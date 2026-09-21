@@ -1,0 +1,33 @@
+# CODEOWNERS – tự động gọi đúng người review khi mở Pull Request.
+#
+# LƯU Ý:
+# 1. Thay các @username giả bên dưới bằng username GitHub thật của từng người.
+# 2. Dòng nằm SAU thắng dòng nằm TRƯỚC. Khi một đường dẫn khớp nhiều dòng,
+#    chỉ dòng cuối cùng khớp được tính, nên phải liệt kê ĐỦ người ở dòng đó.
+# 3. Tác giả PR không tự duyệt được PR của mình. Vì vậy mỗi vùng phải có
+#    ít nhất 2 người (FE chỉ có 1 người nên nhóm trưởng đứng cùng).
+#
+# Quy ước tên: lead = nhóm trưởng · fe = Frontend · be1..be4 = Backend
+
+# ----- Cấu hình repo và tài liệu -----
+/.github/                       @arisdo-29
+/docs/                          @arisdo-29
+/README.md                      @arisdo-29
+
+# ----- Frontend -----
+/frontend/                      @My-Mieu @arisdo-29
+
+# ----- Backend (mặc định: cả 4 BE) -----
+/backend/                       @arisdo-29 @Nguyentri2531 @dwargon73-sketch @kopslngbtram2110
+
+# ----- Backend: file dùng chung, dễ gây xung đột -----
+/backend/pom.xml                @arisdo-29
+/backend/**/common/             @arisdo-29
+/backend/**/config/             @arisdo-29
+/backend/**/security/           @arisdo-29
+
+# ----- Backend: module tiền và trạng thái (SRS yêu cầu review bắt buộc) -----
+# CreditService, PaymentOrders, CashLedger, CreditLedger, CreditHolds
+/backend/**/credit/             @arisdo-29 @dwargon73-sketch
+# RequestService, state machine của Request
+/backend/**/request/            @dwargon73-sketch @arisdo-29

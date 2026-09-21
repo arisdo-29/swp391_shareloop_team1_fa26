@@ -1,0 +1,35 @@
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== IDE =====
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+# VS Code: bỏ qua mọi thứ, chỉ giữ file cấu hình dùng chung cho cả nhóm
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# ===== Bí mật & cấu hình cá nhân =====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+application-local.properties
+application-local.yml
+application-local.yaml
+
+# ===== Log & file tạm =====
+*.log
+logs/
+*.tmp
+*.swp
+
+# ===== Claude Code (file cấu hình cá nhân, không đẩy lên repo) =====
+.claude/settings.local.json
+CLAUDE.local.md
