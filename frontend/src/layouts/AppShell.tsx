@@ -16,12 +16,22 @@ function ScrollToTop() {
 
 export function AppShell() {
   const { pathname } = useLocation();
-  const isHome = pathname === '/';
   const user = useAppSelector(selectCurrentUser);
+  const isAdmin = user?.role === 'admin';
+  const isHome = pathname === '/' && !isAdmin;
   const dispatch = useAppDispatch();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const nav = user
+  const nav = isAdmin
+    ? [
+        ['/admin', 'Dashboard', 'dashboard'],
+        ['/admin/moderation', 'Quản lý món đồ', 'article'],
+        ['/admin/users', 'Người dùng', 'group'],
+        ['/admin/complaints', 'Báo cáo / Khiếu nại', 'shield'],
+        ['/admin/transactions', 'Giao dịch', 'transaction'],
+        ['/admin/finance', 'Thống kê', 'activity'],
+      ]
+    : user
     ? [
         ['/', 'Trang chủ', 'home'],
         ['/browse', 'Tìm đồ', 'browse'],
@@ -55,7 +65,7 @@ export function AppShell() {
         }`}
       >
         <div className="mx-auto flex h-[68px] w-full max-w-[1500px] items-center gap-5 px-6 md:px-8 lg:px-12 xl:px-14">
-          <Link to="/" onClick={closeMenus} className="flex shrink-0 items-center gap-2.5">
+          <Link to={isAdmin ? '/admin' : '/'} onClick={closeMenus} className="flex shrink-0 items-center gap-2.5">
             <span
               className={`grid size-9 place-items-center rounded-md text-white ${
                 isHome ? 'bg-white/15 ring-1 ring-white/25' : 'bg-primary'
@@ -66,7 +76,7 @@ export function AppShell() {
             <span
               className={`text-base font-extrabold ${isHome ? 'text-white' : 'text-text-primary'}`}
             >
-              SHARE<span className={isHome ? 'text-primary-fixed' : 'text-primary'}>LOOP</span>
+              {isAdmin ? 'SHARELOOP ADMIN' : <>SHARE<span className={isHome ? 'text-primary-fixed' : 'text-primary'}>LOOP</span></>}
             </span>
           </Link>
           <nav className="hidden min-w-0 flex-1 items-center gap-0.5 lg:flex">
@@ -94,6 +104,7 @@ export function AppShell() {
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {user ? (
               <>
+                {!isAdmin ? <>
                 <Link
                   to="/credit"
                   className={`hidden items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-semibold transition sm:flex ${
@@ -110,6 +121,7 @@ export function AppShell() {
                     Đăng đồ
                   </Button>
                 </Link>
+                </> : null}
                 <div className="relative">
                   <button
                     onClick={() => setProfileOpen(!profileOpen)}
@@ -129,7 +141,7 @@ export function AppShell() {
                   {profileOpen ? (
                     <div className="absolute right-0 top-12 w-60 rounded-lg bg-white p-2 text-text-primary shadow-lg ring-1 ring-border">
                       <div className="border-b border-border/70 px-3 py-2.5">
-                        <p className="truncate text-sm font-bold">{user.name}</p>
+                        <p className="truncate text-sm font-bold">{isAdmin ? 'Quản trị viên' : user.name}</p>
                         <p className="mt-0.5 truncate text-xs text-text-muted">{user.email}</p>
                       </div>
                       <Link
@@ -138,24 +150,28 @@ export function AppShell() {
                         className="mt-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm text-text-secondary hover:bg-surface-low"
                       >
                         <Icon name="user" className="size-5" />
-                        Hồ sơ
+                        {isAdmin ? 'Hồ sơ quản trị' : 'Hồ sơ'}
                       </Link>
-                      <Link
+                      {!isAdmin ? <Link
                         to="/credit"
                         onClick={closeMenus}
                         className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-text-secondary hover:bg-surface-low"
                       >
                         <Icon name="wallet" className="size-5" />
                         Credit
+                      </Link> : null}
+                      <Link to="/change-password" onClick={closeMenus} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-text-secondary hover:bg-surface-low">
+                        <Icon name="shield" className="size-5" />
+                        Đổi mật khẩu
                       </Link>
-                      {user.role === 'admin' ? (
+                      {isAdmin ? (
                         <Link
-                          to="/admin"
+                          to="/profile"
                           onClick={closeMenus}
                           className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-text-secondary hover:bg-surface-low"
                         >
-                          <Icon name="admin" className="size-5" />
-                          Quản trị
+                          <Icon name="user" className="size-5" />
+                          Chỉnh sửa hồ sơ
                         </Link>
                       ) : null}
                       <button
@@ -225,7 +241,7 @@ export function AppShell() {
                 {label}
               </NavLink>
             ))}
-            {user ? (
+            {user && !isAdmin ? (
               <Link
                 to="/post"
                 onClick={closeMenus}

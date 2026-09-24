@@ -303,7 +303,7 @@ export function Home() {
   const approved = useMemo(
     () =>
       items
-        .filter((item) => item.status === 'approved')
+        .filter((item) => item.status === 'approved' || item.status === 'APPROVED')
         .sort((a, b) => b.postedAt.localeCompare(a.postedAt)),
     [items],
   );

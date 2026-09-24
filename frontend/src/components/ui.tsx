@@ -21,6 +21,8 @@ const iconMap = {
   send: Icons.PaperPlaneTilt,
   menu: Icons.List,
   close: Icons.X,
+  eye: Icons.Eye,
+  eyeSlash: Icons.EyeSlash,
   chevronDown: Icons.CaretDown,
   home: Icons.House,
   browse: Icons.MagnifyingGlass,
@@ -205,13 +207,15 @@ export function StatusBadge({
   const label =
     status in txLabel
       ? txLabel[status as TransactionStatus]
-      : status === 'approved'
+      : status === 'approved' || status === 'APPROVED'
         ? 'Đã duyệt'
-        : status === 'pending'
+        : status === 'pending' || status === 'PENDING_REVIEW'
           ? 'Chờ duyệt'
-          : status === 'rejected'
+          : status === 'rejected' || status === 'REJECTED'
             ? 'Từ chối'
-            : status === 'expired'
+            : status === 'VIOLATION'
+              ? 'Vi phạm'
+              : status === 'expired'
               ? 'Hết hạn'
               : status === 'removed'
                 ? 'Đã gỡ'
@@ -220,8 +224,8 @@ export function StatusBadge({
                   : status === 'suspended'
                     ? 'Tạm khóa'
                     : 'Hoạt động';
-  const danger = ['rejected', 'removed', 'locked', 'DISPUTED', 'CANCELLED'].includes(status);
-  const ok = ['approved', 'active', 'COMPLETED'].includes(status);
+  const danger = ['rejected', 'REJECTED', 'VIOLATION', 'removed', 'locked', 'DISPUTED', 'CANCELLED'].includes(status);
+  const ok = ['approved', 'APPROVED', 'active', 'COMPLETED'].includes(status);
   return (
     <span
       className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-[11px] font-semibold ${danger ? 'bg-red-50 text-error' : ok ? 'bg-emerald-50 text-success' : 'bg-amber-50 text-warning'}`}

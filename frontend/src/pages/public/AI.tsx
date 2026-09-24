@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
-import { Button, EmptyState, PageHeader, ProductCard, TextArea } from '../../components/ui';
+import { Alert, Button, EmptyState, PageHeader, ProductCard, TextArea } from '../../components/ui';
 import { CATEGORIES } from '../../constants/domain';
 import { findNeedMatches, parseNeed } from '../../utils/aiMatching';
 import type { Item, ItemType } from '../../types/domain';
+import { AI_ASSISTANT_SEARCH_FEE } from '../../utils/credit';
 
 export function AI() {
   const data = useAppSelector(selectData);
@@ -19,6 +20,7 @@ export function AI() {
   const [district, setDistrict] = useState('');
   const [category, setCategory] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
+  const [creditError, setCreditError] = useState(false);
   const slideshowItems = useMemo(
     () =>
       ['item_022', 'item_005', 'item_001', 'item_024', 'item_014', 'item_006', 'item_009', 'item_011', 'item_016', 'item_008']
@@ -48,6 +50,11 @@ export function AI() {
     }
   }, [activeImageIndex, slideshowItems.length]);
   const analyze = () => {
+    if (user && user.availableCredit < AI_ASSISTANT_SEARCH_FEE) {
+      setCreditError(true);
+      return;
+    }
+    setCreditError(false);
     if (user) dispatch(actions.useAiFeature({ userId: user.id, feature: 'ASSISTANT_SEARCH' }));
     const parsed = parseNeed(text, CATEGORIES, districts);
     setType(parsed.type);
@@ -84,6 +91,14 @@ export function AI() {
             <Button className="mt-4 w-full sm:w-auto" icon="ai" onClick={analyze}>
               Phân tích nhu cầu
             </Button>
+            {creditError ? (
+              <Alert tone="error">
+                <p>Bạn không đủ Credit để thực hiện thao tác này.</p>
+                <Button className="mt-2" size="sm" variant="outline" onClick={() => (window.location.href = '/credit')}>
+                  Nạp Credit
+                </Button>
+              </Alert>
+            ) : null}
           </aside>
           <div className="relative min-h-[280px] overflow-hidden lg:min-h-0" aria-label="Ảnh sản phẩm SHARELOOP">
             {slideshowItems.map((item, index) => (
