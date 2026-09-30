@@ -1,0 +1,20 @@
+# Profile test: datasource do Testcontainers cấp (@ServiceConnection / DynamicPropertySource),
+# không khai báo datasource url ở đây.
+spring:
+  flyway:
+    locations: classpath:db/migration
+    out-of-order: false
+
+app:
+  # module auth (BE1)
+  jwt:
+    secret: test-only-secret-for-integration-tests-32-bytes
+  # module auth / config (BE1)
+  cors:
+    allowed-origins: http://localhost:5173
+  # module media (BE2)
+  storage:
+    type: local
+  # module integration/ai (BE2)
+  ai:
+    enabled: false
