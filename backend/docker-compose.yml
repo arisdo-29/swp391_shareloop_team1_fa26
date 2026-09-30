@@ -1,0 +1,26 @@
+# Môi trường dev: PostgreSQL, hộp thư giả (Mailpit), MinIO.
+# Chạy: docker compose up -d (trong thư mục backend/)
+
+services:
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: shareloop
+      POSTGRES_USER: shareloop
+      POSTGRES_PASSWORD: shareloop
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+
+  mail:                         # SMTP giả: xem email tại http://localhost:8025
+    image: axllent/mailpit
+    ports: ["1025:1025", "8025:8025"]
+
+  minio:                        # tuỳ chọn, thử StorageService kiểu S3
+    image: cgr.dev/chainguard/minio:latest
+    user: root
+    command: server /data --console-address ":9001"
+    ports: ["9000:9000", "9001:9001"]
+
+volumes:
+  pgdata:

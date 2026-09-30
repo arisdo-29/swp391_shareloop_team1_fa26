@@ -13,22 +13,25 @@
 ## Phạm vi
 
 - [ ] Frontend (`frontend/`)
-- [ ] Backend (`backend/`) – module: <!-- auth / item / request / chat / credit / admin / report -->
+- [ ] Backend (`backend/`) – module: <!-- auth / user / wallet / listingfee / catalog / media / item / moderation / search / request / chat / notification / setting / review / report / reputation / admin / audit -->
 - [ ] Tài liệu (`docs/`)
 
 ## Checklist
 
 - [ ] Nhánh tách từ `develop` và PR trỏ vào `develop`
 - [ ] Đã chạy được ở máy local
-- [ ] Đã có test cho phần logic mới (bắt buộc với chuyển trạng thái `Request` và mọi nhánh trừ Credit)
+- [ ] Đã có test cho phần logic mới (bắt buộc với chuyển trạng thái `Request` / `Item` và mọi nhánh trừ Credit)
 - [ ] Không commit `.env`, khoá API, mật khẩu hay file cấu hình cá nhân
 - [ ] Nếu thêm hoặc đổi endpoint: đã cập nhật `docs/api/` và báo bạn FE
+- [ ] Commit và mô tả PR không có dòng ghi công AI
+- [ ] Đã chạy `./mvnw spotless:apply` và `./mvnw verify` (nếu sửa backend)
 
 ## Chạm vào vùng nhạy cảm?
 
-- [ ] `CreditService` / luồng tiền → cần review bởi người ngoài module
-- [ ] `RequestService` / chuyển trạng thái → cần review bởi người ngoài module
-- [ ] File dùng chung (`pom.xml`, `common/`, `config/`, `security/`) → đã báo cả nhóm
+- [ ] `wallet` (`CreditService`) / luồng tiền → cần review bởi người ngoài module
+- [ ] `listingfee` (phí đăng, sửa, gia hạn, đẩy bài) → cần review bởi người ngoài module
+- [ ] Chuyển trạng thái `Request` / `Item` → cần review bởi người ngoài module
+- [ ] File dùng chung (`pom.xml`, `common/`, `config/`, `application.yml`, `db/migration/`) → đã báo cả nhóm
 
 ## Ảnh chụp / ghi chú thêm
 

@@ -1,0 +1,43 @@
+# Build + kiem dinh dang + test backend. Chay tren moi PR de dung lam
+# "required check"; PR khong dong vao backend/ thi bo qua cac buoc nang.
+name: backend
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+jobs:
+  backend-build:
+    name: backend-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: PR co sua backend khong
+        id: changes
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE...HEAD" \
+            | grep -qE '^(backend/|\.github/workflows/backend\.yml)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-java@v4
+        if: steps.changes.outputs.run == 'true'
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Kiem tra dinh dang (Spotless)
+        if: steps.changes.outputs.run == 'true'
+        working-directory: backend
+        run: ./mvnw -B spotless:check
+      - name: Build va test (ca Testcontainers)
+        if: steps.changes.outputs.run == 'true'
+        working-directory: backend
+        run: ./mvnw -B verify

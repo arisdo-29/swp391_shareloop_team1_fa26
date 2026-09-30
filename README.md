@@ -2,111 +2,131 @@
 
 > Nền tảng web **Cho – Nhận – Trao đổi đồ cũ** cộng đồng.
 
-Đồ án môn **SWP391** · Đặc tả: SRS ShareLoop v8 (19/09/2026)
+Đồ án môn **SWP391** · Đặc tả: SRS ShareLoop v10 (29/09/2026)
 
 ---
 
 ## Giới thiệu
 
-ShareLoop giúp cộng đồng cho, nhận và trao đổi đồ cũ. Người dùng đăng bài về món đồ không còn dùng; người khác gửi yêu cầu xin hoặc đề nghị đổi một món tương đương; hai bên thống nhất thời gian, địa điểm qua khung chat của hệ thống rồi tự giao nhận.
+ShareLoop giúp cộng đồng cho, nhận và trao đổi đồ cũ. Người dùng đăng bài về món đồ không còn dùng; người khác gửi yêu cầu xin hoặc đề nghị đổi một món tương đương. Hai bên thống nhất thời gian, địa điểm qua khung chat có kiểm soát rồi tự giao nhận.
 
-Mục tiêu: đưa đồ còn tốt đến đúng người cần và giảm rủi ro khi hai người lạ giao dịch với nhau.
+Từ v10, doanh thu nằm ở bước đăng bài chứ không nằm ở bước giao dịch: giao dịch Cho và Trao đổi hoàn toàn miễn phí. Mục tiêu là đưa đồ còn tốt đến đúng người cần và giảm rủi ro khi hai người lạ giao dịch với nhau.
 
-## Tính năng chính
+**Tính năng chính (SRS v10):**
 
-- **Đăng bài Cho / Trao đổi** – miễn phí, có giới hạn số bài đồng thời theo hạng.
-- **Gửi yêu cầu** – xin đồ hoặc đề nghị đổi; chủ bài đăng chọn đúng một người.
-- **Chat có kiểm soát** – chặn mọi thông tin liên lạc cho tới khi hai bên xác nhận lịch hẹn.
-- **Ví Credit** – nạp tiền qua cổng thanh toán, 1 VNĐ = 1 Credit, chỉ tiêu trong hệ thống, không rút ra.
-- **Kiểm duyệt hai tầng** – chặn cứng tự động theo quy tắc + Admin duyệt thủ công theo checklist tám mục.
-- **Uy tín & khiếu nại** – khiếu nại trong 7 ngày sau giao dịch; Admin xác minh rồi mới trừ sao uy tín.
-- **AI hỗ trợ (2 vai trò)** – gợi ý ghép đôi trên bài Trao đổi và trợ lý tìm đồ. AI không tham gia kiểm duyệt và không phân tích hình ảnh.
+- **Tài khoản** – đăng ký có xác thực email bằng OTP, đăng nhập, hồ sơ, quên mật khẩu.
+- **Ví Credit** – nạp qua VNPay (sandbox), xem số dư khả dụng, số đang giữ và lịch sử ví; Credit chỉ tiêu trong hệ thống, không rút ra.
+- **Bài đăng Cho / Trao đổi** – sửa, gỡ, gia hạn, đẩy bài; vòng đời 30 ngày.
+- **Kiểm duyệt ba tầng** – chặn cứng tại form (lexicon + regex), AI sàng lọc gắn cờ hỗ trợ Admin, Admin duyệt theo checklist cấu hình được. AI không tự duyệt hay từ chối.
+- **Tìm đồ** – tìm kiếm, lọc thủ công miễn phí (hỗ trợ gõ không dấu); trang AI trợ lý tìm đồ.
+- **Giao dịch** – gửi yêu cầu, chọn người, chat có kiểm soát (chặn thông tin liên hệ hai tầng, thẻ sản phẩm), chốt lịch hẹn, trao liên lạc, xác nhận hai chiều.
+- **Uy tín & khiếu nại** – TrustStars, điểm, hạng; khiếu nại trong 7 ngày sau giao dịch, Admin xác minh rồi mới xử lý ở cấp tài khoản.
+- **Quản trị** – danh mục, khu vực, lexicon, checklist, cấu hình phí và hạn mức, khoá tài khoản, báo cáo tài chính.
 
-## Người dùng
+## Biểu phí (SRS v10, mục 4.2)
 
-Hệ thống chỉ có hai loại người dùng, cùng kế thừa từ `User`:
+Quy đổi: **1.000đ = 1 Credit** (Credit là số nguyên). Nạp tối thiểu **10.000đ** (10 Credit), số tiền nạp là bội số của 1.000.
 
-| Actor | Mô tả |
-|---|---|
-| **Member** | Dùng một tài khoản duy nhất cho mọi vai: đăng bài là người cho, gửi yêu cầu là người nhận. |
-| **Admin** | Duyệt bài, xử lý khiếu nại, xem báo cáo tài chính. Mọi hành động đều ghi `AuditLog`. |
-
-Hệ thống ngoài: cổng thanh toán (VNPay sandbox), dịch vụ LLM, dịch vụ email (SMTP).
-
-## Mô hình Credit & biểu phí
-
-Chỉ thu phí ở hai chỗ có chi phí vận hành thật: **mở giao dịch** và **gọi AI**.
-
-| Khoản mục | Mức phí | Ai trả |
+| Khoản mục | Mức phí | Thời điểm trừ |
 |---|---|---|
-| Đăng bài, tìm kiếm, gửi yêu cầu | 0đ | – |
-| Giao dịch Trao đổi (Swap) | 2.000 Credit | Cả hai bên |
-| Giao dịch Cho–Nhận (Give) | 4.000 Credit | Chỉ người nhận |
-| AI gợi ý ghép đôi | 5.000 Credit/lượt (miễn phí 1 lượt/tuần) | Người bấm tìm |
-| AI trợ lý tìm đồ | 1.000 Credit/lượt (miễn phí 5 lượt/ngày) | Người hỏi |
+| Giao dịch Cho, Trao đổi | Miễn phí | – |
+| Gửi yêu cầu, chat, chốt lịch, hoàn tất | Miễn phí | – |
+| Tìm kiếm, lọc thủ công | Miễn phí | – |
+| Đăng bài (Cho hoặc Trao đổi) | 5 Credit / 30 ngày hiển thị | Giữ (Hold) khi gửi duyệt, trừ thật khi duyệt lần đầu; bị từ chối thì nhả lại toàn bộ |
+| Sửa bài trước khi duyệt / bị chặn tự động | Miễn phí | – |
+| Sửa bài sau duyệt, lần đầu | Miễn phí (1 lần / bài) | – |
+| Sửa bài sau duyệt, từ lần thứ hai | 5 Credit / lần | Giữ khi gửi bản sửa, trừ khi bản sửa được duyệt |
+| Gia hạn bài | 5 Credit / 30 ngày | Ngay khi bấm gia hạn |
+| Đẩy bài | 5 Credit / 3 ngày (cộng dồn tối đa 14 ngày) | Ngay khi bấm; chỉ bài Approved còn hạn |
+| AI trợ lý tìm đồ | 2 Credit / lượt, 5 lượt miễn phí / ngày cho tài khoản đã từng nạp | Ngay trước khi gọi LLM |
 
-Mỗi giao dịch hoàn tất mang về đúng **4.000 Credit** cho hệ thống, bất kể hình thức. Nạp tối thiểu 10.000đ.
+Mọi con số đọc từ cấu hình (`website_attributes`), Admin đổi được mà không sửa mã.
 
-Số dư được kiểm tra ở **ba chốt**: lúc gửi yêu cầu, lúc được chọn, và lúc xác nhận lịch hẹn (chốt cuối giữ tạm tiền để tránh tiêu hai lần cho hai giao dịch song song).
-
-## Luồng giao dịch
-
-1. Người nhận gửi yêu cầu tới một bài đăng.
-2. Chủ bài đăng chọn đúng một người → hệ thống mở khung chat.
-3. Hai bên thương lượng thời gian, địa điểm (chat chặn thông tin liên lạc).
-4. Cả hai xác nhận lịch hẹn → hệ thống trừ Credit → trao email và số điện thoại cho nhau.
-5. Hai bên tự giao nhận và cùng xác nhận trên hệ thống.
-6. Trong 7 ngày sau giao dịch, có thể khiếu nại; Admin xác minh rồi xử lý ở cấp tài khoản.
+> **Đối chiếu với SRS:** các mức phí trong yêu cầu khớp SRS v10. Hai chi tiết SRS có mà yêu cầu chưa nêu, đã bổ sung theo SRS: (1) đẩy bài cộng dồn tối đa 14 ngày; (2) tài khoản **chưa từng nạp** chỉ có 1 lượt AI dùng thử, không có 5 lượt/ngày.
 
 ## Công nghệ
 
 | Hạng mục | Lựa chọn |
 |---|---|
-| Backend | Java 17 · Spring Boot 3 (Web, Security + JWT, Data JPA, Validation, Scheduling) |
-| Frontend | ReactJS · Vite · React Router · Axios · TailwindCSS |
-| Cơ sở dữ liệu | Microsoft SQL Server |
-| Kiểm thử | JUnit 5 · Mockito |
+| Backend | Java 21 · Spring Boot **4.1.1 (khoá phiên bản)** · Maven Wrapper |
+| Cơ sở dữ liệu | PostgreSQL 16 · Flyway |
+| Môi trường dev | Docker Compose (PostgreSQL, Mailpit) |
+| Frontend | React · Vite · TypeScript · Tailwind |
 | Thanh toán | VNPay sandbox |
-| Email / SMS | SMTP thật / SMS giả lập (in OTP ra console) |
-| Công cụ | IntelliJ IDEA · Visual Studio Code · Antigravity |
 
-## Kiến trúc
+## Dữ liệu
 
-```
-React SPA  →  Security (JWT)  →  Controller  →  Service  →  Repository (JPA)  →  SQL Server
-                                                   ↓
-                                    Integration (PaymentGateway / Ai / Notification)
-                                    Scheduler (job dọn dẹp theo giờ)
-```
-
-Các nguyên tắc bắt buộc giữ xuyên suốt:
-
-- Tiền chỉ được đụng tới trong `CreditService`, mọi thao tác chạy trong transaction có khoá dòng.
-- Trạng thái `Request` chỉ được đổi trong `RequestService`, theo đúng sơ đồ trạng thái.
-- Controller không chứa business rule; Service không trả entity thô, luôn đi qua DTO.
-- Thông tin liên lạc của đối phương chỉ được trả về sau khi `ContactRevealedAt` có giá trị.
-- Mọi lời gọi ra ngoài đều có timeout và đường lui.
-- Mọi business rule kiểm tra ở FE đều phải được kiểm lại ở BE.
+Cơ sở dữ liệu có **17 bảng** (đã chốt, không tự thêm bảng). Bảng chính có 7 cột chuẩn: `created_at`, `updated_at`, `created_by`, `updated_by`, `is_active`, `is_deleted`, `status`; bảng danh mục, cấu hình có 6 cột (không có `status`). **Không xoá cứng**: xoá là đặt `is_deleted = true`, ẩn hoặc khoá là `is_active = false`. Chi tiết ở tài liệu *Luồng hoạt động & ERD v10*, mục 7.11.
 
 ## Cấu trúc repository
 
 ```
-ShareLoop/
-├── .github/      # CODEOWNERS, mẫu Pull Request
-├── frontend/     # ReactJS (Vite)
-├── backend/      # Spring Boot (Maven), chia package theo module
-├── docs/         # Tài liệu: SRS, ERD, wireframe, hợp đồng API
-├── .editorconfig
-├── .gitattributes
-├── .gitignore
+swp391_shareloop_team1_fa26/
+├── .github/       # CODEOWNERS, mẫu PR, workflows (backend, no-ai-attribution)
+├── .githooks/     # commit-msg
+├── backend/       # Spring Boot (Maven), chia package theo module
+├── frontend/      # React + Vite
+├── docs/
+│   ├── srs/       # SRS v10, Luồng hoạt động & ERD, Lộ trình triển khai Backend
+│   ├── api/       # Contract API theo module (docs/api/<module>.md)
+│   └── decisions/
+├── AGENTS.md      # luật chung cho trợ lý AI
+├── CLAUDE.md
 └── README.md
 ```
 
-> Các thư mục sẽ được bổ sung dần theo từng nhánh.
+## Cấu trúc backend
+
+Chia theo **module nghiệp vụ**, không chia theo tầng. Gốc: `backend/src/main/java/com/shareloop/`. Bên trong mỗi module (chỉ tạo thư mục nào cần):
+
+```
+<module>/
+├── controller/   service/   repository/   entity/
+├── dto/          mapper/    event/        job/
+└── <Module>ErrorCode.java
+```
+
+Nguyên tắc: gọi chéo module chỉ qua `<Tên>Service` hoặc sự kiện, không inject repository của module khác; giữa các module chỉ lưu `id` (Long), không `@ManyToOne` sang entity module khác. Thư mục `common/`, `config/`, `integration/` dùng chung.
+
+| Package | Nội dung | Người sở hữu |
+|---|---|---|
+| `common`, `config` | nền dùng chung, cấu hình Spring | BE1 |
+| `auth` | đăng ký, OTP email, đăng nhập, JWT | BE1 |
+| `user` | hồ sơ, đổi số điện thoại | BE1 |
+| `wallet` | ví Credit, nạp tiền, sổ Credit | BE1 |
+| `listingfee` | phí đăng, sửa, gia hạn, đẩy bài | BE1 |
+| `integration/payment`, `integration/mail` | VNPay, email SMTP | BE1 |
+| `catalog` | danh mục, thuộc tính động, khu vực | BE2 |
+| `media` | tải ảnh, media_files | BE2 |
+| `item` | bài đăng | BE2 |
+| `moderation` | lexicon, regex, AI sàng lọc / chat | BE2 |
+| `search` | tìm kiếm, AI trợ lý tìm đồ | BE2 |
+| `integration/ai`, `integration/storage` | LLM, lưu ảnh | BE2 |
+| `request` | Request, state machine, lịch hẹn, giao nhận | BE3 |
+| `chat` | tin nhắn, thẻ bài, đổi món đề nghị | BE3 |
+| `notification` | thông báo trong app, email giao dịch | BE3 |
+| `setting` | cấu hình, lexicon, checklist | BE4 |
+| `review` | hàng chờ duyệt, duyệt / từ chối | BE4 |
+| `report` | báo cáo, khiếu nại, tranh chấp | BE4 |
+| `reputation` | TrustStars, điểm, hạng | BE4 |
+| `admin` | khoá tài khoản, báo cáo tài chính | BE4 |
+| `audit` | activity_logs | BE4 |
 
 ## Bắt đầu nhanh
 
-**Yêu cầu:** Node.js (LTS) · JDK 17 · SQL Server
+**Yêu cầu:** JDK 21 · Docker Desktop · Node.js (LTS)
+
+### Backend
+
+```bash
+cd backend
+docker compose up -d                 # PostgreSQL 16, Mailpit
+.\mvnw.cmd spring-boot:run           # Windows
+./mvnw spring-boot:run               # macOS / Linux
+```
+
+- Swagger: <http://localhost:8080/swagger-ui.html>
+- Mailpit (xem email OTP): <http://localhost:8025>
 
 ### Frontend
 
@@ -116,9 +136,13 @@ npm install
 npm run dev
 ```
 
-### Backend
+## Việc bắt buộc sau khi clone
 
-_Sẽ bổ sung khi nhánh backend được đẩy lên._
+```bash
+git config core.hooksPath .githooks
+```
+
+Bật hook `commit-msg` (kiểm tra định dạng commit và chặn dòng ghi công AI). Không chạy lệnh này thì commit của bạn vẫn có thể bị CI từ chối.
 
 ## Quy trình làm việc với Git
 
@@ -137,9 +161,14 @@ _Sẽ bổ sung khi nhánh backend được đẩy lên._
 ```bash
 git switch develop
 git pull
-git switch -c feature/be-credit-topup     # tách nhánh mới từ develop
-# ... code, commit ...
-git push -u origin feature/be-credit-topup
+git switch -c feature/be-wallet-topup     # tách nhánh mới từ develop
+# ... code ...
+cd backend
+./mvnw spotless:apply                     # định dạng mã
+./mvnw verify                             # build + test
+cd ..
+# ... commit ...
+git push -u origin feature/be-wallet-topup
 # mở Pull Request vào develop và điền mẫu PR
 ```
 
@@ -148,7 +177,7 @@ git push -u origin feature/be-credit-topup
 Có tiền tố `be` hoặc `fe` để nhìn là biết phần nào:
 
 ```
-feature/be-credit-topup
+feature/be-wallet-topup
 feature/be-request-choose
 feature/fe-post-page
 fix/be-hold-double-charge
@@ -157,10 +186,10 @@ docs/api-item
 
 ### Commit
 
-Theo dạng `type(scope): mô tả ngắn`, scope là tên module:
+Theo dạng `type(scope): mô tả ngắn`, scope là tên package:
 
 ```
-feat(credit): add topup webhook
+feat(wallet): add topup webhook
 fix(request): reject invalid state transition
 docs: update README
 chore: bump spring boot version
@@ -171,8 +200,8 @@ Các type: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`.
 ### Review và merge
 
 - Mọi PR cần ít nhất 1 người duyệt. Người được gọi review tự động theo `.github/CODEOWNERS`.
-- **Bắt buộc review bởi người ngoài module** với mọi thay đổi trong `CreditService` và `RequestService`.
-- Sửa file dùng chung (`pom.xml`, `common/`, `config/`, `security/`): làm PR nhỏ, merge nhanh và báo cả nhóm.
+- **Bắt buộc review bởi người ngoài module** với mọi thay đổi trong `wallet` (`CreditService`) và `request` (`RequestService`).
+- Sửa file dùng chung (`pom.xml`, `common/`, `config/`, `application.yml`, `db/migration/`): làm PR nhỏ, merge nhanh và báo cả nhóm.
 - Mã do AI sinh ra phải được một thành viên đọc lại và chịu trách nhiệm.
 
 ### Không commit
@@ -180,28 +209,26 @@ Các type: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`.
 `.env`, khoá API (VNPay, SMTP, LLM), mật khẩu, `application-local.properties`, `node_modules/`, `target/`.
 Dùng `.env.example` hoặc file cấu hình mẫu chứa giá trị giả để hướng dẫn người khác.
 
-## Kế hoạch 8 tuần
+## Dùng trợ lý AI
 
-| Tuần | Trọng tâm |
-|---|---|
-| 1 | Chốt use case, ERD, wireframe; dựng khung React |
-| 2 | Auth + OTP, Users, Items, chặn cứng |
-| 3 | Module Credit và nạp tiền sandbox |
-| 4 | Kiểm duyệt hai tầng, Requests |
-| 5 | Chat, Hold, trao thông tin liên lạc (mốc quan trọng nhất) |
-| 6 | State machine đầy đủ, khiếu nại, uy tín, job tự động, AI |
-| 7 | Kiểm thử tích hợp, báo cáo tài chính, yêu cầu Should |
-| 8 | Sửa lỗi, hoàn thiện, chuẩn bị demo |
+- [AGENTS.md](AGENTS.md) là luật chung cho mọi trợ lý AI trong repo này.
+- AI **không tự commit, push hay mở PR**. Người làm tự xem diff, chạy test và commit dưới tên mình.
+- Repo **không chứa bất kỳ dòng ghi công AI nào** (`Co-Authored-By`, `Generated with...`) trong commit, PR, mã nguồn hay tài liệu.
+- Hook `.githooks/commit-msg` và CI `no-ai-attribution` sẽ chặn các dòng này.
+
+## Kế hoạch triển khai
+
+Xem SRS v10, chương 16 (*Kế hoạch từ tuần 4 đến tuần 9*).
 
 ## Nhóm thực hiện
 
-| Vai trò | Họ tên |
-|---|---|
-| Frontend (ReactJS) | _điền tên_ |
-| Backend 1 (Auth, Credit, Scheduler) | _điền tên_ |
-| Backend 2 (Items, chặn cứng, AI) | _điền tên_ |
-| Backend 3 (Requests, Chat) | _điền tên_ |
-| Backend 4 (Admin, Khiếu nại, Uy tín) | _điền tên_ |
+| Vai trò | GitHub | Phụ trách |
+|---|---|---|
+| Frontend | @My-Mieu | Giao diện React |
+| Backend 1 | @arisdo-29 | auth, user, wallet, listingfee, nền |
+| Backend 2 | @Nguyentri2531 | catalog, media, item, moderation, search |
+| Backend 3 | @dwargon73-sketch | request, chat, notification |
+| Backend 4 | @kopslngbtram2110 | setting, review, report, reputation, admin, audit |
 
 ## Giấy phép
 
