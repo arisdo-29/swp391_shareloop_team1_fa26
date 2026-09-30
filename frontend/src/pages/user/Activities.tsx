@@ -1,59 +1,54 @@
-import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
 import {
   Alert,
+  Avatar,
   Button,
   ConditionBadge,
   EmptyState,
   Field,
-  Icon,
   PageHeader,
   StatusBadge,
   TextArea,
   TypeBadge,
 } from '../../components/ui';
-import { getSwapSuggestions } from '../../utils/aiMatching';
-import { conditionLabel } from '../../utils/formatting';
-import { AI_SWAP_MATCHING_FEE } from '../../utils/credit';
+import { RECEIVE_ITEM_FEE } from '../../utils/credit';
+
+const requestStatusLabel = {
+  PENDING: 'Chờ phản hồi',
+  ACCEPTED: 'Đã được chọn',
+  NOT_SELECTED: 'Không được chọn',
+  CANCELLED: 'Đã hủy',
+};
 
 export function Activities() {
+  const location = useLocation();
   const data = useAppSelector(selectData);
   const user = useAppSelector(selectCurrentUser)!;
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [tab, setTab] = useState<'items' | 'transactions'>('items');
   const [editingId, setEditingId] = useState('');
-  const [suggestionSourceId, setSuggestionSourceId] = useState('');
+  const [removeConfirmId, setRemoveConfirmId] = useState('');
+  const [requestsItemId, setRequestsItemId] = useState('');
+  const [acceptConfirmId, setAcceptConfirmId] = useState('');
+  const [acceptError, setAcceptError] = useState('');
+  const [editNotice, setEditNotice] = useState('');
   const [draftTitle, setDraftTitle] = useState('');
   const [draftDescription, setDraftDescription] = useState('');
-  const [creditError, setCreditError] = useState('');
-  const myItems = data.items.filter((i) => i.ownerId === user.id);
-  const suggestionSource = myItems.find((item) => item.id === suggestionSourceId);
-  const swapSuggestions = useMemo(
-    () =>
-      suggestionSource
-        ? getSwapSuggestions(suggestionSource, data.items, data.users, user.id)
-        : [],
-    [data.items, data.users, suggestionSource, user.id],
-  );
+
+  useEffect(() => {
+    dispatch(actions.refreshExpiredItems());
+  }, [dispatch]);
+
+  const myItems = useMemo(() => data.items.filter((i) => i.ownerId === user.id), [data.items, user.id]);
   const txs = data.transactions.filter((t) => t.ownerId === user.id || t.requesterId === user.id);
-  const sendSwapRequest = (sourceItemId: string, targetItemId: string) => {
-    if (user.reputationStars <= 0) {
-      setCreditError('Uy tín của bạn đang ở mức 0 nên hiện không thể gửi yêu cầu trao đổi.');
-      return;
-    }
-    const target = data.items.find((item) => item.id === targetItemId);
-    const owner = target ? data.users.find((entry) => entry.id === target.ownerId) : undefined;
-    if (user.availableCredit < 2 || !owner || owner.availableCredit < 2) {
-      setCreditError('Bạn không đủ Credit để thực hiện thao tác này.');
-      return;
-    }
-    setCreditError('');
-    dispatch(actions.createTransaction({ itemId: targetItemId, requesterId: user.id, sourceItemId }));
-    navigate('/messages');
-  };
+  const acceptRequest = data.itemRequests.find((request) => request.id === acceptConfirmId);
+  const acceptItem = data.items.find((item) => item.id === acceptRequest?.itemId);
+  const acceptRequester = data.users.find((entry) => entry.id === acceptRequest?.requesterId);
+  const acceptOfferedItem = data.items.find((item) => item.id === acceptRequest?.offeredItemId);
+
   return (
     <div className="page-shell">
       <PageHeader
@@ -65,13 +60,15 @@ export function Activities() {
           </Link>
         }
       />
-      {creditError ? (
-        <Alert tone="error">
-          <p>{creditError}</p>
-          <Button className="mt-2" size="sm" variant="outline" onClick={() => navigate('/credit')}>
-            Nạp Credit
-          </Button>
-        </Alert>
+      {(location.state as { notice?: string } | null)?.notice ? (
+        <div className="mb-5">
+          <Alert tone="success">{(location.state as { notice: string }).notice}</Alert>
+        </div>
+      ) : null}
+      {editNotice ? (
+        <div className="mb-5">
+          <Alert tone="warning">{editNotice}</Alert>
+        </div>
       ) : null}
       <div className="mb-6 flex gap-1 border-b border-border">
         <button
@@ -87,16 +84,18 @@ export function Activities() {
           Giao dịch <span className="ml-1 text-xs">({txs.length})</span>
         </button>
       </div>
+
       {tab === 'items' ? (
         <section>
           {myItems.length ? (
             <div className="space-y-3">
               {myItems.map((item) => {
-                const canUseAiSwap = item.type === 'trade' && (item.status === 'approved' || item.status === 'APPROVED');
-                const isSuggestionOpen = suggestionSourceId === item.id;
-
+                const approved = item.status === 'approved' || item.status === 'APPROVED';
+                const canEdit = !approved || (item.postApprovalEditCount ?? 0) < 1;
+                const itemRequests = data.itemRequests.filter((request) => request.itemId === item.id);
+                const hasAcceptedRequest = itemRequests.some((request) => request.status === 'ACCEPTED');
                 return (
-                  <div key={item.id} className="space-y-3">
+                  <div key={item.id}>
                     <article className="grid gap-4 rounded-lg bg-white p-3 ring-1 ring-border/80 sm:grid-cols-[120px_1fr_auto] sm:items-center">
                       <img
                         src={item.images[0]}
@@ -115,8 +114,7 @@ export function Activities() {
                           {item.title}
                         </Link>
                         <p className="mt-1 text-xs text-text-muted">
-                          Hết hạn {new Date(item.expiresAt).toLocaleDateString('vi-VN')} ·{' '}
-                          {item.district}
+                          Hết hạn: {new Date(item.expiresAt).toLocaleDateString('vi-VN')} · {item.district}
                         </p>
                         {(item.status === 'rejected' || item.status === 'REJECTED' || item.status === 'VIOLATION') && (item.rejectionReason || item.moderationReason) ? (
                           <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-xs leading-5 text-error">
@@ -124,12 +122,30 @@ export function Activities() {
                           </p>
                         ) : null}
                       </div>
-                      <div className="flex flex-wrap gap-1 sm:justify-end">
+                      <div className="flex flex-wrap gap-2 sm:justify-end">
+                        <Link to={`/items/${item.id}`}>
+                          <Button size="sm" variant="outline" icon="eye">
+                            Xem chi tiết
+                          </Button>
+                        </Link>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon="messages"
+                          onClick={() => setRequestsItemId(requestsItemId === item.id ? '' : item.id)}
+                        >
+                          Yêu cầu ({itemRequests.length})
+                        </Button>
                         <Button
                           size="sm"
                           variant="ghost"
                           icon="edit"
                           onClick={() => {
+                            if (!canEdit) {
+                              setEditNotice('Bạn đã sử dụng lượt sửa miễn phí sau khi bài được duyệt.');
+                              return;
+                            }
+                            setEditNotice('');
                             setEditingId(item.id);
                             setDraftTitle(item.title);
                             setDraftDescription(item.description);
@@ -137,120 +153,40 @@ export function Activities() {
                         >
                           Sửa
                         </Button>
-                        {canUseAiSwap ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            icon="ai"
-                            onClick={() => {
-                              if (!isSuggestionOpen && user.availableCredit < AI_SWAP_MATCHING_FEE) {
-                                setCreditError('Bạn không đủ Credit để thực hiện thao tác này.');
-                                return;
-                              }
-                              setCreditError('');
-                              if (!isSuggestionOpen)
-                                dispatch(
-                                  actions.useAiFeature({
-                                    userId: user.id,
-                                    feature: 'SWAP_MATCHING',
-                                  }),
-                                );
-                              setSuggestionSourceId(isSuggestionOpen ? '' : item.id);
-                            }}
-                          >
-                            AI gợi ý đổi
-                          </Button>
-                        ) : null}
                         <Button
                           size="sm"
                           variant="danger"
                           icon="trash"
-                          onClick={() =>
-                            dispatch(actions.removeItem({ itemId: item.id, ownerId: user.id }))
-                          }
+                          disabled={item.status === 'removed'}
+                          onClick={() => setRemoveConfirmId(item.id)}
                         >
                           Gỡ
                         </Button>
+                        {item.status === 'expired' ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            icon="renew"
+                            onClick={() =>
+                              dispatch(actions.renewItem({ itemId: item.id, ownerId: user.id }))
+                            }
+                          >
+                            Gia hạn
+                          </Button>
+                        ) : null}
                       </div>
                     </article>
-                    {isSuggestionOpen ? (
-                      <div className="rounded-lg bg-white p-4 ring-1 ring-primary/15 sm:p-5">
-                        <div className="flex items-center gap-2">
-                          <span className="flex size-9 items-center justify-center rounded-md bg-primary-faint text-primary">
-                            <Icon name="ai" className="size-5" weight="fill" />
-                          </span>
-                          <div>
-                            <h2 className="text-sm font-bold text-text-primary">
-                              Gợi ý phù hợp với {item.title}
-                            </h2>
-                            <p className="mt-0.5 text-xs text-text-muted">
-                              Chỉ lấy món trao đổi đã duyệt từ dữ liệu SHARELOOP.
-                            </p>
-                          </div>
-                        </div>
-                        {swapSuggestions.length ? (
-                          <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                            {swapSuggestions.map((suggestion) => (
-                              <article
-                                key={suggestion.item.id}
-                                className="grid gap-3 rounded-lg bg-background p-3 ring-1 ring-border/70 sm:grid-cols-[96px_1fr]"
-                              >
-                                <img
-                                  src={suggestion.item.images[0]}
-                                  alt={suggestion.item.title}
-                                  className="aspect-[4/3] w-full rounded-md object-cover sm:w-24"
-                                />
-                                <div className="min-w-0">
-                                  <Link
-                                    to={`/items/${suggestion.item.id}`}
-                                    className="line-clamp-1 font-bold hover:text-primary"
-                                  >
-                                    {suggestion.item.title}
-                                  </Link>
-                                  <p className="mt-1 text-xs text-text-muted">
-                                    {suggestion.owner?.name ?? 'Người dùng SHARELOOP'} ·{' '}
-                                    {suggestion.item.district}
-                                  </p>
-                                  <div className="mt-2 flex flex-wrap gap-2">
-                                    <ConditionBadge condition={suggestion.item.condition} />
-                                    <span className="inline-flex rounded-sm bg-surface-low px-2 py-1 text-[11px] font-medium text-text-secondary">
-                                      {suggestion.item.tradeFor
-                                        ? `Muốn đổi: ${suggestion.item.tradeFor}`
-                                        : conditionLabel[suggestion.item.condition]}
-                                    </span>
-                                  </div>
-                                  <p className="mt-2 line-clamp-2 text-xs leading-5 text-text-muted">
-                                    {suggestion.reason}
-                                  </p>
-                                  <div className="mt-3 flex flex-wrap gap-2">
-                                    <Link to={`/items/${suggestion.item.id}`}>
-                                      <Button size="sm" variant="outline">
-                                        Xem món
-                                      </Button>
-                                    </Link>
-                                    <Button
-                                      size="sm"
-                                      variant="secondary"
-                                      icon="send"
-                                      onClick={() => sendSwapRequest(item.id, suggestion.item.id)}
-                                    >
-                                      Gửi đề nghị trao đổi
-                                    </Button>
-                                  </div>
-                                </div>
-                              </article>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="mt-4">
-                            <EmptyState
-                              icon="ai"
-                              title="Chưa có gợi ý phù hợp"
-                              text="Hiện chưa có món trao đổi đã duyệt khác trong dữ liệu SHARELOOP."
-                            />
-                          </div>
-                        )}
-                      </div>
+                    {requestsItemId === item.id ? (
+                      <RequestPanel
+                        itemStatus={item.status}
+                        hasAcceptedRequest={hasAcceptedRequest}
+                        itemRequests={itemRequests}
+                        data={data}
+                        onAccept={(requestId) => {
+                          setAcceptError('');
+                          setAcceptConfirmId(requestId);
+                        }}
+                      />
                     ) : null}
                   </div>
                 );
@@ -276,6 +212,9 @@ export function Activities() {
                 const item = data.items.find((i) => i.id === tx.itemId)!;
                 const other = data.users.find(
                   (u) => u.id === (tx.ownerId === user.id ? tx.requesterId : tx.ownerId),
+                );
+                const conversation = data.conversations.find(
+                  (entry) => entry.transactionId === tx.id,
                 );
                 return (
                   <article
@@ -305,15 +244,19 @@ export function Activities() {
                     </div>
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/70 pt-4">
                       <p className="text-xs text-text-muted">
-                        {tx.creditHeldBy.includes(user.id)
-                          ? 'Phí của bạn đang được giữ an toàn.'
-                          : 'Chưa xác nhận giữ phí.'}
+                        Giao dịch miễn phí. Credit không bị trừ trong quá trình giao nhận.
                       </p>
-                      <Link to="/messages">
-                        <Button size="sm" variant="outline" icon="messages">
-                          Mở giao dịch
+                      {conversation ? (
+                        <Link to="/messages">
+                          <Button size="sm" variant="outline" icon="messages">
+                            Đi tới cuộc trò chuyện
+                          </Button>
+                        </Link>
+                      ) : (
+                        <Button size="sm" variant="outline" icon="messages" disabled>
+                          Chưa mở chat
                         </Button>
-                      </Link>
+                      )}
                     </div>
                   </article>
                 );
@@ -322,11 +265,12 @@ export function Activities() {
           ) : (
             <EmptyState
               title="Chưa có giao dịch"
-              text="Các yêu cầu nhận đồ và trao đổi sẽ xuất hiện tại đây."
+              text="Giao dịch chỉ được tạo sau khi chủ bài chọn một yêu cầu."
             />
           )}
         </section>
       )}
+
       {editingId ? (
         <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
           <div className="w-full rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
@@ -352,6 +296,12 @@ export function Activities() {
                 onClick={() => {
                   const item = data.items.find((entry) => entry.id === editingId);
                   if (!item) return;
+                  const approved = item.status === 'approved' || item.status === 'APPROVED';
+                  if (approved && (item.postApprovalEditCount ?? 0) >= 1) {
+                    setEditNotice('Bạn đã sử dụng lượt sửa miễn phí sau khi bài được duyệt.');
+                    setEditingId('');
+                    return;
+                  }
                   dispatch(
                     actions.updateItem({
                       itemId: item.id,
@@ -375,6 +325,180 @@ export function Activities() {
           </div>
         </div>
       ) : null}
+
+      {removeConfirmId ? (
+        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6"
+          >
+            <h2 className="text-xl font-bold">Gỡ bài đăng?</h2>
+            <p className="mt-2 text-sm leading-6 text-text-muted">
+              Bài đăng sẽ không còn hiển thị với người dùng khác.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setRemoveConfirmId('')}>
+                Hủy
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  dispatch(actions.removeItem({ itemId: removeConfirmId, ownerId: user.id }));
+                  setRemoveConfirmId('');
+                }}
+              >
+                Xác nhận gỡ
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {acceptRequest && acceptItem && acceptRequester ? (
+        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6"
+          >
+            <h2 className="text-xl font-bold">Xác nhận chọn người</h2>
+            <p className="mt-2 text-sm leading-6 text-text-muted">
+              {acceptRequest.type === 'gift'
+                ? `Bạn muốn chọn ${acceptRequester.name} để nhận ${acceptItem.title}?`
+                : `Bạn muốn trao đổi ${acceptItem.title} với ${acceptOfferedItem?.title ?? 'món được đề nghị'}?`}
+            </p>
+            {acceptError ? (
+              <div className="mt-3 rounded-md bg-amber-50 p-3 text-xs leading-5 text-warning">
+                {acceptError}
+              </div>
+            ) : null}
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setAcceptError('');
+                  setAcceptConfirmId('');
+                }}
+              >
+                Hủy
+              </Button>
+              <Button
+                onClick={() => {
+                  if (acceptRequest.type === 'gift' && acceptRequester.availableCredit < RECEIVE_ITEM_FEE) {
+                    setAcceptError('Người nhận không đủ Credit và cần nạp Credit trước khi được chọn.');
+                    return;
+                  }
+                  dispatch(actions.acceptItemRequest({ requestId: acceptRequest.id, ownerId: user.id }));
+                  setAcceptConfirmId('');
+                }}
+              >
+                Xác nhận
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RequestPanel({
+  itemStatus,
+  hasAcceptedRequest,
+  itemRequests,
+  data,
+  onAccept,
+}: {
+  itemStatus: string;
+  hasAcceptedRequest: boolean;
+  itemRequests: ReturnType<typeof selectData>['itemRequests'];
+  data: ReturnType<typeof selectData>;
+  onAccept: (requestId: string) => void;
+}) {
+  return (
+    <div className="mt-2 rounded-lg bg-white p-4 ring-1 ring-border/80">
+      <h3 className="text-sm font-bold">Yêu cầu cho bài đăng</h3>
+      {itemRequests.length ? (
+        <div className="mt-3 space-y-3">
+          {itemRequests.map((request) => {
+            const requester = data.users.find((entry) => entry.id === request.requesterId);
+            const offeredItem = request.offeredItemId
+              ? data.items.find((entry) => entry.id === request.offeredItemId)
+              : undefined;
+            if (!requester) return null;
+            return (
+              <article key={request.id} className="rounded-md border border-border p-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-0 gap-3">
+                    <Avatar user={requester} />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <strong className="truncate text-sm">{requester.name}</strong>
+                        <TypeBadge type={request.type} />
+                        <span className="rounded-sm bg-amber-50 px-2 py-1 text-[11px] font-semibold text-warning">
+                          {requestStatusLabel[request.status]}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-text-muted">
+                        {new Date(request.createdAt).toLocaleString('vi-VN')}
+                      </p>
+                      {request.message ? (
+                        <p className="mt-2 text-sm leading-6 text-text-secondary">{request.message}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <Link to="/profile">
+                      <Button size="sm" variant="ghost" icon="user">
+                        Xem hồ sơ
+                      </Button>
+                    </Link>
+                    {request.status === 'ACCEPTED' ? (
+                      <Link to="/messages">
+                        <Button size="sm" variant="outline" icon="messages">
+                          Nhắn tin
+                        </Button>
+                      </Link>
+                    ) : request.status === 'PENDING' && !hasAcceptedRequest && itemStatus !== 'IN_TRANSACTION' ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        icon="check"
+                        onClick={() => onAccept(request.id)}
+                      >
+                        Chọn người này
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+                {offeredItem ? (
+                  <div className="mt-3 rounded-md bg-surface-low p-3">
+                    <p className="text-xs font-bold text-text-muted">Món đề nghị trao đổi</p>
+                    <div className="mt-2 flex items-center gap-3">
+                      <img src={offeredItem.images[0]} alt="" className="size-14 rounded-md object-cover" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold">{offeredItem.title}</p>
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          <ConditionBadge condition={offeredItem.condition} />
+                          <span className="text-xs text-text-muted">{offeredItem.district}</span>
+                        </div>
+                      </div>
+                      <Link to={`/items/${offeredItem.id}`}>
+                        <Button size="sm" variant="outline" icon="eye">
+                          Xem chi tiết
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-text-muted">Chưa có yêu cầu nào cho món này.</p>
+      )}
     </div>
   );
 }

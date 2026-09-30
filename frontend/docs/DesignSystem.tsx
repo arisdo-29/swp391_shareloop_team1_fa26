@@ -105,48 +105,48 @@ const ICON_LIST = [
 
 const STATUS_LIST = [
   { status: 'pending', label: 'Chờ duyệt', bg: '#FFF7ED', color: '#F59E0B' },
-  { status: 'approved', label: 'Đã duyệt', bg: '#ECFDF5', color: '#059669' },
+  { status: 'approved', label: 'ÄĂ£ duyá»‡t', bg: '#ECFDF5', color: '#059669' },
   { status: 'rejected', label: 'Từ chối', bg: '#FEF2F2', color: '#BA1A1A' },
   { status: 'expired', label: 'Hết hạn', bg: '#FFF7ED', color: '#F59E0B' },
-  { status: 'removed', label: 'Đã gỡ', bg: '#F8F9FF', color: '#BCC9C6' },
+  { status: 'removed', label: 'ÄĂ£ gá»¡', bg: '#F8F9FF', color: '#BCC9C6' },
   { status: 'negotiating', label: 'Đang TL', bg: '#FFDBCA', color: '#9D4300' },
   { status: 'waiting_schedule', label: 'Chờ chốt lịch', bg: '#FFF7ED', color: '#F59E0B' },
-  { status: 'schedule_confirmed', label: 'Đã chốt lịch', bg: '#EFF4FF', color: '#00685F' },
-  { status: 'fee_held', label: 'Đã giữ phí', bg: '#FFDBCA', color: '#9D4300' },
+  { status: 'schedule_confirmed', label: 'ÄĂ£ chá»‘t lá»‹ch', bg: '#EFF4FF', color: '#00685F' },
+  { status: 'schedule_locked', label: 'Da chot lich', bg: '#FFDBCA', color: '#9D4300' },
   { status: 'waiting_handover', label: 'Chờ giao nhận', bg: '#FFF7ED', color: '#F59E0B' },
-  { status: 'confirming', label: 'Đang xác nhận', bg: '#EFF4FF', color: '#6D7A77' },
-  { status: 'completed', label: 'Hoàn tất', bg: '#ECFDF5', color: '#059669' },
+  { status: 'confirming', label: 'Äang xĂ¡c nháº­n', bg: '#EFF4FF', color: '#6D7A77' },
+  { status: 'completed', label: 'HoĂ n táº¥t', bg: '#ECFDF5', color: '#059669' },
   { status: 'disputed', label: 'Tranh chấp', bg: '#FEF2F2', color: '#BA1A1A' },
-  { status: 'cancelled', label: 'Đã hủy', bg: '#F8F9FF', color: '#BCC9C6' },
+  { status: 'cancelled', label: 'ÄĂ£ há»§y', bg: '#F8F9FF', color: '#BCC9C6' },
   { status: 'active', label: 'Hoạt động', bg: '#ECFDF5', color: '#059669' },
-  { status: 'suspended', label: 'Tạm khóa', bg: '#FFF7ED', color: '#F59E0B' },
-  { status: 'locked', label: 'Đã khóa', bg: '#FEF2F2', color: '#BA1A1A' },
+  { status: 'suspended', label: 'Táº¡m khĂ³a', bg: '#FFF7ED', color: '#F59E0B' },
+  { status: 'locked', label: 'ÄĂ£ khĂ³a', bg: '#FEF2F2', color: '#BA1A1A' },
 ];
 
 const SCREEN_INVENTORY = [
   { name: 'Trang chủ', route: '/', role: 'Public', layout: 'AppShell', components: ['Hero', 'Search', 'CategoryGrid', 'ProductGrid', 'CommunitySection'], states: ['Logged out', 'Logged in'] },
-  { name: 'Tìm đồ', route: '/browse', role: 'Public', layout: 'AppShell + SidebarLayout', components: ['FilterSidebar', 'ProductGrid', 'SearchField'], states: ['No filter', 'Filtered', 'Empty results'] },
-  { name: 'Chi tiết món', route: '/product/:id', role: 'Public', layout: 'AppShell + TwoColumn', components: ['ProductImage', 'ProductDetail', 'OwnerCard', 'ActionModal'], states: ['Guest view', 'User view', 'Own item'] },
+  { name: 'TĂ¬m Ä‘á»“', route: '/browse', role: 'Public', layout: 'AppShell + SidebarLayout', components: ['FilterSidebar', 'ProductGrid', 'SearchField'], states: ['No filter', 'Filtered', 'Empty results'] },
+  { name: 'Chi tiáº¿t mĂ³n', route: '/product/:id', role: 'Public', layout: 'AppShell + TwoColumn', components: ['ProductImage', 'ProductDetail', 'OwnerCard', 'ActionModal'], states: ['Guest view', 'User view', 'Own item'] },
   { name: 'Đăng đồ', route: '/post', role: 'User', layout: 'AppShell + FormLayout', components: ['FormFields', 'ImageUpload', 'TypeToggle'], states: ['Empty', 'Filled', 'Submitted'] },
   { name: 'Hoạt động', route: '/activities', role: 'User', layout: 'AppShell + Tabs', components: ['ListingRow', 'TransactionRow', 'EditForm', 'ConfirmModal'], states: ['Posted tab', 'Requests tab'] },
-  { name: 'Trợ lý AI', route: '/ai', role: 'Public/User', layout: 'AppShell', components: ['AIInput', 'AIIntentCard', 'AIMatchCard', 'AIExchangeComparison'], states: ['Find mode', 'Have mode', 'Results', 'Match confirmed'] },
+  { name: 'Trá»£ lĂ½ AI', route: '/ai', role: 'Public/User', layout: 'AppShell', components: ['AIInput', 'AIIntentCard', 'AIMatchCard', 'AIExchangeComparison'], states: ['Find mode', 'Have mode', 'Results', 'Match confirmed'] },
   { name: 'Tin nhắn', route: '/messages', role: 'User', layout: 'AppShell + ChatLayout', components: ['ConversationList', 'ChatPanel', 'TransactionContext', 'HandoverCard', 'CreditHoldCard'], states: ['Negotiating', 'Schedule proposed', 'Fee held', 'Handover', 'Completed'] },
   { name: 'Hồ sơ', route: '/profile', role: 'User', layout: 'AppShell + SidebarLayout', components: ['ProfileSidebar', 'InfoForm', 'ReputationTab', 'CreditHistoryTab'], states: ['Info tab', 'Reputation tab', 'Credit tab'] },
   { name: 'Đăng nhập', route: '/login', role: 'Guest', layout: 'AppShell + FormLayout', components: ['LoginForm', 'DemoButtons'], states: ['Empty', 'Error', 'Loading'] },
-  { name: 'Đăng ký', route: '/register', role: 'Guest', layout: 'AppShell + FormLayout', components: ['RegisterForm', 'OTPInput', 'StepIndicator'], states: ['Step 1 form', 'Step 2 email OTP', 'Step 3 phone OTP'] },
-  { name: 'Admin', route: '/admin', role: 'Admin', layout: 'AppShell + AdminLayout', components: ['AdminSidebar', 'AdminContent', 'DataTable', 'AdminModal'], states: ['7 sections × sub-sections'] },
+  { name: 'ÄÄƒng kĂ½', route: '/register', role: 'Guest', layout: 'AppShell + FormLayout', components: ['RegisterForm', 'OTPInput', 'StepIndicator'], states: ['Step 1 form', 'Step 2 email OTP', 'Step 3 phone OTP'] },
+  { name: 'Admin', route: '/admin', role: 'Admin', layout: 'AppShell + AdminLayout', components: ['AdminSidebar', 'AdminContent', 'DataTable', 'AdminModal'], states: ['7 sections Ă— sub-sections'] },
 ];
 
 const ROUTE_MAP = {
   public: [
     { route: '/', name: 'Trang chủ', component: 'Home', layout: 'AppShell', components: 'Hero, Search, CategoryGrid, ProductGrid' },
-    { route: '/browse', name: 'Tìm đồ', component: 'Browse', layout: 'AppShell + SidebarLayout', components: 'FilterSidebar, ProductGrid' },
-    { route: '/product/:id', name: 'Chi tiết món', component: 'ProductDetail', layout: 'AppShell + TwoColumn', components: 'ProductImage, ProductDetail, OwnerCard' },
-    { route: '/ai', name: 'Trợ lý AI', component: 'AI', layout: 'AppShell', components: 'AIInput, AIIntentCard, AIMatchCard' },
+    { route: '/browse', name: 'TĂ¬m Ä‘á»“', component: 'Browse', layout: 'AppShell + SidebarLayout', components: 'FilterSidebar, ProductGrid' },
+    { route: '/product/:id', name: 'Chi tiáº¿t mĂ³n', component: 'ProductDetail', layout: 'AppShell + TwoColumn', components: 'ProductImage, ProductDetail, OwnerCard' },
+    { route: '/ai', name: 'Trá»£ lĂ½ AI', component: 'AI', layout: 'AppShell', components: 'AIInput, AIIntentCard, AIMatchCard' },
   ],
   guest: [
     { route: '/login', name: 'Đăng nhập', component: 'Login', layout: 'AppShell + FormLayout', components: 'LoginForm, DemoButtons' },
-    { route: '/register', name: 'Đăng ký', component: 'Register', layout: 'AppShell + FormLayout', components: 'RegisterForm, OTPInput, StepIndicator' },
+    { route: '/register', name: 'ÄÄƒng kĂ½', component: 'Register', layout: 'AppShell + FormLayout', components: 'RegisterForm, OTPInput, StepIndicator' },
   ],
   auth: [
     { route: '/post', name: 'Đăng đồ', component: 'Post', layout: 'AppShell + FormLayout', components: 'TypeToggle, FormFields, ImageUpload' },
@@ -156,24 +156,24 @@ const ROUTE_MAP = {
   ],
   admin: [
     { route: '/admin', name: 'Dashboard', component: 'Admin → Tổng quan', layout: 'AppShell + AdminLayout', components: 'StatCards, ActivityFeed' },
-    { route: '/admin/moderation', name: 'Duyệt bài', component: 'Admin → Nội dung', layout: 'AppShell + AdminLayout', components: 'AdminTable, ModerationChecklist' },
-    { route: '/admin/expired-posts', name: 'Bài hết hạn', component: 'Admin → Nội dung', layout: 'AppShell + AdminLayout', components: 'AdminTable, BulkActions' },
-    { route: '/admin/categories', name: 'Danh mục', component: 'Admin → Cấu hình', layout: 'AppShell + AdminLayout', components: 'CategoryTable, InlineEdit' },
-    { route: '/admin/keywords', name: 'Từ khóa cấm', component: 'Admin → Cấu hình', layout: 'AppShell + AdminLayout', components: 'KeywordList, AddKeywordForm' },
-    { route: '/admin/districts', name: 'Quận/huyện', component: 'Admin → Cấu hình', layout: 'AppShell + AdminLayout', components: 'DistrictTable, InlineEdit' },
-    { route: '/admin/users', name: 'Danh sách người dùng', component: 'Admin → Người dùng', layout: 'AppShell + AdminLayout', components: 'AdminTable, AdminFilterBar, UserModal' },
-    { route: '/admin/users/:userId', name: 'Chi tiết người dùng', component: 'Admin → Người dùng', layout: 'AppShell + AdminLayout', components: 'UserDetail 5-tab panel, CreditHistory, TxList' },
-    { route: '/admin/reputation', name: 'Uy tín & hạng', component: 'Admin → Người dùng', layout: 'AppShell + AdminLayout', components: 'ReputationTable, RankBadge, StarRating' },
-    { route: '/admin/locked-users', name: 'Tài khoản bị khóa', component: 'Admin → Người dùng', layout: 'AppShell + AdminLayout', components: 'AdminTable, UnlockModal' },
+    { route: '/admin/moderation', name: 'Duyá»‡t bĂ i', component: 'Admin â†’ Ná»™i dung', layout: 'AppShell + AdminLayout', components: 'AdminTable, ModerationChecklist' },
+    { route: '/admin/expired-posts', name: 'BĂ i háº¿t háº¡n', component: 'Admin â†’ Ná»™i dung', layout: 'AppShell + AdminLayout', components: 'AdminTable, BulkActions' },
+    { route: '/admin/categories', name: 'Danh má»¥c', component: 'Admin â†’ Cáº¥u hĂ¬nh', layout: 'AppShell + AdminLayout', components: 'CategoryTable, InlineEdit' },
+    { route: '/admin/keywords', name: 'Tá»« khĂ³a cáº¥m', component: 'Admin â†’ Cáº¥u hĂ¬nh', layout: 'AppShell + AdminLayout', components: 'KeywordList, AddKeywordForm' },
+    { route: '/admin/districts', name: 'Quáº­n/huyá»‡n', component: 'Admin â†’ Cáº¥u hĂ¬nh', layout: 'AppShell + AdminLayout', components: 'DistrictTable, InlineEdit' },
+    { route: '/admin/users', name: 'Danh sĂ¡ch ngÆ°á»i dĂ¹ng', component: 'Admin â†’ NgÆ°á»i dĂ¹ng', layout: 'AppShell + AdminLayout', components: 'AdminTable, AdminFilterBar, UserModal' },
+    { route: '/admin/users/:userId', name: 'Chi tiáº¿t ngÆ°á»i dĂ¹ng', component: 'Admin â†’ NgÆ°á»i dĂ¹ng', layout: 'AppShell + AdminLayout', components: 'UserDetail 5-tab panel, CreditHistory, TxList' },
+    { route: '/admin/reputation', name: 'Uy tĂ­n & háº¡ng', component: 'Admin â†’ NgÆ°á»i dĂ¹ng', layout: 'AppShell + AdminLayout', components: 'ReputationTable, RankBadge, StarRating' },
+    { route: '/admin/locked-users', name: 'TĂ i khoáº£n bá»‹ khĂ³a', component: 'Admin â†’ NgÆ°á»i dĂ¹ng', layout: 'AppShell + AdminLayout', components: 'AdminTable, UnlockModal' },
     { route: '/admin/transactions', name: 'Giao dịch', component: 'Admin → Giao dịch', layout: 'AppShell + AdminLayout', components: 'AdminTable, AdminFilterBar' },
     { route: '/admin/transactions/:transactionId', name: 'Chi tiết giao dịch', component: 'Admin → Giao dịch', layout: 'AppShell + AdminLayout', components: 'TxDetail, HandoverCard, EvidencePreview' },
     { route: '/admin/disputes', name: 'Tranh chấp', component: 'Admin → Giao dịch', layout: 'AppShell + AdminLayout', components: 'DisputeTable, DisputeModal, ResolveForm' },
-    { route: '/admin/alerts', name: 'Cảnh báo', component: 'Admin → Giao dịch', layout: 'AppShell + AdminLayout', components: 'AlertTable, SuspiciousFlag' },
-    { route: '/admin/finance', name: 'Tổng quan tài chính', component: 'Admin → Tài chính', layout: 'AppShell + AdminLayout', components: 'FinanceStatCards, RevenueTable' },
-    { route: '/admin/finance/users/:userId', name: 'Credit người dùng', component: 'Admin → Tài chính', layout: 'AppShell + AdminLayout', components: 'CreditSummary, CreditHistoryTable, AdjustModal' },
-    { route: '/admin/settings/fees', name: 'Phí giao dịch', component: 'Admin → Cấu hình', layout: 'AppShell + AdminLayout', components: 'FeeConfigForm, SaveConfirm' },
-    { route: '/admin/settings/ranks', name: 'Cấu hình hạng', component: 'Admin → Cấu hình', layout: 'AppShell + AdminLayout', components: 'RankConfigTable, ThresholdEdit' },
-    { route: '/admin/audit-logs', name: 'Nhật ký hệ thống', component: 'Admin → Hệ thống', layout: 'AppShell + AdminLayout', components: 'AuditLogTable, FilterBar, ExportButton' },
+    { route: '/admin/alerts', name: 'Cáº£nh bĂ¡o', component: 'Admin â†’ Giao dá»‹ch', layout: 'AppShell + AdminLayout', components: 'AlertTable, SuspiciousFlag' },
+    { route: '/admin/finance', name: 'Tá»•ng quan tĂ i chĂ­nh', component: 'Admin â†’ TĂ i chĂ­nh', layout: 'AppShell + AdminLayout', components: 'FinanceStatCards, RevenueTable' },
+    { route: '/admin/finance/users/:userId', name: 'Credit ngÆ°á»i dĂ¹ng', component: 'Admin â†’ TĂ i chĂ­nh', layout: 'AppShell + AdminLayout', components: 'CreditSummary, CreditHistoryTable, AdjustModal' },
+    { route: '/admin/settings/credit', name: 'Credit dang bai', component: 'Admin -> Cau hinh', layout: 'AppShell + AdminLayout', components: 'CreditConfigSummary, SaveConfirm' },
+    { route: '/admin/settings/ranks', name: 'Cáº¥u hĂ¬nh háº¡ng', component: 'Admin â†’ Cáº¥u hĂ¬nh', layout: 'AppShell + AdminLayout', components: 'RankConfigTable, ThresholdEdit' },
+    { route: '/admin/audit-logs', name: 'Nháº­t kĂ½ há»‡ thá»‘ng', component: 'Admin â†’ Há»‡ thá»‘ng', layout: 'AppShell + AdminLayout', components: 'AuditLogTable, FilterBar, ExportButton' },
   ],
 };
 
@@ -278,7 +278,7 @@ export default function DesignSystem() {
                     <div style={{ fontSize: 9, color: '#BCC9C6' }}>{t.size}/{t.lh} · w{t.weight}</div>
                   </div>
                   <div style={{ fontSize: t.size > 36 ? 28 : t.size, fontWeight: t.weight, lineHeight: `${t.lh}px`, color: '#0B1C30' }}>
-                    {t.name.includes('Display') ? 'SHARELOOP' : t.name.includes('Heading') ? 'Trao đổi đồ cũ' : 'Kết nối cộng đồng qua món đồ'}
+                    {t.name.includes('Display') ? 'SHARELOOP' : t.name.includes('Heading') ? 'Trao Ä‘á»•i Ä‘á»“ cÅ©' : 'Káº¿t ná»‘i cá»™ng Ä‘á»“ng qua mĂ³n Ä‘á»“'}
                   </div>
                 </div>
               ))}
@@ -286,14 +286,14 @@ export default function DesignSystem() {
             <DSCard title="Usage Examples">
               <Grid cols={2}>
                 {[
-                  { label: 'Page Title', ex: 'Khám phá tất cả món đồ', size: 26, weight: 700 },
-                  { label: 'Section Title', ex: 'Món đồ nổi bật', size: 18, weight: 700 },
+                  { label: 'Page Title', ex: 'KhĂ¡m phĂ¡ táº¥t cáº£ mĂ³n Ä‘á»“', size: 26, weight: 700 },
+                  { label: 'Section Title', ex: 'MĂ³n Ä‘á»“ ná»•i báº­t', size: 18, weight: 700 },
                   { label: 'Card Title', ex: 'Tai nghe Sony WH-1000XM4', size: 14, weight: 600 },
-                  { label: 'Body', ex: 'Còn mới 95%, mua về ít dùng. Hộp đầy đủ phụ kiện.', size: 13, weight: 400 },
-                  { label: 'Form Label', ex: 'Tên món đồ *', size: 12, weight: 600 },
-                  { label: 'Helper Text', ex: 'Tối đa 100 ký tự', size: 11, weight: 400 },
+                  { label: 'Body', ex: 'CĂ²n má»›i 95%, mua vá» Ă­t dĂ¹ng. Há»™p Ä‘áº§y Ä‘á»§ phá»¥ kiá»‡n.', size: 13, weight: 400 },
+                  { label: 'Form Label', ex: 'TĂªn mĂ³n Ä‘á»“ *', size: 12, weight: 600 },
+                  { label: 'Helper Text', ex: 'Tá»‘i Ä‘a 100 kĂ½ tá»±', size: 11, weight: 400 },
                   { label: 'Badge', ex: 'CHO TẶNG', size: 10, weight: 700 },
-                  { label: 'Table Text', ex: 'Nguyễn Hoàng Minh', size: 13, weight: 500 },
+                  { label: 'Table Text', ex: 'Nguyá»…n HoĂ ng Minh', size: 13, weight: 500 },
                 ].map(ex => (
                   <div key={ex.label} style={{ padding: 14, background: '#F8F9FF', borderRadius: 10 }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#BCC9C6', marginBottom: 6 }}>{ex.label}</div>
@@ -411,10 +411,10 @@ export default function DesignSystem() {
                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>add</span>Đăng đồ
                 </button>
                 <button style={{ ...btnVariant('outline'), display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>search</span>Tìm đồ
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>search</span>TĂ¬m Ä‘á»“
                 </button>
                 <button style={{ ...btnVariant('danger'), display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span>Gỡ bài
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span>Gá»¡ bĂ i
                 </button>
               </div>
             </DSCard>
@@ -426,15 +426,15 @@ export default function DesignSystem() {
             <DSCard title="TextField States">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 400 }}>
                 {[
-                  { label: 'Default', value: '', placeholder: 'Tên món đồ...', border: '#BCC9C6' },
+                  { label: 'Default', value: '', placeholder: 'TĂªn mĂ³n Ä‘á»“...', border: '#BCC9C6' },
                   { label: 'Focus', value: '', placeholder: 'Đang nhập...', border: '#00685F' },
                   { label: 'Filled', value: 'Tai nghe Sony WH-1000XM4', placeholder: '', border: '#BCC9C6' },
-                  { label: 'Error', value: 'abc', placeholder: '', border: '#BA1A1A', error: 'Tên phải có ít nhất 5 ký tự' },
-                  { label: 'Disabled', value: '', placeholder: 'Không thể chỉnh sửa', border: '#E5EEFF' },
+                  { label: 'Error', value: 'abc', placeholder: '', border: '#BA1A1A', error: 'TĂªn pháº£i cĂ³ Ă­t nháº¥t 5 kĂ½ tá»±' },
+                  { label: 'Disabled', value: '', placeholder: 'KhĂ´ng thá»ƒ chá»‰nh sá»­a', border: '#E5EEFF' },
                 ].map(f => (
                   <div key={f.label}>
                     <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6D7A77', marginBottom: 4 }}>{f.label}</label>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#0B1C30', marginBottom: 4 }}>Tên món đồ *</label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#0B1C30', marginBottom: 4 }}>TĂªn mĂ³n Ä‘á»“ *</label>
                     <input value={f.value} placeholder={f.placeholder} readOnly style={{ width: '100%', padding: '9px 12px', border: `1.5px solid ${f.border}`, borderRadius: 10, fontSize: 13, fontFamily: 'inherit', outline: 'none', background: f.label === 'Disabled' ? '#F8F9FF' : '#fff', boxSizing: 'border-box' }} />
                     {f.error && <div style={{ fontSize: 11, color: '#BA1A1A', marginTop: 3 }}>{f.error}</div>}
                   </div>
@@ -450,13 +450,13 @@ export default function DesignSystem() {
               </DSCard>
               <DSCard title="Checkbox & Radio">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {['Cho tặng miễn phí', 'Trao đổi đồ'].map((l, i) => (
+                  {['Cho táº·ng miá»…n phĂ­', 'Trao Ä‘á»•i Ä‘á»“'].map((l, i) => (
                     <label key={l} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#3D4947', cursor: 'pointer' }}>
                       <input type="checkbox" defaultChecked={i === 0} style={{ accentColor: '#00685F' }} />{l}
                     </label>
                   ))}
                   <div style={{ marginTop: 8 }} />
-                  {['Gặp trực tiếp', 'Giao hàng'].map((l, i) => (
+                  {['Gáº·p trá»±c tiáº¿p', 'Giao hĂ ng'].map((l, i) => (
                     <label key={l} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#3D4947', cursor: 'pointer' }}>
                       <input type="radio" name="method" defaultChecked={i === 0} style={{ accentColor: '#00685F' }} />{l}
                     </label>
@@ -473,7 +473,7 @@ export default function DesignSystem() {
               <DSCard title="Search Field">
                 <div style={{ display: 'flex', alignItems: 'center', border: '1.5px solid #BCC9C6', borderRadius: 12, background: '#fff', overflow: 'hidden' }}>
                   <span className="material-symbols-outlined" style={{ padding: '0 12px', color: '#6D7A77', fontSize: 18 }}>search</span>
-                  <input placeholder="Tìm món đồ..." style={{ flex: 1, border: 'none', outline: 'none', fontSize: 13, padding: '9px 0', fontFamily: 'inherit' }} />
+                  <input placeholder="TĂ¬m mĂ³n Ä‘á»“..." style={{ flex: 1, border: 'none', outline: 'none', fontSize: 13, padding: '9px 0', fontFamily: 'inherit' }} />
                 </div>
               </DSCard>
             </Grid>
@@ -497,14 +497,14 @@ export default function DesignSystem() {
             </DSCard>
             <DSCard title="Condition Badges">
               <div style={{ display: 'flex', gap: 8 }}>
-                {[['Mới', '#ECFDF5', '#059669'], ['Dùng tốt', '#EFF4FF', '#00685F'], ['Đã qua dùng', '#F8F9FF', '#6D7A77']].map(([l, bg, c]) => (
+                {[['Má»›i', '#ECFDF5', '#059669'], ['DĂ¹ng tá»‘t', '#EFF4FF', '#00685F'], ['ÄĂ£ qua dĂ¹ng', '#F8F9FF', '#6D7A77']].map(([l, bg, c]) => (
                   <span key={String(l)} style={{ padding: '3px 9px', borderRadius: 5, background: bg as string, color: c as string, fontSize: 10, fontWeight: 600 }}>{l}</span>
                 ))}
               </div>
             </DSCard>
             <DSCard title="Rank Badges">
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {[['Thành viên mới', '#BCC9C6'], ['Thành viên tích cực', '#F59E0B'], ['Thành viên uy tín', '#00685F']].map(([l, c]) => (
+                {[['ThĂ nh viĂªn má»›i', '#BCC9C6'], ['ThĂ nh viĂªn tĂ­ch cá»±c', '#F59E0B'], ['ThĂ nh viĂªn uy tĂ­n', '#00685F']].map(([l, c]) => (
                   <span key={String(l)} style={{ padding: '4px 12px', borderRadius: 9999, background: (c as string) + '18', color: c as string, fontSize: 11, fontWeight: 700 }}>{l}</span>
                 ))}
               </div>
@@ -517,8 +517,8 @@ export default function DesignSystem() {
             <DSCard title="ProductCard / Grid">
               <div style={{ display: 'flex', gap: 14 }}>
                 {[
-                  { img: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200&h=150&fit=crop', title: 'Tai nghe Sony WH-1000XM4', type: 'trade', condition: 'Dùng tốt', district: 'Quận 3', owner: 'Thanh Nga', stars: 4.2 },
-                  { img: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=200&h=150&fit=crop', title: 'Sofa da nâu 3 chỗ', type: 'gift', condition: 'Mới', district: 'Quận 1', owner: 'Văn Hùng', stars: 5.0 },
+                  { img: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200&h=150&fit=crop', title: 'Tai nghe Sony WH-1000XM4', type: 'trade', condition: 'DĂ¹ng tá»‘t', district: 'Quáº­n 3', owner: 'Thanh Nga', stars: 4.2 },
+                  { img: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=200&h=150&fit=crop', title: 'Sofa da nĂ¢u 3 chá»—', type: 'gift', condition: 'Má»›i', district: 'Quáº­n 1', owner: 'VÄƒn HĂ¹ng', stars: 5.0 },
                 ].map(p => (
                   <div key={p.title} style={{ width: 200, background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', border: '1px solid #E5EEFF' }}>
                     <div style={{ position: 'relative' }}>
@@ -543,9 +543,9 @@ export default function DesignSystem() {
               <div style={{ display: 'flex', gap: 12, padding: '12px', background: '#fff', borderRadius: 14, border: '1px solid #E5EEFF', maxWidth: 480 }}>
                 <img src="https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=80&h=60&fit=crop" alt="" style={{ width: 80, height: 60, borderRadius: 8, objectFit: 'cover' }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: '#0B1C30', marginBottom: 2 }}>Máy ảnh Fujifilm X-T30</div>
-                  <div style={{ fontSize: 11, color: '#6D7A77', marginBottom: 4 }}>Bình Thạnh · Trao đổi</div>
-                  <span style={{ padding: '2px 7px', borderRadius: 5, background: '#EFF4FF', color: '#059669', fontSize: 9, fontWeight: 600 }}>Dùng tốt</span>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: '#0B1C30', marginBottom: 2 }}>MĂ¡y áº£nh Fujifilm X-T30</div>
+                  <div style={{ fontSize: 11, color: '#6D7A77', marginBottom: 4 }}>BĂ¬nh Tháº¡nh Â· Trao Ä‘á»•i</div>
+                  <span style={{ padding: '2px 7px', borderRadius: 5, background: '#EFF4FF', color: '#059669', fontSize: 9, fontWeight: 600 }}>DĂ¹ng tá»‘t</span>
                 </div>
               </div>
             </DSCard>
@@ -558,11 +558,11 @@ export default function DesignSystem() {
               <div style={{ display: 'flex', alignItems: 'center', height: 52, background: '#fff', border: '1px solid #E5EEFF', borderRadius: 12, padding: '0 20px', gap: 24 }}>
                 <div style={{ fontWeight: 700, fontSize: 15, color: '#00685F' }}>SHARELOOP</div>
                 <div style={{ display: 'flex', gap: 16, flex: 1 }}>
-                  {['Trang chủ', 'Tìm đồ', 'Trợ lý AI'].map(n => <span key={n} style={{ fontSize: 13, color: '#3D4947', cursor: 'pointer' }}>{n}</span>)}
+                  {['Trang chá»§', 'TĂ¬m Ä‘á»“', 'Trá»£ lĂ½ AI'].map(n => <span key={n} style={{ fontSize: 13, color: '#3D4947', cursor: 'pointer' }}>{n}</span>)}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button style={{ padding: '6px 14px', borderRadius: 8, border: '1.5px solid #BCC9C6', background: '#fff', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit', color: '#3D4947' }}>Đăng nhập</button>
-                  <button style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: '#00685F', color: '#fff', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit', fontWeight: 600 }}>Đăng ký</button>
+                  <button style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: '#00685F', color: '#fff', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit', fontWeight: 600 }}>ÄÄƒng kĂ½</button>
                 </div>
               </div>
             </DSCard>
@@ -570,7 +570,7 @@ export default function DesignSystem() {
               <div style={{ display: 'flex', alignItems: 'center', height: 52, background: '#fff', border: '1px solid #E5EEFF', borderRadius: 12, padding: '0 20px', gap: 20 }}>
                 <div style={{ fontWeight: 700, fontSize: 15, color: '#00685F' }}>SHARELOOP</div>
                 <div style={{ display: 'flex', gap: 14, flex: 1 }}>
-                  {['Trang chủ', 'Tìm đồ', 'Hoạt động', 'Trợ lý AI', 'Tin nhắn'].map(n => <span key={n} style={{ fontSize: 12, color: '#3D4947', cursor: 'pointer', whiteSpace: 'nowrap' }}>{n}</span>)}
+                  {['Trang chá»§', 'TĂ¬m Ä‘á»“', 'Hoáº¡t Ä‘á»™ng', 'Trá»£ lĂ½ AI', 'Tin nháº¯n'].map(n => <span key={n} style={{ fontSize: 12, color: '#3D4947', cursor: 'pointer', whiteSpace: 'nowrap' }}>{n}</span>)}
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 9999, background: '#EFF4FF', cursor: 'pointer' }}>
@@ -586,7 +586,7 @@ export default function DesignSystem() {
             </DSCard>
             <DSCard title="Admin Sidebar (mini)">
               <div style={{ width: 180, background: '#fff', borderRadius: 12, border: '1px solid #E5EEFF', padding: 10 }}>
-                {[['dashboard', 'Tổng quan'], ['article', 'Nội dung'], ['group', 'Người dùng'], ['swap_horiz', 'Giao dịch'], ['payments', 'Tài chính'], ['settings', 'Cấu hình'], ['history', 'Hệ thống']].map(([icon, label], i) => (
+                {[['dashboard', 'Tá»•ng quan'], ['article', 'Ná»™i dung'], ['group', 'NgÆ°á»i dĂ¹ng'], ['swap_horiz', 'Giao dá»‹ch'], ['payments', 'TĂ i chĂ­nh'], ['settings', 'Cáº¥u hĂ¬nh'], ['history', 'Há»‡ thá»‘ng']].map(([icon, label], i) => (
                   <div key={String(label)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, background: i === 0 ? '#FFDBCA' : 'transparent', marginBottom: 2 }}>
                     <span className="material-symbols-outlined" style={{ fontSize: 15, color: i === 0 ? '#9D4300' : '#6D7A77' }}>{icon}</span>
                     <span style={{ fontSize: 12, fontWeight: i === 0 ? 700 : 400, color: i === 0 ? '#9D4300' : '#3D4947' }}>{label}</span>
@@ -603,13 +603,13 @@ export default function DesignSystem() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 400 }}>
                 <div style={{ display: 'flex', gap: 7 }}>
                   <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#00685F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 9, fontWeight: 700, flexShrink: 0 }}>TN</div>
-                  <div style={{ padding: '9px 13px', borderRadius: '14px 14px 14px 4px', background: '#fff', border: '1px solid #E5EEFF', fontSize: 13, color: '#0B1C30' }}>Bàn học mình muốn tặng cho ai cần.</div>
+                  <div style={{ padding: '9px 13px', borderRadius: '14px 14px 14px 4px', background: '#fff', border: '1px solid #E5EEFF', fontSize: 13, color: '#0B1C30' }}>BĂ n há»c mĂ¬nh muá»‘n táº·ng cho ai cáº§n.</div>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <div style={{ padding: '9px 13px', borderRadius: '14px 14px 4px 14px', background: '#00685F', fontSize: 13, color: '#fff' }}>Mình cần lắm! Bàn có thể tháo ra không?</div>
+                  <div style={{ padding: '9px 13px', borderRadius: '14px 14px 4px 14px', background: '#00685F', fontSize: 13, color: '#fff' }}>MĂ¬nh cáº§n láº¯m! BĂ n cĂ³ thá»ƒ thĂ¡o ra khĂ´ng?</div>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <span style={{ display: 'inline-block', padding: '4px 14px', borderRadius: 9999, background: '#F0F4FF', fontSize: 11, color: '#6D7A77', fontWeight: 500 }}>5 Credit đã được giữ.</span>
+                  <span style={{ display: 'inline-block', padding: '4px 14px', borderRadius: 9999, background: '#F0F4FF', fontSize: 11, color: '#6D7A77', fontWeight: 500 }}>5 Credit Ä‘Ă£ Ä‘Æ°á»£c giá»¯.</span>
                 </div>
               </div>
             </DSCard>
@@ -620,21 +620,21 @@ export default function DesignSystem() {
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.05em' }}>ĐỀ XUẤT GIAO NHẬN</span>
                 </div>
                 <div style={{ padding: '12px 14px' }}>
-                  {[['Ngày', '25/09/2026'], ['Thời gian', '18:30'], ['Khu vực', 'Bình Thạnh'], ['Địa điểm', 'Landmark 81'], ['Phương thức', 'Gặp trực tiếp']].map(([k, v]) => (
+                  {[['NgĂ y', '25/09/2026'], ['Thá»i gian', '18:30'], ['Khu vá»±c', 'BĂ¬nh Tháº¡nh'], ['Äá»‹a Ä‘iá»ƒm', 'Landmark 81'], ['PhÆ°Æ¡ng thá»©c', 'Gáº·p trá»±c tiáº¿p']].map(([k, v]) => (
                     <div key={String(k)} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0' }}>
                       <span style={{ color: '#6D7A77' }}>{k}</span><span style={{ fontWeight: 600, color: '#0B1C30' }}>{v}</span>
                     </div>
                   ))}
                   <div style={{ display: 'flex', gap: 7, marginTop: 12 }}>
                     <button style={btnVariant('outline')}>Đề xuất lại</button>
-                    <button style={{ ...btnVariant('primary'), flex: 1 }}>Đồng ý</button>
+                    <button style={{ ...btnVariant('primary'), flex: 1 }}>Äá»“ng Ă½</button>
                   </div>
                 </div>
               </div>
             </DSCard>
             <DSCard title="TransactionProgress">
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                {['Thương lượng', 'Chốt lịch', 'Chờ giao', 'Xác nhận', 'Hoàn tất'].map((step, i, arr) => (
+                {['ThÆ°Æ¡ng lÆ°á»£ng', 'Chá»‘t lá»‹ch', 'Chá» giao', 'XĂ¡c nháº­n', 'HoĂ n táº¥t'].map((step, i, arr) => (
                   <>
                     <div key={step} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
                       <div style={{ width: 28, height: 28, borderRadius: '50%', background: i <= 2 ? '#00685F' : '#E5EEFF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -655,10 +655,10 @@ export default function DesignSystem() {
             <DSCard title="Toast Variants">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 360 }}>
                 {[
-                  { type: 'Success', icon: 'check_circle', bg: '#ECFDF5', color: '#059669', msg: 'Bài đăng đã được duyệt.' },
-                  { type: 'Error', icon: 'cancel', bg: '#FEF2F2', color: '#BA1A1A', msg: 'Không thể hoàn tất giao dịch.' },
-                  { type: 'Warning', icon: 'warning', bg: '#FFF7ED', color: '#F59E0B', msg: 'Credit sắp hết, hãy nạp thêm.' },
-                  { type: 'Info', icon: 'info', bg: '#EFF4FF', color: '#00685F', msg: 'Lịch giao nhận đã được đề xuất.' },
+                  { type: 'Success', icon: 'check_circle', bg: '#ECFDF5', color: '#059669', msg: 'BĂ i Ä‘Äƒng Ä‘Ă£ Ä‘Æ°á»£c duyá»‡t.' },
+                  { type: 'Error', icon: 'cancel', bg: '#FEF2F2', color: '#BA1A1A', msg: 'KhĂ´ng thá»ƒ hoĂ n táº¥t giao dá»‹ch.' },
+                  { type: 'Warning', icon: 'warning', bg: '#FFF7ED', color: '#F59E0B', msg: 'Credit sáº¯p háº¿t, hĂ£y náº¡p thĂªm.' },
+                  { type: 'Info', icon: 'info', bg: '#EFF4FF', color: '#00685F', msg: 'Lá»‹ch giao nháº­n Ä‘Ă£ Ä‘Æ°á»£c Ä‘á» xuáº¥t.' },
                 ].map(t => (
                   <div key={t.type} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 12, background: t.bg, border: `1px solid ${t.color}30` }}>
                     <span className="material-symbols-outlined" style={{ fontSize: 18, color: t.color }}>{t.icon}</span>
@@ -671,8 +671,8 @@ export default function DesignSystem() {
             <DSCard title="Empty State">
               <div style={{ textAlign: 'center', padding: '24px 0' }}>
                 <span className="material-symbols-outlined" style={{ fontSize: 48, color: '#BCC9C6', display: 'block', marginBottom: 12 }}>inventory_2</span>
-                <div style={{ fontSize: 16, fontWeight: 600, color: '#3D4947', marginBottom: 6 }}>Chưa có món đồ nào</div>
-                <div style={{ fontSize: 13, color: '#6D7A77', marginBottom: 16 }}>Hãy đăng món đồ đầu tiên của bạn!</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#3D4947', marginBottom: 6 }}>ChÆ°a cĂ³ mĂ³n Ä‘á»“ nĂ o</div>
+                <div style={{ fontSize: 13, color: '#6D7A77', marginBottom: 16 }}>HĂ£y Ä‘Äƒng mĂ³n Ä‘á»“ Ä‘áº§u tiĂªn cá»§a báº¡n!</div>
                 <button style={btnVariant('primary')}>Đăng đồ ngay</button>
               </div>
             </DSCard>
@@ -684,9 +684,9 @@ export default function DesignSystem() {
             <DSCard title="AdminStatCard">
               <div style={{ display: 'flex', gap: 12 }}>
                 {[
-                  { label: 'Tổng người dùng', value: '1.248', icon: 'group', color: '#00685F' },
-                  { label: 'Bài chờ duyệt', value: '18', icon: 'pending', color: '#F59E0B' },
-                  { label: 'Giao dịch thành công', value: '742', icon: 'check_circle', color: '#059669' },
+                  { label: 'Tá»•ng ngÆ°á»i dĂ¹ng', value: '1.248', icon: 'group', color: '#00685F' },
+                  { label: 'BĂ i chá» duyá»‡t', value: '18', icon: 'pending', color: '#F59E0B' },
+                  { label: 'Giao dá»‹ch thĂ nh cĂ´ng', value: '742', icon: 'check_circle', color: '#059669' },
                 ].map(s => (
                   <div key={s.label} style={{ flex: 1, background: '#fff', borderRadius: 14, padding: '16px 18px', border: '1px solid #E5EEFF' }}>
                     <div style={{ width: 32, height: 32, borderRadius: 8, background: s.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
@@ -701,18 +701,18 @@ export default function DesignSystem() {
             <DSCard title="AdminTable (mini)">
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead><tr style={{ background: '#F8F9FF' }}>
-                  {['Người dùng', 'Khu vực', 'Credit', 'Trạng thái', 'Thao tác'].map(h => (
+                  {['NgÆ°á»i dĂ¹ng', 'Khu vá»±c', 'Credit', 'Tráº¡ng thĂ¡i', 'Thao tĂ¡c'].map(h => (
                     <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#6D7A77' }}>{h}</th>
                   ))}
                 </tr></thead>
                 <tbody>
-                  {[['Văn Hùng', 'Quận 1', '340', 'active'], ['Thanh Nga', 'Quận 3', '55', 'active'], ['Tuấn Anh', 'Tân Bình', '15', 'locked']].map(([name, d, c, st]) => (
+                  {[['VÄƒn HĂ¹ng', 'Quáº­n 1', '340', 'active'], ['Thanh Nga', 'Quáº­n 3', '55', 'active'], ['Tuáº¥n Anh', 'TĂ¢n BĂ¬nh', '15', 'locked']].map(([name, d, c, st]) => (
                     <tr key={String(name)} style={{ borderTop: '1px solid #F0F4FF' }}>
                       <td style={{ padding: '8px 10px', fontWeight: 600, color: '#0B1C30' }}>{name}</td>
                       <td style={{ padding: '8px 10px', color: '#6D7A77' }}>{d}</td>
                       <td style={{ padding: '8px 10px', fontWeight: 700, color: '#00685F' }}>{c}</td>
                       <td style={{ padding: '8px 10px' }}>
-                        <span style={{ padding: '2px 7px', borderRadius: 5, background: st === 'active' ? '#ECFDF5' : '#FEF2F2', color: st === 'active' ? '#059669' : '#BA1A1A', fontSize: 10, fontWeight: 600 }}>{st === 'active' ? 'Hoạt động' : 'Đã khóa'}</span>
+                        <span style={{ padding: '2px 7px', borderRadius: 5, background: st === 'active' ? '#ECFDF5' : '#FEF2F2', color: st === 'active' ? '#059669' : '#BA1A1A', fontSize: 10, fontWeight: 600 }}>{st === 'active' ? 'Hoáº¡t Ä‘á»™ng' : 'ÄĂ£ khĂ³a'}</span>
                       </td>
                       <td style={{ padding: '8px 10px' }}>
                         <button style={{ padding: '3px 9px', borderRadius: 6, border: 'none', background: '#F8F9FF', color: '#3D4947', cursor: 'pointer', fontSize: 10, fontFamily: 'inherit' }}>Xem</button>
@@ -826,7 +826,7 @@ export default function DesignSystem() {
                 {`type TxFlow =
   | 'negotiating'       // initial
   | 'schedule_proposed' // handover card sent
-  | 'schedule_agreed'   // partner clicked Đồng ý
+  | 'schedule_agreed'   // partner clicked Äá»“ng Ă½
   | 'fee_held'          // credit locked
   | 'waiting_handover'  // (alias: fee_held)
   | 'sender_done'       // sender confirmed delivery
@@ -950,7 +950,7 @@ Token usage:
             {[
               { name: 'User', fields: [
                 ['id', 'string', '"user_001"'],
-                ['name', 'string', '"Nguyễn Hoàng Minh"'],
+                ['name', 'string', '"Nguyá»…n HoĂ ng Minh"'],
                 ['email', 'string', '"minh@example.com"'],
                 ['phone', 'string', '"0912345678"'],
                 ['district', 'string', '"Quận 3"'],
@@ -960,7 +960,7 @@ Token usage:
                 ['holdCredit', 'number', '5'],
                 ['rewardPoints', 'number', '480'],
                 ['reputationStars', 'number', '4.2'],
-                ['rank', 'string', '"Thành viên tích cực"'],
+                ['rank', 'string', '"ThĂ nh viĂªn tĂ­ch cá»±c"'],
                 ['status', 'active | suspended | locked', '"active"'],
                 ['role', 'user | admin', '"user"'],
                 ['joinedAt', 'string (ISO)', '"2024-03-15"'],
@@ -970,13 +970,13 @@ Token usage:
                 ['id', 'string', '"item_001"'],
                 ['ownerId', 'string → User.id', '"user_001"'],
                 ['title', 'string', '"Tai nghe Sony WH-1000XM4"'],
-                ['description', 'string', '"Còn mới 95%..."'],
+                ['description', 'string', '"CĂ²n má»›i 95%..."'],
                 ['type', 'gift | trade', '"trade"'],
                 ['category', 'string', '"Đồ điện tử"'],
                 ['condition', 'new | good | used', '"good"'],
                 ['district', 'string', '"Quận 3"'],
                 ['image', 'string (URL)', '"https://..."'],
-                ['tradeFor', 'string?', '"Máy ảnh, đồ điện tử"'],
+                ['tradeFor', 'string?', '"MĂ¡y áº£nh, Ä‘á»“ Ä‘iá»‡n tá»­"'],
                 ['status', 'pending | approved | rejected | expired | removed', '"approved"'],
                 ['postedAt', 'string (ISO)', '"2026-08-01"'],
                 ['expiresAt', 'string (ISO)', '"2026-09-01"'],
@@ -1002,10 +1002,10 @@ Token usage:
                 ['transactionId', 'string → Transaction.id', '"tx_001"'],
                 ['date', 'string', '"2026-09-25"'],
                 ['time', 'string', '"18:30"'],
-                ['district', 'string', '"Bình Thạnh"'],
+                ['district', 'string', '"BĂ¬nh Tháº¡nh"'],
                 ['address', 'string', '"Landmark 81"'],
-                ['method', 'Gặp trực tiếp | Giao hàng', '"Gặp trực tiếp"'],
-                ['note', 'string?', '"Nhắn tin trước 30 phút"'],
+                ['method', 'Gáº·p trá»±c tiáº¿p | Giao hĂ ng', '"Gáº·p trá»±c tiáº¿p"'],
+                ['note', 'string?', '"Nháº¯n tin trÆ°á»›c 30 phĂºt"'],
                 ['proposedBy', 'string → User.id', '"user_002"'],
                 ['agreedBy', 'string?', '"user_001"'],
                 ['status', 'proposed | confirmed', '"confirmed"'],
@@ -1024,7 +1024,7 @@ Token usage:
                 ['transactionId', 'string → Transaction.id', '"tx_001"'],
                 ['participantIds', 'string[]', '["user_001","user_002"]'],
                 ['itemId', 'string → Item.id', '"item_001"'],
-                ['lastMessage', 'string', '"Mình đồng ý lịch này"'],
+                ['lastMessage', 'string', '"MĂ¬nh Ä‘á»“ng Ă½ lá»‹ch nĂ y"'],
                 ['lastMessageAt', 'string', '"2026-09-20T14:22:00"'],
                 ['unreadCount', 'number', '2'],
               ], rel: 'links 2 Users; contains Messages' },
@@ -1033,7 +1033,7 @@ Token usage:
                 ['convId', 'string → Conversation.id', '"conv_001"'],
                 ['sender', 'string → User.id | "system"', '"user_001"'],
                 ['type', 'chat | system | handover_card', '"chat"'],
-                ['text', 'string?', '"Bàn học còn dùng tốt không?"'],
+                ['text', 'string?', '"BĂ n há»c cĂ²n dĂ¹ng tá»‘t khĂ´ng?"'],
                 ['handoverData', 'HandoverData?', 'null'],
                 ['confirmed', 'boolean?', 'false'],
                 ['time', 'string', '"14:22"'],
@@ -1052,7 +1052,7 @@ Token usage:
                 ['amount', 'number (positive=in, negative=out)', '-5'],
                 ['balance', 'number (after)', '195'],
                 ['ref', 'string?', '"tx_001"'],
-                ['note', 'string', '"Giữ phí giao dịch"'],
+                ['note', 'string', '"Phi dang bai"'],
                 ['createdAt', 'string', '"2026-09-20T14:30:00"'],
               ], rel: 'belongs to User' },
               { name: 'Topup', fields: [
@@ -1071,22 +1071,22 @@ Token usage:
                 ['userId', 'string → User.id', '"user_001"'],
                 ['itemImage', 'string (URL)', '"https://..."'],
                 ['category', 'string', '"Nước hoa"'],
-                ['generatedDescription', 'string', '"Nước hoa vẫn còn khá nhiều..."'],
-                ['editedDescription', 'string', '"Nước hoa còn khoảng 70%..."'],
+                ['generatedDescription', 'string', '"NÆ°á»›c hoa váº«n cĂ²n khĂ¡ nhiá»u..."'],
+                ['editedDescription', 'string', '"NÆ°á»›c hoa cĂ²n khoáº£ng 70%..."'],
                 ['createdAt', 'string', '"2026-09-20"'],
               ], rel: 'belongs to User; leads to AIMatch' },
               { name: 'AIMatch', fields: [
                 ['id', 'string', '"aim_001"'],
                 ['analysisId', 'string → AIAnalysis.id', '"ai_001"'],
                 ['matchedItemId', 'string → Item.id', '"item_005"'],
-                ['reason', 'string (Vietnamese)', '"Cả hai đều là đồ điện tử..."'],
+                ['reason', 'string (Vietnamese)', '"Cáº£ hai Ä‘á»u lĂ  Ä‘á»“ Ä‘iá»‡n tá»­..."'],
                 ['createdAt', 'string', '"2026-09-20"'],
               ], rel: 'links AIAnalysis to Item' },
               { name: 'Dispute', fields: [
                 ['id', 'string', '"disp_001"'],
                 ['transactionId', 'string → Transaction.id', '"tx_001"'],
                 ['reporterId', 'string → User.id', '"user_002"'],
-                ['reason', 'string', '"Đồ không đúng mô tả"'],
+                ['reason', 'string', '"Äá»“ khĂ´ng Ä‘Ăºng mĂ´ táº£"'],
                 ['status', 'open | reviewing | resolved | closed', '"open"'],
                 ['resolution', 'string?', 'null'],
                 ['adminNote', 'string?', 'null'],
@@ -1098,13 +1098,13 @@ Token usage:
                 ['action', 'string', '"approve_listing"'],
                 ['targetType', 'user | item | transaction | dispute | setting', '"item"'],
                 ['targetId', 'string', '"item_042"'],
-                ['detail', 'string', '"Duyệt bài đăng: Bàn học gỗ"'],
+                ['detail', 'string', '"Duyá»‡t bĂ i Ä‘Äƒng: BĂ n há»c gá»—"'],
                 ['createdAt', 'string', '"2026-09-21T09:15:00"'],
               ], rel: 'belongs to Admin User' },
               { name: 'SystemSetting', fields: [
                 ['key', 'string', '"tx_fee_credit"'],
                 ['value', 'string | number', '5'],
-                ['label', 'string', '"Phí giao dịch (Credit)"'],
+                ['label', 'string', '"Giao dich mien phi"'],
                 ['updatedAt', 'string', '"2026-09-01"'],
                 ['updatedBy', 'string → User.id', '"admin_001"'],
               ], rel: 'global; no owner' },
@@ -1168,8 +1168,8 @@ Token usage:
                   { rule: 'Both parties confirm delivery', effect: 'HOLD → SPENT (fee deducted)', ok: true },
                   { rule: 'Valid cancellation before handover', effect: 'HOLD → AVAILABLE (refunded)', ok: true },
                   { rule: 'Admin refund', effect: 'Logged as REFUND, AVAILABLE increases', ok: true },
-                  { rule: 'Deduct credit before payment confirmed', effect: '⚠ FORBIDDEN — never do this', ok: false },
-                  { rule: 'One-party confirmation triggers payout', effect: '⚠ FORBIDDEN — both must confirm', ok: false },
+                  { rule: 'Deduct credit before payment confirmed', effect: 'â  FORBIDDEN â€” never do this', ok: false },
+                  { rule: 'One-party confirmation triggers payout', effect: 'â  FORBIDDEN â€” both must confirm', ok: false },
                 ].map(r => (
                   <div key={r.rule} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', borderRadius: 10, background: r.ok ? '#F8F9FF' : '#FEF2F2', border: `1px solid ${r.ok ? '#E5EEFF' : '#FCA5A5'}` }}>
                     <span className="material-symbols-outlined" style={{ fontSize: 16, color: r.ok ? '#059669' : '#BA1A1A', flexShrink: 0 }}>{r.ok ? 'check_circle' : 'cancel'}</span>
@@ -1183,11 +1183,11 @@ Token usage:
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {[
                   { type: 'TOPUP', desc: 'User nạp tiền', color: '#059669' },
-                  { type: 'HOLD', desc: 'Phí bị giữ khi xác nhận giao dịch', color: '#F59E0B' },
+                  { type: 'HOLD', desc: 'PhĂ­ bá»‹ giá»¯ khi xĂ¡c nháº­n giao dá»‹ch', color: '#F59E0B' },
                   { type: 'RELEASE_HOLD', desc: 'Trả lại khi hủy hợp lệ', color: '#059669' },
-                  { type: 'TRANSACTION_FEE', desc: 'Phí chính thức sau hoàn tất', color: '#9D4300' },
-                  { type: 'AI_FEE', desc: 'Phí phân tích AI (nếu có)', color: '#6D7A77' },
-                  { type: 'REFUND', desc: 'Admin hoàn tiền thủ công', color: '#00685F' },
+                  { type: 'TRANSACTION_FEE', desc: 'PhĂ­ chĂ­nh thá»©c sau hoĂ n táº¥t', color: '#9D4300' },
+                  { type: 'AI_FEE', desc: 'PhĂ­ phĂ¢n tĂ­ch AI (náº¿u cĂ³)', color: '#6D7A77' },
+                  { type: 'REFUND', desc: 'Admin hoĂ n tiá»n thá»§ cĂ´ng', color: '#00685F' },
                   { type: 'ADMIN_ADJUSTMENT', desc: 'Admin điều chỉnh số dư', color: '#6D7A77' },
                 ].map(t => (
                   <div key={t.type} style={{ padding: '8px 14px', borderRadius: 10, background: t.color + '10', border: `1px solid ${t.color}30` }}>
@@ -1200,9 +1200,9 @@ Token usage:
             <DSCard title="Four Separate Concepts — Never Merge">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
                 {[
-                  { name: 'Credit', icon: 'account_balance_wallet', color: '#00685F', bg: '#EFF4FF', desc: 'Virtual currency. 1 Credit = 1,000đ. Used for transaction fees.' },
+                  { name: 'Credit', icon: 'account_balance_wallet', color: '#00685F', bg: '#EFF4FF', desc: 'Virtual currency. 1 Credit = 1,000d. Used for posting fees and optional services.' },
                   { name: 'Reward Points', icon: 'redeem', color: '#9D4300', bg: '#FFDBCA', desc: 'Earned from activity. Used for discounts or unlocking features.' },
-                  { name: 'Member Rank', icon: 'military_tech', color: '#F59E0B', bg: '#FFF7ED', desc: 'Thành viên mới / Tích cực / Uy tín. Based on tx count + reputation.' },
+                  { name: 'Member Rank', icon: 'military_tech', color: '#F59E0B', bg: '#FFF7ED', desc: 'ThĂ nh viĂªn má»›i / TĂ­ch cá»±c / Uy tĂ­n. Based on tx count + reputation.' },
                   { name: 'Reputation Stars', icon: 'star', color: '#059669', bg: '#ECFDF5', desc: 'Average rating from completed transactions. 1–5 scale.' },
                 ].map(c => (
                   <div key={c.name} style={{ background: c.bg, borderRadius: 14, padding: 16, textAlign: 'center' }}>
@@ -1224,9 +1224,9 @@ Token usage:
                   { state: 'NEGOTIATING', color: '#6D7A77', trigger: '(initial — conversation opened)' },
                   { arrow: '↓ Requester sends HandoverScheduleCard' },
                   { state: 'SCHEDULE_PROPOSED', color: '#F59E0B', trigger: 'submitHandover()' },
-                  { arrow: '↓ Owner clicks "Đồng ý" on HandoverCard' },
+                  { arrow: 'â†“ Owner clicks "Äá»“ng Ă½" on HandoverCard' },
                   { state: 'SCHEDULE_CONFIRMED', color: '#00685F', trigger: 'agreeHandover(cardId)' },
-                  { arrow: '↓ Either party clicks "Xác nhận phí" → modal → confirms' },
+                  { arrow: 'â†“ Either party clicks "XĂ¡c nháº­n phĂ­" â†’ modal â†’ confirms' },
                   { state: 'CREDIT_HELD', color: '#9D4300', trigger: 'holdFee() — 5 Credit: AVAILABLE → HOLD' },
                   { arrow: '↓ Both arrive at exchange location' },
                   { state: 'WAITING_HANDOVER', color: '#F59E0B', trigger: '(alias for CREDIT_HELD; no separate trigger)' },
@@ -1291,15 +1291,15 @@ Token usage:
                 <tbody>
                   {[
                     ['Requester', 'Gửi đề xuất lịch', 'NEGOTIATING', 'SCHEDULE_PROPOSED', 'None'],
-                    ['Owner', 'Đồng ý lịch', 'SCHEDULE_PROPOSED', 'SCHEDULE_CONFIRMED', 'None'],
+                    ['Owner', 'Äá»“ng Ă½ lá»‹ch', 'SCHEDULE_PROPOSED', 'SCHEDULE_CONFIRMED', 'None'],
                     ['Owner', 'Đề xuất lại lịch', 'SCHEDULE_PROPOSED', 'SCHEDULE_PROPOSED', 'None'],
-                    ['Either', 'Xác nhận phí', 'SCHEDULE_CONFIRMED', 'CREDIT_HELD', 'AVAILABLE − 5 → HOLD'],
-                    ['Sender', 'Xác nhận giao đồ', 'CREDIT_HELD', 'SENDER_CONFIRMED', 'None'],
-                    ['Receiver', 'Xác nhận nhận đồ', 'CREDIT_HELD / SENDER_CONFIRMED', 'RECEIVER_CONFIRMED', 'None'],
-                    ['System', 'Cả hai đã xác nhận', 'BOTH CONFIRMED', 'COMPLETED', 'HOLD → SPENT'],
+                    ['Either', 'XĂ¡c nháº­n phĂ­', 'SCHEDULE_CONFIRMED', 'CREDIT_HELD', 'AVAILABLE âˆ’ 5 â†’ HOLD'],
+                    ['Sender', 'XĂ¡c nháº­n giao Ä‘á»“', 'CREDIT_HELD', 'SENDER_CONFIRMED', 'None'],
+                    ['Receiver', 'XĂ¡c nháº­n nháº­n Ä‘á»“', 'CREDIT_HELD / SENDER_CONFIRMED', 'RECEIVER_CONFIRMED', 'None'],
+                    ['System', 'Cáº£ hai Ä‘Ă£ xĂ¡c nháº­n', 'BOTH CONFIRMED', 'COMPLETED', 'HOLD â†’ SPENT'],
                     ['Either', 'Hủy (trước hold)', 'NEGOTIATING / PROPOSED', 'CANCELLED', 'None'],
-                    ['Admin', 'Hủy có lý do hợp lệ', 'After CREDIT_HELD', 'CANCELLED', 'HOLD → AVAILABLE'],
-                    ['Either', 'Báo cáo tranh chấp', 'After CREDIT_HELD', 'DISPUTED', 'Hold frozen'],
+                    ['Admin', 'Há»§y cĂ³ lĂ½ do há»£p lá»‡', 'After CREDIT_HELD', 'CANCELLED', 'HOLD â†’ AVAILABLE'],
+                    ['Either', 'BĂ¡o cĂ¡o tranh cháº¥p', 'After CREDIT_HELD', 'DISPUTED', 'Hold frozen'],
                   ].map(row => (
                     <tr key={row[1] + row[2]} style={{ borderBottom: '1px solid #F0F4FF' }}>
                       {row.map((cell, i) => (
@@ -1318,13 +1318,13 @@ Token usage:
             <DSCard title="Complete AI Flow">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {[
-                  { step: 1, label: 'User opens Trợ lý AI', detail: 'Selects mode: "Tôi muốn tìm đồ" or "Tôi có món muốn đổi"' },
+                  { step: 1, label: 'User opens Trá»£ lĂ½ AI', detail: 'Selects mode: "TĂ´i muá»‘n tĂ¬m Ä‘á»“" or "TĂ´i cĂ³ mĂ³n muá»‘n Ä‘á»•i"' },
                   { step: 2, label: 'Upload & Describe', detail: 'User uploads photo + selects category → AI generates natural Vietnamese description' },
                   { step: 3, label: 'AI Analysis', detail: 'System generates AIAnalysis — title, condition, description in natural language' },
                   { step: 4, label: 'User Confirms Description', detail: 'User reads and edits generated description if needed → confirms' },
                   { step: 5, label: 'AI Finds Matches', detail: 'System searches approved items → returns 3–5 AIMatch results' },
                   { step: 6, label: 'Browse Matches', detail: 'User reviews matched items with natural Vietnamese reason text' },
-                  { step: 7, label: 'Compare Items', detail: 'User selects a match → side-by-side comparison (MÓN CỦA BẠN ⇄ MÓN CỦA ĐỐI PHƯƠNG)' },
+                  { step: 7, label: 'Compare Items', detail: 'User selects a match â†’ side-by-side comparison (MĂ“N Cá»¦A Báº N â‡„ MĂ“N Cá»¦A Äá»I PHÆ¯Æ NG)' },
                   { step: 8, label: 'Send Proposal', detail: 'User clicks "Đề xuất trao đổi" → creates Transaction + Conversation' },
                   { step: 9, label: 'Navigate to Messages', detail: 'navigate(\'/messages\') with the new conversation pre-selected → TxFlow starts at NEGOTIATING' },
                 ].map(s => (
@@ -1343,15 +1343,15 @@ Token usage:
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{ padding: 10, background: '#ECFDF5', borderRadius: 8, border: '1px solid #BBF7D0' }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#059669', marginBottom: 4 }}>GOOD — Natural Vietnamese</div>
-                    <div style={{ fontSize: 12, color: '#0B1C30', fontStyle: 'italic' }}>"Nước hoa vẫn còn khá nhiều, chai được giữ tốt và hạn sử dụng còn xa."</div>
+                    <div style={{ fontSize: 12, color: '#0B1C30', fontStyle: 'italic' }}>"NÆ°á»›c hoa váº«n cĂ²n khĂ¡ nhiá»u, chai Ä‘Æ°á»£c giá»¯ tá»‘t vĂ  háº¡n sá»­ dá»¥ng cĂ²n xa."</div>
                   </div>
                   <div style={{ padding: 10, background: '#ECFDF5', borderRadius: 8, border: '1px solid #BBF7D0' }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#059669', marginBottom: 4 }}>GOOD — Honest observation</div>
-                    <div style={{ fontSize: 12, color: '#0B1C30', fontStyle: 'italic' }}>"Bàn học còn chắc chắn, có vài vết xước nhỏ ở mặt trên nhưng không ảnh hưởng sử dụng."</div>
+                    <div style={{ fontSize: 12, color: '#0B1C30', fontStyle: 'italic' }}>"BĂ n há»c cĂ²n cháº¯c cháº¯n, cĂ³ vĂ i váº¿t xÆ°á»›c nhá» á»Ÿ máº·t trĂªn nhÆ°ng khĂ´ng áº£nh hÆ°á»Ÿng sá»­ dá»¥ng."</div>
                   </div>
                   <div style={{ padding: 10, background: '#FEF2F2', borderRadius: 8, border: '1px solid #FCA5A5' }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#BA1A1A', marginBottom: 4 }}>BAD — Fake percentages</div>
-                    <div style={{ fontSize: 12, color: '#BA1A1A', fontStyle: 'italic', textDecoration: 'line-through' }}>"AI đánh giá 87% phù hợp."</div>
+                    <div style={{ fontSize: 12, color: '#BA1A1A', fontStyle: 'italic', textDecoration: 'line-through' }}>"AI Ä‘Ă¡nh giĂ¡ 87% phĂ¹ há»£p."</div>
                   </div>
                   <div style={{ padding: 10, background: '#FEF2F2', borderRadius: 8, border: '1px solid #FCA5A5' }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#BA1A1A', marginBottom: 4 }}>BAD — Generic non-description</div>
@@ -1363,8 +1363,8 @@ Token usage:
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{ fontSize: 11, color: '#6D7A77', marginBottom: 4 }}>Match reason must explain WHY the items are compatible in conversational Vietnamese.</div>
                   {[
-                    { ok: true, text: '"Cả hai đều thuộc danh mục đồ điện tử và đang trong tình trạng dùng tốt, phù hợp để trao đổi."' },
-                    { ok: true, text: '"Người dùng muốn đổi đồ gia dụng — chiếc quạt này rất phù hợp với mong muốn đó."' },
+                    { ok: true, text: '"Cáº£ hai Ä‘á»u thuá»™c danh má»¥c Ä‘á»“ Ä‘iá»‡n tá»­ vĂ  Ä‘ang trong tĂ¬nh tráº¡ng dĂ¹ng tá»‘t, phĂ¹ há»£p Ä‘á»ƒ trao Ä‘á»•i."' },
+                    { ok: true, text: '"NgÆ°á»i dĂ¹ng muá»‘n Ä‘á»•i Ä‘á»“ gia dá»¥ng â€” chiáº¿c quáº¡t nĂ y ráº¥t phĂ¹ há»£p vá»›i mong muá»‘n Ä‘Ă³."' },
                     { ok: false, text: '"Match score: 92.4%. Semantic similarity: 0.87."' },
                   ].map((m, i) => (
                     <div key={i} style={{ padding: 10, background: m.ok ? '#ECFDF5' : '#FEF2F2', borderRadius: 8, border: `1px solid ${m.ok ? '#BBF7D0' : '#FCA5A5'}` }}>
@@ -1378,17 +1378,17 @@ Token usage:
             <DSCard title="AIExchangeComparison Layout">
               <div style={{ display: 'flex', gap: 16, maxWidth: 540 }}>
                 <div style={{ flex: 1, background: '#EFF4FF', borderRadius: 14, padding: 16, textAlign: 'center' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#00685F', marginBottom: 8, letterSpacing: '0.06em' }}>MÓN CỦA BẠN</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#00685F', marginBottom: 8, letterSpacing: '0.06em' }}>MĂ“N Cá»¦A Báº N</div>
                   <div style={{ width: '100%', aspectRatio: '4/3', background: '#DCE9FF', borderRadius: 10, marginBottom: 8 }} />
                   <div style={{ fontWeight: 600, fontSize: 12, color: '#0B1C30' }}>Nước hoa Chanel</div>
-                  <div style={{ fontSize: 10, color: '#6D7A77' }}>Quận 3 · Dùng tốt</div>
+                  <div style={{ fontSize: 10, color: '#6D7A77' }}>Quáº­n 3 Â· DĂ¹ng tá»‘t</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', fontSize: 22, color: '#BCC9C6', fontWeight: 300 }}>⇄</div>
                 <div style={{ flex: 1, background: '#FFDBCA', borderRadius: 14, padding: 16, textAlign: 'center' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#9D4300', marginBottom: 8, letterSpacing: '0.06em' }}>MÓN ĐỐI PHƯƠNG</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#9D4300', marginBottom: 8, letterSpacing: '0.06em' }}>MĂ“N Äá»I PHÆ¯Æ NG</div>
                   <div style={{ width: '100%', aspectRatio: '4/3', background: '#FFD4B0', borderRadius: 10, marginBottom: 8 }} />
                   <div style={{ fontWeight: 600, fontSize: 12, color: '#0B1C30' }}>Tai nghe Sony</div>
-                  <div style={{ fontSize: 10, color: '#6D7A77' }}>Bình Thạnh · Dùng tốt</div>
+                  <div style={{ fontSize: 10, color: '#6D7A77' }}>BĂ¬nh Tháº¡nh Â· DĂ¹ng tá»‘t</div>
                 </div>
               </div>
             </DSCard>
@@ -1475,9 +1475,9 @@ Token usage:
                   <tbody>
                     {[
                       { feature: 'Trang chủ', g: 'view', u: 'view', a: 'view' },
-                      { feature: 'Tìm đồ (Browse)', g: 'view', u: 'view', a: 'view' },
-                      { feature: 'Chi tiết món đồ', g: 'view', u: 'view + request', a: 'view + manage' },
-                      { feature: 'Trợ lý AI', g: 'view', u: 'full', a: 'full' },
+                      { feature: 'TĂ¬m Ä‘á»“ (Browse)', g: 'view', u: 'view', a: 'view' },
+                      { feature: 'Chi tiáº¿t mĂ³n Ä‘á»“', g: 'view', u: 'view + request', a: 'view + manage' },
+                      { feature: 'Trá»£ lĂ½ AI', g: 'view', u: 'full', a: 'full' },
                       { feature: 'Đăng đồ', g: '✗ redirect /login', u: 'full', a: 'full' },
                       { feature: 'Hoạt động', g: '✗ redirect /login', u: 'own listings only', a: 'view all' },
                       { feature: 'Tin nhắn', g: '✗ redirect /login', u: 'own convs only', a: 'view all' },
@@ -1485,11 +1485,11 @@ Token usage:
                       { feature: 'Credit / Wallet', g: '✗ not visible', u: 'own wallet', a: 'view all wallets' },
                       { feature: 'Admin Dashboard', g: '✗ redirect /', u: '✗ redirect /', a: 'full' },
                       { feature: 'Duyệt nội dung', g: '✗', u: '✗', a: 'full' },
-                      { feature: 'Quản lý người dùng', g: '✗', u: '✗', a: 'full' },
-                      { feature: 'Quản lý giao dịch', g: '✗', u: '✗', a: 'full' },
-                      { feature: 'Tài chính', g: '✗', u: '✗', a: 'full' },
-                      { feature: 'Cấu hình hệ thống', g: '✗', u: '✗', a: 'full' },
-                      { feature: 'Nhật ký audit', g: '✗', u: '✗', a: 'full' },
+                      { feature: 'Quáº£n lĂ½ ngÆ°á»i dĂ¹ng', g: 'âœ—', u: 'âœ—', a: 'full' },
+                      { feature: 'Quáº£n lĂ½ giao dá»‹ch', g: 'âœ—', u: 'âœ—', a: 'full' },
+                      { feature: 'TĂ i chĂ­nh', g: 'âœ—', u: 'âœ—', a: 'full' },
+                      { feature: 'Cáº¥u hĂ¬nh há»‡ thá»‘ng', g: 'âœ—', u: 'âœ—', a: 'full' },
+                      { feature: 'Nháº­t kĂ½ audit', g: 'âœ—', u: 'âœ—', a: 'full' },
                     ].map(row => (
                       <tr key={row.feature} style={{ borderBottom: '1px solid #F0F4FF' }}>
                         <td style={{ padding: '8px 12px', fontWeight: 600, color: '#0B1C30' }}>{row.feature}</td>

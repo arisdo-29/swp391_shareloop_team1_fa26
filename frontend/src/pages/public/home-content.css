@@ -727,7 +727,7 @@
   flex-direction: column;
   overflow: hidden;
   border-radius: 8px;
-  background: #fff;
+  background: #FFFAF5;
   box-shadow: 0 0 0 1px #d7dedb;
   transition: transform 300ms var(--home-ease), box-shadow 300ms;
 }
@@ -2622,7 +2622,7 @@
   height: 100%;
   min-width: 0;
   padding: 0;
-  background: #fff;
+  background: #FFFAF5;
   box-shadow: 0 0 0 1px #d7dedb;
 }
 .home-content .home-rail-new-items .home-discovery-track > a.home-product-card > .home-product-card-image {

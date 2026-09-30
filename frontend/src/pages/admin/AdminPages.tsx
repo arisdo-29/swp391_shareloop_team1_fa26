@@ -18,7 +18,7 @@ import {
 } from '../../components/ui';
 import { CATEGORIES } from '../../constants/domain';
 import { formatVnd } from '../../utils/formatting';
-import type { AppStateData, ComplaintStatus, ForbiddenKeyword, Item, KeywordAction, RankRule, ReputationPointRule, SupportedDistrict, Transaction } from '../../types/domain';
+import type { AppStateData, ComplaintStatus, ForbiddenKeyword, Item, KeywordAction, RankRule, ReputationPointRule, SupportedDistrict, Transaction, User } from '../../types/domain';
 
 function Panel({
   title,
@@ -48,6 +48,7 @@ function FilterBar({ children }: { children: ReactNode }) {
 
 export function AdminDashboard() {
   const data = useAppSelector(selectData);
+  const navigate = useNavigate();
   const pending = data.items.filter((i) => i.status === 'pending' || i.status === 'PENDING_REVIEW' || i.status === 'VIOLATION');
   const activeTx = data.transactions.filter((t) => !['COMPLETED', 'CANCELLED'].includes(t.status));
   return (
@@ -60,9 +61,9 @@ export function AdminDashboard() {
         <Stat label="Bài chờ duyệt" value={pending.length} detail="Cần kiểm tra nội dung" />
         <Stat label="Giao dịch đang mở" value={activeTx.length} />
         <Stat
-          label="Credit đang giữ"
+          label="Credit tạm giữ"
           value={data.users.reduce((s, u) => s + u.holdCredit, 0)}
-          detail="Chưa ghi nhận doanh thu"
+          detail="Không dùng cho phí giao dịch"
         />
       </div>
       <div className="mt-8 grid gap-6 xl:grid-cols-[1.2fr_.8fr]">
@@ -84,7 +85,7 @@ export function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                <tr>
+                <tr className="cursor-pointer hover:bg-surface-low" onClick={() => navigate('/admin/moderation')}>
                   <td className="font-semibold">Duyệt bài đăng mới</td>
                   <td>{pending.length} bài</td>
                   <td>
@@ -92,13 +93,13 @@ export function AdminDashboard() {
                   </td>
                   <td>Hôm nay</td>
                 </tr>
-                <tr>
+                <tr className="cursor-pointer hover:bg-surface-low" onClick={() => navigate('/admin/finance')}>
                   <td className="font-semibold">Top-up chờ xác nhận</td>
                   <td>{data.topups.filter((t) => t.status === 'pending').length} yêu cầu</td>
                   <td>Thông thường</td>
                   <td>15 phút trước</td>
                 </tr>
-                <tr>
+                <tr className="cursor-pointer hover:bg-surface-low" onClick={() => navigate('/admin/complaints')}>
                   <td className="font-semibold">Giao dịch cần theo dõi</td>
                   <td>
                     {data.complaints.filter((item) => item.status !== 'resolved').length} khiếu nại
@@ -135,12 +136,37 @@ export function AdminModeration() {
   const admin = useAppSelector(selectCurrentUser)!;
   const dispatch = useAppDispatch();
   const [query, setQuery] = useState('');
+  const [reviewing, setReviewing] = useState<Item | null>(null);
+  const [approving, setApproving] = useState<Item | null>(null);
   const [rejecting, setRejecting] = useState<Item | null>(null);
   const [toast, setToast] = useState('');
-  const [checklist, setChecklist] = useState<Record<string, boolean>>({});
-  const rows = data.items
-    .filter((i) => i.status === 'pending' || i.status === 'PENDING_REVIEW' || i.status === 'VIOLATION')
-    .filter((i) => i.title.toLowerCase().includes(query.toLowerCase()));
+  const [checklist, setChecklist] = useState<Record<string, Record<string, boolean>>>({});
+  const pendingPosts = data.items.filter((i) => i.status === 'pending' || i.status === 'PENDING_REVIEW' || i.status === 'VIOLATION');
+  const rows = pendingPosts.filter((item) => {
+    const owner = data.users.find((user) => user.id === item.ownerId);
+    const searchable = `${item.title} ${owner?.name ?? ''} ${item.category}`.toLowerCase();
+    return searchable.includes(query.trim().toLowerCase());
+  });
+  const checkedCount = (itemId: string) =>
+    moderationChecklist.filter((entry) => checklist[itemId]?.[entry.key]).length;
+  const readyToApprove = (itemId: string) => checkedCount(itemId) === moderationChecklist.length;
+  const approvePost = (item: Item) => {
+    dispatch(
+      actions.updateItemStatus({
+        itemId: item.id,
+        status: 'approved',
+        adminId: admin.id,
+      }),
+    );
+    setApproving(null);
+    setReviewing(null);
+    setToast('Đã duyệt bài thành công.');
+    setChecklist((current) => {
+      const next = { ...current };
+      delete next[item.id];
+      return next;
+    });
+  };
   return (
     <Panel
       title="Duyệt bài"
@@ -154,7 +180,7 @@ export function AdminModeration() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <span className="text-xs text-text-muted">{rows.length} bài đang chờ</span>
+        <span className="text-xs text-text-muted">{pendingPosts.length} bài đăng chờ</span>
       </FilterBar>
       <div className="space-y-3">
         {rows.map((item) => {
@@ -182,11 +208,14 @@ export function AdminModeration() {
                   {owner?.name} · {item.district}
                 </p>
               </div>
-              <div className="flex gap-2">
-                <label className="flex items-center gap-1 text-[11px] text-text-muted">
-                  <input type="checkbox" checked={checklist[item.id] ?? false} onChange={(event) => setChecklist((current) => ({ ...current, [item.id]: event.target.checked }))} />
-                  Checklist: nội dung, ảnh, danh mục hợp lệ
-                </label>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setReviewing(item)}
+                >
+                  Xem chi tiết
+                </Button>
                 <Button
                   size="sm"
                   variant="danger"
@@ -196,25 +225,50 @@ export function AdminModeration() {
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() =>
-                    dispatch(
-                      actions.updateItemStatus({
-                        itemId: item.id,
-                        status: 'approved',
-                        adminId: admin.id,
-                      }),
-                    )
-                  }
-                  disabled={!checklist[item.id]}
+                  onClick={() => setApproving(item)}
+                  disabled={!readyToApprove(item.id)}
                 >
                   Duyệt bài
                 </Button>
+                <p className="basis-full text-right text-[11px] text-text-muted">
+                  Checklist {checkedCount(item.id)}/{moderationChecklist.length}
+                </p>
               </div>
             </article>
           );
         })}
       </div>
       {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
+      {reviewing ? (
+        <ModerationDetailModal
+          item={reviewing}
+          owner={data.users.find((user) => user.id === reviewing.ownerId)}
+          checked={checklist[reviewing.id] ?? {}}
+          onToggle={(key, value) =>
+            setChecklist((current) => ({
+              ...current,
+              [reviewing.id]: { ...(current[reviewing.id] ?? {}), [key]: value },
+            }))
+          }
+          onClose={() => setReviewing(null)}
+          onReject={() => {
+            setReviewing(null);
+            setRejecting(reviewing);
+          }}
+          onApprove={() => {
+            setApproving(reviewing);
+          }}
+        />
+      ) : null}
+      {approving ? (
+        <ConfirmDialog
+          title="Duyệt bài đăng?"
+          text="Bạn xác nhận bài đăng này đáp ứng đầy đủ tiêu chí của SHARELOOP?"
+          confirmLabel="Xác nhận duyệt"
+          onCancel={() => setApproving(null)}
+          onConfirm={() => approvePost(approving)}
+        />
+      ) : null}
       {rejecting ? (
         <RejectPostModal
           item={rejecting}
@@ -237,14 +291,100 @@ export function AdminModeration() {
   );
 }
 
+const moderationChecklist = [
+  { key: 'category', label: 'Không thuộc danh mục bị cấm' },
+  { key: 'keyword', label: 'Không chứa từ khóa cấm' },
+  { key: 'content', label: 'Nội dung phù hợp' },
+  { key: 'image', label: 'Hình ảnh phù hợp' },
+  { key: 'complete', label: 'Thông tin đầy đủ' },
+] as const;
+
+function ModerationDetailModal({
+  item,
+  owner,
+  checked,
+  onToggle,
+  onClose,
+  onReject,
+  onApprove,
+}: {
+  item: Item;
+  owner?: AppStateData['users'][number];
+  checked: Record<string, boolean>;
+  onToggle: (key: string, value: boolean) => void;
+  onClose: () => void;
+  onReject: () => void;
+  onApprove: () => void;
+}) {
+  const isReady = moderationChecklist.every((entry) => checked[entry.key]);
+  const progress = moderationChecklist.filter((entry) => checked[entry.key]).length;
+  const automaticResult =
+    item.status === 'VIOLATION'
+      ? (item.moderationReason ?? 'Bài đăng cần Admin kiểm tra do không vượt qua kiểm tra tự động.')
+      : 'Không phát hiện vi phạm tự động.';
+  return (
+    <Modal title="Chi tiết duyệt bài" onClose={onClose}>
+      <div className="grid gap-4 md:grid-cols-[180px_1fr]">
+        <img
+          src={item.images[0]}
+          alt={item.title}
+          className="aspect-square w-full rounded-md object-cover"
+        />
+        <div className="grid gap-3 text-sm sm:grid-cols-2">
+          <Info label="Tên món đồ" value={item.title} />
+          <Info label="Người đăng" value={owner?.name ?? item.ownerId} />
+          <Info label="Hình thức" value={item.type === 'gift' ? 'Cho tặng' : 'Trao đổi'} />
+          <Info label="Danh mục" value={item.category} />
+          <Info label="Khu vực" value={item.district} />
+          <Info label="Tình trạng" value={conditionLabels[item.condition]} />
+          <Info label="Ngày đăng" value={new Date(item.postedAt).toLocaleDateString('vi-VN')} />
+          <Info label="Ngày hết hạn" value={new Date(item.expiresAt).toLocaleDateString('vi-VN')} />
+          <Info label="Kiểm tra tự động" value={automaticResult} />
+        </div>
+      </div>
+      <h3 className="mt-5 text-sm font-bold">Mô tả</h3>
+      <div className="mt-4 rounded-md bg-background p-3 text-sm leading-6 text-text-secondary">
+        {item.description}
+      </div>
+      <div className="mt-5 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-bold">Checklist kiểm duyệt</h3>
+        <span className="text-xs font-semibold text-text-muted">Checklist {progress}/{moderationChecklist.length}</span>
+      </div>
+      <div className="mt-3 grid gap-2">
+        {moderationChecklist.map((entry) => (
+          <label key={entry.key} className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+            <input
+              type="checkbox"
+              checked={Boolean(checked[entry.key])}
+              onChange={(event) => onToggle(entry.key, event.target.checked)}
+            />
+            <span>{entry.label}</span>
+          </label>
+        ))}
+      </div>
+      <div className="mt-6 flex flex-wrap justify-end gap-2">
+        <Button variant="ghost" onClick={onClose}>Đóng</Button>
+        <Button variant="danger" onClick={onReject}>Từ chối</Button>
+        <Button disabled={!isReady} onClick={onApprove}>Duyệt bài</Button>
+      </div>
+    </Modal>
+  );
+}
+
 const rejectionOptions = [
-  'Danh mục không phù hợp',
-  'Nội dung không rõ ràng',
+  'Nội dung không phù hợp',
   'Hình ảnh không phù hợp',
-  'Sản phẩm thuộc danh mục bị cấm',
-  'Nội dung có dấu hiệu vi phạm',
-  'Khác',
+  'Thuộc danh mục bị hạn chế',
+  'Chứa thông tin không được phép',
+  'Thông tin bài đăng chưa đầy đủ',
+  'Lý do khác',
 ];
+
+const conditionLabels: Record<Item['condition'], string> = {
+  new: 'Mới',
+  good: 'Còn tốt',
+  used: 'Đã sử dụng',
+};
 
 function RejectPostModal({
   item,
@@ -259,7 +399,8 @@ function RejectPostModal({
   const [selectedReason, setSelectedReason] = useState('');
   const [detail, setDetail] = useState('');
   const [error, setError] = useState('');
-  const reason = [selectedReason, detail.trim()].filter(Boolean).join(' - ');
+  const needsDetail = selectedReason === 'Lý do khác';
+  const reason = needsDetail ? detail.trim() : selectedReason;
   return (
     <Modal title="Từ chối bài đăng" onClose={onClose}>
       <p className="text-sm leading-6 text-text-muted">
@@ -281,17 +422,19 @@ function RejectPostModal({
           </label>
         ))}
       </div>
-      <TextArea
-        className="mt-4"
-        label="Lý do chi tiết"
-        placeholder="Nhập lý do từ chối để người đăng biết cần chỉnh sửa nội dung nào..."
-        value={detail}
-        error={error}
-        onChange={(event) => {
-          setDetail(event.target.value);
-          setError('');
-        }}
-      />
+      {needsDetail ? (
+        <TextArea
+          className="mt-4"
+          label="Lý do chi tiết"
+          placeholder="Nhập lý do từ chối để người đăng biết cần chỉnh sửa nội dung nào..."
+          value={detail}
+          error={error}
+          onChange={(event) => {
+            setDetail(event.target.value);
+            setError('');
+          }}
+        />
+      ) : error ? <p className="mt-3 text-xs text-error">{error}</p> : null}
       <div className="mt-6 flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose}>Hủy</Button>
         <Button
@@ -317,6 +460,7 @@ export function AdminUsers() {
   const dispatch = useAppDispatch();
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
+  const [accountAction, setAccountAction] = useState<{ user: User; locked: boolean } | null>(null);
   const rows = data.users
     .filter((u) => `${u.name} ${u.email} ${u.phone}`.toLowerCase().includes(query.toLowerCase()))
     .filter((u) => !status || u.status === status);
@@ -370,7 +514,7 @@ export function AdminUsers() {
                 </td>
                 <td>{u.district}</td>
                 <td className="tabular-nums">
-                  {u.availableCredit} / {u.holdCredit} giữ
+                  {u.availableCredit} / {u.holdCredit} tạm giữ
                 </td>
                 <td>
                   {u.reputationStars.toFixed(1)} · {u.rank}
@@ -383,15 +527,7 @@ export function AdminUsers() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() =>
-                        dispatch(
-                          actions.lockUser({
-                            adminId: admin.id,
-                            userId: u.id,
-                            locked: u.status !== 'locked',
-                          }),
-                        )
-                      }
+                      onClick={() => setAccountAction({ user: u, locked: u.status !== 'locked' })}
                     >
                       {u.status === 'locked' ? 'Mở khóa' : 'Khóa'}
                     </Button>
@@ -402,7 +538,89 @@ export function AdminUsers() {
           </tbody>
         </table>
       </div>
+      {accountAction ? (
+        <AccountStatusModal
+          user={accountAction.user}
+          locked={accountAction.locked}
+          history={data.auditLogs.filter((log) => log.targetType === 'user' && log.targetId === accountAction.user.id && ['ACCOUNT_LOCKED', 'ACCOUNT_UNLOCKED'].includes(log.action))}
+          onClose={() => setAccountAction(null)}
+          onConfirm={(reason) => {
+            dispatch(
+              actions.lockUser({
+                adminId: admin.id,
+                userId: accountAction.user.id,
+                locked: accountAction.locked,
+                reason,
+              }),
+            );
+            setAccountAction(null);
+          }}
+        />
+      ) : null}
     </Panel>
+  );
+}
+
+function AccountStatusModal({
+  user,
+  locked,
+  history,
+  onClose,
+  onConfirm,
+}: {
+  user: User;
+  locked: boolean;
+  history: AppStateData['auditLogs'];
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+  const actionLabel = locked ? 'Khóa tài khoản' : 'Mở khóa tài khoản';
+  return (
+    <Modal title={actionLabel} onClose={onClose}>
+      <div className="grid gap-3 text-sm sm:grid-cols-2">
+        <Info label="Người dùng" value={user.name} />
+        <Info label="Trạng thái hiện tại" value={user.status === 'locked' ? 'Đã khóa' : 'Đang hoạt động'} />
+      </div>
+      <TextArea
+        className="mt-4"
+        label="Lý do"
+        value={reason}
+        error={error}
+        placeholder="Nhập lý do để lưu vào Audit Log..."
+        onChange={(event) => {
+          setReason(event.target.value);
+          setError('');
+        }}
+      />
+      <div className="mt-5">
+        <h3 className="text-sm font-bold">Lịch sử khóa / mở khóa</h3>
+        <div className="mt-2 max-h-48 space-y-2 overflow-y-auto">
+          {history.length ? history.map((log) => (
+            <div key={log.id} className="rounded-md border border-border px-3 py-2 text-xs">
+              <p className="font-semibold">{log.detail}</p>
+              <p className="mt-1 text-text-muted">{new Date(log.createdAt).toLocaleString('vi-VN')}</p>
+            </div>
+          )) : <p className="text-sm text-text-muted">Chưa có lịch sử khóa / mở khóa.</p>}
+        </div>
+      </div>
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="ghost" onClick={onClose}>Hủy</Button>
+        <Button
+          variant={locked ? 'danger' : 'primary'}
+          onClick={() => {
+            if (!reason.trim()) {
+              setError('Vui lòng nhập lý do.');
+              return;
+            }
+            onConfirm(reason.trim());
+          }}
+        >
+          Xác nhận
+        </Button>
+      </div>
+    </Modal>
   );
 }
 
@@ -428,7 +646,7 @@ export function AdminUserDetail() {
       <div className="space-y-6">
         <section className="grid gap-5 rounded-lg bg-white p-5 ring-1 ring-border/80 sm:grid-cols-3">
           <Stat label="Credit khả dụng" value={u.availableCredit} />
-          <Stat label="Credit đang giữ" value={u.holdCredit} />
+          <Stat label="Credit tạm giữ" value={u.holdCredit} />
           <Stat label="Tổng giao dịch" value={txs.length} />
         </section>
         <section>
@@ -533,7 +751,7 @@ export function AdminTransactions() {
     )
     .filter((tx) => !status || tx.status === status);
   return (
-    <Panel title="Giao dịch" description="Theo dõi tiến trình, Credit Hold và xác nhận bàn giao.">
+    <Panel title="Giao dịch" description="Theo dõi tiến trình, lịch giao nhận và xác nhận bàn giao.">
       <FilterBar>
         <div className="flex-1">
           <SearchField
@@ -563,7 +781,7 @@ export function AdminTransactions() {
               <th>Món đồ</th>
               <th>Loại</th>
               <th>Trạng thái</th>
-              <th>Credit Hold</th>
+              <th>Lịch giao nhận</th>
               <th>Ngày tạo</th>
             </tr>
           </thead>
@@ -582,7 +800,7 @@ export function AdminTransactions() {
                 <td>
                   <StatusBadge status={tx.status} />
                 </td>
-                <td>{tx.creditHeldBy.length} bên</td>
+                <td>{tx.status === 'WAITING_HANDOVER' || tx.status === 'COMPLETED' ? 'Đã chốt' : 'Đang xử lý'}</td>
                 <td>{new Date(tx.createdAt).toLocaleDateString('vi-VN')}</td>
               </tr>
             ))}
@@ -652,8 +870,8 @@ export function AdminTransactionDetail() {
           <h2 className="section-title">Kiểm soát giao dịch</h2>
           <div className="mt-4 space-y-4">
             <Info
-              label="Bên đã giữ phí"
-              value={tx.creditHeldBy.length ? `${tx.creditHeldBy.length} bên` : 'Chưa có'}
+              label="Trạng thái liên hệ"
+              value={['WAITING_HANDOVER', 'SENDER_CONFIRMED', 'RECEIVER_CONFIRMED', 'COMPLETED'].includes(tx.status) ? 'Đã mở khóa' : 'Chưa mở khóa'}
             />
             <Info
               label="Người gửi xác nhận"
@@ -689,7 +907,7 @@ export function AdminFinance() {
           label="Credit toàn hệ thống"
           value={data.users.reduce((s, u) => s + u.totalCredit, 0)}
         />
-        <Stat label="Credit đang giữ" value={data.users.reduce((s, u) => s + u.holdCredit, 0)} />
+        <Stat label="Credit tạm giữ" value={data.users.reduce((s, u) => s + u.holdCredit, 0)} />
         <Stat label="Doanh thu hệ thống" value={data.systemRevenue} />
         <Stat label="Top-up chờ duyệt" value={pending.length} />
       </div>
@@ -777,7 +995,7 @@ export function AdminFinanceUserLookup() {
                 <th>Email</th>
                 <th>SĐT</th>
                 <th>Credit khả dụng</th>
-                <th>Credit đang giữ</th>
+                <th>Credit tạm giữ</th>
                 <th>Trạng thái</th>
                 <th></th>
               </tr>
@@ -819,40 +1037,13 @@ export function AdminFinanceUserLookup() {
 }
 
 export function AdminSettings() {
-  const data = useAppSelector(selectData);
-  const admin = useAppSelector(selectCurrentUser)!;
   const dispatch = useAppDispatch();
-  const [fee, setFee] = useState(
-    Number(data.settings.find((s) => s.key === 'tx_fee_credit')?.value ?? 200),
-  );
   return (
-    <Panel title="Phí & hạn mức" description="Cấu hình áp dụng cho các giao dịch mới.">
+    <Panel title="Cấu hình Credit" description="Giao dịch ShareLoop hiện miễn phí cho cả Swap và Give.">
       <div className="max-w-2xl rounded-lg bg-white p-6 ring-1 ring-border/80">
-        <div className="grid gap-5 sm:grid-cols-2">
-          <Field
-            type="number"
-            label="Phí giao dịch (Credit)"
-            value={fee}
-            onChange={(e) => setFee(Number(e.target.value))}
-            hint="Swap: 2 mỗi bên. Give: người nhận 4."
-          />
-          <Field
-            type="number"
-            label="Hạn mức top-up/ngày"
-            value={20000}
-            readOnly
-            hint="Giá trị demo bằng VND."
-          />
+        <div className="rounded-md bg-primary-faint p-4 text-sm text-text-secondary">
+          Phí chỉ phát sinh khi đăng bài: 5 Credit mỗi bài. Gửi yêu cầu, chọn người, chat, chốt lịch, giao nhận và hoàn tất đều không trừ Credit.
         </div>
-        <div className="mt-5 rounded-md bg-primary-faint p-4 text-sm text-text-secondary">
-          1 Credit = 1.000đ. Swap thu 2 Credit mỗi bên; Give thu 4 Credit từ người nhận.
-        </div>
-        <Button
-          className="mt-5"
-          onClick={() => dispatch(actions.updateFeeSetting({ adminId: admin.id, fee }))}
-        >
-          Lưu cấu hình
-        </Button>
         <div className="mt-8 border-t border-border pt-5">
           <h3 className="text-sm font-bold">Dữ liệu demo</h3>
           <p className="mt-1 text-xs leading-5 text-text-muted">
@@ -1200,6 +1391,16 @@ function AdminComplaints() {
           ) : null}
           <TextArea className="mt-4" label="Ghi chú xử lý" value={note} onChange={(event) => setNote(event.target.value)} />
           <TextArea className="mt-4" label="Kết quả xử lý" value={resolution} onChange={(event) => setResolution(event.target.value)} />
+          {selected.response ? (
+            <div className="mt-4 rounded-md bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+              <strong>Phản hồi của người bị khiếu nại</strong>
+              <p className="mt-1">{selected.response}</p>
+            </div>
+          ) : selected.responseDueAt ? (
+            <div className="mt-4 rounded-md bg-background p-3 text-sm text-text-muted">
+              Người bị khiếu nại có 3 ngày để phản hồi. Hạn phản hồi: {new Date(selected.responseDueAt).toLocaleString('vi-VN')}.
+            </div>
+          ) : null}
           <div className="mt-6 flex flex-wrap justify-end gap-2">
             <Button variant="ghost" onClick={() => setSelectedId('')}>Đóng</Button>
             {selected.status === 'received' ? (
@@ -1225,7 +1426,37 @@ function AdminComplaints() {
               >
                 Đánh dấu đã xử lý
               </Button>
+              <Button
+                variant="danger"
+                onClick={() =>
+                  dispatch(actions.adminAdjustReputationStars({
+                    adminId: admin.id,
+                    userId: selected.reportedUserId,
+                    change: -1,
+                    reason: resolution || `Xử lý khiếu nại ${selected.id}`,
+                  }))
+                }
+              >
+                Trừ 1 sao uy tín
+              </Button>
               </>
+            ) : null}
+            {data.users.find((user) => user.id === selected.reportedUserId)?.reputationStars === 0 ? (
+              <Button
+                variant="outline"
+                disabled={Boolean(data.users.find((user) => user.id === selected.reportedUserId)?.reputationRestoreUsed)}
+                onClick={() =>
+                  dispatch(actions.restoreOneReputationStar({
+                    adminId: admin.id,
+                    userId: selected.reportedUserId,
+                    reason: resolution || `Cấp lại uy tín sau khi xem xét ${selected.id}`,
+                  }))
+                }
+              >
+                {data.users.find((user) => user.id === selected.reportedUserId)?.reputationRestoreUsed
+                  ? 'Đã sử dụng quyền cấp lại uy tín'
+                  : 'Cấp lại 1 sao'}
+              </Button>
             ) : null}
           </div>
         </Modal>
@@ -1523,6 +1754,8 @@ function AdminStaticContent({
   kind: 'expired' | 'categories' | 'locked' | 'alerts';
 }) {
   const data = useAppSelector(selectData);
+  const admin = useAppSelector(selectCurrentUser)!;
+  const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [categories, setCategories] = useState<CategoryRow[]>(() =>
     CATEGORIES.map((name) => ({
@@ -1534,6 +1767,8 @@ function AdminStaticContent({
     })),
   );
   const [editingCategory, setEditingCategory] = useState<CategoryRow | null>(null);
+  const [accountAction, setAccountAction] = useState<{ user: User; locked: boolean } | null>(null);
+  const [selectedExpired, setSelectedExpired] = useState<Item | null>(null);
   const [selectedAlertId, setSelectedAlertId] = useState('');
   const [inspectedAlerts, setInspectedAlerts] = useState<string[]>([]);
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
@@ -1541,23 +1776,137 @@ function AdminStaticContent({
   const configs = {
     expired: ['Bài quá hạn', 'Theo dõi và xử lý các bài đã hết thời gian hiển thị.'],
     categories: ['Danh mục', 'Quản lý cấu trúc danh mục dùng chung toàn hệ thống.'],
-    locked: ['Tài khoản bị khóa', 'Các tài khoản bị hạn chế truy cập hệ thống.'],
+    locked: ['Quản lý tài khoản', 'Theo dõi trạng thái, khóa hoặc mở khóa tài khoản người dùng.'],
     alerts: ['Cảnh báo bất thường', 'Tín hiệu cần kiểm tra từ hoạt động giao dịch và Credit.'],
   } as const;
   const [title, description] = configs[kind];
   const alertRows = data.transactions
-    .filter((t) => t.status === 'DISPUTED' || t.creditHeldBy.length > 1)
+    .filter((t) => t.status === 'DISPUTED' )
     .filter((t) => !dismissedAlerts.includes(`alert_${t.id}`));
   const selectedTx = alertRows.find((tx) => `alert_${tx.id}` === selectedAlertId);
   const rows =
-    kind === 'locked'
-        ? data.users.filter((u) => u.status === 'locked').map((u) => [u.name, u.email, 'Đã khóa'])
-        : kind === 'expired'
+    kind === 'expired'
           ? data.items.filter((i) => i.status === 'expired').map((i) => [i.title, i.district, new Date(i.expiresAt).toLocaleDateString('vi-VN')])
           : [];
-  if (kind === 'categories') {
+  if (kind === 'locked') {
     return (
       <Panel title={title} description={description}>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Người dùng</th>
+                <th>Email</th>
+                <th>Trạng thái</th>
+                <th>Lịch sử gần nhất</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.users.map((user) => {
+                const lastLog = data.auditLogs.find((log) => log.targetType === 'user' && log.targetId === user.id && ['ACCOUNT_LOCKED', 'ACCOUNT_UNLOCKED'].includes(log.action));
+                return (
+                  <tr key={user.id}>
+                    <td className="font-semibold">{user.name}</td>
+                    <td>{user.email}</td>
+                    <td><StatusBadge status={user.status} /></td>
+                    <td className="text-xs text-text-muted">
+                      {lastLog ? `${lastLog.detail} - ${new Date(lastLog.createdAt).toLocaleString('vi-VN')}` : 'Chưa có'}
+                    </td>
+                    <td>
+                      {user.role !== 'admin' ? (
+                        <Button
+                          size="sm"
+                          variant={user.status === 'locked' ? 'outline' : 'danger'}
+                          onClick={() => setAccountAction({ user, locked: user.status !== 'locked' })}
+                        >
+                          {user.status === 'locked' ? 'Mở khóa' : 'Khóa'}
+                        </Button>
+                      ) : <span className="text-xs text-text-muted">Không áp dụng</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {accountAction ? (
+          <AccountStatusModal
+            user={accountAction.user}
+            locked={accountAction.locked}
+            history={data.auditLogs.filter((log) => log.targetType === 'user' && log.targetId === accountAction.user.id && ['ACCOUNT_LOCKED', 'ACCOUNT_UNLOCKED'].includes(log.action))}
+            onClose={() => setAccountAction(null)}
+            onConfirm={(reason) => {
+              dispatch(actions.lockUser({ adminId: admin.id, userId: accountAction.user.id, locked: accountAction.locked, reason }));
+              setAccountAction(null);
+              setToast('Đã cập nhật trạng thái tài khoản.');
+            }}
+          />
+        ) : null}
+        {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
+      </Panel>
+    );
+  }
+  if (kind === 'expired') {
+    const expiredPosts = data.items.filter((item) => item.status === 'expired');
+    return (
+      <Panel title={title} description={description}>
+        {expiredPosts.length ? (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Món đồ</th>
+                  <th>Người đăng</th>
+                  <th>Ngày đăng</th>
+                  <th>Ngày hết hạn</th>
+                  <th>Trạng thái hiện tại</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expiredPosts.map((item) => {
+                  const owner = data.users.find((user) => user.id === item.ownerId);
+                  return (
+                    <tr key={item.id}>
+                      <td className="font-semibold">{item.title}</td>
+                      <td>{owner?.name ?? item.ownerId}</td>
+                      <td>{new Date(item.postedAt).toLocaleDateString('vi-VN')}</td>
+                      <td>{new Date(item.expiresAt).toLocaleDateString('vi-VN')}</td>
+                      <td><StatusBadge status={item.status} /></td>
+                      <td><Button size="sm" variant="outline" onClick={() => setSelectedExpired(item)}>Kiểm tra</Button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState title="Không có bài quá hạn" text="Bài hết hạn sẽ xuất hiện tại đây để Admin kiểm tra trước khi xử lý." />
+        )}
+        {selectedExpired ? (
+          <ExpiredPostModal
+            item={selectedExpired}
+            owner={data.users.find((user) => user.id === selectedExpired.ownerId)}
+            onClose={() => setSelectedExpired(null)}
+            onMarkRemoved={() => {
+              dispatch(actions.updateItemStatus({ itemId: selectedExpired.id, status: 'removed', adminId: admin.id }));
+              setSelectedExpired(null);
+              setToast('Đã đánh dấu bài quá hạn là đã gỡ.');
+            }}
+          />
+        ) : null}
+        {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
+      </Panel>
+    );
+  }
+  if (kind === 'categories') {
+    return (
+      <Panel
+        title={title}
+        description={description}
+        action={<Button icon="add" onClick={() => setEditingCategory(emptyCategory())}>Thêm danh mục</Button>}
+      >
         <div className="table-wrap">
           <table className="data-table">
             <thead>
@@ -1588,9 +1937,10 @@ function AdminStaticContent({
             category={editingCategory}
             onClose={() => setEditingCategory(null)}
             onSave={(nextCategory) => {
-              setCategories((current) =>
-                current.map((entry) => entry.id === editingCategory.id ? { ...nextCategory, id: editingCategory.id } : entry),
-              );
+              setCategories((current) => {
+                if (!editingCategory.id) return [...current, { ...nextCategory, id: nextCategory.code || nextCategory.name }];
+                return current.map((entry) => entry.id === editingCategory.id ? { ...nextCategory, id: editingCategory.id } : entry);
+              });
               setEditingCategory(null);
               setToast('Đã cập nhật danh mục thành công.');
             }}
@@ -1708,6 +2058,16 @@ type CategoryRow = {
   status: 'active' | 'hidden';
 };
 
+function emptyCategory(): CategoryRow {
+  return {
+    id: '',
+    name: '',
+    code: '',
+    description: '',
+    status: 'active',
+  };
+}
+
 function CategoryModal({
   category,
   onClose,
@@ -1722,18 +2082,55 @@ function CategoryModal({
   const [code, setCode] = useState(category.code);
   const [description, setDescription] = useState(category.description);
   const [status, setStatus] = useState<CategoryRow['status']>(category.status);
+  const protectedCategory = CATEGORIES.some((entry) => entry === category.id);
   return (
-    <Modal title="Chỉnh sửa danh mục" onClose={onClose}>
-      <Field label="Tên danh mục" value={name} onChange={(event) => setName(event.target.value)} />
-      <Field className="mt-4" label="Mã danh mục" value={code} onChange={(event) => setCode(event.target.value)} />
+    <Modal title={category.id ? 'Chỉnh sửa danh mục' : 'Thêm danh mục'} onClose={onClose}>
+      <Field label="Tên danh mục" value={name} disabled={protectedCategory} onChange={(event) => setName(event.target.value)} />
+      <Field className="mt-4" label="Mã danh mục" value={code} disabled={protectedCategory} onChange={(event) => setCode(event.target.value)} />
       <TextArea className="mt-4" label="Mô tả" value={description} onChange={(event) => setDescription(event.target.value)} />
-      <Select className="mt-4" label="Trạng thái" value={status} onChange={(event) => setStatus(event.target.value as CategoryRow['status'])}>
+      <Select className="mt-4" label="Trạng thái" value={status} disabled={protectedCategory} onChange={(event) => setStatus(event.target.value as CategoryRow['status'])}>
         <option value="active">Đang dùng</option>
         <option value="hidden">Tạm ẩn</option>
       </Select>
+      {protectedCategory ? <p className="mt-2 text-xs text-text-muted">Danh mục mặc định của ShareLoop được bảo vệ, chỉ cho phép cập nhật mô tả.</p> : null}
       <div className="mt-6 flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose}>Hủy</Button>
         <Button onClick={() => onSave({ ...category, name, code, description, status })}>Lưu thay đổi</Button>
+      </div>
+    </Modal>
+  );
+}
+
+function ExpiredPostModal({
+  item,
+  owner,
+  onClose,
+  onMarkRemoved,
+}: {
+  item: Item;
+  owner?: User;
+  onClose: () => void;
+  onMarkRemoved: () => void;
+}) {
+  return (
+    <Modal title="Xử lý bài quá hạn" onClose={onClose}>
+      <div className="grid gap-4 md:grid-cols-[160px_1fr]">
+        <img src={item.images[0]} alt={item.title} className="aspect-square w-full rounded-md object-cover" />
+        <div className="grid gap-3 text-sm sm:grid-cols-2">
+          <Info label="Món đồ" value={item.title} />
+          <Info label="Người đăng" value={owner?.name ?? item.ownerId} />
+          <Info label="Ngày đăng" value={new Date(item.postedAt).toLocaleDateString('vi-VN')} />
+          <Info label="Ngày hết hạn" value={new Date(item.expiresAt).toLocaleDateString('vi-VN')} />
+          <Info label="Trạng thái hiện tại" value="Hết hạn" />
+          <Info label="Khu vực" value={item.district} />
+        </div>
+      </div>
+      <p className="mt-4 rounded-md bg-background p-3 text-sm leading-6 text-text-secondary">
+        {item.description}
+      </p>
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="ghost" onClick={onClose}>Đóng</Button>
+        <Button variant="danger" onClick={onMarkRemoved}>Đánh dấu đã gỡ</Button>
       </div>
     </Modal>
   );
@@ -1773,7 +2170,7 @@ function AlertDetailModal({
         <Info label="Loại cảnh báo" value={alertType} />
         <Info label="Thời gian phát hiện" value={new Date(transaction.createdAt).toLocaleString('vi-VN')} />
         <Info label="Trạng thái giao dịch" value={transaction.status} />
-        <Info label="Credit liên quan" value={`${transaction.creditHeldBy.length} bên đã giữ Credit`} />
+        <Info label="Liên hệ" value={['WAITING_HANDOVER', 'SENDER_CONFIRMED', 'RECEIVER_CONFIRMED', 'COMPLETED'].includes(transaction.status) ? 'Đã mở khóa' : 'Chưa mở khóa'} />
         <Info label="Trạng thái kiểm tra" value={inspected ? 'Đã kiểm tra' : 'Chưa kiểm tra'} />
       </div>
       <div className="mt-4 rounded-md bg-background p-3 text-sm leading-6 text-text-secondary">
@@ -1833,11 +2230,13 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 function ConfirmDialog({
   title,
   text,
+  confirmLabel = 'Xóa',
   onCancel,
   onConfirm,
 }: {
   title: string;
   text: string;
+  confirmLabel?: string;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -1846,7 +2245,7 @@ function ConfirmDialog({
       <p className="text-sm leading-6 text-text-muted">{text}</p>
       <div className="mt-6 flex justify-end gap-2">
         <Button variant="ghost" onClick={onCancel}>Hủy</Button>
-        <Button variant="danger" onClick={onConfirm}>Xóa</Button>
+        <Button variant={confirmLabel === 'Xóa' ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</Button>
       </div>
     </Modal>
   );
@@ -1859,3 +2258,5 @@ function Info({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+

@@ -1,5 +1,5 @@
 export type Role = 'guest' | 'user' | 'admin';
-export type UserStatus = 'active' | 'suspended' | 'locked';
+export type UserStatus = 'active' | 'suspended' | 'locked' | 'pending_verification';
 export type ItemType = 'gift' | 'trade';
 export type ItemCondition = 'new' | 'good' | 'used';
 export type ItemStatus =
@@ -10,8 +10,11 @@ export type ItemStatus =
   | 'rejected'
   | 'REJECTED'
   | 'VIOLATION'
+  | 'IN_TRANSACTION'
+  | 'COMPLETED'
   | 'expired'
   | 'removed';
+export type ItemRequestStatus = 'PENDING' | 'ACCEPTED' | 'NOT_SELECTED' | 'CANCELLED';
 export type TransactionStatus =
   | 'NEGOTIATING'
   | 'SCHEDULE_PROPOSED'
@@ -27,6 +30,7 @@ export type CreditHistoryType =
   | 'TOPUP'
   | 'TRANSACTION_FEE'
   | 'SPEND'
+  | 'RECEIVE_FEE'
   | 'HOLD'
   | 'REFUND'
   | 'AI_SPEND'
@@ -56,6 +60,14 @@ export interface User {
   role: 'user' | 'admin';
   joinedAt: string;
   totalTx: number;
+  reputationRestoreUsed?: boolean;
+}
+
+export interface TransactionEvidence {
+  id: string;
+  userId: string;
+  files: string[];
+  createdAt: string;
 }
 
 export interface Item {
@@ -72,6 +84,7 @@ export interface Item {
   status: ItemStatus;
   rejectionReason?: string;
   moderationReason?: string;
+  postApprovalEditCount?: number;
   postedAt: string;
   expiresAt: string;
 }
@@ -93,7 +106,9 @@ export interface Handover {
 export interface Transaction {
   id: string;
   itemId: string;
+  offeredItemId?: string;
   sourceItemId?: string;
+  selectedRequestId?: string;
   requesterId: string;
   ownerId: string;
   type: ItemType;
@@ -114,10 +129,26 @@ export interface Transaction {
   requesterEvidence?: string[];
   senderEvidence?: string[];
   receiverEvidence?: string[];
+  evidenceRecords?: TransactionEvidence[];
+  reminderDay0At?: string;
+  reminderDay3At?: string;
+  autoConfirmAt?: string;
+  silentCancelAt?: string;
   completedAt?: string;
   complaintDeadline?: string;
   cancelledAt?: string;
   disputeId?: string;
+  createdAt: string;
+}
+
+export interface ItemRequest {
+  id: string;
+  type: ItemType;
+  itemId: string;
+  offeredItemId?: string;
+  requesterId: string;
+  status: ItemRequestStatus;
+  message: string;
   createdAt: string;
 }
 
@@ -204,6 +235,10 @@ export interface Complaint {
   status: ComplaintStatus;
   adminNote?: string;
   resolution?: string;
+  response?: string;
+  responseEvidence?: string[];
+  responseDueAt?: string;
+  responseSubmittedAt?: string;
   resolvedAt?: string;
 }
 
@@ -260,6 +295,9 @@ export interface AdminAuditLog {
   targetType: 'user' | 'item' | 'transaction' | 'dispute' | 'setting' | 'keyword' | 'district' | 'complaint' | 'rank' | 'point_rule';
   targetId: string;
   detail: string;
+  previousValue?: string;
+  newValue?: string;
+  reason?: string;
   createdAt: string;
 }
 
@@ -276,6 +314,7 @@ export interface AppStateData {
   systemRevenue: number;
   users: User[];
   items: Item[];
+  itemRequests: ItemRequest[];
   transactions: Transaction[];
   handovers: Handover[];
   conversations: Conversation[];
@@ -293,6 +332,7 @@ export interface AppStateData {
   auditLogs: AdminAuditLog[];
   settings: SystemSetting[];
   passwordReset?: PasswordResetState;
+  emailVerification?: EmailVerificationState;
 }
 
 export interface PasswordResetState {
@@ -305,4 +345,22 @@ export interface PasswordResetState {
   attempts: number;
   verified: boolean;
   resetToken?: string;
+}
+
+export interface PendingRegistration {
+  name: string;
+  username: string;
+  email: string;
+  phone: string;
+  district: string;
+  passwordHash: string;
+}
+
+export interface EmailVerificationState {
+  id: string;
+  registration: PendingRegistration;
+  otpHash: string;
+  expiresAt: string;
+  resendAvailableAt: string;
+  attempts: number;
 }

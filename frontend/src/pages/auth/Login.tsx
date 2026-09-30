@@ -5,8 +5,9 @@ import { actions, selectData } from '../../app/store';
 import { Alert, Button, Field, Icon } from '../../components/ui';
 import { PasswordField } from '../../components/PasswordField';
 import { verifyPassword } from '../../utils/passwordSecurity';
+
 export function Login() {
-  const [username, setUsername] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -15,29 +16,68 @@ export function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const successNotice = (location.state as { notice?: string } | null)?.notice;
-  const login = async (name: string, pass: string, target = '/') => {
+
+  const login = async (nameOrEmail: string, pass: string, target = '/') => {
+    const normalized = nameOrEmail.trim().toLowerCase();
+    setError('');
+    if (!normalized) {
+      setError('Vui lòng nhập tên đăng nhập hoặc email.');
+      return;
+    }
+    if (!pass) {
+      setError('Vui lòng nhập mật khẩu.');
+      return;
+    }
     setProcessing(true);
-    const candidate = data.users.find((u) => u.username === name && u.status !== 'locked');
-    const valid = candidate && await verifyPassword(pass, candidate.password) ? candidate : undefined;
-    if (!valid) {
-      setError('Tên đăng nhập hoặc mật khẩu chưa đúng. Tài khoản bị khóa không thể đăng nhập.');
+    const candidate = data.users.find(
+      (user) => user.username.toLowerCase() === normalized || user.email.toLowerCase() === normalized,
+    );
+    if (!candidate && data.emailVerification) {
+      const pending = data.emailVerification.registration;
+      if (pending.username.toLowerCase() === normalized || pending.email.toLowerCase() === normalized) {
+        setError('Tài khoản chưa xác thực email. Vui lòng nhập OTP đã gửi đến email của bạn.');
+        setProcessing(false);
+        return;
+      }
+    }
+    if (candidate?.status === 'pending_verification') {
+      setError('Tài khoản chưa xác thực email. Vui lòng xác thực trước khi đăng nhập.');
       setProcessing(false);
       return;
     }
-    dispatch(actions.login({ username: name, passwordHash: valid.password }));
+    if (candidate?.status === 'locked') {
+      setError('Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.');
+      setProcessing(false);
+      return;
+    }
+    if (candidate?.status === 'suspended') {
+      setError('Tài khoản đang tạm khóa. Vui lòng liên hệ quản trị viên.');
+      setProcessing(false);
+      return;
+    }
+    const valid = candidate && await verifyPassword(pass, candidate.password) ? candidate : undefined;
+    if (!valid) {
+      setError('Tên đăng nhập/email hoặc mật khẩu chưa đúng.');
+      setProcessing(false);
+      return;
+    }
+    dispatch(actions.login({ username: valid.username, passwordHash: valid.password }));
     navigate(target);
     setProcessing(false);
   };
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    login(username, password);
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    void login(identifier, password);
   };
+
   const quickLogin = (role: 'user' | 'admin') => {
     setError('');
     setProcessing(false);
     dispatch(actions.demoLogin({ username: role, role }));
     navigate(role === 'admin' ? '/admin' : '/');
   };
+
   return (
     <div className="page-shell grid min-h-[620px] items-center gap-10 lg:grid-cols-2">
       <section className="hidden max-w-lg lg:block">
@@ -55,22 +95,20 @@ export function Login() {
       >
         <h1 className="text-2xl font-bold">Đăng nhập</h1>
         <p className="mt-2 text-sm text-text-muted">Dùng tài khoản của bạn để tiếp tục.</p>
-        {error ? (
-          <div className="mt-5">
-            <Alert tone="error">{error}</Alert>
-          </div>
-        ) : null}
+        {error ? <div className="mt-5"><Alert tone="error">{error}</Alert></div> : null}
         {successNotice ? <div className="mt-5"><Alert tone="success">{successNotice}</Alert></div> : null}
         <div className="mt-6 space-y-4">
           <Field
             required
-            label="Tên đăng nhập"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            label="Tên đăng nhập hoặc email"
+            value={identifier}
+            onChange={(event) => setIdentifier(event.target.value)}
             autoComplete="username"
           />
           <PasswordField label="Mật khẩu" value={password} onChange={setPassword} autoComplete="current-password" />
-          <Button className="w-full" disabled={processing}>Đăng nhập</Button>
+          <Button className="w-full" disabled={processing}>
+            {processing ? 'Đang đăng nhập...' : 'Đăng nhập'}
+          </Button>
         </div>
         <Link to="/forgot-password" className="mt-4 block text-center text-sm font-semibold text-primary hover:underline">
           Quên mật khẩu?
@@ -84,11 +122,7 @@ export function Login() {
           <Button type="button" variant="outline" onClick={() => quickLogin('user')}>
             Người dùng
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => quickLogin('admin')}
-          >
+          <Button type="button" variant="outline" onClick={() => quickLogin('admin')}>
             Quản trị viên
           </Button>
         </div>

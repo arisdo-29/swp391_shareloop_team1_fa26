@@ -97,6 +97,7 @@ export function findNeedMatches(
 
   return items
     .filter((item) => item.status === 'approved' || item.status === 'APPROVED')
+    .filter((item) => new Date(item.expiresAt).getTime() >= Date.now())
     .filter((item) => !parsed.district || item.district === parsed.district)
     .filter((item) => !parsed.type || item.type === parsed.type)
     .filter((item) => !parsed.category || item.category === parsed.category)
@@ -118,6 +119,7 @@ export function getSwapSuggestions(
   return items
     .filter((item) => item.type === 'trade')
     .filter((item) => item.status === 'approved' || item.status === 'APPROVED')
+    .filter((item) => new Date(item.expiresAt).getTime() >= Date.now())
     .filter((item) => item.id !== sourceItem.id)
     .filter((item) => item.ownerId !== currentUserId)
     .map((item) => {

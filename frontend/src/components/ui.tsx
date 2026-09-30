@@ -217,7 +217,9 @@ export function StatusBadge({
               ? 'Vi phạm'
               : status === 'expired'
               ? 'Hết hạn'
-              : status === 'removed'
+              : status === 'IN_TRANSACTION'
+                ? 'Đang giao dịch'
+                : status === 'removed'
                 ? 'Đã gỡ'
                 : status === 'locked'
                   ? 'Đã khóa'
@@ -304,7 +306,7 @@ export function ProductCard({ item, owner }: { item: Item; owner?: User }) {
   return (
     <Link
       to={`/items/${item.id}`}
-      className="group block min-w-0 overflow-hidden rounded-lg bg-white ring-1 ring-border/80 transition duration-300 hover:-translate-y-1 hover:shadow-md hover:ring-primary/20"
+      className="group block min-w-0 overflow-hidden rounded-lg bg-[#FFFAF5] ring-1 ring-border/80 transition duration-300 hover:-translate-y-1 hover:shadow-md hover:ring-primary/20"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-surface-container">
         <img
