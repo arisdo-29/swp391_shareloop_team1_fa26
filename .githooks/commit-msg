@@ -1,0 +1,15 @@
+#!/bin/sh
+# ShareLoop: chan moi dong ghi cong AI trong commit message.
+# Bat mot lan tren moi may: git config core.hooksPath .githooks
+AI='claude|anthropic|codex|openai|chatgpt|gpt|gemini|google'
+AI="$AI|copilot|cursor|antigravity|devin|windsurf"
+P="co-authored-by:.*($AI)|generated (with|by) .*($AI|\bai\b)"
+P="$P|noreply@anthropic\.com|claude\.ai/code"
+if grep -v '^#' "$1" | grep -Eiq "$P"; then
+  echo "" >&2
+  echo "COMMIT BI CHAN: message co dong ghi cong AI" >&2
+  echo "(Co-Authored-By / Generated with ...). Xoa dong do roi commit lai." >&2
+  echo "" >&2
+  exit 1
+fi
+exit 0

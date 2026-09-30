@@ -1,0 +1,35 @@
+# Chan PR co dong ghi cong AI trong commit, tieu de hoac mo ta PR.
+name: no-ai-attribution
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+jobs:
+  no-ai-attribution:
+    name: no-ai-attribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Kiem tra commit va mo ta PR
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          AI='claude|anthropic|codex|openai|chatgpt|gpt|gemini|google'
+          AI="$AI|copilot|cursor|antigravity|devin|windsurf"
+          P="co-authored-by:.*($AI)|generated (with|by) .*($AI|\bai\b)"
+          P="$P|noreply@anthropic\.com|claude\.ai/code"
+          bad=0
+          if git log --format='%B' "$BASE..$HEAD" | grep -Ein "$P"; then
+            echo "::error::Commit message co dong ghi cong AI"; bad=1
+          fi
+          if git log --format='%an%n%cn' "$BASE..$HEAD" | grep -Eiq "^($AI)"; then
+            echo "::error::Commit co tac gia la cong cu AI"; bad=1
+          fi
+          if printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" | grep -Ein "$P"; then
+            echo "::error::Tieu de hoac mo ta PR co dong ghi cong AI"; bad=1
+          fi
+          exit $bad
