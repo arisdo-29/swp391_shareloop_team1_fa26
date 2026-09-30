@@ -1,0 +1,35 @@
+# Cấu hình dùng chung. Mỗi module một khối app.<module>;
+# người sở hữu chỉ sửa trong khối của mình, thêm dòng ở cuối khối.
+spring:
+  application:
+    name: shareloop
+  profiles:
+    default: dev
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate            # schema do Flyway quản lý
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+app:
+  # module auth (BE1)
+  jwt:
+    ttl-minutes: 120
+  # module auth / config (BE1)
+  cors: {}
+  # module media (BE2)
+  storage: {}
+  # module integration/ai (BE2)
+  ai: {}
+  # module integration/payment (BE1)
+  payment: {}
+  # module integration/mail (BE1)
+  mail: {}

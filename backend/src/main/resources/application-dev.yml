@@ -1,0 +1,20 @@
+# Profile dev (máy cá nhân): kết nối dịch vụ của docker-compose.yml
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/shareloop
+    username: shareloop
+    password: shareloop
+  flyway:
+    locations: classpath:db/migration,classpath:db/dev-data
+    out-of-order: true              # chỉ ở dev
+  mail:
+    host: localhost
+    port: 1025
+
+app:
+  # module auth (BE1)
+  jwt:
+    secret: ${JWT_SECRET:dev-only-secret-change-me-32-bytes-min}
+  # module auth / config (BE1)
+  cors:
+    allowed-origins: http://localhost:5173
