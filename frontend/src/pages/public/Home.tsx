@@ -299,11 +299,13 @@ export function Home() {
   const [q, setQ] = useState('');
   const [district, setDistrict] = useState('Bình Thạnh');
   const [newItemFilter, setNewItemFilter] = useState<'all' | ItemType>('all');
+  const [loginPromptOpen, setLoginPromptOpen] = useState(false);
 
   const approved = useMemo(
     () =>
       items
         .filter((item) => item.status === 'approved' || item.status === 'APPROVED')
+        .filter((item) => new Date(item.expiresAt).getTime() >= Date.now())
         .sort((a, b) => b.postedAt.localeCompare(a.postedAt)),
     [items],
   );
@@ -494,7 +496,11 @@ export function Home() {
                 <p>Đăng lên SHARELOOP để tặng lại hoặc tìm một món phù hợp để trao đổi.</p>
               </div>
               <div className="flex flex-wrap items-center gap-5">
-                <Link to={currentUser ? '/post' : '/login'} className="home-final-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-primary transition"><Icon name="add" className="size-[18px]" weight="bold" />Đăng món đồ</Link>
+                {currentUser ? (
+                  <Link to="/post" className="home-final-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-primary transition"><Icon name="add" className="size-[18px]" weight="bold" />Đăng món đồ</Link>
+                ) : (
+                  <button type="button" onClick={() => setLoginPromptOpen(true)} className="home-final-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-primary transition"><Icon name="add" className="size-[18px]" weight="bold" />Đăng món đồ</button>
+                )}
                 <Link to="/browse" className="inline-flex items-center gap-2 text-sm font-bold text-primary">Tìm đồ <Icon name="arrow" className="size-4" /></Link>
               </div>
             </div>
@@ -502,6 +508,23 @@ export function Home() {
         </div>
 
       </HomeMotion>
+      {loginPromptOpen ? (
+        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full rounded-t-xl bg-white p-5 text-text-primary shadow-lg sm:max-w-md sm:rounded-xl sm:p-6"
+          >
+            <h2 className="text-xl font-bold">Bạn cần đăng nhập để đăng đồ.</h2>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setLoginPromptOpen(false)}>
+                Để sau
+              </Button>
+              <Button onClick={() => navigate('/login')}>Đăng nhập</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

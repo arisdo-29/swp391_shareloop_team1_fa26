@@ -1,19 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectData } from '../../app/store';
-import {
-  Button,
-  EmptyState,
-  Icon,
-  PageHeader,
-  ProductCard,
-  SearchField,
-  Select,
-} from '../../components/ui';
+import { Button, EmptyState, Icon, PageHeader, ProductCard } from '../../components/ui';
 import { CATEGORIES, CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import type { ItemCondition, ItemType } from '../../types/domain';
+
 export function Browse() {
   const [params] = useSearchParams();
   const data = useAppSelector(selectData);
@@ -32,6 +25,7 @@ export function Browse() {
     () =>
       items
         .filter((i) => i.status === 'approved' || i.status === 'APPROVED')
+        .filter((i) => new Date(i.expiresAt).getTime() >= Date.now())
         .filter((i) => !q || `${i.title} ${i.description}`.toLowerCase().includes(q.toLowerCase()))
         .filter((i) => !type || i.type === type)
         .filter((i) => !category || i.category === category)
@@ -46,51 +40,89 @@ export function Browse() {
     setCondition('');
     setDistrict('');
   };
+  const activeFilters = [
+    type
+      ? {
+          key: 'type',
+          label: type === 'gift' ? 'Cho tặng' : 'Trao đổi',
+          clear: () => setType('' as ItemType | ''),
+        }
+      : null,
+    category ? { key: 'category', label: category, clear: () => setCategory('') } : null,
+    condition
+      ? {
+          key: 'condition',
+          label: conditionLabel[condition],
+          clear: () => setCondition('' as ItemCondition | ''),
+        }
+      : null,
+    district ? { key: 'district', label: district, clear: () => setDistrict('') } : null,
+  ].filter(Boolean) as Array<{ key: string; label: string; clear: () => void }>;
+
   const filters = (
     <>
-      <SearchField
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Tên món đồ, mô tả..."
-      />
-      <Select
-        label="Hình thức"
-        value={type}
-        onChange={(e) => setType(e.target.value as ItemType | '')}
-      >
-        <option value="">Tất cả</option>
-        <option value="gift">Cho tặng</option>
-        <option value="trade">Trao đổi</option>
-      </Select>
-      <Select label="Danh mục" value={category} onChange={(e) => setCategory(e.target.value)}>
-        <option value="">Tất cả</option>
-        {CATEGORIES.map((c) => (
-          <option key={c}>{c}</option>
-        ))}
-      </Select>
-      <Select
-        label="Tình trạng"
-        value={condition}
-        onChange={(e) => setCondition(e.target.value as ItemCondition | '')}
-      >
-        <option value="">Tất cả</option>
-        {CONDITIONS.map((c) => (
-          <option key={c} value={c}>
-            {conditionLabel[c]}
-          </option>
-        ))}
-      </Select>
-      <Select label="Quận" value={district} onChange={(e) => setDistrict(e.target.value)}>
-        <option value="">Tất cả quận</option>
-        {districts.map((d) => (
-          <option key={d}>{d}</option>
-        ))}
-      </Select>
-      <Button variant="ghost" size="sm" className="w-full" onClick={reset}>
-        Xóa bộ lọc
-      </Button>
+      <div className="flex h-11 items-center rounded-xl border border-border bg-white px-3 transition hover:border-primary/40 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
+        <Icon name="search" className="size-4 shrink-0 text-text-muted" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Tìm tên món đồ..."
+          className="min-w-0 flex-1 border-0 bg-transparent px-2.5 text-sm outline-none placeholder:text-text-muted/70"
+        />
+      </div>
+      {activeFilters.length ? (
+        <div className="flex flex-wrap gap-1.5">
+          {activeFilters.map((filter) => (
+            <button
+              key={filter.key}
+              type="button"
+              onClick={filter.clear}
+              className="inline-flex h-7 items-center gap-1 rounded-full border border-primary/15 bg-primary-faint px-2.5 text-xs font-semibold text-primary transition hover:border-primary/40 hover:bg-primary-soft"
+            >
+              {filter.label}
+              <Icon name="close" className="size-3" />
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+        <FilterSelect
+          label="Hình thức"
+          value={type}
+          onChange={(e) => setType(e.target.value as ItemType | '')}
+        >
+          <option value="">Tất cả</option>
+          <option value="gift">Cho tặng</option>
+          <option value="trade">Trao đổi</option>
+        </FilterSelect>
+        <FilterSelect label="Danh mục" value={category} onChange={(e) => setCategory(e.target.value)}>
+          <option value="">Tất cả</option>
+          {CATEGORIES.map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </FilterSelect>
+        <FilterSelect
+          label="Tình trạng"
+          value={condition}
+          onChange={(e) => setCondition(e.target.value as ItemCondition | '')}
+        >
+          <option value="">Tất cả</option>
+          {CONDITIONS.map((c) => (
+            <option key={c} value={c}>
+              {conditionLabel[c]}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="Khu vực" value={district} onChange={(e) => setDistrict(e.target.value)}>
+          <option value="">Tất cả quận</option>
+          {districts.map((d) => (
+            <option key={d}>{d}</option>
+          ))}
+        </FilterSelect>
+      </div>
     </>
   );
+
   return (
     <div className="page-shell">
       <PageHeader
@@ -107,15 +139,26 @@ export function Browse() {
           </Button>
         }
       />
-      <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
         <aside
-          className={`${mobileFilters ? 'block' : 'hidden'} h-fit space-y-4 rounded-lg bg-white p-4 ring-1 ring-border/80 lg:block`}
+          className={`${mobileFilters ? 'block' : 'hidden'} h-fit overflow-hidden rounded-2xl border border-border/80 bg-white shadow-sm lg:block`}
         >
-          <div className="hidden items-center gap-2 border-b border-border pb-3 text-sm font-bold lg:flex">
-            <Icon name="filter" className="size-4" />
-            Bộ lọc
+          <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm font-bold text-text-primary">
+              <span className="grid size-8 place-items-center rounded-lg bg-primary-faint text-primary">
+                <Icon name="filter" className="size-4" weight="bold" />
+              </span>
+              Bộ lọc
+            </div>
+            <button
+              type="button"
+              onClick={reset}
+              className="rounded-md px-2 py-1 text-xs font-bold text-primary transition hover:bg-primary-faint"
+            >
+              Đặt lại
+            </button>
           </div>
-          {filters}
+          <div className="space-y-3 p-4">{filters}</div>
         </aside>
         <section className="min-w-0">
           <div className="mb-4 flex items-center justify-between">
@@ -151,6 +194,31 @@ export function Browse() {
         </section>
       </div>
     </div>
+  );
+}
+
+function FilterSelect({
+  label,
+  children,
+  className = '',
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement> & { label: string; children: ReactNode }) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1 block text-xs font-bold text-text-secondary">{label}</span>
+      <span className="relative block">
+        <select
+          className={`h-11 w-full appearance-none rounded-xl border border-border bg-white px-3 pr-9 text-sm font-medium text-text-primary outline-none transition hover:border-primary/40 focus:border-primary focus:ring-4 focus:ring-primary/10 ${className}`}
+          {...props}
+        >
+          {children}
+        </select>
+        <Icon
+          name="chevronDown"
+          className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-text-muted"
+        />
+      </span>
+    </label>
   );
 }
 

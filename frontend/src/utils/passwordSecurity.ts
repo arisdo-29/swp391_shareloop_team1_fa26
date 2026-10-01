@@ -61,3 +61,7 @@ export function generateOtp() {
 export function validEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
+
+export function validVietnamPhone(phone: string) {
+  return /^(?:\+84|84|0)(?:3|5|7|8|9)\d{8}$/.test(phone.replace(/[\s.-]/g, ''));
+}

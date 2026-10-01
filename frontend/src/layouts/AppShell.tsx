@@ -22,6 +22,7 @@ export function AppShell() {
   const dispatch = useAppDispatch();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const nav = isAdmin
     ? [
         ['/admin', 'Dashboard', 'dashboard'],
@@ -79,28 +80,30 @@ export function AppShell() {
               {isAdmin ? 'SHARELOOP ADMIN' : <>SHARE<span className={isHome ? 'text-primary-fixed' : 'text-primary'}>LOOP</span></>}
             </span>
           </Link>
-          <nav className="hidden min-w-0 flex-1 items-center gap-0.5 lg:flex">
-            {nav.map(([to, label]) => (
-              <NavLink
-                end={to === '/'}
-                key={to}
-                to={to}
-                className={({ isActive }) =>
-                  `whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition ${
-                    isHome
-                      ? isActive
-                        ? 'bg-white/15 text-white'
-                        : 'text-white/80 hover:bg-white/10 hover:text-white'
-                      : isActive
-                        ? 'bg-primary-faint text-primary'
-                        : 'text-text-secondary hover:bg-surface-low hover:text-text-primary'
-                  }`
-                }
-              >
-                {label}
-              </NavLink>
-            ))}
-          </nav>
+          {!isAdmin ? (
+            <nav className="hidden min-w-0 flex-1 items-center gap-0.5 lg:flex">
+              {nav.map(([to, label]) => (
+                <NavLink
+                  end={to === '/'}
+                  key={to}
+                  to={to}
+                  className={({ isActive }) =>
+                    `whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition ${
+                      isHome
+                        ? isActive
+                          ? 'bg-white/15 text-white'
+                          : 'text-white/80 hover:bg-white/10 hover:text-white'
+                        : isActive
+                          ? 'bg-primary-faint text-primary'
+                          : 'text-text-secondary hover:bg-surface-low hover:text-text-primary'
+                    }`
+                  }
+                >
+                  {label}
+                </NavLink>
+              ))}
+            </nav>
+          ) : null}
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {user ? (
               <>
@@ -205,15 +208,17 @@ export function AppShell() {
                 </Link>
               </>
             )}
-            <IconButton
-              icon={mobileOpen ? 'close' : 'menu'}
-              label="Mở điều hướng"
-              className={`lg:hidden ${isHome ? 'text-white hover:bg-white/10' : ''}`}
-              onClick={() => setMobileOpen(!mobileOpen)}
-            />
+            {!isAdmin ? (
+              <IconButton
+                icon={mobileOpen ? 'close' : 'menu'}
+                label="Mở điều hướng"
+                className={`lg:hidden ${isHome ? 'text-white hover:bg-white/10' : ''}`}
+                onClick={() => setMobileOpen(!mobileOpen)}
+              />
+            ) : null}
           </div>
         </div>
-        {mobileOpen ? (
+        {mobileOpen && !isAdmin ? (
           <nav
             className={`border-t px-4 py-3 lg:hidden ${
               isHome ? 'border-white/15 bg-[#0d332c]/95 text-white' : 'border-border bg-white'
@@ -275,6 +280,7 @@ export function AppShell() {
             </div>
             <FooterGroup
               title="Khám phá"
+              onPostClick={!user ? () => setLoginPromptOpen(true) : undefined}
               links={[
                 ['Tìm đồ', '/browse'],
                 ['Trợ lý AI', '/ai'],
@@ -306,24 +312,62 @@ export function AppShell() {
           </div>
         </div>
       </footer>
+      {loginPromptOpen ? (
+        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full rounded-t-xl bg-white p-5 text-text-primary shadow-lg sm:max-w-md sm:rounded-xl sm:p-6"
+          >
+            <h2 className="text-xl font-bold">Bạn cần đăng nhập để đăng đồ.</h2>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setLoginPromptOpen(false)}>
+                Để sau
+              </Button>
+              <Link to="/login" onClick={() => setLoginPromptOpen(false)}>
+                <Button>Đăng nhập</Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function FooterGroup({ title, links }: { title: string; links: Array<[string, string]> }) {
+function FooterGroup({
+  title,
+  links,
+  onPostClick,
+}: {
+  title: string;
+  links: Array<[string, string]>;
+  onPostClick?: () => void;
+}) {
   return (
     <div>
       <h2 className="text-sm font-bold text-text-primary">{title}</h2>
       <nav className="mt-4 space-y-3">
-        {links.map(([label, to]) => (
-          <Link
-            key={to}
-            to={to}
-            className="block text-sm leading-6 text-text-muted transition hover:text-primary"
-          >
-            {label}
-          </Link>
-        ))}
+        {links.map(([label, to]) =>
+          onPostClick && to === '/post' ? (
+            <button
+              key={to}
+              type="button"
+              onClick={onPostClick}
+              className="block text-left text-sm leading-6 text-text-muted transition hover:text-primary"
+            >
+              {label}
+            </button>
+          ) : (
+            <Link
+              key={to}
+              to={to}
+              className="block text-sm leading-6 text-text-muted transition hover:text-primary"
+            >
+              {label}
+            </Link>
+          ),
+        )}
       </nav>
     </div>
   );

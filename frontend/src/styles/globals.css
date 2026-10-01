@@ -95,8 +95,131 @@ img {
   .surface-section {
     @apply rounded-xl bg-white p-5 ring-1 ring-border/70 sm:p-6;
   }
+
+  .ai-hero-panel {
+    width: calc(100% - 32px);
+    max-width: 1360px;
+    margin: 0 auto;
+    box-sizing: border-box;
+    height: auto;
+    min-height: 0;
+    padding: 18px 20px 0;
+  }
+
+  .ai-hero-visual {
+    --ai-card-width: 118px;
+    --ai-card-height: 168px;
+    --ai-card-gap: 16px;
+    --ai-step: calc(var(--ai-card-width) + var(--ai-card-gap));
+    --ai-window-width: calc(var(--ai-card-width) + var(--ai-card-width) + var(--ai-card-gap));
+    @apply flex w-full max-w-full items-center justify-center overflow-hidden;
+    gap: var(--ai-card-gap);
+    margin: 30px auto 0;
+    max-width: 1180px;
+    padding: 6px 16px 10px;
+    box-sizing: border-box;
+  }
+
+  .ai-hero-textarea {
+    @apply mx-auto;
+    height: 100px;
+    min-height: 100px;
+    max-width: 760px;
+    width: min(760px, calc(100% - 48px));
+  }
+
+  .ai-hero-stage {
+    @apply mx-auto w-full max-w-full overflow-hidden;
+    box-sizing: border-box;
+  }
+
+  .ai-hero-window {
+    @apply mx-auto max-w-full overflow-hidden;
+    width: min(100%, var(--ai-window-width));
+  }
+
+  .ai-hero-rail {
+    @apply flex w-max items-center justify-center;
+    gap: var(--ai-card-gap);
+    transform: translate3d(var(--ai-offset, 0px), 0, 0);
+    transition:
+      transform 500ms ease,
+      opacity 500ms ease;
+    will-change: transform;
+  }
+
+  .ai-hero-rail.is-resetting {
+    transition: none;
+  }
+
+  .ai-hero-product-card {
+    @apply relative shrink-0 overflow-hidden border border-white/80 bg-white shadow-sm shadow-primary/10;
+    height: var(--ai-card-height);
+    border-radius: 16px;
+    width: var(--ai-card-width);
+    transition:
+      transform 500ms ease,
+      box-shadow 500ms ease;
+    transform: none;
+  }
+
+  .ai-hero-product-card:hover {
+    transform: scale(1.02);
+    z-index: 2;
+    box-shadow: 0 22px 50px rgba(20, 92, 78, 0.16);
+  }
+
+  .ai-hero-product-card img {
+    @apply h-full w-full object-cover;
+    object-position: center;
+    display: block;
+  }
 }
+
+@media (min-width: 640px) {
+  .ai-hero-visual {
+    --ai-card-width: 132px;
+    --ai-card-height: 184px;
+    --ai-card-gap: 16px;
+    --ai-window-width: calc(
+      var(--ai-card-width) + var(--ai-card-width) + var(--ai-card-width) + var(--ai-card-width) +
+      var(--ai-card-gap) + var(--ai-card-gap) + var(--ai-card-gap)
+    );
+  }
+}
+
+@media (min-width: 1024px) {
+  .ai-hero-visual {
+    --ai-card-width: 118px;
+    --ai-card-height: 170px;
+    --ai-card-gap: 14px;
+    padding: 6px 0 10px;
+    --ai-window-width: calc(
+      var(--ai-card-width) + var(--ai-card-width) + var(--ai-card-width) + var(--ai-card-width) + var(--ai-card-width) + var(--ai-card-width) + var(--ai-card-width) +
+      var(--ai-card-gap) + var(--ai-card-gap) + var(--ai-card-gap) + var(--ai-card-gap) + var(--ai-card-gap) + var(--ai-card-gap)
+    );
+  }
+}
+
+@media (min-width: 1280px) {
+  .ai-hero-visual {
+    --ai-card-width: 155px;
+    --ai-card-height: 210px;
+    --ai-card-gap: 16px;
+    --ai-window-width: calc(
+      var(--ai-card-width) + var(--ai-card-width) + var(--ai-card-width) + var(--ai-card-width) + var(--ai-card-width) + var(--ai-card-width) + var(--ai-card-width) +
+      var(--ai-card-gap) + var(--ai-card-gap) + var(--ai-card-gap) + var(--ai-card-gap) + var(--ai-card-gap) + var(--ai-card-gap)
+    );
+    margin-top: 30px;
+    padding: 6px 30px 10px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .ai-hero-rail {
+    animation: none;
+  }
+
   *,
   *::before,
   *::after {

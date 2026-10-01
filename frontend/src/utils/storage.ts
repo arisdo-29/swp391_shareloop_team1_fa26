@@ -15,7 +15,10 @@ import { rankFor } from './reputation';
 const KEY = 'shareloop:v1:state';
 
 function normalizeCreditHistory(parsed: AppStateData) {
-  const existing = (parsed.creditHistory ?? []).map((entry) => {
+  const existing = (parsed.creditHistory ?? [])
+    .filter((entry) => !['TRANSACTION_FEE', 'HOLD', 'RELEASE_HOLD'].includes(entry.type as string))
+    .filter((entry) => !/:HOLD$|:SPEND$|:RELEASE$/.test(entry.ref ?? entry.transactionId ?? ''))
+    .map((entry) => {
     const entryType = entry.type as string;
     const relatedTransactionId =
       entry.relatedTransactionId ?? entry.ref?.split(':')[0] ?? entry.transactionId?.split(':')[0];
@@ -29,13 +32,7 @@ function normalizeCreditHistory(parsed: AppStateData) {
           : entry.type;
     const transactionId = entry.transactionId ?? entry.ref ?? entry.id;
     const description = entry.description ?? entry.note;
-    const status =
-      entry.status ??
-      (type === 'HOLD'
-        ? 'holding'
-        : type === 'REFUND'
-          ? 'refunded'
-          : 'completed');
+    const status = entry.status ?? (type === 'REFUND' ? 'refunded' : 'completed');
     return {
       ...entry,
       transactionId,
@@ -79,16 +76,34 @@ function scaleCreditsDown(parsed: AppStateData) {
   );
 }
 
+function legacyOfferedItemId(
+  tx: AppStateData['transactions'][number],
+  requests: AppStateData['itemRequests'],
+) {
+  if (tx.offeredItemId ?? tx.sourceItemId) return tx.offeredItemId ?? tx.sourceItemId;
+  if (tx.type !== 'trade') return undefined;
+  const selectedRequest = requests.find((request) => request.id === tx.selectedRequestId);
+  if (selectedRequest?.offeredItemId) return selectedRequest.offeredItemId;
+  return requests.find(
+    (request) =>
+      request.type === 'trade' &&
+      request.itemId === tx.itemId &&
+      request.requesterId === tx.requesterId &&
+      request.status === 'ACCEPTED',
+  )?.offeredItemId ??
+    (tx.itemId === 'item_001' && tx.requesterId === 'user_001'
+      ? 'item_007'
+      : tx.itemId === 'item_011' && tx.requesterId === 'user_001'
+        ? 'item_010'
+        : undefined);
+}
+
 export function loadPersistedState(): AppStateData {
   if (typeof localStorage === 'undefined') return initialData;
   const raw = localStorage.getItem(KEY);
   if (!raw) return initialData;
   try {
     const parsed = JSON.parse(raw) as AppStateData;
-    if (parsed.settings?.some((setting) => setting.key === 'tx_fee_credit' && Number(setting.value) <= 5)) {
-      localStorage.setItem(KEY, JSON.stringify(initialData));
-      return initialData;
-    }
     const scaleVersion = Number(parsed.settings?.find((setting) => setting.key === 'credit_scale_version')?.value ?? 1);
     if (scaleVersion < 2) {
       scaleCreditsDown(parsed);
@@ -108,44 +123,61 @@ export function loadPersistedState(): AppStateData {
       code: topup.code ?? `SLTOPUP-${topup.id.slice(-6).toUpperCase()}`,
       status: (topup.status as string) === 'success' ? 'completed' : topup.status,
     }));
-    parsed.transactions = (parsed.transactions ?? []).map((tx) => ({
-      ...tx,
-      creditHeld: tx.creditHeld ?? tx.creditHeldBy.length > 0,
-      feeCaptured: tx.feeCaptured ?? false,
-      ownerScheduleConfirmed: tx.ownerScheduleConfirmed ?? false,
-      requesterScheduleConfirmed: tx.requesterScheduleConfirmed ?? false,
-      completedByOwner: tx.completedByOwner ?? tx.senderConfirmed ?? false,
-      completedByRequester: tx.completedByRequester ?? tx.receiverConfirmed ?? false,
-      status:
-        tx.status === 'CREDIT_HELD' &&
-        (tx.type === 'gift'
-          ? tx.creditHeldBy.includes(tx.requesterId)
-          : tx.creditHeldBy.includes(tx.ownerId) && tx.creditHeldBy.includes(tx.requesterId))
-          ? 'WAITING_HANDOVER'
-          : tx.status,
-    }));
+    const itemRequests = parsed.itemRequests ?? [];
+    parsed.transactions = (parsed.transactions ?? []).map((tx) => {
+      const offeredItemId = legacyOfferedItemId(tx, itemRequests);
+      return {
+        ...tx,
+        offeredItemId,
+        sourceItemId: tx.sourceItemId ?? offeredItemId,
+        creditHeldBy: [],
+        creditHeld: false,
+        feeCaptured: tx.feeCaptured ?? false,
+        feeCharged: false,
+        feeCredit: 0,
+        ownerScheduleConfirmed: tx.ownerScheduleConfirmed ?? false,
+        requesterScheduleConfirmed: tx.requesterScheduleConfirmed ?? false,
+        completedByOwner: tx.completedByOwner ?? tx.senderConfirmed ?? false,
+        completedByRequester: tx.completedByRequester ?? tx.receiverConfirmed ?? false,
+        evidenceRecords: tx.evidenceRecords ?? [],
+        status:
+          tx.status === 'CREDIT_HELD'
+            ? 'WAITING_HANDOVER'
+            : tx.status,
+      };
+    });
     const persistedItemIds = new Set((parsed.items ?? []).map((item) => item.id));
+    const now = Date.now();
     parsed.items = [
       ...(parsed.items ?? []),
       ...seedItems.filter((item) => !persistedItemIds.has(item.id)),
-    ];
+    ].map((item) => {
+      const approved = item.status === 'approved' || item.status === 'APPROVED';
+      const expired = approved && new Date(item.expiresAt).getTime() < now;
+      return {
+        ...item,
+        status: expired ? 'expired' : item.status,
+        postApprovalEditCount: item.postApprovalEditCount ?? 0,
+      };
+    });
     parsed.keywords = parsed.keywords ?? seedKeywords;
     parsed.districts = parsed.districts ?? seedDistricts;
-    parsed.complaints = parsed.complaints ?? seedComplaints;
+    parsed.itemRequests = parsed.itemRequests ?? [];
+    parsed.complaints = (parsed.complaints ?? seedComplaints).map((complaint) => ({
+      ...complaint,
+      responseEvidence: complaint.responseEvidence ?? [],
+    }));
     parsed.systemRevenue = parsed.systemRevenue ?? 0;
     parsed.aiUsage = parsed.aiUsage ?? [];
     parsed.ranks = parsed.ranks ?? seedRanks;
     parsed.pointRules = parsed.pointRules ?? seedPointRules;
     parsed.pointHistory = parsed.pointHistory ?? seedPointHistory;
     parsed.creditHistory = normalizeCreditHistory(parsed);
-    const demoHistory = parsed.creditHistory.filter((entry) => entry.userId === 'user_001');
-    if (demoHistory.some((entry) => entry.amount === 5000 || entry.amount === -200 || entry.type === 'HOLD')) {
-      parsed.creditHistory = [
-        ...seedCreditHistory.filter((entry) => entry.userId === 'user_001'),
-        ...parsed.creditHistory.filter((entry) => entry.userId !== 'user_001'),
-      ];
-      parsed.topups = (parsed.topups ?? []).filter((topup) => topup.userId !== 'user_001');
-    }
+    parsed.settings = (parsed.settings ?? []).map((setting) =>
+      setting.key === 'tx_fee_credit'
+        ? { ...setting, value: 0, label: 'Giao dich mien phi' }
+        : setting,
+    );
     parsed.users = (parsed.users ?? []).map((user) => {
       // Older demo data used the typo "use" for the seeded demo user.
       const normalizedUser = user.id === 'user_001' && user.username === 'use'
@@ -159,7 +191,11 @@ export function loadPersistedState(): AppStateData {
         : normalizedUser;
       return demoWalletUser.role === 'admin'
         ? demoWalletUser
-        : { ...demoWalletUser, rank: rankFor(demoWalletUser.rewardPoints, parsed.ranks) };
+        : {
+            ...demoWalletUser,
+            reputationRestoreUsed: demoWalletUser.reputationRestoreUsed ?? false,
+            rank: rankFor(demoWalletUser.rewardPoints, parsed.ranks),
+          };
     });
     return parsed;
   } catch {

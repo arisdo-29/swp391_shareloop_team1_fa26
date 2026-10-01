@@ -3,20 +3,38 @@ import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
 import { Button, Field, Icon, PageHeader } from '../../components/ui';
-import type { CreditHistory, CreditHistoryType, Topup } from '../../types/domain';
+import type { CreditHistory, CreditHistoryType, Item, Topup } from '../../types/domain';
 import { formatCredit, formatVnd } from '../../utils/formatting';
 import { CREDIT_TO_VND } from '../../utils/credit';
 
 const packages = [1, 2, 5, 10, 20];
 type Step = 'select' | 'qr' | 'pending';
-type HistoryFilter = 'all' | 'topup' | 'spend' | 'hold' | 'refund';
+type HistoryFilter = 'all' | 'topup' | 'spend';
 
 const filterTypes: Record<Exclude<HistoryFilter, 'all'>, CreditHistoryType[]> = {
   topup: ['TOPUP'],
-  spend: ['TRANSACTION_FEE', 'SPEND', 'AI_SPEND'],
-  hold: ['HOLD'],
-  refund: ['REFUND', 'RELEASE_HOLD'],
+  spend: ['SPEND', 'AI_SPEND', 'RECEIVE_FEE'],
 };
+
+const legacyHistoryPattern = /swap|give|giu phi|giữ phí|giu giao dich|giữ giao dịch|tam giu|tạm giữ/i;
+
+function isPostFee(entry: CreditHistory) {
+  return entry.type === 'SPEND' && /^phi dang bai|^phí đăng bài/i.test(entry.description);
+}
+
+function isVisibleCreditHistory(entry: CreditHistory) {
+  if (['TRANSACTION_FEE', 'HOLD', 'RELEASE_HOLD'].includes(entry.type)) return false;
+  if (legacyHistoryPattern.test(`${entry.description} ${entry.note}`)) return false;
+  return entry.type === 'TOPUP' || entry.type === 'AI_SPEND' || entry.type === 'RECEIVE_FEE' || entry.type === 'ADMIN_ADJUSTMENT' || isPostFee(entry);
+}
+
+function postFeeItemId(entry: CreditHistory) {
+  return entry.ref?.match(/^post:(.+):fee$/)?.[1] ?? entry.transactionId.match(/^post:(.+):fee$/)?.[1];
+}
+
+function balanceBefore(entry: CreditHistory) {
+  return entry.balance - entry.amount;
+}
 
 export function Credit() {
   const user = useAppSelector(selectCurrentUser)!;
@@ -40,22 +58,24 @@ export function Credit() {
     () =>
       data.creditHistory
         .filter((entry) => entry.userId === user.id)
+        .filter(isVisibleCreditHistory)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [data.creditHistory, user.id],
   );
+
+  const history = useMemo(() => {
+    if (historyFilter === 'all') return allHistory;
+    return allHistory.filter((entry) => filterTypes[historyFilter].includes(entry.type));
+  }, [allHistory, historyFilter]);
 
   const selectedRelatedTransaction = selectedEntry && 'relatedTransactionId' in selectedEntry
     ? data.transactions.find((tx) => tx.id === selectedEntry.relatedTransactionId)
     : undefined;
   const selectedRelatedItem = selectedRelatedTransaction
     ? data.items.find((item) => item.id === selectedRelatedTransaction.itemId)
-    : undefined;
-
-  const history = useMemo(() => {
-    const entries = allHistory;
-    if (historyFilter === 'all') return entries;
-    return entries.filter((entry) => filterTypes[historyFilter].includes(entry.type));
-  }, [allHistory, historyFilter]);
+    : selectedEntry && !('method' in selectedEntry)
+      ? data.items.find((item) => item.id === postFeeItemId(selectedEntry))
+      : undefined;
 
   const continuePayment = () => {
     const code = `SLTOPUP-${crypto.randomUUID()}`;
@@ -164,6 +184,7 @@ export function Credit() {
       </section>
 
       <CreditHistorySection
+        items={data.items}
         allHistory={allHistory}
         history={history}
         pendingTopups={
@@ -182,7 +203,6 @@ export function Credit() {
           relatedTransactionId={selectedRelatedTransaction?.id}
           relatedItemTitle={selectedRelatedItem?.title}
           relatedTransactionType={selectedRelatedTransaction?.type}
-          balanceAfter={'balance' in selectedEntry ? selectedEntry.balance : undefined}
           onViewTransaction={selectedRelatedTransaction ? () => navigate('/messages') : undefined}
         />
       ) : null}
@@ -267,13 +287,7 @@ function TopupSelection({
   );
 }
 
-function PaymentSummary({
-  creditAmount,
-  onContinue,
-}: {
-  creditAmount: number;
-  onContinue: () => void;
-}) {
+function PaymentSummary({ creditAmount, onContinue }: { creditAmount: number; onContinue: () => void }) {
   const value = creditAmount * CREDIT_TO_VND;
   return (
     <aside className="h-fit rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6 lg:sticky lg:top-24">
@@ -360,32 +374,19 @@ function QrPayment({
 
 function MockQr() {
   return (
-    <div
-      aria-label="Mã QR thanh toán mẫu"
-      className="grid aspect-square grid-cols-11 gap-[2px] bg-white"
-    >
+    <div aria-label="Mã QR thanh toán mẫu" className="grid aspect-square grid-cols-11 gap-[2px] bg-white">
       {Array.from({ length: 121 }, (_, index) => {
         const row = Math.floor(index / 11);
         const col = index % 11;
         const finder = (row < 4 && col < 4) || (row < 4 && col > 6) || (row > 6 && col < 4);
-        const filled = finder
-          ? row % 3 !== 1 || col % 3 !== 1
-          : (row * 7 + col * 11 + index) % 5 < 2;
+        const filled = finder ? row % 3 !== 1 || col % 3 !== 1 : (row * 7 + col * 11 + index) % 5 < 2;
         return <span key={index} className={filled ? 'bg-text-primary' : 'bg-white'} />;
       })}
     </div>
   );
 }
 
-function PendingTopup({
-  code,
-  amount,
-  onNewTopup,
-}: {
-  code: string;
-  amount: number;
-  onNewTopup: () => void;
-}) {
+function PendingTopup({ code, amount, onNewTopup }: { code: string; amount: number; onNewTopup: () => void }) {
   return (
     <div className="rounded-xl bg-white px-5 py-10 text-center ring-1 ring-border/80 sm:px-8">
       <span className="mx-auto grid size-14 place-items-center rounded-lg bg-amber-50 text-warning">
@@ -393,8 +394,7 @@ function PendingTopup({
       </span>
       <h2 className="mt-5 text-2xl font-bold">Yêu cầu nạp Credit đang được xác nhận.</h2>
       <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-text-muted">
-        Yêu cầu {code} cho {amount} Credit đã được ghi nhận. Credit sẽ được cộng đúng một lần sau
-        khi quản trị viên xác nhận.
+        Yêu cầu {code} cho {amount} Credit đã được ghi nhận. Credit sẽ được cộng đúng một lần sau khi quản trị viên xác nhận.
       </p>
       <Button className="mt-6" variant="outline" onClick={onNewTopup}>
         Tạo yêu cầu nạp khác
@@ -404,6 +404,7 @@ function PendingTopup({
 }
 
 function CreditHistorySection({
+  items,
   allHistory,
   history,
   pendingTopups,
@@ -411,6 +412,7 @@ function CreditHistorySection({
   onFilterChange,
   onSelect,
 }: {
+  items: Item[];
   allHistory: CreditHistory[];
   history: CreditHistory[];
   pendingTopups: Topup[];
@@ -427,9 +429,8 @@ function CreditHistorySection({
     ['all', 'Tất cả'],
     ['topup', 'Nạp Credit'],
     ['spend', 'Chi tiêu'],
-    ['hold', 'Đang giữ'],
-    ['refund', 'Hoàn Credit'],
   ];
+
   return (
     <section className="mt-10">
       <h2 className="section-title">Lịch sử Credit</h2>
@@ -460,19 +461,22 @@ function CreditHistorySection({
             onClick={() => onSelect(topup)}
           />
         ))}
-        {history.map((entry) => (
-          <HistoryRow
-            key={entry.id}
-            icon={historyIcon(entry)}
-            title={entry.description ?? historyTitle(entry)}
-            transactionId={entry.transactionId}
-            date={entry.createdAt}
-            amount={entry.amount}
-            status={historyStatus(entry)}
-            tone={historyTone(entry)}
-            onClick={() => onSelect(entry)}
-          />
-        ))}
+        {history.map((entry) => {
+          const relatedItem = items.find((item) => item.id === postFeeItemId(entry));
+          return (
+            <HistoryRow
+              key={entry.id}
+              icon={historyIcon(entry)}
+              title={historyTitle(entry, relatedItem?.title)}
+              transactionId={entry.transactionId}
+              date={entry.createdAt}
+              amount={entry.amount}
+              status={historyStatus(entry)}
+              tone={historyTone(entry)}
+              onClick={() => onSelect(entry)}
+            />
+          );
+        })}
         {!pendingTopups.length && !history.length ? (
           <div className="px-5 py-12 text-center text-sm text-text-muted">
             Chưa có giao dịch phù hợp.
@@ -511,6 +515,7 @@ function HistoryRow({
           ? 'text-warning'
           : 'text-text-secondary';
   const prefix = amount > 0 ? '+' : '';
+
   return (
     <button type="button" onClick={onClick} className="grid w-full cursor-pointer grid-cols-[1fr_auto_auto] gap-4 border-b border-border/70 px-4 py-4 text-left transition hover:bg-surface-low last:border-0 sm:px-5">
       <div className="flex min-w-0 gap-3">
@@ -536,13 +541,19 @@ function HistoryRow({
   );
 }
 
-function historyTitle(entry: CreditHistory) {
+function historyTitle(entry: CreditHistory, relatedItemTitle?: string) {
+  if (isPostFee(entry)) {
+    const itemTitle = relatedItemTitle ?? entry.description.replace(/^phi dang bai\s*-\s*/i, '').replace(/^phí đăng bài\s*-\s*/i, '');
+    return `Phí đăng bài${itemTitle ? ` - ${itemTitle}` : ''}`;
+  }
+  if (entry.type === 'RECEIVE_FEE') return entry.description;
   const labels: Record<CreditHistoryType, string> = {
     TOPUP: 'Nạp Credit',
-    TRANSACTION_FEE: 'Phí giao dịch',
-    SPEND: 'Phí giao dịch',
+    TRANSACTION_FEE: 'Lịch sử cũ',
+    SPEND: 'Chi tiêu',
+    RECEIVE_FEE: 'Phí nhận đồ',
     AI_SPEND: 'Phí dịch vụ AI',
-    HOLD: 'Giữ phí giao dịch',
+    HOLD: 'Lịch sử cũ',
     RELEASE_HOLD: 'Hoàn Credit',
     REFUND: 'Hoàn Credit',
     ADMIN_ADJUSTMENT: 'Cập nhật hệ thống',
@@ -551,24 +562,18 @@ function historyTitle(entry: CreditHistory) {
 }
 
 function historyStatus(entry: CreditHistory) {
-  if (entry.status === 'holding') return 'Đang giữ';
-  if (entry.status === 'refunded') return 'Đã hoàn';
   if (entry.status === 'pending') return 'Đang xác nhận';
-  if (entry.type === 'HOLD') return 'Đang giữ';
-  if (entry.type === 'RELEASE_HOLD' || entry.type === 'REFUND') return 'Đã hoàn';
+  if (entry.status === 'refunded') return 'Đã hoàn';
   return 'Hoàn tất';
 }
 
 function historyTone(entry: CreditHistory): 'positive' | 'negative' | 'hold' | 'pending' {
-  if (entry.type === 'HOLD') return 'hold';
-  if (entry.type === 'RELEASE_HOLD' || entry.type === 'REFUND' || entry.amount > 0)
-    return 'positive';
+  if (entry.amount > 0) return 'positive';
   return 'negative';
 }
 
 function historyIcon(entry: CreditHistory): 'wallet' | 'payments' | 'history' | 'renew' {
   if (entry.type === 'TOPUP') return 'wallet';
-  if (entry.type === 'HOLD') return 'history';
   if (entry.type === 'REFUND' || entry.type === 'RELEASE_HOLD') return 'renew';
   return 'payments';
 }
@@ -578,7 +583,6 @@ function CreditTransactionDetail({
   relatedTransactionId,
   relatedItemTitle,
   relatedTransactionType,
-  balanceAfter,
   onClose,
   onViewTransaction,
 }: {
@@ -586,23 +590,15 @@ function CreditTransactionDetail({
   relatedTransactionId?: string;
   relatedItemTitle?: string;
   relatedTransactionType?: 'gift' | 'trade';
-  balanceAfter?: number;
   onClose: () => void;
   onViewTransaction?: () => void;
 }) {
   const isTopup = 'method' in entry;
   const historyEntry = isTopup ? undefined : entry;
-  const isHold = historyEntry?.type === 'HOLD' && historyEntry.status === 'holding';
-  const typeLabel = isTopup
-    ? 'Nạp Credit'
-    : historyEntry?.type === 'TRANSACTION_FEE' || historyEntry?.type === 'SPEND'
-      ? 'Phí mở giao dịch Cho - Nhận'
-      : historyEntry?.type === 'HOLD'
-        ? 'Tạm giữ phí giao dịch'
-        : historyEntry ? historyTitle(historyEntry) : '';
+  const typeLabel = isTopup ? 'Nạp Credit' : isPostFee(entry) ? 'Phí đăng bài' : historyTitle(entry, relatedItemTitle);
   const status = isTopup
     ? entry.status === 'pending' ? 'Đang xác nhận' : 'Hoàn tất'
-    : historyEntry ? historyStatus(historyEntry) : '';
+    : historyStatus(entry);
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4" onMouseDown={onClose}>
@@ -614,30 +610,40 @@ function CreditTransactionDetail({
           </button>
         </div>
         <dl className="mt-6 divide-y divide-border rounded-lg bg-surface-low px-4">
-          <DetailRow label="Mã giao dịch" value={isTopup ? entry.code : entry.transactionId} />
           <DetailRow label="Loại giao dịch" value={typeLabel} />
           {isTopup ? (
             <>
-              <DetailRow label="Phương thức" value="QR" />
-              <DetailRow label="Số Credit nhận được" value={`+${entry.amount} Credit`} valueClass="text-success" />
+              <DetailRow label="Số Credit" value={`+${entry.amount} Credit`} valueClass="text-success" />
               <DetailRow label="Số tiền thanh toán" value={formatVnd(entry.vnd)} />
             </>
           ) : (
-            <DetailRow label={isHold ? 'Số Credit đang giữ' : 'Số Credit'} value={`${entry.amount > 0 ? '+' : ''}${entry.amount} Credit`} valueClass={historyTone(entry) === 'negative' ? 'text-error' : historyTone(entry) === 'hold' ? 'text-warning' : 'text-success'} />
+            <>
+              {isPostFee(entry) && relatedItemTitle ? <DetailRow label="Món đồ" value={relatedItemTitle} /> : null}
+              <DetailRow label="Số Credit" value={`${entry.amount > 0 ? '+' : ''}${entry.amount} Credit`} valueClass={historyTone(entry) === 'negative' ? 'text-error' : 'text-success'} />
+              <DetailRow label="Số dư trước" value={`${balanceBefore(entry)} Credit`} />
+              <DetailRow label="Số dư sau" value={`${entry.balance} Credit`} />
+            </>
           )}
-          {!isTopup ? <DetailRow label="Giá trị quy đổi" value={formatVnd(Math.abs(entry.amount) * CREDIT_TO_VND)} /> : null}
-          <DetailRow label={isHold ? 'Thời gian giữ' : 'Thời gian'} value={formatDateTime(entry.createdAt)} />
+          <DetailRow label="Thời gian" value={formatDateTime(entry.createdAt)} />
+          <DetailRow label="Mã giao dịch" value={isTopup ? entry.code : entry.transactionId} />
           <DetailRow label="Trạng thái" value={status} />
-          {(!isTopup || balanceAfter !== undefined) ? <DetailRow label="Số dư sau giao dịch" value={`${isTopup ? (balanceAfter ?? entry.amount) : entry.balance} Credit`} /> : null}
         </dl>
-        {relatedTransactionId && relatedItemTitle ? (
-          <div className="mt-5 rounded-lg border border-border p-4 text-sm">
-            <p className="font-semibold text-text-primary">Giao dịch liên quan</p>
-            <p className="mt-2 text-text-secondary">Tên món đồ: {relatedItemTitle}</p>
-            <p className="mt-1 text-text-secondary">Hình thức: {relatedTransactionType === 'trade' ? 'Trao đổi' : 'Cho - Nhận'}</p>
-            {onViewTransaction ? <Button className="mt-4" size="sm" onClick={onViewTransaction}>Xem giao dịch</Button> : null}
-          </div>
-        ) : null}
+        <div className="mt-5 rounded-lg border border-border p-4 text-sm">
+          <p className="font-semibold text-text-primary">Nội dung liên quan</p>
+          <p className="mt-2 text-text-secondary">
+            {isTopup
+              ? `Nạp ${entry.amount} Credit qua QR`
+              : historyEntry?.note || historyEntry?.description || historyTitle(historyEntry!, relatedItemTitle)}
+          </p>
+          {relatedItemTitle ? <p className="mt-1 text-text-secondary">Món đồ: {relatedItemTitle}</p> : null}
+          {relatedTransactionType ? (
+            <p className="mt-1 text-text-secondary">
+              Hình thức: {relatedTransactionType === 'trade' ? 'Trao đổi' : 'Cho - Nhận'}
+            </p>
+          ) : null}
+          {relatedTransactionId ? <p className="mt-1 text-text-secondary">Giao dịch liên quan: {relatedTransactionId}</p> : null}
+          {onViewTransaction ? <Button className="mt-4" size="sm" onClick={onViewTransaction}>Xem giao dịch</Button> : null}
+        </div>
       </div>
     </div>
   );

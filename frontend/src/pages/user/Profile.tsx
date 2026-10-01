@@ -4,6 +4,7 @@ import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
 import {
   Avatar,
+  Alert,
   Button,
   Field,
   Icon,
@@ -16,6 +17,7 @@ import { formatCredit, formatVnd } from '../../utils/formatting';
 import { CREDIT_TO_VND } from '../../utils/credit';
 import { fileToDataUrl } from '../../utils/files';
 import { ChangePasswordForm } from '../../components/ChangePasswordForm';
+import { validEmail, validVietnamPhone } from '../../utils/passwordSecurity';
 export function Profile() {
   const user = useAppSelector(selectCurrentUser)!;
   const isAdmin = user.role === 'admin';
@@ -27,6 +29,8 @@ export function Profile() {
   const [email, setEmail] = useState(user.email);
   const [phone, setPhone] = useState(user.phone);
   const [district, setDistrict] = useState(user.district);
+  const [profileError, setProfileError] = useState('');
+  const [profileNotice, setProfileNotice] = useState('');
   const [amount, setAmount] = useState(5);
   const [showQr, setShowQr] = useState(false);
   const history = data.creditHistory.filter((h) => h.userId === user.id);
@@ -34,8 +38,24 @@ export function Profile() {
   const districts = data.districts
     .filter((entry) => entry.status === 'active')
     .map((entry) => entry.name);
-  const save = () =>
-    dispatch(actions.updateProfile({ userId: user.id, name, email, phone, district, avatarUrl }));
+  const save = () => {
+    setProfileError('');
+    setProfileNotice('');
+    if (!name.trim()) {
+      setProfileError('Vui lòng nhập họ và tên.');
+      return;
+    }
+    if (!validEmail(email)) {
+      setProfileError('Email không đúng định dạng.');
+      return;
+    }
+    if (!validVietnamPhone(phone)) {
+      setProfileError('Số điện thoại Việt Nam không hợp lệ.');
+      return;
+    }
+    dispatch(actions.updateProfile({ userId: user.id, name: name.trim(), email: email.trim().toLowerCase(), phone: phone.trim(), district, avatarUrl }));
+    setProfileNotice('Cập nhật hồ sơ thành công.');
+  };
   return (
     <div className="page-shell">
       <PageHeader
@@ -116,6 +136,7 @@ export function Profile() {
               </div>
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 <Field label="Họ và tên" value={name} onChange={(e) => setName(e.target.value)} />
+                <Field label="Tên đăng nhập" value={user.username} readOnly className="bg-surface-low" />
                 <Field
                   label="Email"
                   type="email"
@@ -133,6 +154,8 @@ export function Profile() {
                   ))}
                 </Select>
               </div>
+              {profileError ? <div className="mt-5"><Alert tone="error">{profileError}</Alert></div> : null}
+              {profileNotice ? <div className="mt-5"><Alert tone="success">{profileNotice}</Alert></div> : null}
               <Button className="mt-6" onClick={save}>
                 Lưu thay đổi
               </Button>

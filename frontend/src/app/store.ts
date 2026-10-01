@@ -5,11 +5,9 @@ import {
   TOPUP_MIN_VND,
   CREDIT_TO_VND,
   assertWalletInvariant,
-  canPayTransactionFees,
-  holdAllTransactionFees,
-  missingCreditMessages,
+  POST_LISTING_FEE,
+  RECEIVE_ITEM_FEE,
   releaseFee,
-  requiredCreditForItemType,
   spendAvailableCredit,
   spendHeldFee,
   txFee,
@@ -47,6 +45,22 @@ const recalculateUserRanks = (state: AppStateData) => {
   });
 };
 const itemApproved = (status: Item['status']) => status === 'approved' || status === 'APPROVED';
+const itemPendingReview = (status: Item['status']) => status === 'pending' || status === 'PENDING_REVIEW';
+const itemExpired = (item: Item, now = new Date()) =>
+  itemApproved(item.status) && new Date(item.expiresAt).getTime() < now.getTime();
+const itemAvailableForRequest = (item: Item, now = new Date()) =>
+  itemApproved(item.status) && new Date(item.expiresAt).getTime() >= now.getTime();
+const activeTransactionForItem = (state: AppStateData, itemId: string) =>
+  state.transactions.some(
+    (tx) =>
+      (tx.itemId === itemId || tx.offeredItemId === itemId || tx.sourceItemId === itemId) &&
+      !['COMPLETED', 'CANCELLED', 'DISPUTED'].includes(tx.status),
+  );
+const reopenableItem = (item: Item) =>
+  new Date(item.expiresAt).getTime() >= Date.now() &&
+  item.status !== 'expired' &&
+  item.status !== 'removed' &&
+  item.status !== 'VIOLATION';
 const reputationBlocked = (state: AppStateData, userId: string) =>
   state.users.find((user) => user.id === userId)?.reputationStars === 0;
 
@@ -63,6 +77,34 @@ const addSystemMessage = (state: AppStateData, transactionId: string, text: stri
   });
   conv.lastMessage = text;
   conv.lastMessageAt = new Date().toISOString();
+};
+
+const openTransactionConversation = (
+  state: AppStateData,
+  tx: Transaction,
+  lastMessage: string,
+) => {
+  let conv = state.conversations.find((entry) => entry.transactionId === tx.id);
+  if (conv) return conv;
+  conv = {
+    id: uniqueId('conv'),
+    transactionId: tx.id,
+    participantIds: [tx.requesterId, tx.ownerId],
+    itemId: tx.itemId,
+    lastMessage,
+    lastMessageAt: new Date().toISOString(),
+    unreadCount: 0,
+  };
+  state.conversations.unshift(conv);
+  state.messages.push({
+    id: uniqueId('msg'),
+    convId: conv.id,
+    sender: 'system',
+    type: 'system',
+    text: lastMessage,
+    time: 'Bây giờ',
+  });
+  return conv;
 };
 
 const mondayKey = (date = new Date()) => {
@@ -102,6 +144,7 @@ const dataSlice = createSlice({
       action: PayloadAction<{
         name: string;
         username: string;
+        email: string;
         passwordHash: string;
         district: string;
         phone: string;
@@ -113,7 +156,7 @@ const dataSlice = createSlice({
         username: action.payload.username,
         password: action.payload.passwordHash,
         name: action.payload.name,
-        email: `${action.payload.username}@example.com`,
+        email: action.payload.email,
         phone: action.payload.phone,
         district: action.payload.district,
         avatarInitials: action.payload.name
@@ -134,6 +177,101 @@ const dataSlice = createSlice({
         totalTx: 0,
       });
       state.currentUserId = id;
+    },
+    startRegistration(
+      state,
+      action: PayloadAction<{
+        registration: {
+          name: string;
+          username: string;
+          email: string;
+          phone: string;
+          district: string;
+          passwordHash: string;
+        };
+        verificationId: string;
+        otpHash: string;
+        expiresAt: string;
+        resendAvailableAt: string;
+      }>,
+    ) {
+      if (!isPasswordHash(action.payload.registration.passwordHash) || !isPasswordHash(action.payload.otpHash)) return;
+      const username = action.payload.registration.username.trim();
+      const email = action.payload.registration.email.trim().toLowerCase();
+      const duplicate = state.users.some(
+        (user) =>
+          user.username.toLowerCase() === username.toLowerCase() ||
+          user.email.toLowerCase() === email,
+      );
+      if (duplicate) return;
+      state.emailVerification = {
+        id: action.payload.verificationId,
+        registration: {
+          ...action.payload.registration,
+          username,
+          email,
+          name: action.payload.registration.name.trim(),
+          phone: action.payload.registration.phone.trim(),
+        },
+        otpHash: action.payload.otpHash,
+        expiresAt: action.payload.expiresAt,
+        resendAvailableAt: action.payload.resendAvailableAt,
+        attempts: 0,
+      };
+    },
+    resendRegistrationOtp(
+      state,
+      action: PayloadAction<{ verificationId: string; otpHash: string; expiresAt: string; resendAvailableAt: string }>,
+    ) {
+      const verification = state.emailVerification;
+      if (!verification || verification.id !== action.payload.verificationId || Date.now() < new Date(verification.resendAvailableAt).getTime()) return;
+      if (!isPasswordHash(action.payload.otpHash)) return;
+      verification.otpHash = action.payload.otpHash;
+      verification.expiresAt = action.payload.expiresAt;
+      verification.resendAvailableAt = action.payload.resendAvailableAt;
+      verification.attempts = 0;
+    },
+    verifyRegistrationOtp(state, action: PayloadAction<{ verificationId: string; otpHash: string }>) {
+      const verification = state.emailVerification;
+      if (!verification || verification.id !== action.payload.verificationId || Date.now() > new Date(verification.expiresAt).getTime() || verification.attempts >= 5) return;
+      if (verification.otpHash !== action.payload.otpHash) {
+        verification.attempts += 1;
+        return;
+      }
+      const duplicate = state.users.some(
+        (user) =>
+          user.username.toLowerCase() === verification.registration.username.toLowerCase() ||
+          user.email.toLowerCase() === verification.registration.email.toLowerCase(),
+      );
+      if (duplicate) return;
+      const id = `user_${Date.now()}`;
+      state.users.push({
+        id,
+        username: verification.registration.username,
+        password: verification.registration.passwordHash,
+        name: verification.registration.name,
+        email: verification.registration.email,
+        phone: verification.registration.phone,
+        district: verification.registration.district,
+        avatarInitials: verification.registration.name
+          .split(' ')
+          .map((p) => p[0])
+          .slice(-2)
+          .join('')
+          .toUpperCase(),
+        totalCredit: 2000,
+        availableCredit: 2000,
+        holdCredit: 0,
+        rewardPoints: 0,
+        reputationStars: 5,
+        rank: 'Thành viên mới',
+        status: 'active',
+        role: 'user',
+        joinedAt: new Date().toISOString(),
+        totalTx: 0,
+      });
+      state.emailVerification = undefined;
+      state.currentUserId = null;
     },
     changePassword(
       state,
@@ -204,9 +342,11 @@ const dataSlice = createSlice({
     },
     addItem(state, action: PayloadAction<Omit<Item, 'id' | 'postedAt' | 'expiresAt' | 'status'>>) {
       if (reputationBlocked(state, action.payload.ownerId)) return;
+      const owner = state.users.find((entry) => entry.id === action.payload.ownerId);
+      if (!owner || (action.payload.type === 'trade' && owner.availableCredit < POST_LISTING_FEE)) return;
       const now = new Date();
       const exp = new Date(now);
-      exp.setMonth(exp.getMonth() + 2);
+      exp.setDate(exp.getDate() + 30);
       const combined = `${action.payload.title} ${action.payload.description} ${action.payload.tradeFor ?? ''}`;
       const fixedRuleViolation = contactSafetyLayer1(combined).blocked ||
         state.keywords.some((keyword) =>
@@ -215,15 +355,27 @@ const dataSlice = createSlice({
         action.payload.title.trim().length < 3 ||
         action.payload.description.trim().length < 10 ||
         !action.payload.images.length;
+      const itemId = `item_${Date.now()}`;
+      if (action.payload.type === 'trade') {
+        const paid = spendAvailableCredit(state, {
+          userId: owner.id,
+          amount: POST_LISTING_FEE,
+          type: 'SPEND',
+          ref: `post:${itemId}:fee`,
+          description: `Phí đăng bài - ${action.payload.title.trim()}`,
+        });
+        if (!paid) return;
+      }
       state.items.unshift({
         ...action.payload,
-        id: `item_${Date.now()}`,
+        id: itemId,
         status: fixedRuleViolation ? 'VIOLATION' : 'PENDING_REVIEW',
         moderationReason: fixedRuleViolation
           ? 'Bài đăng không vượt qua kiểm tra tự động. Vui lòng rà soát thông tin liên hệ, nội dung và hình ảnh.'
           : undefined,
         postedAt: now.toISOString(),
         expiresAt: exp.toISOString(),
+        postApprovalEditCount: 0,
       });
     },
     updateItem(
@@ -241,9 +393,17 @@ const dataSlice = createSlice({
         (entry) => entry.id === action.payload.itemId && entry.ownerId === action.payload.ownerId,
       );
       if (!item) return;
+      if (itemApproved(item.status)) {
+        const count = item.postApprovalEditCount ?? 0;
+        if (count >= 1) return;
+        item.postApprovalEditCount = count + 1;
+      } else if (!itemPendingReview(item.status) && item.status !== 'rejected' && item.status !== 'REJECTED' && item.status !== 'VIOLATION') {
+        return;
+      }
       Object.assign(item, action.payload.changes);
       item.status = 'PENDING_REVIEW';
       item.rejectionReason = undefined;
+      item.moderationReason = undefined;
     },
     removeItem(state, action: PayloadAction<{ itemId: string; ownerId: string }>) {
       const item = state.items.find(
@@ -257,7 +417,7 @@ const dataSlice = createSlice({
       );
       if (!item) return;
       const expiresAt = new Date();
-      expiresAt.setMonth(expiresAt.getMonth() + 2);
+      expiresAt.setDate(expiresAt.getDate() + 30);
       item.expiresAt = expiresAt.toISOString();
       item.status = 'PENDING_REVIEW';
     },
@@ -301,16 +461,27 @@ const dataSlice = createSlice({
       if ((action.payload.status === 'rejected' || action.payload.status === 'REJECTED') && !rejectionReason) return;
       const nextStatus = action.payload.status === 'approved' ? 'APPROVED' :
         action.payload.status === 'rejected' ? 'REJECTED' : action.payload.status;
+      const previousStatus = item.status;
+      // Admin moderation only changes listing status. Any listing fee is charged
+      // when addItem creates the pending trade listing.
       item.status = nextStatus;
+      if (nextStatus === 'APPROVED') {
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 30);
+        item.expiresAt = expiresAt.toISOString();
+      }
       item.rejectionReason = nextStatus === 'REJECTED' ? rejectionReason : undefined;
       item.moderationReason = rejectionReason;
       state.auditLogs.unshift({
         id: `log_${Date.now()}`,
         adminId: action.payload.adminId,
-        action: `${action.payload.status}_listing`,
+        action: nextStatus === 'APPROVED' ? 'POST_APPROVED' : nextStatus === 'REJECTED' ? 'POST_REJECTED' : 'POST_STATUS_UPDATED',
         targetType: 'item',
         targetId: item.id,
         detail: `Cập nhật trạng thái bài đăng: ${item.title}`,
+        previousValue: previousStatus,
+        newValue: nextStatus,
+        reason: rejectionReason,
         createdAt: new Date().toISOString(),
       });
       if (
@@ -327,49 +498,39 @@ const dataSlice = createSlice({
     },
     createTransaction(
       state,
-      action: PayloadAction<{ itemId: string; requesterId: string; sourceItemId?: string }>,
+      action: PayloadAction<{
+        itemId: string;
+        requesterId: string;
+        offeredItemId?: string;
+        sourceItemId?: string;
+      }>,
     ) {
+      state.items.forEach((entry) => {
+        if (itemExpired(entry)) entry.status = 'expired';
+      });
       const item = state.items.find((entry) => entry.id === action.payload.itemId);
-      const sourceItem = action.payload.sourceItemId
-        ? state.items.find((entry) => entry.id === action.payload.sourceItemId)
+      const offeredItemId = action.payload.offeredItemId ?? action.payload.sourceItemId;
+      const offeredItem = offeredItemId
+        ? state.items.find((entry) => entry.id === offeredItemId)
         : undefined;
       if (
         !item ||
         item.ownerId === action.payload.requesterId ||
         !itemApproved(item.status) ||
         reputationBlocked(state, action.payload.requesterId) ||
-        (sourceItem &&
-          (sourceItem.ownerId !== action.payload.requesterId ||
-            sourceItem.type !== 'trade' ||
-            !itemApproved(sourceItem.status) ||
+        (offeredItem &&
+          (offeredItem.ownerId !== action.payload.requesterId ||
+            offeredItem.type !== 'trade' ||
+            !itemApproved(offeredItem.status) ||
             item.type !== 'trade')) ||
         !activeActor(state, action.payload.requesterId)
       )
         return;
-      const requester = state.users.find((entry) => entry.id === action.payload.requesterId);
-      const requiredCredit = requiredCreditForItemType(item.type);
-      const payerIdsForStart = item.type === 'trade' ? [item.ownerId, action.payload.requesterId] : [action.payload.requesterId];
-      const insufficient = payerIdsForStart.some((userId) => {
-        const payer = state.users.find((entry) => entry.id === userId);
-        return !payer || payer.availableCredit < (userId === item.ownerId && item.type === 'trade' ? 2 : requiredCredit);
-      });
-      if (!requester || insufficient) {
-        const message = 'Bạn không đủ Credit để thực hiện thao tác này.';
-        state.auditLogs.unshift({
-          id: uniqueId('log'),
-          adminId: action.payload.requesterId,
-          action: 'request_credit_blocked',
-          targetType: 'transaction',
-          targetId: item.id,
-          detail: message,
-          createdAt: new Date().toISOString(),
-        });
-        return;
-      }
       const tx: Transaction = {
         id: uniqueId('tx'),
         itemId: item.id,
-        sourceItemId: sourceItem?.id,
+        offeredItemId: offeredItem?.id,
+        sourceItemId: offeredItem?.id,
         requesterId: action.payload.requesterId,
         ownerId: item.ownerId,
         type: item.type,
@@ -391,29 +552,151 @@ const dataSlice = createSlice({
         receiverEvidence: [],
         createdAt: new Date().toISOString(),
       };
-      const convId = uniqueId('conv');
       state.transactions.unshift(tx);
-      state.conversations.unshift({
-        id: convId,
-        transactionId: tx.id,
-        participantIds: [tx.requesterId, tx.ownerId],
+    },
+    createItemRequest(
+      state,
+      action: PayloadAction<{
+        itemId: string;
+        requesterId: string;
+        message: string;
+        offeredItemId?: string;
+      }>,
+    ) {
+      state.items.forEach((entry) => {
+        if (itemExpired(entry)) entry.status = 'expired';
+      });
+      const item = state.items.find((entry) => entry.id === action.payload.itemId);
+      const requester = state.users.find((entry) => entry.id === action.payload.requesterId);
+      if (
+        !item ||
+        !requester ||
+        item.ownerId === requester.id ||
+        !itemAvailableForRequest(item) ||
+        activeTransactionForItem(state, item.id) ||
+        reputationBlocked(state, requester.id) ||
+        !activeActor(state, requester.id)
+      )
+        return;
+      const duplicate = state.itemRequests.some(
+        (request) =>
+          request.itemId === item.id &&
+          request.requesterId === requester.id &&
+          (request.status === 'PENDING' || request.status === 'ACCEPTED'),
+      );
+      if (duplicate) return;
+      const offeredItem = action.payload.offeredItemId
+        ? state.items.find((entry) => entry.id === action.payload.offeredItemId)
+        : undefined;
+      if (item.type === 'trade') {
+        if (
+          !offeredItem ||
+          offeredItem.ownerId !== requester.id ||
+          !itemAvailableForRequest(offeredItem) ||
+          activeTransactionForItem(state, offeredItem.id)
+        )
+          return;
+      }
+      state.itemRequests.unshift({
+        id: uniqueId('req'),
+        type: item.type,
         itemId: item.id,
-        lastMessage: sourceItem
-          ? `Đề xuất trao đổi từ ${sourceItem.title} đã được tạo.`
-          : 'Đề xuất giao dịch đã được tạo.',
-        lastMessageAt: new Date().toISOString(),
-        unreadCount: 0,
+        offeredItemId: item.type === 'trade' ? offeredItem?.id : undefined,
+        requesterId: requester.id,
+        status: 'PENDING',
+        message: action.payload.message.trim(),
+        createdAt: new Date().toISOString(),
       });
-      state.messages.push({
-        id: uniqueId('msg'),
-        convId,
-        sender: 'system',
-        type: 'system',
-        text: sourceItem
-          ? `Đề xuất trao đổi từ "${sourceItem.title}" sang "${item.title}" đã được tạo.`
-          : 'Đề xuất giao dịch đã được tạo.',
-        time: 'Bây giờ',
+    },
+    acceptItemRequest(state, action: PayloadAction<{ requestId: string; ownerId: string }>) {
+      const request = state.itemRequests.find((entry) => entry.id === action.payload.requestId);
+      const item = state.items.find((entry) => entry.id === request?.itemId);
+      if (
+        !request ||
+        !item ||
+        item.ownerId !== action.payload.ownerId ||
+        request.status !== 'PENDING' ||
+        !activeActor(state, action.payload.ownerId) ||
+        activeTransactionForItem(state, item.id)
+      )
+        return;
+      const offeredItem = request.offeredItemId
+        ? state.items.find((entry) => entry.id === request.offeredItemId)
+        : undefined;
+      if (
+        request.type === 'trade' &&
+        (!offeredItem ||
+          offeredItem.ownerId !== request.requesterId ||
+          !itemAvailableForRequest(offeredItem) ||
+          activeTransactionForItem(state, offeredItem.id))
+      )
+        return;
+      const transactionId = uniqueId('tx');
+      if (request.type === 'gift') {
+        const paid = spendAvailableCredit(state, {
+          userId: request.requesterId,
+          amount: RECEIVE_ITEM_FEE,
+          type: 'RECEIVE_FEE',
+          ref: `${transactionId}:receive_fee`,
+          description: `PhĂ­ nháº­n Ä‘á»“ - ${item.title}`,
+        });
+        if (!paid) return;
+      }
+      request.status = 'ACCEPTED';
+      state.itemRequests.forEach((entry) => {
+        if (entry.itemId === item.id && entry.id !== request.id && entry.status === 'PENDING') {
+          entry.status = 'NOT_SELECTED';
+        }
       });
+      item.status = 'IN_TRANSACTION';
+      const tx: Transaction = {
+        id: transactionId,
+        itemId: item.id,
+        offeredItemId: request.offeredItemId,
+        sourceItemId: request.offeredItemId,
+        selectedRequestId: request.id,
+        requesterId: request.requesterId,
+        ownerId: item.ownerId,
+        type: item.type,
+        feeCredit: txFee(state),
+        feeCharged: request.type === 'gift',
+        status: 'NEGOTIATING',
+        creditHeldBy: [],
+        creditHeld: false,
+        feeCaptured: false,
+        ownerScheduleConfirmed: false,
+        requesterScheduleConfirmed: false,
+        completedByOwner: false,
+        completedByRequester: false,
+        senderConfirmed: false,
+        receiverConfirmed: false,
+        ownerEvidence: [],
+        requesterEvidence: [],
+        senderEvidence: [],
+        receiverEvidence: [],
+        createdAt: new Date().toISOString(),
+      };
+      state.transactions.unshift(tx);
+      openTransactionConversation(
+        state,
+        tx,
+        'Chủ bài đăng đã chọn yêu cầu này. Hai bên có thể nhắn tin trong ShareLoop.',
+      );
+    },
+    refreshExpiredItems(state) {
+      state.items.forEach((item) => {
+        if (itemExpired(item)) item.status = 'expired';
+      });
+    },
+    selectTransaction(state, action: PayloadAction<{ transactionId: string; ownerId: string }>) {
+      const tx = state.transactions.find((entry) => entry.id === action.payload.transactionId);
+      if (!tx || tx.ownerId !== action.payload.ownerId || !activeActor(state, action.payload.ownerId))
+        return;
+      openTransactionConversation(
+        state,
+        tx,
+        'Chủ bài đăng đã chọn bạn để giao dịch. Hai bên có thể nhắn tin trong ShareLoop.',
+      );
     },
     proposeHandover(state, action: PayloadAction<Omit<Handover, 'id' | 'status'>>) {
       const tx = state.transactions.find((entry) => entry.id === action.payload.transactionId);
@@ -423,17 +706,21 @@ const dataSlice = createSlice({
         !canTransition(tx, 'SCHEDULE_PROPOSED')
       )
         return;
-      if (!canPayTransactionFees(state, tx)) {
-        addSystemMessage(state, tx.id, missingCreditMessages(state, tx).join(' '));
-        return;
-      }
       const id = uniqueId('ho');
       state.handovers.push({ ...action.payload, id, status: 'proposed' });
       tx.handoverId = id;
       tx.ownerScheduleConfirmed = tx.ownerId === action.payload.proposedBy;
       tx.requesterScheduleConfirmed = tx.requesterId === action.payload.proposedBy;
       transitionTransaction(tx, 'SCHEDULE_PROPOSED');
-      const conv = state.conversations.find((entry) => entry.transactionId === tx.id);
+      const conv =
+        state.conversations.find((entry) => entry.transactionId === tx.id) ??
+        (action.payload.proposedBy === tx.ownerId
+          ? openTransactionConversation(
+              state,
+              tx,
+              'Chủ bài đăng đã chọn bạn để giao dịch. Hai bên có thể nhắn tin trong ShareLoop.',
+            )
+          : undefined);
       if (conv)
         state.messages.push({
           id: uniqueId('msg'),
@@ -460,29 +747,34 @@ const dataSlice = createSlice({
         return;
       ho.status = 'confirmed';
       ho.agreedBy = action.payload.userId;
+      const scheduledAt = new Date(`${ho.date}T${ho.time || '00:00'}`);
       transitionTransaction(tx, 'SCHEDULE_CONFIRMED');
       tx.ownerScheduleConfirmed = true;
       tx.requesterScheduleConfirmed = true;
-      if (holdAllTransactionFees(state, tx.id)) {
-        applyReputationPointEvent(state, {
-          userId: tx.ownerId,
-          key: 'handover_confirmed_on_time',
-          ref: `${tx.id}:${tx.ownerId}:handover_confirmed_on_time`,
-        });
-        applyReputationPointEvent(state, {
-          userId: tx.requesterId,
-          key: 'handover_confirmed_on_time',
-          ref: `${tx.id}:${tx.requesterId}:handover_confirmed_on_time`,
-        });
-        addSystemMessage(state, tx.id, 'Lich da duoc xac nhan va Credit da duoc giu. Thong tin lien he da mo khoa.');
-      } else {
-        ho.status = 'proposed';
-        ho.agreedBy = undefined;
-        tx.ownerScheduleConfirmed = tx.ownerId === ho.proposedBy;
-        tx.requesterScheduleConfirmed = tx.requesterId === ho.proposedBy;
-        tx.status = 'SCHEDULE_PROPOSED';
-        addSystemMessage(state, tx.id, missingCreditMessages(state, tx).join(' ') || 'Khong the giu Credit. Vui long kiem tra so du.');
-      }
+      tx.creditHeldBy = [];
+      tx.creditHeld = false;
+      tx.reminderDay0At = scheduledAt.toISOString();
+      const reminderDay3 = new Date(scheduledAt);
+      reminderDay3.setDate(reminderDay3.getDate() + 3);
+      tx.reminderDay3At = reminderDay3.toISOString();
+      const autoConfirm = new Date(scheduledAt);
+      autoConfirm.setDate(autoConfirm.getDate() + 7);
+      tx.autoConfirmAt = autoConfirm.toISOString();
+      const silentCancel = new Date(scheduledAt);
+      silentCancel.setDate(silentCancel.getDate() + 20);
+      tx.silentCancelAt = silentCancel.toISOString();
+      transitionTransaction(tx, 'WAITING_HANDOVER');
+      applyReputationPointEvent(state, {
+        userId: tx.ownerId,
+        key: 'handover_confirmed_on_time',
+        ref: `${tx.id}:${tx.ownerId}:handover_confirmed_on_time`,
+      });
+      applyReputationPointEvent(state, {
+        userId: tx.requesterId,
+        key: 'handover_confirmed_on_time',
+        ref: `${tx.id}:${tx.requesterId}:handover_confirmed_on_time`,
+      });
+      addSystemMessage(state, tx.id, 'Lịch đã được xác nhận. Thông tin liên hệ đã mở khóa.');
     },
     confirmTransactionSide(
       state,
@@ -495,7 +787,6 @@ const dataSlice = createSlice({
         !['WAITING_HANDOVER', 'SENDER_CONFIRMED', 'RECEIVER_CONFIRMED'].includes(tx.status)
       )
         return;
-      if (!tx.creditHeld) return;
       if (action.payload.userId === tx.ownerId) {
         if (tx.completedByOwner) return;
         if (!canTransition(tx, tx.completedByRequester ? 'COMPLETED' : 'SENDER_CONFIRMED')) return;
@@ -503,8 +794,22 @@ const dataSlice = createSlice({
         tx.senderConfirmed = true;
         tx.ownerEvidence = action.payload.evidence ?? [];
         tx.senderEvidence = tx.ownerEvidence;
+        if (tx.ownerEvidence.length) {
+          tx.evidenceRecords = [
+            ...(tx.evidenceRecords ?? []),
+            {
+              id: uniqueId('evi'),
+              userId: action.payload.userId,
+              files: tx.ownerEvidence,
+              createdAt: new Date().toISOString(),
+            },
+          ];
+        }
         if (tx.completedByRequester) {
-          if (!spendHeldFee(state, tx.id)) {
+          if (spendHeldFee(state, tx.id)) {
+            const item = state.items.find((entry) => entry.id === tx.itemId);
+            if (item) item.status = 'COMPLETED';
+          } else {
             tx.completedByOwner = false;
             tx.senderConfirmed = false;
             tx.ownerEvidence = [];
@@ -518,8 +823,22 @@ const dataSlice = createSlice({
         tx.receiverConfirmed = true;
         tx.requesterEvidence = action.payload.evidence ?? [];
         tx.receiverEvidence = tx.requesterEvidence;
+        if (tx.requesterEvidence.length) {
+          tx.evidenceRecords = [
+            ...(tx.evidenceRecords ?? []),
+            {
+              id: uniqueId('evi'),
+              userId: action.payload.userId,
+              files: tx.requesterEvidence,
+              createdAt: new Date().toISOString(),
+            },
+          ];
+        }
         if (tx.completedByOwner) {
-          if (!spendHeldFee(state, tx.id)) {
+          if (spendHeldFee(state, tx.id)) {
+            const item = state.items.find((entry) => entry.id === tx.itemId);
+            if (item) item.status = 'COMPLETED';
+          } else {
             tx.completedByRequester = false;
             tx.receiverConfirmed = false;
             tx.requesterEvidence = [];
@@ -621,13 +940,21 @@ const dataSlice = createSlice({
       if (
         tx.status !== 'COMPLETED' ||
         !tx.complaintDeadline ||
-        now > new Date(tx.complaintDeadline).getTime()
+        now > new Date(tx.complaintDeadline).getTime() ||
+        state.complaints.some(
+          (entry) =>
+            entry.transactionId === tx.id &&
+            entry.reporterId === action.payload.reporterId &&
+            !['resolved', 'rejected'].includes(entry.status),
+        )
       )
         return;
       const reason = action.payload.reason.trim();
       const content = action.payload.content.trim();
       if (!reason || !content) return;
       const reportedUserId = tx.ownerId === action.payload.reporterId ? tx.requesterId : tx.ownerId;
+      const responseDueAt = new Date();
+      responseDueAt.setDate(responseDueAt.getDate() + 3);
       state.complaints.unshift({
         id: uniqueId('cmp'),
         reporterId: action.payload.reporterId,
@@ -638,7 +965,30 @@ const dataSlice = createSlice({
         evidence: action.payload.evidence,
         createdAt: new Date().toISOString(),
         status: 'received',
+        responseDueAt: responseDueAt.toISOString(),
       });
+    },
+    respondToComplaint(
+      state,
+      action: PayloadAction<{
+        complaintId: string;
+        respondentId: string;
+        response: string;
+        evidence?: string[];
+      }>,
+    ) {
+      const complaint = state.complaints.find((entry) => entry.id === action.payload.complaintId);
+      if (
+        !complaint ||
+        complaint.reportedUserId !== action.payload.respondentId ||
+        !activeActor(state, action.payload.respondentId) ||
+        !action.payload.response.trim() ||
+        ['resolved', 'rejected', 'violation_confirmed'].includes(complaint.status)
+      )
+        return;
+      complaint.response = action.payload.response.trim();
+      complaint.responseEvidence = action.payload.evidence ?? [];
+      complaint.responseSubmittedAt = new Date().toISOString();
     },
     updateComplaintStatus(
       state,
@@ -672,6 +1022,67 @@ const dataSlice = createSlice({
       } else if (action.payload.status === 'rejected') {
         complaint.resolvedAt = new Date().toISOString();
       }
+    },
+    adminAdjustReputationStars(
+      state,
+      action: PayloadAction<{
+        adminId: string;
+        userId: string;
+        change: number;
+        reason: string;
+      }>,
+    ) {
+      const target = state.users.find((entry) => entry.id === action.payload.userId);
+      if (
+        !target ||
+        target.role === 'admin' ||
+        !activeAdmin(state, action.payload.adminId) ||
+        !Number.isFinite(action.payload.change) ||
+        action.payload.change === 0 ||
+        !action.payload.reason.trim()
+      )
+        return;
+      const previous = target.reputationStars;
+      target.reputationStars = Math.max(0, Math.min(5, Number((target.reputationStars + action.payload.change).toFixed(1))));
+      state.auditLogs.unshift({
+        id: uniqueId('log'),
+        adminId: action.payload.adminId,
+        action: 'adjust_reputation_stars',
+        targetType: 'user',
+        targetId: target.id,
+        detail: action.payload.reason.trim(),
+        previousValue: String(previous),
+        newValue: String(target.reputationStars),
+        createdAt: new Date().toISOString(),
+      });
+    },
+    restoreOneReputationStar(
+      state,
+      action: PayloadAction<{ adminId: string; userId: string; reason: string }>,
+    ) {
+      const target = state.users.find((entry) => entry.id === action.payload.userId);
+      if (
+        !target ||
+        target.role === 'admin' ||
+        !activeAdmin(state, action.payload.adminId) ||
+        target.reputationStars > 0 ||
+        target.reputationRestoreUsed ||
+        !action.payload.reason.trim()
+      )
+        return;
+      target.reputationStars = 1;
+      target.reputationRestoreUsed = true;
+      state.auditLogs.unshift({
+        id: uniqueId('log'),
+        adminId: action.payload.adminId,
+        action: 'restore_one_reputation_star',
+        targetType: 'user',
+        targetId: target.id,
+        detail: action.payload.reason.trim(),
+        previousValue: '0',
+        newValue: '1',
+        createdAt: new Date().toISOString(),
+      });
     },
     updateRankRule(
       state,
@@ -822,6 +1233,8 @@ const dataSlice = createSlice({
       const tx = state.transactions.find((entry) => entry.id === action.payload.transactionId);
       if (!tx || !participant(state, tx, action.payload.actorId)) return;
       if (releaseFee(state, action.payload.transactionId)) {
+        const item = state.items.find((entry) => entry.id === tx.itemId);
+        if (item && reopenableItem(item)) item.status = 'APPROVED';
         applyReputationPointEvent(state, {
           userId: action.payload.actorId,
           key: 'unreasoned_cancel',
@@ -840,17 +1253,7 @@ const dataSlice = createSlice({
         !action.payload.text.trim()
       )
         return;
-      if (!tx.creditHeld && inspectContactMessage(action.payload.text).blocked) {
-        state.messages.push({
-          id: uniqueId('msg'),
-          convId: action.payload.convId,
-          sender: 'system',
-          type: 'system',
-          text: 'Không thể gửi thông tin liên hệ trước khi hai bên xác nhận lịch hẹn.',
-          time: 'Bay gio',
-        });
-        return;
-      }
+      if (inspectContactMessage(action.payload.text).blocked) return;
       state.messages.push({
         id: uniqueId('msg'),
         convId: action.payload.convId,
@@ -1034,7 +1437,7 @@ const dataSlice = createSlice({
       if (
         !activeAdmin(state, action.payload.adminId) ||
         !Number.isSafeInteger(action.payload.fee) ||
-        action.payload.fee <= 0
+        action.payload.fee < 0
       )
         return;
       const setting = state.settings.find((entry) => entry.key === 'tx_fee_credit');
@@ -1049,21 +1452,26 @@ const dataSlice = createSlice({
         action: 'change_fee_setting',
         targetType: 'setting',
         targetId: 'tx_fee_credit',
-        detail: `Đổi phí giao dịch thành ${action.payload.fee} Credit`,
+        detail: `Cap nhat cau hinh Credit giao dich: ${action.payload.fee} Credit`,
         createdAt: new Date().toISOString(),
       });
     },
-    lockUser(state, action: PayloadAction<{ adminId: string; userId: string; locked: boolean }>) {
+    lockUser(state, action: PayloadAction<{ adminId: string; userId: string; locked: boolean; reason?: string }>) {
       const user = state.users.find((entry) => entry.id === action.payload.userId);
       if (!user || user.role === 'admin' || !activeAdmin(state, action.payload.adminId)) return;
+      const previousStatus = user.status;
+      const reason = action.payload.reason?.trim();
       user.status = action.payload.locked ? 'locked' : 'active';
       state.auditLogs.unshift({
         id: `log_${Date.now()}`,
         adminId: action.payload.adminId,
-        action: action.payload.locked ? 'lock_user' : 'unlock_user',
+        action: action.payload.locked ? 'ACCOUNT_LOCKED' : 'ACCOUNT_UNLOCKED',
         targetType: 'user',
         targetId: user.id,
-        detail: `${action.payload.locked ? 'Khóa' : 'Mở khóa'} ${user.name}`,
+        detail: `${action.payload.locked ? 'Khóa' : 'Mở khóa'} ${user.name}${reason ? `: ${reason}` : ''}`,
+        previousValue: previousStatus,
+        newValue: user.status,
+        reason,
         createdAt: new Date().toISOString(),
       });
     },
@@ -1094,3 +1502,4 @@ export type AppDispatch = typeof store.dispatch;
 export const selectData = (state: RootState) => state.data;
 export const selectCurrentUser = (state: RootState) =>
   state.data.users.find((user) => user.id === state.data.currentUserId) ?? null;
+

@@ -7,6 +7,7 @@ import { ProductDetail } from '../pages/public/ProductDetail';
 import { AI } from '../pages/public/AI';
 import { Login } from '../pages/auth/Login';
 import { Register } from '../pages/auth/Register';
+import { VerifyEmail } from '../pages/auth/VerifyEmail';
 import { ForgotPassword } from '../pages/auth/ForgotPassword';
 import { ChangePassword } from '../pages/auth/ChangePassword';
 import { Post } from '../pages/user/Post';
@@ -49,7 +50,10 @@ export const router = createBrowserRouter([
         children: [
           { path: '/login', element: <Login /> },
           { path: '/register', element: <Register /> },
+          { path: '/verify-email', element: <VerifyEmail /> },
           { path: '/forgot-password', element: <ForgotPassword /> },
+          { path: '/forgot-password/verify', element: <ForgotPassword /> },
+          { path: '/reset-password', element: <ForgotPassword /> },
         ],
       },
       {
