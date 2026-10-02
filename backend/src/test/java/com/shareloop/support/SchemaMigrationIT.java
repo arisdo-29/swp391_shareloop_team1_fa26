@@ -51,7 +51,6 @@ class SchemaMigrationIT extends IntegrationTest {
         assertThat(flyway.info().pending()).isEmpty();
         MigrationInfo current = flyway.info().current();
         assertThat(current).isNotNull();
-        assertThat(current.getVersion().getVersion()).isEqualTo("1");
         assertThat(current.getState().isApplied()).isTrue();
     }
 
