@@ -135,6 +135,7 @@ class SecurityConfigIT extends IntegrationTest {
     @Test
     void savedRecordWithoutUserLeavesAuditorEmpty() {
         var saved = areaRepository.saveAndFlush(new AuditProbeArea("probe-job", (short) 1));
+        probeAreaId = saved.getId();
 
         assertThat(saved.getCreatedBy()).isNull();
         assertThat(saved.getUpdatedBy()).isNull();
