@@ -32,4 +32,5 @@ app:
   # module integration/payment (BE1)
   payment: {}
   # module integration/mail (BE1)
-  mail: {}
+  mail:
+    from: no-reply@shareloop.local

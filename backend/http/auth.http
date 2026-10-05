@@ -1,6 +1,24 @@
 @host = http://localhost:8080
 # Người sở hữu: BE1 @arisdo-29
 
+### Đăng ký (201). Mã OTP gửi về Mailpit: mở http://localhost:8025 để đọc thư
+POST {{host}}/api/v1/auth/register
+Content-Type: application/json
+
+{ "email": "moi@example.com", "password": "MatKhau@123", "fullName": "Nguyễn Văn Mới", "phone": "0901234567" }
+
+### Xác thực OTP (200, trả token như đăng nhập). Thay "otp" bằng mã trong thư
+POST {{host}}/api/v1/auth/verify-otp
+Content-Type: application/json
+
+{ "email": "moi@example.com", "otp": "123456" }
+
+### Gửi lại OTP (200; gọi sớm hơn 60 giây thì 429 AUTH_OTP_RESEND_TOO_SOON)
+POST {{host}}/api/v1/auth/resend-otp
+Content-Type: application/json
+
+{ "email": "moi@example.com" }
+
 ### Đăng nhập (tài khoản seed dev), lưu kết quả để các request sau lấy token
 # @name login
 POST {{host}}/api/v1/auth/login
