@@ -12,7 +12,8 @@ public enum RequestErrorCode implements ErrorCode {
     REQUEST_SELF_OFFER_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "Không thể gửi yêu cầu cho bài đăng của chính mình."),
     REQUEST_ITEM_NOT_AVAILABLE(HttpStatus.CONFLICT, "Bài đăng không ở trạng thái sẵn sàng để gửi yêu cầu."),
     REQUEST_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy bài đăng."),
-    REQUEST_SWAP_OFFERED_ITEM_REQUIRED(HttpStatus.BAD_REQUEST, "Yêu cầu trao đổi bắt buộc phải chọn món đề nghị."),
+    REQUEST_SWAP_OFFERED_ITEM_REQUIRED(
+            HttpStatus.UNPROCESSABLE_ENTITY, "Yêu cầu trao đổi bắt buộc phải chọn món đề nghị."),
     REQUEST_FORBIDDEN(HttpStatus.FORBIDDEN, "Bạn không có quyền thao tác trên yêu cầu này.");
 
     private final HttpStatus status;

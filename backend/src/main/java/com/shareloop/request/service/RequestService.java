@@ -9,6 +9,8 @@ import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.mapper.RequestMapper;
 import com.shareloop.request.repository.RequestRepository;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -32,12 +34,17 @@ public class RequestService {
 
     private final RequestRepository requestRepository;
     private final NotificationService notificationService;
+    private final ConfigService configService;
     private final JdbcClient jdbcClient;
 
     public RequestService(
-            RequestRepository requestRepository, NotificationService notificationService, JdbcClient jdbcClient) {
+            RequestRepository requestRepository,
+            NotificationService notificationService,
+            ConfigService configService,
+            JdbcClient jdbcClient) {
         this.requestRepository = requestRepository;
         this.notificationService = notificationService;
+        this.configService = configService;
         this.jdbcClient = jdbcClient;
     }
 
@@ -46,9 +53,10 @@ public class RequestService {
      */
     @Transactional
     public RequestResponse createRequest(long itemId, long receiverId, CreateRequest requestDto) {
-        // 1. Kiểm tra giới hạn 5 request PENDING cùng lúc (BR-U02)
+        // 1. Kiểm tra giới hạn số request PENDING cùng lúc (BR-U02, đọc từ ConfigService)
+        int maxPending = configService.getInt(ConfigKey.MAX_PENDING_REQUESTS);
         long pendingCount = requestRepository.countByReceiverIdAndStatus(receiverId, RequestStatus.PENDING);
-        if (pendingCount >= 5) {
+        if (pendingCount >= maxPending) {
             throw new BusinessException(RequestErrorCode.REQUEST_LIMIT_EXCEEDED);
         }
 

@@ -5,7 +5,8 @@ public enum ConfigKey {
     OTP_TTL_MINUTES("otp_ttl_minutes", 5),
     OTP_MAX_FAILED("otp_max_failed", 5),
     OTP_RESEND_COOLDOWN_SECONDS("otp_resend_cooldown_seconds", 60),
-    PENDING_ACCOUNT_TTL_HOURS("pending_account_ttl_hours", 24);
+    PENDING_ACCOUNT_TTL_HOURS("pending_account_ttl_hours", 24),
+    MAX_PENDING_REQUESTS("max_pending_requests", 5);
 
     private final String attrKey;
     private final int defaultValue;
