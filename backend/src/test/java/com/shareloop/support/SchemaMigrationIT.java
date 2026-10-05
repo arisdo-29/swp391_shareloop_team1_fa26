@@ -52,6 +52,9 @@ class SchemaMigrationIT extends IntegrationTest {
         MigrationInfo current = flyway.info().current();
         assertThat(current).isNotNull();
         assertThat(current.getState().isApplied()).isTrue();
+        assertThat(flyway.info().applied())
+                .extracting(migration -> migration.getVersion().getVersion())
+                .contains("1", "202610051200");
     }
 
     @Test

@@ -6,7 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.SQLRestriction;
 
-/** Cấu hình và thuộc tính website lưu trong website_attributes. */
+/** Entity lát cắt các cột cấu hình cần đọc từ website_attributes. */
 @Entity
 @Table(name = "website_attributes")
 @SQLRestriction("is_deleted = false")
@@ -20,6 +20,9 @@ public class WebsiteAttribute extends BaseEntity {
 
     @Column(name = "attr_value", nullable = false)
     private String attrValue;
+
+    @Column(name = "sort_order", nullable = false)
+    private int sortOrder;
 
     protected WebsiteAttribute() {}
 
