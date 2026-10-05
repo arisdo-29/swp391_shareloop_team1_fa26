@@ -1,7 +1,13 @@
 package com.shareloop.user.service;
 
+import com.shareloop.auth.dto.AuthUserResponse;
+import com.shareloop.common.exception.BusinessException;
+import com.shareloop.user.UserErrorCode;
 import com.shareloop.user.dto.ContactInfo;
+import com.shareloop.user.mapper.UserMapper;
+import com.shareloop.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service cửa ngõ của module user (Lộ trình 4.7, 4.8). Module khác muốn khoá tài khoản hoặc lấy thông tin liên lạc
@@ -16,6 +22,29 @@ import org.springframework.stereotype.Service;
 public class UserService {
 
     private static final String TODO = "TODO BE1 - tuan 4";
+
+    private final UserRepository userRepository;
+    private final UserMapper userMapper;
+
+    public UserService(UserRepository userRepository, UserMapper userMapper) {
+        this.userRepository = userRepository;
+        this.userMapper = userMapper;
+    }
+
+    /**
+     * Thông tin người dùng đang đăng nhập (GET /api/v1/me).
+     *
+     * <p>Transaction: read-only.
+     *
+     * @throws com.shareloop.common.exception.BusinessException USER_NOT_FOUND khi tài khoản không còn tồn tại
+     */
+    @Transactional(readOnly = true) // chỉ đọc DB: mở transaction read-only
+    public AuthUserResponse getMe(long userId) {
+        return userRepository
+                .findById(userId)
+                .map(userMapper::toAuthUserResponse)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+    }
 
     /**
      * Khoá tài khoản (FR-107, UC-50).
