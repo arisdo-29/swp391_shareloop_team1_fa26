@@ -14,6 +14,7 @@ public abstract class IntegrationTest {
     protected static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16");
 
     static {
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"));
         POSTGRES.start();
     }
 }
