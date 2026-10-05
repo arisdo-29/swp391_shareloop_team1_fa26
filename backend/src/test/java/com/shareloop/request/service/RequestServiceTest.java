@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.shareloop.common.exception.BusinessException;
@@ -16,7 +17,10 @@ import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.repository.RequestRepository;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,11 +40,19 @@ class RequestServiceTest {
     NotificationService notificationService;
 
     @Mock
+    ConfigService configService;
+
+    @Mock
     JdbcClient jdbcClient;
 
     @Spy
     @InjectMocks
     RequestService requestService;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(configService.getInt(ConfigKey.MAX_PENDING_REQUESTS)).thenReturn(5);
+    }
 
     @Test
     @DisplayName("Ném lỗi khi đã có 5 request PENDING cùng lúc (BR-U02)")
