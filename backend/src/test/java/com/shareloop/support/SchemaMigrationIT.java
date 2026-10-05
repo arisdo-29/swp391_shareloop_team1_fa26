@@ -119,13 +119,17 @@ class SchemaMigrationIT extends IntegrationTest {
     void updatedAtAdvancesOnUpdate() throws InterruptedException {
         Long id =
                 jdbc.queryForObject("INSERT INTO areas (name, level) VALUES ('Test area', 1) RETURNING id", Long.class);
-        Timestamp before = jdbc.queryForObject("SELECT updated_at FROM areas WHERE id = ?", Timestamp.class, id);
+        try {
+            Timestamp before = jdbc.queryForObject("SELECT updated_at FROM areas WHERE id = ?", Timestamp.class, id);
 
-        Thread.sleep(50);
-        jdbc.update("UPDATE areas SET name = 'Test area 2' WHERE id = ?", id);
+            Thread.sleep(50);
+            jdbc.update("UPDATE areas SET name = 'Test area 2' WHERE id = ?", id);
 
-        Timestamp after = jdbc.queryForObject("SELECT updated_at FROM areas WHERE id = ?", Timestamp.class, id);
-        assertThat(after).isAfter(before);
+            Timestamp after = jdbc.queryForObject("SELECT updated_at FROM areas WHERE id = ?", Timestamp.class, id);
+            assertThat(after).isAfter(before);
+        } finally {
+            jdbc.update("DELETE FROM areas WHERE id = ?", id);
+        }
     }
 
     private List<String> columnsOf(String table) {

@@ -55,10 +55,14 @@ class SecurityConfigIT extends IntegrationTest {
     @Autowired
     AuditProbeAreaRepository areaRepository;
 
+    Long probeAreaId;
+
     @AfterEach
     void cleanUp() {
         SecurityContextHolder.clearContext();
-        areaRepository.deleteAll();
+        if (probeAreaId != null) {
+            areaRepository.deleteById(probeAreaId);
+        }
     }
 
     @Test
@@ -138,6 +142,7 @@ class SecurityConfigIT extends IntegrationTest {
         SecurityContextHolder.getContext().setAuthentication(jwtAuthenticationConverter.convert(jwt));
 
         var saved = areaRepository.saveAndFlush(new AuditProbeArea("probe", (short) 1));
+        probeAreaId = saved.getId();
 
         assertThat(saved.getCreatedBy()).isEqualTo(7L);
         assertThat(saved.getUpdatedBy()).isEqualTo(7L);
@@ -146,6 +151,7 @@ class SecurityConfigIT extends IntegrationTest {
     @Test
     void savedRecordWithoutUserLeavesAuditorEmpty() {
         var saved = areaRepository.saveAndFlush(new AuditProbeArea("probe-job", (short) 1));
+        probeAreaId = saved.getId();
 
         assertThat(saved.getCreatedBy()).isNull();
         assertThat(saved.getUpdatedBy()).isNull();
