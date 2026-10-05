@@ -1,2 +1,82 @@
 @host = http://localhost:8080
-# Người sở hữu: BE2 @Nguyentri2531
+
+# Token của Nguyễn Văn An (User id = 2)
+@token_an = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwicm9sZXMiOlsiVVNFUiJdLCJpYXQiOjE3OTEyMDc2OTcsImV4cCI6MTc5Mzc5OTY5N30.5iH_Tma-coD90gYHbaT91kjzXuI3q2i9KyvhynTHeXQ
+
+# Token của Trần Thị Bình (User id = 3)
+@token_binh = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwicm9sZXMiOlsiVVNFUiJdLCJpYXQiOjE3OTEyMDc2OTcsImV4cCI6MTc5Mzc5OTY5N30.i9wUj1e7kK0t6kR8qN_dev_placeholder_binh
+
+### 1. Đăng bài Cho tặng (GIVE) thành công
+POST {{host}}/api/v1/items
+Authorization: Bearer {{token_an}}
+Content-Type: application/json
+
+{
+  "categoryId": 1,
+  "areaId": 1,
+  "offerType": "GIVE",
+  "title": "Giáo trình Toán rời rạc",
+  "description": "Sách còn mới 95%, tặng cho bạn nào cần ôn thi",
+  "desiredItem": null,
+  "condition": "LIKE_NEW",
+  "defectNote": null,
+  "brand": "NXB Giáo Dục"
+}
+
+### 2. Đăng bài Trao đổi (SWAP) thành công (kèm desiredItem)
+POST {{host}}/api/v1/items
+Authorization: Bearer {{token_an}}
+Content-Type: application/json
+
+{
+  "categoryId": 1,
+  "areaId": 1,
+  "offerType": "SWAP",
+  "title": "Giáo trình Cơ sở dữ liệu",
+  "description": "Sách còn tốt, muốn đổi lấy sách Lập trình Java",
+  "desiredItem": "Giáo trình Lập trình Java",
+  "condition": "GOOD",
+  "defectNote": null,
+  "brand": "FPT Poly"
+}
+
+### 3. Đăng bài Trao đổi (SWAP) thiếu desiredItem -> Lỗi 400
+POST {{host}}/api/v1/items
+Authorization: Bearer {{token_an}}
+Content-Type: application/json
+
+{
+  "categoryId": 1,
+  "areaId": 1,
+  "offerType": "SWAP",
+  "title": "Giáo trình CSDL lỗi thiếu đồ đổi",
+  "description": "Không có desiredItem",
+  "desiredItem": null,
+  "condition": "GOOD"
+}
+
+### 4. Đăng bài DEFECTIVE nhưng thiếu defectNote -> Lỗi 400
+POST {{host}}/api/v1/items
+Authorization: Bearer {{token_an}}
+Content-Type: application/json
+
+{
+  "categoryId": 1,
+  "areaId": 1,
+  "offerType": "GIVE",
+  "title": "Bàn phím cơ hỏng switch",
+  "description": "Đồ hỏng nhưng quên ghi chú lỗi",
+  "condition": "DEFECTIVE",
+  "defectNote": null
+}
+
+### 5. Xem chi tiết bài đăng (Khách vãng lai / Không cần token)
+GET {{host}}/api/v1/items/1
+
+### 6. Xem chi tiết bài đăng của chính mình (chủ bài xem được kể cả PENDING_REVIEW)
+GET {{host}}/api/v1/items/1
+Authorization: Bearer {{token_an}}
+
+### 7. Xem danh sách bài đăng của tôi
+GET {{host}}/api/v1/me/items
+Authorization: Bearer {{token_an}}
