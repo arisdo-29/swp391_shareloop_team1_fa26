@@ -5,6 +5,38 @@ lỗi theo định dạng thống nhất bên dưới. File này làm mẫu cont
 
 Người sở hữu: BE2. Danh mục chỉ có endpoint đọc; ghi danh mục thuộc API Admin (`/api/v1/admin/...`, chưa có).
 
+## GET /api/v1/areas
+
+Cây khu vực đang dùng (`is_active = true`, chưa xoá mềm), sắp theo id tăng dần ở mỗi cấp. Khu vực
+cấp 1 chứa danh sách khu vực cấp 2 trong `children`; khu vực cấp 2 có `children` rỗng.
+
+- Xác thực: **không cần** (GET công khai).
+- Thành công: `200`, mảng `AreaResponse` (rỗng nếu chưa có khu vực).
+
+```json
+[
+  {
+    "id": 1,
+    "name": "TP. Hồ Chí Minh",
+    "parentId": null,
+    "level": 1,
+    "children": [
+      { "id": 2, "name": "Quận 1", "parentId": 1, "level": 2, "children": [] }
+    ]
+  }
+]
+```
+
+## AreaResponse
+
+| Trường     | Kiểu           | Ý nghĩa                                      |
+|------------|----------------|----------------------------------------------|
+| `id`       | number         | Id khu vực                                   |
+| `name`     | string         | Tên hiển thị                                 |
+| `parentId` | number?        | Id khu vực cha, `null` ở cấp thành phố       |
+| `level`    | number         | Cấp khu vực: `1` thành phố, `2` quận         |
+| `children` | AreaResponse[] | Khu vực con đang dùng; rỗng ở cấp quận       |
+
 ## GET /api/v1/categories
 
 Danh sách danh mục đang dùng (`is_active = true`, chưa xoá mềm), sắp theo `sortOrder` tăng dần.
