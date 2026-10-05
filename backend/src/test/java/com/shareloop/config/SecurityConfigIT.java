@@ -110,6 +110,22 @@ class SecurityConfigIT extends IntegrationTest {
     }
 
     @Test
+    void adminConfigsRequiresAdminRoleAndReturnsAllConfigKeys() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/configs")).andExpect(status().isUnauthorized());
+
+        String userToken = jwtService.issue(42, false);
+        mockMvc.perform(get("/api/v1/admin/configs").header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isForbidden());
+
+        String adminToken = jwtService.issue(1, true);
+        mockMvc.perform(get("/api/v1/admin/configs").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].key").value("vnd_per_credit"))
+                .andExpect(jsonPath("$[0].value").value("1000"))
+                .andExpect(jsonPath("$[0].defaultValue").value("1000"));
+    }
+
+    @Test
     void publicGetPathsSkipAuthentication() throws Exception {
         // Không có controller: 404 chứng tỏ request đã qua tầng security (không bị chặn 401).
         mockMvc.perform(get("/api/v1/categories/999999")).andExpect(status().isNotFound());

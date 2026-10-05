@@ -1,2 +1,7 @@
 @host = http://localhost:8080
 # Người sở hữu: BE4 @kopslngbtram2110
+
+### Liệt kê cấu hình (thay access token bằng JWT của Admin)
+GET {{host}}/api/v1/admin/configs
+Authorization: Bearer {{adminToken}}
+Accept: application/json
