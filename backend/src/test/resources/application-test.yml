@@ -4,6 +4,14 @@ spring:
   flyway:
     locations: classpath:db/migration
     out-of-order: false
+  mail:
+    host: localhost                 # chỉ để JavaMailSender khởi tạo được; test thay EmailSender bằng mock
+
+# Không có SMTP thật khi test: nếu không tắt, /actuator/health thành DOWN (503) vì kiểm tra kết nối mail thất bại.
+management:
+  health:
+    mail:
+      enabled: false
 
 app:
   # module auth (BE1)

@@ -8,6 +8,7 @@ import com.shareloop.auth.AuthErrorCode;
 import com.shareloop.auth.dto.AuthResponse;
 import com.shareloop.auth.dto.LoginRequest;
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.entity.User;
 import com.shareloop.user.entity.UserStatus;
 import com.shareloop.user.mapper.UserMapper;
@@ -39,11 +40,18 @@ class AuthServiceTest {
     @Mock
     JwtService jwtService;
 
+    @Mock
+    OtpService otpService;
+
+    @Mock
+    ConfigService configService;
+
     AuthService service;
 
     @BeforeEach
     void createService() {
-        service = new AuthService(userRepository, passwordEncoder, jwtService, new UserMapper(), TTL_MINUTES);
+        service = new AuthService(
+                userRepository, passwordEncoder, jwtService, new UserMapper(), otpService, configService, TTL_MINUTES);
     }
 
     @Test
