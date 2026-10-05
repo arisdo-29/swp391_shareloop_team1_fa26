@@ -6,6 +6,7 @@ import com.shareloop.setting.repository.WebsiteAttributeRepository;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,5 +40,23 @@ public class ConfigService {
                 .findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", key.key())
                 .map(attribute -> attribute.getAttrValue())
                 .orElse(key.defaultValue());
+    }
+
+    public int getInt(ConfigKey key) {
+        Objects.requireNonNull(key, "key must not be null");
+
+        return repository
+                .findConfigValueByAttrKey(key.getAttrKey())
+                .map(value -> {
+                    try {
+                        return Integer.parseInt(value);
+                    } catch (NumberFormatException exception) {
+                        throw new IllegalStateException(
+                                "Configuration value for key '%s' must be an integer: '%s'"
+                                        .formatted(key.getAttrKey(), value),
+                                exception);
+                    }
+                })
+                .orElse(key.getDefaultValue());
     }
 }

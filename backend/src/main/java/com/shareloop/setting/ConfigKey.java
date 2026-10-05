@@ -34,9 +34,9 @@ public enum ConfigKey {
     REVIEW_SLA_HOURS("review_sla_hours", "24"),
     REPORT_HIDE_THRESHOLD("report_hide_threshold", "3"),
     OTP_TTL_MINUTES("otp_ttl_minutes", "5"),
-    OTP_MAX_FAILS("otp_max_fails", "5"),
-    OTP_RESEND_SECONDS("otp_resend_seconds", "60"),
-    UNVERIFIED_ACCOUNT_HOURS("unverified_account_hours", "24"),
+    OTP_MAX_FAILED("otp_max_failed", "5"),
+    OTP_RESEND_COOLDOWN_SECONDS("otp_resend_cooldown_seconds", "60"),
+    PENDING_ACCOUNT_TTL_HOURS("pending_account_ttl_hours", "24"),
     ACCOUNTS_PER_IP_24H("accounts_per_ip_24h", "3"),
     PHONE_CHANGE_INTERVAL_DAYS("phone_change_interval_days", "30"),
     MAX_PENDING_REQUESTS("max_pending_requests", "5"),
@@ -60,7 +60,15 @@ public enum ConfigKey {
         return key;
     }
 
+    public String getAttrKey() {
+        return key;
+    }
+
     public String defaultValue() {
         return defaultValue;
+    }
+
+    public int getDefaultValue() {
+        return Integer.parseInt(defaultValue);
     }
 }
