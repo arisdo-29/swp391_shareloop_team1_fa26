@@ -3,12 +3,14 @@ package com.shareloop.integration.mail;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 
 /** Gửi email qua SMTP. Ở máy dev, SMTP là Mailpit (localhost:1025), xem thư ở http://localhost:8025. */
 @Component
+@ConditionalOnProperty(name = "app.mail.provider", havingValue = "smtp", matchIfMissing = true)
 public class SmtpEmailSender implements EmailSender {
 
     private final JavaMailSender javaMailSender;
