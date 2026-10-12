@@ -1,8 +1,18 @@
 package com.shareloop.wallet.service;
 
+import com.shareloop.common.exception.BusinessException;
+import com.shareloop.wallet.WalletErrorCode;
 import com.shareloop.wallet.dto.WalletResponse;
+import com.shareloop.wallet.entity.CreditLedgerEntry;
 import com.shareloop.wallet.entity.CreditTxType;
+import com.shareloop.wallet.entity.WalletAccount;
+import com.shareloop.wallet.mapper.WalletMapper;
+import com.shareloop.wallet.repository.CreditLedgerRepository;
+import com.shareloop.wallet.repository.WalletAccountRepository;
+import java.util.EnumSet;
+import java.util.Set;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Nơi duy nhất được đổi tiền trong hệ thống (Lộ trình 4.7, 4.8). Mọi hàm đổi số dư khoá dòng {@code users} của
@@ -15,9 +25,30 @@ import org.springframework.stereotype.Service;
  * <p>Người gọi: listingfee (hold, release, chargeHeld), item/search (spend), payment IPN (topUp).
  */
 @Service
+// @Transactional ở class: mọi hàm public chạy trong một transaction (REQUIRED = tham gia transaction của người
+// gọi nếu có, không thì tự mở). Hàm ném RuntimeException thì hoàn tác cả số dư lẫn dòng ledger.
+@Transactional
 public class CreditService {
 
     private static final String TODO = "TODO BE1 - tuan 5";
+
+    // Dùng EnumSet vì contains(null) trả false; Set.of(...) sẽ ném NullPointerException khi type là null.
+    private static final Set<CreditTxType> HELD_FEE_TYPES = EnumSet.of(CreditTxType.POST_FEE, CreditTxType.EDIT_FEE);
+    private static final Set<CreditTxType> SPEND_TYPES =
+            EnumSet.of(CreditTxType.RENEW_FEE, CreditTxType.BOOST_FEE, CreditTxType.AI_SEARCH_FEE);
+
+    private final WalletAccountRepository walletAccountRepository;
+    private final CreditLedgerRepository creditLedgerRepository;
+    private final WalletMapper walletMapper;
+
+    public CreditService(
+            WalletAccountRepository walletAccountRepository,
+            CreditLedgerRepository creditLedgerRepository,
+            WalletMapper walletMapper) {
+        this.walletAccountRepository = walletAccountRepository;
+        this.creditLedgerRepository = creditLedgerRepository;
+        this.walletMapper = walletMapper;
+    }
 
     /**
      * Giữ chỗ Credit khi gửi bài chờ duyệt (C02: giữ khi gửi, trừ khi duyệt lần đầu; F05 bước 3, F07 bước 4).
@@ -33,9 +64,16 @@ public class CreditService {
      * @param itemId bài liên quan
      * @throws com.shareloop.common.exception.BusinessException WALLET_INSUFFICIENT_BALANCE khi khả dụng không đủ;
      *     WALLET_INVALID_AMOUNT khi amount không dương; WALLET_NOT_FOUND khi không có user
+     * @throws IllegalArgumentException khi type không phải POST_FEE hoặc EDIT_FEE (lỗi lập trình, không phải lỗi
+     *     nghiệp vụ)
      */
     public void hold(long userId, long amount, CreditTxType type, Long itemId) {
-        throw new UnsupportedOperationException(TODO);
+        requireAllowedType(type, HELD_FEE_TYPES, "hold");
+        requirePositiveAmount(amount);
+
+        WalletAccount wallet = lockWallet(userId);
+        // Không gọi save: entity đang được quản lý trong transaction, Hibernate tự UPDATE khi commit (dirty checking).
+        wallet.hold(amount);
     }
 
     /**
@@ -51,9 +89,14 @@ public class CreditService {
      * @param itemId bài liên quan
      * @throws com.shareloop.common.exception.BusinessException WALLET_HELD_INSUFFICIENT khi held_credit nhỏ hơn
      *     amount; WALLET_INVALID_AMOUNT; WALLET_NOT_FOUND
+     * @throws IllegalArgumentException khi type không phải POST_FEE hoặc EDIT_FEE
      */
     public void release(long userId, long amount, CreditTxType type, Long itemId) {
-        throw new UnsupportedOperationException(TODO);
+        requireAllowedType(type, HELD_FEE_TYPES, "release");
+        requirePositiveAmount(amount);
+
+        WalletAccount wallet = lockWallet(userId);
+        wallet.release(amount);
     }
 
     /**
@@ -71,9 +114,15 @@ public class CreditService {
      * @param itemId bài liên quan
      * @throws com.shareloop.common.exception.BusinessException WALLET_HELD_INSUFFICIENT khi held_credit nhỏ hơn
      *     amount; WALLET_INVALID_AMOUNT; WALLET_NOT_FOUND
+     * @throws IllegalArgumentException khi type không phải POST_FEE hoặc EDIT_FEE
      */
     public void chargeHeld(long userId, long amount, CreditTxType type, Long itemId) {
-        throw new UnsupportedOperationException(TODO);
+        requireAllowedType(type, HELD_FEE_TYPES, "chargeHeld");
+        requirePositiveAmount(amount);
+
+        WalletAccount wallet = lockWallet(userId);
+        wallet.chargeHeld(amount);
+        writeDebitLedger(userId, amount, type, wallet.getCreditBalance(), itemId);
     }
 
     /**
@@ -92,9 +141,15 @@ public class CreditService {
      * @param itemId bài liên quan; null khi không gắn bài (AI_SEARCH_FEE)
      * @throws com.shareloop.common.exception.BusinessException WALLET_INSUFFICIENT_BALANCE khi khả dụng không đủ;
      *     WALLET_INVALID_AMOUNT; WALLET_NOT_FOUND
+     * @throws IllegalArgumentException khi type không phải RENEW_FEE, BOOST_FEE hoặc AI_SEARCH_FEE
      */
     public void spend(long userId, long amount, CreditTxType type, Long itemId) {
-        throw new UnsupportedOperationException(TODO);
+        requireAllowedType(type, SPEND_TYPES, "spend");
+        requirePositiveAmount(amount);
+
+        WalletAccount wallet = lockWallet(userId);
+        wallet.spend(amount);
+        writeDebitLedger(userId, amount, type, wallet.getCreditBalance(), itemId);
     }
 
     /**
@@ -126,7 +181,37 @@ public class CreditService {
      * @return số dư, số đang giữ, số khả dụng, đã từng nạp hay chưa
      * @throws com.shareloop.common.exception.BusinessException WALLET_NOT_FOUND khi không có user
      */
+    // readOnly = true ghi đè @Transactional ở class: báo cho DB và Hibernate biết hàm này chỉ đọc.
+    @Transactional(readOnly = true)
     public WalletResponse getWallet(long userId) {
-        throw new UnsupportedOperationException(TODO);
+        return walletAccountRepository
+                .findById(userId)
+                .map(walletMapper::toResponse)
+                .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
+    }
+
+    // type sai là lỗi của người gọi (lập trình viên), không phải tình huống nghiệp vụ nên không dùng BusinessException.
+    private void requireAllowedType(CreditTxType type, Set<CreditTxType> allowedTypes, String operation) {
+        if (!allowedTypes.contains(type)) {
+            throw new IllegalArgumentException(operation + " chỉ nhận " + allowedTypes + " nhưng nhận " + type);
+        }
+    }
+
+    private void requirePositiveAmount(long amount) {
+        if (amount <= 0) {
+            throw new BusinessException(WalletErrorCode.WALLET_INVALID_AMOUNT);
+        }
+    }
+
+    private WalletAccount lockWallet(long userId) {
+        return walletAccountRepository
+                .lockById(userId)
+                .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
+    }
+
+    // Cột credit_ledger.amount là INT; toIntExact ném ArithmeticException (và rollback) thay vì cắt số âm thầm.
+    private void writeDebitLedger(long userId, long amount, CreditTxType type, long balanceAfter, Long itemId) {
+        int debitAmount = -Math.toIntExact(amount);
+        creditLedgerRepository.save(new CreditLedgerEntry(userId, debitAmount, type, balanceAfter, itemId));
     }
 }

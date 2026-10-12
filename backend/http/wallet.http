@@ -1,2 +1,12 @@
 @host = http://localhost:8080
 # Người sở hữu: BE1 @arisdo-29
+
+# Dán accessToken lấy từ request login trong auth.http (không lưu token vào repo)
+@token = <dán accessToken vào đây>
+
+### Xem ví của tôi (200: creditBalance, heldCredit, available, hasToppedUp)
+GET {{host}}/api/v1/wallet
+Authorization: Bearer {{token}}
+
+### Không có token (401 UNAUTHORIZED)
+GET {{host}}/api/v1/wallet
