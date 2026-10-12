@@ -115,6 +115,21 @@ public class Request extends BaseEntity {
         this.cancelReason = reason;
     }
 
+    /**
+     * Chủ bài chọn người nhận (FR-66, BR-D01). Chuyển sang RESERVED và ghi nhận reserved_at.
+     */
+    public void select(Instant now) {
+        transitionTo(RequestStatus.RESERVED);
+        this.reservedAt = now;
+    }
+
+    /**
+     * Tự động từ chối yêu cầu (BR-D01). Chuyển sang REJECTED.
+     */
+    public void reject() {
+        transitionTo(RequestStatus.REJECTED);
+    }
+
     public Long getItemId() {
         return itemId;
     }

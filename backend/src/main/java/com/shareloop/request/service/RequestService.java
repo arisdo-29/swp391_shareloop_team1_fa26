@@ -1,6 +1,7 @@
 package com.shareloop.request.service;
 
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.CreateRequest;
@@ -11,6 +12,7 @@ import com.shareloop.request.mapper.RequestMapper;
 import com.shareloop.request.repository.RequestRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -35,16 +37,19 @@ public class RequestService {
     private final RequestRepository requestRepository;
     private final NotificationService notificationService;
     private final ConfigService configService;
+    private final ItemService itemService;
     private final JdbcClient jdbcClient;
 
     public RequestService(
             RequestRepository requestRepository,
             NotificationService notificationService,
             ConfigService configService,
+            ItemService itemService,
             JdbcClient jdbcClient) {
         this.requestRepository = requestRepository;
         this.notificationService = notificationService;
         this.configService = configService;
+        this.itemService = itemService;
         this.jdbcClient = jdbcClient;
     }
 
@@ -156,6 +161,72 @@ public class RequestService {
 
         request.cancel("Người gửi tự huỷ yêu cầu");
         Request saved = requestRepository.save(request);
+        return RequestMapper.toResponse(saved);
+    }
+
+    /**
+     * Chủ bài đăng chọn đúng một người nhận (FR-66, BR-D01).
+     *
+     * <p>Các yêu cầu PENDING khác tự động REJECTED; bài đăng chuyển sang RESERVED qua ItemService.reserve.
+     *
+     * @param requestId id của yêu cầu được chọn
+     * @param currentUserId id của người đang thao tác (phải là chủ bài đăng)
+     * @return RequestResponse của yêu cầu sau khi được chọn
+     */
+    @Transactional
+    public RequestResponse selectReceiver(long requestId, long currentUserId) {
+        Request selectedRequest = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+
+        ItemSnapshot item = findItemSnapshot(selectedRequest.getItemId())
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+
+        if (item.donorId() != currentUserId) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+
+        if (selectedRequest.getStatus() != RequestStatus.PENDING) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+
+        // 1. Chuyển request được chọn sang RESERVED (qua canTransition)
+        selectedRequest.select(Instant.now());
+        Request saved = requestRepository.save(selectedRequest);
+
+        // 2. Các yêu cầu PENDING khác cho cùng bài đăng tự động REJECTED
+        List<Request> otherPendingRequests =
+                requestRepository.findByItemIdAndStatus(selectedRequest.getItemId(), RequestStatus.PENDING);
+        for (Request other : otherPendingRequests) {
+            if (!other.getId().equals(selectedRequest.getId())) {
+                other.reject();
+                requestRepository.save(other);
+                try {
+                    notificationService.notify(
+                            other.getReceiverId(),
+                            "REQUEST_REJECTED",
+                            "Yêu cầu không được chọn",
+                            "Chủ bài đã chọn người nhận khác cho món đồ này.",
+                            "/items/" + selectedRequest.getItemId());
+                } catch (Exception ignored) {
+                }
+            }
+        }
+
+        // 3. Giữ chỗ bài đăng qua ItemService.reserve
+        itemService.reserve(selectedRequest.getItemId());
+
+        // 4. Bắn thông báo cho người nhận được chọn
+        try {
+            notificationService.notify(
+                    selectedRequest.getReceiverId(),
+                    "REQUEST_ACCEPTED",
+                    "Yêu cầu được chấp nhận",
+                    "Chủ bài đã chọn bạn để trao tặng/trao đổi món đồ.",
+                    "/requests/" + selectedRequest.getId());
+        } catch (Exception ignored) {
+        }
+
         return RequestMapper.toResponse(saved);
     }
 

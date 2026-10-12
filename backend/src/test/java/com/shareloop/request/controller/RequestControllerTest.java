@@ -116,4 +116,20 @@ class RequestControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
     }
+
+    @Test
+    @DisplayName("Chủ bài chọn người nhận thành công trả về 200 OK")
+    void select_withToken_returns200() throws Exception {
+        String token = jwtService.issue(20L, false);
+
+        RequestResponse response =
+                new RequestResponse(100L, 1L, 10L, null, "GIVE", "RESERVED", null, null, null, Instant.now());
+
+        when(requestService.selectReceiver(100L, 20L)).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/requests/100/select").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(100))
+                .andExpect(jsonPath("$.status").value("RESERVED"));
+    }
 }

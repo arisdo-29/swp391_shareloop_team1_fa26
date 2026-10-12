@@ -93,6 +93,16 @@ public class ItemService {
                 .toList();
     }
 
+    /**
+     * Giữ chỗ bài đăng khi chủ bài chọn người nhận (BR-D01, Issue #38).
+     */
+    @Transactional
+    public void reserve(Long itemId) {
+        Item item =
+                itemRepository.findById(itemId).orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
+        item.reserve();
+    }
+
     private List<String> saveMediaMappings(Long itemId, Long donorId, List<String> images) {
         if (images == null || images.isEmpty() || jdbcClient == null) {
             return images != null ? images : List.of();

@@ -1,2 +1,37 @@
 @host = http://localhost:8080
+@token = your_jwt_token_here
 # Người sở hữu: BE3 @dwargon73-sketch
+
+### 1. Gửi yêu cầu xin đồ (GIVE)
+POST {{host}}/api/v1/items/1/requests
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "offeredItemId": null
+}
+
+### 2. Gửi đề nghị trao đổi đồ (SWAP)
+POST {{host}}/api/v1/items/2/requests
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "offeredItemId": 3
+}
+
+### 3. Chủ bài xem danh sách các yêu cầu gửi tới bài của mình
+GET {{host}}/api/v1/items/1/requests
+Authorization: Bearer {{token}}
+
+### 4. Xem danh sách tất cả yêu cầu do chính mình gửi đi
+GET {{host}}/api/v1/me/requests
+Authorization: Bearer {{token}}
+
+### 5. Người gửi tự huỷ yêu cầu (khi còn PENDING)
+POST {{host}}/api/v1/requests/1/cancel
+Authorization: Bearer {{token}}
+
+### 6. Chủ bài chọn người nhận (các yêu cầu khác tự Reject, giữ chỗ bài đăng)
+POST {{host}}/api/v1/requests/1/select
+Authorization: Bearer {{token}}

@@ -67,4 +67,13 @@ public class RequestController {
     public RequestResponse cancel(@PathVariable long id, @CurrentUserId Long currentUserId) {
         return requestService.cancelRequest(id, currentUserId);
     }
+
+    /**
+     * Chủ bài đăng chọn người nhận, các yêu cầu khác tự động bị từ chối.
+     */
+    @Operation(summary = "Chủ bài đăng chọn người nhận cho món đồ")
+    @PostMapping("/api/v1/requests/{id}/select")
+    public RequestResponse select(@PathVariable long id, @CurrentUserId Long currentUserId) {
+        return requestService.selectReceiver(id, currentUserId);
+    }
 }

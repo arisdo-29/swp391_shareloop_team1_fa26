@@ -126,4 +126,8 @@ public class Item extends BaseEntity {
     public void approve() {
         this.status = ItemStatus.APPROVED;
     }
+
+    public void reserve() {
+        this.status = ItemStatus.RESERVED;
+    }
 }

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.CreateRequest;
@@ -19,6 +20,7 @@ import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.repository.RequestRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -41,6 +43,9 @@ class RequestServiceTest {
 
     @Mock
     ConfigService configService;
+
+    @Mock
+    ItemService itemService;
 
     @Mock
     JdbcClient jdbcClient;
@@ -183,6 +188,81 @@ class RequestServiceTest {
         assertThatThrownBy(() -> requestService.cancelRequest(55L, 999L))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_FORBIDDEN);
+                });
+    }
+
+    @Test
+    @DisplayName(
+            "Chủ bài chọn người nhận thành công: chuyển RESERVED, reject các request khác và giữ chỗ bài (FR-66, BR-D01)")
+    void selectReceiver_whenSuccess_reservesRequestAndItemAndRejectsOthers() {
+        Request selectedRequest = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+
+        Request otherRequest = new Request(1L, 11L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(otherRequest, "id", 102L);
+
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+        when(requestRepository.findByItemIdAndStatus(1L, RequestStatus.PENDING))
+                .thenReturn(List.of(selectedRequest, otherRequest));
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+
+        RequestResponse response = requestService.selectReceiver(101L, 20L);
+
+        assertThat(response.status()).isEqualTo("RESERVED");
+        assertThat(selectedRequest.getStatus()).isEqualTo(RequestStatus.RESERVED);
+        assertThat(selectedRequest.getReservedAt()).isNotNull();
+
+        assertThat(otherRequest.getStatus()).isEqualTo(RequestStatus.REJECTED);
+        org.mockito.Mockito.verify(itemService).reserve(1L);
+        org.mockito.Mockito.verify(notificationService).notify(eq(10L), eq("REQUEST_ACCEPTED"), any(), any(), any());
+        org.mockito.Mockito.verify(notificationService).notify(eq(11L), eq("REQUEST_REJECTED"), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Ném lỗi FORBIDDEN khi người khác (không phải chủ bài) cố tình chọn người nhận")
+    void selectReceiver_whenNotOwner_throwsForbidden() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        assertThatThrownBy(() -> requestService.selectReceiver(101L, 999L))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_FORBIDDEN);
+                });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi NOT_FOUND khi chọn request không tồn tại")
+    void selectReceiver_whenNotFound_throwsNotFound() {
+        when(requestRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> requestService.selectReceiver(999L, 20L))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_NOT_FOUND);
+                });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi INVALID_STATE_TRANSITION khi request không còn ở trạng thái PENDING")
+    void selectReceiver_whenNotPending_throwsInvalidStateTransition() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.cancel("Đã huỷ trước");
+
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        assertThatThrownBy(() -> requestService.selectReceiver(101L, 20L))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
                 });
     }
 }
