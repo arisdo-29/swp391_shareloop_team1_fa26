@@ -31,7 +31,9 @@ import tools.jackson.databind.ObjectMapper;
 public class SecurityConfig {
 
     /** Các GET công khai; thêm đường dẫn mới chỉ sửa ở đây. */
-    static final String[] PUBLIC_GET = {"/api/v1/categories/**", "/api/v1/areas/**", "/api/v1/items/*"};
+    static final String[] PUBLIC_GET = {
+        "/api/v1/categories/**", "/api/v1/areas/**", "/api/v1/items/*", "/api/v1/media/*"
+    };
 
     private static final String[] PERMIT_ALL = {
         "/api/v1/auth/**", "/actuator/health", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**"

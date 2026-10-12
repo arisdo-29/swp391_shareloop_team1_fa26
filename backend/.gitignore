@@ -32,3 +32,6 @@ application-local.yaml
 # Log
 logs/
 *.log
+
+# Local media files
+uploads/

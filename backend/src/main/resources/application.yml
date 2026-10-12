@@ -1,6 +1,10 @@
 # Cấu hình dùng chung. Mỗi module một khối app.<module>;
 # người sở hữu chỉ sửa trong khối của mình, thêm dòng ở cuối khối.
 spring:
+  servlet:
+    multipart:
+      max-file-size: 6MB
+      max-request-size: 6MB
   application:
     name: shareloop
   profiles:
