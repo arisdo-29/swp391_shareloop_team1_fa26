@@ -164,6 +164,17 @@ class ItemServiceTest {
     }
 
     @Test
+    void hiddenApprovedItemIsNotPublic() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        item.deactivate();
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        assertThatThrownBy(() -> itemService.getItem(1L, null))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
+    }
+
+    @Test
     @DisplayName("Xem bài không tồn tại ném lỗi ITEM_NOT_FOUND")
     void getItem_notFound_throwsNotFound() {
         when(itemRepository.findById(999L)).thenReturn(Optional.empty());
