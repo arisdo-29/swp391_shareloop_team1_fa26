@@ -124,7 +124,14 @@ public class Item extends BaseEntity {
     }
 
     public void approve() {
-        this.status = ItemStatus.APPROVED;
+        transitionTo(ItemStatus.APPROVED);
+    }
+
+    public void transitionTo(ItemStatus target) {
+        if (!ItemStatus.canTransition(status, target)) {
+            throw new IllegalStateException("Invalid item status transition: " + status + " -> " + target);
+        }
+        status = target;
     }
 
     public void reserve() {

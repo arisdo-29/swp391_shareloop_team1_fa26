@@ -1,5 +1,6 @@
 package com.shareloop.item.service;
 
+import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.dto.CreateItemRequest;
@@ -13,6 +14,9 @@ import com.shareloop.item.repository.ItemRepository;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,7 +80,7 @@ public class ItemService {
         Item item = itemRepository.findById(id).orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
 
         boolean isOwner = currentUserId != null && currentUserId.equals(item.getDonorId());
-        if (item.getStatus() == ItemStatus.APPROVED || isOwner) {
+        if ((item.getStatus() == ItemStatus.APPROVED && item.isActive()) || isOwner) {
             return ItemMapper.toResponse(item, findImages(id));
         }
 
@@ -93,6 +97,18 @@ public class ItemService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public PageResponse<ItemResponse> listPublicItems(Long categoryId, Long areaId, int page, int size) {
+        Page<ItemResponse> result = itemRepository
+                .findVisibleByFilters(
+                        ItemStatus.APPROVED,
+                        categoryId,
+                        areaId,
+                        PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))))
+                .map(item -> ItemMapper.toResponse(item, findImages(item.getId())));
+        return PageResponse.from(result);
+    }
+
     /**
      * Giữ chỗ bài đăng khi chủ bài chọn người nhận (BR-D01, Issue #38).
      */
@@ -101,6 +117,28 @@ public class ItemService {
         Item item =
                 itemRepository.findById(itemId).orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
         item.reserve();
+    }
+
+    @Transactional
+    public void markApproved(long itemId) {
+        transition(itemId, ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED);
+    }
+
+    @Transactional
+    public void markRejected(long itemId) {
+        transition(itemId, ItemStatus.PENDING_REVIEW, ItemStatus.REJECTED);
+    }
+
+    private void transition(long itemId, ItemStatus expected, ItemStatus target) {
+        Item item = requireItem(itemId);
+        if (item.getStatus() != expected || !ItemStatus.canTransition(item.getStatus(), target)) {
+            throw new BusinessException(ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
+        }
+        item.transitionTo(target);
+    }
+
+    private Item requireItem(long itemId) {
+        return itemRepository.findById(itemId).orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
     }
 
     private List<String> saveMediaMappings(Long itemId, Long donorId, List<String> images) {

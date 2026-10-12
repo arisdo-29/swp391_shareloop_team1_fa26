@@ -164,6 +164,17 @@ class ItemServiceTest {
     }
 
     @Test
+    void hiddenApprovedItemIsNotPublic() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        item.deactivate();
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        assertThatThrownBy(() -> itemService.getItem(1L, null))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
+    }
+
+    @Test
     @DisplayName("Xem bài không tồn tại ném lỗi ITEM_NOT_FOUND")
     void getItem_notFound_throwsNotFound() {
         when(itemRepository.findById(999L)).thenReturn(Optional.empty());
@@ -227,5 +238,39 @@ class ItemServiceTest {
         itemService.reserve(1L);
 
         assertThat(item.getStatus()).isEqualTo(ItemStatus.RESERVED);
+    }
+
+    @Test
+    void markApprovedTransitionsOnlyPendingReview() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        itemService.markApproved(1L);
+        assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
+
+        assertThatThrownBy(() -> itemService.markApproved(1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
+    }
+
+    @Test
+    void markRejectedTransitionsOnlyPendingReview() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        itemService.markRejected(1L);
+        assertThat(item.getStatus()).isEqualTo(ItemStatus.REJECTED);
+
+        assertThatThrownBy(() -> itemService.markRejected(1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
+    }
+
+    @Test
+    void markApprovedRejectsMissingItem() {
+        when(itemRepository.findById(99L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> itemService.markApproved(99L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
     }
 }
