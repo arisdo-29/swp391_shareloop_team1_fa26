@@ -84,6 +84,27 @@ Người gửi tự huỷ yêu cầu khi yêu cầu còn ở trạng thái `PEND
 
 ---
 
+## 5. POST /api/v1/requests/{id}/select
+
+Chủ bài đăng chọn đúng một người nhận cho bài đăng (F10 bước 2, FR-66, BR-D01).
+
+- **Xác thực:** Bắt buộc JWT (phải là chủ bài đăng `donorId`).
+- **Path variable:** `id` (id của request được chọn).
+- **Hành vi nghiệp vụ:**
+  - Request được chọn chuyển sang trạng thái `RESERVED` (`reservedAt` được ghi nhận).
+  - Tất cả các Request khác gửi tới cùng bài đăng đang ở trạng thái `PENDING` sẽ tự động chuyển sang `REJECTED`.
+  - Bài đăng chuyển sang trạng thái `RESERVED` qua `ItemService.reserve(itemId)`.
+  - Người nhận được chọn nhận thông báo `REQUEST_ACCEPTED`.
+  - Các người nhận bị từ chối nhận thông báo `REQUEST_REJECTED`.
+- **Thành công:** `200 OK`, trả về `RequestResponse` của yêu cầu được chọn (`status = RESERVED`).
+- **Lỗi:**
+  - `403 REQUEST_FORBIDDEN`: Không phải chủ bài đăng.
+  - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
+  - `404 REQUEST_ITEM_NOT_FOUND`: Không tìm thấy bài đăng liên quan.
+  - `409 REQUEST_INVALID_STATE_TRANSITION`: Yêu cầu không còn ở trạng thái `PENDING` để chọn.
+
+---
+
 ## DTO Models
 
 ### RequestResponse
