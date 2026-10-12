@@ -27,4 +27,4 @@ Cập nhật giá trị cấu hình đã được seed. Yêu cầu role `ADMIN` 
 { "value": "8", "reason": "Điều chỉnh mức phí theo chính sách mới" }
 ```
 
-Thành công trả về `ConfigResponse` và ghi một dòng `activity_logs` loại `CONFIG_UPDATED`, gồm admin, key, giá trị cũ/mới và lý do. Key không tồn tại hoặc chưa được seed trả `404 CONFIG_KEY_NOT_FOUND`. Các cấu hình số nguyên phải lớn hơn 0, ngoại trừ `max_active_items_diamond` nhận `-1` để biểu thị không giới hạn; `chat_ai_threshold` phải nằm trong khoảng `0` đến `1`. Giá trị không hợp lệ trả `400 CONFIG_VALUE_INVALID`.
+Thành công trả về `ConfigResponse` và ghi một dòng `activity_logs` loại `CONFIG_UPDATED`, gồm admin, key, giá trị cũ/mới và lý do. Key không tồn tại hoặc chưa được seed trả `404 CONFIG_KEY_NOT_FOUND`. Các cấu hình số nguyên phải lớn hơn 0, ngoại trừ phí (`post_fee`, `edit_fee`, `renew_fee`, `boost_fee`, `ai_search_fee`), số lượt (`ai_free_per_day`, `ai_trial_uses`, `item_ai_retries`, `boost_max_per_page`) được phép bằng `0`; `max_active_items_diamond` nhận `-1` để biểu thị không giới hạn. `chat_ai_threshold` phải nằm trong khoảng `0` đến `1`. Giá trị âm không hợp lệ trả `400 CONFIG_VALUE_INVALID`.

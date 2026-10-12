@@ -99,7 +99,7 @@ public class ConfigService {
             if (key == ConfigKey.MAX_ACTIVE_ITEMS_DIAMOND && number == -1) {
                 return;
             }
-            if (number <= 0) {
+            if (number < 0 || (number == 0 && !allowsZero(key))) {
                 throw new NumberFormatException();
             }
         } catch (NumberFormatException exception) {
@@ -107,7 +107,7 @@ public class ConfigService {
                     switch (key) {
                         case CHAT_AI_THRESHOLD -> "nằm trong khoảng từ 0 đến 1";
                         case MAX_ACTIVE_ITEMS_DIAMOND -> "là số nguyên dương hoặc bằng -1";
-                        default -> "là số nguyên dương";
+                        default -> allowsZero(key) ? "là số nguyên không âm" : "là số nguyên dương";
                     };
             throw new BusinessException(
                     SettingErrorCode.CONFIG_VALUE_INVALID,
@@ -115,5 +115,20 @@ public class ConfigService {
                     "value",
                     Map.of("key", key.key()));
         }
+    }
+
+    private boolean allowsZero(ConfigKey key) {
+        return switch (key) {
+            case POST_FEE,
+                    EDIT_FEE,
+                    RENEW_FEE,
+                    BOOST_FEE,
+                    AI_SEARCH_FEE,
+                    AI_FREE_PER_DAY,
+                    AI_TRIAL_USES,
+                    ITEM_AI_RETRIES,
+                    BOOST_MAX_PER_PAGE -> true;
+            default -> false;
+        };
     }
 }

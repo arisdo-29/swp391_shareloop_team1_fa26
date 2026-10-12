@@ -173,4 +173,25 @@ class ConfigServiceTest {
                         .value())
                 .isEqualTo("-1");
     }
+
+    @Test
+    void updateAllowsZeroForFeesAndRetryCounts() {
+        for (ConfigKey key : List.of(ConfigKey.POST_FEE, ConfigKey.ITEM_AI_RETRIES)) {
+            var attribute = mock(WebsiteAttribute.class);
+            when(attribute.getAttrValue()).thenReturn("5");
+            when(repository.findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", key.key()))
+                    .thenReturn(Optional.of(attribute));
+
+            assertThat(service.update(key, "0", "Disable fee or retries", 17L).value())
+                    .isEqualTo("0");
+        }
+    }
+
+    @Test
+    void updateRejectsNegativeValueForKeysWithoutNegativeSentinel() {
+        assertThatThrownBy(() -> service.update(ConfigKey.POST_FEE, "-1", "reason", 17L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SettingErrorCode.CONFIG_VALUE_INVALID);
+    }
 }
