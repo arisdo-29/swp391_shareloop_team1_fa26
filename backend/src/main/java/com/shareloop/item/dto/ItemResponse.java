@@ -4,6 +4,7 @@ import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import java.time.Instant;
+import java.util.List;
 
 /**
  * DTO trả về thông tin bài đăng (UC-20, UC-22).
@@ -20,6 +21,41 @@ public record ItemResponse(
         ItemCondition condition,
         String defectNote,
         String brand,
+        List<String> images,
         ItemStatus status,
         Instant createdAt,
-        Instant updatedAt) {}
+        Instant updatedAt) {
+
+    public ItemResponse(
+            Long id,
+            Long donorId,
+            Long categoryId,
+            Long areaId,
+            OfferType offerType,
+            String title,
+            String description,
+            String desiredItem,
+            ItemCondition condition,
+            String defectNote,
+            String brand,
+            ItemStatus status,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(
+                id,
+                donorId,
+                categoryId,
+                areaId,
+                offerType,
+                title,
+                description,
+                desiredItem,
+                condition,
+                defectNote,
+                brand,
+                List.of(),
+                status,
+                createdAt,
+                updatedAt);
+    }
+}

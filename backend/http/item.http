@@ -20,7 +20,10 @@ Content-Type: application/json
   "desiredItem": null,
   "condition": "LIKE_NEW",
   "defectNote": null,
-  "brand": "NXB Giáo Dục"
+  "brand": "NXB Giáo Dục",
+  "images": [
+    "https://example.com/math1.jpg"
+  ]
 }
 
 ### 2. Đăng bài Trao đổi (SWAP) thành công (kèm desiredItem)

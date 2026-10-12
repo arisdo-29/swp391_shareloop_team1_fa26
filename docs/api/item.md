@@ -24,7 +24,10 @@ Bản demo gấp (chưa tích hợp ảnh, phí đăng bài, kiểm duyệt AI).
   "desiredItem": null,
   "condition": "LIKE_NEW",
   "defectNote": null,
-  "brand": "NXB Giáo Dục"
+  "brand": "NXB Giáo Dục",
+  "images": [
+    "https://example.com/math1.jpg"
+  ]
 }
 ```
 
@@ -48,6 +51,9 @@ Bản demo gấp (chưa tích hợp ảnh, phí đăng bài, kiểm duyệt AI).
   "condition": "LIKE_NEW",
   "defectNote": null,
   "brand": "NXB Giáo Dục",
+  "images": [
+    "https://example.com/math1.jpg"
+  ],
   "status": "PENDING_REVIEW",
   "createdAt": "2026-10-05T14:00:00Z",
   "updatedAt": "2026-10-05T14:00:00Z"
@@ -103,6 +109,7 @@ Xem danh sách tất cả các bài đăng do chính mình tạo (sắp xếp m�
 | `condition` | string | Có | `NEW`, `LIKE_NEW`, `GOOD`, `DEFECTIVE` |
 | `defectNote` | string? | Điều kiện | Bắt buộc nếu `condition` là `DEFECTIVE` |
 | `brand` | string? | Không | Tối đa 80 ký tự |
+| `images` | array[string]? | Không | Danh sách URL ảnh đính kèm bài đăng |
 
 ### ItemResponse
 
@@ -119,6 +126,7 @@ Xem danh sách tất cả các bài đăng do chính mình tạo (sắp xếp m�
 | `condition` | string | Tình trạng đồ |
 | `defectNote` | string? | Mô tả lỗi (nếu DEFECTIVE) |
 | `brand` | string? | Nhãn hiệu / Thương hiệu |
+| `images` | array[string] | Danh sách URL ảnh của bài đăng |
 | `status` | string | `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `RESERVED`, `TRADED`, `EXPIRED` |
 | `createdAt` | string | Thời điểm tạo ISO-8601 UTC |
 | `updatedAt` | string | Thời điểm cập nhật ISO-8601 UTC |

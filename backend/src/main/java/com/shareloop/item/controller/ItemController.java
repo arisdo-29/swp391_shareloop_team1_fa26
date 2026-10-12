@@ -37,7 +37,9 @@ public class ItemController {
     @Operation(summary = "Đăng bài mới")
     @PostMapping("/api/v1/items")
     @ResponseStatus(HttpStatus.CREATED)
-    public ItemResponse create(@CurrentUserId Long currentUserId, @Valid @RequestBody CreateItemRequest request) {
+    public ItemResponse create(
+            @io.swagger.v3.oas.annotations.Parameter(hidden = true) @CurrentUserId Long currentUserId,
+            @Valid @RequestBody CreateItemRequest request) {
         return itemService.createItem(currentUserId, request);
     }
 
@@ -46,7 +48,9 @@ public class ItemController {
      */
     @Operation(summary = "Chi tiết một bài đăng")
     @GetMapping("/api/v1/items/{id}")
-    public ItemResponse getById(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
+    public ItemResponse getById(
+            @PathVariable Long id,
+            @io.swagger.v3.oas.annotations.Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
         Long currentUserId = parseUserId(jwt);
         return itemService.getItem(id, currentUserId);
     }
@@ -56,7 +60,8 @@ public class ItemController {
      */
     @Operation(summary = "Danh sách bài đăng của tôi")
     @GetMapping("/api/v1/me/items")
-    public List<ItemResponse> listMyItems(@CurrentUserId Long currentUserId) {
+    public List<ItemResponse> listMyItems(
+            @io.swagger.v3.oas.annotations.Parameter(hidden = true) @CurrentUserId Long currentUserId) {
         return itemService.listMyItems(currentUserId);
     }
 

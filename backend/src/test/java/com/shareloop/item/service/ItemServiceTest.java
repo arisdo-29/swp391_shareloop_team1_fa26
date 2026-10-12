@@ -187,4 +187,31 @@ class ItemServiceTest {
         assertThat(responses.get(0).title()).isEqualTo("Sách 1");
         verify(itemRepository).findByDonorIdOrderByCreatedAtDesc(10L);
     }
+
+    @Test
+    @DisplayName("Tạo bài có danh sách ảnh thành công")
+    void createItem_withImages_success() {
+        CreateItemRequest request = new CreateItemRequest(
+                1L,
+                1L,
+                OfferType.GIVE,
+                "Sách Toán",
+                "Sách mới",
+                null,
+                ItemCondition.NEW,
+                null,
+                "NXB Trẻ",
+                List.of("https://example.com/img1.jpg", "https://example.com/img2.jpg"));
+
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> {
+            Item item = invocation.getArgument(0);
+            ReflectionTestUtils.setField(item, "id", 102L);
+            return item;
+        });
+
+        ItemResponse response = itemService.createItem(10L, request);
+
+        assertThat(response.id()).isEqualTo(102L);
+        assertThat(response.images()).containsExactly("https://example.com/img1.jpg", "https://example.com/img2.jpg");
+    }
 }
