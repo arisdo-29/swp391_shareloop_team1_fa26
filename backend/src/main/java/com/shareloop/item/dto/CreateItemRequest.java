@@ -5,6 +5,7 @@ import com.shareloop.item.entity.OfferType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 
 /**
  * DTO gửi lên khi tạo bài đăng mới (POST /api/v1/items).
@@ -28,4 +29,20 @@ public record CreateItemRequest(
         String defectNote,
 
         @Size(max = 80, message = "Thương hiệu tối đa 80 ký tự")
-        String brand) {}
+        String brand,
+
+        List<String> images) {
+
+    public CreateItemRequest(
+            Long categoryId,
+            Long areaId,
+            OfferType offerType,
+            String title,
+            String description,
+            String desiredItem,
+            ItemCondition condition,
+            String defectNote,
+            String brand) {
+        this(categoryId, areaId, offerType, title, description, desiredItem, condition, defectNote, brand, List.of());
+    }
+}

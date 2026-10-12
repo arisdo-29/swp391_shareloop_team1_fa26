@@ -10,7 +10,10 @@ import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.mapper.ItemMapper;
 import com.shareloop.item.repository.ItemRepository;
+import java.util.ArrayList;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,9 +24,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class ItemService {
 
     private final ItemRepository itemRepository;
+    private final JdbcClient jdbcClient;
 
-    public ItemService(ItemRepository itemRepository) {
+    public ItemService(ItemRepository itemRepository, @Autowired(required = false) JdbcClient jdbcClient) {
         this.itemRepository = itemRepository;
+        this.jdbcClient = jdbcClient;
     }
 
     /**
@@ -56,7 +61,8 @@ public class ItemService {
                 request.brand());
 
         Item saved = itemRepository.save(item);
-        return ItemMapper.toResponse(saved);
+        List<String> savedImages = saveMediaMappings(saved.getId(), donorId, request.images());
+        return ItemMapper.toResponse(saved, savedImages);
     }
 
     /**
@@ -71,7 +77,7 @@ public class ItemService {
 
         boolean isOwner = currentUserId != null && currentUserId.equals(item.getDonorId());
         if (item.getStatus() == ItemStatus.APPROVED || isOwner) {
-            return ItemMapper.toResponse(item);
+            return ItemMapper.toResponse(item, findImages(id));
         }
 
         throw new BusinessException(ItemErrorCode.ITEM_NOT_FOUND);
@@ -83,7 +89,61 @@ public class ItemService {
     @Transactional(readOnly = true)
     public List<ItemResponse> listMyItems(Long currentUserId) {
         return itemRepository.findByDonorIdOrderByCreatedAtDesc(currentUserId).stream()
-                .map(ItemMapper::toResponse)
+                .map(item -> ItemMapper.toResponse(item, findImages(item.getId())))
                 .toList();
+    }
+
+    private List<String> saveMediaMappings(Long itemId, Long donorId, List<String> images) {
+        if (images == null || images.isEmpty() || jdbcClient == null) {
+            return images != null ? images : List.of();
+        }
+        List<String> savedImages = new ArrayList<>();
+        short order = 0;
+        for (String url : images) {
+            if (url == null || url.isBlank()) {
+                continue;
+            }
+            String cleanUrl = url.trim();
+            String storageKey = cleanUrl.length() > 300 ? cleanUrl.substring(0, 300) : cleanUrl;
+
+            Long mediaId = jdbcClient
+                    .sql("SELECT id FROM media_files WHERE storage_key = :key")
+                    .param("key", storageKey)
+                    .query(Long.class)
+                    .optional()
+                    .orElseGet(() -> jdbcClient
+                            .sql(
+                                    "INSERT INTO media_files (storage_key, mime_type, size_bytes, visibility, status, created_by, updated_by) "
+                                            + "VALUES (:key, 'image/jpeg', 0, 'PUBLIC', 'ATTACHED', :uid, :uid) RETURNING id")
+                            .param("key", storageKey)
+                            .param("uid", donorId)
+                            .query(Long.class)
+                            .single());
+
+            jdbcClient
+                    .sql(
+                            "INSERT INTO item_media_mappings (item_id, media_id, role, sort_order) "
+                                    + "VALUES (:itemId, :mediaId, 'PHOTO', :sortOrder) ON CONFLICT (item_id, media_id) DO NOTHING")
+                    .param("itemId", itemId)
+                    .param("mediaId", mediaId)
+                    .param("sortOrder", order++)
+                    .update();
+
+            savedImages.add(cleanUrl);
+        }
+        return savedImages;
+    }
+
+    private List<String> findImages(Long itemId) {
+        if (jdbcClient == null || itemId == null) {
+            return List.of();
+        }
+        return jdbcClient
+                .sql("SELECT m.storage_key FROM item_media_mappings imm "
+                        + "JOIN media_files m ON imm.media_id = m.id "
+                        + "WHERE imm.item_id = :itemId ORDER BY imm.sort_order")
+                .param("itemId", itemId)
+                .query(String.class)
+                .list();
     }
 }
