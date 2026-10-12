@@ -24,7 +24,7 @@ public class AdminReviewController {
 
     @GetMapping
     public List<ReviewQueueItem> listPending(
-            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "0") @Min(0) @Max(21_474_836) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         return reviewService.listPending(page, size);
     }

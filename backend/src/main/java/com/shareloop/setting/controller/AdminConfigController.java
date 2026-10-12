@@ -1,7 +1,9 @@
 package com.shareloop.setting.controller;
 
+import com.shareloop.common.exception.BusinessException;
 import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.SettingErrorCode;
 import com.shareloop.setting.dto.ConfigResponse;
 import com.shareloop.setting.dto.UpdateConfigRequest;
 import com.shareloop.setting.service.ConfigService;
@@ -36,7 +38,7 @@ public class AdminConfigController {
         ConfigKey configKey = Arrays.stream(ConfigKey.values())
                 .filter(candidate -> candidate.key().equals(key))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Unknown configuration key: " + key));
+                .orElseThrow(() -> new BusinessException(SettingErrorCode.CONFIG_KEY_NOT_FOUND));
         return configService.update(configKey, request.value(), request.reason(), adminId);
     }
 }

@@ -39,7 +39,8 @@ public class ActivityLog {
 
     protected ActivityLog() {}
 
-    public ActivityLog(Long actorId, String type, String targetType, Long targetId, Map<String, Object> data, String reason) {
+    public ActivityLog(
+            Long actorId, String type, String targetType, Long targetId, Map<String, Object> data, String reason) {
         this.actorId = actorId;
         this.type = type;
         this.targetType = targetType;

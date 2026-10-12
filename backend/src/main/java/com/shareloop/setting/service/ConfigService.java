@@ -1,9 +1,12 @@
 package com.shareloop.setting.service;
 
 import com.shareloop.audit.service.ActivityLogService;
+import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.SettingErrorCode;
 import com.shareloop.setting.dto.ConfigResponse;
 import com.shareloop.setting.repository.WebsiteAttributeRepository;
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -65,13 +68,52 @@ public class ConfigService {
 
     @Transactional
     public ConfigResponse update(ConfigKey key, String value, String reason, Long adminId) {
-        var attribute = repository.findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", key.key())
-                .orElseThrow(() -> new IllegalArgumentException("Configuration key is not seeded: " + key.key()));
+        validateValue(key, value);
+        var attribute = repository
+                .findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", key.key())
+                .orElseThrow(() -> new BusinessException(SettingErrorCode.CONFIG_KEY_NOT_FOUND));
         String previousValue = attribute.getAttrValue();
         attribute.updateValue(value);
         repository.save(attribute);
-        activityLogService.log(adminId, "CONFIG_UPDATED", "CONFIG", null,
-                Map.of("key", key.key(), "oldValue", previousValue, "newValue", value), reason);
+        activityLogService.log(
+                adminId,
+                "CONFIG_UPDATED",
+                "CONFIG",
+                null,
+                Map.of("key", key.key(), "oldValue", previousValue, "newValue", value),
+                reason);
         return new ConfigResponse(key.key(), value, key.defaultValue());
+    }
+
+    private void validateValue(ConfigKey key, String value) {
+        try {
+            if (key == ConfigKey.CHAT_AI_THRESHOLD) {
+                BigDecimal threshold = new BigDecimal(value);
+                if (threshold.compareTo(BigDecimal.ZERO) < 0 || threshold.compareTo(BigDecimal.ONE) > 0) {
+                    throw new NumberFormatException();
+                }
+                return;
+            }
+
+            int number = Integer.parseInt(value);
+            if (key == ConfigKey.MAX_ACTIVE_ITEMS_DIAMOND && number == -1) {
+                return;
+            }
+            if (number <= 0) {
+                throw new NumberFormatException();
+            }
+        } catch (NumberFormatException exception) {
+            String expectedFormat =
+                    switch (key) {
+                        case CHAT_AI_THRESHOLD -> "nằm trong khoảng từ 0 đến 1";
+                        case MAX_ACTIVE_ITEMS_DIAMOND -> "là số nguyên dương hoặc bằng -1";
+                        default -> "là số nguyên dương";
+                    };
+            throw new BusinessException(
+                    SettingErrorCode.CONFIG_VALUE_INVALID,
+                    "Giá trị cấu hình '%s' phải %s.".formatted(key.key(), expectedFormat),
+                    "value",
+                    Map.of("key", key.key()));
+        }
     }
 }

@@ -5,7 +5,6 @@ import com.shareloop.review.repository.ReviewQueueRepository;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +19,8 @@ public class ReviewService {
     }
 
     public List<ReviewQueueItem> listPending(int page, int size) {
-        return repository.findPendingReviewQueue(PageRequest.of(page, size)).stream()
+        int offset = Math.multiplyExact(page, size);
+        return repository.findPendingReviewQueue(offset, size).stream()
                 .map(row -> new ReviewQueueItem(
                         ((Number) row[0]).longValue(),
                         ((Number) row[1]).longValue(),
@@ -43,6 +43,7 @@ public class ReviewService {
         if (value instanceof java.sql.Timestamp timestamp) {
             return timestamp.toInstant();
         }
-        throw new IllegalStateException("Unsupported timestamp result type: " + value.getClass().getName());
+        throw new IllegalStateException(
+                "Unsupported timestamp result type: " + value.getClass().getName());
     }
 }

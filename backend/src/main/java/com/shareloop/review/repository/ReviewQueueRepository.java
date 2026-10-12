@@ -1,33 +1,41 @@
 package com.shareloop.review.repository;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.util.List;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.Repository;
+import org.springframework.stereotype.Repository;
 
-public interface ReviewQueueRepository extends Repository<com.shareloop.item.entity.Item, Long> {
+@Repository
+public class ReviewQueueRepository {
 
-    @Query(value = """
-            SELECT i.id AS id,
-                   i.donor_id AS donorId,
-                   i.title AS title,
-                   i.ai_risk AS aiRisk,
-                   COALESCE(i.ai_result ->> 'flag', i.ai_result ->> 'moderation', 'NONE') AS moderationFlag,
-                   COALESCE(i.ai_result ->> 'reason', i.ai_result ->> 'moderationReason') AS flagReason,
-                   u.trust_stars AS donorTrustStars,
-                   i.created_at AS createdAt
+    private static final String PENDING_REVIEW_QUERY = """
+            SELECT i.id,
+                   i.donor_id,
+                   i.title,
+                   i.ai_risk,
+                   COALESCE(i.ai_result ->> 'flag', 'NONE'),
+                   i.ai_result ->> 'reason',
+                   u.trust_stars,
+                   i.created_at
             FROM items i
             JOIN users u ON u.id = i.donor_id
             WHERE i.status = 'PENDING_REVIEW'
               AND i.is_deleted = FALSE
               AND u.is_deleted = FALSE
-            ORDER BY CASE WHEN COALESCE(i.ai_result ->> 'flag', i.ai_result ->> 'moderation') = 'REVIEW'
-                          THEN 0 ELSE 1 END,
+            ORDER BY CASE WHEN i.ai_result ->> 'flag' = 'REVIEW' THEN 0 ELSE 1 END,
                      u.trust_stars ASC,
-                     u.created_at DESC,
                      i.created_at ASC,
                      i.id ASC
-            """, nativeQuery = true)
-    List<Object[]> findPendingReviewQueue(Pageable pageable);
+            """;
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    public List<Object[]> findPendingReviewQueue(int offset, int limit) {
+        return entityManager
+                .createNativeQuery(PENDING_REVIEW_QUERY)
+                .setFirstResult(offset)
+                .setMaxResults(limit)
+                .getResultList();
+    }
 }
