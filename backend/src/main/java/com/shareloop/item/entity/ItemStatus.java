@@ -9,5 +9,15 @@ public enum ItemStatus {
     REJECTED,
     RESERVED,
     TRADED,
-    EXPIRED
+    EXPIRED;
+
+    public static boolean canTransition(ItemStatus from, ItemStatus to) {
+        if (from == null || to == null || from == to) {
+            return false;
+        }
+        return switch (from) {
+            case PENDING_REVIEW -> to == APPROVED || to == REJECTED;
+            case APPROVED, REJECTED, RESERVED, TRADED, EXPIRED -> false;
+        };
+    }
 }

@@ -9,7 +9,8 @@ import org.springframework.http.HttpStatus;
 public enum ItemErrorCode implements ErrorCode {
     ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy bài đăng."),
     ITEM_SWAP_DESIRED_ITEM_REQUIRED(HttpStatus.BAD_REQUEST, "Bài đăng trao đổi bắt buộc phải có món mong muốn."),
-    ITEM_DEFECT_NOTE_REQUIRED(HttpStatus.BAD_REQUEST, "Bài đăng đồ lỗi bắt buộc phải có mô tả lỗi.");
+    ITEM_DEFECT_NOTE_REQUIRED(HttpStatus.BAD_REQUEST, "Bài đăng đồ lỗi bắt buộc phải có mô tả lỗi."),
+    ITEM_INVALID_STATUS_TRANSITION(HttpStatus.CONFLICT, "Không thể chuyển trạng thái bài đăng.");
 
     private final HttpStatus status;
     private final String defaultMessage;

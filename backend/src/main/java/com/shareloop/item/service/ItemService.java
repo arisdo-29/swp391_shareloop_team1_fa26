@@ -103,6 +103,28 @@ public class ItemService {
         item.reserve();
     }
 
+    @Transactional
+    public void markApproved(long itemId) {
+        transition(itemId, ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED);
+    }
+
+    @Transactional
+    public void markRejected(long itemId) {
+        transition(itemId, ItemStatus.PENDING_REVIEW, ItemStatus.REJECTED);
+    }
+
+    private void transition(long itemId, ItemStatus expected, ItemStatus target) {
+        Item item = requireItem(itemId);
+        if (item.getStatus() != expected || !ItemStatus.canTransition(item.getStatus(), target)) {
+            throw new BusinessException(ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
+        }
+        item.transitionTo(target);
+    }
+
+    private Item requireItem(long itemId) {
+        return itemRepository.findById(itemId).orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
+    }
+
     private List<String> saveMediaMappings(Long itemId, Long donorId, List<String> images) {
         if (images == null || images.isEmpty() || jdbcClient == null) {
             return images != null ? images : List.of();
