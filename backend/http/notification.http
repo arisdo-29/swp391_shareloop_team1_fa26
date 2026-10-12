@@ -1,0 +1,23 @@
+@host = http://localhost:8080
+
+# Token của Nguyễn Văn An (User id = 2)
+@token_an = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwicm9sZXMiOlsiVVNFUiJdLCJpYXQiOjE3OTEyMDc2OTcsImV4cCI6MTc5Mzc5OTY5N30.5iH_Tma-coD90gYHbaT91kjzXuI3q2i9KyvhynTHeXQ
+
+# Token của Trần Thị Bình (User id = 3)
+@token_binh = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwicm9sZXMiOlsiVVNFUiJdLCJpYXQiOjE3OTEyMDc2OTcsImV4cCI6MTc5Mzc5OTY5N30.i9wUj1e7kK0t6kR8qN_dev_placeholder_binh
+
+### 1. Xem danh sách thông báo của tôi (An)
+GET {{host}}/api/v1/notifications?page=0&size=20
+Authorization: Bearer {{token_an}}
+
+### 2. Lấy số lượng thông báo chưa đọc
+GET {{host}}/api/v1/notifications/unread-count
+Authorization: Bearer {{token_an}}
+
+### 3. Đánh dấu thông báo đã đọc
+POST {{host}}/api/v1/notifications/1/read
+Authorization: Bearer {{token_an}}
+
+### 4. Người khác (Bình) cố tình đọc thông báo của An -> 404 NOTIFICATION_NOT_FOUND
+POST {{host}}/api/v1/notifications/1/read
+Authorization: Bearer {{token_binh}}
