@@ -43,6 +43,7 @@ public class ReviewService {
         if (value instanceof java.sql.Timestamp timestamp) {
             return timestamp.toInstant();
         }
-        throw new IllegalStateException("Unsupported timestamp result type: " + value.getClass().getName());
+        throw new IllegalStateException(
+                "Unsupported timestamp result type: " + value.getClass().getName());
     }
 }

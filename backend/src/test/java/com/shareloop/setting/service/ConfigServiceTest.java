@@ -5,10 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.entity.WebsiteAttribute;
 import com.shareloop.setting.repository.WebsiteAttributeRepository;
-import com.shareloop.audit.service.ActivityLogService;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;

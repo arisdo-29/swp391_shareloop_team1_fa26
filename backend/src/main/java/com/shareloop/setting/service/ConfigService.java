@@ -65,13 +65,19 @@ public class ConfigService {
 
     @Transactional
     public ConfigResponse update(ConfigKey key, String value, String reason, Long adminId) {
-        var attribute = repository.findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", key.key())
+        var attribute = repository
+                .findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", key.key())
                 .orElseThrow(() -> new IllegalArgumentException("Configuration key is not seeded: " + key.key()));
         String previousValue = attribute.getAttrValue();
         attribute.updateValue(value);
         repository.save(attribute);
-        activityLogService.log(adminId, "CONFIG_UPDATED", "CONFIG", null,
-                Map.of("key", key.key(), "oldValue", previousValue, "newValue", value), reason);
+        activityLogService.log(
+                adminId,
+                "CONFIG_UPDATED",
+                "CONFIG",
+                null,
+                Map.of("key", key.key(), "oldValue", previousValue, "newValue", value),
+                reason);
         return new ConfigResponse(key.key(), value, key.defaultValue());
     }
 }

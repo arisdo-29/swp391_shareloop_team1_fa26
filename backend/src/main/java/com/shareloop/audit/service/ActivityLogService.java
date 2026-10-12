@@ -14,7 +14,8 @@ public class ActivityLogService {
         this.repository = repository;
     }
 
-    public void log(Long actorId, String type, String targetType, Long targetId, Map<String, Object> data, String reason) {
+    public void log(
+            Long actorId, String type, String targetType, Long targetId, Map<String, Object> data, String reason) {
         repository.save(new ActivityLog(actorId, type, targetType, targetId, data, reason));
     }
 }
