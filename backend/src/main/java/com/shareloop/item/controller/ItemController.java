@@ -1,5 +1,6 @@
 package com.shareloop.item.controller;
 
+import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.item.dto.CreateItemRequest;
 import com.shareloop.item.dto.ItemResponse;
@@ -7,14 +8,18 @@ import com.shareloop.item.service.ItemService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "Item", description = "Quản lý bài đăng cho tặng và trao đổi đồ")
 @RestController
+@Validated
 public class ItemController {
 
     private final ItemService itemService;
@@ -63,6 +69,16 @@ public class ItemController {
     public List<ItemResponse> listMyItems(
             @io.swagger.v3.oas.annotations.Parameter(hidden = true) @CurrentUserId Long currentUserId) {
         return itemService.listMyItems(currentUserId);
+    }
+
+    @Operation(summary = "Danh sách bài đã duyệt")
+    @GetMapping("/api/v1/items")
+    public PageResponse<ItemResponse> listPublic(
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Long areaId,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return itemService.listPublicItems(categoryId, areaId, page, size);
     }
 
     private Long parseUserId(Jwt jwt) {

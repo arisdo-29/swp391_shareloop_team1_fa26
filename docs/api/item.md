@@ -94,6 +94,21 @@ Xem danh sách tất cả các bài đăng do chính mình tạo (sắp xếp m�
 
 ---
 
+## 4. GET /api/v1/items
+
+Danh sách bài `APPROVED` còn hiển thị, mới nhất trước. Không cần đăng nhập.
+
+Tham số tùy chọn: `categoryId`, `areaId` (lọc đúng id), `page` (từ 0, mặc định 0),
+`size` (1–100, mặc định 20). Kết quả là `PageResponse<ItemResponse>`:
+
+```json
+{ "items": [], "page": 0, "size": 20, "totalElements": 0 }
+```
+
+`400 VALIDATION_FAILED` khi tham số phân trang sai.
+
+---
+
 ## DTO Models
 
 ### CreateItemRequest
