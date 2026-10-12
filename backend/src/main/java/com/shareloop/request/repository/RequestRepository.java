@@ -26,6 +26,11 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
     List<Request> findByItemIdOrderByCreatedAtDesc(Long itemId);
 
     /**
+     * Danh sách yêu cầu gửi tới một bài đăng theo trạng thái cụ thể.
+     */
+    List<Request> findByItemIdAndStatus(Long itemId, RequestStatus status);
+
+    /**
      * Danh sách yêu cầu do người dùng gửi đi, sắp theo thời gian tạo mới nhất lên trước.
      */
     List<Request> findByReceiverIdOrderByCreatedAtDesc(Long receiverId);

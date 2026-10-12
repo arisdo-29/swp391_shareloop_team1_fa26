@@ -214,4 +214,18 @@ class ItemServiceTest {
         assertThat(response.id()).isEqualTo(102L);
         assertThat(response.images()).containsExactly("https://example.com/img1.jpg", "https://example.com/img2.jpg");
     }
+
+    @Test
+    @DisplayName("Giữ chỗ bài đăng thành công")
+    void reserve_success() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        ReflectionTestUtils.setField(item, "id", 1L);
+
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        itemService.reserve(1L);
+
+        assertThat(item.getStatus()).isEqualTo(ItemStatus.RESERVED);
+    }
 }
