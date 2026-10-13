@@ -11,8 +11,10 @@ import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.mapper.ItemMapper;
 import com.shareloop.item.repository.ItemRepository;
-import java.util.ArrayList;
+import com.shareloop.media.service.MediaService;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -26,13 +28,19 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class ItemService {
+    private static final Pattern MEDIA_URL = Pattern.compile("/api/v1/media/([1-9][0-9]*)");
 
     private final ItemRepository itemRepository;
     private final JdbcClient jdbcClient;
+    private final MediaService mediaService;
 
-    public ItemService(ItemRepository itemRepository, @Autowired(required = false) JdbcClient jdbcClient) {
+    public ItemService(
+            ItemRepository itemRepository,
+            @Autowired(required = false) JdbcClient jdbcClient,
+            MediaService mediaService) {
         this.itemRepository = itemRepository;
         this.jdbcClient = jdbcClient;
+        this.mediaService = mediaService;
     }
 
     /**
@@ -64,9 +72,11 @@ public class ItemService {
                 request.defectNote(),
                 request.brand());
 
+        List<Long> mediaIds = parseMediaIds(request.images());
+        mediaService.attach(mediaIds, donorId);
         Item saved = itemRepository.save(item);
-        List<String> savedImages = saveMediaMappings(saved.getId(), donorId, request.images());
-        return ItemMapper.toResponse(saved, savedImages);
+        saveMediaMappings(saved.getId(), mediaIds);
+        return ItemMapper.toResponse(saved, mediaUrls(mediaIds));
     }
 
     /**
@@ -141,45 +151,40 @@ public class ItemService {
         return itemRepository.findById(itemId).orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
     }
 
-    private List<String> saveMediaMappings(Long itemId, Long donorId, List<String> images) {
-        if (images == null || images.isEmpty() || jdbcClient == null) {
-            return images != null ? images : List.of();
+    private List<Long> parseMediaIds(List<String> images) {
+        if (images == null || images.isEmpty()) {
+            return List.of();
         }
-        List<String> savedImages = new ArrayList<>();
+        return images.stream()
+                .map(url -> {
+                    Matcher matcher = url == null ? null : MEDIA_URL.matcher(url);
+                    if (matcher == null || !matcher.matches()) {
+                        throw new BusinessException(ItemErrorCode.ITEM_INVALID_IMAGE);
+                    }
+                    try {
+                        return Long.parseLong(matcher.group(1));
+                    } catch (NumberFormatException exception) {
+                        throw new BusinessException(ItemErrorCode.ITEM_INVALID_IMAGE);
+                    }
+                })
+                .toList();
+    }
+
+    private List<String> mediaUrls(List<Long> mediaIds) {
+        return mediaIds.stream().map(id -> "/api/v1/media/" + id).toList();
+    }
+
+    private void saveMediaMappings(Long itemId, List<Long> mediaIds) {
         short order = 0;
-        for (String url : images) {
-            if (url == null || url.isBlank()) {
-                continue;
-            }
-            String cleanUrl = url.trim();
-            String storageKey = cleanUrl.length() > 300 ? cleanUrl.substring(0, 300) : cleanUrl;
-
-            Long mediaId = jdbcClient
-                    .sql("SELECT id FROM media_files WHERE storage_key = :key")
-                    .param("key", storageKey)
-                    .query(Long.class)
-                    .optional()
-                    .orElseGet(() -> jdbcClient
-                            .sql(
-                                    "INSERT INTO media_files (storage_key, mime_type, size_bytes, visibility, status, created_by, updated_by) "
-                                            + "VALUES (:key, 'image/jpeg', 0, 'PUBLIC', 'ATTACHED', :uid, :uid) RETURNING id")
-                            .param("key", storageKey)
-                            .param("uid", donorId)
-                            .query(Long.class)
-                            .single());
-
+        for (Long mediaId : mediaIds) {
             jdbcClient
-                    .sql(
-                            "INSERT INTO item_media_mappings (item_id, media_id, role, sort_order) "
-                                    + "VALUES (:itemId, :mediaId, 'PHOTO', :sortOrder) ON CONFLICT (item_id, media_id) DO NOTHING")
+                    .sql("INSERT INTO item_media_mappings (item_id, media_id, role, sort_order) "
+                            + "VALUES (:itemId, :mediaId, 'PHOTO', :sortOrder)")
                     .param("itemId", itemId)
                     .param("mediaId", mediaId)
                     .param("sortOrder", order++)
                     .update();
-
-            savedImages.add(cleanUrl);
         }
-        return savedImages;
     }
 
     private List<String> findImages(Long itemId) {
@@ -187,9 +192,9 @@ public class ItemService {
             return List.of();
         }
         return jdbcClient
-                .sql("SELECT m.storage_key FROM item_media_mappings imm "
+                .sql("SELECT '/api/v1/media/' || m.id FROM item_media_mappings imm "
                         + "JOIN media_files m ON imm.media_id = m.id "
-                        + "WHERE imm.item_id = :itemId ORDER BY imm.sort_order")
+                        + "WHERE imm.item_id = :itemId AND m.is_active AND NOT m.is_deleted ORDER BY imm.sort_order")
                 .param("itemId", itemId)
                 .query(String.class)
                 .list();
