@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.entity.WebsiteAttribute;
 import com.shareloop.setting.repository.WebsiteAttributeRepository;
@@ -15,7 +16,8 @@ import org.junit.jupiter.api.Test;
 class ConfigServiceTest {
 
     private final WebsiteAttributeRepository repository = mock(WebsiteAttributeRepository.class);
-    private final ConfigService service = new ConfigService(repository);
+    private final ActivityLogService activityLogService = mock(ActivityLogService.class);
+    private final ConfigService service = new ConfigService(repository, activityLogService);
 
     @Test
     void getIntReturnsStoredInteger() {

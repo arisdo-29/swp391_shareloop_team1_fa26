@@ -37,4 +37,8 @@ public class WebsiteAttribute extends BaseEntity {
     public String getAttrValue() {
         return attrValue;
     }
+
+    public void updateValue(String attrValue) {
+        this.attrValue = attrValue;
+    }
 }

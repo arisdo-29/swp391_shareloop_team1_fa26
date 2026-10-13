@@ -1,5 +1,6 @@
 package com.shareloop.setting.service;
 
+import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.dto.ConfigResponse;
 import com.shareloop.setting.repository.WebsiteAttributeRepository;
@@ -16,9 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConfigService {
 
     private final WebsiteAttributeRepository repository;
+    private final ActivityLogService activityLogService;
 
-    public ConfigService(WebsiteAttributeRepository repository) {
+    public ConfigService(WebsiteAttributeRepository repository, ActivityLogService activityLogService) {
         this.repository = repository;
+        this.activityLogService = activityLogService;
     }
 
     public List<ConfigResponse> listConfigs() {
@@ -58,5 +61,23 @@ public class ConfigService {
                     }
                 })
                 .orElse(key.getDefaultValue());
+    }
+
+    @Transactional
+    public ConfigResponse update(ConfigKey key, String value, String reason, Long adminId) {
+        var attribute = repository
+                .findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", key.key())
+                .orElseThrow(() -> new IllegalArgumentException("Configuration key is not seeded: " + key.key()));
+        String previousValue = attribute.getAttrValue();
+        attribute.updateValue(value);
+        repository.save(attribute);
+        activityLogService.log(
+                adminId,
+                "CONFIG_UPDATED",
+                "CONFIG",
+                null,
+                Map.of("key", key.key(), "oldValue", previousValue, "newValue", value),
+                reason);
+        return new ConfigResponse(key.key(), value, key.defaultValue());
     }
 }
