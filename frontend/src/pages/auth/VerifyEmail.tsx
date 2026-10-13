@@ -1,28 +1,25 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { actions, selectData } from '../../app/store';
-import { Alert, Button } from '../../components/ui';
-import { generateOtp, hashPassword, verifyPassword } from '../../utils/passwordSecurity';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Alert, Button, Field } from '../../components/ui';
+import { authApi } from '../../services/authApi';
+import { authErrorMessage } from '../../services/authErrors';
+import type { ApiError } from '../../services/http';
 
-const OTP_TTL_MS = 5 * 60 * 1000;
-const RESEND_WAIT_MS = 60 * 1000;
+type VerifyEmailState = {
+  email?: string;
+  resendCooldownSeconds?: number;
+};
 
 export function VerifyEmail() {
-  const data = useAppSelector(selectData);
-  const verification = data.emailVerification;
-  const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
+  const state = (location.state as VerifyEmailState | null) ?? {};
+  const [email, setEmail] = useState(state.email?.trim().toLowerCase() ?? '');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [processing, setProcessing] = useState(false);
-  const [seconds, setSeconds] = useState(0);
-
-  useEffect(() => {
-    if (!verification) return;
-    setSeconds(Math.max(0, Math.ceil((new Date(verification.resendAvailableAt).getTime() - Date.now()) / 1000)));
-  }, [verification]);
+  const [seconds, setSeconds] = useState(state.resendCooldownSeconds ?? 0);
 
   useEffect(() => {
     if (!seconds) return undefined;
@@ -31,30 +28,30 @@ export function VerifyEmail() {
   }, [seconds]);
 
   const resend = async () => {
-    if (!verification || seconds > 0) return;
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || seconds > 0) return;
     setError('');
     setNotice('');
     setProcessing(true);
-    const now = Date.now();
-    const generatedOtp = generateOtp();
-    dispatch(actions.resendRegistrationOtp({
-      verificationId: verification.id,
-      otpHash: await hashPassword(generatedOtp),
-      expiresAt: new Date(now + OTP_TTL_MS).toISOString(),
-      resendAvailableAt: new Date(now + RESEND_WAIT_MS).toISOString(),
-    }));
-    setSeconds(60);
-    setNotice('Mã OTP mới đã được gửi đến email của bạn.');
-    setProcessing(false);
+    try {
+      const result = await authApi.resendOtp(normalizedEmail);
+      setSeconds(result.resendCooldownSeconds);
+      setNotice('Mã OTP mới đã được gửi đến email của bạn.');
+    } catch (apiError) {
+      setError(authErrorMessage(apiError as ApiError));
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
     const code = otp.join('');
     setError('');
     setNotice('');
-    if (!verification) {
-      setError('Không tìm thấy phiên đăng ký. Vui lòng đăng ký lại.');
+    if (!normalizedEmail) {
+      setError('Vui lòng nhập email.');
       return;
     }
     if (!code) {
@@ -65,26 +62,15 @@ export function VerifyEmail() {
       setError('Mã OTP không hợp lệ.');
       return;
     }
-    if (Date.now() > new Date(verification.expiresAt).getTime()) {
-      setError('Mã OTP đã hết hạn. Vui lòng gửi lại mã.');
-      return;
-    }
-    if (verification.attempts >= 5) {
-      setError('Bạn đã nhập sai quá số lần cho phép. Vui lòng gửi lại mã.');
-      return;
-    }
     setProcessing(true);
-    const valid = await verifyPassword(code, verification.otpHash);
-    dispatch(actions.verifyRegistrationOtp({
-      verificationId: verification.id,
-      otpHash: valid ? verification.otpHash : '',
-    }));
-    setProcessing(false);
-    if (!valid) {
-      setError(verification.attempts + 1 >= 5 ? 'Bạn đã nhập sai quá số lần cho phép. Vui lòng gửi lại mã.' : 'Mã OTP không chính xác.');
-      return;
+    try {
+      await authApi.verifyOtp(normalizedEmail, code);
+      navigate('/login', { state: { notice: 'Đăng ký thành công. Vui lòng đăng nhập.' } });
+    } catch (apiError) {
+      setError(authErrorMessage(apiError as ApiError));
+    } finally {
+      setProcessing(false);
     }
-    navigate('/login', { state: { notice: 'Đăng ký thành công. Vui lòng đăng nhập.' } });
   };
 
   return (
@@ -94,17 +80,25 @@ export function VerifyEmail() {
         className="w-full max-w-md rounded-xl bg-white p-6 shadow-md ring-1 ring-border/70 sm:p-8"
       >
         <h1 className="text-2xl font-bold">Xác thực email</h1>
-        <p className="mt-2 text-sm leading-6 text-text-muted">Mã OTP đã được gửi đến email của bạn.</p>
-        {!verification ? (
+        <p className="mt-2 text-sm leading-6 text-text-muted">Nhập email và mã OTP đã được gửi đến email của bạn.</p>
+        {!email ? (
           <div className="mt-5">
             <Alert tone="warning">
-              Phiên xác thực không tồn tại. <Link to="/register" className="font-semibold underline">Đăng ký lại</Link>
+              Chưa có email xác thực. <Link to="/register" className="font-semibold underline">Đăng ký lại</Link>
             </Alert>
           </div>
         ) : null}
         {notice ? <div className="mt-5"><Alert tone="success">{notice}</Alert></div> : null}
         {error ? <div className="mt-5"><Alert tone="error">{error}</Alert></div> : null}
-        <div className="mt-7">
+        <div className="mt-7 space-y-4">
+          <Field
+            required
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            autoComplete="email"
+          />
           <div className="grid grid-cols-6 gap-2">
             {otp.map((value, index) => (
               <input
@@ -122,14 +116,14 @@ export function VerifyEmail() {
               />
             ))}
           </div>
-          <Button className="mt-5 w-full" disabled={processing || !verification}>
+          <Button className="w-full" disabled={processing}>
             {processing ? 'Đang xác nhận...' : 'Xác nhận'}
           </Button>
           <Button
             type="button"
             variant="ghost"
-            className="mt-2 w-full"
-            disabled={processing || !verification || seconds > 0}
+            className="w-full"
+            disabled={processing || !email.trim() || seconds > 0}
             onClick={() => void resend()}
           >
             {seconds > 0 ? `Gửi lại mã sau 00:${String(seconds).padStart(2, '0')}` : 'Gửi lại mã'}

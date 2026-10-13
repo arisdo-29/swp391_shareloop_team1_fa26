@@ -2,10 +2,11 @@ import { useMemo, useState, type Dispatch } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
-import { Button, Field, Icon, PageHeader } from '../../components/ui';
+import { Alert, Button, Field, Icon, PageHeader } from '../../components/ui';
 import type { CreditHistory, CreditHistoryType, Item, Topup } from '../../types/domain';
 import { formatCredit, formatVnd } from '../../utils/formatting';
 import { CREDIT_TO_VND } from '../../utils/credit';
+import { useWallet } from '../../app/WalletContext';
 
 const packages = [1, 2, 5, 10, 20];
 type Step = 'select' | 'qr' | 'pending';
@@ -48,19 +49,22 @@ export function Credit() {
   const [activeTopupId, setActiveTopupId] = useState('');
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
   const [selectedEntry, setSelectedEntry] = useState<CreditHistory | Topup | null>(null);
+  const { isApiAccount, wallet, loading: walletLoading, error: walletError } = useWallet();
 
-  const topups = data.topups.filter((topup) => topup.userId === user.id);
+  const topups = isApiAccount ? [] : data.topups.filter((topup) => topup.userId === user.id);
   const activeTopup = topups.find((topup) => topup.id === activeTopupId);
   const latestCompleted = topups.find((topup) => topup.status === 'completed');
   const paymentValue = creditAmount * CREDIT_TO_VND;
 
   const allHistory = useMemo(
     () =>
-      data.creditHistory
-        .filter((entry) => entry.userId === user.id)
-        .filter(isVisibleCreditHistory)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [data.creditHistory, user.id],
+      isApiAccount
+        ? []
+        : data.creditHistory
+            .filter((entry) => entry.userId === user.id)
+            .filter(isVisibleCreditHistory)
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [data.creditHistory, isApiAccount, user.id],
   );
 
   const history = useMemo(() => {
@@ -104,6 +108,17 @@ export function Credit() {
         description="Quản lý số dư, nạp Credit và theo dõi các giao dịch của bạn."
       />
 
+      {walletLoading ? (
+        <div className="mb-6">
+          <Alert>Đang tải số dư Credit...</Alert>
+        </div>
+      ) : null}
+      {walletError ? (
+        <div className="mb-6">
+          <Alert tone="error">{walletError}</Alert>
+        </div>
+      ) : null}
+
       {latestCompleted ? (
         <div className="mb-6 flex items-start gap-3 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-success">
           <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-white">
@@ -126,11 +141,16 @@ export function Credit() {
               Số dư Credit
             </div>
             <div className="mt-3 text-4xl font-bold tabular-nums sm:text-5xl">
-              {formatCredit(user.totalCredit)}
+              {isApiAccount
+                ? wallet
+                  ? formatCredit(wallet.creditBalance)
+                  : '--'
+                : formatCredit(user.totalCredit)}
             </div>
             <p className="mt-3 text-sm text-white/70">1 Credit = 1.000đ</p>
           </div>
           <button
+            disabled={isApiAccount}
             className="inline-flex min-h-11 items-center justify-center rounded-md bg-white px-4 py-2 text-sm font-bold text-primary shadow-sm transition duration-200 hover:bg-primary-soft active:translate-y-px"
             onClick={() => {
               setStep('select');
@@ -141,13 +161,15 @@ export function Credit() {
           </button>
         </div>
         <div className="grid border-t border-white/15 bg-white/5 sm:grid-cols-2">
-          <BalanceMetric label="Khả dụng" value={user.availableCredit} />
-          <BalanceMetric label="Đang giữ" value={user.holdCredit} bordered />
+          <BalanceMetric label="Khả dụng" value={isApiAccount ? wallet?.available ?? null : user.availableCredit} />
+          <BalanceMetric label="Đang giữ" value={isApiAccount ? wallet?.heldCredit ?? null : user.holdCredit} bordered />
         </div>
       </section>
 
       <section id="topup" className="mt-8 scroll-mt-24">
-        {step === 'select' ? (
+        {isApiAccount ? (
+          <Alert tone="warning">Backend chưa cung cấp API nạp Credit cho tài khoản này.</Alert>
+        ) : step === 'select' ? (
           <TopupSelection
             creditAmount={creditAmount}
             customAmount={customAmount}
@@ -195,6 +217,7 @@ export function Credit() {
         activeFilter={historyFilter}
         onFilterChange={setHistoryFilter}
         onSelect={setSelectedEntry}
+        unavailable={isApiAccount}
       />
       {selectedEntry ? (
         <CreditTransactionDetail
@@ -216,7 +239,7 @@ function BalanceMetric({
   bordered = false,
 }: {
   label: string;
-  value: number;
+  value: number | null;
   bordered?: boolean;
 }) {
   return (
@@ -224,7 +247,7 @@ function BalanceMetric({
       className={`px-6 py-4 sm:px-8 lg:px-10 ${bordered ? 'border-t border-white/15 sm:border-l sm:border-t-0' : ''}`}
     >
       <p className="text-xs font-medium text-white/60">{label}</p>
-      <p className="mt-1 text-xl font-bold tabular-nums">{value} Credit</p>
+      <p className="mt-1 text-xl font-bold tabular-nums">{value === null ? '--' : `${value} Credit`}</p>
     </div>
   );
 }
@@ -411,6 +434,7 @@ function CreditHistorySection({
   activeFilter,
   onFilterChange,
   onSelect,
+  unavailable = false,
 }: {
   items: Item[];
   allHistory: CreditHistory[];
@@ -419,6 +443,7 @@ function CreditHistorySection({
   activeFilter: HistoryFilter;
   onFilterChange: Dispatch<HistoryFilter>;
   onSelect: (entry: CreditHistory | Topup) => void;
+  unavailable?: boolean;
 }) {
   const countFor = (filter: HistoryFilter) => {
     const pendingCount = filter === 'all' || filter === 'topup' ? pendingTopups.length : 0;
@@ -434,6 +459,12 @@ function CreditHistorySection({
   return (
     <section className="mt-10">
       <h2 className="section-title">Lịch sử Credit</h2>
+      {unavailable ? (
+        <div className="mt-4 rounded-xl bg-white px-5 py-12 text-center text-sm text-text-muted ring-1 ring-border/80">
+          Backend chưa cung cấp API lịch sử Credit.
+        </div>
+      ) : (
+        <>
       <div className="mt-4 overflow-x-auto border-b border-border">
         <div className="flex min-w-max gap-1">
           {tabs.map(([id, label]) => (
@@ -483,6 +514,8 @@ function CreditHistorySection({
           </div>
         ) : null}
       </div>
+        </>
+      )}
     </section>
   );
 }

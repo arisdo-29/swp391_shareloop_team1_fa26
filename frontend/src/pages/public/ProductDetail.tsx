@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
@@ -7,11 +7,17 @@ import {
   Button,
   ConditionBadge,
   Icon,
+  ItemImage,
   OwnerCard,
   StatusBadge,
   TextArea,
   TypeBadge,
 } from '../../components/ui';
+import { catalogApi } from '../../services/catalogApi';
+import { itemApi } from '../../services/itemApi';
+import { requestApi, toBackendUserId, toFeItemRequest } from '../../services/requestApi';
+import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
+import type { Item, ItemRequest, User } from '../../types/domain';
 
 const requestStatusLabel = {
   PENDING: 'Chờ phản hồi',
@@ -32,7 +38,62 @@ export function ProductDetail() {
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [offeredItemId, setOfferedItemId] = useState('');
-  const item = data.items.find((x) => x.id === id);
+  const [apiItem, setApiItem] = useState<Item | null>(null);
+  const [apiOfferedItems, setApiOfferedItems] = useState<Item[]>([]);
+  const [apiSentRequests, setApiSentRequests] = useState<ItemRequest[]>([]);
+  const [loadingItem, setLoadingItem] = useState(false);
+  const [itemError, setItemError] = useState('');
+  const [requestSubmitting, setRequestSubmitting] = useState(false);
+  const mockItem = data.items.find((x) => x.id === id);
+  const isApiId = Boolean(id && /^\d+$/.test(id));
+  const item = isApiId ? apiItem : mockItem;
+  const currentUserId = toBackendUserId(user?.id);
+
+  useEffect(() => {
+    if (!id || !/^\d+$/.test(id)) return;
+    let active = true;
+    setLoadingItem(true);
+    setItemError('');
+    Promise.all([catalogApi.categories(), catalogApi.areas(), itemApi.detail(Number(id))])
+      .then(([categories, areas, detail]) => {
+        if (!active) return;
+        setApiItem(toFeItem(detail, toCategoryNameMap(categories), toAreaNameMap(areas)));
+      })
+      .catch(() => {
+        if (!active) return;
+        setApiItem(null);
+        setItemError('Không tải được chi tiết bài đăng.');
+      })
+      .finally(() => {
+        if (active) setLoadingItem(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  useEffect(() => {
+    if (!isApiId) return;
+    if (!currentUserId) {
+      setApiOfferedItems([]);
+      setApiSentRequests([]);
+      return;
+    }
+    let active = true;
+    Promise.all([catalogApi.categories(), catalogApi.areas(), itemApi.mine(), requestApi.mine(currentUserId)])
+      .then(([categories, areas, mine, requests]) => {
+        if (!active) return;
+        setApiOfferedItems(mine.map((entry) => toFeItem(entry, toCategoryNameMap(categories), toAreaNameMap(areas))));
+        setApiSentRequests(requests.map((entry) => toFeItemRequest(entry, user?.id)));
+      })
+      .catch(() => {
+        if (active) setApiOfferedItems([]);
+        if (active) setApiSentRequests([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentUserId, isApiId, user?.id]);
 
   const activeTransactionItemIds = useMemo(() => {
     const ids = new Set<string>();
@@ -46,6 +107,13 @@ export function ProductDetail() {
     return ids;
   }, [data.transactions]);
 
+  if (loadingItem)
+    return (
+      <div className="page-shell">
+        <Alert tone="warning">{itemError || 'Đang tải chi tiết bài đăng...'}</Alert>
+      </div>
+    );
+
   if (!item)
     return (
       <div className="page-shell">
@@ -53,13 +121,34 @@ export function ProductDetail() {
       </div>
     );
 
-  const owner = data.users.find((x) => x.id === item.ownerId)!;
+  const owner =
+    data.users.find((x) => x.id === item.ownerId) ??
+    ({
+      id: item.ownerId,
+      username: item.ownerId,
+      password: '',
+      name: item.ownerId.startsWith('api_') ? `Người đăng #${item.ownerId.replace('api_', '')}` : 'Người đăng',
+      email: '',
+      phone: '',
+      district: item.district,
+      avatarInitials: item.ownerId.startsWith('api_') ? item.ownerId.replace('api_', '').slice(0, 2) : 'ND',
+      totalCredit: 0,
+      availableCredit: 0,
+      holdCredit: 0,
+      rewardPoints: 0,
+      reputationStars: 5,
+      rank: 'Thành viên',
+      status: 'active',
+      role: 'user',
+      joinedAt: item.postedAt,
+      totalTx: 0,
+    } satisfies User);
   const own = user?.id === item.ownerId;
   const activeListing =
     (item.status === 'approved' || item.status === 'APPROVED') &&
-    new Date(item.expiresAt).getTime() >= Date.now();
+    (!item.expiresAt || new Date(item.expiresAt).getTime() >= Date.now());
   const existingRequest = user
-    ? data.itemRequests.find(
+    ? (isApiId ? apiSentRequests : data.itemRequests).find(
         (request) =>
           request.itemId === item.id &&
           request.requesterId === user.id &&
@@ -67,12 +156,12 @@ export function ProductDetail() {
       )
     : undefined;
   const eligibleOfferedItems = user
-    ? data.items.filter(
+    ? (isApiId ? apiOfferedItems : data.items).filter(
         (entry) =>
           entry.ownerId === user.id &&
           entry.id !== item.id &&
           (entry.status === 'approved' || entry.status === 'APPROVED') &&
-          new Date(entry.expiresAt).getTime() >= Date.now() &&
+          (!entry.expiresAt || new Date(entry.expiresAt).getTime() >= Date.now()) &&
           !activeTransactionItemIds.has(entry.id),
       )
     : [];
@@ -82,6 +171,10 @@ export function ProductDetail() {
     setRequestSuccess('');
     if (!user) {
       setLoginPromptOpen(true);
+      return;
+    }
+    if (isApiId && !currentUserId) {
+      setRequestError('Vui lòng đăng nhập bằng tài khoản thật để gửi yêu cầu.');
       return;
     }
     if (own || !activeListing) return;
@@ -96,10 +189,36 @@ export function ProductDetail() {
     setRequestOpen(true);
   };
 
-  const submitRequest = () => {
+  const submitRequest = async () => {
     if (!user) return;
     if (item.type === 'trade' && !offeredItemId) {
       setRequestError('Vui lòng chọn món bạn muốn dùng để trao đổi.');
+      return;
+    }
+    if (requestSubmitting) return;
+    if (isApiId) {
+      if (!currentUserId) {
+        setRequestError('Vui lòng đăng nhập bằng tài khoản thật để gửi yêu cầu.');
+        return;
+      }
+      setRequestSubmitting(true);
+      setRequestError('');
+      try {
+        const request = await requestApi.create(
+          Number(item.id),
+          currentUserId,
+          item.type === 'trade' ? Number(offeredItemId) : undefined,
+        );
+        setApiSentRequests((current) => [toFeItemRequest(request, user.id), ...current]);
+        setRequestOpen(false);
+        setMessage('');
+        setOfferedItemId('');
+        setRequestSuccess(item.type === 'gift' ? 'Đã gửi yêu cầu nhận.' : 'Đã gửi đề nghị trao đổi.');
+      } catch {
+        setRequestError('Không gửi được yêu cầu. Vui lòng thử lại.');
+      } finally {
+        setRequestSubmitting(false);
+      }
       return;
     }
     dispatch(
@@ -116,6 +235,25 @@ export function ProductDetail() {
     setRequestSuccess(item.type === 'gift' ? 'Đã gửi yêu cầu nhận.' : 'Đã gửi đề nghị trao đổi.');
   };
 
+  const cancelApiRequest = async (requestId: string) => {
+    if (!currentUserId || requestSubmitting) return;
+    const numericRequestId = Number(requestId.replace(/^api_req_/, ''));
+    if (!Number.isSafeInteger(numericRequestId)) return;
+    setRequestSubmitting(true);
+    setRequestError('');
+    try {
+      const request = await requestApi.cancel(numericRequestId, currentUserId);
+      setApiSentRequests((current) =>
+        current.map((entry) => (entry.id === requestId ? toFeItemRequest(request, user?.id) : entry)),
+      );
+      setRequestSuccess('Đã hủy yêu cầu.');
+    } catch {
+      setRequestError('Không hủy được yêu cầu. Vui lòng thử lại.');
+    } finally {
+      setRequestSubmitting(false);
+    }
+  };
+
   return (
     <div className="page-shell">
       <Link
@@ -127,7 +265,7 @@ export function ProductDetail() {
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
         <main className="min-w-0">
           <div className="overflow-hidden rounded-xl bg-surface-container">
-            <img src={item.images[0]} alt={item.title} className="aspect-[4/3] w-full object-cover" />
+            <ItemImage src={item.images[0]} alt={item.title} className="aspect-[4/3] w-full object-cover" />
           </div>
           <div className="mt-6 flex flex-wrap gap-2">
             <TypeBadge type={item.type} />
@@ -148,6 +286,16 @@ export function ProductDetail() {
             <p className="mt-3 max-w-3xl whitespace-pre-line text-[15px] leading-7 text-text-secondary">
               {item.description}
             </p>
+            {item.brand ? (
+              <p className="mt-3 text-sm text-text-secondary">
+                <strong>Thương hiệu:</strong> {item.brand}
+              </p>
+            ) : null}
+            {item.defectNote ? (
+              <p className="mt-3 text-sm text-text-secondary">
+                <strong>Lưu ý tình trạng:</strong> {item.defectNote}
+              </p>
+            ) : null}
             {item.tradeFor ? (
               <div className="mt-5 rounded-lg bg-secondary-soft p-4 text-sm leading-6 text-secondary">
                 <strong>Mong muốn trao đổi:</strong> {item.tradeFor}
@@ -191,6 +339,16 @@ export function ProductDetail() {
                 <p>{requestError}</p>
               </div>
             ) : null}
+            {isApiId && existingRequest?.status === 'PENDING' ? (
+              <Button
+                className="mt-3 w-full"
+                variant="outline"
+                disabled={requestSubmitting}
+                onClick={() => void cancelApiRequest(existingRequest.id)}
+              >
+                Hủy yêu cầu
+              </Button>
+            ) : null}
           </div>
           <OwnerCard owner={owner} />
         </aside>
@@ -227,7 +385,7 @@ export function ProductDetail() {
                         checked={offeredItemId === entry.id}
                         onChange={() => setOfferedItemId(entry.id)}
                       />
-                      <img src={entry.images[0]} alt="" className="size-12 rounded-md object-cover" />
+                      <ItemImage src={entry.images[0]} alt={entry.title} className="size-12 rounded-md object-cover" />
                       <span className="min-w-0 flex-1">
                         <strong className="block truncate text-sm">{entry.title}</strong>
                         <span className="text-xs text-text-muted">{entry.district}</span>
@@ -253,7 +411,7 @@ export function ProductDetail() {
               <Button variant="ghost" onClick={() => setRequestOpen(false)}>
                 Hủy
               </Button>
-              <Button onClick={submitRequest} disabled={item.type === 'trade' && !eligibleOfferedItems.length}>
+              <Button onClick={submitRequest} disabled={requestSubmitting || (item.type === 'trade' && !eligibleOfferedItems.length)}>
                 {item.type === 'gift' ? 'Gửi yêu cầu' : 'Gửi đề nghị trao đổi'}
               </Button>
             </div>

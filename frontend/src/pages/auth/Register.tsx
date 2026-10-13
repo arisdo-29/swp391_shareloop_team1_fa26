@@ -1,36 +1,19 @@
 import { type FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { actions, selectData } from '../../app/store';
-import { Alert, Button, Field, Select } from '../../components/ui';
+import { Alert, Button, Field } from '../../components/ui';
 import { PasswordField } from '../../components/PasswordField';
-import {
-  generateOtp,
-  hashPassword,
-  passwordRules,
-  validEmail,
-  validVietnamPhone,
-  validatePassword,
-} from '../../utils/passwordSecurity';
-
-const OTP_TTL_MS = 5 * 60 * 1000;
-const RESEND_WAIT_MS = 60 * 1000;
+import { validEmail, validVietnamPhone, validatePassword } from '../../utils/passwordSecurity';
+import { authApi } from '../../services/authApi';
+import { authErrorMessage } from '../../services/authErrors';
+import type { ApiError } from '../../services/http';
 
 export function Register() {
-  const data = useAppSelector(selectData);
-  const districts = data.districts
-    .filter((entry) => entry.status === 'active')
-    .map((entry) => entry.name);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
   const [phone, setPhone] = useState('');
-  const [district, setDistrict] = useState<string>(districts[0] ?? '');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState(false);
-  const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
   const submit = async (event: FormEvent) => {
@@ -38,7 +21,6 @@ export function Register() {
     const nextErrors: Record<string, string> = {};
     const trimmedName = name.trim();
     const trimmedEmail = email.trim().toLowerCase();
-    const trimmedUsername = username.trim();
     const trimmedPhone = phone.trim();
 
     if (!trimmedName) nextErrors.name = 'Vui lòng nhập họ và tên.';
@@ -46,48 +28,33 @@ export function Register() {
     else if (!validEmail(trimmedEmail)) nextErrors.email = 'Email không đúng định dạng.';
     if (!trimmedPhone) nextErrors.phone = 'Vui lòng nhập số điện thoại.';
     else if (!validVietnamPhone(trimmedPhone)) nextErrors.phone = 'Số điện thoại Việt Nam không hợp lệ.';
-    if (!trimmedUsername) nextErrors.username = 'Vui lòng nhập tên đăng nhập.';
     const passwordErrors = validatePassword(password);
     if (passwordErrors.length) nextErrors.password = passwordErrors[0];
-    if (!confirmPassword) nextErrors.confirmPassword = 'Vui lòng xác nhận mật khẩu.';
-    else if (password !== confirmPassword) nextErrors.confirmPassword = passwordRules.mismatch;
-    if (data.users.some((user) => user.username.toLowerCase() === trimmedUsername.toLowerCase())) {
-      nextErrors.username = 'Tên đăng nhập đã được sử dụng.';
-    }
-    if (data.users.some((user) => user.email.toLowerCase() === trimmedEmail)) {
-      nextErrors.email = 'Email đã được sử dụng.';
-    }
-    if (
-      data.emailVerification &&
-      (data.emailVerification.registration.username.toLowerCase() === trimmedUsername.toLowerCase() ||
-        data.emailVerification.registration.email.toLowerCase() === trimmedEmail)
-    ) {
-      nextErrors.email = 'Email này đang chờ xác thực. Vui lòng kiểm tra mã OTP.';
-    }
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
       return;
     }
 
+    setErrors({});
     setProcessing(true);
-    const now = Date.now();
-    const generatedOtp = generateOtp();
-    dispatch(actions.startRegistration({
-      registration: {
-        name: trimmedName,
+    try {
+      const result = await authApi.register({
         email: trimmedEmail,
-        username: trimmedUsername,
+        password,
+        fullName: trimmedName,
         phone: trimmedPhone,
-        district,
-        passwordHash: await hashPassword(password),
-      },
-      verificationId: crypto.randomUUID(),
-      otpHash: await hashPassword(generatedOtp),
-      expiresAt: new Date(now + OTP_TTL_MS).toISOString(),
-      resendAvailableAt: new Date(now + RESEND_WAIT_MS).toISOString(),
-    }));
-    setProcessing(false);
-    navigate('/verify-email');
+      });
+      navigate('/verify-email', {
+        state: {
+          email: result.email || trimmedEmail,
+          resendCooldownSeconds: result.resendCooldownSeconds,
+        },
+      });
+    } catch (apiError) {
+      setErrors({ form: authErrorMessage(apiError as ApiError) });
+    } finally {
+      setProcessing(false);
+    }
   };
 
   return (
@@ -119,43 +86,21 @@ export function Register() {
             error={errors.email}
             autoComplete="email"
           />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              required
-              label="Số điện thoại"
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-              error={errors.phone}
-              placeholder="09xx xxx xxx"
-              autoComplete="tel"
-            />
-            <Field
-              required
-              label="Tên đăng nhập"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              error={errors.username}
-              autoComplete="username"
-            />
-          </div>
-          <Select label="Quận" value={district} onChange={(event) => setDistrict(event.target.value)}>
-            {districts.map((entry) => (
-              <option key={entry}>{entry}</option>
-            ))}
-          </Select>
+          <Field
+            required
+            label="Số điện thoại"
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            error={errors.phone}
+            placeholder="09xx xxx xxx"
+            autoComplete="tel"
+          />
           <PasswordField
             label="Mật khẩu"
             value={password}
             onChange={setPassword}
             autoComplete="new-password"
             error={errors.password}
-          />
-          <PasswordField
-            label="Xác nhận mật khẩu"
-            value={confirmPassword}
-            onChange={setConfirmPassword}
-            autoComplete="new-password"
-            error={errors.confirmPassword}
           />
           <Button className="w-full" disabled={processing}>
             {processing ? 'Đang gửi mã...' : 'Đăng ký'}

@@ -153,7 +153,7 @@ export function loadPersistedState(): AppStateData {
       ...seedItems.filter((item) => !persistedItemIds.has(item.id)),
     ].map((item) => {
       const approved = item.status === 'approved' || item.status === 'APPROVED';
-      const expired = approved && new Date(item.expiresAt).getTime() < now;
+      const expired = approved && Boolean(item.expiresAt) && new Date(item.expiresAt!).getTime() < now;
       return {
         ...item,
         status: expired ? 'expired' : item.status,
