@@ -3,7 +3,7 @@
 Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất bên dưới.
 
-Bản demo gấp (chưa tích hợp ảnh, phí đăng bài, kiểm duyệt AI).
+Bản demo gấp (đã hỗ trợ gắn ảnh upload; chưa tích hợp phí đăng bài và kiểm duyệt AI).
 
 ---
 
@@ -26,7 +26,7 @@ Bản demo gấp (chưa tích hợp ảnh, phí đăng bài, kiểm duyệt AI).
   "defectNote": null,
   "brand": "NXB Giáo Dục",
   "images": [
-    "https://example.com/math1.jpg"
+    "/api/v1/media/42"
   ]
 }
 ```
@@ -52,7 +52,7 @@ Bản demo gấp (chưa tích hợp ảnh, phí đăng bài, kiểm duyệt AI).
   "defectNote": null,
   "brand": "NXB Giáo Dục",
   "images": [
-    "https://example.com/math1.jpg"
+    "/api/v1/media/42"
   ],
   "status": "PENDING_REVIEW",
   "createdAt": "2026-10-05T14:00:00Z",
@@ -64,6 +64,10 @@ Bản demo gấp (chưa tích hợp ảnh, phí đăng bài, kiểm duyệt AI).
   - `400 VALIDATION_FAILED`: Dữ liệu đầu vào không hợp lệ (thiếu trường bắt buộc, vượt độ dài).
   - `400 ITEM_SWAP_DESIRED_ITEM_REQUIRED`: Đăng bài SWAP nhưng thiếu món mong muốn.
   - `400 ITEM_DEFECT_NOTE_REQUIRED`: Đồ DEFECTIVE nhưng thiếu mô tả lỗi.
+  - `400 ITEM_INVALID_IMAGE`: `images[]` chứa URL không phải URL trả về từ `POST /api/v1/media`.
+  - `403 MEDIA_NOT_OWNER`: Ảnh không thuộc người đăng bài.
+  - `404 MEDIA_NOT_FOUND`: Không tìm thấy ảnh đã upload.
+  - `409 MEDIA_NOT_UPLOADED`: Ảnh đã gắn vào bài khác hoặc không còn dùng được.
   - `401 UNAUTHORIZED`: Chưa đăng nhập.
 
 ---
@@ -124,7 +128,7 @@ Tham số tùy chọn: `categoryId`, `areaId` (lọc đúng id), `page` (từ 0,
 | `condition` | string | Có | `NEW`, `LIKE_NEW`, `GOOD`, `DEFECTIVE` |
 | `defectNote` | string? | Điều kiện | Bắt buộc nếu `condition` là `DEFECTIVE` |
 | `brand` | string? | Không | Tối đa 80 ký tự |
-| `images` | array[string]? | Không | Danh sách URL ảnh đính kèm bài đăng |
+| `images` | array[string]? | Không | Danh sách URL `/api/v1/media/{id}` nhận từ `POST /api/v1/media`; chỉ gắn ảnh đã upload của chính người đăng |
 
 ### ItemResponse
 
@@ -141,7 +145,7 @@ Tham số tùy chọn: `categoryId`, `areaId` (lọc đúng id), `page` (từ 0,
 | `condition` | string | Tình trạng đồ |
 | `defectNote` | string? | Mô tả lỗi (nếu DEFECTIVE) |
 | `brand` | string? | Nhãn hiệu / Thương hiệu |
-| `images` | array[string] | Danh sách URL ảnh của bài đăng |
+| `images` | array[string] | Danh sách URL `/api/v1/media/{id}` của ảnh đã lưu |
 | `status` | string | `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `RESERVED`, `TRADED`, `EXPIRED` |
 | `createdAt` | string | Thời điểm tạo ISO-8601 UTC |
 | `updatedAt` | string | Thời điểm cập nhật ISO-8601 UTC |
@@ -155,5 +159,6 @@ Tham số tùy chọn: `categoryId`, `areaId` (lọc đúng id), `page` (từ 0,
 | `ITEM_NOT_FOUND` | 404 | Không tìm thấy bài đăng hoặc bài chưa duyệt mà người xem không phải chủ |
 | `ITEM_SWAP_DESIRED_ITEM_REQUIRED` | 400 | Bài đăng SWAP nhưng thiếu món mong muốn |
 | `ITEM_DEFECT_NOTE_REQUIRED` | 400 | Bài đăng có tình trạng DEFECTIVE nhưng thiếu mô tả lỗi |
+| `ITEM_INVALID_IMAGE` | 400 | URL ảnh không phải URL do API media trả về |
 | `VALIDATION_FAILED` | 400 | Sai định dạng hoặc thiếu trường bắt buộc |
 | `UNAUTHORIZED` | 401 | Thiếu token hoặc token không hợp lệ |

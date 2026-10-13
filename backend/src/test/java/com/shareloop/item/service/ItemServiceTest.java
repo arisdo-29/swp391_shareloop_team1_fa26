@@ -3,6 +3,9 @@ package com.shareloop.item.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -15,14 +18,17 @@ import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.repository.ItemRepository;
+import com.shareloop.media.service.MediaService;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Answers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,6 +36,12 @@ class ItemServiceTest {
 
     @Mock
     ItemRepository itemRepository;
+
+    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+    JdbcClient jdbcClient;
+
+    @Mock
+    MediaService mediaService;
 
     @InjectMocks
     ItemService itemService;
@@ -212,7 +224,7 @@ class ItemServiceTest {
                 ItemCondition.NEW,
                 null,
                 "NXB Trẻ",
-                List.of("https://example.com/img1.jpg", "https://example.com/img2.jpg"));
+                List.of("/api/v1/media/7", "/api/v1/media/8"));
 
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> {
             Item item = invocation.getArgument(0);
@@ -223,7 +235,30 @@ class ItemServiceTest {
         ItemResponse response = itemService.createItem(10L, request);
 
         assertThat(response.id()).isEqualTo(102L);
-        assertThat(response.images()).containsExactly("https://example.com/img1.jpg", "https://example.com/img2.jpg");
+        assertThat(response.images()).containsExactly("/api/v1/media/7", "/api/v1/media/8");
+        verify(mediaService).attach(List.of(7L, 8L), 10L);
+        verify(jdbcClient, times(2)).sql(startsWith("INSERT INTO item_media_mappings"));
+        verify(jdbcClient, never()).sql(startsWith("INSERT INTO media_files"));
+    }
+
+    @Test
+    void createItem_rejectsExternalImageUrl() {
+        CreateItemRequest request = new CreateItemRequest(
+                1L,
+                1L,
+                OfferType.GIVE,
+                "Book",
+                "Description",
+                null,
+                ItemCondition.NEW,
+                null,
+                null,
+                List.of("https://example.com/image.jpg"));
+
+        assertThatThrownBy(() -> itemService.createItem(10L, request))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_INVALID_IMAGE);
+        verify(itemRepository, never()).save(any(Item.class));
     }
 
     @Test
