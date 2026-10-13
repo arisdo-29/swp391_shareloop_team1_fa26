@@ -5,6 +5,7 @@ import type {
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as Icons from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
 import type { Item, ItemCondition, ItemType, TransactionStatus, User } from '../types/domain';
@@ -34,6 +35,7 @@ const iconMap = {
   shirt: Icons.TShirt,
   package: Icons.Package,
   messages: Icons.ChatCircleDots,
+  bell: Icons.Bell,
   admin: Icons.SquaresFour,
   logout: Icons.SignOut,
   user: Icons.UserCircle,
@@ -284,6 +286,77 @@ export function LoadingState() {
     </div>
   );
 }
+
+export function ItemImage({
+  src,
+  alt,
+  className = '',
+}: {
+  src?: string;
+  alt: string;
+  className?: string;
+}) {
+  const retryTimerRef = useRef<number | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const imageSrc = getRetryImageSrc(src, retryAttempt);
+
+  useEffect(() => {
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+    setFailed(false);
+    setRetryAttempt(0);
+    return () => {
+      if (retryTimerRef.current !== null) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+  }, [src]);
+
+  return src && !failed ? (
+    <img
+      key={`${imageSrc}:${retryAttempt}`}
+      src={imageSrc}
+      alt={alt}
+      className={className}
+      onError={() => {
+        if (retryAttempt < 2) {
+          if (retryTimerRef.current !== null) return;
+          retryTimerRef.current = window.setTimeout(() => {
+            retryTimerRef.current = null;
+            setRetryAttempt((current) => current + 1);
+          }, 800);
+          return;
+        }
+        setFailed(true);
+      }}
+    />
+  ) : (
+    <div role="img" aria-label={alt} className={`grid place-items-center bg-surface-container text-text-muted ${className}`}>
+      <Icon name="image" className="size-6" />
+    </div>
+  );
+}
+
+function getRetryImageSrc(src: string | undefined, retryAttempt: number) {
+  if (!src || retryAttempt <= 0 || hasSignedUrlQuery(src)) return src;
+  try {
+    const url = new URL(src, window.location.href);
+    url.searchParams.set('sl_image_retry', String(retryAttempt));
+    return url.toString();
+  } catch {
+    const separator = src.includes('?') ? '&' : '?';
+    return `${src}${separator}sl_image_retry=${retryAttempt}`;
+  }
+}
+
+function hasSignedUrlQuery(src: string) {
+  return /(?:[?&](?:x-amz-signature|x-goog-signature|signature|expires|policy|key-pair-id)=)/i.test(src);
+}
+
 export function Alert({
   tone = 'info',
   children,
@@ -309,7 +382,7 @@ export function ProductCard({ item, owner }: { item: Item; owner?: User }) {
       className="group block min-w-0 overflow-hidden rounded-lg bg-[#FFFAF5] ring-1 ring-border/80 transition duration-300 hover:-translate-y-1 hover:shadow-md hover:ring-primary/20"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-surface-container">
-        <img
+        <ItemImage
           src={item.images[0]}
           alt={item.title}
           className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
@@ -359,7 +432,7 @@ export function HorizontalProductCard({ item, owner }: { item: Item; owner?: Use
       to={`/items/${item.id}`}
       className="group flex min-w-0 gap-3 rounded-md p-2 transition hover:bg-primary-faint"
     >
-      <img
+      <ItemImage
         src={item.images[0]}
         alt={item.title}
         className="h-20 w-24 shrink-0 rounded-md object-cover"

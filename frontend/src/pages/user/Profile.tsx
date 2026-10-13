@@ -18,11 +18,13 @@ import { CREDIT_TO_VND } from '../../utils/credit';
 import { fileToDataUrl } from '../../utils/files';
 import { ChangePasswordForm } from '../../components/ChangePasswordForm';
 import { validEmail, validVietnamPhone } from '../../utils/passwordSecurity';
+import { useWallet } from '../../app/WalletContext';
 export function Profile() {
   const user = useAppSelector(selectCurrentUser)!;
   const isAdmin = user.role === 'admin';
   const data = useAppSelector(selectData);
   const dispatch = useAppDispatch();
+  const { isApiAccount, wallet } = useWallet();
   const [tab, setTab] = useState<'profile' | 'credit' | 'reputation' | 'password'>('profile');
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
   const [name, setName] = useState(user.name);
@@ -165,15 +167,15 @@ export function Profile() {
             <div className="space-y-6">
               <section className="rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
                 <div className="grid gap-6 sm:grid-cols-3">
-                  <Stat label="Tổng Credit" value={formatCredit(user.totalCredit)} />
+                  <Stat label="Tổng Credit" value={isApiAccount ? (wallet ? formatCredit(wallet.creditBalance) : '--') : formatCredit(user.totalCredit)} />
                   <Stat
                     label="Khả dụng"
-                    value={formatCredit(user.availableCredit)}
+                    value={isApiAccount ? (wallet ? formatCredit(wallet.available) : '--') : formatCredit(user.availableCredit)}
                     detail="Có thể dùng cho giao dịch"
                   />
                   <Stat
                     label="Đang giữ"
-                    value={formatCredit(user.holdCredit)}
+                    value={isApiAccount ? (wallet ? formatCredit(wallet.heldCredit) : '--') : formatCredit(user.holdCredit)}
                     detail="Chưa được chi tiêu"
                   />
                 </div>

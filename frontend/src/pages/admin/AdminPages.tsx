@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
@@ -18,6 +18,9 @@ import {
 } from '../../components/ui';
 import { CATEGORIES } from '../../constants/domain';
 import { formatVnd } from '../../utils/formatting';
+import { adminConfigApi, type AdminConfigResponse } from '../../services/adminConfigApi';
+import type { ApiError } from '../../services/http';
+import { toBackendUserId } from '../../services/requestApi';
 import type { AppStateData, ComplaintStatus, ForbiddenKeyword, Item, KeywordAction, RankRule, ReputationPointRule, SupportedDistrict, Transaction, User } from '../../types/domain';
 
 function Panel({
@@ -135,12 +138,37 @@ export function AdminModeration() {
   const data = useAppSelector(selectData);
   const admin = useAppSelector(selectCurrentUser)!;
   const dispatch = useAppDispatch();
+  const isApiAdmin = toBackendUserId(admin.id) !== null;
   const [query, setQuery] = useState('');
   const [reviewing, setReviewing] = useState<Item | null>(null);
   const [approving, setApproving] = useState<Item | null>(null);
   const [rejecting, setRejecting] = useState<Item | null>(null);
   const [toast, setToast] = useState('');
   const [checklist, setChecklist] = useState<Record<string, Record<string, boolean>>>({});
+
+  if (isApiAdmin) {
+    return (
+      <Panel
+        title="Duyệt bài"
+        description="Backend hiện chưa công bố API để Admin xem, duyệt hoặc từ chối bài chờ kiểm duyệt."
+      >
+        <div className="rounded-lg bg-white p-6 ring-1 ring-border/80">
+          <EmptyState
+            icon="shield"
+            title="Chưa có API duyệt bài cho tài khoản Backend"
+            text="OpenAPI live chưa có endpoint danh sách bài PENDING_REVIEW, xem chi tiết bài chờ duyệt, duyệt bài hoặc từ chối bài. Trang này không hiển thị dữ liệu mock cho Admin Backend để tránh nhầm với dữ liệu thật."
+          />
+          <div className="mt-5 rounded-md bg-amber-50 p-4 text-sm leading-6 text-warning">
+            <p className="font-semibold">Cần Backend bổ sung API trước khi có thể duyệt sản phẩm thật như #8.</p>
+            <p className="mt-1">
+              Tối thiểu cần API đọc danh sách bài chờ duyệt và API chuyển trạng thái sang APPROVED hoặc REJECTED theo quyền Admin.
+            </p>
+          </div>
+        </div>
+      </Panel>
+    );
+  }
+
   const pendingPosts = data.items.filter((i) => i.status === 'pending' || i.status === 'PENDING_REVIEW' || i.status === 'VIOLATION');
   const rows = pendingPosts.filter((item) => {
     const owner = data.users.find((user) => user.id === item.ownerId);
@@ -338,7 +366,10 @@ function ModerationDetailModal({
           <Info label="Khu vực" value={item.district} />
           <Info label="Tình trạng" value={conditionLabels[item.condition]} />
           <Info label="Ngày đăng" value={new Date(item.postedAt).toLocaleDateString('vi-VN')} />
-          <Info label="Ngày hết hạn" value={new Date(item.expiresAt).toLocaleDateString('vi-VN')} />
+          <Info
+            label="Ngày hết hạn"
+            value={item.expiresAt ? new Date(item.expiresAt).toLocaleDateString('vi-VN') : 'Không có'}
+          />
           <Info label="Kiểm tra tự động" value={automaticResult} />
         </div>
       </div>
@@ -1038,6 +1069,93 @@ export function AdminFinanceUserLookup() {
 
 export function AdminSettings() {
   const dispatch = useAppDispatch();
+  const admin = useAppSelector(selectCurrentUser)!;
+  const isApiAdmin = toBackendUserId(admin.id) !== null;
+  const [configs, setConfigs] = useState<AdminConfigResponse[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    if (!isApiAdmin) {
+      setConfigs([]);
+      setLoading(false);
+      setError('');
+      return;
+    }
+
+    let active = true;
+    setLoading(true);
+    setError('');
+    adminConfigApi
+      .list()
+      .then((response) => {
+        if (active) setConfigs(response);
+      })
+      .catch((apiError: ApiError) => {
+        if (!active) return;
+        setConfigs([]);
+        setError(
+          apiError.status === 403
+            ? 'Tài khoản hiện tại không đủ quyền xem cấu hình hệ thống.'
+            : 'Không tải được cấu hình hệ thống từ Backend.',
+        );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isApiAdmin, reloadKey]);
+
+  if (isApiAdmin) {
+    return (
+      <Panel title="Cấu hình hệ thống" description="Dữ liệu cấu hình đọc từ Backend. OpenAPI hiện chỉ cung cấp API đọc.">
+        <div className="max-w-4xl rounded-lg bg-white p-6 ring-1 ring-border/80">
+          <div className="rounded-md bg-primary-faint p-4 text-sm leading-6 text-text-secondary">
+            Các giá trị bên dưới đang ở chế độ chỉ đọc vì OpenAPI chỉ công bố
+            <span className="font-mono"> GET /api/v1/admin/configs</span>. Không có thao tác lưu hoặc reset cấu hình Backend trên màn này.
+          </div>
+
+          {loading ? (
+            <EmptyState title="Đang tải cấu hình" text="Vui lòng chờ trong giây lát." />
+          ) : error ? (
+            <div className="mt-5 rounded-md bg-red-50 p-4 text-sm leading-6 text-error">
+              <p>{error}</p>
+              <Button className="mt-3" size="sm" variant="outline" onClick={() => setReloadKey((current) => current + 1)}>
+                Thử lại
+              </Button>
+            </div>
+          ) : configs.length ? (
+            <div className="table-wrap mt-5">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Key</th>
+                    <th>Value</th>
+                    <th>Default Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {configs.map((config) => (
+                    <tr key={config.key}>
+                      <td className="font-mono text-xs">{config.key}</td>
+                      <td className="font-mono text-xs">{config.value}</td>
+                      <td className="font-mono text-xs">{config.defaultValue}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState title="Chưa có cấu hình" text="Backend không trả về cấu hình hệ thống nào." />
+          )}
+        </div>
+      </Panel>
+    );
+  }
+
   return (
     <Panel title="Cấu hình Credit" description="Giao dịch ShareLoop hiện miễn phí cho cả Swap và Give.">
       <div className="max-w-2xl rounded-lg bg-white p-6 ring-1 ring-border/80">
@@ -1786,7 +1904,13 @@ function AdminStaticContent({
   const selectedTx = alertRows.find((tx) => `alert_${tx.id}` === selectedAlertId);
   const rows =
     kind === 'expired'
-          ? data.items.filter((i) => i.status === 'expired').map((i) => [i.title, i.district, new Date(i.expiresAt).toLocaleDateString('vi-VN')])
+          ? data.items
+              .filter((i) => i.status === 'expired')
+              .map((i) => [
+                i.title,
+                i.district,
+                i.expiresAt ? new Date(i.expiresAt).toLocaleDateString('vi-VN') : 'Không có',
+              ])
           : [];
   if (kind === 'locked') {
     return (
@@ -1872,7 +1996,9 @@ function AdminStaticContent({
                       <td className="font-semibold">{item.title}</td>
                       <td>{owner?.name ?? item.ownerId}</td>
                       <td>{new Date(item.postedAt).toLocaleDateString('vi-VN')}</td>
-                      <td>{new Date(item.expiresAt).toLocaleDateString('vi-VN')}</td>
+                      <td>
+                        {item.expiresAt ? new Date(item.expiresAt).toLocaleDateString('vi-VN') : 'Không có'}
+                      </td>
                       <td><StatusBadge status={item.status} /></td>
                       <td><Button size="sm" variant="outline" onClick={() => setSelectedExpired(item)}>Kiểm tra</Button></td>
                     </tr>
@@ -1905,7 +2031,6 @@ function AdminStaticContent({
       <Panel
         title={title}
         description={description}
-        action={<Button icon="add" onClick={() => setEditingCategory(emptyCategory())}>Thêm danh mục</Button>}
       >
         <div className="table-wrap">
           <table className="data-table">
@@ -1938,7 +2063,6 @@ function AdminStaticContent({
             onClose={() => setEditingCategory(null)}
             onSave={(nextCategory) => {
               setCategories((current) => {
-                if (!editingCategory.id) return [...current, { ...nextCategory, id: nextCategory.code || nextCategory.name }];
                 return current.map((entry) => entry.id === editingCategory.id ? { ...nextCategory, id: editingCategory.id } : entry);
               });
               setEditingCategory(null);
@@ -2058,16 +2182,6 @@ type CategoryRow = {
   status: 'active' | 'hidden';
 };
 
-function emptyCategory(): CategoryRow {
-  return {
-    id: '',
-    name: '',
-    code: '',
-    description: '',
-    status: 'active',
-  };
-}
-
 function CategoryModal({
   category,
   onClose,
@@ -2084,7 +2198,7 @@ function CategoryModal({
   const [status, setStatus] = useState<CategoryRow['status']>(category.status);
   const protectedCategory = CATEGORIES.some((entry) => entry === category.id);
   return (
-    <Modal title={category.id ? 'Chỉnh sửa danh mục' : 'Thêm danh mục'} onClose={onClose}>
+    <Modal title="Chỉnh sửa danh mục" onClose={onClose}>
       <Field label="Tên danh mục" value={name} disabled={protectedCategory} onChange={(event) => setName(event.target.value)} />
       <Field className="mt-4" label="Mã danh mục" value={code} disabled={protectedCategory} onChange={(event) => setCode(event.target.value)} />
       <TextArea className="mt-4" label="Mô tả" value={description} onChange={(event) => setDescription(event.target.value)} />
@@ -2120,7 +2234,10 @@ function ExpiredPostModal({
           <Info label="Món đồ" value={item.title} />
           <Info label="Người đăng" value={owner?.name ?? item.ownerId} />
           <Info label="Ngày đăng" value={new Date(item.postedAt).toLocaleDateString('vi-VN')} />
-          <Info label="Ngày hết hạn" value={new Date(item.expiresAt).toLocaleDateString('vi-VN')} />
+          <Info
+            label="Ngày hết hạn"
+            value={item.expiresAt ? new Date(item.expiresAt).toLocaleDateString('vi-VN') : 'Không có'}
+          />
           <Info label="Trạng thái hiện tại" value="Hết hạn" />
           <Info label="Khu vực" value={item.district} />
         </div>
