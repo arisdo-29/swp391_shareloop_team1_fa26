@@ -1,43 +1,96 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { actions, selectCurrentUser, selectData } from '../../app/store';
+import { useAppSelector } from '../../app/hooks';
+import { selectCurrentUser } from '../../app/store';
 import { Alert, Button, Field, Icon, PageHeader, Select, TextArea } from '../../components/ui';
-import { CATEGORIES, CONDITIONS } from '../../constants/domain';
+import { CONDITIONS } from '../../constants/domain';
 import { CREDIT_TO_VND, POST_LISTING_FEE } from '../../utils/credit';
 import { conditionLabel } from '../../utils/formatting';
 import type { ItemCondition, ItemType } from '../../types/domain';
 import { fileToDataUrl } from '../../utils/files';
+import { catalogApi } from '../../services/catalogApi';
+import { toAreaOptions, toCategoryIdByName, toCategoryNames, type AreaOption } from '../../services/mappers';
+import { itemApi, type ApiCondition } from '../../services/itemApi';
+import { mediaApi } from '../../services/mediaApi';
+import { resolveMediaUrl } from '../../services/mediaUrl';
+import { toBackendUserId } from '../../services/requestApi';
+import { useWallet } from '../../app/WalletContext';
 
 type FormErrors = Partial<Record<'type' | 'title' | 'category' | 'condition' | 'district' | 'description' | 'images', string>>;
+type MediaUploadState = 'idle' | 'uploading' | 'error';
 
 const POST_FEE_SUCCESS =
-  'Đăng bài thành công. 5 Credit đã được trừ. Bài đăng đã được gửi để xét duyệt.';
+  'Đăng bài trao đổi thành công. Bài đăng đã được gửi để xét duyệt.';
 const FREE_GIFT_SUCCESS =
   'Đăng bài cho tặng thành công. Bài đăng đã được gửi để xét duyệt.';
+const PENDING_REVIEW_NOTICE = 'Bài đăng đang chờ quản trị viên duyệt.';
 const INSUFFICIENT_CREDIT = 'Bạn không đủ Credit để đăng bài.';
+const BACKEND_SESSION_REQUIRED = 'Vui lòng đăng nhập bằng tài khoản thật để đăng bài.';
+const SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST =
+  import.meta.env.DEV && import.meta.env.VITE_POST_SKIP_MEDIA_UPLOAD === 'true';
+
+const CONDITION_TO_API: Record<ItemCondition, ApiCondition> = {
+  new: 'NEW',
+  good: 'GOOD',
+  used: 'DEFECTIVE',
+};
 
 export function Post() {
   const user = useAppSelector(selectCurrentUser)!;
-  const data = useAppSelector(selectData);
-  const dispatch = useAppDispatch();
+  const { isApiAccount, wallet, loading: walletLoading, error: walletError } = useWallet();
   const navigate = useNavigate();
-  const districts = data.districts
-    .filter((entry) => entry.status === 'active')
-    .map((entry) => entry.name);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [districts, setDistricts] = useState<AreaOption[]>([]);
+  const [categoryIds, setCategoryIds] = useState<Map<string, number>>(new Map());
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState('');
   const [type, setType] = useState<ItemType | ''>('');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
   const [condition, setCondition] = useState<ItemCondition | ''>('');
-  const [district, setDistrict] = useState(user.district);
+  const [district, setDistrict] = useState('');
   const [description, setDescription] = useState('');
   const [tradeFor, setTradeFor] = useState('');
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [images, setImages] = useState<string[]>([]);
+  const [uploadedImageUrls, setUploadedImageUrls] = useState<Map<File, string>>(new Map());
+  const [mediaUploadState, setMediaUploadState] = useState<MediaUploadState>('idle');
+  const [mediaUploadError, setMediaUploadError] = useState('');
   const [error, setError] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submitInFlight = useRef(false);
   const feeVnd = POST_LISTING_FEE * CREDIT_TO_VND;
+  const currentUserId = toBackendUserId(user.id);
+  const mediaUploading = mediaUploadState === 'uploading';
+  const availableCredit = isApiAccount ? wallet?.available ?? null : user.availableCredit;
+
+  useEffect(() => {
+    let active = true;
+    setCatalogLoading(true);
+    setCatalogError('');
+    Promise.all([catalogApi.categories(), catalogApi.areas()])
+      .then(([categoryData, areaData]) => {
+        if (!active) return;
+        setCategories(toCategoryNames(categoryData));
+        setDistricts(toAreaOptions(areaData));
+        setCategoryIds(toCategoryIdByName(categoryData));
+      })
+      .catch(() => {
+        if (!active) return;
+        setCategories([]);
+        setDistricts([]);
+        setCategoryIds(new Map());
+        setCatalogError('Không tải được danh mục hoặc khu vực. Vui lòng thử lại.');
+      })
+      .finally(() => {
+        if (active) setCatalogLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const validate = () => {
     const nextErrors: FormErrors = {};
@@ -47,7 +100,6 @@ export function Post() {
     if (!condition) nextErrors.condition = 'Vui lòng chọn tình trạng món đồ.';
     if (!district) nextErrors.district = 'Vui lòng chọn khu vực.';
     if (!description.trim()) nextErrors.description = 'Vui lòng nhập mô tả.';
-    if (!images.length) nextErrors.images = 'Vui lòng thêm ít nhất một hình ảnh.';
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -55,11 +107,19 @@ export function Post() {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    if (user.reputationStars <= 0) {
+    if (!isApiAccount && user.reputationStars <= 0) {
       setError('Uy tín của bạn đang ở mức 0 nên hiện không thể đăng bài mới.');
       return;
     }
-    if (type === 'trade' && user.availableCredit < POST_LISTING_FEE) {
+    if (!currentUserId) {
+      setError(BACKEND_SESSION_REQUIRED);
+      return;
+    }
+    if (type === 'trade' && availableCredit === null) {
+      setError(walletLoading ? 'Đang tải số dư Credit. Vui lòng chờ trong giây lát.' : walletError || 'Chưa thể xác minh số dư Credit.');
+      return;
+    }
+    if (type === 'trade' && availableCredit !== null && availableCredit < POST_LISTING_FEE) {
       setError(INSUFFICIENT_CREDIT);
       setConfirmOpen(false);
       return;
@@ -68,33 +128,87 @@ export function Post() {
     setConfirmOpen(true);
   };
 
-  const confirmSubmit = () => {
-    if (submitting) return;
+  const confirmSubmit = async () => {
+    if (submitInFlight.current) return;
     if (!validate()) {
       setConfirmOpen(false);
       return;
     }
-    if (type === 'trade' && user.availableCredit < POST_LISTING_FEE) {
+    if (type === 'trade' && availableCredit === null) {
+      setError(walletLoading ? 'Đang tải số dư Credit. Vui lòng chờ trong giây lát.' : walletError || 'Chưa thể xác minh số dư Credit.');
+      setConfirmOpen(false);
+      return;
+    }
+    if (type === 'trade' && availableCredit !== null && availableCredit < POST_LISTING_FEE) {
       setError(INSUFFICIENT_CREDIT);
       setConfirmOpen(false);
       return;
     }
+    if (!currentUserId) {
+      setError(BACKEND_SESSION_REQUIRED);
+      setConfirmOpen(false);
+      return;
+    }
     if (!type || !condition) return;
+    const categoryId = categoryIds.get(category);
+    const areaId = Number(district);
+    if (!categoryId || !areaId) {
+      setError('Danh mục hoặc khu vực chưa hợp lệ. Vui lòng chọn lại.');
+      setConfirmOpen(false);
+      return;
+    }
+    submitInFlight.current = true;
     setSubmitting(true);
-    dispatch(
-      actions.addItem({
-        ownerId: user.id,
-        title: title.trim(),
-        description: description.trim(),
-        type,
-        category,
-        condition,
-        district,
-        images,
-        tradeFor: type === 'trade' ? tradeFor.trim() || undefined : undefined,
-      }),
-    );
-    navigate('/activities', { state: { notice: type === 'gift' ? FREE_GIFT_SUCCESS : POST_FEE_SUCCESS } });
+    setError('');
+    setMediaUploadError('');
+    try {
+      const uploadedUrls = new Map(uploadedImageUrls);
+      if (!SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST && imageFiles.length) {
+        setMediaUploadState('uploading');
+        try {
+          for (const file of imageFiles) {
+            if (uploadedUrls.has(file)) continue;
+            const media = await mediaApi.upload(file);
+            const url = resolveMediaUrl(media.url);
+            if (!url) throw new Error('Media API did not return an image URL.');
+            uploadedUrls.set(file, url);
+            setUploadedImageUrls(new Map(uploadedUrls));
+          }
+        } catch {
+          setMediaUploadState('error');
+          setMediaUploadError('Không tải được ảnh lên. Các ảnh đã tải thành công sẽ được giữ lại khi thử lại.');
+          setConfirmOpen(false);
+          return;
+        }
+      }
+      setMediaUploadState('idle');
+      const itemImages = SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST
+        ? []
+        : imageFiles.map((file) => uploadedUrls.get(file)).filter((url): url is string => Boolean(url));
+      const item = await itemApi.create(
+        {
+          categoryId,
+          areaId,
+          offerType: type === 'gift' ? 'GIVE' : 'SWAP',
+          title: title.trim(),
+          description: description.trim(),
+          desiredItem: type === 'trade' ? tradeFor.trim() || null : null,
+          condition: CONDITION_TO_API[condition],
+          defectNote: null,
+          brand: null,
+          images: itemImages,
+        },
+      );
+      const baseNotice = type === 'gift' ? FREE_GIFT_SUCCESS : POST_FEE_SUCCESS;
+      const reviewNotice = item.status === 'PENDING_REVIEW' ? ` ${PENDING_REVIEW_NOTICE}` : '';
+      navigate('/activities', { state: { notice: `${baseNotice}${reviewNotice} Mã bài: #${item.id}.` } });
+    } catch {
+      setError('Không đăng được bài. Vui lòng kiểm tra thông tin và thử lại.');
+      setConfirmOpen(false);
+    } finally {
+      submitInFlight.current = false;
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -164,7 +278,9 @@ export function Post() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Select label="Danh mục" value={category} onChange={(e) => setCategory(e.target.value)}>
               <option value="">Chọn danh mục</option>
-              {CATEGORIES.map((c) => (
+              {catalogLoading ? <option disabled>Đang tải danh mục...</option> : null}
+              {!catalogLoading && !categories.length ? <option disabled>Chưa có danh mục</option> : null}
+              {categories.map((c) => (
                 <option key={c}>{c}</option>
               ))}
             </Select>
@@ -192,11 +308,14 @@ export function Post() {
             onChange={(e) => setDistrict(e.target.value)}
           >
             <option value="">Chọn khu vực</option>
+            {catalogLoading ? <option disabled>Đang tải khu vực...</option> : null}
+            {!catalogLoading && !districts.length ? <option disabled>Chưa có khu vực</option> : null}
             {districts.map((d) => (
-              <option key={d}>{d}</option>
+              <option key={d.id} value={d.id}>{d.label}</option>
             ))}
           </Select>
           {errors.district ? <span className="mt-[-14px] block text-xs text-error">{errors.district}</span> : null}
+          {catalogError ? <span className="mt-[-14px] block text-xs text-error">{catalogError}</span> : null}
           <TextArea
             label="Mô tả"
             value={description}
@@ -223,14 +342,45 @@ export function Post() {
               type="file"
               accept="image/*"
               multiple
+              disabled={submitting || mediaUploading}
               onChange={async (event) => {
-                const files = Array.from(event.target.files ?? []).slice(0, 6);
-                setImages(await Promise.all(files.map(fileToDataUrl)));
-                setErrors((current) => ({ ...current, images: undefined }));
+                const selectedFiles = Array.from(event.target.files ?? []);
+                const files = selectedFiles.slice(0, 6);
+                setMediaUploadState('idle');
+                setMediaUploadError('');
+                if (selectedFiles.length > 6) {
+                  setErrors((current) => ({ ...current, images: 'Chỉ được chọn tối đa 6 ảnh.' }));
+                } else if (files.some((file) => !file.type.startsWith('image/'))) {
+                  setErrors((current) => ({ ...current, images: 'Vui lòng chỉ chọn tệp hình ảnh.' }));
+                  setImageFiles([]);
+                  setImages([]);
+                  setUploadedImageUrls(new Map());
+                  return;
+                } else {
+                  setErrors((current) => ({ ...current, images: undefined }));
+                }
+                try {
+                  const previews = await Promise.all(files.map(fileToDataUrl));
+                  setImageFiles(files);
+                  setImages(previews);
+                  setUploadedImageUrls((current) =>
+                    new Map(files.flatMap((file) => {
+                      const url = current.get(file);
+                      return url ? [[file, url] as const] : [];
+                    })),
+                  );
+                } catch {
+                  setImageFiles([]);
+                  setImages([]);
+                  setUploadedImageUrls(new Map());
+                  setMediaUploadState('error');
+                  setMediaUploadError('Không đọc được ảnh đã chọn. Vui lòng chọn lại.');
+                }
               }}
             />
           </label>
           {errors.images ? <span className="block text-xs text-error">{errors.images}</span> : null}
+          {mediaUploadError ? <span className="block text-xs text-error">{mediaUploadError}</span> : null}
           {images.length ? (
             <div className="grid grid-cols-3 gap-2">
               {images.map((image, index) => (
@@ -243,7 +393,19 @@ export function Post() {
                   <button
                     type="button"
                     aria-label="Xóa ảnh"
-                    onClick={() => setImages(images.filter((_, itemIndex) => itemIndex !== index))}
+                    disabled={submitting || mediaUploading}
+                    onClick={() => {
+                      const removedFile = imageFiles[index];
+                      setImageFiles(imageFiles.filter((_, itemIndex) => itemIndex !== index));
+                      setImages(images.filter((_, itemIndex) => itemIndex !== index));
+                      setUploadedImageUrls((current) => {
+                        const next = new Map(current);
+                        if (removedFile) next.delete(removedFile);
+                        return next;
+                      });
+                      setMediaUploadState('idle');
+                      setMediaUploadError('');
+                    }}
                     className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-white text-error shadow-sm"
                   >
                     <Icon name="close" className="size-3" />
@@ -271,7 +433,7 @@ export function Post() {
               </>
             )}
           </div>
-          <Button className="w-full" size="lg">
+          <Button className="w-full" size="lg" disabled={mediaUploading}>
             Đăng bài
           </Button>
         </aside>
@@ -297,17 +459,17 @@ export function Post() {
                 label={type === 'gift' ? 'Phí đăng bài' : 'Phí đăng bài'}
                 value={type === 'gift' ? 'Miễn phí' : `${POST_LISTING_FEE} Credit`}
               />
-              <SummaryRow label="Số dư hiện tại" value={`${user.availableCredit} Credit`} />
+              <SummaryRow label="Số dư hiện tại" value={availableCredit === null ? '--' : `${availableCredit} Credit`} />
               <SummaryRow
                 label="Số dư sau khi đăng"
-                value={`${type === 'gift' ? user.availableCredit : user.availableCredit - POST_LISTING_FEE} Credit`}
+                value={availableCredit === null ? '--' : `${availableCredit} Credit`}
               />
             </div>
             <div className="mt-6 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={submitting}>
+              <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={submitting || mediaUploading}>
                 Hủy
               </Button>
-              <Button onClick={confirmSubmit} disabled={submitting}>
+              <Button onClick={confirmSubmit} disabled={submitting || mediaUploading}>
                 {submitting ? 'Đang đăng...' : 'Xác nhận đăng bài'}
               </Button>
             </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
@@ -9,12 +9,18 @@ import {
   ConditionBadge,
   EmptyState,
   Field,
+  ItemImage,
   PageHeader,
   StatusBadge,
   TextArea,
   TypeBadge,
 } from '../../components/ui';
 import { RECEIVE_ITEM_FEE } from '../../utils/credit';
+import { catalogApi } from '../../services/catalogApi';
+import { itemApi } from '../../services/itemApi';
+import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
+import { requestApi, toBackendUserId, toFeItemRequest } from '../../services/requestApi';
+import type { Item, ItemRequest, User } from '../../types/domain';
 
 const requestStatusLabel = {
   PENDING: 'Chờ phản hồi',
@@ -34,20 +40,141 @@ export function Activities() {
   const [requestsItemId, setRequestsItemId] = useState('');
   const [acceptConfirmId, setAcceptConfirmId] = useState('');
   const [acceptError, setAcceptError] = useState('');
+  const [selectNotice, setSelectNotice] = useState('');
+  const [selectingRequestId, setSelectingRequestId] = useState('');
   const [editNotice, setEditNotice] = useState('');
   const [draftTitle, setDraftTitle] = useState('');
   const [draftDescription, setDraftDescription] = useState('');
+  const [myItems, setMyItems] = useState<Item[]>([]);
+  const [apiRequestsByItem, setApiRequestsByItem] = useState<Record<string, ItemRequest[]>>({});
+  const [apiSentRequests, setApiSentRequests] = useState<ItemRequest[]>([]);
+  const [myItemsLoading, setMyItemsLoading] = useState(true);
+  const [myItemsError, setMyItemsError] = useState('');
+  const [cancelingRequestId, setCancelingRequestId] = useState('');
+  const selectInFlight = useRef(false);
+  const currentUserId = toBackendUserId(user.id);
 
   useEffect(() => {
     dispatch(actions.refreshExpiredItems());
   }, [dispatch]);
 
-  const myItems = useMemo(() => data.items.filter((i) => i.ownerId === user.id), [data.items, user.id]);
+  useEffect(() => {
+    let active = true;
+    setMyItemsLoading(true);
+    setMyItemsError('');
+    if (!currentUserId) {
+      setMyItems(data.items.filter((item) => item.ownerId === user.id));
+      setApiRequestsByItem({});
+      setApiSentRequests([]);
+      setMyItemsLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+    Promise.all([catalogApi.categories(), catalogApi.areas(), itemApi.mine(), requestApi.mine(currentUserId)])
+      .then(async ([categories, areas, items, sentRequests]) => {
+        if (!active) return;
+        const categoryNames = toCategoryNameMap(categories);
+        const areaNames = toAreaNameMap(areas);
+        const mappedItems = items.map((item) => toFeItem(item, categoryNames, areaNames));
+        const requestEntries = await Promise.all(
+          mappedItems.map(async (item) => {
+            const requests = await requestApi.forItem(Number(item.id), currentUserId);
+            return [item.id, requests.map((request) => toFeItemRequest(request))] as const;
+          }),
+        );
+        if (!active) return;
+        setMyItems(mappedItems);
+        setApiRequestsByItem(Object.fromEntries(requestEntries));
+        setApiSentRequests(sentRequests.map((request) => toFeItemRequest(request, user.id)));
+      })
+      .catch(() => {
+        if (!active) return;
+        setMyItems([]);
+        setApiRequestsByItem({});
+        setApiSentRequests([]);
+        setMyItemsError('Không tải được bài đăng của bạn.');
+      })
+      .finally(() => {
+        if (active) setMyItemsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentUserId, data.items, user.id]);
   const txs = data.transactions.filter((t) => t.ownerId === user.id || t.requesterId === user.id);
-  const acceptRequest = data.itemRequests.find((request) => request.id === acceptConfirmId);
-  const acceptItem = data.items.find((item) => item.id === acceptRequest?.itemId);
-  const acceptRequester = data.users.find((entry) => entry.id === acceptRequest?.requesterId);
+  const acceptApiRequest = Object.values(apiRequestsByItem)
+    .flat()
+    .find((request) => request.id === acceptConfirmId);
+  const acceptRequest = acceptApiRequest ?? data.itemRequests.find((request) => request.id === acceptConfirmId);
+  const acceptItem = (acceptApiRequest ? myItems : data.items).find((item) => item.id === acceptRequest?.itemId);
+  const acceptRequester = acceptRequest
+    ? data.users.find((entry) => entry.id === acceptRequest.requesterId) ?? apiDisplayUser(acceptRequest.requesterId)
+    : undefined;
   const acceptOfferedItem = data.items.find((item) => item.id === acceptRequest?.offeredItemId);
+  const cancelApiRequest = async (requestId: string) => {
+    if (!currentUserId || cancelingRequestId) return;
+    const numericRequestId = Number(requestId.replace(/^api_req_/, ''));
+    if (!Number.isSafeInteger(numericRequestId)) return;
+    setCancelingRequestId(requestId);
+    try {
+      const request = await requestApi.cancel(numericRequestId, currentUserId);
+      setApiSentRequests((current) =>
+        current.map((entry) => (entry.id === requestId ? toFeItemRequest(request, user.id) : entry)),
+      );
+    } catch {
+      setMyItemsError('Không hủy được yêu cầu. Vui lòng thử lại.');
+    } finally {
+      setCancelingRequestId('');
+    }
+  };
+
+  const selectApiRequest = async (request: ItemRequest) => {
+    if (!currentUserId || selectInFlight.current || request.status !== 'PENDING') return;
+    const numericRequestId = Number(request.id.replace(/^api_req_/, ''));
+    const numericItemId = Number(request.itemId);
+    if (!Number.isSafeInteger(numericRequestId) || !Number.isSafeInteger(numericItemId)) {
+      setAcceptError('Yêu cầu hoặc bài đăng không hợp lệ.');
+      return;
+    }
+
+    selectInFlight.current = true;
+    setSelectingRequestId(request.id);
+    setAcceptError('');
+    setSelectNotice('');
+    try {
+      const selected = await requestApi.select(numericRequestId, currentUserId);
+      setApiRequestsByItem((current) => ({
+        ...current,
+        [request.itemId]: (current[request.itemId] ?? []).map((entry) =>
+          entry.id === request.id ? toFeItemRequest(selected) : entry,
+        ),
+      }));
+
+      try {
+        const [categories, areas, requests, item] = await Promise.all([
+          catalogApi.categories(),
+          catalogApi.areas(),
+          requestApi.forItem(numericItemId, currentUserId),
+          itemApi.detail(numericItemId),
+        ]);
+        setApiRequestsByItem((current) => ({
+          ...current,
+          [request.itemId]: requests.map((entry) => toFeItemRequest(entry)),
+        }));
+        const mappedItem = toFeItem(item, toCategoryNameMap(categories), toAreaNameMap(areas));
+        setMyItems((current) => current.map((entry) => (entry.id === request.itemId ? mappedItem : entry)));
+      } catch {
+        setSelectNotice('Đã chọn người nhận, nhưng chưa thể làm mới đầy đủ trạng thái từ Backend.');
+      }
+      setAcceptConfirmId('');
+    } catch {
+      setAcceptError('Không chọn được người nhận. Vui lòng làm mới dữ liệu và thử lại.');
+    } finally {
+      selectInFlight.current = false;
+      setSelectingRequestId('');
+    }
+  };
 
   return (
     <div className="page-shell">
@@ -70,6 +197,11 @@ export function Activities() {
           <Alert tone="warning">{editNotice}</Alert>
         </div>
       ) : null}
+      {selectNotice ? (
+        <div className="mb-5">
+          <Alert tone="warning">{selectNotice}</Alert>
+        </div>
+      ) : null}
       <div className="mb-6 flex gap-1 border-b border-border">
         <button
           onClick={() => setTab('items')}
@@ -87,17 +219,24 @@ export function Activities() {
 
       {tab === 'items' ? (
         <section>
-          {myItems.length ? (
+          {myItemsLoading ? (
+            <EmptyState title="Đang tải bài đăng" text="Vui lòng chờ trong giây lát." />
+          ) : myItemsError ? (
+            <EmptyState title="Không tải được bài đăng" text={myItemsError} />
+          ) : myItems.length ? (
             <div className="space-y-3">
               {myItems.map((item) => {
                 const approved = item.status === 'approved' || item.status === 'APPROVED';
                 const canEdit = !approved || (item.postApprovalEditCount ?? 0) < 1;
-                const itemRequests = data.itemRequests.filter((request) => request.itemId === item.id);
+                const apiItem = /^\d+$/.test(item.id);
+                const itemRequests = apiItem
+                  ? apiRequestsByItem[item.id] ?? []
+                  : data.itemRequests.filter((request) => request.itemId === item.id);
                 const hasAcceptedRequest = itemRequests.some((request) => request.status === 'ACCEPTED');
                 return (
                   <div key={item.id}>
                     <article className="grid gap-4 rounded-lg bg-white p-3 ring-1 ring-border/80 sm:grid-cols-[120px_1fr_auto] sm:items-center">
-                      <img
+                      <ItemImage
                         src={item.images[0]}
                         alt={item.title}
                         className="aspect-[4/3] w-full rounded-md object-cover sm:w-[120px]"
@@ -114,7 +253,10 @@ export function Activities() {
                           {item.title}
                         </Link>
                         <p className="mt-1 text-xs text-text-muted">
-                          Hết hạn: {new Date(item.expiresAt).toLocaleDateString('vi-VN')} · {item.district}
+                          {item.expiresAt
+                            ? `Hết hạn: ${new Date(item.expiresAt).toLocaleDateString('vi-VN')} · `
+                            : ''}
+                          {item.district}
                         </p>
                         {(item.status === 'rejected' || item.status === 'REJECTED' || item.status === 'VIOLATION') && (item.rejectionReason || item.moderationReason) ? (
                           <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-xs leading-5 text-error">
@@ -182,6 +324,7 @@ export function Activities() {
                         hasAcceptedRequest={hasAcceptedRequest}
                         itemRequests={itemRequests}
                         data={data}
+                        allowAccept={!apiItem || Boolean(currentUserId)}
                         onAccept={(requestId) => {
                           setAcceptError('');
                           setAcceptConfirmId(requestId);
@@ -191,6 +334,14 @@ export function Activities() {
                   </div>
                 );
               })}
+              {currentUserId ? (
+                <SentRequestPanel
+                  itemRequests={apiSentRequests}
+                  items={myItems}
+                  cancelingRequestId={cancelingRequestId}
+                  onCancel={(requestId) => void cancelApiRequest(requestId)}
+                />
+              ) : null}
             </div>
           ) : (
             <EmptyState
@@ -223,9 +374,9 @@ export function Activities() {
                   >
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex min-w-0 items-center gap-3">
-                        <img
+                        <ItemImage
                           src={item.images[0]}
-                          alt=""
+                          alt={item.title}
                           className="size-14 shrink-0 rounded-md object-cover"
                         />
                         <div className="min-w-0">
@@ -376,6 +527,7 @@ export function Activities() {
             <div className="mt-6 flex justify-end gap-2">
               <Button
                 variant="ghost"
+                disabled={selectingRequestId === acceptRequest.id}
                 onClick={() => {
                   setAcceptError('');
                   setAcceptConfirmId('');
@@ -384,7 +536,12 @@ export function Activities() {
                 Hủy
               </Button>
               <Button
+                disabled={selectingRequestId === acceptRequest.id}
                 onClick={() => {
+                  if (acceptApiRequest) {
+                    void selectApiRequest(acceptApiRequest);
+                    return;
+                  }
                   if (acceptRequest.type === 'gift' && acceptRequester.availableCredit < RECEIVE_ITEM_FEE) {
                     setAcceptError('Người nhận không đủ Credit và cần nạp Credit trước khi được chọn.');
                     return;
@@ -393,7 +550,7 @@ export function Activities() {
                   setAcceptConfirmId('');
                 }}
               >
-                Xác nhận
+                {selectingRequestId === acceptRequest.id ? 'Đang chọn...' : 'Xác nhận'}
               </Button>
             </div>
           </div>
@@ -403,17 +560,111 @@ export function Activities() {
   );
 }
 
+function apiDisplayUser(userId: string): User {
+  const apiId = userId.replace(/^api_/, '');
+  return {
+    id: userId,
+    username: userId,
+    password: '',
+    name: userId.startsWith('api_') ? `Người dùng #${apiId}` : 'Người dùng',
+    email: '',
+    phone: '',
+    district: '',
+    avatarInitials: userId.startsWith('api_') ? apiId.slice(0, 2).toUpperCase() : 'ND',
+    totalCredit: 0,
+    availableCredit: 0,
+    holdCredit: 0,
+    rewardPoints: 0,
+    reputationStars: 5,
+    rank: 'Thành viên',
+    status: 'active',
+    role: 'user',
+    joinedAt: new Date().toISOString(),
+    totalTx: 0,
+  };
+}
+
+function SentRequestPanel({
+  itemRequests,
+  items,
+  cancelingRequestId,
+  onCancel,
+}: {
+  itemRequests: ItemRequest[];
+  items: Item[];
+  cancelingRequestId: string;
+  onCancel: (requestId: string) => void;
+}) {
+  return (
+    <div className="rounded-lg bg-white p-4 ring-1 ring-border/80">
+      <h3 className="text-sm font-bold">Yêu cầu đã gửi</h3>
+      {itemRequests.length ? (
+        <div className="mt-3 space-y-3">
+          {itemRequests.map((request) => {
+            const item = items.find((entry) => entry.id === request.itemId);
+            return (
+              <article key={request.id} className="rounded-md border border-border p-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <strong className="truncate text-sm">{item?.title ?? `Bài đăng #${request.itemId}`}</strong>
+                      <TypeBadge type={request.type} />
+                      <span className="rounded-sm bg-amber-50 px-2 py-1 text-[11px] font-semibold text-warning">
+                        {requestStatusLabel[request.status]}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-text-muted">
+                      {new Date(request.createdAt).toLocaleString('vi-VN')}
+                    </p>
+                    {request.offeredItemId ? (
+                      <p className="mt-2 text-xs text-text-muted">
+                        Món đề nghị trao đổi: #{request.offeredItemId}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <Link to={`/items/${request.itemId}`}>
+                      <Button size="sm" variant="outline" icon="eye">
+                        Xem bài
+                      </Button>
+                    </Link>
+                    {request.status === 'PENDING' ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon="close"
+                        disabled={cancelingRequestId === request.id}
+                        onClick={() => onCancel(request.id)}
+                      >
+                        Hủy yêu cầu
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-text-muted">Bạn chưa gửi yêu cầu nào.</p>
+      )}
+    </div>
+  );
+}
+
 function RequestPanel({
   itemStatus,
   hasAcceptedRequest,
   itemRequests,
   data,
+  allowAccept,
   onAccept,
 }: {
   itemStatus: string;
   hasAcceptedRequest: boolean;
   itemRequests: ReturnType<typeof selectData>['itemRequests'];
   data: ReturnType<typeof selectData>;
+  allowAccept: boolean;
   onAccept: (requestId: string) => void;
 }) {
   return (
@@ -422,11 +673,10 @@ function RequestPanel({
       {itemRequests.length ? (
         <div className="mt-3 space-y-3">
           {itemRequests.map((request) => {
-            const requester = data.users.find((entry) => entry.id === request.requesterId);
+            const requester = data.users.find((entry) => entry.id === request.requesterId) ?? apiDisplayUser(request.requesterId);
             const offeredItem = request.offeredItemId
               ? data.items.find((entry) => entry.id === request.offeredItemId)
               : undefined;
-            if (!requester) return null;
             return (
               <article key={request.id} className="rounded-md border border-border p-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -460,7 +710,7 @@ function RequestPanel({
                           Nhắn tin
                         </Button>
                       </Link>
-                    ) : request.status === 'PENDING' && !hasAcceptedRequest && itemStatus !== 'IN_TRANSACTION' ? (
+                    ) : allowAccept && request.status === 'PENDING' && !hasAcceptedRequest && itemStatus !== 'IN_TRANSACTION' ? (
                       <Button
                         size="sm"
                         variant="outline"
@@ -476,7 +726,7 @@ function RequestPanel({
                   <div className="mt-3 rounded-md bg-surface-low p-3">
                     <p className="text-xs font-bold text-text-muted">Món đề nghị trao đổi</p>
                     <div className="mt-2 flex items-center gap-3">
-                      <img src={offeredItem.images[0]} alt="" className="size-14 rounded-md object-cover" />
+                      <ItemImage src={offeredItem.images[0]} alt={offeredItem.title} className="size-14 rounded-md object-cover" />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-bold">{offeredItem.title}</p>
                         <div className="mt-1 flex flex-wrap gap-2">

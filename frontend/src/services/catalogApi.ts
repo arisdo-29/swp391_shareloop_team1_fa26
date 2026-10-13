@@ -1,3 +1,5 @@
+import { http } from './http';
+
 export const catalogApiEndpoints = {
   categories: '/api/v1/categories',
   category: (id: number) => `/api/v1/categories/${id}`,
@@ -33,20 +35,29 @@ export interface AttributeResponse {
   active: boolean;
 }
 
+export const catalogApi = {
+  async areas(): Promise<AreaResponse[]> {
+    const { data } = await http.get<AreaResponse[]>(catalogApiEndpoints.areas);
+    return data;
+  },
+  async categories(): Promise<CategoryResponse[]> {
+    const { data } = await http.get<CategoryResponse[]>(catalogApiEndpoints.categories);
+    return data;
+  },
+  async attributes(categoryId: number): Promise<AttributeResponse[]> {
+    const { data } = await http.get<AttributeResponse[]>(catalogApiEndpoints.attributes(categoryId));
+    return data;
+  },
+};
+
 export async function getCategories(): Promise<CategoryResponse[]> {
-  const response = await fetch(catalogApiEndpoints.categories);
-  if (!response.ok) throw new Error(`Cannot load categories: ${response.status}`);
-  return response.json() as Promise<CategoryResponse[]>;
+  return catalogApi.categories();
 }
 
 export async function getAreas(): Promise<AreaResponse[]> {
-  const response = await fetch(catalogApiEndpoints.areas);
-  if (!response.ok) throw new Error(`Cannot load areas: ${response.status}`);
-  return response.json() as Promise<AreaResponse[]>;
+  return catalogApi.areas();
 }
 
 export async function getCategoryAttributes(categoryId: number): Promise<AttributeResponse[]> {
-  const response = await fetch(catalogApiEndpoints.attributes(categoryId));
-  if (!response.ok) throw new Error(`Cannot load category attributes: ${response.status}`);
-  return response.json() as Promise<AttributeResponse[]>;
+  return catalogApi.attributes(categoryId);
 }

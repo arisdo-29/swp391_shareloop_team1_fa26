@@ -1,3 +1,5 @@
+import { http } from './http';
+
 export const mediaApiEndpoints = {
   upload: '/api/v1/media',
   file: (id: number) => `/api/v1/media/${id}`,
@@ -19,3 +21,16 @@ export async function uploadMedia(file: File, accessToken: string): Promise<Medi
   if (!response.ok) throw new Error(`Upload failed: ${response.status}`);
   return response.json() as Promise<MediaResponse>;
 }
+
+export const mediaApi = {
+  async upload(file: File, userId?: number): Promise<MediaResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (userId !== undefined) formData.append('userId', String(userId));
+
+    const { data } = await http.post<MediaResponse>(mediaApiEndpoints.upload, formData, {
+      headers: { 'Content-Type': undefined },
+    });
+    return data;
+  },
+};

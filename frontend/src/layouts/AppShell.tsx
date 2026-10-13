@@ -3,6 +3,9 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { actions, selectCurrentUser } from '../app/store';
 import { Avatar, Button, Icon, IconButton } from '../components/ui';
+import { authApi } from '../services/authApi';
+import { NotificationMenu } from '../components/NotificationMenu';
+import { useWallet, WalletProvider } from '../app/WalletContext';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -15,13 +18,23 @@ function ScrollToTop() {
 }
 
 export function AppShell() {
+  return (
+    <WalletProvider>
+      <AppShellContent />
+    </WalletProvider>
+  );
+}
+
+function AppShellContent() {
   const { pathname } = useLocation();
   const user = useAppSelector(selectCurrentUser);
+  const { isApiAccount, wallet } = useWallet();
   const isAdmin = user?.role === 'admin';
   const isHome = pathname === '/' && !isAdmin;
   const dispatch = useAppDispatch();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const nav = isAdmin
     ? [
@@ -48,6 +61,15 @@ export function AppShell() {
   const closeMenus = () => {
     setMobileOpen(false);
     setProfileOpen(false);
+    setNotificationOpen(false);
+  };
+  const logout = async () => {
+    try {
+      await authApi.logout();
+    } finally {
+      dispatch(actions.logout());
+      closeMenus();
+    }
   };
   return (
     <div className="flex min-h-screen flex-col">
@@ -117,7 +139,7 @@ export function AppShell() {
                   }`}
                 >
                   <Icon name="wallet" className="size-[18px]" />
-                  {user.availableCredit} Credit
+                  {isApiAccount ? (wallet ? wallet.available : '--') : user.availableCredit} Credit
                 </Link>
                 <Link to="/post" className="hidden sm:block">
                   <Button icon="add" size="sm">
@@ -125,9 +147,19 @@ export function AppShell() {
                   </Button>
                 </Link>
                 </> : null}
+                <NotificationMenu
+                  userId={user.id}
+                  isHome={isHome}
+                  open={notificationOpen}
+                  onOpenChange={setNotificationOpen}
+                  onOpen={() => setProfileOpen(false)}
+                />
                 <div className="relative">
                   <button
-                    onClick={() => setProfileOpen(!profileOpen)}
+                    onClick={() => {
+                      setProfileOpen(!profileOpen);
+                      setNotificationOpen(false);
+                    }}
                     className={`flex items-center gap-1 rounded-md p-1 transition ${
                       isHome ? 'hover:bg-white/10' : 'hover:bg-surface-low'
                     }`}
@@ -179,8 +211,7 @@ export function AppShell() {
                       ) : null}
                       <button
                         onClick={() => {
-                          dispatch(actions.logout());
-                          closeMenus();
+                          void logout();
                         }}
                         className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-error hover:bg-red-50"
                       >

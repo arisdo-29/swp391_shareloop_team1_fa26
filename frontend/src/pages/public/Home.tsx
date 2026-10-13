@@ -305,7 +305,7 @@ export function Home() {
     () =>
       items
         .filter((item) => item.status === 'approved' || item.status === 'APPROVED')
-        .filter((item) => new Date(item.expiresAt).getTime() >= Date.now())
+        .filter((item) => !item.expiresAt || new Date(item.expiresAt).getTime() >= Date.now())
         .sort((a, b) => b.postedAt.localeCompare(a.postedAt)),
     [items],
   );

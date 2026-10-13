@@ -1,96 +1,41 @@
-export const authApiEndpoints = {
-  register: '/api/auth/register',
-  sendEmailOtp: '/api/auth/email/send-otp',
-  verifyEmailOtp: '/api/auth/email/verify-otp',
-  login: '/api/auth/login',
-  resendOtp: '/api/auth/email/resend-otp',
-  forgotPassword: '/api/auth/password/forgot',
-  verifyResetOtp: '/api/auth/password/verify-otp',
-  resetPassword: '/api/auth/password/reset',
-  changePassword: '/api/auth/password/change',
-  getProfile: '/api/account/profile',
-  updateProfile: '/api/account/profile',
-} as const;
+import { http, tokenStorage } from './http';
 
-export interface AuthApiClient {
-  register(input: RegisterRequest): Promise<RegisterResponse>;
-  sendEmailOtp(input: EmailOtpRequest): Promise<void>;
-  verifyEmailOtp(input: VerifyOtpRequest): Promise<void>;
-  login(input: LoginRequest): Promise<LoginResponse>;
-  resendOtp(input: EmailOtpRequest): Promise<void>;
-  forgotPassword(input: ForgotPasswordRequest): Promise<void>;
-  verifyResetOtp(input: VerifyOtpRequest): Promise<VerifyResetOtpResponse>;
-  resetPassword(input: ResetPasswordRequest): Promise<void>;
-  changePassword(input: ChangePasswordRequest): Promise<void>;
-  getProfile(): Promise<ProfileResponse>;
-  updateProfile(input: UpdateProfileRequest): Promise<ProfileResponse>;
-}
+// Theo docs/api/auth.md
+export interface RegisterRequest { email: string; password: string; fullName: string; phone: string }
+export interface OtpSentResponse { email: string; otpExpiresInSeconds: number; resendCooldownSeconds: number }
+export interface AuthUserResponse { id: number; email: string; fullName: string; isAdmin: boolean }
+export interface AuthResponse { accessToken: string; tokenType: 'Bearer'; expiresIn: number; user: AuthUserResponse }
 
-export interface RegisterRequest {
-  name: string;
-  email: string;
-  phone: string;
-  username: string;
-  password: string;
-}
-
-export interface RegisterResponse {
-  verificationId: string;
-}
-
-export interface EmailOtpRequest {
-  email: string;
-  verificationId?: string;
-}
-
-export interface VerifyOtpRequest {
-  verificationId: string;
-  otp: string;
-}
-
-export interface LoginRequest {
-  usernameOrEmail: string;
-  password: string;
-}
-
-export interface LoginResponse {
-  accessToken: string;
-  role: 'user' | 'admin';
-}
-
-export interface ForgotPasswordRequest {
-  email: string;
-}
-
-export interface VerifyResetOtpResponse {
-  resetToken: string;
-}
-
-export interface ResetPasswordRequest {
-  resetToken: string;
-  newPassword: string;
-}
-
-export interface ChangePasswordRequest {
-  currentPassword: string;
-  newPassword: string;
-}
-
-export interface ProfileResponse {
-  id: string;
-  name: string;
-  username: string;
-  email: string;
-  phone: string;
-  avatarUrl?: string;
-  credit: number;
-  rank?: string;
-  reputationStars?: number;
-}
-
-export interface UpdateProfileRequest {
-  name: string;
-  email: string;
-  phone: string;
-  avatarUrl?: string;
-}
+export const authApi = {
+  async register(input: RegisterRequest) {
+    const { data } = await http.post<OtpSentResponse>('/api/v1/auth/register', input);
+    return data;
+  },
+  async verifyOtp(email: string, otp: string) {
+    const { data } = await http.post<AuthResponse>('/api/v1/auth/verify-otp', { email, otp });
+    return data;
+  },
+  async resendOtp(email: string) {
+    const { data } = await http.post<OtpSentResponse>('/api/v1/auth/resend-otp', { email });
+    return data;
+  },
+  async login(email: string, password: string) {
+    const { data } = await http.post<AuthResponse>('/api/v1/auth/login', { email, password });
+    tokenStorage.set(data.accessToken);
+    tokenStorage.setUserId(data.user.id);
+    return data;
+  },
+  async me(userId: number) {
+    const { data } = await http.get<AuthUserResponse>('/api/v1/me', {
+      params: { userId },
+    });
+    return data;
+  },
+  async logout() {
+    try {
+      await http.post('/api/v1/auth/logout');
+    } finally {
+      tokenStorage.clear();
+    }
+  },
+};
