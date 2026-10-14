@@ -49,7 +49,7 @@ public class Message {
     private MessageModeration moderation = MessageModeration.PASS;
 
     @Column(name = "moderation_tier")
-    private Integer moderationTier;
+    private Short moderationTier;
 
     @Column(name = "blocked_reason", length = 100)
     private String blockedReason;
@@ -116,7 +116,7 @@ public class Message {
         return moderation;
     }
 
-    public Integer getModerationTier() {
+    public Short getModerationTier() {
         return moderationTier;
     }
 
@@ -134,7 +134,7 @@ public class Message {
 
     public void block(int tier, String reason) {
         this.moderation = MessageModeration.BLOCKED;
-        this.moderationTier = tier;
+        this.moderationTier = (short) tier;
         this.blockedReason = reason;
     }
 }
