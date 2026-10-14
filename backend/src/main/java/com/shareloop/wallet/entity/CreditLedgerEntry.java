@@ -73,6 +73,16 @@ public class CreditLedgerEntry {
         this.itemId = itemId;
     }
 
+    /**
+     * Dòng cộng tiền từ đơn nạp: amount dương, type TOP_UP, luôn kèm payment_order_id. Index unique ux_ledger_order
+     * trên payment_order_id là chốt chặn cuối cùng để một đơn không thể được cộng hai lần.
+     */
+    public static CreditLedgerEntry topUp(Long userId, int credits, long balanceAfter, Long paymentOrderId) {
+        CreditLedgerEntry entry = new CreditLedgerEntry(userId, credits, CreditTxType.TOP_UP, balanceAfter, null);
+        entry.paymentOrderId = paymentOrderId;
+        return entry;
+    }
+
     public Long getId() {
         return id;
     }

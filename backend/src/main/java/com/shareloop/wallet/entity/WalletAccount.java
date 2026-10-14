@@ -13,7 +13,7 @@ import org.hibernate.annotations.SQLRestriction;
  * Entity "lát cắt" của bảng users: chỉ map nhóm cột tiền của module wallet (Lộ trình 4.8). Không tạo bản ghi ở đây
  * (user do module user tạo), chỉ đọc và sửa số dư.
  *
- * <p>Các hàm đổi số dư ({@code hold}, {@code release}, {@code chargeHeld}, {@code spend}) chỉ do
+ * <p>Các hàm đổi số dư ({@code hold}, {@code release}, {@code chargeHeld}, {@code spend}, {@code topUp}) chỉ do
  * {@code CreditService} gọi, sau khi đã khoá dòng bằng {@code WalletAccountRepository.lockById}. Chúng để public vì
  * entity và service nằm ở hai package khác nhau; module khác không có repository nên không với tới entity này.
  */
@@ -89,5 +89,11 @@ public class WalletAccount extends SliceAudit {
             throw new BusinessException(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE);
         }
         creditBalance -= amount;
+    }
+
+    /** Cộng Credit từ đơn nạp đã thanh toán và bật cờ đã từng nạp (điều kiện mở hạn mức AI, C18). */
+    public void topUp(long credits) {
+        creditBalance += credits;
+        hasToppedUp = true;
     }
 }
