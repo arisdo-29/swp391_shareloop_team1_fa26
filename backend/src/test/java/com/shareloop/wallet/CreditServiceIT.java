@@ -3,14 +3,18 @@ package com.shareloop.wallet;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.support.IntegrationTest;
 import com.shareloop.wallet.dto.WalletResponse;
+import com.shareloop.wallet.dto.WalletTransactionResponse;
 import com.shareloop.wallet.entity.CreditTxType;
 import com.shareloop.wallet.service.CreditService;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -40,11 +44,13 @@ class CreditServiceIT extends IntegrationTest {
 
     private final List<Long> createdUserIds = new ArrayList<>();
 
-    // Thứ tự xoá: credit_ledger và items tham chiếu users nên phải xoá trước; chỉ xoá dữ liệu do test tạo ra.
+    // Thứ tự xoá: credit_ledger tham chiếu payment_orders, items; các bảng đó tham chiếu users nên phải xoá trước.
+    // Chỉ xoá dữ liệu do test tạo ra.
     @AfterEach
     void cleanUp() {
         for (Long userId : createdUserIds) {
             jdbc.update("DELETE FROM credit_ledger WHERE user_id = ?", userId);
+            jdbc.update("DELETE FROM payment_orders WHERE user_id = ?", userId);
             jdbc.update("DELETE FROM items WHERE donor_id = ?", userId);
             jdbc.update("DELETE FROM users WHERE id = ?", userId);
         }
@@ -289,7 +295,226 @@ class CreditServiceIT extends IntegrationTest {
         assertBusinessError(thrown, WalletErrorCode.WALLET_NOT_FOUND);
     }
 
+    // ---------- topUp ----------
+
+    @Test
+    void topUp_whenOrderPending_addsCreditWritesLedgerAndSetsHasToppedUp() {
+        // given
+        long userId = insertUser(5, 2);
+        long orderId = insertPaymentOrder(userId, 20, "PENDING");
+
+        // when
+        WalletResponse wallet = creditService.topUp(userId, orderId);
+
+        // then: số dư cộng 20, held giữ nguyên, cờ đã nạp bật, đơn chốt SUCCESS
+        assertThat(wallet.creditBalance()).isEqualTo(25);
+        assertThat(wallet.heldCredit()).isEqualTo(2);
+        assertThat(wallet.hasToppedUp()).isTrue();
+        assertThat(balanceOf(userId)).isEqualTo(25);
+        assertThat(hasToppedUpOf(userId)).isTrue();
+        Map<String, Object> orderRow = jdbc.queryForMap(
+                "SELECT status, signature_verified, paid_at FROM payment_orders WHERE id = ?", orderId);
+        assertThat(orderRow.get("status")).isEqualTo("SUCCESS");
+        assertThat(orderRow.get("signature_verified")).isEqualTo(true);
+        assertThat(orderRow.get("paid_at")).isNotNull();
+        Map<String, Object> ledgerRow = jdbc.queryForMap(
+                "SELECT amount, type, balance_after, payment_order_id FROM credit_ledger WHERE user_id = ?", userId);
+        assertThat(ledgerRow.get("amount")).isEqualTo(20);
+        assertThat(ledgerRow.get("type")).isEqualTo("TOP_UP");
+        assertThat(ledgerRow.get("balance_after")).isEqualTo(25L);
+        assertThat(ledgerRow.get("payment_order_id")).isEqualTo(orderId);
+    }
+
+    @Test
+    void topUp_whenOrderAlreadySuccess_returnsWalletWithoutAddingCredit() {
+        // given: đơn đã được cộng ở lần gọi trước
+        long userId = insertUser(0, 0);
+        long orderId = insertPaymentOrder(userId, 20, "PENDING");
+        creditService.topUp(userId, orderId);
+
+        // when: gọi lại cho cùng đơn
+        WalletResponse wallet = creditService.topUp(userId, orderId);
+
+        // then: không lỗi, số dư không đổi, vẫn chỉ một dòng ledger
+        assertThat(wallet.creditBalance()).isEqualTo(20);
+        assertThat(balanceOf(userId)).isEqualTo(20);
+        assertThat(ledgerCountOf(userId)).isEqualTo(1);
+    }
+
+    @Test
+    void topUp_whenOrderExpired_throwsNotPayable() {
+        // given
+        long userId = insertUser(0, 0);
+        long orderId = insertPaymentOrder(userId, 20, "EXPIRED");
+
+        // when
+        Throwable thrown = catchThrowable(() -> creditService.topUp(userId, orderId));
+
+        // then
+        assertBusinessError(thrown, WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE);
+        assertThat(balanceOf(userId)).isZero();
+        assertThat(ledgerCountOf(userId)).isZero();
+    }
+
+    @Test
+    void topUp_whenOrderOfOtherUser_throwsOrderNotFound() {
+        // given: đơn thuộc về owner, nhưng người khác gọi topUp
+        long ownerId = insertUser(0, 0);
+        long otherUserId = insertUser(0, 0);
+        long orderId = insertPaymentOrder(ownerId, 20, "PENDING");
+
+        // when
+        Throwable thrown = catchThrowable(() -> creditService.topUp(otherUserId, orderId));
+
+        // then
+        assertBusinessError(thrown, WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND);
+        assertThat(balanceOf(otherUserId)).isZero();
+        assertThat(statusOfOrder(orderId)).isEqualTo("PENDING");
+    }
+
+    @Test
+    void topUp_whenTwoOrdersConfirmedConcurrently_finalBalanceIncludesBoth() throws Exception {
+        // given: một ví, hai đơn khác nhau 10 và 20 Credit
+        long userId = insertUser(0, 0);
+        long firstOrderId = insertPaymentOrder(userId, 10, "PENDING");
+        long secondOrderId = insertPaymentOrder(userId, 20, "PENDING");
+
+        // when: hai luồng cùng cộng tiền vào một ví một lúc
+        List<Throwable> failures = runConcurrently(
+                () -> creditService.topUp(userId, firstOrderId), () -> creditService.topUp(userId, secondOrderId));
+
+        // then: không lần nào bị mất; nhờ khoá dòng users, số dư cuối là 10 + 20 chứ không phải 10 hoặc 20
+        assertThat(failures).isEmpty();
+        assertThat(balanceOf(userId)).isEqualTo(30);
+        assertThat(ledgerCountOf(userId)).isEqualTo(2);
+        Long lastBalanceAfter = jdbc.queryForObject(
+                "SELECT max(balance_after) FROM credit_ledger WHERE user_id = ?", Long.class, userId);
+        assertThat(lastBalanceAfter).isEqualTo(30L);
+    }
+
+    // ---------- getTransactions ----------
+
+    @Test
+    void getTransactions_returnsOnlyOwnEntriesNewestFirst() {
+        // given: hai dòng của user, một dòng của người khác
+        long userId = insertUser(0, 0);
+        long otherUserId = insertUser(0, 0);
+        insertLedger(userId, -5, "AI_SEARCH_FEE", "2026-10-01T08:00:00Z");
+        insertLedger(userId, -2, "AI_SEARCH_FEE", "2026-10-03T08:00:00Z");
+        insertLedger(otherUserId, -5, "AI_SEARCH_FEE", "2026-10-02T08:00:00Z");
+
+        // when
+        PageResponse<WalletTransactionResponse> result = creditService.getTransactions(userId, null, null, 0, 20);
+
+        // then
+        assertThat(result.totalElements()).isEqualTo(2);
+        assertThat(result.items())
+                .extracting(WalletTransactionResponse::createdAt)
+                .containsExactly(Instant.parse("2026-10-03T08:00:00Z"), Instant.parse("2026-10-01T08:00:00Z"));
+    }
+
+    @Test
+    void getTransactions_whenFromToGiven_returnsOnlyEntriesInRange() {
+        // given: khoảng [01/10, 03/10) gồm dòng ngày 01 và 02, không gồm ngày 03
+        long userId = insertUser(0, 0);
+        insertLedger(userId, -1, "AI_SEARCH_FEE", "2026-09-30T23:59:59Z");
+        insertLedger(userId, -2, "AI_SEARCH_FEE", "2026-10-01T00:00:00Z");
+        insertLedger(userId, -3, "AI_SEARCH_FEE", "2026-10-02T12:00:00Z");
+        insertLedger(userId, -4, "AI_SEARCH_FEE", "2026-10-03T00:00:00Z");
+
+        // when
+        PageResponse<WalletTransactionResponse> result = creditService.getTransactions(
+                userId, Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-10-03T00:00:00Z"), 0, 20);
+
+        // then
+        assertThat(result.items()).extracting(WalletTransactionResponse::amount).containsExactly(-3, -2);
+    }
+
+    @Test
+    void getTransactions_whenFromNotBeforeTo_throwsInvalidDateRange() {
+        // given
+        long userId = insertUser(0, 0);
+        Instant sameMoment = Instant.parse("2026-10-01T00:00:00Z");
+
+        // when
+        Throwable thrown = catchThrowable(() -> creditService.getTransactions(userId, sameMoment, sameMoment, 0, 20));
+
+        // then
+        assertBusinessError(thrown, WalletErrorCode.WALLET_INVALID_DATE_RANGE);
+    }
+
     // ---------- hàm hỗ trợ ----------
+
+    // Chạy hai việc cùng lúc trên hai luồng; trả về các BusinessException bắt được (rỗng nếu cả hai thành công).
+    private List<Throwable> runConcurrently(Runnable firstTask, Runnable secondTask) throws Exception {
+        CountDownLatch bothReady = new CountDownLatch(2);
+        CountDownLatch startSignal = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Throwable> first = executor.submit(waitThenRun(firstTask, bothReady, startSignal));
+            Future<Throwable> second = executor.submit(waitThenRun(secondTask, bothReady, startSignal));
+            bothReady.await();
+            startSignal.countDown();
+            List<Throwable> failures = new ArrayList<>();
+            addIfNotNull(failures, first.get(30, TimeUnit.SECONDS));
+            addIfNotNull(failures, second.get(30, TimeUnit.SECONDS));
+            return failures;
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private Callable<Throwable> waitThenRun(Runnable task, CountDownLatch bothReady, CountDownLatch startSignal) {
+        return () -> {
+            bothReady.countDown();
+            startSignal.await();
+            try {
+                task.run();
+                return null;
+            } catch (BusinessException ex) {
+                return ex;
+            }
+        };
+    }
+
+    private void addIfNotNull(List<Throwable> failures, Throwable failure) {
+        if (failure != null) {
+            failures.add(failure);
+        }
+    }
+
+    // amount_vnd = credits x 1.000 nên credits phải >= 10 để thoả CHECK amount_vnd >= 10000 của DB.
+    private long insertPaymentOrder(long userId, int credits, String status) {
+        String orderCode = "it-" + UUID.randomUUID().toString().replace("-", "");
+        return jdbc.queryForObject(
+                "INSERT INTO payment_orders (user_id, order_code, amount_vnd, credits, vnd_per_credit, provider, status)"
+                        + " VALUES (?, ?, ?, ?, 1000, 'MOCK', ?) RETURNING id",
+                Long.class,
+                userId,
+                orderCode,
+                credits * 1000L,
+                credits,
+                status);
+    }
+
+    // Ghi thẳng dòng ledger với created_at chọn trước để kiểm lọc ngày; balance_after không quan trọng ở đây.
+    private void insertLedger(long userId, int amount, String type, String createdAt) {
+        jdbc.update(
+                "INSERT INTO credit_ledger (user_id, amount, type, balance_after, created_at)"
+                        + " VALUES (?, ?, ?, 0, ?::timestamptz)",
+                userId,
+                amount,
+                type,
+                createdAt);
+    }
+
+    private boolean hasToppedUpOf(long userId) {
+        return jdbc.queryForObject("SELECT has_topped_up FROM users WHERE id = ?", Boolean.class, userId);
+    }
+
+    private String statusOfOrder(long orderId) {
+        return jdbc.queryForObject("SELECT status FROM payment_orders WHERE id = ?", String.class, orderId);
+    }
 
     private void assertBusinessError(Throwable thrown, WalletErrorCode expected) {
         assertThat(thrown)
