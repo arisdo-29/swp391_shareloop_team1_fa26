@@ -32,14 +32,17 @@ public class ChatService {
 
     private final MessageRepository messageRepository;
     private final RequestService requestService;
+    private final ChatContactFilter chatContactFilter;
 
-    public ChatService(MessageRepository messageRepository, RequestService requestService) {
+    public ChatService(
+            MessageRepository messageRepository, RequestService requestService, ChatContactFilter chatContactFilter) {
         this.messageRepository = messageRepository;
         this.requestService = requestService;
+        this.chatContactFilter = chatContactFilter;
     }
 
     /**
-     * Gửi tin nhắn mới trong khung chat của yêu cầu giao dịch (FR-68).
+     * Gửi tin nhắn mới trong khung chat của yêu cầu giao dịch (FR-68, FR-72).
      *
      * @param requestId     id của yêu cầu giao dịch
      * @param currentUserId id người gửi hiện tại
@@ -57,6 +60,9 @@ public class ChatService {
         }
 
         RequestChatContext context = validateAndGetChatContext(requestId, currentUserId);
+
+        // Lọc thông tin liên hệ tầng 1 (FR-72, FR-74; BR-C01)
+        chatContactFilter.validateMessage(request.content());
 
         Message message = new Message(
                 context.requestId(), currentUserId, request.content().trim());

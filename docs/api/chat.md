@@ -43,6 +43,13 @@ Gửi tin nhắn mới trong khung chat của yêu cầu giao dịch (FR-68, UC-
 
 - **Lỗi:**
   - `400 BAD_REQUEST` (`CHAT_MESSAGE_EMPTY`): Nội dung tin nhắn rỗng.
+  - `400 BAD_REQUEST` (`CHAT_MESSAGE_BLOCKED`): Tin nhắn bị chặn do chứa thông tin liên hệ (số điện thoại viết bằng số hoặc bằng chữ, email, liên kết) (FR-72, FR-74; BR-C01). Ví dụ:
+    ```json
+    {
+      "code": "CHAT_MESSAGE_BLOCKED",
+      "message": "Tin nhắn bị chặn do chứa thông tin liên hệ: số điện thoại (0 9 1 2 3 4 5 6 7 8)."
+    }
+    ```
   - `401 UNAUTHORIZED`: Chưa đăng nhập.
   - `403 FORBIDDEN` (`CHAT_FORBIDDEN`): Người dùng không thuộc hai bên của giao dịch.
   - `404 NOT_FOUND` (`CHAT_REQUEST_NOT_FOUND`): Yêu cầu giao dịch không tồn tại.
