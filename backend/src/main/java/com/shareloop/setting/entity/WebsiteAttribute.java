@@ -4,7 +4,10 @@ import com.shareloop.common.entity.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import java.util.Map;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLRestriction;
+import org.hibernate.type.SqlTypes;
 
 /** Entity lát cắt các cột cấu hình cần đọc từ website_attributes. */
 @Entity
@@ -21,6 +24,10 @@ public class WebsiteAttribute extends BaseEntity {
     @Column(name = "attr_value", nullable = false)
     private String attrValue;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "extra", columnDefinition = "jsonb")
+    private Map<String, Object> extra;
+
     @Column(name = "sort_order", nullable = false)
     private int sortOrder;
 
@@ -36,6 +43,14 @@ public class WebsiteAttribute extends BaseEntity {
 
     public String getAttrValue() {
         return attrValue;
+    }
+
+    public Map<String, Object> getExtra() {
+        return extra == null ? Map.of() : Map.copyOf(extra);
+    }
+
+    public int getSortOrder() {
+        return sortOrder;
     }
 
     public void updateValue(String attrValue) {

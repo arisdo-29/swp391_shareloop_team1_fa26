@@ -89,4 +89,20 @@ class ConfigServiceTest {
                 });
         assertThat(service.get(ConfigKey.POST_FEE)).isEqualTo("8");
     }
+
+    @Test
+    void lexiconReturnsEmptyListWhenNoRulesExist() {
+        when(repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc("BANNED_KEYWORD"))
+                .thenReturn(List.of());
+
+        assertThat(service.lexicon()).isEmpty();
+    }
+
+    @Test
+    void checklistReturnsEmptyListWhenNoQuestionsExist() {
+        when(repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc("CHECKLIST"))
+                .thenReturn(List.of());
+
+        assertThat(service.checklist()).isEmpty();
+    }
 }

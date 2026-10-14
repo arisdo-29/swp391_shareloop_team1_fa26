@@ -3,6 +3,7 @@ package com.shareloop.setting.service;
 import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.dto.ConfigResponse;
+import com.shareloop.setting.dto.LexiconEntry;
 import com.shareloop.setting.repository.WebsiteAttributeRepository;
 import java.util.Arrays;
 import java.util.List;
@@ -61,6 +62,45 @@ public class ConfigService {
                     }
                 })
                 .orElse(key.getDefaultValue());
+    }
+
+    /** Active moderation rules in their configured order. */
+    public List<LexiconEntry> lexicon() {
+        return repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc("BANNED_KEYWORD").stream()
+                .map(attribute -> {
+                    Map<String, Object> extra = attribute.getExtra();
+                    return new LexiconEntry(
+                            attribute.getAttrKey(),
+                            stringValue(extra, "category"),
+                            stringValue(extra, "severity"),
+                            stringValue(extra, "matchMode"),
+                            stringList(extra.get("exceptions")),
+                            stringValue(extra, "scope"),
+                            attribute.getSortOrder());
+                })
+                .toList();
+    }
+
+    /** Active review checklist questions in their configured order. */
+    public List<String> checklist() {
+        return repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc("CHECKLIST").stream()
+                .map(attribute -> attribute.getAttrValue())
+                .toList();
+    }
+
+    private static String stringValue(Map<String, Object> values, String key) {
+        Object value = values.get(key);
+        return value instanceof String string ? string : null;
+    }
+
+    private static List<String> stringList(Object value) {
+        if (!(value instanceof List<?> values)) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(String.class::isInstance)
+                .map(String.class::cast)
+                .toList();
     }
 
     @Transactional
