@@ -34,7 +34,9 @@ app:
   # module integration/ai (BE2)
   ai: {}
   # module integration/payment (BE1)
-  payment: {}
+  payment:
+    mock:
+      enabled: false                # bật endpoint mock-confirm (tự cộng Credit không cần tiền); chỉ bật ở dev, staging
   # module integration/mail (BE1)
   mail:
     from: no-reply@shareloop.local

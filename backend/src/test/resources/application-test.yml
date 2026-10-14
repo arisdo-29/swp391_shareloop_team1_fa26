@@ -26,3 +26,7 @@ app:
   # module integration/ai (BE2)
   ai:
     enabled: false
+  # module integration/payment (BE1)
+  payment:
+    mock:
+      enabled: true
