@@ -1,27 +1,29 @@
 import { type FormEvent, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { actions, selectData } from '../../app/store';
+import { useAppDispatch } from '../../app/hooks';
+import { actions } from '../../app/store';
 import { Alert, Button, Field, Icon } from '../../components/ui';
 import { PasswordField } from '../../components/PasswordField';
-import { verifyPassword } from '../../utils/passwordSecurity';
+import { authApi } from '../../services/authApi';
+import { authErrorMessage } from '../../services/authErrors';
+import type { ApiError } from '../../services/http';
+import { toFeUser } from '../../services/mappers';
 
 export function Login() {
-  const [identifier, setIdentifier] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [processing, setProcessing] = useState(false);
-  const data = useAppSelector(selectData);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const location = useLocation();
   const successNotice = (location.state as { notice?: string } | null)?.notice;
 
-  const login = async (nameOrEmail: string, pass: string, target = '/') => {
-    const normalized = nameOrEmail.trim().toLowerCase();
+  const login = async (inputEmail: string, pass: string) => {
+    const normalized = inputEmail.trim().toLowerCase();
     setError('');
     if (!normalized) {
-      setError('Vui lòng nhập tên đăng nhập hoặc email.');
+      setError('Vui lòng nhập email.');
       return;
     }
     if (!pass) {
@@ -29,53 +31,21 @@ export function Login() {
       return;
     }
     setProcessing(true);
-    const candidate = data.users.find(
-      (user) => user.username.toLowerCase() === normalized || user.email.toLowerCase() === normalized,
-    );
-    if (!candidate && data.emailVerification) {
-      const pending = data.emailVerification.registration;
-      if (pending.username.toLowerCase() === normalized || pending.email.toLowerCase() === normalized) {
-        setError('Tài khoản chưa xác thực email. Vui lòng nhập OTP đã gửi đến email của bạn.');
-        setProcessing(false);
-        return;
-      }
-    }
-    if (candidate?.status === 'pending_verification') {
-      setError('Tài khoản chưa xác thực email. Vui lòng xác thực trước khi đăng nhập.');
+    try {
+      const result = await authApi.login(normalized, pass);
+      const user = toFeUser(result.user);
+      dispatch(actions.loginFromApi(user));
+      navigate(user.role === 'admin' ? '/admin' : '/');
+    } catch (apiError) {
+      setError(authErrorMessage(apiError as ApiError));
+    } finally {
       setProcessing(false);
-      return;
     }
-    if (candidate?.status === 'locked') {
-      setError('Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.');
-      setProcessing(false);
-      return;
-    }
-    if (candidate?.status === 'suspended') {
-      setError('Tài khoản đang tạm khóa. Vui lòng liên hệ quản trị viên.');
-      setProcessing(false);
-      return;
-    }
-    const valid = candidate && await verifyPassword(pass, candidate.password) ? candidate : undefined;
-    if (!valid) {
-      setError('Tên đăng nhập/email hoặc mật khẩu chưa đúng.');
-      setProcessing(false);
-      return;
-    }
-    dispatch(actions.login({ username: valid.username, passwordHash: valid.password }));
-    navigate(target);
-    setProcessing(false);
   };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    void login(identifier, password);
-  };
-
-  const quickLogin = (role: 'user' | 'admin') => {
-    setError('');
-    setProcessing(false);
-    dispatch(actions.demoLogin({ username: role, role }));
-    navigate(role === 'admin' ? '/admin' : '/');
+    void login(email, password);
   };
 
   return (
@@ -100,10 +70,11 @@ export function Login() {
         <div className="mt-6 space-y-4">
           <Field
             required
-            label="Tên đăng nhập hoặc email"
-            value={identifier}
-            onChange={(event) => setIdentifier(event.target.value)}
-            autoComplete="username"
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            autoComplete="email"
           />
           <PasswordField label="Mật khẩu" value={password} onChange={setPassword} autoComplete="current-password" />
           <Button className="w-full" disabled={processing}>
@@ -113,20 +84,7 @@ export function Login() {
         <Link to="/forgot-password" className="mt-4 block text-center text-sm font-semibold text-primary hover:underline">
           Quên mật khẩu?
         </Link>
-        <div className="my-6 flex items-center gap-3 text-xs text-text-muted">
-          <span className="h-px flex-1 bg-border" />
-          <span>Tài khoản demo</span>
-          <span className="h-px flex-1 bg-border" />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Button type="button" variant="outline" onClick={() => quickLogin('user')}>
-            Người dùng
-          </Button>
-          <Button type="button" variant="outline" onClick={() => quickLogin('admin')}>
-            Quản trị viên
-          </Button>
-        </div>
-        <p className="mt-6 text-center text-sm text-text-muted">
+        <p className="mt-8 text-center text-sm text-text-muted">
           Chưa có tài khoản?{' '}
           <Link to="/register" className="font-semibold text-primary hover:underline">
             Đăng ký

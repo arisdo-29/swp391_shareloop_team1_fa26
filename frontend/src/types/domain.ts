@@ -81,12 +81,14 @@ export interface Item {
   district: string;
   images: string[];
   tradeFor?: string;
+  brand?: string;
+  defectNote?: string;
   status: ItemStatus;
   rejectionReason?: string;
   moderationReason?: string;
   postApprovalEditCount?: number;
   postedAt: string;
-  expiresAt: string;
+  expiresAt?: string;
 }
 
 export interface Handover {

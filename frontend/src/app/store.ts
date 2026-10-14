@@ -22,6 +22,7 @@ import type {
   RankRule,
   ReputationPointRule,
   Transaction,
+  User,
 } from '../types/domain';
 import { canTransition, transitionTransaction } from '../utils/transaction';
 import { applyReputationPointEvent, rankFor } from '../utils/reputation';
@@ -47,9 +48,9 @@ const recalculateUserRanks = (state: AppStateData) => {
 const itemApproved = (status: Item['status']) => status === 'approved' || status === 'APPROVED';
 const itemPendingReview = (status: Item['status']) => status === 'pending' || status === 'PENDING_REVIEW';
 const itemExpired = (item: Item, now = new Date()) =>
-  itemApproved(item.status) && new Date(item.expiresAt).getTime() < now.getTime();
+  itemApproved(item.status) && Boolean(item.expiresAt) && new Date(item.expiresAt!).getTime() < now.getTime();
 const itemAvailableForRequest = (item: Item, now = new Date()) =>
-  itemApproved(item.status) && new Date(item.expiresAt).getTime() >= now.getTime();
+  itemApproved(item.status) && (!item.expiresAt || new Date(item.expiresAt).getTime() >= now.getTime());
 const activeTransactionForItem = (state: AppStateData, itemId: string) =>
   state.transactions.some(
     (tx) =>
@@ -57,7 +58,7 @@ const activeTransactionForItem = (state: AppStateData, itemId: string) =>
       !['COMPLETED', 'CANCELLED', 'DISPUTED'].includes(tx.status),
   );
 const reopenableItem = (item: Item) =>
-  new Date(item.expiresAt).getTime() >= Date.now() &&
+  (!item.expiresAt || new Date(item.expiresAt).getTime() >= Date.now()) &&
   item.status !== 'expired' &&
   item.status !== 'removed' &&
   item.status !== 'VIOLATION';
@@ -135,6 +136,17 @@ const dataSlice = createSlice({
           entry.status === 'active',
       );
       state.currentUserId = user?.id ?? null;
+    },
+    // Đăng nhập thật qua API: thêm (hoặc cập nhật) user vào danh sách và đặt làm người đang đăng nhập,
+    // để Guards và các màn còn dùng mock vẫn tìm thấy currentUser.
+    loginFromApi(state, action: PayloadAction<User>) {
+      const index = state.users.findIndex((user) => user.id === action.payload.id);
+      if (index >= 0) {
+        state.users[index] = { ...state.users[index], ...action.payload };
+      } else {
+        state.users.push(action.payload);
+      }
+      state.currentUserId = action.payload.id;
     },
     logout(state) {
       state.currentUserId = null;

@@ -1,17 +1,35 @@
-import { useMemo, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectData } from '../../app/store';
 import { Button, EmptyState, Icon, PageHeader, ProductCard } from '../../components/ui';
-import { CATEGORIES, CONDITIONS } from '../../constants/domain';
+import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
-import type { ItemCondition, ItemType } from '../../types/domain';
+import type { Item, ItemCondition, ItemType } from '../../types/domain';
+import { catalogApi } from '../../services/catalogApi';
+import { itemApi } from '../../services/itemApi';
+import {
+  toAreaOptions,
+  toCategoryIdByName,
+  toCategoryNames,
+  toFeItem,
+  type AreaOption,
+} from '../../services/mappers';
+
+const PAGE_SIZE = 20;
 
 export function Browse() {
   const [params] = useSearchParams();
   const data = useAppSelector(selectData);
-  const { items, users } = data;
-  const districts = useMemo(() => dataDistricts(data), [data]);
+  const { users } = data;
+  const [items, setItems] = useState<Item[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [categoryIds, setCategoryIds] = useState<Map<string, number>>(new Map());
+  const [districts, setDistricts] = useState<AreaOption[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [itemsLoading, setItemsLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState('');
+  const [itemsError, setItemsError] = useState('');
   const [q, setQ] = useState(params.get('q') ?? '');
   const typeParam = params.get('type');
   const [type, setType] = useState<ItemType | ''>(
@@ -21,17 +39,93 @@ export function Browse() {
   const [condition, setCondition] = useState<ItemCondition | ''>('');
   const [district, setDistrict] = useState(params.get('district') ?? '');
   const [mobileFilters, setMobileFilters] = useState(false);
+  const [page, setPage] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setCatalogLoading(true);
+    setCatalogError('');
+    Promise.all([catalogApi.categories(), catalogApi.areas()])
+      .then(([categoryData, areaData]) => {
+        if (!active) return;
+        setCategories(toCategoryNames(categoryData));
+        setCategoryIds(toCategoryIdByName(categoryData));
+        setDistricts(toAreaOptions(areaData));
+      })
+      .catch(() => {
+        if (!active) return;
+        setCategories([]);
+        setCategoryIds(new Map());
+        setDistricts([]);
+        setCatalogError('Không tải được danh mục hoặc khu vực.');
+      })
+      .finally(() => {
+        if (!active) return;
+        setCatalogLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (catalogLoading) return;
+    let active = true;
+    setItemsLoading(true);
+    setItemsError('');
+    const categoryId = category ? categoryIds.get(category) : undefined;
+    const parsedAreaId = district ? Number(district) : undefined;
+    itemApi
+      .list({
+        categoryId,
+        areaId:
+          parsedAreaId !== undefined && Number.isSafeInteger(parsedAreaId) && parsedAreaId > 0
+            ? parsedAreaId
+            : undefined,
+        page,
+        size: PAGE_SIZE,
+      })
+      .then((response) => {
+        if (!active) return;
+        const categoryNames = new Map(Array.from(categoryIds.entries(), ([name, id]) => [id, name]));
+        const areaNames = new Map(districts.map((area) => [area.id, area.label]));
+        setItems(response.items.map((item) => toFeItem(item, categoryNames, areaNames)));
+        setPage(response.page);
+        setTotalElements(response.totalElements);
+      })
+      .catch(() => {
+        if (!active) return;
+        setItems([]);
+        setTotalElements(0);
+        setItemsError('Không tải được danh sách bài đăng.');
+      })
+      .finally(() => {
+        if (active) setItemsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [catalogLoading, category, categoryIds, district, districts, page]);
+
+  useEffect(() => {
+    if (!district || districts.some((area) => String(area.id) === district)) return;
+    const matched = districts.find((area) => area.label === district || area.name === district);
+    if (matched) {
+      setDistrict(String(matched.id));
+      setPage(0);
+    }
+  }, [district, districts]);
+
+  const selectedDistrictLabel = districts.find((area) => String(area.id) === district)?.label ?? district;
+
   const results = useMemo(
     () =>
       items
-        .filter((i) => i.status === 'approved' || i.status === 'APPROVED')
-        .filter((i) => new Date(i.expiresAt).getTime() >= Date.now())
         .filter((i) => !q || `${i.title} ${i.description}`.toLowerCase().includes(q.toLowerCase()))
         .filter((i) => !type || i.type === type)
-        .filter((i) => !category || i.category === category)
-        .filter((i) => !condition || i.condition === condition)
-        .filter((i) => !district || i.district === district),
-    [items, q, type, category, condition, district],
+        .filter((i) => !condition || i.condition === condition),
+    [items, q, type, condition],
   );
   const reset = () => {
     setQ('');
@@ -39,6 +133,7 @@ export function Browse() {
     setCategory('');
     setCondition('');
     setDistrict('');
+    setPage(0);
   };
   const activeFilters = [
     type
@@ -48,7 +143,9 @@ export function Browse() {
           clear: () => setType('' as ItemType | ''),
         }
       : null,
-    category ? { key: 'category', label: category, clear: () => setCategory('') } : null,
+    category
+      ? { key: 'category', label: category, clear: () => { setCategory(''); setPage(0); } }
+      : null,
     condition
       ? {
           key: 'condition',
@@ -56,7 +153,9 @@ export function Browse() {
           clear: () => setCondition('' as ItemCondition | ''),
         }
       : null,
-    district ? { key: 'district', label: district, clear: () => setDistrict('') } : null,
+    district
+      ? { key: 'district', label: selectedDistrictLabel, clear: () => { setDistrict(''); setPage(0); } }
+      : null,
   ].filter(Boolean) as Array<{ key: string; label: string; clear: () => void }>;
 
   const filters = (
@@ -95,9 +194,18 @@ export function Browse() {
           <option value="gift">Cho tặng</option>
           <option value="trade">Trao đổi</option>
         </FilterSelect>
-        <FilterSelect label="Danh mục" value={category} onChange={(e) => setCategory(e.target.value)}>
+        <FilterSelect
+          label="Danh mục"
+          value={category}
+          onChange={(e) => {
+            setCategory(e.target.value);
+            setPage(0);
+          }}
+        >
           <option value="">Tất cả</option>
-          {CATEGORIES.map((c) => (
+          {catalogLoading ? <option disabled>Đang tải danh mục...</option> : null}
+          {!catalogLoading && !categories.length ? <option disabled>Chưa có danh mục</option> : null}
+          {categories.map((c) => (
             <option key={c}>{c}</option>
           ))}
         </FilterSelect>
@@ -113,12 +221,22 @@ export function Browse() {
             </option>
           ))}
         </FilterSelect>
-        <FilterSelect label="Khu vực" value={district} onChange={(e) => setDistrict(e.target.value)}>
+        <FilterSelect
+          label="Khu vực"
+          value={district}
+          onChange={(e) => {
+            setDistrict(e.target.value);
+            setPage(0);
+          }}
+        >
           <option value="">Tất cả quận</option>
+          {catalogLoading ? <option disabled>Đang tải khu vực...</option> : null}
+          {!catalogLoading && !districts.length ? <option disabled>Chưa có khu vực</option> : null}
           {districts.map((d) => (
-            <option key={d}>{d}</option>
+            <option key={d.id} value={d.id}>{d.label}</option>
           ))}
         </FilterSelect>
+        {catalogError ? <p className="text-xs text-error">{catalogError}</p> : null}
       </div>
     </>
   );
@@ -170,7 +288,11 @@ export function Browse() {
               <option>Gần ngày hết hạn</option>
             </select>
           </div>
-          {results.length ? (
+          {itemsLoading ? (
+            <EmptyState title="Đang tải bài đăng" text="Vui lòng chờ trong giây lát." />
+          ) : itemsError ? (
+            <EmptyState title="Không tải được bài đăng" text={itemsError} />
+          ) : results.length ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {results.map((item) => (
                 <ProductCard
@@ -191,6 +313,27 @@ export function Browse() {
               }
             />
           )}
+          {!itemsLoading && !itemsError && totalElements > PAGE_SIZE ? (
+            <div className="mt-6 flex items-center justify-center gap-3">
+              <Button
+                variant="outline"
+                disabled={page === 0}
+                onClick={() => setPage((current) => Math.max(0, current - 1))}
+              >
+                Trang trước
+              </Button>
+              <span className="text-sm text-text-muted">
+                Trang {page + 1} / {Math.ceil(totalElements / PAGE_SIZE)}
+              </span>
+              <Button
+                variant="outline"
+                disabled={(page + 1) * PAGE_SIZE >= totalElements}
+                onClick={() => setPage((current) => current + 1)}
+              >
+                Trang sau
+              </Button>
+            </div>
+          ) : null}
         </section>
       </div>
     </div>
@@ -220,8 +363,4 @@ function FilterSelect({
       </span>
     </label>
   );
-}
-
-function dataDistricts(data: ReturnType<typeof selectData>) {
-  return data.districts.filter((district) => district.status === 'active').map((district) => district.name);
 }
