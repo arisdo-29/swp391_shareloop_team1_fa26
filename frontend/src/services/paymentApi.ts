@@ -1,0 +1,44 @@
+import { http } from './http';
+import type { WalletResponse } from './walletApi';
+
+// Contract: docs/api/payment.md
+export const paymentApiEndpoints = {
+  createTopUpOrder: '/api/v1/wallet/topup-orders',
+  mockConfirm: (orderCode: string) =>
+    `/api/v1/wallet/topup-orders/${encodeURIComponent(orderCode)}/mock-confirm`,
+} as const;
+
+export type PaymentOrderStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'EXPIRED';
+export type PaymentProvider = 'MOCK' | 'VNPAY';
+
+export interface CreateTopUpOrderRequest {
+  amountVnd: number;
+}
+
+export interface TopUpOrderResponse {
+  orderCode: string;
+  amountVnd: number;
+  credits: number;
+  status: PaymentOrderStatus;
+  provider: PaymentProvider;
+  redirectUrl: string;
+}
+
+export interface TopUpConfirmResponse {
+  orderCode: string;
+  status: PaymentOrderStatus;
+  credits: number;
+  wallet: WalletResponse;
+}
+
+export const paymentApi = {
+  async createTopUpOrder(input: CreateTopUpOrderRequest): Promise<TopUpOrderResponse> {
+    const { data } = await http.post<TopUpOrderResponse>(paymentApiEndpoints.createTopUpOrder, input);
+    return data;
+  },
+  // Chỉ có ở dev/staging (app.payment.mock.enabled=true); production trả 404.
+  async mockConfirm(orderCode: string): Promise<TopUpConfirmResponse> {
+    const { data } = await http.post<TopUpConfirmResponse>(paymentApiEndpoints.mockConfirm(orderCode));
+    return data;
+  },
+};

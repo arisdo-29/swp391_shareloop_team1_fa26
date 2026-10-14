@@ -18,3 +18,7 @@ app:
   # module auth / config (BE1)
   cors:
     allowed-origins: http://localhost:5173
+  # module integration/payment (BE1)
+  payment:
+    mock:
+      enabled: true
