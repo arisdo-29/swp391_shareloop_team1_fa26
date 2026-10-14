@@ -5,6 +5,7 @@ import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.CreateRequest;
+import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
@@ -244,6 +245,21 @@ public class RequestService {
     @Transactional(readOnly = true)
     public boolean hasReservedOrHigherRequest(long itemId) {
         return requestRepository.hasReservedOrHigherRequest(itemId);
+    }
+
+    /**
+     * Lấy thông tin ngữ cảnh yêu cầu giao dịch dùng cho xác thực truy cập và trạng thái chat (FR-68, BR-C03).
+     */
+    @Transactional(readOnly = true)
+    public RequestChatContext getChatContext(long requestId) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+
+        ItemSnapshot item = findItemSnapshot(request.getItemId())
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+
+        return new RequestChatContext(request.getId(), request.getStatus(), request.getReceiverId(), item.donorId());
     }
 
     Optional<ItemSnapshot> findItemSnapshot(long itemId) {
