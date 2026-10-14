@@ -35,6 +35,9 @@ class ChatServiceTest {
     @Mock
     RequestService requestService;
 
+    @Mock
+    ChatContactFilter chatContactFilter;
+
     @InjectMocks
     ChatService chatService;
 
@@ -138,6 +141,26 @@ class ChatServiceTest {
                     .isInstanceOf(BusinessException.class)
                     .satisfies(e ->
                             assertThat(((BusinessException) e).getErrorCode()).isEqualTo(ChatErrorCode.CHAT_FORBIDDEN));
+        }
+
+        @Test
+        @DisplayName("Ném lỗi CHAT_MESSAGE_BLOCKED khi tin nhắn chứa thông tin liên hệ")
+        void sendMessage_throwsWhenContactInfoDetected() {
+            RequestChatContext context =
+                    new RequestChatContext(REQUEST_ID, RequestStatus.RESERVED, RECEIVER_ID, DONOR_ID);
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(context);
+
+            org.mockito.Mockito.doThrow(new BusinessException(
+                            ChatErrorCode.CHAT_MESSAGE_BLOCKED, "Tin nhắn bị chặn do chứa thông tin liên hệ"))
+                    .when(chatContactFilter)
+                    .validateMessage("Gọi không chín một hai ba bốn năm sáu bảy tám");
+
+            SendMessageRequest req = new SendMessageRequest("Gọi không chín một hai ba bốn năm sáu bảy tám");
+
+            assertThatThrownBy(() -> chatService.sendMessage(REQUEST_ID, RECEIVER_ID, req))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                            .isEqualTo(ChatErrorCode.CHAT_MESSAGE_BLOCKED));
         }
     }
 
