@@ -1,16 +1,26 @@
 package com.shareloop.wallet.service;
 
+import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.wallet.WalletErrorCode;
 import com.shareloop.wallet.dto.WalletResponse;
+import com.shareloop.wallet.dto.WalletTransactionResponse;
 import com.shareloop.wallet.entity.CreditLedgerEntry;
 import com.shareloop.wallet.entity.CreditTxType;
+import com.shareloop.wallet.entity.PaymentOrder;
+import com.shareloop.wallet.entity.PaymentOrderStatus;
 import com.shareloop.wallet.entity.WalletAccount;
 import com.shareloop.wallet.mapper.WalletMapper;
 import com.shareloop.wallet.repository.CreditLedgerRepository;
+import com.shareloop.wallet.repository.PaymentOrderRepository;
 import com.shareloop.wallet.repository.WalletAccountRepository;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.EnumSet;
 import java.util.Set;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,7 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Mọi số tiền do người gọi truyền vào; người gọi lấy mức phí từ ConfigService (post_fee, edit_fee, renew_fee,
  * boost_fee, ai_search_fee), CreditService không viết cứng con số nào.
  *
- * <p>Người gọi: listingfee (hold, release, chargeHeld), item/search (spend), payment IPN (topUp).
+ * <p>Người gọi: listingfee (hold, release, chargeHeld), item/search (spend), wallet.PaymentService (topUp).
  */
 @Service
 // @Transactional ở class: mọi hàm public chạy trong một transaction (REQUIRED = tham gia transaction của người
@@ -30,7 +40,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class CreditService {
 
-    private static final String TODO = "TODO BE1 - tuan 5";
+    // Mốc thay cho from / to khi người dùng không lọc; để truy vấn luôn có đủ hai đầu khoảng, không cần query riêng.
+    private static final Instant EARLIEST = Instant.EPOCH;
+    private static final Instant LATEST = Instant.parse("9999-12-31T00:00:00Z");
 
     // Dùng EnumSet vì contains(null) trả false; Set.of(...) sẽ ném NullPointerException khi type là null.
     private static final Set<CreditTxType> HELD_FEE_TYPES = EnumSet.of(CreditTxType.POST_FEE, CreditTxType.EDIT_FEE);
@@ -39,15 +51,21 @@ public class CreditService {
 
     private final WalletAccountRepository walletAccountRepository;
     private final CreditLedgerRepository creditLedgerRepository;
+    private final PaymentOrderRepository paymentOrderRepository;
     private final WalletMapper walletMapper;
+    private final Clock clock;
 
     public CreditService(
             WalletAccountRepository walletAccountRepository,
             CreditLedgerRepository creditLedgerRepository,
-            WalletMapper walletMapper) {
+            PaymentOrderRepository paymentOrderRepository,
+            WalletMapper walletMapper,
+            Clock clock) {
         this.walletAccountRepository = walletAccountRepository;
         this.creditLedgerRepository = creditLedgerRepository;
+        this.paymentOrderRepository = paymentOrderRepository;
         this.walletMapper = walletMapper;
+        this.clock = clock;
     }
 
     /**
@@ -153,23 +171,73 @@ public class CreditService {
     }
 
     /**
-     * Cộng Credit cho đơn nạp đã thanh toán thành công (F04 bước 3).
+     * Chốt đơn nạp đã được cổng xác nhận và cộng Credit (F04 bước 3; FR-14, BR-P10).
      *
-     * <p>Quy tắc: đơn payment_orders phải SUCCESS và đúng chủ; {@code credit_balance += credits} của đơn,
-     * {@code has_topped_up = true}, ghi credit_ledger TOP_UP với payment_order_id và balance_after. Index unique
-     * ux_ledger_order chặn cộng hai lần một đơn; gọi lại cho đơn đã cộng bị từ chối.
+     * <p>Quy tắc: đơn PENDING thì chuyển SUCCESS, {@code credit_balance += credits} của đơn,
+     * {@code has_topped_up = true}, ghi credit_ledger TOP_UP với payment_order_id và balance_after. Đơn đã SUCCESS
+     * thì không cộng nữa, chỉ trả ví hiện tại (gọi lại nhiều lần vẫn an toàn). Số Credit lấy từ
+     * {@code payment_orders.credits} (đã tính khi tạo đơn theo ConfigService), hàm này không tự tính.
      *
-     * <p>Transaction: một transaction duy nhất cùng với việc chốt đơn SUCCESS và lưu callback_data do người gọi
-     * (IPN) thực hiện, chỉ sau khi đã kiểm chữ ký và đối chiếu số tiền. Khoá: dòng users của userId. Số Credit
-     * lấy từ {@code payment_orders.credits} (đã tính khi tạo đơn theo ConfigService), hàm này không tự tính.
+     * <p>Transaction: REQUIRED. Khoá theo thứ tự dòng users rồi dòng payment_orders, và kiểm trạng thái SAU khi
+     * khoá: hai lời gọi cùng lúc cho một đơn thì lời gọi sau chờ, rồi thấy SUCCESS nên không cộng lần hai. Người
+     * gọi chỉ gọi hàm này sau khi cổng đã xác nhận thanh toán.
      *
-     * @param userId chủ ví
-     * @param paymentOrderId đơn nạp cần cộng
-     * @throws com.shareloop.common.exception.BusinessException WALLET_PAYMENT_ORDER_NOT_FOUND khi không có đơn;
-     *     WALLET_PAYMENT_ORDER_NOT_PAYABLE khi đơn không SUCCESS, sai chủ hoặc đã cộng; WALLET_NOT_FOUND
+     * @param userId chủ ví, phải là chủ đơn
+     * @param paymentOrderId đơn nạp cần chốt
+     * @return ví sau khi cộng, hoặc ví hiện tại nếu đơn đã được cộng từ trước
+     * @throws com.shareloop.common.exception.BusinessException WALLET_PAYMENT_ORDER_NOT_FOUND khi không có đơn hoặc
+     *     đơn của người khác; WALLET_PAYMENT_ORDER_NOT_PAYABLE khi đơn FAILED hoặc EXPIRED; WALLET_NOT_FOUND
      */
-    public void topUp(long userId, long paymentOrderId) {
-        throw new UnsupportedOperationException(TODO);
+    public WalletResponse topUp(long userId, long paymentOrderId) {
+        WalletAccount wallet = lockWallet(userId);
+        PaymentOrder order = lockPaymentOrder(paymentOrderId);
+        requireOrderOwner(order, userId);
+
+        if (order.getStatus() == PaymentOrderStatus.SUCCESS) {
+            return walletMapper.toResponse(wallet);
+        }
+        if (order.getStatus() != PaymentOrderStatus.PENDING) {
+            throw new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE);
+        }
+
+        order.markSuccess(clock.instant());
+        wallet.topUp(order.getCredits());
+        creditLedgerRepository.save(
+                CreditLedgerEntry.topUp(userId, order.getCredits(), wallet.getCreditBalance(), order.getId()));
+        return walletMapper.toResponse(wallet);
+    }
+
+    /**
+     * Lịch sử ví của chính người dùng, mới nhất trước (UC-11, FR-16, BR-P09).
+     *
+     * <p>Quy tắc: chỉ các dòng credit_ledger (giao dịch làm đổi số dư thật); giữ chỗ và nhả giữ không ghi sổ cái
+     * nên không có ở đây. Lọc theo khoảng [from, to); bỏ trống đầu nào thì không giới hạn đầu đó.
+     *
+     * <p>Transaction: read-only, không khoá dòng.
+     *
+     * @param userId chủ ví (lấy từ token)
+     * @param from mốc bắt đầu (gồm), có thể null
+     * @param to mốc kết thúc (không gồm), có thể null
+     * @param page số trang, bắt đầu từ 0
+     * @param size số dòng mỗi trang
+     * @throws com.shareloop.common.exception.BusinessException WALLET_INVALID_DATE_RANGE khi from không trước to
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<WalletTransactionResponse> getTransactions(
+            long userId, Instant from, Instant to, int page, int size) {
+        Instant rangeStart = from != null ? from : EARLIEST;
+        Instant rangeEnd = to != null ? to : LATEST;
+        if (!rangeStart.isBefore(rangeEnd)) {
+            throw new BusinessException(WalletErrorCode.WALLET_INVALID_DATE_RANGE);
+        }
+
+        // Sắp thêm theo id để các dòng cùng created_at vẫn có thứ tự cố định giữa các trang.
+        Sort newestFirst = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
+        Page<WalletTransactionResponse> result = creditLedgerRepository
+                .findByUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                        userId, rangeStart, rangeEnd, PageRequest.of(page, size, newestFirst))
+                .map(walletMapper::toTransactionResponse);
+        return PageResponse.from(result);
     }
 
     /**
@@ -207,6 +275,19 @@ public class CreditService {
         return walletAccountRepository
                 .lockById(userId)
                 .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
+    }
+
+    private PaymentOrder lockPaymentOrder(long paymentOrderId) {
+        return paymentOrderRepository
+                .lockById(paymentOrderId)
+                .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND));
+    }
+
+    // Đơn của người khác báo "không tìm thấy" như đơn không tồn tại, để không lộ là mã đơn đó có thật.
+    private void requireOrderOwner(PaymentOrder order, long userId) {
+        if (order.getUserId() != userId) {
+            throw new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND);
+        }
     }
 
     // Cột credit_ledger.amount là INT; toIntExact ném ArithmeticException (và rollback) thay vì cắt số âm thầm.
