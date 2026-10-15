@@ -91,6 +91,15 @@ Xem chi tiết một bài đăng theo ID.
 
 ---
 
+## PUT /api/v1/items/{id}
+
+- **Xác thực:** Bearer Token, chỉ chủ bài. Body gồm các trường nội dung như `CreateItemRequest`; `images` có thể bỏ qua để giữ ảnh hiện tại, hoặc gửi 3–8 URL media của chính chủ bài để thay toàn bộ và sắp lại thứ tự.
+- **Luồng:** Từ chối bài đã `RESERVED`/`TRADED`/`EXPIRED` hoặc có Request từ `RESERVED` trở lên. Kiểm duyệt tầng 1 tiêu đề, mô tả và món mong muốn; nội dung bị chặn trả `422`, không giữ phí hay đổi bài. Sau đó gọi `quoteEdit` và `holdEditFee` theo [luật phí sửa](listingfee.md). Bài thành `PENDING_REVIEW`, tạm ẩn để Admin duyệt lại.
+- **Thành công:** `200 OK`, `ItemResponse` mới.
+- **Lỗi chính:** `401 UNAUTHORIZED`, `403 ITEM_NOT_OWNER`, `404 ITEM_NOT_FOUND`, `409 ITEM_EDIT_NOT_ALLOWED`, `422 ITEM_MODERATION_BLOCKED` (`field: content`), `422 ITEM_INVALID_IMAGE_COUNT`, lỗi media và `402 WALLET_INSUFFICIENT_BALANCE`.
+
+---
+
 ## 3. GET /api/v1/me/items
 
 Xem danh sách tất cả các bài đăng do chính mình tạo (sắp xếp mới nhất lên trước).
@@ -168,5 +177,8 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2`. `q` rỗng ho�
 | `ITEM_DEFECT_NOTE_REQUIRED` | 400 | Bài đăng có tình trạng DEFECTIVE nhưng thiếu mô tả lỗi |
 | `ITEM_INVALID_IMAGE` | 400 | URL ảnh không phải URL do API media trả về |
 | `ITEM_INVALID_IMAGE_COUNT` | 422 | `images` có ít hơn 3 hoặc nhiều hơn 8 phần tử |
+| `ITEM_NOT_OWNER` | 403 | Sửa bài không phải của mình |
+| `ITEM_EDIT_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được sửa |
+| `ITEM_MODERATION_BLOCKED` | 422 | Nội dung sửa bị kiểm duyệt tầng 1 chặn |
 | `VALIDATION_FAILED` | 400 | Sai định dạng hoặc thiếu trường bắt buộc |
 | `UNAUTHORIZED` | 401 | Thiếu token hoặc token không hợp lệ |

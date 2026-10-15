@@ -5,15 +5,22 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.dto.CreateItemRequest;
 import com.shareloop.item.dto.ItemResponse;
+import com.shareloop.item.dto.UpdateItemRequest;
 import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.mapper.ItemMapper;
 import com.shareloop.item.repository.ItemRepository;
+import com.shareloop.listingfee.service.PostFeeService;
+import com.shareloop.media.MediaErrorCode;
 import com.shareloop.media.service.MediaService;
+import com.shareloop.moderation.ModerationStatus;
+import com.shareloop.moderation.service.ContentModerationService;
+import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -36,16 +43,25 @@ public class ItemService {
     private final JdbcClient jdbcClient;
     private final MediaService mediaService;
     private final ConfigService configService;
+    private final RequestQueryService requestQueryService;
+    private final ContentModerationService contentModerationService;
+    private final PostFeeService postFeeService;
 
     public ItemService(
             ItemRepository itemRepository,
             @Autowired(required = false) JdbcClient jdbcClient,
             MediaService mediaService,
-            ConfigService configService) {
+            ConfigService configService,
+            RequestQueryService requestQueryService,
+            ContentModerationService contentModerationService,
+            PostFeeService postFeeService) {
         this.itemRepository = itemRepository;
         this.jdbcClient = jdbcClient;
         this.mediaService = mediaService;
         this.configService = configService;
+        this.requestQueryService = requestQueryService;
+        this.contentModerationService = contentModerationService;
+        this.postFeeService = postFeeService;
     }
 
     /**
@@ -93,6 +109,65 @@ public class ItemService {
         Item saved = itemRepository.save(item);
         saveMediaMappings(saved.getId(), mediaIds);
         return ItemMapper.toResponse(saved, mediaUrls(mediaIds));
+    }
+
+    @Transactional
+    public ItemResponse updateItem(long itemId, long userId, UpdateItemRequest request) {
+        Item item = requireItem(itemId);
+        if (item.getDonorId() != userId) {
+            throw new BusinessException(ItemErrorCode.ITEM_NOT_OWNER);
+        }
+        if (item.getStatus() == ItemStatus.RESERVED
+                || item.getStatus() == ItemStatus.TRADED
+                || item.getStatus() == ItemStatus.EXPIRED
+                || requestQueryService.hasReservedOrHigherRequest(itemId)) {
+            throw new BusinessException(ItemErrorCode.ITEM_EDIT_NOT_ALLOWED);
+        }
+        validateContent(request.offerType(), request.desiredItem(), request.condition(), request.defectNote());
+        String moderationText = request.desiredItem() == null
+                ? request.description()
+                : request.description() + " " + request.desiredItem();
+        var moderation = contentModerationService.checkPost(request.categoryId(), request.title(), moderationText);
+        if (moderation.status() == ModerationStatus.BLOCK) {
+            throw new BusinessException(
+                    ItemErrorCode.ITEM_MODERATION_BLOCKED,
+                    ItemErrorCode.ITEM_MODERATION_BLOCKED.defaultMessage(),
+                    "content",
+                    Map.of("reasonCode", moderation.reasonCode(), "matchedTerms", moderation.matchedTerms()));
+        }
+
+        List<Long> newMediaIds = null;
+        if (request.images() != null) {
+            validateImageCount(request.images());
+            newMediaIds = parseMediaIds(request.images());
+            if (new HashSet<>(newMediaIds).size() != newMediaIds.size()) {
+                throw new BusinessException(MediaErrorCode.MEDIA_INVALID_FILE);
+            }
+        }
+        postFeeService.quoteEdit(itemId, userId);
+        postFeeService.holdEditFee(itemId, userId);
+        if (requestQueryService.hasReservedOrHigherRequest(itemId)) {
+            throw new BusinessException(ItemErrorCode.ITEM_EDIT_NOT_ALLOWED);
+        }
+
+        item.submitEdit(
+                request.categoryId(),
+                request.areaId(),
+                request.offerType(),
+                request.title(),
+                request.description(),
+                request.desiredItem(),
+                request.condition(),
+                request.defectNote(),
+                request.brand());
+        if (newMediaIds != null) {
+            replaceMediaMappings(itemId, userId, newMediaIds);
+        }
+        jdbcClient
+                .sql("UPDATE items SET ai_risk = 'UNCHECKED', ai_result = NULL WHERE id = :itemId")
+                .param("itemId", itemId)
+                .update();
+        return ItemMapper.toResponse(item, findImages(itemId));
     }
 
     /**
@@ -221,6 +296,46 @@ public class ItemService {
                     }
                 })
                 .toList();
+    }
+
+    private void validateContent(OfferType offerType, String desiredItem, ItemCondition condition, String defectNote) {
+        if (offerType == OfferType.SWAP && (desiredItem == null || desiredItem.isBlank())) {
+            throw new BusinessException(ItemErrorCode.ITEM_SWAP_DESIRED_ITEM_REQUIRED);
+        }
+        if (condition == ItemCondition.DEFECTIVE && (defectNote == null || defectNote.isBlank())) {
+            throw new BusinessException(ItemErrorCode.ITEM_DEFECT_NOTE_REQUIRED);
+        }
+    }
+
+    private void validateImageCount(List<String> images) {
+        int minImages = configService.getInt(ConfigKey.ITEM_PHOTOS_MIN);
+        int maxImages = configService.getInt(ConfigKey.ITEM_PHOTOS_MAX);
+        if (images.size() < minImages || images.size() > maxImages) {
+            throw new BusinessException(
+                    ItemErrorCode.ITEM_INVALID_IMAGE_COUNT,
+                    "Bài đăng cần từ %d đến %d ảnh.".formatted(minImages, maxImages),
+                    "images",
+                    Map.of("min", minImages, "max", maxImages));
+        }
+    }
+
+    private void replaceMediaMappings(long itemId, long userId, List<Long> newMediaIds) {
+        List<Long> oldMediaIds = jdbcClient
+                .sql("SELECT media_id FROM item_media_mappings WHERE item_id = :itemId AND role = 'PHOTO'")
+                .param("itemId", itemId)
+                .query(Long.class)
+                .list();
+        List<Long> added =
+                newMediaIds.stream().filter(id -> !oldMediaIds.contains(id)).toList();
+        List<Long> removed =
+                oldMediaIds.stream().filter(id -> !newMediaIds.contains(id)).toList();
+        mediaService.attach(added, userId);
+        jdbcClient
+                .sql("DELETE FROM item_media_mappings WHERE item_id = :itemId AND role = 'PHOTO'")
+                .param("itemId", itemId)
+                .update();
+        saveMediaMappings(itemId, newMediaIds);
+        mediaService.detach(removed, userId);
     }
 
     private List<String> mediaUrls(List<Long> mediaIds) {

@@ -12,6 +12,9 @@ public enum ItemErrorCode implements ErrorCode {
     ITEM_DEFECT_NOTE_REQUIRED(HttpStatus.BAD_REQUEST, "Bài đăng đồ lỗi bắt buộc phải có mô tả lỗi."),
     ITEM_INVALID_IMAGE(HttpStatus.BAD_REQUEST, "Ảnh phải là URL trả về từ API upload media."),
     ITEM_INVALID_IMAGE_COUNT(HttpStatus.UNPROCESSABLE_CONTENT, "Bài đăng cần từ 3 đến 8 ảnh."),
+    ITEM_NOT_OWNER(HttpStatus.FORBIDDEN, "Bạn không phải chủ bài đăng."),
+    ITEM_EDIT_NOT_ALLOWED(HttpStatus.CONFLICT, "Bài đăng đã có yêu cầu được giữ chỗ hoặc không thể sửa."),
+    ITEM_MODERATION_BLOCKED(HttpStatus.UNPROCESSABLE_CONTENT, "Nội dung bài đăng không qua kiểm duyệt tầng 1."),
     ITEM_INVALID_STATUS_TRANSITION(HttpStatus.CONFLICT, "Không thể chuyển trạng thái bài đăng.");
 
     private final HttpStatus status;
