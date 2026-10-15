@@ -6,35 +6,32 @@ export interface MessageResponse {
   senderId: number;
   kind: string;
   content: string;
-  mediaId?: number;
-  refItemId?: number;
-  offerStatus?: string;
-  moderation: string;
-  blockedReason?: string;
+  mediaId?: number | null;
+  refItemId?: number | null;
+  offerStatus?: string | null;
+  moderation?: string | null;
+  blockedReason?: string | null;
   createdAt: string;
 }
 
-export interface SendMessageBody {
+export interface SendMessageRequest {
   content: string;
 }
 
 export const chatApi = {
-  async getMessages(requestId: number, currentUserId: number, afterId?: number): Promise<MessageResponse[]> {
-    const params: { currentUserId: number; afterId?: number } = { currentUserId };
-    if (afterId !== undefined && afterId > 0) {
-      params.afterId = afterId;
-    }
+  async list(requestId: number, currentUserId: number, afterId?: number) {
     const { data } = await http.get<MessageResponse[]>(`/api/v1/requests/${requestId}/messages`, {
-      params,
+      params: { currentUserId, afterId },
     });
     return data;
   },
 
-  async sendMessage(requestId: number, currentUserId: number, content: string): Promise<MessageResponse> {
-    const body: SendMessageBody = { content };
-    const { data } = await http.post<MessageResponse>(`/api/v1/requests/${requestId}/messages`, body, {
-      params: { currentUserId },
-    });
+  async send(requestId: number, currentUserId: number, input: SendMessageRequest) {
+    const { data } = await http.post<MessageResponse>(
+      `/api/v1/requests/${requestId}/messages`,
+      input,
+      { params: { currentUserId } },
+    );
     return data;
   },
 };

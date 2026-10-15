@@ -13,7 +13,7 @@ import { toAreaOptions, toCategoryIdByName, toCategoryNames, type AreaOption } f
 import { itemApi, type ApiCondition } from '../../services/itemApi';
 import { mediaApi } from '../../services/mediaApi';
 import { toBackendUserId } from '../../services/requestApi';
-import { useWallet } from '../../app/WalletContext';
+import { useWallet } from '../../app/useWallet';
 
 type FormErrors = Partial<Record<'type' | 'title' | 'category' | 'condition' | 'district' | 'description' | 'images', string>>;
 type MediaUploadState = 'idle' | 'uploading' | 'error';
@@ -27,6 +27,8 @@ const INSUFFICIENT_CREDIT = 'Bạn không đủ Credit để đăng bài.';
 const BACKEND_SESSION_REQUIRED = 'Vui lòng đăng nhập bằng tài khoản thật để đăng bài.';
 const SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST =
   import.meta.env.DEV && import.meta.env.VITE_POST_SKIP_MEDIA_UPLOAD === 'true';
+const ITEM_IMAGES_MIN = 3;
+const ITEM_IMAGES_MAX = 8;
 
 const CONDITION_TO_API: Record<ItemCondition, ApiCondition> = {
   new: 'NEW',
@@ -99,6 +101,11 @@ export function Post() {
     if (!condition) nextErrors.condition = 'Vui lòng chọn tình trạng món đồ.';
     if (!district) nextErrors.district = 'Vui lòng chọn khu vực.';
     if (!description.trim()) nextErrors.description = 'Vui lòng nhập mô tả.';
+    if (!SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST && imageFiles.length < ITEM_IMAGES_MIN) {
+      nextErrors.images = `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.`;
+    } else if (imageFiles.length > ITEM_IMAGES_MAX) {
+      nextErrors.images = `Chỉ được chọn tối đa ${ITEM_IMAGES_MAX} ảnh.`;
+    }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -114,11 +121,11 @@ export function Post() {
       setError(BACKEND_SESSION_REQUIRED);
       return;
     }
-    if (type === 'trade' && availableCredit === null) {
+    if (!isApiAccount && type === 'trade' && availableCredit === null) {
       setError(walletLoading ? 'Đang tải số dư Credit. Vui lòng chờ trong giây lát.' : walletError || 'Chưa thể xác minh số dư Credit.');
       return;
     }
-    if (type === 'trade' && availableCredit !== null && availableCredit < POST_LISTING_FEE) {
+    if (!isApiAccount && type === 'trade' && availableCredit !== null && availableCredit < POST_LISTING_FEE) {
       setError(INSUFFICIENT_CREDIT);
       setConfirmOpen(false);
       return;
@@ -133,12 +140,12 @@ export function Post() {
       setConfirmOpen(false);
       return;
     }
-    if (type === 'trade' && availableCredit === null) {
+    if (!isApiAccount && type === 'trade' && availableCredit === null) {
       setError(walletLoading ? 'Đang tải số dư Credit. Vui lòng chờ trong giây lát.' : walletError || 'Chưa thể xác minh số dư Credit.');
       setConfirmOpen(false);
       return;
     }
-    if (type === 'trade' && availableCredit !== null && availableCredit < POST_LISTING_FEE) {
+    if (!isApiAccount && type === 'trade' && availableCredit !== null && availableCredit < POST_LISTING_FEE) {
       setError(INSUFFICIENT_CREDIT);
       setConfirmOpen(false);
       return;
@@ -335,7 +342,9 @@ export function Post() {
           <label className={`flex aspect-[4/3] w-full flex-col items-center justify-center rounded-lg border border-dashed bg-white text-center transition hover:border-primary ${errors.images ? 'border-error' : 'border-border'}`}>
             <Icon name="image" className="size-8 text-primary" />
             <strong className="mt-3 text-sm">Thêm hình ảnh</strong>
-            <span className="mt-1 text-xs text-text-muted">Tối đa 6 ảnh</span>
+            <span className="mt-1 text-xs text-text-muted">
+              Từ {ITEM_IMAGES_MIN} đến {ITEM_IMAGES_MAX} ảnh · thứ tự chọn là thứ tự hiển thị
+            </span>
             <input
               className="hidden"
               type="file"
@@ -344,17 +353,19 @@ export function Post() {
               disabled={submitting || mediaUploading}
               onChange={async (event) => {
                 const selectedFiles = Array.from(event.target.files ?? []);
-                const files = selectedFiles.slice(0, 6);
+                const files = selectedFiles.slice(0, ITEM_IMAGES_MAX);
                 setMediaUploadState('idle');
                 setMediaUploadError('');
-                if (selectedFiles.length > 6) {
-                  setErrors((current) => ({ ...current, images: 'Chỉ được chọn tối đa 6 ảnh.' }));
+                if (selectedFiles.length > ITEM_IMAGES_MAX) {
+                  setErrors((current) => ({ ...current, images: `Chỉ được chọn tối đa ${ITEM_IMAGES_MAX} ảnh.` }));
                 } else if (files.some((file) => !file.type.startsWith('image/'))) {
                   setErrors((current) => ({ ...current, images: 'Vui lòng chỉ chọn tệp hình ảnh.' }));
                   setImageFiles([]);
                   setImages([]);
                   setUploadedImageUrls(new Map());
                   return;
+                } else if (!SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST && files.length < ITEM_IMAGES_MIN) {
+                  setErrors((current) => ({ ...current, images: `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.` }));
                 } else {
                   setErrors((current) => ({ ...current, images: undefined }));
                 }
@@ -404,6 +415,13 @@ export function Post() {
                       });
                       setMediaUploadState('idle');
                       setMediaUploadError('');
+                      const remainingCount = imageFiles.length - 1;
+                      setErrors((current) => ({
+                        ...current,
+                        images: !SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST && remainingCount < ITEM_IMAGES_MIN
+                          ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.`
+                          : undefined,
+                      }));
                     }}
                     className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-white text-error shadow-sm"
                   >
@@ -422,6 +440,11 @@ export function Post() {
           <div className="rounded-lg bg-white p-4 text-xs leading-5 text-text-secondary ring-1 ring-border/80">
             {type === 'gift' ? (
               <strong className="text-primary">Đăng bài cho tặng miễn phí</strong>
+            ) : isApiAccount ? (
+              <>
+                <strong className="text-text-primary">Phí đăng bài theo cấu hình Backend</strong>
+                <p className="mt-1">Backend sẽ kiểm tra và áp dụng phí khi tạo bài.</p>
+              </>
             ) : (
               <>
                 <strong className="text-text-primary">Phí đăng bài: {POST_LISTING_FEE} Credit</strong>
@@ -456,7 +479,7 @@ export function Post() {
             <div className="mt-5 space-y-3 rounded-lg bg-surface-low p-4 text-sm">
               <SummaryRow
                 label={type === 'gift' ? 'Phí đăng bài' : 'Phí đăng bài'}
-                value={type === 'gift' ? 'Miễn phí' : `${POST_LISTING_FEE} Credit`}
+                value={type === 'gift' ? 'Miễn phí' : isApiAccount ? 'Theo cấu hình Backend' : `${POST_LISTING_FEE} Credit`}
               />
               <SummaryRow label="Số dư hiện tại" value={availableCredit === null ? '--' : `${availableCredit} Credit`} />
               <SummaryRow

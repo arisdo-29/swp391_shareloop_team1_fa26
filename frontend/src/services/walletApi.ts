@@ -37,10 +37,8 @@ export interface WalletTransactionParams {
 }
 
 export const walletApi = {
-  async get(currentUserId: number) {
-    const { data } = await http.get<WalletResponse>('/api/v1/wallet', {
-      params: { currentUserId },
-    });
+  async get() {
+    const { data } = await http.get<WalletResponse>('/api/v1/wallet');
     return data;
   },
   async listTransactions(params: WalletTransactionParams = {}): Promise<PageResponse<WalletTransactionResponse>> {

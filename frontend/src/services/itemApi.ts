@@ -37,7 +37,7 @@ export interface CreateItemRequest {
   condition: ApiCondition;
   defectNote: string | null;
   brand: string | null;
-  images?: string[];
+  images: string[];
 }
 
 export interface ItemResponse extends CreateItemRequest {

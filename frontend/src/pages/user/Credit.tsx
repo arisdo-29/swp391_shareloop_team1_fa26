@@ -1,4 +1,4 @@
-import { useMemo, useState, type Dispatch } from 'react';
+import { useEffect, useMemo, useState, type Dispatch } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
@@ -6,7 +6,9 @@ import { Alert, Button, Field, Icon, PageHeader } from '../../components/ui';
 import type { CreditHistory, CreditHistoryType, Item, Topup } from '../../types/domain';
 import { formatCredit, formatVnd } from '../../utils/formatting';
 import { CREDIT_TO_VND } from '../../utils/credit';
-import { useWallet } from '../../app/WalletContext';
+import { useWallet } from '../../app/useWallet';
+import { walletApi, type WalletTransactionResponse } from '../../services/walletApi';
+import { paymentApi, type TopUpOrderResponse } from '../../services/paymentApi';
 
 const packages = [1, 2, 5, 10, 20];
 type Step = 'select' | 'qr' | 'pending';
@@ -37,6 +39,33 @@ function balanceBefore(entry: CreditHistory) {
   return entry.balance - entry.amount;
 }
 
+const walletTransactionLabels: Record<WalletTransactionResponse['type'], string> = {
+  TOP_UP: 'Nạp Credit',
+  POST_FEE: 'Phí đăng bài',
+  EDIT_FEE: 'Phí chỉnh sửa bài',
+  RENEW_FEE: 'Phí gia hạn bài',
+  BOOST_FEE: 'Phí đẩy tin',
+  AI_SEARCH_FEE: 'Phí dịch vụ AI',
+  ADMIN_ADJUST: 'Điều chỉnh bởi quản trị viên',
+};
+
+function toCreditHistory(entry: WalletTransactionResponse, userId: string): CreditHistory {
+  const type: CreditHistoryType = entry.type === 'TOP_UP' ? 'TOPUP' : entry.type === 'AI_SEARCH_FEE' ? 'AI_SPEND' : entry.type === 'ADMIN_ADJUST' ? 'ADMIN_ADJUSTMENT' : 'SPEND';
+  return {
+    id: `api_wallet_${entry.id}`,
+    userId,
+    transactionId: `ledger-${entry.id}`,
+    type,
+    amount: entry.amount,
+    balance: entry.balanceAfter,
+    description: walletTransactionLabels[entry.type],
+    status: 'completed',
+    ref: entry.type === 'POST_FEE' && entry.itemId ? `post:${entry.itemId}:fee` : undefined,
+    note: entry.note ?? '',
+    createdAt: entry.createdAt,
+  };
+}
+
 export function Credit() {
   const user = useAppSelector(selectCurrentUser)!;
   const data = useAppSelector(selectData);
@@ -44,27 +73,62 @@ export function Credit() {
   const navigate = useNavigate();
   const [creditAmount, setCreditAmount] = useState(5);
   const [customAmount, setCustomAmount] = useState('');
+  const [apiAmountVnd, setApiAmountVnd] = useState('');
   const [step, setStep] = useState<Step>('select');
   const [transactionCode, setTransactionCode] = useState('');
   const [activeTopupId, setActiveTopupId] = useState('');
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
   const [selectedEntry, setSelectedEntry] = useState<CreditHistory | Topup | null>(null);
-  const { isApiAccount, wallet, loading: walletLoading, error: walletError } = useWallet();
+  const { isApiAccount, wallet, loading: walletLoading, error: walletError, refresh: refreshWallet } = useWallet();
+  const [apiHistory, setApiHistory] = useState<CreditHistory[]>([]);
+  const [apiHistoryLoading, setApiHistoryLoading] = useState(false);
+  const [apiHistoryError, setApiHistoryError] = useState('');
+  const [historyReloadKey, setHistoryReloadKey] = useState(0);
+  const [apiTopUpOrder, setApiTopUpOrder] = useState<TopUpOrderResponse | null>(null);
+  const [topUpSubmitting, setTopUpSubmitting] = useState(false);
+  const [topUpError, setTopUpError] = useState('');
 
   const topups = isApiAccount ? [] : data.topups.filter((topup) => topup.userId === user.id);
   const activeTopup = topups.find((topup) => topup.id === activeTopupId);
   const latestCompleted = topups.find((topup) => topup.status === 'completed');
   const paymentValue = creditAmount * CREDIT_TO_VND;
 
+  useEffect(() => {
+    if (!isApiAccount) {
+      setApiHistory([]);
+      setApiHistoryError('');
+      return;
+    }
+    let active = true;
+    setApiHistoryLoading(true);
+    setApiHistoryError('');
+    walletApi
+      .listTransactions({ page: 0, size: 100 })
+      .then((response) => {
+        if (active) setApiHistory(response.items.map((entry) => toCreditHistory(entry, user.id)));
+      })
+      .catch(() => {
+        if (!active) return;
+        setApiHistory([]);
+        setApiHistoryError('Không tải được lịch sử Credit từ Backend.');
+      })
+      .finally(() => {
+        if (active) setApiHistoryLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [historyReloadKey, isApiAccount, user.id]);
+
   const allHistory = useMemo(
     () =>
       isApiAccount
-        ? []
+        ? apiHistory
         : data.creditHistory
             .filter((entry) => entry.userId === user.id)
             .filter(isVisibleCreditHistory)
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [data.creditHistory, isApiAccount, user.id],
+    [apiHistory, data.creditHistory, isApiAccount, user.id],
   );
 
   const history = useMemo(() => {
@@ -81,7 +145,26 @@ export function Credit() {
       ? data.items.find((item) => item.id === postFeeItemId(selectedEntry))
       : undefined;
 
-  const continuePayment = () => {
+  const continuePayment = async () => {
+    if (isApiAccount) {
+      const amountVnd = Number(apiAmountVnd);
+      if (!Number.isSafeInteger(amountVnd) || amountVnd <= 0) {
+        setTopUpError('Vui lòng nhập số tiền nạp hợp lệ.');
+        return;
+      }
+      setTopUpSubmitting(true);
+      setTopUpError('');
+      try {
+        const order = await paymentApi.createTopUpOrder({ amountVnd });
+        setApiTopUpOrder(order);
+        setStep('pending');
+      } catch {
+        setTopUpError('Không tạo được đơn nạp Credit. Vui lòng thử lại.');
+      } finally {
+        setTopUpSubmitting(false);
+      }
+      return;
+    }
     const code = `SLTOPUP-${crypto.randomUUID()}`;
     setTransactionCode(code);
     setStep('qr');
@@ -114,8 +197,9 @@ export function Credit() {
         </div>
       ) : null}
       {walletError ? (
-        <div className="mb-6">
+        <div className="mb-6 space-y-3">
           <Alert tone="error">{walletError}</Alert>
+          <Button variant="outline" onClick={refreshWallet}>Thử tải lại số dư</Button>
         </div>
       ) : null}
 
@@ -147,10 +231,11 @@ export function Credit() {
                   : '--'
                 : formatCredit(user.totalCredit)}
             </div>
-            <p className="mt-3 text-sm text-white/70">1 Credit = 1.000đ</p>
+            <p className="mt-3 text-sm text-white/70">
+              {isApiAccount ? 'Tỷ lệ quy đổi do Backend xác định khi tạo đơn.' : '1 Credit = 1.000đ'}
+            </p>
           </div>
           <button
-            disabled={isApiAccount}
             className="inline-flex min-h-11 items-center justify-center rounded-md bg-white px-4 py-2 text-sm font-bold text-primary shadow-sm transition duration-200 hover:bg-primary-soft active:translate-y-px"
             onClick={() => {
               setStep('select');
@@ -167,33 +252,47 @@ export function Credit() {
       </section>
 
       <section id="topup" className="mt-8 scroll-mt-24">
-        {isApiAccount ? (
-          <Alert tone="warning">Backend chưa cung cấp API nạp Credit cho tài khoản này.</Alert>
-        ) : step === 'select' ? (
-          <TopupSelection
-            creditAmount={creditAmount}
-            customAmount={customAmount}
-            onAmountChange={(amount) => {
-              setCreditAmount(amount);
-              setCustomAmount('');
-            }}
-            onCustomChange={(value) => {
-              setCustomAmount(value);
-              const parsed = Number(value);
-              setCreditAmount(Number.isInteger(parsed) && parsed > 0 ? parsed : 0);
-            }}
-            onContinue={continuePayment}
-          />
+        {topUpError ? (
+          <div className="mb-4">
+            <Alert tone="error">{topUpError}</Alert>
+          </div>
         ) : null}
-        {step === 'qr' ? (
-          <QrPayment
-            creditAmount={creditAmount}
-            transactionCode={transactionCode}
-            onBack={() => setStep('select')}
-            onConfirm={confirmTransfer}
-          />
+        {step === 'select' ? (
+          isApiAccount ? (
+            <ApiTopupSelection
+              amountVnd={apiAmountVnd}
+              onAmountChange={setApiAmountVnd}
+              onContinue={() => void continuePayment()}
+              submitting={topUpSubmitting}
+            />
+          ) : (
+            <TopupSelection
+              creditAmount={creditAmount}
+              customAmount={customAmount}
+              onAmountChange={(amount) => {
+                setCreditAmount(amount);
+                setCustomAmount('');
+              }}
+              onCustomChange={(value) => {
+                setCustomAmount(value);
+                const parsed = Number(value);
+                setCreditAmount(Number.isInteger(parsed) && parsed > 0 ? parsed : 0);
+              }}
+              onContinue={() => void continuePayment()}
+              submitting={topUpSubmitting}
+            />
+          )
         ) : null}
-        {step === 'pending' ? (
+        {!isApiAccount && step === 'qr' ? <QrPayment creditAmount={creditAmount} transactionCode={transactionCode} onBack={() => setStep('select')} onConfirm={confirmTransfer} /> : null}
+        {isApiAccount && step === 'pending' && apiTopUpOrder ? (
+          <ApiTopUpOrder
+            order={apiTopUpOrder}
+            onNewTopup={() => {
+              setApiTopUpOrder(null);
+              setStep('select');
+            }}
+          />
+        ) : !isApiAccount && step === 'pending' ? (
           <PendingTopup
             code={activeTopup?.code ?? transactionCode}
             amount={activeTopup?.amount ?? creditAmount}
@@ -204,6 +303,20 @@ export function Credit() {
           />
         ) : null}
       </section>
+
+      {apiHistoryLoading ? (
+        <div className="mt-8">
+          <Alert>Đang tải lịch sử Credit...</Alert>
+        </div>
+      ) : null}
+      {apiHistoryError ? (
+        <div className="mt-8 space-y-3">
+          <Alert tone="error">{apiHistoryError}</Alert>
+          <Button variant="outline" onClick={() => setHistoryReloadKey((key) => key + 1)}>
+            Thử tải lại
+          </Button>
+        </div>
+      ) : null}
 
       <CreditHistorySection
         items={data.items}
@@ -217,7 +330,7 @@ export function Credit() {
         activeFilter={historyFilter}
         onFilterChange={setHistoryFilter}
         onSelect={setSelectedEntry}
-        unavailable={isApiAccount}
+        unavailable={false}
       />
       {selectedEntry ? (
         <CreditTransactionDetail
@@ -252,19 +365,42 @@ function BalanceMetric({
   );
 }
 
-function TopupSelection({
-  creditAmount,
-  customAmount,
-  onAmountChange,
-  onCustomChange,
-  onContinue,
-}: {
-  creditAmount: number;
-  customAmount: string;
-  onAmountChange: Dispatch<number>;
-  onCustomChange: Dispatch<string>;
-  onContinue: () => void;
-}) {
+function ApiTopupSelection({ amountVnd, onAmountChange, onContinue, submitting }: { amountVnd: string; onAmountChange: Dispatch<string>; onContinue: () => void; submitting: boolean }) {
+  const parsedAmount = Number(amountVnd);
+  const validAmount = Number.isSafeInteger(parsedAmount) && parsedAmount > 0;
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+      <div className="rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-7">
+        <h2 className="section-title">Nạp Credit</h2>
+        <p className="mt-2 text-sm text-text-muted">
+          Nhập số tiền VND. Backend sẽ xác định số Credit và trạng thái đơn trong response.
+        </p>
+        <div className="mt-6 max-w-sm">
+          <Field
+            label="Số tiền nạp (VND)"
+            type="number"
+            min={1}
+            step={1}
+            value={amountVnd}
+            onChange={(event) => onAmountChange(event.target.value)}
+            placeholder="Nhập số tiền"
+          />
+        </div>
+      </div>
+      <aside className="h-fit rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
+        <h2 className="text-base font-bold">Tóm tắt thanh toán</h2>
+        <p className="mt-3 text-sm text-text-muted">
+          Không cộng Credit trước khi Backend xác nhận đơn thanh toán.
+        </p>
+        <Button className="mt-5 w-full" size="lg" onClick={onContinue} disabled={!validAmount || submitting}>
+          {submitting ? 'Đang tạo đơn...' : 'Tạo đơn nạp Credit'}
+        </Button>
+      </aside>
+    </div>
+  );
+}
+
+function TopupSelection({ creditAmount, customAmount, onAmountChange, onCustomChange, onContinue, submitting = false }: { creditAmount: number; customAmount: string; onAmountChange: Dispatch<number>; onCustomChange: Dispatch<string>; onContinue: () => void; submitting?: boolean }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
       <div className="rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-7">
@@ -274,43 +410,28 @@ function TopupSelection({
           {packages.map((amount) => {
             const selected = creditAmount === amount && !customAmount;
             return (
-              <button
-                key={amount}
-                onClick={() => onAmountChange(amount)}
-                className={`relative rounded-lg border px-4 py-4 text-left transition duration-200 active:translate-y-px ${selected ? 'border-primary bg-primary-faint ring-2 ring-primary/10' : 'border-border bg-white hover:border-primary/40'}`}
-              >
+              <button key={amount} onClick={() => onAmountChange(amount)} className={`relative rounded-lg border px-4 py-4 text-left transition duration-200 active:translate-y-px ${selected ? 'border-primary bg-primary-faint ring-2 ring-primary/10' : 'border-border bg-white hover:border-primary/40'}`}>
                 {selected ? (
                   <span className="absolute right-3 top-3 grid size-5 place-items-center rounded-full bg-primary text-white">
                     <Icon name="check" className="size-3" weight="bold" />
                   </span>
                 ) : null}
                 <strong className="block text-base text-text-primary">{amount} Credit</strong>
-                <span className="mt-1 block text-xs text-text-muted">
-                  {formatVnd(amount * CREDIT_TO_VND)}
-                </span>
+                <span className="mt-1 block text-xs text-text-muted">{formatVnd(amount * CREDIT_TO_VND)}</span>
               </button>
             );
           })}
         </div>
         <div className="mt-5 max-w-xs">
-          <Field
-            label="Số Credit khác"
-            type="number"
-            min={1}
-            step={1}
-            value={customAmount}
-            onChange={(event) => onCustomChange(event.target.value)}
-            placeholder="Nhập số Credit"
-            hint="Tối thiểu 1 Credit."
-          />
+          <Field label="Số Credit khác" type="number" min={1} step={1} value={customAmount} onChange={(event) => onCustomChange(event.target.value)} placeholder="Nhập số Credit" hint="Tối thiểu 1 Credit." />
         </div>
       </div>
-      <PaymentSummary creditAmount={creditAmount} onContinue={onContinue} />
+      <PaymentSummary creditAmount={creditAmount} onContinue={onContinue} submitting={submitting} />
     </div>
   );
 }
 
-function PaymentSummary({ creditAmount, onContinue }: { creditAmount: number; onContinue: () => void }) {
+function PaymentSummary({ creditAmount, onContinue, submitting = false }: { creditAmount: number; onContinue: () => void; submitting?: boolean }) {
   const value = creditAmount * CREDIT_TO_VND;
   return (
     <aside className="h-fit rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6 lg:sticky lg:top-24">
@@ -324,12 +445,10 @@ function PaymentSummary({ creditAmount, onContinue }: { creditAmount: number; on
         <span className="text-sm font-semibold">Tổng thanh toán</span>
         <strong className="text-lg tabular-nums text-primary">{formatVnd(value)}</strong>
       </div>
-      <Button className="mt-5 w-full" size="lg" onClick={onContinue} disabled={creditAmount < 1}>
-        Tiếp tục thanh toán
+      <Button className="mt-5 w-full" size="lg" onClick={onContinue} disabled={creditAmount < 1 || submitting}>
+        {submitting ? 'Đang tạo đơn...' : 'Tiếp tục thanh toán'}
       </Button>
-      <p className="mt-3 text-center text-[11px] leading-5 text-text-muted">
-        Credit chỉ được cộng sau khi giao dịch được xác nhận.
-      </p>
+      <p className="mt-3 text-center text-[11px] leading-5 text-text-muted">Credit chỉ được cộng sau khi giao dịch được xác nhận.</p>
     </aside>
   );
 }
@@ -422,6 +541,44 @@ function PendingTopup({ code, amount, onNewTopup }: { code: string; amount: numb
       <Button className="mt-6" variant="outline" onClick={onNewTopup}>
         Tạo yêu cầu nạp khác
       </Button>
+    </div>
+  );
+}
+
+function ApiTopUpOrder({ order, onNewTopup }: { order: TopUpOrderResponse; onNewTopup: () => void }) {
+  const statusLabels: Record<TopUpOrderResponse['status'], string> = {
+    PENDING: 'Đang chờ thanh toán',
+    SUCCESS: 'Đã thanh toán',
+    FAILED: 'Thanh toán thất bại',
+    EXPIRED: 'Đơn đã hết hạn',
+  };
+  const safeRedirectUrl = order.redirectUrl && /^https?:\/\//i.test(order.redirectUrl) ? order.redirectUrl : null;
+  return (
+    <div className="rounded-xl bg-white px-5 py-8 ring-1 ring-border/80 sm:px-8">
+      <div className="mx-auto max-w-2xl text-center">
+        <span className="mx-auto grid size-14 place-items-center rounded-lg bg-amber-50 text-warning">
+          <Icon name="history" className="size-7" />
+        </span>
+        <h2 className="mt-5 text-2xl font-bold">Đơn nạp Credit đã được tạo</h2>
+        <p className="mt-2 text-sm leading-6 text-text-muted">Credit chưa được cộng vào ví. Trạng thái chỉ thay đổi sau khi Backend xác nhận thanh toán.</p>
+        <dl className="mt-6 divide-y divide-border rounded-lg bg-surface-low px-4 text-left">
+          <DetailRow label="Mã đơn" value={order.orderCode} />
+          <DetailRow label="Số tiền" value={formatVnd(order.amountVnd)} />
+          <DetailRow label="Credit dự kiến" value={`${order.credits} Credit`} />
+          <DetailRow label="Nhà cung cấp" value={order.provider} />
+          <DetailRow label="Trạng thái" value={statusLabels[order.status]} />
+        </dl>
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <Button variant="outline" onClick={onNewTopup}>
+            Tạo đơn nạp khác
+          </Button>
+          {safeRedirectUrl ? (
+            <a href={safeRedirectUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-bold text-white">
+              Đi đến cổng thanh toán
+            </a>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

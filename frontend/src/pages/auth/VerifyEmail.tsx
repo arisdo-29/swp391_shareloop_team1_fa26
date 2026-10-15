@@ -1,9 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAppDispatch } from '../../app/hooks';
+import { actions } from '../../app/store';
 import { Alert, Button, Field } from '../../components/ui';
 import { authApi } from '../../services/authApi';
 import { authErrorMessage } from '../../services/authErrors';
 import type { ApiError } from '../../services/http';
+import { toFeUser } from '../../services/mappers';
 
 type VerifyEmailState = {
   email?: string;
@@ -12,6 +15,7 @@ type VerifyEmailState = {
 
 export function VerifyEmail() {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const location = useLocation();
   const state = (location.state as VerifyEmailState | null) ?? {};
   const [email, setEmail] = useState(state.email?.trim().toLowerCase() ?? '');
@@ -64,8 +68,9 @@ export function VerifyEmail() {
     }
     setProcessing(true);
     try {
-      await authApi.verifyOtp(normalizedEmail, code);
-      navigate('/login', { state: { notice: 'Đăng ký thành công. Vui lòng đăng nhập.' } });
+      const result = await authApi.verifyOtp(normalizedEmail, code);
+      dispatch(actions.loginFromApi(toFeUser(result.user)));
+      navigate(result.user.isAdmin ? '/admin' : '/', { replace: true });
     } catch (apiError) {
       setError(authErrorMessage(apiError as ApiError));
     } finally {

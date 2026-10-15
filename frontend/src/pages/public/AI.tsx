@@ -7,10 +7,12 @@ import { CATEGORIES } from '../../constants/domain';
 import { findNeedMatches, parseNeed } from '../../utils/aiMatching';
 import type { Item, ItemType } from '../../types/domain';
 import { AI_ASSISTANT_SEARCH_FEE } from '../../utils/credit';
+import { toBackendUserId } from '../../services/requestApi';
 
 export function AI() {
   const data = useAppSelector(selectData);
   const user = useAppSelector(selectCurrentUser);
+  const isApiAccount = toBackendUserId(user?.id) !== null;
   const dispatch = useAppDispatch();
   const districts = useMemo(
     () => data.districts.filter((entry) => entry.status === 'active').map((entry) => entry.name),
@@ -85,12 +87,12 @@ export function AI() {
     return () => window.clearTimeout(timeout);
   }, [activeImageIndex, slideshowItems.length]);
   const analyze = () => {
-    if (user && user.availableCredit < AI_ASSISTANT_SEARCH_FEE) {
+    if (user && !isApiAccount && user.availableCredit < AI_ASSISTANT_SEARCH_FEE) {
       setCreditError(true);
       return;
     }
     setCreditError(false);
-    if (user) dispatch(actions.useAiFeature({ userId: user.id, feature: 'ASSISTANT_SEARCH' }));
+    if (user && !isApiAccount) dispatch(actions.useAiFeature({ userId: user.id, feature: 'ASSISTANT_SEARCH' }));
     const parsed = parseNeed(text, CATEGORIES, districts);
     setType(parsed.type);
     setDistrict(parsed.district);

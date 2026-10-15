@@ -1,15 +1,9 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAppSelector } from './hooks';
 import { selectCurrentUser } from './store';
 import { toBackendUserId } from '../services/requestApi';
 import { walletApi, type WalletResponse } from '../services/walletApi';
-
-interface WalletContextValue {
-  isApiAccount: boolean;
-  wallet: WalletResponse | null;
-  loading: boolean;
-  error: string;
-}
+import { WalletContext, type WalletContextValue } from './useWallet';
 
 interface WalletState {
   userId: number | null;
@@ -17,8 +11,6 @@ interface WalletState {
   loading: boolean;
   error: string;
 }
-
-const WalletContext = createContext<WalletContextValue | null>(null);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const user = useAppSelector(selectCurrentUser);
@@ -30,6 +22,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     loading: false,
     error: '',
   });
+  const [reloadKey, setReloadKey] = useState(0);
+  const refresh = useCallback(() => {
+    requestRef.current = null;
+    setReloadKey((key) => key + 1);
+  }, []);
 
   useEffect(() => {
     if (!backendUserId) {
@@ -41,7 +38,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     let active = true;
     setState({ userId: backendUserId, wallet: null, loading: true, error: '' });
     if (requestRef.current?.userId !== backendUserId) {
-      requestRef.current = { userId: backendUserId, promise: walletApi.get(backendUserId) };
+      requestRef.current = { userId: backendUserId, promise: walletApi.get() };
     }
     requestRef.current.promise
       .then((wallet) => {
@@ -59,7 +56,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [backendUserId]);
+  }, [backendUserId, reloadKey]);
 
   const value = useMemo<WalletContextValue>(() => {
     const matchesCurrentUser = backendUserId !== null && state.userId === backendUserId;
@@ -68,14 +65,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       wallet: matchesCurrentUser ? state.wallet : null,
       loading: backendUserId !== null && (!matchesCurrentUser || state.loading),
       error: matchesCurrentUser ? state.error : '',
+      refresh,
     };
-  }, [backendUserId, state]);
+  }, [backendUserId, refresh, state]);
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
-}
-
-export function useWallet() {
-  const context = useContext(WalletContext);
-  if (!context) throw new Error('useWallet must be used within WalletProvider.');
-  return context;
 }
