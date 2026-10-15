@@ -1,6 +1,7 @@
 package com.shareloop.user.mapper;
 
 import com.shareloop.auth.dto.AuthUserResponse;
+import com.shareloop.user.dto.ContactInfo;
 import com.shareloop.user.dto.MeResponse;
 import com.shareloop.user.entity.User;
 import org.springframework.stereotype.Component;
@@ -26,6 +27,11 @@ public class UserMapper {
                 user.getAreaId(),
                 user.getAvatarMediaId(),
                 buildAvatarUrl(user.getAvatarMediaId()));
+    }
+
+    // Chỉ 4 trường này được trao cho đối tác (BR-T11); không thêm trường khác vào ContactInfo.
+    public ContactInfo toContactInfo(User user) {
+        return new ContactInfo(user.getId(), user.getFullName(), user.getEmail(), user.getPhone());
     }
 
     private String buildAvatarUrl(Long avatarMediaId) {
