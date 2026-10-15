@@ -3,7 +3,7 @@
 Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất bên dưới. File này làm mẫu contract cho các module khác.
 
-Người sở hữu: BE2. Danh mục chỉ có endpoint đọc; ghi danh mục thuộc API Admin (`/api/v1/admin/...`, chưa có).
+Người sở hữu: BE2. API công khai chỉ đọc; API Admin quản lý danh mục ở `/api/v1/admin/categories`.
 
 ## GET /api/v1/areas
 
@@ -75,12 +75,24 @@ Chi tiết một danh mục đang dùng.
 | `boostable`  | boolean | Cho phép đẩy tin (boost) bài đăng thuộc danh mục này |
 | `sortOrder`  | number  | Thứ tự hiển thị, nhỏ đứng trước                      |
 
+## API Admin: `/api/v1/admin/categories`
+
+Tất cả endpoint cần JWT có quyền Admin; người dùng thường nhận `403 FORBIDDEN`.
+
+- `GET`: danh sách mọi danh mục chưa xoá mềm, kể cả đang ẩn, theo `sortOrder` rồi `id`. Response có các trường như `CategoryResponse` và thêm `active`.
+- `POST`: tạo danh mục, trả `201` và `AdminCategoryResponse`.
+- `PUT /{id}`: sửa tên, danh mục cha, cờ `restricted`/`boostable` và `sortOrder`; trả `200`.
+- `PATCH /{id}/active`: gửi `{ "active": false }` để ẩn, `{ "active": true }` để hiện lại; trả `200`. Ẩn danh mục cha cũng ẩn các danh mục con đang hoạt động. Không xoá cứng.
+- Body của POST/PUT: `{ "name": "Sách", "parentId": null, "restricted": false, "boostable": true, "sortOrder": 1 }`. `name` bắt buộc, tối đa 100 ký tự; `sortOrder` không âm. Danh mục cha phải đang hoạt động và không được tạo vòng lặp.
+- Lỗi: `400 VALIDATION_FAILED`, `404 CATALOG_CATEGORY_NOT_FOUND`, `422 CATALOG_INVALID_PARENT` (`field: parentId`).
+
 ## Mã lỗi
 
 | code                        | HTTP | Khi nào                                        |
 |-----------------------------|------|------------------------------------------------|
 | `CATALOG_CATEGORY_NOT_FOUND`| 404  | Không có danh mục đang dùng với id đã cho      |
-| `VALIDATION_FAILED`         | 400  | `id` trên đường dẫn không phải số              |
+| `CATALOG_INVALID_PARENT`    | 422  | Danh mục cha không tồn tại, đang ẩn hoặc tạo vòng lặp |
+| `VALIDATION_FAILED`         | 400  | Tham số đường dẫn hoặc request body không hợp lệ |
 
 Định dạng lỗi (`field` và `details` chỉ có khi liên quan):
 
