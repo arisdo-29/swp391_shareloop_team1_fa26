@@ -19,14 +19,23 @@ public class MailTemplateRenderer {
     private static final String PLACEHOLDER_START = "{{";
     private static final String PLACEHOLDER_END = "}}";
 
+    private static final String REGISTER_NOTE = "Nếu bạn không đăng ký tài khoản ShareLoop, hãy bỏ qua email này.";
+    private static final String PASSWORD_RESET_NOTE = "Bạn vừa yêu cầu đặt lại mật khẩu ShareLoop. Nếu không phải bạn,"
+            + " hãy bỏ qua email này; mật khẩu hiện tại vẫn giữ nguyên.";
+
     /**
-     * Nội dung email OTP (FR-02) từ mẫu otp.html.
+     * Nội dung email OTP đăng ký (FR-02) từ mẫu otp.html.
      *
      * @param code mã OTP thô 6 chữ số
      * @param ttlMinutes số phút mã còn hiệu lực, lấy từ ConfigKey.OTP_TTL_MINUTES ở nơi phát sự kiện
      */
     public String renderOtp(String code, int ttlMinutes) {
-        return render("otp", Map.of("otp", code, "ttlMinutes", String.valueOf(ttlMinutes)));
+        return renderOtpWithNote(code, ttlMinutes, REGISTER_NOTE);
+    }
+
+    /** Nội dung email OTP đặt lại mật khẩu (FR-09): cùng mẫu otp.html, chỉ khác dòng ghi chú cuối. */
+    public String renderPasswordResetOtp(String code, int ttlMinutes) {
+        return renderOtpWithNote(code, ttlMinutes, PASSWORD_RESET_NOTE);
     }
 
     /**
@@ -57,6 +66,10 @@ public class MailTemplateRenderer {
             html = html.replace(placeholder, safeValue);
         }
         return html;
+    }
+
+    private String renderOtpWithNote(String code, int ttlMinutes, String purposeNote) {
+        return render("otp", Map.of("otp", code, "ttlMinutes", String.valueOf(ttlMinutes), "purposeNote", purposeNote));
     }
 
     private String readTemplate(String templateName) {
