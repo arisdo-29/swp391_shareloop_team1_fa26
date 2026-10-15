@@ -39,4 +39,10 @@ public class Area extends BaseEntity {
     public short getLevel() {
         return level;
     }
+
+    public void update(String name, Long parentId, short level) {
+        this.name = name;
+        this.parentId = parentId;
+        this.level = level;
+    }
 }
