@@ -48,3 +48,45 @@ Có thể gửi thêm `reason` để ghi lý do vào `activity_logs`. Thành cô
 - `401 UNAUTHORIZED`: chưa đăng nhập.
 - `403 FORBIDDEN`: tài khoản không phải Admin.
 - `404 SETTING_CONFIG_NOT_FOUND`: key không tồn tại hoặc cấu hình chưa được seed.
+
+## Admin lexicon
+
+Các endpoint dưới đây chỉ dành cho Admin. Dữ liệu lưu trong `website_attributes` với `attr_group = BANNED_KEYWORD`; keyword nằm ở `attr_value`, còn `group` (category), `level` (severity), `matchMode`, `exceptions` và `scope` nằm trong JSONB `extra`. Danh sách GET gồm cả từ khóa đã ẩn.
+
+### GET /api/v1/admin/lexicon
+
+Trả danh sách từ khóa theo `sort_order`, gồm `id`, keyword, group, level, match mode, exceptions, scope, thứ tự và trạng thái active.
+
+### POST /api/v1/admin/lexicon
+
+Thêm từ khóa. `level` nhận `BLOCK` hoặc `REVIEW`; `matchMode` nhận `WORD`, `PHRASE` hoặc `REGEX` và mặc định là `WORD`; `scope` nhận `POST`, `CHAT`, `MESSAGE` hoặc `BOTH`. `exceptions` có thể là danh sách rỗng hoặc bỏ qua.
+
+```json
+{
+  "keyword": "súng nước",
+  "group": "WEAPONS",
+  "level": "REVIEW",
+  "matchMode": "PHRASE",
+  "exceptions": [],
+  "scope": "POST"
+}
+```
+
+Thành công trả `201 Created` cùng mục vừa tạo.
+
+### PUT /api/v1/admin/lexicon/{id}
+
+Thay nội dung và metadata của mục theo cùng body như POST. Thành công trả mục đã cập nhật.
+
+### PATCH /api/v1/admin/lexicon/{id}/active
+
+Ẩn hoặc hiện mục bằng cách cập nhật `is_active`, không xóa cứng.
+
+```json
+{ "active": false }
+```
+
+- `400 VALIDATION_FAILED` hoặc `SETTING_LEXICON_INVALID_VALUE`: keyword rỗng, level/matchMode/scope không hợp lệ.
+- `403 FORBIDDEN`: người gọi không phải Admin.
+- `404 SETTING_LEXICON_NOT_FOUND`: không tìm thấy mục.
+- `409 SETTING_LEXICON_DUPLICATE`: keyword đã có trong cùng group và scope (không phân biệt hoa thường và khoảng trắng liên tiếp).
