@@ -171,6 +171,22 @@ public class CreditService {
     }
 
     /**
+     * Khoá dòng users của userId tới hết transaction của người gọi, không đổi số dư. Dùng khi người gọi phải đọc rồi
+     * quyết định dựa trên dữ liệu của chính người dùng đó mà không để luồng khác chen giữa (ví dụ
+     * {@code PostFeeService.holdEditFee}: hai lần sửa cùng lúc của một chủ bài phải chạy lần lượt).
+     *
+     * <p>Transaction: REQUIRED, phải gọi bên trong transaction của người gọi thì khoá mới còn tác dụng. Khoá: dòng
+     * users của userId. Các hàm hold, release, chargeHeld gọi sau đó trong cùng transaction khoá lại chính dòng này,
+     * không bị chặn.
+     *
+     * @param userId người dùng cần khoá ví
+     * @throws com.shareloop.common.exception.BusinessException WALLET_NOT_FOUND khi không có user
+     */
+    public void lockWalletRow(long userId) {
+        lockWallet(userId);
+    }
+
+    /**
      * Chốt đơn nạp đã được cổng xác nhận và cộng Credit (F04 bước 3; FR-14, BR-P10).
      *
      * <p>Quy tắc: đơn PENDING thì chuyển SUCCESS, {@code credit_balance += credits} của đơn,

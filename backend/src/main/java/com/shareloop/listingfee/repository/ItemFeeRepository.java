@@ -22,10 +22,14 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
      * Đọc nhẹ chủ bài và cột phí, không khoá, không tạo entity managed; rỗng khi không có bài hoặc bài đã xoá mềm.
      * Dùng native query vì donor_id đã do entity Item (module item) map, ItemFee không được map lại cột này nên JPQL
      * không với tới được. Alias để trong ngoặc kép vì PostgreSQL tự hạ chữ thường alias không quote.
+     *
+     * <p>approved_at chỉ cần biết có hay không nên trả sẵn boolean (everApproved); cột này thuộc module item/review
+     * nên ItemFee cũng không map.
      */
     @Query(
             value = "SELECT donor_id AS \"donorId\", fee_state AS \"feeState\", pending_fee AS \"pendingFee\","
-                    + " pending_fee_type AS \"pendingFeeType\""
+                    + " pending_fee_type AS \"pendingFeeType\", (approved_at IS NOT NULL) AS \"everApproved\","
+                    + " free_edit_used AS \"freeEditUsed\""
                     + " FROM items WHERE id = :itemId AND is_deleted = false",
             nativeQuery = true)
     Optional<ItemFeeSnapshot> findFeeSnapshotById(@Param("itemId") Long itemId);

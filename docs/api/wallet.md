@@ -107,6 +107,7 @@ ConfigService, `CreditService` không tự quyết mức phí.
 | `release(userId, amount, type, itemId)`      | `held_credit` giảm                             | Không               | `POST_FEE`, `EDIT_FEE`                |
 | `chargeHeld(userId, amount, type, itemId)`   | `held_credit` và `credit_balance` cùng giảm    | Có, amount âm       | `POST_FEE`, `EDIT_FEE`                |
 | `spend(userId, amount, type, itemId)`        | `credit_balance` giảm (chỉ từ phần khả dụng)   | Có, amount âm       | `RENEW_FEE`, `BOOST_FEE`, `AI_SEARCH_FEE` |
+| `lockWalletRow(userId)`                      | Không đổi, chỉ khoá dòng `users` tới hết transaction của người gọi | Không | -                       |
 | `getWallet(userId)`                          | Không đổi, đọc không khoá                      | Không               | -                                     |
 | `topUp(userId, paymentOrderId)`              | Đơn PENDING → SUCCESS, `credit_balance` tăng, `has_topped_up = true`; đơn đã SUCCESS thì không đổi gì, trả ví hiện tại | Có, amount dương, kèm `payment_order_id` | `TOP_UP` |
 | `getTransactions(userId, from, to, page, size)` | Không đổi, đọc không khoá                   | Không               | -                                     |

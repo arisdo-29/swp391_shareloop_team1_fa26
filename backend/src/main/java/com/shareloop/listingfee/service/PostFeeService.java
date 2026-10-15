@@ -22,6 +22,10 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Mọi mức phí đọc từ ConfigService (ConfigKey post_fee, edit_fee), không viết cứng.
  *
+ * <p>Mọi bài đang chờ duyệt đều ở fee_state = HELD, kể cả khi phí bằng 0 (lượt sửa miễn phí, hoặc Admin cấu hình
+ * phí 0): khi đó pending_fee = 0 và không đụng tới ví. Nhờ vậy ReviewService luôn gọi được chargeHeldFee /
+ * releaseHeldFee, và lúc duyệt biết được bài vừa duyệt là bản sửa (pending_fee_type = EDIT).
+ *
  * <p>Sau CHARGED hoặc RELEASED, pending_fee và pending_fee_type được giữ nguyên, không reset về 0 / NULL: CHECK của
  * bảng items không ràng buộc hai cột này theo fee_state, và giữ lại cho biết khoản vừa trừ hoặc nhả là bao nhiêu,
  * loại gì (truy vết khi đối soát với credit_ledger). Lần giữ phí kế tiếp (markHeld) ghi đè cả hai cột.
@@ -32,8 +36,6 @@ import org.springframework.transaction.annotation.Transactional;
 // REQUIRED: tham gia transaction của ItemService / ReviewService; lỗi ở bất kỳ bước nào hoàn tác cả tiền lẫn cột phí.
 @Transactional
 public class PostFeeService {
-
-    private static final String TODO = "TODO BE1 - tuan 5";
 
     private final ItemFeeRepository itemFeeRepository;
     private final CreditService creditService;
@@ -49,8 +51,10 @@ public class PostFeeService {
     /**
      * Báo trước lượt sửa tới là miễn phí hay có phí (F07 bước 2; GET /items/{id}/edit-quote).
      *
-     * <p>Quy tắc (C14, C14b): approved_at null thì miễn phí (NOT_YET_APPROVED); đã duyệt và free_edit_used = false
-     * thì miễn phí một lần (FIRST_FREE_EDIT); còn lại có phí bằng ConfigKey edit_fee (PAID_EDIT).
+     * <p>Quy tắc (C14, C14b, BR-D07, R36), xét theo thứ tự: chưa từng duyệt (approved_at null) và đang giữ phí đăng
+     * thì miễn phí (NOT_YET_APPROVED); chưa từng duyệt và phí đăng đã nhả thì giữ lại phí đăng post_fee
+     * (REPOST_FEE); đã duyệt và đang có bản sửa chờ duyệt thì sửa đè miễn phí (PENDING_REVIEW_OVERWRITE); đã duyệt và
+     * free_edit_used = false thì miễn phí một lần (FIRST_FREE_EDIT); còn lại có phí edit_fee (PAID_EDIT).
      *
      * <p>Transaction: read-only, không khoá dòng nào; không đổi dữ liệu.
      *
@@ -59,21 +63,22 @@ public class PostFeeService {
      * @return miễn phí hay có phí, số Credit, lý do
      * @throws com.shareloop.common.exception.BusinessException LISTINGFEE_ITEM_NOT_FOUND, LISTINGFEE_NOT_OWNER
      */
+    @Transactional(readOnly = true)
     public EditQuote quoteEdit(long itemId, long userId) {
-        throw new UnsupportedOperationException(TODO);
+        ItemFeeSnapshot snapshot = readSnapshot(itemId);
+        requireOwner(snapshot, userId);
+        return toEditQuote(snapshot);
     }
 
     /**
      * Giữ phí đăng khi tạo bài (C01, C02, F05 bước 3).
      *
-     * <p>Quy tắc: số phí = ConfigKey post_fee. Gọi {@code CreditService.hold(userId, fee, POST_FEE, itemId)}, rồi
-     * ghi fee_state = HELD, pending_fee = fee, pending_fee_type = POST.
+     * <p>Quy tắc: số phí = ConfigKey post_fee. Phí lớn hơn 0 thì gọi
+     * {@code CreditService.hold(userId, fee, POST_FEE, itemId)}; phí bằng 0 (Admin cấu hình miễn phí) thì không đụng
+     * ví. Sau đó ghi fee_state = HELD, pending_fee = fee, pending_fee_type = POST.
      *
      * <p>Transaction: REQUIRED, tham gia transaction tạo bài của ItemService. Khoá: dòng users (trong CreditService),
      * rồi dòng items của itemId; thứ tự này cố định để tránh deadlock.
-     *
-     * <p>Chưa xử lý trường hợp post_fee = 0 (Admin cấu hình miễn phí): hiện CreditService.hold sẽ ném
-     * WALLET_INVALID_AMOUNT. Xử lý ở R2 cùng luồng sửa bài.
      *
      * @param itemId bài vừa tạo
      * @param userId chủ bài
@@ -89,7 +94,7 @@ public class PostFeeService {
         }
 
         int fee = configService.getInt(ConfigKey.POST_FEE);
-        creditService.hold(userId, fee, CreditTxType.POST_FEE, itemId);
+        holdOnWallet(userId, fee, ItemFeeType.POST, itemId);
 
         // Khoá items sau users. markHeld tự kiểm lại "đang HELD" trên dữ liệu vừa khoá; ném lỗi thì hoàn tác cả hold.
         ItemFee itemFee = lockItemFee(itemId);
@@ -97,30 +102,50 @@ public class PostFeeService {
     }
 
     /**
-     * Giữ phí khi sửa bài (C14, C14b, F07 bước 4).
+     * Giữ phí khi gửi bản sửa (C14, C14b, F07 bước 4). ItemService gọi hàm này cho MỌI lần sửa; hàm tự quyết giữ bao
+     * nhiêu, đúng bằng số {@link #quoteEdit} báo.
      *
-     * <p>Quy tắc: tính lượt bằng {@link #quoteEdit}. Miễn phí thì không giữ gì. Có phí thì giữ ConfigKey edit_fee
-     * với pending_fee_type = EDIT. Bài chưa từng trả phí đăng và chưa đang giữ thì giữ phí đăng (loại POST) như
-     * {@link #holdPostFee}.
+     * <p>Quy tắc: đang HELD (bài đang chờ duyệt) thì sửa đè, không làm gì (UC-14 2a). Còn lại giữ {@code amount} của
+     * báo giá: REPOST_FEE giữ loại POST; FIRST_FREE_EDIT và PAID_EDIT giữ loại EDIT (lượt miễn phí giữ 0 Credit, chỉ
+     * để lúc duyệt biết mà bật free_edit_used). Phí 0 thì không đụng ví. Không bật free_edit_used ở đây: lượt chỉ tính
+     * khi bản sửa được duyệt (BR-D07), xem {@link #chargeHeldFee}.
      *
-     * <p>Transaction: REQUIRED, tham gia transaction sửa bài của ItemService. Khoá: dòng users (trong
-     * CreditService), rồi dòng items.
+     * <p>Transaction: REQUIRED, tham gia transaction sửa bài của ItemService. Khoá: dòng users của chủ bài TRƯỚC khi
+     * đọc dữ liệu để tính báo giá, rồi dòng items. Hai lần gọi cùng lúc cho một bài xếp hàng ở dòng users; lần sau
+     * thấy bài đã HELD nên không giữ thêm.
      *
      * @param itemId bài đang sửa
      * @param userId chủ bài
      * @throws com.shareloop.common.exception.BusinessException LISTINGFEE_ITEM_NOT_FOUND, LISTINGFEE_NOT_OWNER,
-     *     LISTINGFEE_EDIT_NOT_ALLOWED, LISTINGFEE_ALREADY_HELD, WALLET_INSUFFICIENT_BALANCE
+     *     WALLET_INSUFFICIENT_BALANCE
      */
     public void holdEditFee(long itemId, long userId) {
-        throw new UnsupportedOperationException(TODO);
+        // Kiểm sớm chủ bài trên ảnh chụp chưa khoá: người khác gọi thì báo lỗi ngay, không khoá ví của ai.
+        requireOwner(readSnapshot(itemId), userId);
+
+        // Khoá ví chủ bài rồi mới đọc lại cột phí: luồng thứ hai phải chờ ở đây tới khi luồng đầu commit, nên ảnh
+        // chụp đọc sau đó đã thấy HELD của luồng đầu. Đọc bằng projection (không phải entity) nên luôn lấy dữ liệu mới.
+        creditService.lockWalletRow(userId);
+        ItemFeeSnapshot snapshot = readSnapshot(itemId);
+        if (snapshot.getFeeState() == ItemFeeState.HELD) {
+            return;
+        }
+
+        EditQuote quote = toEditQuote(snapshot);
+        ItemFeeType feeType = quote.reason() == EditQuote.Reason.REPOST_FEE ? ItemFeeType.POST : ItemFeeType.EDIT;
+        holdOnWallet(userId, quote.amount(), feeType, itemId);
+
+        ItemFee itemFee = lockItemFee(itemId);
+        itemFee.markHeld(quote.amount(), feeType);
     }
 
     /**
      * Trừ khoản phí đang giữ khi Admin duyệt (F06 bước 3).
      *
-     * <p>Quy tắc: đọc pending_fee và pending_fee_type của bài; gọi {@code CreditService.chargeHeld}; fee_state =
-     * CHARGED. Loại POST thì post_fee_paid = true (expire_at do ItemService.markApproved đặt). Lượt sửa miễn phí
-     * thì free_edit_used = true. pending_fee và pending_fee_type giữ nguyên sau khi trừ (lý do ở Javadoc lớp).
+     * <p>Quy tắc: đọc pending_fee và pending_fee_type của bài; pending_fee lớn hơn 0 thì gọi
+     * {@code CreditService.chargeHeld} (bằng 0 thì không đụng ví, không ghi credit_ledger); fee_state = CHARGED. Loại
+     * POST thì post_fee_paid = true (expire_at do ItemService.markApproved đặt). Loại EDIT thì free_edit_used = true
+     * (lượt sửa chỉ tính khi được duyệt). pending_fee và pending_fee_type giữ nguyên sau khi trừ (lý do ở Javadoc lớp).
      *
      * <p>Transaction: REQUIRED, cùng transaction với ReviewService.approve. Khoá: dòng users của chủ bài (trong
      * CreditService), rồi dòng items. Sau khi khoá items, nếu bài không còn HELD hoặc khoản giữ đã khác số vừa
@@ -134,8 +159,13 @@ public class PostFeeService {
         ItemFeeSnapshot snapshot = readSnapshot(itemId);
         requireHeld(snapshot);
 
-        creditService.chargeHeld(
-                snapshot.getDonorId(), snapshot.getPendingFee(), toCreditTxType(snapshot.getPendingFeeType()), itemId);
+        if (snapshot.getPendingFee() > 0) {
+            creditService.chargeHeld(
+                    snapshot.getDonorId(),
+                    snapshot.getPendingFee(),
+                    toCreditTxType(snapshot.getPendingFeeType()),
+                    itemId);
+        }
 
         ItemFee itemFee = lockItemFee(itemId);
         requireSameHeldFee(itemFee, snapshot);
@@ -145,9 +175,9 @@ public class PostFeeService {
     /**
      * Nhả khoản phí đang giữ khi từ chối hoặc rút/xoá bài (F06 bước 4, F05 DELETE).
      *
-     * <p>Quy tắc: gọi {@code CreditService.release}; fee_state = RELEASED. Không ghi credit_ledger (chưa mất tiền);
-     * reason chỉ để ghi log hoạt động của người gọi. pending_fee và pending_fee_type giữ nguyên (lý do ở Javadoc
-     * lớp).
+     * <p>Quy tắc: pending_fee lớn hơn 0 thì gọi {@code CreditService.release}; fee_state = RELEASED. Không ghi
+     * credit_ledger (chưa mất tiền); reason chỉ để ghi log hoạt động của người gọi. Không đụng free_edit_used: bản sửa
+     * bị từ chối không tính lượt (R36). pending_fee và pending_fee_type giữ nguyên (lý do ở Javadoc lớp).
      *
      * <p>Transaction: REQUIRED, tham gia transaction của người gọi (từ chối, xoá bài). Khoá: dòng users của chủ
      * bài (trong CreditService), rồi dòng items. Kiểm lại sau khi khoá như {@link #chargeHeldFee}.
@@ -161,12 +191,51 @@ public class PostFeeService {
         ItemFeeSnapshot snapshot = readSnapshot(itemId);
         requireHeld(snapshot);
 
-        creditService.release(
-                snapshot.getDonorId(), snapshot.getPendingFee(), toCreditTxType(snapshot.getPendingFeeType()), itemId);
+        if (snapshot.getPendingFee() > 0) {
+            creditService.release(
+                    snapshot.getDonorId(),
+                    snapshot.getPendingFee(),
+                    toCreditTxType(snapshot.getPendingFeeType()),
+                    itemId);
+        }
 
         ItemFee itemFee = lockItemFee(itemId);
         requireSameHeldFee(itemFee, snapshot);
         itemFee.markReleased();
+    }
+
+    // Bảng luật trong Javadoc quoteEdit; mỗi điều kiện một dòng, xét từ trên xuống, gặp dòng đúng là trả về.
+    private EditQuote toEditQuote(ItemFeeSnapshot snapshot) {
+        boolean feeHeld = snapshot.getFeeState() == ItemFeeState.HELD;
+        if (!snapshot.getEverApproved() && feeHeld) {
+            return freeQuote(EditQuote.Reason.NOT_YET_APPROVED);
+        }
+        if (!snapshot.getEverApproved()) {
+            return paidQuote(configService.getInt(ConfigKey.POST_FEE), EditQuote.Reason.REPOST_FEE);
+        }
+        if (feeHeld) {
+            return freeQuote(EditQuote.Reason.PENDING_REVIEW_OVERWRITE);
+        }
+        if (!snapshot.getFreeEditUsed()) {
+            return freeQuote(EditQuote.Reason.FIRST_FREE_EDIT);
+        }
+        return paidQuote(configService.getInt(ConfigKey.EDIT_FEE), EditQuote.Reason.PAID_EDIT);
+    }
+
+    private EditQuote freeQuote(EditQuote.Reason reason) {
+        return new EditQuote(true, 0, reason);
+    }
+
+    // Admin có thể cấu hình mức phí bằng 0; khi đó báo miễn phí nhưng vẫn giữ lý do gốc.
+    private EditQuote paidQuote(int amount, EditQuote.Reason reason) {
+        return new EditQuote(amount == 0, amount, reason);
+    }
+
+    // CreditService.hold không nhận số 0 (WALLET_INVALID_AMOUNT); phí 0 nghĩa là không có gì để giữ ở ví.
+    private void holdOnWallet(long userId, int fee, ItemFeeType feeType, long itemId) {
+        if (fee > 0) {
+            creditService.hold(userId, fee, toCreditTxType(feeType), itemId);
+        }
     }
 
     // Không dùng findById(ItemFee) để đọc trước: entity đó sẽ nằm trong persistence context, và lockById sau đó

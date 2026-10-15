@@ -5,10 +5,13 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.common.exception.ErrorCode;
+import com.shareloop.listingfee.dto.EditQuote;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.support.IntegrationTest;
 import com.shareloop.wallet.WalletErrorCode;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -29,8 +32,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
  */
 class PostFeeServiceIT extends IntegrationTest {
 
-    // Bằng giá trị post_fee seed trong V202610051200__setting_seed_config.sql.
+    // Bằng giá trị post_fee, edit_fee seed trong V202610051200__setting_seed_config.sql.
     private static final int POST_FEE = 5;
+    private static final int EDIT_FEE = 5;
     private static final int START_BALANCE = 20;
     private static final AtomicInteger PHONE_SEQUENCE = new AtomicInteger();
 
@@ -41,6 +45,8 @@ class PostFeeServiceIT extends IntegrationTest {
     JdbcTemplate jdbc;
 
     private final List<Long> createdUserIds = new ArrayList<>();
+    // Giá trị cấu hình gốc của các khoá bị test đổi, để trả lại sau mỗi test.
+    private final Map<String, String> originalConfigValues = new HashMap<>();
 
     // Thứ tự xoá: credit_ledger và items tham chiếu users nên phải xoá trước; chỉ xoá dữ liệu do test tạo ra.
     @AfterEach
@@ -51,6 +57,8 @@ class PostFeeServiceIT extends IntegrationTest {
             jdbc.update("DELETE FROM users WHERE id = ?", userId);
         }
         createdUserIds.clear();
+        originalConfigValues.forEach(this::updateConfig);
+        originalConfigValues.clear();
     }
 
     // ---------- holdPostFee ----------
@@ -119,6 +127,24 @@ class PostFeeServiceIT extends IntegrationTest {
         assertThat(feeColumnsOf(itemId).get("fee_state")).isEqualTo("NONE");
     }
 
+    @Test
+    void holdPostFee_whenPostFeeConfiguredZero_marksHeldWithoutTouchingWallet() {
+        // given: Admin cấu hình phí đăng = 0; ví không có Credit nào
+        setConfig("post_fee", "0");
+        long ownerId = insertUser(0, 0);
+        long itemId = insertItem(ownerId);
+
+        // when
+        postFeeService.holdPostFee(itemId, ownerId);
+
+        // then
+        assertThat(heldOf(ownerId)).isZero();
+        Map<String, Object> fee = feeColumnsOf(itemId);
+        assertThat(fee.get("fee_state")).isEqualTo("HELD");
+        assertThat(fee.get("pending_fee")).isEqualTo(0);
+        assertThat(fee.get("pending_fee_type")).isEqualTo("POST");
+    }
+
     // ---------- chargeHeldFee / releaseHeldFee ----------
 
     @Test
@@ -173,7 +199,284 @@ class PostFeeServiceIT extends IntegrationTest {
         assertThat(balanceOf(ownerId)).isEqualTo(START_BALANCE);
     }
 
+    // ---------- quoteEdit ----------
+
+    @Test
+    void quoteEdit_whenNeverApprovedAndPostFeeHeld_returnsFreeNotYetApproved() {
+        // given: bài mới đang chờ duyệt lần đầu, phí đăng đang giữ
+        long ownerId = insertUser(START_BALANCE, POST_FEE);
+        long itemId = insertHeldItem(ownerId, POST_FEE);
+
+        // when
+        EditQuote quote = postFeeService.quoteEdit(itemId, ownerId);
+
+        // then
+        assertThat(quote).isEqualTo(new EditQuote(true, 0, EditQuote.Reason.NOT_YET_APPROVED));
+    }
+
+    @Test
+    void quoteEdit_whenRejectedBeforeFirstApproval_returnsRepostFee() {
+        // given: bài bị từ chối ở lần duyệt đầu, phí đăng đã nhả
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertRejectedItem(ownerId);
+
+        // when
+        EditQuote quote = postFeeService.quoteEdit(itemId, ownerId);
+
+        // then
+        assertThat(quote).isEqualTo(new EditQuote(false, POST_FEE, EditQuote.Reason.REPOST_FEE));
+    }
+
+    @Test
+    void quoteEdit_whenApprovedAndFreeEditUnused_returnsFirstFreeEdit() {
+        // given
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, false);
+
+        // when
+        EditQuote quote = postFeeService.quoteEdit(itemId, ownerId);
+
+        // then
+        assertThat(quote).isEqualTo(new EditQuote(true, 0, EditQuote.Reason.FIRST_FREE_EDIT));
+    }
+
+    @Test
+    void quoteEdit_whenFreeEditUsed_returnsPaidEditFromConfig() {
+        // given
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, true);
+
+        // when
+        EditQuote quote = postFeeService.quoteEdit(itemId, ownerId);
+
+        // then
+        assertThat(quote).isEqualTo(new EditQuote(false, EDIT_FEE, EditQuote.Reason.PAID_EDIT));
+    }
+
+    @Test
+    void quoteEdit_whenEditPendingReview_returnsFreeOverwrite() {
+        // given: bản sửa có phí đã gửi và đang chờ duyệt
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, true);
+        postFeeService.holdEditFee(itemId, ownerId);
+
+        // when
+        EditQuote quote = postFeeService.quoteEdit(itemId, ownerId);
+
+        // then
+        assertThat(quote).isEqualTo(new EditQuote(true, 0, EditQuote.Reason.PENDING_REVIEW_OVERWRITE));
+    }
+
+    @Test
+    void quoteEdit_whenCallerIsNotOwner_throwsNotOwner() {
+        // given
+        long ownerId = insertUser(START_BALANCE, 0);
+        long otherUserId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, true);
+
+        // when
+        Throwable thrown = catchThrowable(() -> postFeeService.quoteEdit(itemId, otherUserId));
+
+        // then
+        assertBusinessError(thrown, ListingFeeErrorCode.LISTINGFEE_NOT_OWNER);
+    }
+
+    // ---------- holdEditFee ----------
+
+    @Test
+    void holdEditFee_whenPaidEdit_holdsEditFee() {
+        // given
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, true);
+
+        // when
+        postFeeService.holdEditFee(itemId, ownerId);
+
+        // then
+        assertThat(heldOf(ownerId)).isEqualTo(EDIT_FEE);
+        assertThat(balanceOf(ownerId)).isEqualTo(START_BALANCE);
+        Map<String, Object> fee = feeColumnsOf(itemId);
+        assertThat(fee.get("fee_state")).isEqualTo("HELD");
+        assertThat(fee.get("pending_fee")).isEqualTo(EDIT_FEE);
+        assertThat(fee.get("pending_fee_type")).isEqualTo("EDIT");
+    }
+
+    @Test
+    void holdEditFee_whenFirstFreeEdit_marksHeldWithZeroAndKeepsFreeEditUnused() {
+        // given
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, false);
+
+        // when
+        postFeeService.holdEditFee(itemId, ownerId);
+
+        // then: không đụng ví; lượt miễn phí chưa bị tính cho tới khi Admin duyệt
+        assertThat(heldOf(ownerId)).isZero();
+        Map<String, Object> fee = feeColumnsOf(itemId);
+        assertThat(fee.get("fee_state")).isEqualTo("HELD");
+        assertThat(fee.get("pending_fee")).isEqualTo(0);
+        assertThat(fee.get("pending_fee_type")).isEqualTo("EDIT");
+        assertThat(fee.get("free_edit_used")).isEqualTo(false);
+    }
+
+    @Test
+    void holdEditFee_whenRejectedBeforeFirstApproval_holdsExactlyQuotedPostFee() {
+        // given
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertRejectedItem(ownerId);
+        EditQuote quote = postFeeService.quoteEdit(itemId, ownerId);
+
+        // when
+        postFeeService.holdEditFee(itemId, ownerId);
+
+        // then: số giữ đúng bằng số đã báo, loại POST vì bài chưa từng trả phí đăng
+        assertThat(quote.amount()).isEqualTo(POST_FEE);
+        assertThat(heldOf(ownerId)).isEqualTo(quote.amount());
+        Map<String, Object> fee = feeColumnsOf(itemId);
+        assertThat(fee.get("fee_state")).isEqualTo("HELD");
+        assertThat(fee.get("pending_fee")).isEqualTo(POST_FEE);
+        assertThat(fee.get("pending_fee_type")).isEqualTo("POST");
+    }
+
+    @Test
+    void holdEditFee_whenAlreadyHeld_overwritesWithoutHoldingAgain() {
+        // given: bản sửa có phí đang chờ duyệt
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, true);
+        postFeeService.holdEditFee(itemId, ownerId);
+
+        // when: sửa đè lần nữa
+        postFeeService.holdEditFee(itemId, ownerId);
+
+        // then: không lỗi, không giữ thêm
+        assertThat(heldOf(ownerId)).isEqualTo(EDIT_FEE);
+        assertThat(feeColumnsOf(itemId).get("pending_fee")).isEqualTo(EDIT_FEE);
+    }
+
+    @Test
+    void holdEditFee_whenBalanceNotEnough_throwsInsufficientBalanceAndKeepsFeeState() {
+        // given: chỉ có 3 Credit, phí sửa là 5
+        long ownerId = insertUser(3, 0);
+        long itemId = insertApprovedItem(ownerId, true);
+
+        // when
+        Throwable thrown = catchThrowable(() -> postFeeService.holdEditFee(itemId, ownerId));
+
+        // then
+        assertBusinessError(thrown, WalletErrorCode.WALLET_INSUFFICIENT_BALANCE);
+        assertThat(heldOf(ownerId)).isZero();
+        assertThat(feeColumnsOf(itemId).get("fee_state")).isEqualTo("CHARGED");
+    }
+
+    @Test
+    void holdEditFee_whenCallerIsNotOwner_throwsNotOwner() {
+        // given
+        long ownerId = insertUser(START_BALANCE, 0);
+        long otherUserId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, true);
+
+        // when
+        Throwable thrown = catchThrowable(() -> postFeeService.holdEditFee(itemId, otherUserId));
+
+        // then
+        assertBusinessError(thrown, ListingFeeErrorCode.LISTINGFEE_NOT_OWNER);
+        assertThat(heldOf(otherUserId)).isZero();
+        assertThat(feeColumnsOf(itemId).get("fee_state")).isEqualTo("CHARGED");
+    }
+
+    @Test
+    void holdEditFee_whenEditFeeConfiguredZero_marksHeldWithoutTouchingWallet() {
+        // given: Admin cấu hình phí sửa = 0; ví không có Credit nào
+        setConfig("edit_fee", "0");
+        long ownerId = insertUser(0, 0);
+        long itemId = insertApprovedItem(ownerId, true);
+
+        // when
+        postFeeService.holdEditFee(itemId, ownerId);
+
+        // then
+        assertThat(heldOf(ownerId)).isZero();
+        Map<String, Object> fee = feeColumnsOf(itemId);
+        assertThat(fee.get("fee_state")).isEqualTo("HELD");
+        assertThat(fee.get("pending_fee")).isEqualTo(0);
+        assertThat(fee.get("pending_fee_type")).isEqualTo("EDIT");
+    }
+
+    // ---------- vòng đời bản sửa: duyệt / từ chối ----------
+
+    @Test
+    void releaseHeldFee_whenFreeEditRejected_keepsFreeEditForNextEdit() {
+        // given: gửi bản sửa miễn phí, Admin từ chối (status REJECTED do ItemService đặt, ở đây giả lập bằng SQL)
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, false);
+        postFeeService.holdEditFee(itemId, ownerId);
+
+        // when
+        postFeeService.releaseHeldFee(itemId, "REJECTED");
+        jdbc.update("UPDATE items SET status = 'REJECTED' WHERE id = ?", itemId);
+
+        // then: R36 — xét approved_at chứ không xét status, lượt miễn phí vẫn còn
+        assertThat(feeColumnsOf(itemId).get("free_edit_used")).isEqualTo(false);
+        assertThat(postFeeService.quoteEdit(itemId, ownerId))
+                .isEqualTo(new EditQuote(true, 0, EditQuote.Reason.FIRST_FREE_EDIT));
+    }
+
+    @Test
+    void chargeHeldFee_whenFreeEditApproved_marksFreeEditUsedWithoutLedger() {
+        // given
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, false);
+        postFeeService.holdEditFee(itemId, ownerId);
+
+        // when
+        postFeeService.chargeHeldFee(itemId);
+
+        // then: không mất Credit, không có dòng ledger; lần sửa sau có phí
+        assertThat(balanceOf(ownerId)).isEqualTo(START_BALANCE);
+        assertThat(ledgerCountOfItem(itemId)).isZero();
+        Map<String, Object> fee = feeColumnsOf(itemId);
+        assertThat(fee.get("fee_state")).isEqualTo("CHARGED");
+        assertThat(fee.get("free_edit_used")).isEqualTo(true);
+        assertThat(postFeeService.quoteEdit(itemId, ownerId).reason()).isEqualTo(EditQuote.Reason.PAID_EDIT);
+    }
+
+    @Test
+    void chargeHeldFee_whenPaidEditApproved_chargesEditFeeIntoLedger() {
+        // given
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, true);
+        postFeeService.holdEditFee(itemId, ownerId);
+
+        // when
+        postFeeService.chargeHeldFee(itemId);
+
+        // then
+        assertThat(balanceOf(ownerId)).isEqualTo(START_BALANCE - EDIT_FEE);
+        assertThat(heldOf(ownerId)).isZero();
+        Map<String, Object> ledgerRow =
+                jdbc.queryForMap("SELECT amount, type FROM credit_ledger WHERE item_id = ?", itemId);
+        assertThat(ledgerRow.get("amount")).isEqualTo(-EDIT_FEE);
+        assertThat(ledgerRow.get("type")).isEqualTo("EDIT_FEE");
+    }
+
     // ---------- hai luồng cùng lúc ----------
+
+    @Test
+    void holdEditFee_whenCalledTwiceConcurrently_holdsOnceAndBothSucceed() throws Exception {
+        // given: bản sửa có phí, đủ tiền cho cả hai lần nếu không có khoá
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, true);
+
+        // when
+        List<Throwable> errors = raceTwoEditHolds(itemId, ownerId);
+
+        // then: luồng sau chờ khoá ví, rồi thấy bài đã HELD nên sửa đè, không giữ thêm
+        assertThat(errors).containsOnlyNulls();
+        assertThat(heldOf(ownerId)).isEqualTo(EDIT_FEE);
+        Map<String, Object> fee = feeColumnsOf(itemId);
+        assertThat(fee.get("fee_state")).isEqualTo("HELD");
+        assertThat(fee.get("pending_fee")).isEqualTo(EDIT_FEE);
+    }
 
     @Test
     void chargeAndRelease_whenOwnerHasAnotherHeldItem_doNotTouchOtherItemsHold() throws Exception {
@@ -242,6 +545,26 @@ class PostFeeServiceIT extends IntegrationTest {
             // Đúng một luồng thành công: một null, một có lỗi.
             assertThat(chargeError == null).isNotEqualTo(releaseError == null);
             return chargeError == null ? new RaceResult(true, releaseError) : new RaceResult(false, chargeError);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    // Hai luồng cùng gọi holdEditFee cho một bài; trả lỗi của từng luồng (null là thành công).
+    // Dùng Arrays.asList vì List.of không nhận phần tử null.
+    private List<Throwable> raceTwoEditHolds(long itemId, long ownerId) throws Exception {
+        CountDownLatch bothReady = new CountDownLatch(2);
+        CountDownLatch startSignal = new CountDownLatch(1);
+        Callable<Throwable> holdEdit =
+                () -> runAfterSignal(bothReady, startSignal, () -> postFeeService.holdEditFee(itemId, ownerId));
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Throwable> firstFuture = executor.submit(holdEdit);
+            Future<Throwable> secondFuture = executor.submit(holdEdit);
+            bothReady.await();
+            startSignal.countDown();
+            return Arrays.asList(firstFuture.get(30, TimeUnit.SECONDS), secondFuture.get(30, TimeUnit.SECONDS));
         } finally {
             executor.shutdownNow();
         }
@@ -329,6 +652,36 @@ class PostFeeServiceIT extends IntegrationTest {
                 pendingFee);
     }
 
+    // Bài đã được duyệt và đã trừ phí đăng; freeEditUsed cho biết đã dùng lượt sửa miễn phí hay chưa.
+    private long insertApprovedItem(long donorId, boolean freeEditUsed) {
+        return jdbc.queryForObject(
+                "INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, condition,"
+                        + " status, approved_at, post_fee_paid, fee_state, pending_fee, pending_fee_type,"
+                        + " free_edit_used)"
+                        + " VALUES (?, ?, ?, 'GIVE', 'ListingFee IT item', 'Mô tả', 'NEW',"
+                        + " 'APPROVED', now(), true, 'CHARGED', ?, 'POST', ?) RETURNING id",
+                Long.class,
+                donorId,
+                seedCategoryId(),
+                seedAreaId(),
+                POST_FEE,
+                freeEditUsed);
+    }
+
+    // Bài bị từ chối ngay ở lần duyệt đầu: chưa từng duyệt (approved_at null), phí đăng đã nhả.
+    private long insertRejectedItem(long donorId) {
+        return jdbc.queryForObject(
+                "INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, condition,"
+                        + " status, fee_state, pending_fee, pending_fee_type)"
+                        + " VALUES (?, ?, ?, 'GIVE', 'ListingFee IT item', 'Mô tả', 'NEW',"
+                        + " 'REJECTED', 'RELEASED', ?, 'POST') RETURNING id",
+                Long.class,
+                donorId,
+                seedCategoryId(),
+                seedAreaId(),
+                POST_FEE);
+    }
+
     // Mượn danh mục và khu vực có sẵn từ seed (không tạo thêm, không xoá) để thoả khoá ngoại của items.
     private long seedCategoryId() {
         return jdbc.queryForObject("SELECT id FROM item_categories ORDER BY id LIMIT 1", Long.class);
@@ -338,9 +691,27 @@ class PostFeeServiceIT extends IntegrationTest {
         return jdbc.queryForObject("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1", Long.class);
     }
 
+    // Đổi một khoá cấu hình cho riêng test này; cleanUp trả lại giá trị gốc.
+    private void setConfig(String attrKey, String value) {
+        String original = jdbc.queryForObject(
+                "SELECT attr_value FROM website_attributes WHERE attr_group = 'CONFIG' AND attr_key = ?",
+                String.class,
+                attrKey);
+        originalConfigValues.putIfAbsent(attrKey, original);
+        updateConfig(attrKey, value);
+    }
+
+    private void updateConfig(String attrKey, String value) {
+        jdbc.update(
+                "UPDATE website_attributes SET attr_value = ? WHERE attr_group = 'CONFIG' AND attr_key = ?",
+                value,
+                attrKey);
+    }
+
     private Map<String, Object> feeColumnsOf(long itemId) {
         return jdbc.queryForMap(
-                "SELECT fee_state, pending_fee, pending_fee_type, post_fee_paid FROM items WHERE id = ?", itemId);
+                "SELECT fee_state, pending_fee, pending_fee_type, post_fee_paid, free_edit_used FROM items WHERE id = ?",
+                itemId);
     }
 
     private long balanceOf(long userId) {
