@@ -179,6 +179,35 @@ Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (FR-80, FR-81,
 
 ---
 
+## 9. GET /api/v1/requests/{id}/contact
+
+Lấy thông tin liên lạc (họ tên, email, số điện thoại) của đối tác khi giao dịch đã chốt lịch hẹn (FR-82, BR-T11, BR-T12, UC-26, UC-62).
+
+- **Xác thực:** Bắt buộc JWT (chủ bài đăng hoặc người nhận).
+- **Path variable:** `id` (id của request).
+- **Hành vi nghiệp vụ:**
+  - Chỉ thành viên trong giao dịch mới có quyền xem thông tin của đối phương.
+  - Chỉ trả về khi Request đã chốt lịch hẹn (tức `contactRevealedAt != null`, từ `LOGISTICS_CONFIRMED` trở lên).
+  - Lấy thông tin qua `UserService.findContact(partnerId)`.
+  - Một khi đã chốt lịch và trao thông tin, thông tin này không bị ẩn lại (BR-T12).
+- **Thành công:** `200 OK`, trả về `RequestContactResponse`:
+
+```json
+{
+  "userId": 10,
+  "fullName": "Nguyễn Văn B",
+  "email": "nguyenvanb@example.com",
+  "phone": "0912345678"
+}
+```
+
+- **Lỗi:**
+  - `403 REQUEST_FORBIDDEN`: Không phải thành viên tham gia giao dịch này.
+  - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
+  - `409 REQUEST_CONTACT_NOT_REVEALED`: Chưa chốt lịch hẹn (chưa đạt `LOGISTICS_CONFIRMED`).
+
+---
+
 ## DTO Models
 
 ### RequestResponse
@@ -216,6 +245,15 @@ Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (FR-80, FR-81,
 |---|---|---|---|
 | `agreeToWaiver` | boolean | Không | Bắt buộc true nếu là SHIPPING |
 
+### RequestContactResponse
+
+| Trường | Kiểu | Ý nghĩa |
+|---|---|---|
+| `userId` | number | Id người dùng đối tác |
+| `fullName` | string | Họ tên hiển thị của đối tác |
+| `email` | string | Email liên lạc của đối tác |
+| `phone` | string | Số điện thoại của đối tác |
+
 ---
 
 ## Mã lỗi
@@ -233,5 +271,6 @@ Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (FR-80, FR-81,
 | `REQUEST_ITEM_NOT_AVAILABLE` | 409 | Bài đăng không ở trạng thái sẵn sàng (chưa duyệt, đã trao đổi...) |
 | `REQUEST_ALREADY_EXISTS` | 409 | Đã có một yêu cầu đang hoạt động cho bài này (BR-R02) |
 | `REQUEST_SCHEDULE_LOCKED` | 409 | Lịch hẹn đã chốt và bị khoá (FR-83, BR-T05) |
+| `REQUEST_CONTACT_NOT_REVEALED` | 409 | Chưa chốt lịch hẹn để xem thông tin liên lạc (FR-82, BR-T11) |
 | `REQUEST_INVALID_STATE_TRANSITION` | 409 | Chuyển đổi trạng thái không hợp lệ theo sơ đồ |
 | `REQUEST_FORBIDDEN` | 403 | Không có quyền thao tác trên yêu cầu này |

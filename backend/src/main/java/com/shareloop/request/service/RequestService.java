@@ -7,6 +7,7 @@ import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.RequestChatContext;
+import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.entity.Request;
@@ -15,6 +16,8 @@ import com.shareloop.request.mapper.RequestMapper;
 import com.shareloop.request.repository.RequestRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.dto.ContactInfo;
+import com.shareloop.user.service.UserService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -41,6 +44,7 @@ public class RequestService {
     private final NotificationService notificationService;
     private final ConfigService configService;
     private final ItemService itemService;
+    private final UserService userService;
     private final JdbcClient jdbcClient;
 
     public RequestService(
@@ -48,11 +52,13 @@ public class RequestService {
             NotificationService notificationService,
             ConfigService configService,
             ItemService itemService,
+            UserService userService,
             JdbcClient jdbcClient) {
         this.requestRepository = requestRepository;
         this.notificationService = notificationService;
         this.configService = configService;
         this.itemService = itemService;
+        this.userService = userService;
         this.jdbcClient = jdbcClient;
     }
 
@@ -343,6 +349,39 @@ public class RequestService {
         }
 
         return RequestMapper.toResponse(saved);
+    }
+
+    /**
+     * Lấy thông tin liên lạc của đối tác khi giao dịch đã chốt lịch (FR-82, BR-T11, BR-T12).
+     *
+     * <p>Chỉ thành viên trong giao dịch mới được gọi và chỉ trả về khi giao dịch đã ở trạng thái
+     * chốt lịch hẹn (contactRevealedAt != null, tức từ LOGISTICS_CONFIRMED trở lên).
+     *
+     * @param requestId id của yêu cầu giao dịch
+     * @param currentUserId id của người đang gọi
+     * @return thông tin liên lạc (họ tên, email, số điện thoại) của đối tác
+     */
+    @Transactional(readOnly = true)
+    public RequestContactResponse getContactInfo(long requestId, long currentUserId) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+
+        ItemSnapshot item = findItemSnapshot(request.getItemId())
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+
+        if (request.getReceiverId() != currentUserId && item.donorId() != currentUserId) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+
+        if (request.getContactRevealedAt() == null) {
+            throw new BusinessException(RequestErrorCode.REQUEST_CONTACT_NOT_REVEALED);
+        }
+
+        long partnerId = (currentUserId == request.getReceiverId()) ? item.donorId() : request.getReceiverId();
+        ContactInfo contact = userService.findContact(partnerId);
+
+        return new RequestContactResponse(contact.userId(), contact.fullName(), contact.email(), contact.phone());
     }
 
     /**

@@ -14,6 +14,7 @@ import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
 import com.shareloop.request.dto.CreateRequest;
+import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.service.RequestService;
 import java.time.Instant;
@@ -257,5 +258,30 @@ class RequestControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"))
                 .andExpect(jsonPath("$.contactRevealedAt").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("Lấy thông tin liên lạc đối tác có JWT trả về 200 OK")
+    void getContact_withToken_returns200() throws Exception {
+        String token = jwtService.issue(10L, false);
+
+        RequestContactResponse response = new RequestContactResponse(20L, "Chủ Bài", "donor@example.com", "0987654321");
+
+        when(requestService.getContactInfo(100L, 10L)).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/requests/100/contact").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(20))
+                .andExpect(jsonPath("$.fullName").value("Chủ Bài"))
+                .andExpect(jsonPath("$.email").value("donor@example.com"))
+                .andExpect(jsonPath("$.phone").value("0987654321"));
+    }
+
+    @Test
+    @DisplayName("Lấy thông tin liên lạc đối tác không có JWT trả về 401 Unauthorized")
+    void getContact_withoutToken_returns401() throws Exception {
+        mockMvc.perform(get("/api/v1/requests/100/contact"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
     }
 }

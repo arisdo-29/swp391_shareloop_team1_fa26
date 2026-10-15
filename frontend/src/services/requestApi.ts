@@ -36,6 +36,13 @@ export interface ConfirmLogisticsRequestBody {
   agreeToWaiver?: boolean;
 }
 
+export interface RequestContactResponse {
+  userId: number;
+  fullName: string;
+  email: string;
+  phone: string;
+}
+
 export const toBackendUserId = (userId: string | null | undefined) => {
   const match = /^api_([1-9]\d*)$/.exec(userId ?? '');
   if (!match) return null;
@@ -102,6 +109,12 @@ export const requestApi = {
   },
   async confirmLogistics(id: number, currentUserId: number, body?: ConfirmLogisticsRequestBody) {
     const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/confirm-logistics`, body ?? {}, {
+      params: { currentUserId },
+    });
+    return data;
+  },
+  async getContact(id: number, currentUserId: number) {
+    const { data } = await http.get<RequestContactResponse>(`/api/v1/requests/${id}/contact`, {
       params: { currentUserId },
     });
     return data;
