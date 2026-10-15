@@ -18,6 +18,10 @@ export interface RequestResponse {
   donorWaiverAt?: string;
   receiverWaiverAt?: string;
   contactRevealedAt?: string;
+  donorHandoverAt?: string;
+  receiverHandoverAt?: string;
+  asDescribed?: boolean;
+  completedAt?: string;
   createdAt: string;
 }
 
@@ -34,6 +38,11 @@ export interface ScheduleRequestBody {
 
 export interface ConfirmLogisticsRequestBody {
   agreeToWaiver?: boolean;
+}
+
+export interface HandoverConfirmRequestBody {
+  asDescribed?: boolean;
+  notAsDescribedReason?: string;
 }
 
 export interface RequestContactResponse {
@@ -115,6 +124,12 @@ export const requestApi = {
   },
   async getContact(id: number, currentUserId: number) {
     const { data } = await http.get<RequestContactResponse>(`/api/v1/requests/${id}/contact`, {
+      params: { currentUserId },
+    });
+    return data;
+  },
+  async confirmHandover(id: number, currentUserId: number, body?: HandoverConfirmRequestBody) {
+    const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/confirm-handover`, body ?? {}, {
       params: { currentUserId },
     });
     return data;

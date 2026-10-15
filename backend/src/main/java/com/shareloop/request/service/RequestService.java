@@ -1,11 +1,16 @@
 package com.shareloop.request.service;
 
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.item.ItemErrorCode;
+import com.shareloop.item.dto.ItemSummary;
+import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
+import com.shareloop.request.dto.HandoverConfirmRequest;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestResponse;
@@ -22,6 +27,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,8 +50,29 @@ public class RequestService {
     private final NotificationService notificationService;
     private final ConfigService configService;
     private final ItemService itemService;
+    private final ItemQueryService itemQueryService;
     private final UserService userService;
+    private final ReputationService reputationService;
     private final JdbcClient jdbcClient;
+
+    public RequestService(
+            RequestRepository requestRepository,
+            NotificationService notificationService,
+            ConfigService configService,
+            ItemService itemService,
+            @Autowired(required = false) ItemQueryService itemQueryService,
+            UserService userService,
+            @Autowired(required = false) ReputationService reputationService,
+            @Autowired(required = false) JdbcClient jdbcClient) {
+        this.requestRepository = requestRepository;
+        this.notificationService = notificationService;
+        this.configService = configService;
+        this.itemService = itemService;
+        this.itemQueryService = itemQueryService;
+        this.userService = userService;
+        this.reputationService = reputationService;
+        this.jdbcClient = jdbcClient;
+    }
 
     public RequestService(
             RequestRepository requestRepository,
@@ -54,12 +81,7 @@ public class RequestService {
             ItemService itemService,
             UserService userService,
             JdbcClient jdbcClient) {
-        this.requestRepository = requestRepository;
-        this.notificationService = notificationService;
-        this.configService = configService;
-        this.itemService = itemService;
-        this.userService = userService;
-        this.jdbcClient = jdbcClient;
+        this(requestRepository, notificationService, configService, itemService, null, userService, null, jdbcClient);
     }
 
     /**
@@ -114,16 +136,12 @@ public class RequestService {
         Request saved = requestRepository.save(request);
 
         // 5. Gửi thông báo cho chủ bài đăng
-        try {
-            notificationService.notify(
-                    targetItem.donorId(),
-                    "NEW_REQUEST",
-                    "Có yêu cầu mới",
-                    "Một thành viên đã gửi yêu cầu tới bài đăng của bạn.",
-                    "/requests/" + saved.getId());
-        } catch (UnsupportedOperationException ignored) {
-            // Khi NotificationService còn ở dạng stub chưa triển khai
-        }
+        notificationService.notify(
+                targetItem.donorId(),
+                "NEW_REQUEST",
+                "Có yêu cầu mới",
+                "Một thành viên đã gửi yêu cầu tới bài đăng của bạn.",
+                "/requests/" + saved.getId());
 
         return RequestMapper.toResponse(saved);
     }
@@ -385,6 +403,104 @@ public class RequestService {
     }
 
     /**
+     * Xác nhận đã giao hoặc đã nhận đồ và trả lời đúng mô tả (FR-84, FR-85, BR-D02, BR-R05, UC-27).
+     *
+     * <p>Chỉ chủ bài đăng (donor) hoặc người nhận (receiver) mới có quyền xác nhận.
+     * Khi một bên bấm, Request chuyển sang AWAITING_HANDOVER và tiếp tục chờ bên còn lại (BR-D02).
+     * Khi cả hai bên đều đã bấm xác nhận:
+     * <ul>
+     *   <li>Request chuyển sang COMPLETED (ghi nhận completedAt).</li>
+     *   <li>Bài đăng chuyển sang TRADED qua ItemService.markTraded (cả 2 bài nếu là SWAP).</li>
+     *   <li>Ghi nhận sự kiện hoàn tất giao dịch tới ReputationService.onCompleted.</li>
+     *   <li>Gửi thông báo hoàn tất giao dịch tới cả hai bên.</li>
+     * </ul>
+     *
+     * @param requestId id của yêu cầu giao dịch
+     * @param currentUserId id của người đang thao tác
+     * @param requestDto thông tin xác nhận (bắt buộc asDescribed và lý do nếu không đúng mô tả đối với bên nhận)
+     * @return RequestResponse sau khi xác nhận
+     */
+    @Transactional
+    public RequestResponse confirmHandover(long requestId, long currentUserId, HandoverConfirmRequest requestDto) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+
+        ItemSnapshot item = findItemSnapshot(request.getItemId())
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+
+        boolean isDonor = item.donorId() == currentUserId;
+        boolean isReceiver = request.getReceiverId() == currentUserId;
+
+        if (!isDonor && !isReceiver) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+
+        Boolean asDescribed = null;
+        if (isReceiver) {
+            if (requestDto == null || requestDto.asDescribed() == null) {
+                throw new BusinessException(RequestErrorCode.REQUEST_AS_DESCRIBED_REQUIRED);
+            }
+            if (Boolean.FALSE.equals(requestDto.asDescribed())
+                    && (requestDto.notAsDescribedReason() == null
+                            || requestDto.notAsDescribedReason().isBlank())) {
+                throw new BusinessException(RequestErrorCode.REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED);
+            }
+            asDescribed = requestDto.asDescribed();
+        }
+
+        request.confirmHandover(isDonor, asDescribed, Instant.now());
+        Request saved = requestRepository.save(request);
+
+        long otherUserId = isDonor ? request.getReceiverId() : item.donorId();
+
+        if (saved.getStatus() == RequestStatus.COMPLETED) {
+            // 1. Chuyển bài đăng sang TRADED (FR-84, #94)
+            itemService.markTraded(saved.getItemId());
+            if ("SWAP".equalsIgnoreCase(saved.getType()) && saved.getOfferedItemId() != null) {
+                itemService.markTraded(saved.getOfferedItemId());
+            }
+
+            long targetRequestId = saved.getId() != null ? saved.getId() : requestId;
+
+            // 2. Chữ ký thông báo sang ReputationService (FR-91, FR-94, #94)
+            if (reputationService != null) {
+                reputationService.onCompleted(targetRequestId);
+            }
+
+            // 3. Gửi thông báo COMPLETED cho cả hai bên
+            try {
+                notificationService.notify(
+                        currentUserId,
+                        "TRANSACTION_COMPLETED",
+                        "Giao dịch hoàn tất",
+                        "Giao dịch đã được hai bên xác nhận hoàn tất thành công.",
+                        "/requests/" + targetRequestId);
+                notificationService.notify(
+                        otherUserId,
+                        "TRANSACTION_COMPLETED",
+                        "Giao dịch hoàn tất",
+                        "Giao dịch đã được hai bên xác nhận hoàn tất thành công.",
+                        "/requests/" + targetRequestId);
+            } catch (Exception ignored) {
+            }
+        } else if (saved.getStatus() == RequestStatus.AWAITING_HANDOVER) {
+            long targetRequestId = saved.getId() != null ? saved.getId() : requestId;
+            try {
+                notificationService.notify(
+                        otherUserId,
+                        "HANDOVER_CONFIRMED",
+                        "Đối phương đã xác nhận giao nhận",
+                        "Đối phương đã xác nhận giao nhận món đồ. Vui lòng kiểm tra và xác nhận.",
+                        "/requests/" + targetRequestId);
+            } catch (Exception ignored) {
+            }
+        }
+
+        return RequestMapper.toResponse(saved);
+    }
+
+    /**
      * Kiểm tra người dùng có đang trong giai đoạn giao nhận hay không (F03, BR-U10).
      */
     @Transactional(readOnly = true)
@@ -416,12 +532,29 @@ public class RequestService {
     }
 
     Optional<ItemSnapshot> findItemSnapshot(long itemId) {
-        return jdbcClient
-                .sql("SELECT donor_id, offer_type, status FROM items WHERE id = :id AND is_deleted = false")
-                .param("id", itemId)
-                .query((rs, rowNum) ->
-                        new ItemSnapshot(rs.getLong("donor_id"), rs.getString("offer_type"), rs.getString("status")))
-                .optional();
+        if (itemQueryService != null) {
+            try {
+                ItemSummary summary = itemQueryService.getSummary(itemId);
+                return Optional.of(new ItemSnapshot(
+                        summary.donorId(),
+                        summary.offerType() != null ? summary.offerType().name() : null,
+                        summary.status() != null ? summary.status().name() : null));
+            } catch (BusinessException e) {
+                if (e.getErrorCode() == ItemErrorCode.ITEM_NOT_FOUND) {
+                    return Optional.empty();
+                }
+                throw e;
+            }
+        }
+        if (jdbcClient != null) {
+            return jdbcClient
+                    .sql("SELECT donor_id, offer_type, status FROM items WHERE id = :id AND is_deleted = false")
+                    .param("id", itemId)
+                    .query((rs, rowNum) -> new ItemSnapshot(
+                            rs.getLong("donor_id"), rs.getString("offer_type"), rs.getString("status")))
+                    .optional();
+        }
+        return Optional.empty();
     }
 
     record ItemSnapshot(long donorId, String offerType, String status) {}

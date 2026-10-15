@@ -3,6 +3,7 @@ package com.shareloop.request.controller;
 import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
+import com.shareloop.request.dto.HandoverConfirmRequest;
 import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.dto.ScheduleRequest;
@@ -119,5 +120,17 @@ public class RequestController {
     @GetMapping("/api/v1/requests/{id}/contact")
     public RequestContactResponse getContact(@PathVariable long id, @CurrentUserId Long currentUserId) {
         return requestService.getContactInfo(id, currentUserId);
+    }
+
+    /**
+     * Xác nhận đã giao / đã nhận đồ và trả lời đúng mô tả (FR-84, FR-85, BR-D02, BR-R05, UC-27).
+     */
+    @Operation(summary = "Xác nhận đã giao hoặc đã nhận đồ và trả lời đúng mô tả")
+    @PostMapping("/api/v1/requests/{id}/confirm-handover")
+    public RequestResponse confirmHandover(
+            @PathVariable long id,
+            @CurrentUserId Long currentUserId,
+            @RequestBody(required = false) HandoverConfirmRequest request) {
+        return requestService.confirmHandover(id, currentUserId, request);
     }
 }

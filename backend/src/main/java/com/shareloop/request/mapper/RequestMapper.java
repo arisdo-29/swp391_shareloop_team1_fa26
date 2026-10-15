@@ -29,6 +29,10 @@ public final class RequestMapper {
                 request.getDonorWaiverAt(),
                 request.getReceiverWaiverAt(),
                 request.getContactRevealedAt(),
+                request.getDonorHandoverAt(),
+                request.getReceiverHandoverAt(),
+                request.getAsDescribed(),
+                request.getCompletedAt(),
                 request.getCreatedAt());
     }
 }
