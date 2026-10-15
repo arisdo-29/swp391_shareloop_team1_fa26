@@ -138,6 +138,13 @@ public class ConfigService {
                 .toList();
     }
 
+    /** Active review reject reason templates in their configured order. */
+    public List<String> rejectReasons() {
+        return repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc("REJECT_REASON").stream()
+                .map(attribute -> attribute.getAttrValue())
+                .toList();
+    }
+
     private static String stringValue(Map<String, Object> values, String key) {
         Object value = values.get(key);
         return value instanceof String string ? string : null;

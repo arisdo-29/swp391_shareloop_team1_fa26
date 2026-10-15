@@ -182,4 +182,24 @@ class ConfigServiceTest {
 
         assertThat(service.checklist()).isEmpty();
     }
+
+    @Test
+    void rejectReasonsReturnsEmptyListWhenNoReasonsExist() {
+        when(repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc("REJECT_REASON"))
+                .thenReturn(List.of());
+
+        assertThat(service.rejectReasons()).isEmpty();
+    }
+
+    @Test
+    void rejectReasonsReturnsActiveReasonsInConfiguredOrder() {
+        var reason1 = mock(WebsiteAttribute.class);
+        when(reason1.getAttrValue()).thenReturn("Ảnh không đúng món");
+        var reason2 = mock(WebsiteAttribute.class);
+        when(reason2.getAttrValue()).thenReturn("Chứa thông tin liên hệ");
+        when(repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc("REJECT_REASON"))
+                .thenReturn(List.of(reason1, reason2));
+
+        assertThat(service.rejectReasons()).containsExactly("Ảnh không đúng món", "Chứa thông tin liên hệ");
+    }
 }

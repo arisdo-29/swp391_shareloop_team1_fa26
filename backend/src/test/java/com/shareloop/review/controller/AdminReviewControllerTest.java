@@ -72,4 +72,24 @@ class AdminReviewControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
+
+    @Test
+    void nonAdminCannotGetRejectReasons() throws Exception {
+        String userToken = jwtService.issue(42L, false);
+
+        mockMvc.perform(get("/api/v1/admin/reviews/reject-reasons").header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void rejectReasonsReturnsListForAdmin() throws Exception {
+        when(reviewService.listRejectReasons()).thenReturn(List.of("Ảnh không đúng món", "Chứa thông tin liên hệ"));
+        String adminToken = jwtService.issue(1L, true);
+
+        mockMvc.perform(get("/api/v1/admin/reviews/reject-reasons").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0]").value("Ảnh không đúng món"))
+                .andExpect(jsonPath("$[1]").value("Chứa thông tin liên hệ"));
+    }
 }

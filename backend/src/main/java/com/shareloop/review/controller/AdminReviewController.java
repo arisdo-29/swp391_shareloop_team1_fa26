@@ -50,6 +50,11 @@ public class AdminReviewController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/reviews/reject-reasons")
+    public List<String> listRejectReasons() {
+        return reviewService.listRejectReasons();
+    }
+
     @PostMapping("/reviews/{itemId}/reject")
     public ResponseEntity<Void> reject(@PathVariable long itemId, @Valid @RequestBody RejectReviewRequest request) {
         reviewService.reject(itemId, request.reason());
