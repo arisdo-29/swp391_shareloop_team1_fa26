@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
@@ -18,19 +18,34 @@ import { CREDIT_TO_VND } from '../../utils/credit';
 import { fileToDataUrl } from '../../utils/files';
 import { ChangePasswordForm } from '../../components/ChangePasswordForm';
 import { validEmail, validVietnamPhone } from '../../utils/passwordSecurity';
-import { useWallet } from '../../app/WalletContext';
+import { useWallet } from '../../app/useWallet';
+import { userApi } from '../../services/userApi';
+import { catalogApi } from '../../services/catalogApi';
+import { mediaApi } from '../../services/mediaApi';
+import { toAreaOptions, type AreaOption } from '../../services/mappers';
+import type { ApiError } from '../../services/http';
+import { toBackendUserId } from '../../services/requestApi';
+import { resolveMediaUrl } from '../../services/mediaUrl';
 export function Profile() {
   const user = useAppSelector(selectCurrentUser)!;
   const isAdmin = user.role === 'admin';
   const data = useAppSelector(selectData);
   const dispatch = useAppDispatch();
-  const { isApiAccount, wallet } = useWallet();
+  const { wallet } = useWallet();
+  const isApiAccount = toBackendUserId(user.id) !== null;
   const [tab, setTab] = useState<'profile' | 'credit' | 'reputation' | 'password'>('profile');
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [phone, setPhone] = useState(user.phone);
   const [district, setDistrict] = useState(user.district);
+  const [apiAreaId, setApiAreaId] = useState('');
+  const [apiAvatarMediaId, setApiAvatarMediaId] = useState<number | null>(null);
+  const [apiAreas, setApiAreas] = useState<AreaOption[]>([]);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [profileLoading, setProfileLoading] = useState(isApiAccount);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileReloadKey, setProfileReloadKey] = useState(0);
   const [profileError, setProfileError] = useState('');
   const [profileNotice, setProfileNotice] = useState('');
   const [amount, setAmount] = useState(5);
@@ -40,19 +55,80 @@ export function Profile() {
   const districts = data.districts
     .filter((entry) => entry.status === 'active')
     .map((entry) => entry.name);
-  const save = () => {
+
+  useEffect(() => {
+    if (!isApiAccount) return;
+    let active = true;
+    setProfileLoading(true);
+    setProfileError('');
+    Promise.all([userApi.getMe(), catalogApi.areas()])
+      .then(([profile, areas]) => {
+        if (!active) return;
+        const options = toAreaOptions(areas);
+        setApiAreas(options);
+        setName(profile.fullName);
+        setEmail(profile.email);
+        setPhone(profile.phone ?? '');
+        setApiAreaId(profile.areaId ? String(profile.areaId) : '');
+        setApiAvatarMediaId(profile.avatarMediaId);
+        setAvatarUrl(profile.avatarUrl ? resolveMediaUrl(profile.avatarUrl) : undefined);
+      })
+      .catch(() => {
+        if (active) setProfileError('Không tải được hồ sơ từ Backend. Vui lòng thử lại.');
+      })
+      .finally(() => {
+        if (active) setProfileLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isApiAccount, profileReloadKey]);
+
+  const save = async () => {
     setProfileError('');
     setProfileNotice('');
     if (!name.trim()) {
       setProfileError('Vui lòng nhập họ và tên.');
       return;
     }
-    if (!validEmail(email)) {
+    if (!isApiAccount && !validEmail(email)) {
       setProfileError('Email không đúng định dạng.');
       return;
     }
-    if (!validVietnamPhone(phone)) {
+    if (!isApiAccount && !validVietnamPhone(phone)) {
       setProfileError('Số điện thoại Việt Nam không hợp lệ.');
+      return;
+    }
+    if (isApiAccount) {
+      setProfileSaving(true);
+      try {
+        const uploaded = avatarFile ? await mediaApi.upload(avatarFile) : null;
+        const parsedAreaId = Number(apiAreaId);
+        const profile = await userApi.updateMe({
+          fullName: name.trim(),
+          areaId: Number.isSafeInteger(parsedAreaId) && parsedAreaId > 0 ? parsedAreaId : null,
+          avatarMediaId: uploaded?.mediaId ?? apiAvatarMediaId,
+        });
+        const districtLabel = apiAreas.find((area) => area.id === profile.areaId)?.label ?? '';
+        const nextAvatarUrl = profile.avatarUrl ? resolveMediaUrl(profile.avatarUrl) : avatarUrl;
+        setAvatarUrl(nextAvatarUrl);
+        setApiAvatarMediaId(profile.avatarMediaId);
+        setAvatarFile(null);
+        dispatch(actions.updateProfile({
+          userId: user.id,
+          name: profile.fullName,
+          email: profile.email,
+          phone: profile.phone ?? '',
+          district: districtLabel,
+          avatarUrl: nextAvatarUrl,
+        }));
+        setProfileNotice('Cập nhật hồ sơ thành công.');
+      } catch (error) {
+        const apiError = error as ApiError;
+        setProfileError(apiError.message || 'Không cập nhật được hồ sơ. Vui lòng thử lại.');
+      } finally {
+        setProfileSaving(false);
+      }
       return;
     }
     dispatch(actions.updateProfile({ userId: user.id, name: name.trim(), email: email.trim().toLowerCase(), phone: phone.trim(), district, avatarUrl }));
@@ -131,7 +207,10 @@ export function Profile() {
                     accept="image/*"
                     onChange={async (event) => {
                       const file = event.target.files?.[0];
-                      if (file) setAvatarUrl(await fileToDataUrl(file));
+                      if (file) {
+                        setAvatarFile(file);
+                        setAvatarUrl(await fileToDataUrl(file));
+                      }
                     }}
                   />
                 </label>
@@ -144,22 +223,41 @@ export function Profile() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  readOnly={isApiAccount}
+                  className={isApiAccount ? 'bg-surface-low' : undefined}
                 />
                 <Field
                   label="Số điện thoại"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  readOnly={isApiAccount}
+                  className={isApiAccount ? 'bg-surface-low' : undefined}
                 />
-                <Select label="Quận" value={district} onChange={(e) => setDistrict(e.target.value)}>
-                  {districts.map((d) => (
-                    <option key={d}>{d}</option>
-                  ))}
+                <Select
+                  label="Quận"
+                  value={isApiAccount ? apiAreaId : district}
+                  onChange={(e) => isApiAccount ? setApiAreaId(e.target.value) : setDistrict(e.target.value)}
+                >
+                  {isApiAccount ? <option value="">Chưa chọn khu vực</option> : null}
+                  {(isApiAccount ? apiAreas : districts).map((entry) =>
+                    typeof entry === 'string' ? (
+                      <option key={entry}>{entry}</option>
+                    ) : (
+                      <option key={entry.id} value={entry.id}>{entry.label}</option>
+                    ),
+                  )}
                 </Select>
               </div>
+              {profileLoading ? <div className="mt-5"><Alert>Đang tải hồ sơ từ Backend...</Alert></div> : null}
               {profileError ? <div className="mt-5"><Alert tone="error">{profileError}</Alert></div> : null}
+              {profileError && isApiAccount && !profileSaving ? (
+                <Button className="mt-3" size="sm" variant="outline" onClick={() => setProfileReloadKey((key) => key + 1)}>
+                  Tải lại hồ sơ
+                </Button>
+              ) : null}
               {profileNotice ? <div className="mt-5"><Alert tone="success">{profileNotice}</Alert></div> : null}
-              <Button className="mt-6" onClick={save}>
-                Lưu thay đổi
+              <Button className="mt-6" onClick={() => void save()} disabled={profileLoading || profileSaving}>
+                {profileSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
               </Button>
             </section>
           ) : null}
@@ -180,6 +278,20 @@ export function Profile() {
                   />
                 </div>
                 <div className="mt-6 border-t border-border pt-5">
+                  {isApiAccount ? (
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h2 className="section-title">Nạp Credit</h2>
+                        <p className="mt-1 text-sm text-text-muted">
+                          Tạo đơn nạp và theo dõi trạng thái thanh toán tại trang Credit.
+                        </p>
+                      </div>
+                      <Link to="/credit">
+                        <Button>Đi đến trang Credit</Button>
+                      </Link>
+                    </div>
+                  ) : (
+                    <>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <h2 className="section-title">Nạp Credit</h2>
@@ -231,6 +343,8 @@ export function Profile() {
                       </div>
                     </div>
                   ) : null}
+                    </>
+                  )}
                 </div>
               </section>
               <section className="rounded-xl bg-white ring-1 ring-border/80">

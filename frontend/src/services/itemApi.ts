@@ -39,7 +39,7 @@ export interface CreateItemRequest {
   condition: ApiCondition;
   defectNote: string | null;
   brand: string | null;
-  images?: string[];
+  images: string[];
 }
 
 export type UpdateItemRequest = Omit<CreateItemRequest, 'images'> & { images?: string[] };
