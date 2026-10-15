@@ -167,6 +167,10 @@ public class Item extends BaseEntity {
     }
 
     public void markTraded() {
-        this.status = ItemStatus.TRADED;
+        transitionTo(ItemStatus.TRADED);
+    }
+
+    public void markExpired() {
+        transitionTo(ItemStatus.EXPIRED);
     }
 }

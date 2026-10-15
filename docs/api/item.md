@@ -3,8 +3,8 @@
 ## Service cửa ngõ nội bộ
 
 - `ItemService.reserve(Long itemId)` chuyển `APPROVED → RESERVED`; `release(long itemId)` chuyển `RESERVED → APPROVED`. Trạng thái khác trả `ITEM_INVALID_STATUS_TRANSITION`.
-- `markTraded(long itemId)` đã có thân; `hide(long itemId)`, `unhide(long itemId)`, `remove(long itemId)`, `hideAllOfUser(long userId)` chờ #91.
-- Các hàm chờ triển khai ném `UnsupportedOperationException` để tránh báo thành công giả; chưa có endpoint HTTP tương ứng trong #38.
+- `markTraded` và `markExpired` chuyển trạng thái qua `canTransition()`; `hide/unhide/hideAllOfUser` chỉ đổi `is_active`.
+- `remove(itemId, userId)` phục vụ DELETE của chủ bài; `remove(itemId)` là cửa ngõ nội bộ. Các hàm vòng đời khác chưa có endpoint HTTP riêng.
 
 Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất bên dưới.
@@ -109,6 +109,15 @@ Xem chi tiết một bài đăng theo ID.
 
 ---
 
+## DELETE /api/v1/items/{id}
+
+- **Xác thực:** Bearer Token, chỉ chủ bài.
+- **Quy tắc:** Không gỡ bài `RESERVED`, `TRADED`, `EXPIRED` hoặc có Request từ `RESERVED` trở lên. Xoá mềm (`is_deleted = true`); phí `HELD` được nhả qua `PostFeeService.releaseHeldFee` trong cùng transaction.
+- **Thành công:** `204 No Content`.
+- **Lỗi:** `401 UNAUTHORIZED`, `403 ITEM_NOT_OWNER`, `404 ITEM_NOT_FOUND`, `409 ITEM_REMOVE_NOT_ALLOWED`.
+
+---
+
 ## 3. GET /api/v1/me/items
 
 Xem danh sách tất cả các bài đăng do chính mình tạo (sắp xếp mới nhất lên trước).
@@ -196,6 +205,7 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2`. `q` rỗng ho�
 | `ITEM_OPERATING_STATUS_NOT_ALLOWED` | 422 | Bài không thuộc danh mục cần trạng thái hoạt động lại gửi trường này |
 | `ITEM_NOT_OWNER` | 403 | Sửa bài không phải của mình |
 | `ITEM_EDIT_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được sửa |
+| `ITEM_REMOVE_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được gỡ |
 | `ITEM_MODERATION_BLOCKED` | 422 | Nội dung tạo hoặc sửa bị kiểm duyệt tầng 1 chặn |
 | `VALIDATION_FAILED` | 400 | Sai định dạng hoặc thiếu trường bắt buộc |
 | `UNAUTHORIZED` | 401 | Thiếu token hoặc token không hợp lệ |

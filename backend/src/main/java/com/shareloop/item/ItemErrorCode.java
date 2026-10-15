@@ -19,6 +19,7 @@ public enum ItemErrorCode implements ErrorCode {
             HttpStatus.UNPROCESSABLE_CONTENT, "Danh mục này không dùng trạng thái hoạt động."),
     ITEM_NOT_OWNER(HttpStatus.FORBIDDEN, "Bạn không phải chủ bài đăng."),
     ITEM_EDIT_NOT_ALLOWED(HttpStatus.CONFLICT, "Bài đăng đã có yêu cầu được giữ chỗ hoặc không thể sửa."),
+    ITEM_REMOVE_NOT_ALLOWED(HttpStatus.CONFLICT, "Bài đăng đã được giữ chỗ hoặc không thể gỡ."),
     ITEM_MODERATION_BLOCKED(HttpStatus.UNPROCESSABLE_CONTENT, "Nội dung bài đăng không qua kiểm duyệt tầng 1."),
     ITEM_INVALID_STATUS_TRANSITION(HttpStatus.CONFLICT, "Không thể chuyển trạng thái bài đăng.");
 
