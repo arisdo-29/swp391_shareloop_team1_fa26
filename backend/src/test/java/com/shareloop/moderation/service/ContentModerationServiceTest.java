@@ -10,6 +10,7 @@ import com.shareloop.catalog.service.CategoryService;
 import com.shareloop.moderation.ModerationStatus;
 import com.shareloop.setting.dto.LexiconEntry;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.setting.service.LexiconMatcher;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,8 @@ class ContentModerationServiceTest {
 
     private final CategoryService categoryService = mock(CategoryService.class);
     private final ConfigService configService = mock(ConfigService.class);
-    private final ContentModerationService service = new ContentModerationService(categoryService, configService);
+    private final ContentModerationService service =
+            new ContentModerationService(categoryService, configService, new LexiconMatcher());
 
     @BeforeEach
     void setUp() {

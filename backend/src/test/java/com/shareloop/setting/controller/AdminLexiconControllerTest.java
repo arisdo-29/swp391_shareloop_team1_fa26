@@ -11,7 +11,10 @@ import com.shareloop.config.ClockConfig;
 import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
+import com.shareloop.setting.dto.LexiconMatch;
 import com.shareloop.setting.service.AdminLexiconService;
+import com.shareloop.setting.service.LexiconService;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -35,6 +38,9 @@ class AdminLexiconControllerTest {
     @MockitoBean
     AdminLexiconService service;
 
+    @MockitoBean
+    LexiconService lexiconService;
+
     @Test
     void nonAdminCannotReadOrCreateLexicon() throws Exception {
         String userToken = jwtService.issue(42L, false);
@@ -47,8 +53,14 @@ class AdminLexiconControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validBody()))
                 .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/admin/lexicon/test")
+                        .header("Authorization", "Bearer " + userToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"test\"}"))
+                .andExpect(status().isForbidden());
 
         verifyNoInteractions(service);
+        verifyNoInteractions(lexiconService);
     }
 
     @Test
@@ -63,6 +75,37 @@ class AdminLexiconControllerTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
 
         verifyNoInteractions(service);
+    }
+
+    @Test
+    void emptyTextIsRejectedByRequestValidation() throws Exception {
+        String adminToken = jwtService.issue(1L, true);
+
+        mockMvc.perform(post("/api/v1/admin/lexicon/test")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"  \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(lexiconService);
+    }
+
+    @Test
+    void adminCanTestLexiconAndReceivesMatchDetails() throws Exception {
+        String adminToken = jwtService.issue(1L, true);
+        org.mockito.Mockito.when(lexiconService.match("ban kinh"))
+                .thenReturn(List.of(new LexiconMatch("bán", "REVIEW", "WEAPONS", LexiconMatch.MatchedAs.NORMALIZED)));
+
+        mockMvc.perform(post("/api/v1/admin/lexicon/test")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"ban kinh\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].keyword").value("bán"))
+                .andExpect(jsonPath("$[0].level").value("REVIEW"))
+                .andExpect(jsonPath("$[0].group").value("WEAPONS"))
+                .andExpect(jsonPath("$[0].matchedAs").value("NORMALIZED"));
     }
 
     private static String validBody() {
