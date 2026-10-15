@@ -42,6 +42,7 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
 - Danh mục điện tử bắt buộc `operatingStatus`: `NORMAL`, `PARTIAL` hoặc `NOT_WORKING`; giá trị lưu trong `item_attribute_mappings`.
 - `images` bắt buộc có 3–8 URL ảnh đã upload của chính người đăng (giới hạn từ `ConfigKey.ITEM_PHOTOS_MIN/MAX`); thứ tự gửi là thứ tự hiển thị.
 - Bài đăng mới tạo có trạng thái mặc định là `PENDING_REVIEW`.
+- Số bài `PENDING_REVIEW` hoặc `APPROVED` còn active của mỗi người đăng bị giới hạn theo hạng hiện tại (`ReputationService.getRank`): Đồng 3, Bạc 5, Vàng 10, Kim Cương không giới hạn theo cấu hình `MAX_ACTIVE_ITEMS_*`. Bài GIVE và SWAP được tính chung.
 - Kiểm duyệt tầng 1 áp dụng cho tiêu đề, mô tả và món mong muốn: `BLOCK` từ chối; `REVIEW` vẫn tạo bài và gắn cờ trong hàng chờ Admin.
 - Khi tạo thành công, giữ phí đăng bài qua `PostFeeService` (mặc định 5 Credit, theo cấu hình); phí chỉ bị trừ lúc Admin duyệt. Lỗi ở bất kỳ bước nào sẽ rollback bài, phí giữ và trạng thái ảnh.
 
@@ -73,6 +74,7 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
   - `400 ITEM_DEFECT_NOTE_REQUIRED`: Đồ DEFECTIVE nhưng thiếu mô tả lỗi.
   - `400 ITEM_INVALID_IMAGE`: `images[]` chứa URL không phải URL trả về từ `POST /api/v1/media`.
   - `422 ITEM_INVALID_IMAGE_COUNT` (`field: images`): Có ít hơn 3 hoặc nhiều hơn 8 ảnh.
+  - `409 ITEM_ACTIVE_LIMIT_REACHED` (`details.limit`, `details.activeCount`): Đã đạt hạn mức bài đang hiển thị hoặc chờ duyệt; thông báo nêu hạn mức hiện tại.
   - `422 ITEM_DEFECT_IMAGES_REQUIRED` (`field: defectImages`): Bài `DEFECTIVE` không có ảnh lỗi.
   - `422 ITEM_OPERATING_STATUS_REQUIRED` (`field: operatingStatus`): Đồ điện tử chưa khai trạng thái hoạt động.
   - `422 ITEM_DEFECT_IMAGES_NOT_ALLOWED` / `ITEM_OPERATING_STATUS_NOT_ALLOWED`: Gửi dữ liệu dành cho điều kiện hoặc danh mục khác.
@@ -199,6 +201,7 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2`. `q` rỗng ho�
 | `ITEM_DEFECT_NOTE_REQUIRED` | 400 | Bài đăng có tình trạng DEFECTIVE nhưng thiếu mô tả lỗi |
 | `ITEM_INVALID_IMAGE` | 400 | URL ảnh không phải URL do API media trả về |
 | `ITEM_INVALID_IMAGE_COUNT` | 422 | `images` có ít hơn 3 hoặc nhiều hơn 8 phần tử |
+| `ITEM_ACTIVE_LIMIT_REACHED` | 409 | Đã đạt hạn mức bài active theo hạng; thông báo nêu hạn mức |
 | `ITEM_DEFECT_IMAGES_REQUIRED` | 422 | Bài `DEFECTIVE` thiếu ảnh lỗi |
 | `ITEM_DEFECT_IMAGES_NOT_ALLOWED` | 422 | Bài không `DEFECTIVE` lại gửi ảnh lỗi |
 | `ITEM_OPERATING_STATUS_REQUIRED` | 422 | Bài điện tử thiếu trạng thái hoạt động |
