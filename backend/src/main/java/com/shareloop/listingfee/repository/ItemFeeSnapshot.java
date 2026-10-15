@@ -4,9 +4,9 @@ import com.shareloop.listingfee.entity.ItemFeeState;
 import com.shareloop.listingfee.entity.ItemFeeType;
 
 /**
- * Ảnh chụp chỉ-đọc của cột phí một bài, dùng để báo lỗi sớm trước khi khoá dòng. Interface projection: Spring Data
- * tự tạo đối tượng từ kết quả query (khớp tên alias với tên getter), không phải entity nên không vào persistence
- * context.
+ * Ảnh chụp chỉ-đọc của cột phí một bài, dùng để báo lỗi sớm trước khi khoá dòng và để tính báo giá sửa bài.
+ * Interface projection: Spring Data tự tạo đối tượng từ kết quả query (khớp tên alias với tên getter), không phải
+ * entity nên không vào persistence context.
  */
 public interface ItemFeeSnapshot {
 
@@ -18,4 +18,9 @@ public interface ItemFeeSnapshot {
 
     // null khi bài chưa từng giữ phí.
     ItemFeeType getPendingFeeType();
+
+    // approved_at khác null: bài đã từng được duyệt ít nhất một lần (R36: xét cột này, không xét status hiện tại).
+    boolean getEverApproved();
+
+    boolean getFreeEditUsed();
 }

@@ -105,12 +105,20 @@ public class ItemFee extends SliceAudit {
         this.feeState = ItemFeeState.HELD;
     }
 
-    /** Khoản giữ đã bị trừ; phí đăng (POST) thì đánh dấu bài đã trả phí đăng. pending_fee giữ nguyên để truy vết. */
+    /**
+     * Khoản giữ đã bị trừ (Admin duyệt). Phí đăng (POST) thì đánh dấu bài đã trả phí đăng; bản sửa (EDIT) thì đánh
+     * dấu đã dùng lượt sửa miễn phí. pending_fee giữ nguyên để truy vết.
+     */
     public void markCharged() {
         requireHeld();
         this.feeState = ItemFeeState.CHARGED;
         if (pendingFeeType == ItemFeeType.POST) {
             this.postFeePaid = true;
+        }
+        // Lượt chỉ tính khi bản sửa được duyệt (BR-D07 (4)), nên bật ở đây chứ không bật lúc giữ phí;
+        // bản sửa bị từ chối đi qua markReleased, không đụng cột này (R36).
+        if (pendingFeeType == ItemFeeType.EDIT) {
+            this.freeEditUsed = true;
         }
     }
 
