@@ -40,6 +40,8 @@ export interface CreateItemRequest {
   defectNote: string | null;
   brand: string | null;
   images?: string[];
+  defectImages?: string[];
+  operatingStatus?: 'NORMAL' | 'PARTIAL' | 'NOT_WORKING';
 }
 
 export type UpdateItemRequest = Omit<CreateItemRequest, 'images'> & { images?: string[] };
@@ -48,6 +50,7 @@ export interface ItemResponse extends CreateItemRequest {
   id: number;
   donorId: number;
   images: string[];
+  defectImages: string[];
   status: ItemStatus;
   createdAt: string;
   updatedAt: string;

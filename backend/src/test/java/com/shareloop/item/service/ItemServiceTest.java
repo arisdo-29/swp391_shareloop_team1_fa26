@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.catalog.service.CategoryAttributeService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.dto.CreateItemRequest;
@@ -49,6 +50,9 @@ class ItemServiceTest {
 
     @Mock
     ConfigService configService;
+
+    @Mock
+    CategoryAttributeService categoryAttributeService;
 
     @InjectMocks
     ItemService itemService;
@@ -135,7 +139,7 @@ class ItemServiceTest {
     }
 
     @Test
-    @DisplayName("Tạo bài DEFECTIVE thành công khi có defectNote")
+    @DisplayName("Tạo bài DEFECTIVE thành công khi có defectNote và ảnh lỗi")
     void createItem_defective_withDefectNote_success() {
         imageLimits();
         CreateItemRequest request = new CreateItemRequest(
@@ -148,7 +152,9 @@ class ItemServiceTest {
                 ItemCondition.DEFECTIVE,
                 "Liệt phím Space",
                 "Logitech",
-                threeImages());
+                threeImages(),
+                List.of("/api/v1/media/4"),
+                null);
 
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> {
             Item item = invocation.getArgument(0);
@@ -160,6 +166,7 @@ class ItemServiceTest {
 
         assertThat(response.id()).isEqualTo(102L);
         assertThat(response.defectNote()).isEqualTo("Liệt phím Space");
+        assertThat(response.defectImages()).containsExactly("/api/v1/media/4");
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.shareloop.item.dto;
 
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.OfferType;
+import com.shareloop.item.entity.OperatingStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -31,7 +32,35 @@ public record CreateItemRequest(
         @Size(max = 80, message = "Thương hiệu tối đa 80 ký tự")
         String brand,
 
-        List<String> images) {
+        List<String> images,
+        List<String> defectImages,
+        OperatingStatus operatingStatus) {
+
+    public CreateItemRequest(
+            Long categoryId,
+            Long areaId,
+            OfferType offerType,
+            String title,
+            String description,
+            String desiredItem,
+            ItemCondition condition,
+            String defectNote,
+            String brand,
+            List<String> images) {
+        this(
+                categoryId,
+                areaId,
+                offerType,
+                title,
+                description,
+                desiredItem,
+                condition,
+                defectNote,
+                brand,
+                images,
+                null,
+                null);
+    }
 
     public CreateItemRequest(
             Long categoryId,
@@ -43,6 +72,18 @@ public record CreateItemRequest(
             ItemCondition condition,
             String defectNote,
             String brand) {
-        this(categoryId, areaId, offerType, title, description, desiredItem, condition, defectNote, brand, List.of());
+        this(
+                categoryId,
+                areaId,
+                offerType,
+                title,
+                description,
+                desiredItem,
+                condition,
+                defectNote,
+                brand,
+                List.of(),
+                null,
+                null);
     }
 }

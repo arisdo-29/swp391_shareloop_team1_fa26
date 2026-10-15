@@ -2,6 +2,7 @@ package com.shareloop.item.mapper;
 
 import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.entity.Item;
+import com.shareloop.item.entity.OperatingStatus;
 import java.util.List;
 
 public final class ItemMapper {
@@ -13,6 +14,11 @@ public final class ItemMapper {
     }
 
     public static ItemResponse toResponse(Item item, List<String> images) {
+        return toResponse(item, images, List.of(), null);
+    }
+
+    public static ItemResponse toResponse(
+            Item item, List<String> images, List<String> defectImages, OperatingStatus operatingStatus) {
         if (item == null) {
             return null;
         }
@@ -31,6 +37,8 @@ public final class ItemMapper {
                 images != null ? images : List.of(),
                 item.getStatus(),
                 item.getCreatedAt(),
-                item.getUpdatedAt());
+                item.getUpdatedAt(),
+                defectImages != null ? defectImages : List.of(),
+                operatingStatus);
     }
 }
