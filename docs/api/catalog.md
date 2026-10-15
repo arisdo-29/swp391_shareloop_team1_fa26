@@ -114,9 +114,6 @@ Tất cả endpoint cần JWT có quyền Admin; người dùng thường nhận
 |-----------------------------|------|------------------------------------------------|
 | `CATALOG_CATEGORY_NOT_FOUND`| 404  | Không có danh mục đang dùng với id đã cho      |
 | `CATALOG_INVALID_PARENT`    | 422  | Danh mục cha không tồn tại, đang ẩn hoặc tạo vòng lặp |
-| `CATALOG_ATTRIBUTE_NOT_FOUND` | 404 | Thuộc tính không tồn tại hoặc không thuộc danh mục |
-| `CATALOG_INVALID_ATTRIBUTE_OPTIONS` | 422 | Options không phù hợp với kiểu thuộc tính |
-| `CATALOG_REQUIRED_ATTRIBUTE` | 409 | Cố sửa hoặc ẩn thuộc tính trạng thái hoạt động bắt buộc |
 | `VALIDATION_FAILED`         | 400  | Tham số đường dẫn hoặc request body không hợp lệ |
 
 Định dạng lỗi (`field` và `details` chỉ có khi liên quan):

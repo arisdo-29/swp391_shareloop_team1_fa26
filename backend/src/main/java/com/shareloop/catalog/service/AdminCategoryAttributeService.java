@@ -1,6 +1,7 @@
 package com.shareloop.catalog.service;
 
 import com.shareloop.catalog.CatalogErrorCode;
+import com.shareloop.catalog.CategoryAttributeErrorCode;
 import com.shareloop.catalog.dto.AdminAttributeRequest;
 import com.shareloop.catalog.dto.AdminAttributeResponse;
 import com.shareloop.catalog.entity.AttributeDataType;
@@ -59,7 +60,7 @@ public class AdminCategoryAttributeService {
                         || request.dataType() != AttributeDataType.SELECT
                         || !request.required()
                         || !attribute.getOptions().equals(options))) {
-            throw new BusinessException(CatalogErrorCode.CATALOG_REQUIRED_ATTRIBUTE);
+            throw new BusinessException(CategoryAttributeErrorCode.CATALOG_REQUIRED_ATTRIBUTE);
         }
         attribute.update(request.name().trim(), request.dataType(), options, request.required(), request.sortOrder());
         return toResponse(attributeRepository.saveAndFlush(attribute));
@@ -70,7 +71,7 @@ public class AdminCategoryAttributeService {
         requireCategory(categoryId);
         ItemAttribute attribute = requireAttribute(categoryId, attributeId);
         if (!active && isOperatingStatus(attribute)) {
-            throw new BusinessException(CatalogErrorCode.CATALOG_REQUIRED_ATTRIBUTE);
+            throw new BusinessException(CategoryAttributeErrorCode.CATALOG_REQUIRED_ATTRIBUTE);
         }
         if (active) {
             requireActiveCategory(categoryId);
@@ -120,17 +121,17 @@ public class AdminCategoryAttributeService {
     private ItemAttribute requireAttribute(long categoryId, long attributeId) {
         ItemAttribute attribute = attributeRepository
                 .findById(attributeId)
-                .orElseThrow(() -> new BusinessException(CatalogErrorCode.CATALOG_ATTRIBUTE_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(CategoryAttributeErrorCode.CATALOG_ATTRIBUTE_NOT_FOUND));
         if (!Objects.equals(attribute.getCategoryId(), categoryId)) {
-            throw new BusinessException(CatalogErrorCode.CATALOG_ATTRIBUTE_NOT_FOUND);
+            throw new BusinessException(CategoryAttributeErrorCode.CATALOG_ATTRIBUTE_NOT_FOUND);
         }
         return attribute;
     }
 
     private BusinessException invalidOptions() {
         return new BusinessException(
-                CatalogErrorCode.CATALOG_INVALID_ATTRIBUTE_OPTIONS,
-                CatalogErrorCode.CATALOG_INVALID_ATTRIBUTE_OPTIONS.defaultMessage(),
+                CategoryAttributeErrorCode.CATALOG_INVALID_ATTRIBUTE_OPTIONS,
+                CategoryAttributeErrorCode.CATALOG_INVALID_ATTRIBUTE_OPTIONS.defaultMessage(),
                 "options",
                 Map.of());
     }
