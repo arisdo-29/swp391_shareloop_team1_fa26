@@ -6,4 +6,3 @@ import java.util.List;
 public record AdminChecklistReorderRequest(
         @NotEmpty(message = "Danh sách id sắp xếp không được để trống.")
         List<Long> itemIds) {}
-
