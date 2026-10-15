@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.shareloop.common.exception.BusinessException;
@@ -318,5 +319,25 @@ class ItemServiceTest {
         assertThatThrownBy(() -> itemService.markApproved(99L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
+    }
+
+    @Test
+    void temporaryGatewaysFailBeforeChangingAnItem() {
+        assertThatThrownBy(() -> itemService.release(1L))
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessageContaining("release");
+        assertThatThrownBy(() -> itemService.hide(1L))
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessageContaining("hide");
+        assertThatThrownBy(() -> itemService.unhide(1L))
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessageContaining("unhide");
+        assertThatThrownBy(() -> itemService.remove(1L))
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessageContaining("remove");
+        assertThatThrownBy(() -> itemService.hideAllOfUser(10L))
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessageContaining("hideAllOfUser");
+        verifyNoInteractions(itemRepository);
     }
 }
