@@ -108,3 +108,76 @@ Response là danh sách các match:
 
 - `400 VALIDATION_FAILED`: text rỗng.
 - `403 FORBIDDEN`: người gọi không phải Admin.
+
+## Admin review checklist (#37)
+
+Các endpoint quản lý bộ câu hỏi checklist kiểm duyệt bài đăng (nhóm `CHECKLIST` trong `website_attributes`). Chỉ Admin được gọi.
+
+### GET /api/v1/admin/checklist
+
+Trả toàn bộ danh sách các câu hỏi checklist theo thứ tự `sort_order`, bao gồm cả các mục đã ẩn (`active: false`).
+
+```json
+[
+  {
+    "id": 1,
+    "key": "ownership_transfer",
+    "question": "Món đồ có cần sang tên, đăng ký, công chứng để đổi chủ không?",
+    "sortOrder": 10,
+    "active": true
+  }
+]
+```
+
+### POST /api/v1/admin/checklist
+
+Thêm câu hỏi mới vào checklist. Tự động xếp vào cuối danh sách (`sort_order` lớn nhất + 10). Mặc định `active = true`.
+
+```json
+{
+  "question": "Ảnh có bị mờ hoặc không nhận dạng được món đồ không?"
+}
+```
+
+Thành công trả `201 Created` cùng mục vừa tạo.
+
+### PUT /api/v1/admin/checklist/{id}
+
+Chỉnh sửa nội dung câu hỏi của một mục checklist.
+
+```json
+{
+  "question": "Nội dung câu hỏi sau khi điều chỉnh?"
+}
+```
+
+Thành công trả `200 OK` cùng mục đã cập nhật.
+
+### PATCH /api/v1/admin/checklist/{id}/active
+
+Ẩn hoặc hiện mục checklist bằng cách cập nhật `is_active`, không xóa cứng.
+
+```json
+{ "active": false }
+```
+
+> [!IMPORTANT]
+> **BR-A06**: Hệ thống bắt buộc luôn có ít nhất 1 mục checklist đang dùng (`active = true`). Nếu thao tác ẩn mục cuối cùng đang active, hệ thống sẽ từ chối và trả về `400 SETTING_CHECKLIST_AT_LEAST_ONE_REQUIRED`.
+
+### PUT /api/v1/admin/checklist/reorder
+
+Sắp xếp lại thứ tự toàn bộ câu hỏi checklist. Body là danh sách toàn bộ ID theo thứ tự mong muốn mới.
+
+```json
+{
+  "itemIds": [3, 1, 2, 4]
+}
+```
+
+Thành công trả về danh sách toàn bộ mục sau khi đã cập nhật lại `sort_order` theo bước nhảy 10, 20, 30...
+
+### Mã lỗi
+- `400 VALIDATION_FAILED`: body rỗng hoặc dữ liệu không hợp lệ.
+- `400 SETTING_CHECKLIST_AT_LEAST_ONE_REQUIRED`: vi phạm BR-A06 khi cố ẩn mục active duy nhất.
+- `403 FORBIDDEN`: tài khoản không phải Admin.
+- `404 SETTING_CHECKLIST_NOT_FOUND`: id câu hỏi không tồn tại.

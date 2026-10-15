@@ -71,4 +71,12 @@ public class WebsiteAttribute extends BaseEntity {
         this.attrValue = keyword;
         this.extra = Map.copyOf(extra);
     }
+
+    public void updateChecklist(String question) {
+        this.attrValue = question;
+    }
+
+    public void updateSortOrder(int sortOrder) {
+        this.sortOrder = sortOrder;
+    }
 }
