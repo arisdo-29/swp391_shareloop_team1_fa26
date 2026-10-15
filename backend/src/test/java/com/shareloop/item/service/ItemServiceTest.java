@@ -276,6 +276,17 @@ class ItemServiceTest {
     }
 
     @Test
+    void markTradedSetsStatusToTraded() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.reserve();
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        itemService.markTraded(1L);
+
+        assertThat(item.getStatus()).isEqualTo(ItemStatus.TRADED);
+    }
+
+    @Test
     void markApprovedTransitionsOnlyPendingReview() {
         Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
         when(itemRepository.findById(1L)).thenReturn(Optional.of(item));

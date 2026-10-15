@@ -90,6 +90,7 @@ Thay nội dung và metadata của mục theo cùng body như POST. Thành công
 - `403 FORBIDDEN`: người gọi không phải Admin.
 - `404 SETTING_LEXICON_NOT_FOUND`: không tìm thấy mục.
 - `409 SETTING_LEXICON_DUPLICATE`: keyword đã có trong cùng group và scope (không phân biệt hoa thường và khoảng trắng liên tiếp).
+<<<<<<< HEAD
 
 ### POST /api/v1/admin/lexicon/test
 
@@ -109,3 +110,5 @@ Response là danh sách các match:
 
 - `400 VALIDATION_FAILED`: text rỗng.
 - `403 FORBIDDEN`: người gọi không phải Admin.
+=======
+>>>>>>> origin/develop

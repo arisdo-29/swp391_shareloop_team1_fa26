@@ -129,6 +129,16 @@ public class ItemService {
         item.reserve();
     }
 
+    /**
+     * Chuyển trạng thái bài đăng sang TRADED khi Request hoàn tất giao dịch (COMPLETED).
+     */
+    @Transactional
+    public void markTraded(long itemId) {
+        Item item =
+                itemRepository.findById(itemId).orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
+        item.markTraded();
+    }
+
     @Transactional
     public void markApproved(long itemId) {
         transition(itemId, ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED);

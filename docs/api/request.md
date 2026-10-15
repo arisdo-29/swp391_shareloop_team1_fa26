@@ -208,6 +208,42 @@ Lấy thông tin liên lạc (họ tên, email, số điện thoại) của đ�
 
 ---
 
+## 10. POST /api/v1/requests/{id}/confirm-handover
+
+Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-84, FR-85, BR-D02, BR-R05, UC-27).
+
+- **Xác thực:** Bắt buộc JWT (chủ bài đăng `donorId` hoặc người nhận `receiverId`).
+- **Path variable:** `id` (id của request).
+- **Request body:**
+
+```json
+{
+  "asDescribed": true,
+  "notAsDescribedReason": "Món đồ bị vỡ một góc không giống trong ảnh" // Bắt buộc nếu người nhận chọn asDescribed = false
+}
+```
+
+- **Hành vi nghiệp vụ:**
+  - Chỉ áp dụng khi Request đang ở trạng thái `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER`.
+  - Bên cho xác nhận -> ghi nhận `donorHandoverAt`.
+  - Bên nhận xác nhận -> bắt buộc trả lời `asDescribed` (nếu chọn `false` bắt buộc có lý do); ghi nhận `receiverHandoverAt` và `asDescribed`.
+  - Một bên xác nhận: Request chuyển sang trạng thái `AWAITING_HANDOVER` (BR-D02).
+  - Cả hai bên đều đã xác nhận:
+    - Request chuyển sang trạng thái `COMPLETED` và ghi nhận `completedAt`.
+    - Bài đăng chuyển sang trạng thái `TRADED` qua `ItemService.markTraded(itemId)` (nếu là SWAP thì cả 2 bài đều chuyển sang TRADED).
+    - Gửi sự kiện tới `ReputationService.onCompleted(requestId)` để xử lý uy tín.
+    - Gửi thông báo `TRANSACTION_COMPLETED` cho cả hai bên.
+- **Thành công:** `200 OK`, trả về `RequestResponse`.
+- **Lỗi:**
+  - `400 REQUEST_AS_DESCRIBED_REQUIRED`: Bên nhận chưa trả lời câu hỏi món đồ có đúng mô tả không.
+  - `400 REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED`: Thiếu lý do khi chọn không đúng mô tả.
+  - `403 REQUEST_FORBIDDEN`: Không phải thành viên tham gia giao dịch.
+  - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
+  - `409 REQUEST_INVALID_STATE_TRANSITION`: Yêu cầu chưa chốt lịch hoặc đã hoàn thành.
+  - `409 REQUEST_HANDOVER_ALREADY_CONFIRMED`: Bên gọi đã xác nhận giao nhận trước đó rồi.
+
+---
+
 ## DTO Models
 
 ### RequestResponse
@@ -219,7 +255,7 @@ Lấy thông tin liên lạc (họ tên, email, số điện thoại) của đ�
 | `receiverId` | number | Id người gửi yêu cầu |
 | `offeredItemId` | number? | Id bài đăng đề nghị đem đổi (SWAP) |
 | `type` | string | `GIVE` hoặc `SWAP` |
-| `status` | string | Trạng thái (`PENDING`, `RESERVED`, `AWAITING_LOGISTICS`, `LOGISTICS_CONFIRMED`, ...) |
+| `status` | string | Trạng thái (`PENDING`, `RESERVED`, `AWAITING_LOGISTICS`, `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER`, `COMPLETED`, ...) |
 | `deliveryMethod` | string? | `IN_PERSON` hoặc `SHIPPING` |
 | `meetingPlace` | string? | Địa điểm hẹn giao nhận |
 | `meetingTime` | string? | Thời gian hẹn ISO-8601 UTC |
@@ -228,6 +264,10 @@ Lấy thông tin liên lạc (họ tên, email, số điện thoại) của đ�
 | `donorWaiverAt` | string? | Thời điểm chủ bài xác nhận cam kết trách nhiệm ISO-8601 UTC |
 | `receiverWaiverAt` | string? | Thời điểm người nhận xác nhận cam kết trách nhiệm ISO-8601 UTC |
 | `contactRevealedAt` | string? | Thời điểm mở thông tin liên lạc ISO-8601 UTC |
+| `donorHandoverAt` | string? | Thời điểm người giao xác nhận đã giao ISO-8601 UTC |
+| `receiverHandoverAt` | string? | Thời điểm người nhận xác nhận đã nhận ISO-8601 UTC |
+| `asDescribed` | boolean? | Người nhận đánh giá món đồ đúng mô tả hay không |
+| `completedAt` | string? | Thời điểm hoàn tất giao dịch ISO-8601 UTC |
 | `createdAt` | string | Thời điểm tạo ISO-8601 UTC |
 
 ### ScheduleRequest
@@ -244,6 +284,13 @@ Lấy thông tin liên lạc (họ tên, email, số điện thoại) của đ�
 | Trường | Kiểu | Bắt buộc | Ràng buộc |
 |---|---|---|---|
 | `agreeToWaiver` | boolean | Không | Bắt buộc true nếu là SHIPPING |
+
+### HandoverConfirmRequest
+
+| Trường | Kiểu | Bắt buộc | Ràng buộc |
+|---|---|---|---|
+| `asDescribed` | boolean | Bên nhận: Có | Bắt buộc với bên nhận |
+| `notAsDescribedReason` | string | Không | Bắt buộc nếu `asDescribed = false` |
 
 ### RequestContactResponse
 
@@ -268,9 +315,12 @@ Lấy thông tin liên lạc (họ tên, email, số điện thoại) của đ�
 | `REQUEST_SCHEDULE_PAST_TIME` | 400 | Thời gian hẹn ở trong quá khứ |
 | `REQUEST_WAIVER_REQUIRED` | 400 | Chưa đồng ý cam kết miễn trừ trách nhiệm khi chọn Ship (BR-T03) |
 | `REQUEST_SCHEDULE_NOT_SET` | 400 | Chưa có thông tin lịch hẹn để xác nhận |
+| `REQUEST_AS_DESCRIBED_REQUIRED` | 400 | Bên nhận chưa trả lời câu hỏi món đồ có đúng mô tả hay không (BR-R05) |
+| `REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED` | 400 | Thiếu lý do khi bên nhận chọn không đúng mô tả (BR-R05) |
 | `REQUEST_ITEM_NOT_AVAILABLE` | 409 | Bài đăng không ở trạng thái sẵn sàng (chưa duyệt, đã trao đổi...) |
 | `REQUEST_ALREADY_EXISTS` | 409 | Đã có một yêu cầu đang hoạt động cho bài này (BR-R02) |
 | `REQUEST_SCHEDULE_LOCKED` | 409 | Lịch hẹn đã chốt và bị khoá (FR-83, BR-T05) |
 | `REQUEST_CONTACT_NOT_REVEALED` | 409 | Chưa chốt lịch hẹn để xem thông tin liên lạc (FR-82, BR-T11) |
+| `REQUEST_HANDOVER_ALREADY_CONFIRMED` | 409 | Bạn đã xác nhận giao nhận cho yêu cầu này rồi |
 | `REQUEST_INVALID_STATE_TRANSITION` | 409 | Chuyển đổi trạng thái không hợp lệ theo sơ đồ |
 | `REQUEST_FORBIDDEN` | 403 | Không có quyền thao tác trên yêu cầu này |

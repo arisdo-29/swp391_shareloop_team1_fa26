@@ -137,4 +137,8 @@ public class Item extends BaseEntity {
     public void reserve() {
         this.status = ItemStatus.RESERVED;
     }
+
+    public void markTraded() {
+        this.status = ItemStatus.TRADED;
+    }
 }
