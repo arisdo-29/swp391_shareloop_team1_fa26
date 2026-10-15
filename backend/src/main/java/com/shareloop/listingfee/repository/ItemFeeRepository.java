@@ -24,12 +24,12 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
      * không với tới được. Alias để trong ngoặc kép vì PostgreSQL tự hạ chữ thường alias không quote.
      *
      * <p>approved_at chỉ cần biết có hay không nên trả sẵn boolean (everApproved); cột này thuộc module item/review
-     * nên ItemFee cũng không map.
+     * nên ItemFee cũng không map. status cũng thuộc module item, chỉ đọc để kiểm điều kiện gia hạn.
      */
     @Query(
             value = "SELECT donor_id AS \"donorId\", fee_state AS \"feeState\", pending_fee AS \"pendingFee\","
                     + " pending_fee_type AS \"pendingFeeType\", (approved_at IS NOT NULL) AS \"everApproved\","
-                    + " free_edit_used AS \"freeEditUsed\""
+                    + " free_edit_used AS \"freeEditUsed\", status AS \"status\""
                     + " FROM items WHERE id = :itemId AND is_deleted = false",
             nativeQuery = true)
     Optional<ItemFeeSnapshot> findFeeSnapshotById(@Param("itemId") Long itemId);

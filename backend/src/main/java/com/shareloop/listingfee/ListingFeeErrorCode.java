@@ -9,7 +9,8 @@ public enum ListingFeeErrorCode implements ErrorCode {
     LISTINGFEE_ALREADY_HELD(HttpStatus.CONFLICT, "Bài đăng đã có khoản phí đang giữ."),
     LISTINGFEE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy bài đăng."),
     LISTINGFEE_NOT_OWNER(HttpStatus.FORBIDDEN, "Bạn không phải chủ bài đăng."),
-    LISTINGFEE_EDIT_NOT_ALLOWED(HttpStatus.CONFLICT, "Bài đăng ở trạng thái hiện tại không được sửa.");
+    LISTINGFEE_EDIT_NOT_ALLOWED(HttpStatus.CONFLICT, "Bài đăng ở trạng thái hiện tại không được sửa."),
+    LISTINGFEE_RENEW_NOT_ALLOWED(HttpStatus.CONFLICT, "Chỉ gia hạn được bài đang hiển thị.");
 
     private final HttpStatus status;
     private final String defaultMessage;

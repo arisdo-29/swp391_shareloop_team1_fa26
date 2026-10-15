@@ -128,6 +128,16 @@ public class ItemFee extends SliceAudit {
         this.feeState = ItemFeeState.RELEASED;
     }
 
+    /** Bắt đầu thời hạn hiển thị khi bài được duyệt lần đầu (UC-40: đặt expire_at ở lần duyệt đầu). */
+    public void startDisplayPeriod(Instant expireAt) {
+        this.expireAt = expireAt;
+    }
+
+    /** Kéo dài thời hạn hiển thị khi chủ bài gia hạn (FR-28); người gọi đã tính mốc mới và đã thu phí. */
+    public void extendExpireAt(Instant newExpireAt) {
+        this.expireAt = newExpireAt;
+    }
+
     private void requireHeld() {
         if (feeState != ItemFeeState.HELD) {
             throw new BusinessException(ListingFeeErrorCode.LISTINGFEE_NOTHING_HELD);

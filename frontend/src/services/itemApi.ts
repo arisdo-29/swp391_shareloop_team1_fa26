@@ -6,6 +6,7 @@ export const itemApiEndpoints = {
   create: '/api/v1/items',
   myItems: '/api/v1/me/items',
   editQuote: (id: number) => `/api/v1/items/${id}/edit-quote`,
+  renew: (id: number) => `/api/v1/items/${id}/renew`,
 } as const;
 
 export interface ItemListParams {
@@ -62,6 +63,13 @@ export interface EditQuote {
   reason: EditQuoteReason;
 }
 
+// Contract: docs/api/listingfee.md (POST /api/v1/items/{id}/renew)
+export interface RenewResponse {
+  itemId: number;
+  fee: number; // số Credit vừa trừ; 0 khi Admin cấu hình miễn phí
+  expireAt: string; // hạn hiển thị mới, ISO-8601 UTC
+}
+
 export function itemListUrl(params: ItemListParams = {}): string {
   const query = new URLSearchParams();
   if (params.categoryId !== undefined) query.set('categoryId', String(params.categoryId));
@@ -94,6 +102,10 @@ export const itemApi = {
   },
   async getEditQuote(id: number): Promise<EditQuote> {
     const { data } = await http.get<EditQuote>(itemApiEndpoints.editQuote(id));
+    return data;
+  },
+  async renewItem(id: number): Promise<RenewResponse> {
+    const { data } = await http.post<RenewResponse>(itemApiEndpoints.renew(id));
     return data;
   },
 };
