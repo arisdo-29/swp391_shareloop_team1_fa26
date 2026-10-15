@@ -12,6 +12,8 @@ import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.wallet.entity.CreditTxType;
 import com.shareloop.wallet.service.CreditService;
+import java.time.Clock;
+import java.time.temporal.ChronoUnit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
  * pending_fee_type, post_fee_paid, free_edit_used) qua entity lát cắt ItemFee; đổi tiền chỉ qua
  * {@code wallet.CreditService}; đổi status bài chỉ qua ItemService.
  *
- * <p>Mọi mức phí đọc từ ConfigService (ConfigKey post_fee, edit_fee), không viết cứng.
+ * <p>Mọi mức phí và số ngày hiển thị đọc từ ConfigService (ConfigKey post_fee, edit_fee, post_display_days), không
+ * viết cứng. Lần duyệt đầu (khoản giữ loại POST) cũng đặt expire_at qua ItemFee, vì cột này thuộc nhóm cột của
+ * listingfee (Lộ trình 4.8).
  *
  * <p>Mọi bài đang chờ duyệt đều ở fee_state = HELD, kể cả khi phí bằng 0 (lượt sửa miễn phí, hoặc Admin cấu hình
  * phí 0): khi đó pending_fee = 0 và không đụng tới ví. Nhờ vậy ReviewService luôn gọi được chargeHeldFee /
@@ -40,12 +44,17 @@ public class PostFeeService {
     private final ItemFeeRepository itemFeeRepository;
     private final CreditService creditService;
     private final ConfigService configService;
+    private final Clock clock;
 
     public PostFeeService(
-            ItemFeeRepository itemFeeRepository, CreditService creditService, ConfigService configService) {
+            ItemFeeRepository itemFeeRepository,
+            CreditService creditService,
+            ConfigService configService,
+            Clock clock) {
         this.itemFeeRepository = itemFeeRepository;
         this.creditService = creditService;
         this.configService = configService;
+        this.clock = clock;
     }
 
     /**
@@ -144,8 +153,9 @@ public class PostFeeService {
      *
      * <p>Quy tắc: đọc pending_fee và pending_fee_type của bài; pending_fee lớn hơn 0 thì gọi
      * {@code CreditService.chargeHeld} (bằng 0 thì không đụng ví, không ghi credit_ledger); fee_state = CHARGED. Loại
-     * POST thì post_fee_paid = true (expire_at do ItemService.markApproved đặt). Loại EDIT thì free_edit_used = true
-     * (lượt sửa chỉ tính khi được duyệt). pending_fee và pending_fee_type giữ nguyên sau khi trừ (lý do ở Javadoc lớp).
+     * POST (chỉ có ở lần duyệt đầu) thì post_fee_paid = true và expire_at = lúc duyệt + post_display_days ngày
+     * (BR-D03, UC-40). Loại EDIT thì free_edit_used = true (lượt sửa chỉ tính khi được duyệt) và không đổi expire_at.
+     * pending_fee và pending_fee_type giữ nguyên sau khi trừ (lý do ở Javadoc lớp).
      *
      * <p>Transaction: REQUIRED, cùng transaction với ReviewService.approve. Khoá: dòng users của chủ bài (trong
      * CreditService), rồi dòng items. Sau khi khoá items, nếu bài không còn HELD hoặc khoản giữ đã khác số vừa
@@ -170,6 +180,10 @@ public class PostFeeService {
         ItemFee itemFee = lockItemFee(itemId);
         requireSameHeldFee(itemFee, snapshot);
         itemFee.markCharged();
+        if (itemFee.getPendingFeeType() == ItemFeeType.POST) {
+            int displayDays = displayDaysAfterApproval(snapshot.getDonorId());
+            itemFee.startDisplayPeriod(clock.instant().plus(displayDays, ChronoUnit.DAYS));
+        }
     }
 
     /**
@@ -229,6 +243,12 @@ public class PostFeeService {
     // Admin có thể cấu hình mức phí bằng 0; khi đó báo miễn phí nhưng vẫn giữ lý do gốc.
     private EditQuote paidQuote(int amount, EditQuote.Reason reason) {
         return new EditQuote(amount == 0, amount, reason);
+    }
+
+    // TODO #96: dùng POST_DISPLAY_DAYS_GOLD khi hạng Vàng trở lên (cần ReputationService.getRank(donorId)).
+    // Gom vào một hàm để khi có getRank chỉ phải sửa một chỗ.
+    private int displayDaysAfterApproval(long donorId) {
+        return configService.getInt(ConfigKey.POST_DISPLAY_DAYS);
     }
 
     // CreditService.hold không nhận số 0 (WALLET_INVALID_AMOUNT); phí 0 nghĩa là không có gì để giữ ở ví.

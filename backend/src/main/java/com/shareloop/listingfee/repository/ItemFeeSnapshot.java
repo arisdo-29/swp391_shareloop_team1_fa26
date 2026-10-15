@@ -1,5 +1,6 @@
 package com.shareloop.listingfee.repository;
 
+import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.listingfee.entity.ItemFeeState;
 import com.shareloop.listingfee.entity.ItemFeeType;
 
@@ -23,4 +24,7 @@ public interface ItemFeeSnapshot {
     boolean getEverApproved();
 
     boolean getFreeEditUsed();
+
+    // Cột status thuộc module item; listingfee chỉ đọc để kiểm bài còn được gia hạn không, không bao giờ ghi.
+    ItemStatus getStatus();
 }

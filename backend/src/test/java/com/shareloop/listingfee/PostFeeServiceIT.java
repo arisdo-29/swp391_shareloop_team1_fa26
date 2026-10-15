@@ -9,6 +9,9 @@ import com.shareloop.listingfee.dto.EditQuote;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.support.IntegrationTest;
 import com.shareloop.wallet.WalletErrorCode;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -164,6 +167,23 @@ class PostFeeServiceIT extends IntegrationTest {
         Map<String, Object> fee = feeColumnsOf(itemId);
         assertThat(fee.get("fee_state")).isEqualTo("CHARGED");
         assertThat(fee.get("post_fee_paid")).isEqualTo(true);
+    }
+
+    @Test
+    void chargeHeldFee_whenPostFeeApproved_setsExpireAtToNowPlusDisplayDays() {
+        // given: đổi post_display_days = 10 (khác mặc định 30) để chắc số ngày đọc từ cấu hình
+        setConfig("post_display_days", "10");
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertItem(ownerId);
+        postFeeService.holdPostFee(itemId, ownerId);
+        Instant before = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+
+        // when
+        postFeeService.chargeHeldFee(itemId);
+
+        // then: expire_at = lúc duyệt + 10 ngày; lúc duyệt nằm giữa before và after
+        Instant after = Instant.now().plusSeconds(1);
+        assertThat(expireAtOf(itemId)).isBetween(before.plus(10, ChronoUnit.DAYS), after.plus(10, ChronoUnit.DAYS));
     }
 
     @Test
@@ -441,6 +461,23 @@ class PostFeeServiceIT extends IntegrationTest {
     }
 
     @Test
+    void chargeHeldFee_whenEditApproved_keepsExpireAtUnchanged() {
+        // given: bài đã duyệt, đang hiển thị tới một mốc cố định; gửi bản sửa có phí
+        Instant oldExpireAt = Instant.parse("2030-01-15T10:00:00Z");
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, true);
+        jdbc.update("UPDATE items SET expire_at = ? WHERE id = ?", Timestamp.from(oldExpireAt), itemId);
+        postFeeService.holdEditFee(itemId, ownerId);
+
+        // when
+        postFeeService.chargeHeldFee(itemId);
+
+        // then: chỉ lần duyệt đầu (loại POST) mới đặt expire_at
+        assertThat(feeColumnsOf(itemId).get("fee_state")).isEqualTo("CHARGED");
+        assertThat(expireAtOf(itemId)).isEqualTo(oldExpireAt);
+    }
+
+    @Test
     void chargeHeldFee_whenPaidEditApproved_chargesEditFeeIntoLedger() {
         // given
         long ownerId = insertUser(START_BALANCE, 0);
@@ -712,6 +749,12 @@ class PostFeeServiceIT extends IntegrationTest {
         return jdbc.queryForMap(
                 "SELECT fee_state, pending_fee, pending_fee_type, post_fee_paid, free_edit_used FROM items WHERE id = ?",
                 itemId);
+    }
+
+    // Đọc qua Timestamp vì driver PostgreSQL không đổi thẳng TIMESTAMPTZ sang Instant.
+    private Instant expireAtOf(long itemId) {
+        Timestamp expireAt = jdbc.queryForObject("SELECT expire_at FROM items WHERE id = ?", Timestamp.class, itemId);
+        return expireAt == null ? null : expireAt.toInstant();
     }
 
     private long balanceOf(long userId) {
