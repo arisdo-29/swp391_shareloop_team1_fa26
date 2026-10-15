@@ -127,6 +127,30 @@ public class Item extends BaseEntity {
         transitionTo(ItemStatus.APPROVED);
     }
 
+    public void submitEdit(
+            Long categoryId,
+            Long areaId,
+            OfferType offerType,
+            String title,
+            String description,
+            String desiredItem,
+            ItemCondition condition,
+            String defectNote,
+            String brand) {
+        if (status != ItemStatus.PENDING_REVIEW) {
+            transitionTo(ItemStatus.PENDING_REVIEW);
+        }
+        this.categoryId = categoryId;
+        this.areaId = areaId;
+        this.offerType = offerType;
+        this.title = title;
+        this.description = description;
+        this.desiredItem = desiredItem;
+        this.condition = condition;
+        this.defectNote = defectNote;
+        this.brand = brand;
+    }
+
     public void transitionTo(ItemStatus target) {
         if (!ItemStatus.canTransition(status, target)) {
             throw new IllegalStateException("Invalid item status transition: " + status + " -> " + target);

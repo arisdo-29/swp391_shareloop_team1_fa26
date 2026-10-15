@@ -4,6 +4,7 @@ export const itemApiEndpoints = {
   list: '/api/v1/items',
   detail: (id: number) => `/api/v1/items/${id}`,
   create: '/api/v1/items',
+  update: (id: number) => `/api/v1/items/${id}`,
   myItems: '/api/v1/me/items',
   editQuote: (id: number) => `/api/v1/items/${id}/edit-quote`,
   renew: (id: number) => `/api/v1/items/${id}/renew`,
@@ -39,6 +40,8 @@ export interface CreateItemRequest {
   brand: string | null;
   images?: string[];
 }
+
+export type UpdateItemRequest = Omit<CreateItemRequest, 'images'> & { images?: string[] };
 
 export interface ItemResponse extends CreateItemRequest {
   id: number;
@@ -90,6 +93,10 @@ export const itemApi = {
   },
   async create(input: CreateItemRequest): Promise<ItemResponse> {
     const { data } = await http.post<ItemResponse>(itemApiEndpoints.create, input);
+    return data;
+  },
+  async update(id: number, input: UpdateItemRequest): Promise<ItemResponse> {
+    const { data } = await http.put<ItemResponse>(itemApiEndpoints.update(id), input);
     return data;
   },
   async detail(id: number): Promise<ItemResponse> {
