@@ -15,7 +15,10 @@ public enum AuthErrorCode implements ErrorCode {
     AUTH_OTP_RESEND_TOO_SOON(HttpStatus.TOO_MANY_REQUESTS, "Vui lòng chờ trước khi gửi lại mã."),
     AUTH_EMAIL_NOT_VERIFIED(HttpStatus.FORBIDDEN, "Email chưa được xác thực."),
     AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "Email hoặc mật khẩu không đúng."),
-    AUTH_ACCOUNT_LOCKED(HttpStatus.FORBIDDEN, "Tài khoản đã bị khoá.");
+    AUTH_ACCOUNT_LOCKED(HttpStatus.FORBIDDEN, "Tài khoản đã bị khoá."),
+    // 400 chứ không phải 401: FE gặp 401 sẽ hiểu là hết phiên và đăng xuất người dùng.
+    AUTH_CURRENT_PASSWORD_INCORRECT(HttpStatus.BAD_REQUEST, "Mật khẩu hiện tại không đúng."),
+    AUTH_NEW_PASSWORD_SAME_AS_CURRENT(HttpStatus.BAD_REQUEST, "Mật khẩu mới phải khác mật khẩu hiện tại.");
 
     private final HttpStatus status;
     private final String defaultMessage;
