@@ -124,14 +124,15 @@ public class ItemService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<ItemResponse> listPublicItems(Long categoryId, Long areaId, int page, int size) {
-        Page<ItemResponse> result = itemRepository
-                .findVisibleByFilters(
+    public PageResponse<ItemResponse> listPublicItems(Long categoryId, Long areaId, String q, int page, int size) {
+        Page<Item> items = q == null || q.isBlank()
+                ? itemRepository.findVisibleByFilters(
                         ItemStatus.APPROVED,
                         categoryId,
                         areaId,
                         PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))))
-                .map(item -> ItemMapper.toResponse(item, findImages(item.getId())));
+                : itemRepository.searchVisibleByFilters(categoryId, areaId, q.trim(), PageRequest.of(page, size));
+        Page<ItemResponse> result = items.map(item -> ItemMapper.toResponse(item, findImages(item.getId())));
         return PageResponse.from(result);
     }
 

@@ -10,6 +10,7 @@ export const itemApiEndpoints = {
 } as const;
 
 export interface ItemListParams {
+  q?: string;
   categoryId?: number;
   areaId?: number;
   page?: number;
@@ -72,6 +73,7 @@ export interface RenewResponse {
 
 export function itemListUrl(params: ItemListParams = {}): string {
   const query = new URLSearchParams();
+  if (params.q !== undefined) query.set('q', params.q);
   if (params.categoryId !== undefined) query.set('categoryId', String(params.categoryId));
   if (params.areaId !== undefined) query.set('areaId', String(params.areaId));
   if (params.page !== undefined) query.set('page', String(params.page));

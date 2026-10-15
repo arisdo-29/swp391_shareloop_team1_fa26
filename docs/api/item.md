@@ -106,8 +106,11 @@ Xem danh sách tất cả các bài đăng do chính mình tạo (sắp xếp m�
 
 Danh sách bài `APPROVED` còn hiển thị, mới nhất trước. Không cần đăng nhập.
 
-Tham số tùy chọn: `categoryId`, `areaId` (lọc đúng id), `page` (từ 0, mặc định 0),
+Tham số tùy chọn: `q` (tìm trong tiêu đề và mô tả, không phân biệt dấu/hoa thường),
+`categoryId`, `areaId` (lọc đúng id, kết hợp được với `q`), `page` (từ 0, mặc định 0),
 `size` (1–100, mặc định 20). Kết quả là `PageResponse<ItemResponse>`:
+
+Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2`. `q` rỗng hoặc chỉ có khoảng trắng tương đương không tìm kiếm; `%` và `_` được xem là ký tự thường.
 
 ```json
 { "items": [], "page": 0, "size": 20, "totalElements": 0 }

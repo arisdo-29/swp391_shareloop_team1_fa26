@@ -76,9 +76,10 @@ public class ItemController {
     public PageResponse<ItemResponse> listPublic(
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Long areaId,
+            @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return itemService.listPublicItems(categoryId, areaId, page, size);
+        return itemService.listPublicItems(categoryId, areaId, q, page, size);
     }
 
     private Long parseUserId(Jwt jwt) {
