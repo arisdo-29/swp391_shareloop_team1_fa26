@@ -102,9 +102,6 @@ Tất cả endpoint cần JWT có quyền Admin; người dùng thường nhận
 |-----------------------------|------|------------------------------------------------|
 | `CATALOG_CATEGORY_NOT_FOUND`| 404  | Không có danh mục đang dùng với id đã cho      |
 | `CATALOG_INVALID_PARENT`    | 422  | Danh mục cha không tồn tại, đang ẩn hoặc tạo vòng lặp |
-| `CATALOG_AREA_NOT_FOUND`    | 404  | Khu vực không tồn tại hoặc đã xoá mềm |
-| `CATALOG_INVALID_AREA_PARENT` | 422 | Cha không phải khu vực cấp 1 đang hoạt động hoặc trỏ về chính nó |
-| `CATALOG_AREA_HAS_CHILDREN` | 409 | Không thể chuyển khu vực có con thành cấp 2 |
 | `VALIDATION_FAILED`         | 400  | Tham số đường dẫn hoặc request body không hợp lệ |
 
 Định dạng lỗi (`field` và `details` chỉ có khi liên quan):

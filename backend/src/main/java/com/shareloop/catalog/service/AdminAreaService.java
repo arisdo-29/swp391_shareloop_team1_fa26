@@ -1,6 +1,6 @@
 package com.shareloop.catalog.service;
 
-import com.shareloop.catalog.CatalogErrorCode;
+import com.shareloop.catalog.AreaErrorCode;
 import com.shareloop.catalog.dto.AdminAreaRequest;
 import com.shareloop.catalog.dto.AdminAreaResponse;
 import com.shareloop.catalog.entity.Area;
@@ -37,7 +37,7 @@ public class AdminAreaService {
         Area area = requireArea(id);
         short level = validateParent(request.parentId(), id);
         if (level == 2 && repository.existsByParentId(id)) {
-            throw new BusinessException(CatalogErrorCode.CATALOG_AREA_HAS_CHILDREN);
+            throw new BusinessException(AreaErrorCode.CATALOG_AREA_HAS_CHILDREN);
         }
         area.update(request.name().trim(), request.parentId(), level);
         return toResponse(repository.saveAndFlush(area));
@@ -75,15 +75,13 @@ public class AdminAreaService {
     }
 
     private Area requireArea(long id) {
-        return repository
-                .findById(id)
-                .orElseThrow(() -> new BusinessException(CatalogErrorCode.CATALOG_AREA_NOT_FOUND));
+        return repository.findById(id).orElseThrow(() -> new BusinessException(AreaErrorCode.CATALOG_AREA_NOT_FOUND));
     }
 
     private BusinessException invalidParent() {
         return new BusinessException(
-                CatalogErrorCode.CATALOG_INVALID_AREA_PARENT,
-                CatalogErrorCode.CATALOG_INVALID_AREA_PARENT.defaultMessage(),
+                AreaErrorCode.CATALOG_INVALID_AREA_PARENT,
+                AreaErrorCode.CATALOG_INVALID_AREA_PARENT.defaultMessage(),
                 "parentId",
                 Map.of());
     }
