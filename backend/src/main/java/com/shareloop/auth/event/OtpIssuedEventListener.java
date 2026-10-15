@@ -1,6 +1,7 @@
 package com.shareloop.auth.event;
 
 import com.shareloop.integration.mail.EmailSender;
+import com.shareloop.integration.mail.MailTemplateRenderer;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -13,9 +14,11 @@ public class OtpIssuedEventListener {
     private static final String SUBJECT = "Mã xác thực ShareLoop";
 
     private final EmailSender emailSender;
+    private final MailTemplateRenderer mailTemplateRenderer;
 
-    public OtpIssuedEventListener(EmailSender emailSender) {
+    public OtpIssuedEventListener(EmailSender emailSender, MailTemplateRenderer mailTemplateRenderer) {
         this.emailSender = emailSender;
+        this.mailTemplateRenderer = mailTemplateRenderer;
     }
 
     // AFTER_COMMIT: chỉ chạy khi transaction của người phát sự kiện commit thành công; rollback thì bỏ qua.
@@ -23,11 +26,7 @@ public class OtpIssuedEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Async
     public void sendOtpEmail(OtpIssuedEvent event) {
-        emailSender.send(event.email(), SUBJECT, buildBody(event));
-    }
-
-    private String buildBody(OtpIssuedEvent event) {
-        return "<p>Mã xác thực của bạn là: <b>" + event.code() + "</b></p>" + "<p>Mã có hiệu lực trong "
-                + event.ttlMinutes() + " phút.</p>";
+        String htmlBody = mailTemplateRenderer.renderOtp(event.code(), event.ttlMinutes());
+        emailSender.send(event.email(), SUBJECT, htmlBody);
     }
 }
