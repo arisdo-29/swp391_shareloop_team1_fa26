@@ -92,6 +92,16 @@ public class MediaService {
         files.forEach(MediaFile::attach);
     }
 
+    /** Temporary gateway for hiding media without changing its status. */
+    public void deactivate(long mediaId) {
+        throw unsupported("deactivate");
+    }
+
+    /** Temporary gateway for soft deletion. */
+    public void remove(long mediaId) {
+        throw unsupported("remove");
+    }
+
     @Transactional(readOnly = true)
     public MediaContent readPublic(long mediaId) {
         MediaFile media = requireMedia(mediaId);
@@ -117,6 +127,10 @@ public class MediaService {
         if (media.getCreatedBy() == null || media.getCreatedBy() != userId) {
             throw new BusinessException(MediaErrorCode.MEDIA_NOT_OWNER);
         }
+    }
+
+    private UnsupportedOperationException unsupported(String operation) {
+        return new UnsupportedOperationException("MediaService." + operation + " is not implemented yet");
     }
 
     public record MediaContent(byte[] bytes, String mimeType) {}

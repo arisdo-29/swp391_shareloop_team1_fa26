@@ -1,5 +1,7 @@
 # API module media
 
+Service cửa ngõ nội bộ: `MediaService.deactivate(long mediaId)` và `remove(long mediaId)` hiện là chữ ký tạm, ném `UnsupportedOperationException`; chưa có endpoint HTTP tương ứng trong #38.
+
 ## POST /api/v1/media
 
 Cần JWT. Gửi `multipart/form-data` với part `file`. Chấp nhận JPG, PNG, WebP hợp lệ;

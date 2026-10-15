@@ -139,6 +139,28 @@ public class ItemService {
         item.markTraded();
     }
 
+    /** Temporary gateway; implemented with the item lifecycle in issue #74. */
+    public void release(long itemId) {
+        throw unsupported("release");
+    }
+
+    /** Temporary gateways; implemented with item lifecycle and removal in issue #91. */
+    public void hide(long itemId) {
+        throw unsupported("hide");
+    }
+
+    public void unhide(long itemId) {
+        throw unsupported("unhide");
+    }
+
+    public void remove(long itemId) {
+        throw unsupported("remove");
+    }
+
+    public void hideAllOfUser(long userId) {
+        throw unsupported("hideAllOfUser");
+    }
+
     @Transactional
     public void markApproved(long itemId) {
         transition(itemId, ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED);
@@ -159,6 +181,10 @@ public class ItemService {
 
     private Item requireItem(long itemId) {
         return itemRepository.findById(itemId).orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
+    }
+
+    private UnsupportedOperationException unsupported(String operation) {
+        return new UnsupportedOperationException("ItemService." + operation + " is not implemented yet");
     }
 
     private List<Long> parseMediaIds(List<String> images) {

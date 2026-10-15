@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.shareloop.common.exception.BusinessException;
@@ -90,6 +91,17 @@ class MediaServiceTest {
         assertThatThrownBy(() -> service.attach(List.of(1L), 4L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", MediaErrorCode.MEDIA_NOT_UPLOADED);
+    }
+
+    @Test
+    void temporaryGatewaysFailBeforeChangingMedia() {
+        assertThatThrownBy(() -> service.deactivate(1L))
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessageContaining("deactivate");
+        assertThatThrownBy(() -> service.remove(1L))
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessageContaining("remove");
+        verifyNoInteractions(repository, storage);
     }
 
     private MediaFile media(long id, long owner) {
