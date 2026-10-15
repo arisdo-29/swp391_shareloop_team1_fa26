@@ -2,15 +2,21 @@ package com.shareloop.setting.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.shareloop.audit.service.ActivityLogService;
+import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.SettingErrorCode;
 import com.shareloop.setting.entity.WebsiteAttribute;
 import com.shareloop.setting.repository.WebsiteAttributeRepository;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class ConfigServiceTest {
@@ -53,6 +59,77 @@ class ConfigServiceTest {
         service.getInt(ConfigKey.PENDING_ACCOUNT_TTL_HOURS);
 
         org.mockito.Mockito.verify(repository).findConfigValueByAttrKey("pending_account_ttl_hours");
+    }
+
+    @Test
+    void getRawReportsMissingKeyByName() {
+        when(repository.findConfigValueByAttrKey("missing_config")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getRaw("missing_config"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Missing config: missing_config")
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SettingErrorCode.SETTING_CONFIG_NOT_FOUND);
+    }
+
+    @Test
+    void getDecimalReadsThresholdAndReportsInvalidTypeWithKey() {
+        when(repository.findConfigValueByAttrKey("chat_ai_threshold")).thenReturn(Optional.of("0.7"));
+        assertThat(service.getDecimal(ConfigKey.CHAT_AI_THRESHOLD)).isEqualByComparingTo("0.7");
+
+        when(repository.findConfigValueByAttrKey("chat_ai_threshold")).thenReturn(Optional.of("abc"));
+        assertThatThrownBy(() -> service.getDecimal(ConfigKey.CHAT_AI_THRESHOLD))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Configuration 'chat_ai_threshold' must be decimal: 'abc'")
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SettingErrorCode.SETTING_CONFIG_INVALID_TYPE);
+    }
+
+    @Test
+    void getBooleanAcceptsOnlyTrueOrFalseIgnoringCase() {
+        when(repository.findConfigValueByAttrKey("feature_enabled")).thenReturn(Optional.of("TrUe"));
+        assertThat(service.getBoolean("feature_enabled")).isTrue();
+
+        when(repository.findConfigValueByAttrKey("feature_enabled")).thenReturn(Optional.of("yes"));
+        assertThatThrownBy(() -> service.getBoolean("feature_enabled"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Configuration 'feature_enabled' must be boolean: 'yes'");
+    }
+
+    @Test
+    void updateRejectsInvalidDecimalAndOutOfRangeThreshold() {
+        assertThatThrownBy(() -> service.update(ConfigKey.CHAT_AI_THRESHOLD, "abc", null, 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Configuration 'chat_ai_threshold' must be a decimal: 'abc'")
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SettingErrorCode.SETTING_CONFIG_INVALID_TYPE);
+
+        assertThatThrownBy(() -> service.update(ConfigKey.CHAT_AI_THRESHOLD, "1.5", null, 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Configuration 'chat_ai_threshold' must be within 0..1: '1.5'")
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SettingErrorCode.SETTING_CONFIG_OUT_OF_RANGE);
+    }
+
+    @Test
+    void updatedDecimalIsReturnedOnTheNextRead() {
+        AtomicReference<String> storedValue = new AtomicReference<>("0.7");
+        var attribute = mock(WebsiteAttribute.class);
+        when(attribute.getAttrValue()).thenAnswer(invocation -> storedValue.get());
+        doAnswer(invocation -> {
+                    storedValue.set(invocation.getArgument(0));
+                    return null;
+                })
+                .when(attribute)
+                .updateValue(anyString());
+        when(repository.findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", "chat_ai_threshold"))
+                .thenReturn(Optional.of(attribute));
+        when(repository.findConfigValueByAttrKey("chat_ai_threshold"))
+                .thenAnswer(invocation -> Optional.of(storedValue.get()));
+
+        service.update(ConfigKey.CHAT_AI_THRESHOLD, "0.8", null, 1L);
+
+        assertThat(service.getDecimal(ConfigKey.CHAT_AI_THRESHOLD)).isEqualByComparingTo("0.8");
     }
 
     @Test

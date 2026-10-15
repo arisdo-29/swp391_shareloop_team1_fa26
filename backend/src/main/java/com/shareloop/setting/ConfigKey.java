@@ -1,5 +1,7 @@
 package com.shareloop.setting;
 
+import java.math.BigDecimal;
+
 /** Các khoá cấu hình nghiệp vụ và giá trị mặc định theo SRS v10. */
 public enum ConfigKey {
     VND_PER_CREDIT("vnd_per_credit", "1000"),
@@ -22,7 +24,7 @@ public enum ConfigKey {
     AI_FREE_PER_DAY("ai_free_per_day", "5"),
     AI_TRIAL_USES("ai_trial_uses", "1"),
     AI_SEARCH_TIMEOUT_SECONDS("ai_search_timeout_seconds", "15"),
-    CHAT_AI_THRESHOLD("chat_ai_threshold", "0.7"),
+    CHAT_AI_THRESHOLD("chat_ai_threshold", "0.7", ValueType.DECIMAL, BigDecimal.ZERO, BigDecimal.ONE),
     CHAT_AI_TIMEOUT_SECONDS("chat_ai_timeout_seconds", "5"),
     ITEM_AI_TIMEOUT_SECONDS("item_ai_timeout_seconds", "20"),
     ITEM_AI_RETRIES("item_ai_retries", "1"),
@@ -50,10 +52,20 @@ public enum ConfigKey {
 
     private final String key;
     private final String defaultValue;
+    private final ValueType valueType;
+    private final BigDecimal minValue;
+    private final BigDecimal maxValue;
 
     ConfigKey(String key, String defaultValue) {
+        this(key, defaultValue, ValueType.INTEGER, null, null);
+    }
+
+    ConfigKey(String key, String defaultValue, ValueType valueType, BigDecimal minValue, BigDecimal maxValue) {
         this.key = key;
         this.defaultValue = defaultValue;
+        this.valueType = valueType;
+        this.minValue = minValue;
+        this.maxValue = maxValue;
     }
 
     public String key() {
@@ -70,5 +82,23 @@ public enum ConfigKey {
 
     public int getDefaultValue() {
         return Integer.parseInt(defaultValue);
+    }
+
+    public ValueType valueType() {
+        return valueType;
+    }
+
+    public BigDecimal minValue() {
+        return minValue;
+    }
+
+    public BigDecimal maxValue() {
+        return maxValue;
+    }
+
+    public enum ValueType {
+        INTEGER,
+        DECIMAL,
+        BOOLEAN
     }
 }

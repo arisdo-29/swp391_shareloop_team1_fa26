@@ -28,3 +28,23 @@ Cập nhật giá trị cấu hình đã được seed. Yêu cầu role `ADMIN` 
 ```
 
 Thành công trả về `ConfigResponse` và ghi một dòng `activity_logs` loại `CONFIG_UPDATED`, gồm admin, key, giá trị cũ/mới và lý do. Key không tồn tại trong `ConfigKey` hoặc chưa được seed sẽ bị từ chối.
+
+## PUT /api/v1/admin/configs
+
+Cập nhật cấu hình bằng key trong request body. Chỉ Admin được gọi. Giá trị được kiểm tra theo kiểu và khoảng đã khai báo cho key; ví dụ `chat_ai_threshold` là số thập phân từ `0` đến `1`. Thay đổi được đọc từ database ngay ở lần gọi kế tiếp, không dùng cache.
+
+```json
+{
+  "key": "chat_ai_threshold",
+  "value": "0.8"
+}
+```
+
+Có thể gửi thêm `reason` để ghi lý do vào `activity_logs`. Thành công trả `ConfigResponse` và ghi log `CONFIG_UPDATED`.
+
+- `400 VALIDATION_FAILED`: thiếu key/value.
+- `400 SETTING_CONFIG_INVALID_TYPE`: value sai kiểu theo key.
+- `400 SETTING_CONFIG_OUT_OF_RANGE`: value ngoài khoảng cho phép.
+- `401 UNAUTHORIZED`: chưa đăng nhập.
+- `403 FORBIDDEN`: tài khoản không phải Admin.
+- `404 SETTING_CONFIG_NOT_FOUND`: key không tồn tại hoặc cấu hình chưa được seed.
