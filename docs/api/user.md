@@ -4,7 +4,7 @@ Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian 
 lỗi theo định dạng thống nhất ở cuối file. Nguồn: SRS v10 (FR-06, BR-U03, UC-03).
 
 Người sở hữu: BE1. File này gồm 2 endpoint hồ sơ của người đang đăng nhập (xem và cập nhật) và các hàm của
-`UserService` dành cho module khác gọi (khoá, mở khoá, lấy thông tin liên lạc). Đổi số điện thoại (FR-07, OTP email)
+`UserService` dành cho module khác gọi (khoá, mở khoá, lấy thông tin liên lạc), cùng job nền dọn tài khoản chưa xác thực (mục "Job nền"). Đổi số điện thoại (FR-07, OTP email)
 và đổi mật khẩu không thuộc file này; đổi mật khẩu xem `docs/api/auth.md`.
 
 ## Quy tắc chung
@@ -146,6 +146,30 @@ Lỗi là `BusinessException` với mã của `UserErrorCode`; nếu để lọt
 - **Không** kiểm Request: người gọi (module request) phải tự bảo đảm Request đã `LogisticsConfirmed` và người xem là
   một trong hai bên, rồi mới gọi để lấy liên lạc của bên còn lại.
 - Vẫn trả khi tài khoản kia đã bị khoá (BR-T12: đã trao thì không ẩn lại).
+
+## Job nền
+
+Không phải endpoint. Profile `test` đặt `app.jobs.enabled=false` nên bean job không được tạo; test gọi thẳng service.
+
+| Job | Lịch | Service | Việc làm |
+|-----|------|---------|----------|
+| `PendingAccountCleanupJob` (#106) | `0 30 * * * *` (phút 30 mỗi giờ) | `PendingAccountCleanupService.deleteExpiredPendingAccounts(now)` | Xoá mềm tài khoản chưa xác thực quá hạn |
+
+### Xoá tài khoản chưa xác thực (FR-117, BR-U06)
+
+- **Chọn**: `status = PENDING_VERIFICATION`, `created_at < now − pending_account_ttl_hours` (mặc định 24 giờ, đọc từ
+  ConfigService), `is_deleted = false`, và **không** có OTP còn hạn (`otp_expires_at` null hoặc `≤ now`). Đọc theo lô
+  100 id, phân trang keyset.
+- **OTP còn hạn thì để lại** tới lượt sau: người dùng có thể vừa gửi lại mã gần mốc 24 giờ. OTP chỉ sống
+  `otp_ttl_minutes` (5 phút), nên chậm nhất lượt kế tiếp sẽ xoá.
+- Hạn tính từ `created_at`; đăng ký lại một email đang PENDING dùng lại dòng cũ nên **không** làm mới mốc này.
+- Tài khoản `ACTIVE` / `BANNED` không bao giờ bị chọn.
+- **Xoá mềm**: `markDeleted()` (`is_deleted = true`), không xoá cứng. Index `ux_users_email` chỉ tính dòng chưa xoá
+  nên email đó đăng ký lại được ngay; số điện thoại vốn chỉ tính trùng với tài khoản ACTIVE.
+- **Mỗi tài khoản một transaction**: đọc lại và kiểm lại ba điều kiện trên rồi mới xoá (người dùng có thể vừa xác thực
+  hoặc gửi lại OTP). Một dòng lỗi chỉ rollback chính nó, ghi log WARN, lượt sau thử lại. Job ghi log INFO số tài khoản
+  đã xoá mỗi lượt.
+- **Idempotent**: dòng đã xoá mềm bị loại khỏi truy vấn, chạy lại không có tác dụng kép.
 
 ## Ghi chú cho frontend
 
