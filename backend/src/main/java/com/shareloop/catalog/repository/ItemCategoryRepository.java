@@ -10,5 +10,9 @@ public interface ItemCategoryRepository extends JpaRepository<ItemCategory, Long
     // Derived query: tên hàm là câu truy vấn. Dòng is_deleted = true đã bị @SQLRestriction loại.
     List<ItemCategory> findByIsActiveTrueOrderBySortOrderAscIdAsc();
 
+    List<ItemCategory> findAllByOrderBySortOrderAscIdAsc();
+
+    List<ItemCategory> findByParentIdAndIsActiveTrue(Long parentId);
+
     Optional<ItemCategory> findByIdAndIsActiveTrue(Long id);
 }
