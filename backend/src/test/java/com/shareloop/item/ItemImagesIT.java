@@ -70,11 +70,13 @@ class ItemImagesIT extends IntegrationTest {
                         .content(body(categoryId, areaId, fourth, fifth, foreign)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("MEDIA_NOT_OWNER"));
-        assertThat(jdbc.sql("SELECT count(*) FROM items WHERE donor_id = :userId")
-                        .param("userId", userId)
-                        .query(Long.class)
+        // This test runs inside the test transaction. ItemCreateIT verifies the committed
+        // rollback boundary for a failed attach without an enclosing test transaction.
+        assertThat(jdbc.sql("SELECT status FROM media_files WHERE id = :id")
+                        .param("id", foreign)
+                        .query(String.class)
                         .single())
-                .isEqualTo(1);
+                .isEqualTo("UPLOADED");
     }
 
     @Test
@@ -229,8 +231,8 @@ class ItemImagesIT extends IntegrationTest {
     }
 
     private long createUser(String email, String phone) {
-        return jdbc.sql("INSERT INTO users (email, password_hash, full_name, phone, status) "
-                        + "VALUES (:email, 'unused', 'Test', :phone, 'ACTIVE') RETURNING id")
+        return jdbc.sql("INSERT INTO users (email, password_hash, full_name, phone, status, credit_balance) "
+                        + "VALUES (:email, 'unused', 'Test', :phone, 'ACTIVE', 100) RETURNING id")
                 .param("email", email)
                 .param("phone", phone)
                 .query(Long.class)

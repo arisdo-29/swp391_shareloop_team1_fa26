@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -21,11 +22,15 @@ import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.repository.ItemRepository;
+import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.media.service.MediaService;
+import com.shareloop.moderation.ModerationResult;
+import com.shareloop.moderation.service.ContentModerationService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,8 +59,21 @@ class ItemServiceTest {
     @Mock
     CategoryAttributeService categoryAttributeService;
 
+    @Mock
+    ContentModerationService contentModerationService;
+
+    @Mock
+    PostFeeService postFeeService;
+
     @InjectMocks
     ItemService itemService;
+
+    @BeforeEach
+    void allowCleanContent() {
+        lenient()
+                .when(contentModerationService.checkPost(anyLong(), any(), any()))
+                .thenReturn(ModerationResult.pass());
+    }
 
     @Test
     @DisplayName("Tạo bài GIVE thành công ở trạng thái PENDING_REVIEW")
@@ -73,7 +91,7 @@ class ItemServiceTest {
                 "NXB Trẻ",
                 threeImages());
 
-        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> {
+        when(itemRepository.saveAndFlush(any(Item.class))).thenAnswer(invocation -> {
             Item item = invocation.getArgument(0);
             ReflectionTestUtils.setField(item, "id", 100L);
             return item;
@@ -85,6 +103,7 @@ class ItemServiceTest {
         assertThat(response.donorId()).isEqualTo(10L);
         assertThat(response.offerType()).isEqualTo(OfferType.GIVE);
         assertThat(response.status()).isEqualTo(ItemStatus.PENDING_REVIEW);
+        verify(postFeeService).holdPostFee(100L, 10L);
     }
 
     @Test
@@ -103,7 +122,7 @@ class ItemServiceTest {
                 null,
                 threeImages());
 
-        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> {
+        when(itemRepository.saveAndFlush(any(Item.class))).thenAnswer(invocation -> {
             Item item = invocation.getArgument(0);
             ReflectionTestUtils.setField(item, "id", 101L);
             return item;
@@ -156,7 +175,7 @@ class ItemServiceTest {
                 List.of("/api/v1/media/4"),
                 null);
 
-        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> {
+        when(itemRepository.saveAndFlush(any(Item.class))).thenAnswer(invocation -> {
             Item item = invocation.getArgument(0);
             ReflectionTestUtils.setField(item, "id", 102L);
             return item;
@@ -263,7 +282,7 @@ class ItemServiceTest {
                 "NXB Trẻ",
                 List.of("/api/v1/media/7", "/api/v1/media/8", "/api/v1/media/9"));
 
-        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> {
+        when(itemRepository.saveAndFlush(any(Item.class))).thenAnswer(invocation -> {
             Item item = invocation.getArgument(0);
             ReflectionTestUtils.setField(item, "id", 102L);
             return item;
@@ -296,7 +315,7 @@ class ItemServiceTest {
         assertThatThrownBy(() -> itemService.createItem(10L, request))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_INVALID_IMAGE);
-        verify(itemRepository, never()).save(any(Item.class));
+        verify(itemRepository, never()).saveAndFlush(any(Item.class));
     }
 
     @Test
@@ -316,7 +335,7 @@ class ItemServiceTest {
                     .hasFieldOrPropertyWithValue("field", "images");
         }
         verify(mediaService, never()).attach(any(), anyLong());
-        verify(itemRepository, never()).save(any(Item.class));
+        verify(itemRepository, never()).saveAndFlush(any(Item.class));
     }
 
     private static List<String> threeImages() {
