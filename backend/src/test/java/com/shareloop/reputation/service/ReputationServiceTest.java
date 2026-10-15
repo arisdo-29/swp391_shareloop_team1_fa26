@@ -32,4 +32,3 @@ class ReputationServiceTest {
         service.onCompleted(100L);
     }
 }
-

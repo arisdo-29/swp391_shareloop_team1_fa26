@@ -46,4 +46,3 @@ class ActivityLogServiceTest {
         verify(repository).save(any(ActivityLog.class));
     }
 }
-
