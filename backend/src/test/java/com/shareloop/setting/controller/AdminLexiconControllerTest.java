@@ -11,14 +11,10 @@ import com.shareloop.config.ClockConfig;
 import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
-<<<<<<< HEAD
 import com.shareloop.setting.dto.LexiconMatch;
 import com.shareloop.setting.service.AdminLexiconService;
 import com.shareloop.setting.service.LexiconService;
 import java.util.List;
-=======
-import com.shareloop.setting.service.AdminLexiconService;
->>>>>>> origin/develop
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -42,14 +38,11 @@ class AdminLexiconControllerTest {
     @MockitoBean
     AdminLexiconService service;
 
-<<<<<<< HEAD
     @MockitoBean
     LexiconService lexiconService;
 
-=======
->>>>>>> origin/develop
     @Test
-    void nonAdminCannotReadOrCreateLexicon() throws Exception {
+    void nonAdminCannotReadCreateOrTestLexicon() throws Exception {
         String userToken = jwtService.issue(42L, false);
 
         mockMvc.perform(get("/api/v1/admin/lexicon").header("Authorization", "Bearer " + userToken))
@@ -60,19 +53,13 @@ class AdminLexiconControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validBody()))
                 .andExpect(status().isForbidden());
-<<<<<<< HEAD
         mockMvc.perform(post("/api/v1/admin/lexicon/test")
                         .header("Authorization", "Bearer " + userToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"text\":\"test\"}"))
                 .andExpect(status().isForbidden());
 
-        verifyNoInteractions(service);
-        verifyNoInteractions(lexiconService);
-=======
-
-        verifyNoInteractions(service);
->>>>>>> origin/develop
+        verifyNoInteractions(service, lexiconService);
     }
 
     @Test
@@ -89,7 +76,6 @@ class AdminLexiconControllerTest {
         verifyNoInteractions(service);
     }
 
-<<<<<<< HEAD
     @Test
     void emptyTextIsRejectedByRequestValidation() throws Exception {
         String adminToken = jwtService.issue(1L, true);
@@ -121,8 +107,6 @@ class AdminLexiconControllerTest {
                 .andExpect(jsonPath("$[0].matchedAs").value("NORMALIZED"));
     }
 
-=======
->>>>>>> origin/develop
     private static String validBody() {
         return "{\"keyword\":\"test\",\"group\":\"WEAPONS\",\"level\":\"BLOCK\",\"scope\":\"POST\"}";
     }
