@@ -8,7 +8,8 @@ import { formatCredit, formatVnd } from '../../utils/formatting';
 import { CREDIT_TO_VND } from '../../utils/credit';
 import { useWallet } from '../../app/useWallet';
 import { walletApi, type WalletTransactionResponse } from '../../services/walletApi';
-import { paymentApi, type TopUpOrderResponse } from '../../services/paymentApi';
+import { paymentApi, type TopUpConfirmResponse, type TopUpOrderResponse } from '../../services/paymentApi';
+import type { ApiError } from '../../services/http';
 
 const packages = [1, 2, 5, 10, 20];
 type Step = 'select' | 'qr' | 'pending';
@@ -66,6 +67,15 @@ function toCreditHistory(entry: WalletTransactionResponse, userId: string): Cred
   };
 }
 
+// Contract: docs/api/payment.md (POST /wallet/topup-orders/{orderCode}/mock-confirm)
+function topUpConfirmErrorMessage(error: ApiError) {
+  if (error.status === 409) return 'Đơn nạp đã hết hạn hoặc không thể thanh toán. Vui lòng tạo đơn nạp mới.';
+  if (error.status === 404 && error.code === 'WALLET_PAYMENT_ORDER_NOT_FOUND') return 'Không tìm thấy đơn nạp này trong tài khoản của bạn.';
+  // 404 không kèm mã của wallet: endpoint mock bị tắt (app.payment.mock.enabled=false).
+  if (error.status === 404) return 'Máy chủ chưa bật thanh toán giả lập. Vui lòng liên hệ quản trị viên.';
+  return 'Không xác nhận được thanh toán. Vui lòng thử lại.';
+}
+
 export function Credit() {
   const user = useAppSelector(selectCurrentUser)!;
   const data = useAppSelector(selectData);
@@ -87,11 +97,15 @@ export function Credit() {
   const [apiTopUpOrder, setApiTopUpOrder] = useState<TopUpOrderResponse | null>(null);
   const [topUpSubmitting, setTopUpSubmitting] = useState(false);
   const [topUpError, setTopUpError] = useState('');
+  const [topUpConfirming, setTopUpConfirming] = useState(false);
+  const [confirmedTopUp, setConfirmedTopUp] = useState<TopUpConfirmResponse | null>(null);
 
   const topups = isApiAccount ? [] : data.topups.filter((topup) => topup.userId === user.id);
   const activeTopup = topups.find((topup) => topup.id === activeTopupId);
   const latestCompleted = topups.find((topup) => topup.status === 'completed');
   const paymentValue = creditAmount * CREDIT_TO_VND;
+  // Tài khoản API lấy kết quả từ mock-confirm; tài khoản seed lấy từ dữ liệu mock trong Redux.
+  const completedCredits = isApiAccount ? confirmedTopUp?.credits ?? null : latestCompleted?.amount ?? null;
 
   useEffect(() => {
     if (!isApiAccount) {
@@ -154,6 +168,7 @@ export function Credit() {
       }
       setTopUpSubmitting(true);
       setTopUpError('');
+      setConfirmedTopUp(null);
       try {
         const order = await paymentApi.createTopUpOrder({ amountVnd });
         setApiTopUpOrder(order);
@@ -168,6 +183,24 @@ export function Credit() {
     const code = `SLTOPUP-${crypto.randomUUID()}`;
     setTransactionCode(code);
     setStep('qr');
+  };
+
+  // Backend đã idempotent cho đơn SUCCESS; chặn thêm ở đây để không gửi trùng khi bấm nhanh.
+  const confirmApiTopUp = async () => {
+    if (!apiTopUpOrder || topUpConfirming) return;
+    setTopUpConfirming(true);
+    setTopUpError('');
+    try {
+      const result = await paymentApi.mockConfirm(apiTopUpOrder.orderCode);
+      setApiTopUpOrder({ ...apiTopUpOrder, status: result.status });
+      setConfirmedTopUp(result);
+      refreshWallet();
+      setHistoryReloadKey((key) => key + 1);
+    } catch (error) {
+      setTopUpError(topUpConfirmErrorMessage(error as ApiError));
+    } finally {
+      setTopUpConfirming(false);
+    }
   };
 
   const confirmTransfer = () => {
@@ -203,7 +236,7 @@ export function Credit() {
         </div>
       ) : null}
 
-      {latestCompleted ? (
+      {completedCredits !== null ? (
         <div className="mb-6 flex items-start gap-3 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-success">
           <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-white">
             <Icon name="check" className="size-4" weight="bold" />
@@ -211,7 +244,7 @@ export function Credit() {
           <div>
             <p className="text-sm font-bold">Nạp Credit thành công</p>
             <p className="mt-0.5 text-xs leading-5">
-              +{latestCompleted.amount} Credit đã được cộng vào tài khoản.
+              +{completedCredits} Credit đã được cộng vào tài khoản.
             </p>
           </div>
         </div>
@@ -287,8 +320,12 @@ export function Credit() {
         {isApiAccount && step === 'pending' && apiTopUpOrder ? (
           <ApiTopUpOrder
             order={apiTopUpOrder}
+            confirming={topUpConfirming}
+            onConfirm={() => void confirmApiTopUp()}
             onNewTopup={() => {
               setApiTopUpOrder(null);
+              setConfirmedTopUp(null);
+              setTopUpError('');
               setStep('select');
             }}
           />
@@ -545,7 +582,7 @@ function PendingTopup({ code, amount, onNewTopup }: { code: string; amount: numb
   );
 }
 
-function ApiTopUpOrder({ order, onNewTopup }: { order: TopUpOrderResponse; onNewTopup: () => void }) {
+function ApiTopUpOrder({ order, confirming, onConfirm, onNewTopup }: { order: TopUpOrderResponse; confirming: boolean; onConfirm: () => void; onNewTopup: () => void }) {
   const statusLabels: Record<TopUpOrderResponse['status'], string> = {
     PENDING: 'Đang chờ thanh toán',
     SUCCESS: 'Đã thanh toán',
@@ -553,14 +590,21 @@ function ApiTopUpOrder({ order, onNewTopup }: { order: TopUpOrderResponse; onNew
     EXPIRED: 'Đơn đã hết hạn',
   };
   const safeRedirectUrl = order.redirectUrl && /^https?:\/\//i.test(order.redirectUrl) ? order.redirectUrl : null;
+  const paid = order.status === 'SUCCESS';
+  // Cổng MOCK chưa có trang thanh toán riêng (redirectUrl là đường dẫn nội bộ) nên xác nhận ngay tại đây.
+  const canMockConfirm = order.provider === 'MOCK' && order.status === 'PENDING';
   return (
     <div className="rounded-xl bg-white px-5 py-8 ring-1 ring-border/80 sm:px-8">
       <div className="mx-auto max-w-2xl text-center">
-        <span className="mx-auto grid size-14 place-items-center rounded-lg bg-amber-50 text-warning">
-          <Icon name="history" className="size-7" />
+        <span className={`mx-auto grid size-14 place-items-center rounded-lg ${paid ? 'bg-emerald-50 text-success' : 'bg-amber-50 text-warning'}`}>
+          <Icon name={paid ? 'check' : 'history'} className="size-7" />
         </span>
-        <h2 className="mt-5 text-2xl font-bold">Đơn nạp Credit đã được tạo</h2>
-        <p className="mt-2 text-sm leading-6 text-text-muted">Credit chưa được cộng vào ví. Trạng thái chỉ thay đổi sau khi Backend xác nhận thanh toán.</p>
+        <h2 className="mt-5 text-2xl font-bold">{paid ? 'Nạp Credit thành công' : 'Đơn nạp Credit đã được tạo'}</h2>
+        <p className="mt-2 text-sm leading-6 text-text-muted">
+          {paid
+            ? `+${order.credits} Credit đã được cộng vào ví.`
+            : 'Credit chưa được cộng vào ví. Trạng thái chỉ thay đổi sau khi Backend xác nhận thanh toán.'}
+        </p>
         <dl className="mt-6 divide-y divide-border rounded-lg bg-surface-low px-4 text-left">
           <DetailRow label="Mã đơn" value={order.orderCode} />
           <DetailRow label="Số tiền" value={formatVnd(order.amountVnd)} />
@@ -569,10 +613,15 @@ function ApiTopUpOrder({ order, onNewTopup }: { order: TopUpOrderResponse; onNew
           <DetailRow label="Trạng thái" value={statusLabels[order.status]} />
         </dl>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <Button variant="outline" onClick={onNewTopup}>
+          <Button variant="outline" onClick={onNewTopup} disabled={confirming}>
             Tạo đơn nạp khác
           </Button>
-          {safeRedirectUrl ? (
+          {canMockConfirm ? (
+            <Button onClick={onConfirm} disabled={confirming}>
+              {confirming ? 'Đang xác nhận...' : 'Xác nhận thanh toán (giả lập)'}
+            </Button>
+          ) : null}
+          {!canMockConfirm && !paid && safeRedirectUrl ? (
             <a href={safeRedirectUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-bold text-white">
               Đi đến cổng thanh toán
             </a>
