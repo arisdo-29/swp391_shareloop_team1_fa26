@@ -1,11 +1,14 @@
 package com.shareloop.request.controller;
 
 import com.shareloop.common.security.CurrentUserId;
+import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.RequestResponse;
+import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.service.RequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -75,5 +78,36 @@ public class RequestController {
     @PostMapping("/api/v1/requests/{id}/select")
     public RequestResponse select(@PathVariable long id, @CurrentUserId Long currentUserId) {
         return requestService.selectReceiver(id, currentUserId);
+    }
+
+    /**
+     * Xem thông tin chi tiết của một yêu cầu giao dịch.
+     */
+    @Operation(summary = "Xem thông tin chi tiết một yêu cầu giao dịch")
+    @GetMapping("/api/v1/requests/{id}")
+    public RequestResponse getDetail(@PathVariable long id, @CurrentUserId Long currentUserId) {
+        return requestService.getDetail(id, currentUserId);
+    }
+
+    /**
+     * Đề xuất hoặc cập nhật lịch hẹn giao nhận (FR-79, FR-80, BR-T01, BR-T02).
+     */
+    @Operation(summary = "Đề xuất hoặc cập nhật lịch hẹn giao nhận")
+    @PostMapping("/api/v1/requests/{id}/schedule")
+    public RequestResponse updateSchedule(
+            @PathVariable long id, @CurrentUserId Long currentUserId, @Valid @RequestBody ScheduleRequest request) {
+        return requestService.updateSchedule(id, currentUserId, request);
+    }
+
+    /**
+     * Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (FR-80, FR-81, BR-T03, BR-T05).
+     */
+    @Operation(summary = "Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm")
+    @PostMapping("/api/v1/requests/{id}/confirm-logistics")
+    public RequestResponse confirmLogistics(
+            @PathVariable long id,
+            @CurrentUserId Long currentUserId,
+            @RequestBody(required = false) ConfirmLogisticsRequest request) {
+        return requestService.confirmLogistics(id, currentUserId, request);
     }
 }

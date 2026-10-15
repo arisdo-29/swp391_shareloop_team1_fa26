@@ -24,6 +24,11 @@ public final class RequestMapper {
                 request.getDeliveryMethod(),
                 request.getMeetingPlace(),
                 request.getMeetingTime(),
+                request.getDonorScheduleOkAt(),
+                request.getReceiverScheduleOkAt(),
+                request.getDonorWaiverAt(),
+                request.getReceiverWaiverAt(),
+                request.getContactRevealedAt(),
                 request.getCreatedAt());
     }
 }
