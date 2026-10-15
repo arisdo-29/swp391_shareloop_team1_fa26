@@ -3,6 +3,7 @@ package com.shareloop.item.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -20,6 +21,8 @@ import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.repository.ItemRepository;
 import com.shareloop.media.service.MediaService;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -44,14 +47,27 @@ class ItemServiceTest {
     @Mock
     MediaService mediaService;
 
+    @Mock
+    ConfigService configService;
+
     @InjectMocks
     ItemService itemService;
 
     @Test
     @DisplayName("Tạo bài GIVE thành công ở trạng thái PENDING_REVIEW")
     void createItem_give_success() {
+        imageLimits();
         CreateItemRequest request = new CreateItemRequest(
-                1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, "NXB Trẻ");
+                1L,
+                1L,
+                OfferType.GIVE,
+                "Sách Toán",
+                "Sách mới",
+                null,
+                ItemCondition.NEW,
+                null,
+                "NXB Trẻ",
+                threeImages());
 
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> {
             Item item = invocation.getArgument(0);
@@ -70,8 +86,18 @@ class ItemServiceTest {
     @Test
     @DisplayName("Tạo bài SWAP thành công khi có desiredItem")
     void createItem_swap_withDesiredItem_success() {
+        imageLimits();
         CreateItemRequest request = new CreateItemRequest(
-                1L, 1L, OfferType.SWAP, "Sách Java", "Sách hay", "Sách C#", ItemCondition.GOOD, null, null);
+                1L,
+                1L,
+                OfferType.SWAP,
+                "Sách Java",
+                "Sách hay",
+                "Sách C#",
+                ItemCondition.GOOD,
+                null,
+                null,
+                threeImages());
 
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> {
             Item item = invocation.getArgument(0);
@@ -111,6 +137,7 @@ class ItemServiceTest {
     @Test
     @DisplayName("Tạo bài DEFECTIVE thành công khi có defectNote")
     void createItem_defective_withDefectNote_success() {
+        imageLimits();
         CreateItemRequest request = new CreateItemRequest(
                 1L,
                 1L,
@@ -120,7 +147,8 @@ class ItemServiceTest {
                 null,
                 ItemCondition.DEFECTIVE,
                 "Liệt phím Space",
-                "Logitech");
+                "Logitech",
+                threeImages());
 
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> {
             Item item = invocation.getArgument(0);
@@ -215,6 +243,7 @@ class ItemServiceTest {
     @Test
     @DisplayName("Tạo bài có danh sách ảnh thành công")
     void createItem_withImages_success() {
+        imageLimits();
         CreateItemRequest request = new CreateItemRequest(
                 1L,
                 1L,
@@ -225,7 +254,7 @@ class ItemServiceTest {
                 ItemCondition.NEW,
                 null,
                 "NXB Trẻ",
-                List.of("/api/v1/media/7", "/api/v1/media/8"));
+                List.of("/api/v1/media/7", "/api/v1/media/8", "/api/v1/media/9"));
 
         when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> {
             Item item = invocation.getArgument(0);
@@ -236,14 +265,15 @@ class ItemServiceTest {
         ItemResponse response = itemService.createItem(10L, request);
 
         assertThat(response.id()).isEqualTo(102L);
-        assertThat(response.images()).containsExactly("/api/v1/media/7", "/api/v1/media/8");
-        verify(mediaService).attach(List.of(7L, 8L), 10L);
-        verify(jdbcClient, times(2)).sql(startsWith("INSERT INTO item_media_mappings"));
+        assertThat(response.images()).containsExactly("/api/v1/media/7", "/api/v1/media/8", "/api/v1/media/9");
+        verify(mediaService).attach(List.of(7L, 8L, 9L), 10L);
+        verify(jdbcClient, times(3)).sql(startsWith("INSERT INTO item_media_mappings"));
         verify(jdbcClient, never()).sql(startsWith("INSERT INTO media_files"));
     }
 
     @Test
     void createItem_rejectsExternalImageUrl() {
+        imageLimits();
         CreateItemRequest request = new CreateItemRequest(
                 1L,
                 1L,
@@ -254,12 +284,41 @@ class ItemServiceTest {
                 ItemCondition.NEW,
                 null,
                 null,
-                List.of("https://example.com/image.jpg"));
+                List.of("/api/v1/media/7", "https://example.com/image.jpg", "/api/v1/media/9"));
 
         assertThatThrownBy(() -> itemService.createItem(10L, request))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_INVALID_IMAGE);
         verify(itemRepository, never()).save(any(Item.class));
+    }
+
+    @Test
+    void createItemRejectsImageCountOutsideThreeToEight() {
+        imageLimits();
+        for (List<String> images : List.of(
+                List.<String>of(),
+                List.of("/api/v1/media/1", "/api/v1/media/2"),
+                java.util.stream.LongStream.rangeClosed(1, 9)
+                        .mapToObj(id -> "/api/v1/media/" + id)
+                        .toList())) {
+            CreateItemRequest request = new CreateItemRequest(
+                    1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null, images);
+            assertThatThrownBy(() -> itemService.createItem(10L, request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_INVALID_IMAGE_COUNT)
+                    .hasFieldOrPropertyWithValue("field", "images");
+        }
+        verify(mediaService, never()).attach(any(), anyLong());
+        verify(itemRepository, never()).save(any(Item.class));
+    }
+
+    private static List<String> threeImages() {
+        return List.of("/api/v1/media/1", "/api/v1/media/2", "/api/v1/media/3");
+    }
+
+    private void imageLimits() {
+        when(configService.getInt(ConfigKey.ITEM_PHOTOS_MIN)).thenReturn(3);
+        when(configService.getInt(ConfigKey.ITEM_PHOTOS_MAX)).thenReturn(8);
     }
 
     @Test
