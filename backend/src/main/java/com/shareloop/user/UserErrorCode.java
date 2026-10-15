@@ -7,7 +7,8 @@ import org.springframework.http.HttpStatus;
 public enum UserErrorCode implements ErrorCode {
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy người dùng."),
     USER_ALREADY_LOCKED(HttpStatus.CONFLICT, "Tài khoản đã bị khoá."),
-    USER_NOT_LOCKED(HttpStatus.CONFLICT, "Tài khoản đang hoạt động, không cần mở khoá.");
+    USER_NOT_LOCKED(HttpStatus.CONFLICT, "Tài khoản đang hoạt động, không cần mở khoá."),
+    USER_AREA_INVALID(HttpStatus.BAD_REQUEST, "Khu vực không tồn tại hoặc đã ngừng hoạt động.");
 
     private final HttpStatus status;
     private final String defaultMessage;
