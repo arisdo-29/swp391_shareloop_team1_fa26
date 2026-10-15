@@ -17,8 +17,8 @@ public enum ItemStatus {
         }
         return switch (from) {
             case PENDING_REVIEW -> to == APPROVED || to == REJECTED;
-            case APPROVED -> to == RESERVED || to == PENDING_REVIEW;
-            case RESERVED -> to == APPROVED;
+            case APPROVED -> to == RESERVED || to == PENDING_REVIEW || to == TRADED || to == EXPIRED;
+            case RESERVED -> to == APPROVED || to == TRADED;
             case REJECTED -> to == PENDING_REVIEW;
             case TRADED, EXPIRED -> false;
         };

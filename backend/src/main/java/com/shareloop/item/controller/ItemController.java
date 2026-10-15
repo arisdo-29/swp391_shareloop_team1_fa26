@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -58,6 +59,15 @@ public class ItemController {
             @io.swagger.v3.oas.annotations.Parameter(hidden = true) @CurrentUserId Long currentUserId,
             @Valid @RequestBody UpdateItemRequest request) {
         return itemService.updateItem(id, currentUserId, request);
+    }
+
+    @Operation(summary = "Gỡ bài đăng của tôi")
+    @DeleteMapping("/api/v1/items/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void remove(
+            @PathVariable Long id,
+            @io.swagger.v3.oas.annotations.Parameter(hidden = true) @CurrentUserId Long currentUserId) {
+        itemService.remove(id, currentUserId);
     }
 
     /**
