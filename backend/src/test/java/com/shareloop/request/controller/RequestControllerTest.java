@@ -284,4 +284,58 @@ class RequestControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
     }
+
+    @Test
+    @DisplayName("Xác nhận giao nhận (Handover) có JWT trả về 200 OK")
+    void confirmHandover_withToken_returns200() throws Exception {
+        String token = jwtService.issue(10L, false);
+
+        RequestResponse response = new RequestResponse(
+                100L,
+                1L,
+                10L,
+                null,
+                "GIVE",
+                "COMPLETED",
+                "IN_PERSON",
+                "Cổng trường FPT",
+                Instant.now(),
+                Instant.now(),
+                Instant.now(),
+                null,
+                null,
+                Instant.now(),
+                Instant.now(),
+                Instant.now(),
+                true,
+                Instant.now(),
+                Instant.now());
+
+        when(requestService.confirmHandover(eq(100L), eq(10L), any())).thenReturn(response);
+
+        String jsonBody = """
+                {
+                    "asDescribed": true
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/requests/100/confirm-handover")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.asDescribed").value(true))
+                .andExpect(jsonPath("$.completedAt").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("Xác nhận giao nhận (Handover) không có JWT trả về 401 Unauthorized")
+    void confirmHandover_withoutToken_returns401() throws Exception {
+        mockMvc.perform(post("/api/v1/requests/100/confirm-handover")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
 }
