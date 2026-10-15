@@ -218,6 +218,11 @@ public class PostFeeService {
         itemFee.markReleased();
     }
 
+    @Transactional(readOnly = true)
+    public boolean hasHeldFee(long itemId) {
+        return readSnapshot(itemId).getFeeState() == ItemFeeState.HELD;
+    }
+
     // Bảng luật trong Javadoc quoteEdit; mỗi điều kiện một dòng, xét từ trên xuống, gặp dòng đúng là trả về.
     private EditQuote toEditQuote(ItemFeeSnapshot snapshot) {
         boolean feeHeld = snapshot.getFeeState() == ItemFeeState.HELD;

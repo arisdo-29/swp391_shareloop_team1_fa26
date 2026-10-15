@@ -15,6 +15,8 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     List<Item> findByDonorIdOrderByCreatedAtDesc(Long donorId);
 
+    List<Item> findByDonorIdAndIsActiveTrue(Long donorId);
+
     long countByDonorIdAndStatusAndIsActiveTrue(Long donorId, ItemStatus status);
 
     @Query("select i from Item i where i.status = :status and i.isActive = true "

@@ -278,8 +278,10 @@ public class ItemService {
      */
     @Transactional
     public void markTraded(long itemId) {
-        Item item =
-                itemRepository.findById(itemId).orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
+        Item item = requireItem(itemId);
+        if (!ItemStatus.canTransition(item.getStatus(), ItemStatus.TRADED)) {
+            throw new BusinessException(ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
+        }
         item.markTraded();
     }
 
@@ -289,21 +291,52 @@ public class ItemService {
         transition(itemId, ItemStatus.RESERVED, ItemStatus.APPROVED);
     }
 
-    /** Temporary gateways; implemented with item lifecycle and removal in issue #91. */
+    @Transactional
     public void hide(long itemId) {
-        throw unsupported("hide");
+        requireItem(itemId).deactivate();
     }
 
+    @Transactional
     public void unhide(long itemId) {
-        throw unsupported("unhide");
+        requireItem(itemId).activate();
     }
 
+    @Transactional
     public void remove(long itemId) {
-        throw unsupported("remove");
+        removeItem(requireItem(itemId));
     }
 
+    @Transactional
+    public void remove(long itemId, long userId) {
+        Item item = requireItem(itemId);
+        if (item.getDonorId() != userId) {
+            throw new BusinessException(ItemErrorCode.ITEM_NOT_OWNER);
+        }
+        removeItem(item);
+    }
+
+    private void removeItem(Item item) {
+        long itemId = item.getId();
+        if (item.getStatus() == ItemStatus.RESERVED
+                || item.getStatus() == ItemStatus.TRADED
+                || item.getStatus() == ItemStatus.EXPIRED
+                || requestQueryService.hasReservedOrHigherRequest(itemId)) {
+            throw new BusinessException(ItemErrorCode.ITEM_REMOVE_NOT_ALLOWED);
+        }
+        if (postFeeService.hasHeldFee(itemId)) {
+            postFeeService.releaseHeldFee(itemId, "DELETED");
+        }
+        item.markDeleted();
+    }
+
+    @Transactional
     public void hideAllOfUser(long userId) {
-        throw unsupported("hideAllOfUser");
+        itemRepository.findByDonorIdAndIsActiveTrue(userId).forEach(Item::deactivate);
+    }
+
+    @Transactional
+    public void markExpired(long itemId) {
+        transition(itemId, ItemStatus.APPROVED, ItemStatus.EXPIRED);
     }
 
     @Transactional
@@ -326,10 +359,6 @@ public class ItemService {
 
     private Item requireItem(long itemId) {
         return itemRepository.findById(itemId).orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
-    }
-
-    private UnsupportedOperationException unsupported(String operation) {
-        return new UnsupportedOperationException("ItemService." + operation + " is not implemented yet");
     }
 
     private List<Long> parseMediaIds(List<String> images) {

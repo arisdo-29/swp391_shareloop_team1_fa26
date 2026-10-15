@@ -26,6 +26,7 @@ import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.media.service.MediaService;
 import com.shareloop.moderation.ModerationResult;
 import com.shareloop.moderation.service.ContentModerationService;
+import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import java.util.List;
@@ -64,6 +65,9 @@ class ItemServiceTest {
 
     @Mock
     PostFeeService postFeeService;
+
+    @Mock
+    RequestQueryService requestQueryService;
 
     @InjectMocks
     ItemService itemService;
@@ -448,19 +452,90 @@ class ItemServiceTest {
     }
 
     @Test
-    void temporaryGatewaysFailBeforeChangingAnItem() {
-        assertThatThrownBy(() -> itemService.hide(1L))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("hide");
-        assertThatThrownBy(() -> itemService.unhide(1L))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("unhide");
-        assertThatThrownBy(() -> itemService.remove(1L))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("remove");
-        assertThatThrownBy(() -> itemService.hideAllOfUser(10L))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("hideAllOfUser");
-        verifyNoInteractions(itemRepository);
+    void hideAndUnhideOnlyChangeVisibility() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Book", "Description", null, ItemCondition.NEW, null, null);
+        item.approve();
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        itemService.hide(1L);
+        assertThat(item.isActive()).isFalse();
+        assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
+        itemService.unhide(1L);
+        assertThat(item.isActive()).isTrue();
+        assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
+    }
+
+    @Test
+    void hideAllOfUserOnlyHidesTheirActiveItems() {
+        Item first = new Item(10L, 1L, 1L, OfferType.GIVE, "Book", "Description", null, ItemCondition.NEW, null, null);
+        Item second = new Item(10L, 1L, 1L, OfferType.GIVE, "Pen", "Description", null, ItemCondition.NEW, null, null);
+        when(itemRepository.findByDonorIdAndIsActiveTrue(10L)).thenReturn(List.of(first, second));
+
+        itemService.hideAllOfUser(10L);
+
+        assertThat(first.isActive()).isFalse();
+        assertThat(second.isActive()).isFalse();
+        verify(itemRepository).findByDonorIdAndIsActiveTrue(10L);
+    }
+
+    @Test
+    void markTradedAndExpiredRequireValidTransitions() {
+        Item traded = new Item(10L, 1L, 1L, OfferType.GIVE, "Book", "Description", null, ItemCondition.NEW, null, null);
+        Item expired = new Item(10L, 1L, 1L, OfferType.GIVE, "Pen", "Description", null, ItemCondition.NEW, null, null);
+        traded.approve();
+        expired.approve();
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(traded));
+        when(itemRepository.findById(2L)).thenReturn(Optional.of(expired));
+
+        itemService.markTraded(1L);
+        itemService.markExpired(2L);
+        assertThat(traded.getStatus()).isEqualTo(ItemStatus.TRADED);
+        assertThat(expired.getStatus()).isEqualTo(ItemStatus.EXPIRED);
+        assertThatThrownBy(() -> itemService.markTraded(1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
+        assertThatThrownBy(() -> itemService.markExpired(2L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
+    }
+
+    @Test
+    void removeReleasesHeldFeeAndRejectsReservedItem() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Book", "Description", null, ItemCondition.NEW, null, null);
+        ReflectionTestUtils.setField(item, "id", 1L);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(postFeeService.hasHeldFee(1L)).thenReturn(true);
+
+        assertThatThrownBy(() -> itemService.remove(1L, 11L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_OWNER);
+        itemService.remove(1L, 10L);
+        assertThat(item.isDeleted()).isTrue();
+        verify(postFeeService).releaseHeldFee(1L, "DELETED");
+
+        Item reserved =
+                new Item(10L, 1L, 1L, OfferType.GIVE, "Pen", "Description", null, ItemCondition.NEW, null, null);
+        reserved.approve();
+        reserved.reserve();
+        ReflectionTestUtils.setField(reserved, "id", 2L);
+        when(itemRepository.findById(2L)).thenReturn(Optional.of(reserved));
+        assertThatThrownBy(() -> itemService.remove(2L, 10L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_REMOVE_NOT_ALLOWED);
+        assertThat(reserved.isDeleted()).isFalse();
+    }
+
+    @Test
+    void removeRejectsAdvancedRequest() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Book", "Description", null, ItemCondition.NEW, null, null);
+        ReflectionTestUtils.setField(item, "id", 1L);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(requestQueryService.hasReservedOrHigherRequest(1L)).thenReturn(true);
+
+        assertThatThrownBy(() -> itemService.remove(1L, 10L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_REMOVE_NOT_ALLOWED);
+        assertThat(item.isDeleted()).isFalse();
+        verifyNoInteractions(postFeeService);
     }
 }
