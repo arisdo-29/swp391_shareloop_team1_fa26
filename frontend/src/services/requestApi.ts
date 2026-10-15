@@ -1,5 +1,5 @@
 import { http } from './http';
-import type { ItemRequest } from '../types/domain';
+import type { ItemRequest, ItemRequestStatus } from '../types/domain';
 import { apiUserId } from './mappers';
 
 // Theo docs/api/request.md
@@ -8,8 +8,8 @@ export interface RequestResponse {
   itemId: number;
   receiverId: number;
   offeredItemId?: number;
-  type: string;
-  status: string;
+  type: 'GIVE' | 'SWAP';
+  status: ItemRequestStatus;
   deliveryMethod?: string;
   meetingPlace?: string;
   meetingTime?: string;
@@ -66,7 +66,7 @@ export function toFeItemRequest(request: RequestResponse, requesterId = apiUserI
     itemId: String(request.itemId),
     offeredItemId: request.offeredItemId ? String(request.offeredItemId) : undefined,
     requesterId,
-    status: request.status as ItemRequest['status'],
+    status: request.status,
     message: '',
     createdAt: request.createdAt,
   };

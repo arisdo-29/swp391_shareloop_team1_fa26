@@ -89,7 +89,7 @@ function legacyOfferedItemId(
       request.type === 'trade' &&
       request.itemId === tx.itemId &&
       request.requesterId === tx.requesterId &&
-      request.status === 'ACCEPTED',
+      request.status === 'RESERVED',
   )?.offeredItemId ??
     (tx.itemId === 'item_001' && tx.requesterId === 'user_001'
       ? 'item_007'
@@ -123,7 +123,18 @@ export function loadPersistedState(): AppStateData {
       code: topup.code ?? `SLTOPUP-${topup.id.slice(-6).toUpperCase()}`,
       status: (topup.status as string) === 'success' ? 'completed' : topup.status,
     }));
-    const itemRequests = parsed.itemRequests ?? [];
+    const itemRequests = (parsed.itemRequests ?? []).map((request) => {
+      const legacyStatus: string = request.status;
+      return {
+        ...request,
+        status:
+          legacyStatus === 'ACCEPTED'
+            ? 'RESERVED'
+            : legacyStatus === 'NOT_SELECTED'
+              ? 'REJECTED'
+              : request.status,
+      };
+    });
     parsed.transactions = (parsed.transactions ?? []).map((tx) => {
       const offeredItemId = legacyOfferedItemId(tx, itemRequests);
       return {
@@ -162,7 +173,7 @@ export function loadPersistedState(): AppStateData {
     });
     parsed.keywords = parsed.keywords ?? seedKeywords;
     parsed.districts = parsed.districts ?? seedDistricts;
-    parsed.itemRequests = parsed.itemRequests ?? [];
+    parsed.itemRequests = itemRequests;
     parsed.complaints = (parsed.complaints ?? seedComplaints).map((complaint) => ({
       ...complaint,
       responseEvidence: complaint.responseEvidence ?? [],

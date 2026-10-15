@@ -61,7 +61,7 @@ export function NotificationMenu({
     return () => {
       active = false;
     };
-  }, [backendUserId]);
+  }, [backendUserId, onOpenChange]);
 
   const loadNotifications = async (nextPage: number, replace: boolean) => {
     if (!backendUserId || listLoadingRef.current) return;

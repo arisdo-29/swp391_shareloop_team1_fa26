@@ -413,10 +413,12 @@ export function ProductCard({ item, owner }: { item: Item; owner?: User }) {
             <Icon name="location" className="size-4 shrink-0" />
             {item.district}
           </span>
-          <span className="inline-flex shrink-0 items-center gap-1">
-            <Icon name="star" className="size-4 text-warning" weight="fill" />
-            {owner?.reputationStars ?? 5}
-          </span>
+          {owner ? (
+            <span className="inline-flex shrink-0 items-center gap-1">
+              <Icon name="star" className="size-4 text-warning" weight="fill" />
+              {owner.reputationStars}
+            </span>
+          ) : null}
         </div>
         <span className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-primary transition group-hover:text-primary-hover">
           Xem chi tiết

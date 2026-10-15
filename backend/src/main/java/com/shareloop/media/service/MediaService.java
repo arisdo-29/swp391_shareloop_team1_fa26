@@ -92,6 +92,14 @@ public class MediaService {
         files.forEach(MediaFile::attach);
     }
 
+    @Transactional
+    public void detach(List<Long> mediaIds, long userId) {
+        mediaIds.stream().sorted().map(this::requireMediaForUpdate).forEach(file -> {
+            requireOwner(file, userId);
+            file.detach();
+        });
+    }
+
     /** Temporary gateway for hiding media without changing its status. */
     public void deactivate(long mediaId) {
         throw unsupported("deactivate");

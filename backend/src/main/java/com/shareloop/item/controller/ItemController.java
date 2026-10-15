@@ -4,6 +4,7 @@ import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.item.dto.CreateItemRequest;
 import com.shareloop.item.dto.ItemResponse;
+import com.shareloop.item.dto.UpdateItemRequest;
 import com.shareloop.item.service.ItemService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,6 +19,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -47,6 +49,15 @@ public class ItemController {
             @io.swagger.v3.oas.annotations.Parameter(hidden = true) @CurrentUserId Long currentUserId,
             @Valid @RequestBody CreateItemRequest request) {
         return itemService.createItem(currentUserId, request);
+    }
+
+    @Operation(summary = "Sửa bài đăng và gửi duyệt lại")
+    @PutMapping("/api/v1/items/{id}")
+    public ItemResponse update(
+            @PathVariable Long id,
+            @io.swagger.v3.oas.annotations.Parameter(hidden = true) @CurrentUserId Long currentUserId,
+            @Valid @RequestBody UpdateItemRequest request) {
+        return itemService.updateItem(id, currentUserId, request);
     }
 
     /**
