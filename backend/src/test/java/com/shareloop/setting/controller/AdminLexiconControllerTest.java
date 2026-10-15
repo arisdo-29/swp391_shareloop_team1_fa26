@@ -91,7 +91,7 @@ class AdminLexiconControllerTest {
     }
 
     @Test
-    void adminCanTestLexiconAndReceivesMatchDetails() throws Exception {
+    void adminCanTestLexiconAndReceivesExactMatchDetails() throws Exception {
         String adminToken = jwtService.issue(1L, true);
         String text = "súng với zalo";
         org.mockito.Mockito.when(lexiconService.match(text))
@@ -113,6 +113,25 @@ class AdminLexiconControllerTest {
                 .andExpect(jsonPath("$[1].level").value("REVIEW"))
                 .andExpect(jsonPath("$[1].group").value("CONTACTS"))
                 .andExpect(jsonPath("$[1].matchedAs").value("EXACT"));
+    }
+
+    @Test
+    void adminTestLexiconReturnsNormalizedMatchAsReview() throws Exception {
+        String adminToken = jwtService.issue(1L, true);
+        String text = "ban kinh";
+        org.mockito.Mockito.when(lexiconService.match(text))
+                .thenReturn(List.of(new LexiconMatch("bán", "REVIEW", "WEAPONS", LexiconMatch.MatchedAs.NORMALIZED)));
+
+        mockMvc.perform(post("/api/v1/admin/lexicon/test")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"text\":\"" + text + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].keyword").value("bán"))
+                .andExpect(jsonPath("$[0].level").value("REVIEW"))
+                .andExpect(jsonPath("$[0].group").value("WEAPONS"))
+                .andExpect(jsonPath("$[0].matchedAs").value("NORMALIZED"));
     }
 
     private static String validBody() {
