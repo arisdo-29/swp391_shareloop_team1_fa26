@@ -12,7 +12,7 @@ VNPay sẽ thay vào sau qua `PaymentGatewayClient` mà không đổi bước 1.
 2. FE chuyển người dùng tới `redirectUrl` = trang giả lập `/wallet/topup/mock-checkout?orderCode=...`.
 3. Trang giả lập gọi `POST /wallet/topup-orders/{orderCode}/mock-confirm` → nhận ví mới.
 
-> **Việc của FE:** cần trang `/wallet/topup/mock-checkout` (đọc `orderCode` trên URL, hiện số tiền, nút "Xác nhận
+> **Việc của FE:** xác nhận giả lập ngay trong trang Credit (đọc `orderCode` trên URL, hiện số tiền, nút "Xác nhận
 > thanh toán" gọi bước 3). Trang này làm ở issue **#83**.
 
 Quy đổi: `credits = amountVnd / vnd_per_credit` (mặc định 1.000đ = 1 Credit). Số tiền phải là bội số của
