@@ -14,6 +14,7 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.media.MediaErrorCode;
 import com.shareloop.media.service.MediaService;
 import com.shareloop.user.UserErrorCode;
+import com.shareloop.user.dto.ContactInfo;
 import com.shareloop.user.dto.MeResponse;
 import com.shareloop.user.dto.UpdateProfileRequest;
 import com.shareloop.user.entity.User;
@@ -22,6 +23,7 @@ import com.shareloop.user.mapper.UserMapper;
 import com.shareloop.user.repository.UserRepository;
 import java.util.List;
 import java.util.Optional;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -145,6 +147,149 @@ class UserServiceTest {
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(UserErrorCode.USER_NOT_FOUND));
+    }
+
+    @Test
+    void lock_whenActive_setsInactiveAndKeepsStatus() {
+        // given
+        User user = givenUser();
+
+        // when
+        service.lock(USER_ID, "Spam nhiều lần");
+
+        // then
+        assertThat(user.isActive()).isFalse();
+        assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+    }
+
+    @Test
+    void lock_whenAlreadyLocked_throwsUserAlreadyLocked() {
+        // given
+        User user = givenUser();
+        user.deactivate();
+
+        // when, then
+        assertErrorCode(() -> service.lock(USER_ID, null), UserErrorCode.USER_ALREADY_LOCKED);
+    }
+
+    @Test
+    void lock_whenUserNotFound_throwsUserNotFound() {
+        // given
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+
+        // when, then
+        assertErrorCode(() -> service.lock(USER_ID, null), UserErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    void unlock_whenLocked_setsActiveAndKeepsStatus() {
+        // given
+        User user = givenUser();
+        user.deactivate();
+
+        // when
+        service.unlock(USER_ID);
+
+        // then
+        assertThat(user.isActive()).isTrue();
+        assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+    }
+
+    @Test
+    void unlock_whenActive_throwsUserNotLocked() {
+        // given
+        givenUser();
+
+        // when, then
+        assertErrorCode(() -> service.unlock(USER_ID), UserErrorCode.USER_NOT_LOCKED);
+    }
+
+    @Test
+    void unlock_whenUserNotFound_throwsUserNotFound() {
+        // given
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+
+        // when, then
+        assertErrorCode(() -> service.unlock(USER_ID), UserErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    void findContact_whenUserExists_returnsIdNameEmailPhone() {
+        // given
+        givenUser();
+
+        // when
+        ContactInfo contact = service.findContact(USER_ID);
+
+        // then
+        assertThat(contact).isEqualTo(new ContactInfo(USER_ID, "Nguyễn Văn An", EMAIL, PHONE));
+    }
+
+    @Test
+    void findContact_whenUserLocked_stillReturnsContact() {
+        // given: BR-T12 đã trao thì không ẩn lại, kể cả khi đối tác bị khoá sau đó
+        User user = givenUser();
+        user.deactivate();
+
+        // when
+        ContactInfo contact = service.findContact(USER_ID);
+
+        // then
+        assertThat(contact.email()).isEqualTo(EMAIL);
+    }
+
+    @Test
+    void findContact_whenUserNotFound_throwsUserNotFound() {
+        // given
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+
+        // when, then
+        assertErrorCode(() -> service.findContact(USER_ID), UserErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    void isLocked_whenInactive_returnsTrue() {
+        // given
+        User user = givenUser();
+        user.deactivate();
+
+        // when, then
+        assertThat(service.isLocked(USER_ID)).isTrue();
+    }
+
+    @Test
+    void isLocked_whenBanned_returnsTrue() {
+        // given: BANNED cũng bị chặn, cùng luật với đăng nhập
+        User user = new User(EMAIL, "hash", "Nguyễn Văn An", PHONE, false, UserStatus.BANNED);
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+
+        // when, then
+        assertThat(service.isLocked(USER_ID)).isTrue();
+    }
+
+    @Test
+    void isLocked_whenActive_returnsFalse() {
+        // given
+        givenUser();
+
+        // when, then
+        assertThat(service.isLocked(USER_ID)).isFalse();
+    }
+
+    @Test
+    void isLocked_whenUserNotFound_returnsFalse() {
+        // given
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+
+        // when, then
+        assertThat(service.isLocked(USER_ID)).isFalse();
+    }
+
+    private void assertErrorCode(ThrowingCallable call, UserErrorCode expected) {
+        assertThatThrownBy(call)
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(expected));
     }
 
     private User givenUser() {

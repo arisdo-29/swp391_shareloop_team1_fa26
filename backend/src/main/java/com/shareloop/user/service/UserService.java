@@ -8,6 +8,7 @@ import com.shareloop.user.dto.ContactInfo;
 import com.shareloop.user.dto.MeResponse;
 import com.shareloop.user.dto.UpdateProfileRequest;
 import com.shareloop.user.entity.User;
+import com.shareloop.user.entity.UserStatus;
 import com.shareloop.user.mapper.UserMapper;
 import com.shareloop.user.repository.UserRepository;
 import java.util.List;
@@ -25,8 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class UserService {
-
-    private static final String TODO = "TODO BE1 - tuan 4";
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
@@ -106,8 +105,15 @@ public class UserService {
      * @throws com.shareloop.common.exception.BusinessException USER_NOT_FOUND khi không có user;
      *     USER_ALREADY_LOCKED khi đã khoá
      */
+    @Transactional // REQUIRED: có transaction của người gọi thì tham gia, không có thì tự mở
     public void lock(long userId, String reason) {
-        throw new UnsupportedOperationException(TODO);
+        User user = findUser(userId);
+        if (!user.isActive()) {
+            throw new BusinessException(UserErrorCode.USER_ALREADY_LOCKED);
+        }
+        // reason không lưu ở đây: bảng users không có cột lý do (ERD đã chốt); người gọi ghi vào ActivityLog.
+        // Không cần save(): user đang được JPA theo dõi, đổi is_active tự ghi xuống DB khi transaction commit.
+        user.deactivate();
     }
 
     /**
@@ -121,8 +127,13 @@ public class UserService {
      * @throws com.shareloop.common.exception.BusinessException USER_NOT_FOUND khi không có user;
      *     USER_NOT_LOCKED khi tài khoản đang hoạt động
      */
+    @Transactional
     public void unlock(long userId) {
-        throw new UnsupportedOperationException(TODO);
+        User user = findUser(userId);
+        if (user.isActive()) {
+            throw new BusinessException(UserErrorCode.USER_NOT_LOCKED);
+        }
+        user.activate();
     }
 
     /**
@@ -138,7 +149,25 @@ public class UserService {
      * @return userId, fullName, email, phone
      * @throws com.shareloop.common.exception.BusinessException USER_NOT_FOUND khi không có user
      */
+    // Không lọc tài khoản bị khoá: BR-T12 đã trao thì không ẩn lại, kể cả khi đối tác bị khoá sau đó.
+    @Transactional(readOnly = true)
     public ContactInfo findContact(long userId) {
-        throw new UnsupportedOperationException(TODO);
+        return userMapper.toContactInfo(findUser(userId));
+    }
+
+    /**
+     * Tài khoản có đang bị chặn dùng hệ thống không. Cùng luật với đăng nhập (AuthService): bị khoá
+     * ({@code is_active = false}) hoặc {@code BANNED}. Dùng cho LockedAccountFilter để chặn token đã cấp trước khi
+     * khoá.
+     *
+     * <p>Không có user (id lạ hoặc đã xoá mềm) thì trả false: không phải việc của hàm này; service phía sau tự trả
+     * USER_NOT_FOUND.
+     */
+    @Transactional(readOnly = true)
+    public boolean isLocked(long userId) {
+        return userRepository
+                .findById(userId)
+                .map(user -> !user.isActive() || user.getStatus() == UserStatus.BANNED)
+                .orElse(false);
     }
 }

@@ -3,13 +3,16 @@
 Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất ở cuối file. Nguồn: SRS v10 (FR-06, BR-U03, UC-03).
 
-Người sở hữu: BE1. File này gồm 2 endpoint hồ sơ của người đang đăng nhập: xem và cập nhật. Đổi số điện thoại
-(FR-07, OTP email) và đổi mật khẩu không thuộc file này; đổi mật khẩu xem `docs/api/auth.md`.
+Người sở hữu: BE1. File này gồm 2 endpoint hồ sơ của người đang đăng nhập (xem và cập nhật) và các hàm của
+`UserService` dành cho module khác gọi (khoá, mở khoá, lấy thông tin liên lạc). Đổi số điện thoại (FR-07, OTP email)
+và đổi mật khẩu không thuộc file này; đổi mật khẩu xem `docs/api/auth.md`.
 
 ## Quy tắc chung
 
 - Cả 2 endpoint **bắt buộc** `Authorization: Bearer <accessToken>`. Id người dùng lấy từ token (claim `sub`),
   không nhận từ client, nên chỉ xem và sửa được hồ sơ của chính mình (BR-U03).
+- Tài khoản bị khoá (FR-107) hoặc `BANNED`: **mọi** endpoint cần token trả `403 AUTH_ACCOUNT_LOCKED`, kể cả với token
+  cấp trước lúc khoá (server kiểm lại tài khoản ở mỗi request). FE gặp mã này thì xoá phiên và về màn đăng nhập.
 - Email và số điện thoại **không đổi** ở đây. Body có gửi kèm `email`/`phone` thì server bỏ qua.
 - Khu vực lấy từ `GET /api/v1/areas` (`docs/api/catalog.md`). Ảnh đại diện upload trước qua `POST /api/v1/media`
   (`docs/api/media.md`), lấy `mediaId` gửi vào `avatarMediaId`.
@@ -106,6 +109,7 @@ Có đủ các trường của `AuthUserResponse` (`docs/api/auth.md`) cộng th
 | `UNAUTHORIZED`       | 401  | Thiếu, sai hoặc hết hạn token (`CommonErrorCode`)                        |
 | `VALIDATION_FAILED`  | 400  | Body thiếu trường hoặc sai định dạng, `field` = tên trường               |
 | `USER_AREA_INVALID`  | 400  | `areaId` không tồn tại hoặc khu vực đã ngừng hoạt động, `field` = `areaId` |
+| `AUTH_ACCOUNT_LOCKED`| 403  | Tài khoản đã bị khoá hoặc `BANNED` (`AuthErrorCode`), kể cả token cũ     |
 | `USER_NOT_FOUND`     | 404  | Tài khoản trong token không còn tồn tại                                  |
 | `MEDIA_NOT_FOUND`    | 404  | `avatarMediaId` không tồn tại (`MediaErrorCode`)                         |
 | `MEDIA_NOT_OWNER`    | 403  | Ảnh không do người này upload                                            |
@@ -116,6 +120,32 @@ Có đủ các trường của `AuthUserResponse` (`docs/api/auth.md`) cộng th
 ```json
 { "code": "USER_AREA_INVALID", "message": "Khu vực không tồn tại hoặc đã ngừng hoạt động.", "field": "areaId", "traceId": "a1b2c3d4" }
 ```
+
+## Dành cho module khác: UserService
+
+Không phải endpoint HTTP. Module khác gọi `com.shareloop.user.service.UserService`, **không** inject `UserRepository`.
+Lỗi là `BusinessException` với mã của `UserErrorCode`; nếu để lọt ra controller thì thành HTTP theo bảng dưới.
+
+| Hàm | Người gọi | Transaction | Lỗi |
+|-----|-----------|-------------|-----|
+| `void lock(long userId, String reason)` | admin (#116), reputation | REQUIRED | `USER_NOT_FOUND` (404), `USER_ALREADY_LOCKED` (409) |
+| `void unlock(long userId)` | admin (#116), reputation | REQUIRED | `USER_NOT_FOUND` (404), `USER_NOT_LOCKED` (409) |
+| `ContactInfo findContact(long userId)` | request (#93) | read-only | `USER_NOT_FOUND` (404) |
+
+### lock / unlock (FR-107, UC-50)
+
+- Khoá: `is_active = false`; mở khoá: `is_active = true`. Cột `status` **không đổi**.
+- `reason` **không được lưu** ở users (bảng không có cột lý do). Người gọi tự ghi lý do vào nhật ký qua
+  ActivityLogService (admin bắt buộc lý do theo #116).
+- Có hiệu lực ngay: đăng nhập trả `403 AUTH_ACCOUNT_LOCKED`, token đã cấp cũng bị chặn ở request kế tiếp.
+- REQUIRED: gọi trong transaction của người gọi thì cùng commit / rollback với việc ghi nhật ký.
+
+### findContact (FR-82, BR-T11, BR-T12)
+
+- Trả `ContactInfo` gồm **đúng 4 trường**: `userId`, `fullName`, `email`, `phone`. Không trả gì khác.
+- **Không** kiểm Request: người gọi (module request) phải tự bảo đảm Request đã `LogisticsConfirmed` và người xem là
+  một trong hai bên, rồi mới gọi để lấy liên lạc của bên còn lại.
+- Vẫn trả khi tài khoản kia đã bị khoá (BR-T12: đã trao thì không ẩn lại).
 
 ## Ghi chú cho frontend
 
