@@ -10,4 +10,10 @@ public interface AreaRepository extends JpaRepository<Area, Long> {
 
     // Khu vực đã xoá mềm bị @SQLRestriction loại nên chỉ cần kiểm thêm is_active.
     boolean existsByIdAndIsActiveTrue(Long id);
+
+    List<Area> findAllByOrderByIdAsc();
+
+    List<Area> findByParentId(Long parentId);
+
+    boolean existsByParentId(Long parentId);
 }
