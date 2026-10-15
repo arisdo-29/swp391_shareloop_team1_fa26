@@ -1,15 +1,16 @@
 # API module auth
 
 Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
-lỗi theo định dạng thống nhất ở cuối file. Nguồn: SRS v10 (FR-01..FR-05, BR-U06, UC-01, UC-02), Luồng F01, F02.
+lỗi theo định dạng thống nhất ở cuối file. Nguồn: SRS v10 (FR-01..FR-05, FR-08, BR-U06, UC-01, UC-02, UC-04),
+Luồng F01, F02.
 
-Người sở hữu: BE1. File này gồm 5 endpoint: đăng ký, xác thực OTP, gửi lại OTP, đăng nhập, đăng xuất.
-Quên mật khẩu, đổi mật khẩu, hồ sơ chưa thuộc file này (contract riêng).
+Người sở hữu: BE1. File này gồm 6 endpoint: đăng ký, xác thực OTP, gửi lại OTP, đăng nhập, đăng xuất, đổi mật khẩu.
+Quên mật khẩu chưa thuộc file này (contract riêng). Hồ sơ (`GET`/`PUT /api/v1/me`) xem `docs/api/user.md`.
 
 ## Quy tắc chung
 
-- Cả 5 endpoint **không cần** header `Authorization` (`/api/v1/auth/**` là công khai). Các API khác gửi
-  `Authorization: Bearer <accessToken>`.
+- 5 endpoint đăng ký, OTP, đăng nhập, đăng xuất **không cần** header `Authorization` (`/api/v1/auth/**` là công khai).
+  Riêng `/change-password` **bắt buộc** token. Các API khác gửi `Authorization: Bearer <accessToken>`.
 - Đăng nhập bằng **email**; bảng `users` không có username.
 - Email so khớp không phân biệt hoa thường, lưu dạng chữ thường; server tự `trim`.
 - Số điện thoại: 10 số di động Việt Nam, đầu `03/05/07/08/09`, nhận cả dạng `+84`; server chuẩn hoá về `0xxxxxxxxx`.
@@ -154,6 +155,34 @@ JWT không lưu trạng thái ở server nên **logout chỉ là client xoá tok
 thu hồi token: token cũ vẫn dùng được đến khi hết hạn (`app.jwt.ttl-minutes`). Endpoint này tồn tại để FE có điểm
 gọi thống nhất; FE phải xoá token dù gọi thành công hay không.
 
+## POST /api/v1/auth/change-password
+
+Đổi mật khẩu cho người đang đăng nhập (FR-08), phải nhập mật khẩu hiện tại.
+
+- Xác thực: **bắt buộc** Bearer Token, dù đường dẫn nằm dưới `/api/v1/auth`. Id người dùng lấy từ token.
+- Request: `ChangePasswordRequest`.
+- Thành công: `204`, không có nội dung.
+- Lỗi: `401 UNAUTHORIZED` (thiếu, sai hoặc hết hạn token), `400 VALIDATION_FAILED` (`field` = tên trường),
+  `400 AUTH_CURRENT_PASSWORD_INCORRECT`, `400 AUTH_NEW_PASSWORD_SAME_AS_CURRENT`, `404 USER_NOT_FOUND`.
+
+Quy tắc:
+
+- `newPassword` theo **đúng luật của đăng ký** (8–64 ký tự, cùng một annotation `@ValidPassword` với `RegisterRequest`).
+- Sai mật khẩu hiện tại → `AUTH_CURRENT_PASSWORD_INCORRECT` (`field` = `currentPassword`). Cố ý dùng `400`, không
+  dùng `401`: FE gặp `401` sẽ coi là hết phiên và đăng xuất.
+- Mật khẩu mới trùng mật khẩu hiện tại → `AUTH_NEW_PASSWORD_SAME_AS_CURRENT` (`field` = `newPassword`).
+- Mật khẩu mới lưu dạng BCrypt.
+- JWT không lưu trạng thái: sau khi đổi, **token đang dùng vẫn hợp lệ** đến khi hết hạn; FE không cần đăng nhập lại.
+  Thu hồi token cũ nằm ngoài phạm vi.
+
+```json
+{ "currentPassword": "MatKhau@123", "newPassword": "MatKhauMoi@456" }
+```
+
+```json
+{ "code": "AUTH_CURRENT_PASSWORD_INCORRECT", "message": "Mật khẩu hiện tại không đúng.", "field": "currentPassword", "traceId": "a1b2c3d4" }
+```
+
 ## DTO
 
 Tất cả là `record`, request có `@Valid`. Tên trường JSON là camelCase.
@@ -163,7 +192,7 @@ Tất cả là `record`, request có `@Valid`. Tên trường JSON là camelCase
 | Trường     | Kiểu   | Ràng buộc                                                                  |
 |------------|--------|----------------------------------------------------------------------------|
 | `email`    | string | Bắt buộc, đúng định dạng email, tối đa 255 ký tự                           |
-| `password` | string | Bắt buộc, 8–64 ký tự (BCrypt giới hạn 72 byte) |
+| `password` | string | Bắt buộc, 8–64 ký tự (BCrypt giới hạn 72 byte); sai thì message "Mật khẩu phải từ 8 đến 64 ký tự." |
 | `fullName` | string | Bắt buộc, 1–100 ký tự sau khi `trim`                                       |
 | `phone`    | string | Bắt buộc, số di động VN: `0[35789]xxxxxxxx` hoặc `+84[35789]xxxxxxxx`      |
 
@@ -186,6 +215,13 @@ Tất cả là `record`, request có `@Valid`. Tên trường JSON là camelCase
 |------------|--------|--------------------------------|
 | `email`    | string | Bắt buộc, đúng định dạng email |
 | `password` | string | Bắt buộc, không rỗng           |
+
+### ChangePasswordRequest
+
+| Trường            | Kiểu   | Ràng buộc                                        |
+|-------------------|--------|--------------------------------------------------|
+| `currentPassword` | string | Bắt buộc, không rỗng                             |
+| `newPassword`     | string | Bắt buộc, 8–64 ký tự (cùng luật với `RegisterRequest.password`) |
 
 ### OtpSentResponse
 
@@ -232,6 +268,9 @@ Trả về từ `/verify-otp` và `/login`.
 | `AUTH_EMAIL_NOT_VERIFIED`       | 403  | Đăng nhập khi tài khoản còn `PENDING_VERIFICATION`                                  |
 | `AUTH_INVALID_CREDENTIALS`      | 401  | Sai email hoặc sai mật khẩu (không phân biệt)                                       |
 | `AUTH_ACCOUNT_LOCKED`           | 403  | Tài khoản `BANNED` hoặc `is_active = false`                                         |
+| `AUTH_CURRENT_PASSWORD_INCORRECT` | 400 | Đổi mật khẩu: mật khẩu hiện tại không đúng, `field` = `currentPassword`            |
+| `AUTH_NEW_PASSWORD_SAME_AS_CURRENT` | 400 | Đổi mật khẩu: mật khẩu mới trùng mật khẩu hiện tại, `field` = `newPassword`      |
+| `UNAUTHORIZED`                  | 401  | `/change-password` thiếu, sai hoặc hết hạn token (`CommonErrorCode`)                |
 | `VALIDATION_FAILED`             | 400  | Body thiếu trường hoặc sai định dạng (`CommonErrorCode`), `field` = tên trường      |
 
 Quyết định đã chốt: dùng `429` cho gọi quá nhanh (`AUTH_OTP_RESEND_TOO_SOON`). FE chỉ dựa vào `code`.
@@ -270,6 +309,9 @@ Bản hiện tại của FE là contract cũ. Cần đổi:
     Interceptor gắn header `Authorization: ${tokenType} ${accessToken}` và coi token hết hạn sau `expiresIn` giây.
 15. **Xử lý lỗi**: đọc `code` trong `ErrorResponse` (`AUTH_*`), không dựa vào `message`. `401 AUTH_INVALID_CREDENTIALS`
     của `/login` là sai thông tin, khác với 401 do phiên hết hạn ở các API khác. `AUTH_EMAIL_NOT_VERIFIED` chuyển sang màn OTP.
-16. **Ngoài phạm vi file này** (`forgotPassword`, `verifyResetOtp`, `resetPassword`, `changePassword`, `getProfile`,
-    `updateProfile`): giữ nguyên chờ contract riêng, nhưng đường dẫn cũng sẽ phải đổi sang `/api/v1/...`
-    (ERD gợi ý `/api/v1/auth/forgot-password`, `/api/v1/auth/reset-password`, `PUT /api/v1/me/password`).
+16. **Đổi mật khẩu**: đã có `authApi.changePassword(input)` gọi `POST /api/v1/auth/change-password` (204). Đường dẫn
+    theo issue #73, khác gợi ý `PUT /api/v1/me/password` của ERD. Lỗi `AUTH_CURRENT_PASSWORD_INCORRECT` hiển thị dưới ô
+    mật khẩu hiện tại (`field`). Hồ sơ (`getProfile`, `updateProfile`) chuyển sang `userApi.ts` (`docs/api/user.md`).
+17. **Ngoài phạm vi file này** (`forgotPassword`, `verifyResetOtp`, `resetPassword`): giữ nguyên chờ contract riêng,
+    nhưng đường dẫn cũng sẽ phải đổi sang `/api/v1/...` (ERD gợi ý `/api/v1/auth/forgot-password`,
+    `/api/v1/auth/reset-password`).
