@@ -55,6 +55,7 @@ public class RequestService {
     private final ReputationService reputationService;
     private final JdbcClient jdbcClient;
 
+    @Autowired
     public RequestService(
             RequestRepository requestRepository,
             NotificationService notificationService,
