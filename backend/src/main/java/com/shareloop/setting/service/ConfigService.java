@@ -120,7 +120,7 @@ public class ConfigService {
                 .map(attribute -> {
                     Map<String, Object> extra = attribute.getExtra();
                     return new LexiconEntry(
-                            attribute.getAttrKey(),
+                            attribute.getAttrValue(),
                             stringValue(extra, "category"),
                             stringValue(extra, "severity"),
                             stringValue(extra, "matchMode"),

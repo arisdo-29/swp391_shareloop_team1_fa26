@@ -33,6 +33,15 @@ public class WebsiteAttribute extends BaseEntity {
 
     protected WebsiteAttribute() {}
 
+    public WebsiteAttribute(
+            String attrGroup, String attrKey, String attrValue, Map<String, Object> extra, int sortOrder) {
+        this.attrGroup = attrGroup;
+        this.attrKey = attrKey;
+        this.attrValue = attrValue;
+        this.extra = extra == null ? null : Map.copyOf(extra);
+        this.sortOrder = sortOrder;
+    }
+
     public String getAttrGroup() {
         return attrGroup;
     }
@@ -55,5 +64,11 @@ public class WebsiteAttribute extends BaseEntity {
 
     public void updateValue(String attrValue) {
         this.attrValue = attrValue;
+    }
+
+    public void updateLexicon(String attrKey, String keyword, Map<String, Object> extra) {
+        this.attrKey = attrKey;
+        this.attrValue = keyword;
+        this.extra = Map.copyOf(extra);
     }
 }

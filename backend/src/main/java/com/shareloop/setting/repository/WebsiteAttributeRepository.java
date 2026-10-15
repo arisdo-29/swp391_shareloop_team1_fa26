@@ -11,6 +11,8 @@ public interface WebsiteAttributeRepository extends JpaRepository<WebsiteAttribu
 
     List<WebsiteAttribute> findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc(String attrGroup);
 
+    List<WebsiteAttribute> findByAttrGroupOrderBySortOrderAscIdAsc(String attrGroup);
+
     Optional<WebsiteAttribute> findFirstByAttrGroupAndAttrKeyAndIsActiveTrue(String attrGroup, String attrKey);
 
     @Query(value = """

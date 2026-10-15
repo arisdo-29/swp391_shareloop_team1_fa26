@@ -16,6 +16,9 @@ class ConfigServiceIT extends IntegrationTest {
     ConfigService configService;
 
     @Autowired
+    AdminLexiconService adminLexiconService;
+
+    @Autowired
     JdbcTemplate jdbc;
 
     @AfterEach
@@ -53,5 +56,23 @@ class ConfigServiceIT extends IntegrationTest {
 
         assertThat(configService.lexicon()).extracting(LexiconEntry::term).doesNotContain("config_service_it_inactive");
         assertThat(configService.checklist()).doesNotContain("Inactive checklist item");
+    }
+
+    @Test
+    void deactivatedAdminLexiconEntryIsNoLongerReturnedByConfigService() {
+        Long id = jdbc.queryForObject(
+                "INSERT INTO website_attributes (attr_group, attr_key, attr_value, extra, sort_order) "
+                        + "VALUES ('BANNED_KEYWORD', 'config_service_it_hidden', 'integration hidden keyword', "
+                        + "'{\"category\":\"TEST\",\"severity\":\"REVIEW\",\"matchMode\":\"WORD\","
+                        + "\"exceptions\":[],\"scope\":\"POST\"}'::jsonb, 999) RETURNING id",
+                Long.class);
+
+        adminLexiconService.setActive(id, false);
+
+        assertThat(configService.lexicon()).extracting(LexiconEntry::term).doesNotContain("integration hidden keyword");
+        assertThat(adminLexiconService.listAll())
+                .filteredOn(entry -> entry.id().equals(id))
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.active()).isFalse());
     }
 }
