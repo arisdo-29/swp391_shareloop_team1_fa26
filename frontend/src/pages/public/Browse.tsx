@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useAppSelector } from '../../app/hooks';
-import { selectData } from '../../app/store';
 import { Button, EmptyState, Icon, PageHeader, ProductCard } from '../../components/ui';
 import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
@@ -20,8 +18,6 @@ const PAGE_SIZE = 20;
 
 export function Browse() {
   const [params] = useSearchParams();
-  const data = useAppSelector(selectData);
-  const { users } = data;
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [categoryIds, setCategoryIds] = useState<Map<string, number>>(new Map());
@@ -30,6 +26,8 @@ export function Browse() {
   const [itemsLoading, setItemsLoading] = useState(true);
   const [catalogError, setCatalogError] = useState('');
   const [itemsError, setItemsError] = useState('');
+  const [catalogReloadKey, setCatalogReloadKey] = useState(0);
+  const [itemsReloadKey, setItemsReloadKey] = useState(0);
   const [q, setQ] = useState(params.get('q') ?? '');
   const typeParam = params.get('type');
   const [type, setType] = useState<ItemType | ''>(
@@ -67,7 +65,7 @@ export function Browse() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [catalogReloadKey]);
 
   useEffect(() => {
     if (catalogLoading) return;
@@ -106,7 +104,7 @@ export function Browse() {
     return () => {
       active = false;
     };
-  }, [catalogLoading, category, categoryIds, district, districts, page]);
+  }, [catalogLoading, category, categoryIds, district, districts, itemsReloadKey, page]);
 
   useEffect(() => {
     if (!district || districts.some((area) => String(area.id) === district)) return;
@@ -236,7 +234,14 @@ export function Browse() {
             <option key={d.id} value={d.id}>{d.label}</option>
           ))}
         </FilterSelect>
-        {catalogError ? <p className="text-xs text-error">{catalogError}</p> : null}
+        {catalogError ? (
+          <div className="space-y-2">
+            <p className="text-xs text-error">{catalogError}</p>
+            <Button variant="outline" size="sm" onClick={() => setCatalogReloadKey((key) => key + 1)}>
+              Thử tải lại
+            </Button>
+          </div>
+        ) : null}
       </div>
     </>
   );
@@ -291,15 +296,15 @@ export function Browse() {
           {itemsLoading ? (
             <EmptyState title="Đang tải bài đăng" text="Vui lòng chờ trong giây lát." />
           ) : itemsError ? (
-            <EmptyState title="Không tải được bài đăng" text={itemsError} />
+            <EmptyState
+              title="Không tải được bài đăng"
+              text={itemsError}
+              action={<Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>Thử tải lại</Button>}
+            />
           ) : results.length ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {results.map((item) => (
-                <ProductCard
-                  key={item.id}
-                  item={item}
-                  owner={users.find((u) => u.id === item.ownerId)}
-                />
+                <ProductCard key={item.id} item={item} />
               ))}
             </div>
           ) : (

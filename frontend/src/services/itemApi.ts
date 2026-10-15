@@ -27,6 +27,7 @@ export interface PageResponse<T> {
 
 export type OfferType = 'GIVE' | 'SWAP';
 export type ApiCondition = 'NEW' | 'LIKE_NEW' | 'GOOD' | 'DEFECTIVE';
+export type OperatingStatus = 'NORMAL' | 'PARTIAL' | 'NOT_WORKING';
 export type ItemStatus = 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'RESERVED' | 'TRADED' | 'EXPIRED';
 
 export interface CreateItemRequest {
@@ -39,9 +40,9 @@ export interface CreateItemRequest {
   condition: ApiCondition;
   defectNote: string | null;
   brand: string | null;
-  images?: string[];
+  images: string[];
   defectImages?: string[];
-  operatingStatus?: 'NORMAL' | 'PARTIAL' | 'NOT_WORKING';
+  operatingStatus?: OperatingStatus | null;
 }
 
 export type UpdateItemRequest = Omit<CreateItemRequest, 'images'> & { images?: string[] };
@@ -51,6 +52,7 @@ export interface ItemResponse extends CreateItemRequest {
   donorId: number;
   images: string[];
   defectImages: string[];
+  operatingStatus: OperatingStatus | null;
   status: ItemStatus;
   createdAt: string;
   updatedAt: string;

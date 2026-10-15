@@ -17,15 +17,17 @@ import {
 } from '../../components/ui';
 import { RECEIVE_ITEM_FEE } from '../../utils/credit';
 import { catalogApi } from '../../services/catalogApi';
-import { itemApi } from '../../services/itemApi';
+import { itemApi, type EditQuote } from '../../services/itemApi';
 import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
 import { requestApi, toBackendUserId, toFeItemRequest } from '../../services/requestApi';
 import type { Item, ItemRequest, User } from '../../types/domain';
+import type { ApiError } from '../../services/http';
+import { useWallet } from '../../app/useWallet';
 
 const requestStatusLabel = {
   PENDING: 'Chờ phản hồi',
-  ACCEPTED: 'Đã được chọn',
-  NOT_SELECTED: 'Không được chọn',
+  RESERVED: 'Đã được chọn',
+  REJECTED: 'Không được chọn',
   CANCELLED: 'Đã hủy',
 };
 
@@ -34,6 +36,7 @@ export function Activities() {
   const data = useAppSelector(selectData);
   const user = useAppSelector(selectCurrentUser)!;
   const dispatch = useAppDispatch();
+  const { refresh: refreshWallet } = useWallet();
   const [tab, setTab] = useState<'items' | 'transactions'>('items');
   const [editingId, setEditingId] = useState('');
   const [removeConfirmId, setRemoveConfirmId] = useState('');
@@ -45,14 +48,37 @@ export function Activities() {
   const [editNotice, setEditNotice] = useState('');
   const [draftTitle, setDraftTitle] = useState('');
   const [draftDescription, setDraftDescription] = useState('');
+  const [editQuote, setEditQuote] = useState<EditQuote | null>(null);
+  const [editQuoteLoading, setEditQuoteLoading] = useState(false);
+  const [editQuoteError, setEditQuoteError] = useState('');
   const [myItems, setMyItems] = useState<Item[]>([]);
   const [apiRequestsByItem, setApiRequestsByItem] = useState<Record<string, ItemRequest[]>>({});
   const [apiSentRequests, setApiSentRequests] = useState<ItemRequest[]>([]);
   const [myItemsLoading, setMyItemsLoading] = useState(true);
   const [myItemsError, setMyItemsError] = useState('');
   const [cancelingRequestId, setCancelingRequestId] = useState('');
+  const [renewingItemId, setRenewingItemId] = useState('');
   const selectInFlight = useRef(false);
   const currentUserId = toBackendUserId(user.id);
+
+  const openEditor = async (item: Item) => {
+    setEditNotice('');
+    setEditingId(item.id);
+    setDraftTitle(item.title);
+    setDraftDescription(item.description);
+    setEditQuote(null);
+    setEditQuoteError('');
+    if (!/^\d+$/.test(item.id)) return;
+    setEditQuoteLoading(true);
+    try {
+      setEditQuote(await itemApi.getEditQuote(Number(item.id)));
+    } catch (error) {
+      const apiError = error as ApiError;
+      setEditQuoteError(apiError.message || 'Không tải được báo giá chỉnh sửa.');
+    } finally {
+      setEditQuoteLoading(false);
+    }
+  };
 
   useEffect(() => {
     dispatch(actions.refreshExpiredItems());
@@ -126,6 +152,27 @@ export function Activities() {
       setMyItemsError('Không hủy được yêu cầu. Vui lòng thử lại.');
     } finally {
       setCancelingRequestId('');
+    }
+  };
+
+  const renewApiItem = async (item: Item) => {
+    const itemId = Number(item.id);
+    if (!Number.isSafeInteger(itemId) || renewingItemId) return;
+    setRenewingItemId(item.id);
+    setMyItemsError('');
+    try {
+      const renewed = await itemApi.renewItem(itemId);
+      setMyItems((current) => current.map((entry) =>
+        entry.id === item.id
+          ? { ...entry, status: 'APPROVED', expiresAt: renewed.expireAt }
+          : entry,
+      ));
+      refreshWallet();
+    } catch (error) {
+      const apiError = error as ApiError;
+      setMyItemsError(apiError.message || 'Không gia hạn được bài đăng. Vui lòng thử lại.');
+    } finally {
+      setRenewingItemId('');
     }
   };
 
@@ -227,12 +274,12 @@ export function Activities() {
             <div className="space-y-3">
               {myItems.map((item) => {
                 const approved = item.status === 'approved' || item.status === 'APPROVED';
-                const canEdit = !approved || (item.postApprovalEditCount ?? 0) < 1;
                 const apiItem = /^\d+$/.test(item.id);
+                const canEdit = apiItem || !approved || (item.postApprovalEditCount ?? 0) < 1;
                 const itemRequests = apiItem
                   ? apiRequestsByItem[item.id] ?? []
                   : data.itemRequests.filter((request) => request.itemId === item.id);
-                const hasAcceptedRequest = itemRequests.some((request) => request.status === 'ACCEPTED');
+                const hasAcceptedRequest = itemRequests.some((request) => request.status === 'RESERVED');
                 return (
                   <div key={item.id}>
                     <article className="grid gap-4 rounded-lg bg-white p-3 ring-1 ring-border/80 sm:grid-cols-[120px_1fr_auto] sm:items-center">
@@ -287,33 +334,33 @@ export function Activities() {
                               setEditNotice('Bạn đã sử dụng lượt sửa miễn phí sau khi bài được duyệt.');
                               return;
                             }
-                            setEditNotice('');
-                            setEditingId(item.id);
-                            setDraftTitle(item.title);
-                            setDraftDescription(item.description);
+                            void openEditor(item);
                           }}
                         >
                           Sửa
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          icon="trash"
-                          disabled={item.status === 'removed'}
-                          onClick={() => setRemoveConfirmId(item.id)}
-                        >
-                          Gỡ
-                        </Button>
+                        {!apiItem ? (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            icon="trash"
+                            disabled={item.status === 'removed'}
+                            onClick={() => setRemoveConfirmId(item.id)}
+                          >
+                            Gỡ
+                          </Button>
+                        ) : null}
                         {item.status === 'expired' ? (
                           <Button
                             size="sm"
                             variant="outline"
                             icon="renew"
-                            onClick={() =>
-                              dispatch(actions.renewItem({ itemId: item.id, ownerId: user.id }))
-                            }
+                            disabled={renewingItemId === item.id}
+                            onClick={() => apiItem
+                              ? void renewApiItem(item)
+                              : dispatch(actions.renewItem({ itemId: item.id, ownerId: user.id }))}
                           >
-                            Gia hạn
+                            {renewingItemId === item.id ? 'Đang gia hạn...' : 'Gia hạn'}
                           </Button>
                         ) : null}
                       </div>
@@ -427,23 +474,44 @@ export function Activities() {
           <div className="w-full rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
             <h2 className="text-xl font-bold">Chỉnh sửa bài đăng</h2>
             <p className="mt-1 text-sm text-text-muted">Bài sẽ chờ duyệt lại sau khi lưu.</p>
+            {/^[0-9]+$/.test(editingId) ? (
+              <div className="mt-4">
+                {editQuoteLoading ? <Alert>Đang tải báo giá chỉnh sửa...</Alert> : null}
+                {editQuoteError ? <Alert tone="error">{editQuoteError}</Alert> : null}
+                {editQuote ? (
+                  <Alert tone={editQuote.free ? 'success' : 'warning'}>
+                    {editQuote.free
+                      ? `Lượt sửa này miễn phí (${editQuote.reason}).`
+                      : `Phí sửa do Backend báo giá: ${editQuote.amount} Credit (${editQuote.reason}).`}
+                  </Alert>
+                ) : null}
+              </div>
+            ) : null}
             <div className="mt-5 space-y-4">
               <Field
                 label="Tên món đồ"
                 value={draftTitle}
                 onChange={(event) => setDraftTitle(event.target.value)}
+                readOnly={/^[0-9]+$/.test(editingId)}
               />
               <TextArea
                 label="Mô tả"
                 value={draftDescription}
                 onChange={(event) => setDraftDescription(event.target.value)}
+                readOnly={/^[0-9]+$/.test(editingId)}
               />
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setEditingId('')}>
                 Hủy
               </Button>
+              {/^[0-9]+$/.test(editingId) ? (
+                <p className="mr-auto max-w-xs text-xs leading-5 text-text-muted">
+                  Swagger chưa có API cập nhật bài đăng, nên Frontend chỉ hiển thị báo giá và không giả lập lưu thay đổi.
+                </p>
+              ) : null}
               <Button
+                disabled={/^[0-9]+$/.test(editingId)}
                 onClick={() => {
                   const item = data.items.find((entry) => entry.id === editingId);
                   if (!item) return;
@@ -704,7 +772,7 @@ function RequestPanel({
                         Xem hồ sơ
                       </Button>
                     </Link>
-                    {request.status === 'ACCEPTED' ? (
+                    {request.status === 'RESERVED' ? (
                       <Link to="/messages">
                         <Button size="sm" variant="outline" icon="messages">
                           Nhắn tin

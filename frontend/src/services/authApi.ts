@@ -14,6 +14,8 @@ export const authApi = {
   },
   async verifyOtp(email: string, otp: string) {
     const { data } = await http.post<AuthResponse>('/api/v1/auth/verify-otp', { email, otp });
+    tokenStorage.set(data.accessToken);
+    tokenStorage.setUserId(data.user.id);
     return data;
   },
   async resendOtp(email: string) {
@@ -24,12 +26,6 @@ export const authApi = {
     const { data } = await http.post<AuthResponse>('/api/v1/auth/login', { email, password });
     tokenStorage.set(data.accessToken);
     tokenStorage.setUserId(data.user.id);
-    return data;
-  },
-  async me(userId: number) {
-    const { data } = await http.get<AuthUserResponse>('/api/v1/me', {
-      params: { userId },
-    });
     return data;
   },
   // Cần token. Thành công trả 204; sai mật khẩu hiện tại là 400 AUTH_CURRENT_PASSWORD_INCORRECT (không phải 401).

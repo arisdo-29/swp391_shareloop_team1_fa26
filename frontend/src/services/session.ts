@@ -1,6 +1,6 @@
 import type { AppDispatch } from '../app/store';
 import { actions } from '../app/store';
-import { authApi } from './authApi';
+import { userApi } from './userApi';
 import { tokenStorage } from './http';
 import { toFeUser } from './mappers';
 
@@ -17,7 +17,7 @@ export async function restoreSession(dispatch: AppDispatch, currentUserId: strin
     return;
   }
   try {
-    const user = await authApi.me(userId);
+    const user = await userApi.getMe();
     dispatch(actions.loginFromApi(toFeUser(user)));
   } catch {
     dispatch(actions.logout()); // token het han: interceptor da xoa token

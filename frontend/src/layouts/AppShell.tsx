@@ -5,7 +5,8 @@ import { actions, selectCurrentUser } from '../app/store';
 import { Avatar, Button, Icon, IconButton } from '../components/ui';
 import { authApi } from '../services/authApi';
 import { NotificationMenu } from '../components/NotificationMenu';
-import { useWallet, WalletProvider } from '../app/WalletContext';
+import { WalletProvider } from '../app/WalletContext';
+import { useWallet } from '../app/useWallet';
 
 function ScrollToTop() {
   const { pathname } = useLocation();

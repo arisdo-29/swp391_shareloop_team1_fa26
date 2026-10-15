@@ -21,8 +21,8 @@ import type { Item, ItemRequest, User } from '../../types/domain';
 
 const requestStatusLabel = {
   PENDING: 'Chờ phản hồi',
-  ACCEPTED: 'Đã được chọn',
-  NOT_SELECTED: 'Không được chọn',
+  RESERVED: 'Đã được chọn',
+  REJECTED: 'Không được chọn',
   CANCELLED: 'Đã hủy',
 };
 
@@ -43,6 +43,7 @@ export function ProductDetail() {
   const [apiSentRequests, setApiSentRequests] = useState<ItemRequest[]>([]);
   const [loadingItem, setLoadingItem] = useState(false);
   const [itemError, setItemError] = useState('');
+  const [itemReloadKey, setItemReloadKey] = useState(0);
   const [requestSubmitting, setRequestSubmitting] = useState(false);
   const mockItem = data.items.find((x) => x.id === id);
   const isApiId = Boolean(id && /^\d+$/.test(id));
@@ -70,7 +71,7 @@ export function ProductDetail() {
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, itemReloadKey]);
 
   useEffect(() => {
     if (!isApiId) return;
@@ -114,6 +115,16 @@ export function ProductDetail() {
       </div>
     );
 
+  if (isApiId && itemError)
+    return (
+      <div className="page-shell space-y-4">
+        <Alert tone="error">{itemError}</Alert>
+        <Button variant="outline" onClick={() => setItemReloadKey((key) => key + 1)}>
+          Thử tải lại
+        </Button>
+      </div>
+    );
+
   if (!item)
     return (
       <div className="page-shell">
@@ -121,8 +132,9 @@ export function ProductDetail() {
       </div>
     );
 
-  const owner =
-    data.users.find((x) => x.id === item.ownerId) ??
+  const owner = isApiId
+    ? null
+    : data.users.find((x) => x.id === item.ownerId) ??
     ({
       id: item.ownerId,
       username: item.ownerId,
@@ -152,7 +164,7 @@ export function ProductDetail() {
         (request) =>
           request.itemId === item.id &&
           request.requesterId === user.id &&
-          (request.status === 'PENDING' || request.status === 'ACCEPTED'),
+          (request.status === 'PENDING' || request.status === 'RESERVED'),
       )
     : undefined;
   const eligibleOfferedItems = user
@@ -350,7 +362,16 @@ export function ProductDetail() {
               </Button>
             ) : null}
           </div>
-          <OwnerCard owner={owner} />
+          {owner ? (
+            <OwnerCard owner={owner} />
+          ) : (
+            <section className="rounded-xl bg-white p-5 ring-1 ring-border/80">
+              <h2 className="font-bold">Thông tin người đăng</h2>
+              <p className="mt-2 text-sm leading-6 text-text-muted">
+                Backend chưa cung cấp hồ sơ công khai hoặc điểm uy tín của người đăng cho bài này.
+              </p>
+            </section>
+          )}
         </aside>
       </div>
 
