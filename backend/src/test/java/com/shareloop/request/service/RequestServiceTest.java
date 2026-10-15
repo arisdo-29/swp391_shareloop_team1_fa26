@@ -3,10 +3,12 @@ package com.shareloop.request.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -193,10 +195,14 @@ class RequestServiceTest {
 
         when(requestRepository.findById(55L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
 
         RequestResponse response = requestService.cancelRequest(55L, 10L);
 
         assertThat(response.status()).isEqualTo("CANCELLED");
+        verify(notificationService).notify(eq(20L), eq("REQUEST_CANCELLED"), any(), any(), eq("/items/1"));
     }
 
     @Test
@@ -323,6 +329,7 @@ class RequestServiceTest {
     @DisplayName("updateSchedule: Thành công khi đề xuất lịch từ trạng thái RESERVED")
     void updateSchedule_whenReserved_transitionsToAwaitingLogistics() {
         Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now()); // RESERVED
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -341,6 +348,30 @@ class RequestServiceTest {
         assertThat(response.meetingTime()).isEqualTo(meetingTime);
         assertThat(response.donorScheduleOkAt()).isNotNull();
         assertThat(response.receiverScheduleOkAt()).isNull();
+        verify(notificationService).notify(eq(10L), eq("SCHEDULE_UPDATED"), any(), any(), eq("/requests/101"));
+    }
+
+    @Test
+    @DisplayName("updateSchedule: Receiver đề xuất lịch -> thông báo SCHEDULE_UPDATED cho Donor")
+    void updateSchedule_whenReceiverUpdates_notifiesDonor() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now()); // RESERVED
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
+        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Cổng trường FPT", meetingTime, null);
+
+        RequestResponse response = requestService.updateSchedule(101L, 10L, dto); // receiver đề xuất
+
+        assertThat(response.status()).isEqualTo("AWAITING_LOGISTICS");
+        assertThat(response.receiverScheduleOkAt()).isNotNull();
+        assertThat(response.donorScheduleOkAt()).isNull();
+        verify(notificationService).notify(eq(20L), eq("SCHEDULE_UPDATED"), any(), any(), eq("/requests/101"));
     }
 
     @Test
@@ -389,6 +420,7 @@ class RequestServiceTest {
     @DisplayName("confirmLogistics: Giao trực tiếp (IN_PERSON), khi bên thứ 2 xác nhận thì chuyển LOGISTICS_CONFIRMED")
     void confirmLogistics_inPerson_bothConfirm_transitionsToLogisticsConfirmed() {
         Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now());
         Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
         request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, true, false, Instant.now());
@@ -406,6 +438,31 @@ class RequestServiceTest {
         assertThat(response.receiverScheduleOkAt()).isNotNull();
         assertThat(response.donorScheduleOkAt()).isNotNull();
         assertThat(response.contactRevealedAt()).isNotNull();
+        verify(notificationService).notify(eq(20L), eq("LOGISTICS_CONFIRMED"), any(), any(), eq("/requests/101"));
+    }
+
+    @Test
+    @DisplayName(
+            "confirmLogistics: Khi mới 1 bên xác nhận (chưa LOGISTICS_CONFIRMED) -> không bắn thông báo LOGISTICS_CONFIRMED")
+    void confirmLogistics_whenOnlyOneSideConfirms_doesNotNotifyLogisticsConfirmed() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
+        // Receiver đề xuất lịch nhưng chưa xác nhận (cả 2 null)
+        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, false, false, Instant.now());
+
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // Receiver gọi xác nhận lịch (chỉ receiver ok, donor chưa ok)
+        RequestResponse response = requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(null));
+
+        assertThat(response.status()).isEqualTo("AWAITING_LOGISTICS");
+        verify(notificationService, never()).notify(anyLong(), eq("LOGISTICS_CONFIRMED"), any(), any(), any());
     }
 
     @Test
@@ -568,6 +625,30 @@ class RequestServiceTest {
         assertThat(request.getDonorHandoverAt()).isNotNull();
         assertThat(request.getReceiverHandoverAt()).isNull();
         verify(notificationService).notify(eq(10L), eq("HANDOVER_CONFIRMED"), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("confirmHandover: Receiver xác nhận trước thì chuyển sang AWAITING_HANDOVER và thông báo cho Donor")
+    void confirmHandover_whenReceiverFirst_transitionsToAwaitingHandover_notifiesDonor() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
+        request.confirmLogistics(false, false, Instant.now());
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
+
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(true, null));
+
+        assertThat(response.status()).isEqualTo("AWAITING_HANDOVER");
+        assertThat(request.getReceiverHandoverAt()).isNotNull();
+        assertThat(request.getDonorHandoverAt()).isNull();
+        verify(notificationService).notify(eq(20L), eq("HANDOVER_CONFIRMED"), any(), any(), eq("/requests/101"));
     }
 
     @Test

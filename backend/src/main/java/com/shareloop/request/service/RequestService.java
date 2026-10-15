@@ -189,6 +189,18 @@ public class RequestService {
 
         request.cancel("Người gửi tự huỷ yêu cầu");
         Request saved = requestRepository.save(request);
+
+        // Thông báo cho chủ bài đăng biết yêu cầu đã bị huỷ
+        ItemSnapshot item = findItemSnapshot(saved.getItemId()).orElse(null);
+        if (item != null) {
+            notificationService.notify(
+                    item.donorId(),
+                    "REQUEST_CANCELLED",
+                    "Yêu cầu đã bị huỷ",
+                    "Người gửi đã tự huỷ yêu cầu với bài đăng của bạn.",
+                    "/items/" + saved.getItemId());
+        }
+
         return RequestMapper.toResponse(saved);
     }
 
@@ -229,15 +241,12 @@ public class RequestService {
             if (!other.getId().equals(selectedRequest.getId())) {
                 other.reject();
                 requestRepository.save(other);
-                try {
-                    notificationService.notify(
-                            other.getReceiverId(),
-                            "REQUEST_REJECTED",
-                            "Yêu cầu không được chọn",
-                            "Chủ bài đã chọn người nhận khác cho món đồ này.",
-                            "/items/" + selectedRequest.getItemId());
-                } catch (Exception ignored) {
-                }
+                notificationService.notify(
+                        other.getReceiverId(),
+                        "REQUEST_REJECTED",
+                        "Yêu cầu không được chọn",
+                        "Chủ bài đã chọn người nhận khác cho món đồ này.",
+                        "/items/" + selectedRequest.getItemId());
             }
         }
 
@@ -245,15 +254,12 @@ public class RequestService {
         itemService.reserve(selectedRequest.getItemId());
 
         // 4. Bắn thông báo cho người nhận được chọn
-        try {
-            notificationService.notify(
-                    selectedRequest.getReceiverId(),
-                    "REQUEST_ACCEPTED",
-                    "Yêu cầu được chấp nhận",
-                    "Chủ bài đã chọn bạn để trao tặng/trao đổi món đồ.",
-                    "/requests/" + selectedRequest.getId());
-        } catch (Exception ignored) {
-        }
+        notificationService.notify(
+                selectedRequest.getReceiverId(),
+                "REQUEST_ACCEPTED",
+                "Yêu cầu được chấp nhận",
+                "Chủ bài đã chọn bạn để trao tặng/trao đổi món đồ.",
+                "/requests/" + selectedRequest.getId());
 
         return RequestMapper.toResponse(saved);
     }
@@ -316,15 +322,12 @@ public class RequestService {
 
         // Bắn thông báo cho bên còn lại
         long otherUserId = isDonor ? request.getReceiverId() : item.donorId();
-        try {
-            notificationService.notify(
-                    otherUserId,
-                    "SCHEDULE_UPDATED",
-                    "Cập nhật lịch hẹn",
-                    "Đối phương đã cập nhật lịch hẹn giao nhận.",
-                    "/requests/" + saved.getId());
-        } catch (Exception ignored) {
-        }
+        notificationService.notify(
+                otherUserId,
+                "SCHEDULE_UPDATED",
+                "Cập nhật lịch hẹn",
+                "Đối phương đã cập nhật lịch hẹn giao nhận.",
+                "/requests/" + saved.getId());
 
         return RequestMapper.toResponse(saved);
     }
@@ -356,15 +359,12 @@ public class RequestService {
         // Nếu cả hai đã xác nhận và sang LOGISTICS_CONFIRMED, thông báo cho bên còn lại
         if (saved.getStatus() == RequestStatus.LOGISTICS_CONFIRMED) {
             long otherUserId = isDonor ? request.getReceiverId() : item.donorId();
-            try {
-                notificationService.notify(
-                        otherUserId,
-                        "LOGISTICS_CONFIRMED",
-                        "Lịch hẹn đã được chốt",
-                        "Cả hai bên đã xác nhận lịch hẹn giao nhận thành công.",
-                        "/requests/" + saved.getId());
-            } catch (Exception ignored) {
-            }
+            notificationService.notify(
+                    otherUserId,
+                    "LOGISTICS_CONFIRMED",
+                    "Lịch hẹn đã được chốt",
+                    "Cả hai bên đã xác nhận lịch hẹn giao nhận thành công.",
+                    "/requests/" + saved.getId());
         }
 
         return RequestMapper.toResponse(saved);
@@ -470,32 +470,26 @@ public class RequestService {
             }
 
             // 3. Gửi thông báo COMPLETED cho cả hai bên
-            try {
-                notificationService.notify(
-                        currentUserId,
-                        "TRANSACTION_COMPLETED",
-                        "Giao dịch hoàn tất",
-                        "Giao dịch đã được hai bên xác nhận hoàn tất thành công.",
-                        "/requests/" + targetRequestId);
-                notificationService.notify(
-                        otherUserId,
-                        "TRANSACTION_COMPLETED",
-                        "Giao dịch hoàn tất",
-                        "Giao dịch đã được hai bên xác nhận hoàn tất thành công.",
-                        "/requests/" + targetRequestId);
-            } catch (Exception ignored) {
-            }
+            notificationService.notify(
+                    currentUserId,
+                    "TRANSACTION_COMPLETED",
+                    "Giao dịch hoàn tất",
+                    "Giao dịch đã được hai bên xác nhận hoàn tất thành công.",
+                    "/requests/" + targetRequestId);
+            notificationService.notify(
+                    otherUserId,
+                    "TRANSACTION_COMPLETED",
+                    "Giao dịch hoàn tất",
+                    "Giao dịch đã được hai bên xác nhận hoàn tất thành công.",
+                    "/requests/" + targetRequestId);
         } else if (saved.getStatus() == RequestStatus.AWAITING_HANDOVER) {
             long targetRequestId = saved.getId() != null ? saved.getId() : requestId;
-            try {
-                notificationService.notify(
-                        otherUserId,
-                        "HANDOVER_CONFIRMED",
-                        "Đối phương đã xác nhận giao nhận",
-                        "Đối phương đã xác nhận giao nhận món đồ. Vui lòng kiểm tra và xác nhận.",
-                        "/requests/" + targetRequestId);
-            } catch (Exception ignored) {
-            }
+            notificationService.notify(
+                    otherUserId,
+                    "HANDOVER_CONFIRMED",
+                    "Đối phương đã xác nhận giao nhận",
+                    "Đối phương đã xác nhận giao nhận món đồ. Vui lòng kiểm tra và xác nhận.",
+                    "/requests/" + targetRequestId);
         }
 
         return RequestMapper.toResponse(saved);
@@ -536,10 +530,12 @@ public class RequestService {
         if (itemQueryService != null) {
             try {
                 ItemSummary summary = itemQueryService.getSummary(itemId);
-                return Optional.of(new ItemSnapshot(
-                        summary.donorId(),
-                        summary.offerType() != null ? summary.offerType().name() : null,
-                        summary.status() != null ? summary.status().name() : null));
+                if (summary != null) {
+                    return Optional.of(new ItemSnapshot(
+                            summary.donorId(),
+                            summary.offerType() != null ? summary.offerType().name() : null,
+                            summary.status() != null ? summary.status().name() : null));
+                }
             } catch (BusinessException e) {
                 if (e.getErrorCode() == ItemErrorCode.ITEM_NOT_FOUND) {
                     return Optional.empty();
