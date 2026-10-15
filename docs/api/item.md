@@ -9,7 +9,7 @@
 Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất bên dưới.
 
-Bản demo gấp (đã hỗ trợ gắn ảnh upload; chưa tích hợp phí đăng bài và kiểm duyệt AI).
+POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và gắn ảnh trong một transaction.
 
 ---
 
@@ -42,6 +42,8 @@ Bản demo gấp (đã hỗ trợ gắn ảnh upload; chưa tích hợp phí đ�
 - Danh mục điện tử bắt buộc `operatingStatus`: `NORMAL`, `PARTIAL` hoặc `NOT_WORKING`; giá trị lưu trong `item_attribute_mappings`.
 - `images` bắt buộc có 3–8 URL ảnh đã upload của chính người đăng (giới hạn từ `ConfigKey.ITEM_PHOTOS_MIN/MAX`); thứ tự gửi là thứ tự hiển thị.
 - Bài đăng mới tạo có trạng thái mặc định là `PENDING_REVIEW`.
+- Kiểm duyệt tầng 1 áp dụng cho tiêu đề, mô tả và món mong muốn: `BLOCK` từ chối; `REVIEW` vẫn tạo bài và gắn cờ trong hàng chờ Admin.
+- Khi tạo thành công, giữ phí đăng bài qua `PostFeeService` (mặc định 5 Credit, theo cấu hình); phí chỉ bị trừ lúc Admin duyệt. Lỗi ở bất kỳ bước nào sẽ rollback bài, phí giữ và trạng thái ảnh.
 
 - **Thành công:** `201 Created`, trả về `ItemResponse`.
 
@@ -77,6 +79,8 @@ Bản demo gấp (đã hỗ trợ gắn ảnh upload; chưa tích hợp phí đ�
   - `403 MEDIA_NOT_OWNER`: Ảnh không thuộc người đăng bài.
   - `404 MEDIA_NOT_FOUND`: Không tìm thấy ảnh đã upload.
   - `409 MEDIA_NOT_UPLOADED`: Ảnh đã gắn vào bài khác hoặc không còn dùng được.
+  - `422 ITEM_MODERATION_BLOCKED` (`field: content`, `details.reasonCode`, `details.matchedTerms`): Nội dung bị kiểm duyệt tầng 1 chặn.
+  - `402 WALLET_INSUFFICIENT_BALANCE`: Credit khả dụng không đủ để giữ phí đăng bài.
   - `401 UNAUTHORIZED`: Chưa đăng nhập.
 
 ---
@@ -192,6 +196,6 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2`. `q` rỗng ho�
 | `ITEM_OPERATING_STATUS_NOT_ALLOWED` | 422 | Bài không thuộc danh mục cần trạng thái hoạt động lại gửi trường này |
 | `ITEM_NOT_OWNER` | 403 | Sửa bài không phải của mình |
 | `ITEM_EDIT_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được sửa |
-| `ITEM_MODERATION_BLOCKED` | 422 | Nội dung sửa bị kiểm duyệt tầng 1 chặn |
+| `ITEM_MODERATION_BLOCKED` | 422 | Nội dung tạo hoặc sửa bị kiểm duyệt tầng 1 chặn |
 | `VALIDATION_FAILED` | 400 | Sai định dạng hoặc thiếu trường bắt buộc |
 | `UNAUTHORIZED` | 401 | Thiếu token hoặc token không hợp lệ |

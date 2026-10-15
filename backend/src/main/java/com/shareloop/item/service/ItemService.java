@@ -90,6 +90,18 @@ public class ItemService {
         validateDefectImages(request.condition(), defectMediaIds);
         Optional<Long> operatingAttributeId = requireOperatingStatus(request.categoryId(), request.operatingStatus());
 
+        String moderationText = request.desiredItem() == null
+                ? request.description()
+                : request.description() + " " + request.desiredItem();
+        var moderation = contentModerationService.checkPost(request.categoryId(), request.title(), moderationText);
+        if (moderation.status() == ModerationStatus.BLOCK) {
+            throw new BusinessException(
+                    ItemErrorCode.ITEM_MODERATION_BLOCKED,
+                    ItemErrorCode.ITEM_MODERATION_BLOCKED.defaultMessage(),
+                    "content",
+                    Map.of("reasonCode", moderation.reasonCode(), "matchedTerms", moderation.matchedTerms()));
+        }
+
         Item item = new Item(
                 donorId,
                 request.categoryId(),
@@ -115,11 +127,21 @@ public class ItemService {
         }
         List<Long> mediaIds = parseMediaIds(request.images());
         List<Long> allMediaIds = combineMediaIds(mediaIds, defectMediaIds);
+        // PostFeeService reads the new item through JDBC in the same transaction.
+        Item saved = itemRepository.saveAndFlush(item);
+        postFeeService.holdPostFee(saved.getId(), donorId);
         mediaService.attach(allMediaIds, donorId);
-        Item saved = itemRepository.save(item);
         saveMediaMappings(saved.getId(), mediaIds, "PHOTO");
         saveMediaMappings(saved.getId(), defectMediaIds, "DEFECT");
         operatingAttributeId.ifPresent(id -> saveOperatingStatus(saved.getId(), id, request.operatingStatus()));
+        if (moderation.status() == ModerationStatus.REVIEW) {
+            jdbcClient
+                    .sql("UPDATE items SET ai_result = jsonb_build_object('flag', 'REVIEW', 'reason', :reason) "
+                            + "WHERE id = :itemId")
+                    .param("reason", moderation.reasonCode())
+                    .param("itemId", saved.getId())
+                    .update();
+        }
         return ItemMapper.toResponse(saved, mediaUrls(mediaIds), mediaUrls(defectMediaIds), request.operatingStatus());
     }
 
