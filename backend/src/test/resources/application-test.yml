@@ -30,3 +30,6 @@ app:
   payment:
     mock:
       enabled: true
+  # job nền: không tạo bean job, test gọi thẳng service với mốc thời gian tự chọn
+  jobs:
+    enabled: false

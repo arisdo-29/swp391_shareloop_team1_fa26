@@ -40,3 +40,6 @@ app:
   # module integration/mail (BE1)
   mail:
     from: no-reply@shareloop.local
+  # job nền @Scheduled (BE1: listingfee, user); dev, prod chạy theo lịch, profile test đặt false
+  jobs:
+    enabled: true

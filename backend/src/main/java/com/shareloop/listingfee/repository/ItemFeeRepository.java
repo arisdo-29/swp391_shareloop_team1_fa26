@@ -2,6 +2,8 @@ package com.shareloop.listingfee.repository;
 
 import com.shareloop.listingfee.entity.ItemFee;
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -11,8 +13,9 @@ import org.springframework.data.repository.query.Param;
 public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
 
     /**
-     * Đọc cột phí của bài và khoá dòng items đến hết transaction (SELECT ... FOR UPDATE). Chỉ PostFeeService gọi,
-     * và luôn gọi SAU khi CreditService đã khoá dòng users, để mọi luồng khoá theo cùng thứ tự users → items.
+     * Đọc cột phí của bài và khoá dòng items đến hết transaction (SELECT ... FOR UPDATE). PostFeeService và
+     * RenewService luôn gọi SAU khi CreditService đã khoá dòng users, để mọi luồng khoá theo cùng thứ tự users →
+     * items. ItemExpiryService chỉ khoá dòng items, không khoá users, nên không tạo vòng chờ với các luồng trên.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select f from ItemFee f where f.id = :id")
@@ -33,4 +36,17 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
                     + " FROM items WHERE id = :itemId AND is_deleted = false",
             nativeQuery = true)
     Optional<ItemFeeSnapshot> findFeeSnapshotById(@Param("itemId") Long itemId);
+
+    /**
+     * Id các bài APPROVED đã quá expire_at (job hết hạn bài, FR-29, BR-D03), không khoá. Native query vì cột status
+     * do entity Item (module item) map, ItemFee không map lại được. Phân trang kiểu keyset (id > afterId, tăng dần):
+     * người gọi truyền id cuối của lô trước, nên một bài xử lý lỗi không bị lấy lại mãi trong cùng một lượt.
+     */
+    @Query(
+            value = "SELECT id FROM items"
+                    + " WHERE status = 'APPROVED' AND expire_at < :now AND is_deleted = false AND id > :afterId"
+                    + " ORDER BY id LIMIT :limit",
+            nativeQuery = true)
+    List<Long> findExpiredApprovedItemIds(
+            @Param("now") Instant now, @Param("afterId") long afterId, @Param("limit") int limit);
 }
