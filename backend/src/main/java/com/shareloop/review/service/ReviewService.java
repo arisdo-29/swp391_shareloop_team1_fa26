@@ -3,6 +3,7 @@ package com.shareloop.review.service;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.listingfee.service.PostFeeService;
+import com.shareloop.notification.service.NotificationService;
 import com.shareloop.review.ReviewErrorCode;
 import com.shareloop.review.dto.ReviewQueueItem;
 import com.shareloop.review.dto.ReviewQueueResponse;
@@ -29,18 +30,21 @@ public class ReviewService {
     private final ConfigService configService;
     private final PostFeeService postFeeService;
     private final ItemService itemService;
+    private final NotificationService notificationService;
 
     public ReviewService(
             ReviewQueueRepository repository,
             ReviewItemRepository reviewItemRepository,
             ConfigService configService,
             PostFeeService postFeeService,
-            ItemService itemService) {
+            ItemService itemService,
+            NotificationService notificationService) {
         this.repository = repository;
         this.reviewItemRepository = reviewItemRepository;
         this.configService = configService;
         this.postFeeService = postFeeService;
         this.itemService = itemService;
+        this.notificationService = notificationService;
     }
 
     public List<ReviewQueueItem> listPending(int page, int size) {
@@ -59,6 +63,10 @@ public class ReviewService {
 
     public ReviewQueueResponse listPendingWithChecklist(int page, int size) {
         return new ReviewQueueResponse(listPending(page, size), configService.checklist(), page, size);
+    }
+
+    public List<String> listRejectReasons() {
+        return configService.rejectReasons();
     }
 
     @Transactional
@@ -96,6 +104,11 @@ public class ReviewService {
         postFeeService.releaseHeldFee(itemId, "REJECTED");
         itemService.markRejected(itemId);
         requireReviewItem(itemId).reject(reason.trim());
+
+        reviewItemRepository
+                .findDonorIdByItemId(itemId)
+                .ifPresent(donorId -> notificationService.notify(
+                        donorId, "POST_REJECTED", "Bài đăng bị từ chối", reason.trim(), "/items/" + itemId));
     }
 
     private ReviewItem requireReviewItem(long itemId) {

@@ -45,13 +45,28 @@ Thành công trả `204 No Content`. Hệ thống trừ phí đang giữ, chuy�
 
 ## POST /api/v1/admin/reviews/{itemId}/reject
 
-Từ chối bài. `reason` bắt buộc và không được để trống. Hệ thống nhả phí đang giữ, chuyển trạng thái bài sang `REJECTED`, rồi lưu `reject_reason` trong cùng transaction.
+Từ chối bài. `reason` bắt buộc và không được để trống. Hệ thống nhả phí đang giữ, chuyển trạng thái bài sang `REJECTED`, lưu `reject_reason` trong cùng transaction, và gửi thông báo trong ứng dụng (`POST_REJECTED`) kèm lý do từ chối tới chủ bài đăng.
 
 ```json
 { "reason": "Ảnh không đúng món đồ được đăng" }
 ```
 
 Thành công trả `204 No Content`.
+
+## GET /api/v1/admin/reviews/reject-reasons
+
+Lấy danh sách các lý do từ chối mẫu soạn sẵn để Admin lựa chọn trên giao diện khi từ chối bài đăng. Chỉ lấy các mục đang kích hoạt (`is_active = true`) trong nhóm `REJECT_REASON`, sắp xếp theo thứ tự cấu hình (`sort_order`).
+
+```json
+[
+  "Ảnh không phải ảnh thật của món đồ hoặc lấy từ mạng.",
+  "Bài đăng chứa thông tin liên hệ (số điện thoại, email, link liên kết).",
+  "Chọn sai danh mục món đồ.",
+  "Món đồ thuộc danh mục hàng cấm hoặc hạn chế chia sẻ.",
+  "Nội dung hoặc hình ảnh không phù hợp với tiêu chuẩn cộng đồng.",
+  "Đồ lỗi nhưng chưa mô tả chi tiết lỗi hoặc thiếu ảnh chụp chỗ lỗi."
+]
+```
 
 ## Mã lỗi
 
