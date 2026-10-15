@@ -1,5 +1,6 @@
 package com.shareloop.auth;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -92,6 +93,40 @@ class AuthApiIT extends IntegrationTest {
     void me_withoutToken_returns401() throws Exception {
         // when, then
         mockMvc.perform(get("/api/v1/me")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void changePassword_withCorrectCurrentPassword_onlyNewPasswordCanLogin() throws Exception {
+        // given
+        String loginResponse = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginBody(PASSWORD)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String accessToken =
+                objectMapper.readTree(loginResponse).get("accessToken").asString();
+        String newPassword = "MatKhauMoi@123";
+        String body = "{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"" + newPassword + "\"}";
+
+        // when
+        mockMvc.perform(post("/api/v1/auth/change-password")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isNoContent());
+
+        // then: hash mới là BCrypt thật, mật khẩu cũ không còn đăng nhập được
+        String storedHash = jdbc.queryForObject("SELECT password_hash FROM users WHERE email = ?", String.class, EMAIL);
+        assertThat(storedHash).startsWith("$2");
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginBody(newPassword)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginBody(PASSWORD)))
+                .andExpect(status().isUnauthorized());
     }
 
     private String loginBody(String password) {
