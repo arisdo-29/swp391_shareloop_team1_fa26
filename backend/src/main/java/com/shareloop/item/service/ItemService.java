@@ -141,9 +141,7 @@ public class ItemService {
      */
     @Transactional
     public void reserve(Long itemId) {
-        Item item =
-                itemRepository.findById(itemId).orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
-        item.reserve();
+        transition(itemId, ItemStatus.APPROVED, ItemStatus.RESERVED);
     }
 
     /**
@@ -156,9 +154,10 @@ public class ItemService {
         item.markTraded();
     }
 
-    /** Temporary gateway; implemented with the item lifecycle in issue #74. */
+    /** Nhả giữ chỗ sau khi Request bị huỷ. */
+    @Transactional
     public void release(long itemId) {
-        throw unsupported("release");
+        transition(itemId, ItemStatus.RESERVED, ItemStatus.APPROVED);
     }
 
     /** Temporary gateways; implemented with item lifecycle and removal in issue #91. */

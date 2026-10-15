@@ -333,11 +333,52 @@ class ItemServiceTest {
         itemService.reserve(1L);
 
         assertThat(item.getStatus()).isEqualTo(ItemStatus.RESERVED);
+
+        assertThatThrownBy(() -> itemService.reserve(1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
+        assertThat(item.getStatus()).isEqualTo(ItemStatus.RESERVED);
+    }
+
+    @Test
+    void reserveRejectsUnapprovedAndMissingItems() {
+        Item pending = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(pending));
+        assertThatThrownBy(() -> itemService.reserve(1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
+        assertThat(pending.getStatus()).isEqualTo(ItemStatus.PENDING_REVIEW);
+
+        when(itemRepository.findById(2L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> itemService.reserve(2L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
+    }
+
+    @Test
+    void releaseOnlyReservedItem() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        item.reserve();
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        itemService.release(1L);
+        assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
+        assertThatThrownBy(() -> itemService.release(1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
+        assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
+
+        when(itemRepository.findById(2L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> itemService.release(2L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
     }
 
     @Test
     void markTradedSetsStatusToTraded() {
         Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
         item.reserve();
         when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
 
@@ -382,9 +423,6 @@ class ItemServiceTest {
 
     @Test
     void temporaryGatewaysFailBeforeChangingAnItem() {
-        assertThatThrownBy(() -> itemService.release(1L))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("release");
         assertThatThrownBy(() -> itemService.hide(1L))
                 .isInstanceOf(UnsupportedOperationException.class)
                 .hasMessageContaining("hide");

@@ -135,7 +135,11 @@ public class Item extends BaseEntity {
     }
 
     public void reserve() {
-        this.status = ItemStatus.RESERVED;
+        transitionTo(ItemStatus.RESERVED);
+    }
+
+    public void release() {
+        transitionTo(ItemStatus.APPROVED);
     }
 
     public void markTraded() {

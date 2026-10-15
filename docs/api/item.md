@@ -2,7 +2,7 @@
 
 ## Service cửa ngõ nội bộ
 
-- `ItemService.reserve(Long itemId)` đã có thân; `release(long itemId)` chờ #74.
+- `ItemService.reserve(Long itemId)` chuyển `APPROVED → RESERVED`; `release(long itemId)` chuyển `RESERVED → APPROVED`. Trạng thái khác trả `ITEM_INVALID_STATUS_TRANSITION`.
 - `markTraded(long itemId)` đã có thân; `hide(long itemId)`, `unhide(long itemId)`, `remove(long itemId)`, `hideAllOfUser(long userId)` chờ #91.
 - Các hàm chờ triển khai ném `UnsupportedOperationException` để tránh báo thành công giả; chưa có endpoint HTTP tương ứng trong #38.
 
