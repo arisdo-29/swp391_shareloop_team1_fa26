@@ -5,6 +5,7 @@ export interface RegisterRequest { email: string; password: string; fullName: st
 export interface OtpSentResponse { email: string; otpExpiresInSeconds: number; resendCooldownSeconds: number }
 export interface AuthUserResponse { id: number; email: string; fullName: string; isAdmin: boolean }
 export interface AuthResponse { accessToken: string; tokenType: 'Bearer'; expiresIn: number; user: AuthUserResponse }
+export interface ChangePasswordRequest { currentPassword: string; newPassword: string }
 
 export const authApi = {
   async register(input: RegisterRequest) {
@@ -30,6 +31,10 @@ export const authApi = {
       params: { userId },
     });
     return data;
+  },
+  // Cần token. Thành công trả 204; sai mật khẩu hiện tại là 400 AUTH_CURRENT_PASSWORD_INCORRECT (không phải 401).
+  async changePassword(input: ChangePasswordRequest) {
+    await http.post('/api/v1/auth/change-password', input);
   },
   async logout() {
     try {

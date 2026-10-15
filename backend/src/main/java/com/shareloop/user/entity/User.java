@@ -30,6 +30,14 @@ public class User extends BaseEntity {
     @Column(name = "phone", nullable = false, length = 15)
     private String phone;
 
+    // Chỉ lưu id khu vực (bảng areas thuộc module catalog), không @ManyToOne sang entity của module khác.
+    @Column(name = "area_id")
+    private Long areaId;
+
+    // Chỉ lưu id ảnh (bảng media_files thuộc module media); null khi chưa có ảnh đại diện.
+    @Column(name = "avatar_media_id")
+    private Long avatarMediaId;
+
     @Column(name = "is_admin", nullable = false)
     private boolean admin;
 
@@ -80,6 +88,14 @@ public class User extends BaseEntity {
 
     public String getPhone() {
         return phone;
+    }
+
+    public Long getAreaId() {
+        return areaId;
+    }
+
+    public Long getAvatarMediaId() {
+        return avatarMediaId;
     }
 
     public boolean isAdmin() {
@@ -144,5 +160,17 @@ public class User extends BaseEntity {
 
     public void recordRegistrationIp(String registrationIp) {
         this.registrationIp = registrationIp;
+    }
+
+    /** Cập nhật phần hồ sơ người dùng được tự sửa (FR-06). Email và số điện thoại cố ý không có ở đây. */
+    public void updateProfile(String fullName, Long areaId, Long avatarMediaId) {
+        this.fullName = fullName;
+        this.areaId = areaId;
+        this.avatarMediaId = avatarMediaId;
+    }
+
+    /** Đổi mật khẩu (FR-08). Chỉ nhận bản băm BCrypt, không bao giờ nhận mật khẩu gốc. */
+    public void changePasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 }

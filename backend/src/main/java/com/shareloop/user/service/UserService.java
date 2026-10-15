@@ -1,11 +1,16 @@
 package com.shareloop.user.service;
 
-import com.shareloop.auth.dto.AuthUserResponse;
+import com.shareloop.catalog.service.AreaService;
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.media.service.MediaService;
 import com.shareloop.user.UserErrorCode;
 import com.shareloop.user.dto.ContactInfo;
+import com.shareloop.user.dto.MeResponse;
+import com.shareloop.user.dto.UpdateProfileRequest;
+import com.shareloop.user.entity.User;
 import com.shareloop.user.mapper.UserMapper;
 import com.shareloop.user.repository.UserRepository;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,25 +30,67 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
+    private final AreaService areaService;
+    private final MediaService mediaService;
 
-    public UserService(UserRepository userRepository, UserMapper userMapper) {
+    public UserService(
+            UserRepository userRepository, UserMapper userMapper, AreaService areaService, MediaService mediaService) {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
+        this.areaService = areaService;
+        this.mediaService = mediaService;
     }
 
     /**
-     * Thông tin người dùng đang đăng nhập (GET /api/v1/me).
+     * Hồ sơ người dùng đang đăng nhập (GET /api/v1/me, FR-06).
      *
      * <p>Transaction: read-only.
      *
      * @throws com.shareloop.common.exception.BusinessException USER_NOT_FOUND khi tài khoản không còn tồn tại
      */
     @Transactional(readOnly = true) // chỉ đọc DB: mở transaction read-only
-    public AuthUserResponse getMe(long userId) {
-        return userRepository
-                .findById(userId)
-                .map(userMapper::toAuthUserResponse)
-                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+    public MeResponse getMe(long userId) {
+        return userMapper.toMeResponse(findUser(userId));
+    }
+
+    /**
+     * Cập nhật họ tên, khu vực mặc định, ảnh đại diện của chính mình (PUT /api/v1/me, FR-06, BR-U03). Không đổi
+     * email và số điện thoại. Khu vực phải đang hoạt động; ảnh mới phải do chính người này upload và chưa gắn ở đâu.
+     *
+     * @throws com.shareloop.common.exception.BusinessException USER_NOT_FOUND, USER_AREA_INVALID; MEDIA_NOT_FOUND,
+     *     MEDIA_NOT_OWNER, MEDIA_NOT_UPLOADED (từ MediaService)
+     */
+    @Transactional // gắn ảnh và lưu hồ sơ trong cùng transaction: một bước lỗi thì hoàn tác cả hai
+    public MeResponse updateProfile(long userId, UpdateProfileRequest request) {
+        User user = findUser(userId);
+        checkAreaIsActive(request.areaId());
+        attachAvatarIfChanged(user, request.avatarMediaId());
+        user.updateProfile(request.fullName().trim(), request.areaId(), request.avatarMediaId());
+        // Không cần gọi save(): user đang được JPA theo dõi, thay đổi tự ghi xuống DB khi transaction commit.
+        return userMapper.toMeResponse(user);
+    }
+
+    private User findUser(long userId) {
+        return userRepository.findById(userId).orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+    }
+
+    // areaId null nghĩa là người dùng bỏ khu vực mặc định, không cần kiểm.
+    private void checkAreaIsActive(Long areaId) {
+        if (areaId == null) {
+            return;
+        }
+        if (!areaService.isActiveArea(areaId)) {
+            throw new BusinessException(UserErrorCode.USER_AREA_INVALID, null, "areaId", null);
+        }
+    }
+
+    // Ảnh giữ nguyên thì đã ATTACHED từ lần trước; gọi attach lần nữa sẽ bị MediaService từ chối.
+    private void attachAvatarIfChanged(User user, Long newAvatarMediaId) {
+        if (newAvatarMediaId == null || newAvatarMediaId.equals(user.getAvatarMediaId())) {
+            return;
+        }
+        // attach kiểm ảnh tồn tại, đúng người upload, còn UPLOADED rồi chuyển sang ATTACHED.
+        mediaService.attach(List.of(newAvatarMediaId), user.getId());
     }
 
     /**

@@ -6,9 +6,11 @@ import static org.mockito.Mockito.when;
 
 import com.shareloop.auth.AuthErrorCode;
 import com.shareloop.auth.dto.AuthResponse;
+import com.shareloop.auth.dto.ChangePasswordRequest;
 import com.shareloop.auth.dto.LoginRequest;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.UserErrorCode;
 import com.shareloop.user.entity.User;
 import com.shareloop.user.entity.UserStatus;
 import com.shareloop.user.mapper.UserMapper;
@@ -29,6 +31,7 @@ class AuthServiceTest {
     private static final String EMAIL = "an@shareloop.local";
     private static final String PASSWORD = "Dev@12345";
     private static final String HASH = "hash-of-password";
+    private static final String NEW_PASSWORD = "MatKhauMoi@123";
     private static final long TTL_MINUTES = 120;
 
     @Mock
@@ -142,6 +145,73 @@ class AuthServiceTest {
 
         // then
         assertThat(response.user().id()).isEqualTo(7L);
+    }
+
+    @Test
+    void changePassword_whenUserNotFound_throwsUserNotFound() {
+        // given
+        when(userRepository.findById(7L)).thenReturn(Optional.empty());
+        ChangePasswordRequest request = new ChangePasswordRequest(PASSWORD, NEW_PASSWORD);
+
+        // when, then
+        assertThatThrownBy(() -> service.changePassword(7L, request))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(UserErrorCode.USER_NOT_FOUND));
+    }
+
+    @Test
+    void changePassword_whenCurrentPasswordWrong_throwsCurrentPasswordIncorrect() {
+        // given
+        User user = givenUserById();
+        when(passwordEncoder.matches("Sai@12345", HASH)).thenReturn(false);
+        ChangePasswordRequest request = new ChangePasswordRequest("Sai@12345", NEW_PASSWORD);
+
+        // when, then
+        assertThatThrownBy(() -> service.changePassword(7L, request))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_CURRENT_PASSWORD_INCORRECT);
+                    assertThat(ex.getField()).isEqualTo("currentPassword");
+                });
+        assertThat(user.getPasswordHash()).isEqualTo(HASH);
+    }
+
+    @Test
+    void changePassword_whenNewPasswordSameAsCurrent_throwsSameAsCurrent() {
+        // given: mật khẩu mới khớp với hash đang lưu
+        User user = givenUserById();
+        when(passwordEncoder.matches(PASSWORD, HASH)).thenReturn(true);
+        ChangePasswordRequest request = new ChangePasswordRequest(PASSWORD, PASSWORD);
+
+        // when, then
+        assertThatThrownBy(() -> service.changePassword(7L, request))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_NEW_PASSWORD_SAME_AS_CURRENT);
+                    assertThat(ex.getField()).isEqualTo("newPassword");
+                });
+        assertThat(user.getPasswordHash()).isEqualTo(HASH);
+    }
+
+    @Test
+    void changePassword_whenValid_storesEncodedNewPassword() {
+        // given
+        User user = givenUserById();
+        when(passwordEncoder.matches(PASSWORD, HASH)).thenReturn(true);
+        when(passwordEncoder.matches(NEW_PASSWORD, HASH)).thenReturn(false);
+        when(passwordEncoder.encode(NEW_PASSWORD)).thenReturn("hash-of-new-password");
+
+        // when
+        service.changePassword(7L, new ChangePasswordRequest(PASSWORD, NEW_PASSWORD));
+
+        // then
+        assertThat(user.getPasswordHash()).isEqualTo("hash-of-new-password");
+    }
+
+    private User givenUserById() {
+        User user = new User(EMAIL, HASH, "Nguyễn Văn An", "0901000002", false, UserStatus.ACTIVE);
+        ReflectionTestUtils.setField(user, "id", 7L);
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        return user;
     }
 
     private void givenUser(UserStatus status, boolean active) {

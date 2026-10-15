@@ -2,6 +2,7 @@ package com.shareloop.auth.service;
 
 import com.shareloop.auth.AuthErrorCode;
 import com.shareloop.auth.dto.AuthResponse;
+import com.shareloop.auth.dto.ChangePasswordRequest;
 import com.shareloop.auth.dto.LoginRequest;
 import com.shareloop.auth.dto.OtpSentResponse;
 import com.shareloop.auth.dto.RegisterRequest;
@@ -10,6 +11,7 @@ import com.shareloop.auth.dto.VerifyOtpRequest;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.UserErrorCode;
 import com.shareloop.user.entity.User;
 import com.shareloop.user.entity.UserStatus;
 import com.shareloop.user.mapper.UserMapper;
@@ -133,6 +135,26 @@ public class AuthService {
             otpService.issue(pendingUser.get());
         }
         return buildOtpSentResponse(email);
+    }
+
+    /**
+     * Đổi mật khẩu cho người đang đăng nhập (FR-08, UC-04). Phải nhập đúng mật khẩu hiện tại; mật khẩu mới theo luật
+     * của đăng ký (kiểm ở DTO), khác mật khẩu cũ và được lưu dạng BCrypt.
+     *
+     * @throws BusinessException USER_NOT_FOUND, AUTH_CURRENT_PASSWORD_INCORRECT, AUTH_NEW_PASSWORD_SAME_AS_CURRENT
+     */
+    @Transactional
+    public void changePassword(long userId, ChangePasswordRequest request) {
+        User user =
+                userRepository.findById(userId).orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw new BusinessException(AuthErrorCode.AUTH_CURRENT_PASSWORD_INCORRECT, null, "currentPassword", null);
+        }
+        // Hash BCrypt có muối ngẫu nhiên nên không so hai hash; so mật khẩu mới với hash cũ bằng matches().
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new BusinessException(AuthErrorCode.AUTH_NEW_PASSWORD_SAME_AS_CURRENT, null, "newPassword", null);
+        }
+        user.changePasswordHash(passwordEncoder.encode(request.newPassword()));
     }
 
     private Optional<User> findPendingUser(String email) {

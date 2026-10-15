@@ -1,13 +1,16 @@
 package com.shareloop.auth.controller;
 
 import com.shareloop.auth.dto.AuthResponse;
+import com.shareloop.auth.dto.ChangePasswordRequest;
 import com.shareloop.auth.dto.LoginRequest;
 import com.shareloop.auth.dto.OtpSentResponse;
 import com.shareloop.auth.dto.RegisterRequest;
 import com.shareloop.auth.dto.ResendOtpRequest;
 import com.shareloop.auth.dto.VerifyOtpRequest;
 import com.shareloop.auth.service.AuthService;
+import com.shareloop.common.security.CurrentUserId;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -56,6 +59,16 @@ public class AuthController {
     @PostMapping("/resend-otp")
     public OtpSentResponse resendOtp(@Valid @RequestBody ResendOtpRequest request) {
         return authService.resendOtp(request);
+    }
+
+    // /api/v1/auth/** công khai trong SecurityConfig, nhưng @CurrentUserId tự trả 401 khi không có token.
+    // userId đặt trước @RequestBody để thiếu token báo 401 trước khi kiểm body (400).
+    @Operation(summary = "Đổi mật khẩu khi đã đăng nhập (cần token)")
+    @PostMapping("/change-password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void changePassword(
+            @Parameter(hidden = true) @CurrentUserId long userId, @Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(userId, request);
     }
 
     // JWT không lưu trạng thái ở server nên không có gì để thu hồi; client tự xoá token.

@@ -35,4 +35,9 @@ public class AreaService {
                 .map(area -> mapper.toResponse(area, childrenByParent.getOrDefault(area.getId(), List.of())))
                 .toList();
     }
+
+    /** Khu vực có tồn tại và đang hoạt động không. Module khác (user) gọi hàm này thay vì đọc bảng areas. */
+    public boolean isActiveArea(long areaId) {
+        return repository.existsByIdAndIsActiveTrue(areaId);
+    }
 }
