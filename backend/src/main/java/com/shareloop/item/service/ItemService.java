@@ -12,7 +12,10 @@ import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.mapper.ItemMapper;
 import com.shareloop.item.repository.ItemRepository;
 import com.shareloop.media.service.MediaService;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,18 +32,20 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ItemService {
     private static final Pattern MEDIA_URL = Pattern.compile("/api/v1/media/([1-9][0-9]*)");
-
     private final ItemRepository itemRepository;
     private final JdbcClient jdbcClient;
     private final MediaService mediaService;
+    private final ConfigService configService;
 
     public ItemService(
             ItemRepository itemRepository,
             @Autowired(required = false) JdbcClient jdbcClient,
-            MediaService mediaService) {
+            MediaService mediaService,
+            ConfigService configService) {
         this.itemRepository = itemRepository;
         this.jdbcClient = jdbcClient;
         this.mediaService = mediaService;
+        this.configService = configService;
     }
 
     /**
@@ -72,6 +77,17 @@ public class ItemService {
                 request.defectNote(),
                 request.brand());
 
+        int minImages = configService.getInt(ConfigKey.ITEM_PHOTOS_MIN);
+        int maxImages = configService.getInt(ConfigKey.ITEM_PHOTOS_MAX);
+        if (request.images() == null
+                || request.images().size() < minImages
+                || request.images().size() > maxImages) {
+            throw new BusinessException(
+                    ItemErrorCode.ITEM_INVALID_IMAGE_COUNT,
+                    "Bài đăng cần từ %d đến %d ảnh.".formatted(minImages, maxImages),
+                    "images",
+                    Map.of("min", minImages, "max", maxImages));
+        }
         List<Long> mediaIds = parseMediaIds(request.images());
         mediaService.attach(mediaIds, donorId);
         Item saved = itemRepository.save(item);

@@ -25,15 +25,14 @@ Bản demo gấp (đã hỗ trợ gắn ảnh upload; chưa tích hợp phí đ�
   "condition": "LIKE_NEW",
   "defectNote": null,
   "brand": "NXB Giáo Dục",
-  "images": [
-    "/api/v1/media/42"
-  ]
+  "images": ["/api/v1/media/42", "/api/v1/media/43", "/api/v1/media/44"]
 }
 ```
 
 *Lưu ý nghiệp vụ:*
 - Nếu `offerType` là `SWAP`, bắt buộc trường `desiredItem` không được rỗng.
 - Nếu `condition` là `DEFECTIVE`, bắt buộc trường `defectNote` không được rỗng.
+- `images` bắt buộc có 3–8 URL ảnh đã upload của chính người đăng (giới hạn từ `ConfigKey.ITEM_PHOTOS_MIN/MAX`); thứ tự gửi là thứ tự hiển thị.
 - Bài đăng mới tạo có trạng thái mặc định là `PENDING_REVIEW`.
 
 - **Thành công:** `201 Created`, trả về `ItemResponse`.
@@ -51,9 +50,7 @@ Bản demo gấp (đã hỗ trợ gắn ảnh upload; chưa tích hợp phí đ�
   "condition": "LIKE_NEW",
   "defectNote": null,
   "brand": "NXB Giáo Dục",
-  "images": [
-    "/api/v1/media/42"
-  ],
+  "images": ["/api/v1/media/42", "/api/v1/media/43", "/api/v1/media/44"],
   "status": "PENDING_REVIEW",
   "createdAt": "2026-10-05T14:00:00Z",
   "updatedAt": "2026-10-05T14:00:00Z"
@@ -65,6 +62,7 @@ Bản demo gấp (đã hỗ trợ gắn ảnh upload; chưa tích hợp phí đ�
   - `400 ITEM_SWAP_DESIRED_ITEM_REQUIRED`: Đăng bài SWAP nhưng thiếu món mong muốn.
   - `400 ITEM_DEFECT_NOTE_REQUIRED`: Đồ DEFECTIVE nhưng thiếu mô tả lỗi.
   - `400 ITEM_INVALID_IMAGE`: `images[]` chứa URL không phải URL trả về từ `POST /api/v1/media`.
+  - `422 ITEM_INVALID_IMAGE_COUNT` (`field: images`): Có ít hơn 3 hoặc nhiều hơn 8 ảnh.
   - `403 MEDIA_NOT_OWNER`: Ảnh không thuộc người đăng bài.
   - `404 MEDIA_NOT_FOUND`: Không tìm thấy ảnh đã upload.
   - `409 MEDIA_NOT_UPLOADED`: Ảnh đã gắn vào bài khác hoặc không còn dùng được.
@@ -128,7 +126,7 @@ Tham số tùy chọn: `categoryId`, `areaId` (lọc đúng id), `page` (từ 0,
 | `condition` | string | Có | `NEW`, `LIKE_NEW`, `GOOD`, `DEFECTIVE` |
 | `defectNote` | string? | Điều kiện | Bắt buộc nếu `condition` là `DEFECTIVE` |
 | `brand` | string? | Không | Tối đa 80 ký tự |
-| `images` | array[string]? | Không | Danh sách URL `/api/v1/media/{id}` nhận từ `POST /api/v1/media`; chỉ gắn ảnh đã upload của chính người đăng |
+| `images` | array[string] | Có | 3–8 URL `/api/v1/media/{id}` nhận từ `POST /api/v1/media`, theo thứ tự hiển thị; chỉ gắn ảnh của chính người đăng |
 
 ### ItemResponse
 
@@ -160,5 +158,6 @@ Tham số tùy chọn: `categoryId`, `areaId` (lọc đúng id), `page` (từ 0,
 | `ITEM_SWAP_DESIRED_ITEM_REQUIRED` | 400 | Bài đăng SWAP nhưng thiếu món mong muốn |
 | `ITEM_DEFECT_NOTE_REQUIRED` | 400 | Bài đăng có tình trạng DEFECTIVE nhưng thiếu mô tả lỗi |
 | `ITEM_INVALID_IMAGE` | 400 | URL ảnh không phải URL do API media trả về |
+| `ITEM_INVALID_IMAGE_COUNT` | 422 | `images` có ít hơn 3 hoặc nhiều hơn 8 phần tử |
 | `VALIDATION_FAILED` | 400 | Sai định dạng hoặc thiếu trường bắt buộc |
 | `UNAUTHORIZED` | 401 | Thiếu token hoặc token không hợp lệ |
