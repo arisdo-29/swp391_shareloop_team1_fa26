@@ -3,15 +3,18 @@ package com.shareloop.auth.service;
 import com.shareloop.auth.AuthErrorCode;
 import com.shareloop.auth.dto.AuthResponse;
 import com.shareloop.auth.dto.ChangePasswordRequest;
+import com.shareloop.auth.dto.ForgotPasswordRequest;
 import com.shareloop.auth.dto.LoginRequest;
 import com.shareloop.auth.dto.OtpSentResponse;
 import com.shareloop.auth.dto.RegisterRequest;
 import com.shareloop.auth.dto.ResendOtpRequest;
+import com.shareloop.auth.dto.ResetPasswordRequest;
 import com.shareloop.auth.dto.VerifyOtpRequest;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.UserErrorCode;
+import com.shareloop.user.entity.OtpPurpose;
 import com.shareloop.user.entity.User;
 import com.shareloop.user.entity.UserStatus;
 import com.shareloop.user.mapper.UserMapper;
@@ -98,7 +101,7 @@ public class AuthService {
             user.recordRegistrationIp(registrationIp);
             userRepository.save(user);
         }
-        otpService.issue(user);
+        otpService.issue(user, OtpPurpose.REGISTER);
         return buildOtpSentResponse(email);
     }
 
@@ -114,7 +117,7 @@ public class AuthService {
     public AuthResponse verifyOtp(VerifyOtpRequest request) {
         User user = findPendingUser(normalizeEmail(request.email()))
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.AUTH_OTP_INVALID));
-        otpService.verify(user, request.otp());
+        otpService.verify(user, request.otp(), OtpPurpose.REGISTER);
         // Trong lúc chờ OTP có thể đã có tài khoản ACTIVE khác giữ số này; user vẫn PENDING để đăng ký lại số khác.
         checkPhoneNotUsedByActiveAccount(user.getPhone());
         user.markVerified();
@@ -132,7 +135,7 @@ public class AuthService {
         String email = normalizeEmail(request.email());
         Optional<User> pendingUser = findPendingUser(email);
         if (pendingUser.isPresent()) {
-            otpService.issue(pendingUser.get());
+            otpService.issue(pendingUser.get(), OtpPurpose.REGISTER);
         }
         return buildOtpSentResponse(email);
     }
@@ -155,6 +158,61 @@ public class AuthService {
             throw new BusinessException(AuthErrorCode.AUTH_NEW_PASSWORD_SAME_AS_CURRENT, null, "newPassword", null);
         }
         user.changePasswordHash(passwordEncoder.encode(request.newPassword()));
+    }
+
+    /**
+     * Quên mật khẩu: gửi OTP đặt lại mật khẩu về email (FR-09, UC-04). Luôn trả cùng một nội dung; chỉ tài khoản ACTIVE
+     * và chưa bị khoá mới được gửi mã. Email không có, chưa xác thực, bị khoá hoặc còn trong cooldown thì không gửi mail
+     * và không báo lỗi, để không dò được email nào đã đăng ký.
+     */
+    @Transactional
+    public OtpSentResponse forgotPassword(ForgotPasswordRequest request) {
+        String email = normalizeEmail(request.email());
+        Optional<User> user = findUserAllowedToResetPassword(email);
+        if (user.isPresent()) {
+            issueResetOtpUnlessInCooldown(user.get());
+        }
+        return buildOtpSentResponse(email);
+    }
+
+    /**
+     * Đặt lại mật khẩu bằng OTP đã gửi qua email (FR-09). Kiểm OTP trước, rồi mới kiểm mật khẩu mới khác mật khẩu cũ;
+     * mật khẩu mới lưu dạng BCrypt và OTP bị xoá sau khi dùng. Email không có tài khoản hợp lệ báo như chưa có mã.
+     *
+     * @throws BusinessException AUTH_OTP_EXPIRED, AUTH_OTP_INVALID, AUTH_OTP_TOO_MANY_ATTEMPTS,
+     *     AUTH_NEW_PASSWORD_SAME_AS_CURRENT
+     */
+    // noRollbackFor: giống verifyOtp, nhập sai mã vẫn phải lưu việc tăng otp_failed_count / xoá mã.
+    @Transactional(noRollbackFor = BusinessException.class)
+    public void resetPassword(ResetPasswordRequest request) {
+        User user = findUserAllowedToResetPassword(normalizeEmail(request.email()))
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.AUTH_OTP_EXPIRED));
+        // Kiểm OTP trước: nếu kiểm trùng mật khẩu trước, người không có mã cũng dò được mật khẩu hiện tại.
+        otpService.verify(user, request.otp(), OtpPurpose.RESET_PASSWORD);
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new BusinessException(AuthErrorCode.AUTH_NEW_PASSWORD_SAME_AS_CURRENT, null, "newPassword", null);
+        }
+        user.changePasswordHash(passwordEncoder.encode(request.newPassword()));
+    }
+
+    // Chỉ tài khoản đăng nhập được mới cho đặt lại mật khẩu; PENDING dùng /resend-otp, BANNED hoặc bị khoá thì không.
+    private Optional<User> findUserAllowedToResetPassword(String email) {
+        return userRepository
+                .findByEmail(email)
+                .filter(user -> user.getStatus() == UserStatus.ACTIVE && user.isActive());
+    }
+
+    // Còn trong cooldown: không gửi mã mới nhưng vẫn trả 200 như email không tồn tại, vì 429 sẽ lộ email có tài khoản.
+    // issue() ném lỗi trước khi đổi dữ liệu và OtpService không có @Transactional, nên bắt lỗi ở đây không làm hỏng
+    // transaction.
+    private void issueResetOtpUnlessInCooldown(User user) {
+        try {
+            otpService.issue(user, OtpPurpose.RESET_PASSWORD);
+        } catch (BusinessException exception) {
+            if (exception.getErrorCode() != AuthErrorCode.AUTH_OTP_RESEND_TOO_SOON) {
+                throw exception;
+            }
+        }
     }
 
     private Optional<User> findPendingUser(String email) {

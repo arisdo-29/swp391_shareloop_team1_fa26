@@ -1,16 +1,16 @@
 # API module auth
 
 Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
-lỗi theo định dạng thống nhất ở cuối file. Nguồn: SRS v10 (FR-01..FR-05, FR-08, BR-U06, UC-01, UC-02, UC-04),
+lỗi theo định dạng thống nhất ở cuối file. Nguồn: SRS v10 (FR-01..FR-05, FR-08, FR-09, BR-U06, UC-01, UC-02, UC-04),
 Luồng F01, F02.
 
-Người sở hữu: BE1. File này gồm 6 endpoint: đăng ký, xác thực OTP, gửi lại OTP, đăng nhập, đăng xuất, đổi mật khẩu.
-Quên mật khẩu chưa thuộc file này (contract riêng). Hồ sơ (`GET`/`PUT /api/v1/me`) xem `docs/api/user.md`.
+Người sở hữu: BE1. File này gồm 8 endpoint: đăng ký, xác thực OTP, gửi lại OTP, đăng nhập, đăng xuất, đổi mật khẩu,
+quên mật khẩu, đặt lại mật khẩu. Hồ sơ (`GET`/`PUT /api/v1/me`) xem `docs/api/user.md`.
 
 ## Quy tắc chung
 
-- 5 endpoint đăng ký, OTP, đăng nhập, đăng xuất **không cần** header `Authorization` (`/api/v1/auth/**` là công khai).
-  Riêng `/change-password` **bắt buộc** token. Các API khác gửi `Authorization: Bearer <accessToken>`.
+- Mọi endpoint ở đây **không cần** header `Authorization` (`/api/v1/auth/**` là công khai), trừ `/change-password`
+  **bắt buộc** token. Các API khác gửi `Authorization: Bearer <accessToken>`.
 - Đăng nhập bằng **email**; bảng `users` không có username.
 - Email so khớp không phân biệt hoa thường, lưu dạng chữ thường; server tự `trim`.
 - Số điện thoại: 10 số di động Việt Nam, đầu `03/05/07/08/09`, nhận cả dạng `+84`; server chuẩn hoá về `0xxxxxxxxx`.
@@ -24,7 +24,9 @@ Quên mật khẩu chưa thuộc file này (contract riêng). Hồ sơ (`GET`/`P
 | `otp_resend_cooldown_seconds` | 60       | Khoảng cách tối thiểu giữa hai lần gửi OTP   |
 
 - Hạn JWT lấy từ `app.jwt.ttl-minutes` (120 phút), nên `expiresIn` = `7200` (giây). JWT chứa `userId` (sub) và `roles`.
-- OTP: 6 chữ số, lưu bản băm, gửi qua email sau khi transaction commit.
+- OTP: 6 chữ số, lưu bản băm kèm mục đích (`otp_purpose` = `REGISTER` hoặc `RESET_PASSWORD`), gửi qua email sau khi
+  transaction commit. Mã của mục đích này không dùng được cho mục đích kia. Mỗi tài khoản chỉ giữ một mã: gửi mã mới
+  làm mã cũ mất hiệu lực.
 - Tài khoản chưa xác thực quá 24 giờ bị job tự xoá; client coi như phải đăng ký lại.
 
 ## POST /api/v1/auth/register
@@ -183,6 +185,68 @@ Quy tắc:
 { "code": "AUTH_CURRENT_PASSWORD_INCORRECT", "message": "Mật khẩu hiện tại không đúng.", "field": "currentPassword", "traceId": "a1b2c3d4" }
 ```
 
+## POST /api/v1/auth/forgot-password
+
+Quên mật khẩu (FR-09): gửi OTP đặt lại mật khẩu về email. Luồng 2 bước: `/forgot-password` → `/reset-password`
+(không có bước xác nhận OTP riêng; FE giữ mã ở màn nhập OTP rồi gửi kèm mật khẩu mới).
+
+- Xác thực: **không cần**.
+- Request: `ForgotPasswordRequest`.
+- Thành công: **luôn** `200`, `OtpSentResponse`.
+- Lỗi: chỉ `400 VALIDATION_FAILED` (email trống hoặc sai định dạng).
+
+Quy tắc:
+
+- **Không lộ email**: chỉ gửi mail khi tài khoản `ACTIVE` và `is_active = true`. Email không tồn tại, tài khoản
+  `PENDING_VERIFICATION` (dùng `/resend-otp`), `BANNED`, bị khoá, hoặc gọi lại khi chưa đủ `otp_resend_cooldown_seconds`
+  → **không gửi mail** nhưng vẫn trả `200` với cùng nội dung. Endpoint này cố ý **không** trả `429`, vì `429` chỉ xảy ra
+  với email có tài khoản.
+- Mã cùng luật với OTP đăng ký: hạn `otp_ttl_minutes`, tối đa `otp_max_failed` lần sai, cách nhau tối thiểu
+  `otp_resend_cooldown_seconds`. Gửi lại mã = gọi lại endpoint này; FE dùng `resendCooldownSeconds` để đếm ngược.
+- Email có tiêu đề "Đặt lại mật khẩu ShareLoop" (mẫu `otp.html`).
+
+```json
+{ "email": "an@example.com" }
+```
+
+```json
+{ "email": "an@example.com", "otpExpiresInSeconds": 300, "resendCooldownSeconds": 60 }
+```
+
+## POST /api/v1/auth/reset-password
+
+Đặt lại mật khẩu bằng OTP đã gửi qua email (FR-09).
+
+- Xác thực: **không cần**.
+- Request: `ResetPasswordRequest`.
+- Thành công: `204`, không có nội dung. FE chuyển sang màn đăng nhập (không tự cấp JWT).
+- Lỗi: `400 VALIDATION_FAILED` (`field` = tên trường), `400 AUTH_OTP_EXPIRED`, `400 AUTH_OTP_INVALID`,
+  `422 AUTH_OTP_TOO_MANY_ATTEMPTS`, `400 AUTH_NEW_PASSWORD_SAME_AS_CURRENT`.
+
+Quy tắc:
+
+- Thứ tự kiểm: tài khoản → OTP → mật khẩu mới khác mật khẩu cũ. Kiểm OTP trước để người không có mã không dò được
+  mật khẩu hiện tại.
+- Email không có tài khoản `ACTIVE` chưa khoá → `AUTH_OTP_EXPIRED`, giống hệt tài khoản thật chưa xin mã (không dò được).
+- Mã sai: tăng `otp_failed_count`, `AUTH_OTP_INVALID` kèm `details.remainingAttempts`. Lần sai thứ `otp_max_failed`:
+  xoá mã, `AUTH_OTP_TOO_MANY_ATTEMPTS`; phải gọi lại `/forgot-password`.
+- Quá `otp_ttl_minutes`, không còn mã, hoặc mã đang lưu là mã đăng ký → `AUTH_OTP_EXPIRED`.
+- `newPassword` theo **đúng luật của đăng ký** (`@ValidPassword`, 8–64 ký tự), lưu BCrypt.
+- Mật khẩu mới trùng mật khẩu cũ → `AUTH_NEW_PASSWORD_SAME_AS_CURRENT` (`field` = `newPassword`). Lúc này OTP **đã được
+  dùng**, FE báo lỗi và cho bấm "Gửi lại mã".
+- Thành công thì xoá các cột `otp_*`: mã không dùng lại được.
+- **Ngoài phạm vi**: JWT không lưu trạng thái nên token đã cấp trước khi đặt lại **vẫn hợp lệ** đến khi hết hạn
+  (`app.jwt.ttl-minutes`), giống `/change-password`. Chưa ghi `activity_logs` SECURITY (ERD F02 bước 4) và chưa giới hạn
+  số lần gọi theo IP/ngày.
+
+```json
+{ "email": "an@example.com", "otp": "123456", "newPassword": "MatKhauMoi@456" }
+```
+
+```json
+{ "code": "AUTH_OTP_INVALID", "message": "Mã OTP không đúng.", "details": { "remainingAttempts": 4 }, "traceId": "a1b2c3d4" }
+```
+
 ## DTO
 
 Tất cả là `record`, request có `@Valid`. Tên trường JSON là camelCase.
@@ -223,15 +287,29 @@ Tất cả là `record`, request có `@Valid`. Tên trường JSON là camelCase
 | `currentPassword` | string | Bắt buộc, không rỗng                             |
 | `newPassword`     | string | Bắt buộc, 8–64 ký tự (cùng luật với `RegisterRequest.password`) |
 
+### ForgotPasswordRequest
+
+| Trường  | Kiểu   | Ràng buộc                      |
+|---------|--------|--------------------------------|
+| `email` | string | Bắt buộc, đúng định dạng email |
+
+### ResetPasswordRequest
+
+| Trường        | Kiểu   | Ràng buộc                                                       |
+|---------------|--------|-----------------------------------------------------------------|
+| `email`       | string | Bắt buộc, đúng định dạng email                                  |
+| `otp`         | string | Bắt buộc, đúng 6 chữ số `^\d{6}$`                               |
+| `newPassword` | string | Bắt buộc, 8–64 ký tự (cùng luật với `RegisterRequest.password`) |
+
 ### OtpSentResponse
 
-Trả về từ `/register` và `/resend-otp`.
+Trả về từ `/register`, `/resend-otp` và `/forgot-password`.
 
 | Trường                  | Kiểu   | Ý nghĩa                                              |
 |-------------------------|--------|------------------------------------------------------|
 | `email`                 | string | Email đã gửi OTP (đã chuẩn hoá chữ thường)           |
 | `otpExpiresInSeconds`   | number | Số giây OTP còn hiệu lực (`otp_ttl_minutes` × 60)    |
-| `resendCooldownSeconds` | number | Số giây phải chờ trước khi gọi lại `/resend-otp`     |
+| `resendCooldownSeconds` | number | Số giây phải chờ trước khi gửi lại mã (`/resend-otp` hoặc `/forgot-password`) |
 
 ### AuthResponse
 
@@ -261,15 +339,15 @@ Trả về từ `/verify-otp` và `/login`.
 | `AUTH_PHONE_ALREADY_USED`       | 409  | Số điện thoại đang gắn với tài khoản `ACTIVE` khác                                  |
 | `AUTH_PHONE_INVALID`            | 400  | Số điện thoại không đúng định dạng di động VN (`field` = `phone`)                   |
 | `AUTH_EMAIL_DOMAIN_NOT_ALLOWED` | 400  | Email thuộc danh sách tên miền dùng một lần (FR-04, cấu hình được; `field` = `email`). Chưa bật ở tuần 4 |
-| `AUTH_OTP_INVALID`              | 400  | OTP sai, hoặc email không có tài khoản chờ xác thực; `details.remainingAttempts`    |
-| `AUTH_OTP_EXPIRED`              | 400  | OTP quá `otp_ttl_minutes` hoặc không còn mã                                         |
+| `AUTH_OTP_INVALID`              | 400  | OTP sai, hoặc (`/verify-otp`) email không có tài khoản chờ xác thực; `details.remainingAttempts` |
+| `AUTH_OTP_EXPIRED`              | 400  | OTP quá `otp_ttl_minutes`, không còn mã, mã khác mục đích; `/reset-password` với email không có tài khoản hợp lệ |
 | `AUTH_OTP_TOO_MANY_ATTEMPTS`    | 422  | Sai đủ `otp_max_failed` lần, mã đã bị xoá; phải gửi lại OTP                         |
-| `AUTH_OTP_RESEND_TOO_SOON`      | 429  | Gửi lại trước `otp_resend_cooldown_seconds`; `details.retryAfterSeconds`            |
+| `AUTH_OTP_RESEND_TOO_SOON`      | 429  | `/register`, `/resend-otp` gửi lại trước `otp_resend_cooldown_seconds`; `details.retryAfterSeconds`. `/forgot-password` không trả mã này |
 | `AUTH_EMAIL_NOT_VERIFIED`       | 403  | Đăng nhập khi tài khoản còn `PENDING_VERIFICATION`                                  |
 | `AUTH_INVALID_CREDENTIALS`      | 401  | Sai email hoặc sai mật khẩu (không phân biệt)                                       |
 | `AUTH_ACCOUNT_LOCKED`           | 403  | Tài khoản `BANNED` hoặc `is_active = false`                                         |
 | `AUTH_CURRENT_PASSWORD_INCORRECT` | 400 | Đổi mật khẩu: mật khẩu hiện tại không đúng, `field` = `currentPassword`            |
-| `AUTH_NEW_PASSWORD_SAME_AS_CURRENT` | 400 | Đổi mật khẩu: mật khẩu mới trùng mật khẩu hiện tại, `field` = `newPassword`      |
+| `AUTH_NEW_PASSWORD_SAME_AS_CURRENT` | 400 | Đổi / đặt lại mật khẩu: mật khẩu mới trùng mật khẩu hiện tại, `field` = `newPassword` |
 | `UNAUTHORIZED`                  | 401  | `/change-password` thiếu, sai hoặc hết hạn token (`CommonErrorCode`)                |
 | `VALIDATION_FAILED`             | 400  | Body thiếu trường hoặc sai định dạng (`CommonErrorCode`), `field` = tên trường      |
 
@@ -312,6 +390,7 @@ Bản hiện tại của FE là contract cũ. Cần đổi:
 16. **Đổi mật khẩu**: đã có `authApi.changePassword(input)` gọi `POST /api/v1/auth/change-password` (204). Đường dẫn
     theo issue #73, khác gợi ý `PUT /api/v1/me/password` của ERD. Lỗi `AUTH_CURRENT_PASSWORD_INCORRECT` hiển thị dưới ô
     mật khẩu hiện tại (`field`). Hồ sơ (`getProfile`, `updateProfile`) chuyển sang `userApi.ts` (`docs/api/user.md`).
-17. **Ngoài phạm vi file này** (`forgotPassword`, `verifyResetOtp`, `resetPassword`): giữ nguyên chờ contract riêng,
-    nhưng đường dẫn cũng sẽ phải đổi sang `/api/v1/...` (ERD gợi ý `/api/v1/auth/forgot-password`,
-    `/api/v1/auth/reset-password`).
+17. **Quên mật khẩu** (issue #137): đã có `authApi.forgotPassword(email)` → `OtpSentResponse` và
+    `authApi.resetPassword({ email, otp, newPassword })` (204). **Không có** `verifyResetOtp` và không có `resetToken`:
+    màn nhập OTP chỉ giữ mã ở phía FE, bước cuối gửi cả ba trường. Trang `ForgotPassword.tsx` hiện vẫn dùng dữ liệu
+    giả trong store, chưa nối API.

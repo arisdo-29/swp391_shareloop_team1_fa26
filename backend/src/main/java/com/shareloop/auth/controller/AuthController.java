@@ -2,10 +2,12 @@ package com.shareloop.auth.controller;
 
 import com.shareloop.auth.dto.AuthResponse;
 import com.shareloop.auth.dto.ChangePasswordRequest;
+import com.shareloop.auth.dto.ForgotPasswordRequest;
 import com.shareloop.auth.dto.LoginRequest;
 import com.shareloop.auth.dto.OtpSentResponse;
 import com.shareloop.auth.dto.RegisterRequest;
 import com.shareloop.auth.dto.ResendOtpRequest;
+import com.shareloop.auth.dto.ResetPasswordRequest;
 import com.shareloop.auth.dto.VerifyOtpRequest;
 import com.shareloop.auth.service.AuthService;
 import com.shareloop.common.security.CurrentUserId;
@@ -23,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Controller mỏng: nhận request, gọi service, trả DTO thẳng. /api/v1/auth/** là công khai (SecurityConfig). */
 // @Tag: Swagger UI gom các endpoint cùng tag vào một nhóm; @Operation(summary) hiện bên phải đường dẫn.
-@Tag(name = "Auth", description = "Đăng ký, đăng nhập, OTP")
+@Tag(name = "Auth", description = "Đăng ký, đăng nhập, OTP, đổi và quên mật khẩu")
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
@@ -69,6 +71,20 @@ public class AuthController {
     public void changePassword(
             @Parameter(hidden = true) @CurrentUserId long userId, @Valid @RequestBody ChangePasswordRequest request) {
         authService.changePassword(userId, request);
+    }
+
+    // Luôn 200 cùng nội dung dù email có tài khoản hay không (không lộ email đã đăng ký).
+    @Operation(summary = "Quên mật khẩu: gửi OTP đặt lại mật khẩu về email")
+    @PostMapping("/forgot-password")
+    public OtpSentResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        return authService.forgotPassword(request);
+    }
+
+    @Operation(summary = "Đặt lại mật khẩu bằng OTP đã gửi qua email")
+    @PostMapping("/reset-password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request);
     }
 
     // JWT không lưu trạng thái ở server nên không có gì để thu hồi; client tự xoá token.

@@ -17,7 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 /**
- * Cấp và kiểm tra OTP đăng ký.
+ * Cấp và kiểm tra OTP email cho đăng ký (REGISTER) và đặt lại mật khẩu (RESET_PASSWORD).
  *
  * <p>Cố ý KHÔNG gắn @Transactional: các method chạy trong transaction của AuthService. Nếu gắn riêng, khi ném
  * BusinessException transaction chung bị đánh dấu rollback-only và AuthService sẽ gặp UnexpectedRollbackException.
@@ -46,32 +46,35 @@ public class OtpService {
     }
 
     /**
-     * Cấp OTP mới cho user (FR-02, BR-U06): lưu bản băm, đặt hạn, phát sự kiện để gửi email sau commit.
+     * Cấp OTP mới cho user (FR-02, FR-09, BR-U06): lưu bản băm kèm mục đích, đặt hạn, phát sự kiện để gửi email sau
+     * commit. Mã mới thay mã cũ, kể cả mã của mục đích khác.
      *
      * @return mã thô 6 chữ số
-     * @throws BusinessException AUTH_OTP_RESEND_TOO_SOON (kèm details.retryAfterSeconds) nếu lần gửi trước chưa đủ cooldown
+     * @throws BusinessException AUTH_OTP_RESEND_TOO_SOON (kèm details.retryAfterSeconds) nếu lần gửi trước chưa đủ
+     *     cooldown; khi đó chưa có dữ liệu nào bị đổi
      */
-    public String issue(User user) {
+    public String issue(User user, OtpPurpose purpose) {
         Instant now = clock.instant();
         int ttlMinutes = configService.getInt(ConfigKey.OTP_TTL_MINUTES);
         checkResendCooldown(user, now, ttlMinutes);
 
         String code = String.format("%06d", secureRandom.nextInt(CODE_BOUND));
         Instant expiresAt = now.plus(Duration.ofMinutes(ttlMinutes));
-        user.startOtp(passwordEncoder.encode(code), OtpPurpose.REGISTER, expiresAt);
+        user.startOtp(passwordEncoder.encode(code), purpose, expiresAt);
 
-        eventPublisher.publishEvent(new OtpIssuedEvent(user.getEmail(), code, ttlMinutes));
+        eventPublisher.publishEvent(new OtpIssuedEvent(user.getEmail(), code, ttlMinutes, purpose));
         return code;
     }
 
     /**
-     * Kiểm tra mã người dùng nhập (FR-02). Đúng thì xoá các cột otp_*.
+     * Kiểm tra mã người dùng nhập (FR-02, FR-09). Đúng thì xoá các cột otp_*. Mã đang lưu thuộc mục đích khác thì coi
+     * như không có mã, để mã đăng ký không dùng được cho đặt lại mật khẩu và ngược lại.
      *
      * @throws BusinessException AUTH_OTP_EXPIRED, AUTH_OTP_INVALID (kèm details.remainingAttempts),
      *     AUTH_OTP_TOO_MANY_ATTEMPTS
      */
-    public void verify(User user, String code) {
-        if (isMissingOrExpired(user)) {
+    public void verify(User user, String code, OtpPurpose purpose) {
+        if (isMissingOrExpired(user) || user.getOtpPurpose() != purpose) {
             throw new BusinessException(AuthErrorCode.AUTH_OTP_EXPIRED);
         }
         if (passwordEncoder.matches(code, user.getOtpCodeHash())) {

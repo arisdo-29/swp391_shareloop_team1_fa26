@@ -6,6 +6,7 @@ export interface OtpSentResponse { email: string; otpExpiresInSeconds: number; r
 export interface AuthUserResponse { id: number; email: string; fullName: string; isAdmin: boolean }
 export interface AuthResponse { accessToken: string; tokenType: 'Bearer'; expiresIn: number; user: AuthUserResponse }
 export interface ChangePasswordRequest { currentPassword: string; newPassword: string }
+export interface ResetPasswordRequest { email: string; otp: string; newPassword: string }
 
 export const authApi = {
   async register(input: RegisterRequest) {
@@ -31,6 +32,15 @@ export const authApi = {
   // Cần token. Thành công trả 204; sai mật khẩu hiện tại là 400 AUTH_CURRENT_PASSWORD_INCORRECT (không phải 401).
   async changePassword(input: ChangePasswordRequest) {
     await http.post('/api/v1/auth/change-password', input);
+  },
+  // Luôn 200 cùng nội dung dù email có tài khoản hay không; dùng resendCooldownSeconds để đếm ngược "Gửi lại mã".
+  async forgotPassword(email: string) {
+    const { data } = await http.post<OtpSentResponse>('/api/v1/auth/forgot-password', { email });
+    return data;
+  },
+  // Không cần token, thành công trả 204 rồi chuyển sang đăng nhập. Không có bước xác nhận OTP riêng.
+  async resetPassword(input: ResetPasswordRequest) {
+    await http.post('/api/v1/auth/reset-password', input);
   },
   async logout() {
     try {

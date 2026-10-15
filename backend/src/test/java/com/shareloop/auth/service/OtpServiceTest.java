@@ -71,7 +71,7 @@ class OtpServiceTest {
         when(passwordEncoder.encode(anyString())).thenReturn(HASH);
 
         // when
-        String code = service.issue(user);
+        String code = service.issue(user, OtpPurpose.REGISTER);
 
         // then
         assertThat(code).matches("\\d{6}");
@@ -88,12 +88,30 @@ class OtpServiceTest {
         when(passwordEncoder.encode(anyString())).thenReturn(HASH);
 
         // when
-        String code = service.issue(user);
+        String code = service.issue(user, OtpPurpose.REGISTER);
 
         // then
         ArgumentCaptor<OtpIssuedEvent> captor = ArgumentCaptor.forClass(OtpIssuedEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
-        assertThat(captor.getValue()).isEqualTo(new OtpIssuedEvent(user.getEmail(), code, TTL_MINUTES));
+        assertThat(captor.getValue())
+                .isEqualTo(new OtpIssuedEvent(user.getEmail(), code, TTL_MINUTES, OtpPurpose.REGISTER));
+    }
+
+    @Test
+    void issue_withResetPasswordPurpose_storesPurposeAndPublishesItInEvent() {
+        // given
+        User user = newPendingUser();
+        when(passwordEncoder.encode(anyString())).thenReturn(HASH);
+
+        // when
+        String code = service.issue(user, OtpPurpose.RESET_PASSWORD);
+
+        // then
+        assertThat(user.getOtpPurpose()).isEqualTo(OtpPurpose.RESET_PASSWORD);
+        ArgumentCaptor<OtpIssuedEvent> captor = ArgumentCaptor.forClass(OtpIssuedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue())
+                .isEqualTo(new OtpIssuedEvent(user.getEmail(), code, TTL_MINUTES, OtpPurpose.RESET_PASSWORD));
     }
 
     @Test
@@ -103,10 +121,11 @@ class OtpServiceTest {
         user.startOtp(HASH, OtpPurpose.REGISTER, sentSecondsAgo(20));
 
         // when, then
-        assertThatThrownBy(() -> service.issue(user)).isInstanceOfSatisfying(BusinessException.class, ex -> {
-            assertThat(ex.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_OTP_RESEND_TOO_SOON);
-            assertThat(ex.getDetails()).containsEntry("retryAfterSeconds", 40L);
-        });
+        assertThatThrownBy(() -> service.issue(user, OtpPurpose.REGISTER))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_OTP_RESEND_TOO_SOON);
+                    assertThat(ex.getDetails()).containsEntry("retryAfterSeconds", 40L);
+                });
         verifyNoInteractions(eventPublisher);
     }
 
@@ -120,7 +139,7 @@ class OtpServiceTest {
         when(passwordEncoder.encode(anyString())).thenReturn(HASH);
 
         // when
-        service.issue(user);
+        service.issue(user, OtpPurpose.REGISTER);
 
         // then
         assertThat(user.getOtpCodeHash()).isEqualTo(HASH);
@@ -134,7 +153,7 @@ class OtpServiceTest {
         when(passwordEncoder.matches(CORRECT_CODE, HASH)).thenReturn(true);
 
         // when
-        service.verify(user, CORRECT_CODE);
+        service.verify(user, CORRECT_CODE, OtpPurpose.REGISTER);
 
         // then
         assertThat(user.getOtpCodeHash()).isNull();
@@ -150,7 +169,7 @@ class OtpServiceTest {
         when(passwordEncoder.matches(WRONG_CODE, HASH)).thenReturn(false);
 
         // when, then
-        assertThatThrownBy(() -> service.verify(user, WRONG_CODE))
+        assertThatThrownBy(() -> service.verify(user, WRONG_CODE, OtpPurpose.REGISTER))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_OTP_INVALID);
                     assertThat(ex.getDetails()).containsEntry("remainingAttempts", 4);
@@ -168,7 +187,7 @@ class OtpServiceTest {
         when(passwordEncoder.matches(WRONG_CODE, HASH)).thenReturn(false);
 
         // when, then
-        assertThatThrownBy(() -> service.verify(user, WRONG_CODE))
+        assertThatThrownBy(() -> service.verify(user, WRONG_CODE, OtpPurpose.REGISTER))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_OTP_TOO_MANY_ATTEMPTS));
@@ -182,7 +201,7 @@ class OtpServiceTest {
         user.startOtp(HASH, OtpPurpose.REGISTER, NOW.minusSeconds(1));
 
         // when, then
-        assertThatThrownBy(() -> service.verify(user, CORRECT_CODE))
+        assertThatThrownBy(() -> service.verify(user, CORRECT_CODE, OtpPurpose.REGISTER))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_OTP_EXPIRED));
@@ -194,10 +213,24 @@ class OtpServiceTest {
         User user = newPendingUser();
 
         // when, then
-        assertThatThrownBy(() -> service.verify(user, CORRECT_CODE))
+        assertThatThrownBy(() -> service.verify(user, CORRECT_CODE, OtpPurpose.REGISTER))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_OTP_EXPIRED));
+    }
+
+    @Test
+    void verify_whenStoredPurposeDiffers_throwsExpiredAndKeepsCode() {
+        // given: mã đăng ký còn hạn và đúng, nhưng đem dùng để đặt lại mật khẩu
+        User user = givenUserWithValidOtp();
+
+        // when, then
+        assertThatThrownBy(() -> service.verify(user, CORRECT_CODE, OtpPurpose.RESET_PASSWORD))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_OTP_EXPIRED));
+        assertThat(user.getOtpCodeHash()).isEqualTo(HASH);
+        assertThat(user.getOtpFailedCount()).isZero();
     }
 
     private User newPendingUser() {
