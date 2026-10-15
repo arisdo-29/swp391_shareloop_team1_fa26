@@ -3,6 +3,9 @@ package com.shareloop.wallet.service;
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.wallet.WalletErrorCode;
+import com.shareloop.wallet.dto.CreditTypeTotal;
+import com.shareloop.wallet.dto.FinanceSummaryResponse;
+import com.shareloop.wallet.dto.TopUpReconciliation;
 import com.shareloop.wallet.dto.WalletResponse;
 import com.shareloop.wallet.dto.WalletTransactionResponse;
 import com.shareloop.wallet.entity.CreditLedgerEntry;
@@ -11,12 +14,15 @@ import com.shareloop.wallet.entity.PaymentOrder;
 import com.shareloop.wallet.entity.PaymentOrderStatus;
 import com.shareloop.wallet.entity.WalletAccount;
 import com.shareloop.wallet.mapper.WalletMapper;
+import com.shareloop.wallet.repository.CashTotalsView;
 import com.shareloop.wallet.repository.CreditLedgerRepository;
+import com.shareloop.wallet.repository.CreditTypeTotalView;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
 import com.shareloop.wallet.repository.WalletAccountRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -257,6 +263,46 @@ public class CreditService {
     }
 
     /**
+     * Báo cáo ba sổ tài chính toàn hệ thống trong khoảng [from, to) cho Admin (FR-109, FR-110, BR-P09): tiền mặt thực
+     * thu (đơn nạp SUCCESS theo paid_at), Credit cộng vào và Credit trừ ra tách theo type, và dòng đối chiếu tiền mặt
+     * quy ra Credit với tổng TOP_UP. Giữ chỗ và nhả giữ không ghi sổ cái nên không có trong báo cáo.
+     *
+     * <p>Transaction: read-only, không khoá dòng; mọi phép cộng chạy bằng SUM/GROUP BY trong DB.
+     *
+     * @param from mốc bắt đầu (gồm), có thể null
+     * @param to mốc kết thúc (không gồm), có thể null
+     * @throws com.shareloop.common.exception.BusinessException WALLET_INVALID_DATE_RANGE khi from không trước to
+     */
+    @Transactional(readOnly = true)
+    public FinanceSummaryResponse getFinanceSummary(Instant from, Instant to) {
+        Instant rangeStart = from != null ? from : EARLIEST;
+        Instant rangeEnd = to != null ? to : LATEST;
+        if (!rangeStart.isBefore(rangeEnd)) {
+            throw new BusinessException(WalletErrorCode.WALLET_INVALID_DATE_RANGE);
+        }
+
+        CashTotalsView cash =
+                paymentOrderRepository.sumByStatusAndPaidAt(PaymentOrderStatus.SUCCESS, rangeStart, rangeEnd);
+        List<CreditTypeTotal> creditIn =
+                toCreditTypeTotals(creditLedgerRepository.sumCreditInByType(rangeStart, rangeEnd));
+        List<CreditTypeTotal> creditOut =
+                toCreditTypeTotals(creditLedgerRepository.sumCreditOutByType(rangeStart, rangeEnd));
+        TopUpReconciliation reconciliation =
+                reconcileTopUp(cash.getCredits(), amountOfType(creditIn, CreditTxType.TOP_UP));
+
+        return new FinanceSummaryResponse(
+                from,
+                to,
+                cash.getOrderCount(),
+                cash.getAmountVnd(),
+                sumAmounts(creditIn),
+                creditIn,
+                sumAmounts(creditOut),
+                creditOut,
+                reconciliation);
+    }
+
+    /**
      * Đọc ví cho GET /wallet và để module khác kiểm số dư (F04).
      *
      * <p>Transaction: read-only, không khoá dòng (chỉ đọc, không dùng để quyết định đổi tiền).
@@ -304,6 +350,34 @@ public class CreditService {
         if (order.getUserId() != userId) {
             throw new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND);
         }
+    }
+
+    private List<CreditTypeTotal> toCreditTypeTotals(List<CreditTypeTotalView> views) {
+        return views.stream().map(walletMapper::toCreditTypeTotal).toList();
+    }
+
+    private long sumAmounts(List<CreditTypeTotal> totals) {
+        long sum = 0;
+        for (CreditTypeTotal total : totals) {
+            sum += total.amount();
+        }
+        return sum;
+    }
+
+    // Type không có dòng nào trong khoảng thì không xuất hiện trong kết quả GROUP BY, nghĩa là tổng bằng 0.
+    private long amountOfType(List<CreditTypeTotal> totals, CreditTxType type) {
+        for (CreditTypeTotal total : totals) {
+            if (total.type() == type) {
+                return total.amount();
+            }
+        }
+        return 0;
+    }
+
+    // BR-P09: tiền mặt thực thu quy ra Credit phải bằng tổng Credit TOP_UP; lệch là dấu hiệu cộng thiếu hoặc cộng thừa.
+    private TopUpReconciliation reconcileTopUp(long cashCredits, long topUpCredits) {
+        long difference = cashCredits - topUpCredits;
+        return new TopUpReconciliation(cashCredits, topUpCredits, difference, difference == 0);
     }
 
     // Cột credit_ledger.amount là INT; toIntExact ném ArithmeticException (và rollback) thay vì cắt số âm thầm.
