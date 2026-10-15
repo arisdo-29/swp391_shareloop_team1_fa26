@@ -5,7 +5,8 @@ lỗi theo định dạng thống nhất (xem `wallet.md`).
 
 Người sở hữu: BE1. Module giữ, trừ, nhả phí đăng bài và phí sửa bài (C01, C02, C14, C14b), đặt thời hạn hiển thị
 `expire_at` khi duyệt lần đầu, và gia hạn bài (C16). Mọi mức phí và số ngày đọc từ ConfigService (`post_fee`,
-`edit_fee`, `renew_fee`, `post_display_days`), không viết cứng. Đổi tiền chỉ qua `wallet.CreditService`.
+`edit_fee`, `renew_fee`, `post_display_days`, `post_display_days_gold`), không viết cứng. Có một job nền chuyển bài
+quá hạn sang `EXPIRED` (mục "Job nền"). Đổi tiền chỉ qua `wallet.CreditService`.
 
 ## GET /api/v1/items/{id}/edit-quote
 
@@ -123,6 +124,30 @@ Ghi chú cho người gọi:
   nhả phí và không tính lượt (BR-D07 (4), R36).
 - Phí 0 (Admin cấu hình `post_fee` hoặc `edit_fee` = 0): vẫn ghi `fee_state = HELD` với `pending_fee = 0`, không gọi ví.
 - **Thời hạn hiển thị**: khi duyệt khoản giữ loại POST (chỉ có ở lần duyệt đầu, kể cả bài gửi lại sau khi bị từ chối
-  lần đầu), `chargeHeldFee` đặt `expire_at = lúc duyệt + post_display_days` ngày. Duyệt bản sửa (loại EDIT) không đổi
-  `expire_at`. Tạm thời mọi hạng đều dùng `post_display_days`; khi có `ReputationService.getRank` (#96) thì hạng Vàng
-  trở lên sẽ dùng `post_display_days_gold`.
+  lần đầu), `chargeHeldFee` đặt `expire_at = lúc duyệt + N` ngày, với N = `post_display_days_gold` (45) khi
+  `ReputationService.getRank(donorId)` là `GOLD` hoặc `DIAMOND`, còn lại `post_display_days` (30) (BR-D03, FR-29).
+  Hạng xét tại lúc duyệt; hạng đổi sau đó không tính lại `expire_at`. Duyệt bản sửa (loại EDIT) không đổi `expire_at`.
+  Gia hạn (`renew`) luôn cộng `post_display_days`, không phụ thuộc hạng (BR-P12).
+
+## Job nền
+
+Không phải endpoint. Profile `test` đặt `app.jobs.enabled=false` nên bean job không được tạo; test gọi thẳng service.
+
+| Job | Lịch | Service | Việc làm |
+|-----|------|---------|----------|
+| `ItemExpiryJob` (#89) | `0 0 * * * *` (phút 0 mỗi giờ) | `ItemExpiryService.expireOverdueItems(now)` | Bài hết hạn → `EXPIRED` |
+
+### Hết hạn bài (FR-29, BR-D03)
+
+- **Chọn**: `status = APPROVED`, `expire_at < now`, `is_deleted = false` (bài đang ẩn `is_active = false` vẫn hết hạn).
+  Đọc theo lô 100 id, phân trang keyset (`id > id cuối lô trước`).
+- **Không chọn**: `RESERVED` (đang giao dịch; `RESERVED → EXPIRED` không hợp lệ), `PENDING_REVIEW` (bản sửa chờ duyệt
+  lại), `EXPIRED`, `TRADED`, `REJECTED`. Bài quay lại `APPROVED` (huỷ giao dịch, duyệt bản sửa) mà đã quá `expire_at`
+  thì lượt kế tiếp xử lý.
+- **Mỗi bài một transaction**: khoá dòng `items` (`lockById`), kiểm lại `status = APPROVED` và `expire_at < now`, rồi
+  gọi `ItemService.markExpired(itemId)`; không đổi thẳng cột `status`. Khoá để không hết hạn bài vừa được gia hạn
+  cùng lúc (`renew` cũng khoá dòng này). Không khoá `users` nên không deadlock với các hàm phí.
+- **Lỗi**: một bài lỗi chỉ rollback chính nó, ghi log WARN, các bài khác vẫn chạy; bài đó vẫn `APPROVED` nên lượt sau
+  thử lại. Hàm trả số bài đã chuyển; job ghi log INFO số này mỗi lượt.
+- **Idempotent**: điều kiện chọn gồm trạng thái hiện tại, chạy lại không có tác dụng kép.
+- Không xoá `boosted_until`: luật đẩy bài bảo đảm `boosted_until ≤ expire_at`, nên lúc hết hạn mốc đẩy đã qua.

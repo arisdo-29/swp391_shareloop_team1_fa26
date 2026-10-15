@@ -8,6 +8,8 @@ import com.shareloop.listingfee.entity.ItemFeeState;
 import com.shareloop.listingfee.entity.ItemFeeType;
 import com.shareloop.listingfee.repository.ItemFeeRepository;
 import com.shareloop.listingfee.repository.ItemFeeSnapshot;
+import com.shareloop.reputation.entity.Rank;
+import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.wallet.entity.CreditTxType;
@@ -22,8 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
  * pending_fee_type, post_fee_paid, free_edit_used) qua entity lát cắt ItemFee; đổi tiền chỉ qua
  * {@code wallet.CreditService}; đổi status bài chỉ qua ItemService.
  *
- * <p>Mọi mức phí và số ngày hiển thị đọc từ ConfigService (ConfigKey post_fee, edit_fee, post_display_days), không
- * viết cứng. Lần duyệt đầu (khoản giữ loại POST) cũng đặt expire_at qua ItemFee, vì cột này thuộc nhóm cột của
+ * <p>Mọi mức phí và số ngày hiển thị đọc từ ConfigService (ConfigKey post_fee, edit_fee, post_display_days,
+ * post_display_days_gold), không viết cứng; hạng của chủ bài đọc qua ReputationService.getRank. Lần duyệt đầu (khoản giữ loại POST) cũng đặt expire_at qua ItemFee, vì cột này thuộc nhóm cột của
  * listingfee (Lộ trình 4.8).
  *
  * <p>Mọi bài đang chờ duyệt đều ở fee_state = HELD, kể cả khi phí bằng 0 (lượt sửa miễn phí, hoặc Admin cấu hình
@@ -44,16 +46,19 @@ public class PostFeeService {
     private final ItemFeeRepository itemFeeRepository;
     private final CreditService creditService;
     private final ConfigService configService;
+    private final ReputationService reputationService;
     private final Clock clock;
 
     public PostFeeService(
             ItemFeeRepository itemFeeRepository,
             CreditService creditService,
             ConfigService configService,
+            ReputationService reputationService,
             Clock clock) {
         this.itemFeeRepository = itemFeeRepository;
         this.creditService = creditService;
         this.configService = configService;
+        this.reputationService = reputationService;
         this.clock = clock;
     }
 
@@ -153,8 +158,8 @@ public class PostFeeService {
      *
      * <p>Quy tắc: đọc pending_fee và pending_fee_type của bài; pending_fee lớn hơn 0 thì gọi
      * {@code CreditService.chargeHeld} (bằng 0 thì không đụng ví, không ghi credit_ledger); fee_state = CHARGED. Loại
-     * POST (chỉ có ở lần duyệt đầu) thì post_fee_paid = true và expire_at = lúc duyệt + post_display_days ngày
-     * (BR-D03, UC-40). Loại EDIT thì free_edit_used = true (lượt sửa chỉ tính khi được duyệt) và không đổi expire_at.
+     * POST (chỉ có ở lần duyệt đầu) thì post_fee_paid = true và expire_at = lúc duyệt + post_display_days ngày, hoặc
+     * post_display_days_gold ngày khi chủ bài từ hạng Vàng trở lên (BR-D03, FR-29, UC-40). Loại EDIT thì free_edit_used = true (lượt sửa chỉ tính khi được duyệt) và không đổi expire_at.
      * pending_fee và pending_fee_type giữ nguyên sau khi trừ (lý do ở Javadoc lớp).
      *
      * <p>Transaction: REQUIRED, cùng transaction với ReviewService.approve. Khoá: dòng users của chủ bài (trong
@@ -250,9 +255,13 @@ public class PostFeeService {
         return new EditQuote(amount == 0, amount, reason);
     }
 
-    // TODO #96: dùng POST_DISPLAY_DAYS_GOLD khi hạng Vàng trở lên (cần ReputationService.getRank(donorId)).
-    // Gom vào một hàm để khi có getRank chỉ phải sửa một chỗ.
-    private int displayDaysAfterApproval(long donorId) {
+    // BR-D03: từ hạng Vàng trở lên (GOLD, DIAMOND) hiển thị lâu hơn. Xét hạng lúc duyệt; hạng đổi sau đó không tính
+    // lại expire_at. Package-private để unit test gọi thẳng, không phải dựng cả luồng trừ phí.
+    int displayDaysAfterApproval(long donorId) {
+        Rank rank = reputationService.getRank(donorId);
+        if (rank == Rank.GOLD || rank == Rank.DIAMOND) {
+            return configService.getInt(ConfigKey.POST_DISPLAY_DAYS_GOLD);
+        }
         return configService.getInt(ConfigKey.POST_DISPLAY_DAYS);
     }
 
