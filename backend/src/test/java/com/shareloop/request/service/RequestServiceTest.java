@@ -15,6 +15,7 @@ import com.shareloop.notification.service.NotificationService;
 import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
+import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.entity.Request;
@@ -22,6 +23,8 @@ import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.repository.RequestRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.dto.ContactInfo;
+import com.shareloop.user.service.UserService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -50,6 +53,9 @@ class RequestServiceTest {
 
     @Mock
     ItemService itemService;
+
+    @Mock
+    UserService userService;
 
     @Mock
     JdbcClient jdbcClient;
@@ -434,5 +440,100 @@ class RequestServiceTest {
         assertThat(response.donorWaiverAt()).isNotNull();
         assertThat(response.receiverWaiverAt()).isNotNull();
         assertThat(response.contactRevealedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("getContactInfo: Chủ bài (donor) xem thông tin người nhận (receiver) khi đã chốt lịch")
+    void getContactInfo_whenDonorCalls_returnsReceiverContact() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.select(Instant.now());
+        request.proposeSchedule(
+                "IN_PERSON", "Cổng trường", Instant.now().plus(2, ChronoUnit.DAYS), true, false, Instant.now());
+        request.confirmLogistics(false, false, Instant.now()); // sang LOGISTICS_CONFIRMED, contactRevealedAt != null
+
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(userService.findContact(10L))
+                .thenReturn(new ContactInfo(10L, "Người Nhận", "receiver@example.com", "0901234567"));
+
+        RequestContactResponse response = requestService.getContactInfo(101L, 20L); // donor gọi
+
+        assertThat(response).isNotNull();
+        assertThat(response.userId()).isEqualTo(10L);
+        assertThat(response.fullName()).isEqualTo("Người Nhận");
+        assertThat(response.email()).isEqualTo("receiver@example.com");
+        assertThat(response.phone()).isEqualTo("0901234567");
+    }
+
+    @Test
+    @DisplayName("getContactInfo: Người nhận (receiver) xem thông tin chủ bài (donor) khi đã chốt lịch")
+    void getContactInfo_whenReceiverCalls_returnsDonorContact() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.select(Instant.now());
+        request.proposeSchedule(
+                "IN_PERSON", "Cổng trường", Instant.now().plus(2, ChronoUnit.DAYS), true, false, Instant.now());
+        request.confirmLogistics(false, false, Instant.now()); // sang LOGISTICS_CONFIRMED
+
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(userService.findContact(20L))
+                .thenReturn(new ContactInfo(20L, "Chủ Bài", "donor@example.com", "0987654321"));
+
+        RequestContactResponse response = requestService.getContactInfo(101L, 10L); // receiver gọi
+
+        assertThat(response).isNotNull();
+        assertThat(response.userId()).isEqualTo(20L);
+        assertThat(response.fullName()).isEqualTo("Chủ Bài");
+        assertThat(response.email()).isEqualTo("donor@example.com");
+        assertThat(response.phone()).isEqualTo("0987654321");
+    }
+
+    @Test
+    @DisplayName("getContactInfo: Ném lỗi CONTACT_NOT_REVEALED khi chưa chốt lịch")
+    void getContactInfo_whenBeforeLogisticsConfirmed_throwsContactNotRevealed() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.select(Instant.now()); // RESERVED, contactRevealedAt is null
+
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        assertThatThrownBy(() -> requestService.getContactInfo(101L, 20L))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_CONTACT_NOT_REVEALED);
+                });
+    }
+
+    @Test
+    @DisplayName("getContactInfo: Ném lỗi FORBIDDEN khi người ngoài yêu cầu xem thông tin")
+    void getContactInfo_whenOutsider_throwsForbidden() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.select(Instant.now());
+
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        assertThatThrownBy(() -> requestService.getContactInfo(101L, 999L))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_FORBIDDEN);
+                });
+    }
+
+    @Test
+    @DisplayName("getContactInfo: Ném lỗi NOT_FOUND khi yêu cầu không tồn tại")
+    void getContactInfo_whenNotFound_throwsNotFound() {
+        when(requestRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> requestService.getContactInfo(999L, 20L))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_NOT_FOUND);
+                });
     }
 }

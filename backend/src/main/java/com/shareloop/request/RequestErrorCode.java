@@ -19,6 +19,8 @@ public enum RequestErrorCode implements ErrorCode {
     REQUEST_WAIVER_REQUIRED(
             HttpStatus.BAD_REQUEST, "Hình thức giao hàng (Shipping) bắt buộc phải xác nhận cam kết chịu trách nhiệm."),
     REQUEST_SCHEDULE_NOT_SET(HttpStatus.BAD_REQUEST, "Chưa có thông tin lịch hẹn để xác nhận."),
+    REQUEST_CONTACT_NOT_REVEALED(
+            HttpStatus.CONFLICT, "Thông tin liên lạc chỉ được hiển thị sau khi hai bên đã chốt lịch hẹn."),
     REQUEST_FORBIDDEN(HttpStatus.FORBIDDEN, "Bạn không có quyền thao tác trên yêu cầu này.");
 
     private final HttpStatus status;

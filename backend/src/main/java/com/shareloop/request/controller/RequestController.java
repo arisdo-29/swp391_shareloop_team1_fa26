@@ -3,6 +3,7 @@ package com.shareloop.request.controller;
 import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
+import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.service.RequestService;
@@ -109,5 +110,14 @@ public class RequestController {
             @CurrentUserId Long currentUserId,
             @RequestBody(required = false) ConfirmLogisticsRequest request) {
         return requestService.confirmLogistics(id, currentUserId, request);
+    }
+
+    /**
+     * Lấy thông tin liên lạc của đối tác khi giao dịch đã chốt lịch (FR-82, BR-T11).
+     */
+    @Operation(summary = "Lấy thông tin liên lạc của đối tác khi giao dịch đã chốt lịch")
+    @GetMapping("/api/v1/requests/{id}/contact")
+    public RequestContactResponse getContact(@PathVariable long id, @CurrentUserId Long currentUserId) {
+        return requestService.getContactInfo(id, currentUserId);
     }
 }
