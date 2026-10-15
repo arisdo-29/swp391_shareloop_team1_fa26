@@ -42,6 +42,32 @@ class MailTemplateRendererTest {
     }
 
     @Test
+    void renderOtp_containsRegisterNote() {
+        // when
+        String html = mailTemplateRenderer.renderOtp("482915", 5);
+
+        // then
+        assertThat(html).contains("Nếu bạn không đăng ký tài khoản ShareLoop").doesNotContain("đặt lại mật khẩu");
+    }
+
+    @Test
+    void renderPasswordResetOtp_containsCodeAndResetNote() {
+        // given
+        String code = "482915";
+
+        // when
+        String html = mailTemplateRenderer.renderPasswordResetOtp(code, 5);
+
+        // then
+        assertThat(html)
+                .contains(code)
+                .contains("5 phút")
+                .contains("đặt lại mật khẩu ShareLoop")
+                .doesNotContain("Nếu bạn không đăng ký")
+                .doesNotContain("{{");
+    }
+
+    @Test
     void renderNotification_escapesHtmlInValues() {
         // given
         String title = "<script>alert('x')</script>";
