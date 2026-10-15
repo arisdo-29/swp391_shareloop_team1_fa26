@@ -1,7 +1,10 @@
 package com.shareloop.setting.controller;
 
+import com.shareloop.common.exception.BusinessException;
 import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.SettingErrorCode;
+import com.shareloop.setting.dto.AdminUpdateConfigRequest;
 import com.shareloop.setting.dto.ConfigResponse;
 import com.shareloop.setting.dto.UpdateConfigRequest;
 import com.shareloop.setting.service.ConfigService;
@@ -32,10 +35,22 @@ public class AdminConfigController {
     @PutMapping("/{key}")
     public ConfigResponse updateConfig(
             @PathVariable String key, @Valid @RequestBody UpdateConfigRequest request, @CurrentUserId Long adminId) {
-        ConfigKey configKey = java.util.Arrays.stream(ConfigKey.values())
+        ConfigKey configKey = resolveKey(key);
+        return configService.update(configKey, request.value(), request.reason(), adminId);
+    }
+
+    @PutMapping
+    public ConfigResponse updateConfig(
+            @Valid @RequestBody AdminUpdateConfigRequest request, @CurrentUserId Long adminId) {
+        ConfigKey configKey = resolveKey(request.key());
+        return configService.update(configKey, request.value(), request.reason(), adminId);
+    }
+
+    private ConfigKey resolveKey(String key) {
+        return java.util.Arrays.stream(ConfigKey.values())
                 .filter(candidate -> candidate.key().equals(key))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Unknown configuration key: " + key));
-        return configService.update(configKey, request.value(), request.reason(), adminId);
+                .orElseThrow(() ->
+                        new BusinessException(SettingErrorCode.SETTING_CONFIG_NOT_FOUND, "Unknown config: " + key));
     }
 }
