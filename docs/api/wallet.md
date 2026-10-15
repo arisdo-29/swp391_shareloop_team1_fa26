@@ -85,7 +85,7 @@ dịch làm đổi số dư thật: nạp, phí đăng/sửa/gia hạn/đẩy b�
 | `WALLET_INSUFFICIENT_BALANCE`      | 402  | Credit khả dụng không đủ để giữ hoặc trừ                          | qua API của module gọi |
 | `WALLET_INVALID_AMOUNT`            | 422  | Số Credit không dương                                             | qua API của module gọi |
 | `WALLET_HELD_INSUFFICIENT`         | 409  | Số đang giữ nhỏ hơn số cần nhả hoặc trừ                           | qua API của module gọi |
-| `WALLET_INVALID_DATE_RANGE`        | 422  | `from` không trước `to`                                           | `GET /wallet/transactions` |
+| `WALLET_INVALID_DATE_RANGE`        | 422  | `from` không trước `to`                                           | `GET /wallet/transactions`; báo cáo tài chính của admin |
 | `WALLET_TOPUP_AMOUNT_INVALID`      | 422  | Số tiền nạp dưới mức tối thiểu hoặc không phải bội số             | xem `payment.md`    |
 | `WALLET_PAYMENT_ORDER_NOT_FOUND`   | 404  | Không có đơn nạp hoặc đơn của người khác                          | xem `payment.md`    |
 | `WALLET_PAYMENT_ORDER_NOT_PAYABLE` | 409  | Đơn nạp `FAILED` hoặc `EXPIRED`                                   | xem `payment.md`    |
@@ -111,8 +111,77 @@ ConfigService, `CreditService` không tự quyết mức phí.
 | `getWallet(userId)`                          | Không đổi, đọc không khoá                      | Không               | -                                     |
 | `topUp(userId, paymentOrderId)`              | Đơn PENDING → SUCCESS, `credit_balance` tăng, `has_topped_up = true`; đơn đã SUCCESS thì không đổi gì, trả ví hiện tại | Có, amount dương, kèm `payment_order_id` | `TOP_UP` |
 | `getTransactions(userId, from, to, page, size)` | Không đổi, đọc không khoá                   | Không               | -                                     |
+| `getFinanceSummary(from, to)`                | Không đổi, đọc không khoá; tổng hợp toàn hệ thống | Không          | -                                     |
 
 `topUp` khoá dòng `users` rồi mới khoá dòng `payment_orders` (thứ tự cố định để tránh deadlock) và trả `WalletResponse`.
 Người gọi hiện tại: `PaymentService` (xác nhận giả lập); sau này là VNPay IPN.
 
 Truyền `type` ngoài danh sách của hàm là lỗi lập trình: ném `IllegalArgumentException`, không phải mã lỗi trên.
+
+### Báo cáo tài chính cho Admin: `getFinanceSummary(from, to)` (FR-109, FR-110, BR-P09)
+
+```java
+FinanceSummaryResponse getFinanceSummary(Instant from, Instant to)
+```
+
+Báo cáo ba sổ (SRS mục 4.7) của **toàn hệ thống** trong khoảng `[from, to)`. Người gọi: admin (#115) gọi qua
+`CreditService`, không inject repository của wallet. Hàm không kiểm quyền; controller của admin tự giới hạn cho Admin.
+
+- `from`, `to` có thể `null` (không giới hạn đầu đó), giống `getTransactions`. `from` không trước `to` thì ném
+  `BusinessException(WALLET_INVALID_DATE_RANGE)`.
+- Read-only, không khoá dòng; mọi phép cộng chạy bằng `SUM ... GROUP BY` trong DB.
+
+| Trường            | Cách tính                                                                                     |
+|-------------------|-----------------------------------------------------------------------------------------------|
+| `from`, `to`      | Đúng như người gọi truyền (có thể `null`)                                                     |
+| `cashOrderCount`  | Số đơn `payment_orders` có `status = SUCCESS` và `paid_at` trong khoảng                       |
+| `cashAmountVnd`   | Tổng `amount_vnd` của các đơn đó (tiền mặt thực thu)                                          |
+| `creditInTotal`   | Tổng `amount` của các dòng `credit_ledger` có `amount > 0` và `created_at` trong khoảng       |
+| `creditInByType`  | Như trên, tách theo `type` (thực tế: `TOP_UP`, `ADMIN_ADJUST` dương)                          |
+| `creditOutTotal`  | Tổng của các dòng có `amount < 0`, **trả số dương** (doanh thu đã thực hiện)                   |
+| `creditOutByType` | Như trên, tách theo `type` (`POST_FEE`, `EDIT_FEE`, `RENEW_FEE`, `BOOST_FEE`, `AI_SEARCH_FEE`; `ADMIN_ADJUST` âm nếu có nằm dòng riêng) |
+| `reconciliation`  | Dòng đối chiếu BR-P09, xem dưới                                                               |
+
+- Mỗi phần tử `...ByType` là `{ type, amount, entryCount }`; `amount` luôn không âm, `entryCount` là số dòng sổ cái.
+  Chỉ có các `type` có dữ liệu trong khoảng, sắp theo tên `type`.
+- Giữ chỗ (`hold`) và nhả giữ (`release`) **không** được tính: chúng chỉ đổi `held_credit`, không ghi sổ cái. Phí
+  đăng/sửa bài vào "trừ ra" lúc Admin duyệt (`chargeHeld` ghi dòng `POST_FEE`/`EDIT_FEE`).
+- Tiền mặt lọc theo `paid_at` (lúc tiền thật về), không theo `created_at` của đơn, để khớp ngày với dòng `TOP_UP`.
+
+**Đối chiếu (`reconciliation`)**: `cashCredits` = tổng `payment_orders.credits` của đơn SUCCESS trong khoảng (tiền mặt
+quy ra Credit theo tỉ lệ đã chốt lúc nạp); `topUpCredits` = tổng Credit `TOP_UP` trong khoảng;
+`difference = cashCredits - topUpCredits`; `matched = (difference == 0)`. `difference > 0` là có đơn đã thu tiền mà
+chưa cộng Credit; `< 0` là cộng Credit không có đơn tương ứng. `paid_at` và `created_at` của dòng `TOP_UP` ghi trong
+cùng một transaction nên chỉ chênh rất nhỏ; chỉ có thể lệch giả nếu giao dịch rơi đúng mốc cắt `to`.
+
+```json
+{
+  "from": "2026-09-30T17:00:00Z",
+  "to": "2026-10-31T17:00:00Z",
+  "cashOrderCount": 3,
+  "cashAmountVnd": 100000,
+  "creditInTotal": 107,
+  "creditInByType": [
+    { "type": "ADMIN_ADJUST", "amount": 7, "entryCount": 1 },
+    { "type": "TOP_UP", "amount": 100, "entryCount": 3 }
+  ],
+  "creditOutTotal": 22,
+  "creditOutByType": [
+    { "type": "AI_SEARCH_FEE", "amount": 2, "entryCount": 2 },
+    { "type": "EDIT_FEE", "amount": 5, "entryCount": 1 },
+    { "type": "POST_FEE", "amount": 10, "entryCount": 2 },
+    { "type": "RENEW_FEE", "amount": 5, "entryCount": 1 }
+  ],
+  "reconciliation": { "cashCredits": 100, "topUpCredits": 100, "difference": 0, "matched": true }
+}
+```
+
+### Tra cứu lịch sử tài chính của một người (FR-112)
+
+Admin dùng lại hai hàm có sẵn, truyền `userId` của người cần tra (hàm không ràng buộc người gọi phải là chủ ví):
+
+- `getWallet(userId)`: số dư, số đang giữ, khả dụng, đã từng nạp hay chưa.
+- `getTransactions(userId, from, to, page, size)`: các dòng sổ cái của người đó, mới nhất trước, có phân trang.
+
+Danh sách đơn nạp của một người (gồm cả `PENDING`, `FAILED`, `EXPIRED`) hiện chưa có hàm; cần thì mở issue riêng
+cho wallet.
