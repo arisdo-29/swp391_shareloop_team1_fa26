@@ -9,7 +9,11 @@ public enum SettingErrorCode implements ErrorCode {
     SETTING_CONFIG_OUT_OF_RANGE(HttpStatus.BAD_REQUEST, "Giá trị cấu hình nằm ngoài khoảng cho phép."),
     SETTING_LEXICON_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy từ khóa kiểm duyệt."),
     SETTING_LEXICON_INVALID_VALUE(HttpStatus.BAD_REQUEST, "Thông tin từ khóa kiểm duyệt không hợp lệ."),
-    SETTING_LEXICON_DUPLICATE(HttpStatus.CONFLICT, "Từ khóa đã tồn tại trong nhóm và phạm vi này.");
+    SETTING_LEXICON_DUPLICATE(HttpStatus.CONFLICT, "Từ khóa đã tồn tại trong nhóm và phạm vi này."),
+    SETTING_CHECKLIST_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy mục checklist."),
+    SETTING_CHECKLIST_INVALID_VALUE(HttpStatus.BAD_REQUEST, "Thông tin mục checklist không hợp lệ."),
+    SETTING_CHECKLIST_AT_LEAST_ONE_REQUIRED(
+            HttpStatus.BAD_REQUEST, "Phải luôn có ít nhất 1 mục checklist đang dùng (BR-A06).");
 
     private final HttpStatus status;
     private final String defaultMessage;
