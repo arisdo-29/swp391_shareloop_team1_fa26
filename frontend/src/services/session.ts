@@ -17,7 +17,7 @@ export async function restoreSession(dispatch: AppDispatch, currentUserId: strin
     return;
   }
   try {
-    const user = await authApi.me(userId);
+    const user = await authApi.me();
     dispatch(actions.loginFromApi(toFeUser(user)));
   } catch {
     dispatch(actions.logout()); // token het han: interceptor da xoa token

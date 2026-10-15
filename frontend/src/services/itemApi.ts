@@ -5,6 +5,7 @@ export const itemApiEndpoints = {
   detail: (id: number) => `/api/v1/items/${id}`,
   create: '/api/v1/items',
   myItems: '/api/v1/me/items',
+  editQuote: (id: number) => `/api/v1/items/${id}/edit-quote`,
 } as const;
 
 export interface ItemListParams {
@@ -47,6 +48,9 @@ export interface ItemResponse extends CreateItemRequest {
   updatedAt: string;
 }
 
+export type EditQuoteReason = 'NOT_YET_APPROVED' | 'REPOST_FEE' | 'PENDING_REVIEW_OVERWRITE' | 'FIRST_FREE_EDIT' | 'PAID_EDIT';
+export interface EditQuote { free: boolean; amount: number; reason: EditQuoteReason }
+
 export function itemListUrl(params: ItemListParams = {}): string {
   const query = new URLSearchParams();
   if (params.categoryId !== undefined) query.set('categoryId', String(params.categoryId));
@@ -75,6 +79,10 @@ export const itemApi = {
   },
   async mine(): Promise<ItemResponse[]> {
     const { data } = await http.get<ItemResponse[]>(itemApiEndpoints.myItems);
+    return data;
+  },
+  async editQuote(id: number): Promise<EditQuote> {
+    const { data } = await http.get<EditQuote>(itemApiEndpoints.editQuote(id));
     return data;
   },
 };

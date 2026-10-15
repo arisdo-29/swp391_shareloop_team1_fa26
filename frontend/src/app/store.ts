@@ -594,7 +594,7 @@ const dataSlice = createSlice({
         (request) =>
           request.itemId === item.id &&
           request.requesterId === requester.id &&
-          (request.status === 'PENDING' || request.status === 'ACCEPTED'),
+          (request.status === 'PENDING' || request.status === 'RESERVED'),
       );
       if (duplicate) return;
       const offeredItem = action.payload.offeredItemId
@@ -654,10 +654,10 @@ const dataSlice = createSlice({
         });
         if (!paid) return;
       }
-      request.status = 'ACCEPTED';
+      request.status = 'RESERVED';
       state.itemRequests.forEach((entry) => {
         if (entry.itemId === item.id && entry.id !== request.id && entry.status === 'PENDING') {
-          entry.status = 'NOT_SELECTED';
+          entry.status = 'REJECTED';
         }
       });
       item.status = 'IN_TRANSACTION';

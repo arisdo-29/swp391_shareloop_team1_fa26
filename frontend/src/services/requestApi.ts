@@ -1,5 +1,5 @@
 import { http } from './http';
-import type { ItemRequest } from '../types/domain';
+import type { ItemRequest, ItemRequestStatus } from '../types/domain';
 import { apiUserId } from './mappers';
 
 // Theo docs/api/request.md
@@ -8,16 +8,37 @@ export interface RequestResponse {
   itemId: number;
   receiverId: number;
   offeredItemId?: number;
-  type: string;
-  status: string;
+  type: 'GIVE' | 'SWAP';
+  status: ItemRequestStatus;
   deliveryMethod?: string;
   meetingPlace?: string;
   meetingTime?: string;
+  donorScheduleOkAt?: string;
+  receiverScheduleOkAt?: string;
+  donorWaiverAt?: string;
+  receiverWaiverAt?: string;
+  contactRevealedAt?: string;
   createdAt: string;
 }
 
 interface CreateRequestBody {
   offeredItemId?: number;
+}
+
+export interface ScheduleRequest {
+  deliveryMethod: 'IN_PERSON' | 'SHIPPING';
+  meetingPlace: string;
+  meetingTime: string;
+  agreeToWaiver?: boolean;
+}
+
+export interface ConfirmLogisticsRequest { agreeToWaiver?: boolean }
+
+export interface RequestContactResponse {
+  userId: number;
+  fullName: string;
+  email: string;
+  phone: string;
 }
 
 export const toBackendUserId = (userId: string | null | undefined) => {
@@ -34,7 +55,7 @@ export function toFeItemRequest(request: RequestResponse, requesterId = apiUserI
     itemId: String(request.itemId),
     offeredItemId: request.offeredItemId ? String(request.offeredItemId) : undefined,
     requesterId,
-    status: request.status as ItemRequest['status'],
+    status: request.status,
     message: '',
     createdAt: request.createdAt,
   };
@@ -68,6 +89,30 @@ export const requestApi = {
   },
   async select(id: number, currentUserId: number) {
     const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/select`, undefined, {
+      params: { currentUserId },
+    });
+    return data;
+  },
+  async detail(id: number, currentUserId: number) {
+    const { data } = await http.get<RequestResponse>(`/api/v1/requests/${id}`, {
+      params: { currentUserId },
+    });
+    return data;
+  },
+  async schedule(id: number, currentUserId: number, input: ScheduleRequest) {
+    const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/schedule`, input, {
+      params: { currentUserId },
+    });
+    return data;
+  },
+  async confirmLogistics(id: number, currentUserId: number, input: ConfirmLogisticsRequest = {}) {
+    const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/confirm-logistics`, input, {
+      params: { currentUserId },
+    });
+    return data;
+  },
+  async contact(id: number, currentUserId: number) {
+    const { data } = await http.get<RequestContactResponse>(`/api/v1/requests/${id}/contact`, {
       params: { currentUserId },
     });
     return data;

@@ -1,5 +1,5 @@
 import type { Item, ItemCondition, ItemStatus, User } from '../types/domain';
-import type { AuthUserResponse } from './authApi';
+import type { AuthUserResponse, MeResponse } from './authApi';
 import type { AreaResponse, CategoryResponse } from './catalogApi';
 import type { ItemResponse } from './itemApi';
 import { resolveMediaUrl } from './mediaUrl';
@@ -8,16 +8,18 @@ export interface AreaOption { id: number; name: string; label: string }
 
 export const apiUserId = (id: number) => `api_${id}`;
 
-export function toFeUser(user: AuthUserResponse): User {
+export function toFeUser(user: AuthUserResponse | MeResponse): User {
+  const profile = user as MeResponse;
   return {
     id: apiUserId(user.id),
     username: user.email,
     password: '',
     name: user.fullName,
     email: user.email,
-    phone: '',
+    phone: profile.phone ?? '',
     district: '',
     avatarInitials: user.fullName.split(' ').map((p) => p[0]).slice(-2).join('').toUpperCase(),
+    avatarUrl: profile.avatarUrl ?? undefined,
     totalCredit: 0,
     availableCredit: 0,
     holdCredit: 0,

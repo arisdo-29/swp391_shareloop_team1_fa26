@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
 import {
+  Alert,
   Avatar,
   Button,
   EmptyState,
@@ -19,6 +20,7 @@ import {
 import { CATEGORIES } from '../../constants/domain';
 import { formatVnd } from '../../utils/formatting';
 import { adminConfigApi, type AdminConfigResponse } from '../../services/adminConfigApi';
+import { adminModerationApi, type ReviewQueueItem } from '../../services/adminModerationApi';
 import type { ApiError } from '../../services/http';
 import { toBackendUserId } from '../../services/requestApi';
 import type { AppStateData, ComplaintStatus, ForbiddenKeyword, Item, KeywordAction, RankRule, ReputationPointRule, SupportedDistrict, Transaction, User } from '../../types/domain';
@@ -138,33 +140,183 @@ export function AdminModeration() {
   const data = useAppSelector(selectData);
   const admin = useAppSelector(selectCurrentUser)!;
   const dispatch = useAppDispatch();
-  const isApiAdmin = toBackendUserId(admin.id) !== null;
+  const backendAdminId = toBackendUserId(admin.id);
+  const isApiAdmin = backendAdminId !== null && admin.role === 'admin';
   const [query, setQuery] = useState('');
   const [reviewing, setReviewing] = useState<Item | null>(null);
   const [approving, setApproving] = useState<Item | null>(null);
   const [rejecting, setRejecting] = useState<Item | null>(null);
   const [toast, setToast] = useState('');
   const [checklist, setChecklist] = useState<Record<string, Record<string, boolean>>>({});
+  const [apiPending, setApiPending] = useState<ReviewQueueItem[]>([]);
+  const [apiChecklist, setApiChecklist] = useState<string[]>([]);
+  const [apiAnswers, setApiAnswers] = useState<Record<number, boolean[]>>({});
+  const [apiRejecting, setApiRejecting] = useState<ReviewQueueItem | null>(null);
+  const [apiRejectReason, setApiRejectReason] = useState('');
+  const [apiActionId, setApiActionId] = useState<number | null>(null);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
+  const [apiLegacyNotice, setApiLegacyNotice] = useState('');
+  const [moderationReloadKey, setModerationReloadKey] = useState(0);
+
+  useEffect(() => {
+    if (!isApiAdmin) return;
+    let active = true;
+    setApiLoading(true);
+    setApiError('');
+    setApiLegacyNotice('');
+    adminModerationApi
+      .pendingReviews({ page: 0, size: 100 })
+      .then((response) => {
+        if (!active) return;
+        setApiPending(response.items);
+        setApiChecklist(response.checklist);
+        setApiAnswers(Object.fromEntries(response.items.map((item) => [item.id, response.checklist.map(() => false)])));
+      })
+      .catch(async (error: ApiError) => {
+        if (!active) return;
+        if (error.status === 404) {
+          try {
+            const legacyItems = await adminModerationApi.pendingItems({ page: 0, size: 100 });
+            if (!active) return;
+            setApiPending(legacyItems);
+            setApiChecklist([]);
+            setApiLegacyNotice('Backend đang dùng hàng chờ cũ; chức năng duyệt và từ chối chưa khả dụng.');
+            return;
+          } catch (fallbackError) {
+            error = fallbackError as ApiError;
+          }
+        }
+        setApiPending([]);
+        setApiError(error.status === 403 ? 'Tài khoản hiện tại không có quyền xem hàng chờ kiểm duyệt.' : 'Không tải được danh sách bài chờ duyệt từ Backend.');
+      })
+      .finally(() => {
+        if (active) setApiLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isApiAdmin, moderationReloadKey]);
+
+  const approveApiReview = async (item: ReviewQueueItem) => {
+    const answers = apiAnswers[item.id] ?? [];
+    if (!apiChecklist.length || answers.length !== apiChecklist.length || answers.some((answer) => !answer)) return;
+    setApiActionId(item.id);
+    setApiError('');
+    try {
+      await adminModerationApi.approve(item.id, { answers });
+      setApiPending((current) => current.filter((entry) => entry.id !== item.id));
+      setToast(`Đã duyệt bài #${item.id}.`);
+    } catch (error) {
+      const apiError = error as ApiError;
+      setApiError(apiError.status === 403 ? 'Tài khoản hiện tại không có quyền duyệt bài.' : apiError.message || 'Không duyệt được bài đăng.');
+    } finally {
+      setApiActionId(null);
+    }
+  };
+
+  const rejectApiReview = async () => {
+    const reason = apiRejectReason.trim();
+    if (!apiRejecting || !reason) return;
+    setApiActionId(apiRejecting.id);
+    setApiError('');
+    try {
+      await adminModerationApi.reject(apiRejecting.id, { reason });
+      setApiPending((current) => current.filter((entry) => entry.id !== apiRejecting.id));
+      setToast(`Đã từ chối bài #${apiRejecting.id}.`);
+      setApiRejecting(null);
+      setApiRejectReason('');
+    } catch (error) {
+      const apiError = error as ApiError;
+      setApiError(apiError.status === 403 ? 'Tài khoản hiện tại không có quyền từ chối bài.' : apiError.message || 'Không từ chối được bài đăng.');
+    } finally {
+      setApiActionId(null);
+    }
+  };
 
   if (isApiAdmin) {
+    const apiRows = apiPending.filter((item) => `${item.title} ${item.donorId} ${item.aiRisk ?? ''} ${item.moderationFlag ?? ''}`.toLowerCase().includes(query.trim().toLowerCase()));
     return (
-      <Panel
-        title="Duyệt bài"
-        description="Backend hiện chưa công bố API để Admin xem, duyệt hoặc từ chối bài chờ kiểm duyệt."
-      >
-        <div className="rounded-lg bg-white p-6 ring-1 ring-border/80">
-          <EmptyState
-            icon="shield"
-            title="Chưa có API duyệt bài cho tài khoản Backend"
-            text="OpenAPI live chưa có endpoint danh sách bài PENDING_REVIEW, xem chi tiết bài chờ duyệt, duyệt bài hoặc từ chối bài. Trang này không hiển thị dữ liệu mock cho Admin Backend để tránh nhầm với dữ liệu thật."
-          />
-          <div className="mt-5 rounded-md bg-amber-50 p-4 text-sm leading-6 text-warning">
-            <p className="font-semibold">Cần Backend bổ sung API trước khi có thể duyệt sản phẩm thật như #8.</p>
-            <p className="mt-1">
-              Tối thiểu cần API đọc danh sách bài chờ duyệt và API chuyển trạng thái sang APPROVED hoặc REJECTED theo quyền Admin.
-            </p>
+      <Panel title="Duyệt bài" description="Danh sách bài chờ kiểm duyệt được tải trực tiếp từ Backend.">
+        <FilterBar>
+          <div className="flex-1">
+            <SearchField placeholder="Tìm theo tiêu đề, người đăng hoặc mức rủi ro..." value={query} onChange={(event) => setQuery(event.target.value)} />
           </div>
-        </div>
+          <span className="text-xs text-text-muted">{apiPending.length} bài đăng chờ</span>
+        </FilterBar>
+        {toast ? <div className="mb-4"><Alert tone="success">{toast}</Alert></div> : null}
+        {apiLegacyNotice ? <div className="mb-4"><Alert tone="warning">{apiLegacyNotice}</Alert></div> : null}
+        {apiLoading ? (
+          <EmptyState title="Đang tải bài chờ duyệt" text="Vui lòng chờ trong giây lát." />
+        ) : apiError ? (
+          <div className="space-y-3 rounded-md bg-red-50 p-4 text-sm text-error">
+            <p>{apiError}</p>
+            <Button variant="outline" size="sm" onClick={() => setModerationReloadKey((key) => key + 1)}>
+              Thử tải lại
+            </Button>
+          </div>
+        ) : apiRows.length ? (
+          <div className="space-y-3">
+            {apiRows.map((item) => (
+              <article key={item.id} className="grid gap-4 rounded-lg bg-white p-4 ring-1 ring-border/80 lg:grid-cols-[1fr_280px]">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                    <span>#{item.id}</span>
+                    <span>Người đăng #{item.donorId}</span>
+                    {item.aiRisk ? <span className="rounded-sm bg-amber-50 px-2 py-1 font-semibold text-warning">Rủi ro: {item.aiRisk}</span> : null}
+                  </div>
+                  <h2 className="mt-2 font-bold">{item.title}</h2>
+                  <p className="mt-2 text-xs leading-5 text-text-muted">{item.flagReason || item.moderationFlag || 'Backend không cung cấp lý do gắn cờ.'}</p>
+                  <p className="mt-2 text-xs text-text-muted">Gửi lúc {new Date(item.createdAt).toLocaleString('vi-VN')}</p>
+                </div>
+                <div className="space-y-3">
+                  <p className="text-xs text-text-muted">Điểm tin cậy: {item.donorTrustStars ?? '--'}</p>
+                  <div className="space-y-2 rounded-md bg-surface-low p-3">
+                    {apiChecklist.map((label, index) => (
+                      <label key={label} className="flex items-start gap-2 text-xs leading-5">
+                        <input
+                          type="checkbox"
+                          checked={apiAnswers[item.id]?.[index] ?? false}
+                          disabled={apiActionId === item.id}
+                          onChange={(event) => setApiAnswers((current) => ({
+                            ...current,
+                            [item.id]: apiChecklist.map((_, answerIndex) => answerIndex === index ? event.target.checked : (current[item.id]?.[answerIndex] ?? false)),
+                          }))}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {apiChecklist.length ? <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="danger" disabled={apiActionId === item.id} onClick={() => { setApiRejecting(item); setApiRejectReason(''); }}>
+                      Từ chối
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={apiActionId === item.id || !apiChecklist.length || !(apiAnswers[item.id] ?? []).every(Boolean)}
+                      onClick={() => void approveApiReview(item)}
+                    >
+                      {apiActionId === item.id ? 'Đang xử lý...' : 'Duyệt bài'}
+                    </Button>
+                  </div> : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState icon="shield" title={query ? 'Không tìm thấy bài phù hợp' : 'Không có bài chờ duyệt'} text={query ? 'Hãy thử từ khóa khác.' : 'Backend chưa trả về bài đăng nào trong hàng chờ.'} />
+        )}
+        {apiRejecting ? (
+          <Modal title={`Từ chối bài #${apiRejecting.id}`} onClose={() => { if (apiActionId === null) setApiRejecting(null); }}>
+            <TextArea label="Lý do từ chối" value={apiRejectReason} onChange={(event) => setApiRejectReason(event.target.value)} disabled={apiActionId !== null} />
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setApiRejecting(null)} disabled={apiActionId !== null}>Hủy</Button>
+              <Button variant="danger" onClick={() => void rejectApiReview()} disabled={!apiRejectReason.trim() || apiActionId !== null}>
+                {apiActionId !== null ? 'Đang xử lý...' : 'Xác nhận từ chối'}
+              </Button>
+            </div>
+          </Modal>
+        ) : null}
       </Panel>
     );
   }
@@ -175,8 +327,7 @@ export function AdminModeration() {
     const searchable = `${item.title} ${owner?.name ?? ''} ${item.category}`.toLowerCase();
     return searchable.includes(query.trim().toLowerCase());
   });
-  const checkedCount = (itemId: string) =>
-    moderationChecklist.filter((entry) => checklist[itemId]?.[entry.key]).length;
+  const checkedCount = (itemId: string) => moderationChecklist.filter((entry) => checklist[itemId]?.[entry.key]).length;
   const readyToApprove = (itemId: string) => checkedCount(itemId) === moderationChecklist.length;
   const approvePost = (item: Item) => {
     dispatch(
@@ -196,17 +347,10 @@ export function AdminModeration() {
     });
   };
   return (
-    <Panel
-      title="Duyệt bài"
-      description="Kiểm tra nội dung, hình ảnh và tính phù hợp trước khi hiển thị."
-    >
+    <Panel title="Duyệt bài" description="Kiểm tra nội dung, hình ảnh và tính phù hợp trước khi hiển thị.">
       <FilterBar>
         <div className="flex-1">
-          <SearchField
-            placeholder="Tìm theo tiêu đề..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+          <SearchField placeholder="Tìm theo tiêu đề..." value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
         <span className="text-xs text-text-muted">{pendingPosts.length} bài đăng chờ</span>
       </FilterBar>
@@ -214,48 +358,27 @@ export function AdminModeration() {
         {rows.map((item) => {
           const owner = data.users.find((u) => u.id === item.ownerId);
           return (
-            <article
-              key={item.id}
-              className="grid gap-4 rounded-lg bg-white p-4 ring-1 ring-border/80 md:grid-cols-[96px_1fr_auto] md:items-center"
-            >
-              <img
-                src={item.images[0]}
-                alt={item.title}
-                className="aspect-square w-full rounded-md object-cover md:size-24"
-              />
+            <article key={item.id} className="grid gap-4 rounded-lg bg-white p-4 ring-1 ring-border/80 md:grid-cols-[96px_1fr_auto] md:items-center">
+              <img src={item.images[0]} alt={item.title} className="aspect-square w-full rounded-md object-cover md:size-24" />
               <div className="min-w-0">
                 <div className="flex gap-2">
                   <TypeBadge type={item.type} />
                   <span className="text-xs text-text-muted">{item.category}</span>
                 </div>
                 <h2 className="mt-2 truncate font-bold">{item.title}</h2>
-                <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-muted">
-                  {item.description}
-                </p>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-muted">{item.description}</p>
                 <p className="mt-2 text-xs font-medium">
                   {owner?.name} · {item.district}
                 </p>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setReviewing(item)}
-                >
+                <Button size="sm" variant="outline" onClick={() => setReviewing(item)}>
                   Xem chi tiết
                 </Button>
-                <Button
-                  size="sm"
-                  variant="danger"
-                  onClick={() => setRejecting(item)}
-                >
+                <Button size="sm" variant="danger" onClick={() => setRejecting(item)}>
                   Từ chối
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={() => setApproving(item)}
-                  disabled={!readyToApprove(item.id)}
-                >
+                <Button size="sm" onClick={() => setApproving(item)} disabled={!readyToApprove(item.id)}>
                   Duyệt bài
                 </Button>
                 <p className="basis-full text-right text-[11px] text-text-muted">
@@ -288,15 +411,7 @@ export function AdminModeration() {
           }}
         />
       ) : null}
-      {approving ? (
-        <ConfirmDialog
-          title="Duyệt bài đăng?"
-          text="Bạn xác nhận bài đăng này đáp ứng đầy đủ tiêu chí của SHARELOOP?"
-          confirmLabel="Xác nhận duyệt"
-          onCancel={() => setApproving(null)}
-          onConfirm={() => approvePost(approving)}
-        />
-      ) : null}
+      {approving ? <ConfirmDialog title="Duyệt bài đăng?" text="Bạn xác nhận bài đăng này đáp ứng đầy đủ tiêu chí của SHARELOOP?" confirmLabel="Xác nhận duyệt" onCancel={() => setApproving(null)} onConfirm={() => approvePost(approving)} /> : null}
       {rejecting ? (
         <RejectPostModal
           item={rejecting}
@@ -424,7 +539,6 @@ function RejectPostModal({
 }: {
   item: Item;
   onClose: () => void;
-  // eslint-disable-next-line no-unused-vars
   onConfirm: (..._args: [string]) => void;
 }) {
   const [selectedReason, setSelectedReason] = useState('');
@@ -1070,11 +1184,16 @@ export function AdminFinanceUserLookup() {
 export function AdminSettings() {
   const dispatch = useAppDispatch();
   const admin = useAppSelector(selectCurrentUser)!;
-  const isApiAdmin = toBackendUserId(admin.id) !== null;
+  const backendAdminId = toBackendUserId(admin.id);
+  const isApiAdmin = backendAdminId !== null && admin.role === 'admin';
   const [configs, setConfigs] = useState<AdminConfigResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [editingConfig, setEditingConfig] = useState<AdminConfigResponse | null>(null);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [updateError, setUpdateError] = useState('');
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     if (!isApiAdmin) {
@@ -1095,11 +1214,7 @@ export function AdminSettings() {
       .catch((apiError: ApiError) => {
         if (!active) return;
         setConfigs([]);
-        setError(
-          apiError.status === 403
-            ? 'Tài khoản hiện tại không đủ quyền xem cấu hình hệ thống.'
-            : 'Không tải được cấu hình hệ thống từ Backend.',
-        );
+        setError(apiError.status === 403 ? 'Tài khoản hiện tại không đủ quyền xem cấu hình hệ thống.' : 'Không tải được cấu hình hệ thống từ Backend.');
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -1109,14 +1224,34 @@ export function AdminSettings() {
     };
   }, [isApiAdmin, reloadKey]);
 
+  const updateConfig = async (value: string, reason: string) => {
+    if (!editingConfig || backendAdminId === null || savingConfig) return;
+    setSavingConfig(true);
+    setUpdateError('');
+    setNotice('');
+    try {
+      const updated = await adminConfigApi.update(editingConfig.key, backendAdminId, {
+        value,
+        reason,
+      });
+      setConfigs((current) => current.map((entry) => (entry.key === updated.key ? updated : entry)));
+      setEditingConfig(null);
+      setNotice(`Đã cập nhật cấu hình ${updated.key}.`);
+    } catch (apiError) {
+      const errorResponse = apiError as ApiError;
+      setUpdateError(errorResponse.status === 403 ? 'Tài khoản hiện tại không có quyền sửa cấu hình.' : errorResponse.message || 'Không cập nhật được cấu hình. Vui lòng thử lại.');
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
   if (isApiAdmin) {
     return (
-      <Panel title="Cấu hình hệ thống" description="Dữ liệu cấu hình đọc từ Backend. OpenAPI hiện chỉ cung cấp API đọc.">
+      <Panel title="Cấu hình hệ thống" description="Xem và cập nhật các cấu hình được Backend hỗ trợ.">
         <div className="max-w-4xl rounded-lg bg-white p-6 ring-1 ring-border/80">
-          <div className="rounded-md bg-primary-faint p-4 text-sm leading-6 text-text-secondary">
-            Các giá trị bên dưới đang ở chế độ chỉ đọc vì OpenAPI chỉ công bố
-            <span className="font-mono"> GET /api/v1/admin/configs</span>. Không có thao tác lưu hoặc reset cấu hình Backend trên màn này.
-          </div>
+          <div className="rounded-md bg-primary-faint p-4 text-sm leading-6 text-text-secondary">Mỗi thay đổi cần nhập lý do và được gửi trực tiếp tới Backend. Cấu hình nhạy cảm cần xác nhận bổ sung trước khi lưu.</div>
+
+          {notice ? <div className="mt-4 rounded-md bg-emerald-50 p-3 text-sm text-success">{notice}</div> : null}
 
           {loading ? (
             <EmptyState title="Đang tải cấu hình" text="Vui lòng chờ trong giây lát." />
@@ -1135,6 +1270,7 @@ export function AdminSettings() {
                     <th>Key</th>
                     <th>Value</th>
                     <th>Default Value</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1143,6 +1279,19 @@ export function AdminSettings() {
                       <td className="font-mono text-xs">{config.key}</td>
                       <td className="font-mono text-xs">{config.value}</td>
                       <td className="font-mono text-xs">{config.defaultValue}</td>
+                      <td className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setUpdateError('');
+                            setNotice('');
+                            setEditingConfig(config);
+                          }}
+                        >
+                          Chỉnh sửa
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1152,6 +1301,17 @@ export function AdminSettings() {
             <EmptyState title="Chưa có cấu hình" text="Backend không trả về cấu hình hệ thống nào." />
           )}
         </div>
+        {editingConfig ? (
+          <ConfigEditModal
+            config={editingConfig}
+            saving={savingConfig}
+            error={updateError}
+            onClose={() => {
+              if (!savingConfig) setEditingConfig(null);
+            }}
+            onSave={(value, reason) => void updateConfig(value, reason)}
+          />
+        ) : null}
       </Panel>
     );
   }
@@ -1159,24 +1319,69 @@ export function AdminSettings() {
   return (
     <Panel title="Cấu hình Credit" description="Giao dịch ShareLoop hiện miễn phí cho cả Swap và Give.">
       <div className="max-w-2xl rounded-lg bg-white p-6 ring-1 ring-border/80">
-        <div className="rounded-md bg-primary-faint p-4 text-sm text-text-secondary">
-          Phí chỉ phát sinh khi đăng bài: 5 Credit mỗi bài. Gửi yêu cầu, chọn người, chat, chốt lịch, giao nhận và hoàn tất đều không trừ Credit.
-        </div>
+        <div className="rounded-md bg-primary-faint p-4 text-sm text-text-secondary">Phí chỉ phát sinh khi đăng bài: 5 Credit mỗi bài. Gửi yêu cầu, chọn người, chat, chốt lịch, giao nhận và hoàn tất đều không trừ Credit.</div>
         <div className="mt-8 border-t border-border pt-5">
           <h3 className="text-sm font-bold">Dữ liệu demo</h3>
-          <p className="mt-1 text-xs leading-5 text-text-muted">
-            Khôi phục toàn bộ người dùng, món đồ, giao dịch và cấu hình về trạng thái ban đầu.
-          </p>
-          <Button
-            className="mt-3"
-            variant="danger"
-            onClick={() => dispatch(actions.resetDemoData())}
-          >
+          <p className="mt-1 text-xs leading-5 text-text-muted">Khôi phục toàn bộ người dùng, món đồ, giao dịch và cấu hình về trạng thái ban đầu.</p>
+          <Button className="mt-3" variant="danger" onClick={() => dispatch(actions.resetDemoData())}>
             Reset Demo Data
           </Button>
         </div>
       </div>
     </Panel>
+  );
+}
+
+function isSensitiveConfig(key: string) {
+  return /(secret|password|token|credential|private|api[_-]?key|jwt|smtp|mail)/i.test(key);
+}
+
+function ConfigEditModal({
+  config,
+  saving,
+  error,
+  onClose,
+  onSave,
+}: {
+  config: AdminConfigResponse;
+  saving: boolean;
+  error: string;
+  onClose: () => void;
+  onSave: (value: string, reason: string) => void;
+}) {
+  const [value, setValue] = useState(config.value);
+  const [reason, setReason] = useState('');
+  const [confirmedSensitive, setConfirmedSensitive] = useState(false);
+  const sensitive = isSensitiveConfig(config.key);
+  const canSave = value.trim().length > 0 && value !== config.value && reason.trim().length > 0 && (!sensitive || confirmedSensitive) && !saving;
+
+  return (
+    <Modal title="Chỉnh sửa cấu hình" onClose={onClose}>
+      <div className="rounded-md bg-surface-low p-4 text-sm">
+        <p className="text-xs text-text-muted">Key</p>
+        <p className="mt-1 break-all font-mono font-semibold">{config.key}</p>
+        <p className="mt-3 text-xs text-text-muted">Giá trị mặc định: {config.defaultValue}</p>
+      </div>
+      <div className="mt-4 space-y-4">
+        <Field label="Giá trị mới" value={value} onChange={(event) => setValue(event.target.value)} disabled={saving} />
+        <TextArea label="Lý do thay đổi" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Mô tả lý do cần cập nhật cấu hình..." disabled={saving} />
+      </div>
+      {sensitive ? (
+        <label className="mt-4 flex items-start gap-2 rounded-md bg-amber-50 p-3 text-sm leading-5 text-warning">
+          <input className="mt-1" type="checkbox" checked={confirmedSensitive} onChange={(event) => setConfirmedSensitive(event.target.checked)} disabled={saving} />
+          <span>Tôi xác nhận đây là cấu hình nhạy cảm và đã kiểm tra kỹ giá trị mới.</span>
+        </label>
+      ) : null}
+      {error ? <p className="mt-4 text-sm text-error">{error}</p> : null}
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="ghost" onClick={onClose} disabled={saving}>
+          Hủy
+        </Button>
+        <Button onClick={() => onSave(value.trim(), reason.trim())} disabled={!canSave}>
+          {saving ? 'Đang lưu...' : 'Xác nhận cập nhật'}
+        </Button>
+      </div>
+    </Modal>
   );
 }
 
@@ -1311,7 +1516,6 @@ function KeywordModal({
 }: {
   keyword: ForbiddenKeyword;
   onClose: () => void;
-  // eslint-disable-next-line no-unused-vars
   onSave: (..._args: [string, KeywordAction]) => void;
 }) {
   const [value, setValue] = useState(keyword.keyword);
@@ -1416,7 +1620,6 @@ function DistrictModal({
 }: {
   district: SupportedDistrict;
   onClose: () => void;
-  // eslint-disable-next-line no-unused-vars
   onSave: (..._args: [string]) => void;
 }) {
   const [name, setName] = useState(district.name);
@@ -1624,7 +1827,6 @@ function RankModal({
 }: {
   rank: RankRule;
   onClose: () => void;
-  // eslint-disable-next-line no-unused-vars
   onSave: (..._args: [string, number, number | undefined, string, RankRule['status']]) => void;
 }) {
   const [name, setName] = useState(rank.name);
@@ -1661,7 +1863,6 @@ function RankTable({
   onEdit,
 }: {
   ranks: RankRule[];
-  // eslint-disable-next-line no-unused-vars
   onEdit: (..._args: [RankRule]) => void;
 }) {
   return (
@@ -1793,7 +1994,6 @@ function PointRuleTable({
   onEdit,
 }: {
   rules: ReputationPointRule[];
-  // eslint-disable-next-line no-unused-vars
   onEdit: (..._args: [ReputationPointRule]) => void;
 }) {
   const typeLabel = { plus: 'Cộng', minus: 'Trừ' };
@@ -1835,7 +2035,6 @@ function PointRuleModal({
 }: {
   rule: ReputationPointRule;
   onClose: () => void;
-  // eslint-disable-next-line no-unused-vars
   onSave: (..._args: [string, ReputationPointRule['type'], number, ReputationPointRule['status'], string]) => void;
 }) {
   const [behavior, setBehavior] = useState(rule.behavior);
@@ -2189,7 +2388,6 @@ function CategoryModal({
 }: {
   category: CategoryRow;
   onClose: () => void;
-  // eslint-disable-next-line no-unused-vars
   onSave: (..._args: [CategoryRow]) => void;
 }) {
   const [name, setName] = useState(category.name);

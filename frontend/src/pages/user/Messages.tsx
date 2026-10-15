@@ -24,9 +24,454 @@ import {
   contactSafetyLayer1,
   hasAmbiguousContactSignal,
 } from '../../utils/contactSafety';
+import { chatApi, type MessageResponse } from '../../services/chatApi';
+import { itemApi, type ItemResponse } from '../../services/itemApi';
+import { requestApi, toBackendUserId, type RequestContactResponse, type RequestResponse } from '../../services/requestApi';
+import { resolveMediaUrl } from '../../services/mediaUrl';
+import type { ApiError } from '../../services/http';
 
 const steps = ['Trao doi', 'De xuat lich', 'Chot lich', 'Ban giao', 'Hoan tat'];
 export function Messages() {
+  const user = useAppSelector(selectCurrentUser)!;
+  const backendUserId = toBackendUserId(user.id);
+  return backendUserId ? <ApiMessages currentUserId={backendUserId} /> : <MockMessages />;
+}
+
+interface ApiConversation {
+  request: RequestResponse;
+  item?: ItemResponse;
+}
+
+function ApiMessages({ currentUserId }: { currentUserId: number }) {
+  const [conversations, setConversations] = useState<ApiConversation[]>([]);
+  const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
+  const [messages, setMessages] = useState<MessageResponse[]>([]);
+  const [message, setMessage] = useState('');
+  const [loadingConversations, setLoadingConversations] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [conversationError, setConversationError] = useState('');
+  const [messageError, setMessageError] = useState('');
+  const [conversationReloadKey, setConversationReloadKey] = useState(0);
+  const [messageReloadKey, setMessageReloadKey] = useState(0);
+  const [sending, setSending] = useState(false);
+  const [mobileChat, setMobileChat] = useState(false);
+  const [deliveryMethod, setDeliveryMethod] = useState<'IN_PERSON' | 'SHIPPING'>('IN_PERSON');
+  const [meetingPlace, setMeetingPlace] = useState('');
+  const [meetingTime, setMeetingTime] = useState('');
+  const [agreeToWaiver, setAgreeToWaiver] = useState(false);
+  const [logisticsLoading, setLogisticsLoading] = useState(false);
+  const [logisticsSubmitting, setLogisticsSubmitting] = useState(false);
+  const [logisticsError, setLogisticsError] = useState('');
+  const [logisticsReloadKey, setLogisticsReloadKey] = useState(0);
+  const [contact, setContact] = useState<RequestContactResponse | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoadingConversations(true);
+    setConversationError('');
+
+    Promise.all([requestApi.mine(currentUserId), itemApi.mine()])
+      .then(async ([sentRequests, ownedItems]) => {
+        const receivedGroups = await Promise.all(ownedItems.map((item) => requestApi.forItem(item.id, currentUserId)));
+        const requestById = new Map<number, RequestResponse>();
+        [...sentRequests, ...receivedGroups.flat()].forEach((request) => {
+          if (request.status === 'RESERVED') requestById.set(request.id, request);
+        });
+
+        const itemById = new Map(ownedItems.map((item) => [item.id, item]));
+        const missingItemIds = [...new Set([...requestById.values()].map((request) => request.itemId).filter((itemId) => !itemById.has(itemId)))];
+        const missingItems = await Promise.allSettled(missingItemIds.map((id) => itemApi.detail(id)));
+        missingItems.forEach((result) => {
+          if (result.status === 'fulfilled') itemById.set(result.value.id, result.value);
+        });
+
+        const nextConversations = [...requestById.values()].map((request) => ({ request, item: itemById.get(request.itemId) })).sort((a, b) => b.request.createdAt.localeCompare(a.request.createdAt));
+        if (!active) return;
+        setConversations(nextConversations);
+        setSelectedRequestId((current) => (current && nextConversations.some(({ request }) => request.id === current) ? current : (nextConversations[0]?.request.id ?? null)));
+      })
+      .catch(() => {
+        if (!active) return;
+        setConversations([]);
+        setSelectedRequestId(null);
+        setConversationError('Không tải được danh sách cuộc trò chuyện từ Backend.');
+      })
+      .finally(() => {
+        if (active) setLoadingConversations(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [conversationReloadKey, currentUserId]);
+
+  useEffect(() => {
+    if (selectedRequestId === null) {
+      setMessages([]);
+      setMessageError('');
+      return;
+    }
+
+    let active = true;
+    let firstLoad = true;
+    const loadMessages = async () => {
+      if (firstLoad) setLoadingMessages(true);
+      try {
+        const response = await chatApi.list(selectedRequestId, currentUserId);
+        if (!active) return;
+        setMessages(response);
+        setMessageError('');
+      } catch {
+        if (active) setMessageError('Không tải được tin nhắn. Vui lòng thử lại.');
+      } finally {
+        if (active && firstLoad) setLoadingMessages(false);
+        firstLoad = false;
+      }
+    };
+
+    void loadMessages();
+    const pollingId = window.setInterval(loadMessages, 5_000);
+    return () => {
+      active = false;
+      window.clearInterval(pollingId);
+    };
+  }, [currentUserId, messageReloadKey, selectedRequestId]);
+
+  useEffect(() => {
+    if (selectedRequestId === null) return;
+    let active = true;
+    setLogisticsLoading(true);
+    setLogisticsError('');
+    setContact(null);
+    requestApi
+      .detail(selectedRequestId, currentUserId)
+      .then((detail) => {
+        if (!active) return;
+        setConversations((current) => current.map((entry) => entry.request.id === detail.id ? { ...entry, request: detail } : entry));
+        setDeliveryMethod(detail.deliveryMethod === 'SHIPPING' ? 'SHIPPING' : 'IN_PERSON');
+        setMeetingPlace(detail.meetingPlace ?? '');
+        setMeetingTime(detail.meetingTime ? detail.meetingTime.slice(0, 16) : '');
+        setAgreeToWaiver(false);
+      })
+      .catch((error: ApiError) => {
+        if (active) setLogisticsError(error.message || 'Không tải được thông tin giao nhận.');
+      })
+      .finally(() => {
+        if (active) setLogisticsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentUserId, logisticsReloadKey, selectedRequestId]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length, selectedRequestId]);
+
+  const selected = conversations.find(({ request }) => request.id === selectedRequestId);
+  const selectedAsDonor = selected ? selected.request.receiverId !== currentUserId : false;
+  const currentPartyConfirmedAt = selected
+    ? selectedAsDonor
+      ? selected.request.donorScheduleOkAt
+      : selected.request.receiverScheduleOkAt
+    : undefined;
+
+  const updateSelectedRequest = (request: RequestResponse) => {
+    setConversations((current) => current.map((entry) => entry.request.id === request.id ? { ...entry, request } : entry));
+  };
+
+  const saveSchedule = async () => {
+    if (!selected || selected.request.status !== 'RESERVED' || selected.request.contactRevealedAt || !meetingPlace.trim() || !meetingTime) return;
+    setLogisticsSubmitting(true);
+    setLogisticsError('');
+    try {
+      const request = await requestApi.schedule(selected.request.id, currentUserId, {
+        deliveryMethod,
+        meetingPlace: meetingPlace.trim(),
+        meetingTime: new Date(meetingTime).toISOString(),
+        agreeToWaiver,
+      });
+      updateSelectedRequest(request);
+      setAgreeToWaiver(false);
+    } catch (error) {
+      const apiError = error as ApiError;
+      setLogisticsError(apiError.message || 'Không cập nhật được lịch giao nhận.');
+    } finally {
+      setLogisticsSubmitting(false);
+    }
+  };
+
+  const confirmLogistics = async () => {
+    if (!selected || selected.request.status !== 'RESERVED' || !selected.request.meetingTime || !agreeToWaiver) return;
+    setLogisticsSubmitting(true);
+    setLogisticsError('');
+    try {
+      const request = await requestApi.confirmLogistics(selected.request.id, currentUserId, { agreeToWaiver });
+      updateSelectedRequest(request);
+      setAgreeToWaiver(false);
+    } catch (error) {
+      const apiError = error as ApiError;
+      setLogisticsError(apiError.message || 'Không xác nhận được lịch giao nhận.');
+    } finally {
+      setLogisticsSubmitting(false);
+    }
+  };
+
+  const loadContact = async () => {
+    if (!selected?.request.contactRevealedAt) return;
+    setLogisticsSubmitting(true);
+    setLogisticsError('');
+    try {
+      setContact(await requestApi.contact(selected.request.id, currentUserId));
+    } catch (error) {
+      const apiError = error as ApiError;
+      setLogisticsError(apiError.message || 'Chưa thể xem thông tin liên lạc.');
+    } finally {
+      setLogisticsSubmitting(false);
+    }
+  };
+
+  const send = async () => {
+    const content = message.trim();
+    if (!content || selectedRequestId === null || sending) return;
+    const layer1 = contactSafetyLayer1(content);
+    if (layer1.blocked) {
+      setMessageError('Tin nhắn có chứa thông tin liên hệ không được phép.');
+      return;
+    }
+
+    setSending(true);
+    setMessageError('');
+    try {
+      if (hasAmbiguousContactSignal(content) && (await classifyAmbiguousContact(content))) {
+        setMessageError('Tin nhắn có dấu hiệu chứa thông tin liên hệ không được phép.');
+        return;
+      }
+      const sent = await chatApi.send(selectedRequestId, currentUserId, { content });
+      setMessages((current) => (current.some((entry) => entry.id === sent.id) ? current : [...current, sent]));
+      setMessage('');
+    } catch (error) {
+      const apiError = error as ApiError;
+      setMessageError(apiError.code === 'CHAT_MESSAGE_BLOCKED' ? apiError.message : 'Không gửi được tin nhắn. Vui lòng thử lại.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="page-shell py-5 sm:py-7">
+      <div className="overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-border/80 lg:grid lg:h-[calc(100dvh-140px)] lg:min-h-[680px] lg:grid-cols-[330px_1fr]">
+        <aside className={`${mobileChat ? 'hidden lg:flex' : 'flex'} min-h-0 flex-col overflow-hidden border-r border-border`}>
+          <div className="flex h-16 items-center justify-between border-b border-border px-5">
+            <h1 className="text-lg font-bold">Tin nhắn</h1>
+            <span className="text-xs text-text-muted">{conversations.length} cuộc trò chuyện</span>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {loadingConversations ? (
+              <div className="p-5 text-sm text-text-muted">Đang tải cuộc trò chuyện...</div>
+            ) : conversationError ? (
+              <div className="space-y-3 p-5 text-sm text-error">
+                <p>{conversationError}</p>
+                <Button variant="outline" size="sm" onClick={() => setConversationReloadKey((key) => key + 1)}>
+                  Thử tải lại
+                </Button>
+              </div>
+            ) : conversations.length ? (
+              conversations.map(({ request, item }) => (
+                <button
+                  type="button"
+                  key={request.id}
+                  onClick={() => {
+                    setSelectedRequestId(request.id);
+                    setMobileChat(true);
+                  }}
+                  className={`flex w-full gap-3 border-b border-border/70 p-4 text-left transition ${request.id === selectedRequestId ? 'bg-primary-faint' : 'hover:bg-background'}`}
+                >
+                  {item?.images[0] ? (
+                    <img src={resolveMediaUrl(item.images[0])} alt="" className="size-11 rounded-md object-cover" />
+                  ) : (
+                    <span className="grid size-11 shrink-0 place-items-center rounded-md bg-surface-low text-primary">
+                      <Icon name="chat" className="size-5" />
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <strong className="block truncate text-sm">{item?.title ?? `Yêu cầu #${request.id}`}</strong>
+                    <span className="mt-1 flex items-center gap-2">
+                      <TypeBadge type={request.type === 'SWAP' ? 'trade' : 'gift'} />
+                      <span className="text-xs text-text-muted">{request.status}</span>
+                    </span>
+                  </span>
+                </button>
+              ))
+            ) : (
+              <div className="p-5">
+                <EmptyState title="Chưa có cuộc trò chuyện" text="Cuộc trò chuyện xuất hiện sau khi một yêu cầu được chọn." />
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {selected ? (
+          <section className={`${mobileChat ? 'flex' : 'hidden lg:flex'} min-h-[680px] flex-col overflow-hidden lg:min-h-0`}>
+            <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4 sm:px-5">
+              <IconButton icon="arrow" label="Quay lại" className="rotate-180 lg:hidden" onClick={() => setMobileChat(false)} />
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-sm font-bold">{selected.item?.title ?? `Yêu cầu #${selected.request.id}`}</h2>
+                <p className="mt-1 text-xs text-text-muted">Tin nhắn được đồng bộ tự động mỗi 5 giây</p>
+              </div>
+              <span className="rounded-sm bg-primary-faint px-2.5 py-1 text-xs font-semibold text-primary">{selected.request.status}</span>
+            </header>
+            <div className="shrink-0 border-b border-border bg-white px-4 py-3 sm:px-5">
+              {logisticsLoading ? (
+                <p className="text-xs text-text-muted">Đang tải thông tin giao nhận...</p>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <Select
+                      label="Hình thức"
+                      value={deliveryMethod}
+                      onChange={(event) => setDeliveryMethod(event.target.value as 'IN_PERSON' | 'SHIPPING')}
+                      disabled={selected.request.status !== 'RESERVED' || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
+                    >
+                      <option value="IN_PERSON">Gặp trực tiếp</option>
+                      <option value="SHIPPING">Giao hàng</option>
+                    </Select>
+                    <Field
+                      label="Địa điểm"
+                      value={meetingPlace}
+                      onChange={(event) => setMeetingPlace(event.target.value)}
+                      disabled={selected.request.status !== 'RESERVED' || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
+                    />
+                    <Field
+                      label="Thời gian"
+                      type="datetime-local"
+                      value={meetingTime}
+                      onChange={(event) => setMeetingTime(event.target.value)}
+                      disabled={selected.request.status !== 'RESERVED' || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
+                    />
+                  </div>
+                  <label className="flex items-start gap-2 text-xs text-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={agreeToWaiver}
+                      onChange={(event) => setAgreeToWaiver(event.target.checked)}
+                      disabled={selected.request.status !== 'RESERVED' || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
+                    />
+                    <span>Tôi đồng ý cam kết trách nhiệm giao nhận.</span>
+                  </label>
+                  {logisticsError ? (
+                    <div className="flex items-center justify-between gap-3 text-xs text-error">
+                      <p>{logisticsError}</p>
+                      <button type="button" className="shrink-0 font-semibold underline" onClick={() => setLogisticsReloadKey((key) => key + 1)}>
+                        Tải lại
+                      </button>
+                    </div>
+                  ) : null}
+                  {contact ? (
+                    <div className="rounded-md bg-primary-faint p-3 text-xs leading-5 text-text-secondary">
+                      <strong className="text-text-primary">{contact.fullName}</strong>
+                      <p>{contact.email}</p>
+                      <p>{contact.phone}</p>
+                    </div>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={selected.request.status !== 'RESERVED' || Boolean(selected.request.contactRevealedAt) || !meetingPlace.trim() || !meetingTime || logisticsSubmitting}
+                      onClick={() => void saveSchedule()}
+                    >
+                      Lưu lịch hẹn
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={selected.request.status !== 'RESERVED' || !selected.request.meetingTime || !agreeToWaiver || Boolean(currentPartyConfirmedAt) || logisticsSubmitting}
+                      onClick={() => void confirmLogistics()}
+                    >
+                      {currentPartyConfirmedAt ? 'Đã xác nhận lịch' : 'Xác nhận lịch'}
+                    </Button>
+                    {selected.request.contactRevealedAt ? (
+                      <Button size="sm" variant="ghost" disabled={logisticsSubmitting} onClick={() => void loadContact()}>
+                        Xem liên hệ
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-background px-4 pb-6 pt-5 sm:px-6">
+              {loadingMessages ? (
+                <p className="text-center text-sm text-text-muted">Đang tải tin nhắn...</p>
+              ) : messages.length ? (
+                messages.map((entry) => {
+                  const mine = entry.senderId === currentUserId;
+                  const system = entry.kind.toUpperCase() === 'SYSTEM';
+                  if (system) {
+                    return (
+                      <div key={entry.id} className="flex justify-center">
+                        <span className="rounded-md bg-surface-container px-3 py-1.5 text-center text-[11px] text-text-muted">{entry.content}</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={entry.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[82%] rounded-lg px-3.5 py-2.5 text-sm leading-6 sm:max-w-[70%] ${mine ? 'rounded-br-sm bg-primary text-white' : 'rounded-bl-sm bg-white text-text-primary ring-1 ring-border/70'}`}>
+                        <p className="whitespace-pre-wrap break-words">{entry.content}</p>
+                        <span className={`mt-1 block text-[10px] ${mine ? 'text-white/65' : 'text-text-muted'}`}>{new Date(entry.createdAt).toLocaleString('vi-VN')}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <EmptyState title="Chưa có tin nhắn" text="Hãy gửi lời chào để bắt đầu cuộc trò chuyện." />
+              )}
+              <div ref={messagesEndRef} aria-hidden="true" />
+            </div>
+            <div className="shrink-0 border-t border-border bg-white p-3 sm:p-4">
+              {messageError ? (
+                <div className="mb-2 flex items-center justify-between gap-3 text-xs text-error">
+                  <p>{messageError}</p>
+                  <button type="button" className="shrink-0 font-semibold underline" onClick={() => setMessageReloadKey((key) => key + 1)}>
+                    Tải lại
+                  </button>
+                </div>
+              ) : null}
+              <form
+                className="flex items-end gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void send();
+                }}
+              >
+                <Field
+                  className="h-11"
+                  value={message}
+                  maxLength={2000}
+                  onChange={(event) => {
+                    setMessage(event.target.value);
+                    if (messageError) setMessageError('');
+                  }}
+                  placeholder="Nhập tin nhắn..."
+                  disabled={sending}
+                />
+                <Button aria-label="Gửi tin nhắn" icon="send" disabled={sending || !message.trim()}>
+                  {sending ? 'Đang gửi' : 'Gửi'}
+                </Button>
+              </form>
+            </div>
+          </section>
+        ) : (
+          <section className="hidden min-h-[680px] place-items-center lg:grid lg:min-h-0">
+            <EmptyState title="Chọn cuộc trò chuyện" text="Chọn một yêu cầu đã được chấp nhận để xem tin nhắn." />
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MockMessages() {
   const data = useAppSelector(selectData);
   const user = useAppSelector(selectCurrentUser)!;
   const dispatch = useAppDispatch();

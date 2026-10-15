@@ -4,7 +4,6 @@ export const catalogApiEndpoints = {
   categories: '/api/v1/categories',
   category: (id: number) => `/api/v1/categories/${id}`,
   areas: '/api/v1/areas',
-  attributes: (categoryId: number) => `/api/v1/categories/${categoryId}/attributes`,
 } as const;
 
 export interface CategoryResponse {
@@ -24,17 +23,6 @@ export interface AreaResponse {
   children: AreaResponse[];
 }
 
-export interface AttributeResponse {
-  id: number;
-  categoryId: number;
-  name: string;
-  dataType: 'TEXT' | 'NUMBER' | 'SELECT' | 'BOOLEAN';
-  options: string[] | null;
-  required: boolean;
-  sortOrder: number;
-  active: boolean;
-}
-
 export const catalogApi = {
   async areas(): Promise<AreaResponse[]> {
     const { data } = await http.get<AreaResponse[]>(catalogApiEndpoints.areas);
@@ -44,8 +32,8 @@ export const catalogApi = {
     const { data } = await http.get<CategoryResponse[]>(catalogApiEndpoints.categories);
     return data;
   },
-  async attributes(categoryId: number): Promise<AttributeResponse[]> {
-    const { data } = await http.get<AttributeResponse[]>(catalogApiEndpoints.attributes(categoryId));
+  async category(id: number): Promise<CategoryResponse> {
+    const { data } = await http.get<CategoryResponse>(catalogApiEndpoints.category(id));
     return data;
   },
 };
@@ -56,8 +44,4 @@ export async function getCategories(): Promise<CategoryResponse[]> {
 
 export async function getAreas(): Promise<AreaResponse[]> {
   return catalogApi.areas();
-}
-
-export async function getCategoryAttributes(categoryId: number): Promise<AttributeResponse[]> {
-  return catalogApi.attributes(categoryId);
 }

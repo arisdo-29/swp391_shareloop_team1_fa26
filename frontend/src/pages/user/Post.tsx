@@ -13,7 +13,7 @@ import { toAreaOptions, toCategoryIdByName, toCategoryNames, type AreaOption } f
 import { itemApi, type ApiCondition } from '../../services/itemApi';
 import { mediaApi } from '../../services/mediaApi';
 import { toBackendUserId } from '../../services/requestApi';
-import { useWallet } from '../../app/WalletContext';
+import { useWallet } from '../../app/useWallet';
 
 type FormErrors = Partial<Record<'type' | 'title' | 'category' | 'condition' | 'district' | 'description' | 'images', string>>;
 type MediaUploadState = 'idle' | 'uploading' | 'error';
@@ -114,11 +114,11 @@ export function Post() {
       setError(BACKEND_SESSION_REQUIRED);
       return;
     }
-    if (type === 'trade' && availableCredit === null) {
+    if (!isApiAccount && type === 'trade' && availableCredit === null) {
       setError(walletLoading ? 'Đang tải số dư Credit. Vui lòng chờ trong giây lát.' : walletError || 'Chưa thể xác minh số dư Credit.');
       return;
     }
-    if (type === 'trade' && availableCredit !== null && availableCredit < POST_LISTING_FEE) {
+    if (!isApiAccount && type === 'trade' && availableCredit !== null && availableCredit < POST_LISTING_FEE) {
       setError(INSUFFICIENT_CREDIT);
       setConfirmOpen(false);
       return;
@@ -133,12 +133,12 @@ export function Post() {
       setConfirmOpen(false);
       return;
     }
-    if (type === 'trade' && availableCredit === null) {
+    if (!isApiAccount && type === 'trade' && availableCredit === null) {
       setError(walletLoading ? 'Đang tải số dư Credit. Vui lòng chờ trong giây lát.' : walletError || 'Chưa thể xác minh số dư Credit.');
       setConfirmOpen(false);
       return;
     }
-    if (type === 'trade' && availableCredit !== null && availableCredit < POST_LISTING_FEE) {
+    if (!isApiAccount && type === 'trade' && availableCredit !== null && availableCredit < POST_LISTING_FEE) {
       setError(INSUFFICIENT_CREDIT);
       setConfirmOpen(false);
       return;
@@ -422,6 +422,11 @@ export function Post() {
           <div className="rounded-lg bg-white p-4 text-xs leading-5 text-text-secondary ring-1 ring-border/80">
             {type === 'gift' ? (
               <strong className="text-primary">Đăng bài cho tặng miễn phí</strong>
+            ) : isApiAccount ? (
+              <>
+                <strong className="text-text-primary">Phí đăng bài theo cấu hình Backend</strong>
+                <p className="mt-1">Backend sẽ kiểm tra và áp dụng phí khi tạo bài.</p>
+              </>
             ) : (
               <>
                 <strong className="text-text-primary">Phí đăng bài: {POST_LISTING_FEE} Credit</strong>
@@ -456,7 +461,7 @@ export function Post() {
             <div className="mt-5 space-y-3 rounded-lg bg-surface-low p-4 text-sm">
               <SummaryRow
                 label={type === 'gift' ? 'Phí đăng bài' : 'Phí đăng bài'}
-                value={type === 'gift' ? 'Miễn phí' : `${POST_LISTING_FEE} Credit`}
+                value={type === 'gift' ? 'Miễn phí' : isApiAccount ? 'Theo cấu hình Backend' : `${POST_LISTING_FEE} Credit`}
               />
               <SummaryRow label="Số dư hiện tại" value={availableCredit === null ? '--' : `${availableCredit} Credit`} />
               <SummaryRow
