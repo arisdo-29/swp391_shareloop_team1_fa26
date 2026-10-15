@@ -4,9 +4,11 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.request.RequestErrorCode;
+import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.dto.RequestResponse;
+import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.mapper.RequestMapper;
@@ -226,6 +228,118 @@ public class RequestService {
                     "Chủ bài đã chọn bạn để trao tặng/trao đổi món đồ.",
                     "/requests/" + selectedRequest.getId());
         } catch (Exception ignored) {
+        }
+
+        return RequestMapper.toResponse(saved);
+    }
+
+    /**
+     * Xem thông tin chi tiết của một yêu cầu giao dịch (F10, UC-26).
+     *
+     * <p>Chỉ chủ bài đăng (donor) hoặc người nhận (receiver) mới có quyền xem.
+     */
+    @Transactional(readOnly = true)
+    public RequestResponse getDetail(long requestId, long currentUserId) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+
+        ItemSnapshot item = findItemSnapshot(request.getItemId())
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+
+        if (request.getReceiverId() != currentUserId && item.donorId() != currentUserId) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+
+        return RequestMapper.toResponse(request);
+    }
+
+    /**
+     * Đề xuất hoặc cập nhật lịch hẹn giao nhận (FR-79, FR-80, BR-T01, BR-T02).
+     *
+     * <p>Chỉ bên tham gia giao dịch mới được đề xuất; chuyển sang AWAITING_LOGISTICS nếu đang RESERVED.
+     */
+    @Transactional
+    public RequestResponse updateSchedule(long requestId, long currentUserId, ScheduleRequest requestDto) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+
+        ItemSnapshot item = findItemSnapshot(request.getItemId())
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+
+        if (request.getReceiverId() != currentUserId && item.donorId() != currentUserId) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+
+        if (requestDto.meetingTime().isBefore(Instant.now())) {
+            throw new BusinessException(RequestErrorCode.REQUEST_SCHEDULE_PAST_TIME);
+        }
+
+        boolean isDonor = item.donorId() == currentUserId;
+        boolean agreeToWaiver = Boolean.TRUE.equals(requestDto.agreeToWaiver());
+
+        request.proposeSchedule(
+                requestDto.deliveryMethod(),
+                requestDto.meetingPlace(),
+                requestDto.meetingTime(),
+                isDonor,
+                agreeToWaiver,
+                Instant.now());
+
+        Request saved = requestRepository.save(request);
+
+        // Bắn thông báo cho bên còn lại
+        long otherUserId = isDonor ? request.getReceiverId() : item.donorId();
+        try {
+            notificationService.notify(
+                    otherUserId,
+                    "SCHEDULE_UPDATED",
+                    "Cập nhật lịch hẹn",
+                    "Đối phương đã cập nhật lịch hẹn giao nhận.",
+                    "/requests/" + saved.getId());
+        } catch (Exception ignored) {
+        }
+
+        return RequestMapper.toResponse(saved);
+    }
+
+    /**
+     * Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (FR-80, FR-81, BR-T03, BR-T05).
+     *
+     * <p>Khi cả hai bên đều đã đồng ý, Request chuyển sang LOGISTICS_CONFIRMED và khoá lịch.
+     */
+    @Transactional
+    public RequestResponse confirmLogistics(long requestId, long currentUserId, ConfirmLogisticsRequest requestDto) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+
+        ItemSnapshot item = findItemSnapshot(request.getItemId())
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+
+        if (request.getReceiverId() != currentUserId && item.donorId() != currentUserId) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+
+        boolean isDonor = item.donorId() == currentUserId;
+        boolean agreeToWaiver = requestDto != null && Boolean.TRUE.equals(requestDto.agreeToWaiver());
+
+        request.confirmLogistics(isDonor, agreeToWaiver, Instant.now());
+        Request saved = requestRepository.save(request);
+
+        // Nếu cả hai đã xác nhận và sang LOGISTICS_CONFIRMED, thông báo cho bên còn lại
+        if (saved.getStatus() == RequestStatus.LOGISTICS_CONFIRMED) {
+            long otherUserId = isDonor ? request.getReceiverId() : item.donorId();
+            try {
+                notificationService.notify(
+                        otherUserId,
+                        "LOGISTICS_CONFIRMED",
+                        "Lịch hẹn đã được chốt",
+                        "Cả hai bên đã xác nhận lịch hẹn giao nhận thành công.",
+                        "/requests/" + saved.getId());
+            } catch (Exception ignored) {
+            }
         }
 
         return RequestMapper.toResponse(saved);

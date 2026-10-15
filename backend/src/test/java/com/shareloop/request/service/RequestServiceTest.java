@@ -13,13 +13,17 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.request.RequestErrorCode;
+import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.RequestResponse;
+import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.repository.RequestRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -264,5 +268,171 @@ class RequestServiceTest {
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
                 });
+    }
+
+    @Test
+    @DisplayName("getDetail: Thành công khi người gọi là donor hoặc receiver")
+    void getDetail_whenValidUser_returnsDetail() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        RequestResponse resReceiver = requestService.getDetail(101L, 10L);
+        assertThat(resReceiver).isNotNull();
+        assertThat(resReceiver.receiverId()).isEqualTo(10L);
+
+        RequestResponse resDonor = requestService.getDetail(101L, 20L);
+        assertThat(resDonor).isNotNull();
+        assertThat(resDonor.itemId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("getDetail: Ném lỗi FORBIDDEN khi người gọi là người ngoài")
+    void getDetail_whenOutsider_throwsForbidden() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        assertThatThrownBy(() -> requestService.getDetail(101L, 999L))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_FORBIDDEN);
+                });
+    }
+
+    @Test
+    @DisplayName("updateSchedule: Thành công khi đề xuất lịch từ trạng thái RESERVED")
+    void updateSchedule_whenReserved_transitionsToAwaitingLogistics() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.select(Instant.now()); // RESERVED
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
+        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Cổng trường FPT", meetingTime, null);
+
+        RequestResponse response = requestService.updateSchedule(101L, 20L, dto); // donor đề xuất
+
+        assertThat(response.status()).isEqualTo("AWAITING_LOGISTICS");
+        assertThat(response.deliveryMethod()).isEqualTo("IN_PERSON");
+        assertThat(response.meetingPlace()).isEqualTo("Cổng trường FPT");
+        assertThat(response.meetingTime()).isEqualTo(meetingTime);
+        assertThat(response.donorScheduleOkAt()).isNotNull();
+        assertThat(response.receiverScheduleOkAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("updateSchedule: Ném lỗi SCHEDULE_PAST_TIME khi thời gian hẹn ở quá khứ")
+    void updateSchedule_whenPastTime_throwsPastTime() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.select(Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        Instant pastTime = Instant.now().minus(1, ChronoUnit.HOURS);
+        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Cổng trường", pastTime, null);
+
+        assertThatThrownBy(() -> requestService.updateSchedule(101L, 20L, dto))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_SCHEDULE_PAST_TIME);
+                });
+    }
+
+    @Test
+    @DisplayName("updateSchedule: Ném lỗi SCHEDULE_LOCKED khi đã ở LOGISTICS_CONFIRMED")
+    void updateSchedule_whenAlreadyConfirmed_throwsScheduleLocked() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.select(Instant.now());
+        request.proposeSchedule(
+                "IN_PERSON", "Cổng trường", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
+        request.confirmLogistics(false, false, Instant.now()); // sang LOGISTICS_CONFIRMED
+
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        Instant futureTime = Instant.now().plus(2, ChronoUnit.DAYS);
+        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Địa điểm mới", futureTime, null);
+
+        assertThatThrownBy(() -> requestService.updateSchedule(101L, 20L, dto))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_SCHEDULE_LOCKED);
+                });
+    }
+
+    @Test
+    @DisplayName("confirmLogistics: Giao trực tiếp (IN_PERSON), khi bên thứ 2 xác nhận thì chuyển LOGISTICS_CONFIRMED")
+    void confirmLogistics_inPerson_bothConfirm_transitionsToLogisticsConfirmed() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.select(Instant.now());
+        Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
+        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, true, false, Instant.now());
+
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // Receiver gọi xác nhận lịch
+        RequestResponse response = requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(null));
+
+        assertThat(response.status()).isEqualTo("LOGISTICS_CONFIRMED");
+        assertThat(response.receiverScheduleOkAt()).isNotNull();
+        assertThat(response.donorScheduleOkAt()).isNotNull();
+        assertThat(response.contactRevealedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("confirmLogistics: Giao hàng (SHIPPING), ném WAIVER_REQUIRED nếu chưa đồng ý cam kết")
+    void confirmLogistics_shipping_withoutWaiver_throwsWaiverRequired() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.select(Instant.now());
+        Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
+        request.proposeSchedule("SHIPPING", "123 Đường XYZ", meetingTime, true, true, Instant.now());
+
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // Receiver không đồng ý waiver
+        assertThatThrownBy(() -> requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(false)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_WAIVER_REQUIRED);
+                });
+    }
+
+    @Test
+    @DisplayName("confirmLogistics: Giao hàng (SHIPPING), cả hai bên cam kết waiver thì sang LOGISTICS_CONFIRMED")
+    void confirmLogistics_shipping_bothWaive_transitionsToLogisticsConfirmed() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.select(Instant.now());
+        Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
+        // Donor đề xuất và agreeToWaiver = true
+        request.proposeSchedule("SHIPPING", "123 Đường XYZ", meetingTime, true, true, Instant.now());
+
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // Receiver gọi confirm kèm agreeToWaiver = true
+        RequestResponse response = requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true));
+
+        assertThat(response.status()).isEqualTo("LOGISTICS_CONFIRMED");
+        assertThat(response.donorWaiverAt()).isNotNull();
+        assertThat(response.receiverWaiverAt()).isNotNull();
+        assertThat(response.contactRevealedAt()).isNotNull();
     }
 }

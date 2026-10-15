@@ -132,4 +132,130 @@ class RequestControllerTest {
                 .andExpect(jsonPath("$.id").value(100))
                 .andExpect(jsonPath("$.status").value("RESERVED"));
     }
+
+    @Test
+    @DisplayName("Xem chi tiết request có JWT trả về 200 OK")
+    void getDetail_withToken_returns200() throws Exception {
+        String token = jwtService.issue(10L, false);
+
+        RequestResponse response =
+                new RequestResponse(100L, 1L, 10L, null, "GIVE", "RESERVED", null, null, null, Instant.now());
+
+        when(requestService.getDetail(100L, 10L)).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/requests/100").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(100))
+                .andExpect(jsonPath("$.receiverId").value(10));
+    }
+
+    @Test
+    @DisplayName("Xem chi tiết request không có JWT trả về 401 Unauthorized")
+    void getDetail_withoutToken_returns401() throws Exception {
+        mockMvc.perform(get("/api/v1/requests/100"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("Đề xuất lịch hẹn thành công trả về 200 OK")
+    void updateSchedule_withToken_returns200() throws Exception {
+        String token = jwtService.issue(20L, false);
+
+        Instant meetingTime = Instant.parse("2026-10-25T10:00:00Z");
+        RequestResponse response = new RequestResponse(
+                100L,
+                1L,
+                10L,
+                null,
+                "GIVE",
+                "AWAITING_LOGISTICS",
+                "IN_PERSON",
+                "Cổng trường FPT",
+                meetingTime,
+                Instant.now(),
+                null,
+                null,
+                null,
+                null,
+                Instant.now());
+
+        when(requestService.updateSchedule(eq(100L), eq(20L), any())).thenReturn(response);
+
+        String jsonBody = """
+                {
+                    "deliveryMethod": "IN_PERSON",
+                    "meetingPlace": "Cổng trường FPT",
+                    "meetingTime": "2026-10-25T10:00:00Z"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/requests/100/schedule")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("AWAITING_LOGISTICS"))
+                .andExpect(jsonPath("$.deliveryMethod").value("IN_PERSON"))
+                .andExpect(jsonPath("$.meetingPlace").value("Cổng trường FPT"));
+    }
+
+    @Test
+    @DisplayName("Đề xuất lịch hẹn thiếu trường hoặc sai deliveryMethod trả về 400 Bad Request")
+    void updateSchedule_invalidBody_returns400() throws Exception {
+        String token = jwtService.issue(20L, false);
+
+        String invalidBody = """
+                {
+                    "deliveryMethod": "INVALID_METHOD",
+                    "meetingPlace": ""
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/requests/100/schedule")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidBody))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Xác nhận lịch hẹn có JWT trả về 200 OK")
+    void confirmLogistics_withToken_returns200() throws Exception {
+        String token = jwtService.issue(10L, false);
+
+        Instant meetingTime = Instant.parse("2026-10-25T10:00:00Z");
+        RequestResponse response = new RequestResponse(
+                100L,
+                1L,
+                10L,
+                null,
+                "GIVE",
+                "LOGISTICS_CONFIRMED",
+                "IN_PERSON",
+                "Cổng trường FPT",
+                meetingTime,
+                Instant.now(),
+                Instant.now(),
+                null,
+                null,
+                Instant.now(),
+                Instant.now());
+
+        when(requestService.confirmLogistics(eq(100L), eq(10L), any())).thenReturn(response);
+
+        String jsonBody = """
+                {
+                    "agreeToWaiver": true
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/requests/100/confirm-logistics")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"))
+                .andExpect(jsonPath("$.contactRevealedAt").isNotEmpty());
+    }
 }

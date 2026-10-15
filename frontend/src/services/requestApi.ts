@@ -13,11 +13,27 @@ export interface RequestResponse {
   deliveryMethod?: string;
   meetingPlace?: string;
   meetingTime?: string;
+  donorScheduleOkAt?: string;
+  receiverScheduleOkAt?: string;
+  donorWaiverAt?: string;
+  receiverWaiverAt?: string;
+  contactRevealedAt?: string;
   createdAt: string;
 }
 
-interface CreateRequestBody {
+export interface CreateRequestBody {
   offeredItemId?: number;
+}
+
+export interface ScheduleRequestBody {
+  deliveryMethod: 'IN_PERSON' | 'SHIPPING';
+  meetingPlace: string;
+  meetingTime: string;
+  agreeToWaiver?: boolean;
+}
+
+export interface ConfirmLogisticsRequestBody {
+  agreeToWaiver?: boolean;
 }
 
 export const toBackendUserId = (userId: string | null | undefined) => {
@@ -60,6 +76,12 @@ export const requestApi = {
     });
     return data;
   },
+  async get(id: number, currentUserId: number) {
+    const { data } = await http.get<RequestResponse>(`/api/v1/requests/${id}`, {
+      params: { currentUserId },
+    });
+    return data;
+  },
   async cancel(id: number, currentUserId: number) {
     const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/cancel`, undefined, {
       params: { currentUserId },
@@ -68,6 +90,18 @@ export const requestApi = {
   },
   async select(id: number, currentUserId: number) {
     const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/select`, undefined, {
+      params: { currentUserId },
+    });
+    return data;
+  },
+  async updateSchedule(id: number, currentUserId: number, body: ScheduleRequestBody) {
+    const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/schedule`, body, {
+      params: { currentUserId },
+    });
+    return data;
+  },
+  async confirmLogistics(id: number, currentUserId: number, body?: ConfirmLogisticsRequestBody) {
+    const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/confirm-logistics`, body ?? {}, {
       params: { currentUserId },
     });
     return data;

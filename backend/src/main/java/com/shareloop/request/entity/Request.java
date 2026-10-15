@@ -130,6 +130,89 @@ public class Request extends BaseEntity {
         transitionTo(RequestStatus.REJECTED);
     }
 
+    /**
+     * Đề xuất hoặc cập nhật lịch hẹn giao nhận (FR-79, FR-80, BR-T01, BR-T02).
+     *
+     * <p>Chuyển sang AWAITING_LOGISTICS nếu đang là RESERVED.
+     * Bên đề xuất tự động được ghi nhận đồng ý lịch mới, bên còn lại phải xác nhận lại.
+     */
+    public void proposeSchedule(
+            String deliveryMethod,
+            String meetingPlace,
+            Instant meetingTime,
+            boolean isDonor,
+            boolean agreeToWaiver,
+            Instant now) {
+        if (this.status == RequestStatus.RESERVED) {
+            transitionTo(RequestStatus.AWAITING_LOGISTICS);
+        } else if (this.status != RequestStatus.AWAITING_LOGISTICS) {
+            throw new BusinessException(RequestErrorCode.REQUEST_SCHEDULE_LOCKED);
+        }
+
+        this.deliveryMethod = deliveryMethod;
+        this.meetingPlace = meetingPlace;
+        this.meetingTime = meetingTime;
+
+        boolean isShipping = "SHIPPING".equalsIgnoreCase(deliveryMethod);
+        if (isDonor) {
+            this.donorScheduleOkAt = now;
+            this.receiverScheduleOkAt = null;
+            if (isShipping && agreeToWaiver) {
+                this.donorWaiverAt = now;
+            }
+        } else {
+            this.receiverScheduleOkAt = now;
+            this.donorScheduleOkAt = null;
+            if (isShipping && agreeToWaiver) {
+                this.receiverWaiverAt = now;
+            }
+        }
+    }
+
+    /**
+     * Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (FR-80, FR-81, BR-T03, BR-T05).
+     *
+     * <p>Khi cả hai bên đều đã đồng ý lịch (và cam kết trách nhiệm nếu là SHIPPING),
+     * Request chuyển sang LOGISTICS_CONFIRMED và ghi nhận contactRevealedAt.
+     */
+    public void confirmLogistics(boolean isDonor, boolean agreeToWaiver, Instant now) {
+        if (this.status != RequestStatus.AWAITING_LOGISTICS) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+        if (this.meetingTime == null || this.deliveryMethod == null) {
+            throw new BusinessException(RequestErrorCode.REQUEST_SCHEDULE_NOT_SET);
+        }
+
+        boolean isShipping = "SHIPPING".equalsIgnoreCase(this.deliveryMethod);
+        if (isShipping) {
+            boolean alreadyWaived = isDonor ? (this.donorWaiverAt != null) : (this.receiverWaiverAt != null);
+            if (!agreeToWaiver && !alreadyWaived) {
+                throw new BusinessException(RequestErrorCode.REQUEST_WAIVER_REQUIRED);
+            }
+            if (agreeToWaiver) {
+                if (isDonor) {
+                    this.donorWaiverAt = now;
+                } else {
+                    this.receiverWaiverAt = now;
+                }
+            }
+        }
+
+        if (isDonor) {
+            this.donorScheduleOkAt = now;
+        } else {
+            this.receiverScheduleOkAt = now;
+        }
+
+        boolean donorOk = this.donorScheduleOkAt != null && (!isShipping || this.donorWaiverAt != null);
+        boolean receiverOk = this.receiverScheduleOkAt != null && (!isShipping || this.receiverWaiverAt != null);
+
+        if (donorOk && receiverOk) {
+            transitionTo(RequestStatus.LOGISTICS_CONFIRMED);
+            this.contactRevealedAt = now;
+        }
+    }
+
     public Long getItemId() {
         return itemId;
     }
