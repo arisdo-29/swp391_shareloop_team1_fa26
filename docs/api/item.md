@@ -38,6 +38,8 @@ Bản demo gấp (đã hỗ trợ gắn ảnh upload; chưa tích hợp phí đ�
 *Lưu ý nghiệp vụ:*
 - Nếu `offerType` là `SWAP`, bắt buộc trường `desiredItem` không được rỗng.
 - Nếu `condition` là `DEFECTIVE`, bắt buộc trường `defectNote` không được rỗng.
+- Nếu `condition` là `DEFECTIVE`, `defectImages` phải có ít nhất một URL ảnh lỗi đã upload của chủ bài; ảnh này lưu với role `DEFECT`, tách khỏi `images` (3–8 ảnh chính).
+- Danh mục điện tử bắt buộc `operatingStatus`: `NORMAL`, `PARTIAL` hoặc `NOT_WORKING`; giá trị lưu trong `item_attribute_mappings`.
 - `images` bắt buộc có 3–8 URL ảnh đã upload của chính người đăng (giới hạn từ `ConfigKey.ITEM_PHOTOS_MIN/MAX`); thứ tự gửi là thứ tự hiển thị.
 - Bài đăng mới tạo có trạng thái mặc định là `PENDING_REVIEW`.
 
@@ -69,6 +71,9 @@ Bản demo gấp (đã hỗ trợ gắn ảnh upload; chưa tích hợp phí đ�
   - `400 ITEM_DEFECT_NOTE_REQUIRED`: Đồ DEFECTIVE nhưng thiếu mô tả lỗi.
   - `400 ITEM_INVALID_IMAGE`: `images[]` chứa URL không phải URL trả về từ `POST /api/v1/media`.
   - `422 ITEM_INVALID_IMAGE_COUNT` (`field: images`): Có ít hơn 3 hoặc nhiều hơn 8 ảnh.
+  - `422 ITEM_DEFECT_IMAGES_REQUIRED` (`field: defectImages`): Bài `DEFECTIVE` không có ảnh lỗi.
+  - `422 ITEM_OPERATING_STATUS_REQUIRED` (`field: operatingStatus`): Đồ điện tử chưa khai trạng thái hoạt động.
+  - `422 ITEM_DEFECT_IMAGES_NOT_ALLOWED` / `ITEM_OPERATING_STATUS_NOT_ALLOWED`: Gửi dữ liệu dành cho điều kiện hoặc danh mục khác.
   - `403 MEDIA_NOT_OWNER`: Ảnh không thuộc người đăng bài.
   - `404 MEDIA_NOT_FOUND`: Không tìm thấy ảnh đã upload.
   - `409 MEDIA_NOT_UPLOADED`: Ảnh đã gắn vào bài khác hoặc không còn dùng được.
@@ -93,7 +98,7 @@ Xem chi tiết một bài đăng theo ID.
 
 ## PUT /api/v1/items/{id}
 
-- **Xác thực:** Bearer Token, chỉ chủ bài. Body gồm các trường nội dung như `CreateItemRequest`; `images` có thể bỏ qua để giữ ảnh hiện tại, hoặc gửi 3–8 URL media của chính chủ bài để thay toàn bộ và sắp lại thứ tự.
+- **Xác thực:** Bearer Token, chỉ chủ bài. Body gồm các trường nội dung như `CreateItemRequest`; `images` và `defectImages` có thể bỏ qua để giữ ảnh hiện tại, hoặc gửi danh sách URL media của chính chủ bài để thay và sắp lại thứ tự. Khi đổi sang `DEFECTIVE` phải có ít nhất một ảnh lỗi; khi chọn danh mục điện tử phải gửi `operatingStatus`.
 - **Luồng:** Từ chối bài đã `RESERVED`/`TRADED`/`EXPIRED` hoặc có Request từ `RESERVED` trở lên. Kiểm duyệt tầng 1 tiêu đề, mô tả và món mong muốn; nội dung bị chặn trả `422`, không giữ phí hay đổi bài. Sau đó gọi `quoteEdit` và `holdEditFee` theo [luật phí sửa](listingfee.md). Bài thành `PENDING_REVIEW`, tạm ẩn để Admin duyệt lại.
 - **Thành công:** `200 OK`, `ItemResponse` mới.
 - **Lỗi chính:** `401 UNAUTHORIZED`, `403 ITEM_NOT_OWNER`, `404 ITEM_NOT_FOUND`, `409 ITEM_EDIT_NOT_ALLOWED`, `422 ITEM_MODERATION_BLOCKED` (`field: content`), `422 ITEM_INVALID_IMAGE_COUNT`, lỗi media và `402 WALLET_INSUFFICIENT_BALANCE`.
@@ -145,6 +150,8 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2`. `q` rỗng ho�
 | `defectNote` | string? | Điều kiện | Bắt buộc nếu `condition` là `DEFECTIVE` |
 | `brand` | string? | Không | Tối đa 80 ký tự |
 | `images` | array[string] | Có | 3–8 URL `/api/v1/media/{id}` nhận từ `POST /api/v1/media`, theo thứ tự hiển thị; chỉ gắn ảnh của chính người đăng |
+| `defectImages` | array[string] | Điều kiện | Ít nhất một URL ảnh lỗi nếu `condition=DEFECTIVE`; role `DEFECT` |
+| `operatingStatus` | string | Điều kiện | Bắt buộc với điện tử: `NORMAL`, `PARTIAL`, `NOT_WORKING` |
 
 ### ItemResponse
 
@@ -162,6 +169,8 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2`. `q` rỗng ho�
 | `defectNote` | string? | Mô tả lỗi (nếu DEFECTIVE) |
 | `brand` | string? | Nhãn hiệu / Thương hiệu |
 | `images` | array[string] | Danh sách URL `/api/v1/media/{id}` của ảnh đã lưu |
+| `defectImages` | array[string] | Danh sách URL ảnh lỗi, role `DEFECT` |
+| `operatingStatus` | string? | Trạng thái hoạt động của đồ điện tử |
 | `status` | string | `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `RESERVED`, `TRADED`, `EXPIRED` |
 | `createdAt` | string | Thời điểm tạo ISO-8601 UTC |
 | `updatedAt` | string | Thời điểm cập nhật ISO-8601 UTC |
@@ -177,6 +186,10 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2`. `q` rỗng ho�
 | `ITEM_DEFECT_NOTE_REQUIRED` | 400 | Bài đăng có tình trạng DEFECTIVE nhưng thiếu mô tả lỗi |
 | `ITEM_INVALID_IMAGE` | 400 | URL ảnh không phải URL do API media trả về |
 | `ITEM_INVALID_IMAGE_COUNT` | 422 | `images` có ít hơn 3 hoặc nhiều hơn 8 phần tử |
+| `ITEM_DEFECT_IMAGES_REQUIRED` | 422 | Bài `DEFECTIVE` thiếu ảnh lỗi |
+| `ITEM_DEFECT_IMAGES_NOT_ALLOWED` | 422 | Bài không `DEFECTIVE` lại gửi ảnh lỗi |
+| `ITEM_OPERATING_STATUS_REQUIRED` | 422 | Bài điện tử thiếu trạng thái hoạt động |
+| `ITEM_OPERATING_STATUS_NOT_ALLOWED` | 422 | Bài không thuộc danh mục cần trạng thái hoạt động lại gửi trường này |
 | `ITEM_NOT_OWNER` | 403 | Sửa bài không phải của mình |
 | `ITEM_EDIT_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được sửa |
 | `ITEM_MODERATION_BLOCKED` | 422 | Nội dung sửa bị kiểm duyệt tầng 1 chặn |

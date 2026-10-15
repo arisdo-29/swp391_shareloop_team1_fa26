@@ -1,6 +1,7 @@
 package com.shareloop.item;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -93,6 +94,138 @@ class ItemImagesIT extends IntegrationTest {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("ITEM_INVALID_IMAGE_COUNT"))
                 .andExpect(jsonPath("$.field").value("images"));
+    }
+
+    @Test
+    void defectiveItemRequiresDefectImageAndPersistsItsRole() throws Exception {
+        long userId = createUser("item-defect-owner@shareloop.local", "0900000226");
+        long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long areaId = jdbc.sql("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long first = createMedia(userId);
+        long second = createMedia(userId);
+        long third = createMedia(userId);
+        long defect = createMedia(userId);
+        String body = "{\"categoryId\":%d,\"areaId\":%d,\"offerType\":\"GIVE\",\"title\":\"Sách cũ\","
+                + "\"description\":\"Còn dùng được\",\"condition\":\"DEFECTIVE\",\"defectNote\":\"Rách bìa\","
+                + "\"images\":[\"/api/v1/media/%d\",\"/api/v1/media/%d\",\"/api/v1/media/%d\"]%s}";
+
+        mvc.perform(post("/api/v1/items")
+                        .header("Authorization", "Bearer " + jwtService.issue(userId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body.formatted(categoryId, areaId, first, second, third, "")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("ITEM_DEFECT_IMAGES_REQUIRED"))
+                .andExpect(jsonPath("$.field").value("defectImages"));
+
+        mvc.perform(post("/api/v1/items")
+                        .header("Authorization", "Bearer " + jwtService.issue(userId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body.formatted(
+                                categoryId,
+                                areaId,
+                                first,
+                                second,
+                                third,
+                                ",\"defectImages\":[\"/api/v1/media/" + defect + "\"]")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.images.length()").value(3))
+                .andExpect(jsonPath("$.defectImages[0]").value("/api/v1/media/" + defect));
+
+        long itemId = jdbc.sql("SELECT id FROM items WHERE donor_id = :userId ORDER BY id DESC LIMIT 1")
+                .param("userId", userId)
+                .query(Long.class)
+                .single();
+        assertThat(jdbc.sql("SELECT role FROM item_media_mappings WHERE item_id = :itemId AND media_id = :mediaId")
+                        .param("itemId", itemId)
+                        .param("mediaId", defect)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("DEFECT");
+        mvc.perform(get("/api/v1/items/{id}", itemId)
+                        .header("Authorization", "Bearer " + jwtService.issue(userId, false)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.images.length()").value(3))
+                .andExpect(jsonPath("$.defectImages[0]").value("/api/v1/media/" + defect));
+    }
+
+    @Test
+    void electronicItemRequiresOperatingStatusAndStoresAttribute() throws Exception {
+        long userId = createUser("item-electronic-owner@shareloop.local", "0900000227");
+        long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE name = 'Điện tử và phụ kiện'")
+                .query(Long.class)
+                .single();
+        long areaId = jdbc.sql("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long first = createMedia(userId);
+        long second = createMedia(userId);
+        long third = createMedia(userId);
+        String body = body(categoryId, areaId, first, second, third);
+
+        mvc.perform(post("/api/v1/items")
+                        .header("Authorization", "Bearer " + jwtService.issue(userId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("ITEM_OPERATING_STATUS_REQUIRED"))
+                .andExpect(jsonPath("$.field").value("operatingStatus"));
+
+        mvc.perform(post("/api/v1/items")
+                        .header("Authorization", "Bearer " + jwtService.issue(userId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body.strip().replaceFirst("}$", ",\"operatingStatus\":\"PARTIAL\"}")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.operatingStatus").value("PARTIAL"));
+
+        long itemId = jdbc.sql("SELECT id FROM items WHERE donor_id = :userId ORDER BY id DESC LIMIT 1")
+                .param("userId", userId)
+                .query(Long.class)
+                .single();
+        assertThat(jdbc.sql("SELECT m.value FROM item_attribute_mappings m "
+                                + "JOIN item_attributes a ON a.id = m.attribute_id "
+                                + "WHERE m.item_id = :itemId AND a.name = 'Trạng thái hoạt động'")
+                        .param("itemId", itemId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("PARTIAL");
+        mvc.perform(get("/api/v1/items/{id}", itemId)
+                        .header("Authorization", "Bearer " + jwtService.issue(userId, false)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.operatingStatus").value("PARTIAL"));
+    }
+
+    @Test
+    void unrelatedConditionAndCategoryRejectExtraFields() throws Exception {
+        long userId = createUser("item-extra-fields@shareloop.local", "0900000228");
+        long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long areaId = jdbc.sql("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long first = createMedia(userId);
+        long second = createMedia(userId);
+        long third = createMedia(userId);
+        long defect = createMedia(userId);
+        String base = body(categoryId, areaId, first, second, third).strip();
+
+        mvc.perform(post("/api/v1/items")
+                        .header("Authorization", "Bearer " + jwtService.issue(userId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(base.replaceFirst("}$", ",\"defectImages\":[\"/api/v1/media/" + defect + "\"]}")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.field").value("defectImages"));
+
+        mvc.perform(post("/api/v1/items")
+                        .header("Authorization", "Bearer " + jwtService.issue(userId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(base.replaceFirst("}$", ",\"operatingStatus\":\"NORMAL\"}")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.field").value("operatingStatus"));
     }
 
     private long createUser(String email, String phone) {

@@ -210,6 +210,37 @@ class ItemEditIT extends IntegrationTest {
                 .isEqualTo(1);
     }
 
+    @Test
+    void editRequiresDefectImageAndElectronicOperatingStatusBeforeFeeHold() throws Exception {
+        long ownerId = user("item-edit-owner7@shareloop.local", "0900000760");
+        long itemId = approvedItem(ownerId);
+        String defectiveBody = body("Tên mới", "Mô tả mới")
+                .replace("\"condition\":\"GOOD\"", "\"condition\":\"DEFECTIVE\",\"defectNote\":\"Nứt vỏ\"");
+        mvc.perform(put("/api/v1/items/{id}", itemId)
+                        .header("Authorization", "Bearer " + jwtService.issue(ownerId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(defectiveBody))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.field").value("defectImages"));
+
+        long electronicCategoryId = jdbc.sql("SELECT id FROM item_categories WHERE name = 'Điện tử và phụ kiện'")
+                .query(Long.class)
+                .single();
+        String electronicBody =
+                body("Tên mới", "Mô tả mới").replace("\"categoryId\":1", "\"categoryId\":" + electronicCategoryId);
+        mvc.perform(put("/api/v1/items/{id}", itemId)
+                        .header("Authorization", "Bearer " + jwtService.issue(ownerId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(electronicBody))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.field").value("operatingStatus"));
+        assertThat(jdbc.sql("SELECT held_credit FROM users WHERE id = :id")
+                        .param("id", ownerId)
+                        .query(Integer.class)
+                        .single())
+                .isZero();
+    }
+
     private long user(String email, String phone) {
         return jdbc.sql("INSERT INTO users (email, password_hash, full_name, phone, status, credit_balance) "
                         + "VALUES (:email, 'unused', 'Test', :phone, 'ACTIVE', 20) RETURNING id")

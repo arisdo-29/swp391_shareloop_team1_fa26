@@ -1,5 +1,6 @@
 package com.shareloop.item.service;
 
+import com.shareloop.catalog.service.CategoryAttributeService;
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
@@ -10,6 +11,7 @@ import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
+import com.shareloop.item.entity.OperatingStatus;
 import com.shareloop.item.mapper.ItemMapper;
 import com.shareloop.item.repository.ItemRepository;
 import com.shareloop.listingfee.service.PostFeeService;
@@ -23,6 +25,7 @@ import com.shareloop.setting.service.ConfigService;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +49,7 @@ public class ItemService {
     private final RequestQueryService requestQueryService;
     private final ContentModerationService contentModerationService;
     private final PostFeeService postFeeService;
+    private final CategoryAttributeService categoryAttributeService;
 
     public ItemService(
             ItemRepository itemRepository,
@@ -54,7 +58,8 @@ public class ItemService {
             ConfigService configService,
             RequestQueryService requestQueryService,
             ContentModerationService contentModerationService,
-            PostFeeService postFeeService) {
+            PostFeeService postFeeService,
+            CategoryAttributeService categoryAttributeService) {
         this.itemRepository = itemRepository;
         this.jdbcClient = jdbcClient;
         this.mediaService = mediaService;
@@ -62,6 +67,7 @@ public class ItemService {
         this.requestQueryService = requestQueryService;
         this.contentModerationService = contentModerationService;
         this.postFeeService = postFeeService;
+        this.categoryAttributeService = categoryAttributeService;
     }
 
     /**
@@ -80,6 +86,9 @@ public class ItemService {
                 && (request.defectNote() == null || request.defectNote().isBlank())) {
             throw new BusinessException(ItemErrorCode.ITEM_DEFECT_NOTE_REQUIRED);
         }
+        List<Long> defectMediaIds = parseMediaIds(request.defectImages());
+        validateDefectImages(request.condition(), defectMediaIds);
+        Optional<Long> operatingAttributeId = requireOperatingStatus(request.categoryId(), request.operatingStatus());
 
         Item item = new Item(
                 donorId,
@@ -105,10 +114,13 @@ public class ItemService {
                     Map.of("min", minImages, "max", maxImages));
         }
         List<Long> mediaIds = parseMediaIds(request.images());
-        mediaService.attach(mediaIds, donorId);
+        List<Long> allMediaIds = combineMediaIds(mediaIds, defectMediaIds);
+        mediaService.attach(allMediaIds, donorId);
         Item saved = itemRepository.save(item);
-        saveMediaMappings(saved.getId(), mediaIds);
-        return ItemMapper.toResponse(saved, mediaUrls(mediaIds));
+        saveMediaMappings(saved.getId(), mediaIds, "PHOTO");
+        saveMediaMappings(saved.getId(), defectMediaIds, "DEFECT");
+        operatingAttributeId.ifPresent(id -> saveOperatingStatus(saved.getId(), id, request.operatingStatus()));
+        return ItemMapper.toResponse(saved, mediaUrls(mediaIds), mediaUrls(defectMediaIds), request.operatingStatus());
     }
 
     @Transactional
@@ -144,12 +156,27 @@ public class ItemService {
                 throw new BusinessException(MediaErrorCode.MEDIA_INVALID_FILE);
             }
         }
+        List<Long> newDefectMediaIds =
+                request.defectImages() == null ? findMediaIds(itemId, "DEFECT") : parseMediaIds(request.defectImages());
+        if (request.condition() != ItemCondition.DEFECTIVE) {
+            if (request.defectImages() != null && !newDefectMediaIds.isEmpty()) {
+                throw new BusinessException(
+                        ItemErrorCode.ITEM_DEFECT_IMAGES_NOT_ALLOWED,
+                        ItemErrorCode.ITEM_DEFECT_IMAGES_NOT_ALLOWED.defaultMessage(),
+                        "defectImages",
+                        null);
+            }
+            newDefectMediaIds = List.of();
+        }
+        validateDefectImages(request.condition(), newDefectMediaIds);
+        Optional<Long> operatingAttributeId = requireOperatingStatus(request.categoryId(), request.operatingStatus());
         postFeeService.quoteEdit(itemId, userId);
         postFeeService.holdEditFee(itemId, userId);
         if (requestQueryService.hasReservedOrHigherRequest(itemId)) {
             throw new BusinessException(ItemErrorCode.ITEM_EDIT_NOT_ALLOWED);
         }
 
+        Long previousCategoryId = item.getCategoryId();
         item.submitEdit(
                 request.categoryId(),
                 request.areaId(),
@@ -160,14 +187,19 @@ public class ItemService {
                 request.condition(),
                 request.defectNote(),
                 request.brand());
-        if (newMediaIds != null) {
-            replaceMediaMappings(itemId, userId, newMediaIds);
+        if (newMediaIds != null || request.defectImages() != null || request.condition() != ItemCondition.DEFECTIVE) {
+            replaceMediaMappings(
+                    itemId,
+                    userId,
+                    newMediaIds == null ? findMediaIds(itemId, "PHOTO") : newMediaIds,
+                    newDefectMediaIds);
         }
+        replaceOperatingStatus(itemId, previousCategoryId, operatingAttributeId, request.operatingStatus());
         jdbcClient
                 .sql("UPDATE items SET ai_risk = 'UNCHECKED', ai_result = NULL WHERE id = :itemId")
                 .param("itemId", itemId)
                 .update();
-        return ItemMapper.toResponse(item, findImages(itemId));
+        return toResponse(item);
     }
 
     /**
@@ -182,7 +214,7 @@ public class ItemService {
 
         boolean isOwner = currentUserId != null && currentUserId.equals(item.getDonorId());
         if ((item.getStatus() == ItemStatus.APPROVED && item.isActive()) || isOwner) {
-            return ItemMapper.toResponse(item, findImages(id));
+            return toResponse(item);
         }
 
         throw new BusinessException(ItemErrorCode.ITEM_NOT_FOUND);
@@ -194,7 +226,7 @@ public class ItemService {
     @Transactional(readOnly = true)
     public List<ItemResponse> listMyItems(Long currentUserId) {
         return itemRepository.findByDonorIdOrderByCreatedAtDesc(currentUserId).stream()
-                .map(item -> ItemMapper.toResponse(item, findImages(item.getId())))
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -207,7 +239,7 @@ public class ItemService {
                         areaId,
                         PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))))
                 : itemRepository.searchVisibleByFilters(categoryId, areaId, q.trim(), PageRequest.of(page, size));
-        Page<ItemResponse> result = items.map(item -> ItemMapper.toResponse(item, findImages(item.getId())));
+        Page<ItemResponse> result = items.map(this::toResponse);
         return PageResponse.from(result);
     }
 
@@ -319,52 +351,161 @@ public class ItemService {
         }
     }
 
-    private void replaceMediaMappings(long itemId, long userId, List<Long> newMediaIds) {
+    private void replaceMediaMappings(long itemId, long userId, List<Long> photos, List<Long> defects) {
         List<Long> oldMediaIds = jdbcClient
-                .sql("SELECT media_id FROM item_media_mappings WHERE item_id = :itemId AND role = 'PHOTO'")
+                .sql("SELECT media_id FROM item_media_mappings WHERE item_id = :itemId AND role IN ('PHOTO', 'DEFECT')")
                 .param("itemId", itemId)
                 .query(Long.class)
                 .list();
+        List<Long> newMediaIds = combineMediaIds(photos, defects);
         List<Long> added =
                 newMediaIds.stream().filter(id -> !oldMediaIds.contains(id)).toList();
         List<Long> removed =
                 oldMediaIds.stream().filter(id -> !newMediaIds.contains(id)).toList();
         mediaService.attach(added, userId);
         jdbcClient
-                .sql("DELETE FROM item_media_mappings WHERE item_id = :itemId AND role = 'PHOTO'")
+                .sql("DELETE FROM item_media_mappings WHERE item_id = :itemId AND role IN ('PHOTO', 'DEFECT')")
                 .param("itemId", itemId)
                 .update();
-        saveMediaMappings(itemId, newMediaIds);
+        saveMediaMappings(itemId, photos, "PHOTO");
+        saveMediaMappings(itemId, defects, "DEFECT");
         mediaService.detach(removed, userId);
+    }
+
+    private List<Long> combineMediaIds(List<Long> photos, List<Long> defects) {
+        List<Long> combined = java.util.stream.Stream.concat(photos.stream(), defects.stream())
+                .toList();
+        if (new HashSet<>(combined).size() != combined.size()) {
+            throw new BusinessException(MediaErrorCode.MEDIA_INVALID_FILE);
+        }
+        return combined;
+    }
+
+    private void validateDefectImages(ItemCondition condition, List<Long> defectMediaIds) {
+        if (condition == ItemCondition.DEFECTIVE && defectMediaIds.isEmpty()) {
+            throw new BusinessException(
+                    ItemErrorCode.ITEM_DEFECT_IMAGES_REQUIRED,
+                    ItemErrorCode.ITEM_DEFECT_IMAGES_REQUIRED.defaultMessage(),
+                    "defectImages",
+                    null);
+        }
+        if (condition != ItemCondition.DEFECTIVE && !defectMediaIds.isEmpty()) {
+            throw new BusinessException(
+                    ItemErrorCode.ITEM_DEFECT_IMAGES_NOT_ALLOWED,
+                    ItemErrorCode.ITEM_DEFECT_IMAGES_NOT_ALLOWED.defaultMessage(),
+                    "defectImages",
+                    null);
+        }
+    }
+
+    private Optional<Long> requireOperatingStatus(Long categoryId, OperatingStatus operatingStatus) {
+        Optional<Long> attributeId = categoryAttributeService.operatingStatusAttributeId(categoryId);
+        if (attributeId.isPresent() && operatingStatus == null) {
+            throw new BusinessException(
+                    ItemErrorCode.ITEM_OPERATING_STATUS_REQUIRED,
+                    ItemErrorCode.ITEM_OPERATING_STATUS_REQUIRED.defaultMessage(),
+                    "operatingStatus",
+                    null);
+        }
+        if (attributeId.isEmpty() && operatingStatus != null) {
+            throw new BusinessException(
+                    ItemErrorCode.ITEM_OPERATING_STATUS_NOT_ALLOWED,
+                    ItemErrorCode.ITEM_OPERATING_STATUS_NOT_ALLOWED.defaultMessage(),
+                    "operatingStatus",
+                    null);
+        }
+        return attributeId;
+    }
+
+    private void saveOperatingStatus(long itemId, long attributeId, OperatingStatus status) {
+        jdbcClient
+                .sql("INSERT INTO item_attribute_mappings (item_id, attribute_id, value) "
+                        + "VALUES (:itemId, :attributeId, :value)")
+                .param("itemId", itemId)
+                .param("attributeId", attributeId)
+                .param("value", status.name())
+                .update();
+    }
+
+    private void replaceOperatingStatus(
+            long itemId, long previousCategoryId, Optional<Long> newAttributeId, OperatingStatus status) {
+        categoryAttributeService
+                .operatingStatusAttributeId(previousCategoryId)
+                .ifPresent(id -> jdbcClient
+                        .sql(
+                                "DELETE FROM item_attribute_mappings WHERE item_id = :itemId AND attribute_id = :attributeId")
+                        .param("itemId", itemId)
+                        .param("attributeId", id)
+                        .update());
+        newAttributeId.ifPresent(id -> saveOperatingStatus(itemId, id, status));
     }
 
     private List<String> mediaUrls(List<Long> mediaIds) {
         return mediaIds.stream().map(id -> "/api/v1/media/" + id).toList();
     }
 
-    private void saveMediaMappings(Long itemId, List<Long> mediaIds) {
+    private void saveMediaMappings(Long itemId, List<Long> mediaIds, String role) {
         short order = 0;
         for (Long mediaId : mediaIds) {
             jdbcClient
                     .sql("INSERT INTO item_media_mappings (item_id, media_id, role, sort_order) "
-                            + "VALUES (:itemId, :mediaId, 'PHOTO', :sortOrder)")
+                            + "VALUES (:itemId, :mediaId, :role, :sortOrder)")
                     .param("itemId", itemId)
                     .param("mediaId", mediaId)
+                    .param("role", role)
                     .param("sortOrder", order++)
                     .update();
         }
     }
 
     private List<String> findImages(Long itemId) {
+        return findImages(itemId, "PHOTO");
+    }
+
+    private List<String> findImages(Long itemId, String role) {
         if (jdbcClient == null || itemId == null) {
             return List.of();
         }
         return jdbcClient
                 .sql("SELECT '/api/v1/media/' || m.id FROM item_media_mappings imm "
                         + "JOIN media_files m ON imm.media_id = m.id "
-                        + "WHERE imm.item_id = :itemId AND m.is_active AND NOT m.is_deleted ORDER BY imm.sort_order")
+                        + "WHERE imm.item_id = :itemId AND imm.role = :role "
+                        + "AND m.is_active AND NOT m.is_deleted ORDER BY imm.sort_order")
                 .param("itemId", itemId)
+                .param("role", role)
                 .query(String.class)
                 .list();
+    }
+
+    private List<Long> findMediaIds(long itemId, String role) {
+        return jdbcClient
+                .sql(
+                        "SELECT media_id FROM item_media_mappings WHERE item_id = :itemId AND role = :role ORDER BY sort_order")
+                .param("itemId", itemId)
+                .param("role", role)
+                .query(Long.class)
+                .list();
+    }
+
+    private OperatingStatus findOperatingStatus(long itemId, long categoryId) {
+        return categoryAttributeService
+                .operatingStatusAttributeId(categoryId)
+                .flatMap(id -> jdbcClient
+                        .sql("SELECT value FROM item_attribute_mappings "
+                                + "WHERE item_id = :itemId AND attribute_id = :attributeId")
+                        .param("itemId", itemId)
+                        .param("attributeId", id)
+                        .query(String.class)
+                        .optional())
+                .map(OperatingStatus::valueOf)
+                .orElse(null);
+    }
+
+    private ItemResponse toResponse(Item item) {
+        return ItemMapper.toResponse(
+                item,
+                findImages(item.getId()),
+                findImages(item.getId(), "DEFECT"),
+                findOperatingStatus(item.getId(), item.getCategoryId()));
     }
 }
