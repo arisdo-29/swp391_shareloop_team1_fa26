@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -13,6 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.service.ItemService;
@@ -25,6 +28,7 @@ import com.shareloop.review.repository.ReviewQueueRepository;
 import com.shareloop.setting.service.ConfigService;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,9 +42,16 @@ class ReviewServiceTest {
     private final PostFeeService postFeeService = mock(PostFeeService.class);
     private final ItemService itemService = mock(ItemService.class);
     private final NotificationService notificationService = mock(NotificationService.class);
+    private final ActivityLogService activityLogService = mock(ActivityLogService.class);
     private final ReviewItem reviewItem = mock(ReviewItem.class);
     private final ReviewService service = new ReviewService(
-            queueRepository, reviewItemRepository, configService, postFeeService, itemService, notificationService);
+            queueRepository,
+            reviewItemRepository,
+            configService,
+            postFeeService,
+            itemService,
+            notificationService,
+            activityLogService);
 
     @BeforeEach
     void setUp() {
@@ -60,48 +71,49 @@ class ReviewServiceTest {
     }
 
     @Test
-    void approveChargesFeeThenChangesItemAndStoresSnapshot() {
-        service.approve(8L, List.of(true, true));
+    void approveChargesFeeThenChangesItemAndStoresSnapshotAndLogsActivity() {
+        service.approve(8L, List.of(true, true), 1L);
 
-        InOrder order = inOrder(postFeeService, itemService, reviewItemRepository, reviewItem);
+        InOrder order = inOrder(postFeeService, itemService, reviewItemRepository, reviewItem, activityLogService);
         order.verify(postFeeService).chargeHeldFee(8L);
         order.verify(itemService).markApproved(8L);
         order.verify(reviewItemRepository).findById(8L);
         order.verify(reviewItem).approve(anyMap(), any(Instant.class));
+        order.verify(activityLogService).log(eq("REVIEW_APPROVE"), eq(1L), eq("ITEM"), eq(8L), anyMap(), isNull());
     }
 
     @Test
-    void incompleteChecklistDoesNotChargeOrApprove() {
-        assertThatThrownBy(() -> service.approve(8L, List.of(true)))
+    void incompleteChecklistDoesNotChargeOrApproveOrLog() {
+        assertThatThrownBy(() -> service.approve(8L, List.of(true), 1L))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(ReviewErrorCode.REVIEW_CHECKLIST_INCOMPLETE);
 
-        verifyNoInteractions(postFeeService, itemService, reviewItemRepository);
+        verifyNoInteractions(postFeeService, itemService, reviewItemRepository, activityLogService);
     }
 
     @Test
-    void chargeFailureDoesNotChangeItemOrSaveSnapshot() {
+    void chargeFailureDoesNotChangeItemOrSaveSnapshotOrLog() {
         org.mockito.Mockito.doThrow(new IllegalStateException("charge failed"))
                 .when(postFeeService)
                 .chargeHeldFee(8L);
 
-        assertThatThrownBy(() -> service.approve(8L, List.of(true, true)))
+        assertThatThrownBy(() -> service.approve(8L, List.of(true, true), 1L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("charge failed");
 
         verify(itemService, never()).markApproved(8L);
-        verifyNoInteractions(reviewItemRepository);
+        verifyNoInteractions(reviewItemRepository, activityLogService);
         verify(reviewItem, never()).approve(anyMap(), any(Instant.class));
     }
 
     @Test
-    void itemInWrongStatusAbortsApprovalBeforeSavingSnapshot() {
+    void itemInWrongStatusAbortsApprovalBeforeSavingSnapshotOrLog() {
         org.mockito.Mockito.doThrow(new BusinessException(ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION))
                 .when(itemService)
                 .markApproved(8L);
 
-        assertThatThrownBy(() -> service.approve(8L, List.of(true, true)))
+        assertThatThrownBy(() -> service.approve(8L, List.of(true, true), 1L))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
@@ -109,6 +121,7 @@ class ReviewServiceTest {
         verify(postFeeService).chargeHeldFee(8L);
         verify(reviewItemRepository, never()).findById(8L);
         verify(reviewItem, never()).approve(anyMap(), any(Instant.class));
+        verifyNoInteractions(activityLogService);
     }
 
     @Test
@@ -120,34 +133,37 @@ class ReviewServiceTest {
 
     @Test
     void rejectRequiresReasonBeforeReleasingFee() {
-        assertThatThrownBy(() -> service.reject(8L, "  "))
+        assertThatThrownBy(() -> service.reject(8L, "  ", 1L))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(ReviewErrorCode.REVIEW_REJECT_REASON_REQUIRED);
 
-        verifyNoInteractions(postFeeService, itemService, reviewItemRepository, notificationService);
+        verifyNoInteractions(
+                postFeeService, itemService, reviewItemRepository, notificationService, activityLogService);
     }
 
     @Test
-    void releaseFeeFailureAbortsBeforeNotifyAndItemChange() {
+    void releaseFeeFailureAbortsBeforeNotifyAndItemChangeAndLog() {
         org.mockito.Mockito.doThrow(new IllegalStateException("fee release failed"))
                 .when(postFeeService)
                 .releaseHeldFee(8L, "REJECTED");
 
-        assertThatThrownBy(() -> service.reject(8L, "Ảnh không đúng món"))
+        assertThatThrownBy(() -> service.reject(8L, "Ảnh không đúng món", 1L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("fee release failed");
 
         verify(itemService, never()).markRejected(8L);
         verify(reviewItemRepository, never()).findById(8L);
         verify(notificationService, never()).notify(anyLong(), anyString(), anyString(), anyString(), anyString());
+        verifyNoInteractions(activityLogService);
     }
 
     @Test
-    void rejectReleasesFeeThenChangesItemAndStoresReasonAndNotifiesDonor() {
-        service.reject(8L, "  Ảnh không đúng món  ");
+    void rejectReleasesFeeThenChangesItemAndStoresReasonAndNotifiesDonorAndLogsActivity() {
+        service.reject(8L, "  Ảnh không đúng món  ", 1L);
 
-        InOrder order = inOrder(postFeeService, itemService, reviewItemRepository, reviewItem, notificationService);
+        InOrder order = inOrder(
+                postFeeService, itemService, reviewItemRepository, reviewItem, notificationService, activityLogService);
         order.verify(postFeeService).releaseHeldFee(8L, "REJECTED");
         order.verify(itemService).markRejected(8L);
         order.verify(reviewItemRepository).findById(8L);
@@ -155,17 +171,33 @@ class ReviewServiceTest {
         order.verify(reviewItemRepository).findDonorIdByItemId(8L);
         order.verify(notificationService)
                 .notify(99L, "POST_REJECTED", "Bài đăng bị từ chối", "Ảnh không đúng món", "/items/8");
+        order.verify(activityLogService)
+                .log(
+                        eq("REVIEW_REJECT"),
+                        eq(1L),
+                        eq("ITEM"),
+                        eq(8L),
+                        (Map<String, Object>) isNull(),
+                        eq("Ảnh không đúng món"));
     }
 
     @Test
-    void rejectWhenDonorNotFoundDoesNotFailOrNotify() {
+    void rejectWhenDonorNotFoundDoesNotFailOrNotifyButLogsActivity() {
         when(reviewItemRepository.findDonorIdByItemId(8L)).thenReturn(Optional.empty());
 
-        service.reject(8L, "Ảnh không đúng món");
+        service.reject(8L, "Ảnh không đúng món", 1L);
 
         verify(postFeeService).releaseHeldFee(8L, "REJECTED");
         verify(itemService).markRejected(8L);
         verify(reviewItem).reject("Ảnh không đúng món");
         verify(notificationService, never()).notify(anyLong(), anyString(), anyString(), anyString(), anyString());
+        verify(activityLogService)
+                .log(
+                        eq("REVIEW_REJECT"),
+                        eq(1L),
+                        eq("ITEM"),
+                        eq(8L),
+                        (Map<String, Object>) isNull(),
+                        eq("Ảnh không đúng món"));
     }
 }

@@ -92,4 +92,30 @@ class AdminReviewControllerTest {
                 .andExpect(jsonPath("$[0]").value("Ảnh không đúng món"))
                 .andExpect(jsonPath("$[1]").value("Chứa thông tin liên hệ"));
     }
+
+    @Test
+    void adminApprovesReviewPassesAdminIdToService() throws Exception {
+        String adminToken = jwtService.issue(1L, true);
+
+        mockMvc.perform(post("/api/v1/admin/reviews/8/approve")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"answers\":[true]}"))
+                .andExpect(status().isNoContent());
+
+        org.mockito.Mockito.verify(reviewService).approve(8L, List.of(true), 1L);
+    }
+
+    @Test
+    void adminRejectsReviewPassesAdminIdToService() throws Exception {
+        String adminToken = jwtService.issue(1L, true);
+
+        mockMvc.perform(post("/api/v1/admin/reviews/8/reject")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Ảnh sai\"}"))
+                .andExpect(status().isNoContent());
+
+        org.mockito.Mockito.verify(reviewService).reject(8L, "Ảnh sai", 1L);
+    }
 }

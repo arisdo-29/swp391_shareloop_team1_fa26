@@ -15,6 +15,7 @@ import com.shareloop.setting.SettingErrorCode;
 import com.shareloop.setting.entity.WebsiteAttribute;
 import com.shareloop.setting.repository.WebsiteAttributeRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -201,5 +202,24 @@ class ConfigServiceTest {
                 .thenReturn(List.of(reason1, reason2));
 
         assertThat(service.rejectReasons()).containsExactly("Ảnh không đúng món", "Chứa thông tin liên hệ");
+    }
+
+    @Test
+    void updateConfigLogsActivityWithAdminIdAndReason() {
+        var attribute = mock(WebsiteAttribute.class);
+        when(attribute.getAttrValue()).thenReturn("5");
+        when(repository.findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", "post_fee"))
+                .thenReturn(Optional.of(attribute));
+
+        service.update(ConfigKey.POST_FEE, "10", "Tăng phí", 9L);
+
+        org.mockito.Mockito.verify(activityLogService)
+                .log(
+                        org.mockito.ArgumentMatchers.eq("CONFIG_UPDATE"),
+                        org.mockito.ArgumentMatchers.eq(9L),
+                        org.mockito.ArgumentMatchers.eq("CONFIG"),
+                        org.mockito.ArgumentMatchers.isNull(),
+                        org.mockito.ArgumentMatchers.eq(Map.of("key", "post_fee", "oldValue", "5", "newValue", "10")),
+                        org.mockito.ArgumentMatchers.eq("Tăng phí"));
     }
 }
