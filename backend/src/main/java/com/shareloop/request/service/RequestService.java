@@ -160,7 +160,7 @@ public class RequestService {
         }
 
         return requestRepository.findByItemIdOrderByCreatedAtDesc(itemId).stream()
-                .map(RequestMapper::toResponse)
+                .map(request -> RequestMapper.toResponse(request, findReceiverName(request.getReceiverId())))
                 .toList();
     }
 
@@ -170,7 +170,7 @@ public class RequestService {
     @Transactional(readOnly = true)
     public List<RequestResponse> listMyRequests(long currentUserId) {
         return requestRepository.findByReceiverIdOrderByCreatedAtDesc(currentUserId).stream()
-                .map(RequestMapper::toResponse)
+                .map(request -> RequestMapper.toResponse(request, findReceiverName(request.getReceiverId())))
                 .toList();
     }
 
@@ -282,7 +282,7 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
         }
 
-        return RequestMapper.toResponse(request);
+        return RequestMapper.toResponse(request, findReceiverName(request.getReceiverId()));
     }
 
     /**
@@ -524,6 +524,23 @@ public class RequestService {
                 .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
 
         return new RequestChatContext(request.getId(), request.getStatus(), request.getReceiverId(), item.donorId());
+    }
+
+    // Chỉ lấy họ tên để hiển thị; email, số điện thoại chỉ trao qua getContactInfo khi đã chốt lịch (BR-T11).
+    // Tra tên lỗi thì trả null để danh sách yêu cầu vẫn hiện được, không làm hỏng cả API.
+    private String findReceiverName(long receiverId) {
+        if (userService == null) {
+            return null;
+        }
+        try {
+            ContactInfo contact = userService.findContact(receiverId);
+            if (contact == null) {
+                return null;
+            }
+            return contact.fullName();
+        } catch (BusinessException e) {
+            return null;
+        }
     }
 
     Optional<ItemSnapshot> findItemSnapshot(long itemId) {

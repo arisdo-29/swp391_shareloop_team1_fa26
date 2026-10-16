@@ -269,6 +269,7 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
 | `asDescribed` | boolean? | Người nhận đánh giá món đồ đúng mô tả hay không |
 | `completedAt` | string? | Thời điểm hoàn tất giao dịch ISO-8601 UTC |
 | `createdAt` | string | Thời điểm tạo ISO-8601 UTC |
+| `receiverName` | string? | Họ tên người gửi yêu cầu (có trong danh sách theo bài, danh sách của tôi và chi tiết). Có thể `null`. Không kèm email/số điện thoại (BR-T11) |
 
 ### ScheduleRequest
 

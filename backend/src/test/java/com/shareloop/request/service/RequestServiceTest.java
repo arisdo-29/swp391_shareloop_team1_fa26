@@ -794,4 +794,24 @@ class RequestServiceTest {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
                 });
     }
+
+    @Test
+    @DisplayName("listByItem: Trả kèm họ tên người xin lấy từ UserService.findContact")
+    void listByItem_whenDonorCalls_returnsReceiverName() {
+        // given
+        Request request = new Request(1L, 10L, null, "GIVE");
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.findByItemIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(request));
+        when(userService.findContact(10L))
+                .thenReturn(new ContactInfo(10L, "Nguyễn Văn B", "receiver@example.com", "0901234567"));
+
+        // when
+        List<RequestResponse> responses = requestService.listByItem(1L, 20L); // donor gọi
+
+        // then
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).receiverName()).isEqualTo("Nguyễn Văn B");
+    }
 }
