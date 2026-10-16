@@ -65,4 +65,37 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
         )
     """, nativeQuery = true)
     boolean hasActiveDelivery(@Param("userId") long userId);
+
+    /**
+     * Tìm các yêu cầu ở trạng thái cụ thể được tạo trước một mốc thời gian (FR-119, BR-R06).
+     */
+    List<Request> findByStatusAndCreatedAtBefore(RequestStatus status, java.time.Instant cutoff);
+
+    /**
+     * Tìm các yêu cầu RESERVED hoặc AWAITING_LOGISTICS quá hạn chưa chốt lịch (FR-120, BR-T10, FR-77, BR-C03).
+     */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.status IN (
+            com.shareloop.request.entity.RequestStatus.RESERVED,
+            com.shareloop.request.entity.RequestStatus.AWAITING_LOGISTICS
+        )
+        AND r.reservedAt IS NOT NULL
+        AND r.reservedAt < :cutoff
+    """)
+    List<Request> findSilentReservedRequests(@Param("cutoff") java.time.Instant cutoff);
+
+    /**
+     * Tìm các yêu cầu AWAITING_HANDOVER có đúng một bên xác nhận quá hạn im lặng (FR-87, BR-T06).
+     */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.status = com.shareloop.request.entity.RequestStatus.AWAITING_HANDOVER
+        AND (
+            (r.donorHandoverAt IS NOT NULL AND r.receiverHandoverAt IS NULL AND r.donorHandoverAt < :cutoff)
+            OR
+            (r.receiverHandoverAt IS NOT NULL AND r.donorHandoverAt IS NULL AND r.receiverHandoverAt < :cutoff)
+        )
+    """)
+    List<Request> findOverdueHandoverRequests(@Param("cutoff") java.time.Instant cutoff);
 }

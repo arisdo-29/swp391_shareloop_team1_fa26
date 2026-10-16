@@ -256,6 +256,19 @@ public class Request extends BaseEntity {
         }
     }
 
+    /**
+     * Tự động xác nhận giao nhận khi một bên im lặng quá hạn (FR-87, BR-T06).
+     * Chuyển trạng thái từ AWAITING_HANDOVER sang COMPLETED.
+     */
+    public void autoConfirm(Instant now) {
+        transitionTo(RequestStatus.COMPLETED);
+        this.autoConfirmed = true;
+        this.completedAt = now;
+        if (this.asDescribed == null) {
+            this.asDescribed = true;
+        }
+    }
+
     public Long getItemId() {
         return itemId;
     }
