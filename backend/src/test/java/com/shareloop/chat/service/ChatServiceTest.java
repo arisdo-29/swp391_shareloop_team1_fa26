@@ -38,6 +38,9 @@ class ChatServiceTest {
     @Mock
     ChatContactFilter chatContactFilter;
 
+    @Mock
+    com.shareloop.media.service.MediaService mediaService;
+
     @InjectMocks
     ChatService chatService;
 
@@ -161,6 +164,107 @@ class ChatServiceTest {
                     .isInstanceOf(BusinessException.class)
                     .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                             .isEqualTo(ChatErrorCode.CHAT_MESSAGE_BLOCKED));
+        }
+
+        @Test
+        @DisplayName("Gửi ảnh thành công khi Request ở trạng thái LOGISTICS_CONFIRMED (FR-75, BR-C05)")
+        void sendMessage_image_success_whenLogisticsConfirmed() {
+            RequestChatContext context =
+                    new RequestChatContext(REQUEST_ID, RequestStatus.LOGISTICS_CONFIRMED, RECEIVER_ID, DONOR_ID);
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(context);
+
+            long mediaId = 42L;
+            Message savedMessage = new Message(REQUEST_ID, RECEIVER_ID, MessageKind.IMAGE, "Ảnh gói đồ", mediaId);
+            when(messageRepository.save(any(Message.class))).thenReturn(savedMessage);
+
+            SendMessageRequest req = new SendMessageRequest("Ảnh gói đồ", mediaId);
+            MessageResponse response = chatService.sendMessage(REQUEST_ID, RECEIVER_ID, req);
+
+            assertThat(response).isNotNull();
+            assertThat(response.kind()).isEqualTo(MessageKind.IMAGE.name());
+            assertThat(response.mediaId()).isEqualTo(mediaId);
+            assertThat(response.content()).isEqualTo("Ảnh gói đồ");
+
+            verify(mediaService).attach(List.of(mediaId), RECEIVER_ID);
+            verify(messageRepository).save(any(Message.class));
+        }
+
+        @Test
+        @DisplayName("Gửi ảnh không kèm caption vẫn thành công khi ở LOGISTICS_CONFIRMED")
+        void sendMessage_image_withoutContent_success() {
+            RequestChatContext context =
+                    new RequestChatContext(REQUEST_ID, RequestStatus.LOGISTICS_CONFIRMED, RECEIVER_ID, DONOR_ID);
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(context);
+
+            long mediaId = 43L;
+            Message savedMessage = new Message(REQUEST_ID, RECEIVER_ID, MessageKind.IMAGE, null, mediaId);
+            when(messageRepository.save(any(Message.class))).thenReturn(savedMessage);
+
+            SendMessageRequest req = new SendMessageRequest(null, mediaId);
+            MessageResponse response = chatService.sendMessage(REQUEST_ID, RECEIVER_ID, req);
+
+            assertThat(response).isNotNull();
+            assertThat(response.kind()).isEqualTo(MessageKind.IMAGE.name());
+            assertThat(response.mediaId()).isEqualTo(mediaId);
+            assertThat(response.content()).isNull();
+
+            verify(mediaService).attach(List.of(mediaId), RECEIVER_ID);
+        }
+
+        @Test
+        @DisplayName("Ném lỗi CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN khi gửi ảnh ở trạng thái RESERVED (FR-75, BR-C05)")
+        void sendMessage_image_throwsWhenReserved() {
+            RequestChatContext context =
+                    new RequestChatContext(REQUEST_ID, RequestStatus.RESERVED, RECEIVER_ID, DONOR_ID);
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(context);
+
+            SendMessageRequest req = new SendMessageRequest("Ảnh minh chứng", 44L);
+
+            assertThatThrownBy(() -> chatService.sendMessage(REQUEST_ID, RECEIVER_ID, req))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                            .isEqualTo(ChatErrorCode.CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN));
+
+            org.mockito.Mockito.verify(mediaService, org.mockito.Mockito.never())
+                    .attach(any(), org.mockito.ArgumentMatchers.anyLong());
+        }
+
+        @Test
+        @DisplayName(
+                "Ném lỗi CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN khi gửi ảnh ở trạng thái AWAITING_LOGISTICS (FR-75, BR-C05)")
+        void sendMessage_image_throwsWhenAwaitingLogistics() {
+            RequestChatContext context =
+                    new RequestChatContext(REQUEST_ID, RequestStatus.AWAITING_LOGISTICS, RECEIVER_ID, DONOR_ID);
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(context);
+
+            SendMessageRequest req = new SendMessageRequest("Ảnh món đồ", 45L);
+
+            assertThatThrownBy(() -> chatService.sendMessage(REQUEST_ID, RECEIVER_ID, req))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                            .isEqualTo(ChatErrorCode.CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN));
+
+            org.mockito.Mockito.verify(mediaService, org.mockito.Mockito.never())
+                    .attach(any(), org.mockito.ArgumentMatchers.anyLong());
+        }
+
+        @Test
+        @DisplayName("Gửi ảnh thành công khi ở trạng thái AWAITING_HANDOVER")
+        void sendMessage_image_success_whenAwaitingHandover() {
+            RequestChatContext context =
+                    new RequestChatContext(REQUEST_ID, RequestStatus.AWAITING_HANDOVER, RECEIVER_ID, DONOR_ID);
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(context);
+
+            long mediaId = 46L;
+            Message savedMessage = new Message(REQUEST_ID, DONOR_ID, MessageKind.IMAGE, "Đã giao hàng", mediaId);
+            when(messageRepository.save(any(Message.class))).thenReturn(savedMessage);
+
+            SendMessageRequest req = new SendMessageRequest("Đã giao hàng", mediaId);
+            MessageResponse response = chatService.sendMessage(REQUEST_ID, DONOR_ID, req);
+
+            assertThat(response).isNotNull();
+            assertThat(response.kind()).isEqualTo(MessageKind.IMAGE.name());
+            verify(mediaService).attach(List.of(mediaId), DONOR_ID);
         }
     }
 

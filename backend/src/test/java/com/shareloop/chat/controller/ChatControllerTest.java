@@ -86,6 +86,37 @@ class ChatControllerTest {
     }
 
     @Test
+    @DisplayName("Gửi tin nhắn ảnh thành công trả về 201 Created và loại tin là IMAGE")
+    void sendMessage_image_withToken_returns201() throws Exception {
+        String token = jwtService.issue(USER_ID, false);
+        MessageResponse response = new MessageResponse(
+                2L,
+                REQUEST_ID,
+                USER_ID,
+                "IMAGE",
+                "Ảnh minh chứng giao hàng",
+                42L,
+                null,
+                null,
+                "PASS",
+                null,
+                Instant.now());
+
+        when(chatService.sendMessage(eq(REQUEST_ID), eq(USER_ID), any(SendMessageRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/requests/{requestId}/messages", REQUEST_ID)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\": \"Ảnh minh chứng giao hàng\", \"mediaId\": 42}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(2))
+                .andExpect(jsonPath("$.kind").value("IMAGE"))
+                .andExpect(jsonPath("$.mediaId").value(42))
+                .andExpect(jsonPath("$.senderId").value(USER_ID));
+    }
+
+    @Test
     @DisplayName("Lấy danh sách tin nhắn thành công có JWT trả về 200 OK")
     void getMessages_withToken_returns200() throws Exception {
         String token = jwtService.issue(USER_ID, false);

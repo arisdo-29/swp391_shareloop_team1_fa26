@@ -4,9 +4,11 @@ import com.shareloop.chat.ChatErrorCode;
 import com.shareloop.chat.dto.MessageResponse;
 import com.shareloop.chat.dto.SendMessageRequest;
 import com.shareloop.chat.entity.Message;
+import com.shareloop.chat.entity.MessageKind;
 import com.shareloop.chat.mapper.MessageMapper;
 import com.shareloop.chat.repository.MessageRepository;
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.media.service.MediaService;
 import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.entity.RequestStatus;
@@ -17,7 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service xử lý logic gửi tin nhắn và lấy tin nhắn theo chu kỳ polling (FR-68, BR-C03).
+ * Service xử lý logic gửi tin nhắn và lấy tin nhắn theo chu kỳ polling (FR-68, FR-75, BR-C03, BR-C05).
  */
 @Service
 public class ChatService {
@@ -33,20 +35,25 @@ public class ChatService {
     private final MessageRepository messageRepository;
     private final RequestService requestService;
     private final ChatContactFilter chatContactFilter;
+    private final MediaService mediaService;
 
     public ChatService(
-            MessageRepository messageRepository, RequestService requestService, ChatContactFilter chatContactFilter) {
+            MessageRepository messageRepository,
+            RequestService requestService,
+            ChatContactFilter chatContactFilter,
+            MediaService mediaService) {
         this.messageRepository = messageRepository;
         this.requestService = requestService;
         this.chatContactFilter = chatContactFilter;
+        this.mediaService = mediaService;
     }
 
     /**
-     * Gửi tin nhắn mới trong khung chat của yêu cầu giao dịch (FR-68, FR-72).
+     * Gửi tin nhắn mới trong khung chat của yêu cầu giao dịch (FR-68, FR-72, FR-75).
      *
      * @param requestId     id của yêu cầu giao dịch
      * @param currentUserId id người gửi hiện tại
-     * @param request       nội dung tin nhắn
+     * @param request       nội dung tin nhắn và/hoặc ảnh
      * @return MessageResponse thông tin tin nhắn đã lưu
      */
     @Transactional
@@ -55,17 +62,41 @@ public class ChatService {
             throw new BusinessException(ChatErrorCode.CHAT_FORBIDDEN);
         }
 
-        if (request == null || request.content() == null || request.content().isBlank()) {
+        boolean hasContent = request != null
+                && request.content() != null
+                && !request.content().isBlank();
+        boolean hasMedia = request != null && request.mediaId() != null;
+
+        if (!hasContent && !hasMedia) {
             throw new BusinessException(ChatErrorCode.CHAT_MESSAGE_EMPTY);
         }
 
         RequestChatContext context = validateAndGetChatContext(requestId, currentUserId);
 
-        // Lọc thông tin liên hệ tầng 1 (FR-72, FR-74; BR-C01)
-        chatContactFilter.validateMessage(request.content());
+        // Chặn gửi ảnh trước khi hai bên chốt lịch (FR-75, BR-C05)
+        if (hasMedia) {
+            if (context.status() == RequestStatus.RESERVED || context.status() == RequestStatus.AWAITING_LOGISTICS) {
+                throw new BusinessException(ChatErrorCode.CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN);
+            }
+            // Gắn ảnh qua MediaService để đảm bảo quyền sở hữu và chuyển sang ATTACHED
+            mediaService.attach(List.of(request.mediaId()), currentUserId);
+        }
 
-        Message message = new Message(
-                context.requestId(), currentUserId, request.content().trim());
+        // Lọc thông tin liên hệ tầng 1 trước LogisticsConfirmed (FR-72, FR-74; BR-C01, BR-C06)
+        if (hasContent) {
+            if (context.status() == RequestStatus.RESERVED || context.status() == RequestStatus.AWAITING_LOGISTICS) {
+                chatContactFilter.validateMessage(request.content());
+            }
+        }
+
+        Message message;
+        if (hasMedia) {
+            String content = hasContent ? request.content().trim() : null;
+            message = new Message(context.requestId(), currentUserId, MessageKind.IMAGE, content, request.mediaId());
+        } else {
+            message = new Message(
+                    context.requestId(), currentUserId, request.content().trim());
+        }
         Message saved = messageRepository.save(message);
 
         return MessageMapper.toResponse(saved);
