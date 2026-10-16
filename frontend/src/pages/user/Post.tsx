@@ -353,12 +353,18 @@ export function Post() {
               disabled={submitting || mediaUploading}
               onChange={async (event) => {
                 const selectedFiles = Array.from(event.target.files ?? []);
-                const files = selectedFiles.slice(0, ITEM_IMAGES_MAX);
                 setMediaUploadState('idle');
                 setMediaUploadError('');
                 if (selectedFiles.length > ITEM_IMAGES_MAX) {
                   setErrors((current) => ({ ...current, images: `Chỉ được chọn tối đa ${ITEM_IMAGES_MAX} ảnh.` }));
-                } else if (files.some((file) => !file.type.startsWith('image/'))) {
+                  setImageFiles([]);
+                  setImages([]);
+                  setUploadedImageUrls(new Map());
+                  event.currentTarget.value = '';
+                  return;
+                }
+                const files = selectedFiles;
+                if (files.some((file) => !file.type.startsWith('image/'))) {
                   setErrors((current) => ({ ...current, images: 'Vui lòng chỉ chọn tệp hình ảnh.' }));
                   setImageFiles([]);
                   setImages([]);

@@ -78,6 +78,7 @@ export const router = createBrowserRouter([
             children: [
               { index: true, element: <AdminDashboard /> },
               { path: 'moderation', element: <AdminModeration /> },
+              { path: 'checklist', element: <AdminContentPage kind="checklist" /> },
               { path: 'expired-posts', element: <AdminContentPage kind="expired" /> },
               { path: 'categories', element: <AdminContentPage kind="categories" /> },
               { path: 'keywords', element: <AdminContentPage kind="keywords" /> },

@@ -4,6 +4,9 @@ import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectData } from '../../app/store';
 import { Alert, Button, Field, PageHeader } from '../../components/ui';
 import { PasswordField } from '../../components/PasswordField';
+import { authApi } from '../../services/authApi';
+import { authErrorMessage } from '../../services/authErrors';
+import type { ApiError } from '../../services/http';
 import {
   generateOtp,
   hashPassword,
@@ -16,6 +19,13 @@ import {
 const OTP_TTL_MS = 5 * 60 * 1000;
 const RESEND_WAIT_MS = 60 * 1000;
 
+interface ApiResetState {
+  flow: 'api';
+  email: string;
+  expiresAt: string;
+  resendAvailableAt: string;
+}
+
 export function ForgotPassword() {
   const data = useAppSelector(selectData);
   const dispatch = useAppDispatch();
@@ -23,7 +33,9 @@ export function ForgotPassword() {
   const location = useLocation();
   const path = location.pathname;
   const step = path === '/forgot-password/verify' ? 'otp' : path === '/reset-password' ? 'reset' : 'email';
-  const [email, setEmail] = useState(data.passwordReset?.email ?? '');
+  const apiReset = location.state as ApiResetState | null;
+  const isApiReset = apiReset?.flow === 'api';
+  const [email, setEmail] = useState(apiReset?.email ?? data.passwordReset?.email ?? '');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -33,9 +45,10 @@ export function ForgotPassword() {
   const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
-    if (!data.passwordReset) return;
-    setSeconds(Math.max(0, Math.ceil((new Date(data.passwordReset.resendAvailableAt).getTime() - Date.now()) / 1000)));
-  }, [data.passwordReset]);
+    const resendAvailableAt = isApiReset ? apiReset.resendAvailableAt : data.passwordReset?.resendAvailableAt;
+    if (!resendAvailableAt) return;
+    setSeconds(Math.max(0, Math.ceil((new Date(resendAvailableAt).getTime() - Date.now()) / 1000)));
+  }, [apiReset, data.passwordReset, isApiReset]);
 
   useEffect(() => {
     if (!seconds) return undefined;
@@ -44,35 +57,55 @@ export function ForgotPassword() {
   }, [seconds]);
 
   useEffect(() => {
-    if (step === 'otp' && !data.passwordReset) navigate('/forgot-password', { replace: true });
-    if (step === 'reset' && !data.passwordReset?.verified) navigate('/forgot-password/verify', { replace: true });
-  }, [data.passwordReset, navigate, step]);
+    if (step === 'otp' && !data.passwordReset && !isApiReset) navigate('/forgot-password', { replace: true });
+    if (step === 'reset' && !data.passwordReset?.verified) navigate('/forgot-password', { replace: true });
+  }, [apiReset, data.passwordReset, isApiReset, navigate, step]);
 
   const createOtpRequest = async (resend = false, requestEmail = email.trim().toLowerCase()) => {
     setProcessing(true);
     setError('');
     setNotice('');
-    const generated = generateOtp();
-    const now = Date.now();
-    const payload = {
-      otpHash: await hashPassword(generated),
-      expiresAt: new Date(now + OTP_TTL_MS).toISOString(),
-      resendAvailableAt: new Date(now + RESEND_WAIT_MS).toISOString(),
-    };
-    if (resend && data.passwordReset) {
-      dispatch(actions.resendPasswordOtp({ resetId: data.passwordReset.id, ...payload }));
-    } else {
-      dispatch(actions.requestPasswordReset({
-        email: requestEmail,
-        resetId: crypto.randomUUID(),
-        resetToken: crypto.randomUUID(),
-        ...payload,
-      }));
+    try {
+      const demoAccount = data.users.some((user) => user.email.toLowerCase() === requestEmail);
+      if (demoAccount && !isApiReset) {
+        const generated = generateOtp();
+        const now = Date.now();
+        const payload = {
+          otpHash: await hashPassword(generated),
+          expiresAt: new Date(now + OTP_TTL_MS).toISOString(),
+          resendAvailableAt: new Date(now + RESEND_WAIT_MS).toISOString(),
+        };
+        if (resend && data.passwordReset) {
+          dispatch(actions.resendPasswordOtp({ resetId: data.passwordReset.id, ...payload }));
+        } else {
+          dispatch(actions.requestPasswordReset({
+            email: requestEmail,
+            resetId: crypto.randomUUID(),
+            resetToken: crypto.randomUUID(),
+            ...payload,
+          }));
+        }
+        setSeconds(60);
+        navigate('/forgot-password/verify');
+      } else {
+        const result = await authApi.forgotPassword(requestEmail);
+        const now = Date.now();
+        const state: ApiResetState = {
+          flow: 'api',
+          email: result.email || requestEmail,
+          expiresAt: new Date(now + result.otpExpiresInSeconds * 1000).toISOString(),
+          resendAvailableAt: new Date(now + result.resendCooldownSeconds * 1000).toISOString(),
+        };
+        setEmail(state.email);
+        setSeconds(result.resendCooldownSeconds);
+        navigate('/forgot-password/verify', { state });
+      }
+      setNotice('Nếu email tồn tại trong hệ thống, mã OTP đã được gửi.');
+    } catch (apiError) {
+      setError(authErrorMessage(apiError as ApiError));
+    } finally {
+      setProcessing(false);
     }
-    setSeconds(60);
-    setNotice('Nếu email tồn tại trong hệ thống, mã OTP đã được gửi.');
-    setProcessing(false);
-    navigate('/forgot-password/verify');
   };
 
   const submitEmail = async (event: FormEvent) => {
@@ -100,6 +133,31 @@ export function ForgotPassword() {
     }
     if (!/^\d{6}$/.test(otp)) {
       setError('Mã OTP không hợp lệ.');
+      return;
+    }
+    if (isApiReset) {
+      if (Date.now() > new Date(apiReset.expiresAt).getTime()) {
+        setError('Mã OTP đã hết hạn. Vui lòng gửi lại mã.');
+        return;
+      }
+      const passwordErrors = validatePassword(newPassword);
+      if (passwordErrors.length) {
+        setError(passwordErrors[0]);
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        setError(passwordRules.mismatch);
+        return;
+      }
+      setProcessing(true);
+      try {
+        await authApi.resetPassword({ email: apiReset.email, otp, newPassword });
+        navigate('/login', { state: { notice: 'Đặt lại mật khẩu thành công.' } });
+      } catch (apiError) {
+        setError(authErrorMessage(apiError as ApiError));
+      } finally {
+        setProcessing(false);
+      }
       return;
     }
     if (!reset || Date.now() > new Date(reset.expiresAt).getTime()) {
@@ -181,6 +239,12 @@ export function ForgotPassword() {
               <Button type="button" variant="ghost" disabled={seconds > 0 || processing} onClick={() => void createOtpRequest(true)}>
                 {seconds > 0 ? `Gửi lại mã sau 00:${String(seconds).padStart(2, '0')}` : 'Gửi lại mã'}
               </Button>
+              {isApiReset ? (
+                <>
+                  <PasswordField label="Mật khẩu mới" value={newPassword} onChange={setNewPassword} error={error} autoComplete="new-password" />
+                  <PasswordField label="Xác nhận mật khẩu mới" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
+                </>
+              ) : null}
             </>
           ) : null}
           {step === 'reset' ? (
@@ -190,7 +254,7 @@ export function ForgotPassword() {
             </>
           ) : null}
           <Button className="w-full" disabled={processing}>
-            {step === 'email' ? 'Gửi mã OTP' : step === 'otp' ? 'Xác minh OTP' : 'Đặt lại mật khẩu'}
+            {step === 'email' ? 'Gửi mã OTP' : step === 'otp' ? (isApiReset ? 'Đặt lại mật khẩu' : 'Xác minh OTP') : 'Đặt lại mật khẩu'}
           </Button>
         </div>
       </form>

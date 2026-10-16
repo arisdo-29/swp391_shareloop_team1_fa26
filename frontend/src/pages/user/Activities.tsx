@@ -17,7 +17,7 @@ import {
 } from '../../components/ui';
 import { RECEIVE_ITEM_FEE } from '../../utils/credit';
 import { catalogApi } from '../../services/catalogApi';
-import { itemApi, type EditQuote } from '../../services/itemApi';
+import { itemApi, type EditQuote, type ItemResponse } from '../../services/itemApi';
 import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
 import { requestApi, toBackendUserId, toFeItemRequest } from '../../services/requestApi';
 import type { Item, ItemRequest, User } from '../../types/domain';
@@ -51,6 +51,8 @@ export function Activities() {
   const [editQuote, setEditQuote] = useState<EditQuote | null>(null);
   const [editQuoteLoading, setEditQuoteLoading] = useState(false);
   const [editQuoteError, setEditQuoteError] = useState('');
+  const [apiEditingItem, setApiEditingItem] = useState<ItemResponse | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
   const [myItems, setMyItems] = useState<Item[]>([]);
   const [apiRequestsByItem, setApiRequestsByItem] = useState<Record<string, ItemRequest[]>>({});
   const [apiSentRequests, setApiSentRequests] = useState<ItemRequest[]>([]);
@@ -58,6 +60,7 @@ export function Activities() {
   const [myItemsError, setMyItemsError] = useState('');
   const [cancelingRequestId, setCancelingRequestId] = useState('');
   const [renewingItemId, setRenewingItemId] = useState('');
+  const [removingItemId, setRemovingItemId] = useState('');
   const selectInFlight = useRef(false);
   const currentUserId = toBackendUserId(user.id);
 
@@ -67,16 +70,79 @@ export function Activities() {
     setDraftTitle(item.title);
     setDraftDescription(item.description);
     setEditQuote(null);
+    setApiEditingItem(null);
     setEditQuoteError('');
     if (!/^\d+$/.test(item.id)) return;
     setEditQuoteLoading(true);
     try {
-      setEditQuote(await itemApi.getEditQuote(Number(item.id)));
+      const [quote, detail] = await Promise.all([
+        itemApi.getEditQuote(Number(item.id)),
+        itemApi.detail(Number(item.id)),
+      ]);
+      setEditQuote(quote);
+      setApiEditingItem(detail);
+      setDraftTitle(detail.title);
+      setDraftDescription(detail.description);
     } catch (error) {
       const apiError = error as ApiError;
       setEditQuoteError(apiError.message || 'Không tải được báo giá chỉnh sửa.');
     } finally {
       setEditQuoteLoading(false);
+    }
+  };
+
+  const saveApiItem = async () => {
+    if (!apiEditingItem || editSaving || !draftTitle.trim() || !draftDescription.trim()) return;
+    setEditSaving(true);
+    setEditQuoteError('');
+    try {
+      const updated = await itemApi.update(apiEditingItem.id, {
+        categoryId: apiEditingItem.categoryId,
+        areaId: apiEditingItem.areaId,
+        offerType: apiEditingItem.offerType,
+        title: draftTitle.trim(),
+        description: draftDescription.trim(),
+        desiredItem: apiEditingItem.desiredItem,
+        condition: apiEditingItem.condition,
+        defectNote: apiEditingItem.defectNote,
+        brand: apiEditingItem.brand,
+        images: apiEditingItem.images,
+        defectImages: apiEditingItem.defectImages ?? undefined,
+        operatingStatus: apiEditingItem.operatingStatus ?? undefined,
+      });
+      const currentItem = myItems.find((item) => item.id === String(updated.id));
+      const mapped = toFeItem(
+        updated,
+        new Map([[updated.categoryId, currentItem?.category ?? 'Danh mục']]),
+        new Map([[updated.areaId, currentItem?.district ?? 'Khu vực']]),
+      );
+      setMyItems((current) => current.map((item) => item.id === mapped.id ? mapped : item));
+      setEditingId('');
+      setApiEditingItem(null);
+      setEditNotice('Đã cập nhật bài đăng và gửi duyệt lại.');
+      refreshWallet();
+    } catch (error) {
+      const apiError = error as ApiError;
+      setEditQuoteError(apiError.message || 'Không cập nhật được bài đăng.');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const removeApiItem = async (itemId: string) => {
+    const id = Number(itemId);
+    if (!Number.isSafeInteger(id) || removingItemId) return;
+    setRemovingItemId(itemId);
+    setMyItemsError('');
+    try {
+      await itemApi.remove(id);
+      setMyItems((current) => current.filter((item) => item.id !== itemId));
+      setRemoveConfirmId('');
+    } catch (error) {
+      const apiError = error as ApiError;
+      setMyItemsError(apiError.message || 'Không gỡ được bài đăng.');
+    } finally {
+      setRemovingItemId('');
     }
   };
 
@@ -339,17 +405,15 @@ export function Activities() {
                         >
                           Sửa
                         </Button>
-                        {!apiItem ? (
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            icon="trash"
-                            disabled={item.status === 'removed'}
-                            onClick={() => setRemoveConfirmId(item.id)}
-                          >
-                            Gỡ
-                          </Button>
-                        ) : null}
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          icon="trash"
+                          disabled={item.status === 'removed' || removingItemId === item.id}
+                          onClick={() => setRemoveConfirmId(item.id)}
+                        >
+                          Gỡ
+                        </Button>
                         {item.status === 'expired' ? (
                           <Button
                             size="sm"
@@ -492,27 +556,26 @@ export function Activities() {
                 label="Tên món đồ"
                 value={draftTitle}
                 onChange={(event) => setDraftTitle(event.target.value)}
-                readOnly={/^[0-9]+$/.test(editingId)}
+                disabled={editSaving || editQuoteLoading}
               />
               <TextArea
                 label="Mô tả"
                 value={draftDescription}
                 onChange={(event) => setDraftDescription(event.target.value)}
-                readOnly={/^[0-9]+$/.test(editingId)}
+                disabled={editSaving || editQuoteLoading}
               />
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setEditingId('')}>
                 Hủy
               </Button>
-              {/^[0-9]+$/.test(editingId) ? (
-                <p className="mr-auto max-w-xs text-xs leading-5 text-text-muted">
-                  Swagger chưa có API cập nhật bài đăng, nên Frontend chỉ hiển thị báo giá và không giả lập lưu thay đổi.
-                </p>
-              ) : null}
               <Button
-                disabled={/^[0-9]+$/.test(editingId)}
+                disabled={editSaving || editQuoteLoading || !draftTitle.trim() || !draftDescription.trim()}
                 onClick={() => {
+                  if (/^[0-9]+$/.test(editingId)) {
+                    void saveApiItem();
+                    return;
+                  }
                   const item = data.items.find((entry) => entry.id === editingId);
                   if (!item) return;
                   const approved = item.status === 'approved' || item.status === 'APPROVED';
@@ -538,7 +601,7 @@ export function Activities() {
                   setEditingId('');
                 }}
               >
-                Lưu thay đổi
+                {editSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
               </Button>
             </div>
           </div>
@@ -557,17 +620,20 @@ export function Activities() {
               Bài đăng sẽ không còn hiển thị với người dùng khác.
             </p>
             <div className="mt-6 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setRemoveConfirmId('')}>
+              <Button variant="ghost" disabled={Boolean(removingItemId)} onClick={() => setRemoveConfirmId('')}>
                 Hủy
               </Button>
               <Button
                 variant="danger"
-                onClick={() => {
-                  dispatch(actions.removeItem({ itemId: removeConfirmId, ownerId: user.id }));
-                  setRemoveConfirmId('');
-                }}
+                disabled={Boolean(removingItemId)}
+                onClick={() => /^[0-9]+$/.test(removeConfirmId)
+                  ? void removeApiItem(removeConfirmId)
+                  : (() => {
+                      dispatch(actions.removeItem({ itemId: removeConfirmId, ownerId: user.id }));
+                      setRemoveConfirmId('');
+                    })()}
               >
-                Xác nhận gỡ
+                {removingItemId ? 'Đang gỡ...' : 'Xác nhận gỡ'}
               </Button>
             </div>
           </div>

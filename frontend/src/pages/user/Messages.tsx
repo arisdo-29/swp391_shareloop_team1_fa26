@@ -115,6 +115,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
 
     let active = true;
     let firstLoad = true;
+    let pollingId: number | undefined;
     const loadMessages = async () => {
       if (firstLoad) setLoadingMessages(true);
       try {
@@ -127,14 +128,14 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       } finally {
         if (active && firstLoad) setLoadingMessages(false);
         firstLoad = false;
+        if (active) pollingId = window.setTimeout(loadMessages, 5_000);
       }
     };
 
     void loadMessages();
-    const pollingId = window.setInterval(loadMessages, 5_000);
     return () => {
       active = false;
-      window.clearInterval(pollingId);
+      if (pollingId !== undefined) window.clearTimeout(pollingId);
     };
   }, [currentUserId, messageReloadKey, selectedRequestId]);
 
