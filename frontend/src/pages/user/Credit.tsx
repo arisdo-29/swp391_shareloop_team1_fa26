@@ -12,8 +12,7 @@ import { paymentApi, type TopUpConfirmResponse, type TopUpOrderResponse } from '
 import type { ApiError } from '../../services/http';
 
 const packages = [1, 2, 5, 10, 20];
-const mockPaymentEnabled = import.meta.env.DEV
-  || (import.meta.env.MODE === 'staging' && import.meta.env.VITE_ENABLE_PAYMENT_MOCK === 'true');
+const mockPaymentEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_PAYMENT_MOCK === 'true';
 type Step = 'select' | 'qr' | 'pending';
 type HistoryFilter = 'all' | 'topup' | 'spend';
 
