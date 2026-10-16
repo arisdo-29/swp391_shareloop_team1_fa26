@@ -23,6 +23,7 @@ export interface RequestResponse {
   asDescribed?: boolean;
   completedAt?: string;
   createdAt: string;
+  receiverName?: string | null;
 }
 
 export interface CreateRequestBody {
@@ -66,6 +67,7 @@ export function toFeItemRequest(request: RequestResponse, requesterId = apiUserI
     itemId: String(request.itemId),
     offeredItemId: request.offeredItemId ? String(request.offeredItemId) : undefined,
     requesterId,
+    requesterName: request.receiverName ?? undefined,
     status: request.status,
     message: '',
     createdAt: request.createdAt,
