@@ -19,9 +19,15 @@ Gửi tin nhắn mới trong khung chat của yêu cầu giao dịch (FR-68, UC-
 
 ```json
 {
-  "content": "Chào bạn, mình hẹn gặp ở cổng trường nhé!"
+  "content": "Chào bạn, mình hẹn gặp ở cổng trường nhé!",
+  "mediaId": null
 }
 ```
+
+*Ghi chú:*
+- Gửi tin nhắn văn bản: truyền `content`, `mediaId = null`.
+- Gửi ảnh: truyền `mediaId` (nhận được từ API tải ảnh `POST /api/v1/media`), `content` là ghi chú/caption tuỳ chọn.
+- **Quy tắc gửi ảnh (FR-75, BR-C05):** Ảnh chỉ được phép gửi sau khi hai bên đã xác nhận lịch hẹn (từ trạng thái `LOGISTICS_CONFIRMED` trở lên). Gửi trước thời điểm này sẽ bị chặn với lỗi `CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN`.
 
 - **Thành công:** `201 Created`, trả về `MessageResponse`.
 
@@ -42,7 +48,7 @@ Gửi tin nhắn mới trong khung chat của yêu cầu giao dịch (FR-68, UC-
 ```
 
 - **Lỗi:**
-  - `400 BAD_REQUEST` (`CHAT_MESSAGE_EMPTY`): Nội dung tin nhắn rỗng.
+  - `400 BAD_REQUEST` (`CHAT_MESSAGE_EMPTY`): Cả nội dung tin nhắn và ảnh đều rỗng.
   - `400 BAD_REQUEST` (`CHAT_MESSAGE_BLOCKED`): Tin nhắn bị chặn do chứa thông tin liên hệ (số điện thoại viết bằng số hoặc bằng chữ, email, liên kết) (FR-72, FR-74; BR-C01). Ví dụ:
     ```json
     {
@@ -54,6 +60,7 @@ Gửi tin nhắn mới trong khung chat của yêu cầu giao dịch (FR-68, UC-
   - `403 FORBIDDEN` (`CHAT_FORBIDDEN`): Người dùng không thuộc hai bên của giao dịch.
   - `404 NOT_FOUND` (`CHAT_REQUEST_NOT_FOUND`): Yêu cầu giao dịch không tồn tại.
   - `409 CONFLICT` (`CHAT_REQUEST_NOT_RESERVED`): Yêu cầu chưa ở trạng thái `RESERVED`.
+  - `409 CONFLICT` (`CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN`): Gửi ảnh trước khi hai bên xác nhận lịch hẹn (`LOGISTICS_CONFIRMED`) (FR-75, BR-C05).
 
 ---
 
