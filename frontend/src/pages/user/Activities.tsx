@@ -201,7 +201,8 @@ export function Activities() {
   const acceptRequest = acceptApiRequest ?? data.itemRequests.find((request) => request.id === acceptConfirmId);
   const acceptItem = (acceptApiRequest ? myItems : data.items).find((item) => item.id === acceptRequest?.itemId);
   const acceptRequester = acceptRequest
-    ? data.users.find((entry) => entry.id === acceptRequest.requesterId) ?? apiDisplayUser(acceptRequest.requesterId)
+    ? data.users.find((entry) => entry.id === acceptRequest.requesterId) ??
+      apiDisplayUser(acceptRequest.requesterId, acceptRequest.requesterName)
     : undefined;
   const acceptOfferedItem = data.items.find((item) => item.id === acceptRequest?.offeredItemId);
   const cancelApiRequest = async (requestId: string) => {
@@ -694,17 +695,27 @@ export function Activities() {
   );
 }
 
-function apiDisplayUser(userId: string): User {
+// Lấy chữ cái đầu của 2 từ cuối trong họ tên, ví dụ "Nguyễn Văn B" → "VB".
+function nameInitials(name: string): string {
+  const words = name.trim().split(/\s+/);
+  const lastTwoWords = words.slice(-2);
+  return lastTwoWords.map((word) => word.charAt(0)).join('').toUpperCase();
+}
+
+function apiDisplayUser(userId: string, name?: string): User {
   const apiId = userId.replace(/^api_/, '');
+  const fallbackName = userId.startsWith('api_') ? `Người dùng #${apiId}` : 'Người dùng';
+  const fallbackInitials = userId.startsWith('api_') ? apiId.slice(0, 2).toUpperCase() : 'ND';
+  const trimmedName = name?.trim() ?? '';
   return {
     id: userId,
     username: userId,
     password: '',
-    name: userId.startsWith('api_') ? `Người dùng #${apiId}` : 'Người dùng',
+    name: trimmedName ? trimmedName : fallbackName,
     email: '',
     phone: '',
     district: '',
-    avatarInitials: userId.startsWith('api_') ? apiId.slice(0, 2).toUpperCase() : 'ND',
+    avatarInitials: trimmedName ? nameInitials(trimmedName) : fallbackInitials,
     totalCredit: 0,
     availableCredit: 0,
     holdCredit: 0,
@@ -807,7 +818,9 @@ function RequestPanel({
       {itemRequests.length ? (
         <div className="mt-3 space-y-3">
           {itemRequests.map((request) => {
-            const requester = data.users.find((entry) => entry.id === request.requesterId) ?? apiDisplayUser(request.requesterId);
+            const requester =
+              data.users.find((entry) => entry.id === request.requesterId) ??
+              apiDisplayUser(request.requesterId, request.requesterName);
             const offeredItem = request.offeredItemId
               ? data.items.find((entry) => entry.id === request.offeredItemId)
               : undefined;
@@ -833,11 +846,6 @@ function RequestPanel({
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    <Link to="/profile">
-                      <Button size="sm" variant="ghost" icon="user">
-                        Xem hồ sơ
-                      </Button>
-                    </Link>
                     {request.status === 'RESERVED' ? (
                       <Link to="/messages">
                         <Button size="sm" variant="outline" icon="messages">

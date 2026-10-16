@@ -11,6 +11,11 @@ public final class RequestMapper {
     private RequestMapper() {}
 
     public static RequestResponse toResponse(Request request) {
+        return toResponse(request, null);
+    }
+
+    // receiverName do service tra từ module user truyền vào; mapper không tự gọi service khác.
+    public static RequestResponse toResponse(Request request, String receiverName) {
         if (request == null) {
             return null;
         }
@@ -33,6 +38,7 @@ public final class RequestMapper {
                 request.getReceiverHandoverAt(),
                 request.getAsDescribed(),
                 request.getCompletedAt(),
-                request.getCreatedAt());
+                request.getCreatedAt(),
+                receiverName);
     }
 }

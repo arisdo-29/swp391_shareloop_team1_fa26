@@ -149,6 +149,7 @@ export interface ItemRequest {
   itemId: string;
   offeredItemId?: string;
   requesterId: string;
+  requesterName?: string;
   status: ItemRequestStatus;
   message: string;
   createdAt: string;
