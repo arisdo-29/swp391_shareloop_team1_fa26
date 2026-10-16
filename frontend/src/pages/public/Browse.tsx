@@ -81,6 +81,7 @@ export function Browse() {
           parsedAreaId !== undefined && Number.isSafeInteger(parsedAreaId) && parsedAreaId > 0
             ? parsedAreaId
             : undefined,
+        q: q.trim() || undefined,
         page,
         size: PAGE_SIZE,
       })
@@ -104,7 +105,7 @@ export function Browse() {
     return () => {
       active = false;
     };
-  }, [catalogLoading, category, categoryIds, district, districts, itemsReloadKey, page]);
+  }, [catalogLoading, category, categoryIds, district, districts, itemsReloadKey, page, q]);
 
   useEffect(() => {
     if (!district || districts.some((area) => String(area.id) === district)) return;
@@ -120,10 +121,9 @@ export function Browse() {
   const results = useMemo(
     () =>
       items
-        .filter((i) => !q || `${i.title} ${i.description}`.toLowerCase().includes(q.toLowerCase()))
         .filter((i) => !type || i.type === type)
         .filter((i) => !condition || i.condition === condition),
-    [items, q, type, condition],
+    [items, type, condition],
   );
   const reset = () => {
     setQ('');
@@ -162,7 +162,10 @@ export function Browse() {
         <Icon name="search" className="size-4 shrink-0 text-text-muted" />
         <input
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setPage(0);
+          }}
           placeholder="Tìm tên món đồ..."
           className="min-w-0 flex-1 border-0 bg-transparent px-2.5 text-sm outline-none placeholder:text-text-muted/70"
         />

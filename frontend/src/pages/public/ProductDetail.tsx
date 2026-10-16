@@ -55,10 +55,11 @@ export function ProductDetail() {
     let active = true;
     setLoadingItem(true);
     setItemError('');
-    Promise.all([catalogApi.categories(), catalogApi.areas(), itemApi.detail(Number(id))])
-      .then(([categories, areas, detail]) => {
+    itemApi.detail(Number(id))
+      .then(async (detail) => {
+        const [category, areas] = await Promise.all([catalogApi.category(detail.categoryId), catalogApi.areas()]);
         if (!active) return;
-        setApiItem(toFeItem(detail, toCategoryNameMap(categories), toAreaNameMap(areas)));
+        setApiItem(toFeItem(detail, new Map([[category.id, category.name]]), toAreaNameMap(areas)));
       })
       .catch(() => {
         if (!active) return;

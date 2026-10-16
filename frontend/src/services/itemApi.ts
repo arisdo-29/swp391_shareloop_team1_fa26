@@ -110,6 +110,9 @@ export const itemApi = {
     const { data } = await http.get<ItemResponse>(itemApiEndpoints.detail(id));
     return data;
   },
+  async remove(id: number): Promise<void> {
+    await http.delete(itemApiEndpoints.detail(id));
+  },
   async mine(): Promise<ItemResponse[]> {
     const { data } = await http.get<ItemResponse[]>(itemApiEndpoints.myItems);
     return data;

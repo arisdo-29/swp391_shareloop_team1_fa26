@@ -12,6 +12,8 @@ import { paymentApi, type TopUpConfirmResponse, type TopUpOrderResponse } from '
 import type { ApiError } from '../../services/http';
 
 const packages = [1, 2, 5, 10, 20];
+const mockPaymentEnabled = import.meta.env.DEV
+  || (import.meta.env.MODE === 'staging' && import.meta.env.VITE_ENABLE_PAYMENT_MOCK === 'true');
 type Step = 'select' | 'qr' | 'pending';
 type HistoryFilter = 'all' | 'topup' | 'spend';
 
@@ -187,7 +189,7 @@ export function Credit() {
 
   // Backend đã idempotent cho đơn SUCCESS; chặn thêm ở đây để không gửi trùng khi bấm nhanh.
   const confirmApiTopUp = async () => {
-    if (!apiTopUpOrder || topUpConfirming) return;
+    if (!mockPaymentEnabled || !apiTopUpOrder || topUpConfirming) return;
     setTopUpConfirming(true);
     setTopUpError('');
     try {
@@ -592,7 +594,7 @@ function ApiTopUpOrder({ order, confirming, onConfirm, onNewTopup }: { order: To
   const safeRedirectUrl = order.redirectUrl && /^https?:\/\//i.test(order.redirectUrl) ? order.redirectUrl : null;
   const paid = order.status === 'SUCCESS';
   // Cổng MOCK chưa có trang thanh toán riêng (redirectUrl là đường dẫn nội bộ) nên xác nhận ngay tại đây.
-  const canMockConfirm = order.provider === 'MOCK' && order.status === 'PENDING';
+  const canMockConfirm = mockPaymentEnabled && order.provider === 'MOCK' && order.status === 'PENDING';
   return (
     <div className="rounded-xl bg-white px-5 py-8 ring-1 ring-border/80 sm:px-8">
       <div className="mx-auto max-w-2xl text-center">

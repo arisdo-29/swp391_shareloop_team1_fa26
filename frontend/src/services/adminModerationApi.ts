@@ -35,6 +35,10 @@ export const adminModerationApi = {
     const { data } = await http.get<ReviewQueueResponse>('/api/v1/admin/reviews/pending', { params });
     return data;
   },
+  async rejectReasons() {
+    const { data } = await http.get<string[]>('/api/v1/admin/reviews/reject-reasons');
+    return data;
+  },
   async approve(itemId: number, input: ApproveReviewRequest) {
     await http.post(`/api/v1/admin/reviews/${itemId}/approve`, input);
   },

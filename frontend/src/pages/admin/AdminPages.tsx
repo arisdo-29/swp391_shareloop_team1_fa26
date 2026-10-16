@@ -21,6 +21,9 @@ import { CATEGORIES } from '../../constants/domain';
 import { formatVnd } from '../../utils/formatting';
 import { adminConfigApi, type AdminConfigResponse } from '../../services/adminConfigApi';
 import { adminModerationApi, type ReviewQueueItem } from '../../services/adminModerationApi';
+import { adminLexiconApi, type AdminLexiconEntry, type AdminLexiconRequest, type LexiconMatch } from '../../services/adminLexiconApi';
+import { adminCategoryApi, type AdminCategoryRequest, type AdminCategoryResponse } from '../../services/adminCategoryApi';
+import { adminChecklistApi, type AdminChecklistEntry } from '../../services/adminChecklistApi';
 import type { ApiError } from '../../services/http';
 import { toBackendUserId } from '../../services/requestApi';
 import type { AppStateData, ComplaintStatus, ForbiddenKeyword, Item, KeywordAction, RankRule, ReputationPointRule, SupportedDistrict, Transaction, User } from '../../types/domain';
@@ -153,6 +156,7 @@ export function AdminModeration() {
   const [apiAnswers, setApiAnswers] = useState<Record<number, boolean[]>>({});
   const [apiRejecting, setApiRejecting] = useState<ReviewQueueItem | null>(null);
   const [apiRejectReason, setApiRejectReason] = useState('');
+  const [apiRejectReasons, setApiRejectReasons] = useState<string[]>([]);
   const [apiActionId, setApiActionId] = useState<number | null>(null);
   const [apiLoading, setApiLoading] = useState(false);
   const [apiError, setApiError] = useState('');
@@ -165,12 +169,15 @@ export function AdminModeration() {
     setApiLoading(true);
     setApiError('');
     setApiLegacyNotice('');
-    adminModerationApi
-      .pendingReviews({ page: 0, size: 100 })
-      .then((response) => {
+    Promise.all([
+      adminModerationApi.pendingReviews({ page: 0, size: 100 }),
+      adminModerationApi.rejectReasons(),
+    ])
+      .then(([response, rejectReasons]) => {
         if (!active) return;
         setApiPending(response.items);
         setApiChecklist(response.checklist);
+        setApiRejectReasons(rejectReasons);
         setApiAnswers(Object.fromEntries(response.items.map((item) => [item.id, response.checklist.map(() => false)])));
       })
       .catch(async (error: ApiError) => {
@@ -181,6 +188,7 @@ export function AdminModeration() {
             if (!active) return;
             setApiPending(legacyItems);
             setApiChecklist([]);
+            setApiRejectReasons([]);
             setApiLegacyNotice('Backend đang dùng hàng chờ cũ; chức năng duyệt và từ chối chưa khả dụng.');
             return;
           } catch (fallbackError) {
@@ -188,6 +196,7 @@ export function AdminModeration() {
           }
         }
         setApiPending([]);
+        setApiRejectReasons([]);
         setApiError(error.status === 403 ? 'Tài khoản hiện tại không có quyền xem hàng chờ kiểm duyệt.' : 'Không tải được danh sách bài chờ duyệt từ Backend.');
       })
       .finally(() => {
@@ -308,7 +317,10 @@ export function AdminModeration() {
         )}
         {apiRejecting ? (
           <Modal title={`Từ chối bài #${apiRejecting.id}`} onClose={() => { if (apiActionId === null) setApiRejecting(null); }}>
-            <TextArea label="Lý do từ chối" value={apiRejectReason} onChange={(event) => setApiRejectReason(event.target.value)} disabled={apiActionId !== null} />
+            <Select label="Lý do từ chối" value={apiRejectReason} onChange={(event) => setApiRejectReason(event.target.value)} disabled={apiActionId !== null}>
+              <option value="">Chọn lý do từ Backend</option>
+              {apiRejectReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+            </Select>
             <div className="mt-5 flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setApiRejecting(null)} disabled={apiActionId !== null}>Hủy</Button>
               <Button variant="danger" onClick={() => void rejectApiReview()} disabled={!apiRejectReason.trim() || apiActionId !== null}>
@@ -1230,10 +1242,18 @@ export function AdminSettings() {
     setUpdateError('');
     setNotice('');
     try {
-      const updated = await adminConfigApi.update(editingConfig.key, backendAdminId, {
-        value,
-        reason,
-      });
+      let updated: AdminConfigResponse;
+      try {
+        updated = await adminConfigApi.updateByBody(backendAdminId, {
+          key: editingConfig.key,
+          value,
+          reason,
+        });
+      } catch (apiError) {
+        const response = apiError as ApiError;
+        if (response.status !== 404 && response.status !== 405) throw apiError;
+        updated = await adminConfigApi.update(editingConfig.key, backendAdminId, { value, reason });
+      }
       setConfigs((current) => current.map((entry) => (entry.key === updated.key ? updated : entry)));
       setEditingConfig(null);
       setNotice(`Đã cập nhật cấu hình ${updated.key}.`);
@@ -1427,6 +1447,7 @@ export function AdminContentPage({
   kind:
     | 'expired'
     | 'categories'
+    | 'checklist'
     | 'keywords'
     | 'districts'
     | 'reputation'
@@ -1436,6 +1457,8 @@ export function AdminContentPage({
     | 'ranks';
 }) {
   if (kind === 'keywords') return <AdminKeywords />;
+  if (kind === 'categories') return <AdminCategories />;
+  if (kind === 'checklist') return <AdminChecklist />;
   if (kind === 'districts') return <AdminDistricts />;
   if (kind === 'disputes') return <AdminComplaints />;
   if (kind === 'ranks') return <AdminRanks />;
@@ -1444,6 +1467,127 @@ export function AdminContentPage({
 }
 
 function AdminKeywords() {
+  const admin = useAppSelector(selectCurrentUser)!;
+  return toBackendUserId(admin.id) !== null && admin.role === 'admin'
+    ? <ApiAdminKeywords />
+    : <MockAdminKeywords />;
+}
+
+function ApiAdminKeywords() {
+  const [entries, setEntries] = useState<AdminLexiconEntry[]>([]);
+  const [editing, setEditing] = useState<AdminLexiconEntry | null | 'new'>(null);
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [testText, setTestText] = useState('');
+  const [testMatches, setTestMatches] = useState<LexiconMatch[]>([]);
+  const [testing, setTesting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError('');
+    adminLexiconApi.list()
+      .then((response) => {
+        if (active) setEntries(response);
+      })
+      .catch((apiError: ApiError) => {
+        if (active) setError(apiError.message || 'Không tải được từ điển kiểm duyệt.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [reloadKey]);
+
+  const save = async (input: AdminLexiconRequest) => {
+    setSavingId(editing === 'new' ? 0 : editing?.id ?? null);
+    setError('');
+    try {
+      const saved = editing === 'new'
+        ? await adminLexiconApi.create(input)
+        : await adminLexiconApi.update(editing!.id, input);
+      setEntries((current) => editing === 'new'
+        ? [...current, saved]
+        : current.map((entry) => entry.id === saved.id ? saved : entry));
+      setEditing(null);
+      setNotice(editing === 'new' ? 'Đã thêm từ khóa.' : 'Đã cập nhật từ khóa.');
+    } catch (apiError) {
+      const response = apiError as ApiError;
+      setError(response.message || 'Không lưu được từ khóa.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const toggleActive = async (entry: AdminLexiconEntry) => {
+    setSavingId(entry.id);
+    setError('');
+    try {
+      const updated = await adminLexiconApi.setActive(entry.id, !entry.active);
+      setEntries((current) => current.map((item) => item.id === updated.id ? updated : item));
+    } catch (apiError) {
+      const response = apiError as ApiError;
+      setError(response.message || 'Không cập nhật được trạng thái từ khóa.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const testLexicon = async () => {
+    if (!testText.trim()) return;
+    setTesting(true);
+    setError('');
+    try {
+      setTestMatches(await adminLexiconApi.test(testText.trim()));
+    } catch (apiError) {
+      const response = apiError as ApiError;
+      setError(response.message || 'Không kiểm tra được nội dung.');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <Panel
+      title="Từ khóa kiểm duyệt"
+      description="Quản lý từ điển kiểm duyệt trực tiếp từ Backend. Từ khóa không bị xóa; hãy tạm ngưng khi không còn sử dụng."
+      action={<Button icon="add" onClick={() => setEditing('new')}>Thêm từ khóa</Button>}
+    >
+      {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
+      {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
+      <section className="mb-5 rounded-lg bg-white p-4 ring-1 ring-border/80">
+        <TextArea label="Kiểm tra nội dung" value={testText} onChange={(event) => setTestText(event.target.value)} placeholder="Nhập nội dung cần đối chiếu với từ điển..." />
+        <Button className="mt-3" variant="outline" disabled={testing || !testText.trim()} onClick={() => void testLexicon()}>{testing ? 'Đang kiểm tra...' : 'Kiểm tra'}</Button>
+        {testMatches.length ? <div className="mt-3 space-y-1 text-xs text-text-secondary">{testMatches.map((match, index) => <p key={`${match.keyword}-${index}`}><strong>{match.keyword}</strong> · {match.level} · {match.group} · {match.matchedAs}</p>)}</div> : null}
+      </section>
+      {loading ? <EmptyState title="Đang tải từ điển" text="Vui lòng chờ trong giây lát." /> : entries.length ? (
+        <div className="table-wrap"><table className="data-table"><thead><tr><th>Từ khóa</th><th>Nhóm</th><th>Mức độ</th><th>Phạm vi</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
+          {entries.map((entry) => <tr key={entry.id}><td className="font-semibold">{entry.keyword}</td><td>{entry.group}</td><td>{entry.level}</td><td>{entry.scope}</td><td>{entry.active ? 'Đang dùng' : 'Tạm ngưng'}</td><td className="space-x-2"><Button size="sm" variant="ghost" disabled={savingId === entry.id} onClick={() => setEditing(entry)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId === entry.id} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ngưng' : 'Kích hoạt'}</Button></td></tr>)}
+        </tbody></table></div>
+      ) : <EmptyState title="Chưa có từ khóa" text="Backend chưa có mục từ điển kiểm duyệt nào." />}
+      {editing ? <ApiLexiconModal entry={editing === 'new' ? null : editing} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
+    </Panel>
+  );
+}
+
+function ApiLexiconModal({ entry, saving, onClose, onSave }: { entry: AdminLexiconEntry | null; saving: boolean; onClose: () => void; onSave: (input: AdminLexiconRequest) => void }) {
+  const [keyword, setKeyword] = useState(entry?.keyword ?? '');
+  const [group, setGroup] = useState(entry?.group ?? '');
+  const [level, setLevel] = useState(entry?.level ?? '');
+  const [scope, setScope] = useState(entry?.scope ?? '');
+  const [matchMode, setMatchMode] = useState(entry?.matchMode ?? '');
+  const [exceptions, setExceptions] = useState(entry?.exceptions.join(', ') ?? '');
+  const valid = keyword.trim() && group.trim() && level.trim() && scope.trim();
+  return <Modal title={entry ? 'Sửa từ khóa' : 'Thêm từ khóa'} onClose={onClose}>
+    <div className="space-y-4"><Field label="Từ khóa" value={keyword} onChange={(event) => setKeyword(event.target.value)} /><Field label="Nhóm" value={group} onChange={(event) => setGroup(event.target.value)} /><Field label="Mức độ" value={level} onChange={(event) => setLevel(event.target.value)} /><Field label="Phạm vi" value={scope} onChange={(event) => setScope(event.target.value)} /><Field label="Chế độ khớp (không bắt buộc)" value={matchMode} onChange={(event) => setMatchMode(event.target.value)} /><Field label="Ngoại lệ, phân cách bằng dấu phẩy" value={exceptions} onChange={(event) => setExceptions(event.target.value)} /></div>
+    <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !valid} onClick={() => onSave({ keyword: keyword.trim(), group: group.trim(), level: level.trim(), scope: scope.trim(), ...(matchMode.trim() ? { matchMode: matchMode.trim() } : {}), exceptions: exceptions.split(',').map((value) => value.trim()).filter(Boolean) })}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
+  </Modal>;
+}
+
+function MockAdminKeywords() {
   const data = useAppSelector(selectData);
   const admin = useAppSelector(selectCurrentUser)!;
   const dispatch = useAppDispatch();
@@ -2063,6 +2207,205 @@ function PointRuleModal({
       </div>
     </Modal>
   );
+}
+
+function AdminChecklist() {
+  const admin = useAppSelector(selectCurrentUser)!;
+  if (toBackendUserId(admin.id) === null || admin.role !== 'admin') {
+    return (
+      <Panel title="Checklist duyệt bài" description="Checklist mẫu dành cho tài khoản demo.">
+        <div className="space-y-2">
+          {moderationChecklist.map((entry, index) => (
+            <div key={entry.key} className="rounded-md bg-white p-4 text-sm ring-1 ring-border/80">
+              <span className="mr-3 text-text-muted">{index + 1}.</span>{entry.label}
+            </div>
+          ))}
+        </div>
+      </Panel>
+    );
+  }
+  return <ApiAdminChecklist />;
+}
+
+function ApiAdminChecklist() {
+  const [entries, setEntries] = useState<AdminChecklistEntry[]>([]);
+  const [editing, setEditing] = useState<AdminChecklistEntry | null | 'new'>(null);
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError('');
+    adminChecklistApi.list()
+      .then((response) => {
+        if (active) setEntries([...response].sort((a, b) => a.sortOrder - b.sortOrder));
+      })
+      .catch((apiError: ApiError) => {
+        if (active) setError(apiError.message || 'Không tải được checklist duyệt bài.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [reloadKey]);
+
+  const save = async (question: string) => {
+    setSavingId(editing === 'new' ? 0 : editing?.id ?? null);
+    setError('');
+    try {
+      const saved = editing === 'new'
+        ? await adminChecklistApi.create({ question })
+        : await adminChecklistApi.update(editing!.id, { question });
+      setEntries((current) => (editing === 'new'
+        ? [...current, saved]
+        : current.map((entry) => entry.id === saved.id ? saved : entry)
+      ).sort((a, b) => a.sortOrder - b.sortOrder));
+      setNotice(editing === 'new' ? 'Đã thêm tiêu chí.' : 'Đã cập nhật tiêu chí.');
+      setEditing(null);
+    } catch (apiError) {
+      setError((apiError as ApiError).message || 'Không lưu được tiêu chí.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const toggleActive = async (entry: AdminChecklistEntry) => {
+    setSavingId(entry.id);
+    setError('');
+    try {
+      const updated = await adminChecklistApi.setActive(entry.id, !entry.active);
+      setEntries((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setNotice(updated.active ? 'Đã kích hoạt tiêu chí.' : 'Đã tạm ngưng tiêu chí.');
+    } catch (apiError) {
+      setError((apiError as ApiError).message || 'Không cập nhật được trạng thái tiêu chí.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const move = async (index: number, offset: -1 | 1) => {
+    const targetIndex = index + offset;
+    if (targetIndex < 0 || targetIndex >= entries.length) return;
+    const reordered = [...entries];
+    [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
+    setSavingId(-1);
+    setError('');
+    try {
+      const updated = await adminChecklistApi.reorder(reordered.map((entry) => entry.id));
+      setEntries([...updated].sort((a, b) => a.sortOrder - b.sortOrder));
+      setNotice('Đã cập nhật thứ tự checklist.');
+    } catch (apiError) {
+      setError((apiError as ApiError).message || 'Không cập nhật được thứ tự checklist.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  return (
+    <Panel title="Checklist duyệt bài" description="Quản lý và sắp xếp các tiêu chí mà quản trị viên phải xác nhận khi duyệt bài." action={<Button icon="add" onClick={() => setEditing('new')}>Thêm tiêu chí</Button>}>
+      {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
+      {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
+      {loading ? <EmptyState title="Đang tải checklist" text="Vui lòng chờ trong giây lát." /> : entries.length ? (
+        <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Mã</th><th>Tiêu chí</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
+          {entries.map((entry, index) => <tr key={entry.id}><td>{index + 1}</td><td className="font-mono text-xs">{entry.key}</td><td className="font-semibold">{entry.question}</td><td>{entry.active ? 'Đang dùng' : 'Tạm ngưng'}</td><td><div className="flex flex-wrap gap-2"><Button size="sm" variant="ghost" disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}>Lên</Button><Button size="sm" variant="ghost" disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}>Xuống</Button><Button size="sm" variant="outline" disabled={savingId !== null} onClick={() => setEditing(entry)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ngưng' : 'Kích hoạt'}</Button></div></td></tr>)}
+        </tbody></table></div>
+      ) : <EmptyState title="Chưa có tiêu chí" text="Backend chưa có tiêu chí duyệt bài nào." />}
+      {editing ? <ChecklistEditModal entry={editing === 'new' ? null : editing} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(question) => void save(question)} /> : null}
+    </Panel>
+  );
+}
+
+function ChecklistEditModal({ entry, saving, onClose, onSave }: { entry: AdminChecklistEntry | null; saving: boolean; onClose: () => void; onSave: (question: string) => void }) {
+  const [question, setQuestion] = useState(entry?.question ?? '');
+  return <Modal title={entry ? 'Sửa tiêu chí' : 'Thêm tiêu chí'} onClose={onClose}>
+    <TextArea label="Nội dung tiêu chí" value={question} onChange={(event) => setQuestion(event.target.value)} disabled={saving} />
+    <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !question.trim()} onClick={() => onSave(question.trim())}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
+  </Modal>;
+}
+
+function AdminCategories() {
+  const admin = useAppSelector(selectCurrentUser)!;
+  return toBackendUserId(admin.id) !== null && admin.role === 'admin'
+    ? <ApiAdminCategories />
+    : <AdminStaticContent kind="categories" />;
+}
+
+function ApiAdminCategories() {
+  const [categories, setCategories] = useState<AdminCategoryResponse[]>([]);
+  const [editing, setEditing] = useState<AdminCategoryResponse | null | 'new'>(null);
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError('');
+    adminCategoryApi.list()
+      .then((response) => { if (active) setCategories(response); })
+      .catch((apiError: ApiError) => { if (active) setError(apiError.message || 'Không tải được danh mục quản trị.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [reloadKey]);
+
+  const save = async (input: AdminCategoryRequest) => {
+    setSavingId(editing === 'new' ? 0 : editing?.id ?? null);
+    setError('');
+    try {
+      const saved = editing === 'new'
+        ? await adminCategoryApi.create(input)
+        : await adminCategoryApi.update(editing!.id, input);
+      setCategories((current) => editing === 'new'
+        ? [...current, saved]
+        : current.map((entry) => entry.id === saved.id ? saved : entry));
+      setEditing(null);
+      setNotice(editing === 'new' ? 'Đã thêm danh mục.' : 'Đã cập nhật danh mục.');
+    } catch (apiError) {
+      const response = apiError as ApiError;
+      setError(response.message || 'Không lưu được danh mục.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const toggleActive = async (category: AdminCategoryResponse) => {
+    setSavingId(category.id);
+    setError('');
+    try {
+      const updated = await adminCategoryApi.setActive(category.id, !category.active);
+      setCategories((current) => current.map((entry) => entry.id === updated.id ? updated : entry));
+    } catch (apiError) {
+      const response = apiError as ApiError;
+      setError(response.message || 'Không cập nhật được trạng thái danh mục.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  return <Panel title="Danh mục" description="Quản lý danh mục thật từ Backend. Danh mục được ẩn hoặc kích hoạt, không xóa dữ liệu." action={<Button icon="add" onClick={() => setEditing('new')}>Thêm danh mục</Button>}>
+    {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
+    {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
+    {loading ? <EmptyState title="Đang tải danh mục" text="Vui lòng chờ trong giây lát." /> : categories.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Tên</th><th>Danh mục cha</th><th>Thuộc tính</th><th>Thứ tự</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>{categories.map((category) => <tr key={category.id}><td className="font-semibold">{category.name}</td><td>{categories.find((entry) => entry.id === category.parentId)?.name ?? '—'}</td><td>{category.restricted ? 'Hạn chế' : 'Thông thường'} · {category.boostable ? 'Có boost' : 'Không boost'}</td><td>{category.sortOrder}</td><td>{category.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td className="space-x-2"><Button size="sm" variant="ghost" disabled={savingId === category.id} onClick={() => setEditing(category)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId === category.id} onClick={() => void toggleActive(category)}>{category.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có danh mục" text="Backend chưa có danh mục nào." />}
+    {editing ? <ApiCategoryModal category={editing === 'new' ? null : editing} categories={categories} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
+  </Panel>;
+}
+
+function ApiCategoryModal({ category, categories, saving, onClose, onSave }: { category: AdminCategoryResponse | null; categories: AdminCategoryResponse[]; saving: boolean; onClose: () => void; onSave: (input: AdminCategoryRequest) => void }) {
+  const [name, setName] = useState(category?.name ?? '');
+  const [parentId, setParentId] = useState(category?.parentId ? String(category.parentId) : '');
+  const [restricted, setRestricted] = useState(category?.restricted ?? false);
+  const [boostable, setBoostable] = useState(category?.boostable ?? false);
+  const [sortOrder, setSortOrder] = useState(category?.sortOrder ?? 0);
+  return <Modal title={category ? 'Sửa danh mục' : 'Thêm danh mục'} onClose={onClose}>
+    <div className="space-y-4"><Field label="Tên danh mục" value={name} onChange={(event) => setName(event.target.value)} /><Select label="Danh mục cha" value={parentId} onChange={(event) => setParentId(event.target.value)}><option value="">Không có</option>{categories.filter((entry) => entry.id !== category?.id).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</Select><Field label="Thứ tự" type="number" min={0} value={sortOrder} onChange={(event) => setSortOrder(Number(event.target.value))} /><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={restricted} onChange={(event) => setRestricted(event.target.checked)} />Danh mục hạn chế</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={boostable} onChange={(event) => setBoostable(event.target.checked)} />Cho phép boost</label></div>
+    <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !name.trim() || !Number.isInteger(sortOrder) || sortOrder < 0} onClick={() => onSave({ name: name.trim(), parentId: parentId ? Number(parentId) : null, restricted, boostable, sortOrder })}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
+  </Modal>;
 }
 
 function AdminStaticContent({
