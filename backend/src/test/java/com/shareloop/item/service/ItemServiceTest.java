@@ -26,6 +26,8 @@ import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.media.service.MediaService;
 import com.shareloop.moderation.ModerationResult;
 import com.shareloop.moderation.service.ContentModerationService;
+import com.shareloop.reputation.entity.Rank;
+import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
@@ -69,6 +71,9 @@ class ItemServiceTest {
     @Mock
     RequestQueryService requestQueryService;
 
+    @Mock
+    ReputationService reputationService;
+
     @InjectMocks
     ItemService itemService;
 
@@ -77,6 +82,71 @@ class ItemServiceTest {
         lenient()
                 .when(contentModerationService.checkPost(anyLong(), any(), any()))
                 .thenReturn(ModerationResult.pass());
+        lenient().when(reputationService.getRank(10L)).thenReturn(Rank.BRONZE);
+        lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_BRONZE)).thenReturn(3);
+    }
+
+    @Test
+    void createItemAtBronzeLimitReturnsConfiguredLimit() {
+        when(itemRepository.countByDonorIdAndStatusInAndIsActiveTrue(
+                        10L, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED)))
+                .thenReturn(3L);
+        CreateItemRequest request = new CreateItemRequest(
+                1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
+
+        assertThatThrownBy(() -> itemService.createItem(10L, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode()).isEqualTo(ItemErrorCode.ITEM_ACTIVE_LIMIT_REACHED);
+                    assertThat(businessException.getMessage()).contains("3");
+                    assertThat(businessException.getDetails()).containsEntry("limit", 3);
+                });
+        verify(itemRepository, never()).saveAndFlush(any(Item.class));
+        verifyNoInteractions(postFeeService);
+    }
+
+    @Test
+    void createItemUsesSilverConfiguredLimit() {
+        when(reputationService.getRank(10L)).thenReturn(Rank.SILVER);
+        when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_SILVER)).thenReturn(7);
+        when(itemRepository.countByDonorIdAndStatusInAndIsActiveTrue(
+                        10L, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED)))
+                .thenReturn(7L);
+        CreateItemRequest request = new CreateItemRequest(
+                1L,
+                1L,
+                OfferType.SWAP,
+                "Sách Toán",
+                "Sách mới",
+                "Sách Văn",
+                ItemCondition.NEW,
+                null,
+                null,
+                threeImages());
+
+        assertThatThrownBy(() -> itemService.createItem(10L, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("7");
+        verify(configService).getInt(ConfigKey.MAX_ACTIVE_ITEMS_SILVER);
+    }
+
+    @Test
+    void diamondRankSkipsItemCount() {
+        when(reputationService.getRank(10L)).thenReturn(Rank.DIAMOND);
+        when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_DIAMOND)).thenReturn(-1);
+        imageLimits();
+        CreateItemRequest request = new CreateItemRequest(
+                1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
+        when(itemRepository.saveAndFlush(any(Item.class))).thenAnswer(invocation -> {
+            Item item = invocation.getArgument(0);
+            ReflectionTestUtils.setField(item, "id", 100L);
+            return item;
+        });
+
+        itemService.createItem(10L, request);
+
+        verify(itemRepository, never()).countByDonorIdAndStatusInAndIsActiveTrue(anyLong(), any());
     }
 
     @Test

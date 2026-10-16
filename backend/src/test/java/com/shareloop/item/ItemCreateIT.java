@@ -79,6 +79,31 @@ class ItemCreateIT extends IntegrationTest {
     }
 
     @Test
+    void activeLimitCountsPendingAndVisibleApprovedForBothOfferTypes() throws Exception {
+        long owner = user(10);
+        long[] images = media(owner);
+        item(owner, "GIVE", "PENDING_REVIEW", true, false);
+        item(owner, "SWAP", "PENDING_REVIEW", true, false);
+        long approved = item(owner, "GIVE", "APPROVED", true, false);
+        item(owner, "GIVE", "APPROVED", false, false);
+        item(owner, "GIVE", "REJECTED", true, false);
+        item(owner, "GIVE", "APPROVED", true, true);
+
+        mvc.perform(create(owner, body("Sách học", "Sách còn tốt", images)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ITEM_ACTIVE_LIMIT_REACHED"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("3")))
+                .andExpect(jsonPath("$.details.limit").value(3))
+                .andExpect(jsonPath("$.details.activeCount").value(3));
+        assertThat(held(owner)).isZero();
+
+        jdbc.sql("UPDATE items SET is_active = false WHERE id = :id")
+                .param("id", approved)
+                .update();
+        mvc.perform(create(owner, body("Sách học", "Sách còn tốt", images))).andExpect(status().isCreated());
+    }
+
+    @Test
     void blockedPostReturnsReasonWithoutHoldingFeeOrAttachingImages() throws Exception {
         long owner = user(10);
         long[] images = media(owner);
@@ -151,6 +176,29 @@ class ItemCreateIT extends IntegrationTest {
                 .single();
         users.add(id);
         return id;
+    }
+
+    private long item(long owner, String offerType, String status, boolean active, boolean deleted) {
+        long category = jdbc.sql("SELECT id FROM item_categories WHERE is_active ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long area = jdbc.sql("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        return jdbc.sql(
+                        "INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, "
+                                + "desired_item, condition, status, is_active, is_deleted) VALUES (:owner, :category, :area, "
+                                + ":offerType, 'Book', 'Description', :desiredItem, 'GOOD', :status, :active, :deleted) RETURNING id")
+                .param("owner", owner)
+                .param("category", category)
+                .param("area", area)
+                .param("offerType", offerType)
+                .param("desiredItem", "SWAP".equals(offerType) ? "Other book" : null)
+                .param("status", status)
+                .param("active", active)
+                .param("deleted", deleted)
+                .query(Long.class)
+                .single();
     }
 
     private long[] media(long owner) {

@@ -19,6 +19,8 @@ import com.shareloop.media.MediaErrorCode;
 import com.shareloop.media.service.MediaService;
 import com.shareloop.moderation.ModerationStatus;
 import com.shareloop.moderation.service.ContentModerationService;
+import com.shareloop.reputation.entity.Rank;
+import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
@@ -50,6 +52,7 @@ public class ItemService {
     private final ContentModerationService contentModerationService;
     private final PostFeeService postFeeService;
     private final CategoryAttributeService categoryAttributeService;
+    private final ReputationService reputationService;
 
     public ItemService(
             ItemRepository itemRepository,
@@ -59,7 +62,8 @@ public class ItemService {
             RequestQueryService requestQueryService,
             ContentModerationService contentModerationService,
             PostFeeService postFeeService,
-            CategoryAttributeService categoryAttributeService) {
+            CategoryAttributeService categoryAttributeService,
+            ReputationService reputationService) {
         this.itemRepository = itemRepository;
         this.jdbcClient = jdbcClient;
         this.mediaService = mediaService;
@@ -68,6 +72,7 @@ public class ItemService {
         this.contentModerationService = contentModerationService;
         this.postFeeService = postFeeService;
         this.categoryAttributeService = categoryAttributeService;
+        this.reputationService = reputationService;
     }
 
     /**
@@ -89,6 +94,7 @@ public class ItemService {
         List<Long> defectMediaIds = parseMediaIds(request.defectImages());
         validateDefectImages(request.condition(), defectMediaIds);
         Optional<Long> operatingAttributeId = requireOperatingStatus(request.categoryId(), request.operatingStatus());
+        checkActiveItemLimit(donorId);
 
         String moderationText = request.desiredItem() == null
                 ? request.description()
@@ -398,6 +404,37 @@ public class ItemService {
                     "Bài đăng cần từ %d đến %d ảnh.".formatted(minImages, maxImages),
                     "images",
                     Map.of("min", minImages, "max", maxImages));
+        }
+    }
+
+    private void checkActiveItemLimit(Long donorId) {
+        Rank rank = reputationService.getRank(donorId);
+        ConfigKey limitKey =
+                switch (rank) {
+                    case BRONZE -> ConfigKey.MAX_ACTIVE_ITEMS_BRONZE;
+                    case SILVER -> ConfigKey.MAX_ACTIVE_ITEMS_SILVER;
+                    case GOLD -> ConfigKey.MAX_ACTIVE_ITEMS_GOLD;
+                    case DIAMOND -> ConfigKey.MAX_ACTIVE_ITEMS_DIAMOND;
+                };
+        int limit = configService.getInt(limitKey);
+        if (limit < 0) {
+            return;
+        }
+
+        // Serialize submissions by the same owner so concurrent requests cannot exceed the limit.
+        jdbcClient
+                .sql("SELECT pg_advisory_xact_lock(:ownerId)")
+                .param("ownerId", donorId)
+                .query()
+                .singleRow();
+        long activeCount = itemRepository.countByDonorIdAndStatusInAndIsActiveTrue(
+                donorId, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED));
+        if (activeCount >= limit) {
+            throw new BusinessException(
+                    ItemErrorCode.ITEM_ACTIVE_LIMIT_REACHED,
+                    "Bạn chỉ được có tối đa %d bài đang hiển thị hoặc chờ duyệt.".formatted(limit),
+                    null,
+                    Map.of("limit", limit, "activeCount", activeCount));
         }
     }
 
