@@ -8,7 +8,7 @@ import { CREDIT_TO_VND, POST_LISTING_FEE } from '../../utils/credit';
 import { conditionLabel } from '../../utils/formatting';
 import type { ItemCondition, ItemType } from '../../types/domain';
 import { fileToDataUrl } from '../../utils/files';
-import { catalogApi } from '../../services/catalogApi';
+import { catalogApi, type CategoryAttributeResponse } from '../../services/catalogApi';
 import { toAreaOptions, toCategoryIdByName, toCategoryNames, type AreaOption } from '../../services/mappers';
 import { itemApi, type ApiCondition } from '../../services/itemApi';
 import { mediaApi } from '../../services/mediaApi';
@@ -45,6 +45,9 @@ export function Post() {
   const [categoryIds, setCategoryIds] = useState<Map<string, number>>(new Map());
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState('');
+  const [categoryAttributes, setCategoryAttributes] = useState<CategoryAttributeResponse[]>([]);
+  const [attributesLoading, setAttributesLoading] = useState(false);
+  const [attributesError, setAttributesError] = useState('');
   const [type, setType] = useState<ItemType | ''>('');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
@@ -92,6 +95,28 @@ export function Post() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    const categoryId = categoryIds.get(category);
+    if (!isApiAccount || !categoryId) {
+      setCategoryAttributes([]);
+      setAttributesError('');
+      setAttributesLoading(false);
+      return;
+    }
+    let active = true;
+    setAttributesLoading(true);
+    setAttributesError('');
+    catalogApi.categoryAttributes(categoryId)
+      .then((response) => { if (active) setCategoryAttributes(response); })
+      .catch(() => {
+        if (!active) return;
+        setCategoryAttributes([]);
+        setAttributesError('Không tải được thông tin bổ sung của danh mục.');
+      })
+      .finally(() => { if (active) setAttributesLoading(false); });
+    return () => { active = false; };
+  }, [category, categoryIds, isApiAccount]);
 
   const validate = () => {
     const nextErrors: FormErrors = {};
@@ -308,6 +333,20 @@ export function Post() {
             {errors.category ? <span className="hidden text-xs text-error sm:block">{errors.category}</span> : <span />}
             {errors.condition ? <span className="text-xs text-error">{errors.condition}</span> : null}
           </div>
+          {isApiAccount && category ? (
+            <div className="rounded-lg bg-surface-low p-4 text-sm">
+              <p className="font-semibold text-text-primary">Thông tin theo danh mục</p>
+              {attributesLoading ? <p className="mt-2 text-text-muted">Đang tải thuộc tính...</p> : null}
+              {attributesError ? <p className="mt-2 text-error">{attributesError}</p> : null}
+              {!attributesLoading && !attributesError && categoryAttributes.length ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {categoryAttributes.map((attribute) => <span key={attribute.id} className="rounded-full bg-white px-3 py-1 text-xs ring-1 ring-border">{attribute.name}{attribute.required ? ' · bắt buộc' : ''}</span>)}
+                </div>
+              ) : null}
+              {!attributesLoading && !attributesError && !categoryAttributes.length ? <p className="mt-2 text-text-muted">Danh mục này chưa có thuộc tính bổ sung.</p> : null}
+              {categoryAttributes.length ? <p className="mt-2 text-xs text-text-muted">Hãy nêu các thông tin trên trong phần mô tả để người xem dễ đánh giá món đồ.</p> : null}
+            </div>
+          ) : null}
           <Select
             label="Khu vực"
             value={district}
