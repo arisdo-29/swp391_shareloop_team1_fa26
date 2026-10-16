@@ -141,7 +141,7 @@ export function NotificationMenu({
       <IconButton
         icon="bell"
         label={unreadCount ? `Thông báo, ${unreadCount} chưa đọc` : 'Thông báo'}
-        className={isHome ? 'text-white hover:bg-white/10' : ''}
+        className={isHome ? '!border-white/30 !bg-white/10 !text-white hover:!bg-white/20 hover:!text-white' : ''}
         aria-expanded={open}
         onClick={toggle}
       />

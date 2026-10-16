@@ -244,7 +244,7 @@ function AppShellContent() {
               <IconButton
                 icon={mobileOpen ? 'close' : 'menu'}
                 label="Mở điều hướng"
-                className={`lg:hidden ${isHome ? 'text-white hover:bg-white/10' : ''}`}
+                className={`lg:hidden ${isHome ? '!border-white/30 !bg-white/10 !text-white hover:!bg-white/20 hover:!text-white' : ''}`}
                 onClick={() => setMobileOpen(!mobileOpen)}
               />
             ) : null}
