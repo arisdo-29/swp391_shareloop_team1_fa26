@@ -6,6 +6,8 @@ import com.shareloop.item.dto.ItemSummary;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.reputation.dto.ReputationSummary;
+import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
@@ -160,7 +162,14 @@ public class RequestService {
         }
 
         return requestRepository.findByItemIdOrderByCreatedAtDesc(itemId).stream()
-                .map(request -> RequestMapper.toResponse(request, findReceiverName(request.getReceiverId())))
+                .map(request -> {
+                    String receiverName = findReceiverName(request.getReceiverId());
+                    ReputationSummary rep = findReceiverReputation(request.getReceiverId());
+                    Integer trustStars = rep != null ? rep.trustStars() : 5;
+                    String rank = rep != null && rep.rank() != null ? rep.rank().name() : Rank.BRONZE.name();
+                    Double asDescribedRate = rep != null ? rep.asDescribedRate() : null;
+                    return RequestMapper.toResponse(request, receiverName, trustStars, rank, asDescribedRate);
+                })
                 .toList();
     }
 
@@ -282,7 +291,16 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
         }
 
-        return RequestMapper.toResponse(request, findReceiverName(request.getReceiverId()));
+        String receiverName = findReceiverName(request.getReceiverId());
+        if (item.donorId() == currentUserId) {
+            ReputationSummary rep = findReceiverReputation(request.getReceiverId());
+            Integer trustStars = rep != null ? rep.trustStars() : 5;
+            String rank = rep != null && rep.rank() != null ? rep.rank().name() : Rank.BRONZE.name();
+            Double asDescribedRate = rep != null ? rep.asDescribedRate() : null;
+            return RequestMapper.toResponse(request, receiverName, trustStars, rank, asDescribedRate);
+        }
+
+        return RequestMapper.toResponse(request, receiverName);
     }
 
     /**
@@ -539,6 +557,19 @@ public class RequestService {
             }
             return contact.fullName();
         } catch (BusinessException e) {
+            return null;
+        }
+    }
+
+    // Lấy thông tin uy tín (TrustStars, hạng, tỉ lệ đúng mô tả) qua ReputationService (FR-65, Issue #110).
+    // Tra lỗi hoặc service chưa sẵn sàng thì trả null để danh sách yêu cầu vẫn hiển thị an toàn.
+    private ReputationSummary findReceiverReputation(long receiverId) {
+        if (reputationService == null) {
+            return null;
+        }
+        try {
+            return reputationService.getReputationSummary(receiverId);
+        } catch (Exception e) {
             return null;
         }
     }

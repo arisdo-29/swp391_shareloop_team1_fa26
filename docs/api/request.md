@@ -50,11 +50,37 @@ Gửi yêu cầu xin đồ (với bài Give) hoặc đề nghị trao đổi đ�
 
 ## 2. GET /api/v1/items/{itemId}/requests
 
-Chủ bài xem danh sách các yêu cầu gửi tới bài đăng của mình (F10 bước 2, UC-22).
+Chủ bài xem danh sách các yêu cầu gửi tới bài đăng của mình (F10 bước 2, FR-65, UC-22).
 
 - **Xác thực:** Bắt buộc JWT (phải là chủ bài đăng).
 - **Path variable:** `itemId` (id bài đăng).
-- **Thành công:** `200 OK`, mảng `RequestResponse` (sắp xếp theo thời gian tạo mới nhất lên trước).
+- **Thành công:** `200 OK`, mảng `RequestResponse` (sắp xếp theo thời gian tạo mới nhất lên trước). Mỗi phần tử đính kèm thông tin uy tín của người gửi yêu cầu: `receiverTrustStars`, `receiverRank`, `receiverAsDescribedRate` (đồng thời hỗ trợ alias `trustStars`, `rank`, `asDescribedRate`).
+- **Ví dụ Response:**
+
+```json
+[
+  {
+    "id": 101,
+    "itemId": 45,
+    "receiverId": 12,
+    "receiverName": "Nguyễn Văn A",
+    "receiverTrustStars": 5,
+    "receiverRank": "BRONZE",
+    "receiverAsDescribedRate": 1.0,
+    "trustStars": 5,
+    "rank": "BRONZE",
+    "asDescribedRate": 1.0,
+    "offeredItemId": null,
+    "type": "GIVE",
+    "status": "PENDING",
+    "deliveryMethod": null,
+    "meetingPlace": null,
+    "meetingTime": null,
+    "createdAt": "2026-10-02T14:00:00Z"
+  }
+]
+```
+
 - **Lỗi:**
   - `403 REQUEST_FORBIDDEN`: Không phải chủ bài đăng.
   - `404 REQUEST_ITEM_NOT_FOUND`: Bài đăng không tồn tại.
@@ -270,6 +296,9 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
 | `completedAt` | string? | Thời điểm hoàn tất giao dịch ISO-8601 UTC |
 | `createdAt` | string | Thời điểm tạo ISO-8601 UTC |
 | `receiverName` | string? | Họ tên người gửi yêu cầu (có trong danh sách theo bài, danh sách của tôi và chi tiết). Có thể `null`. Không kèm email/số điện thoại (BR-T11) |
+| `receiverTrustStars` | number? | Số sao uy tín của người gửi yêu cầu (TrustStars: 1-5). Alias: `trustStars` (FR-65) |
+| `receiverRank` | string? | Hạng uy tín của người gửi yêu cầu (`BRONZE`, `SILVER`, `GOLD`, `PLATINUM`, `DIAMOND`). Alias: `rank` (FR-65) |
+| `receiverAsDescribedRate` | number? | Tỉ lệ giao dịch đúng mô tả của người gửi yêu cầu (0.00 - 1.00; `null` nếu chưa có giao dịch hoàn tất). Alias: `asDescribedRate` (FR-65) |
 
 ### ScheduleRequest
 
