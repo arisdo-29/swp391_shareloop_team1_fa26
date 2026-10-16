@@ -1,5 +1,6 @@
 package com.shareloop.review.service;
 
+import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.listingfee.service.PostFeeService;
@@ -31,6 +32,7 @@ public class ReviewService {
     private final PostFeeService postFeeService;
     private final ItemService itemService;
     private final NotificationService notificationService;
+    private final ActivityLogService activityLogService;
 
     public ReviewService(
             ReviewQueueRepository repository,
@@ -38,13 +40,15 @@ public class ReviewService {
             ConfigService configService,
             PostFeeService postFeeService,
             ItemService itemService,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            ActivityLogService activityLogService) {
         this.repository = repository;
         this.reviewItemRepository = reviewItemRepository;
         this.configService = configService;
         this.postFeeService = postFeeService;
         this.itemService = itemService;
         this.notificationService = notificationService;
+        this.activityLogService = activityLogService;
     }
 
     public List<ReviewQueueItem> listPending(int page, int size) {
@@ -71,6 +75,11 @@ public class ReviewService {
 
     @Transactional
     public void approve(long itemId, List<Boolean> answers) {
+        approve(itemId, answers, null);
+    }
+
+    @Transactional
+    public void approve(long itemId, List<Boolean> answers, Long adminId) {
         List<String> questions = configService.checklist();
         if (questions.isEmpty()) {
             throw new BusinessException(ReviewErrorCode.REVIEW_CHECKLIST_NOT_CONFIGURED);
@@ -92,11 +101,19 @@ public class ReviewService {
             check.put("passed", answers.get(index));
             checks.add(check);
         }
-        reviewItem.approve(Map.of("checks", checks), Instant.now());
+        Map<String, Object> snapshot = Map.of("checks", checks);
+        reviewItem.approve(snapshot, Instant.now());
+
+        activityLogService.log("REVIEW_APPROVE", adminId, "ITEM", itemId, snapshot, null);
     }
 
     @Transactional
     public void reject(long itemId, String reason) {
+        reject(itemId, reason, null);
+    }
+
+    @Transactional
+    public void reject(long itemId, String reason, Long adminId) {
         if (reason == null || reason.isBlank()) {
             throw new BusinessException(ReviewErrorCode.REVIEW_REJECT_REASON_REQUIRED);
         }
@@ -109,6 +126,8 @@ public class ReviewService {
                 .findDonorIdByItemId(itemId)
                 .ifPresent(donorId -> notificationService.notify(
                         donorId, "POST_REJECTED", "Bài đăng bị từ chối", reason.trim(), "/items/" + itemId));
+
+        activityLogService.log("REVIEW_REJECT", adminId, "ITEM", itemId, (Map<String, Object>) null, reason.trim());
     }
 
     private ReviewItem requireReviewItem(long itemId) {

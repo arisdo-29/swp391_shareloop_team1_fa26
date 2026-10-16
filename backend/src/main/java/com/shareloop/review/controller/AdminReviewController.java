@@ -1,5 +1,6 @@
 package com.shareloop.review.controller;
 
+import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.review.dto.ApproveReviewRequest;
 import com.shareloop.review.dto.RejectReviewRequest;
 import com.shareloop.review.dto.ReviewQueueItem;
@@ -45,8 +46,9 @@ public class AdminReviewController {
     }
 
     @PostMapping("/reviews/{itemId}/approve")
-    public ResponseEntity<Void> approve(@PathVariable long itemId, @Valid @RequestBody ApproveReviewRequest request) {
-        reviewService.approve(itemId, request.answers());
+    public ResponseEntity<Void> approve(
+            @PathVariable long itemId, @Valid @RequestBody ApproveReviewRequest request, @CurrentUserId Long adminId) {
+        reviewService.approve(itemId, request.answers(), adminId);
         return ResponseEntity.noContent().build();
     }
 
@@ -56,8 +58,9 @@ public class AdminReviewController {
     }
 
     @PostMapping("/reviews/{itemId}/reject")
-    public ResponseEntity<Void> reject(@PathVariable long itemId, @Valid @RequestBody RejectReviewRequest request) {
-        reviewService.reject(itemId, request.reason());
+    public ResponseEntity<Void> reject(
+            @PathVariable long itemId, @Valid @RequestBody RejectReviewRequest request, @CurrentUserId Long adminId) {
+        reviewService.reject(itemId, request.reason(), adminId);
         return ResponseEntity.noContent().build();
     }
 }

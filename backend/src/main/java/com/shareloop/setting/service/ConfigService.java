@@ -172,8 +172,8 @@ public class ConfigService {
         attribute.updateValue(value);
         repository.save(attribute);
         activityLogService.log(
+                "CONFIG_UPDATE",
                 adminId,
-                "CONFIG_UPDATED",
                 "CONFIG",
                 null,
                 Map.of("key", key.key(), "oldValue", previousValue, "newValue", value),
