@@ -37,6 +37,16 @@ cấp 1 chứa danh sách khu vực cấp 2 trong `children`; khu vực cấp 2 
 | `level`    | number         | Cấp khu vực: `1` thành phố, `2` quận         |
 | `children` | AreaResponse[] | Khu vực con đang dùng; rỗng ở cấp quận       |
 
+## API Admin: `/api/v1/admin/areas`
+
+Tất cả endpoint cần JWT có quyền Admin; người dùng thường nhận `403 FORBIDDEN`.
+
+- `GET`: danh sách khu vực chưa xoá mềm, kể cả đang ẩn, sắp theo id; mỗi phần tử có `id`, `name`, `parentId`, `level`, `active`.
+- `POST`: tạo khu vực, trả `201`. Body: `{ "name": "Quận mới", "parentId": 1 }`; `parentId: null` tạo cấp 1, cha cấp 1 đang hoạt động tạo cấp 2.
+- `PUT /{id}`: sửa tên hoặc chuyển khu vực sang cha khác, trả `200`. Không thể chuyển khu vực có con thành cấp 2.
+- `PATCH /{id}/active`: gửi `{ "active": false }` để ẩn hoặc `{ "active": true }` để hiện, trả `200`. Ẩn cấp 1 sẽ ẩn các con; hiện lại cấp 1 không tự hiện các con. Chỉ hiện con khi cha đang hoạt động. Không xoá cứng.
+- `name` bắt buộc, tối đa 100 ký tự. Lỗi: `400 VALIDATION_FAILED`, `404 CATALOG_AREA_NOT_FOUND`, `422 CATALOG_INVALID_AREA_PARENT` (`field: parentId`), `409 CATALOG_AREA_HAS_CHILDREN`.
+
 ## GET /api/v1/categories
 
 Danh sách danh mục đang dùng (`is_active = true`, chưa xoá mềm), sắp theo `sortOrder` tăng dần.
