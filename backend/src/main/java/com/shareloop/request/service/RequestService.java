@@ -541,7 +541,13 @@ public class RequestService {
         ItemSnapshot item = findItemSnapshot(request.getItemId())
                 .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
 
-        return new RequestChatContext(request.getId(), request.getStatus(), request.getReceiverId(), item.donorId());
+        return new RequestChatContext(
+                request.getId(),
+                request.getStatus(),
+                request.getReceiverId(),
+                item.donorId(),
+                request.getItemId(),
+                request.getOfferedItemId());
     }
 
     // Chỉ lấy họ tên để hiển thị; email, số điện thoại chỉ trao qua getContactInfo khi đã chốt lịch (BR-T11).

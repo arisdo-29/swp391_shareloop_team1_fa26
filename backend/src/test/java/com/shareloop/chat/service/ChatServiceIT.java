@@ -114,6 +114,51 @@ class ChatServiceIT extends IntegrationTest {
         assertThat(mediaStatus).isEqualTo("ATTACHED");
     }
 
+    @Test
+    @DisplayName(
+            "Gửi thẻ bài APPROVED vào chat và lấy thẻ sản phẩm ghim đầu chat thành công (FR-69, FR-70, BR-C02, BR-C07)")
+    void sendMessage_itemCard_and_getPinnedItems_success() {
+        long donorId = insertUser();
+        long receiverId = insertUser();
+        long mainItemId = insertItem(donorId, "RESERVED");
+        long sharedItemId = insertItem(donorId, "APPROVED");
+        long requestId = insertRequest(mainItemId, receiverId, "RESERVED");
+
+        // 1. Gửi thẻ bài APPROVED vào chat
+        SendMessageRequest request = new SendMessageRequest("Bạn xem món này nhé", null, sharedItemId);
+        MessageResponse response = chatService.sendMessage(requestId, receiverId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.kind()).isEqualTo(MessageKind.ITEM_CARD.name());
+        assertThat(response.refItemId()).isEqualTo(sharedItemId);
+        assertThat(response.itemCard()).isNotNull();
+        assertThat(response.itemCard().id()).isEqualTo(sharedItemId);
+        assertThat(response.itemCard().status().name()).isEqualTo("APPROVED");
+        createdMessageIds.add(response.id());
+
+        // 2. Lấy thẻ sản phẩm ghim ở đầu chat
+        var pinned = chatService.getPinnedItems(requestId, receiverId);
+        assertThat(pinned).isNotEmpty();
+        assertThat(pinned.get(0).id()).isEqualTo(mainItemId);
+    }
+
+    @Test
+    @DisplayName("Ném lỗi CHAT_ITEM_NOT_APPROVED khi chia sẻ thẻ của bài chưa APPROVED vào chat")
+    void sendMessage_itemCard_throwsWhenNotApproved() {
+        long donorId = insertUser();
+        long receiverId = insertUser();
+        long mainItemId = insertItem(donorId, "RESERVED");
+        long pendingItemId = insertItem(donorId, "PENDING_REVIEW");
+        long requestId = insertRequest(mainItemId, receiverId, "RESERVED");
+
+        SendMessageRequest request = new SendMessageRequest("Món này chưa duyệt nè", null, pendingItemId);
+
+        assertThatThrownBy(() -> chatService.sendMessage(requestId, receiverId, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(ChatErrorCode.CHAT_ITEM_NOT_APPROVED));
+    }
+
     // ---------- Tiện ích hỗ trợ test ----------
 
     private long insertUser() {
