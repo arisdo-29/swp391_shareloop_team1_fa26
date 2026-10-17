@@ -27,7 +27,7 @@ Lấy bản tóm tắt thông tin uy tín người dùng phục vụ hiển th�
 - `rank`: Hạng tín nhiệm tính theo tổng điểm (`BRONZE`, `SILVER`, `GOLD`, `DIAMOND`).
 - `asDescribedRate`: Tỉ lệ % đánh giá đúng mô tả từ các giao dịch hoàn tất.
 
-### 1.4. `void onCompleted(Long requestId)`
+### 1.4. `void onCompleted(long requestId)`
 Chữ ký tiếp nhận sự kiện giao dịch chuyển sang trạng thái `COMPLETED` (Issue #96). Thân đầy đủ (cộng điểm theo loại giao dịch, cập nhật chuỗi giao dịch sạch `clean_streak`, tính lại hạng và ghi nhận activity log) được triển khai chi tiết ở cột mốc R4.
 
 ---

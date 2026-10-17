@@ -117,12 +117,8 @@ public class ReputationService {
      *
      * @param requestId id của yêu cầu giao dịch vừa chuyển sang COMPLETED
      */
-    public void onCompleted(Long requestId) {
-        // TODO(R4): cộng điểm, ghi log, cập nhật rank
-    }
-
     public void onCompleted(long requestId) {
-        onCompleted(Long.valueOf(requestId));
+        // TODO(R4): cộng điểm, ghi log, cập nhật rank
     }
 
     private int getThreshold(String upperKey, String lowerKey, int fallback) {
