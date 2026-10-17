@@ -5,6 +5,7 @@ import com.shareloop.chat.dto.MessageResponse;
 import com.shareloop.chat.dto.SendMessageRequest;
 import com.shareloop.chat.entity.Message;
 import com.shareloop.chat.entity.MessageKind;
+import com.shareloop.chat.entity.MessageModeration;
 import com.shareloop.chat.mapper.MessageMapper;
 import com.shareloop.chat.repository.MessageRepository;
 import com.shareloop.common.exception.BusinessException;
@@ -19,13 +20,14 @@ import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.service.RequestService;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service xử lý logic gửi tin nhắn, chia sẻ thẻ bài và lấy thẻ ghim ở đầu chat (FR-68, FR-69, FR-70, FR-75).
+ * Service xử lý logic gửi tin nhắn, chia sẻ thẻ bài và lấy thẻ ghim ở đầu chat (FR-68, FR-69, FR-70, FR-72, FR-75, FR-76, FR-78).
  */
 @Service
 public class ChatService {
@@ -43,13 +45,23 @@ public class ChatService {
     private final ChatContactFilter chatContactFilter;
     private final MediaService mediaService;
     private final ItemQueryService itemQueryService;
+    private final ChatViolationRecorder chatViolationRecorder;
 
     public ChatService(
             MessageRepository messageRepository,
             RequestService requestService,
             ChatContactFilter chatContactFilter,
             MediaService mediaService) {
-        this(messageRepository, requestService, chatContactFilter, mediaService, null);
+        this(messageRepository, requestService, chatContactFilter, mediaService, null, null);
+    }
+
+    public ChatService(
+            MessageRepository messageRepository,
+            RequestService requestService,
+            ChatContactFilter chatContactFilter,
+            MediaService mediaService,
+            ItemQueryService itemQueryService) {
+        this(messageRepository, requestService, chatContactFilter, mediaService, itemQueryService, null);
     }
 
     @Autowired
@@ -58,16 +70,18 @@ public class ChatService {
             RequestService requestService,
             ChatContactFilter chatContactFilter,
             MediaService mediaService,
-            @Autowired(required = false) ItemQueryService itemQueryService) {
+            @Autowired(required = false) ItemQueryService itemQueryService,
+            @Autowired(required = false) ChatViolationRecorder chatViolationRecorder) {
         this.messageRepository = messageRepository;
         this.requestService = requestService;
         this.chatContactFilter = chatContactFilter;
         this.mediaService = mediaService;
         this.itemQueryService = itemQueryService;
+        this.chatViolationRecorder = chatViolationRecorder;
     }
 
     /**
-     * Gửi tin nhắn mới (văn bản, ảnh hoặc thẻ bài đăng) trong khung chat (FR-68, FR-70, FR-72, FR-75).
+     * Gửi tin nhắn mới (văn bản, ảnh hoặc thẻ bài đăng) trong khung chat (FR-68, FR-70, FR-72, FR-75, FR-76, FR-78).
      *
      * @param requestId     id của yêu cầu giao dịch
      * @param currentUserId id người gửi hiện tại
@@ -119,10 +133,36 @@ public class ChatService {
             }
         }
 
-        // Lọc thông tin liên hệ tầng 1 trước LogisticsConfirmed (FR-72, FR-74; BR-C01, BR-C06)
+        // Lọc thông tin liên hệ và từ khoá cấm mức BLOCK (FR-72, FR-74, FR-78; BR-C01, BR-A10, BR-C06)
         if (hasContent) {
-            if (context.status() == RequestStatus.RESERVED || context.status() == RequestStatus.AWAITING_LOGISTICS) {
-                chatContactFilter.validateMessage(request.content());
+            boolean isBeforeLogistics =
+                    context.status() == RequestStatus.RESERVED || context.status() == RequestStatus.AWAITING_LOGISTICS;
+            Optional<String> violation = chatContactFilter.checkViolation(request.content(), isBeforeLogistics);
+            if (violation.isPresent()) {
+                String reason = violation.get();
+                if (chatViolationRecorder != null) {
+                    chatViolationRecorder.recordViolationAndAlertAdmin(
+                            context.requestId(),
+                            currentUserId,
+                            request.content().trim(),
+                            reason);
+                }
+                throw new BusinessException(
+                        ChatErrorCode.CHAT_MESSAGE_BLOCKED, "Tin nhắn bị chặn do chứa " + reason + ".");
+            }
+            if (isBeforeLogistics) {
+                try {
+                    chatContactFilter.validateMessage(request.content());
+                } catch (BusinessException e) {
+                    if (e.getErrorCode() == ChatErrorCode.CHAT_MESSAGE_BLOCKED && chatViolationRecorder != null) {
+                        chatViolationRecorder.recordViolationAndAlertAdmin(
+                                context.requestId(),
+                                currentUserId,
+                                request.content().trim(),
+                                e.getMessage());
+                    }
+                    throw e;
+                }
             }
         }
 
@@ -149,6 +189,7 @@ public class ChatService {
     /**
      * Lấy danh sách tin nhắn theo chu kỳ (polling), hỗ trợ lọc tin mới hơn afterId (FR-68).
      * Tự động ghép thẻ bài đăng cho các tin nhắn dạng ITEM_CARD.
+     * Chỉ trả về các tin nhắn hợp lệ (moderation = PASS).
      *
      * @param requestId     id của yêu cầu giao dịch
      * @param currentUserId id người đang thao tác
@@ -171,6 +212,7 @@ public class ChatService {
         }
 
         return messages.stream()
+                .filter(m -> m.getModeration() == MessageModeration.PASS)
                 .map(m -> {
                     ItemCardDto card = null;
                     if (m.getRefItemId() != null) {
