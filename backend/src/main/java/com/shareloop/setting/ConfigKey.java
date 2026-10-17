@@ -48,7 +48,10 @@ public enum ConfigKey {
     COMPLAINT_WINDOW_DAYS("complaint_window_days", "7"),
     RESPONSE_WINDOW_DAYS("response_window_days", "3"),
     DAILY_POINTS_CAP("daily_points_cap", "30"),
-    PAYMENT_ORDER_EXPIRE_MINUTES("payment_order_expire_minutes", "30");
+    PAYMENT_ORDER_EXPIRE_MINUTES("payment_order_expire_minutes", "30"),
+    REPUTATION_SILVER_MIN("reputation_silver_min", "50"),
+    REPUTATION_GOLD_MIN("reputation_gold_min", "150"),
+    REPUTATION_DIAMOND_MIN("reputation_diamond_min", "400");
 
     private final String key;
     private final String defaultValue;
