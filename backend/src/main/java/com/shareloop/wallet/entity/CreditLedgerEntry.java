@@ -83,6 +83,16 @@ public class CreditLedgerEntry {
         return entry;
     }
 
+    /**
+     * Dòng hoàn phí: amount dương, cùng type với dòng trừ gốc, note ghi id dòng gốc (ví dụ "Hoàn phí AI #12") để biết
+     * dòng gốc đã được hoàn hay chưa.
+     */
+    public static CreditLedgerEntry refund(Long userId, int amount, CreditTxType type, long balanceAfter, String note) {
+        CreditLedgerEntry entry = new CreditLedgerEntry(userId, amount, type, balanceAfter, null);
+        entry.note = note;
+        return entry;
+    }
+
     public Long getId() {
         return id;
     }

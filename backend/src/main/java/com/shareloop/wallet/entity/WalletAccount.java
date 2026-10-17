@@ -96,4 +96,9 @@ public class WalletAccount extends SliceAudit {
         creditBalance += credits;
         hasToppedUp = true;
     }
+
+    /** Hoàn lại Credit đã trừ; không bật has_topped_up vì hoàn phí không phải là nạp tiền. */
+    public void refund(long amount) {
+        creditBalance += amount;
+    }
 }
