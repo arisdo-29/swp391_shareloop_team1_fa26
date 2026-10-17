@@ -88,7 +88,7 @@ class ItemScreeningIT extends IntegrationTest {
 
     @Test
     void highRiskFlagsPendingItemAndLogsCallWithoutAccountData() throws Exception {
-        when(aiClient.screen(any(), any())).thenReturn(new AiResponse("openai/gpt-oss-120b", HIGH));
+        when(aiClient.screen(any(), any())).thenReturn(new AiResponse("gemini-3.5-flash-lite", HIGH));
 
         screeningService.screen(event());
 
@@ -96,7 +96,7 @@ class ItemScreeningIT extends IntegrationTest {
         assertThat(value("status")).isEqualTo("PENDING_REVIEW");
         assertThat(value("ai_result ->> 'flag'")).isEqualTo("REVIEW");
         assertThat(value("ai_result ->> 'reason'")).isEqualTo("Có thông tin liên hệ");
-        assertThat(value("ai_result ->> 'model'")).isEqualTo("openai/gpt-oss-120b");
+        assertThat(value("ai_result ->> 'model'")).isEqualTo("gemini-3.5-flash-lite");
         assertThat(jdbc.sql("SELECT count(*) FROM activity_logs WHERE type = 'AiUsage' AND target_id = :itemId")
                         .param("itemId", itemId)
                         .query(Integer.class)
@@ -128,7 +128,7 @@ class ItemScreeningIT extends IntegrationTest {
 
     @Test
     void invalidJsonLeavesItemUnchecked() throws Exception {
-        when(aiClient.screen(any(), any())).thenReturn(new AiResponse("openai/gpt-oss-120b", "{\"risk\":\"high\"}"));
+        when(aiClient.screen(any(), any())).thenReturn(new AiResponse("gemini-3.5-flash-lite", "{\"risk\":\"high\"}"));
 
         screeningService.screen(event());
 
@@ -142,7 +142,7 @@ class ItemScreeningIT extends IntegrationTest {
             jdbc.sql("UPDATE items SET title = 'New title' WHERE id = :itemId")
                     .param("itemId", itemId)
                     .update();
-            return new AiResponse("openai/gpt-oss-120b", HIGH);
+            return new AiResponse("gemini-3.5-flash-lite", HIGH);
         });
 
         screeningService.screen(event());
@@ -157,7 +157,7 @@ class ItemScreeningIT extends IntegrationTest {
                         + "WHERE id = :itemId")
                 .param("itemId", itemId)
                 .update();
-        when(aiClient.screen(any(), any())).thenReturn(new AiResponse("openai/gpt-oss-120b", LOW));
+        when(aiClient.screen(any(), any())).thenReturn(new AiResponse("gemini-3.5-flash-lite", LOW));
 
         screeningService.screen(event());
 

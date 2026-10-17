@@ -16,8 +16,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Component
-public class GroqAiClient implements AiClient {
-    private static final URI ENDPOINT = URI.create("https://api.groq.com/openai/v1/chat/completions");
+public class GeminiAiClient implements AiClient {
+    private static final String API_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
     private static final String SCHEMA = """
             {"type":"object","additionalProperties":false,"required":["contactInfo","prohibited",
             "categoryMismatch","swapIntentInGivePost","qualityIssue","risk","reasonVi"],"properties":{
@@ -40,10 +40,10 @@ public class GroqAiClient implements AiClient {
     private final String systemPrompt;
 
     @Autowired
-    public GroqAiClient(
+    public GeminiAiClient(
             ObjectMapper mapper,
             @Value("${app.ai.api-key:}") String apiKey,
-            @Value("${app.ai.model:openai/gpt-oss-120b}") String model)
+            @Value("${app.ai.model:gemini-3.5-flash-lite}") String model)
             throws IOException {
         this(
                 mapper,
@@ -57,7 +57,10 @@ public class GroqAiClient implements AiClient {
                         StandardCharsets.UTF_8));
     }
 
-    GroqAiClient(ObjectMapper mapper, HttpClient httpClient, String apiKey, String model, String systemPrompt) {
+    GeminiAiClient(ObjectMapper mapper, HttpClient httpClient, String apiKey, String model, String systemPrompt) {
+        if (!model.matches("[A-Za-z0-9._-]+")) {
+            throw new IllegalArgumentException("Invalid Gemini model ID");
+        }
         this.mapper = mapper;
         this.httpClient = httpClient;
         this.apiKey = apiKey;
@@ -75,41 +78,54 @@ public class GroqAiClient implements AiClient {
         if (!isAvailable()) {
             throw new IllegalStateException("AI_API_KEY is not configured");
         }
-        String body = buildRequestBody(content);
-        HttpRequest request = HttpRequest.newBuilder(ENDPOINT)
-                .timeout(timeout)
-                .header("Authorization", "Bearer " + apiKey)
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
+        HttpRequest request = buildRequest(content, timeout);
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200) {
-            throw new IOException("Groq API returned HTTP " + response.statusCode());
-        }
-        JsonNode root = mapper.readTree(response.body());
-        JsonNode message = root.path("choices").path(0).path("message").path("content");
-        if (!message.isTextual() || message.asText().isBlank()) {
-            throw new IOException("Groq API returned no screening content");
-        }
-        return new AiResponse(model, message.asText());
+        return parseResponse(response.statusCode(), response.body());
+    }
+
+    HttpRequest buildRequest(AiScreeningContent content, Duration timeout) {
+        return HttpRequest.newBuilder(URI.create(API_BASE + model + ":generateContent"))
+                .timeout(timeout)
+                .header("x-goog-api-key", apiKey)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(buildRequestBody(content)))
+                .build();
     }
 
     String buildRequestBody(AiScreeningContent content) {
         return mapper.writeValueAsString(Map.of(
-                "model",
-                model,
-                "temperature",
-                0,
-                "messages",
-                new Object[] {
-                    Map.of("role", "system", "content", systemPrompt),
-                    Map.of("role", "user", "content", mapper.writeValueAsString(content))
-                },
-                "response_format",
-                Map.of(
-                        "type",
-                        "json_schema",
-                        "json_schema",
-                        Map.of("name", "item_screening", "strict", true, "schema", mapper.readTree(SCHEMA)))));
+                "systemInstruction", Map.of("parts", new Object[] {Map.of("text", systemPrompt)}),
+                "contents",
+                        new Object[] {
+                            Map.of("role", "user", "parts", new Object[] {
+                                Map.of("text", mapper.writeValueAsString(content))
+                            })
+                        },
+                "generationConfig",
+                        Map.of(
+                                "responseFormat",
+                                Map.of(
+                                        "text",
+                                        Map.of("mimeType", "application/json", "schema", mapper.readTree(SCHEMA))))));
+    }
+
+    AiResponse parseResponse(int statusCode, String responseBody) throws IOException {
+        if (statusCode != 200) {
+            throw new IOException("Gemini API returned HTTP " + statusCode);
+        }
+        JsonNode root = mapper.readTree(responseBody);
+        JsonNode parts = root.path("candidates").path(0).path("content").path("parts");
+        StringBuilder content = new StringBuilder();
+        for (int index = 0; index < parts.size(); index++) {
+            JsonNode part = parts.path(index);
+            if (!part.path("thought").asBoolean() && part.path("text").isTextual()) {
+                content.append(part.path("text").asText());
+            }
+        }
+        if (content.isEmpty()) {
+            throw new IOException("Gemini API returned no screening content");
+        }
+        String modelVersion = root.path("modelVersion").asText();
+        return new AiResponse(modelVersion.isBlank() ? model : modelVersion, content.toString());
     }
 }
