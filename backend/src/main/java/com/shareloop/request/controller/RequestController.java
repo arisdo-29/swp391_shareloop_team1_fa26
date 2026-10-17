@@ -133,4 +133,27 @@ public class RequestController {
             @RequestBody(required = false) HandoverConfirmRequest request) {
         return requestService.confirmHandover(id, currentUserId, request);
     }
+
+    /**
+     * Đính kèm ảnh hoặc video minh chứng vào yêu cầu giao dịch (FR-86, BR-T09, UC-28).
+     */
+    @Operation(summary = "Đính kèm ảnh hoặc video minh chứng giao nhận")
+    @PostMapping("/api/v1/requests/{id}/media")
+    public List<com.shareloop.request.dto.RequestMediaResponse> attachMedia(
+            @PathVariable long id,
+            @CurrentUserId Long currentUserId,
+            @Valid @RequestBody com.shareloop.request.dto.AttachMediaRequest request) {
+        return requestService.attachMedia(id, currentUserId, request.mediaIds(), request.stage());
+    }
+
+    /**
+     * Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (FR-86, BR-T09).
+     * Chỉ hai bên tham gia giao dịch mới có quyền xem.
+     */
+    @Operation(summary = "Lấy danh sách ảnh hoặc video minh chứng giao nhận (chỉ 2 bên tham gia)")
+    @GetMapping("/api/v1/requests/{id}/media")
+    public List<com.shareloop.request.dto.RequestMediaResponse> getMediaList(
+            @PathVariable long id, @CurrentUserId Long currentUserId) {
+        return requestService.getMediaList(id, currentUserId);
+    }
 }
