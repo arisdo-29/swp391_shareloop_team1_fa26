@@ -32,7 +32,8 @@ app:
   # module media (BE2)
   storage: {}
   # module integration/ai (BE2)
-  ai: {}
+  ai:
+    api-key: ${AI_API_KEY:}
   # module integration/payment (BE1)
   payment:
     mock:
