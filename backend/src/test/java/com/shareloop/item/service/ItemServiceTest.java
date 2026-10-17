@@ -25,6 +25,7 @@ import com.shareloop.item.repository.ItemRepository;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.media.service.MediaService;
 import com.shareloop.moderation.ModerationResult;
+import com.shareloop.moderation.event.ItemScreeningRequestedEvent;
 import com.shareloop.moderation.service.ContentModerationService;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
@@ -41,6 +42,7 @@ import org.mockito.Answers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -73,6 +75,9 @@ class ItemServiceTest {
 
     @Mock
     ReputationService reputationService;
+
+    @Mock
+    ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     ItemService itemService;
@@ -178,6 +183,9 @@ class ItemServiceTest {
         assertThat(response.offerType()).isEqualTo(OfferType.GIVE);
         assertThat(response.status()).isEqualTo(ItemStatus.PENDING_REVIEW);
         verify(postFeeService).holdPostFee(100L, 10L);
+        verify(eventPublisher)
+                .publishEvent(
+                        new ItemScreeningRequestedEvent(100L, 10L, 1L, "GIVE", "Sách Toán", "Sách mới", null, "NEW"));
     }
 
     @Test

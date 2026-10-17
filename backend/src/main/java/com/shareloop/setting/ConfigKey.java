@@ -26,7 +26,7 @@ public enum ConfigKey {
     AI_SEARCH_TIMEOUT_SECONDS("ai_search_timeout_seconds", "15"),
     CHAT_AI_THRESHOLD("chat_ai_threshold", "0.7", ValueType.DECIMAL, BigDecimal.ZERO, BigDecimal.ONE),
     CHAT_AI_TIMEOUT_SECONDS("chat_ai_timeout_seconds", "5"),
-    ITEM_AI_TIMEOUT_SECONDS("item_ai_timeout_seconds", "20"),
+    ITEM_AI_TIMEOUT_SECONDS("item_ai_timeout_seconds", "15"),
     ITEM_AI_RETRIES("item_ai_retries", "1"),
     CHAT_VIOLATION_ALERT("chat_violation_alert", "3"),
     ITEM_PHOTOS_MIN("item_photos_min", "3"),
