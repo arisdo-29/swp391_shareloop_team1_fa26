@@ -338,4 +338,64 @@ class RequestControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
     }
+
+    @Test
+    @DisplayName("Đính kèm minh chứng giao nhận thành công có JWT trả về 200 OK")
+    void attachMedia_withToken_returns200() throws Exception {
+        String token = jwtService.issue(10L, false);
+
+        when(requestService.attachMedia(eq(100L), eq(10L), eq(List.of(501L)), eq("HANDOVER")))
+                .thenReturn(List.of(new com.shareloop.request.dto.RequestMediaResponse(
+                        501L, "/api/v1/media/501", "HANDOVER", 10L, Instant.now())));
+
+        String jsonBody = """
+                {
+                    "mediaIds": [501],
+                    "stage": "HANDOVER"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/requests/100/media")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].mediaId").value(501))
+                .andExpect(jsonPath("$[0].url").value("/api/v1/media/501"))
+                .andExpect(jsonPath("$[0].stage").value("HANDOVER"))
+                .andExpect(jsonPath("$[0].uploadedBy").value(10));
+    }
+
+    @Test
+    @DisplayName("Đính kèm minh chứng không có JWT trả về 401 Unauthorized")
+    void attachMedia_withoutToken_returns401() throws Exception {
+        mockMvc.perform(post("/api/v1/requests/100/media")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mediaIds\":[501]}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("Xem danh sách minh chứng có JWT trả về 200 OK")
+    void getMediaList_withToken_returns200() throws Exception {
+        String token = jwtService.issue(10L, false);
+
+        when(requestService.getMediaList(100L, 10L))
+                .thenReturn(List.of(new com.shareloop.request.dto.RequestMediaResponse(
+                        501L, "/api/v1/media/501", "HANDOVER", 10L, Instant.now())));
+
+        mockMvc.perform(get("/api/v1/requests/100/media").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].mediaId").value(501))
+                .andExpect(jsonPath("$[0].url").value("/api/v1/media/501"));
+    }
+
+    @Test
+    @DisplayName("Xem danh sách minh chứng không có JWT trả về 401 Unauthorized")
+    void getMediaList_withoutToken_returns401() throws Exception {
+        mockMvc.perform(get("/api/v1/requests/100/media"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
 }
