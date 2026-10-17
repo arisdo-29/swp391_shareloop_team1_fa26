@@ -220,6 +220,19 @@ class RequestServiceTest {
     }
 
     @Test
+    @DisplayName("Ném lỗi REQUEST_INVALID_STATE_TRANSITION khi huỷ yêu cầu không còn ở trạng thái PENDING (BR-R04)")
+    void cancelRequest_whenNotPending_throwsInvalidStateTransition() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.transitionTo(com.shareloop.request.entity.RequestStatus.RESERVED);
+        when(requestRepository.findById(55L)).thenReturn(Optional.of(request));
+
+        assertThatThrownBy(() -> requestService.cancelRequest(55L, 10L))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+                });
+    }
+
+    @Test
     @DisplayName(
             "Chủ bài chọn người nhận thành công: chuyển RESERVED, reject các request khác và giữ chỗ bài (FR-66, BR-D01)")
     void selectReceiver_whenSuccess_reservesRequestAndItemAndRejectsOthers() {
