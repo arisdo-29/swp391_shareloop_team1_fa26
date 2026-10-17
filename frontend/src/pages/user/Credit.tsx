@@ -77,6 +77,19 @@ function topUpConfirmErrorMessage(error: ApiError) {
   return 'Không xác nhận được thanh toán. Vui lòng thử lại.';
 }
 
+function isValidTopUpAmount(value: string) {
+  if (!/^\d+$/.test(value.trim())) return false;
+  const amount = Number(value);
+  return Number.isSafeInteger(amount) && amount > 0;
+}
+
+function topUpOrderErrorMessage(error: ApiError) {
+  if (error.code === 'WALLET_TOPUP_AMOUNT_INVALID') {
+    return error.message || 'Số tiền nạp không đáp ứng mức tối thiểu hoặc bội số do Backend cấu hình.';
+  }
+  return error.message || 'Không tạo được đơn nạp Credit. Vui lòng thử lại.';
+}
+
 export function Credit() {
   const user = useAppSelector(selectCurrentUser)!;
   const data = useAppSelector(selectData);
@@ -163,8 +176,8 @@ export function Credit() {
   const continuePayment = async () => {
     if (isApiAccount) {
       const amountVnd = Number(apiAmountVnd);
-      if (!Number.isSafeInteger(amountVnd) || amountVnd <= 0) {
-        setTopUpError('Vui lòng nhập số tiền nạp hợp lệ.');
+      if (!isValidTopUpAmount(apiAmountVnd)) {
+        setTopUpError('Vui lòng nhập số tiền nạp là số nguyên dương.');
         return;
       }
       setTopUpSubmitting(true);
@@ -174,8 +187,8 @@ export function Credit() {
         const order = await paymentApi.createTopUpOrder({ amountVnd });
         setApiTopUpOrder(order);
         setStep('pending');
-      } catch {
-        setTopUpError('Không tạo được đơn nạp Credit. Vui lòng thử lại.');
+      } catch (error) {
+        setTopUpError(topUpOrderErrorMessage(error as ApiError));
       } finally {
         setTopUpSubmitting(false);
       }
@@ -404,8 +417,7 @@ function BalanceMetric({
 }
 
 function ApiTopupSelection({ amountVnd, onAmountChange, onContinue, submitting }: { amountVnd: string; onAmountChange: Dispatch<string>; onContinue: () => void; submitting: boolean }) {
-  const parsedAmount = Number(amountVnd);
-  const validAmount = Number.isSafeInteger(parsedAmount) && parsedAmount > 0;
+  const validAmount = isValidTopUpAmount(amountVnd);
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
       <div className="rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-7">
@@ -422,6 +434,7 @@ function ApiTopupSelection({ amountVnd, onAmountChange, onContinue, submitting }
             value={amountVnd}
             onChange={(event) => onAmountChange(event.target.value)}
             placeholder="Nhập số tiền"
+            error={amountVnd && !validAmount ? 'Vui lòng nhập số tiền nạp là số nguyên dương.' : undefined}
           />
         </div>
       </div>
