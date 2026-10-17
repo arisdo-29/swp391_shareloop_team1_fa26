@@ -1,0 +1,18 @@
+@host = http://localhost:8080
+# Người sở hữu: BE1 @arisdo-29
+
+# Dán accessToken lấy từ request login trong auth.http (không lưu token vào repo)
+@token = <dán accessToken vào đây>
+# Id một bài APPROVED của chính mình, còn hạn, danh mục cho phép đẩy
+@itemId = 1
+
+### Đẩy bài thêm một gói (200: itemId, boostedUntil, creditBalance)
+POST {{host}}/api/v1/items/{{itemId}}/boost
+Authorization: Bearer {{token}}
+
+### Gọi lặp lại để cộng dồn; quá boost_max_days ngày (409 LISTINGFEE_BOOST_LIMIT_EXCEEDED)
+POST {{host}}/api/v1/items/{{itemId}}/boost
+Authorization: Bearer {{token}}
+
+### Không có token (401 UNAUTHORIZED)
+POST {{host}}/api/v1/items/{{itemId}}/boost
