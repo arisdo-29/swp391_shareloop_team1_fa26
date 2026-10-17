@@ -2,6 +2,7 @@ package com.shareloop.review.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.util.Comparator;
 
 @Schema(description = "Thông tin bài đăng trong hàng chờ duyệt")
 public record ReviewQueueItem(
@@ -27,4 +28,19 @@ public record ReviewQueueItem(
         short donorTrustStars,
 
         @Schema(description = "Thời điểm bài đăng được tạo", example = "2026-10-14T10:00:00Z")
-        Instant createdAt) {}
+        Instant createdAt) {
+
+    public static final Comparator<ReviewQueueItem> QUEUE_ORDER = Comparator.comparing(
+                    ReviewQueueItem::isFlagged, Comparator.reverseOrder())
+            .thenComparingInt(ReviewQueueItem::donorTrustStars)
+            .thenComparing(ReviewQueueItem::createdAt, Comparator.nullsLast(Comparator.naturalOrder()))
+            .thenComparing(ReviewQueueItem::id, Comparator.nullsLast(Comparator.naturalOrder()));
+
+    public boolean isFlagged() {
+        return "REVIEW".equalsIgnoreCase(moderationFlag);
+    }
+
+    public int riskScore() {
+        return Math.max(0, 6 - donorTrustStars);
+    }
+}
