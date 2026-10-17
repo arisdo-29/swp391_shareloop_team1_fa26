@@ -2,6 +2,8 @@ package com.shareloop.wallet.service;
 
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
 import com.shareloop.wallet.WalletErrorCode;
 import com.shareloop.wallet.dto.CreditTypeTotal;
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
@@ -35,10 +37,12 @@ import org.springframework.transaction.annotation.Transactional;
  * người dùng bằng {@code WalletAccountRepository.lockById} (SELECT ... FOR UPDATE) và chạy trong transaction của
  * người gọi (REQUIRED); khi không có transaction ngoài thì tự mở transaction mới.
  *
- * <p>Mọi số tiền do người gọi truyền vào; người gọi lấy mức phí từ ConfigService (post_fee, edit_fee, renew_fee,
- * boost_fee, ai_search_fee), CreditService không viết cứng con số nào.
+ * <p>Số tiền thường do người gọi truyền vào; người gọi lấy mức phí từ ConfigService (post_fee, edit_fee, renew_fee,
+ * boost_fee). Riêng {@link #chargeAiSearch} tự đọc ai_search_fee từ ConfigService. CreditService không viết cứng con
+ * số nào.
  *
- * <p>Người gọi: listingfee (hold, release, chargeHeld), item/search (spend), wallet.PaymentService (topUp).
+ * <p>Người gọi: listingfee (hold, release, chargeHeld), item (spend), search (chargeAiSearch, refundAiSearch),
+ * wallet.PaymentService (topUp).
  */
 @Service
 // @Transactional ở class: mọi hàm public chạy trong một transaction (REQUIRED = tham gia transaction của người
@@ -59,6 +63,7 @@ public class CreditService {
     private final CreditLedgerRepository creditLedgerRepository;
     private final PaymentOrderRepository paymentOrderRepository;
     private final WalletMapper walletMapper;
+    private final ConfigService configService;
     private final Clock clock;
 
     public CreditService(
@@ -66,11 +71,13 @@ public class CreditService {
             CreditLedgerRepository creditLedgerRepository,
             PaymentOrderRepository paymentOrderRepository,
             WalletMapper walletMapper,
+            ConfigService configService,
             Clock clock) {
         this.walletAccountRepository = walletAccountRepository;
         this.creditLedgerRepository = creditLedgerRepository;
         this.paymentOrderRepository = paymentOrderRepository;
         this.walletMapper = walletMapper;
+        this.configService = configService;
         this.clock = clock;
     }
 
@@ -174,6 +181,60 @@ public class CreditService {
         WalletAccount wallet = lockWallet(userId);
         wallet.spend(amount);
         writeDebitLedger(userId, amount, type, wallet.getCreditBalance(), itemId);
+    }
+
+    /**
+     * Trừ phí một lần AI trợ lý tìm đồ trả lời (C17, AI_SEARCH_FEE). Mức phí đọc từ ConfigKey.AI_SEARCH_FEE; người gọi
+     * chỉ truyền userId. Trừ từ phần khả dụng như {@link #spend}.
+     *
+     * <p>Cách dùng: gọi hàm này trước khi gọi AI và giữ lại id trả về; nếu gọi AI lỗi thì gọi {@link #refundAiSearch}
+     * với id đó để hoàn phí.
+     *
+     * <p>Transaction: REQUIRED. Khoá: dòng users của userId.
+     *
+     * @param userId người bị trừ (lấy từ token)
+     * @return id của dòng credit_ledger vừa ghi (amount âm)
+     * @throws com.shareloop.common.exception.BusinessException WALLET_INSUFFICIENT_BALANCE khi khả dụng không đủ;
+     *     WALLET_INVALID_AMOUNT khi ai_search_fee cấu hình không dương; WALLET_NOT_FOUND khi không có user
+     */
+    public long chargeAiSearch(long userId) {
+        long fee = configService.getInt(ConfigKey.AI_SEARCH_FEE);
+        requirePositiveAmount(fee);
+
+        WalletAccount wallet = lockWallet(userId);
+        wallet.spend(fee);
+        return writeDebitLedger(userId, fee, CreditTxType.AI_SEARCH_FEE, wallet.getCreditBalance(), null);
+    }
+
+    /**
+     * Hoàn phí AI khi lần gọi AI đã trừ tiền bị lỗi (C17). Cộng lại đúng số đã trừ ở dòng gốc (không đọc lại cấu
+     * hình, vì Admin có thể đã đổi mức phí) và ghi một dòng ledger AI_SEARCH_FEE dương, note "Hoàn phí AI #ledgerId".
+     *
+     * <p>Quy tắc: dòng gốc phải thuộc userId, có type AI_SEARCH_FEE, amount âm, và chưa từng được hoàn.
+     *
+     * <p>Transaction: REQUIRED. Khoá dòng users của userId trước khi kiểm "đã hoàn chưa", nên hai lời gọi hoàn cùng
+     * lúc cho một dòng gốc chạy lần lượt và lời gọi sau bị chặn.
+     *
+     * @param userId chủ ví, phải là người đã bị trừ ở dòng gốc
+     * @param ledgerId id do {@link #chargeAiSearch} trả về
+     * @throws com.shareloop.common.exception.BusinessException WALLET_AI_FEE_NOT_FOUND khi không có dòng gốc, dòng
+     *     của người khác hoặc không phải dòng trừ phí AI; WALLET_AI_FEE_ALREADY_REFUNDED khi đã hoàn trước đó;
+     *     WALLET_NOT_FOUND khi không có user
+     */
+    public void refundAiSearch(long userId, long ledgerId) {
+        WalletAccount wallet = lockWallet(userId);
+        CreditLedgerEntry originalEntry = findAiSearchCharge(userId, ledgerId);
+
+        String note = "Hoàn phí AI #" + ledgerId;
+        if (creditLedgerRepository.existsByUserIdAndTypeAndNote(userId, CreditTxType.AI_SEARCH_FEE, note)) {
+            throw new BusinessException(WalletErrorCode.WALLET_AI_FEE_ALREADY_REFUNDED);
+        }
+
+        // Dòng gốc lưu số âm, đổi dấu để ra số cần cộng lại.
+        int refundAmount = -originalEntry.getAmount();
+        wallet.refund(refundAmount);
+        creditLedgerRepository.save(CreditLedgerEntry.refund(
+                userId, refundAmount, CreditTxType.AI_SEARCH_FEE, wallet.getCreditBalance(), note));
     }
 
     /**
@@ -352,6 +413,19 @@ public class CreditService {
         }
     }
 
+    // Dòng không có, của người khác, hay không phải dòng trừ phí AI đều báo cùng một lỗi, để không lộ id đó có thật.
+    private CreditLedgerEntry findAiSearchCharge(long userId, long ledgerId) {
+        CreditLedgerEntry entry = creditLedgerRepository
+                .findById(ledgerId)
+                .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_AI_FEE_NOT_FOUND));
+        boolean isOwnAiCharge =
+                entry.getUserId() == userId && entry.getType() == CreditTxType.AI_SEARCH_FEE && entry.getAmount() < 0;
+        if (!isOwnAiCharge) {
+            throw new BusinessException(WalletErrorCode.WALLET_AI_FEE_NOT_FOUND);
+        }
+        return entry;
+    }
+
     private List<CreditTypeTotal> toCreditTypeTotals(List<CreditTypeTotalView> views) {
         return views.stream().map(walletMapper::toCreditTypeTotal).toList();
     }
@@ -381,8 +455,11 @@ public class CreditService {
     }
 
     // Cột credit_ledger.amount là INT; toIntExact ném ArithmeticException (và rollback) thay vì cắt số âm thầm.
-    private void writeDebitLedger(long userId, long amount, CreditTxType type, long balanceAfter, Long itemId) {
+    // Trả id của dòng vừa ghi: id do DB sinh (IDENTITY) nên save đã INSERT ngay và có id.
+    private long writeDebitLedger(long userId, long amount, CreditTxType type, long balanceAfter, Long itemId) {
         int debitAmount = -Math.toIntExact(amount);
-        creditLedgerRepository.save(new CreditLedgerEntry(userId, debitAmount, type, balanceAfter, itemId));
+        CreditLedgerEntry entry =
+                creditLedgerRepository.save(new CreditLedgerEntry(userId, debitAmount, type, balanceAfter, itemId));
+        return entry.getId();
     }
 }

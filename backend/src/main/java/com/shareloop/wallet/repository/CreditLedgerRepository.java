@@ -1,6 +1,7 @@
 package com.shareloop.wallet.repository;
 
 import com.shareloop.wallet.entity.CreditLedgerEntry;
+import com.shareloop.wallet.entity.CreditTxType;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -18,6 +19,9 @@ public interface CreditLedgerRepository extends JpaRepository<CreditLedgerEntry,
      */
     Page<CreditLedgerEntry> findByUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
             Long userId, Instant from, Instant to, Pageable pageable);
+
+    /** Đã có dòng với đúng note này chưa; dùng để chặn hoàn phí AI hai lần cho cùng một dòng gốc. */
+    boolean existsByUserIdAndTypeAndNote(Long userId, CreditTxType type, String note);
 
     /**
      * Tổng Credit cộng vào (amount dương) của mọi người dùng trong khoảng [from, to), gom theo type. DB tự cộng

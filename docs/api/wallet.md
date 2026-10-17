@@ -107,6 +107,8 @@ ConfigService, `CreditService` không tự quyết mức phí.
 | `release(userId, amount, type, itemId)`      | `held_credit` giảm                             | Không               | `POST_FEE`, `EDIT_FEE`                |
 | `chargeHeld(userId, amount, type, itemId)`   | `held_credit` và `credit_balance` cùng giảm    | Có, amount âm       | `POST_FEE`, `EDIT_FEE`                |
 | `spend(userId, amount, type, itemId)`        | `credit_balance` giảm (chỉ từ phần khả dụng)   | Có, amount âm       | `RENEW_FEE`, `BOOST_FEE`, `AI_SEARCH_FEE` |
+| `chargeAiSearch(userId)` → `long` ledgerId   | `credit_balance` giảm `ai_search_fee` (tự đọc ConfigService, chỉ từ phần khả dụng) | Có, amount âm | `AI_SEARCH_FEE` |
+| `refundAiSearch(userId, ledgerId)`           | `credit_balance` tăng lại đúng số đã trừ ở dòng `ledgerId` | Có, amount dương, note `Hoàn phí AI #<ledgerId>` | `AI_SEARCH_FEE` |
 | `lockWalletRow(userId)`                      | Không đổi, chỉ khoá dòng `users` tới hết transaction của người gọi | Không | -                       |
 | `getWallet(userId)`                          | Không đổi, đọc không khoá                      | Không               | -                                     |
 | `topUp(userId, paymentOrderId)`              | Đơn PENDING → SUCCESS, `credit_balance` tăng, `has_topped_up = true`; đơn đã SUCCESS thì không đổi gì, trả ví hiện tại | Có, amount dương, kèm `payment_order_id` | `TOP_UP` |
@@ -115,6 +117,10 @@ ConfigService, `CreditService` không tự quyết mức phí.
 
 `topUp` khoá dòng `users` rồi mới khoá dòng `payment_orders` (thứ tự cố định để tránh deadlock) và trả `WalletResponse`.
 Người gọi hiện tại: `PaymentService` (xác nhận giả lập); sau này là VNPay IPN.
+
+Phí AI (#121, người gọi: search): gọi `chargeAiSearch` trước khi gọi AI và giữ `ledgerId` trả về; AI lỗi thì gọi
+`refundAiSearch(userId, ledgerId)`. Dòng gốc không có, của người khác hoặc không phải dòng trừ phí AI → `WALLET_AI_FEE_NOT_FOUND`
+(404); đã hoàn rồi → `WALLET_AI_FEE_ALREADY_REFUNDED` (409). Hoàn khoá dòng `users` trước khi kiểm nên không hoàn hai lần.
 
 Truyền `type` ngoài danh sách của hàm là lỗi lập trình: ném `IllegalArgumentException`, không phải mã lỗi trên.
 
