@@ -23,6 +23,7 @@ import com.shareloop.user.entity.User;
 import com.shareloop.user.entity.UserStatus;
 import com.shareloop.user.mapper.UserMapper;
 import com.shareloop.user.repository.UserRepository;
+import java.time.Clock;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,7 +66,15 @@ class AuthServiceTest {
     @BeforeEach
     void createService() {
         service = new AuthService(
-                userRepository, passwordEncoder, jwtService, new UserMapper(), otpService, configService, TTL_MINUTES);
+                userRepository,
+                passwordEncoder,
+                jwtService,
+                new UserMapper(),
+                otpService,
+                configService,
+                new DisposableEmailDomains(),
+                Clock.systemUTC(),
+                TTL_MINUTES);
     }
 
     @Test

@@ -19,6 +19,9 @@ import com.shareloop.user.entity.User;
 import com.shareloop.user.entity.UserStatus;
 import com.shareloop.user.mapper.UserMapper;
 import com.shareloop.user.repository.UserRepository;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,6 +36,8 @@ public class AuthService {
     private static final String TOKEN_TYPE = "Bearer";
     private static final long SECONDS_PER_MINUTE = 60;
     private static final String VIETNAM_COUNTRY_PREFIX = "+84";
+    // FR-10, C30: cửa sổ đếm tài khoản theo IP là 24 giờ, đã nằm trong chính tên khoá accounts_per_ip_24h.
+    private static final long IP_LIMIT_WINDOW_HOURS = 24;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -40,6 +45,8 @@ public class AuthService {
     private final UserMapper userMapper;
     private final OtpService otpService;
     private final ConfigService configService;
+    private final DisposableEmailDomains disposableEmailDomains;
+    private final Clock clock;
     private final long jwtTtlMinutes;
 
     public AuthService(
@@ -49,6 +56,8 @@ public class AuthService {
             UserMapper userMapper,
             OtpService otpService,
             ConfigService configService,
+            DisposableEmailDomains disposableEmailDomains,
+            Clock clock,
             @Value("${app.jwt.ttl-minutes}") long jwtTtlMinutes) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -56,6 +65,8 @@ public class AuthService {
         this.userMapper = userMapper;
         this.otpService = otpService;
         this.configService = configService;
+        this.disposableEmailDomains = disposableEmailDomains;
+        this.clock = clock;
         this.jwtTtlMinutes = jwtTtlMinutes;
     }
 
@@ -77,11 +88,17 @@ public class AuthService {
      * Đăng ký tài khoản và gửi OTP về email (FR-01, FR-02). Email còn PENDING_VERIFICATION thì cập nhật thông tin
      * rồi cấp OTP mới (vẫn theo cooldown).
      *
-     * @throws BusinessException AUTH_EMAIL_ALREADY_REGISTERED, AUTH_PHONE_ALREADY_USED, AUTH_OTP_RESEND_TOO_SOON
+     * <p>Chống tạo nhiều tài khoản (SRS 5.3): email dùng một lần bị chặn (FR-04); tạo tài khoản MỚI thì IP đăng ký
+     * phải có ít hơn accounts_per_ip_24h tài khoản trong 24 giờ qua (FR-10). Đăng ký lại email đang PENDING không tạo
+     * tài khoản mới nên không xét IP.
+     *
+     * @throws BusinessException AUTH_EMAIL_DOMAIN_NOT_ALLOWED, AUTH_TOO_MANY_ACCOUNTS_FROM_IP,
+     *     AUTH_EMAIL_ALREADY_REGISTERED, AUTH_PHONE_ALREADY_USED, AUTH_OTP_RESEND_TOO_SOON
      */
     @Transactional // mở transaction ghi: lưu user và OTP cùng lúc, lỗi giữa chừng thì hoàn tác hết
     public OtpSentResponse register(RegisterRequest request, String registrationIp) {
         String email = normalizeEmail(request.email());
+        checkEmailNotDisposable(email);
         String phone = normalizePhone(request.phone());
         String fullName = request.fullName().trim();
         String passwordHash = passwordEncoder.encode(request.password());
@@ -97,6 +114,7 @@ public class AuthService {
             user = existingUser.get();
             user.updatePendingRegistration(passwordHash, fullName, phone);
         } else {
+            checkIpUnderAccountLimit(registrationIp);
             user = new User(email, passwordHash, fullName, phone, false, UserStatus.PENDING_VERIFICATION);
             user.recordRegistrationIp(registrationIp);
             userRepository.save(user);
@@ -217,6 +235,25 @@ public class AuthService {
 
     private Optional<User> findPendingUser(String email) {
         return userRepository.findByEmail(email).filter(user -> user.getStatus() == UserStatus.PENDING_VERIFICATION);
+    }
+
+    // field = "email" để FE hiện lỗi ngay dưới ô email.
+    private void checkEmailNotDisposable(String email) {
+        if (disposableEmailDomains.isDisposable(email)) {
+            throw new BusinessException(AuthErrorCode.AUTH_EMAIL_DOMAIN_NOT_ALLOWED, null, "email", null);
+        }
+    }
+
+    // Không lấy được IP (null, ví dụ khi gọi thẳng service) thì không có gì để đếm, bỏ qua kiểm tra.
+    private void checkIpUnderAccountLimit(String registrationIp) {
+        if (registrationIp == null || registrationIp.isBlank()) {
+            return;
+        }
+        Instant since = clock.instant().minus(IP_LIMIT_WINDOW_HOURS, ChronoUnit.HOURS);
+        long accountsFromIp = userRepository.countByRegistrationIpAndCreatedAtAfter(registrationIp, since);
+        if (accountsFromIp >= configService.getInt(ConfigKey.ACCOUNTS_PER_IP_24H)) {
+            throw new BusinessException(AuthErrorCode.AUTH_TOO_MANY_ACCOUNTS_FROM_IP);
+        }
     }
 
     private void checkPhoneNotUsedByActiveAccount(String phone) {
