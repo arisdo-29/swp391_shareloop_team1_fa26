@@ -17,4 +17,9 @@ public class RequestQueryService {
     public boolean hasReservedOrHigherRequest(long itemId) {
         return repository.hasReservedOrHigherRequest(itemId);
     }
+
+    @Transactional(readOnly = true)
+    public boolean hasActiveDelivery(long userId) {
+        return repository.hasActiveDelivery(userId);
+    }
 }

@@ -63,6 +63,12 @@ public class User extends BaseEntity {
     @Column(name = "registration_ip", length = 45)
     private String registrationIp;
 
+    @Column(name = "pending_phone", length = 15)
+    private String pendingPhone;
+
+    @Column(name = "phone_changed_at")
+    private Instant phoneChangedAt;
+
     protected User() {}
 
     public User(String email, String passwordHash, String fullName, String phone, boolean admin, UserStatus status) {
@@ -172,5 +178,28 @@ public class User extends BaseEntity {
     /** Đổi mật khẩu (FR-08). Chỉ nhận bản băm BCrypt, không bao giờ nhận mật khẩu gốc. */
     public void changePasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
+    }
+
+    public String getPendingPhone() {
+        return pendingPhone;
+    }
+
+    public void setPendingPhone(String pendingPhone) {
+        this.pendingPhone = pendingPhone;
+    }
+
+    public Instant getPhoneChangedAt() {
+        return phoneChangedAt;
+    }
+
+    public void setPhoneChangedAt(Instant phoneChangedAt) {
+        this.phoneChangedAt = phoneChangedAt;
+    }
+
+    /** Đổi số điện thoại (FR-07, BR-U10). Cập nhật số mới, lưu mốc đổi và xoá pending_phone. */
+    public void changePhone(String newPhone, Instant changedAt) {
+        this.phone = newPhone;
+        this.phoneChangedAt = changedAt;
+        this.pendingPhone = null;
     }
 }
