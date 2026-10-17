@@ -3,21 +3,15 @@ const PBKDF2_ITERATIONS = 120000;
 
 export const passwordRules = {
   required: 'Vui lòng nhập mật khẩu.',
-  length: 'Mật khẩu mới phải có từ 8–32 ký tự.',
-  complexity: 'Mật khẩu phải có ít nhất 1 chữ hoa, 1 chữ thường, 1 số và 1 ký tự đặc biệt.',
-  whitespace: 'Mật khẩu không được có khoảng trắng ở đầu hoặc cuối.',
+  length: 'Mật khẩu phải có từ 8–64 ký tự.',
   different: 'Mật khẩu mới không được trùng với mật khẩu hiện tại.',
   mismatch: 'Mật khẩu xác nhận không khớp.',
 };
 
 export function validatePassword(password: string) {
   const errors: string[] = [];
-  if (!password) errors.push(passwordRules.required);
-  else if (password.trim() !== password) errors.push(passwordRules.whitespace);
-  if (password.length < 8 || password.length > 32) errors.push(passwordRules.length);
-  if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
-    errors.push(passwordRules.complexity);
-  }
+  if (!password.trim()) errors.push(passwordRules.required);
+  else if (password.length < 8 || password.length > 64) errors.push(passwordRules.length);
   return errors;
 }
 
@@ -63,5 +57,9 @@ export function validEmail(email: string) {
 }
 
 export function validVietnamPhone(phone: string) {
-  return /^(?:\+84|84|0)(?:3|5|7|8|9)\d{8}$/.test(phone.replace(/[\s.-]/g, ''));
+  return /^(?:\+84|0)[35789]\d{8}$/.test(phone.replace(/[\s.-]/g, ''));
+}
+
+export function normalizeVietnamPhone(phone: string) {
+  return phone.replace(/[\s.-]/g, '');
 }

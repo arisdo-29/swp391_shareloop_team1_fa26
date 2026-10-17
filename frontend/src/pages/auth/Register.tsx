@@ -2,7 +2,12 @@ import { type FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Alert, Button, Field } from '../../components/ui';
 import { PasswordField } from '../../components/PasswordField';
-import { validEmail, validVietnamPhone, validatePassword } from '../../utils/passwordSecurity';
+import {
+  normalizeVietnamPhone,
+  validEmail,
+  validVietnamPhone,
+  validatePassword,
+} from '../../utils/passwordSecurity';
 import { authApi } from '../../services/authApi';
 import { authErrorMessage } from '../../services/authErrors';
 import type { ApiError } from '../../services/http';
@@ -21,13 +26,15 @@ export function Register() {
     const nextErrors: Record<string, string> = {};
     const trimmedName = name.trim();
     const trimmedEmail = email.trim().toLowerCase();
-    const trimmedPhone = phone.trim();
+    const normalizedPhone = normalizeVietnamPhone(phone.trim());
 
     if (!trimmedName) nextErrors.name = 'Vui lòng nhập họ và tên.';
+    else if (trimmedName.length > 100) nextErrors.name = 'Họ và tên không được vượt quá 100 ký tự.';
     if (!trimmedEmail) nextErrors.email = 'Vui lòng nhập email.';
     else if (!validEmail(trimmedEmail)) nextErrors.email = 'Email không đúng định dạng.';
-    if (!trimmedPhone) nextErrors.phone = 'Vui lòng nhập số điện thoại.';
-    else if (!validVietnamPhone(trimmedPhone)) nextErrors.phone = 'Số điện thoại Việt Nam không hợp lệ.';
+    else if (trimmedEmail.length > 255) nextErrors.email = 'Email không được vượt quá 255 ký tự.';
+    if (!normalizedPhone) nextErrors.phone = 'Vui lòng nhập số điện thoại.';
+    else if (!validVietnamPhone(normalizedPhone)) nextErrors.phone = 'Số điện thoại phải có dạng 0xxxxxxxxx hoặc +84xxxxxxxxx.';
     const passwordErrors = validatePassword(password);
     if (passwordErrors.length) nextErrors.password = passwordErrors[0];
     if (Object.keys(nextErrors).length) {
@@ -42,16 +49,23 @@ export function Register() {
         email: trimmedEmail,
         password,
         fullName: trimmedName,
-        phone: trimmedPhone,
+        phone: normalizedPhone,
       });
       navigate('/verify-email', {
         state: {
           email: result.email || trimmedEmail,
+          otpExpiresInSeconds: result.otpExpiresInSeconds,
           resendCooldownSeconds: result.resendCooldownSeconds,
         },
       });
     } catch (apiError) {
-      setErrors({ form: authErrorMessage(apiError as ApiError) });
+      const error = apiError as ApiError;
+      const field = error.field === 'fullName' ? 'name' : error.field;
+      setErrors(
+        field && ['name', 'email', 'phone', 'password'].includes(field)
+          ? { [field]: authErrorMessage(error) }
+          : { form: authErrorMessage(error) },
+      );
     } finally {
       setProcessing(false);
     }
@@ -75,6 +89,7 @@ export function Register() {
             value={name}
             onChange={(event) => setName(event.target.value)}
             error={errors.name}
+            maxLength={100}
             autoComplete="name"
           />
           <Field
@@ -84,15 +99,17 @@ export function Register() {
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             error={errors.email}
+            maxLength={255}
             autoComplete="email"
           />
           <Field
             required
             label="Số điện thoại"
+            type="tel"
             value={phone}
             onChange={(event) => setPhone(event.target.value)}
             error={errors.phone}
-            placeholder="09xx xxx xxx"
+            placeholder="+84330485296"
             autoComplete="tel"
           />
           <PasswordField

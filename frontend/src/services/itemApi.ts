@@ -1,4 +1,4 @@
-import { http } from './http';
+import { http, type ApiError } from './http';
 
 export const itemApiEndpoints = {
   list: '/api/v1/items',
@@ -30,6 +30,11 @@ export type ApiCondition = 'NEW' | 'LIKE_NEW' | 'GOOD' | 'DEFECTIVE';
 export type OperatingStatus = 'NORMAL' | 'PARTIAL' | 'NOT_WORKING';
 export type ItemStatus = 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'RESERVED' | 'TRADED' | 'EXPIRED';
 
+export function itemErrorMessage(error: unknown, fallback: string): string {
+  const apiError = error as Partial<ApiError>;
+  return typeof apiError.message === 'string' && apiError.message.trim() ? apiError.message : fallback;
+}
+
 export interface CreateItemRequest {
   categoryId: number;
   areaId: number;
@@ -41,11 +46,14 @@ export interface CreateItemRequest {
   defectNote: string | null;
   brand: string | null;
   images: string[];
-  defectImages?: string[];
-  operatingStatus?: OperatingStatus | null;
+  defectImages: string[] | null;
+  operatingStatus: OperatingStatus | null;
 }
 
-export type UpdateItemRequest = Omit<CreateItemRequest, 'images'> & { images?: string[] };
+export type UpdateItemRequest = Omit<CreateItemRequest, 'images' | 'defectImages'> & {
+  images?: string[];
+  defectImages?: string[] | null;
+};
 
 export interface ItemResponse extends CreateItemRequest {
   id: number;
