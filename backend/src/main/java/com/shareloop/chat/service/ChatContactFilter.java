@@ -4,17 +4,24 @@ import com.shareloop.chat.ChatErrorCode;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.moderation.ContactInfoDetector;
 import com.shareloop.moderation.ContactInfoDetector.Match;
+import com.shareloop.setting.dto.LexiconEntry;
+import com.shareloop.setting.dto.LexiconMatch;
+import com.shareloop.setting.service.ConfigService;
+import com.shareloop.setting.service.LexiconMatcher;
 import java.text.Normalizer;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Bộ lọc thông tin liên hệ tầng 1 cho module chat (FR-72, FR-74; BR-C01).
+ * Bộ lọc thông tin liên hệ và từ khoá cấm mức BLOCK tầng 1 cho module chat (FR-72, FR-74, FR-78; BR-C01, BR-A10).
  *
  * <p>Tái sử dụng {@link ContactInfoDetector} và bổ sung phần riêng của chat:
  * nhận diện các chữ số viết bằng chữ tiếng Việt ("không", "một", "hai"...) kể cả viết
  * cách quãng hoặc lẫn lộn chữ số, sau đó áp bộ phát hiện của {@link ContactInfoDetector}.
+ * Đồng thời tích hợp kiểm tra từ khoá cấm mức BLOCK từ {@link LexiconMatcher} (FR-78, BR-A10).
  */
 @Component
 public class ChatContactFilter {
@@ -40,25 +47,83 @@ public class ChatContactFilter {
     private static final Pattern NINE =
             Pattern.compile("(?<=[^a-z0-9]|^)(chin)(?=[^a-z0-9]|$)", Pattern.CASE_INSENSITIVE);
 
+    private final ConfigService configService;
+    private final LexiconMatcher lexiconMatcher;
+
+    public ChatContactFilter() {
+        this(null, null);
+    }
+
+    @Autowired
+    public ChatContactFilter(
+            @Autowired(required = false) ConfigService configService,
+            @Autowired(required = false) LexiconMatcher lexiconMatcher) {
+        this.configService = configService;
+        this.lexiconMatcher = lexiconMatcher != null ? lexiconMatcher : new LexiconMatcher();
+    }
+
     /**
-     * Kiểm tra nội dung tin nhắn. Nếu phát hiện thông tin liên hệ thì ném {@link BusinessException}
+     * Kiểm tra nội dung tin nhắn có vi phạm từ khoá cấm mức BLOCK (FR-78) hoặc thông tin liên hệ (FR-72) hay không.
+     *
+     * @param content          nội dung tin nhắn
+     * @param checkContactInfo có kích hoạt kiểm tra thông tin liên hệ không (chỉ áp dụng trước LogisticsConfirmed)
+     * @return Optional chứa mô tả lý do vi phạm nếu có; rỗng nếu tin nhắn hợp lệ
+     */
+    public Optional<String> checkViolation(String content, boolean checkContactInfo) {
+        if (content == null || content.isBlank()) {
+            return Optional.empty();
+        }
+
+        // 1. Kiểm tra từ khoá cấm mức BLOCK (FR-78, BR-A10)
+        if (configService != null) {
+            List<LexiconEntry> lexicon = configService.lexicon();
+            if (lexicon != null && !lexicon.isEmpty()) {
+                List<LexiconEntry> applicable = lexicon.stream()
+                        .filter(e -> e != null
+                                && (e.scope() == null
+                                        || "CHAT".equalsIgnoreCase(e.scope())
+                                        || "BOTH".equalsIgnoreCase(e.scope())))
+                        .toList();
+                List<LexiconMatch> matches = lexiconMatcher.match(content, applicable);
+                Optional<LexiconMatch> blockMatch = matches.stream()
+                        .filter(m -> "BLOCK".equalsIgnoreCase(m.level()))
+                        .findFirst();
+                if (blockMatch.isPresent()) {
+                    return Optional.of("từ khoá cấm (" + blockMatch.get().keyword() + ")");
+                }
+            }
+        }
+
+        // 2. Kiểm tra thông tin liên hệ nếu trước LogisticsConfirmed (FR-72, BR-C01)
+        if (checkContactInfo) {
+            List<Match> contactMatches = detectContactInfo(content);
+            if (!contactMatches.isEmpty()) {
+                Match first = contactMatches.get(0);
+                String detail =
+                        switch (first.type()) {
+                            case PHONE -> "số điện thoại (" + first.matched() + ")";
+                            case EMAIL -> "địa chỉ email (" + first.matched() + ")";
+                            case URL -> "liên kết web (" + first.matched() + ")";
+                        };
+                return Optional.of("thông tin liên hệ: " + detail);
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    /**
+     * Kiểm tra nội dung tin nhắn. Nếu phát hiện vi phạm thì ném {@link BusinessException}
      * kèm lý do chi tiết theo FR-74.
      *
      * @param content nội dung tin nhắn
-     * @throws BusinessException nếu phát hiện số điện thoại, email hoặc URL
+     * @throws BusinessException nếu phát hiện số điện thoại, email, URL hoặc từ khoá cấm mức BLOCK
      */
     public void validateMessage(String content) {
-        List<Match> violations = detectContactInfo(content);
-        if (!violations.isEmpty()) {
-            Match first = violations.get(0);
-            String detail =
-                    switch (first.type()) {
-                        case PHONE -> "số điện thoại (" + first.matched() + ")";
-                        case EMAIL -> "địa chỉ email (" + first.matched() + ")";
-                        case URL -> "liên kết web (" + first.matched() + ")";
-                    };
+        Optional<String> violation = checkViolation(content, true);
+        if (violation.isPresent()) {
             throw new BusinessException(
-                    ChatErrorCode.CHAT_MESSAGE_BLOCKED, "Tin nhắn bị chặn do chứa thông tin liên hệ: " + detail + ".");
+                    ChatErrorCode.CHAT_MESSAGE_BLOCKED, "Tin nhắn bị chặn do chứa " + violation.get() + ".");
         }
     }
 
