@@ -44,6 +44,8 @@ public class AuthController {
     }
 
     // Lấy IP ở controller để service không phụ thuộc servlet (dễ test hơn).
+    // Dùng getRemoteAddr, không tự đọc X-Forwarded-For: prod bật forward-headers-strategy: framework nên Spring đã
+    // thay remoteAddr bằng IP thật sau proxy; tự đọc header thì client gửi header giả là lách được giới hạn theo IP.
     @Operation(summary = "Đăng ký tài khoản, gửi OTP về email")
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)

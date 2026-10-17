@@ -27,4 +27,10 @@ public interface ItemFeeSnapshot {
 
     // Cột status thuộc module item; listingfee chỉ đọc để kiểm bài còn được gia hạn không, không bao giờ ghi.
     ItemStatus getStatus();
+
+    // Cột category_id thuộc module item; chỉ đọc để hỏi catalog danh mục có cho đẩy bài không.
+    Long getCategoryId();
+
+    // is_active = false: bài đang bị ẩn (do report hoặc Admin), không được đẩy (UC-16).
+    boolean getActive();
 }

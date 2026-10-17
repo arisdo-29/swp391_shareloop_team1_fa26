@@ -14,7 +14,9 @@ public enum ChatErrorCode implements ErrorCode {
     CHAT_MESSAGE_EMPTY(HttpStatus.BAD_REQUEST, "Nội dung tin nhắn không được để trống."),
     CHAT_MESSAGE_BLOCKED(HttpStatus.BAD_REQUEST, "Tin nhắn bị chặn do chứa thông tin liên hệ."),
     CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN(
-            HttpStatus.CONFLICT, "Chỉ được gửi ảnh sau khi hai bên đã chốt lịch hẹn (LOGISTICS_CONFIRMED).");
+            HttpStatus.CONFLICT, "Chỉ được gửi ảnh sau khi hai bên đã chốt lịch hẹn (LOGISTICS_CONFIRMED)."),
+    CHAT_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy bài đăng để chia sẻ thẻ."),
+    CHAT_ITEM_NOT_APPROVED(HttpStatus.BAD_REQUEST, "Chỉ được chia sẻ thẻ của bài đăng đã được duyệt (APPROVED).");
 
     private final HttpStatus status;
     private final String defaultMessage;

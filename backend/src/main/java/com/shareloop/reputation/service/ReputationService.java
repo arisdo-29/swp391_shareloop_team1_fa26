@@ -4,30 +4,70 @@ import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.entity.UserReputation;
 import com.shareloop.reputation.repository.UserReputationRepository;
+import com.shareloop.setting.service.ConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service cửa ngõ của module reputation (Lộ trình 4.7, SRS FR-91, FR-94).
+ * Service cửa ngõ của module reputation (Lộ trình 4.7, SRS FR-91, FR-94, FR-100, BR-U01).
  * Module khác thông báo sự kiện liên quan đến uy tín người dùng qua service này.
  */
 @Service
 public class ReputationService {
 
+    private final ConfigService configService;
     private final UserReputationRepository userReputationRepository;
 
     public ReputationService() {
-        this.userReputationRepository = null;
+        this(null, null);
+    }
+
+    public ReputationService(UserReputationRepository userReputationRepository) {
+        this(null, userReputationRepository);
+    }
+
+    public ReputationService(ConfigService configService) {
+        this(configService, null);
     }
 
     @Autowired
-    public ReputationService(UserReputationRepository userReputationRepository) {
+    public ReputationService(
+            ConfigService configService,
+            @Autowired(required = false) UserReputationRepository userReputationRepository) {
+        this.configService = configService;
         this.userReputationRepository = userReputationRepository;
     }
 
     /**
-     * Lấy hạng tín nhiệm hiện tại của người dùng (Issue #40, #96).
+     * Tính hạng tín nhiệm theo tổng điểm dựa trên ngưỡng cấu hình từ ConfigService (FR-100, BR-U01, Issue #96).
+     *
+     * @param totalPoints tổng điểm tích luỹ
+     * @return hạng tín nhiệm tương ứng (BRONZE, SILVER, GOLD, DIAMOND)
+     */
+    public Rank getRank(int totalPoints) {
+        if (configService == null) {
+            return Rank.BRONZE;
+        }
+
+        int diamond = getThreshold("REPUTATION_DIAMOND_MIN", "reputation_diamond_min", 400);
+        int gold = getThreshold("REPUTATION_GOLD_MIN", "reputation_gold_min", 150);
+        int silver = getThreshold("REPUTATION_SILVER_MIN", "reputation_silver_min", 50);
+
+        if (totalPoints >= diamond) {
+            return Rank.DIAMOND;
+        }
+        if (totalPoints >= gold) {
+            return Rank.GOLD;
+        }
+        if (totalPoints >= silver) {
+            return Rank.SILVER;
+        }
+        return Rank.BRONZE;
+    }
+
+    /**
+     * Lấy hạng tín nhiệm hiện tại của người dùng từ điểm tích luỹ (Issue #40, #96).
      *
      * @param userId id của người dùng
      * @return hạng tín nhiệm (mặc định BRONZE)
@@ -39,7 +79,7 @@ public class ReputationService {
         }
         return userReputationRepository
                 .findById(userId)
-                .map(UserReputation::getRankLevel)
+                .map(user -> getRank(user.getTotalPoints()))
                 .orElse(Rank.BRONZE);
     }
 
@@ -65,18 +105,31 @@ public class ReputationService {
         }
 
         int trustStars = reputation.getTrustStars();
-        Rank rank = reputation.getRankLevel() != null ? reputation.getRankLevel() : Rank.BRONZE;
+        Rank rank = getRank(reputation.getTotalPoints());
         Double asDescribedRate = userReputationRepository.calculateAsDescribedRate(userId);
 
         return new ReputationSummary(userId, trustStars, rank, asDescribedRate);
     }
 
     /**
-     * Ghi nhận sự kiện hoàn thành giao dịch để tính toán điểm tín nhiệm hoặc huy hiệu (Issue #96).
+     * Chữ ký có sẵn để request gọi khi giao dịch chuyển sang COMPLETED (Issue #96).
+     * Thân đầy đủ (cộng điểm, cập nhật sao, tính lại hạng) sẽ được hoàn thiện ở R4.
      *
      * @param requestId id của yêu cầu giao dịch vừa chuyển sang COMPLETED
      */
     public void onCompleted(long requestId) {
-        // Chữ ký service chờ BE4 (@kopslngbtram2110) triển khai chi tiết ở Issue #96
+        // TODO(R4): cộng điểm, ghi log, cập nhật rank
+    }
+
+    private int getThreshold(String upperKey, String lowerKey, int fallback) {
+        try {
+            return configService.getDecimal(upperKey).intValue();
+        } catch (Exception e1) {
+            try {
+                return configService.getDecimal(lowerKey).intValue();
+            } catch (Exception e2) {
+                return fallback;
+            }
+        }
     }
 }

@@ -76,11 +76,16 @@ public class Message {
     }
 
     public Message(Long requestId, Long senderId, MessageKind kind, String content, Long mediaId) {
+        this(requestId, senderId, kind, content, mediaId, null);
+    }
+
+    public Message(Long requestId, Long senderId, MessageKind kind, String content, Long mediaId, Long refItemId) {
         this.requestId = requestId;
         this.senderId = senderId;
         this.kind = kind != null ? kind : MessageKind.TEXT;
         this.content = content;
         this.mediaId = mediaId;
+        this.refItemId = refItemId;
         this.moderation = MessageModeration.PASS;
         this.createdAt = Instant.now();
     }
