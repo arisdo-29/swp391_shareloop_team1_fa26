@@ -51,7 +51,10 @@ public enum ConfigKey {
     PAYMENT_ORDER_EXPIRE_MINUTES("payment_order_expire_minutes", "30"),
     REPUTATION_SILVER_MIN("reputation_silver_min", "50"),
     REPUTATION_GOLD_MIN("reputation_gold_min", "150"),
-    REPUTATION_DIAMOND_MIN("reputation_diamond_min", "400");
+    REPUTATION_DIAMOND_MIN("reputation_diamond_min", "400"),
+    REPUTATION_GIVE_DONOR("reputation_give_donor", "10"),
+    REPUTATION_GIVE_RECEIVER("reputation_give_receiver", "2"),
+    REPUTATION_SWAP_EACH("reputation_swap_each", "6");
 
     private final String key;
     private final String defaultValue;
