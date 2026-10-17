@@ -11,6 +11,13 @@ lỗi theo định dạng thống nhất bên dưới.
 
 POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và gắn ảnh trong một transaction.
 
+## AI sàng lọc sau khi gửi bài
+
+- Sau khi transaction tạo hoặc sửa bài commit thành công, luồng nền gửi nội dung bài đến Groq. Chỉ gửi tiêu đề, mô tả, món mong muốn, danh mục, tình trạng và loại bài; không gửi ảnh hay dữ liệu tài khoản người đăng.
+- Tầng 2 ghi `items.ai_risk` (`LOW`, `MEDIUM`, `HIGH`) và `items.ai_result` đã kiểm tra schema, gồm kết quả, model và thời điểm kiểm. Kết quả nghi vấn có cờ `REVIEW` và lý do cho hàng chờ duyệt. Tầng 2 không đổi trạng thái hay phí bài đăng, và giữ nguyên lý do `REVIEW` của tầng 1 nếu đã có.
+- Khi nhà cung cấp lỗi, quá hạn hoặc trả JSON sai, `ai_risk` vẫn là `UNCHECKED` (giao diện hiện "AI chưa kiểm"); bài vẫn ở hàng chờ duyệt. Mỗi lượt gọi đã thử được ghi `AiUsage` với lần thử, kết quả, thời lượng và model khi có, không ghi nội dung bài hay API key.
+- Model mặc định: `openai/gpt-oss-120b` qua Groq. Đặt `AI_API_KEY` trong môi trường chạy của profile production, không đưa vào Git. `item_ai_timeout_seconds` mặc định 15 giây tổng cộng cho tối đa một lần thử lại; có thể chỉnh `item_ai_retries` bằng cấu hình admin.
+
 ---
 
 ## 1. POST /api/v1/items

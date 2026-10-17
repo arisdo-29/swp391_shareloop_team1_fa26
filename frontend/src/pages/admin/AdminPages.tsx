@@ -280,7 +280,7 @@ export function AdminModeration() {
                   <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
                     <span>#{item.id}</span>
                     <span>Người đăng #{item.donorId}</span>
-                    {item.aiRisk ? <span className="rounded-sm bg-amber-50 px-2 py-1 font-semibold text-warning">Rủi ro: {item.aiRisk}</span> : null}
+                    {item.aiRisk ? <span className="rounded-sm bg-amber-50 px-2 py-1 font-semibold text-warning">{item.aiRisk === 'UNCHECKED' ? 'AI chưa kiểm' : `Rủi ro: ${item.aiRisk}`}</span> : null}
                   </div>
                   <h2 className="mt-2 font-bold">{item.title}</h2>
                   <p className="mt-2 text-xs leading-5 text-text-muted">{item.flagReason || item.moderationFlag || 'Backend không cung cấp lý do gắn cờ.'}</p>
