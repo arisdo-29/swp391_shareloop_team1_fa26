@@ -702,7 +702,7 @@ function nameInitials(name: string): string {
   return lastTwoWords.map((word) => word.charAt(0)).join('').toUpperCase();
 }
 
-function apiDisplayUser(userId: string, name?: string): User {
+function apiDisplayUser(userId: string, name?: string, trustStars?: number, rank?: string): User {
   const apiId = userId.replace(/^api_/, '');
   const fallbackName = userId.startsWith('api_') ? `Người dùng #${apiId}` : 'Người dùng';
   const fallbackInitials = userId.startsWith('api_') ? apiId.slice(0, 2).toUpperCase() : 'ND';
@@ -720,8 +720,8 @@ function apiDisplayUser(userId: string, name?: string): User {
     availableCredit: 0,
     holdCredit: 0,
     rewardPoints: 0,
-    reputationStars: 5,
-    rank: 'Thành viên',
+    reputationStars: typeof trustStars === 'number' ? trustStars : 5,
+    rank: rank ?? 'Thành viên',
     status: 'active',
     role: 'user',
     joinedAt: new Date().toISOString(),
@@ -820,7 +820,12 @@ function RequestPanel({
           {itemRequests.map((request) => {
             const requester =
               data.users.find((entry) => entry.id === request.requesterId) ??
-              apiDisplayUser(request.requesterId, request.requesterName);
+              apiDisplayUser(
+                request.requesterId,
+                request.requesterName,
+                request.requesterTrustStars,
+                request.requesterRank
+              );
             const offeredItem = request.offeredItemId
               ? data.items.find((entry) => entry.id === request.offeredItemId)
               : undefined;
@@ -832,6 +837,30 @@ function RequestPanel({
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <strong className="truncate text-sm">{requester.name}</strong>
+                        {request.requesterTrustStars !== undefined ? (
+                          <span
+                            className="inline-flex items-center gap-0.5 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700"
+                            title="Điểm uy tín TrustStars"
+                          >
+                            ⭐ {request.requesterTrustStars}
+                          </span>
+                        ) : null}
+                        {request.requesterRank ? (
+                          <span
+                            className="rounded bg-sky-50 px-1.5 py-0.5 text-[11px] font-medium text-sky-700"
+                            title="Hạng thành viên"
+                          >
+                            {request.requesterRank}
+                          </span>
+                        ) : null}
+                        {typeof request.requesterAsDescribedRate === 'number' ? (
+                          <span
+                            className="rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700"
+                            title="Tỉ lệ đúng mô tả trong các giao dịch"
+                          >
+                            Đúng mô tả: {Math.round(request.requesterAsDescribedRate * 100)}%
+                          </span>
+                        ) : null}
                         <TypeBadge type={request.type} />
                         <span className="rounded-sm bg-amber-50 px-2 py-1 text-[11px] font-semibold text-warning">
                           {requestStatusLabel[request.status]}
