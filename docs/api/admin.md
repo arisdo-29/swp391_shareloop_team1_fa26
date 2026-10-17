@@ -57,3 +57,58 @@ Xem nhật ký hành động trong hệ thống (FR-115, Issue #117). Chỉ dàn
 | `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
 | `403` | Forbidden | Người dùng không có vai trò Admin |
 
+---
+
+## 2. POST /api/v1/admin/users/{userId}/lock
+
+Khoá tài khoản người dùng và ghi nhật ký hoạt động (FR-107, Issue #116). Chỉ dành cho quản trị viên (Admin). Bắt buộc cung cấp lý do khoá.
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
+- **Path Variable:** `userId` (ID người dùng cần khoá).
+- **Request Body:**
+
+```json
+{
+  "reason": "Nhiều báo cáo lừa đảo đã được xác minh"
+}
+```
+
+- **Thành công:** `200 OK` (không có body).
+- **Mã lỗi:**
+
+| Mã | Ý nghĩa | Mô tả |
+|----|---------|-------|
+| `200` | Thành công | Khoá tài khoản thành công và đã ghi nhật ký |
+| `400` | Bad Request | `VALIDATION_FAILED` (thiếu lý do hoặc vượt quá 500 ký tự) hoặc `USER_CANNOT_LOCK_SELF` (Admin tự khoá chính mình) |
+| `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
+| `403` | Forbidden | Người dùng không có vai trò Admin |
+| `404` | Not Found | `USER_NOT_FOUND`: Người dùng không tồn tại |
+| `409` | Conflict | `USER_ALREADY_LOCKED`: Tài khoản đã bị khoá từ trước |
+
+---
+
+## 3. POST /api/v1/admin/users/{userId}/unlock
+
+Mở khoá tài khoản người dùng và ghi nhật ký hoạt động (FR-107, Issue #116). Chỉ dành cho quản trị viên (Admin). Bắt buộc cung cấp lý do mở khoá.
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
+- **Path Variable:** `userId` (ID người dùng cần mở khoá).
+- **Request Body:**
+
+```json
+{
+  "reason": "Người dùng đã giải trình hợp lệ và hoàn tất cam kết"
+}
+```
+
+- **Thành công:** `200 OK` (không có body).
+- **Mã lỗi:**
+
+| Mã | Ý nghĩa | Mô tả |
+|----|---------|-------|
+| `200` | Thành công | Mở khoá tài khoản thành công và đã ghi nhật ký |
+| `400` | Bad Request | `VALIDATION_FAILED`: Thiếu lý do hoặc lý do vượt quá 500 ký tự |
+| `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
+| `403` | Forbidden | Người dùng không có vai trò Admin |
+| `404` | Not Found | `USER_NOT_FOUND`: Người dùng không tồn tại |
+| `409` | Conflict | `USER_NOT_LOCKED`: Tài khoản đang hoạt động bình thường, không cần mở khoá |
