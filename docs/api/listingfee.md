@@ -4,8 +4,9 @@ Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian 
 lỗi theo định dạng thống nhất (xem `wallet.md`).
 
 Người sở hữu: BE1. Module giữ, trừ, nhả phí đăng bài và phí sửa bài (C01, C02, C14, C14b), đặt thời hạn hiển thị
-`expire_at` khi duyệt lần đầu, và gia hạn bài (C16). Mọi mức phí và số ngày đọc từ ConfigService (`post_fee`,
-`edit_fee`, `renew_fee`, `post_display_days`, `post_display_days_gold`), không viết cứng. Có một job nền chuyển bài
+`expire_at` khi duyệt lần đầu, gia hạn bài (C16) và đẩy bài (C15). Mọi mức phí và số ngày đọc từ ConfigService
+(`post_fee`, `edit_fee`, `renew_fee`, `post_display_days`, `post_display_days_gold`, `boost_fee`, `boost_days`,
+`boost_max_days`), không viết cứng. Có một job nền chuyển bài
 quá hạn sang `EXPIRED` (mục "Job nền"). Đổi tiền chỉ qua `wallet.CreditService`.
 
 ## GET /api/v1/items/{id}/edit-quote
@@ -87,18 +88,52 @@ Gia hạn bài của chính mình (F08 bước 1, FR-28, BR-D03, BR-P12). Trừ 
 | `fee`      | number | Số Credit vừa trừ; `0` khi Admin cấu hình `renew_fee = 0`     |
 | `expireAt` | string | Hạn hiển thị mới, ISO-8601 UTC                                |
 
+## POST /api/v1/items/{id}/boost
+
+Đẩy bài của chính mình thêm một gói (C15, FR-36, BR-P08; SRS 4.6, UC-16). Trừ phí ngay (không giữ chỗ), kéo dài
+`boosted_until`. Không đổi status, không qua kiểm duyệt lại.
+
+- Xác thực: **bắt buộc** Bearer Token. Id người dùng lấy từ token, không nhận từ client.
+- Tham số đường dẫn: `id` là id bài đăng. Không có body; mỗi lần gọi là **một gói**, muốn thêm thì gọi tiếp.
+- Điều kiện: người gọi là chủ bài; bài `APPROVED` và không bị ẩn (`is_active = true`); danh mục có `boostable = true`.
+- Thời gian: `boosted_until = max(now, boosted_until cũ) + boost_days` ngày (mặc định 3). Kết quả phải
+  `≤ now + boost_max_days` (mặc định 14) và `≤ expire_at`; vượt thì từ chối và **không** trừ tiền.
+- Phí: `boost_fee` (mặc định 5 Credit), trừ từ số dư khả dụng và ghi `credit_ledger` loại `BOOST_FEE` gắn `item_id`.
+  Phí cấu hình bằng 0 thì không đụng ví. Không hoàn phí khi bài bị gỡ, bị ẩn hay hết hạn (SRS 4.6).
+- Thành công: `200`, một `BoostResponse`.
+- Lỗi: `401 UNAUTHORIZED`; `402 WALLET_INSUFFICIENT_BALANCE`; `403 LISTINGFEE_NOT_OWNER`; `404 LISTINGFEE_ITEM_NOT_FOUND`;
+  `404 CATALOG_CATEGORY_NOT_FOUND` khi danh mục của bài đã bị ẩn; `409 LISTINGFEE_BOOST_NOT_ALLOWED`,
+  `409 LISTINGFEE_CATEGORY_NOT_BOOSTABLE`, `409 LISTINGFEE_BOOST_LIMIT_EXCEEDED`, `409 LISTINGFEE_BOOST_EXCEEDS_EXPIRY`.
+- Xếp bài đang đẩy lên đầu kết quả tìm kiếm thuộc module item/search, chưa làm ở endpoint này.
+
+```json
+{ "itemId": 31, "boostedUntil": "2026-10-20T08:00:00Z", "creditBalance": 15 }
+```
+
+## BoostResponse
+
+| Trường          | Kiểu   | Ý nghĩa                                                 |
+|-----------------|--------|---------------------------------------------------------|
+| `itemId`        | number | Bài vừa đẩy                                             |
+| `boostedUntil`  | string | Thời điểm hết đẩy mới, ISO-8601 UTC                     |
+| `creditBalance` | number | Số dư Credit (`credit_balance`) của chủ bài sau khi trừ |
+
 ## Mã lỗi
 
 | code                          | HTTP | Khi nào                                                      | Lộ ra qua API                 |
 |-------------------------------|------|--------------------------------------------------------------|-------------------------------|
-| `LISTINGFEE_ITEM_NOT_FOUND`   | 404  | Không có bài hoặc bài đã xoá mềm                             | `GET /items/{id}/edit-quote`, `POST /items/{id}/renew` |
-| `LISTINGFEE_NOT_OWNER`        | 403  | Người gọi không phải chủ bài                                 | `GET /items/{id}/edit-quote`, `POST /items/{id}/renew` |
+| `LISTINGFEE_ITEM_NOT_FOUND`   | 404  | Không có bài hoặc bài đã xoá mềm                             | `GET /items/{id}/edit-quote`, `POST /items/{id}/renew`, `POST /items/{id}/boost` |
+| `LISTINGFEE_NOT_OWNER`        | 403  | Người gọi không phải chủ bài                                 | `GET /items/{id}/edit-quote`, `POST /items/{id}/renew`, `POST /items/{id}/boost` |
 | `LISTINGFEE_RENEW_NOT_ALLOWED`| 409  | Gia hạn bài không ở trạng thái `APPROVED`                    | `POST /items/{id}/renew`      |
+| `LISTINGFEE_BOOST_NOT_ALLOWED`| 409  | Đẩy bài không `APPROVED` hoặc đang bị ẩn                     | `POST /items/{id}/boost`      |
+| `LISTINGFEE_CATEGORY_NOT_BOOSTABLE` | 409 | Danh mục của bài có `boostable = false`                | `POST /items/{id}/boost`      |
+| `LISTINGFEE_BOOST_LIMIT_EXCEEDED`   | 409 | `boosted_until` mới vượt `now + boost_max_days`        | `POST /items/{id}/boost`      |
+| `LISTINGFEE_BOOST_EXCEEDS_EXPIRY`   | 409 | `boosted_until` mới vượt `expire_at` của bài           | `POST /items/{id}/boost`      |
 | `LISTINGFEE_ALREADY_HELD`     | 409  | Tạo bài mà bài đã có khoản phí đang giữ                      | qua API của module gọi        |
 | `LISTINGFEE_NOTHING_HELD`     | 409  | Duyệt / từ chối / xoá mà bài không có khoản phí đang giữ     | qua API của module gọi        |
 | `LISTINGFEE_EDIT_NOT_ALLOWED` | 409  | Dự phòng; hiện chưa dùng (kiểm status bài là việc của item)  | -                             |
 
-Không đủ Credit khi giữ phí hoặc khi gia hạn: `402 WALLET_INSUFFICIENT_BALANCE` (xem `wallet.md`).
+Không đủ Credit khi giữ phí, gia hạn hoặc đẩy bài: `402 WALLET_INSUFFICIENT_BALANCE` (xem `wallet.md`).
 
 ## Hàm nội bộ `PostFeeService` (cho module khác, không phải endpoint)
 

@@ -138,6 +138,11 @@ public class ItemFee extends SliceAudit {
         this.expireAt = newExpireAt;
     }
 
+    /** Kéo dài thời gian đẩy bài (C15, FR-36); người gọi đã tính mốc mới, đã kiểm giới hạn và đã thu phí. */
+    public void extendBoostedUntil(Instant newBoostedUntil) {
+        this.boostedUntil = newBoostedUntil;
+    }
+
     private void requireHeld() {
         if (feeState != ItemFeeState.HELD) {
             throw new BusinessException(ListingFeeErrorCode.LISTINGFEE_NOTHING_HELD);
