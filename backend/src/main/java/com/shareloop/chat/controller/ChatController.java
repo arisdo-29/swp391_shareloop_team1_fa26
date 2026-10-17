@@ -4,6 +4,7 @@ import com.shareloop.chat.dto.MessageResponse;
 import com.shareloop.chat.dto.SendMessageRequest;
 import com.shareloop.chat.service.ChatService;
 import com.shareloop.common.security.CurrentUserId;
+import com.shareloop.item.dto.ItemCardDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -19,11 +20,11 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller xử lý gửi và nhận tin nhắn theo chu kỳ polling trong giao dịch (FR-68, BR-C03).
+ * Controller xử lý gửi, nhận tin nhắn và lấy thẻ sản phẩm ghim trong giao dịch (FR-68, FR-69, FR-70, BR-C02, BR-C03).
  */
 @Tag(name = "Chat", description = "Quản lý tin nhắn trao đổi trong giao dịch")
 @RestController
-@RequestMapping("/api/v1/requests/{requestId}/messages")
+@RequestMapping("/api/v1/requests/{requestId}")
 public class ChatController {
 
     private final ChatService chatService;
@@ -36,7 +37,7 @@ public class ChatController {
      * Gửi tin nhắn mới trong cuộc trò chuyện của yêu cầu giao dịch.
      */
     @Operation(summary = "Gửi tin nhắn mới trong cuộc trò chuyện")
-    @PostMapping
+    @PostMapping("/messages")
     @ResponseStatus(HttpStatus.CREATED)
     public MessageResponse sendMessage(
             @PathVariable Long requestId,
@@ -49,11 +50,20 @@ public class ChatController {
      * Lấy danh sách tin nhắn của cuộc trò chuyện (hỗ trợ polling tin mới qua afterId).
      */
     @Operation(summary = "Lấy danh sách tin nhắn trong cuộc trò chuyện (hỗ trợ polling)")
-    @GetMapping
+    @GetMapping("/messages")
     public List<MessageResponse> getMessages(
             @PathVariable Long requestId,
             @CurrentUserId Long currentUserId,
             @RequestParam(required = false) Long afterId) {
         return chatService.getMessages(requestId, currentUserId, afterId);
+    }
+
+    /**
+     * Lấy danh sách thẻ sản phẩm ghim ở đầu khung chat (FR-69, BR-C02).
+     */
+    @Operation(summary = "Lấy danh sách thẻ sản phẩm ghim ở đầu khung chat")
+    @GetMapping({"/pinned-items", "/messages/pinned-items"})
+    public List<ItemCardDto> getPinnedItems(@PathVariable Long requestId, @CurrentUserId Long currentUserId) {
+        return chatService.getPinnedItems(requestId, currentUserId);
     }
 }

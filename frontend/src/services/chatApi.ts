@@ -1,5 +1,14 @@
 import { http } from './http';
 
+export interface ItemCardResponse {
+  id: number;
+  title: string;
+  offerType: 'GIVE' | 'SWAP';
+  status: string;
+  imageUrl?: string | null;
+  donorId: number;
+}
+
 export interface MessageResponse {
   id: number;
   requestId: number;
@@ -8,6 +17,7 @@ export interface MessageResponse {
   content: string;
   mediaId?: number | null;
   refItemId?: number | null;
+  itemCard?: ItemCardResponse | null;
   offerStatus?: string | null;
   moderation?: string | null;
   blockedReason?: string | null;
@@ -15,7 +25,9 @@ export interface MessageResponse {
 }
 
 export interface SendMessageRequest {
-  content: string;
+  content?: string;
+  mediaId?: number | null;
+  refItemId?: number | null;
 }
 
 export const chatApi = {
@@ -33,5 +45,17 @@ export const chatApi = {
       { params: { currentUserId } },
     );
     return data;
+  },
+
+  async getPinnedItems(requestId: number, currentUserId: number) {
+    const { data } = await http.get<ItemCardResponse[]>(
+      `/api/v1/requests/${requestId}/pinned-items`,
+      { params: { currentUserId } },
+    );
+    return data;
+  },
+
+  async sendItemCard(requestId: number, currentUserId: number, refItemId: number, content?: string) {
+    return this.send(requestId, currentUserId, { refItemId, content: content ?? '' });
   },
 };
