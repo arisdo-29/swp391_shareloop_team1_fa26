@@ -36,4 +36,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("now") Instant now,
             @Param("afterId") long afterId,
             Limit limit);
+
+    /**
+     * Danh sách ID của các quản trị viên đang hoạt động (dùng cho gửi thông báo cảnh báo hệ thống).
+     */
+    @Query("select u.id from User u where u.admin = true and u.isActive = true")
+    List<Long> findAdminIds();
 }

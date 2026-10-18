@@ -170,4 +170,12 @@ public class UserService {
                 .map(user -> !user.isActive() || user.getStatus() == UserStatus.BANNED)
                 .orElse(false);
     }
+
+    /**
+     * Lấy danh sách ID của các quản trị viên đang hoạt động trong hệ thống.
+     */
+    @Transactional(readOnly = true)
+    public List<Long> findAdminIds() {
+        return userRepository.findAdminIds();
+    }
 }

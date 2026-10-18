@@ -3,7 +3,7 @@
 Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất bên dưới.
 
-Người sở hữu: BE3 (@dwargon73-sketch). FR-68, FR-69, FR-70, FR-72, FR-75; BR-C01, BR-C02, BR-C03, BR-C05, BR-C07.
+Người sở hữu: BE3 (@dwargon73-sketch). FR-68, FR-69, FR-70, FR-72, FR-75, FR-76, FR-78; BR-C01, BR-C02, BR-C03, BR-C04, BR-C05, BR-C07, BR-A10.
 
 ---
 
@@ -61,7 +61,7 @@ Gửi tin nhắn mới (văn bản, ảnh hoặc chia sẻ thẻ bài đăng) tr
 - **Lỗi:**
   - `400 BAD_REQUEST` (`CHAT_MESSAGE_EMPTY`): Cả nội dung tin nhắn, ảnh và mã thẻ bài đều rỗng.
   - `400 BAD_REQUEST` (`CHAT_ITEM_NOT_APPROVED`): Chia sẻ thẻ của bài đăng chưa được duyệt (`APPROVED`) (FR-70, BR-C07).
-  - `400 BAD_REQUEST` (`CHAT_MESSAGE_BLOCKED`): Tin nhắn bị chặn do chứa thông tin liên hệ (số điện thoại viết bằng số hoặc bằng chữ, email, liên kết) (FR-72, FR-74; BR-C01).
+  - `400 BAD_REQUEST` (`CHAT_MESSAGE_BLOCKED`): Tin nhắn bị chặn do chứa thông tin liên hệ (trước `LOGISTICS_CONFIRMED`) hoặc chứa từ khoá cấm mức `BLOCK` (FR-72, FR-74, FR-78; BR-C01, BR-A10). Nếu một giao dịch có từ 3 lần vi phạm trở lên sẽ tự động gửi cảnh báo tới Admin (FR-76, BR-C04).
   - `401 UNAUTHORIZED`: Chưa đăng nhập.
   - `403 FORBIDDEN` (`CHAT_FORBIDDEN`): Người dùng không thuộc hai bên của giao dịch.
   - `404 NOT_FOUND` (`CHAT_REQUEST_NOT_FOUND`): Yêu cầu giao dịch không tồn tại.
@@ -73,7 +73,7 @@ Gửi tin nhắn mới (văn bản, ảnh hoặc chia sẻ thẻ bài đăng) tr
 
 ## 2. GET /api/v1/requests/{requestId}/messages
 
-Lấy danh sách tin nhắn trong khung chat (hỗ trợ hỏi tin mới theo chu kỳ - polling) (FR-68, UC-24). Các tin nhắn có `refItemId` sẽ được backend tự động ghép thông tin thẻ bài hiện tại qua trường `itemCard`.
+Lấy danh sách tin nhắn trong khung chat (hỗ trợ hỏi tin mới theo chu kỳ - polling) (FR-68, UC-24). Các tin nhắn có `refItemId` sẽ được backend tự động ghép thông tin thẻ bài hiện tại qua trường `itemCard`. Chỉ trả về các tin nhắn hợp lệ (`moderation = PASS`), các tin nhắn bị chặn được lưu để kiểm duyệt và cảnh báo Admin, không trả về trong khung chat.
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT). Chỉ 2 bên của yêu cầu giao dịch.
 - **Điều kiện:** Yêu cầu giao dịch phải ở trạng thái từ `RESERVED` trở lên.
