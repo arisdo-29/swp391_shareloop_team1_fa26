@@ -43,7 +43,7 @@ const sections = [
       ['settings', 'Phí & hạn mức', '/admin/settings/fees'],
     ],
   },
-  { label: 'Hệ thống', items: [['history', 'Audit Log', '/admin/audit-logs']] },
+  { label: 'Hệ thống', items: [['history', 'Nhật ký hành động', '/admin/audit-logs']] },
 ] as const;
 export function AdminLayout() {
   const [open, setOpen] = useState(false);

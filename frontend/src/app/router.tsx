@@ -63,6 +63,7 @@ export const router = createBrowserRouter([
           { path: '/activities', element: <Activities /> },
           { path: '/messages', element: <Messages /> },
           { path: '/credit', element: <Credit /> },
+          { path: '/wallet/topup/mock-checkout', element: <Credit /> },
         ],
       },
       {

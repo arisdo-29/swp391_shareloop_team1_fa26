@@ -10,6 +10,7 @@ import * as Icons from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
 import type { Item, ItemCondition, ItemType, TransactionStatus, User } from '../types/domain';
 import { conditionLabel, txLabel } from '../utils/formatting';
+import { resolveMediaUrl } from '../services/mediaUrl';
 
 const iconMap = {
   search: Icons.MagnifyingGlass,
@@ -206,8 +207,15 @@ export function StatusBadge({
 }: {
   status: TransactionStatus | Item['status'] | User['status'];
 }) {
+  const backendItemLabel: Partial<Record<Item['status'], string>> = {
+    RESERVED: 'Đã giữ chỗ',
+    TRADED: 'Đã trao đổi',
+    EXPIRED: 'Hết hạn',
+  };
   const label =
-    status in txLabel
+    status in backendItemLabel
+      ? backendItemLabel[status as Item['status']]
+      : status in txLabel
       ? txLabel[status as TransactionStatus]
       : status === 'approved' || status === 'APPROVED'
         ? 'Đã duyệt'
@@ -229,7 +237,7 @@ export function StatusBadge({
                     ? 'Tạm khóa'
                     : 'Hoạt động';
   const danger = ['rejected', 'REJECTED', 'VIOLATION', 'removed', 'locked', 'DISPUTED', 'CANCELLED'].includes(status);
-  const ok = ['approved', 'APPROVED', 'active', 'COMPLETED'].includes(status);
+  const ok = ['approved', 'APPROVED', 'active', 'COMPLETED', 'TRADED'].includes(status);
   return (
     <span
       className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-[11px] font-semibold ${danger ? 'bg-red-50 text-error' : ok ? 'bg-emerald-50 text-success' : 'bg-amber-50 text-warning'}`}
@@ -482,10 +490,18 @@ export function Avatar({
   size?: 'sm' | 'md' | 'lg';
 }) {
   const cls = { sm: 'size-8 text-[11px]', md: 'size-10 text-xs', lg: 'size-14 text-base' };
-  return user.avatarUrl ? (
+  const avatarSrc = resolveMediaUrl(user.avatarUrl);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [avatarSrc]);
+
+  return avatarSrc && !failed ? (
     <img
-      src={user.avatarUrl}
-      alt={`Ảnh đại diện của ${user.name}`}
+      src={avatarSrc}
+      alt=""
+      onError={() => setFailed(true)}
       className={`shrink-0 rounded-md object-cover ${cls[size]}`}
     />
   ) : (
@@ -493,7 +509,7 @@ export function Avatar({
       aria-label={user.name}
       className={`inline-flex shrink-0 items-center justify-center rounded-md bg-primary text-white font-bold ${cls[size]}`}
     >
-      {user.avatarInitials}
+      {user.avatarInitials.trim() ? user.avatarInitials : <Icon name="user" className="size-1/2" />}
     </span>
   );
 }

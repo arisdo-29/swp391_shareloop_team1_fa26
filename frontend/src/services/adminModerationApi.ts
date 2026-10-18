@@ -4,6 +4,8 @@ export interface ReviewQueueItem {
   id: number;
   donorId: number;
   title: string;
+  images?: string[] | null;
+  defectImages?: string[] | null;
   aiRisk?: string | null;
   moderationFlag?: string | null;
   flagReason?: string | null;

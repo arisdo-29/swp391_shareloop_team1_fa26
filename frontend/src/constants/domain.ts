@@ -43,7 +43,7 @@ export const DISTRICTS = [
   'TP Thủ Đức',
 ] as const;
 
-export const CONDITIONS = ['new', 'good', 'used'] as const;
+export const CONDITIONS = ['NEW', 'LIKE_NEW', 'GOOD', 'DEFECTIVE'] as const;
 
 export const ADMIN_ROUTES = [
   '/admin/moderation',

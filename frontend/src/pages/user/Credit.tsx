@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type Dispatch } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState, type Dispatch } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
 import { Alert, Button, Field, Icon, PageHeader } from '../../components/ui';
@@ -8,13 +8,29 @@ import { formatCredit, formatVnd } from '../../utils/formatting';
 import { CREDIT_TO_VND } from '../../utils/credit';
 import { useWallet } from '../../app/useWallet';
 import { walletApi, type WalletTransactionResponse } from '../../services/walletApi';
-import { paymentApi, type TopUpConfirmResponse, type TopUpOrderResponse } from '../../services/paymentApi';
+import {
+  paymentApi,
+  type PaymentOrderStatus,
+  type PaymentProvider,
+  type TopUpConfirmResponse,
+  type TopUpOrderResponse,
+} from '../../services/paymentApi';
 import type { ApiError } from '../../services/http';
+import {
+  clearPendingTopUp,
+  loadPendingTopUp,
+  paymentRedirectUrl,
+  returnOrderCode,
+  savePendingTopUp,
+  type PendingTopUpSession,
+} from '../../services/topUpSession';
 
 const packages = [1, 2, 5, 10, 20];
-const mockPaymentEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_PAYMENT_MOCK === 'true';
+const mockPaymentEnabled = (import.meta.env.DEV || import.meta.env.MODE === 'staging')
+  && import.meta.env.VITE_ENABLE_MOCK_TOPUP === 'true';
 type Step = 'select' | 'qr' | 'pending';
 type HistoryFilter = 'all' | 'topup' | 'spend';
+type ReturnState = 'idle' | 'checking' | 'success' | 'pending';
 
 const filterTypes: Record<Exclude<HistoryFilter, 'all'>, CreditHistoryType[]> = {
   topup: ['TOPUP'],
@@ -51,6 +67,20 @@ const walletTransactionLabels: Record<WalletTransactionResponse['type'], string>
   ADMIN_ADJUST: 'Điều chỉnh bởi quản trị viên',
 };
 
+const paymentStatusLabels: Record<PaymentOrderStatus, string> = {
+  PENDING: 'Đang chờ thanh toán',
+  SUCCESS: 'Đã thanh toán',
+  FAILED: 'Thanh toán thất bại',
+  EXPIRED: 'Đơn đã hết hạn',
+};
+
+const paymentProviderLabels: Record<PaymentProvider, string> = {
+  VNPAY: 'VNPAY',
+  MOCK: 'Thanh toán nội bộ',
+};
+
+const topUpAmountInvalidMessage = 'Số tiền nạp chưa hợp lệ. Theo giá trị mặc định, số tiền cần chia hết cho 1.000đ và tối thiểu 10.000đ; các mức này có thể thay đổi theo cấu hình hệ thống.';
+
 function toCreditHistory(entry: WalletTransactionResponse, userId: string): CreditHistory {
   const type: CreditHistoryType = entry.type === 'TOP_UP' ? 'TOPUP' : entry.type === 'AI_SEARCH_FEE' ? 'AI_SPEND' : entry.type === 'ADMIN_ADJUST' ? 'ADMIN_ADJUSTMENT' : 'SPEND';
   return {
@@ -70,11 +100,14 @@ function toCreditHistory(entry: WalletTransactionResponse, userId: string): Cred
 
 // Contract: docs/api/payment.md (POST /wallet/topup-orders/{orderCode}/mock-confirm)
 function topUpConfirmErrorMessage(error: ApiError) {
-  if (error.status === 409) return 'Đơn nạp đã hết hạn hoặc không thể thanh toán. Vui lòng tạo đơn nạp mới.';
-  if (error.status === 404 && error.code === 'WALLET_PAYMENT_ORDER_NOT_FOUND') return 'Không tìm thấy đơn nạp này trong tài khoản của bạn.';
-  // 404 không kèm mã của wallet: endpoint mock bị tắt (app.payment.mock.enabled=false).
-  if (error.status === 404) return 'Máy chủ chưa bật thanh toán giả lập. Vui lòng liên hệ quản trị viên.';
-  return 'Không xác nhận được thanh toán. Vui lòng thử lại.';
+  return error.message || 'Không xác nhận được thanh toán. Vui lòng thử lại.';
+}
+
+function topUpCreateErrorMessage(error: unknown) {
+  const apiError = error as Partial<ApiError>;
+  if (apiError.code === 'WALLET_TOPUP_AMOUNT_INVALID') return topUpAmountInvalidMessage;
+  if (typeof apiError.message === 'string' && apiError.message) return apiError.message;
+  return 'Không tạo được đơn nạp Credit. Vui lòng thử lại.';
 }
 
 export function Credit() {
@@ -82,6 +115,7 @@ export function Credit() {
   const data = useAppSelector(selectData);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const [creditAmount, setCreditAmount] = useState(5);
   const [customAmount, setCustomAmount] = useState('');
   const [apiAmountVnd, setApiAmountVnd] = useState('');
@@ -90,8 +124,9 @@ export function Credit() {
   const [activeTopupId, setActiveTopupId] = useState('');
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
   const [selectedEntry, setSelectedEntry] = useState<CreditHistory | Topup | null>(null);
-  const { isApiAccount, wallet, loading: walletLoading, error: walletError, refresh: refreshWallet } = useWallet();
+  const { isApiAccount, wallet, loading: walletLoading, error: walletError, refresh: refreshWallet, replaceWallet } = useWallet();
   const [apiHistory, setApiHistory] = useState<CreditHistory[]>([]);
+  const [rawApiHistory, setRawApiHistory] = useState<WalletTransactionResponse[]>([]);
   const [apiHistoryLoading, setApiHistoryLoading] = useState(false);
   const [apiHistoryError, setApiHistoryError] = useState('');
   const [historyReloadKey, setHistoryReloadKey] = useState(0);
@@ -100,13 +135,21 @@ export function Credit() {
   const [topUpError, setTopUpError] = useState('');
   const [topUpConfirming, setTopUpConfirming] = useState(false);
   const [confirmedTopUp, setConfirmedTopUp] = useState<TopUpConfirmResponse | null>(null);
+  const [pendingTopUp, setPendingTopUp] = useState<PendingTopUpSession | null>(() => loadPendingTopUp());
+  const [returnState, setReturnState] = useState<ReturnState>('idle');
+  const [missingOrderHistoryReloaded, setMissingOrderHistoryReloaded] = useState(false);
+  const createTopUpInFlight = useRef(false);
+  const confirmTopUpInFlight = useRef(false);
+  const missingOrderCleanupRef = useRef(false);
 
   const topups = isApiAccount ? [] : data.topups.filter((topup) => topup.userId === user.id);
   const activeTopup = topups.find((topup) => topup.id === activeTopupId);
   const latestCompleted = topups.find((topup) => topup.status === 'completed');
   const paymentValue = creditAmount * CREDIT_TO_VND;
   // Tài khoản API lấy kết quả từ mock-confirm; tài khoản seed lấy từ dữ liệu mock trong Redux.
-  const completedCredits = isApiAccount ? confirmedTopUp?.credits ?? null : latestCompleted?.amount ?? null;
+  const completedCredits = isApiAccount
+    ? confirmedTopUp?.credits ?? (returnState === 'success' ? pendingTopUp?.order.credits ?? null : null)
+    : latestCompleted?.amount ?? null;
 
   useEffect(() => {
     if (!isApiAccount) {
@@ -120,20 +163,76 @@ export function Credit() {
     walletApi
       .listTransactions({ page: 0, size: 100 })
       .then((response) => {
-        if (active) setApiHistory(response.items.map((entry) => toCreditHistory(entry, user.id)));
-      })
-      .catch(() => {
         if (!active) return;
+        setRawApiHistory(response.items);
+        setApiHistory(response.items.map((entry) => toCreditHistory(entry, user.id)));
+      })
+      .catch((caught) => {
+        if (!active) return;
+        const apiError = caught as ApiError;
         setApiHistory([]);
-        setApiHistoryError('Không tải được lịch sử Credit từ Backend.');
+        setRawApiHistory([]);
+        setApiHistoryError(apiError.message || 'Không tải được lịch sử Credit.');
       })
       .finally(() => {
-        if (active) setApiHistoryLoading(false);
+        if (active) {
+          setApiHistoryLoading(false);
+          if (missingOrderCleanupRef.current) setMissingOrderHistoryReloaded(true);
+        }
       });
     return () => {
       active = false;
     };
   }, [historyReloadKey, isApiAccount, user.id]);
+
+  useEffect(() => {
+    if (!isApiAccount) return;
+    const params = new URLSearchParams(location.search);
+    const code = returnOrderCode(params);
+    if (!code) return;
+    const stored = loadPendingTopUp();
+    if (!stored || stored.order.orderCode !== code) {
+      setTopUpError('');
+      missingOrderCleanupRef.current = true;
+      setMissingOrderHistoryReloaded(false);
+      refreshWallet();
+      setHistoryReloadKey((key) => key + 1);
+      return;
+    }
+    setPendingTopUp(stored);
+    setApiTopUpOrder(stored.order);
+    setStep('pending');
+    setReturnState('checking');
+    refreshWallet();
+    setHistoryReloadKey((key) => key + 1);
+  }, [isApiAccount, location.search, refreshWallet]);
+
+  useEffect(() => {
+    if (!missingOrderCleanupRef.current || !missingOrderHistoryReloaded || walletLoading || apiHistoryLoading) return;
+    missingOrderCleanupRef.current = false;
+    setMissingOrderHistoryReloaded(false);
+    navigate('/credit', { replace: true });
+  }, [apiHistoryLoading, missingOrderHistoryReloaded, navigate, walletLoading]);
+
+  useEffect(() => {
+    if (returnState !== 'checking' || !pendingTopUp || apiHistoryLoading) return;
+    const createdAt = new Date(pendingTopUp.createdAt).getTime();
+    const ledgerConfirmed = rawApiHistory.some((entry) =>
+      entry.type === 'TOP_UP'
+      && entry.amount === pendingTopUp.order.credits
+      && new Date(entry.createdAt).getTime() >= createdAt - 60_000,
+    );
+    const walletConfirmed = pendingTopUp.walletBalanceBefore !== null
+      && wallet !== null
+      && wallet.creditBalance >= pendingTopUp.walletBalanceBefore + pendingTopUp.order.credits;
+    if (ledgerConfirmed || walletConfirmed) {
+      setApiTopUpOrder((current) => current ? { ...current, status: 'SUCCESS' } : current);
+      setReturnState('success');
+      clearPendingTopUp();
+    } else {
+      setReturnState('pending');
+    }
+  }, [apiHistoryLoading, pendingTopUp, rawApiHistory, returnState, wallet]);
 
   const allHistory = useMemo(
     () =>
@@ -162,21 +261,32 @@ export function Credit() {
 
   const continuePayment = async () => {
     if (isApiAccount) {
+      if (createTopUpInFlight.current) return;
       const amountVnd = Number(apiAmountVnd);
       if (!Number.isSafeInteger(amountVnd) || amountVnd <= 0) {
         setTopUpError('Vui lòng nhập số tiền nạp hợp lệ.');
         return;
       }
+      createTopUpInFlight.current = true;
       setTopUpSubmitting(true);
       setTopUpError('');
       setConfirmedTopUp(null);
       try {
         const order = await paymentApi.createTopUpOrder({ amountVnd });
+        savePendingTopUp(order, wallet?.creditBalance ?? null);
+        setPendingTopUp(loadPendingTopUp());
         setApiTopUpOrder(order);
         setStep('pending');
-      } catch {
-        setTopUpError('Không tạo được đơn nạp Credit. Vui lòng thử lại.');
+        const redirectUrl = paymentRedirectUrl(order.redirectUrl);
+        if (!redirectUrl) {
+          setTopUpError('Không thể mở cổng thanh toán vì địa chỉ chuyển hướng không hợp lệ. Vui lòng thử lại sau.');
+          return;
+        }
+        window.location.assign(redirectUrl);
+      } catch (caught) {
+        setTopUpError(topUpCreateErrorMessage(caught));
       } finally {
+        createTopUpInFlight.current = false;
         setTopUpSubmitting(false);
       }
       return;
@@ -188,18 +298,22 @@ export function Credit() {
 
   // Backend đã idempotent cho đơn SUCCESS; chặn thêm ở đây để không gửi trùng khi bấm nhanh.
   const confirmApiTopUp = async () => {
-    if (!mockPaymentEnabled || !apiTopUpOrder || topUpConfirming) return;
+    if (!mockPaymentEnabled || !apiTopUpOrder || confirmTopUpInFlight.current) return;
+    confirmTopUpInFlight.current = true;
     setTopUpConfirming(true);
     setTopUpError('');
     try {
       const result = await paymentApi.mockConfirm(apiTopUpOrder.orderCode);
       setApiTopUpOrder({ ...apiTopUpOrder, status: result.status });
       setConfirmedTopUp(result);
-      refreshWallet();
+      replaceWallet(result.wallet);
+      setReturnState('success');
+      clearPendingTopUp();
       setHistoryReloadKey((key) => key + 1);
     } catch (error) {
       setTopUpError(topUpConfirmErrorMessage(error as ApiError));
     } finally {
+      confirmTopUpInFlight.current = false;
       setTopUpConfirming(false);
     }
   };
@@ -237,6 +351,14 @@ export function Credit() {
         </div>
       ) : null}
 
+      {isApiAccount && returnState === 'checking' ? (
+        <div className="mb-6"><Alert>Đang đối chiếu kết quả thanh toán với ví Credit...</Alert></div>
+      ) : null}
+      {isApiAccount && returnState === 'pending' ? (
+        <div className="mb-6">
+          <Alert>Giao dịch nạp Credit chưa được ghi nhận. Đơn vẫn đang chờ và số dư đã được tải lại từ hệ thống.</Alert>
+        </div>
+      ) : null}
       {completedCredits !== null ? (
         <div className="mb-6 flex items-start gap-3 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-success">
           <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-white">
@@ -266,7 +388,7 @@ export function Credit() {
                 : formatCredit(user.totalCredit)}
             </div>
             <p className="mt-3 text-sm text-white/70">
-              {isApiAccount ? 'Tỷ lệ quy đổi do Backend xác định khi tạo đơn.' : '1 Credit = 1.000đ'}
+              {isApiAccount ? 'Tỷ lệ quy đổi được xác định khi tạo đơn.' : '1 Credit = 1.000đ'}
             </p>
           </div>
           <button
@@ -326,6 +448,9 @@ export function Credit() {
             onNewTopup={() => {
               setApiTopUpOrder(null);
               setConfirmedTopUp(null);
+              setPendingTopUp(null);
+              setReturnState('idle');
+              clearPendingTopUp();
               setTopUpError('');
               setStep('select');
             }}
@@ -411,7 +536,7 @@ function ApiTopupSelection({ amountVnd, onAmountChange, onContinue, submitting }
       <div className="rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-7">
         <h2 className="section-title">Nạp Credit</h2>
         <p className="mt-2 text-sm text-text-muted">
-          Nhập số tiền VND. Backend sẽ xác định số Credit và trạng thái đơn trong response.
+          Nhập số tiền muốn nạp. Số Credit quy đổi sẽ được hiển thị sau khi tạo đơn.
         </p>
         <div className="mt-6 max-w-sm">
           <Field
@@ -422,13 +547,14 @@ function ApiTopupSelection({ amountVnd, onAmountChange, onContinue, submitting }
             value={amountVnd}
             onChange={(event) => onAmountChange(event.target.value)}
             placeholder="Nhập số tiền"
+            hint="Nhập số nguyên dương. Mức tối thiểu và bước tiền nạp được áp dụng theo quy định hiện hành."
           />
         </div>
       </div>
       <aside className="h-fit rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
         <h2 className="text-base font-bold">Tóm tắt thanh toán</h2>
         <p className="mt-3 text-sm text-text-muted">
-          Không cộng Credit trước khi Backend xác nhận đơn thanh toán.
+          Credit chỉ được cộng sau khi khoản thanh toán được xác nhận.
         </p>
         <Button className="mt-5 w-full" size="lg" onClick={onContinue} disabled={!validAmount || submitting}>
           {submitting ? 'Đang tạo đơn...' : 'Tạo đơn nạp Credit'}
@@ -584,13 +710,7 @@ function PendingTopup({ code, amount, onNewTopup }: { code: string; amount: numb
 }
 
 function ApiTopUpOrder({ order, confirming, onConfirm, onNewTopup }: { order: TopUpOrderResponse; confirming: boolean; onConfirm: () => void; onNewTopup: () => void }) {
-  const statusLabels: Record<TopUpOrderResponse['status'], string> = {
-    PENDING: 'Đang chờ thanh toán',
-    SUCCESS: 'Đã thanh toán',
-    FAILED: 'Thanh toán thất bại',
-    EXPIRED: 'Đơn đã hết hạn',
-  };
-  const safeRedirectUrl = order.redirectUrl && /^https?:\/\//i.test(order.redirectUrl) ? order.redirectUrl : null;
+  const safeRedirectUrl = paymentRedirectUrl(order.redirectUrl);
   const paid = order.status === 'SUCCESS';
   // Cổng MOCK chưa có trang thanh toán riêng (redirectUrl là đường dẫn nội bộ) nên xác nhận ngay tại đây.
   const canMockConfirm = mockPaymentEnabled && order.provider === 'MOCK' && order.status === 'PENDING';
@@ -604,27 +724,34 @@ function ApiTopUpOrder({ order, confirming, onConfirm, onNewTopup }: { order: To
         <p className="mt-2 text-sm leading-6 text-text-muted">
           {paid
             ? `+${order.credits} Credit đã được cộng vào ví.`
-            : 'Credit chưa được cộng vào ví. Trạng thái chỉ thay đổi sau khi Backend xác nhận thanh toán.'}
+            : 'Credit chưa được cộng vào ví. Trạng thái sẽ thay đổi sau khi khoản thanh toán được xác nhận.'}
         </p>
         <dl className="mt-6 divide-y divide-border rounded-lg bg-surface-low px-4 text-left">
           <DetailRow label="Mã đơn" value={order.orderCode} />
           <DetailRow label="Số tiền" value={formatVnd(order.amountVnd)} />
           <DetailRow label="Credit dự kiến" value={`${order.credits} Credit`} />
-          <DetailRow label="Nhà cung cấp" value={order.provider} />
-          <DetailRow label="Trạng thái" value={statusLabels[order.status]} />
+          <DetailRow label="Cổng thanh toán" value={paymentProviderLabels[order.provider]} />
+          <DetailRow label="Trạng thái" value={paymentStatusLabels[order.status]} />
         </dl>
+        {order.provider === 'MOCK' && !paid ? (
+          <p className="mt-4 rounded-md bg-amber-50 p-3 text-sm text-warning">
+            {canMockConfirm
+              ? 'Chế độ kiểm thử: bấm nút bên dưới để nhận Credit.'
+              : 'Đơn nạp đang chờ xử lý. Credit sẽ được cộng sau khi quản trị viên xác nhận thanh toán.'}
+          </p>
+        ) : null}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button variant="outline" onClick={onNewTopup} disabled={confirming}>
             Tạo đơn nạp khác
           </Button>
           {canMockConfirm ? (
             <Button onClick={onConfirm} disabled={confirming}>
-              {confirming ? 'Đang xác nhận...' : 'Xác nhận thanh toán (giả lập)'}
+              {confirming ? 'Đang xác nhận...' : 'Xác nhận thanh toán thử nghiệm'}
             </Button>
           ) : null}
-          {!canMockConfirm && !paid && safeRedirectUrl ? (
-            <a href={safeRedirectUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-bold text-white">
-              Đi đến cổng thanh toán
+          {order.provider !== 'MOCK' && !paid && safeRedirectUrl ? (
+            <a href={safeRedirectUrl} className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-bold text-white">
+              Quay lại cổng thanh toán
             </a>
           ) : null}
         </div>
@@ -668,7 +795,7 @@ function CreditHistorySection({
       <h2 className="section-title">Lịch sử Credit</h2>
       {unavailable ? (
         <div className="mt-4 rounded-xl bg-white px-5 py-12 text-center text-sm text-text-muted ring-1 ring-border/80">
-          Backend chưa cung cấp API lịch sử Credit.
+          Chưa thể tải lịch sử Credit.
         </div>
       ) : (
         <>

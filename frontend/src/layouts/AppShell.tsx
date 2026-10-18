@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { actions, selectCurrentUser } from '../app/store';
-import { Avatar, Button, Icon, IconButton } from '../components/ui';
+import { Button, Icon, IconButton } from '../components/ui';
 import { authApi } from '../services/authApi';
 import { NotificationMenu } from '../components/NotificationMenu';
 import { WalletProvider } from '../app/WalletContext';
@@ -166,10 +166,12 @@ function AppShellContent() {
                     }`}
                     aria-expanded={profileOpen}
                   >
-                    <Avatar user={user} />
+                    <span className="inline-block max-w-[120px] truncate text-sm font-semibold">
+                      {user.name}
+                    </span>
                     <Icon
                       name="chevronDown"
-                      className={`hidden size-4 sm:block ${
+                      className={`size-4 ${
                         isHome ? 'text-white/75' : 'text-text-muted'
                       }`}
                     />

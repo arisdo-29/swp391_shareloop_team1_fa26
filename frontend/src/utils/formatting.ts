@@ -1,6 +1,10 @@
 import type { ItemCondition, TransactionStatus } from '../types/domain';
 
 export const conditionLabel: Record<ItemCondition, string> = {
+  NEW: 'Mới',
+  LIKE_NEW: 'Như mới',
+  GOOD: 'Còn tốt',
+  DEFECTIVE: 'Có lỗi',
   new: 'Mới',
   good: 'Dùng tốt',
   used: 'Đã qua dùng',

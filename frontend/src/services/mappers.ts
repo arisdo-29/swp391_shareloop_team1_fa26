@@ -20,7 +20,7 @@ export function toFeUser(user: AuthUserResponse | MeResponse): User {
     phone: profile.phone ?? '',
     district: '',
     avatarInitials: user.fullName.split(' ').map((p) => p[0]).slice(-2).join('').toUpperCase(),
-    avatarUrl: profile.avatarUrl ?? undefined,
+    avatarUrl: resolveMediaUrl(profile.avatarUrl) || undefined,
     totalCredit: 0,
     availableCredit: 0,
     holdCredit: 0,
@@ -89,19 +89,19 @@ function flattenAreas(areas: AreaResponse[]): Array<{ area: AreaResponse; parent
 }
 
 const CONDITION_TO_FE: Record<ItemResponse['condition'], ItemCondition> = {
-  NEW: 'new',
-  LIKE_NEW: 'good',
-  GOOD: 'good',
-  DEFECTIVE: 'used',
+  NEW: 'NEW',
+  LIKE_NEW: 'LIKE_NEW',
+  GOOD: 'GOOD',
+  DEFECTIVE: 'DEFECTIVE',
 };
 
 const STATUS_TO_FE: Record<ItemResponse['status'], ItemStatus> = {
   PENDING_REVIEW: 'PENDING_REVIEW',
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
-  RESERVED: 'IN_TRANSACTION',
-  TRADED: 'COMPLETED',
-  EXPIRED: 'expired',
+  RESERVED: 'RESERVED',
+  TRADED: 'TRADED',
+  EXPIRED: 'EXPIRED',
 };
 
 export function toFeItem(
@@ -116,12 +116,15 @@ export function toFeItem(
     description: item.description,
     type: item.offerType === 'GIVE' ? 'gift' : 'trade',
     category: categoryNames.get(item.categoryId) ?? '',
+    categoryId: item.categoryId,
     condition: CONDITION_TO_FE[item.condition],
     district: areaNames.get(item.areaId) ?? '',
     images: Array.isArray(item.images) ? item.images.map(resolveMediaUrl).filter(Boolean) : [],
     tradeFor: item.desiredItem ?? undefined,
     brand: item.brand ?? undefined,
     defectNote: item.defectNote ?? undefined,
+    defectImages: item.defectImages.map(resolveMediaUrl).filter(Boolean),
+    operatingStatus: item.operatingStatus ?? undefined,
     status: STATUS_TO_FE[item.status],
     postedAt: item.createdAt,
   };

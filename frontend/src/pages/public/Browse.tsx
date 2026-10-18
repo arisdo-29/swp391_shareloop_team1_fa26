@@ -6,6 +6,7 @@ import { conditionLabel } from '../../utils/formatting';
 import type { Item, ItemCondition, ItemType } from '../../types/domain';
 import { catalogApi } from '../../services/catalogApi';
 import { itemApi } from '../../services/itemApi';
+import type { ApiError } from '../../services/http';
 import {
   toAreaOptions,
   toCategoryIdByName,
@@ -51,12 +52,13 @@ export function Browse() {
         setCategoryIds(toCategoryIdByName(categoryData));
         setDistricts(toAreaOptions(areaData));
       })
-      .catch(() => {
+      .catch((caught) => {
         if (!active) return;
+        const apiError = caught as ApiError;
         setCategories([]);
         setCategoryIds(new Map());
         setDistricts([]);
-        setCatalogError('Không tải được danh mục hoặc khu vực.');
+        setCatalogError(apiError.message || 'Không tải được danh mục hoặc khu vực.');
       })
       .finally(() => {
         if (!active) return;
@@ -93,11 +95,12 @@ export function Browse() {
         setPage(response.page);
         setTotalElements(response.totalElements);
       })
-      .catch(() => {
+      .catch((caught) => {
         if (!active) return;
+        const apiError = caught as ApiError;
         setItems([]);
         setTotalElements(0);
-        setItemsError('Không tải được danh sách bài đăng.');
+        setItemsError(apiError.message || 'Không tải được danh sách bài đăng.');
       })
       .finally(() => {
         if (active) setItemsLoading(false);

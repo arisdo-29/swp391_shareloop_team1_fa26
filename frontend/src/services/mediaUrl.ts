@@ -4,9 +4,10 @@ export function resolveMediaUrl(value: string | null | undefined) {
   const url = value?.trim();
   if (!url) return '';
   if (/^[a-z][a-z\d+\-.]*:/i.test(url)) return url;
+  const path = /^\d+$/.test(url) ? `/api/v1/media/${url}` : url;
   try {
-    return new URL(url, API_BASE_URL).toString();
+    return new URL(path, API_BASE_URL).toString();
   } catch {
-    return url;
+    return path;
   }
 }

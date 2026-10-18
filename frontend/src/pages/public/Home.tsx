@@ -1,17 +1,20 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
-import { selectCurrentUser, selectData } from '../../app/store';
+import { selectCurrentUser } from '../../app/store';
 import {
   Avatar,
   Button,
   ConditionBadge,
+  EmptyState,
   Icon,
   SearchField,
   TypeBadge,
 } from '../../components/ui';
-import { CATEGORIES } from '../../constants/domain';
 import type { Item, ItemType, User } from '../../types/domain';
+import { catalogApi } from '../../services/catalogApi';
+import { itemApi } from '../../services/itemApi';
+import { toAreaNameMap, toAreaOptions, toCategoryNameMap, toFeItem, type AreaOption } from '../../services/mappers';
 import { HomeLifecycle, HomeProcess } from './HomeCommunity';
 import { HomeDiscoveryRail, HomeMotion } from './HomeMotion';
 import './home-content.css';
@@ -21,32 +24,11 @@ const newItemFilters: Array<{ value: 'all' | ItemType; label: string }> = [
   { value: 'gift', label: 'Cho tặng' },
   { value: 'trade', label: 'Trao đổi' },
 ];
-const popularDistricts = ['Bình Thạnh', 'Phú Nhuận', 'Quận 3', 'Quận 7', 'Tân Bình', 'TP Thủ Đức'];
 const quickLinks = [
   { label: 'Đồ cho tặng', to: '/browse?type=gift' },
   { label: 'Đồ điện tử', to: '/browse?category=Đồ%20điện%20tử' },
   { label: 'Sách', to: '/browse?category=Sách' },
   { label: 'Bình Thạnh', to: '/browse?district=Bình%20Thạnh' },
-];
-const featuredIds = [
-  'item_005',
-  'item_001',
-  'item_011',
-  'item_006',
-  'item_017',
-  'item_018',
-  'item_020',
-  'item_022',
-];
-const heroSlideIds = [
-  'item_009',
-  'item_022',
-  'item_021',
-  'item_012',
-  'item_001',
-  'item_005',
-  'item_007',
-  'item_016',
 ];
 
 function SectionHeading({
@@ -130,10 +112,7 @@ function HomeProductCard({ item, owner, tradeFor }: { item: Item; owner?: User; 
 
 function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactNode }) {
   const slides = useMemo(
-    () =>
-      heroSlideIds
-        .map((id) => items.find((item) => item.id === id))
-        .filter((item): item is Item => Boolean(item)),
+    () => items.filter((item) => item.images.length > 0).slice(0, 8),
     [items],
   );
   const [activeIndex, setActiveIndex] = useState(0);
@@ -290,16 +269,40 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
 }
 
 export function Home() {
-  const { items, users } = useAppSelector(selectData);
-  const districtOptions = useAppSelector(selectData)
-    .districts.filter((entry) => entry.status === 'active')
-    .map((entry) => entry.name);
   const currentUser = useAppSelector(selectCurrentUser);
   const navigate = useNavigate();
+  const [items, setItems] = useState<Item[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [districtOptions, setDistrictOptions] = useState<AreaOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
   const [q, setQ] = useState('');
-  const [district, setDistrict] = useState('Bình Thạnh');
+  const [district, setDistrict] = useState('');
   const [newItemFilter, setNewItemFilter] = useState<'all' | ItemType>('all');
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setLoadError('');
+    Promise.all([catalogApi.categories(), catalogApi.areas(), itemApi.list({ page: 0, size: 100 })])
+      .then(([categoryData, areaData, response]) => {
+        if (!active) return;
+        setCategories(categoryData.map((entry) => entry.name));
+        setDistrictOptions(toAreaOptions(areaData));
+        setItems(response.items.map((entry) => toFeItem(entry, toCategoryNameMap(categoryData), toAreaNameMap(areaData))));
+      })
+      .catch((caught: { message?: string }) => {
+        if (!active) return;
+        setItems([]);
+        setLoadError(caught.message || 'Không tải được bài đăng.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [reloadKey]);
 
   const approved = useMemo(
     () =>
@@ -316,17 +319,17 @@ export function Home() {
       ? approved
       : approved.filter((item) => item.type === newItemFilter)
   ).slice(0, 5);
-  const featured = featuredIds
-    .map((id) => approved.find((item) => item.id === id))
-    .filter((item): item is Item => Boolean(item));
-  const districtCounts = popularDistricts.map((name) => ({
-    name,
-    count: approved.filter((item) => item.district === name).length,
+  const featured = approved.slice(0, 8);
+  const districtCounts = districtOptions.slice(0, 6).map((area) => ({
+    name: area.label,
+    id: area.id,
+    count: approved.filter((item) => item.district === area.label).length,
   }));
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    navigate(`/browse?q=${encodeURIComponent(q)}&district=${encodeURIComponent(district)}`);
+    const districtQuery = district ? `&district=${encodeURIComponent(district)}` : '';
+    navigate(`/browse?q=${encodeURIComponent(q)}${districtQuery}`);
   };
 
   return (
@@ -361,8 +364,9 @@ export function Home() {
               value={district}
               onChange={(event) => setDistrict(event.target.value)}
             >
-              {districtOptions.map((name) => (
-                <option key={name}>{name}</option>
+              <option value="">Tất cả khu vực</option>
+              {districtOptions.map((area) => (
+                <option key={area.id} value={area.id}>{area.label}</option>
               ))}
             </select>
             <Button icon="search">Tìm đồ</Button>
@@ -382,17 +386,35 @@ export function Home() {
         </div>
       </HomeHeroCarousel>
 
+      {loading || loadError ? (
+        <div className="home-inner py-5">
+          <div className={`rounded-lg p-4 text-sm ${loadError ? 'bg-red-50 text-error' : 'bg-primary-faint text-primary'}`}>
+            {loadError ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span>{loadError}</span>
+                <Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Thử lại</Button>
+              </div>
+            ) : 'Đang tải bài đăng mới nhất...'}
+          </div>
+        </div>
+      ) : null}
+
       <HomeMotion>
+        {!loading && !loadError && approved.length === 0 ? (
+          <HomeSection className="home-band">
+            <EmptyState title="Chưa có bài đăng đã duyệt" text="Các món đồ mới sẽ xuất hiện tại đây sau khi được duyệt." />
+          </HomeSection>
+        ) : null}
         <HomeSection className="home-band home-categories-band">
           <SectionHeading title="Khám phá theo danh mục" description="Tìm nhanh những món đồ đang được chia sẻ trong cộng đồng." href="/browse" />
           <HomeDiscoveryRail label="Khám phá theo danh mục" variant="categories">
-            {CATEGORIES.map((category, index) => {
+            {categories.map((category, index) => {
               const categoryItems = approved.filter((item) => item.category === category);
               return (
                 <Link key={category} to={`/browse?category=${encodeURIComponent(category)}`} className="home-category group">
                   <Icon name="arrow" className="home-category-arrow" />
                   <span className="home-category-icon">
-                    <Icon name={categoryIcons[index]} />
+                    <Icon name={categoryIcons[index % categoryIcons.length]} />
                   </span>
                   <span className="home-category-label">{category}</span>
                   <span className="home-category-count">{categoryItems.length} món đồ</span>
@@ -419,7 +441,7 @@ export function Home() {
           </div>
           <div className="home-product-grid home-new-items-grid">
             {newItems.map((item) => (
-              <HomeProductCard key={item.id} item={item} owner={users.find((user) => user.id === item.ownerId)} />
+              <HomeProductCard key={item.id} item={item} />
             ))}
           </div>
         </HomeSection>
@@ -428,7 +450,7 @@ export function Home() {
           <SectionHeading title="Được quan tâm trong cộng đồng" description="Những món đồ nổi bật đang sẵn sàng cho một kết nối mới." href="/browse" />
           <div className="home-product-grid">
             {featured.slice(0, 5).map((item) => (
-              <HomeProductCard key={item.id} item={item} owner={users.find((user) => user.id === item.ownerId)} />
+              <HomeProductCard key={item.id} item={item} />
             ))}
           </div>
         </HomeSection>
@@ -438,7 +460,7 @@ export function Home() {
             <SectionHeading title="Đồ đang được cho tặng" description="Những món còn hữu ích, được gửi tiếp không kèm giá bán." href="/browse?type=gift" linkLabel="Xem đồ tặng" />
             <div className="home-product-grid">
               {gifts.slice(0, 5).map((item) => (
-                <HomeProductCard key={item.id} item={item} owner={users.find((user) => user.id === item.ownerId)} />
+                <HomeProductCard key={item.id} item={item} />
               ))}
             </div>
           </HomeSection>
@@ -448,7 +470,7 @@ export function Home() {
           <SectionHeading title="Đang tìm người trao đổi" description="Xem món chủ sở hữu đang có và điều họ mong muốn nhận lại." href="/browse?type=trade" linkLabel="Xem đồ trao đổi" />
           <div className="home-product-grid home-trade-grid">
             {trades.slice(0, 5).map((item) => (
-              <HomeProductCard key={item.id} item={item} owner={users.find((user) => user.id === item.ownerId)} tradeFor={item.tradeFor} />
+              <HomeProductCard key={item.id} item={item} tradeFor={item.tradeFor} />
             ))}
           </div>
         </HomeSection>
@@ -456,8 +478,8 @@ export function Home() {
         <HomeSection className="home-band">
           <SectionHeading title="Khám phá quanh quận của bạn" description="Chọn khu vực thuận tiện để hẹn giao nhận trực tiếp." href="/browse" linkLabel="Xem mọi khu vực" />
           <div className="home-district-panel" aria-label="Khám phá quanh quận của bạn">
-            {districtCounts.map(({ name, count }) => (
-              <Link key={name} to={`/browse?district=${encodeURIComponent(name)}`} className="home-district">
+            {districtCounts.map(({ name, id, count }) => (
+              <Link key={id} to={`/browse?district=${id}`} className="home-district">
                 <Icon name="location" className="size-6" /><h3>{name}</h3><span>{count} món đang có</span><Icon name="arrow" className="size-4" />
               </Link>
             ))}

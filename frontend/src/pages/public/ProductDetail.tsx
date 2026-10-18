@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { actions, selectCurrentUser, selectData } from '../../app/store';
+import { useAppSelector } from '../../app/hooks';
+import { selectCurrentUser, selectData } from '../../app/store';
 import {
   Alert,
   Button,
@@ -18,6 +18,8 @@ import { itemApi } from '../../services/itemApi';
 import { requestApi, toBackendUserId, toFeItemRequest } from '../../services/requestApi';
 import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
 import type { Item, ItemRequest, User } from '../../types/domain';
+import type { ApiError } from '../../services/http';
+import { ReportDialog } from '../../components/ReportDialog';
 
 const requestStatusLabel = {
   PENDING: 'Chờ phản hồi',
@@ -30,7 +32,6 @@ export function ProductDetail() {
   const { id } = useParams();
   const data = useAppSelector(selectData);
   const user = useAppSelector(selectCurrentUser);
-  const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [requestError, setRequestError] = useState('');
   const [requestSuccess, setRequestSuccess] = useState('');
@@ -45,9 +46,11 @@ export function ProductDetail() {
   const [itemError, setItemError] = useState('');
   const [itemReloadKey, setItemReloadKey] = useState(0);
   const [requestSubmitting, setRequestSubmitting] = useState(false);
-  const mockItem = data.items.find((x) => x.id === id);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportNotice, setReportNotice] = useState('');
   const isApiId = Boolean(id && /^\d+$/.test(id));
-  const item = isApiId ? apiItem : mockItem;
+  const item = apiItem;
   const currentUserId = toBackendUserId(user?.id);
 
   useEffect(() => {
@@ -59,12 +62,14 @@ export function ProductDetail() {
       .then(async (detail) => {
         const [category, areas] = await Promise.all([catalogApi.category(detail.categoryId), catalogApi.areas()]);
         if (!active) return;
+        setSelectedImageIndex(0);
         setApiItem(toFeItem(detail, new Map([[category.id, category.name]]), toAreaNameMap(areas)));
       })
-      .catch(() => {
+      .catch((caught) => {
         if (!active) return;
+        const apiError = caught as ApiError;
         setApiItem(null);
-        setItemError('Không tải được chi tiết bài đăng.');
+        setItemError(apiError.message || 'Không tải được chi tiết bài đăng.');
       })
       .finally(() => {
         if (active) setLoadingItem(false);
@@ -133,18 +138,16 @@ export function ProductDetail() {
       </div>
     );
 
-  const owner = isApiId
-    ? null
-    : data.users.find((x) => x.id === item.ownerId) ??
+  const owner = data.users.find((x) => x.id === item.ownerId) ??
     ({
       id: item.ownerId,
       username: item.ownerId,
       password: '',
-      name: item.ownerId.startsWith('api_') ? `Người đăng #${item.ownerId.replace('api_', '')}` : 'Người đăng',
+      name: 'Người đăng',
       email: '',
       phone: '',
       district: item.district,
-      avatarInitials: item.ownerId.startsWith('api_') ? item.ownerId.replace('api_', '').slice(0, 2) : 'ND',
+      avatarInitials: '',
       totalCredit: 0,
       availableCredit: 0,
       holdCredit: 0,
@@ -161,7 +164,7 @@ export function ProductDetail() {
     (item.status === 'approved' || item.status === 'APPROVED') &&
     (!item.expiresAt || new Date(item.expiresAt).getTime() >= Date.now());
   const existingRequest = user
-    ? (isApiId ? apiSentRequests : data.itemRequests).find(
+    ? apiSentRequests.find(
         (request) =>
           request.itemId === item.id &&
           request.requesterId === user.id &&
@@ -169,7 +172,7 @@ export function ProductDetail() {
       )
     : undefined;
   const eligibleOfferedItems = user
-    ? (isApiId ? apiOfferedItems : data.items).filter(
+    ? apiOfferedItems.filter(
         (entry) =>
           entry.ownerId === user.id &&
           entry.id !== item.id &&
@@ -186,7 +189,7 @@ export function ProductDetail() {
       setLoginPromptOpen(true);
       return;
     }
-    if (isApiId && !currentUserId) {
+    if (!currentUserId) {
       setRequestError('Vui lòng đăng nhập bằng tài khoản thật để gửi yêu cầu.');
       return;
     }
@@ -209,43 +212,29 @@ export function ProductDetail() {
       return;
     }
     if (requestSubmitting) return;
-    if (isApiId) {
-      if (!currentUserId) {
-        setRequestError('Vui lòng đăng nhập bằng tài khoản thật để gửi yêu cầu.');
-        return;
-      }
-      setRequestSubmitting(true);
-      setRequestError('');
-      try {
-        const request = await requestApi.create(
-          Number(item.id),
-          currentUserId,
-          item.type === 'trade' ? Number(offeredItemId) : undefined,
-        );
-        setApiSentRequests((current) => [toFeItemRequest(request, user.id), ...current]);
-        setRequestOpen(false);
-        setMessage('');
-        setOfferedItemId('');
-        setRequestSuccess(item.type === 'gift' ? 'Đã gửi yêu cầu nhận.' : 'Đã gửi đề nghị trao đổi.');
-      } catch {
-        setRequestError('Không gửi được yêu cầu. Vui lòng thử lại.');
-      } finally {
-        setRequestSubmitting(false);
-      }
+    if (!currentUserId) {
+      setRequestError('Vui lòng đăng nhập bằng tài khoản thật để gửi yêu cầu.');
       return;
     }
-    dispatch(
-      actions.createItemRequest({
-        itemId: item.id,
-        requesterId: user.id,
-        offeredItemId: item.type === 'trade' ? offeredItemId : undefined,
-        message,
-      }),
-    );
-    setRequestOpen(false);
-    setMessage('');
-    setOfferedItemId('');
-    setRequestSuccess(item.type === 'gift' ? 'Đã gửi yêu cầu nhận.' : 'Đã gửi đề nghị trao đổi.');
+    setRequestSubmitting(true);
+    setRequestError('');
+    try {
+      const request = await requestApi.create(
+        Number(item.id),
+        currentUserId,
+        item.type === 'trade' ? Number(offeredItemId) : undefined,
+      );
+      setApiSentRequests((current) => [toFeItemRequest(request, user.id), ...current]);
+      setRequestOpen(false);
+      setMessage('');
+      setOfferedItemId('');
+      setRequestSuccess(item.type === 'gift' ? 'Đã gửi yêu cầu nhận.' : 'Đã gửi đề nghị trao đổi.');
+    } catch (caught) {
+      const apiError = caught as ApiError;
+      setRequestError(apiError.message || 'Không gửi được yêu cầu. Vui lòng thử lại.');
+    } finally {
+      setRequestSubmitting(false);
+    }
   };
 
   const cancelApiRequest = async (requestId: string) => {
@@ -278,8 +267,32 @@ export function ProductDetail() {
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
         <main className="min-w-0">
           <div className="overflow-hidden rounded-xl bg-surface-container">
-            <ItemImage src={item.images[0]} alt={item.title} className="aspect-[4/3] w-full object-cover" />
+            <ItemImage
+              src={item.images[selectedImageIndex] ?? item.images[0]}
+              alt={item.title}
+              className="aspect-[4/3] w-full object-cover"
+            />
           </div>
+          {item.images.length > 1 ? (
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {item.images.map((image, index) => (
+                <button
+                  key={`${image}-${index}`}
+                  type="button"
+                  aria-label={`Xem ảnh ${index + 1}`}
+                  aria-pressed={selectedImageIndex === index}
+                  onClick={() => setSelectedImageIndex(index)}
+                  className={`shrink-0 overflow-hidden rounded-md ${selectedImageIndex === index ? 'ring-2 ring-primary' : 'ring-1 ring-border'}`}
+                >
+                  <ItemImage
+                    src={image}
+                    alt={`${item.title} - ảnh ${index + 1}`}
+                    className="h-16 w-20 object-cover sm:h-20 sm:w-24"
+                  />
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="mt-6 flex flex-wrap gap-2">
             <TypeBadge type={item.type} />
             <ConditionBadge condition={item.condition} />
@@ -308,6 +321,19 @@ export function ProductDetail() {
               <p className="mt-3 text-sm text-text-secondary">
                 <strong>Lưu ý tình trạng:</strong> {item.defectNote}
               </p>
+            ) : null}
+            {item.operatingStatus ? (
+              <p className="mt-3 text-sm text-text-secondary">
+                <strong>Trạng thái hoạt động:</strong>{' '}
+                {{ NORMAL: 'Bình thường', PARTIAL: 'Một phần', NOT_WORKING: 'Không hoạt động' }[item.operatingStatus]}
+              </p>
+            ) : null}
+            {item.defectImages?.length ? (
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {item.defectImages.map((image, index) => (
+                  <ItemImage key={`${image}-${index}`} src={image} alt={`Ảnh lỗi ${index + 1}`} className="aspect-square rounded-md object-cover" />
+                ))}
+              </div>
             ) : null}
             {item.tradeFor ? (
               <div className="mt-5 rounded-lg bg-secondary-soft p-4 text-sm leading-6 text-secondary">
@@ -362,6 +388,24 @@ export function ProductDetail() {
                 Hủy yêu cầu
               </Button>
             ) : null}
+            {currentUserId && !own ? (
+              <Button
+                className="mt-3 w-full"
+                variant="ghost"
+                icon="shield"
+                onClick={() => {
+                  setReportNotice('');
+                  setReportOpen(true);
+                }}
+              >
+                Báo cáo vi phạm
+              </Button>
+            ) : null}
+            {reportNotice ? (
+              <div className="mt-3 rounded-md bg-emerald-50 p-3 text-xs leading-5 text-success">
+                {reportNotice}
+              </div>
+            ) : null}
           </div>
           {owner ? (
             <OwnerCard owner={owner} />
@@ -369,7 +413,7 @@ export function ProductDetail() {
             <section className="rounded-xl bg-white p-5 ring-1 ring-border/80">
               <h2 className="font-bold">Thông tin người đăng</h2>
               <p className="mt-2 text-sm leading-6 text-text-muted">
-                Backend chưa cung cấp hồ sơ công khai hoặc điểm uy tín của người đăng cho bài này.
+                Chưa có hồ sơ công khai hoặc điểm uy tín của người đăng cho bài này.
               </p>
             </section>
           )}
@@ -457,6 +501,18 @@ export function ProductDetail() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {reportOpen && currentUserId && !own ? (
+        <ReportDialog
+          target={{ targetType: 'ITEM', itemId: Number(item.id) }}
+          contextLabel={`Báo cáo bài “${item.title}”`}
+          onClose={() => setReportOpen(false)}
+          onSuccess={() => {
+            setReportOpen(false);
+            setReportNotice('Báo cáo đã được gửi đến quản trị viên để xem xét.');
+          }}
+        />
       ) : null}
     </div>
   );

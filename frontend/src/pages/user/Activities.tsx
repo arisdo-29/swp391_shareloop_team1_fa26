@@ -9,16 +9,31 @@ import {
   ConditionBadge,
   EmptyState,
   Field,
+  Icon,
   ItemImage,
   PageHeader,
+  Select,
   StatusBadge,
   TextArea,
   TypeBadge,
 } from '../../components/ui';
+import { CONDITIONS } from '../../constants/domain';
 import { RECEIVE_ITEM_FEE } from '../../utils/credit';
-import { catalogApi } from '../../services/catalogApi';
-import { itemApi, type EditQuote, type ItemResponse } from '../../services/itemApi';
-import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
+import { conditionLabel } from '../../utils/formatting';
+import { fileToDataUrl } from '../../utils/files';
+import { catalogApi, type CategoryAttributeResponse, type CategoryResponse } from '../../services/catalogApi';
+import {
+  itemApi,
+  type ApiCondition,
+  type EditQuote,
+  type EditQuoteReason,
+  type ItemResponse,
+  type OfferType,
+  type OperatingStatus,
+  type UpdateItemRequest,
+} from '../../services/itemApi';
+import { mediaApi } from '../../services/mediaApi';
+import { toAreaNameMap, toAreaOptions, toCategoryNameMap, toFeItem, type AreaOption } from '../../services/mappers';
 import { requestApi, toBackendUserId, toFeItemRequest } from '../../services/requestApi';
 import type { Item, ItemRequest, User } from '../../types/domain';
 import type { ApiError } from '../../services/http';
@@ -30,6 +45,29 @@ const requestStatusLabel = {
   REJECTED: 'Không được chọn',
   CANCELLED: 'Đã hủy',
 };
+
+const editQuoteReasonLabel: Record<EditQuoteReason, string> = {
+  NOT_YET_APPROVED: 'Bài chưa được duyệt lần đầu',
+  REPOST_FEE: 'Gửi lại bài sau khi bị từ chối',
+  PENDING_REVIEW_OVERWRITE: 'Cập nhật bản sửa đang chờ duyệt',
+  FIRST_FREE_EDIT: 'Lượt sửa miễn phí đầu tiên',
+  PAID_EDIT: 'Lượt sửa có phí',
+};
+
+function getEditQuoteReasonLabel(reason: string) {
+  return editQuoteReasonLabel[reason as EditQuoteReason] ?? 'Theo quy định của ShareLoop';
+}
+
+type ListingFeeAction = { type: 'renew' | 'boost'; item: Item };
+const WALLET_INSUFFICIENT_BALANCE = 'WALLET_INSUFFICIENT_BALANCE';
+
+const ITEM_IMAGES_MIN = 3;
+const ITEM_IMAGES_MAX = 8;
+
+type EditFormErrors = Partial<Record<
+  'title' | 'description' | 'desiredItem' | 'brand' | 'images' | 'defectNote' | 'defectImages' | 'operatingStatus',
+  string
+>>;
 
 export function Activities() {
   const location = useLocation();
@@ -46,11 +84,10 @@ export function Activities() {
   const [selectNotice, setSelectNotice] = useState('');
   const [selectingRequestId, setSelectingRequestId] = useState('');
   const [editNotice, setEditNotice] = useState('');
-  const [draftTitle, setDraftTitle] = useState('');
-  const [draftDescription, setDraftDescription] = useState('');
   const [editQuote, setEditQuote] = useState<EditQuote | null>(null);
   const [editQuoteLoading, setEditQuoteLoading] = useState(false);
   const [editQuoteError, setEditQuoteError] = useState('');
+  const [editQuoteNeedsTopUp, setEditQuoteNeedsTopUp] = useState(false);
   const [apiEditingItem, setApiEditingItem] = useState<ItemResponse | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [myItems, setMyItems] = useState<Item[]>([]);
@@ -60,18 +97,27 @@ export function Activities() {
   const [myItemsError, setMyItemsError] = useState('');
   const [cancelingRequestId, setCancelingRequestId] = useState('');
   const [renewingItemId, setRenewingItemId] = useState('');
+  const [boostingItemId, setBoostingItemId] = useState('');
+  const [listingFeeAction, setListingFeeAction] = useState<ListingFeeAction | null>(null);
+  const [listingFeeError, setListingFeeError] = useState('');
+  const [listingFeeNeedsTopUp, setListingFeeNeedsTopUp] = useState(false);
+  const [listingFeeNotice, setListingFeeNotice] = useState('');
   const [removingItemId, setRemovingItemId] = useState('');
+  const [itemsReloadKey, setItemsReloadKey] = useState(0);
+  const [editCategories, setEditCategories] = useState<CategoryResponse[]>([]);
+  const [boostableCategoryIds, setBoostableCategoryIds] = useState<number[]>([]);
+  const [editAreas, setEditAreas] = useState<AreaOption[]>([]);
   const selectInFlight = useRef(false);
+  const listingFeeInFlight = useRef(false);
   const currentUserId = toBackendUserId(user.id);
 
   const openEditor = async (item: Item) => {
     setEditNotice('');
     setEditingId(item.id);
-    setDraftTitle(item.title);
-    setDraftDescription(item.description);
     setEditQuote(null);
     setApiEditingItem(null);
     setEditQuoteError('');
+    setEditQuoteNeedsTopUp(false);
     if (!/^\d+$/.test(item.id)) return;
     setEditQuoteLoading(true);
     try {
@@ -81,8 +127,6 @@ export function Activities() {
       ]);
       setEditQuote(quote);
       setApiEditingItem(detail);
-      setDraftTitle(detail.title);
-      setDraftDescription(detail.description);
     } catch (error) {
       const apiError = error as ApiError;
       setEditQuoteError(apiError.message || 'Không tải được báo giá chỉnh sửa.');
@@ -91,39 +135,34 @@ export function Activities() {
     }
   };
 
-  const saveApiItem = async () => {
-    if (!apiEditingItem || editSaving || !draftTitle.trim() || !draftDescription.trim()) return;
+  const saveApiItem = async (input: UpdateItemRequest) => {
+    if (!apiEditingItem || editSaving) return;
     setEditSaving(true);
     setEditQuoteError('');
+    setEditQuoteNeedsTopUp(false);
     try {
-      const updated = await itemApi.update(apiEditingItem.id, {
-        categoryId: apiEditingItem.categoryId,
-        areaId: apiEditingItem.areaId,
-        offerType: apiEditingItem.offerType,
-        title: draftTitle.trim(),
-        description: draftDescription.trim(),
-        desiredItem: apiEditingItem.desiredItem,
-        condition: apiEditingItem.condition,
-        defectNote: apiEditingItem.defectNote,
-        brand: apiEditingItem.brand,
-        images: apiEditingItem.images,
-        defectImages: apiEditingItem.defectImages ?? undefined,
-        operatingStatus: apiEditingItem.operatingStatus ?? undefined,
-      });
-      const currentItem = myItems.find((item) => item.id === String(updated.id));
+      const latestQuote = await itemApi.getEditQuote(apiEditingItem.id);
+      setEditQuote(latestQuote);
+      const updated = await itemApi.update(apiEditingItem.id, input);
       const mapped = toFeItem(
         updated,
-        new Map([[updated.categoryId, currentItem?.category ?? 'Danh mục']]),
-        new Map([[updated.areaId, currentItem?.district ?? 'Khu vực']]),
+        toCategoryNameMap(editCategories),
+        new Map(editAreas.map((area) => [area.id, area.label])),
       );
-      setMyItems((current) => current.map((item) => item.id === mapped.id ? mapped : item));
+      setMyItems((current) => current.map((item) => item.id === mapped.id
+        ? { ...mapped, expiresAt: item.expiresAt, boostedUntil: item.boostedUntil }
+        : item));
       setEditingId('');
       setApiEditingItem(null);
       setEditNotice('Đã cập nhật bài đăng và gửi duyệt lại.');
       refreshWallet();
     } catch (error) {
       const apiError = error as ApiError;
-      setEditQuoteError(apiError.message || 'Không cập nhật được bài đăng.');
+      const insufficientCredit = apiError.code === WALLET_INSUFFICIENT_BALANCE;
+      setEditQuoteNeedsTopUp(insufficientCredit);
+      setEditQuoteError(insufficientCredit
+        ? 'Số dư khả dụng không đủ để chỉnh sửa bài. Vui lòng nạp thêm Credit.'
+        : apiError.message || 'Không cập nhật được bài đăng.');
     } finally {
       setEditSaving(false);
     }
@@ -155,9 +194,10 @@ export function Activities() {
     setMyItemsLoading(true);
     setMyItemsError('');
     if (!currentUserId) {
-      setMyItems(data.items.filter((item) => item.ownerId === user.id));
+      setMyItems([]);
       setApiRequestsByItem({});
       setApiSentRequests([]);
+      setMyItemsError('Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.');
       setMyItemsLoading(false);
       return () => {
         active = false;
@@ -168,6 +208,9 @@ export function Activities() {
         if (!active) return;
         const categoryNames = toCategoryNameMap(categories);
         const areaNames = toAreaNameMap(areas);
+        setEditCategories(categories.filter((category) => !category.restricted));
+        setBoostableCategoryIds(categories.filter((category) => category.boostable).map((category) => category.id));
+        setEditAreas(toAreaOptions(areas));
         const mappedItems = items.map((item) => toFeItem(item, categoryNames, areaNames));
         const requestEntries = await Promise.all(
           mappedItems.map(async (item) => {
@@ -180,12 +223,16 @@ export function Activities() {
         setApiRequestsByItem(Object.fromEntries(requestEntries));
         setApiSentRequests(sentRequests.map((request) => toFeItemRequest(request, user.id)));
       })
-      .catch(() => {
+      .catch((caught) => {
         if (!active) return;
+        const apiError = caught as ApiError;
         setMyItems([]);
+        setEditCategories([]);
+        setBoostableCategoryIds([]);
+        setEditAreas([]);
         setApiRequestsByItem({});
         setApiSentRequests([]);
-        setMyItemsError('Không tải được bài đăng của bạn.');
+        setMyItemsError(apiError.message || 'Không tải được bài đăng của bạn.');
       })
       .finally(() => {
         if (active) setMyItemsLoading(false);
@@ -193,7 +240,7 @@ export function Activities() {
     return () => {
       active = false;
     };
-  }, [currentUserId, data.items, user.id]);
+  }, [currentUserId, itemsReloadKey, user.id]);
   const txs = data.transactions.filter((t) => t.ownerId === user.id || t.requesterId === user.id);
   const acceptApiRequest = Object.values(apiRequestsByItem)
     .flat()
@@ -222,24 +269,48 @@ export function Activities() {
     }
   };
 
-  const renewApiItem = async (item: Item) => {
+  const confirmListingFeeAction = async () => {
+    if (!listingFeeAction || listingFeeInFlight.current) return;
+    const { item, type } = listingFeeAction;
     const itemId = Number(item.id);
-    if (!Number.isSafeInteger(itemId) || renewingItemId) return;
-    setRenewingItemId(item.id);
-    setMyItemsError('');
+    if (!Number.isSafeInteger(itemId)) return;
+    listingFeeInFlight.current = true;
+    setListingFeeError('');
+    setListingFeeNeedsTopUp(false);
+    setListingFeeNotice('');
+    if (type === 'renew') setRenewingItemId(item.id);
+    else setBoostingItemId(item.id);
     try {
-      const renewed = await itemApi.renewItem(itemId);
-      setMyItems((current) => current.map((entry) =>
-        entry.id === item.id
-          ? { ...entry, status: 'APPROVED', expiresAt: renewed.expireAt }
-          : entry,
-      ));
+      if (type === 'renew') {
+        const renewed = await itemApi.renewItem(itemId);
+        setMyItems((current) => current.map((entry) =>
+          entry.id === item.id ? { ...entry, expiresAt: renewed.expireAt } : entry,
+        ));
+        setListingFeeNotice(
+          renewed.fee > 0
+            ? `Đã gia hạn bài và trừ ${renewed.fee} Credit.`
+            : 'Đã gia hạn bài miễn phí.',
+        );
+      } else {
+        const boosted = await itemApi.boostItem(itemId);
+        setMyItems((current) => current.map((entry) =>
+          entry.id === item.id ? { ...entry, boostedUntil: boosted.boostedUntil } : entry,
+        ));
+        setListingFeeNotice('Đã đẩy bài thành công.');
+      }
       refreshWallet();
+      setListingFeeAction(null);
     } catch (error) {
       const apiError = error as ApiError;
-      setMyItemsError(apiError.message || 'Không gia hạn được bài đăng. Vui lòng thử lại.');
+      const insufficientCredit = apiError.code === WALLET_INSUFFICIENT_BALANCE;
+      setListingFeeNeedsTopUp(insufficientCredit);
+      setListingFeeError(insufficientCredit
+        ? `Số dư khả dụng không đủ để ${type === 'renew' ? 'gia hạn' : 'đẩy'} bài. Vui lòng nạp thêm Credit.`
+        : apiError.message || `Không ${type === 'renew' ? 'gia hạn' : 'đẩy'} được bài đăng. Vui lòng thử lại.`);
     } finally {
+      listingFeeInFlight.current = false;
       setRenewingItemId('');
+      setBoostingItemId('');
     }
   };
 
@@ -279,7 +350,7 @@ export function Activities() {
         const mappedItem = toFeItem(item, toCategoryNameMap(categories), toAreaNameMap(areas));
         setMyItems((current) => current.map((entry) => (entry.id === request.itemId ? mappedItem : entry)));
       } catch {
-        setSelectNotice('Đã chọn người nhận, nhưng chưa thể làm mới đầy đủ trạng thái từ Backend.');
+        setSelectNotice('Đã chọn người nhận, nhưng chưa thể cập nhật đầy đủ trạng thái mới nhất.');
       }
       setAcceptConfirmId('');
     } catch {
@@ -311,6 +382,11 @@ export function Activities() {
           <Alert tone="warning">{editNotice}</Alert>
         </div>
       ) : null}
+      {listingFeeNotice ? (
+        <div className="mb-5">
+          <Alert tone="success">{listingFeeNotice}</Alert>
+        </div>
+      ) : null}
       {selectNotice ? (
         <div className="mb-5">
           <Alert tone="warning">{selectNotice}</Alert>
@@ -336,13 +412,19 @@ export function Activities() {
           {myItemsLoading ? (
             <EmptyState title="Đang tải bài đăng" text="Vui lòng chờ trong giây lát." />
           ) : myItemsError ? (
-            <EmptyState title="Không tải được bài đăng" text={myItemsError} />
+            <EmptyState
+              title="Không tải được bài đăng"
+              text={myItemsError}
+              action={<Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>Thử lại</Button>}
+            />
           ) : myItems.length ? (
             <div className="space-y-3">
               {myItems.map((item) => {
-                const approved = item.status === 'approved' || item.status === 'APPROVED';
                 const apiItem = /^\d+$/.test(item.id);
-                const canEdit = apiItem || !approved || (item.postApprovalEditCount ?? 0) < 1;
+                const canEdit = ['PENDING_REVIEW', 'APPROVED', 'REJECTED'].includes(item.status);
+                const canUseListingFee = apiItem && item.status === 'APPROVED';
+                const canBoost = canUseListingFee && item.categoryId !== undefined &&
+                  boostableCategoryIds.includes(item.categoryId);
                 const itemRequests = apiItem
                   ? apiRequestsByItem[item.id] ?? []
                   : data.itemRequests.filter((request) => request.itemId === item.id);
@@ -372,6 +454,11 @@ export function Activities() {
                             : ''}
                           {item.district}
                         </p>
+                        {item.boostedUntil ? (
+                          <p className="mt-1 text-xs font-medium text-primary">
+                            Đang được đẩy đến {new Date(item.boostedUntil).toLocaleString('vi-VN')}
+                          </p>
+                        ) : null}
                         {(item.status === 'rejected' || item.status === 'REJECTED' || item.status === 'VIOLATION') && (item.rejectionReason || item.moderationReason) ? (
                           <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-xs leading-5 text-error">
                             Lý do kiểm duyệt: {item.rejectionReason ?? item.moderationReason}
@@ -396,13 +483,8 @@ export function Activities() {
                           size="sm"
                           variant="ghost"
                           icon="edit"
-                          onClick={() => {
-                            if (!canEdit) {
-                              setEditNotice('Bạn đã sử dụng lượt sửa miễn phí sau khi bài được duyệt.');
-                              return;
-                            }
-                            void openEditor(item);
-                          }}
+                          disabled={!canEdit}
+                          onClick={() => void openEditor(item)}
                         >
                           Sửa
                         </Button>
@@ -410,22 +492,39 @@ export function Activities() {
                           size="sm"
                           variant="danger"
                           icon="trash"
-                          disabled={item.status === 'removed' || removingItemId === item.id}
+                          disabled={['RESERVED', 'TRADED', 'EXPIRED', 'removed'].includes(item.status) || removingItemId === item.id}
                           onClick={() => setRemoveConfirmId(item.id)}
                         >
                           Gỡ
                         </Button>
-                        {item.status === 'expired' ? (
+                        {canUseListingFee ? (
                           <Button
                             size="sm"
                             variant="outline"
                             icon="renew"
-                            disabled={renewingItemId === item.id}
-                            onClick={() => apiItem
-                              ? void renewApiItem(item)
-                              : dispatch(actions.renewItem({ itemId: item.id, ownerId: user.id }))}
+                            disabled={Boolean(renewingItemId || boostingItemId)}
+                            onClick={() => {
+                              setListingFeeError('');
+                              setListingFeeNeedsTopUp(false);
+                              setListingFeeAction({ type: 'renew', item });
+                            }}
                           >
                             {renewingItemId === item.id ? 'Đang gia hạn...' : 'Gia hạn'}
+                          </Button>
+                        ) : null}
+                        {canBoost ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            icon="arrow"
+                            disabled={Boolean(renewingItemId || boostingItemId)}
+                            onClick={() => {
+                              setListingFeeError('');
+                              setListingFeeNeedsTopUp(false);
+                              setListingFeeAction({ type: 'boost', item });
+                            }}
+                          >
+                            {boostingItemId === item.id ? 'Đang đẩy...' : 'Đẩy bài'}
                           </Button>
                         ) : null}
                       </div>
@@ -536,7 +635,7 @@ export function Activities() {
 
       {editingId ? (
         <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
-          <div className="w-full rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
+          <div className="max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
             <h2 className="text-xl font-bold">Chỉnh sửa bài đăng</h2>
             <p className="mt-1 text-sm text-text-muted">Bài sẽ chờ duyệt lại sau khi lưu.</p>
             {/^[0-9]+$/.test(editingId) ? (
@@ -546,63 +645,75 @@ export function Activities() {
                 {editQuote ? (
                   <Alert tone={editQuote.free ? 'success' : 'warning'}>
                     {editQuote.free
-                      ? `Lượt sửa này miễn phí (${editQuote.reason}).`
-                      : `Phí sửa do Backend báo giá: ${editQuote.amount} Credit (${editQuote.reason}).`}
+                      ? `Lượt sửa này miễn phí. ${getEditQuoteReasonLabel(editQuote.reason)}.`
+                      : `Sửa bài sẽ giữ ${editQuote.amount} Credit. ${getEditQuoteReasonLabel(editQuote.reason)}.`}
                   </Alert>
+                ) : null}
+                {editQuoteNeedsTopUp ? (
+                  <Link className="mt-3 inline-block" to="/credit">
+                    <Button size="sm">Nạp Credit</Button>
+                  </Link>
                 ) : null}
               </div>
             ) : null}
-            <div className="mt-5 space-y-4">
-              <Field
-                label="Tên món đồ"
-                value={draftTitle}
-                onChange={(event) => setDraftTitle(event.target.value)}
+            {apiEditingItem ? (
+              <EditItemForm
+                key={apiEditingItem.id}
+                item={apiEditingItem}
+                categories={editCategories}
+                areas={editAreas}
                 disabled={editSaving || editQuoteLoading}
+                onCancel={() => setEditingId('')}
+                onSave={saveApiItem}
               />
-              <TextArea
-                label="Mô tả"
-                value={draftDescription}
-                onChange={(event) => setDraftDescription(event.target.value)}
-                disabled={editSaving || editQuoteLoading}
-              />
-            </div>
+            ) : editQuoteLoading ? null : (
+              <div className="mt-6 flex justify-end">
+                <Button variant="ghost" onClick={() => setEditingId('')}>Hủy</Button>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {listingFeeAction ? (
+        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6"
+          >
+            <h2 className="text-xl font-bold">
+              {listingFeeAction.type === 'renew' ? 'Xác nhận gia hạn bài' : 'Xác nhận đẩy bài'}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-text-muted">
+              Thao tác này sẽ trừ Credit ngay. Khoản phí đã trừ sẽ không được hoàn lại.
+            </p>
+            <p className="mt-2 text-sm font-semibold">{listingFeeAction.item.title}</p>
+            {listingFeeError ? (
+              <div className="mt-4">
+                <Alert tone="error">{listingFeeError}</Alert>
+                {listingFeeNeedsTopUp ? (
+                  <Link className="mt-3 inline-block" to="/credit">
+                    <Button size="sm">Nạp Credit</Button>
+                  </Link>
+                ) : null}
+              </div>
+            ) : null}
             <div className="mt-6 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setEditingId('')}>
+              <Button
+                variant="ghost"
+                disabled={Boolean(renewingItemId || boostingItemId)}
+                onClick={() => setListingFeeAction(null)}
+              >
                 Hủy
               </Button>
               <Button
-                disabled={editSaving || editQuoteLoading || !draftTitle.trim() || !draftDescription.trim()}
-                onClick={() => {
-                  if (/^[0-9]+$/.test(editingId)) {
-                    void saveApiItem();
-                    return;
-                  }
-                  const item = data.items.find((entry) => entry.id === editingId);
-                  if (!item) return;
-                  const approved = item.status === 'approved' || item.status === 'APPROVED';
-                  if (approved && (item.postApprovalEditCount ?? 0) >= 1) {
-                    setEditNotice('Bạn đã sử dụng lượt sửa miễn phí sau khi bài được duyệt.');
-                    setEditingId('');
-                    return;
-                  }
-                  dispatch(
-                    actions.updateItem({
-                      itemId: item.id,
-                      ownerId: user.id,
-                      changes: {
-                        title: draftTitle,
-                        description: draftDescription,
-                        category: item.category,
-                        condition: item.condition,
-                        district: item.district,
-                        tradeFor: item.tradeFor,
-                      },
-                    }),
-                  );
-                  setEditingId('');
-                }}
+                disabled={Boolean(renewingItemId || boostingItemId)}
+                onClick={() => void confirmListingFeeAction()}
               >
-                {editSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
+                {renewingItemId || boostingItemId
+                  ? 'Đang xử lý...'
+                  : listingFeeAction.type === 'renew' ? 'Gia hạn' : 'Đẩy bài'}
               </Button>
             </div>
           </div>
@@ -627,12 +738,7 @@ export function Activities() {
               <Button
                 variant="danger"
                 disabled={Boolean(removingItemId)}
-                onClick={() => /^[0-9]+$/.test(removeConfirmId)
-                  ? void removeApiItem(removeConfirmId)
-                  : (() => {
-                      dispatch(actions.removeItem({ itemId: removeConfirmId, ownerId: user.id }));
-                      setRemoveConfirmId('');
-                    })()}
+                onClick={() => void removeApiItem(removeConfirmId)}
               >
                 {removingItemId ? 'Đang gỡ...' : 'Xác nhận gỡ'}
               </Button>
@@ -695,6 +801,364 @@ export function Activities() {
   );
 }
 
+function EditItemForm({
+  item,
+  categories,
+  areas,
+  disabled,
+  onCancel,
+  onSave,
+}: {
+  item: ItemResponse;
+  categories: CategoryResponse[];
+  areas: AreaOption[];
+  disabled: boolean;
+  onCancel: () => void;
+  onSave: (input: UpdateItemRequest) => Promise<void>;
+}) {
+  const [offerType, setOfferType] = useState<OfferType>(item.offerType);
+  const [title, setTitle] = useState(item.title);
+  const [description, setDescription] = useState(item.description);
+  const [desiredItem, setDesiredItem] = useState(item.desiredItem ?? '');
+  const [categoryId, setCategoryId] = useState(item.categoryId);
+  const [condition, setCondition] = useState<ApiCondition>(item.condition);
+  const [defectNote, setDefectNote] = useState(item.defectNote ?? '');
+  const [brand, setBrand] = useState(item.brand ?? '');
+  const [areaId, setAreaId] = useState(item.areaId);
+  const [images, setImages] = useState(item.images);
+  const [newImages, setNewImages] = useState<Array<{ file: File; preview: string }>>([]);
+  const [defectImages, setDefectImages] = useState(item.defectImages ?? []);
+  const [newDefectImages, setNewDefectImages] = useState<Array<{ file: File; preview: string }>>([]);
+  const [operatingStatus, setOperatingStatus] = useState<OperatingStatus | ''>(item.operatingStatus ?? '');
+  const [categoryAttributes, setCategoryAttributes] = useState<CategoryAttributeResponse[]>([]);
+  const [attributesLoading, setAttributesLoading] = useState(false);
+  const [attributesError, setAttributesError] = useState('');
+  const [errors, setErrors] = useState<EditFormErrors>({});
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const totalImageCount = images.length + newImages.length;
+  const totalDefectImageCount = defectImages.length + newDefectImages.length;
+  const operatingStatusRequired = categoryAttributes.some(
+    (attribute) =>
+      attribute.required &&
+      attribute.dataType === 'SELECT' &&
+      ['NORMAL', 'PARTIAL', 'NOT_WORKING'].every((option) => attribute.options.includes(option)),
+  );
+  const formDisabled = disabled || uploading;
+
+  useEffect(() => {
+    let active = true;
+    setAttributesLoading(true);
+    setAttributesError('');
+    catalogApi.categoryAttributes(categoryId)
+      .then((response) => {
+        if (active) setCategoryAttributes(response);
+      })
+      .catch(() => {
+        if (!active) return;
+        setCategoryAttributes([]);
+        setAttributesError('Không tải được thông tin bổ sung của danh mục.');
+      })
+      .finally(() => {
+        if (active) setAttributesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [categoryId]);
+
+  const validate = () => {
+    const nextErrors: EditFormErrors = {};
+    if (!title.trim()) nextErrors.title = 'Vui lòng nhập tiêu đề.';
+    else if (title.trim().length > 150) nextErrors.title = 'Tiêu đề tối đa 150 ký tự.';
+    if (!description.trim()) nextErrors.description = 'Vui lòng nhập mô tả.';
+    if (offerType === 'SWAP' && !desiredItem.trim()) {
+      nextErrors.desiredItem = 'Vui lòng nhập món đồ mong muốn.';
+    }
+    if (brand.trim().length > 80) nextErrors.brand = 'Thương hiệu tối đa 80 ký tự.';
+    if (totalImageCount < ITEM_IMAGES_MIN) {
+      nextErrors.images = `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.`;
+    } else if (totalImageCount > ITEM_IMAGES_MAX) {
+      nextErrors.images = `Chỉ được chọn tối đa ${ITEM_IMAGES_MAX} ảnh.`;
+    }
+    if (condition === 'DEFECTIVE' && !defectNote.trim()) {
+      nextErrors.defectNote = 'Vui lòng mô tả lỗi của món đồ.';
+    }
+    if (condition === 'DEFECTIVE' && totalDefectImageCount === 0) {
+      nextErrors.defectImages = 'Vui lòng chọn ít nhất một ảnh lỗi.';
+    }
+    if (operatingStatusRequired && !operatingStatus) {
+      nextErrors.operatingStatus = 'Vui lòng chọn trạng thái hoạt động.';
+    }
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const addImages = async (files: File[]) => {
+    setUploadError('');
+    if (files.some((file) => !file.type.startsWith('image/'))) {
+      setErrors((current) => ({ ...current, images: 'Vui lòng chỉ chọn tệp hình ảnh.' }));
+      return;
+    }
+    if (totalImageCount + files.length > ITEM_IMAGES_MAX) {
+      setErrors((current) => ({ ...current, images: `Chỉ được chọn tối đa ${ITEM_IMAGES_MAX} ảnh.` }));
+      return;
+    }
+    try {
+      const previews = await Promise.all(files.map(fileToDataUrl));
+      setNewImages((current) => [...current, ...files.map((file, index) => ({ file, preview: previews[index] }))]);
+      const nextCount = totalImageCount + files.length;
+      setErrors((current) => ({
+        ...current,
+        images: nextCount < ITEM_IMAGES_MIN ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.` : undefined,
+      }));
+    } catch {
+      setUploadError('Không đọc được ảnh đã chọn. Vui lòng chọn lại.');
+    }
+  };
+
+  const addDefectImages = async (files: File[]) => {
+    setUploadError('');
+    if (files.some((file) => !file.type.startsWith('image/'))) {
+      setErrors((current) => ({ ...current, defectImages: 'Vui lòng chỉ chọn tệp hình ảnh.' }));
+      return;
+    }
+    try {
+      const previews = await Promise.all(files.map(fileToDataUrl));
+      setNewDefectImages((current) => [
+        ...current,
+        ...files.map((file, index) => ({ file, preview: previews[index] })),
+      ]);
+      setErrors((current) => ({ ...current, defectImages: undefined }));
+    } catch {
+      setUploadError('Không đọc được ảnh lỗi đã chọn. Vui lòng chọn lại.');
+    }
+  };
+
+  const submit = async () => {
+    if (formDisabled || !validate()) return;
+    setUploading(true);
+    setUploadError('');
+    try {
+      const [uploadedImages, uploadedDefectImages] = await Promise.all([
+        Promise.all(newImages.map(async ({ file }) => (await mediaApi.upload(file)).url)),
+        condition === 'DEFECTIVE'
+          ? Promise.all(newDefectImages.map(async ({ file }) => (await mediaApi.upload(file)).url))
+          : Promise.resolve([]),
+      ]);
+      await onSave({
+        categoryId,
+        areaId,
+        offerType,
+        title: title.trim(),
+        description: description.trim(),
+        desiredItem: offerType === 'SWAP' ? desiredItem.trim() : null,
+        condition,
+        defectNote: condition === 'DEFECTIVE' ? defectNote.trim() : null,
+        brand: brand.trim() || null,
+        images: [...images, ...uploadedImages],
+        defectImages: condition === 'DEFECTIVE' ? [...defectImages, ...uploadedDefectImages] : [],
+        operatingStatus: operatingStatusRequired
+          ? operatingStatus || null
+          : categoryId === item.categoryId
+            ? item.operatingStatus
+            : null,
+      });
+    } catch (caught) {
+      const apiError = caught as ApiError;
+      setUploadError(apiError.message || 'Không tải được ảnh lên. Vui lòng thử lại.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <form
+      className="mt-5 space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submit();
+      }}
+    >
+      <Select label="Hình thức" value={offerType} disabled={formDisabled} onChange={(event) => setOfferType(event.target.value as OfferType)}>
+        <option value="GIVE">Cho tặng</option>
+        <option value="SWAP">Trao đổi</option>
+      </Select>
+      {offerType === 'SWAP' ? (
+        <Field label="Món muốn đổi" value={desiredItem} disabled={formDisabled} error={errors.desiredItem} onChange={(event) => setDesiredItem(event.target.value)} />
+      ) : null}
+      <Field label="Tên món đồ" value={title} disabled={formDisabled} error={errors.title} onChange={(event) => setTitle(event.target.value)} />
+      <Select label="Danh mục" value={categoryId} disabled={formDisabled} onChange={(event) => setCategoryId(Number(event.target.value))}>
+        {!categories.some((category) => category.id === categoryId) ? <option value={categoryId}>Danh mục hiện tại</option> : null}
+        {[...categories]
+          .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'vi'))
+          .map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+      </Select>
+      <Select label="Tình trạng" value={condition} disabled={formDisabled} onChange={(event) => setCondition(event.target.value as ApiCondition)}>
+        {CONDITIONS.map((value) => <option key={value} value={value}>{conditionLabel[value]}</option>)}
+      </Select>
+      {condition === 'DEFECTIVE' ? (
+        <>
+          <TextArea label="Ghi chú lỗi" value={defectNote} disabled={formDisabled} error={errors.defectNote} onChange={(event) => setDefectNote(event.target.value)} />
+          <ImageEditor
+            label="Ảnh lỗi"
+            hint="Cần ít nhất một ảnh thể hiện rõ lỗi."
+            images={defectImages}
+            newImages={newDefectImages}
+            disabled={formDisabled}
+            error={errors.defectImages}
+            onAdd={addDefectImages}
+            onRemoveExisting={(index) => {
+              setDefectImages((current) => current.filter((_, itemIndex) => itemIndex !== index));
+              if (totalDefectImageCount - 1 === 0) setErrors((current) => ({ ...current, defectImages: 'Vui lòng chọn ít nhất một ảnh lỗi.' }));
+            }}
+            onRemoveNew={(index) => {
+              setNewDefectImages((current) => current.filter((_, itemIndex) => itemIndex !== index));
+              if (totalDefectImageCount - 1 === 0) setErrors((current) => ({ ...current, defectImages: 'Vui lòng chọn ít nhất một ảnh lỗi.' }));
+            }}
+          />
+        </>
+      ) : null}
+      <Field label="Thương hiệu (không bắt buộc)" value={brand} disabled={formDisabled} error={errors.brand} onChange={(event) => setBrand(event.target.value)} />
+      <Select label="Khu vực" value={areaId} disabled={formDisabled} onChange={(event) => setAreaId(Number(event.target.value))}>
+        {!areas.some((area) => area.id === areaId) ? <option value={areaId}>Khu vực hiện tại</option> : null}
+        {areas.map((area) => <option key={area.id} value={area.id}>{area.label}</option>)}
+      </Select>
+      <TextArea label="Mô tả" value={description} disabled={formDisabled} error={errors.description} onChange={(event) => setDescription(event.target.value)} />
+      {attributesLoading ? <p className="text-xs text-text-muted">Đang tải thuộc tính danh mục...</p> : null}
+      {attributesError ? <p className="text-xs text-error">{attributesError}</p> : null}
+      {operatingStatusRequired ? (
+        <div>
+          <Select label="Trạng thái hoạt động" value={operatingStatus} disabled={formDisabled} onChange={(event) => setOperatingStatus(event.target.value as OperatingStatus | '')}>
+            <option value="">Chọn trạng thái hoạt động</option>
+            <option value="NORMAL">Hoạt động bình thường</option>
+            <option value="PARTIAL">Hoạt động một phần</option>
+            <option value="NOT_WORKING">Không hoạt động</option>
+          </Select>
+          {errors.operatingStatus ? <span className="mt-1 block text-xs text-error">{errors.operatingStatus}</span> : null}
+        </div>
+      ) : null}
+      <ImageEditor
+        label="Ảnh"
+        hint={`Từ ${ITEM_IMAGES_MIN} đến ${ITEM_IMAGES_MAX} ảnh.`}
+        images={images}
+        newImages={newImages}
+        disabled={formDisabled}
+        error={errors.images}
+        onAdd={addImages}
+        onRemoveExisting={(index) => {
+          setImages((current) => current.filter((_, itemIndex) => itemIndex !== index));
+          const nextCount = totalImageCount - 1;
+          setErrors((current) => ({ ...current, images: nextCount < ITEM_IMAGES_MIN ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.` : undefined }));
+        }}
+        onRemoveNew={(index) => {
+          setNewImages((current) => current.filter((_, itemIndex) => itemIndex !== index));
+          const nextCount = totalImageCount - 1;
+          setErrors((current) => ({ ...current, images: nextCount < ITEM_IMAGES_MIN ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.` : undefined }));
+        }}
+      />
+      {uploadError ? <Alert tone="error">{uploadError}</Alert> : null}
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="ghost" disabled={formDisabled} onClick={onCancel}>Hủy</Button>
+        <Button type="submit" disabled={formDisabled || attributesLoading}>{uploading || disabled ? 'Đang lưu...' : 'Lưu thay đổi'}</Button>
+      </div>
+    </form>
+  );
+}
+
+function ImageEditor({
+  label,
+  hint,
+  images,
+  newImages,
+  disabled,
+  error,
+  onAdd,
+  onRemoveExisting,
+  onRemoveNew,
+}: {
+  label: string;
+  hint: string;
+  images: string[];
+  newImages: Array<{ file: File; preview: string }>;
+  disabled: boolean;
+  error?: string;
+  onAdd: (files: File[]) => Promise<void>;
+  onRemoveExisting: (index: number) => void;
+  onRemoveNew: (index: number) => void;
+}) {
+  return (
+    <div>
+      <label className={`block rounded-lg border border-dashed p-4 text-sm ${error ? 'border-error' : 'border-border'}`}>
+        <span className="font-semibold">{label}</span>
+        <span className="mt-1 block text-xs text-text-muted">{hint}</span>
+        <input
+          className="mt-3 block w-full text-xs"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          disabled={disabled}
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            event.currentTarget.value = '';
+            void onAdd(files);
+          }}
+        />
+      </label>
+      {error ? <span className="mt-1.5 block text-xs text-error">{error}</span> : null}
+      {images.length || newImages.length ? (
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          {images.map((image, index) => (
+            <EditableImage
+              key={`${image}-${index}`}
+              src={image}
+              alt={`${label} ${index + 1}`}
+              disabled={disabled}
+              onRemove={() => onRemoveExisting(index)}
+            />
+          ))}
+          {newImages.map(({ preview }, index) => (
+            <EditableImage
+              key={`${preview.slice(-16)}-${index}`}
+              src={preview}
+              alt={`${label} ${images.length + index + 1}`}
+              disabled={disabled}
+              onRemove={() => onRemoveNew(index)}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function EditableImage({
+  src,
+  alt,
+  disabled,
+  onRemove,
+}: {
+  src: string;
+  alt: string;
+  disabled: boolean;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="relative">
+      <ItemImage src={src} alt={alt} className="aspect-square w-full rounded-md object-cover" />
+      <button
+        type="button"
+        aria-label="Xóa ảnh"
+        disabled={disabled}
+        onClick={onRemove}
+        className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-white text-error shadow-sm"
+      >
+        <Icon name="close" className="size-3" />
+      </button>
+    </div>
+  );
+}
+
 // Lấy chữ cái đầu của 2 từ cuối trong họ tên, ví dụ "Nguyễn Văn B" → "VB".
 function nameInitials(name: string): string {
   const words = name.trim().split(/\s+/);
@@ -703,19 +1167,16 @@ function nameInitials(name: string): string {
 }
 
 function apiDisplayUser(userId: string, name?: string): User {
-  const apiId = userId.replace(/^api_/, '');
-  const fallbackName = userId.startsWith('api_') ? `Người dùng #${apiId}` : 'Người dùng';
-  const fallbackInitials = userId.startsWith('api_') ? apiId.slice(0, 2).toUpperCase() : 'ND';
   const trimmedName = name?.trim() ?? '';
   return {
     id: userId,
     username: userId,
     password: '',
-    name: trimmedName ? trimmedName : fallbackName,
+    name: trimmedName || 'Người dùng',
     email: '',
     phone: '',
     district: '',
-    avatarInitials: trimmedName ? nameInitials(trimmedName) : fallbackInitials,
+    avatarInitials: trimmedName ? nameInitials(trimmedName) : '',
     totalCredit: 0,
     availableCredit: 0,
     holdCredit: 0,
@@ -852,7 +1313,7 @@ function RequestPanel({
                           Nhắn tin
                         </Button>
                       </Link>
-                    ) : allowAccept && request.status === 'PENDING' && !hasAcceptedRequest && itemStatus !== 'IN_TRANSACTION' ? (
+                    ) : allowAccept && request.status === 'PENDING' && !hasAcceptedRequest && !['IN_TRANSACTION', 'RESERVED'].includes(itemStatus) ? (
                       <Button
                         size="sm"
                         variant="outline"
