@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser } from '../../app/store';
-import { Alert, Button, EmptyState, PageHeader, ProductCard, TextArea } from '../../components/ui';
+import { Alert, Button, EmptyState, ItemImage, PageHeader, ProductCard, TextArea } from '../../components/ui';
 import { findNeedMatches, parseNeed } from '../../utils/aiMatching';
 import type { Item, ItemType } from '../../types/domain';
 import { AI_ASSISTANT_SEARCH_FEE } from '../../utils/credit';
@@ -179,7 +179,7 @@ export function AI() {
                       className="ai-hero-product-card"
                       aria-label={item.title}
                     >
-                      <img src={item.images[0]} alt="" />
+                      <ItemImage src={item.images[0]} alt={item.title} className="size-full object-cover" />
                     </Link>
                   ))}
                 </div>

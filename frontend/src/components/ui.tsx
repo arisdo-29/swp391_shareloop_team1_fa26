@@ -5,7 +5,7 @@ import type {
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import * as Icons from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
 import type { Item, ItemCondition, ItemType, TransactionStatus, User } from '../types/domain';
@@ -301,70 +301,33 @@ export function ItemImage({
   src,
   alt,
   className = '',
+  loading,
 }: {
   src?: string;
   alt: string;
   className?: string;
+  loading?: 'eager' | 'lazy';
 }) {
-  const retryTimerRef = useRef<number | null>(null);
   const [failed, setFailed] = useState(false);
-  const [retryAttempt, setRetryAttempt] = useState(0);
-  const imageSrc = getRetryImageSrc(src, retryAttempt);
+  const imageSrc = resolveMediaUrl(src);
 
   useEffect(() => {
-    if (retryTimerRef.current !== null) {
-      window.clearTimeout(retryTimerRef.current);
-      retryTimerRef.current = null;
-    }
     setFailed(false);
-    setRetryAttempt(0);
-    return () => {
-      if (retryTimerRef.current !== null) {
-        window.clearTimeout(retryTimerRef.current);
-        retryTimerRef.current = null;
-      }
-    };
-  }, [src]);
+  }, [imageSrc]);
 
-  return src && !failed ? (
+  return imageSrc && !failed ? (
     <img
-      key={`${imageSrc}:${retryAttempt}`}
       src={imageSrc}
       alt={alt}
+      loading={loading}
       className={className}
-      onError={() => {
-        if (retryAttempt < 2) {
-          if (retryTimerRef.current !== null) return;
-          retryTimerRef.current = window.setTimeout(() => {
-            retryTimerRef.current = null;
-            setRetryAttempt((current) => current + 1);
-          }, 800);
-          return;
-        }
-        setFailed(true);
-      }}
+      onError={() => setFailed(true)}
     />
   ) : (
     <div role="img" aria-label={alt} className={`grid place-items-center bg-surface-container text-text-muted ${className}`}>
       <Icon name="image" className="size-6" />
     </div>
   );
-}
-
-function getRetryImageSrc(src: string | undefined, retryAttempt: number) {
-  if (!src || retryAttempt <= 0 || hasSignedUrlQuery(src)) return src;
-  try {
-    const url = new URL(src, window.location.href);
-    url.searchParams.set('sl_image_retry', String(retryAttempt));
-    return url.toString();
-  } catch {
-    const separator = src.includes('?') ? '&' : '?';
-    return `${src}${separator}sl_image_retry=${retryAttempt}`;
-  }
-}
-
-function hasSignedUrlQuery(src: string) {
-  return /(?:[?&](?:x-amz-signature|x-goog-signature|signature|expires|policy|key-pair-id)=)/i.test(src);
 }
 
 export function Alert({
