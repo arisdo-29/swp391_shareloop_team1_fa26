@@ -1,17 +1,29 @@
 package com.shareloop.user.service;
 
+import com.shareloop.auth.service.OtpService;
 import com.shareloop.catalog.service.AreaService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.media.service.MediaService;
+import com.shareloop.request.service.RequestQueryService;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.UserErrorCode;
+import com.shareloop.user.dto.ChangePhoneOtpResponse;
+import com.shareloop.user.dto.ChangePhoneRequest;
 import com.shareloop.user.dto.ContactInfo;
 import com.shareloop.user.dto.MeResponse;
+import com.shareloop.user.dto.SendChangePhoneOtpRequest;
 import com.shareloop.user.dto.UpdateProfileRequest;
+import com.shareloop.user.entity.OtpPurpose;
 import com.shareloop.user.entity.User;
 import com.shareloop.user.entity.UserStatus;
 import com.shareloop.user.mapper.UserMapper;
 import com.shareloop.user.repository.UserRepository;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,13 +43,31 @@ public class UserService {
     private final UserMapper userMapper;
     private final AreaService areaService;
     private final MediaService mediaService;
+    private final OtpService otpService;
+    private final ConfigService configService;
+    private final RequestQueryService requestQueryService;
 
+    @Autowired
     public UserService(
-            UserRepository userRepository, UserMapper userMapper, AreaService areaService, MediaService mediaService) {
+            UserRepository userRepository,
+            UserMapper userMapper,
+            AreaService areaService,
+            MediaService mediaService,
+            OtpService otpService,
+            ConfigService configService,
+            @Autowired(required = false) RequestQueryService requestQueryService) {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
         this.areaService = areaService;
         this.mediaService = mediaService;
+        this.otpService = otpService;
+        this.configService = configService;
+        this.requestQueryService = requestQueryService;
+    }
+
+    public UserService(
+            UserRepository userRepository, UserMapper userMapper, AreaService areaService, MediaService mediaService) {
+        this(userRepository, userMapper, areaService, mediaService, null, null, null);
     }
 
     /**
@@ -177,5 +207,105 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<Long> findAdminIds() {
         return userRepository.findAdminIds();
+    }
+
+    /**
+     * Yêu cầu gửi mã OTP về email để đổi số điện thoại (FR-07, BR-U10).
+     */
+    @Transactional
+    public ChangePhoneOtpResponse sendChangePhoneOtp(long userId, SendChangePhoneOtpRequest request) {
+        User user = findUser(userId);
+        String normalizedPhone = normalizePhone(request.newPhone());
+
+        // 1. Số mới không được trùng số hiện tại
+        if (normalizedPhone.equals(user.getPhone())) {
+            throw new BusinessException(UserErrorCode.USER_PHONE_SAME_AS_CURRENT, null, "newPhone", null);
+        }
+
+        // 2. Số mới chưa bị dùng bởi tài khoản ACTIVE khác
+        if (userRepository.existsByPhoneAndStatus(normalizedPhone, UserStatus.ACTIVE)) {
+            throw new BusinessException(UserErrorCode.USER_PHONE_ALREADY_USED, null, "newPhone", null);
+        }
+
+        // 3. Giới hạn tối đa 1 lần trong 30 ngày (BR-U10)
+        checkPhoneChangeCooldown(user);
+
+        // 4. Không được đổi khi đang có giao dịch đã trao liên lạc mà chưa hoàn tất (BR-U10)
+        checkNoActiveDelivery(userId);
+
+        // 5. Cấp OTP qua email
+        user.setPendingPhone(normalizedPhone);
+        otpService.issue(user, OtpPurpose.CHANGE_PHONE);
+
+        int ttlMinutes = configService.getInt(ConfigKey.OTP_TTL_MINUTES);
+        int cooldownSeconds = configService.getInt(ConfigKey.OTP_RESEND_COOLDOWN_SECONDS);
+        return new ChangePhoneOtpResponse(user.getEmail(), ttlMinutes * 60, cooldownSeconds);
+    }
+
+    /**
+     * Xác nhận OTP và đổi số điện thoại (FR-07, BR-U10).
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public MeResponse changePhone(long userId, ChangePhoneRequest request) {
+        User user = findUser(userId);
+        String normalizedPhone = normalizePhone(request.newPhone());
+
+        // 1. Kiểm tra lại giao dịch đang hoạt động và giới hạn 30 ngày
+        checkNoActiveDelivery(userId);
+        checkPhoneChangeCooldown(user);
+
+        // 2. Số mới không được trùng số hiện tại
+        if (normalizedPhone.equals(user.getPhone())) {
+            throw new BusinessException(UserErrorCode.USER_PHONE_SAME_AS_CURRENT, null, "newPhone", null);
+        }
+
+        // 3. Kiểm tra mã OTP qua OtpService
+        otpService.verify(user, request.otp(), OtpPurpose.CHANGE_PHONE);
+
+        // 4. Kiểm tra lại số điện thoại chưa bị tài khoản ACTIVE khác dùng
+        if (userRepository.existsByPhoneAndStatus(normalizedPhone, UserStatus.ACTIVE)) {
+            throw new BusinessException(UserErrorCode.USER_PHONE_ALREADY_USED, null, "newPhone", null);
+        }
+
+        // 5. Đổi số điện thoại và lưu mốc thời gian
+        user.changePhone(normalizedPhone, Instant.now());
+        return userMapper.toMeResponse(user);
+    }
+
+    private void checkPhoneChangeCooldown(User user) {
+        if (user.getPhoneChangedAt() == null || configService == null) {
+            return;
+        }
+        int intervalDays = configService.getInt(ConfigKey.PHONE_CHANGE_INTERVAL_DAYS);
+        Instant now = Instant.now();
+        Instant nextAllowedAt = user.getPhoneChangedAt().plus(intervalDays, ChronoUnit.DAYS);
+        if (now.isBefore(nextAllowedAt)) {
+            long retryAfterDays = ChronoUnit.DAYS.between(now, nextAllowedAt);
+            if (retryAfterDays <= 0) {
+                retryAfterDays = 1;
+            }
+            throw new BusinessException(
+                    UserErrorCode.USER_PHONE_CHANGE_COOLDOWN,
+                    "Chỉ được đổi số điện thoại tối đa 1 lần trong " + intervalDays + " ngày.",
+                    "newPhone",
+                    Map.of("retryAfterDays", retryAfterDays));
+        }
+    }
+
+    private void checkNoActiveDelivery(long userId) {
+        if (requestQueryService != null && requestQueryService.hasActiveDelivery(userId)) {
+            throw new BusinessException(UserErrorCode.USER_PHONE_CHANGE_ACTIVE_DELIVERY);
+        }
+    }
+
+    private String normalizePhone(String phone) {
+        if (phone == null) {
+            return null;
+        }
+        String trimmed = phone.trim();
+        if (trimmed.startsWith("+84")) {
+            return "0" + trimmed.substring(3);
+        }
+        return trimmed;
     }
 }

@@ -1,7 +1,10 @@
 package com.shareloop.user.controller;
 
 import com.shareloop.common.security.CurrentUserId;
+import com.shareloop.user.dto.ChangePhoneOtpResponse;
+import com.shareloop.user.dto.ChangePhoneRequest;
 import com.shareloop.user.dto.MeResponse;
+import com.shareloop.user.dto.SendChangePhoneOtpRequest;
 import com.shareloop.user.dto.UpdateProfileRequest;
 import com.shareloop.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -9,6 +12,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -40,5 +44,20 @@ public class MeController {
     public MeResponse updateMe(
             @Parameter(hidden = true) @CurrentUserId long userId, @Valid @RequestBody UpdateProfileRequest request) {
         return userService.updateProfile(userId, request);
+    }
+
+    @Operation(summary = "Gửi mã OTP qua email để đổi số điện thoại (FR-07, BR-U10)")
+    @PostMapping("/phone/otp")
+    public ChangePhoneOtpResponse sendChangePhoneOtp(
+            @Parameter(hidden = true) @CurrentUserId long userId,
+            @Valid @RequestBody SendChangePhoneOtpRequest request) {
+        return userService.sendChangePhoneOtp(userId, request);
+    }
+
+    @Operation(summary = "Xác nhận OTP và đổi số điện thoại (FR-07, BR-U10)")
+    @PutMapping("/phone")
+    public MeResponse changePhone(
+            @Parameter(hidden = true) @CurrentUserId long userId, @Valid @RequestBody ChangePhoneRequest request) {
+        return userService.changePhone(userId, request);
     }
 }
