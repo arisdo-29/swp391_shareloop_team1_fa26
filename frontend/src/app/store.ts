@@ -149,7 +149,11 @@ const dataSlice = createSlice({
       state.currentUserId = action.payload.id;
     },
     logout(state) {
+      const userId = state.currentUserId;
       state.currentUserId = null;
+      if (userId?.startsWith('api_')) {
+        state.users = state.users.filter((user) => user.id !== userId);
+      }
     },
     register(
       state,

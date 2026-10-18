@@ -6,12 +6,19 @@ import { Alert, Button, Field } from '../../components/ui';
 import { authApi } from '../../services/authApi';
 import { authErrorMessage } from '../../services/authErrors';
 import type { ApiError } from '../../services/http';
-import { toFeUser } from '../../services/mappers';
+import { fetchSessionUser } from '../../services/session';
+import { validEmail } from '../../utils/passwordSecurity';
 
 type VerifyEmailState = {
   email?: string;
+  otpExpiresInSeconds?: number;
   resendCooldownSeconds?: number;
 };
+
+function formatCountdown(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  return `${String(minutes).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+}
 
 export function VerifyEmail() {
   const navigate = useNavigate();
@@ -23,26 +30,42 @@ export function VerifyEmail() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [processing, setProcessing] = useState(false);
-  const [seconds, setSeconds] = useState(state.resendCooldownSeconds ?? 0);
+  const [otpSeconds, setOtpSeconds] = useState<number | null>(state.otpExpiresInSeconds ?? null);
+  const [resendSeconds, setResendSeconds] = useState(state.resendCooldownSeconds ?? 0);
 
   useEffect(() => {
-    if (!seconds) return undefined;
-    const timer = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000);
+    if (!resendSeconds) return undefined;
+    const timer = window.setInterval(() => setResendSeconds((value) => Math.max(0, value - 1)), 1000);
     return () => window.clearInterval(timer);
-  }, [seconds]);
+  }, [resendSeconds]);
+
+  useEffect(() => {
+    if (otpSeconds === null || otpSeconds === 0) return undefined;
+    const timer = window.setInterval(() => setOtpSeconds((value) => value === null ? null : Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [otpSeconds]);
 
   const resend = async () => {
     const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail || seconds > 0) return;
+    if (!normalizedEmail || resendSeconds > 0 || processing) return;
+    if (!validEmail(normalizedEmail)) {
+      setError('Email không đúng định dạng.');
+      return;
+    }
     setError('');
     setNotice('');
     setProcessing(true);
     try {
-      const result = await authApi.resendOtp(normalizedEmail);
-      setSeconds(result.resendCooldownSeconds);
+      const result = await authApi.resendOtp({ email: normalizedEmail });
+      setEmail(result.email || normalizedEmail);
+      setOtpSeconds(result.otpExpiresInSeconds);
+      setResendSeconds(result.resendCooldownSeconds);
       setNotice('Mã OTP mới đã được gửi đến email của bạn.');
     } catch (apiError) {
-      setError(authErrorMessage(apiError as ApiError));
+      const apiResponseError = apiError as ApiError;
+      const retryAfter = apiResponseError.details?.retryAfterSeconds;
+      if (typeof retryAfter === 'number') setResendSeconds(retryAfter);
+      setError(authErrorMessage(apiResponseError));
     } finally {
       setProcessing(false);
     }
@@ -58,6 +81,10 @@ export function VerifyEmail() {
       setError('Vui lòng nhập email.');
       return;
     }
+    if (!validEmail(normalizedEmail)) {
+      setError('Email không đúng định dạng.');
+      return;
+    }
     if (!code) {
       setError('Vui lòng nhập mã OTP.');
       return;
@@ -66,11 +93,16 @@ export function VerifyEmail() {
       setError('Mã OTP không hợp lệ.');
       return;
     }
+    if (otpSeconds === 0) {
+      setError('Mã OTP đã hết hạn. Vui lòng gửi lại mã.');
+      return;
+    }
     setProcessing(true);
     try {
-      const result = await authApi.verifyOtp(normalizedEmail, code);
-      dispatch(actions.loginFromApi(toFeUser(result.user)));
-      navigate(result.user.isAdmin ? '/admin' : '/', { replace: true });
+      await authApi.verifyOtp({ email: normalizedEmail, otp: code });
+      const user = await fetchSessionUser();
+      dispatch(actions.loginFromApi(user));
+      navigate(user.role === 'admin' ? '/admin' : '/', { replace: true });
     } catch (apiError) {
       setError(authErrorMessage(apiError as ApiError));
     } finally {
@@ -121,17 +153,22 @@ export function VerifyEmail() {
               />
             ))}
           </div>
-          <Button className="w-full" disabled={processing}>
+          {otpSeconds !== null ? (
+            <p className={`text-center text-xs ${otpSeconds === 0 ? 'text-error' : 'text-text-muted'}`}>
+              {otpSeconds === 0 ? 'Mã OTP đã hết hạn.' : `Mã OTP hết hạn sau ${formatCountdown(otpSeconds)}.`}
+            </p>
+          ) : null}
+          <Button className="w-full" disabled={processing || otpSeconds === 0}>
             {processing ? 'Đang xác nhận...' : 'Xác nhận'}
           </Button>
           <Button
             type="button"
             variant="ghost"
             className="w-full"
-            disabled={processing || !email.trim() || seconds > 0}
+            disabled={processing || !email.trim() || resendSeconds > 0}
             onClick={() => void resend()}
           >
-            {seconds > 0 ? `Gửi lại mã sau 00:${String(seconds).padStart(2, '0')}` : 'Gửi lại mã'}
+            {resendSeconds > 0 ? `Gửi lại mã sau ${formatCountdown(resendSeconds)}` : 'Gửi lại mã'}
           </Button>
         </div>
       </form>

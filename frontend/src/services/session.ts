@@ -2,7 +2,14 @@ import type { AppDispatch } from '../app/store';
 import { actions } from '../app/store';
 import { userApi } from './userApi';
 import { tokenStorage } from './http';
-import { toFeUser } from './mappers';
+import { catalogApi } from './catalogApi';
+import { toAreaOptions, toFeUser } from './mappers';
+
+export async function fetchSessionUser() {
+  const [profile, areas] = await Promise.all([userApi.getMe(), catalogApi.areas()]);
+  const district = toAreaOptions(areas).find((area) => area.id === profile.areaId)?.label ?? '';
+  return toFeUser(profile, district);
+}
 
 /** Goi khi mo app: con token va userId API thi hoi /me de khoi phuc phien dang nhap. */
 export async function restoreSession(dispatch: AppDispatch, currentUserId: string | null) {
@@ -17,8 +24,7 @@ export async function restoreSession(dispatch: AppDispatch, currentUserId: strin
     return;
   }
   try {
-    const user = await userApi.getMe();
-    dispatch(actions.loginFromApi(toFeUser(user)));
+    dispatch(actions.loginFromApi(await fetchSessionUser()));
   } catch {
     dispatch(actions.logout()); // token het han: interceptor da xoa token
   }

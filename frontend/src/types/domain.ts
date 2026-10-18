@@ -1,7 +1,14 @@
 export type Role = 'guest' | 'user' | 'admin';
 export type UserStatus = 'active' | 'suspended' | 'locked' | 'pending_verification';
 export type ItemType = 'gift' | 'trade';
-export type ItemCondition = 'new' | 'good' | 'used';
+export type ItemCondition =
+  | 'new'
+  | 'good'
+  | 'used'
+  | 'NEW'
+  | 'LIKE_NEW'
+  | 'GOOD'
+  | 'DEFECTIVE';
 export type ItemStatus =
   | 'pending'
   | 'PENDING_REVIEW'
@@ -9,6 +16,9 @@ export type ItemStatus =
   | 'APPROVED'
   | 'rejected'
   | 'REJECTED'
+  | 'RESERVED'
+  | 'TRADED'
+  | 'EXPIRED'
   | 'VIOLATION'
   | 'IN_TRANSACTION'
   | 'COMPLETED'
@@ -48,8 +58,10 @@ export interface User {
   email: string;
   phone: string;
   district: string;
+  areaId?: number | null;
   avatarInitials: string;
   avatarUrl?: string;
+  avatarMediaId?: number | null;
   totalCredit: number;
   availableCredit: number;
   holdCredit: number;
@@ -83,6 +95,8 @@ export interface Item {
   tradeFor?: string;
   brand?: string;
   defectNote?: string;
+  defectImages?: string[];
+  operatingStatus?: 'NORMAL' | 'PARTIAL' | 'NOT_WORKING';
   status: ItemStatus;
   rejectionReason?: string;
   moderationReason?: string;

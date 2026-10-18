@@ -174,4 +174,84 @@ class ChatContactFilterTest {
             assertThat(filter.detectContactInfo("   ")).isEmpty();
         }
     }
+
+    @Nested
+    @DisplayName("Kiểm tra từ khoá cấm mức BLOCK trong Lexicon (FR-78, BR-A10)")
+    class LexiconBlockTest {
+
+        private final com.shareloop.setting.service.ConfigService configService =
+                org.mockito.Mockito.mock(com.shareloop.setting.service.ConfigService.class);
+        private final com.shareloop.setting.service.LexiconMatcher lexiconMatcher =
+                new com.shareloop.setting.service.LexiconMatcher();
+        private final ChatContactFilter lexiconFilter = new ChatContactFilter(configService, lexiconMatcher);
+
+        @org.junit.jupiter.api.BeforeEach
+        void setUp() {
+            org.mockito.Mockito.when(configService.lexicon())
+                    .thenReturn(List.of(
+                            new com.shareloop.setting.dto.LexiconEntry(
+                                    "cần sa", "DRUGS", "BLOCK", "PHRASE", List.of(), "BOTH", 1),
+                            new com.shareloop.setting.dto.LexiconEntry(
+                                    "súng", "WEAPONS", "BLOCK", "WORD", List.of("súng nước"), "CHAT", 2),
+                            new com.shareloop.setting.dto.LexiconEntry(
+                                    "từ cấm bài", "OTHER", "BLOCK", "WORD", List.of(), "POST", 3),
+                            new com.shareloop.setting.dto.LexiconEntry(
+                                    "zalo", "CONTACT", "REVIEW", "WORD", List.of(), "CHAT", 4)));
+        }
+
+        @Test
+        @DisplayName("Chặn tin nhắn chứa từ khoá cấm mức BLOCK có scope BOTH")
+        void detect_bannedKeyword_bothScope() {
+            java.util.Optional<String> result = lexiconFilter.checkViolation("Bạn có cần sa không bạn ơi", true);
+
+            assertThat(result).isPresent();
+            assertThat(result.get()).contains("từ khoá cấm (cần sa)");
+        }
+
+        @Test
+        @DisplayName("Chặn tin nhắn chứa từ khoá cấm mức BLOCK có scope CHAT")
+        void detect_bannedKeyword_chatScope() {
+            java.util.Optional<String> result = lexiconFilter.checkViolation("Tôi mang theo khẩu súng nhé", true);
+
+            assertThat(result).isPresent();
+            assertThat(result.get()).contains("từ khoá cấm (súng)");
+        }
+
+        @Test
+        @DisplayName("Không chặn khi từ khoá trùng với trường hợp ngoại lệ (exceptions)")
+        void ignore_bannedKeyword_whenExceptionMatches() {
+            java.util.Optional<String> result = lexiconFilter.checkViolation("Mình tặng súng nước cho bé chơi", true);
+
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Không chặn từ khoá có scope POST trong chat")
+        void ignore_bannedKeyword_whenScopeIsPostOnly() {
+            java.util.Optional<String> result = lexiconFilter.checkViolation("Nội dung chứa từ cấm bài", true);
+
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Không chặn từ khoá mức REVIEW (chỉ chặn mức BLOCK theo FR-78)")
+        void ignore_reviewLevelKeyword() {
+            java.util.Optional<String> result = lexiconFilter.checkViolation("Trao đổi qua zalo nhé bạn", false);
+
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Sau khi chốt lịch (checkContactInfo = false): SĐT không bị chặn nhưng từ cấm BLOCK vẫn bị chặn")
+        void afterLogisticsConfirmed_contactInfoAllowed_butBlockKeywordsStillBlocked() {
+            // SĐT không bị chặn khi checkContactInfo = false
+            java.util.Optional<String> phoneResult = lexiconFilter.checkViolation("Số mình 0912345678 nhé", false);
+            assertThat(phoneResult).isEmpty();
+
+            // Từ cấm mức BLOCK vẫn bị chặn
+            java.util.Optional<String> drugResult = lexiconFilter.checkViolation("Giao cho mình ít cần sa nhé", false);
+            assertThat(drugResult).isPresent();
+            assertThat(drugResult.get()).contains("từ khoá cấm (cần sa)");
+        }
+    }
 }

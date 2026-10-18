@@ -4,14 +4,17 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser, selectData } from '../../app/store';
 import {
   Avatar,
+  Alert,
   Button,
   ConditionBadge,
   Icon,
   SearchField,
   TypeBadge,
 } from '../../components/ui';
-import { CATEGORIES } from '../../constants/domain';
 import type { Item, ItemType, User } from '../../types/domain';
+import { catalogApi } from '../../services/catalogApi';
+import { itemApi, itemErrorMessage } from '../../services/itemApi';
+import { toAreaOptions, toAreaNameMap, toCategoryNameMap, toCategoryNames, toFeItem } from '../../services/mappers';
 import { HomeLifecycle, HomeProcess } from './HomeCommunity';
 import { HomeDiscoveryRail, HomeMotion } from './HomeMotion';
 import './home-content.css';
@@ -130,10 +133,12 @@ function HomeProductCard({ item, owner, tradeFor }: { item: Item; owner?: User; 
 
 function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactNode }) {
   const slides = useMemo(
-    () =>
-      heroSlideIds
+    () => {
+      const configuredSlides = heroSlideIds
         .map((id) => items.find((item) => item.id === id))
-        .filter((item): item is Item => Boolean(item)),
+        .filter((item): item is Item => Boolean(item));
+      return configuredSlides.length ? configuredSlides : items.slice(0, heroSlideIds.length);
+    },
     [items],
   );
   const [activeIndex, setActiveIndex] = useState(0);
@@ -290,16 +295,62 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
 }
 
 export function Home() {
-  const { items, users } = useAppSelector(selectData);
-  const districtOptions = useAppSelector(selectData)
-    .districts.filter((entry) => entry.status === 'active')
-    .map((entry) => entry.name);
+  const { users } = useAppSelector(selectData);
   const currentUser = useAppSelector(selectCurrentUser);
   const navigate = useNavigate();
+  const [apiItems, setApiItems] = useState<Item[]>([]);
+  const [apiDistricts, setApiDistricts] = useState<string[]>([]);
+  const [apiCategories, setApiCategories] = useState<string[]>([]);
+  const [apiError, setApiError] = useState('');
+  const [apiLoading, setApiLoading] = useState(true);
   const [q, setQ] = useState('');
   const [district, setDistrict] = useState('Bình Thạnh');
   const [newItemFilter, setNewItemFilter] = useState<'all' | ItemType>('all');
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
+  const items = apiItems;
+  const districtOptions = apiDistricts;
+  const categoryOptions = apiCategories;
+
+  useEffect(() => {
+    let active = true;
+    setApiLoading(true);
+    setApiError('');
+    Promise.all([
+      catalogApi.categories(),
+      catalogApi.areas(),
+      itemApi.list({ page: 0, size: 100 }),
+    ])
+      .then(([categories, areas, page]) => {
+        if (!active) return;
+        const areaOptions = toAreaOptions(areas);
+        setApiCategories(toCategoryNames(categories));
+        setApiDistricts(areaOptions.map((area) => area.label));
+        setApiItems(
+          page.items.map((item) =>
+            toFeItem(item, toCategoryNameMap(categories), toAreaNameMap(areas)),
+          ),
+        );
+        setDistrict((current) =>
+          areaOptions.some((area) => area.label === current)
+            ? current
+            : areaOptions[0]?.label ?? '',
+        );
+      })
+      .catch((error) => {
+        if (!active) return;
+        setApiItems([]);
+        setApiDistricts([]);
+        setApiCategories([]);
+        setApiError(itemErrorMessage(error, 'Không tải được danh sách bài đăng từ Backend. Vui lòng thử lại.'));
+      })
+      .finally(() => {
+        if (active) setApiLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const approved = useMemo(
     () =>
@@ -316,9 +367,10 @@ export function Home() {
       ? approved
       : approved.filter((item) => item.type === newItemFilter)
   ).slice(0, 5);
-  const featured = featuredIds
+  const configuredFeatured = featuredIds
     .map((id) => approved.find((item) => item.id === id))
     .filter((item): item is Item => Boolean(item));
+  const featured = configuredFeatured.length ? configuredFeatured : approved.slice(0, 5);
   const districtCounts = popularDistricts.map((name) => ({
     name,
     count: approved.filter((item) => item.district === name).length,
@@ -382,17 +434,23 @@ export function Home() {
         </div>
       </HomeHeroCarousel>
 
+      {apiLoading ? <div className="home-inner mt-4"><Alert>Đang tải bài đăng từ Backend...</Alert></div> : null}
+      {apiError ? <div className="home-inner mt-4"><Alert tone="error">{apiError}</Alert></div> : null}
+      {!apiLoading && !apiError && !items.length ? (
+        <div className="home-inner mt-4"><Alert>Hiện chưa có bài đăng đã duyệt.</Alert></div>
+      ) : null}
+
       <HomeMotion>
         <HomeSection className="home-band home-categories-band">
           <SectionHeading title="Khám phá theo danh mục" description="Tìm nhanh những món đồ đang được chia sẻ trong cộng đồng." href="/browse" />
           <HomeDiscoveryRail label="Khám phá theo danh mục" variant="categories">
-            {CATEGORIES.map((category, index) => {
+            {categoryOptions.map((category, index) => {
               const categoryItems = approved.filter((item) => item.category === category);
               return (
                 <Link key={category} to={`/browse?category=${encodeURIComponent(category)}`} className="home-category group">
                   <Icon name="arrow" className="home-category-arrow" />
                   <span className="home-category-icon">
-                    <Icon name={categoryIcons[index]} />
+                    <Icon name={categoryIcons[index] ?? 'package'} />
                   </span>
                   <span className="home-category-label">{category}</span>
                   <span className="home-category-count">{categoryItems.length} món đồ</span>

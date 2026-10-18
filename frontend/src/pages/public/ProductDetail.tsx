@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { actions, selectCurrentUser, selectData } from '../../app/store';
+import { useAppSelector } from '../../app/hooks';
+import { selectCurrentUser, selectData } from '../../app/store';
 import {
   Alert,
   Button,
@@ -14,7 +14,7 @@ import {
   TypeBadge,
 } from '../../components/ui';
 import { catalogApi } from '../../services/catalogApi';
-import { itemApi } from '../../services/itemApi';
+import { itemApi, itemErrorMessage } from '../../services/itemApi';
 import { requestApi, toBackendUserId, toFeItemRequest } from '../../services/requestApi';
 import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
 import type { Item, ItemRequest, User } from '../../types/domain';
@@ -30,7 +30,6 @@ export function ProductDetail() {
   const { id } = useParams();
   const data = useAppSelector(selectData);
   const user = useAppSelector(selectCurrentUser);
-  const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [requestError, setRequestError] = useState('');
   const [requestSuccess, setRequestSuccess] = useState('');
@@ -45,9 +44,8 @@ export function ProductDetail() {
   const [itemError, setItemError] = useState('');
   const [itemReloadKey, setItemReloadKey] = useState(0);
   const [requestSubmitting, setRequestSubmitting] = useState(false);
-  const mockItem = data.items.find((x) => x.id === id);
   const isApiId = Boolean(id && /^\d+$/.test(id));
-  const item = isApiId ? apiItem : mockItem;
+  const item = apiItem;
   const currentUserId = toBackendUserId(user?.id);
 
   useEffect(() => {
@@ -61,10 +59,10 @@ export function ProductDetail() {
         if (!active) return;
         setApiItem(toFeItem(detail, new Map([[category.id, category.name]]), toAreaNameMap(areas)));
       })
-      .catch(() => {
+      .catch((error) => {
         if (!active) return;
         setApiItem(null);
-        setItemError('Không tải được chi tiết bài đăng.');
+        setItemError(itemErrorMessage(error, 'Không tải được chi tiết bài đăng.'));
       })
       .finally(() => {
         if (active) setLoadingItem(false);
@@ -133,35 +131,13 @@ export function ProductDetail() {
       </div>
     );
 
-  const owner = isApiId
-    ? null
-    : data.users.find((x) => x.id === item.ownerId) ??
-    ({
-      id: item.ownerId,
-      username: item.ownerId,
-      password: '',
-      name: item.ownerId.startsWith('api_') ? `Người đăng #${item.ownerId.replace('api_', '')}` : 'Người đăng',
-      email: '',
-      phone: '',
-      district: item.district,
-      avatarInitials: item.ownerId.startsWith('api_') ? item.ownerId.replace('api_', '').slice(0, 2) : 'ND',
-      totalCredit: 0,
-      availableCredit: 0,
-      holdCredit: 0,
-      rewardPoints: 0,
-      reputationStars: 5,
-      rank: 'Thành viên',
-      status: 'active',
-      role: 'user',
-      joinedAt: item.postedAt,
-      totalTx: 0,
-    } satisfies User);
+  const owner: User | null = null;
   const own = user?.id === item.ownerId;
   const activeListing =
     (item.status === 'approved' || item.status === 'APPROVED') &&
     (!item.expiresAt || new Date(item.expiresAt).getTime() >= Date.now());
   const existingRequest = user
-    ? (isApiId ? apiSentRequests : data.itemRequests).find(
+    ? apiSentRequests.find(
         (request) =>
           request.itemId === item.id &&
           request.requesterId === user.id &&
@@ -169,7 +145,7 @@ export function ProductDetail() {
       )
     : undefined;
   const eligibleOfferedItems = user
-    ? (isApiId ? apiOfferedItems : data.items).filter(
+    ? apiOfferedItems.filter(
         (entry) =>
           entry.ownerId === user.id &&
           entry.id !== item.id &&
@@ -186,7 +162,7 @@ export function ProductDetail() {
       setLoginPromptOpen(true);
       return;
     }
-    if (isApiId && !currentUserId) {
+    if (!currentUserId) {
       setRequestError('Vui lòng đăng nhập bằng tài khoản thật để gửi yêu cầu.');
       return;
     }
@@ -209,43 +185,28 @@ export function ProductDetail() {
       return;
     }
     if (requestSubmitting) return;
-    if (isApiId) {
-      if (!currentUserId) {
-        setRequestError('Vui lòng đăng nhập bằng tài khoản thật để gửi yêu cầu.');
-        return;
-      }
-      setRequestSubmitting(true);
-      setRequestError('');
-      try {
-        const request = await requestApi.create(
-          Number(item.id),
-          currentUserId,
-          item.type === 'trade' ? Number(offeredItemId) : undefined,
-        );
-        setApiSentRequests((current) => [toFeItemRequest(request, user.id), ...current]);
-        setRequestOpen(false);
-        setMessage('');
-        setOfferedItemId('');
-        setRequestSuccess(item.type === 'gift' ? 'Đã gửi yêu cầu nhận.' : 'Đã gửi đề nghị trao đổi.');
-      } catch {
-        setRequestError('Không gửi được yêu cầu. Vui lòng thử lại.');
-      } finally {
-        setRequestSubmitting(false);
-      }
+    if (!currentUserId) {
+      setRequestError('Vui lòng đăng nhập bằng tài khoản thật để gửi yêu cầu.');
       return;
     }
-    dispatch(
-      actions.createItemRequest({
-        itemId: item.id,
-        requesterId: user.id,
-        offeredItemId: item.type === 'trade' ? offeredItemId : undefined,
-        message,
-      }),
-    );
-    setRequestOpen(false);
-    setMessage('');
-    setOfferedItemId('');
-    setRequestSuccess(item.type === 'gift' ? 'Đã gửi yêu cầu nhận.' : 'Đã gửi đề nghị trao đổi.');
+    setRequestSubmitting(true);
+    setRequestError('');
+    try {
+      const request = await requestApi.create(
+        Number(item.id),
+        currentUserId,
+        item.type === 'trade' ? Number(offeredItemId) : undefined,
+      );
+      setApiSentRequests((current) => [toFeItemRequest(request, user.id), ...current]);
+      setRequestOpen(false);
+      setMessage('');
+      setOfferedItemId('');
+      setRequestSuccess(item.type === 'gift' ? 'Đã gửi yêu cầu nhận.' : 'Đã gửi đề nghị trao đổi.');
+    } catch (error) {
+      setRequestError(itemErrorMessage(error, 'Không gửi được yêu cầu. Vui lòng thử lại.'));
+    } finally {
+      setRequestSubmitting(false);
+    }
   };
 
   const cancelApiRequest = async (requestId: string) => {

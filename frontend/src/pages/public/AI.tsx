@@ -8,16 +8,20 @@ import { findNeedMatches, parseNeed } from '../../utils/aiMatching';
 import type { Item, ItemType } from '../../types/domain';
 import { AI_ASSISTANT_SEARCH_FEE } from '../../utils/credit';
 import { toBackendUserId } from '../../services/requestApi';
+import { catalogApi } from '../../services/catalogApi';
+import { itemApi, itemErrorMessage } from '../../services/itemApi';
+import { toAreaNameMap, toAreaNames, toCategoryNameMap, toCategoryNames, toFeItem } from '../../services/mappers';
 
 export function AI() {
   const data = useAppSelector(selectData);
   const user = useAppSelector(selectCurrentUser);
   const isApiAccount = toBackendUserId(user?.id) !== null;
   const dispatch = useAppDispatch();
-  const districts = useMemo(
-    () => data.districts.filter((entry) => entry.status === 'active').map((entry) => entry.name),
-    [data.districts],
-  );
+  const [items, setItems] = useState<Item[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [districts, setDistricts] = useState<string[]>([]);
+  const [itemsError, setItemsError] = useState('');
+  const [itemsLoading, setItemsLoading] = useState(true);
   const [text, setText] = useState('');
   const [type, setType] = useState<ItemType | ''>('');
   const [district, setDistrict] = useState('');
@@ -28,17 +32,11 @@ export function AI() {
   const [reduceMotion, setReduceMotion] = useState(false);
   const [railAnimating, setRailAnimating] = useState(false);
   const [railResetting, setRailResetting] = useState(false);
-  const slideshowItems = useMemo(
-    () =>
-      ['item_022', 'item_005', 'item_001', 'item_024', 'item_014', 'item_006', 'item_009', 'item_011', 'item_016', 'item_008']
-        .map((id) => data.items.find((item) => item.id === id))
-        .filter((item): item is Item => Boolean(item)),
-    [data.items],
-  );
+  const slideshowItems = useMemo(() => items.slice(0, 10), [items]);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const results = useMemo(
-    () => findNeedMatches(data.items, text, { type, district, category }),
-    [category, data.items, district, text, type],
+    () => findNeedMatches(items, text, { type, district, category }),
+    [category, district, items, text, type],
   );
   const carouselItems = useMemo(
     () => [...slideshowItems, ...slideshowItems.slice(0, Math.min(7, slideshowItems.length))],
@@ -48,6 +46,32 @@ export function AI() {
     activeImageIndex === 0
       ? '0px'
       : `calc(0px ${Array.from({ length: activeImageIndex }, () => '- var(--ai-step)').join(' ')})`;
+
+  useEffect(() => {
+    let active = true;
+    setItemsLoading(true);
+    setItemsError('');
+    Promise.all([catalogApi.categories(), catalogApi.areas(), itemApi.list({ page: 0, size: 100 })])
+      .then(([categoryData, areaData, page]) => {
+        if (!active) return;
+        setCategories(toCategoryNames(categoryData));
+        setDistricts(toAreaNames(areaData));
+        setItems(page.items.map((item) => toFeItem(item, toCategoryNameMap(categoryData), toAreaNameMap(areaData))));
+      })
+      .catch((error) => {
+        if (!active) return;
+        setItems([]);
+        setCategories([]);
+        setDistricts([]);
+        setItemsError(itemErrorMessage(error, 'Không tải được bài đăng từ Backend.'));
+      })
+      .finally(() => {
+        if (active) setItemsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -93,7 +117,7 @@ export function AI() {
     }
     setCreditError(false);
     if (user && !isApiAccount) dispatch(actions.useAiFeature({ userId: user.id, feature: 'ASSISTANT_SEARCH' }));
-    const parsed = parseNeed(text, CATEGORIES, districts);
+    const parsed = parseNeed(text, categories.length ? categories : CATEGORIES, districts);
     setType(parsed.type);
     setDistrict(parsed.district);
     setCategory(parsed.category);
@@ -106,6 +130,8 @@ export function AI() {
         title="Trợ lý tìm đồ"
         description="Mô tả nhu cầu bằng tiếng Việt. Trợ lý chỉ tìm trong các bài đăng SHARELOOP."
       />
+      {itemsLoading ? <Alert>Đang tải bài đăng từ Backend...</Alert> : null}
+      {itemsError ? <Alert tone="error">{itemsError}</Alert> : null}
       <div className="space-y-10">
         <div className="ai-hero-panel overflow-hidden rounded-[24px] bg-[#f6efe4] ring-1 ring-border/70">
           <section className="mx-auto max-w-3xl text-center">
