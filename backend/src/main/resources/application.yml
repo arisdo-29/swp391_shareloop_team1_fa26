@@ -30,7 +30,9 @@ app:
   # module auth / config (BE1)
   cors: {}
   # module media (BE2)
-  storage: {}
+  storage:
+    type: local                     # local | s3; profile prod đọc từ STORAGE_TYPE
+    local-dir: ./uploads            # chỉ dùng khi type = local
   # module integration/ai (BE2)
   ai:
     api-key: ${AI_API_KEY:}
