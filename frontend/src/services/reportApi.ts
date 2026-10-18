@@ -39,10 +39,36 @@ export interface ReportResponse {
   createdAt: string;
 }
 
+export interface CreateDisputeRequest {
+  reason: string;
+  note?: string;
+  evidenceMediaIds?: number[];
+}
+
+export interface DisputeResponseRequest {
+  note: string;
+  evidenceMediaIds?: number[];
+}
+
+export interface DisputeResponse {
+  id: number;
+  responseDueAt: string;
+}
+
+export function openDispute(requestId: number, body: CreateDisputeRequest): Promise<DisputeResponse> {
+  return http.post<DisputeResponse>(`/api/v1/requests/${requestId}/disputes`, body).then(res => res.data);
+}
+
+export function respondDispute(disputeId: number, body: DisputeResponseRequest): Promise<void> {
+  return http.post<void>(`/api/v1/disputes/${disputeId}/response`, body).then(() => undefined);
+}
+
 export const reportApi = {
   async createReport(data: CreateReportRequest): Promise<ReportResponse> {
     const response = await http.post<ReportResponse>('/api/v1/reports', data);
     return response.data;
   },
+  openDispute,
+  respondDispute,
 };
 
