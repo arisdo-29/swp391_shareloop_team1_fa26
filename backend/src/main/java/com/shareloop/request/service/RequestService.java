@@ -238,6 +238,10 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
         }
 
+        if (request.getStatus() != RequestStatus.PENDING) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+
         request.cancel("Người gửi tự huỷ yêu cầu");
         Request saved = requestRepository.save(request);
 
