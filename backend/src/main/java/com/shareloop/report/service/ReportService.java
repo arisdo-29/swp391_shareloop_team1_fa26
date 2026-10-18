@@ -39,6 +39,7 @@ public class ReportService {
     private final Clock clock;
     private final JdbcClient jdbcClient;
 
+    @Autowired
     public ReportService(
             ReportRepository reportRepository,
             ItemQueryService itemQueryService,
@@ -56,11 +57,6 @@ public class ReportService {
         this.notificationService = notificationService;
         this.clock = clock != null ? clock : Clock.systemDefaultZone();
         this.jdbcClient = jdbcClient;
-    }
-
-    public ReportService(
-            ReportRepository reportRepository, ItemQueryService itemQueryService, ItemService itemService) {
-        this(reportRepository, itemQueryService, itemService, null, null, null, null, null);
     }
 
     @Transactional
