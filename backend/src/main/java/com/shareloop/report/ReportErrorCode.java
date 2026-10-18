@@ -7,7 +7,9 @@ public enum ReportErrorCode implements ErrorCode {
     REPORT_TARGET_REQUIRED(HttpStatus.BAD_REQUEST, "Đối tượng báo cáo là bắt buộc."),
     REPORT_CANNOT_REPORT_SELF(HttpStatus.BAD_REQUEST, "Không thể tự báo cáo chính mình hoặc bài đăng của chính mình."),
     REPORT_ALREADY_REPORTED(HttpStatus.CONFLICT, "Bạn đã báo cáo đối tượng này trước đó."),
-    REPORT_TARGET_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy đối tượng cần báo cáo.");
+    REPORT_TARGET_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy đối tượng cần báo cáo."),
+    REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy báo cáo vi phạm."),
+    REPORT_ALREADY_CONCLUDED(HttpStatus.CONFLICT, "Báo cáo này đã được kết luận trước đó.");
 
     private final HttpStatus status;
     private final String defaultMessage;

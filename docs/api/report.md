@@ -71,7 +71,84 @@ Báo cáo một bài đăng hoặc một người dùng vi phạm quy tắc cộ
 
 ---
 
+## 2. POST /api/v1/admin/reports/{reportId}/conclude
+
+Admin đưa ra kết luận xử lý đối với báo cáo vi phạm (FR-91, FR-93, BR-U04, BR-A07, Issue #113).
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền `ROLE_ADMIN`. ID của Admin được trích xuất từ phiên đăng nhập (`@CurrentUserId`).
+- **Quy tắc nghiệp vụ:**
+  - Báo cáo phải tồn tại trong hệ thống (`404 REPORT_NOT_FOUND`).
+  - Báo cáo chưa được kết luận trước đó; nếu đã ở trạng thái `RESOLVED` hoặc `DISMISSED` thì từ chối xử lý (`409 REPORT_ALREADY_CONCLUDED`).
+  - **Khi kết luận DISMISS (Bác bỏ / Không có cơ sở):**
+    - Trạng thái báo cáo chuyển thành `DISMISSED`.
+    - Không trừ sao uy tín, không ẩn bài đăng.
+    - Ghi nhận nhật ký hành động Admin (`activity_logs` loại `REPORT_DISMISSED`).
+  - **Khi kết luận UPHOLD (Chấp thuận / Khiếu nại có cơ sở):**
+    - Trạng thái báo cáo chuyển thành `RESOLVED`.
+    - Xác định người vi phạm (`violatorId`):
+      - Đối tượng là `ITEM`: Chủ bài đăng (`donorId`).
+      - Đối tượng là `USER`: Người dùng bị báo cáo (`targetUserId`).
+      - Đối tượng là `REQUEST`: Bên bị khiếu nại trong giao dịch (khác với người gửi báo cáo).
+    - Trừ 1 sao uy tín của người vi phạm qua `ReputationService.deductStar(violatorId, 1, note)` (BR-U04).
+    - Nếu lý do vi phạm thuộc nhóm nghiêm trọng cấu hình qua `REPORT_SERIOUS_REASONS` (mặc định: `PROHIBITED_ITEM`, `COUNTERFEIT`):
+      - Hệ thống tự động ẩn toàn bộ các bài đăng đang hoạt động khác của người vi phạm để rà soát (`itemService.hideAllOfUser(violatorId)`, BR-A07).
+    - Nếu đối tượng báo cáo là bài đăng cụ thể (`ITEM`), tự động ẩn bài đăng đó (`itemService.hide(itemId)`).
+    - Ghi nhận nhật ký hành động Admin (`activity_logs` loại `REPORT_UPHELD`).
+  - Cập nhật thông tin Admin kết luận (`resolved_by`), ghi chú kết luận (`resolution`) và thời điểm kết luận (`resolved_at`).
+
+- **Request Body:**
+
+```json
+{
+  "decision": "UPHOLD",
+  "note": "Xác minh sản phẩm là hàng cấm lưu hành theo quy chế cộng đồng, áp dụng chế tài trừ 1 sao và rà soát các bài đăng khác."
+}
+```
+
+*Hoặc bác bỏ:*
+
+```json
+{
+  "decision": "DISMISS",
+  "note": "Bằng chứng người báo cáo cung cấp không đủ cơ sở xác định vi phạm."
+}
+```
+
+- **Thành công:** `200 OK`, trả về `ReportConclusionResponse`.
+
+```json
+{
+  "id": 1,
+  "targetType": "ITEM",
+  "itemId": 105,
+  "targetUserId": null,
+  "requestId": null,
+  "reason": "PROHIBITED_ITEM",
+  "status": "RESOLVED",
+  "resolvedBy": 2,
+  "resolution": "Xác minh sản phẩm là hàng cấm lưu hành theo quy chế cộng đồng, áp dụng chế tài trừ 1 sao và rà soát các bài đăng khác.",
+  "starsDeducted": 1,
+  "resolvedAt": "2026-10-18T13:00:00Z"
+}
+```
+
+- **Mã lỗi:**
+  - `400 BAD_REQUEST`:
+    - `VALIDATION_FAILED`: `decision` bị thiếu hoặc không thuộc `UPHOLD`/`DISMISS`; `note` vượt quá 500 ký tự.
+  - `401 UNAUTHORIZED`: Chưa đăng nhập.
+  - `403 FORBIDDEN`: Người dùng không có vai trò `ROLE_ADMIN`.
+  - `404 NOT_FOUND`:
+    - `REPORT_NOT_FOUND`: Báo cáo vi phạm với `reportId` tương ứng không tồn tại.
+  - `409 CONFLICT`:
+    - `REPORT_ALREADY_CONCLUDED`: Báo cáo vi phạm đã được kết luận xử lý trước đó.
+
+---
+
 ## DTO & Enums
+
+### ReportDecision
+- `UPHOLD`: Chấp thuận khiếu nại (báo cáo có cơ sở, áp dụng chế tài).
+- `DISMISS`: Bác bỏ khiếu nại (báo cáo không có cơ sở, đóng khiếu nại).
 
 ### TargetType
 - `ITEM`: Báo cáo bài đăng cho tặng / trao đổi đồ.
@@ -94,6 +171,6 @@ Báo cáo một bài đăng hoặc một người dùng vi phạm quy tắc cộ
 ### ReportStatus
 - `OPEN`: Mới tạo, đang chờ ban quản trị xử lý.
 - `AWAITING_RESPONSE`: Chờ người bị báo cáo giải trình.
-- `RESOLVED`: Đã giải quyết xong.
-- `DISMISSED`: Bác bỏ báo cáo (báo cáo sai sự thật).
+- `RESOLVED`: Đã giải quyết xong (chấp thuận khiếu nại).
+- `DISMISSED`: Bác bỏ báo cáo (báo cáo sai sự thật / không có cơ sở).
 

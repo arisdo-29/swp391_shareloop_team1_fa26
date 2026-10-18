@@ -347,6 +347,23 @@ public class ReputationService {
                 .orElse(true);
     }
 
+    /**
+     * Trừ sao uy tín (TrustStars) của người dùng khi vi phạm (FR-91, FR-92, BR-U04, BR-U05, Issue #113, #114).
+     *
+     * @param userId ID người dùng bị trừ sao
+     * @param amount số sao cần trừ
+     * @param reason lý do trừ sao
+     */
+    @Transactional
+    public void deductStar(Long userId, int amount, String reason) {
+        // Stub for #114 dependency - to be implemented fully in #114
+    }
+
+    @Transactional
+    public void deductStar(Long userId, int amount) {
+        deductStar(userId, amount, null);
+    }
+
     private int getThreshold(String upperKey, String lowerKey, int fallback) {
         try {
             return configService.getDecimal(upperKey).intValue();
