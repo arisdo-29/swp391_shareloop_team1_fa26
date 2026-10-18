@@ -16,6 +16,8 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.reputation.dto.ReputationSummary;
+import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
@@ -214,6 +216,19 @@ class RequestServiceTest {
         assertThatThrownBy(() -> requestService.cancelRequest(55L, 999L))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_FORBIDDEN);
+                });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi REQUEST_INVALID_STATE_TRANSITION khi huỷ yêu cầu không còn ở trạng thái PENDING (BR-R04)")
+    void cancelRequest_whenNotPending_throwsInvalidStateTransition() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.transitionTo(com.shareloop.request.entity.RequestStatus.RESERVED);
+        when(requestRepository.findById(55L)).thenReturn(Optional.of(request));
+
+        assertThatThrownBy(() -> requestService.cancelRequest(55L, 10L))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
                 });
     }
 
@@ -813,5 +828,83 @@ class RequestServiceTest {
         // then
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).receiverName()).isEqualTo("Nguyễn Văn B");
+    }
+
+    @Test
+    @DisplayName(
+            "listByItem: Trả kèm TrustStars, hạng và tỉ lệ đúng mô tả lấy từ ReputationService (FR-65, Issue #110)")
+    void listByItem_whenDonorCalls_returnsReceiverReputationInfo() {
+        // given
+        Request request = new Request(1L, 10L, null, "GIVE");
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.findByItemIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(request));
+        when(userService.findContact(10L))
+                .thenReturn(new ContactInfo(10L, "Nguyễn Văn B", "receiver@example.com", "0901234567"));
+        when(reputationService.getReputationSummary(10L)).thenReturn(new ReputationSummary(10L, 5, Rank.SILVER, 95.5));
+
+        // when
+        List<RequestResponse> responses = requestService.listByItem(1L, 20L); // donor gọi
+
+        // then
+        assertThat(responses).hasSize(1);
+        RequestResponse resp = responses.get(0);
+        assertThat(resp.receiverName()).isEqualTo("Nguyễn Văn B");
+        assertThat(resp.receiverTrustStars()).isEqualTo(5);
+        assertThat(resp.trustStars()).isEqualTo(5);
+        assertThat(resp.receiverRank()).isEqualTo("SILVER");
+        assertThat(resp.rank()).isEqualTo("SILVER");
+        assertThat(resp.receiverAsDescribedRate()).isEqualTo(95.5);
+        assertThat(resp.asDescribedRate()).isEqualTo(95.5);
+    }
+
+    @Test
+    @DisplayName("listByItem: Khi ReputationService ném lỗi, vẫn trả về danh sách an toàn với giá trị mặc định")
+    void listByItem_whenReputationServiceFails_returnsDefaultReputationGracefully() {
+        // given
+        Request request = new Request(1L, 10L, null, "GIVE");
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.findByItemIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(request));
+        when(userService.findContact(10L))
+                .thenReturn(new ContactInfo(10L, "Nguyễn Văn B", "receiver@example.com", "0901234567"));
+        when(reputationService.getReputationSummary(10L))
+                .thenThrow(new RuntimeException("Database error in reputation"));
+
+        // when
+        List<RequestResponse> responses = requestService.listByItem(1L, 20L);
+
+        // then
+        assertThat(responses).hasSize(1);
+        RequestResponse resp = responses.get(0);
+        assertThat(resp.receiverName()).isEqualTo("Nguyễn Văn B");
+        assertThat(resp.receiverTrustStars()).isEqualTo(5);
+        assertThat(resp.receiverRank()).isEqualTo("BRONZE");
+        assertThat(resp.receiverAsDescribedRate()).isNull();
+    }
+
+    @Test
+    @DisplayName("getDetail: Khi chủ bài xem chi tiết yêu cầu, trả kèm thông tin uy tín của người xin")
+    void getDetail_whenDonorCalls_returnsReceiverReputationInfo() {
+        // given
+        Request request = new Request(1L, 10L, null, "GIVE");
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(userService.findContact(10L))
+                .thenReturn(new ContactInfo(10L, "Nguyễn Văn B", "receiver@example.com", "0901234567"));
+        when(reputationService.getReputationSummary(10L)).thenReturn(new ReputationSummary(10L, 4, Rank.GOLD, 100.0));
+
+        // when
+        RequestResponse resp = requestService.getDetail(101L, 20L); // donor xem
+
+        // then
+        assertThat(resp.receiverName()).isEqualTo("Nguyễn Văn B");
+        assertThat(resp.receiverTrustStars()).isEqualTo(4);
+        assertThat(resp.receiverRank()).isEqualTo("GOLD");
+        assertThat(resp.receiverAsDescribedRate()).isEqualTo(100.0);
     }
 }

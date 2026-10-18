@@ -7,7 +7,8 @@ import { PasswordField } from '../../components/PasswordField';
 import { authApi } from '../../services/authApi';
 import { authErrorMessage } from '../../services/authErrors';
 import type { ApiError } from '../../services/http';
-import { toFeUser } from '../../services/mappers';
+import { fetchSessionUser } from '../../services/session';
+import { validEmail } from '../../utils/passwordSecurity';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -26,18 +27,27 @@ export function Login() {
       setError('Vui lòng nhập email.');
       return;
     }
+    if (!validEmail(normalized)) {
+      setError('Email không đúng định dạng.');
+      return;
+    }
     if (!pass) {
       setError('Vui lòng nhập mật khẩu.');
       return;
     }
     setProcessing(true);
     try {
-      const result = await authApi.login(normalized, pass);
-      const user = toFeUser(result.user);
+      await authApi.login({ email: normalized, password: pass });
+      const user = await fetchSessionUser();
       dispatch(actions.loginFromApi(user));
       navigate(user.role === 'admin' ? '/admin' : '/');
     } catch (apiError) {
-      setError(authErrorMessage(apiError as ApiError));
+      const authError = apiError as ApiError;
+      if (authError.code === 'AUTH_EMAIL_NOT_VERIFIED') {
+        navigate('/verify-email', { state: { email: normalized } });
+        return;
+      }
+      setError(authErrorMessage(authError));
     } finally {
       setProcessing(false);
     }

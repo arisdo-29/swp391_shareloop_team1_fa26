@@ -26,7 +26,7 @@ public enum ConfigKey {
     AI_SEARCH_TIMEOUT_SECONDS("ai_search_timeout_seconds", "15"),
     CHAT_AI_THRESHOLD("chat_ai_threshold", "0.7", ValueType.DECIMAL, BigDecimal.ZERO, BigDecimal.ONE),
     CHAT_AI_TIMEOUT_SECONDS("chat_ai_timeout_seconds", "5"),
-    ITEM_AI_TIMEOUT_SECONDS("item_ai_timeout_seconds", "20"),
+    ITEM_AI_TIMEOUT_SECONDS("item_ai_timeout_seconds", "15"),
     ITEM_AI_RETRIES("item_ai_retries", "1"),
     CHAT_VIOLATION_ALERT("chat_violation_alert", "3"),
     ITEM_PHOTOS_MIN("item_photos_min", "3"),
@@ -48,7 +48,10 @@ public enum ConfigKey {
     COMPLAINT_WINDOW_DAYS("complaint_window_days", "7"),
     RESPONSE_WINDOW_DAYS("response_window_days", "3"),
     DAILY_POINTS_CAP("daily_points_cap", "30"),
-    PAYMENT_ORDER_EXPIRE_MINUTES("payment_order_expire_minutes", "30");
+    PAYMENT_ORDER_EXPIRE_MINUTES("payment_order_expire_minutes", "30"),
+    REPUTATION_SILVER_MIN("reputation_silver_min", "50"),
+    REPUTATION_GOLD_MIN("reputation_gold_min", "150"),
+    REPUTATION_DIAMOND_MIN("reputation_diamond_min", "400");
 
     private final String key;
     private final String defaultValue;

@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -16,7 +17,10 @@ import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
 import com.shareloop.user.UserErrorCode;
+import com.shareloop.user.dto.ChangePhoneOtpResponse;
+import com.shareloop.user.dto.ChangePhoneRequest;
 import com.shareloop.user.dto.MeResponse;
+import com.shareloop.user.dto.SendChangePhoneOtpRequest;
 import com.shareloop.user.dto.UpdateProfileRequest;
 import com.shareloop.user.service.UserService;
 import org.junit.jupiter.api.Test;
@@ -130,6 +134,91 @@ class MeControllerTest {
                 .andExpect(jsonPath("$.fullName").value("Nguyễn Văn An"))
                 .andExpect(jsonPath("$.email").value("an@example.com"))
                 .andExpect(jsonPath("$.avatarMediaId").value(30));
+    }
+
+    @Test
+    void sendChangePhoneOtp_withoutToken_returns401() throws Exception {
+        String body = "{\"newPhone\":\"0987654321\"}";
+
+        mockMvc.perform(post(URL + "/phone/otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+        verifyNoInteractions(userService);
+    }
+
+    @Test
+    void sendChangePhoneOtp_whenInvalidPhoneRegex_returns400ValidationFailed() throws Exception {
+        String body = "{\"newPhone\":\"12345\"}";
+
+        mockMvc.perform(post(URL + "/phone/otp")
+                        .header("Authorization", bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.field").value("newPhone"));
+        verifyNoInteractions(userService);
+    }
+
+    @Test
+    void sendChangePhoneOtp_whenValid_returns200() throws Exception {
+        SendChangePhoneOtpRequest request = new SendChangePhoneOtpRequest("0987654321");
+        when(userService.sendChangePhoneOtp(USER_ID, request))
+                .thenReturn(new ChangePhoneOtpResponse("an@example.com", 300, 60));
+        String body = "{\"newPhone\":\"0987654321\"}";
+
+        mockMvc.perform(post(URL + "/phone/otp")
+                        .header("Authorization", bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("an@example.com"))
+                .andExpect(jsonPath("$.otpExpiresInSeconds").value(300))
+                .andExpect(jsonPath("$.resendCooldownSeconds").value(60));
+    }
+
+    @Test
+    void changePhone_withoutToken_returns401() throws Exception {
+        String body = "{\"newPhone\":\"0987654321\",\"otp\":\"123456\"}";
+
+        mockMvc.perform(put(URL + "/phone")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+        verifyNoInteractions(userService);
+    }
+
+    @Test
+    void changePhone_whenInvalidOtp_returns400ValidationFailed() throws Exception {
+        String body = "{\"newPhone\":\"0987654321\",\"otp\":\"abc\"}";
+
+        mockMvc.perform(put(URL + "/phone")
+                        .header("Authorization", bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.field").value("otp"));
+        verifyNoInteractions(userService);
+    }
+
+    @Test
+    void changePhone_whenValid_returns200() throws Exception {
+        ChangePhoneRequest request = new ChangePhoneRequest("0987654321", "123456");
+        MeResponse updated = new MeResponse(
+                USER_ID, "an@example.com", "Nguyễn Văn An", "0987654321", false, 12L, 30L, "/api/v1/media/30");
+        when(userService.changePhone(USER_ID, request)).thenReturn(updated);
+        String body = "{\"newPhone\":\"0987654321\",\"otp\":\"123456\"}";
+
+        mockMvc.perform(put(URL + "/phone")
+                        .header("Authorization", bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.phone").value("0987654321"));
     }
 
     private String bearerToken() {

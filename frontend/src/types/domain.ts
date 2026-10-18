@@ -164,6 +164,9 @@ export interface ItemRequest {
   offeredItemId?: string;
   requesterId: string;
   requesterName?: string;
+  requesterTrustStars?: number;
+  requesterRank?: string;
+  requesterAsDescribedRate?: number;
   status: ItemRequestStatus;
   message: string;
   createdAt: string;

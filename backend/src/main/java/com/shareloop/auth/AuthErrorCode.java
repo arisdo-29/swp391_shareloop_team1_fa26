@@ -8,7 +8,11 @@ public enum AuthErrorCode implements ErrorCode {
     AUTH_EMAIL_ALREADY_REGISTERED(HttpStatus.CONFLICT, "Email đã được đăng ký."),
     AUTH_PHONE_ALREADY_USED(HttpStatus.CONFLICT, "Số điện thoại đã được sử dụng."),
     AUTH_PHONE_INVALID(HttpStatus.BAD_REQUEST, "Số điện thoại không đúng định dạng."),
-    AUTH_EMAIL_DOMAIN_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "Tên miền email không được phép."),
+    AUTH_EMAIL_DOMAIN_NOT_ALLOWED(
+            HttpStatus.BAD_REQUEST, "Không thể đăng ký bằng email dùng một lần. Vui lòng dùng email cá nhân của bạn."),
+    AUTH_TOO_MANY_ACCOUNTS_FROM_IP(
+            HttpStatus.TOO_MANY_REQUESTS,
+            "Mạng của bạn đã tạo quá nhiều tài khoản trong 24 giờ qua. Vui lòng thử lại sau."),
     AUTH_OTP_INVALID(HttpStatus.BAD_REQUEST, "Mã OTP không đúng."),
     AUTH_OTP_EXPIRED(HttpStatus.BAD_REQUEST, "Mã OTP đã hết hạn."),
     AUTH_OTP_TOO_MANY_ATTEMPTS(HttpStatus.UNPROCESSABLE_ENTITY, "Bạn đã nhập sai quá nhiều lần, vui lòng gửi lại mã."),

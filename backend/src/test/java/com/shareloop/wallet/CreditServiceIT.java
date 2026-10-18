@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
 import com.shareloop.support.IntegrationTest;
 import com.shareloop.wallet.dto.WalletResponse;
 import com.shareloop.wallet.dto.WalletTransactionResponse;
@@ -38,6 +40,9 @@ class CreditServiceIT extends IntegrationTest {
 
     @Autowired
     CreditService creditService;
+
+    @Autowired
+    ConfigService configService;
 
     @Autowired
     JdbcTemplate jdbc;
@@ -247,6 +252,96 @@ class CreditServiceIT extends IntegrationTest {
         assertBusinessError(thrown, WalletErrorCode.WALLET_INSUFFICIENT_BALANCE);
         assertThat(balanceOf(userId)).isEqualTo(10);
         assertThat(ledgerCountOf(userId)).isZero();
+    }
+
+    // ---------- chargeAiSearch ----------
+
+    @Test
+    void chargeAiSearch_whenAvailableEnough_decreasesBalanceByConfiguredFeeAndReturnsLedgerId() {
+        // given
+        long aiFee = aiSearchFee();
+        long userId = insertUser(20, 0);
+
+        // when
+        long ledgerId = creditService.chargeAiSearch(userId);
+
+        // then
+        assertThat(balanceOf(userId)).isEqualTo(20 - aiFee);
+        Map<String, Object> ledgerRow = jdbc.queryForMap(
+                "SELECT user_id, amount, type, balance_after FROM credit_ledger WHERE id = ?", ledgerId);
+        assertThat(ledgerRow.get("user_id")).isEqualTo(userId);
+        assertThat(ledgerRow.get("amount")).isEqualTo((int) -aiFee);
+        assertThat(ledgerRow.get("type")).isEqualTo("AI_SEARCH_FEE");
+        assertThat(ledgerRow.get("balance_after")).isEqualTo(20 - aiFee);
+    }
+
+    @Test
+    void chargeAiSearch_whenAvailableNotEnough_throwsInsufficientBalance() {
+        // given: thiếu đúng 1 Credit so với mức phí
+        long aiFee = aiSearchFee();
+        long userId = insertUser(aiFee - 1, 0);
+
+        // when
+        Throwable thrown = catchThrowable(() -> creditService.chargeAiSearch(userId));
+
+        // then
+        assertBusinessError(thrown, WalletErrorCode.WALLET_INSUFFICIENT_BALANCE);
+        assertThat(balanceOf(userId)).isEqualTo(aiFee - 1);
+        assertThat(ledgerCountOf(userId)).isZero();
+    }
+
+    // ---------- refundAiSearch ----------
+
+    @Test
+    void refundAiSearch_whenChargeNotRefunded_restoresBalanceAndWritesPositiveLedger() {
+        // given
+        long aiFee = aiSearchFee();
+        long userId = insertUser(20, 0);
+        long ledgerId = creditService.chargeAiSearch(userId);
+
+        // when
+        creditService.refundAiSearch(userId, ledgerId);
+
+        // then: số dư về lại như cũ, có thêm một dòng dương ghi id dòng gốc
+        assertThat(balanceOf(userId)).isEqualTo(20);
+        Map<String, Object> refundRow = jdbc.queryForMap(
+                "SELECT amount, type, balance_after, note FROM credit_ledger WHERE user_id = ? AND amount > 0", userId);
+        assertThat(refundRow.get("amount")).isEqualTo((int) aiFee);
+        assertThat(refundRow.get("type")).isEqualTo("AI_SEARCH_FEE");
+        assertThat(refundRow.get("balance_after")).isEqualTo(20L);
+        assertThat(refundRow.get("note")).isEqualTo("Hoàn phí AI #" + ledgerId);
+    }
+
+    @Test
+    void refundAiSearch_whenAlreadyRefunded_throwsAlreadyRefunded() {
+        // given: dòng phí đã được hoàn một lần
+        long userId = insertUser(20, 0);
+        long ledgerId = creditService.chargeAiSearch(userId);
+        creditService.refundAiSearch(userId, ledgerId);
+
+        // when
+        Throwable thrown = catchThrowable(() -> creditService.refundAiSearch(userId, ledgerId));
+
+        // then: không cộng thêm lần nữa
+        assertBusinessError(thrown, WalletErrorCode.WALLET_AI_FEE_ALREADY_REFUNDED);
+        assertThat(balanceOf(userId)).isEqualTo(20);
+        assertThat(ledgerCountOf(userId)).isEqualTo(2);
+    }
+
+    @Test
+    void refundAiSearch_whenLedgerOfOtherUser_throwsAiFeeNotFound() {
+        // given: owner bị trừ phí, người khác xin hoàn dòng đó
+        long ownerId = insertUser(20, 0);
+        long otherUserId = insertUser(0, 0);
+        long ledgerId = creditService.chargeAiSearch(ownerId);
+
+        // when
+        Throwable thrown = catchThrowable(() -> creditService.refundAiSearch(otherUserId, ledgerId));
+
+        // then
+        assertBusinessError(thrown, WalletErrorCode.WALLET_AI_FEE_NOT_FOUND);
+        assertThat(balanceOf(otherUserId)).isZero();
+        assertThat(ledgerCountOf(otherUserId)).isZero();
     }
 
     // ---------- type sai ----------
@@ -506,6 +601,11 @@ class CreditServiceIT extends IntegrationTest {
                 amount,
                 type,
                 createdAt);
+    }
+
+    // Đọc mức phí AI đang cấu hình thay vì viết cứng, để test vẫn đúng khi seed đổi giá trị.
+    private long aiSearchFee() {
+        return configService.getInt(ConfigKey.AI_SEARCH_FEE);
     }
 
     private boolean hasToppedUpOf(long userId) {

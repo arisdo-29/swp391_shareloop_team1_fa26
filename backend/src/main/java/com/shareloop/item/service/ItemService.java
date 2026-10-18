@@ -18,6 +18,7 @@ import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.media.MediaErrorCode;
 import com.shareloop.media.service.MediaService;
 import com.shareloop.moderation.ModerationStatus;
+import com.shareloop.moderation.event.ItemScreeningRequestedEvent;
 import com.shareloop.moderation.service.ContentModerationService;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
@@ -31,6 +32,7 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -53,6 +55,7 @@ public class ItemService {
     private final PostFeeService postFeeService;
     private final CategoryAttributeService categoryAttributeService;
     private final ReputationService reputationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ItemService(
             ItemRepository itemRepository,
@@ -63,7 +66,8 @@ public class ItemService {
             ContentModerationService contentModerationService,
             PostFeeService postFeeService,
             CategoryAttributeService categoryAttributeService,
-            ReputationService reputationService) {
+            ReputationService reputationService,
+            ApplicationEventPublisher eventPublisher) {
         this.itemRepository = itemRepository;
         this.jdbcClient = jdbcClient;
         this.mediaService = mediaService;
@@ -73,6 +77,7 @@ public class ItemService {
         this.postFeeService = postFeeService;
         this.categoryAttributeService = categoryAttributeService;
         this.reputationService = reputationService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -148,6 +153,7 @@ public class ItemService {
                     .param("itemId", saved.getId())
                     .update();
         }
+        eventPublisher.publishEvent(ItemScreeningRequestedEvent.from(saved));
         return ItemMapper.toResponse(saved, mediaUrls(mediaIds), mediaUrls(defectMediaIds), request.operatingStatus());
     }
 
@@ -227,6 +233,15 @@ public class ItemService {
                 .sql("UPDATE items SET ai_risk = 'UNCHECKED', ai_result = NULL WHERE id = :itemId")
                 .param("itemId", itemId)
                 .update();
+        if (moderation.status() == ModerationStatus.REVIEW) {
+            jdbcClient
+                    .sql("UPDATE items SET ai_result = jsonb_build_object('flag', 'REVIEW', 'reason', :reason) "
+                            + "WHERE id = :itemId")
+                    .param("reason", moderation.reasonCode())
+                    .param("itemId", itemId)
+                    .update();
+        }
+        eventPublisher.publishEvent(ItemScreeningRequestedEvent.from(item));
         return toResponse(item);
     }
 

@@ -14,8 +14,17 @@ public final class RequestMapper {
         return toResponse(request, null);
     }
 
-    // receiverName do service tra từ module user truyền vào; mapper không tự gọi service khác.
     public static RequestResponse toResponse(Request request, String receiverName) {
+        return toResponse(request, receiverName, null, null, null);
+    }
+
+    // Map đầy đủ họ tên và thông tin uy tín (TrustStars, hạng, tỉ lệ đúng mô tả) (FR-65, Issue #110).
+    public static RequestResponse toResponse(
+            Request request,
+            String receiverName,
+            Integer receiverTrustStars,
+            String receiverRank,
+            Double receiverAsDescribedRate) {
         if (request == null) {
             return null;
         }
@@ -39,6 +48,9 @@ public final class RequestMapper {
                 request.getAsDescribed(),
                 request.getCompletedAt(),
                 request.getCreatedAt(),
-                receiverName);
+                receiverName,
+                receiverTrustStars,
+                receiverRank,
+                receiverAsDescribedRate);
     }
 }

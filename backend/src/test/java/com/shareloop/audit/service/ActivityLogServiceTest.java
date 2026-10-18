@@ -7,14 +7,26 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.audit.AuditErrorCode;
+import com.shareloop.audit.dto.ActivityLogDto;
 import com.shareloop.audit.entity.ActivityLog;
 import com.shareloop.audit.repository.ActivityLogRepository;
+import com.shareloop.common.exception.BusinessException;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class ActivityLogServiceTest {
 
@@ -81,5 +93,67 @@ class ActivityLogServiceTest {
         assertThat(saved.getType()).isEqualTo("CONFIG_UPDATE");
         assertThat(saved.getData()).containsEntry("key", "val");
         assertThat(saved.getCreatedAt()).isEqualTo(fixedInstant);
+    }
+
+    @Test
+    @DisplayName("search: from sau to ném BusinessException INVALID_DATE_RANGE")
+    void search_fromAfterTo_throwsInvalidDateRange() {
+        LocalDate from = LocalDate.of(2026, 10, 20);
+        LocalDate to = LocalDate.of(2026, 10, 10);
+
+        assertThatThrownBy(() -> service.search(1L, "APPROVE_ITEM", from, to, 0, 20))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(AuditErrorCode.INVALID_DATE_RANGE));
+    }
+
+    @Test
+    @DisplayName("search: phân trang mặc định sắp xếp mới nhất trước và map DTO chính xác")
+    @SuppressWarnings("unchecked")
+    void search_validParameters_queriesRepositoryAndMapsDto() {
+        ActivityLog logEntity =
+                new ActivityLog("APPROVE_ITEM", 1L, "ITEM", 42L, Map.of("status", "APPROVED"), "Hợp lệ", fixedInstant);
+        ReflectionTestUtils.setField(logEntity, "id", 100L);
+
+        when(repository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(logEntity)));
+
+        Page<ActivityLogDto> result =
+                service.search(1L, "APPROVE_ITEM", LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 17), 0, 20);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getContent()).hasSize(1);
+        ActivityLogDto dto = result.getContent().get(0);
+        assertThat(dto.id()).isEqualTo(100L);
+        assertThat(dto.actorId()).isEqualTo(1L);
+        assertThat(dto.type()).isEqualTo("APPROVE_ITEM");
+        assertThat(dto.targetType()).isEqualTo("ITEM");
+        assertThat(dto.targetId()).isEqualTo(42L);
+        assertThat(dto.reason()).isEqualTo("Hợp lệ");
+        assertThat(dto.detail()).isEqualTo("Hợp lệ");
+        assertThat(dto.createdAt()).isEqualTo(fixedInstant);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(repository).findAll(any(Specification.class), pageableCaptor.capture());
+        Pageable pageable = pageableCaptor.getValue();
+        assertThat(pageable.getPageNumber()).isEqualTo(0);
+        assertThat(pageable.getPageSize()).isEqualTo(20);
+        assertThat(pageable.getSort().getOrderFor("createdAt")).isNotNull();
+        assertThat(pageable.getSort().getOrderFor("createdAt").getDirection()).isEqualTo(Sort.Direction.DESC);
+    }
+
+    @Test
+    @DisplayName("search: giới hạn size tối đa 100 và page không âm")
+    @SuppressWarnings("unchecked")
+    void search_clampsPageAndSize() {
+        when(repository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
+
+        service.search(null, null, null, null, -5, 500);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(repository).findAll(any(Specification.class), pageableCaptor.capture());
+        Pageable pageable = pageableCaptor.getValue();
+        assertThat(pageable.getPageNumber()).isEqualTo(0);
+        assertThat(pageable.getPageSize()).isEqualTo(100);
     }
 }

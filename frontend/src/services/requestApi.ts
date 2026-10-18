@@ -24,6 +24,12 @@ export interface RequestResponse {
   completedAt?: string;
   createdAt: string;
   receiverName?: string | null;
+  receiverTrustStars?: number | null;
+  receiverRank?: string | null;
+  receiverAsDescribedRate?: number | null;
+  trustStars?: number | null;
+  rank?: string | null;
+  asDescribedRate?: number | null;
 }
 
 export interface CreateRequestBody {
@@ -61,6 +67,9 @@ export const toBackendUserId = (userId: string | null | undefined) => {
 };
 
 export function toFeItemRequest(request: RequestResponse, requesterId = apiUserId(request.receiverId)): ItemRequest {
+  const trustStars = request.receiverTrustStars ?? request.trustStars;
+  const rank = request.receiverRank ?? request.rank;
+  const asDescribedRate = request.receiverAsDescribedRate ?? request.asDescribedRate;
   return {
     id: `api_req_${request.id}`,
     type: request.type === 'SWAP' ? 'trade' : 'gift',
@@ -68,6 +77,9 @@ export function toFeItemRequest(request: RequestResponse, requesterId = apiUserI
     offeredItemId: request.offeredItemId ? String(request.offeredItemId) : undefined,
     requesterId,
     requesterName: request.receiverName ?? undefined,
+    requesterTrustStars: typeof trustStars === 'number' ? trustStars : undefined,
+    requesterRank: rank ?? undefined,
+    requesterAsDescribedRate: typeof asDescribedRate === 'number' ? asDescribedRate : undefined,
     status: request.status,
     message: '',
     createdAt: request.createdAt,

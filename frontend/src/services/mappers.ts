@@ -9,7 +9,7 @@ export interface AreaOption { id: number; name: string; label: string }
 
 export const apiUserId = (id: number) => `api_${id}`;
 
-export function toFeUser(user: AuthUserResponse | MeResponse): User {
+export function toFeUser(user: AuthUserResponse | MeResponse, district = ''): User {
   const profile = user as MeResponse;
   return {
     id: apiUserId(user.id),
@@ -18,7 +18,7 @@ export function toFeUser(user: AuthUserResponse | MeResponse): User {
     name: user.fullName,
     email: user.email,
     phone: profile.phone ?? '',
-    district: '',
+    district,
     avatarInitials: user.fullName.split(' ').map((p) => p[0]).slice(-2).join('').toUpperCase(),
     avatarUrl: resolveMediaUrl(profile.avatarUrl) || undefined,
     totalCredit: 0,

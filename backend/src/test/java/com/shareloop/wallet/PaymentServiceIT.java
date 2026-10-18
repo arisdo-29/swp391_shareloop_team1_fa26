@@ -1,11 +1,19 @@
 package com.shareloop.wallet;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
+import com.shareloop.common.exception.BusinessException;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
 import com.shareloop.support.IntegrationTest;
 import com.shareloop.wallet.dto.TopUpConfirmResponse;
 import com.shareloop.wallet.entity.PaymentOrderStatus;
+import com.shareloop.wallet.service.PaymentExpiryService;
 import com.shareloop.wallet.service.PaymentService;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -30,6 +38,12 @@ class PaymentServiceIT extends IntegrationTest {
 
     @Autowired
     PaymentService paymentService;
+
+    @Autowired
+    PaymentExpiryService paymentExpiryService;
+
+    @Autowired
+    ConfigService configService;
 
     @Autowired
     JdbcTemplate jdbc;
@@ -98,6 +112,35 @@ class PaymentServiceIT extends IntegrationTest {
                 .containsExactly(PaymentOrderStatus.SUCCESS, PaymentOrderStatus.SUCCESS);
         assertThat(ledgerCountOf(userId)).isEqualTo(1);
         assertThat(balanceOf(userId)).isEqualTo(20);
+    }
+
+    @Test
+    void confirmMockPayment_whenOrderExpiredByJob_throwsNotPayable() {
+        // given: đơn tạo quá hạn rồi bị job hết hạn chuyển EXPIRED
+        long userId = insertUser();
+        String orderCode = paymentService.createTopUpOrder(userId, 20_000).orderCode();
+        long expireMinutes = configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES);
+        Instant pastDeadline = Instant.now().minus(expireMinutes + 1, ChronoUnit.MINUTES);
+        jdbc.update(
+                "UPDATE payment_orders SET created_at = ? WHERE order_code = ?",
+                Timestamp.from(pastDeadline),
+                orderCode);
+        paymentExpiryService.expireStaleOrders(Instant.now());
+
+        // when
+        Throwable thrown = catchThrowable(() -> paymentService.confirmMockPayment(userId, orderCode));
+
+        // then: bị từ chối, không cộng Credit, đơn vẫn EXPIRED
+        assertThat(thrown)
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode())
+                                .isEqualTo(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE));
+        assertThat(balanceOf(userId)).isZero();
+        assertThat(ledgerCountOf(userId)).isZero();
+        assertThat(jdbc.queryForObject(
+                        "SELECT status FROM payment_orders WHERE order_code = ?", String.class, orderCode))
+                .isEqualTo("EXPIRED");
     }
 
     // ---------- hàm hỗ trợ ----------

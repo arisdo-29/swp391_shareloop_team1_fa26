@@ -50,11 +50,37 @@ Gửi yêu cầu xin đồ (với bài Give) hoặc đề nghị trao đổi đ�
 
 ## 2. GET /api/v1/items/{itemId}/requests
 
-Chủ bài xem danh sách các yêu cầu gửi tới bài đăng của mình (F10 bước 2, UC-22).
+Chủ bài xem danh sách các yêu cầu gửi tới bài đăng của mình (F10 bước 2, FR-65, UC-22).
 
 - **Xác thực:** Bắt buộc JWT (phải là chủ bài đăng).
 - **Path variable:** `itemId` (id bài đăng).
-- **Thành công:** `200 OK`, mảng `RequestResponse` (sắp xếp theo thời gian tạo mới nhất lên trước).
+- **Thành công:** `200 OK`, mảng `RequestResponse` (sắp xếp theo thời gian tạo mới nhất lên trước). Mỗi phần tử đính kèm thông tin uy tín của người gửi yêu cầu: `receiverTrustStars`, `receiverRank`, `receiverAsDescribedRate` (đồng thời hỗ trợ alias `trustStars`, `rank`, `asDescribedRate`).
+- **Ví dụ Response:**
+
+```json
+[
+  {
+    "id": 101,
+    "itemId": 45,
+    "receiverId": 12,
+    "receiverName": "Nguyễn Văn A",
+    "receiverTrustStars": 5,
+    "receiverRank": "BRONZE",
+    "receiverAsDescribedRate": 1.0,
+    "trustStars": 5,
+    "rank": "BRONZE",
+    "asDescribedRate": 1.0,
+    "offeredItemId": null,
+    "type": "GIVE",
+    "status": "PENDING",
+    "deliveryMethod": null,
+    "meetingPlace": null,
+    "meetingTime": null,
+    "createdAt": "2026-10-02T14:00:00Z"
+  }
+]
+```
+
 - **Lỗi:**
   - `403 REQUEST_FORBIDDEN`: Không phải chủ bài đăng.
   - `404 REQUEST_ITEM_NOT_FOUND`: Bài đăng không tồn tại.
@@ -219,12 +245,14 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
 ```json
 {
   "asDescribed": true,
-  "notAsDescribedReason": "Món đồ bị vỡ một góc không giống trong ảnh" // Bắt buộc nếu người nhận chọn asDescribed = false
+  "notAsDescribedReason": "Món đồ bị vỡ một góc không giống trong ảnh", // Bắt buộc nếu người nhận chọn asDescribed = false
+  "mediaIds": [1, 2] // Tuỳ chọn: danh sách ID ảnh/video minh chứng khi giao nhận (FR-86, BR-T09)
 }
 ```
 
 - **Hành vi nghiệp vụ:**
   - Chỉ áp dụng khi Request đang ở trạng thái `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER`.
+  - Nếu có truyền `mediaIds`: gọi `MediaService.attach(mediaIds, currentUserId)` và lưu vào `request_media_mappings` với stage `HANDOVER` (FR-86, BR-T09).
   - Bên cho xác nhận -> ghi nhận `donorHandoverAt`.
   - Bên nhận xác nhận -> bắt buộc trả lời `asDescribed` (nếu chọn `false` bắt buộc có lý do); ghi nhận `receiverHandoverAt` và `asDescribed`.
   - Một bên xác nhận: Request chuyển sang trạng thái `AWAITING_HANDOVER` (BR-D02).
@@ -244,7 +272,76 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
 
 ---
 
+## 11. POST /api/v1/requests/{id}/media
+
+Đính kèm ảnh hoặc video minh chứng vào yêu cầu giao dịch (FR-86, BR-T09, UC-28).
+
+- **Xác thực:** Bắt buộc JWT (chủ bài đăng `donorId` hoặc người nhận `receiverId`).
+- **Path variable:** `id` (id của request).
+- **Request body:**
+
+```json
+{
+  "mediaIds": [1, 2],
+  "stage": "HANDOVER" // Tuỳ chọn: 'HANDOVER' hoặc 'DISPUTE' (mặc định 'HANDOVER')
+}
+```
+
+- **Hành vi nghiệp vụ:**
+  - Chỉ thành viên trong giao dịch mới có quyền đính kèm minh chứng.
+  - Request phải ở giai đoạn giao nhận trở đi (`LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER`, `COMPLETED`, hoặc `DISPUTED`).
+  - Gọi `MediaService.attach(mediaIds, currentUserId)` để chuyển trạng thái media sang `ATTACHED`.
+  - Lưu vào bảng `request_media_mappings`.
+- **Thành công:** `200 OK`, trả về danh sách `RequestMediaResponse`.
+- **Lỗi:**
+  - `400 REQUEST_MEDIA_REQUIRED`: Danh sách `mediaIds` rỗng.
+  - `400 REQUEST_MEDIA_STAGE_INVALID`: Giai đoạn không hợp lệ (chỉ chấp nhận `HANDOVER` hoặc `DISPUTE`).
+  - `403 REQUEST_FORBIDDEN`: Người gọi không phải thành viên tham gia giao dịch.
+  - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
+  - `409 REQUEST_INVALID_STATE_TRANSITION`: Yêu cầu chưa đến giai đoạn giao nhận (chưa đạt `LOGISTICS_CONFIRMED`).
+
+---
+
+## 12. GET /api/v1/requests/{id}/media
+
+Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (FR-86, BR-T09).
+
+- **Xác thực:** Bắt buộc JWT (chỉ chủ bài đăng hoặc người nhận).
+- **Path variable:** `id` (id của request).
+- **Hành vi nghiệp vụ:**
+  - **Chỉ hai bên tham gia giao dịch** mới có quyền xem minh chứng (BR-T09). Người dùng khác bị chặn `403 Forbidden`.
+  - Trả về danh sách minh chứng đã đính kèm theo thứ tự thời gian tạo tăng dần.
+- **Thành công:** `200 OK`, trả về danh sách `RequestMediaResponse`:
+
+```json
+[
+  {
+    "mediaId": 1,
+    "url": "/api/v1/media/1",
+    "stage": "HANDOVER",
+    "uploadedBy": 10,
+    "createdAt": "2026-10-18T10:00:00Z"
+  }
+]
+```
+
+- **Lỗi:**
+  - `403 REQUEST_FORBIDDEN`: Người gọi không phải thành viên tham gia giao dịch (BR-T09).
+  - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
+
+---
+
 ## DTO Models
+
+### RequestMediaResponse
+
+| Trường | Kiểu | Ý nghĩa |
+|---|---|---|
+| `mediaId` | number | ID tệp media |
+| `url` | string | Đường dẫn xem tệp (`/api/v1/media/{id}`) |
+| `stage` | string | Giai đoạn đính kèm (`HANDOVER` hoặc `DISPUTE`) |
+| `uploadedBy` | number | ID người tải lên |
+| `createdAt` | string | Thời điểm đính kèm ISO-8601 UTC |
 
 ### RequestResponse
 
@@ -270,6 +367,9 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
 | `completedAt` | string? | Thời điểm hoàn tất giao dịch ISO-8601 UTC |
 | `createdAt` | string | Thời điểm tạo ISO-8601 UTC |
 | `receiverName` | string? | Họ tên người gửi yêu cầu (có trong danh sách theo bài, danh sách của tôi và chi tiết). Có thể `null`. Không kèm email/số điện thoại (BR-T11) |
+| `receiverTrustStars` | number? | Số sao uy tín của người gửi yêu cầu (TrustStars: 1-5). Alias: `trustStars` (FR-65) |
+| `receiverRank` | string? | Hạng uy tín của người gửi yêu cầu (`BRONZE`, `SILVER`, `GOLD`, `PLATINUM`, `DIAMOND`). Alias: `rank` (FR-65) |
+| `receiverAsDescribedRate` | number? | Tỉ lệ giao dịch đúng mô tả của người gửi yêu cầu (0.00 - 1.00; `null` nếu chưa có giao dịch hoàn tất). Alias: `asDescribedRate` (FR-65) |
 
 ### ScheduleRequest
 
@@ -292,6 +392,14 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
 |---|---|---|---|
 | `asDescribed` | boolean | Bên nhận: Có | Bắt buộc với bên nhận |
 | `notAsDescribedReason` | string | Không | Bắt buộc nếu `asDescribed = false` |
+| `mediaIds` | number[] | Không | Danh sách ID ảnh/video minh chứng khi giao nhận (FR-86, BR-T09) |
+
+### AttachMediaRequest
+
+| Trường | Kiểu | Bắt buộc | Ràng buộc |
+|---|---|---|---|
+| `mediaIds` | number[] | Có | Danh sách ID tệp media đã tải lên (không được rỗng) |
+| `stage` | string | Không | Giai đoạn ('HANDOVER' hoặc 'DISPUTE', mặc định 'HANDOVER') |
 
 ### RequestContactResponse
 
@@ -318,10 +426,13 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
 | `REQUEST_SCHEDULE_NOT_SET` | 400 | Chưa có thông tin lịch hẹn để xác nhận |
 | `REQUEST_AS_DESCRIBED_REQUIRED` | 400 | Bên nhận chưa trả lời câu hỏi món đồ có đúng mô tả hay không (BR-R05) |
 | `REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED` | 400 | Thiếu lý do khi bên nhận chọn không đúng mô tả (BR-R05) |
+| `REQUEST_MEDIA_REQUIRED` | 400 | Danh sách ảnh/video minh chứng không được rỗng (FR-86) |
+| `REQUEST_MEDIA_STAGE_INVALID` | 400 | Giai đoạn đính kèm minh chứng không hợp lệ |
 | `REQUEST_ITEM_NOT_AVAILABLE` | 409 | Bài đăng không ở trạng thái sẵn sàng (chưa duyệt, đã trao đổi...) |
 | `REQUEST_ALREADY_EXISTS` | 409 | Đã có một yêu cầu đang hoạt động cho bài này (BR-R02) |
 | `REQUEST_SCHEDULE_LOCKED` | 409 | Lịch hẹn đã chốt và bị khoá (FR-83, BR-T05) |
 | `REQUEST_CONTACT_NOT_REVEALED` | 409 | Chưa chốt lịch hẹn để xem thông tin liên lạc (FR-82, BR-T11) |
 | `REQUEST_HANDOVER_ALREADY_CONFIRMED` | 409 | Bạn đã xác nhận giao nhận cho yêu cầu này rồi |
 | `REQUEST_INVALID_STATE_TRANSITION` | 409 | Chuyển đổi trạng thái không hợp lệ theo sơ đồ |
-| `REQUEST_FORBIDDEN` | 403 | Không có quyền thao tác trên yêu cầu này |
+| `REQUEST_FORBIDDEN` | 403 | Không có quyền thao tác trên yêu cầu này (hoặc người ngoài xem minh chứng) |
+

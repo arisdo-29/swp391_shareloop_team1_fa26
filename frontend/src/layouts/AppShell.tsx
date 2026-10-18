@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { actions, selectCurrentUser } from '../app/store';
 import { Button, Icon, IconButton } from '../components/ui';
@@ -28,6 +28,7 @@ export function AppShell() {
 
 function AppShellContent() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const user = useAppSelector(selectCurrentUser);
   const { isApiAccount, wallet } = useWallet();
   const isAdmin = user?.role === 'admin';
@@ -64,13 +65,11 @@ function AppShellContent() {
     setProfileOpen(false);
     setNotificationOpen(false);
   };
-  const logout = async () => {
-    try {
-      await authApi.logout();
-    } finally {
-      dispatch(actions.logout());
-      closeMenus();
-    }
+  const logout = () => {
+    void authApi.logout();
+    dispatch(actions.logout());
+    closeMenus();
+    navigate('/login', { replace: true });
   };
   return (
     <div className="flex min-h-screen flex-col">
@@ -214,7 +213,7 @@ function AppShellContent() {
                       ) : null}
                       <button
                         onClick={() => {
-                          void logout();
+                          logout();
                         }}
                         className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-error hover:bg-red-50"
                       >

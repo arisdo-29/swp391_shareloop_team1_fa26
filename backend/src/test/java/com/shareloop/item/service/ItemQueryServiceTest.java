@@ -60,4 +60,27 @@ class ItemQueryServiceTest {
                 .thenReturn(3L);
         assertThat(service.countApprovedByDonor(10L)).isEqualTo(3L);
     }
+
+    @Test
+    void exposesItemCard() {
+        Item item = new Item(10L, 1L, 1L, OfferType.SWAP, "Bàn học", "Mô tả", "Ghế", ItemCondition.GOOD, null, null);
+        ReflectionTestUtils.setField(item, "id", 7L);
+        item.approve();
+        when(repository.findById(7L)).thenReturn(Optional.of(item));
+
+        var card = service.getItemCard(7L);
+        assertThat(card.id()).isEqualTo(7L);
+        assertThat(card.title()).isEqualTo("Bàn học");
+        assertThat(card.offerType()).isEqualTo(OfferType.SWAP);
+        assertThat(card.status()).isEqualTo(ItemStatus.APPROVED);
+        assertThat(card.donorId()).isEqualTo(10L);
+    }
+
+    @Test
+    void missingItemCardThrowsBusinessError() {
+        when(repository.findById(8L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.getItemCard(8L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
+    }
 }

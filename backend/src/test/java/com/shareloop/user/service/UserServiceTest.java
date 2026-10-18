@@ -9,18 +9,29 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.auth.AuthErrorCode;
+import com.shareloop.auth.service.OtpService;
 import com.shareloop.catalog.service.AreaService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.media.MediaErrorCode;
 import com.shareloop.media.service.MediaService;
+import com.shareloop.request.service.RequestQueryService;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.UserErrorCode;
+import com.shareloop.user.dto.ChangePhoneOtpResponse;
+import com.shareloop.user.dto.ChangePhoneRequest;
 import com.shareloop.user.dto.ContactInfo;
 import com.shareloop.user.dto.MeResponse;
+import com.shareloop.user.dto.SendChangePhoneOtpRequest;
 import com.shareloop.user.dto.UpdateProfileRequest;
+import com.shareloop.user.entity.OtpPurpose;
 import com.shareloop.user.entity.User;
 import com.shareloop.user.entity.UserStatus;
 import com.shareloop.user.mapper.UserMapper;
 import com.shareloop.user.repository.UserRepository;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
@@ -48,11 +59,27 @@ class UserServiceTest {
     @Mock
     MediaService mediaService;
 
+    @Mock
+    OtpService otpService;
+
+    @Mock
+    ConfigService configService;
+
+    @Mock
+    RequestQueryService requestQueryService;
+
     UserService service;
 
     @BeforeEach
     void createService() {
-        service = new UserService(userRepository, new UserMapper(), areaService, mediaService);
+        service = new UserService(
+                userRepository,
+                new UserMapper(),
+                areaService,
+                mediaService,
+                otpService,
+                configService,
+                requestQueryService);
     }
 
     @Test
@@ -283,6 +310,180 @@ class UserServiceTest {
 
         // when, then
         assertThat(service.isLocked(USER_ID)).isFalse();
+    }
+
+    // ==================== sendChangePhoneOtp (FR-07, BR-U10) ====================
+
+    @Test
+    void sendChangePhoneOtp_whenValid_issuesOtpAndReturnsResponse() {
+        // given
+        User user = givenUser();
+        when(userRepository.existsByPhoneAndStatus("0987654321", UserStatus.ACTIVE))
+                .thenReturn(false);
+        when(requestQueryService.hasActiveDelivery(USER_ID)).thenReturn(false);
+        when(configService.getInt(ConfigKey.OTP_TTL_MINUTES)).thenReturn(5);
+        when(configService.getInt(ConfigKey.OTP_RESEND_COOLDOWN_SECONDS)).thenReturn(60);
+
+        SendChangePhoneOtpRequest request = new SendChangePhoneOtpRequest("+84987654321");
+
+        // when
+        ChangePhoneOtpResponse response = service.sendChangePhoneOtp(USER_ID, request);
+
+        // then
+        assertThat(user.getPendingPhone()).isEqualTo("0987654321");
+        verify(otpService).issue(user, OtpPurpose.CHANGE_PHONE);
+        assertThat(response.email()).isEqualTo(EMAIL);
+        assertThat(response.otpExpiresInSeconds()).isEqualTo(300);
+        assertThat(response.resendCooldownSeconds()).isEqualTo(60);
+    }
+
+    @Test
+    void sendChangePhoneOtp_whenSameAsCurrentPhone_throwsPhoneSameAsCurrent() {
+        // given
+        givenUser();
+        SendChangePhoneOtpRequest request = new SendChangePhoneOtpRequest("+84901000002");
+
+        // when, then
+        assertErrorCode(() -> service.sendChangePhoneOtp(USER_ID, request), UserErrorCode.USER_PHONE_SAME_AS_CURRENT);
+        verify(otpService, never()).issue(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void sendChangePhoneOtp_whenPhoneAlreadyUsedByActiveUser_throwsPhoneAlreadyUsed() {
+        // given
+        givenUser();
+        when(userRepository.existsByPhoneAndStatus("0987654321", UserStatus.ACTIVE))
+                .thenReturn(true);
+        SendChangePhoneOtpRequest request = new SendChangePhoneOtpRequest("0987654321");
+
+        // when, then
+        assertErrorCode(() -> service.sendChangePhoneOtp(USER_ID, request), UserErrorCode.USER_PHONE_ALREADY_USED);
+        verify(otpService, never()).issue(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void sendChangePhoneOtp_whenWithinCooldown_throwsPhoneChangeCooldown() {
+        // given
+        User user = givenUser();
+        user.setPhoneChangedAt(Instant.now().minus(10, ChronoUnit.DAYS));
+        when(configService.getInt(ConfigKey.PHONE_CHANGE_INTERVAL_DAYS)).thenReturn(30);
+
+        SendChangePhoneOtpRequest request = new SendChangePhoneOtpRequest("0987654321");
+
+        // when, then
+        assertErrorCode(() -> service.sendChangePhoneOtp(USER_ID, request), UserErrorCode.USER_PHONE_CHANGE_COOLDOWN);
+        verify(otpService, never()).issue(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void sendChangePhoneOtp_whenHasActiveDelivery_throwsPhoneChangeActiveDelivery() {
+        // given
+        givenUser();
+        when(requestQueryService.hasActiveDelivery(USER_ID)).thenReturn(true);
+        SendChangePhoneOtpRequest request = new SendChangePhoneOtpRequest("0987654321");
+
+        // when, then
+        assertErrorCode(
+                () -> service.sendChangePhoneOtp(USER_ID, request), UserErrorCode.USER_PHONE_CHANGE_ACTIVE_DELIVERY);
+        verify(otpService, never()).issue(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    // ==================== changePhone (FR-07, BR-U10) ====================
+
+    @Test
+    void changePhone_whenValid_verifiesOtpAndUpdatesPhoneAndRecordsTimestamp() {
+        // given
+        User user = givenUser();
+        user.setPendingPhone("0987654321");
+        when(requestQueryService.hasActiveDelivery(USER_ID)).thenReturn(false);
+        when(userRepository.existsByPhoneAndStatus("0987654321", UserStatus.ACTIVE))
+                .thenReturn(false);
+
+        ChangePhoneRequest request = new ChangePhoneRequest("+84987654321", "123456");
+
+        // when
+        MeResponse response = service.changePhone(USER_ID, request);
+
+        // then
+        verify(otpService).verify(user, "123456", OtpPurpose.CHANGE_PHONE);
+        assertThat(user.getPhone()).isEqualTo("0987654321");
+        assertThat(user.getPendingPhone()).isNull();
+        assertThat(user.getPhoneChangedAt()).isNotNull();
+        assertThat(response.phone()).isEqualTo("0987654321");
+    }
+
+    @Test
+    void changePhone_whenOtpServiceThrows_propagatesExceptionWithoutUpdatingPhone() {
+        // given
+        User user = givenUser();
+        when(requestQueryService.hasActiveDelivery(USER_ID)).thenReturn(false);
+        doThrow(new BusinessException(AuthErrorCode.AUTH_OTP_INVALID))
+                .when(otpService)
+                .verify(user, "999999", OtpPurpose.CHANGE_PHONE);
+
+        ChangePhoneRequest request = new ChangePhoneRequest("0987654321", "999999");
+
+        // when, then
+        assertThatThrownBy(() -> service.changePhone(USER_ID, request))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_OTP_INVALID);
+                });
+        assertThat(user.getPhone()).isEqualTo(PHONE);
+        assertThat(user.getPhoneChangedAt()).isNull();
+    }
+
+    @Test
+    void changePhone_whenSameAsCurrentPhone_throwsPhoneSameAsCurrent() {
+        // given
+        givenUser();
+        when(requestQueryService.hasActiveDelivery(USER_ID)).thenReturn(false);
+        ChangePhoneRequest request = new ChangePhoneRequest("0901000002", "123456");
+
+        // when, then
+        assertErrorCode(() -> service.changePhone(USER_ID, request), UserErrorCode.USER_PHONE_SAME_AS_CURRENT);
+        verify(otpService, never())
+                .verify(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void changePhone_whenPhoneAlreadyUsedByActiveUser_throwsPhoneAlreadyUsed() {
+        // given
+        User user = givenUser();
+        when(requestQueryService.hasActiveDelivery(USER_ID)).thenReturn(false);
+        when(userRepository.existsByPhoneAndStatus("0987654321", UserStatus.ACTIVE))
+                .thenReturn(true);
+
+        ChangePhoneRequest request = new ChangePhoneRequest("0987654321", "123456");
+
+        // when, then
+        assertErrorCode(() -> service.changePhone(USER_ID, request), UserErrorCode.USER_PHONE_ALREADY_USED);
+    }
+
+    @Test
+    void changePhone_whenCooldownNotPassed_throwsPhoneChangeCooldown() {
+        // given
+        User user = givenUser();
+        user.setPhoneChangedAt(Instant.now().minus(5, ChronoUnit.DAYS));
+        when(configService.getInt(ConfigKey.PHONE_CHANGE_INTERVAL_DAYS)).thenReturn(30);
+
+        ChangePhoneRequest request = new ChangePhoneRequest("0987654321", "123456");
+
+        // when, then
+        assertErrorCode(() -> service.changePhone(USER_ID, request), UserErrorCode.USER_PHONE_CHANGE_COOLDOWN);
+    }
+
+    @Test
+    void changePhone_whenHasActiveDelivery_throwsPhoneChangeActiveDelivery() {
+        // given
+        givenUser();
+        when(requestQueryService.hasActiveDelivery(USER_ID)).thenReturn(true);
+        ChangePhoneRequest request = new ChangePhoneRequest("0987654321", "123456");
+
+        // when, then
+        assertErrorCode(() -> service.changePhone(USER_ID, request), UserErrorCode.USER_PHONE_CHANGE_ACTIVE_DELIVERY);
     }
 
     private void assertErrorCode(ThrowingCallable call, UserErrorCode expected) {
