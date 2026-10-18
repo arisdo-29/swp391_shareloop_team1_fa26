@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
-import { Alert, Button, Field, Icon, PageHeader, Select, TextArea } from '../../components/ui';
+import { Alert, Button, Field, Icon, ItemImage, PageHeader, Select, TextArea } from '../../components/ui';
 import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import type { ItemCondition, ItemType } from '../../types/domain';
@@ -459,7 +459,7 @@ export function Post() {
                 {defectImagePreviews.length ? (
                   <div className="mt-3 grid grid-cols-4 gap-2">
                     {defectImagePreviews.map((preview, index) => (
-                      <img key={`${preview.slice(-16)}-${index}`} src={preview} alt={`Ảnh lỗi ${index + 1}`} className="aspect-square rounded-md object-cover" />
+                      <ItemImage key={`${preview.slice(-16)}-${index}`} src={preview} alt={`Ảnh lỗi ${index + 1}`} className="aspect-square rounded-md object-cover" />
                     ))}
                   </div>
                 ) : null}
@@ -545,7 +545,7 @@ export function Post() {
             <div className="grid grid-cols-3 gap-2">
               {images.map((image, index) => (
                 <div key={image.slice(-16) + index} className="relative">
-                  <img
+                  <ItemImage
                     src={image}
                     alt={`Ảnh món đồ ${index + 1}`}
                     className="aspect-square rounded-md object-cover"

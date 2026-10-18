@@ -33,12 +33,17 @@ export interface TopUpConfirmResponse {
 
 export const paymentApi = {
   async createTopUpOrder(input: CreateTopUpOrderRequest): Promise<TopUpOrderResponse> {
-    const { data } = await http.post<TopUpOrderResponse>(paymentApiEndpoints.createTopUpOrder, input);
+    const { data } = await http.post<TopUpOrderResponse>(
+      paymentApiEndpoints.createTopUpOrder,
+      input,
+    );
     return data;
   },
-  // Chỉ có ở dev/staging (app.payment.mock.enabled=true); production trả 404.
+  // Chỉ hoạt động khi Backend bật app.payment.mock.enabled; nếu tắt, endpoint trả 404.
   async mockConfirm(orderCode: string): Promise<TopUpConfirmResponse> {
-    const { data } = await http.post<TopUpConfirmResponse>(paymentApiEndpoints.mockConfirm(orderCode));
+    const { data } = await http.post<TopUpConfirmResponse>(
+      paymentApiEndpoints.mockConfirm(orderCode),
+    );
     return data;
   },
 };

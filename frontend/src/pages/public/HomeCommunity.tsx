@@ -1,4 +1,4 @@
-import { Icon } from '../../components/ui';
+import { Icon, ItemImage } from '../../components/ui';
 import { Link } from 'react-router-dom';
 import type { Item } from '../../types/domain';
 
@@ -60,7 +60,7 @@ export function HomeLifecycle({ items }: { items: Item[] }) {
           <div className="home-lifecycle-visual">
             <div className="home-lifecycle-collage" aria-label="Một số món đồ trong cộng đồng">
               {lifecycleImages.map((image, index) => (
-                <img
+                <ItemImage
                   key={items[index]?.id ?? image.src}
                   src={image.src}
                   alt={image.alt}

@@ -1,6 +1,12 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { AppShell } from '../layouts/AppShell';
-import { AdminRoute, GuestOnlyRoute, ProfileRoute, ProtectedRoute, PublicRoute } from '../routes/Guards';
+import {
+  AdminRoute,
+  GuestOnlyRoute,
+  ProfileRoute,
+  ProtectedRoute,
+  PublicRoute,
+} from '../routes/Guards';
 import { Home } from '../pages/public/Home';
 import { Browse } from '../pages/public/Browse';
 import { ProductDetail } from '../pages/public/ProductDetail';
@@ -15,6 +21,8 @@ import { Activities } from '../pages/user/Activities';
 import { Messages } from '../pages/user/Messages';
 import { Profile } from '../pages/user/Profile';
 import { Credit } from '../pages/user/Credit';
+import { DemoPaymentCheckout } from '../pages/user/DemoPaymentCheckout';
+import { demoPaymentEnabled } from '../services/paymentFlow';
 import { AdminLayout } from '../pages/admin/AdminLayout';
 import { NotFound } from '../pages/NotFound';
 import {
@@ -63,12 +71,18 @@ export const router = createBrowserRouter([
           { path: '/activities', element: <Activities /> },
           { path: '/messages', element: <Messages /> },
           { path: '/credit', element: <Credit /> },
-          { path: '/wallet/topup/mock-checkout', element: <Credit /> },
+          {
+            path: '/wallet/topup/mock-checkout',
+            element: demoPaymentEnabled ? <DemoPaymentCheckout /> : <Credit />,
+          },
         ],
       },
       {
         element: <ProfileRoute />,
-        children: [{ path: '/profile', element: <Profile /> }, { path: '/change-password', element: <ChangePassword /> }],
+        children: [
+          { path: '/profile', element: <Profile /> },
+          { path: '/change-password', element: <ChangePassword /> },
+        ],
       },
       {
         element: <AdminRoute />,

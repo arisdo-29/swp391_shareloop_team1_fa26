@@ -8,6 +8,7 @@ import {
   ConditionBadge,
   EmptyState,
   Icon,
+  ItemImage,
   SearchField,
   TypeBadge,
 } from '../../components/ui';
@@ -77,7 +78,7 @@ function HomeProductCard({ item, owner, tradeFor }: { item: Item; owner?: User; 
   return (
     <Link to={`/items/${item.id}`} className="home-product-card group">
       <div className="home-product-card-image">
-        <img
+        <ItemImage
           src={item.images[0]}
           alt={item.title}
           className="size-full object-cover transition duration-500 group-hover:scale-[1.03]"
@@ -175,7 +176,7 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
     <section className="relative isolate overflow-hidden border-b border-primary-hover/30 bg-[#0d332c]">
       <div className="absolute inset-[-28px] z-0 overflow-hidden" aria-hidden="true">
         {slides.map((item, index) => (
-          <img
+          <ItemImage
             key={`background-${item.id}`}
             src={item.images[0]}
             alt=""
@@ -206,7 +207,7 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
             aria-label={`Xem chi tiết ${activeItem.title}`}
           >
             {slides.map((item, index) => (
-              <img
+              <ItemImage
                 key={`main-${item.id}`}
                 src={item.images[0]}
                 alt={index === activeIndex ? item.title : ''}
@@ -257,7 +258,7 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
                       : 'scale-95 border-white/35 opacity-60 hover:scale-100 hover:border-white/70 hover:opacity-100'
                   }`}
                 >
-                  <img src={item.images[0]} alt="" className="size-full object-cover" />
+                  <ItemImage src={item.images[0]} alt={item.title} className="size-full object-cover" />
                 </button>
               );
             })}

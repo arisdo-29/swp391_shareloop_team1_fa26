@@ -445,7 +445,7 @@ export function AdminModeration() {
           const owner = data.users.find((u) => u.id === item.ownerId);
           return (
             <article key={item.id} className="grid gap-4 rounded-lg bg-white p-4 ring-1 ring-border/80 md:grid-cols-[96px_1fr_auto] md:items-center">
-              <img src={item.images[0]} alt={item.title} className="aspect-square w-full rounded-md object-cover md:size-24" />
+              <ItemImage src={item.images[0]} alt={item.title} className="aspect-square w-full rounded-md object-cover md:size-24" />
               <div className="min-w-0">
                 <div className="flex gap-2">
                   <TypeBadge type={item.type} />
@@ -621,7 +621,7 @@ function ModerationDetailModal({
   return (
     <Modal title="Chi tiết duyệt bài" onClose={onClose}>
       <div className="grid gap-4 md:grid-cols-[180px_1fr]">
-        <img
+        <ItemImage
           src={item.images[0]}
           alt={item.title}
           className="aspect-square w-full rounded-md object-cover"
@@ -1137,7 +1137,7 @@ export function AdminTransactionDetail() {
         <div className="space-y-6">
           <section className="rounded-lg bg-white p-5 ring-1 ring-border/80">
             <div className="flex gap-4">
-              <img
+              <ItemImage
                 src={item.images[0]}
                 alt={item.title}
                 className="size-24 rounded-md object-cover"
@@ -2364,7 +2364,7 @@ function AdminComplaints() {
                 source.startsWith('data:video') ? (
                   <video key={source.slice(-16) + index} src={source} className="aspect-square rounded-md object-cover" controls />
                 ) : (
-                  <img key={source.slice(-16) + index} src={source} alt="Bằng chứng" className="aspect-square rounded-md object-cover" />
+                  <ItemImage key={source.slice(-16) + index} src={source} alt="Bằng chứng" className="aspect-square rounded-md object-cover" />
                 )
               ))}
             </div>
@@ -3391,7 +3391,7 @@ function ExpiredPostModal({
   return (
     <Modal title="Xử lý bài quá hạn" onClose={onClose}>
       <div className="grid gap-4 md:grid-cols-[160px_1fr]">
-        <img src={item.images[0]} alt={item.title} className="aspect-square w-full rounded-md object-cover" />
+        <ItemImage src={item.images[0]} alt={item.title} className="aspect-square w-full rounded-md object-cover" />
         <div className="grid gap-3 text-sm sm:grid-cols-2">
           <Info label="Món đồ" value={item.title} />
           <Info label="Người đăng" value={owner?.name ?? item.ownerId} />
