@@ -41,6 +41,7 @@ public class ReportService {
     private final ConfigService configService;
     private final RequestService requestService;
 
+    @Autowired
     public ReportService(
             ReportRepository reportRepository,
             ItemQueryService itemQueryService,
@@ -56,11 +57,6 @@ public class ReportService {
         this.activityLogService = activityLogService;
         this.configService = configService;
         this.requestService = requestService;
-    }
-
-    public ReportService(
-            ReportRepository reportRepository, ItemQueryService itemQueryService, ItemService itemService) {
-        this(reportRepository, itemQueryService, itemService, null, null, null, null);
     }
 
     @Transactional
