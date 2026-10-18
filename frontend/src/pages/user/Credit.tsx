@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type Dispatch } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
 import { Alert, Button, Field, Icon, PageHeader } from '../../components/ui';
@@ -11,9 +11,11 @@ import { walletApi, type WalletTransactionResponse } from '../../services/wallet
 import { paymentApi, type TopUpConfirmResponse, type TopUpOrderResponse } from '../../services/paymentApi';
 import type { ApiError } from '../../services/http';
 
-const packages = [1, 2, 5, 10, 20];
-const mockPaymentEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_PAYMENT_MOCK === 'true';
-type Step = 'select' | 'qr' | 'pending';
+const packages = [10, 20, 50];
+const mockPaymentEnabled =
+  import.meta.env.DEV ||
+  (import.meta.env.MODE === 'staging' && import.meta.env.VITE_ENABLE_PAYMENT_MOCK === 'true');
+type Step = 'select' | 'pending';
 type HistoryFilter = 'all' | 'topup' | 'spend';
 
 const filterTypes: Record<Exclude<HistoryFilter, 'all'>, CreditHistoryType[]> = {
@@ -56,7 +58,7 @@ function toCreditHistory(entry: WalletTransactionResponse, userId: string): Cred
   return {
     id: `api_wallet_${entry.id}`,
     userId,
-    transactionId: `ledger-${entry.id}`,
+    transactionId: entry.paymentOrderId ? `payment-order-${entry.paymentOrderId}` : `ledger-${entry.id}`,
     type,
     amount: entry.amount,
     balance: entry.balanceAfter,
@@ -85,9 +87,29 @@ function isValidTopUpAmount(value: string) {
 
 function topUpOrderErrorMessage(error: ApiError) {
   if (error.code === 'WALLET_TOPUP_AMOUNT_INVALID') {
-    return error.message || 'Số tiền nạp không đáp ứng mức tối thiểu hoặc bội số do Backend cấu hình.';
+    return 'Số tiền nạp chưa hợp lệ. Mặc định số tiền phải từ 10.000đ và chia hết cho 1.000đ; mức này có thể được quản trị viên thay đổi.';
   }
-  return error.message || 'Không tạo được đơn nạp Credit. Vui lòng thử lại.';
+  if (error.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (error.status === 403) return 'Tài khoản không được phép tạo đơn nạp Credit.';
+  return 'Không tạo được đơn nạp Credit. Vui lòng thử lại.';
+}
+
+interface CreditRouteState {
+  topUpOrder?: TopUpOrderResponse;
+  confirmedTopUp?: TopUpConfirmResponse;
+}
+
+function resolvePaymentRedirect(value: string) {
+  if (!value.trim()) return null;
+  try {
+    const url = new URL(value, window.location.origin);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    return url.origin === window.location.origin
+      ? { external: false, url: `${url.pathname}${url.search}${url.hash}` }
+      : { external: true, url: url.toString() };
+  } catch {
+    return null;
+  }
 }
 
 export function Credit() {
@@ -95,11 +117,16 @@ export function Credit() {
   const data = useAppSelector(selectData);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
+  const routeState = location.state as CreditRouteState | null;
+  const isMockCheckout = location.pathname === '/wallet/topup/mock-checkout';
+  const checkoutOrderCode = isMockCheckout
+    ? new URLSearchParams(location.search).get('orderCode')?.trim() ?? ''
+    : '';
   const [creditAmount, setCreditAmount] = useState(5);
   const [customAmount, setCustomAmount] = useState('');
   const [apiAmountVnd, setApiAmountVnd] = useState('');
-  const [step, setStep] = useState<Step>('select');
-  const [transactionCode, setTransactionCode] = useState('');
+  const [step, setStep] = useState<Step>(isMockCheckout ? 'pending' : 'select');
   const [activeTopupId, setActiveTopupId] = useState('');
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
   const [selectedEntry, setSelectedEntry] = useState<CreditHistory | Topup | null>(null);
@@ -108,18 +135,30 @@ export function Credit() {
   const [apiHistoryLoading, setApiHistoryLoading] = useState(false);
   const [apiHistoryError, setApiHistoryError] = useState('');
   const [historyReloadKey, setHistoryReloadKey] = useState(0);
-  const [apiTopUpOrder, setApiTopUpOrder] = useState<TopUpOrderResponse | null>(null);
+  const [apiTopUpOrder, setApiTopUpOrder] = useState<TopUpOrderResponse | null>(
+    routeState?.topUpOrder?.orderCode === checkoutOrderCode ? routeState.topUpOrder : null,
+  );
   const [topUpSubmitting, setTopUpSubmitting] = useState(false);
-  const [topUpError, setTopUpError] = useState('');
+  const [topUpError, setTopUpError] = useState(
+    isMockCheckout && !checkoutOrderCode ? 'Đường dẫn thanh toán thiếu mã đơn. Vui lòng tạo lại đơn nạp Credit.' : '',
+  );
   const [topUpConfirming, setTopUpConfirming] = useState(false);
-  const [confirmedTopUp, setConfirmedTopUp] = useState<TopUpConfirmResponse | null>(null);
+  const [confirmedTopUp, setConfirmedTopUp] = useState<TopUpConfirmResponse | null>(
+    routeState?.confirmedTopUp ?? null,
+  );
 
   const topups = isApiAccount ? [] : data.topups.filter((topup) => topup.userId === user.id);
   const activeTopup = topups.find((topup) => topup.id === activeTopupId);
-  const latestCompleted = topups.find((topup) => topup.status === 'completed');
+  const demoTopUpEnabled = import.meta.env.DEV && !isApiAccount;
   const paymentValue = creditAmount * CREDIT_TO_VND;
   // Tài khoản API lấy kết quả từ mock-confirm; tài khoản seed lấy từ dữ liệu mock trong Redux.
-  const completedCredits = isApiAccount ? confirmedTopUp?.credits ?? null : latestCompleted?.amount ?? null;
+  const completedCredits = isApiAccount
+    ? confirmedTopUp?.status === 'SUCCESS'
+      ? confirmedTopUp.credits
+      : null
+    : activeTopup?.status === 'completed'
+      ? activeTopup.amount
+      : null;
 
   useEffect(() => {
     if (!isApiAccount) {
@@ -187,6 +226,16 @@ export function Credit() {
         const order = await paymentApi.createTopUpOrder({ amountVnd });
         setApiTopUpOrder(order);
         setStep('pending');
+        const redirect = resolvePaymentRedirect(order.redirectUrl);
+        if (!redirect) {
+          setTopUpError('Địa chỉ thanh toán không hợp lệ. Vui lòng tạo lại đơn hoặc liên hệ quản trị viên.');
+          return;
+        }
+        if (redirect.external) {
+          window.location.assign(redirect.url);
+        } else {
+          navigate(redirect.url, { state: { topUpOrder: order } satisfies CreditRouteState });
+        }
       } catch (error) {
         setTopUpError(topUpOrderErrorMessage(error as ApiError));
       } finally {
@@ -194,22 +243,32 @@ export function Credit() {
       }
       return;
     }
-    const code = `SLTOPUP-${crypto.randomUUID()}`;
-    setTransactionCode(code);
-    setStep('qr');
+    if (!demoTopUpEnabled || !Number.isSafeInteger(creditAmount) || creditAmount < 1 || !Number.isSafeInteger(paymentValue)) {
+      setTopUpError('Vui lòng chọn số Credit thử hợp lệ.');
+      return;
+    }
+    const id = `demo_top_${crypto.randomUUID()}`;
+    const code = `DEMO-${crypto.randomUUID()}`;
+    setTopUpError('');
+    setActiveTopupId(id);
+    dispatch(actions.topupCredit({ id, code, userId: user.id, vnd: paymentValue }));
+    setStep('pending');
   };
 
   // Backend đã idempotent cho đơn SUCCESS; chặn thêm ở đây để không gửi trùng khi bấm nhanh.
-  const confirmApiTopUp = async () => {
-    if (!mockPaymentEnabled || !apiTopUpOrder || topUpConfirming) return;
+  const confirmApiTopUp = async (orderCode: string) => {
+    if (!mockPaymentEnabled || !orderCode || topUpConfirming) return;
     setTopUpConfirming(true);
     setTopUpError('');
     try {
-      const result = await paymentApi.mockConfirm(apiTopUpOrder.orderCode);
-      setApiTopUpOrder({ ...apiTopUpOrder, status: result.status });
+      const result = await paymentApi.mockConfirm(orderCode);
+      setApiTopUpOrder((order) => order ? { ...order, status: result.status } : order);
       setConfirmedTopUp(result);
       refreshWallet();
       setHistoryReloadKey((key) => key + 1);
+      if (isMockCheckout) {
+        navigate('/wallet', { replace: true, state: { confirmedTopUp: result } satisfies CreditRouteState });
+      }
     } catch (error) {
       setTopUpError(topUpConfirmErrorMessage(error as ApiError));
     } finally {
@@ -217,18 +276,11 @@ export function Credit() {
     }
   };
 
-  const confirmTransfer = () => {
-    const id = `top_${crypto.randomUUID()}`;
-    dispatch(
-      actions.topupCredit({
-        id,
-        code: transactionCode,
-        userId: user.id,
-        vnd: paymentValue,
-      }),
-    );
-    setActiveTopupId(id);
-    setStep('pending');
+  const confirmDemoTopUp = () => {
+    if (!demoTopUpEnabled || !activeTopup || activeTopup.status !== 'pending' || topUpConfirming) return;
+    setTopUpConfirming(true);
+    dispatch(actions.confirmDemoTopup({ topupId: activeTopup.id, userId: user.id }));
+    setTopUpConfirming(false);
   };
 
   return (
@@ -256,7 +308,9 @@ export function Credit() {
             <Icon name="check" className="size-4" weight="bold" />
           </span>
           <div>
-            <p className="text-sm font-bold">Nạp Credit thành công</p>
+            <p className="text-sm font-bold">
+              {isApiAccount ? 'Nạp Credit thành công' : 'Nạp Credit thử thành công'}
+            </p>
             <p className="mt-0.5 text-xs leading-5">
               +{completedCredits} Credit đã được cộng vào tài khoản.
             </p>
@@ -282,15 +336,17 @@ export function Credit() {
               {isApiAccount ? 'Tỷ lệ quy đổi do Backend xác định khi tạo đơn.' : '1 Credit = 1.000đ'}
             </p>
           </div>
-          <button
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-white px-4 py-2 text-sm font-bold text-primary shadow-sm transition duration-200 hover:bg-primary-soft active:translate-y-px"
-            onClick={() => {
-              setStep('select');
-              document.getElementById('topup')?.scrollIntoView({ behavior: 'smooth' });
-            }}
-          >
-            Nạp Credit
-          </button>
+          {isApiAccount || demoTopUpEnabled ? (
+            <button
+              className="inline-flex min-h-11 items-center justify-center rounded-md bg-white px-4 py-2 text-sm font-bold text-primary shadow-sm transition duration-200 hover:bg-primary-soft active:translate-y-px"
+              onClick={() => {
+                setStep('select');
+                document.getElementById('topup')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+            >
+              {isApiAccount ? 'Nạp Credit' : 'Nạp Credit thử'}
+            </button>
+          ) : null}
         </div>
         <div className="grid border-t border-white/15 bg-white/5 sm:grid-cols-2">
           <BalanceMetric label="Khả dụng" value={isApiAccount ? wallet?.available ?? null : user.availableCredit} />
@@ -298,7 +354,7 @@ export function Credit() {
         </div>
       </section>
 
-      <section id="topup" className="mt-8 scroll-mt-24">
+      {isApiAccount || demoTopUpEnabled ? <section id="topup" className="mt-8 scroll-mt-24">
         {topUpError ? (
           <div className="mb-4">
             <Alert tone="error">{topUpError}</Alert>
@@ -312,7 +368,7 @@ export function Credit() {
               onContinue={() => void continuePayment()}
               submitting={topUpSubmitting}
             />
-          ) : (
+          ) : demoTopUpEnabled ? (
             <TopupSelection
               creditAmount={creditAmount}
               customAmount={customAmount}
@@ -328,14 +384,13 @@ export function Credit() {
               onContinue={() => void continuePayment()}
               submitting={topUpSubmitting}
             />
-          )
+          ) : null
         ) : null}
-        {!isApiAccount && step === 'qr' ? <QrPayment creditAmount={creditAmount} transactionCode={transactionCode} onBack={() => setStep('select')} onConfirm={confirmTransfer} /> : null}
         {isApiAccount && step === 'pending' && apiTopUpOrder ? (
           <ApiTopUpOrder
             order={apiTopUpOrder}
             confirming={topUpConfirming}
-            onConfirm={() => void confirmApiTopUp()}
+            onConfirm={() => void confirmApiTopUp(apiTopUpOrder.orderCode)}
             onNewTopup={() => {
               setApiTopUpOrder(null);
               setConfirmedTopUp(null);
@@ -343,17 +398,25 @@ export function Credit() {
               setStep('select');
             }}
           />
-        ) : !isApiAccount && step === 'pending' ? (
-          <PendingTopup
-            code={activeTopup?.code ?? transactionCode}
-            amount={activeTopup?.amount ?? creditAmount}
+        ) : isApiAccount && isMockCheckout && checkoutOrderCode ? (
+          <ApiMockCheckout
+            orderCode={checkoutOrderCode}
+            confirming={topUpConfirming}
+            enabled={mockPaymentEnabled}
+            onConfirm={() => void confirmApiTopUp(checkoutOrderCode)}
+          />
+        ) : demoTopUpEnabled && step === 'pending' && activeTopup ? (
+          <DemoTopUpOrder
+            topup={activeTopup}
+            confirming={topUpConfirming}
+            onConfirm={confirmDemoTopUp}
             onNewTopup={() => {
               setActiveTopupId('');
               setStep('select');
             }}
           />
         ) : null}
-      </section>
+      </section> : null}
 
       {apiHistoryLoading ? (
         <div className="mt-8">
@@ -455,8 +518,11 @@ function TopupSelection({ creditAmount, customAmount, onAmountChange, onCustomCh
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
       <div className="rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-7">
-        <h2 className="section-title">Nạp Credit</h2>
-        <p className="mt-2 text-sm text-text-muted">Chọn số Credit bạn muốn nạp vào tài khoản.</p>
+        <h2 className="section-title">Nạp Credit thử</h2>
+        <p className="mt-2 text-sm text-text-muted">
+          Chọn số Credit demo với tỷ lệ 1.000đ = 1 Credit.
+        </p>
+        <p className="mt-2 text-sm font-semibold text-warning">Thanh toán thử — Không sử dụng tiền thật</p>
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {packages.map((amount) => {
             const selected = creditAmount === amount && !customAmount;
@@ -474,7 +540,7 @@ function TopupSelection({ creditAmount, customAmount, onAmountChange, onCustomCh
           })}
         </div>
         <div className="mt-5 max-w-xs">
-          <Field label="Số Credit khác" type="number" min={1} step={1} value={customAmount} onChange={(event) => onCustomChange(event.target.value)} placeholder="Nhập số Credit" hint="Tối thiểu 1 Credit." />
+          <Field label="Số Credit khác" type="number" min={1} step={1} value={customAmount} onChange={(event) => onCustomChange(event.target.value)} placeholder="Nhập số Credit" hint="Số tiền thử được tính theo tỷ lệ 1.000đ = 1 Credit." />
         </div>
       </div>
       <PaymentSummary creditAmount={creditAmount} onContinue={onContinue} submitting={submitting} />
@@ -497,9 +563,11 @@ function PaymentSummary({ creditAmount, onContinue, submitting = false }: { cred
         <strong className="text-lg tabular-nums text-primary">{formatVnd(value)}</strong>
       </div>
       <Button className="mt-5 w-full" size="lg" onClick={onContinue} disabled={creditAmount < 1 || submitting}>
-        {submitting ? 'Đang tạo đơn...' : 'Tiếp tục thanh toán'}
+        {submitting ? 'Đang tạo đơn...' : 'Tạo đơn nạp Credit thử'}
       </Button>
-      <p className="mt-3 text-center text-[11px] leading-5 text-text-muted">Credit chỉ được cộng sau khi giao dịch được xác nhận.</p>
+      <p className="mt-3 text-center text-[11px] leading-5 text-text-muted">
+        Credit demo chỉ được cộng sau khi bạn xác nhận thanh toán thử.
+      </p>
     </aside>
   );
 }
@@ -513,92 +581,52 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function QrPayment({
-  creditAmount,
-  transactionCode,
-  onBack,
+function DemoTopUpOrder({
+  topup,
+  confirming,
   onConfirm,
+  onNewTopup,
 }: {
-  creditAmount: number;
-  transactionCode: string;
-  onBack: () => void;
+  topup: Topup;
+  confirming: boolean;
   onConfirm: () => void;
+  onNewTopup: () => void;
 }) {
-  return (
-    <div className="rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-7">
-      <div className="mx-auto max-w-3xl">
-        <div className="text-center">
-          <span className="inline-flex rounded-sm bg-amber-50 px-2.5 py-1 text-xs font-semibold text-warning">
-            Đang chờ thanh toán
-          </span>
-          <h2 className="mt-4 text-2xl font-bold">Quét mã QR để thanh toán</h2>
-          <p className="mt-2 text-sm text-text-muted">
-            Dùng ứng dụng ngân hàng của bạn để quét mã bên dưới.
-          </p>
-        </div>
-        <div className="mt-7 grid gap-8 md:grid-cols-[240px_1fr] md:items-center">
-          <div className="mx-auto w-full max-w-[240px] rounded-lg bg-white p-4 shadow-md ring-1 ring-border">
-            <MockQr />
-          </div>
-          <div>
-            <dl className="space-y-3 rounded-lg bg-background p-4 text-sm">
-              <SummaryRow label="Số tiền" value={formatVnd(creditAmount * CREDIT_TO_VND)} />
-              <SummaryRow label="Credit nhận" value={`${creditAmount} Credit`} />
-              <SummaryRow label="Mã giao dịch" value={transactionCode} />
-            </dl>
-            <ol className="mt-5 space-y-2 text-sm leading-6 text-text-secondary">
-              <li>1. Mở ứng dụng ngân hàng.</li>
-              <li>2. Quét mã QR.</li>
-              <li>3. Kiểm tra đúng số tiền và nội dung chuyển khoản.</li>
-              <li>4. Sau khi chuyển khoản, chọn “Tôi đã chuyển khoản”.</li>
-            </ol>
-          </div>
-        </div>
-        <div className="mt-8 flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:justify-end">
-          <Button variant="outline" onClick={onBack}>
-            Quay lại
-          </Button>
-          <Button onClick={onConfirm}>Tôi đã chuyển khoản</Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MockQr() {
-  return (
-    <div aria-label="Mã QR thanh toán mẫu" className="grid aspect-square grid-cols-11 gap-[2px] bg-white">
-      {Array.from({ length: 121 }, (_, index) => {
-        const row = Math.floor(index / 11);
-        const col = index % 11;
-        const finder = (row < 4 && col < 4) || (row < 4 && col > 6) || (row > 6 && col < 4);
-        const filled = finder ? row % 3 !== 1 || col % 3 !== 1 : (row * 7 + col * 11 + index) % 5 < 2;
-        return <span key={index} className={filled ? 'bg-text-primary' : 'bg-white'} />;
-      })}
-    </div>
-  );
-}
-
-function PendingTopup({ code, amount, onNewTopup }: { code: string; amount: number; onNewTopup: () => void }) {
+  const completed = topup.status === 'completed';
   return (
     <div className="rounded-xl bg-white px-5 py-10 text-center ring-1 ring-border/80 sm:px-8">
-      <span className="mx-auto grid size-14 place-items-center rounded-lg bg-amber-50 text-warning">
-        <Icon name="history" className="size-7" />
+      <span className={`mx-auto grid size-14 place-items-center rounded-lg ${completed ? 'bg-emerald-50 text-success' : 'bg-amber-50 text-warning'}`}>
+        <Icon name={completed ? 'check' : 'history'} className="size-7" />
       </span>
-      <h2 className="mt-5 text-2xl font-bold">Yêu cầu nạp Credit đang được xác nhận.</h2>
-      <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-text-muted">
-        Yêu cầu {code} cho {amount} Credit đã được ghi nhận. Credit sẽ được cộng đúng một lần sau khi quản trị viên xác nhận.
+      <h2 className="mt-5 text-2xl font-bold">
+        {completed ? 'Nạp Credit thử thành công' : 'Đơn nạp Credit thử đã được tạo'}
+      </h2>
+      <p className="mx-auto mt-3 max-w-lg text-sm font-semibold leading-6 text-warning">
+        Thanh toán thử — Không sử dụng tiền thật
       </p>
-      <Button className="mt-6" variant="outline" onClick={onNewTopup}>
-        Tạo yêu cầu nạp khác
-      </Button>
+      <dl className="mx-auto mt-6 max-w-xl divide-y divide-border rounded-lg bg-surface-low px-4 text-left">
+        <DetailRow label="Mã đơn" value={topup.code} />
+        <DetailRow label="Số tiền" value={formatVnd(topup.vnd)} />
+        <DetailRow label="Credit dự kiến" value={`${topup.amount} Credit`} />
+        <DetailRow label="Trạng thái" value={completed ? 'Thành công (thử)' : 'Đang chờ xác nhận thanh toán'} />
+      </dl>
+      <div className="mt-6 flex flex-wrap justify-center gap-2">
+        <Button variant="outline" onClick={onNewTopup} disabled={confirming}>
+          Tạo đơn nạp thử khác
+        </Button>
+        {!completed ? (
+          <Button onClick={onConfirm} disabled={confirming}>
+            {confirming ? 'Đang xác nhận...' : 'Xác nhận thanh toán thử'}
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }
 
 function ApiTopUpOrder({ order, confirming, onConfirm, onNewTopup }: { order: TopUpOrderResponse; confirming: boolean; onConfirm: () => void; onNewTopup: () => void }) {
   const statusLabels: Record<TopUpOrderResponse['status'], string> = {
-    PENDING: 'Đang chờ thanh toán',
+    PENDING: 'Đang chờ xác nhận thanh toán',
     SUCCESS: 'Đã thanh toán',
     FAILED: 'Thanh toán thất bại',
     EXPIRED: 'Đơn đã hết hạn',
@@ -623,7 +651,7 @@ function ApiTopUpOrder({ order, confirming, onConfirm, onNewTopup }: { order: To
           <DetailRow label="Mã đơn" value={order.orderCode} />
           <DetailRow label="Số tiền" value={formatVnd(order.amountVnd)} />
           <DetailRow label="Credit dự kiến" value={`${order.credits} Credit`} />
-          <DetailRow label="Nhà cung cấp" value={order.provider} />
+          {order.provider === 'VNPAY' ? <DetailRow label="Cổng thanh toán" value="VNPAY" /> : null}
           <DetailRow label="Trạng thái" value={statusLabels[order.status]} />
         </dl>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
@@ -642,6 +670,40 @@ function ApiTopUpOrder({ order, confirming, onConfirm, onNewTopup }: { order: To
           ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ApiMockCheckout({
+  orderCode,
+  confirming,
+  enabled,
+  onConfirm,
+}: {
+  orderCode: string;
+  confirming: boolean;
+  enabled: boolean;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="rounded-xl bg-white px-5 py-10 text-center ring-1 ring-border/80 sm:px-8">
+      <span className="mx-auto grid size-14 place-items-center rounded-lg bg-amber-50 text-warning">
+        <Icon name="history" className="size-7" />
+      </span>
+      <h2 className="mt-5 text-2xl font-bold">Đang chờ xác nhận thanh toán</h2>
+      <p className="mx-auto mt-3 max-w-lg break-all text-sm leading-6 text-text-muted">Mã đơn: {orderCode}</p>
+      {enabled ? (
+        <>
+          <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-warning">
+            Chế độ kiểm thử: bấm nút bên dưới để nhận Credit.
+          </p>
+          <Button className="mt-6" onClick={onConfirm} disabled={confirming}>
+            {confirming ? 'Đang xác nhận...' : 'Xác nhận thanh toán thử'}
+          </Button>
+        </>
+      ) : (
+        <Alert tone="warning">Đơn nạp đang chờ hệ thống thanh toán xác nhận.</Alert>
+      )}
     </div>
   );
 }
@@ -703,7 +765,7 @@ function CreditHistorySection({
           <HistoryRow
             key={topup.id}
             icon="wallet"
-            title="Nạp Credit"
+            title={topup.method === 'Thanh toán thử' ? 'Nạp Credit thử' : 'Nạp Credit'}
             transactionId={topup.code}
             date={topup.createdAt}
             amount={topup.amount}
@@ -795,6 +857,7 @@ function HistoryRow({
 }
 
 function historyTitle(entry: CreditHistory, relatedItemTitle?: string) {
+  if (entry.type === 'TOPUP' && entry.note === 'Nạp Credit thử') return 'Nạp Credit thử';
   if (isPostFee(entry)) {
     const itemTitle = relatedItemTitle ?? entry.description.replace(/^phi dang bai\s*-\s*/i, '').replace(/^phí đăng bài\s*-\s*/i, '');
     return `Phí đăng bài${itemTitle ? ` - ${itemTitle}` : ''}`;
@@ -815,6 +878,7 @@ function historyTitle(entry: CreditHistory, relatedItemTitle?: string) {
 }
 
 function historyStatus(entry: CreditHistory) {
+  if (entry.type === 'TOPUP' && entry.note === 'Nạp Credit thử') return 'Thành công (thử)';
   if (entry.status === 'pending') return 'Đang xác nhận';
   if (entry.status === 'refunded') return 'Đã hoàn';
   return 'Hoàn tất';
@@ -848,7 +912,13 @@ function CreditTransactionDetail({
 }) {
   const isTopup = 'method' in entry;
   const historyEntry = isTopup ? undefined : entry;
-  const typeLabel = isTopup ? 'Nạp Credit' : isPostFee(entry) ? 'Phí đăng bài' : historyTitle(entry, relatedItemTitle);
+  const typeLabel = isTopup
+    ? entry.method === 'Thanh toán thử'
+      ? 'Nạp Credit thử'
+      : 'Nạp Credit'
+    : isPostFee(entry)
+      ? 'Phí đăng bài'
+      : historyTitle(entry, relatedItemTitle);
   const status = isTopup
     ? entry.status === 'pending' ? 'Đang xác nhận' : 'Hoàn tất'
     : historyStatus(entry);
@@ -885,7 +955,9 @@ function CreditTransactionDetail({
           <p className="font-semibold text-text-primary">Nội dung liên quan</p>
           <p className="mt-2 text-text-secondary">
             {isTopup
-              ? `Nạp ${entry.amount} Credit qua QR`
+              ? entry.method === 'Thanh toán thử'
+                ? `Nạp thử ${entry.amount} Credit — không sử dụng tiền thật`
+                : `Nạp ${entry.amount} Credit qua QR`
               : historyEntry?.note || historyEntry?.description || historyTitle(historyEntry!, relatedItemTitle)}
           </p>
           {relatedItemTitle ? <p className="mt-1 text-text-secondary">Món đồ: {relatedItemTitle}</p> : null}
