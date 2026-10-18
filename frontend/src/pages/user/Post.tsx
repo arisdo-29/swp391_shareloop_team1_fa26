@@ -3,60 +3,49 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import { Alert, Button, Field, Icon, PageHeader, Select, TextArea } from '../../components/ui';
-import { CREDIT_TO_VND, POST_LISTING_FEE } from '../../utils/credit';
-import type { ItemType } from '../../types/domain';
+import { CONDITIONS } from '../../constants/domain';
+import { conditionLabel } from '../../utils/formatting';
+import type { ItemCondition, ItemType } from '../../types/domain';
 import { fileToDataUrl } from '../../utils/files';
 import { catalogApi, type CategoryAttributeResponse } from '../../services/catalogApi';
 import { toAreaOptions, toCategoryIdByName, toCategoryNames, type AreaOption } from '../../services/mappers';
-import { itemApi, itemErrorMessage, type ApiCondition, type OperatingStatus } from '../../services/itemApi';
+import { itemApi, type ApiCondition, type OperatingStatus } from '../../services/itemApi';
 import { mediaApi } from '../../services/mediaApi';
+import type { ApiError } from '../../services/http';
 import { toBackendUserId } from '../../services/requestApi';
 import { useWallet } from '../../app/useWallet';
 
-type FormErrors = Partial<Record<
-  | 'type'
-  | 'title'
-  | 'category'
-  | 'condition'
-  | 'district'
-  | 'description'
-  | 'tradeFor'
-  | 'images'
-  | 'defectNote'
-  | 'defectImages'
-  | 'operatingStatus',
-  string
->>;
+type FormErrors = Partial<Record<'type' | 'title' | 'category' | 'condition' | 'district' | 'description' | 'tradeFor' | 'brand' | 'defectNote' | 'images' | 'defectImages' | 'operatingStatus', string>>;
 type MediaUploadState = 'idle' | 'uploading' | 'error';
 
-const POST_FEE_SUCCESS =
+const SWAP_POST_SUCCESS =
   'Đăng bài trao đổi thành công. Bài đăng đã được gửi để xét duyệt.';
-const FREE_GIFT_SUCCESS =
+const GIVE_POST_SUCCESS =
   'Đăng bài cho tặng thành công. Bài đăng đã được gửi để xét duyệt.';
 const PENDING_REVIEW_NOTICE = 'Bài đăng đang chờ quản trị viên duyệt.';
-const INSUFFICIENT_CREDIT = 'Bạn không đủ Credit để đăng bài.';
+const WALLET_INSUFFICIENT_BALANCE = 'WALLET_INSUFFICIENT_BALANCE';
+const INSUFFICIENT_CREDIT_MESSAGE = 'Số dư Credit khả dụng không đủ để đăng bài.';
 const BACKEND_SESSION_REQUIRED = 'Vui lòng đăng nhập bằng tài khoản thật để đăng bài.';
+const SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST =
+  import.meta.env.DEV && import.meta.env.VITE_POST_SKIP_MEDIA_UPLOAD === 'true';
 const ITEM_IMAGES_MIN = 3;
 const ITEM_IMAGES_MAX = 8;
-const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-const ACCEPTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const OPERATING_STATUSES: OperatingStatus[] = ['NORMAL', 'PARTIAL', 'NOT_WORKING'];
-const OPERATING_STATUS_LABELS: Record<OperatingStatus, string> = {
-  NORMAL: 'Hoạt động bình thường',
-  PARTIAL: 'Hoạt động một phần',
-  NOT_WORKING: 'Không hoạt động',
-};
+// Giá trị mặc định của Backend; Backend vẫn quyết định mức phí thực tế khi tạo bài.
+const POST_FEE_DISPLAY = 5;
 
-const POST_CONDITIONS: Array<{ value: ApiCondition; label: string }> = [
-  { value: 'NEW', label: 'Mới' },
-  { value: 'LIKE_NEW', label: 'Như mới' },
-  { value: 'GOOD', label: 'Đã qua sử dụng, còn tốt' },
-  { value: 'DEFECTIVE', label: 'Có lỗi' },
-];
+const CONDITION_TO_API: Record<ItemCondition, ApiCondition> = {
+  NEW: 'NEW',
+  LIKE_NEW: 'LIKE_NEW',
+  GOOD: 'GOOD',
+  DEFECTIVE: 'DEFECTIVE',
+  new: 'NEW',
+  good: 'GOOD',
+  used: 'DEFECTIVE',
+};
 
 export function Post() {
   const user = useAppSelector(selectCurrentUser)!;
-  const { isApiAccount, wallet, loading: walletLoading, error: walletError } = useWallet();
+  const { isApiAccount, wallet, loading: walletLoading, error: walletError, refresh: refreshWallet } = useWallet();
   const navigate = useNavigate();
   const [categories, setCategories] = useState<string[]>([]);
   const [districts, setDistricts] = useState<AreaOption[]>([]);
@@ -69,38 +58,36 @@ export function Post() {
   const [type, setType] = useState<ItemType | ''>('');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
-  const [condition, setCondition] = useState<ApiCondition | ''>('');
+  const [condition, setCondition] = useState<ItemCondition | ''>('');
   const [district, setDistrict] = useState('');
   const [description, setDescription] = useState('');
   const [tradeFor, setTradeFor] = useState('');
+  const [brand, setBrand] = useState('');
   const [defectNote, setDefectNote] = useState('');
-  const [defectImageFiles, setDefectImageFiles] = useState<File[]>([]);
-  const [defectImages, setDefectImages] = useState<string[]>([]);
-  const [uploadedDefectImageUrls, setUploadedDefectImageUrls] = useState<Map<File, string>>(new Map());
   const [operatingStatus, setOperatingStatus] = useState<OperatingStatus | ''>('');
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [images, setImages] = useState<string[]>([]);
   const [uploadedImageUrls, setUploadedImageUrls] = useState<Map<File, string>>(new Map());
+  const [defectImageFiles, setDefectImageFiles] = useState<File[]>([]);
+  const [defectImagePreviews, setDefectImagePreviews] = useState<string[]>([]);
+  const [uploadedDefectImageUrls, setUploadedDefectImageUrls] = useState<Map<File, string>>(new Map());
   const [mediaUploadState, setMediaUploadState] = useState<MediaUploadState>('idle');
   const [mediaUploadError, setMediaUploadError] = useState('');
   const [error, setError] = useState('');
+  const [errorCode, setErrorCode] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const submitInFlight = useRef(false);
-  const feeVnd = POST_LISTING_FEE * CREDIT_TO_VND;
   const currentUserId = toBackendUserId(user.id);
   const mediaUploading = mediaUploadState === 'uploading';
   const availableCredit = isApiAccount ? wallet?.available ?? null : user.availableCredit;
-  const operatingStatusAttribute = categoryAttributes.find(
+  const operatingStatusRequired = categoryAttributes.some(
     (attribute) =>
-      attribute.name === 'Trạng thái hoạt động'
-      && attribute.dataType === 'SELECT'
-      && attribute.required,
+      attribute.required &&
+      attribute.dataType === 'SELECT' &&
+      ['NORMAL', 'PARTIAL', 'NOT_WORKING'].every((option) => attribute.options.includes(option)),
   );
-  const operatingStatusOptions = operatingStatusAttribute?.options.filter(
-    (option): option is OperatingStatus => OPERATING_STATUSES.includes(option as OperatingStatus),
-  ) ?? [];
 
   useEffect(() => {
     let active = true;
@@ -113,12 +100,12 @@ export function Post() {
         setDistricts(toAreaOptions(areaData));
         setCategoryIds(toCategoryIdByName(categoryData));
       })
-      .catch((error) => {
+      .catch(() => {
         if (!active) return;
         setCategories([]);
         setDistricts([]);
         setCategoryIds(new Map());
-        setCatalogError(itemErrorMessage(error, 'Không tải được danh mục hoặc khu vực. Vui lòng thử lại.'));
+        setCatalogError('Không tải được danh mục hoặc khu vực. Vui lòng thử lại.');
       })
       .finally(() => {
         if (active) setCatalogLoading(false);
@@ -130,8 +117,7 @@ export function Post() {
 
   useEffect(() => {
     const categoryId = categoryIds.get(category);
-    setOperatingStatus('');
-    if (!categoryId) {
+    if (!isApiAccount || !categoryId) {
       setCategoryAttributes([]);
       setAttributesError('');
       setAttributesLoading(false);
@@ -142,47 +128,41 @@ export function Post() {
     setAttributesError('');
     catalogApi.categoryAttributes(categoryId)
       .then((response) => { if (active) setCategoryAttributes(response); })
-      .catch((error) => {
+      .catch(() => {
         if (!active) return;
         setCategoryAttributes([]);
-        setAttributesError(itemErrorMessage(error, 'Không tải được thông tin bổ sung của danh mục.'));
+        setAttributesError('Không tải được thông tin bổ sung của danh mục.');
       })
       .finally(() => { if (active) setAttributesLoading(false); });
     return () => { active = false; };
-  }, [category, categoryIds]);
+  }, [category, categoryIds, isApiAccount]);
 
   const validate = () => {
     const nextErrors: FormErrors = {};
     if (!type) nextErrors.type = 'Vui lòng chọn hình thức.';
     if (!title.trim()) nextErrors.title = 'Vui lòng nhập tiêu đề.';
-    else if (title.trim().length > 150) nextErrors.title = 'Tiêu đề tối đa 150 ký tự.';
     if (!category) nextErrors.category = 'Vui lòng chọn danh mục.';
     if (!condition) nextErrors.condition = 'Vui lòng chọn tình trạng món đồ.';
     if (!district) nextErrors.district = 'Vui lòng chọn khu vực.';
     if (!description.trim()) nextErrors.description = 'Vui lòng nhập mô tả.';
-    if (type === 'trade' && !tradeFor.trim()) {
-      nextErrors.tradeFor = 'Vui lòng nhập món đồ bạn muốn nhận khi trao đổi.';
-    }
-    if (condition === 'DEFECTIVE' && !defectNote.trim()) {
-      nextErrors.defectNote = 'Vui lòng mô tả lỗi của món đồ.';
-    }
-    if (condition === 'DEFECTIVE' && defectImageFiles.length < 1) {
-      nextErrors.defectImages = 'Vui lòng chọn ít nhất 1 ảnh thể hiện lỗi.';
-    }
-    if (operatingStatusAttribute && !operatingStatus) {
-      nextErrors.operatingStatus = 'Vui lòng chọn trạng thái hoạt động.';
-    }
-    if (imageFiles.length < ITEM_IMAGES_MIN) {
+    if (!SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST && imageFiles.length < ITEM_IMAGES_MIN) {
       nextErrors.images = `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.`;
     } else if (imageFiles.length > ITEM_IMAGES_MAX) {
       nextErrors.images = `Chỉ được chọn tối đa ${ITEM_IMAGES_MAX} ảnh.`;
     }
+    if (title.trim().length > 150) nextErrors.title = 'Tiêu đề tối đa 150 ký tự.';
+    if (type === 'trade' && !tradeFor.trim()) nextErrors.tradeFor = 'Vui lòng nhập món đồ mong muốn.';
+    if (brand.trim().length > 80) nextErrors.brand = 'Thương hiệu tối đa 80 ký tự.';
+    if (condition === 'DEFECTIVE' && !defectNote.trim()) nextErrors.defectNote = 'Vui lòng mô tả lỗi của món đồ.';
+    if (condition === 'DEFECTIVE' && defectImageFiles.length === 0) nextErrors.defectImages = 'Vui lòng chọn ít nhất một ảnh lỗi.';
+    if (operatingStatusRequired && !operatingStatus) nextErrors.operatingStatus = 'Vui lòng chọn trạng thái hoạt động.';
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    setErrorCode('');
     if (!validate()) return;
     if (!isApiAccount && user.reputationStars <= 0) {
       setError('Uy tín của bạn đang ở mức 0 nên hiện không thể đăng bài mới.');
@@ -192,12 +172,13 @@ export function Post() {
       setError(BACKEND_SESSION_REQUIRED);
       return;
     }
-    if (!isApiAccount && type === 'trade' && availableCredit === null) {
+    if (type === 'trade' && isApiAccount && availableCredit === null) {
       setError(walletLoading ? 'Đang tải số dư Credit. Vui lòng chờ trong giây lát.' : walletError || 'Chưa thể xác minh số dư Credit.');
       return;
     }
-    if (!isApiAccount && type === 'trade' && availableCredit !== null && availableCredit < POST_LISTING_FEE) {
-      setError(INSUFFICIENT_CREDIT);
+    if (type === 'trade' && availableCredit !== null && availableCredit < POST_FEE_DISPLAY) {
+      setErrorCode(WALLET_INSUFFICIENT_BALANCE);
+      setError(INSUFFICIENT_CREDIT_MESSAGE);
       setConfirmOpen(false);
       return;
     }
@@ -207,17 +188,19 @@ export function Post() {
 
   const confirmSubmit = async () => {
     if (submitInFlight.current) return;
+    setErrorCode('');
     if (!validate()) {
       setConfirmOpen(false);
       return;
     }
-    if (!isApiAccount && type === 'trade' && availableCredit === null) {
+    if (type === 'trade' && isApiAccount && availableCredit === null) {
       setError(walletLoading ? 'Đang tải số dư Credit. Vui lòng chờ trong giây lát.' : walletError || 'Chưa thể xác minh số dư Credit.');
       setConfirmOpen(false);
       return;
     }
-    if (!isApiAccount && type === 'trade' && availableCredit !== null && availableCredit < POST_LISTING_FEE) {
-      setError(INSUFFICIENT_CREDIT);
+    if (type === 'trade' && availableCredit !== null && availableCredit < POST_FEE_DISPLAY) {
+      setErrorCode(WALLET_INSUFFICIENT_BALANCE);
+      setError(INSUFFICIENT_CREDIT_MESSAGE);
       setConfirmOpen(false);
       return;
     }
@@ -240,47 +223,40 @@ export function Post() {
     setMediaUploadError('');
     try {
       const uploadedUrls = new Map(uploadedImageUrls);
-      const uploadedDefectUrls = new Map(uploadedDefectImageUrls);
-      if (imageFiles.length) {
+      if (!SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST && imageFiles.length) {
         setMediaUploadState('uploading');
         try {
           for (const file of imageFiles) {
             if (uploadedUrls.has(file)) continue;
             const media = await mediaApi.upload(file);
             const url = media.url;
-            if (!url) throw new Error('Media API did not return an image URL.');
+            if (!url) throw new Error('Không nhận được địa chỉ ảnh sau khi tải lên.');
             uploadedUrls.set(file, url);
             setUploadedImageUrls(new Map(uploadedUrls));
           }
-        } catch (uploadError) {
+        } catch (caught) {
+          const apiError = caught as ApiError;
           setMediaUploadState('error');
-          setMediaUploadError(itemErrorMessage(uploadError, 'Không tải được ảnh lên. Các ảnh đã tải thành công sẽ được giữ lại khi thử lại.'));
-          setConfirmOpen(false);
-          return;
-        }
-      }
-      if (condition === 'DEFECTIVE' && defectImageFiles.length) {
-        setMediaUploadState('uploading');
-        try {
-          for (const file of defectImageFiles) {
-            if (uploadedDefectUrls.has(file)) continue;
-            const media = await mediaApi.upload(file);
-            const url = media.url;
-            uploadedDefectUrls.set(file, url);
-            setUploadedDefectImageUrls(new Map(uploadedDefectUrls));
-          }
-        } catch (uploadError) {
-          setMediaUploadState('error');
-          setMediaUploadError(itemErrorMessage(uploadError, 'Không tải được ảnh lỗi lên. Các ảnh đã tải thành công sẽ được giữ lại khi thử lại.'));
+          setMediaUploadError(apiError.message || 'Không tải được ảnh lên. Các ảnh đã tải thành công sẽ được giữ lại khi thử lại.');
           setConfirmOpen(false);
           return;
         }
       }
       setMediaUploadState('idle');
-      const itemImages = imageFiles.map((file) => uploadedUrls.get(file)).filter((url): url is string => Boolean(url));
-      const itemDefectImages = defectImageFiles
-        .map((file) => uploadedDefectUrls.get(file))
-        .filter((url): url is string => Boolean(url));
+      const itemImages = SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST
+        ? []
+        : imageFiles.map((file) => uploadedUrls.get(file)).filter((url): url is string => Boolean(url));
+      const uploadedDefectUrls = new Map(uploadedDefectImageUrls);
+      if (condition === 'DEFECTIVE') {
+        setMediaUploadState('uploading');
+        for (const file of defectImageFiles) {
+          if (uploadedDefectUrls.has(file)) continue;
+          const media = await mediaApi.upload(file);
+          uploadedDefectUrls.set(file, media.url);
+          setUploadedDefectImageUrls(new Map(uploadedDefectUrls));
+        }
+      }
+      setMediaUploadState('idle');
       const item = await itemApi.create(
         {
           categoryId,
@@ -289,19 +265,27 @@ export function Post() {
           title: title.trim(),
           description: description.trim(),
           desiredItem: type === 'trade' ? tradeFor.trim() || null : null,
-          condition,
+          condition: CONDITION_TO_API[condition],
           defectNote: condition === 'DEFECTIVE' ? defectNote.trim() : null,
-          brand: null,
+          brand: brand.trim() || null,
           images: itemImages,
-          defectImages: condition === 'DEFECTIVE' ? itemDefectImages : null,
-          operatingStatus: operatingStatusAttribute ? operatingStatus || null : null,
+          defectImages: condition === 'DEFECTIVE'
+            ? defectImageFiles.map((file) => uploadedDefectUrls.get(file)).filter((url): url is string => Boolean(url))
+            : [],
+          operatingStatus: operatingStatusRequired ? operatingStatus || null : null,
         },
       );
-      const baseNotice = type === 'gift' ? FREE_GIFT_SUCCESS : POST_FEE_SUCCESS;
+      refreshWallet();
+      const baseNotice = type === 'gift' ? GIVE_POST_SUCCESS : SWAP_POST_SUCCESS;
       const reviewNotice = item.status === 'PENDING_REVIEW' ? ` ${PENDING_REVIEW_NOTICE}` : '';
       navigate('/activities', { state: { notice: `${baseNotice}${reviewNotice} Mã bài: #${item.id}.` } });
-    } catch (submitError) {
-      setError(itemErrorMessage(submitError, 'Không đăng được bài. Vui lòng kiểm tra thông tin và thử lại.'));
+    } catch (caught) {
+      const apiError = caught as ApiError;
+      setErrorCode(apiError.code);
+      setError(apiError.code === WALLET_INSUFFICIENT_BALANCE
+        ? INSUFFICIENT_CREDIT_MESSAGE
+        : apiError.message || 'Không đăng được bài. Vui lòng kiểm tra thông tin và thử lại.');
+      if (apiError.code === WALLET_INSUFFICIENT_BALANCE) refreshWallet();
       setConfirmOpen(false);
     } finally {
       submitInFlight.current = false;
@@ -320,11 +304,8 @@ export function Post() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span>
               {error}
-              {error === INSUFFICIENT_CREDIT ? (
-                <span className="mt-1 block">Phí đăng bài là 5 Credit.</span>
-              ) : null}
             </span>
-            {error === INSUFFICIENT_CREDIT ? (
+            {errorCode === WALLET_INSUFFICIENT_BALANCE ? (
               <Link to="/credit">
                 <Button size="sm">Nạp Credit</Button>
               </Link>
@@ -370,7 +351,6 @@ export function Post() {
             label="Tiêu đề"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            maxLength={150}
             placeholder="Ví dụ: Xe đạp mini màu xanh"
             error={errors.title}
           />
@@ -387,27 +367,12 @@ export function Post() {
             <Select
               label="Tình trạng món đồ"
               value={condition}
-              onChange={(e) => {
-                const nextCondition = e.target.value as ApiCondition | '';
-                setCondition(nextCondition);
-                setErrors((current) => ({ ...current, condition: undefined }));
-                if (nextCondition !== 'DEFECTIVE') {
-                  setDefectNote('');
-                  setDefectImageFiles([]);
-                  setDefectImages([]);
-                  setUploadedDefectImageUrls(new Map());
-                  setErrors((current) => ({
-                    ...current,
-                    defectNote: undefined,
-                    defectImages: undefined,
-                  }));
-                }
-              }}
+              onChange={(e) => setCondition(e.target.value as ItemCondition | '')}
             >
               <option value="">Chọn tình trạng</option>
-              {POST_CONDITIONS.map((entry) => (
-                <option key={entry.value} value={entry.value}>
-                  {entry.label}
+              {CONDITIONS.map((c) => (
+                <option key={c} value={c}>
+                  {conditionLabel[c]}
                 </option>
               ))}
             </Select>
@@ -416,7 +381,7 @@ export function Post() {
             {errors.category ? <span className="hidden text-xs text-error sm:block">{errors.category}</span> : <span />}
             {errors.condition ? <span className="text-xs text-error">{errors.condition}</span> : null}
           </div>
-          {isApiAccount && category ? (
+          {isApiAccount && category && (attributesLoading || Boolean(attributesError) || categoryAttributes.length > 0) ? (
             <div className="rounded-lg bg-surface-low p-4 text-sm">
               <p className="font-semibold text-text-primary">Thông tin theo danh mục</p>
               {attributesLoading ? <p className="mt-2 text-text-muted">Đang tải thuộc tính...</p> : null}
@@ -426,26 +391,7 @@ export function Post() {
                   {categoryAttributes.map((attribute) => <span key={attribute.id} className="rounded-full bg-white px-3 py-1 text-xs ring-1 ring-border">{attribute.name}{attribute.required ? ' · bắt buộc' : ''}</span>)}
                 </div>
               ) : null}
-              {!attributesLoading && !attributesError && !categoryAttributes.length ? <p className="mt-2 text-text-muted">Danh mục này chưa có thuộc tính bổ sung.</p> : null}
               {categoryAttributes.length ? <p className="mt-2 text-xs text-text-muted">Hãy nêu các thông tin trên trong phần mô tả để người xem dễ đánh giá món đồ.</p> : null}
-            </div>
-          ) : null}
-          {operatingStatusAttribute ? (
-            <div>
-              <Select
-                label="Trạng thái hoạt động"
-                value={operatingStatus}
-                onChange={(event) => {
-                  setOperatingStatus(event.target.value as OperatingStatus | '');
-                  setErrors((current) => ({ ...current, operatingStatus: undefined }));
-                }}
-              >
-                <option value="">Chọn trạng thái hoạt động</option>
-                {operatingStatusOptions.map((status) => (
-                  <option key={status} value={status}>{OPERATING_STATUS_LABELS[status]}</option>
-                ))}
-              </Select>
-              {errors.operatingStatus ? <span className="mt-1.5 block text-xs text-error">{errors.operatingStatus}</span> : null}
             </div>
           ) : null}
           <Select
@@ -469,109 +415,6 @@ export function Post() {
             placeholder="Tình trạng thực tế, kích thước và những lưu ý cần biết..."
             error={errors.description}
           />
-          {condition === 'DEFECTIVE' ? (
-            <div className="space-y-4 rounded-lg border border-border bg-surface-low p-4">
-              <TextArea
-                label="Mô tả lỗi"
-                value={defectNote}
-                onChange={(event) => {
-                  setDefectNote(event.target.value);
-                  setErrors((current) => ({ ...current, defectNote: undefined }));
-                }}
-                placeholder="Mô tả rõ vị trí và mức độ lỗi của món đồ..."
-                error={errors.defectNote}
-              />
-              <label className={`block rounded-lg border border-dashed bg-white p-4 text-center transition hover:border-primary ${errors.defectImages ? 'border-error' : 'border-border'}`}>
-                <Icon name="image" className="mx-auto size-7 text-primary" />
-                <strong className="mt-2 block text-sm">Thêm ảnh thể hiện lỗi</strong>
-                <span className="mt-1 block text-xs text-text-muted">Ít nhất 1 ảnh khi tình trạng là có lỗi</span>
-                <input
-                  className="hidden"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  multiple
-                  disabled={submitting || mediaUploading}
-                  onChange={async (event) => {
-                    const files = Array.from(event.target.files ?? []);
-                    setMediaUploadState('idle');
-                    setMediaUploadError('');
-                    if (files.some((file) => !ACCEPTED_IMAGE_TYPES.has(file.type))) {
-                      setDefectImageFiles([]);
-                      setDefectImages([]);
-                      setUploadedDefectImageUrls(new Map());
-                      setErrors((current) => ({ ...current, defectImages: 'Ảnh phải có định dạng JPG, PNG hoặc WebP.' }));
-                      return;
-                    }
-                    if (files.some((file) => file.size > IMAGE_MAX_BYTES)) {
-                      setDefectImageFiles([]);
-                      setDefectImages([]);
-                      setUploadedDefectImageUrls(new Map());
-                      setErrors((current) => ({ ...current, defectImages: 'Mỗi ảnh phải có dung lượng không quá 5 MB.' }));
-                      return;
-                    }
-                    try {
-                      const previews = await Promise.all(files.map(fileToDataUrl));
-                      setDefectImageFiles(files);
-                      setDefectImages(previews);
-                      setUploadedDefectImageUrls((current) =>
-                        new Map(files.flatMap((file) => {
-                          const url = current.get(file);
-                          return url ? [[file, url] as const] : [];
-                        })),
-                      );
-                      setErrors((current) => ({
-                        ...current,
-                        defectImages: files.length < 1
-                          ? 'Vui lòng chọn ít nhất 1 ảnh thể hiện lỗi.'
-                          : undefined,
-                      }));
-                    } catch {
-                      setDefectImageFiles([]);
-                      setDefectImages([]);
-                      setUploadedDefectImageUrls(new Map());
-                      setMediaUploadState('error');
-                      setMediaUploadError('Không đọc được ảnh lỗi đã chọn. Vui lòng chọn lại.');
-                    }
-                  }}
-                />
-              </label>
-              {errors.defectImages ? <span className="block text-xs text-error">{errors.defectImages}</span> : null}
-              {defectImages.length ? (
-                <div className="grid grid-cols-3 gap-2">
-                  {defectImages.map((image, index) => (
-                    <div key={image.slice(-16) + index} className="relative">
-                      <img src={image} alt={`Ảnh lỗi ${index + 1}`} className="aspect-square rounded-md object-cover" />
-                      <button
-                        type="button"
-                        aria-label="Xóa ảnh lỗi"
-                        disabled={submitting || mediaUploading}
-                        onClick={() => {
-                          const removedFile = defectImageFiles[index];
-                          setDefectImageFiles(defectImageFiles.filter((_, itemIndex) => itemIndex !== index));
-                          setDefectImages(defectImages.filter((_, itemIndex) => itemIndex !== index));
-                          setUploadedDefectImageUrls((current) => {
-                            const next = new Map(current);
-                            if (removedFile) next.delete(removedFile);
-                            return next;
-                          });
-                          const remainingCount = defectImageFiles.length - 1;
-                          setErrors((current) => ({
-                            ...current,
-                            defectImages: remainingCount < 1
-                              ? 'Vui lòng chọn ít nhất 1 ảnh thể hiện lỗi.'
-                              : undefined,
-                          }));
-                        }}
-                        className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-white text-error shadow-sm"
-                      >
-                        <Icon name="close" className="size-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
           {type === 'trade' ? (
             <Field
               label="Bạn muốn đổi lấy gì?"
@@ -580,6 +423,63 @@ export function Post() {
               placeholder="Ví dụ: Sách thiếu nhi hoặc cây để bàn"
               error={errors.tradeFor}
             />
+          ) : null}
+          <Field
+            label="Thương hiệu (không bắt buộc)"
+            value={brand}
+            onChange={(event) => setBrand(event.target.value)}
+            error={errors.brand}
+          />
+          {condition === 'DEFECTIVE' ? (
+            <>
+              <TextArea
+                label="Mô tả lỗi"
+                value={defectNote}
+                onChange={(event) => setDefectNote(event.target.value)}
+                error={errors.defectNote}
+              />
+              <label className="block rounded-lg border border-dashed border-border p-4 text-sm">
+                <span className="font-semibold">Ảnh lỗi</span>
+                <span className="mt-1 block text-xs text-text-muted">Chọn ít nhất một ảnh thể hiện rõ lỗi.</span>
+                <input
+                  className="mt-3 block w-full text-xs"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  disabled={submitting || mediaUploading}
+                  onChange={async (event) => {
+                    const files = Array.from(event.target.files ?? []);
+                    setDefectImageFiles(files);
+                    setUploadedDefectImageUrls(new Map());
+                    setDefectImagePreviews(await Promise.all(files.map(fileToDataUrl)));
+                    setErrors((current) => ({ ...current, defectImages: files.length ? undefined : current.defectImages }));
+                  }}
+                />
+                {errors.defectImages ? <span className="mt-2 block text-xs text-error">{errors.defectImages}</span> : null}
+                {defectImagePreviews.length ? (
+                  <div className="mt-3 grid grid-cols-4 gap-2">
+                    {defectImagePreviews.map((preview, index) => (
+                      <img key={`${preview.slice(-16)}-${index}`} src={preview} alt={`Ảnh lỗi ${index + 1}`} className="aspect-square rounded-md object-cover" />
+                    ))}
+                  </div>
+                ) : null}
+              </label>
+            </>
+          ) : null}
+          {operatingStatusRequired ? (
+            <div>
+              <Select
+                label="Trạng thái hoạt động"
+                value={operatingStatus}
+                onChange={(event) => setOperatingStatus(event.target.value as OperatingStatus | '')}
+              >
+                <option value="">Chọn trạng thái hoạt động</option>
+                <option value="NORMAL">Hoạt động bình thường</option>
+                <option value="PARTIAL">Hoạt động một phần</option>
+                <option value="NOT_WORKING">Không hoạt động</option>
+              </Select>
+              {errors.operatingStatus ? <span className="mt-1 block text-xs text-error">{errors.operatingStatus}</span> : null}
+            </div>
           ) : null}
         </section>
         <aside className="space-y-4">
@@ -608,19 +508,13 @@ export function Post() {
                   return;
                 }
                 const files = selectedFiles;
-                if (files.some((file) => !ACCEPTED_IMAGE_TYPES.has(file.type))) {
-                  setErrors((current) => ({ ...current, images: 'Ảnh phải có định dạng JPG, PNG hoặc WebP.' }));
+                if (files.some((file) => !file.type.startsWith('image/'))) {
+                  setErrors((current) => ({ ...current, images: 'Vui lòng chỉ chọn tệp hình ảnh.' }));
                   setImageFiles([]);
                   setImages([]);
                   setUploadedImageUrls(new Map());
                   return;
-                } else if (files.some((file) => file.size > IMAGE_MAX_BYTES)) {
-                  setErrors((current) => ({ ...current, images: 'Mỗi ảnh phải có dung lượng không quá 5 MB.' }));
-                  setImageFiles([]);
-                  setImages([]);
-                  setUploadedImageUrls(new Map());
-                  return;
-                } else if (files.length < ITEM_IMAGES_MIN) {
+                } else if (!SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST && files.length < ITEM_IMAGES_MIN) {
                   setErrors((current) => ({ ...current, images: `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.` }));
                 } else {
                   setErrors((current) => ({ ...current, images: undefined }));
@@ -674,7 +568,7 @@ export function Post() {
                       const remainingCount = imageFiles.length - 1;
                       setErrors((current) => ({
                         ...current,
-                        images: remainingCount < ITEM_IMAGES_MIN
+                        images: !SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST && remainingCount < ITEM_IMAGES_MIN
                           ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.`
                           : undefined,
                       }));
@@ -687,31 +581,11 @@ export function Post() {
               ))}
             </div>
           ) : null}
-          <div className="rounded-lg bg-primary-faint p-4 text-xs leading-5 text-text-secondary">
-            <strong className="text-primary">Trước khi đăng</strong>
-            <p className="mt-1">
-              Bài viết sẽ chờ quản trị viên duyệt. Không đăng thông tin liên hệ trong mô tả.
-            </p>
+          <div className="space-y-1 rounded-lg bg-white p-4 text-xs leading-5 text-text-secondary ring-1 ring-border/80">
+            <p className="whitespace-nowrap text-text-primary"><strong>Cho tặng:</strong> miễn phí</p>
+            <p className="whitespace-nowrap text-text-primary"><strong>Trao đổi:</strong> phí đăng bài {POST_FEE_DISPLAY} Credit</p>
           </div>
-          <div className="rounded-lg bg-white p-4 text-xs leading-5 text-text-secondary ring-1 ring-border/80">
-            {type === 'gift' ? (
-              <strong className="text-primary">Đăng bài cho tặng miễn phí</strong>
-            ) : isApiAccount ? (
-              <>
-                <strong className="text-text-primary">Phí đăng bài theo cấu hình Backend</strong>
-                <p className="mt-1">Backend sẽ kiểm tra và áp dụng phí khi tạo bài.</p>
-              </>
-            ) : (
-              <>
-                <strong className="text-text-primary">Phí đăng bài: {POST_LISTING_FEE} Credit</strong>
-                <p className="mt-1 font-bold text-primary">
-                  {POST_LISTING_FEE} Credit ({feeVnd.toLocaleString('vi-VN')}đ)
-                </p>
-                <p className="mt-1">5 Credit sẽ được trừ khi bạn xác nhận đăng bài.</p>
-              </>
-            )}
-          </div>
-          <Button className="w-full" size="lg" disabled={mediaUploading}>
+          <Button className="w-full" size="lg" disabled={submitting || mediaUploading || catalogLoading}>
             Đăng bài
           </Button>
         </aside>
@@ -729,18 +603,18 @@ export function Post() {
             </h2>
             <p className="mt-2 text-sm leading-6 text-text-muted">
               {type === 'gift'
-                ? 'Bài cho tặng được đăng miễn phí sau khi bạn xác nhận.'
+                ? 'Bài cho tặng được đăng miễn phí.'
                 : 'Phí đăng bài sẽ được trừ một lần sau khi bạn xác nhận.'}
             </p>
             <div className="mt-5 space-y-3 rounded-lg bg-surface-low p-4 text-sm">
               <SummaryRow
-                label={type === 'gift' ? 'Phí đăng bài' : 'Phí đăng bài'}
-                value={type === 'gift' ? 'Miễn phí' : isApiAccount ? 'Theo cấu hình Backend' : `${POST_LISTING_FEE} Credit`}
+                label="Phí đăng bài"
+                value={type === 'gift' ? 'Miễn phí' : `${POST_FEE_DISPLAY} Credit`}
               />
               <SummaryRow label="Số dư hiện tại" value={availableCredit === null ? '--' : `${availableCredit} Credit`} />
               <SummaryRow
                 label="Số dư sau khi đăng"
-                value={availableCredit === null ? '--' : `${availableCredit} Credit`}
+                value={availableCredit === null ? '--' : `${type === 'gift' ? availableCredit : availableCredit - POST_FEE_DISPLAY} Credit`}
               />
             </div>
             <div className="mt-6 flex justify-end gap-2">

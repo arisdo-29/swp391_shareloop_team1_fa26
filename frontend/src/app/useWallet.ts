@@ -7,6 +7,7 @@ export interface WalletContextValue {
   loading: boolean;
   error: string;
   refresh: () => void;
+  replaceWallet: (wallet: WalletResponse) => void;
 }
 
 export const WalletContext = createContext<WalletContextValue | null>(null);

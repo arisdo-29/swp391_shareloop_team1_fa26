@@ -22,10 +22,48 @@ import { useWallet } from '../../app/useWallet';
 import { userApi } from '../../services/userApi';
 import { catalogApi } from '../../services/catalogApi';
 import { mediaApi } from '../../services/mediaApi';
-import { toAreaOptions, toFeUser, type AreaOption } from '../../services/mappers';
+import { toAreaOptions, type AreaOption } from '../../services/mappers';
 import type { ApiError } from '../../services/http';
 import { toBackendUserId } from '../../services/requestApi';
 import { resolveMediaUrl } from '../../services/mediaUrl';
+
+function profileLoadErrorMessage(error: unknown, source: 'profile' | 'areas') {
+  const apiError = error as Partial<ApiError>;
+  if (apiError.code === 'AUTH_ACCOUNT_LOCKED') {
+    return 'Tài khoản đã bị khoá. Vui lòng liên hệ quản trị viên.';
+  }
+  if (apiError.code === 'USER_NOT_FOUND') return 'Không tìm thấy hồ sơ tài khoản.';
+  if (apiError.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (apiError.status === 403) return 'Tài khoản không có quyền truy cập hồ sơ.';
+  if (apiError.status === 404 && source === 'profile') return 'Không tìm thấy hồ sơ tài khoản.';
+  if (apiError.status === 0) return 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
+  if (source === 'areas') return 'Không tải được danh sách khu vực mặc định. Vui lòng thử lại.';
+  if (apiError.status && apiError.status >= 500) {
+    return 'Máy chủ chưa thể tải hồ sơ lúc này. Vui lòng thử lại sau.';
+  }
+  return 'Không tải được hồ sơ. Vui lòng thử lại.';
+}
+
+function profileSaveErrorMessage(error: unknown) {
+  const apiError = error as Partial<ApiError>;
+  const messages: Record<string, string> = {
+    VALIDATION_FAILED: 'Thông tin hồ sơ chưa hợp lệ. Vui lòng kiểm tra lại.',
+    USER_AREA_INVALID: 'Khu vực đã chọn không tồn tại hoặc đã ngừng hoạt động.',
+    MEDIA_NOT_FOUND: 'Không tìm thấy ảnh đại diện đã chọn.',
+    MEDIA_NOT_OWNER: 'Bạn không có quyền sử dụng ảnh đại diện này.',
+    MEDIA_NOT_UPLOADED: 'Ảnh đại diện này đã được sử dụng hoặc không còn hợp lệ.',
+    USER_NOT_FOUND: 'Không tìm thấy hồ sơ tài khoản.',
+    AUTH_ACCOUNT_LOCKED: 'Tài khoản đã bị khoá. Vui lòng liên hệ quản trị viên.',
+  };
+  if (apiError.code && messages[apiError.code]) return messages[apiError.code];
+  if (apiError.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (apiError.status === 0) return 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
+  if (apiError.status && apiError.status >= 500) {
+    return 'Máy chủ chưa thể cập nhật hồ sơ lúc này. Vui lòng thử lại sau.';
+  }
+  return 'Không cập nhật được hồ sơ. Vui lòng thử lại.';
+}
+
 export function Profile() {
   const user = useAppSelector(selectCurrentUser)!;
   const isAdmin = user.role === 'admin';
@@ -46,7 +84,8 @@ export function Profile() {
   const [profileLoading, setProfileLoading] = useState(isApiAccount);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileReloadKey, setProfileReloadKey] = useState(0);
-  const [profileError, setProfileError] = useState('');
+  const [profileLoadError, setProfileLoadError] = useState('');
+  const [profileSaveError, setProfileSaveError] = useState('');
   const [profileNotice, setProfileNotice] = useState('');
   const [amount, setAmount] = useState(5);
   const [showQr, setShowQr] = useState(false);
@@ -60,23 +99,36 @@ export function Profile() {
     if (!isApiAccount) return;
     let active = true;
     setProfileLoading(true);
-    setProfileError('');
-    Promise.all([userApi.getMe(), catalogApi.areas()])
-      .then(([profile, areas]) => {
+    setProfileLoadError('');
+    Promise.allSettled([userApi.getMe(), catalogApi.areas()])
+      .then(([profileResult, areasResult]) => {
         if (!active) return;
-        const options = toAreaOptions(areas);
+        const options = areasResult.status === 'fulfilled' ? toAreaOptions(areasResult.value) : [];
+        if (areasResult.status === 'fulfilled') setApiAreas(options);
+        if (profileResult.status === 'rejected') {
+          setProfileLoadError(profileLoadErrorMessage(profileResult.reason, 'profile'));
+          return;
+        }
+        const profile = profileResult.value;
+        const resolvedAvatarUrl = profile.avatarUrl ? resolveMediaUrl(profile.avatarUrl) : undefined;
         const districtLabel = options.find((area) => area.id === profile.areaId)?.label ?? '';
-        setApiAreas(options);
         setName(profile.fullName);
         setEmail(profile.email);
         setPhone(profile.phone ?? '');
         setApiAreaId(profile.areaId ? String(profile.areaId) : '');
         setApiAvatarMediaId(profile.avatarMediaId);
-        setAvatarUrl(profile.avatarUrl ? resolveMediaUrl(profile.avatarUrl) : undefined);
-        dispatch(actions.loginFromApi(toFeUser(profile, districtLabel)));
-      })
-      .catch(() => {
-        if (active) setProfileError('Không tải được hồ sơ từ Backend. Vui lòng thử lại.');
+        setAvatarUrl(resolvedAvatarUrl);
+        dispatch(actions.updateProfile({
+          userId: user.id,
+          name: profile.fullName,
+          email: profile.email,
+          phone: profile.phone ?? '',
+          district: districtLabel,
+          avatarUrl: resolvedAvatarUrl,
+        }));
+        if (areasResult.status === 'rejected') {
+          setProfileLoadError(profileLoadErrorMessage(areasResult.reason, 'areas'));
+        }
       })
       .finally(() => {
         if (active) setProfileLoading(false);
@@ -84,21 +136,21 @@ export function Profile() {
     return () => {
       active = false;
     };
-  }, [dispatch, isApiAccount, profileReloadKey]);
+  }, [dispatch, isApiAccount, profileReloadKey, user.id]);
 
   const save = async () => {
-    setProfileError('');
+    setProfileSaveError('');
     setProfileNotice('');
     if (!name.trim()) {
-      setProfileError('Vui lòng nhập họ và tên.');
+      setProfileSaveError('Vui lòng nhập họ và tên.');
       return;
     }
     if (!isApiAccount && !validEmail(email)) {
-      setProfileError('Email không đúng định dạng.');
+      setProfileSaveError('Email không đúng định dạng.');
       return;
     }
     if (!isApiAccount && !validVietnamPhone(phone)) {
-      setProfileError('Số điện thoại Việt Nam không hợp lệ.');
+      setProfileSaveError('Số điện thoại Việt Nam không hợp lệ.');
       return;
     }
     if (isApiAccount) {
@@ -112,15 +164,21 @@ export function Profile() {
           avatarMediaId: uploaded?.mediaId ?? apiAvatarMediaId,
         });
         const districtLabel = apiAreas.find((area) => area.id === profile.areaId)?.label ?? '';
-        const nextAvatarUrl = profile.avatarUrl ? resolveMediaUrl(profile.avatarUrl) : avatarUrl;
+        const nextAvatarUrl = resolveMediaUrl(profile.avatarUrl) || undefined;
         setAvatarUrl(nextAvatarUrl);
         setApiAvatarMediaId(profile.avatarMediaId);
         setAvatarFile(null);
-        dispatch(actions.loginFromApi(toFeUser(profile, districtLabel)));
+        dispatch(actions.updateProfile({
+          userId: user.id,
+          name: profile.fullName,
+          email: profile.email,
+          phone: profile.phone ?? '',
+          district: districtLabel,
+          avatarUrl: nextAvatarUrl,
+        }));
         setProfileNotice('Cập nhật hồ sơ thành công.');
       } catch (error) {
-        const apiError = error as ApiError;
-        setProfileError(apiError.message || 'Không cập nhật được hồ sơ. Vui lòng thử lại.');
+        setProfileSaveError(profileSaveErrorMessage(error));
       } finally {
         setProfileSaving(false);
       }
@@ -133,16 +191,23 @@ export function Profile() {
     <div className="page-shell">
       <PageHeader
         title="Tài khoản của bạn"
-        description="Quản lý thông tin, Credit và uy tín cộng đồng."
       />
       <div className="grid gap-7 lg:grid-cols-[240px_1fr]">
         <aside>
           <div className="flex items-center gap-3 pb-5">
-            <Avatar user={{ ...user, avatarUrl }} size="lg" />
+            <Avatar
+              user={{
+                ...user,
+                name,
+                avatarInitials: name.trim().split(/\s+/).map((part) => part[0]).slice(-2).join('').toUpperCase(),
+                avatarUrl,
+              }}
+              size="lg"
+            />
             <div className="min-w-0">
-              <h2 className="truncate font-bold">{user.name}</h2>
+              <h2 className="truncate font-bold">{name}</h2>
               <div className="mt-1">
-                <RankBadge rank={user.rank} />
+                <RankBadge rank={isAdmin ? 'Quản trị hệ thống' : user.rank} />
               </div>
             </div>
           </div>
@@ -150,7 +215,6 @@ export function Profile() {
             {(
               [
                 ['profile', 'Hồ sơ', 'user'],
-                ['password', 'Đổi mật khẩu', 'shield'],
                 ['credit', 'Credit', 'wallet'],
                 ['reputation', 'Uy tín & Hạng', 'star'],
               ] as const
@@ -212,7 +276,9 @@ export function Profile() {
               </div>
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 <Field label="Họ và tên" value={name} onChange={(e) => setName(e.target.value)} />
-                <Field label="Tên đăng nhập" value={user.username} readOnly className="bg-surface-low" />
+                {user.username.trim().toLowerCase() !== email.trim().toLowerCase() ? (
+                  <Field label="Tên đăng nhập" value={user.username} readOnly className="bg-surface-low" />
+                ) : null}
                 <Field
                   label="Email"
                   type="email"
@@ -229,7 +295,7 @@ export function Profile() {
                   className={isApiAccount ? 'bg-surface-low' : undefined}
                 />
                 <Select
-                  label="Quận"
+                  label="Khu vực mặc định"
                   value={isApiAccount ? apiAreaId : district}
                   onChange={(e) => isApiAccount ? setApiAreaId(e.target.value) : setDistrict(e.target.value)}
                 >
@@ -243,9 +309,10 @@ export function Profile() {
                   )}
                 </Select>
               </div>
-              {profileLoading ? <div className="mt-5"><Alert>Đang tải hồ sơ từ Backend...</Alert></div> : null}
-              {profileError ? <div className="mt-5"><Alert tone="error">{profileError}</Alert></div> : null}
-              {profileError && isApiAccount && !profileSaving ? (
+              {profileLoading ? <div className="mt-5"><Alert>Đang tải hồ sơ...</Alert></div> : null}
+              {profileLoadError ? <div className="mt-5"><Alert tone="error">{profileLoadError}</Alert></div> : null}
+              {profileSaveError ? <div className="mt-5"><Alert tone="error">{profileSaveError}</Alert></div> : null}
+              {profileLoadError && isApiAccount && !profileSaving ? (
                 <Button className="mt-3" size="sm" variant="outline" onClick={() => setProfileReloadKey((key) => key + 1)}>
                   Tải lại hồ sơ
                 </Button>

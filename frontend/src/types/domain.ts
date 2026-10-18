@@ -2,13 +2,13 @@ export type Role = 'guest' | 'user' | 'admin';
 export type UserStatus = 'active' | 'suspended' | 'locked' | 'pending_verification';
 export type ItemType = 'gift' | 'trade';
 export type ItemCondition =
-  | 'new'
-  | 'good'
-  | 'used'
   | 'NEW'
   | 'LIKE_NEW'
   | 'GOOD'
-  | 'DEFECTIVE';
+  | 'DEFECTIVE'
+  | 'new'
+  | 'good'
+  | 'used';
 export type ItemStatus =
   | 'pending'
   | 'PENDING_REVIEW'
@@ -58,10 +58,8 @@ export interface User {
   email: string;
   phone: string;
   district: string;
-  areaId?: number | null;
   avatarInitials: string;
   avatarUrl?: string;
-  avatarMediaId?: number | null;
   totalCredit: number;
   availableCredit: number;
   holdCredit: number;
@@ -89,6 +87,7 @@ export interface Item {
   description: string;
   type: ItemType;
   category: string;
+  categoryId?: number;
   condition: ItemCondition;
   district: string;
   images: string[];
@@ -103,6 +102,7 @@ export interface Item {
   postApprovalEditCount?: number;
   postedAt: string;
   expiresAt?: string;
+  boostedUntil?: string;
 }
 
 export interface Handover {

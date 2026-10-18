@@ -20,18 +20,15 @@ export const adminConfigApi = {
     const { data } = await http.get<AdminConfigResponse[]>('/api/v1/admin/configs');
     return data;
   },
-  async update(key: string, adminId: number, input: UpdateAdminConfigRequest) {
+  async update(key: string, input: UpdateAdminConfigRequest) {
     const { data } = await http.put<AdminConfigResponse>(
       `/api/v1/admin/configs/${encodeURIComponent(key)}`,
       input,
-      { params: { adminId } },
     );
     return data;
   },
-  async updateByBody(adminId: number, input: BulkUpdateAdminConfigRequest) {
-    const { data } = await http.put<AdminConfigResponse>('/api/v1/admin/configs', input, {
-      params: { adminId },
-    });
+  async updateByBody(input: BulkUpdateAdminConfigRequest) {
+    const { data } = await http.put<AdminConfigResponse>('/api/v1/admin/configs', input);
     return data;
   },
 };

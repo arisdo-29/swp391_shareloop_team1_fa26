@@ -8,6 +8,7 @@ export const itemApiEndpoints = {
   myItems: '/api/v1/me/items',
   editQuote: (id: number) => `/api/v1/items/${id}/edit-quote`,
   renew: (id: number) => `/api/v1/items/${id}/renew`,
+  boost: (id: number) => `/api/v1/items/${id}/boost`,
 } as const;
 
 export interface ItemListParams {
@@ -77,7 +78,7 @@ export type EditQuoteReason =
 export interface EditQuote {
   free: boolean; // true khi amount = 0
   amount: number; // số Credit sẽ giữ khi gửi bản sửa
-  reason: EditQuoteReason;
+  reason: string;
 }
 
 // Contract: docs/api/listingfee.md (POST /api/v1/items/{id}/renew)
@@ -85,6 +86,12 @@ export interface RenewResponse {
   itemId: number;
   fee: number; // số Credit vừa trừ; 0 khi Admin cấu hình miễn phí
   expireAt: string; // hạn hiển thị mới, ISO-8601 UTC
+}
+
+export interface BoostResponse {
+  itemId: number;
+  boostedUntil: string;
+  creditBalance: number;
 }
 
 export function itemListUrl(params: ItemListParams = {}): string {
@@ -119,7 +126,7 @@ export const itemApi = {
     return data;
   },
   async remove(id: number): Promise<void> {
-    await http.delete(itemApiEndpoints.detail(id));
+    await http.delete<void>(itemApiEndpoints.detail(id));
   },
   async mine(): Promise<ItemResponse[]> {
     const { data } = await http.get<ItemResponse[]>(itemApiEndpoints.myItems);
@@ -131,6 +138,10 @@ export const itemApi = {
   },
   async renewItem(id: number): Promise<RenewResponse> {
     const { data } = await http.post<RenewResponse>(itemApiEndpoints.renew(id));
+    return data;
+  },
+  async boostItem(id: number): Promise<BoostResponse> {
+    const { data } = await http.post<BoostResponse>(itemApiEndpoints.boost(id));
     return data;
   },
 };

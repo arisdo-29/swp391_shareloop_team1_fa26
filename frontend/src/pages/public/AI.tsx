@@ -1,27 +1,26 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { actions, selectCurrentUser, selectData } from '../../app/store';
+import { actions, selectCurrentUser } from '../../app/store';
 import { Alert, Button, EmptyState, PageHeader, ProductCard, TextArea } from '../../components/ui';
-import { CATEGORIES } from '../../constants/domain';
 import { findNeedMatches, parseNeed } from '../../utils/aiMatching';
 import type { Item, ItemType } from '../../types/domain';
 import { AI_ASSISTANT_SEARCH_FEE } from '../../utils/credit';
 import { toBackendUserId } from '../../services/requestApi';
 import { catalogApi } from '../../services/catalogApi';
-import { itemApi, itemErrorMessage } from '../../services/itemApi';
-import { toAreaNameMap, toAreaNames, toCategoryNameMap, toCategoryNames, toFeItem } from '../../services/mappers';
+import { itemApi } from '../../services/itemApi';
+import { toAreaNameMap, toAreaOptions, toCategoryNameMap, toFeItem } from '../../services/mappers';
+import type { ApiError } from '../../services/http';
 
 export function AI() {
-  const data = useAppSelector(selectData);
   const user = useAppSelector(selectCurrentUser);
   const isApiAccount = toBackendUserId(user?.id) !== null;
   const dispatch = useAppDispatch();
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [districts, setDistricts] = useState<string[]>([]);
-  const [itemsError, setItemsError] = useState('');
   const [itemsLoading, setItemsLoading] = useState(true);
+  const [itemsError, setItemsError] = useState('');
   const [text, setText] = useState('');
   const [type, setType] = useState<ItemType | ''>('');
   const [district, setDistrict] = useState('');
@@ -32,7 +31,7 @@ export function AI() {
   const [reduceMotion, setReduceMotion] = useState(false);
   const [railAnimating, setRailAnimating] = useState(false);
   const [railResetting, setRailResetting] = useState(false);
-  const slideshowItems = useMemo(() => items.slice(0, 10), [items]);
+  const slideshowItems = useMemo(() => items.filter((item) => item.images.length).slice(0, 10), [items]);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const results = useMemo(
     () => findNeedMatches(items, text, { type, district, category }),
@@ -52,25 +51,19 @@ export function AI() {
     setItemsLoading(true);
     setItemsError('');
     Promise.all([catalogApi.categories(), catalogApi.areas(), itemApi.list({ page: 0, size: 100 })])
-      .then(([categoryData, areaData, page]) => {
+      .then(([categoryData, areaData, response]) => {
         if (!active) return;
-        setCategories(toCategoryNames(categoryData));
-        setDistricts(toAreaNames(areaData));
-        setItems(page.items.map((item) => toFeItem(item, toCategoryNameMap(categoryData), toAreaNameMap(areaData))));
+        setCategories(categoryData.map((entry) => entry.name));
+        setDistricts(toAreaOptions(areaData).map((entry) => entry.label));
+        setItems(response.items.map((entry) => toFeItem(entry, toCategoryNameMap(categoryData), toAreaNameMap(areaData))));
       })
-      .catch((error) => {
+      .catch((caught) => {
         if (!active) return;
-        setItems([]);
-        setCategories([]);
-        setDistricts([]);
-        setItemsError(itemErrorMessage(error, 'Không tải được bài đăng từ Backend.'));
+        const apiError = caught as ApiError;
+        setItemsError(apiError.message || 'Không tải được danh sách bài đăng.');
       })
-      .finally(() => {
-        if (active) setItemsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+      .finally(() => { if (active) setItemsLoading(false); });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -117,7 +110,7 @@ export function AI() {
     }
     setCreditError(false);
     if (user && !isApiAccount) dispatch(actions.useAiFeature({ userId: user.id, feature: 'ASSISTANT_SEARCH' }));
-    const parsed = parseNeed(text, categories.length ? categories : CATEGORIES, districts);
+    const parsed = parseNeed(text, categories, districts);
     setType(parsed.type);
     setDistrict(parsed.district);
     setCategory(parsed.category);
@@ -130,9 +123,9 @@ export function AI() {
         title="Trợ lý tìm đồ"
         description="Mô tả nhu cầu bằng tiếng Việt. Trợ lý chỉ tìm trong các bài đăng SHARELOOP."
       />
-      {itemsLoading ? <Alert>Đang tải bài đăng từ Backend...</Alert> : null}
-      {itemsError ? <Alert tone="error">{itemsError}</Alert> : null}
       <div className="space-y-10">
+        {itemsLoading ? <Alert tone="warning">Đang tải bài đăng...</Alert> : null}
+        {itemsError ? <Alert tone="error">{itemsError}</Alert> : null}
         <div className="ai-hero-panel overflow-hidden rounded-[24px] bg-[#f6efe4] ring-1 ring-border/70">
           <section className="mx-auto max-w-3xl text-center">
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">
@@ -207,7 +200,6 @@ export function AI() {
                   <ProductCard
                     key={item.id}
                     item={item}
-                    owner={data.users.find((user) => user.id === item.ownerId)}
                   />
                 ))}
               </div>

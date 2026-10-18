@@ -3,6 +3,7 @@ import { useAppSelector } from './hooks';
 import { selectCurrentUser } from './store';
 import { toBackendUserId } from '../services/requestApi';
 import { walletApi, type WalletResponse } from '../services/walletApi';
+import type { ApiError } from '../services/http';
 import { WalletContext, type WalletContextValue } from './useWallet';
 
 interface WalletState {
@@ -27,6 +28,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     requestRef.current = null;
     setReloadKey((key) => key + 1);
   }, []);
+  const replaceWallet = useCallback((wallet: WalletResponse) => {
+    if (!backendUserId) return;
+    requestRef.current = null;
+    setState({ userId: backendUserId, wallet, loading: false, error: '' });
+  }, [backendUserId]);
 
   useEffect(() => {
     if (!backendUserId) {
@@ -44,13 +50,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       .then((wallet) => {
         if (active) setState({ userId: backendUserId, wallet, loading: false, error: '' });
       })
-      .catch(() => {
+      .catch((caught) => {
         if (!active) return;
+        const apiError = caught as ApiError;
         setState({
           userId: backendUserId,
           wallet: null,
           loading: false,
-          error: 'Không tải được số dư Credit. Vui lòng thử lại.',
+          error: apiError.message || 'Không tải được số dư Credit. Vui lòng thử lại.',
         });
       });
     return () => {
@@ -66,8 +73,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       loading: backendUserId !== null && (!matchesCurrentUser || state.loading),
       error: matchesCurrentUser ? state.error : '',
       refresh,
+      replaceWallet,
     };
-  }, [backendUserId, refresh, state]);
+  }, [backendUserId, refresh, replaceWallet, state]);
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 }

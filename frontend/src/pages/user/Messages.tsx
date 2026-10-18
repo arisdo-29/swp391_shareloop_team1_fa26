@@ -10,6 +10,7 @@ import {
   Field,
   Icon,
   IconButton,
+  ItemImage,
   Select,
   StatusBadge,
   TextArea,
@@ -24,13 +25,15 @@ import {
   contactSafetyLayer1,
   hasAmbiguousContactSignal,
 } from '../../utils/contactSafety';
-import { chatApi, type MessageResponse } from '../../services/chatApi';
+import { chatApi, type MessageResponse, type PinnedItemResponse } from '../../services/chatApi';
 import { itemApi, type ItemResponse } from '../../services/itemApi';
 import { requestApi, toBackendUserId, type RequestContactResponse, type RequestResponse } from '../../services/requestApi';
 import { resolveMediaUrl } from '../../services/mediaUrl';
 import type { ApiError } from '../../services/http';
+import { ReportDialog } from '../../components/ReportDialog';
 
 const steps = ['Trao doi', 'De xuat lich', 'Chot lich', 'Ban giao', 'Hoan tat'];
+
 export function Messages() {
   const user = useAppSelector(selectCurrentUser)!;
   const backendUserId = toBackendUserId(user.id);
@@ -43,6 +46,7 @@ interface ApiConversation {
 }
 
 function ApiMessages({ currentUserId }: { currentUserId: number }) {
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState<ApiConversation[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
   const [messages, setMessages] = useState<MessageResponse[]>([]);
@@ -64,6 +68,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [logisticsError, setLogisticsError] = useState('');
   const [logisticsReloadKey, setLogisticsReloadKey] = useState(0);
   const [contact, setContact] = useState<RequestContactResponse | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportNotice, setReportNotice] = useState('');
+  const [pinnedItems, setPinnedItems] = useState<PinnedItemResponse[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -95,7 +102,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         if (!active) return;
         setConversations([]);
         setSelectedRequestId(null);
-        setConversationError('Không tải được danh sách cuộc trò chuyện từ Backend.');
+        setConversationError('Không tải được danh sách cuộc trò chuyện.');
       })
       .finally(() => {
         if (active) setLoadingConversations(false);
@@ -140,6 +147,26 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   }, [currentUserId, messageReloadKey, selectedRequestId]);
 
   useEffect(() => {
+    if (selectedRequestId === null) {
+      setPinnedItems([]);
+      return;
+    }
+    let active = true;
+    setPinnedItems([]);
+    chatApi
+      .pinnedItems(selectedRequestId, currentUserId)
+      .then((response) => {
+        if (active) setPinnedItems(response);
+      })
+      .catch(() => {
+        if (active) setPinnedItems([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentUserId, selectedRequestId]);
+
+  useEffect(() => {
     if (selectedRequestId === null) return;
     let active = true;
     setLogisticsLoading(true);
@@ -172,6 +199,11 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
 
   const selected = conversations.find(({ request }) => request.id === selectedRequestId);
   const selectedAsDonor = selected ? selected.request.receiverId !== currentUserId : false;
+  const reportTargetUserId = selected?.item
+    ? selected.item.donorId === currentUserId
+      ? selected.request.receiverId
+      : selected.item.donorId
+    : null;
   const currentPartyConfirmedAt = selected
     ? selectedAsDonor
       ? selected.request.donorScheduleOkAt
@@ -310,6 +342,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   onClick={() => {
                     setSelectedRequestId(request.id);
                     setMobileChat(true);
+                    setReportOpen(false);
+                    setReportNotice('');
                   }}
                   className={`flex w-full gap-3 border-b border-border/70 p-4 text-left transition ${request.id === selectedRequestId ? 'bg-primary-faint' : 'hover:bg-background'}`}
                 >
@@ -346,6 +380,11 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 <p className="mt-1 text-xs text-text-muted">Tin nhắn được đồng bộ tự động mỗi 5 giây</p>
               </div>
               <span className="rounded-sm bg-primary-faint px-2.5 py-1 text-xs font-semibold text-primary">{selected.request.status}</span>
+              {reportTargetUserId && reportTargetUserId !== currentUserId ? (
+                <Button size="sm" variant="ghost" icon="shield" onClick={() => setReportOpen(true)}>
+                  Báo cáo
+                </Button>
+              ) : null}
             </header>
             <div className="shrink-0 border-b border-border bg-white px-4 py-3 sm:px-5">
               {logisticsLoading ? (
@@ -393,6 +432,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       </button>
                     </div>
                   ) : null}
+                  {reportNotice ? (
+                    <div className="rounded-md bg-emerald-50 p-3 text-xs text-success">{reportNotice}</div>
+                  ) : null}
                   {contact ? (
                     <div className="rounded-md bg-primary-faint p-3 text-xs leading-5 text-text-secondary">
                       <strong className="text-text-primary">{contact.fullName}</strong>
@@ -436,6 +478,31 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
               )}
             </div>
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-background px-4 pb-6 pt-5 sm:px-6">
+              {pinnedItems.length ? (
+                <div className="mb-4 flex gap-3 overflow-x-auto rounded-lg bg-white p-3 ring-1 ring-border/70">
+                  {pinnedItems.map((pinnedItem) => (
+                    <button
+                      key={pinnedItem.id}
+                      type="button"
+                      className="flex min-w-[240px] items-center gap-3 rounded-md p-2 text-left transition hover:bg-surface-low"
+                      onClick={() => navigate(`/items/${pinnedItem.id}`)}
+                    >
+                      <ItemImage
+                        src={resolveMediaUrl(pinnedItem.imageUrl)}
+                        alt={pinnedItem.title}
+                        className="size-14 shrink-0 rounded-md object-cover"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <strong className="block truncate text-sm">{pinnedItem.title}</strong>
+                        <span className="mt-1 flex flex-wrap gap-1.5">
+                          <TypeBadge type={pinnedItem.offerType === 'GIVE' ? 'gift' : 'trade'} />
+                          <StatusBadge status={pinnedItem.status} />
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {loadingMessages ? (
                 <p className="text-center text-sm text-text-muted">Đang tải tin nhắn...</p>
               ) : messages.length ? (
@@ -502,6 +569,17 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
           </section>
         )}
       </div>
+      {reportOpen && selected && reportTargetUserId && reportTargetUserId !== currentUserId ? (
+        <ReportDialog
+          target={{ targetType: 'USER', targetUserId: reportTargetUserId, requestId: selected.request.id }}
+          contextLabel={`Báo cáo người dùng trong yêu cầu #${selected.request.id}`}
+          onClose={() => setReportOpen(false)}
+          onSuccess={() => {
+            setReportOpen(false);
+            setReportNotice('Báo cáo đã được gửi đến quản trị viên để xem xét.');
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1394,7 +1472,7 @@ function TransactionParticipant({
 }) {
   const displayUser = participant ?? {
     name: 'Thành viên',
-    avatarInitials: '?',
+    avatarInitials: '',
     avatarUrl: undefined,
   };
   return (
