@@ -9,8 +9,9 @@ export interface AreaOption { id: number; name: string; label: string }
 
 export const apiUserId = (id: number) => `api_${id}`;
 
-export function toFeUser(user: AuthUserResponse | MeResponse): User {
+export function toFeUser(user: AuthUserResponse | MeResponse, district = ''): User {
   const profile = user as MeResponse;
+  const avatarUrl = resolveMediaUrl(profile.avatarUrl);
   return {
     id: apiUserId(user.id),
     username: user.email,
@@ -18,15 +19,17 @@ export function toFeUser(user: AuthUserResponse | MeResponse): User {
     name: user.fullName,
     email: user.email,
     phone: profile.phone ?? '',
-    district: '',
+    district,
+    areaId: profile.areaId ?? null,
     avatarInitials: user.fullName.split(' ').map((p) => p[0]).slice(-2).join('').toUpperCase(),
-    avatarUrl: profile.avatarUrl ?? undefined,
+    avatarUrl: avatarUrl || undefined,
+    avatarMediaId: profile.avatarMediaId ?? null,
     totalCredit: 0,
     availableCredit: 0,
     holdCredit: 0,
     rewardPoints: 0,
     reputationStars: 5,
-    rank: 'Thành viên mới',
+    rank: user.isAdmin ? 'Quản trị hệ thống' : 'Chưa có dữ liệu',
     status: 'active',
     role: user.isAdmin ? 'admin' : 'user',
     joinedAt: new Date().toISOString(),
@@ -89,19 +92,19 @@ function flattenAreas(areas: AreaResponse[]): Array<{ area: AreaResponse; parent
 }
 
 const CONDITION_TO_FE: Record<ItemResponse['condition'], ItemCondition> = {
-  NEW: 'new',
-  LIKE_NEW: 'good',
-  GOOD: 'good',
-  DEFECTIVE: 'used',
+  NEW: 'NEW',
+  LIKE_NEW: 'LIKE_NEW',
+  GOOD: 'GOOD',
+  DEFECTIVE: 'DEFECTIVE',
 };
 
 const STATUS_TO_FE: Record<ItemResponse['status'], ItemStatus> = {
   PENDING_REVIEW: 'PENDING_REVIEW',
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
-  RESERVED: 'IN_TRANSACTION',
-  TRADED: 'COMPLETED',
-  EXPIRED: 'expired',
+  RESERVED: 'RESERVED',
+  TRADED: 'TRADED',
+  EXPIRED: 'EXPIRED',
 };
 
 export function toFeItem(
@@ -122,6 +125,10 @@ export function toFeItem(
     tradeFor: item.desiredItem ?? undefined,
     brand: item.brand ?? undefined,
     defectNote: item.defectNote ?? undefined,
+    defectImages: Array.isArray(item.defectImages)
+      ? item.defectImages.map(resolveMediaUrl).filter(Boolean)
+      : [],
+    operatingStatus: item.operatingStatus ?? undefined,
     status: STATUS_TO_FE[item.status],
     postedAt: item.createdAt,
   };

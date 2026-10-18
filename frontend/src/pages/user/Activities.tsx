@@ -17,7 +17,7 @@ import {
 } from '../../components/ui';
 import { RECEIVE_ITEM_FEE } from '../../utils/credit';
 import { catalogApi } from '../../services/catalogApi';
-import { itemApi, type EditQuote, type ItemResponse } from '../../services/itemApi';
+import { itemApi, itemErrorMessage, type EditQuote, type ItemResponse } from '../../services/itemApi';
 import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
 import { requestApi, toBackendUserId, toFeItemRequest } from '../../services/requestApi';
 import type { Item, ItemRequest, User } from '../../types/domain';
@@ -58,6 +58,7 @@ export function Activities() {
   const [apiSentRequests, setApiSentRequests] = useState<ItemRequest[]>([]);
   const [myItemsLoading, setMyItemsLoading] = useState(true);
   const [myItemsError, setMyItemsError] = useState('');
+  const [myItemsReloadKey, setMyItemsReloadKey] = useState(0);
   const [cancelingRequestId, setCancelingRequestId] = useState('');
   const [renewingItemId, setRenewingItemId] = useState('');
   const [removingItemId, setRemovingItemId] = useState('');
@@ -107,8 +108,8 @@ export function Activities() {
         defectNote: apiEditingItem.defectNote,
         brand: apiEditingItem.brand,
         images: apiEditingItem.images,
-        defectImages: apiEditingItem.defectImages ?? undefined,
-        operatingStatus: apiEditingItem.operatingStatus ?? undefined,
+        defectImages: apiEditingItem.defectImages,
+        operatingStatus: apiEditingItem.operatingStatus,
       });
       const currentItem = myItems.find((item) => item.id === String(updated.id));
       const mapped = toFeItem(
@@ -155,9 +156,10 @@ export function Activities() {
     setMyItemsLoading(true);
     setMyItemsError('');
     if (!currentUserId) {
-      setMyItems(data.items.filter((item) => item.ownerId === user.id));
+      setMyItems([]);
       setApiRequestsByItem({});
       setApiSentRequests([]);
+      setMyItemsError('Vui lòng đăng nhập bằng tài khoản Backend để tải bài đăng của bạn.');
       setMyItemsLoading(false);
       return () => {
         active = false;
@@ -180,12 +182,12 @@ export function Activities() {
         setApiRequestsByItem(Object.fromEntries(requestEntries));
         setApiSentRequests(sentRequests.map((request) => toFeItemRequest(request, user.id)));
       })
-      .catch(() => {
+      .catch((error) => {
         if (!active) return;
         setMyItems([]);
         setApiRequestsByItem({});
         setApiSentRequests([]);
-        setMyItemsError('Không tải được bài đăng của bạn.');
+        setMyItemsError(itemErrorMessage(error, 'Không tải được bài đăng của bạn.'));
       })
       .finally(() => {
         if (active) setMyItemsLoading(false);
@@ -193,7 +195,7 @@ export function Activities() {
     return () => {
       active = false;
     };
-  }, [currentUserId, data.items, user.id]);
+  }, [currentUserId, myItemsReloadKey, user.id]);
   const txs = data.transactions.filter((t) => t.ownerId === user.id || t.requesterId === user.id);
   const acceptApiRequest = Object.values(apiRequestsByItem)
     .flat()
@@ -336,16 +338,19 @@ export function Activities() {
           {myItemsLoading ? (
             <EmptyState title="Đang tải bài đăng" text="Vui lòng chờ trong giây lát." />
           ) : myItemsError ? (
-            <EmptyState title="Không tải được bài đăng" text={myItemsError} />
+            <EmptyState
+              title="Không tải được bài đăng"
+              text={myItemsError}
+              action={currentUserId ? (
+                <Button variant="outline" onClick={() => setMyItemsReloadKey((key) => key + 1)}>
+                  Thử tải lại
+                </Button>
+              ) : undefined}
+            />
           ) : myItems.length ? (
             <div className="space-y-3">
               {myItems.map((item) => {
-                const approved = item.status === 'approved' || item.status === 'APPROVED';
-                const apiItem = /^\d+$/.test(item.id);
-                const canEdit = apiItem || !approved || (item.postApprovalEditCount ?? 0) < 1;
-                const itemRequests = apiItem
-                  ? apiRequestsByItem[item.id] ?? []
-                  : data.itemRequests.filter((request) => request.itemId === item.id);
+                const itemRequests = apiRequestsByItem[item.id] ?? [];
                 const hasAcceptedRequest = itemRequests.some((request) => request.status === 'RESERVED');
                 return (
                   <div key={item.id}>
@@ -397,10 +402,6 @@ export function Activities() {
                           variant="ghost"
                           icon="edit"
                           onClick={() => {
-                            if (!canEdit) {
-                              setEditNotice('Bạn đã sử dụng lượt sửa miễn phí sau khi bài được duyệt.');
-                              return;
-                            }
                             void openEditor(item);
                           }}
                         >
@@ -415,15 +416,13 @@ export function Activities() {
                         >
                           Gỡ
                         </Button>
-                        {item.status === 'expired' ? (
+                        {item.status === 'expired' || item.status === 'EXPIRED' ? (
                           <Button
                             size="sm"
                             variant="outline"
                             icon="renew"
                             disabled={renewingItemId === item.id}
-                            onClick={() => apiItem
-                              ? void renewApiItem(item)
-                              : dispatch(actions.renewItem({ itemId: item.id, ownerId: user.id }))}
+                            onClick={() => void renewApiItem(item)}
                           >
                             {renewingItemId === item.id ? 'Đang gia hạn...' : 'Gia hạn'}
                           </Button>
@@ -436,7 +435,7 @@ export function Activities() {
                         hasAcceptedRequest={hasAcceptedRequest}
                         itemRequests={itemRequests}
                         data={data}
-                        allowAccept={!apiItem || Boolean(currentUserId)}
+                        allowAccept={Boolean(currentUserId)}
                         onAccept={(requestId) => {
                           setAcceptError('');
                           setAcceptConfirmId(requestId);
@@ -573,33 +572,7 @@ export function Activities() {
               <Button
                 disabled={editSaving || editQuoteLoading || !draftTitle.trim() || !draftDescription.trim()}
                 onClick={() => {
-                  if (/^[0-9]+$/.test(editingId)) {
-                    void saveApiItem();
-                    return;
-                  }
-                  const item = data.items.find((entry) => entry.id === editingId);
-                  if (!item) return;
-                  const approved = item.status === 'approved' || item.status === 'APPROVED';
-                  if (approved && (item.postApprovalEditCount ?? 0) >= 1) {
-                    setEditNotice('Bạn đã sử dụng lượt sửa miễn phí sau khi bài được duyệt.');
-                    setEditingId('');
-                    return;
-                  }
-                  dispatch(
-                    actions.updateItem({
-                      itemId: item.id,
-                      ownerId: user.id,
-                      changes: {
-                        title: draftTitle,
-                        description: draftDescription,
-                        category: item.category,
-                        condition: item.condition,
-                        district: item.district,
-                        tradeFor: item.tradeFor,
-                      },
-                    }),
-                  );
-                  setEditingId('');
+                  void saveApiItem();
                 }}
               >
                 {editSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
@@ -627,12 +600,7 @@ export function Activities() {
               <Button
                 variant="danger"
                 disabled={Boolean(removingItemId)}
-                onClick={() => /^[0-9]+$/.test(removeConfirmId)
-                  ? void removeApiItem(removeConfirmId)
-                  : (() => {
-                      dispatch(actions.removeItem({ itemId: removeConfirmId, ownerId: user.id }));
-                      setRemoveConfirmId('');
-                    })()}
+                onClick={() => void removeApiItem(removeConfirmId)}
               >
                 {removingItemId ? 'Đang gỡ...' : 'Xác nhận gỡ'}
               </Button>

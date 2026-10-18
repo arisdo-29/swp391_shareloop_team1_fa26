@@ -22,7 +22,7 @@ import { useWallet } from '../../app/useWallet';
 import { userApi } from '../../services/userApi';
 import { catalogApi } from '../../services/catalogApi';
 import { mediaApi } from '../../services/mediaApi';
-import { toAreaOptions, type AreaOption } from '../../services/mappers';
+import { toAreaOptions, toFeUser, type AreaOption } from '../../services/mappers';
 import type { ApiError } from '../../services/http';
 import { toBackendUserId } from '../../services/requestApi';
 import { resolveMediaUrl } from '../../services/mediaUrl';
@@ -65,6 +65,7 @@ export function Profile() {
       .then(([profile, areas]) => {
         if (!active) return;
         const options = toAreaOptions(areas);
+        const districtLabel = options.find((area) => area.id === profile.areaId)?.label ?? '';
         setApiAreas(options);
         setName(profile.fullName);
         setEmail(profile.email);
@@ -72,6 +73,7 @@ export function Profile() {
         setApiAreaId(profile.areaId ? String(profile.areaId) : '');
         setApiAvatarMediaId(profile.avatarMediaId);
         setAvatarUrl(profile.avatarUrl ? resolveMediaUrl(profile.avatarUrl) : undefined);
+        dispatch(actions.loginFromApi(toFeUser(profile, districtLabel)));
       })
       .catch(() => {
         if (active) setProfileError('Không tải được hồ sơ từ Backend. Vui lòng thử lại.');
@@ -82,7 +84,7 @@ export function Profile() {
     return () => {
       active = false;
     };
-  }, [isApiAccount, profileReloadKey]);
+  }, [dispatch, isApiAccount, profileReloadKey]);
 
   const save = async () => {
     setProfileError('');
@@ -114,14 +116,7 @@ export function Profile() {
         setAvatarUrl(nextAvatarUrl);
         setApiAvatarMediaId(profile.avatarMediaId);
         setAvatarFile(null);
-        dispatch(actions.updateProfile({
-          userId: user.id,
-          name: profile.fullName,
-          email: profile.email,
-          phone: profile.phone ?? '',
-          district: districtLabel,
-          avatarUrl: nextAvatarUrl,
-        }));
+        dispatch(actions.loginFromApi(toFeUser(profile, districtLabel)));
         setProfileNotice('Cập nhật hồ sơ thành công.');
       } catch (error) {
         const apiError = error as ApiError;
