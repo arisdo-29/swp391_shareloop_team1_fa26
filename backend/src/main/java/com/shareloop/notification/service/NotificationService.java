@@ -27,11 +27,22 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.shareloop.user.service.UserService userService;
 
     public NotificationService(
             NotificationRepository notificationRepository, ApplicationEventPublisher eventPublisher) {
+        this(notificationRepository, eventPublisher, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public NotificationService(
+            NotificationRepository notificationRepository,
+            ApplicationEventPublisher eventPublisher,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+                    com.shareloop.user.service.UserService userService) {
         this.notificationRepository = notificationRepository;
         this.eventPublisher = eventPublisher;
+        this.userService = userService;
     }
 
     /**
@@ -47,6 +58,27 @@ public class NotificationService {
     public void notify(long userId, String type, String title, String body, String link) {
         Notification notification = new Notification(userId, type, title, body, link);
         notificationRepository.save(notification);
+    }
+
+    /**
+     * Gửi thông báo cảnh báo tới tất cả các Admin đang hoạt động trong hệ thống (FR-76, BR-C04).
+     *
+     * @param type loại thông báo (ví dụ CHAT_VIOLATION_ALERT)
+     * @param title tiêu đề cảnh báo
+     * @param body nội dung cảnh báo chi tiết
+     * @param link liên kết điều hướng
+     */
+    @Transactional
+    public void notifyAdmins(String type, String title, String body, String link) {
+        if (userService == null) {
+            return;
+        }
+        List<Long> adminIds = userService.findAdminIds();
+        if (adminIds != null) {
+            for (Long adminId : adminIds) {
+                notify(adminId, type, title, body, link);
+            }
+        }
     }
 
     /**

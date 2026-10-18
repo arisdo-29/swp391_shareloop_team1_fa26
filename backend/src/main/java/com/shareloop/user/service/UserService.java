@@ -202,6 +202,14 @@ public class UserService {
     }
 
     /**
+     * Lấy danh sách ID của các quản trị viên đang hoạt động trong hệ thống.
+     */
+    @Transactional(readOnly = true)
+    public List<Long> findAdminIds() {
+        return userRepository.findAdminIds();
+    }
+
+    /**
      * Yêu cầu gửi mã OTP về email để đổi số điện thoại (FR-07, BR-U10).
      */
     @Transactional

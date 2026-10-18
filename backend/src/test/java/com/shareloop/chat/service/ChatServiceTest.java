@@ -3,6 +3,7 @@ package com.shareloop.chat.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,6 +49,9 @@ class ChatServiceTest {
 
     @Mock
     ItemQueryService itemQueryService;
+
+    @Mock
+    ChatViolationRecorder chatViolationRecorder;
 
     @InjectMocks
     ChatService chatService;
@@ -337,6 +341,59 @@ class ChatServiceTest {
                     .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                             .isEqualTo(ChatErrorCode.CHAT_ITEM_NOT_FOUND));
         }
+
+        @Test
+        @DisplayName("Ném lỗi CHAT_MESSAGE_BLOCKED và ghi nhận vi phạm khi phát hiện thông tin liên hệ (FR-72, FR-76)")
+        void sendMessage_blocked_whenContactInfoDetected() {
+            RequestChatContext context =
+                    new RequestChatContext(REQUEST_ID, RequestStatus.RESERVED, RECEIVER_ID, DONOR_ID);
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(context);
+
+            String content = "Gọi mình số 0912345678 nhé";
+            when(chatContactFilter.checkViolation(content, true))
+                    .thenReturn(java.util.Optional.of("thông tin liên hệ: số điện thoại (0912345678)"));
+
+            SendMessageRequest req = new SendMessageRequest(content);
+            assertThatThrownBy(() -> chatService.sendMessage(REQUEST_ID, RECEIVER_ID, req))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e -> {
+                        assertThat(((BusinessException) e).getErrorCode())
+                                .isEqualTo(ChatErrorCode.CHAT_MESSAGE_BLOCKED);
+                        assertThat(e.getMessage()).contains("số điện thoại (0912345678)");
+                    });
+
+            verify(chatViolationRecorder)
+                    .recordViolationAndAlertAdmin(
+                            REQUEST_ID, RECEIVER_ID, content, "thông tin liên hệ: số điện thoại (0912345678)");
+            verify(messageRepository, never()).save(any(Message.class));
+        }
+
+        @Test
+        @DisplayName(
+                "Ném lỗi CHAT_MESSAGE_BLOCKED và ghi nhận vi phạm khi phát hiện từ khoá cấm mức BLOCK (FR-78, FR-76)")
+        void sendMessage_blocked_whenBlockKeywordDetected() {
+            RequestChatContext context =
+                    new RequestChatContext(REQUEST_ID, RequestStatus.LOGISTICS_CONFIRMED, RECEIVER_ID, DONOR_ID);
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(context);
+
+            String content = "bán cần sa giá rẻ";
+            // Ở LOGISTICS_CONFIRMED thì checkContactInfo = false
+            when(chatContactFilter.checkViolation(content, false))
+                    .thenReturn(java.util.Optional.of("từ khoá cấm (cần sa)"));
+
+            SendMessageRequest req = new SendMessageRequest(content);
+            assertThatThrownBy(() -> chatService.sendMessage(REQUEST_ID, RECEIVER_ID, req))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e -> {
+                        assertThat(((BusinessException) e).getErrorCode())
+                                .isEqualTo(ChatErrorCode.CHAT_MESSAGE_BLOCKED);
+                        assertThat(e.getMessage()).contains("từ khoá cấm (cần sa)");
+                    });
+
+            verify(chatViolationRecorder)
+                    .recordViolationAndAlertAdmin(REQUEST_ID, RECEIVER_ID, content, "từ khoá cấm (cần sa)");
+            verify(messageRepository, never()).save(any(Message.class));
+        }
     }
 
     @Nested
@@ -399,6 +456,27 @@ class ChatServiceTest {
 
             assertThat(list).hasSize(1);
             assertThat(list.get(0).content()).isEqualTo("Tin mới");
+        }
+
+        @Test
+        @DisplayName("Chỉ trả về tin nhắn PASS và tự động loại bỏ các tin nhắn BLOCKED")
+        void getMessages_filtersOutBlockedMessages() {
+            RequestChatContext context =
+                    new RequestChatContext(REQUEST_ID, RequestStatus.RESERVED, RECEIVER_ID, DONOR_ID);
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(context);
+
+            Message m1 = new Message(REQUEST_ID, RECEIVER_ID, "Tin hợp lệ 1");
+            Message m2 = new Message(REQUEST_ID, DONOR_ID, "Tin vi phạm");
+            m2.block(1, "từ khoá cấm");
+            Message m3 = new Message(REQUEST_ID, RECEIVER_ID, "Tin hợp lệ 2");
+
+            when(messageRepository.findByRequestIdOrderByIdAsc(REQUEST_ID)).thenReturn(List.of(m1, m2, m3));
+
+            List<MessageResponse> list = chatService.getMessages(REQUEST_ID, RECEIVER_ID, null);
+
+            assertThat(list).hasSize(2);
+            assertThat(list.get(0).content()).isEqualTo("Tin hợp lệ 1");
+            assertThat(list.get(1).content()).isEqualTo("Tin hợp lệ 2");
         }
 
         @Test

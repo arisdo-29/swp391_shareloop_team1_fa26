@@ -5,6 +5,7 @@ import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.dto.ItemSummary;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
+import com.shareloop.media.service.MediaService;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.entity.Rank;
@@ -15,11 +16,14 @@ import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.HandoverConfirmRequest;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.dto.RequestContactResponse;
+import com.shareloop.request.dto.RequestMediaResponse;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.entity.Request;
+import com.shareloop.request.entity.RequestMediaMapping;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.mapper.RequestMapper;
+import com.shareloop.request.repository.RequestMediaRepository;
 import com.shareloop.request.repository.RequestRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
@@ -56,6 +60,8 @@ public class RequestService {
     private final UserService userService;
     private final ReputationService reputationService;
     private final JdbcClient jdbcClient;
+    private final MediaService mediaService;
+    private final RequestMediaRepository requestMediaRepository;
 
     @Autowired
     public RequestService(
@@ -66,7 +72,9 @@ public class RequestService {
             @Autowired(required = false) ItemQueryService itemQueryService,
             UserService userService,
             @Autowired(required = false) ReputationService reputationService,
-            @Autowired(required = false) JdbcClient jdbcClient) {
+            @Autowired(required = false) JdbcClient jdbcClient,
+            @Autowired(required = false) MediaService mediaService,
+            @Autowired(required = false) RequestMediaRepository requestMediaRepository) {
         this.requestRepository = requestRepository;
         this.notificationService = notificationService;
         this.configService = configService;
@@ -75,6 +83,30 @@ public class RequestService {
         this.userService = userService;
         this.reputationService = reputationService;
         this.jdbcClient = jdbcClient;
+        this.mediaService = mediaService;
+        this.requestMediaRepository = requestMediaRepository;
+    }
+
+    public RequestService(
+            RequestRepository requestRepository,
+            NotificationService notificationService,
+            ConfigService configService,
+            ItemService itemService,
+            @Autowired(required = false) ItemQueryService itemQueryService,
+            UserService userService,
+            @Autowired(required = false) ReputationService reputationService,
+            @Autowired(required = false) JdbcClient jdbcClient) {
+        this(
+                requestRepository,
+                notificationService,
+                configService,
+                itemService,
+                itemQueryService,
+                userService,
+                reputationService,
+                jdbcClient,
+                null,
+                null);
     }
 
     public RequestService(
@@ -84,7 +116,17 @@ public class RequestService {
             ItemService itemService,
             UserService userService,
             JdbcClient jdbcClient) {
-        this(requestRepository, notificationService, configService, itemService, null, userService, null, jdbcClient);
+        this(
+                requestRepository,
+                notificationService,
+                configService,
+                itemService,
+                null,
+                userService,
+                null,
+                jdbcClient,
+                null,
+                null);
     }
 
     /**
@@ -194,6 +236,10 @@ public class RequestService {
 
         if (!request.getReceiverId().equals(currentUserId)) {
             throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+
+        if (request.getStatus() != RequestStatus.PENDING) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
         }
 
         request.cancel("Người gửi tự huỷ yêu cầu");
@@ -468,6 +514,13 @@ public class RequestService {
             asDescribed = requestDto.asDescribed();
         }
 
+        // Đính kèm ảnh hoặc video minh chứng khi giao nhận nếu có (FR-86, BR-T09)
+        if (requestDto != null
+                && requestDto.mediaIds() != null
+                && !requestDto.mediaIds().isEmpty()) {
+            attachMediaInternal(request.getId(), currentUserId, requestDto.mediaIds(), "HANDOVER");
+        }
+
         request.confirmHandover(isDonor, asDescribed, Instant.now());
         Request saved = requestRepository.save(request);
 
@@ -511,6 +564,137 @@ public class RequestService {
         }
 
         return RequestMapper.toResponse(saved);
+    }
+
+    /**
+     * Đính kèm ảnh hoặc video minh chứng vào yêu cầu giao dịch (FR-86, BR-T09, UC-28).
+     *
+     * <p>Chỉ chủ bài đăng hoặc người nhận mới có quyền đính kèm.
+     * Sử dụng MediaService.attach để chuyển trạng thái media sang ATTACHED.
+     *
+     * @param requestId id của yêu cầu giao dịch
+     * @param currentUserId id của người đang thao tác
+     * @param mediaIds danh sách id của các tệp media đã tải lên
+     * @param stage giai đoạn đính kèm ('HANDOVER' hoặc 'DISPUTE')
+     * @return danh sách minh chứng của yêu cầu sau khi đính kèm
+     */
+    @Transactional
+    public List<RequestMediaResponse> attachMedia(
+            long requestId, long currentUserId, List<Long> mediaIds, String stage) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+
+        ItemSnapshot item = findItemSnapshot(request.getItemId())
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+
+        if (request.getReceiverId() != currentUserId && item.donorId() != currentUserId) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+
+        // Minh chứng giao nhận chỉ được đính kèm ở giai đoạn giao nhận trở đi (FR-86, BR-T09)
+        boolean canAttachMedia = request.getStatus() == RequestStatus.LOGISTICS_CONFIRMED
+                || request.getStatus() == RequestStatus.AWAITING_HANDOVER
+                || request.getStatus() == RequestStatus.COMPLETED
+                || request.getStatus() == RequestStatus.DISPUTED;
+        if (!canAttachMedia) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+
+        if (mediaIds == null || mediaIds.isEmpty()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_MEDIA_REQUIRED);
+        }
+
+        String effectiveStage = (stage != null && !stage.isBlank()) ? stage.toUpperCase() : "HANDOVER";
+        if (!"HANDOVER".equals(effectiveStage) && !"DISPUTE".equals(effectiveStage)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_MEDIA_STAGE_INVALID);
+        }
+
+        attachMediaInternal(requestId, currentUserId, mediaIds, effectiveStage);
+
+        return getMediaList(requestId, currentUserId);
+    }
+
+    /**
+     * Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (FR-86, BR-T09).
+     *
+     * <p>Chỉ hai bên tham gia giao dịch (donor hoặc receiver) mới có quyền xem minh chứng.
+     *
+     * @param requestId id của yêu cầu giao dịch
+     * @param currentUserId id của người đang gọi API
+     * @return danh sách minh chứng đã đính kèm
+     */
+    @Transactional(readOnly = true)
+    public List<RequestMediaResponse> getMediaList(long requestId, long currentUserId) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+
+        ItemSnapshot item = findItemSnapshot(request.getItemId())
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+
+        // Chỉ hai bên tham gia giao dịch mới có quyền xem minh chứng (BR-T09)
+        if (request.getReceiverId() != currentUserId && item.donorId() != currentUserId) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+
+        if (requestMediaRepository != null) {
+            return requestMediaRepository.findByRequestIdOrderByCreatedAtAsc(requestId).stream()
+                    .map(m -> new RequestMediaResponse(
+                            m.getMediaId(),
+                            "/api/v1/media/" + m.getMediaId(),
+                            m.getStage(),
+                            m.getUploadedBy(),
+                            m.getCreatedAt()))
+                    .toList();
+        }
+
+        if (jdbcClient != null) {
+            return jdbcClient
+                    .sql("SELECT media_id, stage, uploaded_by, created_at FROM request_media_mappings "
+                            + "WHERE request_id = :requestId ORDER BY created_at ASC")
+                    .param("requestId", requestId)
+                    .query((rs, rowNum) -> new RequestMediaResponse(
+                            rs.getLong("media_id"),
+                            "/api/v1/media/" + rs.getLong("media_id"),
+                            rs.getString("stage"),
+                            rs.getLong("uploaded_by"),
+                            rs.getTimestamp("created_at").toInstant()))
+                    .list();
+        }
+
+        return List.of();
+    }
+
+    private void attachMediaInternal(long requestId, long currentUserId, List<Long> mediaIds, String stage) {
+        if (mediaIds == null || mediaIds.isEmpty()) {
+            return;
+        }
+
+        if (mediaService != null) {
+            mediaService.attach(mediaIds, currentUserId);
+        }
+
+        String effectiveStage = (stage != null && !stage.isBlank()) ? stage.toUpperCase() : "HANDOVER";
+        for (Long mediaId : mediaIds) {
+            if (requestMediaRepository != null) {
+                if (!requestMediaRepository.existsByRequestIdAndMediaId(requestId, mediaId)) {
+                    requestMediaRepository.save(
+                            new RequestMediaMapping(requestId, mediaId, effectiveStage, currentUserId));
+                }
+            } else if (jdbcClient != null) {
+                jdbcClient
+                        .sql(
+                                "INSERT INTO request_media_mappings (request_id, media_id, stage, uploaded_by, created_at) "
+                                        + "VALUES (:reqId, :mediaId, :stage, :userId, :now) ON CONFLICT DO NOTHING")
+                        .param("reqId", requestId)
+                        .param("mediaId", mediaId)
+                        .param("stage", effectiveStage)
+                        .param("userId", currentUserId)
+                        .param("now", Instant.now())
+                        .update();
+            }
+        }
     }
 
     /**

@@ -550,6 +550,10 @@ const conditionLabels: Record<Item['condition'], string> = {
   new: 'Mới',
   good: 'Còn tốt',
   used: 'Đã sử dụng',
+  NEW: 'Mới',
+  LIKE_NEW: 'Như mới',
+  GOOD: 'Đã qua sử dụng, còn tốt',
+  DEFECTIVE: 'Có lỗi',
 };
 
 function RejectPostModal({
