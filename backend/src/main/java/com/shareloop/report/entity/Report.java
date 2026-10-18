@@ -51,6 +51,15 @@ public class Report extends BaseEntity {
     @Column(name = "responded_at")
     private Instant respondedAt;
 
+    @Column(name = "response_due_at")
+    private Instant responseDueAt;
+
+    @Column(name = "evidence", columnDefinition = "TEXT")
+    private String evidence;
+
+    @Column(name = "response_evidence", columnDefinition = "TEXT")
+    private String responseEvidence;
+
     @Column(name = "resolved_by")
     private Long resolvedBy;
 
@@ -84,6 +93,42 @@ public class Report extends BaseEntity {
         this.stage = stage != null ? stage : ReportStage.BEFORE;
         this.status = ReportStatus.OPEN;
         this.starsDeducted = 0;
+    }
+
+    /**
+     * Tạo khiếu nại giao dịch đã hoàn thành (FR-89, FR-90, BR-T08, Issue #112).
+     */
+    public static Report createDispute(
+            Long reporterId,
+            Long requestId,
+            Long itemId,
+            Long respondentId,
+            ReportReason reason,
+            String note,
+            String evidence,
+            Instant responseDueAt) {
+        Report report = new Report(
+                reporterId,
+                TargetType.REQUEST,
+                itemId,
+                respondentId,
+                requestId,
+                reason,
+                note != null && !note.isBlank() ? note.trim() : reason.name(),
+                ReportStage.AFTER);
+        report.status = ReportStatus.AWAITING_RESPONSE;
+        report.evidence = evidence;
+        report.responseDueAt = responseDueAt;
+        return report;
+    }
+
+    /**
+     * Bên bị khiếu nại gửi giải trình kèm bằng chứng (FR-90, BR-T08, Issue #112).
+     */
+    public void respond(String note, String responseEvidence, Instant now) {
+        this.response = note != null ? note.trim() : null;
+        this.responseEvidence = responseEvidence;
+        this.respondedAt = now;
     }
 
     public Long getReporterId() {
@@ -128,6 +173,18 @@ public class Report extends BaseEntity {
 
     public Instant getRespondedAt() {
         return respondedAt;
+    }
+
+    public Instant getResponseDueAt() {
+        return responseDueAt;
+    }
+
+    public String getEvidence() {
+        return evidence;
+    }
+
+    public String getResponseEvidence() {
+        return responseEvidence;
     }
 
     public Long getResolvedBy() {
