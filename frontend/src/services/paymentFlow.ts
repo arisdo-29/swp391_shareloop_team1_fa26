@@ -15,7 +15,7 @@ export function shouldAutoConfirmPayment(order: TopUpOrderResponse) {
 export function demoPaymentErrorMessage(error: unknown) {
   const apiError = error as Partial<ApiError>;
   if ([403, 404, 500].includes(apiError.status ?? 0)) return demoPaymentUnavailableMessage;
-  return 'Không thể hoàn tất thanh toán. Vui lòng thử lại.';
+  return apiError.message || 'Không thể hoàn tất thanh toán. Vui lòng thử lại.';
 }
 
 export function confirmDemoPayment(order: TopUpOrderResponse) {

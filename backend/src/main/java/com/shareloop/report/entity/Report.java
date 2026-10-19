@@ -145,4 +145,23 @@ public class Report extends BaseEntity {
     public Instant getResolvedAt() {
         return resolvedAt;
     }
+
+    /**
+     * Ghi nhận kết luận của Admin đối với báo cáo vi phạm (FR-91, FR-93, Issue #113).
+     *
+     * @param decision quyết định UPHOLD hoặc DISMISS
+     * @param adminId ID của Admin thực hiện
+     * @param note ghi chú kết luận
+     */
+    public void conclude(com.shareloop.report.dto.ReportDecision decision, Long adminId, String note) {
+        this.status = (decision == com.shareloop.report.dto.ReportDecision.UPHOLD)
+                ? ReportStatus.RESOLVED
+                : ReportStatus.DISMISSED;
+        this.resolvedBy = adminId;
+        this.resolution = note;
+        this.resolvedAt = Instant.now();
+        if (decision == com.shareloop.report.dto.ReportDecision.UPHOLD) {
+            this.starsDeducted = 1;
+        }
+    }
 }

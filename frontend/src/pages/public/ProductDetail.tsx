@@ -14,10 +14,12 @@ import {
   TypeBadge,
 } from '../../components/ui';
 import { catalogApi } from '../../services/catalogApi';
-import { itemApi, itemErrorMessage } from '../../services/itemApi';
+import { itemApi } from '../../services/itemApi';
 import { requestApi, toBackendUserId, toFeItemRequest } from '../../services/requestApi';
 import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
 import type { Item, ItemRequest, User } from '../../types/domain';
+import type { ApiError } from '../../services/http';
+import { ReportDialog } from '../../components/ReportDialog';
 
 const requestStatusLabel = {
   PENDING: 'Chờ phản hồi',
@@ -44,6 +46,9 @@ export function ProductDetail() {
   const [itemError, setItemError] = useState('');
   const [itemReloadKey, setItemReloadKey] = useState(0);
   const [requestSubmitting, setRequestSubmitting] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportNotice, setReportNotice] = useState('');
   const isApiId = Boolean(id && /^\d+$/.test(id));
   const item = apiItem;
   const currentUserId = toBackendUserId(user?.id);
@@ -57,12 +62,14 @@ export function ProductDetail() {
       .then(async (detail) => {
         const [category, areas] = await Promise.all([catalogApi.category(detail.categoryId), catalogApi.areas()]);
         if (!active) return;
+        setSelectedImageIndex(0);
         setApiItem(toFeItem(detail, new Map([[category.id, category.name]]), toAreaNameMap(areas)));
       })
-      .catch((error) => {
+      .catch((caught) => {
         if (!active) return;
+        const apiError = caught as ApiError;
         setApiItem(null);
-        setItemError(itemErrorMessage(error, 'Không tải được chi tiết bài đăng.'));
+        setItemError(apiError.message || 'Không tải được chi tiết bài đăng.');
       })
       .finally(() => {
         if (active) setLoadingItem(false);
@@ -131,7 +138,27 @@ export function ProductDetail() {
       </div>
     );
 
-  const owner: User | null = null;
+  const owner = data.users.find((x) => x.id === item.ownerId) ??
+    ({
+      id: item.ownerId,
+      username: item.ownerId,
+      password: '',
+      name: 'Người đăng',
+      email: '',
+      phone: '',
+      district: item.district,
+      avatarInitials: '',
+      totalCredit: 0,
+      availableCredit: 0,
+      holdCredit: 0,
+      rewardPoints: 0,
+      reputationStars: 5,
+      rank: 'Thành viên',
+      status: 'active',
+      role: 'user',
+      joinedAt: item.postedAt,
+      totalTx: 0,
+    } satisfies User);
   const own = user?.id === item.ownerId;
   const activeListing =
     (item.status === 'approved' || item.status === 'APPROVED') &&
@@ -202,8 +229,9 @@ export function ProductDetail() {
       setMessage('');
       setOfferedItemId('');
       setRequestSuccess(item.type === 'gift' ? 'Đã gửi yêu cầu nhận.' : 'Đã gửi đề nghị trao đổi.');
-    } catch (error) {
-      setRequestError(itemErrorMessage(error, 'Không gửi được yêu cầu. Vui lòng thử lại.'));
+    } catch (caught) {
+      const apiError = caught as ApiError;
+      setRequestError(apiError.message || 'Không gửi được yêu cầu. Vui lòng thử lại.');
     } finally {
       setRequestSubmitting(false);
     }
@@ -239,8 +267,32 @@ export function ProductDetail() {
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
         <main className="min-w-0">
           <div className="overflow-hidden rounded-xl bg-surface-container">
-            <ItemImage src={item.images[0]} alt={item.title} className="aspect-[4/3] w-full object-cover" />
+            <ItemImage
+              src={item.images[selectedImageIndex] ?? item.images[0]}
+              alt={item.title}
+              className="aspect-[4/3] w-full object-cover"
+            />
           </div>
+          {item.images.length > 1 ? (
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {item.images.map((image, index) => (
+                <button
+                  key={`${image}-${index}`}
+                  type="button"
+                  aria-label={`Xem ảnh ${index + 1}`}
+                  aria-pressed={selectedImageIndex === index}
+                  onClick={() => setSelectedImageIndex(index)}
+                  className={`shrink-0 overflow-hidden rounded-md ${selectedImageIndex === index ? 'ring-2 ring-primary' : 'ring-1 ring-border'}`}
+                >
+                  <ItemImage
+                    src={image}
+                    alt={`${item.title} - ảnh ${index + 1}`}
+                    className="h-16 w-20 object-cover sm:h-20 sm:w-24"
+                  />
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="mt-6 flex flex-wrap gap-2">
             <TypeBadge type={item.type} />
             <ConditionBadge condition={item.condition} />
@@ -269,6 +321,19 @@ export function ProductDetail() {
               <p className="mt-3 text-sm text-text-secondary">
                 <strong>Lưu ý tình trạng:</strong> {item.defectNote}
               </p>
+            ) : null}
+            {item.operatingStatus ? (
+              <p className="mt-3 text-sm text-text-secondary">
+                <strong>Trạng thái hoạt động:</strong>{' '}
+                {{ NORMAL: 'Bình thường', PARTIAL: 'Một phần', NOT_WORKING: 'Không hoạt động' }[item.operatingStatus]}
+              </p>
+            ) : null}
+            {item.defectImages?.length ? (
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {item.defectImages.map((image, index) => (
+                  <ItemImage key={`${image}-${index}`} src={image} alt={`Ảnh lỗi ${index + 1}`} className="aspect-square rounded-md object-cover" />
+                ))}
+              </div>
             ) : null}
             {item.tradeFor ? (
               <div className="mt-5 rounded-lg bg-secondary-soft p-4 text-sm leading-6 text-secondary">
@@ -323,6 +388,24 @@ export function ProductDetail() {
                 Hủy yêu cầu
               </Button>
             ) : null}
+            {currentUserId && !own ? (
+              <Button
+                className="mt-3 w-full"
+                variant="ghost"
+                icon="shield"
+                onClick={() => {
+                  setReportNotice('');
+                  setReportOpen(true);
+                }}
+              >
+                Báo cáo vi phạm
+              </Button>
+            ) : null}
+            {reportNotice ? (
+              <div className="mt-3 rounded-md bg-emerald-50 p-3 text-xs leading-5 text-success">
+                {reportNotice}
+              </div>
+            ) : null}
           </div>
           {owner ? (
             <OwnerCard owner={owner} />
@@ -330,7 +413,7 @@ export function ProductDetail() {
             <section className="rounded-xl bg-white p-5 ring-1 ring-border/80">
               <h2 className="font-bold">Thông tin người đăng</h2>
               <p className="mt-2 text-sm leading-6 text-text-muted">
-                Backend chưa cung cấp hồ sơ công khai hoặc điểm uy tín của người đăng cho bài này.
+                Chưa có hồ sơ công khai hoặc điểm uy tín của người đăng cho bài này.
               </p>
             </section>
           )}
@@ -418,6 +501,18 @@ export function ProductDetail() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {reportOpen && currentUserId && !own ? (
+        <ReportDialog
+          target={{ targetType: 'ITEM', itemId: Number(item.id) }}
+          contextLabel={`Báo cáo bài “${item.title}”`}
+          onClose={() => setReportOpen(false)}
+          onSuccess={() => {
+            setReportOpen(false);
+            setReportNotice('Báo cáo đã được gửi đến quản trị viên để xem xét.');
+          }}
+        />
       ) : null}
     </div>
   );

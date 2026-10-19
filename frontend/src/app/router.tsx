@@ -1,6 +1,12 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { AppShell } from '../layouts/AppShell';
-import { AdminRoute, GuestOnlyRoute, ProfileRoute, ProtectedRoute, PublicRoute } from '../routes/Guards';
+import {
+  AdminRoute,
+  GuestOnlyRoute,
+  ProfileRoute,
+  ProtectedRoute,
+  PublicRoute,
+} from '../routes/Guards';
 import { Home } from '../pages/public/Home';
 import { Browse } from '../pages/public/Browse';
 import { ProductDetail } from '../pages/public/ProductDetail';
@@ -74,7 +80,10 @@ export const router = createBrowserRouter([
       },
       {
         element: <ProfileRoute />,
-        children: [{ path: '/profile', element: <Profile /> }, { path: '/change-password', element: <ChangePassword /> }],
+        children: [
+          { path: '/profile', element: <Profile /> },
+          { path: '/change-password', element: <ChangePassword /> },
+        ],
       },
       {
         element: <AdminRoute />,

@@ -21,7 +21,7 @@ import { useWallet } from '../../app/useWallet';
 import { userApi } from '../../services/userApi';
 import { catalogApi } from '../../services/catalogApi';
 import { mediaApi } from '../../services/mediaApi';
-import { toAreaOptions, toFeUser, type AreaOption } from '../../services/mappers';
+import { toAreaOptions, type AreaOption } from '../../services/mappers';
 import type { ApiError } from '../../services/http';
 import { toBackendUserId } from '../../services/requestApi';
 import { resolveMediaUrl } from '../../services/mediaUrl';
@@ -176,14 +176,22 @@ export function Profile() {
           return;
         }
         const profile = profileResult.value;
+        const resolvedAvatarUrl = profile.avatarUrl ? resolveMediaUrl(profile.avatarUrl) : undefined;
         const districtLabel = options.find((area) => area.id === profile.areaId)?.label ?? '';
         setName(profile.fullName);
         setEmail(profile.email);
         setPhone(profile.phone ?? '');
         setApiAreaId(profile.areaId ? String(profile.areaId) : '');
         setApiAvatarMediaId(profile.avatarMediaId);
-        setAvatarUrl(profile.avatarUrl ? resolveMediaUrl(profile.avatarUrl) : undefined);
-        dispatch(actions.loginFromApi(toFeUser(profile, districtLabel)));
+        setAvatarUrl(resolvedAvatarUrl);
+        dispatch(actions.updateProfile({
+          userId: user.id,
+          name: profile.fullName,
+          email: profile.email,
+          phone: profile.phone ?? '',
+          district: districtLabel,
+          avatarUrl: resolvedAvatarUrl,
+        }));
         if (areasResult.status === 'rejected') {
           setProfileLoadError(profileLoadErrorMessage(areasResult.reason, 'areas'));
         }
@@ -308,8 +316,21 @@ export function Profile() {
         return;
       }
       const districtLabel = apiAreas.find((area) => area.id === profile.areaId)?.label ?? '';
+      const nextAvatarUrl = profile.avatarUrl ? resolveMediaUrl(profile.avatarUrl) : undefined;
+      setName(profile.fullName);
+      setEmail(profile.email);
       setPhone(profile.phone);
-      dispatch(actions.loginFromApi(toFeUser(profile, districtLabel)));
+      setApiAreaId(profile.areaId ? String(profile.areaId) : '');
+      setApiAvatarMediaId(profile.avatarMediaId);
+      setAvatarUrl(nextAvatarUrl);
+      dispatch(actions.updateProfile({
+        userId: user.id,
+        name: profile.fullName,
+        email: profile.email,
+        phone: profile.phone,
+        district: districtLabel,
+        avatarUrl: nextAvatarUrl,
+      }));
       closePhoneChange();
       setProfileNotice('Đổi số điện thoại thành công.');
     } catch (error) {
@@ -345,11 +366,18 @@ export function Profile() {
           avatarMediaId: uploaded?.mediaId ?? apiAvatarMediaId,
         });
         const districtLabel = apiAreas.find((area) => area.id === profile.areaId)?.label ?? '';
-        const nextAvatarUrl = profile.avatarUrl ? resolveMediaUrl(profile.avatarUrl) : avatarUrl;
+        const nextAvatarUrl = resolveMediaUrl(profile.avatarUrl) || undefined;
         setAvatarUrl(nextAvatarUrl);
         setApiAvatarMediaId(profile.avatarMediaId);
         setAvatarFile(null);
-        dispatch(actions.loginFromApi(toFeUser(profile, districtLabel)));
+        dispatch(actions.updateProfile({
+          userId: user.id,
+          name: profile.fullName,
+          email: profile.email,
+          phone: profile.phone ?? '',
+          district: districtLabel,
+          avatarUrl: nextAvatarUrl,
+        }));
         setProfileNotice('Cập nhật hồ sơ thành công.');
       } catch (error) {
         setProfileSaveError(profileSaveErrorMessage(error));
@@ -365,7 +393,6 @@ export function Profile() {
     <div className="page-shell">
       <PageHeader
         title="Tài khoản của bạn"
-        description="Quản lý thông tin, Credit và uy tín cộng đồng."
       />
       <div className="grid gap-7 lg:grid-cols-[240px_1fr]">
         <aside>
@@ -382,7 +409,7 @@ export function Profile() {
             <div className="min-w-0">
               <h2 className="truncate font-bold">{name}</h2>
               <div className="mt-1">
-                <RankBadge rank={user.rank} />
+                <RankBadge rank={isAdmin ? 'Quản trị hệ thống' : user.rank} />
               </div>
             </div>
           </div>
@@ -390,7 +417,6 @@ export function Profile() {
             {(
               [
                 ['profile', 'Hồ sơ', 'user'],
-                ['password', 'Đổi mật khẩu', 'shield'],
                 ['credit', 'Credit', 'wallet'],
                 ['reputation', 'Uy tín & Hạng', 'star'],
               ] as const

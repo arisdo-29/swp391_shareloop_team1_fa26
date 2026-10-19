@@ -1,13 +1,13 @@
 import type { ItemCondition, TransactionStatus } from '../types/domain';
 
 export const conditionLabel: Record<ItemCondition, string> = {
+  NEW: 'Mới',
+  LIKE_NEW: 'Như mới',
+  GOOD: 'Còn tốt',
+  DEFECTIVE: 'Có lỗi',
   new: 'Mới',
   good: 'Dùng tốt',
   used: 'Đã qua dùng',
-  NEW: 'Mới',
-  LIKE_NEW: 'Như mới',
-  GOOD: 'Đã qua sử dụng, còn tốt',
-  DEFECTIVE: 'Có lỗi',
 };
 
 export const txLabel: Record<TransactionStatus, string> = {

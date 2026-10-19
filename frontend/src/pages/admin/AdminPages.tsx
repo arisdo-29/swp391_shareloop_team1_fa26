@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
@@ -9,6 +9,7 @@ import {
   EmptyState,
   Field,
   Icon,
+  ItemImage,
   PageHeader,
   SearchField,
   Select,
@@ -32,7 +33,13 @@ import {
 import { adminAreaApi, type AdminAreaRequest, type AdminAreaResponse } from '../../services/adminAreaApi';
 import type { AttributeDataType } from '../../services/catalogApi';
 import { adminChecklistApi, type AdminChecklistEntry } from '../../services/adminChecklistApi';
+import {
+  adminAuditApi,
+  type ActivityLogParams,
+  type ActivityLogResponse,
+} from '../../services/adminAuditApi';
 import type { ApiError } from '../../services/http';
+import { resolveMediaUrl } from '../../services/mediaUrl';
 import { toBackendUserId } from '../../services/requestApi';
 import type { AppStateData, ComplaintStatus, ForbiddenKeyword, Item, KeywordAction, RankRule, ReputationPointRule, SupportedDistrict, Transaction, User } from '../../types/domain';
 
@@ -60,6 +67,56 @@ function FilterBar({ children }: { children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+const riskLabel: Record<string, string> = {
+  UNCHECKED: 'Chưa kiểm tra',
+  LOW: 'Thấp',
+  MEDIUM: 'Trung bình',
+  HIGH: 'Cao',
+};
+
+const moderationFlagLabel: Record<string, string> = {
+  PASS: 'Đạt',
+  REVIEW: 'Cần kiểm tra',
+  BLOCK: 'Bị chặn',
+};
+
+const moderationReasonLabel: Record<string, string> = {
+  LEXICON_REVIEW: 'Nội dung có từ khóa cần kiểm tra.',
+  INVALID_INPUT: 'Thông tin bài đăng chưa hợp lệ.',
+  INVALID_LEXICON_RULE: 'Quy tắc kiểm duyệt từ khóa chưa hợp lệ.',
+  MODERATION_CHECK_FAILED: 'Không thể hoàn tất kiểm tra tự động.',
+};
+
+const positiveChecklistLabel: Record<string, string> = {
+  'Món đồ có cần sang tên, đăng ký, công chứng để đổi chủ không?': 'Không cần sang tên, đăng ký, công chứng',
+  'Món đồ có quy đổi trực tiếp ra tiền mặt được không?': 'Không quy đổi trực tiếp ra tiền mặt',
+  'Nếu là thực phẩm: còn nguyên tem, nhìn rõ hạn, hạn còn trên 30 ngày?': 'Thực phẩm còn nguyên tem, nhìn rõ hạn và hạn còn trên 30 ngày',
+  'Có phải thuốc, thực phẩm chức năng, thiết bị y tế, mỹ phẩm đã mở?': 'Không phải thuốc, thực phẩm chức năng, thiết bị y tế hoặc mỹ phẩm đã mở',
+  'Ảnh là ảnh thật của đúng món đồ, đủ số lượng, không lấy trên mạng?': 'Ảnh là ảnh thật của đúng món đồ, đủ số lượng và không lấy trên mạng',
+  'Ảnh hoặc mô tả có thông tin liên hệ, kể cả viết ngầm? (xem cờ AI)': 'Ảnh và mô tả không có thông tin liên hệ',
+  'Tình trạng khai báo có khớp với ảnh? Đồ lỗi đã mô tả lỗi?': 'Tình trạng khai báo khớp với ảnh và đồ lỗi đã được mô tả',
+  'Danh mục có đúng với món đồ?': 'Danh mục đúng với món đồ',
+  'Bài Trao đổi đã có mô tả món mong muốn?': 'Bài Trao đổi có mô tả món mong muốn',
+  'Có dấu hiệu hàng nhái, hoặc bật nhãn chính hãng mà chứng từ không khớp?': 'Không có dấu hiệu hàng nhái',
+};
+
+function displayRisk(value?: string | null) {
+  const normalized = value?.trim().toUpperCase();
+  return normalized ? riskLabel[normalized] ?? value!.trim() : '';
+}
+
+function displayModerationNote(item: ReviewQueueItem) {
+  const reason = item.flagReason?.trim();
+  if (reason && reason.toUpperCase() !== 'NONE') {
+    const normalizedReason = reason.toUpperCase();
+    if (moderationReasonLabel[normalizedReason]) return moderationReasonLabel[normalizedReason];
+    return /^[A-Z][A-Z0-9_]*$/.test(reason) ? 'Cần kiểm tra thêm' : reason;
+  }
+  const flag = item.moderationFlag?.trim().toUpperCase();
+  if (!flag || flag === 'NONE') return '';
+  return moderationFlagLabel[flag] ?? item.moderationFlag!.trim();
 }
 
 export function AdminDashboard() {
@@ -197,7 +254,7 @@ export function AdminModeration() {
             setApiPending(legacyItems);
             setApiChecklist([]);
             setApiRejectReasons([]);
-            setApiLegacyNotice('Backend đang dùng hàng chờ cũ; chức năng duyệt và từ chối chưa khả dụng.');
+            setApiLegacyNotice('Hệ thống đang dùng hàng chờ cũ; chức năng duyệt và từ chối chưa khả dụng.');
             return;
           } catch (fallbackError) {
             error = fallbackError as ApiError;
@@ -205,7 +262,7 @@ export function AdminModeration() {
         }
         setApiPending([]);
         setApiRejectReasons([]);
-        setApiError(error.status === 403 ? 'Tài khoản hiện tại không có quyền xem hàng chờ kiểm duyệt.' : 'Không tải được danh sách bài chờ duyệt từ Backend.');
+        setApiError(error.status === 403 ? 'Tài khoản hiện tại không có quyền xem hàng chờ kiểm duyệt.' : 'Không tải được danh sách bài chờ duyệt.');
       })
       .finally(() => {
         if (active) setApiLoading(false);
@@ -254,7 +311,7 @@ export function AdminModeration() {
   if (isApiAdmin) {
     const apiRows = apiPending.filter((item) => `${item.title} ${item.donorId} ${item.aiRisk ?? ''} ${item.moderationFlag ?? ''}`.toLowerCase().includes(query.trim().toLowerCase()));
     return (
-      <Panel title="Duyệt bài" description="Danh sách bài chờ kiểm duyệt được tải trực tiếp từ Backend.">
+      <Panel title="Duyệt bài" description="Danh sách bài đăng đang chờ kiểm duyệt.">
         <FilterBar>
           <div className="flex-1">
             <SearchField placeholder="Tìm theo tiêu đề, người đăng hoặc mức rủi ro..." value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -279,12 +336,16 @@ export function AdminModeration() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
                     <span>#{item.id}</span>
-                    <span>Người đăng #{item.donorId}</span>
-                    {item.aiRisk ? <span className="rounded-sm bg-amber-50 px-2 py-1 font-semibold text-warning">Rủi ro: {item.aiRisk}</span> : null}
+                    <span>Người đăng</span>
+                    {displayRisk(item.aiRisk) ? <span className="rounded-sm bg-amber-50 px-2 py-1 font-semibold text-warning">Rủi ro: {displayRisk(item.aiRisk)}</span> : null}
                   </div>
                   <h2 className="mt-2 font-bold">{item.title}</h2>
-                  <p className="mt-2 text-xs leading-5 text-text-muted">{item.flagReason || item.moderationFlag || 'Backend không cung cấp lý do gắn cờ.'}</p>
+                  {displayModerationNote(item) ? <p className="mt-2 text-xs leading-5 text-text-muted">{displayModerationNote(item)}</p> : null}
                   <p className="mt-2 text-xs text-text-muted">Gửi lúc {new Date(item.createdAt).toLocaleString('vi-VN')}</p>
+                  <ModerationImageGallery
+                    images={item.images ?? data.items.find((entry) => entry.id === String(item.id))?.images ?? []}
+                    defectImages={item.defectImages ?? data.items.find((entry) => entry.id === String(item.id))?.defectImages ?? []}
+                  />
                 </div>
                 <div className="space-y-3">
                   <p className="text-xs text-text-muted">Điểm tin cậy: {item.donorTrustStars ?? '--'}</p>
@@ -300,7 +361,7 @@ export function AdminModeration() {
                             [item.id]: apiChecklist.map((_, answerIndex) => answerIndex === index ? event.target.checked : (current[item.id]?.[answerIndex] ?? false)),
                           }))}
                         />
-                        <span>{label}</span>
+                        <span>{positiveChecklistLabel[label] ?? label}</span>
                       </label>
                     ))}
                   </div>
@@ -310,7 +371,12 @@ export function AdminModeration() {
                     </Button>
                     <Button
                       size="sm"
-                      disabled={apiActionId === item.id || !apiChecklist.length || !(apiAnswers[item.id] ?? []).every(Boolean)}
+                      disabled={
+                        apiActionId === item.id ||
+                        !apiChecklist.length ||
+                        (apiAnswers[item.id] ?? []).length !== apiChecklist.length ||
+                        !(apiAnswers[item.id] ?? []).every(Boolean)
+                      }
                       onClick={() => void approveApiReview(item)}
                     >
                       {apiActionId === item.id ? 'Đang xử lý...' : 'Duyệt bài'}
@@ -321,12 +387,12 @@ export function AdminModeration() {
             ))}
           </div>
         ) : (
-          <EmptyState icon="shield" title={query ? 'Không tìm thấy bài phù hợp' : 'Không có bài chờ duyệt'} text={query ? 'Hãy thử từ khóa khác.' : 'Backend chưa trả về bài đăng nào trong hàng chờ.'} />
+          <EmptyState icon="shield" title={query ? 'Không tìm thấy bài phù hợp' : 'Không có bài chờ duyệt'} text={query ? 'Hãy thử từ khóa khác.' : 'Hiện chưa có bài đăng nào trong hàng chờ.'} />
         )}
         {apiRejecting ? (
           <Modal title={`Từ chối bài #${apiRejecting.id}`} onClose={() => { if (apiActionId === null) setApiRejecting(null); }}>
             <Select label="Lý do từ chối" value={apiRejectReason} onChange={(event) => setApiRejectReason(event.target.value)} disabled={apiActionId !== null}>
-              <option value="">Chọn lý do từ Backend</option>
+              <option value="">Chọn lý do từ danh sách</option>
               {apiRejectReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
             </Select>
             <div className="mt-5 flex justify-end gap-2">
@@ -379,7 +445,7 @@ export function AdminModeration() {
           const owner = data.users.find((u) => u.id === item.ownerId);
           return (
             <article key={item.id} className="grid gap-4 rounded-lg bg-white p-4 ring-1 ring-border/80 md:grid-cols-[96px_1fr_auto] md:items-center">
-              <img src={item.images[0]} alt={item.title} className="aspect-square w-full rounded-md object-cover md:size-24" />
+              <ItemImage src={item.images[0]} alt={item.title} className="aspect-square w-full rounded-md object-cover md:size-24" />
               <div className="min-w-0">
                 <div className="flex gap-2">
                   <TypeBadge type={item.type} />
@@ -454,6 +520,73 @@ export function AdminModeration() {
   );
 }
 
+function ModerationImageGallery({
+  images,
+  defectImages,
+}: {
+  images: string[];
+  defectImages: string[];
+}) {
+  const [preview, setPreview] = useState<{ src: string; title: string } | null>(null);
+  const itemImages = images.map(resolveMediaUrl).filter(Boolean);
+  const itemDefectImages = defectImages.map(resolveMediaUrl).filter(Boolean);
+
+  if (!itemImages.length && !itemDefectImages.length) return null;
+
+  return (
+    <div className="mt-4 space-y-3">
+      {itemImages.length ? (
+        <ModerationThumbnailGroup
+          label="Ảnh món đồ"
+          images={itemImages}
+          onPreview={(src, index) => setPreview({ src, title: `Ảnh món đồ ${index + 1}` })}
+        />
+      ) : null}
+      {itemDefectImages.length ? (
+        <ModerationThumbnailGroup
+          label="Ảnh lỗi"
+          images={itemDefectImages}
+          onPreview={(src, index) => setPreview({ src, title: `Ảnh lỗi ${index + 1}` })}
+        />
+      ) : null}
+      {preview ? (
+        <Modal title={preview.title} onClose={() => setPreview(null)}>
+          <ItemImage src={preview.src} alt={preview.title} className="max-h-[70vh] w-full rounded-md object-contain" />
+        </Modal>
+      ) : null}
+    </div>
+  );
+}
+
+function ModerationThumbnailGroup({
+  label,
+  images,
+  onPreview,
+}: {
+  label: string;
+  images: string[];
+  onPreview: (src: string, index: number) => void;
+}) {
+  return (
+    <div>
+      <p className="mb-2 text-xs font-semibold text-text-secondary">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {images.map((image, index) => (
+          <button
+            key={`${image}-${index}`}
+            type="button"
+            aria-label={`Xem lớn ${label.toLowerCase()} ${index + 1}`}
+            onClick={() => onPreview(image, index)}
+            className="overflow-hidden rounded-md ring-1 ring-border"
+          >
+            <ItemImage src={image} alt={`${label} ${index + 1}`} className="size-16 object-cover" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const moderationChecklist = [
   { key: 'category', label: 'Không thuộc danh mục bị cấm' },
   { key: 'keyword', label: 'Không chứa từ khóa cấm' },
@@ -488,7 +621,7 @@ function ModerationDetailModal({
   return (
     <Modal title="Chi tiết duyệt bài" onClose={onClose}>
       <div className="grid gap-4 md:grid-cols-[180px_1fr]">
-        <img
+        <ItemImage
           src={item.images[0]}
           alt={item.title}
           className="aspect-square w-full rounded-md object-cover"
@@ -547,13 +680,13 @@ const rejectionOptions = [
 ];
 
 const conditionLabels: Record<Item['condition'], string> = {
+  NEW: 'Mới',
+  LIKE_NEW: 'Như mới',
+  GOOD: 'Còn tốt',
+  DEFECTIVE: 'Có lỗi',
   new: 'Mới',
   good: 'Còn tốt',
   used: 'Đã sử dụng',
-  NEW: 'Mới',
-  LIKE_NEW: 'Như mới',
-  GOOD: 'Đã qua sử dụng, còn tốt',
-  DEFECTIVE: 'Có lỗi',
 };
 
 function RejectPostModal({
@@ -1004,7 +1137,7 @@ export function AdminTransactionDetail() {
         <div className="space-y-6">
           <section className="rounded-lg bg-white p-5 ring-1 ring-border/80">
             <div className="flex gap-4">
-              <img
+              <ItemImage
                 src={item.images[0]}
                 alt={item.title}
                 className="size-24 rounded-md object-cover"
@@ -1205,6 +1338,15 @@ export function AdminFinanceUserLookup() {
   );
 }
 
+function adminConfigErrorMessage(error: ApiError) {
+  if (error.status === 400) return 'Giá trị hoặc lý do thay đổi chưa hợp lệ. Vui lòng kiểm tra lại.';
+  if (error.status === 403) return 'Tài khoản hiện tại không có quyền sửa cấu hình.';
+  if (error.status === 404) return 'Không tìm thấy cấu hình cần cập nhật.';
+  if (error.status === 401) return 'Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.';
+  if (error.status === 0) return 'Không kết nối được máy chủ. Vui lòng thử lại.';
+  return 'Không cập nhật được cấu hình. Vui lòng thử lại.';
+}
+
 export function AdminSettings() {
   const dispatch = useAppDispatch();
   const admin = useAppSelector(selectCurrentUser)!;
@@ -1238,7 +1380,7 @@ export function AdminSettings() {
       .catch((apiError: ApiError) => {
         if (!active) return;
         setConfigs([]);
-        setError(apiError.status === 403 ? 'Tài khoản hiện tại không đủ quyền xem cấu hình hệ thống.' : 'Không tải được cấu hình hệ thống từ Backend.');
+        setError(apiError.status === 403 ? 'Tài khoản hiện tại không đủ quyền xem cấu hình hệ thống.' : 'Không tải được cấu hình hệ thống.');
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -1256,7 +1398,7 @@ export function AdminSettings() {
     try {
       let updated: AdminConfigResponse;
       try {
-        updated = await adminConfigApi.updateByBody(backendAdminId, {
+        updated = await adminConfigApi.updateByBody({
           key: editingConfig.key,
           value,
           reason,
@@ -1264,14 +1406,13 @@ export function AdminSettings() {
       } catch (apiError) {
         const response = apiError as ApiError;
         if (response.status !== 404 && response.status !== 405) throw apiError;
-        updated = await adminConfigApi.update(editingConfig.key, backendAdminId, { value, reason });
+        updated = await adminConfigApi.update(editingConfig.key, { value, reason });
       }
       setConfigs((current) => current.map((entry) => (entry.key === updated.key ? updated : entry)));
       setEditingConfig(null);
       setNotice(`Đã cập nhật cấu hình ${updated.key}.`);
     } catch (apiError) {
-      const errorResponse = apiError as ApiError;
-      setUpdateError(errorResponse.status === 403 ? 'Tài khoản hiện tại không có quyền sửa cấu hình.' : errorResponse.message || 'Không cập nhật được cấu hình. Vui lòng thử lại.');
+      setUpdateError(adminConfigErrorMessage(apiError as ApiError));
     } finally {
       setSavingConfig(false);
     }
@@ -1279,9 +1420,9 @@ export function AdminSettings() {
 
   if (isApiAdmin) {
     return (
-      <Panel title="Cấu hình hệ thống" description="Xem và cập nhật các cấu hình được Backend hỗ trợ.">
+      <Panel title="Cấu hình hệ thống" description="Xem và cập nhật các thiết lập đang được hỗ trợ.">
         <div className="max-w-4xl rounded-lg bg-white p-6 ring-1 ring-border/80">
-          <div className="rounded-md bg-primary-faint p-4 text-sm leading-6 text-text-secondary">Mỗi thay đổi cần nhập lý do và được gửi trực tiếp tới Backend. Cấu hình nhạy cảm cần xác nhận bổ sung trước khi lưu.</div>
+          <div className="rounded-md bg-primary-faint p-4 text-sm leading-6 text-text-secondary">Mỗi thay đổi cần nhập lý do. Thiết lập nhạy cảm cần xác nhận bổ sung trước khi lưu.</div>
 
           {notice ? <div className="mt-4 rounded-md bg-emerald-50 p-3 text-sm text-success">{notice}</div> : null}
 
@@ -1330,7 +1471,7 @@ export function AdminSettings() {
               </table>
             </div>
           ) : (
-            <EmptyState title="Chưa có cấu hình" text="Backend không trả về cấu hình hệ thống nào." />
+            <EmptyState title="Chưa có cấu hình" text="Hiện chưa có cấu hình hệ thống nào." />
           )}
         </div>
         {editingConfig ? (
@@ -1418,39 +1559,296 @@ function ConfigEditModal({
 }
 
 export function AdminAuditLogs() {
-  const data = useAppSelector(selectData);
+  const [logs, setLogs] = useState<ActivityLogResponse[]>([]);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [actorId, setActorId] = useState('');
+  const [actionType, setActionType] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [filters, setFilters] = useState<Omit<ActivityLogParams, 'page' | 'size'>>({});
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError('');
+
+    adminAuditApi
+      .list({ ...filters, page, size: pageSize })
+      .then((response) => {
+        if (!active) return;
+        setLogs(response.content);
+        setTotalElements(response.totalElements);
+        setTotalPages(response.totalPages);
+      })
+      .catch((apiError: ApiError) => {
+        if (!active) return;
+        setLogs([]);
+        setTotalElements(0);
+        setTotalPages(0);
+        setError(activityLogErrorMessage(apiError));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [filters, page, pageSize, reloadKey]);
+
+  const applyFilters = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (from && to && from > to) {
+      setError('Khoảng ngày không hợp lệ');
+      return;
+    }
+    setError('');
+    setPage(0);
+    setFilters({
+      actorId: actorId ? Number(actorId) : undefined,
+      type: actionType || undefined,
+      from: from || undefined,
+      to: to || undefined,
+    });
+  };
+
   return (
-    <Panel title="Audit Log" description="Dấu vết bất biến của các thao tác quản trị.">
-      <div className="table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Thời gian</th>
-              <th>Hành động</th>
-              <th>Đối tượng</th>
-              <th>Chi tiết</th>
-              <th>Admin</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.auditLogs.map((log) => (
-              <tr key={log.id}>
-                <td className="whitespace-nowrap">
-                  {new Date(log.createdAt).toLocaleString('vi-VN')}
-                </td>
-                <td className="font-mono text-xs">{log.action}</td>
-                <td>
-                  {log.targetType} · {log.targetId}
-                </td>
-                <td>{log.detail}</td>
-                <td>{data.users.find((u) => u.id === log.adminId)?.name ?? log.adminId}</td>
-              </tr>
+    <Panel title="Nhật ký hành động">
+      <form onSubmit={applyFilters} className="mb-5 rounded-lg bg-white p-4 ring-1 ring-border/80">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <Field
+            label="ID người thực hiện"
+            type="number"
+            min="1"
+            step="1"
+            value={actorId}
+            onChange={(event) => setActorId(event.target.value)}
+            placeholder="Ví dụ: 3"
+          />
+          <Select label="Hành động" value={actionType} onChange={(event) => setActionType(event.target.value)}>
+            <option value="">Tất cả hành động</option>
+            {Object.entries(activityLogTypeLabels).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </Select>
+          <Field label="Từ ngày" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+          <Field label="Đến ngày" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+          <div className="flex items-end">
+            <Button type="submit" className="w-full" disabled={loading}>Lọc nhật ký</Button>
+          </div>
+        </div>
+      </form>
+
+      {loading ? (
+        <EmptyState title="Đang tải nhật ký" text="Vui lòng chờ trong giây lát." />
+      ) : error ? (
+        <div className="rounded-md bg-red-50 p-4 text-sm leading-6 text-error">
+          <p>{error}</p>
+          <Button className="mt-3" size="sm" variant="outline" onClick={() => setReloadKey((value) => value + 1)}>
+            Thử lại
+          </Button>
+        </div>
+      ) : logs.length === 0 ? (
+        <EmptyState icon="history" title="Chưa có nhật ký" text="Không có hành động nào phù hợp với bộ lọc hiện tại." />
+      ) : (
+        <>
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Thời gian</th>
+                  <th>Người thực hiện</th>
+                  <th>Hành động</th>
+                  <th>Đối tượng</th>
+                  <th>Chi tiết</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((log) => (
+                  <tr key={log.id}>
+                    <td className="whitespace-nowrap">{formatActivityLogTime(log.createdAt)}</td>
+                    <td>{log.actorId ? `Admin #${log.actorId}` : 'Hệ thống'}</td>
+                    <td>{activityLogTypeLabel(log.type)}</td>
+                    <td>{activityLogTarget(log)}</td>
+                    <td><ActivityLogDetail log={log} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-4 flex flex-col gap-3 rounded-lg bg-white p-3 text-sm text-text-secondary ring-1 ring-border/80 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              {totalElements.toLocaleString('vi-VN')} bản ghi · Trang {page + 1}/{Math.max(totalPages, 1)}
+            </p>
+            <div className="flex items-center gap-2">
+              <Select
+                aria-label="Số bản ghi mỗi trang"
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  setPage(0);
+                }}
+              >
+                <option value={10}>10 / trang</option>
+                <option value={20}>20 / trang</option>
+                <option value={50}>50 / trang</option>
+              </Select>
+              <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((value) => value - 1)}>
+                Trang trước
+              </Button>
+              <Button size="sm" variant="outline" disabled={page + 1 >= totalPages} onClick={() => setPage((value) => value + 1)}>
+                Trang sau
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
     </Panel>
   );
+}
+
+const activityLogTypeLabels: Record<string, string> = {
+  APPROVE_ITEM: 'Duyệt bài',
+  REJECT_ITEM: 'Từ chối bài',
+  REVIEW_APPROVE: 'Duyệt bài',
+  REVIEW_REJECT: 'Từ chối bài',
+  CONFIG_UPDATE: 'Cập nhật cấu hình',
+  ADMIN_ACTION: 'Thao tác quản trị',
+  REVIEW: 'Kiểm duyệt bài',
+  AI_CALL: 'Gọi trợ lý AI',
+  POINTS: 'Thay đổi điểm uy tín',
+  STARS: 'Thay đổi sao uy tín',
+  SECURITY: 'Sự kiện bảo mật',
+};
+
+function activityLogTypeLabel(type: string) {
+  return activityLogTypeLabels[type.trim().toUpperCase()] ?? 'Khác';
+}
+
+interface ActivityLogCheck {
+  passed: boolean;
+  question: string;
+}
+
+function ActivityLogDetail({ log }: { log: ActivityLogResponse }) {
+  const [expanded, setExpanded] = useState(false);
+  const content = log.detail?.trim() || log.reason?.trim() || 'Không có thông tin chi tiết';
+  const checks = activityLogChecks(log, content);
+  const isStructured = checks.length > 0 || /^[{[]/.test(content);
+
+  if (!isStructured) {
+    return <p className="max-w-xl line-clamp-2 leading-5">{content}</p>;
+  }
+
+  const passedCount = checks.filter((check) => check.passed).length;
+  const summary = checks.length
+    ? `Đạt đủ ${passedCount}/${checks.length} mục kiểm duyệt`
+    : 'Có dữ liệu chi tiết';
+
+  return (
+    <div className="max-w-xl">
+      <p className={expanded ? 'leading-5' : 'line-clamp-2 leading-5'}>{summary}</p>
+      <button
+        type="button"
+        className="mt-1 text-xs font-semibold text-primary hover:text-primary-hover"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        {expanded ? 'Thu gọn' : 'Xem chi tiết'}
+      </button>
+      {expanded ? (
+        checks.length ? (
+          <ul className="mt-2 max-h-48 space-y-1.5 overflow-y-auto rounded-md bg-surface-low p-2 text-xs leading-5">
+            {checks.map((check, index) => (
+              <li key={`${check.question}-${index}`} className="flex items-start gap-2">
+                <span className={check.passed ? 'font-bold text-success' : 'font-bold text-error'}>
+                  {check.passed ? '✓' : '✗'}
+                </span>
+                <span>{check.question}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 rounded-md bg-surface-low p-2 text-xs leading-5 text-text-muted">
+            Dữ liệu chi tiết đã được ghi nhận.
+          </p>
+        )
+      ) : null}
+    </div>
+  );
+}
+
+function activityLogChecks(log: ActivityLogResponse, content: string): ActivityLogCheck[] {
+  const dataChecks = activityLogChecksFromValue(log.data);
+  if (dataChecks.length) return dataChecks;
+
+  if (/^[{[]/.test(content)) {
+    try {
+      const parsedChecks = activityLogChecksFromValue(JSON.parse(content) as unknown);
+      if (parsedChecks.length) return parsedChecks;
+    } catch {
+      // Backend cũ có thể trả Map.toString(), được xử lý bằng biểu thức bên dưới.
+    }
+  }
+
+  if (!/checks|passed|question/i.test(content)) return [];
+  return [...content.matchAll(/\{passed=(true|false),\s*question=([^}]*)}/gi)].flatMap((match) => {
+    const question = match[2]?.trim();
+    return question ? [{ passed: match[1].toLowerCase() === 'true', question }] : [];
+  });
+}
+
+function activityLogChecksFromValue(value: unknown): ActivityLogCheck[] {
+  const entries = Array.isArray(value)
+    ? value
+    : value && typeof value === 'object' && Array.isArray((value as Record<string, unknown>).checks)
+      ? (value as Record<string, unknown>).checks as unknown[]
+      : [];
+
+  return entries.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const record = entry as Record<string, unknown>;
+    const question = typeof record.question === 'string' ? record.question.trim() : '';
+    const passed = record.passed === true || record.passed === 'true';
+    return question ? [{ passed, question }] : [];
+  });
+}
+
+const activityLogTargetLabels: Record<string, string> = {
+  ITEM: 'Bài đăng',
+  USER: 'Người dùng',
+  REQUEST: 'Yêu cầu',
+  REPORT: 'Báo cáo',
+  CONFIG: 'Cấu hình',
+};
+
+function activityLogTarget(log: ActivityLogResponse) {
+  const label = activityLogTargetLabels[log.targetType?.trim().toUpperCase() ?? ''] ?? 'Đối tượng';
+  return log.targetId == null ? label : `${label} #${log.targetId}`;
+}
+
+function formatActivityLogTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Không xác định';
+  return new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    dateStyle: 'short',
+    timeStyle: 'medium',
+  }).format(date);
+}
+
+function activityLogErrorMessage(error: ApiError) {
+  if (error.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (error.status === 403) return 'Tài khoản hiện tại không có quyền xem nhật ký hành động.';
+  if (error.status === 400) return 'Khoảng ngày không hợp lệ';
+  if (error.status === 0) return 'Không thể kết nối máy chủ. Vui lòng kiểm tra kết nối và thử lại.';
+  return error.message || 'Không tải được nhật ký hành động. Vui lòng thử lại.';
 }
 
 export function AdminContentPage({
@@ -1483,6 +1881,28 @@ function AdminKeywords() {
   return toBackendUserId(admin.id) !== null && admin.role === 'admin'
     ? <ApiAdminKeywords />
     : <MockAdminKeywords />;
+}
+
+const lexiconGroupLabels: Record<string, string> = {
+  WEAPONS: 'Vũ khí',
+  DRUGS: 'Ma túy',
+  CONTACT: 'Thông tin liên hệ',
+};
+
+const lexiconLevelLabels: Record<string, string> = {
+  BLOCK: 'Chặn đăng',
+  REVIEW: 'Cần duyệt thủ công',
+};
+
+const lexiconScopeLabels: Record<string, string> = {
+  POST: 'Bài đăng',
+  CHAT: 'Tin nhắn',
+  MESSAGE: 'Tin nhắn',
+  BOTH: 'Bài đăng và tin nhắn',
+};
+
+function getLexiconLabel(labels: Record<string, string>, value: string) {
+  return labels[value.trim().toUpperCase()] ?? 'Khác';
 }
 
 function ApiAdminKeywords() {
@@ -1565,7 +1985,6 @@ function ApiAdminKeywords() {
   return (
     <Panel
       title="Từ khóa kiểm duyệt"
-      description="Quản lý từ điển kiểm duyệt trực tiếp từ Backend. Từ khóa không bị xóa; hãy tạm ngưng khi không còn sử dụng."
       action={<Button icon="add" onClick={() => setEditing('new')}>Thêm từ khóa</Button>}
     >
       {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
@@ -1573,13 +1992,13 @@ function ApiAdminKeywords() {
       <section className="mb-5 rounded-lg bg-white p-4 ring-1 ring-border/80">
         <TextArea label="Kiểm tra nội dung" value={testText} onChange={(event) => setTestText(event.target.value)} placeholder="Nhập nội dung cần đối chiếu với từ điển..." />
         <Button className="mt-3" variant="outline" disabled={testing || !testText.trim()} onClick={() => void testLexicon()}>{testing ? 'Đang kiểm tra...' : 'Kiểm tra'}</Button>
-        {testMatches.length ? <div className="mt-3 space-y-1 text-xs text-text-secondary">{testMatches.map((match, index) => <p key={`${match.keyword}-${index}`}><strong>{match.keyword}</strong> · {match.level} · {match.group} · {match.matchedAs}</p>)}</div> : null}
+        {testMatches.length ? <div className="mt-3 space-y-1 text-xs text-text-secondary">{testMatches.map((match, index) => <p key={`${match.keyword}-${index}`}><strong>{match.keyword}</strong> · {getLexiconLabel(lexiconLevelLabels, match.level)} · {getLexiconLabel(lexiconGroupLabels, match.group)} · {match.matchedAs}</p>)}</div> : null}
       </section>
       {loading ? <EmptyState title="Đang tải từ điển" text="Vui lòng chờ trong giây lát." /> : entries.length ? (
         <div className="table-wrap"><table className="data-table"><thead><tr><th>Từ khóa</th><th>Nhóm</th><th>Mức độ</th><th>Phạm vi</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
-          {entries.map((entry) => <tr key={entry.id}><td className="font-semibold">{entry.keyword}</td><td>{entry.group}</td><td>{entry.level}</td><td>{entry.scope}</td><td>{entry.active ? 'Đang dùng' : 'Tạm ngưng'}</td><td className="space-x-2"><Button size="sm" variant="ghost" disabled={savingId === entry.id} onClick={() => setEditing(entry)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId === entry.id} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ngưng' : 'Kích hoạt'}</Button></td></tr>)}
+          {entries.map((entry) => <tr key={entry.id}><td className="font-semibold">{entry.keyword}</td><td>{getLexiconLabel(lexiconGroupLabels, entry.group)}</td><td>{getLexiconLabel(lexiconLevelLabels, entry.level)}</td><td>{getLexiconLabel(lexiconScopeLabels, entry.scope)}</td><td>{entry.active ? 'Đang hiển thị' : 'Đang ẩn'}</td><td className="space-x-2"><Button size="sm" variant="ghost" disabled={savingId === entry.id} onClick={() => setEditing(entry)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId === entry.id} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ngưng' : 'Kích hoạt'}</Button></td></tr>)}
         </tbody></table></div>
-      ) : <EmptyState title="Chưa có từ khóa" text="Backend chưa có mục từ điển kiểm duyệt nào." />}
+      ) : <EmptyState title="Chưa có từ khóa" text="Hiện chưa có mục từ điển kiểm duyệt nào." />}
       {editing ? <ApiLexiconModal entry={editing === 'new' ? null : editing} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
     </Panel>
   );
@@ -1593,8 +2012,9 @@ function ApiLexiconModal({ entry, saving, onClose, onSave }: { entry: AdminLexic
   const [matchMode, setMatchMode] = useState(entry?.matchMode ?? '');
   const [exceptions, setExceptions] = useState(entry?.exceptions.join(', ') ?? '');
   const valid = keyword.trim() && group.trim() && level.trim() && scope.trim();
+  const messageScope = scope.trim().toUpperCase() === 'MESSAGE' ? 'MESSAGE' : 'CHAT';
   return <Modal title={entry ? 'Sửa từ khóa' : 'Thêm từ khóa'} onClose={onClose}>
-    <div className="space-y-4"><Field label="Từ khóa" value={keyword} onChange={(event) => setKeyword(event.target.value)} /><Field label="Nhóm" value={group} onChange={(event) => setGroup(event.target.value)} /><Field label="Mức độ" value={level} onChange={(event) => setLevel(event.target.value)} /><Field label="Phạm vi" value={scope} onChange={(event) => setScope(event.target.value)} /><Field label="Chế độ khớp (không bắt buộc)" value={matchMode} onChange={(event) => setMatchMode(event.target.value)} /><Field label="Ngoại lệ, phân cách bằng dấu phẩy" value={exceptions} onChange={(event) => setExceptions(event.target.value)} /></div>
+    <div className="space-y-4"><Field label="Từ khóa" value={keyword} onChange={(event) => setKeyword(event.target.value)} /><Select label="Nhóm" value={group} onChange={(event) => setGroup(event.target.value)}><option value="">Chọn nhóm</option>{group && !lexiconGroupLabels[group.trim().toUpperCase()] ? <option value={group}>Khác</option> : null}{Object.entries(lexiconGroupLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select><Select label="Mức độ" value={level} onChange={(event) => setLevel(event.target.value)}><option value="">Chọn mức độ</option>{level && !lexiconLevelLabels[level.trim().toUpperCase()] ? <option value={level}>Khác</option> : null}{Object.entries(lexiconLevelLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select><Select label="Phạm vi" value={scope} onChange={(event) => setScope(event.target.value)}><option value="">Chọn phạm vi</option>{scope && !lexiconScopeLabels[scope.trim().toUpperCase()] ? <option value={scope}>Khác</option> : null}<option value="POST">Bài đăng</option><option value={messageScope}>Tin nhắn</option><option value="BOTH">Bài đăng và tin nhắn</option></Select><Field label="Chế độ khớp (không bắt buộc)" value={matchMode} onChange={(event) => setMatchMode(event.target.value)} /><Field label="Ngoại lệ, phân cách bằng dấu phẩy" value={exceptions} onChange={(event) => setExceptions(event.target.value)} /></div>
     <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !valid} onClick={() => onSave({ keyword: keyword.trim(), group: group.trim(), level: level.trim(), scope: scope.trim(), ...(matchMode.trim() ? { matchMode: matchMode.trim() } : {}), exceptions: exceptions.split(',').map((value) => value.trim()).filter(Boolean) })}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
   </Modal>;
 }
@@ -1762,7 +2182,7 @@ function ApiAdminAreas() {
   return <Panel title="Khu vực" description="Quản lý tỉnh, thành phố và khu vực con dùng cho tìm kiếm và đăng bài." action={<Button icon="add" onClick={() => setEditing('new')}>Thêm khu vực</Button>}>
     {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
     {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
-    {loading ? <EmptyState title="Đang tải khu vực" text="Vui lòng chờ trong giây lát." /> : areas.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Tên</th><th>Khu vực cha</th><th>Cấp</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>{areas.map((area) => <tr key={area.id}><td className="font-semibold">{area.name}</td><td>{areas.find((entry) => entry.id === area.parentId)?.name ?? '—'}</td><td>{area.level}</td><td>{area.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td className="space-x-2"><Button size="sm" variant="ghost" disabled={savingId === area.id} onClick={() => setEditing(area)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId === area.id} onClick={() => void toggleActive(area)}>{area.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có khu vực" text="Backend chưa có khu vực nào." />}
+    {loading ? <EmptyState title="Đang tải khu vực" text="Vui lòng chờ trong giây lát." /> : areas.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Tên</th><th>Khu vực cha</th><th>Cấp</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>{areas.map((area) => <tr key={area.id}><td className="font-semibold">{area.name}</td><td>{areas.find((entry) => entry.id === area.parentId)?.name ?? '—'}</td><td>{area.level}</td><td>{area.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td className="space-x-2"><Button size="sm" variant="ghost" disabled={savingId === area.id} onClick={() => setEditing(area)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId === area.id} onClick={() => void toggleActive(area)}>{area.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có khu vực" text="Hiện chưa có khu vực nào." />}
     {editing ? <ApiAreaModal area={editing === 'new' ? null : editing} areas={areas} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
   </Panel>;
 }
@@ -1944,7 +2364,7 @@ function AdminComplaints() {
                 source.startsWith('data:video') ? (
                   <video key={source.slice(-16) + index} src={source} className="aspect-square rounded-md object-cover" controls />
                 ) : (
-                  <img key={source.slice(-16) + index} src={source} alt="Bằng chứng" className="aspect-square rounded-md object-cover" />
+                  <ItemImage key={source.slice(-16) + index} src={source} alt="Bằng chứng" className="aspect-square rounded-md object-cover" />
                 )
               ))}
             </div>
@@ -2405,10 +2825,10 @@ function ApiAdminChecklist() {
       {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
       {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
       {loading ? <EmptyState title="Đang tải checklist" text="Vui lòng chờ trong giây lát." /> : entries.length ? (
-        <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Mã</th><th>Tiêu chí</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
-          {entries.map((entry, index) => <tr key={entry.id}><td>{index + 1}</td><td className="font-mono text-xs">{entry.key}</td><td className="font-semibold">{entry.question}</td><td>{entry.active ? 'Đang dùng' : 'Tạm ngưng'}</td><td><div className="flex flex-wrap gap-2"><Button size="sm" variant="ghost" disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}>Lên</Button><Button size="sm" variant="ghost" disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}>Xuống</Button><Button size="sm" variant="outline" disabled={savingId !== null} onClick={() => setEditing(entry)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ngưng' : 'Kích hoạt'}</Button></div></td></tr>)}
+        <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th className="hidden text-text-muted md:table-cell">Mã</th><th>Tiêu chí</th><th className="whitespace-nowrap">Trạng thái</th><th className="min-w-[430px] whitespace-nowrap">Thao tác</th></tr></thead><tbody>
+          {entries.map((entry, index) => <tr key={entry.id}><td>{index + 1}</td><td className="hidden font-mono text-xs text-text-muted md:table-cell">{entry.key}</td><td className="font-semibold">{entry.question}</td><td className="whitespace-nowrap">{entry.active ? 'Đang hiển thị' : 'Đang ẩn'}</td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" size="sm" variant="ghost" title="Đưa mục này lên trên một vị trí" disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}>Chuyển lên</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="ghost" title="Đưa mục này xuống dưới một vị trí" disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}>Chuyển xuống</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="outline" title="Chỉnh sửa câu tiêu chí" disabled={savingId !== null} onClick={() => setEditing(entry)}>Sửa nội dung</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="outline" title={entry.active ? 'Không hiển thị mục này khi duyệt bài (không xoá)' : 'Hiển thị lại mục này khi duyệt bài'} disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Ẩn khỏi checklist' : 'Hiện lại'}</Button></div></td></tr>)}
         </tbody></table></div>
-      ) : <EmptyState title="Chưa có tiêu chí" text="Backend chưa có tiêu chí duyệt bài nào." />}
+      ) : <EmptyState title="Chưa có tiêu chí" text="Hiện chưa có tiêu chí duyệt bài nào." />}
       {editing ? <ChecklistEditModal entry={editing === 'new' ? null : editing} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(question) => void save(question)} /> : null}
     </Panel>
   );
@@ -2421,6 +2841,8 @@ function ChecklistEditModal({ entry, saving, onClose, onSave }: { entry: AdminCh
     <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !question.trim()} onClick={() => onSave(question.trim())}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
   </Modal>;
 }
+
+const SHOW_CATEGORY_ATTRIBUTES = false;
 
 function AdminCategories() {
   const admin = useAppSelector(selectCurrentUser)!;
@@ -2483,11 +2905,13 @@ function ApiAdminCategories() {
     }
   };
 
-  return <Panel title="Danh mục" description="Quản lý danh mục thật từ Backend. Danh mục được ẩn hoặc kích hoạt, không xóa dữ liệu." action={<Button icon="add" onClick={() => setEditing('new')}>Thêm danh mục</Button>}>
+  const hasParentCategory = categories.some((category) => category.parentId != null);
+
+  return <Panel title="Danh mục" action={<Button icon="add" onClick={() => setEditing('new')}>Thêm danh mục</Button>}>
     {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
     {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
-    {loading ? <EmptyState title="Đang tải danh mục" text="Vui lòng chờ trong giây lát." /> : categories.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Tên</th><th>Danh mục cha</th><th>Thuộc tính</th><th>Thứ tự</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>{categories.map((category) => <tr key={category.id}><td className="font-semibold">{category.name}</td><td>{categories.find((entry) => entry.id === category.parentId)?.name ?? '—'}</td><td>{category.restricted ? 'Hạn chế' : 'Thông thường'} · {category.boostable ? 'Có boost' : 'Không boost'}</td><td>{category.sortOrder}</td><td>{category.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td className="space-x-2"><Button size="sm" variant="ghost" disabled={savingId === category.id} onClick={() => setEditing(category)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId === category.id} onClick={() => void toggleActive(category)}>{category.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có danh mục" text="Backend chưa có danh mục nào." />}
-    {!loading && categories.length ? <ApiCategoryAttributes categories={categories} /> : null}
+    {loading ? <EmptyState title="Đang tải danh mục" text="Vui lòng chờ trong giây lát." /> : categories.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Tên</th>{hasParentCategory ? <th>Danh mục cha</th> : null}<th>Thuộc tính</th><th>Thứ tự</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>{categories.map((category) => <tr key={category.id}><td className="font-semibold">{category.name}</td>{hasParentCategory ? <td>{categories.find((entry) => entry.id === category.parentId)?.name ?? '—'}</td> : null}<td>{category.restricted ? 'Hạn chế' : 'Thông thường'} · {category.boostable ? 'Có boost' : 'Không boost'}</td><td>{category.sortOrder}</td><td>{category.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td className="space-x-2"><Button size="sm" variant="ghost" disabled={savingId === category.id} onClick={() => setEditing(category)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId === category.id} onClick={() => void toggleActive(category)}>{category.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có danh mục" text="Hiện chưa có danh mục nào." />}
+    {SHOW_CATEGORY_ATTRIBUTES && !loading && categories.length ? <ApiCategoryAttributes categories={categories} /> : null}
     {editing ? <ApiCategoryModal category={editing === 'new' ? null : editing} categories={categories} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
   </Panel>;
 }
@@ -2967,7 +3391,7 @@ function ExpiredPostModal({
   return (
     <Modal title="Xử lý bài quá hạn" onClose={onClose}>
       <div className="grid gap-4 md:grid-cols-[160px_1fr]">
-        <img src={item.images[0]} alt={item.title} className="aspect-square w-full rounded-md object-cover" />
+        <ItemImage src={item.images[0]} alt={item.title} className="aspect-square w-full rounded-md object-cover" />
         <div className="grid gap-3 text-sm sm:grid-cols-2">
           <Info label="Món đồ" value={item.title} />
           <Info label="Người đăng" value={owner?.name ?? item.ownerId} />

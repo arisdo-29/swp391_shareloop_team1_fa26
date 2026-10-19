@@ -9,6 +9,7 @@ public enum UserErrorCode implements ErrorCode {
     USER_ALREADY_LOCKED(HttpStatus.CONFLICT, "Tài khoản đã bị khoá."),
     USER_NOT_LOCKED(HttpStatus.CONFLICT, "Tài khoản đang hoạt động, không cần mở khoá."),
     USER_AREA_INVALID(HttpStatus.BAD_REQUEST, "Khu vực không tồn tại hoặc đã ngừng hoạt động."),
+    USER_CANNOT_LOCK_SELF(HttpStatus.BAD_REQUEST, "Không thể tự khoá tài khoản của chính mình."),
     USER_PHONE_ALREADY_USED(HttpStatus.CONFLICT, "Số điện thoại đã được sử dụng bởi tài khoản khác."),
     USER_PHONE_SAME_AS_CURRENT(HttpStatus.BAD_REQUEST, "Số điện thoại mới trùng với số điện thoại hiện tại."),
     USER_PHONE_CHANGE_COOLDOWN(HttpStatus.BAD_REQUEST, "Chỉ được đổi số điện thoại tối đa 1 lần trong 30 ngày."),

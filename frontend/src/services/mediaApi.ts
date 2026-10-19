@@ -15,9 +15,7 @@ export const mediaApi = {
     const formData = new FormData();
     formData.append('file', file);
 
-    const { data } = await http.post<MediaResponse>(mediaApiEndpoints.upload, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const { data } = await http.post<MediaResponse>(mediaApiEndpoints.upload, formData);
     return data;
   },
 };
