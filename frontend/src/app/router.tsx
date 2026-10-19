@@ -15,6 +15,8 @@ import { Activities } from '../pages/user/Activities';
 import { Messages } from '../pages/user/Messages';
 import { Profile } from '../pages/user/Profile';
 import { Credit } from '../pages/user/Credit';
+import { DemoPaymentCheckout } from '../pages/user/DemoPaymentCheckout';
+import { demoPaymentEnabled } from '../services/paymentFlow';
 import { AdminLayout } from '../pages/admin/AdminLayout';
 import { NotFound } from '../pages/NotFound';
 import {
@@ -64,7 +66,10 @@ export const router = createBrowserRouter([
           { path: '/messages', element: <Messages /> },
           { path: '/credit', element: <Credit /> },
           { path: '/wallet', element: <Credit /> },
-          { path: '/wallet/topup/mock-checkout', element: <Credit /> },
+          {
+            path: '/wallet/topup/mock-checkout',
+            element: demoPaymentEnabled ? <DemoPaymentCheckout /> : <Credit />,
+          },
         ],
       },
       {
