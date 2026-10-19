@@ -109,7 +109,7 @@ function toCreditHistory(entry: WalletTransactionResponse, userId: string): Cred
   return {
     id: `api_wallet_${entry.id}`,
     userId,
-    transactionId: `ledger-${entry.id}`,
+    transactionId: entry.paymentOrderId ? `payment-order-${entry.paymentOrderId}` : `ledger-${entry.id}`,
     type,
     amount: entry.amount,
     balance: entry.balanceAfter,

@@ -86,7 +86,7 @@ export function DemoPaymentCheckout() {
             SHARE<span className="text-primary-fixed">LOOP</span>
           </p>
           <h1 className="mt-4 text-2xl font-bold">Đang xử lý thanh toán...</h1>
-          <p className="mt-1 text-xs font-medium text-white/70">Chế độ demo</p>
+          <p className="mt-1 text-xs font-medium text-white/70">Không sử dụng tiền thật</p>
         </header>
 
         <div className="p-6 sm:p-8">
