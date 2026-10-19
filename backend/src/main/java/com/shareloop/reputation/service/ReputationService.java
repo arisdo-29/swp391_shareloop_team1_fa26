@@ -1,17 +1,23 @@
 package com.shareloop.reputation.service;
 
+import com.shareloop.audit.dto.ActivityLogDto;
 import com.shareloop.audit.service.ActivityLogService;
+import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.reputation.dto.MyReputationResponse;
+import com.shareloop.reputation.dto.PointHistoryDto;
 import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.dto.RequestParticipantProjection;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.entity.UserReputation;
 import com.shareloop.reputation.repository.UserReputationRepository;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.UserErrorCode;
 import java.util.Map;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -142,6 +148,53 @@ public class ReputationService {
         Double asDescribedRate = userReputationRepository.calculateAsDescribedRate(userId);
 
         return new ReputationSummary(userId, trustStars, rank, asDescribedRate);
+    }
+
+    /**
+     * Xem thông tin điểm, hạng, TrustStars, tỉ lệ đúng mô tả và lịch sử biến động điểm của chính người dùng (FR-101, Issue #128).
+     *
+     * @param userId ID người dùng đang đăng nhập
+     * @param page số trang (bắt đầu từ 0)
+     * @param size số lượng bản ghi mỗi trang (1-50)
+     * @return thông tin uy tín cá nhân và phân trang lịch sử
+     */
+    @Transactional(readOnly = true)
+    public MyReputationResponse getMyReputation(Long userId, int page, int size) {
+        if (userId == null) {
+            throw new IllegalArgumentException("userId must not be null");
+        }
+
+        UserReputation reputation = userReputationRepository != null
+                ? userReputationRepository
+                        .findById(userId)
+                        .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND))
+                : null;
+
+        int totalPoints = reputation != null ? reputation.getTotalPoints() : 0;
+        int trustStars = reputation != null ? reputation.getTrustStars() : 5;
+        Rank rank = getRank(totalPoints);
+
+        Double rawRate =
+                userReputationRepository != null ? userReputationRepository.calculateAsDescribedRate(userId) : null;
+        Double accuracyRate = rawRate != null ? rawRate / 100.0 : null;
+
+        int pageNumber = Math.max(page, 0);
+        int pageSize = Math.min(Math.max(size, 1), 50);
+
+        Page<PointHistoryDto> history = Page.empty();
+        if (activityLogService != null) {
+            Page<ActivityLogDto> logs = activityLogService.search(userId, "POINTS", null, null, pageNumber, pageSize);
+            history = logs.map(log -> {
+                int delta = 0;
+                if (log.data() != null && log.data().get("points") instanceof Number n) {
+                    delta = n.intValue();
+                }
+                String reason = log.reason() != null && !log.reason().isBlank() ? log.reason() : "REQUEST_COMPLETED";
+                return new PointHistoryDto(delta, reason, log.createdAt());
+            });
+        }
+
+        return new MyReputationResponse(totalPoints, rank, trustStars, accuracyRate, history);
     }
 
     /**
@@ -345,23 +398,6 @@ public class ReputationService {
                 .findById(userId)
                 .map(u -> u.getTrustStars() > 0)
                 .orElse(true);
-    }
-
-    /**
-     * Trừ sao uy tín (TrustStars) của người dùng khi vi phạm (FR-91, FR-92, BR-U04, BR-U05, Issue #113, #114).
-     *
-     * @param userId ID người dùng bị trừ sao
-     * @param amount số sao cần trừ
-     * @param reason lý do trừ sao
-     */
-    @Transactional
-    public void deductStar(Long userId, int amount, String reason) {
-        // Stub for #114 dependency - to be implemented fully in #114
-    }
-
-    @Transactional
-    public void deductStar(Long userId, int amount) {
-        deductStar(userId, amount, null);
     }
 
     private int getThreshold(String upperKey, String lowerKey, int fallback) {

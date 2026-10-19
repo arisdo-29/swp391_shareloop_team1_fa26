@@ -2,6 +2,8 @@ package com.shareloop.reputation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -11,16 +13,23 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.audit.dto.ActivityLogDto;
 import com.shareloop.audit.service.ActivityLogService;
+import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.reputation.dto.MyReputationResponse;
 import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.dto.RequestParticipantProjection;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.entity.UserReputation;
 import com.shareloop.reputation.repository.UserReputationRepository;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.UserErrorCode;
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,6 +43,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -396,6 +408,78 @@ class ReputationServiceTest {
 
             assertThat(user.getTrustStars()).isEqualTo(0); // 2 - 5 -> 0, không âm
             verify(itemService, times(1)).hideAllOfUser(userId);
+        }
+    }
+
+    @Nested
+    @DisplayName("Tests cho getMyReputation (FR-101, Issue #128)")
+    class GetMyReputationTests {
+
+        @Test
+        @DisplayName("Lấy thông tin uy tín cá nhân thành công có đầy đủ điểm, hạng, sao, tỉ lệ và lịch sử")
+        void getMyReputation_success() {
+            Long userId = 1L;
+            UserReputation user = new UserReputation(userId, (short) 4, 320, Rank.GOLD);
+            when(userReputationRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userReputationRepository.calculateAsDescribedRate(userId)).thenReturn(92.0);
+
+            ActivityLogDto logDto = new ActivityLogDto(
+                    101L,
+                    userId,
+                    "POINTS",
+                    "REQUEST",
+                    50L,
+                    Map.of("points", 10, "totalPoints", 320, "rank", "GOLD"),
+                    "Cộng 10 điểm hoàn tất giao dịch #50",
+                    "Chi tiết",
+                    Instant.parse("2026-10-18T10:00:00Z"));
+            when(activityLogService.search(eq(userId), eq("POINTS"), any(), any(), eq(0), eq(20)))
+                    .thenReturn(new PageImpl<>(List.of(logDto), PageRequest.of(0, 20), 1));
+
+            MyReputationResponse res = service.getMyReputation(userId, 0, 20);
+
+            assertThat(res.totalPoints()).isEqualTo(320);
+            assertThat(res.rank()).isEqualTo(Rank.GOLD);
+            assertThat(res.trustStars()).isEqualTo(4);
+            assertThat(res.accuracyRate()).isEqualTo(0.92);
+            assertThat(res.history().getContent()).hasSize(1);
+            assertThat(res.history().getContent().get(0).delta()).isEqualTo(10);
+            assertThat(res.history().getContent().get(0).reason()).isEqualTo("Cộng 10 điểm hoàn tất giao dịch #50");
+        }
+
+        @Test
+        @DisplayName("Người dùng chưa có giao dịch nào trả về accuracyRate = null và lịch sử rỗng")
+        void getMyReputation_noTransactions_returnsNullAccuracyRate() {
+            Long userId = 2L;
+            UserReputation user = new UserReputation(userId, (short) 5, 0, Rank.BRONZE);
+            when(userReputationRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userReputationRepository.calculateAsDescribedRate(userId)).thenReturn(null);
+            when(activityLogService.search(eq(userId), eq("POINTS"), any(), any(), eq(0), eq(20)))
+                    .thenReturn(Page.empty());
+
+            MyReputationResponse res = service.getMyReputation(userId, 0, 20);
+
+            assertThat(res.totalPoints()).isEqualTo(0);
+            assertThat(res.rank()).isEqualTo(Rank.BRONZE);
+            assertThat(res.trustStars()).isEqualTo(5);
+            assertNull(res.accuracyRate());
+            assertThat(res.history().getContent()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Không tìm thấy người dùng ném BusinessException USER_NOT_FOUND")
+        void getMyReputation_userNotFound_throwsException() {
+            Long userId = 999L;
+            when(userReputationRepository.findById(userId)).thenReturn(Optional.empty());
+
+            BusinessException ex = assertThrows(BusinessException.class, () -> service.getMyReputation(userId, 0, 20));
+            assertThat(ex.getErrorCode()).isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        }
+
+        @Test
+        @DisplayName("userId là null ném IllegalArgumentException")
+        void getMyReputation_nullUserId_throwsException() {
+            assertThrows(IllegalArgumentException.class, () -> service.getMyReputation(null, 0, 20));
         }
     }
 
