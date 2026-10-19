@@ -3,6 +3,7 @@ package com.shareloop.listingfee.repository;
 import com.shareloop.listingfee.entity.ItemFee;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -51,4 +52,15 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
             nativeQuery = true)
     List<Long> findExpiredApprovedItemIds(
             @Param("now") Instant now, @Param("afterId") long afterId, @Param("limit") int limit);
+
+    /**
+     * Hạn hiển thị và hạn đẩy của nhiều bài trong một lần đọc, không khoá. Dùng khi module item trả chi tiết hoặc
+     * danh sách bài: một query cho cả trang thay vì một query mỗi bài. Không lọc is_deleted vì người gọi đã lọc bài
+     * khi đọc danh sách. Bài không có trong kết quả thì người gọi coi như cả hai cột null.
+     */
+    @Query(
+            value = "SELECT id AS \"id\", expire_at AS \"expireAt\", boosted_until AS \"boostedUntil\""
+                    + " FROM items WHERE id IN (:ids)",
+            nativeQuery = true)
+    List<ItemDisplayWindowRow> findDisplayWindowRows(@Param("ids") Collection<Long> ids);
 }

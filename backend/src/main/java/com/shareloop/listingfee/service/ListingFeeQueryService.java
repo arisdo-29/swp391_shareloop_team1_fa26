@@ -1,0 +1,68 @@
+package com.shareloop.listingfee.service;
+
+import com.shareloop.listingfee.dto.DisplayWindow;
+import com.shareloop.listingfee.dto.ListingFeeConfigResponse;
+import com.shareloop.listingfee.repository.ItemDisplayWindowRow;
+import com.shareloop.listingfee.repository.ItemFeeRepository;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Các truy vấn chỉ-đọc của module listingfee cho module khác và cho FE. Cố ý chỉ phụ thuộc ItemFeeRepository và
+ * ConfigService, không phụ thuộc ItemService: ItemService gọi service này, nên nếu service này gọi ngược lại
+ * ItemService thì Spring sẽ báo vòng phụ thuộc.
+ */
+@Service
+// readOnly = true: transaction chỉ đọc, Hibernate bỏ qua bước kiểm tra thay đổi (dirty checking) khi kết thúc.
+@Transactional(readOnly = true)
+public class ListingFeeQueryService {
+
+    // Bài GIVE được đăng miễn phí: không có khoá cấu hình vì đây là quy tắc cố định, Admin không đổi được.
+    private static final int GIVE_POST_FEE = 0;
+
+    private final ItemFeeRepository itemFeeRepository;
+    private final ConfigService configService;
+
+    public ListingFeeQueryService(ItemFeeRepository itemFeeRepository, ConfigService configService) {
+        this.itemFeeRepository = itemFeeRepository;
+        this.configService = configService;
+    }
+
+    /**
+     * Đọc hạn hiển thị (expire_at) và hạn đẩy (boosted_until) của nhiều bài bằng một query. Danh sách rỗng thì trả
+     * map rỗng, không query. Bài không tìm thấy thì không có trong map.
+     */
+    public Map<Long, DisplayWindow> findDisplayWindows(Collection<Long> itemIds) {
+        Map<Long, DisplayWindow> displayWindows = new HashMap<>();
+        if (itemIds == null || itemIds.isEmpty()) {
+            return displayWindows;
+        }
+        for (ItemDisplayWindowRow row : itemFeeRepository.findDisplayWindowRows(itemIds)) {
+            displayWindows.put(row.getId(), new DisplayWindow(row.getExpireAt(), row.getBoostedUntil()));
+        }
+        return displayWindows;
+    }
+
+    /**
+     * Bảng phí và thời hạn hiện hành; mọi con số đọc từ ConfigService nên Admin đổi cấu hình là thấy ngay. Riêng phí
+     * đăng bài GIVE luôn 0 (chỉ bài SWAP mất phí đăng).
+     */
+    public ListingFeeConfigResponse getFeeConfig() {
+        return new ListingFeeConfigResponse(
+                configService.getInt(ConfigKey.POST_FEE),
+                GIVE_POST_FEE,
+                configService.getInt(ConfigKey.EDIT_FEE),
+                configService.getInt(ConfigKey.RENEW_FEE),
+                configService.getInt(ConfigKey.RENEW_EXPIRED_WINDOW_DAYS),
+                configService.getInt(ConfigKey.BOOST_FEE),
+                configService.getInt(ConfigKey.BOOST_DAYS),
+                configService.getInt(ConfigKey.BOOST_MAX_DAYS),
+                configService.getInt(ConfigKey.POST_DISPLAY_DAYS),
+                configService.getInt(ConfigKey.POST_DISPLAY_DAYS_GOLD));
+    }
+}

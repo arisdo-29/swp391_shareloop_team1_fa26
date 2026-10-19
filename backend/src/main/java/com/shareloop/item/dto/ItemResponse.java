@@ -27,7 +27,10 @@ public record ItemResponse(
         Instant createdAt,
         Instant updatedAt,
         List<String> defectImages,
-        OperatingStatus operatingStatus) {
+        OperatingStatus operatingStatus,
+        // Hai cột do module listingfee quản lý; null khi bài chưa từng được duyệt / chưa từng được đẩy.
+        Instant expireAt,
+        Instant boostedUntil) {
 
     public ItemResponse(
             Long id,
@@ -62,6 +65,8 @@ public record ItemResponse(
                 createdAt,
                 updatedAt,
                 List.of(),
+                null,
+                null,
                 null);
     }
 
@@ -97,6 +102,8 @@ public record ItemResponse(
                 createdAt,
                 updatedAt,
                 List.of(),
+                null,
+                null,
                 null);
     }
 }
