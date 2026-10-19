@@ -5,8 +5,6 @@ import { applyReputationPointEvent } from './reputation';
 export const CREDIT_TO_VND = 1000;
 export const POST_LISTING_FEE = 5;
 export const RECEIVE_ITEM_FEE = 5;
-export const AI_SWAP_MATCHING_FEE = 500;
-export const AI_ASSISTANT_SEARCH_FEE = 100;
 export const TOPUP_MIN_VND = 1000;
 
 export function txFee(_data: AppStateData) {

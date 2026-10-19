@@ -1,7 +1,5 @@
 import { configureStore, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import {
-  AI_ASSISTANT_SEARCH_FEE,
-  AI_SWAP_MATCHING_FEE,
   TOPUP_MIN_VND,
   CREDIT_TO_VND,
   assertWalletInvariant,
@@ -143,13 +141,6 @@ const openTransactionConversation = (
     time: 'Bây giờ',
   });
   return conv;
-};
-
-const mondayKey = (date = new Date()) => {
-  const copy = new Date(date);
-  const day = copy.getDay() || 7;
-  copy.setDate(copy.getDate() - day + 1);
-  return copy.toISOString().slice(0, 10);
 };
 
 const dataSlice = createSlice({
@@ -1376,48 +1367,6 @@ const dataSlice = createSlice({
         detail: `Xác nhận nạp ${completed.topup.amount} Credit`,
         createdAt: new Date().toISOString(),
       });
-    },
-    useAiFeature(
-      state,
-      action: PayloadAction<{ userId: string; feature: 'SWAP_MATCHING' | 'ASSISTANT_SEARCH' }>,
-    ) {
-      if (!activeActor(state, action.payload.userId)) return;
-      const periodKey =
-        action.payload.feature === 'SWAP_MATCHING'
-          ? `week:${mondayKey()}`
-          : `day:${new Date().toISOString().slice(0, 10)}`;
-      let counter = state.aiUsage.find(
-        (entry) =>
-          entry.userId === action.payload.userId &&
-          entry.feature === action.payload.feature &&
-          entry.periodKey === periodKey,
-      );
-      if (!counter) {
-        counter = {
-          id: uniqueId('aiu'),
-          userId: action.payload.userId,
-          feature: action.payload.feature,
-          periodKey,
-          count: 0,
-        };
-        state.aiUsage.push(counter);
-      }
-      const fee =
-        action.payload.feature === 'SWAP_MATCHING'
-          ? AI_SWAP_MATCHING_FEE
-          : AI_ASSISTANT_SEARCH_FEE;
-      const paid = spendAvailableCredit(state, {
-        userId: action.payload.userId,
-        amount: fee,
-        type: 'AI_SPEND',
-        ref: `ai:${action.payload.feature}:${action.payload.userId}:${Date.now()}`,
-        description:
-          action.payload.feature === 'SWAP_MATCHING'
-            ? 'Phí AI gợi ý ghép đôi Swap'
-            : 'Phí AI trợ lý tìm đồ',
-      });
-      if (!paid) return;
-      counter.count += 1;
     },
     adminAdjustCredit(
       state,
