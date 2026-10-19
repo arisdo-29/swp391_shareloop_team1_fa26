@@ -286,6 +286,20 @@ public class ItemService {
         return PageResponse.from(result);
     }
 
+    /** Search gateway for the AI assistant; the database remains the source of every returned item. */
+    @Transactional(readOnly = true)
+    public PageResponse<ItemResponse> searchApprovedForAi(
+            Long categoryId, Long areaId, String q, ItemCondition condition, OfferType offerType, int page, int size) {
+        Page<Item> items = itemRepository.searchApprovedForAi(
+                categoryId,
+                areaId,
+                condition == null ? null : condition.name(),
+                offerType == null ? null : offerType.name(),
+                q == null ? "" : q.trim(),
+                PageRequest.of(page, size));
+        return PageResponse.from(items.map(this::toResponse));
+    }
+
     /**
      * Giữ chỗ bài đăng khi chủ bài chọn người nhận (BR-D01, Issue #38).
      */
