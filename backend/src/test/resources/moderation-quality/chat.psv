@@ -1,0 +1,101 @@
+id|violation|kind|text
+C001|true|phone|Gọi mình ở 0900000001 nhé
+C002|true|phone|Số mình là 091 000 0002
+C003|true|phone|Liên hệ 093.000.0003 trước khi đến
+C004|true|phone|Nhắn qua số 098-000-0004
+C005|true|phone|Mình dùng 0320000005 để trao đổi
+C006|true|phone|Số nhận hàng 0560000006
+C007|true|phone|Cho mình gọi 0700000007
+C008|true|phone|Hẹn qua 0830000008
+C009|true|phone|Để lại 0990000009 nha
+C010|true|phone|Bạn lưu số 0900000010
+C011|true|spelled_phone|Số mình không chín một hai ba bốn năm sáu bảy tám
+C012|true|spelled_phone|Gọi khong chin mot hai ba bon nam sau bay tam
+C013|true|spelled_phone|không.chín.một.hai.ba.bốn.năm.sáu.bảy.tám
+C014|true|spelled_phone|không-chín-một-hai-ba-bốn-năm-sáu-bảy-tám
+C015|true|spelled_phone|Số là 0 chín 1 hai 3 bốn 5 sáu 7 8
+C016|true|spelled_phone|không tám ba hai một không không không không một
+C017|true|spelled_phone|khong bay khong mot hai ba bon nam sau bay
+C018|true|spelled_phone|Nhắn số không chín tám bảy sáu năm bốn ba hai một
+C019|true|spelled_phone|khong nam sau bay tam chin mot hai ba bon
+C020|true|spelled_phone|Mình đọc từng số: không chín không không không không không không hai không
+C021|true|email|Gửi ảnh tới dochoi01@example.com
+C022|true|email|Email của mình là book.seller@example.org
+C023|true|email|Liên hệ qua a+b@example.net
+C024|true|email|Nhắn mail seller_04@example.com nhé
+C025|true|email|Hỏi thêm ở user-five@example.org
+C026|true|url|Xem thêm tại https://example.com/item/1
+C027|true|url|Ảnh mình để trên http://example.org/photos
+C028|true|url|Bạn vào www.example.net/listing
+C029|true|url|Đường dẫn là https://shop.example.com/a
+C030|true|url|Mời xem https://example.org/chi-tiet
+C031|true|social|Tìm mình trên Zalo tên Đồ Cũ Quận Một
+C032|true|social|Nhắn Facebook cho tài khoản sachcuquan1
+C033|true|social|IB Instagram @dochoidanggon
+C034|true|social|Telegram của mình là @nhan_do_cu
+C035|true|social|Kết bạn Zalo bằng tên cửa hàng Đồ Dùng Bé
+C036|true|obfuscated_contact|Số không chín một, rồi hai ba bốn, cuối năm sáu bảy tám
+C037|true|obfuscated_contact|Mình dùng 09O0000011, chữ O là số không
+C038|true|obfuscated_contact|Mail là sachcu [at] example [dot] com
+C039|true|obfuscated_contact|Tìm trang example chấm com gạch item một
+C040|true|obfuscated_contact|Liên hệ số không chín một cách hai ba bốn cách năm sáu bảy tám
+C041|true|prohibited|Mình muốn đổi lấy cần sa
+C042|true|prohibited|Tôi có cần sa, bạn nhận không
+C043|true|prohibited|Giao cho mình ít CẦN SA
+C044|true|prohibited|Cần   sa có đổi được không
+C045|true|prohibited|Bạn có cần sa không
+C046|true|prohibited|Đổi đồ lấy cần sa nhé
+C047|true|prohibited|Cần sa là thứ mình rao
+C048|true|prohibited|Mình mang cần sa tới điểm hẹn
+C049|true|prohibited|Chốt món cần sa này đi
+C050|true|prohibited|Tìm người nhận cần sa
+C051|false|ordinary|Cuốn sách này còn đủ trang không
+C052|false|ordinary|Mình muốn xem ảnh bìa và gáy sách
+C053|false|ordinary|Chiều mai bạn có rảnh không
+C054|false|ordinary|Món đồ này còn hoạt động tốt chứ
+C055|false|ordinary|Bạn có thể giữ món này đến cuối tuần
+C056|false|ordinary|Đồ chơi phù hợp với bé mấy tuổi
+C057|false|ordinary|Mình muốn nhận tại điểm hẹn trong ứng dụng
+C058|false|ordinary|Áo có bị phai màu không
+C059|false|ordinary|Sách có ghi chú ở bên trong không
+C060|false|ordinary|Cảm ơn bạn đã đăng món đồ
+C061|false|number|Giá mình mua ban đầu là 150.000 đồng
+C062|false|number|Sách xuất bản năm 2024
+C063|false|number|Mã món đồ là SL-12345
+C064|false|number|Mã lô 12345678901 in dưới đáy hộp
+C065|false|number|Bộ này có 09 cuốn và 03 đĩa
+C066|false|number|Mình có thể nhận lúc 09:00 sáng
+C067|false|number|Kích thước là 90 x 120 cm
+C068|false|number|Bàn mua năm 2019 giá 1.000.000 đồng
+C069|false|number|Mẫu máy này có dung lượng 128 GB
+C070|false|number|Mã bảo hành là AB-09000000123
+C071|false|digit_words|Nhà mình có hai bé học lớp ba
+C072|false|digit_words|Không biết món này đã dùng bao lâu
+C073|false|digit_words|Một hộp có bốn món và năm nhãn
+C074|false|digit_words|Thứ sáu mình rảnh, thứ bảy thì bận
+C075|false|digit_words|Chín quyển này thuộc ba bộ khác nhau
+C076|false|digit_words|Tám chiếc bút đều còn mực
+C077|false|digit_words|Cảm ơn và tạm biệt bạn nhé
+C078|false|digit_words|Không còn hộp nhưng máy vẫn chạy
+C079|false|digit_words|Mình cần ba cuốn sách lớp bốn
+C080|false|digit_words|Năm nay bé lên lớp một
+C081|false|link_like|Mình xem ảnh ngay trong bài đăng được không
+C082|false|link_like|Bạn có thể tải ảnh lên ứng dụng
+C083|false|link_like|Nút xem chi tiết đang không mở
+C084|false|link_like|Mình không dùng mạng xã hội
+C085|false|link_like|Trong sách có chữ website nhưng không có đường dẫn
+C086|false|link_like|Nhãn áo ghi tên thương hiệu Facebook
+C087|false|link_like|Đây là giáo trình về thiết kế web
+C088|false|link_like|Bộ sách có ví dụ về email marketing
+C089|false|link_like|Mình muốn hỏi về tính năng chat của ứng dụng
+C090|false|link_like|Ảnh chụp màn hình có biểu tượng Zalo
+C091|false|exception|Mình muốn nhận súng nước cho bé
+C092|false|exception|Súng bắn keo còn dùng được không
+C093|false|exception|Súng phun sơn đã vệ sinh chưa
+C094|false|exception|Súng bắn đinh có kèm hộp không
+C095|false|exception|Từ cần trong câu này chỉ nhu cầu của mình
+C096|false|exception|Từ sa trong tên sách không nói về chất cấm
+C097|false|exception|Bạn có cần sách giáo khoa không
+C098|false|exception|Mình có chậu cây sa kê muốn tặng
+C099|false|exception|Đồ chơi bác sĩ kèm ống nghe nhựa
+C100|false|exception|Mình sẽ xác nhận lịch qua tính năng hẹn gặp
