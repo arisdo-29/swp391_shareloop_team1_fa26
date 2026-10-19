@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.shareloop.auth.service.JwtService;
 import com.shareloop.support.IntegrationTest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -32,10 +33,22 @@ class AdminCategoryAttributeIT extends IntegrationTest {
     @Autowired
     JdbcClient jdbc;
 
+    private long adminId;
+
+    // Thao tác admin giờ ghi activity_logs, mà actor_id có khoá ngoại tới users nên admin phải có thật trong DB.
+    @BeforeEach
+    void createAdmin() {
+        adminId = jdbc.sql(
+                        "INSERT INTO users (email, password_hash, full_name, phone, status, credit_balance) "
+                                + "VALUES ('catalog-admin-3@test.local', 'unused', 'Admin', '0900000003', 'ACTIVE', 0) RETURNING id")
+                .query(Long.class)
+                .single();
+    }
+
     @Test
     void adminCreatesUpdatesAndHidesAttributeFromPublicForm() throws Exception {
         long category = categoryId("Sách, truyện, giáo trình, văn phòng phẩm");
-        String token = jwtService.issue(1L, true);
+        String token = jwtService.issue(adminId, true);
         String path = "/api/v1/admin/categories/{category}/attributes";
         mvc.perform(post(path, category)
                         .header("Authorization", "Bearer " + token)
@@ -74,7 +87,7 @@ class AdminCategoryAttributeIT extends IntegrationTest {
         long books = categoryId("Sách, truyện, giáo trình, văn phòng phẩm");
         long electronics = categoryId("Điện tử và phụ kiện");
         long operatingStatus = attributeId(electronics, "Trạng thái hoạt động");
-        String token = jwtService.issue(1L, true);
+        String token = jwtService.issue(adminId, true);
         mvc.perform(post("/api/v1/admin/categories/{category}/attributes", books)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -107,7 +120,7 @@ class AdminCategoryAttributeIT extends IntegrationTest {
         long electronics = categoryId("Điện tử và phụ kiện");
         long operatingStatus = attributeId(electronics, "Trạng thái hoạt động");
         String user = jwtService.issue(2L, false);
-        String admin = jwtService.issue(1L, true);
+        String admin = jwtService.issue(adminId, true);
         mvc.perform(get("/api/v1/admin/categories/{category}/attributes", books)
                         .header("Authorization", "Bearer " + user))
                 .andExpect(status().isForbidden());

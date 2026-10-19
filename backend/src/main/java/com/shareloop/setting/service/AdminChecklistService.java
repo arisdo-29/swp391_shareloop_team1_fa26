@@ -1,5 +1,7 @@
 package com.shareloop.setting.service;
 
+import com.shareloop.audit.ActivityType;
+import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.SettingErrorCode;
 import com.shareloop.setting.dto.AdminChecklistEntry;
@@ -7,6 +9,7 @@ import com.shareloop.setting.dto.AdminChecklistReorderRequest;
 import com.shareloop.setting.dto.AdminChecklistRequest;
 import com.shareloop.setting.entity.WebsiteAttribute;
 import com.shareloop.setting.repository.WebsiteAttributeRepository;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -22,10 +25,14 @@ public class AdminChecklistService {
 
     private static final String ATTR_GROUP = "CHECKLIST";
 
-    private final WebsiteAttributeRepository repository;
+    private static final String LOG_TARGET_TYPE = "CHECKLIST";
 
-    public AdminChecklistService(WebsiteAttributeRepository repository) {
+    private final WebsiteAttributeRepository repository;
+    private final ActivityLogService activityLogService;
+
+    public AdminChecklistService(WebsiteAttributeRepository repository, ActivityLogService activityLogService) {
         this.repository = repository;
+        this.activityLogService = activityLogService;
     }
 
     public List<AdminChecklistEntry> listAll() {
@@ -34,8 +41,13 @@ public class AdminChecklistService {
                 .toList();
     }
 
+    /**
+     * Thêm câu hỏi kiểm duyệt vào cuối danh sách và ghi nhật ký CHECKLIST_CREATE (FR-115).
+     *
+     * @throws BusinessException SETTING_CHECKLIST_INVALID_VALUE khi câu hỏi rỗng
+     */
     @Transactional
-    public AdminChecklistEntry create(AdminChecklistRequest request) {
+    public AdminChecklistEntry create(AdminChecklistRequest request, Long adminId) {
         String question = validateQuestion(request);
         int sortOrder = repository.findByAttrGroupOrderBySortOrderAscIdAsc(ATTR_GROUP).stream()
                         .mapToInt(WebsiteAttribute::getSortOrder)
@@ -44,19 +56,33 @@ public class AdminChecklistService {
                 + 10;
         String attrKey = "chk_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         WebsiteAttribute attribute = new WebsiteAttribute(ATTR_GROUP, attrKey, question, null, sortOrder);
-        return toResponse(repository.saveAndFlush(attribute));
+        WebsiteAttribute saved = repository.saveAndFlush(attribute);
+        logAction(ActivityType.CHECKLIST_CREATE, adminId, saved);
+        return toResponse(saved);
     }
 
+    /**
+     * Sửa nội dung câu hỏi kiểm duyệt và ghi nhật ký CHECKLIST_UPDATE (FR-115).
+     *
+     * @throws BusinessException SETTING_CHECKLIST_NOT_FOUND, SETTING_CHECKLIST_INVALID_VALUE
+     */
     @Transactional
-    public AdminChecklistEntry update(long id, AdminChecklistRequest request) {
+    public AdminChecklistEntry update(long id, AdminChecklistRequest request, Long adminId) {
         WebsiteAttribute attribute = requireEntry(id);
         String question = validateQuestion(request);
         attribute.updateChecklist(question);
-        return toResponse(repository.saveAndFlush(attribute));
+        WebsiteAttribute saved = repository.saveAndFlush(attribute);
+        logAction(ActivityType.CHECKLIST_UPDATE, adminId, saved);
+        return toResponse(saved);
     }
 
+    /**
+     * Bật/tắt câu hỏi kiểm duyệt (BR-A06: luôn còn ít nhất 1 mục đang dùng) và ghi nhật ký CHECKLIST_TOGGLE.
+     *
+     * @throws BusinessException SETTING_CHECKLIST_NOT_FOUND, SETTING_CHECKLIST_AT_LEAST_ONE_REQUIRED
+     */
     @Transactional
-    public AdminChecklistEntry setActive(long id, boolean active) {
+    public AdminChecklistEntry setActive(long id, boolean active, Long adminId) {
         WebsiteAttribute attribute = requireEntry(id);
         if (active) {
             attribute.activate();
@@ -70,11 +96,18 @@ public class AdminChecklistService {
             }
             attribute.deactivate();
         }
-        return toResponse(repository.saveAndFlush(attribute));
+        WebsiteAttribute saved = repository.saveAndFlush(attribute);
+        logAction(ActivityType.CHECKLIST_TOGGLE, adminId, saved);
+        return toResponse(saved);
     }
 
+    /**
+     * Sắp xếp lại toàn bộ câu hỏi kiểm duyệt theo danh sách id và ghi nhật ký CHECKLIST_REORDER (FR-115).
+     *
+     * @throws BusinessException SETTING_CHECKLIST_INVALID_VALUE, SETTING_CHECKLIST_NOT_FOUND
+     */
     @Transactional
-    public List<AdminChecklistEntry> reorder(AdminChecklistReorderRequest request) {
+    public List<AdminChecklistEntry> reorder(AdminChecklistReorderRequest request, Long adminId) {
         if (request == null || request.itemIds() == null || request.itemIds().isEmpty()) {
             throw new BusinessException(
                     SettingErrorCode.SETTING_CHECKLIST_INVALID_VALUE, "Danh sách id sắp xếp không được để trống.");
@@ -112,10 +145,25 @@ public class AdminChecklistService {
         }
 
         repository.saveAllAndFlush(allEntries);
+        // Sắp xếp tác động cả danh sách nên không có targetId; lưu thứ tự mới vào data.
+        activityLogService.log(
+                ActivityType.CHECKLIST_REORDER.name(),
+                adminId,
+                LOG_TARGET_TYPE,
+                null,
+                Map.<String, Object>of("itemIds", itemIds),
+                null);
 
         return repository.findByAttrGroupOrderBySortOrderAscIdAsc(ATTR_GROUP).stream()
                 .map(AdminChecklistService::toResponse)
                 .toList();
+    }
+
+    private void logAction(ActivityType type, Long adminId, WebsiteAttribute attribute) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("question", attribute.getAttrValue());
+        data.put("active", attribute.isActive());
+        activityLogService.log(type.name(), adminId, LOG_TARGET_TYPE, attribute.getId(), data, null);
     }
 
     private WebsiteAttribute requireEntry(long id) {

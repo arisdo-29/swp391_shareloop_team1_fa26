@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.shareloop.auth.service.JwtService;
 import com.shareloop.support.IntegrationTest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -32,9 +33,21 @@ class AdminCategoryIT extends IntegrationTest {
     @Autowired
     JdbcClient jdbc;
 
+    private long adminId;
+
+    // Thao tác admin giờ ghi activity_logs, mà actor_id có khoá ngoại tới users nên admin phải có thật trong DB.
+    @BeforeEach
+    void createAdmin() {
+        adminId = jdbc.sql(
+                        "INSERT INTO users (email, password_hash, full_name, phone, status, credit_balance) "
+                                + "VALUES ('catalog-admin-2@test.local', 'unused', 'Admin', '0900000002', 'ACTIVE', 0) RETURNING id")
+                .query(Long.class)
+                .single();
+    }
+
     @Test
     void adminCreatesReordersEditsAndHidesCategory() throws Exception {
-        String token = jwtService.issue(1L, true);
+        String token = jwtService.issue(adminId, true);
         mvc.perform(post("/api/v1/admin/categories")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -75,7 +88,7 @@ class AdminCategoryIT extends IntegrationTest {
 
     @Test
     void hidingParentHidesChildrenAndRejectsCycles() throws Exception {
-        String token = jwtService.issue(1L, true);
+        String token = jwtService.issue(adminId, true);
         mvc.perform(post("/api/v1/admin/categories")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -116,7 +129,7 @@ class AdminCategoryIT extends IntegrationTest {
     @Test
     void adminEndpointsRejectNonAdminAndInvalidBody() throws Exception {
         String userToken = jwtService.issue(2L, false);
-        String adminToken = jwtService.issue(1L, true);
+        String adminToken = jwtService.issue(adminId, true);
         mvc.perform(get("/api/v1/admin/categories")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/admin/categories").header("Authorization", "Bearer " + userToken))
                 .andExpect(status().isForbidden());

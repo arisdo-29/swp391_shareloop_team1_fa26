@@ -95,7 +95,7 @@ class AdminChecklistControllerTest {
     @Test
     void adminCanCreateChecklistEntry() throws Exception {
         String adminToken = jwtService.issue(1L, true);
-        when(service.create(any())).thenReturn(new AdminChecklistEntry(1L, "chk_1", "Câu hỏi mới?", 10, true));
+        when(service.create(any(), any())).thenReturn(new AdminChecklistEntry(1L, "chk_1", "Câu hỏi mới?", 10, true));
 
         mockMvc.perform(post("/api/v1/admin/checklist")
                         .header("Authorization", "Bearer " + adminToken)
@@ -111,7 +111,7 @@ class AdminChecklistControllerTest {
     @Test
     void adminCanReorderChecklist() throws Exception {
         String adminToken = jwtService.issue(1L, true);
-        when(service.reorder(any()))
+        when(service.reorder(any(), any()))
                 .thenReturn(List.of(
                         new AdminChecklistEntry(2L, "chk_2", "Câu 2", 10, true),
                         new AdminChecklistEntry(1L, "chk_1", "Câu 1", 20, true)));
@@ -128,7 +128,7 @@ class AdminChecklistControllerTest {
     @Test
     void adminCanToggleActive() throws Exception {
         String adminToken = jwtService.issue(1L, true);
-        when(service.setActive(anyLong(), anyBoolean()))
+        when(service.setActive(anyLong(), anyBoolean(), any()))
                 .thenReturn(new AdminChecklistEntry(1L, "chk_1", "Câu 1", 10, false));
 
         mockMvc.perform(patch("/api/v1/admin/checklist/1/active")

@@ -1,5 +1,6 @@
 package com.shareloop.setting.controller;
 
+import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.setting.dto.AdminLexiconActiveRequest;
 import com.shareloop.setting.dto.AdminLexiconEntry;
 import com.shareloop.setting.dto.AdminLexiconRequest;
@@ -72,8 +73,9 @@ public class AdminLexiconController {
     @ApiResponse(responseCode = "403", description = "Không có quyền Admin")
     @ApiResponse(responseCode = "409", description = "Từ khóa bị trùng trong cùng nhóm và phạm vi")
     @PostMapping
-    public ResponseEntity<AdminLexiconEntry> create(@Valid @RequestBody AdminLexiconRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request));
+    public ResponseEntity<AdminLexiconEntry> create(
+            @Valid @RequestBody AdminLexiconRequest request, @Parameter(hidden = true) @CurrentUserId Long adminId) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request, adminId));
     }
 
     @Operation(
@@ -89,8 +91,9 @@ public class AdminLexiconController {
     @PutMapping("/{id}")
     public AdminLexiconEntry update(
             @Parameter(description = "ID của từ khóa trong từ điển") @PathVariable long id,
-            @Valid @RequestBody AdminLexiconRequest request) {
-        return service.update(id, request);
+            @Valid @RequestBody AdminLexiconRequest request,
+            @Parameter(hidden = true) @CurrentUserId Long adminId) {
+        return service.update(id, request, adminId);
     }
 
     @Operation(
@@ -105,7 +108,8 @@ public class AdminLexiconController {
     @PatchMapping("/{id}/active")
     public AdminLexiconEntry setActive(
             @Parameter(description = "ID của từ khóa trong từ điển") @PathVariable long id,
-            @Valid @RequestBody AdminLexiconActiveRequest request) {
-        return service.setActive(id, request.active());
+            @Valid @RequestBody AdminLexiconActiveRequest request,
+            @Parameter(hidden = true) @CurrentUserId Long adminId) {
+        return service.setActive(id, request.active(), adminId);
     }
 }

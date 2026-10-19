@@ -1,5 +1,6 @@
 package com.shareloop.report.service;
 
+import com.shareloop.audit.ActivityType;
 import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.dto.ItemSummary;
@@ -201,7 +202,7 @@ public class ReportService {
         if (decision == ReportDecision.DISMISS) {
             if (activityLogService != null) {
                 activityLogService.log(
-                        "REPORT_DISMISSED",
+                        ActivityType.REPORT_DISMISSED.name(),
                         adminId,
                         "REPORT",
                         reportId,
@@ -246,7 +247,7 @@ public class ReportService {
                 logPayload.put("seriousViolation", serious);
 
                 activityLogService.log(
-                        "REPORT_UPHELD",
+                        ActivityType.REPORT_UPHELD.name(),
                         adminId,
                         "REPORT",
                         reportId,

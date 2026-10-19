@@ -12,7 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.shareloop.audit.AuditErrorCode;
 import com.shareloop.audit.dto.ActivityLogDto;
-import com.shareloop.audit.service.ActivityLogService;
+import com.shareloop.audit.dto.ActivityTypeDto;
+import com.shareloop.audit.service.ActivityLogQueryService;
 import com.shareloop.auth.service.JwtService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.config.ClockConfig;
@@ -46,7 +47,7 @@ class AdminActivityLogControllerTest {
     JwtService jwtService;
 
     @MockitoBean
-    ActivityLogService activityLogService;
+    ActivityLogQueryService activityLogQueryService;
 
     @Test
     @DisplayName("Chưa đăng nhập gọi API admin trả về 401 Unauthorized")
@@ -55,7 +56,7 @@ class AdminActivityLogControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
 
-        verifyNoInteractions(activityLogService);
+        verifyNoInteractions(activityLogQueryService);
     }
 
     @Test
@@ -67,7 +68,7 @@ class AdminActivityLogControllerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
-        verifyNoInteractions(activityLogService);
+        verifyNoInteractions(activityLogQueryService);
     }
 
     @Test
@@ -76,15 +77,27 @@ class AdminActivityLogControllerTest {
         String adminToken = jwtService.issue(1L, true);
 
         ActivityLogDto logDto = new ActivityLogDto(
-                101L, 1L, "APPROVE_ITEM", "ITEM", 42L, null, "Hợp lệ", "Hợp lệ", Instant.parse("2026-10-17T10:00:00Z"));
+                101L,
+                1L,
+                "Nguyễn Văn A",
+                "a@fpt.edu.vn",
+                "REVIEW_APPROVE",
+                "Duyệt bài",
+                "ITEM",
+                42L,
+                "Áo khoác size M",
+                null,
+                null,
+                "Duyệt bài",
+                Instant.parse("2026-10-17T10:00:00Z"));
 
-        when(activityLogService.search(
-                        eq(1L), eq("APPROVE_ITEM"), any(LocalDate.class), any(LocalDate.class), eq(0), eq(20)))
+        when(activityLogQueryService.search(
+                        eq(1L), eq("REVIEW_APPROVE"), any(LocalDate.class), any(LocalDate.class), eq(0), eq(20)))
                 .thenReturn(new PageImpl<>(List.of(logDto)));
 
         mockMvc.perform(get(URL).header("Authorization", "Bearer " + adminToken)
                         .param("actorId", "1")
-                        .param("type", "APPROVE_ITEM")
+                        .param("type", "REVIEW_APPROVE")
                         .param("from", "2026-10-01")
                         .param("to", "2026-10-17")
                         .param("page", "0")
@@ -92,11 +105,29 @@ class AdminActivityLogControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(101))
                 .andExpect(jsonPath("$.content[0].actorId").value(1))
-                .andExpect(jsonPath("$.content[0].type").value("APPROVE_ITEM"))
-                .andExpect(jsonPath("$.content[0].targetId").value(42));
+                .andExpect(jsonPath("$.content[0].type").value("REVIEW_APPROVE"))
+                .andExpect(jsonPath("$.content[0].targetId").value(42))
+                .andExpect(jsonPath("$.content[0].actorName").value("Nguyễn Văn A"))
+                .andExpect(jsonPath("$.content[0].typeLabel").value("Duyệt bài"))
+                .andExpect(jsonPath("$.content[0].targetTitle").value("Áo khoác size M"));
 
-        verify(activityLogService)
-                .search(eq(1L), eq("APPROVE_ITEM"), any(LocalDate.class), any(LocalDate.class), eq(0), eq(20));
+        verify(activityLogQueryService)
+                .search(eq(1L), eq("REVIEW_APPROVE"), any(LocalDate.class), any(LocalDate.class), eq(0), eq(20));
+    }
+
+    @Test
+    @DisplayName("Admin lấy danh sách loại hành động trả về [{type, label}]")
+    void listTypes_adminToken_returnsTypesWithLabels() throws Exception {
+        // given
+        String adminToken = jwtService.issue(1L, true);
+        when(activityLogQueryService.listTypes())
+                .thenReturn(List.of(new ActivityTypeDto("USER_LOCK", "Khoá tài khoản")));
+
+        // when / then
+        mockMvc.perform(get(URL + "/types").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].type").value("USER_LOCK"))
+                .andExpect(jsonPath("$[0].label").value("Khoá tài khoản"));
     }
 
     @Test
@@ -104,7 +135,7 @@ class AdminActivityLogControllerTest {
     void list_invalidDateRange_returns400() throws Exception {
         String adminToken = jwtService.issue(1L, true);
 
-        when(activityLogService.search(any(), any(), any(), any(), anyInt(), anyInt()))
+        when(activityLogQueryService.search(any(), any(), any(), any(), anyInt(), anyInt()))
                 .thenThrow(new BusinessException(AuditErrorCode.INVALID_DATE_RANGE));
 
         mockMvc.perform(get(URL).header("Authorization", "Bearer " + adminToken)

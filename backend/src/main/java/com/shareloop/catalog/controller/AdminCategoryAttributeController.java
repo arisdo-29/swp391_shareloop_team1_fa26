@@ -4,6 +4,8 @@ import com.shareloop.catalog.dto.AdminAttributeActiveRequest;
 import com.shareloop.catalog.dto.AdminAttributeRequest;
 import com.shareloop.catalog.dto.AdminAttributeResponse;
 import com.shareloop.catalog.service.AdminCategoryAttributeService;
+import com.shareloop.common.security.CurrentUserId;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -33,23 +35,27 @@ public class AdminCategoryAttributeController {
 
     @PostMapping
     public ResponseEntity<AdminAttributeResponse> create(
-            @PathVariable long categoryId, @Valid @RequestBody AdminAttributeRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(categoryId, request));
+            @PathVariable long categoryId,
+            @Valid @RequestBody AdminAttributeRequest request,
+            @Parameter(hidden = true) @CurrentUserId Long adminId) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(categoryId, request, adminId));
     }
 
     @PutMapping("/{attributeId}")
     public AdminAttributeResponse update(
             @PathVariable long categoryId,
             @PathVariable long attributeId,
-            @Valid @RequestBody AdminAttributeRequest request) {
-        return service.update(categoryId, attributeId, request);
+            @Valid @RequestBody AdminAttributeRequest request,
+            @Parameter(hidden = true) @CurrentUserId Long adminId) {
+        return service.update(categoryId, attributeId, request, adminId);
     }
 
     @PatchMapping("/{attributeId}/active")
     public AdminAttributeResponse setActive(
             @PathVariable long categoryId,
             @PathVariable long attributeId,
-            @Valid @RequestBody AdminAttributeActiveRequest request) {
-        return service.setActive(categoryId, attributeId, request.active());
+            @Valid @RequestBody AdminAttributeActiveRequest request,
+            @Parameter(hidden = true) @CurrentUserId Long adminId) {
+        return service.setActive(categoryId, attributeId, request.active(), adminId);
     }
 }

@@ -7,6 +7,10 @@ import com.shareloop.item.dto.ItemSummary;
 import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.repository.ItemRepository;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -50,6 +54,30 @@ public class ItemQueryService {
         return new ItemCardDto(
                 item.getId(), item.getTitle(), item.getOfferType(), item.getStatus(), imageUrl, item.getDonorId());
     }
+
+    /**
+     * Tên bài đăng theo id, dùng cho trang nhật ký Admin (FR-115). Cố ý không lọc is_deleted để bài đã xoá vẫn hiện
+     * tên trong nhật ký. Id không tồn tại sẽ không có trong map.
+     */
+    public Map<Long, String> findTitles(Collection<Long> ids) {
+        Map<Long, String> titles = new HashMap<>();
+        if (jdbcClient == null || ids == null || ids.isEmpty()) {
+            return titles;
+        }
+        // Dùng JdbcClient thay vì repository vì entity Item có @SQLRestriction ẩn bài đã xoá mềm.
+        List<ItemTitle> rows = jdbcClient
+                .sql("SELECT id, title FROM items WHERE id IN (:ids)")
+                .param("ids", ids)
+                .query(ItemTitle.class)
+                .list();
+        for (ItemTitle row : rows) {
+            titles.put(row.id(), row.title());
+        }
+        return titles;
+    }
+
+    // JdbcClient tự map cột id, title vào record theo tên thành phần.
+    private record ItemTitle(Long id, String title) {}
 
     private String findFirstImage(long itemId) {
         if (jdbcClient == null) {
