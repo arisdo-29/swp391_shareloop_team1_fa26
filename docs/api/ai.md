@@ -26,7 +26,10 @@ Response `200`:
     "page": 0,
     "size": 20,
     "totalElements": 0
-  }
+  },
+  "quota": { "freeUsesRemaining": 4, "feeCredits": 2, "hasToppedUp": true },
+  "chargedCredits": 0,
+  "fallback": false
 }
 ```
 
@@ -38,9 +41,21 @@ Nội dung `query` được gửi riêng ở vai trò `user`; chỉ thị hệ t
 | --- | --- | --- |
 | 400 | `SEARCH_QUERY_INVALID` hoặc lỗi validation chung | Query hoặc phân trang không hợp lệ |
 | 401 | `UNAUTHORIZED` | Chưa đăng nhập |
-| 502 | `SEARCH_AI_FAILED` | Không gọi được Gemini |
-| 502 | `SEARCH_AI_INVALID_RESPONSE` | JSON AI sai schema hoặc bộ lọc ngoài danh mục hợp lệ |
-| 503 | `SEARCH_AI_UNAVAILABLE` | Backend chưa có `AI_API_KEY` |
-| 504 | `SEARCH_AI_TIMEOUT` | Gemini quá thời gian `ai_search_timeout_seconds` |
+| 402 | `WALLET_INSUFFICIENT_BALANCE` | Hết lượt miễn phí và không đủ Credit khả dụng |
+| 404 | `SEARCH_ACCOUNT_NOT_FOUND` | Không tìm thấy tài khoản |
 
-Issue #124 chưa tính lượt miễn phí hay trừ Credit. Issue #125 sẽ thêm hạn mức, hoàn lượt khi AI lỗi và kết quả tìm thường khi lỗi. FE trang trợ lý sẽ nối API ở issue #130; file service `aiApi.ts` được tạo tại đây để bàn giao contract.
+Lỗi Gemini, phản hồi sai schema, thiếu key và quá thời gian `ai_search_timeout_seconds` được xử lý bằng kết quả tìm thường `200` có `fallback: true`.
+
+## Hạn mức và phí — issue #125
+
+`GET /api/v1/ai/quota` cần JWT, không tiêu lượt. Response:
+
+```json
+{ "freeUsesRemaining": 5, "feeCredits": 2, "hasToppedUp": true }
+```
+
+Tài khoản đã từng nạp thành công có 5 lượt miễn phí mỗi ngày theo ngày của máy chủ. Tài khoản chưa nạp có 1 lượt dùng thử duy nhất. Mức lượt và phí lấy từ cấu hình `ai_free_per_day`, `ai_trial_uses`, `ai_search_fee`. Khi hết lượt miễn phí, mỗi lần tìm bằng AI trừ phí qua CreditService; nếu Credit khả dụng không đủ, API trả `402 WALLET_INSUFFICIENT_BALANCE` và không gọi Gemini. Mỗi request đổi trang cũng là một lượt gọi AI mới.
+
+`chargedCredits` là phí của lần gọi thành công này, bằng 0 khi dùng lượt miễn phí. Nếu Gemini lỗi, trả JSON sai hoặc quá thời gian chờ, backend hoàn lượt hoặc hoàn đúng khoản Credit đã trừ, tìm thường bằng chính câu nhập, trả `fallback: true`, `chargedCredits: 0` và quota sau khi hoàn. Khi chưa cấu hình `AI_API_KEY`, API cũng tìm thường và không trừ lượt. Tìm thường chỉ so khớp từ khoá với bài đã duyệt; nó không hiểu category, địa bàn hoặc ý định như Gemini. Có thể nhận kết quả rỗng dù AI sẽ hiểu câu nhập tốt hơn.
+
+FE trang trợ lý sẽ nối API ở issue #130. `frontend/src/services/aiApi.ts` đã có phương thức `search`; Miều cập nhật type theo các trường bổ sung và gọi endpoint quota để hiển thị lượt/phí trước khi bấm.

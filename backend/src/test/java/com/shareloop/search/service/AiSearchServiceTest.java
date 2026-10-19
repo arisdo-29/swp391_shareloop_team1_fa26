@@ -3,7 +3,6 @@ package com.shareloop.search.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -24,11 +23,14 @@ import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.search.SearchErrorCode;
+import com.shareloop.search.dto.AiQuotaResponse;
 import com.shareloop.search.dto.AiSearchResponse;
+import com.shareloop.search.service.AiQuotaService.Reservation;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,6 +57,9 @@ class AiSearchServiceTest {
     ConfigService configService;
 
     @Mock
+    AiQuotaService quotaService;
+
+    @Mock
     ActivityLogService activityLogService;
 
     private AiSearchService service;
@@ -67,6 +72,7 @@ class AiSearchServiceTest {
                 areaService,
                 itemService,
                 configService,
+                quotaService,
                 activityLogService,
                 new JsonMapper());
     }
@@ -88,32 +94,37 @@ class AiSearchServiceTest {
         assertThat(result.filters().categoryId()).isEqualTo(1L);
         assertThat(result.filters().areaId()).isEqualTo(11L);
         assertThat(result.results()).isSameAs(page);
+        assertThat(result.fallback()).isFalse();
+        assertThat(result.quota().freeUsesRemaining()).isEqualTo(4);
         verify(activityLogService).log(eq("AiUsage"), eq(7L), eq("AI_SEARCH"), eq(null), anyMap(), eq(null));
     }
 
     @Test
-    void unknownDistrictIsRejectedBeforeDatabaseQuery() throws Exception {
+    void unknownDistrictFallsBackAndRefundsBeforeDatabaseQuery() throws Exception {
         ready();
         when(aiClient.extract(any(), any(), any())).thenReturn(new AiResponse("gemini-test", """
                 {"keywords":"sách","categoryId":1,"areaId":10,"condition":null,"offerType":null}
                 """));
-        assertError(SearchErrorCode.SEARCH_AI_INVALID_RESPONSE);
-        verify(itemService, never()).searchApprovedForAi(any(), any(), any(), any(), any(), anyInt(), anyInt());
+        AiSearchResponse result = service.search(7L, "Tìm sách cũ ở quận 1", 0, 20);
+        assertThat(result.fallback()).isTrue();
+        verify(quotaService).refund(eq(7L), any());
+        verify(itemService).searchApprovedForAi(null, null, "Tìm sách cũ ở quận 1", null, null, 0, 20);
     }
 
     @Test
-    void timeoutIsLoggedAndReportedWithoutSearchingItems() throws Exception {
+    void timeoutRefundsAndFallsBack() throws Exception {
         ready();
         when(aiClient.model()).thenReturn("gemini-test");
         when(aiClient.extract(any(), any(), any())).thenThrow(new HttpTimeoutException("timed out"));
-        assertError(SearchErrorCode.SEARCH_AI_TIMEOUT);
-        verify(itemService, never()).searchApprovedForAi(any(), any(), any(), any(), any(), anyInt(), anyInt());
+        assertThat(service.search(7L, "Tìm sách cũ ở quận 1", 0, 20).fallback()).isTrue();
+        verify(quotaService).refund(eq(7L), any());
     }
 
     @Test
-    void missingApiKeyStopsBeforeAiCall() throws Exception {
-        assertError(SearchErrorCode.SEARCH_AI_UNAVAILABLE);
+    void missingApiKeyFallsBackWithoutReserving() throws Exception {
+        assertThat(service.search(7L, "Tìm sách cũ ở quận 1", 0, 20).fallback()).isTrue();
         verify(aiClient, never()).extract(any(), any(), any());
+        verify(quotaService, never()).reserve(any(Long.class));
     }
 
     @Test
@@ -136,6 +147,8 @@ class AiSearchServiceTest {
                         (short) 1,
                         List.of(new AreaResponse(11L, "Quận 1", 10L, (short) 2, List.of())))));
         when(configService.getInt(ConfigKey.AI_SEARCH_TIMEOUT_SECONDS)).thenReturn(15);
+        when(quotaService.reserve(7L)).thenReturn(new Reservation(LocalDate.of(2026, 10, 19), true, null));
+        when(quotaService.getQuota(7L)).thenReturn(new AiQuotaResponse(4, 2, true));
     }
 
     private void assertError(SearchErrorCode expected) {
