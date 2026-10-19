@@ -1,8 +1,12 @@
 package com.shareloop.review.entity;
 
 import com.shareloop.common.entity.SliceAudit;
+import com.shareloop.common.exception.BusinessException;
+import com.shareloop.review.ReviewErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -39,10 +43,44 @@ public class ReviewItem extends SliceAudit {
     @Column(name = "rejected_at")
     private Instant rejectedAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "auth_status", length = 10, nullable = false)
+    private AuthenticityStatus authStatus = AuthenticityStatus.NONE;
+
     protected ReviewItem() {}
+
+    public ReviewItem(Long id, AuthenticityStatus authStatus) {
+        this.id = id;
+        this.authStatus = authStatus != null ? authStatus : AuthenticityStatus.NONE;
+    }
 
     public Long getId() {
         return id;
+    }
+
+    public AuthenticityStatus getAuthStatus() {
+        return authStatus;
+    }
+
+    public void grantAuthenticity() {
+        if (this.authStatus != AuthenticityStatus.PENDING) {
+            throw new BusinessException(ReviewErrorCode.AUTHENTICITY_INVALID_STATUS);
+        }
+        this.authStatus = AuthenticityStatus.VERIFIED;
+    }
+
+    public void rejectAuthenticity() {
+        if (this.authStatus != AuthenticityStatus.PENDING) {
+            throw new BusinessException(ReviewErrorCode.AUTHENTICITY_INVALID_STATUS);
+        }
+        this.authStatus = AuthenticityStatus.REJECTED;
+    }
+
+    public void revokeAuthenticity() {
+        if (this.authStatus != AuthenticityStatus.VERIFIED) {
+            throw new BusinessException(ReviewErrorCode.AUTHENTICITY_NOT_VERIFIED);
+        }
+        this.authStatus = AuthenticityStatus.REVOKED;
     }
 
     public void approve(Map<String, Object> snapshot, Instant approvedAt, Long approvedBy) {

@@ -78,7 +78,10 @@ public class AdminActivityLogController {
                                                 "CATEGORY_ATTRIBUTE_TOGGLE",
                                                 "AREA_CREATE",
                                                 "AREA_UPDATE",
-                                                "AREA_TOGGLE"
+                                                "AREA_TOGGLE",
+                                                "AUTH_GRANT",
+                                                "AUTH_REJECT",
+                                                "AUTH_REVOKE"
                                             }))
                     @RequestParam(required = false)
                     String type,

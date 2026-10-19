@@ -30,7 +30,10 @@ public enum ActivityType {
     CATEGORY_ATTRIBUTE_TOGGLE("Bật/tắt thuộc tính danh mục"),
     AREA_CREATE("Thêm khu vực"),
     AREA_UPDATE("Sửa khu vực"),
-    AREA_TOGGLE("Bật/tắt khu vực");
+    AREA_TOGGLE("Bật/tắt khu vực"),
+    AUTH_GRANT("Cấp nhãn chính hãng"),
+    AUTH_REJECT("Từ chối nhãn chính hãng"),
+    AUTH_REVOKE("Thu hồi nhãn chính hãng");
 
     private final String label;
 

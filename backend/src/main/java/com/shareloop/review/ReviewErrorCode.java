@@ -8,7 +8,12 @@ public enum ReviewErrorCode implements ErrorCode {
     REVIEW_REJECT_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "Lý do từ chối là bắt buộc."),
     REVIEW_CHECKLIST_NOT_CONFIGURED(HttpStatus.CONFLICT, "Checklist duyệt bài chưa được cấu hình."),
     REVIEW_CHECKLIST_INCOMPLETE(HttpStatus.BAD_REQUEST, "Cần trả lời đạt tất cả mục checklist để duyệt bài."),
-    REVIEW_CHECKLIST_OUTDATED(HttpStatus.CONFLICT, "Checklist vừa được cập nhật, vui lòng tải lại trang.");
+    REVIEW_CHECKLIST_OUTDATED(HttpStatus.CONFLICT, "Checklist vừa được cập nhật, vui lòng tải lại trang."),
+    AUTHENTICITY_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy bài đăng cần xét duyệt chứng từ."),
+    AUTHENTICITY_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "Lý do là bắt buộc."),
+    AUTHENTICITY_INVALID_STATUS(
+            HttpStatus.CONFLICT, "Chỉ có thể cấp hoặc từ chối nhãn cho bài đang chờ xét duyệt chứng từ."),
+    AUTHENTICITY_NOT_VERIFIED(HttpStatus.CONFLICT, "Chỉ có thể thu hồi nhãn chính hãng đang được cấp.");
 
     private final HttpStatus status;
     private final String defaultMessage;
