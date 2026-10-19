@@ -86,6 +86,34 @@ class ItemEditIT extends IntegrationTest {
     }
 
     @Test
+    void updateItem_whenGiveChangedToSwap_throwsOfferTypeChangeNotAllowed() throws Exception {
+        // given: bài Cho tặng đã duyệt; bản sửa đổi sang Trao đổi (có desiredItem hợp lệ)
+        long ownerId = user("item-edit-owner8@shareloop.local", "0900000761");
+        long itemId = approvedItem(ownerId);
+        String swapBody = body("Tên mới", "Mô tả mới")
+                .replace("\"offerType\":\"GIVE\"", "\"offerType\":\"SWAP\",\"desiredItem\":\"Sách khác\"");
+
+        // when
+        mvc.perform(put("/api/v1/items/{id}", itemId)
+                        .header("Authorization", "Bearer " + jwtService.issue(ownerId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(swapBody))
+                // then: bị chặn trước khi giữ phí sửa, bài và ví giữ nguyên
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED"));
+        assertThat(jdbc.sql("SELECT offer_type FROM items WHERE id = :id")
+                        .param("id", itemId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("GIVE");
+        assertThat(jdbc.sql("SELECT held_credit FROM users WHERE id = :id")
+                        .param("id", ownerId)
+                        .query(Integer.class)
+                        .single())
+                .isZero();
+    }
+
+    @Test
     void otherUserCannotEdit() throws Exception {
         long ownerId = user("item-edit-owner2@shareloop.local", "0900000752");
         long otherId = user("item-edit-other@shareloop.local", "0900000753");

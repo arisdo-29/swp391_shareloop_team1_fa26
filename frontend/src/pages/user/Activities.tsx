@@ -1013,10 +1013,13 @@ function EditItemForm({
         void submit();
       }}
     >
-      <Select label="Hình thức" value={offerType} disabled={formDisabled} onChange={(event) => setOfferType(event.target.value as OfferType)}>
-        <option value="GIVE">Cho tặng</option>
-        <option value="SWAP">Trao đổi</option>
-      </Select>
+      <div>
+        <Select label="Hình thức" value={offerType} disabled={formDisabled} onChange={(event) => setOfferType(event.target.value as OfferType)}>
+          <option value="GIVE">Cho tặng</option>
+          <option value="SWAP" disabled={item.offerType === 'GIVE'}>Trao đổi</option>
+        </Select>
+        {item.offerType === 'GIVE' ? <p className="mt-1 text-xs text-text-muted">Muốn trao đổi thì đăng bài mới.</p> : null}
+      </div>
       {offerType === 'SWAP' ? (
         <Field label="Món muốn đổi" value={desiredItem} disabled={formDisabled} error={errors.desiredItem} onChange={(event) => setDesiredItem(event.target.value)} />
       ) : null}

@@ -311,7 +311,7 @@ Request Một yêu cầu xin đồ hoặc đề nghị trao đổi gửi tới m
 bản ghi này.
 Credit Đơn vị tiêu dùng nội bộ, 1.000 VNĐ = 1 Credit, số nguyên. Chỉ có từ nạp tiền, nhả Hold
 hoặc điều chỉnh của Admin.
-Phí đăng bài (PostFee) [v10] 5 Credit thu khi một bài (Cho hoặc Trao đổi) được duyệt lần đầu.
+Phí đăng bài (PostFee) [v10] 5 Credit thu khi một bài Trao đổi được duyệt lần đầu. Bài Cho miễn phí đăng.
 Hold Credit bị khoá tạm, chưa trừ thật. Trong v10 chỉ phát sinh khi một bài có phí đang chờ
 duyệt.
 Đẩy bài (Boost) [v10] Trả Credit để bài được xếp đầu kết quả trong một số ngày.
@@ -542,7 +542,7 @@ duyệt
 Đẩy bài [v10] 5 Credit / 3 ngày — đã  Người  Ngay khi bấm Chỉ bài Approved còn hạn.
 |                        | chốt (C15) | đăng |     | Cộng dồn tối đa 14 ngày. |
 | ---------------------- | ---------- | ---- | --- | ------------------------ |
-| Chuyển Cho → Trao đổi  | 0          | —    | —   | Bài đã trả phí đăng bài. |
+| Chuyển Cho → Trao đổi  | Không cho phép, đăng bài mới | —    | —   | Bài Cho miễn phí đăng; đổi sang Trao đổi sẽ né phí đăng bài. |
 [v10]
 | Tìm kiếm & lọc thủ công | 0   | —   | —   | Không giới hạn. |
 | ----------------------- | --- | --- | --- | --------------- |
@@ -1292,7 +1292,8 @@ Trang 49 / 83
 SRS ShareLoop — phiên bản v10
 Mã Yêu cầu chức năng Ai thực hiện Ưu tiên Use case Business
 Rule
-FR-32 Giữ (Hold) 5 Credit phí đăng bài khi gửi duyệt Hệ thống Must UC-13 BR-P03
+FR-32 Giữ (Hold) 5 Credit phí đăng bài khi gửi duyệt bài Trao đổi; bài Cho Hệ thống Must UC-13 BR-P03
+miễn phí đăng (không Hold Credit)
 FR-33 Khi bài được duyệt lần đầu, chuyển Hold thành trừ thật Hệ thống Must UC-13, 40 BR-P03
 (POST_FEE); phí đăng bài chỉ trừ một lần trong đời bài
 FR-34 Nhả Hold khi bài bị từ chối hoặc người đăng rút bài Hệ thống Must UC-13, 40 BR-P03

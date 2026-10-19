@@ -1,6 +1,7 @@
 package com.shareloop.listingfee.service;
 
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.item.entity.OfferType;
 import com.shareloop.listingfee.ListingFeeErrorCode;
 import com.shareloop.listingfee.dto.EditQuote;
 import com.shareloop.listingfee.entity.ItemFee;
@@ -28,8 +29,12 @@ import org.springframework.transaction.annotation.Transactional;
  * post_display_days_gold), không viết cứng; hạng của chủ bài đọc qua ReputationService.getRank. Lần duyệt đầu (khoản giữ loại POST) cũng đặt expire_at qua ItemFee, vì cột này thuộc nhóm cột của
  * listingfee (Lộ trình 4.8).
  *
- * <p>Mọi bài đang chờ duyệt đều ở fee_state = HELD, kể cả khi phí bằng 0 (lượt sửa miễn phí, hoặc Admin cấu hình
- * phí 0): khi đó pending_fee = 0 và không đụng tới ví. Nhờ vậy ReviewService luôn gọi được chargeHeldFee /
+ * <p>Phí đăng (post_fee) chỉ áp dụng cho bài Trao đổi (SWAP); bài Cho tặng (GIVE) miễn phí đăng, kể cả khi gửi lại
+ * bài bị từ chối. Phí sửa bài sau duyệt (edit_fee) áp dụng cho cả hai loại. ItemService chặn đổi GIVE sang SWAP để
+ * không né được phí đăng.
+ *
+ * <p>Mọi bài đang chờ duyệt đều ở fee_state = HELD, kể cả khi phí bằng 0 (bài GIVE, lượt sửa miễn phí, hoặc Admin
+ * cấu hình phí 0): khi đó pending_fee = 0 và không đụng tới ví. Nhờ vậy ReviewService luôn gọi được chargeHeldFee /
  * releaseHeldFee, và lúc duyệt biết được bài vừa duyệt là bản sửa (pending_fee_type = EDIT).
  *
  * <p>Sau CHARGED hoặc RELEASED, pending_fee và pending_fee_type được giữ nguyên, không reset về 0 / NULL: CHECK của
@@ -66,8 +71,8 @@ public class PostFeeService {
      * Báo trước lượt sửa tới là miễn phí hay có phí (F07 bước 2; GET /items/{id}/edit-quote).
      *
      * <p>Quy tắc (C14, C14b, BR-D07, R36), xét theo thứ tự: chưa từng duyệt (approved_at null) và đang giữ phí đăng
-     * thì miễn phí (NOT_YET_APPROVED); chưa từng duyệt và phí đăng đã nhả thì giữ lại phí đăng post_fee
-     * (REPOST_FEE); đã duyệt và đang có bản sửa chờ duyệt thì sửa đè miễn phí (PENDING_REVIEW_OVERWRITE); đã duyệt và
+     * thì miễn phí (NOT_YET_APPROVED); chưa từng duyệt và phí đăng đã nhả thì giữ lại phí đăng (REPOST_FEE): post_fee
+     * với bài SWAP, 0 với bài GIVE; đã duyệt và đang có bản sửa chờ duyệt thì sửa đè miễn phí (PENDING_REVIEW_OVERWRITE); đã duyệt và
      * free_edit_used = false thì miễn phí một lần (FIRST_FREE_EDIT); còn lại có phí edit_fee (PAID_EDIT).
      *
      * <p>Transaction: read-only, không khoá dòng nào; không đổi dữ liệu.
@@ -87,9 +92,10 @@ public class PostFeeService {
     /**
      * Giữ phí đăng khi tạo bài (C01, C02, F05 bước 3).
      *
-     * <p>Quy tắc: số phí = ConfigKey post_fee. Phí lớn hơn 0 thì gọi
-     * {@code CreditService.hold(userId, fee, POST_FEE, itemId)}; phí bằng 0 (Admin cấu hình miễn phí) thì không đụng
-     * ví. Sau đó ghi fee_state = HELD, pending_fee = fee, pending_fee_type = POST.
+     * <p>Quy tắc: bài SWAP có số phí = ConfigKey post_fee; bài GIVE miễn phí (số phí = 0). Phí lớn hơn 0 thì gọi
+     * {@code CreditService.hold(userId, fee, POST_FEE, itemId)}; phí bằng 0 (bài GIVE, hoặc Admin cấu hình miễn phí)
+     * thì không đụng ví. Sau đó luôn ghi fee_state = HELD, pending_fee = fee, pending_fee_type = POST, kể cả bài GIVE,
+     * để lúc duyệt chargeHeldFee chạy được và đặt expire_at.
      *
      * <p>Transaction: REQUIRED, tham gia transaction tạo bài của ItemService. Khoá: dòng users (trong CreditService),
      * rồi dòng items của itemId; thứ tự này cố định để tránh deadlock.
@@ -107,7 +113,7 @@ public class PostFeeService {
             throw new BusinessException(ListingFeeErrorCode.LISTINGFEE_ALREADY_HELD);
         }
 
-        int fee = configService.getInt(ConfigKey.POST_FEE);
+        int fee = postFeeFor(snapshot.getOfferType());
         holdOnWallet(userId, fee, ItemFeeType.POST, itemId);
 
         // Khoá items sau users. markHeld tự kiểm lại "đang HELD" trên dữ liệu vừa khoá; ném lỗi thì hoàn tác cả hold.
@@ -235,7 +241,7 @@ public class PostFeeService {
             return freeQuote(EditQuote.Reason.NOT_YET_APPROVED);
         }
         if (!snapshot.getEverApproved()) {
-            return paidQuote(configService.getInt(ConfigKey.POST_FEE), EditQuote.Reason.REPOST_FEE);
+            return paidQuote(postFeeFor(snapshot.getOfferType()), EditQuote.Reason.REPOST_FEE);
         }
         if (feeHeld) {
             return freeQuote(EditQuote.Reason.PENDING_REVIEW_OVERWRITE);
@@ -244,6 +250,14 @@ public class PostFeeService {
             return freeQuote(EditQuote.Reason.FIRST_FREE_EDIT);
         }
         return paidQuote(configService.getInt(ConfigKey.EDIT_FEE), EditQuote.Reason.PAID_EDIT);
+    }
+
+    // Chỉ bài Trao đổi mất phí đăng; bài Cho tặng miễn phí để khuyến khích cho đồ (kể cả tài khoản 0 Credit).
+    private int postFeeFor(OfferType offerType) {
+        if (offerType == OfferType.GIVE) {
+            return 0;
+        }
+        return configService.getInt(ConfigKey.POST_FEE);
     }
 
     private EditQuote freeQuote(EditQuote.Reason reason) {

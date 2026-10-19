@@ -148,6 +148,24 @@ class PostFeeServiceIT extends IntegrationTest {
         assertThat(fee.get("pending_fee_type")).isEqualTo("POST");
     }
 
+    @Test
+    void holdPostFee_whenGiveItemAndZeroBalance_marksHeldWithZeroWithoutTouchingWallet() {
+        // given: bài Cho tặng miễn phí đăng; ví không có Credit nào
+        long ownerId = insertUser(0, 0);
+        long itemId = insertItem(ownerId, "GIVE");
+
+        // when
+        postFeeService.holdPostFee(itemId, ownerId);
+
+        // then: vẫn HELD loại POST để lúc duyệt chargeHeldFee chạy được, nhưng ví không đổi
+        assertThat(heldOf(ownerId)).isZero();
+        assertThat(balanceOf(ownerId)).isZero();
+        Map<String, Object> fee = feeColumnsOf(itemId);
+        assertThat(fee.get("fee_state")).isEqualTo("HELD");
+        assertThat(fee.get("pending_fee")).isEqualTo(0);
+        assertThat(fee.get("pending_fee_type")).isEqualTo("POST");
+    }
+
     // ---------- chargeHeldFee / releaseHeldFee ----------
 
     @Test
@@ -245,6 +263,19 @@ class PostFeeServiceIT extends IntegrationTest {
 
         // then
         assertThat(quote).isEqualTo(new EditQuote(false, POST_FEE, EditQuote.Reason.REPOST_FEE));
+    }
+
+    @Test
+    void quoteEdit_whenGiveItemRejectedBeforeFirstApproval_returnsFreeRepostFee() {
+        // given: bài Cho tặng bị từ chối ở lần duyệt đầu (phí đăng đã giữ là 0)
+        long ownerId = insertUser(0, 0);
+        long itemId = insertRejectedItem(ownerId, "GIVE", 0);
+
+        // when
+        EditQuote quote = postFeeService.quoteEdit(itemId, ownerId);
+
+        // then: gửi lại bài GIVE vẫn miễn phí, giữ lý do REPOST_FEE
+        assertThat(quote).isEqualTo(new EditQuote(true, 0, EditQuote.Reason.REPOST_FEE));
     }
 
     @Test
@@ -664,15 +695,27 @@ class PostFeeServiceIT extends IntegrationTest {
         return userId;
     }
 
-    // Bài mới tạo: các cột phí lấy mặc định của DB (fee_state = NONE, pending_fee = 0).
+    // Bài Trao đổi mới tạo (loại bài mất phí đăng): các cột phí lấy mặc định của DB (fee_state = NONE, pending_fee =
+    // 0).
     private long insertItem(long donorId) {
+        return insertItem(donorId, "SWAP");
+    }
+
+    // desired_item bắt buộc với SWAP (ck_items_swap_desired), để null với GIVE.
+    private long insertItem(long donorId, String offerType) {
         return jdbc.queryForObject(
-                "INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, condition)"
-                        + " VALUES (?, ?, ?, 'GIVE', 'ListingFee IT item', 'Mô tả', 'NEW') RETURNING id",
+                "INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, desired_item,"
+                        + " condition) VALUES (?, ?, ?, ?, 'ListingFee IT item', 'Mô tả', ?, 'NEW') RETURNING id",
                 Long.class,
                 donorId,
                 seedCategoryId(),
-                seedAreaId());
+                seedAreaId(),
+                offerType,
+                desiredItemFor(offerType));
+    }
+
+    private String desiredItemFor(String offerType) {
+        return "SWAP".equals(offerType) ? "Món muốn đổi" : null;
     }
 
     // Bài đang giữ phí đăng sẵn; ví của chủ bài phải được tạo với held_credit tương ứng.
@@ -705,18 +748,25 @@ class PostFeeServiceIT extends IntegrationTest {
                 freeEditUsed);
     }
 
-    // Bài bị từ chối ngay ở lần duyệt đầu: chưa từng duyệt (approved_at null), phí đăng đã nhả.
+    // Bài Trao đổi bị từ chối ngay ở lần duyệt đầu: chưa từng duyệt (approved_at null), phí đăng đã nhả.
     private long insertRejectedItem(long donorId) {
+        return insertRejectedItem(donorId, "SWAP", POST_FEE);
+    }
+
+    // releasedFee: số phí đăng đã giữ rồi nhả lúc bị từ chối (bài GIVE là 0).
+    private long insertRejectedItem(long donorId, String offerType, int releasedFee) {
         return jdbc.queryForObject(
-                "INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, condition,"
-                        + " status, fee_state, pending_fee, pending_fee_type)"
-                        + " VALUES (?, ?, ?, 'GIVE', 'ListingFee IT item', 'Mô tả', 'NEW',"
+                "INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, desired_item,"
+                        + " condition, status, fee_state, pending_fee, pending_fee_type)"
+                        + " VALUES (?, ?, ?, ?, 'ListingFee IT item', 'Mô tả', ?, 'NEW',"
                         + " 'REJECTED', 'RELEASED', ?, 'POST') RETURNING id",
                 Long.class,
                 donorId,
                 seedCategoryId(),
                 seedAreaId(),
-                POST_FEE);
+                offerType,
+                desiredItemFor(offerType),
+                releasedFee);
     }
 
     // Mượn danh mục và khu vực có sẵn từ seed (không tạo thêm, không xoá) để thoả khoá ngoại của items.
