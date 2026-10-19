@@ -6,7 +6,7 @@ Tất cả các endpoint trong module này yêu cầu quyền **ADMIN** (Bearer 
 
 ## 1. GET /api/v1/admin/reviews/pending
 
-Lấy trang bài đăng đang chờ duyệt (`PENDING_REVIEW`) kèm danh sách câu hỏi `checklist` kiểm duyệt hiện hành.
+Lấy trang bài đăng đang chờ duyệt (`PENDING_REVIEW`) kèm danh sách điều kiện đạt `checklist` hiện hành, chỉ gồm mục active theo `sort_order`, rồi `id`.
 
 ### Thứ tự ưu tiên sắp xếp:
 1. Bài có cờ kiểm duyệt `moderationFlag = 'REVIEW'` đứng trước bài không có cờ.
@@ -30,14 +30,16 @@ Lấy trang bài đăng đang chờ duyệt (`PENDING_REVIEW`) kèm danh sách c
       "title": "Áo khoác gió nam",
       "aiRisk": "LOW",
       "moderationFlag": "REVIEW",
-      "flagReason": "Có thể có thông tin liên hệ",
+      "flagReasonCode": "LEXICON_REVIEW",
+      "flagReason": "Có từ khoá cần xem xét: zalo",
+      "matchedTerms": ["zalo"],
       "donorTrustStars": 3,
       "createdAt": "2026-10-14T10:00:00Z"
     }
   ],
   "checklist": [
-    "Ảnh là ảnh thật của đúng món đồ?",
-    "Món đồ không thuộc danh mục hàng cấm hoặc vi phạm chính sách?"
+    {"id": 11, "key": "real_photos", "statement": "Ảnh là ảnh thật của đúng món đồ, đủ số lượng, không lấy trên mạng."},
+    {"id": 12, "key": "category_match", "statement": "Danh mục đúng với món đồ."}
   ],
   "page": 0,
   "size": 20
@@ -54,7 +56,7 @@ Lấy trang bài đăng đang chờ duyệt (`PENDING_REVIEW`) kèm danh sách c
 
 ## 2. POST /api/v1/admin/reviews/{itemId}/approve
 
-Duyệt bài đăng đang chờ kiểm duyệt. Admin bắt buộc phải trả lời đủ tất cả các câu hỏi trong `checklist` (lấy từ endpoint pending) và tất cả câu trả lời phải là `true` (đạt).
+Duyệt bài đăng đang chờ kiểm duyệt. Gửi đáp án theo `id` của từng điều kiện trong `checklist`, không ghép theo vị trí. Phải đủ ID đang active, không trùng và tất cả `passed = true` (đạt).
 
 ### Path Parameters
 - `itemId`: ID bài đăng cần duyệt.
@@ -62,7 +64,7 @@ Duyệt bài đăng đang chờ kiểm duyệt. Admin bắt buộc phải trả 
 ### Request Body (`ApproveReviewRequest`)
 ```json
 {
-  "answers": [true, true]
+  "answers": [{"id": 11, "passed": true}, {"id": 12, "passed": true}]
 }
 ```
 
@@ -76,8 +78,10 @@ Duyệt bài đăng đang chờ kiểm duyệt. Admin bắt buộc phải trả 
 | Mã HTTP | Mã lỗi / Chi tiết | Ý nghĩa |
 |---------|-------------------|---------|
 | 204 | - | Duyệt thành công (No Content) |
-| 400 | `VALIDATION_FAILED` | Danh sách `answers` rỗng hoặc chứa giá trị null |
-| 400 | `REVIEW_CHECKLIST_INCOMPLETE` | Trả lời thiếu số lượng câu checklist hoặc có câu trả lời là `false` |
+| 400 | `VALIDATION_FAILED` | Danh sách `answers` rỗng, phần tử null hoặc thiếu `id`/`passed` |
+| 400 | `REVIEW_CHECKLIST_INCOMPLETE` | Thiếu ID đang active, trùng ID hoặc có `passed = false` |
+| 409 | `REVIEW_CHECKLIST_OUTDATED` | Có ID không thuộc checklist đang active; tải lại trang |
+| 409 | `REVIEW_CHECKLIST_NOT_CONFIGURED` | Chưa có mục checklist đang active |
 | 401 | `UNAUTHORIZED` | Chưa đăng nhập |
 | 403 | `FORBIDDEN` | Không có quyền Admin |
 | 404 | `REVIEW_ITEM_NOT_FOUND` / `LISTINGFEE_ITEM_NOT_FOUND` | Không tìm thấy bài đăng |
@@ -85,6 +89,19 @@ Duyệt bài đăng đang chờ kiểm duyệt. Admin bắt buộc phải trả 
 | 409 | `LISTINGFEE_NOTHING_HELD` | Không tìm thấy khoản phí đang giữ để trừ |
 
 ---
+
+Snapshot và log `REVIEW_APPROVE` lưu `{"checks":[{"id":11,"key":"real_photos","statement":"Ảnh là ảnh thật của đúng món đồ, đủ số lượng, không lấy trên mạng.","passed":true}]}` theo thứ tự cấu hình. Snapshot cũ được chuyển từ câu seed có `key`, `statement`, `passed`, không bổ sung `id` hồi tố.
+
+`flagReasonCode` giữ mã gốc hoặc lý do tự do; `flagReason` là câu tiếng Việt, nối từ khớp khi mã là `LEXICON_REVIEW`. `matchedTerms` là mảng chuỗi, rỗng nếu dữ liệu cũ không có. Các trường này cũng áp dụng endpoint tương thích cũ.
+
+Khi duyệt lưu `approved_by`; khi từ chối lưu `rejected_by`, `rejected_at`. Các cột này thuộc module review, độc lập với JPA Auditing.
+
+FE cần cập nhật `frontend/src/services/adminModerationApi.ts` và `frontend/src/pages/admin/AdminPages.tsx`:
+
+- Đổi `checklist: string[]` sang `{id: number, key: string, statement: string}[]`; hiển thị `statement`.
+- Gửi `answers: {id: number, passed: boolean}[]`, dùng ID của mục tương ứng; không gửi mảng boolean.
+- Thêm `flagReasonCode`, `matchedTerms`; hiển thị trực tiếp `flagReason` tiếng Việt.
+- Khi nhận `409 REVIEW_CHECKLIST_OUTDATED`, tải lại checklist và yêu cầu tích lại trước khi duyệt.
 
 ## 3. POST /api/v1/admin/reviews/{itemId}/reject
 
@@ -155,7 +172,9 @@ Endpoint kế thừa dùng để lấy danh sách bài đăng chờ duyệt mà 
     "title": "Áo khoác gió nam",
     "aiRisk": "LOW",
     "moderationFlag": "REVIEW",
-    "flagReason": "Có thể có thông tin liên hệ",
+    "flagReasonCode": "LEXICON_REVIEW",
+    "flagReason": "Có từ khoá cần xem xét: zalo",
+    "matchedTerms": ["zalo"],
     "donorTrustStars": 3,
     "createdAt": "2026-10-14T10:00:00Z"
   }

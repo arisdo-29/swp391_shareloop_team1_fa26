@@ -19,6 +19,7 @@ import com.shareloop.listingfee.service.ListingFeeQueryService;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.media.MediaErrorCode;
 import com.shareloop.media.service.MediaService;
+import com.shareloop.moderation.ModerationResult;
 import com.shareloop.moderation.ModerationStatus;
 import com.shareloop.moderation.event.ItemScreeningRequestedEvent;
 import com.shareloop.moderation.service.ContentModerationService;
@@ -42,6 +43,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Service quản lý bài đăng: tạo mới, xem chi tiết, xem danh sách bài của tôi.
@@ -60,6 +62,7 @@ public class ItemService {
     private final CategoryAttributeService categoryAttributeService;
     private final ReputationService reputationService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ObjectMapper objectMapper;
 
     public ItemService(
             ItemRepository itemRepository,
@@ -72,7 +75,8 @@ public class ItemService {
             ListingFeeQueryService listingFeeQueryService,
             CategoryAttributeService categoryAttributeService,
             ReputationService reputationService,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            ObjectMapper objectMapper) {
         this.itemRepository = itemRepository;
         this.jdbcClient = jdbcClient;
         this.mediaService = mediaService;
@@ -84,6 +88,7 @@ public class ItemService {
         this.categoryAttributeService = categoryAttributeService;
         this.reputationService = reputationService;
         this.eventPublisher = eventPublisher;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -152,12 +157,7 @@ public class ItemService {
         saveMediaMappings(saved.getId(), defectMediaIds, "DEFECT");
         operatingAttributeId.ifPresent(id -> saveOperatingStatus(saved.getId(), id, request.operatingStatus()));
         if (moderation.status() == ModerationStatus.REVIEW) {
-            jdbcClient
-                    .sql("UPDATE items SET ai_result = jsonb_build_object('flag', 'REVIEW', 'reason', :reason) "
-                            + "WHERE id = :itemId")
-                    .param("reason", moderation.reasonCode())
-                    .param("itemId", saved.getId())
-                    .update();
+            saveReviewFlag(saved.getId(), moderation);
         }
         eventPublisher.publishEvent(ItemScreeningRequestedEvent.from(saved));
         return ItemMapper.toResponse(
@@ -245,12 +245,7 @@ public class ItemService {
                 .param("itemId", itemId)
                 .update();
         if (moderation.status() == ModerationStatus.REVIEW) {
-            jdbcClient
-                    .sql("UPDATE items SET ai_result = jsonb_build_object('flag', 'REVIEW', 'reason', :reason) "
-                            + "WHERE id = :itemId")
-                    .param("reason", moderation.reasonCode())
-                    .param("itemId", itemId)
-                    .update();
+            saveReviewFlag(itemId, moderation);
         }
         eventPublisher.publishEvent(ItemScreeningRequestedEvent.from(item));
         return toResponse(item, findDisplayWindow(itemId));
@@ -572,6 +567,17 @@ public class ItemService {
 
     private List<String> mediaUrls(List<Long> mediaIds) {
         return mediaIds.stream().map(id -> "/api/v1/media/" + id).toList();
+    }
+
+    // Lưu cả từ khoá đã khớp để Admin ở hàng chờ duyệt thấy ngay vì sao bài bị gắn cờ.
+    private void saveReviewFlag(long itemId, ModerationResult moderation) {
+        jdbcClient
+                .sql("UPDATE items SET ai_result = jsonb_build_object('flag', 'REVIEW', 'reason', :reason, "
+                        + "'matchedTerms', CAST(:matchedTerms AS jsonb)) WHERE id = :itemId")
+                .param("reason", moderation.reasonCode())
+                .param("matchedTerms", objectMapper.writeValueAsString(moderation.matchedTerms()))
+                .param("itemId", itemId)
+                .update();
     }
 
     private void saveMediaMappings(Long itemId, List<Long> mediaIds, String role) {

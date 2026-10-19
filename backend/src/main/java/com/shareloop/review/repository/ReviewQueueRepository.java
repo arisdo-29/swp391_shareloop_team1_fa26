@@ -15,7 +15,8 @@ public interface ReviewQueueRepository extends Repository<com.shareloop.item.ent
                    COALESCE(i.ai_result ->> 'flag', i.ai_result ->> 'moderation', 'NONE') AS moderationFlag,
                    COALESCE(i.ai_result ->> 'reason', i.ai_result ->> 'moderationReason') AS flagReason,
                    u.trust_stars AS donorTrustStars,
-                   i.created_at AS createdAt
+                   i.created_at AS createdAt,
+                   CAST(i.ai_result -> 'matchedTerms' AS TEXT) AS matchedTerms
             FROM items i
             JOIN users u ON u.id = i.donor_id
             WHERE i.status = 'PENDING_REVIEW'

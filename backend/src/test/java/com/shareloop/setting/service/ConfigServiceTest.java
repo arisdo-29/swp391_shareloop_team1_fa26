@@ -181,7 +181,26 @@ class ConfigServiceTest {
         when(repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc("CHECKLIST"))
                 .thenReturn(List.of());
 
-        assertThat(service.checklist()).isEmpty();
+        assertThat(service.checklistItems()).isEmpty();
+    }
+
+    @Test
+    void checklistItemsIncludeIdsKeysAndStatementsInRepositoryOrder() {
+        var first = mock(WebsiteAttribute.class);
+        when(first.getId()).thenReturn(12L);
+        when(first.getAttrKey()).thenReturn("photos");
+        when(first.getAttrValue()).thenReturn("Ảnh đúng món");
+        var second = mock(WebsiteAttribute.class);
+        when(second.getId()).thenReturn(11L);
+        when(second.getAttrKey()).thenReturn("category");
+        when(second.getAttrValue()).thenReturn("Danh mục đúng");
+        when(repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc("CHECKLIST"))
+                .thenReturn(List.of(first, second));
+
+        assertThat(service.checklistItems())
+                .containsExactly(
+                        new com.shareloop.setting.dto.ChecklistItem(12L, "photos", "Ảnh đúng món"),
+                        new com.shareloop.setting.dto.ChecklistItem(11L, "category", "Danh mục đúng"));
     }
 
     @Test

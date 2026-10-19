@@ -833,7 +833,10 @@ approved_edit_count SMALLINT NN Số lần sửa sau duyệt đã được duy�
 | ai_result | JSONB       |        | JSON cờ AI + model + thời điểm  |
 review_snapshot JSONB Bộ câu hỏi + câu trả lời checklist lần duyệt
 gần nhất
-| approved_at | TIMESTAMPTZ |     |     |
+| approved_at | TIMESTAMPTZ | | Thời điểm duyệt gần nhất |
+| approved_by | BIGINT | | ID Admin duyệt gần nhất, module review sở hữu |
+| rejected_by | BIGINT | | ID Admin từ chối gần nhất, module review sở hữu |
+| rejected_at | TIMESTAMPTZ | | Thời điểm từ chối gần nhất |
 | ----------- | ----------- | --- | --- |
 Trang 40 / 55
 

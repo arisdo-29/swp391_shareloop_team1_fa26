@@ -135,6 +135,11 @@ class ItemCreateIT extends IntegrationTest {
                         .query(String.class)
                         .single())
                 .isEqualTo("LEXICON_REVIEW");
+        assertThat(jdbc.sql("SELECT ai_result -> 'matchedTerms' ->> 0 FROM items WHERE id = :id")
+                        .param("id", itemId(owner))
+                        .query(String.class)
+                        .single())
+                .isEqualTo("zalo");
     }
 
     @Test
