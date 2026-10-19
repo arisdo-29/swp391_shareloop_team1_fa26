@@ -11,7 +11,6 @@ export const apiUserId = (id: number) => `api_${id}`;
 
 export function toFeUser(user: AuthUserResponse | MeResponse, district = ''): User {
   const profile = user as MeResponse;
-  const avatarUrl = resolveMediaUrl(profile.avatarUrl);
   return {
     id: apiUserId(user.id),
     username: user.email,
@@ -20,16 +19,14 @@ export function toFeUser(user: AuthUserResponse | MeResponse, district = ''): Us
     email: user.email,
     phone: profile.phone ?? '',
     district,
-    areaId: profile.areaId ?? null,
     avatarInitials: user.fullName.split(' ').map((p) => p[0]).slice(-2).join('').toUpperCase(),
-    avatarUrl: avatarUrl || undefined,
-    avatarMediaId: profile.avatarMediaId ?? null,
+    avatarUrl: resolveMediaUrl(profile.avatarUrl) || undefined,
     totalCredit: 0,
     availableCredit: 0,
     holdCredit: 0,
     rewardPoints: 0,
     reputationStars: 5,
-    rank: user.isAdmin ? 'Quản trị hệ thống' : 'Chưa có dữ liệu',
+    rank: 'Thành viên mới',
     status: 'active',
     role: user.isAdmin ? 'admin' : 'user',
     joinedAt: new Date().toISOString(),
@@ -119,15 +116,14 @@ export function toFeItem(
     description: item.description,
     type: item.offerType === 'GIVE' ? 'gift' : 'trade',
     category: categoryNames.get(item.categoryId) ?? '',
+    categoryId: item.categoryId,
     condition: CONDITION_TO_FE[item.condition],
     district: areaNames.get(item.areaId) ?? '',
     images: Array.isArray(item.images) ? item.images.map(resolveMediaUrl).filter(Boolean) : [],
     tradeFor: item.desiredItem ?? undefined,
     brand: item.brand ?? undefined,
     defectNote: item.defectNote ?? undefined,
-    defectImages: Array.isArray(item.defectImages)
-      ? item.defectImages.map(resolveMediaUrl).filter(Boolean)
-      : [],
+    defectImages: item.defectImages.map(resolveMediaUrl).filter(Boolean),
     operatingStatus: item.operatingStatus ?? undefined,
     status: STATUS_TO_FE[item.status],
     postedAt: item.createdAt,

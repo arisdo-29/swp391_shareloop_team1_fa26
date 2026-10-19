@@ -1,0 +1,27 @@
+@host = http://localhost:8080
+# Người sở hữu: BE2 @Nguyentri2531
+# Trước khi chạy: chép một ảnh .png thật vào thư mục backend/http/ và đặt tên sample.png
+# (backend kiểm tra loại ảnh bằng nội dung tệp, đổi đuôi tệp khác thành .png sẽ bị từ chối).
+
+### Đăng nhập (tài khoản seed dev), lưu token cho request tải ảnh
+# @name login
+POST {{host}}/api/v1/auth/login
+Content-Type: application/json
+
+{ "email": "an@shareloop.local", "password": "Dev@12345" }
+
+### Tải ảnh lên (201, trả mediaId và url)
+# @name upload
+POST {{host}}/api/v1/media
+Authorization: Bearer {{login.response.body.accessToken}}
+Content-Type: multipart/form-data; boundary=ShareLoopBoundary
+
+--ShareLoopBoundary
+Content-Disposition: form-data; name="file"; filename="sample.png"
+Content-Type: image/png
+
+< ./sample.png
+--ShareLoopBoundary--
+
+### Xem ảnh vừa tải (200, không cần đăng nhập)
+GET {{host}}{{upload.response.body.url}}

@@ -59,7 +59,6 @@ export interface ApiError {
 export const http = axios.create({
   baseURL: API_BASE_URL,
   timeout: 70_000, // Render free ngủ sau 15 phút, lần gọi đầu có thể mất khoảng 1 phút
-  headers: { 'Content-Type': 'application/json' },
 });
 
 http.interceptors.request.use((config) => {

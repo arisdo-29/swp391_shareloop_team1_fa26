@@ -1,6 +1,6 @@
 import { http } from './http';
 
-export type TargetType = 'ITEM' | 'USER' | 'REQUEST';
+export type ReportTargetType = 'ITEM' | 'USER' | 'REQUEST';
 
 export type ReportReason =
   | 'NOT_AS_DESCRIBED'
@@ -11,31 +11,29 @@ export type ReportReason =
   | 'HARASSMENT'
   | 'OTHER';
 
-export type ReportStage = 'BEFORE' | 'AFTER';
+export type ReportTarget =
+  | { targetType: 'ITEM'; itemId: number; targetId?: never }
+  | { targetType: 'ITEM'; targetId: number; itemId?: never }
+  | { targetType: 'USER'; targetUserId: number; targetId?: never; requestId?: number }
+  | { targetType: 'USER'; targetId: number; targetUserId?: never; requestId?: number }
+  | { targetType: 'REQUEST'; requestId: number };
 
-export type ReportStatus = 'OPEN' | 'AWAITING_RESPONSE' | 'RESOLVED' | 'DISMISSED';
-
-export interface CreateReportRequest {
-  targetType: TargetType;
-  targetId?: number;
-  itemId?: number;
-  targetUserId?: number;
-  requestId?: number;
+export type CreateReportRequest = ReportTarget & {
   reason: ReportReason;
   description: string;
-}
+};
 
 export interface ReportResponse {
   id: number;
   reporterId: number;
-  targetType: TargetType;
+  targetType: ReportTargetType;
   itemId: number | null;
   targetUserId: number | null;
   requestId: number | null;
   reason: ReportReason;
   description: string;
-  stage: ReportStage;
-  status: ReportStatus;
+  stage: 'BEFORE' | 'AFTER';
+  status: 'OPEN' | 'AWAITING_RESPONSE' | 'RESOLVED' | 'DISMISSED';
   createdAt: string;
 }
 
@@ -64,11 +62,10 @@ export function respondDispute(disputeId: number, body: DisputeResponseRequest):
 }
 
 export const reportApi = {
-  async createReport(data: CreateReportRequest): Promise<ReportResponse> {
-    const response = await http.post<ReportResponse>('/api/v1/reports', data);
-    return response.data;
+  async create(input: CreateReportRequest): Promise<ReportResponse> {
+    const { data } = await http.post<ReportResponse>('/api/v1/reports', input);
+    return data;
   },
   openDispute,
   respondDispute,
 };
-

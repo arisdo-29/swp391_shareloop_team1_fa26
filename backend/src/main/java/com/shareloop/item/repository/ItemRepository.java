@@ -50,4 +50,31 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             @Param("areaId") Long areaId,
             @Param("q") String q,
             Pageable pageable);
+
+    @Query(
+            value = "SELECT i.* FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
+                    + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
+                    + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
+                    + "AND (CAST(:offerType AS varchar) IS NULL OR i.offer_type = :offerType) "
+                    + "AND f_unaccent(lower(i.title || ' ' || i.description)) LIKE "
+                    + "'%' || replace(replace(replace(f_unaccent(lower(:q)), '!', '!!'), '%', '!%'), '_', '!_') "
+                    + "|| '%' ESCAPE '!' ORDER BY i.created_at DESC, i.id DESC",
+            countQuery =
+                    "SELECT count(*) FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                            + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
+                            + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
+                            + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
+                            + "AND (CAST(:offerType AS varchar) IS NULL OR i.offer_type = :offerType) "
+                            + "AND f_unaccent(lower(i.title || ' ' || i.description)) LIKE "
+                            + "'%' || replace(replace(replace(f_unaccent(lower(:q)), '!', '!!'), '%', '!%'), '_', '!_') "
+                            + "|| '%' ESCAPE '!'",
+            nativeQuery = true)
+    Page<Item> searchApprovedForAi(
+            @Param("categoryId") Long categoryId,
+            @Param("areaId") Long areaId,
+            @Param("condition") String condition,
+            @Param("offerType") String offerType,
+            @Param("q") String q,
+            Pageable pageable);
 }

@@ -17,6 +17,7 @@
 		<java.version>21</java.version>
 		<springdoc.version>3.1.1</springdoc.version>
 		<spotless.version>3.10.3</spotless.version>
+		<awssdk.version>2.31.0</awssdk.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -70,6 +71,18 @@
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>${springdoc.version}</version>
 		</dependency>
+		<!-- module media (BE2): lưu ảnh lên storage tương thích S3 (Cloudflare R2, MinIO) -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<exclusions>
+				<!-- chỉ dùng client đồng bộ; bỏ Netty để tiết kiệm RAM trên Render (512 MB) -->
+				<exclusion>
+					<groupId>software.amazon.awssdk</groupId>
+					<artifactId>netty-nio-client</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -107,6 +120,19 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
+
+	<dependencyManagement>
+		<dependencies>
+			<!-- BOM của AWS SDK v2: mọi module awssdk dùng cùng một phiên bản -->
+			<dependency>
+				<groupId>software.amazon.awssdk</groupId>
+				<artifactId>bom</artifactId>
+				<version>${awssdk.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 
 	<build>
 		<plugins>

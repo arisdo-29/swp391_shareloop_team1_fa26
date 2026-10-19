@@ -35,6 +35,7 @@ class RequestJobServiceIT extends IntegrationTest {
     @AfterEach
     void cleanUp() {
         for (Long requestId : createdRequestIds) {
+            jdbc.update("DELETE FROM activity_logs WHERE target_type = 'REQUEST' AND target_id = ?", requestId);
             jdbc.update("DELETE FROM requests WHERE id = ?", requestId);
         }
         createdRequestIds.clear();
@@ -45,6 +46,7 @@ class RequestJobServiceIT extends IntegrationTest {
         createdItemIds.clear();
 
         for (Long userId : createdUserIds) {
+            jdbc.update("DELETE FROM activity_logs WHERE actor_id = ?", userId);
             jdbc.update("DELETE FROM notifications WHERE user_id = ?", userId);
             jdbc.update("DELETE FROM users WHERE id = ?", userId);
         }
@@ -120,6 +122,12 @@ class RequestJobServiceIT extends IntegrationTest {
         assertThat(requestStatusOf(requestId)).isEqualTo("COMPLETED");
         assertThat(isAutoConfirmed(requestId)).isTrue();
         assertThat(itemStatusOf(itemId)).isEqualTo("TRADED");
+
+        Integer logCount = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM activity_logs WHERE target_type = 'REQUEST' AND target_id = ? AND type = 'POINTS'",
+                Integer.class,
+                requestId);
+        assertThat(logCount).isGreaterThanOrEqualTo(1);
     }
 
     // ---------- Tiện ích hỗ trợ test ----------

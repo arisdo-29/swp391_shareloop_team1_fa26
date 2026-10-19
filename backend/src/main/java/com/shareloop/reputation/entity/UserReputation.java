@@ -69,4 +69,31 @@ public class UserReputation extends SliceAudit {
     public boolean isGraceStarUsed() {
         return graceStarUsed;
     }
+
+    public void addPoints(int points, Rank newRank) {
+        this.totalPoints += points;
+        this.rankLevel = newRank;
+    }
+
+    public int deductStars(int amount) {
+        int before = this.trustStars;
+        this.trustStars = (short) Math.max(0, this.trustStars - amount);
+        return before;
+    }
+
+    public void setTrustStars(short trustStars) {
+        this.trustStars = (short) Math.max(0, Math.min(5, (int) trustStars));
+    }
+
+    public void setTotalPoints(int totalPoints) {
+        this.totalPoints = Math.max(0, totalPoints);
+    }
+
+    public void setRankLevel(Rank rankLevel) {
+        this.rankLevel = rankLevel;
+    }
+
+    public void setCleanStreak(int cleanStreak) {
+        this.cleanStreak = Math.max(0, cleanStreak);
+    }
 }
