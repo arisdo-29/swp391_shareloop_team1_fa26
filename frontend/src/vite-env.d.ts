@@ -5,4 +5,5 @@ interface ImportMetaEnv {
   readonly VITE_DEMO_PAYMENT?: string;
   readonly VITE_POST_SKIP_MEDIA_UPLOAD?: string;
   readonly VITE_ENABLE_MOCK_TOPUP?: string;
+  readonly VITE_ENABLE_PAYMENT_MOCK?: string;
 }

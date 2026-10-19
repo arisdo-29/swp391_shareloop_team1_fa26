@@ -967,7 +967,6 @@ export const initialData: AppStateData = {
   keywords: seedKeywords,
   districts: seedDistricts,
   complaints: seedComplaints,
-  aiUsage: [],
   ranks: seedRanks,
   pointRules: seedPointRules,
   pointHistory: seedPointHistory,

@@ -1,5 +1,7 @@
 package com.shareloop.setting.service;
 
+import com.shareloop.audit.ActivityType;
+import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.SettingErrorCode;
 import com.shareloop.setting.dto.AdminLexiconEntry;
@@ -9,6 +11,7 @@ import com.shareloop.setting.repository.WebsiteAttributeRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
@@ -27,10 +30,14 @@ public class AdminLexiconService {
     private static final List<String> MATCH_MODES = List.of("WORD", "PHRASE", "REGEX");
     private static final List<String> SCOPES = List.of("POST", "CHAT", "MESSAGE", "BOTH");
 
-    private final WebsiteAttributeRepository repository;
+    private static final String LOG_TARGET_TYPE = "LEXICON";
 
-    public AdminLexiconService(WebsiteAttributeRepository repository) {
+    private final WebsiteAttributeRepository repository;
+    private final ActivityLogService activityLogService;
+
+    public AdminLexiconService(WebsiteAttributeRepository repository, ActivityLogService activityLogService) {
         this.repository = repository;
+        this.activityLogService = activityLogService;
     }
 
     public List<AdminLexiconEntry> listAll() {
@@ -39,8 +46,13 @@ public class AdminLexiconService {
                 .toList();
     }
 
+    /**
+     * Thêm từ khoá cấm vào cuối danh sách và ghi nhật ký LEXICON_CREATE (FR-115).
+     *
+     * @throws BusinessException SETTING_LEXICON_INVALID_VALUE, SETTING_LEXICON_DUPLICATE
+     */
     @Transactional
-    public AdminLexiconEntry create(AdminLexiconRequest request) {
+    public AdminLexiconEntry create(AdminLexiconRequest request, Long adminId) {
         NormalizedRule rule = normalizeAndValidate(request);
         ensureUnique(rule, null);
         int sortOrder = repository.findByAttrGroupOrderBySortOrderAscIdAsc(ATTR_GROUP).stream()
@@ -50,20 +62,33 @@ public class AdminLexiconService {
                 + 10;
         WebsiteAttribute saved = saveUnique(
                 new WebsiteAttribute(ATTR_GROUP, uniqueAttrKey(rule), rule.keyword(), toExtra(rule), sortOrder));
+        logAction(ActivityType.LEXICON_CREATE, adminId, saved);
         return toResponse(saved);
     }
 
+    /**
+     * Sửa từ khoá cấm và ghi nhật ký LEXICON_UPDATE (FR-115).
+     *
+     * @throws BusinessException SETTING_LEXICON_NOT_FOUND, SETTING_LEXICON_INVALID_VALUE, SETTING_LEXICON_DUPLICATE
+     */
     @Transactional
-    public AdminLexiconEntry update(long id, AdminLexiconRequest request) {
+    public AdminLexiconEntry update(long id, AdminLexiconRequest request, Long adminId) {
         WebsiteAttribute attribute = requireEntry(id);
         NormalizedRule rule = normalizeAndValidate(request);
         ensureUnique(rule, id);
         attribute.updateLexicon(uniqueAttrKey(rule), rule.keyword(), toExtra(rule));
-        return toResponse(saveUnique(attribute));
+        WebsiteAttribute saved = saveUnique(attribute);
+        logAction(ActivityType.LEXICON_UPDATE, adminId, saved);
+        return toResponse(saved);
     }
 
+    /**
+     * Bật/tắt từ khoá cấm (không xoá cứng) và ghi nhật ký LEXICON_TOGGLE (FR-115).
+     *
+     * @throws BusinessException SETTING_LEXICON_NOT_FOUND, SETTING_LEXICON_DUPLICATE khi bật lại bị trùng
+     */
     @Transactional
-    public AdminLexiconEntry setActive(long id, boolean active) {
+    public AdminLexiconEntry setActive(long id, boolean active, Long adminId) {
         WebsiteAttribute attribute = requireEntry(id);
         if (active) {
             NormalizedRule currentRule = toRule(attribute);
@@ -72,7 +97,18 @@ public class AdminLexiconService {
         } else {
             attribute.deactivate();
         }
-        return toResponse(repository.saveAndFlush(attribute));
+        WebsiteAttribute saved = repository.saveAndFlush(attribute);
+        logAction(ActivityType.LEXICON_TOGGLE, adminId, saved);
+        return toResponse(saved);
+    }
+
+    private void logAction(ActivityType type, Long adminId, WebsiteAttribute attribute) {
+        NormalizedRule rule = toRule(attribute);
+        Map<String, Object> data = new HashMap<>();
+        data.put("term", rule.keyword());
+        data.put("severity", rule.level());
+        data.put("active", attribute.isActive());
+        activityLogService.log(type.name(), adminId, LOG_TARGET_TYPE, attribute.getId(), data, null);
     }
 
     private WebsiteAttribute requireEntry(long id) {

@@ -97,7 +97,7 @@ class ItemScreeningIT extends IntegrationTest {
         assertThat(value("ai_result ->> 'flag'")).isEqualTo("REVIEW");
         assertThat(value("ai_result ->> 'reason'")).isEqualTo("Có thông tin liên hệ");
         assertThat(value("ai_result ->> 'model'")).isEqualTo("gemini-3.5-flash-lite");
-        assertThat(jdbc.sql("SELECT count(*) FROM activity_logs WHERE type = 'AiUsage' AND target_id = :itemId")
+        assertThat(jdbc.sql("SELECT count(*) FROM activity_logs WHERE type = 'AI_USAGE' AND target_id = :itemId")
                         .param("itemId", itemId)
                         .query(Integer.class)
                         .single())
@@ -119,7 +119,7 @@ class ItemScreeningIT extends IntegrationTest {
         assertThat(value("ai_risk")).isEqualTo("UNCHECKED");
         assertThat(value("status")).isEqualTo("PENDING_REVIEW");
         verify(aiClient, times(2)).screen(any(), any());
-        assertThat(jdbc.sql("SELECT count(*) FROM activity_logs WHERE type = 'AiUsage' AND target_id = :itemId")
+        assertThat(jdbc.sql("SELECT count(*) FROM activity_logs WHERE type = 'AI_USAGE' AND target_id = :itemId")
                         .param("itemId", itemId)
                         .query(Integer.class)
                         .single())

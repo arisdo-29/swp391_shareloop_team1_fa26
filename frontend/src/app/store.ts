@@ -1,7 +1,5 @@
 import { configureStore, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import {
-  AI_ASSISTANT_SEARCH_FEE,
-  AI_SWAP_MATCHING_FEE,
   TOPUP_MIN_VND,
   CREDIT_TO_VND,
   assertWalletInvariant,
@@ -28,6 +26,7 @@ import { canTransition, transitionTransaction } from '../utils/transaction';
 import { applyReputationPointEvent, rankFor } from '../utils/reputation';
 import { inspectContactMessage, contactSafetyLayer1 } from '../utils/contactSafety';
 import { isPasswordHash } from '../utils/passwordSecurity';
+import { toBackendUserId } from '../services/requestApi';
 
 const initialState: AppStateData = loadPersistedState();
 let idSequence = 0;
@@ -38,6 +37,42 @@ const activeActor = (state: AppStateData, actorId: string) =>
 const activeAdmin = (state: AppStateData, adminId: string) =>
   activeActor(state, adminId) &&
   state.users.some((user) => user.id === adminId && user.role === 'admin');
+const completePendingTopup = (state: AppStateData, topupId: string, description: string) => {
+  const topup = state.topups.find((entry) => entry.id === topupId);
+  const user = state.users.find((entry) => entry.id === topup?.userId);
+  if (
+    !topup ||
+    !user ||
+    topup.status !== 'pending' ||
+    !Number.isSafeInteger(topup.vnd) ||
+    topup.vnd <= 0 ||
+    topup.vnd < TOPUP_MIN_VND ||
+    topup.vnd % CREDIT_TO_VND !== 0 ||
+    topup.amount !== topup.vnd / CREDIT_TO_VND ||
+    !Number.isSafeInteger(user.totalCredit + topup.amount) ||
+    !Number.isSafeInteger(user.availableCredit + topup.amount) ||
+    state.creditHistory.some((entry) => entry.ref === topup.id)
+  )
+    return null;
+  topup.status = 'completed';
+  topup.confirmedAt = new Date().toISOString();
+  user.totalCredit += topup.amount;
+  user.availableCredit += topup.amount;
+  state.creditHistory.unshift({
+    id: uniqueId('ch'),
+    userId: user.id,
+    transactionId: topup.id,
+    type: 'TOPUP',
+    amount: topup.amount,
+    balance: user.availableCredit,
+    description,
+    status: 'completed',
+    ref: topup.id,
+    note: description,
+    createdAt: new Date().toISOString(),
+  });
+  return { topup, user };
+};
 const participant = (state: AppStateData, tx: Transaction, actorId: string) =>
   activeActor(state, actorId) && (tx.ownerId === actorId || tx.requesterId === actorId);
 const recalculateUserRanks = (state: AppStateData) => {
@@ -106,13 +141,6 @@ const openTransactionConversation = (
     time: 'Bây giờ',
   });
   return conv;
-};
-
-const mondayKey = (date = new Date()) => {
-  const copy = new Date(date);
-  const day = copy.getDay() || 7;
-  copy.setDate(copy.getDate() - day + 1);
-  return copy.toISOString().slice(0, 10);
 };
 
 const dataSlice = createSlice({
@@ -1285,12 +1313,13 @@ const dataSlice = createSlice({
       state,
       action: PayloadAction<{ userId: string; vnd: number; id?: string; code?: string }>,
     ) {
+      if (!import.meta.env.DEV || toBackendUserId(action.payload.userId) !== null) return;
       const user = state.users.find((entry) => entry.id === action.payload.userId);
       if (!user || !activeActor(state, action.payload.userId)) return;
       if (
         !Number.isSafeInteger(action.payload.vnd) ||
         action.payload.vnd < TOPUP_MIN_VND ||
-        action.payload.vnd % 1000 !== 0
+        action.payload.vnd % CREDIT_TO_VND !== 0
       )
         return;
       const id = action.payload.id ?? uniqueId('top');
@@ -1308,97 +1337,36 @@ const dataSlice = createSlice({
         userId: user.id,
         amount: action.payload.vnd / CREDIT_TO_VND,
         vnd: action.payload.vnd,
-        method: 'QR Banking',
+        method: 'Thanh toán thử',
         status: 'pending',
         createdAt: new Date().toISOString(),
       });
     },
-    confirmTopup(state, action: PayloadAction<{ topupId: string; adminId: string }>) {
-      const topup = state.topups.find((entry) => entry.id === action.payload.topupId);
-      const user = state.users.find((entry) => entry.id === topup?.userId);
+    confirmDemoTopup(state, action: PayloadAction<{ topupId: string; userId: string }>) {
       if (
-        !topup ||
-        !user ||
-        !activeAdmin(state, action.payload.adminId) ||
-        topup.status !== 'pending' ||
-        !Number.isSafeInteger(topup.vnd) ||
-        topup.vnd <= 0 ||
-        topup.vnd < TOPUP_MIN_VND ||
-        topup.vnd % 1000 !== 0 ||
-        topup.amount !== topup.vnd / CREDIT_TO_VND ||
-        !Number.isSafeInteger(user.totalCredit + topup.amount) ||
-        !Number.isSafeInteger(user.availableCredit + topup.amount) ||
-        state.creditHistory.some((entry) => entry.ref === topup.id)
+        !import.meta.env.DEV ||
+        toBackendUserId(action.payload.userId) !== null ||
+        !activeActor(state, action.payload.userId)
       )
         return;
-      topup.status = 'completed';
-      topup.confirmedAt = new Date().toISOString();
-      user.totalCredit += topup.amount;
-      user.availableCredit += topup.amount;
-      state.creditHistory.unshift({
-        id: uniqueId('ch'),
-        userId: user.id,
-        transactionId: topup.id,
-        type: 'TOPUP',
-        amount: topup.amount,
-        balance: user.availableCredit,
-        description: 'Nạp Credit qua QR',
-        status: 'completed',
-        ref: topup.id,
-        note: 'Nạp Credit qua QR',
-        createdAt: new Date().toISOString(),
-      });
+      const topup = state.topups.find((entry) => entry.id === action.payload.topupId);
+      if (!topup || topup.userId !== action.payload.userId || topup.method !== 'Thanh toán thử') return;
+      completePendingTopup(state, topup.id, 'Nạp Credit thử');
+    },
+    confirmTopup(state, action: PayloadAction<{ topupId: string; adminId: string }>) {
+      const topup = state.topups.find((entry) => entry.id === action.payload.topupId);
+      if (!import.meta.env.DEV || !topup || !activeAdmin(state, action.payload.adminId)) return;
+      const completed = completePendingTopup(state, topup.id, 'Nạp Credit qua QR');
+      if (!completed) return;
       state.auditLogs.unshift({
         id: uniqueId('log'),
         adminId: action.payload.adminId,
         action: 'confirm_topup',
         targetType: 'user',
-        targetId: user.id,
-        detail: `Xác nhận nạp ${topup.amount} Credit`,
+        targetId: completed.user.id,
+        detail: `Xác nhận nạp ${completed.topup.amount} Credit`,
         createdAt: new Date().toISOString(),
       });
-    },
-    useAiFeature(
-      state,
-      action: PayloadAction<{ userId: string; feature: 'SWAP_MATCHING' | 'ASSISTANT_SEARCH' }>,
-    ) {
-      if (!activeActor(state, action.payload.userId)) return;
-      const periodKey =
-        action.payload.feature === 'SWAP_MATCHING'
-          ? `week:${mondayKey()}`
-          : `day:${new Date().toISOString().slice(0, 10)}`;
-      let counter = state.aiUsage.find(
-        (entry) =>
-          entry.userId === action.payload.userId &&
-          entry.feature === action.payload.feature &&
-          entry.periodKey === periodKey,
-      );
-      if (!counter) {
-        counter = {
-          id: uniqueId('aiu'),
-          userId: action.payload.userId,
-          feature: action.payload.feature,
-          periodKey,
-          count: 0,
-        };
-        state.aiUsage.push(counter);
-      }
-      const fee =
-        action.payload.feature === 'SWAP_MATCHING'
-          ? AI_SWAP_MATCHING_FEE
-          : AI_ASSISTANT_SEARCH_FEE;
-      const paid = spendAvailableCredit(state, {
-        userId: action.payload.userId,
-        amount: fee,
-        type: 'AI_SPEND',
-        ref: `ai:${action.payload.feature}:${action.payload.userId}:${Date.now()}`,
-        description:
-          action.payload.feature === 'SWAP_MATCHING'
-            ? 'Phí AI gợi ý ghép đôi Swap'
-            : 'Phí AI trợ lý tìm đồ',
-      });
-      if (!paid) return;
-      counter.count += 1;
     },
     adminAdjustCredit(
       state,

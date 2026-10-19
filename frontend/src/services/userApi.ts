@@ -19,6 +19,21 @@ export interface UpdateProfileRequest {
   avatarMediaId: number | null;
 }
 
+export interface SendChangePhoneOtpRequest {
+  newPhone: string;
+}
+
+export interface ChangePhoneOtpResponse {
+  email: string;
+  otpExpiresInSeconds: number;
+  resendCooldownSeconds: number;
+}
+
+export interface ChangePhoneRequest {
+  newPhone: string;
+  otp: string;
+}
+
 export const userApi = {
   async getMe() {
     const { data } = await http.get<MeResponse>('/api/v1/me');
@@ -26,6 +41,14 @@ export const userApi = {
   },
   async updateMe(input: UpdateProfileRequest) {
     const { data } = await http.put<MeResponse>('/api/v1/me', input);
+    return data;
+  },
+  async sendChangePhoneOtp(input: SendChangePhoneOtpRequest) {
+    const { data } = await http.post<ChangePhoneOtpResponse>('/api/v1/me/phone/otp', input);
+    return data;
+  },
+  async changePhone(input: ChangePhoneRequest) {
+    const { data } = await http.put<MeResponse>('/api/v1/me/phone', input);
     return data;
   },
 };

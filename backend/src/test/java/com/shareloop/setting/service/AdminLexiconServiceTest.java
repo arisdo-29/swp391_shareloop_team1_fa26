@@ -2,9 +2,15 @@ package com.shareloop.setting.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.audit.ActivityType;
+import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.SettingErrorCode;
 import com.shareloop.setting.dto.AdminLexiconRequest;
@@ -18,8 +24,11 @@ import org.mockito.ArgumentCaptor;
 
 class AdminLexiconServiceTest {
 
+    private static final Long ADMIN_ID = 1L;
+
     private final WebsiteAttributeRepository repository = mock(WebsiteAttributeRepository.class);
-    private final AdminLexiconService service = new AdminLexiconService(repository);
+    private final ActivityLogService activityLogService = mock(ActivityLogService.class);
+    private final AdminLexiconService service = new AdminLexiconService(repository, activityLogService);
 
     @Test
     void createStoresKeywordAndMetadataAndUsesCategoryScopeKey() {
@@ -28,7 +37,7 @@ class AdminLexiconServiceTest {
         when(repository.saveAndFlush(org.mockito.ArgumentMatchers.any(WebsiteAttribute.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        var result = service.create(request("  dao  ", "weapons", "block", "post"));
+        var result = service.create(request("  dao  ", "weapons", "block", "post"), ADMIN_ID);
 
         ArgumentCaptor<WebsiteAttribute> saved = ArgumentCaptor.forClass(WebsiteAttribute.class);
         org.mockito.Mockito.verify(repository).saveAndFlush(saved.capture());
@@ -50,7 +59,7 @@ class AdminLexiconServiceTest {
         when(repository.findByAttrGroupOrderBySortOrderAscIdAsc("BANNED_KEYWORD"))
                 .thenReturn(List.of());
 
-        assertThatThrownBy(() -> service.create(request("dao", "WEAPONS", "ALLOW", "POST")))
+        assertThatThrownBy(() -> service.create(request("dao", "WEAPONS", "ALLOW", "POST"), ADMIN_ID))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("level chỉ nhận BLOCK hoặc REVIEW.")
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
@@ -63,7 +72,7 @@ class AdminLexiconServiceTest {
         when(repository.findByAttrGroupOrderBySortOrderAscIdAsc("BANNED_KEYWORD"))
                 .thenReturn(List.of(existing));
 
-        assertThatThrownBy(() -> service.create(request(" DAO găm ", "weapons", "BLOCK", "post")))
+        assertThatThrownBy(() -> service.create(request(" DAO găm ", "weapons", "BLOCK", "post"), ADMIN_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(SettingErrorCode.SETTING_LEXICON_DUPLICATE);
@@ -77,7 +86,7 @@ class AdminLexiconServiceTest {
         when(repository.saveAndFlush(org.mockito.ArgumentMatchers.any(WebsiteAttribute.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        var result = service.create(request("dao", "WEAPONS", "REVIEW", "CHAT"));
+        var result = service.create(request("dao", "WEAPONS", "REVIEW", "CHAT"), ADMIN_ID);
 
         assertThat(result.scope()).isEqualTo("CHAT");
     }
@@ -86,11 +95,11 @@ class AdminLexiconServiceTest {
     void updateAndToggleReturnNotFoundForOtherIds() {
         when(repository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(99L, request("dao", "WEAPONS", "BLOCK", "POST")))
+        assertThatThrownBy(() -> service.update(99L, request("dao", "WEAPONS", "BLOCK", "POST"), ADMIN_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(SettingErrorCode.SETTING_LEXICON_NOT_FOUND);
-        assertThatThrownBy(() -> service.setActive(99L, false))
+        assertThatThrownBy(() -> service.setActive(99L, false, ADMIN_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(SettingErrorCode.SETTING_LEXICON_NOT_FOUND);
@@ -105,6 +114,33 @@ class AdminLexiconServiceTest {
 
         assertThat(service.listAll()).extracting(entry -> entry.keyword()).containsExactly("dao", "zalo");
         assertThat(service.listAll()).extracting(entry -> entry.active()).containsExactly(true, false);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void create_whenValid_logsLexiconCreateWithTermAndSeverity() {
+        // given
+        when(repository.findByAttrGroupOrderBySortOrderAscIdAsc("BANNED_KEYWORD"))
+                .thenReturn(List.of());
+        when(repository.saveAndFlush(any(WebsiteAttribute.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        service.create(request("dao", "WEAPONS", "BLOCK", "POST"), ADMIN_ID);
+
+        // then
+        ArgumentCaptor<Map<String, Object>> data = ArgumentCaptor.forClass(Map.class);
+        verify(activityLogService)
+                .log(
+                        eq(ActivityType.LEXICON_CREATE.name()),
+                        eq(ADMIN_ID),
+                        eq("LEXICON"),
+                        any(),
+                        data.capture(),
+                        isNull());
+        assertThat(data.getValue())
+                .containsEntry("term", "dao")
+                .containsEntry("severity", "BLOCK")
+                .containsEntry("active", true);
     }
 
     private static AdminLexiconRequest request(String keyword, String group, String level, String scope) {

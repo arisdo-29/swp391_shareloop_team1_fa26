@@ -74,6 +74,8 @@ class RequestLifecycleIT extends IntegrationTest {
 
         for (Long userId : createdUserIds) {
             jdbc.update("DELETE FROM notifications WHERE user_id = ?", userId);
+            // Hoàn tất giao dịch ghi activity_logs (POINTS) với actor_id = user, phải xoá trước vì có khoá ngoại
+            jdbc.update("DELETE FROM activity_logs WHERE actor_id = ?", userId);
             jdbc.update("DELETE FROM users WHERE id = ?", userId);
         }
         createdUserIds.clear();

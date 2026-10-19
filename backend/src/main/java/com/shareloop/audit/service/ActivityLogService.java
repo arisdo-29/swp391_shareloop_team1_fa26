@@ -9,6 +9,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Chỉ ghi nhật ký. Phần đọc nằm ở ActivityLogQueryService để class này không phụ thuộc UserService: nhiều service
+ * (ConfigService, ...) inject class này, nếu nó lại cần UserService thì sẽ thành vòng phụ thuộc bean.
+ */
 @Service
 public class ActivityLogService {
 
@@ -53,64 +57,5 @@ public class ActivityLogService {
     public void log(
             Long actorId, String type, String targetType, Long targetId, Map<String, Object> data, String reason) {
         log(type, actorId, targetType, targetId, data, reason);
-    }
-
-    /**
-     * Tìm kiếm và phân trang nhật ký hành động của Admin (FR-115, Issue #117).
-     */
-    @Transactional(readOnly = true)
-    public org.springframework.data.domain.Page<com.shareloop.audit.dto.ActivityLogDto> search(
-            Long actorId, String type, java.time.LocalDate from, java.time.LocalDate to, int page, int size) {
-        if (from != null && to != null && from.isAfter(to)) {
-            throw new com.shareloop.common.exception.BusinessException(
-                    com.shareloop.audit.AuditErrorCode.INVALID_DATE_RANGE);
-        }
-
-        java.time.ZoneId zone = java.time.ZoneId.of("Asia/Ho_Chi_Minh");
-        org.springframework.data.jpa.domain.Specification<ActivityLog> spec = (root, query, cb) -> cb.conjunction();
-
-        if (actorId != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("actorId"), actorId));
-        }
-        if (type != null && !type.isBlank()) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("type"), type.trim()));
-        }
-        if (from != null) {
-            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(
-                    root.get("createdAt"), from.atStartOfDay(zone).toInstant()));
-        }
-        if (to != null) {
-            spec = spec.and((root, query, cb) -> cb.lessThan(
-                    root.get("createdAt"), to.plusDays(1).atStartOfDay(zone).toInstant()));
-        }
-
-        int pageNumber = Math.max(page, 0);
-        int pageSize = Math.min(Math.max(size, 1), 100);
-        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
-                pageNumber,
-                pageSize,
-                org.springframework.data.domain.Sort.by(
-                        org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
-
-        return repository.findAll(spec, pageable).map(this::toDto);
-    }
-
-    private com.shareloop.audit.dto.ActivityLogDto toDto(ActivityLog entity) {
-        String detail = entity.getReason();
-        if ((detail == null || detail.isBlank())
-                && entity.getData() != null
-                && !entity.getData().isEmpty()) {
-            detail = entity.getData().toString();
-        }
-        return new com.shareloop.audit.dto.ActivityLogDto(
-                entity.getId(),
-                entity.getActorId(),
-                entity.getType(),
-                entity.getTargetType(),
-                entity.getTargetId(),
-                entity.getData(),
-                entity.getReason(),
-                detail,
-                entity.getCreatedAt());
     }
 }

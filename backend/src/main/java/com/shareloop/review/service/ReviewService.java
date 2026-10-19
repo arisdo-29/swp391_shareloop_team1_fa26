@@ -1,5 +1,6 @@
 package com.shareloop.review.service;
 
+import com.shareloop.audit.ActivityType;
 import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemService;
@@ -104,7 +105,7 @@ public class ReviewService {
         Map<String, Object> snapshot = Map.of("checks", checks);
         reviewItem.approve(snapshot, Instant.now());
 
-        activityLogService.log("REVIEW_APPROVE", adminId, "ITEM", itemId, snapshot, null);
+        activityLogService.log(ActivityType.REVIEW_APPROVE.name(), adminId, "ITEM", itemId, snapshot, null);
     }
 
     @Transactional
@@ -127,7 +128,8 @@ public class ReviewService {
                 .ifPresent(donorId -> notificationService.notify(
                         donorId, "POST_REJECTED", "Bài đăng bị từ chối", reason.trim(), "/items/" + itemId));
 
-        activityLogService.log("REVIEW_REJECT", adminId, "ITEM", itemId, (Map<String, Object>) null, reason.trim());
+        activityLogService.log(
+                ActivityType.REVIEW_REJECT.name(), adminId, "ITEM", itemId, (Map<String, Object>) null, reason.trim());
     }
 
     private ReviewItem requireReviewItem(long itemId) {

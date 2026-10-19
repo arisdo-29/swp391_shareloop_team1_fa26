@@ -1,5 +1,6 @@
 package com.shareloop.user.service;
 
+import com.shareloop.audit.ActivityType;
 import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.user.UserErrorCode;
@@ -35,7 +36,7 @@ public class AdminUserService {
         }
 
         userService.lock(userId, reason);
-        activityLogService.log("USER_LOCK", adminId, "USER", userId, (String) null, reason);
+        activityLogService.log(ActivityType.USER_LOCK.name(), adminId, "USER", userId, (String) null, reason);
     }
 
     /**
@@ -48,6 +49,6 @@ public class AdminUserService {
     @Transactional
     public void unlock(Long adminId, Long userId, String reason) {
         userService.unlock(userId);
-        activityLogService.log("USER_UNLOCK", adminId, "USER", userId, (String) null, reason);
+        activityLogService.log(ActivityType.USER_UNLOCK.name(), adminId, "USER", userId, (String) null, reason);
     }
 }

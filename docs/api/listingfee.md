@@ -9,6 +9,47 @@ Người sở hữu: BE1. Module giữ, trừ, nhả phí đăng bài và phí s
 `boost_max_days`), không viết cứng. Có một job nền chuyển bài
 quá hạn sang `EXPIRED` (mục "Job nền"). Đổi tiền chỉ qua `wallet.CreditService`.
 
+## GET /api/v1/listing-fees
+
+Bảng phí và thời hạn hiện hành để FE hiển thị trước khi người dùng đăng, sửa, gia hạn hay đẩy bài. Mọi số đọc từ
+ConfigService ở mỗi lần gọi, nên Admin đổi cấu hình (`PUT /api/v1/admin/configs/{key}`) thì lần gọi sau thấy số mới.
+
+- Xác thực: **bắt buộc** Bearer Token (người dùng đã đăng nhập bất kỳ). Không có tham số.
+- Thành công: `200`, một `ListingFeeConfigResponse`.
+- Lỗi: `401 UNAUTHORIZED`.
+
+```json
+{
+  "postFeeSwap": 5,
+  "postFeeGive": 0,
+  "editFee": 5,
+  "renewFee": 5,
+  "renewExpiredWindowDays": 7,
+  "boostFee": 5,
+  "boostDays": 3,
+  "boostMaxDays": 14,
+  "postDisplayDays": 30,
+  "postDisplayDaysGold": 45
+}
+```
+
+## ListingFeeConfigResponse
+
+| Trường                   | Kiểu   | Khoá cấu hình               | Ý nghĩa                                                          |
+|--------------------------|--------|-----------------------------|------------------------------------------------------------------|
+| `postFeeSwap`            | number | `post_fee`                  | Phí đăng bài SWAP (Credit), giữ khi gửi bài, trừ khi được duyệt  |
+| `postFeeGive`            | number | (không có)                  | Luôn `0`: bài GIVE đăng miễn phí, quy tắc cố định                |
+| `editFee`                | number | `edit_fee`                  | Phí mỗi lượt sửa sau khi đã dùng lượt sửa miễn phí               |
+| `renewFee`               | number | `renew_fee`                 | Phí gia hạn bài                                                  |
+| `renewExpiredWindowDays` | number | `renew_expired_window_days` | Số ngày sau khi hết hạn vẫn được gia hạn (API gia hạn bài `EXPIRED` chưa hỗ trợ, xem mục renew) |
+| `boostFee`               | number | `boost_fee`                 | Phí mỗi lần đẩy bài                                              |
+| `boostDays`              | number | `boost_days`                | Số ngày được đẩy thêm sau mỗi lần đẩy                            |
+| `boostMaxDays`           | number | `boost_max_days`            | `boostedUntil` không được vượt `now + boostMaxDays`              |
+| `postDisplayDays`        | number | `post_display_days`         | Số ngày hiển thị sau lần duyệt đầu (cũng là số ngày cộng khi gia hạn) |
+| `postDisplayDaysGold`    | number | `post_display_days_gold`    | Số ngày hiển thị sau lần duyệt đầu khi chủ bài từ hạng Vàng trở lên |
+
+Hạn hiển thị (`expireAt`) và hạn đẩy (`boostedUntil`) của từng bài được trả kèm trong `ItemResponse` (xem `item.md`).
+
 ## GET /api/v1/items/{id}/edit-quote
 
 Báo trước lượt sửa tới của bài là miễn phí hay phải giữ bao nhiêu Credit (F07 bước 2, FR-26). Chỉ đọc, không giữ
@@ -34,7 +75,17 @@ tiền, không đổi dữ liệu. Số `amount` trả về đúng bằng số `
 |----------|---------|-------------------------------------------------------------------------|
 | `free`   | boolean | `true` khi lượt sửa không giữ Credit nào (`amount == 0`)                |
 | `amount` | number  | Số Credit sẽ giữ khi gửi bản sửa; `0` khi miễn phí                      |
-| `reason` | string  | Lý do, xem bảng luật bên dưới                                           |
+| `reason` | string  | Lý do (enum `Reason`), xem bảng luật bên dưới                           |
+
+Swagger hiển thị mô tả từng giá trị của `reason` (ghi trong `@Schema` của `EditQuote.Reason`):
+
+| Giá trị                    | Ý nghĩa                                                                                     |
+|----------------------------|---------------------------------------------------------------------------------------------|
+| `NOT_YET_APPROVED`         | Bài chưa từng được duyệt và phí đăng đang được giữ (bài chờ duyệt lần đầu): sửa miễn phí.   |
+| `REPOST_FEE`               | Bài chưa từng được duyệt và phí đăng đã được nhả (bị từ chối): gửi lại phải giữ lại `post_fee`. |
+| `PENDING_REVIEW_OVERWRITE` | Bài đã duyệt và đang có một bản sửa chờ duyệt: sửa đè, không thêm phí, không thêm lượt.    |
+| `FIRST_FREE_EDIT`          | Bài đã duyệt nhưng chưa dùng lượt sửa miễn phí: miễn phí một lần.                           |
+| `PAID_EDIT`                | Đã dùng lượt sửa miễn phí sau duyệt: tính phí sửa (`edit_fee`).                             |
 
 ### Luật báo giá (xét từ trên xuống, gặp dòng đúng thì dừng)
 

@@ -7,6 +7,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.audit.ActivityType;
+import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.SettingErrorCode;
 import com.shareloop.setting.dto.AdminChecklistReorderRequest;
@@ -14,14 +16,18 @@ import com.shareloop.setting.dto.AdminChecklistRequest;
 import com.shareloop.setting.entity.WebsiteAttribute;
 import com.shareloop.setting.repository.WebsiteAttributeRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 class AdminChecklistServiceTest {
 
+    private static final Long ADMIN_ID = 1L;
+
     private final WebsiteAttributeRepository repository = mock(WebsiteAttributeRepository.class);
-    private final AdminChecklistService service = new AdminChecklistService(repository);
+    private final ActivityLogService activityLogService = mock(ActivityLogService.class);
+    private final AdminChecklistService service = new AdminChecklistService(repository, activityLogService);
 
     @Test
     void createStoresQuestionAndCalculatesSortOrder() {
@@ -29,7 +35,7 @@ class AdminChecklistServiceTest {
         when(repository.findByAttrGroupOrderBySortOrderAscIdAsc("CHECKLIST")).thenReturn(List.of(existingItem));
         when(repository.saveAndFlush(any(WebsiteAttribute.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var result = service.create(new AdminChecklistRequest("Câu hỏi mới?"));
+        var result = service.create(new AdminChecklistRequest("Câu hỏi mới?"), ADMIN_ID);
 
         ArgumentCaptor<WebsiteAttribute> captor = ArgumentCaptor.forClass(WebsiteAttribute.class);
         verify(repository).saveAndFlush(captor.capture());
@@ -42,7 +48,7 @@ class AdminChecklistServiceTest {
 
     @Test
     void createRejectsBlankQuestion() {
-        assertThatThrownBy(() -> service.create(new AdminChecklistRequest("  ")))
+        assertThatThrownBy(() -> service.create(new AdminChecklistRequest("  "), ADMIN_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(SettingErrorCode.SETTING_CHECKLIST_INVALID_VALUE);
@@ -54,7 +60,7 @@ class AdminChecklistServiceTest {
         when(repository.findById(1L)).thenReturn(Optional.of(existing));
         when(repository.saveAndFlush(any(WebsiteAttribute.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var result = service.update(1L, new AdminChecklistRequest("Câu sửa?"));
+        var result = service.update(1L, new AdminChecklistRequest("Câu sửa?"), ADMIN_ID);
 
         assertThat(result.question()).isEqualTo("Câu sửa?");
         assertThat(existing.getAttrValue()).isEqualTo("Câu sửa?");
@@ -64,7 +70,7 @@ class AdminChecklistServiceTest {
     void updateThrowsNotFoundWhenIdDoesNotExist() {
         when(repository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(99L, new AdminChecklistRequest("Câu sửa?")))
+        assertThatThrownBy(() -> service.update(99L, new AdminChecklistRequest("Câu sửa?"), ADMIN_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(SettingErrorCode.SETTING_CHECKLIST_NOT_FOUND);
@@ -79,7 +85,7 @@ class AdminChecklistServiceTest {
                 .thenReturn(List.of(item1, item2));
         when(repository.saveAndFlush(any(WebsiteAttribute.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var result = service.setActive(1L, false);
+        var result = service.setActive(1L, false, ADMIN_ID);
 
         assertThat(result.active()).isFalse();
         assertThat(item1.isActive()).isFalse();
@@ -92,7 +98,7 @@ class AdminChecklistServiceTest {
         when(repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc("CHECKLIST"))
                 .thenReturn(List.of(item1));
 
-        assertThatThrownBy(() -> service.setActive(1L, false))
+        assertThatThrownBy(() -> service.setActive(1L, false, ADMIN_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(SettingErrorCode.SETTING_CHECKLIST_AT_LEAST_ONE_REQUIRED);
@@ -104,11 +110,53 @@ class AdminChecklistServiceTest {
         WebsiteAttribute item2 = existing(2L, "chk_2", "Câu 2", 20, true);
         when(repository.findByAttrGroupOrderBySortOrderAscIdAsc("CHECKLIST")).thenReturn(List.of(item1, item2));
 
-        var result = service.reorder(new AdminChecklistReorderRequest(List.of(2L, 1L)));
+        var result = service.reorder(new AdminChecklistReorderRequest(List.of(2L, 1L)), ADMIN_ID);
 
         assertThat(item2.getSortOrder()).isEqualTo(10);
         assertThat(item1.getSortOrder()).isEqualTo(20);
         assertThat(result).hasSize(2);
+    }
+
+    @Test
+    void reorder_whenValid_logsChecklistReorderWithNewOrder() {
+        // given
+        WebsiteAttribute item1 = existing(1L, "chk_1", "Câu 1", 10, true);
+        WebsiteAttribute item2 = existing(2L, "chk_2", "Câu 2", 20, true);
+        when(repository.findByAttrGroupOrderBySortOrderAscIdAsc("CHECKLIST")).thenReturn(List.of(item1, item2));
+
+        // when
+        service.reorder(new AdminChecklistReorderRequest(List.of(2L, 1L)), ADMIN_ID);
+
+        // then
+        verify(activityLogService)
+                .log(
+                        ActivityType.CHECKLIST_REORDER.name(),
+                        ADMIN_ID,
+                        "CHECKLIST",
+                        null,
+                        Map.<String, Object>of("itemIds", List.of(2L, 1L)),
+                        null);
+    }
+
+    @Test
+    void update_whenValid_logsChecklistUpdate() {
+        // given
+        WebsiteAttribute item = existing(1L, "chk_1", "Câu cũ?", 10, true);
+        when(repository.findById(1L)).thenReturn(Optional.of(item));
+        when(repository.saveAndFlush(any(WebsiteAttribute.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        service.update(1L, new AdminChecklistRequest("Câu sửa?"), ADMIN_ID);
+
+        // then
+        verify(activityLogService)
+                .log(
+                        ActivityType.CHECKLIST_UPDATE.name(),
+                        ADMIN_ID,
+                        "CHECKLIST",
+                        1L,
+                        Map.<String, Object>of("question", "Câu sửa?", "active", true),
+                        null);
     }
 
     @Test
@@ -117,12 +165,12 @@ class AdminChecklistServiceTest {
         WebsiteAttribute item2 = existing(2L, "chk_2", "Câu 2", 20, true);
         when(repository.findByAttrGroupOrderBySortOrderAscIdAsc("CHECKLIST")).thenReturn(List.of(item1, item2));
 
-        assertThatThrownBy(() -> service.reorder(new AdminChecklistReorderRequest(List.of(1L, 1L))))
+        assertThatThrownBy(() -> service.reorder(new AdminChecklistReorderRequest(List.of(1L, 1L)), ADMIN_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(SettingErrorCode.SETTING_CHECKLIST_INVALID_VALUE);
 
-        assertThatThrownBy(() -> service.reorder(new AdminChecklistReorderRequest(List.of(1L))))
+        assertThatThrownBy(() -> service.reorder(new AdminChecklistReorderRequest(List.of(1L)), ADMIN_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(SettingErrorCode.SETTING_CHECKLIST_INVALID_VALUE);

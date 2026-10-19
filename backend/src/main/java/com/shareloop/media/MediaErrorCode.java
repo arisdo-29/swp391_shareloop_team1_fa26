@@ -9,7 +9,8 @@ public enum MediaErrorCode implements ErrorCode {
     MEDIA_FILE_TOO_LARGE(HttpStatus.UNPROCESSABLE_CONTENT, "Ảnh vượt quá kích thước cho phép."),
     MEDIA_NOT_OWNER(HttpStatus.FORBIDDEN, "Bạn không sở hữu ảnh này."),
     MEDIA_NOT_UPLOADED(HttpStatus.CONFLICT, "Ảnh đã được gắn hoặc không còn dùng được."),
-    MEDIA_STORAGE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Không thể lưu ảnh.");
+    MEDIA_STORAGE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Không thể lưu ảnh."),
+    MEDIA_FILE_MISSING(HttpStatus.NOT_FOUND, "Ảnh không còn trên máy chủ, vui lòng tải lại.");
 
     private final HttpStatus status;
     private final String message;

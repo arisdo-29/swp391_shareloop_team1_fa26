@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.shareloop.audit.dto.ActivityLogDto;
+import com.shareloop.audit.service.ActivityLogQueryService;
 import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemService;
@@ -61,6 +62,9 @@ class ReputationServiceTest {
     private ActivityLogService activityLogService;
 
     @Mock
+    private ActivityLogQueryService activityLogQueryService;
+
+    @Mock
     private ItemService itemService;
 
     @Mock
@@ -79,7 +83,12 @@ class ReputationServiceTest {
         when(configService.getDecimal("REPUTATION_SWAP_EACH")).thenReturn(new BigDecimal("6"));
 
         service = new ReputationService(
-                configService, userReputationRepository, activityLogService, itemService, notificationService);
+                configService,
+                userReputationRepository,
+                activityLogService,
+                activityLogQueryService,
+                itemService,
+                notificationService);
     }
 
     @Nested
@@ -426,14 +435,18 @@ class ReputationServiceTest {
             ActivityLogDto logDto = new ActivityLogDto(
                     101L,
                     userId,
+                    "Nguyễn Văn A",
+                    "user1@test.com",
                     "POINTS",
+                    "Cộng điểm",
                     "REQUEST",
                     50L,
+                    "Yêu cầu #50",
                     Map.of("points", 10, "totalPoints", 320, "rank", "GOLD"),
                     "Cộng 10 điểm hoàn tất giao dịch #50",
-                    "Chi tiết",
+                    "Cộng 10 điểm",
                     Instant.parse("2026-10-18T10:00:00Z"));
-            when(activityLogService.search(eq(userId), eq("POINTS"), any(), any(), eq(0), eq(20)))
+            when(activityLogQueryService.search(eq(userId), eq("POINTS"), any(), any(), eq(0), eq(20)))
                     .thenReturn(new PageImpl<>(List.of(logDto), PageRequest.of(0, 20), 1));
 
             MyReputationResponse res = service.getMyReputation(userId, 0, 20);
@@ -454,7 +467,7 @@ class ReputationServiceTest {
             UserReputation user = new UserReputation(userId, (short) 5, 0, Rank.BRONZE);
             when(userReputationRepository.findById(userId)).thenReturn(Optional.of(user));
             when(userReputationRepository.calculateAsDescribedRate(userId)).thenReturn(null);
-            when(activityLogService.search(eq(userId), eq("POINTS"), any(), any(), eq(0), eq(20)))
+            when(activityLogQueryService.search(eq(userId), eq("POINTS"), any(), any(), eq(0), eq(20)))
                     .thenReturn(Page.empty());
 
             MyReputationResponse res = service.getMyReputation(userId, 0, 20);

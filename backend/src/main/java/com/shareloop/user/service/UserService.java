@@ -14,6 +14,7 @@ import com.shareloop.user.dto.ContactInfo;
 import com.shareloop.user.dto.MeResponse;
 import com.shareloop.user.dto.SendChangePhoneOtpRequest;
 import com.shareloop.user.dto.UpdateProfileRequest;
+import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.entity.OtpPurpose;
 import com.shareloop.user.entity.User;
 import com.shareloop.user.entity.UserStatus;
@@ -21,6 +22,8 @@ import com.shareloop.user.mapper.UserMapper;
 import com.shareloop.user.repository.UserRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -207,6 +210,22 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<Long> findAdminIds() {
         return userRepository.findAdminIds();
+    }
+
+    /**
+     * Tên và email của nhiều người dùng trong một lần truy vấn, dùng cho trang nhật ký Admin (FR-115). User đã xoá
+     * mềm bị @SQLRestriction loại nên không có trong map; người gọi tự xử lý id thiếu.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, UserBrief> findBriefs(Collection<Long> ids) {
+        Map<Long, UserBrief> briefs = new HashMap<>();
+        if (ids == null || ids.isEmpty()) {
+            return briefs;
+        }
+        for (User user : userRepository.findAllById(ids)) {
+            briefs.put(user.getId(), new UserBrief(user.getId(), user.getFullName(), user.getEmail()));
+        }
+        return briefs;
     }
 
     /**

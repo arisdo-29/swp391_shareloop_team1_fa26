@@ -1,6 +1,8 @@
 package com.shareloop.reputation.service;
 
+import com.shareloop.audit.ActivityType;
 import com.shareloop.audit.dto.ActivityLogDto;
+import com.shareloop.audit.service.ActivityLogQueryService;
 import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemService;
@@ -31,23 +33,24 @@ public class ReputationService {
     private final ConfigService configService;
     private final UserReputationRepository userReputationRepository;
     private final ActivityLogService activityLogService;
+    private final ActivityLogQueryService activityLogQueryService;
     private final ObjectProvider<ItemService> itemServiceProvider;
     private final NotificationService notificationService;
 
     public ReputationService() {
-        this(null, null, null, (ObjectProvider<ItemService>) null, null);
+        this(null, null, null, null, (ObjectProvider<ItemService>) null, null);
     }
 
     public ReputationService(UserReputationRepository userReputationRepository) {
-        this(null, userReputationRepository, null, (ObjectProvider<ItemService>) null, null);
+        this(null, userReputationRepository, null, null, (ObjectProvider<ItemService>) null, null);
     }
 
     public ReputationService(ConfigService configService) {
-        this(configService, null, null, (ObjectProvider<ItemService>) null, null);
+        this(configService, null, null, null, (ObjectProvider<ItemService>) null, null);
     }
 
     public ReputationService(ConfigService configService, UserReputationRepository userReputationRepository) {
-        this(configService, userReputationRepository, null, (ObjectProvider<ItemService>) null, null);
+        this(configService, userReputationRepository, null, null, (ObjectProvider<ItemService>) null, null);
     }
 
     public ReputationService(
@@ -60,6 +63,23 @@ public class ReputationService {
                 configService,
                 userReputationRepository,
                 activityLogService,
+                null,
+                itemService != null ? new SimpleObjectProvider<>(itemService) : null,
+                notificationService);
+    }
+
+    public ReputationService(
+            ConfigService configService,
+            UserReputationRepository userReputationRepository,
+            ActivityLogService activityLogService,
+            ActivityLogQueryService activityLogQueryService,
+            ItemService itemService,
+            NotificationService notificationService) {
+        this(
+                configService,
+                userReputationRepository,
+                activityLogService,
+                activityLogQueryService,
                 itemService != null ? new SimpleObjectProvider<>(itemService) : null,
                 notificationService);
     }
@@ -69,11 +89,13 @@ public class ReputationService {
             ConfigService configService,
             @Autowired(required = false) UserReputationRepository userReputationRepository,
             @Autowired(required = false) ActivityLogService activityLogService,
+            @Autowired(required = false) ActivityLogQueryService activityLogQueryService,
             @Autowired(required = false) ObjectProvider<ItemService> itemServiceProvider,
             @Autowired(required = false) NotificationService notificationService) {
         this.configService = configService;
         this.userReputationRepository = userReputationRepository;
         this.activityLogService = activityLogService;
+        this.activityLogQueryService = activityLogQueryService;
         this.itemServiceProvider = itemServiceProvider;
         this.notificationService = notificationService;
     }
@@ -182,8 +204,9 @@ public class ReputationService {
         int pageSize = Math.min(Math.max(size, 1), 50);
 
         Page<PointHistoryDto> history = Page.empty();
-        if (activityLogService != null) {
-            Page<ActivityLogDto> logs = activityLogService.search(userId, "POINTS", null, null, pageNumber, pageSize);
+        if (activityLogQueryService != null) {
+            Page<ActivityLogDto> logs = activityLogQueryService.search(
+                    userId, ActivityType.POINTS.code(), null, null, pageNumber, pageSize);
             history = logs.map(log -> {
                 int delta = 0;
                 if (log.data() != null && log.data().get("points") instanceof Number n) {
@@ -267,7 +290,7 @@ public class ReputationService {
 
             if (activityLogService != null) {
                 activityLogService.log(
-                        "POINTS",
+                        ActivityType.POINTS.name(),
                         donorId,
                         "REQUEST",
                         requestId,
@@ -284,7 +307,7 @@ public class ReputationService {
 
             if (activityLogService != null) {
                 activityLogService.log(
-                        "POINTS",
+                        ActivityType.POINTS.name(),
                         receiverId,
                         "REQUEST",
                         requestId,
@@ -335,7 +358,7 @@ public class ReputationService {
 
         if (activityLogService != null) {
             activityLogService.log(
-                    "STARS",
+                    ActivityType.STARS.name(),
                     null,
                     "USER",
                     userId,

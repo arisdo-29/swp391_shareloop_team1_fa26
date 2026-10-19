@@ -1,5 +1,6 @@
 package com.shareloop.moderation.service;
 
+import com.shareloop.audit.ActivityType;
 import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.catalog.service.CategoryService;
 import com.shareloop.integration.ai.AiClient;
@@ -178,6 +179,6 @@ public class ItemScreeningService {
         if (model != null) {
             data.put("model", model);
         }
-        activityLogService.log("AiUsage", event.donorId(), "ITEM", event.itemId(), data, null);
+        activityLogService.log(ActivityType.AI_USAGE.name(), event.donorId(), "ITEM", event.itemId(), data, null);
     }
 }

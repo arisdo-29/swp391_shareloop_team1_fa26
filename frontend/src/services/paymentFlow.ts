@@ -4,7 +4,7 @@ import { paymentRedirectUrl } from './topUpSession';
 
 export const demoPaymentEnabled = import.meta.env.VITE_DEMO_PAYMENT === 'true';
 export const demoPaymentUnavailableMessage =
-  'Chức năng nạp demo chưa được bật. Vui lòng liên hệ quản trị viên.';
+  'Chức năng thanh toán này chưa khả dụng. Vui lòng liên hệ quản trị viên.';
 
 const confirmationAttempts = new Map<string, Promise<TopUpConfirmResponse>>();
 

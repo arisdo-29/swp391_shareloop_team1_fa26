@@ -22,6 +22,8 @@ import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.repository.ItemRepository;
+import com.shareloop.listingfee.dto.DisplayWindow;
+import com.shareloop.listingfee.service.ListingFeeQueryService;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.media.service.MediaService;
 import com.shareloop.moderation.ModerationResult;
@@ -32,7 +34,9 @@ import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -69,6 +73,9 @@ class ItemServiceTest {
 
     @Mock
     PostFeeService postFeeService;
+
+    @Mock
+    ListingFeeQueryService listingFeeQueryService;
 
     @Mock
     RequestQueryService requestQueryService;
@@ -346,6 +353,32 @@ class ItemServiceTest {
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).title()).isEqualTo("Sách 1");
         verify(itemRepository).findByDonorIdOrderByCreatedAtDesc(10L);
+    }
+
+    @Test
+    void listMyItems_withManyItems_readsDisplayWindowsOnceForAllItems() {
+        // given: ba bài, chỉ bài 1 đã duyệt và đã đẩy
+        Item item1 = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách 1", "Mô tả", null, ItemCondition.NEW, null, null);
+        Item item2 = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách 2", "Mô tả", null, ItemCondition.NEW, null, null);
+        Item item3 = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách 3", "Mô tả", null, ItemCondition.NEW, null, null);
+        ReflectionTestUtils.setField(item1, "id", 1L);
+        ReflectionTestUtils.setField(item2, "id", 2L);
+        ReflectionTestUtils.setField(item3, "id", 3L);
+        Instant expireAt = Instant.parse("2026-11-18T00:00:00Z");
+        Instant boostedUntil = Instant.parse("2026-10-22T00:00:00Z");
+        when(itemRepository.findByDonorIdOrderByCreatedAtDesc(10L)).thenReturn(List.of(item1, item2, item3));
+        when(listingFeeQueryService.findDisplayWindows(List.of(1L, 2L, 3L)))
+                .thenReturn(Map.of(1L, new DisplayWindow(expireAt, boostedUntil)));
+
+        // when
+        List<ItemResponse> responses = itemService.listMyItems(10L);
+
+        // then: một lần đọc cho cả danh sách; bài không có trong map thì hai field null
+        verify(listingFeeQueryService, times(1)).findDisplayWindows(any());
+        assertThat(responses.get(0).expireAt()).isEqualTo(expireAt);
+        assertThat(responses.get(0).boostedUntil()).isEqualTo(boostedUntil);
+        assertThat(responses.get(1).expireAt()).isNull();
+        assertThat(responses.get(2).boostedUntil()).isNull();
     }
 
     @Test

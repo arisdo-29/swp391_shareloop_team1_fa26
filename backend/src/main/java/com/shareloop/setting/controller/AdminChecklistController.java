@@ -1,5 +1,6 @@
 package com.shareloop.setting.controller;
 
+import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.setting.dto.AdminChecklistActiveRequest;
 import com.shareloop.setting.dto.AdminChecklistEntry;
 import com.shareloop.setting.dto.AdminChecklistReorderRequest;
@@ -53,8 +54,9 @@ public class AdminChecklistController {
     @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
     @ApiResponse(responseCode = "403", description = "Không có quyền Admin")
     @PostMapping
-    public ResponseEntity<AdminChecklistEntry> create(@Valid @RequestBody AdminChecklistRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request));
+    public ResponseEntity<AdminChecklistEntry> create(
+            @Valid @RequestBody AdminChecklistRequest request, @Parameter(hidden = true) @CurrentUserId Long adminId) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request, adminId));
     }
 
     @Operation(summary = "Cập nhật câu hỏi checklist", description = "Sửa nội dung của một câu hỏi checklist theo ID.")
@@ -66,8 +68,9 @@ public class AdminChecklistController {
     @PutMapping("/{id}")
     public AdminChecklistEntry update(
             @Parameter(description = "ID của câu hỏi checklist") @PathVariable long id,
-            @Valid @RequestBody AdminChecklistRequest request) {
-        return service.update(id, request);
+            @Valid @RequestBody AdminChecklistRequest request,
+            @Parameter(hidden = true) @CurrentUserId Long adminId) {
+        return service.update(id, request, adminId);
     }
 
     @Operation(
@@ -81,8 +84,9 @@ public class AdminChecklistController {
     @PatchMapping("/{id}/active")
     public AdminChecklistEntry setActive(
             @Parameter(description = "ID của câu hỏi checklist") @PathVariable long id,
-            @Valid @RequestBody AdminChecklistActiveRequest request) {
-        return service.setActive(id, request.active());
+            @Valid @RequestBody AdminChecklistActiveRequest request,
+            @Parameter(hidden = true) @CurrentUserId Long adminId) {
+        return service.setActive(id, request.active(), adminId);
     }
 
     @Operation(
@@ -93,7 +97,9 @@ public class AdminChecklistController {
     @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
     @ApiResponse(responseCode = "403", description = "Không có quyền Admin")
     @PutMapping("/reorder")
-    public List<AdminChecklistEntry> reorder(@Valid @RequestBody AdminChecklistReorderRequest request) {
-        return service.reorder(request);
+    public List<AdminChecklistEntry> reorder(
+            @Valid @RequestBody AdminChecklistReorderRequest request,
+            @Parameter(hidden = true) @CurrentUserId Long adminId) {
+        return service.reorder(request, adminId);
     }
 }
