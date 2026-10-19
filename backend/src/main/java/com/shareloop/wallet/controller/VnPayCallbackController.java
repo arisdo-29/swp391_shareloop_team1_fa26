@@ -2,6 +2,8 @@ package com.shareloop.wallet.controller;
 
 import com.shareloop.wallet.dto.VnPayIpnResponse;
 import com.shareloop.wallet.service.VnPayCallbackService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.net.URI;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
+@Tag(name = "vn-pay-callback-controller", description = "Tiếp nhận kết quả thanh toán từ VNPAY")
 @RestController
 @RequestMapping("/api/v1/payments/vnpay")
 public class VnPayCallbackController {
@@ -28,6 +31,10 @@ public class VnPayCallbackController {
         this.feResultUrl = feResultUrl;
     }
 
+    @Operation(
+            summary = "Nhận thông báo kết quả thanh toán VNPAY",
+            description =
+                    "VNPAY gọi trực tiếp, không cần Bearer Token. Kiểm chữ ký và số tiền, cập nhật đơn nạp và cộng Credit khi thanh toán thành công; callback lặp không cộng thêm.")
     @GetMapping("/ipn")
     public VnPayIpnResponse ipn(@RequestParam Map<String, String> params) {
         try {
@@ -38,6 +45,10 @@ public class VnPayCallbackController {
         }
     }
 
+    @Operation(
+            summary = "Chuyển người dùng về trang kết quả thanh toán",
+            description =
+                    "Không cần Bearer Token. Kiểm chữ ký rồi chuyển hướng 302 về giao diện với mã đơn và trạng thái. Endpoint này không cộng Credit; kết quả cộng Credit được xử lý qua IPN.")
     @GetMapping("/return")
     public ResponseEntity<Void> paymentReturn(@RequestParam Map<String, String> params) {
         boolean verified = service.verify(params);

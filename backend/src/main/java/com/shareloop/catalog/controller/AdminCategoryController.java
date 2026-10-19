@@ -5,7 +5,9 @@ import com.shareloop.catalog.dto.AdminCategoryRequest;
 import com.shareloop.catalog.dto.AdminCategoryResponse;
 import com.shareloop.catalog.service.AdminCategoryService;
 import com.shareloop.common.security.CurrentUserId;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "admin-category-controller", description = "Admin quản lý danh mục đồ dùng")
 @RestController
 @RequestMapping("/api/v1/admin/categories")
 public class AdminCategoryController {
@@ -28,17 +31,27 @@ public class AdminCategoryController {
         this.service = service;
     }
 
+    @Operation(
+            summary = "Xem danh sách danh mục để quản lý",
+            description = "Chỉ Admin. Bao gồm danh mục đang hoạt động và đang ẩn, sắp theo thứ tự hiển thị rồi ID.")
     @GetMapping
     public List<AdminCategoryResponse> list() {
         return service.listAll();
     }
 
+    @Operation(
+            summary = "Tạo danh mục mới",
+            description = "Chỉ Admin. Thiết lập tên, danh mục cha, cờ hạn chế, quyền đẩy tin và thứ tự hiển thị.")
     @PostMapping
     public ResponseEntity<AdminCategoryResponse> create(
             @Valid @RequestBody AdminCategoryRequest request, @Parameter(hidden = true) @CurrentUserId Long adminId) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request, adminId));
     }
 
+    @Operation(
+            summary = "Cập nhật thông tin danh mục",
+            description =
+                    "Chỉ Admin. Sửa tên, danh mục cha, cờ hạn chế, quyền đẩy tin và thứ tự; danh mục cha phải đang hoạt động và không tạo vòng lặp.")
     @PutMapping("/{id}")
     public AdminCategoryResponse update(
             @PathVariable long id,
@@ -47,6 +60,9 @@ public class AdminCategoryController {
         return service.update(id, request, adminId);
     }
 
+    @Operation(
+            summary = "Ẩn hoặc hiện danh mục",
+            description = "Chỉ Admin. Ẩn danh mục cha sẽ ẩn các danh mục con đang hoạt động.")
     @PatchMapping("/{id}/active")
     public AdminCategoryResponse setActive(
             @PathVariable long id,

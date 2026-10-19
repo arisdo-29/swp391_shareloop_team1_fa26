@@ -59,6 +59,10 @@ public class ReportController {
         return reportService.createReport(currentUserId, request);
     }
 
+    @Operation(
+            summary = "Gửi giải trình cho báo cáo",
+            description =
+                    "Yêu cầu đăng nhập và là bên bị báo cáo. Gửi nội dung giải trình kèm ảnh bằng chứng khi hồ sơ đang chờ phản hồi và còn hạn; mỗi hồ sơ chỉ được giải trình một lần. Thành công trả 204.")
     @PostMapping("/{reportId}/response")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void respond(

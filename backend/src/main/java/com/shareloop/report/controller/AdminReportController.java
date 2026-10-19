@@ -49,6 +49,10 @@ public class AdminReportController {
         this.evidenceService = evidenceService;
     }
 
+    @Operation(
+            summary = "Xem danh sách báo cáo và khiếu nại",
+            description =
+                    "Chỉ Admin. Hỗ trợ phân trang và lọc đồng thời theo trạng thái, loại đối tượng; hồ sơ mới nhất hiển thị trước.")
     @GetMapping
     public AdminReportPage list(
             @RequestParam(required = false) ReportStatus status,
@@ -58,11 +62,19 @@ public class AdminReportController {
         return queryService.list(status, targetType, page, size);
     }
 
+    @Operation(
+            summary = "Xem chi tiết hồ sơ báo cáo hoặc khiếu nại",
+            description =
+                    "Chỉ Admin. Trả về thông tin các bên, nội dung báo cáo, giải trình, bằng chứng, thời hạn phản hồi và kết luận nếu có.")
     @GetMapping("/{reportId}")
     public AdminReportDetail detail(@PathVariable @Min(1) long reportId) {
         return queryService.detail(reportId);
     }
 
+    @Operation(
+            summary = "Xem ảnh bằng chứng của hồ sơ",
+            description =
+                    "Chỉ Admin. Ảnh phải thuộc danh sách bằng chứng hoặc bằng chứng giải trình của đúng hồ sơ. Trả về nội dung ảnh riêng tư và không cho lưu bộ nhớ đệm.")
     @GetMapping("/{reportId}/evidence/{mediaId}")
     public ResponseEntity<byte[]> evidence(@PathVariable @Min(1) long reportId, @PathVariable @Min(1) long mediaId) {
         var content = evidenceService.read(reportId, mediaId);
