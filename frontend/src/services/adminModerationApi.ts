@@ -9,6 +9,8 @@ export interface ReviewQueueItem {
   aiRisk?: string | null;
   moderationFlag?: string | null;
   flagReason?: string | null;
+  flagReasonCode?: string | null;
+  matchedTerms?: string[];
   donorTrustStars?: number | null;
   createdAt: string;
 }
@@ -20,12 +22,13 @@ export interface PendingItemsParams {
 
 export interface ReviewQueueResponse {
   items: ReviewQueueItem[];
-  checklist: string[];
+  checklist: ReviewChecklistItem[];
   page: number;
   size: number;
 }
 
-export interface ApproveReviewRequest { answers: boolean[] }
+export interface ReviewChecklistItem { id: number; key: string; statement: string }
+export interface ApproveReviewRequest { answers: { id: number; passed: boolean }[] }
 export interface RejectReviewRequest { reason: string }
 
 export const adminModerationApi = {

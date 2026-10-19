@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { notificationApi, type NotificationResponse } from '../services/notificationApi';
 import { toBackendUserId } from '../services/requestApi';
 import { Button, IconButton } from './ui';
@@ -191,6 +192,18 @@ export function NotificationMenu({
                           {new Date(notification.createdAt).toLocaleString('vi-VN')}
                         </p>
                         <div className="mt-2 flex items-center gap-3 text-xs font-semibold">
+                          {notification.link?.startsWith('/') && !notification.link.startsWith('//') && !notification.link.includes('\\') ? (
+                            <Link
+                              to={notification.link}
+                              className="text-primary hover:underline"
+                              onClick={() => {
+                                void markAsRead(notification);
+                                onOpenChange(false);
+                              }}
+                            >
+                              Xem chi tiết
+                            </Link>
+                          ) : null}
                           {!notification.isRead ? (
                             <button
                               type="button"

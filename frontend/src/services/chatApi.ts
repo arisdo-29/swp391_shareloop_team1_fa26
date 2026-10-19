@@ -8,6 +8,7 @@ export interface MessageResponse {
   content: string;
   mediaId?: number | null;
   refItemId?: number | null;
+  itemCard?: PinnedItemResponse | null;
   offerStatus?: string | null;
   moderation?: string | null;
   blockedReason?: string | null;
@@ -16,6 +17,7 @@ export interface MessageResponse {
 
 export interface SendMessageRequest {
   content: string;
+  refItemId?: number;
 }
 
 export interface PinnedItemResponse {

@@ -24,7 +24,16 @@ export type ItemStatus =
   | 'COMPLETED'
   | 'expired'
   | 'removed';
-export type ItemRequestStatus = 'PENDING' | 'RESERVED' | 'REJECTED' | 'CANCELLED';
+export type ItemRequestStatus =
+  | 'PENDING'
+  | 'RESERVED'
+  | 'AWAITING_LOGISTICS'
+  | 'LOGISTICS_CONFIRMED'
+  | 'AWAITING_HANDOVER'
+  | 'COMPLETED'
+  | 'DISPUTED'
+  | 'REJECTED'
+  | 'CANCELLED';
 export type TransactionStatus =
   | 'NEGOTIATING'
   | 'SCHEDULE_PROPOSED'

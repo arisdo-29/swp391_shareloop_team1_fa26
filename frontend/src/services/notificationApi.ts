@@ -5,7 +5,7 @@ export interface NotificationResponse {
   type: string;
   title: string;
   body: string;
-  link: string;
+  link: string | null;
   isRead: boolean;
   createdAt: string;
 }

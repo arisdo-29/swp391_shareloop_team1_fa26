@@ -1,0 +1,129 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { build } from 'esbuild';
+
+const memory = new Map();
+globalThis.localStorage = {
+  getItem: (key) => memory.get(key) ?? null,
+  setItem: (key, value) => memory.set(key, String(value)),
+  removeItem: (key) => memory.delete(key),
+};
+
+const bundle = await build({
+  stdin: {
+    contents: `export { http, tokenStorage } from './src/services/http.ts';
+      export { aiApi } from './src/services/aiApi.ts';
+      export { chatApi } from './src/services/chatApi.ts';
+      export { adminModerationApi } from './src/services/adminModerationApi.ts';
+      export { adminFinanceApi } from './src/services/adminFinanceApi.ts';
+      export { adminAuditApi } from './src/services/adminAuditApi.ts';
+      export { requestApi, toFeItemRequest } from './src/services/requestApi.ts';
+      export { canChat, canSchedule, canConfirmHandover, requestStatusLabel } from './src/utils/request.ts';
+      export { loadPersistedState } from './src/utils/storage.ts';`,
+    resolveDir: process.cwd(), loader: 'ts', sourcefile: 'api-verification.ts',
+  },
+  bundle: true, platform: 'browser', format: 'esm', write: false,
+  define: { 'import.meta.env': '{}' },
+});
+const api = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].contents).toString('base64')}`);
+
+let requests = [];
+let nextResponse = {};
+api.http.defaults.adapter = async (config) => {
+  requests.push({ method: config.method, url: config.url, params: config.params, body: config.data ? JSON.parse(config.data) : undefined });
+  return { data: nextResponse, status: 200, statusText: 'OK', headers: {}, config };
+};
+
+await test('quota không tìm kiếm hoặc tiêu lượt; search giữ quota và kết quả dự phòng', async () => {
+  requests = [];
+  nextResponse = { freeUsesRemaining: 1, feeCredits: 2, hasToppedUp: false };
+  assert.deepEqual(await api.aiApi.quota(), nextResponse);
+  assert.equal(requests[0].method, 'get');
+  assert.equal(requests[0].url, '/api/v1/ai/quota');
+  nextResponse = { filters: {}, results: { items: [], page: 2, size: 6, totalElements: 20 }, quota: nextResponse, fallback: true, chargedCredits: 0 };
+  assert.deepEqual(await api.aiApi.search('bàn học', 2, 6), nextResponse);
+  assert.deepEqual(requests[1].body, { query: 'bàn học' });
+  assert.deepEqual(requests[1].params, { page: 2, size: 6 });
+});
+
+await test('polling truyền afterId và gửi thẻ bài qua refItemId', async () => {
+  requests = [];
+  nextResponse = [];
+  await api.chatApi.list(101, 7, 25);
+  assert.deepEqual(requests[0].params, { currentUserId: 7, afterId: 25 });
+  await api.chatApi.send(101, 7, { content: '', refItemId: 42 });
+  assert.equal(requests[1].url, '/api/v1/requests/101/messages');
+  assert.deepEqual(requests[1].body, { content: '', refItemId: 42 });
+});
+
+await test('duyệt gửi ID điều kiện cùng đáp án, không ghép lại theo vị trí', async () => {
+  requests = [];
+  const answers = [{ id: 12, passed: true }, { id: 11, passed: true }];
+  await api.adminModerationApi.approve(42, { answers });
+  assert.equal(requests[0].url, '/api/v1/admin/reviews/42/approve');
+  assert.deepEqual(requests[0].body.answers, answers);
+});
+
+await test('nhật ký đọc được cả metadata page mới và response Spring cũ', async () => {
+  nextResponse = { content: [{ id: 1, actorName: 'Người duyệt', typeLabel: 'Duyệt bài' }], page: { number: 1, size: 20, totalElements: 45, totalPages: 3 } };
+  const page = await api.adminAuditApi.list({ page: 1 });
+  assert.equal(page.totalElements, 45);
+  assert.equal(page.totalPages, 3);
+  assert.equal(page.content[0].actorName, 'Người duyệt');
+  assert.equal(page.last, false);
+  nextResponse = { content: [], number: 0, size: 20, totalElements: 0, totalPages: 0 };
+  assert.equal((await api.adminAuditApi.list()).totalElements, 0);
+});
+
+await test('báo cáo dùng ngày lịch; tra cứu lịch sử có phân trang; khóa gửi lý do', async () => {
+  requests = [];
+  await api.adminFinanceApi.report({ from: '2026-10-01', to: '2026-10-19' });
+  assert.deepEqual(requests[0].params, { from: '2026-10-01', to: '2026-10-19' });
+  await api.adminFinanceApi.userHistory(9, { page: 2, size: 20 });
+  assert.equal(requests[1].url, '/api/v1/admin/finance/users/9/history');
+  assert.deepEqual(requests[1].params, { page: 2, size: 20 });
+  await api.adminFinanceApi.setLocked(9, true, 'Đã xác minh vi phạm');
+  assert.equal(requests[2].url, '/api/v1/admin/users/9/lock');
+  assert.deepEqual(requests[2].body, { reason: 'Đã xác minh vi phạm' });
+  await api.adminFinanceApi.setLocked(9, false, 'Đã giải trình');
+  assert.equal(requests[3].url, '/api/v1/admin/users/9/unlock');
+});
+
+await test('AWAITING_LOGISTICS vẫn cho sửa lịch, các trạng thái sau chốt vẫn cho chat', () => {
+  assert.equal(api.canSchedule('RESERVED'), true);
+  assert.equal(api.canSchedule('AWAITING_LOGISTICS'), true);
+  for (const status of ['PENDING', 'LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER', 'COMPLETED', 'DISPUTED', 'REJECTED', 'CANCELLED']) assert.equal(api.canSchedule(status), false);
+  for (const status of ['RESERVED', 'AWAITING_LOGISTICS', 'LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER', 'COMPLETED', 'DISPUTED']) assert.equal(api.canChat(status), true);
+  for (const status of ['PENDING', 'REJECTED', 'CANCELLED']) assert.equal(api.canChat(status), false);
+});
+
+await test('chỉ mở xác nhận giao nhận ở LOGISTICS_CONFIRMED hoặc AWAITING_HANDOVER', () => {
+  for (const status of Object.keys(api.requestStatusLabel)) {
+    assert.equal(api.canConfirmHandover(status), ['LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER'].includes(status));
+  }
+  assert.equal(api.toFeItemRequest({ id: 9, receiverId: 2, itemId: 3, type: 'GIVE', status: 'COMPLETED' }).status, 'COMPLETED');
+});
+
+await test('bên nhận giữ nguyên lựa chọn không đúng mô tả và lý do khi xác nhận', async () => {
+  requests = [];
+  await api.requestApi.confirmHandover(101, 7, { asDescribed: false, notAsDescribedReason: 'Màn hình bị vỡ' });
+  assert.equal(requests[0].url, '/api/v1/requests/101/confirm-handover');
+  assert.deepEqual(requests[0].body, { asDescribed: false, notAsDescribedReason: 'Màn hình bị vỡ' });
+});
+
+await test('khởi tạo bỏ qua dữ liệu nghiệp vụ cũ và số dư lưu trên trình duyệt', () => {
+  memory.set('shareloop:v1:state', JSON.stringify({ currentUserId: 'user_001', users: [{ availableCredit: 999999 }] }));
+  const state = api.loadPersistedState();
+  assert.equal(state.currentUserId, null);
+  for (const key of ['users', 'items', 'transactions', 'creditHistory', 'topups', 'complaints']) assert.deepEqual(state[key], []);
+});
+
+await test('lỗi 403 và checklist cũ giữ code để giao diện xử lý', async () => {
+  const originalAdapter = api.http.defaults.adapter;
+  try {
+    api.http.defaults.adapter = async (config) => Promise.reject({ response: { status: 403, data: { code: 'FORBIDDEN', message: 'Không có quyền' } }, config });
+    await assert.rejects(api.adminFinanceApi.report({}), (error) => error.status === 403 && error.code === 'FORBIDDEN');
+    api.http.defaults.adapter = async (config) => Promise.reject({ response: { status: 409, data: { code: 'REVIEW_CHECKLIST_OUTDATED', message: 'Checklist đã thay đổi' } }, config });
+    await assert.rejects(api.adminModerationApi.approve(1, { answers: [{ id: 11, passed: true }] }), (error) => error.code === 'REVIEW_CHECKLIST_OUTDATED');
+  } finally { api.http.defaults.adapter = originalAdapter; }
+});

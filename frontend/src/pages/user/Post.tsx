@@ -281,6 +281,14 @@ export function Post() {
       navigate('/activities', { state: { notice: `${baseNotice}${reviewNotice} Mã bài: #${item.id}.` } });
     } catch (caught) {
       const apiError = caught as ApiError;
+      const fieldNames: Record<string, keyof FormErrors> = {
+        title: 'title', description: 'description', desiredItem: 'tradeFor',
+        categoryId: 'category', areaId: 'district', condition: 'condition',
+        defectNote: 'defectNote', images: 'images', defectImages: 'defectImages',
+        brand: 'brand', operatingStatus: 'operatingStatus', offerType: 'type',
+      };
+      const field = apiError.field ? fieldNames[apiError.field] : undefined;
+      if (field) setErrors((current) => ({ ...current, [field]: apiError.message }));
       setErrorCode(apiError.code);
       setError(apiError.code === WALLET_INSUFFICIENT_BALANCE
         ? INSUFFICIENT_CREDIT_MESSAGE
@@ -291,6 +299,17 @@ export function Post() {
       submitInFlight.current = false;
       setSubmitting(false);
     }
+  };
+
+  const moveImage = (index: number, direction: number) => {
+    const target = index + direction;
+    if (target < 0 || target >= imageFiles.length) return;
+    const nextFiles = [...imageFiles];
+    const nextImages = [...images];
+    [nextFiles[index], nextFiles[target]] = [nextFiles[target], nextFiles[index]];
+    [nextImages[index], nextImages[target]] = [nextImages[target], nextImages[index]];
+    setImageFiles(nextFiles);
+    setImages(nextImages);
   };
 
   return (
@@ -550,6 +569,10 @@ export function Post() {
                     alt={`Ảnh món đồ ${index + 1}`}
                     className="aspect-square rounded-md object-cover"
                   />
+                  <div className="absolute bottom-1 left-1 right-1 flex justify-between gap-1">
+                    <button type="button" className="rounded bg-white px-2 text-xs" aria-label={`Đưa ảnh ${index + 1} về trước`} disabled={index === 0 || submitting || mediaUploading} onClick={() => moveImage(index, -1)}>←</button>
+                    <button type="button" className="rounded bg-white px-2 text-xs" aria-label={`Đưa ảnh ${index + 1} ra sau`} disabled={index === images.length - 1 || submitting || mediaUploading} onClick={() => moveImage(index, 1)}>→</button>
+                  </div>
                   <button
                     type="button"
                     aria-label="Xóa ảnh"

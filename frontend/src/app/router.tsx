@@ -26,17 +26,19 @@ import { demoPaymentEnabled } from '../services/paymentFlow';
 import { AdminLayout } from '../pages/admin/AdminLayout';
 import { NotFound } from '../pages/NotFound';
 import {
+  AdminAccountActions as AdminUsers,
+  AdminOperationsDashboard as AdminDashboard,
+  AdminFinanceReport as AdminFinance,
+  AdminUserCreditHistory as AdminUserDetail,
+  AdminUserCreditHistory as AdminFinanceUserLookup,
+} from '../pages/admin/AdminFinancePages';
+import {
   AdminAuditLogs,
-  AdminDashboard,
-  AdminFinance,
-  AdminFinanceUserLookup,
   AdminModeration,
   AdminSettings,
   AdminContentPage,
   AdminTransactionDetail,
   AdminTransactions,
-  AdminUserDetail,
-  AdminUsers,
 } from '../pages/admin/AdminPages';
 
 export const router = createBrowserRouter([
@@ -70,6 +72,7 @@ export const router = createBrowserRouter([
           { path: '/post', element: <Post /> },
           { path: '/activities', element: <Activities /> },
           { path: '/messages', element: <Messages /> },
+          { path: '/requests/:requestId', element: <Messages /> },
           { path: '/credit', element: <Credit /> },
           { path: '/wallet', element: <Credit /> },
           {

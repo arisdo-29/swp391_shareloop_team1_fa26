@@ -22,7 +22,7 @@ export function AiSearchNotices({
             <p className="font-bold text-text-primary">Lượt tìm miễn phí</p>
             <p className="mt-0.5 leading-5">
               {remainingFreeSearches === null
-                ? 'Thông tin số lượt còn lại sẽ được cập nhật khi tính năng sẵn sàng.'
+                ? 'Chưa tải được số lượt còn lại.'
                 : 'Bạn còn ' + remainingFreeSearches + ' lượt miễn phí.'}
             </p>
           </div>
@@ -33,7 +33,7 @@ export function AiSearchNotices({
           </span>
           <div>
             <p className="font-bold text-text-primary">Phí sau lượt miễn phí</p>
-            <p className="mt-0.5 leading-5">Mỗi lượt tìm tiếp theo dự kiến dùng {feeCredits} Credit.</p>
+            <p className="mt-0.5 leading-5">Mỗi lượt tìm tiếp theo dùng {feeCredits} Credit.</p>
           </div>
         </div>
       </div>

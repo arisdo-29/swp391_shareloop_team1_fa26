@@ -38,13 +38,7 @@ import { requestApi, toBackendUserId, toFeItemRequest } from '../../services/req
 import type { Item, ItemRequest, User } from '../../types/domain';
 import type { ApiError } from '../../services/http';
 import { useWallet } from '../../app/useWallet';
-
-const requestStatusLabel = {
-  PENDING: 'Chờ phản hồi',
-  RESERVED: 'Đã được chọn',
-  REJECTED: 'Không được chọn',
-  CANCELLED: 'Đã hủy',
-};
+import { canChat, requestStatusLabel } from '../../utils/request';
 
 const editQuoteReasonLabel: Record<EditQuoteReason, string> = {
   NOT_YET_APPROVED: 'Bài chưa được duyệt lần đầu',
@@ -242,6 +236,10 @@ export function Activities() {
     };
   }, [currentUserId, itemsReloadKey, user.id]);
   const txs = data.transactions.filter((t) => t.ownerId === user.id || t.requesterId === user.id);
+  const apiTransactions = [...new Map([
+    ...apiSentRequests,
+    ...Object.values(apiRequestsByItem).flat(),
+  ].map((request) => [request.id, request])).values()];
   const acceptApiRequest = Object.values(apiRequestsByItem)
     .flat()
     .find((request) => request.id === acceptConfirmId);
@@ -403,7 +401,7 @@ export function Activities() {
           onClick={() => setTab('transactions')}
           className={`border-b-2 px-4 py-3 text-sm font-semibold ${tab === 'transactions' ? 'border-primary text-primary' : 'border-transparent text-text-muted'}`}
         >
-          Giao dịch <span className="ml-1 text-xs">({txs.length})</span>
+          Giao dịch <span className="ml-1 text-xs">({currentUserId ? apiTransactions.length : txs.length})</span>
         </button>
       </div>
 
@@ -568,7 +566,13 @@ export function Activities() {
         </section>
       ) : (
         <section>
-          {txs.length ? (
+          {currentUserId ? (
+            myItemsLoading ? <EmptyState title="Đang tải giao dịch" text="Vui lòng chờ trong giây lát." /> : myItemsError ? (
+              <EmptyState title="Không tải được giao dịch" text={myItemsError} action={<Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>Thử lại</Button>} />
+            ) : (
+              <SentRequestPanel itemRequests={apiTransactions} items={myItems} cancelingRequestId={cancelingRequestId} onCancel={(requestId) => void cancelApiRequest(requestId)} />
+            )
+          ) : txs.length ? (
             <div className="space-y-3">
               {txs.map((tx) => {
                 const item = data.items.find((i) => i.id === tx.itemId)!;
@@ -1201,9 +1205,10 @@ function SentRequestPanel({
   cancelingRequestId: string;
   onCancel: (requestId: string) => void;
 }) {
+  const currentUser = useAppSelector(selectCurrentUser);
   return (
     <div className="rounded-lg bg-white p-4 ring-1 ring-border/80">
-      <h3 className="text-sm font-bold">Yêu cầu đã gửi</h3>
+      <h3 className="text-sm font-bold">Yêu cầu giao dịch</h3>
       {itemRequests.length ? (
         <div className="mt-3 space-y-3">
           {itemRequests.map((request) => {
@@ -1229,12 +1234,15 @@ function SentRequestPanel({
                     ) : null}
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
+                    <Link to={`/requests/${request.id.replace(/^api_req_/, '')}`}>
+                      <Button size="sm" variant="outline">Chi tiết giao dịch</Button>
+                    </Link>
                     <Link to={`/items/${request.itemId}`}>
                       <Button size="sm" variant="outline" icon="eye">
                         Xem bài
                       </Button>
                     </Link>
-                    {request.status === 'PENDING' ? (
+                    {request.status === 'PENDING' && request.requesterId === currentUser?.id ? (
                       <Button
                         size="sm"
                         variant="ghost"
@@ -1307,8 +1315,8 @@ function RequestPanel({
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    {request.status === 'RESERVED' ? (
-                      <Link to="/messages">
+                    {canChat(request.status) ? (
+                      <Link to={`/requests/${request.id.replace(/^api_req_/, '')}`}>
                         <Button size="sm" variant="outline" icon="messages">
                           Nhắn tin
                         </Button>
