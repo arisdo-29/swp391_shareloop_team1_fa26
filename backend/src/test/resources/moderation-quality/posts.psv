@@ -1,0 +1,61 @@
+id|violation|kind|title|description
+P001|true|phone|Tặng sách tiếng Anh|Liên hệ số 0900000001 để nhận
+P002|true|phone|Bàn học cũ|Gọi 091 000 0002 trước khi đến
+P003|true|phone|Áo khoác trẻ em|Số nhận hàng là 093.000.0003
+P004|true|phone|Đèn bàn|Nhắn qua 098-000-0004 để hỏi thêm
+P005|true|phone|Nồi cơm điện|Mình nghe máy ở 0320000005
+P006|true|phone|Bộ truyện tranh|Liên lạc 0560000006 nhé
+P007|true|phone|Xe đạp bé|Số của mình là 0700000007
+P008|true|phone|Ghế gỗ nhỏ|Vui lòng gọi 0830000008
+P009|true|phone|Hộp bút|Hẹn lấy qua số 0990000009
+P010|true|phone|Quạt điện|Để lại tin cho 0900000010
+P011|true|email|Tặng giáo trình|Viết thư cho books01@example.com
+P012|true|email|Bộ đồ chơi xếp hình|Gửi mail đến toys02@example.org
+P013|true|email|Giày thể thao cũ|Mình dùng shoe03@example.net
+P014|true|url|Đồ trang trí phòng|Xem hình tại https://example.com/decor
+P015|true|url|Bàn phím máy tính|Ảnh khác nằm ở www.example.net/keyboard
+P016|true|prohibited|Cần sa|Mình rao cần sa còn nguyên gói
+P017|true|prohibited|Đổi lấy cần sa|Mình có món đồ muốn đổi
+P018|true|prohibited|Tặng CẦN SA|Món này không còn cần dùng
+P019|true|prohibited|Bộ dụng cụ cần sa|Đồ cần sa để trong hộp
+P020|true|prohibited|Gói cần   sa|Mô tả chi tiết khi gặp
+P021|true|prohibited|Súng cũ|Món còn hoạt động bình thường
+P022|true|prohibited|Tặng khẩu súng|Mình không sử dụng nữa
+P023|true|prohibited|Phụ kiện súng|Có kèm theo bao đựng
+P024|true|prohibited|Súng thể thao|Món còn nguyên phụ kiện
+P025|true|prohibited|Đổi súng lấy sách|Mình sẽ trao đổi tại điểm hẹn
+P026|true|social|Bộ sách học tiếng Anh|Nhắn Zalo tên Sach Cu Quan Mot để nhận
+P027|true|social|Tặng áo khoác|Tìm Facebook tài khoản ao_khoac_cu
+P028|true|social|Hộp đồ dùng học tập|Nhắn Instagram @dodunghoctap
+P029|true|social|Đèn học mini|Liên hệ Telegram @denhocmini
+P030|true|obfuscated_contact|Tặng máy tính bỏ túi|Số mình không chín một hai ba bốn năm sáu bảy tám
+P031|false|ordinary|Tặng sách toán lớp sáu|Sách còn đủ trang và dùng tốt
+P032|false|ordinary|Áo khoác màu xanh|Áo đã giặt sạch, còn nguyên khóa
+P033|false|ordinary|Bàn học nhỏ bằng gỗ|Bàn chắc chắn, có vài vết xước
+P034|false|ordinary|Bộ xếp hình trẻ em|Đủ các mảnh và hộp đựng
+P035|false|ordinary|Đèn đọc sách|Đèn sáng tốt, dây nguồn còn nguyên
+P036|false|ordinary|Nồi cơm điện cũ|Nồi hoạt động tốt và đã vệ sinh
+P037|false|ordinary|Truyện tranh thiếu nhi|Sách còn sạch, bìa hơi cũ
+P038|false|ordinary|Giày chạy bộ|Giày vừa cỡ 39, đế còn tốt
+P039|false|ordinary|Ghế nhựa nhỏ|Ghế không nứt, màu còn mới
+P040|false|ordinary|Hộp bút vải|Khóa kéo hoạt động bình thường
+P041|false|number|Bộ sách năm 2024|Gồm 09 cuốn và 03 tập bài tập
+P042|false|number|Máy ảnh mã SL-12345|Máy có 128 GB thẻ nhớ
+P043|false|number|Bàn gỗ dài 120 cm|Mua năm 2019, giá 1.000.000 đồng
+P044|false|number|Đồng hồ báo thức|Có hiển thị giờ 09:00 rõ nét
+P045|false|number|Thùng đồ mã AB-09000000123|Đây là mã in trên thùng hàng
+P046|false|exception|Súng nước đồ chơi|Đồ chơi nhựa cho trẻ em
+P047|false|exception|Súng bắn keo|Dụng cụ thủ công còn dùng tốt
+P048|false|exception|Súng phun sơn|Dụng cụ đã được vệ sinh sạch
+P049|false|exception|Súng bắn đinh|Dụng cụ làm mộc còn nguyên hộp
+P050|false|exception|Bộ súng nước mini|Dùng khi đi chơi hè, còn mới
+P051|false|word_boundary|Sách về cây cần sa kê|Nội dung nói về cây ăn quả sa kê
+P052|false|word_boundary|Sách kỹ năng cần thiết|Bản in đẹp và còn đủ trang
+P053|false|word_boundary|Áo in chữ Facebook|Chữ trang trí nằm trên mặt áo
+P054|false|word_boundary|Giáo trình về website|Sách hướng dẫn thiết kế trang web
+P055|false|word_boundary|Sách về email marketing|Nội dung là kiến thức tiếp thị
+P056|false|ordinary|Tặng xe đạp trẻ em|Lốp đã thay, phanh hoạt động tốt
+P057|false|ordinary|Bộ dụng cụ nhà bếp|Gồm muỗng, vá và rổ còn sạch
+P058|false|ordinary|Túi vải tái sử dụng|Túi không rách, quai còn chắc
+P059|false|ordinary|Bút màu cho bé|Nhiều màu, đầu bút còn tốt
+P060|false|ordinary|Kệ sách gỗ nhỏ|Kệ đứng vững, chỉ có xước nhẹ
