@@ -3,8 +3,8 @@
 Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất (xem `docs/api/wallet.md`).
 
-Người sở hữu: BE1. Hiện chỉ có **cổng giả lập** (`MockPaymentClient`): không có tiền thật, người dùng tự bấm xác nhận.
-VNPay sẽ thay vào sau qua `PaymentGatewayClient` mà không đổi bước 1.
+Người sở hữu: BE1. Chọn cổng qua `app.payment.provider=mock|vnpay`, mặc định `mock`.
+`MockPaymentClient` giả lập thanh toán; `VnPayClient` tạo URL chuyển sang VNPAY.
 
 ## Luồng (F04, UC-10)
 
@@ -75,7 +75,7 @@ Xác nhận thanh toán giả lập và cộng Credit (FR-13, FR-14) trong một
 | `amountVnd`   | number | Số tiền nạp (VNĐ)                                     |
 | `credits`     | number | Số Credit sẽ được cộng                                |
 | `status`      | string | `PENDING` / `SUCCESS` / `FAILED` / `EXPIRED`          |
-| `provider`    | string | `MOCK` (sau này thêm `VNPAY`)                         |
+| `provider`    | string | `MOCK` hoặc `VNPAY`                                  |
 | `redirectUrl` | string | Địa chỉ FE chuyển người dùng tới để thanh toán        |
 
 ## TopUpConfirmResponse
@@ -93,9 +93,59 @@ Xác nhận thanh toán giả lập và cộng Credit (FR-13, FR-14) trong một
 |------------------------------------|------|-----------------------------------------------------------|
 | `WALLET_TOPUP_AMOUNT_INVALID`      | 422  | Dưới mức nạp tối thiểu hoặc không phải bội số của giá 1 Credit |
 | `WALLET_PAYMENT_ORDER_NOT_FOUND`   | 404  | Không có đơn hoặc đơn của người khác                      |
-| `WALLET_PAYMENT_ORDER_NOT_PAYABLE` | 409  | Đơn `FAILED` hoặc `EXPIRED`                               |
+| `WALLET_PAYMENT_ORDER_NOT_PAYABLE` | 409  | Đơn `FAILED`, `EXPIRED` hoặc dùng mock-confirm cho đơn khác `MOCK` |
 
-## Chưa làm
+## Luồng VNPAY
 
-- `GET /wallet/topup-orders/{orderCode}` (trang trả về đọc trạng thái đơn) và VNPay IPN.
-- Job chuyển đơn PENDING quá `payment_order_expire_minutes` sang `EXPIRED` (FR-18).
+1. FE gọi tạo đơn như trên; nhận `provider=VNPAY` và chuyển trình duyệt tới `redirectUrl`.
+2. URL có số tiền nhân 100, thời gian `Asia/Ho_Chi_Minh`, hạn từ `PAYMENT_ORDER_EXPIRE_MINUTES`, chữ ký HMAC-SHA512 trên tham số đã sắp xếp và URL-encode.
+3. VNPAY gọi IPN để backend ghi kết quả và cộng Credit. Chỉ IPN được cộng tiền.
+4. Trình duyệt quay về return, backend kiểm chữ ký rồi chuyển hướng 302 tới `app.payment.vnpay.fe-result-url`, mặc định `http://localhost:5173/credit` (route `/credit` đã có trong FE).
+
+### GET /api/v1/payments/vnpay/ipn
+
+Không cần Bearer Token. Xác thực bằng `vnp_SecureHash`; loại `vnp_SecureHash` và `vnp_SecureHashType` khỏi dữ liệu ký.
+Tìm đơn VNPAY bằng `vnp_TxnRef`, kiểm chính xác `vnp_Amount = amount_vnd * 100` (không làm tròn).
+Chỉ khi cả `vnp_ResponseCode` và `vnp_TransactionStatus` bằng `00` mới cộng Credit; kết quả khác chuyển đơn PENDING sang FAILED.
+Khóa `users` trước `payment_orders`; cập nhật đơn, số dư và ledger trong cùng transaction. IPN lặp lại trả `02`, không cộng thêm.
+
+Callback có chữ ký hợp lệ và tìm được đơn VNPAY sẽ lưu `provider_txn_id`, `signature_verified`, toàn bộ tham số trong `callback_data`, kể cả sai số tiền hoặc đơn đã xác nhận.
+Chữ ký sai không cập nhật đơn. Không lưu được callback khi không tìm thấy đơn hoặc transaction gặp lỗi.
+
+Luôn trả HTTP 200 với JSON (đúng chữ hoa): `{"RspCode":"00","Message":"Confirm Success"}`.
+
+| RspCode | Message | Ý nghĩa |
+| --- | --- | --- |
+| `00` | Confirm Success | Đã xử lý kết quả thành công hoặc thất bại của cổng |
+| `01` | Order not found | Không tìm thấy đơn VNPAY |
+| `02` | Order already confirmed | Đơn không còn PENDING |
+| `04` | Invalid amount | Số tiền thiếu, sai định dạng hoặc không khớp |
+| `97` | Invalid signature | Chữ ký sai hoặc thiếu |
+| `99` | Unknown error | Lỗi xử lý khác; transaction được rollback |
+
+### GET /api/v1/payments/vnpay/return
+
+Không cần Bearer Token. Chỉ kiểm chữ ký và redirect 302; không ghi đơn, không cộng Credit.
+Query gửi FE: `orderCode` và `status=SUCCESS|FAILED|INVALID_SIGNATURE`. Chữ ký sai trả `orderCode` rỗng.
+`SUCCESS` ở đây chỉ phản ánh dữ liệu return của cổng; IPN có thể đến sau. FE cần tải lại ví và không được suy ra đã cộng tiền từ query này.
+FE hiện có route `/credit`; phần hiển thị kết quả query và API đọc trạng thái đơn riêng chưa được triển khai trong task này.
+
+### Biến môi trường (profile prod)
+
+| Biến | Ý nghĩa / mặc định |
+| --- | --- |
+| `PAYMENT_PROVIDER` | `mock` (mặc định) hoặc `vnpay` |
+| `VNPAY_TMN_CODE` | Mã merchant; bắt buộc khi chọn VNPAY |
+| `VNPAY_HASH_SECRET` | Khóa ký từ merchant; bắt buộc khi chọn VNPAY; không đưa vào FE |
+| `VNPAY_PAY_URL` | `https://sandbox.vnpayment.vn/paymentv2/vpcpay.html` |
+| `VNPAY_RETURN_URL` | URL backend `/api/v1/payments/vnpay/return`; mặc định rỗng, phải cấu hình khi chọn VNPAY |
+| `VNPAY_FE_RESULT_URL` | URL FE kết quả; mặc định `http://localhost:5173/credit`, khi deploy đặt `https://<frontend-domain>/credit` |
+| `PAYMENT_MOCK_ENABLED` | Bật endpoint mock-confirm; không cho phép xác nhận đơn VNPAY |
+
+Phải khai báo IPN URL `https://<render-domain>/api/v1/payments/vnpay/ipn` trong trang quản trị merchant sandbox của VNPAY.
+Backend phải truy cập công khai bằng HTTPS để VNPAY gọi IPN.
+
+Tham khảo [tài liệu thanh toán VNPAY 2.1.0](https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html).
+
+Job hết hạn đã chuyển đơn PENDING quá `payment_order_expire_minutes` sang EXPIRED.
+Chưa có `GET /wallet/topup-orders/{orderCode}` để FE truy vấn trạng thái đơn.

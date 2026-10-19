@@ -10,6 +10,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Map;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -68,7 +71,27 @@ public class PaymentOrder {
     @Column(name = "paid_at")
     private Instant paidAt;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "callback_data", columnDefinition = "jsonb")
+    private Map<String, String> callbackData;
+
     protected PaymentOrder() {}
+
+    public void recordGatewayResult(String providerTxnId, boolean signatureVerified, Map<String, String> callbackData) {
+        this.providerTxnId = providerTxnId;
+        this.signatureVerified = signatureVerified;
+        this.callbackData = Map.copyOf(callbackData);
+    }
+
+    public void markFailed() {
+        if (status == PaymentOrderStatus.PENDING) {
+            status = PaymentOrderStatus.FAILED;
+        }
+    }
+
+    public Map<String, String> getCallbackData() {
+        return callbackData;
+    }
 
     /** Đơn mới luôn ở trạng thái PENDING, chưa kiểm chữ ký. */
     public PaymentOrder(

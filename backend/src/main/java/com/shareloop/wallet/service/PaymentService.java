@@ -10,6 +10,7 @@ import com.shareloop.wallet.dto.TopUpOrderResponse;
 import com.shareloop.wallet.dto.WalletResponse;
 import com.shareloop.wallet.entity.PaymentOrder;
 import com.shareloop.wallet.entity.PaymentOrderStatus;
+import com.shareloop.wallet.entity.PaymentProvider;
 import com.shareloop.wallet.mapper.WalletMapper;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
 import com.shareloop.wallet.repository.PaymentOrderSnapshot;
@@ -93,6 +94,9 @@ public class PaymentService {
             throw new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND);
         }
 
+        if (snapshot.getProvider() != PaymentProvider.MOCK) {
+            throw new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE);
+        }
         WalletResponse wallet = creditService.topUp(userId, snapshot.getId());
         return new TopUpConfirmResponse(orderCode, PaymentOrderStatus.SUCCESS, snapshot.getCredits(), wallet);
     }

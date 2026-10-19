@@ -3,8 +3,8 @@ package com.shareloop.integration.payment;
 import com.shareloop.wallet.entity.PaymentProvider;
 
 /**
- * Điểm nối tới cổng thanh toán (Lộ trình C11). Hiện chỉ có {@link MockPaymentClient}; khi làm VNPay sẽ thêm
- * VnPayClient cài cùng interface này, PaymentService không phải sửa.
+ * Điểm nối tới cổng thanh toán (Lộ trình C11). Chọn {@link MockPaymentClient} hoặc {@link VnPayClient}
+ * bằng cấu hình app.payment.provider.
  */
 public interface PaymentGatewayClient {
 
