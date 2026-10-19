@@ -37,4 +37,3 @@ public class MeReputationController {
         return reputationService.getMyReputation(userId, page, size);
     }
 }
-
