@@ -15,6 +15,7 @@ const bundle = await build({
       export { aiApi } from './src/services/aiApi.ts';
       export { chatApi } from './src/services/chatApi.ts';
       export { adminModerationApi } from './src/services/adminModerationApi.ts';
+      export { reportApi } from './src/services/reportApi.ts';
       export { adminFinanceApi } from './src/services/adminFinanceApi.ts';
       export { adminAuditApi } from './src/services/adminAuditApi.ts';
       export { requestApi, toFeItemRequest } from './src/services/requestApi.ts';
@@ -62,6 +63,55 @@ await test('duyệt gửi ID điều kiện cùng đáp án, không ghép lại 
   await api.adminModerationApi.approve(42, { answers });
   assert.equal(requests[0].url, '/api/v1/admin/reviews/42/approve');
   assert.deepEqual(requests[0].body.answers, answers);
+});
+
+await test('khiếu nại truyền bộ lọc, phân trang và đọc hồ sơ theo report ID', async () => {
+  requests = [];
+  nextResponse = { items: [{ id: 71, targetType: 'REQUEST', requestId: 88 }], page: 2, size: 20, totalElements: 41, totalPages: 3 };
+  const controller = new AbortController();
+  assert.deepEqual(await api.reportApi.list({ page: 2, size: 20, status: 'OPEN', targetType: 'REQUEST' }, controller.signal), nextResponse);
+  assert.equal(requests[0].url, '/api/v1/admin/reports');
+  assert.deepEqual(requests[0].params, { page: 2, size: 20, status: 'OPEN', targetType: 'REQUEST' });
+  nextResponse = { report: { id: 71, requestId: 88 }, response: 'Giải trình', resolution: null,
+    evidence: [{ id: 12, url: '/api/v1/admin/reports/71/evidence/12', available: true }],
+    responseEvidence: [{ id: 15, url: null, available: false }], responseDueAt: '2026-10-23T03:00:00Z' };
+  assert.deepEqual(await api.reportApi.detail(71), nextResponse);
+  assert.equal(requests[1].url, '/api/v1/admin/reports/71');
+  nextResponse = new Blob(['image'], { type: 'image/png' });
+  assert.equal(await api.reportApi.evidence(71, 12, controller.signal), nextResponse);
+  assert.equal(requests[2].url, '/api/v1/admin/reports/71/evidence/12');
+});
+
+await test('kết luận gửi UPHOLD hoặc DISMISS cùng ghi chú, giữ lỗi 409 từ backend', async () => {
+  requests = [];
+  for (const decision of ['UPHOLD', 'DISMISS']) {
+    nextResponse = { id: 71, status: decision === 'UPHOLD' ? 'RESOLVED' : 'DISMISSED' };
+    assert.deepEqual(await api.reportApi.conclude(71, { decision, note: 'Đã xác minh' }), nextResponse);
+    assert.deepEqual(requests.at(-1).body, { decision, note: 'Đã xác minh' });
+    assert.equal(requests.at(-1).url, '/api/v1/admin/reports/71/conclude');
+  }
+  const adapter = api.http.defaults.adapter;
+  api.http.defaults.adapter = async (config) => {
+    throw { isAxiosError: true, config, response: { status: 409, data: { code: 'REPORT_ALREADY_CONCLUDED', message: 'Đã xử lý' } } };
+  };
+  try {
+    await assert.rejects(api.reportApi.conclude(71, { decision: 'UPHOLD' }), (error) => error.status === 409 && error.code === 'REPORT_ALREADY_CONCLUDED');
+  } finally {
+    api.http.defaults.adapter = adapter;
+  }
+});
+
+await test('giữ API mở khiếu nại giao dịch và giải trình của màn người dùng', async () => {
+  requests = [];
+  const input = { reason: 'NOT_AS_DESCRIBED', note: 'Đồ khác mô tả', evidenceMediaIds: [12] };
+  nextResponse = { id: 71, responseDueAt: '2026-10-23T03:00:00Z' };
+  assert.deepEqual(await api.reportApi.openDispute(88, input), nextResponse);
+  assert.equal(requests[0].url, '/api/v1/requests/88/disputes');
+  assert.deepEqual(requests[0].body, input);
+  const response = { note: 'Giải trình', evidenceMediaIds: [15] };
+  assert.equal(await api.reportApi.respondDispute(71, response), undefined);
+  assert.equal(requests[1].url, '/api/v1/disputes/71/response');
+  assert.deepEqual(requests[1].body, response);
 });
 
 await test('nhật ký đọc được cả metadata page mới và response Spring cũ', async () => {

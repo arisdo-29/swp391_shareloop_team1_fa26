@@ -5,7 +5,9 @@ import com.shareloop.report.entity.TargetType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 
 @Schema(description = "Yêu cầu báo cáo vi phạm")
 public record CreateReportRequest(
@@ -34,7 +36,20 @@ public record CreateReportRequest(
         @NotBlank(message = "Mô tả chi tiết lý do báo cáo là bắt buộc.")
         @Size(max = 2000, message = "Mô tả không được vượt quá 2000 ký tự.")
         @Schema(description = "Mô tả chi tiết vi phạm", example = "Bài đăng chứa hàng cấm không được phép chia sẻ")
-        String description) {
+        String description,
+
+        List<@NotNull @Positive Long> evidenceMediaIds) {
+
+    public CreateReportRequest(
+            TargetType targetType,
+            Long targetId,
+            Long itemId,
+            Long targetUserId,
+            Long requestId,
+            ReportReason reason,
+            String description) {
+        this(targetType, targetId, itemId, targetUserId, requestId, reason, description, List.of());
+    }
 
     public Long resolvedItemId() {
         if (itemId != null) {

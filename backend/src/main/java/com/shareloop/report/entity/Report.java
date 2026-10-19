@@ -129,6 +129,7 @@ public class Report extends BaseEntity {
         this.response = note != null ? note.trim() : null;
         this.responseEvidence = responseEvidence;
         this.respondedAt = now;
+        this.status = ReportStatus.OPEN;
     }
 
     public Long getReporterId() {
@@ -185,6 +186,15 @@ public class Report extends BaseEntity {
 
     public String getResponseEvidence() {
         return responseEvidence;
+    }
+
+    public void setEvidence(String evidence) {
+        this.evidence = evidence;
+    }
+
+    public void awaitResponse(Instant dueAt) {
+        this.responseDueAt = dueAt;
+        this.status = ReportStatus.AWAITING_RESPONSE;
     }
 
     public Long getResolvedBy() {

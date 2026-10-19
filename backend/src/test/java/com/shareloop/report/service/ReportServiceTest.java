@@ -19,7 +19,6 @@ import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
-import com.shareloop.media.service.MediaService;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.report.ReportErrorCode;
 import com.shareloop.report.dto.ConcludeReportRequest;
@@ -72,7 +71,7 @@ class ReportServiceTest {
     ItemService itemService;
 
     @Mock
-    MediaService mediaService;
+    ReportEvidenceService evidenceService;
 
     @Mock
     NotificationService notificationService;
@@ -98,11 +97,17 @@ class ReportServiceTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient()
+                .when(configService.getDecimal("DISPUTE_WINDOW_DAYS"))
+                .thenReturn(new BigDecimal("7"));
+        org.mockito.Mockito.lenient()
+                .when(configService.getDecimal("DISPUTE_RESPONSE_DAYS"))
+                .thenReturn(new BigDecimal("3"));
         reportService = spy(new ReportService(
                 reportRepository,
                 itemQueryService,
                 itemService,
-                mediaService,
+                evidenceService,
                 notificationService,
                 reputationService,
                 activityLogService,
@@ -242,12 +247,13 @@ class ReportServiceTest {
         CreateDisputeRequest request =
                 new CreateDisputeRequest(ReportReason.NOT_AS_DESCRIBED, "Hàng bị lỗi không như mô tả", List.of(50L));
 
+        when(evidenceService.attach(List.of(50L), receiverId)).thenReturn("[50]");
         DisputeResponse response = reportService.openDispute(receiverId, requestId, request);
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.responseDueAt()).isEqualTo(BASE_TIME.plus(Duration.ofDays(3)));
 
-        verify(mediaService).attach(List.of(50L), receiverId);
+        verify(evidenceService).attach(List.of(50L), receiverId);
         verify(notificationService)
                 .notify(
                         eq(donorId),
@@ -376,13 +382,15 @@ class ReportServiceTest {
 
         DisputeResponseRequest request = new DisputeResponseRequest("Áo nguyên vẹn", List.of(60L));
 
+        when(evidenceService.attach(List.of(60L), respondentId)).thenReturn("[60]");
         reportService.respondDispute(respondentId, disputeId, request);
 
         assertThat(dispute.getResponse()).isEqualTo("Áo nguyên vẹn");
         assertThat(dispute.getRespondedAt()).isEqualTo(BASE_TIME);
         assertThat(dispute.getResponseEvidence()).isEqualTo("[60]");
+        assertThat(dispute.getStatus()).isEqualTo(ReportStatus.OPEN);
 
-        verify(mediaService).attach(List.of(60L), respondentId);
+        verify(evidenceService).attach(List.of(60L), respondentId);
     }
 
     @Test
@@ -704,5 +712,382 @@ class ReportServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
                         .isEqualTo(ReportErrorCode.REPORT_ALREADY_CONCLUDED));
+    }
+
+    @Test
+    void requestCreationStoresPrivateEvidenceAndConfiguredDeadline() {
+        doReturn(new ReportService.RequestSnapshot(7L, 5L, 10L, "COMPLETED", BASE_TIME))
+                .when(reportService)
+                .findRequest(7L);
+        when(itemQueryService.getSummary(5L)).thenReturn(new ItemSummary(5L, 20L, OfferType.GIVE, ItemStatus.APPROVED));
+        when(configService.getDecimal("DISPUTE_WINDOW_DAYS")).thenReturn(new BigDecimal("7"));
+        when(configService.getDecimal("DISPUTE_RESPONSE_DAYS")).thenReturn(new BigDecimal("4"));
+        when(evidenceService.attach(java.util.List.of(12L), 10L)).thenReturn("[12]");
+        when(reportRepository.save(any())).thenAnswer(invocation -> {
+            Report report = invocation.getArgument(0);
+            assertThat(report.getEvidence()).isEqualTo("[12]");
+            assertThat(report.getResponseDueAt()).isEqualTo(BASE_TIME.plus(Duration.ofDays(4)));
+            return report;
+        });
+        var result = reportService.createReport(
+                10L,
+                new CreateReportRequest(
+                        TargetType.REQUEST,
+                        null,
+                        null,
+                        null,
+                        7L,
+                        ReportReason.OTHER,
+                        "Khiếu nại",
+                        java.util.List.of(12L)));
+        assertThat(result.status()).isEqualTo(ReportStatus.AWAITING_RESPONSE);
+        assertThat(result.targetUserId()).isEqualTo(20L);
+        assertThat(result.itemId()).isEqualTo(5L);
+    }
+
+    @Test
+    void genericRequestReportsPreserveCompletedWindowAndParticipantChecks() {
+        var input = new CreateReportRequest(TargetType.REQUEST, null, null, null, 100L, ReportReason.OTHER, "Nội dung");
+        when(itemQueryService.getSummary(200L))
+                .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.TRADED));
+        doReturn(new ReportService.RequestSnapshot(100L, 200L, 10L, "RESERVED", null))
+                .when(reportService)
+                .findRequest(100L);
+        assertThatThrownBy(() -> reportService.createReport(10L, input))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.DISPUTE_REQUEST_NOT_COMPLETED);
+        doReturn(new ReportService.RequestSnapshot(100L, 200L, 10L, "COMPLETED", BASE_TIME.minus(Duration.ofDays(8))))
+                .when(reportService)
+                .findRequest(100L);
+        assertThatThrownBy(() -> reportService.createReport(10L, input))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.DISPUTE_WINDOW_EXPIRED);
+        doReturn(new ReportService.RequestSnapshot(100L, 200L, 10L, "COMPLETED", BASE_TIME))
+                .when(reportService)
+                .findRequest(100L);
+        assertThatThrownBy(() -> reportService.createReport(99L, input))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.DISPUTE_NOT_A_PARTY);
+        org.mockito.Mockito.verifyNoInteractions(evidenceService, notificationService);
+    }
+
+    @Test
+    void disputeDeadlinesUseTypedConfigFallbackWhenLegacyKeysAreAbsent() {
+        doReturn(new ReportService.RequestSnapshot(100L, 200L, 10L, "COMPLETED", BASE_TIME))
+                .when(reportService)
+                .findRequest(100L);
+        when(itemQueryService.getSummary(200L))
+                .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.TRADED));
+        var absent = new BusinessException(com.shareloop.setting.SettingErrorCode.SETTING_CONFIG_NOT_FOUND);
+        when(configService.getDecimal("DISPUTE_WINDOW_DAYS")).thenThrow(absent);
+        when(configService.getDecimal("DISPUTE_RESPONSE_DAYS")).thenThrow(absent);
+        when(configService.getInt(com.shareloop.setting.ConfigKey.COMPLAINT_WINDOW_DAYS))
+                .thenReturn(10);
+        when(configService.getInt(com.shareloop.setting.ConfigKey.RESPONSE_WINDOW_DAYS))
+                .thenReturn(4);
+        when(reportRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        var result =
+                reportService.openDispute(10L, 100L, new CreateDisputeRequest(ReportReason.OTHER, "Nội dung", null));
+        assertThat(result.responseDueAt()).isEqualTo(BASE_TIME.plus(Duration.ofDays(4)));
+        verify(configService).getInt(com.shareloop.setting.ConfigKey.COMPLAINT_WINDOW_DAYS);
+        verify(configService).getInt(com.shareloop.setting.ConfigKey.RESPONSE_WINDOW_DAYS);
+    }
+
+    @Test
+    void responseRequiresTargetAndOpenWindowAndOnlyAcceptsOnce() {
+        Report report =
+                new Report(10L, TargetType.USER, null, 20L, null, ReportReason.OTHER, "Nội dung", ReportStage.BEFORE);
+        report.awaitResponse(BASE_TIME.plusSeconds(3600));
+        when(reportRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(report));
+        var input = new com.shareloop.report.dto.RespondReportRequest(" Giải trình ", java.util.List.of(15L));
+        assertThatThrownBy(() -> reportService.respond(30L, 1L, input))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.REPORT_NOT_PARTICIPANT);
+        when(evidenceService.attach(java.util.List.of(15L), 20L)).thenReturn("[15]");
+        reportService.respond(20L, 1L, input);
+        assertThat(report.getResponse()).isEqualTo("Giải trình");
+        assertThat(report.getResponseEvidence()).isEqualTo("[15]");
+        assertThat(report.getStatus()).isEqualTo(ReportStatus.OPEN);
+        assertThatThrownBy(() -> reportService.respond(20L, 1L, input))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.REPORT_RESPONSE_NOT_ALLOWED);
+    }
+
+    @Test
+    void expiredResponseCannotAttachEvidence() {
+        Report report =
+                new Report(10L, TargetType.USER, null, 20L, null, ReportReason.OTHER, "Nội dung", ReportStage.BEFORE);
+        report.awaitResponse(BASE_TIME.minusSeconds(1));
+        when(reportRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(report));
+        assertThatThrownBy(() -> reportService.respond(
+                        20L,
+                        1L,
+                        new com.shareloop.report.dto.RespondReportRequest("Giải trình", java.util.List.of(15L))))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.REPORT_RESPONSE_NOT_ALLOWED);
+        org.mockito.Mockito.verifyNoInteractions(evidenceService);
+    }
+
+    @Test
+    @DisplayName("Báo cáo bài đăng hợp lệ thành công")
+    void createReport_itemTarget_success() {
+        Long reporterId = 10L;
+        Long itemId = 100L;
+        Long donorId = 20L;
+
+        CreateReportRequest request = new CreateReportRequest(
+                TargetType.ITEM,
+                null,
+                itemId,
+                null,
+                null,
+                ReportReason.NOT_AS_DESCRIBED,
+                "Đồ rách nát không giống mô tả");
+
+        ItemSummary summary = new ItemSummary(itemId, donorId, OfferType.GIVE, ItemStatus.APPROVED);
+
+        when(itemQueryService.getSummary(itemId)).thenReturn(summary);
+        when(reportRepository.existsByReporterIdAndTargetTypeAndItemId(reporterId, TargetType.ITEM, itemId))
+                .thenReturn(false);
+        when(reportRepository.countByItemId(itemId)).thenReturn(1L);
+
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> {
+            Report saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 1L);
+            return saved;
+        });
+
+        ReportResponse response = reportService.createReport(reporterId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.id()).isEqualTo(1L);
+        assertThat(response.reporterId()).isEqualTo(reporterId);
+        assertThat(response.targetType()).isEqualTo(TargetType.ITEM);
+        assertThat(response.itemId()).isEqualTo(itemId);
+        assertThat(response.reason()).isEqualTo(ReportReason.NOT_AS_DESCRIBED);
+        assertThat(response.description()).isEqualTo("Đồ rách nát không giống mô tả");
+        assertThat(response.status()).isEqualTo(ReportStatus.OPEN);
+
+        verify(itemService, never()).hide(itemId);
+    }
+
+    @Test
+    @DisplayName("Báo cáo người dùng hợp lệ thành công")
+    void createReport_userTarget_success() {
+        Long reporterId = 10L;
+        Long targetUserId = 20L;
+
+        CreateReportRequest request = new CreateReportRequest(
+                TargetType.USER, targetUserId, null, null, null, ReportReason.HARASSMENT, "Quấy rối qua tin nhắn");
+
+        when(reportRepository.existsByReporterIdAndTargetTypeAndTargetUserId(reporterId, TargetType.USER, targetUserId))
+                .thenReturn(false);
+
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> {
+            Report saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 2L);
+            return saved;
+        });
+
+        ReportResponse response = reportService.createReport(reporterId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.id()).isEqualTo(2L);
+        assertThat(response.targetType()).isEqualTo(TargetType.USER);
+        assertThat(response.targetUserId()).isEqualTo(targetUserId);
+        assertThat(response.reason()).isEqualTo(ReportReason.HARASSMENT);
+    }
+
+    @Test
+    @DisplayName("Báo cáo yêu cầu giao dịch hợp lệ thành công")
+    void createReport_requestTarget_success() {
+        Long reporterId = 10L;
+        Long requestId = 50L;
+        doReturn(new ReportService.RequestSnapshot(requestId, 100L, reporterId, "COMPLETED", BASE_TIME))
+                .when(reportService)
+                .findRequest(requestId);
+        when(itemQueryService.getSummary(100L))
+                .thenReturn(new ItemSummary(100L, 20L, OfferType.GIVE, ItemStatus.APPROVED));
+        when(configService.getDecimal("DISPUTE_WINDOW_DAYS")).thenReturn(new BigDecimal("7"));
+        when(configService.getDecimal("DISPUTE_RESPONSE_DAYS")).thenReturn(new BigDecimal("3"));
+
+        CreateReportRequest request = new CreateReportRequest(
+                TargetType.REQUEST, null, null, null, requestId, ReportReason.NO_SHOW, "Không đến nhận đồ");
+
+        when(reportRepository.existsByReporterIdAndTargetTypeAndRequestId(reporterId, TargetType.REQUEST, requestId))
+                .thenReturn(false);
+
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> {
+            Report saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 3L);
+            return saved;
+        });
+
+        ReportResponse response = reportService.createReport(reporterId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.id()).isEqualTo(3L);
+        assertThat(response.targetType()).isEqualTo(TargetType.REQUEST);
+        assertThat(response.requestId()).isEqualTo(requestId);
+    }
+
+    @Test
+    @DisplayName("Tự báo cáo bài của mình ném lỗi REPORT_CANNOT_REPORT_SELF")
+    void createReport_selfItem_throwsException() {
+        Long reporterId = 10L;
+        Long itemId = 100L;
+
+        CreateReportRequest request = new CreateReportRequest(
+                TargetType.ITEM, null, itemId, null, null, ReportReason.OTHER, "Tự báo cáo mình");
+
+        ItemSummary summary = new ItemSummary(itemId, reporterId, OfferType.GIVE, ItemStatus.APPROVED);
+
+        when(itemQueryService.getSummary(itemId)).thenReturn(summary);
+
+        assertThatThrownBy(() -> reportService.createReport(reporterId, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(ReportErrorCode.REPORT_CANNOT_REPORT_SELF));
+    }
+
+    @Test
+    @DisplayName("Tự báo cáo chính mình ném lỗi REPORT_CANNOT_REPORT_SELF")
+    void createReport_selfUser_throwsException() {
+        Long reporterId = 10L;
+
+        CreateReportRequest request = new CreateReportRequest(
+                TargetType.USER, reporterId, null, null, null, ReportReason.OTHER, "Tự báo cáo mình");
+
+        assertThatThrownBy(() -> reportService.createReport(reporterId, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(ReportErrorCode.REPORT_CANNOT_REPORT_SELF));
+    }
+
+    @Test
+    @DisplayName("Báo cáo trùng lặp bài đăng ném lỗi REPORT_ALREADY_REPORTED")
+    void createReport_alreadyReportedItem_throwsException() {
+        Long reporterId = 10L;
+        Long itemId = 100L;
+        Long donorId = 20L;
+
+        CreateReportRequest request =
+                new CreateReportRequest(TargetType.ITEM, null, itemId, null, null, ReportReason.OTHER, "Báo cáo lần 2");
+
+        ItemSummary summary = new ItemSummary(itemId, donorId, OfferType.GIVE, ItemStatus.APPROVED);
+
+        when(itemQueryService.getSummary(itemId)).thenReturn(summary);
+        when(reportRepository.existsByReporterIdAndTargetTypeAndItemId(reporterId, TargetType.ITEM, itemId))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> reportService.createReport(reporterId, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(ReportErrorCode.REPORT_ALREADY_REPORTED));
+    }
+
+    @Test
+    @DisplayName("Báo cáo bài không tồn tại ném lỗi REPORT_TARGET_NOT_FOUND")
+    void createReport_itemNotFound_throwsException() {
+        Long reporterId = 10L;
+        Long itemId = 999L;
+
+        CreateReportRequest request =
+                new CreateReportRequest(TargetType.ITEM, null, itemId, null, null, ReportReason.OTHER, "Bài ảo");
+
+        when(itemQueryService.getSummary(itemId)).thenReturn(null);
+
+        assertThatThrownBy(() -> reportService.createReport(reporterId, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(ReportErrorCode.REPORT_TARGET_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("BR-A03: Khi số lượng báo cáo bài đăng đạt ngưỡng >= 3 thì tự động ẩn bài")
+    void createReport_reachesThreshold_hidesItem() {
+        Long reporterId = 10L;
+        Long itemId = 100L;
+        Long donorId = 20L;
+
+        CreateReportRequest request = new CreateReportRequest(
+                TargetType.ITEM, itemId, null, null, null, ReportReason.PROHIBITED_ITEM, "Đồ cấm nguy hiểm");
+
+        ItemSummary summary = new ItemSummary(itemId, donorId, OfferType.GIVE, ItemStatus.APPROVED);
+
+        when(itemQueryService.getSummary(itemId)).thenReturn(summary);
+        when(reportRepository.existsByReporterIdAndTargetTypeAndItemId(reporterId, TargetType.ITEM, itemId))
+                .thenReturn(false);
+        when(reportRepository.countByItemId(itemId)).thenReturn(3L);
+
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> {
+            Report saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 5L);
+            return saved;
+        });
+
+        reportService.createReport(reporterId, request);
+
+        verify(itemService).hide(itemId);
+    }
+
+    @Test
+    @DisplayName("Thiếu targetId/itemId ném lỗi REPORT_TARGET_REQUIRED")
+    void createReport_missingTargetId_throwsException() {
+        Long reporterId = 10L;
+        CreateReportRequest request =
+                new CreateReportRequest(TargetType.ITEM, null, null, null, null, ReportReason.OTHER, "Không có id");
+
+        assertThatThrownBy(() -> reportService.createReport(reporterId, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(ReportErrorCode.REPORT_TARGET_REQUIRED));
+    }
+
+    // =========================================================================
+    // Các ca kiểm thử cho Admin Conclude Report (Issue #113)
+    // =========================================================================
+
+    @Test
+    @DisplayName("Admin kết luận UPHOLD với lý do thường: trừ 1 sao chủ bài, ẩn bài bị báo cáo, KHÔNG ẩn toàn bộ bài")
+    void conclude_uphold_itemTarget_normalReason_success() {
+        Long adminId = 1L;
+        Long reportId = 11L;
+        Long itemId = 201L;
+        Long donorId = 301L;
+
+        Report report = new Report(
+                100L,
+                TargetType.ITEM,
+                itemId,
+                null,
+                null,
+                ReportReason.NOT_AS_DESCRIBED,
+                "Đồ cũ nát",
+                ReportStage.BEFORE);
+        ReflectionTestUtils.setField(report, "id", reportId);
+
+        when(reportRepository.findByIdForUpdate(reportId)).thenReturn(Optional.of(report));
+        when(itemQueryService.getSummary(itemId))
+                .thenReturn(new ItemSummary(itemId, donorId, OfferType.GIVE, ItemStatus.APPROVED));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ConcludeReportRequest request =
+                new ConcludeReportRequest(ReportDecision.UPHOLD, "Xác minh hàng không đúng mô tả");
+        ReportConclusionResponse response = reportService.conclude(adminId, reportId, request);
+
+        assertThat(response.status()).isEqualTo(ReportStatus.RESOLVED);
+        assertThat(response.starsDeducted()).isEqualTo((short) 1);
+        assertThat(response.resolvedBy()).isEqualTo(adminId);
+
+        // Trừ 1 sao chủ bài
+        verify(reputationService).deductStar(eq(donorId), eq(1), eq("Xác minh hàng không đúng mô tả"));
+        // Ẩn bài đăng bị khiếu nại
+        verify(itemService).hide(itemId);
+        // Không phải lý do nghiêm trọng nên không gọi hideAllOfUser
+        verify(itemService, never()).hideAllOfUser(anyLong());
+        // Ghi activity log
+        verify(activityLogService)
+                .log(
+                        eq("REPORT_UPHELD"),
+                        eq(adminId),
+                        eq("REPORT"),
+                        eq(reportId),
+                        anyMap(),
+                        eq("Xác minh hàng không đúng mô tả"));
     }
 }

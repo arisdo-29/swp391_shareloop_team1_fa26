@@ -1,0 +1,4 @@
+ALTER TABLE reports
+    ADD COLUMN IF NOT EXISTS evidence TEXT,
+    ADD COLUMN IF NOT EXISTS response_evidence TEXT,
+    ADD COLUMN IF NOT EXISTS response_due_at TIMESTAMPTZ;

@@ -6,7 +6,6 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.dto.ItemSummary;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
-import com.shareloop.media.service.MediaService;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.report.ReportErrorCode;
 import com.shareloop.report.dto.ConcludeReportRequest;
@@ -17,6 +16,7 @@ import com.shareloop.report.dto.DisputeResponseRequest;
 import com.shareloop.report.dto.ReportConclusionResponse;
 import com.shareloop.report.dto.ReportDecision;
 import com.shareloop.report.dto.ReportResponse;
+import com.shareloop.report.dto.RespondReportRequest;
 import com.shareloop.report.entity.Report;
 import com.shareloop.report.entity.ReportReason;
 import com.shareloop.report.entity.ReportStage;
@@ -26,6 +26,7 @@ import com.shareloop.report.repository.ReportRepository;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.service.RequestService;
+import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import java.time.Clock;
 import java.time.Duration;
@@ -47,12 +48,12 @@ public class ReportService {
     private final ReportRepository reportRepository;
     private final ItemQueryService itemQueryService;
     private final ItemService itemService;
-    private final MediaService mediaService;
     private final NotificationService notificationService;
     private final ReputationService reputationService;
     private final ActivityLogService activityLogService;
     private final ConfigService configService;
     private final RequestService requestService;
+    private final ReportEvidenceService evidenceService;
     private final JdbcClient jdbcClient;
     private final Clock clock;
 
@@ -61,7 +62,7 @@ public class ReportService {
             ReportRepository reportRepository,
             ItemQueryService itemQueryService,
             @Autowired(required = false) ItemService itemService,
-            @Autowired(required = false) MediaService mediaService,
+            ReportEvidenceService evidenceService,
             @Autowired(required = false) NotificationService notificationService,
             @Autowired(required = false) ReputationService reputationService,
             @Autowired(required = false) ActivityLogService activityLogService,
@@ -72,7 +73,7 @@ public class ReportService {
         this.reportRepository = reportRepository;
         this.itemQueryService = itemQueryService;
         this.itemService = itemService;
-        this.mediaService = mediaService;
+        this.evidenceService = evidenceService;
         this.notificationService = notificationService;
         this.reputationService = reputationService;
         this.activityLogService = activityLogService;
@@ -120,6 +121,7 @@ public class ReportService {
                 if (reportRepository.existsByReporterIdAndTargetTypeAndItemId(reporterId, targetType, resolvedItemId)) {
                     throw new BusinessException(ReportErrorCode.REPORT_ALREADY_REPORTED);
                 }
+                resolvedTargetUserId = summary.donorId();
             }
             case USER -> {
                 if (resolvedTargetUserId == null) {
@@ -137,10 +139,10 @@ public class ReportService {
                 if (resolvedRequestId == null) {
                     throw new BusinessException(ReportErrorCode.REPORT_TARGET_REQUIRED);
                 }
-                if (reportRepository.existsByReporterIdAndTargetTypeAndRequestId(
-                        reporterId, targetType, resolvedRequestId)) {
-                    throw new BusinessException(ReportErrorCode.REPORT_ALREADY_REPORTED);
-                }
+                return toReportResponse(openDisputeReport(
+                        reporterId,
+                        resolvedRequestId,
+                        new CreateDisputeRequest(request.reason(), request.description(), request.evidenceMediaIds())));
             }
         }
 
@@ -156,6 +158,7 @@ public class ReportService {
                 request.description(),
                 stage);
 
+        report.setEvidence(evidenceService.attach(request.evidenceMediaIds(), reporterId));
         Report saved = reportRepository.save(report);
 
         // BR-A03: Đạt 3 report thì tự ẩn bài
@@ -166,6 +169,10 @@ public class ReportService {
             }
         }
 
+        return toReportResponse(saved);
+    }
+
+    private ReportResponse toReportResponse(Report saved) {
         return new ReportResponse(
                 saved.getId(),
                 saved.getReporterId(),
@@ -180,11 +187,33 @@ public class ReportService {
                 saved.getCreatedAt());
     }
 
+    @Transactional
+    public void respond(Long userId, long reportId, RespondReportRequest input) {
+        Report report = reportRepository
+                .findByIdForUpdate(reportId)
+                .orElseThrow(() -> new BusinessException(ReportErrorCode.REPORT_NOT_FOUND));
+        Long targetId = resolveViolator(report);
+        if (!userId.equals(targetId)) throw new BusinessException(ReportErrorCode.REPORT_NOT_PARTICIPANT);
+        Instant now = Instant.now(clock);
+        if (report.getStatus() != ReportStatus.AWAITING_RESPONSE
+                || report.getRespondedAt() != null
+                || report.getResponseDueAt() == null
+                || now.isAfter(report.getResponseDueAt())) {
+            throw new BusinessException(ReportErrorCode.REPORT_RESPONSE_NOT_ALLOWED);
+        }
+        report.respond(input.response().trim(), evidenceService.attach(input.evidenceMediaIds(), userId), now);
+    }
+
     /**
      * Mở khiếu nại giao dịch đã hoàn tất trong vòng 7 ngày (FR-89, BR-T08, Issue #112).
      */
     @Transactional
     public DisputeResponse openDispute(Long userId, Long requestId, CreateDisputeRequest request) {
+        Report saved = openDisputeReport(userId, requestId, request);
+        return new DisputeResponse(saved.getId(), saved.getResponseDueAt());
+    }
+
+    private Report openDisputeReport(Long userId, Long requestId, CreateDisputeRequest request) {
         if (userId == null) {
             throw new IllegalArgumentException("userId cannot be null");
         }
@@ -220,19 +249,7 @@ public class ReportService {
         }
 
         // 4. Kiểm tra cửa sổ khiếu nại (7 ngày sau completedAt)
-        int windowDays = 7;
-        if (configService != null) {
-            try {
-                windowDays = configService.getDecimal("DISPUTE_WINDOW_DAYS").intValue();
-            } catch (Exception e1) {
-                try {
-                    windowDays =
-                            configService.getDecimal("COMPLAINT_WINDOW_DAYS").intValue();
-                } catch (Exception e2) {
-                    windowDays = 7;
-                }
-            }
-        }
+        int windowDays = disputeDays("DISPUTE_WINDOW_DAYS", ConfigKey.COMPLAINT_WINDOW_DAYS);
         Instant completedAt = reqSnapshot.completedAt() != null ? reqSnapshot.completedAt() : Instant.now(clock);
         Instant deadline = completedAt.plus(Duration.ofDays(windowDays));
         if (Instant.now(clock).isAfter(deadline)) {
@@ -246,30 +263,14 @@ public class ReportService {
 
         // 6. Kiểm tra và đính kèm bằng chứng nếu có
         List<Long> evidenceMediaIds = request.evidenceMediaIds();
-        if (evidenceMediaIds != null && !evidenceMediaIds.isEmpty() && mediaService != null) {
-            mediaService.attach(evidenceMediaIds, userId);
-        }
 
         // 7. Mở cửa sổ giải trình 3 ngày cho bên bị khiếu nại
-        int responseDays = 3;
-        if (configService != null) {
-            try {
-                responseDays = configService.getDecimal("DISPUTE_RESPONSE_DAYS").intValue();
-            } catch (Exception e1) {
-                try {
-                    responseDays =
-                            configService.getDecimal("RESPONSE_WINDOW_DAYS").intValue();
-                } catch (Exception e2) {
-                    responseDays = 3;
-                }
-            }
-        }
+        int responseDays = disputeDays("DISPUTE_RESPONSE_DAYS", ConfigKey.RESPONSE_WINDOW_DAYS);
         Instant now = Instant.now(clock);
         Instant responseDueAt = now.plus(Duration.ofDays(responseDays));
         Long respondentId = userId.equals(donorId) ? receiverId : donorId;
 
-        String evidenceStr =
-                (evidenceMediaIds != null && !evidenceMediaIds.isEmpty()) ? evidenceMediaIds.toString() : null;
+        String evidenceStr = evidenceService.attach(evidenceMediaIds, userId);
 
         Report dispute = Report.createDispute(
                 userId,
@@ -294,7 +295,7 @@ public class ReportService {
                     "/me/disputes/" + saved.getId());
         }
 
-        return new DisputeResponse(saved.getId(), saved.getResponseDueAt());
+        return saved;
     }
 
     /**
@@ -338,12 +339,8 @@ public class ReportService {
 
         // Đính kèm bằng chứng nếu có
         List<Long> evidenceMediaIds = request.evidenceMediaIds();
-        if (evidenceMediaIds != null && !evidenceMediaIds.isEmpty() && mediaService != null) {
-            mediaService.attach(evidenceMediaIds, userId);
-        }
 
-        String evidenceStr =
-                (evidenceMediaIds != null && !evidenceMediaIds.isEmpty()) ? evidenceMediaIds.toString() : null;
+        String evidenceStr = evidenceService.attach(evidenceMediaIds, userId);
 
         dispute.respond(request.note(), evidenceStr, Instant.now(clock));
         reportRepository.save(dispute);
@@ -448,6 +445,17 @@ public class ReportService {
                 saved.getResolution(),
                 saved.getStarsDeducted(),
                 saved.getResolvedAt());
+    }
+
+    private int disputeDays(String legacyKey, ConfigKey fallback) {
+        if (configService == null) return fallback.getDefaultValue();
+        try {
+            return configService.getDecimal(legacyKey).intValueExact();
+        } catch (BusinessException exception) {
+            if (exception.getErrorCode() != com.shareloop.setting.SettingErrorCode.SETTING_CONFIG_NOT_FOUND)
+                throw exception;
+            return configService.getInt(fallback);
+        }
     }
 
     private Long resolveViolator(Report report) {

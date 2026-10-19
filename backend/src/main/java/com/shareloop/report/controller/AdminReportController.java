@@ -1,19 +1,32 @@
 package com.shareloop.report.controller;
 
 import com.shareloop.common.security.CurrentUserId;
+import com.shareloop.report.dto.AdminReportDetail;
+import com.shareloop.report.dto.AdminReportPage;
 import com.shareloop.report.dto.ConcludeReportRequest;
 import com.shareloop.report.dto.ReportConclusionResponse;
+import com.shareloop.report.entity.ReportStatus;
+import com.shareloop.report.entity.TargetType;
+import com.shareloop.report.service.AdminReportQueryService;
+import com.shareloop.report.service.ReportEvidenceService;
 import com.shareloop.report.service.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -26,9 +39,37 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminReportController {
 
     private final ReportService reportService;
+    private final AdminReportQueryService queryService;
+    private final ReportEvidenceService evidenceService;
 
-    public AdminReportController(ReportService reportService) {
+    public AdminReportController(
+            ReportService reportService, AdminReportQueryService queryService, ReportEvidenceService evidenceService) {
         this.reportService = reportService;
+        this.queryService = queryService;
+        this.evidenceService = evidenceService;
+    }
+
+    @GetMapping
+    public AdminReportPage list(
+            @RequestParam(required = false) ReportStatus status,
+            @RequestParam(required = false) TargetType targetType,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return queryService.list(status, targetType, page, size);
+    }
+
+    @GetMapping("/{reportId}")
+    public AdminReportDetail detail(@PathVariable @Min(1) long reportId) {
+        return queryService.detail(reportId);
+    }
+
+    @GetMapping("/{reportId}/evidence/{mediaId}")
+    public ResponseEntity<byte[]> evidence(@PathVariable @Min(1) long reportId, @PathVariable @Min(1) long mediaId) {
+        var content = evidenceService.read(reportId, mediaId);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .contentType(MediaType.parseMediaType(content.mimeType()))
+                .body(content.bytes());
     }
 
     /**
