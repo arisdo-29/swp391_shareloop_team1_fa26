@@ -21,7 +21,7 @@ import {
 import { CATEGORIES } from '../../constants/domain';
 import { formatVnd } from '../../utils/formatting';
 import { adminConfigApi, type AdminConfigResponse } from '../../services/adminConfigApi';
-import { adminModerationApi, type ReviewQueueItem } from '../../services/adminModerationApi';
+import { adminModerationApi, type ReviewQueueItem, type ReviewChecklistItem } from '../../services/adminModerationApi';
 import { adminLexiconApi, type AdminLexiconEntry, type AdminLexiconRequest, type LexiconMatch } from '../../services/adminLexiconApi';
 import {
   adminCategoryApi,
@@ -87,19 +87,6 @@ const moderationReasonLabel: Record<string, string> = {
   INVALID_INPUT: 'Thông tin bài đăng chưa hợp lệ.',
   INVALID_LEXICON_RULE: 'Quy tắc kiểm duyệt từ khóa chưa hợp lệ.',
   MODERATION_CHECK_FAILED: 'Không thể hoàn tất kiểm tra tự động.',
-};
-
-const positiveChecklistLabel: Record<string, string> = {
-  'Món đồ có cần sang tên, đăng ký, công chứng để đổi chủ không?': 'Không cần sang tên, đăng ký, công chứng',
-  'Món đồ có quy đổi trực tiếp ra tiền mặt được không?': 'Không quy đổi trực tiếp ra tiền mặt',
-  'Nếu là thực phẩm: còn nguyên tem, nhìn rõ hạn, hạn còn trên 30 ngày?': 'Thực phẩm còn nguyên tem, nhìn rõ hạn và hạn còn trên 30 ngày',
-  'Có phải thuốc, thực phẩm chức năng, thiết bị y tế, mỹ phẩm đã mở?': 'Không phải thuốc, thực phẩm chức năng, thiết bị y tế hoặc mỹ phẩm đã mở',
-  'Ảnh là ảnh thật của đúng món đồ, đủ số lượng, không lấy trên mạng?': 'Ảnh là ảnh thật của đúng món đồ, đủ số lượng và không lấy trên mạng',
-  'Ảnh hoặc mô tả có thông tin liên hệ, kể cả viết ngầm? (xem cờ AI)': 'Ảnh và mô tả không có thông tin liên hệ',
-  'Tình trạng khai báo có khớp với ảnh? Đồ lỗi đã mô tả lỗi?': 'Tình trạng khai báo khớp với ảnh và đồ lỗi đã được mô tả',
-  'Danh mục có đúng với món đồ?': 'Danh mục đúng với món đồ',
-  'Bài Trao đổi đã có mô tả món mong muốn?': 'Bài Trao đổi có mô tả món mong muốn',
-  'Có dấu hiệu hàng nhái, hoặc bật nhãn chính hãng mà chứng từ không khớp?': 'Không có dấu hiệu hàng nhái',
 };
 
 function displayRisk(value?: string | null) {
@@ -217,7 +204,7 @@ export function AdminModeration() {
   const [toast, setToast] = useState('');
   const [checklist, setChecklist] = useState<Record<string, Record<string, boolean>>>({});
   const [apiPending, setApiPending] = useState<ReviewQueueItem[]>([]);
-  const [apiChecklist, setApiChecklist] = useState<string[]>([]);
+  const [apiChecklist, setApiChecklist] = useState<ReviewChecklistItem[]>([]);
   const [apiAnswers, setApiAnswers] = useState<Record<number, boolean[]>>({});
   const [apiRejecting, setApiRejecting] = useState<ReviewQueueItem | null>(null);
   const [apiRejectReason, setApiRejectReason] = useState('');
@@ -278,12 +265,18 @@ export function AdminModeration() {
     setApiActionId(item.id);
     setApiError('');
     try {
-      await adminModerationApi.approve(item.id, { answers });
+      await adminModerationApi.approve(item.id, { answers: apiChecklist.map((entry, index) => ({ id: entry.id, passed: answers[index] })) });
       setApiPending((current) => current.filter((entry) => entry.id !== item.id));
       setToast(`Đã duyệt bài #${item.id}.`);
     } catch (error) {
       const apiError = error as ApiError;
-      setApiError(apiError.status === 403 ? 'Tài khoản hiện tại không có quyền duyệt bài.' : apiError.message || 'Không duyệt được bài đăng.');
+      if (apiError.code === 'REVIEW_CHECKLIST_OUTDATED') {
+        setApiAnswers({});
+        setModerationReloadKey((key) => key + 1);
+        setToast('Checklist đã thay đổi. Vui lòng kiểm tra và tích lại các điều kiện.');
+      } else {
+        setApiError(apiError.status === 403 ? 'Tài khoản hiện tại không có quyền duyệt bài.' : apiError.message || 'Không duyệt được bài đăng.');
+      }
     } finally {
       setApiActionId(null);
     }
@@ -350,8 +343,8 @@ export function AdminModeration() {
                 <div className="space-y-3">
                   <p className="text-xs text-text-muted">Điểm tin cậy: {item.donorTrustStars ?? '--'}</p>
                   <div className="space-y-2 rounded-md bg-surface-low p-3">
-                    {apiChecklist.map((label, index) => (
-                      <label key={label} className="flex items-start gap-2 text-xs leading-5">
+                    {apiChecklist.map((entry, index) => (
+                      <label key={entry.id} className="flex items-start gap-2 text-xs leading-5">
                         <input
                           type="checkbox"
                           checked={apiAnswers[item.id]?.[index] ?? false}
@@ -361,7 +354,7 @@ export function AdminModeration() {
                             [item.id]: apiChecklist.map((_, answerIndex) => answerIndex === index ? event.target.checked : (current[item.id]?.[answerIndex] ?? false)),
                           }))}
                         />
-                        <span>{positiveChecklistLabel[label] ?? label}</span>
+                        <span>{entry.statement}</span>
                       </label>
                     ))}
                   </div>
@@ -1559,6 +1552,7 @@ function ConfigEditModal({
 }
 
 export function AdminAuditLogs() {
+  const [actionTypes, setActionTypes] = useState<{ type: string; label: string }[]>([]);
   const [logs, setLogs] = useState<ActivityLogResponse[]>([]);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
@@ -1572,6 +1566,12 @@ export function AdminAuditLogs() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [filters, setFilters] = useState<Omit<ActivityLogParams, 'page' | 'size'>>({});
+
+  useEffect(() => {
+    let active = true;
+    adminAuditApi.types().then((types) => { if (active) setActionTypes(types); }).catch(() => { /* Backend cũ vẫn dùng danh sách nhãn sẵn có. */ });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -1633,7 +1633,7 @@ export function AdminAuditLogs() {
           />
           <Select label="Hành động" value={actionType} onChange={(event) => setActionType(event.target.value)}>
             <option value="">Tất cả hành động</option>
-            {Object.entries(activityLogTypeLabels).map(([value, label]) => (
+            {(actionTypes.length ? actionTypes.map((entry) => [entry.type, entry.label]) : Object.entries(activityLogTypeLabels)).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </Select>
@@ -1673,8 +1673,8 @@ export function AdminAuditLogs() {
                 {logs.map((log) => (
                   <tr key={log.id}>
                     <td className="whitespace-nowrap">{formatActivityLogTime(log.createdAt)}</td>
-                    <td>{log.actorId ? `Admin #${log.actorId}` : 'Hệ thống'}</td>
-                    <td>{activityLogTypeLabel(log.type)}</td>
+                    <td>{log.actorName ?? (log.actorId ? `Admin #${log.actorId}` : 'Hệ thống')}</td>
+                    <td>{log.typeLabel ?? activityLogTypeLabel(log.type)}</td>
                     <td>{activityLogTarget(log)}</td>
                     <td><ActivityLogDetail log={log} /></td>
                   </tr>
@@ -1814,7 +1814,7 @@ function activityLogChecksFromValue(value: unknown): ActivityLogCheck[] {
   return entries.flatMap((entry) => {
     if (!entry || typeof entry !== 'object') return [];
     const record = entry as Record<string, unknown>;
-    const question = typeof record.question === 'string' ? record.question.trim() : '';
+    const question = typeof record.statement === 'string' ? record.statement.trim() : typeof record.question === 'string' ? record.question.trim() : '';
     const passed = record.passed === true || record.passed === 'true';
     return question ? [{ passed, question }] : [];
   });
@@ -1829,6 +1829,7 @@ const activityLogTargetLabels: Record<string, string> = {
 };
 
 function activityLogTarget(log: ActivityLogResponse) {
+  if (log.targetTitle) return log.targetTitle;
   const label = activityLogTargetLabels[log.targetType?.trim().toUpperCase() ?? ''] ?? 'Đối tượng';
   return log.targetId == null ? label : `${label} #${log.targetId}`;
 }
@@ -2294,6 +2295,12 @@ function DistrictModal({
 }
 
 function AdminComplaints() {
+  const admin = useAppSelector(selectCurrentUser);
+  if (toBackendUserId(admin?.id)) return <Panel title="Khiếu nại"><EmptyState title="Chưa thể tải khiếu nại" text="Chức năng xem hồ sơ và bằng chứng khiếu nại chưa sẵn sàng. Vui lòng thử lại khi hệ thống được cập nhật." /></Panel>;
+  return <LegacyAdminComplaints />;
+}
+
+function LegacyAdminComplaints() {
   const data = useAppSelector(selectData);
   const admin = useAppSelector(selectCurrentUser)!;
   const dispatch = useAppDispatch();

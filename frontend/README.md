@@ -1,6 +1,6 @@
-# SHARELOOP Frontend Prototype
+# SHARELOOP Frontend
 
-SHARELOOP is a frontend-only React prototype for giving away unused items, trading used items, district-based discovery, AI-assisted matching, messaging, Credit holds, handover flow, profile reputation, and admin moderation.
+Giao diện React + TypeScript kết nối backend ShareLoop qua các service trong `src/services/`. Tìm đồ theo quận/huyện, đăng bài, ví, giao dịch, chat và các chức năng quản trị dùng API tương ứng.
 
 ## Stack
 
@@ -22,7 +22,7 @@ The repository includes `vercel.json` with the SPA rewrite required by React Rou
 
 1. Push this repository to GitHub, GitLab, or Bitbucket.
 2. In Vercel, select **Add New Project** and import the repository.
-3. Keep the detected framework as **Vite** and deploy. No environment variables are currently required.
+3. Chọn framework **Vite**, cấu hình `VITE_API_BASE_URL` là địa chỉ backend trong Project Settings → Environment Variables, sau đó build và deploy. Giá trị mặc định trong code là `https://shareloop-api.onrender.com`.
 
 Every push to the production branch creates a production deployment. Other branches and pull requests receive preview deployments.
 
@@ -35,24 +35,23 @@ npx vercel --prod
 
 Do not commit the generated `.vercel` directory; it contains the local link to the Vercel project.
 
-## Demo Accounts
+## Dữ liệu và phiên đăng nhập
 
-- User: `use` / `12345678`
-- Admin: `admin` / `12345678`
+Ứng dụng khởi tạo dữ liệu nghiệp vụ rỗng và tải từ API. Không đọc hoặc ghi cơ sở dữ liệu mẫu, số dư hay giao dịch vào localStorage. Token vẫn được quản lý trong HTTP client; khi tải lại trang, ứng dụng khôi phục người dùng qua API hồ sơ.
 
-The login page also includes demo-login buttons.
+Một số nhánh reducer và màn hình cũ chưa được gỡ hoàn toàn. Xem [báo cáo rà soát](docs/mieu-r1-r3-review.md) để biết các phần còn thiếu API. Dữ liệu mẫu trong `src/mocks/database.ts` hiện chỉ phục vụ kiểm chứng domain cũ, không được tải vào ứng dụng.
 
-## Mock Backend
+## Kiểm tra
 
-All domain data lives in one Redux-backed mock database seeded from `src/mocks/database.ts` and persisted to `localStorage` under `shareloop:v1:state`. Pages must use shared entities, not duplicate Home/Browse/Admin/AI arrays.
+`npm run lint`, `npm run build`, `npm run test:api`.
 
-Use the Reset Demo Data action from the profile/admin workflow by dispatching `resetDemoData` during development, or clear the localStorage key.
+Bộ kiểm tra API dùng adapter HTTP trong bộ nhớ, không gọi staging và không thay cho kiểm thử trình duyệt với hai tài khoản thật.
 
 ## Main Routes
 
 - `/`, `/browse`, `/product/:id`, `/ai`
 - `/login`, `/register`
-- `/post`, `/activities`, `/messages`, `/profile`
+- `/post`, `/activities`, `/requests/:requestId`, `/messages`, `/profile`
 - `/admin` and nested moderation, users, transactions, finance, settings, audit logs
 
 ## Credit Rules

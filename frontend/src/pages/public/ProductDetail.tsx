@@ -21,12 +21,7 @@ import type { Item, ItemRequest, User } from '../../types/domain';
 import type { ApiError } from '../../services/http';
 import { ReportDialog } from '../../components/ReportDialog';
 
-const requestStatusLabel = {
-  PENDING: 'Chờ phản hồi',
-  RESERVED: 'Đã được chọn',
-  REJECTED: 'Không được chọn',
-  CANCELLED: 'Đã hủy',
-};
+import { requestStatusLabel } from '../../utils/request';
 
 export function ProductDetail() {
   const { id } = useParams();

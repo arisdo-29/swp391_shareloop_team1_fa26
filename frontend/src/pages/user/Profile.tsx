@@ -729,7 +729,9 @@ export function Profile() {
             </div>
           ) : null}
           {tab === 'password' ? <ChangePasswordForm user={user} /> : null}
-          {tab === 'reputation' ? (
+          {tab === 'reputation' && isApiAccount ? (
+            <Alert>Điểm, hạng và lịch sử uy tín chưa sẵn sàng. Hồ sơ và đổi mật khẩu vẫn sử dụng được.</Alert>
+          ) : tab === 'reputation' ? (
             <div className="space-y-6">
               <section className="grid gap-5 rounded-xl bg-white p-6 ring-1 ring-border/80 sm:grid-cols-3">
                 <Stat label="Reward Points" value={user.rewardPoints} detail="Điểm hoạt động" />

@@ -1,86 +1,108 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
-import { selectData } from '../../app/store';
+import { selectCurrentUser } from '../../app/store';
+import { useWallet } from '../../app/useWallet';
 import { AiSearchNotices } from '../../components/ai/AiSearchNotices';
-import { Button, EmptyState, Icon, PageHeader, ProductCard, TextArea } from '../../components/ui';
-import {
-  AI_SEARCH_PREVIEW_ENABLED,
-  searchPreviewItems,
-  type PreviewUnderstoodFilter,
-} from '../../mocks/aiSearchPreview';
+import { Alert, Button, EmptyState, Icon, PageHeader, ProductCard, TextArea } from '../../components/ui';
+import { aiApi, type AiQuotaResponse } from '../../services/aiApi';
+import { catalogApi, type CategoryResponse, type AreaResponse } from '../../services/catalogApi';
+import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
+import { conditionLabel } from '../../utils/formatting';
+import type { ApiError } from '../../services/http';
 import type { Item } from '../../types/domain';
 
 const MAX_QUERY_LENGTH = 500;
 const PAGE_SIZE = 6;
-
-// Chỉ là dữ liệu trình bày trong lúc chờ contract #125, không phải cấu trúc response.
-const NOTICE_PREVIEW = {
-  remainingFreeSearches: null,
-  feeCredits: 2,
-  isFallbackSearch: false,
-} as const;
-
 type SearchStatus = 'idle' | 'loading' | 'success' | 'error';
 
 export function AI() {
-  const data = useAppSelector(selectData);
+  const user = useAppSelector(selectCurrentUser);
+  const userId = user?.id;
+  const { refresh: refreshWallet } = useWallet();
   const [query, setQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [queryError, setQueryError] = useState('');
   const [status, setStatus] = useState<SearchStatus>('idle');
-  const [filters, setFilters] = useState<PreviewUnderstoodFilter[]>([]);
+  const [filters, setFilters] = useState<{ label: string; value: string }[]>([]);
   const [results, setResults] = useState<Item[]>([]);
   const [page, setPage] = useState(0);
-  const searchTimerRef = useRef<number | null>(null);
+  const [totalElements, setTotalElements] = useState(0);
+  const [quota, setQuota] = useState<AiQuotaResponse | null>(null);
+  const [quotaError, setQuotaError] = useState('');
+  const [searchError, setSearchError] = useState('');
+  const [fallback, setFallback] = useState(false);
+  const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const [areas, setAreas] = useState<AreaResponse[]>([]);
+  const inFlight = useRef(false);
+  const generation = useRef(0);
 
-  useEffect(
-    () => () => {
-      if (searchTimerRef.current !== null) window.clearTimeout(searchTimerRef.current);
-    },
-    [],
-  );
+  useEffect(() => {
+    let active = true;
+    setQuota(null);
+    setQuotaError('');
+    setStatus('idle');
+    setResults([]);
+    if (userId) {
+      aiApi.quota().then((response) => { if (active) setQuota(response); })
+        .catch((error: ApiError) => { if (active) setQuotaError(error.message || 'Không tải được hạn mức tìm kiếm.'); });
+    }
+    Promise.all([catalogApi.categories(), catalogApi.areas()]).then(([nextCategories, nextAreas]) => {
+      if (active) { setCategories(nextCategories); setAreas(nextAreas); }
+    }).catch(() => { /* Kết quả vẫn hiển thị được khi danh mục tạm thời không tải được. */ });
+    return () => { active = false; generation.current += 1; inFlight.current = false; };
+  }, [userId]);
 
-  const totalPages = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
-  const visibleResults = useMemo(
-    () => results.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
-    [page, results],
-  );
-
-  const search = (value = query) => {
+  const totalPages = Math.max(1, Math.ceil(totalElements / PAGE_SIZE));
+  const search = async (value = query, nextPage = 0) => {
     const normalizedQuery = value.trim();
-    if (!normalizedQuery) {
-      setQueryError('Vui lòng mô tả món đồ bạn đang tìm.');
+    if (!normalizedQuery || normalizedQuery.length > MAX_QUERY_LENGTH) {
+      setQueryError('Vui lòng nhập mô tả từ 1 đến 500 ký tự.');
       return;
     }
-
-    if (searchTimerRef.current !== null) window.clearTimeout(searchTimerRef.current);
+    if (!user || !quota || inFlight.current) return;
+    inFlight.current = true;
+    const currentGeneration = generation.current;
     setQueryError('');
+    setSearchError('');
     setSubmittedQuery(normalizedQuery);
     setStatus('loading');
-    setPage(0);
-
-    searchTimerRef.current = window.setTimeout(() => {
-      try {
-        if (!AI_SEARCH_PREVIEW_ENABLED) throw new Error('Search preview is unavailable.');
-
-        // TODO(#125): thay searchPreviewItems bằng aiApi.search(normalizedQuery, page, PAGE_SIZE).
-        const preview = searchPreviewItems(normalizedQuery, data.items);
-        setFilters(preview.filters);
-        setResults(preview.items);
-        setStatus('success');
-      } catch {
-        setFilters([]);
-        setResults([]);
-        setStatus('error');
-      } finally {
-        searchTimerRef.current = null;
-      }
-    }, 350);
+    try {
+      const response = await aiApi.search(normalizedQuery, nextPage, PAGE_SIZE);
+      if (currentGeneration !== generation.current) return;
+      const categoryNames = toCategoryNameMap(categories);
+      const areaNames = toAreaNameMap(areas);
+      const parsed = response.filters;
+      const understood: { label: string; value: string }[] = [];
+      if (parsed.keywords) understood.push({ label: 'Từ khóa', value: parsed.keywords });
+      if (parsed.categoryId) understood.push({ label: 'Danh mục', value: categoryNames.get(parsed.categoryId) ?? String(parsed.categoryId) });
+      if (parsed.areaId) understood.push({ label: 'Khu vực', value: areaNames.get(parsed.areaId) ?? String(parsed.areaId) });
+      if (parsed.condition) understood.push({ label: 'Tình trạng', value: conditionLabel[parsed.condition] });
+      if (parsed.offerType) understood.push({ label: 'Hình thức', value: parsed.offerType === 'GIVE' ? 'Cho tặng' : 'Trao đổi' });
+      setFilters(understood);
+      setResults(response.results.items.map((item) => toFeItem(item, categoryNames, areaNames)));
+      setTotalElements(response.results.totalElements);
+      setPage(response.results.page);
+      setQuota(response.quota);
+      setFallback(response.fallback);
+      setStatus('success');
+      refreshWallet();
+    } catch (error) {
+      if (currentGeneration !== generation.current) return;
+      const apiError = error as ApiError;
+      setSearchError(apiError.code === 'WALLET_INSUFFICIENT_BALANCE' ? 'Hết lượt miễn phí và số dư Credit không đủ. Vui lòng nạp thêm Credit.' : apiError.message || 'Không tìm được đồ. Vui lòng thử lại.');
+      setStatus('error');
+      setResults([]);
+      refreshWallet();
+      try { const latest = await aiApi.quota(); if (currentGeneration === generation.current) setQuota(latest); } catch { /* Giữ hạn mức đã tải, lần tìm tiếp theo vẫn do backend kiểm tra. */ }
+    } finally {
+      if (currentGeneration === generation.current) inFlight.current = false;
+    }
   };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    search();
+    void search();
   };
 
   return (
@@ -126,7 +148,7 @@ export function AI() {
                   <Button
                     type="submit"
                     icon="search"
-                    disabled={status === 'loading' || !query.trim()}
+                    disabled={status === 'loading' || !query.trim() || !quota || !user}
                   >
                     {status === 'loading' ? 'Đang tìm...' : 'Tìm'}
                   </Button>
@@ -136,7 +158,11 @@ export function AI() {
           </div>
 
           <div className="border-t border-border/70 p-5 sm:p-6">
-            <AiSearchNotices {...NOTICE_PREVIEW} />
+            {!user ? <Alert><Link to="/login" className="font-semibold underline">Đăng nhập</Link> để sử dụng trợ lý tìm đồ.</Alert> : quota ? (
+              <AiSearchNotices remainingFreeSearches={quota.freeUsesRemaining} feeCredits={quota.feeCredits} isFallbackSearch={fallback} />
+            ) : <Alert tone={quotaError ? 'error' : 'info'}>{quotaError || 'Đang tải hạn mức tìm kiếm...'}</Alert>}
+            {quotaError ? <Button variant="outline" size="sm" onClick={() => { void aiApi.quota().then((response) => { setQuota(response); setQuotaError(''); }).catch((error: ApiError) => setQuotaError(error.message)); }}>Thử tải hạn mức</Button> : null}
+            {quota ? <p className="mt-3 text-xs text-text-muted">Mỗi lần tìm hoặc chuyển trang dùng một lượt; hết lượt miễn phí sẽ dùng {quota.feeCredits} Credit. Tìm dự phòng được hoàn lượt và phí.</p> : null}
           </div>
         </section>
 
@@ -167,9 +193,9 @@ export function AI() {
               <div className="mt-5">
                 <EmptyState
                   title="Chưa thể tìm đồ lúc này"
-                  text="Vui lòng thử lại sau ít phút."
+                  text={searchError}
                   action={
-                    <Button variant="outline" onClick={() => search(submittedQuery)}>
+                    <Button variant="outline" onClick={() => void search(submittedQuery, page)}>
                       Thử lại
                     </Button>
                   }
@@ -218,11 +244,10 @@ export function AI() {
             {results.length ? (
               <>
                 <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {visibleResults.map((item) => (
+                  {results.map((item) => (
                     <ProductCard
                       key={item.id}
                       item={item}
-                      owner={data.users.find((user) => user.id === item.ownerId)}
                     />
                   ))}
                 </div>
@@ -231,7 +256,7 @@ export function AI() {
                     <Button
                       variant="outline"
                       disabled={page === 0}
-                      onClick={() => setPage((current) => Math.max(0, current - 1))}
+                      onClick={() => void search(submittedQuery, page - 1)}
                     >
                       Trang trước
                     </Button>
@@ -241,7 +266,7 @@ export function AI() {
                     <Button
                       variant="outline"
                       disabled={page + 1 >= totalPages}
-                      onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))}
+                      onClick={() => void search(submittedQuery, page + 1)}
                     >
                       Trang sau
                     </Button>

@@ -10,7 +10,7 @@ import {
   spendHeldFee,
   txFee,
 } from '../utils/credit';
-import { loadPersistedState, resetPersistedState, savePersistedState } from '../utils/storage';
+import { loadPersistedState, resetPersistedState } from '../utils/storage';
 import type {
   AppStateData,
   ComplaintStatus,
@@ -1477,7 +1477,6 @@ export const dataReducer = dataSlice.reducer;
 export const store = configureStore({ reducer: { data: dataSlice.reducer } });
 store.subscribe(() => {
   assertWalletInvariant(store.getState().data);
-  savePersistedState(store.getState().data);
 });
 
 export type RootState = ReturnType<typeof store.getState>;

@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:api": "node scripts/verify-api.mjs",
     "preview": "vite preview",
     "format": "prettier --write ."
   },

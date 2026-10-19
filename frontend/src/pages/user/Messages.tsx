@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
 import {
@@ -30,6 +30,7 @@ import { itemApi, type ItemResponse } from '../../services/itemApi';
 import { requestApi, toBackendUserId, type RequestContactResponse, type RequestResponse } from '../../services/requestApi';
 import type { ApiError } from '../../services/http';
 import { ReportDialog } from '../../components/ReportDialog';
+import { canChat, canConfirmHandover, canSchedule, requestStatusLabel } from '../../utils/request';
 
 const steps = ['Trao doi', 'De xuat lich', 'Chot lich', 'Ban giao', 'Hoan tat'];
 
@@ -46,6 +47,8 @@ interface ApiConversation {
 
 function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const navigate = useNavigate();
+  const { requestId } = useParams();
+  const requestedId = requestId ? Number(requestId) : null;
   const [conversations, setConversations] = useState<ApiConversation[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
   const [messages, setMessages] = useState<MessageResponse[]>([]);
@@ -62,6 +65,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [meetingPlace, setMeetingPlace] = useState('');
   const [meetingTime, setMeetingTime] = useState('');
   const [agreeToWaiver, setAgreeToWaiver] = useState(false);
+  const [asDescribed, setAsDescribed] = useState('');
+  const [notAsDescribedReason, setNotAsDescribedReason] = useState('');
   const [logisticsLoading, setLogisticsLoading] = useState(false);
   const [logisticsSubmitting, setLogisticsSubmitting] = useState(false);
   const [logisticsError, setLogisticsError] = useState('');
@@ -70,7 +75,10 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [reportOpen, setReportOpen] = useState(false);
   const [reportNotice, setReportNotice] = useState('');
   const [pinnedItems, setPinnedItems] = useState<PinnedItemResponse[]>([]);
+  const [shareItemId, setShareItemId] = useState('');
+  const [shareableItems, setShareableItems] = useState<ItemResponse[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const activeRequestId = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -79,11 +87,18 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
 
     Promise.all([requestApi.mine(currentUserId), itemApi.mine()])
       .then(async ([sentRequests, ownedItems]) => {
+        if (!active) return;
+        setShareableItems(ownedItems.filter((item) => item.status === 'APPROVED'));
         const receivedGroups = await Promise.all(ownedItems.map((item) => requestApi.forItem(item.id, currentUserId)));
         const requestById = new Map<number, RequestResponse>();
         [...sentRequests, ...receivedGroups.flat()].forEach((request) => {
-          if (request.status === 'RESERVED') requestById.set(request.id, request);
+          if (canChat(request.status) || request.id === requestedId) requestById.set(request.id, request);
         });
+        if (requestedId !== null) {
+          if (!Number.isSafeInteger(requestedId) || requestedId <= 0) throw new Error('Invalid request');
+          const detail = await requestApi.get(requestedId, currentUserId);
+          requestById.set(detail.id, detail);
+        }
 
         const itemById = new Map(ownedItems.map((item) => [item.id, item]));
         const missingItemIds = [...new Set([...requestById.values()].map((request) => request.itemId).filter((itemId) => !itemById.has(itemId)))];
@@ -95,7 +110,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         const nextConversations = [...requestById.values()].map((request) => ({ request, item: itemById.get(request.itemId) })).sort((a, b) => b.request.createdAt.localeCompare(a.request.createdAt));
         if (!active) return;
         setConversations(nextConversations);
-        setSelectedRequestId((current) => (current && nextConversations.some(({ request }) => request.id === current) ? current : (nextConversations[0]?.request.id ?? null)));
+        setSelectedRequestId((current) => requestedId ?? (current && nextConversations.some(({ request }) => request.id === current) ? current : (nextConversations[0]?.request.id ?? null)));
+        if (requestedId !== null) setMobileChat(true);
       })
       .catch(() => {
         if (!active) return;
@@ -110,24 +126,38 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     return () => {
       active = false;
     };
-  }, [conversationReloadKey, currentUserId]);
+  }, [conversationReloadKey, currentUserId, requestedId]);
+
+  const selected = conversations.find(({ request }) => request.id === selectedRequestId);
+  const chatEnabled = selected ? canChat(selected.request.status) : false;
 
   useEffect(() => {
-    if (selectedRequestId === null) {
+    activeRequestId.current = selectedRequestId;
+    setMessages([]);
+    setMessage('');
+    setShareItemId('');
+    if (selectedRequestId === null || !chatEnabled) {
       setMessages([]);
       setMessageError('');
+      setLoadingMessages(false);
       return;
     }
 
     let active = true;
     let firstLoad = true;
     let pollingId: number | undefined;
+    let afterId: number | undefined;
     const loadMessages = async () => {
       if (firstLoad) setLoadingMessages(true);
       try {
-        const response = await chatApi.list(selectedRequestId, currentUserId);
+        const [response, detail] = await Promise.all([
+          chatApi.list(selectedRequestId, currentUserId, afterId),
+          requestApi.get(selectedRequestId, currentUserId),
+        ]);
         if (!active) return;
-        setMessages(response);
+        setConversations((current) => current.map((entry) => entry.request.id === detail.id ? { ...entry, request: detail } : entry));
+        if (response.length) afterId = Math.max(afterId ?? 0, ...response.map((entry) => entry.id));
+        setMessages((current) => [...new Map([...current, ...response].map((entry) => [entry.id, entry])).values()].sort((a, b) => a.id - b.id));
         setMessageError('');
       } catch {
         if (active) setMessageError('Không tải được tin nhắn. Vui lòng thử lại.');
@@ -143,10 +173,10 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       active = false;
       if (pollingId !== undefined) window.clearTimeout(pollingId);
     };
-  }, [currentUserId, messageReloadKey, selectedRequestId]);
+  }, [chatEnabled, currentUserId, messageReloadKey, selectedRequestId]);
 
   useEffect(() => {
-    if (selectedRequestId === null) {
+    if (selectedRequestId === null || !chatEnabled) {
       setPinnedItems([]);
       return;
     }
@@ -163,7 +193,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     return () => {
       active = false;
     };
-  }, [currentUserId, selectedRequestId]);
+  }, [chatEnabled, currentUserId, selectedRequestId]);
 
   useEffect(() => {
     if (selectedRequestId === null) return;
@@ -171,6 +201,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     setLogisticsLoading(true);
     setLogisticsError('');
     setContact(null);
+    setAsDescribed('');
+    setNotAsDescribedReason('');
     requestApi
       .get(selectedRequestId, currentUserId)
       .then((detail) => {
@@ -178,7 +210,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         setConversations((current) => current.map((entry) => entry.request.id === detail.id ? { ...entry, request: detail } : entry));
         setDeliveryMethod(detail.deliveryMethod === 'SHIPPING' ? 'SHIPPING' : 'IN_PERSON');
         setMeetingPlace(detail.meetingPlace ?? '');
-        setMeetingTime(detail.meetingTime ? detail.meetingTime.slice(0, 16) : '');
+        const meetingDate = detail.meetingTime ? new Date(detail.meetingTime) : null;
+        setMeetingTime(meetingDate ? new Date(meetingDate.getTime() - meetingDate.getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : '');
         setAgreeToWaiver(false);
       })
       .catch((error: ApiError) => {
@@ -196,7 +229,17 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, selectedRequestId]);
 
-  const selected = conversations.find(({ request }) => request.id === selectedRequestId);
+  const selectedMeetingTime = selected?.request.meetingTime;
+  const selectedMeetingPlace = selected?.request.meetingPlace;
+  const selectedDeliveryMethod = selected?.request.deliveryMethod;
+  useEffect(() => {
+    const date = selectedMeetingTime ? new Date(selectedMeetingTime) : null;
+    setMeetingTime(date ? new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : '');
+    setMeetingPlace(selectedMeetingPlace ?? '');
+    setDeliveryMethod(selectedDeliveryMethod === 'SHIPPING' ? 'SHIPPING' : 'IN_PERSON');
+    setAgreeToWaiver(false);
+  }, [selectedMeetingTime, selectedMeetingPlace, selectedDeliveryMethod]);
+
   const selectedAsDonor = selected ? selected.request.receiverId !== currentUserId : false;
   const reportTargetUserId = selected?.item
     ? selected.item.donorId === currentUserId
@@ -219,7 +262,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   };
 
   const saveSchedule = async () => {
-    if (!selected || selected.request.status !== 'RESERVED' || selected.request.contactRevealedAt || !meetingPlace.trim() || !meetingTime) return;
+    if (!selected || logisticsSubmitting || !canSchedule(selected.request.status) || selected.request.contactRevealedAt || !meetingPlace.trim() || !meetingTime) return;
     setLogisticsSubmitting(true);
     setLogisticsError('');
     try {
@@ -240,7 +283,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   };
 
   const confirmLogistics = async () => {
-    if (!selected || selected.request.status !== 'RESERVED' || !selected.request.meetingTime || !agreeToWaiver) return;
+    if (!selected || logisticsSubmitting || selected.request.status !== 'AWAITING_LOGISTICS' || !selected.request.meetingTime || !agreeToWaiver) return;
     setLogisticsSubmitting(true);
     setLogisticsError('');
     try {
@@ -260,24 +303,29 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     setLogisticsSubmitting(true);
     setLogisticsError('');
     try {
-      setContact(await requestApi.getContact(selected.request.id, currentUserId));
+      const response = await requestApi.getContact(selected.request.id, currentUserId);
+      if (activeRequestId.current === selected.request.id) setContact(response);
     } catch (error) {
       const apiError = error as ApiError;
-      setLogisticsError(apiError.message || 'Chưa thể xem thông tin liên lạc.');
+      if (activeRequestId.current === selected.request.id) setLogisticsError(apiError.message || 'Chưa thể xem thông tin liên lạc.');
     } finally {
       setLogisticsSubmitting(false);
     }
   };
 
   const confirmApiHandover = async () => {
-    if (!selected?.request.contactRevealedAt || currentHandoverAt) return;
+    if (!selected || logisticsSubmitting || !canConfirmHandover(selected.request.status) || !selected.request.contactRevealedAt || currentHandoverAt) return;
+    if (!selectedAsDonor && (!asDescribed || (asDescribed === 'no' && !notAsDescribedReason.trim()))) {
+      setLogisticsError('Vui lòng đánh giá món đồ và nhập lý do nếu không đúng mô tả.');
+      return;
+    }
     setLogisticsSubmitting(true);
     setLogisticsError('');
     try {
       const request = await requestApi.confirmHandover(
         selected.request.id,
         currentUserId,
-        selectedAsDonor ? {} : { asDescribed: true },
+        selectedAsDonor ? {} : { asDescribed: asDescribed === 'yes', notAsDescribedReason: asDescribed === 'no' ? notAsDescribedReason.trim() : undefined },
       );
       updateSelectedRequest(request);
     } catch (error) {
@@ -288,11 +336,29 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     }
   };
 
+  const actOnPendingRequest = async (action: 'select' | 'cancel') => {
+    if (!selected || logisticsSubmitting || selected.request.status !== 'PENDING') return;
+    setLogisticsSubmitting(true);
+    setLogisticsError('');
+    try {
+      updateSelectedRequest(await requestApi[action](selected.request.id, currentUserId));
+    } catch (error) {
+      setLogisticsError((error as ApiError).message || 'Không cập nhật được yêu cầu.');
+    } finally {
+      setLogisticsSubmitting(false);
+    }
+  };
+
   const send = async () => {
     const content = message.trim();
-    if (!content || selectedRequestId === null || sending) return;
+    if ((!content && !shareItemId) || selectedRequestId === null || !chatEnabled || sending) return;
+    const refItemId = shareItemId ? Number(shareItemId) : undefined;
+    if (refItemId !== undefined && (!Number.isSafeInteger(refItemId) || refItemId <= 0)) {
+      setMessageError('Mã bài chia sẻ phải là số nguyên dương.');
+      return;
+    }
     const layer1 = contactSafetyLayer1(content);
-    if (layer1.blocked) {
+    if (!selected?.request.contactRevealedAt && layer1.blocked) {
       setMessageError('Tin nhắn có chứa thông tin liên hệ không được phép.');
       return;
     }
@@ -300,16 +366,23 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     setSending(true);
     setMessageError('');
     try {
-      if (hasAmbiguousContactSignal(content) && (await classifyAmbiguousContact(content))) {
+      if (!selected?.request.contactRevealedAt && hasAmbiguousContactSignal(content) && (await classifyAmbiguousContact(content))) {
         setMessageError('Tin nhắn có dấu hiệu chứa thông tin liên hệ không được phép.');
         return;
       }
-      const sent = await chatApi.send(selectedRequestId, currentUserId, { content });
+      const sent = await chatApi.send(selectedRequestId, currentUserId, { content, refItemId });
+      if (activeRequestId.current !== selectedRequestId) return;
+      if (sent.moderation && sent.moderation !== 'PASS') {
+        setMessageError(sent.blockedReason || 'Tin nhắn không vượt qua kiểm duyệt.');
+        return;
+      }
       setMessages((current) => (current.some((entry) => entry.id === sent.id) ? current : [...current, sent]));
       setMessage('');
+      setShareItemId('');
     } catch (error) {
       const apiError = error as ApiError;
-      setMessageError(apiError.code === 'CHAT_MESSAGE_BLOCKED' ? apiError.message : 'Không gửi được tin nhắn. Vui lòng thử lại.');
+      if (activeRequestId.current !== selectedRequestId) return;
+      setMessageError(apiError.message || 'Không gửi được tin nhắn. Vui lòng thử lại.');
     } finally {
       setSending(false);
     }
@@ -357,7 +430,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     <strong className="block truncate text-sm">{item?.title ?? `Yêu cầu #${request.id}`}</strong>
                     <span className="mt-1 flex items-center gap-2">
                       <TypeBadge type={request.type === 'SWAP' ? 'trade' : 'gift'} />
-                      <span className="text-xs text-text-muted">{request.status}</span>
+                      <span className="text-xs text-text-muted">{requestStatusLabel[request.status]}</span>
                     </span>
                   </span>
                 </button>
@@ -378,7 +451,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 <h2 className="truncate text-sm font-bold">{selected.item?.title ?? `Yêu cầu #${selected.request.id}`}</h2>
                 <p className="mt-1 text-xs text-text-muted">Tin nhắn được đồng bộ tự động mỗi 5 giây</p>
               </div>
-              <span className="rounded-sm bg-primary-faint px-2.5 py-1 text-xs font-semibold text-primary">{selected.request.status}</span>
+              <span className="rounded-sm bg-primary-faint px-2.5 py-1 text-xs font-semibold text-primary">{requestStatusLabel[selected.request.status]}</span>
               {reportTargetUserId && reportTargetUserId !== currentUserId ? (
                 <Button size="sm" variant="ghost" icon="shield" onClick={() => setReportOpen(true)}>
                   Báo cáo
@@ -390,12 +463,32 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 <p className="text-xs text-text-muted">Đang tải thông tin giao nhận...</p>
               ) : (
                 <div className="space-y-3">
+                  {selected.request.status === 'PENDING' ? (
+                    <div className="flex items-center gap-3 text-sm">
+                      <p>Yêu cầu đang chờ chủ bài chọn người nhận.</p>
+                      {selectedAsDonor ? (
+                        <Button size="sm" disabled={logisticsSubmitting} onClick={() => { if (window.confirm('Chọn người này? Các yêu cầu khác sẽ bị từ chối.')) void actOnPendingRequest('select'); }}>Chọn người này</Button>
+                      ) : (
+                        <Button size="sm" variant="outline" disabled={logisticsSubmitting} onClick={() => void actOnPendingRequest('cancel')}>Hủy yêu cầu</Button>
+                      )}
+                    </div>
+                  ) : null}
+                  {canConfirmHandover(selected.request.status) && !selectedAsDonor && !currentHandoverAt ? (
+                    <div className="space-y-2">
+                      <Select label="Món đồ có đúng mô tả không?" value={asDescribed} disabled={logisticsSubmitting} onChange={(event) => setAsDescribed(event.target.value)}>
+                        <option value="">Chọn đánh giá</option>
+                        <option value="yes">Đúng mô tả</option>
+                        <option value="no">Không đúng mô tả</option>
+                      </Select>
+                      {asDescribed === 'no' ? <TextArea label="Lý do không đúng mô tả" value={notAsDescribedReason} disabled={logisticsSubmitting} onChange={(event) => setNotAsDescribedReason(event.target.value)} /> : null}
+                    </div>
+                  ) : null}
                   <div className="grid gap-2 sm:grid-cols-3">
                     <Select
                       label="Hình thức"
                       value={deliveryMethod}
                       onChange={(event) => setDeliveryMethod(event.target.value as 'IN_PERSON' | 'SHIPPING')}
-                      disabled={selected.request.status !== 'RESERVED' || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
+                      disabled={!canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
                     >
                       <option value="IN_PERSON">Gặp trực tiếp</option>
                       <option value="SHIPPING">Giao hàng</option>
@@ -404,14 +497,14 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       label="Địa điểm"
                       value={meetingPlace}
                       onChange={(event) => setMeetingPlace(event.target.value)}
-                      disabled={selected.request.status !== 'RESERVED' || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
+                      disabled={!canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
                     />
                     <Field
                       label="Thời gian"
                       type="datetime-local"
                       value={meetingTime}
                       onChange={(event) => setMeetingTime(event.target.value)}
-                      disabled={selected.request.status !== 'RESERVED' || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
+                      disabled={!canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
                     />
                   </div>
                   <label className="flex items-start gap-2 text-xs text-text-secondary">
@@ -419,7 +512,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       type="checkbox"
                       checked={agreeToWaiver}
                       onChange={(event) => setAgreeToWaiver(event.target.checked)}
-                      disabled={selected.request.status !== 'RESERVED' || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
+                      disabled={!canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
                     />
                     <span>Tôi đồng ý cam kết trách nhiệm giao nhận.</span>
                   </label>
@@ -445,14 +538,14 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={selected.request.status !== 'RESERVED' || Boolean(selected.request.contactRevealedAt) || !meetingPlace.trim() || !meetingTime || logisticsSubmitting}
+                      disabled={!canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || !meetingPlace.trim() || !meetingTime || logisticsSubmitting}
                       onClick={() => void saveSchedule()}
                     >
                       Lưu lịch hẹn
                     </Button>
                     <Button
                       size="sm"
-                      disabled={selected.request.status !== 'RESERVED' || !selected.request.meetingTime || !agreeToWaiver || Boolean(currentPartyConfirmedAt) || logisticsSubmitting}
+                      disabled={selected.request.status !== 'AWAITING_LOGISTICS' || !selected.request.meetingTime || !agreeToWaiver || Boolean(currentPartyConfirmedAt) || logisticsSubmitting}
                       onClick={() => void confirmLogistics()}
                     >
                       {currentPartyConfirmedAt ? 'Đã xác nhận lịch' : 'Xác nhận lịch'}
@@ -462,7 +555,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         Xem liên hệ
                       </Button>
                     ) : null}
-                    {selected.request.contactRevealedAt ? (
+                    {canConfirmHandover(selected.request.status) && selected.request.contactRevealedAt ? (
                       <Button
                         size="sm"
                         variant="outline"
@@ -518,6 +611,12 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   return (
                     <div key={entry.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[82%] rounded-lg px-3.5 py-2.5 text-sm leading-6 sm:max-w-[70%] ${mine ? 'rounded-br-sm bg-primary text-white' : 'rounded-bl-sm bg-white text-text-primary ring-1 ring-border/70'}`}>
+                        {entry.itemCard ? (
+                          <button type="button" className="mb-2 flex w-full items-center gap-3 rounded-md bg-white p-3 text-left text-text-primary" onClick={() => navigate(`/items/${entry.itemCard!.id}`)}>
+                            <ItemImage src={entry.itemCard.imageUrl ?? undefined} alt={entry.itemCard.title} className="size-14 rounded-md object-cover" />
+                            <span><strong className="block">{entry.itemCard.title}</strong><StatusBadge status={entry.itemCard.status} /></span>
+                          </button>
+                        ) : null}
                         <p className="whitespace-pre-wrap break-words">{entry.content}</p>
                         <span className={`mt-1 block text-[10px] ${mine ? 'text-white/65' : 'text-text-muted'}`}>{new Date(entry.createdAt).toLocaleString('vi-VN')}</span>
                       </div>
@@ -525,11 +624,15 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   );
                 })
               ) : (
-                <EmptyState title="Chưa có tin nhắn" text="Hãy gửi lời chào để bắt đầu cuộc trò chuyện." />
+                <EmptyState title={chatEnabled ? "Chưa có tin nhắn" : "Chưa mở chat"} text={chatEnabled ? "Hãy gửi lời chào để bắt đầu cuộc trò chuyện." : "Chat chỉ mở khi yêu cầu được chọn."} />
               )}
               <div ref={messagesEndRef} aria-hidden="true" />
             </div>
             <div className="shrink-0 border-t border-border bg-white p-3 sm:p-4">
+              <Select label="Chia sẻ bài của bạn" value={shareItemId} disabled={sending || !chatEnabled} onChange={(event) => setShareItemId(event.target.value)}>
+                <option value="">Không đính kèm bài đăng</option>
+                {shareableItems.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+              </Select>
               {messageError ? (
                 <div className="mb-2 flex items-center justify-between gap-3 text-xs text-error">
                   <p>{messageError}</p>
@@ -554,9 +657,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     if (messageError) setMessageError('');
                   }}
                   placeholder="Nhập tin nhắn..."
-                  disabled={sending}
+                  disabled={sending || !chatEnabled}
                 />
-                <Button aria-label="Gửi tin nhắn" icon="send" disabled={sending || !message.trim()}>
+                <Button aria-label="Gửi tin nhắn" icon="send" disabled={sending || !chatEnabled || (!message.trim() && !shareItemId)}>
                   {sending ? 'Đang gửi' : 'Gửi'}
                 </Button>
               </form>
