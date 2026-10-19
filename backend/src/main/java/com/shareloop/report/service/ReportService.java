@@ -6,9 +6,13 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.dto.ItemSummary;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
+import com.shareloop.notification.service.NotificationService;
 import com.shareloop.report.ReportErrorCode;
 import com.shareloop.report.dto.ConcludeReportRequest;
+import com.shareloop.report.dto.CreateDisputeRequest;
 import com.shareloop.report.dto.CreateReportRequest;
+import com.shareloop.report.dto.DisputeResponse;
+import com.shareloop.report.dto.DisputeResponseRequest;
 import com.shareloop.report.dto.ReportConclusionResponse;
 import com.shareloop.report.dto.ReportDecision;
 import com.shareloop.report.dto.ReportResponse;
@@ -24,14 +28,17 @@ import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.service.RequestService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,109 +48,105 @@ public class ReportService {
     private final ReportRepository reportRepository;
     private final ItemQueryService itemQueryService;
     private final ItemService itemService;
+    private final NotificationService notificationService;
     private final ReputationService reputationService;
     private final ActivityLogService activityLogService;
     private final ConfigService configService;
     private final RequestService requestService;
     private final ReportEvidenceService evidenceService;
+    private final JdbcClient jdbcClient;
+    private final Clock clock;
 
     @Autowired
     public ReportService(
             ReportRepository reportRepository,
             ItemQueryService itemQueryService,
-            ItemService itemService,
+            @Autowired(required = false) ItemService itemService,
+            ReportEvidenceService evidenceService,
+            @Autowired(required = false) NotificationService notificationService,
             @Autowired(required = false) ReputationService reputationService,
             @Autowired(required = false) ActivityLogService activityLogService,
             @Autowired(required = false) ConfigService configService,
             @Autowired(required = false) RequestService requestService,
-            ReportEvidenceService evidenceService) {
+            @Autowired(required = false) JdbcClient jdbcClient,
+            @Autowired(required = false) Clock clock) {
         this.reportRepository = reportRepository;
         this.itemQueryService = itemQueryService;
         this.itemService = itemService;
+        this.evidenceService = evidenceService;
+        this.notificationService = notificationService;
         this.reputationService = reputationService;
         this.activityLogService = activityLogService;
         this.configService = configService;
         this.requestService = requestService;
-        this.evidenceService = evidenceService;
+        this.jdbcClient = jdbcClient;
+        this.clock = clock != null ? clock : Clock.systemUTC();
     }
 
     @Transactional
     public ReportResponse createReport(Long reporterId, CreateReportRequest request) {
+        return create(reporterId, request);
+    }
+
+    @Transactional
+    public ReportResponse create(Long reporterId, CreateReportRequest request) {
         if (reporterId == null) {
             throw new IllegalArgumentException("reporterId cannot be null");
         }
+        if (request == null) {
+            throw new IllegalArgumentException("request cannot be null");
+        }
 
         TargetType targetType = request.targetType();
-        Long resolvedItemId = null;
-        Long resolvedTargetUserId = null;
-        Long resolvedRequestId = null;
-
-        if (targetType == TargetType.ITEM) {
-            resolvedItemId = request.resolvedItemId();
-            if (resolvedItemId == null) {
-                throw new BusinessException(
-                        ReportErrorCode.REPORT_TARGET_REQUIRED, "Thiếu itemId để báo cáo bài đăng.");
-            }
-
-            // Kiểm tra bài đăng tồn tại
-            ItemSummary itemSummary = itemQueryService.getSummary(resolvedItemId);
-            if (itemSummary == null) {
-                throw new BusinessException(
-                        ReportErrorCode.REPORT_TARGET_NOT_FOUND, "Không tìm thấy bài đăng cần báo cáo.");
-            }
-
-            // Không tự báo cáo bài của chính mình
-            if (reporterId.equals(itemSummary.donorId())) {
-                throw new BusinessException(
-                        ReportErrorCode.REPORT_CANNOT_REPORT_SELF, "Không thể tự báo cáo bài đăng của chính mình.");
-            }
-            resolvedTargetUserId = itemSummary.donorId();
-
-            // Mỗi người chỉ báo cáo một đối tượng một lần
-            if (reportRepository.existsByReporterIdAndTargetTypeAndItemId(
-                    reporterId, TargetType.ITEM, resolvedItemId)) {
-                throw new BusinessException(
-                        ReportErrorCode.REPORT_ALREADY_REPORTED, "Bạn đã báo cáo bài đăng này rồi.");
-            }
-
-        } else if (targetType == TargetType.USER) {
-            resolvedTargetUserId = request.resolvedTargetUserId();
-            if (resolvedTargetUserId == null) {
-                throw new BusinessException(
-                        ReportErrorCode.REPORT_TARGET_REQUIRED, "Thiếu targetUserId để báo cáo người dùng.");
-            }
-
-            // Không tự báo cáo chính mình
-            if (reporterId.equals(resolvedTargetUserId)) {
-                throw new BusinessException(
-                        ReportErrorCode.REPORT_CANNOT_REPORT_SELF, "Không thể tự báo cáo chính mình.");
-            }
-
-            // Mỗi người chỉ báo cáo một đối tượng một lần
-            if (reportRepository.existsByReporterIdAndTargetTypeAndTargetUserId(
-                    reporterId, TargetType.USER, resolvedTargetUserId)) {
-                throw new BusinessException(
-                        ReportErrorCode.REPORT_ALREADY_REPORTED, "Bạn đã báo cáo người dùng này rồi.");
-            }
-
-        } else if (targetType == TargetType.REQUEST) {
-            resolvedRequestId = request.resolvedRequestId();
-            if (resolvedRequestId == null) {
-                throw new BusinessException(
-                        ReportErrorCode.REPORT_TARGET_REQUIRED, "Thiếu requestId để báo cáo giao dịch.");
-            }
-
-            if (reportRepository.existsByReporterIdAndTargetTypeAndRequestId(
-                    reporterId, TargetType.REQUEST, resolvedRequestId)) {
-                throw new BusinessException(
-                        ReportErrorCode.REPORT_ALREADY_REPORTED, "Bạn đã báo cáo yêu cầu giao dịch này rồi.");
-            }
-            RequestChatContext context = requestService.getChatContext(resolvedRequestId);
-            if (reporterId.equals(context.receiverId())) resolvedTargetUserId = context.donorId();
-            else if (reporterId.equals(context.donorId())) resolvedTargetUserId = context.receiverId();
-            else throw new BusinessException(ReportErrorCode.REPORT_NOT_PARTICIPANT);
-            resolvedItemId = context.itemId();
+        if (targetType == null) {
+            throw new BusinessException(ReportErrorCode.REPORT_TARGET_REQUIRED);
         }
+
+        Long resolvedItemId = request.resolvedItemId();
+        Long resolvedTargetUserId = request.resolvedTargetUserId();
+        Long resolvedRequestId = request.resolvedRequestId();
+
+        switch (targetType) {
+            case ITEM -> {
+                if (resolvedItemId == null) {
+                    throw new BusinessException(ReportErrorCode.REPORT_TARGET_REQUIRED);
+                }
+                ItemSummary summary = itemQueryService.getSummary(resolvedItemId);
+                if (summary == null) {
+                    throw new BusinessException(ReportErrorCode.REPORT_TARGET_NOT_FOUND);
+                }
+                if (reporterId.equals(summary.donorId())) {
+                    throw new BusinessException(ReportErrorCode.REPORT_CANNOT_REPORT_SELF);
+                }
+                if (reportRepository.existsByReporterIdAndTargetTypeAndItemId(reporterId, targetType, resolvedItemId)) {
+                    throw new BusinessException(ReportErrorCode.REPORT_ALREADY_REPORTED);
+                }
+                resolvedTargetUserId = summary.donorId();
+            }
+            case USER -> {
+                if (resolvedTargetUserId == null) {
+                    throw new BusinessException(ReportErrorCode.REPORT_TARGET_REQUIRED);
+                }
+                if (reporterId.equals(resolvedTargetUserId)) {
+                    throw new BusinessException(ReportErrorCode.REPORT_CANNOT_REPORT_SELF);
+                }
+                if (reportRepository.existsByReporterIdAndTargetTypeAndTargetUserId(
+                        reporterId, targetType, resolvedTargetUserId)) {
+                    throw new BusinessException(ReportErrorCode.REPORT_ALREADY_REPORTED);
+                }
+            }
+            case REQUEST -> {
+                if (resolvedRequestId == null) {
+                    throw new BusinessException(ReportErrorCode.REPORT_TARGET_REQUIRED);
+                }
+                return toReportResponse(openDisputeReport(
+                        reporterId,
+                        resolvedRequestId,
+                        new CreateDisputeRequest(request.reason(), request.description(), request.evidenceMediaIds())));
+            }
+        }
+
+        ReportStage stage = resolvedRequestId != null ? ReportStage.AFTER : ReportStage.BEFORE;
 
         Report report = new Report(
                 reporterId,
@@ -152,14 +155,10 @@ public class ReportService {
                 resolvedTargetUserId,
                 resolvedRequestId,
                 request.reason(),
-                request.description().trim(),
-                ReportStage.BEFORE);
+                request.description(),
+                stage);
 
         report.setEvidence(evidenceService.attach(request.evidenceMediaIds(), reporterId));
-        if (targetType == TargetType.REQUEST) {
-            report.awaitResponse(
-                    Instant.now().plus(configService.getInt(ConfigKey.RESPONSE_WINDOW_DAYS), ChronoUnit.DAYS));
-        }
         Report saved = reportRepository.save(report);
 
         // BR-A03: Đạt 3 report thì tự ẩn bài
@@ -170,6 +169,10 @@ public class ReportService {
             }
         }
 
+        return toReportResponse(saved);
+    }
+
+    private ReportResponse toReportResponse(Report saved) {
         return new ReportResponse(
                 saved.getId(),
                 saved.getReporterId(),
@@ -191,7 +194,7 @@ public class ReportService {
                 .orElseThrow(() -> new BusinessException(ReportErrorCode.REPORT_NOT_FOUND));
         Long targetId = resolveViolator(report);
         if (!userId.equals(targetId)) throw new BusinessException(ReportErrorCode.REPORT_NOT_PARTICIPANT);
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         if (report.getStatus() != ReportStatus.AWAITING_RESPONSE
                 || report.getRespondedAt() != null
                 || report.getResponseDueAt() == null
@@ -202,12 +205,149 @@ public class ReportService {
     }
 
     /**
+     * Mở khiếu nại giao dịch đã hoàn tất trong vòng 7 ngày (FR-89, BR-T08, Issue #112).
+     */
+    @Transactional
+    public DisputeResponse openDispute(Long userId, Long requestId, CreateDisputeRequest request) {
+        Report saved = openDisputeReport(userId, requestId, request);
+        return new DisputeResponse(saved.getId(), saved.getResponseDueAt());
+    }
+
+    private Report openDisputeReport(Long userId, Long requestId, CreateDisputeRequest request) {
+        if (userId == null) {
+            throw new IllegalArgumentException("userId cannot be null");
+        }
+        if (requestId == null) {
+            throw new IllegalArgumentException("requestId cannot be null");
+        }
+        if (request == null || request.reason() == null) {
+            throw new IllegalArgumentException("request and reason cannot be null");
+        }
+
+        // 1. Tìm thông tin giao dịch
+        RequestSnapshot reqSnapshot = findRequest(requestId);
+        if (reqSnapshot == null) {
+            throw new BusinessException(ReportErrorCode.REPORT_TARGET_NOT_FOUND, "Không tìm thấy yêu cầu giao dịch.");
+        }
+
+        // 2. Xác định các bên tham gia giao dịch
+        ItemSummary itemSummary = itemQueryService.getSummary(reqSnapshot.itemId());
+        if (itemSummary == null) {
+            throw new BusinessException(
+                    ReportErrorCode.REPORT_TARGET_NOT_FOUND, "Không tìm thấy bài đăng của giao dịch.");
+        }
+        Long donorId = itemSummary.donorId();
+        Long receiverId = reqSnapshot.receiverId();
+
+        if (!userId.equals(donorId) && !userId.equals(receiverId)) {
+            throw new BusinessException(ReportErrorCode.DISPUTE_NOT_A_PARTY);
+        }
+
+        // 3. Kiểm tra trạng thái giao dịch phải là COMPLETED
+        if (!"COMPLETED".equalsIgnoreCase(reqSnapshot.status())) {
+            throw new BusinessException(ReportErrorCode.DISPUTE_REQUEST_NOT_COMPLETED);
+        }
+
+        // 4. Kiểm tra cửa sổ khiếu nại (7 ngày sau completedAt)
+        int windowDays = disputeDays("DISPUTE_WINDOW_DAYS", ConfigKey.COMPLAINT_WINDOW_DAYS);
+        Instant completedAt = reqSnapshot.completedAt() != null ? reqSnapshot.completedAt() : Instant.now(clock);
+        Instant deadline = completedAt.plus(Duration.ofDays(windowDays));
+        if (Instant.now(clock).isAfter(deadline)) {
+            throw new BusinessException(ReportErrorCode.DISPUTE_WINDOW_EXPIRED);
+        }
+
+        // 5. Mỗi người chỉ khiếu nại giao dịch này một lần
+        if (reportRepository.existsByReporterIdAndTargetTypeAndRequestId(userId, TargetType.REQUEST, requestId)) {
+            throw new BusinessException(ReportErrorCode.REPORT_ALREADY_REPORTED);
+        }
+
+        // 6. Kiểm tra và đính kèm bằng chứng nếu có
+        List<Long> evidenceMediaIds = request.evidenceMediaIds();
+
+        // 7. Mở cửa sổ giải trình 3 ngày cho bên bị khiếu nại
+        int responseDays = disputeDays("DISPUTE_RESPONSE_DAYS", ConfigKey.RESPONSE_WINDOW_DAYS);
+        Instant now = Instant.now(clock);
+        Instant responseDueAt = now.plus(Duration.ofDays(responseDays));
+        Long respondentId = userId.equals(donorId) ? receiverId : donorId;
+
+        String evidenceStr = evidenceService.attach(evidenceMediaIds, userId);
+
+        Report dispute = Report.createDispute(
+                userId,
+                requestId,
+                reqSnapshot.itemId(),
+                respondentId,
+                request.reason(),
+                request.note(),
+                evidenceStr,
+                responseDueAt);
+
+        Report saved = reportRepository.save(dispute);
+
+        // 8. Gửi thông báo cho bên bị khiếu nại
+        if (notificationService != null) {
+            notificationService.notify(
+                    respondentId,
+                    "DISPUTE_OPENED",
+                    "Giao dịch #" + requestId + " bị khiếu nại",
+                    "Giao dịch #" + requestId + " đã bị đối tác khiếu nại. Bạn có " + responseDays
+                            + " ngày để giải trình.",
+                    "/me/disputes/" + saved.getId());
+        }
+
+        return saved;
+    }
+
+    /**
+     * Bên bị khiếu nại gửi giải trình kèm bằng chứng trong vòng 3 ngày (FR-90, BR-T08, Issue #112).
+     */
+    @Transactional
+    public void respondDispute(Long userId, Long disputeId, DisputeResponseRequest request) {
+        if (userId == null) {
+            throw new IllegalArgumentException("userId cannot be null");
+        }
+        if (disputeId == null) {
+            throw new IllegalArgumentException("disputeId cannot be null");
+        }
+        if (request == null || request.note() == null || request.note().isBlank()) {
+            throw new IllegalArgumentException("request and note cannot be null or blank");
+        }
+
+        Report dispute = reportRepository
+                .findByIdForUpdate(disputeId)
+                .orElseThrow(() -> new BusinessException(ReportErrorCode.DISPUTE_NOT_FOUND));
+
+        // Chỉ bên bị khiếu nại mới được giải trình
+        if (dispute.getTargetUserId() == null || !userId.equals(dispute.getTargetUserId())) {
+            throw new BusinessException(ReportErrorCode.DISPUTE_NOT_RESPONDENT);
+        }
+
+        // Đã kết luận thì không thể giải trình thêm
+        if (dispute.getStatus() == ReportStatus.RESOLVED || dispute.getStatus() == ReportStatus.DISMISSED) {
+            throw new BusinessException(ReportErrorCode.DISPUTE_ALREADY_CONCLUDED);
+        }
+
+        // Đã giải trình trước đó
+        if (dispute.getRespondedAt() != null) {
+            throw new BusinessException(ReportErrorCode.DISPUTE_ALREADY_RESPONDED);
+        }
+
+        // Quá hạn giải trình 3 ngày
+        if (dispute.getResponseDueAt() != null && Instant.now(clock).isAfter(dispute.getResponseDueAt())) {
+            throw new BusinessException(ReportErrorCode.DISPUTE_RESPONSE_WINDOW_EXPIRED);
+        }
+
+        // Đính kèm bằng chứng nếu có
+        List<Long> evidenceMediaIds = request.evidenceMediaIds();
+
+        String evidenceStr = evidenceService.attach(evidenceMediaIds, userId);
+
+        dispute.respond(request.note(), evidenceStr, Instant.now(clock));
+        reportRepository.save(dispute);
+    }
+
+    /**
      * Admin kết luận khiếu nại (FR-91, FR-93, BR-U04, BR-A07, Issue #113).
-     *
-     * @param adminId ID của Admin thực hiện
-     * @param reportId ID của báo cáo vi phạm
-     * @param request quyết định kết luận và ghi chú
-     * @return kết quả kết luận báo cáo
      */
     @Transactional
     public ReportConclusionResponse conclude(Long adminId, Long reportId, ConcludeReportRequest request) {
@@ -307,6 +447,17 @@ public class ReportService {
                 saved.getResolvedAt());
     }
 
+    private int disputeDays(String legacyKey, ConfigKey fallback) {
+        if (configService == null) return fallback.getDefaultValue();
+        try {
+            return configService.getDecimal(legacyKey).intValueExact();
+        } catch (BusinessException exception) {
+            if (exception.getErrorCode() != com.shareloop.setting.SettingErrorCode.SETTING_CONFIG_NOT_FOUND)
+                throw exception;
+            return configService.getInt(fallback);
+        }
+    }
+
     private Long resolveViolator(Report report) {
         if (report.getTargetType() == TargetType.USER) {
             return report.getTargetUserId();
@@ -367,4 +518,26 @@ public class ReportService {
                 .collect(Collectors.toSet());
         return seriousSet.contains(reason.name());
     }
+
+    RequestSnapshot findRequest(Long requestId) {
+        if (jdbcClient == null) {
+            return null;
+        }
+        return jdbcClient
+                .sql(
+                        "SELECT id, item_id, receiver_id, status, completed_at FROM requests WHERE id = ? AND is_deleted = false")
+                .param(requestId)
+                .query((rs, rowNum) -> new RequestSnapshot(
+                        rs.getLong("id"),
+                        rs.getLong("item_id"),
+                        rs.getLong("receiver_id"),
+                        rs.getString("status"),
+                        rs.getTimestamp("completed_at") != null
+                                ? rs.getTimestamp("completed_at").toInstant()
+                                : null))
+                .optional()
+                .orElse(null);
+    }
+
+    public record RequestSnapshot(Long id, Long itemId, Long receiverId, String status, Instant completedAt) {}
 }

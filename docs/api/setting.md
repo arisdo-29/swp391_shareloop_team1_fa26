@@ -111,7 +111,7 @@ Response là danh sách các match:
 
 ## Admin review checklist (#37)
 
-Các endpoint quản lý bộ câu hỏi checklist kiểm duyệt bài đăng (nhóm `CHECKLIST` trong `website_attributes`). Chỉ Admin được gọi.
+Các endpoint quản lý bộ điều kiện đạt checklist kiểm duyệt bài đăng (nhóm `CHECKLIST` trong `website_attributes`). Chỉ Admin được gọi. Dùng câu “đạt thì tích”: `true` nghĩa là bài đáp ứng điều kiện. API quản lý vẫn giữ tên trường `question`; API hàng chờ trả mục active dạng `{id, key, statement}` theo `sort_order`, rồi `id` (xem [Review API](review.md)).
 
 ### GET /api/v1/admin/checklist
 
@@ -122,7 +122,7 @@ Trả toàn bộ danh sách các câu hỏi checklist theo thứ tự `sort_orde
   {
     "id": 1,
     "key": "ownership_transfer",
-    "question": "Món đồ có cần sang tên, đăng ký, công chứng để đổi chủ không?",
+    "question": "Không cần sang tên, đăng ký hay công chứng để đổi chủ.",
     "sortOrder": 10,
     "active": true
   }
@@ -135,7 +135,7 @@ Thêm câu hỏi mới vào checklist. Tự động xếp vào cuối danh sách
 
 ```json
 {
-  "question": "Ảnh có bị mờ hoặc không nhận dạng được món đồ không?"
+  "question": "Ảnh rõ nét, nhận dạng được món đồ."
 }
 ```
 
@@ -147,7 +147,7 @@ Chỉnh sửa nội dung câu hỏi của một mục checklist.
 
 ```json
 {
-  "question": "Nội dung câu hỏi sau khi điều chỉnh?"
+  "question": "Điều kiện đạt sau khi điều chỉnh."
 }
 ```
 

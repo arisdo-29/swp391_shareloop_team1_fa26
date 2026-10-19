@@ -17,8 +17,8 @@ class ReviewQueueOrderTest {
     @Test
     @DisplayName("Bài có cờ REVIEW đứng trước bài không có cờ, dù bài không cờ có người đăng rủi ro hơn và chờ lâu hơn")
     void flaggedBeforeUnflaggedEvenIfUnflaggedHasLowerTrustStars() {
-        ReviewQueueItem unflaggedRisky =
-                new ReviewQueueItem(1L, 10L, "Áo cũ", "LOW", "NONE", null, (short) 1, now.minus(5, ChronoUnit.HOURS));
+        ReviewQueueItem unflaggedRisky = new ReviewQueueItem(
+                1L, 10L, "Áo cũ", "LOW", "NONE", null, null, List.of(), (short) 1, now.minus(5, ChronoUnit.HOURS));
         ReviewQueueItem flaggedTrusted = new ReviewQueueItem(
                 2L,
                 20L,
@@ -26,6 +26,8 @@ class ReviewQueueOrderTest {
                 "HIGH",
                 "REVIEW",
                 "Nghi ngờ có sđt",
+                null,
+                List.of(),
                 (short) 5,
                 now.minus(1, ChronoUnit.HOURS));
 
@@ -39,9 +41,27 @@ class ReviewQueueOrderTest {
     @DisplayName("Cùng có cờ: người đăng có uy tín thấp hơn (rủi ro hơn) đứng trước")
     void sameFlag_lowerTrustStarsBeforeHigherTrustStars() {
         ReviewQueueItem riskyUserPost = new ReviewQueueItem(
-                10L, 101L, "Đồng hồ", "HIGH", "REVIEW", "Từ cấm", (short) 2, now.minus(1, ChronoUnit.HOURS));
+                10L,
+                101L,
+                "Đồng hồ",
+                "HIGH",
+                "REVIEW",
+                "Từ cấm",
+                null,
+                List.of(),
+                (short) 2,
+                now.minus(1, ChronoUnit.HOURS));
         ReviewQueueItem trustedUserPost = new ReviewQueueItem(
-                11L, 102L, "Tai nghe", "HIGH", "REVIEW", "Từ cấm", (short) 4, now.minus(2, ChronoUnit.HOURS));
+                11L,
+                102L,
+                "Tai nghe",
+                "HIGH",
+                "REVIEW",
+                "Từ cấm",
+                null,
+                List.of(),
+                (short) 4,
+                now.minus(2, ChronoUnit.HOURS));
 
         List<ReviewQueueItem> items = new ArrayList<>(List.of(trustedUserPost, riskyUserPost));
         items.sort(ReviewQueueItem.QUEUE_ORDER);
@@ -53,9 +73,27 @@ class ReviewQueueOrderTest {
     @DisplayName("Cùng cờ và cùng số sao: bài vào hàng chờ lâu hơn đứng trước")
     void sameFlagAndTrustStars_olderItemBeforeNewerItem() {
         ReviewQueueItem olderPost = new ReviewQueueItem(
-                21L, 201L, "Balo", "MEDIUM", "REVIEW", "Lỗi ảnh", (short) 3, now.minus(10, ChronoUnit.HOURS));
+                21L,
+                201L,
+                "Balo",
+                "MEDIUM",
+                "REVIEW",
+                "Lỗi ảnh",
+                null,
+                List.of(),
+                (short) 3,
+                now.minus(10, ChronoUnit.HOURS));
         ReviewQueueItem newerPost = new ReviewQueueItem(
-                22L, 202L, "Giày", "MEDIUM", "REVIEW", "Lỗi ảnh", (short) 3, now.minus(2, ChronoUnit.HOURS));
+                22L,
+                202L,
+                "Giày",
+                "MEDIUM",
+                "REVIEW",
+                "Lỗi ảnh",
+                null,
+                List.of(),
+                (short) 3,
+                now.minus(2, ChronoUnit.HOURS));
 
         List<ReviewQueueItem> items = new ArrayList<>(List.of(newerPost, olderPost));
         items.sort(ReviewQueueItem.QUEUE_ORDER);
@@ -67,8 +105,9 @@ class ReviewQueueOrderTest {
     @DisplayName("Cùng cờ, cùng sao, cùng thời điểm: ID nhỏ hơn đứng trước để phá hòa ổn định")
     void sameFlagTrustStarsAndCreatedAt_smallerIdFirst() {
         ReviewQueueItem postWithSmallerId =
-                new ReviewQueueItem(31L, 301L, "Món A", "LOW", "NONE", null, (short) 5, now);
-        ReviewQueueItem postWithLargerId = new ReviewQueueItem(32L, 302L, "Món B", "LOW", "NONE", null, (short) 5, now);
+                new ReviewQueueItem(31L, 301L, "Món A", "LOW", "NONE", null, null, List.of(), (short) 5, now);
+        ReviewQueueItem postWithLargerId =
+                new ReviewQueueItem(32L, 302L, "Món B", "LOW", "NONE", null, null, List.of(), (short) 5, now);
 
         List<ReviewQueueItem> items = new ArrayList<>(List.of(postWithLargerId, postWithSmallerId));
         items.sort(ReviewQueueItem.QUEUE_ORDER);
@@ -83,7 +122,8 @@ class ReviewQueueOrderTest {
         emptyQueue.sort(ReviewQueueItem.QUEUE_ORDER);
         assertThat(emptyQueue).isEmpty();
 
-        ReviewQueueItem singleItem = new ReviewQueueItem(1L, 10L, "Áo", "LOW", "NONE", null, (short) 5, now);
+        ReviewQueueItem singleItem =
+                new ReviewQueueItem(1L, 10L, "Áo", "LOW", "NONE", null, null, List.of(), (short) 5, now);
         List<ReviewQueueItem> singleQueue = new ArrayList<>(List.of(singleItem));
         singleQueue.sort(ReviewQueueItem.QUEUE_ORDER);
         assertThat(singleQueue).containsExactly(singleItem);
@@ -92,8 +132,10 @@ class ReviewQueueOrderTest {
     @Test
     @DisplayName("Kiểm tra helper isFlagged và riskScore")
     void helperMethodsVerification() {
-        ReviewQueueItem flaggedItem = new ReviewQueueItem(1L, 10L, "Áo", "HIGH", "REVIEW", "Vi phạm", (short) 2, now);
-        ReviewQueueItem unflaggedItem = new ReviewQueueItem(2L, 10L, "Quần", "LOW", "NONE", null, (short) 5, now);
+        ReviewQueueItem flaggedItem =
+                new ReviewQueueItem(1L, 10L, "Áo", "HIGH", "REVIEW", "Vi phạm", null, List.of(), (short) 2, now);
+        ReviewQueueItem unflaggedItem =
+                new ReviewQueueItem(2L, 10L, "Quần", "LOW", "NONE", null, null, List.of(), (short) 5, now);
 
         assertThat(flaggedItem.isFlagged()).isTrue();
         assertThat(flaggedItem.riskScore()).isEqualTo(4);

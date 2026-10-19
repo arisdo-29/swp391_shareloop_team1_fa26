@@ -3,6 +3,7 @@ package com.shareloop.review.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.List;
 
 @Schema(description = "Thông tin bài đăng trong hàng chờ duyệt")
 public record ReviewQueueItem(
@@ -21,8 +22,19 @@ public record ReviewQueueItem(
         @Schema(description = "Cờ kiểm duyệt (REVIEW nếu nghi vấn vi phạm)", example = "REVIEW")
         String moderationFlag,
 
-        @Schema(description = "Lý do bị gắn cờ kiểm duyệt", example = "Có thể có thông tin liên hệ")
+        @Schema(
+                description =
+                        "Mã gốc lý do gắn cờ (LEXICON_REVIEW, INVALID_INPUT...), hoặc câu AI viết sẵn; null nếu không có cờ",
+                example = "LEXICON_REVIEW")
+        String flagReasonCode,
+
+        @Schema(
+                description = "Lý do bị gắn cờ bằng tiếng Việt để hiển thị cho Admin",
+                example = "Có từ khoá cần xem xét: zalo")
         String flagReason,
+
+        @Schema(description = "Từ khoá đã khớp khi kiểm duyệt tầng 1 (rỗng nếu không có)", example = "[\"zalo\"]")
+        List<String> matchedTerms,
 
         @Schema(description = "Số sao uy tín của người đăng (1-5)", example = "3")
         short donorTrustStars,

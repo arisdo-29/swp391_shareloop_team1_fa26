@@ -74,13 +74,15 @@ public class AdminReviewController {
     @Operation(
             summary = "Duyệt bài",
             description =
-                    "Duyệt bài đăng đang chờ kiểm duyệt. Yêu cầu trả lời đủ câu hỏi checklist và tất cả câu trả lời phải là true (đạt). Hệ thống trừ phí đang giữ và chuyển trạng thái bài sang APPROVED.")
+                    "Duyệt bài đăng đang chờ kiểm duyệt. Gửi đủ đáp án theo id của điều kiện checklist, không trùng id và tất cả passed = true. Hệ thống trừ phí đang giữ và chuyển trạng thái bài sang APPROVED.")
     @ApiResponse(responseCode = "204", description = "Duyệt thành công")
     @ApiResponse(responseCode = "400", description = "Checklist chưa hoàn thành hoặc có câu trả lời không đạt")
     @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
     @ApiResponse(responseCode = "403", description = "Không có quyền Admin")
     @ApiResponse(responseCode = "404", description = "Không tìm thấy item")
-    @ApiResponse(responseCode = "409", description = "Item đã được xử lý trước đó hoặc không có phí đang giữ")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Checklist lỗi thời/chưa cấu hình, item đã được xử lý trước đó hoặc không có phí đang giữ")
     @PostMapping("/reviews/{itemId}/approve")
     public ResponseEntity<Void> approve(
             @Parameter(description = "ID của item trong hàng chờ") @PathVariable long itemId,

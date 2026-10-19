@@ -101,6 +101,19 @@ await test('kết luận gửi UPHOLD hoặc DISMISS cùng ghi chú, giữ lỗi
   }
 });
 
+await test('giữ API mở khiếu nại giao dịch và giải trình của màn người dùng', async () => {
+  requests = [];
+  const input = { reason: 'NOT_AS_DESCRIBED', note: 'Đồ khác mô tả', evidenceMediaIds: [12] };
+  nextResponse = { id: 71, responseDueAt: '2026-10-23T03:00:00Z' };
+  assert.deepEqual(await api.reportApi.openDispute(88, input), nextResponse);
+  assert.equal(requests[0].url, '/api/v1/requests/88/disputes');
+  assert.deepEqual(requests[0].body, input);
+  const response = { note: 'Giải trình', evidenceMediaIds: [15] };
+  assert.equal(await api.reportApi.respondDispute(71, response), undefined);
+  assert.equal(requests[1].url, '/api/v1/disputes/71/response');
+  assert.deepEqual(requests[1].body, response);
+});
+
 await test('nhật ký đọc được cả metadata page mới và response Spring cũ', async () => {
   nextResponse = { content: [{ id: 1, actorName: 'Người duyệt', typeLabel: 'Duyệt bài' }], page: { number: 1, size: 20, totalElements: 45, totalPages: 3 } };
   const page = await api.adminAuditApi.list({ page: 1 });

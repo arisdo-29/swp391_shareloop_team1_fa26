@@ -3,7 +3,7 @@
 ## Chuẩn bị
 
 - Backend đã chạy Flyway, bao gồm migration `V202610200300__report_evidence_and_response_deadline.sql`.
-- Frontend kết nối đúng backend; dùng hai tài khoản Admin và hai bên của một giao dịch thật.
+- Frontend kết nối đúng backend; dùng hai tài khoản Admin và hai bên của một giao dịch thật đã `COMPLETED`, còn trong cửa sổ khiếu nại cấu hình.
 - Chuẩn bị bài đang `PENDING_REVIEW` có phí đăng đang giữ, một báo cáo `REQUEST`,
   một báo cáo `ITEM`, một hồ sơ không ảnh và một hồ sơ có ảnh không còn khả dụng.
 - Không dùng dữ liệu store hoặc thay trạng thái bằng localStorage để demo.

@@ -50,6 +50,66 @@ class AdminReportApiIT extends IntegrationTest {
     }
 
     @Test
+    void existingDisputeEndpointsKeepPrivateEvidenceAndReturnRespondedReportToOpen() throws Exception {
+        long donor = user("Dispute donor");
+        long receiver = user("Dispute receiver");
+        long category = jdbc.queryForObject(
+                "INSERT INTO item_categories (name) VALUES ('Dispute merge IT') RETURNING id", Long.class);
+        long area = jdbc.queryForObject(
+                "INSERT INTO areas (name, level) VALUES ('Dispute merge IT', 1) RETURNING id", Long.class);
+        long item = jdbc.queryForObject("""
+                INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, condition, status)
+                VALUES (?, ?, ?, 'GIVE', 'Dispute merge IT', 'Dispute merge IT', 'GOOD', 'TRADED') RETURNING id
+                """, Long.class, donor, category, area);
+        long requestId = jdbc.queryForObject("""
+                INSERT INTO requests (item_id, receiver_id, type, status, completed_at)
+                VALUES (?, ?, 'GIVE', 'COMPLETED', now()) RETURNING id
+                """, Long.class, item, receiver);
+        long senderMedia = media(receiver);
+        long responseMedia = media(donor);
+        String opened = mvc.perform(post("/api/v1/requests/" + requestId + "/disputes")
+                        .header("Authorization", "Bearer " + jwt.issue(receiver, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"NOT_AS_DESCRIBED","note":"Nội dung khiếu nại","evidenceMediaIds":[%d]}
+                                """.formatted(senderMedia)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.responseDueAt").isNotEmpty())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long reportId = JsonMapper.builder().build().readTree(opened).get("id").asLong();
+        mvc.perform(post("/api/v1/disputes/" + reportId + "/response")
+                        .header("Authorization", "Bearer " + jwt.issue(donor, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"note":"Nội dung giải trình","evidenceMediaIds":[%d]}
+                                """.formatted(responseMedia)))
+                .andExpect(status().isOk());
+        reports.flush();
+        for (long id : new long[] {senderMedia, responseMedia}) {
+            mvc.perform(get("/api/v1/media/" + id)).andExpect(status().isNotFound());
+            mvc.perform(get("/api/v1/admin/reports/" + reportId + "/evidence/" + id)
+                            .header("Authorization", "Bearer " + jwt.issue(donor, true)))
+                    .andExpect(status().isOk())
+                    .andExpect(content().bytes(IMAGE));
+        }
+        mvc.perform(get("/api/v1/admin/reports/" + reportId)
+                        .header("Authorization", "Bearer " + jwt.issue(donor, true)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.report.status").value("OPEN"))
+                .andExpect(jsonPath("$.report.stage").value("AFTER"))
+                .andExpect(jsonPath("$.response").value("Nội dung giải trình"))
+                .andExpect(jsonPath("$.responseEvidence[0].id").value(responseMedia));
+        mvc.perform(post("/api/v1/disputes/" + reportId + "/response")
+                        .header("Authorization", "Bearer " + jwt.issue(donor, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"note\":\"Gửi lại\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DISPUTE_ALREADY_RESPONDED"));
+    }
+
+    @Test
     void bothPartiesEvidenceIsPrivateAndAdminCanConcludeOnlyOnce() throws Exception {
         long reporter = user("Reporter");
         long target = user("Target");

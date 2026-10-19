@@ -1008,19 +1008,18 @@ Thuộc tính động theo danh Ví dụ điện tử: trạng thái hoạt đ�
 mục [v9] thời gian đã dùng.
 Nội dung Không chứa thông tin liên hệ (BR-A09), không chứa từ khoá cấm mức BLOCK.
 6.17.4. Checklist duyệt bài khởi tạo (Admin cấu hình được)
-# Câu hỏi Admin phải trả lời Nếu không đạt
-1 Món đồ có cần sang tên, đăng ký, công chứng để đổi chủ không? Từ chối — BR-A04.
-2 Món đồ có quy đổi trực tiếp ra tiền mặt được không? Từ chối — BR-A04.
-3 Nếu là thực phẩm: còn nguyên tem, nhìn rõ hạn, hạn còn trên 30 Từ chối — BR-A05.
-ngày?
-4 Có phải thuốc, thực phẩm chức năng, thiết bị y tế, mỹ phẩm đã mở? Từ chối — danh mục cấm.
-5 Ảnh là ảnh thật của đúng món đồ, đủ số lượng, không lấy trên mạng? Từ chối, yêu cầu chụp lại.
-6 Ảnh hoặc mô tả có thông tin liên hệ, kể cả viết ngầm? (xem cờ AI) Từ chối — BR-A09.
-7 Tình trạng khai báo có khớp với ảnh? Đồ lỗi đã mô tả lỗi? Trả về yêu cầu bổ sung.
-8 Danh mục có đúng với món đồ? Trả về yêu cầu sửa danh mục.
-9 Bài Trao đổi đã có mô tả món mong muốn? Trả về yêu cầu bổ sung.
-10 Có dấu hiệu hàng nhái, hoặc bật nhãn chính hãng mà chứng từ Từ chối (BR-A12) hoặc duyệt không
-không khớp? kèm nhãn.
+| # | Điều kiện đạt | Nếu không đạt |
+|---|---|---|
+| 1 | Không cần sang tên, đăng ký hay công chứng để đổi chủ. | Từ chối — BR-A04. |
+| 2 | Không quy đổi trực tiếp ra tiền mặt được. | Từ chối — BR-A04. |
+| 3 | Không phải thực phẩm, hoặc là thực phẩm còn nguyên tem, nhìn rõ hạn và hạn còn trên 30 ngày. | Từ chối — BR-A05. |
+| 4 | Không phải thuốc, thực phẩm chức năng, thiết bị y tế hay mỹ phẩm đã mở. | Từ chối — danh mục cấm. |
+| 5 | Ảnh là ảnh thật của đúng món đồ, đủ số lượng, không lấy trên mạng. | Từ chối, yêu cầu chụp lại. |
+| 6 | Ảnh và mô tả không có thông tin liên hệ, kể cả viết ngầm (đã xem cờ AI). | Từ chối — BR-A09. |
+| 7 | Tình trạng khai báo khớp với ảnh; đồ lỗi đã mô tả lỗi. | Trả về yêu cầu bổ sung. |
+| 8 | Danh mục đúng với món đồ. | Trả về yêu cầu sửa danh mục. |
+| 9 | Bài Cho tặng, hoặc bài Trao đổi đã mô tả món mong muốn. | Trả về yêu cầu bổ sung. |
+| 10 | Không có dấu hiệu hàng nhái, không bật nhãn chính hãng khi chứng từ không khớp. | Từ chối (BR-A12) hoặc duyệt không kèm nhãn. |
 Việc người đăng có TrustStars bằng 0 do hệ thống tự chặn từ lúc gửi bài, không cần Admin kiểm.
 Trang 42 / 83
 

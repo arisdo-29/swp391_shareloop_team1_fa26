@@ -68,6 +68,30 @@ export interface ReportEvidence {
   available: boolean;
 }
 
+export interface CreateDisputeRequest {
+  reason: string;
+  note?: string;
+  evidenceMediaIds?: number[];
+}
+
+export interface DisputeResponseRequest {
+  note: string;
+  evidenceMediaIds?: number[];
+}
+
+export interface DisputeResponse {
+  id: number;
+  responseDueAt: string;
+}
+
+export function openDispute(requestId: number, body: CreateDisputeRequest): Promise<DisputeResponse> {
+  return http.post<DisputeResponse>(`/api/v1/requests/${requestId}/disputes`, body).then(res => res.data);
+}
+
+export function respondDispute(disputeId: number, body: DisputeResponseRequest): Promise<void> {
+  return http.post<void>(`/api/v1/disputes/${disputeId}/response`, body).then(() => undefined);
+}
+
 export const reportApi = {
   async evidence(reportId: number, mediaId: number, signal?: AbortSignal) {
     const { data } = await http.get<Blob>(`/api/v1/admin/reports/${reportId}/evidence/${mediaId}`, {
@@ -107,4 +131,6 @@ export const reportApi = {
     const { data } = await http.post<ReportResponse>('/api/v1/reports', input);
     return data;
   },
+  openDispute,
+  respondDispute,
 };

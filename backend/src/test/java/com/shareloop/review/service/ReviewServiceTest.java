@@ -22,9 +22,11 @@ import com.shareloop.item.service.ItemService;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.review.ReviewErrorCode;
+import com.shareloop.review.dto.ChecklistAnswer;
 import com.shareloop.review.entity.ReviewItem;
 import com.shareloop.review.repository.ReviewItemRepository;
 import com.shareloop.review.repository.ReviewQueueRepository;
+import com.shareloop.setting.dto.ChecklistItem;
 import com.shareloop.setting.service.ConfigService;
 import java.time.Instant;
 import java.util.List;
@@ -33,6 +35,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
+import tools.jackson.databind.json.JsonMapper;
 
 class ReviewServiceTest {
 
@@ -51,11 +54,15 @@ class ReviewServiceTest {
             postFeeService,
             itemService,
             notificationService,
-            activityLogService);
+            activityLogService,
+            JsonMapper.builder().build());
 
     @BeforeEach
     void setUp() {
-        when(configService.checklist()).thenReturn(List.of("Ảnh đúng món", "Mô tả trung thực"));
+        when(configService.checklistItems())
+                .thenReturn(List.of(
+                        new ChecklistItem(11L, "photos", "Ảnh đúng món"),
+                        new ChecklistItem(12L, "description", "Mô tả trung thực")));
         when(reviewItemRepository.findById(8L)).thenReturn(Optional.of(reviewItem));
         when(reviewItemRepository.findDonorIdByItemId(8L)).thenReturn(Optional.of(99L));
     }
@@ -67,24 +74,27 @@ class ReviewServiceTest {
         var result = service.listPendingWithChecklist(0, 20);
 
         assertThat(result.items()).isEmpty();
-        assertThat(result.checklist()).containsExactly("Ảnh đúng món", "Mô tả trung thực");
+        assertThat(result.checklist())
+                .containsExactly(
+                        new ChecklistItem(11L, "photos", "Ảnh đúng món"),
+                        new ChecklistItem(12L, "description", "Mô tả trung thực"));
     }
 
     @Test
     void approveChargesFeeThenChangesItemAndStoresSnapshotAndLogsActivity() {
-        service.approve(8L, List.of(true, true), 1L);
+        service.approve(8L, List.of(new ChecklistAnswer(11L, true), new ChecklistAnswer(12L, true)), 1L);
 
         InOrder order = inOrder(postFeeService, itemService, reviewItemRepository, reviewItem, activityLogService);
         order.verify(postFeeService).chargeHeldFee(8L);
         order.verify(itemService).markApproved(8L);
         order.verify(reviewItemRepository).findById(8L);
-        order.verify(reviewItem).approve(anyMap(), any(Instant.class));
+        order.verify(reviewItem).approve(anyMap(), any(Instant.class), eq(1L));
         order.verify(activityLogService).log(eq("REVIEW_APPROVE"), eq(1L), eq("ITEM"), eq(8L), anyMap(), isNull());
     }
 
     @Test
     void incompleteChecklistDoesNotChargeOrApproveOrLog() {
-        assertThatThrownBy(() -> service.approve(8L, List.of(true), 1L))
+        assertThatThrownBy(() -> service.approve(8L, List.of(new ChecklistAnswer(11L, true)), 1L))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(ReviewErrorCode.REVIEW_CHECKLIST_INCOMPLETE);
@@ -93,18 +103,127 @@ class ReviewServiceTest {
     }
 
     @Test
+    void snapshotUsesConfiguredOrderEvenWhenAnswersAreReversed() {
+        service.approve(8L, List.of(new ChecklistAnswer(12L, true), new ChecklistAnswer(11L, true)), 1L);
+
+        Map<String, Object> snapshot = Map.of(
+                "checks",
+                List.of(
+                        Map.of("id", 11L, "key", "photos", "statement", "Ảnh đúng món", "passed", true),
+                        Map.of("id", 12L, "key", "description", "statement", "Mô tả trung thực", "passed", true)));
+        verify(reviewItem).approve(eq(snapshot), any(Instant.class), eq(1L));
+        verify(activityLogService).log(eq("REVIEW_APPROVE"), eq(1L), eq("ITEM"), eq(8L), eq(snapshot), isNull());
+    }
+
+    @Test
+    void duplicateIdsAreIncomplete() {
+        assertApprovalFails(
+                List.of(new ChecklistAnswer(11L, true), new ChecklistAnswer(11L, true)),
+                ReviewErrorCode.REVIEW_CHECKLIST_INCOMPLETE);
+    }
+
+    @Test
+    void unknownIdRequiresChecklistReload() {
+        assertApprovalFails(
+                List.of(new ChecklistAnswer(11L, true), new ChecklistAnswer(99L, true)),
+                ReviewErrorCode.REVIEW_CHECKLIST_OUTDATED);
+    }
+
+    @Test
+    void failedConditionIsIncomplete() {
+        assertApprovalFails(
+                List.of(new ChecklistAnswer(11L, true), new ChecklistAnswer(12L, false)),
+                ReviewErrorCode.REVIEW_CHECKLIST_INCOMPLETE);
+    }
+
+    @Test
+    void missingChecklistConfigurationPreventsApproval() {
+        when(configService.checklistItems()).thenReturn(List.of());
+        assertApprovalFails(List.of(new ChecklistAnswer(11L, true)), ReviewErrorCode.REVIEW_CHECKLIST_NOT_CONFIGURED);
+    }
+
+    @Test
+    void nullAndEmptyAnswersAreIncomplete() {
+        assertApprovalFails(null, ReviewErrorCode.REVIEW_CHECKLIST_INCOMPLETE);
+        assertApprovalFails(List.of(), ReviewErrorCode.REVIEW_CHECKLIST_INCOMPLETE);
+        assertApprovalFails(
+                java.util.Arrays.asList((ChecklistAnswer) null), ReviewErrorCode.REVIEW_CHECKLIST_INCOMPLETE);
+        assertApprovalFails(List.of(new ChecklistAnswer(null, true)), ReviewErrorCode.REVIEW_CHECKLIST_INCOMPLETE);
+        assertApprovalFails(
+                List.of(new ChecklistAnswer(11L, null), new ChecklistAnswer(12L, true)),
+                ReviewErrorCode.REVIEW_CHECKLIST_INCOMPLETE);
+    }
+
+    @Test
+    void jsonNullMatchedTermsIsAnEmptyList() {
+        Object[] row = {
+            8L, 99L, "Áo", "LOW", "REVIEW", "LEXICON_REVIEW", (short) 3, Instant.parse("2026-10-19T00:00:00Z"), "null"
+        };
+        when(queueRepository.findPendingReviewQueue(any())).thenReturn(java.util.Collections.singletonList(row));
+
+        var item = service.listPending(0, 20).getFirst();
+
+        assertThat(item.flagReason()).isEqualTo("Có từ khoá cần xem xét");
+        assertThat(item.matchedTerms()).isEmpty();
+    }
+
+    private void assertApprovalFails(List<ChecklistAnswer> answers, ReviewErrorCode errorCode) {
+        assertThatThrownBy(() -> service.approve(8L, answers, 1L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(errorCode);
+        verifyNoInteractions(postFeeService, itemService, reviewItemRepository, activityLogService);
+    }
+
+    @Test
+    void pendingQueueDescribesReasonAndIncludesMatchedTerms() {
+        Object[] row = {
+            8L,
+            99L,
+            "Áo",
+            "LOW",
+            "REVIEW",
+            "LEXICON_REVIEW",
+            (short) 3,
+            Instant.parse("2026-10-19T00:00:00Z"),
+            "[\"zalo\",\"liên hệ\"]"
+        };
+        when(queueRepository.findPendingReviewQueue(any())).thenReturn(java.util.Collections.singletonList(row));
+
+        var item = service.listPending(0, 20).getFirst();
+
+        assertThat(item.flagReasonCode()).isEqualTo("LEXICON_REVIEW");
+        assertThat(item.flagReason()).isEqualTo("Có từ khoá cần xem xét: zalo, liên hệ");
+        assertThat(item.matchedTerms()).containsExactly("zalo", "liên hệ");
+    }
+
+    @Test
+    void legacyQueueWithoutMatchedTermsPreservesFreeTextReason() {
+        Object[] row = {
+            8L, 99L, "Áo", "LOW", "REVIEW", "Ảnh cần kiểm tra", (short) 3, Instant.parse("2026-10-19T00:00:00Z"), null
+        };
+        when(queueRepository.findPendingReviewQueue(any())).thenReturn(java.util.Collections.singletonList(row));
+
+        var item = service.listPending(0, 20).getFirst();
+
+        assertThat(item.flagReason()).isEqualTo("Ảnh cần kiểm tra");
+        assertThat(item.matchedTerms()).isEmpty();
+    }
+
+    @Test
     void chargeFailureDoesNotChangeItemOrSaveSnapshotOrLog() {
         org.mockito.Mockito.doThrow(new IllegalStateException("charge failed"))
                 .when(postFeeService)
                 .chargeHeldFee(8L);
 
-        assertThatThrownBy(() -> service.approve(8L, List.of(true, true), 1L))
+        assertThatThrownBy(() -> service.approve(
+                        8L, List.of(new ChecklistAnswer(11L, true), new ChecklistAnswer(12L, true)), 1L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("charge failed");
 
         verify(itemService, never()).markApproved(8L);
         verifyNoInteractions(reviewItemRepository, activityLogService);
-        verify(reviewItem, never()).approve(anyMap(), any(Instant.class));
+        verify(reviewItem, never()).approve(anyMap(), any(Instant.class), eq(1L));
     }
 
     @Test
@@ -113,14 +232,15 @@ class ReviewServiceTest {
                 .when(itemService)
                 .markApproved(8L);
 
-        assertThatThrownBy(() -> service.approve(8L, List.of(true, true), 1L))
+        assertThatThrownBy(() -> service.approve(
+                        8L, List.of(new ChecklistAnswer(11L, true), new ChecklistAnswer(12L, true)), 1L))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
 
         verify(postFeeService).chargeHeldFee(8L);
         verify(reviewItemRepository, never()).findById(8L);
-        verify(reviewItem, never()).approve(anyMap(), any(Instant.class));
+        verify(reviewItem, never()).approve(anyMap(), any(Instant.class), eq(1L));
         verifyNoInteractions(activityLogService);
     }
 
@@ -167,7 +287,7 @@ class ReviewServiceTest {
         order.verify(postFeeService).releaseHeldFee(8L, "REJECTED");
         order.verify(itemService).markRejected(8L);
         order.verify(reviewItemRepository).findById(8L);
-        order.verify(reviewItem).reject("Ảnh không đúng món");
+        order.verify(reviewItem).reject(eq("Ảnh không đúng món"), any(Instant.class), eq(1L));
         order.verify(reviewItemRepository).findDonorIdByItemId(8L);
         order.verify(notificationService)
                 .notify(99L, "POST_REJECTED", "Bài đăng bị từ chối", "Ảnh không đúng món", "/items/8");
@@ -189,7 +309,7 @@ class ReviewServiceTest {
 
         verify(postFeeService).releaseHeldFee(8L, "REJECTED");
         verify(itemService).markRejected(8L);
-        verify(reviewItem).reject("Ảnh không đúng món");
+        verify(reviewItem).reject(eq("Ảnh không đúng món"), any(Instant.class), eq(1L));
         verify(notificationService, never()).notify(anyLong(), anyString(), anyString(), anyString(), anyString());
         verify(activityLogService)
                 .log(

@@ -71,3 +71,52 @@ public record ReputationSummary(
     Double asDescribedRate
 ) {}
 ```
+
+---
+
+## 3. GET /api/v1/me/reputation
+
+Xem thông tin uy tín cá nhân của chính người dùng đang đăng nhập (FR-101, Issue #128). Bao gồm tổng điểm, hạng, số sao uy tín, tỉ lệ đúng mô tả và lịch sử biến động điểm (mới nhất lên trước, có phân trang).
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT). ID người dùng được xác định qua `@CurrentUserId` từ token đăng nhập.
+- **Query Parameters:**
+
+| Tham số | Kiểu | Bắt buộc | Mặc định | Giới hạn | Mô tả |
+|---|---|---|---|---|---|
+| `page` | `int` | Không | `0` | $\ge 0$ | Chỉ số trang (bắt đầu từ 0) |
+| `size` | `int` | Không | `20` | `1–50` | Số lượng bản ghi mỗi trang |
+
+- **Thành công:** `200 OK`, trả về `MyReputationResponse`.
+
+```json
+{
+  "totalPoints": 320,
+  "rank": "GOLD",
+  "trustStars": 4,
+  "accuracyRate": 0.92,
+  "history": {
+    "content": [
+      {
+        "delta": 10,
+        "reason": "Cộng 10 điểm hoàn tất giao dịch #50 (vai trò cho/tặng)",
+        "createdAt": "2026-10-18T10:00:00Z"
+      }
+    ],
+    "page": {
+      "size": 20,
+      "number": 0,
+      "totalElements": 1,
+      "totalPages": 1
+    }
+  }
+}
+```
+
+- **Mã lỗi:**
+
+| Mã HTTP | Ý nghĩa | Mô tả |
+|---|---|---|
+| `200` | Thành công | Trả về thông tin uy tín và lịch sử điểm |
+| `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
+| `404` | Not Found | `USER_NOT_FOUND`: Tài khoản không tồn tại |
+

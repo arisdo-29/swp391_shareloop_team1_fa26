@@ -6,6 +6,7 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.ConfigKey.ValueType;
 import com.shareloop.setting.SettingErrorCode;
+import com.shareloop.setting.dto.ChecklistItem;
 import com.shareloop.setting.dto.ConfigResponse;
 import com.shareloop.setting.dto.LexiconEntry;
 import com.shareloop.setting.repository.WebsiteAttributeRepository;
@@ -132,10 +133,11 @@ public class ConfigService {
                 .toList();
     }
 
-    /** Active review checklist questions in their configured order. */
-    public List<String> checklist() {
+    /** Các mục checklist duyệt bài đang dùng (kèm id, key) theo sort_order rồi id; dùng để ghép đáp án theo id. */
+    public List<ChecklistItem> checklistItems() {
         return repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc("CHECKLIST").stream()
-                .map(attribute -> attribute.getAttrValue())
+                .map(attribute ->
+                        new ChecklistItem(attribute.getId(), attribute.getAttrKey(), attribute.getAttrValue()))
                 .toList();
     }
 

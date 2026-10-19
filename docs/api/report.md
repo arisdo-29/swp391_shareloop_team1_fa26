@@ -1,8 +1,6 @@
-# API module report
+# Report API Contract
 
-Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc), lỗi theo định dạng thống nhất của hệ thống.
-
-Người sở hữu: BE4 (@kopslngbtram2110).
+Module báo cáo vi phạm (`report`) quản lý việc tiếp nhận khiếu nại và báo cáo từ người dùng nhằm duy trì môi trường an toàn cho nền tảng ShareLoop.
 
 ## Admin đọc khiếu nại (#118)
 
@@ -57,8 +55,10 @@ còn khả dụng; `reportedUser` có thể `null` nếu không xác định đ�
 Hồ sơ vẫn đọc được khi đối tượng liên quan đã mất. `relatedItemId` lấy thêm từ giao dịch
 nếu hồ sơ cũ chưa lưu ID bài. Trường giải trình/kết luận chưa có trả `null`.
 
-Migration `V202610200300__report_evidence_and_response_deadline.sql` thêm ba cột
-`evidence`, `response_evidence`, `response_due_at` vào bảng hiện có. Hai cột bằng chứng lưu
+Migration `V202610181400__report_dispute_fields_and_configs.sql` trên develop đã có ba cột
+`evidence`, `response_evidence`, `response_due_at`. Migration tương thích của #118
+`V202610200300__report_evidence_and_response_deadline.sql` dùng `IF NOT EXISTS`, không tạo trùng cột.
+Hai cột bằng chứng lưu
 JSON array media ID dạng text (ví dụ `[12, 15]`); API luôn trả danh sách object đã chuẩn hoá.
 Hồ sơ cũ không có dữ liệu trả mảng rỗng và hạn `null`, không suy đoán thời hạn lịch sử.
 Media bị xoá/ẩn hoặc không còn gắn trả `available: false, url: null`. Tệp mất trong storage
@@ -91,9 +91,12 @@ không null/trùng, bỏ qua hoặc mảng rỗng được phép). Upload ảnh 
 trước khi tạo báo cáo. Chỉ media `UPLOADED`, còn hoạt động và thuộc người gửi mới được gắn;
 sau khi gắn chuyển `ATTACHED`, `PRIVATE`. Lỗi media rollback cả việc tạo báo cáo.
 
-Khi báo cáo `REQUEST`, người gửi phải là một trong hai bên giao dịch; hệ thống lưu
-người bị báo cáo, ID bài và `responseDueAt` theo `ConfigKey.RESPONSE_WINDOW_DAYS`,
-chuyển `AWAITING_RESPONSE`. Báo cáo `ITEM` lưu thêm ID chủ bài để giữ danh tính đối tượng.
+Khi báo cáo `REQUEST`, cả `POST /reports` và `POST /requests/{requestId}/disputes` dùng
+cùng luồng kiểm tra giao dịch `COMPLETED`, người tham gia, cửa sổ khiếu nại và chống gửi lặp.
+Hệ thống lưu người bị báo cáo, ID bài và `responseDueAt`, chuyển `AWAITING_RESPONSE`.
+Ưu tiên các khoá `DISPUTE_WINDOW_DAYS`/`DISPUTE_RESPONSE_DAYS` của contract dispute;
+nếu không có thì đọc `ConfigKey.COMPLAINT_WINDOW_DAYS`/`RESPONSE_WINDOW_DAYS`.
+Cả hai luồng dùng Clock được inject. Báo cáo `ITEM` lưu thêm ID chủ bài để giữ danh tính đối tượng.
 
 `POST /api/v1/reports/{reportId}/response` yêu cầu Bearer JWT của bên bị báo cáo:
 
@@ -105,10 +108,15 @@ chuyển `AWAITING_RESPONSE`. Báo cáo `ITEM` lưu thêm ID chủ bài để gi
 giống quy tắc bên gửi. Thành công `204 No Content`, lưu nội dung đã trim, ảnh và
 `respondedAt`, chuyển hồ sơ về `OPEN`. Khoá dòng cùng cơ chế kết luận, không nhận
 giải trình lần hai, sau hạn, hoặc khi hồ sơ không còn `AWAITING_RESPONSE`.
+Endpoint `POST /disputes/{disputeId}/response` hiện có vẫn nhận `{note, evidenceMediaIds}`,
+trả `200` và giữ các mã lỗi `DISPUTE_*` riêng. Cả hai endpoint đều gắn bằng chứng riêng tư
+qua cùng gateway và chuyển `AWAITING_RESPONSE` về `OPEN` sau khi giải trình, đúng mục 5 (Sơ đồ trạng thái) trong Luồng hoạt động & ERD.
 
-Lỗi ghi bổ sung: `400 VALIDATION_FAILED`; `403 REPORT_NOT_PARTICIPANT`;
-`409 REPORT_RESPONSE_NOT_ALLOWED`; `404 REPORT_NOT_FOUND`/`REQUEST_NOT_FOUND`/
-`REQUEST_ITEM_NOT_FOUND`; media: `403 MEDIA_NOT_OWNER`, `404 MEDIA_NOT_FOUND`,
+Lỗi ghi bổ sung: `400 VALIDATION_FAILED`; `403 REPORT_NOT_PARTICIPANT` (giải trình qua `/reports`)
+hoặc `DISPUTE_NOT_A_PARTY` (tạo báo cáo `REQUEST`);
+`409 REPORT_RESPONSE_NOT_ALLOWED`/`DISPUTE_REQUEST_NOT_COMPLETED`;
+`422 DISPUTE_WINDOW_EXPIRED`; `404 REPORT_NOT_FOUND`/`REPORT_TARGET_NOT_FOUND`;
+media: `403 MEDIA_NOT_OWNER`, `404 MEDIA_NOT_FOUND`,
 `409 MEDIA_NOT_UPLOADED`, `422 MEDIA_INVALID_FILE` (ID trùng).
 
 Admin vẫn dùng `POST .../conclude` với `{decision: "UPHOLD" | "DISMISS", note}`;
@@ -121,24 +129,23 @@ Các request đọc bị huỷ/bỏ qua khi chuyển hồ sơ hoặc bộ lọc.
 
 ## 1. POST /api/v1/reports
 
-Báo cáo một bài đăng hoặc một người dùng vi phạm quy tắc cộng đồng (FR-88, BR-A03).
+Báo cáo một bài đăng hoặc một người dùng vi phạm quy tắc cộng đồng.
 
-- **Xác thực:** Bắt buộc Bearer Token (JWT). ID của người báo cáo được trích xuất tự động từ phiên đăng nhập hiện tại (`@CurrentUserId`).
+- **Xác thực:** Bắt buộc Bearer Token (JWT). ID người báo cáo được trích xuất từ phiên đăng nhập hiện tại (`@CurrentUserId`).
 - **Quy tắc nghiệp vụ:**
-  - Người dùng không được tự báo cáo chính mình hoặc bài đăng do chính mình tạo ra (`409 REPORT_CANNOT_REPORT_SELF`).
-  - Mỗi người dùng chỉ được báo cáo một đối tượng (bài đăng hoặc người dùng) đúng 1 lần (`409 REPORT_ALREADY_REPORTED`).
+  - Không thể tự báo cáo chính mình hoặc bài đăng của chính mình (`400 REPORT_CANNOT_REPORT_SELF`).
+  - Mỗi người dùng chỉ được báo cáo một đối tượng tối đa 1 lần (`409 REPORT_ALREADY_REPORTED`).
   - Đối tượng báo cáo phải tồn tại trong hệ thống (`404 REPORT_TARGET_NOT_FOUND`).
-  - **BR-A03 (Tự động ẩn bài khi đạt 3 báo cáo):** Khi số lượng báo cáo hợp lệ đối với một bài đăng đạt ngưỡng từ 3 báo cáo trở lên, hệ thống sẽ tự động kích hoạt ẩn bài đăng (`itemService.hide(itemId)`).
-- **Request Body:**
+  - Cơ chế tự động bảo vệ (BR-A03): Nếu một bài đăng (`ITEM`) nhận đủ **3 báo cáo** vi phạm, hệ thống tự động ẩn bài (`itemService.hide(itemId)`).
 
-*Báo cáo bài đăng:*
+- **Request Body:**
 
 ```json
 {
   "targetType": "ITEM",
   "itemId": 105,
-  "reason": "NOT_AS_DESCRIBED",
-  "description": "Món đồ thực tế bị rách nát hoàn toàn, không giống như ảnh mô tả"
+  "reason": "PROHIBITED_ITEM",
+  "description": "Sản phẩm có dấu hiệu là hàng cấm lưu hành theo quy định pháp luật."
 }
 ```
 
@@ -147,9 +154,9 @@ Báo cáo một bài đăng hoặc một người dùng vi phạm quy tắc cộ
 ```json
 {
   "targetType": "USER",
-  "targetUserId": 42,
+  "targetUserId": 23,
   "reason": "HARASSMENT",
-  "description": "Người dùng nhắn tin xúc phạm và đe doạ"
+  "description": "Người dùng liên tục nhắn tin xúc phạm sau khi hẹn nhận đồ."
 }
 ```
 
@@ -158,35 +165,129 @@ Báo cáo một bài đăng hoặc một người dùng vi phạm quy tắc cộ
 ```json
 {
   "id": 1,
-  "reporterId": 10,
+  "reporterId": 42,
   "targetType": "ITEM",
   "itemId": 105,
   "targetUserId": null,
   "requestId": null,
-  "reason": "NOT_AS_DESCRIBED",
-  "description": "Món đồ thực tế bị rách nát hoàn toàn, không giống như ảnh mô tả",
+  "reason": "PROHIBITED_ITEM",
+  "description": "Sản phẩm có dấu hiệu là hàng cấm lưu hành theo quy định pháp luật.",
   "stage": "BEFORE",
   "status": "OPEN",
-  "createdAt": "2026-10-17T16:00:00Z"
+  "createdAt": "2026-10-18T10:00:00Z"
 }
 ```
 
 - **Mã lỗi:**
   - `400 BAD_REQUEST`:
-    - `REPORT_TARGET_REQUIRED`: Không xác định được ID đối tượng cần báo cáo.
-    - `VALIDATION_FAILED`: `targetType`, `reason` hoặc `description` không hợp lệ/bị trống.
+    - `REPORT_TARGET_REQUIRED`: Chưa cung cấp đối tượng cần báo cáo.
+    - `REPORT_CANNOT_REPORT_SELF`: Tự báo cáo chính mình hoặc bài của mình.
+    - `VALIDATION_FAILED`: `targetType` hoặc `reason` không hợp lệ; `description` vượt quá 1000 ký tự.
   - `401 UNAUTHORIZED`: Chưa đăng nhập.
   - `404 NOT_FOUND`:
-    - `REPORT_TARGET_NOT_FOUND`: Bài đăng hoặc người dùng cần báo cáo không tồn tại.
+    - `REPORT_TARGET_NOT_FOUND`: Bài đăng hoặc người dùng không tồn tại.
   - `409 CONFLICT`:
-    - `REPORT_CANNOT_REPORT_SELF`: Người dùng cố gắng tự báo cáo chính mình hoặc bài đăng của chính mình.
-    - `REPORT_ALREADY_REPORTED`: Người dùng đã từng gửi báo cáo cho đối tượng này.
+    - `REPORT_ALREADY_REPORTED`: Đã báo cáo đối tượng này trước đó.
 
 ---
 
-## 2. POST /api/v1/admin/reports/{reportId}/conclude
+## 2. POST /api/v1/requests/{requestId}/disputes
 
-Admin đưa ra kết luận xử lý đối với báo cáo vi phạm (FR-91, FR-93, BR-U04, BR-A07, Issue #113).
+Một trong hai bên tham gia giao dịch (người cho hoặc người nhận) gửi khiếu nại sau khi giao dịch đã hoàn tất (FR-89, BR-T08, Issue #112).
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT). ID người khiếu nại được trích xuất từ phiên đăng nhập hiện tại (`@CurrentUserId`).
+- **Quy tắc nghiệp vụ:**
+  - Yêu cầu giao dịch phải tồn tại trong hệ thống (`404 REPORT_TARGET_NOT_FOUND`).
+  - Người khiếu nại bắt buộc phải là một bên trong giao dịch (`donorId` hoặc `receiverId`); người ngoài không có quyền khiếu nại (`403 DISPUTE_NOT_A_PARTY`).
+  - Giao dịch bắt buộc phải ở trạng thái đã hoàn thành `COMPLETED` (`409 DISPUTE_REQUEST_NOT_COMPLETED`).
+  - Cửa sổ khiếu nại: Khiếu nại phải được gửi trong vòng 7 ngày kể từ thời điểm giao dịch hoàn thành (`completedAt`). Quá 7 ngày sẽ bị từ chối (`422 DISPUTE_WINDOW_EXPIRED`). Số ngày được cấu hình qua `DISPUTE_WINDOW_DAYS` (mặc định 7 ngày).
+  - Mỗi người chỉ được khiếu nại giao dịch này một lần (`409 REPORT_ALREADY_REPORTED`).
+  - Người khiếu nại có thể đính kèm danh sách ID media làm bằng chứng. Các media file phải tồn tại và thuộc quyền sở hữu của người gửi (`403 MEDIA_NOT_OWNER`, `404 MEDIA_NOT_FOUND`).
+  - Sau khi mở khiếu nại thành công, hệ thống mở cửa sổ 3 ngày cho bên bị khiếu nại gửi giải trình (`responseDueAt = now + 3 days`), cấu hình qua `DISPUTE_RESPONSE_DAYS` (mặc định 3 ngày). Trạng thái bản ghi là `AWAITING_RESPONSE`.
+  - Hệ thống gửi thông báo trong ứng dụng cho bên bị khiếu nại (`notificationService.notify`).
+
+- **Request Body:**
+
+```json
+{
+  "reason": "NOT_AS_DESCRIBED",
+  "note": "Áo bị rách ở phần nách áo, không giống như ảnh mô tả",
+  "evidenceMediaIds": [12, 15]
+}
+```
+
+- **Thành công:** `201 Created`, trả về `DisputeResponse`.
+
+```json
+{
+  "id": 1,
+  "responseDueAt": "2026-10-21T13:30:00Z"
+}
+```
+
+- **Mã lỗi:**
+  - `400 BAD_REQUEST`:
+    - `VALIDATION_FAILED`: `reason` trống hoặc không hợp lệ; `note` vượt quá 500 ký tự.
+    - `MEDIA_INVALID_FILE`: ID media không hợp lệ hoặc bị trùng.
+  - `401 UNAUTHORIZED`: Chưa đăng nhập.
+  - `403 FORBIDDEN`:
+    - `DISPUTE_NOT_A_PARTY`: Người dùng không phải là người cho hoặc người nhận của giao dịch này.
+    - `MEDIA_NOT_OWNER`: Media đính kèm không thuộc quyền sở hữu của người gửi.
+  - `404 NOT_FOUND`:
+    - `REPORT_TARGET_NOT_FOUND`: Không tìm thấy giao dịch.
+    - `MEDIA_NOT_FOUND`: Media file không tồn tại.
+  - `409 CONFLICT`:
+    - `DISPUTE_REQUEST_NOT_COMPLETED`: Giao dịch chưa chuyển sang trạng thái COMPLETED.
+    - `REPORT_ALREADY_REPORTED`: Người dùng đã khiếu nại giao dịch này trước đó.
+  - `422 UNPROCESSABLE_ENTITY`:
+    - `DISPUTE_WINDOW_EXPIRED`: Đã quá 7 ngày kể từ lúc giao dịch hoàn tất.
+
+---
+
+## 3. POST /api/v1/disputes/{disputeId}/response
+
+Bên bị khiếu nại gửi văn bản giải trình kèm bằng chứng đối chất (FR-90, BR-T08, Issue #112).
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT). ID người giải trình được trích xuất từ phiên đăng nhập hiện tại (`@CurrentUserId`).
+- **Quy tắc nghiệp vụ:**
+  - Bản ghi khiếu nại phải tồn tại trong hệ thống (`404 DISPUTE_NOT_FOUND`).
+  - Chỉ bên bị khiếu nại (`respondent`) mới có quyền gửi giải trình (`403 DISPUTE_NOT_RESPONDENT`).
+  - Khiếu nại chưa bị đóng hoặc đã được Admin kết luận (`409 DISPUTE_ALREADY_CONCLUDED`).
+  - Bên bị khiếu nại chỉ được gửi giải trình đúng 1 lần (`409 DISPUTE_ALREADY_RESPONDED`).
+  - Giải trình phải được gửi trong vòng 3 ngày kể từ lúc khiếu nại được mở (`now <= responseDueAt`). Quá 3 ngày sẽ bị từ chối (`422 DISPUTE_RESPONSE_WINDOW_EXPIRED`).
+  - Có thể đính kèm danh sách ID media làm bằng chứng. Các media file phải tồn tại và thuộc quyền sở hữu của người giải trình.
+
+- **Request Body:**
+
+```json
+{
+  "note": "Áo đã được kiểm tra cẩn thận trước khi giao, không có bất kỳ vết rách nào.",
+  "evidenceMediaIds": [18]
+}
+```
+
+- **Thành công:** `200 OK` (không có body trả về).
+
+- **Mã lỗi:**
+  - `400 BAD_REQUEST`:
+    - `VALIDATION_FAILED`: `note` trống hoặc vượt quá 1000 ký tự.
+  - `401 UNAUTHORIZED`: Chưa đăng nhập.
+  - `403 FORBIDDEN`:
+    - `DISPUTE_NOT_RESPONDENT`: Người gọi không phải là bên bị khiếu nại.
+    - `MEDIA_NOT_OWNER`: Media không thuộc quyền sở hữu của người gửi.
+  - `404 NOT_FOUND`:
+    - `DISPUTE_NOT_FOUND`: Không tìm thấy bản ghi khiếu nại.
+  - `409 CONFLICT`:
+    - `DISPUTE_ALREADY_CONCLUDED`: Khiếu nại này đã được Admin kết luận, không thể giải trình thêm.
+    - `DISPUTE_ALREADY_RESPONDED`: Bạn đã gửi giải trình cho khiếu nại này rồi.
+  - `422 UNPROCESSABLE_ENTITY`:
+    - `DISPUTE_RESPONSE_WINDOW_EXPIRED`: Đã quá thời hạn 3 ngày để gửi giải trình.
+
+---
+
+## 4. POST /api/v1/admin/reports/{reportId}/conclude
+
+Admin đưa ra kết luận xử lý đối với báo cáo hoặc khiếu nại vi phạm (FR-91, FR-93, BR-U04, BR-A07, Issue #113).
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền `ROLE_ADMIN`. ID của Admin được trích xuất từ phiên đăng nhập (`@CurrentUserId`).
 - **Quy tắc nghiệp vụ:**
@@ -201,7 +302,7 @@ Admin đưa ra kết luận xử lý đối với báo cáo vi phạm (FR-91, FR
     - Xác định người vi phạm (`violatorId`):
       - Đối tượng là `ITEM`: Chủ bài đăng (`donorId`).
       - Đối tượng là `USER`: Người dùng bị báo cáo (`targetUserId`).
-      - Đối tượng là `REQUEST`: Bên bị khiếu nại trong giao dịch (khác với người gửi báo cáo).
+      - Đối tượng là `REQUEST`: Bên bị khiếu nại trong giao dịch.
     - Trừ 1 sao uy tín của người vi phạm qua `ReputationService.deductStar(violatorId, 1, note)` (BR-U04).
     - Nếu lý do vi phạm thuộc nhóm nghiêm trọng cấu hình qua `REPORT_SERIOUS_REASONS` (mặc định: `PROHIBITED_ITEM`, `COUNTERFEIT`):
       - Hệ thống tự động ẩn toàn bộ các bài đăng đang hoạt động khác của người vi phạm để rà soát (`itemService.hideAllOfUser(violatorId)`, BR-A07).
@@ -266,24 +367,22 @@ Admin đưa ra kết luận xử lý đối với báo cáo vi phạm (FR-91, FR
 ### TargetType
 - `ITEM`: Báo cáo bài đăng cho tặng / trao đổi đồ.
 - `USER`: Báo cáo tài khoản người dùng vi phạm.
-- `REQUEST`: Báo cáo yêu cầu nhận đồ (nếu có tranh chấp trong quá trình nhận đồ).
+- `REQUEST`: Báo cáo yêu cầu nhận đồ (khiếu nại tranh chấp giao dịch).
 
 ### ReportReason
 - `NOT_AS_DESCRIBED`: Đồ không đúng mô tả.
-- `COUNTERFEIT`: Hàng giả / hàng nhái.
-- `PROHIBITED_ITEM`: Hàng cấm theo quy định pháp luật hoặc nội quy cộng đồng.
 - `NO_SHOW`: Không đến điểm hẹn nhận / trao đổi đồ.
-- `WRONG_CONTACT_INFO`: Sai thông tin liên hệ / thông tin ảo.
-- `HARASSMENT`: Quấy rối, khiếm nhã, đe dọa.
+- `COUNTERFEIT`: Hàng giả, hàng nhái.
+- `PROHIBITED_ITEM`: Hàng thuộc danh mục cấm cho tặng.
+- `HARASSMENT`: Quấy rối, đe dọa, xúc phạm.
 - `OTHER`: Lý do khác.
 
 ### ReportStage
 - `BEFORE`: Tranh chấp hoặc phát hiện vi phạm trước khi hoàn tất giao dịch.
-- `AFTER`: Phát hiện vi phạm sau khi hoàn tất giao dịch.
+- `AFTER`: Phát hiện vi phạm sau khi hoàn tất giao dịch (khiếu nại giao dịch đã COMPLETED).
 
 ### ReportStatus
-- `OPEN`: Mới tạo, đang chờ ban quản trị xử lý.
-- `AWAITING_RESPONSE`: Chờ người bị báo cáo giải trình.
+- `OPEN`: Mới tạo, đang chờ xử lý.
+- `AWAITING_RESPONSE`: Chờ bên bị khiếu nại gửi giải trình (cửa sổ 3 ngày).
 - `RESOLVED`: Đã giải quyết xong (chấp thuận khiếu nại).
-- `DISMISSED`: Bác bỏ báo cáo (báo cáo sai sự thật / không có cơ sở).
-
+- `DISMISSED`: Bác bỏ báo cáo / khiếu nại.
