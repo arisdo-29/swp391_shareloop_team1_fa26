@@ -10,15 +10,20 @@ import com.shareloop.media.repository.MediaFileRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import java.io.IOException;
+import java.nio.file.NoSuchFileException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class MediaService {
+    private static final Logger log = LoggerFactory.getLogger(MediaService.class);
+
     private final MediaFileRepository repository;
     private final StorageService storage;
     private final ConfigService config;
@@ -110,6 +115,10 @@ public class MediaService {
         throw unsupported("remove");
     }
 
+    /**
+     * Đọc bytes của ảnh PUBLIC đang dùng. Ném MEDIA_NOT_FOUND nếu không có bản ghi hoặc ảnh bị ẩn,
+     * MEDIA_FILE_MISSING nếu bản ghi còn nhưng tệp không còn trong storage, MEDIA_STORAGE_ERROR khi storage lỗi.
+     */
     @Transactional(readOnly = true)
     public MediaContent readPublic(long mediaId) {
         MediaFile media = requireMedia(mediaId);
@@ -118,7 +127,16 @@ public class MediaService {
         }
         try {
             return new MediaContent(storage.read(media.getStorageKey()), media.getMimeType());
+        } catch (NoSuchFileException exception) {
+            // Bản ghi còn nhưng tệp đã mất (ví dụ ổ đĩa Render bị xoá): lỗi dữ liệu, không phải sự cố máy chủ.
+            log.warn("Media file missing in storage: mediaId={}, storageKey={}", mediaId, media.getStorageKey());
+            throw new BusinessException(MediaErrorCode.MEDIA_FILE_MISSING);
         } catch (IOException exception) {
+            log.error(
+                    "Cannot read media from storage: mediaId={}, storageKey={}",
+                    mediaId,
+                    media.getStorageKey(),
+                    exception);
             throw new BusinessException(MediaErrorCode.MEDIA_STORAGE_ERROR);
         }
     }

@@ -20,6 +20,11 @@ Tệp được lưu Local với khóa ngẫu nhiên; bản ghi `media_files` có
 Lỗi: `422 MEDIA_INVALID_FILE`, `422 MEDIA_FILE_TOO_LARGE`, `401 UNAUTHORIZED`,
 `500 MEDIA_STORAGE_ERROR`.
 
+Lỗi của `GET /api/v1/media/{id}`: `404 MEDIA_NOT_FOUND` (không có bản ghi, ảnh bị ẩn hoặc
+không `PUBLIC`), `404 MEDIA_FILE_MISSING` (bản ghi còn nhưng tệp không còn trong storage, ví dụ
+ảnh tải lên Render trước khi chuyển sang R2; FE nên báo người dùng tải lại ảnh),
+`500 MEDIA_STORAGE_ERROR` (storage lỗi khi đọc).
+
 ## MediaService.attach(mediaIds, userId)
 
 Service nội bộ cho module item. Kiểm tất cả id không trùng, tồn tại, thuộc người gọi và
