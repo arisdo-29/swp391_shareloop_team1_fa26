@@ -16,7 +16,7 @@ const KEY = 'shareloop:v1:state';
 
 function normalizeCreditHistory(parsed: AppStateData) {
   const existing = (parsed.creditHistory ?? [])
-    .filter((entry) => !['TRANSACTION_FEE', 'HOLD', 'RELEASE_HOLD'].includes(entry.type as string))
+    .filter((entry) => !['TRANSACTION_FEE', 'HOLD', 'RELEASE_HOLD', 'AI_FEE', 'AI_SPEND'].includes(entry.type as string))
     .filter((entry) => !/:HOLD$|:SPEND$|:RELEASE$/.test(entry.ref ?? entry.transactionId ?? ''))
     .map((entry) => {
     const entryType = entry.type as string;
@@ -25,9 +25,7 @@ function normalizeCreditHistory(parsed: AppStateData) {
     const type =
       entryType === 'TRANSACTION_FEE'
         ? 'SPEND'
-        : entryType === 'AI_FEE'
-          ? 'AI_SPEND'
-          : entryType === 'RELEASE_HOLD'
+        : entryType === 'RELEASE_HOLD'
           ? 'REFUND'
           : entry.type;
     const transactionId = entry.transactionId ?? entry.ref ?? entry.id;
@@ -179,7 +177,7 @@ export function loadPersistedState(): AppStateData {
       responseEvidence: complaint.responseEvidence ?? [],
     }));
     parsed.systemRevenue = parsed.systemRevenue ?? 0;
-    parsed.aiUsage = parsed.aiUsage ?? [];
+    delete (parsed as AppStateData & { aiUsage?: unknown }).aiUsage;
     parsed.ranks = parsed.ranks ?? seedRanks;
     parsed.pointRules = parsed.pointRules ?? seedPointRules;
     parsed.pointHistory = parsed.pointHistory ?? seedPointHistory;

@@ -262,14 +262,6 @@ export interface Complaint {
   resolvedAt?: string;
 }
 
-export interface AiUsageCounter {
-  id: string;
-  userId: string;
-  feature: 'SWAP_MATCHING' | 'ASSISTANT_SEARCH';
-  periodKey: string;
-  count: number;
-}
-
 export interface RankRule {
   id: string;
   name: string;
@@ -345,7 +337,6 @@ export interface AppStateData {
   keywords: ForbiddenKeyword[];
   districts: SupportedDistrict[];
   complaints: Complaint[];
-  aiUsage: AiUsageCounter[];
   ranks: RankRule[];
   pointRules: ReputationPointRule[];
   pointHistory: ReputationPointHistory[];
