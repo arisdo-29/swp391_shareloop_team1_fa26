@@ -15,6 +15,7 @@ import com.shareloop.moderation.ContactInfoDetector;
 import com.shareloop.search.SearchErrorCode;
 import com.shareloop.search.dto.AiSearchFilters;
 import com.shareloop.search.dto.AiSearchResponse;
+import com.shareloop.search.service.AiQuotaService.Reservation;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import java.net.http.HttpTimeoutException;
@@ -36,6 +37,7 @@ public class AiSearchService {
     private final AreaService areaService;
     private final ItemService itemService;
     private final ConfigService configService;
+    private final AiQuotaService quotaService;
     private final ActivityLogService activityLogService;
     private final ObjectMapper mapper;
 
@@ -45,6 +47,7 @@ public class AiSearchService {
             AreaService areaService,
             ItemService itemService,
             ConfigService configService,
+            AiQuotaService quotaService,
             ActivityLogService activityLogService,
             ObjectMapper mapper) {
         this.aiClient = aiClient;
@@ -52,6 +55,7 @@ public class AiSearchService {
         this.areaService = areaService;
         this.itemService = itemService;
         this.configService = configService;
+        this.quotaService = quotaService;
         this.activityLogService = activityLogService;
         this.mapper = mapper;
     }
@@ -67,7 +71,7 @@ public class AiSearchService {
             throw new BusinessException(SearchErrorCode.SEARCH_QUERY_INVALID);
         }
         if (!aiClient.isAvailable()) {
-            throw new BusinessException(SearchErrorCode.SEARCH_AI_UNAVAILABLE);
+            return fallback(userId, query, page, size);
         }
 
         List<CategoryResponse> categories = categoryService.listActive();
@@ -86,33 +90,36 @@ public class AiSearchService {
         Set<Long> categoryIds = categories.stream().map(CategoryResponse::id).collect(Collectors.toSet());
         Set<Long> districtIds = districts.stream().map(AreaResponse::id).collect(Collectors.toSet());
 
+        Duration timeout = Duration.ofSeconds(configService.getInt(ConfigKey.AI_SEARCH_TIMEOUT_SECONDS));
+        Reservation reservation = quotaService.reserve(userId);
         long started = System.nanoTime();
         AiResponse response;
         try {
-            response = aiClient.extract(
-                    query.trim(),
-                    allowedFilters,
-                    Duration.ofSeconds(configService.getInt(ConfigKey.AI_SEARCH_TIMEOUT_SECONDS)));
+            response = aiClient.extract(query.trim(), allowedFilters, timeout);
         } catch (HttpTimeoutException exception) {
-            logCall(userId, aiClient.model(), "TIMEOUT", started);
-            throw new BusinessException(SearchErrorCode.SEARCH_AI_TIMEOUT);
+            quotaService.refund(userId, reservation);
+            logCall(userId, aiClient.model(), "TIMEOUT", started, reservation);
+            return fallback(userId, query, page, size);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            logCall(userId, aiClient.model(), "INTERRUPTED", started);
-            throw new BusinessException(SearchErrorCode.SEARCH_AI_FAILED);
+            quotaService.refund(userId, reservation);
+            logCall(userId, aiClient.model(), "INTERRUPTED", started, reservation);
+            return fallback(userId, query, page, size);
         } catch (Exception exception) {
-            logCall(userId, aiClient.model(), "FAILED", started);
-            throw new BusinessException(SearchErrorCode.SEARCH_AI_FAILED);
+            quotaService.refund(userId, reservation);
+            logCall(userId, aiClient.model(), "FAILED", started, reservation);
+            return fallback(userId, query, page, size);
         }
 
         AiSearchFilters filters;
         try {
             filters = validate(response.content(), categoryIds, districtIds);
         } catch (RuntimeException exception) {
-            logCall(userId, response.model(), "INVALID_RESPONSE", started);
-            throw new BusinessException(SearchErrorCode.SEARCH_AI_INVALID_RESPONSE);
+            quotaService.refund(userId, reservation);
+            logCall(userId, response.model(), "INVALID_RESPONSE", started, reservation);
+            return fallback(userId, query, page, size);
         }
-        logCall(userId, response.model(), "SUCCESS", started);
+        logCall(userId, response.model(), "SUCCESS", started, reservation);
         return new AiSearchResponse(
                 filters,
                 itemService.searchApprovedForAi(
@@ -122,7 +129,20 @@ public class AiSearchService {
                         filters.condition(),
                         filters.offerType(),
                         page,
-                        size));
+                        size),
+                quotaService.getQuota(userId),
+                reservation.paid() ? configService.getInt(ConfigKey.AI_SEARCH_FEE) : 0,
+                false);
+    }
+
+    private AiSearchResponse fallback(long userId, String query, int page, int size) {
+        String keywords = query.trim();
+        return new AiSearchResponse(
+                new AiSearchFilters(keywords, null, null, null, null),
+                itemService.searchApprovedForAi(null, null, keywords, null, null, page, size),
+                quotaService.getQuota(userId),
+                0,
+                true);
     }
 
     private AiSearchFilters validate(String content, Set<Long> categoryIds, Set<Long> districtIds) {
@@ -174,7 +194,7 @@ public class AiSearchService {
         return Enum.valueOf(type, node.asText());
     }
 
-    private void logCall(long userId, String model, String outcome, long started) {
+    private void logCall(long userId, String model, String outcome, long started, Reservation reservation) {
         activityLogService.log(
                 "AiUsage",
                 userId,
@@ -186,7 +206,9 @@ public class AiSearchService {
                         "model",
                         model,
                         "billing",
-                        "NOT_APPLIED",
+                        "SUCCESS".equals(outcome)
+                                ? (reservation.paid() ? "CREDIT" : "FREE")
+                                : (reservation.paid() ? "REFUNDED_CREDIT" : "REFUNDED_FREE"),
                         "outcome",
                         outcome,
                         "durationMs",
