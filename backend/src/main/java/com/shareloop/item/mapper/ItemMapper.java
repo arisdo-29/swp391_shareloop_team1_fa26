@@ -3,6 +3,7 @@ package com.shareloop.item.mapper;
 import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.OperatingStatus;
+import com.shareloop.listingfee.dto.DisplayWindow;
 import java.util.List;
 
 public final class ItemMapper {
@@ -14,11 +15,16 @@ public final class ItemMapper {
     }
 
     public static ItemResponse toResponse(Item item, List<String> images) {
-        return toResponse(item, images, List.of(), null);
+        return toResponse(item, images, List.of(), null, null);
     }
 
+    /** displayWindow null (bài chưa có dữ liệu hạn) thì expireAt và boostedUntil đều null. */
     public static ItemResponse toResponse(
-            Item item, List<String> images, List<String> defectImages, OperatingStatus operatingStatus) {
+            Item item,
+            List<String> images,
+            List<String> defectImages,
+            OperatingStatus operatingStatus,
+            DisplayWindow displayWindow) {
         if (item == null) {
             return null;
         }
@@ -39,6 +45,8 @@ public final class ItemMapper {
                 item.getCreatedAt(),
                 item.getUpdatedAt(),
                 defectImages != null ? defectImages : List.of(),
-                operatingStatus);
+                operatingStatus,
+                displayWindow != null ? displayWindow.expireAt() : null,
+                displayWindow != null ? displayWindow.boostedUntil() : null);
     }
 }

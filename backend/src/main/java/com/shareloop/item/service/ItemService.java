@@ -14,6 +14,8 @@ import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.entity.OperatingStatus;
 import com.shareloop.item.mapper.ItemMapper;
 import com.shareloop.item.repository.ItemRepository;
+import com.shareloop.listingfee.dto.DisplayWindow;
+import com.shareloop.listingfee.service.ListingFeeQueryService;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.media.MediaErrorCode;
 import com.shareloop.media.service.MediaService;
@@ -25,6 +27,7 @@ import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +56,7 @@ public class ItemService {
     private final RequestQueryService requestQueryService;
     private final ContentModerationService contentModerationService;
     private final PostFeeService postFeeService;
+    private final ListingFeeQueryService listingFeeQueryService;
     private final CategoryAttributeService categoryAttributeService;
     private final ReputationService reputationService;
     private final ApplicationEventPublisher eventPublisher;
@@ -65,6 +69,7 @@ public class ItemService {
             RequestQueryService requestQueryService,
             ContentModerationService contentModerationService,
             PostFeeService postFeeService,
+            ListingFeeQueryService listingFeeQueryService,
             CategoryAttributeService categoryAttributeService,
             ReputationService reputationService,
             ApplicationEventPublisher eventPublisher) {
@@ -75,6 +80,7 @@ public class ItemService {
         this.requestQueryService = requestQueryService;
         this.contentModerationService = contentModerationService;
         this.postFeeService = postFeeService;
+        this.listingFeeQueryService = listingFeeQueryService;
         this.categoryAttributeService = categoryAttributeService;
         this.reputationService = reputationService;
         this.eventPublisher = eventPublisher;
@@ -154,7 +160,12 @@ public class ItemService {
                     .update();
         }
         eventPublisher.publishEvent(ItemScreeningRequestedEvent.from(saved));
-        return ItemMapper.toResponse(saved, mediaUrls(mediaIds), mediaUrls(defectMediaIds), request.operatingStatus());
+        return ItemMapper.toResponse(
+                saved,
+                mediaUrls(mediaIds),
+                mediaUrls(defectMediaIds),
+                request.operatingStatus(),
+                findDisplayWindow(saved.getId()));
     }
 
     @Transactional
@@ -242,7 +253,7 @@ public class ItemService {
                     .update();
         }
         eventPublisher.publishEvent(ItemScreeningRequestedEvent.from(item));
-        return toResponse(item);
+        return toResponse(item, findDisplayWindow(itemId));
     }
 
     /**
@@ -257,7 +268,7 @@ public class ItemService {
 
         boolean isOwner = currentUserId != null && currentUserId.equals(item.getDonorId());
         if ((item.getStatus() == ItemStatus.APPROVED && item.isActive()) || isOwner) {
-            return toResponse(item);
+            return toResponse(item, findDisplayWindow(item.getId()));
         }
 
         throw new BusinessException(ItemErrorCode.ITEM_NOT_FOUND);
@@ -268,9 +279,13 @@ public class ItemService {
      */
     @Transactional(readOnly = true)
     public List<ItemResponse> listMyItems(Long currentUserId) {
-        return itemRepository.findByDonorIdOrderByCreatedAtDesc(currentUserId).stream()
-                .map(this::toResponse)
-                .toList();
+        List<Item> items = itemRepository.findByDonorIdOrderByCreatedAtDesc(currentUserId);
+        Map<Long, DisplayWindow> displayWindows = findDisplayWindows(items);
+        List<ItemResponse> responses = new ArrayList<>();
+        for (Item item : items) {
+            responses.add(toResponse(item, displayWindows.get(item.getId())));
+        }
+        return responses;
     }
 
     @Transactional(readOnly = true)
@@ -282,8 +297,7 @@ public class ItemService {
                         areaId,
                         PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))))
                 : itemRepository.searchVisibleByFilters(categoryId, areaId, q.trim(), PageRequest.of(page, size));
-        Page<ItemResponse> result = items.map(this::toResponse);
-        return PageResponse.from(result);
+        return toPageResponse(items);
     }
 
     /** Search gateway for the AI assistant; the database remains the source of every returned item. */
@@ -297,7 +311,7 @@ public class ItemService {
                 offerType == null ? null : offerType.name(),
                 q == null ? "" : q.trim(),
                 PageRequest.of(page, size));
-        return PageResponse.from(items.map(this::toResponse));
+        return toPageResponse(items);
     }
 
     /**
@@ -617,11 +631,28 @@ public class ItemService {
                 .orElse(null);
     }
 
-    private ItemResponse toResponse(Item item) {
+    private ItemResponse toResponse(Item item, DisplayWindow displayWindow) {
         return ItemMapper.toResponse(
                 item,
                 findImages(item.getId()),
                 findImages(item.getId(), "DEFECT"),
-                findOperatingStatus(item.getId(), item.getCategoryId()));
+                findOperatingStatus(item.getId(), item.getCategoryId()),
+                displayWindow);
+    }
+
+    // Đọc một trang bằng một query hạn hiển thị cho cả trang, thay vì một query mỗi bài.
+    private PageResponse<ItemResponse> toPageResponse(Page<Item> items) {
+        Map<Long, DisplayWindow> displayWindows = findDisplayWindows(items.getContent());
+        return PageResponse.from(items.map(item -> toResponse(item, displayWindows.get(item.getId()))));
+    }
+
+    // expire_at, boosted_until thuộc module listingfee nên đọc qua ListingFeeQueryService, không map lại ở Item.
+    private Map<Long, DisplayWindow> findDisplayWindows(List<Item> items) {
+        List<Long> itemIds = items.stream().map(Item::getId).toList();
+        return listingFeeQueryService.findDisplayWindows(itemIds);
+    }
+
+    private DisplayWindow findDisplayWindow(long itemId) {
+        return listingFeeQueryService.findDisplayWindows(List.of(itemId)).get(itemId);
     }
 }

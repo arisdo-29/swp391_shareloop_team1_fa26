@@ -71,7 +71,9 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
   "images": ["/api/v1/media/42", "/api/v1/media/43", "/api/v1/media/44"],
   "status": "PENDING_REVIEW",
   "createdAt": "2026-10-05T14:00:00Z",
-  "updatedAt": "2026-10-05T14:00:00Z"
+  "updatedAt": "2026-10-05T14:00:00Z",
+  "expireAt": null,
+  "boostedUntil": null
 }
 ```
 
@@ -196,6 +198,11 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2`. `q` rỗng ho�
 | `status` | string | `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `RESERVED`, `TRADED`, `EXPIRED` |
 | `createdAt` | string | Thời điểm tạo ISO-8601 UTC |
 | `updatedAt` | string | Thời điểm cập nhật ISO-8601 UTC |
+| `expireAt` | string? | Hạn hiển thị ISO-8601 UTC (cột `expire_at`, module listingfee). `null` khi bài chưa từng được duyệt |
+| `boostedUntil` | string? | Thời điểm hết đẩy bài ISO-8601 UTC (cột `boosted_until`, module listingfee). `null` khi bài chưa từng được đẩy; giá trị đã qua nghĩa là hết đẩy |
+
+`expireAt` và `boostedUntil` có trong mọi API trả `ItemResponse` (tạo, sửa, chi tiết, bài của tôi, danh sách công khai).
+Với danh sách, hai trường này được đọc bằng một query cho cả trang qua `ListingFeeQueryService.findDisplayWindows`.
 
 ---
 
