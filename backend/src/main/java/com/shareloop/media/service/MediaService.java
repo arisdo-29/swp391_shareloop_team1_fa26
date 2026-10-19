@@ -98,6 +98,30 @@ public class MediaService {
     }
 
     @Transactional
+    public void attachPrivateEvidence(List<Long> mediaIds, long userId) {
+        attach(mediaIds, userId);
+        if (mediaIds != null) mediaIds.forEach(id -> requireMedia(id).makePrivate());
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> findAvailableEvidence(List<Long> mediaIds) {
+        return repository.findAllById(mediaIds).stream()
+                .filter(media -> media.isActive() && media.getStatus() == MediaStatus.ATTACHED)
+                .map(MediaFile::getId)
+                .toList();
+    }
+
+    /** Caller must authorize Admin access and verify that this media belongs to the report. */
+    @Transactional(readOnly = true)
+    public MediaContent readEvidenceForAdmin(long mediaId) {
+        MediaFile media = requireMedia(mediaId);
+        if (!media.isActive() || media.getStatus() != MediaStatus.ATTACHED) {
+            throw new BusinessException(MediaErrorCode.MEDIA_NOT_FOUND);
+        }
+        return readContent(media);
+    }
+
+    @Transactional
     public void detach(List<Long> mediaIds, long userId) {
         mediaIds.stream().sorted().map(this::requireMediaForUpdate).forEach(file -> {
             requireOwner(file, userId);
@@ -125,6 +149,11 @@ public class MediaService {
         if (!media.isActive() || !"PUBLIC".equals(media.getVisibility())) {
             throw new BusinessException(MediaErrorCode.MEDIA_NOT_FOUND);
         }
+        return readContent(media);
+    }
+
+    private MediaContent readContent(MediaFile media) {
+        long mediaId = media.getId();
         try {
             return new MediaContent(storage.read(media.getStorageKey()), media.getMimeType());
         } catch (NoSuchFileException exception) {

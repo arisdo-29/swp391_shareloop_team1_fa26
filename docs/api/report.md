@@ -4,6 +4,119 @@ Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian 
 
 Người sở hữu: BE4 (@kopslngbtram2110).
 
+## Admin đọc khiếu nại (#118)
+
+### GET /api/v1/admin/reports
+
+Yêu cầu Bearer JWT có `ROLE_ADMIN`. Query: `page` mặc định `0`, tối thiểu `0`;
+`size` mặc định `20`, trong khoảng `1–100`; `status` và `targetType` không bắt buộc,
+nhận đúng enum bên dưới. Hai bộ lọc kết hợp bằng AND. Thứ tự cố định:
+`createdAt DESC, id DESC`. Không trả bản ghi đã xoá mềm.
+
+Ví dụ: `GET /api/v1/admin/reports?page=0&size=20&status=OPEN&targetType=REQUEST`.
+
+```json
+{
+  "items": [{
+    "id": 71, "reporterId": 10, "targetType": "REQUEST",
+    "itemId": 105, "targetUserId": 42, "requestId": 88,
+    "reason": "NOT_AS_DESCRIBED", "description": "Đồ khác mô tả",
+    "stage": "BEFORE", "status": "OPEN", "createdAt": "2026-10-20T03:00:00Z"
+  }],
+  "page": 0, "size": 20, "totalElements": 1, "totalPages": 1
+}
+```
+
+Trang rỗng trả `items: []`; không có bản ghi thì `totalPages: 0`.
+
+### GET /api/v1/admin/reports/{reportId}
+
+Yêu cầu Admin; `reportId` là số nguyên dương. Response:
+
+```json
+{
+  "report": {
+    "id": 71, "reporterId": 10, "targetType": "REQUEST",
+    "itemId": 105, "targetUserId": 42, "requestId": 88,
+    "reason": "NOT_AS_DESCRIBED", "description": "Đồ khác mô tả",
+    "stage": "BEFORE", "status": "OPEN", "createdAt": "2026-10-20T03:00:00Z"
+  },
+  "reporter": {"id": 10, "fullName": "Người gửi"},
+  "reportedUser": {"id": 42, "fullName": "Người bị báo cáo"},
+  "relatedItemId": 105,
+  "response": "Nội dung giải trình", "respondedAt": "2026-10-20T04:00:00Z",
+  "responseDueAt": "2026-10-23T03:00:00Z",
+  "evidence": [{"id": 12, "url": "/api/v1/admin/reports/71/evidence/12", "available": true}],
+  "responseEvidence": [{"id": 15, "url": null, "available": false}],
+  "resolvedBy": null, "resolution": null, "starsDeducted": 0, "resolvedAt": null
+}
+```
+
+Không trả email, số điện thoại hoặc storage key. Tên có thể `null` nếu người dùng không
+còn khả dụng; `reportedUser` có thể `null` nếu không xác định được bên bị báo cáo.
+Hồ sơ vẫn đọc được khi đối tượng liên quan đã mất. `relatedItemId` lấy thêm từ giao dịch
+nếu hồ sơ cũ chưa lưu ID bài. Trường giải trình/kết luận chưa có trả `null`.
+
+Migration `V202610200300__report_evidence_and_response_deadline.sql` thêm ba cột
+`evidence`, `response_evidence`, `response_due_at` vào bảng hiện có. Hai cột bằng chứng lưu
+JSON array media ID dạng text (ví dụ `[12, 15]`); API luôn trả danh sách object đã chuẩn hoá.
+Hồ sơ cũ không có dữ liệu trả mảng rỗng và hạn `null`, không suy đoán thời hạn lịch sử.
+Media bị xoá/ẩn hoặc không còn gắn trả `available: false, url: null`. Tệp mất trong storage
+có thể chỉ phát hiện khi đọc ảnh; FE hiển thị fallback riêng, vẫn giữ hồ sơ.
+
+### GET /api/v1/admin/reports/{reportId}/evidence/{mediaId}
+
+Chỉ Admin và chỉ media ID gắn trong một trong hai danh sách bằng chứng của đúng hồ sơ.
+Trả bytes ảnh với `Content-Type` media gốc và `Cache-Control: no-store`.
+FE tải qua HTTP client có Bearer JWT rồi dùng blob URL cho ảnh; không gắn URL riêng tư
+thẳng vào `img` vì trình duyệt không tự thêm Authorization. Thu hồi blob URL khi đóng hồ sơ.
+Không đổi quyền đọc endpoint public: bằng chứng đã gắn có visibility `PRIVATE`.
+
+Mã lỗi các API đọc:
+
+| HTTP | Code | Trường hợp |
+| --- | --- | --- |
+| 400 | `VALIDATION_FAILED` | Sai enum/kiểu query, page âm, size ngoài 1–100 hoặc ID không dương |
+| 401 | `UNAUTHORIZED` | Chưa đăng nhập/phiên hết hạn |
+| 403 | `FORBIDDEN` | Không có quyền Admin |
+| 404 | `REPORT_NOT_FOUND` | Hồ sơ không tồn tại hoặc đã xoá mềm |
+| 404 | `MEDIA_NOT_FOUND` | Media không thuộc hồ sơ, bị xoá/ẩn hoặc không còn gắn |
+| 404 | `MEDIA_FILE_MISSING` | Bản ghi còn nhưng tệp không còn trong storage |
+| 500 | `MEDIA_STORAGE_ERROR` | Lỗi đọc storage |
+
+### Ghi bằng chứng và giải trình để tạo hồ sơ thật
+
+`POST /api/v1/reports` nhận thêm `evidenceMediaIds?: number[]` (ID nguyên dương,
+không null/trùng, bỏ qua hoặc mảng rỗng được phép). Upload ảnh bằng API media hiện có
+trước khi tạo báo cáo. Chỉ media `UPLOADED`, còn hoạt động và thuộc người gửi mới được gắn;
+sau khi gắn chuyển `ATTACHED`, `PRIVATE`. Lỗi media rollback cả việc tạo báo cáo.
+
+Khi báo cáo `REQUEST`, người gửi phải là một trong hai bên giao dịch; hệ thống lưu
+người bị báo cáo, ID bài và `responseDueAt` theo `ConfigKey.RESPONSE_WINDOW_DAYS`,
+chuyển `AWAITING_RESPONSE`. Báo cáo `ITEM` lưu thêm ID chủ bài để giữ danh tính đối tượng.
+
+`POST /api/v1/reports/{reportId}/response` yêu cầu Bearer JWT của bên bị báo cáo:
+
+```json
+{"response": "Nội dung giải trình", "evidenceMediaIds": [15]}
+```
+
+`response` bắt buộc, không toàn khoảng trắng, tối đa 2000 ký tự; `evidenceMediaIds`
+giống quy tắc bên gửi. Thành công `204 No Content`, lưu nội dung đã trim, ảnh và
+`respondedAt`, chuyển hồ sơ về `OPEN`. Khoá dòng cùng cơ chế kết luận, không nhận
+giải trình lần hai, sau hạn, hoặc khi hồ sơ không còn `AWAITING_RESPONSE`.
+
+Lỗi ghi bổ sung: `400 VALIDATION_FAILED`; `403 REPORT_NOT_PARTICIPANT`;
+`409 REPORT_RESPONSE_NOT_ALLOWED`; `404 REPORT_NOT_FOUND`/`REQUEST_NOT_FOUND`/
+`REQUEST_ITEM_NOT_FOUND`; media: `403 MEDIA_NOT_OWNER`, `404 MEDIA_NOT_FOUND`,
+`409 MEDIA_NOT_UPLOADED`, `422 MEDIA_INVALID_FILE` (ID trùng).
+
+Admin vẫn dùng `POST .../conclude` với `{decision: "UPHOLD" | "DISMISS", note}`;
+ghi chú không bắt buộc, tối đa 500 ký tự. Không thêm hạn chế thời điểm kết luận.
+FE xác nhận trước khi gửi, khoá nút khi gửi, tải lại list theo bộ lọc hiện tại và chi tiết
+sau thành công; nếu `409 REPORT_ALREADY_CONCLUDED`, báo hồ sơ đã được xử lý và tải lại.
+Các request đọc bị huỷ/bỏ qua khi chuyển hồ sơ hoặc bộ lọc.
+
 ---
 
 ## 1. POST /api/v1/reports

@@ -54,6 +54,7 @@ class ReportServiceTest {
     private final RequestService requestService = mock(RequestService.class);
 
     private ReportService reportService;
+    private final ReportEvidenceService evidenceService = mock(ReportEvidenceService.class);
 
     @BeforeEach
     void setUp() {
@@ -64,7 +65,72 @@ class ReportServiceTest {
                 reputationService,
                 activityLogService,
                 configService,
-                requestService);
+                requestService,
+                evidenceService);
+    }
+
+    @Test
+    void requestCreationStoresPrivateEvidenceAndConfiguredDeadline() {
+        when(requestService.getChatContext(7L))
+                .thenReturn(new RequestChatContext(7L, RequestStatus.DISPUTED, 10L, 20L, 5L, null));
+        when(configService.getInt(com.shareloop.setting.ConfigKey.RESPONSE_WINDOW_DAYS))
+                .thenReturn(4);
+        when(evidenceService.attach(java.util.List.of(12L), 10L)).thenReturn("[12]");
+        when(reportRepository.save(any())).thenAnswer(invocation -> {
+            Report report = invocation.getArgument(0);
+            assertThat(report.getEvidence()).isEqualTo("[12]");
+            assertThat(report.getResponseDueAt())
+                    .isBetween(
+                            java.time.Instant.now().plusSeconds(345590),
+                            java.time.Instant.now().plusSeconds(345610));
+            return report;
+        });
+        var result = reportService.createReport(
+                10L,
+                new CreateReportRequest(
+                        TargetType.REQUEST,
+                        null,
+                        null,
+                        null,
+                        7L,
+                        ReportReason.OTHER,
+                        "Khiếu nại",
+                        java.util.List.of(12L)));
+        assertThat(result.status()).isEqualTo(ReportStatus.AWAITING_RESPONSE);
+        assertThat(result.targetUserId()).isEqualTo(20L);
+        assertThat(result.itemId()).isEqualTo(5L);
+    }
+
+    @Test
+    void responseRequiresTargetAndOpenWindowAndOnlyAcceptsOnce() {
+        Report report =
+                new Report(10L, TargetType.USER, null, 20L, null, ReportReason.OTHER, "Nội dung", ReportStage.BEFORE);
+        report.awaitResponse(java.time.Instant.now().plusSeconds(3600));
+        when(reportRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(report));
+        var input = new com.shareloop.report.dto.RespondReportRequest(" Giải trình ", java.util.List.of(15L));
+        assertThatThrownBy(() -> reportService.respond(30L, 1L, input))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.REPORT_NOT_PARTICIPANT);
+        when(evidenceService.attach(java.util.List.of(15L), 20L)).thenReturn("[15]");
+        reportService.respond(20L, 1L, input);
+        assertThat(report.getResponse()).isEqualTo("Giải trình");
+        assertThat(report.getResponseEvidence()).isEqualTo("[15]");
+        assertThat(report.getStatus()).isEqualTo(ReportStatus.OPEN);
+        assertThatThrownBy(() -> reportService.respond(20L, 1L, input))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.REPORT_RESPONSE_NOT_ALLOWED);
+    }
+
+    @Test
+    void expiredResponseCannotAttachEvidence() {
+        Report report =
+                new Report(10L, TargetType.USER, null, 20L, null, ReportReason.OTHER, "Nội dung", ReportStage.BEFORE);
+        report.awaitResponse(java.time.Instant.now().minusSeconds(1));
+        when(reportRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(report));
+        assertThatThrownBy(() -> reportService.respond(
+                        20L,
+                        1L,
+                        new com.shareloop.report.dto.RespondReportRequest("Giải trình", java.util.List.of(15L))))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.REPORT_RESPONSE_NOT_ALLOWED);
+        org.mockito.Mockito.verifyNoInteractions(evidenceService);
     }
 
     @Test
@@ -142,6 +208,10 @@ class ReportServiceTest {
     void createReport_requestTarget_success() {
         Long reporterId = 10L;
         Long requestId = 50L;
+        when(requestService.getChatContext(requestId))
+                .thenReturn(new RequestChatContext(requestId, RequestStatus.DISPUTED, reporterId, 20L, 100L, null));
+        when(configService.getInt(com.shareloop.setting.ConfigKey.RESPONSE_WINDOW_DAYS))
+                .thenReturn(3);
 
         CreateReportRequest request = new CreateReportRequest(
                 TargetType.REQUEST, null, null, null, requestId, ReportReason.NO_SHOW, "Không đến nhận đồ");

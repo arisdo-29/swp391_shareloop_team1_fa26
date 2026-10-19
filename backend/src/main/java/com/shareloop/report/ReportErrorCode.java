@@ -4,6 +4,8 @@ import com.shareloop.common.exception.ErrorCode;
 import org.springframework.http.HttpStatus;
 
 public enum ReportErrorCode implements ErrorCode {
+    REPORT_NOT_PARTICIPANT(HttpStatus.FORBIDDEN, "Bạn không phải bên liên quan của khiếu nại."),
+    REPORT_RESPONSE_NOT_ALLOWED(HttpStatus.CONFLICT, "Hồ sơ không còn nhận giải trình."),
     REPORT_TARGET_REQUIRED(HttpStatus.BAD_REQUEST, "Đối tượng báo cáo là bắt buộc."),
     REPORT_CANNOT_REPORT_SELF(HttpStatus.BAD_REQUEST, "Không thể tự báo cáo chính mình hoặc bài đăng của chính mình."),
     REPORT_ALREADY_REPORTED(HttpStatus.CONFLICT, "Bạn đã báo cáo đối tượng này trước đó."),

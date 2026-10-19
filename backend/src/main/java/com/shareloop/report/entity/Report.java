@@ -51,6 +51,15 @@ public class Report extends BaseEntity {
     @Column(name = "responded_at")
     private Instant respondedAt;
 
+    @Column(name = "evidence", columnDefinition = "TEXT")
+    private String evidence;
+
+    @Column(name = "response_evidence", columnDefinition = "TEXT")
+    private String responseEvidence;
+
+    @Column(name = "response_due_at")
+    private Instant responseDueAt;
+
     @Column(name = "resolved_by")
     private Long resolvedBy;
 
@@ -128,6 +137,34 @@ public class Report extends BaseEntity {
 
     public Instant getRespondedAt() {
         return respondedAt;
+    }
+
+    public String getEvidence() {
+        return evidence;
+    }
+
+    public String getResponseEvidence() {
+        return responseEvidence;
+    }
+
+    public Instant getResponseDueAt() {
+        return responseDueAt;
+    }
+
+    public void setEvidence(String evidence) {
+        this.evidence = evidence;
+    }
+
+    public void awaitResponse(Instant dueAt) {
+        this.responseDueAt = dueAt;
+        this.status = ReportStatus.AWAITING_RESPONSE;
+    }
+
+    public void respond(String response, String evidence, Instant respondedAt) {
+        this.response = response;
+        this.responseEvidence = evidence;
+        this.respondedAt = respondedAt;
+        this.status = ReportStatus.OPEN;
     }
 
     public Long getResolvedBy() {

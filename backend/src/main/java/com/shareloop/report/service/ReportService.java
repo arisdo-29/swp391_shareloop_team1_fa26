@@ -12,6 +12,7 @@ import com.shareloop.report.dto.CreateReportRequest;
 import com.shareloop.report.dto.ReportConclusionResponse;
 import com.shareloop.report.dto.ReportDecision;
 import com.shareloop.report.dto.ReportResponse;
+import com.shareloop.report.dto.RespondReportRequest;
 import com.shareloop.report.entity.Report;
 import com.shareloop.report.entity.ReportReason;
 import com.shareloop.report.entity.ReportStage;
@@ -21,7 +22,10 @@ import com.shareloop.report.repository.ReportRepository;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.service.RequestService;
+import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -41,6 +45,7 @@ public class ReportService {
     private final ActivityLogService activityLogService;
     private final ConfigService configService;
     private final RequestService requestService;
+    private final ReportEvidenceService evidenceService;
 
     @Autowired
     public ReportService(
@@ -50,7 +55,8 @@ public class ReportService {
             @Autowired(required = false) ReputationService reputationService,
             @Autowired(required = false) ActivityLogService activityLogService,
             @Autowired(required = false) ConfigService configService,
-            @Autowired(required = false) RequestService requestService) {
+            @Autowired(required = false) RequestService requestService,
+            ReportEvidenceService evidenceService) {
         this.reportRepository = reportRepository;
         this.itemQueryService = itemQueryService;
         this.itemService = itemService;
@@ -58,6 +64,7 @@ public class ReportService {
         this.activityLogService = activityLogService;
         this.configService = configService;
         this.requestService = requestService;
+        this.evidenceService = evidenceService;
     }
 
     @Transactional
@@ -90,6 +97,7 @@ public class ReportService {
                 throw new BusinessException(
                         ReportErrorCode.REPORT_CANNOT_REPORT_SELF, "Không thể tự báo cáo bài đăng của chính mình.");
             }
+            resolvedTargetUserId = itemSummary.donorId();
 
             // Mỗi người chỉ báo cáo một đối tượng một lần
             if (reportRepository.existsByReporterIdAndTargetTypeAndItemId(
@@ -130,6 +138,11 @@ public class ReportService {
                 throw new BusinessException(
                         ReportErrorCode.REPORT_ALREADY_REPORTED, "Bạn đã báo cáo yêu cầu giao dịch này rồi.");
             }
+            RequestChatContext context = requestService.getChatContext(resolvedRequestId);
+            if (reporterId.equals(context.receiverId())) resolvedTargetUserId = context.donorId();
+            else if (reporterId.equals(context.donorId())) resolvedTargetUserId = context.receiverId();
+            else throw new BusinessException(ReportErrorCode.REPORT_NOT_PARTICIPANT);
+            resolvedItemId = context.itemId();
         }
 
         Report report = new Report(
@@ -142,6 +155,11 @@ public class ReportService {
                 request.description().trim(),
                 ReportStage.BEFORE);
 
+        report.setEvidence(evidenceService.attach(request.evidenceMediaIds(), reporterId));
+        if (targetType == TargetType.REQUEST) {
+            report.awaitResponse(
+                    Instant.now().plus(configService.getInt(ConfigKey.RESPONSE_WINDOW_DAYS), ChronoUnit.DAYS));
+        }
         Report saved = reportRepository.save(report);
 
         // BR-A03: Đạt 3 report thì tự ẩn bài
@@ -164,6 +182,23 @@ public class ReportService {
                 saved.getStage(),
                 saved.getStatus(),
                 saved.getCreatedAt());
+    }
+
+    @Transactional
+    public void respond(Long userId, long reportId, RespondReportRequest input) {
+        Report report = reportRepository
+                .findByIdForUpdate(reportId)
+                .orElseThrow(() -> new BusinessException(ReportErrorCode.REPORT_NOT_FOUND));
+        Long targetId = resolveViolator(report);
+        if (!userId.equals(targetId)) throw new BusinessException(ReportErrorCode.REPORT_NOT_PARTICIPANT);
+        Instant now = Instant.now();
+        if (report.getStatus() != ReportStatus.AWAITING_RESPONSE
+                || report.getRespondedAt() != null
+                || report.getResponseDueAt() == null
+                || now.isAfter(report.getResponseDueAt())) {
+            throw new BusinessException(ReportErrorCode.REPORT_RESPONSE_NOT_ALLOWED);
+        }
+        report.respond(input.response().trim(), evidenceService.attach(input.evidenceMediaIds(), userId), now);
     }
 
     /**

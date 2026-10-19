@@ -60,6 +60,19 @@ class MediaServiceTest {
     }
 
     @Test
+    void attachedEvidenceBecomesPrivateAndCannotBeReadPublicly() {
+        MediaFile owned = media(1L, 4L);
+        when(repository.findForUpdate(1L)).thenReturn(Optional.of(owned));
+        when(repository.findById(1L)).thenReturn(Optional.of(owned));
+        service.attachPrivateEvidence(List.of(1L), 4L);
+        assertThat(owned.getVisibility()).isEqualTo("PRIVATE");
+        assertThat(owned.getStatus()).isEqualTo(MediaStatus.ATTACHED);
+        assertThatThrownBy(() -> service.readPublic(1L))
+                .hasFieldOrPropertyWithValue("errorCode", MediaErrorCode.MEDIA_NOT_FOUND);
+        verifyNoInteractions(storage);
+    }
+
+    @Test
     void invalidImageNeverReachesStorage() throws IOException {
         when(config.getInt(ConfigKey.IMAGE_MAX_MB)).thenReturn(5);
         var file = new MockMultipartFile("file", "x.png", "image/png", new byte[] {1, 2, 3});

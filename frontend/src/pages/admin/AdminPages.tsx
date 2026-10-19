@@ -1,3 +1,4 @@
+import { AdminComplaints } from './AdminComplaints';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
@@ -41,7 +42,7 @@ import {
 import type { ApiError } from '../../services/http';
 import { resolveMediaUrl } from '../../services/mediaUrl';
 import { toBackendUserId } from '../../services/requestApi';
-import type { AppStateData, ComplaintStatus, ForbiddenKeyword, Item, KeywordAction, RankRule, ReputationPointRule, SupportedDistrict, Transaction, User } from '../../types/domain';
+import type { AppStateData, ForbiddenKeyword, Item, KeywordAction, RankRule, ReputationPointRule, SupportedDistrict, Transaction, User } from '../../types/domain';
 
 function Panel({
   title,
@@ -195,8 +196,7 @@ export function AdminModeration() {
   const data = useAppSelector(selectData);
   const admin = useAppSelector(selectCurrentUser)!;
   const dispatch = useAppDispatch();
-  const backendAdminId = toBackendUserId(admin.id);
-  const isApiAdmin = backendAdminId !== null && admin.role === 'admin';
+  const isApiAdmin = admin.role === 'admin';
   const [query, setQuery] = useState('');
   const [reviewing, setReviewing] = useState<Item | null>(null);
   const [approving, setApproving] = useState<Item | null>(null);
@@ -336,8 +336,8 @@ export function AdminModeration() {
                   {displayModerationNote(item) ? <p className="mt-2 text-xs leading-5 text-text-muted">{displayModerationNote(item)}</p> : null}
                   <p className="mt-2 text-xs text-text-muted">Gửi lúc {new Date(item.createdAt).toLocaleString('vi-VN')}</p>
                   <ModerationImageGallery
-                    images={item.images ?? data.items.find((entry) => entry.id === String(item.id))?.images ?? []}
-                    defectImages={item.defectImages ?? data.items.find((entry) => entry.id === String(item.id))?.defectImages ?? []}
+                    images={item.images ?? []}
+                    defectImages={item.defectImages ?? []}
                   />
                 </div>
                 <div className="space-y-3">
@@ -2291,164 +2291,6 @@ function DistrictModal({
         <Button onClick={() => onSave(name)}>Lưu</Button>
       </div>
     </Modal>
-  );
-}
-
-function AdminComplaints() {
-  const admin = useAppSelector(selectCurrentUser);
-  if (toBackendUserId(admin?.id)) return <Panel title="Khiếu nại"><EmptyState title="Chưa thể tải khiếu nại" text="Chức năng xem hồ sơ và bằng chứng khiếu nại chưa sẵn sàng. Vui lòng thử lại khi hệ thống được cập nhật." /></Panel>;
-  return <LegacyAdminComplaints />;
-}
-
-function LegacyAdminComplaints() {
-  const data = useAppSelector(selectData);
-  const admin = useAppSelector(selectCurrentUser)!;
-  const dispatch = useAppDispatch();
-  const [selectedId, setSelectedId] = useState('');
-  const [note, setNote] = useState('');
-  const [resolution, setResolution] = useState('');
-  const selected = data.complaints.find((entry) => entry.id === selectedId);
-  const statusLabel: Record<ComplaintStatus, string> = {
-    received: 'Đã tiếp nhận',
-    processing: 'Đang xử lý',
-    resolved: 'Đã xử lý',
-    rejected: 'Đã bác bỏ khiếu nại',
-    violation_confirmed: 'Đã xác nhận vi phạm',
-  };
-  return (
-    <Panel title="Khiếu nại" description="Hồ sơ giao dịch cần quản trị viên xem xét và xử lý.">
-      <div className="table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Mã</th>
-              <th>Người gửi</th>
-              <th>Giao dịch</th>
-              <th>Lý do</th>
-              <th>Ngày gửi</th>
-              <th>Trạng thái</th>
-              <th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.complaints.map((complaint) => (
-              <tr key={complaint.id}>
-                <td className="font-semibold">{complaint.id}</td>
-                <td>{data.users.find((user) => user.id === complaint.reporterId)?.name}</td>
-                <td>{complaint.transactionId}</td>
-                <td>{complaint.reason}</td>
-                <td>{new Date(complaint.createdAt).toLocaleDateString('vi-VN')}</td>
-                <td>{statusLabel[complaint.status]}</td>
-                <td>
-                  <Button size="sm" variant="outline" onClick={() => {
-                    setSelectedId(complaint.id);
-                    setNote(complaint.adminNote ?? '');
-                    setResolution(complaint.resolution ?? '');
-                  }}>
-                    Xem chi tiết
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {selected ? (
-        <Modal title={`Khiếu nại ${selected.id}`} onClose={() => setSelectedId('')}>
-          <div className="grid gap-3 text-sm">
-            <Info label="Người gửi" value={data.users.find((user) => user.id === selected.reporterId)?.name ?? selected.reporterId} />
-            <Info label="Người bị khiếu nại" value={data.users.find((user) => user.id === selected.reportedUserId)?.name ?? selected.reportedUserId} />
-            <Info label="Giao dịch liên quan" value={selected.transactionId} />
-            <Info label="Trạng thái" value={statusLabel[selected.status]} />
-          </div>
-          <div className="mt-4 rounded-md bg-background p-3 text-sm leading-6 text-text-secondary">
-            <strong className="text-text-primary">{selected.reason}</strong>
-            <p className="mt-1">{selected.content}</p>
-          </div>
-          {selected.evidence.length ? (
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              {selected.evidence.map((source, index) => (
-                source.startsWith('data:video') ? (
-                  <video key={source.slice(-16) + index} src={source} className="aspect-square rounded-md object-cover" controls />
-                ) : (
-                  <ItemImage key={source.slice(-16) + index} src={source} alt="Bằng chứng" className="aspect-square rounded-md object-cover" />
-                )
-              ))}
-            </div>
-          ) : null}
-          <TextArea className="mt-4" label="Ghi chú xử lý" value={note} onChange={(event) => setNote(event.target.value)} />
-          <TextArea className="mt-4" label="Kết quả xử lý" value={resolution} onChange={(event) => setResolution(event.target.value)} />
-          {selected.response ? (
-            <div className="mt-4 rounded-md bg-amber-50 p-3 text-sm leading-6 text-amber-900">
-              <strong>Phản hồi của người bị khiếu nại</strong>
-              <p className="mt-1">{selected.response}</p>
-            </div>
-          ) : selected.responseDueAt ? (
-            <div className="mt-4 rounded-md bg-background p-3 text-sm text-text-muted">
-              Người bị khiếu nại có 3 ngày để phản hồi. Hạn phản hồi: {new Date(selected.responseDueAt).toLocaleString('vi-VN')}.
-            </div>
-          ) : null}
-          <div className="mt-6 flex flex-wrap justify-end gap-2">
-            <Button variant="ghost" onClick={() => setSelectedId('')}>Đóng</Button>
-            {selected.status === 'received' ? (
-              <Button
-                onClick={() => dispatch(actions.updateComplaintStatus({ adminId: admin.id, complaintId: selected.id, status: 'processing', adminNote: note }))}
-              >
-                Chuyển đang xử lý
-              </Button>
-            ) : null}
-            {selected.status === 'processing' ? (
-              <>
-              <Button variant="outline" onClick={() => {
-                dispatch(actions.updateComplaintStatus({ adminId: admin.id, complaintId: selected.id, status: 'rejected', adminNote: note, resolution }));
-                setSelectedId('');
-              }}>
-                Bác bỏ khiếu nại
-              </Button>
-              <Button
-                onClick={() => {
-                  dispatch(actions.updateComplaintStatus({ adminId: admin.id, complaintId: selected.id, status: 'violation_confirmed', adminNote: note, resolution }));
-                  setSelectedId('');
-                }}
-              >
-                Đánh dấu đã xử lý
-              </Button>
-              <Button
-                variant="danger"
-                onClick={() =>
-                  dispatch(actions.adminAdjustReputationStars({
-                    adminId: admin.id,
-                    userId: selected.reportedUserId,
-                    change: -1,
-                    reason: resolution || `Xử lý khiếu nại ${selected.id}`,
-                  }))
-                }
-              >
-                Trừ 1 sao uy tín
-              </Button>
-              </>
-            ) : null}
-            {data.users.find((user) => user.id === selected.reportedUserId)?.reputationStars === 0 ? (
-              <Button
-                variant="outline"
-                disabled={Boolean(data.users.find((user) => user.id === selected.reportedUserId)?.reputationRestoreUsed)}
-                onClick={() =>
-                  dispatch(actions.restoreOneReputationStar({
-                    adminId: admin.id,
-                    userId: selected.reportedUserId,
-                    reason: resolution || `Cấp lại uy tín sau khi xem xét ${selected.id}`,
-                  }))
-                }
-              >
-                {data.users.find((user) => user.id === selected.reportedUserId)?.reputationRestoreUsed
-                  ? 'Đã sử dụng quyền cấp lại uy tín'
-                  : 'Cấp lại 1 sao'}
-              </Button>
-            ) : null}
-          </div>
-        </Modal>
-      ) : null}
-    </Panel>
   );
 }
 

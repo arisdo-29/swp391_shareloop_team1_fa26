@@ -21,6 +21,7 @@ export type ReportTarget =
 export type CreateReportRequest = ReportTarget & {
   reason: ReportReason;
   description: string;
+  evidenceMediaIds?: number[];
 };
 
 export interface ReportResponse {
@@ -37,7 +38,71 @@ export interface ReportResponse {
   createdAt: string;
 }
 
+export type ReportStatus = ReportResponse['status'];
+export type ReportDecision = 'UPHOLD' | 'DISMISS';
+export interface AdminReportPage {
+  items: ReportResponse[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+export interface AdminReportDetail {
+  report: ReportResponse;
+  reporter: { id: number; fullName: string | null };
+  reportedUser: { id: number; fullName: string | null } | null;
+  relatedItemId: number | null;
+  response: string | null;
+  respondedAt: string | null;
+  responseDueAt: string | null;
+  evidence: ReportEvidence[];
+  responseEvidence: ReportEvidence[];
+  resolvedBy: number | null;
+  resolution: string | null;
+  starsDeducted: number;
+  resolvedAt: string | null;
+}
+export interface ReportEvidence {
+  id: number;
+  url: string | null;
+  available: boolean;
+}
+
 export const reportApi = {
+  async evidence(reportId: number, mediaId: number, signal?: AbortSignal) {
+    const { data } = await http.get<Blob>(`/api/v1/admin/reports/${reportId}/evidence/${mediaId}`, {
+      responseType: 'blob',
+      signal,
+    });
+    return data;
+  },
+  async list(
+    params: {
+      page?: number;
+      size?: number;
+      status?: ReportStatus;
+      targetType?: ReportTargetType;
+    } = {},
+    signal?: AbortSignal,
+  ) {
+    const { data } = await http.get<AdminReportPage>('/api/v1/admin/reports', { params, signal });
+    return data;
+  },
+  async detail(reportId: number, signal?: AbortSignal) {
+    const { data } = await http.get<AdminReportDetail>(`/api/v1/admin/reports/${reportId}`, {
+      signal,
+    });
+    return data;
+  },
+  async conclude(reportId: number, input: { decision: ReportDecision; note?: string }) {
+    const { data } = await http.post<
+      Pick<AdminReportDetail, 'resolvedBy' | 'resolution' | 'starsDeducted' | 'resolvedAt'> & {
+        id: number;
+        status: ReportStatus;
+      }
+    >(`/api/v1/admin/reports/${reportId}/conclude`, input);
+    return data;
+  },
   async create(input: CreateReportRequest): Promise<ReportResponse> {
     const { data } = await http.post<ReportResponse>('/api/v1/reports', input);
     return data;

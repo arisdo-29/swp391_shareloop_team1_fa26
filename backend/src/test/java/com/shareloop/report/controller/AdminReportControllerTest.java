@@ -3,6 +3,7 @@ package com.shareloop.report.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -14,13 +15,16 @@ import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
 import com.shareloop.report.ReportErrorCode;
+import com.shareloop.report.dto.AdminReportPage;
 import com.shareloop.report.dto.ConcludeReportRequest;
 import com.shareloop.report.dto.ReportConclusionResponse;
 import com.shareloop.report.entity.ReportReason;
 import com.shareloop.report.entity.ReportStatus;
 import com.shareloop.report.entity.TargetType;
+import com.shareloop.report.service.AdminReportQueryService;
 import com.shareloop.report.service.ReportService;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,6 +52,58 @@ class AdminReportControllerTest {
 
     @MockitoBean
     ReportService reportService;
+
+    @MockitoBean
+    AdminReportQueryService queryService;
+
+    @MockitoBean
+    com.shareloop.report.service.ReportEvidenceService evidenceService;
+
+    @Test
+    void readEndpointsRequireAdmin() throws Exception {
+        for (String path : new String[] {BASE_URL, BASE_URL + "/1"}) {
+            mockMvc.perform(get(path)).andExpect(status().isUnauthorized());
+            mockMvc.perform(get(path).header("Authorization", "Bearer " + jwtService.issue(NORMAL_USER_ID, false)))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    void listPassesPaginationAndFilters() throws Exception {
+        when(queryService.list(ReportStatus.OPEN, TargetType.ITEM, 2, 10))
+                .thenReturn(new AdminReportPage(List.of(), 2, 10, 21, 3));
+        mockMvc.perform(get(BASE_URL)
+                        .header("Authorization", "Bearer " + jwtService.issue(ADMIN_ID, true))
+                        .param("status", "OPEN")
+                        .param("targetType", "ITEM")
+                        .param("page", "2")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.page").value(2))
+                .andExpect(jsonPath("$.totalElements").value(21));
+    }
+
+    @Test
+    void invalidReadParametersReturn400() throws Exception {
+        for (String query :
+                new String[] {"page=-1", "size=0", "size=101", "status=INVALID", "targetType=INVALID", "page=x"}) {
+            mockMvc.perform(get(BASE_URL + "?" + query)
+                            .header("Authorization", "Bearer " + jwtService.issue(ADMIN_ID, true)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+        }
+        mockMvc.perform(get(BASE_URL + "/0").header("Authorization", "Bearer " + jwtService.issue(ADMIN_ID, true)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void detailNotFoundReturnsReportError() throws Exception {
+        when(queryService.detail(999L)).thenThrow(new BusinessException(ReportErrorCode.REPORT_NOT_FOUND));
+        mockMvc.perform(get(BASE_URL + "/999").header("Authorization", "Bearer " + jwtService.issue(ADMIN_ID, true)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("REPORT_NOT_FOUND"));
+    }
 
     @Test
     @DisplayName("Kết luận khi chưa đăng nhập trả về 401 Unauthorized")

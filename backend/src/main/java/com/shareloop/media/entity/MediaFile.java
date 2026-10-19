@@ -63,6 +63,10 @@ public class MediaFile extends BaseEntity {
         status = MediaStatus.ATTACHED;
     }
 
+    public void makePrivate() {
+        visibility = "PRIVATE";
+    }
+
     public void detach() {
         if (status != MediaStatus.ATTACHED) {
             throw new IllegalStateException("Media is not attached");
