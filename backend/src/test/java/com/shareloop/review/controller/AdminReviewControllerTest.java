@@ -11,10 +11,14 @@ import com.shareloop.config.ClockConfig;
 import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
+import com.shareloop.review.dto.ChecklistAnswer;
 import com.shareloop.review.dto.ReviewQueueResponse;
 import com.shareloop.review.service.ReviewService;
+import com.shareloop.setting.dto.ChecklistItem;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -40,13 +44,14 @@ class AdminReviewControllerTest {
     @Test
     void pendingQueueReturnsChecklistForAdmin() throws Exception {
         when(reviewService.listPendingWithChecklist(0, 20))
-                .thenReturn(new ReviewQueueResponse(List.of(), List.of("Ảnh đúng món"), 0, 20));
+                .thenReturn(new ReviewQueueResponse(
+                        List.of(), List.of(new ChecklistItem(11L, "photos", "Ảnh đúng món")), 0, 20));
         String adminToken = jwtService.issue(1L, true);
 
         mockMvc.perform(get("/api/v1/admin/reviews/pending").header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isArray())
-                .andExpect(jsonPath("$.checklist[0]").value("Ảnh đúng món"));
+                .andExpect(jsonPath("$.checklist[0].statement").value("Ảnh đúng món"));
     }
 
     @Test
@@ -56,7 +61,7 @@ class AdminReviewControllerTest {
         mockMvc.perform(post("/api/v1/admin/reviews/8/approve")
                         .header("Authorization", "Bearer " + userToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"answers\":[true]}"))
+                        .content("{\"answers\":[{\"id\":11,\"passed\":true}]}"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
     }
@@ -100,10 +105,31 @@ class AdminReviewControllerTest {
         mockMvc.perform(post("/api/v1/admin/reviews/8/approve")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"answers\":[true]}"))
+                        .content("{\"answers\":[{\"id\":11,\"passed\":true}]}"))
                 .andExpect(status().isNoContent());
 
-        org.mockito.Mockito.verify(reviewService).approve(8L, List.of(true), 1L);
+        org.mockito.Mockito.verify(reviewService).approve(8L, List.of(new ChecklistAnswer(11L, true)), 1L);
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "{\"answers\":[]}",
+                "{\"answers\":[null]}",
+                "{\"answers\":[{\"id\":11}]}",
+                "{\"answers\":[{\"passed\":true}]}"
+            })
+    void invalidChecklistAnswersNeverReachService(String body) throws Exception {
+        String adminToken = jwtService.issue(1L, true);
+
+        mockMvc.perform(post("/api/v1/admin/reviews/8/approve")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        org.mockito.Mockito.verifyNoInteractions(reviewService);
     }
 
     @Test

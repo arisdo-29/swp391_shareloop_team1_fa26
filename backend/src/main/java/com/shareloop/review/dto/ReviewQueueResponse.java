@@ -1,5 +1,6 @@
 package com.shareloop.review.dto;
 
+import com.shareloop.setting.dto.ChecklistItem;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
@@ -8,8 +9,8 @@ public record ReviewQueueResponse(
         @Schema(description = "Danh sách bài đăng đang chờ duyệt")
         List<ReviewQueueItem> items,
 
-        @Schema(description = "Danh sách câu hỏi checklist kiểm duyệt hiện hành")
-        List<String> checklist,
+        @Schema(description = "Các mục checklist đang dùng (điều kiện đạt), theo thứ tự cấu hình")
+        List<ChecklistItem> checklist,
 
         @Schema(description = "Số trang hiện tại (bắt đầu từ 0)", example = "0")
         int page,

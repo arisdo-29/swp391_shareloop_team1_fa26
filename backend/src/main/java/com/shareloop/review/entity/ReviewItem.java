@@ -30,19 +30,31 @@ public class ReviewItem extends SliceAudit {
     @Column(name = "reject_reason", columnDefinition = "TEXT")
     private String rejectReason;
 
+    @Column(name = "approved_by")
+    private Long approvedBy;
+
+    @Column(name = "rejected_by")
+    private Long rejectedBy;
+
+    @Column(name = "rejected_at")
+    private Instant rejectedAt;
+
     protected ReviewItem() {}
 
     public Long getId() {
         return id;
     }
 
-    public void approve(Map<String, Object> snapshot, Instant approvedAt) {
+    public void approve(Map<String, Object> snapshot, Instant approvedAt, Long approvedBy) {
         this.reviewSnapshot = Map.copyOf(snapshot);
         this.approvedAt = approvedAt;
+        this.approvedBy = approvedBy;
         this.rejectReason = null;
     }
 
-    public void reject(String reason) {
+    public void reject(String reason, Instant rejectedAt, Long rejectedBy) {
         this.rejectReason = reason;
+        this.rejectedAt = rejectedAt;
+        this.rejectedBy = rejectedBy;
     }
 }

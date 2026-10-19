@@ -2,6 +2,7 @@ package com.shareloop.setting.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.shareloop.setting.dto.ChecklistItem;
 import com.shareloop.setting.dto.LexiconEntry;
 import com.shareloop.support.IntegrationTest;
 import java.util.List;
@@ -29,7 +30,7 @@ class ConfigServiceIT extends IntegrationTest {
     @Test
     void readsSeededLexiconAndChecklistInConfiguredOrder() {
         List<LexiconEntry> lexicon = configService.lexicon();
-        List<String> checklist = configService.checklist();
+        List<ChecklistItem> checklist = configService.checklistItems();
 
         assertThat(lexicon).extracting(LexiconEntry::term).containsSubsequence("súng", "cần sa", "zalo");
         assertThat(lexicon)
@@ -43,8 +44,9 @@ class ConfigServiceIT extends IntegrationTest {
                 });
         assertThat(lexicon).filteredOn(rule -> rule.severity().equals("REVIEW")).isNotEmpty();
         assertThat(checklist)
+                .extracting(ChecklistItem::statement)
                 .hasSizeGreaterThanOrEqualTo(1)
-                .startsWith("Món đồ có cần sang tên, đăng ký, công chứng để đổi chủ không?");
+                .startsWith("Không cần sang tên, đăng ký hay công chứng để đổi chủ.");
     }
 
     @Test
@@ -55,7 +57,9 @@ class ConfigServiceIT extends IntegrationTest {
                 + "('CHECKLIST', 'config_service_it_inactive', 'Inactive checklist item', NULL, -1, FALSE)");
 
         assertThat(configService.lexicon()).extracting(LexiconEntry::term).doesNotContain("config_service_it_inactive");
-        assertThat(configService.checklist()).doesNotContain("Inactive checklist item");
+        assertThat(configService.checklistItems())
+                .extracting(ChecklistItem::statement)
+                .doesNotContain("Inactive checklist item");
     }
 
     @Test
