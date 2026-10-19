@@ -1,5 +1,6 @@
 package com.shareloop.setting.service;
 
+import com.shareloop.audit.ActivityType;
 import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.ConfigKey;
@@ -172,7 +173,7 @@ public class ConfigService {
         attribute.updateValue(value);
         repository.save(attribute);
         activityLogService.log(
-                "CONFIG_UPDATE",
+                ActivityType.CONFIG_UPDATE.name(),
                 adminId,
                 "CONFIG",
                 null,

@@ -67,7 +67,7 @@ class ConfigServiceIT extends IntegrationTest {
                         + "\"exceptions\":[],\"scope\":\"POST\"}'::jsonb, 999) RETURNING id",
                 Long.class);
 
-        adminLexiconService.setActive(id, false);
+        adminLexiconService.setActive(id, false, null);
 
         assertThat(configService.lexicon()).extracting(LexiconEntry::term).doesNotContain("integration hidden keyword");
         assertThat(adminLexiconService.listAll())

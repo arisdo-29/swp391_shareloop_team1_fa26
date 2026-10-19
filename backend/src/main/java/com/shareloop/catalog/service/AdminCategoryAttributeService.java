@@ -1,5 +1,7 @@
 package com.shareloop.catalog.service;
 
+import com.shareloop.audit.ActivityType;
+import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.catalog.CatalogErrorCode;
 import com.shareloop.catalog.CategoryAttributeErrorCode;
 import com.shareloop.catalog.dto.AdminAttributeRequest;
@@ -9,6 +11,7 @@ import com.shareloop.catalog.entity.ItemAttribute;
 import com.shareloop.catalog.repository.ItemAttributeRepository;
 import com.shareloop.catalog.repository.ItemCategoryRepository;
 import com.shareloop.common.exception.BusinessException;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -20,13 +23,18 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class AdminCategoryAttributeService {
     private static final String OPERATING_STATUS = "Trạng thái hoạt động";
+    private static final String LOG_TARGET_TYPE = "CATEGORY_ATTRIBUTE";
     private final ItemAttributeRepository attributeRepository;
     private final ItemCategoryRepository categoryRepository;
+    private final ActivityLogService activityLogService;
 
     public AdminCategoryAttributeService(
-            ItemAttributeRepository attributeRepository, ItemCategoryRepository categoryRepository) {
+            ItemAttributeRepository attributeRepository,
+            ItemCategoryRepository categoryRepository,
+            ActivityLogService activityLogService) {
         this.attributeRepository = attributeRepository;
         this.categoryRepository = categoryRepository;
+        this.activityLogService = activityLogService;
     }
 
     public List<AdminAttributeResponse> listAll(long categoryId) {
@@ -36,8 +44,13 @@ public class AdminCategoryAttributeService {
                 .toList();
     }
 
+    /**
+     * Thêm thuộc tính cho danh mục đang hoạt động và ghi nhật ký CATEGORY_ATTRIBUTE_CREATE (FR-115).
+     *
+     * @throws BusinessException CATALOG_CATEGORY_NOT_FOUND, CATALOG_INVALID_ATTRIBUTE_OPTIONS
+     */
     @Transactional
-    public AdminAttributeResponse create(long categoryId, AdminAttributeRequest request) {
+    public AdminAttributeResponse create(long categoryId, AdminAttributeRequest request, Long adminId) {
         requireActiveCategory(categoryId);
         List<String> options = validateOptions(request);
         ItemAttribute attribute = new ItemAttribute(
@@ -47,11 +60,21 @@ public class AdminCategoryAttributeService {
                 options,
                 request.required(),
                 request.sortOrder());
-        return toResponse(attributeRepository.saveAndFlush(attribute));
+        ItemAttribute saved = attributeRepository.saveAndFlush(attribute);
+        logAction(ActivityType.CATEGORY_ATTRIBUTE_CREATE, adminId, saved);
+        return toResponse(saved);
     }
 
+    /**
+     * Sửa thuộc tính và ghi nhật ký CATEGORY_ATTRIBUTE_UPDATE (FR-115). Thuộc tính "Trạng thái hoạt động" bắt buộc
+     * không được đổi tên, kiểu hay lựa chọn.
+     *
+     * @throws BusinessException CATALOG_CATEGORY_NOT_FOUND, CATALOG_ATTRIBUTE_NOT_FOUND, CATALOG_REQUIRED_ATTRIBUTE,
+     *     CATALOG_INVALID_ATTRIBUTE_OPTIONS
+     */
     @Transactional
-    public AdminAttributeResponse update(long categoryId, long attributeId, AdminAttributeRequest request) {
+    public AdminAttributeResponse update(
+            long categoryId, long attributeId, AdminAttributeRequest request, Long adminId) {
         requireCategory(categoryId);
         ItemAttribute attribute = requireAttribute(categoryId, attributeId);
         List<String> options = validateOptions(request);
@@ -63,11 +86,18 @@ public class AdminCategoryAttributeService {
             throw new BusinessException(CategoryAttributeErrorCode.CATALOG_REQUIRED_ATTRIBUTE);
         }
         attribute.update(request.name().trim(), request.dataType(), options, request.required(), request.sortOrder());
-        return toResponse(attributeRepository.saveAndFlush(attribute));
+        ItemAttribute saved = attributeRepository.saveAndFlush(attribute);
+        logAction(ActivityType.CATEGORY_ATTRIBUTE_UPDATE, adminId, saved);
+        return toResponse(saved);
     }
 
+    /**
+     * Bật/tắt thuộc tính và ghi nhật ký CATEGORY_ATTRIBUTE_TOGGLE (FR-115). Không được tắt thuộc tính bắt buộc.
+     *
+     * @throws BusinessException CATALOG_CATEGORY_NOT_FOUND, CATALOG_ATTRIBUTE_NOT_FOUND, CATALOG_REQUIRED_ATTRIBUTE
+     */
     @Transactional
-    public AdminAttributeResponse setActive(long categoryId, long attributeId, boolean active) {
+    public AdminAttributeResponse setActive(long categoryId, long attributeId, boolean active, Long adminId) {
         requireCategory(categoryId);
         ItemAttribute attribute = requireAttribute(categoryId, attributeId);
         if (!active && isOperatingStatus(attribute)) {
@@ -79,7 +109,17 @@ public class AdminCategoryAttributeService {
         } else {
             attribute.deactivate();
         }
-        return toResponse(attributeRepository.saveAndFlush(attribute));
+        ItemAttribute saved = attributeRepository.saveAndFlush(attribute);
+        logAction(ActivityType.CATEGORY_ATTRIBUTE_TOGGLE, adminId, saved);
+        return toResponse(saved);
+    }
+
+    private void logAction(ActivityType type, Long adminId, ItemAttribute attribute) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("categoryId", attribute.getCategoryId());
+        data.put("name", attribute.getName());
+        data.put("active", attribute.isActive());
+        activityLogService.log(type.name(), adminId, LOG_TARGET_TYPE, attribute.getId(), data, null);
     }
 
     private List<String> validateOptions(AdminAttributeRequest request) {

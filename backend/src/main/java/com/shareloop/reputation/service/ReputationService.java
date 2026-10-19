@@ -1,5 +1,6 @@
 package com.shareloop.reputation.service;
 
+import com.shareloop.audit.ActivityType;
 import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
@@ -214,7 +215,7 @@ public class ReputationService {
 
             if (activityLogService != null) {
                 activityLogService.log(
-                        "POINTS",
+                        ActivityType.POINTS.name(),
                         donorId,
                         "REQUEST",
                         requestId,
@@ -231,7 +232,7 @@ public class ReputationService {
 
             if (activityLogService != null) {
                 activityLogService.log(
-                        "POINTS",
+                        ActivityType.POINTS.name(),
                         receiverId,
                         "REQUEST",
                         requestId,
@@ -282,7 +283,7 @@ public class ReputationService {
 
         if (activityLogService != null) {
             activityLogService.log(
-                    "STARS",
+                    ActivityType.STARS.name(),
                     null,
                     "USER",
                     userId,

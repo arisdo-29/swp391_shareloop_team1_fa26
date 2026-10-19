@@ -4,6 +4,8 @@ import com.shareloop.catalog.dto.AdminCategoryActiveRequest;
 import com.shareloop.catalog.dto.AdminCategoryRequest;
 import com.shareloop.catalog.dto.AdminCategoryResponse;
 import com.shareloop.catalog.service.AdminCategoryService;
+import com.shareloop.common.security.CurrentUserId;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -32,18 +34,24 @@ public class AdminCategoryController {
     }
 
     @PostMapping
-    public ResponseEntity<AdminCategoryResponse> create(@Valid @RequestBody AdminCategoryRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request));
+    public ResponseEntity<AdminCategoryResponse> create(
+            @Valid @RequestBody AdminCategoryRequest request, @Parameter(hidden = true) @CurrentUserId Long adminId) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request, adminId));
     }
 
     @PutMapping("/{id}")
-    public AdminCategoryResponse update(@PathVariable long id, @Valid @RequestBody AdminCategoryRequest request) {
-        return service.update(id, request);
+    public AdminCategoryResponse update(
+            @PathVariable long id,
+            @Valid @RequestBody AdminCategoryRequest request,
+            @Parameter(hidden = true) @CurrentUserId Long adminId) {
+        return service.update(id, request, adminId);
     }
 
     @PatchMapping("/{id}/active")
     public AdminCategoryResponse setActive(
-            @PathVariable long id, @Valid @RequestBody AdminCategoryActiveRequest request) {
-        return service.setActive(id, request.active());
+            @PathVariable long id,
+            @Valid @RequestBody AdminCategoryActiveRequest request,
+            @Parameter(hidden = true) @CurrentUserId Long adminId) {
+        return service.setActive(id, request.active(), adminId);
     }
 }

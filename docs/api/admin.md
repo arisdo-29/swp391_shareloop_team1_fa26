@@ -14,13 +14,13 @@ Xem nhật ký hành động trong hệ thống (FR-115, Issue #117). Chỉ dàn
 | Tham số | Kiểu | Bắt buộc | Mặc định | Mô tả |
 |---|---|---|---|---|
 | `actorId` | number | Không | - | Lọc theo ID người thực hiện |
-| `type` | string | Không | - | Lọc theo loại hành động (vd: `APPROVE_ITEM`, `USER_LOCK`) |
+| `type` | string | Không | - | Lọc theo loại hành động, một trong các mã ở bảng [Loại hành động](#loại-hành-động-activitytype) (vd: `REVIEW_APPROVE`, `USER_LOCK`) |
 | `from` | yyyy-MM-dd | Không | - | Từ ngày (tính từ 00:00:00 theo múi giờ Asia/Ho_Chi_Minh) |
 | `to` | yyyy-MM-dd | Không | - | Đến ngày (tính hết 23:59:59 của ngày `to` theo múi giờ Asia/Ho_Chi_Minh) |
 | `page` | number | Không | 0 | Chỉ số trang (bắt đầu từ 0) |
 | `size` | number | Không | 20 | Số lượng bản ghi mỗi trang (tối đa 100) |
 
-- **Thành công:** `200 OK`, trả về `Page<ActivityLogDto>`.
+- **Thành công:** `200 OK`, trả về `Page<ActivityLogDto>`. Tên người thực hiện và tên đối tượng đã được backend tra sẵn, FE không cần gọi thêm API.
 
 ```json
 {
@@ -28,14 +28,20 @@ Xem nhật ký hành động trong hệ thống (FR-115, Issue #117). Chỉ dàn
     {
       "id": 101,
       "actorId": 1,
-      "type": "APPROVE_ITEM",
-      "targetType": "ITEM",
-      "targetId": 42,
+      "actorName": "Nguyễn Văn A",
+      "actorEmail": "admin@fpt.edu.vn",
+      "type": "CONFIG_UPDATE",
+      "typeLabel": "Sửa cấu hình",
+      "targetType": "CONFIG",
+      "targetId": null,
+      "targetTitle": "POST_FEE",
       "data": {
-        "status": "APPROVED"
+        "key": "POST_FEE",
+        "oldValue": "5",
+        "newValue": "10"
       },
-      "reason": "Nội dung hợp lệ",
-      "detail": "Nội dung hợp lệ",
+      "reason": "Điều chỉnh phí đăng bài",
+      "detail": "POST_FEE: 5 → 10",
       "createdAt": "2026-10-17T10:00:00Z"
     }
   ],
@@ -56,6 +62,89 @@ Xem nhật ký hành động trong hệ thống (FR-115, Issue #117). Chỉ dàn
 | `400` | Bad Request | `INVALID_DATE_RANGE`: Từ ngày (`from`) sau đến ngày (`to`) |
 | `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
 | `403` | Forbidden | Người dùng không có vai trò Admin |
+
+### Các trường của ActivityLogDto
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | number | ID bản ghi nhật ký |
+| `actorId` | number \| null | ID người thực hiện; `null` khi hệ thống tự làm (vd: trừ sao tự động) |
+| `actorName` | string | Tên người thực hiện. `actorId = null` → `"Hệ thống"`. Không tìm thấy user (đã xoá mềm) → `"Người dùng #<id>"` |
+| `actorEmail` | string \| null | Email người thực hiện; `null` khi là hệ thống hoặc không tìm thấy |
+| `type` | string | Mã loại hành động (xem bảng dưới) |
+| `typeLabel` | string | Nhãn tiếng Việt của `type`. Mã cũ không còn trong bảng thì trả lại chính mã đó |
+| `targetType` | string \| null | Loại đối tượng: `ITEM`, `USER`, `CONFIG`, `REPORT`, `REQUEST`, `LEXICON`, `CHECKLIST`, `CATEGORY`, `CATEGORY_ATTRIBUTE`, `AREA` |
+| `targetId` | number \| null | ID đối tượng |
+| `targetTitle` | string \| null | Tên hiển thị của đối tượng, xem quy tắc dưới |
+| `data` | object \| null | Dữ liệu bổ sung dạng key-value, khác nhau theo `type` |
+| `reason` | string \| null | Lý do Admin nhập |
+| `detail` | string \| null | Câu tóm tắt để hiển thị, xem quy tắc dưới |
+| `createdAt` | string (ISO-8601) | Thời điểm thực hiện |
+
+**Quy tắc `targetTitle`:**
+
+| `targetType` | `targetTitle` |
+|---|---|
+| `ITEM` | Tên bài đăng (kể cả bài đã xoá mềm) |
+| `USER` | Họ tên người dùng; không tìm thấy → `"Người dùng #<id>"` |
+| `CONFIG` | Giá trị `data.key` |
+| `REPORT` | `"Báo cáo #<id>"` |
+| `REQUEST` | `"Yêu cầu #<id>"` |
+| Loại khác | `null` |
+
+**Quy tắc `detail`:** `REVIEW_APPROVE` → `"Duyệt bài"`; `CONFIG_UPDATE` → `"<key>: <oldValue> → <newValue>"`; còn lại → `reason`.
+
+### Loại hành động (ActivityType)
+
+| `type` | Nhãn | `targetType` | `data` |
+|---|---|---|---|
+| `REVIEW_APPROVE` | Duyệt bài | `ITEM` | `checks` (câu hỏi checklist và kết quả) |
+| `REVIEW_REJECT` | Từ chối bài | `ITEM` | - (lý do ở `reason`) |
+| `CONFIG_UPDATE` | Sửa cấu hình | `CONFIG` | `key`, `oldValue`, `newValue` |
+| `USER_LOCK` | Khoá tài khoản | `USER` | - |
+| `USER_UNLOCK` | Mở khoá tài khoản | `USER` | - |
+| `REPORT_DISMISSED` | Bác bỏ báo cáo | `REPORT` | `decision`, `reportId`, `targetType` |
+| `REPORT_UPHELD` | Chấp nhận báo cáo | `REPORT` | `decision`, `reportId`, `targetType`, `violatorId`, `starsDeducted`, `seriousViolation` |
+| `POINTS` | Cộng điểm | `REQUEST` | `points`, `totalPoints`, `rank`, `role` |
+| `STARS` | Trừ sao | `USER` | `amount`, `before`, `after` |
+| `AI_USAGE` | Gọi AI kiểm duyệt | `ITEM` | `attempt`, `outcome`, `durationMs`, `model` |
+| `LEXICON_CREATE` | Thêm từ khoá cấm | `LEXICON` | `term`, `severity`, `active` |
+| `LEXICON_UPDATE` | Sửa từ khoá cấm | `LEXICON` | `term`, `severity`, `active` |
+| `LEXICON_TOGGLE` | Bật/tắt từ khoá cấm | `LEXICON` | `term`, `severity`, `active` |
+| `CHECKLIST_CREATE` | Thêm câu hỏi kiểm duyệt | `CHECKLIST` | `question`, `active` |
+| `CHECKLIST_UPDATE` | Sửa câu hỏi kiểm duyệt | `CHECKLIST` | `question`, `active` |
+| `CHECKLIST_TOGGLE` | Bật/tắt câu hỏi kiểm duyệt | `CHECKLIST` | `question`, `active` |
+| `CHECKLIST_REORDER` | Sắp xếp câu hỏi kiểm duyệt | `CHECKLIST` (`targetId = null`) | `itemIds` (thứ tự mới) |
+| `CATEGORY_CREATE` | Thêm danh mục | `CATEGORY` | `name`, `active` |
+| `CATEGORY_UPDATE` | Sửa danh mục | `CATEGORY` | `name`, `active` |
+| `CATEGORY_TOGGLE` | Bật/tắt danh mục | `CATEGORY` | `name`, `active` |
+| `CATEGORY_ATTRIBUTE_CREATE` | Thêm thuộc tính danh mục | `CATEGORY_ATTRIBUTE` | `categoryId`, `name`, `active` |
+| `CATEGORY_ATTRIBUTE_UPDATE` | Sửa thuộc tính danh mục | `CATEGORY_ATTRIBUTE` | `categoryId`, `name`, `active` |
+| `CATEGORY_ATTRIBUTE_TOGGLE` | Bật/tắt thuộc tính danh mục | `CATEGORY_ATTRIBUTE` | `categoryId`, `name`, `active` |
+| `AREA_CREATE` | Thêm khu vực | `AREA` | `name`, `active` |
+| `AREA_UPDATE` | Sửa khu vực | `AREA` | `name`, `active` |
+| `AREA_TOGGLE` | Bật/tắt khu vực | `AREA` | `name`, `active` |
+
+> Bản ghi cũ có `type = 'AiUsage'` được migration `V202610191500__audit_rename_ai_usage` đổi thành `AI_USAGE`.
+
+---
+
+## 1.1. GET /api/v1/admin/activity-logs/types
+
+Danh sách loại hành động kèm nhãn tiếng Việt, dùng để dựng bộ lọc `type` trên FE. Thứ tự theo bảng [Loại hành động](#loại-hành-động-activitytype).
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
+- **Thành công:** `200 OK`
+
+```json
+[
+  { "type": "REVIEW_APPROVE", "label": "Duyệt bài" },
+  { "type": "REVIEW_REJECT", "label": "Từ chối bài" },
+  { "type": "CONFIG_UPDATE", "label": "Sửa cấu hình" }
+]
+```
+
+- **Mã lỗi:** `401` chưa đăng nhập, `403` không phải Admin.
 
 ---
 
