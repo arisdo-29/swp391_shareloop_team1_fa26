@@ -14,13 +14,17 @@ import org.springframework.data.repository.query.Param;
 public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long> {
 
     /** Đọc nhẹ id, chủ đơn, trạng thái và số Credit theo mã đơn; không khoá, không tạo entity managed. */
-    @Query("select o.id as id, o.userId as userId, o.status as status, o.credits as credits from PaymentOrder o"
-            + " where o.orderCode = :orderCode")
+    @Query(
+            "select o.id as id, o.userId as userId, o.status as status, o.credits as credits, o.provider as provider from PaymentOrder o"
+                    + " where o.orderCode = :orderCode")
     Optional<PaymentOrderSnapshot> findSnapshotByOrderCode(@Param("orderCode") String orderCode);
 
+    @Query("select o.userId from PaymentOrder o where o.id = :id")
+    Optional<Long> findUserIdById(@Param("id") Long id);
+
     /**
-     * Đọc đơn và khoá dòng payment_orders đến hết transaction (SELECT ... FOR UPDATE). Chỉ CreditService.topUp gọi,
-     * và luôn gọi SAU khi đã khoá dòng users, để mọi luồng khoá theo cùng thứ tự users → payment_orders.
+     * Đọc đơn và khoá dòng payment_orders đến hết transaction (SELECT ... FOR UPDATE). Luồng nạp và callback
+     * luôn gọi SAU khi đã khoá dòng users, để mọi luồng khoá theo cùng thứ tự users → payment_orders.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select o from PaymentOrder o where o.id = :id")

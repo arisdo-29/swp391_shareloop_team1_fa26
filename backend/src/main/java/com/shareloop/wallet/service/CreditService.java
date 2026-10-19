@@ -14,6 +14,7 @@ import com.shareloop.wallet.entity.CreditLedgerEntry;
 import com.shareloop.wallet.entity.CreditTxType;
 import com.shareloop.wallet.entity.PaymentOrder;
 import com.shareloop.wallet.entity.PaymentOrderStatus;
+import com.shareloop.wallet.entity.PaymentProvider;
 import com.shareloop.wallet.entity.WalletAccount;
 import com.shareloop.wallet.mapper.WalletMapper;
 import com.shareloop.wallet.repository.CashTotalsView;
@@ -276,6 +277,24 @@ public class CreditService {
         PaymentOrder order = lockPaymentOrder(paymentOrderId);
         requireOrderOwner(order, userId);
 
+        return applyTopUp(wallet, order);
+    }
+
+    /** Đọc chủ đơn bằng projection rồi khóa users → payment_orders; IPN đã xác minh chữ ký trước khi gọi. */
+    public WalletResponse topUpFromGateway(long paymentOrderId) {
+        long userId = paymentOrderRepository
+                .findUserIdById(paymentOrderId)
+                .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND));
+        WalletAccount wallet = lockWallet(userId);
+        PaymentOrder order = lockPaymentOrder(paymentOrderId);
+        if (order.getProvider() != PaymentProvider.VNPAY) {
+            throw new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE);
+        }
+        return applyTopUp(wallet, order);
+    }
+
+    private WalletResponse applyTopUp(WalletAccount wallet, PaymentOrder order) {
+        long userId = order.getUserId();
         if (order.getStatus() == PaymentOrderStatus.SUCCESS) {
             return walletMapper.toResponse(wallet);
         }

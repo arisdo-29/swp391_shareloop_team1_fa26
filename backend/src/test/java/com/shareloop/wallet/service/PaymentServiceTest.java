@@ -153,6 +153,18 @@ class PaymentServiceTest {
 
     // ---------- hàm hỗ trợ ----------
 
+    @Test
+    void confirmMockPayment_whenVnpayOrder_rejectsWithoutTopUp() {
+        PaymentOrderSnapshot snapshot = org.mockito.Mockito.mock(PaymentOrderSnapshot.class);
+        when(snapshot.getUserId()).thenReturn(USER_ID);
+        when(snapshot.getProvider()).thenReturn(PaymentProvider.VNPAY);
+        when(paymentOrderRepository.findSnapshotByOrderCode(ORDER_CODE)).thenReturn(Optional.of(snapshot));
+        assertBusinessError(
+                catchThrowable(() -> paymentService.confirmMockPayment(USER_ID, ORDER_CODE)),
+                WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE);
+        verify(creditService, never()).topUp(anyLong(), anyLong());
+    }
+
     private void givenDefaultTopUpConfig() {
         when(configService.getInt(ConfigKey.VND_PER_CREDIT)).thenReturn(1_000);
         when(configService.getInt(ConfigKey.TOPUP_MIN_CREDITS)).thenReturn(10);
@@ -168,6 +180,11 @@ class PaymentServiceTest {
     // Tạo ảnh chụp giả cho đơn ORDER_ID; projection là interface nên tự viết một lớp ẩn danh là đủ.
     private PaymentOrderSnapshot snapshotOf(long userId, PaymentOrderStatus status, int credits) {
         return new PaymentOrderSnapshot() {
+            @Override
+            public PaymentProvider getProvider() {
+                return PaymentProvider.MOCK;
+            }
+
             @Override
             public Long getId() {
                 return ORDER_ID;

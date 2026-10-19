@@ -1,6 +1,7 @@
 package com.shareloop.integration.payment;
 
 import com.shareloop.wallet.entity.PaymentProvider;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Component;
  * ({@code /wallet/topup/mock-checkout}); trang đó gọi POST .../{orderCode}/mock-confirm để chốt đơn.
  */
 @Component
+@ConditionalOnProperty(name = "app.payment.provider", havingValue = "mock", matchIfMissing = true)
 public class MockPaymentClient implements PaymentGatewayClient {
 
     // Đường dẫn trang của FE (tương đối), không phải API backend.
