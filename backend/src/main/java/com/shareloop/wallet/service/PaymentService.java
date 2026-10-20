@@ -86,6 +86,9 @@ public class PaymentService {
      *     đơn của người khác; WALLET_PAYMENT_ORDER_NOT_PAYABLE khi đơn FAILED hoặc EXPIRED
      */
     public TopUpConfirmResponse confirmMockPayment(long userId, String orderCode) {
+        if (paymentGatewayClient.provider() == PaymentProvider.MANUAL) {
+            throw new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE);
+        }
         // Đọc bằng projection (không tạo entity) để lần khoá đơn trong topUp đọc dữ liệu mới từ DB.
         PaymentOrderSnapshot snapshot = paymentOrderRepository
                 .findSnapshotByOrderCode(orderCode)

@@ -10,6 +10,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -75,6 +76,48 @@ public class PaymentOrder {
     @Column(name = "callback_data", columnDefinition = "jsonb")
     private Map<String, String> callbackData;
 
+    @Column(name = "submitted_at")
+    private Instant submittedAt;
+
+    @Column(name = "reviewed_by")
+    private Long reviewedBy;
+
+    @Column(name = "reviewed_at")
+    private Instant reviewedAt;
+
+    @Column(name = "review_note", length = 500)
+    private String reviewNote;
+
+    public Instant getSubmittedAt() {
+        return submittedAt;
+    }
+
+    public Long getReviewedBy() {
+        return reviewedBy;
+    }
+
+    public Instant getReviewedAt() {
+        return reviewedAt;
+    }
+
+    public String getReviewNote() {
+        return reviewNote;
+    }
+
+    public void submit(Instant now) {
+        if (submittedAt == null) submittedAt = now.truncatedTo(ChronoUnit.MICROS);
+    }
+
+    public void review(long adminId, Instant now, String note) {
+        reviewedBy = adminId;
+        reviewedAt = now.truncatedTo(ChronoUnit.MICROS);
+        reviewNote = note;
+    }
+
+    public void markExpired() {
+        if (status == PaymentOrderStatus.PENDING) status = PaymentOrderStatus.EXPIRED;
+    }
+
     protected PaymentOrder() {}
 
     public void recordGatewayResult(String providerTxnId, boolean signatureVerified, Map<String, String> callbackData) {
@@ -107,12 +150,12 @@ public class PaymentOrder {
     }
 
     /**
-     * Chốt đơn đã thanh toán. Người gọi chỉ gọi hàm này sau khi cổng đã xác nhận (với VNPay là đã kiểm chữ ký IPN;
-     * với cổng giả lập là MockPaymentClient luôn xác nhận) nên đặt signature_verified = true.
+     * Chốt đơn đã thanh toán sau khi cổng xác nhận hoặc admin duyệt. MANUAL không có chữ ký cổng thanh toán;
+     * giữ nguyên hành vi xác nhận chữ ký của MOCK/VNPAY.
      */
     public void markSuccess(Instant paidAt) {
         this.status = PaymentOrderStatus.SUCCESS;
-        this.signatureVerified = true;
+        this.signatureVerified = provider != PaymentProvider.MANUAL;
         this.paidAt = paidAt;
     }
 

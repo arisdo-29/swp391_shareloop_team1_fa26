@@ -9,24 +9,19 @@ import {
 } from '../../services/paymentFlow';
 import { clearPendingTopUp, loadPendingTopUp } from '../../services/topUpSession';
 import { formatVnd } from '../../utils/formatting';
+import { paymentApi, type TopUpOrderResponse } from '../../services/paymentApi';
 
 export function DemoPaymentCheckout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { replaceWallet } = useWallet();
-  const [processing, setProcessing] = useState(true);
+  const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const orderCode = useMemo(
     () => new URLSearchParams(location.search).get('orderCode'),
     [location.search],
   );
-  const [pendingTopUp] = useState(loadPendingTopUp);
-  const order =
-    demoPaymentEnabled &&
-    pendingTopUp?.order.orderCode === orderCode &&
-    pendingTopUp.order.provider === 'MOCK'
-      ? pendingTopUp.order
-      : null;
+  const [order, setOrder] = useState<TopUpOrderResponse | null>(null);
 
   const returnToCredit = () => {
     if (!error) clearPendingTopUp();
@@ -34,46 +29,50 @@ export function DemoPaymentCheckout() {
   };
 
   useEffect(() => {
-    if (!order) {
-      setProcessing(false);
-      return;
-    }
-
     let active = true;
+    const code = orderCode ?? loadPendingTopUp()?.orderCode;
+    if (!code || !demoPaymentEnabled) return;
+    paymentApi
+      .getOrder(code)
+      .then((result) => {
+        if (active && result.provider === 'MOCK') setOrder({ ...result, redirectUrl: '' });
+      })
+      .catch((caught) => {
+        if (active) setError(demoPaymentErrorMessage(caught));
+      });
+    return () => {
+      active = false;
+    };
+  }, [orderCode]);
+
+  const confirm = () => {
+    if (!order || processing) return;
+    setProcessing(true);
     confirmDemoPayment(order)
       .then((result) => {
-        if (!active) return;
         replaceWallet(result.wallet);
         clearPendingTopUp();
         navigate('/credit', {
           replace: true,
-          state: { topUpSuccessCredits: result.credits },
         });
       })
       .catch((caught) => {
-        if (!active) return;
         setError(demoPaymentErrorMessage(caught));
         setProcessing(false);
       });
-
-    return () => {
-      active = false;
-    };
-  }, [navigate, order, replaceWallet]);
+  };
 
   const discardInvalidOrder = () => {
     clearPendingTopUp();
     navigate('/credit', { replace: true });
   };
 
-  if (!order) {
+  if (!order || !demoPaymentEnabled) {
     return (
       <div className="page-shell py-10">
         <div className="mx-auto max-w-xl rounded-xl bg-white p-6 text-center shadow-sm ring-1 ring-border/80 sm:p-8">
           <Alert tone="error">
-            {demoPaymentEnabled
-              ? 'Không tìm thấy đơn thanh toán thử nghiệm hợp lệ. Vui lòng tạo lại đơn nạp Credit.'
-              : 'Thanh toán thử nghiệm chỉ khả dụng khi chế độ demo được bật ở môi trường phát triển hoặc staging.'}
+            Không tìm thấy đơn thanh toán hợp lệ. Vui lòng tạo lại đơn nạp Credit.
           </Alert>
           <Button className="mt-5" variant="outline" onClick={discardInvalidOrder}>
             Quay về trang Credit
@@ -93,7 +92,7 @@ export function DemoPaymentCheckout() {
           <p className="mt-3 text-lg font-extrabold tracking-wide">
             SHARE<span className="text-primary-fixed">LOOP</span>
           </p>
-          <h1 className="mt-4 text-2xl font-bold">Đang xử lý thanh toán...</h1>
+          <h1 className="mt-4 text-2xl font-bold">Xác nhận thanh toán thử nghiệm</h1>
           <p className="mt-1 text-xs font-medium text-white/70">Không sử dụng tiền thật</p>
         </header>
 
@@ -123,9 +122,14 @@ export function DemoPaymentCheckout() {
               </span>
             </div>
           ) : (
-            <Button className="mt-7 w-full" variant="outline" size="lg" onClick={returnToCredit}>
-              Quay về trang Credit
-            </Button>
+            <div className="mt-7 space-y-3">
+              <Button className="w-full" onClick={confirm}>
+                Xác nhận thanh toán thử nghiệm
+              </Button>
+              <Button className="w-full" variant="outline" size="lg" onClick={returnToCredit}>
+                Quay về trang Credit
+              </Button>
+            </div>
           )}
         </div>
       </section>

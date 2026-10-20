@@ -1,45 +1,28 @@
 import type { TopUpOrderResponse } from './paymentApi';
 
 const STORAGE_KEY = 'shareloop:pendingTopUp';
-
 export interface PendingTopUpSession {
-  order: TopUpOrderResponse;
-  createdAt: string;
-  walletBalanceBefore: number | null;
+  orderCode: string;
 }
 
-function isTopUpOrder(value: unknown): value is TopUpOrderResponse {
-  if (!value || typeof value !== 'object') return false;
-  const order = value as Partial<TopUpOrderResponse>;
-  return typeof order.orderCode === 'string' && order.orderCode.length > 0
-    && Number.isSafeInteger(order.amountVnd) && Number(order.amountVnd) > 0
-    && Number.isSafeInteger(order.credits) && Number(order.credits) > 0
-    && ['PENDING', 'SUCCESS', 'FAILED', 'EXPIRED'].includes(String(order.status))
-    && ['MOCK', 'VNPAY'].includes(String(order.provider))
-    && typeof order.redirectUrl === 'string';
-}
-
-export function savePendingTopUp(order: TopUpOrderResponse, walletBalanceBefore: number | null) {
-  const value: PendingTopUpSession = {
-    order,
-    createdAt: new Date().toISOString(),
-    walletBalanceBefore,
-  };
+export function savePendingTopUp(order: TopUpOrderResponse) {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ orderCode: order.orderCode }));
   } catch {
-    // Trình duyệt có thể chặn storage; vẫn cho phép chuyển đến cổng thanh toán.
+    /* Storage may be blocked by the browser. */
   }
 }
 
 export function loadPendingTopUp(): PendingTopUpSession | null {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const value = JSON.parse(raw) as Partial<PendingTopUpSession>;
-    if (!isTopUpOrder(value.order) || typeof value.createdAt !== 'string') return null;
-    if (value.walletBalanceBefore !== null && !Number.isSafeInteger(value.walletBalanceBefore)) return null;
-    return value as PendingTopUpSession;
+    const value = JSON.parse(
+      sessionStorage.getItem(STORAGE_KEY) ?? 'null',
+    ) as PendingTopUpSession | null;
+    return value &&
+      typeof value.orderCode === 'string' &&
+      /^[a-zA-Z0-9-]{1,40}$/.test(value.orderCode)
+      ? { orderCode: value.orderCode }
+      : null;
   } catch {
     return null;
   }
@@ -49,7 +32,7 @@ export function clearPendingTopUp() {
   try {
     sessionStorage.removeItem(STORAGE_KEY);
   } catch {
-    // Không có dữ liệu số dư nào được lưu tại đây; bỏ qua khi storage bị chặn.
+    /* Storage may be blocked. */
   }
 }
 

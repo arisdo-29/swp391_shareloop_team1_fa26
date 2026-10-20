@@ -9,7 +9,18 @@ export const paymentApiEndpoints = {
 } as const;
 
 export type PaymentOrderStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'EXPIRED';
-export type PaymentProvider = 'MOCK' | 'VNPAY';
+export type PaymentProvider = 'MOCK' | 'VNPAY' | 'MANUAL';
+
+export interface TopUpOrderDetailResponse extends Omit<TopUpOrderResponse, 'redirectUrl'> {
+  userId: number;
+  vndPerCredit: number;
+  createdAt: string;
+  expiresAt: string;
+  submittedAt: string | null;
+  reviewedBy: number | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+}
 
 export interface CreateTopUpOrderRequest {
   amountVnd: number;
@@ -32,6 +43,18 @@ export interface TopUpConfirmResponse {
 }
 
 export const paymentApi = {
+  async getOrder(orderCode: string): Promise<TopUpOrderDetailResponse> {
+    const { data } = await http.get<TopUpOrderDetailResponse>(
+      `${paymentApiEndpoints.createTopUpOrder}/${encodeURIComponent(orderCode)}`,
+    );
+    return data;
+  },
+  async markPaid(orderCode: string): Promise<TopUpOrderDetailResponse> {
+    const { data } = await http.post<TopUpOrderDetailResponse>(
+      `${paymentApiEndpoints.createTopUpOrder}/${encodeURIComponent(orderCode)}/mark-paid`,
+    );
+    return data;
+  },
   async createTopUpOrder(input: CreateTopUpOrderRequest): Promise<TopUpOrderResponse> {
     const { data } = await http.post<TopUpOrderResponse>(
       paymentApiEndpoints.createTopUpOrder,
