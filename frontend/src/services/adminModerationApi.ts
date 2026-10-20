@@ -4,6 +4,14 @@ export interface ReviewQueueItem {
   id: number;
   donorId: number;
   title: string;
+  categoryId?: number | null;
+  areaId?: number | null;
+  offerType?: 'GIVE' | 'SWAP' | null;
+  description?: string | null;
+  desiredItem?: string | null;
+  condition?: 'NEW' | 'LIKE_NEW' | 'GOOD' | 'DEFECTIVE' | null;
+  defectNote?: string | null;
+  brand?: string | null;
   images?: string[] | null;
   defectImages?: string[] | null;
   aiRisk?: string | null;

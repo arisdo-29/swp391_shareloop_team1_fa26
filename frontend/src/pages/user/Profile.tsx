@@ -25,6 +25,24 @@ import { toAreaOptions, type AreaOption } from '../../services/mappers';
 import type { ApiError } from '../../services/http';
 import { toBackendUserId } from '../../services/requestApi';
 import { resolveMediaUrl } from '../../services/mediaUrl';
+import { reputationApi, type MyReputation } from '../../services/reputationApi';
+
+const reputationRankLabel: Record<MyReputation['rank'], string> = {
+  BRONZE: 'Đồng',
+  SILVER: 'Bạc',
+  GOLD: 'Vàng',
+  DIAMOND: 'Kim cương',
+};
+
+function reputationErrorMessage(error: unknown) {
+  const apiError = error as Partial<ApiError>;
+  if (apiError.code === 'USER_NOT_FOUND' || apiError.status === 404) {
+    return 'Không tìm thấy thông tin uy tín của tài khoản.';
+  }
+  if (apiError.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (apiError.status === 0) return 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
+  return 'Không tải được thông tin uy tín. Vui lòng thử lại.';
+}
 
 function profileLoadErrorMessage(error: unknown, source: 'profile' | 'areas') {
   const apiError = error as Partial<ApiError>;
@@ -155,6 +173,11 @@ export function Profile() {
   const [phoneChangeConfirming, setPhoneChangeConfirming] = useState(false);
   const [phoneChangeError, setPhoneChangeError] = useState('');
   const [phoneChangeNotice, setPhoneChangeNotice] = useState('');
+  const [reputation, setReputation] = useState<MyReputation | null>(null);
+  const [reputationPage, setReputationPage] = useState(0);
+  const [reputationLoading, setReputationLoading] = useState(false);
+  const [reputationError, setReputationError] = useState('');
+  const [reputationReloadKey, setReputationReloadKey] = useState(0);
   const history = data.creditHistory.filter((h) => h.userId === user.id);
   const topups = data.topups.filter((t) => t.userId === user.id);
   const districts = data.districts
@@ -219,6 +242,26 @@ export function Profile() {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [phoneResendCooldown]);
+
+  useEffect(() => {
+    if (!isApiAccount || tab !== 'reputation') return;
+    let active = true;
+    setReputationLoading(true);
+    setReputationError('');
+    reputationApi.getMyReputation(reputationPage, 20)
+      .then((response) => {
+        if (active) setReputation(response);
+      })
+      .catch((error) => {
+        if (active) setReputationError(reputationErrorMessage(error));
+      })
+      .finally(() => {
+        if (active) setReputationLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isApiAccount, reputationPage, reputationReloadKey, tab]);
 
   const closePhoneChange = () => {
     setPhoneChangeOpen(false);
@@ -730,7 +773,78 @@ export function Profile() {
           ) : null}
           {tab === 'password' ? <ChangePasswordForm user={user} /> : null}
           {tab === 'reputation' && isApiAccount ? (
-            <Alert>Điểm, hạng và lịch sử uy tín chưa sẵn sàng. Hồ sơ và đổi mật khẩu vẫn sử dụng được.</Alert>
+            <div className="space-y-6">
+              {reputationLoading && !reputation ? <Alert>Đang tải thông tin uy tín...</Alert> : null}
+              {reputationError ? (
+                <div className="space-y-3">
+                  <Alert tone="error">{reputationError}</Alert>
+                  <Button size="sm" variant="outline" onClick={() => setReputationReloadKey((key) => key + 1)}>
+                    Thử lại
+                  </Button>
+                </div>
+              ) : null}
+              {reputation ? (
+                <>
+                  <section className="grid gap-5 rounded-xl bg-white p-6 ring-1 ring-border/80 sm:grid-cols-4">
+                    <Stat label="Tổng điểm" value={reputation.totalPoints} detail="Điểm hoạt động" />
+                    <Stat label="Hạng thành viên" value={reputationRankLabel[reputation.rank]} detail="Dựa trên điểm uy tín" />
+                    <Stat label="Sao uy tín" value={`${reputation.trustStars}/5`} detail="Mức tin cậy hiện tại" />
+                    <Stat
+                      label="Tỉ lệ đúng mô tả"
+                      value={reputation.accuracyRate === null ? 'Chưa có' : `${Math.round(reputation.accuracyRate * 100)}%`}
+                      detail="Từ giao dịch được đánh giá"
+                    />
+                  </section>
+                  <section className="rounded-xl bg-white ring-1 ring-border/80">
+                    <div className="border-b border-border px-5 py-4">
+                      <h2 className="section-title">Lịch sử uy tín</h2>
+                      <p className="mt-1 text-xs text-text-muted">{reputation.history.totalElements} lần thay đổi điểm</p>
+                    </div>
+                    {reputation.history.content.length ? reputation.history.content.map((entry, index) => (
+                      <div
+                        key={`${entry.createdAt}-${index}`}
+                        className="grid grid-cols-[1fr_auto] gap-4 border-b border-border/70 px-5 py-4 last:border-0"
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{entry.reason}</p>
+                          <p className="mt-1 text-xs text-text-muted">{new Date(entry.createdAt).toLocaleString('vi-VN')}</p>
+                        </div>
+                        <strong className={`text-sm tabular-nums ${entry.delta < 0 ? 'text-error' : 'text-success'}`}>
+                          {entry.delta > 0 ? '+' : ''}{entry.delta} điểm
+                        </strong>
+                      </div>
+                    )) : (
+                      <div className="p-5">
+                        <p className="text-sm text-text-muted">Chưa có thay đổi điểm uy tín.</p>
+                      </div>
+                    )}
+                    {reputation.history.totalPages > 1 ? (
+                      <div className="flex items-center justify-between border-t border-border px-5 py-4">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={reputationLoading || reputation.history.number <= 0}
+                          onClick={() => setReputationPage((page) => Math.max(0, page - 1))}
+                        >
+                          Trang trước
+                        </Button>
+                        <span className="text-xs text-text-muted">
+                          Trang {reputation.history.number + 1}/{reputation.history.totalPages}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={reputationLoading || reputation.history.number + 1 >= reputation.history.totalPages}
+                          onClick={() => setReputationPage((page) => page + 1)}
+                        >
+                          Trang sau
+                        </Button>
+                      </div>
+                    ) : null}
+                  </section>
+                </>
+              ) : null}
+            </div>
           ) : tab === 'reputation' ? (
             <div className="space-y-6">
               <section className="grid gap-5 rounded-xl bg-white p-6 ring-1 ring-border/80 sm:grid-cols-3">

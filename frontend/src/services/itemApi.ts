@@ -9,6 +9,7 @@ export const itemApiEndpoints = {
   editQuote: (id: number) => `/api/v1/items/${id}/edit-quote`,
   renew: (id: number) => `/api/v1/items/${id}/renew`,
   boost: (id: number) => `/api/v1/items/${id}/boost`,
+  listingFees: '/api/v1/listing-fees',
 } as const;
 
 export interface ItemListParams {
@@ -65,6 +66,8 @@ export interface ItemResponse extends CreateItemRequest {
   status: ItemStatus;
   createdAt: string;
   updatedAt: string;
+  expireAt: string | null;
+  boostedUntil: string | null;
 }
 
 // Contract: docs/api/listingfee.md (GET /api/v1/items/{id}/edit-quote)
@@ -94,6 +97,19 @@ export interface BoostResponse {
   creditBalance: number;
 }
 
+export interface ListingFeeConfigResponse {
+  postFeeSwap: number;
+  postFeeGive: number;
+  editFee: number;
+  renewFee: number;
+  renewExpiredWindowDays: number;
+  boostFee: number;
+  boostDays: number;
+  boostMaxDays: number;
+  postDisplayDays: number;
+  postDisplayDaysGold: number;
+}
+
 export function itemListUrl(params: ItemListParams = {}): string {
   const query = new URLSearchParams();
   if (params.q !== undefined) query.set('q', params.q);
@@ -109,6 +125,10 @@ export async function listItems(params: ItemListParams = {}): Promise<PageRespon
 }
 
 export const itemApi = {
+  async getListingFees(): Promise<ListingFeeConfigResponse> {
+    const { data } = await http.get<ListingFeeConfigResponse>(itemApiEndpoints.listingFees);
+    return data;
+  },
   async list(params: ItemListParams = {}): Promise<PageResponse<ItemResponse>> {
     const { data } = await http.get<PageResponse<ItemResponse>>(itemApiEndpoints.list, { params });
     return data;

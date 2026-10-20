@@ -27,12 +27,65 @@ import {
 } from '../../utils/contactSafety';
 import { chatApi, type MessageResponse, type PinnedItemResponse } from '../../services/chatApi';
 import { itemApi, type ItemResponse } from '../../services/itemApi';
-import { requestApi, toBackendUserId, type RequestContactResponse, type RequestResponse } from '../../services/requestApi';
+import {
+  requestApi,
+  toBackendUserId,
+  type RequestContactResponse,
+  type RequestMediaResponse,
+  type RequestMediaStage,
+  type RequestResponse,
+} from '../../services/requestApi';
 import type { ApiError } from '../../services/http';
 import { ReportDialog } from '../../components/ReportDialog';
 import { canChat, canConfirmHandover, canSchedule, requestStatusLabel } from '../../utils/request';
+import { mediaApi } from '../../services/mediaApi';
+import { openDispute, respondDispute, type ReportReason } from '../../services/reportApi';
+import { resolveMediaUrl } from '../../services/mediaUrl';
 
 const steps = ['Trao doi', 'De xuat lich', 'Chot lich', 'Ban giao', 'Hoan tat'];
+
+const disputeReasonLabels: Record<ReportReason, string> = {
+  NOT_AS_DESCRIBED: 'Không đúng mô tả',
+  COUNTERFEIT: 'Hàng giả hoặc hàng nhái',
+  PROHIBITED_ITEM: 'Mặt hàng bị cấm',
+  NO_SHOW: 'Không đến theo lịch hẹn',
+  WRONG_CONTACT_INFO: 'Thông tin liên hệ không đúng',
+  HARASSMENT: 'Quấy rối',
+  OTHER: 'Lý do khác',
+};
+
+const disputeErrorLabels: Record<string, string> = {
+  VALIDATION_FAILED: 'Nội dung chưa hợp lệ. Vui lòng kiểm tra lý do, ghi chú và số lượng minh chứng.',
+  MEDIA_INVALID_FILE: 'Danh sách minh chứng có tệp không hợp lệ hoặc bị trùng.',
+  UNAUTHORIZED: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+  DISPUTE_NOT_A_PARTY: 'Bạn không phải là một bên của giao dịch này.',
+  DISPUTE_NOT_RESPONDENT: 'Chỉ người bị khiếu nại mới có thể gửi giải trình.',
+  DISPUTE_REQUEST_NOT_COMPLETED: 'Giao dịch chưa hoàn tất nên chưa thể khiếu nại.',
+  DISPUTE_WINDOW_EXPIRED: 'Đã quá thời hạn gửi khiếu nại.',
+  DISPUTE_RESPONSE_WINDOW_EXPIRED: 'Đã quá thời hạn gửi giải trình.',
+  DISPUTE_NOT_FOUND: 'Không tìm thấy khiếu nại này.',
+  DISPUTE_ALREADY_CONCLUDED: 'Khiếu nại đã được quản trị viên kết luận.',
+  DISPUTE_ALREADY_RESPONDED: 'Bạn đã gửi giải trình cho khiếu nại này.',
+  REPORT_TARGET_NOT_FOUND: 'Không tìm thấy giao dịch cần khiếu nại.',
+  REPORT_TARGET_REQUIRED: 'Chưa chọn đối tượng cần báo cáo.',
+  REPORT_CANNOT_REPORT_SELF: 'Bạn không thể tự báo cáo chính mình hoặc bài đăng của mình.',
+  REPORT_NOT_PARTICIPANT: 'Bạn không phải là bên liên quan của khiếu nại.',
+  REPORT_RESPONSE_NOT_ALLOWED: 'Khiếu nại này không còn nhận giải trình.',
+  REPORT_ALREADY_REPORTED: 'Bạn đã gửi khiếu nại cho giao dịch này.',
+  REPORT_NOT_FOUND: 'Không tìm thấy báo cáo hoặc khiếu nại.',
+  REPORT_ALREADY_CONCLUDED: 'Báo cáo hoặc khiếu nại đã được kết luận.',
+  MEDIA_NOT_OWNER: 'Có minh chứng không thuộc quyền sở hữu của bạn.',
+  MEDIA_NOT_FOUND: 'Không tìm thấy một hoặc nhiều minh chứng đã tải lên.',
+  DISPUTE_INVALID_EVIDENCE: 'Minh chứng không hợp lệ hoặc không thuộc quyền sở hữu của bạn.',
+};
+
+function disputeErrorMessage(error: unknown) {
+  const apiError = error as Partial<ApiError>;
+  if (apiError.code && disputeErrorLabels[apiError.code]) return disputeErrorLabels[apiError.code];
+  if (apiError.status === 401) return disputeErrorLabels.UNAUTHORIZED;
+  if (apiError.status === 0) return 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
+  return 'Không thể gửi thông tin lúc này. Vui lòng thử lại.';
+}
 
 export function Messages() {
   const user = useAppSelector(selectCurrentUser)!;
@@ -47,8 +100,9 @@ interface ApiConversation {
 
 function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const navigate = useNavigate();
-  const { requestId } = useParams();
+  const { requestId, disputeId } = useParams();
   const requestedId = requestId ? Number(requestId) : null;
+  const responseDisputeId = disputeId ? Number(disputeId) : null;
   const [conversations, setConversations] = useState<ApiConversation[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
   const [messages, setMessages] = useState<MessageResponse[]>([]);
@@ -77,6 +131,24 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [pinnedItems, setPinnedItems] = useState<PinnedItemResponse[]>([]);
   const [shareItemId, setShareItemId] = useState('');
   const [shareableItems, setShareableItems] = useState<ItemResponse[]>([]);
+  const [disputeOpen, setDisputeOpen] = useState(false);
+  const [disputeReason, setDisputeReason] = useState<ReportReason | ''>('');
+  const [disputeNote, setDisputeNote] = useState('');
+  const [disputeEvidence, setDisputeEvidence] = useState<File[]>([]);
+  const [disputeSubmitting, setDisputeSubmitting] = useState(false);
+  const [disputeError, setDisputeError] = useState('');
+  const [disputeNotice, setDisputeNotice] = useState('');
+  const [responseNote, setResponseNote] = useState('');
+  const [responseEvidence, setResponseEvidence] = useState<File[]>([]);
+  const [responseSubmitting, setResponseSubmitting] = useState(false);
+  const [responseError, setResponseError] = useState('');
+  const [responseNotice, setResponseNotice] = useState('');
+  const [requestMedia, setRequestMedia] = useState<RequestMediaResponse[]>([]);
+  const [requestMediaFiles, setRequestMediaFiles] = useState<File[]>([]);
+  const [requestMediaStage, setRequestMediaStage] = useState<RequestMediaStage>('HANDOVER');
+  const [requestMediaLoading, setRequestMediaLoading] = useState(false);
+  const [requestMediaSubmitting, setRequestMediaSubmitting] = useState(false);
+  const [requestMediaError, setRequestMediaError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeRequestId = useRef<number | null>(null);
 
@@ -130,6 +202,32 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
 
   const selected = conversations.find(({ request }) => request.id === selectedRequestId);
   const chatEnabled = selected ? canChat(selected.request.status) : false;
+  const requestMediaEnabled = selected
+    ? ['LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER', 'COMPLETED', 'DISPUTED'].includes(selected.request.status)
+    : false;
+
+  useEffect(() => {
+    setRequestMedia([]);
+    setRequestMediaFiles([]);
+    setRequestMediaError('');
+    setRequestMediaStage(selected?.request.status === 'DISPUTED' ? 'DISPUTE' : 'HANDOVER');
+    if (selectedRequestId === null || !requestMediaEnabled) return;
+    let active = true;
+    setRequestMediaLoading(true);
+    requestApi.media(selectedRequestId)
+      .then((response) => {
+        if (active) setRequestMedia(response);
+      })
+      .catch((error: ApiError) => {
+        if (active) setRequestMediaError(error.message || 'Không tải được ảnh minh chứng giao nhận.');
+      })
+      .finally(() => {
+        if (active) setRequestMediaLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [requestMediaEnabled, selected?.request.status, selectedRequestId]);
 
   useEffect(() => {
     activeRequestId.current = selectedRequestId;
@@ -388,6 +486,83 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     }
   };
 
+  const uploadEvidence = async (files: File[]) => {
+    const uploaded = await Promise.all(files.map((file) => mediaApi.upload(file)));
+    return uploaded.map((entry) => entry.mediaId);
+  };
+
+  const submitDispute = async () => {
+    if (!selected || !disputeReason || disputeSubmitting || selected.request.status !== 'COMPLETED') return;
+    setDisputeSubmitting(true);
+    setDisputeError('');
+    try {
+      const evidenceMediaIds = disputeEvidence.length ? await uploadEvidence(disputeEvidence) : undefined;
+      const response = await openDispute(selected.request.id, {
+        reason: disputeReason,
+        note: disputeNote.trim() || undefined,
+        evidenceMediaIds,
+      });
+      setDisputeOpen(false);
+      setDisputeReason('');
+      setDisputeNote('');
+      setDisputeEvidence([]);
+      setDisputeNotice(
+        `Khiếu nại #${response.id} đã được gửi. Hạn giải trình: ${new Date(response.responseDueAt).toLocaleString('vi-VN')}.`,
+      );
+      setConversationReloadKey((key) => key + 1);
+    } catch (error) {
+      setDisputeError(disputeErrorMessage(error));
+    } finally {
+      setDisputeSubmitting(false);
+    }
+  };
+
+  const submitDisputeResponse = async () => {
+    if (!responseDisputeId || !Number.isSafeInteger(responseDisputeId) || responseDisputeId <= 0 || !responseNote.trim() || responseSubmitting) return;
+    setResponseSubmitting(true);
+    setResponseError('');
+    try {
+      const evidenceMediaIds = responseEvidence.length ? await uploadEvidence(responseEvidence) : undefined;
+      await respondDispute(responseDisputeId, { note: responseNote.trim(), evidenceMediaIds });
+      setResponseNote('');
+      setResponseEvidence([]);
+      setResponseNotice('Giải trình đã được gửi đến quản trị viên.');
+    } catch (error) {
+      setResponseError(disputeErrorMessage(error));
+    } finally {
+      setResponseSubmitting(false);
+    }
+  };
+
+  const attachRequestMedia = async () => {
+    if (!selected || !requestMediaEnabled || !requestMediaFiles.length || requestMediaSubmitting) return;
+    setRequestMediaSubmitting(true);
+    setRequestMediaError('');
+    try {
+      const mediaIds = await uploadEvidence(requestMediaFiles);
+      const response = await requestApi.attachMedia(selected.request.id, {
+        mediaIds,
+        stage: requestMediaStage,
+      });
+      setRequestMedia(response);
+      setRequestMediaFiles([]);
+    } catch (error) {
+      const apiError = error as ApiError;
+      const messages: Record<string, string> = {
+        REQUEST_MEDIA_REQUIRED: 'Vui lòng chọn ít nhất một ảnh minh chứng.',
+        REQUEST_MEDIA_STAGE_INVALID: 'Giai đoạn minh chứng không hợp lệ.',
+        REQUEST_FORBIDDEN: 'Bạn không có quyền xem hoặc bổ sung minh chứng cho giao dịch này.',
+        REQUEST_NOT_FOUND: 'Không tìm thấy giao dịch.',
+        REQUEST_INVALID_STATE_TRANSITION: 'Giao dịch chưa đến giai đoạn được phép bổ sung minh chứng.',
+        MEDIA_NOT_OWNER: 'Có ảnh không thuộc quyền sở hữu của bạn.',
+        MEDIA_NOT_FOUND: 'Không tìm thấy một hoặc nhiều ảnh đã tải lên.',
+      };
+      setRequestMediaError(messages[apiError.code] || apiError.message || 'Không bổ sung được ảnh minh chứng.');
+    } finally {
+      setRequestMediaSubmitting(false);
+    }
+  };
+
   return (
     <div className="page-shell py-5 sm:py-7">
       <div className="overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-border/80 lg:grid lg:h-[calc(100dvh-140px)] lg:min-h-[680px] lg:grid-cols-[330px_1fr]">
@@ -416,6 +591,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     setMobileChat(true);
                     setReportOpen(false);
                     setReportNotice('');
+                    setDisputeNotice('');
                   }}
                   className={`flex w-full gap-3 border-b border-border/70 p-4 text-left transition ${request.id === selectedRequestId ? 'bg-primary-faint' : 'hover:bg-background'}`}
                 >
@@ -527,11 +703,77 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   {reportNotice ? (
                     <div className="rounded-md bg-emerald-50 p-3 text-xs text-success">{reportNotice}</div>
                   ) : null}
+                  {disputeNotice ? (
+                    <div className="rounded-md bg-emerald-50 p-3 text-xs text-success">{disputeNotice}</div>
+                  ) : null}
                   {contact ? (
                     <div className="rounded-md bg-primary-faint p-3 text-xs leading-5 text-text-secondary">
                       <strong className="text-text-primary">{contact.fullName}</strong>
                       <p>{contact.email}</p>
                       <p>{contact.phone}</p>
+                    </div>
+                  ) : null}
+                  {requestMediaEnabled ? (
+                    <div className="rounded-md border border-border bg-background p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <strong className="text-sm">Minh chứng giao dịch</strong>
+                        <span className="text-xs text-text-muted">
+                          {requestMediaLoading ? 'Đang tải...' : `${requestMedia.length} ảnh`}
+                        </span>
+                      </div>
+                      {requestMedia.length ? (
+                        <div className="mt-3 flex gap-2 overflow-x-auto">
+                          {requestMedia.map((entry) => (
+                            <a
+                              key={entry.mediaId}
+                              href={resolveMediaUrl(entry.url)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="shrink-0"
+                              title={`${entry.stage === 'HANDOVER' ? 'Giao nhận' : 'Khiếu nại'} · ${new Date(entry.createdAt).toLocaleString('vi-VN')}`}
+                            >
+                              <ItemImage
+                                src={entry.url}
+                                alt={`Minh chứng #${entry.mediaId}`}
+                                className="size-16 rounded-md object-cover"
+                              />
+                            </a>
+                          ))}
+                        </div>
+                      ) : !requestMediaLoading ? (
+                        <p className="mt-2 text-xs text-text-muted">Chưa có ảnh minh chứng.</p>
+                      ) : null}
+                      <div className="mt-3 grid gap-2 sm:grid-cols-[150px_1fr_auto] sm:items-end">
+                        <Select
+                          label="Giai đoạn"
+                          value={requestMediaStage}
+                          disabled={requestMediaSubmitting}
+                          onChange={(event) => setRequestMediaStage(event.target.value as RequestMediaStage)}
+                        >
+                          <option value="HANDOVER">Giao nhận</option>
+                          <option value="DISPUTE">Khiếu nại</option>
+                        </Select>
+                        <Field
+                          label="Bổ sung ảnh"
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          disabled={requestMediaSubmitting}
+                          onChange={(event) => setRequestMediaFiles(Array.from(event.target.files ?? []))}
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={requestMediaSubmitting || !requestMediaFiles.length}
+                          onClick={() => void attachRequestMedia()}
+                        >
+                          {requestMediaSubmitting ? 'Đang tải...' : 'Thêm ảnh'}
+                        </Button>
+                      </div>
+                      {requestMediaFiles.length ? (
+                        <p className="mt-2 text-xs text-text-muted">Đã chọn {requestMediaFiles.length} ảnh.</p>
+                      ) : null}
+                      {requestMediaError ? <p className="mt-2 text-xs text-error">{requestMediaError}</p> : null}
                     </div>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
@@ -563,6 +805,20 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         onClick={() => void confirmApiHandover()}
                       >
                         {currentHandoverAt ? 'Đã xác nhận bàn giao' : 'Xác nhận bàn giao'}
+                      </Button>
+                    ) : null}
+                    {selected.request.status === 'COMPLETED' ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        icon="shield"
+                        onClick={() => {
+                          setDisputeError('');
+                          setDisputeNotice('');
+                          setDisputeOpen(true);
+                        }}
+                      >
+                        Gửi khiếu nại
                       </Button>
                     ) : null}
                   </div>
@@ -681,6 +937,108 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
             setReportNotice('Báo cáo đã được gửi đến quản trị viên để xem xét.');
           }}
         />
+      ) : null}
+      {disputeOpen && selected ? (
+        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
+          <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
+            <h2 className="text-xl font-bold">Gửi khiếu nại giao dịch</h2>
+            <p className="mt-1 text-sm text-text-muted">Yêu cầu #{selected.request.id} · {selected.item?.title ?? 'Bài đăng'}</p>
+            <Select
+              className="mt-5"
+              label="Lý do"
+              value={disputeReason}
+              disabled={disputeSubmitting}
+              onChange={(event) => setDisputeReason(event.target.value as ReportReason | '')}
+            >
+              <option value="">Chọn lý do khiếu nại</option>
+              {Object.entries(disputeReasonLabels).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </Select>
+            <TextArea
+              className="mt-4"
+              label="Nội dung (không bắt buộc)"
+              value={disputeNote}
+              maxLength={500}
+              disabled={disputeSubmitting}
+              onChange={(event) => setDisputeNote(event.target.value)}
+            />
+            <p className="mt-1 text-right text-xs text-text-muted">{disputeNote.length}/500</p>
+            <Field
+              className="mt-4"
+              label="Minh chứng"
+              type="file"
+              accept="image/*"
+              multiple
+              disabled={disputeSubmitting}
+              onChange={(event) => setDisputeEvidence(Array.from(event.target.files ?? []))}
+            />
+            {disputeEvidence.length ? (
+              <p className="mt-2 text-xs text-text-muted">Đã chọn {disputeEvidence.length} ảnh.</p>
+            ) : null}
+            {disputeError ? <div className="mt-4 rounded-md bg-red-50 p-3 text-xs text-error">{disputeError}</div> : null}
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="ghost" disabled={disputeSubmitting} onClick={() => setDisputeOpen(false)}>Hủy</Button>
+              <Button disabled={disputeSubmitting || !disputeReason} onClick={() => void submitDispute()}>
+                {disputeSubmitting ? 'Đang gửi...' : 'Gửi khiếu nại'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {responseDisputeId !== null ? (
+        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
+          <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
+            <h2 className="text-xl font-bold">Giải trình khiếu nại</h2>
+            <p className="mt-1 text-sm text-text-muted">Khiếu nại #{Number.isSafeInteger(responseDisputeId) ? responseDisputeId : ''}</p>
+            {responseNotice ? (
+              <div className="mt-5 space-y-4">
+                <div className="rounded-md bg-emerald-50 p-3 text-sm text-success">{responseNotice}</div>
+                <div className="flex justify-end">
+                  <Button onClick={() => navigate('/messages')}>Về trang Tin nhắn</Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <TextArea
+                  className="mt-5"
+                  label="Nội dung giải trình"
+                  value={responseNote}
+                  maxLength={1000}
+                  disabled={responseSubmitting}
+                  onChange={(event) => setResponseNote(event.target.value)}
+                />
+                <p className="mt-1 text-right text-xs text-text-muted">{responseNote.length}/1000</p>
+                <Field
+                  className="mt-4"
+                  label="Minh chứng"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={responseSubmitting}
+                  onChange={(event) => setResponseEvidence(Array.from(event.target.files ?? []))}
+                />
+                {responseEvidence.length ? (
+                  <p className="mt-2 text-xs text-text-muted">Đã chọn {responseEvidence.length} ảnh.</p>
+                ) : null}
+                {(!Number.isSafeInteger(responseDisputeId) || responseDisputeId <= 0) ? (
+                  <div className="mt-4 rounded-md bg-red-50 p-3 text-xs text-error">Đường dẫn khiếu nại không hợp lệ.</div>
+                ) : responseError ? (
+                  <div className="mt-4 rounded-md bg-red-50 p-3 text-xs text-error">{responseError}</div>
+                ) : null}
+                <div className="mt-6 flex justify-end gap-2">
+                  <Button variant="ghost" disabled={responseSubmitting} onClick={() => navigate('/messages')}>Hủy</Button>
+                  <Button
+                    disabled={responseSubmitting || !responseNote.trim() || !Number.isSafeInteger(responseDisputeId) || responseDisputeId <= 0}
+                    onClick={() => void submitDisputeResponse()}
+                  >
+                    {responseSubmitting ? 'Đang gửi...' : 'Gửi giải trình'}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       ) : null}
     </div>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import { useWallet } from '../../app/useWallet';
@@ -13,10 +13,11 @@ import type { ApiError } from '../../services/http';
 import type { Item } from '../../types/domain';
 
 const MAX_QUERY_LENGTH = 500;
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 20;
 type SearchStatus = 'idle' | 'loading' | 'success' | 'error';
 
 export function AI() {
+  const navigate = useNavigate();
   const user = useAppSelector(selectCurrentUser);
   const userId = user?.id;
   const { refresh: refreshWallet } = useWallet();
@@ -32,6 +33,8 @@ export function AI() {
   const [quotaError, setQuotaError] = useState('');
   const [searchError, setSearchError] = useState('');
   const [fallback, setFallback] = useState(false);
+  const [chargedCredits, setChargedCredits] = useState(0);
+  const [needsTopUp, setNeedsTopUp] = useState(false);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [areas, setAreas] = useState<AreaResponse[]>([]);
   const inFlight = useRef(false);
@@ -43,6 +46,8 @@ export function AI() {
     setQuotaError('');
     setStatus('idle');
     setResults([]);
+    setChargedCredits(0);
+    setNeedsTopUp(false);
     if (userId) {
       aiApi.quota().then((response) => { if (active) setQuota(response); })
         .catch((error: ApiError) => { if (active) setQuotaError(error.message || 'Không tải được hạn mức tìm kiếm.'); });
@@ -65,6 +70,8 @@ export function AI() {
     const currentGeneration = generation.current;
     setQueryError('');
     setSearchError('');
+    setChargedCredits(0);
+    setNeedsTopUp(false);
     setSubmittedQuery(normalizedQuery);
     setStatus('loading');
     try {
@@ -75,8 +82,8 @@ export function AI() {
       const parsed = response.filters;
       const understood: { label: string; value: string }[] = [];
       if (parsed.keywords) understood.push({ label: 'Từ khóa', value: parsed.keywords });
-      if (parsed.categoryId) understood.push({ label: 'Danh mục', value: categoryNames.get(parsed.categoryId) ?? String(parsed.categoryId) });
-      if (parsed.areaId) understood.push({ label: 'Khu vực', value: areaNames.get(parsed.areaId) ?? String(parsed.areaId) });
+      if (parsed.categoryId) understood.push({ label: 'Danh mục', value: categoryNames.get(parsed.categoryId) ?? 'Danh mục phù hợp' });
+      if (parsed.areaId) understood.push({ label: 'Khu vực', value: areaNames.get(parsed.areaId) ?? 'Khu vực phù hợp' });
       if (parsed.condition) understood.push({ label: 'Tình trạng', value: conditionLabel[parsed.condition] });
       if (parsed.offerType) understood.push({ label: 'Hình thức', value: parsed.offerType === 'GIVE' ? 'Cho tặng' : 'Trao đổi' });
       setFilters(understood);
@@ -85,15 +92,17 @@ export function AI() {
       setPage(response.results.page);
       setQuota(response.quota);
       setFallback(response.fallback);
+      setChargedCredits(response.chargedCredits);
       setStatus('success');
-      refreshWallet();
+      if (response.chargedCredits > 0) refreshWallet();
     } catch (error) {
       if (currentGeneration !== generation.current) return;
       const apiError = error as ApiError;
-      setSearchError(apiError.code === 'WALLET_INSUFFICIENT_BALANCE' ? 'Hết lượt miễn phí và số dư Credit không đủ. Vui lòng nạp thêm Credit.' : apiError.message || 'Không tìm được đồ. Vui lòng thử lại.');
+      const insufficientCredit = apiError.code === 'WALLET_INSUFFICIENT_BALANCE';
+      setNeedsTopUp(insufficientCredit);
+      setSearchError(insufficientCredit ? 'Bạn đã hết lượt miễn phí và chưa đủ Credit cho lượt tìm tiếp theo.' : apiError.message || 'Không tìm được đồ. Vui lòng thử lại.');
       setStatus('error');
       setResults([]);
-      refreshWallet();
       try { const latest = await aiApi.quota(); if (currentGeneration === generation.current) setQuota(latest); } catch { /* Giữ hạn mức đã tải, lần tìm tiếp theo vẫn do backend kiểm tra. */ }
     } finally {
       if (currentGeneration === generation.current) inFlight.current = false;
@@ -158,8 +167,13 @@ export function AI() {
           </div>
 
           <div className="border-t border-border/70 p-5 sm:p-6">
-            {!user ? <Alert><Link to="/login" className="font-semibold underline">Đăng nhập</Link> để sử dụng trợ lý tìm đồ.</Alert> : quota ? (
-              <AiSearchNotices remainingFreeSearches={quota.freeUsesRemaining} feeCredits={quota.feeCredits} isFallbackSearch={fallback} />
+            {quota ? (
+              <AiSearchNotices
+                remainingFreeSearches={quota.freeUsesRemaining}
+                feeCredits={quota.feeCredits}
+                chargedCredits={chargedCredits}
+                isFallbackSearch={fallback}
+              />
             ) : <Alert tone={quotaError ? 'error' : 'info'}>{quotaError || 'Đang tải hạn mức tìm kiếm...'}</Alert>}
             {quotaError ? <Button variant="outline" size="sm" onClick={() => { void aiApi.quota().then((response) => { setQuota(response); setQuotaError(''); }).catch((error: ApiError) => setQuotaError(error.message)); }}>Thử tải hạn mức</Button> : null}
             {quota ? <p className="mt-3 text-xs text-text-muted">Mỗi lần tìm hoặc chuyển trang dùng một lượt; hết lượt miễn phí sẽ dùng {quota.feeCredits} Credit. Tìm dự phòng được hoàn lượt và phí.</p> : null}
@@ -195,8 +209,8 @@ export function AI() {
                   title="Chưa thể tìm đồ lúc này"
                   text={searchError}
                   action={
-                    <Button variant="outline" onClick={() => void search(submittedQuery, page)}>
-                      Thử lại
+                    <Button variant={needsTopUp ? 'primary' : 'outline'} onClick={() => needsTopUp ? navigate('/credit') : void search(submittedQuery, page)}>
+                      {needsTopUp ? 'Nạp Credit' : 'Thử lại'}
                     </Button>
                   }
                 />

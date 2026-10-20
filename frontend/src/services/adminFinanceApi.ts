@@ -4,6 +4,8 @@ import type { WalletTransactionResponse } from './walletApi';
 
 export interface FinanceGroup { type: string; amount: number; entryCount: number }
 export interface FinanceSummary {
+  from: string | null;
+  to: string | null;
   cashOrderCount: number;
   cashAmountVnd: number;
   creditInTotal: number;

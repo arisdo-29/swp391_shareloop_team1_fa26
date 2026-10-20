@@ -1,5 +1,7 @@
 import { http } from './http';
 
+export const ADMIN_CHECKLIST_QUESTION_MAX_LENGTH = 255;
+
 export interface AdminChecklistEntry {
   id: number;
   key: string;
