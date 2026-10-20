@@ -3,7 +3,7 @@
 Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất bên dưới.
 
-Người sở hữu: BE1. File này gồm endpoint đọc ví và lịch sử ví. Nạp Credit (đơn nạp, xác nhận giả lập) xem
+Người sở hữu: BE1. File này gồm endpoint đọc ví và lịch sử ví. Nạp Credit (QR minh họa/admin duyệt, MOCK, VNPAY) xem
 `docs/api/payment.md`. Đổi số dư chỉ xảy ra bên trong `CreditService` (xem mục cuối).
 
 ## GET /api/v1/wallet
@@ -111,12 +111,15 @@ ConfigService, `CreditService` không tự quyết mức phí.
 | `refundAiSearch(userId, ledgerId)`           | `credit_balance` tăng lại đúng số đã trừ ở dòng `ledgerId` | Có, amount dương, note `Hoàn phí AI #<ledgerId>` | `AI_SEARCH_FEE` |
 | `lockWalletRow(userId)`                      | Không đổi, chỉ khoá dòng `users` tới hết transaction của người gọi | Không | -                       |
 | `getWallet(userId)`                          | Không đổi, đọc không khoá                      | Không               | -                                     |
-| `topUp(userId, paymentOrderId)`              | Đơn PENDING → SUCCESS, `credit_balance` tăng, `has_topped_up = true`; đơn đã SUCCESS thì không đổi gì, trả ví hiện tại | Có, amount dương, kèm `payment_order_id` | `TOP_UP` |
+| `topUp(userId, paymentOrderId)`              | Đơn cổng thanh toán PENDING → SUCCESS, `credit_balance` tăng, `has_topped_up = true`; SUCCESS không đổi; từ chối MANUAL | Có, amount dương, kèm `payment_order_id` | `TOP_UP` |
+| `topUpManual(userId, paymentOrderId)` | Chỉ đơn MANUAL đã mark-paid; cộng snapshot Credit khi admin duyệt, SUCCESS không cộng lại | Có, amount dương, kèm `payment_order_id` | `TOP_UP` |
 | `getTransactions(userId, from, to, page, size)` | Không đổi, đọc không khoá                   | Không               | -                                     |
 | `getFinanceSummary(from, to)`                | Không đổi, đọc không khoá; tổng hợp toàn hệ thống | Không          | -                                     |
 
 `topUp` khoá dòng `users` rồi mới khoá dòng `payment_orders` (thứ tự cố định để tránh deadlock) và trả `WalletResponse`.
-Người gọi hiện tại: `PaymentService` (xác nhận giả lập); sau này là VNPay IPN.
+Người gọi: `PaymentService` (MOCK), VNPay IPN qua `topUpFromGateway`, `ManualTopUpService` qua `topUpManual`.
+Luồng MANUAL khóa ví rồi đơn, duyệt và ghi ActivityLogService trong cùng transaction; mark-paid/từ chối
+không đổi số dư. Snapshot Credit được giữ dù cấu hình tỷ lệ thay đổi. MANUAL không đánh dấu xác minh chữ ký.
 
 Phí AI (#121, người gọi: search): gọi `chargeAiSearch` trước khi gọi AI và giữ `ledgerId` trả về; AI lỗi thì gọi
 `refundAiSearch(userId, ledgerId)`. Dòng gốc không có, của người khác hoặc không phải dòng trừ phí AI → `WALLET_AI_FEE_NOT_FOUND`
@@ -189,5 +192,5 @@ Admin dùng lại hai hàm có sẵn, truyền `userId` của người cần tra
 - `getWallet(userId)`: số dư, số đang giữ, khả dụng, đã từng nạp hay chưa.
 - `getTransactions(userId, from, to, page, size)`: các dòng sổ cái của người đó, mới nhất trước, có phân trang.
 
-Danh sách đơn nạp của một người (gồm cả `PENDING`, `FAILED`, `EXPIRED`) hiện chưa có hàm; cần thì mở issue riêng
-cho wallet.
+Danh sách yêu cầu MANUAL và thao tác admin duyệt/từ chối: xem `GET /admin/finance/topup-orders` cùng các API
+trong `payment.md`. Bộ lọc userId cho danh sách đơn chưa được cung cấp.

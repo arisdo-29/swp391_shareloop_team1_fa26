@@ -22,6 +22,7 @@ import { Messages } from '../pages/user/Messages';
 import { Profile } from '../pages/user/Profile';
 import { Credit } from '../pages/user/Credit';
 import { DemoPaymentCheckout } from '../pages/user/DemoPaymentCheckout';
+import { ManualPaymentCheckout } from '../pages/user/ManualPaymentCheckout';
 import { ReportResponse } from '../pages/user/ReportResponse';
 import { AdminLayout } from '../pages/admin/AdminLayout';
 import { AdminAuthenticity } from '../pages/admin/AdminAuthenticity';
@@ -79,6 +80,7 @@ export const router = createBrowserRouter([
           { path: '/me/reports/:reportId', element: <ReportResponse /> },
           { path: '/credit', element: <Credit /> },
           { path: '/wallet', element: <Credit /> },
+          { path: '/wallet/topup/manual-checkout', element: <ManualPaymentCheckout /> },
           {
             path: '/wallet/topup/mock-checkout',
             element: <DemoPaymentCheckout />,

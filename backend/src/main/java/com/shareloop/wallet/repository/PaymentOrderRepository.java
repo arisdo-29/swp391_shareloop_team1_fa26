@@ -13,6 +13,13 @@ import org.springframework.data.repository.query.Param;
 
 public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long> {
 
+    @Query("select o from PaymentOrder o where o.provider = com.shareloop.wallet.entity.PaymentProvider.MANUAL"
+            + " and (:status is null or o.status = :status) and (:submittedOnly = false or o.submittedAt is not null)")
+    org.springframework.data.domain.Page<PaymentOrder> findManualOrders(
+            @Param("status") PaymentOrderStatus status,
+            @Param("submittedOnly") boolean submittedOnly,
+            org.springframework.data.domain.Pageable pageable);
+
     /** Đọc nhẹ id, chủ đơn, trạng thái và số Credit theo mã đơn; không khoá, không tạo entity managed. */
     @Query(
             "select o.id as id, o.userId as userId, o.status as status, o.credits as credits, o.provider as provider from PaymentOrder o"
@@ -53,7 +60,8 @@ public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long
     // chạy thẳng xuống DB, bỏ qua các entity đang nằm trong persistence context, nên người gọi không nên đọc lại đơn
     // trong cùng transaction.
     @Modifying
-    @Query("update PaymentOrder o set o.status = :toStatus where o.status = :fromStatus and o.createdAt < :cutoff")
+    @Query("update PaymentOrder o set o.status = :toStatus where o.status = :fromStatus and o.createdAt < :cutoff"
+            + " and (o.provider <> com.shareloop.wallet.entity.PaymentProvider.MANUAL or o.submittedAt is null)")
     int updateStatusByStatusAndCreatedAtBefore(
             @Param("fromStatus") PaymentOrderStatus fromStatus,
             @Param("toStatus") PaymentOrderStatus toStatus,

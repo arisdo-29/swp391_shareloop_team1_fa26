@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser, selectData } from '../../app/store';
 import { Alert, Button, Field, Icon, PageHeader } from '../../components/ui';
@@ -25,7 +25,7 @@ import {
 
 type Step = 'select' | 'pending';
 type HistoryFilter = 'all' | 'topup' | 'spend';
-type ReturnState = 'idle' | 'pending' | 'failed' | 'invalid';
+type ReturnState = 'idle' | 'pending' | 'failed' | 'invalid' | 'checking' | 'success';
 
 const filterTypes: Record<Exclude<HistoryFilter, 'all'>, CreditHistoryType[]> = {
   topup: ['TOPUP'],
@@ -73,7 +73,7 @@ const walletTransactionLabels: Record<WalletTransactionResponse['type'], string>
 
 const paymentStatusLabels: Record<PaymentOrderStatus, string> = {
   PENDING: 'Đang chờ thanh toán',
-  SUCCESS: 'Đã thanh toán',
+  SUCCESS: 'Đã cộng Credit',
   FAILED: 'Thanh toán thất bại',
   EXPIRED: 'Đơn đã hết hạn',
 };
@@ -81,6 +81,7 @@ const paymentStatusLabels: Record<PaymentOrderStatus, string> = {
 const paymentProviderLabels: Record<PaymentProvider, string> = {
   VNPAY: 'VNPAY',
   MOCK: 'Thanh toán thử nghiệm',
+  MANUAL: 'QR minh họa, admin duyệt',
 };
 
 const topUpAmountInvalidMessage =
@@ -98,7 +99,9 @@ function toCreditHistory(entry: WalletTransactionResponse, userId: string): Cred
   return {
     id: `api_wallet_${entry.id}`,
     userId,
-    transactionId: entry.paymentOrderId ? `payment-order-${entry.paymentOrderId}` : `ledger-${entry.id}`,
+    transactionId: entry.paymentOrderId
+      ? `payment-order-${entry.paymentOrderId}`
+      : `ledger-${entry.id}`,
     type,
     amount: entry.amount,
     balance: entry.balanceAfter,
@@ -117,18 +120,11 @@ function topUpCreateErrorMessage(error: unknown) {
   return 'Không tạo được đơn nạp Credit. Vui lòng thử lại.';
 }
 
-function topUpSuccessCredits(state: unknown) {
-  if (!state || typeof state !== 'object') return null;
-  const credits = (state as { topUpSuccessCredits?: unknown }).topUpSuccessCredits;
-  return Number.isSafeInteger(credits) && Number(credits) > 0 ? Number(credits) : null;
-}
-
 export function Credit() {
   const user = useAppSelector(selectCurrentUser)!;
   const data = useAppSelector(selectData);
   const navigate = useNavigate();
   const location = useLocation();
-  const [checkoutCompletedCredits] = useState(() => topUpSuccessCredits(location.state));
   const [apiAmountVnd, setApiAmountVnd] = useState('');
   const [step, setStep] = useState<Step>('select');
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
@@ -149,15 +145,12 @@ export function Credit() {
   const [topUpProcessing, setTopUpProcessing] = useState(false);
   const [topUpError, setTopUpError] = useState('');
   const [returnState, setReturnState] = useState<ReturnState>('idle');
+  const [orderCheckKey, setOrderCheckKey] = useState(0);
   const createTopUpInFlight = useRef(false);
 
-  useEffect(() => {
-    if (checkoutCompletedCredits === null) return;
-    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
-  }, [checkoutCompletedCredits, location.pathname, location.search, navigate]);
-
   const topups = isApiAccount ? [] : data.topups.filter((topup) => topup.userId === user.id);
-  const completedCredits = isApiAccount ? checkoutCompletedCredits : null;
+  const completedCredits =
+    isApiAccount && returnState === 'success' ? (apiTopUpOrder?.credits ?? null) : null;
 
   useEffect(() => {
     if (!isApiAccount) {
@@ -190,39 +183,53 @@ export function Credit() {
 
   useEffect(() => {
     if (!isApiAccount) return;
-    const params = new URLSearchParams(location.search);
-    const gatewayStatus = params.get('status');
-    const code = returnOrderCode(params);
-    if (gatewayStatus === 'INVALID_SIGNATURE') {
-      setReturnState('invalid');
-      clearPendingTopUp();
-      refreshWallet();
-      setHistoryReloadKey((key) => key + 1);
+    const code = returnOrderCode(new URLSearchParams(location.search));
+    if (!code) {
+      if (new URLSearchParams(location.search).get('status') === 'INVALID_SIGNATURE') {
+        setReturnState('invalid');
+        clearPendingTopUp();
+      }
       return;
     }
-    if (gatewayStatus === 'FAILED') {
-      setReturnState('failed');
-      clearPendingTopUp();
-      setApiTopUpOrder((current) => current ? { ...current, status: 'FAILED' } : current);
-      refreshWallet();
-      setHistoryReloadKey((key) => key + 1);
-      return;
-    }
-    if (!code) return;
-    const stored = loadPendingTopUp();
-    if (!stored || stored.order.orderCode !== code) {
-      setTopUpError('');
-      setReturnState('pending');
-      refreshWallet();
-      setHistoryReloadKey((key) => key + 1);
-      return;
-    }
-    setApiTopUpOrder(stored.order);
-    setStep('pending');
-    setReturnState('pending');
-    refreshWallet();
-    setHistoryReloadKey((key) => key + 1);
-  }, [isApiAccount, location.search, refreshWallet]);
+    let active = true;
+    setReturnState('checking');
+    paymentApi
+      .getOrder(code)
+      .then((order) => {
+        if (!active) return;
+        if (order.provider === 'MANUAL' && order.status !== 'SUCCESS') {
+          navigate('/wallet/topup/manual-checkout?orderCode=' + encodeURIComponent(code), {
+            replace: true,
+          });
+          return;
+        }
+        setApiTopUpOrder({ ...order, redirectUrl: '' });
+        setStep('pending');
+        setReturnState(
+          order.status === 'SUCCESS'
+            ? 'success'
+            : order.status === 'FAILED'
+              ? 'failed'
+              : order.status === 'EXPIRED'
+                ? 'idle'
+                : 'pending',
+        );
+        if (order.status === 'SUCCESS') {
+          clearPendingTopUp();
+          refreshWallet();
+          setHistoryReloadKey((key) => key + 1);
+        }
+      })
+      .catch((caught: ApiError) => {
+        if (active) {
+          setReturnState('idle');
+          setTopUpError(caught.message || 'Không tải được đơn nạp.');
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [isApiAccount, location.search, navigate, refreshWallet, orderCheckKey]);
 
   const allHistory = useMemo(
     () =>
@@ -263,7 +270,7 @@ export function Credit() {
     setTopUpError('');
     try {
       const order = await paymentApi.createTopUpOrder({ amountVnd });
-      savePendingTopUp(order, wallet?.creditBalance ?? null);
+      savePendingTopUp(order);
       setApiTopUpOrder(order);
       setStep('pending');
       if (order.provider === 'MOCK') {
@@ -304,16 +311,12 @@ export function Credit() {
 
       {isApiAccount && returnState === 'pending' ? (
         <div className="mb-6 space-y-3">
-          <Alert>
-            Đang xác minh thanh toán. Backend chưa cung cấp trạng thái xác nhận theo mã đơn, vì vậy
-            ShareLoop chưa thể xác nhận Credit đã được cộng cho giao dịch này.
-          </Alert>
+          <Alert>Đơn đang chờ xác nhận từ hệ thống. Credit chưa được cộng cho giao dịch này.</Alert>
           <Button
             size="sm"
             variant="outline"
             onClick={() => {
-              refreshWallet();
-              setHistoryReloadKey((key) => key + 1);
+              setOrderCheckKey((key) => key + 1);
             }}
           >
             Kiểm tra lại
@@ -327,7 +330,9 @@ export function Credit() {
       ) : null}
       {isApiAccount && returnState === 'invalid' ? (
         <div className="mb-6">
-          <Alert tone="error">Kết quả trả về từ cổng thanh toán không hợp lệ. Credit chưa được cộng vào ví.</Alert>
+          <Alert tone="error">
+            Kết quả trả về từ cổng thanh toán không hợp lệ. Credit chưa được cộng vào ví.
+          </Alert>
         </div>
       ) : null}
       {completedCredits !== null ? (
@@ -384,6 +389,14 @@ export function Credit() {
       </section>
 
       <section id="topup" className="mt-8 scroll-mt-24">
+        {isApiAccount && loadPendingTopUp()?.orderCode ? (
+          <Link
+            className="mb-4 inline-block text-primary underline"
+            to={`/credit?orderCode=${encodeURIComponent(loadPendingTopUp()!.orderCode)}`}
+          >
+            Mở lại đơn nạp gần nhất
+          </Link>
+        ) : null}
         {topUpError ? (
           <div className="mb-4">
             <Alert tone="error">{topUpError}</Alert>
@@ -400,7 +413,8 @@ export function Credit() {
             />
           ) : (
             <Alert tone="warning">
-              Tài khoản demo không thể tạo giao dịch nạp Credit. Vui lòng đăng nhập bằng tài khoản Backend để thanh toán qua VNPAY.
+              Tài khoản demo không thể tạo giao dịch nạp Credit. Vui lòng đăng nhập bằng tài khoản
+              Backend để thanh toán qua VNPAY.
             </Alert>
           )
         ) : null}
@@ -572,7 +586,8 @@ function ApiTopUpOrder({
         </dl>
         {order.provider === 'MOCK' && !paid ? (
           <p className="mt-4 rounded-md bg-amber-50 p-3 text-sm text-warning">
-            Backend đang cấu hình cổng thanh toán thử nghiệm. Cần chuyển cấu hình Backend sang VNPAY để tiếp tục nạp Credit.
+            Backend đang cấu hình cổng thanh toán thử nghiệm. Cần chuyển cấu hình Backend sang VNPAY
+            để tiếp tục nạp Credit.
           </p>
         ) : null}
         <div className="mt-6 flex flex-wrap justify-center gap-2">

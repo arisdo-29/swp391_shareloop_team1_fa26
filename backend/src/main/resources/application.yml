@@ -38,6 +38,7 @@ app:
     api-key: ${AI_API_KEY:}
   # module integration/payment (BE1)
   payment:
+    provider: ${PAYMENT_PROVIDER:mock}
     mock:
       enabled: false                # bật endpoint mock-confirm (tự cộng Credit không cần tiền); chỉ bật ở dev, staging
   # module integration/mail (BE1)

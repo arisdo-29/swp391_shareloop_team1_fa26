@@ -2,15 +2,14 @@ import type { ApiError } from './http';
 import { paymentApi, type TopUpConfirmResponse, type TopUpOrderResponse } from './paymentApi';
 import { paymentRedirectUrl } from './topUpSession';
 
-const isNonProductionPaymentEnvironment =
-  import.meta.env.DEV || import.meta.env.MODE === 'staging';
+const isNonProductionPaymentEnvironment = import.meta.env.DEV || import.meta.env.MODE === 'staging';
 
 export const demoPaymentEnabled =
   isNonProductionPaymentEnvironment && import.meta.env.VITE_DEMO_PAYMENT === 'true';
 export const demoPaymentUnavailableMessage =
   'Thanh toán thử nghiệm chưa được bật trong môi trường này.';
 export const backendMockProviderMessage =
-  'Backend đang cấu hình cổng thanh toán thử nghiệm. Vui lòng chuyển cấu hình Backend sang VNPAY để nạp Credit.';
+  'Backend đang cấu hình cổng thanh toán thử nghiệm. Vui lòng chuyển cấu hình Backend sang MANUAL hoặc VNPAY để nạp Credit.';
 
 const confirmationAttempts = new Map<string, Promise<TopUpConfirmResponse>>();
 
@@ -33,6 +32,12 @@ export function confirmDemoPayment(order: TopUpOrderResponse) {
 }
 
 export async function startPayment(order: TopUpOrderResponse): Promise<void> {
+  if (order.provider === 'MANUAL') {
+    window.location.assign(
+      '/wallet/topup/manual-checkout?orderCode=' + encodeURIComponent(order.orderCode),
+    );
+    return;
+  }
   if (order.provider !== 'VNPAY') throw new Error(backendMockProviderMessage);
 
   const redirectUrl = paymentRedirectUrl(order.redirectUrl);

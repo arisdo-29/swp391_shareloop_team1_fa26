@@ -5,5 +5,6 @@ public enum PaymentProvider {
     /** Cổng VNPAY, mặc định dùng sandbox. */
     VNPAY,
     /** Cổng giả lập: không có tiền thật, dùng cho dev và demo. */
-    MOCK
+    MOCK,
+    MANUAL
 }

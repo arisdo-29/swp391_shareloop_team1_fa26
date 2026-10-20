@@ -277,6 +277,10 @@ public class CreditService {
         PaymentOrder order = lockPaymentOrder(paymentOrderId);
         requireOrderOwner(order, userId);
 
+        if (order.getProvider() == PaymentProvider.MANUAL) {
+            throw new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE);
+        }
+
         return applyTopUp(wallet, order);
     }
 
@@ -288,6 +292,16 @@ public class CreditService {
         WalletAccount wallet = lockWallet(userId);
         PaymentOrder order = lockPaymentOrder(paymentOrderId);
         if (order.getProvider() != PaymentProvider.VNPAY) {
+            throw new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE);
+        }
+        return applyTopUp(wallet, order);
+    }
+
+    public WalletResponse topUpManual(long userId, long paymentOrderId) {
+        WalletAccount wallet = lockWallet(userId);
+        PaymentOrder order = lockPaymentOrder(paymentOrderId);
+        requireOrderOwner(order, userId);
+        if (order.getProvider() != PaymentProvider.MANUAL || order.getSubmittedAt() == null) {
             throw new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE);
         }
         return applyTopUp(wallet, order);

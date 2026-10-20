@@ -7,6 +7,7 @@ import type { ApiError } from '../../services/http';
 import type { PageResponse } from '../../services/itemApi';
 import type { WalletTransactionResponse } from '../../services/walletApi';
 import { formatVnd } from '../../utils/formatting';
+import { AdminTopUpOrders } from './AdminTopUpOrders';
 
 const transactionLabels: Record<string, string> = {
   TOP_UP: 'Nạp Credit', POST_FEE: 'Phí đăng bài', EDIT_FEE: 'Phí sửa bài',
@@ -82,6 +83,7 @@ export function AdminFinanceReport() {
 
   return <>
     <PageHeader title="Báo cáo tài chính" description="Tiền thu, Credit cộng và Credit trừ theo sổ hệ thống." action={<Link to="/admin/finance/users"><Button variant="outline">Lịch sử người dùng</Button></Link>} />
+    <AdminTopUpOrders onProcessed={() => setReload((value) => value + 1)} />
     <form className="mb-5 flex flex-wrap items-end gap-3" onSubmit={submit}>
       <Field label="Từ ngày" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
       <Field label="Đến ngày" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
