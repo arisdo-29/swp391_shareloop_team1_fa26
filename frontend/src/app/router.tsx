@@ -26,22 +26,18 @@ import { ManualPaymentCheckout } from '../pages/user/ManualPaymentCheckout';
 import { ReportResponse } from '../pages/user/ReportResponse';
 import { AdminLayout } from '../pages/admin/AdminLayout';
 import { AdminAuthenticity } from '../pages/admin/AdminAuthenticity';
+import { AdminUnderDevelopment } from '../pages/admin/AdminUnderDevelopment';
 import { AdminComplaints } from '../pages/admin/AdminComplaints';
 import { NotFound } from '../pages/NotFound';
 import {
-  AdminAccountActions as AdminUsers,
   AdminOperationsDashboard as AdminDashboard,
   AdminFinanceReport as AdminFinance,
-  AdminUserCreditHistory as AdminUserDetail,
-  AdminUserCreditHistory as AdminFinanceUserLookup,
 } from '../pages/admin/AdminFinancePages';
 import {
   AdminAuditLogs,
   AdminModeration,
   AdminSettings,
   AdminContentPage,
-  AdminTransactionDetail,
-  AdminTransactions,
 } from '../pages/admin/AdminPages';
 
 export const router = createBrowserRouter([
@@ -109,18 +105,18 @@ export const router = createBrowserRouter([
               { path: 'categories', element: <AdminContentPage kind="categories" /> },
               { path: 'keywords', element: <AdminContentPage kind="keywords" /> },
               { path: 'districts', element: <AdminContentPage kind="districts" /> },
-              { path: 'users', element: <AdminUsers /> },
-              { path: 'users/:userId', element: <AdminUserDetail /> },
-              { path: 'reputation', element: <AdminContentPage kind="reputation" /> },
-              { path: 'locked-users', element: <AdminContentPage kind="locked" /> },
-              { path: 'transactions', element: <AdminTransactions /> },
-              { path: 'transactions/:transactionId', element: <AdminTransactionDetail /> },
+              { path: 'users', element: <AdminUnderDevelopment title="Quản lý tài khoản" /> },
+              { path: 'users/:userId', element: <AdminUnderDevelopment title="Lịch sử Credit người dùng" /> },
+              { path: 'reputation', element: <AdminUnderDevelopment title="Uy tín & Hạng" /> },
+              { path: 'locked-users', element: <AdminUnderDevelopment title="Quản lý tài khoản" /> },
+              { path: 'transactions', element: <AdminUnderDevelopment title="Giao dịch" /> },
+              { path: 'transactions/:transactionId', element: <AdminUnderDevelopment title="Giao dịch" /> },
               { path: 'complaints', element: <AdminComplaints /> },
               { path: 'disputes', element: <AdminComplaints /> },
               { path: 'alerts', element: <AdminContentPage kind="alerts" /> },
               { path: 'finance', element: <AdminFinance /> },
-              { path: 'finance/users', element: <AdminFinanceUserLookup /> },
-              { path: 'finance/users/:userId', element: <AdminUserDetail /> },
+              { path: 'finance/users', element: <AdminUnderDevelopment title="Lịch sử Credit người dùng" /> },
+              { path: 'finance/users/:userId', element: <AdminUnderDevelopment title="Lịch sử Credit người dùng" /> },
               { path: 'settings/fees', element: <AdminSettings /> },
               { path: 'settings/ranks', element: <AdminContentPage kind="ranks" /> },
               { path: 'audit-logs', element: <AdminAuditLogs /> },
