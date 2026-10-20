@@ -59,6 +59,21 @@ export interface RequestContactResponse {
   phone: string;
 }
 
+export type RequestMediaStage = 'HANDOVER' | 'DISPUTE';
+
+export interface RequestMediaResponse {
+  mediaId: number;
+  url: string;
+  stage: RequestMediaStage;
+  uploadedBy: number;
+  createdAt: string;
+}
+
+export interface AttachRequestMediaBody {
+  mediaIds: number[];
+  stage?: RequestMediaStage;
+}
+
 export const toBackendUserId = (userId: string | null | undefined) => {
   const match = /^api_([1-9]\d*)$/.exec(userId ?? '');
   if (!match) return null;
@@ -87,6 +102,14 @@ export function toFeItemRequest(request: RequestResponse, requesterId = apiUserI
 }
 
 export const requestApi = {
+  async media(id: number): Promise<RequestMediaResponse[]> {
+    const { data } = await http.get<RequestMediaResponse[]>(`/api/v1/requests/${id}/media`);
+    return data;
+  },
+  async attachMedia(id: number, body: AttachRequestMediaBody): Promise<RequestMediaResponse[]> {
+    const { data } = await http.post<RequestMediaResponse[]>(`/api/v1/requests/${id}/media`, body);
+    return data;
+  },
   async create(itemId: number, currentUserId: number, offeredItemId?: number) {
     const body: CreateRequestBody = offeredItemId === undefined ? {} : { offeredItemId };
     const { data } = await http.post<RequestResponse>(`/api/v1/items/${itemId}/requests`, body, {

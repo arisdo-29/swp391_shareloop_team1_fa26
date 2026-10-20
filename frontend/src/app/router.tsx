@@ -22,8 +22,10 @@ import { Messages } from '../pages/user/Messages';
 import { Profile } from '../pages/user/Profile';
 import { Credit } from '../pages/user/Credit';
 import { DemoPaymentCheckout } from '../pages/user/DemoPaymentCheckout';
-import { demoPaymentEnabled } from '../services/paymentFlow';
+import { ReportResponse } from '../pages/user/ReportResponse';
 import { AdminLayout } from '../pages/admin/AdminLayout';
+import { AdminAuthenticity } from '../pages/admin/AdminAuthenticity';
+import { AdminComplaints } from '../pages/admin/AdminComplaints';
 import { NotFound } from '../pages/NotFound';
 import {
   AdminAccountActions as AdminUsers,
@@ -52,7 +54,6 @@ export const router = createBrowserRouter([
           { path: '/browse', element: <Browse /> },
           { path: '/items/:id', element: <ProductDetail /> },
           { path: '/product/:id', element: <ProductDetail /> },
-          { path: '/ai', element: <AI /> },
         ],
       },
       {
@@ -70,14 +71,17 @@ export const router = createBrowserRouter([
         element: <ProtectedRoute />,
         children: [
           { path: '/post', element: <Post /> },
+          { path: '/ai', element: <AI /> },
           { path: '/activities', element: <Activities /> },
           { path: '/messages', element: <Messages /> },
           { path: '/requests/:requestId', element: <Messages /> },
+          { path: '/me/disputes/:disputeId', element: <Messages /> },
+          { path: '/me/reports/:reportId', element: <ReportResponse /> },
           { path: '/credit', element: <Credit /> },
           { path: '/wallet', element: <Credit /> },
           {
             path: '/wallet/topup/mock-checkout',
-            element: demoPaymentEnabled ? <DemoPaymentCheckout /> : <Credit />,
+            element: <DemoPaymentCheckout />,
           },
         ],
       },
@@ -97,6 +101,7 @@ export const router = createBrowserRouter([
             children: [
               { index: true, element: <AdminDashboard /> },
               { path: 'moderation', element: <AdminModeration /> },
+              { path: 'authenticity', element: <AdminAuthenticity /> },
               { path: 'checklist', element: <AdminContentPage kind="checklist" /> },
               { path: 'expired-posts', element: <AdminContentPage kind="expired" /> },
               { path: 'categories', element: <AdminContentPage kind="categories" /> },
@@ -108,8 +113,8 @@ export const router = createBrowserRouter([
               { path: 'locked-users', element: <AdminContentPage kind="locked" /> },
               { path: 'transactions', element: <AdminTransactions /> },
               { path: 'transactions/:transactionId', element: <AdminTransactionDetail /> },
-              { path: 'complaints', element: <AdminContentPage kind="disputes" /> },
-              { path: 'disputes', element: <AdminContentPage kind="disputes" /> },
+              { path: 'complaints', element: <AdminComplaints /> },
+              { path: 'disputes', element: <AdminComplaints /> },
               { path: 'alerts', element: <AdminContentPage kind="alerts" /> },
               { path: 'finance', element: <AdminFinance /> },
               { path: 'finance/users', element: <AdminFinanceUserLookup /> },

@@ -33,7 +33,12 @@ import {
 } from '../../services/adminCategoryApi';
 import { adminAreaApi, type AdminAreaRequest, type AdminAreaResponse } from '../../services/adminAreaApi';
 import type { AttributeDataType } from '../../services/catalogApi';
-import { adminChecklistApi, type AdminChecklistEntry } from '../../services/adminChecklistApi';
+import { catalogApi, type AreaResponse } from '../../services/catalogApi';
+import {
+  ADMIN_CHECKLIST_QUESTION_MAX_LENGTH,
+  adminChecklistApi,
+  type AdminChecklistEntry,
+} from '../../services/adminChecklistApi';
 import {
   adminAuditApi,
   type ActivityLogParams,
@@ -41,6 +46,7 @@ import {
 } from '../../services/adminAuditApi';
 import type { ApiError } from '../../services/http';
 import { resolveMediaUrl } from '../../services/mediaUrl';
+import { itemApi, type ItemResponse } from '../../services/itemApi';
 import { toBackendUserId } from '../../services/requestApi';
 import type { AppStateData, ForbiddenKeyword, Item, KeywordAction, RankRule, ReputationPointRule, SupportedDistrict, Transaction, User } from '../../types/domain';
 
@@ -106,6 +112,26 @@ function displayModerationNote(item: ReviewQueueItem) {
   if (!flag || flag === 'NONE') return '';
   return moderationFlagLabel[flag] ?? item.moderationFlag!.trim();
 }
+
+type ReviewDetailState =
+  | { status: 'loading' }
+  | { status: 'loaded'; data: ItemResponse }
+  | { status: 'error'; message: string };
+
+function hasInlineReviewDetails(item: ReviewQueueItem) {
+  return item.description != null && item.categoryId != null && item.areaId != null && item.offerType != null && item.condition != null;
+}
+
+function flattenAreas(areas: AreaResponse[]): AreaResponse[] {
+  return areas.flatMap((area) => [area, ...flattenAreas(area.children ?? [])]);
+}
+
+const apiConditionLabels: Record<NonNullable<ReviewQueueItem['condition']>, string> = {
+  NEW: 'Mới',
+  LIKE_NEW: 'Như mới',
+  GOOD: 'Còn tốt',
+  DEFECTIVE: 'Có lỗi',
+};
 
 export function AdminDashboard() {
   const data = useAppSelector(selectData);
@@ -214,6 +240,27 @@ export function AdminModeration() {
   const [apiError, setApiError] = useState('');
   const [apiLegacyNotice, setApiLegacyNotice] = useState('');
   const [moderationReloadKey, setModerationReloadKey] = useState(0);
+  const [expandedReviewIds, setExpandedReviewIds] = useState<Record<number, boolean>>({});
+  const [reviewDetails, setReviewDetails] = useState<Record<number, ReviewDetailState>>({});
+  const [categoryNames, setCategoryNames] = useState<Record<number, string>>({});
+  const [areaNames, setAreaNames] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    if (!isApiAdmin) return;
+    let active = true;
+    void Promise.allSettled([catalogApi.categories(), catalogApi.areas()]).then(([categoriesResult, areasResult]) => {
+      if (!active) return;
+      if (categoriesResult.status === 'fulfilled') {
+        setCategoryNames(Object.fromEntries(categoriesResult.value.map((category) => [category.id, category.name])));
+      }
+      if (areasResult.status === 'fulfilled') {
+        setAreaNames(Object.fromEntries(flattenAreas(areasResult.value).map((area) => [area.id, area.name])));
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [isApiAdmin]);
 
   useEffect(() => {
     if (!isApiAdmin) return;
@@ -301,6 +348,27 @@ export function AdminModeration() {
     }
   };
 
+  const loadReviewDetails = async (item: ReviewQueueItem) => {
+    if (hasInlineReviewDetails(item) || reviewDetails[item.id]) return;
+    setReviewDetails((current) => ({ ...current, [item.id]: { status: 'loading' } }));
+    try {
+      const detail = await itemApi.detail(item.id);
+      setReviewDetails((current) => ({ ...current, [item.id]: { status: 'loaded', data: detail } }));
+    } catch (error) {
+      const apiError = error as ApiError;
+      const message = apiError.status === 404
+        ? 'Không thể đọc chi tiết bài chờ duyệt từ GET /api/v1/items/{id}. Backend cần cho phép Admin truy cập hoặc bổ sung các trường chi tiết vào response pending.'
+        : apiError.message || 'Không tải được thông tin chi tiết của bài đăng.';
+      setReviewDetails((current) => ({ ...current, [item.id]: { status: 'error', message } }));
+    }
+  };
+
+  const toggleReviewDetails = (item: ReviewQueueItem) => {
+    const willExpand = !expandedReviewIds[item.id];
+    setExpandedReviewIds((current) => ({ ...current, [item.id]: willExpand }));
+    if (willExpand) void loadReviewDetails(item);
+  };
+
   if (isApiAdmin) {
     const apiRows = apiPending.filter((item) => `${item.title} ${item.donorId} ${item.aiRisk ?? ''} ${item.moderationFlag ?? ''}`.toLowerCase().includes(query.trim().toLowerCase()));
     return (
@@ -324,21 +392,37 @@ export function AdminModeration() {
           </div>
         ) : apiRows.length ? (
           <div className="space-y-3">
-            {apiRows.map((item) => (
-              <article key={item.id} className="grid gap-4 rounded-lg bg-white p-4 ring-1 ring-border/80 lg:grid-cols-[1fr_280px]">
+            {apiRows.map((item) => {
+              const detailState = reviewDetails[item.id];
+              const detail = detailState?.status === 'loaded' ? detailState.data : item;
+              const expanded = Boolean(expandedReviewIds[item.id]);
+              const hasDetails = hasInlineReviewDetails(item) || detailState?.status === 'loaded';
+              return (
+              <article key={item.id} className="grid gap-4 rounded-lg bg-white p-4 ring-1 ring-border/80 lg:grid-cols-[minmax(0,1fr)_280px]">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
-                    <span>#{item.id}</span>
-                    <span>Người đăng</span>
+                    <span>Bài #{item.id}</span>
                     {displayRisk(item.aiRisk) ? <span className="rounded-sm bg-amber-50 px-2 py-1 font-semibold text-warning">Rủi ro: {displayRisk(item.aiRisk)}</span> : null}
                   </div>
                   <h2 className="mt-2 font-bold">{item.title}</h2>
                   {displayModerationNote(item) ? <p className="mt-2 text-xs leading-5 text-text-muted">{displayModerationNote(item)}</p> : null}
                   <p className="mt-2 text-xs text-text-muted">Gửi lúc {new Date(item.createdAt).toLocaleString('vi-VN')}</p>
-                  <ModerationImageGallery
-                    images={item.images ?? []}
-                    defectImages={item.defectImages ?? []}
-                  />
+                  <Button className="mt-3" size="sm" variant="outline" onClick={() => toggleReviewDetails(item)}>
+                    {expanded ? 'Thu gọn thông tin' : 'Xem đầy đủ thông tin'}
+                  </Button>
+                  {expanded ? (
+                    <div className="mt-4">
+                      {detailState?.status === 'loading' ? <p className="text-sm text-text-muted">Đang tải thông tin chi tiết...</p> : null}
+                      {detailState?.status === 'error' ? <Alert tone="warning">{detailState.message}</Alert> : null}
+                      {hasDetails ? (
+                        <ModerationItemDetails
+                          item={detail}
+                          categoryName={detail.categoryId == null ? undefined : categoryNames[detail.categoryId]}
+                          areaName={detail.areaId == null ? undefined : areaNames[detail.areaId]}
+                        />
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="space-y-3">
                   <p className="text-xs text-text-muted">Điểm tin cậy: {item.donorTrustStars ?? '--'}</p>
@@ -377,7 +461,8 @@ export function AdminModeration() {
                   </div> : null}
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <EmptyState icon="shield" title={query ? 'Không tìm thấy bài phù hợp' : 'Không có bài chờ duyệt'} text={query ? 'Hãy thử từ khóa khác.' : 'Hiện chưa có bài đăng nào trong hàng chờ.'} />
@@ -513,6 +598,37 @@ export function AdminModeration() {
   );
 }
 
+function ModerationItemDetails({
+  item,
+  categoryName,
+  areaName,
+}: {
+  item: ReviewQueueItem | ItemResponse;
+  categoryName?: string;
+  areaName?: string;
+}) {
+  const offerType = item.offerType;
+  const condition = item.condition;
+  return (
+    <div className="rounded-md bg-surface-low p-4">
+      <div className="grid gap-x-5 gap-y-3 text-sm sm:grid-cols-2">
+        <Info label="Hình thức" value={offerType === 'GIVE' ? 'Cho tặng' : offerType === 'SWAP' ? 'Trao đổi' : 'Chưa có dữ liệu'} />
+        {offerType === 'SWAP' ? <Info label="Món muốn đổi" value={item.desiredItem?.trim() || 'Chưa có dữ liệu'} /> : null}
+        <Info label="Danh mục" value={categoryName ?? (item.categoryId == null ? 'Chưa có dữ liệu' : `Danh mục #${item.categoryId}`)} />
+        <Info label="Khu vực" value={areaName ?? (item.areaId == null ? 'Chưa có dữ liệu' : `Khu vực #${item.areaId}`)} />
+        <Info label="Tình trạng" value={condition ? apiConditionLabels[condition] : 'Chưa có dữ liệu'} />
+        <Info label="Thương hiệu" value={item.brand?.trim() || 'Không có'} />
+        <Info label="Ghi chú lỗi" value={item.defectNote?.trim() || 'Không có'} />
+      </div>
+      <div className="mt-4">
+        <p className="text-xs font-semibold text-text-secondary">Mô tả đầy đủ</p>
+        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-text-primary">{item.description?.trim() || 'Chưa có dữ liệu'}</p>
+      </div>
+      <ModerationImageGallery images={item.images ?? []} defectImages={item.defectImages ?? []} />
+    </div>
+  );
+}
+
 function ModerationImageGallery({
   images,
   defectImages,
@@ -520,7 +636,7 @@ function ModerationImageGallery({
   images: string[];
   defectImages: string[];
 }) {
-  const [preview, setPreview] = useState<{ src: string; title: string } | null>(null);
+  const [preview, setPreview] = useState<{ images: string[]; index: number; label: string } | null>(null);
   const itemImages = images.map(resolveMediaUrl).filter(Boolean);
   const itemDefectImages = defectImages.map(resolveMediaUrl).filter(Boolean);
 
@@ -532,19 +648,43 @@ function ModerationImageGallery({
         <ModerationThumbnailGroup
           label="Ảnh món đồ"
           images={itemImages}
-          onPreview={(src, index) => setPreview({ src, title: `Ảnh món đồ ${index + 1}` })}
+          mainThumbnail
+          onPreview={(_, index) => setPreview({ images: itemImages, index, label: 'Ảnh món đồ' })}
         />
       ) : null}
       {itemDefectImages.length ? (
         <ModerationThumbnailGroup
           label="Ảnh lỗi"
           images={itemDefectImages}
-          onPreview={(src, index) => setPreview({ src, title: `Ảnh lỗi ${index + 1}` })}
+          onPreview={(_, index) => setPreview({ images: itemDefectImages, index, label: 'Ảnh lỗi' })}
         />
       ) : null}
       {preview ? (
-        <Modal title={preview.title} onClose={() => setPreview(null)}>
-          <ItemImage src={preview.src} alt={preview.title} className="max-h-[70vh] w-full rounded-md object-contain" />
+        <Modal title={`${preview.label} ${preview.index + 1}/${preview.images.length}`} onClose={() => setPreview(null)}>
+          <ItemImage
+            src={preview.images[preview.index]}
+            alt={`${preview.label} ${preview.index + 1}`}
+            className="max-h-[70vh] w-full rounded-md object-contain"
+          />
+          {preview.images.length > 1 ? (
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPreview((current) => current ? { ...current, index: (current.index - 1 + current.images.length) % current.images.length } : null)}
+              >
+                Ảnh trước
+              </Button>
+              <span className="text-xs text-text-muted">{preview.index + 1}/{preview.images.length}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPreview((current) => current ? { ...current, index: (current.index + 1) % current.images.length } : null)}
+              >
+                Ảnh sau
+              </Button>
+            </div>
+          ) : null}
         </Modal>
       ) : null}
     </div>
@@ -555,10 +695,12 @@ function ModerationThumbnailGroup({
   label,
   images,
   onPreview,
+  mainThumbnail = false,
 }: {
   label: string;
   images: string[];
   onPreview: (src: string, index: number) => void;
+  mainThumbnail?: boolean;
 }) {
   return (
     <div>
@@ -572,7 +714,11 @@ function ModerationThumbnailGroup({
             onClick={() => onPreview(image, index)}
             className="overflow-hidden rounded-md ring-1 ring-border"
           >
-            <ItemImage src={image} alt={`${label} ${index + 1}`} className="size-16 object-cover" />
+            <ItemImage
+              src={image}
+              alt={`${label} ${index + 1}`}
+              className={`${mainThumbnail && index === 0 ? 'size-24' : 'size-16'} object-cover`}
+            />
           </button>
         ))}
       </div>
@@ -2685,9 +2831,19 @@ function ApiAdminChecklist() {
 
 function ChecklistEditModal({ entry, saving, onClose, onSave }: { entry: AdminChecklistEntry | null; saving: boolean; onClose: () => void; onSave: (question: string) => void }) {
   const [question, setQuestion] = useState(entry?.question ?? '');
+  const questionTooLong = question.length > ADMIN_CHECKLIST_QUESTION_MAX_LENGTH;
   return <Modal title={entry ? 'Sửa tiêu chí' : 'Thêm tiêu chí'} onClose={onClose}>
-    <TextArea label="Nội dung tiêu chí" value={question} onChange={(event) => setQuestion(event.target.value)} disabled={saving} />
-    <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !question.trim()} onClick={() => onSave(question.trim())}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
+    <TextArea
+      label="Nội dung tiêu chí"
+      value={question}
+      onChange={(event) => setQuestion(event.target.value)}
+      disabled={saving}
+      error={questionTooLong ? `Nội dung không được vượt quá ${ADMIN_CHECKLIST_QUESTION_MAX_LENGTH} ký tự.` : undefined}
+    />
+    <p className={`mt-1.5 text-right text-xs ${questionTooLong ? 'text-error' : 'text-text-muted'}`}>
+      {question.length}/{ADMIN_CHECKLIST_QUESTION_MAX_LENGTH} ký tự
+    </p>
+    <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !question.trim() || questionTooLong} onClick={() => onSave(question.trim())}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
   </Modal>;
 }
 

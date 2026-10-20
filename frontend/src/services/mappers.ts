@@ -127,5 +127,7 @@ export function toFeItem(
     operatingStatus: item.operatingStatus ?? undefined,
     status: STATUS_TO_FE[item.status],
     postedAt: item.createdAt,
+    expiresAt: item.expireAt ?? undefined,
+    boostedUntil: item.boostedUntil ?? undefined,
   };
 }

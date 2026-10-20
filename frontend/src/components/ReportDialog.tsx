@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { ApiError } from '../services/http';
 import { reportApi, type ReportReason, type ReportTarget } from '../services/reportApi';
 import { Button, IconButton, Select, TextArea } from './ui';
+import { mediaApi } from '../services/mediaApi';
 
 const reportReasonLabels: Record<ReportReason, string> = {
   NOT_AS_DESCRIBED: 'Không đúng mô tả',
@@ -36,6 +37,7 @@ export function ReportDialog({ target, contextLabel, onClose, onSuccess }: Repor
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const submitInFlight = useRef(false);
 
   const submit = async () => {
@@ -44,7 +46,15 @@ export function ReportDialog({ target, contextLabel, onClose, onSuccess }: Repor
     setSubmitting(true);
     setError('');
     try {
-      await reportApi.create({ ...target, reason, description: description.trim() });
+      const uploads = evidenceFiles.length
+        ? await Promise.all(evidenceFiles.map((file) => mediaApi.upload(file)))
+        : [];
+      await reportApi.create({
+        ...target,
+        reason,
+        description: description.trim(),
+        evidenceMediaIds: uploads.length ? uploads.map((entry) => entry.mediaId) : undefined,
+      });
       onSuccess();
     } catch (caught) {
       setError(reportErrorMessage(caught as ApiError));
@@ -85,6 +95,20 @@ export function ReportDialog({ target, contextLabel, onClose, onSuccess }: Repor
           disabled={submitting}
         />
         <p className="mt-1 text-right text-xs text-text-muted">{description.length}/{REPORT_DESCRIPTION_MAX_LENGTH}</p>
+        <label className="mt-4 block">
+          <span className="label">Ảnh minh chứng (không bắt buộc)</span>
+          <input
+            className="input"
+            type="file"
+            accept="image/*"
+            multiple
+            disabled={submitting}
+            onChange={(event) => setEvidenceFiles(Array.from(event.target.files ?? []))}
+          />
+        </label>
+        {evidenceFiles.length ? (
+          <p className="mt-2 text-xs text-text-muted">Đã chọn {evidenceFiles.length} ảnh minh chứng.</p>
+        ) : null}
         {error ? <div className="mt-3 rounded-md bg-red-50 p-3 text-xs text-error">{error}</div> : null}
         <div className="mt-6 flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose} disabled={submitting}>Hủy</Button>

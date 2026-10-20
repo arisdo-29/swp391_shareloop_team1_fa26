@@ -28,6 +28,7 @@ import {
   type EditQuote,
   type EditQuoteReason,
   type ItemResponse,
+  type ListingFeeConfigResponse,
   type OfferType,
   type OperatingStatus,
   type UpdateItemRequest,
@@ -93,6 +94,8 @@ export function Activities() {
   const [renewingItemId, setRenewingItemId] = useState('');
   const [boostingItemId, setBoostingItemId] = useState('');
   const [listingFeeAction, setListingFeeAction] = useState<ListingFeeAction | null>(null);
+  const [listingFees, setListingFees] = useState<ListingFeeConfigResponse | null>(null);
+  const [listingFeesLoading, setListingFeesLoading] = useState(false);
   const [listingFeeError, setListingFeeError] = useState('');
   const [listingFeeNeedsTopUp, setListingFeeNeedsTopUp] = useState(false);
   const [listingFeeNotice, setListingFeeNotice] = useState('');
@@ -104,6 +107,26 @@ export function Activities() {
   const selectInFlight = useRef(false);
   const listingFeeInFlight = useRef(false);
   const currentUserId = toBackendUserId(user.id);
+
+  useEffect(() => {
+    if (!currentUserId || !listingFeeAction) return;
+    let active = true;
+    setListingFees(null);
+    setListingFeesLoading(true);
+    itemApi.getListingFees()
+      .then((fees) => {
+        if (active) setListingFees(fees);
+      })
+      .catch(() => {
+        if (active) setListingFees(null);
+      })
+      .finally(() => {
+        if (active) setListingFeesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentUserId, listingFeeAction]);
 
   const openEditor = async (item: Item) => {
     setEditNotice('');
@@ -689,10 +712,16 @@ export function Activities() {
             <h2 className="text-xl font-bold">
               {listingFeeAction.type === 'renew' ? 'Xác nhận gia hạn bài' : 'Xác nhận đẩy bài'}
             </h2>
-            <p className="mt-2 text-sm leading-6 text-text-muted">
-              Thao tác này sẽ trừ Credit ngay. Khoản phí đã trừ sẽ không được hoàn lại.
-            </p>
             <p className="mt-2 text-sm font-semibold">{listingFeeAction.item.title}</p>
+            <p className="mt-2 text-sm leading-6 text-text-muted">
+              {listingFeesLoading
+                ? 'Đang tải mức phí hiện hành...'
+                : listingFees
+                  ? listingFeeAction.type === 'renew'
+                    ? `Phí gia hạn: ${listingFees.renewFee} Credit.`
+                    : `Phí đẩy bài: ${listingFees.boostFee} Credit, hiệu lực ${listingFees.boostDays} ngày.`
+                  : 'Không tải được mức phí hiện hành. Vui lòng đóng hộp thoại và thử lại.'}
+            </p>
             {listingFeeError ? (
               <div className="mt-4">
                 <Alert tone="error">{listingFeeError}</Alert>
@@ -712,7 +741,7 @@ export function Activities() {
                 Hủy
               </Button>
               <Button
-                disabled={Boolean(renewingItemId || boostingItemId)}
+                disabled={Boolean(renewingItemId || boostingItemId) || listingFeesLoading || !listingFees}
                 onClick={() => void confirmListingFeeAction()}
               >
                 {renewingItemId || boostingItemId

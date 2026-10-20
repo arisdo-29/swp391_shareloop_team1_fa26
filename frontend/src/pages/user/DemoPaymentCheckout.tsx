@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useWallet } from '../../app/useWallet';
 import { Alert, Button, Icon } from '../../components/ui';
-import { confirmDemoPayment, demoPaymentErrorMessage } from '../../services/paymentFlow';
+import {
+  confirmDemoPayment,
+  demoPaymentEnabled,
+  demoPaymentErrorMessage,
+} from '../../services/paymentFlow';
 import { clearPendingTopUp, loadPendingTopUp } from '../../services/topUpSession';
 import { formatVnd } from '../../utils/formatting';
 
@@ -18,7 +22,9 @@ export function DemoPaymentCheckout() {
   );
   const [pendingTopUp] = useState(loadPendingTopUp);
   const order =
-    pendingTopUp?.order.orderCode === orderCode && pendingTopUp.order.provider === 'MOCK'
+    demoPaymentEnabled &&
+    pendingTopUp?.order.orderCode === orderCode &&
+    pendingTopUp.order.provider === 'MOCK'
       ? pendingTopUp.order
       : null;
 
@@ -65,7 +71,9 @@ export function DemoPaymentCheckout() {
       <div className="page-shell py-10">
         <div className="mx-auto max-w-xl rounded-xl bg-white p-6 text-center shadow-sm ring-1 ring-border/80 sm:p-8">
           <Alert tone="error">
-            Không tìm thấy đơn thanh toán hợp lệ. Vui lòng tạo lại đơn nạp Credit.
+            {demoPaymentEnabled
+              ? 'Không tìm thấy đơn thanh toán thử nghiệm hợp lệ. Vui lòng tạo lại đơn nạp Credit.'
+              : 'Thanh toán thử nghiệm chỉ khả dụng khi chế độ demo được bật ở môi trường phát triển hoặc staging.'}
           </Alert>
           <Button className="mt-5" variant="outline" onClick={discardInvalidOrder}>
             Quay về trang Credit

@@ -2,15 +2,17 @@ import type { ApiError } from './http';
 import { paymentApi, type TopUpConfirmResponse, type TopUpOrderResponse } from './paymentApi';
 import { paymentRedirectUrl } from './topUpSession';
 
-export const demoPaymentEnabled = import.meta.env.VITE_DEMO_PAYMENT === 'true';
+const isNonProductionPaymentEnvironment =
+  import.meta.env.DEV || import.meta.env.MODE === 'staging';
+
+export const demoPaymentEnabled =
+  isNonProductionPaymentEnvironment && import.meta.env.VITE_DEMO_PAYMENT === 'true';
 export const demoPaymentUnavailableMessage =
-  'Chức năng thanh toán này chưa khả dụng. Vui lòng liên hệ quản trị viên.';
+  'Thanh toán thử nghiệm chưa được bật trong môi trường này.';
+export const backendMockProviderMessage =
+  'Backend đang cấu hình cổng thanh toán thử nghiệm. Vui lòng chuyển cấu hình Backend sang VNPAY để nạp Credit.';
 
 const confirmationAttempts = new Map<string, Promise<TopUpConfirmResponse>>();
-
-export function shouldAutoConfirmPayment(order: TopUpOrderResponse) {
-  return demoPaymentEnabled && order.provider === 'MOCK';
-}
 
 export function demoPaymentErrorMessage(error: unknown) {
   const apiError = error as Partial<ApiError>;
@@ -19,6 +21,9 @@ export function demoPaymentErrorMessage(error: unknown) {
 }
 
 export function confirmDemoPayment(order: TopUpOrderResponse) {
+  if (!demoPaymentEnabled || order.provider !== 'MOCK') {
+    return Promise.reject(new Error(demoPaymentUnavailableMessage));
+  }
   const existing = confirmationAttempts.get(order.orderCode);
   if (existing) return existing;
 
@@ -27,10 +32,8 @@ export function confirmDemoPayment(order: TopUpOrderResponse) {
   return confirmation;
 }
 
-export async function startPayment(order: TopUpOrderResponse): Promise<TopUpConfirmResponse | null> {
-  if (shouldAutoConfirmPayment(order)) {
-    return confirmDemoPayment(order);
-  }
+export async function startPayment(order: TopUpOrderResponse): Promise<void> {
+  if (order.provider !== 'VNPAY') throw new Error(backendMockProviderMessage);
 
   const redirectUrl = paymentRedirectUrl(order.redirectUrl);
   if (!redirectUrl) {
@@ -39,5 +42,4 @@ export async function startPayment(order: TopUpOrderResponse): Promise<TopUpConf
     );
   }
   window.location.assign(redirectUrl);
-  return null;
 }

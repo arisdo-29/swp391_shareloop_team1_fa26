@@ -40,6 +40,19 @@ export interface ReportResponse {
 
 export type ReportStatus = ReportResponse['status'];
 export type ReportDecision = 'UPHOLD' | 'DISMISS';
+export interface ReportConclusionResponse {
+  id: number;
+  targetType: ReportTargetType;
+  itemId: number | null;
+  targetUserId: number | null;
+  requestId: number | null;
+  reason: ReportReason;
+  status: ReportStatus;
+  resolvedBy: number;
+  resolution: string | null;
+  starsDeducted: number;
+  resolvedAt: string;
+}
 export interface AdminReportPage {
   items: ReportResponse[];
   page: number;
@@ -69,13 +82,18 @@ export interface ReportEvidence {
 }
 
 export interface CreateDisputeRequest {
-  reason: string;
+  reason: ReportReason;
   note?: string;
   evidenceMediaIds?: number[];
 }
 
 export interface DisputeResponseRequest {
   note: string;
+  evidenceMediaIds?: number[];
+}
+
+export interface RespondReportRequest {
+  response: string;
   evidenceMediaIds?: number[];
 }
 
@@ -93,6 +111,9 @@ export function respondDispute(disputeId: number, body: DisputeResponseRequest):
 }
 
 export const reportApi = {
+  async respond(reportId: number, input: RespondReportRequest): Promise<void> {
+    await http.post<void>(`/api/v1/reports/${reportId}/response`, input);
+  },
   async evidence(reportId: number, mediaId: number, signal?: AbortSignal) {
     const { data } = await http.get<Blob>(`/api/v1/admin/reports/${reportId}/evidence/${mediaId}`, {
       responseType: 'blob',
@@ -119,12 +140,7 @@ export const reportApi = {
     return data;
   },
   async conclude(reportId: number, input: { decision: ReportDecision; note?: string }) {
-    const { data } = await http.post<
-      Pick<AdminReportDetail, 'resolvedBy' | 'resolution' | 'starsDeducted' | 'resolvedAt'> & {
-        id: number;
-        status: ReportStatus;
-      }
-    >(`/api/v1/admin/reports/${reportId}/conclude`, input);
+    const { data } = await http.post<ReportConclusionResponse>(`/api/v1/admin/reports/${reportId}/conclude`, input);
     return data;
   },
   async create(input: CreateReportRequest): Promise<ReportResponse> {
