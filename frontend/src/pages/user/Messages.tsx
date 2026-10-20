@@ -634,7 +634,28 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 </Button>
               ) : null}
             </header>
-            <div className="shrink-0 border-b border-border bg-white px-4 py-3 sm:px-5">
+            <details key={selected.request.id} className="group shrink-0 border-b border-border bg-white">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-surface-low focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:px-5 [&::-webkit-details-marker]:hidden">
+                <span className="min-w-0">
+                  <strong className="block text-sm">Thông tin giao nhận và xác nhận</strong>
+                  <span className="mt-1 block truncate text-xs text-text-muted">
+                    {logisticsLoading ? 'Đang tải thông tin giao nhận...' : (
+                      <>
+                        {deliveryMethod === 'IN_PERSON' ? 'Gặp trực tiếp' : 'Giao hàng'}
+                        {meetingPlace ? ` · ${meetingPlace}` : ''}
+                        {meetingTime ? ` · ${new Date(meetingTime).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })}` : ''}
+                      </>
+                    )}
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-2 text-xs font-semibold text-primary">
+                  {logisticsError || requestMediaError ? <span className="text-error">Có lỗi</span> : null}
+                  <span className="group-open:hidden">Xem chi tiết</span>
+                  <span className="hidden group-open:inline">Thu gọn</span>
+                  <Icon name="chevronDown" className="size-4 transition-transform group-open:rotate-180" />
+                </span>
+              </summary>
+              <div className="max-h-[40dvh] overflow-y-auto overscroll-contain px-4 pb-3 sm:px-5">
               {logisticsLoading ? (
                 <p className="text-xs text-text-muted">Đang tải thông tin giao nhận...</p>
               ) : (
@@ -699,12 +720,6 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         Tải lại
                       </button>
                     </div>
-                  ) : null}
-                  {reportNotice ? (
-                    <div className="rounded-md bg-emerald-50 p-3 text-xs text-success">{reportNotice}</div>
-                  ) : null}
-                  {disputeNotice ? (
-                    <div className="rounded-md bg-emerald-50 p-3 text-xs text-success">{disputeNotice}</div>
                   ) : null}
                   {contact ? (
                     <div className="rounded-md bg-primary-faint p-3 text-xs leading-5 text-text-secondary">
@@ -824,7 +839,14 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   </div>
                 </div>
               )}
-            </div>
+              </div>
+            </details>
+            {reportNotice || disputeNotice ? (
+              <div role="status" className="shrink-0 space-y-2 border-b border-border bg-emerald-50 px-4 py-3 text-xs text-success sm:px-5">
+                {reportNotice ? <p>{reportNotice}</p> : null}
+                {disputeNotice ? <p>{disputeNotice}</p> : null}
+              </div>
+            ) : null}
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-background px-4 pb-6 pt-5 sm:px-6">
               {pinnedItems.length ? (
                 <div className="mb-4 flex gap-3 overflow-x-auto rounded-lg bg-white p-3 ring-1 ring-border/70">
