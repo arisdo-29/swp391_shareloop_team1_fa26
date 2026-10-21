@@ -200,6 +200,69 @@ Báo cáo tài chính ba sổ và đối chiếu TopUp (FR-109, FR-110, BR-P09, 
 
 ---
 
+## 2.1. GET /api/v1/admin/finance/report.csv
+
+Xuất báo cáo tài chính ra file CSV (FR-111, Issue #149). Cùng số liệu và cùng cách hiểu `from`/`to` với [mục 2](#2-get-apiv1adminfinancereport); chỉ khác định dạng trả về. Chỉ dành cho Admin.
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
+- **Query Parameters:** `from`, `to` giống [mục 2](#2-get-apiv1adminfinancereport).
+- **Thành công:** `200 OK`, body là file CSV.
+
+| Header | Giá trị |
+|---|---|
+| `Content-Type` | `text/csv;charset=UTF-8` |
+| `Content-Disposition` | `attachment; filename="finance-report_<from>_<to>.csv"`; thiếu `from` ghi `start`, thiếu `to` ghi `now` (vd: `finance-report_start_now.csv`) |
+
+**Định dạng file:**
+
+- Mã hoá UTF-8 **có BOM** (3 byte đầu `EF BB BF`) để Excel hiển thị đúng tiếng Việt; phân cách bằng dấu phẩy, xuống dòng CRLF.
+- File chia thành các phần cách nhau một dòng trống. Mỗi phần gồm dòng tiêu đề tiếng Việt, dòng header trùng tên trường của `FinanceSummaryResponse`, rồi các dòng dữ liệu.
+- `Từ ngày` / `Đến ngày` là ngày Admin truyền vào (theo giờ Việt Nam); không truyền thì ghi `không giới hạn`.
+- Phần Credit liệt kê từng `type` có dữ liệu (sắp theo tên type), số luôn dương; dòng `Tổng` có `amount` = `creditInTotal` / `creditOutTotal` và `entryCount` = tổng `entryCount` các dòng phía trên.
+
+Ví dụ với cùng dữ liệu của mục 2 (`from=2026-10-01&to=2026-10-31`):
+
+```csv
+Báo cáo tài chính ShareLoop
+Từ ngày,2026-10-01
+Đến ngày,2026-10-31
+
+Tiền mặt thu
+cashOrderCount,cashAmountVnd
+3,100000
+
+Credit cộng vào
+type,amount,entryCount
+ADMIN_ADJUST,7,1
+TOP_UP,100,3
+Tổng,107,4
+
+Credit trừ ra
+type,amount,entryCount
+AI_SEARCH_FEE,2,2
+EDIT_FEE,5,1
+POST_FEE,10,2
+RENEW_FEE,5,1
+Tổng,22,6
+
+Đối chiếu TopUp
+cashCredits,topUpCredits,difference,matched
+100,100,0,true
+```
+
+- **Mã lỗi:** trả JSON theo định dạng lỗi chung (không phải CSV), không có `Content-Disposition`.
+
+| Mã | Ý nghĩa | Mô tả |
+|----|---------|-------|
+| `200` | Thành công | Trả về file CSV |
+| `400` | Bad Request | `INVALID_DATE_RANGE`: Từ ngày (`from`) sau đến ngày (`to`); `VALIDATION_FAILED`: ngày sai định dạng |
+| `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
+| `403` | Forbidden | Người dùng không có vai trò Admin |
+
+> FE gọi khác origin (vd: `VITE_API_BASE_URL` trỏ sang Render) không đọc được header `Content-Disposition` vì CORS mới expose `X-Trace-Id`; FE tự đặt tên file khi lưu blob.
+
+---
+
 ## 3. GET /api/v1/admin/finance/users/{userId}/history
 
 Tra cứu lịch sử tài chính và biến động số dư Credit của một người dùng (FR-112, Issue #115). Chỉ dành cho Admin. Phân trang và sắp xếp mới nhất lên trước (`createdAt DESC, id DESC`).
