@@ -45,6 +45,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ReportService {
 
+    /** Report chưa có kết luận; DISMISSED và RESOLVED không tính vào ngưỡng tự ẩn bài. */
+    private static final List<ReportStatus> PENDING_STATUSES =
+            List.of(ReportStatus.OPEN, ReportStatus.AWAITING_RESPONSE);
+
     private final ReportRepository reportRepository;
     private final ItemQueryService itemQueryService;
     private final ItemService itemService;
@@ -161,15 +165,35 @@ public class ReportService {
         report.setEvidence(evidenceService.attach(request.evidenceMediaIds(), reporterId));
         Report saved = reportRepository.save(report);
 
-        // BR-A03: Đạt 3 report thì tự ẩn bài
         if (targetType == TargetType.ITEM && resolvedItemId != null) {
-            long count = reportRepository.countByItemId(resolvedItemId);
-            if (count >= 3 && itemService != null) {
-                itemService.hide(resolvedItemId);
-            }
+            hideItemWhenReportThresholdReached(resolvedItemId);
         }
 
         return toReportResponse(saved);
+    }
+
+    /**
+     * BR-A03, FR-49: bài có đủ ngưỡng report đang chờ xử lý thì tự ẩn (is_active = false, giữ nguyên status). Hàng
+     * chờ là trang khiếu nại của Admin, nơi các report OPEN đã nằm sẵn, nên chỉ báo Admin một lần lúc bài vừa chạm
+     * ngưỡng; report sau đó vào bài đã ẩn không báo lại.
+     */
+    private void hideItemWhenReportThresholdReached(long itemId) {
+        int threshold = configService.getInt(ConfigKey.REPORT_HIDE_THRESHOLD);
+        long pendingReports =
+                reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, itemId, PENDING_STATUSES);
+        if (pendingReports < threshold || itemService == null) {
+            return;
+        }
+
+        itemService.hide(itemId);
+        if (pendingReports == threshold && notificationService != null) {
+            notificationService.notifyAdmins(
+                    "ITEM_AUTO_HIDDEN",
+                    "Bài đăng bị ẩn do nhiều báo cáo",
+                    "Bài #" + itemId + " đã tự ẩn sau " + pendingReports
+                            + " báo cáo đang chờ xử lý. Vui lòng xem xét trong hàng chờ khiếu nại.",
+                    "/admin/complaints");
+        }
     }
 
     private ReportResponse toReportResponse(Report saved) {
