@@ -168,6 +168,10 @@ public class ItemService {
                 findDisplayWindow(saved.getId()));
     }
 
+    /**
+     * Gửi bản sửa của bài, bài quay về PENDING_REVIEW (F07 bước 4); phí sửa do PostFeeService.holdEditFee quyết.
+     * Không cho đổi bài Cho tặng sang Trao đổi (né phí đăng): ném ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED.
+     */
     @Transactional
     public ItemResponse updateItem(long itemId, long userId, UpdateItemRequest request) {
         Item item = requireItem(itemId);
@@ -179,6 +183,11 @@ public class ItemService {
                 || item.getStatus() == ItemStatus.EXPIRED
                 || requestQueryService.hasReservedOrHigherRequest(itemId)) {
             throw new BusinessException(ItemErrorCode.ITEM_EDIT_NOT_ALLOWED);
+        }
+        // Bài GIVE miễn phí đăng, bài SWAP mất phí đăng: cho đổi GIVE sang SWAP thì né được phí, nên chặn.
+        // Chiều SWAP sang GIVE vẫn cho phép. Kiểm trước khi giữ phí sửa (holdEditFee) để không đụng tới ví.
+        if (item.getOfferType() == OfferType.GIVE && request.offerType() == OfferType.SWAP) {
+            throw new BusinessException(ItemErrorCode.ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED);
         }
         validateContent(request.offerType(), request.desiredItem(), request.condition(), request.defectNote());
         String moderationText = request.desiredItem() == null

@@ -51,7 +51,7 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
 - Bài đăng mới tạo có trạng thái mặc định là `PENDING_REVIEW`.
 - Số bài `PENDING_REVIEW` hoặc `APPROVED` còn active của mỗi người đăng bị giới hạn theo hạng hiện tại (`ReputationService.getRank`): Đồng 3, Bạc 5, Vàng 10, Kim Cương không giới hạn theo cấu hình `MAX_ACTIVE_ITEMS_*`. Bài GIVE và SWAP được tính chung.
 - Kiểm duyệt tầng 1 áp dụng cho tiêu đề, mô tả và món mong muốn: `BLOCK` từ chối; `REVIEW` vẫn tạo bài và gắn cờ trong hàng chờ Admin.
-- Khi tạo thành công, giữ phí đăng bài qua `PostFeeService` (mặc định 5 Credit, theo cấu hình); phí chỉ bị trừ lúc Admin duyệt. Lỗi ở bất kỳ bước nào sẽ rollback bài, phí giữ và trạng thái ảnh.
+- Khi tạo thành công, gọi `PostFeeService.holdPostFee`. Phí đăng chỉ áp dụng cho bài `SWAP` (mặc định 5 Credit, theo cấu hình `post_fee`); phí chỉ bị trừ lúc Admin duyệt. Bài `GIVE` miễn phí đăng: tài khoản 0 Credit vẫn đăng được, bài vẫn ở `fee_state = HELD` với `pending_fee = 0` và không đụng tới ví. Lỗi ở bất kỳ bước nào sẽ rollback bài, phí giữ và trạng thái ảnh.
 
 - **Thành công:** `201 Created`, trả về `ItemResponse`.
 
@@ -91,7 +91,7 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
   - `404 MEDIA_NOT_FOUND`: Không tìm thấy ảnh đã upload.
   - `409 MEDIA_NOT_UPLOADED`: Ảnh đã gắn vào bài khác hoặc không còn dùng được.
   - `422 ITEM_MODERATION_BLOCKED` (`field: content`, `details.reasonCode`, `details.matchedTerms`): Nội dung bị kiểm duyệt tầng 1 chặn.
-  - `402 WALLET_INSUFFICIENT_BALANCE`: Credit khả dụng không đủ để giữ phí đăng bài.
+  - `402 WALLET_INSUFFICIENT_BALANCE`: Credit khả dụng không đủ để giữ phí đăng bài (chỉ xảy ra với bài `SWAP`).
   - `401 UNAUTHORIZED`: Chưa đăng nhập.
 
 ---
@@ -114,9 +114,9 @@ Xem chi tiết một bài đăng theo ID.
 ## PUT /api/v1/items/{id}
 
 - **Xác thực:** Bearer Token, chỉ chủ bài. Body gồm các trường nội dung như `CreateItemRequest`; `images` và `defectImages` có thể bỏ qua để giữ ảnh hiện tại, hoặc gửi danh sách URL media của chính chủ bài để thay và sắp lại thứ tự. Khi đổi sang `DEFECTIVE` phải có ít nhất một ảnh lỗi; khi chọn danh mục điện tử phải gửi `operatingStatus`.
-- **Luồng:** Từ chối bài đã `RESERVED`/`TRADED`/`EXPIRED` hoặc có Request từ `RESERVED` trở lên. Kiểm duyệt tầng 1 tiêu đề, mô tả và món mong muốn; nội dung bị chặn trả `422`, không giữ phí hay đổi bài. Sau đó gọi `quoteEdit` và `holdEditFee` theo [luật phí sửa](listingfee.md). Bài thành `PENDING_REVIEW`, tạm ẩn để Admin duyệt lại.
+- **Luồng:** Từ chối bài đã `RESERVED`/`TRADED`/`EXPIRED` hoặc có Request từ `RESERVED` trở lên. Không cho đổi bài `GIVE` sang `SWAP` (bài Cho tặng miễn phí đăng, đổi sang Trao đổi sẽ né được phí đăng): trả `409 ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED`, không giữ phí hay đổi bài; muốn trao đổi thì đăng bài `SWAP` mới. Chiều `SWAP` sang `GIVE` vẫn cho phép. Kiểm duyệt tầng 1 tiêu đề, mô tả và món mong muốn; nội dung bị chặn trả `422`, không giữ phí hay đổi bài. Sau đó gọi `quoteEdit` và `holdEditFee` theo [luật phí sửa](listingfee.md). Bài thành `PENDING_REVIEW`, tạm ẩn để Admin duyệt lại.
 - **Thành công:** `200 OK`, `ItemResponse` mới.
-- **Lỗi chính:** `401 UNAUTHORIZED`, `403 ITEM_NOT_OWNER`, `404 ITEM_NOT_FOUND`, `409 ITEM_EDIT_NOT_ALLOWED`, `422 ITEM_MODERATION_BLOCKED` (`field: content`), `422 ITEM_INVALID_IMAGE_COUNT`, lỗi media và `402 WALLET_INSUFFICIENT_BALANCE`.
+- **Lỗi chính:** `401 UNAUTHORIZED`, `403 ITEM_NOT_OWNER`, `404 ITEM_NOT_FOUND`, `409 ITEM_EDIT_NOT_ALLOWED`, `409 ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED`, `422 ITEM_MODERATION_BLOCKED` (`field: content`), `422 ITEM_INVALID_IMAGE_COUNT`, lỗi media và `402 WALLET_INSUFFICIENT_BALANCE`.
 
 ---
 
@@ -223,6 +223,7 @@ Với danh sách, hai trường này được đọc bằng một query cho cả
 | `ITEM_NOT_OWNER` | 403 | Sửa bài không phải của mình |
 | `ITEM_EDIT_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được sửa |
 | `ITEM_REMOVE_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được gỡ |
+| `ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED` | 409 | Sửa bài Cho tặng (`GIVE`) sang Trao đổi (`SWAP`); phải đăng bài Trao đổi mới |
 | `ITEM_MODERATION_BLOCKED` | 422 | Nội dung tạo hoặc sửa bị kiểm duyệt tầng 1 chặn |
 | `VALIDATION_FAILED` | 400 | Sai định dạng hoặc thiếu trường bắt buộc |
 | `UNAUTHORIZED` | 401 | Thiếu token hoặc token không hợp lệ |
