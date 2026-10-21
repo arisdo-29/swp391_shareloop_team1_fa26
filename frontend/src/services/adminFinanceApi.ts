@@ -43,7 +43,7 @@ export const adminFinanceApi = {
     );
     return data;
   },
-  async approveTopUp(orderCode: string, note?: string) {
+  async approveTopUp(orderCode: string, note: string) {
     const { data } = await http.post<TopUpOrderDetailResponse>(
       `/api/v1/admin/finance/topup-orders/${encodeURIComponent(orderCode)}/approve`,
       { note },
