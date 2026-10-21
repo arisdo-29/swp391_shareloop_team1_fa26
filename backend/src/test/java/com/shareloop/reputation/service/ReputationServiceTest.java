@@ -23,6 +23,7 @@ import com.shareloop.notification.service.NotificationService;
 import com.shareloop.reputation.ReputationErrorCode;
 import com.shareloop.reputation.dto.GraceStarResponse;
 import com.shareloop.reputation.dto.MyReputationResponse;
+import com.shareloop.reputation.dto.RepeatedPair;
 import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.dto.RequestParticipantProjection;
 import com.shareloop.reputation.entity.Rank;
@@ -36,6 +37,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -738,6 +740,22 @@ class ReputationServiceTest {
                     BusinessException.class, () -> service.grantGraceStar(ADMIN_ID, USER_ID, "Đã giải trình"));
 
             assertThat(ex.getErrorCode()).isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        }
+    }
+
+    @Nested
+    @DisplayName("7. Cặp giao dịch lặp cho cảnh báo Admin (findRepeatedPairs - FR-113, Issue #148)")
+    class RepeatedPairsTests {
+
+        @Test
+        @DisplayName("Đổi từng dòng của native query thành RepeatedPair, đọc được thời gian dạng OffsetDateTime")
+        void findRepeatedPairs_mapsRowsToRepeatedPairs() {
+            Instant since = NOW.minus(Duration.ofDays(90));
+            Object[] row = {3L, 7L, 6L, OffsetDateTime.parse("2026-10-20T15:00:00+07:00")};
+            when(userReputationRepository.findRepeatedPairs(since, 5L)).thenReturn(List.<Object[]>of(row));
+
+            assertThat(service.findRepeatedPairs(since, 5))
+                    .containsExactly(new RepeatedPair(3L, 7L, 6, Instant.parse("2026-10-20T08:00:00Z")));
         }
     }
 

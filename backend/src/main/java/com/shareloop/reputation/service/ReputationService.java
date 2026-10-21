@@ -11,6 +11,7 @@ import com.shareloop.reputation.ReputationErrorCode;
 import com.shareloop.reputation.dto.GraceStarResponse;
 import com.shareloop.reputation.dto.MyReputationResponse;
 import com.shareloop.reputation.dto.PointHistoryDto;
+import com.shareloop.reputation.dto.RepeatedPair;
 import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.dto.RequestParticipantProjection;
 import com.shareloop.reputation.entity.Rank;
@@ -23,7 +24,9 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -536,6 +539,43 @@ public class ReputationService {
                 .findById(userId)
                 .map(u -> u.getTrustStars() > 0)
                 .orElse(true);
+    }
+
+    /**
+     * Cặp người dùng giao dịch với nhau nhiều bất thường, dùng cho trang cảnh báo của Admin (FR-113, BR-U08, Issue
+     * #148). Cùng cách đếm cặp với luật không cộng điểm ở {@link #onCompleted}: tính cả hai chiều, chỉ giao dịch
+     * COMPLETED.
+     *
+     * @param since mốc bắt đầu cửa sổ tính cặp (gồm)
+     * @param threshold chỉ lấy cặp có số giao dịch lớn hơn số này
+     * @return các cặp, nhiều giao dịch nhất lên trước
+     */
+    @Transactional(readOnly = true)
+    public List<RepeatedPair> findRepeatedPairs(Instant since, int threshold) {
+        if (userReputationRepository == null) {
+            return List.of();
+        }
+        return userReputationRepository.findRepeatedPairs(since, threshold).stream()
+                .map(row -> new RepeatedPair(
+                        ((Number) row[0]).longValue(),
+                        ((Number) row[1]).longValue(),
+                        ((Number) row[2]).longValue(),
+                        toInstant(row[3])))
+                .toList();
+    }
+
+    // Native query trả timestamptz dưới dạng Instant hoặc OffsetDateTime tuỳ cấu hình Hibernate, giống ReviewService.
+    private static Instant toInstant(Object value) {
+        if (value instanceof Instant instant) {
+            return instant;
+        }
+        if (value instanceof OffsetDateTime offsetDateTime) {
+            return offsetDateTime.toInstant();
+        }
+        if (value instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toInstant();
+        }
+        return null;
     }
 
     // configService null chỉ gặp ở unit test dựng service rút gọn; khi đó dùng giá trị mặc định của ConfigKey.

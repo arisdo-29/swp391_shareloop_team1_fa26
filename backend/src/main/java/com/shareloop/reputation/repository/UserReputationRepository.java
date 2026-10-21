@@ -4,6 +4,7 @@ import com.shareloop.reputation.dto.RequestParticipantProjection;
 import com.shareloop.reputation.entity.UserReputation;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -61,6 +62,31 @@ public interface UserReputationRepository extends JpaRepository<UserReputation, 
             @Param("userB") Long userB,
             @Param("since") Instant since,
             @Param("excludeRequestId") Long excludeRequestId);
+
+    /**
+     * Các cặp người dùng có hơn {@code threshold} giao dịch COMPLETED với nhau, tính cả hai chiều cho và nhận, hoàn tất
+     * từ mốc {@code since} (FR-113, BR-U08). Cùng cách đếm cặp với {@link #countCompletedBetween}.
+     *
+     * @param since mốc bắt đầu cửa sổ tính cặp (gồm)
+     * @param threshold chỉ lấy cặp có số giao dịch lớn hơn số này
+     * @return mỗi dòng gồm id nhỏ hơn, id lớn hơn, số giao dịch, thời điểm hoàn tất gần nhất; nhiều giao dịch nhất
+     *     lên trước
+     */
+    @Query(value = """
+            SELECT LEAST(i.donor_id, r.receiver_id) AS user_a_id,
+                   GREATEST(i.donor_id, r.receiver_id) AS user_b_id,
+                   COUNT(*) AS completed_count,
+                   MAX(r.completed_at) AS last_completed_at
+            FROM requests r
+            JOIN items i ON r.item_id = i.id
+            WHERE r.status = 'COMPLETED'
+              AND r.is_deleted = FALSE
+              AND r.completed_at >= :since
+            GROUP BY LEAST(i.donor_id, r.receiver_id), GREATEST(i.donor_id, r.receiver_id)
+            HAVING COUNT(*) > :threshold
+            ORDER BY completed_count DESC, last_completed_at DESC
+            """, nativeQuery = true)
+    List<Object[]> findRepeatedPairs(@Param("since") Instant since, @Param("threshold") long threshold);
 
     /**
      * Kiểm tra xem giao dịch đã được ghi nhận cộng điểm uy tín hay chưa qua bảng activity_logs (Idempotency).

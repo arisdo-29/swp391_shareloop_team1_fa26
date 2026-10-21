@@ -352,3 +352,48 @@ Cấp 1 sao ân hạn cho người dùng đang có 0 sao (FR-95, BR-U09, UC-51, 
 | `404` | Not Found | `USER_NOT_FOUND`: Người dùng không tồn tại |
 | `409` | Conflict | `REPUTATION_GRACE_STAR_ALREADY_USED`: Đã được cấp sao ân hạn trước đó (kể cả khi về 0 sao lần hai) |
 | `409` | Conflict | `REPUTATION_GRACE_STAR_NOT_ELIGIBLE`: Người dùng vẫn còn sao (chỉ cấp khi đang 0 sao) |
+
+---
+
+## 7. GET /api/v1/admin/anomalies
+
+Cảnh báo bất thường cho Admin (FR-113, UC-52, BR-U08, Issue #148). Kết quả tính trực tiếp mỗi lần gọi, không lưu bảng.
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
+- **Cặp giao dịch lặp:** hai người có **hơn** `reputation_pair_alert_threshold` (mặc định `5`) giao dịch `COMPLETED` với nhau trong `reputation_pair_window_days` ngày gần nhất (mặc định `90`), tính cả hai chiều cho/nhận. Giao dịch đã huỷ hoặc hoàn tất ngoài cửa sổ không tính. Cách đếm cặp giống luật không cộng điểm khi giao dịch hoàn tất (BR-U08, [reputation.md mục 1.4](reputation.md#14-void-oncompletedlong-requestid)).
+- **Sắp xếp:** nhiều giao dịch nhất lên trước, cùng số thì cặp có giao dịch gần nhất lên trước. `userA` là người có id nhỏ hơn.
+- **Chưa làm:** cảnh báo nhiều tài khoản cùng IP, đang chờ BE1 đồng ý thêm method vào `UserService` (module user). Khi làm sẽ thêm một mảng mới vào response (ngưỡng `accounts_per_ip_24h`, không giới hạn thời gian); các trường hiện có giữ nguyên.
+- **Thành công:** `200 OK`, trả về `AnomalyReportResponse`. Không có cảnh báo nào thì `repeatedPairs` là mảng rỗng.
+
+```json
+{
+  "generatedAt": "2026-10-22T03:00:00Z",
+  "pairWindowDays": 90,
+  "pairThreshold": 5,
+  "repeatedPairs": [
+    {
+      "userA": { "id": 3, "fullName": "Nguyễn Văn An", "email": "an@fpt.edu.vn" },
+      "userB": { "id": 7, "fullName": "Trần Thị Bình", "email": "binh@fpt.edu.vn" },
+      "completedCount": 6,
+      "lastCompletedAt": "2026-10-20T08:00:00Z"
+    }
+  ]
+}
+```
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `generatedAt` | string (ISO-8601) | Thời điểm tính |
+| `pairWindowDays` | number | Số ngày của cửa sổ tính cặp |
+| `pairThreshold` | number | Cặp có **hơn** số giao dịch này trong cửa sổ thì bị cảnh báo |
+| `repeatedPairs[].userA`, `userB` | object | `id`, `fullName`, `email` của hai người. Người dùng đã xoá mềm: `fullName = "Người dùng #<id>"`, `email = null` |
+| `repeatedPairs[].completedCount` | number | Số giao dịch `COMPLETED` giữa hai người trong cửa sổ |
+| `repeatedPairs[].lastCompletedAt` | string (ISO-8601) | Thời điểm hoàn tất gần nhất của cặp |
+
+- **Mã lỗi:**
+
+| Mã | Ý nghĩa | Mô tả |
+|----|---------|-------|
+| `200` | Thành công | Trả về danh sách cảnh báo (có thể rỗng) |
+| `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
+| `403` | Forbidden | Người dùng không có vai trò Admin |
