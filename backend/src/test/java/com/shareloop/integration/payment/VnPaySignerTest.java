@@ -8,6 +8,29 @@ import org.junit.jupiter.api.Test;
 
 class VnPaySignerTest {
     @Test
+    void officialReturnFields_matchIndependentTestKeyHash() throws Exception {
+        var fixture = VnPayTestData.officialFixture();
+        var params = VnPayTestData.officialCallback();
+        assertThat(VnPaySigner.encodeParameters(params)).isEqualTo(fixture.getProperty("canonical"));
+        assertThat(VnPaySigner.sign(params, fixture.getProperty("test-key")))
+                .isEqualTo(fixture.getProperty("expected-hash"));
+        assertThat(VnPaySigner.verify(params, fixture.getProperty("test-key"))).isTrue();
+        params.put("vnp_OrderInfo", "Changed order information");
+        assertThat(VnPaySigner.verify(params, fixture.getProperty("test-key"))).isFalse();
+    }
+
+    @Test
+    void encoding_omitsEmptyValuesAndHashFieldsAndEscapesSpecialCharacters() {
+        var params = new HashMap<String, String>();
+        params.put("vnp_OrderInfo", "Nạp + 50% & /?");
+        params.put("vnp_Empty", "");
+        params.put("vnp_Null", null);
+        params.put("vnp_SecureHash", "ignored");
+        params.put("vnp_SecureHashType", "ignored");
+        assertThat(VnPaySigner.encodeParameters(params)).isEqualTo("vnp_OrderInfo=N%E1%BA%A1p+%2B+50%25+%26+%2F%3F");
+    }
+
+    @Test
     void sign_matchesIndependentlyCalculatedHmacSha512() {
         var params =
                 new HashMap<>(Map.of("vnp_TxnRef", "abc", "vnp_OrderInfo", "Nap Credit abc", "vnp_Amount", "2000000"));

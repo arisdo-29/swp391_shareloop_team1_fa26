@@ -39,6 +39,12 @@ app:
   # module integration/payment (BE1)
   payment:
     provider: ${PAYMENT_PROVIDER:mock}
+    vnpay:
+      pay-url: ${VNPAY_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+      return-url: ${VNPAY_RETURN_URL:}
+      fe-result-url: ${VNPAY_FE_RESULT_URL:http://localhost:5173/credit}
+      tmn-code: ${VNPAY_TMN_CODE:}
+      hash-secret: ${VNPAY_HASH_SECRET:}
     mock:
       enabled: false                # bật endpoint mock-confirm (tự cộng Credit không cần tiền); chỉ bật ở dev, staging
   # module integration/mail (BE1)
