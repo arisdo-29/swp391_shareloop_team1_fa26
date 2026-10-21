@@ -31,8 +31,8 @@ public class VnPayClient implements PaymentGatewayClient {
             @Value("${app.payment.vnpay.return-url:}") String returnUrl,
             @Value("${app.payment.vnpay.tmn-code:}") String tmnCode,
             @Value("${app.payment.vnpay.hash-secret:}") String secret) {
-        if (returnUrl.isBlank() || tmnCode.isBlank() || secret.isBlank()) {
-            throw new IllegalArgumentException("VNPAY requires return-url, tmn-code and hash-secret");
+        if (payUrl.isBlank() || returnUrl.isBlank() || tmnCode.isBlank() || secret.isBlank()) {
+            throw new IllegalArgumentException("VNPAY requires pay-url, return-url, tmn-code and hash-secret");
         }
         this.configService = configService;
         this.clock = clock;

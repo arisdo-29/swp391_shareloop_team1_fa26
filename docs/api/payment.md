@@ -211,7 +211,9 @@ Khóa `users` trước `payment_orders`; cập nhật đơn, số dư và ledger
 Callback có chữ ký hợp lệ và tìm được đơn VNPAY sẽ lưu `provider_txn_id`, `signature_verified`, toàn bộ tham số trong `callback_data`, kể cả sai số tiền hoặc đơn đã xác nhận.
 Chữ ký sai không cập nhật đơn. Không lưu được callback khi không tìm thấy đơn hoặc transaction gặp lỗi.
 
-Luôn trả HTTP 200 với JSON (đúng chữ hoa): `{"RspCode":"00","Message":"Confirm Success"}`.
+IPN trả HTTP 200 với JSON (đúng chữ hoa); kết quả nghiệp vụ nằm trong `RspCode`, không phải HTTP status.
+Ví dụ khi đã xử lý kết quả: `{"RspCode":"00","Message":"Confirm Success"}`.
+`00` cũng có thể là đã ghi nhận thanh toán thất bại thành FAILED, không tự chứng minh đã cộng Credit.
 
 | RspCode | Message | Ý nghĩa |
 | --- | --- | --- |
@@ -229,7 +231,11 @@ Query gửi FE: `orderCode` và `status=SUCCESS|FAILED|INVALID_SIGNATURE`. Chữ
 `SUCCESS` ở đây chỉ phản ánh dữ liệu return của cổng; IPN có thể đến sau. FE cần tải lại ví và không được suy ra đã cộng tiền từ query này.
 FE đọc API trạng thái đơn bằng mã tham chiếu; không suy ra đã cộng tiền từ query return hoặc số dư tăng.
 
-### Biến môi trường (profile prod)
+### Biến môi trường (dev và prod)
+
+Mapping `VNPAY_*` nằm trong `application.yml` dùng chung; prod kế thừa cùng giá trị mặc định.
+Chỉ chọn VNPAY mới cần cấu hình merchant; MOCK/MANUAL khởi động được khi thiếu thông tin VNPay.
+Thiếu hoặc để trắng pay-url, return-url, tmn-code hay hash-secret khi chọn VNPAY sẽ làm startup thất bại với thông báo rõ ràng.
 
 | Biến | Ý nghĩa / mặc định |
 | --- | --- |
@@ -243,6 +249,21 @@ FE đọc API trạng thái đơn bằng mã tham chiếu; không suy ra đã c�
 
 Phải khai báo IPN URL `https://<render-domain>/api/v1/payments/vnpay/ipn` trong trang quản trị merchant sandbox của VNPAY.
 Backend phải truy cập công khai bằng HTTPS để VNPAY gọi IPN.
+
+Local: khai báo các biến trong môi trường của IDE/terminal chạy backend (Spring không tự đọc file `.env`).
+Riêng mock-confirm: profile dev mặc định bật; muốn tắt ở dev dùng `APP_PAYMENT_MOCK_ENABLED=false`.
+`PAYMENT_MOCK_ENABLED` là mapping của profile prod; không thay đổi mặc định các profile trong task này.
+Chạy profile `dev`; sau khi có merchant dùng `PAYMENT_PROVIDER=vnpay`,
+`VNPAY_RETURN_URL=https://<public-backend>/api/v1/payments/vnpay/return` và
+`VNPAY_FE_RESULT_URL=http://localhost:5173/credit`. Backend local cần tunnel HTTPS công khai để nhận IPN;
+đăng ký `https://<public-backend>/api/v1/payments/vnpay/ipn` tại merchant. Không trỏ return URL thẳng tới FE.
+
+Chưa có merchant: automated tests dùng `TESTONLY`/`test-secret` trong test context, không cần gọi cổng thật.
+Không dùng các giá trị giả này để thanh toán. Giữ provider đang deploy; nếu cần demo qua MANUAL thì người vận hành
+đặt `PAYMENT_PROVIDER=manual`, `PAYMENT_MOCK_ENABLED=false`, restart và tạo đơn mới. Không sửa provider của đơn cũ.
+MANUAL dùng QR minh họa, mark-paid và admin duyệt như mô tả đầu tài liệu, không yêu cầu secret VNPay.
+
+Checklist Render/merchant, SQL đối chiếu và giới hạn kiểm chứng: [nghiệm thu VNPay #122](../testing/vnpay-acceptance-122.md).
 
 Tham khảo [tài liệu thanh toán VNPAY 2.1.0](https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html).
 

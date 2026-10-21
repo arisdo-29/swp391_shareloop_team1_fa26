@@ -1,24 +1,36 @@
 package com.shareloop.wallet;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doAnswer;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.shareloop.integration.payment.VnPaySigner;
+import com.shareloop.common.exception.BusinessException;
+import com.shareloop.integration.payment.VnPayTestData;
 import com.shareloop.support.IntegrationTest;
 import com.shareloop.wallet.entity.PaymentOrder;
 import com.shareloop.wallet.entity.PaymentProvider;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
+import com.shareloop.wallet.service.CreditService;
+import com.shareloop.wallet.service.ManualTopUpService;
+import com.shareloop.wallet.service.PaymentService;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.util.LinkedMultiValueMap;
 
@@ -33,6 +45,15 @@ class VnPayCallbackIT extends IntegrationTest {
 
     @Autowired
     PaymentOrderRepository orders;
+
+    @Autowired
+    PaymentService payment;
+
+    @Autowired
+    ManualTopUpService manual;
+
+    @MockitoSpyBean
+    CreditService credit;
 
     long userId;
     String orderCode;
@@ -69,6 +90,28 @@ class VnPayCallbackIT extends IntegrationTest {
                         Boolean.class,
                         orderCode))
                 .isTrue();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM credit_ledger l JOIN payment_orders p ON p.id = l.payment_order_id WHERE p.order_code = ? AND l.type = 'TOP_UP' AND l.amount = p.credits AND l.balance_after = p.credits",
+                        Long.class,
+                        orderCode))
+                .isEqualTo(1);
+        assertThat(credit.getWallet(userId).hasToppedUp()).isTrue();
+    }
+
+    @Test
+    void officialCallbackFixture_reSignedWithTestKey_creditsSnapshot() throws Exception {
+        jdbc.update(
+                "UPDATE payment_orders SET order_code = '166117', amount_vnd = 10000, credits = 10 WHERE order_code = ?",
+                orderCode);
+        orderCode = "166117";
+        ipn(VnPayTestData.officialCallback(), "00");
+        assertStatus("SUCCESS");
+        assertThat(credit.getWallet(userId).creditBalance()).isEqualTo(10);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM credit_ledger WHERE user_id = ? AND type = 'TOP_UP' AND amount = 10",
+                        Long.class,
+                        userId))
+                .isEqualTo(1);
     }
 
     @Test
@@ -109,36 +152,117 @@ class VnPayCallbackIT extends IntegrationTest {
                 .isEqualTo(1);
     }
 
-    @Test
-    void transactionStatusMustAlsoBeSuccessful() throws Exception {
-        ipn(signed("2000000", "00", "02"), "00");
+    @ParameterizedTest
+    @CsvSource({"00,02", "24,00", "24,02"})
+    void bothResponseAndTransactionStatusMustBeSuccessful(String response, String transactionStatus) throws Exception {
+        ipn(signed("2000000", response, transactionStatus), "00");
         assertStatus("FAILED");
+        assertNoCredits();
     }
 
     @Test
     void missingOrder_returns01() throws Exception {
         var params = signed("2000000", "00", "00");
         params.put("vnp_TxnRef", "missing-order");
-        params.put("vnp_SecureHash", VnPaySigner.sign(params, "test-secret"));
+        VnPayTestData.signCallback(params);
         ipn(params, "01");
+        assertPristineOrder();
+        assertNoCredits();
     }
 
-    @Test
-    void invalidSignature_doesNotChangeOrder() throws Exception {
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(
+            strings = {
+                "bad",
+                "gg",
+                "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            })
+    void invalidSignature_doesNotChangeOrderWalletOrLedger(String hash) throws Exception {
         var params = signed("2000000", "00", "00");
-        params.put("vnp_SecureHash", "0".repeat(128));
+        if (hash == null) params.remove("vnp_SecureHash");
+        else params.put("vnp_SecureHash", hash);
         ipn(params, "97");
+        assertPristineOrder();
+        assertNoCredits();
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(
+            strings = {
+                "2000001",
+                "20000",
+                "abc",
+                "-2000000",
+                "2000000.0",
+                " 2000000",
+                "999999999999999999999999999999999"
+            })
+    void invalidAmount_includingMissingMalformedAndFractionalVnd_returns04(String amount) throws Exception {
+        var params = signed("2000000", "00", "00");
+        if (amount == null) params.remove("vnp_Amount");
+        else params.put("vnp_Amount", amount);
+        VnPayTestData.signCallback(params);
+        ipn(params, "04");
+        assertStatus("PENDING");
+        assertNoCredits();
         assertThat(jdbc.queryForObject(
-                        "SELECT status = 'PENDING' AND NOT signature_verified AND callback_data IS NULL FROM payment_orders WHERE order_code = ?",
+                        "SELECT signature_verified AND callback_data IS NOT NULL FROM payment_orders WHERE order_code = ?",
                         Boolean.class,
                         orderCode))
                 .isTrue();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"MOCK", "MANUAL"})
+    void wrongProvider_returns01WithoutChangingOrder(String provider) throws Exception {
+        jdbc.update("UPDATE payment_orders SET provider = ? WHERE order_code = ?", provider, orderCode);
+        ipn(signed("2000000", "00", "00"), "01");
+        assertPristineOrder();
+        assertNoCredits();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"FAILED", "EXPIRED"})
+    void terminalUnpaidOrder_cannotBeCredited(String terminalStatus) throws Exception {
+        jdbc.update("UPDATE payment_orders SET status = ? WHERE order_code = ?", terminalStatus, orderCode);
+        ipn(signed("2000000", "00", "00"), "02");
+        assertStatus(terminalStatus);
+        assertNoCredits();
+    }
+
     @Test
-    void invalidAmount_includingFractionalVnd_returns04() throws Exception {
-        ipn(signed("2000001", "00", "00"), "04");
-        assertStatus("PENDING");
+    void failureAfterActualCreditWrites_rollsBackOrderWalletLedgerAndCallback() throws Exception {
+        doAnswer(invocation -> {
+                    invocation.callRealMethod();
+                    // Flush actual writes before failing, so rollback is checked against the database.
+                    orders.flush();
+                    throw new IllegalStateException("Injected failure after gateway credit");
+                })
+                .when(credit)
+                .topUpFromGateway(anyLong());
+        ipn(signed("2000000", "00", "00"), "99");
+        assertPristineOrder();
+        assertNoCredits();
+    }
+
+    @Test
+    void mockAndManualOperations_cannotConfirmVnpayOrder() {
+        assertNotPayable(() -> payment.confirmMockPayment(userId, orderCode));
+        assertNotPayable(() -> manual.markPaid(userId, orderCode));
+        assertNotPayable(() -> manual.approve(userId, orderCode, null));
+        assertNotPayable(() -> manual.reject(userId, orderCode, "wrong provider"));
+        assertPristineOrder();
+        assertNoCredits();
+    }
+
+    private void assertNotPayable(org.assertj.core.api.ThrowableAssert.ThrowingCallable operation) {
+        assertThatThrownBy(operation)
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode())
+                                .isEqualTo(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE));
     }
 
     @Test
@@ -157,8 +281,36 @@ class VnPayCallbackIT extends IntegrationTest {
                 .andExpect(status().isFound())
                 .andExpect(redirectedUrl("http://localhost:5173/credit?orderCode=" + orderCode + "&status=SUCCESS"));
         assertStatus("PENDING");
-        assertThat(jdbc.queryForObject("SELECT credit_balance FROM users WHERE id = ?", Long.class, userId))
+        assertPristineOrder();
+        assertNoCredits();
+    }
+
+    @Test
+    void invalidReturn_redirectsWithoutLeakingOrderCodeOrChangingState() throws Exception {
+        var params = new LinkedMultiValueMap<String, String>();
+        var data = signed("2000000", "00", "00");
+        data.put("vnp_SecureHash", "bad");
+        data.forEach(params::add);
+        mvc.perform(get("/api/v1/payments/vnpay/return").params(params))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("http://localhost:5173/credit?orderCode=&status=INVALID_SIGNATURE"));
+        assertPristineOrder();
+        assertNoCredits();
+    }
+
+    private void assertNoCredits() {
+        assertThat(credit.getWallet(userId).creditBalance()).isZero();
+        assertThat(credit.getWallet(userId).hasToppedUp()).isFalse();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM credit_ledger WHERE user_id = ?", Long.class, userId))
                 .isZero();
+    }
+
+    private void assertPristineOrder() {
+        assertThat(jdbc.queryForObject(
+                        "SELECT status = 'PENDING' AND NOT signature_verified AND callback_data IS NULL AND provider_txn_id IS NULL AND paid_at IS NULL FROM payment_orders WHERE order_code = ?",
+                        Boolean.class,
+                        orderCode))
+                .isTrue();
     }
 
     private Map<String, String> signed(String amount, String response, String status) {
@@ -173,7 +325,7 @@ class VnPayCallbackIT extends IntegrationTest {
                 status,
                 "vnp_TransactionNo",
                 "123456"));
-        params.put("vnp_SecureHash", VnPaySigner.sign(params, "test-secret"));
+        VnPayTestData.signCallback(params);
         return params;
     }
 

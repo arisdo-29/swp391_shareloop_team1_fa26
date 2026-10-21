@@ -38,8 +38,14 @@ class VnPayClientTest {
                 .containsEntry("vnp_CreateDate", "20261019170000")
                 .containsEntry("vnp_ExpireDate", "20261019171700")
                 .containsEntry("vnp_Amount", "2000000")
+                .containsEntry("vnp_Version", "2.1.0")
+                .containsEntry("vnp_TmnCode", "TEST")
+                .containsEntry("vnp_IpAddr", "127.0.0.1")
+                .doesNotContainKey("vnp_SecureHashType")
                 .containsEntry("vnp_TxnRef", "abc")
                 .containsEntry("vnp_ReturnUrl", "https://example.com/return");
-        assertThat(VnPaySigner.verify(params, "test-secret")).isTrue();
+        String actualHash = params.get("vnp_SecureHash");
+        VnPayTestData.signCallback(params);
+        assertThat(actualHash).isEqualTo(params.get("vnp_SecureHash"));
     }
 }
