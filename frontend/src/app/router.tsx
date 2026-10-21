@@ -28,6 +28,7 @@ import { AdminLayout } from '../pages/admin/AdminLayout';
 import { AdminAuthenticity } from '../pages/admin/AdminAuthenticity';
 import { AdminUnderDevelopment } from '../pages/admin/AdminUnderDevelopment';
 import { AdminComplaints } from '../pages/admin/AdminComplaints';
+import { AdminTopUpOrders } from '../pages/admin/AdminTopUpOrders';
 import { NotFound } from '../pages/NotFound';
 import {
   AdminOperationsDashboard as AdminDashboard,
@@ -115,6 +116,7 @@ export const router = createBrowserRouter([
               { path: 'disputes', element: <AdminComplaints /> },
               { path: 'alerts', element: <AdminContentPage kind="alerts" /> },
               { path: 'finance', element: <AdminFinance /> },
+              { path: 'finance/topup-orders', element: <AdminTopUpOrders /> },
               { path: 'finance/users', element: <AdminUnderDevelopment title="Lịch sử Credit người dùng" /> },
               { path: 'finance/users/:userId', element: <AdminUnderDevelopment title="Lịch sử Credit người dùng" /> },
               { path: 'settings/fees', element: <AdminSettings /> },

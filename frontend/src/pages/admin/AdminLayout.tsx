@@ -35,6 +35,7 @@ const sections = [
     label: 'Tài chính',
     items: [
       ['payments', 'Báo cáo tài chính', '/admin/finance'],
+      ['payments', 'Đơn nạp Credit', '/admin/finance/topup-orders'],
       ['search', 'Tra cứu người dùng', '/admin/finance/users'],
     ],
   },
@@ -57,7 +58,7 @@ export function AdminLayout() {
           </p>
           {section.items.map(([icon, label, to]) => (
             <NavLink
-              end={to === '/admin'}
+              end={to === '/admin' || to === '/admin/finance'}
               key={to}
               to={to}
               onClick={() => setOpen(false)}
