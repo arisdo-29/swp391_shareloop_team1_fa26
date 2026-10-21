@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
@@ -39,6 +40,7 @@ import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.service.RequestService;
+import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -60,6 +62,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class ReportServiceTest {
 
     private static final Instant BASE_TIME = Instant.parse("2026-10-18T10:00:00Z");
+    private static final List<ReportStatus> PENDING = List.of(ReportStatus.OPEN, ReportStatus.AWAITING_RESPONSE);
 
     @Mock
     ReportRepository reportRepository;
@@ -103,6 +106,9 @@ class ReportServiceTest {
         org.mockito.Mockito.lenient()
                 .when(configService.getDecimal("DISPUTE_RESPONSE_DAYS"))
                 .thenReturn(new BigDecimal("3"));
+        org.mockito.Mockito.lenient()
+                .when(configService.getInt(ConfigKey.REPORT_HIDE_THRESHOLD))
+                .thenReturn(3);
         reportService = spy(new ReportService(
                 reportRepository,
                 itemQueryService,
@@ -128,7 +134,8 @@ class ReportServiceTest {
                 .thenReturn(new ItemSummary(itemId, donorId, OfferType.GIVE, ItemStatus.APPROVED));
         when(reportRepository.existsByReporterIdAndTargetTypeAndItemId(reporterId, TargetType.ITEM, itemId))
                 .thenReturn(false);
-        when(reportRepository.countByItemId(itemId)).thenReturn(1L);
+        when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, itemId, PENDING))
+                .thenReturn(1L);
         when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
 
         CreateReportRequest req = new CreateReportRequest(
@@ -207,7 +214,8 @@ class ReportServiceTest {
                 .thenReturn(new ItemSummary(itemId, donorId, OfferType.GIVE, ItemStatus.APPROVED));
         when(reportRepository.existsByReporterIdAndTargetTypeAndItemId(reporterId, TargetType.ITEM, itemId))
                 .thenReturn(false);
-        when(reportRepository.countByItemId(itemId)).thenReturn(3L);
+        when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, itemId, PENDING))
+                .thenReturn(3L);
         when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
 
         CreateReportRequest req = new CreateReportRequest(
@@ -216,6 +224,64 @@ class ReportServiceTest {
         reportService.create(reporterId, req);
 
         verify(itemService).hide(itemId);
+    }
+
+    @Test
+    @DisplayName("BR-A03: ngưỡng đọc từ ConfigService, chưa đủ ngưỡng cấu hình (5) thì chưa ẩn bài")
+    void reportItem_belowConfiguredThreshold_doesNotHide() {
+        givenItemCanBeReported(1L, 10L, 2L);
+        when(configService.getInt(ConfigKey.REPORT_HIDE_THRESHOLD)).thenReturn(5);
+        when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, 10L, PENDING))
+                .thenReturn(4L);
+
+        reportService.create(1L, itemReport(10L));
+
+        verify(itemService, never()).hide(anyLong());
+        verify(notificationService, never()).notifyAdmins(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("BR-A03: vừa đủ ngưỡng report đang chờ xử lý thì ẩn bài và báo Admin về hàng chờ khiếu nại")
+    void reportItem_reachesThreshold_hidesAndNotifiesAdmins() {
+        givenItemCanBeReported(1L, 10L, 2L);
+        when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, 10L, PENDING))
+                .thenReturn(3L);
+
+        reportService.create(1L, itemReport(10L));
+
+        verify(itemService).hide(10L);
+        verify(notificationService)
+                .notifyAdmins(
+                        "ITEM_AUTO_HIDDEN",
+                        "Bài đăng bị ẩn do nhiều báo cáo",
+                        "Bài #10 đã tự ẩn sau 3 báo cáo đang chờ xử lý. Vui lòng xem xét trong hàng chờ khiếu nại.",
+                        "/admin/complaints");
+    }
+
+    @Test
+    @DisplayName("BR-A03: report thứ 4 vào bài đã ẩn: vẫn giữ ẩn nhưng không báo Admin lần nữa")
+    void reportItem_aboveThreshold_doesNotNotifyAdminsAgain() {
+        givenItemCanBeReported(1L, 10L, 2L);
+        when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, 10L, PENDING))
+                .thenReturn(4L);
+
+        reportService.create(1L, itemReport(10L));
+
+        verify(itemService).hide(10L);
+        verify(notificationService, never()).notifyAdmins(anyString(), anyString(), anyString(), anyString());
+    }
+
+    private void givenItemCanBeReported(Long reporterId, Long itemId, Long donorId) {
+        when(itemQueryService.getSummary(itemId))
+                .thenReturn(new ItemSummary(itemId, donorId, OfferType.GIVE, ItemStatus.APPROVED));
+        when(reportRepository.existsByReporterIdAndTargetTypeAndItemId(reporterId, TargetType.ITEM, itemId))
+                .thenReturn(false);
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    private static CreateReportRequest itemReport(Long itemId) {
+        return new CreateReportRequest(
+                TargetType.ITEM, itemId, null, null, null, ReportReason.PROHIBITED_ITEM, "Bài đăng hàng cấm");
     }
 
     // ==================== DISPUTE TESTS (#112) ====================
@@ -843,7 +909,8 @@ class ReportServiceTest {
         when(itemQueryService.getSummary(itemId)).thenReturn(summary);
         when(reportRepository.existsByReporterIdAndTargetTypeAndItemId(reporterId, TargetType.ITEM, itemId))
                 .thenReturn(false);
-        when(reportRepository.countByItemId(itemId)).thenReturn(1L);
+        when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, itemId, PENDING))
+                .thenReturn(1L);
 
         when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> {
             Report saved = invocation.getArgument(0);
@@ -1012,7 +1079,8 @@ class ReportServiceTest {
         when(itemQueryService.getSummary(itemId)).thenReturn(summary);
         when(reportRepository.existsByReporterIdAndTargetTypeAndItemId(reporterId, TargetType.ITEM, itemId))
                 .thenReturn(false);
-        when(reportRepository.countByItemId(itemId)).thenReturn(3L);
+        when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, itemId, PENDING))
+                .thenReturn(3L);
 
         when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> {
             Report saved = invocation.getArgument(0);

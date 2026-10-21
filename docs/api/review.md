@@ -257,4 +257,21 @@ Thu hồi nhãn hàng chính hãng khi phát hiện chứng từ giả mạo. Ch
 | 404 | `AUTHENTICITY_ITEM_NOT_FOUND` | Không tìm thấy bài đăng |
 | 409 | `AUTHENTICITY_NOT_VERIFIED` | Bài đăng chưa được cấp nhãn chính hãng (không ở trạng thái `VERIFIED`) |
 
+---
+
+## 9. Job cảnh báo bài chờ duyệt quá SLA (`ReviewSlaJob`, không có API)
+
+Cảnh báo Admin khi có bài chờ duyệt quá SLA (FR-121, BR-A02, Issue #151). Job chạy phút 45 mỗi giờ khi `app.jobs.enabled=true` (dev, prod), gọi `ReviewSlaService.alertOverdueReviews(now)`.
+
+- **Bài quá SLA:** `status = PENDING_REVIEW`, chưa xoá mềm, và `updated_at <= now - review_sla_hours` (mặc định `24` giờ, đọc từ `ConfigService`). Bài chờ **đúng** 24 giờ đã tính là quá SLA.
+- **Mốc tính thời gian chờ:** `updated_at`, tức lần gửi gần nhất. Bài đã duyệt mà sửa thì quay lại `PENDING_REVIEW` và được tính lại từ lúc gửi bản sửa. Người đăng sửa trong lúc chờ thì thời gian chờ cũng tính lại.
+- **Thông báo:** Mỗi lượt chạy gửi **một** thông báo tổng hợp cho mọi Admin, không gửi theo từng bài (không có bảng lưu bài nào đã được cảnh báo). Còn bài quá SLA thì lượt sau báo lại. Không có bài nào quá SLA thì không gửi.
+
+| Trường | Giá trị |
+|---|---|
+| `type` | `REVIEW_SLA_OVERDUE` |
+| `title` | `Bài chờ duyệt quá SLA` |
+| `body` | `"<N> bài đã chờ duyệt từ 24 giờ trở lên. Vui lòng xử lý hàng chờ duyệt."` |
+| `link` | `/admin/moderation` |
+
 
