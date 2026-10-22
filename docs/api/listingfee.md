@@ -54,6 +54,49 @@ ConfigService ở mỗi lần gọi, nên Admin đổi cấu hình (`PUT /api/v1
 
 Hạn hiển thị (`expireAt`) và hạn đẩy (`boostedUntil`) của từng bài được trả kèm trong `ItemResponse` (xem `item.md`).
 
+## GET /api/v1/listing-fees/held
+
+Danh sách bài của người đang đăng nhập đang giữ phí (FR-15), để màn Ví hiện cạnh số "đang giữ". Gồm bài chờ duyệt
+đang giữ phí đăng (`POST`) và bài đã duyệt đang chờ duyệt bản sửa giữ phí sửa (`EDIT`). Bài GIVE (không giữ gì), bài
+đã được duyệt xong (phí đã trừ) và bài bị từ chối hoặc bị gỡ (phí đã nhả) không có trong danh sách. Tổng `pendingFee`
+của các dòng bằng `heldCredit` trong `GET /api/v1/wallet`. Xếp bài mới cập nhật trước.
+
+- Xác thực: **bắt buộc** Bearer Token. Chỉ trả bài của chính người gọi. Không có tham số.
+- Thành công: `200`, mảng `HeldFeeItem` (rỗng nếu không giữ phí nào).
+- Lỗi: `401 UNAUTHORIZED`.
+
+```json
+[
+  {
+    "itemId": 42,
+    "title": "Xe đạp mini",
+    "offerType": "SWAP",
+    "status": "APPROVED",
+    "pendingFee": 5,
+    "feeType": "EDIT"
+  },
+  {
+    "itemId": 40,
+    "title": "Bàn học gỗ",
+    "offerType": "SWAP",
+    "status": "PENDING_REVIEW",
+    "pendingFee": 5,
+    "feeType": "POST"
+  }
+]
+```
+
+## HeldFeeItem
+
+| Trường       | Kiểu   | Ý nghĩa                                                       |
+|--------------|--------|---------------------------------------------------------------|
+| `itemId`     | number | Id bài                                                        |
+| `title`      | string | Tên bài                                                       |
+| `offerType`  | string | `GIVE` hoặc `SWAP`                                            |
+| `status`     | string | Trạng thái bài hiện tại (`PENDING_REVIEW`, `APPROVED`, ...)   |
+| `pendingFee` | number | Số Credit đang giữ cho bài này                                |
+| `feeType`    | string | `POST` (phí đăng) hoặc `EDIT` (phí sửa)                       |
+
 ## GET /api/v1/items/{id}/edit-quote
 
 Báo trước lượt sửa tới của bài là miễn phí hay phải giữ bao nhiêu Credit (F07 bước 2, FR-26). Chỉ đọc, không giữ
