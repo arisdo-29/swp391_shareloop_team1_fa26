@@ -107,6 +107,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
   const [messages, setMessages] = useState<MessageResponse[]>([]);
   const [message, setMessage] = useState('');
+  const [chatImage, setChatImage] = useState<File | null>(null);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [conversationError, setConversationError] = useState('');
@@ -129,6 +130,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [reportOpen, setReportOpen] = useState(false);
   const [reportNotice, setReportNotice] = useState('');
   const [pinnedItems, setPinnedItems] = useState<PinnedItemResponse[]>([]);
+  const [pinnedItemsLoading, setPinnedItemsLoading] = useState(false);
+  const [pinnedItemsError, setPinnedItemsError] = useState('');
   const [shareItemId, setShareItemId] = useState('');
   const [shareableItems, setShareableItems] = useState<ItemResponse[]>([]);
   const [disputeOpen, setDisputeOpen] = useState(false);
@@ -150,6 +153,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [requestMediaSubmitting, setRequestMediaSubmitting] = useState(false);
   const [requestMediaError, setRequestMediaError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatImageInputRef = useRef<HTMLInputElement>(null);
   const activeRequestId = useRef<number | null>(null);
 
   useEffect(() => {
@@ -233,6 +237,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     activeRequestId.current = selectedRequestId;
     setMessages([]);
     setMessage('');
+    setChatImage(null);
+    if (chatImageInputRef.current) chatImageInputRef.current.value = '';
     setShareItemId('');
     if (selectedRequestId === null || !chatEnabled) {
       setMessages([]);
@@ -249,7 +255,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       if (firstLoad) setLoadingMessages(true);
       try {
         const [response, detail] = await Promise.all([
-          chatApi.list(selectedRequestId, currentUserId, afterId),
+          chatApi.list(selectedRequestId, afterId),
           requestApi.get(selectedRequestId, currentUserId),
         ]);
         if (!active) return;
@@ -276,17 +282,27 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   useEffect(() => {
     if (selectedRequestId === null || !chatEnabled) {
       setPinnedItems([]);
+      setPinnedItemsLoading(false);
+      setPinnedItemsError('');
       return;
     }
     let active = true;
     setPinnedItems([]);
+    setPinnedItemsLoading(true);
+    setPinnedItemsError('');
     chatApi
-      .pinnedItems(selectedRequestId, currentUserId)
+      .pinnedItems(selectedRequestId)
       .then((response) => {
         if (active) setPinnedItems(response);
       })
-      .catch(() => {
-        if (active) setPinnedItems([]);
+      .catch((error: ApiError) => {
+        if (active) {
+          setPinnedItems([]);
+          setPinnedItemsError(error.message || 'Không tải được thẻ sản phẩm ghim.');
+        }
+      })
+      .finally(() => {
+        if (active) setPinnedItemsLoading(false);
       });
     return () => {
       active = false;
@@ -449,10 +465,24 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
 
   const send = async () => {
     const content = message.trim();
-    if ((!content && !shareItemId) || selectedRequestId === null || !chatEnabled || sending) return;
+    if (
+      (!content && !shareItemId && !chatImage) ||
+      selectedRequestId === null ||
+      !chatEnabled ||
+      sending
+    )
+      return;
     const refItemId = shareItemId ? Number(shareItemId) : undefined;
     if (refItemId !== undefined && (!Number.isSafeInteger(refItemId) || refItemId <= 0)) {
       setMessageError('Mã bài chia sẻ phải là số nguyên dương.');
+      return;
+    }
+    if (chatImage && shareItemId) {
+      setMessageError('Chỉ gửi một ảnh hoặc một thẻ sản phẩm trong mỗi tin nhắn.');
+      return;
+    }
+    if (chatImage && !requestMediaEnabled) {
+      setMessageError('Chỉ được gửi ảnh sau khi hai bên đã chốt lịch hẹn.');
       return;
     }
     const layer1 = contactSafetyLayer1(content);
@@ -468,7 +498,12 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         setMessageError('Tin nhắn có dấu hiệu chứa thông tin liên hệ không được phép.');
         return;
       }
-      const sent = await chatApi.send(selectedRequestId, currentUserId, { content, refItemId });
+      const uploaded = chatImage ? await mediaApi.upload(chatImage) : null;
+      const sent = await chatApi.send(selectedRequestId, {
+        content: content || null,
+        mediaId: uploaded?.mediaId ?? null,
+        refItemId: refItemId ?? null,
+      });
       if (activeRequestId.current !== selectedRequestId) return;
       if (sent.moderation && sent.moderation !== 'PASS') {
         setMessageError(sent.blockedReason || 'Tin nhắn không vượt qua kiểm duyệt.');
@@ -476,6 +511,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       }
       setMessages((current) => (current.some((entry) => entry.id === sent.id) ? current : [...current, sent]));
       setMessage('');
+      setChatImage(null);
+      if (chatImageInputRef.current) chatImageInputRef.current.value = '';
       setShareItemId('');
     } catch (error) {
       const apiError = error as ApiError;
@@ -848,6 +885,11 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
               </div>
             ) : null}
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-background px-4 pb-6 pt-5 sm:px-6">
+              {pinnedItemsLoading ? (
+                <p className="text-center text-xs text-text-muted">Đang tải thẻ sản phẩm ghim...</p>
+              ) : pinnedItemsError ? (
+                <p className="text-center text-xs text-error">{pinnedItemsError}</p>
+              ) : null}
               {pinnedItems.length ? (
                 <div className="mb-4 flex gap-3 overflow-x-auto rounded-lg bg-white p-3 ring-1 ring-border/70">
                   {pinnedItems.map((pinnedItem) => (
@@ -895,7 +937,21 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                             <span><strong className="block">{entry.itemCard.title}</strong><StatusBadge status={entry.itemCard.status} /></span>
                           </button>
                         ) : null}
-                        <p className="whitespace-pre-wrap break-words">{entry.content}</p>
+                        {entry.mediaId ? (
+                          <a
+                            href={resolveMediaUrl(`/api/v1/media/${entry.mediaId}`)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mb-2 block"
+                          >
+                            <img
+                              src={resolveMediaUrl(`/api/v1/media/${entry.mediaId}`)}
+                              alt="Ảnh trong cuộc trò chuyện"
+                              className="max-h-72 max-w-full rounded-md object-contain"
+                            />
+                          </a>
+                        ) : null}
+                        {entry.content ? <p className="whitespace-pre-wrap break-words">{entry.content}</p> : null}
                         <span className={`mt-1 block text-[10px] ${mine ? 'text-white/65' : 'text-text-muted'}`}>{new Date(entry.createdAt).toLocaleString('vi-VN')}</span>
                       </div>
                     </div>
@@ -907,10 +963,45 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
               <div ref={messagesEndRef} aria-hidden="true" />
             </div>
             <div className="shrink-0 border-t border-border bg-white p-3 sm:p-4">
-              <Select label="Chia sẻ bài của bạn" value={shareItemId} disabled={sending || !chatEnabled} onChange={(event) => setShareItemId(event.target.value)}>
+              <Select label="Chia sẻ bài của bạn" value={shareItemId} disabled={sending || !chatEnabled || !!chatImage} onChange={(event) => setShareItemId(event.target.value)}>
                 <option value="">Không đính kèm bài đăng</option>
                 {shareableItems.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
               </Select>
+              <div className="mb-3 flex flex-wrap items-center gap-3 text-xs">
+                <label className={`inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 font-semibold ${sending || !chatEnabled || !requestMediaEnabled || !!shareItemId ? 'pointer-events-none opacity-50' : 'hover:bg-surface-low'}`}>
+                  <Icon name="image" className="size-4" />
+                  Đính kèm ảnh
+                  <input
+                    ref={chatImageInputRef}
+                    className="sr-only"
+                    type="file"
+                    accept="image/*"
+                    disabled={sending || !chatEnabled || !requestMediaEnabled || !!shareItemId}
+                    onChange={(event) => {
+                      setChatImage(event.target.files?.[0] ?? null);
+                      if (messageError) setMessageError('');
+                    }}
+                  />
+                </label>
+                {chatImage ? (
+                  <span className="flex min-w-0 items-center gap-2 text-text-secondary">
+                    <span className="max-w-56 truncate">{chatImage.name}</span>
+                    <button
+                      type="button"
+                      className="font-semibold text-error underline"
+                      disabled={sending}
+                      onClick={() => {
+                        setChatImage(null);
+                        if (chatImageInputRef.current) chatImageInputRef.current.value = '';
+                      }}
+                    >
+                      Bỏ ảnh
+                    </button>
+                  </span>
+                ) : !requestMediaEnabled && chatEnabled ? (
+                  <span className="text-text-muted">Có thể gửi ảnh sau khi hai bên chốt lịch hẹn.</span>
+                ) : null}
+              </div>
               {messageError ? (
                 <div className="mb-2 flex items-center justify-between gap-3 text-xs text-error">
                   <p>{messageError}</p>
@@ -937,7 +1028,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   placeholder="Nhập tin nhắn..."
                   disabled={sending || !chatEnabled}
                 />
-                <Button aria-label="Gửi tin nhắn" icon="send" disabled={sending || !chatEnabled || (!message.trim() && !shareItemId)}>
+                <Button aria-label="Gửi tin nhắn" icon="send" disabled={sending || !chatEnabled || (!message.trim() && !shareItemId && !chatImage)}>
                   {sending ? 'Đang gửi' : 'Gửi'}
                 </Button>
               </form>
