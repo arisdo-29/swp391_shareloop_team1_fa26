@@ -4,7 +4,7 @@ Phạm vi: mọi yêu cầu chức năng ưu tiên **Must** trong SRS v10 (mục
 
 ## 1. Tóm tắt
 
-**Tổng 87 FR Must: 72 Đủ, 15 chưa đủ** (Thiếu FE 4, Thiếu BE 3, Thiếu test 3, Lệch SRS 5). Đối chiếu ngày 2026-10-21 trên nhánh `docs/134-fr-must-matrix`, commit develop `7383885`. Cả 6 phần "Không cắt" ở SRS 12.6 đều **chưa đủ 100%** (mục 3).
+**Tổng 87 FR Must: 77 Đủ, 10 chưa đủ** (Thiếu FE 3, Thiếu BE 3, Thiếu test 1, Lệch SRS 3). Đối chiếu ngày 2026-10-21 trên nhánh `docs/134-fr-must-matrix`, commit develop `7383885`. Cả 6 phần "Không cắt" ở SRS 12.6 đều **chưa đủ 100%** (mục 3).
 
 Cách đọc cột:
 - **Module (người)**: README ghi người sở hữu theo vai (BE1–BE4), không ghi tên người. Module lấy theo package chứa code thực tế.
@@ -18,8 +18,8 @@ Cách đọc cột:
 |---|---|---|---|---|---|---|---|---|
 | FR-01 | Đăng ký email, mật khẩu, tên, SĐT | auth (BE1) | `POST /api/v1/auth/register` | `AuthRegisterIT#register_thenVerifyOtp_returnsTokenThatCanCallMe`, `#register_whenEmailAlreadyActive_returns409EmailAlreadyRegistered` | `/register` · authApi | ✓ auth.md | Đủ | — |
 | FR-02 | OTP 6 số, hạn 5 phút, 5 lần sai, gửi lại 60 giây | auth (BE1) | `POST /auth/verify-otp`, `POST /auth/resend-otp`; `OtpService` | `OtpServiceTest#issue_whenResentTooSoon_throwsResendTooSoonWithRetryAfterSeconds`, `#verify_whenFifthWrongCode_clearsCodeAndThrowsTooManyAttempts`, `#verify_whenCodeExpired_throwsExpired` | `/verify-email` · authApi | ✓ auth.md | Đủ | — |
-| FR-03 | Kiểm tra SĐT di động VN; mỗi email một số; không trùng tài khoản hoạt động | auth (BE1) | `@Pattern` trong `RegisterRequest`; `AuthService.checkPhoneNotUsedByActiveAccount` | Không có test cho đăng ký sai định dạng SĐT hay trùng SĐT (chỉ có test đổi SĐT: `UserServiceTest#sendChangePhoneOtp_whenPhoneAlreadyUsedByActiveUser_throwsPhoneAlreadyUsed`) | `/register` · authApi | ✓ auth.md | Thiếu test | Cần mở issue: `test(auth): kiểm tra đăng ký sai định dạng và trùng số điện thoại` |
-| FR-05 | Đăng nhập, đăng xuất, cấp JWT | auth (BE1) | `POST /auth/login`, `POST /auth/logout` | `AuthApiIT#login_withCorrectPassword_returnsTokenThatCanCallMe`, `AuthServiceTest#login_whenAccountBanned_throwsAccountLocked`. Không có test nào cho `/auth/logout` | `/login`, nút đăng xuất trong AppShell · authApi | ✓ auth.md | Thiếu test | Cần mở issue: `test(auth): thêm test cho POST /auth/logout` |
+| FR-03 | Kiểm tra SĐT di động VN; mỗi email một số; không trùng tài khoản hoạt động | auth (BE1) | `@Pattern` trong `RegisterRequest`; `AuthService.checkPhoneNotUsedByActiveAccount` | `AuthPhoneAndLogoutIT#register_whenPhoneFormatInvalid_returns400ValidationFailedOnPhoneField`, `#register_whenPhoneBelongsToActiveAccount_returns409PhoneAlreadyUsedAndCreatesNoUser`, `#register_whenPhoneOnlyBelongsToPendingAccount_returns201`, `#register_whenPhoneOnlyBelongsToSoftDeletedAccount_returns201`; `AuthRegisterIT#register_whenEmailAlreadyActive_returns409EmailAlreadyRegistered` | `/register` · authApi | ✓ auth.md (lệch nhỏ: docs ghi `400 AUTH_PHONE_INVALID`, code trả `400 VALIDATION_FAILED` với `field` = `phone`) | Đủ | — |
+| FR-05 | Đăng nhập, đăng xuất, cấp JWT | auth (BE1) | `POST /auth/login`, `POST /auth/logout` | `AuthApiIT#login_withCorrectPassword_returnsTokenThatCanCallMe`, `AuthServiceTest#login_whenAccountBanned_throwsAccountLocked`, `AuthPhoneAndLogoutIT#logout_withToken_returns204`, `#logout_withoutToken_returns204BecauseLogoutIsPublic`, `#logout_thenUseSameToken_tokenStillWorksUntilExpiry` | `/login`, nút đăng xuất trong AppShell · authApi | ✓ auth.md | Đủ | — |
 | FR-06 | Xem và cập nhật hồ sơ | user (BE1) | `GET/PUT /api/v1/me` | `MeControllerTest#updateMe_withValidBody_returnsUpdatedProfile`, `UserServiceTest#updateProfile_whenValid_updatesNameAreaAvatarAndKeepsEmailPhone` | `/profile` · userApi | ✓ user.md | Đủ | #131 còn mở nhưng màn đã gọi API |
 | FR-08 | Đổi mật khẩu khi đã đăng nhập | auth (BE1) | `POST /auth/change-password` | `AuthApiIT#changePassword_withCorrectCurrentPassword_onlyNewPasswordCanLogin`, `AuthControllerTest#changePassword_whenCurrentPasswordWrong_returns400CurrentPasswordIncorrect` | `/change-password` · authApi | ✓ auth.md | Đủ | — |
 | FR-11 | Chọn gói nạp, tạo PaymentOrder, chặn dưới 10 Credit hoặc không bội số 1.000đ | wallet (BE1) | `POST /api/v1/wallet/topup-orders`; `PaymentService.createTopUpOrder` | `PaymentServiceTest#createTopUpOrder_whenBelowMinimum_throwsTopUpAmountInvalid`, `#createTopUpOrder_whenNotMultipleOfVndPerCredit_throwsTopUpAmountInvalid`, `TopUpOrderControllerTest#createTopUpOrder_whenBelowMinimum_returns422` | `/credit` · walletApi, paymentApi | ✓ payment.md | Đủ | — |
@@ -29,7 +29,7 @@ Cách đọc cột:
 | FR-15 | Số dư khả dụng, số đang giữ, danh sách bài đang giữ phí | wallet (BE1), listingfee | `GET /api/v1/wallet` → `WalletResponse`; `GET /api/v1/listing-fees/held` → `HeldFeeItem[]` | `CreditServiceIT#getWallet_whenUserExists_returnsBalanceHeldAndAvailable`, `HeldFeesApiIT#getHeldFees_whenPostAndEditFeeHeld_returnsTwoRowsWithRightFeeType`, `#getHeldFees_whenListed_totalPendingFeeEqualsHeldCredit` | `/credit` · walletApi.get, walletApi.listHeldFees (mục "Bài đang giữ phí") | ✓ wallet.md, listingfee.md | Đủ | — |
 | FR-16 | Lịch sử ví lọc theo khoảng ngày hoặc tuần/tháng/quý | wallet (BE1) | `GET /api/v1/wallet/transactions?from&to&page&size` | `CreditServiceIT#getTransactions_whenFromToGiven_returnsOnlyEntriesInRange`, `WalletControllerTest#listMyTransactions_whenFromNotBeforeTo_returns422` | `/credit` · walletApi.listTransactions: nút 7 ngày, tháng này, quý này, tất cả, ô từ ngày, đến ngày, phân trang 20 dòng | ✓ wallet.md | Đủ | — |
 | FR-17 | Popup xác nhận ghi rõ số Credit trước thao tác có phí | listingfee + FE (BE1, FE) | `GET /items/{id}/edit-quote`, `GET /listing-fees`, `GET /ai/quota` | `EditQuoteControllerTest#getEditQuote_withToken_returnsQuoteForTokenUser`, `PostFeeServiceIT#quoteEdit_whenFreeEditUsed_returnsPaidEditFromConfig` | `/post` (dialog "Xác nhận đăng bài" có phí và số dư), `/activities` (xác nhận gia hạn, đẩy, báo giá sửa), `/ai` (lượt còn lại) · itemApi, aiApi | ✓ listingfee.md | Đủ | Phần chính sách hoàn phí: xem FR-35 |
-| FR-19 | Tạo bài Cho (SRS ghi phí 5 Credit) | item (BE2) | `POST /api/v1/items` (offerType GIVE) | `ItemServiceTest#createItem_give_success`, `ItemCreateIT#createGive_whenZeroCredit_succeedsWithZeroHeldFeeAndWalletUnchanged` | `/post` · itemApi | ✓ item.md | Lệch SRS | FR-19 nói Cho tốn 5 Credit, nhưng FR-32 và code (commit #292) cho Cho miễn phí đăng. SRS tự mâu thuẫn. Cần mở issue (docs): `docs: thống nhất FR-19 với FR-32 và README về phí bài Cho` |
+| FR-19 | Tạo bài Cho (miễn phí đăng, xem FR-32) | item (BE2) | `POST /api/v1/items` (offerType GIVE) | `ItemServiceTest#createItem_give_success`, `ItemCreateIT#createGive_whenZeroCredit_succeedsWithZeroHeldFeeAndWalletUnchanged` | `/post` · itemApi | ✓ item.md | Đủ | SRS và README đã thống nhất với FR-32 |
 | FR-20 | Tạo bài Trao đổi, bắt buộc mô tả món mong muốn | item (BE2) | `POST /api/v1/items` (offerType SWAP) | `ItemServiceTest#createItem_swap_withDesiredItem_success`, `#createItem_swap_missingDesiredItem_throwsException` | `/post` · itemApi | ✓ item.md | Đủ | — |
 | FR-21 | Tải 3–8 ảnh, sắp thứ tự, tối đa 5 MB/ảnh | item + media (BE2) | `POST /api/v1/media` (multipart), `POST /items` kèm `imageIds`; `MediaService.upload` | `ItemServiceTest#createItemRejectsImageCountOutsideThreeToEight`, `ItemImagesIT#createItemKeepsUploadOrderAndRejectsForeignMedia`, `MediaServiceTest#uploadUsesFileSignatureAndReturnsId`. Nhánh `MEDIA_FILE_TOO_LARGE` (quá 5 MB) không có test | `/post` · mediaApi, itemApi | ✓ media.md, item.md | Thiếu test | Cần mở issue: `test(media): từ chối ảnh vượt IMAGE_MAX_MB` |
 | FR-22 | Tình trạng bắt buộc; Có lỗi cần mô tả lỗi và ít nhất 1 ảnh lỗi | item (BE2) | `POST /items` | `ItemImagesIT#defectiveItemRequiresDefectImageAndPersistsItsRole`, `ItemServiceTest#createItem_defective_missingDefectNote_throwsException` | `/post` · itemApi | ✓ item.md | Đủ | — |
@@ -110,7 +110,7 @@ SRS 12.6 ghi "Không cắt: Đăng bài + phí + kiểm duyệt tầng 1 và 3; 
 
 | # | Phần | FR thuộc phần | FR chưa Đủ | Kết luận |
 |---|---|---|---|---|
-| 1 | Đăng bài + phí | FR-19, 20, 21, 22, 24, 25, 26, 27, 29, 31, 32, 33, 34, 35 (kèm FR-17) | FR-19 Lệch SRS (SRS tự mâu thuẫn FR-19/FR-32); FR-21 Thiếu test (quá 5 MB); FR-35 Thiếu FE (chính sách hoàn phí) | **Chưa đủ.** Luồng đăng bài, giữ phí, trừ phí, nhả phí chạy và có test; còn thiếu một test, một dòng chữ FE và một quyết định SRS |
+| 1 | Đăng bài + phí | FR-19, 20, 21, 22, 24, 25, 26, 27, 29, 31, 32, 33, 34, 35 (kèm FR-17) | FR-21 Thiếu test (quá 5 MB); FR-35 Thiếu FE (chính sách hoàn phí) | **Chưa đủ.** Luồng đăng bài, giữ phí, trừ phí, nhả phí chạy và có test; còn thiếu một test và một dòng chữ FE |
 | 2 | Kiểm duyệt tầng 1 và 3 | FR-39, 40, 41, 42, 45, 46, 47 (tầng 2 AI FR-43, 44 đều Đủ) | FR-42 Thiếu BE (chưa chặn sang tên pháp lý, quy ra tiền mặt, thực phẩm tại form) | **Chưa đủ.** Tầng 3 Admin duyệt Đủ; tầng 1 thiếu một trong bốn quy tắc |
 | 3 | Giao dịch tới Completed | FR-61–66, 68, 69, 72, 74, 75, 77, 79–85, 87, 97, 100, 119, 120 (FR-73 thuộc mục cắt số 5) | FR-66 Lệch SRS; FR-85 Lệch SRS; ngoài ra FR-92 (0 sao vẫn gửi được yêu cầu) | **Chưa đủ.** Luồng Pending → Completed chạy được và có `RequestLifecycleIT`; hai lệch nhỏ không chặn luồng, FR-92 là lỗ hổng quyền |
 | 4 | Nạp Credit | FR-11, 12, 13, 14, 15, 16 | FR-15, FR-16 Đủ | **Chưa đủ.** Lõi nạp FR-11–14 Đủ và có test; VNPay sandbox thật vẫn chưa xác minh (#122) |
@@ -134,10 +134,9 @@ SRS 12.6 ghi "Không cắt: Đăng bài + phí + kiểm duyệt tầng 1 và 3; 
 | FR-114 (Should) | "Đạt yêu cầu" nhờ `ItemExpiryJob` | FR-114 là màn Admin liệt kê bài quá hạn và gỡ hẳn; không có endpoint Admin cho việc này. `/admin/expired-posts` là trang static đọc store |
 
 **4.2 SRS và README khác code**
-- FR-19 ("Cho: phí 5 Credit như mọi bài") mâu thuẫn FR-32 ("bài Cho miễn phí đăng"). Code theo FR-32 (commit #292). README, bảng biểu phí, vẫn ghi "Đăng bài (Cho hoặc Trao đổi) 5 Credit" nên đã lỗi thời.
 - FR-50 cần lọc tình trạng và hình thức; API chỉ có `q`, `categoryId`, `areaId`.
 - FR-82 ghi "Gửi email và số điện thoại ... kèm lịch hẹn"; code trao qua `GET /requests/{id}/contact` trong app và không gửi email. Cần BE3 xác nhận SRS có đòi kênh email hay không.
-- FR-85, FR-66, FR-42, FR-15: xem bảng mục 2.
+- FR-85, FR-66, FR-42: xem bảng mục 2.
 
 **4.3 docs/api và FE khác code**
 - Mọi endpoint của FR Must trong bảng đều có mô tả trong `docs/api/<module>.md`; không phát hiện endpoint lệch đường dẫn giữa docs/api và controller ở các FR Must. Hàm không có endpoint (job, nền) đều có comment mã FR/BR trong code.
@@ -156,6 +155,5 @@ SRS 12.6 ghi "Không cắt: Đăng bài + phí + kiểm duyệt tầng 1 và 3; 
 | FR-107 | Thiếu FE | Cần mở issue |
 | FR-112 | Thiếu FE | Cần mở issue (Không cắt) |
 | FR-35 | Thiếu FE | Cần mở issue (Không cắt) |
-| FR-03, FR-05, FR-21 | Thiếu test | Cần mở issue (FR-21 thuộc Không cắt) |
+| FR-21 | Thiếu test | Cần mở issue (thuộc Không cắt) |
 | FR-50, FR-66, FR-85 | Lệch SRS | Cần mở issue |
-| FR-19 | Lệch SRS | Cần mở issue (docs: thống nhất SRS và README) |

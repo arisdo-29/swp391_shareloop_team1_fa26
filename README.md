@@ -32,7 +32,9 @@ Quy đổi: **1.000đ = 1 Credit** (Credit là số nguyên). Nạp tối thiể
 | Giao dịch Cho, Trao đổi | Miễn phí | – |
 | Gửi yêu cầu, chat, chốt lịch, hoàn tất | Miễn phí | – |
 | Tìm kiếm, lọc thủ công | Miễn phí | – |
-| Đăng bài (Cho hoặc Trao đổi) | 5 Credit / 30 ngày hiển thị | Giữ (Hold) khi gửi duyệt, trừ thật khi duyệt lần đầu; bị từ chối thì nhả lại toàn bộ |
+| Đăng bài Cho | Miễn phí | – |
+| Đăng bài Trao đổi | 5 Credit / 30 ngày hiển thị | Giữ (Hold) khi gửi duyệt, trừ thật khi duyệt lần đầu; bị từ chối thì nhả lại toàn bộ |
+| Chuyển bài Cho → Trao đổi | Không cho phép, đăng bài mới | – |
 | Sửa bài trước khi duyệt / bị chặn tự động | Miễn phí | – |
 | Sửa bài sau duyệt, lần đầu | Miễn phí (1 lần / bài) | – |
 | Sửa bài sau duyệt, từ lần thứ hai | 5 Credit / lần | Giữ khi gửi bản sửa, trừ khi bản sửa được duyệt |
