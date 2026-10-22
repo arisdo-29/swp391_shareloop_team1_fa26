@@ -18,7 +18,7 @@ const sections = [
   {
     label: 'Người dùng',
     items: [
-      ['group', 'Danh sách người dùng', '/admin/users'],
+      ['group', 'Khóa / mở khóa tài khoản', '/admin/users'],
       ['star', 'Uy tín & Hạng', '/admin/reputation'],
       ['close', 'Khóa tài khoản', '/admin/locked-users'],
     ],

@@ -3,11 +3,13 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch } from '../../app/hooks';
 import { actions } from '../../app/store';
 import { Alert, Button, Field } from '../../components/ui';
+import { OtpInput } from '../../components/OtpInput';
 import { authApi } from '../../services/authApi';
 import { authErrorMessage } from '../../services/authErrors';
 import type { ApiError } from '../../services/http';
 import { fetchSessionUser } from '../../services/session';
 import { validEmail } from '../../utils/passwordSecurity';
+import { createOtpValue } from '../../utils/otp';
 
 type VerifyEmailState = {
   email?: string;
@@ -26,7 +28,7 @@ export function VerifyEmail() {
   const location = useLocation();
   const state = (location.state as VerifyEmailState | null) ?? {};
   const [email, setEmail] = useState(state.email?.trim().toLowerCase() ?? '');
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otp, setOtp] = useState(() => createOtpValue());
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -58,6 +60,7 @@ export function VerifyEmail() {
     try {
       const result = await authApi.resendOtp({ email: normalizedEmail });
       setEmail(result.email || normalizedEmail);
+      setOtp(createOtpValue());
       setOtpSeconds(result.otpExpiresInSeconds);
       setResendSeconds(result.resendCooldownSeconds);
       setNotice('Mã OTP mới đã được gửi đến email của bạn.');
@@ -136,23 +139,16 @@ export function VerifyEmail() {
             onChange={(event) => setEmail(event.target.value)}
             autoComplete="email"
           />
-          <div className="grid grid-cols-6 gap-2">
-            {otp.map((value, index) => (
-              <input
-                key={index}
-                aria-label={`Số OTP ${index + 1}`}
-                inputMode="numeric"
-                maxLength={1}
-                value={value}
-                onChange={(event) => {
-                  const next = [...otp];
-                  next[index] = event.target.value.replace(/\D/g, '');
-                  setOtp(next);
-                }}
-                className="aspect-square min-w-0 rounded-md border border-border text-center text-lg font-bold outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
-              />
-            ))}
-          </div>
+          <OtpInput
+            value={otp}
+            label=""
+            disabled={processing}
+            invalid={Boolean(error && otp.join('').length > 0)}
+            onChange={(value) => {
+              setOtp(value);
+              if (error) setError('');
+            }}
+          />
           {otpSeconds !== null ? (
             <p className={`text-center text-xs ${otpSeconds === 0 ? 'text-error' : 'text-text-muted'}`}>
               {otpSeconds === 0 ? 'Mã OTP đã hết hạn.' : `Mã OTP hết hạn sau ${formatCountdown(otpSeconds)}.`}

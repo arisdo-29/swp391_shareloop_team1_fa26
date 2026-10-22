@@ -3,15 +3,22 @@ package com.shareloop.wallet.controller;
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
 import com.shareloop.wallet.dto.WalletTransactionResponse;
+import com.shareloop.wallet.mapper.FinanceReportCsvWriter;
 import com.shareloop.wallet.service.AdminFinanceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,19 +27,24 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller báo cáo tài chính và tra cứu lịch sử tài chính cho Admin (FR-109, FR-110, FR-112).
+ * Controller báo cáo tài chính, xuất CSV và tra cứu lịch sử tài chính cho Admin (FR-109, FR-110, FR-111, FR-112).
  * Chỉ Admin mới có quyền truy cập (/api/v1/admin/** được bảo vệ bởi SecurityConfig).
  */
-@Tag(name = "admin-finance-controller", description = "Báo cáo tài chính và tra cứu lịch sử giao dịch")
+@Tag(name = "admin-finance-controller", description = "Báo cáo tài chính, xuất CSV và tra cứu lịch sử giao dịch")
 @RestController
 @RequestMapping("/api/v1/admin/finance")
 @Validated
 public class AdminFinanceController {
 
-    private final AdminFinanceService adminFinanceService;
+    private static final MediaType TEXT_CSV_UTF8 = new MediaType("text", "csv", StandardCharsets.UTF_8);
 
-    public AdminFinanceController(AdminFinanceService adminFinanceService) {
+    private final AdminFinanceService adminFinanceService;
+    private final FinanceReportCsvWriter financeReportCsvWriter;
+
+    public AdminFinanceController(
+            AdminFinanceService adminFinanceService, FinanceReportCsvWriter financeReportCsvWriter) {
         this.adminFinanceService = adminFinanceService;
+        this.financeReportCsvWriter = financeReportCsvWriter;
     }
 
     /**
@@ -57,6 +69,39 @@ public class AdminFinanceController {
                     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate to) {
         return adminFinanceService.getReport(from, to);
+    }
+
+    /**
+     * Xuất báo cáo tài chính ra file CSV, cùng số liệu với {@code /report} (FR-111).
+     *
+     * <p>Không khai báo {@code produces} để lỗi nghiệp vụ (vd: INVALID_DATE_RANGE) vẫn trả JSON như mọi API khác.
+     */
+    @Operation(
+            summary = "Xuất báo cáo tài chính CSV",
+            description = "Chỉ Admin. Cùng số liệu với /report, trả file CSV UTF-8 có BOM để Excel "
+                    + "hiển thị đúng tiếng Việt.")
+    @ApiResponse(responseCode = "200", description = "File CSV", content = @Content(mediaType = "text/csv"))
+    @ApiResponse(responseCode = "400", description = "Khoảng ngày không hợp lệ")
+    @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
+    @ApiResponse(responseCode = "403", description = "Không phải Admin")
+    @GetMapping("/report.csv")
+    public ResponseEntity<byte[]> reportCsv(
+            @Parameter(description = "Từ ngày (yyyy-MM-dd)")
+                    @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    LocalDate from,
+            @Parameter(description = "Đến ngày (yyyy-MM-dd)")
+                    @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    LocalDate to) {
+        FinanceSummaryResponse report = adminFinanceService.getReport(from, to);
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename(financeReportCsvWriter.fileName(from, to))
+                .build();
+        return ResponseEntity.ok()
+                .contentType(TEXT_CSV_UTF8)
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(financeReportCsvWriter.write(report, from, to));
     }
 
     /**

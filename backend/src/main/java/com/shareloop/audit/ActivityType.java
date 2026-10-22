@@ -33,7 +33,9 @@ public enum ActivityType {
     AREA_TOGGLE("Bật/tắt khu vực"),
     AUTH_GRANT("Cấp nhãn chính hãng"),
     AUTH_REJECT("Từ chối nhãn chính hãng"),
-    AUTH_REVOKE("Thu hồi nhãn chính hãng");
+    AUTH_REVOKE("Thu hồi nhãn chính hãng"),
+    GRACE_STAR("Cấp sao ân hạn"),
+    STAR_RESTORED("Tự hồi sao");
 
     private final String label;
 
