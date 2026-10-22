@@ -6,6 +6,7 @@ import com.shareloop.catalog.mapper.AreaMapper;
 import com.shareloop.catalog.repository.AreaRepository;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,11 @@ public class AreaService {
                 .filter(area -> area.getLevel() == 1 && area.getParentId() == null)
                 .map(area -> mapper.toResponse(area, childrenByParent.getOrDefault(area.getId(), List.of())))
                 .toList();
+    }
+
+    /** Tên khu vực theo id cho trang Admin; khu vực đang ẩn vẫn có tên, chỉ khu vực đã xoá mềm mới trả rỗng. */
+    public Optional<String> findName(long areaId) {
+        return repository.findById(areaId).map(area -> area.getName());
     }
 
     /** Khu vực có tồn tại và đang hoạt động không. Module khác (user) gọi hàm này thay vì đọc bảng areas. */

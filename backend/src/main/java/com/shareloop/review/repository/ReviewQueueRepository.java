@@ -33,6 +33,19 @@ public interface ReviewQueueRepository extends Repository<com.shareloop.item.ent
             """, nativeQuery = true)
     List<Object[]> findPendingReviewQueue(Pageable pageable);
 
+    // Thông tin kiểm duyệt của một bài ở mọi trạng thái (Admin xem chi tiết); cùng cách đọc ai_result như hàng chờ.
+    @Query(value = """
+            SELECT i.ai_risk AS aiRisk,
+                   COALESCE(i.ai_result ->> 'flag', i.ai_result ->> 'moderation', 'NONE') AS moderationFlag,
+                   COALESCE(i.ai_result ->> 'reason', i.ai_result ->> 'moderationReason') AS flagReason,
+                   u.trust_stars AS donorTrustStars,
+                   CAST(i.ai_result -> 'matchedTerms' AS TEXT) AS matchedTerms
+            FROM items i
+            JOIN users u ON u.id = i.donor_id
+            WHERE i.id = :itemId
+              AND i.is_deleted = FALSE
+            """, nativeQuery = true)
+    List<Object[]> findModerationInfo(@Param("itemId") long itemId);
     /**
      * Đếm bài trong hàng chờ duyệt đã chờ tới mốc {@code cutoff} (gồm cả đúng mốc) mà chưa được duyệt (FR-121).
      * Thời gian chờ tính từ updated_at: bài sửa xong quay lại PENDING_REVIEW được tính lại từ lúc gửi bản sửa.

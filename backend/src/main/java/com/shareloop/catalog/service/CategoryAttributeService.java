@@ -6,7 +6,10 @@ import com.shareloop.catalog.entity.ItemAttribute;
 import com.shareloop.catalog.repository.ItemAttributeRepository;
 import com.shareloop.catalog.repository.ItemCategoryRepository;
 import com.shareloop.common.exception.BusinessException;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -47,6 +50,19 @@ public class CategoryAttributeService {
                 attribute.getOptions(),
                 attribute.isRequired(),
                 attribute.getSortOrder());
+    }
+
+    /**
+     * Tên thuộc tính theo id, dùng cho trang chi tiết bài của Admin. Thuộc tính đang ẩn vẫn có tên; id không còn
+     * tồn tại (xoá mềm) sẽ không có trong map.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, String> findNames(Collection<Long> attributeIds) {
+        Map<Long, String> names = new HashMap<>();
+        for (ItemAttribute attribute : attributeRepository.findAllById(attributeIds)) {
+            names.put(attribute.getId(), attribute.getName());
+        }
+        return names;
     }
 
     @Transactional(readOnly = true)
