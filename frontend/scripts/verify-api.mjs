@@ -17,6 +17,7 @@ const bundle = await build({
       export { catalogApi } from './src/services/catalogApi.ts';
       export { adminAuthenticityApi, authenticityErrorMessage, beginAuthenticitySubmission, validateAuthenticityReason } from './src/services/adminAuthenticityApi.ts';
       export { adminModerationApi } from './src/services/adminModerationApi.ts';
+      export { itemApi } from './src/services/itemApi.ts';
       export { reportApi } from './src/services/reportApi.ts';
       export { adminFinanceApi } from './src/services/adminFinanceApi.ts';
       export { paymentApi } from './src/services/paymentApi.ts';
@@ -24,7 +25,8 @@ const bundle = await build({
       export { loadPendingTopUp, savePendingTopUp } from './src/services/topUpSession.ts';
       export { adminAuditApi } from './src/services/adminAuditApi.ts';
       export { requestApi, toFeItemRequest } from './src/services/requestApi.ts';
-      export { canChat, canSchedule, canConfirmHandover, requestStatusLabel } from './src/utils/request.ts';
+      export { canChat, canSchedule, canConfirmHandover, canSelectPendingRequest, requestStatusLabel } from './src/utils/request.ts';
+      export { applyOtpBackspace, applyOtpChange, applyOtpPaste, createOtpValue } from './src/utils/otp.ts';
       export { loadPersistedState } from './src/utils/storage.ts';`,
     resolveDir: process.cwd(),
     loader: 'ts',
@@ -195,6 +197,28 @@ await test('duyệt gửi ID điều kiện cùng đáp án, không ghép lại 
   assert.deepEqual(requests[0].body.answers, answers);
 });
 
+await test('hàng chờ moderation, chi tiết bài và từ chối dùng đúng contract', async () => {
+  requests = [];
+  nextResponse = {
+    items: [{ id: 42, donorId: 9, title: 'Áo khoác', createdAt: '2026-10-14T10:00:00Z' }],
+    checklist: [{ id: 11, key: 'real_photos', statement: 'Ảnh là ảnh thật.' }],
+    page: 0,
+    size: 20,
+  };
+  assert.deepEqual(await api.adminModerationApi.pendingReviews({ page: 0, size: 20 }), nextResponse);
+  assert.equal(requests[0].url, '/api/v1/admin/reviews/pending');
+  assert.deepEqual(requests[0].params, { page: 0, size: 20 });
+
+  nextResponse = { id: 42, title: 'Áo khoác', images: ['/api/v1/media/1'] };
+  assert.deepEqual(await api.itemApi.detail(42), nextResponse);
+  assert.equal(requests[1].url, '/api/v1/items/42');
+
+  nextResponse = undefined;
+  await api.adminModerationApi.reject(42, { reason: 'Ảnh không phù hợp' });
+  assert.equal(requests[2].url, '/api/v1/admin/reviews/42/reject');
+  assert.deepEqual(requests[2].body, { reason: 'Ảnh không phù hợp' });
+});
+
 await test('khiếu nại truyền bộ lọc, phân trang và đọc hồ sơ theo report ID', async () => {
   requests = [];
   nextResponse = {
@@ -344,6 +368,26 @@ await test('chỉ mở xác nhận giao nhận ở LOGISTICS_CONFIRMED hoặc AW
   );
 });
 
+await test('danh sách, chi tiết và chọn yêu cầu dùng đúng contract Backend', async () => {
+  requests = [];
+  nextResponse = [];
+  await api.requestApi.forItem(45, 9);
+  assert.equal(requests[0].method, 'get');
+  assert.equal(requests[0].url, '/api/v1/items/45/requests');
+  assert.deepEqual(requests[0].params, { currentUserId: 9 });
+
+  nextResponse = { id: 101, itemId: 45, receiverId: 12, type: 'GIVE', status: 'PENDING' };
+  await api.requestApi.get(101, 9);
+  assert.equal(requests[1].method, 'get');
+  assert.equal(requests[1].url, '/api/v1/requests/101');
+
+  nextResponse = { ...nextResponse, status: 'RESERVED' };
+  await api.requestApi.select(101, 9);
+  assert.equal(requests[2].method, 'post');
+  assert.equal(requests[2].url, '/api/v1/requests/101/select');
+  assert.equal(requests[2].body, undefined);
+});
+
 await test('bên nhận giữ nguyên lựa chọn không đúng mô tả và lý do khi xác nhận', async () => {
   requests = [];
   await api.requestApi.confirmHandover(101, 7, {
@@ -431,4 +475,39 @@ await test('authenticity ánh xạ lỗi HTTP 400/401/403/404/409 và 500', () =
   for (const [status, message] of expected) {
     assert.equal(api.authenticityErrorMessage({ status }), message);
   }
+});
+
+await test('OTP tự chuyển focus qua từng ô và giữ ở ô cuối, không phát sinh submit', () => {
+  let value = api.createOtpValue();
+  const submitCount = 0;
+  for (let index = 0; index < 6; index += 1) {
+    const result = api.applyOtpChange(value, index, String(index));
+    value = result.value;
+    assert.equal(result.focusIndex, Math.min(index + 1, 5));
+  }
+  assert.deepEqual(value, ['0', '1', '2', '3', '4', '5']);
+  assert.equal(submitCount, 0);
+});
+
+await test('OTP Backspace xóa ô có số và lùi focus khi ô đang trống', () => {
+  const filled = ['1', '2', '', '', '', ''];
+  const cleared = api.applyOtpBackspace(filled, 1);
+  assert.deepEqual(cleared.value, ['1', '', '', '', '', '']);
+  assert.equal(cleared.focusIndex, 1);
+  const movedBack = api.applyOtpBackspace(cleared.value, 1);
+  assert.deepEqual(movedBack.value, cleared.value);
+  assert.equal(movedBack.focusIndex, 0);
+});
+
+await test('OTP paste phân bổ đủ mã, bỏ chữ cái và cho phép sửa mã sai', () => {
+  const pasted = api.applyOtpPaste(api.createOtpValue(), 0, '12a3456');
+  assert.deepEqual(pasted.value, ['1', '2', '3', '4', '5', '6']);
+  assert.equal(pasted.focusIndex, 5);
+
+  const rejectedLetter = api.applyOtpChange(pasted.value, 2, 'x');
+  assert.deepEqual(rejectedLetter.value, pasted.value);
+  const corrected = api.applyOtpChange(rejectedLetter.value, 2, '9');
+  assert.deepEqual(corrected.value, ['1', '2', '9', '4', '5', '6']);
+  assert.equal(corrected.focusIndex, 3);
+  assert.deepEqual(api.createOtpValue(), ['', '', '', '', '', '']);
 });

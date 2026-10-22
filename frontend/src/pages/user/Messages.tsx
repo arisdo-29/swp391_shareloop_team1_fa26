@@ -37,12 +37,19 @@ import {
 } from '../../services/requestApi';
 import type { ApiError } from '../../services/http';
 import { ReportDialog } from '../../components/ReportDialog';
-import { canChat, canConfirmHandover, canSchedule, requestStatusLabel } from '../../utils/request';
+import { canChat, canConfirmHandover, canSchedule, canSelectPendingRequest, requestStatusLabel } from '../../utils/request';
 import { mediaApi } from '../../services/mediaApi';
 import { openDispute, respondDispute, type ReportReason } from '../../services/reportApi';
 import { resolveMediaUrl } from '../../services/mediaUrl';
 
 const steps = ['Trao doi', 'De xuat lich', 'Chot lich', 'Ban giao', 'Hoan tat'];
+
+const apiConditionLabel: Record<ItemResponse['condition'], string> = {
+  NEW: 'Mới',
+  LIKE_NEW: 'Như mới',
+  GOOD: 'Còn tốt',
+  DEFECTIVE: 'Có lỗi',
+};
 
 const disputeReasonLabels: Record<ReportReason, string> = {
   NOT_AS_DESCRIBED: 'Không đúng mô tả',
@@ -93,9 +100,52 @@ export function Messages() {
   return backendUserId ? <ApiMessages currentUserId={backendUserId} /> : <MockMessages />;
 }
 
-interface ApiConversation {
+export interface ApiConversation {
   request: RequestResponse;
   item?: ItemResponse;
+  offeredItem?: ItemResponse;
+}
+
+function requestStatusClass(status: RequestResponse['status']) {
+  if (status === 'REJECTED' || status === 'CANCELLED' || status === 'DISPUTED') {
+    return 'bg-red-50 text-error';
+  }
+  if (status === 'COMPLETED') return 'bg-emerald-50 text-success';
+  if (status === 'RESERVED') return 'bg-primary-soft text-primary';
+  return 'bg-amber-50 text-warning';
+}
+
+function requestParticipantName(conversation: ApiConversation, currentUserId: number) {
+  if (conversation.item?.donorId === currentUserId) {
+    return conversation.request.receiverName?.trim() || `Người dùng #${conversation.request.receiverId}`;
+  }
+  return 'Chủ bài đăng';
+}
+
+function avatarInitials(name: string) {
+  if (name === 'Chủ bài đăng') return '';
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(-2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
+}
+
+function canSelectRequest(
+  conversation: ApiConversation,
+  conversations: ApiConversation[],
+  currentUserId: number,
+) {
+  return canSelectPendingRequest(
+    conversation.request.status,
+    conversation.item?.donorId,
+    currentUserId,
+    conversations
+      .filter((entry) => entry.request.itemId === conversation.request.itemId)
+      .map((entry) => entry.request.status),
+  );
 }
 
 function ApiMessages({ currentUserId }: { currentUserId: number }) {
@@ -115,6 +165,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [conversationReloadKey, setConversationReloadKey] = useState(0);
   const [messageReloadKey, setMessageReloadKey] = useState(0);
   const [sending, setSending] = useState(false);
+  const [selectCandidateId, setSelectCandidateId] = useState<number | null>(null);
+  const [selectSubmitting, setSelectSubmitting] = useState(false);
+  const [selectError, setSelectError] = useState('');
   const [mobileChat, setMobileChat] = useState(false);
   const [deliveryMethod, setDeliveryMethod] = useState<'IN_PERSON' | 'SHIPPING'>('IN_PERSON');
   const [meetingPlace, setMeetingPlace] = useState('');
@@ -156,6 +209,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatImageInputRef = useRef<HTMLInputElement>(null);
   const activeRequestId = useRef<number | null>(null);
+  const selectInFlight = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -169,7 +223,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         const receivedGroups = await Promise.all(ownedItems.map((item) => requestApi.forItem(item.id, currentUserId)));
         const requestById = new Map<number, RequestResponse>();
         [...sentRequests, ...receivedGroups.flat()].forEach((request) => {
-          if (canChat(request.status) || request.id === requestedId) requestById.set(request.id, request);
+          requestById.set(request.id, request);
         });
         if (requestedId !== null) {
           if (!Number.isSafeInteger(requestedId) || requestedId <= 0) throw new Error('Invalid request');
@@ -178,13 +232,23 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         }
 
         const itemById = new Map(ownedItems.map((item) => [item.id, item]));
-        const missingItemIds = [...new Set([...requestById.values()].map((request) => request.itemId).filter((itemId) => !itemById.has(itemId)))];
+        const missingItemIds = [...new Set(
+          [...requestById.values()]
+            .flatMap((request) => [request.itemId, request.offeredItemId])
+            .filter((itemId): itemId is number => itemId !== undefined && !itemById.has(itemId)),
+        )];
         const missingItems = await Promise.allSettled(missingItemIds.map((id) => itemApi.detail(id)));
         missingItems.forEach((result) => {
           if (result.status === 'fulfilled') itemById.set(result.value.id, result.value);
         });
 
-        const nextConversations = [...requestById.values()].map((request) => ({ request, item: itemById.get(request.itemId) })).sort((a, b) => b.request.createdAt.localeCompare(a.request.createdAt));
+        const nextConversations = [...requestById.values()]
+          .map((request) => ({
+            request,
+            item: itemById.get(request.itemId),
+            offeredItem: request.offeredItemId ? itemById.get(request.offeredItemId) : undefined,
+          }))
+          .sort((a, b) => b.request.createdAt.localeCompare(a.request.createdAt));
         if (!active) return;
         setConversations(nextConversations);
         setSelectedRequestId((current) => requestedId ?? (current && nextConversations.some(({ request }) => request.id === current) ? current : (nextConversations[0]?.request.id ?? null)));
@@ -206,6 +270,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   }, [conversationReloadKey, currentUserId, requestedId]);
 
   const selected = conversations.find(({ request }) => request.id === selectedRequestId);
+  const selectCandidate = conversations.find(({ request }) => request.id === selectCandidateId);
+  const selectedParticipantName = selected ? requestParticipantName(selected, currentUserId) : '';
   const chatEnabled = selected ? canChat(selected.request.status) : false;
   const requestMediaEnabled = selected
     ? ['LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER', 'COMPLETED', 'DISPUTED'].includes(selected.request.status)
@@ -355,7 +421,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     setAgreeToWaiver(false);
   }, [selectedMeetingTime, selectedMeetingPlace, selectedDeliveryMethod]);
 
-  const selectedAsDonor = selected ? selected.request.receiverId !== currentUserId : false;
+  const selectedAsDonor = selected?.item?.donorId === currentUserId;
   const reportTargetUserId = selected?.item
     ? selected.item.donorId === currentUserId
       ? selected.request.receiverId
@@ -374,6 +440,42 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
 
   const updateSelectedRequest = (request: RequestResponse) => {
     setConversations((current) => current.map((entry) => entry.request.id === request.id ? { ...entry, request } : entry));
+  };
+
+  const confirmRequestSelection = async () => {
+    if (
+      !selectCandidate ||
+      selectInFlight.current ||
+      !canSelectRequest(selectCandidate, conversations, currentUserId)
+    ) return;
+
+    selectInFlight.current = true;
+    setSelectSubmitting(true);
+    setSelectError('');
+    try {
+      const updated = await requestApi.select(selectCandidate.request.id, currentUserId);
+      updateSelectedRequest({ ...selectCandidate.request, ...updated });
+      setSelectedRequestId(updated.id);
+      setMobileChat(true);
+      setSelectCandidateId(null);
+      navigate(`/requests/${updated.id}`, { replace: true });
+      setConversationReloadKey((key) => key + 1);
+    } catch (error) {
+      const apiError = error as ApiError;
+      const errorMessages: Record<string, string> = {
+        REQUEST_FORBIDDEN: 'Bạn không có quyền chọn người cho bài đăng này.',
+        REQUEST_NOT_FOUND: 'Không tìm thấy yêu cầu này.',
+        REQUEST_ITEM_NOT_FOUND: 'Không tìm thấy bài đăng liên quan.',
+        REQUEST_INVALID_STATE_TRANSITION: 'Yêu cầu không còn ở trạng thái có thể lựa chọn.',
+      };
+      setSelectError(errorMessages[apiError.code] || 'Không thể chọn người này. Vui lòng tải lại danh sách và thử lại.');
+      if (apiError.status === 409 || apiError.status === 404) {
+        setConversationReloadKey((key) => key + 1);
+      }
+    } finally {
+      selectInFlight.current = false;
+      setSelectSubmitting(false);
+    }
   };
 
   const saveSchedule = async () => {
@@ -451,12 +553,12 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     }
   };
 
-  const actOnPendingRequest = async (action: 'select' | 'cancel') => {
+  const cancelPendingRequest = async () => {
     if (!selected || logisticsSubmitting || selected.request.status !== 'PENDING') return;
     setLogisticsSubmitting(true);
     setLogisticsError('');
     try {
-      updateSelectedRequest(await requestApi[action](selected.request.id, currentUserId));
+      updateSelectedRequest(await requestApi.cancel(selected.request.id, currentUserId));
     } catch (error) {
       setLogisticsError((error as ApiError).message || 'Không cập nhật được yêu cầu.');
     } finally {
@@ -620,38 +722,63 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 </Button>
               </div>
             ) : conversations.length ? (
-              conversations.map(({ request, item }) => (
-                <button
-                  type="button"
-                  key={request.id}
-                  onClick={() => {
-                    setSelectedRequestId(request.id);
-                    setMobileChat(true);
-                    setReportOpen(false);
-                    setReportNotice('');
-                    setDisputeNotice('');
-                  }}
-                  className={`flex w-full gap-3 border-b border-border/70 p-4 text-left transition ${request.id === selectedRequestId ? 'bg-primary-faint' : 'hover:bg-background'}`}
-                >
-                  {item?.images[0] ? (
-                    <ItemImage src={item.images[0]} alt={item.title} className="size-11 rounded-md object-cover" />
-                  ) : (
-                    <span className="grid size-11 shrink-0 place-items-center rounded-md bg-surface-low text-primary">
-                      <Icon name="chat" className="size-5" />
-                    </span>
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <strong className="block truncate text-sm">{item?.title ?? `Yêu cầu #${request.id}`}</strong>
-                    <span className="mt-1 flex items-center gap-2">
-                      <TypeBadge type={request.type === 'SWAP' ? 'trade' : 'gift'} />
-                      <span className="text-xs text-text-muted">{requestStatusLabel[request.status]}</span>
-                    </span>
-                  </span>
-                </button>
-              ))
+              conversations.map((conversation) => {
+                const { request, item } = conversation;
+                const participantName = requestParticipantName(conversation, currentUserId);
+                const selectable = canSelectRequest(conversation, conversations, currentUserId);
+                const openDetails = () => {
+                  setSelectedRequestId(request.id);
+                  setMobileChat(true);
+                  setReportOpen(false);
+                  setReportNotice('');
+                  setDisputeNotice('');
+                };
+                return (
+                  <article
+                    key={request.id}
+                    className={`border-b border-border/70 p-4 transition ${request.id === selectedRequestId ? 'bg-primary-faint ring-1 ring-inset ring-primary/20' : 'hover:bg-background'}`}
+                  >
+                    <button type="button" onClick={openDetails} className="flex w-full gap-3 text-left">
+                      <Avatar
+                        user={{ name: participantName, avatarInitials: avatarInitials(participantName), avatarUrl: undefined }}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <strong className="block truncate text-sm">{participantName}</strong>
+                        <span className="mt-0.5 block truncate text-xs text-text-muted">
+                          {item?.title ?? `Bài đăng #${request.itemId}`}
+                        </span>
+                        <span className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <TypeBadge type={request.type === 'SWAP' ? 'trade' : 'gift'} />
+                          <span className={`rounded-sm px-2 py-1 text-[11px] font-semibold ${requestStatusClass(request.status)}`}>
+                            {requestStatusLabel[request.status]}
+                          </span>
+                        </span>
+                        <span className="mt-2 block text-[11px] text-text-muted">
+                          {new Date(request.createdAt).toLocaleString('vi-VN')}
+                        </span>
+                      </span>
+                    </button>
+                    <div className="mt-3 flex flex-wrap justify-end gap-2">
+                      <Button size="sm" variant="outline" onClick={openDetails}>Xem chi tiết</Button>
+                      {selectable ? (
+                        <Button
+                          size="sm"
+                          disabled={selectSubmitting}
+                          onClick={() => {
+                            setSelectError('');
+                            setSelectCandidateId(request.id);
+                          }}
+                        >
+                          Chọn người này
+                        </Button>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })
             ) : (
               <div className="p-5">
-                <EmptyState title="Chưa có cuộc trò chuyện" text="Cuộc trò chuyện xuất hiện sau khi một yêu cầu được chọn." />
+                <EmptyState title="Chưa có yêu cầu" text="Các yêu cầu nhận hoặc trao đổi món đồ sẽ xuất hiện tại đây." />
               </div>
             )}
           </div>
@@ -662,8 +789,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
             <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4 sm:px-5">
               <IconButton icon="arrow" label="Quay lại" className="rotate-180 lg:hidden" onClick={() => setMobileChat(false)} />
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-sm font-bold">{selected.item?.title ?? `Yêu cầu #${selected.request.id}`}</h2>
-                <p className="mt-1 text-xs text-text-muted">Tin nhắn được đồng bộ tự động mỗi 5 giây</p>
+                <h2 className="truncate text-sm font-bold">{selectedParticipantName}</h2>
+                <p className="mt-1 truncate text-xs text-text-muted">{selected.item?.title ?? `Bài đăng #${selected.request.itemId}`}</p>
               </div>
               <span className="rounded-sm bg-primary-faint px-2.5 py-1 text-xs font-semibold text-primary">{requestStatusLabel[selected.request.status]}</span>
               {reportTargetUserId && reportTargetUserId !== currentUserId ? (
@@ -672,6 +799,62 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 </Button>
               ) : null}
             </header>
+            <div className="shrink-0 border-b border-border bg-white px-4 py-3 sm:px-5">
+              <div className="flex flex-wrap items-start gap-3">
+                <Avatar
+                  user={{
+                    name: selectedParticipantName,
+                    avatarInitials: avatarInitials(selectedParticipantName),
+                    avatarUrl: undefined,
+                  }}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <strong className="text-sm">Yêu cầu #{selected.request.id}</strong>
+                    <TypeBadge type={selected.request.type === 'SWAP' ? 'trade' : 'gift'} />
+                    <span className={`rounded-sm px-2 py-1 text-[11px] font-semibold ${requestStatusClass(selected.request.status)}`}>
+                      {requestStatusLabel[selected.request.status]}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-text-muted">
+                    Gửi lúc {new Date(selected.request.createdAt).toLocaleString('vi-VN')}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-text-secondary">
+                    {selected.request.type === 'GIVE'
+                      ? `Đề nghị nhận món “${selected.item?.title ?? `#${selected.request.itemId}`}”.`
+                      : `Đề nghị trao đổi với món “${selected.item?.title ?? `#${selected.request.itemId}`}”.`}
+                  </p>
+                  <p className="mt-1 text-xs text-text-muted">Backend chưa cung cấp nội dung ghi chú riêng của yêu cầu.</p>
+                </div>
+              </div>
+              {selected.request.type === 'SWAP' ? (
+                selected.offeredItem ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/items/${selected.offeredItem!.id}`)}
+                    className="mt-3 flex w-full items-center gap-3 rounded-md bg-surface-low p-3 text-left transition hover:bg-primary-faint"
+                  >
+                    <ItemImage
+                      src={selected.offeredItem.images[0]}
+                      alt={selected.offeredItem.title}
+                      className="size-16 shrink-0 rounded-md object-cover"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-text-muted">Món đề xuất trao đổi</span>
+                      <strong className="mt-1 block truncate text-sm">{selected.offeredItem.title}</strong>
+                      <span className="mt-1 line-clamp-2 block text-xs leading-5 text-text-muted">{selected.offeredItem.description}</span>
+                      <span className="mt-1 block text-xs font-semibold text-text-secondary">
+                        {apiConditionLabel[selected.offeredItem.condition]}
+                      </span>
+                    </span>
+                  </button>
+                ) : (
+                  <p className="mt-3 rounded-md bg-amber-50 p-3 text-xs text-warning">
+                    Không tải được chi tiết món đề xuất #{selected.request.offeredItemId ?? ''} từ API bài đăng.
+                  </p>
+                )
+              ) : null}
+            </div>
             <details key={selected.request.id} className="group shrink-0 border-b border-border bg-white">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-surface-low focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:px-5 [&::-webkit-details-marker]:hidden">
                 <span className="min-w-0">
@@ -702,9 +885,22 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     <div className="flex items-center gap-3 text-sm">
                       <p>Yêu cầu đang chờ chủ bài chọn người nhận.</p>
                       {selectedAsDonor ? (
-                        <Button size="sm" disabled={logisticsSubmitting} onClick={() => { if (window.confirm('Chọn người này? Các yêu cầu khác sẽ bị từ chối.')) void actOnPendingRequest('select'); }}>Chọn người này</Button>
+                        canSelectRequest(selected, conversations, currentUserId) ? (
+                          <Button
+                            size="sm"
+                            disabled={selectSubmitting}
+                            onClick={() => {
+                              setSelectError('');
+                              setSelectCandidateId(selected.request.id);
+                            }}
+                          >
+                            Chọn người này
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-text-muted">Bài đăng đã có yêu cầu được chọn.</span>
+                        )
                       ) : (
-                        <Button size="sm" variant="outline" disabled={logisticsSubmitting} onClick={() => void actOnPendingRequest('cancel')}>Hủy yêu cầu</Button>
+                        <Button size="sm" variant="outline" disabled={logisticsSubmitting} onClick={() => void cancelPendingRequest()}>Hủy yêu cầu</Button>
                       )}
                     </div>
                   ) : null}
@@ -1052,6 +1248,20 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
           </section>
         )}
       </div>
+      {selectCandidate ? (
+        <SelectRequestDialog
+          conversation={selectCandidate}
+          participantName={requestParticipantName(selectCandidate, currentUserId)}
+          submitting={selectSubmitting}
+          error={selectError}
+          onCancel={() => {
+            if (selectSubmitting) return;
+            setSelectCandidateId(null);
+            setSelectError('');
+          }}
+          onConfirm={() => void confirmRequestSelection()}
+        />
+      ) : null}
       {reportOpen && selected && reportTargetUserId && reportTargetUserId !== currentUserId ? (
         <ReportDialog
           target={{ targetType: 'USER', targetUserId: reportTargetUserId, requestId: selected.request.id }}
@@ -1165,6 +1375,73 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+export function SelectRequestDialog({
+  conversation,
+  participantName,
+  submitting,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  conversation: ApiConversation;
+  participantName: string;
+  submitting: boolean;
+  error: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !submitting) onCancel();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onCancel, submitting]);
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-end bg-black/30 sm:place-items-center sm:p-4" role="presentation">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="select-request-title"
+        className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6"
+      >
+        <h2 id="select-request-title" className="text-xl font-bold">Xác nhận chọn người giao dịch</h2>
+        <div className="mt-4 flex items-center gap-3 rounded-md bg-surface-low p-3">
+          <Avatar user={{ name: participantName, avatarInitials: avatarInitials(participantName), avatarUrl: undefined }} />
+          <div className="min-w-0 flex-1">
+            <strong className="block truncate text-sm">{participantName}</strong>
+            <p className="mt-1 text-xs text-text-muted">
+              Yêu cầu #{conversation.request.id} · {conversation.request.type === 'SWAP' ? 'Trao đổi' : 'Nhận món đồ'}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 space-y-2 text-sm leading-6 text-text-secondary">
+          <p>
+            Bài đăng: <strong className="text-text-primary">{conversation.item?.title ?? `#${conversation.request.itemId}`}</strong>
+          </p>
+          <p>Gửi lúc: {new Date(conversation.request.createdAt).toLocaleString('vi-VN')}</p>
+          {conversation.request.type === 'SWAP' ? (
+            <p>
+              Món đề xuất: <strong className="text-text-primary">{conversation.offeredItem?.title ?? `#${conversation.request.offeredItemId ?? ''}`}</strong>
+            </p>
+          ) : null}
+        </div>
+        <p className="mt-4 rounded-md bg-amber-50 p-3 text-xs leading-5 text-warning">
+          Backend sẽ chuyển yêu cầu này sang Đã được chọn và từ chối các yêu cầu đang chờ khác của cùng bài đăng.
+        </p>
+        {error ? <p role="alert" className="mt-4 rounded-md bg-red-50 p-3 text-sm text-error">{error}</p> : null}
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="ghost" autoFocus disabled={submitting} onClick={onCancel}>Hủy</Button>
+          <Button disabled={submitting} onClick={onConfirm}>
+            {submitting ? 'Đang chọn...' : 'Xác nhận chọn'}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { AdminComplaints } from './AdminComplaints';
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
@@ -118,19 +118,21 @@ type ReviewDetailState =
   | { status: 'loaded'; data: ItemResponse }
   | { status: 'error'; message: string };
 
-function hasInlineReviewDetails(item: ReviewQueueItem) {
-  return item.description != null && item.categoryId != null && item.areaId != null && item.offerType != null && item.condition != null;
-}
-
 function flattenAreas(areas: AreaResponse[]): AreaResponse[] {
   return areas.flatMap((area) => [area, ...flattenAreas(area.children ?? [])]);
 }
 
-const apiConditionLabels: Record<NonNullable<ReviewQueueItem['condition']>, string> = {
+const apiConditionLabels: Record<ItemResponse['condition'], string> = {
   NEW: 'Mới',
   LIKE_NEW: 'Như mới',
   GOOD: 'Còn tốt',
   DEFECTIVE: 'Có lỗi',
+};
+
+const operatingStatusLabels: Record<NonNullable<ItemResponse['operatingStatus']>, string> = {
+  NORMAL: 'Hoạt động bình thường',
+  PARTIAL: 'Hoạt động một phần',
+  NOT_WORKING: 'Không hoạt động',
 };
 
 export function AdminDashboard() {
@@ -232,10 +234,12 @@ export function AdminModeration() {
   const [apiPending, setApiPending] = useState<ReviewQueueItem[]>([]);
   const [apiChecklist, setApiChecklist] = useState<ReviewChecklistItem[]>([]);
   const [apiAnswers, setApiAnswers] = useState<Record<number, boolean[]>>({});
+  const [apiApproving, setApiApproving] = useState<ReviewQueueItem | null>(null);
   const [apiRejecting, setApiRejecting] = useState<ReviewQueueItem | null>(null);
   const [apiRejectReason, setApiRejectReason] = useState('');
   const [apiRejectReasons, setApiRejectReasons] = useState<string[]>([]);
   const [apiActionId, setApiActionId] = useState<number | null>(null);
+  const [apiActionError, setApiActionError] = useState('');
   const [apiLoading, setApiLoading] = useState(false);
   const [apiError, setApiError] = useState('');
   const [apiLegacyNotice, setApiLegacyNotice] = useState('');
@@ -244,6 +248,7 @@ export function AdminModeration() {
   const [reviewDetails, setReviewDetails] = useState<Record<number, ReviewDetailState>>({});
   const [categoryNames, setCategoryNames] = useState<Record<number, string>>({});
   const [areaNames, setAreaNames] = useState<Record<number, string>>({});
+  const apiSubmissionLock = useRef(false);
 
   useEffect(() => {
     if (!isApiAdmin) return;
@@ -308,32 +313,42 @@ export function AdminModeration() {
 
   const approveApiReview = async (item: ReviewQueueItem) => {
     const answers = apiAnswers[item.id] ?? [];
-    if (!apiChecklist.length || answers.length !== apiChecklist.length || answers.some((answer) => !answer)) return;
+    if (
+      apiSubmissionLock.current ||
+      !apiChecklist.length ||
+      answers.length !== apiChecklist.length ||
+      answers.some((answer) => !answer)
+    ) return;
+    apiSubmissionLock.current = true;
     setApiActionId(item.id);
-    setApiError('');
+    setApiActionError('');
     try {
       await adminModerationApi.approve(item.id, { answers: apiChecklist.map((entry, index) => ({ id: entry.id, passed: answers[index] })) });
       setApiPending((current) => current.filter((entry) => entry.id !== item.id));
       setToast(`Đã duyệt bài #${item.id}.`);
+      setApiApproving(null);
     } catch (error) {
       const apiError = error as ApiError;
       if (apiError.code === 'REVIEW_CHECKLIST_OUTDATED') {
         setApiAnswers({});
         setModerationReloadKey((key) => key + 1);
+        setApiApproving(null);
         setToast('Checklist đã thay đổi. Vui lòng kiểm tra và tích lại các điều kiện.');
       } else {
-        setApiError(apiError.status === 403 ? 'Tài khoản hiện tại không có quyền duyệt bài.' : apiError.message || 'Không duyệt được bài đăng.');
+        setApiActionError(apiError.status === 403 ? 'Tài khoản hiện tại không có quyền duyệt bài.' : apiError.message || 'Không duyệt được bài đăng.');
       }
     } finally {
+      apiSubmissionLock.current = false;
       setApiActionId(null);
     }
   };
 
   const rejectApiReview = async () => {
     const reason = apiRejectReason.trim();
-    if (!apiRejecting || !reason) return;
+    if (!apiRejecting || !reason || apiSubmissionLock.current) return;
+    apiSubmissionLock.current = true;
     setApiActionId(apiRejecting.id);
-    setApiError('');
+    setApiActionError('');
     try {
       await adminModerationApi.reject(apiRejecting.id, { reason });
       setApiPending((current) => current.filter((entry) => entry.id !== apiRejecting.id));
@@ -342,14 +357,15 @@ export function AdminModeration() {
       setApiRejectReason('');
     } catch (error) {
       const apiError = error as ApiError;
-      setApiError(apiError.status === 403 ? 'Tài khoản hiện tại không có quyền từ chối bài.' : apiError.message || 'Không từ chối được bài đăng.');
+      setApiActionError(apiError.status === 403 ? 'Tài khoản hiện tại không có quyền từ chối bài.' : apiError.message || 'Không từ chối được bài đăng.');
     } finally {
+      apiSubmissionLock.current = false;
       setApiActionId(null);
     }
   };
 
   const loadReviewDetails = async (item: ReviewQueueItem) => {
-    if (hasInlineReviewDetails(item) || reviewDetails[item.id]) return;
+    if (reviewDetails[item.id]?.status === 'loading' || reviewDetails[item.id]?.status === 'loaded') return;
     setReviewDetails((current) => ({ ...current, [item.id]: { status: 'loading' } }));
     try {
       const detail = await itemApi.detail(item.id);
@@ -394,87 +410,224 @@ export function AdminModeration() {
           <div className="space-y-3">
             {apiRows.map((item) => {
               const detailState = reviewDetails[item.id];
-              const detail = detailState?.status === 'loaded' ? detailState.data : item;
+              const detail = detailState?.status === 'loaded' ? detailState.data : null;
               const expanded = Boolean(expandedReviewIds[item.id]);
-              const hasDetails = hasInlineReviewDetails(item) || detailState?.status === 'loaded';
               return (
-              <article key={item.id} className="grid gap-4 rounded-lg bg-white p-4 ring-1 ring-border/80 lg:grid-cols-[minmax(0,1fr)_280px]">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
-                    <span>Bài #{item.id}</span>
-                    {displayRisk(item.aiRisk) ? <span className="rounded-sm bg-amber-50 px-2 py-1 font-semibold text-warning">Rủi ro: {displayRisk(item.aiRisk)}</span> : null}
-                  </div>
-                  <h2 className="mt-2 font-bold">{item.title}</h2>
-                  {displayModerationNote(item) ? <p className="mt-2 text-xs leading-5 text-text-muted">{displayModerationNote(item)}</p> : null}
-                  <p className="mt-2 text-xs text-text-muted">Gửi lúc {new Date(item.createdAt).toLocaleString('vi-VN')}</p>
-                  <Button className="mt-3" size="sm" variant="outline" onClick={() => toggleReviewDetails(item)}>
-                    {expanded ? 'Thu gọn thông tin' : 'Xem đầy đủ thông tin'}
-                  </Button>
-                  {expanded ? (
-                    <div className="mt-4">
-                      {detailState?.status === 'loading' ? <p className="text-sm text-text-muted">Đang tải thông tin chi tiết...</p> : null}
-                      {detailState?.status === 'error' ? <Alert tone="warning">{detailState.message}</Alert> : null}
-                      {hasDetails ? (
-                        <ModerationItemDetails
-                          item={detail}
-                          categoryName={detail.categoryId == null ? undefined : categoryNames[detail.categoryId]}
-                          areaName={detail.areaId == null ? undefined : areaNames[detail.areaId]}
+                <article
+                  key={item.id}
+                  className="overflow-hidden rounded-lg bg-white ring-1 ring-border/80 shadow-sm"
+                >
+                  <div className="min-w-0 p-4 sm:p-5">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                        <span className="rounded-sm bg-surface-low px-2 py-1 font-mono font-semibold text-text-secondary">
+                          #{item.id}
+                        </span>
+                        {displayRisk(item.aiRisk) ? (
+                          <span className="rounded-sm bg-amber-50 px-2 py-1 font-semibold text-warning">
+                            Rủi ro: {displayRisk(item.aiRisk)}
+                          </span>
+                        ) : null}
+                        {item.moderationFlag ? (
+                          <span className="rounded-sm bg-red-50 px-2 py-1 font-semibold text-error">
+                            {moderationFlagLabel[item.moderationFlag.toUpperCase()] ?? item.moderationFlag}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <h2 className="mt-3 text-lg font-bold leading-7 text-text-primary">{item.title}</h2>
+
+                      <dl className="mt-4 grid gap-x-6 gap-y-3 rounded-md bg-surface-low p-4 sm:grid-cols-3">
+                        <Info label="Người đăng" value={`Người dùng #${item.donorId}`} />
+                        <Info
+                          label="Uy tín"
+                          value={
+                            item.donorTrustStars == null
+                              ? 'Chưa có dữ liệu'
+                              : `${item.donorTrustStars}/5 sao`
+                          }
                         />
+                        <Info
+                          label="Thời gian đăng"
+                          value={new Date(item.createdAt).toLocaleString('vi-VN')}
+                        />
+                      </dl>
+
+                      {displayModerationNote(item) || item.matchedTerms?.length ? (
+                        <div className="mt-4 rounded-md border border-amber-100 bg-amber-50 p-3 text-sm text-warning">
+                          {displayModerationNote(item) ? (
+                            <p className="leading-6">{displayModerationNote(item)}</p>
+                          ) : null}
+                          {item.matchedTerms?.length ? (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {item.matchedTerms.map((term) => (
+                                <span key={term} className="rounded-sm bg-white/80 px-2 py-1 text-xs font-semibold">
+                                  {term}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
                       ) : null}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="space-y-3">
-                  <p className="text-xs text-text-muted">Điểm tin cậy: {item.donorTrustStars ?? '--'}</p>
-                  <div className="space-y-2 rounded-md bg-surface-low p-3">
-                    {apiChecklist.map((entry, index) => (
-                      <label key={entry.id} className="flex items-start gap-2 text-xs leading-5">
-                        <input
-                          type="checkbox"
-                          checked={apiAnswers[item.id]?.[index] ?? false}
+
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => toggleReviewDetails(item)}
+                        >
+                          {expanded ? 'Thu gọn chi tiết' : 'Tải chi tiết và hình ảnh'}
+                        </Button>
+                        {!expanded ? (
+                          <span className="text-xs leading-5 text-text-muted">
+                            Danh sách chờ chưa chứa mô tả, danh mục, tình trạng và ảnh.
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {expanded ? (
+                        <div className="mt-4">
+                          {detailState?.status === 'loading' ? (
+                            <div className="rounded-md bg-surface-low p-4 text-sm text-text-muted">
+                              Đang tải chi tiết và hình ảnh từ API bài đăng...
+                            </div>
+                          ) : null}
+                          {detailState?.status === 'error' ? (
+                            <div className="space-y-3">
+                              <Alert tone="warning">{detailState.message}</Alert>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void loadReviewDetails(item)}
+                              >
+                                Thử tải lại chi tiết
+                              </Button>
+                            </div>
+                          ) : null}
+                          {detail ? (
+                            <ModerationItemDetails
+                              item={detail}
+                              categoryName={categoryNames[detail.categoryId]}
+                              areaName={areaNames[detail.areaId]}
+                            />
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">
+                        <Button
+                          size="sm"
+                          variant="danger"
                           disabled={apiActionId === item.id}
-                          onChange={(event) => setApiAnswers((current) => ({
-                            ...current,
-                            [item.id]: apiChecklist.map((_, answerIndex) => answerIndex === index ? event.target.checked : (current[item.id]?.[answerIndex] ?? false)),
-                          }))}
-                        />
-                        <span>{entry.statement}</span>
-                      </label>
-                    ))}
+                          onClick={() => {
+                            setApiActionError('');
+                            setApiRejecting(item);
+                            setApiRejectReason('');
+                          }}
+                        >
+                          Từ chối
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={apiActionId === item.id || !apiChecklist.length}
+                          onClick={() => {
+                            setApiActionError('');
+                            setApiApproving(item);
+                          }}
+                        >
+                          Duyệt bài
+                        </Button>
+                      </div>
                   </div>
-                  {apiChecklist.length ? <div className="flex justify-end gap-2">
-                    <Button size="sm" variant="danger" disabled={apiActionId === item.id} onClick={() => { setApiRejecting(item); setApiRejectReason(''); }}>
-                      Từ chối
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={
-                        apiActionId === item.id ||
-                        !apiChecklist.length ||
-                        (apiAnswers[item.id] ?? []).length !== apiChecklist.length ||
-                        !(apiAnswers[item.id] ?? []).every(Boolean)
-                      }
-                      onClick={() => void approveApiReview(item)}
-                    >
-                      {apiActionId === item.id ? 'Đang xử lý...' : 'Duyệt bài'}
-                    </Button>
-                  </div> : null}
-                </div>
-              </article>
+                </article>
               );
             })}
           </div>
         ) : (
           <EmptyState icon="shield" title={query ? 'Không tìm thấy bài phù hợp' : 'Không có bài chờ duyệt'} text={query ? 'Hãy thử từ khóa khác.' : 'Hiện chưa có bài đăng nào trong hàng chờ.'} />
         )}
+        {apiApproving ? (
+          <Modal
+            title="Checklist kiểm duyệt"
+            onClose={() => {
+              if (apiActionId === null) {
+                setApiApproving(null);
+                setApiActionError('');
+              }
+            }}
+          >
+            <p className="mb-4 text-sm text-text-muted">
+              Bài #{apiApproving.id}: <span className="font-semibold text-text-primary">{apiApproving.title}</span>
+            </p>
+            <ModerationChecklistContent
+              checklist={apiChecklist}
+              answers={apiAnswers[apiApproving.id] ?? apiChecklist.map(() => false)}
+              disabled={apiActionId === apiApproving.id}
+              error={apiActionError}
+              onToggle={(index, checked) => {
+                setApiAnswers((current) => ({
+                  ...current,
+                  [apiApproving.id]: apiChecklist.map((_, answerIndex) =>
+                    answerIndex === index ? checked : (current[apiApproving.id]?.[answerIndex] ?? false),
+                  ),
+                }));
+              }}
+              onCancel={() => {
+                setApiApproving(null);
+                setApiActionError('');
+              }}
+              onConfirm={() => void approveApiReview(apiApproving)}
+            />
+          </Modal>
+        ) : null}
         {apiRejecting ? (
-          <Modal title={`Từ chối bài #${apiRejecting.id}`} onClose={() => { if (apiActionId === null) setApiRejecting(null); }}>
-            <Select label="Lý do từ chối" value={apiRejectReason} onChange={(event) => setApiRejectReason(event.target.value)} disabled={apiActionId !== null}>
+          <Modal
+            title="Từ chối bài đăng"
+            onClose={() => {
+              if (apiActionId === null) {
+                setApiRejecting(null);
+                setApiActionError('');
+              }
+            }}
+          >
+            <p className="mb-4 text-sm text-text-muted">
+              Bài #{apiRejecting.id}: <span className="font-semibold text-text-primary">{apiRejecting.title}</span>
+            </p>
+            <Select
+              label="Lý do mẫu"
+              value={apiRejectReasons.includes(apiRejectReason) ? apiRejectReason : ''}
+              onChange={(event) => {
+                setApiRejectReason(event.target.value);
+                setApiActionError('');
+              }}
+              disabled={apiActionId !== null}
+            >
               <option value="">Chọn lý do từ danh sách</option>
               {apiRejectReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
             </Select>
+            <div className="mt-4">
+              <TextArea
+                label="Lý do từ chối"
+                required
+                value={apiRejectReason}
+                disabled={apiActionId !== null}
+                placeholder="Chọn lý do mẫu hoặc nhập lý do cụ thể"
+                onChange={(event) => {
+                  setApiRejectReason(event.target.value);
+                  setApiActionError('');
+                }}
+              />
+            </div>
+            {apiActionError ? <div className="mt-4"><Alert tone="error">{apiActionError}</Alert></div> : null}
             <div className="mt-5 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setApiRejecting(null)} disabled={apiActionId !== null}>Hủy</Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setApiRejecting(null);
+                  setApiActionError('');
+                }}
+                disabled={apiActionId !== null}
+              >
+                Hủy
+              </Button>
               <Button variant="danger" onClick={() => void rejectApiReview()} disabled={!apiRejectReason.trim() || apiActionId !== null}>
                 {apiActionId !== null ? 'Đang xử lý...' : 'Xác nhận từ chối'}
               </Button>
@@ -603,7 +756,7 @@ function ModerationItemDetails({
   categoryName,
   areaName,
 }: {
-  item: ReviewQueueItem | ItemResponse;
+  item: ItemResponse;
   categoryName?: string;
   areaName?: string;
 }) {
@@ -618,6 +771,14 @@ function ModerationItemDetails({
         <Info label="Khu vực" value={areaName ?? (item.areaId == null ? 'Chưa có dữ liệu' : `Khu vực #${item.areaId}`)} />
         <Info label="Tình trạng" value={condition ? apiConditionLabels[condition] : 'Chưa có dữ liệu'} />
         <Info label="Thương hiệu" value={item.brand?.trim() || 'Không có'} />
+        <Info
+          label="Trạng thái hoạt động"
+          value={
+            item.operatingStatus
+              ? operatingStatusLabels[item.operatingStatus]
+              : 'Không áp dụng hoặc chưa có dữ liệu'
+          }
+        />
         <Info label="Ghi chú lỗi" value={item.defectNote?.trim() || 'Không có'} />
       </div>
       <div className="mt-4">
@@ -625,6 +786,83 @@ function ModerationItemDetails({
         <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-text-primary">{item.description?.trim() || 'Chưa có dữ liệu'}</p>
       </div>
       <ModerationImageGallery images={item.images ?? []} defectImages={item.defectImages ?? []} />
+    </div>
+  );
+}
+
+export function ModerationChecklistContent({
+  checklist,
+  answers,
+  disabled,
+  error,
+  onToggle,
+  onCancel,
+  onConfirm,
+}: {
+  checklist: ReviewChecklistItem[];
+  answers: boolean[];
+  disabled: boolean;
+  error?: string;
+  onToggle: (index: number, checked: boolean) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const completed = checklist.reduce((total, _, index) => total + (answers[index] ? 1 : 0), 0);
+  const isComplete = checklist.length > 0 && completed === checklist.length;
+  const progress = checklist.length ? Math.round((completed / checklist.length) * 100) : 0;
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-bold text-text-primary">Tiến độ kiểm duyệt</p>
+          <p className="mt-1 text-xs text-text-muted">Tích chọn từng tiêu chí sau khi đã kiểm tra bài đăng.</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-primary/10 px-3 py-1 text-sm font-bold text-primary" aria-live="polite">
+          {completed}/{checklist.length}
+        </span>
+      </div>
+      <div
+        className="mb-4 h-2 overflow-hidden rounded-full bg-surface-low"
+        role="progressbar"
+        aria-label="Tiến độ checklist"
+        aria-valuemin={0}
+        aria-valuemax={checklist.length}
+        aria-valuenow={completed}
+      >
+        <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress}%` }} />
+      </div>
+
+      {checklist.length ? (
+        <div className="max-h-[50dvh] space-y-2 overflow-y-auto overscroll-contain pr-1">
+          {checklist.map((entry, index) => (
+            <label
+              key={entry.id}
+              className="flex cursor-pointer items-start gap-3 rounded-md border border-border/80 p-3 text-sm leading-6 transition hover:bg-surface-low has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/40"
+            >
+              <input
+                type="checkbox"
+                checked={answers[index] ?? false}
+                disabled={disabled}
+                autoFocus={index === 0}
+                onChange={(event) => onToggle(index, event.target.checked)}
+                className="mt-1 size-4 shrink-0 accent-primary"
+              />
+              <span>{entry.statement}</span>
+            </label>
+          ))}
+        </div>
+      ) : (
+        <Alert tone="warning">Backend chưa cung cấp checklist kiểm duyệt. Không thể xác nhận duyệt bài.</Alert>
+      )}
+
+      {error ? <div className="mt-4"><Alert tone="error">{error}</Alert></div> : null}
+      <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">
+        <Button variant="ghost" onClick={onCancel} disabled={disabled}>Hủy</Button>
+        <Button onClick={onConfirm} disabled={!isComplete || disabled}>
+          {disabled ? 'Đang xử lý...' : 'Xác nhận duyệt bài'}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -640,7 +878,13 @@ function ModerationImageGallery({
   const itemImages = images.map(resolveMediaUrl).filter(Boolean);
   const itemDefectImages = defectImages.map(resolveMediaUrl).filter(Boolean);
 
-  if (!itemImages.length && !itemDefectImages.length) return null;
+  if (!itemImages.length && !itemDefectImages.length) {
+    return (
+      <div className="mt-4 rounded-md border border-dashed border-border p-4 text-sm text-text-muted">
+        Bài đăng không có hình ảnh trong response chi tiết.
+      </div>
+    );
+  }
 
   return (
     <div className="mt-4 space-y-3">
@@ -705,19 +949,23 @@ function ModerationThumbnailGroup({
   return (
     <div>
       <p className="mb-2 text-xs font-semibold text-text-secondary">{label}</p>
-      <div className="flex flex-wrap gap-2">
+      <div className={mainThumbnail ? 'grid grid-cols-4 gap-2' : 'flex flex-wrap gap-2'}>
         {images.map((image, index) => (
           <button
             key={`${image}-${index}`}
             type="button"
             aria-label={`Xem lớn ${label.toLowerCase()} ${index + 1}`}
             onClick={() => onPreview(image, index)}
-            className="overflow-hidden rounded-md ring-1 ring-border"
+            className={`overflow-hidden rounded-md bg-white ring-1 ring-border transition hover:ring-primary/50 ${
+              mainThumbnail && index === 0 ? 'col-span-4' : ''
+            }`}
           >
             <ItemImage
               src={image}
               alt={`${label} ${index + 1}`}
-              className={`${mainThumbnail && index === 0 ? 'size-24' : 'size-16'} object-cover`}
+              className={`${
+                mainThumbnail && index === 0 ? 'h-56 w-full' : 'size-20'
+              } object-cover`}
             />
           </button>
         ))}
@@ -3485,12 +3733,27 @@ function AlertDetailModal({
 }
 
 function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  const titleId = useId();
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
-      <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-xl sm:rounded-xl sm:p-6">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-xl sm:rounded-xl sm:p-6"
+      >
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-bold">{title}</h2>
-          <button onClick={onClose} className="grid size-9 place-items-center rounded-md text-text-muted hover:bg-surface-low">
+          <h2 id={titleId} className="text-xl font-bold">{title}</h2>
+          <button type="button" aria-label="Đóng" onClick={onClose} className="grid size-9 place-items-center rounded-md text-text-muted hover:bg-surface-low">
             <Icon name="close" className="size-5" />
           </button>
         </div>

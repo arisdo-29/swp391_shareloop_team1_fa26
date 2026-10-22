@@ -2,10 +2,12 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Alert, Button, Field, PageHeader } from '../../components/ui';
 import { PasswordField } from '../../components/PasswordField';
+import { OtpInput } from '../../components/OtpInput';
 import { authApi } from '../../services/authApi';
 import { authErrorMessage } from '../../services/authErrors';
 import type { ApiError } from '../../services/http';
 import { passwordRules, validEmail, validatePassword } from '../../utils/passwordSecurity';
+import { createOtpValue } from '../../utils/otp';
 
 interface ApiResetState {
   email: string;
@@ -25,7 +27,7 @@ export function ForgotPassword() {
   const step = path === '/forgot-password' ? 'email' : 'reset';
   const apiReset = location.state as ApiResetState | null;
   const [email, setEmail] = useState(apiReset?.email ?? '');
-  const [otp, setOtp] = useState('');
+  const [otp, setOtp] = useState(() => createOtpValue());
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -66,6 +68,7 @@ export function ForgotPassword() {
         resendCooldownSeconds: result.resendCooldownSeconds,
       };
       setEmail(state.email);
+      setOtp(createOtpValue());
       setOtpSeconds(result.otpExpiresInSeconds);
       setResendSeconds(result.resendCooldownSeconds);
       if (!resend) {
@@ -97,7 +100,8 @@ export function ForgotPassword() {
   const resetPassword = async (event: FormEvent) => {
     event.preventDefault();
     setError('');
-    if (!/^\d{6}$/.test(otp)) {
+    const code = otp.join('');
+    if (!/^\d{6}$/.test(code)) {
       setError('Mã OTP phải gồm đúng 6 chữ số.');
       return;
     }
@@ -116,7 +120,7 @@ export function ForgotPassword() {
     }
     setProcessing(true);
     try {
-      await authApi.resetPassword({ email, otp, newPassword });
+      await authApi.resetPassword({ email, otp: code, newPassword });
       navigate('/login', {
         replace: true,
         state: { notice: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập.' },
@@ -157,13 +161,14 @@ export function ForgotPassword() {
           {step === 'reset' ? (
             <>
               <Field label="Email" type="email" value={email} readOnly autoComplete="email" />
-              <Field
-                required
-                label="Mã OTP"
-                inputMode="numeric"
-                maxLength={6}
+              <OtpInput
                 value={otp}
-                onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                disabled={processing}
+                invalid={error.startsWith('Mã OTP')}
+                onChange={(value) => {
+                  setOtp(value);
+                  if (error.startsWith('Mã OTP')) setError('');
+                }}
               />
               <PasswordField label="Mật khẩu mới" value={newPassword} onChange={setNewPassword} autoComplete="new-password" />
               <PasswordField label="Xác nhận mật khẩu mới" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />

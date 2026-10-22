@@ -1,7 +1,13 @@
-import { useState } from 'react';
-import { Field, Icon } from './ui';
+import { useId, useState } from 'react';
+import { Icon } from './ui';
 
-export function PasswordField({ label, value, onChange, error, autoComplete }: {
+export function PasswordField({
+  label,
+  value,
+  onChange,
+  error,
+  autoComplete,
+}: {
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -9,26 +15,41 @@ export function PasswordField({ label, value, onChange, error, autoComplete }: {
   autoComplete?: string;
 }) {
   const [visible, setVisible] = useState(false);
+  const inputId = useId();
+  const errorId = `${inputId}-error`;
+
   return (
-    <div className="relative">
-      <Field
-        required
-        label={label}
-        type={visible ? 'text' : 'password'}
-        value={value}
-        error={error}
-        onChange={(event) => onChange(event.target.value)}
-        autoComplete={autoComplete}
-        className="pr-11"
-      />
-      <button
-        type="button"
-        aria-label={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-        onClick={() => setVisible((current) => !current)}
-        className="absolute right-2 top-8 grid size-9 place-items-center rounded-md text-text-muted hover:bg-surface-low hover:text-primary"
-      >
-        <Icon name={visible ? 'eyeSlash' : 'eye'} className="size-5" />
-      </button>
+    <div>
+      <label htmlFor={inputId} className="label">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          id={inputId}
+          required
+          type={visible ? 'text' : 'password'}
+          value={value}
+          aria-invalid={Boolean(error) || undefined}
+          aria-describedby={error ? errorId : undefined}
+          onChange={(event) => onChange(event.target.value)}
+          autoComplete={autoComplete}
+          className={`input password-input pr-12 ${error ? 'border-error focus:border-error focus:ring-error/10' : ''}`}
+        />
+        <button
+          type="button"
+          aria-label={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+          aria-pressed={visible}
+          onClick={() => setVisible((current) => !current)}
+          className="absolute inset-y-0 right-1 my-auto grid size-9 place-items-center rounded-md text-text-muted hover:bg-surface-low hover:text-primary"
+        >
+          <Icon name={visible ? 'eyeSlash' : 'eye'} className="size-5" />
+        </button>
+      </div>
+      {error ? (
+        <span id={errorId} className="mt-1.5 block text-xs text-error">
+          {error}
+        </span>
+      ) : null}
     </div>
   );
 }
