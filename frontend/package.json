@@ -10,10 +10,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "npm run test:api && vitest run",
     "test:api": "node scripts/verify-api.mjs",
-    "test:moderation": "vitest run src/pages/admin/ModerationChecklistContent.test.tsx",
+    "test:moderation": "vitest run src/pages/admin/ModerationChecklistContent.test.tsx src/pages/admin/RejectReasonsContent.test.tsx",
     "test:otp": "vitest run src/components/OtpInput.test.tsx",
-    "test:requests": "vitest run src/pages/user/RequestSelection.test.tsx",
+    "test:requests": "vitest run src/pages/user/RequestSelection.test.tsx src/utils/meetingSchedule.test.ts",
     "preview": "vite preview",
     "format": "prettier --write ."
   },

@@ -17,6 +17,7 @@ const bundle = await build({
       export { catalogApi } from './src/services/catalogApi.ts';
       export { adminAuthenticityApi, authenticityErrorMessage, beginAuthenticitySubmission, validateAuthenticityReason } from './src/services/adminAuthenticityApi.ts';
       export { adminModerationApi } from './src/services/adminModerationApi.ts';
+      export { adminChecklistApi, validateChecklistItemIds } from './src/services/adminChecklistApi.ts';
       export { itemApi } from './src/services/itemApi.ts';
       export { reportApi } from './src/services/reportApi.ts';
       export { adminFinanceApi } from './src/services/adminFinanceApi.ts';
@@ -195,6 +196,46 @@ await test('duyệt gửi ID điều kiện cùng đáp án, không ghép lại 
   await api.adminModerationApi.approve(42, { answers });
   assert.equal(requests[0].url, '/api/v1/admin/reviews/42/approve');
   assert.deepEqual(requests[0].body.answers, answers);
+});
+
+await test('Admin Checklist dùng đúng method, path và request body cho đủ 5 API', async () => {
+  requests = [];
+  const first = { id: 3, key: 'photo', question: 'Ảnh đúng món đồ?', sortOrder: 10, active: true };
+  const second = { id: 1, key: 'content', question: 'Nội dung phù hợp?', sortOrder: 20, active: false };
+
+  nextResponse = [first, second];
+  assert.deepEqual(await api.adminChecklistApi.list(), [first, second]);
+  assert.equal(requests[0].method, 'get');
+  assert.equal(requests[0].url, '/api/v1/admin/checklist');
+
+  nextResponse = first;
+  await api.adminChecklistApi.create({ question: 'Ảnh đúng món đồ?' });
+  assert.equal(requests[1].method, 'post');
+  assert.equal(requests[1].url, '/api/v1/admin/checklist');
+  assert.deepEqual(requests[1].body, { question: 'Ảnh đúng món đồ?' });
+
+  nextResponse = { ...first, question: 'Ảnh là ảnh thật của đúng món đồ?' };
+  await api.adminChecklistApi.update(3, { question: 'Ảnh là ảnh thật của đúng món đồ?' });
+  assert.equal(requests[2].method, 'put');
+  assert.equal(requests[2].url, '/api/v1/admin/checklist/3');
+  assert.deepEqual(requests[2].body, { question: 'Ảnh là ảnh thật của đúng món đồ?' });
+
+  nextResponse = [second, first];
+  await api.adminChecklistApi.reorder([1, 3]);
+  assert.equal(requests[3].method, 'put');
+  assert.equal(requests[3].url, '/api/v1/admin/checklist/reorder');
+  assert.deepEqual(requests[3].body, { itemIds: [1, 3] });
+
+  nextResponse = { ...first, active: false };
+  await api.adminChecklistApi.setActive(3, false);
+  assert.equal(requests[4].method, 'patch');
+  assert.equal(requests[4].url, '/api/v1/admin/checklist/3/active');
+  assert.deepEqual(requests[4].body, { active: false });
+
+  assert.equal(api.validateChecklistItemIds([3, 1, 2]), true);
+  assert.equal(api.validateChecklistItemIds([3, 1, 3]), false);
+  await assert.rejects(api.adminChecklistApi.reorder([3, 1, 3]));
+  assert.equal(requests.length, 5);
 });
 
 await test('hàng chờ moderation, chi tiết bài và từ chối dùng đúng contract', async () => {

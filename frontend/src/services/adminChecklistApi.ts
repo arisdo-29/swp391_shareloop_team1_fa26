@@ -14,6 +14,12 @@ export interface AdminChecklistRequest {
   question: string;
 }
 
+export function validateChecklistItemIds(itemIds: number[]) {
+  return itemIds.length > 0 &&
+    itemIds.every((id) => Number.isSafeInteger(id) && id > 0) &&
+    new Set(itemIds).size === itemIds.length;
+}
+
 export const adminChecklistApi = {
   async list() {
     const { data } = await http.get<AdminChecklistEntry[]>('/api/v1/admin/checklist');
@@ -28,6 +34,9 @@ export const adminChecklistApi = {
     return data;
   },
   async reorder(itemIds: number[]) {
+    if (!validateChecklistItemIds(itemIds)) {
+      throw new Error('Danh sách ID checklist không hợp lệ.');
+    }
     const { data } = await http.put<AdminChecklistEntry[]>('/api/v1/admin/checklist/reorder', { itemIds });
     return data;
   },

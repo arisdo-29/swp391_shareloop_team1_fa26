@@ -16,25 +16,25 @@ const actionContent: Record<
   { button: string; confirm: string; title: string; description: string; success: string }
 > = {
   grant: {
-    button: 'Cấp nhãn chính hãng',
-    confirm: 'Xác nhận cấp nhãn',
-    title: 'Xác nhận cấp nhãn chính hãng',
+    button: 'Xác nhận chính hãng',
+    confirm: 'Xác nhận chính hãng',
+    title: 'Xác nhận hàng chính hãng',
     description: 'Backend chỉ chấp nhận thao tác khi bài đăng đang ở trạng thái PENDING.',
-    success: 'Đã cấp nhãn chính hãng thành công.',
+    success: 'Đã xác nhận hàng chính hãng thành công.',
   },
   reject: {
-    button: 'Từ chối nhãn',
+    button: 'Từ chối xác minh',
     confirm: 'Xác nhận từ chối',
-    title: 'Từ chối nhãn chính hãng',
+    title: 'Từ chối xác minh',
     description: 'Backend chỉ chấp nhận thao tác khi bài đăng đang ở trạng thái PENDING.',
-    success: 'Đã từ chối nhãn chính hãng thành công.',
+    success: 'Đã từ chối xác minh thành công.',
   },
   revoke: {
-    button: 'Thu hồi nhãn',
+    button: 'Thu hồi xác minh',
     confirm: 'Xác nhận thu hồi',
-    title: 'Thu hồi nhãn chính hãng',
+    title: 'Thu hồi xác minh',
     description: 'Backend chỉ chấp nhận thao tác khi bài đăng đang ở trạng thái VERIFIED.',
-    success: 'Đã thu hồi nhãn chính hãng thành công.',
+    success: 'Đã thu hồi xác minh thành công.',
   },
 };
 
@@ -114,8 +114,8 @@ export function AdminAuthenticity() {
   return (
     <section className="space-y-5">
       <PageHeader
-        title="Nhãn chính hãng"
-        description="Quản lý nhãn chính hãng thủ công theo ID bài đăng."
+        title="Xác minh hàng chính hãng"
+        description="Kiểm tra và xác minh tính chính hãng của món đồ."
       />
 
       <Alert tone="warning">{STATUS_WARNING}</Alert>
@@ -214,7 +214,7 @@ export function AdminAuthenticity() {
                   label="Lý do"
                   required
                   autoFocus
-                  placeholder="Nhập lý do xử lý nhãn chính hãng"
+                  placeholder="Nhập lý do từ chối hoặc thu hồi xác minh"
                   value={reason}
                   error={reasonError}
                   disabled={submitting}
