@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Alert, Button, EmptyState, Field, PageHeader, Stat, TextArea } from '../../components/ui';
+import { Alert, Button, EmptyState, Field, Icon, PageHeader, Stat, TextArea } from '../../components/ui';
 import { adminFinanceApi, type FinanceSummary } from '../../services/adminFinanceApi';
 import { adminAuditApi, type ActivityLogResponse } from '../../services/adminAuditApi';
 import type { ApiError } from '../../services/http';
@@ -20,6 +20,25 @@ function errorMessage(error: unknown) {
   return apiError.message || 'Không tải được dữ liệu. Vui lòng thử lại.';
 }
 
+const dashboardActions = [
+  { to: '/admin/moderation', label: 'Duyệt bài', icon: 'article' },
+  { to: '/admin/finance', label: 'Báo cáo tài chính', icon: 'payments' },
+  { to: '/admin/users', label: 'Quản lý tài khoản', icon: 'group' },
+  { to: '/admin/checklist', label: 'Checklist duyệt bài', icon: 'check' },
+  { to: '/admin/audit-logs', label: 'Nhật ký hoạt động', icon: 'history' },
+] as const;
+
+function activityTone(type: string) {
+  const normalizedType = type.toUpperCase();
+  if (['REJECT', 'LOCK', 'DELETE', 'REMOVE', 'FAIL'].some((keyword) => normalizedType.includes(keyword))) {
+    return 'bg-red-50 text-error';
+  }
+  if (['APPROVE', 'CREATE', 'ADD', 'UNLOCK', 'ACTIVATE'].some((keyword) => normalizedType.includes(keyword))) {
+    return 'bg-emerald-50 text-success';
+  }
+  return 'bg-blue-50 text-info';
+}
+
 export function AdminOperationsDashboard() {
   const [report, setReport] = useState<FinanceSummary | null>(null);
   const [logs, setLogs] = useState<ActivityLogResponse[]>([]);
@@ -33,25 +52,109 @@ export function AdminOperationsDashboard() {
       .catch((caught) => { if (active) setError(errorMessage(caught)); });
     return () => { active = false; };
   }, [reload]);
+  const metrics = report ? [
+    { label: 'Tiền thu', value: formatVnd(report.cashAmountVnd), icon: 'payments', tone: 'bg-primary-faint text-primary' },
+    { label: 'Credit cộng', value: report.creditInTotal.toLocaleString('vi-VN'), icon: 'add', tone: 'bg-emerald-50 text-success' },
+    { label: 'Credit trừ', value: report.creditOutTotal.toLocaleString('vi-VN'), icon: 'transaction', tone: 'bg-orange-50 text-secondary' },
+  ] : [];
+
   return <>
-    <PageHeader title="Tổng quan vận hành" description="Số liệu tài chính và hoạt động gần đây của hệ thống." />
-    <div className="mb-6 flex flex-wrap gap-3">
-      <Link to="/admin/moderation"><Button>Duyệt bài</Button></Link>
-      <Link to="/admin/finance"><Button variant="outline">Báo cáo tài chính</Button></Link>
-      <Link to="/admin/users"><Button variant="outline">Quản lý tài khoản</Button></Link>
-    </div>
-    {error ? <Alert tone="error">{error} <button type="button" className="underline" onClick={() => setReload((value) => value + 1)}>Thử lại</button></Alert> : report ? <>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Stat label="Tiền thu" value={formatVnd(report.cashAmountVnd)} />
-        <Stat label="Credit cộng" value={report.creditInTotal} />
-        <Stat label="Credit trừ" value={report.creditOutTotal} />
+    <PageHeader
+      title="Tổng quan vận hành"
+      description="Theo dõi nhanh số liệu tài chính và những hoạt động mới nhất trên ShareLoop."
+    />
+    <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_18rem] xl:items-start">
+      <div className="min-w-0 space-y-6">
+        {error ? (
+          <Alert tone="error">
+            {error}{' '}
+            <button type="button" className="font-semibold underline" onClick={() => setReload((value) => value + 1)}>Thử lại</button>
+          </Alert>
+        ) : report ? (
+          <>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {metrics.map((metric) => (
+                <section key={metric.label} className="rounded-xl border border-border/80 bg-white p-5 shadow-sm">
+                  <div className={`flex size-11 items-center justify-center rounded-lg ${metric.tone}`}>
+                    <Icon name={metric.icon} className="size-5" weight="bold" />
+                  </div>
+                  <p className="mt-4 text-sm font-medium text-text-muted">{metric.label}</p>
+                  <p className="mt-1 break-words text-2xl font-bold tabular-nums text-text-primary">{metric.value}</p>
+                </section>
+              ))}
+            </div>
+
+            <section className="overflow-hidden rounded-xl border border-border/80 bg-white shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-5 py-4 sm:px-6">
+                <div>
+                  <h2 className="section-title">Hoạt động gần đây</h2>
+                  <p className="mt-1 text-sm text-text-muted">Các thay đổi mới nhất được ghi nhận trong hệ thống.</p>
+                </div>
+                <Link className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary-hover" to="/admin/audit-logs">
+                  Xem tất cả
+                  <Icon name="arrow" className="size-4" />
+                </Link>
+              </div>
+              {logs.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                    <thead className="bg-surface-low text-xs font-semibold text-text-muted">
+                      <tr>
+                        <th className="whitespace-nowrap px-5 py-3">Thời gian</th>
+                        <th className="whitespace-nowrap px-5 py-3">Người thực hiện</th>
+                        <th className="whitespace-nowrap px-5 py-3">Hành động</th>
+                        <th className="px-5 py-3">Chi tiết</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {logs.map((log) => (
+                        <tr key={log.id} className="border-t border-border/70 transition hover:bg-primary-faint">
+                          <td className="whitespace-nowrap px-5 py-4 text-xs text-text-muted">{new Date(log.createdAt).toLocaleString('vi-VN')}</td>
+                          <td className="max-w-48 px-5 py-4">
+                            <p className="truncate font-semibold text-text-primary">{log.actorName || log.actorEmail || (log.actorId ? `#${log.actorId}` : '—')}</p>
+                            {log.actorName && log.actorEmail ? <p className="mt-0.5 truncate text-xs text-text-muted">{log.actorEmail}</p> : null}
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${activityTone(log.type)}`}>
+                              {log.typeLabel || log.type}
+                            </span>
+                          </td>
+                          <td className="max-w-sm px-5 py-4 leading-6 text-text-secondary">{log.detail || log.reason || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="px-6 py-10 text-center text-sm text-text-muted">Chưa có hoạt động nào được ghi nhận.</div>
+              )}
+            </section>
+          </>
+        ) : (
+          <EmptyState title="Đang tải tổng quan" text="Vui lòng chờ trong giây lát." />
+        )}
       </div>
-      <section className="mt-6 rounded-lg bg-white p-5 ring-1 ring-border">
-        <h2 className="mb-3 section-title">Hoạt động gần đây</h2>
-        {logs.length ? logs.map((log) => <div key={log.id} className="border-b border-border py-3 text-sm"><p>{log.actorName ?? 'Hệ thống'} · {log.typeLabel ?? log.type}</p><p>{log.detail || log.reason || '—'}</p><p className="text-xs text-text-muted">{new Date(log.createdAt).toLocaleString('vi-VN')}</p></div>) : <p>Chưa có nhật ký.</p>}
-        <Link className="mt-3 inline-block text-sm text-primary" to="/admin/audit-logs">Xem toàn bộ nhật ký</Link>
-      </section>
-    </> : <EmptyState title="Đang tải tổng quan" text="Vui lòng chờ trong giây lát." />}
+
+      <aside className="rounded-xl border border-border/80 bg-white p-4 shadow-sm sm:p-5 xl:sticky xl:top-6">
+        <h2 className="text-base font-bold text-text-primary">Thao tác nhanh</h2>
+        <p className="mt-1 text-sm leading-6 text-text-muted">Truy cập các công cụ quản trị thường dùng.</p>
+        <nav aria-label="Thao tác nhanh" className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+          {dashboardActions.map((action) => (
+            <Link
+              key={action.to}
+              to={action.to}
+              className="group flex min-w-0 items-center gap-3 rounded-lg border border-border/70 px-3.5 py-3 text-sm font-semibold text-text-secondary transition hover:border-primary/30 hover:bg-primary-faint hover:text-primary"
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-surface-low text-primary transition group-hover:bg-white">
+                <Icon name={action.icon} className="size-[18px]" weight="bold" />
+              </span>
+              <span className="min-w-0 flex-1">{action.label}</span>
+              <Icon name="arrow" className="size-4 shrink-0 text-text-muted transition group-hover:translate-x-0.5 group-hover:text-primary" />
+            </Link>
+          ))}
+        </nav>
+      </aside>
+    </div>
   </>;
 }
 

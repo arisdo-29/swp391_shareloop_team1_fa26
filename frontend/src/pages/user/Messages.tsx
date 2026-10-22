@@ -11,6 +11,7 @@ import {
   Icon,
   IconButton,
   ItemImage,
+  SearchField,
   Select,
   StatusBadge,
   TextArea,
@@ -41,6 +42,16 @@ import { canChat, canConfirmHandover, canSchedule, canSelectPendingRequest, requ
 import { mediaApi } from '../../services/mediaApi';
 import { openDispute, respondDispute, type ReportReason } from '../../services/reportApi';
 import { resolveMediaUrl } from '../../services/mediaUrl';
+import {
+  canConfirmMeetingSchedule,
+  minimumMeetingTimeValue,
+  parseLocalMeetingTime,
+  scheduleApiErrorMessage,
+  toLocalMeetingTimeValue,
+  validateLocalMeetingTime,
+  validateMeetingPlace,
+  validateStoredMeetingTime,
+} from '../../utils/meetingSchedule';
 
 const steps = ['Trao doi', 'De xuat lich', 'Chot lich', 'Ban giao', 'Hoan tat'];
 
@@ -148,6 +159,51 @@ function canSelectRequest(
   );
 }
 
+function mergeConversationRequests(
+  current: ApiConversation[],
+  refreshedRequests: RequestResponse[],
+) {
+  const requestById = new Map(refreshedRequests.map((request) => [request.id, request]));
+  return current.map((conversation) => {
+    const refreshed = requestById.get(conversation.request.id);
+    return refreshed
+      ? { ...conversation, request: { ...conversation.request, ...refreshed } }
+      : conversation;
+  });
+}
+
+export function RequestDetailsTabs({
+  activeTab,
+  onChange,
+}: {
+  activeTab: 'info' | 'schedule';
+  onChange: (tab: 'info' | 'schedule') => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-1 rounded-md bg-surface-low p-1" role="tablist" aria-label="Chi tiết yêu cầu">
+      {([
+        ['info', 'Thông tin'],
+        ['schedule', 'Lịch giao nhận'],
+      ] as const).map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === value}
+          onClick={() => onChange(value)}
+          className={`rounded px-3 py-2 text-xs font-semibold transition ${
+            activeTab === value
+              ? 'bg-white text-primary shadow-sm ring-1 ring-border/70'
+              : 'text-text-muted hover:text-text-primary'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const navigate = useNavigate();
   const { requestId, disputeId } = useParams();
@@ -169,9 +225,14 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [selectSubmitting, setSelectSubmitting] = useState(false);
   const [selectError, setSelectError] = useState('');
   const [mobileChat, setMobileChat] = useState(false);
+  const [conversationQuery, setConversationQuery] = useState('');
+  const [detailsTab, setDetailsTab] = useState<'info' | 'schedule'>('info');
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [deliveryMethod, setDeliveryMethod] = useState<'IN_PERSON' | 'SHIPPING'>('IN_PERSON');
   const [meetingPlace, setMeetingPlace] = useState('');
   const [meetingTime, setMeetingTime] = useState('');
+  const [scheduleNow, setScheduleNow] = useState(() => new Date());
   const [agreeToWaiver, setAgreeToWaiver] = useState(false);
   const [asDescribed, setAsDescribed] = useState('');
   const [notAsDescribedReason, setNotAsDescribedReason] = useState('');
@@ -210,6 +271,11 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const chatImageInputRef = useRef<HTMLInputElement>(null);
   const activeRequestId = useRef<number | null>(null);
   const selectInFlight = useRef(false);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setScheduleNow(new Date()), 30_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -276,6 +342,24 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const requestMediaEnabled = selected
     ? ['LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER', 'COMPLETED', 'DISPUTED'].includes(selected.request.status)
     : false;
+  const selectedItemId = selected?.request.itemId;
+  const selectedItemDonorId = selected?.item?.donorId;
+
+  useEffect(() => {
+    if (!selectedItemId || selectedItemDonorId !== currentUserId) return;
+    let active = true;
+    requestApi
+      .forItem(selectedItemId, currentUserId)
+      .then((requests) => {
+        if (active) setConversations((current) => mergeConversationRequests(current, requests));
+      })
+      .catch(() => {
+        // Danh sách hiện tại vẫn dùng được; Backend sẽ kiểm tra lại khi xác nhận chọn.
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentUserId, selectedItemDonorId, selectedItemId, selectedRequestId]);
 
   useEffect(() => {
     setRequestMedia([]);
@@ -391,8 +475,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         setConversations((current) => current.map((entry) => entry.request.id === detail.id ? { ...entry, request: detail } : entry));
         setDeliveryMethod(detail.deliveryMethod === 'SHIPPING' ? 'SHIPPING' : 'IN_PERSON');
         setMeetingPlace(detail.meetingPlace ?? '');
-        const meetingDate = detail.meetingTime ? new Date(detail.meetingTime) : null;
-        setMeetingTime(meetingDate ? new Date(meetingDate.getTime() - meetingDate.getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : '');
+        setMeetingTime(detail.meetingTime ? toLocalMeetingTimeValue(detail.meetingTime) : '');
         setAgreeToWaiver(false);
       })
       .catch((error: ApiError) => {
@@ -414,8 +497,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const selectedMeetingPlace = selected?.request.meetingPlace;
   const selectedDeliveryMethod = selected?.request.deliveryMethod;
   useEffect(() => {
-    const date = selectedMeetingTime ? new Date(selectedMeetingTime) : null;
-    setMeetingTime(date ? new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : '');
+    setMeetingTime(selectedMeetingTime ? toLocalMeetingTimeValue(selectedMeetingTime) : '');
     setMeetingPlace(selectedMeetingPlace ?? '');
     setDeliveryMethod(selectedDeliveryMethod === 'SHIPPING' ? 'SHIPPING' : 'IN_PERSON');
     setAgreeToWaiver(false);
@@ -453,6 +535,23 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     setSelectSubmitting(true);
     setSelectError('');
     try {
+      const refreshedRequests = await requestApi.forItem(selectCandidate.request.itemId, currentUserId);
+      setConversations((current) => mergeConversationRequests(current, refreshedRequests));
+      const refreshedCandidate = refreshedRequests.find((request) => request.id === selectCandidate.request.id);
+      const canStillSelect = Boolean(
+        refreshedCandidate &&
+        canSelectPendingRequest(
+          refreshedCandidate.status,
+          selectCandidate.item?.donorId,
+          currentUserId,
+          refreshedRequests.map((request) => request.status),
+        ),
+      );
+      if (!canStillSelect) {
+        setSelectError('Bài đăng đã có người được chọn hoặc yêu cầu này không còn khả dụng. Danh sách đã được cập nhật.');
+        return;
+      }
+
       const updated = await requestApi.select(selectCandidate.request.id, currentUserId);
       updateSelectedRequest({ ...selectCandidate.request, ...updated });
       setSelectedRequestId(updated.id);
@@ -466,7 +565,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         REQUEST_FORBIDDEN: 'Bạn không có quyền chọn người cho bài đăng này.',
         REQUEST_NOT_FOUND: 'Không tìm thấy yêu cầu này.',
         REQUEST_ITEM_NOT_FOUND: 'Không tìm thấy bài đăng liên quan.',
-        REQUEST_INVALID_STATE_TRANSITION: 'Yêu cầu không còn ở trạng thái có thể lựa chọn.',
+        REQUEST_INVALID_STATE_TRANSITION: 'Bài đăng đã có người được chọn hoặc yêu cầu này không còn khả dụng. Danh sách đã được cập nhật.',
       };
       setSelectError(errorMessages[apiError.code] || 'Không thể chọn người này. Vui lòng tải lại danh sách và thử lại.');
       if (apiError.status === 409 || apiError.status === 404) {
@@ -479,28 +578,59 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   };
 
   const saveSchedule = async () => {
-    if (!selected || logisticsSubmitting || !canSchedule(selected.request.status) || selected.request.contactRevealedAt || !meetingPlace.trim() || !meetingTime) return;
+    if (!selected || logisticsSubmitting || !canSchedule(selected.request.status) || selected.request.contactRevealedAt) return;
+    const now = new Date();
+    const placeError = validateMeetingPlace(meetingPlace);
+    const timeError = validateLocalMeetingTime(meetingTime, now);
+    const parsedMeetingTime = parseLocalMeetingTime(meetingTime);
+    if (placeError || timeError || !parsedMeetingTime) {
+      setScheduleNow(now);
+      setLogisticsError(placeError || timeError || 'Thời gian giao nhận không hợp lệ.');
+      return;
+    }
     setLogisticsSubmitting(true);
     setLogisticsError('');
     try {
       const request = await requestApi.updateSchedule(selected.request.id, currentUserId, {
         deliveryMethod,
         meetingPlace: meetingPlace.trim(),
-        meetingTime: new Date(meetingTime).toISOString(),
+        meetingTime: parsedMeetingTime.toISOString(),
         agreeToWaiver,
       });
       updateSelectedRequest(request);
       setAgreeToWaiver(false);
     } catch (error) {
-      const apiError = error as ApiError;
-      setLogisticsError(apiError.message || 'Không cập nhật được lịch giao nhận.');
+      setLogisticsError(scheduleApiErrorMessage(error, 'Không cập nhật được lịch giao nhận.'));
     } finally {
       setLogisticsSubmitting(false);
     }
   };
 
   const confirmLogistics = async () => {
-    if (!selected || logisticsSubmitting || selected.request.status !== 'AWAITING_LOGISTICS' || !selected.request.meetingTime || !agreeToWaiver) return;
+    if (!selected || logisticsSubmitting || selected.request.status !== 'AWAITING_LOGISTICS') return;
+    const now = new Date();
+    const placeError = validateMeetingPlace(meetingPlace);
+    const timeError = validateLocalMeetingTime(meetingTime, now);
+    const storedTimeError = validateStoredMeetingTime(selected.request.meetingTime, now);
+    const savedMeetingTime = selected.request.meetingTime
+      ? toLocalMeetingTimeValue(selected.request.meetingTime)
+      : '';
+    const hasUnsavedSchedule =
+      meetingPlace.trim() !== (selected.request.meetingPlace ?? '').trim() ||
+      meetingTime !== savedMeetingTime ||
+      deliveryMethod !== selected.request.deliveryMethod;
+    if (placeError || timeError || storedTimeError || !agreeToWaiver || hasUnsavedSchedule) {
+      setScheduleNow(now);
+      setLogisticsError(
+        placeError ||
+          timeError ||
+          storedTimeError ||
+          (!agreeToWaiver
+            ? 'Vui lòng đồng ý cam kết trách nhiệm giao nhận.'
+            : 'Thông tin lịch đã thay đổi. Vui lòng lưu lịch hẹn trước khi xác nhận.'),
+      );
+      return;
+    }
     setLogisticsSubmitting(true);
     setLogisticsError('');
     try {
@@ -508,8 +638,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       updateSelectedRequest(request);
       setAgreeToWaiver(false);
     } catch (error) {
-      const apiError = error as ApiError;
-      setLogisticsError(apiError.message || 'Không xác nhận được lịch giao nhận.');
+      setLogisticsError(scheduleApiErrorMessage(error, 'Không xác nhận được lịch giao nhận.'));
     } finally {
       setLogisticsSubmitting(false);
     }
@@ -703,13 +832,64 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     }
   };
 
+  const meetingPlaceValidation = validateMeetingPlace(meetingPlace);
+  const meetingTimeValidation = validateLocalMeetingTime(meetingTime, scheduleNow);
+  const meetingFormValid = !meetingPlaceValidation && !meetingTimeValidation;
+  const savedMeetingTimeValue = selected?.request.meetingTime
+    ? toLocalMeetingTimeValue(selected.request.meetingTime)
+    : '';
+  const hasUnsavedSchedule = selected
+    ? meetingPlace.trim() !== (selected.request.meetingPlace ?? '').trim() ||
+      meetingTime !== savedMeetingTimeValue ||
+      deliveryMethod !== selected.request.deliveryMethod
+    : false;
+  const savedScheduleValid = Boolean(
+    selected &&
+    !validateMeetingPlace(selected.request.meetingPlace ?? '') &&
+    !validateStoredMeetingTime(selected.request.meetingTime, scheduleNow),
+  );
+  const canConfirmSchedule = Boolean(
+    selected?.request.status === 'AWAITING_LOGISTICS' &&
+    canConfirmMeetingSchedule({
+      meetingPlace,
+      localMeetingTime: meetingTime,
+      storedMeetingTime: selected.request.meetingTime,
+      agreed: agreeToWaiver,
+      hasUnsavedChanges: hasUnsavedSchedule,
+      now: scheduleNow,
+    }) &&
+    savedScheduleValid &&
+    !currentPartyConfirmedAt &&
+    !logisticsSubmitting,
+  );
+  const normalizedConversationQuery = conversationQuery.trim().toLocaleLowerCase('vi-VN');
+  const filteredConversations = normalizedConversationQuery
+    ? conversations.filter((conversation) => {
+        const searchable = [
+          conversation.item?.title ?? `Bài đăng #${conversation.request.itemId}`,
+          requestParticipantName(conversation, currentUserId),
+          requestStatusLabel[conversation.request.status],
+          conversation.request.type,
+        ].join(' ').toLocaleLowerCase('vi-VN');
+        return searchable.includes(normalizedConversationQuery);
+      })
+    : conversations;
+
   return (
     <div className="page-shell py-5 sm:py-7">
-      <div className="overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-border/80 lg:grid lg:h-[calc(100dvh-140px)] lg:min-h-[680px] lg:grid-cols-[330px_1fr]">
+      <div className="overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-border/80 lg:grid lg:h-[calc(100dvh-140px)] lg:min-h-[680px] lg:grid-cols-[290px_minmax(0,1fr)]">
         <aside className={`${mobileChat ? 'hidden lg:flex' : 'flex'} min-h-0 flex-col overflow-hidden border-r border-border`}>
           <div className="flex h-16 items-center justify-between border-b border-border px-5">
             <h1 className="text-lg font-bold">Tin nhắn</h1>
             <span className="text-xs text-text-muted">{conversations.length} cuộc trò chuyện</span>
+          </div>
+          <div className="border-b border-border p-3">
+            <SearchField
+              aria-label="Tìm kiếm cuộc trò chuyện"
+              placeholder="Tìm món đồ hoặc người liên quan"
+              value={conversationQuery}
+              onChange={(event) => setConversationQuery(event.target.value)}
+            />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {loadingConversations ? (
@@ -721,14 +901,15 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   Thử tải lại
                 </Button>
               </div>
-            ) : conversations.length ? (
-              conversations.map((conversation) => {
+            ) : filteredConversations.length ? (
+              filteredConversations.map((conversation) => {
                 const { request, item } = conversation;
                 const participantName = requestParticipantName(conversation, currentUserId);
                 const selectable = canSelectRequest(conversation, conversations, currentUserId);
                 const openDetails = () => {
                   setSelectedRequestId(request.id);
                   setMobileChat(true);
+                  setMobileDetailsOpen(false);
                   setReportOpen(false);
                   setReportNotice('');
                   setDisputeNotice('');
@@ -736,31 +917,27 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 return (
                   <article
                     key={request.id}
-                    className={`border-b border-border/70 p-4 transition ${request.id === selectedRequestId ? 'bg-primary-faint ring-1 ring-inset ring-primary/20' : 'hover:bg-background'}`}
+                    className={`border-b border-border/70 p-3 transition ${request.id === selectedRequestId ? 'bg-primary-faint ring-1 ring-inset ring-primary/25' : 'hover:bg-background'}`}
                   >
                     <button type="button" onClick={openDetails} className="flex w-full gap-3 text-left">
                       <Avatar
                         user={{ name: participantName, avatarInitials: avatarInitials(participantName), avatarUrl: undefined }}
                       />
                       <span className="min-w-0 flex-1">
-                        <strong className="block truncate text-sm">{participantName}</strong>
-                        <span className="mt-0.5 block truncate text-xs text-text-muted">
-                          {item?.title ?? `Bài đăng #${request.itemId}`}
-                        </span>
-                        <span className="mt-2 flex flex-wrap items-center gap-1.5">
-                          <TypeBadge type={request.type === 'SWAP' ? 'trade' : 'gift'} />
+                        <strong className="block truncate text-sm">{item?.title ?? `Bài đăng #${request.itemId}`}</strong>
+                        <span className="mt-1 block truncate text-xs text-text-muted">{participantName}</span>
+                        <span className="mt-2 flex items-center justify-between gap-2">
                           <span className={`rounded-sm px-2 py-1 text-[11px] font-semibold ${requestStatusClass(request.status)}`}>
                             {requestStatusLabel[request.status]}
                           </span>
-                        </span>
-                        <span className="mt-2 block text-[11px] text-text-muted">
-                          {new Date(request.createdAt).toLocaleString('vi-VN')}
+                          <span className="shrink-0 text-[10px] text-text-muted">
+                            {new Date(request.createdAt).toLocaleDateString('vi-VN')}
+                          </span>
                         </span>
                       </span>
                     </button>
-                    <div className="mt-3 flex flex-wrap justify-end gap-2">
-                      <Button size="sm" variant="outline" onClick={openDetails}>Xem chi tiết</Button>
-                      {selectable ? (
+                    {selectable ? (
+                      <div className="mt-2 flex justify-end">
                         <Button
                           size="sm"
                           disabled={selectSubmitting}
@@ -771,35 +948,73 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         >
                           Chọn người này
                         </Button>
-                      ) : null}
-                    </div>
+                      </div>
+                    ) : null}
                   </article>
                 );
               })
             ) : (
               <div className="p-5">
-                <EmptyState title="Chưa có yêu cầu" text="Các yêu cầu nhận hoặc trao đổi món đồ sẽ xuất hiện tại đây." />
+                <EmptyState
+                  title={conversationQuery ? 'Không tìm thấy cuộc trò chuyện' : 'Chưa có yêu cầu'}
+                  text={conversationQuery ? 'Thử tìm bằng tên món đồ, người liên quan hoặc trạng thái khác.' : 'Các yêu cầu nhận hoặc trao đổi món đồ sẽ xuất hiện tại đây.'}
+                />
               </div>
             )}
           </div>
         </aside>
 
         {selected ? (
-          <section className={`${mobileChat ? 'flex' : 'hidden lg:flex'} min-h-[680px] flex-col overflow-hidden lg:min-h-0`}>
-            <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4 sm:px-5">
+          <section className={`${mobileChat ? 'flex' : 'hidden lg:flex'} min-h-[680px] flex-col overflow-hidden lg:min-h-0 xl:grid xl:grid-rows-[64px_auto_minmax(0,1fr)_auto] ${rightPanelCollapsed ? 'xl:grid-cols-[minmax(0,1fr)]' : 'xl:grid-cols-[minmax(0,1fr)_340px]'}`}>
+            <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4 sm:px-5 xl:col-start-1 xl:row-start-1">
               <IconButton icon="arrow" label="Quay lại" className="rotate-180 lg:hidden" onClick={() => setMobileChat(false)} />
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-sm font-bold">{selectedParticipantName}</h2>
-                <p className="mt-1 truncate text-xs text-text-muted">{selected.item?.title ?? `Bài đăng #${selected.request.itemId}`}</p>
+                <h2 className="truncate text-sm font-bold">{selected.item?.title ?? `Bài đăng #${selected.request.itemId}`}</h2>
+                <p className="mt-1 truncate text-xs text-text-muted">Trao đổi với {selectedParticipantName}</p>
               </div>
               <span className="rounded-sm bg-primary-faint px-2.5 py-1 text-xs font-semibold text-primary">{requestStatusLabel[selected.request.status]}</span>
-              {reportTargetUserId && reportTargetUserId !== currentUserId ? (
-                <Button size="sm" variant="ghost" icon="shield" onClick={() => setReportOpen(true)}>
-                  Báo cáo
-                </Button>
-              ) : null}
+              <Button size="sm" variant="outline" className="xl:hidden" onClick={() => setMobileDetailsOpen(true)}>
+                Chi tiết
+              </Button>
+              <Button size="sm" variant="ghost" className="hidden xl:inline-flex" onClick={() => setRightPanelCollapsed((current) => !current)}>
+                {rightPanelCollapsed ? 'Mở thông tin' : 'Thu gọn'}
+              </Button>
             </header>
-            <div className="shrink-0 border-b border-border bg-white px-4 py-3 sm:px-5">
+            {mobileDetailsOpen ? (
+              <button
+                type="button"
+                aria-label="Đóng bảng chi tiết"
+                className="fixed inset-0 z-30 bg-black/30 xl:hidden"
+                onClick={() => setMobileDetailsOpen(false)}
+              />
+            ) : null}
+            <aside
+              aria-label="Thông tin yêu cầu"
+              className={`${mobileDetailsOpen ? 'fixed inset-x-3 bottom-3 top-20 z-40 flex' : 'hidden'} min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-white shadow-xl xl:static xl:col-start-2 xl:row-span-4 xl:row-start-1 xl:rounded-none xl:border-y-0 xl:border-r-0 xl:border-l xl:shadow-none ${rightPanelCollapsed ? 'xl:hidden' : 'xl:flex'}`}
+            >
+              <div className="shrink-0 border-b border-border p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Yêu cầu #{selected.request.id}</p>
+                    <h3 className="mt-1 truncate text-sm font-bold">{selected.item?.title ?? `Bài đăng #${selected.request.itemId}`}</h3>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Đóng bảng chi tiết"
+                    className="grid size-9 shrink-0 place-items-center rounded-md text-text-muted hover:bg-surface-low"
+                    onClick={() => {
+                      setMobileDetailsOpen(false);
+                      setRightPanelCollapsed(true);
+                    }}
+                  >
+                    <Icon name="close" className="size-4" />
+                  </button>
+                </div>
+                <RequestDetailsTabs activeTab={detailsTab} onChange={setDetailsTab} />
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              {detailsTab === 'info' ? (
+                <div className="p-4">
               <div className="flex flex-wrap items-start gap-3">
                 <Avatar
                   user={{
@@ -824,7 +1039,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       ? `Đề nghị nhận món “${selected.item?.title ?? `#${selected.request.itemId}`}”.`
                       : `Đề nghị trao đổi với món “${selected.item?.title ?? `#${selected.request.itemId}`}”.`}
                   </p>
-                  <p className="mt-1 text-xs text-text-muted">Backend chưa cung cấp nội dung ghi chú riêng của yêu cầu.</p>
+                  <p className="mt-1 text-xs text-text-muted">Yêu cầu này chưa có nội dung ghi chú riêng.</p>
                 </div>
               </div>
               {selected.request.type === 'SWAP' ? (
@@ -850,33 +1065,23 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   </button>
                 ) : (
                   <p className="mt-3 rounded-md bg-amber-50 p-3 text-xs text-warning">
-                    Không tải được chi tiết món đề xuất #{selected.request.offeredItemId ?? ''} từ API bài đăng.
+                    Không tải được chi tiết món đề xuất #{selected.request.offeredItemId ?? ''}.
                   </p>
                 )
               ) : null}
-            </div>
-            <details key={selected.request.id} className="group shrink-0 border-b border-border bg-white">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-surface-low focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:px-5 [&::-webkit-details-marker]:hidden">
-                <span className="min-w-0">
-                  <strong className="block text-sm">Thông tin giao nhận và xác nhận</strong>
-                  <span className="mt-1 block truncate text-xs text-text-muted">
-                    {logisticsLoading ? 'Đang tải thông tin giao nhận...' : (
-                      <>
-                        {deliveryMethod === 'IN_PERSON' ? 'Gặp trực tiếp' : 'Giao hàng'}
-                        {meetingPlace ? ` · ${meetingPlace}` : ''}
-                        {meetingTime ? ` · ${new Date(meetingTime).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })}` : ''}
-                      </>
-                    )}
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-center gap-2 text-xs font-semibold text-primary">
-                  {logisticsError || requestMediaError ? <span className="text-error">Có lỗi</span> : null}
-                  <span className="group-open:hidden">Xem chi tiết</span>
-                  <span className="hidden group-open:inline">Thu gọn</span>
-                  <Icon name="chevronDown" className="size-4 transition-transform group-open:rotate-180" />
-                </span>
-              </summary>
-              <div className="max-h-[40dvh] overflow-y-auto overscroll-contain px-4 pb-3 sm:px-5">
+                  <div className="mt-4 grid gap-2">
+                    <Button size="sm" variant="outline" onClick={() => navigate(`/items/${selected.request.itemId}`)}>
+                      Xem chi tiết bài đăng
+                    </Button>
+                    {reportTargetUserId && reportTargetUserId !== currentUserId ? (
+                      <Button size="sm" variant="ghost" icon="shield" onClick={() => setReportOpen(true)}>
+                        Báo cáo người dùng
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+              <div className="p-4">
               {logisticsLoading ? (
                 <p className="text-xs text-text-muted">Đang tải thông tin giao nhận...</p>
               ) : (
@@ -914,7 +1119,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       {asDescribed === 'no' ? <TextArea label="Lý do không đúng mô tả" value={notAsDescribedReason} disabled={logisticsSubmitting} onChange={(event) => setNotAsDescribedReason(event.target.value)} /> : null}
                     </div>
                   ) : null}
-                  <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="grid gap-2">
                     <Select
                       label="Hình thức"
                       value={deliveryMethod}
@@ -927,14 +1132,25 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     <Field
                       label="Địa điểm"
                       value={meetingPlace}
-                      onChange={(event) => setMeetingPlace(event.target.value)}
+                      maxLength={255}
+                      error={meetingPlace ? meetingPlaceValidation ?? undefined : undefined}
+                      onChange={(event) => {
+                        setMeetingPlace(event.target.value);
+                        setLogisticsError('');
+                      }}
                       disabled={!canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
                     />
                     <Field
                       label="Thời gian"
                       type="datetime-local"
                       value={meetingTime}
-                      onChange={(event) => setMeetingTime(event.target.value)}
+                      min={minimumMeetingTimeValue(scheduleNow)}
+                      error={meetingTime ? meetingTimeValidation ?? undefined : undefined}
+                      onChange={(event) => {
+                        setMeetingTime(event.target.value);
+                        setScheduleNow(new Date());
+                        setLogisticsError('');
+                      }}
                       disabled={!canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
                     />
                   </div>
@@ -992,7 +1208,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       ) : !requestMediaLoading ? (
                         <p className="mt-2 text-xs text-text-muted">Chưa có ảnh minh chứng.</p>
                       ) : null}
-                      <div className="mt-3 grid gap-2 sm:grid-cols-[150px_1fr_auto] sm:items-end">
+                      <div className="mt-3 grid gap-2">
                         <Select
                           label="Giai đoạn"
                           value={requestMediaStage}
@@ -1029,14 +1245,14 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={!canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || !meetingPlace.trim() || !meetingTime || logisticsSubmitting}
+                      disabled={!canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || !meetingFormValid || logisticsSubmitting}
                       onClick={() => void saveSchedule()}
                     >
                       Lưu lịch hẹn
                     </Button>
                     <Button
                       size="sm"
-                      disabled={selected.request.status !== 'AWAITING_LOGISTICS' || !selected.request.meetingTime || !agreeToWaiver || Boolean(currentPartyConfirmedAt) || logisticsSubmitting}
+                      disabled={!canConfirmSchedule}
                       onClick={() => void confirmLogistics()}
                     >
                       {currentPartyConfirmedAt ? 'Đã xác nhận lịch' : 'Xác nhận lịch'}
@@ -1074,14 +1290,16 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 </div>
               )}
               </div>
-            </details>
+              )}
+              </div>
+            </aside>
             {reportNotice || disputeNotice ? (
-              <div role="status" className="shrink-0 space-y-2 border-b border-border bg-emerald-50 px-4 py-3 text-xs text-success sm:px-5">
+              <div role="status" className="shrink-0 space-y-2 border-b border-border bg-emerald-50 px-4 py-3 text-xs text-success sm:px-5 xl:col-start-1 xl:row-start-2">
                 {reportNotice ? <p>{reportNotice}</p> : null}
                 {disputeNotice ? <p>{disputeNotice}</p> : null}
               </div>
             ) : null}
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-background px-4 pb-6 pt-5 sm:px-6">
+            <div className={`min-h-0 flex-1 space-y-3 overflow-y-auto bg-background px-4 pb-6 pt-5 sm:px-6 xl:col-start-1 ${reportNotice || disputeNotice ? 'xl:row-start-3' : 'xl:row-start-2 xl:row-span-2'}`}>
               {pinnedItemsLoading ? (
                 <p className="text-center text-xs text-text-muted">Đang tải thẻ sản phẩm ghim...</p>
               ) : pinnedItemsError ? (
@@ -1170,7 +1388,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
               )}
               <div ref={messagesEndRef} aria-hidden="true" />
             </div>
-            <div className="shrink-0 border-t border-border bg-white p-3 sm:p-4">
+            <div className="shrink-0 border-t border-border bg-white p-3 sm:p-4 xl:col-start-1 xl:row-start-4">
               <Select label="Chia sẻ bài của bạn" value={shareItemId} disabled={sending || !chatEnabled || !!chatImage} onChange={(event) => setShareItemId(event.target.value)}>
                 <option value="">Không đính kèm bài đăng</option>
                 {shareableItems.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
@@ -1432,7 +1650,7 @@ export function SelectRequestDialog({
           ) : null}
         </div>
         <p className="mt-4 rounded-md bg-amber-50 p-3 text-xs leading-5 text-warning">
-          Backend sẽ chuyển yêu cầu này sang Đã được chọn và từ chối các yêu cầu đang chờ khác của cùng bài đăng.
+          Khi bạn xác nhận chọn người này để giao dịch, yêu cầu sẽ được chấp nhận và các yêu cầu đang chờ khác của cùng bài đăng sẽ tự động bị từ chối.
         </p>
         {error ? <p role="alert" className="mt-4 rounded-md bg-red-50 p-3 text-sm text-error">{error}</p> : null}
         <div className="mt-6 flex justify-end gap-2">
