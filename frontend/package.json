@@ -11,6 +11,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test:api": "node scripts/verify-api.mjs",
+    "test:moderation": "vitest run src/pages/admin/ModerationChecklistContent.test.tsx",
+    "test:otp": "vitest run src/components/OtpInput.test.tsx",
+    "test:requests": "vitest run src/pages/user/RequestSelection.test.tsx",
     "preview": "vite preview",
     "format": "prettier --write ."
   },
@@ -27,6 +30,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
     "@types/node": "^24.3.0",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
@@ -36,10 +41,12 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.3.0",
+    "jsdom": "^30.1.3",
     "postcss": "^8.5.6",
     "prettier": "^3.6.2",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.8.3",
-    "typescript-eslint": "^8.70.0"
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^5.0.5"
   }
 }

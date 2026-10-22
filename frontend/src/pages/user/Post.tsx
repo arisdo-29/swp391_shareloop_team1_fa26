@@ -24,7 +24,11 @@ const GIVE_POST_SUCCESS =
   'Đăng bài cho tặng thành công. Bài đăng đã được gửi để xét duyệt.';
 const PENDING_REVIEW_NOTICE = 'Bài đăng đang chờ quản trị viên duyệt.';
 const WALLET_INSUFFICIENT_BALANCE = 'WALLET_INSUFFICIENT_BALANCE';
+const ITEM_MODERATION_BLOCKED = 'ITEM_MODERATION_BLOCKED';
 const INSUFFICIENT_CREDIT_MESSAGE = 'Số dư Credit khả dụng không đủ để đăng bài.';
+const MODERATION_BLOCKED_TITLE = 'Bài đăng chưa đáp ứng quy định';
+const MODERATION_BLOCKED_MESSAGE =
+  'Nội dung bài đăng của bạn có thể chứa thông tin không phù hợp với quy định của ShareLoop. Vui lòng kiểm tra và chỉnh sửa tiêu đề, mô tả hoặc hình ảnh trước khi đăng lại.';
 const BACKEND_SESSION_REQUIRED = 'Vui lòng đăng nhập bằng tài khoản thật để đăng bài.';
 const SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST =
   import.meta.env.DEV && import.meta.env.VITE_POST_SKIP_MEDIA_UPLOAD === 'true';
@@ -337,7 +341,9 @@ export function Post() {
       setErrorCode(apiError.code);
       setError(apiError.code === WALLET_INSUFFICIENT_BALANCE
         ? INSUFFICIENT_CREDIT_MESSAGE
-        : apiError.message || 'Không đăng được bài. Vui lòng kiểm tra thông tin và thử lại.');
+        : apiError.code === ITEM_MODERATION_BLOCKED
+          ? MODERATION_BLOCKED_MESSAGE
+          : apiError.message || 'Không đăng được bài. Vui lòng kiểm tra thông tin và thử lại.');
       if (apiError.code === WALLET_INSUFFICIENT_BALANCE) refreshWallet();
       setConfirmOpen(false);
     } finally {
@@ -365,16 +371,21 @@ export function Post() {
       />
       {error ? (
         <Alert tone="error">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span>
-              {error}
-            </span>
-            {errorCode === WALLET_INSUFFICIENT_BALANCE ? (
-              <Link to="/credit">
-                <Button size="sm">Nạp Credit</Button>
-              </Link>
-            ) : null}
-          </div>
+          {errorCode === ITEM_MODERATION_BLOCKED ? (
+            <div>
+              <p className="font-bold text-error">{MODERATION_BLOCKED_TITLE}</p>
+              <p className="mt-1 whitespace-normal break-words leading-6">{error}</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span>{error}</span>
+              {errorCode === WALLET_INSUFFICIENT_BALANCE ? (
+                <Link to="/credit">
+                  <Button size="sm">Nạp Credit</Button>
+                </Link>
+              ) : null}
+            </div>
+          )}
         </Alert>
       ) : null}
       <form onSubmit={submit} className="grid gap-6 lg:grid-cols-[1fr_280px]">

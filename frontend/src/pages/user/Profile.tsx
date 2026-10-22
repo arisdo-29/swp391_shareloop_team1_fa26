@@ -16,6 +16,7 @@ import {
 import { formatCredit } from '../../utils/formatting';
 import { fileToDataUrl } from '../../utils/files';
 import { ChangePasswordForm } from '../../components/ChangePasswordForm';
+import { OtpInput } from '../../components/OtpInput';
 import { validEmail, validVietnamPhone } from '../../utils/passwordSecurity';
 import { useWallet } from '../../app/useWallet';
 import { userApi } from '../../services/userApi';
@@ -26,6 +27,7 @@ import type { ApiError } from '../../services/http';
 import { toBackendUserId } from '../../services/requestApi';
 import { resolveMediaUrl } from '../../services/mediaUrl';
 import { reputationApi, type MyReputation } from '../../services/reputationApi';
+import { createOtpValue } from '../../utils/otp';
 
 const reputationRankLabel: Record<MyReputation['rank'], string> = {
   BRONZE: 'Đồng',
@@ -165,7 +167,7 @@ export function Profile() {
   const [profileNotice, setProfileNotice] = useState('');
   const [phoneChangeOpen, setPhoneChangeOpen] = useState(false);
   const [newPhone, setNewPhone] = useState('');
-  const [phoneOtp, setPhoneOtp] = useState('');
+  const [phoneOtp, setPhoneOtp] = useState(() => createOtpValue());
   const [phoneOtpEmail, setPhoneOtpEmail] = useState('');
   const [phoneOtpExpiresIn, setPhoneOtpExpiresIn] = useState<number | null>(null);
   const [phoneResendCooldown, setPhoneResendCooldown] = useState(0);
@@ -266,7 +268,7 @@ export function Profile() {
   const closePhoneChange = () => {
     setPhoneChangeOpen(false);
     setNewPhone('');
-    setPhoneOtp('');
+    setPhoneOtp(createOtpValue());
     setPhoneOtpEmail('');
     setPhoneOtpExpiresIn(null);
     setPhoneResendCooldown(0);
@@ -306,7 +308,7 @@ export function Profile() {
         return;
       }
       setNewPhone(normalizedPhone);
-      setPhoneOtp('');
+      setPhoneOtp(createOtpValue());
       setPhoneOtpEmail(response.email);
       setPhoneOtpExpiresIn(Math.floor(response.otpExpiresInSeconds));
       setPhoneResendCooldown(Math.floor(response.resendCooldownSeconds));
@@ -340,14 +342,15 @@ export function Profile() {
       setPhoneChangeError('Mã OTP đã hết hạn. Vui lòng gửi lại mã mới.');
       return;
     }
-    if (!OTP_PATTERN.test(phoneOtp)) {
+    const otpCode = phoneOtp.join('');
+    if (!OTP_PATTERN.test(otpCode)) {
       setPhoneChangeError('Mã OTP phải gồm đúng 6 chữ số.');
       return;
     }
 
     setPhoneChangeConfirming(true);
     try {
-      const profile = await userApi.changePhone({ newPhone: normalizedPhone, otp: phoneOtp });
+      const profile = await userApi.changePhone({ newPhone: normalizedPhone, otp: otpCode });
       const currentUserId = toBackendUserId(user.id);
       if (
         !Number.isSafeInteger(profile.id)
@@ -549,7 +552,7 @@ export function Profile() {
                       onClick={() => {
                         setPhoneChangeOpen(true);
                         setNewPhone('');
-                        setPhoneOtp('');
+                        setPhoneOtp(createOtpValue());
                         setPhoneOtpEmail('');
                         setPhoneOtpExpiresIn(null);
                         setPhoneResendCooldown(0);
@@ -626,15 +629,12 @@ export function Profile() {
                             ? ` Mã hết hạn sau ${formatCountdown(phoneOtpExpiresIn)}.`
                             : ''}
                         </Alert>
-                        <Field
-                          label="Mã OTP"
+                        <OtpInput
                           value={phoneOtp}
-                          inputMode="numeric"
-                          autoComplete="one-time-code"
-                          maxLength={6}
-                          placeholder="Nhập 6 chữ số"
-                          onChange={(event) => {
-                            setPhoneOtp(event.target.value.replace(/\D/g, '').slice(0, 6));
+                          disabled={phoneChangeSending || phoneChangeConfirming}
+                          invalid={phoneChangeError.startsWith('Mã OTP')}
+                          onChange={(value) => {
+                            setPhoneOtp(value);
                             setPhoneChangeError('');
                           }}
                         />
@@ -645,7 +645,7 @@ export function Profile() {
                             disabled={
                               phoneChangeConfirming
                               || phoneChangeSending
-                              || phoneOtp.length !== 6
+                              || phoneOtp.join('').length !== 6
                               || phoneOtpExpiresIn === 0
                             }
                           >
