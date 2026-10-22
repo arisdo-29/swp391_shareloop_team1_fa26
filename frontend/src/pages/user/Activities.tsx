@@ -59,6 +59,15 @@ const WALLET_INSUFFICIENT_BALANCE = 'WALLET_INSUFFICIENT_BALANCE';
 const ITEM_IMAGES_MIN = 3;
 const ITEM_IMAGES_MAX = 8;
 
+const OPERATING_STATUS_LABELS: Record<OperatingStatus, string> = {
+  NORMAL: 'Hoạt động bình thường',
+  PARTIAL: 'Hoạt động một phần',
+  NOT_WORKING: 'Không hoạt động',
+};
+
+const isOperatingStatus = (value: string): value is OperatingStatus =>
+  value === 'NORMAL' || value === 'PARTIAL' || value === 'NOT_WORKING';
+
 type EditFormErrors = Partial<Record<
   'title' | 'description' | 'desiredItem' | 'brand' | 'images' | 'defectNote' | 'defectImages' | 'operatingStatus',
   string
@@ -871,12 +880,16 @@ function EditItemForm({
   const [uploadError, setUploadError] = useState('');
   const totalImageCount = images.length + newImages.length;
   const totalDefectImageCount = defectImages.length + newDefectImages.length;
-  const operatingStatusRequired = categoryAttributes.some(
+  const sortedCategoryAttributes = [...categoryAttributes].sort(
+    (left, right) => left.sortOrder - right.sortOrder || left.id - right.id,
+  );
+  const operatingStatusAttribute = sortedCategoryAttributes.find(
     (attribute) =>
-      attribute.required &&
       attribute.dataType === 'SELECT' &&
       ['NORMAL', 'PARTIAL', 'NOT_WORKING'].every((option) => attribute.options.includes(option)),
   );
+  const operatingStatusRequired = operatingStatusAttribute?.required ?? false;
+  const operatingStatusOptions = operatingStatusAttribute?.options.filter(isOperatingStatus) ?? [];
   const formDisabled = disabled || uploading;
 
   useEffect(() => {
@@ -1013,10 +1026,13 @@ function EditItemForm({
         void submit();
       }}
     >
-      <Select label="Hình thức" value={offerType} disabled={formDisabled} onChange={(event) => setOfferType(event.target.value as OfferType)}>
-        <option value="GIVE">Cho tặng</option>
-        <option value="SWAP">Trao đổi</option>
-      </Select>
+      <div>
+        <Select label="Hình thức" value={offerType} disabled={formDisabled} onChange={(event) => setOfferType(event.target.value as OfferType)}>
+          <option value="GIVE">Cho tặng</option>
+          <option value="SWAP" disabled={item.offerType === 'GIVE'}>Trao đổi</option>
+        </Select>
+        {item.offerType === 'GIVE' ? <p className="mt-1 text-xs text-text-muted">Muốn trao đổi thì đăng bài mới.</p> : null}
+      </div>
       {offerType === 'SWAP' ? (
         <Field label="Món muốn đổi" value={desiredItem} disabled={formDisabled} error={errors.desiredItem} onChange={(event) => setDesiredItem(event.target.value)} />
       ) : null}
@@ -1060,13 +1076,24 @@ function EditItemForm({
       <TextArea label="Mô tả" value={description} disabled={formDisabled} error={errors.description} onChange={(event) => setDescription(event.target.value)} />
       {attributesLoading ? <p className="text-xs text-text-muted">Đang tải thuộc tính danh mục...</p> : null}
       {attributesError ? <p className="text-xs text-error">{attributesError}</p> : null}
-      {operatingStatusRequired ? (
+      {!attributesLoading && !attributesError && sortedCategoryAttributes.length ? (
+        <div className="flex flex-wrap gap-2">
+          {sortedCategoryAttributes.map((attribute) => (
+            <span key={attribute.id} className="rounded-full bg-surface-low px-3 py-1 text-xs ring-1 ring-border">
+              {attribute.name}
+              {attribute.required ? ' · bắt buộc' : ''}
+              {attribute.options.length ? ` · ${attribute.options.join(', ')}` : ` · ${attribute.dataType}`}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {operatingStatusAttribute ? (
         <div>
-          <Select label="Trạng thái hoạt động" value={operatingStatus} disabled={formDisabled} onChange={(event) => setOperatingStatus(event.target.value as OperatingStatus | '')}>
+          <Select label={`${operatingStatusAttribute.name}${operatingStatusRequired ? '' : ' (không bắt buộc)'}`} value={operatingStatus} disabled={formDisabled} onChange={(event) => setOperatingStatus(event.target.value as OperatingStatus | '')}>
             <option value="">Chọn trạng thái hoạt động</option>
-            <option value="NORMAL">Hoạt động bình thường</option>
-            <option value="PARTIAL">Hoạt động một phần</option>
-            <option value="NOT_WORKING">Không hoạt động</option>
+            {operatingStatusOptions.map((option) => (
+              <option key={option} value={option}>{OPERATING_STATUS_LABELS[option]}</option>
+            ))}
           </Select>
           {errors.operatingStatus ? <span className="mt-1 block text-xs text-error">{errors.operatingStatus}</span> : null}
         </div>

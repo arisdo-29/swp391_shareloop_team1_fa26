@@ -36,7 +36,21 @@ export interface WalletTransactionParams {
   size?: number; // 1..100
 }
 
+// Contract: docs/api/listingfee.md (GET /api/v1/listing-fees/held)
+export interface HeldFeeItem {
+  itemId: number;
+  title: string;
+  offerType: 'GIVE' | 'SWAP';
+  status: string;
+  pendingFee: number;
+  feeType: 'POST' | 'EDIT'; // POST = phí đăng, EDIT = phí sửa
+}
+
 export const walletApi = {
+  async listHeldFees() {
+    const { data } = await http.get<HeldFeeItem[]>('/api/v1/listing-fees/held');
+    return data;
+  },
   async get() {
     const { data } = await http.get<WalletResponse>('/api/v1/wallet');
     return data;

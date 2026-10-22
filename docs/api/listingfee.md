@@ -9,6 +9,10 @@ Người sở hữu: BE1. Module giữ, trừ, nhả phí đăng bài và phí s
 `boost_max_days`), không viết cứng. Có một job nền chuyển bài
 quá hạn sang `EXPIRED` (mục "Job nền"). Đổi tiền chỉ qua `wallet.CreditService`.
 
+Phí đăng (`post_fee`) chỉ áp dụng cho bài Trao đổi (`SWAP`); bài Cho tặng (`GIVE`) miễn phí đăng, kể cả khi gửi lại
+bài bị từ chối. Phí sửa bài sau duyệt (`edit_fee`) áp dụng cho cả hai loại. Không cho sửa bài `GIVE` thành `SWAP`
+(`409 ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED`, xem `item.md`) để không né được phí đăng.
+
 ## GET /api/v1/listing-fees
 
 Bảng phí và thời hạn hiện hành để FE hiển thị trước khi người dùng đăng, sửa, gia hạn hay đẩy bài. Mọi số đọc từ
@@ -49,6 +53,49 @@ ConfigService ở mỗi lần gọi, nên Admin đổi cấu hình (`PUT /api/v1
 | `postDisplayDaysGold`    | number | `post_display_days_gold`    | Số ngày hiển thị sau lần duyệt đầu khi chủ bài từ hạng Vàng trở lên |
 
 Hạn hiển thị (`expireAt`) và hạn đẩy (`boostedUntil`) của từng bài được trả kèm trong `ItemResponse` (xem `item.md`).
+
+## GET /api/v1/listing-fees/held
+
+Danh sách bài của người đang đăng nhập đang giữ phí (FR-15), để màn Ví hiện cạnh số "đang giữ". Gồm bài chờ duyệt
+đang giữ phí đăng (`POST`) và bài đã duyệt đang chờ duyệt bản sửa giữ phí sửa (`EDIT`). Bài GIVE (không giữ gì), bài
+đã được duyệt xong (phí đã trừ) và bài bị từ chối hoặc bị gỡ (phí đã nhả) không có trong danh sách. Tổng `pendingFee`
+của các dòng bằng `heldCredit` trong `GET /api/v1/wallet`. Xếp bài mới cập nhật trước.
+
+- Xác thực: **bắt buộc** Bearer Token. Chỉ trả bài của chính người gọi. Không có tham số.
+- Thành công: `200`, mảng `HeldFeeItem` (rỗng nếu không giữ phí nào).
+- Lỗi: `401 UNAUTHORIZED`.
+
+```json
+[
+  {
+    "itemId": 42,
+    "title": "Xe đạp mini",
+    "offerType": "SWAP",
+    "status": "APPROVED",
+    "pendingFee": 5,
+    "feeType": "EDIT"
+  },
+  {
+    "itemId": 40,
+    "title": "Bàn học gỗ",
+    "offerType": "SWAP",
+    "status": "PENDING_REVIEW",
+    "pendingFee": 5,
+    "feeType": "POST"
+  }
+]
+```
+
+## HeldFeeItem
+
+| Trường       | Kiểu   | Ý nghĩa                                                       |
+|--------------|--------|---------------------------------------------------------------|
+| `itemId`     | number | Id bài                                                        |
+| `title`      | string | Tên bài                                                       |
+| `offerType`  | string | `GIVE` hoặc `SWAP`                                            |
+| `status`     | string | Trạng thái bài hiện tại (`PENDING_REVIEW`, `APPROVED`, ...)   |
+| `pendingFee` | number | Số Credit đang giữ cho bài này                                |
+| `feeType`    | string | `POST` (phí đăng) hoặc `EDIT` (phí sửa)                       |
 
 ## GET /api/v1/items/{id}/edit-quote
 
@@ -95,7 +142,7 @@ miễn phí.
 | `reason`                   | Điều kiện                                                       | `free` | `amount`   |
 |----------------------------|-----------------------------------------------------------------|--------|------------|
 | `NOT_YET_APPROVED`         | Chưa từng duyệt, phí đăng đang giữ (bài chờ duyệt lần đầu)      | true   | 0          |
-| `REPOST_FEE`               | Chưa từng duyệt, phí đăng đã nhả (bị từ chối): giữ lại phí đăng | false  | `post_fee` |
+| `REPOST_FEE`               | Chưa từng duyệt, phí đăng đã nhả (bị từ chối): giữ lại phí đăng | false  | `post_fee` (bài `SWAP`); bài `GIVE`: `free = true`, 0 |
 | `PENDING_REVIEW_OVERWRITE` | Đã duyệt, đang có bản sửa chờ duyệt: sửa đè (UC-14 2a)          | true   | 0          |
 | `FIRST_FREE_EDIT`          | Đã duyệt, chưa dùng lượt sửa miễn phí (C14)                     | true   | 0          |
 | `PAID_EDIT`                | Đã duyệt, đã dùng lượt miễn phí (C14b)                          | false  | `edit_fee` |
@@ -193,7 +240,7 @@ Mọi hàm chạy trong transaction của người gọi (REQUIRED). Khoá luôn
 | Hàm                               | Người gọi                         | Việc làm                                                                 |
 |-----------------------------------|-----------------------------------|--------------------------------------------------------------------------|
 | `quoteEdit(itemId, userId)`       | item (PUT), endpoint ở trên       | Trả `EditQuote`; chỉ đọc, không khoá                                     |
-| `holdPostFee(itemId, userId)`     | item (tạo bài)                    | Giữ `post_fee`, `fee_state = HELD`, loại POST                            |
+| `holdPostFee(itemId, userId)`     | item (tạo bài)                    | Giữ `post_fee` (bài `SWAP`) hoặc 0 (bài `GIVE`), `fee_state = HELD`, loại POST |
 | `holdEditFee(itemId, userId)`     | item (sửa bài)                    | Giữ đúng `amount` của `quoteEdit`; đang HELD thì không làm gì            |
 | `chargeHeldFee(itemId)`           | review (duyệt)                    | Trừ khoản đang giữ, `fee_state = CHARGED`; loại POST thì đặt `expire_at` |
 | `releaseHeldFee(itemId, reason)`  | review (từ chối), item (xoá bài)  | Nhả khoản đang giữ, `fee_state = RELEASED`                               |
@@ -208,7 +255,9 @@ Ghi chú cho người gọi:
   `releaseHeldFee`. Khoản giữ bằng 0 thì không đụng ví và không ghi `credit_ledger`.
 - **Lượt sửa miễn phí** chỉ bị tính (`free_edit_used = true`) khi Admin **duyệt** một bản sửa loại EDIT. Từ chối thì
   nhả phí và không tính lượt (BR-D07 (4), R36).
-- Phí 0 (Admin cấu hình `post_fee` hoặc `edit_fee` = 0): vẫn ghi `fee_state = HELD` với `pending_fee = 0`, không gọi ví.
+- Phí 0 (bài `GIVE` khi đăng hoặc gửi lại sau từ chối, hoặc Admin cấu hình `post_fee` / `edit_fee` = 0): vẫn ghi
+  `fee_state = HELD` với `pending_fee = 0`, không gọi ví. Nhờ vậy bài `GIVE` vẫn qua `chargeHeldFee` lúc duyệt: được
+  đặt `expire_at`, `post_fee_paid = true`, không có dòng `credit_ledger`.
 - **Thời hạn hiển thị**: khi duyệt khoản giữ loại POST (chỉ có ở lần duyệt đầu, kể cả bài gửi lại sau khi bị từ chối
   lần đầu), `chargeHeldFee` đặt `expire_at = lúc duyệt + N` ngày, với N = `post_display_days_gold` (45) khi
   `ReputationService.getRank(donorId)` là `GOLD` hoặc `DIAMOND`, còn lại `post_display_days` (30) (BR-D03, FR-29).

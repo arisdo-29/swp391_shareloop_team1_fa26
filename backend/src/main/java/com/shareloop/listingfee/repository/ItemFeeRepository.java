@@ -29,13 +29,13 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
      *
      * <p>approved_at chỉ cần biết có hay không nên trả sẵn boolean (everApproved); cột này thuộc module item/review
      * nên ItemFee cũng không map. status, category_id, is_active cũng thuộc module item, chỉ đọc để kiểm điều kiện
-     * gia hạn và đẩy bài.
+     * gia hạn và đẩy bài; offer_type cũng vậy, chỉ đọc để biết bài có mất phí đăng không (chỉ SWAP mất phí).
      */
     @Query(
             value = "SELECT donor_id AS \"donorId\", fee_state AS \"feeState\", pending_fee AS \"pendingFee\","
                     + " pending_fee_type AS \"pendingFeeType\", (approved_at IS NOT NULL) AS \"everApproved\","
                     + " free_edit_used AS \"freeEditUsed\", status AS \"status\","
-                    + " category_id AS \"categoryId\", is_active AS \"active\""
+                    + " category_id AS \"categoryId\", is_active AS \"active\", offer_type AS \"offerType\""
                     + " FROM items WHERE id = :itemId AND is_deleted = false",
             nativeQuery = true)
     Optional<ItemFeeSnapshot> findFeeSnapshotById(@Param("itemId") Long itemId);
@@ -63,4 +63,18 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
                     + " FROM items WHERE id IN (:ids)",
             nativeQuery = true)
     List<ItemDisplayWindowRow> findDisplayWindowRows(@Param("ids") Collection<Long> ids);
+
+    /**
+     * Các bài của một người đang giữ phí (fee_state = HELD, pending_fee > 0), bài mới cập nhật xếp trước. Native query
+     * vì title, status, offer_type thuộc module item, ItemFee không map các cột này. Tổng pending_fee của các dòng này
+     * bằng users.held_credit.
+     */
+    @Query(
+            value = "SELECT id AS \"id\", title AS \"title\", offer_type AS \"offerType\", status AS \"status\","
+                    + " pending_fee AS \"pendingFee\", pending_fee_type AS \"pendingFeeType\","
+                    + " updated_at AS \"updatedAt\""
+                    + " FROM items WHERE donor_id = :userId AND fee_state = 'HELD' AND pending_fee > 0"
+                    + " AND is_deleted = false ORDER BY updated_at DESC",
+            nativeQuery = true)
+    List<HeldFeeRow> findHeldFeeRows(@Param("userId") Long userId);
 }

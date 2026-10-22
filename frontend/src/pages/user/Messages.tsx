@@ -132,6 +132,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [pinnedItems, setPinnedItems] = useState<PinnedItemResponse[]>([]);
   const [pinnedItemsLoading, setPinnedItemsLoading] = useState(false);
   const [pinnedItemsError, setPinnedItemsError] = useState('');
+  const [pinnedItemsReloadKey, setPinnedItemsReloadKey] = useState(0);
   const [shareItemId, setShareItemId] = useState('');
   const [shareableItems, setShareableItems] = useState<ItemResponse[]>([]);
   const [disputeOpen, setDisputeOpen] = useState(false);
@@ -307,7 +308,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     return () => {
       active = false;
     };
-  }, [chatEnabled, currentUserId, selectedRequestId]);
+  }, [chatEnabled, pinnedItemsReloadKey, selectedRequestId]);
 
   useEffect(() => {
     if (selectedRequestId === null) return;
@@ -888,7 +889,18 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
               {pinnedItemsLoading ? (
                 <p className="text-center text-xs text-text-muted">Đang tải thẻ sản phẩm ghim...</p>
               ) : pinnedItemsError ? (
-                <p className="text-center text-xs text-error">{pinnedItemsError}</p>
+                <div className="flex items-center justify-center gap-3 text-xs text-error">
+                  <p>{pinnedItemsError}</p>
+                  <button
+                    type="button"
+                    className="shrink-0 font-semibold underline"
+                    onClick={() => setPinnedItemsReloadKey((key) => key + 1)}
+                  >
+                    Thử tải lại
+                  </button>
+                </div>
+              ) : !pinnedItems.length ? (
+                <p className="text-center text-xs text-text-muted">Cuộc trò chuyện này không có sản phẩm ghim.</p>
               ) : null}
               {pinnedItems.length ? (
                 <div className="mb-4 flex gap-3 overflow-x-auto rounded-lg bg-white p-3 ring-1 ring-border/70">

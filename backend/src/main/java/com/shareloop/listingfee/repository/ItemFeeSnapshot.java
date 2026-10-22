@@ -1,6 +1,7 @@
 package com.shareloop.listingfee.repository;
 
 import com.shareloop.item.entity.ItemStatus;
+import com.shareloop.item.entity.OfferType;
 import com.shareloop.listingfee.entity.ItemFeeState;
 import com.shareloop.listingfee.entity.ItemFeeType;
 
@@ -33,4 +34,7 @@ public interface ItemFeeSnapshot {
 
     // is_active = false: bài đang bị ẩn (do report hoặc Admin), không được đẩy (UC-16).
     boolean getActive();
+
+    // Cột offer_type thuộc module item; chỉ đọc để tính phí đăng: GIVE miễn phí, SWAP mất post_fee.
+    OfferType getOfferType();
 }
