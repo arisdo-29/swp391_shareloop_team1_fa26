@@ -30,8 +30,6 @@ const SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST =
   import.meta.env.DEV && import.meta.env.VITE_POST_SKIP_MEDIA_UPLOAD === 'true';
 const ITEM_IMAGES_MIN = 3;
 const ITEM_IMAGES_MAX = 8;
-// Giá trị mặc định của Backend; Backend vẫn quyết định mức phí thực tế khi tạo bài.
-const POST_FEE_DISPLAY = 5;
 
 const CONDITION_TO_API: Record<ItemCondition, ApiCondition> = {
   NEW: 'NEW',
@@ -82,6 +80,9 @@ export function Post() {
   const currentUserId = toBackendUserId(user.id);
   const mediaUploading = mediaUploadState === 'uploading';
   const availableCredit = isApiAccount ? wallet?.available ?? null : user.availableCredit;
+  // Phí đăng bài Trao đổi đọc từ Backend (GET /listing-fees); null khi chưa tải được.
+  const [postFee, setPostFee] = useState<number | null>(null);
+  const [postFeeError, setPostFeeError] = useState('');
   const operatingStatusRequired = categoryAttributes.some(
     (attribute) =>
       attribute.required &&
@@ -114,6 +115,26 @@ export function Post() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isApiAccount) return;
+    let active = true;
+    itemApi
+      .getListingFees()
+      .then((fees) => {
+        if (!active) return;
+        setPostFee(fees.postFeeSwap);
+        setPostFeeError('');
+      })
+      .catch(() => {
+        if (!active) return;
+        setPostFee(null);
+        setPostFeeError('Chưa tải được phí đăng bài. Vui lòng thử lại.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [isApiAccount]);
 
   useEffect(() => {
     const categoryId = categoryIds.get(category);
@@ -176,7 +197,11 @@ export function Post() {
       setError(walletLoading ? 'Đang tải số dư Credit. Vui lòng chờ trong giây lát.' : walletError || 'Chưa thể xác minh số dư Credit.');
       return;
     }
-    if (type === 'trade' && availableCredit !== null && availableCredit < POST_FEE_DISPLAY) {
+    if (type === 'trade' && postFee === null) {
+      setError(postFeeError || 'Đang tải phí đăng bài. Vui lòng chờ trong giây lát.');
+      return;
+    }
+    if (type === 'trade' && postFee !== null && availableCredit !== null && availableCredit < postFee) {
       setErrorCode(WALLET_INSUFFICIENT_BALANCE);
       setError(INSUFFICIENT_CREDIT_MESSAGE);
       setConfirmOpen(false);
@@ -198,7 +223,12 @@ export function Post() {
       setConfirmOpen(false);
       return;
     }
-    if (type === 'trade' && availableCredit !== null && availableCredit < POST_FEE_DISPLAY) {
+    if (type === 'trade' && postFee === null) {
+      setError(postFeeError || 'Đang tải phí đăng bài. Vui lòng chờ trong giây lát.');
+      setConfirmOpen(false);
+      return;
+    }
+    if (type === 'trade' && postFee !== null && availableCredit !== null && availableCredit < postFee) {
       setErrorCode(WALLET_INSUFFICIENT_BALANCE);
       setError(INSUFFICIENT_CREDIT_MESSAGE);
       setConfirmOpen(false);
@@ -606,7 +636,7 @@ export function Post() {
           ) : null}
           <div className="space-y-1 rounded-lg bg-white p-4 text-xs leading-5 text-text-secondary ring-1 ring-border/80">
             <p className="whitespace-nowrap text-text-primary"><strong>Cho tặng:</strong> miễn phí</p>
-            <p className="whitespace-nowrap text-text-primary"><strong>Trao đổi:</strong> phí đăng bài {POST_FEE_DISPLAY} Credit</p>
+            <p className="whitespace-nowrap text-text-primary"><strong>Trao đổi:</strong> phí đăng bài {postFee === null ? "--" : postFee} Credit</p>
           </div>
           <Button className="w-full" size="lg" disabled={submitting || mediaUploading || catalogLoading}>
             Đăng bài
@@ -624,27 +654,38 @@ export function Post() {
             <h2 id="post-fee-title" className="text-xl font-bold text-text-primary">
               Xác nhận đăng bài
             </h2>
-            <p className="mt-2 text-sm leading-6 text-text-muted">
-              {type === 'gift'
-                ? 'Bài cho tặng được đăng miễn phí.'
-                : 'Phí đăng bài sẽ được trừ một lần sau khi bạn xác nhận.'}
-            </p>
+            {type === 'gift' ? (
+              <p className="mt-2 text-sm leading-6 text-text-muted">Bài cho tặng được đăng miễn phí.</p>
+            ) : (
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-text-muted">
+                <li>Giữ {postFee === null ? '--' : postFee} Credit khi gửi duyệt.</li>
+                <li>Chỉ trừ khi bài được duyệt lần đầu.</li>
+                <li>Nhả lại toàn bộ nếu bài bị từ chối hoặc bạn gỡ bài trước khi duyệt.</li>
+              </ul>
+            )}
             <div className="mt-5 space-y-3 rounded-lg bg-surface-low p-4 text-sm">
               <SummaryRow
                 label="Phí đăng bài"
-                value={type === 'gift' ? 'Miễn phí' : `${POST_FEE_DISPLAY} Credit`}
+                value={type === 'gift' ? 'Miễn phí' : postFee === null ? '--' : `${postFee} Credit`}
               />
               <SummaryRow label="Số dư hiện tại" value={availableCredit === null ? '--' : `${availableCredit} Credit`} />
               <SummaryRow
-                label="Số dư sau khi đăng"
-                value={availableCredit === null ? '--' : `${type === 'gift' ? availableCredit : availableCredit - POST_FEE_DISPLAY} Credit`}
+                label="Khả dụng sau khi giữ"
+                value={
+                  availableCredit === null || (type !== 'gift' && postFee === null)
+                    ? '--'
+                    : `${type === 'gift' ? availableCredit : availableCredit - (postFee ?? 0)} Credit`
+                }
               />
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={submitting || mediaUploading}>
                 Hủy
               </Button>
-              <Button onClick={confirmSubmit} disabled={submitting || mediaUploading}>
+              <Button
+                onClick={confirmSubmit}
+                disabled={submitting || mediaUploading || (type === 'trade' && postFee === null)}
+              >
                 {submitting ? 'Đang đăng...' : 'Xác nhận đăng bài'}
               </Button>
             </div>
