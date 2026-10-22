@@ -41,6 +41,15 @@ const CONDITION_TO_API: Record<ItemCondition, ApiCondition> = {
   used: 'DEFECTIVE',
 };
 
+const OPERATING_STATUS_LABELS: Record<OperatingStatus, string> = {
+  NORMAL: 'Hoạt động bình thường',
+  PARTIAL: 'Hoạt động một phần',
+  NOT_WORKING: 'Không hoạt động',
+};
+
+const isOperatingStatus = (value: string): value is OperatingStatus =>
+  value === 'NORMAL' || value === 'PARTIAL' || value === 'NOT_WORKING';
+
 export function Post() {
   const user = useAppSelector(selectCurrentUser)!;
   const { isApiAccount, wallet, loading: walletLoading, error: walletError, refresh: refreshWallet } = useWallet();
@@ -83,12 +92,16 @@ export function Post() {
   // Phí đăng bài Trao đổi đọc từ Backend (GET /listing-fees); null khi chưa tải được.
   const [postFee, setPostFee] = useState<number | null>(null);
   const [postFeeError, setPostFeeError] = useState('');
-  const operatingStatusRequired = categoryAttributes.some(
+  const sortedCategoryAttributes = [...categoryAttributes].sort(
+    (left, right) => left.sortOrder - right.sortOrder || left.id - right.id,
+  );
+  const operatingStatusAttribute = sortedCategoryAttributes.find(
     (attribute) =>
-      attribute.required &&
       attribute.dataType === 'SELECT' &&
       ['NORMAL', 'PARTIAL', 'NOT_WORKING'].every((option) => attribute.options.includes(option)),
   );
+  const operatingStatusRequired = operatingStatusAttribute?.required ?? false;
+  const operatingStatusOptions = operatingStatusAttribute?.options.filter(isOperatingStatus) ?? [];
 
   useEffect(() => {
     let active = true;
@@ -138,6 +151,8 @@ export function Post() {
 
   useEffect(() => {
     const categoryId = categoryIds.get(category);
+    setOperatingStatus('');
+    setErrors((current) => ({ ...current, operatingStatus: undefined }));
     if (!isApiAccount || !categoryId) {
       setCategoryAttributes([]);
       setAttributesError('');
@@ -437,7 +452,13 @@ export function Post() {
               {attributesError ? <p className="mt-2 text-error">{attributesError}</p> : null}
               {!attributesLoading && !attributesError && categoryAttributes.length ? (
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {categoryAttributes.map((attribute) => <span key={attribute.id} className="rounded-full bg-white px-3 py-1 text-xs ring-1 ring-border">{attribute.name}{attribute.required ? ' · bắt buộc' : ''}</span>)}
+                  {sortedCategoryAttributes.map((attribute) => (
+                    <span key={attribute.id} className="rounded-full bg-white px-3 py-1 text-xs ring-1 ring-border">
+                      {attribute.name}
+                      {attribute.required ? ' · bắt buộc' : ''}
+                      {attribute.options.length ? ` · ${attribute.options.join(', ')}` : ` · ${attribute.dataType}`}
+                    </span>
+                  ))}
                 </div>
               ) : null}
               {categoryAttributes.length ? <p className="mt-2 text-xs text-text-muted">Hãy nêu các thông tin trên trong phần mô tả để người xem dễ đánh giá món đồ.</p> : null}
@@ -515,17 +536,17 @@ export function Post() {
               </label>
             </>
           ) : null}
-          {operatingStatusRequired ? (
+          {operatingStatusAttribute ? (
             <div>
               <Select
-                label="Trạng thái hoạt động"
+                label={`${operatingStatusAttribute.name}${operatingStatusRequired ? '' : ' (không bắt buộc)'}`}
                 value={operatingStatus}
                 onChange={(event) => setOperatingStatus(event.target.value as OperatingStatus | '')}
               >
                 <option value="">Chọn trạng thái hoạt động</option>
-                <option value="NORMAL">Hoạt động bình thường</option>
-                <option value="PARTIAL">Hoạt động một phần</option>
-                <option value="NOT_WORKING">Không hoạt động</option>
+                {operatingStatusOptions.map((option) => (
+                  <option key={option} value={option}>{OPERATING_STATUS_LABELS[option]}</option>
+                ))}
               </Select>
               {errors.operatingStatus ? <span className="mt-1 block text-xs text-error">{errors.operatingStatus}</span> : null}
             </div>
