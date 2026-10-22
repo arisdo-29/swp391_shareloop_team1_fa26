@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type Dispatch } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser, selectData } from '../../app/store';
@@ -6,7 +6,11 @@ import { Alert, Button, Field, Icon, PageHeader } from '../../components/ui';
 import type { CreditHistory, CreditHistoryType, Item, Topup } from '../../types/domain';
 import { formatCredit, formatVnd } from '../../utils/formatting';
 import { useWallet } from '../../app/useWallet';
-import { walletApi, type WalletTransactionResponse } from '../../services/walletApi';
+import {
+  walletApi,
+  type HeldFeeItem,
+  type WalletTransactionResponse,
+} from '../../services/walletApi';
 import {
   paymentApi,
   type PaymentOrderStatus,
@@ -31,6 +35,45 @@ const filterTypes: Record<Exclude<HistoryFilter, 'all'>, CreditHistoryType[]> = 
   topup: ['TOPUP'],
   spend: ['SPEND', 'AI_SPEND', 'RECEIVE_FEE'],
 };
+
+const HISTORY_PAGE_SIZE = 20;
+const DAY_MS = 24 * 60 * 60 * 1000;
+// Asia/Ho_Chi_Minh là UTC+7 quanh năm (không có giờ mùa hè) nên cộng cố định 7 giờ.
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+type QuickRange = '7days' | 'month' | 'quarter' | 'all';
+
+// Ngày hôm nay theo giờ Việt Nam, dạng yyyy-MM-dd (dùng được cho ô <input type="date">).
+function todayInVietnam() {
+  return new Date(Date.now() + VN_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function dateToInput(timestamp: number) {
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+// Trả về [từ ngày, đến ngày] cho nút lọc nhanh; '' nghĩa là không giới hạn.
+function quickRangeDates(range: QuickRange): [string, string] {
+  const today = todayInVietnam();
+  if (range === 'all') return ['', ''];
+  if (range === '7days') {
+    return [dateToInput(Date.parse(today) - 6 * DAY_MS), today];
+  }
+  if (range === 'month') return [today.slice(0, 8) + '01', today];
+  const month = Number(today.slice(5, 7));
+  const quarterStartMonth = Math.floor((month - 1) / 3) * 3 + 1;
+  return [`${today.slice(0, 5)}${String(quarterStartMonth).padStart(2, '0')}-01`, today];
+}
+
+// 00:00 giờ Việt Nam của ngày đã chọn, đổi sang ISO UTC. API tính "from" là gồm.
+function startOfDayIso(date: string) {
+  return new Date(`${date}T00:00:00+07:00`).toISOString();
+}
+
+// API tính "to" là không gồm, nên lấy 00:00 của ngày kế tiếp để bao trọn cuối ngày đã chọn.
+function endOfDayIso(date: string) {
+  return new Date(new Date(`${date}T00:00:00+07:00`).getTime() + DAY_MS).toISOString();
+}
 
 const legacyHistoryPattern =
   /swap|give|giu phi|giữ phí|giu giao dich|giữ giao dịch|tam giu|tạm giữ/i;
@@ -140,6 +183,12 @@ export function Credit() {
   const [apiHistoryLoading, setApiHistoryLoading] = useState(false);
   const [apiHistoryError, setApiHistoryError] = useState('');
   const [historyReloadKey, setHistoryReloadKey] = useState(0);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [historyPage, setHistoryPage] = useState(0);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [heldFees, setHeldFees] = useState<HeldFeeItem[]>([]);
+  const [heldFeesError, setHeldFeesError] = useState('');
   const [apiTopUpOrder, setApiTopUpOrder] = useState<TopUpOrderResponse | null>(null);
   const [topUpSubmitting, setTopUpSubmitting] = useState(false);
   const [topUpProcessing, setTopUpProcessing] = useState(false);
@@ -152,20 +201,55 @@ export function Credit() {
   const completedCredits =
     isApiAccount && returnState === 'success' ? (apiTopUpOrder?.credits ?? null) : null;
 
+  // Từ ngày sau Đến ngày thì báo lỗi và không gọi API.
+  const dateRangeError =
+    fromDate && toDate && fromDate > toDate ? '"Từ ngày" không được sau "Đến ngày".' : '';
+
+  // Danh sách bài đang giữ phí tải lại mỗi khi số dư ví được tải lại (wallet đổi object).
+  useEffect(() => {
+    if (!isApiAccount) {
+      setHeldFees([]);
+      return;
+    }
+    let active = true;
+    walletApi
+      .listHeldFees()
+      .then((response) => {
+        if (!active) return;
+        setHeldFees(response);
+        setHeldFeesError('');
+      })
+      .catch((caught) => {
+        if (!active) return;
+        setHeldFees([]);
+        setHeldFeesError((caught as ApiError).message || 'Không tải được danh sách bài đang giữ phí.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [isApiAccount, wallet]);
+
   useEffect(() => {
     if (!isApiAccount) {
       setApiHistory([]);
       setApiHistoryError('');
       return;
     }
+    if (dateRangeError) return;
     let active = true;
     setApiHistoryLoading(true);
     setApiHistoryError('');
     walletApi
-      .listTransactions({ page: 0, size: 100 })
+      .listTransactions({
+        from: fromDate ? startOfDayIso(fromDate) : undefined,
+        to: toDate ? endOfDayIso(toDate) : undefined,
+        page: historyPage,
+        size: HISTORY_PAGE_SIZE,
+      })
       .then((response) => {
         if (!active) return;
         setApiHistory(response.items.map((entry) => toCreditHistory(entry, user.id)));
+        setHistoryTotal(response.totalElements);
       })
       .catch((caught) => {
         if (!active) return;
@@ -179,7 +263,14 @@ export function Credit() {
     return () => {
       active = false;
     };
-  }, [historyReloadKey, isApiAccount, user.id]);
+  }, [historyReloadKey, isApiAccount, user.id, fromDate, toDate, historyPage, dateRangeError]);
+
+  // Đổi bộ lọc ngày thì quay về trang đầu.
+  const changeDateRange = (nextFrom: string, nextTo: string) => {
+    setFromDate(nextFrom);
+    setToDate(nextTo);
+    setHistoryPage(0);
+  };
 
   useEffect(() => {
     if (!isApiAccount) return;
@@ -388,6 +479,8 @@ export function Credit() {
         </div>
       </section>
 
+      {isApiAccount ? <HeldFeesSection heldFees={heldFees} error={heldFeesError} /> : null}
+
       <section id="topup" className="mt-8 scroll-mt-24">
         {isApiAccount && loadPendingTopUp()?.orderCode ? (
           <Link
@@ -459,6 +552,25 @@ export function Credit() {
         onFilterChange={setHistoryFilter}
         onSelect={setSelectedEntry}
         unavailable={false}
+        dateFilter={
+          isApiAccount ? (
+            <HistoryDateFilter
+              fromDate={fromDate}
+              toDate={toDate}
+              error={dateRangeError}
+              onChange={changeDateRange}
+            />
+          ) : null
+        }
+        pagination={
+          isApiAccount ? (
+            <HistoryPagination
+              page={historyPage}
+              total={historyTotal}
+              onPageChange={setHistoryPage}
+            />
+          ) : null
+        }
       />
       {selectedEntry ? (
         <CreditTransactionDetail
@@ -617,6 +729,8 @@ function CreditHistorySection({
   onFilterChange,
   onSelect,
   unavailable = false,
+  dateFilter = null,
+  pagination = null,
 }: {
   items: Item[];
   allHistory: CreditHistory[];
@@ -626,6 +740,8 @@ function CreditHistorySection({
   onFilterChange: Dispatch<HistoryFilter>;
   onSelect: (entry: CreditHistory | Topup) => void;
   unavailable?: boolean;
+  dateFilter?: ReactNode;
+  pagination?: ReactNode;
 }) {
   const countFor = (filter: HistoryFilter) => {
     const pendingCount = filter === 'all' || filter === 'topup' ? pendingTopups.length : 0;
@@ -643,6 +759,7 @@ function CreditHistorySection({
   return (
     <section className="mt-10">
       <h2 className="section-title">Lịch sử Credit</h2>
+      {dateFilter}
       {unavailable ? (
         <div className="mt-4 rounded-xl bg-white px-5 py-12 text-center text-sm text-text-muted ring-1 ring-border/80">
           Chưa thể tải lịch sử Credit.
@@ -698,9 +815,149 @@ function CreditHistorySection({
               </div>
             ) : null}
           </div>
+          {pagination}
         </>
       )}
     </section>
+  );
+}
+
+function HeldFeesSection({ heldFees, error }: { heldFees: HeldFeeItem[]; error: string }) {
+  return (
+    <section className="mt-8">
+      <h2 className="section-title">Bài đang giữ phí</h2>
+      <p className="mt-1 text-xs text-text-muted">
+        Được trừ khi bài được duyệt, nhả lại nếu bài bị từ chối hoặc bị gỡ.
+      </p>
+      {error ? (
+        <div className="mt-3">
+          <Alert tone="error">{error}</Alert>
+        </div>
+      ) : null}
+      {!error && !heldFees.length ? (
+        <p className="mt-3 text-sm text-text-muted">Không có bài nào đang giữ phí.</p>
+      ) : null}
+      {heldFees.length ? (
+        <ul className="mt-3 divide-y divide-border overflow-hidden rounded-xl bg-white ring-1 ring-border/80">
+          {heldFees.map((heldFee) => (
+            <li
+              key={heldFee.itemId}
+              className="flex items-center justify-between gap-3 px-4 py-3 text-sm"
+            >
+              <div className="min-w-0">
+                <Link
+                  className="block truncate font-semibold text-primary hover:underline"
+                  to={`/items/${heldFee.itemId}`}
+                >
+                  {heldFee.title}
+                </Link>
+                <span className="text-xs text-text-muted">
+                  {heldFee.feeType === 'POST' ? 'Phí đăng' : 'Phí sửa'}
+                </span>
+              </div>
+              <span className="shrink-0 font-bold tabular-nums">
+                {formatCredit(heldFee.pendingFee)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
+function HistoryDateFilter({
+  fromDate,
+  toDate,
+  error,
+  onChange,
+}: {
+  fromDate: string;
+  toDate: string;
+  error: string;
+  onChange: (fromDate: string, toDate: string) => void;
+}) {
+  const quickButtons: Array<[QuickRange, string]> = [
+    ['7days', '7 ngày'],
+    ['month', 'Tháng này'],
+    ['quarter', 'Quý này'],
+    ['all', 'Tất cả'],
+  ];
+  const dateInputClass = 'rounded-md border border-border bg-white px-2 py-1.5 text-sm';
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {quickButtons.map(([range, label]) => (
+          <Button
+            key={range}
+            size="sm"
+            variant="outline"
+            onClick={() => onChange(...quickRangeDates(range))}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <label className="flex items-center gap-2">
+          Từ ngày
+          <input
+            type="date"
+            className={dateInputClass}
+            value={fromDate}
+            onChange={(event) => onChange(event.target.value, toDate)}
+          />
+        </label>
+        <label className="flex items-center gap-2">
+          Đến ngày
+          <input
+            type="date"
+            className={dateInputClass}
+            value={toDate}
+            onChange={(event) => onChange(fromDate, event.target.value)}
+          />
+        </label>
+      </div>
+      {error ? <Alert tone="error">{error}</Alert> : null}
+    </div>
+  );
+}
+
+function HistoryPagination({
+  page,
+  total,
+  onPageChange,
+}: {
+  page: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}) {
+  const totalPages = Math.ceil(total / HISTORY_PAGE_SIZE);
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="mt-4 flex items-center justify-between text-sm">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={page === 0}
+        onClick={() => onPageChange(page - 1)}
+      >
+        Trang trước
+      </Button>
+      <span className="text-text-muted">
+        Trang {page + 1} / {totalPages}
+      </span>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={page + 1 >= totalPages}
+        onClick={() => onPageChange(page + 1)}
+      >
+        Trang sau
+      </Button>
+    </div>
   );
 }
 

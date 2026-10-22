@@ -1,13 +1,17 @@
 package com.shareloop.listingfee.service;
 
 import com.shareloop.listingfee.dto.DisplayWindow;
+import com.shareloop.listingfee.dto.HeldFeeItem;
 import com.shareloop.listingfee.dto.ListingFeeConfigResponse;
+import com.shareloop.listingfee.repository.HeldFeeRow;
 import com.shareloop.listingfee.repository.ItemDisplayWindowRow;
 import com.shareloop.listingfee.repository.ItemFeeRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +50,24 @@ public class ListingFeeQueryService {
             displayWindows.put(row.getId(), new DisplayWindow(row.getExpireAt(), row.getBoostedUntil()));
         }
         return displayWindows;
+    }
+
+    /**
+     * Danh sách bài đang giữ phí của một người (FR-15): bài SWAP chờ duyệt giữ phí đăng, bài đã duyệt chờ duyệt bản
+     * sửa giữ phí sửa. Bài GIVE (giữ 0), bài đã duyệt xong hoặc bị từ chối không có trong danh sách.
+     */
+    public List<HeldFeeItem> findHeldFees(long userId) {
+        List<HeldFeeItem> heldFees = new ArrayList<>();
+        for (HeldFeeRow row : itemFeeRepository.findHeldFeeRows(userId)) {
+            heldFees.add(new HeldFeeItem(
+                    row.getId(),
+                    row.getTitle(),
+                    row.getOfferType(),
+                    row.getStatus(),
+                    row.getPendingFee(),
+                    row.getPendingFeeType()));
+        }
+        return heldFees;
     }
 
     /**
