@@ -6,6 +6,7 @@ import com.shareloop.catalog.mapper.CategoryMapper;
 import com.shareloop.catalog.repository.ItemCategoryRepository;
 import com.shareloop.common.exception.BusinessException;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,14 @@ public class CategoryService {
         return repository.findByIsActiveTrueOrderBySortOrderAscIdAsc().stream()
                 .map(mapper::toResponse)
                 .toList();
+    }
+
+    /**
+     * Tên danh mục theo id cho trang Admin. Khác getById: danh mục đang ẩn vẫn có tên, vì bài cũ có thể còn thuộc
+     * danh mục đã ẩn; chỉ danh mục đã xoá mềm mới trả rỗng.
+     */
+    public Optional<String> findName(long id) {
+        return repository.findById(id).map(category -> category.getName());
     }
 
     /** Danh mục ẩn hoặc đã xoá mềm coi như không tồn tại. */

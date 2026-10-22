@@ -4,6 +4,7 @@ import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
+import org.springframework.data.repository.query.Param;
 
 public interface ReviewQueueRepository extends Repository<com.shareloop.item.entity.Item, Long> {
 
@@ -30,4 +31,18 @@ public interface ReviewQueueRepository extends Repository<com.shareloop.item.ent
                      i.id ASC
             """, nativeQuery = true)
     List<Object[]> findPendingReviewQueue(Pageable pageable);
+
+    // Thông tin kiểm duyệt của một bài ở mọi trạng thái (Admin xem chi tiết); cùng cách đọc ai_result như hàng chờ.
+    @Query(value = """
+            SELECT i.ai_risk AS aiRisk,
+                   COALESCE(i.ai_result ->> 'flag', i.ai_result ->> 'moderation', 'NONE') AS moderationFlag,
+                   COALESCE(i.ai_result ->> 'reason', i.ai_result ->> 'moderationReason') AS flagReason,
+                   u.trust_stars AS donorTrustStars,
+                   CAST(i.ai_result -> 'matchedTerms' AS TEXT) AS matchedTerms
+            FROM items i
+            JOIN users u ON u.id = i.donor_id
+            WHERE i.id = :itemId
+              AND i.is_deleted = FALSE
+            """, nativeQuery = true)
+    List<Object[]> findModerationInfo(@Param("itemId") long itemId);
 }
