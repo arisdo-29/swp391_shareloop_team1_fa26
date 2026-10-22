@@ -1259,7 +1259,7 @@ hồi
 9.4. Nhóm C — Bài đăng
 Mã Yêu cầu chức năng Ai thực hiện Ưu tiên Use case Business
 Rule
-FR-19 Tạo bài hình thức Cho (phí 5 Credit như mọi bài) Member Must UC-12 BR-D05, BR-
+FR-19 Tạo bài hình thức Cho (miễn phí đăng, xem FR-32) Member Must UC-12 BR-D05, BR-
 P01
 FR-20 Tạo bài hình thức Trao đổi, bắt buộc mô tả món mong Member Must UC-12 BR-S02
 muốn
