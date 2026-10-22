@@ -1,10 +1,14 @@
 package com.shareloop.listingfee.controller;
 
+import com.shareloop.common.security.CurrentUserId;
+import com.shareloop.listingfee.dto.HeldFeeItem;
 import com.shareloop.listingfee.dto.ListingFeeConfigResponse;
 import com.shareloop.listingfee.service.ListingFeeQueryService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,5 +35,16 @@ public class ListingFeeController {
     @GetMapping
     public ListingFeeConfigResponse getFeeConfig() {
         return listingFeeQueryService.getFeeConfig();
+    }
+
+    @Operation(
+            summary = "Danh sách bài của tôi đang giữ phí (FR-15)",
+            description = "Gồm bài chờ duyệt đang giữ phí đăng và bài chờ duyệt bản sửa đang giữ phí sửa."
+                    + " Tổng pendingFee bằng số Credit đang giữ của ví.")
+    @ApiResponse(responseCode = "200", description = "Thành công, danh sách rỗng nếu không giữ phí nào")
+    @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
+    @GetMapping("/held")
+    public List<HeldFeeItem> getHeldFees(@Parameter(hidden = true) @CurrentUserId long userId) {
+        return listingFeeQueryService.findHeldFees(userId);
     }
 }

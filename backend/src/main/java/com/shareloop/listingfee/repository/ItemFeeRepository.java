@@ -63,4 +63,18 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
                     + " FROM items WHERE id IN (:ids)",
             nativeQuery = true)
     List<ItemDisplayWindowRow> findDisplayWindowRows(@Param("ids") Collection<Long> ids);
+
+    /**
+     * Các bài của một người đang giữ phí (fee_state = HELD, pending_fee > 0), bài mới cập nhật xếp trước. Native query
+     * vì title, status, offer_type thuộc module item, ItemFee không map các cột này. Tổng pending_fee của các dòng này
+     * bằng users.held_credit.
+     */
+    @Query(
+            value = "SELECT id AS \"id\", title AS \"title\", offer_type AS \"offerType\", status AS \"status\","
+                    + " pending_fee AS \"pendingFee\", pending_fee_type AS \"pendingFeeType\","
+                    + " updated_at AS \"updatedAt\""
+                    + " FROM items WHERE donor_id = :userId AND fee_state = 'HELD' AND pending_fee > 0"
+                    + " AND is_deleted = false ORDER BY updated_at DESC",
+            nativeQuery = true)
+    List<HeldFeeRow> findHeldFeeRows(@Param("userId") Long userId);
 }
