@@ -936,8 +936,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         </span>
                       </span>
                     </button>
-                    {selectable ? (
-                      <div className="mt-2 flex justify-end">
+                    <div className="mt-2 flex flex-wrap justify-end gap-2">
+                      <Button size="sm" variant="outline" onClick={openDetails}>Xem chi tiết</Button>
+                      {selectable ? (
                         <Button
                           size="sm"
                           disabled={selectSubmitting}
@@ -948,8 +949,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         >
                           Chọn người này
                         </Button>
-                      </div>
-                    ) : null}
+                      ) : null}
+                    </div>
                   </article>
                 );
               })
