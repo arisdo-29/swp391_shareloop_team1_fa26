@@ -3,7 +3,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RejectReasonsContent } from './AdminPages';
+import { RejectReasonsContent } from './ModerationParts';
 
 const reasons = [
   'Ảnh không đúng món đồ.',

@@ -5,7 +5,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReviewChecklistItem } from '../../services/adminModerationApi';
-import { ModerationChecklistContent } from './AdminPages';
+import { ModerationChecklistContent } from './ModerationParts';
 
 const checklist: ReviewChecklistItem[] = [
   { id: 11, key: 'content', statement: 'Nội dung phù hợp quy định' },

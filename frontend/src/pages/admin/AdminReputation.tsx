@@ -1,200 +1,224 @@
-import { useRef, useState, type FormEvent } from 'react';
-import { Alert, Button, Field, PageHeader, TextArea } from '../../components/ui';
+import { useState } from 'react';
+import { Alert, Button, EmptyState, PageHeader } from '../../components/ui';
+import type { AdminConfigResponse } from '../../services/adminConfigApi';
+import { ConfigEditDialog } from './ConfigEditDialog';
+import { GraceStarSection } from './GraceStarSection';
+import { formatConfigValue } from './configDisplay';
 import {
-  adminReputationApi,
-  type GraceStarResponse,
-} from '../../services/adminReputationApi';
-import type { ApiError } from '../../services/http';
+  DIAMOND_MIN_KEY,
+  GOLD_MIN_KEY,
+  SILVER_MIN_KEY,
+  rankOrderError,
+} from './rankThresholds';
+import { useAdminConfigs } from './useAdminConfigs';
 
-function graceStarErrorMessage(error: unknown) {
-  const apiError = error as Partial<ApiError>;
-  if (apiError.code === 'REPUTATION_GRACE_STAR_ALREADY_USED') {
-    return 'Người dùng đã được cấp sao ân hạn trước đó. Mỗi tài khoản chỉ được cấp một lần.';
-  }
-  if (apiError.code === 'REPUTATION_GRACE_STAR_NOT_ELIGIBLE') {
-    return 'Chỉ có thể cấp sao ân hạn khi người dùng đang có 0 sao.';
-  }
-  if (apiError.status === 404) return 'Không tìm thấy người dùng.';
-  if (apiError.status === 403) return 'Bạn không có quyền cấp sao ân hạn.';
-  if (apiError.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
-  if (apiError.status === 400) return 'Thông tin cấp sao chưa hợp lệ. Vui lòng kiểm tra lại.';
-  if (apiError.status === 0) return 'Không thể kết nối đến hệ thống. Vui lòng thử lại.';
-  return 'Không thể cấp sao ân hạn. Vui lòng thử lại sau.';
+const POST_DISPLAY_DAYS_KEY = 'post_display_days';
+const POST_DISPLAY_DAYS_GOLD_KEY = 'post_display_days_gold';
+
+interface RankRow {
+  name: string;
+  minPointsKey: string | null;
+  maxItemsKey: string;
+  displayDaysKey: string | null;
 }
 
-export function AdminReputation() {
-  const [userId, setUserId] = useState('');
-  const [reason, setReason] = useState('');
-  const [confirmationOpen, setConfirmationOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [result, setResult] = useState<GraceStarResponse | null>(null);
-  const inFlight = useRef(false);
-  const normalizedUserId = userId.trim();
-  const numericUserId = Number(normalizedUserId);
-  const validUserId =
-    /^[1-9]\d*$/.test(normalizedUserId) &&
-    Number.isSafeInteger(numericUserId) &&
-    numericUserId > 0;
-  const trimmedReason = reason.trim();
-  const validReason = trimmedReason.length > 0 && trimmedReason.length <= 500;
-  const userIdError = userId && !validUserId ? 'ID người dùng phải là số nguyên dương.' : '';
+const RANKS: RankRow[] = [
+  { name: 'Đồng', minPointsKey: null, maxItemsKey: 'max_active_items_bronze', displayDaysKey: null },
+  { name: 'Bạc', minPointsKey: SILVER_MIN_KEY, maxItemsKey: 'max_active_items_silver', displayDaysKey: null },
+  {
+    name: 'Vàng',
+    minPointsKey: GOLD_MIN_KEY,
+    maxItemsKey: 'max_active_items_gold',
+    displayDaysKey: POST_DISPLAY_DAYS_GOLD_KEY,
+  },
+  {
+    name: 'Kim cương',
+    minPointsKey: DIAMOND_MIN_KEY,
+    maxItemsKey: 'max_active_items_diamond',
+    displayDaysKey: null,
+  },
+];
 
-  const openConfirmation = (event: FormEvent) => {
-    event.preventDefault();
-    setError('');
-    setResult(null);
-    if (!validUserId) {
-      setError('Vui lòng nhập ID người dùng là số nguyên dương.');
-      return;
-    }
-    if (!validReason) {
-      setError('Lý do phải có từ 1 đến 500 ký tự.');
-      return;
-    }
-    setConfirmationOpen(true);
+// Các key đã nằm trong bảng hạng nên không lặp lại ở bảng quy tắc cộng điểm.
+const RANK_TABLE_KEYS = new Set(
+  RANKS.flatMap((rank) => [rank.minPointsKey, rank.maxItemsKey, rank.displayDaysKey]).filter(
+    (key): key is string => key !== null,
+  ),
+);
+
+function EditableValue({
+  config,
+  onEdit,
+}: {
+  config: AdminConfigResponse | undefined;
+  onEdit: (config: AdminConfigResponse) => void;
+}) {
+  if (!config) return <span className="text-text-muted">—</span>;
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className="font-semibold tabular-nums">{formatConfigValue(config)}</span>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="!min-h-7 !px-2"
+        aria-label={`Sửa ${config.label}`}
+        onClick={() => onEdit(config)}
+      >
+        Sửa
+      </Button>
+    </span>
+  );
+}
+
+/** Uy tín và Hạng: cấu hình hạng thành viên, quy tắc cộng điểm (dùng API cấu hình có sẵn) và cấp sao ân hạn. */
+export function AdminReputation() {
+  const { configs, loading, error, reload, saving, saveError, setSaveError, clearSaveError, update } =
+    useAdminConfigs();
+  const [editing, setEditing] = useState<AdminConfigResponse | null>(null);
+  const [notice, setNotice] = useState('');
+  const byKey = (key: string) => configs.find((entry) => entry.key === key);
+  const rules = configs.filter((entry) => entry.group === 'REPUTATION' && !RANK_TABLE_KEYS.has(entry.key));
+
+  const openEditor = (config: AdminConfigResponse) => {
+    clearSaveError();
+    setNotice('');
+    setEditing(config);
   };
 
-  const confirmGrant = async () => {
-    if (!validUserId || !validReason || inFlight.current) return;
-
-    inFlight.current = true;
-    setSubmitting(true);
-    try {
-      const response = await adminReputationApi.grantGraceStar(numericUserId, trimmedReason);
-      setResult(response);
-      setReason('');
-      setConfirmationOpen(false);
-    } catch (caught) {
-      setError(graceStarErrorMessage(caught));
-    } finally {
-      inFlight.current = false;
-      setSubmitting(false);
+  const save = async (value: string, reason: string) => {
+    if (!editing) return;
+    // Báo lỗi thứ tự điểm các hạng ngay trên trang, Backend vẫn kiểm tra lại khi lưu.
+    const orderError = rankOrderError(configs, editing.key, value);
+    if (orderError) {
+      setSaveError(orderError);
+      return;
     }
+    const updated = await update(editing.key, value, reason);
+    if (!updated) return;
+    setEditing(null);
+    setNotice(`Đã cập nhật "${updated.label}".`);
   };
 
   return (
-    <section>
+    <div className="space-y-8">
       <PageHeader
         title="Uy tín & Hạng"
-        description="Quản lý và hỗ trợ khôi phục uy tín cho tài khoản đủ điều kiện."
+        description="Cấu hình hạng thành viên, quy tắc cộng điểm uy tín và hỗ trợ khôi phục uy tín cho tài khoản đủ điều kiện."
       />
 
-      <Alert tone="warning">
-        Sao ân hạn chỉ được cấp một lần cho tài khoản đang có 0 sao uy tín.
-      </Alert>
-
-      <form
-        className="mt-5 max-w-2xl space-y-4 rounded-xl border border-border/80 bg-white p-5 shadow-sm sm:p-6"
-        onSubmit={openConfirmation}
-      >
-        <Field
-          label="ID người dùng"
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          required
-          value={userId}
-          disabled={submitting}
-          error={userIdError}
-          onChange={(event) => {
-            setUserId(event.target.value);
-            setError('');
-            setResult(null);
-          }}
-          hint="Hiện hệ thống chỉ hỗ trợ xác định tài khoản theo ID."
-        />
-        <TextArea
-          label="Lý do cấp sao"
-          required
-          maxLength={500}
-          value={reason}
-          disabled={submitting}
-          onChange={(event) => {
-            setReason(event.target.value);
-            setError('');
-            setResult(null);
-          }}
-          placeholder="Ví dụ: Người dùng đã giải trình và cam kết không tái phạm"
-        />
-        <p className="text-right text-xs text-text-muted">{reason.length}/500</p>
-
-        {error && !confirmationOpen ? (
-          <div role="alert">
-            <Alert tone="error">{error}</Alert>
-          </div>
-        ) : null}
-        {result ? (
-          <div role="status">
-            <Alert tone="success">
-              Đã cấp sao ân hạn cho người dùng #{result.userId}. Số sao hiện tại:{' '}
-              {result.trustStars}.
-            </Alert>
-          </div>
-        ) : null}
-
-        <Button type="submit" icon="star" disabled={submitting || !validUserId || !validReason}>
-          Cấp 1 sao ân hạn
-        </Button>
-      </form>
-
-      {confirmationOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4">
-          <div
-            className="w-full max-w-lg rounded-xl border border-border bg-white p-5 shadow-xl sm:p-6"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="grace-star-confirm-title"
-          >
-            <h2 id="grace-star-confirm-title" className="text-lg font-bold text-text-primary">
-              Xác nhận cấp sao ân hạn
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-text-secondary">
-              Vui lòng kiểm tra thông tin trước khi xác nhận.
-            </p>
-
-            <dl className="mt-5 divide-y divide-border rounded-lg bg-surface-low px-4">
-              <div className="grid gap-1 py-3 sm:grid-cols-[9rem_1fr]">
-                <dt className="text-sm text-text-muted">ID người dùng</dt>
-                <dd className="font-semibold text-text-primary">#{numericUserId}</dd>
-              </div>
-              <div className="grid gap-1 py-3 sm:grid-cols-[9rem_1fr]">
-                <dt className="text-sm text-text-muted">Lý do</dt>
-                <dd className="break-words text-sm leading-6 text-text-primary">{trimmedReason}</dd>
-              </div>
-            </dl>
-
-            <div className="mt-4">
-              <Alert tone="warning">
-                Thao tác này chỉ áp dụng một lần cho tài khoản đủ điều kiện và không thể cấp lại.
-              </Alert>
-            </div>
-
-            {error ? (
-              <div className="mt-4" role="alert">
-                <Alert tone="error">{error}</Alert>
-              </div>
-            ) : null}
-
-            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={submitting}
-                onClick={() => {
-                  setConfirmationOpen(false);
-                  setError('');
-                }}
-              >
-                Hủy
-              </Button>
-              <Button type="button" icon="star" disabled={submitting} onClick={() => void confirmGrant()}>
-                {submitting ? 'Đang cấp sao…' : 'Xác nhận cấp 1 sao'}
-              </Button>
-            </div>
-          </div>
+      {notice ? (
+        <div role="status">
+          <Alert tone="success">{notice}</Alert>
         </div>
       ) : null}
-    </section>
+
+      {loading ? (
+        <EmptyState title="Đang tải cấu hình" text="Vui lòng chờ trong giây lát." />
+      ) : error ? (
+        <div className="space-y-3">
+          <Alert tone="error">{error}</Alert>
+          <Button size="sm" variant="outline" onClick={reload}>
+            Thử lại
+          </Button>
+        </div>
+      ) : (
+        <>
+          <section>
+            <h2 className="mb-1 section-title">Hạng thành viên</h2>
+            <p className="mb-3 text-sm text-text-muted">
+              Điểm tối thiểu phải tăng dần: Bạc nhỏ hơn Vàng, Vàng nhỏ hơn Kim cương. Hạn mức bài đăng -1 nghĩa là không
+              giới hạn.
+            </p>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Hạng</th>
+                    <th>Điểm tối thiểu</th>
+                    <th>Số bài đăng tối đa</th>
+                    <th>Số ngày hiển thị bài</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {RANKS.map((rank) => {
+                    const defaultDays = byKey(POST_DISPLAY_DAYS_KEY);
+                    return (
+                      <tr key={rank.name}>
+                        <td className="font-semibold text-text-primary">{rank.name}</td>
+                        <td>
+                          {rank.minPointsKey ? (
+                            <EditableValue config={byKey(rank.minPointsKey)} onEdit={openEditor} />
+                          ) : (
+                            <span className="font-semibold tabular-nums">0</span>
+                          )}
+                        </td>
+                        <td>
+                          <EditableValue config={byKey(rank.maxItemsKey)} onEdit={openEditor} />
+                        </td>
+                        <td>
+                          {rank.displayDaysKey ? (
+                            <EditableValue config={byKey(rank.displayDaysKey)} onEdit={openEditor} />
+                          ) : defaultDays ? (
+                            <span className="tabular-nums text-text-secondary">{defaultDays.value} ngày</span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2 className="mb-1 section-title">Quy tắc cộng điểm</h2>
+            <p className="mb-3 text-sm text-text-muted">Điểm uy tín quyết định hạng của người dùng.</p>
+            {rules.length ? (
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Quy tắc</th>
+                      <th>Giá trị</th>
+                      <th>Mặc định</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rules.map((rule) => (
+                      <tr key={rule.key}>
+                        <td className="max-w-md">
+                          <p className="font-semibold text-text-primary">{rule.label}</p>
+                          <p className="mt-0.5 text-xs leading-5 text-text-muted">{rule.description}</p>
+                        </td>
+                        <td>
+                          <EditableValue config={rule} onEdit={openEditor} />
+                        </td>
+                        <td className="tabular-nums text-text-muted">{rule.defaultValue}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState title="Chưa có quy tắc" text="Hiện chưa có quy tắc cộng điểm nào." />
+            )}
+          </section>
+        </>
+      )}
+
+      <GraceStarSection />
+
+      {editing ? (
+        <ConfigEditDialog
+          config={editing}
+          saving={saving}
+          error={saveError}
+          onClose={() => setEditing(null)}
+          onSave={(value, reason) => void save(value, reason)}
+        />
+      ) : null}
+    </div>
   );
 }

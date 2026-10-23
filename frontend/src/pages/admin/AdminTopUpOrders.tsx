@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Dialog } from '../../components/Dialog';
+import { Pagination } from '../../components/Pagination';
 import { Alert, Button, EmptyState, PageHeader, TextArea } from '../../components/ui';
 import { adminFinanceApi } from '../../services/adminFinanceApi';
 import type { ApiError } from '../../services/http';
@@ -15,6 +17,19 @@ const statusLabels: Record<PaymentOrderStatus, string> = {
   EXPIRED: 'Hết hạn',
 };
 
+function statusLabel(order: TopUpOrderDetailResponse) {
+  // Đơn FAILED đã có người duyệt nghĩa là admin từ chối, đơn FAILED không có người duyệt là thanh toán lỗi.
+  if (order.status === 'FAILED' && order.reviewedBy !== null) return 'Từ chối';
+  return statusLabels[order.status];
+}
+
+function statusClass(status: PaymentOrderStatus) {
+  if (status === 'SUCCESS') return 'bg-emerald-50 text-success';
+  if (status === 'PENDING') return 'bg-amber-50 text-warning';
+  if (status === 'FAILED') return 'bg-red-50 text-error';
+  return 'bg-surface-low text-text-muted';
+}
+
 function formatDateTime(value: string | null) {
   return value ? new Date(value).toLocaleString('vi-VN') : '—';
 }
@@ -28,22 +43,25 @@ function getErrorMessage(error: unknown) {
   return apiError.message || 'Không xử lý được yêu cầu. Vui lòng thử lại.';
 }
 
-export function AdminTopUpOrders({ onProcessed }: { onProcessed?: () => void } = {}) {
+/** Chỉ đơn chuyển khoản thủ công đã được người dùng bấm "đã thanh toán" mới duyệt được. */
+function canReview(order: TopUpOrderDetailResponse) {
+  return order.provider === 'MANUAL' && order.status === 'PENDING' && order.submittedAt !== null;
+}
+
+export function AdminTopUpOrders() {
   const [result, setResult] = useState<PageResponse<TopUpOrderDetailResponse> | null>(null);
-  const [status, setStatus] = useState<PaymentOrderStatus>('PENDING');
-  const [submittedOnly, setSubmittedOnly] = useState(true);
+  // '' là tất cả trạng thái: mở trang là thấy toàn bộ đơn, đơn mới nhất ở trên.
+  const [status, setStatus] = useState<PaymentOrderStatus | ''>('');
+  const [submittedOnly, setSubmittedOnly] = useState(false);
   const [page, setPage] = useState(0);
   const [reloadKey, setReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [note, setNote] = useState('');
   const [selected, setSelected] = useState<{
     order: TopUpOrderDetailResponse;
     action: 'approve' | 'reject';
   } | null>(null);
-  const inFlight = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -51,7 +69,12 @@ export function AdminTopUpOrders({ onProcessed }: { onProcessed?: () => void } =
     setError('');
 
     adminFinanceApi
-      .topUpOrders({ status, submittedOnly, page, size: PAGE_SIZE })
+      .topUpOrders({
+        status: status || undefined,
+        submittedOnly: submittedOnly || undefined,
+        page,
+        size: PAGE_SIZE,
+      })
       .then((response) => {
         if (!active) return;
         if (response.items.length === 0 && page > 0) {
@@ -74,73 +97,29 @@ export function AdminTopUpOrders({ onProcessed }: { onProcessed?: () => void } =
     };
   }, [page, reloadKey, status, submittedOnly]);
 
-  const openReview = (order: TopUpOrderDetailResponse, action: 'approve' | 'reject') => {
-    setSelected({ order, action });
-    setNote('');
-    setError('');
-    setNotice('');
+  const closeDialog = useCallback(() => setSelected(null), []);
+
+  const onProcessed = (message: string) => {
+    setSelected(null);
+    setNotice(message);
+    setReloadKey((current) => current + 1);
   };
-
-  const processOrder = async () => {
-    if (!selected || inFlight.current) return;
-    const reviewText = note.trim();
-    if (selected.action === 'reject' && !reviewText) {
-      setError('Vui lòng nhập lý do từ chối.');
-      return;
-    }
-
-    inFlight.current = true;
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      if (selected.action === 'approve') {
-        await adminFinanceApi.approveTopUp(selected.order.orderCode, reviewText);
-      } else {
-        await adminFinanceApi.rejectTopUp(selected.order.orderCode, reviewText);
-      }
-      setNotice(
-        selected.action === 'approve'
-          ? 'Đã phê duyệt đơn nạp. Backend đã cập nhật Credit.'
-          : 'Đã từ chối đơn nạp.',
-      );
-      setSelected(null);
-      setNote('');
-      onProcessed?.();
-      setReloadKey((current) => current + 1);
-    } catch (caught) {
-      setError(getErrorMessage(caught));
-    } finally {
-      inFlight.current = false;
-      setBusy(false);
-    }
-  };
-
-  const totalPages = result ? Math.max(1, Math.ceil(result.totalElements / result.size)) : 1;
-  const reloadButton = (
-    <Button
-      variant="outline"
-      disabled={busy || loading}
-      onClick={() => setReloadKey((current) => current + 1)}
-    >
-      Tải lại
-    </Button>
-  );
 
   return (
-    <section className={onProcessed ? 'mb-8 space-y-5' : 'space-y-5'}>
-      {onProcessed ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="section-title">Đơn nạp Credit</h2>
-          {reloadButton}
-        </div>
-      ) : (
-        <PageHeader
-          title="Đơn nạp Credit"
-          description="Duyệt các đơn chuyển khoản thủ công đã được người dùng xác nhận thanh toán."
-          action={reloadButton}
-        />
-      )}
+    <section className="space-y-5">
+      <PageHeader
+        title="Đơn nạp Credit"
+        description="Theo dõi mọi đơn nạp và duyệt các đơn chuyển khoản thủ công đã được người dùng xác nhận thanh toán."
+        action={
+          <Button
+            variant="outline"
+            disabled={loading}
+            onClick={() => setReloadKey((current) => current + 1)}
+          >
+            Tải lại
+          </Button>
+        }
+      />
 
       <div className="flex flex-wrap items-end gap-4 rounded-lg bg-white p-4 ring-1 ring-border">
         <label className="grid gap-1.5 text-sm font-medium">
@@ -148,13 +127,12 @@ export function AdminTopUpOrders({ onProcessed }: { onProcessed?: () => void } =
           <select
             className="rounded-md border border-border bg-white px-3 py-2"
             value={status}
-            disabled={busy}
             onChange={(event) => {
-              setStatus(event.target.value as PaymentOrderStatus);
+              setStatus(event.target.value as PaymentOrderStatus | '');
               setPage(0);
-              setSelected(null);
             }}
           >
+            <option value="">Tất cả</option>
             {Object.entries(statusLabels).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -166,11 +144,9 @@ export function AdminTopUpOrders({ onProcessed }: { onProcessed?: () => void } =
           <input
             type="checkbox"
             checked={submittedOnly}
-            disabled={busy}
             onChange={(event) => {
               setSubmittedOnly(event.target.checked);
               setPage(0);
-              setSelected(null);
             }}
           />
           Chỉ đơn đã xác nhận thanh toán
@@ -178,77 +154,40 @@ export function AdminTopUpOrders({ onProcessed }: { onProcessed?: () => void } =
       </div>
 
       {error ? <Alert tone="error">{error}</Alert> : null}
-      {notice ? <Alert tone="success">{notice}</Alert> : null}
+      {notice ? (
+        <div role="status">
+          <Alert tone="success">{notice}</Alert>
+        </div>
+      ) : null}
 
-      {loading ? (
+      {loading && !result ? (
         <EmptyState title="Đang tải đơn nạp" text="Vui lòng chờ trong giây lát." />
       ) : result ? (
-        <div className="space-y-4">
+        <div>
           <div className="table-wrap">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Đơn / người dùng</th>
+                  <th>Người dùng</th>
                   <th>Giá trị</th>
-                  <th>Nguồn / trạng thái</th>
+                  <th>Trạng thái</th>
                   <th>Thời gian</th>
                   <th>Kết quả duyệt</th>
                   <th>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
-                {result.items.map((order) => {
-                  const canReview =
-                    order.provider === 'MANUAL' &&
-                    order.status === 'PENDING' &&
-                    order.submittedAt !== null;
-                  return (
-                    <tr key={order.orderCode}>
-                      <td>
-                        <p className="break-all font-semibold">{order.orderCode}</p>
-                        <p className="text-xs text-text-muted">User #{order.userId}</p>
-                      </td>
-                      <td>
-                        <p className="font-semibold">{formatVnd(order.amountVnd)}</p>
-                        <p className="text-xs text-text-muted">
-                          {order.credits} Credit · {formatVnd(order.vndPerCredit)}/Credit
-                        </p>
-                      </td>
-                      <td>
-                        <p>{order.provider}</p>
-                        <p className="text-xs text-text-muted">{statusLabels[order.status]}</p>
-                      </td>
-                      <td className="text-xs">
-                        <p>Tạo: {formatDateTime(order.createdAt)}</p>
-                        <p>Hết hạn: {formatDateTime(order.expiresAt)}</p>
-                        <p>Đã gửi: {formatDateTime(order.submittedAt)}</p>
-                      </td>
-                      <td className="text-xs">
-                        <p>Admin: {order.reviewedBy ?? '—'}</p>
-                        <p>Lúc: {formatDateTime(order.reviewedAt)}</p>
-                        <p className="max-w-52 break-words">Ghi chú: {order.reviewNote || '—'}</p>
-                      </td>
-                      <td>
-                        {canReview ? (
-                          <div className="flex flex-wrap gap-2">
-                            <Button disabled={busy} onClick={() => openReview(order, 'approve')}>
-                              Phê duyệt
-                            </Button>
-                            <Button
-                              variant="danger"
-                              disabled={busy}
-                              onClick={() => openReview(order, 'reject')}
-                            >
-                              Từ chối
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-text-muted">Không thể duyệt thủ công</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {result.items.map((order) => (
+                  <TopUpRow
+                    key={order.orderCode}
+                    order={order}
+                    onAction={(action) => {
+                      setNotice('');
+                      setError('');
+                      setSelected({ order, action });
+                    }}
+                  />
+                ))}
                 {result.items.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="text-center text-text-muted">
@@ -259,62 +198,161 @@ export function AdminTopUpOrders({ onProcessed }: { onProcessed?: () => void } =
               </tbody>
             </table>
           </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-text-muted">
-              {result.totalElements} đơn · Trang {result.page + 1}/{totalPages}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                disabled={busy || page === 0}
-                onClick={() => setPage((current) => Math.max(0, current - 1))}
-              >
-                Trang trước
-              </Button>
-              <Button
-                variant="outline"
-                disabled={busy || (page + 1) * result.size >= result.totalElements}
-                onClick={() => setPage((current) => current + 1)}
-              >
-                Trang sau
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            page={result.page}
+            size={result.size}
+            totalElements={result.totalElements}
+            disabled={loading}
+            onPageChange={setPage}
+          />
         </div>
       ) : null}
 
       {selected ? (
-        <div
-          className="space-y-3 rounded-lg bg-surface-low p-4 ring-1 ring-border"
-          role="dialog"
-          aria-label="Xác nhận xử lý đơn nạp"
-        >
-          <p>
-            {selected.action === 'approve' ? 'Phê duyệt' : 'Từ chối'} đơn{' '}
-            <strong>{selected.order.orderCode}</strong> của người dùng #{selected.order.userId}?
-          </p>
-          <TextArea
-            label={selected.action === 'approve' ? 'Ghi chú (tùy chọn)' : 'Lý do từ chối (bắt buộc)'}
-            maxLength={500}
-            disabled={busy}
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-          />
-          <div className="flex gap-3">
-            <Button
-              variant={selected.action === 'reject' ? 'danger' : 'primary'}
-              disabled={busy || (selected.action === 'reject' && !note.trim())}
-              onClick={() => void processOrder()}
-            >
-              {busy ? 'Đang xử lý...' : 'Xác nhận'}
-            </Button>
-            <Button variant="outline" disabled={busy} onClick={() => setSelected(null)}>
-              Hủy
-            </Button>
-          </div>
-        </div>
+        <ReviewDialog
+          order={selected.order}
+          action={selected.action}
+          onClose={closeDialog}
+          onDone={onProcessed}
+        />
       ) : null}
     </section>
+  );
+}
+
+function TopUpRow({
+  order,
+  onAction,
+}: {
+  order: TopUpOrderDetailResponse;
+  onAction: (action: 'approve' | 'reject') => void;
+}) {
+  const reviewed = order.reviewedAt !== null;
+  return (
+    <tr>
+      <td>
+        <p className="font-semibold text-text-primary">{order.userName || 'Người dùng đã xóa'}</p>
+        {order.userEmail ? <p className="text-xs text-text-muted">{order.userEmail}</p> : null}
+      </td>
+      <td>
+        <p className="font-semibold tabular-nums">{formatVnd(order.amountVnd)}</p>
+        <p className="text-xs text-text-muted">{order.credits} Credit</p>
+      </td>
+      <td>
+        <span
+          className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-[11px] font-semibold ${statusClass(order.status)}`}
+        >
+          {statusLabel(order)}
+        </span>
+      </td>
+      <td className="text-xs">
+        <p>Tạo lúc: {formatDateTime(order.createdAt)}</p>
+        {order.submittedAt ? <p>Xác nhận thanh toán: {formatDateTime(order.submittedAt)}</p> : null}
+        {order.status === 'PENDING' ? <p>Hết hạn: {formatDateTime(order.expiresAt)}</p> : null}
+      </td>
+      <td className="text-xs">
+        {reviewed ? (
+          <>
+            <p>Người duyệt: {order.reviewedByName || 'Quản trị viên đã xóa'}</p>
+            <p>Lúc: {formatDateTime(order.reviewedAt)}</p>
+            {order.reviewNote ? <p className="max-w-52 break-words">Ghi chú: {order.reviewNote}</p> : null}
+          </>
+        ) : (
+          '—'
+        )}
+      </td>
+      <td>
+        {canReview(order) ? (
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => onAction('approve')}>
+              Phê duyệt
+            </Button>
+            <Button size="sm" variant="danger" onClick={() => onAction('reject')}>
+              Từ chối
+            </Button>
+          </div>
+        ) : (
+          <span className="text-text-muted">—</span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function ReviewDialog({
+  order,
+  action,
+  onClose,
+  onDone,
+}: {
+  order: TopUpOrderDetailResponse;
+  action: 'approve' | 'reject';
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const inFlight = useRef(false);
+  const approving = action === 'approve';
+  const reviewText = note.trim();
+
+  const submit = async () => {
+    if (inFlight.current) return;
+    if (!approving && !reviewText) {
+      setError('Vui lòng nhập lý do từ chối.');
+      return;
+    }
+    inFlight.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      if (approving) {
+        await adminFinanceApi.approveTopUp(order.orderCode, reviewText);
+      } else {
+        await adminFinanceApi.rejectTopUp(order.orderCode, reviewText);
+      }
+      onDone(approving ? 'Đã phê duyệt đơn nạp và cộng Credit cho người dùng.' : 'Đã từ chối đơn nạp.');
+    } catch (caught) {
+      setError(getErrorMessage(caught));
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog title="Xác nhận xử lý đơn nạp" busy={busy} onClose={onClose}>
+      <p className="text-sm leading-6 text-text-secondary">
+        {approving ? 'Phê duyệt' : 'Từ chối'} đơn nạp <strong>{formatVnd(order.amountVnd)}</strong> (
+        {order.credits} Credit) của <strong>{order.userName || 'người dùng này'}</strong>?
+      </p>
+      <div className="mt-4">
+        <TextArea
+          label={approving ? 'Ghi chú (tùy chọn)' : 'Lý do từ chối (bắt buộc)'}
+          maxLength={500}
+          disabled={busy}
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+        />
+      </div>
+      {error ? (
+        <div className="mt-3" role="alert">
+          <Alert tone="error">{error}</Alert>
+        </div>
+      ) : null}
+      <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button variant="outline" disabled={busy} onClick={onClose}>
+          Hủy
+        </Button>
+        <Button
+          variant={approving ? 'primary' : 'danger'}
+          disabled={busy || (!approving && !reviewText)}
+          onClick={() => void submit()}
+        >
+          {busy ? 'Đang xử lý...' : 'Xác nhận'}
+        </Button>
+      </div>
+    </Dialog>
   );
 }
