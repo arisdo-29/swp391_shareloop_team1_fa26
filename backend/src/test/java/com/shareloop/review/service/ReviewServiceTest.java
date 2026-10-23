@@ -16,6 +16,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.shareloop.audit.service.ActivityLogService;
+import com.shareloop.catalog.service.AreaService;
+import com.shareloop.catalog.service.CategoryAttributeService;
+import com.shareloop.catalog.service.CategoryService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.service.ItemService;
@@ -28,6 +31,7 @@ import com.shareloop.review.repository.ReviewItemRepository;
 import com.shareloop.review.repository.ReviewQueueRepository;
 import com.shareloop.setting.dto.ChecklistItem;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.service.UserService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +50,10 @@ class ReviewServiceTest {
     private final ItemService itemService = mock(ItemService.class);
     private final NotificationService notificationService = mock(NotificationService.class);
     private final ActivityLogService activityLogService = mock(ActivityLogService.class);
+    private final UserService userService = mock(UserService.class);
+    private final CategoryService categoryService = mock(CategoryService.class);
+    private final AreaService areaService = mock(AreaService.class);
+    private final CategoryAttributeService categoryAttributeService = mock(CategoryAttributeService.class);
     private final ReviewItem reviewItem = mock(ReviewItem.class);
     private final ReviewService service = new ReviewService(
             queueRepository,
@@ -55,6 +63,10 @@ class ReviewServiceTest {
             itemService,
             notificationService,
             activityLogService,
+            userService,
+            categoryService,
+            areaService,
+            categoryAttributeService,
             JsonMapper.builder().build());
 
     @BeforeEach
@@ -81,13 +93,13 @@ class ReviewServiceTest {
     }
 
     @Test
-    void approveChargesFeeThenChangesItemAndStoresSnapshotAndLogsActivity() {
+    void approveChangesItemStatusThenChargesFeeAndStoresSnapshotAndLogsActivity() {
         service.approve(8L, List.of(new ChecklistAnswer(11L, true), new ChecklistAnswer(12L, true)), 1L);
 
         InOrder order = inOrder(postFeeService, itemService, reviewItemRepository, reviewItem, activityLogService);
-        order.verify(postFeeService).chargeHeldFee(8L);
-        order.verify(itemService).markApproved(8L);
         order.verify(reviewItemRepository).findById(8L);
+        order.verify(itemService).markApproved(8L);
+        order.verify(postFeeService).chargeHeldFee(8L);
         order.verify(reviewItem).approve(anyMap(), any(Instant.class), eq(1L));
         order.verify(activityLogService).log(eq("REVIEW_APPROVE"), eq(1L), eq("ITEM"), eq(8L), anyMap(), isNull());
     }
@@ -99,7 +111,7 @@ class ReviewServiceTest {
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(ReviewErrorCode.REVIEW_CHECKLIST_INCOMPLETE);
 
-        verifyNoInteractions(postFeeService, itemService, reviewItemRepository, activityLogService);
+        verifyNoInteractions(postFeeService, itemService, activityLogService);
     }
 
     @Test
@@ -172,7 +184,7 @@ class ReviewServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(errorCode);
-        verifyNoInteractions(postFeeService, itemService, reviewItemRepository, activityLogService);
+        verifyNoInteractions(postFeeService, itemService, activityLogService);
     }
 
     @Test
@@ -221,8 +233,7 @@ class ReviewServiceTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("charge failed");
 
-        verify(itemService, never()).markApproved(8L);
-        verifyNoInteractions(reviewItemRepository, activityLogService);
+        verifyNoInteractions(activityLogService);
         verify(reviewItem, never()).approve(anyMap(), any(Instant.class), eq(1L));
     }
 
@@ -238,8 +249,7 @@ class ReviewServiceTest {
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
 
-        verify(postFeeService).chargeHeldFee(8L);
-        verify(reviewItemRepository, never()).findById(8L);
+        verify(postFeeService, never()).chargeHeldFee(8L);
         verify(reviewItem, never()).approve(anyMap(), any(Instant.class), eq(1L));
         verifyNoInteractions(activityLogService);
     }
@@ -272,8 +282,7 @@ class ReviewServiceTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("fee release failed");
 
-        verify(itemService, never()).markRejected(8L);
-        verify(reviewItemRepository, never()).findById(8L);
+        verify(reviewItem, never()).reject(anyString(), any(Instant.class), anyLong());
         verify(notificationService, never()).notify(anyLong(), anyString(), anyString(), anyString(), anyString());
         verifyNoInteractions(activityLogService);
     }
@@ -284,9 +293,9 @@ class ReviewServiceTest {
 
         InOrder order = inOrder(
                 postFeeService, itemService, reviewItemRepository, reviewItem, notificationService, activityLogService);
-        order.verify(postFeeService).releaseHeldFee(8L, "REJECTED");
-        order.verify(itemService).markRejected(8L);
         order.verify(reviewItemRepository).findById(8L);
+        order.verify(itemService).markRejected(8L);
+        order.verify(postFeeService).releaseHeldFee(8L, "REJECTED");
         order.verify(reviewItem).reject(eq("Ảnh không đúng món"), any(Instant.class), eq(1L));
         order.verify(reviewItemRepository).findDonorIdByItemId(8L);
         order.verify(notificationService)
@@ -319,5 +328,29 @@ class ReviewServiceTest {
                         eq(8L),
                         (Map<String, Object>) isNull(),
                         eq("Ảnh không đúng món"));
+    }
+
+    @Test
+    void rejectWhenItemAlreadyProcessedDoesNotReleaseFee() {
+        org.mockito.Mockito.doThrow(new BusinessException(ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION))
+                .when(itemService)
+                .markRejected(8L);
+
+        assertThatThrownBy(() -> service.reject(8L, "Ảnh mờ", 1L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
+
+        verifyNoInteractions(postFeeService, notificationService, activityLogService);
+    }
+
+    @Test
+    void getDetailWhenItemMissingThrowsReviewItemNotFound() {
+        when(reviewItemRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getDetail(404L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(ReviewErrorCode.REVIEW_ITEM_NOT_FOUND);
     }
 }
