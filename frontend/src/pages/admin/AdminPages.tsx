@@ -48,7 +48,7 @@ import type { ApiError } from '../../services/http';
 import { resolveMediaUrl } from '../../services/mediaUrl';
 import { itemApi, type ItemResponse } from '../../services/itemApi';
 import { toBackendUserId } from '../../services/requestApi';
-import type { AppStateData, ForbiddenKeyword, Item, KeywordAction, RankRule, ReputationPointRule, SupportedDistrict, Transaction, User } from '../../types/domain';
+import type { AppStateData, ForbiddenKeyword, Item, KeywordAction, RankRule, ReputationPointRule, SupportedDistrict, User } from '../../types/domain';
 
 function Panel({
   title,
@@ -3420,7 +3420,6 @@ function AdminStaticContent({
   const data = useAppSelector(selectData);
   const admin = useAppSelector(selectCurrentUser)!;
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [categories, setCategories] = useState<CategoryRow[]>(() =>
     CATEGORIES.map((name) => ({
       id: name,
@@ -3433,9 +3432,6 @@ function AdminStaticContent({
   const [editingCategory, setEditingCategory] = useState<CategoryRow | null>(null);
   const [accountAction, setAccountAction] = useState<{ user: User; locked: boolean } | null>(null);
   const [selectedExpired, setSelectedExpired] = useState<Item | null>(null);
-  const [selectedAlertId, setSelectedAlertId] = useState('');
-  const [inspectedAlerts, setInspectedAlerts] = useState<string[]>([]);
-  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
   const [toast, setToast] = useState('');
   const configs = {
     expired: ['Bài quá hạn', 'Theo dõi và xử lý các bài đã hết thời gian hiển thị.'],
@@ -3444,10 +3440,6 @@ function AdminStaticContent({
     alerts: ['Cảnh báo bất thường', 'Tín hiệu cần kiểm tra từ hoạt động giao dịch và Credit.'],
   } as const;
   const [title, description] = configs[kind];
-  const alertRows = data.transactions
-    .filter((t) => t.status === 'DISPUTED' )
-    .filter((t) => !dismissedAlerts.includes(`alert_${t.id}`));
-  const selectedTx = alertRows.find((tx) => `alert_${tx.id}` === selectedAlertId);
   const rows =
     kind === 'expired'
           ? data.items
@@ -3623,66 +3615,16 @@ function AdminStaticContent({
   if (kind === 'alerts') {
     return (
       <Panel title={title} description={description}>
-        {alertRows.length ? (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Tên / Mã</th>
-                  <th>Thông tin</th>
-                  <th>Trạng thái</th>
-                  <th>Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                {alertRows.map((tx) => {
-                  const alertId = `alert_${tx.id}`;
-                  const isInspected = inspectedAlerts.includes(alertId);
-                  return (
-                    <tr key={alertId} className="cursor-pointer" onClick={() => setSelectedAlertId(alertId)}>
-                      <td className="font-semibold">{alertId}</td>
-                      <td>{tx.status === 'DISPUTED' ? 'Giao dịch có khiếu nại' : 'Nhiều bên đã giữ Credit'}</td>
-                      <td>{isInspected ? 'Đã kiểm tra' : tx.status}</td>
-                      <td>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedAlertId(alertId);
-                          }}
-                        >
-                          Xem chi tiết
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <EmptyState title="Chưa có dữ liệu phù hợp" text="Các bản ghi mới sẽ xuất hiện tại đây." />
-        )}
-        {selectedTx ? (
-          <AlertDetailModal
-            transaction={selectedTx}
-            data={data}
-            inspected={inspectedAlerts.includes(`alert_${selectedTx.id}`)}
-            onClose={() => setSelectedAlertId('')}
-            onInspect={() => {
-              setInspectedAlerts((current) => [...new Set([...current, `alert_${selectedTx.id}`])]);
-              setToast('Đã đánh dấu cảnh báo đã kiểm tra.');
-            }}
-            onDismiss={() => {
-              setDismissedAlerts((current) => [...new Set([...current, `alert_${selectedTx.id}`])]);
-              setSelectedAlertId('');
-              setToast('Đã bỏ qua cảnh báo.');
-            }}
-            onOpenTransaction={() => navigate(`/admin/transactions/${selectedTx.id}`)}
+        <Alert tone="warning">
+          Backend hiện chưa cung cấp API cảnh báo bất thường. Trang này sẽ không hiển thị dữ liệu
+          mô phỏng thay cho dữ liệu vận hành thật.
+        </Alert>
+        <div className="mt-5">
+          <EmptyState
+            title="Chưa có nguồn dữ liệu Backend"
+            text="Cần GET /api/v1/admin/anomalies trong Swagger trước khi có thể tải cảnh báo."
           />
-        ) : null}
-        {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
+        </div>
       </Panel>
     );
   }
@@ -3793,70 +3735,6 @@ function ExpiredPostModal({
       <div className="mt-6 flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose}>Đóng</Button>
         <Button variant="danger" onClick={onMarkRemoved}>Đánh dấu đã gỡ</Button>
-      </div>
-    </Modal>
-  );
-}
-
-function AlertDetailModal({
-  transaction,
-  data,
-  inspected,
-  onClose,
-  onInspect,
-  onOpenTransaction,
-  onDismiss,
-}: {
-  transaction: Transaction;
-  data: AppStateData;
-  inspected: boolean;
-  onClose: () => void;
-  onInspect: () => void;
-  onOpenTransaction: () => void;
-  onDismiss: () => void;
-}) {
-  const item = data.items.find((entry) => entry.id === transaction.itemId);
-  const owner = data.users.find((entry) => entry.id === transaction.ownerId);
-  const requester = data.users.find((entry) => entry.id === transaction.requesterId);
-  const alertId = `alert_${transaction.id}`;
-  const alertType = transaction.status === 'DISPUTED' ? 'Giao dịch có khiếu nại' : 'Nhiều bên đã giữ Credit';
-  const relatedLogs = data.auditLogs
-    .filter((log) => log.targetId === transaction.id || log.targetId === transaction.itemId)
-    .slice(0, 5);
-  return (
-    <Modal title="Chi tiết cảnh báo bất thường" onClose={onClose}>
-      <div className="grid gap-3 text-sm sm:grid-cols-2">
-        <Info label="Mã cảnh báo" value={alertId} />
-        <Info label="Mã giao dịch" value={transaction.id} />
-        <Info label="Người liên quan" value={[owner?.name, requester?.name].filter(Boolean).join(' ↔ ')} />
-        <Info label="Loại cảnh báo" value={alertType} />
-        <Info label="Thời gian phát hiện" value={new Date(transaction.createdAt).toLocaleString('vi-VN')} />
-        <Info label="Trạng thái giao dịch" value={transaction.status} />
-        <Info label="Liên hệ" value={['WAITING_HANDOVER', 'SENDER_CONFIRMED', 'RECEIVER_CONFIRMED', 'COMPLETED'].includes(transaction.status) ? 'Đã mở khóa' : 'Chưa mở khóa'} />
-        <Info label="Trạng thái kiểm tra" value={inspected ? 'Đã kiểm tra' : 'Chưa kiểm tra'} />
-      </div>
-      <div className="mt-4 rounded-md bg-background p-3 text-sm leading-6 text-text-secondary">
-        <p><strong className="text-text-primary">Nội dung cảnh báo:</strong> {item?.title ?? transaction.itemId}</p>
-        <p className="mt-1"><strong className="text-text-primary">Lý do hệ thống đánh dấu:</strong> {alertType}</p>
-      </div>
-      <div className="mt-4">
-        <h3 className="text-sm font-bold">Lịch sử hoạt động liên quan</h3>
-        <div className="mt-2 space-y-2">
-          {relatedLogs.length ? relatedLogs.map((log) => (
-            <div key={log.id} className="rounded-md border border-border px-3 py-2 text-xs text-text-muted">
-              <p className="font-semibold text-text-primary">{log.detail}</p>
-              <p className="mt-0.5">{new Date(log.createdAt).toLocaleString('vi-VN')}</p>
-            </div>
-          )) : (
-            <p className="text-sm text-text-muted">Chưa có lịch sử liên quan trong audit log.</p>
-          )}
-        </div>
-      </div>
-      <div className="mt-6 flex flex-wrap justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>Đóng</Button>
-        <Button variant="outline" onClick={onInspect}>Đánh dấu đã kiểm tra</Button>
-        <Button variant="secondary" onClick={onOpenTransaction}>Xem giao dịch liên quan</Button>
-        <Button variant="danger" onClick={onDismiss}>Bỏ qua cảnh báo</Button>
       </div>
     </Modal>
   );
