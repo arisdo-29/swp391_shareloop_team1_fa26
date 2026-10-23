@@ -14,10 +14,6 @@ vi.mock('../../services/adminFinanceApi', () => ({
   },
 }));
 
-vi.mock('./AdminTopUpOrders', () => ({
-  AdminTopUpOrders: () => null,
-}));
-
 const summary = {
   from: null,
   to: null,
@@ -59,7 +55,8 @@ describe('AdminFinanceReport CSV', () => {
         <AdminFinanceReport />
       </MemoryRouter>,
     );
-    await screen.findByText(/Đối chiếu tiền thu và Credit nạp: Khớp/);
+    await screen.findByText('Đối chiếu tiền thu và Credit nạp');
+    expect(screen.getByText('Khớp')).toBeTruthy();
 
     await user.type(screen.getByLabelText('Từ ngày'), '2026-10-01');
     await user.type(screen.getByLabelText('Đến ngày'), '2026-10-31');
@@ -94,7 +91,7 @@ describe('AdminFinanceReport CSV', () => {
         <AdminFinanceReport />
       </MemoryRouter>,
     );
-    await screen.findByText(/Đối chiếu tiền thu và Credit nạp: Khớp/);
+    await screen.findByText('Đối chiếu tiền thu và Credit nạp');
 
     await user.click(screen.getByRole('button', { name: 'Xuất báo cáo CSV' }));
     await waitFor(() =>

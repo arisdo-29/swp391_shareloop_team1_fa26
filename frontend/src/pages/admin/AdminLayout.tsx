@@ -7,7 +7,7 @@ const sections = [
     label: 'Nội dung',
     items: [
       ['article', 'Duyệt bài', '/admin/moderation'],
-      ['verified', 'Xác minh hàng chính hãng', '/admin/authenticity'],
+      // Tạm ẩn "Xác minh hàng chính hãng" (/admin/authenticity): chưa có luồng xác nhận và chưa có BR. Code BE vẫn giữ.
       ['shield', 'Checklist duyệt bài', '/admin/checklist'],
       ['history', 'Bài quá hạn', '/admin/expired-posts'],
       ['box', 'Danh mục', '/admin/categories'],
