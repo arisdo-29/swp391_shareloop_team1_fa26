@@ -50,14 +50,30 @@ function activityTone(type: string) {
 export function AdminOperationsDashboard() {
   const [report, setReport] = useState<FinanceSummary | null>(null);
   const [logs, setLogs] = useState<ActivityLogResponse[]>([]);
-  const [error, setError] = useState('');
+  const [reportLoading, setReportLoading] = useState(true);
+  const [logsLoading, setLogsLoading] = useState(true);
+  const [reportError, setReportError] = useState('');
+  const [logsError, setLogsError] = useState('');
   const [reload, setReload] = useState(0);
   useEffect(() => {
     let active = true;
-    setReport(null); setError('');
-    Promise.all([adminFinanceApi.report({}), adminAuditApi.list({ page: 0, size: 5 })])
-      .then(([summary, recent]) => { if (active) { setReport(summary); setLogs(recent.content); } })
-      .catch((caught) => { if (active) setError(errorMessage(caught)); });
+    setReport(null);
+    setLogs([]);
+    setReportLoading(true);
+    setLogsLoading(true);
+    setReportError('');
+    setLogsError('');
+
+    void adminFinanceApi.report({})
+      .then((summary) => { if (active) setReport(summary); })
+      .catch((caught) => { if (active) setReportError(errorMessage(caught)); })
+      .finally(() => { if (active) setReportLoading(false); });
+
+    void adminAuditApi.list({ page: 0, size: 5 })
+      .then((recent) => { if (active) setLogs(recent.content); })
+      .catch((caught) => { if (active) setLogsError(errorMessage(caught)); })
+      .finally(() => { if (active) setLogsLoading(false); });
+
     return () => { active = false; };
   }, [reload]);
   const metrics = report ? [
@@ -73,74 +89,81 @@ export function AdminOperationsDashboard() {
     />
     <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_18rem] xl:items-start">
       <div className="min-w-0 space-y-6">
-        {error ? (
+        {reportError ? (
           <Alert tone="error">
-            {error}{' '}
+            {reportError}{' '}
             <button type="button" className="font-semibold underline" onClick={() => setReload((value) => value + 1)}>Thử lại</button>
           </Alert>
         ) : report ? (
-          <>
-            <div className="grid gap-4 sm:grid-cols-3">
-              {metrics.map((metric) => (
-                <section key={metric.label} className="rounded-xl border border-border/80 bg-white p-5 shadow-sm">
-                  <div className={`flex size-11 items-center justify-center rounded-lg ${metric.tone}`}>
-                    <Icon name={metric.icon} className="size-5" weight="bold" />
-                  </div>
-                  <p className="mt-4 text-sm font-medium text-text-muted">{metric.label}</p>
-                  <p className="mt-1 break-words text-2xl font-bold tabular-nums text-text-primary">{metric.value}</p>
-                </section>
-              ))}
-            </div>
-
-            <section className="overflow-hidden rounded-xl border border-border/80 bg-white shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-5 py-4 sm:px-6">
-                <div>
-                  <h2 className="section-title">Hoạt động gần đây</h2>
-                  <p className="mt-1 text-sm text-text-muted">Các thay đổi mới nhất được ghi nhận trong hệ thống.</p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {metrics.map((metric) => (
+              <section key={metric.label} className="rounded-xl border border-border/80 bg-white p-5 shadow-sm">
+                <div className={`flex size-11 items-center justify-center rounded-lg ${metric.tone}`}>
+                  <Icon name={metric.icon} className="size-5" weight="bold" />
                 </div>
-                <Link className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary-hover" to="/admin/audit-logs">
-                  Xem tất cả
-                  <Icon name="arrow" className="size-4" />
-                </Link>
-              </div>
-              {logs.length ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-                    <thead className="bg-surface-low text-xs font-semibold text-text-muted">
-                      <tr>
-                        <th className="whitespace-nowrap px-5 py-3">Thời gian</th>
-                        <th className="whitespace-nowrap px-5 py-3">Người thực hiện</th>
-                        <th className="whitespace-nowrap px-5 py-3">Hành động</th>
-                        <th className="px-5 py-3">Chi tiết</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {logs.map((log) => (
-                        <tr key={log.id} className="border-t border-border/70 transition hover:bg-primary-faint">
-                          <td className="whitespace-nowrap px-5 py-4 text-xs text-text-muted">{new Date(log.createdAt).toLocaleString('vi-VN')}</td>
-                          <td className="max-w-48 px-5 py-4">
-                            <p className="truncate font-semibold text-text-primary">{log.actorName || log.actorEmail || (log.actorId ? 'Tài khoản đã xóa' : 'Hệ thống')}</p>
-                            {log.actorName && log.actorEmail ? <p className="mt-0.5 truncate text-xs text-text-muted">{log.actorEmail}</p> : null}
-                          </td>
-                          <td className="px-5 py-4">
-                            <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${activityTone(log.type)}`}>
-                              {log.typeLabel || log.type}
-                            </span>
-                          </td>
-                          <td className="max-w-sm px-5 py-4 leading-6 text-text-secondary">{log.detail || log.reason || '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="px-6 py-10 text-center text-sm text-text-muted">Chưa có hoạt động nào được ghi nhận.</div>
-              )}
-            </section>
-          </>
+                <p className="mt-4 text-sm font-medium text-text-muted">{metric.label}</p>
+                <p className="mt-1 break-words text-2xl font-bold tabular-nums text-text-primary">{metric.value}</p>
+              </section>
+            ))}
+          </div>
         ) : (
-          <EmptyState title="Đang tải tổng quan" text="Vui lòng chờ trong giây lát." />
+          reportLoading ? <EmptyState title="Đang tải tổng quan" text="Vui lòng chờ trong giây lát." /> : null
         )}
+
+        <section className="overflow-hidden rounded-xl border border-border/80 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-5 py-4 sm:px-6">
+            <div>
+              <h2 className="section-title">Hoạt động gần đây</h2>
+              <p className="mt-1 text-sm text-text-muted">Các thay đổi mới nhất được ghi nhận trong hệ thống.</p>
+            </div>
+            <Link className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary-hover" to="/admin/audit-logs">
+              Xem tất cả
+              <Icon name="arrow" className="size-4" />
+            </Link>
+          </div>
+          {logsError ? (
+            <div className="px-6 py-6">
+              <Alert tone="error">
+                {logsError}{' '}
+                <button type="button" className="font-semibold underline" onClick={() => setReload((value) => value + 1)}>Thử lại</button>
+              </Alert>
+            </div>
+          ) : logsLoading ? (
+            <div className="px-6 py-10 text-center text-sm text-text-muted">Đang tải hoạt động gần đây...</div>
+          ) : logs.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                <thead className="bg-surface-low text-xs font-semibold text-text-muted">
+                  <tr>
+                    <th className="whitespace-nowrap px-5 py-3">Thời gian</th>
+                    <th className="whitespace-nowrap px-5 py-3">Người thực hiện</th>
+                    <th className="whitespace-nowrap px-5 py-3">Hành động</th>
+                    <th className="px-5 py-3">Chi tiết</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map((log) => (
+                    <tr key={log.id} className="border-t border-border/70 transition hover:bg-primary-faint">
+                      <td className="whitespace-nowrap px-5 py-4 text-xs text-text-muted">{new Date(log.createdAt).toLocaleString('vi-VN')}</td>
+                      <td className="max-w-48 px-5 py-4">
+                        <p className="truncate font-semibold text-text-primary">{log.actorName || log.actorEmail || (log.actorId ? 'Tài khoản đã xóa' : 'Hệ thống')}</p>
+                        {log.actorName && log.actorEmail ? <p className="mt-0.5 truncate text-xs text-text-muted">{log.actorEmail}</p> : null}
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${activityTone(log.type)}`}>
+                          {log.typeLabel || log.type}
+                        </span>
+                      </td>
+                      <td className="max-w-sm px-5 py-4 leading-6 text-text-secondary">{log.detail || log.reason || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="px-6 py-10 text-center text-sm text-text-muted">Chưa có hoạt động nào được ghi nhận.</div>
+          )}
+        </section>
       </div>
 
       <aside className="rounded-xl border border-border/80 bg-white p-4 shadow-sm sm:p-5 xl:sticky xl:top-6">

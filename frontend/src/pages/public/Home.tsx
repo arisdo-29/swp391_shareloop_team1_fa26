@@ -14,8 +14,8 @@ import {
 } from '../../components/ui';
 import type { Item, ItemType, User } from '../../types/domain';
 import { catalogApi } from '../../services/catalogApi';
-import type { CategoryResponse } from '../../services/catalogApi';
-import { itemApi } from '../../services/itemApi';
+import type { AreaResponse, CategoryResponse } from '../../services/catalogApi';
+import { itemApi, type ItemResponse } from '../../services/itemApi';
 import { toAreaNameMap, toAreaOptions, toCategoryNameMap, toFeItem, type AreaOption } from '../../services/mappers';
 import { categoryBrowsePath } from '../../utils/browseFilters';
 import { HomeLifecycle, HomeProcess } from './HomeCommunity';
@@ -276,9 +276,9 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
 export function Home() {
   const currentUser = useAppSelector(selectCurrentUser);
   const navigate = useNavigate();
-  const [items, setItems] = useState<Item[]>([]);
-  const [categories, setCategories] = useState<CategoryResponse[]>([]);
-  const [districtOptions, setDistrictOptions] = useState<AreaOption[]>([]);
+  const [itemResponses, setItemResponses] = useState<ItemResponse[]>([]);
+  const [categoryResponses, setCategoryResponses] = useState<CategoryResponse[]>([]);
+  const [areaResponses, setAreaResponses] = useState<AreaResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -291,20 +291,22 @@ export function Home() {
     let active = true;
     setLoading(true);
     setLoadError('');
-    Promise.all([catalogApi.categories(), catalogApi.areas(), itemApi.list({ page: 0, size: 100 })])
-      .then(([categoryData, areaData, response]) => {
-        if (!active) return;
-        setCategories(
-          categoryData
-            .filter((entry) => !entry.restricted)
-            .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'vi')),
-        );
-        setDistrictOptions(toAreaOptions(areaData));
-        setItems(response.items.map((entry) => toFeItem(entry, toCategoryNameMap(categoryData), toAreaNameMap(areaData))));
+
+    void catalogApi.categories().then((categoryData) => {
+      if (active) setCategoryResponses(categoryData);
+    }).catch(() => undefined);
+
+    void catalogApi.areas().then((areaData) => {
+      if (active) setAreaResponses(areaData);
+    }).catch(() => undefined);
+
+    void itemApi.list({ page: 0, size: 100 })
+      .then((response) => {
+        if (active) setItemResponses(response.items);
       })
       .catch((caught: { message?: string }) => {
         if (!active) return;
-        setItems([]);
+        setItemResponses([]);
         setLoadError(caught.message || 'Không tải được bài đăng.');
       })
       .finally(() => {
@@ -312,6 +314,21 @@ export function Home() {
       });
     return () => { active = false; };
   }, [reloadKey]);
+
+  const categories = useMemo(
+    () =>
+      categoryResponses
+        .filter((entry) => !entry.restricted)
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'vi')),
+    [categoryResponses],
+  );
+  const districtOptions: AreaOption[] = useMemo(() => toAreaOptions(areaResponses), [areaResponses]);
+  const categoryNameMap = useMemo(() => toCategoryNameMap(categoryResponses), [categoryResponses]);
+  const areaNameMap = useMemo(() => toAreaNameMap(areaResponses), [areaResponses]);
+  const items = useMemo(
+    () => itemResponses.map((entry) => toFeItem(entry, categoryNameMap, areaNameMap)),
+    [areaNameMap, categoryNameMap, itemResponses],
+  );
 
   const approved = useMemo(
     () =>
