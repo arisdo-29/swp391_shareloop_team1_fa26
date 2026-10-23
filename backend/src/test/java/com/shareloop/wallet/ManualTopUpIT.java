@@ -94,6 +94,66 @@ class ManualTopUpIT extends IntegrationTest {
     }
 
     @Test
+    void list_withoutFilters_showsNewestFirstWithOwnerAndReviewerNames() {
+        // given
+        long owner = user();
+        long admin = user();
+        jdbc.update("UPDATE users SET full_name = 'Người nạp' WHERE id = ?", owner);
+        jdbc.update("UPDATE users SET full_name = 'Admin duyệt' WHERE id = ?", admin);
+        String olderCode = order(owner);
+        String newerCode = order(owner);
+        manual.markPaid(owner, newerCode);
+        manual.approve(admin, newerCode, "đã kiểm tra");
+
+        // when: không lọc trạng thái, không bắt buộc đã gửi
+        List<TopUpOrderDetailResponse> items = manual.list(null, false, 0, 100).items();
+
+        // then
+        List<String> codes =
+                items.stream().map(TopUpOrderDetailResponse::orderCode).toList();
+        assertThat(codes).contains(olderCode, newerCode);
+        assertThat(codes.indexOf(newerCode)).isLessThan(codes.indexOf(olderCode));
+        TopUpOrderDetailResponse approved = findByCode(items, newerCode);
+        assertThat(approved.userName()).isEqualTo("Người nạp");
+        assertThat(approved.reviewedByName()).isEqualTo("Admin duyệt");
+        TopUpOrderDetailResponse untouched = findByCode(items, olderCode);
+        assertThat(untouched.userName()).isEqualTo("Người nạp");
+        assertThat(untouched.reviewedByName()).isNull();
+    }
+
+    @Test
+    void list_whenSubmittedOnly_hidesOrdersNotYetSubmitted() {
+        // given
+        long owner = user();
+        String unsubmittedCode = order(owner);
+        String submittedCode = order(owner);
+        manual.markPaid(owner, submittedCode);
+
+        // when
+        List<String> codes = manual.list(PaymentOrderStatus.PENDING, true, 0, 100).items().stream()
+                .map(TopUpOrderDetailResponse::orderCode)
+                .toList();
+
+        // then
+        assertThat(codes).contains(submittedCode).doesNotContain(unsubmittedCode);
+    }
+
+    @Test
+    void ownerEndpoints_doNotExposeOwnerAndReviewerNames() {
+        // given
+        long owner = user();
+        String code = order(owner);
+
+        // when
+        TopUpOrderDetailResponse detail = manual.getOrder(owner, code);
+
+        // then
+        assertThat(detail.userName()).isNull();
+        assertThat(detail.userEmail()).isNull();
+        assertThat(detail.reviewedByName()).isNull();
+    }
+
+    @Test
     void ownerChecksHideAnotherUsersOrder() {
         long owner = user();
         long other = user();
@@ -286,6 +346,13 @@ class ManualTopUpIT extends IntegrationTest {
 
     private String order(long user) {
         return payment.createTopUpOrder(user, 20_000).orderCode();
+    }
+
+    private TopUpOrderDetailResponse findByCode(List<TopUpOrderDetailResponse> items, String code) {
+        return items.stream()
+                .filter(item -> item.orderCode().equals(code))
+                .findFirst()
+                .orElseThrow();
     }
 
     private long balance(long user) {

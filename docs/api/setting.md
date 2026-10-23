@@ -12,12 +12,33 @@ Trả danh sách cấu hình nghiệp vụ cho Admin. Endpoint đọc giá trị
 
 ```json
 [
-  { "key": "vnd_per_credit", "value": "1000", "defaultValue": "1000" },
-  { "key": "post_fee", "value": "5", "defaultValue": "5" }
+  {
+    "key": "post_fee",
+    "value": "5",
+    "defaultValue": "5",
+    "label": "Phí đăng bài",
+    "description": "Số Credit được giữ khi đăng bài và chỉ bị trừ khi Admin duyệt. Bài bị từ chối thì được hoàn lại.",
+    "group": "FEES",
+    "groupLabel": "Phí và nạp tiền"
+  }
 ]
 ```
 
 `value` và `defaultValue` là chuỗi để giữ nguyên biểu diễn được lưu trong `website_attributes.attr_value`.
+
+`label`, `description`, `group` và `groupLabel` là dữ liệu mô tả lấy từ enum `ConfigKey` (không lưu trong DB), để trang Admin hiện tên tiếng Việt thay cho khoá kỹ thuật. `group` nhận một trong các mã sau:
+
+| `group` | `groupLabel` | Gồm các khoá |
+|---|---|---|
+| `FEES` | Phí và nạp tiền | `vnd_per_credit`, `topup_min_credits`, `post_fee`, `edit_fee`, `renew_fee`, `boost_fee`, `ai_search_fee`, `payment_order_expire_minutes` |
+| `POSTING` | Đăng bài và hiển thị | `post_display_days`, `renew_expired_window_days`, `boost_days`, `boost_max_days`, `boost_max_per_page`, `item_photos_min`, `item_photos_max`, `image_max_mb`, `media_orphan_hours` |
+| `AI` | AI trợ lý và sàng lọc | `ai_free_per_day`, `ai_trial_uses`, `ai_search_timeout_seconds`, `chat_ai_threshold`, `chat_ai_timeout_seconds`, `item_ai_timeout_seconds`, `item_ai_retries` |
+| `MODERATION` | Kiểm duyệt và báo cáo | `chat_violation_alert`, `review_sla_hours`, `report_hide_threshold` |
+| `ACCOUNT` | Tài khoản và OTP | `otp_ttl_minutes`, `otp_max_failed`, `otp_resend_cooldown_seconds`, `pending_account_ttl_hours`, `accounts_per_ip_24h`, `phone_change_interval_days` |
+| `TRANSACTION` | Yêu cầu và giao dịch | `max_pending_requests`, `request_pending_days`, `chat_open_days`, `auto_confirm_days`, `complaint_window_days`, `response_window_days` |
+| `REPUTATION` | Uy tín và hạng | `post_display_days_gold`, `max_active_items_*`, `daily_points_cap`, `reputation_*` |
+
+Trang Cấu hình hệ thống bỏ nhóm `REPUTATION`; nhóm này hiện ở trang Uy tín và Hạng.
 
 ## PUT /api/v1/admin/configs/{key}
 
@@ -45,9 +66,12 @@ Có thể gửi thêm `reason` để ghi lý do vào `activity_logs`. Thành cô
 - `400 VALIDATION_FAILED`: thiếu key/value.
 - `400 SETTING_CONFIG_INVALID_TYPE`: value sai kiểu theo key.
 - `400 SETTING_CONFIG_OUT_OF_RANGE`: value ngoài khoảng cho phép.
+- `400 SETTING_RANK_THRESHOLD_ORDER`: sửa `reputation_silver_min`, `reputation_gold_min` hoặc `reputation_diamond_min` làm điểm tối thiểu các hạng không còn tăng dần. Phải thoả Bạc < Vàng < Kim cương (BR-U01), so với giá trị đang lưu của hai khoá còn lại. Muốn nâng cả ba mốc thì sửa từ mốc cao nhất xuống mốc thấp nhất.
 - `401 UNAUTHORIZED`: chưa đăng nhập.
 - `403 FORBIDDEN`: tài khoản không phải Admin.
 - `404 SETTING_CONFIG_NOT_FOUND`: key không tồn tại hoặc cấu hình chưa được seed.
+
+Quy tắc `SETTING_RANK_THRESHOLD_ORDER` áp dụng cho cả `PUT /api/v1/admin/configs/{key}`.
 
 ## Admin lexicon
 

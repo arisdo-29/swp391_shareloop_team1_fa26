@@ -21,7 +21,7 @@ public class MailTemplateRenderer {
 
     private static final String REGISTER_NOTE = "Nếu bạn không đăng ký tài khoản ShareLoop, hãy bỏ qua email này.";
     private static final String PASSWORD_RESET_NOTE = "Bạn vừa yêu cầu đặt lại mật khẩu ShareLoop. Nếu không phải bạn,"
-            + " hãy bỏ qua email này; mật khẩu hiện tại vẫn giữ nguyên.";
+            + " hãy bỏ qua email này. Mật khẩu hiện tại vẫn giữ nguyên.";
 
     /**
      * Nội dung email OTP đăng ký (FR-02) từ mẫu otp.html.

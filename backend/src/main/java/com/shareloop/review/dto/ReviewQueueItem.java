@@ -13,6 +13,9 @@ public record ReviewQueueItem(
         @Schema(description = "ID người đăng bài", example = "9")
         Long donorId,
 
+        @Schema(description = "Họ tên người đăng bài; null nếu tài khoản đã bị xoá", example = "Nguyễn Văn A")
+        String donorName,
+
         @Schema(description = "Tiêu đề bài đăng", example = "Áo khoác gió nam")
         String title,
 

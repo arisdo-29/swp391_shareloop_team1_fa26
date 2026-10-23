@@ -1,5 +1,6 @@
 package com.shareloop.request.mapper;
 
+import com.shareloop.request.dto.RequestItemInfo;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.entity.Request;
 
@@ -18,13 +19,30 @@ public final class RequestMapper {
         return toResponse(request, receiverName, null, null, null);
     }
 
-    // Map đầy đủ họ tên và thông tin uy tín (TrustStars, hạng, tỉ lệ đúng mô tả) (FR-65, Issue #110).
+    // Map họ tên và thông tin uy tín (TrustStars, hạng, tỉ lệ đúng mô tả) (FR-65, Issue #110), chưa có tên món đồ.
     public static RequestResponse toResponse(
             Request request,
             String receiverName,
             Integer receiverTrustStars,
             String receiverRank,
             Double receiverAsDescribedRate) {
+        return toResponse(
+                request,
+                receiverName,
+                receiverTrustStars,
+                receiverRank,
+                receiverAsDescribedRate,
+                RequestItemInfo.EMPTY);
+    }
+
+    // Map đầy đủ, kèm tên món đồ và tên chủ bài để giao diện không phải hiện id (U2).
+    public static RequestResponse toResponse(
+            Request request,
+            String receiverName,
+            Integer receiverTrustStars,
+            String receiverRank,
+            Double receiverAsDescribedRate,
+            RequestItemInfo itemInfo) {
         if (request == null) {
             return null;
         }
@@ -51,6 +69,11 @@ public final class RequestMapper {
                 receiverName,
                 receiverTrustStars,
                 receiverRank,
-                receiverAsDescribedRate);
+                receiverAsDescribedRate,
+                itemInfo.itemTitle(),
+                itemInfo.itemImage(),
+                itemInfo.donorId(),
+                itemInfo.donorName(),
+                itemInfo.offeredItemTitle());
     }
 }

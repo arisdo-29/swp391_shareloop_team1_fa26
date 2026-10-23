@@ -27,6 +27,7 @@ Lấy trang bài đăng đang chờ duyệt (`PENDING_REVIEW`) kèm danh sách �
     {
       "id": 42,
       "donorId": 9,
+      "donorName": "Nguyễn Văn A",
       "title": "Áo khoác gió nam",
       "aiRisk": "LOW",
       "moderationFlag": "REVIEW",
@@ -45,6 +46,8 @@ Lấy trang bài đăng đang chờ duyệt (`PENDING_REVIEW`) kèm danh sách �
   "size": 20
 }
 ```
+
+`donorName` là họ tên người đăng, lấy qua `UserService.findBriefs`; là `null` khi tài khoản người đăng đã bị xoá. Giao diện dùng trường này để hiện tên và tìm kiếm theo tên người đăng, không hiện `donorId`. Endpoint cũ `GET /api/v1/admin/items/pending` cũng trả thêm `donorName` ở mỗi phần tử.
 
 | Mã HTTP | Ý nghĩa |
 |---------|---------|

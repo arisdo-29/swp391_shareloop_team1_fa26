@@ -3,6 +3,7 @@ import { http } from './http';
 export interface ReviewQueueItem {
   id: number;
   donorId: number;
+  donorName?: string | null;
   title: string;
   aiRisk?: string | null;
   moderationFlag?: string | null;

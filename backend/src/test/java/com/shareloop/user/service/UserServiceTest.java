@@ -2,8 +2,11 @@ package com.shareloop.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -12,6 +15,7 @@ import static org.mockito.Mockito.when;
 import com.shareloop.auth.AuthErrorCode;
 import com.shareloop.auth.service.OtpService;
 import com.shareloop.catalog.service.AreaService;
+import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.media.MediaErrorCode;
 import com.shareloop.media.service.MediaService;
@@ -19,6 +23,9 @@ import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.UserErrorCode;
+import com.shareloop.user.dto.AdminAccountRole;
+import com.shareloop.user.dto.AdminAccountState;
+import com.shareloop.user.dto.AdminUserSummary;
 import com.shareloop.user.dto.ChangePhoneOtpResponse;
 import com.shareloop.user.dto.ChangePhoneRequest;
 import com.shareloop.user.dto.ContactInfo;
@@ -40,6 +47,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /** Unit test UserService: Mockito, không khởi động Spring, không đụng DB. */
@@ -491,6 +500,57 @@ class UserServiceTest {
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(expected));
+    }
+
+    @Test
+    void searchAccounts_whenLockedAdminWithKeyword_buildsExpectedFilters() {
+        // given: PotentialStubbingProblem sẽ báo lỗi nếu service truyền sai tham số lọc
+        when(userRepository.searchForAdmin(eq("%an%"), isNull(), eq(true), eq(true), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        // when
+        PageResponse<AdminUserSummary> result =
+                service.searchAccounts("  An ", AdminAccountState.LOCKED, AdminAccountRole.ADMIN, 0, 20);
+
+        // then
+        assertThat(result.items()).isEmpty();
+    }
+
+    @Test
+    void searchAccounts_whenNoFilters_passesNullForEveryFilter() {
+        // given
+        when(userRepository.searchForAdmin(isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        // when: từ khoá toàn khoảng trắng coi như không có từ khoá
+        PageResponse<AdminUserSummary> result = service.searchAccounts("   ", null, null, 0, 20);
+
+        // then
+        assertThat(result.items()).isEmpty();
+    }
+
+    @Test
+    void searchAccounts_mapsDerivedStateAndRoleForEachAccount() {
+        // given
+        User lockedUser = new User("a@x.test", "hash", "Bị khoá", "0900000001", false, UserStatus.ACTIVE);
+        lockedUser.deactivate();
+        User bannedAndLocked = new User("b@x.test", "hash", "Bị cấm", "0900000002", false, UserStatus.BANNED);
+        bannedAndLocked.deactivate();
+        User pendingAdmin = new User("c@x.test", "hash", "Chờ", "0900000003", true, UserStatus.PENDING_VERIFICATION);
+        when(userRepository.searchForAdmin(any(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(lockedUser, bannedAndLocked, pendingAdmin)));
+
+        // when
+        List<AdminUserSummary> items =
+                service.searchAccounts(null, null, null, 0, 20).items();
+
+        // then: BANNED được ưu tiên hơn LOCKED
+        assertThat(items.get(0).status()).isEqualTo(AdminAccountState.LOCKED);
+        assertThat(items.get(0).locked()).isTrue();
+        assertThat(items.get(0).role()).isEqualTo(AdminAccountRole.USER);
+        assertThat(items.get(1).status()).isEqualTo(AdminAccountState.BANNED);
+        assertThat(items.get(2).status()).isEqualTo(AdminAccountState.PENDING_VERIFICATION);
+        assertThat(items.get(2).role()).isEqualTo(AdminAccountRole.ADMIN);
     }
 
     private User givenUser() {

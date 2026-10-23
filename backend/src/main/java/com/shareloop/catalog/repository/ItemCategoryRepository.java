@@ -12,6 +12,9 @@ public interface ItemCategoryRepository extends JpaRepository<ItemCategory, Long
 
     List<ItemCategory> findAllByOrderBySortOrderAscIdAsc();
 
+    // Danh mục có thứ tự lớn nhất, dùng để gán danh mục mới xuống cuối danh sách.
+    Optional<ItemCategory> findFirstByOrderBySortOrderDesc();
+
     List<ItemCategory> findByParentIdAndIsActiveTrue(Long parentId);
 
     Optional<ItemCategory> findByIdAndIsActiveTrue(Long id);

@@ -36,6 +36,9 @@ export interface ReportResponse {
   stage: 'BEFORE' | 'AFTER';
   status: 'OPEN' | 'AWAITING_RESPONSE' | 'RESOLVED' | 'DISMISSED';
   createdAt: string;
+  // Chỉ có trong API của Admin (docs/api/report.md): họ tên người gửi và tên đối tượng bị báo cáo.
+  reporterName?: string | null;
+  targetName?: string | null;
 }
 
 export type ReportStatus = ReportResponse['status'];
@@ -74,6 +77,8 @@ export interface AdminReportDetail {
   resolution: string | null;
   starsDeducted: number;
   resolvedAt: string | null;
+  relatedItemTitle?: string | null;
+  resolvedByName?: string | null;
 }
 export interface ReportEvidence {
   id: number;

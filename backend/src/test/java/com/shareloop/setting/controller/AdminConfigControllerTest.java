@@ -3,6 +3,7 @@ package com.shareloop.setting.controller;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -39,10 +40,34 @@ class AdminConfigControllerTest {
     @MockitoBean
     ConfigService configService;
 
+    private static ConfigResponse thresholdResponse() {
+        return new ConfigResponse(
+                "chat_ai_threshold",
+                "0.8",
+                "0.7",
+                "Ngưỡng chặn tin nhắn của AI",
+                "Độ tin cậy tối thiểu để AI chặn một tin nhắn.",
+                "AI",
+                "AI trợ lý và sàng lọc");
+    }
+
+    @Test
+    void adminCanListConfigsWithLabelDescriptionAndGroup() throws Exception {
+        when(configService.listConfigs()).thenReturn(java.util.List.of(thresholdResponse()));
+        String adminToken = jwtService.issue(1L, true);
+
+        mockMvc.perform(get("/api/v1/admin/configs").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].key").value("chat_ai_threshold"))
+                .andExpect(jsonPath("$[0].label").value("Ngưỡng chặn tin nhắn của AI"))
+                .andExpect(jsonPath("$[0].description").value("Độ tin cậy tối thiểu để AI chặn một tin nhắn."))
+                .andExpect(jsonPath("$[0].group").value("AI"))
+                .andExpect(jsonPath("$[0].groupLabel").value("AI trợ lý và sàng lọc"));
+    }
+
     @Test
     void adminCanUpdateConfigUsingBodyKeyAndValue() throws Exception {
-        when(configService.update(ConfigKey.CHAT_AI_THRESHOLD, "0.8", null, 1L))
-                .thenReturn(new ConfigResponse("chat_ai_threshold", "0.8", "0.7"));
+        when(configService.update(ConfigKey.CHAT_AI_THRESHOLD, "0.8", null, 1L)).thenReturn(thresholdResponse());
         String adminToken = jwtService.issue(1L, true);
 
         mockMvc.perform(put("/api/v1/admin/configs")
@@ -85,7 +110,7 @@ class AdminConfigControllerTest {
     @Test
     void legacyPathCanStillUpdateConfig() throws Exception {
         when(configService.update(ConfigKey.CHAT_AI_THRESHOLD, "0.8", "raise threshold", 1L))
-                .thenReturn(new ConfigResponse("chat_ai_threshold", "0.8", "0.7"));
+                .thenReturn(thresholdResponse());
         String adminToken = jwtService.issue(1L, true);
 
         mockMvc.perform(put("/api/v1/admin/configs/chat_ai_threshold")

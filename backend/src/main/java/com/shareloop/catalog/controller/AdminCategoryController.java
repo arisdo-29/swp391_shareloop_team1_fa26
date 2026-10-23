@@ -1,6 +1,7 @@
 package com.shareloop.catalog.controller;
 
 import com.shareloop.catalog.dto.AdminCategoryActiveRequest;
+import com.shareloop.catalog.dto.AdminCategoryReorderRequest;
 import com.shareloop.catalog.dto.AdminCategoryRequest;
 import com.shareloop.catalog.dto.AdminCategoryResponse;
 import com.shareloop.catalog.service.AdminCategoryService;
@@ -41,11 +42,23 @@ public class AdminCategoryController {
 
     @Operation(
             summary = "Tạo danh mục mới",
-            description = "Chỉ Admin. Thiết lập tên, danh mục cha, cờ hạn chế, quyền đẩy tin và thứ tự hiển thị.")
+            description =
+                    "Chỉ Admin. Thiết lập tên, danh mục cha, cờ hạn chế và quyền đẩy tin. Không gửi sortOrder thì danh mục nằm cuối danh sách.")
     @PostMapping
     public ResponseEntity<AdminCategoryResponse> create(
             @Valid @RequestBody AdminCategoryRequest request, @Parameter(hidden = true) @CurrentUserId Long adminId) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request, adminId));
+    }
+
+    @Operation(
+            summary = "Sắp xếp lại thứ tự danh mục",
+            description =
+                    "Chỉ Admin. Gửi danh sách id của mọi danh mục theo thứ tự mới, mỗi danh mục một lần. Thứ tự lưu là vị trí trong danh sách, bắt đầu từ 1.")
+    @PutMapping("/reorder")
+    public List<AdminCategoryResponse> reorder(
+            @Valid @RequestBody AdminCategoryReorderRequest request,
+            @Parameter(hidden = true) @CurrentUserId Long adminId) {
+        return service.reorder(request, adminId);
     }
 
     @Operation(

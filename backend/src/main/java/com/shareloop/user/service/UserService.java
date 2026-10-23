@@ -2,12 +2,16 @@ package com.shareloop.user.service;
 
 import com.shareloop.auth.service.OtpService;
 import com.shareloop.catalog.service.AreaService;
+import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.media.service.MediaService;
 import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.UserErrorCode;
+import com.shareloop.user.dto.AdminAccountRole;
+import com.shareloop.user.dto.AdminAccountState;
+import com.shareloop.user.dto.AdminUserSummary;
 import com.shareloop.user.dto.ChangePhoneOtpResponse;
 import com.shareloop.user.dto.ChangePhoneRequest;
 import com.shareloop.user.dto.ContactInfo;
@@ -27,6 +31,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -226,6 +233,59 @@ public class UserService {
             briefs.put(user.getId(), new UserBrief(user.getId(), user.getFullName(), user.getEmail()));
         }
         return briefs;
+    }
+
+    /**
+     * Danh sách tài khoản cho trang quản lý của Admin (FR-107), tài khoản mới nhất trước. Mọi bộ lọc đều tuỳ chọn:
+     * keyword khớp một phần họ tên, email hoặc số điện thoại (không phân biệt hoa thường); state lọc theo trạng thái
+     * hiển thị (LOCKED nghĩa là is_active = false); role lọc Admin hoặc người dùng thường.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<AdminUserSummary> searchAccounts(
+            String keyword, AdminAccountState state, AdminAccountRole role, int page, int size) {
+        Boolean adminFilter = role == null ? null : role == AdminAccountRole.ADMIN;
+        Sort newestFirst = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
+
+        Page<User> result = userRepository.searchForAdmin(
+                toKeywordPattern(keyword),
+                toStatusFilter(state),
+                toLockedFilter(state),
+                adminFilter,
+                PageRequest.of(page, size, newestFirst));
+        return PageResponse.from(result.map(userMapper::toAdminSummary));
+    }
+
+    // Từ khoá trống thì không lọc; ngược lại đổi thành mẫu LIKE chữ thường, ví dụ "An" thành "%an%".
+    private String toKeywordPattern(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return null;
+        }
+        return "%" + keyword.trim().toLowerCase() + "%";
+    }
+
+    // LOCKED không có giá trị riêng ở cột status nên trả null và để toLockedFilter xử lý.
+    private UserStatus toStatusFilter(AdminAccountState state) {
+        if (state == null) {
+            return null;
+        }
+        return switch (state) {
+            case ACTIVE -> UserStatus.ACTIVE;
+            case PENDING_VERIFICATION -> UserStatus.PENDING_VERIFICATION;
+            case BANNED -> UserStatus.BANNED;
+            case LOCKED -> null;
+        };
+    }
+
+    // ACTIVE và PENDING_VERIFICATION chỉ tính tài khoản chưa bị khoá; BANNED lấy cả hai.
+    private Boolean toLockedFilter(AdminAccountState state) {
+        if (state == null) {
+            return null;
+        }
+        return switch (state) {
+            case ACTIVE, PENDING_VERIFICATION -> false;
+            case LOCKED -> true;
+            case BANNED -> null;
+        };
     }
 
     /**

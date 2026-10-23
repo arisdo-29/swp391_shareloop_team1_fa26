@@ -215,6 +215,10 @@ Lỗi là `BusinessException` với mã của `UserErrorCode`; nếu để lọt
 | `void lock(long userId, String reason)` | admin (#116), reputation | REQUIRED | `USER_NOT_FOUND` (404), `USER_ALREADY_LOCKED` (409) |
 | `void unlock(long userId)` | admin (#116), reputation | REQUIRED | `USER_NOT_FOUND` (404), `USER_NOT_LOCKED` (409) |
 | `ContactInfo findContact(long userId)` | request (#93) | read-only | `USER_NOT_FOUND` (404) |
+| `PageResponse<AdminUserSummary> searchAccounts(String keyword, AdminAccountState state, AdminAccountRole role, int page, int size)` | admin, wallet | read-only | - |
+| `Map<Long, UserBrief> findBriefs(Collection<Long> ids)` | audit, review, report, wallet | read-only | - (id thiếu không có trong map) |
+
+`searchAccounts` là hàm sau `GET /api/v1/admin/users` (xem `admin.md` mục 3.3): lọc tuỳ chọn theo từ khoá (họ tên, email, số điện thoại), trạng thái hiển thị (`ACTIVE`, `LOCKED`, `PENDING_VERIFICATION`, `BANNED`) và vai trò (`ADMIN`, `USER`), tài khoản mới nhất trước. Module wallet gọi với `role = USER` để dựng danh sách tra cứu tài chính.
 
 ### lock / unlock (FR-107, UC-50)
 

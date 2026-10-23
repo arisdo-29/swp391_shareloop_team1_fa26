@@ -27,6 +27,12 @@ export interface RequestResponse {
   receiverTrustStars?: number | null;
   receiverRank?: string | null;
   receiverAsDescribedRate?: number | null;
+  // Tên món đồ và chủ bài để không phải hiện id (docs/api/request.md).
+  itemTitle?: string | null;
+  itemImage?: string | null;
+  donorId?: number | null;
+  donorName?: string | null;
+  offeredItemTitle?: string | null;
   trustStars?: number | null;
   rank?: string | null;
   asDescribedRate?: number | null;

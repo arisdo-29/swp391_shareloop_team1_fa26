@@ -20,6 +20,10 @@ export interface TopUpOrderDetailResponse extends Omit<TopUpOrderResponse, 'redi
   reviewedBy: number | null;
   reviewedAt: string | null;
   reviewNote: string | null;
+  // Chỉ có trong API của Admin (docs/api/payment.md), API của người dùng để null.
+  userName?: string | null;
+  userEmail?: string | null;
+  reviewedByName?: string | null;
 }
 
 export interface CreateTopUpOrderRequest {

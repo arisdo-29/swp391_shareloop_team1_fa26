@@ -6,11 +6,13 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.support.IntegrationTest;
 import com.shareloop.wallet.dto.CreditTypeTotal;
+import com.shareloop.wallet.dto.DailyCashTotal;
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
 import com.shareloop.wallet.dto.TopUpReconciliation;
 import com.shareloop.wallet.entity.CreditTxType;
 import com.shareloop.wallet.service.CreditService;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -107,6 +109,32 @@ class CreditServiceFinanceSummaryIT extends IntegrationTest {
                         new CreditTypeTotal(CreditTxType.POST_FEE, 10, 2),
                         new CreditTypeTotal(CreditTxType.RENEW_FEE, 5, 1));
         assertThat(summary.reconciliation()).isEqualTo(new TopUpReconciliation(100, 100, 0, true));
+        // Chia theo ngày giờ Việt Nam: đơn thanh toán lúc 23:59:59 UTC ngày 31/3 đã là sáng 1/4 ở Việt Nam.
+        assertThat(summary.cashByDay())
+                .containsExactly(
+                        new DailyCashTotal(LocalDate.parse("2001-03-01"), 20_000, 1),
+                        new DailyCashTotal(LocalDate.parse("2001-03-15"), 30_000, 1),
+                        new DailyCashTotal(LocalDate.parse("2001-04-01"), 50_000, 1));
+    }
+
+    @Test
+    void getFinanceSummary_whenTwoOrdersPaidOnSameVietnamDay_sumsThemIntoOneDay() {
+        // given: 16:30 UTC ngày 10/6 là 23:30 ngày 10/6 ở Việt Nam, 17:30 UTC đã sang ngày 11/6
+        Instant from = Instant.parse("2001-06-01T00:00:00Z");
+        Instant to = Instant.parse("2001-07-01T00:00:00Z");
+        long userId = insertUser();
+        insertPaidOrder(userId, 20, "2001-06-10T01:00:00Z", "2001-06-10T02:00:00Z");
+        insertPaidOrder(userId, 30, "2001-06-10T16:00:00Z", "2001-06-10T16:30:00Z");
+        insertPaidOrder(userId, 40, "2001-06-10T17:00:00Z", "2001-06-10T17:30:00Z");
+
+        // when
+        FinanceSummaryResponse summary = creditService.getFinanceSummary(from, to);
+
+        // then
+        assertThat(summary.cashByDay())
+                .containsExactly(
+                        new DailyCashTotal(LocalDate.parse("2001-06-10"), 50_000, 2),
+                        new DailyCashTotal(LocalDate.parse("2001-06-11"), 40_000, 1));
     }
 
     @Test
@@ -143,6 +171,7 @@ class CreditServiceFinanceSummaryIT extends IntegrationTest {
         assertThat(summary.creditOutTotal()).isZero();
         assertThat(summary.creditOutByType()).isEmpty();
         assertThat(summary.reconciliation()).isEqualTo(new TopUpReconciliation(0, 0, 0, true));
+        assertThat(summary.cashByDay()).isEmpty();
     }
 
     @Test

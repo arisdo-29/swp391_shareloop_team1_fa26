@@ -18,7 +18,16 @@ class FinanceReportCsvWriterTest {
     @DisplayName("Không truyền from/to và chưa có giao dịch: ghi 'không giới hạn', dòng Tổng bằng 0")
     void write_noDatesAndNoEntries_writesUnboundedAndZeroTotals() {
         FinanceSummaryResponse report = new FinanceSummaryResponse(
-                null, null, 0L, 0L, 0L, List.of(), 0L, List.of(), new TopUpReconciliation(50L, 40L, 10L, false));
+                null,
+                null,
+                0L,
+                0L,
+                0L,
+                List.of(),
+                0L,
+                List.of(),
+                new TopUpReconciliation(50L, 40L, 10L, false),
+                List.of());
 
         String csv = new String(writer.write(report, null, null), StandardCharsets.UTF_8);
 
