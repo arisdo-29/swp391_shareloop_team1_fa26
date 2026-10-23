@@ -295,56 +295,59 @@ function AppShellContent() {
       <main id="main-content" className="flex-1">
         <Outlet />
       </main>
-      <footer className="mt-auto border-t border-border bg-white">
-        <div className="mx-auto w-full max-w-[1500px] px-6 pb-8 pt-12 sm:pt-14 md:px-8 lg:px-12 xl:px-14">
-          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
-            <div className="max-w-sm">
-              <Link to="/" className="inline-flex items-center gap-2.5">
-                <span className="grid size-9 place-items-center rounded-md bg-primary text-white">
-                  <Icon name="renew" className="size-5" weight="bold" />
-                </span>
-                <strong className="text-base font-extrabold text-text-primary">
-                  SHARE<span className="text-primary">LOOP</span>
-                </strong>
-              </Link>
-              <p className="mt-4 text-sm leading-6 text-text-muted">
-                Trao món đồ cũ, mở một vòng đời mới cho cộng đồng.
-              </p>
-            </div>
-            <FooterGroup
-              title="Khám phá"
-              onPostClick={!user ? () => setLoginPromptOpen(true) : undefined}
-              links={[
-                ['Tìm đồ', '/browse'],
-                ['Trợ lý AI', '/ai'],
-                ['Đăng đồ', '/post'],
-              ]}
-            />
-            <FooterGroup
-              title="Tài khoản"
-              links={[
-                ['Hồ sơ', '/profile'],
-                ['Credit', '/credit'],
-                ['Hoạt động', '/activities'],
-              ]}
-            />
-            <div>
-              <h2 className="text-sm font-bold text-text-primary">Hỗ trợ</h2>
-              <div className="mt-4 space-y-3 text-sm leading-6 text-text-muted">
-                <p>Quy tắc cộng đồng</p>
-                <p>Chính sách an toàn</p>
-                <p>Hướng dẫn trao đổi</p>
-                <a href="mailto:support@shareloop.vn" className="block hover:text-primary">
-                  support@shareloop.vn
-                </a>
+      {/* Quản trị viên chỉ làm việc trong khu vực admin nên không hiện chân trang dành cho người dùng. */}
+      {!isAdmin ? (
+        <footer className="mt-auto border-t border-border bg-white">
+          <div className="mx-auto w-full max-w-[1500px] px-6 pb-8 pt-12 sm:pt-14 md:px-8 lg:px-12 xl:px-14">
+            <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
+              <div className="max-w-sm">
+                <Link to="/" className="inline-flex items-center gap-2.5">
+                  <span className="grid size-9 place-items-center rounded-md bg-primary text-white">
+                    <Icon name="renew" className="size-5" weight="bold" />
+                  </span>
+                  <strong className="text-base font-extrabold text-text-primary">
+                    SHARE<span className="text-primary">LOOP</span>
+                  </strong>
+                </Link>
+                <p className="mt-4 text-sm leading-6 text-text-muted">
+                  Trao món đồ cũ, mở một vòng đời mới cho cộng đồng.
+                </p>
+              </div>
+              <FooterGroup
+                title="Khám phá"
+                onPostClick={!user ? () => setLoginPromptOpen(true) : undefined}
+                links={[
+                  ['Tìm đồ', '/browse'],
+                  ['Trợ lý AI', '/ai'],
+                  ['Đăng đồ', '/post'],
+                ]}
+              />
+              <FooterGroup
+                title="Tài khoản"
+                links={[
+                  ['Hồ sơ', '/profile'],
+                  ['Credit', '/credit'],
+                  ['Hoạt động', '/activities'],
+                ]}
+              />
+              <div>
+                <h2 className="text-sm font-bold text-text-primary">Hỗ trợ</h2>
+                <div className="mt-4 space-y-3 text-sm leading-6 text-text-muted">
+                  <p>Quy tắc cộng đồng</p>
+                  <p>Chính sách an toàn</p>
+                  <p>Hướng dẫn trao đổi</p>
+                  <a href="mailto:support@shareloop.vn" className="block hover:text-primary">
+                    support@shareloop.vn
+                  </a>
+                </div>
               </div>
             </div>
+            <div className="mt-12 flex flex-col gap-3 border-t border-border pt-6 text-xs text-text-muted sm:flex-row sm:items-center sm:justify-between">
+              <p>© 2026 SHARELOOP</p>
+            </div>
           </div>
-          <div className="mt-12 flex flex-col gap-3 border-t border-border pt-6 text-xs text-text-muted sm:flex-row sm:items-center sm:justify-between">
-            <p>© 2026 SHARELOOP</p>
-          </div>
-        </div>
-      </footer>
+        </footer>
+      ) : null}
       {loginPromptOpen ? (
         <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
           <div
