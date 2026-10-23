@@ -286,14 +286,10 @@ export function AdminComplaints() {
               <tbody>
                 {list.items.map((report) => (
                   <tr key={report.id}>
-                    <td>#{report.reporterId}</td>
+                    <td>{report.reporterName || 'Người dùng đã xóa'}</td>
                     <td>
-                      {targetLabels[report.targetType]} #
-                      {report.targetType === 'ITEM'
-                        ? report.itemId
-                        : report.targetType === 'USER'
-                          ? report.targetUserId
-                          : report.requestId}
+                      <span className="text-xs text-text-muted">{targetLabels[report.targetType]}</span>
+                      <p className="font-semibold">{report.targetName || 'Không còn xác định được'}</p>
                     </td>
                     <td>{reasonLabels[report.reason] ?? report.reason}</td>
                     <td>{date(report.createdAt)}</td>
@@ -377,8 +373,11 @@ export function AdminComplaints() {
                     : 'Không còn xác định được'}
                 </p>
                 <p>
-                  Bài đăng: {detail.relatedItemId ? `#${detail.relatedItemId}` : 'Không có'} · Giao
-                  dịch: {detail.report.requestId ? `#${detail.report.requestId}` : 'Không có'}
+                  Bài đăng liên quan:{' '}
+                  {detail.relatedItemId
+                    ? (detail.relatedItemTitle ?? 'Bài đăng đã bị xóa')
+                    : 'Không có'}
+                  {' · '}Gắn với giao dịch: {detail.report.requestId ? 'Có' : 'Không'}
                 </p>
                 <p>
                   Trạng thái: {statusLabels[detail.report.status]} · Gửi lúc:{' '}
@@ -419,7 +418,7 @@ export function AdminComplaints() {
                       {detail.resolution || 'Không có ghi chú.'}
                     </p>
                     <p>
-                      Quản trị viên đã kết luận · {date(detail.resolvedAt)} · Đã trừ{' '}
+                      {detail.resolvedByName ?? 'Quản trị viên'} đã kết luận · {date(detail.resolvedAt)} · Đã trừ{' '}
                       {detail.starsDeducted} sao
                     </p>
                   </div>
@@ -431,8 +430,8 @@ export function AdminComplaints() {
                       disabled={submitting || confirming}
                       onChange={(event) => setDecision(event.target.value as ReportDecision)}
                     >
-                      <option value="UPHOLD">Có cơ sở (UPHOLD)</option>
-                      <option value="DISMISS">Bác bỏ (DISMISS)</option>
+                      <option value="UPHOLD">Có cơ sở</option>
+                      <option value="DISMISS">Bác bỏ</option>
                     </Select>
                     <TextArea
                       label="Ghi chú kết luận (tối đa 500 ký tự, không bắt buộc)"

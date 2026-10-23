@@ -29,16 +29,17 @@ import { AdminUnderDevelopment } from '../pages/admin/AdminUnderDevelopment';
 import { AdminComplaints } from '../pages/admin/AdminComplaints';
 import { AdminTopUpOrders } from '../pages/admin/AdminTopUpOrders';
 import { AdminReputation } from '../pages/admin/AdminReputation';
+import { AdminAccounts } from '../pages/admin/AdminAccounts';
+import { AdminModerationList } from '../pages/admin/AdminModerationList';
+import { AdminModerationDetail } from '../pages/admin/AdminModerationDetail';
+import { AdminFinanceUsers, AdminFinanceUserDetail } from '../pages/admin/AdminFinanceUsers';
 import { NotFound } from '../pages/NotFound';
 import {
   AdminOperationsDashboard as AdminDashboard,
   AdminFinanceReport as AdminFinance,
-  AdminAccountActions,
-  AdminUserCreditHistory,
 } from '../pages/admin/AdminFinancePages';
 import {
   AdminAuditLogs,
-  AdminModeration,
   AdminSettings,
   AdminContentPage,
 } from '../pages/admin/AdminPages';
@@ -101,7 +102,8 @@ export const router = createBrowserRouter([
             element: <AdminLayout />,
             children: [
               { index: true, element: <AdminDashboard /> },
-              { path: 'moderation', element: <AdminModeration /> },
+              { path: 'moderation', element: <AdminModerationList /> },
+              { path: 'moderation/:itemId', element: <AdminModerationDetail /> },
               // Tạm ẩn trang Nhãn chính hãng (chưa có luồng xác nhận, chưa có BR): đưa về trang tổng quan.
               { path: 'authenticity', element: <Navigate to="/admin" replace /> },
               { path: 'checklist', element: <AdminContentPage kind="checklist" /> },
@@ -109,10 +111,10 @@ export const router = createBrowserRouter([
               { path: 'categories', element: <AdminContentPage kind="categories" /> },
               { path: 'keywords', element: <AdminContentPage kind="keywords" /> },
               { path: 'districts', element: <AdminContentPage kind="districts" /> },
-              { path: 'users', element: <AdminAccountActions /> },
-              { path: 'users/:userId', element: <AdminUserCreditHistory /> },
+              { path: 'users', element: <AdminAccounts /> },
               { path: 'reputation', element: <AdminReputation /> },
-              { path: 'locked-users', element: <AdminAccountActions /> },
+              // Gộp "Khóa tài khoản" vào Quản lý tài khoản: giữ đường dẫn cũ để link đã lưu vẫn dùng được.
+              { path: 'locked-users', element: <Navigate to="/admin/users" replace /> },
               { path: 'transactions', element: <AdminUnderDevelopment title="Giao dịch" /> },
               { path: 'transactions/:transactionId', element: <AdminUnderDevelopment title="Giao dịch" /> },
               { path: 'complaints', element: <AdminComplaints /> },
@@ -120,10 +122,11 @@ export const router = createBrowserRouter([
               { path: 'alerts', element: <AdminContentPage kind="alerts" /> },
               { path: 'finance', element: <AdminFinance /> },
               { path: 'finance/topup-orders', element: <AdminTopUpOrders /> },
-              { path: 'finance/users', element: <AdminUserCreditHistory /> },
-              { path: 'finance/users/:userId', element: <AdminUserCreditHistory /> },
+              { path: 'finance/users', element: <AdminFinanceUsers /> },
+              { path: 'finance/users/:userId', element: <AdminFinanceUserDetail /> },
               { path: 'settings/fees', element: <AdminSettings /> },
-              { path: 'settings/ranks', element: <AdminContentPage kind="ranks" /> },
+              // Hạng và điểm uy tín nay cấu hình chung ở trang Uy tín & Hạng.
+              { path: 'settings/ranks', element: <Navigate to="/admin/reputation" replace /> },
               { path: 'audit-logs', element: <AdminAuditLogs /> },
             ],
           },

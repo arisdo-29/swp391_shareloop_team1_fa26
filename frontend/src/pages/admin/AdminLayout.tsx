@@ -18,9 +18,8 @@ const sections = [
   {
     label: 'Người dùng',
     items: [
-      ['group', 'Khóa / mở khóa tài khoản', '/admin/users'],
+      ['group', 'Quản lý tài khoản', '/admin/users'],
       ['star', 'Uy tín & Hạng', '/admin/reputation'],
-      ['close', 'Khóa tài khoản', '/admin/locked-users'],
     ],
   },
   {
@@ -42,7 +41,7 @@ const sections = [
   {
     label: 'Cấu hình',
     items: [
-      ['settings', 'Phí & hạn mức', '/admin/settings/fees'],
+      ['settings', 'Cấu hình hệ thống', '/admin/settings/fees'],
     ],
   },
   { label: 'Hệ thống', items: [['history', 'Nhật ký hành động', '/admin/audit-logs']] },

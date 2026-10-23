@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AdminCategoryResponse } from '../../services/adminCategoryApi';
@@ -29,66 +29,28 @@ function renderModal(category: AdminCategoryResponse | null = null) {
       onSave={onSave}
     />,
   );
-  return { onSave, orderInput: screen.getByRole('spinbutton', { name: 'Thứ tự' }) as HTMLInputElement };
+  return { onSave };
 }
 
 describe('ApiCategoryModal', () => {
-  it('tăng giảm thứ tự như số nguyên thông thường', () => {
-    const { orderInput } = renderModal();
+  it('không còn ô nhập thứ tự vì Backend tự xếp danh mục', () => {
+    renderModal();
 
-    expect(orderInput.value).toBe('0');
-    orderInput.stepUp();
-    fireEvent.input(orderInput);
-    expect(orderInput.value).toBe('1');
-    orderInput.stepUp();
-    fireEvent.input(orderInput);
-    expect(orderInput.value).toBe('2');
-    orderInput.stepDown();
-    fireEvent.input(orderInput);
-    expect(orderInput.value).toBe('1');
-    orderInput.stepDown();
-    fireEvent.input(orderInput);
-    expect(orderInput.value).toBe('0');
+    expect(screen.queryByRole('spinbutton', { name: 'Thứ tự' })).toBeNull();
+    expect(screen.getByText(/tự xếp cuối danh sách/)).toBeTruthy();
   });
 
-  it('cho phép xóa để nhập lại và chuẩn hóa số 0 thừa khi rời ô', async () => {
-    const user = userEvent.setup();
-    const { orderInput } = renderModal();
+  it('chưa nhập tên thì chưa cho lưu', () => {
+    renderModal();
 
-    await user.clear(orderInput);
-    expect(orderInput.value).toBe('');
     expect((screen.getByRole('button', { name: 'Lưu' }) as HTMLButtonElement).disabled).toBe(true);
-
-    await user.type(orderInput, '001');
-    expect(orderInput.value).toBe('1');
-    await user.tab();
-    expect(orderInput.value).toBe('1');
-
-    for (const value of ['0', '1', '10']) {
-      await user.clear(orderInput);
-      await user.type(orderInput, value);
-      expect(orderInput.value).toBe(value);
-    }
   });
 
-  it('không nhận số âm, chữ hoặc số thập phân', () => {
-    const { orderInput } = renderModal();
-
-    fireEvent.change(orderInput, { target: { value: '-1' } });
-    expect(orderInput.value).toBe('0');
-    fireEvent.change(orderInput, { target: { value: 'abc' } });
-    expect(orderInput.value).not.toBe('abc');
-    fireEvent.change(orderInput, { target: { value: '1.5' } });
-    expect(orderInput.value).not.toBe('1.5');
-  });
-
-  it('thêm danh mục với sortOrder kiểu number và nhãn đẩy tin mới', async () => {
+  it('thêm danh mục mới không gửi sortOrder và dùng nhãn đẩy tin mới', async () => {
     const user = userEvent.setup();
-    const { onSave, orderInput } = renderModal();
+    const { onSave } = renderModal();
 
     await user.type(screen.getByRole('textbox', { name: 'Tên danh mục' }), 'Nội thất');
-    await user.clear(orderInput);
-    await user.type(orderInput, '001');
     await user.click(screen.getByRole('checkbox', { name: 'Cho phép đẩy tin' }));
     await user.click(screen.getByRole('button', { name: 'Lưu' }));
 
@@ -98,24 +60,26 @@ describe('ApiCategoryModal', () => {
       parentId: null,
       restricted: false,
       boostable: true,
-      sortOrder: 1,
     });
   });
 
-  it('sửa danh mục và gửi giá trị thứ tự mới', async () => {
+  it('sửa danh mục giữ nguyên thông tin cũ và không gửi sortOrder', async () => {
     const user = userEvent.setup();
-    const { onSave, orderInput } = renderModal(existingCategory);
+    const { onSave } = renderModal(existingCategory);
 
     expect(screen.getByRole('dialog', { name: 'Sửa danh mục' })).toBeTruthy();
-    expect(orderInput.value).toBe('3');
-    await user.clear(orderInput);
-    await user.type(orderInput, '10');
+    expect(screen.queryByText(/tự xếp cuối danh sách/)).toBeNull();
+    const nameInput = screen.getByRole('textbox', { name: 'Tên danh mục' }) as HTMLInputElement;
+    expect(nameInput.value).toBe('Đồ điện tử');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Điện tử gia dụng');
     await user.click(screen.getByRole('button', { name: 'Lưu' }));
 
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'Đồ điện tử',
+    expect(onSave).toHaveBeenCalledWith({
+      name: 'Điện tử gia dụng',
+      parentId: null,
+      restricted: false,
       boostable: true,
-      sortOrder: 10,
-    }));
+    });
   });
 });

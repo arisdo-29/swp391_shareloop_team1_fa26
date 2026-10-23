@@ -1,4 +1,7 @@
 import { AdminComplaints } from './AdminComplaints';
+import { AdminConfigs } from './AdminConfigs';
+import { AdminUserPicker } from './AdminUserPicker';
+import type { AdminUserSummary } from '../../services/adminUserApi';
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
@@ -21,8 +24,6 @@ import {
 } from '../../components/ui';
 import { CATEGORIES } from '../../constants/domain';
 import { formatVnd } from '../../utils/formatting';
-import { adminConfigApi, type AdminConfigResponse } from '../../services/adminConfigApi';
-import { adminModerationApi, type ReviewQueueItem, type ReviewChecklistItem } from '../../services/adminModerationApi';
 import { adminLexiconApi, type AdminLexiconEntry, type AdminLexiconRequest, type LexiconMatch } from '../../services/adminLexiconApi';
 import {
   adminCategoryApi,
@@ -33,7 +34,6 @@ import {
 } from '../../services/adminCategoryApi';
 import { adminAreaApi, type AdminAreaRequest, type AdminAreaResponse } from '../../services/adminAreaApi';
 import type { AttributeDataType } from '../../services/catalogApi';
-import { catalogApi, type AreaResponse } from '../../services/catalogApi';
 import {
   ADMIN_CHECKLIST_QUESTION_MAX_LENGTH,
   adminChecklistApi,
@@ -45,8 +45,6 @@ import {
   type ActivityLogResponse,
 } from '../../services/adminAuditApi';
 import type { ApiError } from '../../services/http';
-import { resolveMediaUrl } from '../../services/mediaUrl';
-import { itemApi, type ItemResponse } from '../../services/itemApi';
 import { toBackendUserId } from '../../services/requestApi';
 import type { AppStateData, ForbiddenKeyword, Item, KeywordAction, RankRule, ReputationPointRule, SupportedDistrict, User } from '../../types/domain';
 
@@ -75,65 +73,6 @@ function FilterBar({ children }: { children: ReactNode }) {
     </div>
   );
 }
-
-const riskLabel: Record<string, string> = {
-  UNCHECKED: 'Chưa kiểm tra',
-  LOW: 'Thấp',
-  MEDIUM: 'Trung bình',
-  HIGH: 'Cao',
-};
-
-const moderationFlagLabel: Record<string, string> = {
-  PASS: 'Đạt',
-  REVIEW: 'Cần kiểm tra',
-  BLOCK: 'Bị chặn',
-};
-
-const moderationReasonLabel: Record<string, string> = {
-  LEXICON_REVIEW: 'Nội dung có từ khóa cần kiểm tra.',
-  INVALID_INPUT: 'Thông tin bài đăng chưa hợp lệ.',
-  INVALID_LEXICON_RULE: 'Quy tắc kiểm duyệt từ khóa chưa hợp lệ.',
-  MODERATION_CHECK_FAILED: 'Không thể hoàn tất kiểm tra tự động.',
-};
-
-function displayRisk(value?: string | null) {
-  const normalized = value?.trim().toUpperCase();
-  return normalized ? riskLabel[normalized] ?? value!.trim() : '';
-}
-
-function displayModerationNote(item: ReviewQueueItem) {
-  const reason = item.flagReason?.trim();
-  if (reason && reason.toUpperCase() !== 'NONE') {
-    const normalizedReason = reason.toUpperCase();
-    if (moderationReasonLabel[normalizedReason]) return moderationReasonLabel[normalizedReason];
-    return /^[A-Z][A-Z0-9_]*$/.test(reason) ? 'Cần kiểm tra thêm' : reason;
-  }
-  const flag = item.moderationFlag?.trim().toUpperCase();
-  if (!flag || flag === 'NONE') return '';
-  return moderationFlagLabel[flag] ?? item.moderationFlag!.trim();
-}
-
-type ReviewDetailState =
-  | { status: 'loading' }
-  | { status: 'loaded'; data: ItemResponse }
-  | { status: 'error'; message: string };
-
-function flattenAreas(areas: AreaResponse[]): AreaResponse[] {
-  return areas.flatMap((area) => [area, ...flattenAreas(area.children ?? [])]);
-}
-
-const apiConditionLabels: Record<ItemResponse['condition'], string> = {
-  NEW: 'Mới',
-  LIKE_NEW: 'Như mới',
-  GOOD: 'Còn tốt',
-  DEFECTIVE: 'Có lỗi',
-};
-
-const operatingStatusLabels: Record<NonNullable<ItemResponse['operatingStatus']>, string> = {
-  NORMAL: 'Hoạt động bình thường',
-  PARTIAL: 'Hoạt động một phần',
-  NOT_WORKING: 'Không hoạt động',
-};
 
 export function AdminDashboard() {
   const data = useAppSelector(selectData);
@@ -217,1013 +156,6 @@ export function AdminDashboard() {
         </section>
       </div>
     </Panel>
-  );
-}
-
-export function AdminModeration() {
-  const data = useAppSelector(selectData);
-  const admin = useAppSelector(selectCurrentUser)!;
-  const dispatch = useAppDispatch();
-  const isApiAdmin = admin.role === 'admin';
-  const [query, setQuery] = useState('');
-  const [reviewing, setReviewing] = useState<Item | null>(null);
-  const [approving, setApproving] = useState<Item | null>(null);
-  const [rejecting, setRejecting] = useState<Item | null>(null);
-  const [toast, setToast] = useState('');
-  const [checklist, setChecklist] = useState<Record<string, Record<string, boolean>>>({});
-  const [apiPending, setApiPending] = useState<ReviewQueueItem[]>([]);
-  const [apiChecklist, setApiChecklist] = useState<ReviewChecklistItem[]>([]);
-  const [apiAnswers, setApiAnswers] = useState<Record<number, boolean[]>>({});
-  const [apiApproving, setApiApproving] = useState<ReviewQueueItem | null>(null);
-  const [apiRejecting, setApiRejecting] = useState<ReviewQueueItem | null>(null);
-  const [apiRejectReasons, setApiRejectReasons] = useState<string[]>([]);
-  const [apiActionId, setApiActionId] = useState<number | null>(null);
-  const [apiActionError, setApiActionError] = useState('');
-  const [apiLoading, setApiLoading] = useState(false);
-  const [apiError, setApiError] = useState('');
-  const [apiLegacyNotice, setApiLegacyNotice] = useState('');
-  const [moderationReloadKey, setModerationReloadKey] = useState(0);
-  const [expandedReviewIds, setExpandedReviewIds] = useState<Record<number, boolean>>({});
-  const [reviewDetails, setReviewDetails] = useState<Record<number, ReviewDetailState>>({});
-  const [categoryNames, setCategoryNames] = useState<Record<number, string>>({});
-  const [areaNames, setAreaNames] = useState<Record<number, string>>({});
-  const apiSubmissionLock = useRef(false);
-
-  useEffect(() => {
-    if (!isApiAdmin) return;
-    let active = true;
-    void Promise.allSettled([catalogApi.categories(), catalogApi.areas()]).then(([categoriesResult, areasResult]) => {
-      if (!active) return;
-      if (categoriesResult.status === 'fulfilled') {
-        setCategoryNames(Object.fromEntries(categoriesResult.value.map((category) => [category.id, category.name])));
-      }
-      if (areasResult.status === 'fulfilled') {
-        setAreaNames(Object.fromEntries(flattenAreas(areasResult.value).map((area) => [area.id, area.name])));
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [isApiAdmin]);
-
-  useEffect(() => {
-    if (!isApiAdmin) return;
-    let active = true;
-    setApiLoading(true);
-    setApiError('');
-    setApiLegacyNotice('');
-    Promise.all([
-      adminModerationApi.pendingReviews({ page: 0, size: 100 }),
-      adminModerationApi.rejectReasons(),
-    ])
-      .then(([response, rejectReasons]) => {
-        if (!active) return;
-        setApiPending(response.items);
-        setApiChecklist(response.checklist);
-        setApiRejectReasons(rejectReasons);
-        setApiAnswers(Object.fromEntries(response.items.map((item) => [item.id, response.checklist.map(() => false)])));
-      })
-      .catch(async (error: ApiError) => {
-        if (!active) return;
-        if (error.status === 404) {
-          try {
-            const legacyItems = await adminModerationApi.pendingItems({ page: 0, size: 100 });
-            if (!active) return;
-            setApiPending(legacyItems);
-            setApiChecklist([]);
-            setApiRejectReasons([]);
-            setApiLegacyNotice('Hệ thống đang dùng hàng chờ cũ. Chức năng duyệt và từ chối chưa khả dụng.');
-            return;
-          } catch (fallbackError) {
-            error = fallbackError as ApiError;
-          }
-        }
-        setApiPending([]);
-        setApiRejectReasons([]);
-        setApiError(error.status === 403 ? 'Tài khoản hiện tại không có quyền xem hàng chờ kiểm duyệt.' : 'Không tải được danh sách bài chờ duyệt.');
-      })
-      .finally(() => {
-        if (active) setApiLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [isApiAdmin, moderationReloadKey]);
-
-  const approveApiReview = async (item: ReviewQueueItem) => {
-    const answers = apiAnswers[item.id] ?? [];
-    if (
-      apiSubmissionLock.current ||
-      !apiChecklist.length ||
-      answers.length !== apiChecklist.length ||
-      answers.some((answer) => !answer)
-    ) return;
-    apiSubmissionLock.current = true;
-    setApiActionId(item.id);
-    setApiActionError('');
-    try {
-      await adminModerationApi.approve(item.id, { answers: apiChecklist.map((entry, index) => ({ id: entry.id, passed: answers[index] })) });
-      setApiPending((current) => current.filter((entry) => entry.id !== item.id));
-      setToast(`Đã duyệt bài "${item.title}".`);
-      setApiApproving(null);
-    } catch (error) {
-      const apiError = error as ApiError;
-      if (apiError.code === 'REVIEW_CHECKLIST_OUTDATED') {
-        setApiAnswers({});
-        setModerationReloadKey((key) => key + 1);
-        setApiApproving(null);
-        setToast('Checklist đã thay đổi. Vui lòng kiểm tra và tích lại các điều kiện.');
-      } else {
-        setApiActionError(apiError.status === 403 ? 'Tài khoản hiện tại không có quyền duyệt bài.' : apiError.message || 'Không duyệt được bài đăng.');
-      }
-    } finally {
-      apiSubmissionLock.current = false;
-      setApiActionId(null);
-    }
-  };
-
-  const rejectApiReview = async (reason: string) => {
-    if (!apiRejecting || !reason || apiSubmissionLock.current) return;
-    apiSubmissionLock.current = true;
-    setApiActionId(apiRejecting.id);
-    setApiActionError('');
-    try {
-      await adminModerationApi.reject(apiRejecting.id, { reason });
-      setApiPending((current) => current.filter((entry) => entry.id !== apiRejecting.id));
-      setToast(`Đã từ chối bài "${apiRejecting.title}".`);
-      setApiRejecting(null);
-    } catch (error) {
-      const apiError = error as ApiError;
-      setApiActionError(apiError.status === 403 ? 'Tài khoản hiện tại không có quyền từ chối bài.' : apiError.message || 'Không từ chối được bài đăng.');
-    } finally {
-      apiSubmissionLock.current = false;
-      setApiActionId(null);
-    }
-  };
-
-  const loadReviewDetails = async (item: ReviewQueueItem) => {
-    if (reviewDetails[item.id]?.status === 'loading' || reviewDetails[item.id]?.status === 'loaded') return;
-    setReviewDetails((current) => ({ ...current, [item.id]: { status: 'loading' } }));
-    try {
-      const detail = await itemApi.detail(item.id);
-      setReviewDetails((current) => ({ ...current, [item.id]: { status: 'loaded', data: detail } }));
-    } catch (error) {
-      const apiError = error as ApiError;
-      const message = apiError.status === 404
-        ? 'Không thể đọc chi tiết bài chờ duyệt từ GET /api/v1/items/{id}. Backend cần cho phép Admin truy cập hoặc bổ sung các trường chi tiết vào response pending.'
-        : apiError.message || 'Không tải được thông tin chi tiết của bài đăng.';
-      setReviewDetails((current) => ({ ...current, [item.id]: { status: 'error', message } }));
-    }
-  };
-
-  const toggleReviewDetails = (item: ReviewQueueItem) => {
-    const willExpand = !expandedReviewIds[item.id];
-    setExpandedReviewIds((current) => ({ ...current, [item.id]: willExpand }));
-    if (willExpand) void loadReviewDetails(item);
-  };
-
-  if (isApiAdmin) {
-    const apiRows = apiPending.filter((item) => `${item.title} ${item.donorId} ${item.aiRisk ?? ''} ${item.moderationFlag ?? ''}`.toLowerCase().includes(query.trim().toLowerCase()));
-    return (
-      <Panel title="Duyệt bài" description="Danh sách bài đăng đang chờ kiểm duyệt.">
-        <FilterBar>
-          <div className="flex-1">
-            <SearchField placeholder="Tìm theo tiêu đề, người đăng hoặc mức rủi ro..." value={query} onChange={(event) => setQuery(event.target.value)} />
-          </div>
-          <span className="text-xs text-text-muted">{apiPending.length} bài đăng chờ</span>
-        </FilterBar>
-        {toast ? <div className="mb-4"><Alert tone="success">{toast}</Alert></div> : null}
-        {apiLegacyNotice ? <div className="mb-4"><Alert tone="warning">{apiLegacyNotice}</Alert></div> : null}
-        {apiLoading ? (
-          <EmptyState title="Đang tải bài chờ duyệt" text="Vui lòng chờ trong giây lát." />
-        ) : apiError ? (
-          <div className="space-y-3 rounded-md bg-red-50 p-4 text-sm text-error">
-            <p>{apiError}</p>
-            <Button variant="outline" size="sm" onClick={() => setModerationReloadKey((key) => key + 1)}>
-              Thử tải lại
-            </Button>
-          </div>
-        ) : apiRows.length ? (
-          <div className="space-y-3">
-            {apiRows.map((item) => {
-              const detailState = reviewDetails[item.id];
-              const detail = detailState?.status === 'loaded' ? detailState.data : null;
-              const expanded = Boolean(expandedReviewIds[item.id]);
-              return (
-                <article
-                  key={item.id}
-                  className="overflow-hidden rounded-lg bg-white ring-1 ring-border/80 shadow-sm"
-                >
-                  <div className="min-w-0 p-4 sm:p-5">
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
-                        {displayRisk(item.aiRisk) ? (
-                          <span className="rounded-sm bg-amber-50 px-2 py-1 font-semibold text-warning">
-                            Rủi ro: {displayRisk(item.aiRisk)}
-                          </span>
-                        ) : null}
-                        {item.moderationFlag ? (
-                          <span className="rounded-sm bg-red-50 px-2 py-1 font-semibold text-error">
-                            {moderationFlagLabel[item.moderationFlag.toUpperCase()] ?? item.moderationFlag}
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <h2 className="mt-3 text-lg font-bold leading-7 text-text-primary">{item.title}</h2>
-
-                      <dl className="mt-4 grid gap-x-6 gap-y-3 rounded-md bg-surface-low p-4 sm:grid-cols-3">
-                        <Info label="Người đăng" value={`Người dùng #${item.donorId}`} />
-                        <Info
-                          label="Uy tín"
-                          value={
-                            item.donorTrustStars == null
-                              ? 'Chưa có dữ liệu'
-                              : `${item.donorTrustStars}/5 sao`
-                          }
-                        />
-                        <Info
-                          label="Thời gian đăng"
-                          value={new Date(item.createdAt).toLocaleString('vi-VN')}
-                        />
-                      </dl>
-
-                      {displayModerationNote(item) || item.matchedTerms?.length ? (
-                        <div className="mt-4 rounded-md border border-amber-100 bg-amber-50 p-3 text-sm text-warning">
-                          {displayModerationNote(item) ? (
-                            <p className="leading-6">{displayModerationNote(item)}</p>
-                          ) : null}
-                          {item.matchedTerms?.length ? (
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {item.matchedTerms.map((term) => (
-                                <span key={term} className="rounded-sm bg-white/80 px-2 py-1 text-xs font-semibold">
-                                  {term}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-
-                      <div className="mt-4 flex flex-wrap items-center gap-3">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => toggleReviewDetails(item)}
-                        >
-                          {expanded ? 'Thu gọn chi tiết' : 'Tải chi tiết và hình ảnh'}
-                        </Button>
-                        {!expanded ? (
-                          <span className="text-xs leading-5 text-text-muted">
-                            Danh sách chờ chưa chứa mô tả, danh mục, tình trạng và ảnh.
-                          </span>
-                        ) : null}
-                      </div>
-
-                      {expanded ? (
-                        <div className="mt-4">
-                          {detailState?.status === 'loading' ? (
-                            <div className="rounded-md bg-surface-low p-4 text-sm text-text-muted">
-                              Đang tải chi tiết và hình ảnh từ API bài đăng...
-                            </div>
-                          ) : null}
-                          {detailState?.status === 'error' ? (
-                            <div className="space-y-3">
-                              <Alert tone="warning">{detailState.message}</Alert>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void loadReviewDetails(item)}
-                              >
-                                Thử tải lại chi tiết
-                              </Button>
-                            </div>
-                          ) : null}
-                          {detail ? (
-                            <ModerationItemDetails
-                              item={detail}
-                              categoryName={categoryNames[detail.categoryId]}
-                              areaName={areaNames[detail.areaId]}
-                            />
-                          ) : null}
-                        </div>
-                      ) : null}
-                      <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          disabled={apiActionId === item.id}
-                          onClick={() => {
-                            setApiActionError('');
-                            setApiRejecting(item);
-                          }}
-                        >
-                          Từ chối
-                        </Button>
-                        <Button
-                          size="sm"
-                          disabled={apiActionId === item.id || !apiChecklist.length}
-                          onClick={() => {
-                            setApiActionError('');
-                            setApiApproving(item);
-                          }}
-                        >
-                          Duyệt bài
-                        </Button>
-                      </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        ) : (
-          <EmptyState icon="shield" title={query ? 'Không tìm thấy bài phù hợp' : 'Không có bài chờ duyệt'} text={query ? 'Hãy thử từ khóa khác.' : 'Hiện chưa có bài đăng nào trong hàng chờ.'} />
-        )}
-        {apiApproving ? (
-          <Modal
-            title="Checklist kiểm duyệt"
-            onClose={() => {
-              if (apiActionId === null) {
-                setApiApproving(null);
-                setApiActionError('');
-              }
-            }}
-          >
-            <p className="mb-4 text-sm text-text-muted">
-              Bài đăng: <span className="font-semibold text-text-primary">{apiApproving.title}</span>
-            </p>
-            <ModerationChecklistContent
-              checklist={apiChecklist}
-              answers={apiAnswers[apiApproving.id] ?? apiChecklist.map(() => false)}
-              disabled={apiActionId === apiApproving.id}
-              error={apiActionError}
-              onToggle={(index, checked) => {
-                setApiAnswers((current) => ({
-                  ...current,
-                  [apiApproving.id]: apiChecklist.map((_, answerIndex) =>
-                    answerIndex === index ? checked : (current[apiApproving.id]?.[answerIndex] ?? false),
-                  ),
-                }));
-              }}
-              onCancel={() => {
-                setApiApproving(null);
-                setApiActionError('');
-              }}
-              onConfirm={() => void approveApiReview(apiApproving)}
-            />
-          </Modal>
-        ) : null}
-        {apiRejecting ? (
-          <Modal
-            title="Từ chối bài đăng"
-            onClose={() => {
-              if (apiActionId === null) {
-                setApiRejecting(null);
-                setApiActionError('');
-              }
-            }}
-          >
-            <p className="mb-4 text-sm text-text-muted">
-              Bài đăng: <span className="font-semibold text-text-primary">{apiRejecting.title}</span>
-            </p>
-            <RejectReasonsContent
-              key={apiRejecting.id}
-              reasons={apiRejectReasons}
-              disabled={apiActionId !== null}
-              error={apiActionError}
-              onChange={() => setApiActionError('')}
-              onCancel={() => {
-                setApiRejecting(null);
-                setApiActionError('');
-              }}
-              onConfirm={(reason) => void rejectApiReview(reason)}
-            />
-          </Modal>
-        ) : null}
-      </Panel>
-    );
-  }
-
-  const pendingPosts = data.items.filter((i) => i.status === 'pending' || i.status === 'PENDING_REVIEW' || i.status === 'VIOLATION');
-  const rows = pendingPosts.filter((item) => {
-    const owner = data.users.find((user) => user.id === item.ownerId);
-    const searchable = `${item.title} ${owner?.name ?? ''} ${item.category}`.toLowerCase();
-    return searchable.includes(query.trim().toLowerCase());
-  });
-  const checkedCount = (itemId: string) => moderationChecklist.filter((entry) => checklist[itemId]?.[entry.key]).length;
-  const readyToApprove = (itemId: string) => checkedCount(itemId) === moderationChecklist.length;
-  const approvePost = (item: Item) => {
-    dispatch(
-      actions.updateItemStatus({
-        itemId: item.id,
-        status: 'approved',
-        adminId: admin.id,
-      }),
-    );
-    setApproving(null);
-    setReviewing(null);
-    setToast('Đã duyệt bài thành công.');
-    setChecklist((current) => {
-      const next = { ...current };
-      delete next[item.id];
-      return next;
-    });
-  };
-  return (
-    <Panel title="Duyệt bài" description="Kiểm tra nội dung, hình ảnh và tính phù hợp trước khi hiển thị.">
-      <FilterBar>
-        <div className="flex-1">
-          <SearchField placeholder="Tìm theo tiêu đề..." value={query} onChange={(e) => setQuery(e.target.value)} />
-        </div>
-        <span className="text-xs text-text-muted">{pendingPosts.length} bài đăng chờ</span>
-      </FilterBar>
-      <div className="space-y-3">
-        {rows.map((item) => {
-          const owner = data.users.find((u) => u.id === item.ownerId);
-          return (
-            <article key={item.id} className="grid gap-4 rounded-lg bg-white p-4 ring-1 ring-border/80 md:grid-cols-[96px_1fr_auto] md:items-center">
-              <ItemImage src={item.images[0]} alt={item.title} className="aspect-square w-full rounded-md object-cover md:size-24" />
-              <div className="min-w-0">
-                <div className="flex gap-2">
-                  <TypeBadge type={item.type} />
-                  <span className="text-xs text-text-muted">{item.category}</span>
-                </div>
-                <h2 className="mt-2 truncate font-bold">{item.title}</h2>
-                <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-muted">{item.description}</p>
-                <p className="mt-2 text-xs font-medium">
-                  {owner?.name} · {item.district}
-                </p>
-              </div>
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button size="sm" variant="outline" onClick={() => setReviewing(item)}>
-                  Xem chi tiết
-                </Button>
-                <Button size="sm" variant="danger" onClick={() => setRejecting(item)}>
-                  Từ chối
-                </Button>
-                <Button size="sm" onClick={() => setApproving(item)} disabled={!readyToApprove(item.id)}>
-                  Duyệt bài
-                </Button>
-                <p className="basis-full text-right text-[11px] text-text-muted">
-                  Checklist {checkedCount(item.id)}/{moderationChecklist.length}
-                </p>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-      {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
-      {reviewing ? (
-        <ModerationDetailModal
-          item={reviewing}
-          owner={data.users.find((user) => user.id === reviewing.ownerId)}
-          checked={checklist[reviewing.id] ?? {}}
-          onToggle={(key, value) =>
-            setChecklist((current) => ({
-              ...current,
-              [reviewing.id]: { ...(current[reviewing.id] ?? {}), [key]: value },
-            }))
-          }
-          onClose={() => setReviewing(null)}
-          onReject={() => {
-            setReviewing(null);
-            setRejecting(reviewing);
-          }}
-          onApprove={() => {
-            setApproving(reviewing);
-          }}
-        />
-      ) : null}
-      {approving ? <ConfirmDialog title="Duyệt bài đăng?" text="Bạn xác nhận bài đăng này đáp ứng đầy đủ tiêu chí của SHARELOOP?" confirmLabel="Xác nhận duyệt" onCancel={() => setApproving(null)} onConfirm={() => approvePost(approving)} /> : null}
-      {rejecting ? (
-        <RejectPostModal
-          item={rejecting}
-          onClose={() => setRejecting(null)}
-          onConfirm={(reason) => {
-            dispatch(
-              actions.updateItemStatus({
-                itemId: rejecting.id,
-                status: 'rejected',
-                adminId: admin.id,
-                rejectionReason: reason,
-              }),
-            );
-            setRejecting(null);
-            setToast('Đã từ chối bài đăng.');
-          }}
-        />
-      ) : null}
-    </Panel>
-  );
-}
-
-function ModerationItemDetails({
-  item,
-  categoryName,
-  areaName,
-}: {
-  item: ItemResponse;
-  categoryName?: string;
-  areaName?: string;
-}) {
-  const offerType = item.offerType;
-  const condition = item.condition;
-  return (
-    <div className="rounded-md bg-surface-low p-4">
-      <div className="grid gap-x-5 gap-y-3 text-sm sm:grid-cols-2">
-        <Info label="Hình thức" value={offerType === 'GIVE' ? 'Cho tặng' : offerType === 'SWAP' ? 'Trao đổi' : 'Chưa có dữ liệu'} />
-        {offerType === 'SWAP' ? <Info label="Món muốn đổi" value={item.desiredItem?.trim() || 'Chưa có dữ liệu'} /> : null}
-        <Info label="Danh mục" value={categoryName ?? 'Chưa có dữ liệu'} />
-        <Info label="Khu vực" value={areaName ?? 'Chưa có dữ liệu'} />
-        <Info label="Tình trạng" value={condition ? apiConditionLabels[condition] : 'Chưa có dữ liệu'} />
-        <Info label="Thương hiệu" value={item.brand?.trim() || 'Không có'} />
-        <Info
-          label="Trạng thái hoạt động"
-          value={
-            item.operatingStatus
-              ? operatingStatusLabels[item.operatingStatus]
-              : 'Không áp dụng hoặc chưa có dữ liệu'
-          }
-        />
-        <Info label="Ghi chú lỗi" value={item.defectNote?.trim() || 'Không có'} />
-      </div>
-      <div className="mt-4">
-        <p className="text-xs font-semibold text-text-secondary">Mô tả đầy đủ</p>
-        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-text-primary">{item.description?.trim() || 'Chưa có dữ liệu'}</p>
-      </div>
-      <ModerationImageGallery images={item.images ?? []} defectImages={item.defectImages ?? []} />
-    </div>
-  );
-}
-
-export function ModerationChecklistContent({
-  checklist,
-  answers,
-  disabled,
-  error,
-  onToggle,
-  onCancel,
-  onConfirm,
-}: {
-  checklist: ReviewChecklistItem[];
-  answers: boolean[];
-  disabled: boolean;
-  error?: string;
-  onToggle: (index: number, checked: boolean) => void;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  const completed = checklist.reduce((total, _, index) => total + (answers[index] ? 1 : 0), 0);
-  const isComplete = checklist.length > 0 && completed === checklist.length;
-  const progress = checklist.length ? Math.round((completed / checklist.length) * 100) : 0;
-
-  return (
-    <div>
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold text-text-primary">Tiến độ kiểm duyệt</p>
-          <p className="mt-1 text-xs text-text-muted">Tích chọn từng tiêu chí sau khi đã kiểm tra bài đăng.</p>
-        </div>
-        <span className="shrink-0 rounded-full bg-primary/10 px-3 py-1 text-sm font-bold text-primary" aria-live="polite">
-          {completed}/{checklist.length}
-        </span>
-      </div>
-      <div
-        className="mb-4 h-2 overflow-hidden rounded-full bg-surface-low"
-        role="progressbar"
-        aria-label="Tiến độ checklist"
-        aria-valuemin={0}
-        aria-valuemax={checklist.length}
-        aria-valuenow={completed}
-      >
-        <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress}%` }} />
-      </div>
-
-      {checklist.length ? (
-        <div className="max-h-[50dvh] space-y-2 overflow-y-auto overscroll-contain pr-1">
-          {checklist.map((entry, index) => (
-            <label
-              key={entry.id}
-              className="flex cursor-pointer items-start gap-3 rounded-md border border-border/80 p-3 text-sm leading-6 transition hover:bg-surface-low has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/40"
-            >
-              <input
-                type="checkbox"
-                checked={answers[index] ?? false}
-                disabled={disabled}
-                autoFocus={index === 0}
-                onChange={(event) => onToggle(index, event.target.checked)}
-                className="mt-1 size-4 shrink-0 accent-primary"
-              />
-              <span>{entry.statement}</span>
-            </label>
-          ))}
-        </div>
-      ) : (
-        <Alert tone="warning">Backend chưa cung cấp checklist kiểm duyệt. Không thể xác nhận duyệt bài.</Alert>
-      )}
-
-      {error ? <div className="mt-4"><Alert tone="error">{error}</Alert></div> : null}
-      <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">
-        <Button variant="ghost" onClick={onCancel} disabled={disabled}>Hủy</Button>
-        <Button onClick={onConfirm} disabled={!isComplete || disabled}>
-          {disabled ? 'Đang xử lý...' : 'Xác nhận duyệt bài'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function composeRejectReason(selectedReasons: string[], includeOther: boolean, otherReason: string) {
-  const reasons = selectedReasons.map((reason) => reason.trim()).filter(Boolean);
-  if (includeOther && otherReason.trim()) reasons.push(otherReason.trim());
-  return reasons.join('\n');
-}
-
-export function RejectReasonsContent({
-  reasons,
-  disabled,
-  error,
-  onChange,
-  onCancel,
-  onConfirm,
-}: {
-  reasons: string[];
-  disabled: boolean;
-  error?: string;
-  onChange?: () => void;
-  onCancel: () => void;
-  onConfirm: (reason: string) => void;
-}) {
-  const normalizedReasons = Array.from(new Set(reasons.map((reason) => reason.trim()).filter(Boolean)));
-  const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
-  const [includeOther, setIncludeOther] = useState(false);
-  const [otherReason, setOtherReason] = useState('');
-  const selectedCount = selectedReasons.length + (includeOther ? 1 : 0);
-  const totalCount = normalizedReasons.length + 1;
-  const customReasonValid = !includeOther || Boolean(otherReason.trim());
-  const canConfirm = selectedCount > 0 && customReasonValid;
-  const combinedReason = composeRejectReason(selectedReasons, includeOther, otherReason);
-
-  const toggleReason = (reason: string, checked: boolean) => {
-    setSelectedReasons((current) => (
-      checked ? [...current, reason] : current.filter((entry) => entry !== reason)
-    ));
-    onChange?.();
-  };
-
-  return (
-    <div>
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold text-text-primary">Lý do từ chối</p>
-          <p className="mt-1 text-xs text-text-muted">Có thể chọn một hoặc nhiều lý do phù hợp.</p>
-        </div>
-        <span className="shrink-0 rounded-full bg-red-50 px-3 py-1 text-sm font-bold text-error" aria-live="polite">
-          {selectedCount}/{totalCount}
-        </span>
-      </div>
-
-      {normalizedReasons.length ? (
-        <div className="max-h-[36dvh] space-y-2 overflow-y-auto overscroll-contain pr-1" aria-label="Danh sách lý do từ chối">
-          {normalizedReasons.map((reason) => (
-            <label
-              key={reason}
-              className="flex cursor-pointer items-start gap-3 rounded-md border border-border/80 p-3 text-sm leading-6 transition hover:bg-surface-low has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/40"
-            >
-              <input
-                type="checkbox"
-                checked={selectedReasons.includes(reason)}
-                disabled={disabled}
-                onChange={(event) => toggleReason(reason, event.target.checked)}
-                className="mt-1 size-4 shrink-0 accent-primary"
-              />
-              <span>{reason}</span>
-            </label>
-          ))}
-        </div>
-      ) : (
-        <Alert tone="warning">Backend chưa cung cấp lý do mẫu. Bạn vẫn có thể nhập lý do khác.</Alert>
-      )}
-
-      <div className="mt-4 border-t border-border/70 pt-4">
-        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border/80 p-3 text-sm font-semibold leading-6 transition hover:bg-surface-low has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/40">
-          <input
-            type="checkbox"
-            checked={includeOther}
-            disabled={disabled}
-            onChange={(event) => {
-              setIncludeOther(event.target.checked);
-              onChange?.();
-            }}
-            className="mt-1 size-4 shrink-0 accent-primary"
-          />
-          <span>Lý do khác</span>
-        </label>
-        {includeOther ? (
-          <TextArea
-            className="mt-3"
-            label="Nội dung lý do khác"
-            required
-            value={otherReason}
-            disabled={disabled}
-            error={!otherReason.trim() ? 'Vui lòng nhập nội dung cho lý do khác.' : undefined}
-            placeholder="Nhập lý do cụ thể để người đăng biết nội dung cần chỉnh sửa..."
-            onChange={(event) => {
-              setOtherReason(event.target.value);
-              onChange?.();
-            }}
-          />
-        ) : null}
-      </div>
-
-      {error ? <div className="mt-4"><Alert tone="error">{error}</Alert></div> : null}
-      <div className="sticky bottom-0 mt-5 flex flex-wrap justify-end gap-2 border-t border-border/70 bg-white pt-4">
-        <Button variant="ghost" onClick={onCancel} disabled={disabled}>Hủy</Button>
-        <Button
-          variant="danger"
-          onClick={() => {
-            if (canConfirm && !disabled) onConfirm(combinedReason);
-          }}
-          disabled={!canConfirm || disabled}
-        >
-          {disabled ? 'Đang xử lý...' : 'Xác nhận từ chối'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function ModerationImageGallery({
-  images,
-  defectImages,
-}: {
-  images: string[];
-  defectImages: string[];
-}) {
-  const [preview, setPreview] = useState<{ images: string[]; index: number; label: string } | null>(null);
-  const itemImages = images.map(resolveMediaUrl).filter(Boolean);
-  const itemDefectImages = defectImages.map(resolveMediaUrl).filter(Boolean);
-
-  if (!itemImages.length && !itemDefectImages.length) {
-    return (
-      <div className="mt-4 rounded-md border border-dashed border-border p-4 text-sm text-text-muted">
-        Bài đăng không có hình ảnh trong response chi tiết.
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-4 space-y-3">
-      {itemImages.length ? (
-        <ModerationThumbnailGroup
-          label="Ảnh món đồ"
-          images={itemImages}
-          mainThumbnail
-          onPreview={(_, index) => setPreview({ images: itemImages, index, label: 'Ảnh món đồ' })}
-        />
-      ) : null}
-      {itemDefectImages.length ? (
-        <ModerationThumbnailGroup
-          label="Ảnh lỗi"
-          images={itemDefectImages}
-          onPreview={(_, index) => setPreview({ images: itemDefectImages, index, label: 'Ảnh lỗi' })}
-        />
-      ) : null}
-      {preview ? (
-        <Modal title={`${preview.label} ${preview.index + 1}/${preview.images.length}`} onClose={() => setPreview(null)}>
-          <ItemImage
-            src={preview.images[preview.index]}
-            alt={`${preview.label} ${preview.index + 1}`}
-            className="max-h-[70vh] w-full rounded-md object-contain"
-          />
-          {preview.images.length > 1 ? (
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setPreview((current) => current ? { ...current, index: (current.index - 1 + current.images.length) % current.images.length } : null)}
-              >
-                Ảnh trước
-              </Button>
-              <span className="text-xs text-text-muted">{preview.index + 1}/{preview.images.length}</span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setPreview((current) => current ? { ...current, index: (current.index + 1) % current.images.length } : null)}
-              >
-                Ảnh sau
-              </Button>
-            </div>
-          ) : null}
-        </Modal>
-      ) : null}
-    </div>
-  );
-}
-
-function ModerationThumbnailGroup({
-  label,
-  images,
-  onPreview,
-  mainThumbnail = false,
-}: {
-  label: string;
-  images: string[];
-  onPreview: (src: string, index: number) => void;
-  mainThumbnail?: boolean;
-}) {
-  return (
-    <div>
-      <p className="mb-2 text-xs font-semibold text-text-secondary">{label}</p>
-      <div className={mainThumbnail ? 'grid grid-cols-4 gap-2' : 'flex flex-wrap gap-2'}>
-        {images.map((image, index) => (
-          <button
-            key={`${image}-${index}`}
-            type="button"
-            aria-label={`Xem lớn ${label.toLowerCase()} ${index + 1}`}
-            onClick={() => onPreview(image, index)}
-            className={`overflow-hidden rounded-md bg-white ring-1 ring-border transition hover:ring-primary/50 ${
-              mainThumbnail && index === 0 ? 'col-span-4' : ''
-            }`}
-          >
-            <ItemImage
-              src={image}
-              alt={`${label} ${index + 1}`}
-              className={`${
-                mainThumbnail && index === 0 ? 'h-56 w-full' : 'size-20'
-              } object-cover`}
-            />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const moderationChecklist = [
-  { key: 'category', label: 'Không thuộc danh mục bị cấm' },
-  { key: 'keyword', label: 'Không chứa từ khóa cấm' },
-  { key: 'content', label: 'Nội dung phù hợp' },
-  { key: 'image', label: 'Hình ảnh phù hợp' },
-  { key: 'complete', label: 'Thông tin đầy đủ' },
-] as const;
-
-function ModerationDetailModal({
-  item,
-  owner,
-  checked,
-  onToggle,
-  onClose,
-  onReject,
-  onApprove,
-}: {
-  item: Item;
-  owner?: AppStateData['users'][number];
-  checked: Record<string, boolean>;
-  onToggle: (key: string, value: boolean) => void;
-  onClose: () => void;
-  onReject: () => void;
-  onApprove: () => void;
-}) {
-  const isReady = moderationChecklist.every((entry) => checked[entry.key]);
-  const progress = moderationChecklist.filter((entry) => checked[entry.key]).length;
-  const automaticResult =
-    item.status === 'VIOLATION'
-      ? (item.moderationReason ?? 'Bài đăng cần Admin kiểm tra do không vượt qua kiểm tra tự động.')
-      : 'Không phát hiện vi phạm tự động.';
-  return (
-    <Modal title="Chi tiết duyệt bài" onClose={onClose}>
-      <div className="grid gap-4 md:grid-cols-[180px_1fr]">
-        <ItemImage
-          src={item.images[0]}
-          alt={item.title}
-          className="aspect-square w-full rounded-md object-cover"
-        />
-        <div className="grid gap-3 text-sm sm:grid-cols-2">
-          <Info label="Tên món đồ" value={item.title} />
-          <Info label="Người đăng" value={owner?.name ?? item.ownerId} />
-          <Info label="Hình thức" value={item.type === 'gift' ? 'Cho tặng' : 'Trao đổi'} />
-          <Info label="Danh mục" value={item.category} />
-          <Info label="Khu vực" value={item.district} />
-          <Info label="Tình trạng" value={conditionLabels[item.condition]} />
-          <Info label="Ngày đăng" value={new Date(item.postedAt).toLocaleDateString('vi-VN')} />
-          <Info
-            label="Ngày hết hạn"
-            value={item.expiresAt ? new Date(item.expiresAt).toLocaleDateString('vi-VN') : 'Không có'}
-          />
-          <Info label="Kiểm tra tự động" value={automaticResult} />
-        </div>
-      </div>
-      <h3 className="mt-5 text-sm font-bold">Mô tả</h3>
-      <div className="mt-4 rounded-md bg-background p-3 text-sm leading-6 text-text-secondary">
-        {item.description}
-      </div>
-      <div className="mt-5 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-bold">Checklist kiểm duyệt</h3>
-        <span className="text-xs font-semibold text-text-muted">Checklist {progress}/{moderationChecklist.length}</span>
-      </div>
-      <div className="mt-3 grid gap-2">
-        {moderationChecklist.map((entry) => (
-          <label key={entry.key} className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
-            <input
-              type="checkbox"
-              checked={Boolean(checked[entry.key])}
-              onChange={(event) => onToggle(entry.key, event.target.checked)}
-            />
-            <span>{entry.label}</span>
-          </label>
-        ))}
-      </div>
-      <div className="mt-6 flex flex-wrap justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>Đóng</Button>
-        <Button variant="danger" onClick={onReject}>Từ chối</Button>
-        <Button disabled={!isReady} onClick={onApprove}>Duyệt bài</Button>
-      </div>
-    </Modal>
-  );
-}
-
-const rejectionOptions = [
-  'Nội dung không phù hợp',
-  'Hình ảnh không phù hợp',
-  'Thuộc danh mục bị hạn chế',
-  'Chứa thông tin không được phép',
-  'Thông tin bài đăng chưa đầy đủ',
-  'Lý do khác',
-];
-
-const conditionLabels: Record<Item['condition'], string> = {
-  NEW: 'Mới',
-  LIKE_NEW: 'Như mới',
-  GOOD: 'Còn tốt',
-  DEFECTIVE: 'Có lỗi',
-  new: 'Mới',
-  good: 'Còn tốt',
-  used: 'Đã sử dụng',
-};
-
-function RejectPostModal({
-  item,
-  onClose,
-  onConfirm,
-}: {
-  item: Item;
-  onClose: () => void;
-  onConfirm: (..._args: [string]) => void;
-}) {
-  const [selectedReason, setSelectedReason] = useState('');
-  const [detail, setDetail] = useState('');
-  const [error, setError] = useState('');
-  const needsDetail = selectedReason === 'Lý do khác';
-  const reason = needsDetail ? detail.trim() : selectedReason;
-  return (
-    <Modal title="Từ chối bài đăng" onClose={onClose}>
-      <p className="text-sm leading-6 text-text-muted">
-        Vui lòng cho biết lý do bài đăng không được duyệt.
-      </p>
-      <div className="mt-4 grid gap-2">
-        {rejectionOptions.map((option) => (
-          <label key={option} className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
-            <input
-              type="radio"
-              name={`reject-${item.id}`}
-              checked={selectedReason === option}
-              onChange={() => {
-                setSelectedReason(option);
-                setError('');
-              }}
-            />
-            <span>{option}</span>
-          </label>
-        ))}
-      </div>
-      {needsDetail ? (
-        <TextArea
-          className="mt-4"
-          label="Lý do chi tiết"
-          placeholder="Nhập lý do từ chối để người đăng biết cần chỉnh sửa nội dung nào..."
-          value={detail}
-          error={error}
-          onChange={(event) => {
-            setDetail(event.target.value);
-            setError('');
-          }}
-        />
-      ) : error ? <p className="mt-3 text-xs text-error">{error}</p> : null}
-      <div className="mt-6 flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>Hủy</Button>
-        <Button
-          variant="danger"
-          onClick={() => {
-            if (!reason.trim()) {
-              setError('Vui lòng nhập lý do từ chối.');
-              return;
-            }
-            onConfirm(reason);
-          }}
-        >
-          Xác nhận từ chối
-        </Button>
-      </div>
-    </Modal>
   );
 }
 
@@ -1809,156 +741,13 @@ export function AdminFinanceUserLookup() {
   );
 }
 
-function adminConfigErrorMessage(error: ApiError) {
-  if (error.status === 400) return 'Giá trị hoặc lý do thay đổi chưa hợp lệ. Vui lòng kiểm tra lại.';
-  if (error.status === 403) return 'Tài khoản hiện tại không có quyền sửa cấu hình.';
-  if (error.status === 404) return 'Không tìm thấy cấu hình cần cập nhật.';
-  if (error.status === 401) return 'Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.';
-  if (error.status === 0) return 'Không kết nối được máy chủ. Vui lòng thử lại.';
-  return 'Không cập nhật được cấu hình. Vui lòng thử lại.';
-}
-
 export function AdminSettings() {
   const dispatch = useAppDispatch();
   const admin = useAppSelector(selectCurrentUser)!;
   const backendAdminId = toBackendUserId(admin.id);
   const isApiAdmin = backendAdminId !== null && admin.role === 'admin';
-  const [configs, setConfigs] = useState<AdminConfigResponse[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [reloadKey, setReloadKey] = useState(0);
-  const [editingConfig, setEditingConfig] = useState<AdminConfigResponse | null>(null);
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [updateError, setUpdateError] = useState('');
-  const [notice, setNotice] = useState('');
 
-  useEffect(() => {
-    if (!isApiAdmin) {
-      setConfigs([]);
-      setLoading(false);
-      setError('');
-      return;
-    }
-
-    let active = true;
-    setLoading(true);
-    setError('');
-    adminConfigApi
-      .list()
-      .then((response) => {
-        if (active) setConfigs(response);
-      })
-      .catch((apiError: ApiError) => {
-        if (!active) return;
-        setConfigs([]);
-        setError(apiError.status === 403 ? 'Tài khoản hiện tại không đủ quyền xem cấu hình hệ thống.' : 'Không tải được cấu hình hệ thống.');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [isApiAdmin, reloadKey]);
-
-  const updateConfig = async (value: string, reason: string) => {
-    if (!editingConfig || backendAdminId === null || savingConfig) return;
-    setSavingConfig(true);
-    setUpdateError('');
-    setNotice('');
-    try {
-      let updated: AdminConfigResponse;
-      try {
-        updated = await adminConfigApi.updateByBody({
-          key: editingConfig.key,
-          value,
-          reason,
-        });
-      } catch (apiError) {
-        const response = apiError as ApiError;
-        if (response.status !== 404 && response.status !== 405) throw apiError;
-        updated = await adminConfigApi.update(editingConfig.key, { value, reason });
-      }
-      setConfigs((current) => current.map((entry) => (entry.key === updated.key ? updated : entry)));
-      setEditingConfig(null);
-      setNotice(`Đã cập nhật cấu hình ${updated.key}.`);
-    } catch (apiError) {
-      setUpdateError(adminConfigErrorMessage(apiError as ApiError));
-    } finally {
-      setSavingConfig(false);
-    }
-  };
-
-  if (isApiAdmin) {
-    return (
-      <Panel title="Cấu hình hệ thống" description="Xem và cập nhật các thiết lập đang được hỗ trợ.">
-        <div className="max-w-4xl rounded-lg bg-white p-6 ring-1 ring-border/80">
-          <div className="rounded-md bg-primary-faint p-4 text-sm leading-6 text-text-secondary">Mỗi thay đổi cần nhập lý do. Thiết lập nhạy cảm cần xác nhận bổ sung trước khi lưu.</div>
-
-          {notice ? <div className="mt-4 rounded-md bg-emerald-50 p-3 text-sm text-success">{notice}</div> : null}
-
-          {loading ? (
-            <EmptyState title="Đang tải cấu hình" text="Vui lòng chờ trong giây lát." />
-          ) : error ? (
-            <div className="mt-5 rounded-md bg-red-50 p-4 text-sm leading-6 text-error">
-              <p>{error}</p>
-              <Button className="mt-3" size="sm" variant="outline" onClick={() => setReloadKey((current) => current + 1)}>
-                Thử lại
-              </Button>
-            </div>
-          ) : configs.length ? (
-            <div className="table-wrap mt-5">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Key</th>
-                    <th>Value</th>
-                    <th>Default Value</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {configs.map((config) => (
-                    <tr key={config.key}>
-                      <td className="font-mono text-xs">{config.key}</td>
-                      <td className="font-mono text-xs">{config.value}</td>
-                      <td className="font-mono text-xs">{config.defaultValue}</td>
-                      <td className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setUpdateError('');
-                            setNotice('');
-                            setEditingConfig(config);
-                          }}
-                        >
-                          Chỉnh sửa
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <EmptyState title="Chưa có cấu hình" text="Hiện chưa có cấu hình hệ thống nào." />
-          )}
-        </div>
-        {editingConfig ? (
-          <ConfigEditModal
-            config={editingConfig}
-            saving={savingConfig}
-            error={updateError}
-            onClose={() => {
-              if (!savingConfig) setEditingConfig(null);
-            }}
-            onSave={(value, reason) => void updateConfig(value, reason)}
-          />
-        ) : null}
-      </Panel>
-    );
-  }
+  if (isApiAdmin) return <AdminConfigs />;
 
   return (
     <Panel title="Cấu hình Credit" description="Giao dịch ShareLoop hiện miễn phí cho cả Swap và Give.">
@@ -1976,59 +765,6 @@ export function AdminSettings() {
   );
 }
 
-function isSensitiveConfig(key: string) {
-  return /(secret|password|token|credential|private|api[_-]?key|jwt|smtp|mail)/i.test(key);
-}
-
-function ConfigEditModal({
-  config,
-  saving,
-  error,
-  onClose,
-  onSave,
-}: {
-  config: AdminConfigResponse;
-  saving: boolean;
-  error: string;
-  onClose: () => void;
-  onSave: (value: string, reason: string) => void;
-}) {
-  const [value, setValue] = useState(config.value);
-  const [reason, setReason] = useState('');
-  const [confirmedSensitive, setConfirmedSensitive] = useState(false);
-  const sensitive = isSensitiveConfig(config.key);
-  const canSave = value.trim().length > 0 && value !== config.value && reason.trim().length > 0 && (!sensitive || confirmedSensitive) && !saving;
-
-  return (
-    <Modal title="Chỉnh sửa cấu hình" onClose={onClose}>
-      <div className="rounded-md bg-surface-low p-4 text-sm">
-        <p className="text-xs text-text-muted">Key</p>
-        <p className="mt-1 break-all font-mono font-semibold">{config.key}</p>
-        <p className="mt-3 text-xs text-text-muted">Giá trị mặc định: {config.defaultValue}</p>
-      </div>
-      <div className="mt-4 space-y-4">
-        <Field label="Giá trị mới" value={value} onChange={(event) => setValue(event.target.value)} disabled={saving} />
-        <TextArea label="Lý do thay đổi" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Mô tả lý do cần cập nhật cấu hình..." disabled={saving} />
-      </div>
-      {sensitive ? (
-        <label className="mt-4 flex items-start gap-2 rounded-md bg-amber-50 p-3 text-sm leading-5 text-warning">
-          <input className="mt-1" type="checkbox" checked={confirmedSensitive} onChange={(event) => setConfirmedSensitive(event.target.checked)} disabled={saving} />
-          <span>Tôi xác nhận đây là cấu hình nhạy cảm và đã kiểm tra kỹ giá trị mới.</span>
-        </label>
-      ) : null}
-      {error ? <p className="mt-4 text-sm text-error">{error}</p> : null}
-      <div className="mt-6 flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose} disabled={saving}>
-          Hủy
-        </Button>
-        <Button onClick={() => onSave(value.trim(), reason.trim())} disabled={!canSave}>
-          {saving ? 'Đang lưu...' : 'Xác nhận cập nhật'}
-        </Button>
-      </div>
-    </Modal>
-  );
-}
-
 export function AdminAuditLogs() {
   const [actionTypes, setActionTypes] = useState<{ type: string; label: string }[]>([]);
   const [logs, setLogs] = useState<ActivityLogResponse[]>([]);
@@ -2039,7 +775,7 @@ export function AdminAuditLogs() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
-  const [actorId, setActorId] = useState('');
+  const [actorUser, setActorUser] = useState<AdminUserSummary | null>(null);
   const [actionType, setActionType] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -2089,7 +825,7 @@ export function AdminAuditLogs() {
     setError('');
     setPage(0);
     setFilters({
-      actorId: actorId ? Number(actorId) : undefined,
+      actorId: actorUser?.id,
       type: actionType || undefined,
       from: from || undefined,
       to: to || undefined,
@@ -2100,15 +836,10 @@ export function AdminAuditLogs() {
     <Panel title="Nhật ký hành động">
       <form onSubmit={applyFilters} className="mb-5 rounded-lg bg-white p-4 ring-1 ring-border/80">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <Field
-            label="ID người thực hiện"
-            type="number"
-            min="1"
-            step="1"
-            value={actorId}
-            onChange={(event) => setActorId(event.target.value)}
-            placeholder="Ví dụ: 3"
-          />
+          <div>
+            <span className="label">Người thực hiện</span>
+            <AdminUserPicker searchLabel="Tìm người thực hiện" selected={actorUser} disabled={loading} onSelect={setActorUser} />
+          </div>
           <Select label="Hành động" value={actionType} onChange={(event) => setActionType(event.target.value)}>
             <option value="">Tất cả hành động</option>
             {(actionTypes.length ? actionTypes.map((entry) => [entry.type, entry.label]) : Object.entries(activityLogTypeLabels)).map(([value, label]) => (
@@ -3227,7 +1958,11 @@ function AdminCategories() {
     : <AdminStaticContent kind="categories" />;
 }
 
-function ApiAdminCategories() {
+function sortCategories(categories: AdminCategoryResponse[]) {
+  return [...categories].sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+}
+
+export function ApiAdminCategories() {
   const [categories, setCategories] = useState<AdminCategoryResponse[]>([]);
   const [editing, setEditing] = useState<AdminCategoryResponse | null | 'new'>(null);
   const [loading, setLoading] = useState(true);
@@ -3235,39 +1970,47 @@ function ApiAdminCategories() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const mutationLock = useRef(false);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError('');
     adminCategoryApi.list()
-      .then((response) => { if (active) setCategories(response); })
+      .then((response) => { if (active) setCategories(sortCategories(response)); })
       .catch((apiError: ApiError) => { if (active) setError(apiError.message || 'Không tải được danh mục quản trị.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [reloadKey]);
 
   const save = async (input: AdminCategoryRequest) => {
+    if (mutationLock.current) return;
+    mutationLock.current = true;
     setSavingId(editing === 'new' ? 0 : editing?.id ?? null);
     setError('');
+    setNotice('');
     try {
+      // Danh mục mới tự xuống cuối danh sách, Backend lo việc gán thứ tự.
       const saved = editing === 'new'
         ? await adminCategoryApi.create(input)
         : await adminCategoryApi.update(editing!.id, input);
-      setCategories((current) => editing === 'new'
+      setCategories((current) => sortCategories(editing === 'new'
         ? [...current, saved]
-        : current.map((entry) => entry.id === saved.id ? saved : entry));
+        : current.map((entry) => entry.id === saved.id ? saved : entry)));
       setEditing(null);
       setNotice(editing === 'new' ? 'Đã thêm danh mục.' : 'Đã cập nhật danh mục.');
     } catch (apiError) {
       const response = apiError as ApiError;
       setError(response.message || 'Không lưu được danh mục.');
     } finally {
+      mutationLock.current = false;
       setSavingId(null);
     }
   };
 
   const toggleActive = async (category: AdminCategoryResponse) => {
+    if (mutationLock.current) return;
+    mutationLock.current = true;
     setSavingId(category.id);
     setError('');
     try {
@@ -3277,16 +2020,41 @@ function ApiAdminCategories() {
       const response = apiError as ApiError;
       setError(response.message || 'Không cập nhật được trạng thái danh mục.');
     } finally {
+      mutationLock.current = false;
+      setSavingId(null);
+    }
+  };
+
+  // Đổi chỗ hai danh mục kề nhau rồi gửi cả danh sách id theo thứ tự mới. Lỗi thì giữ nguyên thứ tự cũ.
+  const move = async (index: number, offset: -1 | 1) => {
+    const targetIndex = index + offset;
+    if (mutationLock.current || targetIndex < 0 || targetIndex >= categories.length) return;
+    const reordered = [...categories];
+    [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
+    mutationLock.current = true;
+    setSavingId(-1);
+    setError('');
+    setNotice('');
+    try {
+      const updated = await adminCategoryApi.reorder(reordered.map((entry) => entry.id));
+      setCategories(sortCategories(updated));
+      setNotice('Đã cập nhật thứ tự danh mục.');
+    } catch (apiError) {
+      const response = apiError as ApiError;
+      setError(response.message || 'Không cập nhật được thứ tự danh mục. Thứ tự cũ được giữ nguyên.');
+    } finally {
+      mutationLock.current = false;
       setSavingId(null);
     }
   };
 
   const hasParentCategory = categories.some((category) => category.parentId != null);
+  const busy = savingId !== null;
 
-  return <Panel title="Danh mục" action={<Button icon="add" onClick={() => setEditing('new')}>Thêm danh mục</Button>}>
+  return <Panel title="Danh mục" description="Thứ tự trong bảng cũng là thứ tự danh mục hiển thị cho người dùng." action={<Button icon="add" disabled={loading || busy} onClick={() => setEditing('new')}>Thêm danh mục</Button>}>
     {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
     {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
-    {loading ? <EmptyState title="Đang tải danh mục" text="Vui lòng chờ trong giây lát." /> : categories.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Tên</th>{hasParentCategory ? <th>Danh mục cha</th> : null}<th>Thuộc tính</th><th>Thứ tự</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>{categories.map((category) => <tr key={category.id}><td className="font-semibold">{category.name}</td>{hasParentCategory ? <td>{categories.find((entry) => entry.id === category.parentId)?.name ?? '—'}</td> : null}<td>{category.restricted ? 'Hạn chế' : 'Thông thường'}</td><td>{category.sortOrder}</td><td>{category.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td className="space-x-2"><Button size="sm" variant="ghost" disabled={savingId === category.id} onClick={() => setEditing(category)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId === category.id} onClick={() => void toggleActive(category)}>{category.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có danh mục" text="Hiện chưa có danh mục nào." />}
+    {loading ? <EmptyState title="Đang tải danh mục" text="Vui lòng chờ trong giây lát." /> : categories.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Tên</th>{hasParentCategory ? <th>Danh mục cha</th> : null}<th>Phân loại</th><th>Trạng thái</th><th className="whitespace-nowrap">Thao tác</th></tr></thead><tbody>{categories.map((category, index) => <tr key={category.id}><td>{index + 1}</td><td className="font-semibold">{category.name}</td>{hasParentCategory ? <td>{categories.find((entry) => entry.id === category.parentId)?.name ?? '—'}</td> : null}<td>{category.restricted ? 'Hạn chế' : 'Thông thường'}</td><td>{category.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" size="sm" variant="ghost" title="Đưa danh mục này lên trên một vị trí" disabled={busy || index === 0} onClick={() => void move(index, -1)}>Chuyển lên</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="ghost" title="Đưa danh mục này xuống dưới một vị trí" disabled={busy || index === categories.length - 1} onClick={() => void move(index, 1)}>Chuyển xuống</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="outline" disabled={busy} onClick={() => setEditing(category)}>Sửa</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="outline" disabled={busy} onClick={() => void toggleActive(category)}>{category.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có danh mục" text="Hiện chưa có danh mục nào." />}
     {SHOW_CATEGORY_ATTRIBUTES && !loading && categories.length ? <ApiCategoryAttributes categories={categories} /> : null}
     {editing ? <ApiCategoryModal category={editing === 'new' ? null : editing} categories={categories} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
   </Panel>;
@@ -3297,14 +2065,9 @@ export function ApiCategoryModal({ category, categories, saving, onClose, onSave
   const [parentId, setParentId] = useState(category?.parentId ? String(category.parentId) : '');
   const [restricted, setRestricted] = useState(category?.restricted ?? false);
   const [boostable, setBoostable] = useState(category?.boostable ?? false);
-  const [sortOrder, setSortOrder] = useState(String(category?.sortOrder ?? 0));
-  const normalizedSortOrder = sortOrder === '' ? null : Number(sortOrder);
-  const validSortOrder = /^\d+$/.test(sortOrder)
-    && normalizedSortOrder !== null
-    && Number.isSafeInteger(normalizedSortOrder);
   return <Modal title={category ? 'Sửa danh mục' : 'Thêm danh mục'} onClose={onClose}>
-    <div className="space-y-4"><Field label="Tên danh mục" value={name} onChange={(event) => setName(event.target.value)} /><Select label="Danh mục cha" value={parentId} onChange={(event) => setParentId(event.target.value)}><option value="">Không có</option>{categories.filter((entry) => entry.id !== category?.id).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</Select><Field label="Thứ tự" type="number" min={0} step={1} inputMode="numeric" value={sortOrder} onChange={(event) => { const nextValue = event.target.value; if (nextValue === '' || /^\d+$/.test(nextValue)) setSortOrder(nextValue); }} onBlur={() => { if (validSortOrder) setSortOrder(String(normalizedSortOrder)); }} /><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={restricted} onChange={(event) => setRestricted(event.target.checked)} />Danh mục hạn chế</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={boostable} onChange={(event) => setBoostable(event.target.checked)} />Cho phép đẩy tin</label></div>
-    <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !name.trim() || !validSortOrder} onClick={() => { if (normalizedSortOrder !== null) onSave({ name: name.trim(), parentId: parentId ? Number(parentId) : null, restricted, boostable, sortOrder: normalizedSortOrder }); }}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
+    <div className="space-y-4"><Field label="Tên danh mục" value={name} onChange={(event) => setName(event.target.value)} /><Select label="Danh mục cha" value={parentId} onChange={(event) => setParentId(event.target.value)}><option value="">Không có</option>{categories.filter((entry) => entry.id !== category?.id).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</Select><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={restricted} onChange={(event) => setRestricted(event.target.checked)} />Danh mục hạn chế</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={boostable} onChange={(event) => setBoostable(event.target.checked)} />Cho phép đẩy tin</label>{category ? null : <p className="text-xs leading-5 text-text-muted">Danh mục mới tự xếp cuối danh sách. Dùng nút Chuyển lên hoặc Chuyển xuống để đổi vị trí.</p>}</div>
+    <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !name.trim()} onClick={() => onSave({ name: name.trim(), parentId: parentId ? Number(parentId) : null, restricted, boostable })}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
   </Modal>;
 }
 

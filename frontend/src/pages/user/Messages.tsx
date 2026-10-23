@@ -126,11 +126,16 @@ function requestStatusClass(status: RequestResponse['status']) {
   return 'bg-amber-50 text-warning';
 }
 
+// Chủ bài lấy từ yêu cầu trước, vì bài đã giữ chỗ hoặc đã trao đổi không còn tải được qua API công khai.
+function donorIdOf(conversation: ApiConversation) {
+  return conversation.request.donorId ?? conversation.item?.donorId;
+}
+
 function requestParticipantName(conversation: ApiConversation, currentUserId: number) {
-  if (conversation.item?.donorId === currentUserId) {
+  if (donorIdOf(conversation) === currentUserId) {
     return conversation.request.receiverName?.trim() || 'Người gửi yêu cầu';
   }
-  return 'Chủ bài đăng';
+  return conversation.request.donorName?.trim() || 'Chủ bài đăng';
 }
 
 function avatarInitials(name: string) {
@@ -151,7 +156,7 @@ function canSelectRequest(
 ) {
   return canSelectPendingRequest(
     conversation.request.status,
-    conversation.item?.donorId,
+    donorIdOf(conversation),
     currentUserId,
     conversations
       .filter((entry) => entry.request.itemId === conversation.request.itemId)
@@ -207,6 +212,13 @@ export function RequestDetailsTabs({
 // Khi chưa có tiêu đề món đồ thì gọi theo loại yêu cầu, không in id kỹ thuật ra màn hình.
 function requestFallbackTitle(request: RequestResponse) {
   return request.type === 'SWAP' ? 'Yêu cầu trao đổi' : 'Yêu cầu nhận đồ';
+}
+
+function conversationTitle(conversation: ApiConversation) {
+  return (
+    conversation.item?.title ??
+    (conversation.request.itemTitle?.trim() || requestFallbackTitle(conversation.request))
+  );
 }
 
 function ApiMessages({ currentUserId }: { currentUserId: number }) {
@@ -343,12 +355,13 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const selected = conversations.find(({ request }) => request.id === selectedRequestId);
   const selectCandidate = conversations.find(({ request }) => request.id === selectCandidateId);
   const selectedParticipantName = selected ? requestParticipantName(selected, currentUserId) : '';
+  const selectedItemTitle = selected ? (selected.item?.title ?? selected.request.itemTitle?.trim()) : undefined;
   const chatEnabled = selected ? canChat(selected.request.status) : false;
   const requestMediaEnabled = selected
     ? ['LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER', 'COMPLETED', 'DISPUTED'].includes(selected.request.status)
     : false;
   const selectedItemId = selected?.request.itemId;
-  const selectedItemDonorId = selected?.item?.donorId;
+  const selectedItemDonorId = selected ? donorIdOf(selected) : undefined;
 
   useEffect(() => {
     if (!selectedItemId || selectedItemDonorId !== currentUserId) return;
@@ -508,11 +521,12 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     setAgreeToWaiver(false);
   }, [selectedMeetingTime, selectedMeetingPlace, selectedDeliveryMethod]);
 
-  const selectedAsDonor = selected?.item?.donorId === currentUserId;
-  const reportTargetUserId = selected?.item
-    ? selected.item.donorId === currentUserId
-      ? selected.request.receiverId
-      : selected.item.donorId
+  const selectedDonorId = selected ? donorIdOf(selected) : undefined;
+  const selectedAsDonor = selectedDonorId === currentUserId;
+  const reportTargetUserId = selectedDonorId
+    ? selectedDonorId === currentUserId
+      ? selected!.request.receiverId
+      : selectedDonorId
     : null;
   const currentPartyConfirmedAt = selected
     ? selectedAsDonor
@@ -547,7 +561,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         refreshedCandidate &&
         canSelectPendingRequest(
           refreshedCandidate.status,
-          selectCandidate.item?.donorId,
+          donorIdOf(selectCandidate),
           currentUserId,
           refreshedRequests.map((request) => request.status),
         ),
@@ -871,7 +885,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const filteredConversations = normalizedConversationQuery
     ? conversations.filter((conversation) => {
         const searchable = [
-          conversation.item?.title ?? requestFallbackTitle(conversation.request),
+          conversationTitle(conversation),
           requestParticipantName(conversation, currentUserId),
           requestStatusLabel[conversation.request.status],
           conversation.request.type,
@@ -908,7 +922,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
               </div>
             ) : filteredConversations.length ? (
               filteredConversations.map((conversation) => {
-                const { request, item } = conversation;
+                const { request } = conversation;
                 const participantName = requestParticipantName(conversation, currentUserId);
                 const selectable = canSelectRequest(conversation, conversations, currentUserId);
                 const openDetails = () => {
@@ -929,7 +943,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         user={{ name: participantName, avatarInitials: avatarInitials(participantName), avatarUrl: undefined }}
                       />
                       <span className="min-w-0 flex-1">
-                        <strong className="block truncate text-sm">{item?.title ?? requestFallbackTitle(request)}</strong>
+                        <strong className="block truncate text-sm">{conversationTitle(conversation)}</strong>
                         <span className="mt-1 block truncate text-xs text-text-muted">{participantName}</span>
                         <span className="mt-2 flex items-center justify-between gap-2">
                           <span className={`rounded-sm px-2 py-1 text-[11px] font-semibold ${requestStatusClass(request.status)}`}>
@@ -975,7 +989,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
             <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4 sm:px-5 xl:col-start-1 xl:row-start-1">
               <IconButton icon="arrow" label="Quay lại" className="rotate-180 lg:hidden" onClick={() => setMobileChat(false)} />
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-sm font-bold">{selected.item?.title ?? requestFallbackTitle(selected.request)}</h2>
+                <h2 className="truncate text-sm font-bold">{conversationTitle(selected)}</h2>
                 <p className="mt-1 truncate text-xs text-text-muted">Trao đổi với {selectedParticipantName}</p>
               </div>
               <span className="rounded-sm bg-primary-faint px-2.5 py-1 text-xs font-semibold text-primary">{requestStatusLabel[selected.request.status]}</span>
@@ -1002,7 +1016,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{requestFallbackTitle(selected.request)}</p>
-                    <h3 className="mt-1 truncate text-sm font-bold">{selected.item?.title ?? requestFallbackTitle(selected.request)}</h3>
+                    <h3 className="mt-1 truncate text-sm font-bold">{conversationTitle(selected)}</h3>
                   </div>
                   <button
                     type="button"
@@ -1042,8 +1056,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   </p>
                   <p className="mt-2 text-sm leading-6 text-text-secondary">
                     {selected.request.type === 'GIVE'
-                      ? (selected.item ? `Đề nghị nhận món “${selected.item.title}”.` : 'Đề nghị nhận món này.')
-                      : (selected.item ? `Đề nghị trao đổi với món “${selected.item.title}”.` : 'Đề nghị trao đổi với món này.')}
+                      ? (selectedItemTitle ? `Đề nghị nhận món “${selectedItemTitle}”.` : 'Đề nghị nhận món này.')
+                      : (selectedItemTitle ? `Đề nghị trao đổi với món “${selectedItemTitle}”.` : 'Đề nghị trao đổi với món này.')}
                   </p>
                   <p className="mt-1 text-xs text-text-muted">Yêu cầu này chưa có nội dung ghi chú riêng.</p>
                 </div>
@@ -1070,8 +1084,11 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     </span>
                   </button>
                 ) : (
-                  <p className="mt-3 rounded-md bg-amber-50 p-3 text-xs text-warning">
-                    Không tải được chi tiết món đề xuất.
+                  <p className="mt-3 rounded-md bg-surface-low p-3 text-sm text-text-secondary">
+                    Món đề xuất trao đổi:{' '}
+                    <strong className="text-text-primary">
+                      {selected.request.offeredItemTitle ?? 'Không tải được chi tiết món đề xuất'}
+                    </strong>
                   </p>
                 )
               ) : null}
@@ -1501,7 +1518,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
           <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
             <h2 className="text-xl font-bold">Gửi khiếu nại giao dịch</h2>
-            <p className="mt-1 text-sm text-text-muted">{selected.item?.title ?? requestFallbackTitle(selected.request)}</p>
+            <p className="mt-1 text-sm text-text-muted">{conversationTitle(selected)}</p>
             <Select
               className="mt-5"
               label="Lý do"
@@ -1646,12 +1663,12 @@ export function SelectRequestDialog({
         </div>
         <div className="mt-4 space-y-2 text-sm leading-6 text-text-secondary">
           <p>
-            Bài đăng: <strong className="text-text-primary">{conversation.item?.title ?? 'Không xác định'}</strong>
+            Bài đăng: <strong className="text-text-primary">{conversation.item?.title ?? conversation.request.itemTitle ?? 'Không xác định'}</strong>
           </p>
           <p>Gửi lúc: {new Date(conversation.request.createdAt).toLocaleString('vi-VN')}</p>
           {conversation.request.type === 'SWAP' ? (
             <p>
-              Món đề xuất: <strong className="text-text-primary">{conversation.offeredItem?.title ?? 'Không xác định'}</strong>
+              Món đề xuất: <strong className="text-text-primary">{conversation.offeredItem?.title ?? conversation.request.offeredItemTitle ?? 'Không xác định'}</strong>
             </p>
           ) : null}
         </div>
