@@ -29,6 +29,7 @@ import { AdminAuthenticity } from '../pages/admin/AdminAuthenticity';
 import { AdminUnderDevelopment } from '../pages/admin/AdminUnderDevelopment';
 import { AdminComplaints } from '../pages/admin/AdminComplaints';
 import { AdminTopUpOrders } from '../pages/admin/AdminTopUpOrders';
+import { AdminReputation } from '../pages/admin/AdminReputation';
 import { NotFound } from '../pages/NotFound';
 import {
   AdminOperationsDashboard as AdminDashboard,
@@ -110,7 +111,7 @@ export const router = createBrowserRouter([
               { path: 'districts', element: <AdminContentPage kind="districts" /> },
               { path: 'users', element: <AdminAccountActions /> },
               { path: 'users/:userId', element: <AdminUserCreditHistory /> },
-              { path: 'reputation', element: <AdminUnderDevelopment title="Uy tín & Hạng" /> },
+              { path: 'reputation', element: <AdminReputation /> },
               { path: 'locked-users', element: <AdminAccountActions /> },
               { path: 'transactions', element: <AdminUnderDevelopment title="Giao dịch" /> },
               { path: 'transactions/:transactionId', element: <AdminUnderDevelopment title="Giao dịch" /> },

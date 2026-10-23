@@ -20,6 +20,16 @@ function errorMessage(error: unknown) {
   return apiError.message || 'Không tải được dữ liệu. Vui lòng thử lại.';
 }
 
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
 const dashboardActions = [
   { to: '/admin/moderation', label: 'Duyệt bài', icon: 'article' },
   { to: '/admin/finance', label: 'Báo cáo tài chính', icon: 'payments' },
@@ -166,6 +176,9 @@ export function AdminFinanceReport() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const [exportNotice, setExportNotice] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -184,14 +197,35 @@ export function AdminFinanceReport() {
     setFilters({ from, to });
   };
 
+  const exportCsv = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportError('');
+    setExportNotice('');
+    try {
+      const download = await adminFinanceApi.reportCsv({
+        from: filters.from || undefined,
+        to: filters.to || undefined,
+      });
+      downloadBlob(download.blob, download.fileName);
+      setExportNotice('Đã tải báo cáo CSV theo bộ lọc hiện tại.');
+    } catch (caught) {
+      setExportError(errorMessage(caught));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return <>
-    <PageHeader title="Báo cáo tài chính" description="Tiền thu, Credit cộng và Credit trừ theo sổ hệ thống." action={<Link to="/admin/finance/users"><Button variant="outline">Lịch sử người dùng</Button></Link>} />
+    <PageHeader title="Báo cáo tài chính" description="Tiền thu, Credit cộng và Credit trừ theo sổ hệ thống." action={<div className="flex flex-wrap gap-2"><Button variant="outline" icon="download" disabled={exporting} onClick={() => void exportCsv()}>{exporting ? 'Đang xuất…' : 'Xuất báo cáo CSV'}</Button><Link to="/admin/finance/users"><Button variant="outline">Lịch sử người dùng</Button></Link></div>} />
     <AdminTopUpOrders onProcessed={() => setReload((value) => value + 1)} />
     <form className="mb-5 flex flex-wrap items-end gap-3" onSubmit={submit}>
       <Field label="Từ ngày" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
       <Field label="Đến ngày" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
       <Button type="submit" disabled={loading}>Lọc</Button>
     </form>
+    {exportError ? <div className="mb-4" role="alert"><Alert tone="error">Không xuất được báo cáo CSV. {exportError}</Alert></div> : null}
+    {exportNotice ? <div className="mb-4" role="status"><Alert tone="success">{exportNotice}</Alert></div> : null}
     {error ? <Alert tone="error">{error} <button type="button" className="underline" onClick={() => setReload((value) => value + 1)}>Thử lại</button></Alert> : null}
     {loading ? <EmptyState title="Đang tải báo cáo" text="Vui lòng chờ trong giây lát." /> : report ? <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
