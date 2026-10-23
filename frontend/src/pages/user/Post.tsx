@@ -327,7 +327,7 @@ export function Post() {
       refreshWallet();
       const baseNotice = type === 'gift' ? GIVE_POST_SUCCESS : SWAP_POST_SUCCESS;
       const reviewNotice = item.status === 'PENDING_REVIEW' ? ` ${PENDING_REVIEW_NOTICE}` : '';
-      navigate('/activities', { state: { notice: `${baseNotice}${reviewNotice} Mã bài: #${item.id}.` } });
+      navigate('/activities', { state: { notice: `${baseNotice}${reviewNotice}` } });
     } catch (caught) {
       const apiError = caught as ApiError;
       const fieldNames: Record<string, keyof FormErrors> = {

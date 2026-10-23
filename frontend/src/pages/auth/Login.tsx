@@ -9,6 +9,7 @@ import { authErrorMessage } from '../../services/authErrors';
 import type { ApiError } from '../../services/http';
 import { fetchSessionUser } from '../../services/session';
 import { validEmail } from '../../utils/passwordSecurity';
+import { preloadRoute } from '../../app/routePreload';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -37,7 +38,8 @@ export function Login() {
     }
     setProcessing(true);
     try {
-      await authApi.login({ email: normalized, password: pass });
+      const authentication = await authApi.login({ email: normalized, password: pass });
+      void preloadRoute(authentication.user.isAdmin ? '/admin' : '/').catch(() => undefined);
       const user = await fetchSessionUser();
       dispatch(actions.loginFromApi(user));
       navigate(user.role === 'admin' ? '/admin' : '/');

@@ -1,4 +1,5 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { lazy } from 'react';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppShell } from '../layouts/AppShell';
 import {
   AdminRoute,
@@ -7,42 +8,40 @@ import {
   ProtectedRoute,
   PublicRoute,
 } from '../routes/Guards';
-import { Home } from '../pages/public/Home';
-import { Browse } from '../pages/public/Browse';
-import { ProductDetail } from '../pages/public/ProductDetail';
-import { AI } from '../pages/public/AI';
-import { Login } from '../pages/auth/Login';
-import { Register } from '../pages/auth/Register';
-import { VerifyEmail } from '../pages/auth/VerifyEmail';
-import { ForgotPassword } from '../pages/auth/ForgotPassword';
-import { ChangePassword } from '../pages/auth/ChangePassword';
-import { Post } from '../pages/user/Post';
-import { Activities } from '../pages/user/Activities';
-import { Messages } from '../pages/user/Messages';
-import { Profile } from '../pages/user/Profile';
-import { Credit } from '../pages/user/Credit';
-import { DemoPaymentCheckout } from '../pages/user/DemoPaymentCheckout';
-import { ManualPaymentCheckout } from '../pages/user/ManualPaymentCheckout';
-import { ReportResponse } from '../pages/user/ReportResponse';
-import { AdminLayout } from '../pages/admin/AdminLayout';
-import { AdminAuthenticity } from '../pages/admin/AdminAuthenticity';
-import { AdminUnderDevelopment } from '../pages/admin/AdminUnderDevelopment';
-import { AdminComplaints } from '../pages/admin/AdminComplaints';
-import { AdminTopUpOrders } from '../pages/admin/AdminTopUpOrders';
-import { AdminReputation } from '../pages/admin/AdminReputation';
-import { NotFound } from '../pages/NotFound';
-import {
-  AdminOperationsDashboard as AdminDashboard,
-  AdminFinanceReport as AdminFinance,
-  AdminAccountActions,
-  AdminUserCreditHistory,
-} from '../pages/admin/AdminFinancePages';
-import {
-  AdminAuditLogs,
-  AdminModeration,
-  AdminSettings,
-  AdminContentPage,
-} from '../pages/admin/AdminPages';
+
+const Home = lazy(() => import('../pages/public/Home').then((module) => ({ default: module.Home })));
+const Browse = lazy(() => import('../pages/public/Browse').then((module) => ({ default: module.Browse })));
+const ProductDetail = lazy(() => import('../pages/public/ProductDetail').then((module) => ({ default: module.ProductDetail })));
+const AI = lazy(() => import('../pages/public/AI').then((module) => ({ default: module.AI })));
+const Login = lazy(() => import('../pages/auth/Login').then((module) => ({ default: module.Login })));
+const Register = lazy(() => import('../pages/auth/Register').then((module) => ({ default: module.Register })));
+const VerifyEmail = lazy(() => import('../pages/auth/VerifyEmail').then((module) => ({ default: module.VerifyEmail })));
+const ForgotPassword = lazy(() => import('../pages/auth/ForgotPassword').then((module) => ({ default: module.ForgotPassword })));
+const ChangePassword = lazy(() => import('../pages/auth/ChangePassword').then((module) => ({ default: module.ChangePassword })));
+const Post = lazy(() => import('../pages/user/Post').then((module) => ({ default: module.Post })));
+const Activities = lazy(() => import('../pages/user/Activities').then((module) => ({ default: module.Activities })));
+const Messages = lazy(() => import('../pages/user/Messages').then((module) => ({ default: module.Messages })));
+const Profile = lazy(() => import('../pages/user/Profile').then((module) => ({ default: module.Profile })));
+const Credit = lazy(() => import('../pages/user/Credit').then((module) => ({ default: module.Credit })));
+const DemoPaymentCheckout = lazy(() => import('../pages/user/DemoPaymentCheckout').then((module) => ({ default: module.DemoPaymentCheckout })));
+const ManualPaymentCheckout = lazy(() => import('../pages/user/ManualPaymentCheckout').then((module) => ({ default: module.ManualPaymentCheckout })));
+const ReportResponse = lazy(() => import('../pages/user/ReportResponse').then((module) => ({ default: module.ReportResponse })));
+const AdminLayout = lazy(() => import('../pages/admin/AdminLayout').then((module) => ({ default: module.AdminLayout })));
+const AdminUnderDevelopment = lazy(() => import('../pages/admin/AdminUnderDevelopment').then((module) => ({ default: module.AdminUnderDevelopment })));
+const AdminComplaints = lazy(() => import('../pages/admin/AdminComplaints').then((module) => ({ default: module.AdminComplaints })));
+const AdminTopUpOrders = lazy(() => import('../pages/admin/AdminTopUpOrders').then((module) => ({ default: module.AdminTopUpOrders })));
+const AdminReputation = lazy(() => import('../pages/admin/AdminReputation').then((module) => ({ default: module.AdminReputation })));
+const AdminAccounts = lazy(() => import('../pages/admin/AdminAccounts').then((module) => ({ default: module.AdminAccounts })));
+const AdminModerationList = lazy(() => import('../pages/admin/AdminModerationList').then((module) => ({ default: module.AdminModerationList })));
+const AdminModerationDetail = lazy(() => import('../pages/admin/AdminModerationDetail').then((module) => ({ default: module.AdminModerationDetail })));
+const AdminFinanceUsers = lazy(() => import('../pages/admin/AdminFinanceUsers').then((module) => ({ default: module.AdminFinanceUsers })));
+const AdminFinanceUserDetail = lazy(() => import('../pages/admin/AdminFinanceUsers').then((module) => ({ default: module.AdminFinanceUserDetail })));
+const NotFound = lazy(() => import('../pages/NotFound').then((module) => ({ default: module.NotFound })));
+const AdminDashboard = lazy(() => import('../pages/admin/AdminFinancePages').then((module) => ({ default: module.AdminOperationsDashboard })));
+const AdminFinance = lazy(() => import('../pages/admin/AdminFinancePages').then((module) => ({ default: module.AdminFinanceReport })));
+const AdminAuditLogs = lazy(() => import('../pages/admin/AdminPages').then((module) => ({ default: module.AdminAuditLogs })));
+const AdminSettings = lazy(() => import('../pages/admin/AdminPages').then((module) => ({ default: module.AdminSettings })));
+const AdminContentPage = lazy(() => import('../pages/admin/AdminPages').then((module) => ({ default: module.AdminContentPage })));
 
 export const router = createBrowserRouter([
   {
@@ -102,17 +101,19 @@ export const router = createBrowserRouter([
             element: <AdminLayout />,
             children: [
               { index: true, element: <AdminDashboard /> },
-              { path: 'moderation', element: <AdminModeration /> },
-              { path: 'authenticity', element: <AdminAuthenticity /> },
+              { path: 'moderation', element: <AdminModerationList /> },
+              { path: 'moderation/:itemId', element: <AdminModerationDetail /> },
+              // Tạm ẩn trang Nhãn chính hãng (chưa có luồng xác nhận, chưa có BR): đưa về trang tổng quan.
+              { path: 'authenticity', element: <Navigate to="/admin" replace /> },
               { path: 'checklist', element: <AdminContentPage kind="checklist" /> },
               { path: 'expired-posts', element: <AdminContentPage kind="expired" /> },
               { path: 'categories', element: <AdminContentPage kind="categories" /> },
               { path: 'keywords', element: <AdminContentPage kind="keywords" /> },
               { path: 'districts', element: <AdminContentPage kind="districts" /> },
-              { path: 'users', element: <AdminAccountActions /> },
-              { path: 'users/:userId', element: <AdminUserCreditHistory /> },
+              { path: 'users', element: <AdminAccounts /> },
               { path: 'reputation', element: <AdminReputation /> },
-              { path: 'locked-users', element: <AdminAccountActions /> },
+              // Gộp "Khóa tài khoản" vào Quản lý tài khoản: giữ đường dẫn cũ để link đã lưu vẫn dùng được.
+              { path: 'locked-users', element: <Navigate to="/admin/users" replace /> },
               { path: 'transactions', element: <AdminUnderDevelopment title="Giao dịch" /> },
               { path: 'transactions/:transactionId', element: <AdminUnderDevelopment title="Giao dịch" /> },
               { path: 'complaints', element: <AdminComplaints /> },
@@ -120,10 +121,11 @@ export const router = createBrowserRouter([
               { path: 'alerts', element: <AdminContentPage kind="alerts" /> },
               { path: 'finance', element: <AdminFinance /> },
               { path: 'finance/topup-orders', element: <AdminTopUpOrders /> },
-              { path: 'finance/users', element: <AdminUserCreditHistory /> },
-              { path: 'finance/users/:userId', element: <AdminUserCreditHistory /> },
+              { path: 'finance/users', element: <AdminFinanceUsers /> },
+              { path: 'finance/users/:userId', element: <AdminFinanceUserDetail /> },
               { path: 'settings/fees', element: <AdminSettings /> },
-              { path: 'settings/ranks', element: <AdminContentPage kind="ranks" /> },
+              // Hạng và điểm uy tín nay cấu hình chung ở trang Uy tín & Hạng.
+              { path: 'settings/ranks', element: <Navigate to="/admin/reputation" replace /> },
               { path: 'audit-logs', element: <AdminAuditLogs /> },
             ],
           },

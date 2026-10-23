@@ -64,7 +64,7 @@ export function ReportResponse() {
     <div className="page-shell">
       <PageHeader
         title="Giải trình báo cáo"
-        description={validReportId ? `Báo cáo #${numericReportId}` : 'Đường dẫn báo cáo không hợp lệ'}
+        description={validReportId ? 'Gửi nội dung giải trình cho báo cáo liên quan đến bạn.' : 'Đường dẫn báo cáo không hợp lệ'}
       />
       <section className="mx-auto max-w-2xl space-y-4 rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
         {!validReportId ? <Alert tone="error">Đường dẫn báo cáo không hợp lệ.</Alert> : success ? (

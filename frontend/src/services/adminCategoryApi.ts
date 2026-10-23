@@ -1,5 +1,5 @@
 import { http } from './http';
-import type { AttributeDataType } from './catalogApi';
+import { invalidateCatalogCache, type AttributeDataType } from './catalogApi';
 
 export interface AdminCategoryResponse {
   id: number;
@@ -16,7 +16,8 @@ export interface AdminCategoryRequest {
   parentId?: number | null;
   restricted: boolean;
   boostable: boolean;
-  sortOrder: number;
+  // Bỏ trống khi tạo mới: Backend đặt danh mục xuống cuối. Bỏ trống khi sửa: giữ thứ tự cũ.
+  sortOrder?: number;
 }
 
 export interface AdminCategoryAttributeResponse {
@@ -45,14 +46,23 @@ export const adminCategoryApi = {
   },
   async create(input: AdminCategoryRequest) {
     const { data } = await http.post<AdminCategoryResponse>('/api/v1/admin/categories', input);
+    invalidateCatalogCache('categories');
     return data;
   },
   async update(id: number, input: AdminCategoryRequest) {
     const { data } = await http.put<AdminCategoryResponse>(`/api/v1/admin/categories/${id}`, input);
+    invalidateCatalogCache('categories');
     return data;
   },
   async setActive(id: number, active: boolean) {
     const { data } = await http.patch<AdminCategoryResponse>(`/api/v1/admin/categories/${id}/active`, { active });
+    invalidateCatalogCache('categories');
+    return data;
+  },
+  // categoryIds phải gồm mọi danh mục (kể cả đang ẩn) theo thứ tự mới. Trả danh sách đã sắp xếp.
+  async reorder(categoryIds: number[]) {
+    const { data } = await http.put<AdminCategoryResponse[]>('/api/v1/admin/categories/reorder', { categoryIds });
+    invalidateCatalogCache('categories');
     return data;
   },
   async listAttributes(categoryId: number) {

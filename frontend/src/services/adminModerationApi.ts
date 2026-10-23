@@ -1,8 +1,10 @@
 import { http } from './http';
+import type { ApiCondition, ItemStatus, OfferType, OperatingStatus } from './itemApi';
 
 export interface ReviewQueueItem {
   id: number;
   donorId: number;
+  donorName?: string | null;
   title: string;
   aiRisk?: string | null;
   moderationFlag?: string | null;
@@ -26,6 +28,41 @@ export interface ReviewQueueResponse {
   size: number;
 }
 
+// Contract: docs/api/review.md mục 2 (GET /api/v1/admin/reviews/{itemId})
+export interface ReviewItemAttribute { attributeId: number; name: string | null; value: string }
+export interface ReviewItemDetail {
+  id: number;
+  title: string;
+  description: string | null;
+  desiredItem: string | null;
+  offerType: OfferType;
+  condition: ApiCondition;
+  defectNote: string | null;
+  brand: string | null;
+  status: ItemStatus;
+  isActive: boolean;
+  operatingStatus: OperatingStatus | null;
+  images: string[];
+  defectImages: string[];
+  categoryId: number;
+  categoryName: string | null;
+  areaId: number;
+  areaName: string | null;
+  donorId: number;
+  donorName: string | null;
+  donorTrustStars: number | null;
+  attributes: ReviewItemAttribute[];
+  aiRisk: string | null;
+  moderationFlag: string | null;
+  flagReasonCode: string | null;
+  flagReason: string | null;
+  matchedTerms: string[];
+  authStatus: string | null;
+  checklist: ReviewChecklistItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ReviewChecklistItem { id: number; key: string; statement: string }
 export interface ApproveReviewRequest { answers: { id: number; passed: boolean }[] }
 export interface RejectReviewRequest { reason: string }
@@ -37,6 +74,10 @@ export const adminModerationApi = {
   },
   async pendingReviews(params: PendingItemsParams = {}) {
     const { data } = await http.get<ReviewQueueResponse>('/api/v1/admin/reviews/pending', { params });
+    return data;
+  },
+  async detail(itemId: number) {
+    const { data } = await http.get<ReviewItemDetail>(`/api/v1/admin/reviews/${itemId}`);
     return data;
   },
   async rejectReasons() {

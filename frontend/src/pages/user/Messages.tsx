@@ -52,6 +52,13 @@ import {
   validateMeetingPlace,
   validateStoredMeetingTime,
 } from '../../utils/meetingSchedule';
+import {
+  CHAT_POLL_INTERVAL_MS,
+  mergeChatMessages,
+  messageOfferStatusLabel,
+  requestConversationPath,
+  shouldRefreshConversationDetail,
+} from '../../utils/chatMessages';
 
 const steps = ['Trao doi', 'De xuat lich', 'Chot lich', 'Ban giao', 'Hoan tat'];
 
@@ -126,11 +133,16 @@ function requestStatusClass(status: RequestResponse['status']) {
   return 'bg-amber-50 text-warning';
 }
 
+// Chủ bài lấy từ yêu cầu trước, vì bài đã giữ chỗ hoặc đã trao đổi không còn tải được qua API công khai.
+function donorIdOf(conversation: ApiConversation) {
+  return conversation.request.donorId ?? conversation.item?.donorId;
+}
+
 function requestParticipantName(conversation: ApiConversation, currentUserId: number) {
-  if (conversation.item?.donorId === currentUserId) {
-    return conversation.request.receiverName?.trim() || `Người dùng #${conversation.request.receiverId}`;
+  if (donorIdOf(conversation) === currentUserId) {
+    return conversation.request.receiverName?.trim() || 'Người gửi yêu cầu';
   }
-  return 'Chủ bài đăng';
+  return conversation.request.donorName?.trim() || 'Chủ bài đăng';
 }
 
 function avatarInitials(name: string) {
@@ -151,7 +163,7 @@ function canSelectRequest(
 ) {
   return canSelectPendingRequest(
     conversation.request.status,
-    conversation.item?.donorId,
+    donorIdOf(conversation),
     currentUserId,
     conversations
       .filter((entry) => entry.request.itemId === conversation.request.itemId)
@@ -201,6 +213,18 @@ export function RequestDetailsTabs({
         </button>
       ))}
     </div>
+  );
+}
+
+// Khi chưa có tiêu đề món đồ thì gọi theo loại yêu cầu, không in id kỹ thuật ra màn hình.
+function requestFallbackTitle(request: RequestResponse) {
+  return request.type === 'SWAP' ? 'Yêu cầu trao đổi' : 'Yêu cầu nhận đồ';
+}
+
+function conversationTitle(conversation: ApiConversation) {
+  return (
+    conversation.item?.title ??
+    (conversation.request.itemTitle?.trim() || requestFallbackTitle(conversation.request))
   );
 }
 
@@ -271,6 +295,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const chatImageInputRef = useRef<HTMLInputElement>(null);
   const activeRequestId = useRef<number | null>(null);
   const selectInFlight = useRef(false);
+  const sendInFlight = useRef(false);
+  const requestGroupsLoadedAt = useRef(new Map<number, number>());
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setScheduleNow(new Date()), 30_000);
@@ -287,6 +313,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         if (!active) return;
         setShareableItems(ownedItems.filter((item) => item.status === 'APPROVED'));
         const receivedGroups = await Promise.all(ownedItems.map((item) => requestApi.forItem(item.id, currentUserId)));
+        const loadedAt = Date.now();
+        ownedItems.forEach((item) => requestGroupsLoadedAt.current.set(item.id, loadedAt));
         const requestById = new Map<number, RequestResponse>();
         [...sentRequests, ...receivedGroups.flat()].forEach((request) => {
           requestById.set(request.id, request);
@@ -338,20 +366,26 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const selected = conversations.find(({ request }) => request.id === selectedRequestId);
   const selectCandidate = conversations.find(({ request }) => request.id === selectCandidateId);
   const selectedParticipantName = selected ? requestParticipantName(selected, currentUserId) : '';
+  const selectedItemTitle = selected ? (selected.item?.title ?? selected.request.itemTitle?.trim()) : undefined;
   const chatEnabled = selected ? canChat(selected.request.status) : false;
   const requestMediaEnabled = selected
     ? ['LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER', 'COMPLETED', 'DISPUTED'].includes(selected.request.status)
     : false;
   const selectedItemId = selected?.request.itemId;
-  const selectedItemDonorId = selected?.item?.donorId;
+  const selectedItemDonorId = selected ? donorIdOf(selected) : undefined;
 
   useEffect(() => {
     if (!selectedItemId || selectedItemDonorId !== currentUserId) return;
+    const loadedAt = requestGroupsLoadedAt.current.get(selectedItemId);
+    if (loadedAt && Date.now() - loadedAt < CHAT_POLL_INTERVAL_MS) return;
     let active = true;
     requestApi
       .forItem(selectedItemId, currentUserId)
       .then((requests) => {
-        if (active) setConversations((current) => mergeConversationRequests(current, requests));
+        if (active) {
+          requestGroupsLoadedAt.current.set(selectedItemId, Date.now());
+          setConversations((current) => mergeConversationRequests(current, requests));
+        }
       })
       .catch(() => {
         // Danh sách hiện tại vẫn dùng được; Backend sẽ kiểm tra lại khi xác nhận chọn.
@@ -402,24 +436,35 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     let firstLoad = true;
     let pollingId: number | undefined;
     let afterId: number | undefined;
+    let pollCount = 1;
     const loadMessages = async () => {
+      if (document.visibilityState === 'hidden') {
+        pollingId = window.setTimeout(loadMessages, CHAT_POLL_INTERVAL_MS);
+        return;
+      }
       if (firstLoad) setLoadingMessages(true);
       try {
+        const shouldRefreshDetail = shouldRefreshConversationDetail(pollCount);
+        pollCount += 1;
         const [response, detail] = await Promise.all([
           chatApi.list(selectedRequestId, afterId),
-          requestApi.get(selectedRequestId, currentUserId),
+          shouldRefreshDetail
+            ? requestApi.get(selectedRequestId, currentUserId).catch(() => null)
+            : Promise.resolve(null),
         ]);
         if (!active) return;
-        setConversations((current) => current.map((entry) => entry.request.id === detail.id ? { ...entry, request: detail } : entry));
+        if (detail) {
+          setConversations((current) => current.map((entry) => entry.request.id === detail.id ? { ...entry, request: detail } : entry));
+        }
         if (response.length) afterId = Math.max(afterId ?? 0, ...response.map((entry) => entry.id));
-        setMessages((current) => [...new Map([...current, ...response].map((entry) => [entry.id, entry])).values()].sort((a, b) => a.id - b.id));
+        setMessages((current) => mergeChatMessages(current, response));
         setMessageError('');
       } catch {
         if (active) setMessageError('Không tải được tin nhắn. Vui lòng thử lại.');
       } finally {
         if (active && firstLoad) setLoadingMessages(false);
         firstLoad = false;
-        if (active) pollingId = window.setTimeout(loadMessages, 5_000);
+        if (active) pollingId = window.setTimeout(loadMessages, CHAT_POLL_INTERVAL_MS);
       }
     };
 
@@ -503,11 +548,12 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     setAgreeToWaiver(false);
   }, [selectedMeetingTime, selectedMeetingPlace, selectedDeliveryMethod]);
 
-  const selectedAsDonor = selected?.item?.donorId === currentUserId;
-  const reportTargetUserId = selected?.item
-    ? selected.item.donorId === currentUserId
-      ? selected.request.receiverId
-      : selected.item.donorId
+  const selectedDonorId = selected ? donorIdOf(selected) : undefined;
+  const selectedAsDonor = selectedDonorId === currentUserId;
+  const reportTargetUserId = selectedDonorId
+    ? selectedDonorId === currentUserId
+      ? selected!.request.receiverId
+      : selectedDonorId
     : null;
   const currentPartyConfirmedAt = selected
     ? selectedAsDonor
@@ -542,7 +588,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         refreshedCandidate &&
         canSelectPendingRequest(
           refreshedCandidate.status,
-          selectCandidate.item?.donorId,
+          donorIdOf(selectCandidate),
           currentUserId,
           refreshedRequests.map((request) => request.status),
         ),
@@ -701,7 +747,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       (!content && !shareItemId && !chatImage) ||
       selectedRequestId === null ||
       !chatEnabled ||
-      sending
+      sendInFlight.current
     )
       return;
     const refItemId = shareItemId ? Number(shareItemId) : undefined;
@@ -723,6 +769,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       return;
     }
 
+    sendInFlight.current = true;
     setSending(true);
     setMessageError('');
     try {
@@ -751,6 +798,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       if (activeRequestId.current !== selectedRequestId) return;
       setMessageError(apiError.message || 'Không gửi được tin nhắn. Vui lòng thử lại.');
     } finally {
+      sendInFlight.current = false;
       setSending(false);
     }
   };
@@ -776,7 +824,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       setDisputeNote('');
       setDisputeEvidence([]);
       setDisputeNotice(
-        `Khiếu nại #${response.id} đã được gửi. Hạn giải trình: ${new Date(response.responseDueAt).toLocaleString('vi-VN')}.`,
+        `Khiếu nại của bạn đã được gửi. Hạn giải trình: ${new Date(response.responseDueAt).toLocaleString('vi-VN')}.`,
       );
       setConversationReloadKey((key) => key + 1);
     } catch (error) {
@@ -866,7 +914,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const filteredConversations = normalizedConversationQuery
     ? conversations.filter((conversation) => {
         const searchable = [
-          conversation.item?.title ?? `Bài đăng #${conversation.request.itemId}`,
+          conversationTitle(conversation),
           requestParticipantName(conversation, currentUserId),
           requestStatusLabel[conversation.request.status],
           conversation.request.type,
@@ -903,7 +951,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
               </div>
             ) : filteredConversations.length ? (
               filteredConversations.map((conversation) => {
-                const { request, item } = conversation;
+                const { request } = conversation;
                 const participantName = requestParticipantName(conversation, currentUserId);
                 const selectable = canSelectRequest(conversation, conversations, currentUserId);
                 const openDetails = () => {
@@ -913,6 +961,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   setReportOpen(false);
                   setReportNotice('');
                   setDisputeNotice('');
+                  navigate(requestConversationPath(request.id));
                 };
                 return (
                   <article
@@ -924,7 +973,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         user={{ name: participantName, avatarInitials: avatarInitials(participantName), avatarUrl: undefined }}
                       />
                       <span className="min-w-0 flex-1">
-                        <strong className="block truncate text-sm">{item?.title ?? `Bài đăng #${request.itemId}`}</strong>
+                        <strong className="block truncate text-sm">{conversationTitle(conversation)}</strong>
                         <span className="mt-1 block truncate text-xs text-text-muted">{participantName}</span>
                         <span className="mt-2 flex items-center justify-between gap-2">
                           <span className={`rounded-sm px-2 py-1 text-[11px] font-semibold ${requestStatusClass(request.status)}`}>
@@ -970,7 +1019,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
             <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4 sm:px-5 xl:col-start-1 xl:row-start-1">
               <IconButton icon="arrow" label="Quay lại" className="rotate-180 lg:hidden" onClick={() => setMobileChat(false)} />
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-sm font-bold">{selected.item?.title ?? `Bài đăng #${selected.request.itemId}`}</h2>
+                <h2 className="truncate text-sm font-bold">{conversationTitle(selected)}</h2>
                 <p className="mt-1 truncate text-xs text-text-muted">Trao đổi với {selectedParticipantName}</p>
               </div>
               <span className="rounded-sm bg-primary-faint px-2.5 py-1 text-xs font-semibold text-primary">{requestStatusLabel[selected.request.status]}</span>
@@ -996,8 +1045,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
               <div className="shrink-0 border-b border-border p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Yêu cầu #{selected.request.id}</p>
-                    <h3 className="mt-1 truncate text-sm font-bold">{selected.item?.title ?? `Bài đăng #${selected.request.itemId}`}</h3>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{requestFallbackTitle(selected.request)}</p>
+                    <h3 className="mt-1 truncate text-sm font-bold">{conversationTitle(selected)}</h3>
                   </div>
                   <button
                     type="button"
@@ -1026,7 +1075,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <strong className="text-sm">Yêu cầu #{selected.request.id}</strong>
+                    <strong className="text-sm">{requestFallbackTitle(selected.request)}</strong>
                     <TypeBadge type={selected.request.type === 'SWAP' ? 'trade' : 'gift'} />
                     <span className={`rounded-sm px-2 py-1 text-[11px] font-semibold ${requestStatusClass(selected.request.status)}`}>
                       {requestStatusLabel[selected.request.status]}
@@ -1037,8 +1086,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   </p>
                   <p className="mt-2 text-sm leading-6 text-text-secondary">
                     {selected.request.type === 'GIVE'
-                      ? `Đề nghị nhận món “${selected.item?.title ?? `#${selected.request.itemId}`}”.`
-                      : `Đề nghị trao đổi với món “${selected.item?.title ?? `#${selected.request.itemId}`}”.`}
+                      ? (selectedItemTitle ? `Đề nghị nhận món “${selectedItemTitle}”.` : 'Đề nghị nhận món này.')
+                      : (selectedItemTitle ? `Đề nghị trao đổi với món “${selectedItemTitle}”.` : 'Đề nghị trao đổi với món này.')}
                   </p>
                   <p className="mt-1 text-xs text-text-muted">Yêu cầu này chưa có nội dung ghi chú riêng.</p>
                 </div>
@@ -1065,8 +1114,11 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     </span>
                   </button>
                 ) : (
-                  <p className="mt-3 rounded-md bg-amber-50 p-3 text-xs text-warning">
-                    Không tải được chi tiết món đề xuất #{selected.request.offeredItemId ?? ''}.
+                  <p className="mt-3 rounded-md bg-surface-low p-3 text-sm text-text-secondary">
+                    Món đề xuất trao đổi:{' '}
+                    <strong className="text-text-primary">
+                      {selected.request.offeredItemTitle ?? 'Không tải được chi tiết món đề xuất'}
+                    </strong>
                   </p>
                 )
               ) : null}
@@ -1200,7 +1252,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                             >
                               <ItemImage
                                 src={entry.url}
-                                alt={`Minh chứng #${entry.mediaId}`}
+                                alt="Ảnh minh chứng"
                                 className="size-16 rounded-md object-cover"
                               />
                             </a>
@@ -1348,6 +1400,15 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 messages.map((entry) => {
                   const mine = entry.senderId === currentUserId;
                   const system = entry.kind.toUpperCase() === 'SYSTEM';
+                  if (entry.moderation && entry.moderation !== 'PASS') {
+                    return (
+                      <div key={entry.id} className="flex justify-center">
+                        <span className="max-w-xl rounded-md bg-red-50 px-3 py-2 text-center text-xs text-error">
+                          {entry.blockedReason || 'Tin nhắn này không vượt qua kiểm duyệt.'}
+                        </span>
+                      </div>
+                    );
+                  }
                   if (system) {
                     return (
                       <div key={entry.id} className="flex justify-center">
@@ -1361,7 +1422,13 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         {entry.itemCard ? (
                           <button type="button" className="mb-2 flex w-full items-center gap-3 rounded-md bg-white p-3 text-left text-text-primary" onClick={() => navigate(`/items/${entry.itemCard!.id}`)}>
                             <ItemImage src={entry.itemCard.imageUrl ?? undefined} alt={entry.itemCard.title} className="size-14 rounded-md object-cover" />
-                            <span><strong className="block">{entry.itemCard.title}</strong><StatusBadge status={entry.itemCard.status} /></span>
+                            <span className="min-w-0">
+                              <strong className="block break-words">{entry.itemCard.title}</strong>
+                              <span className="mt-1 flex flex-wrap gap-1.5">
+                                <TypeBadge type={entry.itemCard.offerType === 'GIVE' ? 'gift' : 'trade'} />
+                                <StatusBadge status={entry.itemCard.status} />
+                              </span>
+                            </span>
                           </button>
                         ) : null}
                         {entry.mediaId ? (
@@ -1379,6 +1446,11 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                           </a>
                         ) : null}
                         {entry.content ? <p className="whitespace-pre-wrap break-words">{entry.content}</p> : null}
+                        {messageOfferStatusLabel(entry.offerStatus) ? (
+                          <span className={`mt-1.5 inline-flex rounded-sm px-2 py-0.5 text-[10px] font-semibold ${mine ? 'bg-white/15 text-white' : 'bg-primary-faint text-primary'}`}>
+                            {messageOfferStatusLabel(entry.offerStatus)}
+                          </span>
+                        ) : null}
                         <span className={`mt-1 block text-[10px] ${mine ? 'text-white/65' : 'text-text-muted'}`}>{new Date(entry.createdAt).toLocaleString('vi-VN')}</span>
                       </div>
                     </div>
@@ -1484,7 +1556,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       {reportOpen && selected && reportTargetUserId && reportTargetUserId !== currentUserId ? (
         <ReportDialog
           target={{ targetType: 'USER', targetUserId: reportTargetUserId, requestId: selected.request.id }}
-          contextLabel={`Báo cáo người dùng trong yêu cầu #${selected.request.id}`}
+          contextLabel="Báo cáo người dùng trong yêu cầu này"
           onClose={() => setReportOpen(false)}
           onSuccess={() => {
             setReportOpen(false);
@@ -1496,7 +1568,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
           <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
             <h2 className="text-xl font-bold">Gửi khiếu nại giao dịch</h2>
-            <p className="mt-1 text-sm text-text-muted">Yêu cầu #{selected.request.id} · {selected.item?.title ?? 'Bài đăng'}</p>
+            <p className="mt-1 text-sm text-text-muted">{conversationTitle(selected)}</p>
             <Select
               className="mt-5"
               label="Lý do"
@@ -1544,7 +1616,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
           <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
             <h2 className="text-xl font-bold">Giải trình khiếu nại</h2>
-            <p className="mt-1 text-sm text-text-muted">Khiếu nại #{Number.isSafeInteger(responseDisputeId) ? responseDisputeId : ''}</p>
+            <p className="mt-1 text-sm text-text-muted">Gửi nội dung giải trình cho khiếu nại liên quan đến bạn.</p>
             {responseNotice ? (
               <div className="mt-5 space-y-4">
                 <div className="rounded-md bg-emerald-50 p-3 text-sm text-success">{responseNotice}</div>
@@ -1635,18 +1707,18 @@ export function SelectRequestDialog({
           <div className="min-w-0 flex-1">
             <strong className="block truncate text-sm">{participantName}</strong>
             <p className="mt-1 text-xs text-text-muted">
-              Yêu cầu #{conversation.request.id} · {conversation.request.type === 'SWAP' ? 'Trao đổi' : 'Nhận món đồ'}
+              {requestFallbackTitle(conversation.request)}
             </p>
           </div>
         </div>
         <div className="mt-4 space-y-2 text-sm leading-6 text-text-secondary">
           <p>
-            Bài đăng: <strong className="text-text-primary">{conversation.item?.title ?? `#${conversation.request.itemId}`}</strong>
+            Bài đăng: <strong className="text-text-primary">{conversation.item?.title ?? conversation.request.itemTitle ?? 'Không xác định'}</strong>
           </p>
           <p>Gửi lúc: {new Date(conversation.request.createdAt).toLocaleString('vi-VN')}</p>
           {conversation.request.type === 'SWAP' ? (
             <p>
-              Món đề xuất: <strong className="text-text-primary">{conversation.offeredItem?.title ?? `#${conversation.request.offeredItemId ?? ''}`}</strong>
+              Món đề xuất: <strong className="text-text-primary">{conversation.offeredItem?.title ?? conversation.request.offeredItemTitle ?? 'Không xác định'}</strong>
             </p>
           ) : null}
         </div>
@@ -2137,7 +2209,7 @@ function MockMessages() {
               <div>
                 <h2 className="text-xl font-bold">Gửi khiếu nại</h2>
                 <p className="mt-1 text-sm text-text-muted">
-                  Khiếu nại sẽ được chuyển đến quản trị viên để xử lý theo giao dịch {tx.id}.
+                  Khiếu nại sẽ được chuyển đến quản trị viên để xử lý theo giao dịch này.
                 </p>
               </div>
               <IconButton icon="close" label="Đóng" onClick={() => setShowComplaint(false)} />

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Icon } from '../../components/ui';
 const sections = [
@@ -7,7 +7,7 @@ const sections = [
     label: 'Nội dung',
     items: [
       ['article', 'Duyệt bài', '/admin/moderation'],
-      ['verified', 'Xác minh hàng chính hãng', '/admin/authenticity'],
+      // Tạm ẩn "Xác minh hàng chính hãng" (/admin/authenticity): chưa có luồng xác nhận và chưa có BR. Code BE vẫn giữ.
       ['shield', 'Checklist duyệt bài', '/admin/checklist'],
       ['history', 'Bài quá hạn', '/admin/expired-posts'],
       ['box', 'Danh mục', '/admin/categories'],
@@ -18,9 +18,8 @@ const sections = [
   {
     label: 'Người dùng',
     items: [
-      ['group', 'Khóa / mở khóa tài khoản', '/admin/users'],
+      ['group', 'Quản lý tài khoản', '/admin/users'],
       ['star', 'Uy tín & Hạng', '/admin/reputation'],
-      ['close', 'Khóa tài khoản', '/admin/locked-users'],
     ],
   },
   {
@@ -42,7 +41,7 @@ const sections = [
   {
     label: 'Cấu hình',
     items: [
-      ['settings', 'Phí & hạn mức', '/admin/settings/fees'],
+      ['settings', 'Cấu hình hệ thống', '/admin/settings/fees'],
     ],
   },
   { label: 'Hệ thống', items: [['history', 'Nhật ký hành động', '/admin/audit-logs']] },
@@ -98,7 +97,9 @@ export function AdminLayout() {
         <nav className="pt-3">{nav}</nav>
       </aside>
       <main className="min-w-0 pt-2 lg:pt-0">
-        <Outlet />
+        <Suspense fallback={<div className="min-h-[620px]" aria-hidden="true" />}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );

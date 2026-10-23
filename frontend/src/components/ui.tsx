@@ -359,6 +359,7 @@ export function ProductCard({ item, owner }: { item: Item; owner?: User }) {
         <ItemImage
           src={item.images[0]}
           alt={item.title}
+          loading="lazy"
           className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
         />
         <div className="absolute left-3 top-3">
@@ -411,6 +412,7 @@ export function HorizontalProductCard({ item, owner }: { item: Item; owner?: Use
       <ItemImage
         src={item.images[0]}
         alt={item.title}
+        loading="lazy"
         className="h-20 w-24 shrink-0 rounded-md object-cover"
       />
       <div className="min-w-0 flex-1 py-1">

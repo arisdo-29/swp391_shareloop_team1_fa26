@@ -1,9 +1,23 @@
 import { http } from './http';
 
+// Contract: docs/api/setting.md. label, description, group và groupLabel lấy từ enum ConfigKey của Backend.
+export type AdminConfigGroup =
+  | 'FEES'
+  | 'POSTING'
+  | 'AI'
+  | 'MODERATION'
+  | 'ACCOUNT'
+  | 'TRANSACTION'
+  | 'REPUTATION';
+
 export interface AdminConfigResponse {
   key: string;
   value: string;
   defaultValue: string;
+  label: string;
+  description: string;
+  group: AdminConfigGroup;
+  groupLabel: string;
 }
 
 export interface UpdateAdminConfigRequest {

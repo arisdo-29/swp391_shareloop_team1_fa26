@@ -79,7 +79,8 @@ describe('Credit đang giữ', () => {
     expect(screen.getByRole('link', { name: 'Xe đạp mini' }).getAttribute('href')).toBe(
       '/items/42',
     );
-    expect(screen.getByText('Mã bài: #42')).toBeTruthy();
+    // Không hiển thị id kỹ thuật của bài cho người dùng.
+    expect(screen.queryByText('Mã bài: #42')).toBeNull();
     expect(screen.getByText('Cho tặng')).toBeTruthy();
     expect(screen.getByText('Chờ duyệt')).toBeTruthy();
     expect(screen.getByText('5 Credit')).toBeTruthy();
@@ -88,7 +89,7 @@ describe('Credit đang giữ', () => {
     expect(screen.getByRole('link', { name: 'Bàn học gỗ' }).getAttribute('href')).toBe(
       '/items/43',
     );
-    expect(screen.getByText('Mã bài: #43')).toBeTruthy();
+    expect(screen.queryByText('Mã bài: #43')).toBeNull();
     expect(screen.getByText('Trao đổi')).toBeTruthy();
     expect(screen.getByText('Đã duyệt')).toBeTruthy();
     expect(screen.getByText('10 Credit')).toBeTruthy();

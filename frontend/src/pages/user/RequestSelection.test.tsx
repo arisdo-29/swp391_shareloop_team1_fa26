@@ -5,9 +5,20 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ItemResponse } from '../../services/itemApi';
+import type { MessageResponse } from '../../services/chatApi';
 import type { RequestResponse } from '../../services/requestApi';
 import { canChat, canSelectPendingRequest, requestStatusLabel } from '../../utils/request';
-import { RequestDetailsTabs, SelectRequestDialog, type ApiConversation } from './Messages';
+import {
+  mergeChatMessages,
+  messageOfferStatusLabel,
+  requestConversationPath,
+  shouldRefreshConversationDetail,
+} from '../../utils/chatMessages';
+import {
+  RequestDetailsTabs,
+  SelectRequestDialog,
+  type ApiConversation,
+} from './Messages';
 
 const request: RequestResponse = {
   id: 101,
@@ -187,5 +198,42 @@ describe('chọn người giao dịch', () => {
       />,
     );
     expect((screen.getByRole('button', { name: 'Đang chọn...' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe('tích hợp tin nhắn API', () => {
+  const message = (id: number, content: string): MessageResponse => ({
+    id,
+    requestId: 101,
+    senderId: 9,
+    kind: 'TEXT',
+    content,
+    mediaId: null,
+    refItemId: null,
+    itemCard: null,
+    offerStatus: null,
+    moderation: 'PASS',
+    blockedReason: null,
+    createdAt: `2026-10-22T08:00:0${id}Z`,
+  });
+
+  it('gộp polling theo ID, không nhân đôi và luôn giữ đúng thứ tự', () => {
+    expect(mergeChatMessages([message(2, 'cũ')], [message(1, 'đầu'), message(2, 'mới')]))
+      .toEqual([message(1, 'đầu'), message(2, 'mới')]);
+  });
+
+  it('chỉ tải lại chi tiết cuộc trò chuyện mỗi sáu lần polling', () => {
+    expect(shouldRefreshConversationDetail(0)).toBe(true);
+    expect(shouldRefreshConversationDetail(1)).toBe(false);
+    expect(shouldRefreshConversationDetail(5)).toBe(false);
+    expect(shouldRefreshConversationDetail(6)).toBe(true);
+  });
+
+  it('tạo URL ổn định khi đổi cuộc trò chuyện và hiển thị trạng thái đề xuất', () => {
+    expect(requestConversationPath(101)).toBe('/requests/101');
+    expect(messageOfferStatusLabel('PENDING')).toBe('Đề xuất đang chờ');
+    expect(messageOfferStatusLabel('ACCEPTED')).toBe('Đề xuất đã được chấp nhận');
+    expect(messageOfferStatusLabel('DECLINED')).toBe('Đề xuất đã bị từ chối');
+    expect(messageOfferStatusLabel(null)).toBeNull();
   });
 });

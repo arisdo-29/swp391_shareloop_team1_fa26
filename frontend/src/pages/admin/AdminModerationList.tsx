@@ -1,0 +1,152 @@
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Alert, Button, EmptyState, PageHeader, SearchField } from '../../components/ui';
+import { adminModerationApi, type ReviewQueueItem } from '../../services/adminModerationApi';
+import { adminErrorMessage } from './adminErrors';
+import { displayFlag, displayModerationNote, displayRisk } from './moderationDisplay';
+
+// Hàng chờ có thứ tự ưu tiên từ Backend nên lấy một lượt đủ lớn và tìm kiếm ngay trên danh sách này.
+const QUEUE_SIZE = 100;
+
+function normalize(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function matchesQuery(item: ReviewQueueItem, query: string) {
+  const text = [item.title, item.donorName ?? '', displayRisk(item.aiRisk), displayFlag(item.moderationFlag)];
+  return normalize(text.join(' ')).includes(normalize(query));
+}
+
+/** Hàng chờ duyệt bài: mỗi bài một hàng gọn, bấm "Xem chi tiết & duyệt" để sang trang duyệt riêng. */
+export function AdminModerationList() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  // Trang chi tiết gửi thông báo "đã duyệt" hoặc "đã từ chối" qua state khi quay về danh sách.
+  const [notice] = useState(() => (location.state as { notice?: string } | null)?.notice ?? '');
+  // Xóa state sau khi đọc để tải lại trang không hiện lại thông báo cũ.
+  useEffect(() => {
+    if (location.state) navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
+  const [items, setItems] = useState<ReviewQueueItem[]>([]);
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError('');
+    adminModerationApi
+      .pendingReviews({ page: 0, size: QUEUE_SIZE })
+      .then((response) => {
+        if (active) setItems(response.items);
+      })
+      .catch((caught) => {
+        if (!active) return;
+        setItems([]);
+        setError(adminErrorMessage(caught, 'Không tải được danh sách bài chờ duyệt.'));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
+
+  const rows = query.trim() ? items.filter((item) => matchesQuery(item, query)) : items;
+
+  return (
+    <>
+      <PageHeader title="Duyệt bài" description="Danh sách bài đăng đang chờ kiểm duyệt." />
+      <div className="mb-5 flex flex-col gap-3 rounded-lg bg-white p-3 ring-1 ring-border/80 sm:flex-row sm:items-center">
+        <div className="flex-1">
+          <SearchField
+            aria-label="Tìm bài chờ duyệt"
+            placeholder="Tìm theo tiêu đề, người đăng hoặc mức rủi ro..."
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
+        <span className="text-xs text-text-muted">{items.length} bài đăng chờ</span>
+      </div>
+
+      {notice ? (
+        <div className="mb-4" role="status">
+          <Alert tone="success">{notice}</Alert>
+        </div>
+      ) : null}
+      {error ? (
+        <div className="mb-4 space-y-3">
+          <Alert tone="error">{error}</Alert>
+          <Button variant="outline" size="sm" onClick={() => setReloadKey((key) => key + 1)}>
+            Thử tải lại
+          </Button>
+        </div>
+      ) : null}
+
+      {loading ? (
+        <EmptyState title="Đang tải bài chờ duyệt" text="Vui lòng chờ trong giây lát." />
+      ) : rows.length ? (
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Bài đăng</th>
+                <th>Người đăng</th>
+                <th>Uy tín</th>
+                <th>Rủi ro</th>
+                <th>Thời gian đăng</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((item) => (
+                <QueueRow key={item.id} item={item} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyState
+          icon="shield"
+          title={query ? 'Không tìm thấy bài phù hợp' : 'Không có bài chờ duyệt'}
+          text={query ? 'Hãy thử từ khóa khác.' : 'Hiện chưa có bài đăng nào trong hàng chờ.'}
+        />
+      )}
+    </>
+  );
+}
+
+function QueueRow({ item }: { item: ReviewQueueItem }) {
+  const flag = displayFlag(item.moderationFlag);
+  const note = displayModerationNote(item);
+  const risk = displayRisk(item.aiRisk);
+  return (
+    <tr>
+      <td className="max-w-md">
+        <p className="font-semibold leading-6 text-text-primary">{item.title}</p>
+        {flag || note ? (
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+            {flag ? (
+              <span className="rounded-sm bg-red-50 px-2 py-1 font-semibold text-error">{flag}</span>
+            ) : null}
+            {note && note !== flag ? <span className="text-text-secondary">{note}</span> : null}
+          </p>
+        ) : null}
+      </td>
+      <td>{item.donorName || 'Tài khoản đã xóa'}</td>
+      <td className="whitespace-nowrap">
+        {item.donorTrustStars == null ? 'Chưa có dữ liệu' : `${item.donorTrustStars}/5 sao`}
+      </td>
+      <td>{risk || '—'}</td>
+      <td className="whitespace-nowrap text-xs">{new Date(item.createdAt).toLocaleString('vi-VN')}</td>
+      <td className="text-right">
+        <Link to={`/admin/moderation/${item.id}`}>
+          <Button size="sm">Xem chi tiết & duyệt</Button>
+        </Link>
+      </td>
+    </tr>
+  );
+}
