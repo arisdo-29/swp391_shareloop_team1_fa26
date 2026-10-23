@@ -40,9 +40,20 @@ public class ConfigService {
                                 (first, ignored) -> first));
 
         return Arrays.stream(ConfigKey.values())
-                .map(key -> new ConfigResponse(
-                        key.key(), configuredValues.getOrDefault(key.key(), key.defaultValue()), key.defaultValue()))
+                .map(key -> toResponse(key, configuredValues.getOrDefault(key.key(), key.defaultValue())))
                 .toList();
+    }
+
+    // Tên, mô tả và nhóm lấy từ chính ConfigKey nên không cần thêm cột trong DB.
+    private ConfigResponse toResponse(ConfigKey key, String value) {
+        return new ConfigResponse(
+                key.key(),
+                value,
+                key.defaultValue(),
+                key.label(),
+                key.description(),
+                key.group().name(),
+                key.group().label());
     }
 
     public String get(ConfigKey key) {
@@ -167,6 +178,7 @@ public class ConfigService {
     public ConfigResponse update(ConfigKey key, String value, String reason, Long adminId) {
         validateValue(key, value);
         value = value.trim();
+        validateRankThresholds(key, value);
         var attribute = repository
                 .findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", key.key())
                 .orElseThrow(() -> new BusinessException(
@@ -181,7 +193,35 @@ public class ConfigService {
                 null,
                 Map.of("key", key.key(), "oldValue", previousValue, "newValue", value),
                 reason);
-        return new ConfigResponse(key.key(), value, key.defaultValue());
+        return toResponse(key, value);
+    }
+
+    /**
+     * Điểm tối thiểu của ba hạng phải tăng dần: Bạc nhỏ hơn Vàng, Vàng nhỏ hơn Kim cương (BR-U01). Nếu không, một người
+     * có thể được xếp hạng cao hơn trong khi điểm lại thấp hơn. Khoá khác thì bỏ qua.
+     *
+     * @throws BusinessException SETTING_RANK_THRESHOLD_ORDER khi giá trị mới làm thứ tự bị đảo hoặc bằng nhau
+     */
+    private void validateRankThresholds(ConfigKey changedKey, String newValue) {
+        boolean isRankThreshold = changedKey == ConfigKey.REPUTATION_SILVER_MIN
+                || changedKey == ConfigKey.REPUTATION_GOLD_MIN
+                || changedKey == ConfigKey.REPUTATION_DIAMOND_MIN;
+        if (!isRankThreshold) {
+            return;
+        }
+
+        int silverMin = thresholdAfterChange(ConfigKey.REPUTATION_SILVER_MIN, changedKey, newValue);
+        int goldMin = thresholdAfterChange(ConfigKey.REPUTATION_GOLD_MIN, changedKey, newValue);
+        int diamondMin = thresholdAfterChange(ConfigKey.REPUTATION_DIAMOND_MIN, changedKey, newValue);
+        if (silverMin >= goldMin || goldMin >= diamondMin) {
+            throw new BusinessException(SettingErrorCode.SETTING_RANK_THRESHOLD_ORDER);
+        }
+    }
+
+    // Khoá đang được sửa lấy giá trị mới, hai khoá còn lại lấy giá trị đang lưu.
+    private int thresholdAfterChange(ConfigKey thresholdKey, ConfigKey changedKey, String newValue) {
+        String value = thresholdKey == changedKey ? newValue : get(thresholdKey);
+        return Integer.parseInt(value.trim());
     }
 
     public void validateValue(ConfigKey key, String value) {

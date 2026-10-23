@@ -19,13 +19,16 @@ Ví dụ: `GET /api/v1/admin/reports?page=0&size=20&status=OPEN&targetType=REQUE
     "id": 71, "reporterId": 10, "targetType": "REQUEST",
     "itemId": 105, "targetUserId": 42, "requestId": 88,
     "reason": "NOT_AS_DESCRIBED", "description": "Đồ khác mô tả",
-    "stage": "BEFORE", "status": "OPEN", "createdAt": "2026-10-20T03:00:00Z"
+    "stage": "BEFORE", "status": "OPEN", "createdAt": "2026-10-20T03:00:00Z",
+    "reporterName": "Người gửi", "targetName": "Áo khoác gió nam"
   }],
   "page": 0, "size": 20, "totalElements": 1, "totalPages": 1
 }
 ```
 
 Trang rỗng trả `items: []`; không có bản ghi thì `totalPages: 0`.
+
+`reporterName` là họ tên người gửi. `targetName` là tên đối tượng bị báo cáo để giao diện không hiện id: với hồ sơ `USER` là họ tên người bị báo cáo, với hồ sơ `ITEM` là tiêu đề bài đăng, với hồ sơ `REQUEST` là tiêu đề bài đăng của giao dịch. Cả hai là `null` khi không tra được (tài khoản hoặc bài đã bị xoá, giao dịch không còn). Hai trường này chỉ có trong API của Admin, còn `POST /reports` để `null`.
 
 ### GET /api/v1/admin/reports/{reportId}
 
@@ -37,7 +40,8 @@ Yêu cầu Admin; `reportId` là số nguyên dương. Response:
     "id": 71, "reporterId": 10, "targetType": "REQUEST",
     "itemId": 105, "targetUserId": 42, "requestId": 88,
     "reason": "NOT_AS_DESCRIBED", "description": "Đồ khác mô tả",
-    "stage": "BEFORE", "status": "OPEN", "createdAt": "2026-10-20T03:00:00Z"
+    "stage": "BEFORE", "status": "OPEN", "createdAt": "2026-10-20T03:00:00Z",
+    "reporterName": "Người gửi", "targetName": "Áo khoác gió nam"
   },
   "reporter": {"id": 10, "fullName": "Người gửi"},
   "reportedUser": {"id": 42, "fullName": "Người bị báo cáo"},
@@ -46,9 +50,12 @@ Yêu cầu Admin; `reportId` là số nguyên dương. Response:
   "responseDueAt": "2026-10-23T03:00:00Z",
   "evidence": [{"id": 12, "url": "/api/v1/admin/reports/71/evidence/12", "available": true}],
   "responseEvidence": [{"id": 15, "url": null, "available": false}],
-  "resolvedBy": null, "resolution": null, "starsDeducted": 0, "resolvedAt": null
+  "resolvedBy": null, "resolution": null, "starsDeducted": 0, "resolvedAt": null,
+  "relatedItemTitle": "Áo khoác gió nam", "resolvedByName": null
 }
 ```
+
+`relatedItemTitle` là tiêu đề bài đăng liên quan (`null` khi không có hoặc bài đã bị xoá). `resolvedByName` là họ tên Admin đã kết luận (`null` khi chưa kết luận).
 
 Không trả email, số điện thoại hoặc storage key. Tên có thể `null` nếu người dùng không
 còn khả dụng; `reportedUser` có thể `null` nếu không xác định được bên bị báo cáo.

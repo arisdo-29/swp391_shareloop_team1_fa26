@@ -1,6 +1,7 @@
 package com.shareloop.wallet.controller;
 
 import com.shareloop.common.api.PageResponse;
+import com.shareloop.wallet.dto.AdminFinanceUserSummary;
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
 import com.shareloop.wallet.dto.WalletTransactionResponse;
 import com.shareloop.wallet.mapper.FinanceReportCsvWriter;
@@ -102,6 +103,42 @@ public class AdminFinanceController {
                 .contentType(TEXT_CSV_UTF8)
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .body(financeReportCsvWriter.write(report, from, to));
+    }
+
+    /**
+     * Danh sách người dùng kèm số liệu Credit cơ bản để tra cứu.
+     */
+    @Operation(
+            summary = "Danh sách người dùng kèm Credit",
+            description =
+                    "Chỉ Admin. Tìm theo họ tên, email hoặc số điện thoại, người dùng mới nhất trước. Mỗi dòng có Credit khả dụng, đang giữ, tổng và tổng đã nạp. Không gồm tài khoản Admin.")
+    @ApiResponse(responseCode = "200", description = "Thành công")
+    @ApiResponse(responseCode = "400", description = "Tham số phân trang sai")
+    @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
+    @ApiResponse(responseCode = "403", description = "Không phải Admin")
+    @GetMapping("/users")
+    public PageResponse<AdminFinanceUserSummary> users(
+            @Parameter(description = "Từ khoá khớp một phần họ tên, email hoặc số điện thoại")
+                    @RequestParam(required = false)
+                    String keyword,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return adminFinanceService.listUsers(keyword, page, size);
+    }
+
+    /**
+     * Thông tin và số liệu Credit của một người dùng.
+     */
+    @Operation(
+            summary = "Ví của một người dùng",
+            description = "Chỉ Admin. Họ tên, email, số điện thoại và số liệu Credit của một người dùng.")
+    @ApiResponse(responseCode = "200", description = "Thành công")
+    @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
+    @ApiResponse(responseCode = "403", description = "Không phải Admin")
+    @ApiResponse(responseCode = "404", description = "Không tìm thấy người dùng")
+    @GetMapping("/users/{userId}/wallet")
+    public AdminFinanceUserSummary userWallet(@Parameter(description = "ID người dùng") @PathVariable long userId) {
+        return adminFinanceService.getUserFinance(userId);
     }
 
     /**

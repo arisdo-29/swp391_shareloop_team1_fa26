@@ -31,8 +31,9 @@ public class AdminTopUpController {
 
     @GetMapping
     public PageResponse<TopUpOrderDetailResponse> list(
-            @RequestParam(defaultValue = "PENDING") PaymentOrderStatus status,
-            @RequestParam(defaultValue = "true") boolean submittedOnly,
+            // Bỏ trống status nghĩa là lấy mọi trạng thái; submittedOnly mặc định false nên thấy cả đơn chưa gửi.
+            @RequestParam(required = false) PaymentOrderStatus status,
+            @RequestParam(defaultValue = "false") boolean submittedOnly,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         return service.list(status, submittedOnly, page, size);

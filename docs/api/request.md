@@ -367,6 +367,11 @@ Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (F
 | `completedAt` | string? | Thời điểm hoàn tất giao dịch ISO-8601 UTC |
 | `createdAt` | string | Thời điểm tạo ISO-8601 UTC |
 | `receiverName` | string? | Họ tên người gửi yêu cầu (có trong danh sách theo bài, danh sách của tôi và chi tiết). Có thể `null`. Không kèm email/số điện thoại (BR-T11) |
+| `itemTitle` | string? | Tiêu đề bài đăng được yêu cầu, có ở mọi API trả `RequestResponse` (kể cả khi bài đã `RESERVED` trở lên, lúc `GET /items/{id}` không còn cho người xin xem). `null` khi bài đã bị xoá |
+| `itemImage` | string? | Ảnh đầu tiên của bài đăng, dạng `/api/v1/media/{id}`. `null` khi bài không có ảnh |
+| `donorId` | number? | Id chủ bài đăng |
+| `donorName` | string? | Họ tên chủ bài đăng. `null` khi tài khoản đã bị xoá. Không kèm email/số điện thoại (BR-T11) |
+| `offeredItemTitle` | string? | Tiêu đề món người xin đề nghị đổi (chỉ yêu cầu `SWAP`) |
 | `receiverTrustStars` | number? | Số sao uy tín của người gửi yêu cầu (TrustStars: 1-5). Alias: `trustStars` (FR-65) |
 | `receiverRank` | string? | Hạng uy tín của người gửi yêu cầu (`BRONZE`, `SILVER`, `GOLD`, `PLATINUM`, `DIAMOND`). Alias: `rank` (FR-65) |
 | `receiverAsDescribedRate` | number? | Tỉ lệ giao dịch đúng mô tả của người gửi yêu cầu (0.00 - 1.00; `null` nếu chưa có giao dịch hoàn tất). Alias: `asDescribedRate` (FR-65) |

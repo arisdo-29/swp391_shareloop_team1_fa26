@@ -15,6 +15,7 @@ import java.util.List;
  * @param creditOutTotal tổng Credit trừ ra (các dòng amount âm), trả số dương
  * @param creditOutByType Credit trừ ra tách theo type, số dương, chỉ gồm type có dữ liệu, sắp theo tên type
  * @param reconciliation đối chiếu tiền mặt quy ra Credit với tổng TOP_UP
+ * @param cashByDay tiền mặt thực thu theo từng ngày giờ Việt Nam, ngày cũ trước, chỉ gồm ngày có đơn thanh toán
  */
 public record FinanceSummaryResponse(
         Instant from,
@@ -25,4 +26,5 @@ public record FinanceSummaryResponse(
         List<CreditTypeTotal> creditInByType,
         long creditOutTotal,
         List<CreditTypeTotal> creditOutByType,
-        TopUpReconciliation reconciliation) {}
+        TopUpReconciliation reconciliation,
+        List<DailyCashTotal> cashByDay) {}

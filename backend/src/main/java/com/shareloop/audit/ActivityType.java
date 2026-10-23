@@ -25,6 +25,7 @@ public enum ActivityType {
     CATEGORY_CREATE("Thêm danh mục"),
     CATEGORY_UPDATE("Sửa danh mục"),
     CATEGORY_TOGGLE("Bật/tắt danh mục"),
+    CATEGORY_REORDER("Sắp xếp danh mục"),
     CATEGORY_ATTRIBUTE_CREATE("Thêm thuộc tính danh mục"),
     CATEGORY_ATTRIBUTE_UPDATE("Sửa thuộc tính danh mục"),
     CATEGORY_ATTRIBUTE_TOGGLE("Bật/tắt thuộc tính danh mục"),

@@ -55,7 +55,10 @@ Bearer Token bắt buộc; chỉ chủ đơn được đọc (mọi provider). K
   "submittedAt": null,
   "reviewedBy": null,
   "reviewedAt": null,
-  "reviewNote": null
+  "reviewNote": null,
+  "userName": null,
+  "userEmail": null,
+  "reviewedByName": null
 }
 ```
 
@@ -74,13 +77,17 @@ Chỉ ADMIN (401 chưa đăng nhập, 403 user thường). Chỉ liệt kê MANU
 
 | Tham số | Mặc định | Ý nghĩa |
 | --- | --- | --- |
-| status | PENDING | PENDING/SUCCESS/FAILED/EXPIRED |
-| submittedOnly | true | Chỉ đơn đã gửi; false cho phép xem cả chưa gửi |
+| status | (bỏ trống) | PENDING/SUCCESS/FAILED/EXPIRED; bỏ trống là mọi trạng thái |
+| submittedOnly | false | true chỉ lấy đơn người dùng đã bấm xác nhận thanh toán; false lấy cả đơn chưa gửi |
 | page | 0 | Số trang >= 0 |
 | size | 20 | 1..100 |
 
-Mặc định hiện đơn đã gửi đang chờ duyệt. Trả 200 `PageResponse<TopUpOrderDetailResponse>`:
-`items`, `page`, `size`, `totalElements`; sắp `submittedAt` giảm dần rồi `id` giảm dần.
+Mặc định (không truyền gì) hiện tất cả đơn nạp thủ công ở mọi trạng thái. Trả 200 `PageResponse<TopUpOrderDetailResponse>`:
+`items`, `page`, `size`, `totalElements`; sắp theo thời điểm tạo `createdAt` giảm dần (đơn mới nhất lên đầu) rồi `id` giảm dần.
+
+> **Thay đổi so với bản trước:** `status` từng mặc định `PENDING` và `submittedOnly` từng mặc định `true` (chỉ hiện đơn chờ duyệt). Client muốn giữ cách cũ phải truyền rõ `status=PENDING&submittedOnly=true`. Thứ tự sắp xếp cũng đổi từ `submittedAt` sang `createdAt`.
+
+API của Admin trả thêm tên để giao diện không hiện id: `userName` và `userEmail` (chủ đơn), `reviewedByName` (Admin đã duyệt hoặc từ chối, `null` khi đơn chưa được xử lý). Các trường này cũng có trong phản hồi của `approve` và `reject`. API của người dùng (`GET /wallet/topup-orders/{orderCode}`, `mark-paid`) vẫn để cả ba trường là `null`.
 
 ### POST /api/v1/admin/finance/topup-orders/{orderCode}/approve
 

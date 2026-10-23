@@ -114,9 +114,10 @@ Tất cả endpoint cần JWT có quyền Admin; người dùng thường nhận
 - `GET`: danh sách mọi danh mục chưa xoá mềm, kể cả đang ẩn, theo `sortOrder` rồi `id`. Response có các trường như `CategoryResponse` và thêm `active`.
 - `POST`: tạo danh mục, trả `201` và `AdminCategoryResponse`.
 - `PUT /{id}`: sửa tên, danh mục cha, cờ `restricted`/`boostable` và `sortOrder`; trả `200`.
+- `PUT /reorder`: sắp xếp lại thứ tự hiển thị của toàn bộ danh mục. Body `{ "categoryIds": [3, 1, 2] }` là danh sách id của **mọi** danh mục (kể cả đang ẩn) theo thứ tự mới, mỗi danh mục đúng một lần. Thứ tự lưu là vị trí trong danh sách, bắt đầu từ 1. Trả `200` và danh sách `AdminCategoryResponse` đã sắp theo thứ tự mới. Ghi nhật ký `CATEGORY_REORDER`. Cùng kiểu với `PUT /api/v1/admin/checklist/reorder`.
 - `PATCH /{id}/active`: gửi `{ "active": false }` để ẩn, `{ "active": true }` để hiện lại; trả `200`. Ẩn danh mục cha cũng ẩn các danh mục con đang hoạt động. Không xoá cứng.
-- Body của POST/PUT: `{ "name": "Sách", "parentId": null, "restricted": false, "boostable": true, "sortOrder": 1 }`. `name` bắt buộc, tối đa 100 ký tự; `sortOrder` không âm. Danh mục cha phải đang hoạt động và không được tạo vòng lặp.
-- Lỗi: `400 VALIDATION_FAILED`, `404 CATALOG_CATEGORY_NOT_FOUND`, `422 CATALOG_INVALID_PARENT` (`field: parentId`).
+- Body của POST/PUT: `{ "name": "Sách", "parentId": null, "restricted": false, "boostable": true }`. `name` bắt buộc, tối đa 100 ký tự. `sortOrder` là tuỳ chọn, không âm: bỏ trống khi **tạo mới** thì danh mục được đặt xuống cuối danh sách (lớn hơn thứ tự lớn nhất hiện có một đơn vị), bỏ trống khi **sửa** thì giữ thứ tự hiện tại. Muốn đổi thứ tự thì dùng `PUT /reorder`. Danh mục cha phải đang hoạt động và không được tạo vòng lặp.
+- Lỗi: `400 VALIDATION_FAILED`, `400 CATALOG_INVALID_SORT_ORDER` (reorder gửi danh sách trùng id, thiếu danh mục hoặc có id không tồn tại), `404 CATALOG_CATEGORY_NOT_FOUND`, `422 CATALOG_INVALID_PARENT` (`field: parentId`).
 
 ## Mã lỗi
 
@@ -124,6 +125,7 @@ Tất cả endpoint cần JWT có quyền Admin; người dùng thường nhận
 |-----------------------------|------|------------------------------------------------|
 | `CATALOG_CATEGORY_NOT_FOUND`| 404  | Không có danh mục đang dùng với id đã cho      |
 | `CATALOG_INVALID_PARENT`    | 422  | Danh mục cha không tồn tại, đang ẩn hoặc tạo vòng lặp |
+| `CATALOG_INVALID_SORT_ORDER`| 400  | Danh sách sắp xếp lại trùng id, thiếu danh mục hoặc có id lạ |
 | `VALIDATION_FAILED`         | 400  | Tham số đường dẫn hoặc request body không hợp lệ |
 
 Định dạng lỗi (`field` và `details` chỉ có khi liên quan):

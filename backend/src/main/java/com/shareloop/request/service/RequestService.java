@@ -2,6 +2,7 @@ package com.shareloop.request.service;
 
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
+import com.shareloop.item.dto.ItemCardDto;
 import com.shareloop.item.dto.ItemSummary;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
@@ -16,6 +17,7 @@ import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.HandoverConfirmRequest;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.dto.RequestContactResponse;
+import com.shareloop.request.dto.RequestItemInfo;
 import com.shareloop.request.dto.RequestMediaResponse;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.dto.ScheduleRequest;
@@ -30,7 +32,9 @@ import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.dto.ContactInfo;
 import com.shareloop.user.service.UserService;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -188,7 +192,7 @@ public class RequestService {
                 "Một thành viên đã gửi yêu cầu tới bài đăng của bạn.",
                 "/requests/" + saved.getId());
 
-        return RequestMapper.toResponse(saved);
+        return toResponse(saved);
     }
 
     /**
@@ -203,14 +207,17 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
         }
 
+        // Mọi yêu cầu trong danh sách cùng một bài nên tra thẻ bài đăng một lần rồi dùng lại.
+        Map<Long, ItemCardDto> itemCards = new HashMap<>();
         return requestRepository.findByItemIdOrderByCreatedAtDesc(itemId).stream()
                 .map(request -> {
-                    String receiverName = findReceiverName(request.getReceiverId());
+                    String receiverName = findUserName(request.getReceiverId());
                     ReputationSummary rep = findReceiverReputation(request.getReceiverId());
                     Integer trustStars = rep != null ? rep.trustStars() : 5;
                     String rank = rep != null && rep.rank() != null ? rep.rank().name() : Rank.BRONZE.name();
                     Double asDescribedRate = rep != null ? rep.asDescribedRate() : null;
-                    return RequestMapper.toResponse(request, receiverName, trustStars, rank, asDescribedRate);
+                    return RequestMapper.toResponse(
+                            request, receiverName, trustStars, rank, asDescribedRate, findItemInfo(request, itemCards));
                 })
                 .toList();
     }
@@ -220,8 +227,15 @@ public class RequestService {
      */
     @Transactional(readOnly = true)
     public List<RequestResponse> listMyRequests(long currentUserId) {
+        Map<Long, ItemCardDto> itemCards = new HashMap<>();
         return requestRepository.findByReceiverIdOrderByCreatedAtDesc(currentUserId).stream()
-                .map(request -> RequestMapper.toResponse(request, findReceiverName(request.getReceiverId())))
+                .map(request -> RequestMapper.toResponse(
+                        request,
+                        findUserName(request.getReceiverId()),
+                        null,
+                        null,
+                        null,
+                        findItemInfo(request, itemCards)))
                 .toList();
     }
 
@@ -256,7 +270,7 @@ public class RequestService {
                     "/items/" + saved.getItemId());
         }
 
-        return RequestMapper.toResponse(saved);
+        return toResponse(saved);
     }
 
     /**
@@ -316,7 +330,7 @@ public class RequestService {
                 "Chủ bài đã chọn bạn để trao tặng/trao đổi món đồ.",
                 "/requests/" + selectedRequest.getId());
 
-        return RequestMapper.toResponse(saved);
+        return toResponse(saved);
     }
 
     /**
@@ -337,16 +351,17 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
         }
 
-        String receiverName = findReceiverName(request.getReceiverId());
+        String receiverName = findUserName(request.getReceiverId());
+        RequestItemInfo itemInfo = findItemInfo(request, new HashMap<>());
         if (item.donorId() == currentUserId) {
             ReputationSummary rep = findReceiverReputation(request.getReceiverId());
             Integer trustStars = rep != null ? rep.trustStars() : 5;
             String rank = rep != null && rep.rank() != null ? rep.rank().name() : Rank.BRONZE.name();
             Double asDescribedRate = rep != null ? rep.asDescribedRate() : null;
-            return RequestMapper.toResponse(request, receiverName, trustStars, rank, asDescribedRate);
+            return RequestMapper.toResponse(request, receiverName, trustStars, rank, asDescribedRate, itemInfo);
         }
 
-        return RequestMapper.toResponse(request, receiverName);
+        return RequestMapper.toResponse(request, receiverName, null, null, null, itemInfo);
     }
 
     /**
@@ -393,7 +408,7 @@ public class RequestService {
                 "Đối phương đã cập nhật lịch hẹn giao nhận.",
                 "/requests/" + saved.getId());
 
-        return RequestMapper.toResponse(saved);
+        return toResponse(saved);
     }
 
     /**
@@ -431,7 +446,7 @@ public class RequestService {
                     "/requests/" + saved.getId());
         }
 
-        return RequestMapper.toResponse(saved);
+        return toResponse(saved);
     }
 
     /**
@@ -563,7 +578,7 @@ public class RequestService {
                     "/requests/" + targetRequestId);
         }
 
-        return RequestMapper.toResponse(saved);
+        return toResponse(saved);
     }
 
     /**
@@ -734,14 +749,64 @@ public class RequestService {
                 request.getOfferedItemId());
     }
 
+    // Phản hồi của các thao tác (tạo, huỷ, chọn, chốt lịch...) cũng kèm tên người xin và tên món đồ, để giao diện
+    // không bị mất tên khi thay yêu cầu cũ bằng phản hồi mới.
+    private RequestResponse toResponse(Request request) {
+        return RequestMapper.toResponse(
+                request,
+                findUserName(request.getReceiverId()),
+                null,
+                null,
+                null,
+                findItemInfo(request, new HashMap<>()));
+    }
+
+    // Tên món đồ, ảnh đầu tiên và tên chủ bài để giao diện hiện tên thay vì id. Cần vì GET /items/{id} chỉ cho xem
+    // bài APPROVED hoặc của chính mình, còn người xin thì vẫn phải thấy tên món đã được chọn (RESERVED trở lên).
+    // itemCards giữ thẻ bài đã tra trong cùng một lần gọi để danh sách nhiều yêu cầu không tra lại cùng một bài.
+    private RequestItemInfo findItemInfo(Request request, Map<Long, ItemCardDto> itemCards) {
+        ItemCardDto card = findItemCard(request.getItemId(), itemCards);
+        String offeredItemTitle = findItemTitle(request.getOfferedItemId());
+        if (card == null) {
+            return new RequestItemInfo(null, null, null, null, offeredItemTitle);
+        }
+        return new RequestItemInfo(
+                card.title(), card.imageUrl(), card.donorId(), findUserName(card.donorId()), offeredItemTitle);
+    }
+
+    // Bài đã xoá hoặc service chưa sẵn sàng thì trả null để API vẫn trả được phần còn lại.
+    private ItemCardDto findItemCard(long itemId, Map<Long, ItemCardDto> itemCards) {
+        if (itemQueryService == null) {
+            return null;
+        }
+        if (itemCards.containsKey(itemId)) {
+            return itemCards.get(itemId);
+        }
+        ItemCardDto card;
+        try {
+            card = itemQueryService.getItemCard(itemId);
+        } catch (BusinessException e) {
+            card = null;
+        }
+        itemCards.put(itemId, card);
+        return card;
+    }
+
+    private String findItemTitle(Long itemId) {
+        if (itemId == null || itemQueryService == null) {
+            return null;
+        }
+        return itemQueryService.findTitles(List.of(itemId)).get(itemId);
+    }
+
     // Chỉ lấy họ tên để hiển thị; email, số điện thoại chỉ trao qua getContactInfo khi đã chốt lịch (BR-T11).
     // Tra tên lỗi thì trả null để danh sách yêu cầu vẫn hiện được, không làm hỏng cả API.
-    private String findReceiverName(long receiverId) {
+    private String findUserName(long userId) {
         if (userService == null) {
             return null;
         }
         try {
-            ContactInfo contact = userService.findContact(receiverId);
+            ContactInfo contact = userService.findContact(userId);
             if (contact == null) {
                 return null;
             }

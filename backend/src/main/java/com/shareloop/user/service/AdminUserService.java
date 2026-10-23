@@ -2,8 +2,12 @@ package com.shareloop.user.service;
 
 import com.shareloop.audit.ActivityType;
 import com.shareloop.audit.service.ActivityLogService;
+import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.user.UserErrorCode;
+import com.shareloop.user.dto.AdminAccountRole;
+import com.shareloop.user.dto.AdminAccountState;
+import com.shareloop.user.dto.AdminUserSummary;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +24,15 @@ public class AdminUserService {
     public AdminUserService(UserService userService, ActivityLogService activityLogService) {
         this.userService = userService;
         this.activityLogService = activityLogService;
+    }
+
+    /**
+     * Danh sách tài khoản cho Admin, có tìm kiếm và lọc theo trạng thái, vai trò (FR-107). Chỉ đọc nên không ghi
+     * nhật ký.
+     */
+    public PageResponse<AdminUserSummary> list(
+            String keyword, AdminAccountState state, AdminAccountRole role, int page, int size) {
+        return userService.searchAccounts(keyword, state, role, page, size);
     }
 
     /**

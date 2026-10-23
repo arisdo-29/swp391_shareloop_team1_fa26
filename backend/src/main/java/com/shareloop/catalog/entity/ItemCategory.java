@@ -58,6 +58,10 @@ public class ItemCategory extends BaseEntity {
         return sortOrder;
     }
 
+    public void updateSortOrder(int sortOrder) {
+        this.sortOrder = sortOrder;
+    }
+
     public void update(String name, Long parentId, boolean restricted, boolean boostable, int sortOrder) {
         this.name = name;
         this.parentId = parentId;

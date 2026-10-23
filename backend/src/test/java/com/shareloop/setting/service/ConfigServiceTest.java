@@ -149,6 +149,73 @@ class ConfigServiceTest {
     }
 
     @Test
+    void list_includesVietnameseLabelDescriptionAndGroupFromConfigKey() {
+        // given
+        when(repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc("CONFIG"))
+                .thenReturn(List.of());
+
+        // when
+        var configs = service.listConfigs();
+
+        // then
+        assertThat(configs)
+                .filteredOn(config -> config.key().equals("post_fee"))
+                .singleElement()
+                .satisfies(config -> {
+                    assertThat(config.label()).isEqualTo("Phí đăng bài");
+                    assertThat(config.description()).isNotBlank();
+                    assertThat(config.group()).isEqualTo("FEES");
+                    assertThat(config.groupLabel()).isEqualTo("Phí và nạp tiền");
+                });
+        assertThat(configs)
+                .filteredOn(config -> config.key().equals("reputation_gold_min"))
+                .singleElement()
+                .satisfies(config -> assertThat(config.group()).isEqualTo("REPUTATION"));
+    }
+
+    @Test
+    void update_whenSilverReachesGold_throwsRankThresholdOrder() {
+        // given: Vàng đang là 150 (mặc định) nên Bạc = 150 là không hợp lệ
+        // when / then
+        assertThatThrownBy(() -> service.update(ConfigKey.REPUTATION_SILVER_MIN, "150", "Thử", 1L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SettingErrorCode.SETTING_RANK_THRESHOLD_ORDER);
+    }
+
+    @Test
+    void update_whenGoldDropsBelowSilver_throwsRankThresholdOrder() {
+        assertThatThrownBy(() -> service.update(ConfigKey.REPUTATION_GOLD_MIN, "40", "Thử", 1L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SettingErrorCode.SETTING_RANK_THRESHOLD_ORDER);
+    }
+
+    @Test
+    void update_whenDiamondEqualsGold_throwsRankThresholdOrder() {
+        assertThatThrownBy(() -> service.update(ConfigKey.REPUTATION_DIAMOND_MIN, "150", "Thử", 1L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SettingErrorCode.SETTING_RANK_THRESHOLD_ORDER);
+    }
+
+    @Test
+    void update_whenThresholdStaysInOrder_savesNewValue() {
+        // given: Bạc 50 < Vàng mới 200 < Kim cương 400
+        var attribute = mock(WebsiteAttribute.class);
+        when(attribute.getAttrValue()).thenReturn("150");
+        when(repository.findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", "reputation_gold_min"))
+                .thenReturn(Optional.of(attribute));
+
+        // when
+        var response = service.update(ConfigKey.REPUTATION_GOLD_MIN, "200", "Nâng ngưỡng", 1L);
+
+        // then
+        assertThat(response.value()).isEqualTo("200");
+        org.mockito.Mockito.verify(attribute).updateValue("200");
+    }
+
+    @Test
     void listUsesActiveDatabaseValueAndKeepsDefaultValue() {
         var attribute = mock(WebsiteAttribute.class);
         when(attribute.getAttrKey()).thenReturn("post_fee");

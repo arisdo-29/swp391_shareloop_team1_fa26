@@ -6,6 +6,7 @@ import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.wallet.WalletErrorCode;
 import com.shareloop.wallet.dto.CreditTypeTotal;
+import com.shareloop.wallet.dto.DailyCashTotal;
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
 import com.shareloop.wallet.dto.TopUpReconciliation;
 import com.shareloop.wallet.dto.WalletResponse;
@@ -20,13 +21,22 @@ import com.shareloop.wallet.mapper.WalletMapper;
 import com.shareloop.wallet.repository.CashTotalsView;
 import com.shareloop.wallet.repository.CreditLedgerRepository;
 import com.shareloop.wallet.repository.CreditTypeTotalView;
+import com.shareloop.wallet.repository.PaidOrderView;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
+import com.shareloop.wallet.repository.UserTopUpTotalView;
 import com.shareloop.wallet.repository.WalletAccountRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -52,6 +62,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class CreditService {
 
     // Mốc thay cho from / to khi người dùng không lọc; để truy vấn luôn có đủ hai đầu khoảng, không cần query riêng.
+    // Múi giờ dùng để chia tiền thu theo ngày trong báo cáo, cùng múi giờ AdminFinanceService đổi from/to.
+    private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
     private static final Instant EARLIEST = Instant.EPOCH;
     private static final Instant LATEST = Instant.parse("9999-12-31T00:00:00Z");
 
@@ -383,6 +396,8 @@ public class CreditService {
                 toCreditTypeTotals(creditLedgerRepository.sumCreditOutByType(rangeStart, rangeEnd));
         TopUpReconciliation reconciliation =
                 reconcileTopUp(cash.getCredits(), amountOfType(creditIn, CreditTxType.TOP_UP));
+        List<DailyCashTotal> cashByDay =
+                groupCashByDay(paymentOrderRepository.findPaidOrders(PaymentOrderStatus.SUCCESS, rangeStart, rangeEnd));
 
         return new FinanceSummaryResponse(
                 from,
@@ -393,7 +408,8 @@ public class CreditService {
                 creditIn,
                 sumAmounts(creditOut),
                 creditOut,
-                reconciliation);
+                reconciliation,
+                cashByDay);
     }
 
     /**
@@ -412,6 +428,42 @@ public class CreditService {
                 .findById(userId)
                 .map(walletMapper::toResponse)
                 .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
+    }
+
+    /**
+     * Ví của nhiều người dùng trong một lần truy vấn, dùng cho danh sách tra cứu của Admin (FR-112). Người dùng không
+     * có ví (không tồn tại hoặc đã xoá mềm) không có trong kết quả.
+     *
+     * <p>Transaction: read-only, không khoá dòng.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, WalletResponse> getWallets(Collection<Long> userIds) {
+        Map<Long, WalletResponse> wallets = new HashMap<>();
+        if (userIds.isEmpty()) {
+            return wallets;
+        }
+        for (WalletAccount account : walletAccountRepository.findAllById(userIds)) {
+            wallets.put(account.getId(), walletMapper.toResponse(account));
+        }
+        return wallets;
+    }
+
+    /**
+     * Tổng Credit đã nạp thành công (đơn SUCCESS) của từng người dùng. Người chưa nạp lần nào không có trong kết quả,
+     * người gọi coi là 0.
+     *
+     * <p>Transaction: read-only, không khoá dòng.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Long> getToppedUpCredits(Collection<Long> userIds) {
+        Map<Long, Long> totals = new HashMap<>();
+        if (userIds.isEmpty()) {
+            return totals;
+        }
+        for (UserTopUpTotalView total : paymentOrderRepository.sumCreditsByUser(PaymentOrderStatus.SUCCESS, userIds)) {
+            totals.put(total.getUserId(), total.getCredits());
+        }
+        return totals;
     }
 
     // type sai là lỗi của người gọi (lập trình viên), không phải tình huống nghiệp vụ nên không dùng BusinessException.
@@ -479,6 +531,24 @@ public class CreditService {
             }
         }
         return 0;
+    }
+
+    // Gom các đơn đã thanh toán theo ngày lịch Việt Nam (paid_at lưu UTC nên 23h UTC đã là ngày hôm sau ở Việt Nam).
+    // TreeMap giữ ngày cũ đứng trước; ngày không có đơn nào thì không xuất hiện.
+    private List<DailyCashTotal> groupCashByDay(List<PaidOrderView> paidOrders) {
+        Map<LocalDate, long[]> totalsByDay = new TreeMap<>();
+        for (PaidOrderView paidOrder : paidOrders) {
+            LocalDate day = paidOrder.getPaidAt().atZone(VIETNAM_ZONE).toLocalDate();
+            long[] totals = totalsByDay.computeIfAbsent(day, key -> new long[2]);
+            totals[0] += paidOrder.getAmountVnd();
+            totals[1] += 1;
+        }
+
+        List<DailyCashTotal> result = new ArrayList<>();
+        for (Map.Entry<LocalDate, long[]> entry : totalsByDay.entrySet()) {
+            result.add(new DailyCashTotal(entry.getKey(), entry.getValue()[0], entry.getValue()[1]));
+        }
+        return result;
     }
 
     // BR-P09: tiền mặt thực thu quy ra Credit phải bằng tổng Credit TOP_UP; lệch là dấu hiệu cộng thiếu hoặc cộng thừa.

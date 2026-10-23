@@ -5,6 +5,8 @@ import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.dto.UserBrief;
+import com.shareloop.user.service.UserService;
 import com.shareloop.wallet.WalletErrorCode;
 import com.shareloop.wallet.dto.TopUpOrderDetailResponse;
 import com.shareloop.wallet.entity.PaymentOrder;
@@ -15,7 +17,11 @@ import com.shareloop.wallet.repository.PaymentOrderSnapshot;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -28,6 +34,7 @@ public class ManualTopUpService {
     private final CreditService creditService;
     private final ConfigService config;
     private final ActivityLogService audit;
+    private final UserService userService;
     private final Clock clock;
 
     public ManualTopUpService(
@@ -35,11 +42,13 @@ public class ManualTopUpService {
             CreditService creditService,
             ConfigService config,
             ActivityLogService audit,
+            UserService userService,
             Clock clock) {
         this.orders = orders;
         this.creditService = creditService;
         this.config = config;
         this.audit = audit;
+        this.userService = userService;
         this.clock = clock;
     }
 
@@ -59,25 +68,30 @@ public class ManualTopUpService {
         return detail(order);
     }
 
+    /**
+     * Danh sách đơn nạp thủ công cho Admin, đơn mới tạo nằm trên cùng. status null nghĩa là mọi trạng thái;
+     * submittedOnly = true chỉ lấy đơn người dùng đã bấm xác nhận thanh toán. Kèm tên chủ đơn và tên Admin duyệt.
+     */
     @Transactional(readOnly = true)
     public PageResponse<TopUpOrderDetailResponse> list(
             PaymentOrderStatus status, boolean submittedOnly, int page, int size) {
-        return PageResponse.from(orders.findManualOrders(
-                        status,
-                        submittedOnly,
-                        PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "submittedAt", "id")))
-                .map(this::detail));
+        Sort newestFirst = Sort.by(Sort.Direction.DESC, "createdAt", "id");
+        Page<PaymentOrder> orderPage =
+                orders.findManualOrders(status, submittedOnly, PageRequest.of(page, size, newestFirst));
+        // Hỏi tên của cả trang bằng một truy vấn, không hỏi từng đơn.
+        Map<Long, UserBrief> briefs = findBriefs(orderPage.getContent());
+        return PageResponse.from(orderPage.map(order -> detail(order, briefs)));
     }
 
     public TopUpOrderDetailResponse approve(long adminId, String code, String note) {
         PaymentOrder order = lock(code);
         requireSubmitted(order);
-        if (order.getStatus() == PaymentOrderStatus.SUCCESS) return detail(order);
+        if (order.getStatus() == PaymentOrderStatus.SUCCESS) return adminDetail(order);
         requireManualPending(order);
         creditService.topUpManual(order.getUserId(), order.getId());
         order.review(adminId, clock.instant(), note);
         log("TOP_UP_APPROVED", adminId, order, note);
-        return detail(order);
+        return adminDetail(order);
     }
 
     public TopUpOrderDetailResponse reject(long adminId, String code, String reason) {
@@ -90,7 +104,7 @@ public class ManualTopUpService {
         order.markFailed();
         order.review(adminId, clock.instant(), reason.trim());
         log("TOP_UP_REJECTED", adminId, order, reason.trim());
-        return detail(order);
+        return adminDetail(order);
     }
 
     private PaymentOrder lockOwned(long userId, String code) {
@@ -140,7 +154,30 @@ public class ManualTopUpService {
                 && !clock.instant().isBefore(expiresAt(order))) order.markExpired();
     }
 
+    // API của người dùng không trả tên: họ chỉ xem đơn của chính mình.
     private TopUpOrderDetailResponse detail(PaymentOrder order) {
+        return detail(order, Map.of());
+    }
+
+    private TopUpOrderDetailResponse adminDetail(PaymentOrder order) {
+        return detail(order, findBriefs(List.of(order)));
+    }
+
+    // Gom id chủ đơn và id Admin duyệt rồi hỏi module user một lần. User đã xoá mềm không có trong kết quả.
+    private Map<Long, UserBrief> findBriefs(List<PaymentOrder> orderList) {
+        Set<Long> userIds = new HashSet<>();
+        for (PaymentOrder order : orderList) {
+            userIds.add(order.getUserId());
+            if (order.getReviewedBy() != null) {
+                userIds.add(order.getReviewedBy());
+            }
+        }
+        return userService.findBriefs(userIds);
+    }
+
+    private TopUpOrderDetailResponse detail(PaymentOrder order, Map<Long, UserBrief> briefs) {
+        UserBrief owner = briefs.get(order.getUserId());
+        UserBrief reviewer = order.getReviewedBy() == null ? null : briefs.get(order.getReviewedBy());
         return new TopUpOrderDetailResponse(
                 order.getOrderCode(),
                 order.getUserId(),
@@ -154,7 +191,10 @@ public class ManualTopUpService {
                 order.getSubmittedAt(),
                 order.getReviewedBy(),
                 order.getReviewedAt(),
-                order.getReviewNote());
+                order.getReviewNote(),
+                owner == null ? null : owner.fullName(),
+                owner == null ? null : owner.email(),
+                reviewer == null ? null : reviewer.fullName());
     }
 
     private void log(String type, long adminId, PaymentOrder order, String note) {
