@@ -30,6 +30,23 @@ export interface AdminDateParams {
   to?: string;
 }
 
+export interface FinanceCsvDownload {
+  blob: Blob;
+  fileName: string;
+}
+
+export function financeCsvFileName(contentDisposition: string | undefined) {
+  const utf8Name = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (utf8Name) {
+    try {
+      return decodeURIComponent(utf8Name.replace(/^"|"$/g, ''));
+    } catch {
+      // Dùng tên filename thông thường hoặc tên mặc định nếu header mã hóa sai.
+    }
+  }
+  return contentDisposition?.match(/filename="?([^";]+)"?/i)?.[1] ?? 'finance-report.csv';
+}
+
 export const adminFinanceApi = {
   async topUpOrders(params: {
     page: number;
@@ -60,6 +77,16 @@ export const adminFinanceApi = {
   async report(params: AdminDateParams) {
     const { data } = await http.get<FinanceSummary>('/api/v1/admin/finance/report', { params });
     return data;
+  },
+  async reportCsv(params: AdminDateParams): Promise<FinanceCsvDownload> {
+    const response = await http.get<Blob>('/api/v1/admin/finance/report.csv', {
+      params,
+      responseType: 'blob',
+    });
+    return {
+      blob: response.data,
+      fileName: financeCsvFileName(response.headers['content-disposition']),
+    };
   },
   async userHistory(userId: number, params: AdminDateParams & { page: number; size: number }) {
     const { data } = await http.get<PageResponse<WalletTransactionResponse>>(

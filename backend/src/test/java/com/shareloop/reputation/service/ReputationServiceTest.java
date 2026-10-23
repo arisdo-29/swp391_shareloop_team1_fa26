@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -19,16 +20,25 @@ import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.reputation.ReputationErrorCode;
+import com.shareloop.reputation.dto.GraceStarResponse;
 import com.shareloop.reputation.dto.MyReputationResponse;
+import com.shareloop.reputation.dto.RepeatedPair;
 import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.dto.RequestParticipantProjection;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.entity.UserReputation;
 import com.shareloop.reputation.repository.UserReputationRepository;
+import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.UserErrorCode;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -40,6 +50,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -51,6 +62,10 @@ import org.springframework.data.domain.PageRequest;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ReputationServiceTest {
+
+    // 18:00 UTC ngày 21/10 là 01:00 ngày 22/10 giờ Việt Nam: UTC và giờ VN lệch ngày để kiểm reset theo giờ VN.
+    private static final Instant NOW = Instant.parse("2026-10-21T18:00:00Z");
+    private static final LocalDate TODAY_VN = LocalDate.of(2026, 10, 22);
 
     @Mock
     private ConfigService configService;
@@ -82,13 +97,19 @@ class ReputationServiceTest {
         when(configService.getDecimal("REPUTATION_GIVE_RECEIVER")).thenReturn(new BigDecimal("2"));
         when(configService.getDecimal("REPUTATION_SWAP_EACH")).thenReturn(new BigDecimal("6"));
 
+        when(configService.getInt(ConfigKey.DAILY_POINTS_CAP)).thenReturn(30);
+        when(configService.getInt(ConfigKey.REPUTATION_PAIR_WINDOW_DAYS)).thenReturn(90);
+        when(configService.getInt(ConfigKey.REPUTATION_PAIR_NO_POINTS_FROM)).thenReturn(3);
+        when(configService.getInt(ConfigKey.REPUTATION_CLEAN_STREAK_FOR_STAR)).thenReturn(10);
+
         service = new ReputationService(
                 configService,
                 userReputationRepository,
                 activityLogService,
                 activityLogQueryService,
                 itemService,
-                notificationService);
+                notificationService,
+                Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @Nested
@@ -493,6 +514,248 @@ class ReputationServiceTest {
         @DisplayName("userId là null ném IllegalArgumentException")
         void getMyReputation_nullUserId_throwsException() {
             assertThrows(IllegalArgumentException.class, () -> service.getMyReputation(null, 0, 20));
+        }
+    }
+
+    @Nested
+    @DisplayName("5. Chống cày điểm, trần điểm mỗi ngày và hồi sao (FR-94, FR-98, FR-99, Issue #150)")
+    class AntiFarmingTests {
+
+        private static final long REQUEST_ID = 601L;
+        private static final long DONOR_ID = 1L;
+        private static final long RECEIVER_ID = 2L;
+
+        private UserReputation donor;
+        private UserReputation receiver;
+
+        @BeforeEach
+        void givenCompletedGiveRequest() {
+            donor = new UserReputation(DONOR_ID, (short) 5, 20, Rank.BRONZE);
+            receiver = new UserReputation(RECEIVER_ID, (short) 5, 10, Rank.BRONZE);
+            when(userReputationRepository.isReputationAppliedForRequest(REQUEST_ID))
+                    .thenReturn(false);
+            when(userReputationRepository.findRequestParticipant(REQUEST_ID))
+                    .thenReturn(createParticipant(DONOR_ID, RECEIVER_ID, "GIVE"));
+            when(userReputationRepository.findByIdForUpdate(DONOR_ID)).thenReturn(Optional.of(donor));
+            when(userReputationRepository.findByIdForUpdate(RECEIVER_ID)).thenReturn(Optional.of(receiver));
+        }
+
+        @Test
+        @DisplayName("Giao dịch thứ 3 giữa cùng cặp trong 90 ngày: cộng 0 điểm, vẫn ghi POINTS kèm lý do")
+        void onCompleted_thirdTransactionBetweenSamePair_grantsNoPoints() {
+            when(userReputationRepository.countCompletedBetween(
+                            DONOR_ID, RECEIVER_ID, NOW.minus(Duration.ofDays(90)), REQUEST_ID))
+                    .thenReturn(2L);
+
+            service.onCompleted(REQUEST_ID);
+
+            assertThat(donor.getTotalPoints()).isEqualTo(20);
+            assertThat(receiver.getTotalPoints()).isEqualTo(10);
+            // Không cộng điểm nhưng vẫn là giao dịch sạch
+            assertThat(donor.getCleanStreak()).isEqualTo(1);
+            assertThat(receiver.getCleanStreak()).isEqualTo(1);
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Map<String, Object>> data = ArgumentCaptor.forClass(Map.class);
+            ArgumentCaptor<String> reason = ArgumentCaptor.forClass(String.class);
+            verify(activityLogService)
+                    .log(eq("POINTS"), eq(DONOR_ID), eq("REQUEST"), eq(REQUEST_ID), data.capture(), reason.capture());
+            assertThat(data.getValue())
+                    .containsEntry("points", 0)
+                    .containsEntry("basePoints", 10)
+                    .containsEntry("pairTransactionNo", 3L);
+            assertThat(reason.getValue())
+                    .isEqualTo("Không cộng điểm giao dịch #601 (vai trò cho/tặng): giao dịch thứ 3"
+                            + " giữa cùng hai người trong 90 ngày");
+            verify(activityLogService)
+                    .log(eq("POINTS"), eq(RECEIVER_ID), eq("REQUEST"), eq(REQUEST_ID), any(Map.class), anyString());
+        }
+
+        @Test
+        @DisplayName("Giao dịch thứ 2 giữa cùng cặp vẫn được cộng điểm đủ")
+        void onCompleted_secondTransactionBetweenSamePair_grantsFullPoints() {
+            when(userReputationRepository.countCompletedBetween(
+                            DONOR_ID, RECEIVER_ID, NOW.minus(Duration.ofDays(90)), REQUEST_ID))
+                    .thenReturn(1L);
+
+            service.onCompleted(REQUEST_ID);
+
+            assertThat(donor.getTotalPoints()).isEqualTo(30);
+            assertThat(receiver.getTotalPoints()).isEqualTo(12);
+        }
+
+        @Test
+        @DisplayName("Chạm trần 30 điểm mỗi ngày: chỉ cộng phần còn lại và ghi lý do")
+        void onCompleted_dailyCapAlmostReached_grantsOnlyRemainingPoints() {
+            donor.claimDailyPoints(25, 30, TODAY_VN);
+
+            service.onCompleted(REQUEST_ID);
+
+            assertThat(donor.getTotalPoints()).isEqualTo(25); // 20 + 5, không phải 20 + 10
+            assertThat(donor.getPointsToday()).isEqualTo(30);
+            ArgumentCaptor<String> reason = ArgumentCaptor.forClass(String.class);
+            verify(activityLogService)
+                    .log(eq("POINTS"), eq(DONOR_ID), eq("REQUEST"), eq(REQUEST_ID), any(Map.class), reason.capture());
+            assertThat(reason.getValue())
+                    .isEqualTo(
+                            "Cộng 5/10 điểm hoàn tất giao dịch #601 (vai trò cho/tặng): chạm trần 30 điểm trong ngày");
+        }
+
+        @Test
+        @DisplayName("Đã đạt trần trong ngày: cộng 0 điểm")
+        void onCompleted_dailyCapReached_grantsNoPoints() {
+            donor.claimDailyPoints(30, 30, TODAY_VN);
+
+            service.onCompleted(REQUEST_ID);
+
+            assertThat(donor.getTotalPoints()).isEqualTo(20);
+            assertThat(donor.getPointsToday()).isEqualTo(30);
+        }
+
+        @Test
+        @DisplayName("Sang ngày mới theo giờ VN (UTC vẫn là hôm trước): points_today đếm lại từ 0")
+        void onCompleted_newDayInVietnam_resetsPointsToday() {
+            // Đã đạt trần ngày 21/10; NOW là 01:00 ngày 22/10 giờ VN nhưng vẫn là ngày 21/10 theo UTC
+            donor.claimDailyPoints(30, 30, TODAY_VN.minusDays(1));
+
+            service.onCompleted(REQUEST_ID);
+
+            assertThat(donor.getTotalPoints()).isEqualTo(30);
+            assertThat(donor.getPointsToday()).isEqualTo(10);
+            assertThat(donor.getPointsDate()).isEqualTo(TODAY_VN);
+        }
+
+        @Test
+        @DisplayName("Đủ 10 giao dịch sạch liên tiếp khi chưa đủ 5 sao: hồi 1 sao, chuỗi về 0, ghi STAR_RESTORED")
+        void onCompleted_tenthCleanTransaction_restoresOneStar() {
+            donor.setTrustStars((short) 3);
+            donor.setCleanStreak(9);
+
+            service.onCompleted(REQUEST_ID);
+
+            assertThat(donor.getTrustStars()).isEqualTo(4);
+            assertThat(donor.getCleanStreak()).isZero();
+            verify(activityLogService)
+                    .log(
+                            eq("STAR_RESTORED"),
+                            isNull(),
+                            eq("USER"),
+                            eq(DONOR_ID),
+                            eq(Map.of("before", 3, "after", 4, "cleanStreak", 10)),
+                            eq("Hồi 1 sao sau 10 giao dịch sạch liên tiếp"));
+        }
+
+        @Test
+        @DisplayName("Đủ 10 giao dịch sạch nhưng đang 5 sao: không hồi thêm")
+        void onCompleted_streakReachedAtFiveStars_doesNotRestore() {
+            donor.setCleanStreak(9);
+
+            service.onCompleted(REQUEST_ID);
+
+            assertThat(donor.getTrustStars()).isEqualTo(5);
+            assertThat(donor.getCleanStreak()).isEqualTo(10);
+            verify(activityLogService, never())
+                    .log(eq("STAR_RESTORED"), any(), anyString(), anyLong(), any(Map.class), anyString());
+        }
+
+        @Test
+        @DisplayName("Bị trừ sao thì mất chuỗi giao dịch sạch")
+        void deductStar_resetsCleanStreak() {
+            donor.setCleanStreak(7);
+
+            service.deductStar(DONOR_ID, 1, "Vi phạm đã xác minh");
+
+            assertThat(donor.getTrustStars()).isEqualTo(4);
+            assertThat(donor.getCleanStreak()).isZero();
+        }
+    }
+
+    @Nested
+    @DisplayName("6. Cấp sao ân hạn (grantGraceStar - FR-95, Issue #150)")
+    class GraceStarTests {
+
+        private static final long ADMIN_ID = 99L;
+        private static final long USER_ID = 7L;
+
+        @Test
+        @DisplayName("Người dùng 0 sao chưa từng được cấp: lên 1 sao, đánh dấu đã dùng, ghi GRACE_STAR")
+        void grantGraceStar_userAtZeroStars_grantsOneStar() {
+            UserReputation user = new UserReputation(USER_ID, (short) 0, 40, Rank.BRONZE);
+            when(userReputationRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
+
+            GraceStarResponse response = service.grantGraceStar(ADMIN_ID, USER_ID, "Đã giải trình");
+
+            assertThat(response).isEqualTo(new GraceStarResponse(USER_ID, 1, true));
+            assertThat(user.getTrustStars()).isEqualTo(1);
+            assertThat(user.isGraceStarUsed()).isTrue();
+            verify(userReputationRepository).save(user);
+            verify(activityLogService)
+                    .log(
+                            "GRACE_STAR",
+                            ADMIN_ID,
+                            "USER",
+                            USER_ID,
+                            Map.<String, Object>of("before", 0, "after", 1),
+                            "Đã giải trình");
+        }
+
+        @Test
+        @DisplayName("Về 0 sao lần hai rồi xin cấp lại: 409 REPUTATION_GRACE_STAR_ALREADY_USED")
+        void grantGraceStar_secondTime_throwsAlreadyUsed() {
+            UserReputation user = new UserReputation(USER_ID, (short) 0, 40, Rank.BRONZE);
+            when(userReputationRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
+            service.grantGraceStar(ADMIN_ID, USER_ID, "Lần đầu");
+            service.deductStar(USER_ID, 1, "Tái phạm");
+
+            BusinessException ex =
+                    assertThrows(BusinessException.class, () -> service.grantGraceStar(ADMIN_ID, USER_ID, "Lần hai"));
+
+            assertThat(ex.getErrorCode()).isEqualTo(ReputationErrorCode.REPUTATION_GRACE_STAR_ALREADY_USED);
+            assertThat(ex.getErrorCode().status().value()).isEqualTo(409);
+            assertThat(user.getTrustStars()).isZero();
+        }
+
+        @Test
+        @DisplayName("Người dùng vẫn còn sao: 409 REPUTATION_GRACE_STAR_NOT_ELIGIBLE, không ghi log")
+        void grantGraceStar_userStillHasStars_throwsNotEligible() {
+            UserReputation user = new UserReputation(USER_ID, (short) 2, 40, Rank.BRONZE);
+            when(userReputationRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
+
+            BusinessException ex = assertThrows(
+                    BusinessException.class, () -> service.grantGraceStar(ADMIN_ID, USER_ID, "Xin thêm sao"));
+
+            assertThat(ex.getErrorCode()).isEqualTo(ReputationErrorCode.REPUTATION_GRACE_STAR_NOT_ELIGIBLE);
+            assertThat(user.isGraceStarUsed()).isFalse();
+            verify(userReputationRepository, never()).save(any());
+            verify(activityLogService, never())
+                    .log(anyString(), any(), anyString(), anyLong(), any(Map.class), anyString());
+        }
+
+        @Test
+        @DisplayName("Không tìm thấy người dùng: 404 USER_NOT_FOUND")
+        void grantGraceStar_userNotFound_throwsUserNotFound() {
+            when(userReputationRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.empty());
+
+            BusinessException ex = assertThrows(
+                    BusinessException.class, () -> service.grantGraceStar(ADMIN_ID, USER_ID, "Đã giải trình"));
+
+            assertThat(ex.getErrorCode()).isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        }
+    }
+
+    @Nested
+    @DisplayName("7. Cặp giao dịch lặp cho cảnh báo Admin (findRepeatedPairs - FR-113, Issue #148)")
+    class RepeatedPairsTests {
+
+        @Test
+        @DisplayName("Đổi từng dòng của native query thành RepeatedPair, đọc được thời gian dạng OffsetDateTime")
+        void findRepeatedPairs_mapsRowsToRepeatedPairs() {
+            Instant since = NOW.minus(Duration.ofDays(90));
+            Object[] row = {3L, 7L, 6L, OffsetDateTime.parse("2026-10-20T15:00:00+07:00")};
+            when(userReputationRepository.findRepeatedPairs(since, 5L)).thenReturn(List.<Object[]>of(row));
+
+            assertThat(service.findRepeatedPairs(since, 5))
+                    .containsExactly(new RepeatedPair(3L, 7L, 6, Instant.parse("2026-10-20T08:00:00Z")));
         }
     }
 

@@ -1,5 +1,5 @@
 import { AdminComplaints } from './AdminComplaints';
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser, selectData } from '../../app/store';
@@ -48,7 +48,7 @@ import type { ApiError } from '../../services/http';
 import { resolveMediaUrl } from '../../services/mediaUrl';
 import { itemApi, type ItemResponse } from '../../services/itemApi';
 import { toBackendUserId } from '../../services/requestApi';
-import type { AppStateData, ForbiddenKeyword, Item, KeywordAction, RankRule, ReputationPointRule, SupportedDistrict, Transaction, User } from '../../types/domain';
+import type { AppStateData, ForbiddenKeyword, Item, KeywordAction, RankRule, ReputationPointRule, SupportedDistrict, User } from '../../types/domain';
 
 function Panel({
   title,
@@ -118,19 +118,21 @@ type ReviewDetailState =
   | { status: 'loaded'; data: ItemResponse }
   | { status: 'error'; message: string };
 
-function hasInlineReviewDetails(item: ReviewQueueItem) {
-  return item.description != null && item.categoryId != null && item.areaId != null && item.offerType != null && item.condition != null;
-}
-
 function flattenAreas(areas: AreaResponse[]): AreaResponse[] {
   return areas.flatMap((area) => [area, ...flattenAreas(area.children ?? [])]);
 }
 
-const apiConditionLabels: Record<NonNullable<ReviewQueueItem['condition']>, string> = {
+const apiConditionLabels: Record<ItemResponse['condition'], string> = {
   NEW: 'Mới',
   LIKE_NEW: 'Như mới',
   GOOD: 'Còn tốt',
   DEFECTIVE: 'Có lỗi',
+};
+
+const operatingStatusLabels: Record<NonNullable<ItemResponse['operatingStatus']>, string> = {
+  NORMAL: 'Hoạt động bình thường',
+  PARTIAL: 'Hoạt động một phần',
+  NOT_WORKING: 'Không hoạt động',
 };
 
 export function AdminDashboard() {
@@ -232,10 +234,11 @@ export function AdminModeration() {
   const [apiPending, setApiPending] = useState<ReviewQueueItem[]>([]);
   const [apiChecklist, setApiChecklist] = useState<ReviewChecklistItem[]>([]);
   const [apiAnswers, setApiAnswers] = useState<Record<number, boolean[]>>({});
+  const [apiApproving, setApiApproving] = useState<ReviewQueueItem | null>(null);
   const [apiRejecting, setApiRejecting] = useState<ReviewQueueItem | null>(null);
-  const [apiRejectReason, setApiRejectReason] = useState('');
   const [apiRejectReasons, setApiRejectReasons] = useState<string[]>([]);
   const [apiActionId, setApiActionId] = useState<number | null>(null);
+  const [apiActionError, setApiActionError] = useState('');
   const [apiLoading, setApiLoading] = useState(false);
   const [apiError, setApiError] = useState('');
   const [apiLegacyNotice, setApiLegacyNotice] = useState('');
@@ -244,6 +247,7 @@ export function AdminModeration() {
   const [reviewDetails, setReviewDetails] = useState<Record<number, ReviewDetailState>>({});
   const [categoryNames, setCategoryNames] = useState<Record<number, string>>({});
   const [areaNames, setAreaNames] = useState<Record<number, string>>({});
+  const apiSubmissionLock = useRef(false);
 
   useEffect(() => {
     if (!isApiAdmin) return;
@@ -308,48 +312,57 @@ export function AdminModeration() {
 
   const approveApiReview = async (item: ReviewQueueItem) => {
     const answers = apiAnswers[item.id] ?? [];
-    if (!apiChecklist.length || answers.length !== apiChecklist.length || answers.some((answer) => !answer)) return;
+    if (
+      apiSubmissionLock.current ||
+      !apiChecklist.length ||
+      answers.length !== apiChecklist.length ||
+      answers.some((answer) => !answer)
+    ) return;
+    apiSubmissionLock.current = true;
     setApiActionId(item.id);
-    setApiError('');
+    setApiActionError('');
     try {
       await adminModerationApi.approve(item.id, { answers: apiChecklist.map((entry, index) => ({ id: entry.id, passed: answers[index] })) });
       setApiPending((current) => current.filter((entry) => entry.id !== item.id));
       setToast(`Đã duyệt bài "${item.title}".`);
+      setApiApproving(null);
     } catch (error) {
       const apiError = error as ApiError;
       if (apiError.code === 'REVIEW_CHECKLIST_OUTDATED') {
         setApiAnswers({});
         setModerationReloadKey((key) => key + 1);
+        setApiApproving(null);
         setToast('Checklist đã thay đổi. Vui lòng kiểm tra và tích lại các điều kiện.');
       } else {
-        setApiError(apiError.status === 403 ? 'Tài khoản hiện tại không có quyền duyệt bài.' : apiError.message || 'Không duyệt được bài đăng.');
+        setApiActionError(apiError.status === 403 ? 'Tài khoản hiện tại không có quyền duyệt bài.' : apiError.message || 'Không duyệt được bài đăng.');
       }
     } finally {
+      apiSubmissionLock.current = false;
       setApiActionId(null);
     }
   };
 
-  const rejectApiReview = async () => {
-    const reason = apiRejectReason.trim();
-    if (!apiRejecting || !reason) return;
+  const rejectApiReview = async (reason: string) => {
+    if (!apiRejecting || !reason || apiSubmissionLock.current) return;
+    apiSubmissionLock.current = true;
     setApiActionId(apiRejecting.id);
-    setApiError('');
+    setApiActionError('');
     try {
       await adminModerationApi.reject(apiRejecting.id, { reason });
       setApiPending((current) => current.filter((entry) => entry.id !== apiRejecting.id));
       setToast(`Đã từ chối bài "${apiRejecting.title}".`);
       setApiRejecting(null);
-      setApiRejectReason('');
     } catch (error) {
       const apiError = error as ApiError;
-      setApiError(apiError.status === 403 ? 'Tài khoản hiện tại không có quyền từ chối bài.' : apiError.message || 'Không từ chối được bài đăng.');
+      setApiActionError(apiError.status === 403 ? 'Tài khoản hiện tại không có quyền từ chối bài.' : apiError.message || 'Không từ chối được bài đăng.');
     } finally {
+      apiSubmissionLock.current = false;
       setApiActionId(null);
     }
   };
 
   const loadReviewDetails = async (item: ReviewQueueItem) => {
-    if (hasInlineReviewDetails(item) || reviewDetails[item.id]) return;
+    if (reviewDetails[item.id]?.status === 'loading' || reviewDetails[item.id]?.status === 'loaded') return;
     setReviewDetails((current) => ({ ...current, [item.id]: { status: 'loading' } }));
     try {
       const detail = await itemApi.detail(item.id);
@@ -394,90 +407,195 @@ export function AdminModeration() {
           <div className="space-y-3">
             {apiRows.map((item) => {
               const detailState = reviewDetails[item.id];
-              const detail = detailState?.status === 'loaded' ? detailState.data : item;
+              const detail = detailState?.status === 'loaded' ? detailState.data : null;
               const expanded = Boolean(expandedReviewIds[item.id]);
-              const hasDetails = hasInlineReviewDetails(item) || detailState?.status === 'loaded';
               return (
-              <article key={item.id} className="grid gap-4 rounded-lg bg-white p-4 ring-1 ring-border/80 lg:grid-cols-[minmax(0,1fr)_280px]">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
-                    {displayRisk(item.aiRisk) ? <span className="rounded-sm bg-amber-50 px-2 py-1 font-semibold text-warning">Rủi ro: {displayRisk(item.aiRisk)}</span> : null}
-                  </div>
-                  <h2 className="mt-2 font-bold">{item.title}</h2>
-                  {displayModerationNote(item) ? <p className="mt-2 text-xs leading-5 text-text-muted">{displayModerationNote(item)}</p> : null}
-                  <p className="mt-2 text-xs text-text-muted">Gửi lúc {new Date(item.createdAt).toLocaleString('vi-VN')}</p>
-                  <Button className="mt-3" size="sm" variant="outline" onClick={() => toggleReviewDetails(item)}>
-                    {expanded ? 'Thu gọn thông tin' : 'Xem đầy đủ thông tin'}
-                  </Button>
-                  {expanded ? (
-                    <div className="mt-4">
-                      {detailState?.status === 'loading' ? <p className="text-sm text-text-muted">Đang tải thông tin chi tiết...</p> : null}
-                      {detailState?.status === 'error' ? <Alert tone="warning">{detailState.message}</Alert> : null}
-                      {hasDetails ? (
-                        <ModerationItemDetails
-                          item={detail}
-                          categoryName={detail.categoryId == null ? undefined : categoryNames[detail.categoryId]}
-                          areaName={detail.areaId == null ? undefined : areaNames[detail.areaId]}
+                <article
+                  key={item.id}
+                  className="overflow-hidden rounded-lg bg-white ring-1 ring-border/80 shadow-sm"
+                >
+                  <div className="min-w-0 p-4 sm:p-5">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                        {displayRisk(item.aiRisk) ? (
+                          <span className="rounded-sm bg-amber-50 px-2 py-1 font-semibold text-warning">
+                            Rủi ro: {displayRisk(item.aiRisk)}
+                          </span>
+                        ) : null}
+                        {item.moderationFlag ? (
+                          <span className="rounded-sm bg-red-50 px-2 py-1 font-semibold text-error">
+                            {moderationFlagLabel[item.moderationFlag.toUpperCase()] ?? item.moderationFlag}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <h2 className="mt-3 text-lg font-bold leading-7 text-text-primary">{item.title}</h2>
+
+                      <dl className="mt-4 grid gap-x-6 gap-y-3 rounded-md bg-surface-low p-4 sm:grid-cols-3">
+                        <Info label="Người đăng" value={`Người dùng #${item.donorId}`} />
+                        <Info
+                          label="Uy tín"
+                          value={
+                            item.donorTrustStars == null
+                              ? 'Chưa có dữ liệu'
+                              : `${item.donorTrustStars}/5 sao`
+                          }
                         />
+                        <Info
+                          label="Thời gian đăng"
+                          value={new Date(item.createdAt).toLocaleString('vi-VN')}
+                        />
+                      </dl>
+
+                      {displayModerationNote(item) || item.matchedTerms?.length ? (
+                        <div className="mt-4 rounded-md border border-amber-100 bg-amber-50 p-3 text-sm text-warning">
+                          {displayModerationNote(item) ? (
+                            <p className="leading-6">{displayModerationNote(item)}</p>
+                          ) : null}
+                          {item.matchedTerms?.length ? (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {item.matchedTerms.map((term) => (
+                                <span key={term} className="rounded-sm bg-white/80 px-2 py-1 text-xs font-semibold">
+                                  {term}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
                       ) : null}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="space-y-3">
-                  <p className="text-xs text-text-muted">Điểm tin cậy: {item.donorTrustStars ?? '--'}</p>
-                  <div className="space-y-2 rounded-md bg-surface-low p-3">
-                    {apiChecklist.map((entry, index) => (
-                      <label key={entry.id} className="flex items-start gap-2 text-xs leading-5">
-                        <input
-                          type="checkbox"
-                          checked={apiAnswers[item.id]?.[index] ?? false}
+
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => toggleReviewDetails(item)}
+                        >
+                          {expanded ? 'Thu gọn chi tiết' : 'Tải chi tiết và hình ảnh'}
+                        </Button>
+                        {!expanded ? (
+                          <span className="text-xs leading-5 text-text-muted">
+                            Danh sách chờ chưa chứa mô tả, danh mục, tình trạng và ảnh.
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {expanded ? (
+                        <div className="mt-4">
+                          {detailState?.status === 'loading' ? (
+                            <div className="rounded-md bg-surface-low p-4 text-sm text-text-muted">
+                              Đang tải chi tiết và hình ảnh từ API bài đăng...
+                            </div>
+                          ) : null}
+                          {detailState?.status === 'error' ? (
+                            <div className="space-y-3">
+                              <Alert tone="warning">{detailState.message}</Alert>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void loadReviewDetails(item)}
+                              >
+                                Thử tải lại chi tiết
+                              </Button>
+                            </div>
+                          ) : null}
+                          {detail ? (
+                            <ModerationItemDetails
+                              item={detail}
+                              categoryName={categoryNames[detail.categoryId]}
+                              areaName={areaNames[detail.areaId]}
+                            />
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">
+                        <Button
+                          size="sm"
+                          variant="danger"
                           disabled={apiActionId === item.id}
-                          onChange={(event) => setApiAnswers((current) => ({
-                            ...current,
-                            [item.id]: apiChecklist.map((_, answerIndex) => answerIndex === index ? event.target.checked : (current[item.id]?.[answerIndex] ?? false)),
-                          }))}
-                        />
-                        <span>{entry.statement}</span>
-                      </label>
-                    ))}
+                          onClick={() => {
+                            setApiActionError('');
+                            setApiRejecting(item);
+                          }}
+                        >
+                          Từ chối
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={apiActionId === item.id || !apiChecklist.length}
+                          onClick={() => {
+                            setApiActionError('');
+                            setApiApproving(item);
+                          }}
+                        >
+                          Duyệt bài
+                        </Button>
+                      </div>
                   </div>
-                  {apiChecklist.length ? <div className="flex justify-end gap-2">
-                    <Button size="sm" variant="danger" disabled={apiActionId === item.id} onClick={() => { setApiRejecting(item); setApiRejectReason(''); }}>
-                      Từ chối
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={
-                        apiActionId === item.id ||
-                        !apiChecklist.length ||
-                        (apiAnswers[item.id] ?? []).length !== apiChecklist.length ||
-                        !(apiAnswers[item.id] ?? []).every(Boolean)
-                      }
-                      onClick={() => void approveApiReview(item)}
-                    >
-                      {apiActionId === item.id ? 'Đang xử lý...' : 'Duyệt bài'}
-                    </Button>
-                  </div> : null}
-                </div>
-              </article>
+                </article>
               );
             })}
           </div>
         ) : (
           <EmptyState icon="shield" title={query ? 'Không tìm thấy bài phù hợp' : 'Không có bài chờ duyệt'} text={query ? 'Hãy thử từ khóa khác.' : 'Hiện chưa có bài đăng nào trong hàng chờ.'} />
         )}
+        {apiApproving ? (
+          <Modal
+            title="Checklist kiểm duyệt"
+            onClose={() => {
+              if (apiActionId === null) {
+                setApiApproving(null);
+                setApiActionError('');
+              }
+            }}
+          >
+            <p className="mb-4 text-sm text-text-muted">
+              Bài đăng: <span className="font-semibold text-text-primary">{apiApproving.title}</span>
+            </p>
+            <ModerationChecklistContent
+              checklist={apiChecklist}
+              answers={apiAnswers[apiApproving.id] ?? apiChecklist.map(() => false)}
+              disabled={apiActionId === apiApproving.id}
+              error={apiActionError}
+              onToggle={(index, checked) => {
+                setApiAnswers((current) => ({
+                  ...current,
+                  [apiApproving.id]: apiChecklist.map((_, answerIndex) =>
+                    answerIndex === index ? checked : (current[apiApproving.id]?.[answerIndex] ?? false),
+                  ),
+                }));
+              }}
+              onCancel={() => {
+                setApiApproving(null);
+                setApiActionError('');
+              }}
+              onConfirm={() => void approveApiReview(apiApproving)}
+            />
+          </Modal>
+        ) : null}
         {apiRejecting ? (
-          <Modal title={`Từ chối bài "${apiRejecting.title}"`} onClose={() => { if (apiActionId === null) setApiRejecting(null); }}>
-            <Select label="Lý do từ chối" value={apiRejectReason} onChange={(event) => setApiRejectReason(event.target.value)} disabled={apiActionId !== null}>
-              <option value="">Chọn lý do từ danh sách</option>
-              {apiRejectReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
-            </Select>
-            <div className="mt-5 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setApiRejecting(null)} disabled={apiActionId !== null}>Hủy</Button>
-              <Button variant="danger" onClick={() => void rejectApiReview()} disabled={!apiRejectReason.trim() || apiActionId !== null}>
-                {apiActionId !== null ? 'Đang xử lý...' : 'Xác nhận từ chối'}
-              </Button>
-            </div>
+          <Modal
+            title="Từ chối bài đăng"
+            onClose={() => {
+              if (apiActionId === null) {
+                setApiRejecting(null);
+                setApiActionError('');
+              }
+            }}
+          >
+            <p className="mb-4 text-sm text-text-muted">
+              Bài đăng: <span className="font-semibold text-text-primary">{apiRejecting.title}</span>
+            </p>
+            <RejectReasonsContent
+              key={apiRejecting.id}
+              reasons={apiRejectReasons}
+              disabled={apiActionId !== null}
+              error={apiActionError}
+              onChange={() => setApiActionError('')}
+              onCancel={() => {
+                setApiRejecting(null);
+                setApiActionError('');
+              }}
+              onConfirm={(reason) => void rejectApiReview(reason)}
+            />
           </Modal>
         ) : null}
       </Panel>
@@ -602,7 +720,7 @@ function ModerationItemDetails({
   categoryName,
   areaName,
 }: {
-  item: ReviewQueueItem | ItemResponse;
+  item: ItemResponse;
   categoryName?: string;
   areaName?: string;
 }) {
@@ -617,6 +735,14 @@ function ModerationItemDetails({
         <Info label="Khu vực" value={areaName ?? 'Chưa có dữ liệu'} />
         <Info label="Tình trạng" value={condition ? apiConditionLabels[condition] : 'Chưa có dữ liệu'} />
         <Info label="Thương hiệu" value={item.brand?.trim() || 'Không có'} />
+        <Info
+          label="Trạng thái hoạt động"
+          value={
+            item.operatingStatus
+              ? operatingStatusLabels[item.operatingStatus]
+              : 'Không áp dụng hoặc chưa có dữ liệu'
+          }
+        />
         <Info label="Ghi chú lỗi" value={item.defectNote?.trim() || 'Không có'} />
       </div>
       <div className="mt-4">
@@ -624,6 +750,203 @@ function ModerationItemDetails({
         <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-text-primary">{item.description?.trim() || 'Chưa có dữ liệu'}</p>
       </div>
       <ModerationImageGallery images={item.images ?? []} defectImages={item.defectImages ?? []} />
+    </div>
+  );
+}
+
+export function ModerationChecklistContent({
+  checklist,
+  answers,
+  disabled,
+  error,
+  onToggle,
+  onCancel,
+  onConfirm,
+}: {
+  checklist: ReviewChecklistItem[];
+  answers: boolean[];
+  disabled: boolean;
+  error?: string;
+  onToggle: (index: number, checked: boolean) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const completed = checklist.reduce((total, _, index) => total + (answers[index] ? 1 : 0), 0);
+  const isComplete = checklist.length > 0 && completed === checklist.length;
+  const progress = checklist.length ? Math.round((completed / checklist.length) * 100) : 0;
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-bold text-text-primary">Tiến độ kiểm duyệt</p>
+          <p className="mt-1 text-xs text-text-muted">Tích chọn từng tiêu chí sau khi đã kiểm tra bài đăng.</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-primary/10 px-3 py-1 text-sm font-bold text-primary" aria-live="polite">
+          {completed}/{checklist.length}
+        </span>
+      </div>
+      <div
+        className="mb-4 h-2 overflow-hidden rounded-full bg-surface-low"
+        role="progressbar"
+        aria-label="Tiến độ checklist"
+        aria-valuemin={0}
+        aria-valuemax={checklist.length}
+        aria-valuenow={completed}
+      >
+        <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress}%` }} />
+      </div>
+
+      {checklist.length ? (
+        <div className="max-h-[50dvh] space-y-2 overflow-y-auto overscroll-contain pr-1">
+          {checklist.map((entry, index) => (
+            <label
+              key={entry.id}
+              className="flex cursor-pointer items-start gap-3 rounded-md border border-border/80 p-3 text-sm leading-6 transition hover:bg-surface-low has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/40"
+            >
+              <input
+                type="checkbox"
+                checked={answers[index] ?? false}
+                disabled={disabled}
+                autoFocus={index === 0}
+                onChange={(event) => onToggle(index, event.target.checked)}
+                className="mt-1 size-4 shrink-0 accent-primary"
+              />
+              <span>{entry.statement}</span>
+            </label>
+          ))}
+        </div>
+      ) : (
+        <Alert tone="warning">Backend chưa cung cấp checklist kiểm duyệt. Không thể xác nhận duyệt bài.</Alert>
+      )}
+
+      {error ? <div className="mt-4"><Alert tone="error">{error}</Alert></div> : null}
+      <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">
+        <Button variant="ghost" onClick={onCancel} disabled={disabled}>Hủy</Button>
+        <Button onClick={onConfirm} disabled={!isComplete || disabled}>
+          {disabled ? 'Đang xử lý...' : 'Xác nhận duyệt bài'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function composeRejectReason(selectedReasons: string[], includeOther: boolean, otherReason: string) {
+  const reasons = selectedReasons.map((reason) => reason.trim()).filter(Boolean);
+  if (includeOther && otherReason.trim()) reasons.push(otherReason.trim());
+  return reasons.join('\n');
+}
+
+export function RejectReasonsContent({
+  reasons,
+  disabled,
+  error,
+  onChange,
+  onCancel,
+  onConfirm,
+}: {
+  reasons: string[];
+  disabled: boolean;
+  error?: string;
+  onChange?: () => void;
+  onCancel: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const normalizedReasons = Array.from(new Set(reasons.map((reason) => reason.trim()).filter(Boolean)));
+  const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
+  const [includeOther, setIncludeOther] = useState(false);
+  const [otherReason, setOtherReason] = useState('');
+  const selectedCount = selectedReasons.length + (includeOther ? 1 : 0);
+  const totalCount = normalizedReasons.length + 1;
+  const customReasonValid = !includeOther || Boolean(otherReason.trim());
+  const canConfirm = selectedCount > 0 && customReasonValid;
+  const combinedReason = composeRejectReason(selectedReasons, includeOther, otherReason);
+
+  const toggleReason = (reason: string, checked: boolean) => {
+    setSelectedReasons((current) => (
+      checked ? [...current, reason] : current.filter((entry) => entry !== reason)
+    ));
+    onChange?.();
+  };
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-bold text-text-primary">Lý do từ chối</p>
+          <p className="mt-1 text-xs text-text-muted">Có thể chọn một hoặc nhiều lý do phù hợp.</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-red-50 px-3 py-1 text-sm font-bold text-error" aria-live="polite">
+          {selectedCount}/{totalCount}
+        </span>
+      </div>
+
+      {normalizedReasons.length ? (
+        <div className="max-h-[36dvh] space-y-2 overflow-y-auto overscroll-contain pr-1" aria-label="Danh sách lý do từ chối">
+          {normalizedReasons.map((reason) => (
+            <label
+              key={reason}
+              className="flex cursor-pointer items-start gap-3 rounded-md border border-border/80 p-3 text-sm leading-6 transition hover:bg-surface-low has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/40"
+            >
+              <input
+                type="checkbox"
+                checked={selectedReasons.includes(reason)}
+                disabled={disabled}
+                onChange={(event) => toggleReason(reason, event.target.checked)}
+                className="mt-1 size-4 shrink-0 accent-primary"
+              />
+              <span>{reason}</span>
+            </label>
+          ))}
+        </div>
+      ) : (
+        <Alert tone="warning">Backend chưa cung cấp lý do mẫu. Bạn vẫn có thể nhập lý do khác.</Alert>
+      )}
+
+      <div className="mt-4 border-t border-border/70 pt-4">
+        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border/80 p-3 text-sm font-semibold leading-6 transition hover:bg-surface-low has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/40">
+          <input
+            type="checkbox"
+            checked={includeOther}
+            disabled={disabled}
+            onChange={(event) => {
+              setIncludeOther(event.target.checked);
+              onChange?.();
+            }}
+            className="mt-1 size-4 shrink-0 accent-primary"
+          />
+          <span>Lý do khác</span>
+        </label>
+        {includeOther ? (
+          <TextArea
+            className="mt-3"
+            label="Nội dung lý do khác"
+            required
+            value={otherReason}
+            disabled={disabled}
+            error={!otherReason.trim() ? 'Vui lòng nhập nội dung cho lý do khác.' : undefined}
+            placeholder="Nhập lý do cụ thể để người đăng biết nội dung cần chỉnh sửa..."
+            onChange={(event) => {
+              setOtherReason(event.target.value);
+              onChange?.();
+            }}
+          />
+        ) : null}
+      </div>
+
+      {error ? <div className="mt-4"><Alert tone="error">{error}</Alert></div> : null}
+      <div className="sticky bottom-0 mt-5 flex flex-wrap justify-end gap-2 border-t border-border/70 bg-white pt-4">
+        <Button variant="ghost" onClick={onCancel} disabled={disabled}>Hủy</Button>
+        <Button
+          variant="danger"
+          onClick={() => {
+            if (canConfirm && !disabled) onConfirm(combinedReason);
+          }}
+          disabled={!canConfirm || disabled}
+        >
+          {disabled ? 'Đang xử lý...' : 'Xác nhận từ chối'}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -639,7 +962,13 @@ function ModerationImageGallery({
   const itemImages = images.map(resolveMediaUrl).filter(Boolean);
   const itemDefectImages = defectImages.map(resolveMediaUrl).filter(Boolean);
 
-  if (!itemImages.length && !itemDefectImages.length) return null;
+  if (!itemImages.length && !itemDefectImages.length) {
+    return (
+      <div className="mt-4 rounded-md border border-dashed border-border p-4 text-sm text-text-muted">
+        Bài đăng không có hình ảnh trong response chi tiết.
+      </div>
+    );
+  }
 
   return (
     <div className="mt-4 space-y-3">
@@ -704,19 +1033,23 @@ function ModerationThumbnailGroup({
   return (
     <div>
       <p className="mb-2 text-xs font-semibold text-text-secondary">{label}</p>
-      <div className="flex flex-wrap gap-2">
+      <div className={mainThumbnail ? 'grid grid-cols-4 gap-2' : 'flex flex-wrap gap-2'}>
         {images.map((image, index) => (
           <button
             key={`${image}-${index}`}
             type="button"
             aria-label={`Xem lớn ${label.toLowerCase()} ${index + 1}`}
             onClick={() => onPreview(image, index)}
-            className="overflow-hidden rounded-md ring-1 ring-border"
+            className={`overflow-hidden rounded-md bg-white ring-1 ring-border transition hover:ring-primary/50 ${
+              mainThumbnail && index === 0 ? 'col-span-4' : ''
+            }`}
           >
             <ItemImage
               src={image}
               alt={`${label} ${index + 1}`}
-              className={`${mainThumbnail && index === 0 ? 'size-24' : 'size-16'} object-cover`}
+              className={`${
+                mainThumbnail && index === 0 ? 'h-56 w-full' : 'size-20'
+              } object-cover`}
             />
           </button>
         ))}
@@ -2722,18 +3055,31 @@ function AdminChecklist() {
   const admin = useAppSelector(selectCurrentUser)!;
   if (toBackendUserId(admin.id) === null || admin.role !== 'admin') {
     return (
-      <Panel title="Checklist duyệt bài" description="Checklist mẫu dành cho tài khoản demo.">
-        <div className="space-y-2">
-          {moderationChecklist.map((entry, index) => (
-            <div key={entry.key} className="rounded-md bg-white p-4 text-sm ring-1 ring-border/80">
-              <span className="mr-3 text-text-muted">{index + 1}.</span>{entry.label}
-            </div>
-          ))}
-        </div>
+      <Panel title="Checklist duyệt bài" description="Quản lý các tiêu chí kiểm duyệt từ Backend.">
+        <Alert tone="warning">Vui lòng đăng nhập bằng tài khoản Admin Backend để quản lý checklist.</Alert>
       </Panel>
     );
   }
   return <ApiAdminChecklist />;
+}
+
+function sortAdminChecklist(entries: AdminChecklistEntry[]) {
+  return [...entries].sort((left, right) => left.sortOrder - right.sortOrder || left.id - right.id);
+}
+
+function adminChecklistErrorMessage(error: unknown, fallback: string) {
+  const apiError = error as ApiError;
+  if (apiError.status === 400) {
+    if (apiError.code === 'SETTING_CHECKLIST_AT_LEAST_ONE_REQUIRED') {
+      return 'Phải luôn có ít nhất một tiêu chí đang hoạt động.';
+    }
+    return 'Dữ liệu checklist chưa hợp lệ. Vui lòng kiểm tra và thử lại.';
+  }
+  if (apiError.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (apiError.status === 403) return 'Bạn không có quyền quản lý checklist.';
+  if (apiError.status === 404) return 'Không tìm thấy tiêu chí checklist.';
+  if (apiError.status === 0) return 'Không kết nối được máy chủ. Vui lòng thử lại.';
+  return fallback;
 }
 
 function ApiAdminChecklist() {
@@ -2742,8 +3088,10 @@ function ApiAdminChecklist() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [editingError, setEditingError] = useState('');
   const [notice, setNotice] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const mutationLock = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -2751,10 +3099,10 @@ function ApiAdminChecklist() {
     setError('');
     adminChecklistApi.list()
       .then((response) => {
-        if (active) setEntries([...response].sort((a, b) => a.sortOrder - b.sortOrder));
+        if (active) setEntries(sortAdminChecklist(response));
       })
       .catch((apiError: ApiError) => {
-        if (active) setError(apiError.message || 'Không tải được checklist duyệt bài.');
+        if (active) setError(adminChecklistErrorMessage(apiError, 'Không tải được checklist duyệt bài.'));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -2763,72 +3111,95 @@ function ApiAdminChecklist() {
   }, [reloadKey]);
 
   const save = async (question: string) => {
-    setSavingId(editing === 'new' ? 0 : editing?.id ?? null);
-    setError('');
+    const trimmedQuestion = question.trim();
+    const currentEditing = editing;
+    if (
+      mutationLock.current ||
+      !currentEditing ||
+      !trimmedQuestion ||
+      trimmedQuestion.length > ADMIN_CHECKLIST_QUESTION_MAX_LENGTH
+    ) return;
+    mutationLock.current = true;
+    setSavingId(currentEditing === 'new' ? 0 : currentEditing.id);
+    setEditingError('');
+    setNotice('');
     try {
-      const saved = editing === 'new'
-        ? await adminChecklistApi.create({ question })
-        : await adminChecklistApi.update(editing!.id, { question });
-      setEntries((current) => (editing === 'new'
+      const saved = currentEditing === 'new'
+        ? await adminChecklistApi.create({ question: trimmedQuestion })
+        : await adminChecklistApi.update(currentEditing.id, { question: trimmedQuestion });
+      setEntries((current) => sortAdminChecklist(currentEditing === 'new'
         ? [...current, saved]
         : current.map((entry) => entry.id === saved.id ? saved : entry)
-      ).sort((a, b) => a.sortOrder - b.sortOrder));
-      setNotice(editing === 'new' ? 'Đã thêm tiêu chí.' : 'Đã cập nhật tiêu chí.');
+      ));
+      setNotice(currentEditing === 'new' ? 'Đã thêm tiêu chí.' : 'Đã cập nhật tiêu chí.');
       setEditing(null);
     } catch (apiError) {
-      setError((apiError as ApiError).message || 'Không lưu được tiêu chí.');
+      setEditingError(adminChecklistErrorMessage(apiError, 'Không lưu được tiêu chí.'));
     } finally {
+      mutationLock.current = false;
       setSavingId(null);
     }
   };
 
   const toggleActive = async (entry: AdminChecklistEntry) => {
+    if (mutationLock.current) return;
+    mutationLock.current = true;
     setSavingId(entry.id);
     setError('');
+    setNotice('');
     try {
       const updated = await adminChecklistApi.setActive(entry.id, !entry.active);
       setEntries((current) => current.map((item) => item.id === updated.id ? updated : item));
       setNotice(updated.active ? 'Đã kích hoạt tiêu chí.' : 'Đã tạm ngưng tiêu chí.');
     } catch (apiError) {
-      setError((apiError as ApiError).message || 'Không cập nhật được trạng thái tiêu chí.');
+      setError(adminChecklistErrorMessage(apiError, 'Không cập nhật được trạng thái tiêu chí.'));
     } finally {
+      mutationLock.current = false;
       setSavingId(null);
     }
   };
 
   const move = async (index: number, offset: -1 | 1) => {
     const targetIndex = index + offset;
-    if (targetIndex < 0 || targetIndex >= entries.length) return;
+    if (mutationLock.current || targetIndex < 0 || targetIndex >= entries.length) return;
     const reordered = [...entries];
     [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
+    const itemIds = reordered.map((entry) => entry.id);
+    if (new Set(itemIds).size !== entries.length) {
+      setError('Danh sách checklist có ID bị trùng. Vui lòng tải lại dữ liệu.');
+      return;
+    }
+    mutationLock.current = true;
     setSavingId(-1);
     setError('');
+    setNotice('');
     try {
-      const updated = await adminChecklistApi.reorder(reordered.map((entry) => entry.id));
-      setEntries([...updated].sort((a, b) => a.sortOrder - b.sortOrder));
+      const updated = await adminChecklistApi.reorder(itemIds);
+      setEntries(sortAdminChecklist(updated));
       setNotice('Đã cập nhật thứ tự checklist.');
     } catch (apiError) {
-      setError((apiError as ApiError).message || 'Không cập nhật được thứ tự checklist.');
+      setError(adminChecklistErrorMessage(apiError, 'Không cập nhật được thứ tự checklist. Thứ tự cũ được giữ nguyên.'));
     } finally {
+      mutationLock.current = false;
       setSavingId(null);
     }
   };
 
   return (
-    <Panel title="Checklist duyệt bài" description="Quản lý và sắp xếp các tiêu chí mà quản trị viên phải xác nhận khi duyệt bài." action={<Button icon="add" onClick={() => setEditing('new')}>Thêm tiêu chí</Button>}>
+    <Panel title="Checklist duyệt bài" description="Quản lý và sắp xếp các tiêu chí mà quản trị viên phải xác nhận khi duyệt bài." action={<Button icon="add" disabled={loading || savingId !== null} onClick={() => { setEditingError(''); setEditing('new'); }}>Thêm tiêu chí</Button>}>
       {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
       {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
       {loading ? <EmptyState title="Đang tải checklist" text="Vui lòng chờ trong giây lát." /> : entries.length ? (
         <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Tiêu chí</th><th className="whitespace-nowrap">Trạng thái</th><th className="min-w-[430px] whitespace-nowrap">Thao tác</th></tr></thead><tbody>
-          {entries.map((entry, index) => <tr key={entry.id}><td>{index + 1}</td><td className="font-semibold">{entry.question}</td><td className="whitespace-nowrap">{entry.active ? 'Đang hiển thị' : 'Đang ẩn'}</td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" size="sm" variant="ghost" title="Đưa mục này lên trên một vị trí" disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}>Chuyển lên</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="ghost" title="Đưa mục này xuống dưới một vị trí" disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}>Chuyển xuống</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="outline" title="Chỉnh sửa câu tiêu chí" disabled={savingId !== null} onClick={() => setEditing(entry)}>Sửa nội dung</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="outline" title={entry.active ? 'Không hiển thị mục này khi duyệt bài (không xoá)' : 'Hiển thị lại mục này khi duyệt bài'} disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Ẩn khỏi checklist' : 'Hiện lại'}</Button></div></td></tr>)}
+          {entries.map((entry, index) => <tr key={entry.id}><td>{index + 1}</td><td className="font-semibold">{entry.question}</td><td className="whitespace-nowrap"><span className={`rounded-sm px-2 py-1 text-xs font-semibold ${entry.active ? 'bg-emerald-50 text-success' : 'bg-surface-low text-text-muted'}`}>{entry.active ? 'Đang hoạt động' : 'Không hoạt động'}</span></td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" size="sm" variant="ghost" title="Đưa mục này lên trên một vị trí" disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}>Chuyển lên</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="ghost" title="Đưa mục này xuống dưới một vị trí" disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}>Chuyển xuống</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="outline" title="Chỉnh sửa câu tiêu chí" disabled={savingId !== null} onClick={() => { setEditingError(''); setEditing(entry); }}>Sửa nội dung</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="outline" title={entry.active ? 'Không hiển thị mục này khi duyệt bài (không xoá)' : 'Hiển thị lại mục này khi duyệt bài'} disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}
         </tbody></table></div>
-      ) : <EmptyState title="Chưa có tiêu chí" text="Hiện chưa có tiêu chí duyệt bài nào." />}
-      {editing ? <ChecklistEditModal entry={editing === 'new' ? null : editing} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(question) => void save(question)} /> : null}
+      ) : error ? null : <EmptyState title="Chưa có tiêu chí" text="Hiện chưa có tiêu chí duyệt bài nào." />}
+      {editing ? <ChecklistEditModal entry={editing === 'new' ? null : editing} saving={savingId !== null} error={editingError} onClose={() => { if (savingId === null) { setEditing(null); setEditingError(''); } }} onSave={(question) => void save(question)} /> : null}
     </Panel>
   );
 }
 
-function ChecklistEditModal({ entry, saving, onClose, onSave }: { entry: AdminChecklistEntry | null; saving: boolean; onClose: () => void; onSave: (question: string) => void }) {
+function ChecklistEditModal({ entry, saving, error, onClose, onSave }: { entry: AdminChecklistEntry | null; saving: boolean; error: string; onClose: () => void; onSave: (question: string) => void }) {
   const [question, setQuestion] = useState(entry?.question ?? '');
   const questionTooLong = question.length > ADMIN_CHECKLIST_QUESTION_MAX_LENGTH;
   return <Modal title={entry ? 'Sửa tiêu chí' : 'Thêm tiêu chí'} onClose={onClose}>
@@ -2842,6 +3213,7 @@ function ChecklistEditModal({ entry, saving, onClose, onSave }: { entry: AdminCh
     <p className={`mt-1.5 text-right text-xs ${questionTooLong ? 'text-error' : 'text-text-muted'}`}>
       {question.length}/{ADMIN_CHECKLIST_QUESTION_MAX_LENGTH} ký tự
     </p>
+    {error ? <div className="mt-4"><Alert tone="error">{error}</Alert></div> : null}
     <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !question.trim() || questionTooLong} onClick={() => onSave(question.trim())}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
   </Modal>;
 }
@@ -2920,15 +3292,19 @@ function ApiAdminCategories() {
   </Panel>;
 }
 
-function ApiCategoryModal({ category, categories, saving, onClose, onSave }: { category: AdminCategoryResponse | null; categories: AdminCategoryResponse[]; saving: boolean; onClose: () => void; onSave: (input: AdminCategoryRequest) => void }) {
+export function ApiCategoryModal({ category, categories, saving, onClose, onSave }: { category: AdminCategoryResponse | null; categories: AdminCategoryResponse[]; saving: boolean; onClose: () => void; onSave: (input: AdminCategoryRequest) => void }) {
   const [name, setName] = useState(category?.name ?? '');
   const [parentId, setParentId] = useState(category?.parentId ? String(category.parentId) : '');
   const [restricted, setRestricted] = useState(category?.restricted ?? false);
   const [boostable, setBoostable] = useState(category?.boostable ?? false);
-  const [sortOrder, setSortOrder] = useState(category?.sortOrder ?? 0);
+  const [sortOrder, setSortOrder] = useState(String(category?.sortOrder ?? 0));
+  const normalizedSortOrder = sortOrder === '' ? null : Number(sortOrder);
+  const validSortOrder = /^\d+$/.test(sortOrder)
+    && normalizedSortOrder !== null
+    && Number.isSafeInteger(normalizedSortOrder);
   return <Modal title={category ? 'Sửa danh mục' : 'Thêm danh mục'} onClose={onClose}>
-    <div className="space-y-4"><Field label="Tên danh mục" value={name} onChange={(event) => setName(event.target.value)} /><Select label="Danh mục cha" value={parentId} onChange={(event) => setParentId(event.target.value)}><option value="">Không có</option>{categories.filter((entry) => entry.id !== category?.id).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</Select><Field label="Thứ tự" type="number" min={0} value={sortOrder} onChange={(event) => setSortOrder(Number(event.target.value))} /><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={restricted} onChange={(event) => setRestricted(event.target.checked)} />Danh mục hạn chế</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={boostable} onChange={(event) => setBoostable(event.target.checked)} />Cho phép boost</label></div>
-    <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !name.trim() || !Number.isInteger(sortOrder) || sortOrder < 0} onClick={() => onSave({ name: name.trim(), parentId: parentId ? Number(parentId) : null, restricted, boostable, sortOrder })}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
+    <div className="space-y-4"><Field label="Tên danh mục" value={name} onChange={(event) => setName(event.target.value)} /><Select label="Danh mục cha" value={parentId} onChange={(event) => setParentId(event.target.value)}><option value="">Không có</option>{categories.filter((entry) => entry.id !== category?.id).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</Select><Field label="Thứ tự" type="number" min={0} step={1} inputMode="numeric" value={sortOrder} onChange={(event) => { const nextValue = event.target.value; if (nextValue === '' || /^\d+$/.test(nextValue)) setSortOrder(nextValue); }} onBlur={() => { if (validSortOrder) setSortOrder(String(normalizedSortOrder)); }} /><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={restricted} onChange={(event) => setRestricted(event.target.checked)} />Danh mục hạn chế</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={boostable} onChange={(event) => setBoostable(event.target.checked)} />Cho phép đẩy tin</label></div>
+    <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !name.trim() || !validSortOrder} onClick={() => { if (normalizedSortOrder !== null) onSave({ name: name.trim(), parentId: parentId ? Number(parentId) : null, restricted, boostable, sortOrder: normalizedSortOrder }); }}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
   </Modal>;
 }
 
@@ -3041,7 +3417,6 @@ function AdminStaticContent({
   const data = useAppSelector(selectData);
   const admin = useAppSelector(selectCurrentUser)!;
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [categories, setCategories] = useState<CategoryRow[]>(() =>
     CATEGORIES.map((name) => ({
       id: name,
@@ -3054,9 +3429,6 @@ function AdminStaticContent({
   const [editingCategory, setEditingCategory] = useState<CategoryRow | null>(null);
   const [accountAction, setAccountAction] = useState<{ user: User; locked: boolean } | null>(null);
   const [selectedExpired, setSelectedExpired] = useState<Item | null>(null);
-  const [selectedAlertId, setSelectedAlertId] = useState('');
-  const [inspectedAlerts, setInspectedAlerts] = useState<string[]>([]);
-  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
   const [toast, setToast] = useState('');
   const configs = {
     expired: ['Bài quá hạn', 'Theo dõi và xử lý các bài đã hết thời gian hiển thị.'],
@@ -3065,10 +3437,6 @@ function AdminStaticContent({
     alerts: ['Cảnh báo bất thường', 'Tín hiệu cần kiểm tra từ hoạt động giao dịch và Credit.'],
   } as const;
   const [title, description] = configs[kind];
-  const alertRows = data.transactions
-    .filter((t) => t.status === 'DISPUTED' )
-    .filter((t) => !dismissedAlerts.includes(`alert_${t.id}`));
-  const selectedTx = alertRows.find((tx) => `alert_${tx.id}` === selectedAlertId);
   const rows =
     kind === 'expired'
           ? data.items
@@ -3244,66 +3612,16 @@ function AdminStaticContent({
   if (kind === 'alerts') {
     return (
       <Panel title={title} description={description}>
-        {alertRows.length ? (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Tên / Mã</th>
-                  <th>Thông tin</th>
-                  <th>Trạng thái</th>
-                  <th>Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                {alertRows.map((tx) => {
-                  const alertId = `alert_${tx.id}`;
-                  const isInspected = inspectedAlerts.includes(alertId);
-                  return (
-                    <tr key={alertId} className="cursor-pointer" onClick={() => setSelectedAlertId(alertId)}>
-                      <td className="font-semibold">{alertId}</td>
-                      <td>{tx.status === 'DISPUTED' ? 'Giao dịch có khiếu nại' : 'Nhiều bên đã giữ Credit'}</td>
-                      <td>{isInspected ? 'Đã kiểm tra' : tx.status}</td>
-                      <td>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedAlertId(alertId);
-                          }}
-                        >
-                          Xem chi tiết
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <EmptyState title="Chưa có dữ liệu phù hợp" text="Các bản ghi mới sẽ xuất hiện tại đây." />
-        )}
-        {selectedTx ? (
-          <AlertDetailModal
-            transaction={selectedTx}
-            data={data}
-            inspected={inspectedAlerts.includes(`alert_${selectedTx.id}`)}
-            onClose={() => setSelectedAlertId('')}
-            onInspect={() => {
-              setInspectedAlerts((current) => [...new Set([...current, `alert_${selectedTx.id}`])]);
-              setToast('Đã đánh dấu cảnh báo đã kiểm tra.');
-            }}
-            onDismiss={() => {
-              setDismissedAlerts((current) => [...new Set([...current, `alert_${selectedTx.id}`])]);
-              setSelectedAlertId('');
-              setToast('Đã bỏ qua cảnh báo.');
-            }}
-            onOpenTransaction={() => navigate(`/admin/transactions/${selectedTx.id}`)}
+        <Alert tone="warning">
+          Backend hiện chưa cung cấp API cảnh báo bất thường. Trang này sẽ không hiển thị dữ liệu
+          mô phỏng thay cho dữ liệu vận hành thật.
+        </Alert>
+        <div className="mt-5">
+          <EmptyState
+            title="Chưa có nguồn dữ liệu Backend"
+            text="Cần GET /api/v1/admin/anomalies trong Swagger trước khi có thể tải cảnh báo."
           />
-        ) : null}
-        {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
+        </div>
       </Panel>
     );
   }
@@ -3419,77 +3737,28 @@ function ExpiredPostModal({
   );
 }
 
-function AlertDetailModal({
-  transaction,
-  data,
-  inspected,
-  onClose,
-  onInspect,
-  onOpenTransaction,
-  onDismiss,
-}: {
-  transaction: Transaction;
-  data: AppStateData;
-  inspected: boolean;
-  onClose: () => void;
-  onInspect: () => void;
-  onOpenTransaction: () => void;
-  onDismiss: () => void;
-}) {
-  const item = data.items.find((entry) => entry.id === transaction.itemId);
-  const owner = data.users.find((entry) => entry.id === transaction.ownerId);
-  const requester = data.users.find((entry) => entry.id === transaction.requesterId);
-  const alertId = `alert_${transaction.id}`;
-  const alertType = transaction.status === 'DISPUTED' ? 'Giao dịch có khiếu nại' : 'Nhiều bên đã giữ Credit';
-  const relatedLogs = data.auditLogs
-    .filter((log) => log.targetId === transaction.id || log.targetId === transaction.itemId)
-    .slice(0, 5);
-  return (
-    <Modal title="Chi tiết cảnh báo bất thường" onClose={onClose}>
-      <div className="grid gap-3 text-sm sm:grid-cols-2">
-        <Info label="Mã cảnh báo" value={alertId} />
-        <Info label="Mã giao dịch" value={transaction.id} />
-        <Info label="Người liên quan" value={[owner?.name, requester?.name].filter(Boolean).join(' ↔ ')} />
-        <Info label="Loại cảnh báo" value={alertType} />
-        <Info label="Thời gian phát hiện" value={new Date(transaction.createdAt).toLocaleString('vi-VN')} />
-        <Info label="Trạng thái giao dịch" value={transaction.status} />
-        <Info label="Liên hệ" value={['WAITING_HANDOVER', 'SENDER_CONFIRMED', 'RECEIVER_CONFIRMED', 'COMPLETED'].includes(transaction.status) ? 'Đã mở khóa' : 'Chưa mở khóa'} />
-        <Info label="Trạng thái kiểm tra" value={inspected ? 'Đã kiểm tra' : 'Chưa kiểm tra'} />
-      </div>
-      <div className="mt-4 rounded-md bg-background p-3 text-sm leading-6 text-text-secondary">
-        <p><strong className="text-text-primary">Nội dung cảnh báo:</strong> {item?.title ?? transaction.itemId}</p>
-        <p className="mt-1"><strong className="text-text-primary">Lý do hệ thống đánh dấu:</strong> {alertType}</p>
-      </div>
-      <div className="mt-4">
-        <h3 className="text-sm font-bold">Lịch sử hoạt động liên quan</h3>
-        <div className="mt-2 space-y-2">
-          {relatedLogs.length ? relatedLogs.map((log) => (
-            <div key={log.id} className="rounded-md border border-border px-3 py-2 text-xs text-text-muted">
-              <p className="font-semibold text-text-primary">{log.detail}</p>
-              <p className="mt-0.5">{new Date(log.createdAt).toLocaleString('vi-VN')}</p>
-            </div>
-          )) : (
-            <p className="text-sm text-text-muted">Chưa có lịch sử liên quan trong audit log.</p>
-          )}
-        </div>
-      </div>
-      <div className="mt-6 flex flex-wrap justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>Đóng</Button>
-        <Button variant="outline" onClick={onInspect}>Đánh dấu đã kiểm tra</Button>
-        <Button variant="secondary" onClick={onOpenTransaction}>Xem giao dịch liên quan</Button>
-        <Button variant="danger" onClick={onDismiss}>Bỏ qua cảnh báo</Button>
-      </div>
-    </Modal>
-  );
-}
-
 function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  const titleId = useId();
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
-      <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-xl sm:rounded-xl sm:p-6">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-xl sm:rounded-xl sm:p-6"
+      >
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-bold">{title}</h2>
-          <button onClick={onClose} className="grid size-9 place-items-center rounded-md text-text-muted hover:bg-surface-low">
+          <h2 id={titleId} className="text-xl font-bold">{title}</h2>
+          <button type="button" aria-label="Đóng" onClick={onClose} className="grid size-9 place-items-center rounded-md text-text-muted hover:bg-surface-low">
             <Icon name="close" className="size-5" />
           </button>
         </div>

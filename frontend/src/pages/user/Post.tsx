@@ -24,14 +24,16 @@ const GIVE_POST_SUCCESS =
   'Đăng bài cho tặng thành công. Bài đăng đã được gửi để xét duyệt.';
 const PENDING_REVIEW_NOTICE = 'Bài đăng đang chờ quản trị viên duyệt.';
 const WALLET_INSUFFICIENT_BALANCE = 'WALLET_INSUFFICIENT_BALANCE';
+const ITEM_MODERATION_BLOCKED = 'ITEM_MODERATION_BLOCKED';
 const INSUFFICIENT_CREDIT_MESSAGE = 'Số dư Credit khả dụng không đủ để đăng bài.';
+const MODERATION_BLOCKED_TITLE = 'Bài đăng chưa đáp ứng quy định';
+const MODERATION_BLOCKED_MESSAGE =
+  'Nội dung bài đăng của bạn có thể chứa thông tin không phù hợp với quy định của ShareLoop. Vui lòng kiểm tra và chỉnh sửa tiêu đề, mô tả hoặc hình ảnh trước khi đăng lại.';
 const BACKEND_SESSION_REQUIRED = 'Vui lòng đăng nhập bằng tài khoản thật để đăng bài.';
 const SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST =
   import.meta.env.DEV && import.meta.env.VITE_POST_SKIP_MEDIA_UPLOAD === 'true';
 const ITEM_IMAGES_MIN = 3;
 const ITEM_IMAGES_MAX = 8;
-// Giá trị mặc định của Backend; Backend vẫn quyết định mức phí thực tế khi tạo bài.
-const POST_FEE_DISPLAY = 5;
 
 const CONDITION_TO_API: Record<ItemCondition, ApiCondition> = {
   NEW: 'NEW',
@@ -42,6 +44,15 @@ const CONDITION_TO_API: Record<ItemCondition, ApiCondition> = {
   good: 'GOOD',
   used: 'DEFECTIVE',
 };
+
+const OPERATING_STATUS_LABELS: Record<OperatingStatus, string> = {
+  NORMAL: 'Hoạt động bình thường',
+  PARTIAL: 'Hoạt động một phần',
+  NOT_WORKING: 'Không hoạt động',
+};
+
+const isOperatingStatus = (value: string): value is OperatingStatus =>
+  value === 'NORMAL' || value === 'PARTIAL' || value === 'NOT_WORKING';
 
 export function Post() {
   const user = useAppSelector(selectCurrentUser)!;
@@ -82,12 +93,19 @@ export function Post() {
   const currentUserId = toBackendUserId(user.id);
   const mediaUploading = mediaUploadState === 'uploading';
   const availableCredit = isApiAccount ? wallet?.available ?? null : user.availableCredit;
-  const operatingStatusRequired = categoryAttributes.some(
+  // Phí đăng bài Trao đổi đọc từ Backend (GET /listing-fees); null khi chưa tải được.
+  const [postFee, setPostFee] = useState<number | null>(null);
+  const [postFeeError, setPostFeeError] = useState('');
+  const sortedCategoryAttributes = [...categoryAttributes].sort(
+    (left, right) => left.sortOrder - right.sortOrder || left.id - right.id,
+  );
+  const operatingStatusAttribute = sortedCategoryAttributes.find(
     (attribute) =>
-      attribute.required &&
       attribute.dataType === 'SELECT' &&
       ['NORMAL', 'PARTIAL', 'NOT_WORKING'].every((option) => attribute.options.includes(option)),
   );
+  const operatingStatusRequired = operatingStatusAttribute?.required ?? false;
+  const operatingStatusOptions = operatingStatusAttribute?.options.filter(isOperatingStatus) ?? [];
 
   useEffect(() => {
     let active = true;
@@ -116,7 +134,29 @@ export function Post() {
   }, []);
 
   useEffect(() => {
+    if (!isApiAccount) return;
+    let active = true;
+    itemApi
+      .getListingFees()
+      .then((fees) => {
+        if (!active) return;
+        setPostFee(fees.postFeeSwap);
+        setPostFeeError('');
+      })
+      .catch(() => {
+        if (!active) return;
+        setPostFee(null);
+        setPostFeeError('Chưa tải được phí đăng bài. Vui lòng thử lại.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [isApiAccount]);
+
+  useEffect(() => {
     const categoryId = categoryIds.get(category);
+    setOperatingStatus('');
+    setErrors((current) => ({ ...current, operatingStatus: undefined }));
     if (!isApiAccount || !categoryId) {
       setCategoryAttributes([]);
       setAttributesError('');
@@ -176,7 +216,11 @@ export function Post() {
       setError(walletLoading ? 'Đang tải số dư Credit. Vui lòng chờ trong giây lát.' : walletError || 'Chưa thể xác minh số dư Credit.');
       return;
     }
-    if (type === 'trade' && availableCredit !== null && availableCredit < POST_FEE_DISPLAY) {
+    if (type === 'trade' && postFee === null) {
+      setError(postFeeError || 'Đang tải phí đăng bài. Vui lòng chờ trong giây lát.');
+      return;
+    }
+    if (type === 'trade' && postFee !== null && availableCredit !== null && availableCredit < postFee) {
       setErrorCode(WALLET_INSUFFICIENT_BALANCE);
       setError(INSUFFICIENT_CREDIT_MESSAGE);
       setConfirmOpen(false);
@@ -198,7 +242,12 @@ export function Post() {
       setConfirmOpen(false);
       return;
     }
-    if (type === 'trade' && availableCredit !== null && availableCredit < POST_FEE_DISPLAY) {
+    if (type === 'trade' && postFee === null) {
+      setError(postFeeError || 'Đang tải phí đăng bài. Vui lòng chờ trong giây lát.');
+      setConfirmOpen(false);
+      return;
+    }
+    if (type === 'trade' && postFee !== null && availableCredit !== null && availableCredit < postFee) {
       setErrorCode(WALLET_INSUFFICIENT_BALANCE);
       setError(INSUFFICIENT_CREDIT_MESSAGE);
       setConfirmOpen(false);
@@ -292,7 +341,9 @@ export function Post() {
       setErrorCode(apiError.code);
       setError(apiError.code === WALLET_INSUFFICIENT_BALANCE
         ? INSUFFICIENT_CREDIT_MESSAGE
-        : apiError.message || 'Không đăng được bài. Vui lòng kiểm tra thông tin và thử lại.');
+        : apiError.code === ITEM_MODERATION_BLOCKED
+          ? MODERATION_BLOCKED_MESSAGE
+          : apiError.message || 'Không đăng được bài. Vui lòng kiểm tra thông tin và thử lại.');
       if (apiError.code === WALLET_INSUFFICIENT_BALANCE) refreshWallet();
       setConfirmOpen(false);
     } finally {
@@ -320,16 +371,21 @@ export function Post() {
       />
       {error ? (
         <Alert tone="error">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span>
-              {error}
-            </span>
-            {errorCode === WALLET_INSUFFICIENT_BALANCE ? (
-              <Link to="/credit">
-                <Button size="sm">Nạp Credit</Button>
-              </Link>
-            ) : null}
-          </div>
+          {errorCode === ITEM_MODERATION_BLOCKED ? (
+            <div>
+              <p className="font-bold text-error">{MODERATION_BLOCKED_TITLE}</p>
+              <p className="mt-1 whitespace-normal break-words leading-6">{error}</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span>{error}</span>
+              {errorCode === WALLET_INSUFFICIENT_BALANCE ? (
+                <Link to="/credit">
+                  <Button size="sm">Nạp Credit</Button>
+                </Link>
+              ) : null}
+            </div>
+          )}
         </Alert>
       ) : null}
       <form onSubmit={submit} className="grid gap-6 lg:grid-cols-[1fr_280px]">
@@ -407,7 +463,13 @@ export function Post() {
               {attributesError ? <p className="mt-2 text-error">{attributesError}</p> : null}
               {!attributesLoading && !attributesError && categoryAttributes.length ? (
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {categoryAttributes.map((attribute) => <span key={attribute.id} className="rounded-full bg-white px-3 py-1 text-xs ring-1 ring-border">{attribute.name}{attribute.required ? ' · bắt buộc' : ''}</span>)}
+                  {sortedCategoryAttributes.map((attribute) => (
+                    <span key={attribute.id} className="rounded-full bg-white px-3 py-1 text-xs ring-1 ring-border">
+                      {attribute.name}
+                      {attribute.required ? ' · bắt buộc' : ''}
+                      {attribute.options.length ? ` · ${attribute.options.join(', ')}` : ` · ${attribute.dataType}`}
+                    </span>
+                  ))}
                 </div>
               ) : null}
               {categoryAttributes.length ? <p className="mt-2 text-xs text-text-muted">Hãy nêu các thông tin trên trong phần mô tả để người xem dễ đánh giá món đồ.</p> : null}
@@ -485,17 +547,17 @@ export function Post() {
               </label>
             </>
           ) : null}
-          {operatingStatusRequired ? (
+          {operatingStatusAttribute ? (
             <div>
               <Select
-                label="Trạng thái hoạt động"
+                label={`${operatingStatusAttribute.name}${operatingStatusRequired ? '' : ' (không bắt buộc)'}`}
                 value={operatingStatus}
                 onChange={(event) => setOperatingStatus(event.target.value as OperatingStatus | '')}
               >
                 <option value="">Chọn trạng thái hoạt động</option>
-                <option value="NORMAL">Hoạt động bình thường</option>
-                <option value="PARTIAL">Hoạt động một phần</option>
-                <option value="NOT_WORKING">Không hoạt động</option>
+                {operatingStatusOptions.map((option) => (
+                  <option key={option} value={option}>{OPERATING_STATUS_LABELS[option]}</option>
+                ))}
               </Select>
               {errors.operatingStatus ? <span className="mt-1 block text-xs text-error">{errors.operatingStatus}</span> : null}
             </div>
@@ -606,7 +668,7 @@ export function Post() {
           ) : null}
           <div className="space-y-1 rounded-lg bg-white p-4 text-xs leading-5 text-text-secondary ring-1 ring-border/80">
             <p className="whitespace-nowrap text-text-primary"><strong>Cho tặng:</strong> miễn phí</p>
-            <p className="whitespace-nowrap text-text-primary"><strong>Trao đổi:</strong> phí đăng bài {POST_FEE_DISPLAY} Credit</p>
+            <p className="whitespace-nowrap text-text-primary"><strong>Trao đổi:</strong> phí đăng bài {postFee === null ? "--" : postFee} Credit</p>
           </div>
           <Button className="w-full" size="lg" disabled={submitting || mediaUploading || catalogLoading}>
             Đăng bài
@@ -624,27 +686,38 @@ export function Post() {
             <h2 id="post-fee-title" className="text-xl font-bold text-text-primary">
               Xác nhận đăng bài
             </h2>
-            <p className="mt-2 text-sm leading-6 text-text-muted">
-              {type === 'gift'
-                ? 'Bài cho tặng được đăng miễn phí.'
-                : 'Phí đăng bài sẽ được trừ một lần sau khi bạn xác nhận.'}
-            </p>
+            {type === 'gift' ? (
+              <p className="mt-2 text-sm leading-6 text-text-muted">Bài cho tặng được đăng miễn phí.</p>
+            ) : (
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-text-muted">
+                <li>Giữ {postFee === null ? '--' : postFee} Credit khi gửi duyệt.</li>
+                <li>Chỉ trừ khi bài được duyệt lần đầu.</li>
+                <li>Nhả lại toàn bộ nếu bài bị từ chối hoặc bạn gỡ bài trước khi duyệt.</li>
+              </ul>
+            )}
             <div className="mt-5 space-y-3 rounded-lg bg-surface-low p-4 text-sm">
               <SummaryRow
                 label="Phí đăng bài"
-                value={type === 'gift' ? 'Miễn phí' : `${POST_FEE_DISPLAY} Credit`}
+                value={type === 'gift' ? 'Miễn phí' : postFee === null ? '--' : `${postFee} Credit`}
               />
               <SummaryRow label="Số dư hiện tại" value={availableCredit === null ? '--' : `${availableCredit} Credit`} />
               <SummaryRow
-                label="Số dư sau khi đăng"
-                value={availableCredit === null ? '--' : `${type === 'gift' ? availableCredit : availableCredit - POST_FEE_DISPLAY} Credit`}
+                label="Khả dụng sau khi giữ"
+                value={
+                  availableCredit === null || (type !== 'gift' && postFee === null)
+                    ? '--'
+                    : `${type === 'gift' ? availableCredit : availableCredit - (postFee ?? 0)} Credit`
+                }
               />
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={submitting || mediaUploading}>
                 Hủy
               </Button>
-              <Button onClick={confirmSubmit} disabled={submitting || mediaUploading}>
+              <Button
+                onClick={confirmSubmit}
+                disabled={submitting || mediaUploading || (type === 'trade' && postFee === null)}
+              >
                 {submitting ? 'Đang đăng...' : 'Xác nhận đăng bài'}
               </Button>
             </div>

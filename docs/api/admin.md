@@ -105,7 +105,7 @@ Xem nhật ký hành động trong hệ thống (FR-115, Issue #117). Chỉ dàn
 | `USER_UNLOCK` | Mở khoá tài khoản | `USER` | - |
 | `REPORT_DISMISSED` | Bác bỏ báo cáo | `REPORT` | `decision`, `reportId`, `targetType` |
 | `REPORT_UPHELD` | Chấp nhận báo cáo | `REPORT` | `decision`, `reportId`, `targetType`, `violatorId`, `starsDeducted`, `seriousViolation` |
-| `POINTS` | Cộng điểm | `REQUEST` | `points`, `totalPoints`, `rank`, `role` |
+| `POINTS` | Cộng điểm | `REQUEST` | `points` (điểm thực cộng, có thể 0), `basePoints`, `totalPoints`, `rank`, `role`, `pairTransactionNo`, `pointsToday` |
 | `STARS` | Trừ sao | `USER` | `amount`, `before`, `after` |
 | `AI_USAGE` | Gọi AI kiểm duyệt | `ITEM` | `attempt`, `outcome`, `durationMs`, `model` |
 | `LEXICON_CREATE` | Thêm từ khoá cấm | `LEXICON` | `term`, `severity`, `active` |
@@ -124,6 +124,8 @@ Xem nhật ký hành động trong hệ thống (FR-115, Issue #117). Chỉ dàn
 | `AREA_CREATE` | Thêm khu vực | `AREA` | `name`, `active` |
 | `AREA_UPDATE` | Sửa khu vực | `AREA` | `name`, `active` |
 | `AREA_TOGGLE` | Bật/tắt khu vực | `AREA` | `name`, `active` |
+| `GRACE_STAR` | Cấp sao ân hạn | `USER` | `before`, `after` (lý do Admin nhập ở `reason`) |
+| `STAR_RESTORED` | Tự hồi sao | `USER` (`actorId = null`) | `before`, `after`, `cleanStreak` |
 
 > Bản ghi cũ có `type = 'AiUsage'` được migration `V202610191500__audit_rename_ai_usage` đổi thành `AI_USAGE`.
 
@@ -197,6 +199,69 @@ Báo cáo tài chính ba sổ và đối chiếu TopUp (FR-109, FR-110, BR-P09, 
 | `400` | Bad Request | `INVALID_DATE_RANGE`: Từ ngày (`from`) sau đến ngày (`to`) |
 | `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
 | `403` | Forbidden | Người dùng không có vai trò Admin |
+
+---
+
+## 2.1. GET /api/v1/admin/finance/report.csv
+
+Xuất báo cáo tài chính ra file CSV (FR-111, Issue #149). Cùng số liệu và cùng cách hiểu `from`/`to` với [mục 2](#2-get-apiv1adminfinancereport); chỉ khác định dạng trả về. Chỉ dành cho Admin.
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
+- **Query Parameters:** `from`, `to` giống [mục 2](#2-get-apiv1adminfinancereport).
+- **Thành công:** `200 OK`, body là file CSV.
+
+| Header | Giá trị |
+|---|---|
+| `Content-Type` | `text/csv;charset=UTF-8` |
+| `Content-Disposition` | `attachment; filename="finance-report_<from>_<to>.csv"`; thiếu `from` ghi `start`, thiếu `to` ghi `now` (vd: `finance-report_start_now.csv`) |
+
+**Định dạng file:**
+
+- Mã hoá UTF-8 **có BOM** (3 byte đầu `EF BB BF`) để Excel hiển thị đúng tiếng Việt; phân cách bằng dấu phẩy, xuống dòng CRLF.
+- File chia thành các phần cách nhau một dòng trống. Mỗi phần gồm dòng tiêu đề tiếng Việt, dòng header trùng tên trường của `FinanceSummaryResponse`, rồi các dòng dữ liệu.
+- `Từ ngày` / `Đến ngày` là ngày Admin truyền vào (theo giờ Việt Nam); không truyền thì ghi `không giới hạn`.
+- Phần Credit liệt kê từng `type` có dữ liệu (sắp theo tên type), số luôn dương; dòng `Tổng` có `amount` = `creditInTotal` / `creditOutTotal` và `entryCount` = tổng `entryCount` các dòng phía trên.
+
+Ví dụ với cùng dữ liệu của mục 2 (`from=2026-10-01&to=2026-10-31`):
+
+```csv
+Báo cáo tài chính ShareLoop
+Từ ngày,2026-10-01
+Đến ngày,2026-10-31
+
+Tiền mặt thu
+cashOrderCount,cashAmountVnd
+3,100000
+
+Credit cộng vào
+type,amount,entryCount
+ADMIN_ADJUST,7,1
+TOP_UP,100,3
+Tổng,107,4
+
+Credit trừ ra
+type,amount,entryCount
+AI_SEARCH_FEE,2,2
+EDIT_FEE,5,1
+POST_FEE,10,2
+RENEW_FEE,5,1
+Tổng,22,6
+
+Đối chiếu TopUp
+cashCredits,topUpCredits,difference,matched
+100,100,0,true
+```
+
+- **Mã lỗi:** trả JSON theo định dạng lỗi chung (không phải CSV), không có `Content-Disposition`.
+
+| Mã | Ý nghĩa | Mô tả |
+|----|---------|-------|
+| `200` | Thành công | Trả về file CSV |
+| `400` | Bad Request | `INVALID_DATE_RANGE`: Từ ngày (`from`) sau đến ngày (`to`); `VALIDATION_FAILED`: ngày sai định dạng |
+| `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
+| `403` | Forbidden | Người dùng không có vai trò Admin |
+
+> FE gọi khác origin (vd: `VITE_API_BASE_URL` trỏ sang Render) không đọc được header `Content-Disposition` vì CORS mới expose `X-Trace-Id`; FE tự đặt tên file khi lưu blob.
 
 ---
 
@@ -312,3 +377,86 @@ Mở khoá tài khoản người dùng và ghi nhật ký hoạt động (FR-107
 | `403` | Forbidden | Người dùng không có vai trò Admin |
 | `404` | Not Found | `USER_NOT_FOUND`: Người dùng không tồn tại |
 | `409` | Conflict | `USER_NOT_LOCKED`: Tài khoản đang hoạt động bình thường, không cần mở khoá |
+
+---
+
+## 6. POST /api/v1/admin/users/{userId}/grace-star
+
+Cấp 1 sao ân hạn cho người dùng đang có 0 sao (FR-95, BR-U09, UC-51, Issue #150). Mỗi tài khoản chỉ được cấp **một lần** (`grace_star_used` chỉ đổi `false → true`). Bắt buộc có lý do; hành động ghi nhật ký `GRACE_STAR`.
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
+- **Path Variable:** `userId` (ID người dùng được cấp).
+- **Request Body:**
+
+```json
+{
+  "reason": "Đã giải trình và cam kết không tái phạm"
+}
+```
+
+- **Thành công:** `200 OK`, trả về `GraceStarResponse`. Người dùng có lại 1 sao nên đăng bài và gửi yêu cầu được trở lại (BR-U05); bài đã bị ẩn lúc về 0 sao vẫn giữ nguyên trạng thái ẩn.
+
+```json
+{
+  "userId": 42,
+  "trustStars": 1,
+  "graceStarUsed": true
+}
+```
+
+- **Mã lỗi:**
+
+| Mã | Ý nghĩa | Mô tả |
+|----|---------|-------|
+| `200` | Thành công | Đã cấp 1 sao và ghi nhật ký |
+| `400` | Bad Request | `VALIDATION_FAILED`: Thiếu lý do hoặc lý do vượt quá 500 ký tự |
+| `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
+| `403` | Forbidden | Người dùng không có vai trò Admin |
+| `404` | Not Found | `USER_NOT_FOUND`: Người dùng không tồn tại |
+| `409` | Conflict | `REPUTATION_GRACE_STAR_ALREADY_USED`: Đã được cấp sao ân hạn trước đó (kể cả khi về 0 sao lần hai) |
+| `409` | Conflict | `REPUTATION_GRACE_STAR_NOT_ELIGIBLE`: Người dùng vẫn còn sao (chỉ cấp khi đang 0 sao) |
+
+---
+
+## 7. GET /api/v1/admin/anomalies
+
+Cảnh báo bất thường cho Admin (FR-113, UC-52, BR-U08, Issue #148). Kết quả tính trực tiếp mỗi lần gọi, không lưu bảng.
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
+- **Cặp giao dịch lặp:** hai người có **hơn** `reputation_pair_alert_threshold` (mặc định `5`) giao dịch `COMPLETED` với nhau trong `reputation_pair_window_days` ngày gần nhất (mặc định `90`), tính cả hai chiều cho/nhận. Giao dịch đã huỷ hoặc hoàn tất ngoài cửa sổ không tính. Cách đếm cặp giống luật không cộng điểm khi giao dịch hoàn tất (BR-U08, [reputation.md mục 1.4](reputation.md#14-void-oncompletedlong-requestid)).
+- **Sắp xếp:** nhiều giao dịch nhất lên trước, cùng số thì cặp có giao dịch gần nhất lên trước. `userA` là người có id nhỏ hơn.
+- **Chưa làm:** cảnh báo nhiều tài khoản cùng IP, đang chờ BE1 đồng ý thêm method vào `UserService` (module user). Khi làm sẽ thêm một mảng mới vào response (ngưỡng `accounts_per_ip_24h`, không giới hạn thời gian); các trường hiện có giữ nguyên.
+- **Thành công:** `200 OK`, trả về `AnomalyReportResponse`. Không có cảnh báo nào thì `repeatedPairs` là mảng rỗng.
+
+```json
+{
+  "generatedAt": "2026-10-22T03:00:00Z",
+  "pairWindowDays": 90,
+  "pairThreshold": 5,
+  "repeatedPairs": [
+    {
+      "userA": { "id": 3, "fullName": "Nguyễn Văn An", "email": "an@fpt.edu.vn" },
+      "userB": { "id": 7, "fullName": "Trần Thị Bình", "email": "binh@fpt.edu.vn" },
+      "completedCount": 6,
+      "lastCompletedAt": "2026-10-20T08:00:00Z"
+    }
+  ]
+}
+```
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `generatedAt` | string (ISO-8601) | Thời điểm tính |
+| `pairWindowDays` | number | Số ngày của cửa sổ tính cặp |
+| `pairThreshold` | number | Cặp có **hơn** số giao dịch này trong cửa sổ thì bị cảnh báo |
+| `repeatedPairs[].userA`, `userB` | object | `id`, `fullName`, `email` của hai người. Người dùng đã xoá mềm: `fullName = "Người dùng #<id>"`, `email = null` |
+| `repeatedPairs[].completedCount` | number | Số giao dịch `COMPLETED` giữa hai người trong cửa sổ |
+| `repeatedPairs[].lastCompletedAt` | string (ISO-8601) | Thời điểm hoàn tất gần nhất của cặp |
+
+- **Mã lỗi:**
+
+| Mã | Ý nghĩa | Mô tả |
+|----|---------|-------|
+| `200` | Thành công | Trả về danh sách cảnh báo (có thể rỗng) |
+| `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
+| `403` | Forbidden | Người dùng không có vai trò Admin |

@@ -7,15 +7,26 @@ import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.reputation.ReputationErrorCode;
+import com.shareloop.reputation.dto.GraceStarResponse;
 import com.shareloop.reputation.dto.MyReputationResponse;
 import com.shareloop.reputation.dto.PointHistoryDto;
+import com.shareloop.reputation.dto.RepeatedPair;
 import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.dto.RequestParticipantProjection;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.entity.UserReputation;
 import com.shareloop.reputation.repository.UserReputationRepository;
+import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.UserErrorCode;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,11 +35,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service cửa ngõ của module reputation (Lộ trình 4.7, SRS FR-91, FR-92, FR-94, FR-97, FR-100, BR-U01, BR-U05).
- * Module khác thông báo sự kiện liên quan đến uy tín người dùng qua service này.
+ * Service cửa ngõ của module reputation (Lộ trình 4.7, SRS FR-91, FR-92, FR-94, FR-95, FR-97, FR-98, FR-99,
+ * FR-100, BR-U01, BR-U05, BR-U08, BR-U09, BR-U11). Module khác thông báo sự kiện liên quan đến uy tín người dùng qua
+ * service này.
  */
 @Service
 public class ReputationService {
+
+    private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final ConfigService configService;
     private final UserReputationRepository userReputationRepository;
@@ -36,21 +50,29 @@ public class ReputationService {
     private final ActivityLogQueryService activityLogQueryService;
     private final ObjectProvider<ItemService> itemServiceProvider;
     private final NotificationService notificationService;
+    private final Clock clock;
 
     public ReputationService() {
-        this(null, null, null, null, (ObjectProvider<ItemService>) null, null);
+        this(null, null, null, null, (ObjectProvider<ItemService>) null, null, Clock.systemUTC());
     }
 
     public ReputationService(UserReputationRepository userReputationRepository) {
-        this(null, userReputationRepository, null, null, (ObjectProvider<ItemService>) null, null);
+        this(null, userReputationRepository, null, null, (ObjectProvider<ItemService>) null, null, Clock.systemUTC());
     }
 
     public ReputationService(ConfigService configService) {
-        this(configService, null, null, null, (ObjectProvider<ItemService>) null, null);
+        this(configService, null, null, null, (ObjectProvider<ItemService>) null, null, Clock.systemUTC());
     }
 
     public ReputationService(ConfigService configService, UserReputationRepository userReputationRepository) {
-        this(configService, userReputationRepository, null, null, (ObjectProvider<ItemService>) null, null);
+        this(
+                configService,
+                userReputationRepository,
+                null,
+                null,
+                (ObjectProvider<ItemService>) null,
+                null,
+                Clock.systemUTC());
     }
 
     public ReputationService(
@@ -65,7 +87,8 @@ public class ReputationService {
                 activityLogService,
                 null,
                 itemService != null ? new SimpleObjectProvider<>(itemService) : null,
-                notificationService);
+                notificationService,
+                Clock.systemUTC());
     }
 
     public ReputationService(
@@ -74,14 +97,16 @@ public class ReputationService {
             ActivityLogService activityLogService,
             ActivityLogQueryService activityLogQueryService,
             ItemService itemService,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            Clock clock) {
         this(
                 configService,
                 userReputationRepository,
                 activityLogService,
                 activityLogQueryService,
                 itemService != null ? new SimpleObjectProvider<>(itemService) : null,
-                notificationService);
+                notificationService,
+                clock);
     }
 
     @Autowired
@@ -91,13 +116,15 @@ public class ReputationService {
             @Autowired(required = false) ActivityLogService activityLogService,
             @Autowired(required = false) ActivityLogQueryService activityLogQueryService,
             @Autowired(required = false) ObjectProvider<ItemService> itemServiceProvider,
-            @Autowired(required = false) NotificationService notificationService) {
+            @Autowired(required = false) NotificationService notificationService,
+            Clock clock) {
         this.configService = configService;
         this.userReputationRepository = userReputationRepository;
         this.activityLogService = activityLogService;
         this.activityLogQueryService = activityLogQueryService;
         this.itemServiceProvider = itemServiceProvider;
         this.notificationService = notificationService;
+        this.clock = clock;
     }
 
     /**
@@ -230,6 +257,15 @@ public class ReputationService {
      * </ul>
      * Tính lại hạng ngay lập tức và ghi nhật ký hoạt động. Chống cộng điểm hai lần cho cùng một yêu cầu (Idempotency).
      *
+     * <p>Chống cày điểm và hồi sao (Issue #150), ngưỡng đọc từ ConfigService:
+     * <ul>
+     *   <li>BR-U08, FR-98: từ giao dịch hoàn tất thứ 3 giữa cùng một cặp (tính cả hai chiều) trong 90 ngày thì cộng 0
+     *   điểm, vẫn ghi nhật ký POINTS kèm lý do.</li>
+     *   <li>BR-U11, FR-99: mỗi người tối đa 30 điểm mỗi ngày theo giờ Việt Nam; chạm trần thì chỉ cộng phần còn lại.</li>
+     *   <li>BR-U09, FR-94: mỗi giao dịch hoàn tất là một giao dịch sạch; đủ 10 giao dịch sạch liên tiếp mà chưa đủ 5 sao
+     *   thì hồi 1 sao và ghi nhật ký STAR_RESTORED.</li>
+     * </ul>
+     *
      * @param requestId id của yêu cầu giao dịch vừa chuyển sang COMPLETED
      */
     @Transactional
@@ -281,48 +317,90 @@ public class ReputationService {
         UserReputation donor = donorId.equals(firstId) ? firstUser : secondUser;
         UserReputation receiver = receiverId.equals(firstId) ? firstUser : secondUser;
 
-        // 5. Cộng điểm và tính lại hạng ngay lập tức
+        // 5. BR-U08: đếm sau khi đã khoá hai người để giao dịch cùng cặp hoàn tất song song không cùng lọt điểm
+        int pairWindowDays = configInt(ConfigKey.REPUTATION_PAIR_WINDOW_DAYS);
+        Instant now = clock.instant();
+        long pairTransactionNo = userReputationRepository.countCompletedBetween(
+                        donorId, receiverId, now.minus(Duration.ofDays(pairWindowDays)), requestId)
+                + 1;
+        CompletionContext context = new CompletionContext(
+                requestId,
+                pairTransactionNo,
+                pairWindowDays,
+                pairTransactionNo >= configInt(ConfigKey.REPUTATION_PAIR_NO_POINTS_FROM),
+                LocalDate.ofInstant(now, VIETNAM_ZONE),
+                configInt(ConfigKey.DAILY_POINTS_CAP),
+                configInt(ConfigKey.REPUTATION_CLEAN_STREAK_FOR_STAR));
+
+        // 6. Cộng điểm trong trần ngày, tính lại hạng ngay lập tức và ghi chuỗi giao dịch sạch
         if (donor != null) {
-            int newTotal = donor.getTotalPoints() + donorPts;
-            Rank newRank = getRank(newTotal);
-            donor.addPoints(donorPts, newRank);
-            userReputationRepository.save(donor);
-
-            if (activityLogService != null) {
-                activityLogService.log(
-                        ActivityType.POINTS.name(),
-                        donorId,
-                        "REQUEST",
-                        requestId,
-                        Map.of("points", donorPts, "totalPoints", newTotal, "rank", newRank.name(), "role", "DONOR"),
-                        "Cộng " + donorPts + " điểm hoàn tất giao dịch #" + requestId + " (vai trò cho/tặng)");
-            }
+            applyCompletion(donor, donorPts, "DONOR", "vai trò cho/tặng", context);
         }
-
         if (receiver != null) {
-            int newTotal = receiver.getTotalPoints() + receiverPts;
-            Rank newRank = getRank(newTotal);
-            receiver.addPoints(receiverPts, newRank);
-            userReputationRepository.save(receiver);
-
-            if (activityLogService != null) {
-                activityLogService.log(
-                        ActivityType.POINTS.name(),
-                        receiverId,
-                        "REQUEST",
-                        requestId,
-                        Map.of(
-                                "points",
-                                receiverPts,
-                                "totalPoints",
-                                newTotal,
-                                "rank",
-                                newRank.name(),
-                                "role",
-                                "RECEIVER"),
-                        "Cộng " + receiverPts + " điểm hoàn tất giao dịch #" + requestId + " (vai trò nhận/đổi)");
-            }
+            applyCompletion(receiver, receiverPts, "RECEIVER", "vai trò nhận/đổi", context);
         }
+    }
+
+    private void applyCompletion(
+            UserReputation user, int basePoints, String role, String roleLabel, CompletionContext context) {
+        int granted =
+                user.claimDailyPoints(context.repeatedPair() ? 0 : basePoints, context.dailyCap(), context.today());
+        int newTotal = user.getTotalPoints() + granted;
+        Rank newRank = getRank(newTotal);
+        user.addPoints(granted, newRank);
+
+        int starsBefore = user.getTrustStars();
+        boolean starRestored = user.recordCleanTransaction(context.streakForStar());
+        userReputationRepository.save(user);
+
+        if (activityLogService == null) {
+            return;
+        }
+        activityLogService.log(
+                ActivityType.POINTS.name(),
+                user.getId(),
+                "REQUEST",
+                context.requestId(),
+                Map.of(
+                        "points", granted,
+                        "basePoints", basePoints,
+                        "totalPoints", newTotal,
+                        "rank", newRank.name(),
+                        "role", role,
+                        "pairTransactionNo", context.pairTransactionNo(),
+                        "pointsToday", user.getPointsToday()),
+                pointsReason(context, roleLabel, basePoints, granted));
+        if (starRestored) {
+            activityLogService.log(
+                    ActivityType.STAR_RESTORED.name(),
+                    null,
+                    "USER",
+                    user.getId(),
+                    Map.of(
+                            "before",
+                            starsBefore,
+                            "after",
+                            user.getTrustStars(),
+                            "cleanStreak",
+                            context.streakForStar()),
+                    "Hồi 1 sao sau " + context.streakForStar() + " giao dịch sạch liên tiếp");
+        }
+    }
+
+    private static String pointsReason(CompletionContext context, String roleLabel, int basePoints, int granted) {
+        String transaction = "giao dịch #" + context.requestId() + " (" + roleLabel + ")";
+        if (context.repeatedPair()) {
+            return "Không cộng điểm " + transaction + ": giao dịch thứ " + context.pairTransactionNo()
+                    + " giữa cùng hai người trong " + context.pairWindowDays() + " ngày";
+        }
+        if (granted == 0 && basePoints > 0) {
+            return "Không cộng điểm " + transaction + ": đã đạt trần " + context.dailyCap() + " điểm trong ngày";
+        }
+        if (granted < basePoints) {
+            return "Cộng " + granted + "/" + basePoints + " điểm hoàn tất " + transaction + ": chạm trần "
+                    + context.dailyCap() + " điểm trong ngày";
+        }
+        return "Cộng " + granted + " điểm hoàn tất " + transaction;
     }
 
     /**
@@ -331,6 +409,7 @@ public class ReputationService {
      * <p>Quy tắc:
      * <ul>
      *   <li>Trừ số lượng sao chỉ định, không để âm (tối thiểu 0 sao).</li>
+     *   <li>Vi phạm làm mất chuỗi giao dịch sạch: clean_streak về 0 (BR-U09, Issue #150).</li>
      *   <li>Ghi nhật ký hành động (activity_logs STARS).</li>
      *   <li>Nếu số sao trước đó > 0 và sau khi trừ về đúng 0 sao: vô hiệu hoá quyền đăng bài bằng cách ẩn toàn bộ
      *   bài đăng đang hiển thị của người này và gửi thông báo cảnh báo (chỉ gửi đúng 1 lần khi chạm mốc 0).</li>
@@ -354,6 +433,7 @@ public class ReputationService {
         int before = user.getTrustStars();
         int newStars = Math.max(0, before - amount);
         user.setTrustStars((short) newStars);
+        user.resetCleanStreak();
         userReputationRepository.save(user);
 
         if (activityLogService != null) {
@@ -385,6 +465,44 @@ public class ReputationService {
     @Transactional
     public void deductStar(Long userId, int amount) {
         deductStar(userId, amount, null);
+    }
+
+    /**
+     * Admin cấp 1 sao ân hạn cho người dùng đang có 0 sao (FR-95, BR-U09, UC-51, Issue #150). Mỗi tài khoản chỉ được
+     * cấp một lần; hành động ghi nhật ký GRACE_STAR kèm lý do.
+     *
+     * @param adminId Admin thực hiện
+     * @param userId người được cấp
+     * @param reason lý do cấp, bắt buộc
+     * @return số sao sau khi cấp
+     * @throws BusinessException USER_NOT_FOUND khi không có người dùng; REPUTATION_GRACE_STAR_ALREADY_USED khi đã cấp
+     *     trước đó; REPUTATION_GRACE_STAR_NOT_ELIGIBLE khi người dùng vẫn còn sao
+     */
+    @Transactional
+    public GraceStarResponse grantGraceStar(Long adminId, Long userId, String reason) {
+        UserReputation user = userReputationRepository
+                .findByIdForUpdate(userId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+        if (user.isGraceStarUsed()) {
+            throw new BusinessException(ReputationErrorCode.REPUTATION_GRACE_STAR_ALREADY_USED);
+        }
+        if (user.getTrustStars() > 0) {
+            throw new BusinessException(ReputationErrorCode.REPUTATION_GRACE_STAR_NOT_ELIGIBLE);
+        }
+
+        user.grantGraceStar();
+        userReputationRepository.save(user);
+
+        if (activityLogService != null) {
+            activityLogService.log(
+                    ActivityType.GRACE_STAR.name(),
+                    adminId,
+                    "USER",
+                    userId,
+                    Map.of("before", 0, "after", user.getTrustStars()),
+                    reason);
+        }
+        return new GraceStarResponse(userId, user.getTrustStars(), user.isGraceStarUsed());
     }
 
     /**
@@ -422,6 +540,58 @@ public class ReputationService {
                 .map(u -> u.getTrustStars() > 0)
                 .orElse(true);
     }
+
+    /**
+     * Cặp người dùng giao dịch với nhau nhiều bất thường, dùng cho trang cảnh báo của Admin (FR-113, BR-U08, Issue
+     * #148). Cùng cách đếm cặp với luật không cộng điểm ở {@link #onCompleted}: tính cả hai chiều, chỉ giao dịch
+     * COMPLETED.
+     *
+     * @param since mốc bắt đầu cửa sổ tính cặp (gồm)
+     * @param threshold chỉ lấy cặp có số giao dịch lớn hơn số này
+     * @return các cặp, nhiều giao dịch nhất lên trước
+     */
+    @Transactional(readOnly = true)
+    public List<RepeatedPair> findRepeatedPairs(Instant since, int threshold) {
+        if (userReputationRepository == null) {
+            return List.of();
+        }
+        return userReputationRepository.findRepeatedPairs(since, threshold).stream()
+                .map(row -> new RepeatedPair(
+                        ((Number) row[0]).longValue(),
+                        ((Number) row[1]).longValue(),
+                        ((Number) row[2]).longValue(),
+                        toInstant(row[3])))
+                .toList();
+    }
+
+    // Native query trả timestamptz dưới dạng Instant hoặc OffsetDateTime tuỳ cấu hình Hibernate, giống ReviewService.
+    private static Instant toInstant(Object value) {
+        if (value instanceof Instant instant) {
+            return instant;
+        }
+        if (value instanceof OffsetDateTime offsetDateTime) {
+            return offsetDateTime.toInstant();
+        }
+        if (value instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toInstant();
+        }
+        return null;
+    }
+
+    // configService null chỉ gặp ở unit test dựng service rút gọn; khi đó dùng giá trị mặc định của ConfigKey.
+    private int configInt(ConfigKey key) {
+        return configService != null ? configService.getInt(key) : key.getDefaultValue();
+    }
+
+    /** Thông số chung của một lần hoàn tất giao dịch, dùng cho cả hai bên. */
+    private record CompletionContext(
+            long requestId,
+            long pairTransactionNo,
+            int pairWindowDays,
+            boolean repeatedPair,
+            LocalDate today,
+            int dailyCap,
+            int streakForStar) {}
 
     private int getThreshold(String upperKey, String lowerKey, int fallback) {
         try {

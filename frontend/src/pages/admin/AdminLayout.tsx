@@ -7,7 +7,7 @@ const sections = [
     label: 'Nội dung',
     items: [
       ['article', 'Duyệt bài', '/admin/moderation'],
-      // Tạm ẩn "Nhãn chính hãng" (/admin/authenticity): chưa có luồng xác nhận và chưa có BR. Code BE vẫn giữ.
+      // Tạm ẩn "Xác minh hàng chính hãng" (/admin/authenticity): chưa có luồng xác nhận và chưa có BR. Code BE vẫn giữ.
       ['shield', 'Checklist duyệt bài', '/admin/checklist'],
       ['history', 'Bài quá hạn', '/admin/expired-posts'],
       ['box', 'Danh mục', '/admin/categories'],
@@ -18,7 +18,7 @@ const sections = [
   {
     label: 'Người dùng',
     items: [
-      ['group', 'Danh sách người dùng', '/admin/users'],
+      ['group', 'Khóa / mở khóa tài khoản', '/admin/users'],
       ['star', 'Uy tín & Hạng', '/admin/reputation'],
       ['close', 'Khóa tài khoản', '/admin/locked-users'],
     ],

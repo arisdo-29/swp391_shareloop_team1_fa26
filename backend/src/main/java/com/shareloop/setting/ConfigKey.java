@@ -54,7 +54,11 @@ public enum ConfigKey {
     REPUTATION_DIAMOND_MIN("reputation_diamond_min", "400"),
     REPUTATION_GIVE_DONOR("reputation_give_donor", "10"),
     REPUTATION_GIVE_RECEIVER("reputation_give_receiver", "2"),
-    REPUTATION_SWAP_EACH("reputation_swap_each", "6");
+    REPUTATION_SWAP_EACH("reputation_swap_each", "6"),
+    REPUTATION_CLEAN_STREAK_FOR_STAR("reputation_clean_streak_for_star", "10"),
+    REPUTATION_PAIR_NO_POINTS_FROM("reputation_pair_no_points_from", "3"),
+    REPUTATION_PAIR_WINDOW_DAYS("reputation_pair_window_days", "90"),
+    REPUTATION_PAIR_ALERT_THRESHOLD("reputation_pair_alert_threshold", "5");
 
     private final String key;
     private final String defaultValue;

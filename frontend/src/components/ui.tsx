@@ -56,6 +56,7 @@ const iconMap = {
   payments: Icons.Coins,
   settings: Icons.GearSix,
   history: Icons.ClockCounterClockwise,
+  download: Icons.DownloadSimple,
 } as const;
 
 export function Icon({

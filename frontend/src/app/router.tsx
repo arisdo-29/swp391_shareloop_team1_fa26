@@ -28,10 +28,13 @@ import { AdminLayout } from '../pages/admin/AdminLayout';
 import { AdminUnderDevelopment } from '../pages/admin/AdminUnderDevelopment';
 import { AdminComplaints } from '../pages/admin/AdminComplaints';
 import { AdminTopUpOrders } from '../pages/admin/AdminTopUpOrders';
+import { AdminReputation } from '../pages/admin/AdminReputation';
 import { NotFound } from '../pages/NotFound';
 import {
   AdminOperationsDashboard as AdminDashboard,
   AdminFinanceReport as AdminFinance,
+  AdminAccountActions,
+  AdminUserCreditHistory,
 } from '../pages/admin/AdminFinancePages';
 import {
   AdminAuditLogs,
@@ -106,10 +109,10 @@ export const router = createBrowserRouter([
               { path: 'categories', element: <AdminContentPage kind="categories" /> },
               { path: 'keywords', element: <AdminContentPage kind="keywords" /> },
               { path: 'districts', element: <AdminContentPage kind="districts" /> },
-              { path: 'users', element: <AdminUnderDevelopment title="Quản lý tài khoản" /> },
-              { path: 'users/:userId', element: <AdminUnderDevelopment title="Lịch sử Credit người dùng" /> },
-              { path: 'reputation', element: <AdminUnderDevelopment title="Uy tín & Hạng" /> },
-              { path: 'locked-users', element: <AdminUnderDevelopment title="Quản lý tài khoản" /> },
+              { path: 'users', element: <AdminAccountActions /> },
+              { path: 'users/:userId', element: <AdminUserCreditHistory /> },
+              { path: 'reputation', element: <AdminReputation /> },
+              { path: 'locked-users', element: <AdminAccountActions /> },
               { path: 'transactions', element: <AdminUnderDevelopment title="Giao dịch" /> },
               { path: 'transactions/:transactionId', element: <AdminUnderDevelopment title="Giao dịch" /> },
               { path: 'complaints', element: <AdminComplaints /> },
@@ -117,8 +120,8 @@ export const router = createBrowserRouter([
               { path: 'alerts', element: <AdminContentPage kind="alerts" /> },
               { path: 'finance', element: <AdminFinance /> },
               { path: 'finance/topup-orders', element: <AdminTopUpOrders /> },
-              { path: 'finance/users', element: <AdminUnderDevelopment title="Lịch sử Credit người dùng" /> },
-              { path: 'finance/users/:userId', element: <AdminUnderDevelopment title="Lịch sử Credit người dùng" /> },
+              { path: 'finance/users', element: <AdminUserCreditHistory /> },
+              { path: 'finance/users/:userId', element: <AdminUserCreditHistory /> },
               { path: 'settings/fees', element: <AdminSettings /> },
               { path: 'settings/ranks', element: <AdminContentPage kind="ranks" /> },
               { path: 'audit-logs', element: <AdminAuditLogs /> },

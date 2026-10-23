@@ -54,7 +54,71 @@ Lấy trang bài đăng đang chờ duyệt (`PENDING_REVIEW`) kèm danh sách �
 
 ---
 
-## 2. POST /api/v1/admin/reviews/{itemId}/approve
+## 2. GET /api/v1/admin/reviews/{itemId}
+
+Chi tiết một bài đăng cho Admin kiểm duyệt, ở **mọi trạng thái** (`PENDING_REVIEW`, `REJECTED`, `APPROVED`...), kể cả bài đang bị ẩn (`isActive = false`). Endpoint công khai `GET /api/v1/items/{id}` không đổi và vẫn chỉ cho xem bài `APPROVED` đang hoạt động hoặc bài của chính chủ.
+
+Ảnh trong `images`/`defectImages` có dạng `/api/v1/media/{id}`; ảnh món đồ và ảnh chỗ lỗi có `visibility = PUBLIC` nên dùng được trực tiếp trong `<img src>`, không cần token.
+
+### Path Parameters
+- `itemId`: ID bài đăng cần xem.
+
+### Response 200 OK
+```json
+{
+  "id": 42,
+  "title": "Áo khoác gió nam",
+  "description": "Áo còn mới 90%, ít mặc.",
+  "desiredItem": "Giày thể thao size 42",
+  "offerType": "SWAP",
+  "condition": "GOOD",
+  "defectNote": null,
+  "brand": "Uniqlo",
+  "status": "PENDING_REVIEW",
+  "isActive": true,
+  "operatingStatus": null,
+  "images": ["/api/v1/media/101", "/api/v1/media/102", "/api/v1/media/103"],
+  "defectImages": [],
+  "categoryId": 3,
+  "categoryName": "Quần áo",
+  "areaId": 7,
+  "areaName": "Quận 1",
+  "donorId": 9,
+  "donorName": "Nguyễn Văn A",
+  "donorTrustStars": 3,
+  "attributes": [
+    {"attributeId": 5, "name": "Kích cỡ", "value": "L"}
+  ],
+  "aiRisk": "LOW",
+  "moderationFlag": "REVIEW",
+  "flagReasonCode": "LEXICON_REVIEW",
+  "flagReason": "Có từ khoá cần xem xét: zalo",
+  "matchedTerms": ["zalo"],
+  "authStatus": "NONE",
+  "checklist": [
+    {"id": 11, "key": "real_photos", "statement": "Ảnh là ảnh thật của đúng món đồ, đủ số lượng, không lấy trên mạng."},
+    {"id": 12, "key": "category_match", "statement": "Danh mục đúng với món đồ."}
+  ],
+  "createdAt": "2026-10-14T10:00:00Z",
+  "updatedAt": "2026-10-14T10:05:00Z"
+}
+```
+
+- `attributes` rỗng (`[]`) nếu bài không có thuộc tính động; `name` là `null` nếu thuộc tính đã bị xoá khỏi danh mục. Danh sách gồm cả thuộc tính "Trạng thái hoạt động" (cũng được trả riêng ở `operatingStatus`).
+- `categoryName`, `areaName`, `donorName` là `null` nếu bản ghi tương ứng đã bị xoá mềm.
+- `aiRisk` là `UNCHECKED` nếu AI chưa chấm xong hoặc không khả dụng; `moderationFlag` là `NONE` khi không có cờ.
+- `flagReasonCode`, `flagReason`, `matchedTerms` có cùng ý nghĩa như ở hàng chờ.
+
+| Mã HTTP | Mã lỗi | Ý nghĩa |
+|---------|--------|---------|
+| 200 | - | Trả về chi tiết bài đăng |
+| 401 | `UNAUTHORIZED` | Chưa đăng nhập |
+| 403 | `FORBIDDEN` | Không có quyền Admin |
+| 404 | `REVIEW_ITEM_NOT_FOUND` | Bài không tồn tại hoặc đã xoá mềm |
+
+---
+
+## 3. POST /api/v1/admin/reviews/{itemId}/approve
 
 Duyệt bài đăng đang chờ kiểm duyệt. Gửi đáp án theo `id` của từng điều kiện trong `checklist`, không ghép theo vị trí. Phải đủ ID đang active, không trùng và tất cả `passed = true` (đạt).
 
@@ -68,9 +132,11 @@ Duyệt bài đăng đang chờ kiểm duyệt. Gửi đáp án theo `id` của 
 }
 ```
 
-### Xử lý hệ thống:
-- Trừ khoản phí đăng bài đang tạm giữ (`CreditService.deductHeldFee`).
-- Chuyển trạng thái bài đăng sang `APPROVED` (hiển thị công khai trên feed).
+### Xử lý hệ thống (theo thứ tự):
+- Kiểm tra checklist (400/409 nếu sai).
+- Chuyển trạng thái bài đăng từ `PENDING_REVIEW` sang `APPROVED` (hiển thị công khai trên feed). Bước này chạy **trước** khi trừ phí nên bài đã xử lý luôn nhận `409 ITEM_INVALID_STATUS_TRANSITION`.
+- Trừ khoản phí đăng bài đang tạm giữ (`PostFeeService.chargeHeldFee`). Bài `GIVE` (phí 0) vẫn duyệt bình thường, không đụng ví.
+- Hai Admin duyệt cùng lúc một bài: chỉ một request thành công (204), request còn lại nhận 409 và phí không bị trừ lần hai.
 - Lưu snapshot kết quả checklist kiểm duyệt (`ReviewItem`) cùng thời điểm duyệt `approved_at` và ID Admin duyệt.
 - Ghi log hoạt động hệ thống (`ActivityLogService.log`).
 
@@ -84,9 +150,9 @@ Duyệt bài đăng đang chờ kiểm duyệt. Gửi đáp án theo `id` của 
 | 409 | `REVIEW_CHECKLIST_NOT_CONFIGURED` | Chưa có mục checklist đang active |
 | 401 | `UNAUTHORIZED` | Chưa đăng nhập |
 | 403 | `FORBIDDEN` | Không có quyền Admin |
-| 404 | `REVIEW_ITEM_NOT_FOUND` / `LISTINGFEE_ITEM_NOT_FOUND` | Không tìm thấy bài đăng |
-| 409 | `ITEM_INVALID_STATUS_TRANSITION` | Bài đăng không ở trạng thái `PENDING_REVIEW` (đã được xử lý trước đó) |
-| 409 | `LISTINGFEE_NOTHING_HELD` | Không tìm thấy khoản phí đang giữ để trừ |
+| 404 | `REVIEW_ITEM_NOT_FOUND` | Không tìm thấy bài đăng (hoặc đã xoá mềm) |
+| 409 | `ITEM_INVALID_STATUS_TRANSITION` | Bài đăng không ở trạng thái `PENDING_REVIEW` (đã duyệt hoặc đã từ chối trước đó) |
+| 409 | `LISTINGFEE_NOTHING_HELD` | Không còn khoản phí đang giữ để trừ (ví dụ request khác vừa xử lý bài xong) |
 
 ---
 
@@ -103,7 +169,7 @@ FE cần cập nhật `frontend/src/services/adminModerationApi.ts` và `fronten
 - Thêm `flagReasonCode`, `matchedTerms`; hiển thị trực tiếp `flagReason` tiếng Việt.
 - Khi nhận `409 REVIEW_CHECKLIST_OUTDATED`, tải lại checklist và yêu cầu tích lại trước khi duyệt.
 
-## 3. POST /api/v1/admin/reviews/{itemId}/reject
+## 4. POST /api/v1/admin/reviews/{itemId}/reject
 
 Từ chối bài đăng đang chờ kiểm duyệt kèm lý do bắt buộc (có thể chọn từ danh sách mẫu `reject-reasons` hoặc tự nhập).
 
@@ -117,9 +183,9 @@ Từ chối bài đăng đang chờ kiểm duyệt kèm lý do bắt buộc (có
 }
 ```
 
-### Xử lý hệ thống:
-- Hoàn trả khoản phí đăng bài đang tạm giữ cho chủ bài (`CreditService.releaseHeldFee`).
-- Chuyển trạng thái bài sang `REJECTED`, lưu lý do từ chối `reject_reason` cùng ID Admin xử lý.
+### Xử lý hệ thống (theo thứ tự):
+- Chuyển trạng thái bài từ `PENDING_REVIEW` sang `REJECTED`, lưu lý do từ chối `reject_reason` cùng ID Admin xử lý. Bước này chạy **trước** khi nhả phí nên bài đã xử lý luôn nhận `409 ITEM_INVALID_STATUS_TRANSITION`.
+- Hoàn trả khoản phí đăng bài đang tạm giữ cho chủ bài (`PostFeeService.releaseHeldFee`).
 - Gửi thông báo trong ứng dụng (`NotificationService.notify`) loại `POST_REJECTED` kèm nội dung lý do tới người đăng.
 - Ghi log hoạt động hệ thống (`ActivityLogService.log`).
 
@@ -130,12 +196,13 @@ Từ chối bài đăng đang chờ kiểm duyệt kèm lý do bắt buộc (có
 | 400 | `VALIDATION_FAILED` | Thiếu lý do hoặc lý do chỉ toàn khoảng trắng |
 | 401 | `UNAUTHORIZED` | Chưa đăng nhập |
 | 403 | `FORBIDDEN` | Không có quyền Admin |
-| 404 | `REVIEW_ITEM_NOT_FOUND` / `LISTINGFEE_ITEM_NOT_FOUND` | Không tìm thấy bài đăng |
-| 409 | `ITEM_INVALID_STATUS_TRANSITION` | Bài đăng không ở trạng thái `PENDING_REVIEW` (đã được xử lý trước đó) |
+| 404 | `REVIEW_ITEM_NOT_FOUND` | Không tìm thấy bài đăng (hoặc đã xoá mềm) |
+| 409 | `ITEM_INVALID_STATUS_TRANSITION` | Bài đăng không ở trạng thái `PENDING_REVIEW` (đã duyệt hoặc đã từ chối trước đó) |
+| 409 | `LISTINGFEE_NOTHING_HELD` | Không còn khoản phí đang giữ để nhả (ví dụ request khác vừa xử lý bài xong) |
 
 ---
 
-## 4. GET /api/v1/admin/reviews/reject-reasons
+## 5. GET /api/v1/admin/reviews/reject-reasons
 
 Lấy danh sách các lý do từ chối mẫu soạn sẵn (nhóm `REJECT_REASON`, đang kích hoạt `is_active = true`, sắp xếp theo `sort_order`) để Admin lựa chọn nhanh trên giao diện kiểm duyệt.
 
@@ -159,7 +226,7 @@ Lấy danh sách các lý do từ chối mẫu soạn sẵn (nhóm `REJECT_REASO
 
 ---
 
-## 5. GET /api/v1/admin/items/pending (Endpoint tương thích cũ)
+## 6. GET /api/v1/admin/items/pending (Endpoint tương thích cũ)
 
 Endpoint kế thừa dùng để lấy danh sách bài đăng chờ duyệt mà không kèm danh sách câu hỏi checklist.
 
@@ -189,7 +256,7 @@ Endpoint kế thừa dùng để lấy danh sách bài đăng chờ duyệt mà 
 
 ---
 
-## 6. POST /api/v1/admin/authenticity/{id}/grant
+## 7. POST /api/v1/admin/authenticity/{id}/grant
 
 Cấp nhãn hàng chính hãng sau khi Admin đối chiếu chứng từ đạt. Chuyển `auth_status` từ `PENDING` sang `VERIFIED`.
 
@@ -207,7 +274,7 @@ Cấp nhãn hàng chính hãng sau khi Admin đối chiếu chứng từ đạt.
 
 ---
 
-## 7. POST /api/v1/admin/authenticity/{id}/reject
+## 8. POST /api/v1/admin/authenticity/{id}/reject
 
 Từ chối cấp nhãn hàng chính hãng kèm lý do bắt buộc. Chuyển `auth_status` từ `PENDING` sang `REJECTED`.
 
@@ -233,7 +300,7 @@ Từ chối cấp nhãn hàng chính hãng kèm lý do bắt buộc. Chuyển `a
 
 ---
 
-## 8. POST /api/v1/admin/authenticity/{id}/revoke
+## 9. POST /api/v1/admin/authenticity/{id}/revoke
 
 Thu hồi nhãn hàng chính hãng khi phát hiện chứng từ giả mạo. Chỉ áp dụng cho bài đăng đang có nhãn chính hãng (`VERIFIED`). Chuyển `auth_status` sang `REVOKED`.
 
@@ -256,5 +323,22 @@ Thu hồi nhãn hàng chính hãng khi phát hiện chứng từ giả mạo. Ch
 | 403 | `FORBIDDEN` | Không có quyền Admin |
 | 404 | `AUTHENTICITY_ITEM_NOT_FOUND` | Không tìm thấy bài đăng |
 | 409 | `AUTHENTICITY_NOT_VERIFIED` | Bài đăng chưa được cấp nhãn chính hãng (không ở trạng thái `VERIFIED`) |
+
+---
+
+## 9. Job cảnh báo bài chờ duyệt quá SLA (`ReviewSlaJob`, không có API)
+
+Cảnh báo Admin khi có bài chờ duyệt quá SLA (FR-121, BR-A02, Issue #151). Job chạy phút 45 mỗi giờ khi `app.jobs.enabled=true` (dev, prod), gọi `ReviewSlaService.alertOverdueReviews(now)`.
+
+- **Bài quá SLA:** `status = PENDING_REVIEW`, chưa xoá mềm, và `updated_at <= now - review_sla_hours` (mặc định `24` giờ, đọc từ `ConfigService`). Bài chờ **đúng** 24 giờ đã tính là quá SLA.
+- **Mốc tính thời gian chờ:** `updated_at`, tức lần gửi gần nhất. Bài đã duyệt mà sửa thì quay lại `PENDING_REVIEW` và được tính lại từ lúc gửi bản sửa. Người đăng sửa trong lúc chờ thì thời gian chờ cũng tính lại.
+- **Thông báo:** Mỗi lượt chạy gửi **một** thông báo tổng hợp cho mọi Admin, không gửi theo từng bài (không có bảng lưu bài nào đã được cảnh báo). Còn bài quá SLA thì lượt sau báo lại. Không có bài nào quá SLA thì không gửi.
+
+| Trường | Giá trị |
+|---|---|
+| `type` | `REVIEW_SLA_OVERDUE` |
+| `title` | `Bài chờ duyệt quá SLA` |
+| `body` | `"<N> bài đã chờ duyệt từ 24 giờ trở lên. Vui lòng xử lý hàng chờ duyệt."` |
+| `link` | `/admin/moderation` |
 
 

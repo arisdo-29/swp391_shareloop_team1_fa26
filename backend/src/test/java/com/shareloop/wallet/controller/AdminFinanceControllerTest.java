@@ -1,5 +1,6 @@
 package com.shareloop.wallet.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -7,6 +8,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -24,25 +27,37 @@ import com.shareloop.wallet.dto.FinanceSummaryResponse;
 import com.shareloop.wallet.dto.TopUpReconciliation;
 import com.shareloop.wallet.dto.WalletTransactionResponse;
 import com.shareloop.wallet.entity.CreditTxType;
+import com.shareloop.wallet.mapper.FinanceReportCsvWriter;
 import com.shareloop.wallet.service.AdminFinanceService;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(AdminFinanceController.class)
-@Import({SecurityConfig.class, JwtConfig.class, JwtService.class, ClockConfig.class, WebConfig.class})
+@Import({
+    SecurityConfig.class,
+    JwtConfig.class,
+    JwtService.class,
+    ClockConfig.class,
+    WebConfig.class,
+    FinanceReportCsvWriter.class
+})
 @ActiveProfiles("test")
 class AdminFinanceControllerTest {
 
     private static final String REPORT_URL = "/api/v1/admin/finance/report";
+    private static final String REPORT_CSV_URL = "/api/v1/admin/finance/report.csv";
     private static final String HISTORY_URL = "/api/v1/admin/finance/users/{userId}/history";
 
     @Autowired
@@ -128,6 +143,116 @@ class AdminFinanceControllerTest {
     }
 
     @Test
+    @DisplayName("GET /admin/finance/report.csv: chưa đăng nhập trả về 401")
+    void reportCsv_withoutToken_returns401() throws Exception {
+        mockMvc.perform(get(REPORT_CSV_URL))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(adminFinanceService);
+    }
+
+    @Test
+    @DisplayName("GET /admin/finance/report.csv: USER không phải Admin trả về 403")
+    void reportCsv_nonAdmin_returns403() throws Exception {
+        String userToken = jwtService.issue(42L, false);
+
+        mockMvc.perform(get(REPORT_CSV_URL).header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        verifyNoInteractions(adminFinanceService);
+    }
+
+    @Test
+    @DisplayName("GET /admin/finance/report.csv: 3 byte đầu là BOM UTF-8 (EF BB BF)")
+    void reportCsv_admin_startsWithUtf8Bom() throws Exception {
+        String adminToken = jwtService.issue(1L, true);
+        when(adminFinanceService.getReport(any(), any())).thenReturn(sampleSummary());
+
+        byte[] body = mockMvc.perform(get(REPORT_CSV_URL)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .param("from", "2026-10-01")
+                        .param("to", "2026-10-17"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+
+        assertThat(Arrays.copyOf(body, 3)).containsExactly((byte) 0xEF, (byte) 0xBB, (byte) 0xBF);
+    }
+
+    @Test
+    @DisplayName("GET /admin/finance/report.csv: Admin tải file CSV đúng header và dòng dữ liệu")
+    void reportCsv_admin_returnsCsvFile() throws Exception {
+        String adminToken = jwtService.issue(1L, true);
+        when(adminFinanceService.getReport(any(), any())).thenReturn(sampleSummary());
+
+        byte[] body = mockMvc.perform(get(REPORT_CSV_URL)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .param("from", "2026-10-01")
+                        .param("to", "2026-10-17"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("text/csv;charset=UTF-8"))
+                .andExpect(header().string(
+                                HttpHeaders.CONTENT_DISPOSITION,
+                                "attachment; filename=\"finance-report_2026-10-01_2026-10-17.csv\""))
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+
+        String csv = new String(body, StandardCharsets.UTF_8);
+        assertThat(csv).startsWith("﻿");
+        assertThat(csv.substring(1).split("\r\n", -1))
+                .containsExactly(
+                        "Báo cáo tài chính ShareLoop",
+                        "Từ ngày,2026-10-01",
+                        "Đến ngày,2026-10-17",
+                        "",
+                        "Tiền mặt thu",
+                        "cashOrderCount,cashAmountVnd",
+                        "3,100000",
+                        "",
+                        "Credit cộng vào",
+                        "type,amount,entryCount",
+                        "ADMIN_ADJUST,7,1",
+                        "TOP_UP,100,3",
+                        "Tổng,107,4",
+                        "",
+                        "Credit trừ ra",
+                        "type,amount,entryCount",
+                        "AI_SEARCH_FEE,2,2",
+                        "EDIT_FEE,5,1",
+                        "POST_FEE,10,2",
+                        "RENEW_FEE,5,1",
+                        "Tổng,22,6",
+                        "",
+                        "Đối chiếu TopUp",
+                        "cashCredits,topUpCredits,difference,matched",
+                        "100,100,0,true",
+                        "");
+
+        verify(adminFinanceService).getReport(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 17));
+    }
+
+    @Test
+    @DisplayName("GET /admin/finance/report.csv: from sau to trả về 400 INVALID_DATE_RANGE dạng JSON")
+    void reportCsv_fromAfterTo_returns400() throws Exception {
+        String adminToken = jwtService.issue(1L, true);
+
+        when(adminFinanceService.getReport(any(), any()))
+                .thenThrow(new BusinessException(FinanceErrorCode.INVALID_DATE_RANGE));
+
+        mockMvc.perform(get(REPORT_CSV_URL)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .param("from", "2026-10-20")
+                        .param("to", "2026-10-10"))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().doesNotExist(HttpHeaders.CONTENT_DISPOSITION))
+                .andExpect(jsonPath("$.code").value("INVALID_DATE_RANGE"));
+    }
+
+    @Test
     @DisplayName("GET /admin/finance/users/{userId}/history: chưa đăng nhập trả về 401")
     void userHistory_withoutToken_returns401() throws Exception {
         mockMvc.perform(get(HISTORY_URL, 42L))
@@ -181,5 +306,24 @@ class AdminFinanceControllerTest {
         mockMvc.perform(get(HISTORY_URL, 999L).header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("WALLET_NOT_FOUND"));
+    }
+
+    private static FinanceSummaryResponse sampleSummary() {
+        return new FinanceSummaryResponse(
+                Instant.parse("2026-09-30T17:00:00Z"),
+                Instant.parse("2026-10-17T17:00:00Z"),
+                3L,
+                100000L,
+                107L,
+                List.of(
+                        new CreditTypeTotal(CreditTxType.ADMIN_ADJUST, 7L, 1L),
+                        new CreditTypeTotal(CreditTxType.TOP_UP, 100L, 3L)),
+                22L,
+                List.of(
+                        new CreditTypeTotal(CreditTxType.AI_SEARCH_FEE, 2L, 2L),
+                        new CreditTypeTotal(CreditTxType.EDIT_FEE, 5L, 1L),
+                        new CreditTypeTotal(CreditTxType.POST_FEE, 10L, 2L),
+                        new CreditTypeTotal(CreditTxType.RENEW_FEE, 5L, 1L)),
+                new TopUpReconciliation(100L, 100L, 0L, true));
     }
 }

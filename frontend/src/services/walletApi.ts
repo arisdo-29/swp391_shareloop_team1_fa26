@@ -1,5 +1,5 @@
 import { http } from './http';
-import type { PageResponse } from './itemApi';
+import type { ItemStatus, PageResponse } from './itemApi';
 
 export interface WalletResponse {
   creditBalance: number;
@@ -41,7 +41,7 @@ export interface HeldFeeItem {
   itemId: number;
   title: string;
   offerType: 'GIVE' | 'SWAP';
-  status: string;
+  status: ItemStatus;
   pendingFee: number;
   feeType: 'POST' | 'EDIT'; // POST = phí đăng, EDIT = phí sửa
 }

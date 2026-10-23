@@ -494,7 +494,11 @@ export function Home() {
               <p className="text-sm font-semibold text-primary">Bạn đang tìm món gì?</p>
               <div className="home-ai-suggestions">
                 {['Đèn bàn để đọc sách', 'Sách cho cuối tuần', 'Đồ dùng góc học tập'].map((suggestion) => (
-                  <Link key={suggestion} to="/ai"><Icon name="search" className="size-4" />{suggestion}<Icon name="arrow" className="size-4" /></Link>
+                  <Link key={suggestion} to="/ai">
+                    <Icon name="search" className="size-4" />
+                    <span>{suggestion}</span>
+                    <Icon name="arrow" className="size-4" />
+                  </Link>
                 ))}
               </div>
             </div>

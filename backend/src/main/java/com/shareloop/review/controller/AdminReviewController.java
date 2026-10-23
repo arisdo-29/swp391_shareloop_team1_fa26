@@ -3,6 +3,7 @@ package com.shareloop.review.controller;
 import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.review.dto.ApproveReviewRequest;
 import com.shareloop.review.dto.RejectReviewRequest;
+import com.shareloop.review.dto.ReviewItemDetailResponse;
 import com.shareloop.review.dto.ReviewQueueItem;
 import com.shareloop.review.dto.ReviewQueueResponse;
 import com.shareloop.review.service.ReviewService;
@@ -69,6 +70,20 @@ public class AdminReviewController {
                     @Max(100)
                     int size) {
         return reviewService.listPendingWithChecklist(page, size);
+    }
+
+    @Operation(
+            summary = "Chi tiết bài đăng cho Admin",
+            description =
+                    "Xem chi tiết một bài ở mọi trạng thái (PENDING_REVIEW, REJECTED, APPROVED...), kể cả bài đang bị ẩn. Kèm người đăng, thuộc tính, thông tin kiểm duyệt và checklist hiện hành.")
+    @ApiResponse(responseCode = "200", description = "Trả về chi tiết bài đăng")
+    @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
+    @ApiResponse(responseCode = "403", description = "Không có quyền Admin")
+    @ApiResponse(responseCode = "404", description = "Không tìm thấy bài đăng (REVIEW_ITEM_NOT_FOUND)")
+    @GetMapping("/reviews/{itemId}")
+    public ReviewItemDetailResponse getReviewDetail(
+            @Parameter(description = "ID của bài đăng") @PathVariable long itemId) {
+        return reviewService.getDetail(itemId);
     }
 
     @Operation(

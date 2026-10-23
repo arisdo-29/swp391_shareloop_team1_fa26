@@ -4,7 +4,9 @@ import com.shareloop.catalog.service.CategoryAttributeService;
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
+import com.shareloop.item.dto.AdminItemDetail;
 import com.shareloop.item.dto.CreateItemRequest;
+import com.shareloop.item.dto.ItemAttributeValue;
 import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.dto.UpdateItemRequest;
 import com.shareloop.item.entity.Item;
@@ -276,6 +278,18 @@ public class ItemService {
         }
 
         throw new BusinessException(ItemErrorCode.ITEM_NOT_FOUND);
+    }
+
+    /**
+     * Admin xem chi tiết bài ở mọi trạng thái (kể cả is_active = false) để duyệt bài PENDING_REVIEW.
+     * Cố ý tách khỏi getItem để endpoint công khai không bị nới quyền. Ném ITEM_NOT_FOUND khi bài không tồn tại
+     * hoặc đã xoá mềm.
+     */
+    @Transactional(readOnly = true)
+    public AdminItemDetail getItemForAdmin(long itemId) {
+        Item item = requireItem(itemId);
+        ItemResponse response = toResponse(item, findDisplayWindow(itemId));
+        return new AdminItemDetail(response, item.isActive(), findAttributeValues(itemId));
     }
 
     /**
@@ -629,6 +643,19 @@ public class ItemService {
                 .param("itemId", itemId)
                 .param("role", role)
                 .query(Long.class)
+                .list();
+    }
+
+    private List<ItemAttributeValue> findAttributeValues(long itemId) {
+        if (jdbcClient == null) {
+            return List.of();
+        }
+        return jdbcClient
+                .sql("SELECT attribute_id, value FROM item_attribute_mappings "
+                        + "WHERE item_id = :itemId ORDER BY attribute_id")
+                .param("itemId", itemId)
+                .query((resultSet, rowNumber) ->
+                        new ItemAttributeValue(resultSet.getLong("attribute_id"), resultSet.getString("value")))
                 .list();
     }
 

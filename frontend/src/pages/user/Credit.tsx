@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode } f
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser, selectData } from '../../app/store';
-import { Alert, Button, Field, Icon, PageHeader } from '../../components/ui';
+import { Alert, Button, Field, Icon, PageHeader, StatusBadge } from '../../components/ui';
 import type { CreditHistory, CreditHistoryType, Item, Topup } from '../../types/domain';
 import { formatCredit, formatVnd } from '../../utils/formatting';
 import { useWallet } from '../../app/useWallet';
@@ -188,7 +188,9 @@ export function Credit() {
   const [historyPage, setHistoryPage] = useState(0);
   const [historyTotal, setHistoryTotal] = useState(0);
   const [heldFees, setHeldFees] = useState<HeldFeeItem[]>([]);
+  const [heldFeesLoading, setHeldFeesLoading] = useState(true);
   const [heldFeesError, setHeldFeesError] = useState('');
+  const [heldFeesReloadKey, setHeldFeesReloadKey] = useState(0);
   const [apiTopUpOrder, setApiTopUpOrder] = useState<TopUpOrderResponse | null>(null);
   const [topUpSubmitting, setTopUpSubmitting] = useState(false);
   const [topUpProcessing, setTopUpProcessing] = useState(false);
@@ -209,25 +211,31 @@ export function Credit() {
   useEffect(() => {
     if (!isApiAccount) {
       setHeldFees([]);
+      setHeldFeesLoading(false);
+      setHeldFeesError('');
       return;
     }
     let active = true;
+    setHeldFeesLoading(true);
+    setHeldFeesError('');
     walletApi
       .listHeldFees()
       .then((response) => {
         if (!active) return;
         setHeldFees(response);
-        setHeldFeesError('');
       })
       .catch((caught) => {
         if (!active) return;
         setHeldFees([]);
         setHeldFeesError((caught as ApiError).message || 'Không tải được danh sách bài đang giữ phí.');
+      })
+      .finally(() => {
+        if (active) setHeldFeesLoading(false);
       });
     return () => {
       active = false;
     };
-  }, [isApiAccount, wallet]);
+  }, [heldFeesReloadKey, isApiAccount, wallet]);
 
   useEffect(() => {
     if (!isApiAccount) {
@@ -479,7 +487,14 @@ export function Credit() {
         </div>
       </section>
 
-      {isApiAccount ? <HeldFeesSection heldFees={heldFees} error={heldFeesError} /> : null}
+      {isApiAccount ? (
+        <HeldFeesSection
+          heldFees={heldFees}
+          loading={heldFeesLoading}
+          error={heldFeesError}
+          onRetry={() => setHeldFeesReloadKey((key) => key + 1)}
+        />
+      ) : null}
 
       <section id="topup" className="mt-8 scroll-mt-24">
         {isApiAccount && loadPendingTopUp()?.orderCode ? (
@@ -819,27 +834,55 @@ function CreditHistorySection({
   );
 }
 
-function HeldFeesSection({ heldFees, error }: { heldFees: HeldFeeItem[]; error: string }) {
+const heldFeeOfferTypeLabels: Record<HeldFeeItem['offerType'], string> = {
+  GIVE: 'Cho tặng',
+  SWAP: 'Trao đổi',
+};
+
+const heldFeeTypeLabels: Record<HeldFeeItem['feeType'], string> = {
+  POST: 'Phí đăng',
+  EDIT: 'Phí sửa',
+};
+
+export function HeldFeesSection({
+  heldFees,
+  loading,
+  error,
+  onRetry,
+}: {
+  heldFees: HeldFeeItem[];
+  loading: boolean;
+  error: string;
+  onRetry: () => void;
+}) {
   return (
     <section className="mt-8">
       <h2 className="section-title">Bài đang giữ phí</h2>
       <p className="mt-1 text-xs text-text-muted">
         Được trừ khi bài được duyệt, nhả lại nếu bài bị từ chối hoặc bị gỡ.
       </p>
-      {error ? (
-        <div className="mt-3">
-          <Alert tone="error">{error}</Alert>
+      {loading ? (
+        <div className="mt-3" role="status">
+          <Alert>Đang tải danh sách Credit đang giữ...</Alert>
         </div>
       ) : null}
-      {!error && !heldFees.length ? (
+      {!loading && error ? (
+        <div className="mt-3 space-y-3">
+          <Alert tone="error">{error}</Alert>
+          <Button size="sm" variant="outline" onClick={onRetry}>
+            Thử lại
+          </Button>
+        </div>
+      ) : null}
+      {!loading && !error && !heldFees.length ? (
         <p className="mt-3 text-sm text-text-muted">Không có bài nào đang giữ phí.</p>
       ) : null}
-      {heldFees.length ? (
+      {!loading && !error && heldFees.length ? (
         <ul className="mt-3 divide-y divide-border overflow-hidden rounded-xl bg-white ring-1 ring-border/80">
           {heldFees.map((heldFee) => (
             <li
               key={heldFee.itemId}
-              className="flex items-center justify-between gap-3 px-4 py-3 text-sm"
+              className="flex flex-col gap-3 px-4 py-4 text-sm sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
                 <Link
@@ -848,13 +891,20 @@ function HeldFeesSection({ heldFees, error }: { heldFees: HeldFeeItem[]; error: 
                 >
                   {heldFee.title}
                 </Link>
-                <span className="text-xs text-text-muted">
-                  {heldFee.feeType === 'POST' ? 'Phí đăng' : 'Phí sửa'}
-                </span>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex rounded-sm bg-primary-soft px-2 py-1 text-[11px] font-bold text-primary">
+                    {heldFeeOfferTypeLabels[heldFee.offerType]}
+                  </span>
+                  <StatusBadge status={heldFee.status} />
+                  <span className="text-xs text-text-muted">
+                    {heldFeeTypeLabels[heldFee.feeType]}
+                  </span>
+                </div>
               </div>
-              <span className="shrink-0 font-bold tabular-nums">
-                {formatCredit(heldFee.pendingFee)}
-              </span>
+              <div className="shrink-0 sm:text-right">
+                <p className="text-xs text-text-muted">Credit đang giữ</p>
+                <p className="mt-1 font-bold tabular-nums">{formatCredit(heldFee.pendingFee)}</p>
+              </div>
             </li>
           ))}
         </ul>

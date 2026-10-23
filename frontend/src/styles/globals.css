@@ -35,6 +35,10 @@ select,
 textarea {
   font: inherit;
 }
+.password-input::-ms-reveal,
+.password-input::-ms-clear {
+  display: none;
+}
 button,
 a {
   -webkit-tap-highlight-color: transparent;

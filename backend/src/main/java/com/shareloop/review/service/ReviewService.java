@@ -2,13 +2,21 @@ package com.shareloop.review.service;
 
 import com.shareloop.audit.ActivityType;
 import com.shareloop.audit.service.ActivityLogService;
+import com.shareloop.catalog.service.AreaService;
+import com.shareloop.catalog.service.CategoryAttributeService;
+import com.shareloop.catalog.service.CategoryService;
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.item.dto.AdminItemDetail;
+import com.shareloop.item.dto.ItemAttributeValue;
+import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.moderation.ModerationReason;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.review.ReviewErrorCode;
 import com.shareloop.review.dto.ChecklistAnswer;
+import com.shareloop.review.dto.ReviewItemAttribute;
+import com.shareloop.review.dto.ReviewItemDetailResponse;
 import com.shareloop.review.dto.ReviewQueueItem;
 import com.shareloop.review.dto.ReviewQueueResponse;
 import com.shareloop.review.entity.ReviewItem;
@@ -16,6 +24,8 @@ import com.shareloop.review.repository.ReviewItemRepository;
 import com.shareloop.review.repository.ReviewQueueRepository;
 import com.shareloop.setting.dto.ChecklistItem;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.dto.UserBrief;
+import com.shareloop.user.service.UserService;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -23,6 +33,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -43,6 +54,10 @@ public class ReviewService {
     private final ItemService itemService;
     private final NotificationService notificationService;
     private final ActivityLogService activityLogService;
+    private final UserService userService;
+    private final CategoryService categoryService;
+    private final AreaService areaService;
+    private final CategoryAttributeService categoryAttributeService;
     private final ObjectMapper objectMapper;
 
     public ReviewService(
@@ -53,6 +68,10 @@ public class ReviewService {
             ItemService itemService,
             NotificationService notificationService,
             ActivityLogService activityLogService,
+            UserService userService,
+            CategoryService categoryService,
+            AreaService areaService,
+            CategoryAttributeService categoryAttributeService,
             ObjectMapper objectMapper) {
         this.repository = repository;
         this.reviewItemRepository = reviewItemRepository;
@@ -61,6 +80,10 @@ public class ReviewService {
         this.itemService = itemService;
         this.notificationService = notificationService;
         this.activityLogService = activityLogService;
+        this.userService = userService;
+        this.categoryService = categoryService;
+        this.areaService = areaService;
+        this.categoryAttributeService = categoryAttributeService;
         this.objectMapper = objectMapper;
     }
 
@@ -78,6 +101,17 @@ public class ReviewService {
         return new ReviewQueueResponse(listPending(page, size), configService.checklistItems(), page, size);
     }
 
+    /**
+     * Chi tiết một bài cho Admin duyệt, ở mọi trạng thái (kể cả is_active = false), kèm checklist hiện hành.
+     * Ném REVIEW_ITEM_NOT_FOUND khi bài không tồn tại hoặc đã xoá mềm.
+     */
+    public ReviewItemDetailResponse getDetail(long itemId) {
+        ReviewItem reviewItem = requireReviewItem(itemId);
+        AdminItemDetail detail = itemService.getItemForAdmin(itemId);
+        Object[] moderation = requireModerationInfo(itemId);
+        return toDetailResponse(detail, reviewItem, moderation);
+    }
+
     public List<String> listRejectReasons() {
         return configService.rejectReasons();
     }
@@ -89,14 +123,16 @@ public class ReviewService {
      */
     @Transactional
     public void approve(long itemId, List<ChecklistAnswer> answers, Long adminId) {
+        ReviewItem reviewItem = requireReviewItem(itemId);
         List<ChecklistItem> checklistItems = configService.checklistItems();
         validateAnswers(checklistItems, answers);
 
-        postFeeService.chargeHeldFee(itemId);
+        // Đổi trạng thái TRƯỚC khi trừ phí: bài đã xử lý báo 409 ITEM_INVALID_STATUS_TRANSITION chứ không phải lỗi phí.
         itemService.markApproved(itemId);
+        postFeeService.chargeHeldFee(itemId);
 
         Map<String, Object> snapshot = buildSnapshot(checklistItems);
-        requireReviewItem(itemId).approve(snapshot, Instant.now(), adminId);
+        reviewItem.approve(snapshot, Instant.now(), adminId);
 
         activityLogService.log(ActivityType.REVIEW_APPROVE.name(), adminId, "ITEM", itemId, snapshot, null);
     }
@@ -112,9 +148,12 @@ public class ReviewService {
             throw new BusinessException(ReviewErrorCode.REVIEW_REJECT_REASON_REQUIRED);
         }
 
-        postFeeService.releaseHeldFee(itemId, "REJECTED");
+        ReviewItem reviewItem = requireReviewItem(itemId);
+
+        // Cùng thứ tự với approve: kiểm trạng thái trước, rồi mới nhả phí.
         itemService.markRejected(itemId);
-        requireReviewItem(itemId).reject(reason.trim(), Instant.now(), adminId);
+        postFeeService.releaseHeldFee(itemId, "REJECTED");
+        reviewItem.reject(reason.trim(), Instant.now(), adminId);
 
         reviewItemRepository
                 .findDonorIdByItemId(itemId)
@@ -198,6 +237,70 @@ public class ReviewService {
                 matchedTerms,
                 ((Number) row[6]).shortValue(),
                 toInstant(row[7]));
+    }
+
+    private ReviewItemDetailResponse toDetailResponse(
+            AdminItemDetail detail, ReviewItem reviewItem, Object[] moderation) {
+        ItemResponse item = detail.item();
+        String flagReasonCode = (String) moderation[2];
+        List<String> matchedTerms = parseMatchedTerms((String) moderation[4]);
+        Optional<UserBrief> donor = Optional.ofNullable(
+                userService.findBriefs(List.of(item.donorId())).get(item.donorId()));
+
+        return new ReviewItemDetailResponse(
+                item.id(),
+                item.title(),
+                item.description(),
+                item.desiredItem(),
+                item.offerType(),
+                item.condition(),
+                item.defectNote(),
+                item.brand(),
+                item.status(),
+                detail.active(),
+                item.operatingStatus(),
+                item.images(),
+                item.defectImages(),
+                item.categoryId(),
+                categoryService.findName(item.categoryId()).orElse(null),
+                item.areaId(),
+                areaService.findName(item.areaId()).orElse(null),
+                item.donorId(),
+                donor.map(UserBrief::fullName).orElse(null),
+                ((Number) moderation[3]).shortValue(),
+                toAttributes(detail.attributes()),
+                (String) moderation[0],
+                (String) moderation[1],
+                flagReasonCode,
+                describeFlagReason(flagReasonCode, matchedTerms),
+                matchedTerms,
+                reviewItem.getAuthStatus().name(),
+                configService.checklistItems(),
+                item.createdAt(),
+                item.updatedAt());
+    }
+
+    // Tên thuộc tính nằm ở module catalog nên hỏi một lần cho cả danh sách; thuộc tính đã xoá thì name = null.
+    private List<ReviewItemAttribute> toAttributes(List<ItemAttributeValue> values) {
+        List<Long> attributeIds = new ArrayList<>();
+        for (ItemAttributeValue value : values) {
+            attributeIds.add(value.attributeId());
+        }
+        Map<Long, String> names = categoryAttributeService.findNames(attributeIds);
+
+        List<ReviewItemAttribute> attributes = new ArrayList<>();
+        for (ItemAttributeValue value : values) {
+            attributes.add(new ReviewItemAttribute(value.attributeId(), names.get(value.attributeId()), value.value()));
+        }
+        return attributes;
+    }
+
+    private Object[] requireModerationInfo(long itemId) {
+        List<Object[]> rows = repository.findModerationInfo(itemId);
+        if (rows.isEmpty()) {
+            throw new BusinessException(ReviewErrorCode.REVIEW_ITEM_NOT_FOUND);
+        }
+        return rows.get(0);
     }
 
     private String describeFlagReason(String flagReasonCode, List<String> matchedTerms) {

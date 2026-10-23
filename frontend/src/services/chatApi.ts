@@ -5,19 +5,20 @@ export interface MessageResponse {
   requestId: number;
   senderId: number;
   kind: string;
-  content: string;
-  mediaId?: number | null;
-  refItemId?: number | null;
-  itemCard?: PinnedItemResponse | null;
-  offerStatus?: string | null;
-  moderation?: string | null;
-  blockedReason?: string | null;
+  content: string | null;
+  mediaId: number | null;
+  refItemId: number | null;
+  itemCard: PinnedItemResponse | null;
+  offerStatus: string | null;
+  moderation: string;
+  blockedReason: string | null;
   createdAt: string;
 }
 
 export interface SendMessageRequest {
-  content: string;
-  refItemId?: number;
+  content?: string | null;
+  mediaId?: number | null;
+  refItemId?: number | null;
 }
 
 export interface PinnedItemResponse {
@@ -30,26 +31,24 @@ export interface PinnedItemResponse {
 }
 
 export const chatApi = {
-  async list(requestId: number, currentUserId: number, afterId?: number) {
+  async list(requestId: number, afterId?: number) {
     const { data } = await http.get<MessageResponse[]>(`/api/v1/requests/${requestId}/messages`, {
-      params: { currentUserId, afterId },
+      params: { afterId },
     });
     return data;
   },
 
-  async send(requestId: number, currentUserId: number, input: SendMessageRequest) {
+  async send(requestId: number, input: SendMessageRequest) {
     const { data } = await http.post<MessageResponse>(
       `/api/v1/requests/${requestId}/messages`,
       input,
-      { params: { currentUserId } },
     );
     return data;
   },
 
-  async pinnedItems(requestId: number, currentUserId: number) {
+  async pinnedItems(requestId: number) {
     const { data } = await http.get<PinnedItemResponse[]>(
-      `/api/v1/requests/${requestId}/messages/pinned-items`,
-      { params: { currentUserId } },
+      `/api/v1/requests/${requestId}/pinned-items`,
     );
     return data;
   },

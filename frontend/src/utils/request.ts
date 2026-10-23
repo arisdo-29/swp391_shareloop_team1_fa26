@@ -23,3 +23,22 @@ export function canSchedule(status: ItemRequestStatus) {
 export function canConfirmHandover(status: ItemRequestStatus) {
   return status === 'LOGISTICS_CONFIRMED' || status === 'AWAITING_HANDOVER';
 }
+
+const selectedRequestStatuses: ItemRequestStatus[] = [
+  'RESERVED',
+  'AWAITING_LOGISTICS',
+  'LOGISTICS_CONFIRMED',
+  'AWAITING_HANDOVER',
+  'COMPLETED',
+  'DISPUTED',
+];
+
+export function canSelectPendingRequest(
+  status: ItemRequestStatus,
+  itemOwnerId: number | undefined,
+  currentUserId: number,
+  siblingStatuses: ItemRequestStatus[],
+) {
+  if (itemOwnerId !== currentUserId || status !== 'PENDING') return false;
+  return !siblingStatuses.some((siblingStatus) => selectedRequestStatuses.includes(siblingStatus));
+}
