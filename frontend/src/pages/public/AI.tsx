@@ -176,7 +176,7 @@ export function AI() {
               />
             ) : <Alert tone={quotaError ? 'error' : 'info'}>{quotaError || 'Đang tải hạn mức tìm kiếm...'}</Alert>}
             {quotaError ? <Button variant="outline" size="sm" onClick={() => { void aiApi.quota().then((response) => { setQuota(response); setQuotaError(''); }).catch((error: ApiError) => setQuotaError(error.message)); }}>Thử tải hạn mức</Button> : null}
-            {quota ? <p className="mt-3 text-xs text-text-muted">Mỗi lần tìm hoặc chuyển trang dùng một lượt; hết lượt miễn phí sẽ dùng {quota.feeCredits} Credit. Tìm dự phòng được hoàn lượt và phí.</p> : null}
+            {quota ? <p className="mt-3 text-xs text-text-muted">Mỗi lần tìm hoặc chuyển trang dùng một lượt. Hết lượt miễn phí, mỗi lượt tốn {quota.feeCredits} Credit. Nếu hệ thống chuyển sang tìm kiếm thường, lượt và phí sẽ được hoàn lại.</p> : null}
           </div>
         </section>
 

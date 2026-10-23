@@ -128,7 +128,7 @@ const paymentProviderLabels: Record<PaymentProvider, string> = {
 };
 
 const topUpAmountInvalidMessage =
-  'Số tiền nạp chưa hợp lệ. Theo giá trị mặc định, số tiền cần chia hết cho 1.000đ và tối thiểu 10.000đ; các mức này có thể thay đổi theo cấu hình hệ thống.';
+  'Số tiền nạp chưa hợp lệ. Theo giá trị mặc định, số tiền cần chia hết cho 1.000đ và tối thiểu 10.000đ. Các mức này có thể thay đổi theo cấu hình hệ thống.';
 
 function toCreditHistory(entry: WalletTransactionResponse, userId: string): CreditHistory {
   const type: CreditHistoryType =
@@ -576,7 +576,6 @@ export function Credit() {
         <CreditTransactionDetail
           entry={selectedEntry}
           onClose={() => setSelectedEntry(null)}
-          relatedTransactionId={selectedRelatedTransaction?.id}
           relatedItemTitle={selectedRelatedItem?.title}
           relatedTransactionType={selectedRelatedTransaction?.type}
           onViewTransaction={selectedRelatedTransaction ? () => navigate('/messages') : undefined}
@@ -785,7 +784,6 @@ function CreditHistorySection({
                 key={topup.id}
                 icon="wallet"
                 title="Nạp Credit"
-                transactionId={topup.code}
                 date={topup.createdAt}
                 amount={topup.amount}
                 status="Đang xác nhận"
@@ -800,7 +798,6 @@ function CreditHistorySection({
                   key={entry.id}
                   icon={historyIcon(entry)}
                   title={historyTitle(entry, relatedItem?.title)}
-                  transactionId={entry.transactionId}
                   date={entry.createdAt}
                   amount={entry.amount}
                   status={historyStatus(entry)}
@@ -964,7 +961,6 @@ function HistoryPagination({
 function HistoryRow({
   icon,
   title,
-  transactionId,
   date,
   amount,
   status,
@@ -973,7 +969,6 @@ function HistoryRow({
 }: {
   icon: 'wallet' | 'payments' | 'history' | 'renew';
   title: string;
-  transactionId: string;
   date: string;
   amount: number;
   status: string;
@@ -1003,7 +998,7 @@ function HistoryRow({
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-text-primary">{title}</p>
           <p className="mt-1 truncate text-xs text-text-muted">
-            {transactionId} · {new Date(date).toLocaleString('vi-VN')}
+            {new Date(date).toLocaleString('vi-VN')}
           </p>
         </div>
       </div>
@@ -1060,14 +1055,12 @@ function historyIcon(entry: CreditHistory): 'wallet' | 'payments' | 'history' | 
 
 function CreditTransactionDetail({
   entry,
-  relatedTransactionId,
   relatedItemTitle,
   relatedTransactionType,
   onClose,
   onViewTransaction,
 }: {
   entry: CreditHistory | Topup;
-  relatedTransactionId?: string;
   relatedItemTitle?: string;
   relatedTransactionType?: 'gift' | 'trade';
   onClose: () => void;
@@ -1137,7 +1130,7 @@ function CreditTransactionDetail({
             </>
           )}
           <DetailRow label="Thời gian" value={formatDateTime(entry.createdAt)} />
-          <DetailRow label="Mã giao dịch" value={isTopup ? entry.code : entry.transactionId} />
+          {isTopup ? <DetailRow label="Mã đơn nạp" value={entry.code} /> : null}
           <DetailRow label="Trạng thái" value={status} />
         </dl>
         <div className="mt-5 rounded-lg border border-border p-4 text-sm">
@@ -1156,9 +1149,6 @@ function CreditTransactionDetail({
             <p className="mt-1 text-text-secondary">
               Hình thức: {relatedTransactionType === 'trade' ? 'Trao đổi' : 'Cho - Nhận'}
             </p>
-          ) : null}
-          {relatedTransactionId ? (
-            <p className="mt-1 text-text-secondary">Giao dịch liên quan: {relatedTransactionId}</p>
           ) : null}
           {onViewTransaction ? (
             <Button className="mt-4" size="sm" onClick={onViewTransaction}>

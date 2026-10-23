@@ -7,7 +7,6 @@ import type { ApiError } from '../../services/http';
 import type { PageResponse } from '../../services/itemApi';
 import type { WalletTransactionResponse } from '../../services/walletApi';
 import { formatVnd } from '../../utils/formatting';
-import { AdminTopUpOrders } from './AdminTopUpOrders';
 
 const transactionLabels: Record<string, string> = {
   TOP_UP: 'Nạp Credit', POST_FEE: 'Phí đăng bài', EDIT_FEE: 'Phí sửa bài',
@@ -83,7 +82,6 @@ export function AdminFinanceReport() {
 
   return <>
     <PageHeader title="Báo cáo tài chính" description="Tiền thu, Credit cộng và Credit trừ theo sổ hệ thống." action={<Link to="/admin/finance/users"><Button variant="outline">Lịch sử người dùng</Button></Link>} />
-    <AdminTopUpOrders onProcessed={() => setReload((value) => value + 1)} />
     <form className="mb-5 flex flex-wrap items-end gap-3" onSubmit={submit}>
       <Field label="Từ ngày" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
       <Field label="Đến ngày" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
@@ -96,14 +94,24 @@ export function AdminFinanceReport() {
         <Stat label="Credit cộng" value={report.creditInTotal} />
         <Stat label="Credit trừ" value={report.creditOutTotal} />
       </div>
-      <Alert tone={report.reconciliation.matched ? 'success' : 'warning'}>
-        Đối chiếu tiền thu và Credit nạp: {report.reconciliation.matched ? 'Khớp' : 'Có chênh lệch'}.
-        Credit quy đổi: {report.reconciliation.cashCredits}; Credit nạp: {report.reconciliation.topUpCredits}; chênh lệch: {report.reconciliation.difference}.
-      </Alert>
+      <section className="rounded-lg bg-white p-5 ring-1 ring-border">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="section-title">Đối chiếu tiền thu và Credit nạp</h2>
+          <span className={`rounded-sm px-2 py-1 text-xs font-semibold ${report.reconciliation.matched ? 'bg-emerald-50 text-success' : 'bg-amber-50 text-warning'}`}>
+            {report.reconciliation.matched ? 'Khớp' : 'Có chênh lệch'}
+          </span>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Stat label="Credit quy đổi từ tiền thu" value={report.reconciliation.cashCredits} />
+          <Stat label="Credit đã nạp" value={report.reconciliation.topUpCredits} />
+          <Stat label="Chênh lệch" value={report.reconciliation.difference} />
+        </div>
+      </section>
       <div className="grid gap-5 lg:grid-cols-2">
         {[{ title: 'Credit cộng theo loại', rows: report.creditInByType }, { title: 'Credit trừ theo loại', rows: report.creditOutByType }].map((group) => <section key={group.title}>
           <h2 className="mb-3 section-title">{group.title}</h2>
-          <div className="table-wrap"><table className="data-table"><thead><tr><th>Loại</th><th>Credit</th><th>Số bút toán</th></tr></thead><tbody>
+          {/* !min-w-0: bảng chỉ 3 cột trong nửa khung, không cần min-w-[720px] mặc định nên không còn thanh cuộn ngang. */}
+          <div className="table-wrap"><table className="data-table !min-w-0"><thead><tr><th>Loại</th><th>Credit</th><th>Số bút toán</th></tr></thead><tbody>
             {group.rows.length ? group.rows.map((row) => <tr key={row.type}><td>{transactionLabels[row.type] ?? row.type}</td><td>{row.amount}</td><td>{row.entryCount}</td></tr>) : <tr><td colSpan={3}>Chưa có dữ liệu.</td></tr>}
           </tbody></table></div>
         </section>)}

@@ -288,7 +288,7 @@ export function AdminModeration() {
             setApiPending(legacyItems);
             setApiChecklist([]);
             setApiRejectReasons([]);
-            setApiLegacyNotice('Hệ thống đang dùng hàng chờ cũ; chức năng duyệt và từ chối chưa khả dụng.');
+            setApiLegacyNotice('Hệ thống đang dùng hàng chờ cũ. Chức năng duyệt và từ chối chưa khả dụng.');
             return;
           } catch (fallbackError) {
             error = fallbackError as ApiError;
@@ -314,7 +314,7 @@ export function AdminModeration() {
     try {
       await adminModerationApi.approve(item.id, { answers: apiChecklist.map((entry, index) => ({ id: entry.id, passed: answers[index] })) });
       setApiPending((current) => current.filter((entry) => entry.id !== item.id));
-      setToast(`Đã duyệt bài #${item.id}.`);
+      setToast(`Đã duyệt bài "${item.title}".`);
     } catch (error) {
       const apiError = error as ApiError;
       if (apiError.code === 'REVIEW_CHECKLIST_OUTDATED') {
@@ -337,7 +337,7 @@ export function AdminModeration() {
     try {
       await adminModerationApi.reject(apiRejecting.id, { reason });
       setApiPending((current) => current.filter((entry) => entry.id !== apiRejecting.id));
-      setToast(`Đã từ chối bài #${apiRejecting.id}.`);
+      setToast(`Đã từ chối bài "${apiRejecting.title}".`);
       setApiRejecting(null);
       setApiRejectReason('');
     } catch (error) {
@@ -401,7 +401,6 @@ export function AdminModeration() {
               <article key={item.id} className="grid gap-4 rounded-lg bg-white p-4 ring-1 ring-border/80 lg:grid-cols-[minmax(0,1fr)_280px]">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
-                    <span>Bài #{item.id}</span>
                     {displayRisk(item.aiRisk) ? <span className="rounded-sm bg-amber-50 px-2 py-1 font-semibold text-warning">Rủi ro: {displayRisk(item.aiRisk)}</span> : null}
                   </div>
                   <h2 className="mt-2 font-bold">{item.title}</h2>
@@ -468,7 +467,7 @@ export function AdminModeration() {
           <EmptyState icon="shield" title={query ? 'Không tìm thấy bài phù hợp' : 'Không có bài chờ duyệt'} text={query ? 'Hãy thử từ khóa khác.' : 'Hiện chưa có bài đăng nào trong hàng chờ.'} />
         )}
         {apiRejecting ? (
-          <Modal title={`Từ chối bài #${apiRejecting.id}`} onClose={() => { if (apiActionId === null) setApiRejecting(null); }}>
+          <Modal title={`Từ chối bài "${apiRejecting.title}"`} onClose={() => { if (apiActionId === null) setApiRejecting(null); }}>
             <Select label="Lý do từ chối" value={apiRejectReason} onChange={(event) => setApiRejectReason(event.target.value)} disabled={apiActionId !== null}>
               <option value="">Chọn lý do từ danh sách</option>
               {apiRejectReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
@@ -614,8 +613,8 @@ function ModerationItemDetails({
       <div className="grid gap-x-5 gap-y-3 text-sm sm:grid-cols-2">
         <Info label="Hình thức" value={offerType === 'GIVE' ? 'Cho tặng' : offerType === 'SWAP' ? 'Trao đổi' : 'Chưa có dữ liệu'} />
         {offerType === 'SWAP' ? <Info label="Món muốn đổi" value={item.desiredItem?.trim() || 'Chưa có dữ liệu'} /> : null}
-        <Info label="Danh mục" value={categoryName ?? (item.categoryId == null ? 'Chưa có dữ liệu' : `Danh mục #${item.categoryId}`)} />
-        <Info label="Khu vực" value={areaName ?? (item.areaId == null ? 'Chưa có dữ liệu' : `Khu vực #${item.areaId}`)} />
+        <Info label="Danh mục" value={categoryName ?? 'Chưa có dữ liệu'} />
+        <Info label="Khu vực" value={areaName ?? 'Chưa có dữ liệu'} />
         <Info label="Tình trạng" value={condition ? apiConditionLabels[condition] : 'Chưa có dữ liệu'} />
         <Info label="Thương hiệu" value={item.brand?.trim() || 'Không có'} />
         <Info label="Ghi chú lỗi" value={item.defectNote?.trim() || 'Không có'} />
@@ -1819,7 +1818,7 @@ export function AdminAuditLogs() {
                 {logs.map((log) => (
                   <tr key={log.id}>
                     <td className="whitespace-nowrap">{formatActivityLogTime(log.createdAt)}</td>
-                    <td>{log.actorName ?? (log.actorId ? `Admin #${log.actorId}` : 'Hệ thống')}</td>
+                    <td>{log.actorName ?? (log.actorId ? 'Quản trị viên' : 'Hệ thống')}</td>
                     <td>{log.typeLabel ?? activityLogTypeLabel(log.type)}</td>
                     <td>{activityLogTarget(log)}</td>
                     <td><ActivityLogDetail log={log} /></td>
@@ -1976,8 +1975,8 @@ const activityLogTargetLabels: Record<string, string> = {
 
 function activityLogTarget(log: ActivityLogResponse) {
   if (log.targetTitle) return log.targetTitle;
-  const label = activityLogTargetLabels[log.targetType?.trim().toUpperCase() ?? ''] ?? 'Đối tượng';
-  return log.targetId == null ? label : `${label} #${log.targetId}`;
+  // Không có tên hiển thị thì chỉ nêu loại đối tượng, không in id kỹ thuật ra màn hình.
+  return activityLogTargetLabels[log.targetType?.trim().toUpperCase() ?? ''] ?? 'Đối tượng';
 }
 
 function formatActivityLogTime(value: string) {
@@ -2820,8 +2819,8 @@ function ApiAdminChecklist() {
       {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
       {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
       {loading ? <EmptyState title="Đang tải checklist" text="Vui lòng chờ trong giây lát." /> : entries.length ? (
-        <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th className="hidden text-text-muted md:table-cell">Mã</th><th>Tiêu chí</th><th className="whitespace-nowrap">Trạng thái</th><th className="min-w-[430px] whitespace-nowrap">Thao tác</th></tr></thead><tbody>
-          {entries.map((entry, index) => <tr key={entry.id}><td>{index + 1}</td><td className="hidden font-mono text-xs text-text-muted md:table-cell">{entry.key}</td><td className="font-semibold">{entry.question}</td><td className="whitespace-nowrap">{entry.active ? 'Đang hiển thị' : 'Đang ẩn'}</td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" size="sm" variant="ghost" title="Đưa mục này lên trên một vị trí" disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}>Chuyển lên</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="ghost" title="Đưa mục này xuống dưới một vị trí" disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}>Chuyển xuống</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="outline" title="Chỉnh sửa câu tiêu chí" disabled={savingId !== null} onClick={() => setEditing(entry)}>Sửa nội dung</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="outline" title={entry.active ? 'Không hiển thị mục này khi duyệt bài (không xoá)' : 'Hiển thị lại mục này khi duyệt bài'} disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Ẩn khỏi checklist' : 'Hiện lại'}</Button></div></td></tr>)}
+        <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Tiêu chí</th><th className="whitespace-nowrap">Trạng thái</th><th className="min-w-[430px] whitespace-nowrap">Thao tác</th></tr></thead><tbody>
+          {entries.map((entry, index) => <tr key={entry.id}><td>{index + 1}</td><td className="font-semibold">{entry.question}</td><td className="whitespace-nowrap">{entry.active ? 'Đang hiển thị' : 'Đang ẩn'}</td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" size="sm" variant="ghost" title="Đưa mục này lên trên một vị trí" disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}>Chuyển lên</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="ghost" title="Đưa mục này xuống dưới một vị trí" disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}>Chuyển xuống</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="outline" title="Chỉnh sửa câu tiêu chí" disabled={savingId !== null} onClick={() => setEditing(entry)}>Sửa nội dung</Button><Button className="!px-2 whitespace-nowrap" size="sm" variant="outline" title={entry.active ? 'Không hiển thị mục này khi duyệt bài (không xoá)' : 'Hiển thị lại mục này khi duyệt bài'} disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Ẩn khỏi checklist' : 'Hiện lại'}</Button></div></td></tr>)}
         </tbody></table></div>
       ) : <EmptyState title="Chưa có tiêu chí" text="Hiện chưa có tiêu chí duyệt bài nào." />}
       {editing ? <ChecklistEditModal entry={editing === 'new' ? null : editing} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(question) => void save(question)} /> : null}

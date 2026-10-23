@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppShell } from '../layouts/AppShell';
 import {
   AdminRoute,
@@ -25,7 +25,6 @@ import { DemoPaymentCheckout } from '../pages/user/DemoPaymentCheckout';
 import { ManualPaymentCheckout } from '../pages/user/ManualPaymentCheckout';
 import { ReportResponse } from '../pages/user/ReportResponse';
 import { AdminLayout } from '../pages/admin/AdminLayout';
-import { AdminAuthenticity } from '../pages/admin/AdminAuthenticity';
 import { AdminUnderDevelopment } from '../pages/admin/AdminUnderDevelopment';
 import { AdminComplaints } from '../pages/admin/AdminComplaints';
 import { AdminTopUpOrders } from '../pages/admin/AdminTopUpOrders';
@@ -100,7 +99,8 @@ export const router = createBrowserRouter([
             children: [
               { index: true, element: <AdminDashboard /> },
               { path: 'moderation', element: <AdminModeration /> },
-              { path: 'authenticity', element: <AdminAuthenticity /> },
+              // Tạm ẩn trang Nhãn chính hãng (chưa có luồng xác nhận, chưa có BR): đưa về trang tổng quan.
+              { path: 'authenticity', element: <Navigate to="/admin" replace /> },
               { path: 'checklist', element: <AdminContentPage kind="checklist" /> },
               { path: 'expired-posts', element: <AdminContentPage kind="expired" /> },
               { path: 'categories', element: <AdminContentPage kind="categories" /> },

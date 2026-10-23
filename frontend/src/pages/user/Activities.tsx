@@ -625,7 +625,7 @@ export function Activities() {
                             {item.title}
                           </Link>
                           <p className="mt-1 text-xs text-text-muted">
-                            Với {other?.name} · {tx.id}
+                            Với {other?.name}
                           </p>
                         </div>
                       </div>
@@ -1250,7 +1250,7 @@ function SentRequestPanel({
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <strong className="truncate text-sm">{item?.title ?? `Bài đăng #${request.itemId}`}</strong>
+                      <strong className="truncate text-sm">{item?.title ?? 'Bài đăng'}</strong>
                       <TypeBadge type={request.type} />
                       <span className="rounded-sm bg-amber-50 px-2 py-1 text-[11px] font-semibold text-warning">
                         {requestStatusLabel[request.status]}
@@ -1261,7 +1261,7 @@ function SentRequestPanel({
                     </p>
                     {request.offeredItemId ? (
                       <p className="mt-2 text-xs text-text-muted">
-                        Món đề nghị trao đổi: #{request.offeredItemId}
+                        Món đề nghị trao đổi: {items.find((entry) => entry.id === request.offeredItemId)?.title ?? 'Món đồ của bạn'}
                       </p>
                     ) : null}
                   </div>

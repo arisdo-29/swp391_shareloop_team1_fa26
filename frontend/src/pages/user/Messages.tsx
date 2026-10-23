@@ -98,6 +98,11 @@ interface ApiConversation {
   item?: ItemResponse;
 }
 
+// Khi chưa có tiêu đề món đồ thì gọi theo loại yêu cầu, không in id kỹ thuật ra màn hình.
+function requestFallbackTitle(request: RequestResponse) {
+  return request.type === 'SWAP' ? 'Yêu cầu trao đổi' : 'Yêu cầu nhận đồ';
+}
+
 function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const navigate = useNavigate();
   const { requestId, disputeId } = useParams();
@@ -507,7 +512,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       setDisputeNote('');
       setDisputeEvidence([]);
       setDisputeNotice(
-        `Khiếu nại #${response.id} đã được gửi. Hạn giải trình: ${new Date(response.responseDueAt).toLocaleString('vi-VN')}.`,
+        `Khiếu nại của bạn đã được gửi. Hạn giải trình: ${new Date(response.responseDueAt).toLocaleString('vi-VN')}.`,
       );
       setConversationReloadKey((key) => key + 1);
     } catch (error) {
@@ -603,7 +608,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     </span>
                   )}
                   <span className="min-w-0 flex-1">
-                    <strong className="block truncate text-sm">{item?.title ?? `Yêu cầu #${request.id}`}</strong>
+                    <strong className="block truncate text-sm">{item?.title ?? requestFallbackTitle(request)}</strong>
                     <span className="mt-1 flex items-center gap-2">
                       <TypeBadge type={request.type === 'SWAP' ? 'trade' : 'gift'} />
                       <span className="text-xs text-text-muted">{requestStatusLabel[request.status]}</span>
@@ -624,7 +629,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
             <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4 sm:px-5">
               <IconButton icon="arrow" label="Quay lại" className="rotate-180 lg:hidden" onClick={() => setMobileChat(false)} />
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-sm font-bold">{selected.item?.title ?? `Yêu cầu #${selected.request.id}`}</h2>
+                <h2 className="truncate text-sm font-bold">{selected.item?.title ?? requestFallbackTitle(selected.request)}</h2>
                 <p className="mt-1 text-xs text-text-muted">Tin nhắn được đồng bộ tự động mỗi 5 giây</p>
               </div>
               <span className="rounded-sm bg-primary-faint px-2.5 py-1 text-xs font-semibold text-primary">{requestStatusLabel[selected.request.status]}</span>
@@ -749,7 +754,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                             >
                               <ItemImage
                                 src={entry.url}
-                                alt={`Minh chứng #${entry.mediaId}`}
+                                alt="Ảnh minh chứng"
                                 className="size-16 rounded-md object-cover"
                               />
                             </a>
@@ -952,7 +957,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       {reportOpen && selected && reportTargetUserId && reportTargetUserId !== currentUserId ? (
         <ReportDialog
           target={{ targetType: 'USER', targetUserId: reportTargetUserId, requestId: selected.request.id }}
-          contextLabel={`Báo cáo người dùng trong yêu cầu #${selected.request.id}`}
+          contextLabel="Báo cáo người dùng trong yêu cầu này"
           onClose={() => setReportOpen(false)}
           onSuccess={() => {
             setReportOpen(false);
@@ -964,7 +969,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
           <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
             <h2 className="text-xl font-bold">Gửi khiếu nại giao dịch</h2>
-            <p className="mt-1 text-sm text-text-muted">Yêu cầu #{selected.request.id} · {selected.item?.title ?? 'Bài đăng'}</p>
+            <p className="mt-1 text-sm text-text-muted">{selected.item?.title ?? requestFallbackTitle(selected.request)}</p>
             <Select
               className="mt-5"
               label="Lý do"
@@ -1012,7 +1017,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
           <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
             <h2 className="text-xl font-bold">Giải trình khiếu nại</h2>
-            <p className="mt-1 text-sm text-text-muted">Khiếu nại #{Number.isSafeInteger(responseDisputeId) ? responseDisputeId : ''}</p>
+            <p className="mt-1 text-sm text-text-muted">Gửi nội dung giải trình cho khiếu nại liên quan đến bạn.</p>
             {responseNotice ? (
               <div className="mt-5 space-y-4">
                 <div className="rounded-md bg-emerald-50 p-3 text-sm text-success">{responseNotice}</div>
@@ -1538,7 +1543,7 @@ function MockMessages() {
               <div>
                 <h2 className="text-xl font-bold">Gửi khiếu nại</h2>
                 <p className="mt-1 text-sm text-text-muted">
-                  Khiếu nại sẽ được chuyển đến quản trị viên để xử lý theo giao dịch {tx.id}.
+                  Khiếu nại sẽ được chuyển đến quản trị viên để xử lý theo giao dịch này.
                 </p>
               </div>
               <IconButton icon="close" label="Đóng" onClick={() => setShowComplaint(false)} />
