@@ -92,9 +92,23 @@ public class ReviewService {
      * flagReasonCode; với LEXICON_REVIEW câu hiển thị kèm danh sách từ khoá đã khớp.
      */
     public List<ReviewQueueItem> listPending(int page, int size) {
-        return repository.findPendingReviewQueue(PageRequest.of(page, size)).stream()
-                .map(this::toQueueItem)
-                .toList();
+        List<Object[]> rows = repository.findPendingReviewQueue(PageRequest.of(page, size));
+        Map<Long, UserBrief> donors = findDonors(rows);
+
+        List<ReviewQueueItem> items = new ArrayList<>();
+        for (Object[] row : rows) {
+            items.add(toQueueItem(row, donors));
+        }
+        return items;
+    }
+
+    // Tên người đăng nằm ở module user nên hỏi một lần cho cả trang; cột 1 của mỗi dòng là donor_id.
+    private Map<Long, UserBrief> findDonors(List<Object[]> rows) {
+        Set<Long> donorIds = new HashSet<>();
+        for (Object[] row : rows) {
+            donorIds.add(((Number) row[1]).longValue());
+        }
+        return userService.findBriefs(donorIds);
     }
 
     public ReviewQueueResponse listPendingWithChecklist(int page, int size) {
@@ -223,12 +237,15 @@ public class ReviewService {
         return Map.of("checks", checks);
     }
 
-    private ReviewQueueItem toQueueItem(Object[] row) {
+    private ReviewQueueItem toQueueItem(Object[] row, Map<Long, UserBrief> donors) {
+        long donorId = ((Number) row[1]).longValue();
+        UserBrief donor = donors.get(donorId);
         String flagReasonCode = (String) row[5];
         List<String> matchedTerms = parseMatchedTerms((String) row[8]);
         return new ReviewQueueItem(
                 ((Number) row[0]).longValue(),
-                ((Number) row[1]).longValue(),
+                donorId,
+                donor == null ? null : donor.fullName(),
                 (String) row[2],
                 (String) row[3],
                 (String) row[4],

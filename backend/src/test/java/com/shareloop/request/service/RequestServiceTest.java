@@ -9,10 +9,15 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.item.ItemErrorCode;
+import com.shareloop.item.dto.ItemCardDto;
+import com.shareloop.item.entity.ItemStatus;
+import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
@@ -36,6 +41,7 @@ import com.shareloop.user.service.UserService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -323,6 +329,75 @@ class RequestServiceTest {
         RequestResponse resDonor = requestService.getDetail(101L, 20L);
         assertThat(resDonor).isNotNull();
         assertThat(resDonor.itemId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("getDetail: Bài đã RESERVED vẫn trả tiêu đề, ảnh và tên chủ bài cho người xin (U2)")
+    void getDetail_whenItemReserved_returnsItemTitleImageAndDonorName() {
+        // given: người xin (10) mở yêu cầu của bài đã được chọn người nhận, GET /items/{id} sẽ không cho họ xem bài này
+        Request request = new Request(1L, 10L, 2L, "SWAP");
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "RESERVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(itemQueryService.getItemCard(1L))
+                .thenReturn(new ItemCardDto(
+                        1L, "Xe đạp mini", OfferType.SWAP, ItemStatus.RESERVED, "/api/v1/media/5", 20L));
+        when(itemQueryService.findTitles(List.of(2L))).thenReturn(Map.of(2L, "Giày thể thao"));
+        when(userService.findContact(10L)).thenReturn(new ContactInfo(10L, "Người xin", "b@example.com", "0901"));
+        when(userService.findContact(20L)).thenReturn(new ContactInfo(20L, "Chủ bài", "a@example.com", "0902"));
+
+        // when
+        RequestResponse response = requestService.getDetail(101L, 10L);
+
+        // then
+        assertThat(response.itemTitle()).isEqualTo("Xe đạp mini");
+        assertThat(response.itemImage()).isEqualTo("/api/v1/media/5");
+        assertThat(response.donorId()).isEqualTo(20L);
+        assertThat(response.donorName()).isEqualTo("Chủ bài");
+        assertThat(response.offeredItemTitle()).isEqualTo("Giày thể thao");
+        assertThat(response.receiverName()).isEqualTo("Người xin");
+    }
+
+    @Test
+    @DisplayName("getDetail: Không tra được thẻ bài đăng thì các trường tên để null, API vẫn trả bình thường")
+    void getDetail_whenItemCardMissing_leavesNamesNull() {
+        // given
+        Request request = new Request(1L, 10L, null, "GIVE");
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(itemQueryService.getItemCard(1L)).thenThrow(new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
+
+        // when
+        RequestResponse response = requestService.getDetail(101L, 10L);
+
+        // then
+        assertThat(response.itemTitle()).isNull();
+        assertThat(response.donorName()).isNull();
+        assertThat(response.offeredItemTitle()).isNull();
+        assertThat(response.itemId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("listMyRequests: Nhiều yêu cầu cùng một bài chỉ tra thẻ bài đăng một lần")
+    void listMyRequests_whenSameItemTwice_looksUpItemCardOnce() {
+        // given
+        Request first = new Request(1L, 10L, null, "GIVE");
+        Request second = new Request(1L, 10L, null, "GIVE");
+        when(requestRepository.findByReceiverIdOrderByCreatedAtDesc(10L)).thenReturn(List.of(first, second));
+        when(itemQueryService.getItemCard(1L))
+                .thenReturn(new ItemCardDto(1L, "Xe đạp mini", OfferType.GIVE, ItemStatus.APPROVED, null, 20L));
+        when(userService.findContact(10L)).thenReturn(new ContactInfo(10L, "Người xin", "b@example.com", "0901"));
+        when(userService.findContact(20L)).thenReturn(new ContactInfo(20L, "Chủ bài", "a@example.com", "0902"));
+
+        // when
+        List<RequestResponse> responses = requestService.listMyRequests(10L);
+
+        // then
+        assertThat(responses).extracting(RequestResponse::itemTitle).containsExactly("Xe đạp mini", "Xe đạp mini");
+        verify(itemQueryService, times(1)).getItemCard(1L);
     }
 
     @Test

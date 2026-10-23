@@ -150,6 +150,7 @@ Báo cáo ba sổ (SRS mục 4.7) của **toàn hệ thống** trong khoảng `[
 | `creditOutTotal`  | Tổng của các dòng có `amount < 0`, **trả số dương** (doanh thu đã thực hiện)                   |
 | `creditOutByType` | Như trên, tách theo `type` (`POST_FEE`, `EDIT_FEE`, `RENEW_FEE`, `BOOST_FEE`, `AI_SEARCH_FEE`; `ADMIN_ADJUST` âm nếu có nằm dòng riêng) |
 | `reconciliation`  | Dòng đối chiếu BR-P09, xem dưới                                                               |
+| `cashByDay`       | Tiền mặt thực thu theo ngày giờ Việt Nam (`Asia/Ho_Chi_Minh`) từ `paid_at`: `{ date, amountVnd, orderCount }`, ngày cũ trước, chỉ gồm ngày có đơn. Gom ở Java vì `paid_at` lưu UTC |
 
 - Mỗi phần tử `...ByType` là `{ type, amount, entryCount }`; `amount` luôn không âm, `entryCount` là số dòng sổ cái.
   Chỉ có các `type` có dữ liệu trong khoảng, sắp theo tên `type`.
@@ -181,7 +182,11 @@ cùng một transaction nên chỉ chênh rất nhỏ; chỉ có thể lệch gi
     { "type": "POST_FEE", "amount": 10, "entryCount": 2 },
     { "type": "RENEW_FEE", "amount": 5, "entryCount": 1 }
   ],
-  "reconciliation": { "cashCredits": 100, "topUpCredits": 100, "difference": 0, "matched": true }
+  "reconciliation": { "cashCredits": 100, "topUpCredits": 100, "difference": 0, "matched": true },
+  "cashByDay": [
+    { "date": "2026-10-03", "amountVnd": 20000, "orderCount": 1 },
+    { "date": "2026-10-17", "amountVnd": 80000, "orderCount": 2 }
+  ]
 }
 ```
 
@@ -191,6 +196,13 @@ Admin dùng lại hai hàm có sẵn, truyền `userId` của người cần tra
 
 - `getWallet(userId)`: số dư, số đang giữ, khả dụng, đã từng nạp hay chưa.
 - `getTransactions(userId, from, to, page, size)`: các dòng sổ cái của người đó, mới nhất trước, có phân trang.
+
+Hai hàm đọc theo lô cho danh sách tra cứu của Admin (read-only, không khoá dòng). Người dùng không có ví hoặc chưa nạp lần nào không xuất hiện trong kết quả, người gọi coi là 0:
+
+- `getWallets(Collection<Long> userIds)`: `Map<userId, WalletResponse>`.
+- `getToppedUpCredits(Collection<Long> userIds)`: `Map<userId, tổng Credit của các đơn nạp SUCCESS>`.
+
+`AdminFinanceService.listUsers` lấy danh sách người dùng thường qua `UserService.searchAccounts` rồi ghép hai hàm trên. Endpoint: `GET /api/v1/admin/finance/users` và `GET /api/v1/admin/finance/users/{userId}/wallet`, xem `admin.md` mục 3.1 và 3.2.
 
 Danh sách yêu cầu MANUAL và thao tác admin duyệt/từ chối: xem `GET /admin/finance/topup-orders` cùng các API
 trong `payment.md`. Bộ lọc userId cho danh sách đơn chưa được cung cấp.

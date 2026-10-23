@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.shareloop.auth.service.JwtService;
 import com.shareloop.support.IntegrationTest;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -149,6 +150,45 @@ class AdminCategoryIT extends IntegrationTest {
                         .content(body("Orphan", 999999L, false, true, 1)))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("CATALOG_INVALID_PARENT"));
+    }
+
+    @Test
+    void newCategoryWithoutSortOrderGoesLastAndReorderRewritesPositions() throws Exception {
+        String token = jwtService.issue(adminId, true);
+        mvc.perform(post("/api/v1/admin/categories")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Admin Last Category\",\"restricted\":false,\"boostable\":true}"))
+                .andExpect(status().isCreated());
+
+        List<Long> idsInOrder = jdbc.sql("SELECT id FROM item_categories ORDER BY sort_order, id")
+                .query(Long.class)
+                .list();
+        assertThat(idsInOrder.getLast()).isEqualTo(categoryId("Admin Last Category"));
+
+        List<Long> reversedIds = idsInOrder.reversed();
+        mvc.perform(put("/api/v1/admin/categories/reorder")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"categoryIds\":" + reversedIds + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("Admin Last Category"))
+                .andExpect(jsonPath("$[0].sortOrder").value(1));
+    }
+
+    @Test
+    void reorderRejectsIncompleteList() throws Exception {
+        String token = jwtService.issue(adminId, true);
+        long firstId = jdbc.sql("SELECT id FROM item_categories ORDER BY sort_order, id LIMIT 1")
+                .query(Long.class)
+                .single();
+
+        mvc.perform(put("/api/v1/admin/categories/reorder")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"categoryIds\":[" + firstId + "]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CATALOG_INVALID_SORT_ORDER"));
     }
 
     private String body(String name, Long parentId, boolean restricted, boolean boostable, int sortOrder) {

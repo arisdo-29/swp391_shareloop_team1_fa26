@@ -73,6 +73,7 @@ public class AdminActivityLogController {
                                                 "CATEGORY_CREATE",
                                                 "CATEGORY_UPDATE",
                                                 "CATEGORY_TOGGLE",
+                                                "CATEGORY_REORDER",
                                                 "CATEGORY_ATTRIBUTE_CREATE",
                                                 "CATEGORY_ATTRIBUTE_UPDATE",
                                                 "CATEGORY_ATTRIBUTE_TOGGLE",

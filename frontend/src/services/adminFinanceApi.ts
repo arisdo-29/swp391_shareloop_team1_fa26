@@ -23,6 +23,26 @@ export interface FinanceSummary {
     difference: number;
     matched: boolean;
   };
+  // Tiền thu theo ngày giờ Việt Nam, ngày cũ trước, chỉ gồm ngày có đơn thanh toán.
+  cashByDay: DailyCash[];
+}
+
+export interface DailyCash {
+  date: string; // yyyy-MM-dd
+  amountVnd: number;
+  orderCount: number;
+}
+
+// Contract: docs/api/admin.md mục 3.1 và 3.2
+export interface AdminFinanceUserSummary {
+  userId: number;
+  fullName: string;
+  email: string;
+  phone: string;
+  availableCredit: number;
+  heldCredit: number;
+  totalCredit: number;
+  totalToppedUpCredit: number;
 }
 
 export interface AdminDateParams {
@@ -48,11 +68,12 @@ export function financeCsvFileName(contentDisposition: string | undefined) {
 }
 
 export const adminFinanceApi = {
+  // Bỏ trống status là mọi trạng thái, bỏ trống submittedOnly là false (docs/api/payment.md).
   async topUpOrders(params: {
     page: number;
     size: number;
-    status: PaymentOrderStatus;
-    submittedOnly: boolean;
+    status?: PaymentOrderStatus;
+    submittedOnly?: boolean;
   }) {
     const { data } = await http.get<PageResponse<TopUpOrderDetailResponse>>(
       '/api/v1/admin/finance/topup-orders',
@@ -87,6 +108,19 @@ export const adminFinanceApi = {
       blob: response.data,
       fileName: financeCsvFileName(response.headers['content-disposition']),
     };
+  },
+  async users(params: { keyword?: string; page: number; size: number }) {
+    const { data } = await http.get<PageResponse<AdminFinanceUserSummary>>(
+      '/api/v1/admin/finance/users',
+      { params },
+    );
+    return data;
+  },
+  async userWallet(userId: number) {
+    const { data } = await http.get<AdminFinanceUserSummary>(
+      `/api/v1/admin/finance/users/${userId}/wallet`,
+    );
+    return data;
   },
   async userHistory(userId: number, params: AdminDateParams & { page: number; size: number }) {
     const { data } = await http.get<PageResponse<WalletTransactionResponse>>(

@@ -24,6 +24,7 @@ const summary = {
   creditOutTotal: 0,
   creditOutByType: [],
   reconciliation: { cashCredits: 0, topUpCredits: 0, difference: 0, matched: true },
+  cashByDay: [],
 };
 
 beforeEach(() => {

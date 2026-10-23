@@ -118,6 +118,7 @@ Xem nhật ký hành động trong hệ thống (FR-115, Issue #117). Chỉ dàn
 | `CATEGORY_CREATE` | Thêm danh mục | `CATEGORY` | `name`, `active` |
 | `CATEGORY_UPDATE` | Sửa danh mục | `CATEGORY` | `name`, `active` |
 | `CATEGORY_TOGGLE` | Bật/tắt danh mục | `CATEGORY` | `name`, `active` |
+| `CATEGORY_REORDER` | Sắp xếp danh mục | `CATEGORY` (`targetId = null`) | `categoryIds` (thứ tự mới) |
 | `CATEGORY_ATTRIBUTE_CREATE` | Thêm thuộc tính danh mục | `CATEGORY_ATTRIBUTE` | `categoryId`, `name`, `active` |
 | `CATEGORY_ATTRIBUTE_UPDATE` | Sửa thuộc tính danh mục | `CATEGORY_ATTRIBUTE` | `categoryId`, `name`, `active` |
 | `CATEGORY_ATTRIBUTE_TOGGLE` | Bật/tắt thuộc tính danh mục | `CATEGORY_ATTRIBUTE` | `categoryId`, `name`, `active` |
@@ -187,9 +188,15 @@ Báo cáo tài chính ba sổ và đối chiếu TopUp (FR-109, FR-110, BR-P09, 
     "topUpCredits": 100,
     "difference": 0,
     "matched": true
-  }
+  },
+  "cashByDay": [
+    { "date": "2026-10-03", "amountVnd": 20000, "orderCount": 1 },
+    { "date": "2026-10-17", "amountVnd": 80000, "orderCount": 2 }
+  ]
 }
 ```
+
+`cashByDay` là tiền mặt thực thu theo từng ngày để vẽ biểu đồ. Ngày tính theo giờ Việt Nam (`Asia/Ho_Chi_Minh`) từ thời điểm thanh toán `paid_at`, sắp ngày cũ trước, chỉ gồm ngày có ít nhất một đơn SUCCESS. Giao diện tự điền các ngày trống bằng 0 nếu cần. Tổng `amountVnd` của mảng này bằng `cashAmountVnd`.
 
 - **Mã lỗi:**
 
@@ -321,6 +328,116 @@ Tra cứu lịch sử tài chính và biến động số dư Credit của một
 | `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
 | `403` | Forbidden | Người dùng không có vai trò Admin |
 | `404` | Not Found | `WALLET_NOT_FOUND`: Người dùng không tồn tại ví trong hệ thống |
+
+---
+
+## 3.1. GET /api/v1/admin/finance/users
+
+Danh sách người dùng thường kèm số liệu Credit cơ bản để Admin tra cứu (FR-112). Không gồm tài khoản Admin. Người dùng mới nhất đứng trước.
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin.
+- **Query Parameters:**
+
+| Tham số | Kiểu | Bắt buộc | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `keyword` | string | Không | - | Khớp một phần họ tên, email hoặc số điện thoại, không phân biệt hoa thường. Bỏ trống thì lấy tất cả |
+| `page` | int | Không | `0` | Số trang, từ 0 |
+| `size` | int | Không | `20` | 1 đến 100 |
+
+- **Thành công:** `200 OK`, `PageResponse<AdminFinanceUserSummary>`.
+
+```json
+{
+  "items": [
+    {
+      "userId": 7,
+      "fullName": "Nguyễn Văn A",
+      "email": "a@example.com",
+      "phone": "0901234567",
+      "availableCredit": 25,
+      "heldCredit": 5,
+      "totalCredit": 30,
+      "totalToppedUpCredit": 50
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1
+}
+```
+
+`availableCredit` là Credit dùng được, `heldCredit` là Credit đang giữ chờ duyệt bài, `totalCredit` là tổng Credit đang có (khả dụng cộng đang giữ). `totalToppedUpCredit` là tổng Credit của các đơn nạp SUCCESS từ trước đến nay (mọi cổng thanh toán). Người dùng chưa có ví hoặc chưa nạp lần nào có số liệu bằng 0.
+
+| Mã | Ý nghĩa | Mô tả |
+|----|---------|-------|
+| `200` | Thành công | Trả về danh sách |
+| `400` | Bad Request | `VALIDATION_FAILED` khi `page`/`size` sai |
+| `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
+| `403` | Forbidden | Người dùng không có vai trò Admin |
+
+---
+
+## 3.2. GET /api/v1/admin/finance/users/{userId}/wallet
+
+Họ tên, email, số điện thoại và số liệu Credit của một người dùng, cho màn hình chi tiết của Admin (FR-112). Lịch sử giao dịch của người đó lấy ở [mục 3](#3-get-apiv1adminfinanceusersuseridhistory).
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin.
+- **Thành công:** `200 OK`, cùng dạng `AdminFinanceUserSummary` như [mục 3.1](#31-get-apiv1adminfinanceusers).
+
+| Mã | Ý nghĩa | Mô tả |
+|----|---------|-------|
+| `200` | Thành công | Trả về thông tin và số liệu Credit |
+| `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
+| `403` | Forbidden | Người dùng không có vai trò Admin |
+| `404` | Not Found | `USER_NOT_FOUND`: Người dùng không tồn tại. `WALLET_NOT_FOUND`: người dùng không có ví |
+
+---
+
+## 3.3. GET /api/v1/admin/users
+
+Danh sách tài khoản cho trang Quản lý tài khoản của Admin (FR-107), có tìm kiếm, lọc và phân trang. Tài khoản mới nhất đứng trước. Dùng cùng với [khoá](#4-post-apiv1adminusersuseridlock) và [mở khoá](#5-post-apiv1adminusersuseridunlock).
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin.
+- **Query Parameters:**
+
+| Tham số | Kiểu | Bắt buộc | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `keyword` | string | Không | - | Khớp một phần họ tên, email hoặc số điện thoại, không phân biệt hoa thường |
+| `status` | enum | Không | - | `ACTIVE`, `LOCKED`, `PENDING_VERIFICATION` hoặc `BANNED` |
+| `role` | enum | Không | - | `ADMIN` hoặc `USER` |
+| `page` | int | Không | `0` | Số trang, từ 0 |
+| `size` | int | Không | `20` | 1 đến 100 |
+
+`status` là trạng thái hiển thị. Cột `users.status` chỉ có `PENDING_VERIFICATION`, `ACTIVE`, `BANNED`, còn khoá tài khoản là `is_active = false` (ERD 7.11), nên `LOCKED` được suy ra. Khi một tài khoản thuộc nhiều nhóm thì ưu tiên theo thứ tự `BANNED`, `LOCKED`, `PENDING_VERIFICATION`, `ACTIVE`. Lọc `ACTIVE` hoặc `PENDING_VERIFICATION` chỉ lấy tài khoản chưa bị khoá.
+
+- **Thành công:** `200 OK`, `PageResponse<AdminUserSummary>`.
+
+```json
+{
+  "items": [
+    {
+      "id": 9,
+      "fullName": "Nguyễn Văn A",
+      "email": "a@example.com",
+      "phone": "0901234567",
+      "role": "USER",
+      "status": "LOCKED",
+      "locked": true,
+      "createdAt": "2026-10-14T10:00:00Z"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1
+}
+```
+
+| Mã | Ý nghĩa | Mô tả |
+|----|---------|-------|
+| `200` | Thành công | Trả về danh sách |
+| `400` | Bad Request | `VALIDATION_FAILED` khi `page`/`size` sai hoặc `status`/`role` không hợp lệ |
+| `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
+| `403` | Forbidden | Người dùng không có vai trò Admin |
 
 ---
 

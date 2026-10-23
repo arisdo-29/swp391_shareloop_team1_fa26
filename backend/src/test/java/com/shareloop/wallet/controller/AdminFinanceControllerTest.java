@@ -22,7 +22,9 @@ import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
 import com.shareloop.wallet.FinanceErrorCode;
 import com.shareloop.wallet.WalletErrorCode;
+import com.shareloop.wallet.dto.AdminFinanceUserSummary;
 import com.shareloop.wallet.dto.CreditTypeTotal;
+import com.shareloop.wallet.dto.DailyCashTotal;
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
 import com.shareloop.wallet.dto.TopUpReconciliation;
 import com.shareloop.wallet.dto.WalletTransactionResponse;
@@ -106,7 +108,8 @@ class AdminFinanceControllerTest {
                 List.of(new CreditTypeTotal(CreditTxType.TOP_UP, 100L, 3L)),
                 22L,
                 List.of(new CreditTypeTotal(CreditTxType.POST_FEE, 10L, 2L)),
-                reconciliation);
+                reconciliation,
+                List.of(new DailyCashTotal(LocalDate.of(2026, 10, 17), 100000L, 3L)));
 
         when(adminFinanceService.getReport(any(), any())).thenReturn(summary);
 
@@ -121,7 +124,10 @@ class AdminFinanceControllerTest {
                 .andExpect(jsonPath("$.creditOutTotal").value(22))
                 .andExpect(jsonPath("$.reconciliation.matched").value(true))
                 .andExpect(jsonPath("$.reconciliation.cashCredits").value(100))
-                .andExpect(jsonPath("$.reconciliation.topUpCredits").value(100));
+                .andExpect(jsonPath("$.reconciliation.topUpCredits").value(100))
+                .andExpect(jsonPath("$.cashByDay[0].date").value("2026-10-17"))
+                .andExpect(jsonPath("$.cashByDay[0].amountVnd").value(100000))
+                .andExpect(jsonPath("$.cashByDay[0].orderCount").value(3));
 
         verify(adminFinanceService).getReport(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 17));
     }
@@ -140,6 +146,58 @@ class AdminFinanceControllerTest {
                         .param("to", "2026-10-10"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_DATE_RANGE"));
+    }
+
+    @Test
+    @DisplayName("GET /admin/finance/users: Admin tra cứu người dùng, mặc định trang 0 cỡ 20")
+    void users_admin_returnsPageWithDefaultPaging() throws Exception {
+        String adminToken = jwtService.issue(1L, true);
+        AdminFinanceUserSummary an =
+                new AdminFinanceUserSummary(7L, "Lan An", "an@test.local", "0900000007", 25L, 5L, 30L, 50L);
+        when(adminFinanceService.listUsers(any(), anyInt(), anyInt()))
+                .thenReturn(new PageResponse<>(List.of(an), 0, 20, 1));
+
+        mockMvc.perform(get("/api/v1/admin/finance/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .param("keyword", "an"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].fullName").value("Lan An"))
+                .andExpect(jsonPath("$.items[0].availableCredit").value(25))
+                .andExpect(jsonPath("$.items[0].totalToppedUpCredit").value(50))
+                .andExpect(jsonPath("$.totalElements").value(1));
+
+        verify(adminFinanceService).listUsers("an", 0, 20);
+    }
+
+    @Test
+    @DisplayName("GET /admin/finance/users: USER thường trả về 403, size vượt 100 trả về 400")
+    void users_nonAdminOrBadSize_isRejected() throws Exception {
+        String userToken = jwtService.issue(42L, false);
+        String adminToken = jwtService.issue(1L, true);
+
+        mockMvc.perform(get("/api/v1/admin/finance/users").header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/finance/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .param("size", "101"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(adminFinanceService);
+    }
+
+    @Test
+    @DisplayName("GET /admin/finance/users/{id}/wallet: Admin xem ví một người dùng")
+    void userWallet_admin_returnsSummary() throws Exception {
+        String adminToken = jwtService.issue(1L, true);
+        when(adminFinanceService.getUserFinance(7L))
+                .thenReturn(
+                        new AdminFinanceUserSummary(7L, "Lan An", "an@test.local", "0900000007", 25L, 5L, 30L, 50L));
+
+        mockMvc.perform(get("/api/v1/admin/finance/users/7/wallet").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(7))
+                .andExpect(jsonPath("$.totalCredit").value(30))
+                .andExpect(jsonPath("$.heldCredit").value(5));
     }
 
     @Test
@@ -324,6 +382,7 @@ class AdminFinanceControllerTest {
                         new CreditTypeTotal(CreditTxType.EDIT_FEE, 5L, 1L),
                         new CreditTypeTotal(CreditTxType.POST_FEE, 10L, 2L),
                         new CreditTypeTotal(CreditTxType.RENEW_FEE, 5L, 1L)),
-                new TopUpReconciliation(100L, 100L, 0L, true));
+                new TopUpReconciliation(100L, 100L, 0L, true),
+                List.of());
     }
 }

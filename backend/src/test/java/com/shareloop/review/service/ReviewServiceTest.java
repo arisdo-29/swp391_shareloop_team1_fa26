@@ -31,6 +31,7 @@ import com.shareloop.review.repository.ReviewItemRepository;
 import com.shareloop.review.repository.ReviewQueueRepository;
 import com.shareloop.setting.dto.ChecklistItem;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.service.UserService;
 import java.time.Instant;
 import java.util.List;
@@ -207,6 +208,36 @@ class ReviewServiceTest {
         assertThat(item.flagReasonCode()).isEqualTo("LEXICON_REVIEW");
         assertThat(item.flagReason()).isEqualTo("Có từ khoá cần xem xét: zalo, liên hệ");
         assertThat(item.matchedTerms()).containsExactly("zalo", "liên hệ");
+    }
+
+    @Test
+    void pendingQueue_includesDonorNameFromUserService() {
+        // given
+        Object[] row = {8L, 99L, "Áo", "LOW", "NONE", null, (short) 3, Instant.parse("2026-10-19T00:00:00Z"), null};
+        when(queueRepository.findPendingReviewQueue(any())).thenReturn(java.util.Collections.singletonList(row));
+        when(userService.findBriefs(java.util.Set.of(99L)))
+                .thenReturn(Map.of(99L, new UserBrief(99L, "Nguyễn Văn A", "a@test.local")));
+
+        // when
+        var item = service.listPending(0, 20).getFirst();
+
+        // then
+        assertThat(item.donorId()).isEqualTo(99L);
+        assertThat(item.donorName()).isEqualTo("Nguyễn Văn A");
+    }
+
+    @Test
+    void pendingQueue_whenDonorHasNoBrief_leavesDonorNameNull() {
+        // given: người đăng đã bị xoá mềm nên findBriefs không trả về họ
+        Object[] row = {8L, 99L, "Áo", "LOW", "NONE", null, (short) 3, Instant.parse("2026-10-19T00:00:00Z"), null};
+        when(queueRepository.findPendingReviewQueue(any())).thenReturn(java.util.Collections.singletonList(row));
+        when(userService.findBriefs(java.util.Set.of(99L))).thenReturn(Map.of());
+
+        // when
+        var item = service.listPending(0, 20).getFirst();
+
+        // then
+        assertThat(item.donorName()).isNull();
     }
 
     @Test

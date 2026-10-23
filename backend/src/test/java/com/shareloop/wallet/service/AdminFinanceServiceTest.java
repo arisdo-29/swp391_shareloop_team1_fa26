@@ -12,8 +12,15 @@ import static org.mockito.Mockito.when;
 
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.user.UserErrorCode;
+import com.shareloop.user.dto.AdminAccountRole;
+import com.shareloop.user.dto.AdminAccountState;
+import com.shareloop.user.dto.AdminUserSummary;
+import com.shareloop.user.dto.ContactInfo;
+import com.shareloop.user.service.UserService;
 import com.shareloop.wallet.FinanceErrorCode;
 import com.shareloop.wallet.WalletErrorCode;
+import com.shareloop.wallet.dto.AdminFinanceUserSummary;
 import com.shareloop.wallet.dto.CreditTypeTotal;
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
 import com.shareloop.wallet.dto.TopUpReconciliation;
@@ -23,6 +30,7 @@ import com.shareloop.wallet.entity.CreditTxType;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,11 +39,12 @@ import org.mockito.ArgumentCaptor;
 class AdminFinanceServiceTest {
 
     private final CreditService creditService = mock(CreditService.class);
+    private final UserService userService = mock(UserService.class);
     private AdminFinanceService adminFinanceService;
 
     @BeforeEach
     void setUp() {
-        adminFinanceService = new AdminFinanceService(creditService);
+        adminFinanceService = new AdminFinanceService(creditService, userService);
     }
 
     @Test
@@ -54,7 +63,8 @@ class AdminFinanceServiceTest {
                 List.of(new CreditTypeTotal(CreditTxType.TOP_UP, 100L, 3L)),
                 22L,
                 List.of(new CreditTypeTotal(CreditTxType.POST_FEE, 10L, 2L)),
-                reconciliation);
+                reconciliation,
+                List.of());
 
         when(creditService.getFinanceSummary(any(Instant.class), any(Instant.class)))
                 .thenReturn(expectedSummary);
@@ -131,6 +141,68 @@ class AdminFinanceServiceTest {
                         .isEqualTo(WalletErrorCode.WALLET_NOT_FOUND));
 
         verify(creditService, never()).getTransactions(any(Long.class), any(), any(), anyInt(), anyInt());
+    }
+
+    @Test
+    @DisplayName("listUsers: ghép số dư và tổng đã nạp vào từng người dùng, chỉ tìm người dùng thường")
+    void listUsers_mergesWalletAndToppedUpTotalsIntoEachUser() {
+        // given
+        AdminUserSummary an = adminUserSummary(7L, "Lan An");
+        AdminUserSummary binh = adminUserSummary(8L, "Bình");
+        when(userService.searchAccounts("an", null, AdminAccountRole.USER, 0, 20))
+                .thenReturn(new PageResponse<>(List.of(an, binh), 0, 20, 2));
+        when(creditService.getWallets(List.of(7L, 8L))).thenReturn(Map.of(7L, new WalletResponse(30L, 5L, 25L, true)));
+        when(creditService.getToppedUpCredits(List.of(7L, 8L))).thenReturn(Map.of(7L, 100L));
+
+        // when
+        PageResponse<AdminFinanceUserSummary> result = adminFinanceService.listUsers("an", 0, 20);
+
+        // then
+        assertThat(result.totalElements()).isEqualTo(2);
+        assertThat(result.items().get(0))
+                .isEqualTo(new AdminFinanceUserSummary(7L, "Lan An", "7@test.local", "0900000007", 25L, 5L, 30L, 100L));
+        // Người dùng không có ví và chưa nạp lần nào thì mọi số liệu là 0
+        assertThat(result.items().get(1))
+                .isEqualTo(new AdminFinanceUserSummary(8L, "Bình", "8@test.local", "0900000008", 0L, 0L, 0L, 0L));
+    }
+
+    @Test
+    @DisplayName("getUserFinance: trả thông tin liên lạc, số dư và tổng đã nạp của một người")
+    void getUserFinance_returnsContactWalletAndToppedUp() {
+        // given
+        when(userService.findContact(7L)).thenReturn(new ContactInfo(7L, "Lan An", "an@test.local", "0900000007"));
+        when(creditService.getWallet(7L)).thenReturn(new WalletResponse(30L, 5L, 25L, true));
+        when(creditService.getToppedUpCredits(List.of(7L))).thenReturn(Map.of());
+
+        // when
+        AdminFinanceUserSummary result = adminFinanceService.getUserFinance(7L);
+
+        // then: chưa có đơn nạp nào thì tổng đã nạp là 0
+        assertThat(result)
+                .isEqualTo(new AdminFinanceUserSummary(7L, "Lan An", "an@test.local", "0900000007", 25L, 5L, 30L, 0L));
+    }
+
+    @Test
+    @DisplayName("getUserFinance: người dùng không tồn tại thì ném USER_NOT_FOUND")
+    void getUserFinance_whenUserMissing_throwsUserNotFound() {
+        when(userService.findContact(99L)).thenThrow(new BusinessException(UserErrorCode.USER_NOT_FOUND));
+
+        assertThatThrownBy(() -> adminFinanceService.getUserFinance(99L))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex ->
+                        assertThat(((BusinessException) ex).getErrorCode()).isEqualTo(UserErrorCode.USER_NOT_FOUND));
+    }
+
+    private static AdminUserSummary adminUserSummary(long id, String fullName) {
+        return new AdminUserSummary(
+                id,
+                fullName,
+                id + "@test.local",
+                "090000000" + id,
+                AdminAccountRole.USER,
+                AdminAccountState.ACTIVE,
+                false,
+                Instant.parse("2026-10-01T00:00:00Z"));
     }
 
     @Test

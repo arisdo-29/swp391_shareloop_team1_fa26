@@ -18,10 +18,21 @@ class ReviewQueueOrderTest {
     @DisplayName("Bài có cờ REVIEW đứng trước bài không có cờ, dù bài không cờ có người đăng rủi ro hơn và chờ lâu hơn")
     void flaggedBeforeUnflaggedEvenIfUnflaggedHasLowerTrustStars() {
         ReviewQueueItem unflaggedRisky = new ReviewQueueItem(
-                1L, 10L, "Áo cũ", "LOW", "NONE", null, null, List.of(), (short) 1, now.minus(5, ChronoUnit.HOURS));
+                1L,
+                10L,
+                null,
+                "Áo cũ",
+                "LOW",
+                "NONE",
+                null,
+                null,
+                List.of(),
+                (short) 1,
+                now.minus(5, ChronoUnit.HOURS));
         ReviewQueueItem flaggedTrusted = new ReviewQueueItem(
                 2L,
                 20L,
+                null,
                 "Sách giáo khoa",
                 "HIGH",
                 "REVIEW",
@@ -43,6 +54,7 @@ class ReviewQueueOrderTest {
         ReviewQueueItem riskyUserPost = new ReviewQueueItem(
                 10L,
                 101L,
+                null,
                 "Đồng hồ",
                 "HIGH",
                 "REVIEW",
@@ -54,6 +66,7 @@ class ReviewQueueOrderTest {
         ReviewQueueItem trustedUserPost = new ReviewQueueItem(
                 11L,
                 102L,
+                null,
                 "Tai nghe",
                 "HIGH",
                 "REVIEW",
@@ -75,6 +88,7 @@ class ReviewQueueOrderTest {
         ReviewQueueItem olderPost = new ReviewQueueItem(
                 21L,
                 201L,
+                null,
                 "Balo",
                 "MEDIUM",
                 "REVIEW",
@@ -86,6 +100,7 @@ class ReviewQueueOrderTest {
         ReviewQueueItem newerPost = new ReviewQueueItem(
                 22L,
                 202L,
+                null,
                 "Giày",
                 "MEDIUM",
                 "REVIEW",
@@ -105,9 +120,9 @@ class ReviewQueueOrderTest {
     @DisplayName("Cùng cờ, cùng sao, cùng thời điểm: ID nhỏ hơn đứng trước để phá hòa ổn định")
     void sameFlagTrustStarsAndCreatedAt_smallerIdFirst() {
         ReviewQueueItem postWithSmallerId =
-                new ReviewQueueItem(31L, 301L, "Món A", "LOW", "NONE", null, null, List.of(), (short) 5, now);
+                new ReviewQueueItem(31L, 301L, null, "Món A", "LOW", "NONE", null, null, List.of(), (short) 5, now);
         ReviewQueueItem postWithLargerId =
-                new ReviewQueueItem(32L, 302L, "Món B", "LOW", "NONE", null, null, List.of(), (short) 5, now);
+                new ReviewQueueItem(32L, 302L, null, "Món B", "LOW", "NONE", null, null, List.of(), (short) 5, now);
 
         List<ReviewQueueItem> items = new ArrayList<>(List.of(postWithLargerId, postWithSmallerId));
         items.sort(ReviewQueueItem.QUEUE_ORDER);
@@ -123,7 +138,7 @@ class ReviewQueueOrderTest {
         assertThat(emptyQueue).isEmpty();
 
         ReviewQueueItem singleItem =
-                new ReviewQueueItem(1L, 10L, "Áo", "LOW", "NONE", null, null, List.of(), (short) 5, now);
+                new ReviewQueueItem(1L, 10L, null, "Áo", "LOW", "NONE", null, null, List.of(), (short) 5, now);
         List<ReviewQueueItem> singleQueue = new ArrayList<>(List.of(singleItem));
         singleQueue.sort(ReviewQueueItem.QUEUE_ORDER);
         assertThat(singleQueue).containsExactly(singleItem);
@@ -133,9 +148,9 @@ class ReviewQueueOrderTest {
     @DisplayName("Kiểm tra helper isFlagged và riskScore")
     void helperMethodsVerification() {
         ReviewQueueItem flaggedItem =
-                new ReviewQueueItem(1L, 10L, "Áo", "HIGH", "REVIEW", "Vi phạm", null, List.of(), (short) 2, now);
+                new ReviewQueueItem(1L, 10L, null, "Áo", "HIGH", "REVIEW", "Vi phạm", null, List.of(), (short) 2, now);
         ReviewQueueItem unflaggedItem =
-                new ReviewQueueItem(2L, 10L, "Quần", "LOW", "NONE", null, null, List.of(), (short) 5, now);
+                new ReviewQueueItem(2L, 10L, null, "Quần", "LOW", "NONE", null, null, List.of(), (short) 5, now);
 
         assertThat(flaggedItem.isFlagged()).isTrue();
         assertThat(flaggedItem.riskScore()).isEqualTo(4);

@@ -6,6 +6,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -36,6 +38,27 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("now") Instant now,
             @Param("afterId") long afterId,
             Limit limit);
+
+    /**
+     * Tìm tài khoản cho trang quản lý của Admin. Tham số nào là null thì không lọc theo tham số đó.
+     *
+     * <p>keywordPattern đã là chữ thường và bọc dấu % hai đầu, khớp họ tên, email hoặc số điện thoại. locked = true
+     * lấy tài khoản bị khoá (is_active = false) nhưng chưa bị cấm; locked = false lấy tài khoản đang hoạt động.
+     */
+    @Query("select u from User u"
+            + " where (:status is null or u.status = :status)"
+            + " and (:locked is null"
+            + "      or (:locked = true and u.isActive = false and u.status <> com.shareloop.user.entity.UserStatus.BANNED)"
+            + "      or (:locked = false and u.isActive = true))"
+            + " and (:admin is null or u.admin = :admin)"
+            + " and (:keywordPattern is null or lower(u.fullName) like :keywordPattern"
+            + "      or lower(u.email) like :keywordPattern or u.phone like :keywordPattern)")
+    Page<User> searchForAdmin(
+            @Param("keywordPattern") String keywordPattern,
+            @Param("status") UserStatus status,
+            @Param("locked") Boolean locked,
+            @Param("admin") Boolean admin,
+            Pageable pageable);
 
     /**
      * Danh sách ID của các quản trị viên đang hoạt động (dùng cho gửi thông báo cảnh báo hệ thống).

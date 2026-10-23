@@ -16,7 +16,8 @@ export interface AdminCategoryRequest {
   parentId?: number | null;
   restricted: boolean;
   boostable: boolean;
-  sortOrder: number;
+  // Bỏ trống khi tạo mới: Backend đặt danh mục xuống cuối. Bỏ trống khi sửa: giữ thứ tự cũ.
+  sortOrder?: number;
 }
 
 export interface AdminCategoryAttributeResponse {
@@ -53,6 +54,11 @@ export const adminCategoryApi = {
   },
   async setActive(id: number, active: boolean) {
     const { data } = await http.patch<AdminCategoryResponse>(`/api/v1/admin/categories/${id}/active`, { active });
+    return data;
+  },
+  // categoryIds phải gồm mọi danh mục (kể cả đang ẩn) theo thứ tự mới. Trả danh sách đã sắp xếp.
+  async reorder(categoryIds: number[]) {
+    const { data } = await http.put<AdminCategoryResponse[]>('/api/v1/admin/categories/reorder', { categoryIds });
     return data;
   },
   async listAttributes(categoryId: number) {

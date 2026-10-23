@@ -4,6 +4,8 @@ import com.shareloop.wallet.entity.PaymentOrder;
 import com.shareloop.wallet.entity.PaymentOrderStatus;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -46,6 +48,24 @@ public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long
             + " coalesce(sum(o.credits), 0) as credits from PaymentOrder o"
             + " where o.status = :status and o.paidAt >= :from and o.paidAt < :to")
     CashTotalsView sumByStatusAndPaidAt(
+            @Param("status") PaymentOrderStatus status, @Param("from") Instant from, @Param("to") Instant to);
+
+    /**
+     * Tổng Credit đã nạp (đơn có trạng thái {@code status}, thường là SUCCESS) của từng người dùng trong danh sách.
+     * Người không có đơn nào sẽ không xuất hiện trong kết quả, nghĩa là tổng bằng 0.
+     */
+    @Query("select o.userId as userId, sum(o.credits) as credits from PaymentOrder o"
+            + " where o.status = :status and o.userId in :userIds group by o.userId")
+    List<UserTopUpTotalView> sumCreditsByUser(
+            @Param("status") PaymentOrderStatus status, @Param("userIds") Collection<Long> userIds);
+
+    /**
+     * Thời điểm thanh toán và số tiền của từng đơn đã thanh toán trong [from, to), cũ nhất trước. Việc gom theo ngày
+     * làm ở Java vì "ngày" phải tính theo giờ Việt Nam, còn paid_at lưu theo UTC.
+     */
+    @Query("select o.paidAt as paidAt, o.amountVnd as amountVnd from PaymentOrder o"
+            + " where o.status = :status and o.paidAt >= :from and o.paidAt < :to order by o.paidAt")
+    List<PaidOrderView> findPaidOrders(
             @Param("status") PaymentOrderStatus status, @Param("from") Instant from, @Param("to") Instant to);
 
     /**
