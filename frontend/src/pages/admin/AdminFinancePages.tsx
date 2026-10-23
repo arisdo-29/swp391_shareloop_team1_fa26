@@ -20,7 +20,6 @@ function errorMessage(error: unknown) {
   return apiError.message || 'Không tải được dữ liệu. Vui lòng thử lại.';
 }
 
-<<<<<<< HEAD
 function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -31,9 +30,6 @@ function downloadBlob(blob: Blob, fileName: string) {
   anchor.remove();
   URL.revokeObjectURL(url);
 }
-
-=======
->>>>>>> origin/develop
 const dashboardActions = [
   { to: '/admin/moderation', label: 'Duyệt bài', icon: 'article' },
   { to: '/admin/finance', label: 'Báo cáo tài chính', icon: 'payments' },
