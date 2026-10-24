@@ -29,6 +29,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class MediaServiceTest {
+    private static final int ONE_MB = 1024 * 1024;
+
     @Mock
     MediaFileRepository repository;
 
@@ -83,6 +85,42 @@ class MediaServiceTest {
     }
 
     @Test
+    void upload_whenImageLargerThanImageMaxMb_throwsFileTooLarge() throws IOException {
+        // given: giới hạn 1 MB, ảnh lớn hơn đúng 1 byte
+        when(config.getInt(ConfigKey.IMAGE_MAX_MB)).thenReturn(1);
+        var file = new MockMultipartFile("file", "big.png", "image/png", pngWithSize(ONE_MB + 1));
+
+        // when
+        assertThatThrownBy(() -> service.upload(file, 4L))
+                // then
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", MediaErrorCode.MEDIA_FILE_TOO_LARGE);
+        verify(storage, never()).save(any(), any());
+        verify(repository, never()).saveAndFlush(any(MediaFile.class));
+    }
+
+    @Test
+    void upload_whenImageExactlyImageMaxMb_isAccepted() throws IOException {
+        // given: ảnh đúng bằng giới hạn 1 MB vẫn hợp lệ
+        byte[] png = pngWithSize(ONE_MB);
+        when(config.getInt(ConfigKey.IMAGE_MAX_MB)).thenReturn(1);
+        when(storage.save(png, "png")).thenReturn("image.png");
+        when(repository.saveAndFlush(any(MediaFile.class))).thenAnswer(invocation -> {
+            MediaFile media = invocation.getArgument(0);
+            ReflectionTestUtils.setField(media, "id", 8L);
+            ReflectionTestUtils.setField(media, "createdBy", 4L);
+            return media;
+        });
+
+        // when
+        var response = service.upload(new MockMultipartFile("file", "edge.png", "image/png", png), 4L);
+
+        // then
+        assertThat(response.mediaId()).isEqualTo(8L);
+        verify(storage).save(png, "png");
+    }
+
+    @Test
     void attachChecksAllOwnersBeforeChangingStatus() {
         MediaFile owned = media(1L, 4L);
         MediaFile foreign = media(2L, 5L);
@@ -115,6 +153,14 @@ class MediaServiceTest {
                 .isInstanceOf(UnsupportedOperationException.class)
                 .hasMessageContaining("remove");
         verifyNoInteractions(repository, storage);
+    }
+
+    /** Mảng byte có chữ ký PNG ở đầu để qua bước nhận dạng định dạng, phần còn lại là số 0. */
+    private static byte[] pngWithSize(int size) {
+        byte[] bytes = new byte[size];
+        byte[] signature = {(byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a};
+        System.arraycopy(signature, 0, bytes, 0, signature.length);
+        return bytes;
     }
 
     private MediaFile media(long id, long owner) {
