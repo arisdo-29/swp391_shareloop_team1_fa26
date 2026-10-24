@@ -323,6 +323,64 @@ public class ReportService {
     }
 
     /**
+     * Tự mở report NOT_AS_DESCRIBED khi bên nhận chọn "Không đúng mô tả" lúc xác nhận giao nhận (FR-85, BR-R05).
+     * Khác openDisputeReport ở chỗ không đòi giao dịch đã COMPLETED, vì bên nhận có thể trả lời trước khi bên cho xác
+     * nhận. Mỗi bên nhận chỉ có một report cho mỗi giao dịch: gọi lại thì bỏ qua, không lỗi.
+     *
+     * @throws BusinessException REPORT_TARGET_NOT_FOUND khi không thấy giao dịch hoặc bài đăng; DISPUTE_NOT_A_PARTY khi
+     *     receiverId không phải bên nhận của giao dịch
+     */
+    @Transactional
+    public void openNotAsDescribedReport(Long receiverId, Long requestId, String reason) {
+        // Event có thể tới hai lần nên kiểm trùng trước, không ném lỗi
+        if (reportRepository.existsByReporterIdAndTargetTypeAndRequestId(receiverId, TargetType.REQUEST, requestId)) {
+            return;
+        }
+
+        RequestSnapshot requestSnapshot = findRequest(requestId);
+        if (requestSnapshot == null) {
+            throw new BusinessException(ReportErrorCode.REPORT_TARGET_NOT_FOUND, "Không tìm thấy yêu cầu giao dịch.");
+        }
+        if (!receiverId.equals(requestSnapshot.receiverId())) {
+            throw new BusinessException(ReportErrorCode.DISPUTE_NOT_A_PARTY);
+        }
+        ItemSummary itemSummary = itemQueryService.getSummary(requestSnapshot.itemId());
+        if (itemSummary == null) {
+            throw new BusinessException(
+                    ReportErrorCode.REPORT_TARGET_NOT_FOUND, "Không tìm thấy bài đăng của giao dịch.");
+        }
+
+        // Bên cho là bên bị báo cáo và có thời hạn giải trình như khiếu nại thường (FR-90)
+        int responseDays = disputeDays("DISPUTE_RESPONSE_DAYS", ConfigKey.RESPONSE_WINDOW_DAYS);
+        Instant responseDueAt = Instant.now(clock).plus(Duration.ofDays(responseDays));
+        Report report = Report.createDispute(
+                receiverId,
+                requestId,
+                requestSnapshot.itemId(),
+                itemSummary.donorId(),
+                ReportReason.NOT_AS_DESCRIBED,
+                reason,
+                null,
+                responseDueAt);
+        Report saved = reportRepository.save(report);
+
+        if (notificationService != null) {
+            notificationService.notify(
+                    itemSummary.donorId(),
+                    "DISPUTE_OPENED",
+                    "Món đồ bị báo không đúng mô tả",
+                    "Người nhận báo món đồ không đúng mô tả. Bạn có " + responseDays + " ngày để giải trình.",
+                    "/me/disputes/" + saved.getId());
+        }
+    }
+
+    /** Giao dịch đã có report nào chưa (FR-87: job tự hoàn tất chỉ xử lý giao dịch không có report). */
+    @Transactional(readOnly = true)
+    public boolean hasReportForRequest(Long requestId) {
+        return reportRepository.existsByRequestId(requestId);
+    }
+
+    /**
      * Bên bị khiếu nại gửi giải trình kèm bằng chứng trong vòng 3 ngày (FR-90, BR-T08, Issue #112).
      */
     @Transactional

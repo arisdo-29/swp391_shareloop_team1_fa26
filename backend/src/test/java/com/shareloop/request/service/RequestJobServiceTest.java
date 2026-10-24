@@ -15,6 +15,7 @@ import com.shareloop.item.dto.ItemSummary;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.report.service.ReportService;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
@@ -60,6 +61,9 @@ class RequestJobServiceTest {
     @Mock
     private TransactionTemplate transactionTemplate;
 
+    @Mock
+    private ReportService reportService;
+
     private RequestJobService requestJobService;
 
     private final Instant now = Instant.parse("2026-10-16T12:00:00Z");
@@ -80,7 +84,8 @@ class RequestJobServiceTest {
                 reputationService,
                 itemQueryService,
                 null,
-                transactionTemplate);
+                transactionTemplate,
+                reportService);
     }
 
     @Nested
@@ -226,6 +231,35 @@ class RequestJobServiceTest {
                     .notify(eq(20L), eq("TRANSACTION_COMPLETED"), anyString(), anyString(), anyString());
             verify(notificationService)
                     .notify(eq(10L), eq("TRANSACTION_COMPLETED"), anyString(), anyString(), anyString());
+        }
+
+        @Test
+        void autoConfirmHandoverRequests_whenRequestHasReport_doesNotComplete() {
+            // given: bên nhận đã xác nhận "không đúng mô tả" nên có report, bên cho im lặng quá 3 ngày
+            when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
+            Instant cutoff = now.minus(3, ChronoUnit.DAYS);
+
+            Request request = new Request(1L, 10L, null, "GIVE");
+            ReflectionTestUtils.setField(request, "id", 303L);
+            request.select(now.minus(5, ChronoUnit.DAYS));
+            request.proposeSchedule(
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(4, ChronoUnit.DAYS));
+            request.confirmLogistics(false, false, now.minus(4, ChronoUnit.DAYS));
+            request.confirmHandover(false, false, cutoff.minus(1, ChronoUnit.HOURS));
+
+            when(requestRepository.findOverdueHandoverRequests(cutoff)).thenReturn(List.of(request));
+            when(requestRepository.findById(303L)).thenReturn(Optional.of(request));
+            when(reportService.hasReportForRequest(303L)).thenReturn(true);
+
+            // when
+            int completedCount = requestJobService.autoConfirmHandoverRequests(now);
+
+            // then
+            assertThat(completedCount).isZero();
+            assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
+            verify(requestRepository, never()).save(request);
+            verify(itemService, never()).markTraded(anyLong());
+            verify(reputationService, never()).onCompleted(anyLong());
         }
 
         @Test

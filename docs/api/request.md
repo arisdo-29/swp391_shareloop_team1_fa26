@@ -256,6 +256,8 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
   - Nếu có truyền `mediaIds`: gọi `MediaService.attach(mediaIds, currentUserId)` và lưu vào `request_media_mappings` với stage `HANDOVER` (FR-86, BR-T09).
   - Bên cho xác nhận -> ghi nhận `donorHandoverAt`.
   - Bên nhận xác nhận -> bắt buộc trả lời `asDescribed` (nếu chọn `false` bắt buộc có lý do); ghi nhận `receiverHandoverAt` và `asDescribed`.
+  - Bên nhận chọn `asDescribed = false`: sau khi giao dịch commit, `RequestService` phát event `NotAsDescribedReportedEvent` (`requestId`, `receiverId`, `reason`) và module report tự mở một report `NOT_AS_DESCRIBED`, mô tả là `notAsDescribedReason` (FR-85, BR-R05, xem [report.md](report.md)). Request không gọi thẳng `ReportService` để tránh vòng phụ thuộc. Lỗi mở report không làm mất câu trả lời của bên nhận, chỉ được ghi log.
+  - Giao dịch đã có report thì job tự hoàn tất sau `auto_confirm_days` ngày bỏ qua, không tự `COMPLETED` (FR-87, BR-T06). Giao dịch ở lại `AWAITING_HANDOVER` cho đến khi bên còn lại tự xác nhận.
   - Một bên xác nhận: Request chuyển sang trạng thái `AWAITING_HANDOVER` (BR-D02).
   - Cả hai bên đều đã xác nhận:
     - Request chuyển sang trạng thái `COMPLETED` và ghi nhận `completedAt`.

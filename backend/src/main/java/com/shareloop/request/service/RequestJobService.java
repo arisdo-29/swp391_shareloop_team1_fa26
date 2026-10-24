@@ -4,6 +4,7 @@ import com.shareloop.item.dto.ItemSummary;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.report.service.ReportService;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
@@ -41,6 +42,7 @@ public class RequestJobService {
     private final ItemQueryService itemQueryService;
     private final JdbcClient jdbcClient;
     private final TransactionTemplate transactionTemplate;
+    private final ReportService reportService;
 
     @Autowired
     public RequestJobService(
@@ -51,7 +53,8 @@ public class RequestJobService {
             @Autowired(required = false) ReputationService reputationService,
             @Autowired(required = false) ItemQueryService itemQueryService,
             @Autowired(required = false) JdbcClient jdbcClient,
-            TransactionTemplate transactionTemplate) {
+            TransactionTemplate transactionTemplate,
+            @Autowired(required = false) ReportService reportService) {
         this.requestRepository = requestRepository;
         this.itemService = itemService;
         this.notificationService = notificationService;
@@ -60,6 +63,7 @@ public class RequestJobService {
         this.itemQueryService = itemQueryService;
         this.jdbcClient = jdbcClient;
         this.transactionTemplate = transactionTemplate;
+        this.reportService = reportService;
     }
 
     /**
@@ -204,6 +208,11 @@ public class RequestJobService {
                 && request.getReceiverHandoverAt().isBefore(cutoff);
 
         if (!donorOverdue && !receiverOverdue) {
+            return false;
+        }
+
+        // Chỉ tự hoàn tất khi giao dịch không có report (FR-87, BR-T06), ví dụ bên nhận đã báo không đúng mô tả
+        if (reportService != null && reportService.hasReportForRequest(request.getId())) {
             return false;
         }
 
