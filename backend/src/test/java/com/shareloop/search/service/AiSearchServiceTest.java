@@ -98,7 +98,7 @@ class AiSearchServiceTest {
         assertThat(result.results()).isSameAs(page);
         assertThat(result.fallback()).isFalse();
         assertThat(result.quota().freeUsesRemaining()).isEqualTo(4);
-        verify(activityLogService).log(eq("AiUsage"), eq(7L), eq("AI_SEARCH"), eq(null), anyMap(), eq(null));
+        verify(activityLogService).log(eq("AI_USAGE"), eq(7L), eq("AI_SEARCH"), eq(null), anyMap(), eq(null));
     }
 
     @Test

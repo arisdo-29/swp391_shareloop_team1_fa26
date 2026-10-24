@@ -58,6 +58,9 @@ public enum ActivityType {
      * chính mã đó để trang nhật ký vẫn hiện được.
      */
     public static String labelOf(String code) {
+        if ("AiUsage".equals(code)) {
+            return AI_USAGE.label;
+        }
         for (ActivityType type : values()) {
             if (type.name().equals(code)) {
                 return type.label;
