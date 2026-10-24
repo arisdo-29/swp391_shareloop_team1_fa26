@@ -1,6 +1,7 @@
 import { AdminComplaints } from './AdminComplaints';
 import { AdminConfigs } from './AdminConfigs';
 import { AdminUserPicker } from './AdminUserPicker';
+import { AdminAnomalyContent } from '../../components/admin/AdminAnomalyContent';
 import type { AdminUserSummary } from '../../services/adminUserApi';
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -1083,6 +1084,7 @@ export function AdminContentPage({
   if (kind === 'disputes') return <AdminComplaints />;
   if (kind === 'ranks') return <AdminRanks />;
   if (kind === 'reputation') return <AdminReputation />;
+  if (kind === 'alerts') return <AdminAnomalyContent />;
   return <AdminStaticContent kind={kind} />;
 }
 
@@ -2175,7 +2177,7 @@ function ApiCategoryAttributeModal({ attribute, saving, onClose, onSave }: { att
 function AdminStaticContent({
   kind,
 }: {
-  kind: 'expired' | 'categories' | 'locked' | 'alerts';
+  kind: 'expired' | 'categories' | 'locked';
 }) {
   const data = useAppSelector(selectData);
   const admin = useAppSelector(selectCurrentUser)!;
@@ -2197,7 +2199,6 @@ function AdminStaticContent({
     expired: ['Bài quá hạn', 'Theo dõi và xử lý các bài đã hết thời gian hiển thị.'],
     categories: ['Danh mục', 'Quản lý cấu trúc danh mục dùng chung toàn hệ thống.'],
     locked: ['Quản lý tài khoản', 'Theo dõi trạng thái, khóa hoặc mở khóa tài khoản người dùng.'],
-    alerts: ['Cảnh báo bất thường', 'Tín hiệu cần kiểm tra từ hoạt động giao dịch và Credit.'],
   } as const;
   const [title, description] = configs[kind];
   const rows =
@@ -2369,22 +2370,6 @@ function AdminStaticContent({
           />
         ) : null}
         {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
-      </Panel>
-    );
-  }
-  if (kind === 'alerts') {
-    return (
-      <Panel title={title} description={description}>
-        <Alert tone="warning">
-          Backend hiện chưa cung cấp API cảnh báo bất thường. Trang này sẽ không hiển thị dữ liệu
-          mô phỏng thay cho dữ liệu vận hành thật.
-        </Alert>
-        <div className="mt-5">
-          <EmptyState
-            title="Chưa có nguồn dữ liệu Backend"
-            text="Cần GET /api/v1/admin/anomalies trong Swagger trước khi có thể tải cảnh báo."
-          />
-        </div>
       </Panel>
     );
   }

@@ -463,7 +463,6 @@ export function Home() {
               const categoryItems = approved.filter((item) => item.categoryId === category.id);
               return (
                 <Link key={category.id} to={categoryBrowsePath(category.id)} className="home-category group">
-                  <Icon name="arrow" className="home-category-arrow" />
                   <span className="home-category-icon">
                     <Icon name={categoryIcons[index % categoryIcons.length]} />
                   </span>
@@ -531,7 +530,7 @@ export function Home() {
           <div className="home-district-panel" aria-label="Khám phá quanh quận của bạn">
             {districtCounts.map(({ name, id, count }) => (
               <Link key={id} to={`/browse?district=${id}`} className="home-district">
-                <Icon name="location" className="size-6" /><h3>{name}</h3><span>{count} món đang có</span><Icon name="arrow" className="size-4" />
+                <Icon name="location" className="size-6" /><h3>{name}</h3><span>{count} món đang có</span>
               </Link>
             ))}
           </div>

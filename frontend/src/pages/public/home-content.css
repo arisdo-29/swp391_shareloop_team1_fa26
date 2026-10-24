@@ -2558,6 +2558,9 @@
 
 /* Final cascade for the Home-only compact treatment. */
 .home-content .home-rail-categories .home-discovery-track {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-flow: row;
+  grid-auto-columns: auto;
   gap: 12px;
 }
 .home-content .home-rail-categories .home-category {
@@ -2641,14 +2644,14 @@
 .home-content .home-rail-new-items .home-discovery-track > a.home-product-card > .home-product-card-copy {
   padding: 14px;
 }
-@media (max-width: 1023px) {
+@media (max-width: 1279px) {
   .home-content .home-rail-categories .home-discovery-track {
-    grid-auto-columns: calc((100% - 42px) / 4);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 @media (max-width: 639px) {
   .home-content .home-rail-categories .home-discovery-track {
-    grid-auto-columns: calc((100% - 14px) / 2);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .home-content .home-final-cluster .home-values {
     margin-bottom: 64px;

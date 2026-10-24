@@ -4,14 +4,12 @@ export interface AiSearchNoticesProps {
   remainingFreeSearches: number | null;
   feeCredits: number;
   chargedCredits: number;
-  isFallbackSearch: boolean;
 }
 
 export function AiSearchNotices({
   remainingFreeSearches,
   feeCredits,
   chargedCredits,
-  isFallbackSearch,
 }: AiSearchNoticesProps) {
   return (
     <div className="space-y-3" aria-live="polite">
@@ -31,11 +29,6 @@ export function AiSearchNotices({
         </div>
       </div>
       {chargedCredits > 0 ? <Alert tone="success">Đã trừ {chargedCredits} Credit</Alert> : null}
-      {isFallbackSearch ? (
-        <Alert tone="warning">
-          Trợ lý AI đang bận, đã chuyển sang tìm kiếm thường
-        </Alert>
-      ) : null}
     </div>
   );
 }

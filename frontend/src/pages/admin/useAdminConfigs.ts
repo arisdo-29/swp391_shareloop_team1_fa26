@@ -70,5 +70,31 @@ export function useAdminConfigs() {
     }
   }, []);
 
-  return { configs, loading, error, reload, saving, saveError, setSaveError, clearSaveError, update };
+  const updateByBody = useCallback(async (key: string, value: string, reason: string) => {
+    setSaving(true);
+    setSaveError('');
+    try {
+      const updated = await adminConfigApi.updateByBody({ key, value, reason });
+      setConfigs((current) => current.map((entry) => (entry.key === updated.key ? updated : entry)));
+      return updated;
+    } catch (caught) {
+      setSaveError(configUpdateErrorMessage(caught));
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  return {
+    configs,
+    loading,
+    error,
+    reload,
+    saving,
+    saveError,
+    setSaveError,
+    clearSaveError,
+    update,
+    updateByBody,
+  };
 }
