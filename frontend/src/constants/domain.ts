@@ -47,14 +47,12 @@ export const CONDITIONS = ['NEW', 'LIKE_NEW', 'GOOD', 'DEFECTIVE'] as const;
 
 export const ADMIN_ROUTES = [
   '/admin/moderation',
-  '/admin/expired-posts',
   '/admin/categories',
   '/admin/keywords',
   '/admin/districts',
   '/admin/users',
   '/admin/reputation',
   '/admin/locked-users',
-  '/admin/transactions',
   '/admin/complaints',
   '/admin/alerts',
   '/admin/finance',

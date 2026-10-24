@@ -1,12 +1,14 @@
 import { http } from './http';
 
+// Contract: docs/api/admin.md mục 7 (GET /api/v1/admin/anomalies)
 export interface AnomalyUser {
   id: number;
   fullName: string;
+  // Người dùng đã xoá mềm thì backend trả null
   email: string | null;
 }
 
-export interface RepeatedPairAnomaly {
+export interface RepeatedPair {
   userA: AnomalyUser;
   userB: AnomalyUser;
   completedCount: number;
@@ -17,11 +19,11 @@ export interface AnomalyReportResponse {
   generatedAt: string;
   pairWindowDays: number;
   pairThreshold: number;
-  repeatedPairs: RepeatedPairAnomaly[];
+  repeatedPairs: RepeatedPair[];
 }
 
 export const adminAnomalyApi = {
-  async getReport() {
+  async report(): Promise<AnomalyReportResponse> {
     const { data } = await http.get<AnomalyReportResponse>('/api/v1/admin/anomalies');
     return data;
   },

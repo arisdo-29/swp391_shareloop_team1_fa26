@@ -7,7 +7,7 @@ import {
   validEmail,
   validVietnamPhone,
   validatePassword,
-} from '../../utils/passwordSecurity';
+} from '../../utils/validation';
 import { authApi } from '../../services/authApi';
 import { authErrorMessage } from '../../services/authErrors';
 import type { ApiError } from '../../services/http';

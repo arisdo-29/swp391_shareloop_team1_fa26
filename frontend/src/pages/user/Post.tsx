@@ -14,6 +14,11 @@ import { mediaApi } from '../../services/mediaApi';
 import type { ApiError } from '../../services/http';
 import { toBackendUserId } from '../../services/requestApi';
 import { useWallet } from '../../app/useWallet';
+import {
+  ITEM_MODERATION_BLOCKED,
+  moderationBlockedMessage,
+  reputationBlockedMessage,
+} from '../../utils/apiErrorMessages';
 
 type FormErrors = Partial<Record<'type' | 'title' | 'category' | 'condition' | 'district' | 'description' | 'tradeFor' | 'brand' | 'defectNote' | 'images' | 'defectImages' | 'operatingStatus', string>>;
 type MediaUploadState = 'idle' | 'uploading' | 'error';
@@ -24,11 +29,8 @@ const GIVE_POST_SUCCESS =
   'Đăng bài cho tặng thành công. Bài đăng đã được gửi để xét duyệt.';
 const PENDING_REVIEW_NOTICE = 'Bài đăng đang chờ quản trị viên duyệt.';
 const WALLET_INSUFFICIENT_BALANCE = 'WALLET_INSUFFICIENT_BALANCE';
-const ITEM_MODERATION_BLOCKED = 'ITEM_MODERATION_BLOCKED';
 const INSUFFICIENT_CREDIT_MESSAGE = 'Số dư Credit khả dụng không đủ để đăng bài.';
 const MODERATION_BLOCKED_TITLE = 'Bài đăng chưa đáp ứng quy định';
-const MODERATION_BLOCKED_MESSAGE =
-  'Nội dung bài đăng của bạn có thể chứa thông tin không phù hợp với quy định của ShareLoop. Vui lòng kiểm tra và chỉnh sửa tiêu đề, mô tả hoặc hình ảnh trước khi đăng lại.';
 const BACKEND_SESSION_REQUIRED = 'Vui lòng đăng nhập bằng tài khoản thật để đăng bài.';
 const SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST =
   import.meta.env.DEV && import.meta.env.VITE_POST_SKIP_MEDIA_UPLOAD === 'true';
@@ -342,8 +344,9 @@ export function Post() {
       setError(apiError.code === WALLET_INSUFFICIENT_BALANCE
         ? INSUFFICIENT_CREDIT_MESSAGE
         : apiError.code === ITEM_MODERATION_BLOCKED
-          ? MODERATION_BLOCKED_MESSAGE
-          : apiError.message || 'Không đăng được bài. Vui lòng kiểm tra thông tin và thử lại.');
+          ? moderationBlockedMessage(apiError)
+          : reputationBlockedMessage(apiError.code)
+            ?? (apiError.message || 'Không đăng được bài. Vui lòng kiểm tra thông tin và thử lại.'));
       if (apiError.code === WALLET_INSUFFICIENT_BALANCE) refreshWallet();
       setConfirmOpen(false);
     } finally {

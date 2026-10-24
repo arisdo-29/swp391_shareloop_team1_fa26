@@ -5,9 +5,10 @@ SHARELOOP is a React + TypeScript + Vite frontend prototype using Tailwind, Redu
 ## Architecture
 
 - `src/types` contains domain contracts.
-- `src/mocks/database.ts` is the seed database.
-- `src/app/store.ts` contains Redux actions around the shared mock state.
-- `src/utils/credit.ts` and `src/utils/transaction.ts` hold business rules.
+- Business data comes from the backend through `src/services/*Api.ts` and the shared axios client in `src/services/http.ts`. Pages call these services directly. There is no seed or mock database.
+- `src/app/store.ts` is a small Redux store that only keeps the signed-in session (`currentUser`) plus a few legacy actions that some pages still call. Do not add new business data or reducers to it.
+- `src/utils/validation.ts` holds input checks (email, phone, password rules). Passwords and OTPs are never hashed or generated in the browser.
+- `src/utils/credit.ts` and `src/utils/transaction.ts` hold display and business helpers.
 - `src/components/ui.tsx` contains reusable SHARELOOP UI primitives.
 - `src/pages` contains route screens.
 - `src/routes/Guards.tsx` enforces route access.

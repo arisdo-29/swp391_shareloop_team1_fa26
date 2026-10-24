@@ -4,9 +4,9 @@ import browseBanner from '../../assets/browse-banner-shareloop-dark.webp';
 import { Button, ConditionBadge, EmptyState, Icon, ItemImage, TypeBadge } from '../../components/ui';
 import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
-import type { Item, ItemCondition, ItemType } from '../../types/domain';
+import type { Item, ItemType } from '../../types/domain';
 import { catalogApi, type CategoryResponse } from '../../services/catalogApi';
-import { itemApi, type ItemResponse } from '../../services/itemApi';
+import { itemApi, type ApiCondition, type ItemResponse, type OfferType } from '../../services/itemApi';
 import type { ApiError } from '../../services/http';
 import {
   toAreaOptions,
@@ -23,6 +23,8 @@ import {
 import './browse.css';
 
 const PAGE_SIZE = 20;
+// Giá trị hình thức ở thanh địa chỉ (gift, trade) khác tên của API
+const OFFER_TYPE_BY_TYPE: Record<ItemType, OfferType> = { gift: 'GIVE', trade: 'SWAP' };
 const pendingBrowseItemRequests = new Map<string, ReturnType<typeof itemApi.list>>();
 
 function loadBrowseItems(params: Parameters<typeof itemApi.list>[0]) {
@@ -56,8 +58,8 @@ export function Browse() {
   const categoryId = positiveIntegerParam(params.get('categoryId'));
   const category = categoryId ? String(categoryId) : '';
   const conditionParam = params.get('condition');
-  const condition: ItemCondition | '' = (CONDITIONS as readonly string[]).includes(conditionParam ?? '')
-    ? conditionParam as ItemCondition
+  const condition: ApiCondition | '' = (CONDITIONS as readonly string[]).includes(conditionParam ?? '')
+    ? conditionParam as ApiCondition
     : '';
   const district = params.get('district') ?? '';
   const [mobileFilters, setMobileFilters] = useState(false);
@@ -108,6 +110,8 @@ export function Browse() {
           ? parsedAreaId
           : undefined,
       q: q.trim() || undefined,
+      condition: condition || undefined,
+      offerType: type ? OFFER_TYPE_BY_TYPE[type] : undefined,
       page,
       size: PAGE_SIZE,
     })
@@ -130,7 +134,7 @@ export function Browse() {
     return () => {
       active = false;
     };
-  }, [categoryId, district, itemsReloadKey, page, q]);
+  }, [categoryId, condition, district, itemsReloadKey, page, q, type]);
 
   useEffect(() => {
     if (!district || districts.some((area) => String(area.id) === district)) return;
@@ -146,6 +150,7 @@ export function Browse() {
     setPage(0);
   };
 
+  const selectedCategoryName = categories.find((entry) => entry.id === categoryId)?.name;
   const selectedDistrictLabel = districts.find((area) => String(area.id) === district)?.label ?? district;
 
   const items = useMemo(() => {
@@ -154,15 +159,9 @@ export function Browse() {
     return itemResponses.map((item) => toFeItem(item, categoryNames, areaNames));
   }, [categories, districts, itemResponses]);
 
-  const results = useMemo(
-    () =>
-      items
-        .filter((i) => !type || i.type === type)
-        .filter((i) => !condition || i.condition === condition),
-    [items, type, condition],
-  );
+  // Hình thức và tình trạng đã được server lọc, ở đây chỉ sắp xếp trong trang hiện tại
   const sortedResults = useMemo(() => {
-    const next = [...results];
+    const next = [...items];
     if (sortMode === 'expiring') {
       return next.sort((a, b) => {
         const aExpiry = a.expiresAt ? new Date(a.expiresAt).getTime() : Number.POSITIVE_INFINITY;
@@ -171,7 +170,7 @@ export function Browse() {
       });
     }
     return next.sort((a, b) => b.postedAt.localeCompare(a.postedAt));
-  }, [results, sortMode]);
+  }, [items, sortMode]);
   const reset = () => {
     setParams(resetBrowseSearchParams(params));
     setPage(0);
@@ -184,10 +183,11 @@ export function Browse() {
           clear: () => setFilter('type', ''),
         }
       : null,
-    categoryId
+    // Chưa tải xong danh mục hoặc không tìm thấy tên thì ẩn chip, không hiện id kỹ thuật
+    selectedCategoryName
       ? {
           key: 'category',
-          label: categories.find((entry) => entry.id === categoryId)?.name ?? `Danh mục #${categoryId}`,
+          label: selectedCategoryName,
           clear: () => setFilter('categoryId', ''),
         }
       : null,
@@ -258,9 +258,9 @@ export function Browse() {
             <option key={entry.id} value={entry.id}>{entry.name}</option>
           ))}
         </FilterSelect>
-        {categoryId ? (
+        {selectedCategoryName ? (
           <p className="-mt-1 break-words px-1 text-xs leading-5 text-text-muted">
-            Đã chọn: <span className="font-semibold text-text-secondary">{categories.find((entry) => entry.id === categoryId)?.name ?? `Danh mục #${categoryId}`}</span>
+            Đã chọn: <span className="font-semibold text-text-secondary">{selectedCategoryName}</span>
           </p>
         ) : null}
         <FilterSelect
@@ -359,7 +359,7 @@ export function Browse() {
           <section className="min-w-0" aria-label="Danh sách món đồ">
             <div className="browse-toolbar">
               <p>
-                <strong>{results.length}</strong> món phù hợp
+                <strong>{totalElements}</strong> món phù hợp
               </p>
               <div className="browse-toolbar__controls">
                 <label className="browse-sort">

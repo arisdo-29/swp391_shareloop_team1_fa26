@@ -9,7 +9,7 @@ import { authApi } from '../../services/authApi';
 import { authErrorMessage } from '../../services/authErrors';
 import type { ApiError } from '../../services/http';
 import { fetchSessionUser } from '../../services/session';
-import { validEmail } from '../../utils/passwordSecurity';
+import { validEmail } from '../../utils/validation';
 import './login.css';
 
 export function Login() {
