@@ -9,7 +9,7 @@ const sections = [
       ['article', 'Duyệt bài', '/admin/moderation'],
       // Tạm ẩn "Xác minh hàng chính hãng" (/admin/authenticity): chưa có luồng xác nhận và chưa có BR. Code BE vẫn giữ.
       ['shield', 'Checklist duyệt bài', '/admin/checklist'],
-      ['history', 'Bài quá hạn', '/admin/expired-posts'],
+      // Tạm ẩn "Bài quá hạn" (/admin/expired-posts): backend chưa có API danh sách cho Admin.
       ['box', 'Danh mục', '/admin/categories'],
       ['shield', 'Từ khóa cấm', '/admin/keywords'],
       ['location', 'Khu vực', '/admin/districts'],
@@ -25,7 +25,7 @@ const sections = [
   {
     label: 'Giao dịch',
     items: [
-      ['transaction', 'Giao dịch', '/admin/transactions'],
+      // Tạm ẩn "Giao dịch" (/admin/transactions): backend chưa có API danh sách giao dịch cho Admin.
       ['shield', 'Khiếu nại', '/admin/complaints'],
       ['activity', 'Cảnh báo bất thường', '/admin/alerts'],
     ],

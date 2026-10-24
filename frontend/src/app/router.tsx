@@ -27,7 +27,7 @@ const DemoPaymentCheckout = lazy(() => import('../pages/user/DemoPaymentCheckout
 const ManualPaymentCheckout = lazy(() => import('../pages/user/ManualPaymentCheckout').then((module) => ({ default: module.ManualPaymentCheckout })));
 const ReportResponse = lazy(() => import('../pages/user/ReportResponse').then((module) => ({ default: module.ReportResponse })));
 const AdminLayout = lazy(() => import('../pages/admin/AdminLayout').then((module) => ({ default: module.AdminLayout })));
-const AdminUnderDevelopment = lazy(() => import('../pages/admin/AdminUnderDevelopment').then((module) => ({ default: module.AdminUnderDevelopment })));
+const AdminAnomalies = lazy(() => import('../pages/admin/AdminAnomalies').then((module) => ({ default: module.AdminAnomalies })));
 const AdminComplaints = lazy(() => import('../pages/admin/AdminComplaints').then((module) => ({ default: module.AdminComplaints })));
 const AdminTopUpOrders = lazy(() => import('../pages/admin/AdminTopUpOrders').then((module) => ({ default: module.AdminTopUpOrders })));
 const AdminReputation = lazy(() => import('../pages/admin/AdminReputation').then((module) => ({ default: module.AdminReputation })));
@@ -106,7 +106,8 @@ export const router = createBrowserRouter([
               // Tạm ẩn trang Nhãn chính hãng (chưa có luồng xác nhận, chưa có BR): đưa về trang tổng quan.
               { path: 'authenticity', element: <Navigate to="/admin" replace /> },
               { path: 'checklist', element: <AdminContentPage kind="checklist" /> },
-              { path: 'expired-posts', element: <AdminContentPage kind="expired" /> },
+              // Tạm ẩn Bài quá hạn và Giao dịch: backend chưa có API cho Admin, đưa về trang tổng quan.
+              { path: 'expired-posts', element: <Navigate to="/admin" replace /> },
               { path: 'categories', element: <AdminContentPage kind="categories" /> },
               { path: 'keywords', element: <AdminContentPage kind="keywords" /> },
               { path: 'districts', element: <AdminContentPage kind="districts" /> },
@@ -114,11 +115,11 @@ export const router = createBrowserRouter([
               { path: 'reputation', element: <AdminReputation /> },
               // Gộp "Khóa tài khoản" vào Quản lý tài khoản: giữ đường dẫn cũ để link đã lưu vẫn dùng được.
               { path: 'locked-users', element: <Navigate to="/admin/users" replace /> },
-              { path: 'transactions', element: <AdminUnderDevelopment title="Giao dịch" /> },
-              { path: 'transactions/:transactionId', element: <AdminUnderDevelopment title="Giao dịch" /> },
+              { path: 'transactions', element: <Navigate to="/admin" replace /> },
+              { path: 'transactions/:transactionId', element: <Navigate to="/admin" replace /> },
               { path: 'complaints', element: <AdminComplaints /> },
               { path: 'disputes', element: <AdminComplaints /> },
-              { path: 'alerts', element: <AdminContentPage kind="alerts" /> },
+              { path: 'alerts', element: <AdminAnomalies /> },
               { path: 'finance', element: <AdminFinance /> },
               { path: 'finance/topup-orders', element: <AdminTopUpOrders /> },
               { path: 'finance/users', element: <AdminFinanceUsers /> },
