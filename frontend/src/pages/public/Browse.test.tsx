@@ -5,7 +5,11 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+feature/frontend-admin-topup-pr
 import browseBanner from '../../assets/browse-banner-shareloop-dark.webp';
+
+import browseBanner from '../../assets/browse-banner-shareloop-dark.png';
+ develop
 import { catalogApi, type CategoryResponse } from '../../services/catalogApi';
 import { itemApi, type ItemResponse } from '../../services/itemApi';
 import { categoryBrowsePath } from '../../utils/browseFilters';

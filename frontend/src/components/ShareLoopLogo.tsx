@@ -1,3 +1,4 @@
+
 export function ShareLoopLogo({ className = '' }: { className?: string }) {
   return (
     <span
