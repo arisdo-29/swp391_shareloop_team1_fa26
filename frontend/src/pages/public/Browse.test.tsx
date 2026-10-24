@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import type { ReactNode } from 'react';
+import { StrictMode, type ReactNode } from 'react';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import browseBanner from '../../assets/browse-banner-green.png';
 import { catalogApi, type CategoryResponse } from '../../services/catalogApi';
 import { itemApi, type ItemResponse } from '../../services/itemApi';
 import { categoryBrowsePath } from '../../utils/browseFilters';
@@ -70,6 +71,14 @@ const book: ItemResponse = {
   boostedUntil: null,
 };
 
+const expiringBook: ItemResponse = {
+  ...book,
+  id: 502,
+  title: 'Sách sắp hết hạn hiển thị',
+  createdAt: '2026-10-10T08:00:00Z',
+  expireAt: '2026-10-25T08:00:00Z',
+};
+
 function LocationState() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -91,6 +100,16 @@ function renderBrowse(initialEntries = ['/browse'], initialIndex?: number) {
   );
 }
 
+function renderBrowseInStrictMode() {
+  return render(
+    <StrictMode>
+      <MemoryRouter initialEntries={['/browse']}>
+        <Browse />
+      </MemoryRouter>
+    </StrictMode>,
+  );
+}
+
 beforeEach(() => {
   vi.mocked(catalogApi.categories).mockResolvedValue(categories);
   vi.mocked(catalogApi.areas).mockResolvedValue([]);
@@ -103,6 +122,75 @@ afterEach(() => {
 });
 
 describe('lọc danh mục trên trang Tìm đồ', () => {
+  it('dùng chung request items đang chạy khi StrictMode mount lại Browse', async () => {
+    let resolveItems!: (value: { items: ItemResponse[]; page: number; size: number; totalElements: number }) => void;
+    const itemsRequest = new Promise<{ items: ItemResponse[]; page: number; size: number; totalElements: number }>((resolve) => {
+      resolveItems = resolve;
+    });
+    vi.mocked(itemApi.list).mockReturnValue(itemsRequest);
+
+    renderBrowseInStrictMode();
+
+    expect(itemApi.list).toHaveBeenCalledTimes(1);
+    resolveItems({ items: [book], page: 0, size: 20, totalElements: 1 });
+    expect(await screen.findByText(book.title)).toBeTruthy();
+  });
+
+  it('đổi Grid/List và sắp xếp mà không gọi lại API items', async () => {
+    const user = userEvent.setup();
+    renderBrowse();
+
+    expect(await screen.findByText(book.title)).toBeTruthy();
+    await waitFor(() => expect(itemApi.list).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole('button', { name: 'Xem dạng danh sách' }));
+    expect(screen.getByRole('button', { name: 'Xem dạng danh sách' }).getAttribute('aria-pressed')).toBe('true');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'expiring');
+
+    expect(itemApi.list).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(book.description)).toBeTruthy();
+  });
+
+  it('sắp xếp danh sách hiện tại mà không thay dữ liệu hoặc gọi API mới', async () => {
+    vi.mocked(itemApi.list).mockResolvedValue({
+      items: [expiringBook, book],
+      page: 0,
+      size: 20,
+      totalElements: 2,
+    });
+    const user = userEvent.setup();
+    const { container } = renderBrowse();
+
+    expect(await screen.findByText(expiringBook.title)).toBeTruthy();
+    const titles = () => Array.from(container.querySelectorAll('.browse-product-card h2')).map((node) => node.textContent);
+    expect(titles()).toEqual([book.title, expiringBook.title]);
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'expiring');
+    expect(titles()).toEqual([expiringBook.title, book.title]);
+    expect(itemApi.list).toHaveBeenCalledTimes(1);
+  });
+
+  it('dùng đúng banner Browse đã duyệt', () => {
+    const { container } = renderBrowse();
+    const banner = container.querySelector<HTMLImageElement>('.browse-banner img');
+
+    expect(banner?.getAttribute('src')).toBe(browseBanner);
+    expect(banner?.getAttribute('width')).toBe('2158');
+    expect(banner?.getAttribute('height')).toBe('729');
+  });
+
+  it('nút áp dụng giữ bộ lọc tức thời và đóng bảng lọc trên mobile', async () => {
+    const user = userEvent.setup();
+    renderBrowse();
+
+    const toggle = screen.getByRole('button', { name: 'Bộ lọc' });
+    await user.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+
+    await user.click(screen.getByRole('button', { name: 'Áp dụng bộ lọc' }));
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('tạo URL danh mục bằng category ID', () => {
     expect(categoryBrowsePath(42)).toBe('/browse?categoryId=42');
   });

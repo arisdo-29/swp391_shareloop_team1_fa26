@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Button, EmptyState, Icon, PageHeader, ProductCard } from '../../components/ui';
+import { memo, useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import browseBanner from '../../assets/browse-banner-shareloop-dark.png';
+import { Button, ConditionBadge, EmptyState, Icon, ItemImage, TypeBadge } from '../../components/ui';
 import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
-import type { ItemCondition, ItemType } from '../../types/domain';
+import type { Item, ItemCondition, ItemType } from '../../types/domain';
 import { catalogApi, type CategoryResponse } from '../../services/catalogApi';
 import { itemApi, type ItemResponse } from '../../services/itemApi';
 import type { ApiError } from '../../services/http';
@@ -19,8 +20,24 @@ import {
   updateBrowseSearchParams,
   type BrowseFilterKey,
 } from '../../utils/browseFilters';
+import './browse.css';
 
 const PAGE_SIZE = 20;
+const pendingBrowseItemRequests = new Map<string, ReturnType<typeof itemApi.list>>();
+
+function loadBrowseItems(params: Parameters<typeof itemApi.list>[0]) {
+  const requestKey = JSON.stringify(params);
+  const pendingRequest = pendingBrowseItemRequests.get(requestKey);
+  if (pendingRequest) return pendingRequest;
+
+  const request = itemApi.list(params).finally(() => {
+    if (pendingBrowseItemRequests.get(requestKey) === request) {
+      pendingBrowseItemRequests.delete(requestKey);
+    }
+  });
+  pendingBrowseItemRequests.set(requestKey, request);
+  return request;
+}
 
 export function Browse() {
   const [params, setParams] = useSearchParams();
@@ -46,6 +63,8 @@ export function Browse() {
   const [mobileFilters, setMobileFilters] = useState(false);
   const [page, setPage] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+  const [sortMode, setSortMode] = useState<'newest' | 'expiring'>('newest');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   useEffect(() => {
     let active = true;
@@ -82,17 +101,16 @@ export function Browse() {
     setItemsLoading(true);
     setItemsError('');
     const parsedAreaId = district ? Number(district) : undefined;
-    itemApi
-      .list({
-        categoryId,
-        areaId:
-          parsedAreaId !== undefined && Number.isSafeInteger(parsedAreaId) && parsedAreaId > 0
-            ? parsedAreaId
-            : undefined,
-        q: q.trim() || undefined,
-        page,
-        size: PAGE_SIZE,
-      })
+    loadBrowseItems({
+      categoryId,
+      areaId:
+        parsedAreaId !== undefined && Number.isSafeInteger(parsedAreaId) && parsedAreaId > 0
+          ? parsedAreaId
+          : undefined,
+      q: q.trim() || undefined,
+      page,
+      size: PAGE_SIZE,
+    })
       .then((response) => {
         if (!active) return;
         setItemResponses(response.items);
@@ -143,6 +161,17 @@ export function Browse() {
         .filter((i) => !condition || i.condition === condition),
     [items, type, condition],
   );
+  const sortedResults = useMemo(() => {
+    const next = [...results];
+    if (sortMode === 'expiring') {
+      return next.sort((a, b) => {
+        const aExpiry = a.expiresAt ? new Date(a.expiresAt).getTime() : Number.POSITIVE_INFINITY;
+        const bExpiry = b.expiresAt ? new Date(b.expiresAt).getTime() : Number.POSITIVE_INFINITY;
+        return aExpiry - bExpiry;
+      });
+    }
+    return next.sort((a, b) => b.postedAt.localeCompare(a.postedAt));
+  }, [results, sortMode]);
   const reset = () => {
     setParams(resetBrowseSearchParams(params));
     setPage(0);
@@ -205,6 +234,7 @@ export function Browse() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
         <FilterSelect
           label="Hình thức"
+          icon="transaction"
           value={type}
           onChange={(e) => setFilter('type', e.target.value)}
         >
@@ -214,6 +244,7 @@ export function Browse() {
         </FilterSelect>
         <FilterSelect
           label="Danh mục"
+          icon="package"
           value={category}
           title={categories.find((entry) => entry.id === categoryId)?.name}
           onChange={(e) => {
@@ -234,6 +265,7 @@ export function Browse() {
         ) : null}
         <FilterSelect
           label="Tình trạng"
+          icon="check"
           value={condition}
           onChange={(e) => setFilter('condition', e.target.value)}
         >
@@ -246,6 +278,7 @@ export function Browse() {
         </FilterSelect>
         <FilterSelect
           label="Khu vực"
+          icon="location"
           value={district}
           onChange={(e) => {
             setFilter('district', e.target.value);
@@ -267,120 +300,208 @@ export function Browse() {
           </div>
         ) : null}
       </div>
+      <Button
+        type="button"
+        size="sm"
+        className="browse-filter-apply"
+        onClick={() => setMobileFilters(false)}
+      >
+        Áp dụng bộ lọc
+      </Button>
     </>
   );
 
   return (
-    <div className="page-shell">
-      <PageHeader
-        title="Tìm đồ"
-        description="Lọc các món đã được duyệt theo nhu cầu và quận của bạn."
-        action={
+    <div className="browse-page">
+      <section className="browse-banner" aria-label="Tìm đồ, sống xanh cùng ShareLoop">
+        <img
+          src={browseBanner}
+          alt="Tìm đồ, khám phá những món đồ đã được chia sẻ trong cộng đồng ShareLoop"
+          width="2158"
+          height="729"
+          decoding="async"
+          fetchPriority="high"
+        />
+      </section>
+
+      <div className="browse-shell">
+        <div className="browse-mobile-filter">
           <Button
             variant="outline"
             icon="filter"
-            className="lg:hidden"
             onClick={() => setMobileFilters(!mobileFilters)}
+            aria-expanded={mobileFilters}
+            aria-controls="browse-filters"
           >
             Bộ lọc
           </Button>
-        }
-      />
-      <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
-        <aside
-          className={`${mobileFilters ? 'block' : 'hidden'} h-fit overflow-hidden rounded-2xl border border-border/80 bg-white shadow-sm lg:block`}
-        >
-          <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
-            <div className="flex items-center gap-2 text-sm font-bold text-text-primary">
-              <span className="grid size-8 place-items-center rounded-lg bg-primary-faint text-primary">
-                <Icon name="filter" className="size-4" weight="bold" />
-              </span>
-              Bộ lọc
+        </div>
+
+        <div className="browse-layout">
+          <aside
+            id="browse-filters"
+            className={`browse-filters ${mobileFilters ? 'is-open' : ''}`}
+          >
+            <div className="browse-filters__header">
+              <div className="browse-filters__title">
+                <span>
+                  <Icon name="filter" className="size-4" weight="bold" />
+                </span>
+                Bộ lọc
+              </div>
+              <button type="button" onClick={reset} className="browse-filter-reset">
+                Đặt lại
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={reset}
-              className="rounded-md px-2 py-1 text-xs font-bold text-primary transition hover:bg-primary-faint"
-            >
-              Đặt lại
-            </button>
-          </div>
-          <div className="space-y-3 p-4">{filters}</div>
-        </aside>
-        <section className="min-w-0">
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm text-text-muted">
-              <strong className="text-text-primary">{results.length}</strong> món phù hợp
-            </p>
-            <select className="rounded-md border-0 bg-transparent text-xs font-semibold text-text-secondary outline-none">
-              <option>Mới nhất</option>
-              <option>Gần ngày hết hạn</option>
-            </select>
-          </div>
-          {itemsLoading ? (
-            <EmptyState title="Đang tải bài đăng" text="Vui lòng chờ trong giây lát." />
-          ) : itemsError ? (
-            <EmptyState
-              title="Không tải được bài đăng"
-              text={itemsError}
-              action={<Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>Thử tải lại</Button>}
-            />
-          ) : results.length ? (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {results.map((item) => (
-                <ProductCard key={item.id} item={item} />
-              ))}
+            <div className="browse-filters__body">{filters}</div>
+          </aside>
+
+          <section className="min-w-0" aria-label="Danh sách món đồ">
+            <div className="browse-toolbar">
+              <p>
+                <strong>{results.length}</strong> món phù hợp
+              </p>
+              <div className="browse-toolbar__controls">
+                <label className="browse-sort">
+                  <span>Sắp xếp</span>
+                  <select
+                    aria-label="Sắp xếp"
+                    value={sortMode}
+                    onChange={(event) => setSortMode(event.target.value as 'newest' | 'expiring')}
+                  >
+                    <option value="newest">Mới nhất</option>
+                    <option value="expiring">Gần ngày hết hạn</option>
+                  </select>
+                  <Icon name="chevronDown" className="size-4" />
+                </label>
+                <div className="browse-view-toggle" role="group" aria-label="Kiểu hiển thị">
+                  <button
+                    type="button"
+                    className={viewMode === 'grid' ? 'is-active' : ''}
+                    aria-label="Xem dạng lưới"
+                    aria-pressed={viewMode === 'grid'}
+                    onClick={() => setViewMode('grid')}
+                  >
+                    <Icon name="dashboard" className="size-[18px]" />
+                  </button>
+                  <button
+                    type="button"
+                    className={viewMode === 'list' ? 'is-active' : ''}
+                    aria-label="Xem dạng danh sách"
+                    aria-pressed={viewMode === 'list'}
+                    onClick={() => setViewMode('list')}
+                  >
+                    <Icon name="menu" className="size-[18px]" />
+                  </button>
+                </div>
+              </div>
             </div>
-          ) : (
-            <EmptyState
-              title="Chưa tìm thấy món phù hợp"
-              text="Thử bỏ bớt một bộ lọc hoặc tìm với từ khóa rộng hơn."
-              action={
-                <Button variant="outline" onClick={reset}>
-                  Đặt lại bộ lọc
+
+            {itemsLoading ? (
+              <EmptyState title="Đang tải bài đăng" text="Vui lòng chờ trong giây lát." />
+            ) : itemsError ? (
+              <EmptyState
+                title="Không tải được bài đăng"
+                text={itemsError}
+                action={<Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>Thử tải lại</Button>}
+              />
+            ) : sortedResults.length ? (
+              <div className={viewMode === 'grid' ? 'browse-products-grid' : 'browse-products-list'}>
+                {sortedResults.map((item) => (
+                  <BrowseProductCard key={item.id} item={item} />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title="Chưa tìm thấy món phù hợp"
+                text="Thử bỏ bớt một bộ lọc hoặc tìm với từ khóa rộng hơn."
+                action={
+                  <Button variant="outline" onClick={reset}>
+                    Đặt lại bộ lọc
+                  </Button>
+                }
+              />
+            )}
+            {!itemsLoading && !itemsError && totalElements > PAGE_SIZE ? (
+              <div className="browse-pagination">
+                <Button
+                  variant="outline"
+                  disabled={page === 0}
+                  onClick={() => setPage((current) => Math.max(0, current - 1))}
+                >
+                  Trang trước
                 </Button>
-              }
-            />
-          )}
-          {!itemsLoading && !itemsError && totalElements > PAGE_SIZE ? (
-            <div className="mt-6 flex items-center justify-center gap-3">
-              <Button
-                variant="outline"
-                disabled={page === 0}
-                onClick={() => setPage((current) => Math.max(0, current - 1))}
-              >
-                Trang trước
-              </Button>
-              <span className="text-sm text-text-muted">
-                Trang {page + 1} / {Math.ceil(totalElements / PAGE_SIZE)}
-              </span>
-              <Button
-                variant="outline"
-                disabled={(page + 1) * PAGE_SIZE >= totalElements}
-                onClick={() => setPage((current) => current + 1)}
-              >
-                Trang sau
-              </Button>
-            </div>
-          ) : null}
-        </section>
+                <span>
+                  Trang {page + 1} / {Math.ceil(totalElements / PAGE_SIZE)}
+                </span>
+                <Button
+                  variant="outline"
+                  disabled={(page + 1) * PAGE_SIZE >= totalElements}
+                  onClick={() => setPage((current) => current + 1)}
+                >
+                  Trang sau
+                </Button>
+              </div>
+            ) : null}
+          </section>
+        </div>
       </div>
     </div>
   );
 }
 
+const BrowseProductCard = memo(function BrowseProductCard({ item }: { item: Item }) {
+  return (
+    <Link to={`/items/${item.id}`} className="browse-product-card">
+      <div className="browse-product-card__image">
+        <ItemImage
+          src={item.images[0]}
+          alt={item.title}
+          loading="lazy"
+          className="size-full object-cover"
+        />
+        <span className="browse-product-card__badge">
+          <TypeBadge type={item.type} />
+        </span>
+      </div>
+      <div className="browse-product-card__content">
+        <h2>{item.title}</h2>
+        <p className="browse-product-card__description">{item.description}</p>
+        <div className="browse-product-card__meta">
+          <ConditionBadge condition={item.condition} />
+          <span title={item.category}>{item.category}</span>
+        </div>
+        <div className="browse-product-card__footer">
+          <span>
+            <Icon name="location" className="size-4" />
+            {item.district}
+          </span>
+          <span className="browse-product-card__link">
+            Xem chi tiết
+            <Icon name="arrow" className="size-3.5" />
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+});
+
 function FilterSelect({
   label,
+  icon,
   children,
   className = '',
   ...props
-}: SelectHTMLAttributes<HTMLSelectElement> & { label: string; children: ReactNode }) {
+}: SelectHTMLAttributes<HTMLSelectElement> & { label: string; icon: string; children: ReactNode }) {
   return (
-    <label className="block min-w-0">
-      <span className="mb-1 block text-xs font-bold text-text-secondary">{label}</span>
+    <label className="browse-filter-field">
+      <span className="browse-filter-field__label">
+        <Icon name={icon} className="size-3.5" weight="bold" />
+        {label}
+      </span>
       <span className="relative block">
         <select
-          className={`h-11 w-full appearance-none rounded-xl border border-border bg-white px-3 pr-9 text-sm font-medium text-text-primary outline-none transition hover:border-primary/40 focus:border-primary focus:ring-4 focus:ring-primary/10 ${className}`}
+          className={`browse-filter-field__select ${className}`}
           {...props}
         >
           {children}

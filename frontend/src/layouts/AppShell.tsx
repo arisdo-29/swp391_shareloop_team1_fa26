@@ -5,6 +5,7 @@ import { actions, selectCurrentUser } from '../app/store';
 import { Button, Icon, IconButton } from '../components/ui';
 import { authApi } from '../services/authApi';
 import { NotificationMenu } from '../components/NotificationMenu';
+import { ShareLoopLogo } from '../components/ShareLoopLogo';
 import { WalletProvider } from '../app/WalletContext';
 import { useWallet } from '../app/useWallet';
 
@@ -94,7 +95,7 @@ function AppShellContent() {
                 isHome ? 'bg-white/15 ring-1 ring-white/25' : 'bg-primary'
               }`}
             >
-              <Icon name="renew" className="size-5" weight="bold" />
+              <ShareLoopLogo className="size-5" />
             </span>
             <span
               className={`text-base font-extrabold ${isHome ? 'text-white' : 'text-text-primary'}`}
@@ -305,7 +306,7 @@ function AppShellContent() {
               <div className="max-w-sm">
                 <Link to="/" className="inline-flex items-center gap-2.5">
                   <span className="grid size-9 place-items-center rounded-md bg-primary text-white">
-                    <Icon name="renew" className="size-5" weight="bold" />
+                    <ShareLoopLogo className="size-5" />
                   </span>
                   <strong className="text-base font-extrabold text-text-primary">
                     SHARE<span className="text-primary">LOOP</span>

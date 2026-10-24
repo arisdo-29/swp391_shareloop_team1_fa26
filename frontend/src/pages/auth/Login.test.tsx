@@ -69,6 +69,15 @@ afterEach(() => {
 });
 
 describe('đăng nhập Admin', () => {
+  it('hiển thị logo ShareLoop ở phần giới thiệu và banner nhưng giữ icon môi trường', () => {
+    const { container } = renderLogin();
+
+    expect(container.querySelectorAll('.shareloop-logo img')).toHaveLength(2);
+    const environmentCard = screen.getByRole('heading', { name: 'Bảo vệ môi trường' }).closest('article');
+    expect(environmentCard?.querySelector('svg')).toBeTruthy();
+    expect(environmentCard?.querySelector('.shareloop-logo img')).toBeNull();
+  });
+
   it('xác thực, dispatch Redux rồi điều hướng tới Dashboard', async () => {
     const user = userEvent.setup();
     renderLogin();
