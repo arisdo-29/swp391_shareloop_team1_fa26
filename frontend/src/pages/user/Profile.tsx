@@ -17,7 +17,7 @@ import { formatCredit } from '../../utils/formatting';
 import { fileToDataUrl } from '../../utils/files';
 import { ChangePasswordForm } from '../../components/ChangePasswordForm';
 import { OtpInput } from '../../components/OtpInput';
-import { validEmail, validVietnamPhone } from '../../utils/passwordSecurity';
+import { validEmail, validVietnamPhone } from '../../utils/validation';
 import { useWallet } from '../../app/useWallet';
 import { userApi } from '../../services/userApi';
 import { catalogApi } from '../../services/catalogApi';

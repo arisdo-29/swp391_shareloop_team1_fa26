@@ -4,7 +4,7 @@ import { authErrorMessage } from '../services/authErrors';
 import type { ApiError } from '../services/http';
 import { toBackendUserId } from '../services/requestApi';
 import type { User } from '../types/domain';
-import { passwordRules, validatePassword } from '../utils/passwordSecurity';
+import { passwordRules, validatePassword } from '../utils/validation';
 import { Alert, Button } from './ui';
 import { PasswordField } from './PasswordField';
 

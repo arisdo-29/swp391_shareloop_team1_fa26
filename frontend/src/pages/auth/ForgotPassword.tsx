@@ -6,7 +6,7 @@ import { OtpInput } from '../../components/OtpInput';
 import { authApi } from '../../services/authApi';
 import { authErrorMessage } from '../../services/authErrors';
 import type { ApiError } from '../../services/http';
-import { passwordRules, validEmail, validatePassword } from '../../utils/passwordSecurity';
+import { passwordRules, validEmail, validatePassword } from '../../utils/validation';
 import { createOtpValue } from '../../utils/otp';
 
 interface ApiResetState {
