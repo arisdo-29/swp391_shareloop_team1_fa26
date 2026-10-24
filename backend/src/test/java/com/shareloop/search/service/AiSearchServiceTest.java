@@ -41,6 +41,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)
 class AiSearchServiceTest {
+    private static final String MODEL = "qwen/qwen3.8-27b:free";
+
     @Mock
     AiSearchClient aiClient;
 
@@ -81,7 +83,7 @@ class AiSearchServiceTest {
     void validFiltersQueryOnlyTheItemServiceAndLogOneCall() throws Exception {
         ready();
         when(aiClient.extract(eq("Tìm sách cũ ở quận 1"), any(), eq(Duration.ofSeconds(15))))
-                .thenReturn(new AiResponse("gemini-test", """
+                .thenReturn(new AiResponse(MODEL, """
                         {"keywords":"sách cũ","categoryId":1,"areaId":11,
                          "condition":"GOOD","offerType":"GIVE"}
                         """));
@@ -102,7 +104,7 @@ class AiSearchServiceTest {
     @Test
     void unknownDistrictFallsBackAndRefundsBeforeDatabaseQuery() throws Exception {
         ready();
-        when(aiClient.extract(any(), any(), any())).thenReturn(new AiResponse("gemini-test", """
+        when(aiClient.extract(any(), any(), any())).thenReturn(new AiResponse(MODEL, """
                 {"keywords":"sách","categoryId":1,"areaId":10,"condition":null,"offerType":null}
                 """));
         AiSearchResponse result = service.search(7L, "Tìm sách cũ ở quận 1", 0, 20);
@@ -114,7 +116,7 @@ class AiSearchServiceTest {
     @Test
     void timeoutRefundsAndFallsBack() throws Exception {
         ready();
-        when(aiClient.model()).thenReturn("gemini-test");
+        when(aiClient.model()).thenReturn(MODEL);
         when(aiClient.extract(any(), any(), any())).thenThrow(new HttpTimeoutException("timed out"));
         assertThat(service.search(7L, "Tìm sách cũ ở quận 1", 0, 20).fallback()).isTrue();
         verify(quotaService).refund(eq(7L), any());
@@ -128,7 +130,7 @@ class AiSearchServiceTest {
     }
 
     @Test
-    void contactDetailsAreRejectedBeforeSendingUserTextToGemini() throws Exception {
+    void contactDetailsAreRejectedBeforeSendingUserTextToProvider() throws Exception {
         assertThatThrownBy(() -> service.search(7L, "Tìm sách, gọi 0901234567", 0, 20))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(error -> assertThat(((BusinessException) error).getErrorCode())
