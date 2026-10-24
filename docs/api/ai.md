@@ -33,9 +33,9 @@ Response `200`:
 }
 ```
 
-`filters` là bộ lọc được Gemini trích xuất và backend kiểm tra. `categoryId` phải thuộc danh mục đang hoạt động; `areaId` phải là ID quận/huyện đang hoạt động. `condition` thuộc `NEW`, `LIKE_NEW`, `GOOD`, `DEFECTIVE`; `offerType` thuộc `GIVE`, `SWAP`. Mỗi trường có thể là `null`. `results.items` là `ItemResponse` từ cơ sở dữ liệu, chỉ gồm bài `APPROVED`, còn hoạt động và chưa xoá. LLM không tạo bài, diễn giải kết quả hay quyết định bài nào được duyệt.
+`filters` là bộ lọc được mô hình `qwen/qwen3.8-27b:free` qua OpenRouter trích xuất và backend kiểm tra. `categoryId` phải thuộc danh mục đang hoạt động; `areaId` phải là ID quận/huyện đang hoạt động. `condition` thuộc `NEW`, `LIKE_NEW`, `GOOD`, `DEFECTIVE`; `offerType` thuộc `GIVE`, `SWAP`. Mỗi trường có thể là `null`. `results.items` là `ItemResponse` từ cơ sở dữ liệu, chỉ gồm bài `APPROVED`, còn hoạt động và chưa xoá. LLM không tạo bài, diễn giải kết quả hay quyết định bài nào được duyệt.
 
-Nội dung `query` được gửi riêng ở vai trò `user`; chỉ thị hệ thống chứa schema và ID danh mục/quận huyện hợp lệ. Backend không đính kèm hồ sơ, tên, email, số điện thoại hoặc dữ liệu ví từ tài khoản người dùng tới Gemini. Bộ lọc tầng 1 từ chối thông tin liên hệ rõ ràng trong câu nhập; người dùng vẫn cần tránh nhập tên hoặc dữ liệu cá nhân khác. Backend ghi `AiUsage` cho từng lượt gọi với vai trò `SEARCH`, model, kết quả và thời gian; không ghi câu người dùng hoặc API key.
+Nội dung `query` được gửi riêng ở vai trò `user`; chỉ thị hệ thống chứa schema và ID danh mục/quận huyện hợp lệ. Backend không đính kèm hồ sơ, tên, email, số điện thoại hoặc dữ liệu ví từ tài khoản người dùng tới OpenRouter. Bộ lọc tầng 1 từ chối thông tin liên hệ rõ ràng trong câu nhập; người dùng vẫn cần tránh nhập tên hoặc dữ liệu cá nhân khác. Backend ghi `AiUsage` cho từng lượt gọi với vai trò `SEARCH`, model, kết quả và thời gian; không ghi câu người dùng hoặc API key.
 
 | HTTP | Code | Ý nghĩa |
 | --- | --- | --- |
@@ -44,7 +44,7 @@ Nội dung `query` được gửi riêng ở vai trò `user`; chỉ thị hệ t
 | 402 | `WALLET_INSUFFICIENT_BALANCE` | Hết lượt miễn phí và không đủ Credit khả dụng |
 | 404 | `SEARCH_ACCOUNT_NOT_FOUND` | Không tìm thấy tài khoản |
 
-Lỗi Gemini, phản hồi sai schema, thiếu key và quá thời gian `ai_search_timeout_seconds` được xử lý bằng kết quả tìm thường `200` có `fallback: true`.
+Lỗi OpenRouter, phản hồi sai schema, thiếu key và quá thời gian `ai_search_timeout_seconds` được xử lý bằng kết quả tìm thường `200` có `fallback: true`.
 
 ## Hạn mức và phí — issue #125
 
@@ -54,8 +54,8 @@ Lỗi Gemini, phản hồi sai schema, thiếu key và quá thời gian `ai_sear
 { "freeUsesRemaining": 5, "feeCredits": 2, "hasToppedUp": true }
 ```
 
-Tài khoản đã từng nạp thành công có 5 lượt miễn phí mỗi ngày theo ngày của máy chủ. Tài khoản chưa nạp có 1 lượt dùng thử duy nhất. Mức lượt và phí lấy từ cấu hình `ai_free_per_day`, `ai_trial_uses`, `ai_search_fee`. Khi hết lượt miễn phí, mỗi lần tìm bằng AI trừ phí qua CreditService; nếu Credit khả dụng không đủ, API trả `402 WALLET_INSUFFICIENT_BALANCE` và không gọi Gemini. Mỗi request đổi trang cũng là một lượt gọi AI mới.
+Tài khoản đã từng nạp thành công có 5 lượt miễn phí mỗi ngày theo ngày của máy chủ. Tài khoản chưa nạp có 1 lượt dùng thử duy nhất. Mức lượt và phí lấy từ cấu hình `ai_free_per_day`, `ai_trial_uses`, `ai_search_fee`. Khi hết lượt miễn phí, mỗi lần tìm bằng AI trừ phí qua CreditService; nếu Credit khả dụng không đủ, API trả `402 WALLET_INSUFFICIENT_BALANCE` và không gọi OpenRouter. Mỗi request đổi trang cũng là một lượt gọi AI mới.
 
-`chargedCredits` là phí của lần gọi thành công này, bằng 0 khi dùng lượt miễn phí. Nếu Gemini lỗi, trả JSON sai hoặc quá thời gian chờ, backend hoàn lượt hoặc hoàn đúng khoản Credit đã trừ, tìm thường bằng chính câu nhập, trả `fallback: true`, `chargedCredits: 0` và quota sau khi hoàn. Khi chưa cấu hình `AI_API_KEY`, API cũng tìm thường và không trừ lượt. Tìm thường chỉ so khớp từ khoá với bài đã duyệt; nó không hiểu category, địa bàn hoặc ý định như Gemini. Có thể nhận kết quả rỗng dù AI sẽ hiểu câu nhập tốt hơn.
+`chargedCredits` là phí của lần gọi thành công này, bằng 0 khi dùng lượt miễn phí. Nếu OpenRouter lỗi, trả JSON sai hoặc quá thời gian chờ, backend hoàn lượt hoặc hoàn đúng khoản Credit đã trừ, tìm thường bằng chính câu nhập, trả `fallback: true`, `chargedCredits: 0` và quota sau khi hoàn. Khi chưa cấu hình `OPENROUTER_API_KEY`, API cũng tìm thường và không trừ lượt. Tìm thường chỉ so khớp từ khoá với bài đã duyệt; nó không hiểu category, địa bàn hoặc ý định như mô hình AI. Có thể nhận kết quả rỗng dù AI sẽ hiểu câu nhập tốt hơn.
 
 FE trang trợ lý sẽ nối API ở issue #130. `frontend/src/services/aiApi.ts` đã có phương thức `search`; Miều cập nhật type theo các trường bổ sung và gọi endpoint quota để hiển thị lượt/phí trước khi bấm.

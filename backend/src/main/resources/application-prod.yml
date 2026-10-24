@@ -37,7 +37,7 @@ app:
       access-key: ${S3_ACCESS_KEY:}
       secret-key: ${S3_SECRET_KEY:}
   ai:
-    api-key: ${AI_API_KEY}
+    api-key: ${OPENROUTER_API_KEY}
   payment:
     mock:
       enabled: ${PAYMENT_MOCK_ENABLED:false}  # staging đặt true để demo nạp giả lập; production để false

@@ -19,6 +19,19 @@ class ChatContactFilterTest {
 
     private final ChatContactFilter filter = new ChatContactFilter();
 
+    @Test
+    void ambiguousSocialHintNeedsTierTwo() {
+        assertThat(filter.isAmbiguous("ib mình nhé")).isTrue();
+        assertThat(filter.isAmbiguous("Cho mình Facebook của bạn")).isTrue();
+        assertThat(filter.isAmbiguous("Số không chín một, rồi hai ba bốn")).isTrue();
+        assertThat(filter.isAmbiguous("Mình dùng 09O0000011, chữ O là số không"))
+                .isTrue();
+        assertThat(filter.isAmbiguous("Mail là sachcu [at] example [dot] com")).isTrue();
+        assertThat(filter.isAmbiguous("Tìm trang example chấm com gạch item một"))
+                .isTrue();
+        assertThat(filter.isAmbiguous("Hẹn gặp ở cổng trường")).isFalse();
+    }
+
     @Nested
     @DisplayName("Ca bắt đúng thông tin liên hệ (True Positive)")
     class TruePositiveTest {

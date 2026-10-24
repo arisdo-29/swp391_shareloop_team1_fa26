@@ -33,6 +33,6 @@ Mức 80,0% của chat tầng 1 chưa đạt mục tiêu NFR-11 (bắt đúng í
 
 ## Tầng 1 + tầng 2
 
-**Chưa có số liệu hợp lệ.** Lọc chat bằng LLM cho ca mơ hồ thuộc #143 chưa có trong `develop`. AI sàng lọc bài đăng đã có nhưng lần đo này không gọi Gemini: chưa có một đợt chạy kiểm định có kiểm soát với model và cấu hình cố định. Không dùng kết quả mock làm số đo chất lượng.
+**Chưa có số liệu hợp lệ.** Lọc chat bằng LLM cho ca mơ hồ thuộc #143 chưa có trong `develop`. AI sàng lọc bài đăng đã có nhưng lần đo này không gọi nhà cung cấp AI thật: chưa có một đợt chạy kiểm định có kiểm soát với model và cấu hình cố định. Không dùng kết quả mock làm số đo chất lượng.
 
 Sau khi #143 merge, chạy cùng bộ 160 mẫu theo hai chế độ tầng 1 và tầng 1 + tầng 2, lưu model, thời điểm, cấu hình ngưỡng, TP/FN/FP/TN và ID ca sai; báo cáo riêng kết quả chat và bài đăng. Bộ dữ liệu này được soạn trước khi đo, nhưng chỉ là mẫu tổng hợp nhỏ nên không đại diện cho tỷ lệ lỗi của người dùng thật.
