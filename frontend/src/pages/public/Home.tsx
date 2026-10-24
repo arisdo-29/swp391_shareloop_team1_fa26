@@ -15,7 +15,7 @@ import {
 import type { Item, ItemType, User } from '../../types/domain';
 import { catalogApi } from '../../services/catalogApi';
 import type { AreaResponse, CategoryResponse } from '../../services/catalogApi';
-import { itemApi, type ItemResponse } from '../../services/itemApi';
+import { itemApi, type ItemResponse, type PageResponse } from '../../services/itemApi';
 import { toAreaNameMap, toAreaOptions, toCategoryNameMap, toFeItem, type AreaOption } from '../../services/mappers';
 import { categoryBrowsePath } from '../../utils/browseFilters';
 import { HomeLifecycle, HomeProcess } from './HomeCommunity';
@@ -27,6 +27,18 @@ const newItemFilters: Array<{ value: 'all' | ItemType; label: string }> = [
   { value: 'gift', label: 'Cho tặng' },
   { value: 'trade', label: 'Trao đổi' },
 ];
+
+let pendingHomeItemsRequest: Promise<PageResponse<ItemResponse>> | null = null;
+
+function loadHomeItems() {
+  if (pendingHomeItemsRequest) return pendingHomeItemsRequest;
+
+  const request = itemApi.list({ page: 0, size: 100 }).finally(() => {
+    if (pendingHomeItemsRequest === request) pendingHomeItemsRequest = null;
+  });
+  pendingHomeItemsRequest = request;
+  return request;
+}
 
 function SectionHeading({
   title,
@@ -178,6 +190,7 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
             src={item.images[0]}
             alt=""
             loading={index === activeIndex ? 'eager' : 'lazy'}
+            fetchPriority={index === activeIndex ? 'high' : undefined}
             className={`absolute inset-0 size-full object-cover transition-all duration-[900ms] ease-out ${
               index === activeIndex
                 ? 'scale-[1.035] opacity-100 blur-[1px] brightness-[0.88] contrast-[0.92] saturate-[0.95]'
@@ -210,6 +223,7 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
                 src={item.images[0]}
                 alt={index === activeIndex ? item.title : ''}
                 loading={index === activeIndex ? 'eager' : 'lazy'}
+                fetchPriority={index === activeIndex ? 'high' : undefined}
                 className={`absolute inset-0 size-full object-cover transition-all duration-700 ease-out ${
                   index === activeIndex
                     ? 'scale-100 opacity-100'
@@ -261,6 +275,7 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
                     src={item.images[0]}
                     alt={item.title}
                     loading={isActive ? 'eager' : 'lazy'}
+                    fetchPriority={isActive ? 'high' : undefined}
                     className="size-full object-cover"
                   />
                 </button>
@@ -300,7 +315,7 @@ export function Home() {
       if (active) setAreaResponses(areaData);
     }).catch(() => undefined);
 
-    void itemApi.list({ page: 0, size: 100 })
+    void loadHomeItems()
       .then((response) => {
         if (active) setItemResponses(response.items);
       })

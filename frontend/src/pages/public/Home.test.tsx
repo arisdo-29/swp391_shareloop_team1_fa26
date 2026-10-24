@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { ReactNode } from 'react';
+import { StrictMode, type ReactNode } from 'react';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -94,6 +94,16 @@ function renderHome() {
   );
 }
 
+function renderHomeInStrictMode() {
+  return render(
+    <StrictMode>
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>
+    </StrictMode>,
+  );
+}
+
 beforeEach(() => {
   vi.mocked(catalogApi.categories).mockResolvedValue(categories);
   vi.mocked(catalogApi.areas).mockResolvedValue(areas);
@@ -106,6 +116,17 @@ afterEach(() => {
 });
 
 describe('trạng thái tải bài đăng trên Home', () => {
+  it('dùng chung request items đang chạy khi StrictMode mount lại Home', async () => {
+    const itemsRequest = deferred<PageResponse<ItemResponse>>();
+    vi.mocked(itemApi.list).mockReturnValue(itemsRequest.promise);
+
+    renderHomeInStrictMode();
+
+    expect(itemApi.list).toHaveBeenCalledTimes(1);
+    await act(async () => itemsRequest.resolve(itemPage));
+    expect((await screen.findAllByText(item.title)).length).toBeGreaterThan(0);
+  });
+
   it('kết thúc loading và hiển thị bài đăng khi API items thành công', async () => {
     const itemsRequest = deferred<PageResponse<ItemResponse>>();
     vi.mocked(itemApi.list).mockReturnValue(itemsRequest.promise);

@@ -303,11 +303,13 @@ export function ItemImage({
   alt,
   className = '',
   loading,
+  fetchPriority,
 }: {
   src?: string;
   alt: string;
   className?: string;
   loading?: 'eager' | 'lazy';
+  fetchPriority?: 'high' | 'low' | 'auto';
 }) {
   const [failed, setFailed] = useState(false);
   const imageSrc = resolveMediaUrl(src);
@@ -321,6 +323,8 @@ export function ItemImage({
       src={imageSrc}
       alt={alt}
       loading={loading}
+      decoding="async"
+      fetchPriority={fetchPriority}
       className={className}
       onError={() => setFailed(true)}
     />
