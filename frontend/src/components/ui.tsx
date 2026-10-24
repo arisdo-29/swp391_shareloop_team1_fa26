@@ -473,6 +473,8 @@ export function Avatar({
     <img
       src={avatarSrc}
       alt=""
+      loading="lazy"
+      decoding="async"
       onError={() => setFailed(true)}
       className={`shrink-0 rounded-md object-cover ${cls[size]}`}
     />
