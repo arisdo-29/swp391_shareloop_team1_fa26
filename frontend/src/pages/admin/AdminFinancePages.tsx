@@ -1,11 +1,17 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Button, EmptyState, Field, Icon, PageHeader, Stat } from '../../components/ui';
 import { adminFinanceApi, type FinanceSummary } from '../../services/adminFinanceApi';
 import { adminAuditApi, type ActivityLogResponse } from '../../services/adminAuditApi';
 import type { ApiError } from '../../services/http';
 import { formatVnd } from '../../utils/formatting';
-import { CashByDayChart, CreditByTypeChart } from './FinanceCharts';
+
+const CashByDayChart = lazy(() =>
+  import('./FinanceCharts').then((module) => ({ default: module.CashByDayChart })),
+);
+const CreditByTypeChart = lazy(() =>
+  import('./FinanceCharts').then((module) => ({ default: module.CreditByTypeChart })),
+);
 
 const transactionLabels: Record<string, string> = {
   TOP_UP: 'Nạp Credit', POST_FEE: 'Phí đăng bài', EDIT_FEE: 'Phí sửa bài',
@@ -269,7 +275,9 @@ export function AdminFinanceReport() {
       <section className="rounded-lg bg-white p-5 ring-1 ring-border">
         <h2 className="mb-1 section-title">Tiền thu theo ngày</h2>
         <p className="mb-4 text-sm text-text-muted">Tổng tiền các đơn nạp đã thanh toán trong khoảng ngày đã chọn.</p>
-        <CashByDayChart days={report.cashByDay} />
+        <Suspense fallback={null}>
+          <CashByDayChart days={report.cashByDay} />
+        </Suspense>
       </section>
       <div className="grid gap-5 lg:grid-cols-2">
         {([
@@ -277,15 +285,17 @@ export function AdminFinanceReport() {
           { title: 'Credit trừ theo loại', rows: report.creditOutByType, tone: 'debit' },
         ] as const).map((group) => <section key={group.title} className="min-w-0 rounded-lg bg-white p-5 ring-1 ring-border">
           <h2 className="mb-4 section-title">{group.title}</h2>
-          <CreditByTypeChart
-            title={group.title}
-            tone={group.tone}
-            rows={group.rows.map((row) => ({
-              label: transactionLabels[row.type] ?? 'Khác',
-              value: row.amount,
-              detail: `${row.entryCount} bút toán`,
-            }))}
-          />
+          <Suspense fallback={null}>
+            <CreditByTypeChart
+              title={group.title}
+              tone={group.tone}
+              rows={group.rows.map((row) => ({
+                label: transactionLabels[row.type] ?? 'Khác',
+                value: row.amount,
+                detail: `${row.entryCount} bút toán`,
+              }))}
+            />
+          </Suspense>
         </section>)}
       </div>
     </div> : null}

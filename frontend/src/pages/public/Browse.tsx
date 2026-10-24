@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import browseBanner from '../../assets/browse-banner-shareloop-dark.png';
+import browseBanner from '../../assets/browse-banner-shareloop-dark.webp';
 import { Button, ConditionBadge, EmptyState, Icon, ItemImage, TypeBadge } from '../../components/ui';
 import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
