@@ -28,7 +28,8 @@ public enum RequestErrorCode implements ErrorCode {
     REQUEST_HANDOVER_ALREADY_CONFIRMED(HttpStatus.CONFLICT, "Bạn đã xác nhận giao nhận cho yêu cầu này rồi."),
     REQUEST_MEDIA_REQUIRED(HttpStatus.BAD_REQUEST, "Danh sách ảnh/video minh chứng không được rỗng."),
     REQUEST_MEDIA_STAGE_INVALID(HttpStatus.BAD_REQUEST, "Giai đoạn đính kèm minh chứng không hợp lệ."),
-    REQUEST_FORBIDDEN(HttpStatus.FORBIDDEN, "Bạn không có quyền thao tác trên yêu cầu này.");
+    REQUEST_FORBIDDEN(HttpStatus.FORBIDDEN, "Bạn không có quyền thao tác trên yêu cầu này."),
+    REQUEST_REPUTATION_BLOCKED(HttpStatus.FORBIDDEN, "Tài khoản có 0 sao uy tín, không thể gửi yêu cầu giao dịch.");
 
     private final HttpStatus status;
     private final String defaultMessage;

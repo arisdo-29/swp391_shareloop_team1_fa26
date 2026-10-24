@@ -138,6 +138,11 @@ public class RequestService {
      */
     @Transactional
     public RequestResponse createRequest(long itemId, long receiverId, CreateRequest requestDto) {
+        // 0. Vô hiệu quyền gửi yêu cầu khi TrustStars về 0 (FR-92, BR-U05)
+        if (reputationService != null && !reputationService.canRequest(receiverId)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_REPUTATION_BLOCKED);
+        }
+
         // 1. Kiểm tra giới hạn số request PENDING cùng lúc (BR-U02, đọc từ ConfigService)
         int maxPending = configService.getInt(ConfigKey.MAX_PENDING_REQUESTS);
         long pendingCount = requestRepository.countByReceiverIdAndStatus(receiverId, RequestStatus.PENDING);
@@ -316,6 +321,24 @@ public class RequestService {
                         "Yêu cầu không được chọn",
                         "Chủ bài đã chọn người nhận khác cho món đồ này.",
                         "/items/" + selectedRequest.getItemId());
+            }
+        }
+
+        // 2b. Huỷ các yêu cầu PENDING khác ở bài khác đang dùng cùng món đề nghị (FR-66, BR-S03)
+        if (selectedRequest.getOfferedItemId() != null) {
+            List<Request> otherSwapRequests = requestRepository.findByOfferedItemIdAndStatus(
+                    selectedRequest.getOfferedItemId(), RequestStatus.PENDING);
+            for (Request otherSwap : otherSwapRequests) {
+                if (!otherSwap.getId().equals(selectedRequest.getId())) {
+                    otherSwap.cancel("Món đồ bạn đề nghị đã được đem trao đổi trong một giao dịch khác.");
+                    requestRepository.save(otherSwap);
+                    notificationService.notify(
+                            otherSwap.getReceiverId(),
+                            "REQUEST_CANCELLED",
+                            "Yêu cầu trao đổi bị huỷ",
+                            "Món đồ bạn đề nghị đã được chọn trong một giao dịch khác.",
+                            "/items/" + otherSwap.getItemId());
+                }
             }
         }
 
