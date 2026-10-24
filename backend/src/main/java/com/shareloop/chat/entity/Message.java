@@ -147,4 +147,9 @@ public class Message {
         this.moderationTier = (short) tier;
         this.blockedReason = reason;
     }
+
+    public void setAiConfidence(BigDecimal confidence) {
+        this.aiConfidence = confidence;
+        this.moderationTier = 2;
+    }
 }

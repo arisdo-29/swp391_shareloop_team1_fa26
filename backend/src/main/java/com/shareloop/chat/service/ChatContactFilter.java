@@ -46,6 +46,13 @@ public class ChatContactFilter {
             Pattern.compile("(?<=[^a-z0-9]|^)(tam)(?=[^a-z0-9]|$)", Pattern.CASE_INSENSITIVE);
     private static final Pattern NINE =
             Pattern.compile("(?<=[^a-z0-9]|^)(chin)(?=[^a-z0-9]|$)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern AMBIGUOUS_CONTACT = Pattern.compile(
+            "(?<![a-z0-9])(zalo|facebook|fb|instagram|insta|ig|telegram|tiktok|ib|inbox|nhan rieng|lien he)(?![a-z0-9])"
+                    + "|(?<![a-z0-9])so\\s+(khong|0[0-9o])"
+                    + "|(?<![a-z0-9])mail\\s+(la|:)"
+                    + "|(?<![a-z0-9])cham\\s+(com|vn|net|org)(?![a-z0-9])"
+                    + "|\\[at\\]",
+            Pattern.CASE_INSENSITIVE);
 
     private final ConfigService configService;
     private final LexiconMatcher lexiconMatcher;
@@ -154,6 +161,12 @@ public class ChatContactFilter {
         }
 
         return List.of();
+    }
+
+    /** Only hints that tier one cannot decide are sent to the second tier. */
+    public boolean isAmbiguous(String content) {
+        return content != null
+                && AMBIGUOUS_CONTACT.matcher(stripDiacritics(content)).find();
     }
 
     /**

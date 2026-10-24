@@ -6,6 +6,7 @@ import com.shareloop.chat.repository.MessageRepository;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import java.math.BigDecimal;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -46,8 +47,17 @@ public class ChatViolationRecorder {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public long recordViolationAndAlertAdmin(long requestId, long senderId, String content, String reason) {
+        return recordViolationAndAlertAdmin(requestId, senderId, content, reason, 1, null);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public long recordViolationAndAlertAdmin(
+            long requestId, long senderId, String content, String reason, int tier, BigDecimal confidence) {
         Message message = new Message(requestId, senderId, content);
-        message.block(1, reason);
+        message.block(tier, reason);
+        if (confidence != null) {
+            message.setAiConfidence(confidence);
+        }
         messageRepository.save(message);
 
         long violationCount = messageRepository.countByRequestIdAndModeration(requestId, MessageModeration.BLOCKED);

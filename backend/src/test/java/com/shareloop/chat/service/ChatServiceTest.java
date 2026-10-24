@@ -23,7 +23,9 @@ import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.service.RequestService;
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -53,6 +55,9 @@ class ChatServiceTest {
     @Mock
     ChatViolationRecorder chatViolationRecorder;
 
+    @Mock
+    ChatAiModerationService chatAiModerationService;
+
     @InjectMocks
     ChatService chatService;
 
@@ -64,6 +69,48 @@ class ChatServiceTest {
     @Nested
     @DisplayName("Gửi tin nhắn (sendMessage)")
     class SendMessageTest {
+
+        @Test
+        void tierTwoBlocksAmbiguousContactAndRecordsConfidence() {
+            when(requestService.getChatContext(REQUEST_ID))
+                    .thenReturn(new RequestChatContext(REQUEST_ID, RequestStatus.RESERVED, RECEIVER_ID, DONOR_ID));
+            when(chatAiModerationService.evaluate(REQUEST_ID, "ib mình nhé"))
+                    .thenReturn(Optional.of(new ChatAiModerationService.Decision(
+                            true, new BigDecimal("0.82"), "liên hệ qua mạng xã hội")));
+
+            assertThatThrownBy(() ->
+                            chatService.sendMessage(REQUEST_ID, RECEIVER_ID, new SendMessageRequest("ib mình nhé")))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                            .isEqualTo(ChatErrorCode.CHAT_MESSAGE_BLOCKED));
+
+            verify(chatViolationRecorder)
+                    .recordViolationAndAlertAdmin(
+                            REQUEST_ID,
+                            RECEIVER_ID,
+                            "ib mình nhé",
+                            "liên hệ qua mạng xã hội",
+                            2,
+                            new BigDecimal("0.82"));
+            verify(messageRepository, never()).save(any(Message.class));
+        }
+
+        @Test
+        void tierTwoPassPersistsConfidence() {
+            when(requestService.getChatContext(REQUEST_ID))
+                    .thenReturn(new RequestChatContext(REQUEST_ID, RequestStatus.RESERVED, RECEIVER_ID, DONOR_ID));
+            when(chatAiModerationService.evaluate(REQUEST_ID, "ib mình nhé"))
+                    .thenReturn(Optional.of(
+                            new ChatAiModerationService.Decision(false, new BigDecimal("0.40"), "không có liên hệ")));
+            when(messageRepository.save(any(Message.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            chatService.sendMessage(REQUEST_ID, RECEIVER_ID, new SendMessageRequest("ib mình nhé"));
+
+            org.mockito.ArgumentCaptor<Message> saved = org.mockito.ArgumentCaptor.forClass(Message.class);
+            verify(messageRepository).save(saved.capture());
+            assertThat(saved.getValue().getModerationTier()).isEqualTo((short) 2);
+            assertThat(saved.getValue().getAiConfidence()).isEqualByComparingTo("0.40");
+        }
 
         @Test
         @DisplayName("Gửi tin nhắn thành công khi Request ở trạng thái RESERVED và người gửi là receiver")
