@@ -67,9 +67,6 @@ export function Login() {
         <section className="login-welcome" aria-labelledby="login-welcome-title">
           <div>
             <p className="login-welcome__eyebrow">
-              <span className="login-welcome__eyebrow-icon" aria-hidden="true">
-                <Icon name="renew" className="h-4 w-4" />
-              </span>
               Cộng đồng sẻ chia bền vững
             </p>
             <h1 id="login-welcome-title" className="login-welcome__title">
@@ -111,9 +108,6 @@ export function Login() {
           </div>
 
           <div className="login-welcome__story" aria-hidden="true">
-            <span className="login-welcome__story-mark">
-              <Icon name="renew" className="h-7 w-7" />
-            </span>
             <div>
               <p>Trao món đồ bạn không còn dùng, nhận lại một kết nối mới.</p>
               <span>Chia sẻ có trách nhiệm · Kết nối bền vững</span>

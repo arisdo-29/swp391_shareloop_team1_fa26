@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { actions, selectCurrentUser } from '../app/store';
@@ -28,7 +28,8 @@ export function AppShell() {
 }
 
 function AppShellContent() {
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
   const navigate = useNavigate();
   const user = useAppSelector(selectCurrentUser);
   const { isApiAccount, wallet } = useWallet();
@@ -39,6 +40,33 @@ function AppShellContent() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
+  const headerActionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMobileOpen(false);
+    setProfileOpen(false);
+    setNotificationOpen(false);
+  }, [location.hash, location.pathname, location.search]);
+
+  useEffect(() => {
+    const closeDropdowns = () => {
+      setProfileOpen(false);
+      setNotificationOpen(false);
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!headerActionsRef.current?.contains(event.target as Node)) closeDropdowns();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeDropdowns();
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
   const nav = isAdmin
     ? [
         ['/admin', 'Dashboard', 'dashboard'],
@@ -127,7 +155,17 @@ function AppShellContent() {
               ))}
             </nav>
           ) : null}
-          <div className="ml-auto flex shrink-0 items-center gap-2">
+          <div
+            ref={headerActionsRef}
+            className="ml-auto flex shrink-0 items-center gap-2"
+            onClick={(event) => {
+              const action = (event.target as HTMLElement).closest('a, button');
+              if (action && !action.hasAttribute('aria-expanded')) {
+                setProfileOpen(false);
+                setNotificationOpen(false);
+              }
+            }}
+          >
             {user ? (
               <>
                 {!isAdmin ? <>
@@ -143,7 +181,7 @@ function AppShellContent() {
                   {isApiAccount ? (wallet ? wallet.available : '--') : user.availableCredit} Credit
                 </Link>
                 <Link to="/post" className="hidden sm:block">
-                  <Button icon="add" size="sm">
+                  <Button size="sm">
                     Đăng đồ
                   </Button>
                 </Link>

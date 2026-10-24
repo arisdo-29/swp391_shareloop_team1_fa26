@@ -411,7 +411,7 @@ export function Home() {
             />
             <select
               aria-label="Chọn quận"
-              className="input"
+              className="input appearance-none"
               value={district}
               onChange={(event) => setDistrict(event.target.value)}
             >
@@ -420,7 +420,7 @@ export function Home() {
                 <option key={area.id} value={area.id}>{area.label}</option>
               ))}
             </select>
-            <Button icon="search">Tìm đồ</Button>
+            <Button>Tìm đồ</Button>
           </form>
 
           <div className="mt-4 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap">
