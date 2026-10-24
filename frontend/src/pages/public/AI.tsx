@@ -32,7 +32,6 @@ export function AI() {
   const [quota, setQuota] = useState<AiQuotaResponse | null>(null);
   const [quotaError, setQuotaError] = useState('');
   const [searchError, setSearchError] = useState('');
-  const [fallback, setFallback] = useState(false);
   const [chargedCredits, setChargedCredits] = useState(0);
   const [needsTopUp, setNeedsTopUp] = useState(false);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
@@ -91,10 +90,15 @@ export function AI() {
       setTotalElements(response.results.totalElements);
       setPage(response.results.page);
       setQuota(response.quota);
-      setFallback(response.fallback);
       setChargedCredits(response.chargedCredits);
       setStatus('success');
       if (response.chargedCredits > 0) refreshWallet();
+      try {
+        const latest = await aiApi.quota();
+        if (currentGeneration === generation.current) setQuota(latest);
+      } catch {
+        // Giữ snapshot từ response tìm kiếm; Backend vẫn là nơi kiểm tra hạn mức cho lần sau.
+      }
     } catch (error) {
       if (currentGeneration !== generation.current) return;
       const apiError = error as ApiError;
@@ -172,7 +176,6 @@ export function AI() {
                 remainingFreeSearches={quota.freeUsesRemaining}
                 feeCredits={quota.feeCredits}
                 chargedCredits={chargedCredits}
-                isFallbackSearch={fallback}
               />
             ) : <Alert tone={quotaError ? 'error' : 'info'}>{quotaError || 'Đang tải hạn mức tìm kiếm...'}</Alert>}
             {quotaError ? <Button variant="outline" size="sm" onClick={() => { void aiApi.quota().then((response) => { setQuota(response); setQuotaError(''); }).catch((error: ApiError) => setQuotaError(error.message)); }}>Thử tải hạn mức</Button> : null}
@@ -295,14 +298,6 @@ export function AI() {
                 />
               </div>
             )}
-          </section>
-        ) : status === 'idle' ? (
-          <section className="rounded-2xl border border-dashed border-border bg-white/60 px-5 py-10 text-center">
-            <Icon name="search" className="mx-auto size-8 text-primary" />
-            <h2 className="mt-3 font-bold text-text-primary">Kết quả sẽ xuất hiện tại đây</h2>
-            <p className="mx-auto mt-1 max-w-lg text-sm leading-6 text-text-muted">
-              Hãy mô tả món đồ bạn cần để xem bộ lọc và danh sách gợi ý.
-            </p>
           </section>
         ) : null}
       </div>

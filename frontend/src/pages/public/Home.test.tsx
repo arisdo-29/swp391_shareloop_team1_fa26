@@ -116,6 +116,16 @@ afterEach(() => {
 });
 
 describe('trạng thái tải bài đăng trên Home', () => {
+  it('giữ link danh mục nhưng không hiển thị mũi tên trên thẻ', async () => {
+    const { container } = renderHome();
+
+    await waitFor(() => expect(container.querySelector('.home-category-label')).toBeTruthy());
+    const categoryLabel = container.querySelector('.home-category-label');
+    const categoryLink = categoryLabel?.closest('a');
+    expect(categoryLink?.getAttribute('href')).toBe('/browse?categoryId=7');
+    expect(container.querySelector('.home-category-arrow')).toBeNull();
+  });
+
   it('giữ chức năng tìm kiếm và chọn khu vực khi bỏ icon trang trí', () => {
     renderHome();
 

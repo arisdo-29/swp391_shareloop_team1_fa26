@@ -29,14 +29,16 @@ function groupConfigs(configs: AdminConfigResponse[]): ConfigSection[] {
 
 /** Cấu hình hệ thống: bảng theo nhóm, mỗi dòng có tên và mô tả tiếng Việt, sửa kèm lý do. */
 export function AdminConfigs() {
-  const { configs, loading, error, reload, saving, saveError, clearSaveError, update } = useAdminConfigs();
+  const { configs, loading, error, reload, saving, saveError, clearSaveError, update, updateByBody } = useAdminConfigs();
   const [editing, setEditing] = useState<AdminConfigResponse | null>(null);
   const [notice, setNotice] = useState('');
   const sections = groupConfigs(configs);
 
   const save = async (value: string, reason: string) => {
     if (!editing) return;
-    const updated = await update(editing.key, value, reason);
+    const updated = editing.key === 'chat_ai_threshold'
+      ? await updateByBody(editing.key, value, reason)
+      : await update(editing.key, value, reason);
     if (!updated) return;
     setEditing(null);
     setNotice(`Đã cập nhật "${updated.label}".`);
