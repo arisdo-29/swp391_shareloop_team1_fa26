@@ -4,7 +4,6 @@ import { useAppDispatch } from '../../app/hooks';
 import { preloadRoute } from '../../app/routePreload';
 import { actions } from '../../app/store';
 import { PasswordField } from '../../components/PasswordField';
-import { ShareLoopLogo } from '../../components/ShareLoopLogo';
 import { Alert, Button, Field, Icon } from '../../components/ui';
 import { authApi } from '../../services/authApi';
 import { authErrorMessage } from '../../services/authErrors';
@@ -69,7 +68,7 @@ export function Login() {
           <div>
             <p className="login-welcome__eyebrow">
               <span className="login-welcome__eyebrow-icon" aria-hidden="true">
-                <ShareLoopLogo className="h-4 w-4" />
+                <Icon name="renew" className="h-4 w-4" />
               </span>
               Cộng đồng sẻ chia bền vững
             </p>
@@ -113,7 +112,7 @@ export function Login() {
 
           <div className="login-welcome__story" aria-hidden="true">
             <span className="login-welcome__story-mark">
-              <ShareLoopLogo className="h-7 w-7" />
+              <Icon name="renew" className="h-7 w-7" />
             </span>
             <div>
               <p>Trao món đồ bạn không còn dùng, nhận lại một kết nối mới.</p>
