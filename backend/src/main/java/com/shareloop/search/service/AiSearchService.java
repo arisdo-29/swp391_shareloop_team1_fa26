@@ -24,12 +24,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class AiSearchService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(AiSearchService.class);
     private static final Set<String> FILTER_KEYS = Set.of("keywords", "categoryId", "areaId", "condition", "offerType");
 
     private final AiSearchClient aiClient;
@@ -71,6 +74,7 @@ public class AiSearchService {
             throw new BusinessException(SearchErrorCode.SEARCH_QUERY_INVALID);
         }
         if (!aiClient.isAvailable()) {
+            LOGGER.warn("AI search fallback: provider API key is unavailable");
             return fallback(userId, query, page, size);
         }
 
@@ -97,15 +101,18 @@ public class AiSearchService {
         try {
             response = aiClient.extract(query.trim(), allowedFilters, timeout);
         } catch (HttpTimeoutException exception) {
+            LOGGER.warn("AI search fallback: provider request timed out");
             quotaService.refund(userId, reservation);
             logCall(userId, aiClient.model(), "TIMEOUT", started, reservation);
             return fallback(userId, query, page, size);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+            LOGGER.warn("AI search fallback: provider request was interrupted");
             quotaService.refund(userId, reservation);
             logCall(userId, aiClient.model(), "INTERRUPTED", started, reservation);
             return fallback(userId, query, page, size);
         } catch (Exception exception) {
+            LOGGER.warn("AI search fallback: provider call failed ({})", safeFailureDetail(exception));
             quotaService.refund(userId, reservation);
             logCall(userId, aiClient.model(), "FAILED", started, reservation);
             return fallback(userId, query, page, size);
@@ -115,6 +122,9 @@ public class AiSearchService {
         try {
             filters = validate(response.content(), categoryIds, districtIds);
         } catch (RuntimeException exception) {
+            LOGGER.warn(
+                    "AI search fallback: provider response failed validation ({})",
+                    exception.getClass().getSimpleName());
             quotaService.refund(userId, reservation);
             logCall(userId, response.model(), "INVALID_RESPONSE", started, reservation);
             return fallback(userId, query, page, size);
@@ -143,6 +153,14 @@ public class AiSearchService {
                 quotaService.getQuota(userId),
                 0,
                 true);
+    }
+
+    private static String safeFailureDetail(Exception exception) {
+        String message = exception.getMessage();
+        if (message != null && message.matches("OpenRouter API returned HTTP [1-5][0-9]{2}")) {
+            return message;
+        }
+        return exception.getClass().getSimpleName();
     }
 
     private AiSearchFilters validate(String content, Set<Long> categoryIds, Set<Long> districtIds) {
@@ -196,7 +214,7 @@ public class AiSearchService {
 
     private void logCall(long userId, String model, String outcome, long started, Reservation reservation) {
         activityLogService.log(
-                "AiUsage",
+                "AI_USAGE",
                 userId,
                 "AI_SEARCH",
                 null,

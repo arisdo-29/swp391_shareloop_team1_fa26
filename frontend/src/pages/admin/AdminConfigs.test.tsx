@@ -8,7 +8,7 @@ import { adminConfigApi, type AdminConfigResponse } from '../../services/adminCo
 import { AdminConfigs } from './AdminConfigs';
 
 vi.mock('../../services/adminConfigApi', () => ({
-  adminConfigApi: { list: vi.fn(), update: vi.fn() },
+  adminConfigApi: { list: vi.fn(), update: vi.fn(), updateByBody: vi.fn() },
 }));
 
 function config(
@@ -87,7 +87,34 @@ describe('AdminConfigs', () => {
     await waitFor(() =>
       expect(adminConfigApi.update).toHaveBeenCalledWith('post_fee', { value: '7', reason: 'Điều chỉnh theo quý' }),
     );
+    expect(adminConfigApi.updateByBody).not.toHaveBeenCalled();
     expect(await screen.findByText('Đã cập nhật "Phí đăng bài".')).toBeTruthy();
+  });
+
+  it('dùng endpoint body cho cấu hình ngưỡng AI mà không gọi trùng endpoint theo key', async () => {
+    const user = userEvent.setup();
+    const aiThreshold = config('chat_ai_threshold', '0.7', 'Ngưỡng AI kiểm tra tin nhắn', 'AI', 'Trợ lý AI');
+    vi.mocked(adminConfigApi.list).mockResolvedValue([...configs, aiThreshold]);
+    vi.mocked(adminConfigApi.updateByBody).mockResolvedValue({ ...aiThreshold, value: '0.8' });
+    renderPage();
+    const row = (await screen.findByText('Ngưỡng AI kiểm tra tin nhắn')).closest('tr')!;
+
+    await user.click(within(row).getByRole('button', { name: 'Chỉnh sửa' }));
+    const dialog = screen.getByRole('dialog', { name: 'Ngưỡng AI kiểm tra tin nhắn' });
+    const valueInput = within(dialog).getByRole('textbox', { name: 'Giá trị mới' });
+    await user.clear(valueInput);
+    await user.type(valueInput, '0.8');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Lý do thay đổi' }), 'Tăng ngưỡng AI');
+    await user.click(within(dialog).getByRole('button', { name: 'Xác nhận cập nhật' }));
+
+    await waitFor(() =>
+      expect(adminConfigApi.updateByBody).toHaveBeenCalledWith({
+        key: 'chat_ai_threshold',
+        value: '0.8',
+        reason: 'Tăng ngưỡng AI',
+      }),
+    );
+    expect(adminConfigApi.update).not.toHaveBeenCalled();
   });
 
   it('giữ hộp thoại và hiện câu báo lỗi của Backend khi giá trị không hợp lệ', async () => {

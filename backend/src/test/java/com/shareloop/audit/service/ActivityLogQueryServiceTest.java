@@ -186,6 +186,27 @@ class ActivityLogQueryServiceTest {
     }
 
     @Test
+    void search_whenLegacyAiUsage_returnsSearchOutcomeInDetail() {
+        Map<String, Object> data = Map.of("role", "SEARCH", "outcome", "FAILED", "durationMs", 123);
+        givenLogs(List.of(new ActivityLog("AiUsage", 3L, "AI_SEARCH", null, data, null, CREATED_AT)));
+
+        ActivityLogDto dto = firstRow(service.search(null, null, null, null, 0, 20));
+
+        assertThat(dto.typeLabel()).isEqualTo("Gọi AI kiểm duyệt");
+        assertThat(dto.detail()).isEqualTo("Tìm đồ AI: FAILED (123 ms)");
+    }
+
+    @Test
+    void search_whenAiUsage_returnsModerationOutcomeInDetail() {
+        Map<String, Object> data = Map.of("outcome", "SUCCESS", "durationMs", 300);
+        givenLogs(List.of(newLog(1L, ActivityType.AI_USAGE, 3L, "ITEM", 42L, data, null)));
+
+        ActivityLogDto dto = firstRow(service.search(null, null, null, null, 0, 20));
+
+        assertThat(dto.detail()).isEqualTo("Kiểm duyệt AI: SUCCESS (300 ms)");
+    }
+
+    @Test
     void search_whenReportAndRequestTargets_returnsNumberedTitles() {
         // given
         givenLogs(List.of(
