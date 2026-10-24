@@ -92,7 +92,7 @@ Xem nhật ký hành động trong hệ thống (FR-115, Issue #117). Chỉ dàn
 | `REQUEST` | `"Yêu cầu #<id>"` |
 | Loại khác | `null` |
 
-**Quy tắc `detail`:** `REVIEW_APPROVE` → `"Duyệt bài"`; `CONFIG_UPDATE` → `"<key>: <oldValue> → <newValue>"`; còn lại → `reason`.
+**Quy tắc `detail`:** `REVIEW_APPROVE` → `"Duyệt bài"`; `CONFIG_UPDATE` → `"<key>: <oldValue> → <newValue>"`; `AI_USAGE` và mã cũ `AiUsage` → vai trò tìm đồ/kiểm duyệt, `outcome` và thời lượng từ `data` (không hiển thị câu nhập hay API key); còn lại → `reason`.
 
 ### Loại hành động (ActivityType)
 

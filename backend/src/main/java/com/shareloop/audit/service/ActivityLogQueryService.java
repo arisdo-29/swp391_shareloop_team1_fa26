@@ -186,6 +186,15 @@ public class ActivityLogQueryService {
         if (ActivityType.CONFIG_UPDATE.code().equals(log.getType()) && log.getData() != null) {
             return dataValue(log, "key") + ": " + dataValue(log, "oldValue") + " → " + dataValue(log, "newValue");
         }
+        if ((ActivityType.AI_USAGE.code().equals(log.getType()) || "AiUsage".equals(log.getType()))
+                && log.getData() != null) {
+            String outcome = dataValue(log, "outcome");
+            if (outcome != null) {
+                String action = "SEARCH".equals(dataValue(log, "role")) ? "Tìm đồ AI" : "Kiểm duyệt AI";
+                String duration = dataValue(log, "durationMs");
+                return action + ": " + outcome + (duration == null ? "" : " (" + duration + " ms)");
+            }
+        }
         return log.getReason();
     }
 
