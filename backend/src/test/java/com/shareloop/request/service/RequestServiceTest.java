@@ -87,6 +87,18 @@ class RequestServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(configService.getInt(ConfigKey.MAX_PENDING_REQUESTS)).thenReturn(5);
+        lenient().when(reputationService.canRequest(anyLong())).thenReturn(true);
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi người gửi yêu cầu có 0 sao uy tín (BR-U05, FR-92)")
+    void createRequest_whenTrustStarsZero_throwsBusinessException() {
+        when(reputationService.canRequest(10L)).thenReturn(false);
+
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_REPUTATION_BLOCKED);
+                });
     }
 
     @Test
@@ -267,6 +279,33 @@ class RequestServiceTest {
         org.mockito.Mockito.verify(itemService).reserve(1L);
         org.mockito.Mockito.verify(notificationService).notify(eq(10L), eq("REQUEST_ACCEPTED"), any(), any(), any());
         org.mockito.Mockito.verify(notificationService).notify(eq(11L), eq("REQUEST_REJECTED"), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Chủ bài chọn người nhận: tự huỷ Request khác dùng cùng món đề nghị (FR-66, BR-S03)")
+    void selectReceiver_whenSwapRequest_cancelsOtherRequestsWithSameOfferedItem() {
+        Request selectedRequest = new Request(1L, 10L, 50L, "SWAP");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+
+        Request otherSwapRequest = new Request(2L, 10L, 50L, "SWAP");
+        org.springframework.test.util.ReflectionTestUtils.setField(otherSwapRequest, "id", 103L);
+
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+        when(requestRepository.findByItemIdAndStatus(1L, RequestStatus.PENDING)).thenReturn(List.of(selectedRequest));
+        when(requestRepository.findByOfferedItemIdAndStatus(50L, RequestStatus.PENDING))
+                .thenReturn(List.of(selectedRequest, otherSwapRequest));
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+
+        RequestResponse response = requestService.selectReceiver(101L, 20L);
+
+        assertThat(response.status()).isEqualTo("RESERVED");
+        assertThat(otherSwapRequest.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        assertThat(otherSwapRequest.getCancelReason()).isNotNull();
+        org.mockito.Mockito.verify(notificationService).notify(eq(10L), eq("REQUEST_CANCELLED"), any(), any(), any());
     }
 
     @Test
