@@ -69,11 +69,11 @@ afterEach(() => {
 });
 
 describe('đăng nhập Admin', () => {
-  it('hiển thị icon tái sử dụng ở phần giới thiệu và banner nhưng giữ icon môi trường', () => {
+  it('bỏ icon tái sử dụng ở phần giới thiệu và banner nhưng giữ icon môi trường', () => {
     const { container } = renderLogin();
 
-    expect(container.querySelector('.login-welcome__eyebrow-icon svg')).toBeTruthy();
-    expect(container.querySelector('.login-welcome__story-mark svg')).toBeTruthy();
+    expect(container.querySelector('.login-welcome__eyebrow-icon')).toBeNull();
+    expect(container.querySelector('.login-welcome__story-mark')).toBeNull();
     const environmentCard = screen.getByRole('heading', { name: 'Bảo vệ môi trường' }).closest('article');
     expect(environmentCard?.querySelector('svg')).toBeTruthy();
   });

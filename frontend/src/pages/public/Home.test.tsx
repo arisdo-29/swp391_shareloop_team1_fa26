@@ -116,6 +116,16 @@ afterEach(() => {
 });
 
 describe('trạng thái tải bài đăng trên Home', () => {
+  it('giữ chức năng tìm kiếm và chọn khu vực khi bỏ icon trang trí', () => {
+    renderHome();
+
+    const searchButton = screen.getByRole('button', { name: 'Tìm đồ' });
+    const areaSelect = screen.getByRole('combobox', { name: 'Chọn quận' });
+    expect(searchButton.querySelector('svg')).toBeNull();
+    expect(areaSelect.classList.contains('appearance-none')).toBe(true);
+    expect(areaSelect.querySelector('option')).toBeTruthy();
+  });
+
   it('dùng chung request items đang chạy khi StrictMode mount lại Home', async () => {
     const itemsRequest = deferred<PageResponse<ItemResponse>>();
     vi.mocked(itemApi.list).mockReturnValue(itemsRequest.promise);

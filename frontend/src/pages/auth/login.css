@@ -150,18 +150,6 @@
   color: #fff;
 }
 
-.login-welcome__story::after {
-  position: absolute;
-  top: -5rem;
-  right: -3rem;
-  width: 14rem;
-  height: 14rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
-  box-shadow: 0 0 0 2.75rem rgba(255, 255, 255, 0.035);
-  content: '';
-}
-
 .login-welcome__story-mark {
   display: grid;
   z-index: 1;
