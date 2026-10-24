@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Icon } from '../../components/ui';
 const sections = [
@@ -97,7 +97,9 @@ export function AdminLayout() {
         <nav className="pt-3">{nav}</nav>
       </aside>
       <main className="min-w-0 pt-2 lg:pt-0">
-        <Outlet />
+        <Suspense fallback={<div className="min-h-[620px]" aria-hidden="true" />}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );

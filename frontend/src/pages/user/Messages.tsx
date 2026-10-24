@@ -52,6 +52,13 @@ import {
   validateMeetingPlace,
   validateStoredMeetingTime,
 } from '../../utils/meetingSchedule';
+import {
+  CHAT_POLL_INTERVAL_MS,
+  mergeChatMessages,
+  messageOfferStatusLabel,
+  requestConversationPath,
+  shouldRefreshConversationDetail,
+} from '../../utils/chatMessages';
 
 const steps = ['Trao doi', 'De xuat lich', 'Chot lich', 'Ban giao', 'Hoan tat'];
 
@@ -288,6 +295,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const chatImageInputRef = useRef<HTMLInputElement>(null);
   const activeRequestId = useRef<number | null>(null);
   const selectInFlight = useRef(false);
+  const sendInFlight = useRef(false);
+  const requestGroupsLoadedAt = useRef(new Map<number, number>());
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setScheduleNow(new Date()), 30_000);
@@ -304,6 +313,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         if (!active) return;
         setShareableItems(ownedItems.filter((item) => item.status === 'APPROVED'));
         const receivedGroups = await Promise.all(ownedItems.map((item) => requestApi.forItem(item.id, currentUserId)));
+        const loadedAt = Date.now();
+        ownedItems.forEach((item) => requestGroupsLoadedAt.current.set(item.id, loadedAt));
         const requestById = new Map<number, RequestResponse>();
         [...sentRequests, ...receivedGroups.flat()].forEach((request) => {
           requestById.set(request.id, request);
@@ -365,11 +376,16 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
 
   useEffect(() => {
     if (!selectedItemId || selectedItemDonorId !== currentUserId) return;
+    const loadedAt = requestGroupsLoadedAt.current.get(selectedItemId);
+    if (loadedAt && Date.now() - loadedAt < CHAT_POLL_INTERVAL_MS) return;
     let active = true;
     requestApi
       .forItem(selectedItemId, currentUserId)
       .then((requests) => {
-        if (active) setConversations((current) => mergeConversationRequests(current, requests));
+        if (active) {
+          requestGroupsLoadedAt.current.set(selectedItemId, Date.now());
+          setConversations((current) => mergeConversationRequests(current, requests));
+        }
       })
       .catch(() => {
         // Danh sách hiện tại vẫn dùng được; Backend sẽ kiểm tra lại khi xác nhận chọn.
@@ -420,24 +436,35 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     let firstLoad = true;
     let pollingId: number | undefined;
     let afterId: number | undefined;
+    let pollCount = 1;
     const loadMessages = async () => {
+      if (document.visibilityState === 'hidden') {
+        pollingId = window.setTimeout(loadMessages, CHAT_POLL_INTERVAL_MS);
+        return;
+      }
       if (firstLoad) setLoadingMessages(true);
       try {
+        const shouldRefreshDetail = shouldRefreshConversationDetail(pollCount);
+        pollCount += 1;
         const [response, detail] = await Promise.all([
           chatApi.list(selectedRequestId, afterId),
-          requestApi.get(selectedRequestId, currentUserId),
+          shouldRefreshDetail
+            ? requestApi.get(selectedRequestId, currentUserId).catch(() => null)
+            : Promise.resolve(null),
         ]);
         if (!active) return;
-        setConversations((current) => current.map((entry) => entry.request.id === detail.id ? { ...entry, request: detail } : entry));
+        if (detail) {
+          setConversations((current) => current.map((entry) => entry.request.id === detail.id ? { ...entry, request: detail } : entry));
+        }
         if (response.length) afterId = Math.max(afterId ?? 0, ...response.map((entry) => entry.id));
-        setMessages((current) => [...new Map([...current, ...response].map((entry) => [entry.id, entry])).values()].sort((a, b) => a.id - b.id));
+        setMessages((current) => mergeChatMessages(current, response));
         setMessageError('');
       } catch {
         if (active) setMessageError('Không tải được tin nhắn. Vui lòng thử lại.');
       } finally {
         if (active && firstLoad) setLoadingMessages(false);
         firstLoad = false;
-        if (active) pollingId = window.setTimeout(loadMessages, 5_000);
+        if (active) pollingId = window.setTimeout(loadMessages, CHAT_POLL_INTERVAL_MS);
       }
     };
 
@@ -720,7 +747,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       (!content && !shareItemId && !chatImage) ||
       selectedRequestId === null ||
       !chatEnabled ||
-      sending
+      sendInFlight.current
     )
       return;
     const refItemId = shareItemId ? Number(shareItemId) : undefined;
@@ -742,6 +769,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       return;
     }
 
+    sendInFlight.current = true;
     setSending(true);
     setMessageError('');
     try {
@@ -770,6 +798,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       if (activeRequestId.current !== selectedRequestId) return;
       setMessageError(apiError.message || 'Không gửi được tin nhắn. Vui lòng thử lại.');
     } finally {
+      sendInFlight.current = false;
       setSending(false);
     }
   };
@@ -932,6 +961,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   setReportOpen(false);
                   setReportNotice('');
                   setDisputeNotice('');
+                  navigate(requestConversationPath(request.id));
                 };
                 return (
                   <article
@@ -1370,6 +1400,15 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 messages.map((entry) => {
                   const mine = entry.senderId === currentUserId;
                   const system = entry.kind.toUpperCase() === 'SYSTEM';
+                  if (entry.moderation && entry.moderation !== 'PASS') {
+                    return (
+                      <div key={entry.id} className="flex justify-center">
+                        <span className="max-w-xl rounded-md bg-red-50 px-3 py-2 text-center text-xs text-error">
+                          {entry.blockedReason || 'Tin nhắn này không vượt qua kiểm duyệt.'}
+                        </span>
+                      </div>
+                    );
+                  }
                   if (system) {
                     return (
                       <div key={entry.id} className="flex justify-center">
@@ -1383,7 +1422,13 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         {entry.itemCard ? (
                           <button type="button" className="mb-2 flex w-full items-center gap-3 rounded-md bg-white p-3 text-left text-text-primary" onClick={() => navigate(`/items/${entry.itemCard!.id}`)}>
                             <ItemImage src={entry.itemCard.imageUrl ?? undefined} alt={entry.itemCard.title} className="size-14 rounded-md object-cover" />
-                            <span><strong className="block">{entry.itemCard.title}</strong><StatusBadge status={entry.itemCard.status} /></span>
+                            <span className="min-w-0">
+                              <strong className="block break-words">{entry.itemCard.title}</strong>
+                              <span className="mt-1 flex flex-wrap gap-1.5">
+                                <TypeBadge type={entry.itemCard.offerType === 'GIVE' ? 'gift' : 'trade'} />
+                                <StatusBadge status={entry.itemCard.status} />
+                              </span>
+                            </span>
                           </button>
                         ) : null}
                         {entry.mediaId ? (
@@ -1401,6 +1446,11 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                           </a>
                         ) : null}
                         {entry.content ? <p className="whitespace-pre-wrap break-words">{entry.content}</p> : null}
+                        {messageOfferStatusLabel(entry.offerStatus) ? (
+                          <span className={`mt-1.5 inline-flex rounded-sm px-2 py-0.5 text-[10px] font-semibold ${mine ? 'bg-white/15 text-white' : 'bg-primary-faint text-primary'}`}>
+                            {messageOfferStatusLabel(entry.offerStatus)}
+                          </span>
+                        ) : null}
                         <span className={`mt-1 block text-[10px] ${mine ? 'text-white/65' : 'text-text-muted'}`}>{new Date(entry.createdAt).toLocaleString('vi-VN')}</span>
                       </div>
                     </div>

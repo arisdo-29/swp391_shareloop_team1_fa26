@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { actions, selectCurrentUser } from '../app/store';
@@ -293,7 +293,9 @@ function AppShellContent() {
         ) : null}
       </header>
       <main id="main-content" className="flex-1">
-        <Outlet />
+        <Suspense fallback={<div className="min-h-[620px]" aria-hidden="true" />}>
+          <Outlet />
+        </Suspense>
       </main>
       {/* Quản trị viên chỉ làm việc trong khu vực admin nên không hiện chân trang dành cho người dùng. */}
       {!isAdmin ? (

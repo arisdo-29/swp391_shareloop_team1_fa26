@@ -3,25 +3,29 @@ import { useSearchParams } from 'react-router-dom';
 import { Button, EmptyState, Icon, PageHeader, ProductCard } from '../../components/ui';
 import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
-import type { Item, ItemCondition, ItemType } from '../../types/domain';
-import { catalogApi } from '../../services/catalogApi';
-import { itemApi } from '../../services/itemApi';
+import type { ItemCondition, ItemType } from '../../types/domain';
+import { catalogApi, type CategoryResponse } from '../../services/catalogApi';
+import { itemApi, type ItemResponse } from '../../services/itemApi';
 import type { ApiError } from '../../services/http';
 import {
   toAreaOptions,
-  toCategoryIdByName,
-  toCategoryNames,
+  toCategoryNameMap,
   toFeItem,
   type AreaOption,
 } from '../../services/mappers';
+import {
+  positiveIntegerParam,
+  resetBrowseSearchParams,
+  updateBrowseSearchParams,
+  type BrowseFilterKey,
+} from '../../utils/browseFilters';
 
 const PAGE_SIZE = 20;
 
 export function Browse() {
-  const [params] = useSearchParams();
-  const [items, setItems] = useState<Item[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [categoryIds, setCategoryIds] = useState<Map<string, number>>(new Map());
+  const [params, setParams] = useSearchParams();
+  const [itemResponses, setItemResponses] = useState<ItemResponse[]>([]);
+  const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [districts, setDistricts] = useState<AreaOption[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [itemsLoading, setItemsLoading] = useState(true);
@@ -29,14 +33,16 @@ export function Browse() {
   const [itemsError, setItemsError] = useState('');
   const [catalogReloadKey, setCatalogReloadKey] = useState(0);
   const [itemsReloadKey, setItemsReloadKey] = useState(0);
-  const [q, setQ] = useState(params.get('q') ?? '');
+  const q = params.get('q') ?? '';
   const typeParam = params.get('type');
-  const [type, setType] = useState<ItemType | ''>(
-    typeParam === 'gift' || typeParam === 'trade' ? typeParam : '',
-  );
-  const [category, setCategory] = useState(params.get('category') ?? '');
-  const [condition, setCondition] = useState<ItemCondition | ''>('');
-  const [district, setDistrict] = useState(params.get('district') ?? '');
+  const type: ItemType | '' = typeParam === 'gift' || typeParam === 'trade' ? typeParam : '';
+  const categoryId = positiveIntegerParam(params.get('categoryId'));
+  const category = categoryId ? String(categoryId) : '';
+  const conditionParam = params.get('condition');
+  const condition: ItemCondition | '' = (CONDITIONS as readonly string[]).includes(conditionParam ?? '')
+    ? conditionParam as ItemCondition
+    : '';
+  const district = params.get('district') ?? '';
   const [mobileFilters, setMobileFilters] = useState(false);
   const [page, setPage] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
@@ -48,15 +54,17 @@ export function Browse() {
     Promise.all([catalogApi.categories(), catalogApi.areas()])
       .then(([categoryData, areaData]) => {
         if (!active) return;
-        setCategories(toCategoryNames(categoryData));
-        setCategoryIds(toCategoryIdByName(categoryData));
+        setCategories(
+          categoryData
+            .filter((entry) => !entry.restricted)
+            .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'vi')),
+        );
         setDistricts(toAreaOptions(areaData));
       })
       .catch((caught) => {
         if (!active) return;
         const apiError = caught as ApiError;
         setCategories([]);
-        setCategoryIds(new Map());
         setDistricts([]);
         setCatalogError(apiError.message || 'Không tải được danh mục hoặc khu vực.');
       })
@@ -70,11 +78,9 @@ export function Browse() {
   }, [catalogReloadKey]);
 
   useEffect(() => {
-    if (catalogLoading) return;
     let active = true;
     setItemsLoading(true);
     setItemsError('');
-    const categoryId = category ? categoryIds.get(category) : undefined;
     const parsedAreaId = district ? Number(district) : undefined;
     itemApi
       .list({
@@ -89,16 +95,14 @@ export function Browse() {
       })
       .then((response) => {
         if (!active) return;
-        const categoryNames = new Map(Array.from(categoryIds.entries(), ([name, id]) => [id, name]));
-        const areaNames = new Map(districts.map((area) => [area.id, area.label]));
-        setItems(response.items.map((item) => toFeItem(item, categoryNames, areaNames)));
+        setItemResponses(response.items);
         setPage(response.page);
         setTotalElements(response.totalElements);
       })
       .catch((caught) => {
         if (!active) return;
         const apiError = caught as ApiError;
-        setItems([]);
+        setItemResponses([]);
         setTotalElements(0);
         setItemsError(apiError.message || 'Không tải được danh sách bài đăng.');
       })
@@ -108,18 +112,29 @@ export function Browse() {
     return () => {
       active = false;
     };
-  }, [catalogLoading, category, categoryIds, district, districts, itemsReloadKey, page, q]);
+  }, [categoryId, district, itemsReloadKey, page, q]);
 
   useEffect(() => {
     if (!district || districts.some((area) => String(area.id) === district)) return;
     const matched = districts.find((area) => area.label === district || area.name === district);
     if (matched) {
-      setDistrict(String(matched.id));
+      setParams(updateBrowseSearchParams(params, { district: String(matched.id) }), { replace: true });
       setPage(0);
     }
-  }, [district, districts]);
+  }, [district, districts, params, setParams]);
+
+  const setFilter = (key: BrowseFilterKey, value: string) => {
+    setParams(updateBrowseSearchParams(params, { [key]: value }));
+    setPage(0);
+  };
 
   const selectedDistrictLabel = districts.find((area) => String(area.id) === district)?.label ?? district;
+
+  const items = useMemo(() => {
+    const categoryNames = toCategoryNameMap(categories);
+    const areaNames = new Map(districts.map((area) => [area.id, area.label]));
+    return itemResponses.map((item) => toFeItem(item, categoryNames, areaNames));
+  }, [categories, districts, itemResponses]);
 
   const results = useMemo(
     () =>
@@ -129,11 +144,7 @@ export function Browse() {
     [items, type, condition],
   );
   const reset = () => {
-    setQ('');
-    setType('');
-    setCategory('');
-    setCondition('');
-    setDistrict('');
+    setParams(resetBrowseSearchParams(params));
     setPage(0);
   };
   const activeFilters = [
@@ -141,21 +152,25 @@ export function Browse() {
       ? {
           key: 'type',
           label: type === 'gift' ? 'Cho tặng' : 'Trao đổi',
-          clear: () => setType('' as ItemType | ''),
+          clear: () => setFilter('type', ''),
         }
       : null,
-    category
-      ? { key: 'category', label: category, clear: () => { setCategory(''); setPage(0); } }
+    categoryId
+      ? {
+          key: 'category',
+          label: categories.find((entry) => entry.id === categoryId)?.name ?? `Danh mục #${categoryId}`,
+          clear: () => setFilter('categoryId', ''),
+        }
       : null,
     condition
       ? {
           key: 'condition',
           label: conditionLabel[condition],
-          clear: () => setCondition('' as ItemCondition | ''),
+          clear: () => setFilter('condition', ''),
         }
       : null,
     district
-      ? { key: 'district', label: selectedDistrictLabel, clear: () => { setDistrict(''); setPage(0); } }
+      ? { key: 'district', label: selectedDistrictLabel, clear: () => setFilter('district', '') }
       : null,
   ].filter(Boolean) as Array<{ key: string; label: string; clear: () => void }>;
 
@@ -166,8 +181,7 @@ export function Browse() {
         <input
           value={q}
           onChange={(e) => {
-            setQ(e.target.value);
-            setPage(0);
+            setFilter('q', e.target.value);
           }}
           placeholder="Tìm tên món đồ..."
           className="min-w-0 flex-1 border-0 bg-transparent px-2.5 text-sm outline-none placeholder:text-text-muted/70"
@@ -180,10 +194,10 @@ export function Browse() {
               key={filter.key}
               type="button"
               onClick={filter.clear}
-              className="inline-flex h-7 items-center gap-1 rounded-full border border-primary/15 bg-primary-faint px-2.5 text-xs font-semibold text-primary transition hover:border-primary/40 hover:bg-primary-soft"
+              className="inline-flex min-h-7 max-w-full items-start gap-1.5 rounded-full border border-primary/15 bg-primary-faint px-2.5 py-1.5 text-left text-xs font-semibold leading-4 text-primary transition hover:border-primary/40 hover:bg-primary-soft"
             >
-              {filter.label}
-              <Icon name="close" className="size-3" />
+              <span className="min-w-0 break-words">{filter.label}</span>
+              <Icon name="close" className="mt-0.5 size-3 shrink-0" />
             </button>
           ))}
         </div>
@@ -192,7 +206,7 @@ export function Browse() {
         <FilterSelect
           label="Hình thức"
           value={type}
-          onChange={(e) => setType(e.target.value as ItemType | '')}
+          onChange={(e) => setFilter('type', e.target.value)}
         >
           <option value="">Tất cả</option>
           <option value="gift">Cho tặng</option>
@@ -201,22 +215,27 @@ export function Browse() {
         <FilterSelect
           label="Danh mục"
           value={category}
+          title={categories.find((entry) => entry.id === categoryId)?.name}
           onChange={(e) => {
-            setCategory(e.target.value);
-            setPage(0);
+            setFilter('categoryId', e.target.value);
           }}
         >
           <option value="">Tất cả</option>
           {catalogLoading ? <option disabled>Đang tải danh mục...</option> : null}
           {!catalogLoading && !categories.length ? <option disabled>Chưa có danh mục</option> : null}
-          {categories.map((c) => (
-            <option key={c}>{c}</option>
+          {categories.map((entry) => (
+            <option key={entry.id} value={entry.id}>{entry.name}</option>
           ))}
         </FilterSelect>
+        {categoryId ? (
+          <p className="-mt-1 break-words px-1 text-xs leading-5 text-text-muted">
+            Đã chọn: <span className="font-semibold text-text-secondary">{categories.find((entry) => entry.id === categoryId)?.name ?? `Danh mục #${categoryId}`}</span>
+          </p>
+        ) : null}
         <FilterSelect
           label="Tình trạng"
           value={condition}
-          onChange={(e) => setCondition(e.target.value as ItemCondition | '')}
+          onChange={(e) => setFilter('condition', e.target.value)}
         >
           <option value="">Tất cả</option>
           {CONDITIONS.map((c) => (
@@ -229,8 +248,7 @@ export function Browse() {
           label="Khu vực"
           value={district}
           onChange={(e) => {
-            setDistrict(e.target.value);
-            setPage(0);
+            setFilter('district', e.target.value);
           }}
         >
           <option value="">Tất cả quận</option>

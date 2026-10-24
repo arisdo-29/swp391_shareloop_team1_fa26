@@ -36,14 +36,61 @@ export interface CategoryAttributeResponse {
   sortOrder: number;
 }
 
+const CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function createCachedResource<T>(load: () => Promise<T>) {
+  let cached: { value: T; expiresAt: number } | null = null;
+  let inFlight: Promise<T> | null = null;
+  let version = 0;
+
+  return {
+    read() {
+      if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.value);
+      if (inFlight) return inFlight;
+
+      const requestVersion = version;
+      const request = load()
+        .then((value) => {
+          if (requestVersion === version) {
+            cached = { value, expiresAt: Date.now() + CATALOG_CACHE_TTL_MS };
+          }
+          return value;
+        })
+        .finally(() => {
+          if (inFlight === request) inFlight = null;
+        });
+      inFlight = request;
+      return request;
+    },
+    invalidate() {
+      version += 1;
+      cached = null;
+      inFlight = null;
+    },
+  };
+}
+
+const areasResource = createCachedResource(async () => {
+  const { data } = await http.get<AreaResponse[]>(catalogApiEndpoints.areas);
+  return data;
+});
+
+const categoriesResource = createCachedResource(async () => {
+  const { data } = await http.get<CategoryResponse[]>(catalogApiEndpoints.categories);
+  return data;
+});
+
+export function invalidateCatalogCache(resource: 'areas' | 'categories' | 'all' = 'all') {
+  if (resource === 'areas' || resource === 'all') areasResource.invalidate();
+  if (resource === 'categories' || resource === 'all') categoriesResource.invalidate();
+}
+
 export const catalogApi = {
-  async areas(): Promise<AreaResponse[]> {
-    const { data } = await http.get<AreaResponse[]>(catalogApiEndpoints.areas);
-    return data;
+  areas(): Promise<AreaResponse[]> {
+    return areasResource.read();
   },
-  async categories(): Promise<CategoryResponse[]> {
-    const { data } = await http.get<CategoryResponse[]>(catalogApiEndpoints.categories);
-    return data;
+  categories(): Promise<CategoryResponse[]> {
+    return categoriesResource.read();
   },
   async category(id: number): Promise<CategoryResponse> {
     const { data } = await http.get<CategoryResponse>(catalogApiEndpoints.category(id));

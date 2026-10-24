@@ -14,8 +14,10 @@ import {
 } from '../../components/ui';
 import type { Item, ItemType, User } from '../../types/domain';
 import { catalogApi } from '../../services/catalogApi';
-import { itemApi } from '../../services/itemApi';
+import type { AreaResponse, CategoryResponse } from '../../services/catalogApi';
+import { itemApi, type ItemResponse } from '../../services/itemApi';
 import { toAreaNameMap, toAreaOptions, toCategoryNameMap, toFeItem, type AreaOption } from '../../services/mappers';
+import { categoryBrowsePath } from '../../utils/browseFilters';
 import { HomeLifecycle, HomeProcess } from './HomeCommunity';
 import { HomeDiscoveryRail, HomeMotion } from './HomeMotion';
 import './home-content.css';
@@ -24,12 +26,6 @@ const newItemFilters: Array<{ value: 'all' | ItemType; label: string }> = [
   { value: 'all', label: 'Tất cả' },
   { value: 'gift', label: 'Cho tặng' },
   { value: 'trade', label: 'Trao đổi' },
-];
-const quickLinks = [
-  { label: 'Đồ cho tặng', to: '/browse?type=gift' },
-  { label: 'Đồ điện tử', to: '/browse?category=Đồ%20điện%20tử' },
-  { label: 'Sách', to: '/browse?category=Sách' },
-  { label: 'Bình Thạnh', to: '/browse?district=Bình%20Thạnh' },
 ];
 
 function SectionHeading({
@@ -81,6 +77,7 @@ function HomeProductCard({ item, owner, tradeFor }: { item: Item; owner?: User; 
         <ItemImage
           src={item.images[0]}
           alt={item.title}
+          loading="lazy"
           className="size-full object-cover transition duration-500 group-hover:scale-[1.03]"
         />
         <span className="absolute left-3 top-3">
@@ -180,6 +177,7 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
             key={`background-${item.id}`}
             src={item.images[0]}
             alt=""
+            loading={index === activeIndex ? 'eager' : 'lazy'}
             className={`absolute inset-0 size-full object-cover transition-all duration-[900ms] ease-out ${
               index === activeIndex
                 ? 'scale-[1.035] opacity-100 blur-[1px] brightness-[0.88] contrast-[0.92] saturate-[0.95]'
@@ -211,6 +209,7 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
                 key={`main-${item.id}`}
                 src={item.images[0]}
                 alt={index === activeIndex ? item.title : ''}
+                loading={index === activeIndex ? 'eager' : 'lazy'}
                 className={`absolute inset-0 size-full object-cover transition-all duration-700 ease-out ${
                   index === activeIndex
                     ? 'scale-100 opacity-100'
@@ -258,7 +257,12 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
                       : 'scale-95 border-white/35 opacity-60 hover:scale-100 hover:border-white/70 hover:opacity-100'
                   }`}
                 >
-                  <ItemImage src={item.images[0]} alt={item.title} className="size-full object-cover" />
+                  <ItemImage
+                    src={item.images[0]}
+                    alt={item.title}
+                    loading={isActive ? 'eager' : 'lazy'}
+                    className="size-full object-cover"
+                  />
                 </button>
               );
             })}
@@ -272,9 +276,9 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
 export function Home() {
   const currentUser = useAppSelector(selectCurrentUser);
   const navigate = useNavigate();
-  const [items, setItems] = useState<Item[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [districtOptions, setDistrictOptions] = useState<AreaOption[]>([]);
+  const [itemResponses, setItemResponses] = useState<ItemResponse[]>([]);
+  const [categoryResponses, setCategoryResponses] = useState<CategoryResponse[]>([]);
+  const [areaResponses, setAreaResponses] = useState<AreaResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -287,16 +291,22 @@ export function Home() {
     let active = true;
     setLoading(true);
     setLoadError('');
-    Promise.all([catalogApi.categories(), catalogApi.areas(), itemApi.list({ page: 0, size: 100 })])
-      .then(([categoryData, areaData, response]) => {
-        if (!active) return;
-        setCategories(categoryData.map((entry) => entry.name));
-        setDistrictOptions(toAreaOptions(areaData));
-        setItems(response.items.map((entry) => toFeItem(entry, toCategoryNameMap(categoryData), toAreaNameMap(areaData))));
+
+    void catalogApi.categories().then((categoryData) => {
+      if (active) setCategoryResponses(categoryData);
+    }).catch(() => undefined);
+
+    void catalogApi.areas().then((areaData) => {
+      if (active) setAreaResponses(areaData);
+    }).catch(() => undefined);
+
+    void itemApi.list({ page: 0, size: 100 })
+      .then((response) => {
+        if (active) setItemResponses(response.items);
       })
       .catch((caught: { message?: string }) => {
         if (!active) return;
-        setItems([]);
+        setItemResponses([]);
         setLoadError(caught.message || 'Không tải được bài đăng.');
       })
       .finally(() => {
@@ -304,6 +314,21 @@ export function Home() {
       });
     return () => { active = false; };
   }, [reloadKey]);
+
+  const categories = useMemo(
+    () =>
+      categoryResponses
+        .filter((entry) => !entry.restricted)
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'vi')),
+    [categoryResponses],
+  );
+  const districtOptions: AreaOption[] = useMemo(() => toAreaOptions(areaResponses), [areaResponses]);
+  const categoryNameMap = useMemo(() => toCategoryNameMap(categoryResponses), [categoryResponses]);
+  const areaNameMap = useMemo(() => toAreaNameMap(areaResponses), [areaResponses]);
+  const items = useMemo(
+    () => itemResponses.map((entry) => toFeItem(entry, categoryNameMap, areaNameMap)),
+    [areaNameMap, categoryNameMap, itemResponses],
+  );
 
   const approved = useMemo(
     () =>
@@ -326,6 +351,16 @@ export function Home() {
     id: area.id,
     count: approved.filter((item) => item.district === area.label).length,
   }));
+  const quickLinks = [
+    { label: 'Đồ cho tặng', to: '/browse?type=gift' },
+    ...categories.slice(0, 2).map((category) => ({
+      label: category.name,
+      to: categoryBrowsePath(category.id),
+    })),
+    ...(districtOptions[0]
+      ? [{ label: districtOptions[0].label, to: `/browse?district=${districtOptions[0].id}` }]
+      : []),
+  ];
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -410,14 +445,14 @@ export function Home() {
           <SectionHeading title="Khám phá theo danh mục" description="Tìm nhanh những món đồ đang được chia sẻ trong cộng đồng." href="/browse" />
           <HomeDiscoveryRail label="Khám phá theo danh mục" variant="categories">
             {categories.map((category, index) => {
-              const categoryItems = approved.filter((item) => item.category === category);
+              const categoryItems = approved.filter((item) => item.categoryId === category.id);
               return (
-                <Link key={category} to={`/browse?category=${encodeURIComponent(category)}`} className="home-category group">
+                <Link key={category.id} to={categoryBrowsePath(category.id)} className="home-category group">
                   <Icon name="arrow" className="home-category-arrow" />
                   <span className="home-category-icon">
                     <Icon name={categoryIcons[index % categoryIcons.length]} />
                   </span>
-                  <span className="home-category-label">{category}</span>
+                  <span className="home-category-label">{category.name}</span>
                   <span className="home-category-count">{categoryItems.length} món đồ</span>
                 </Link>
               );

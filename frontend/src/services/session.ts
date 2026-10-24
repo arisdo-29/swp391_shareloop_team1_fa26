@@ -6,7 +6,10 @@ import { catalogApi } from './catalogApi';
 import { toAreaOptions, toFeUser } from './mappers';
 
 export async function fetchSessionUser() {
-  const [profile, areas] = await Promise.all([userApi.getMe(), catalogApi.areas()]);
+  const profile = await userApi.getMe();
+  if (profile.isAdmin || profile.areaId === null) return toFeUser(profile);
+
+  const areas = await catalogApi.areas();
   const district = toAreaOptions(areas).find((area) => area.id === profile.areaId)?.label ?? '';
   return toFeUser(profile, district);
 }
