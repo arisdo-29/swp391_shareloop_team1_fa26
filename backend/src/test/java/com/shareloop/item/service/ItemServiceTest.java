@@ -17,6 +17,7 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.dto.CreateItemRequest;
 import com.shareloop.item.dto.ItemResponse;
+import com.shareloop.item.dto.UpdateItemRequest;
 import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
@@ -96,6 +97,63 @@ class ItemServiceTest {
                 .thenReturn(ModerationResult.pass());
         lenient().when(reputationService.getRank(10L)).thenReturn(Rank.BRONZE);
         lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_BRONZE)).thenReturn(3);
+        // Mock mặc định trả false nên phải cho phép đăng bài, riêng test 0 sao sẽ ghi đè
+        lenient().when(reputationService.canPost(anyLong())).thenReturn(true);
+    }
+
+    @Test
+    void createItem_whenTrustStarsZero_throwsReputationBlockedAndHoldsNoFee() {
+        // given
+        when(reputationService.canPost(10L)).thenReturn(false);
+        CreateItemRequest request = new CreateItemRequest(
+                1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
+
+        // when
+        assertThatThrownBy(() -> itemService.createItem(10L, request))
+                // then
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_REPUTATION_BLOCKED);
+        verify(itemRepository, never()).saveAndFlush(any(Item.class));
+        verifyNoInteractions(postFeeService, contentModerationService, mediaService);
+    }
+
+    @Test
+    void createItem_whenTrustStarsRemain_createsItemAndHoldsFee() {
+        // given
+        imageLimits();
+        when(reputationService.canPost(10L)).thenReturn(true);
+        when(itemRepository.saveAndFlush(any(Item.class))).thenAnswer(invocation -> {
+            Item item = invocation.getArgument(0);
+            ReflectionTestUtils.setField(item, "id", 100L);
+            return item;
+        });
+        CreateItemRequest request = new CreateItemRequest(
+                1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
+
+        // when
+        ItemResponse response = itemService.createItem(10L, request);
+
+        // then
+        assertThat(response.id()).isEqualTo(100L);
+        verify(postFeeService).holdPostFee(100L, 10L);
+    }
+
+    @Test
+    void updateItem_whenTrustStarsZero_throwsReputationBlockedAndHoldsNoFee() {
+        // given
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        ReflectionTestUtils.setField(item, "id", 5L);
+        when(itemRepository.findById(5L)).thenReturn(Optional.of(item));
+        when(reputationService.canPost(10L)).thenReturn(false);
+        UpdateItemRequest request = new UpdateItemRequest(
+                1L, 1L, OfferType.GIVE, "Sách mới", "Mô tả mới", null, ItemCondition.NEW, null, null, null, null, null);
+
+        // when
+        assertThatThrownBy(() -> itemService.updateItem(5L, 10L, request))
+                // then
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_REPUTATION_BLOCKED);
+        verifyNoInteractions(postFeeService);
     }
 
     @Test

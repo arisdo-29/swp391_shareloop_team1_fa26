@@ -53,6 +53,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -282,6 +283,79 @@ class ReportServiceTest {
     private static CreateReportRequest itemReport(Long itemId) {
         return new CreateReportRequest(
                 TargetType.ITEM, itemId, null, null, null, ReportReason.PROHIBITED_ITEM, "Bài đăng hàng cấm");
+    }
+
+    // ==================== NOT_AS_DESCRIBED TỰ ĐỘNG (FR-85, BR-R05) ====================
+
+    @Test
+    void openNotAsDescribedReport_whenAwaitingHandover_createsDisputeForDonor() {
+        // given: bên nhận trả lời trước nên giao dịch mới ở AWAITING_HANDOVER, chưa COMPLETED
+        ReportService.RequestSnapshot snapshot =
+                new ReportService.RequestSnapshot(100L, 200L, 10L, "AWAITING_HANDOVER", null);
+        doReturn(snapshot).when(reportService).findRequest(100L);
+        when(itemQueryService.getSummary(200L))
+                .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.APPROVED));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> {
+            Report saved = inv.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 5L);
+            return saved;
+        });
+
+        // when
+        reportService.openNotAsDescribedReport(10L, 100L, "Máy không bật được");
+
+        // then
+        ArgumentCaptor<Report> captor = ArgumentCaptor.forClass(Report.class);
+        verify(reportRepository).save(captor.capture());
+        Report report = captor.getValue();
+        assertThat(report.getReporterId()).isEqualTo(10L);
+        assertThat(report.getTargetType()).isEqualTo(TargetType.REQUEST);
+        assertThat(report.getReason()).isEqualTo(ReportReason.NOT_AS_DESCRIBED);
+        assertThat(report.getDescription()).isEqualTo("Máy không bật được");
+        assertThat(report.getTargetUserId()).isEqualTo(20L);
+        assertThat(report.getRequestId()).isEqualTo(100L);
+        assertThat(report.getStatus()).isEqualTo(ReportStatus.AWAITING_RESPONSE);
+        verify(notificationService).notify(eq(20L), eq("DISPUTE_OPENED"), any(), any(), eq("/me/disputes/5"));
+    }
+
+    @Test
+    void openNotAsDescribedReport_whenCalledTwice_createsOnlyOneReport() {
+        // given: lần gọi thứ hai thấy report của bên nhận đã có
+        when(reportRepository.existsByReporterIdAndTargetTypeAndRequestId(10L, TargetType.REQUEST, 100L))
+                .thenReturn(true);
+
+        // when
+        reportService.openNotAsDescribedReport(10L, 100L, "Máy không bật được");
+
+        // then
+        verify(reportRepository, never()).save(any(Report.class));
+        verify(notificationService, never()).notify(anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    void openNotAsDescribedReport_whenNotTheReceiver_throwsNotAParty() {
+        // given
+        ReportService.RequestSnapshot snapshot =
+                new ReportService.RequestSnapshot(100L, 200L, 10L, "AWAITING_HANDOVER", null);
+        doReturn(snapshot).when(reportService).findRequest(100L);
+
+        // when
+        assertThatThrownBy(() -> reportService.openNotAsDescribedReport(99L, 100L, "Lý do"))
+                // then
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(ReportErrorCode.DISPUTE_NOT_A_PARTY));
+        verify(reportRepository, never()).save(any(Report.class));
+    }
+
+    @Test
+    void hasReportForRequest_returnsRepositoryAnswer() {
+        // given
+        when(reportRepository.existsByRequestId(100L)).thenReturn(true);
+
+        // when và then
+        assertThat(reportService.hasReportForRequest(100L)).isTrue();
+        assertThat(reportService.hasReportForRequest(101L)).isFalse();
     }
 
     // ==================== DISPUTE TESTS (#112) ====================

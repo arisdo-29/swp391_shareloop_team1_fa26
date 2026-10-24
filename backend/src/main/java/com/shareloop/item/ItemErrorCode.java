@@ -23,6 +23,7 @@ public enum ItemErrorCode implements ErrorCode {
     ITEM_REMOVE_NOT_ALLOWED(HttpStatus.CONFLICT, "Bài đăng đã được giữ chỗ hoặc không thể gỡ."),
     ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED(
             HttpStatus.CONFLICT, "Bài Cho tặng không chuyển được sang Trao đổi. Hãy đăng bài Trao đổi mới."),
+    ITEM_REPUTATION_BLOCKED(HttpStatus.FORBIDDEN, "Tài khoản có 0 sao uy tín, không thể đăng bài mới."),
     ITEM_MODERATION_BLOCKED(HttpStatus.UNPROCESSABLE_CONTENT, "Nội dung bài đăng không qua kiểm duyệt tầng 1."),
     ITEM_INVALID_STATUS_TRANSITION(HttpStatus.CONFLICT, "Không thể chuyển trạng thái bài đăng.");
 

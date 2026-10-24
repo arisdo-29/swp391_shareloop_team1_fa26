@@ -119,6 +119,23 @@ Endpoint `POST /disputes/{disputeId}/response` hiện có vẫn nhận `{note, e
 trả `200` và giữ các mã lỗi `DISPUTE_*` riêng. Cả hai endpoint đều gắn bằng chứng riêng tư
 qua cùng gateway và chuyển `AWAITING_RESPONSE` về `OPEN` sau khi giải trình, đúng mục 5 (Sơ đồ trạng thái) trong Luồng hoạt động & ERD.
 
+### Report tự mở khi bên nhận chọn "Không đúng mô tả" (FR-85, BR-R05)
+
+Không có endpoint mới. Khi bên nhận gọi `POST /api/v1/requests/{id}/confirm-handover` với `asDescribed = false`,
+module request phát event `NotAsDescribedReportedEvent`. Listener trong module report
+(`@TransactionalEventListener(AFTER_COMMIT)`, chạy trong transaction mới) gọi
+`ReportService.openNotAsDescribedReport(receiverId, requestId, reason)`:
+
+- Tạo đúng 1 report: `targetType = REQUEST`, `reason = NOT_AS_DESCRIBED`, `stage = AFTER`, `status = AWAITING_RESPONSE`,
+  `description` là lý do bên nhận nhập, `targetUserId` là chủ bài, `responseDueAt` theo `DISPUTE_RESPONSE_DAYS`.
+  Không thêm bảng hay cột.
+- Khác `POST /requests/{requestId}/disputes`: không đòi giao dịch đã `COMPLETED` và không xét cửa sổ khiếu nại
+  7 ngày, vì bên nhận có thể trả lời khi giao dịch còn `AWAITING_HANDOVER`.
+- Chống trùng: bên nhận đã có report `REQUEST` cho giao dịch này thì bỏ qua, không lỗi.
+- Gửi thông báo `DISPUTE_OPENED` cho chủ bài, dẫn tới `/me/disputes/{reportId}` để giải trình.
+- Chủ bài và Admin xử lý như khiếu nại thường (`POST /disputes/{disputeId}/response`, `.../conclude`).
+- `ReportService.hasReportForRequest(requestId)` cho job tự hoàn tất ở module request bỏ qua giao dịch đã có report (FR-87).
+
 Lỗi ghi bổ sung: `400 VALIDATION_FAILED`; `403 REPORT_NOT_PARTICIPANT` (giải trình qua `/reports`)
 hoặc `DISPUTE_NOT_A_PARTY` (tạo báo cáo `REQUEST`);
 `409 REPORT_RESPONSE_NOT_ALLOWED`/`DISPUTE_REQUEST_NOT_COMPLETED`;

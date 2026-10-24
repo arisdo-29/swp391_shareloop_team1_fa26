@@ -95,9 +95,13 @@ public class ItemService {
 
     /**
      * Tạo bài đăng mới ở trạng thái PENDING_REVIEW (F07 bước 1).
+     * Người có 0 sao uy tín không được đăng bài (FR-92, BR-U05): ném ITEM_REPUTATION_BLOCKED.
      */
     @Transactional
     public ItemResponse createItem(Long donorId, CreateItemRequest request) {
+        // Kiểm tra sao uy tín đầu tiên để không giữ phí hay kiểm duyệt cho người đã bị khoá quyền đăng bài
+        requireCanPost(donorId);
+
         // SWAP bắt buộc phải có món mong muốn (BR-S02, ck_items_swap_desired)
         if (request.offerType() == OfferType.SWAP
                 && (request.desiredItem() == null || request.desiredItem().isBlank())) {
@@ -180,6 +184,8 @@ public class ItemService {
         if (item.getDonorId() != userId) {
             throw new BusinessException(ItemErrorCode.ITEM_NOT_OWNER);
         }
+        // Bài của người 0 sao đã bị ẩn, sửa sẽ tốn phí sửa cho bài không hiển thị được (BR-U05)
+        requireCanPost(userId);
         if (item.getStatus() == ItemStatus.RESERVED
                 || item.getStatus() == ItemStatus.TRADED
                 || item.getStatus() == ItemStatus.EXPIRED
@@ -306,16 +312,27 @@ public class ItemService {
         return responses;
     }
 
+    /**
+     * Danh sách công khai bài APPROVED còn hiển thị (FR-50). Mọi bộ lọc đều không bắt buộc và kết hợp được với nhau;
+     * lọc ngay ở database để phân trang và tổng số luôn đúng.
+     */
     @Transactional(readOnly = true)
-    public PageResponse<ItemResponse> listPublicItems(Long categoryId, Long areaId, String q, int page, int size) {
-        Page<Item> items = q == null || q.isBlank()
-                ? itemRepository.findVisibleByFilters(
-                        ItemStatus.APPROVED,
-                        categoryId,
-                        areaId,
-                        PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))))
-                : itemRepository.searchVisibleByFilters(categoryId, areaId, q.trim(), PageRequest.of(page, size));
-        return toPageResponse(items);
+    public PageResponse<ItemResponse> listPublicItems(
+            Long categoryId, Long areaId, String q, ItemCondition condition, OfferType offerType, int page, int size) {
+        if (q == null || q.isBlank()) {
+            PageRequest pageRequest =
+                    PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+            return toPageResponse(itemRepository.findVisibleByFilters(
+                    ItemStatus.APPROVED, categoryId, areaId, condition, offerType, pageRequest));
+        }
+        // Truy vấn native so sánh theo chuỗi nên đổi enum sang tên
+        return toPageResponse(itemRepository.searchVisibleByFilters(
+                categoryId,
+                areaId,
+                condition == null ? null : condition.name(),
+                offerType == null ? null : offerType.name(),
+                q.trim(),
+                PageRequest.of(page, size)));
     }
 
     /** Search gateway for the AI assistant; the database remains the source of every returned item. */
@@ -465,6 +482,12 @@ public class ItemService {
                     "Bài đăng cần từ %d đến %d ảnh.".formatted(minImages, maxImages),
                     "images",
                     Map.of("min", minImages, "max", maxImages));
+        }
+    }
+
+    private void requireCanPost(Long userId) {
+        if (!reputationService.canPost(userId)) {
+            throw new BusinessException(ItemErrorCode.ITEM_REPUTATION_BLOCKED);
         }
     }
 
