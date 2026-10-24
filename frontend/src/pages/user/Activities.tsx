@@ -40,6 +40,7 @@ import type { Item, ItemRequest, User } from '../../types/domain';
 import type { ApiError } from '../../services/http';
 import { useWallet } from '../../app/useWallet';
 import { canChat, requestStatusLabel } from '../../utils/request';
+import { reputationBlockedMessage } from '../../utils/apiErrorMessages';
 
 const editQuoteReasonLabel: Record<EditQuoteReason, string> = {
   NOT_YET_APPROVED: 'Bài chưa được duyệt lần đầu',
@@ -188,7 +189,7 @@ export function Activities() {
       setEditQuoteNeedsTopUp(insufficientCredit);
       setEditQuoteError(insufficientCredit
         ? 'Số dư khả dụng không đủ để chỉnh sửa bài. Vui lòng nạp thêm Credit.'
-        : apiError.message || 'Không cập nhật được bài đăng.');
+        : reputationBlockedMessage(apiError.code) ?? (apiError.message || 'Không cập nhật được bài đăng.'));
     } finally {
       setEditSaving(false);
     }

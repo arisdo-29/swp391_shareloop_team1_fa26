@@ -228,6 +228,44 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     expect(await screen.findByText('Bộ giáo trình đại học')).toBeTruthy();
   });
 
+  it('gửi hình thức và tình trạng từ URL lên API, không lọc lại phía trình duyệt', async () => {
+    // book có tình trạng GOOD nhưng URL lọc NEW: server đã lọc nên trang vẫn hiện đúng những gì API trả về
+    renderBrowse(['/browse?type=gift&condition=NEW']);
+
+    await waitFor(() => expect(itemApi.list).toHaveBeenCalledWith({
+      categoryId: undefined,
+      areaId: undefined,
+      q: undefined,
+      condition: 'NEW',
+      offerType: 'GIVE',
+      page: 0,
+      size: 20,
+    }));
+    expect(await screen.findByText(book.title)).toBeTruthy();
+  });
+
+  it('đổi hình thức và tình trạng thì gọi lại API với offerType và condition', async () => {
+    const user = userEvent.setup();
+    renderBrowse();
+    await screen.findByText(book.title);
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Hình thức' }), 'trade');
+    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ offerType: 'SWAP' })));
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Tình trạng' }), 'LIKE_NEW');
+    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offerType: 'SWAP', condition: 'LIKE_NEW', page: 0 }),
+    ));
+  });
+
+  it('không hiện id kỹ thuật khi không tìm thấy tên danh mục', async () => {
+    renderBrowse(['/browse?categoryId=9999']);
+
+    await waitFor(() => expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({ categoryId: 9999 })));
+    await screen.findByText(book.title);
+    expect(screen.queryByText(/Danh mục #/)).toBeNull();
+  });
+
   it('đổi danh mục và đặt lại đồng bộ URL lẫn request API', async () => {
     const user = userEvent.setup();
     renderBrowse();

@@ -22,6 +22,7 @@ import type { ApiError } from '../../services/http';
 import { ReportDialog } from '../../components/ReportDialog';
 
 import { requestStatusLabel } from '../../utils/request';
+import { reputationBlockedMessage } from '../../utils/apiErrorMessages';
 
 export function ProductDetail() {
   const { id } = useParams();
@@ -226,7 +227,9 @@ export function ProductDetail() {
       setRequestSuccess(item.type === 'gift' ? 'Đã gửi yêu cầu nhận.' : 'Đã gửi đề nghị trao đổi.');
     } catch (caught) {
       const apiError = caught as ApiError;
-      setRequestError(apiError.message || 'Không gửi được yêu cầu. Vui lòng thử lại.');
+      setRequestError(
+        reputationBlockedMessage(apiError.code) ?? (apiError.message || 'Không gửi được yêu cầu. Vui lòng thử lại.'),
+      );
     } finally {
       setRequestSubmitting(false);
     }
