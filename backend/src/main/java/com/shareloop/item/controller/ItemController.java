@@ -5,6 +5,8 @@ import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.item.dto.CreateItemRequest;
 import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.dto.UpdateItemRequest;
+import com.shareloop.item.entity.ItemCondition;
+import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.service.ItemService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -98,9 +100,11 @@ public class ItemController {
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Long areaId,
             @RequestParam(required = false) String q,
+            @RequestParam(required = false) ItemCondition condition,
+            @RequestParam(required = false) OfferType offerType,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return itemService.listPublicItems(categoryId, areaId, q, page, size);
+        return itemService.listPublicItems(categoryId, areaId, q, condition, offerType, page, size);
     }
 
     private Long parseUserId(Jwt jwt) {

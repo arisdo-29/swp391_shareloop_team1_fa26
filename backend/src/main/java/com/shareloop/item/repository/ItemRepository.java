@@ -1,7 +1,9 @@
 package com.shareloop.item.repository;
 
 import com.shareloop.item.entity.Item;
+import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
+import com.shareloop.item.entity.OfferType;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,17 +25,23 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     @Query("select i from Item i where i.status = :status and i.isActive = true "
             + "and (:categoryId is null or i.categoryId = :categoryId) "
-            + "and (:areaId is null or i.areaId = :areaId)")
+            + "and (:areaId is null or i.areaId = :areaId) "
+            + "and (:condition is null or i.condition = :condition) "
+            + "and (:offerType is null or i.offerType = :offerType)")
     Page<Item> findVisibleByFilters(
             @Param("status") ItemStatus status,
             @Param("categoryId") Long categoryId,
             @Param("areaId") Long areaId,
+            @Param("condition") ItemCondition condition,
+            @Param("offerType") OfferType offerType,
             Pageable pageable);
 
     @Query(
             value = "SELECT i.* FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
                     + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
                     + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
+                    + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
+                    + "AND (CAST(:offerType AS varchar) IS NULL OR i.offer_type = :offerType) "
                     + "AND f_unaccent(lower(i.title || ' ' || i.description)) LIKE "
                     + "'%' || replace(replace(replace(f_unaccent(lower(:q)), '!', '!!'), '%', '!%'), '_', '!_') "
                     + "|| '%' ESCAPE '!' ORDER BY i.created_at DESC, i.id DESC",
@@ -41,6 +49,8 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
                     "SELECT count(*) FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
                             + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
                             + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
+                            + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
+                            + "AND (CAST(:offerType AS varchar) IS NULL OR i.offer_type = :offerType) "
                             + "AND f_unaccent(lower(i.title || ' ' || i.description)) LIKE "
                             + "'%' || replace(replace(replace(f_unaccent(lower(:q)), '!', '!!'), '%', '!%'), '_', '!_') "
                             + "|| '%' ESCAPE '!'",
@@ -48,6 +58,8 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
     Page<Item> searchVisibleByFilters(
             @Param("categoryId") Long categoryId,
             @Param("areaId") Long areaId,
+            @Param("condition") String condition,
+            @Param("offerType") String offerType,
             @Param("q") String q,
             Pageable pageable);
 
