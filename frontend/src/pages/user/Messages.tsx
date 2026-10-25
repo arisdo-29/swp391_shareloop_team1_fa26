@@ -54,6 +54,7 @@ import {
   requestConversationPath,
   shouldRefreshConversationDetail,
 } from '../../utils/chatMessages';
+import { ReputationBadge } from '../../components/ReputationBadge';
 
 const apiConditionLabel: Record<ItemResponse['condition'], string> = {
   NEW: 'Mới',
@@ -984,6 +985,16 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       <span className="min-w-0 flex-1">
                         <strong className="block truncate text-sm">{conversationTitle(conversation)}</strong>
                         <span className="mt-1 block truncate text-xs text-text-muted">{participantName}</span>
+                        {donorIdOf(conversation) === currentUserId ? (
+                          <span className="mt-1 block">
+                            <ReputationBadge
+                              trustStars={request.receiverTrustStars ?? request.trustStars}
+                              rank={request.receiverRank ?? request.rank}
+                              asDescribedRate={request.receiverAsDescribedRate ?? request.asDescribedRate}
+                              compact
+                            />
+                          </span>
+                        ) : null}
                         <span className="mt-2 flex items-center justify-between gap-2">
                           <span className={`rounded-sm px-2 py-1 text-[11px] font-semibold ${requestStatusClass(request.status)}`}>
                             {requestStatusLabel[request.status]}
@@ -1149,8 +1160,20 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
               ) : (
                 <div className="space-y-3">
                   {selected.request.status === 'PENDING' ? (
-                    <div className="flex items-center gap-3 text-sm">
-                      <p>Yêu cầu đang chờ chủ bài chọn người nhận.</p>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-sm">
+                      <div>
+                        <p>Yêu cầu đang chờ chủ bài chọn người nhận.</p>
+                        {selectedAsDonor ? (
+                          <div className="mt-1">
+                            <ReputationBadge
+                              trustStars={selected.request.receiverTrustStars ?? selected.request.trustStars}
+                              rank={selected.request.receiverRank ?? selected.request.rank}
+                              asDescribedRate={selected.request.receiverAsDescribedRate ?? selected.request.asDescribedRate}
+                              compact
+                            />
+                          </div>
+                        ) : null}
+                      </div>
                       {selectedAsDonor ? (
                         canSelectRequest(selected, conversations, currentUserId) ? (
                           <Button
@@ -1716,6 +1739,13 @@ export function SelectRequestDialog({
           <Avatar user={{ name: participantName, avatarInitials: avatarInitials(participantName), avatarUrl: undefined }} />
           <div className="min-w-0 flex-1">
             <strong className="block truncate text-sm">{participantName}</strong>
+            <div className="mt-1">
+              <ReputationBadge
+                trustStars={conversation.request.receiverTrustStars ?? conversation.request.trustStars}
+                rank={conversation.request.receiverRank ?? conversation.request.rank}
+                asDescribedRate={conversation.request.receiverAsDescribedRate ?? conversation.request.asDescribedRate}
+              />
+            </div>
             <p className="mt-1 text-xs text-text-muted">
               {requestFallbackTitle(conversation.request)}
             </p>

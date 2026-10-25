@@ -170,7 +170,9 @@ export interface ItemRequest {
   id: string;
   type: ItemType;
   itemId: string;
+  itemTitle?: string;
   offeredItemId?: string;
+  offeredItemTitle?: string;
   requesterId: string;
   requesterName?: string;
   requesterTrustStars?: number;

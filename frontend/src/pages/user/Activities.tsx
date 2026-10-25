@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { actions, selectCurrentUser, selectData } from '../../app/store';
+import { useAppSelector } from '../../app/hooks';
+import { selectCurrentUser, selectData } from '../../app/store';
 import {
   Alert,
   Avatar,
@@ -18,7 +18,6 @@ import {
   TypeBadge,
 } from '../../components/ui';
 import { CONDITIONS } from '../../constants/domain';
-import { RECEIVE_ITEM_FEE } from '../../utils/credit';
 import { conditionLabel } from '../../utils/formatting';
 import { fileToDataUrl } from '../../utils/files';
 import { catalogApi, type CategoryAttributeResponse, type CategoryResponse } from '../../services/catalogApi';
@@ -41,6 +40,7 @@ import type { ApiError } from '../../services/http';
 import { useWallet } from '../../app/useWallet';
 import { canChat, requestStatusLabel } from '../../utils/request';
 import { reputationBlockedMessage } from '../../utils/apiErrorMessages';
+import { ReputationBadge } from '../../components/ReputationBadge';
 
 const editQuoteReasonLabel: Record<EditQuoteReason, string> = {
   NOT_YET_APPROVED: 'Bài chưa được duyệt lần đầu',
@@ -78,7 +78,6 @@ export function Activities() {
   const location = useLocation();
   const data = useAppSelector(selectData);
   const user = useAppSelector(selectCurrentUser)!;
-  const dispatch = useAppDispatch();
   const { refresh: refreshWallet } = useWallet();
   const [tab, setTab] = useState<'items' | 'transactions'>('items');
   const [editingId, setEditingId] = useState('');
@@ -213,10 +212,6 @@ export function Activities() {
   };
 
   useEffect(() => {
-    dispatch(actions.refreshExpiredItems());
-  }, [dispatch]);
-
-  useEffect(() => {
     let active = true;
     setMyItemsLoading(true);
     setMyItemsError('');
@@ -268,7 +263,6 @@ export function Activities() {
       active = false;
     };
   }, [currentUserId, itemsReloadKey, user.id]);
-  const txs = data.transactions.filter((t) => t.ownerId === user.id || t.requesterId === user.id);
   const apiTransactions = [...new Map([
     ...apiSentRequests,
     ...Object.values(apiRequestsByItem).flat(),
@@ -434,7 +428,7 @@ export function Activities() {
           onClick={() => setTab('transactions')}
           className={`border-b-2 px-4 py-3 text-sm font-semibold ${tab === 'transactions' ? 'border-primary text-primary' : 'border-transparent text-text-muted'}`}
         >
-          Giao dịch <span className="ml-1 text-xs">({currentUserId ? apiTransactions.length : txs.length})</span>
+          Giao dịch <span className="ml-1 text-xs">({apiTransactions.length})</span>
         </button>
       </div>
 
@@ -599,72 +593,20 @@ export function Activities() {
         </section>
       ) : (
         <section>
-          {currentUserId ? (
-            myItemsLoading ? <EmptyState title="Đang tải giao dịch" text="Vui lòng chờ trong giây lát." /> : myItemsError ? (
-              <EmptyState title="Không tải được giao dịch" text={myItemsError} action={<Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>Thử lại</Button>} />
-            ) : (
-              <SentRequestPanel itemRequests={apiTransactions} items={myItems} cancelingRequestId={cancelingRequestId} onCancel={(requestId) => void cancelApiRequest(requestId)} />
-            )
-          ) : txs.length ? (
-            <div className="space-y-3">
-              {txs.map((tx) => {
-                const item = data.items.find((i) => i.id === tx.itemId)!;
-                const other = data.users.find(
-                  (u) => u.id === (tx.ownerId === user.id ? tx.requesterId : tx.ownerId),
-                );
-                const conversation = data.conversations.find(
-                  (entry) => entry.transactionId === tx.id,
-                );
-                return (
-                  <article
-                    key={tx.id}
-                    className="rounded-lg bg-white p-4 ring-1 ring-border/80 sm:p-5"
-                  >
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <ItemImage
-                          src={item.images[0]}
-                          alt={item.title}
-                          className="size-14 shrink-0 rounded-md object-cover"
-                        />
-                        <div className="min-w-0">
-                          <Link
-                            to="/messages"
-                            className="block truncate font-bold hover:text-primary"
-                          >
-                            {item.title}
-                          </Link>
-                          <p className="mt-1 text-xs text-text-muted">
-                            Với {other?.name}
-                          </p>
-                        </div>
-                      </div>
-                      <StatusBadge status={tx.status} />
-                    </div>
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/70 pt-4">
-                      <p className="text-xs text-text-muted">
-                        Giao dịch miễn phí. Credit không bị trừ trong quá trình giao nhận.
-                      </p>
-                      {conversation ? (
-                        <Link to="/messages">
-                          <Button size="sm" variant="outline" icon="messages">
-                            Đi tới cuộc trò chuyện
-                          </Button>
-                        </Link>
-                      ) : (
-                        <Button size="sm" variant="outline" icon="messages" disabled>
-                          Chưa mở chat
-                        </Button>
-                      )}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          ) : (
+          {myItemsLoading ? (
+            <EmptyState title="Đang tải giao dịch" text="Vui lòng chờ trong giây lát." />
+          ) : myItemsError ? (
             <EmptyState
-              title="Chưa có giao dịch"
-              text="Giao dịch chỉ được tạo sau khi chủ bài chọn một yêu cầu."
+              title="Không tải được giao dịch"
+              text={myItemsError}
+              action={<Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>Thử lại</Button>}
+            />
+          ) : (
+            <SentRequestPanel
+              itemRequests={apiTransactions}
+              items={myItems}
+              cancelingRequestId={cancelingRequestId}
+              onCancel={(requestId) => void cancelApiRequest(requestId)}
             />
           )}
         </section>
@@ -801,8 +743,19 @@ export function Activities() {
             <p className="mt-2 text-sm leading-6 text-text-muted">
               {acceptRequest.type === 'gift'
                 ? `Bạn muốn chọn ${acceptRequester.name} để nhận ${acceptItem.title}?`
-                : `Bạn muốn trao đổi ${acceptItem.title} với ${acceptOfferedItem?.title ?? 'món được đề nghị'}?`}
+                : `Bạn muốn trao đổi ${acceptItem.title} với ${acceptRequest.offeredItemTitle ?? acceptOfferedItem?.title ?? 'món được đề nghị'}?`}
             </p>
+            <div className="mt-3 rounded-md bg-surface-low p-3">
+              <p className="text-xs font-semibold text-text-muted">Thông tin người nhận:</p>
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                <strong className="text-sm">{acceptRequester.name}</strong>
+                <ReputationBadge
+                  trustStars={acceptRequest.requesterTrustStars}
+                  rank={acceptRequest.requesterRank}
+                  asDescribedRate={acceptRequest.requesterAsDescribedRate}
+                />
+              </div>
+            </div>
             {acceptError ? (
               <div className="mt-3 rounded-md bg-amber-50 p-3 text-xs leading-5 text-warning">
                 {acceptError}
@@ -822,16 +775,7 @@ export function Activities() {
               <Button
                 disabled={selectingRequestId === acceptRequest.id}
                 onClick={() => {
-                  if (acceptApiRequest) {
-                    void selectApiRequest(acceptApiRequest);
-                    return;
-                  }
-                  if (acceptRequest.type === 'gift' && acceptRequester.availableCredit < RECEIVE_ITEM_FEE) {
-                    setAcceptError('Người nhận không đủ Credit và cần nạp Credit trước khi được chọn.');
-                    return;
-                  }
-                  dispatch(actions.acceptItemRequest({ requestId: acceptRequest.id, ownerId: user.id }));
-                  setAcceptConfirmId('');
+                  void selectApiRequest(acceptApiRequest ?? acceptRequest);
                 }}
               >
                 {selectingRequestId === acceptRequest.id ? 'Đang chọn...' : 'Xác nhận'}
@@ -1275,7 +1219,7 @@ function SentRequestPanel({
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <strong className="truncate text-sm">{item?.title ?? 'Bài đăng'}</strong>
+                      <strong className="truncate text-sm">{request.itemTitle ?? item?.title ?? 'Bài đăng'}</strong>
                       <TypeBadge type={request.type} />
                       <span className="rounded-sm bg-amber-50 px-2 py-1 text-[11px] font-semibold text-warning">
                         {requestStatusLabel[request.status]}
@@ -1284,9 +1228,9 @@ function SentRequestPanel({
                     <p className="mt-1 text-xs text-text-muted">
                       {new Date(request.createdAt).toLocaleString('vi-VN')}
                     </p>
-                    {request.offeredItemId ? (
+                    {request.offeredItemId || request.offeredItemTitle ? (
                       <p className="mt-2 text-xs text-text-muted">
-                        Món đề nghị trao đổi: {items.find((entry) => entry.id === request.offeredItemId)?.title ?? 'Món đồ của bạn'}
+                        Món đề nghị trao đổi: {request.offeredItemTitle ?? items.find((entry) => entry.id === request.offeredItemId)?.title ?? 'Món đề nghị'}
                       </p>
                     ) : null}
                   </div>
@@ -1363,6 +1307,14 @@ function RequestPanel({
                           {requestStatusLabel[request.status]}
                         </span>
                       </div>
+                      <div className="mt-1">
+                        <ReputationBadge
+                          trustStars={request.requesterTrustStars}
+                          rank={request.requesterRank}
+                          asDescribedRate={request.requesterAsDescribedRate}
+                          compact
+                        />
+                      </div>
                       <p className="mt-1 text-xs text-text-muted">
                         {new Date(request.createdAt).toLocaleString('vi-VN')}
                       </p>
@@ -1390,23 +1342,35 @@ function RequestPanel({
                     ) : null}
                   </div>
                 </div>
-                {offeredItem ? (
+                {request.type === 'trade' && (request.offeredItemTitle || offeredItem) ? (
                   <div className="mt-3 rounded-md bg-surface-low p-3">
                     <p className="text-xs font-bold text-text-muted">Món đề nghị trao đổi</p>
                     <div className="mt-2 flex items-center gap-3">
-                      <ItemImage src={offeredItem.images[0]} alt={offeredItem.title} className="size-14 rounded-md object-cover" />
+                      {offeredItem?.images?.[0] ? (
+                        <ItemImage
+                          src={offeredItem.images[0]}
+                          alt={request.offeredItemTitle ?? offeredItem.title}
+                          className="size-14 rounded-md object-cover"
+                        />
+                      ) : null}
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-bold">{offeredItem.title}</p>
-                        <div className="mt-1 flex flex-wrap gap-2">
-                          <ConditionBadge condition={offeredItem.condition} />
-                          <span className="text-xs text-text-muted">{offeredItem.district}</span>
-                        </div>
+                        <p className="truncate text-sm font-bold">
+                          {request.offeredItemTitle ?? offeredItem?.title ?? 'Món đề nghị trao đổi'}
+                        </p>
+                        {offeredItem ? (
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            <ConditionBadge condition={offeredItem.condition} />
+                            <span className="text-xs text-text-muted">{offeredItem.district}</span>
+                          </div>
+                        ) : null}
                       </div>
-                      <Link to={`/items/${offeredItem.id}`}>
-                        <Button size="sm" variant="outline" icon="eye">
-                          Xem chi tiết
-                        </Button>
-                      </Link>
+                      {request.offeredItemId ? (
+                        <Link to={`/items/${request.offeredItemId}`}>
+                          <Button size="sm" variant="outline" icon="eye">
+                            Xem chi tiết
+                          </Button>
+                        </Link>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}
