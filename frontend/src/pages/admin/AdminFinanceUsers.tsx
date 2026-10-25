@@ -13,7 +13,7 @@ import {
   type AdminFinanceUserSummary,
 } from '../../services/adminFinanceApi';
 import type { PageResponse } from '../../services/itemApi';
-import type { CreditHistory, Topup } from '../../types/domain';
+import type { CreditHistory } from '../../types/domain';
 import {
   HISTORY_PAGE_SIZE,
   adminHistoryTabs,
@@ -25,6 +25,8 @@ import { useDebouncedValue } from '../../utils/useDebouncedValue';
 import { adminErrorMessage } from './adminErrors';
 
 const USER_PAGE_SIZE = 20;
+// Admin không có danh sách bài của người dùng nên lịch sử không hiện tên món.
+const noItemTitles = new Map<string, string>();
 
 /** Danh sách người dùng kèm số dư Credit: mở trang là thấy ngay, gõ để tìm theo tên, email hoặc số điện thoại. */
 export function AdminFinanceUsers() {
@@ -170,7 +172,7 @@ export function AdminFinanceUserDetail() {
   const [toDate, setToDate] = useState('');
   const [page, setPage] = useState(0);
   const [reloadKey, setReloadKey] = useState(0);
-  const [selected, setSelected] = useState<CreditHistory | Topup | null>(null);
+  const [selected, setSelected] = useState<CreditHistory | null>(null);
   const dateRangeError =
     fromDate && toDate && fromDate > toDate ? '"Từ ngày" không được sau "Đến ngày".' : '';
 
@@ -276,9 +278,8 @@ export function AdminFinanceUserDetail() {
         </div>
       ) : null}
       <CreditHistorySection
-        items={[]}
+        itemTitles={noItemTitles}
         allHistory={history}
-        pendingTopups={[]}
         tabs={adminHistoryTabs}
         activeTab={tab}
         onTabChange={setTab}

@@ -164,4 +164,21 @@ describe('AdminTopUpOrders', () => {
       ),
     );
   });
+
+  it('báo lỗi khi tải danh sách thất bại và cho thử lại ngay trong khung lỗi', async () => {
+    // given
+    const user = userEvent.setup();
+    vi.mocked(adminFinanceApi.topUpOrders)
+      .mockRejectedValueOnce({ status: 0, message: 'Không kết nối được máy chủ, vui lòng thử lại.' })
+      .mockResolvedValueOnce({ items: orders, page: 0, size: 10, totalElements: orders.length });
+    render(<AdminTopUpOrders />);
+    expect(await screen.findByText('Không kết nối được máy chủ, vui lòng thử lại.')).toBeTruthy();
+
+    // when
+    await user.click(screen.getByRole('button', { name: 'Thử lại' }));
+
+    // then
+    expect(await screen.findByText('Lan An')).toBeTruthy();
+    expect(screen.queryByText('Không kết nối được máy chủ, vui lòng thử lại.')).toBeNull();
+  });
 });

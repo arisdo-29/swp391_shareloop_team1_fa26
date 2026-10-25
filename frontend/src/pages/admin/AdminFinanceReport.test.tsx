@@ -37,7 +37,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('AdminFinanceReport CSV', () => {
+// Trang tải biểu đồ bằng lazy import nên khi chạy chung cả bộ test có thể vượt 5 giây mặc định.
+describe('AdminFinanceReport CSV', { timeout: 20_000 }, () => {
   it('xuất file bằng đúng bộ lọc đã áp dụng và thông báo thành công', async () => {
     const user = userEvent.setup();
     const blob = new Blob(['csv'], { type: 'text/csv' });
@@ -98,5 +99,26 @@ describe('AdminFinanceReport CSV', () => {
     await waitFor(() =>
       expect(screen.getByRole('alert').textContent).toContain('không có quyền quản trị'),
     );
+  });
+
+  it('báo khoảng ngày sai mà không có nút thử lại và không gọi lại API', async () => {
+    // given
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <AdminFinanceReport />
+      </MemoryRouter>,
+    );
+    await screen.findByText('Đối chiếu tiền thu và Credit nạp');
+    await user.type(screen.getByLabelText('Từ ngày'), '2026-10-10');
+    await user.type(screen.getByLabelText('Đến ngày'), '2026-10-01');
+
+    // when
+    await user.click(screen.getByRole('button', { name: 'Lọc' }));
+
+    // then
+    expect(screen.getByText('Từ ngày phải trước hoặc bằng đến ngày.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Thử lại' })).toBeNull();
+    expect(adminFinanceApi.report).toHaveBeenCalledTimes(1);
   });
 });

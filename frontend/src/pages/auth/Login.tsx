@@ -23,6 +23,7 @@ export function Login() {
   const successNotice = (location.state as { notice?: string } | null)?.notice;
 
   const login = async (inputEmail: string, pass: string) => {
+    if (processing) return;
     const normalized = inputEmail.trim().toLowerCase();
     setError('');
     if (!normalized) {

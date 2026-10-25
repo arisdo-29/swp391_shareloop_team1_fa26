@@ -5,6 +5,7 @@ import { adminFinanceApi, type FinanceSummary } from '../../services/adminFinanc
 import { adminAuditApi, type ActivityLogResponse } from '../../services/adminAuditApi';
 import type { ApiError } from '../../services/http';
 import { formatVnd } from '../../utils/formatting';
+import { walletTransactionLabels } from '../../utils/creditHistory';
 
 const CashByDayChart = lazy(() =>
   import('./FinanceCharts').then((module) => ({ default: module.CashByDayChart })),
@@ -13,10 +14,7 @@ const CreditByTypeChart = lazy(() =>
   import('./FinanceCharts').then((module) => ({ default: module.CreditByTypeChart })),
 );
 
-const transactionLabels: Record<string, string> = {
-  TOP_UP: 'Nạp Credit', POST_FEE: 'Phí đăng bài', EDIT_FEE: 'Phí sửa bài',
-  RENEW_FEE: 'Phí gia hạn', BOOST_FEE: 'Phí đẩy bài', AI_SEARCH_FEE: 'Phí tìm bằng AI', ADMIN_ADJUST: 'Điều chỉnh',
-};
+const transactionLabels: Record<string, string> = walletTransactionLabels;
 
 function errorMessage(error: unknown) {
   const apiError = error as ApiError;
@@ -201,6 +199,7 @@ export function AdminFinanceReport() {
   const [filters, setFilters] = useState({ from: '', to: '' });
   const [report, setReport] = useState<FinanceSummary | null>(null);
   const [error, setError] = useState('');
+  const [rangeError, setRangeError] = useState('');
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
   const [exporting, setExporting] = useState(false);
@@ -220,7 +219,8 @@ export function AdminFinanceReport() {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (from && to && from > to) { setError('Từ ngày phải trước hoặc bằng đến ngày.'); return; }
+    if (from && to && from > to) { setRangeError('Từ ngày phải trước hoặc bằng đến ngày.'); return; }
+    setRangeError('');
     setFilters({ from, to });
   };
 
@@ -244,12 +244,13 @@ export function AdminFinanceReport() {
   };
 
   return <>
-    <PageHeader title="Báo cáo tài chính" description="Tiền thu, Credit cộng và Credit trừ theo sổ hệ thống." action={<div className="flex flex-wrap gap-2"><Button variant="outline" icon="download" disabled={exporting} onClick={() => void exportCsv()}>{exporting ? 'Đang xuất…' : 'Xuất báo cáo CSV'}</Button><Link to="/admin/finance/users"><Button variant="outline">Tra cứu người dùng</Button></Link></div>} />
+    <PageHeader title="Báo cáo tài chính" description="Tiền thu, Credit cộng và Credit trừ theo sổ hệ thống." action={<div className="flex flex-wrap gap-2"><Button variant="outline" icon="download" disabled={exporting} onClick={() => void exportCsv()}>{exporting ? 'Đang xuất...' : 'Xuất báo cáo CSV'}</Button><Link to="/admin/finance/users"><Button variant="outline">Tra cứu người dùng</Button></Link></div>} />
     <form className="mb-5 flex flex-wrap items-end gap-3" onSubmit={submit}>
       <Field label="Từ ngày" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
       <Field label="Đến ngày" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
       <Button type="submit" disabled={loading}>Lọc</Button>
     </form>
+    {rangeError ? <div className="mb-4" role="alert"><Alert tone="error">{rangeError}</Alert></div> : null}
     {exportError ? <div className="mb-4" role="alert"><Alert tone="error">Không xuất được báo cáo CSV. {exportError}</Alert></div> : null}
     {exportNotice ? <div className="mb-4" role="status"><Alert tone="success">{exportNotice}</Alert></div> : null}
     {error ? <Alert tone="error">{error} <button type="button" className="underline" onClick={() => setReload((value) => value + 1)}>Thử lại</button></Alert> : null}
