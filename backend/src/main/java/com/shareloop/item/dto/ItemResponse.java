@@ -4,6 +4,7 @@ import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.entity.OperatingStatus;
+import com.shareloop.reputation.entity.Rank;
 import java.time.Instant;
 import java.util.List;
 
@@ -30,7 +31,11 @@ public record ItemResponse(
         OperatingStatus operatingStatus,
         // Hai cột do module listingfee quản lý; null khi bài chưa từng được duyệt / chưa từng được đẩy.
         Instant expireAt,
-        Instant boostedUntil) {
+        Instant boostedUntil,
+        String donorName,
+        Integer donorTrustStars,
+        Rank donorRank,
+        Double donorAsDescribedRate) {
 
     public ItemResponse(
             Long id,
@@ -65,6 +70,10 @@ public record ItemResponse(
                 createdAt,
                 updatedAt,
                 List.of(),
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null);
@@ -104,6 +113,38 @@ public record ItemResponse(
                 List.of(),
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
                 null);
+    }
+
+    public ItemResponse withDonorReputation(
+            String donorName, Integer donorTrustStars, Rank donorRank, Double donorAsDescribedRate) {
+        return new ItemResponse(
+                id,
+                donorId,
+                categoryId,
+                areaId,
+                offerType,
+                title,
+                description,
+                desiredItem,
+                condition,
+                defectNote,
+                brand,
+                images,
+                status,
+                createdAt,
+                updatedAt,
+                defectImages,
+                operatingStatus,
+                expireAt,
+                boostedUntil,
+                donorName,
+                donorTrustStars,
+                donorRank,
+                donorAsDescribedRate);
     }
 }

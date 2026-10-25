@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import type { Item, ItemCondition, ItemType, TransactionStatus, User } from '../types/domain';
 import { conditionLabel, txLabel } from '../utils/formatting';
 import { resolveMediaUrl } from '../services/mediaUrl';
+import { ReputationBadge } from './ReputationBadge';
 
 const iconMap = {
   search: Icons.MagnifyingGlass,
@@ -369,6 +370,7 @@ export function ProductCard({ item, owner }: { item: Item; owner?: User }) {
         <div className="absolute left-3 top-3">
           <TypeBadge type={item.type} />
         </div>
+        <BoostBadge boostedUntil={item.boostedUntil} className="absolute right-3 top-3" />
       </div>
       <div className="p-3 sm:p-4">
         <h3 className="line-clamp-2 min-h-10 text-sm font-bold leading-5 text-text-primary sm:min-h-11 sm:text-[15px] sm:leading-[1.45]">
@@ -432,7 +434,16 @@ export function HorizontalProductCard({ item, owner }: { item: Item; owner?: Use
     </Link>
   );
 }
-export function OwnerCard({ owner }: { owner: User }) {
+export function OwnerCard({
+  owner,
+  reputation,
+  transactionCount,
+}: {
+  owner: User;
+  reputation?: { trustStars?: number | null; rank?: string | null; asDescribedRate?: number | null };
+  transactionCount?: number | null;
+}) {
+  const displayedTransactionCount = transactionCount === undefined ? owner.totalTx : transactionCount;
   return (
     <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
       <div className="flex items-center gap-3">
@@ -440,18 +451,26 @@ export function OwnerCard({ owner }: { owner: User }) {
         <div className="min-w-0">
           <div className="truncate font-bold">{owner.name}</div>
           <div className="mt-0.5 text-xs text-text-muted">
-            {owner.district} · {owner.totalTx} giao dịch
+            {owner.district}{displayedTransactionCount == null ? '' : ` · ${displayedTransactionCount} giao dịch`}
           </div>
         </div>
       </div>
-      <div className="mt-4 flex items-center justify-between">
-        <RankBadge rank={owner.rank} />
-        <span className="inline-flex items-center gap-1 text-sm font-bold text-warning">
-          <Icon name="star" className="size-4" weight="fill" />
-          {owner.reputationStars}
-        </span>
-      </div>
+      <ReputationBadge
+        className="mt-4"
+        trustStars={reputation ? reputation.trustStars : owner.reputationStars}
+        rank={reputation ? reputation.rank : owner.rank}
+        asDescribedRate={reputation?.asDescribedRate}
+      />
     </div>
+  );
+}
+
+export function BoostBadge({ boostedUntil, className = '' }: { boostedUntil?: string | null; className?: string }) {
+  if (!boostedUntil || new Date(boostedUntil).getTime() <= Date.now()) return null;
+  return (
+    <span className={`inline-flex items-center rounded-sm bg-secondary px-2 py-1 text-[11px] font-bold text-white shadow-sm ${className}`}>
+      Được đẩy
+    </span>
   );
 }
 export function Avatar({

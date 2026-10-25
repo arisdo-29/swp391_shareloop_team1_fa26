@@ -64,6 +64,13 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
             nativeQuery = true)
     List<ItemDisplayWindowRow> findDisplayWindowRows(@Param("ids") Collection<Long> ids);
 
+    /** Ids of currently boosted, visible items, ordered by latest boost expiry. */
+    @Query(
+            value = "SELECT id FROM items WHERE boosted_until > :now AND status = 'APPROVED' AND is_active "
+                    + "AND is_deleted = false ORDER BY boosted_until DESC, created_at DESC, id DESC",
+            nativeQuery = true)
+    List<Long> findCurrentlyBoostedItemIds(@Param("now") Instant now);
+
     /**
      * Các bài của một người đang giữ phí (fee_state = HELD, pending_fee > 0), bài mới cập nhật xếp trước. Native query
      * vì title, status, offer_type thuộc module item, ItemFee không map các cột này. Tổng pending_fee của các dòng này

@@ -4,6 +4,7 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import {
   Avatar,
+  BoostBadge,
   Button,
   ConditionBadge,
   EmptyState,
@@ -95,6 +96,7 @@ function HomeProductCard({ item, owner, tradeFor }: { item: Item; owner?: User; 
         <span className="absolute left-3 top-3">
           <TypeBadge type={item.type} />
         </span>
+        <BoostBadge boostedUntil={item.boostedUntil} className="absolute right-3 top-3" />
       </div>
       <div className="home-product-card-copy">
         <h3>{item.title}</h3>
@@ -113,7 +115,7 @@ function HomeProductCard({ item, owner, tradeFor }: { item: Item; owner?: User; 
           <span className="min-w-0 truncate">{owner.name}</span>
         </p>
       ) : null}
-        <div className="home-product-card-footer"><span><Icon name="location" className="size-4" />{item.district}</span><span><Icon name="star" className="size-4 text-warning" weight="fill" />{owner?.reputationStars ?? 5}</span></div>
+        <div className="home-product-card-footer"><span><Icon name="location" className="size-4" />{item.district}</span></div>
         <span className="home-product-card-link">Xem chi tiết <Icon name="arrow" className="size-3.5" /></span>
       </div>
     </Link>

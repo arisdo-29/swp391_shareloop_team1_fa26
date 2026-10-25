@@ -30,11 +30,14 @@ import com.shareloop.media.service.MediaService;
 import com.shareloop.moderation.ModerationResult;
 import com.shareloop.moderation.event.ItemScreeningRequestedEvent;
 import com.shareloop.moderation.service.ContentModerationService;
+import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.dto.UserBrief;
+import com.shareloop.user.service.UserService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +51,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -85,6 +91,9 @@ class ItemServiceTest {
     ReputationService reputationService;
 
     @Mock
+    UserService userService;
+
+    @Mock
     ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
@@ -99,6 +108,7 @@ class ItemServiceTest {
         lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_BRONZE)).thenReturn(3);
         // Mock mặc định trả false nên phải cho phép đăng bài, riêng test 0 sao sẽ ghi đè
         lenient().when(reputationService.canPost(anyLong())).thenReturn(true);
+        lenient().when(userService.findBriefs(any())).thenReturn(Map.of());
     }
 
     @Test
@@ -348,6 +358,77 @@ class ItemServiceTest {
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.status()).isEqualTo(ItemStatus.APPROVED);
+        assertThat(response.donorName()).isNull();
+        assertThat(response.donorTrustStars()).isNull();
+    }
+
+    @Test
+    void getItem_includesDonorNameAndReputationOnlyOnDetail() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        ReflectionTestUtils.setField(item, "id", 1L);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(userService.findBriefs(any()))
+                .thenReturn(Map.of(10L, new UserBrief(10L, "Nguyễn An", "hidden@example.test")));
+        when(reputationService.getReputationSummary(10L)).thenReturn(new ReputationSummary(10L, 4, Rank.GOLD, 0.9));
+
+        ItemResponse response = itemService.getItem(1L, null);
+
+        assertThat(response.donorName()).isEqualTo("Nguyễn An");
+        assertThat(response.donorTrustStars()).isEqualTo(4);
+        assertThat(response.donorRank()).isEqualTo(Rank.GOLD);
+        assertThat(response.donorAsDescribedRate()).isEqualTo(0.9);
+        assertThat(response.toString()).doesNotContain("hidden@example.test");
+    }
+
+    @Test
+    void listPublicItemsPromotesOnlyConfiguredBoostCountAndKeepsFilteredTotal() {
+        Item boostedFirst = itemWithId(1L, "Boosted first");
+        Item boostedSecond = itemWithId(2L, "Boosted second");
+        Item unboosted = itemWithId(4L, "Newest regular");
+        when(configService.getInt(ConfigKey.BOOST_MAX_PER_PAGE)).thenReturn(2);
+        when(listingFeeQueryService.findCurrentlyBoostedItemIds(any())).thenReturn(List.of(1L, 2L, 3L));
+        when(itemRepository.findBoostedVisibleByFilters(
+                        ItemStatus.APPROVED,
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of(1L, 2L, 3L),
+                        PageRequest.of(
+                                0,
+                                2,
+                                org.springframework.data.domain.Sort.by(
+                                        org.springframework.data.domain.Sort.Order.desc("createdAt"),
+                                        org.springframework.data.domain.Sort.Order.desc("id")))))
+                .thenReturn(new PageImpl<>(List.of(boostedFirst, boostedSecond), PageRequest.of(0, 2), 3));
+        when(itemRepository.findUnboostedVisibleByFilters(
+                        org.mockito.ArgumentMatchers.eq(ItemStatus.APPROVED),
+                        org.mockito.ArgumentMatchers.isNull(),
+                        org.mockito.ArgumentMatchers.isNull(),
+                        org.mockito.ArgumentMatchers.isNull(),
+                        org.mockito.ArgumentMatchers.isNull(),
+                        org.mockito.ArgumentMatchers.eq(List.of(1L, 2L, 3L)),
+                        any(Pageable.class)))
+                .thenAnswer(invocation -> {
+                    Pageable pageable = invocation.getArgument(6);
+                    return new PageImpl<>(List.of(unboosted), pageable, 1);
+                });
+        when(listingFeeQueryService.findDisplayWindows(List.of(1L, 2L, 4L))).thenReturn(Map.of());
+
+        var response = itemService.listPublicItems(null, null, null, null, null, 0, 3);
+
+        assertThat(response.items())
+                .extracting(ItemResponse::title)
+                .containsExactly("Boosted first", "Boosted second", "Newest regular");
+        assertThat(response.totalElements()).isEqualTo(4);
+    }
+
+    private Item itemWithId(long id, String title) {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, title, "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        ReflectionTestUtils.setField(item, "id", id);
+        return item;
     }
 
     @Test

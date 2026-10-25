@@ -116,6 +116,18 @@ afterEach(() => {
 });
 
 describe('trạng thái tải bài đăng trên Home', () => {
+  it('hiển thị nhãn đẩy còn hạn trên thẻ và không hiện sao mặc định', async () => {
+    vi.mocked(itemApi.list).mockResolvedValue({
+      ...itemPage,
+      items: [{ ...item, boostedUntil: '2999-10-20T08:00:00Z' }],
+    });
+    const { container } = renderHome();
+
+    expect((await screen.findAllByText('Được đẩy')).length).toBeGreaterThan(0);
+    const footer = container.querySelector('.home-product-card-footer');
+    expect(footer?.textContent).toBe('Bình Thạnh');
+  });
+
   it('giữ chức năng tìm kiếm và chọn khu vực khi bỏ icon trang trí', () => {
     renderHome();
 

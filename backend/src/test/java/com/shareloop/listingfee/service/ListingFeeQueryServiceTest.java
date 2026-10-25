@@ -1,11 +1,13 @@
 package com.shareloop.listingfee.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.shareloop.listingfee.dto.DisplayWindow;
 import com.shareloop.listingfee.repository.ItemFeeRepository;
 import com.shareloop.setting.service.ConfigService;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -37,5 +39,14 @@ class ListingFeeQueryServiceTest {
         // then: không gửi query "IN ()" rỗng xuống DB
         assertThat(displayWindows).isEmpty();
         verifyNoInteractions(itemFeeRepository);
+    }
+
+    @Test
+    void findCurrentlyBoostedItemIdsDelegatesReadToListingFeeRepository() {
+        Instant now = Instant.parse("2026-10-26T00:00:00Z");
+
+        listingFeeQueryService.findCurrentlyBoostedItemIds(now);
+
+        verify(itemFeeRepository).findCurrentlyBoostedItemIds(now);
     }
 }

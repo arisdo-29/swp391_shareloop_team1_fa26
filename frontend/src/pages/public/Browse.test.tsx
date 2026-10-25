@@ -122,6 +122,19 @@ afterEach(() => {
 });
 
 describe('lọc danh mục trên trang Tìm đồ', () => {
+  it('hiển thị nhãn khi bài vẫn đang được đẩy', async () => {
+    vi.mocked(itemApi.list).mockResolvedValue({
+      items: [{ ...book, boostedUntil: '2999-10-20T08:00:00Z' }],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+    });
+
+    renderBrowse();
+
+    expect(await screen.findByText('Được đẩy')).toBeTruthy();
+  });
+
   it('dùng chung request items đang chạy khi StrictMode mount lại Browse', async () => {
     let resolveItems!: (value: { items: ItemResponse[]; page: number; size: number; totalElements: number }) => void;
     const itemsRequest = new Promise<{ items: ItemResponse[]; page: number; size: number; totalElements: number }>((resolve) => {

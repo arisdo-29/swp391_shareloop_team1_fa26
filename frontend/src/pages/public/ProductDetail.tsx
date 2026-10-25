@@ -134,12 +134,34 @@ export function ProductDetail() {
       </div>
     );
 
-  const owner = data.users.find((x) => x.id === item.ownerId) ??
-    ({
+  const localOwner = data.users.find((x) => x.id === item.ownerId);
+  const owner = isApiId
+    ? {
+        id: item.ownerId,
+        username: item.ownerId,
+        password: '',
+        name: item.donorName ?? 'Tài khoản đã xóa',
+        email: '',
+        phone: '',
+        district: item.district,
+        avatarInitials: '',
+        totalCredit: 0,
+        availableCredit: 0,
+        holdCredit: 0,
+        rewardPoints: 0,
+        reputationStars: item.donorTrustStars ?? 0,
+        rank: item.donorRank ?? '',
+        status: 'active' as const,
+        role: 'user' as const,
+        joinedAt: item.postedAt,
+        totalTx: 0,
+      }
+    : localOwner ??
+      ({
       id: item.ownerId,
       username: item.ownerId,
       password: '',
-      name: 'Người đăng',
+      name: isApiId ? (item.donorName ?? 'Tài khoản đã xóa') : 'Người đăng',
       email: '',
       phone: '',
       district: item.district,
@@ -148,13 +170,13 @@ export function ProductDetail() {
       availableCredit: 0,
       holdCredit: 0,
       rewardPoints: 0,
-      reputationStars: 5,
-      rank: 'Thành viên',
+      reputationStars: item.donorTrustStars ?? 0,
+      rank: item.donorRank ?? '',
       status: 'active',
       role: 'user',
       joinedAt: item.postedAt,
       totalTx: 0,
-    } satisfies User);
+      } satisfies User);
   const own = user?.id === item.ownerId;
   const activeListing =
     (item.status === 'approved' || item.status === 'APPROVED') &&
@@ -406,7 +428,15 @@ export function ProductDetail() {
             ) : null}
           </div>
           {owner ? (
-            <OwnerCard owner={owner} />
+            <OwnerCard
+              owner={owner}
+              transactionCount={isApiId ? null : undefined}
+              reputation={isApiId ? {
+                trustStars: item.donorTrustStars,
+                rank: item.donorRank,
+                asDescribedRate: item.donorAsDescribedRate,
+              } : undefined}
+            />
           ) : (
             <section className="rounded-xl bg-white p-5 ring-1 ring-border/80">
               <h2 className="font-bold">Thông tin người đăng</h2>

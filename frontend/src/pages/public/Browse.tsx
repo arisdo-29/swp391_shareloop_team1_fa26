@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import browseBanner from '../../assets/browse-banner-shareloop-dark.webp';
-import { Button, ConditionBadge, EmptyState, Icon, ItemImage, TypeBadge } from '../../components/ui';
+import { BoostBadge, Button, ConditionBadge, EmptyState, Icon, ItemImage, TypeBadge } from '../../components/ui';
 import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import type { Item, ItemType } from '../../types/domain';
@@ -463,6 +463,7 @@ const BrowseProductCard = memo(function BrowseProductCard({ item }: { item: Item
         <span className="browse-product-card__badge">
           <TypeBadge type={item.type} />
         </span>
+        <BoostBadge boostedUntil={item.boostedUntil} className="absolute right-3 top-3" />
       </div>
       <div className="browse-product-card__content">
         <h2>{item.title}</h2>

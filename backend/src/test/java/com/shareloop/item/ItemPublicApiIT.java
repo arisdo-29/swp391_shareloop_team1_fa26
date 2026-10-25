@@ -8,6 +8,8 @@ import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.repository.ItemRepository;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
 import com.shareloop.support.IntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +29,9 @@ class ItemPublicApiIT extends IntegrationTest {
 
     @Autowired
     ItemRepository items;
+
+    @Autowired
+    ConfigService configService;
 
     @Test
     void anonymousListFiltersOutPendingAndHiddenItems() throws Exception {
@@ -206,6 +211,58 @@ class ItemPublicApiIT extends IntegrationTest {
                 .andExpect(jsonPath("$.totalElements").value(1));
 
         mvc.perform(get("/api/v1/items").param("condition", "BROKEN")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void publicSearchPromotesConfiguredNumberOfBoostedItemsPerPageWithoutDuplicates() throws Exception {
+        long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long areaId = jdbc.sql("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long userId = jdbc.sql(
+                        "INSERT INTO users (email, password_hash, full_name, phone, status) "
+                                + "VALUES ('boost-page-test@shareloop.local', 'unused', 'Boost test', '0900000677', 'ACTIVE') RETURNING id")
+                .query(Long.class)
+                .single();
+        int configuredBoostLimit = configService.getInt(ConfigKey.BOOST_MAX_PER_PAGE);
+        int pageSize = Math.min(100, Math.max(1, configuredBoostLimit) + 1);
+        int promotedPerPage = Math.min(pageSize, Math.max(0, configuredBoostLimit));
+        int boostedCount = promotedPerPage + 1;
+        for (int index = 0; index < boostedCount; index++) {
+            Item boosted = approvedItem(
+                    userId, categoryId, areaId, "Boost paging boosted " + index, OfferType.GIVE, ItemCondition.NEW);
+            jdbc.sql("UPDATE items SET boosted_until = now() + interval '1 day' WHERE id = :id")
+                    .param("id", boosted.getId())
+                    .update();
+        }
+        int normalCount = pageSize + 2;
+        for (int index = 0; index < normalCount; index++) {
+            approvedItem(userId, categoryId, areaId, "Boost paging normal " + index, OfferType.GIVE, ItemCondition.NEW);
+        }
+
+        mvc.perform(get("/api/v1/items")
+                        .param("q", "boost paging")
+                        .param("categoryId", String.valueOf(categoryId))
+                        .param("page", "0")
+                        .param("size", String.valueOf(pageSize)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(boostedCount + normalCount))
+                .andExpect(jsonPath("$.items.length()").value(pageSize))
+                .andExpect(jsonPath("$.items[0].title").value("Boost paging boosted " + (boostedCount - 1)))
+                .andExpect(jsonPath("$.items[" + promotedPerPage + "].title")
+                        .value("Boost paging normal " + (normalCount - 1)));
+
+        mvc.perform(get("/api/v1/items")
+                        .param("q", "boost paging")
+                        .param("categoryId", String.valueOf(categoryId))
+                        .param("page", "1")
+                        .param("size", String.valueOf(pageSize)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(boostedCount + normalCount))
+                .andExpect(jsonPath("$.items.length()").value(pageSize))
+                .andExpect(jsonPath("$.items[0].title").value("Boost paging boosted 0"));
     }
 
     private Item approvedItem(

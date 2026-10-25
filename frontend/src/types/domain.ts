@@ -112,6 +112,10 @@ export interface Item {
   postedAt: string;
   expiresAt?: string;
   boostedUntil?: string;
+  donorName?: string | null;
+  donorTrustStars?: number | null;
+  donorRank?: string | null;
+  donorAsDescribedRate?: number | null;
 }
 
 export interface Handover {

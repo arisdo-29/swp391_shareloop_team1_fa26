@@ -70,6 +70,10 @@ export interface ItemResponse extends CreateItemRequest {
   updatedAt: string;
   expireAt: string | null;
   boostedUntil: string | null;
+  donorName?: string | null;
+  donorTrustStars?: number | null;
+  donorRank?: string | null;
+  donorAsDescribedRate?: number | null;
 }
 
 // Contract: docs/api/listingfee.md (GET /api/v1/items/{id}/edit-quote)

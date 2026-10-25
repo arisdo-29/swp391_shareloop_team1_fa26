@@ -16,6 +16,7 @@ import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.entity.OperatingStatus;
 import com.shareloop.item.mapper.ItemMapper;
 import com.shareloop.item.repository.ItemRepository;
+import com.shareloop.item.repository.OffsetLimitPageable;
 import com.shareloop.listingfee.dto.DisplayWindow;
 import com.shareloop.listingfee.service.ListingFeeQueryService;
 import com.shareloop.listingfee.service.PostFeeService;
@@ -25,22 +26,29 @@ import com.shareloop.moderation.ModerationResult;
 import com.shareloop.moderation.ModerationStatus;
 import com.shareloop.moderation.event.ItemScreeningRequestedEvent;
 import com.shareloop.moderation.service.ContentModerationService;
+import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.dto.UserBrief;
+import com.shareloop.user.service.UserService;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -63,6 +71,7 @@ public class ItemService {
     private final ListingFeeQueryService listingFeeQueryService;
     private final CategoryAttributeService categoryAttributeService;
     private final ReputationService reputationService;
+    private final UserService userService;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
 
@@ -78,7 +87,8 @@ public class ItemService {
             CategoryAttributeService categoryAttributeService,
             ReputationService reputationService,
             ApplicationEventPublisher eventPublisher,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            UserService userService) {
         this.itemRepository = itemRepository;
         this.jdbcClient = jdbcClient;
         this.mediaService = mediaService;
@@ -89,6 +99,7 @@ public class ItemService {
         this.listingFeeQueryService = listingFeeQueryService;
         this.categoryAttributeService = categoryAttributeService;
         this.reputationService = reputationService;
+        this.userService = userService;
         this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
     }
@@ -280,7 +291,17 @@ public class ItemService {
 
         boolean isOwner = currentUserId != null && currentUserId.equals(item.getDonorId());
         if ((item.getStatus() == ItemStatus.APPROVED && item.isActive()) || isOwner) {
-            return toResponse(item, findDisplayWindow(item.getId()));
+            ItemResponse response = toResponse(item, findDisplayWindow(item.getId()));
+            UserBrief donor = userService.findBriefs(Set.of(item.getDonorId())).get(item.getDonorId());
+            if (donor == null) {
+                return response;
+            }
+            ReputationSummary reputation = reputationService.getReputationSummary(item.getDonorId());
+            if (reputation == null) {
+                return response.withDonorReputation(donor.fullName(), null, null, null);
+            }
+            return response.withDonorReputation(
+                    donor.fullName(), reputation.trustStars(), reputation.rank(), reputation.asDescribedRate());
         }
 
         throw new BusinessException(ItemErrorCode.ITEM_NOT_FOUND);
@@ -319,6 +340,13 @@ public class ItemService {
     @Transactional(readOnly = true)
     public PageResponse<ItemResponse> listPublicItems(
             Long categoryId, Long areaId, String q, ItemCondition condition, OfferType offerType, int page, int size) {
+        int boostLimit = Math.min(size, Math.max(0, configService.getInt(ConfigKey.BOOST_MAX_PER_PAGE)));
+        List<Long> boostedIds =
+                boostLimit == 0 ? List.of() : listingFeeQueryService.findCurrentlyBoostedItemIds(Instant.now());
+        if (!boostedIds.isEmpty()) {
+            return listPublicItemsWithBoosts(
+                    categoryId, areaId, q, condition, offerType, page, size, boostLimit, boostedIds);
+        }
         if (q == null || q.isBlank()) {
             PageRequest pageRequest =
                     PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
@@ -333,6 +361,69 @@ public class ItemService {
                 offerType == null ? null : offerType.name(),
                 q.trim(),
                 PageRequest.of(page, size)));
+    }
+
+    private PageResponse<ItemResponse> listPublicItemsWithBoosts(
+            Long categoryId,
+            Long areaId,
+            String q,
+            ItemCondition condition,
+            OfferType offerType,
+            int page,
+            int size,
+            int boostLimit,
+            List<Long> boostedIds) {
+        Sort newestFirst = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
+        PageRequest boostedRequest = PageRequest.of(page, boostLimit, newestFirst);
+        boolean hasQuery = q != null && !q.isBlank();
+        String conditionName = condition == null ? null : condition.name();
+        String offerTypeName = offerType == null ? null : offerType.name();
+        Page<Item> boosted = hasQuery
+                ? itemRepository.searchBoostedVisibleByFilters(
+                        categoryId, areaId, conditionName, offerTypeName, q.trim(), boostedIds, boostedRequest)
+                : itemRepository.findBoostedVisibleByFilters(
+                        ItemStatus.APPROVED, categoryId, areaId, condition, offerType, boostedIds, boostedRequest);
+
+        int unboostedLimit = size - boosted.getNumberOfElements();
+        List<Item> items = new ArrayList<>(boosted.getContent());
+        long boostsBeforePage = Math.min(boosted.getTotalElements(), (long) page * boostLimit);
+        long unboostedOffset = Math.max(0L, (long) page * size - boostsBeforePage);
+        long totalUnboosted = 0L;
+        if (unboostedLimit > 0) {
+            Pageable unboostedPage = new OffsetLimitPageable(unboostedOffset, unboostedLimit, newestFirst);
+            Page<Item> unboosted = hasQuery
+                    ? itemRepository.searchUnboostedVisibleByFilters(
+                            categoryId, areaId, conditionName, offerTypeName, q.trim(), boostedIds, unboostedPage)
+                    : itemRepository.findUnboostedVisibleByFilters(
+                            ItemStatus.APPROVED, categoryId, areaId, condition, offerType, boostedIds, unboostedPage);
+            items.addAll(unboosted.getContent());
+            totalUnboosted = unboosted.getTotalElements();
+        } else {
+            totalUnboosted = hasQuery
+                    ? itemRepository
+                            .searchUnboostedVisibleByFilters(
+                                    categoryId,
+                                    areaId,
+                                    conditionName,
+                                    offerTypeName,
+                                    q.trim(),
+                                    boostedIds,
+                                    new OffsetLimitPageable(0, 1, newestFirst))
+                            .getTotalElements()
+                    : itemRepository
+                            .findUnboostedVisibleByFilters(
+                                    ItemStatus.APPROVED,
+                                    categoryId,
+                                    areaId,
+                                    condition,
+                                    offerType,
+                                    boostedIds,
+                                    new OffsetLimitPageable(0, 1, newestFirst))
+                            .getTotalElements();
+        }
+        Page<Item> combined =
+                new PageImpl<>(items, PageRequest.of(page, size), boosted.getTotalElements() + totalUnboosted);
+        return toPageResponse(combined);
     }
 
     /** Search gateway for the AI assistant; the database remains the source of every returned item. */

@@ -107,6 +107,7 @@ Xem chi tiết một bài đăng theo ID.
   - Bài ở các trạng thái khác (`PENDING_REVIEW`, `REJECTED`, `RESERVED`, `TRADED`, `EXPIRED`): Chỉ chính **chủ bài đăng** (`donorId`) mới xem được.
   - Trường hợp bài không tồn tại, đã xoá mềm, hoặc người xem không phải chủ bài: Trả về `404 ITEM_NOT_FOUND`.
 - **Thành công:** `200 OK`, trả về `ItemResponse`.
+- Với endpoint chi tiết, `ItemResponse` có thêm `donorName`, `donorTrustStars`, `donorRank`, `donorAsDescribedRate`. Tên được đọc từ `UserService`; điểm uy tín lấy từ `ReputationService`. Không trả email hoặc số điện thoại. Nếu tài khoản đã xoá hoặc chưa có dữ liệu tương ứng, trường đó là `null`.
 - **Lỗi:**
   - `404 ITEM_NOT_FOUND`: Không tìm thấy bài đăng hoặc không có quyền xem.
 
@@ -143,7 +144,7 @@ Xem danh sách tất cả các bài đăng do chính mình tạo (sắp xếp m�
 
 ## 4. GET /api/v1/items
 
-Danh sách bài `APPROVED` còn hiển thị, mới nhất trước. Không cần đăng nhập.
+Danh sách bài `APPROVED` còn hiển thị. Trong tập kết quả sau khi áp dụng đầy đủ bộ lọc, tối đa `boost_max_per_page` bài có `boosted_until` còn hạn được đưa lên đầu từng trang; thứ tự còn lại theo ngày đăng mới nhất. Bài đẩy không bị lặp giữa các trang; `totalElements` và phân trang vẫn tính trên toàn bộ kết quả lọc. Không cần đăng nhập.
 
 Tham số tùy chọn: `q` (tìm trong tiêu đề và mô tả, không phân biệt dấu/hoa thường),
 `categoryId`, `areaId` (lọc đúng id, kết hợp được với `q`),
@@ -203,9 +204,14 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&o
 | `updatedAt` | string | Thời điểm cập nhật ISO-8601 UTC |
 | `expireAt` | string? | Hạn hiển thị ISO-8601 UTC (cột `expire_at`, module listingfee). `null` khi bài chưa từng được duyệt |
 | `boostedUntil` | string? | Thời điểm hết đẩy bài ISO-8601 UTC (cột `boosted_until`, module listingfee). `null` khi bài chưa từng được đẩy; giá trị đã qua nghĩa là hết đẩy |
+| `donorName` | string? | Tên người đăng; chỉ có dữ liệu ở endpoint chi tiết, không có email/số điện thoại |
+| `donorTrustStars` | number? | Sao uy tín người đăng (0–5); chỉ có dữ liệu ở endpoint chi tiết |
+| `donorRank` | string? | Hạng uy tín (`BRONZE`, `SILVER`, `GOLD`, `DIAMOND`); chỉ có dữ liệu ở endpoint chi tiết |
+| `donorAsDescribedRate` | number? | Tỉ lệ đúng mô tả từ 0–1; chỉ có dữ liệu ở endpoint chi tiết, `null` nếu chưa đủ đánh giá |
 
 `expireAt` và `boostedUntil` có trong mọi API trả `ItemResponse` (tạo, sửa, chi tiết, bài của tôi, danh sách công khai).
 Với danh sách, hai trường này được đọc bằng một query cho cả trang qua `ListingFeeQueryService.findDisplayWindows`.
+Các trường `donor*` chỉ được điền cho `GET /api/v1/items/{id}`; API tạo, sửa, bài của tôi và các endpoint danh sách để các trường này `null`.
 
 ---
 
