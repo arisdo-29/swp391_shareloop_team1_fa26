@@ -85,6 +85,8 @@ Trả danh sách từ khóa theo `sort_order`, gồm `id`, keyword, group, level
 
 Thêm từ khóa. `level` nhận `BLOCK` hoặc `REVIEW`; `matchMode` nhận `WORD`, `PHRASE` hoặc `REGEX` và mặc định là `WORD`; `scope` nhận `POST`, `CHAT`, `MESSAGE` hoặc `BOTH`. `exceptions` có thể là danh sách rỗng hoặc bỏ qua.
 
+Với `REGEX`, `keyword` phải là biểu thức chính quy Java biên dịch được, nếu không sẽ bị từ chối ngay khi lưu. Biểu thức giữ nguyên hoa thường (`\D`, `\S`, `\W` giữ đúng nghĩa) và được khớp không phân biệt hoa thường.
+
 ```json
 {
   "keyword": "súng nước",
@@ -110,7 +112,7 @@ Thay nội dung và metadata của mục theo cùng body như POST. Thành công
 { "active": false }
 ```
 
-- `400 VALIDATION_FAILED` hoặc `SETTING_LEXICON_INVALID_VALUE`: keyword rỗng, level/matchMode/scope không hợp lệ.
+- `400 VALIDATION_FAILED` hoặc `SETTING_LEXICON_INVALID_VALUE`: keyword rỗng, level/matchMode/scope không hợp lệ, hoặc `matchMode = REGEX` mà keyword không phải REGEX hợp lệ (áp dụng cả khi bật lại một mục cũ qua PATCH).
 - `403 FORBIDDEN`: người gọi không phải Admin.
 - `404 SETTING_LEXICON_NOT_FOUND`: không tìm thấy mục.
 - `409 SETTING_LEXICON_DUPLICATE`: keyword đã có trong cùng group và scope (không phân biệt hoa thường và khoảng trắng liên tiếp).

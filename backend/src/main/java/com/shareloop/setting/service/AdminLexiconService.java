@@ -92,6 +92,7 @@ public class AdminLexiconService {
         WebsiteAttribute attribute = requireEntry(id);
         if (active) {
             NormalizedRule currentRule = toRule(attribute);
+            ensureMatchable(currentRule.keyword(), currentRule.matchMode());
             ensureUnique(currentRule, id);
             attribute.activate();
         } else {
@@ -150,6 +151,7 @@ public class AdminLexiconService {
         if (!SCOPES.contains(scope)) {
             throw invalid("scope chỉ nhận POST, CHAT, MESSAGE hoặc BOTH.");
         }
+        ensureMatchable(keyword, matchMode);
         List<String> exceptions = request.exceptions() == null
                 ? List.of()
                 : request.exceptions().stream()
@@ -157,6 +159,18 @@ public class AdminLexiconService {
                         .distinct()
                         .toList();
         return new NormalizedRule(keyword, group, level, matchMode, exceptions, scope);
+    }
+
+    // Luật không biên dịch được sẽ làm hỏng mọi lần quét bài và chat, nên chặn ngay khi lưu hoặc bật lại.
+    private static void ensureMatchable(String keyword, String matchMode) {
+        try {
+            LexiconMatcher.validateRule(keyword, matchMode);
+        } catch (IllegalArgumentException exception) {
+            throw invalid(
+                    "REGEX".equals(matchMode)
+                            ? "keyword không phải biểu thức REGEX hợp lệ."
+                            : "keyword không dùng được để so khớp.");
+        }
     }
 
     private WebsiteAttribute saveUnique(WebsiteAttribute attribute) {

@@ -82,7 +82,9 @@ public class AdminActivityLogController {
                                                 "AREA_TOGGLE",
                                                 "AUTH_GRANT",
                                                 "AUTH_REJECT",
-                                                "AUTH_REVOKE"
+                                                "AUTH_REVOKE",
+                                                "GRACE_STAR",
+                                                "STAR_RESTORED"
                                             }))
                     @RequestParam(required = false)
                     String type,

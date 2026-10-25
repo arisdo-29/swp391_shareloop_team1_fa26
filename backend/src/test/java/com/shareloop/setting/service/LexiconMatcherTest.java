@@ -1,6 +1,8 @@
 package com.shareloop.setting.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.shareloop.setting.dto.LexiconEntry;
 import com.shareloop.setting.dto.LexiconMatch.MatchedAs;
@@ -71,7 +73,36 @@ class LexiconMatcherTest {
                 .isEmpty();
     }
 
+    @Test
+    void regexKeepsUppercaseEscapesInsteadOfLowercasingThem() {
+        // \D là "không phải chữ số"; trước đây bị viết thường thành \d nên khớp ngược.
+        var rule = List.of(regexRule("a\\Db"));
+
+        assertThat(matcher.match("a-b", rule))
+                .singleElement()
+                .satisfies(match -> assertThat(match.matchedAs()).isEqualTo(MatchedAs.EXACT));
+        assertThat(matcher.match("a1b", rule)).isEmpty();
+    }
+
+    @Test
+    void regexIsStillCaseInsensitive() {
+        assertThat(matcher.match("ZALO 0912", List.of(regexRule("zalo\\s*\\d+"))))
+                .hasSize(1);
+    }
+
+    @Test
+    void validateRuleRejectsRegexThatDoesNotCompile() {
+        assertThatThrownBy(() -> LexiconMatcher.validateRule("[abc", "REGEX"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatCode(() -> LexiconMatcher.validateRule("0\\d{9}", "REGEX")).doesNotThrowAnyException();
+        assertThatCode(() -> LexiconMatcher.validateRule("[abc", "WORD")).doesNotThrowAnyException();
+    }
+
     private static LexiconEntry rule(String term, String level, List<String> exceptions, String group) {
         return new LexiconEntry(term, group, level, "WORD", exceptions, "POST", 1);
+    }
+
+    private static LexiconEntry regexRule(String pattern) {
+        return new LexiconEntry(pattern, "CONTACT", "BLOCK", "REGEX", List.of(), "POST", 1);
     }
 }

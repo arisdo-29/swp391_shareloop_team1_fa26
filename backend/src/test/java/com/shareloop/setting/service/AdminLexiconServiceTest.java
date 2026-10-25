@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -114,6 +115,53 @@ class AdminLexiconServiceTest {
 
         assertThat(service.listAll()).extracting(entry -> entry.keyword()).containsExactly("dao", "zalo");
         assertThat(service.listAll()).extracting(entry -> entry.active()).containsExactly(true, false);
+    }
+
+    @Test
+    void createRejectsRegexThatDoesNotCompileAndSavesNothing() {
+        var request = new AdminLexiconRequest("[abc", "WEAPONS", "BLOCK", "REGEX", List.of(), "POST");
+
+        assertThatThrownBy(() -> service.create(request, ADMIN_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("keyword không phải biểu thức REGEX hợp lệ.")
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SettingErrorCode.SETTING_LEXICON_INVALID_VALUE);
+        verify(repository, never()).saveAndFlush(any(WebsiteAttribute.class));
+    }
+
+    @Test
+    void createAcceptsValidRegex() {
+        when(repository.findByAttrGroupOrderBySortOrderAscIdAsc("BANNED_KEYWORD"))
+                .thenReturn(List.of());
+        when(repository.saveAndFlush(any(WebsiteAttribute.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.create(
+                new AdminLexiconRequest("0\\d{9}", "CONTACT", "REVIEW", "regex", List.of(), "POST"), ADMIN_ID);
+
+        assertThat(result.matchMode()).isEqualTo("REGEX");
+        assertThat(result.keyword()).isEqualTo("0\\d{9}");
+    }
+
+    @Test
+    void reactivatingStoredRegexThatDoesNotCompileIsRejected() {
+        WebsiteAttribute broken = mock(WebsiteAttribute.class);
+        when(broken.getId()).thenReturn(5L);
+        when(broken.getAttrGroup()).thenReturn("BANNED_KEYWORD");
+        when(broken.getAttrValue()).thenReturn("(súng");
+        when(broken.getExtra())
+                .thenReturn(Map.of(
+                        "category", "WEAPONS",
+                        "severity", "BLOCK",
+                        "matchMode", "REGEX",
+                        "exceptions", List.of(),
+                        "scope", "POST"));
+        when(repository.findById(5L)).thenReturn(Optional.of(broken));
+
+        assertThatThrownBy(() -> service.setActive(5L, true, ADMIN_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SettingErrorCode.SETTING_LEXICON_INVALID_VALUE);
+        verify(broken, never()).activate();
     }
 
     @Test

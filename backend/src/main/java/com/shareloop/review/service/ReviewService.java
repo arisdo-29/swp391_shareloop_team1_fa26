@@ -148,6 +148,16 @@ public class ReviewService {
         Map<String, Object> snapshot = buildSnapshot(checklistItems);
         reviewItem.approve(snapshot, Instant.now(), adminId);
 
+        // UC-40 bước 5: duyệt xong báo người đăng, giống nhánh từ chối.
+        reviewItemRepository
+                .findDonorIdByItemId(itemId)
+                .ifPresent(donorId -> notificationService.notify(
+                        donorId,
+                        "POST_APPROVED",
+                        "Bài đăng đã được duyệt",
+                        "Bài đăng của bạn đã được duyệt và đang hiển thị công khai.",
+                        "/items/" + itemId));
+
         activityLogService.log(ActivityType.REVIEW_APPROVE.name(), adminId, "ITEM", itemId, snapshot, null);
     }
 
