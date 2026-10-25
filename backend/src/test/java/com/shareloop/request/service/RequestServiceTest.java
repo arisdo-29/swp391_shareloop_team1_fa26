@@ -282,8 +282,10 @@ class RequestServiceTest {
 
         assertThat(otherRequest.getStatus()).isEqualTo(RequestStatus.REJECTED);
         org.mockito.Mockito.verify(itemService).reserve(1L);
-        org.mockito.Mockito.verify(notificationService).notify(eq(10L), eq("REQUEST_ACCEPTED"), any(), any(), any());
-        org.mockito.Mockito.verify(notificationService).notify(eq(11L), eq("REQUEST_REJECTED"), any(), any(), any());
+        org.mockito.Mockito.verify(notificationService)
+                .notify(eq(10L), eq("REQUEST_ACCEPTED"), any(), any(), eq("/requests/101"));
+        org.mockito.Mockito.verify(notificationService)
+                .notify(eq(11L), eq("REQUEST_REJECTED"), any(), any(), eq("/requests/102"));
     }
 
     @Test
@@ -310,7 +312,8 @@ class RequestServiceTest {
         assertThat(response.status()).isEqualTo("RESERVED");
         assertThat(otherSwapRequest.getStatus()).isEqualTo(RequestStatus.CANCELLED);
         assertThat(otherSwapRequest.getCancelReason()).isNotNull();
-        org.mockito.Mockito.verify(notificationService).notify(eq(10L), eq("REQUEST_CANCELLED"), any(), any(), any());
+        org.mockito.Mockito.verify(notificationService)
+                .notify(eq(10L), eq("REQUEST_CANCELLED"), any(), any(), eq("/requests/103"));
     }
 
     @Test

@@ -327,7 +327,7 @@ public class RequestService {
                         "REQUEST_REJECTED",
                         "Yêu cầu không được chọn",
                         "Chủ bài đã chọn người nhận khác cho món đồ này.",
-                        "/items/" + selectedRequest.getItemId());
+                        "/requests/" + other.getId());
             }
         }
 
@@ -344,7 +344,7 @@ public class RequestService {
                             "REQUEST_CANCELLED",
                             "Yêu cầu trao đổi bị huỷ",
                             "Món đồ bạn đề nghị đã được chọn trong một giao dịch khác.",
-                            "/items/" + otherSwap.getItemId());
+                            "/requests/" + otherSwap.getId());
                 }
             }
         }
