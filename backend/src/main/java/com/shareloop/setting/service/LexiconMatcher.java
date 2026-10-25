@@ -47,11 +47,25 @@ public class LexiconMatcher {
         return List.copyOf(matches);
     }
 
+    /**
+     * Kiểm một luật trước khi lưu, biên dịch đúng như {@link #match} (cả dạng giữ dấu và bỏ dấu). Một REGEX sai cú
+     * pháp làm mọi lần quét đều ném lỗi: bài đăng rơi hết vào MODERATION_CHECK_FAILED, kể cả bài chứa từ khoá BLOCK, và
+     * chat lỗi 500.
+     *
+     * @throws IllegalArgumentException khi luật không biên dịch được (PatternSyntaxException là lớp con)
+     */
+    public static void validateRule(String term, String matchMode) {
+        compileRule(term, matchMode, false);
+        compileRule(term, matchMode, true);
+    }
+
     private static Pattern compileRule(String term, String matchMode, boolean removeDiacritics) {
         if (matchMode == null) {
             throw new IllegalArgumentException("Lexicon match mode is missing");
         }
-        String normalizedTerm = normalize(term, removeDiacritics);
+        // REGEX không viết thường: \D, \S, \W, \B sẽ đổi nghĩa và \P{Lu} hỏng cú pháp. FLAGS đã bỏ qua hoa thường.
+        boolean regex = "REGEX".equalsIgnoreCase(matchMode);
+        String normalizedTerm = normalize(term, removeDiacritics, !regex);
         if (normalizedTerm.isBlank()) {
             throw new IllegalArgumentException("Lexicon keyword is blank after normalization");
         }
@@ -102,14 +116,18 @@ public class LexiconMatcher {
     }
 
     private static String normalize(String value, boolean removeDiacritics) {
+        return normalize(value, removeDiacritics, true);
+    }
+
+    private static String normalize(String value, boolean removeDiacritics, boolean lowerCase) {
         String normalized = Normalizer.normalize(value, removeDiacritics ? Normalizer.Form.NFD : Normalizer.Form.NFC);
         if (removeDiacritics) {
             normalized = normalized.replaceAll("\\p{M}+", "").replace('đ', 'd').replace('Đ', 'D');
         }
-        return WHITESPACE
-                .matcher(normalized.toLowerCase(Locale.ROOT))
-                .replaceAll(" ")
-                .trim();
+        if (lowerCase) {
+            normalized = normalized.toLowerCase(Locale.ROOT);
+        }
+        return WHITESPACE.matcher(normalized).replaceAll(" ").trim();
     }
 
     private static String flexibleWhitespace(String quoted) {

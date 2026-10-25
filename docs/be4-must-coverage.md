@@ -19,7 +19,7 @@ Mục tiêu: Đảm bảo 100% các yêu cầu **Must** đều có mã nguồn x
 | **FR-93** | Rà soát các bài đăng khác của người vi phạm khi lý do là hàng cấm | `report` (BE4) | `ReportService.concludeReport`<br>(gọi `ItemService.hideAllOfUser`) | `AdminReportControllerTest`<br>`ReportServiceTest` | `docs/api/report.md` | **Đủ** *(PR #262 / #113)* |
 | **FR-97** | Cộng điểm khi Completed: Cho +10/+2, Trao đổi +6/+6 | `reputation` (BE4) | `ReputationService.onCompleted(requestId)` | `ReputationServiceTest` | `docs/api/reputation.md` | **Đủ** *(PR #258 / #114)* |
 | **FR-100** | Tính lại hạng (Rank) theo điểm và áp dụng quyền lợi ngay | `reputation` (BE4) | `ReputationService.getRank(int)`<br>`ReputationService.getRank(Long)` | `ReputationServiceTest` | `docs/api/reputation.md` | **Đủ** *(PR #258 / #114)* |
-| **FR-101** | Xem thông tin điểm, hạng, sao, tỉ lệ đúng mô tả của thành viên | `reputation` (BE4) | `ReputationService.getReputationSummary(Long)`<br>*(Hiện dùng nội bộ trong luồng giao dịch `RequestService`)* | `ReputationServiceTest` | `docs/api/reputation.md` | **Đủ cho luồng nội bộ** *(Xem mục 4 để mở rộng API công khai)* |
+| **FR-101** | Xem thông tin điểm, hạng, sao, tỉ lệ đúng mô tả của thành viên | `reputation` (BE4) | `GET /api/v1/me/reputation`<br>`ReputationService.getReputationSummary(Long)` | `MeReputationControllerTest`<br>`ReputationServiceTest` | `docs/api/reputation.md` | **Đủ** *(#128)* |
 | **FR-102** | Quản lý danh mục, cờ IsRestricted và thuộc tính động | `catalog` (BE2) | `GET, POST, PUT, DELETE /api/v1/admin/categories/**`<br>`GET, POST, PUT, DELETE /api/v1/admin/category-attributes/**` | `AdminCategoryControllerTest`<br>`AdminCategoryAttributeControllerTest` | `docs/api/catalog.md` | **Đủ** *(BE2 đã thực hiện)* |
 | **FR-103** | Quản lý lexicon: từ khoá, mức độ, ngoại lệ; kiểm tra thử văn bản | `setting` (BE4) | `GET /api/v1/admin/lexicon`<br>`POST /api/v1/admin/lexicon`<br>`PUT /api/v1/admin/lexicon/{id}`<br>`PATCH /api/v1/admin/lexicon/{id}/active`<br>`POST /api/v1/admin/lexicon/test` | `AdminLexiconControllerTest`<br>`AdminLexiconServiceTest`<br>`LexiconMatcherTest` | `docs/api/setting.md` | **Đủ** |
 | **FR-104** | Quản lý danh sách câu hỏi kiểm duyệt bài đăng (checklist) | `setting` (BE4) | `GET /api/v1/admin/checklist`<br>`POST /api/v1/admin/checklist`<br>`PUT /api/v1/admin/checklist/{id}`<br>`PATCH /api/v1/admin/checklist/{id}/active`<br>`PUT /api/v1/admin/checklist/reorder` | `AdminChecklistControllerTest`<br>`AdminChecklistServiceTest` | `docs/api/setting.md` | **Đủ** |
@@ -40,8 +40,8 @@ Các yêu cầu này theo SRS v10 không thuộc danh sách **Must** bắt buộ
 | Mã FR | Mức ưu tiên | Mô tả yêu cầu | Hiện trạng và Đề xuất |
 |---|---|---|---|
 | **FR-108** | **Should** | Gỡ số điện thoại khỏi tài khoản khi có khiếu nại chiếm số | Đã có API đổi số điện thoại bằng OTP email qua `PUT /api/v1/me/phone` (#147). Chưa có API can thiệp gỡ tay cho Admin. Đề xuất: Chưa làm ở R5, chuyển sang R6 nếu cần. |
-| **FR-111** | **Should** | Xuất báo cáo tài chính CSV | API JSON đã cung cấp đầy đủ dữ liệu ở `GET /api/v1/admin/finance/report`. FE hoặc Admin tool có thể parse trực tiếp thành file CSV. Đề xuất: Giữ nguyên cho R5. |
-| **FR-113** | **Should** | Cảnh báo bất thường (cặp giao dịch lặp, nhiều tài khoản cùng IP...) | Đã có cảnh báo từ khoá vi phạm trong chat (#146). Các kiểm tra bất thường khác thuộc cơ chế giám sát nâng cao. Đề xuất: Triển khai ở R6/post-MVP. |
+| **FR-111** | **Should** | Xuất báo cáo tài chính CSV | **Đã làm (#149):** `GET /api/v1/admin/finance/report.csv` (`AdminFinanceControllerTest`, `FinanceReportCsvWriterTest`, `docs/api/admin.md` mục 2.1). |
+| **FR-113** | **Should** | Cảnh báo bất thường (cặp giao dịch lặp, nhiều tài khoản cùng IP...) | **Đã làm phần cặp giao dịch lặp (#148):** `GET /api/v1/admin/anomalies` (`AdminAnomalyServiceTest`, `AdminAnomalyControllerTest`, `AdminAnomalyIT`). Cảnh báo nhiều tài khoản cùng IP chưa làm, chờ method mới ở `UserService`. |
 | **FR-114** | **Should** | Danh sách bài quá hạn và gỡ hẳn | Đã có `ItemExpiryJob` tự động quét và cập nhật trạng thái bài hết hạn. Đề xuất: Đạt yêu cầu hệ thống. |
 | **FR-116** | **Could** | Thống kê số lượt gọi AI, chi phí ước tính, tỉ lệ đồng ý cờ AI | Thuộc nhóm phân tích bổ sung (Could). Đề xuất: Triển khai sau R5. |
 
@@ -57,23 +57,24 @@ Tất cả các endpoint thuộc nhóm `/api/v1/admin/**` đã được rà soá
      - Người dùng thông thường (`USER`) gọi vào trả về HTTP `403 FORBIDDEN`.
      - Chỉ token có vai trò `ADMIN` mới được phép thực thi.
 2. **Ghi vết hành động (Activity Logging - FR-115)**:
-   - Mọi thao tác làm thay đổi dữ liệu hoặc trạng thái của Admin đều ghi một dòng vào bảng `activity_logs`:
-     - **Khoá tài khoản**: Ghi log `USER_LOCKED` kèm lý do vi phạm (`reason`).
-     - **Mở khoá tài khoản**: Ghi log `USER_UNLOCKED` kèm lý do (`reason`).
-     - **Duyệt bài đăng**: Ghi log `ITEM_APPROVED` kèm kết quả checklist.
-     - **Từ chối bài đăng**: Ghi log `ITEM_REJECTED` kèm mẫu lý do từ chối.
-     - **Cập nhật cấu hình hệ thống**: Ghi log `CONFIG_UPDATED` kèm key, giá trị cũ/mới và lý do.
-     - **Kết luận báo cáo / khiếu nại**: Ghi log `REPORT_CONCLUDED` kèm quyết định và ghi chú.
+   - Mọi thao tác làm thay đổi dữ liệu hoặc trạng thái của Admin đều ghi một dòng vào bảng `activity_logs`. Cột `type` lưu đúng tên hằng của enum `ActivityType`:
+     - **Khoá tài khoản**: Ghi log `USER_LOCK` kèm lý do vi phạm (`reason`).
+     - **Mở khoá tài khoản**: Ghi log `USER_UNLOCK` kèm lý do (`reason`).
+     - **Duyệt bài đăng**: Ghi log `REVIEW_APPROVE` kèm kết quả checklist.
+     - **Từ chối bài đăng**: Ghi log `REVIEW_REJECT` kèm lý do từ chối.
+     - **Cập nhật cấu hình hệ thống**: Ghi log `CONFIG_UPDATE` kèm key, giá trị cũ/mới và lý do.
+     - **Kết luận báo cáo / khiếu nại**: Ghi log `REPORT_UPHELD` (có cơ sở) hoặc `REPORT_DISMISSED` (bác bỏ) kèm quyết định và ghi chú.
+     - **Lexicon, checklist**: `LEXICON_CREATE/UPDATE/TOGGLE`, `CHECKLIST_CREATE/UPDATE/TOGGLE/REORDER`.
+     - **Uy tín**: `GRACE_STAR` (Admin cấp sao ân hạn), `STAR_RESTORED` (hệ thống tự hồi sao).
 
 ---
 
 ## 4. Tình trạng tài liệu `docs/api/` cho các module BE4
 
 Các tài liệu API contract đã đầy đủ và đồng bộ với mã nguồn:
-- **`docs/api/admin.md`**: Đầy đủ 5 nhóm endpoint quản trị (Nhật ký hành động, Báo cáo tài chính, Lịch sử giao dịch ví của người dùng, Khoá tài khoản, Mở khoá tài khoản).
+- **`docs/api/admin.md`**: Nhật ký hành động (kèm danh sách loại), Báo cáo tài chính (JSON và CSV), Lịch sử giao dịch ví của người dùng, Khoá và mở khoá tài khoản, Cấp sao ân hạn, Cảnh báo bất thường.
 - **`docs/api/report.md`**: Đầy đủ endpoint báo cáo vi phạm, khiếu nại giao dịch trong 7 ngày, giải trình khiếu nại trong 3 ngày và Admin kết luận.
 - **`docs/api/review.md`**: Đầy đủ endpoint danh sách hàng chờ kèm checklist, duyệt bài, từ chối bài và danh sách mẫu lý do.
 - **`docs/api/setting.md`**: Đầy đủ endpoint quản lý cấu hình hệ thống, từ điển lexicon và checklist câu hỏi duyệt bài.
-- **`docs/api/reputation.md`**: Đầy đủ mô tả `ReputationService`, thang điểm, các ngưỡng hạng và cấu trúc `ReputationSummary`.
-  *(Khuyến nghị: Nếu cần endpoint công khai riêng cho Member tra cứu trang uy tín của chính mình hoặc người khác theo FR-101/UC-05, có thể bổ sung `GET /api/v1/users/{userId}/reputation` trả về `ReputationSummary`)*.
+- **`docs/api/reputation.md`**: Đầy đủ mô tả `ReputationService`, thang điểm, các ngưỡng hạng, cấu trúc `ReputationSummary` và `GET /api/v1/me/reputation` cho Member xem uy tín của chính mình (FR-101).
 

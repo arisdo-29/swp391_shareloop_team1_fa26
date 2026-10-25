@@ -141,6 +141,7 @@ Duyệt bài đăng đang chờ kiểm duyệt. Gửi đáp án theo `id` của 
 - Trừ khoản phí đăng bài đang tạm giữ (`PostFeeService.chargeHeldFee`). Bài `GIVE` (phí 0) vẫn duyệt bình thường, không đụng ví.
 - Hai Admin duyệt cùng lúc một bài: chỉ một request thành công (204), request còn lại nhận 409 và phí không bị trừ lần hai.
 - Lưu snapshot kết quả checklist kiểm duyệt (`ReviewItem`) cùng thời điểm duyệt `approved_at` và ID Admin duyệt.
+- Gửi thông báo trong ứng dụng (`NotificationService.notify`) loại `POST_APPROVED` tới người đăng, `link = /items/{itemId}` (UC-40 bước 5).
 - Ghi log hoạt động hệ thống (`ActivityLogService.log`).
 
 ### Response & Mã lỗi
