@@ -78,7 +78,7 @@ class AdminAnomalyServiceTest {
     }
 
     @Test
-    @DisplayName("Người dùng đã xoá mềm (không có trong findBriefs) hiển thị 'Người dùng #id'")
+    @DisplayName("Người dùng đã xoá mềm (không có trong findBriefs) hiển thị 'Tài khoản đã xoá', không hiện #id")
     void getAnomalies_deletedUser_showsPlaceholderName() {
         when(reputationService.findRepeatedPairs(any(), anyInt()))
                 .thenReturn(List.of(new RepeatedPair(3L, 7L, 6, LAST_COMPLETED)));
@@ -87,7 +87,7 @@ class AdminAnomalyServiceTest {
 
         AnomalyReportResponse response = service.getAnomalies();
 
-        assertThat(response.repeatedPairs().get(0).userB()).isEqualTo(new AnomalyUser(7L, "Người dùng #7", null));
+        assertThat(response.repeatedPairs().get(0).userB()).isEqualTo(new AnomalyUser(7L, "Tài khoản đã xoá", null));
     }
 
     @Test

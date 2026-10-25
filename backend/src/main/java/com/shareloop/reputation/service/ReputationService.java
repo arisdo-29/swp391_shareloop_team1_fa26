@@ -26,6 +26,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.ObjectProvider;
@@ -43,6 +44,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReputationService {
 
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
+    /** SRS 6.12: tỉ lệ đúng mô tả chỉ hiện khi người đăng có từ 3 giao dịch đã được đánh giá trở lên. */
+    static final int MIN_RATED_FOR_AS_DESCRIBED_RATE = 3;
 
     private final ConfigService configService;
     private final UserReputationRepository userReputationRepository;
@@ -138,9 +142,10 @@ public class ReputationService {
             return Rank.BRONZE;
         }
 
-        int diamond = getThreshold("REPUTATION_DIAMOND_MIN", "reputation_diamond_min", 400);
-        int gold = getThreshold("REPUTATION_GOLD_MIN", "reputation_gold_min", 150);
-        int silver = getThreshold("REPUTATION_SILVER_MIN", "reputation_silver_min", 50);
+        // Đọc đúng key mà trang Admin sửa (ConfigKey, viết thường), không đọc key viết hoa cũ của migration
+        int diamond = configInt(ConfigKey.REPUTATION_DIAMOND_MIN);
+        int gold = configInt(ConfigKey.REPUTATION_GOLD_MIN);
+        int silver = configInt(ConfigKey.REPUTATION_SILVER_MIN);
 
         if (totalPoints >= diamond) {
             return Rank.DIAMOND;
@@ -173,7 +178,8 @@ public class ReputationService {
 
     /**
      * Lấy thông tin uy tín tổng quan của người dùng (FR-65, Issue #110).
-     * Bao gồm TrustStars (mặc định 5), hạng (mặc định BRONZE) và tỉ lệ đúng mô tả (%).
+     * Bao gồm TrustStars (mặc định 5), hạng (mặc định BRONZE) và tỉ lệ đúng mô tả thang 0–1 (null khi dưới 3 giao
+     * dịch đã được đánh giá).
      *
      * @param userId id của người dùng
      * @return tóm tắt uy tín người dùng
@@ -194,9 +200,8 @@ public class ReputationService {
 
         int trustStars = reputation.getTrustStars();
         Rank rank = getRank(reputation.getTotalPoints());
-        Double asDescribedRate = userReputationRepository.calculateAsDescribedRate(userId);
 
-        return new ReputationSummary(userId, trustStars, rank, asDescribedRate);
+        return new ReputationSummary(userId, trustStars, rank, asDescribedRate(userId));
     }
 
     /**
@@ -223,9 +228,7 @@ public class ReputationService {
         int trustStars = reputation != null ? reputation.getTrustStars() : 5;
         Rank rank = getRank(totalPoints);
 
-        Double rawRate =
-                userReputationRepository != null ? userReputationRepository.calculateAsDescribedRate(userId) : null;
-        Double accuracyRate = rawRate != null ? rawRate / 100.0 : null;
+        Double accuracyRate = asDescribedRate(userId);
 
         int pageNumber = Math.max(page, 0);
         int pageSize = Math.min(Math.max(size, 1), 50);
@@ -296,10 +299,10 @@ public class ReputationService {
         int donorPts;
         int receiverPts;
         if ("GIVE".equalsIgnoreCase(type)) {
-            donorPts = getThreshold("REPUTATION_GIVE_DONOR", "reputation_give_donor", 10);
-            receiverPts = getThreshold("REPUTATION_GIVE_RECEIVER", "reputation_give_receiver", 2);
+            donorPts = configInt(ConfigKey.REPUTATION_GIVE_DONOR);
+            receiverPts = configInt(ConfigKey.REPUTATION_GIVE_RECEIVER);
         } else {
-            int swapPts = getThreshold("REPUTATION_SWAP_EACH", "reputation_swap_each", 6);
+            int swapPts = configInt(ConfigKey.REPUTATION_SWAP_EACH);
             donorPts = swapPts;
             receiverPts = swapPts;
         }
@@ -325,6 +328,8 @@ public class ReputationService {
                 + 1;
         CompletionContext context = new CompletionContext(
                 requestId,
+                participant.getItemId(),
+                participant.getItemTitle(),
                 pairTransactionNo,
                 pairWindowDays,
                 pairTransactionNo >= configInt(ConfigKey.REPUTATION_PAIR_NO_POINTS_FROM),
@@ -356,19 +361,24 @@ public class ReputationService {
         if (activityLogService == null) {
             return;
         }
+        Map<String, Object> data = new HashMap<>(Map.of(
+                "points", granted,
+                "basePoints", basePoints,
+                "totalPoints", newTotal,
+                "rank", newRank.name(),
+                "role", role,
+                "pairTransactionNo", context.pairTransactionNo(),
+                "pointsToday", user.getPointsToday()));
+        // Nhật ký Admin dùng itemId để hiện tên món thay cho "Yêu cầu #id"
+        if (context.itemId() != null) {
+            data.put("itemId", context.itemId());
+        }
         activityLogService.log(
                 ActivityType.POINTS.name(),
                 user.getId(),
                 "REQUEST",
                 context.requestId(),
-                Map.of(
-                        "points", granted,
-                        "basePoints", basePoints,
-                        "totalPoints", newTotal,
-                        "rank", newRank.name(),
-                        "role", role,
-                        "pairTransactionNo", context.pairTransactionNo(),
-                        "pointsToday", user.getPointsToday()),
+                data,
                 pointsReason(context, roleLabel, basePoints, granted));
         if (starRestored) {
             activityLogService.log(
@@ -388,7 +398,11 @@ public class ReputationService {
     }
 
     private static String pointsReason(CompletionContext context, String roleLabel, int basePoints, int granted) {
-        String transaction = "giao dịch #" + context.requestId() + " (" + roleLabel + ")";
+        // Gọi giao dịch bằng tên món thay cho "giao dịch #id": người dùng không biết id là gì
+        String transaction = (context.itemTitle() == null || context.itemTitle().isBlank()
+                        ? "giao dịch"
+                        : "giao dịch món “" + context.itemTitle() + "”")
+                + " (" + roleLabel + ")";
         if (context.repeatedPair()) {
             return "Không cộng điểm " + transaction + ": giao dịch thứ " + context.pairTransactionNo()
                     + " giữa cùng hai người trong " + context.pairWindowDays() + " ngày";
@@ -456,8 +470,9 @@ public class ReputationService {
                         userId,
                         "TRUST_STARS_DEPLETED",
                         "Sao uy tín đã về 0",
-                        "Điểm uy tín (TrustStars) của bạn đã về 0. Quyền đăng bài và gửi yêu cầu giao dịch đã bị vô hiệu hoá. Vui lòng gửi khiếu nại để được xem xét cấp sao ân hạn.",
-                        "/me/reputation");
+                        "Điểm uy tín của bạn đã về 0. Quyền đăng bài và gửi yêu cầu giao dịch đã bị vô hiệu hoá. Vui lòng gửi khiếu nại để được xem xét cấp sao ân hạn.",
+                        // FE không có trang /me/reputation (ra 404), tab uy tín nằm trong trang hồ sơ
+                        "/profile?tab=reputation");
             }
         }
     }
@@ -578,6 +593,20 @@ public class ReputationService {
         return null;
     }
 
+    /**
+     * Tỉ lệ đúng mô tả theo thang 0–1 (0.92 nghĩa là 92%), dùng chung cho hồ sơ, danh sách yêu cầu và /me/reputation để
+     * mọi nơi cùng một thang. Dưới {@value #MIN_RATED_FOR_AS_DESCRIBED_RATE} giao dịch đã được đánh giá thì trả null vì
+     * quá ít dữ liệu (SRS 6.12).
+     */
+    private Double asDescribedRate(Long userId) {
+        if (userReputationRepository == null
+                || userReputationRepository.countRatedCompletedAsDonor(userId) < MIN_RATED_FOR_AS_DESCRIBED_RATE) {
+            return null;
+        }
+        Double percent = userReputationRepository.calculateAsDescribedRate(userId);
+        return percent != null ? percent / 100.0 : null;
+    }
+
     // configService null chỉ gặp ở unit test dựng service rút gọn; khi đó dùng giá trị mặc định của ConfigKey.
     private int configInt(ConfigKey key) {
         return configService != null ? configService.getInt(key) : key.getDefaultValue();
@@ -586,24 +615,14 @@ public class ReputationService {
     /** Thông số chung của một lần hoàn tất giao dịch, dùng cho cả hai bên. */
     private record CompletionContext(
             long requestId,
+            Long itemId,
+            String itemTitle,
             long pairTransactionNo,
             int pairWindowDays,
             boolean repeatedPair,
             LocalDate today,
             int dailyCap,
             int streakForStar) {}
-
-    private int getThreshold(String upperKey, String lowerKey, int fallback) {
-        try {
-            return configService.getDecimal(upperKey).intValue();
-        } catch (Exception e1) {
-            try {
-                return configService.getDecimal(lowerKey).intValue();
-            } catch (Exception e2) {
-                return fallback;
-            }
-        }
-    }
 
     /**
      * Lớp hỗ trợ gói ItemService thành ObjectProvider khi dùng trong unit test.

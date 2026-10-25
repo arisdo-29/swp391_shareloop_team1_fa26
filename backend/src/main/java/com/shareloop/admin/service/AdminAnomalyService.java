@@ -75,6 +75,6 @@ public class AdminAnomalyService {
         UserBrief brief = briefs.get(userId);
         return brief != null
                 ? new AnomalyUser(userId, brief.fullName(), brief.email())
-                : new AnomalyUser(userId, "Người dùng #" + userId, null);
+                : new AnomalyUser(userId, "Tài khoản đã xoá", null);
     }
 }

@@ -8,6 +8,7 @@ import com.shareloop.audit.entity.ActivityLog;
 import com.shareloop.audit.repository.ActivityLogRepository;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemQueryService;
+import com.shareloop.setting.ConfigKey;
 import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.service.UserService;
 import java.time.LocalDate;
@@ -35,6 +36,8 @@ public class ActivityLogQueryService {
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final int MAX_PAGE_SIZE = 100;
     private static final String SYSTEM_ACTOR_NAME = "Hệ thống";
+    // Người dùng đã xoá mềm không còn tên. Không hiện "Người dùng #id" vì Admin không đọc được id.
+    private static final String DELETED_USER_NAME = "Tài khoản đã xoá";
 
     private final ActivityLogRepository repository;
     private final UserService userService;
@@ -121,8 +124,20 @@ public class ActivityLogQueryService {
             if ("ITEM".equals(log.getTargetType()) && log.getTargetId() != null) {
                 itemIds.add(log.getTargetId());
             }
+            // Log báo cáo và giao dịch lưu itemId trong data để hiện tên bài thay cho "#id"
+            Long dataItemId = dataItemId(log);
+            if (dataItemId != null) {
+                itemIds.add(dataItemId);
+            }
         }
         return itemIds;
+    }
+
+    private static Long dataItemId(ActivityLog log) {
+        if (log.getData() != null && log.getData().get("itemId") instanceof Number number) {
+            return number.longValue();
+        }
+        return null;
     }
 
     private static ActivityLogDto toDto(ActivityLog log, Map<Long, UserBrief> users, Map<Long, String> itemTitles) {
@@ -148,11 +163,7 @@ public class ActivityLogQueryService {
             return SYSTEM_ACTOR_NAME;
         }
         // User đã xoá mềm không có trong map nhưng nhật ký vẫn phải hiện được người làm.
-        return actor == null ? unknownUserName(actorId) : actor.fullName();
-    }
-
-    private static String unknownUserName(Long userId) {
-        return "Người dùng #" + userId;
+        return actor == null ? DELETED_USER_NAME : actor.fullName();
     }
 
     private static String targetTitle(ActivityLog log, Map<Long, UserBrief> users, Map<Long, String> itemTitles) {
@@ -163,11 +174,31 @@ public class ActivityLogQueryService {
         return switch (log.getTargetType()) {
             case "ITEM" -> targetId == null ? null : itemTitles.get(targetId);
             case "USER" -> targetUserName(targetId, users);
-            case "CONFIG" -> dataValue(log, "key");
-            case "REPORT" -> targetId == null ? null : "Báo cáo #" + targetId;
-            case "REQUEST" -> targetId == null ? null : "Yêu cầu #" + targetId;
+            case "CONFIG" -> configLabel(dataValue(log, "key"));
+            // Gọi bằng tên bài; log cũ chưa có itemId thì chỉ hiện loại, không hiện "#id"
+            case "REPORT" -> withItemTitle("Báo cáo về", "Báo cáo", log, itemTitles);
+            case "REQUEST" -> withItemTitle("Giao dịch món", "Giao dịch", log, itemTitles);
             default -> null;
         };
+    }
+
+    private static String withItemTitle(String prefix, String fallback, ActivityLog log, Map<Long, String> itemTitles) {
+        Long itemId = dataItemId(log);
+        String title = itemId == null ? null : itemTitles.get(itemId);
+        return title == null || title.isBlank() ? fallback : prefix + " “" + title + "”";
+    }
+
+    // Key cấu hình (vd "reputation_gold_min") đổi sang nhãn tiếng Việt mà trang Admin đang hiện
+    private static String configLabel(String key) {
+        if (key == null) {
+            return null;
+        }
+        for (ConfigKey configKey : ConfigKey.values()) {
+            if (configKey.key().equalsIgnoreCase(key)) {
+                return configKey.label();
+            }
+        }
+        return key;
     }
 
     private static String targetUserName(Long targetId, Map<Long, UserBrief> users) {
@@ -175,7 +206,7 @@ public class ActivityLogQueryService {
             return null;
         }
         UserBrief user = users.get(targetId);
-        return user == null ? unknownUserName(targetId) : user.fullName();
+        return user == null ? DELETED_USER_NAME : user.fullName();
     }
 
     // Không trả Map.toString() nữa: FE hiển thị thẳng chuỗi này nên phải đọc được.
@@ -184,7 +215,8 @@ public class ActivityLogQueryService {
             return ActivityType.REVIEW_APPROVE.label();
         }
         if (ActivityType.CONFIG_UPDATE.code().equals(log.getType()) && log.getData() != null) {
-            return dataValue(log, "key") + ": " + dataValue(log, "oldValue") + " → " + dataValue(log, "newValue");
+            return configLabel(dataValue(log, "key")) + ": " + dataValue(log, "oldValue") + " → "
+                    + dataValue(log, "newValue");
         }
         if ((ActivityType.AI_USAGE.code().equals(log.getType()) || "AiUsage".equals(log.getType()))
                 && log.getData() != null) {

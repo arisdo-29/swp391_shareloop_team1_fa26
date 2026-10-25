@@ -101,12 +101,17 @@ class ReportServiceTest {
 
     @BeforeEach
     void setUp() {
+        // Hạn khiếu nại và hạn giải trình đọc đúng ConfigKey (key viết thường mà trang Admin sửa)
         org.mockito.Mockito.lenient()
-                .when(configService.getDecimal("DISPUTE_WINDOW_DAYS"))
-                .thenReturn(new BigDecimal("7"));
+                .when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_DAYS))
+                .thenReturn(7);
         org.mockito.Mockito.lenient()
-                .when(configService.getDecimal("DISPUTE_RESPONSE_DAYS"))
-                .thenReturn(new BigDecimal("3"));
+                .when(configService.getInt(ConfigKey.RESPONSE_WINDOW_DAYS))
+                .thenReturn(3);
+        // Tên bài dùng trong câu chữ thông báo và ghi chú thay cho "#id"
+        org.mockito.Mockito.lenient()
+                .when(itemQueryService.findTitles(any()))
+                .thenReturn(java.util.Map.of(10L, "Bàn học gỗ", 105L, "Áo khoác", 200L, "Nồi cơm điện"));
         org.mockito.Mockito.lenient()
                 .when(configService.getInt(ConfigKey.REPORT_HIDE_THRESHOLD))
                 .thenReturn(3);
@@ -255,7 +260,8 @@ class ReportServiceTest {
                 .notifyAdmins(
                         "ITEM_AUTO_HIDDEN",
                         "Bài đăng bị ẩn do nhiều báo cáo",
-                        "Bài #10 đã tự ẩn sau 3 báo cáo đang chờ xử lý. Vui lòng xem xét trong hàng chờ khiếu nại.",
+                        "Bài “Bàn học gỗ” đã tự ẩn sau 3 báo cáo đang chờ xử lý. Vui lòng xem xét trong hàng chờ"
+                                + " khiếu nại.",
                         "/admin/complaints");
     }
 
@@ -376,8 +382,6 @@ class ReportServiceTest {
                 .thenReturn(new ItemSummary(itemId, donorId, OfferType.GIVE, ItemStatus.APPROVED));
         when(reportRepository.existsByReporterIdAndTargetTypeAndRequestId(receiverId, TargetType.REQUEST, requestId))
                 .thenReturn(false);
-        when(configService.getDecimal("DISPUTE_WINDOW_DAYS")).thenReturn(new BigDecimal("7"));
-        when(configService.getDecimal("DISPUTE_RESPONSE_DAYS")).thenReturn(new BigDecimal("3"));
         when(reportRepository.save(any(Report.class))).thenAnswer(inv -> {
             Report r = inv.getArgument(0);
             ReflectionTestUtils.setField(r, "id", 1L);
@@ -398,8 +402,8 @@ class ReportServiceTest {
                 .notify(
                         eq(donorId),
                         eq("DISPUTE_OPENED"),
-                        eq("Giao dịch #100 bị khiếu nại"),
-                        any(String.class),
+                        eq("Giao dịch “Nồi cơm điện” bị khiếu nại"),
+                        eq("Giao dịch “Nồi cơm điện” đã bị đối tác khiếu nại. Bạn có 3 ngày để giải trình."),
                         eq("/me/disputes/1"));
     }
 
@@ -441,7 +445,6 @@ class ReportServiceTest {
 
         when(itemQueryService.getSummary(itemId))
                 .thenReturn(new ItemSummary(itemId, donorId, OfferType.GIVE, ItemStatus.APPROVED));
-        when(configService.getDecimal("DISPUTE_WINDOW_DAYS")).thenReturn(new BigDecimal("7"));
 
         CreateDisputeRequest request = new CreateDisputeRequest(ReportReason.NOT_AS_DESCRIBED, "Quá hạn", null);
 
@@ -673,6 +676,48 @@ class ReportServiceTest {
     }
 
     @Test
+    @DisplayName("Kết luận không kèm ghi chú: ghi chú mặc định gọi báo cáo bằng tên bài, không có #id")
+    void conclude_withoutNote_defaultNotesUseItemTitle() {
+        Long adminId = 1L;
+        Report dismissed =
+                new Report(100L, TargetType.ITEM, 105L, null, null, ReportReason.OTHER, "Báo cáo", ReportStage.BEFORE);
+        ReflectionTestUtils.setField(dismissed, "id", 12L);
+        Report upheld = new Report(
+                100L, TargetType.ITEM, 105L, null, null, ReportReason.NOT_AS_DESCRIBED, "Báo cáo", ReportStage.BEFORE);
+        ReflectionTestUtils.setField(upheld, "id", 13L);
+        when(reportRepository.findByIdForUpdate(12L)).thenReturn(Optional.of(dismissed));
+        when(reportRepository.findByIdForUpdate(13L)).thenReturn(Optional.of(upheld));
+        when(itemQueryService.getSummary(105L))
+                .thenReturn(new ItemSummary(105L, 205L, OfferType.GIVE, ItemStatus.APPROVED));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        reportService.conclude(adminId, 12L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
+        reportService.conclude(adminId, 13L, new ConcludeReportRequest(ReportDecision.UPHOLD, null));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.Map<String, Object>> data = ArgumentCaptor.forClass(java.util.Map.class);
+        verify(activityLogService)
+                .log(
+                        eq("REPORT_DISMISSED"),
+                        eq(adminId),
+                        eq("REPORT"),
+                        eq(12L),
+                        data.capture(),
+                        eq("Bác bỏ báo cáo về “Áo khoác”"));
+        // Nhật ký Admin dùng itemId để hiện tên bài thay cho "Báo cáo #id"
+        assertThat(data.getValue()).containsEntry("itemId", 105L);
+        verify(reputationService).deductStar(205L, 1, "Bị kết luận vi phạm theo báo cáo về “Áo khoác”");
+        verify(activityLogService)
+                .log(
+                        eq("REPORT_UPHELD"),
+                        eq(adminId),
+                        eq("REPORT"),
+                        eq(13L),
+                        anyMap(),
+                        eq("Chấp thuận báo cáo về “Áo khoác”, xử phạt trừ 1 sao uy tín"));
+    }
+
+    @Test
     @DisplayName(
             "Admin kết luận UPHOLD cho bài ITEM thông thường: trừ 1 sao chủ bài, ẩn bài đó, không ẩn toàn bộ bài khác")
     void conclude_uphold_itemTarget_success() {
@@ -860,8 +905,8 @@ class ReportServiceTest {
                 .when(reportService)
                 .findRequest(7L);
         when(itemQueryService.getSummary(5L)).thenReturn(new ItemSummary(5L, 20L, OfferType.GIVE, ItemStatus.APPROVED));
-        when(configService.getDecimal("DISPUTE_WINDOW_DAYS")).thenReturn(new BigDecimal("7"));
-        when(configService.getDecimal("DISPUTE_RESPONSE_DAYS")).thenReturn(new BigDecimal("4"));
+        // Admin đổi hạn giải trình (key viết thường response_window_days) sang 4 ngày -> hạn đổi theo
+        when(configService.getInt(ConfigKey.RESPONSE_WINDOW_DAYS)).thenReturn(4);
         when(evidenceService.attach(java.util.List.of(12L), 10L)).thenReturn("[12]");
         when(reportRepository.save(any())).thenAnswer(invocation -> {
             Report report = invocation.getArgument(0);
@@ -909,15 +954,20 @@ class ReportServiceTest {
     }
 
     @Test
-    void disputeDeadlinesUseTypedConfigFallbackWhenLegacyKeysAreAbsent() {
+    @DisplayName("Hạn khiếu nại, hạn giải trình đi theo key viết thường Admin sửa, bỏ qua key viết hoa cũ")
+    void disputeDeadlinesFollowLowercaseConfigKeysAndIgnoreLegacyUppercaseKeys() {
         doReturn(new ReportService.RequestSnapshot(100L, 200L, 10L, "COMPLETED", BASE_TIME))
                 .when(reportService)
                 .findRequest(100L);
         when(itemQueryService.getSummary(200L))
                 .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.TRADED));
-        var absent = new BusinessException(com.shareloop.setting.SettingErrorCode.SETTING_CONFIG_NOT_FOUND);
-        when(configService.getDecimal("DISPUTE_WINDOW_DAYS")).thenThrow(absent);
-        when(configService.getDecimal("DISPUTE_RESPONSE_DAYS")).thenThrow(absent);
+        // Key viết hoa do migration cũ seed: có giá trị khác nhưng không được dùng nữa
+        org.mockito.Mockito.lenient()
+                .when(configService.getDecimal("DISPUTE_WINDOW_DAYS"))
+                .thenReturn(new BigDecimal("1"));
+        org.mockito.Mockito.lenient()
+                .when(configService.getDecimal("DISPUTE_RESPONSE_DAYS"))
+                .thenReturn(new BigDecimal("1"));
         when(configService.getInt(com.shareloop.setting.ConfigKey.COMPLAINT_WINDOW_DAYS))
                 .thenReturn(10);
         when(configService.getInt(com.shareloop.setting.ConfigKey.RESPONSE_WINDOW_DAYS))
@@ -1043,8 +1093,6 @@ class ReportServiceTest {
                 .findRequest(requestId);
         when(itemQueryService.getSummary(100L))
                 .thenReturn(new ItemSummary(100L, 20L, OfferType.GIVE, ItemStatus.APPROVED));
-        when(configService.getDecimal("DISPUTE_WINDOW_DAYS")).thenReturn(new BigDecimal("7"));
-        when(configService.getDecimal("DISPUTE_RESPONSE_DAYS")).thenReturn(new BigDecimal("3"));
 
         CreateReportRequest request = new CreateReportRequest(
                 TargetType.REQUEST, null, null, null, requestId, ReportReason.NO_SHOW, "Không đến nhận đồ");

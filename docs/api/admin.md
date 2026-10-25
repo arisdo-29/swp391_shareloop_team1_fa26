@@ -69,7 +69,7 @@ Xem nhật ký hành động trong hệ thống (FR-115, Issue #117). Chỉ dàn
 |---|---|---|
 | `id` | number | ID bản ghi nhật ký |
 | `actorId` | number \| null | ID người thực hiện; `null` khi hệ thống tự làm (vd: trừ sao tự động) |
-| `actorName` | string | Tên người thực hiện. `actorId = null` → `"Hệ thống"`. Không tìm thấy user (đã xoá mềm) → `"Người dùng #<id>"` |
+| `actorName` | string | Tên người thực hiện. `actorId = null` → `"Hệ thống"`. Không tìm thấy user (đã xoá mềm) → `"Tài khoản đã xoá"` |
 | `actorEmail` | string \| null | Email người thực hiện; `null` khi là hệ thống hoặc không tìm thấy |
 | `type` | string | Mã loại hành động (xem bảng dưới) |
 | `typeLabel` | string | Nhãn tiếng Việt của `type`. Mã cũ không còn trong bảng thì trả lại chính mã đó |
@@ -86,13 +86,15 @@ Xem nhật ký hành động trong hệ thống (FR-115, Issue #117). Chỉ dàn
 | `targetType` | `targetTitle` |
 |---|---|
 | `ITEM` | Tên bài đăng (kể cả bài đã xoá mềm) |
-| `USER` | Họ tên người dùng; không tìm thấy → `"Người dùng #<id>"` |
-| `CONFIG` | Giá trị `data.key` |
-| `REPORT` | `"Báo cáo #<id>"` |
-| `REQUEST` | `"Yêu cầu #<id>"` |
+| `USER` | Họ tên người dùng, không tìm thấy (đã xoá mềm) → `"Tài khoản đã xoá"` |
+| `CONFIG` | Nhãn tiếng Việt của khoá trong `data.key` (vd `reputation_gold_min` → `"Điểm tối thiểu hạng Vàng"`), khoá lạ thì trả lại chính khoá |
+| `REPORT` | `"Báo cáo về “<tên bài>”"` theo `data.itemId`, không có bài (báo cáo người dùng, log cũ) → `"Báo cáo"` |
+| `REQUEST` | `"Giao dịch món “<tên bài>”"` theo `data.itemId`, log cũ không có → `"Giao dịch"` |
 | Loại khác | `null` |
 
-**Quy tắc `detail`:** `REVIEW_APPROVE` → `"Duyệt bài"`; `CONFIG_UPDATE` → `"<key>: <oldValue> → <newValue>"`; `AI_USAGE` và mã cũ `AiUsage` → vai trò tìm đồ/kiểm duyệt, `outcome` và thời lượng từ `data` (không hiển thị câu nhập hay API key); còn lại → `reason`.
+Không trả `#<id>` trong `targetTitle`, `actorName`. Log `REPORT_DISMISSED`, `REPORT_UPHELD`, `POINTS` lưu thêm `data.itemId`.
+
+**Quy tắc `detail`:** `REVIEW_APPROVE` → `"Duyệt bài"`; `CONFIG_UPDATE` → `"<nhãn tiếng Việt của key>: <oldValue> → <newValue>"`; `AI_USAGE` và mã cũ `AiUsage` → vai trò tìm đồ/kiểm duyệt, `outcome` và thời lượng từ `data` (không hiển thị câu nhập hay API key); còn lại → `reason`.
 
 ### Loại hành động (ActivityType)
 
@@ -566,7 +568,7 @@ Cảnh báo bất thường cho Admin (FR-113, UC-52, BR-U08, Issue #148). Kết
 | `generatedAt` | string (ISO-8601) | Thời điểm tính |
 | `pairWindowDays` | number | Số ngày của cửa sổ tính cặp |
 | `pairThreshold` | number | Cặp có **hơn** số giao dịch này trong cửa sổ thì bị cảnh báo |
-| `repeatedPairs[].userA`, `userB` | object | `id`, `fullName`, `email` của hai người. Người dùng đã xoá mềm: `fullName = "Người dùng #<id>"`, `email = null` |
+| `repeatedPairs[].userA`, `userB` | object | `id`, `fullName`, `email` của hai người. Người dùng đã xoá mềm: `fullName = "Tài khoản đã xoá"`, `email = null` |
 | `repeatedPairs[].completedCount` | number | Số giao dịch `COMPLETED` giữa hai người trong cửa sổ |
 | `repeatedPairs[].lastCompletedAt` | string (ISO-8601) | Thời điểm hoàn tất gần nhất của cặp |
 
