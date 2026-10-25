@@ -11,9 +11,11 @@ import java.util.Map;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-/** Shared OpenRouter transport for the three AI features. The model is fixed in code. */
+/** Shared OpenRouter transport for the three AI features. */
 final class OpenRouterGateway {
-    static final String MODEL = "qwen/qwen3.8-27b:free";
+    static final String PRIMARY_MODEL = "google/gemma-4-31b-it:free";
+    static final String FALLBACK_MODEL = "google/gemma-4-26b-a4b-it:free";
+    private static final List<String> MODELS = List.of(PRIMARY_MODEL, FALLBACK_MODEL);
     private static final URI ENDPOINT = URI.create("https://openrouter.ai/api/v1/chat/completions");
 
     private final ObjectMapper mapper;
@@ -47,7 +49,7 @@ final class OpenRouterGateway {
         return parseResponse(response.statusCode(), response.body());
     }
 
-    HttpRequest buildRequest(
+    private HttpRequest buildRequest(
             String systemPrompt, String userContent, String schemaName, String schema, Duration timeout) {
         return HttpRequest.newBuilder(endpoint)
                 .timeout(timeout)
@@ -58,9 +60,9 @@ final class OpenRouterGateway {
                 .build();
     }
 
-    String buildRequestBody(String systemPrompt, String userContent, String schemaName, String schema) {
+    private String buildRequestBody(String systemPrompt, String userContent, String schemaName, String schema) {
         return mapper.writeValueAsString(Map.of(
-                "model", MODEL,
+                "models", MODELS,
                 "messages",
                         List.of(
                                 Map.of("role", "system", "content", systemPrompt),
@@ -74,7 +76,7 @@ final class OpenRouterGateway {
                 "provider", Map.of("require_parameters", true)));
     }
 
-    AiResponse parseResponse(int statusCode, String body) throws IOException {
+    private AiResponse parseResponse(int statusCode, String body) throws IOException {
         if (statusCode != 200) {
             throw new IOException("OpenRouter API returned HTTP " + statusCode);
         }
@@ -85,6 +87,6 @@ final class OpenRouterGateway {
             throw new IOException("OpenRouter API returned no content");
         }
         String model = root.path("model").asText();
-        return new AiResponse(model.isBlank() ? MODEL : model, content.asText());
+        return new AiResponse(model.isBlank() ? PRIMARY_MODEL : model, content.asText());
     }
 }

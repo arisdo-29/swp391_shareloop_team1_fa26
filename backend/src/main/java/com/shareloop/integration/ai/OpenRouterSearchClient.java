@@ -54,7 +54,7 @@ public class OpenRouterSearchClient implements AiSearchClient {
 
     @Override
     public String model() {
-        return OpenRouterGateway.MODEL;
+        return OpenRouterGateway.PRIMARY_MODEL;
     }
 
     @Override
