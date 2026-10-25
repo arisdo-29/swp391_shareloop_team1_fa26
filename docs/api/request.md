@@ -376,8 +376,8 @@ Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (F
 | `donorName` | string? | Họ tên chủ bài đăng. `null` khi tài khoản đã bị xoá. Không kèm email/số điện thoại (BR-T11) |
 | `offeredItemTitle` | string? | Tiêu đề món người xin đề nghị đổi (chỉ yêu cầu `SWAP`) |
 | `receiverTrustStars` | number? | Số sao uy tín của người gửi yêu cầu (TrustStars: 1-5). Alias: `trustStars` (FR-65) |
-| `receiverRank` | string? | Hạng uy tín của người gửi yêu cầu (`BRONZE`, `SILVER`, `GOLD`, `PLATINUM`, `DIAMOND`). Alias: `rank` (FR-65) |
-| `receiverAsDescribedRate` | number? | Tỉ lệ giao dịch đúng mô tả của người gửi yêu cầu (0.00 - 1.00; `null` nếu chưa có giao dịch hoàn tất). Alias: `asDescribedRate` (FR-65) |
+| `receiverRank` | string? | Hạng uy tín của người gửi yêu cầu (`BRONZE`, `SILVER`, `GOLD`, `DIAMOND`). Alias: `rank` (FR-65) |
+| `receiverAsDescribedRate` | number? | Tỉ lệ giao dịch đúng mô tả của người gửi yêu cầu, thang 0.00 - 1.00 (vd `0.92` là 92%). `null` khi có dưới 3 giao dịch hoàn tất đã được đánh giá "đúng mô tả?" (SRS 6.12). Alias: `asDescribedRate` (FR-65) |
 
 ### ScheduleRequest
 

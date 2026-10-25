@@ -11,10 +11,11 @@ Người sở hữu: BE4 (@kopslngbtram2110).
 Module `reputation` cung cấp các phương thức nghiệp vụ để các module khác gọi trực tiếp qua Spring Service:
 
 ### 1.1. `Rank getRank(int totalPoints)`
-Tính hạng tín nhiệm tương ứng từ tổng điểm tích luỹ dựa trên các ngưỡng cấu hình từ `ConfigService`:
-- `REPUTATION_SILVER_MIN` (mặc định: `50`): Ngưỡng lên hạng Bạc (`SILVER`).
-- `REPUTATION_GOLD_MIN` (mặc định: `150`): Ngưỡng lên hạng Vàng (`GOLD`).
-- `REPUTATION_DIAMOND_MIN` (mặc định: `400`): Ngưỡng lên hạng Kim Cương (`DIAMOND`).
+Tính hạng tín nhiệm tương ứng từ tổng điểm tích luỹ dựa trên các ngưỡng cấu hình đọc qua `ConfigService(ConfigKey)`,
+đúng key viết thường mà trang Admin sửa (key viết hoa cũ do migration seed không còn được đọc):
+- `reputation_silver_min` (mặc định: `50`): Ngưỡng lên hạng Bạc (`SILVER`).
+- `reputation_gold_min` (mặc định: `150`): Ngưỡng lên hạng Vàng (`GOLD`).
+- `reputation_diamond_min` (mặc định: `400`): Ngưỡng lên hạng Kim Cương (`DIAMOND`).
 - Dưới ngưỡng Bạc: Hạng Đồng (`BRONZE`).
 
 ### 1.2. `Rank getRank(Long userId)`
@@ -25,19 +26,22 @@ Lấy bản tóm tắt thông tin uy tín người dùng phục vụ hiển th�
 - `userId`: ID người dùng.
 - `trustStars`: Số sao uy tín (0–5 sao, mặc định 5).
 - `rank`: Hạng tín nhiệm tính theo tổng điểm (`BRONZE`, `SILVER`, `GOLD`, `DIAMOND`).
-- `asDescribedRate`: Tỉ lệ % đánh giá đúng mô tả từ các giao dịch hoàn tất.
+- `asDescribedRate`: Tỉ lệ đúng mô tả khi người dùng là chủ bài, thang **0–1** (vd `0.92` là 92%), cùng thang với
+  `accuracyRate` của `/me/reputation`. Chỉ trả khi có **từ 3 giao dịch `COMPLETED` đã được đánh giá** "đúng mô tả?"
+  trở lên, dưới 3 thì `null` (SRS 6.12).
 
 ### 1.4. `void onCompleted(long requestId)`
 Tiếp nhận sự kiện giao dịch chuyển sang trạng thái `COMPLETED` (FR-97, FR-100, Issue #114; FR-94, FR-98, FR-99, Issue #150):
 - **Cộng điểm theo loại giao dịch**:
-  - Giao dịch Cho (`GIVE`): Người cho nhận `REPUTATION_GIVE_DONOR` (mặc định `10` điểm); người nhận nhận `REPUTATION_GIVE_RECEIVER` (mặc định `2` điểm).
-  - Giao dịch Trao đổi (`SWAP`): Cả hai bên đều nhận `REPUTATION_SWAP_EACH` (mặc định `6` điểm).
+  - Giao dịch Cho (`GIVE`): Người cho nhận `reputation_give_donor` (mặc định `10` điểm); người nhận nhận `reputation_give_receiver` (mặc định `2` điểm).
+  - Giao dịch Trao đổi (`SWAP`): Cả hai bên đều nhận `reputation_swap_each` (mặc định `6` điểm).
 - **Không cộng điểm giao dịch lặp cặp (FR-98, BR-U08)**: Đếm giao dịch `COMPLETED` giữa cùng hai người, tính cả hai chiều cho/nhận, có `completed_at` trong `reputation_pair_window_days` ngày gần nhất (mặc định `90`). Từ giao dịch thứ `reputation_pair_no_points_from` (mặc định `3`) trở đi, cả hai bên được cộng `0` điểm nhưng vẫn ghi nhật ký `POINTS` kèm lý do.
 - **Trần điểm mỗi ngày (FR-99, BR-U11)**: Mỗi người được cộng tối đa `daily_points_cap` điểm mỗi ngày (mặc định `30`), tính theo ngày giờ Việt Nam (cột `points_today`, `points_date`). Sang ngày mới thì `points_today` đếm lại từ 0; chạm trần thì chỉ cộng phần còn lại.
 - **Hồi sao (FR-94, BR-U09)**: Mỗi giao dịch hoàn tất là một giao dịch sạch: `clean_streak` của cả hai bên +1, kể cả giao dịch lặp cặp không được điểm. Đủ `reputation_clean_streak_for_star` (mặc định `10`) mà đang dưới 5 sao thì +1 sao, `clean_streak` về 0 và ghi nhật ký `STAR_RESTORED`. Đang 5 sao thì không hồi thêm.
 - **Tính lại hạng ngay lập tức**: Cập nhật trực tiếp `rank_level` của người dùng tương ứng với tổng điểm mới.
 - **Chống cộng trùng (Idempotent)**: Kiểm tra qua nhật ký `activity_logs` loại `POINTS`, bỏ qua nếu request đã được cộng điểm trước đó.
-- **Ghi nhật ký**: Ghi nhận thay đổi điểm vào `activity_logs` với `type = 'POINTS'`; `data` gồm `points` (điểm thực cộng), `basePoints` (điểm theo loại giao dịch), `totalPoints`, `rank`, `role`, `pairTransactionNo`, `pointsToday`.
+- **Ghi nhật ký**: Ghi nhận thay đổi điểm vào `activity_logs` với `type = 'POINTS'`; `data` gồm `points` (điểm thực cộng), `basePoints` (điểm theo loại giao dịch), `totalPoints`, `rank`, `role`, `pairTransactionNo`, `pointsToday`, `itemId` (bài của giao dịch). Lý do gọi giao dịch bằng tên món, vd `Cộng 10 điểm hoàn tất giao dịch món “Nồi cơm điện” (vai trò cho/tặng)`, không dùng `#id`.
+- **Hết sao**: khi về 0 sao, gửi thông báo `TRUST_STARS_DEPLETED` có link `/profile?tab=reputation` (tab uy tín trong trang hồ sơ).
 
 ### 1.5. `void deductStar(Long userId, int amount, String reason)`
 Trừ sao uy tín của người dùng khi có vi phạm được kết luận (FR-91, FR-92, BR-U04, BR-U05, Issue #114):
@@ -120,12 +124,12 @@ Xem thông tin uy tín cá nhân của chính người dùng đang đăng nhập
     "content": [
       {
         "delta": 0,
-        "reason": "Không cộng điểm giao dịch #51 (vai trò cho/tặng): giao dịch thứ 3 giữa cùng hai người trong 90 ngày",
+        "reason": "Không cộng điểm giao dịch món “Bàn học gỗ” (vai trò cho/tặng): giao dịch thứ 3 giữa cùng hai người trong 90 ngày",
         "createdAt": "2026-10-19T09:00:00Z"
       },
       {
         "delta": 10,
-        "reason": "Cộng 10 điểm hoàn tất giao dịch #50 (vai trò cho/tặng)",
+        "reason": "Cộng 10 điểm hoàn tất giao dịch món “Nồi cơm điện” (vai trò cho/tặng)",
         "createdAt": "2026-10-18T10:00:00Z"
       }
     ],
@@ -140,8 +144,9 @@ Xem thông tin uy tín cá nhân của chính người dùng đang đăng nhập
 ```
 
 Giao dịch hoàn tất nhưng không được cộng đủ điểm vẫn có một dòng lịch sử; `reason` giải thích lý do:
-- Lặp cặp (BR-U08): `delta = 0`, `"Không cộng điểm giao dịch #51 (vai trò cho/tặng): giao dịch thứ 3 giữa cùng hai người trong 90 ngày"`.
-- Chạm trần ngày (BR-U11): `"Cộng 5/10 điểm hoàn tất giao dịch #52 (vai trò cho/tặng): chạm trần 30 điểm trong ngày"`; đã đạt trần thì `delta = 0`, `"Không cộng điểm giao dịch #53 (vai trò cho/tặng): đã đạt trần 30 điểm trong ngày"`.
+- Lặp cặp (BR-U08): `delta = 0`, `"Không cộng điểm giao dịch món “Bàn học gỗ” (vai trò cho/tặng): giao dịch thứ 3 giữa cùng hai người trong 90 ngày"`.
+- Chạm trần ngày (BR-U11): `"Cộng 5/10 điểm hoàn tất giao dịch món “Áo khoác” (vai trò cho/tặng): chạm trần 30 điểm trong ngày"`; đã đạt trần thì `delta = 0`, `"Không cộng điểm giao dịch món “Ghế xếp” (vai trò cho/tặng): đã đạt trần 30 điểm trong ngày"`.
+Lý do gọi giao dịch bằng tên món, không dùng `#id`. `accuracyRate` theo thang 0–1, `null` khi dưới 3 giao dịch đã được đánh giá.
 
 - **Mã lỗi:**
 

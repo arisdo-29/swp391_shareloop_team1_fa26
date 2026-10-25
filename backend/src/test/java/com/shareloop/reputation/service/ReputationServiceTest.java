@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
@@ -32,7 +33,6 @@ import com.shareloop.reputation.repository.UserReputationRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.UserErrorCode;
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -66,6 +66,7 @@ class ReputationServiceTest {
     // 18:00 UTC ngày 21/10 là 01:00 ngày 22/10 giờ Việt Nam: UTC và giờ VN lệch ngày để kiểm reset theo giờ VN.
     private static final Instant NOW = Instant.parse("2026-10-21T18:00:00Z");
     private static final LocalDate TODAY_VN = LocalDate.of(2026, 10, 22);
+    private static final Long ITEM_ID = 77L;
 
     @Mock
     private ConfigService configService;
@@ -89,13 +90,14 @@ class ReputationServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(configService.getDecimal("REPUTATION_SILVER_MIN")).thenReturn(new BigDecimal("100"));
-        when(configService.getDecimal("REPUTATION_GOLD_MIN")).thenReturn(new BigDecimal("300"));
-        when(configService.getDecimal("REPUTATION_DIAMOND_MIN")).thenReturn(new BigDecimal("600"));
+        // Service đọc đúng ConfigKey (key viết thường mà trang Admin sửa)
+        when(configService.getInt(ConfigKey.REPUTATION_SILVER_MIN)).thenReturn(100);
+        when(configService.getInt(ConfigKey.REPUTATION_GOLD_MIN)).thenReturn(300);
+        when(configService.getInt(ConfigKey.REPUTATION_DIAMOND_MIN)).thenReturn(600);
 
-        when(configService.getDecimal("REPUTATION_GIVE_DONOR")).thenReturn(new BigDecimal("10"));
-        when(configService.getDecimal("REPUTATION_GIVE_RECEIVER")).thenReturn(new BigDecimal("2"));
-        when(configService.getDecimal("REPUTATION_SWAP_EACH")).thenReturn(new BigDecimal("6"));
+        when(configService.getInt(ConfigKey.REPUTATION_GIVE_DONOR)).thenReturn(10);
+        when(configService.getInt(ConfigKey.REPUTATION_GIVE_RECEIVER)).thenReturn(2);
+        when(configService.getInt(ConfigKey.REPUTATION_SWAP_EACH)).thenReturn(6);
 
         when(configService.getInt(ConfigKey.DAILY_POINTS_CAP)).thenReturn(30);
         when(configService.getInt(ConfigKey.REPUTATION_PAIR_WINDOW_DAYS)).thenReturn(90);
@@ -190,6 +192,7 @@ class ReputationServiceTest {
         void getReputationSummary_whenUserFoundInRepo_returnsReputationDataWithCalculatedRank() {
             UserReputation userRep = new UserReputation(123L, (short) 4, 350, Rank.BRONZE);
             when(userReputationRepository.findById(123L)).thenReturn(Optional.of(userRep));
+            when(userReputationRepository.countRatedCompletedAsDonor(123L)).thenReturn(4L);
             when(userReputationRepository.calculateAsDescribedRate(123L)).thenReturn(96.5);
 
             ReputationSummary summary = service.getReputationSummary(123L);
@@ -197,7 +200,41 @@ class ReputationServiceTest {
             assertThat(summary.userId()).isEqualTo(123L);
             assertThat(summary.trustStars()).isEqualTo(4);
             assertThat(summary.rank()).isEqualTo(Rank.GOLD);
-            assertThat(summary.asDescribedRate()).isEqualTo(96.5);
+            // Cùng thang 0–1 với /me/reputation và docs/api/request.md
+            assertThat(summary.asDescribedRate()).isEqualTo(0.965);
+        }
+
+        @ParameterizedTest
+        @ValueSource(longs = {0L, 1L, 2L})
+        @DisplayName("Dưới 3 giao dịch đã đánh giá thì chưa hiện tỉ lệ đúng mô tả (SRS 6.12)")
+        void getReputationSummary_whenFewerThanThreeRated_returnsNullRate(long rated) {
+            when(userReputationRepository.findById(123L))
+                    .thenReturn(Optional.of(new UserReputation(123L, (short) 5, 0, Rank.BRONZE)));
+            when(userReputationRepository.countRatedCompletedAsDonor(123L)).thenReturn(rated);
+            when(userReputationRepository.calculateAsDescribedRate(123L)).thenReturn(50.0);
+
+            assertThat(service.getReputationSummary(123L).asDescribedRate()).isNull();
+        }
+
+        @Test
+        @DisplayName("Đủ đúng 3 giao dịch đã đánh giá thì hiện tỉ lệ")
+        void getReputationSummary_whenExactlyThreeRated_returnsRate() {
+            when(userReputationRepository.findById(123L))
+                    .thenReturn(Optional.of(new UserReputation(123L, (short) 5, 0, Rank.BRONZE)));
+            when(userReputationRepository.countRatedCompletedAsDonor(123L)).thenReturn(3L);
+            when(userReputationRepository.calculateAsDescribedRate(123L)).thenReturn(100.0);
+
+            assertThat(service.getReputationSummary(123L).asDescribedRate()).isEqualTo(1.0);
+        }
+
+        @Test
+        @DisplayName("Admin đổi ngưỡng hạng (key viết thường) thì hạng đổi theo")
+        void rankFollowsLowercaseConfigKey() {
+            when(configService.getInt(ConfigKey.REPUTATION_GOLD_MIN)).thenReturn(400);
+            assertThat(service.getRank(350)).isEqualTo(Rank.SILVER);
+
+            when(configService.getInt(ConfigKey.REPUTATION_GOLD_MIN)).thenReturn(200);
+            assertThat(service.getRank(350)).isEqualTo(Rank.GOLD);
         }
 
         @Test
@@ -334,8 +371,9 @@ class ReputationServiceTest {
             long donorId = 10L;
             long receiverId = 20L;
 
-            when(configService.getDecimal("REPUTATION_GIVE_DONOR")).thenReturn(new BigDecimal("15"));
-            when(configService.getDecimal("REPUTATION_GIVE_RECEIVER")).thenReturn(new BigDecimal("5"));
+            // Admin sửa key viết thường qua trang cấu hình -> điểm cộng đổi theo
+            when(configService.getInt(ConfigKey.REPUTATION_GIVE_DONOR)).thenReturn(15);
+            when(configService.getInt(ConfigKey.REPUTATION_GIVE_RECEIVER)).thenReturn(5);
 
             RequestParticipantProjection participant = createParticipant(donorId, receiverId, "GIVE");
             when(userReputationRepository.isReputationAppliedForRequest(requestId))
@@ -404,10 +442,15 @@ class ReputationServiceTest {
             assertThat(service.canPost(userId)).isFalse();
             assertThat(service.canRequest(userId)).isFalse();
 
-            // Ẩn toàn bộ bài đăng và gửi thông báo
+            // Ẩn toàn bộ bài đăng và gửi thông báo trỏ về tab uy tín trong hồ sơ (FE không có /me/reputation)
             verify(itemService, times(1)).hideAllOfUser(userId);
             verify(notificationService, times(1))
-                    .notify(eq(userId), eq("TRUST_STARS_DEPLETED"), anyString(), anyString(), anyString());
+                    .notify(
+                            eq(userId),
+                            eq("TRUST_STARS_DEPLETED"),
+                            anyString(),
+                            argThat(body -> !body.contains("TrustStars")),
+                            eq("/profile?tab=reputation"));
         }
 
         @Test
@@ -451,6 +494,7 @@ class ReputationServiceTest {
             Long userId = 1L;
             UserReputation user = new UserReputation(userId, (short) 4, 320, Rank.GOLD);
             when(userReputationRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userReputationRepository.countRatedCompletedAsDonor(userId)).thenReturn(25L);
             when(userReputationRepository.calculateAsDescribedRate(userId)).thenReturn(92.0);
 
             ActivityLogDto logDto = new ActivityLogDto(
@@ -462,9 +506,9 @@ class ReputationServiceTest {
                     "Cộng điểm",
                     "REQUEST",
                     50L,
-                    "Yêu cầu #50",
-                    Map.of("points", 10, "totalPoints", 320, "rank", "GOLD"),
-                    "Cộng 10 điểm hoàn tất giao dịch #50",
+                    "Giao dịch món “Nồi cơm điện”",
+                    Map.of("points", 10, "totalPoints", 320, "rank", "GOLD", "itemId", 77L),
+                    "Cộng 10 điểm hoàn tất giao dịch món “Nồi cơm điện” (vai trò cho/tặng)",
                     "Cộng 10 điểm",
                     Instant.parse("2026-10-18T10:00:00Z"));
             when(activityLogQueryService.search(eq(userId), eq("POINTS"), any(), any(), eq(0), eq(20)))
@@ -478,7 +522,8 @@ class ReputationServiceTest {
             assertThat(res.accuracyRate()).isEqualTo(0.92);
             assertThat(res.history().getContent()).hasSize(1);
             assertThat(res.history().getContent().get(0).delta()).isEqualTo(10);
-            assertThat(res.history().getContent().get(0).reason()).isEqualTo("Cộng 10 điểm hoàn tất giao dịch #50");
+            assertThat(res.history().getContent().get(0).reason())
+                    .isEqualTo("Cộng 10 điểm hoàn tất giao dịch món “Nồi cơm điện” (vai trò cho/tặng)");
         }
 
         @Test
@@ -563,10 +608,13 @@ class ReputationServiceTest {
             assertThat(data.getValue())
                     .containsEntry("points", 0)
                     .containsEntry("basePoints", 10)
-                    .containsEntry("pairTransactionNo", 3L);
+                    .containsEntry("pairTransactionNo", 3L)
+                    .containsEntry("itemId", ITEM_ID); // để nhật ký Admin hiện tên món
+            // Lý do gọi giao dịch bằng tên món, không có "#id"
             assertThat(reason.getValue())
-                    .isEqualTo("Không cộng điểm giao dịch #601 (vai trò cho/tặng): giao dịch thứ 3"
-                            + " giữa cùng hai người trong 90 ngày");
+                    .isEqualTo("Không cộng điểm giao dịch món “Nồi cơm điện” (vai trò cho/tặng): giao dịch thứ 3"
+                            + " giữa cùng hai người trong 90 ngày")
+                    .doesNotContain("#");
             verify(activityLogService)
                     .log(eq("POINTS"), eq(RECEIVER_ID), eq("REQUEST"), eq(REQUEST_ID), any(Map.class), anyString());
         }
@@ -597,8 +645,8 @@ class ReputationServiceTest {
             verify(activityLogService)
                     .log(eq("POINTS"), eq(DONOR_ID), eq("REQUEST"), eq(REQUEST_ID), any(Map.class), reason.capture());
             assertThat(reason.getValue())
-                    .isEqualTo(
-                            "Cộng 5/10 điểm hoàn tất giao dịch #601 (vai trò cho/tặng): chạm trần 30 điểm trong ngày");
+                    .isEqualTo("Cộng 5/10 điểm hoàn tất giao dịch món “Nồi cơm điện” (vai trò cho/tặng): chạm trần 30"
+                            + " điểm trong ngày");
         }
 
         @Test
@@ -779,6 +827,16 @@ class ReputationServiceTest {
             @Override
             public String getStatus() {
                 return "COMPLETED";
+            }
+
+            @Override
+            public Long getItemId() {
+                return ITEM_ID;
+            }
+
+            @Override
+            public String getItemTitle() {
+                return "Nồi cơm điện";
             }
         };
     }

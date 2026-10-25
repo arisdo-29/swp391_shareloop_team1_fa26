@@ -101,8 +101,12 @@ sau khi gắn chuyển `ATTACHED`, `PRIVATE`. Lỗi media rollback cả việc t
 Khi báo cáo `REQUEST`, cả `POST /reports` và `POST /requests/{requestId}/disputes` dùng
 cùng luồng kiểm tra giao dịch `COMPLETED`, người tham gia, cửa sổ khiếu nại và chống gửi lặp.
 Hệ thống lưu người bị báo cáo, ID bài và `responseDueAt`, chuyển `AWAITING_RESPONSE`.
-Ưu tiên các khoá `DISPUTE_WINDOW_DAYS`/`DISPUTE_RESPONSE_DAYS` của contract dispute;
-nếu không có thì đọc `ConfigKey.COMPLAINT_WINDOW_DAYS`/`RESPONSE_WINDOW_DAYS`.
+Hạn khiếu nại và hạn giải trình đọc thẳng `ConfigKey.COMPLAINT_WINDOW_DAYS` (`complaint_window_days`, mặc định 7)
+và `ConfigKey.RESPONSE_WINDOW_DAYS` (`response_window_days`, mặc định 3), đúng key trang Admin sửa.
+Khoá viết hoa cũ `DISPUTE_WINDOW_DAYS`/`DISPUTE_RESPONSE_DAYS` không còn được đọc.
+Thông báo `DISPUTE_OPENED` và `ITEM_AUTO_HIDDEN` gọi bằng tên bài (vd `Giao dịch “Nồi cơm điện” bị khiếu nại`), không dùng `#id`.
+Ghi chú mặc định khi Admin kết luận mà không nhập ghi chú: `Bác bỏ báo cáo về “<tên bài>”`,
+`Chấp thuận báo cáo về “<tên bài>”, xử phạt trừ 1 sao uy tín` (báo cáo người dùng không có bài thì bỏ phần “về …”).
 Cả hai luồng dùng Clock được inject. Báo cáo `ITEM` lưu thêm ID chủ bài để giữ danh tính đối tượng.
 
 `POST /api/v1/reports/{reportId}/response` yêu cầu Bearer JWT của bên bị báo cáo:
