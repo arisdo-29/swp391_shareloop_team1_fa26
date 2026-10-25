@@ -24,7 +24,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 class ItemScreeningIT extends IntegrationTest {
-    private static final String MODEL = "qwen/qwen3.8-27b:free";
+    private static final String MODEL = "google/gemma-4-31b-it:free";
     private static final String LOW = """
             {"contactInfo":{"found":false,"evidence":null},
              "prohibited":{"found":false,"category":null,"evidence":null},

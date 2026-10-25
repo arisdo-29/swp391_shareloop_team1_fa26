@@ -10,7 +10,7 @@ import tools.jackson.databind.JsonNode;
 
 class OpenRouterSearchClientTest {
     private static final String RESPONSE = """
-            {"model":"qwen/qwen3.8-27b:free","choices":[{"message":{"content":"{}"}}]}
+            {"model":"google/gemma-4-26b-a4b-it:free","choices":[{"message":{"content":"{}"}}]}
             """;
 
     @Test
@@ -23,10 +23,11 @@ class OpenRouterSearchClientTest {
 
             JsonNode body = server.body();
             assertThat(result.content()).isEqualTo("{}");
-            assertThat(result.model()).isEqualTo("qwen/qwen3.8-27b:free");
-            assertThat(client.model()).isEqualTo("qwen/qwen3.8-27b:free");
+            assertThat(result.model()).isEqualTo("google/gemma-4-26b-a4b-it:free");
+            assertThat(client.model()).isEqualTo("google/gemma-4-31b-it:free");
             assertThat(server.authorization()).isEqualTo("Bearer test-key");
-            assertThat(body.path("model").asText()).isEqualTo("qwen/qwen3.8-27b:free");
+            assertThat(body.path("models").path(0).asText()).isEqualTo("google/gemma-4-31b-it:free");
+            assertThat(body.path("models").path(1).asText()).isEqualTo("google/gemma-4-26b-a4b-it:free");
             assertThat(body.path("messages").path(0).path("content").asText())
                     .contains("Search system prompt", "categories");
             assertThat(body.path("messages").path(1).path("content").asText()).isEqualTo("Tìm sách ở Quận 7");
@@ -49,6 +50,17 @@ class OpenRouterSearchClientTest {
                     .isInstanceOf(IOException.class)
                     .hasMessage("OpenRouter API returned HTTP 401")
                     .hasMessageNotContaining("test-key");
+        }
+    }
+
+    @Test
+    void usesRequestedModelWhenProviderOmitsModel() throws Exception {
+        try (var server = new OpenRouterTestServer("{\"choices\":[{\"message\":{\"content\":\"{}\"}}]}", 200)) {
+            var client = new OpenRouterSearchClient(server.gateway(), "Prompt");
+
+            AiResponse result = client.extract("sách", "{}", Duration.ofSeconds(15));
+
+            assertThat(result.model()).isEqualTo("google/gemma-4-31b-it:free");
         }
     }
 }
