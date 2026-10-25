@@ -153,7 +153,14 @@ export function AdminTopUpOrders() {
         </label>
       </div>
 
-      {error ? <Alert tone="error">{error}</Alert> : null}
+      {error ? (
+        <div className="space-y-3">
+          <Alert tone="error">{error}</Alert>
+          <Button variant="outline" size="sm" onClick={() => setReloadKey((current) => current + 1)}>
+            Thử lại
+          </Button>
+        </div>
+      ) : null}
       {notice ? (
         <div role="status">
           <Alert tone="success">{notice}</Alert>

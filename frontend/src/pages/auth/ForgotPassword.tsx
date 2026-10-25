@@ -99,6 +99,7 @@ export function ForgotPassword() {
 
   const resetPassword = async (event: FormEvent) => {
     event.preventDefault();
+    if (processing) return;
     setError('');
     const code = otp.join('');
     if (!/^\d{6}$/.test(code)) {
@@ -154,7 +155,6 @@ export function ForgotPassword() {
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              error={error && !validEmail(email) ? error : undefined}
               autoComplete="email"
             />
           ) : null}

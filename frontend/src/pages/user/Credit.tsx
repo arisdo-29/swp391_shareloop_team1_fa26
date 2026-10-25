@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type Dispatch } from 'react';
+import { useEffect, useRef, useState, type Dispatch } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
-import { selectCurrentUser, selectData } from '../../app/store';
+import { selectCurrentUser } from '../../app/store';
 import { Alert, Button, Field, Icon, PageHeader, StatusBadge } from '../../components/ui';
 import {
   CreditHistorySection,
@@ -10,16 +10,16 @@ import {
   HistoryDateFilter,
   HistoryPagination,
 } from '../../components/CreditHistoryView';
+import { itemApi } from '../../services/itemApi';
 import {
   HISTORY_PAGE_SIZE,
   endOfDayIso,
-  isVisibleCreditHistory,
-  postFeeItemId,
+  itemTitleOf,
   startOfDayIso,
   toCreditHistory,
   userHistoryTabs,
 } from '../../utils/creditHistory';
-import type { CreditHistory, Topup } from '../../types/domain';
+import type { CreditHistory } from '../../types/domain';
 import { formatCredit, formatVnd } from '../../utils/formatting';
 import { useWallet } from '../../app/useWallet';
 import { walletApi, type HeldFeeItem } from '../../services/walletApi';
@@ -52,7 +52,7 @@ const paymentStatusLabels: Record<PaymentOrderStatus, string> = {
 const paymentProviderLabels: Record<PaymentProvider, string> = {
   VNPAY: 'VNPAY',
   MOCK: 'Thanh toán thử nghiệm',
-  MANUAL: 'QR minh họa, admin duyệt',
+  MANUAL: 'QR minh họa, quản trị viên duyệt',
 };
 
 const topUpAmountInvalidMessage =
@@ -67,15 +67,13 @@ function topUpCreateErrorMessage(error: unknown) {
 
 export function Credit() {
   const user = useAppSelector(selectCurrentUser)!;
-  const data = useAppSelector(selectData);
   const navigate = useNavigate();
   const location = useLocation();
   const [apiAmountVnd, setApiAmountVnd] = useState('');
   const [step, setStep] = useState<Step>('select');
   const [historyTab, setHistoryTab] = useState('all');
-  const [selectedEntry, setSelectedEntry] = useState<CreditHistory | Topup | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<CreditHistory | null>(null);
   const {
-    isApiAccount,
     wallet,
     loading: walletLoading,
     error: walletError,
@@ -89,6 +87,7 @@ export function Credit() {
   const [toDate, setToDate] = useState('');
   const [historyPage, setHistoryPage] = useState(0);
   const [historyTotal, setHistoryTotal] = useState(0);
+  const [itemTitles, setItemTitles] = useState<Map<string, string>>(() => new Map());
   const [heldFees, setHeldFees] = useState<HeldFeeItem[]>([]);
   const [heldFeesLoading, setHeldFeesLoading] = useState(true);
   const [heldFeesError, setHeldFeesError] = useState('');
@@ -101,9 +100,23 @@ export function Credit() {
   const [orderCheckKey, setOrderCheckKey] = useState(0);
   const createTopUpInFlight = useRef(false);
 
-  const topups = isApiAccount ? [] : data.topups.filter((topup) => topup.userId === user.id);
-  const completedCredits =
-    isApiAccount && returnState === 'success' ? (apiTopUpOrder?.credits ?? null) : null;
+  const completedCredits = returnState === 'success' ? (apiTopUpOrder?.credits ?? null) : null;
+
+  // Tên món chỉ để hiển thị cho dễ nhìn nên gọi một lần; lỗi thì bỏ qua, lịch sử vẫn xem được không có tên.
+  useEffect(() => {
+    let active = true;
+    itemApi
+      .mine()
+      .then((items) => {
+        if (active) setItemTitles(new Map(items.map((item) => [String(item.id), item.title])));
+      })
+      .catch(() => {
+        if (active) setItemTitles(new Map());
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Từ ngày sau Đến ngày thì báo lỗi và không gọi API.
   const dateRangeError =
@@ -111,12 +124,6 @@ export function Credit() {
 
   // Danh sách bài đang giữ phí tải lại mỗi khi số dư ví được tải lại (wallet đổi object).
   useEffect(() => {
-    if (!isApiAccount) {
-      setHeldFees([]);
-      setHeldFeesLoading(false);
-      setHeldFeesError('');
-      return;
-    }
     let active = true;
     setHeldFeesLoading(true);
     setHeldFeesError('');
@@ -137,14 +144,9 @@ export function Credit() {
     return () => {
       active = false;
     };
-  }, [heldFeesReloadKey, isApiAccount, wallet]);
+  }, [heldFeesReloadKey, wallet]);
 
   useEffect(() => {
-    if (!isApiAccount) {
-      setApiHistory([]);
-      setApiHistoryError('');
-      return;
-    }
     if (dateRangeError) return;
     let active = true;
     setApiHistoryLoading(true);
@@ -173,7 +175,7 @@ export function Credit() {
     return () => {
       active = false;
     };
-  }, [historyReloadKey, isApiAccount, user.id, fromDate, toDate, historyPage, dateRangeError]);
+  }, [historyReloadKey, user.id, fromDate, toDate, historyPage, dateRangeError]);
 
   // Đổi bộ lọc ngày thì quay về trang đầu.
   const changeDateRange = (nextFrom: string, nextTo: string) => {
@@ -183,7 +185,6 @@ export function Credit() {
   };
 
   useEffect(() => {
-    if (!isApiAccount) return;
     const code = returnOrderCode(new URLSearchParams(location.search));
     if (!code) {
       if (new URLSearchParams(location.search).get('status') === 'INVALID_SIGNATURE') {
@@ -230,31 +231,12 @@ export function Credit() {
     return () => {
       active = false;
     };
-  }, [isApiAccount, location.search, navigate, refreshWallet, orderCheckKey]);
+  }, [location.search, navigate, refreshWallet, orderCheckKey]);
 
-  const allHistory = useMemo(
-    () =>
-      isApiAccount
-        ? apiHistory
-        : data.creditHistory
-            .filter((entry) => entry.userId === user.id)
-            .filter(isVisibleCreditHistory)
-            .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [apiHistory, data.creditHistory, isApiAccount, user.id],
-  );
-
-  const selectedRelatedTransaction =
-    selectedEntry && 'relatedTransactionId' in selectedEntry
-      ? data.transactions.find((tx) => tx.id === selectedEntry.relatedTransactionId)
-      : undefined;
-  const selectedRelatedItem = selectedRelatedTransaction
-    ? data.items.find((item) => item.id === selectedRelatedTransaction.itemId)
-    : selectedEntry && !('method' in selectedEntry)
-      ? data.items.find((item) => item.id === postFeeItemId(selectedEntry))
-      : undefined;
+  const selectedItemTitle = selectedEntry ? itemTitleOf(selectedEntry, itemTitles) : undefined;
 
   const continuePayment = async () => {
-    if (!isApiAccount || createTopUpInFlight.current) return;
+    if (createTopUpInFlight.current) return;
     const amountVnd = Number(apiAmountVnd);
     if (!Number.isSafeInteger(amountVnd) || amountVnd <= 0) {
       setTopUpError('Vui lòng nhập số tiền nạp hợp lệ.');
@@ -305,7 +287,7 @@ export function Credit() {
         </div>
       ) : null}
 
-      {isApiAccount && returnState === 'pending' ? (
+      {returnState === 'pending' ? (
         <div className="mb-6 space-y-3">
           <Alert>Đơn đang chờ xác nhận từ hệ thống. Credit chưa được cộng cho giao dịch này.</Alert>
           <Button
@@ -319,12 +301,12 @@ export function Credit() {
           </Button>
         </div>
       ) : null}
-      {isApiAccount && returnState === 'failed' ? (
+      {returnState === 'failed' ? (
         <div className="mb-6">
           <Alert tone="error">Thanh toán không thành công. Credit chưa được cộng vào ví.</Alert>
         </div>
       ) : null}
-      {isApiAccount && returnState === 'invalid' ? (
+      {returnState === 'invalid' ? (
         <div className="mb-6">
           <Alert tone="error">
             Kết quả trả về từ cổng thanh toán không hợp lệ. Credit chưa được cộng vào ví.
@@ -351,14 +333,10 @@ export function Credit() {
               Số dư Credit
             </div>
             <div className="mt-3 text-4xl font-bold tabular-nums sm:text-5xl">
-              {isApiAccount
-                ? wallet
-                  ? formatCredit(wallet.creditBalance)
-                  : '--'
-                : formatCredit(user.totalCredit)}
+              {wallet ? formatCredit(wallet.creditBalance) : '--'}
             </div>
             <p className="mt-3 text-sm text-white/70">
-              {isApiAccount ? 'Tỷ lệ quy đổi được xác định khi tạo đơn.' : '1 Credit = 1.000đ'}
+              Tỷ lệ quy đổi được xác định khi tạo đơn.
             </p>
           </div>
           <button
@@ -374,27 +352,25 @@ export function Credit() {
         <div className="grid border-t border-white/15 bg-white/5 sm:grid-cols-2">
           <BalanceMetric
             label="Khả dụng"
-            value={isApiAccount ? (wallet?.available ?? null) : user.availableCredit}
+            value={wallet?.available ?? null}
           />
           <BalanceMetric
             label="Đang giữ"
-            value={isApiAccount ? (wallet?.heldCredit ?? null) : user.holdCredit}
+            value={wallet?.heldCredit ?? null}
             bordered
           />
         </div>
       </section>
 
-      {isApiAccount ? (
-        <HeldFeesSection
-          heldFees={heldFees}
-          loading={heldFeesLoading}
-          error={heldFeesError}
-          onRetry={() => setHeldFeesReloadKey((key) => key + 1)}
-        />
-      ) : null}
+      <HeldFeesSection
+        heldFees={heldFees}
+        loading={heldFeesLoading}
+        error={heldFeesError}
+        onRetry={() => setHeldFeesReloadKey((key) => key + 1)}
+      />
 
       <section id="topup" className="mt-8 scroll-mt-24">
-        {isApiAccount && loadPendingTopUp()?.orderCode ? (
+        {loadPendingTopUp()?.orderCode ? (
           <Link
             className="mb-4 inline-block text-primary underline"
             to={`/credit?orderCode=${encodeURIComponent(loadPendingTopUp()!.orderCode)}`}
@@ -408,22 +384,15 @@ export function Credit() {
           </div>
         ) : null}
         {step === 'select' ? (
-          isApiAccount ? (
-            <ApiTopupSelection
-              amountVnd={apiAmountVnd}
-              onAmountChange={setApiAmountVnd}
-              onContinue={() => void continuePayment()}
-              submitting={topUpSubmitting}
-              processing={topUpProcessing}
-            />
-          ) : (
-            <Alert tone="warning">
-              Tài khoản demo không thể tạo giao dịch nạp Credit. Vui lòng đăng nhập bằng tài khoản
-              Backend để thanh toán qua VNPAY.
-            </Alert>
-          )
+          <ApiTopupSelection
+            amountVnd={apiAmountVnd}
+            onAmountChange={setApiAmountVnd}
+            onContinue={() => void continuePayment()}
+            submitting={topUpSubmitting}
+            processing={topUpProcessing}
+          />
         ) : null}
-        {isApiAccount && step === 'pending' && apiTopUpOrder ? (
+        {step === 'pending' && apiTopUpOrder ? (
           <ApiTopUpOrder
             order={apiTopUpOrder}
             onNewTopup={() => {
@@ -452,41 +421,30 @@ export function Credit() {
       ) : null}
 
       <CreditHistorySection
-        items={data.items}
-        allHistory={allHistory}
-        pendingTopups={topups.filter((t) => t.status === 'pending')}
+        itemTitles={itemTitles}
+        allHistory={apiHistory}
         tabs={userHistoryTabs}
         activeTab={historyTab}
         onTabChange={setHistoryTab}
         onSelect={setSelectedEntry}
         unavailable={false}
         dateFilter={
-          isApiAccount ? (
-            <HistoryDateFilter
-              fromDate={fromDate}
-              toDate={toDate}
-              error={dateRangeError}
-              onChange={changeDateRange}
-            />
-          ) : null
+          <HistoryDateFilter
+            fromDate={fromDate}
+            toDate={toDate}
+            error={dateRangeError}
+            onChange={changeDateRange}
+          />
         }
         pagination={
-          isApiAccount ? (
-            <HistoryPagination
-              page={historyPage}
-              total={historyTotal}
-              onPageChange={setHistoryPage}
-            />
-          ) : null
+          <HistoryPagination page={historyPage} total={historyTotal} onPageChange={setHistoryPage} />
         }
       />
       {selectedEntry ? (
         <CreditTransactionDetail
           entry={selectedEntry}
           onClose={() => setSelectedEntry(null)}
-          relatedItemTitle={selectedRelatedItem?.title}
-          relatedTransactionType={selectedRelatedTransaction?.type}
-          onViewTransaction={selectedRelatedTransaction ? () => navigate('/messages') : undefined}
+          relatedItemTitle={selectedItemTitle}
         />
       ) : null}
     </div>
@@ -605,8 +563,7 @@ function ApiTopUpOrder({
         </dl>
         {order.provider === 'MOCK' && !paid ? (
           <p className="mt-4 rounded-md bg-amber-50 p-3 text-sm text-warning">
-            Backend đang cấu hình cổng thanh toán thử nghiệm. Cần chuyển cấu hình Backend sang VNPAY
-            để tiếp tục nạp Credit.
+            {backendMockProviderMessage}
           </p>
         ) : null}
         <div className="mt-6 flex flex-wrap justify-center gap-2">

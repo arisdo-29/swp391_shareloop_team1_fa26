@@ -76,6 +76,7 @@ export function VerifyEmail() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (processing) return;
     const normalizedEmail = email.trim().toLowerCase();
     const code = otp.join('');
     setError('');

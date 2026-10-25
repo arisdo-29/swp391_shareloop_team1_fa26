@@ -23,6 +23,7 @@ export function Register() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (processing) return;
     const nextErrors: Record<string, string> = {};
     const trimmedName = name.trim();
     const trimmedEmail = email.trim().toLowerCase();
@@ -60,7 +61,8 @@ export function Register() {
       });
     } catch (apiError) {
       const error = apiError as ApiError;
-      const field = error.field === 'fullName' ? 'name' : error.field;
+      // Backend không gắn field cho lỗi trùng số điện thoại nên chỉ về đúng ô nhập bằng mã lỗi.
+      const field = error.code === 'AUTH_PHONE_ALREADY_USED' ? 'phone' : error.field === 'fullName' ? 'name' : error.field;
       setErrors(
         field && ['name', 'email', 'phone', 'password'].includes(field)
           ? { [field]: authErrorMessage(error) }

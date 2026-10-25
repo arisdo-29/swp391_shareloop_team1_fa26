@@ -93,13 +93,13 @@ export function ManualPaymentCheckout() {
         : order?.status === 'EXPIRED'
           ? 'Đơn đã hết hạn'
           : order?.submittedAt
-            ? 'Chờ admin duyệt'
+            ? 'Chờ quản trị viên duyệt'
             : 'Chờ thanh toán';
 
   return (
     <section className="mx-auto my-8 max-w-xl space-y-5 rounded-xl bg-white p-6 shadow-sm ring-1 ring-border">
       <h1 className="text-2xl font-bold">Nạp Credit bằng QR minh họa</h1>
-      <Alert tone="warning">QR minh họa — không chuyển tiền thật</Alert>
+      <Alert tone="warning">QR minh họa, không chuyển tiền thật.</Alert>
       {error ? <Alert tone="error">{error}</Alert> : null}
       {!order && !error ? <p>Đang tải đơn nạp...</p> : null}
       {order ? (
@@ -108,7 +108,7 @@ export function ManualPaymentCheckout() {
             <img
               className="mx-auto size-56"
               src="/images/manual-topup-qr.svg"
-              alt="QR minh họa chứa chuỗi SHARELOOP-DEMO-NO-PAYMENT"
+              alt="Mã QR minh họa, không dùng để chuyển tiền thật"
             />
           ) : null}
           <dl className="space-y-2 rounded-lg bg-surface-low p-4 text-sm">
@@ -136,14 +136,14 @@ export function ManualPaymentCheckout() {
             ) : null}
           </dl>
           {order.status === 'PENDING' && order.submittedAt ? (
-            <Alert>Đã gửi yêu cầu. Credit sẽ được cộng sau khi admin duyệt</Alert>
+            <Alert>Đã gửi yêu cầu. Credit sẽ được cộng sau khi quản trị viên duyệt.</Alert>
           ) : null}
           {order.status === 'SUCCESS' ? (
             <Alert tone="success">
               Đã cộng {order.credits} Credit. Ví được tải lại từ hệ thống.
             </Alert>
           ) : null}
-          {order.reviewNote ? <Alert>Ghi chú của admin: {order.reviewNote}</Alert> : null}
+          {order.reviewNote ? <Alert>Ghi chú của quản trị viên: {order.reviewNote}</Alert> : null}
           <div className="flex flex-wrap gap-3">
             {order.status === 'PENDING' ? (
               <Button disabled={busy || !!order.submittedAt} onClick={() => void update(true)}>
