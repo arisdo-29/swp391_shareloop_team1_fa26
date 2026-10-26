@@ -329,6 +329,36 @@ describe('trạng thái tải bài đăng trên Home', () => {
     expect(screen.queryByRole('button', { name: `Hiển thị ảnh ${carouselItems[0].title}` })).toBeNull();
   });
 
+  it('LoopAI dùng ảnh của 3 bài được đẩy gần nhất theo thời gian đẩy', async () => {
+    const boostedItems = Array.from({ length: 4 }, (_, index): ItemResponse => ({
+      ...item,
+      id: 580 + index,
+      title: `Bài LoopAI ${index + 1}`,
+      images: [`https://example.com/loop-ai-${index + 1}.jpg`],
+      boostedUntil: new Date(Date.UTC(2099, 0, index + 1, 8)).toISOString(),
+    }));
+    vi.mocked(itemApi.list).mockResolvedValue({
+      items: boostedItems,
+      page: 0,
+      size: 100,
+      totalElements: boostedItems.length,
+      totalPages: 1,
+    });
+
+    renderHome();
+
+    const heading = await screen.findByRole('heading', { name: 'Tìm món đồ bạn cần cùng AI' });
+    const section = heading.closest('section');
+    expect(section).toBeTruthy();
+    await waitFor(() => expect(section!.querySelectorAll('.home-ai-suggestions img')).toHaveLength(3));
+    expect(Array.from(section!.querySelectorAll('.home-ai-suggestions img')).map((image) => image.getAttribute('src')))
+      .toEqual([
+        'https://example.com/loop-ai-4.jpg',
+        'https://example.com/loop-ai-3.jpg',
+        'https://example.com/loop-ai-2.jpg',
+      ]);
+  });
+
   it('hiển thị 5 bài trao đổi mới nhất, không ưu tiên boost và không hiện nhãn Được đẩy', async () => {
     const tradeItems = Array.from({ length: 6 }, (_, index): ItemResponse => ({
       ...item,
