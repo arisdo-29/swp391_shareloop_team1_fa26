@@ -28,12 +28,9 @@ class OpenRouterAiClientTest {
             JsonNode userData = new JsonMapper()
                     .readTree(body.path("messages").path(1).path("content").asText());
             assertThat(userData.path("description").asText()).isEqualTo(injection);
-            assertThat(body.path("response_format")
-                            .path("json_schema")
-                            .path("schema")
-                            .path("required")
-                            .size())
-                    .isEqualTo(7);
+            assertThat(body.path("messages").path(0).path("content").asText())
+                    .contains("shareloop_item_screening", "\"required\"");
+            assertThat(body.path("response_format").path("type").asText()).isEqualTo("json_object");
         }
     }
 }

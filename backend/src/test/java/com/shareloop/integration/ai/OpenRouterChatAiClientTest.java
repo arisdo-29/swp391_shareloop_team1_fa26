@@ -29,12 +29,9 @@ class OpenRouterChatAiClientTest {
                     .readTree(body.path("messages").path(1).path("content").asText());
             assertThat(userData.path("message").asText()).isEqualTo(injection);
             assertThat(userData.path("previousMessages").path(0).asText()).isEqualTo("Earlier message");
-            assertThat(body.path("response_format")
-                            .path("json_schema")
-                            .path("schema")
-                            .path("required")
-                            .size())
-                    .isEqualTo(3);
+            assertThat(body.path("messages").path(0).path("content").asText())
+                    .contains("shareloop_chat_moderation", "\"required\"");
+            assertThat(body.path("response_format").path("type").asText()).isEqualTo("json_object");
         }
     }
 }

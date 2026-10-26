@@ -33,6 +33,7 @@ export function AI() {
   const [quotaError, setQuotaError] = useState('');
   const [searchError, setSearchError] = useState('');
   const [chargedCredits, setChargedCredits] = useState(0);
+  const [fallback, setFallback] = useState(false);
   const [needsTopUp, setNeedsTopUp] = useState(false);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [areas, setAreas] = useState<AreaResponse[]>([]);
@@ -46,6 +47,7 @@ export function AI() {
     setStatus('idle');
     setResults([]);
     setChargedCredits(0);
+    setFallback(false);
     setNeedsTopUp(false);
     if (userId) {
       aiApi.quota().then((response) => { if (active) setQuota(response); })
@@ -70,6 +72,7 @@ export function AI() {
     setQueryError('');
     setSearchError('');
     setChargedCredits(0);
+    setFallback(false);
     setNeedsTopUp(false);
     setSubmittedQuery(normalizedQuery);
     setStatus('loading');
@@ -91,6 +94,7 @@ export function AI() {
       setPage(response.results.page);
       setQuota(response.quota);
       setChargedCredits(response.chargedCredits);
+      setFallback(response.fallback);
       setStatus('success');
       if (response.chargedCredits > 0) refreshWallet();
       try {
@@ -179,6 +183,7 @@ export function AI() {
               />
             ) : <Alert tone={quotaError ? 'error' : 'info'}>{quotaError || 'Đang tải hạn mức tìm kiếm...'}</Alert>}
             {quotaError ? <Button variant="outline" onClick={() => { void aiApi.quota().then((response) => { setQuota(response); setQuotaError(''); }).catch((error: ApiError) => setQuotaError(error.message)); }}>Thử tải hạn mức</Button> : null}
+            {status === 'success' && fallback ? <Alert tone="info">AI hiện không phản hồi. Đây là kết quả tìm kiếm thường; lượt miễn phí và Credit của bạn không bị trừ.</Alert> : null}
             {quota ? <p className="mt-3 text-xs text-text-muted">Mỗi lần tìm hoặc chuyển trang dùng một lượt. Hết lượt miễn phí, mỗi lượt tốn {quota.feeCredits} Credit. Nếu hệ thống chuyển sang tìm kiếm thường, lượt và phí sẽ được hoàn lại.</p> : null}
           </div>
         </section>
@@ -188,7 +193,7 @@ export function AI() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary">
-                  Bộ lọc trợ lý hiểu được
+                  {fallback ? 'Từ khóa tìm kiếm thường' : 'Bộ lọc trợ lý hiểu được'}
                 </p>
                 <h2 className="mt-1 text-lg font-bold text-text-primary">
                   {submittedQuery ? 'Từ mô tả của bạn' : 'Bộ lọc tìm kiếm'}
