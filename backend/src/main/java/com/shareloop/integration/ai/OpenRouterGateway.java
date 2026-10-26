@@ -65,14 +65,14 @@ final class OpenRouterGateway {
                 "models", MODELS,
                 "messages",
                         List.of(
-                                Map.of("role", "system", "content", systemPrompt),
+                                Map.of(
+                                        "role",
+                                        "system",
+                                        "content",
+                                        systemPrompt + "\nReturn one JSON object matching " + schemaName + ":\n"
+                                                + schema),
                                 Map.of("role", "user", "content", userContent)),
-                "response_format",
-                        Map.of(
-                                "type",
-                                "json_schema",
-                                "json_schema",
-                                Map.of("name", schemaName, "strict", false, "schema", mapper.readTree(schema))),
+                "response_format", Map.of("type", "json_object"),
                 "provider", Map.of("require_parameters", true)));
     }
 
