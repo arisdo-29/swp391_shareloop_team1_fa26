@@ -4,6 +4,7 @@ import com.shareloop.catalog.service.CategoryAttributeService;
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
+import com.shareloop.item.PostLimitProperties;
 import com.shareloop.item.dto.AdminItemDetail;
 import com.shareloop.item.dto.CreateItemRequest;
 import com.shareloop.item.dto.ItemAttributeValue;
@@ -30,6 +31,7 @@ import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.service.UserService;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -65,6 +67,8 @@ public class ItemService {
     private final ReputationService reputationService;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final UserService userService;
+    private final PostLimitProperties postLimitProperties;
 
     public ItemService(
             ItemRepository itemRepository,
@@ -78,7 +82,9 @@ public class ItemService {
             CategoryAttributeService categoryAttributeService,
             ReputationService reputationService,
             ApplicationEventPublisher eventPublisher,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            UserService userService,
+            PostLimitProperties postLimitProperties) {
         this.itemRepository = itemRepository;
         this.jdbcClient = jdbcClient;
         this.mediaService = mediaService;
@@ -91,6 +97,8 @@ public class ItemService {
         this.reputationService = reputationService;
         this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
+        this.userService = userService;
+        this.postLimitProperties = postLimitProperties;
     }
 
     /**
@@ -116,7 +124,10 @@ public class ItemService {
         List<Long> defectMediaIds = parseMediaIds(request.defectImages());
         validateDefectImages(request.condition(), defectMediaIds);
         Optional<Long> operatingAttributeId = requireOperatingStatus(request.categoryId(), request.operatingStatus());
-        checkActiveItemLimit(donorId);
+        // Tài khoản test trong danh sách cấu hình được bỏ qua giới hạn số bài; phí đăng bài vẫn bị giữ như thường
+        if (!canBypassPostLimit(donorId)) {
+            checkActiveItemLimit(donorId);
+        }
 
         String moderationText = request.desiredItem() == null
                 ? request.description()
@@ -489,6 +500,11 @@ public class ItemService {
         if (!reputationService.canPost(userId)) {
             throw new BusinessException(ItemErrorCode.ITEM_REPUTATION_BLOCKED);
         }
+    }
+
+    private boolean canBypassPostLimit(Long donorId) {
+        String email = userService.findEmailById(donorId);
+        return postLimitProperties.canBypassPostLimit(email);
     }
 
     private void checkActiveItemLimit(Long donorId) {
