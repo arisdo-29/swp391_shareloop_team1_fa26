@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import { Alert, Button, Field, Icon, ItemImage, PageHeader, Select, TextArea } from '../../components/ui';
+import { DialogFrame } from '../../components/Dialog';
 import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import type { ItemCondition, ItemType } from '../../types/domain';
@@ -676,53 +677,46 @@ export function Post() {
         </aside>
       </form>
       {confirmOpen ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/45 sm:place-items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="post-fee-title"
-            className="w-full rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6"
-          >
-            <h2 id="post-fee-title" className="text-xl font-bold text-text-primary">
-              Xác nhận đăng bài
-            </h2>
-            {type === 'gift' ? (
-              <p className="mt-2 text-sm leading-6 text-text-muted">Bài cho tặng được đăng miễn phí.</p>
-            ) : (
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-text-muted">
-                <li>Giữ {postFee === null ? '--' : postFee} Credit khi gửi duyệt.</li>
-                <li>Chỉ trừ khi bài được duyệt lần đầu.</li>
-                <li>Nhả lại toàn bộ nếu bài bị từ chối hoặc bạn gỡ bài trước khi duyệt.</li>
-              </ul>
-            )}
-            <div className="mt-5 space-y-3 rounded-lg bg-surface-low p-4 text-sm">
-              <SummaryRow
-                label="Phí đăng bài"
-                value={type === 'gift' ? 'Miễn phí' : postFee === null ? '--' : `${postFee} Credit`}
-              />
-              <SummaryRow label="Số dư hiện tại" value={availableCredit === null ? '--' : `${availableCredit} Credit`} />
-              <SummaryRow
-                label="Khả dụng sau khi giữ"
-                value={
-                  availableCredit === null || (type !== 'gift' && postFee === null)
-                    ? '--'
-                    : `${type === 'gift' ? availableCredit : availableCredit - (postFee ?? 0)} Credit`
-                }
-              />
-            </div>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={submitting || mediaUploading}>
-                Hủy
-              </Button>
-              <Button
-                onClick={confirmSubmit}
-                disabled={submitting || mediaUploading || (type === 'trade' && postFee === null)}
-              >
-                {submitting ? 'Đang đăng...' : 'Xác nhận đăng bài'}
-              </Button>
-            </div>
+        <DialogFrame labelledBy="post-fee-title">
+          <h2 id="post-fee-title" className="text-xl font-bold text-text-primary">
+            Xác nhận đăng bài
+          </h2>
+          {type === 'gift' ? (
+            <p className="mt-2 text-sm leading-6 text-text-muted">Bài cho tặng được đăng miễn phí.</p>
+          ) : (
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-text-muted">
+              <li>Giữ {postFee === null ? '--' : postFee} Credit khi gửi duyệt.</li>
+              <li>Chỉ trừ khi bài được duyệt lần đầu.</li>
+              <li>Nhả lại toàn bộ nếu bài bị từ chối hoặc bạn gỡ bài trước khi duyệt.</li>
+            </ul>
+          )}
+          <div className="mt-5 space-y-3 rounded-lg bg-surface-low p-4 text-sm">
+            <SummaryRow
+              label="Phí đăng bài"
+              value={type === 'gift' ? 'Miễn phí' : postFee === null ? '--' : `${postFee} Credit`}
+            />
+            <SummaryRow label="Số dư hiện tại" value={availableCredit === null ? '--' : `${availableCredit} Credit`} />
+            <SummaryRow
+              label="Khả dụng sau khi giữ"
+              value={
+                availableCredit === null || (type !== 'gift' && postFee === null)
+                  ? '--'
+                  : `${type === 'gift' ? availableCredit : availableCredit - (postFee ?? 0)} Credit`
+              }
+            />
           </div>
-        </div>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={submitting || mediaUploading}>
+              Hủy
+            </Button>
+            <Button
+              onClick={confirmSubmit}
+              disabled={submitting || mediaUploading || (type === 'trade' && postFee === null)}
+            >
+              {submitting ? 'Đang đăng...' : 'Xác nhận đăng bài'}
+            </Button>
+          </div>
+        </DialogFrame>
       ) : null}
     </div>
   );

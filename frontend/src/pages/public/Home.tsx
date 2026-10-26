@@ -12,6 +12,7 @@ import {
   SearchField,
   TypeBadge,
 } from '../../components/ui';
+import { DialogFrame } from '../../components/Dialog';
 import type { Item, ItemType, User } from '../../types/domain';
 import { catalogApi } from '../../services/catalogApi';
 import type { AreaResponse, CategoryResponse } from '../../services/catalogApi';
@@ -585,21 +586,15 @@ export function Home() {
 
       </HomeMotion>
       {loginPromptOpen ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="w-full rounded-t-xl bg-white p-5 text-text-primary shadow-lg sm:max-w-md sm:rounded-xl sm:p-6"
-          >
-            <h2 className="text-xl font-bold">Bạn cần đăng nhập để đăng đồ.</h2>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setLoginPromptOpen(false)}>
-                Để sau
-              </Button>
-              <Button onClick={() => navigate('/login')}>Đăng nhập</Button>
-            </div>
+        <DialogFrame size="sm" className="text-text-primary">
+          <h2 className="text-xl font-bold">Bạn cần đăng nhập để đăng đồ.</h2>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setLoginPromptOpen(false)}>
+              Để sau
+            </Button>
+            <Button onClick={() => navigate('/login')}>Đăng nhập</Button>
           </div>
-        </div>
+        </DialogFrame>
       ) : null}
     </div>
   );

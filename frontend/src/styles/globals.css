@@ -20,6 +20,8 @@
   --color-primary-soft: #e7f1ed;
   --color-secondary-soft: #f8ede8;
   --color-surface-container: #e5eae8;
+  --color-primary-faint: #f2f7f5;
+  --color-secondary-hover: #984629;
   color-scheme: light;
   font-synthesis: none;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Alert, Button, EmptyState, PageHeader, SearchField } from '../../components/ui';
+import { Alert, Button, PageHeader, SearchField, SkeletonRows } from '../../components/ui';
 import {
   CreditHistorySection,
   CreditTransactionDetail,
@@ -86,7 +86,7 @@ export function AdminFinanceUsers() {
         </div>
       ) : null}
       {loading && !result ? (
-        <EmptyState title="Đang tải danh sách" text="Vui lòng chờ trong giây lát." />
+        <SkeletonRows label="Đang tải danh sách" />
       ) : result ? (
         <>
           <div className="table-wrap">

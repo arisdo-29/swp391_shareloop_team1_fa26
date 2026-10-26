@@ -16,6 +16,7 @@ import {
   TextArea,
   TypeBadge,
 } from '../../components/ui';
+import { DialogFrame } from '../../components/Dialog';
 import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import { fileToDataUrl } from '../../utils/files';
@@ -641,134 +642,116 @@ export function Activities() {
       ) : null}
 
       {listingFeeAction ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/45 sm:place-items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="w-full rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6"
-          >
-            <h2 className="text-xl font-bold">
-              {listingFeeAction.type === 'renew' ? 'Xác nhận gia hạn bài' : 'Xác nhận đẩy bài'}
-            </h2>
-            <p className="mt-2 text-sm font-semibold">{listingFeeAction.item.title}</p>
-            <p className="mt-2 text-sm leading-6 text-text-muted">
-              {listingFeesLoading
-                ? 'Đang tải mức phí hiện hành...'
-                : listingFees
-                  ? listingFeeAction.type === 'renew'
-                    ? `Phí gia hạn: ${listingFees.renewFee} Credit.`
-                    : `Phí đẩy bài: ${listingFees.boostFee} Credit, hiệu lực ${listingFees.boostDays} ngày.`
-                  : 'Không tải được mức phí hiện hành. Vui lòng đóng hộp thoại và thử lại.'}
-            </p>
-            {listingFeeError ? (
-              <div className="mt-4">
-                <Alert tone="error">{listingFeeError}</Alert>
-                {listingFeeNeedsTopUp ? (
-                  <Link className="mt-3 inline-block" to="/credit">
-                    <Button>Nạp Credit</Button>
-                  </Link>
-                ) : null}
-              </div>
-            ) : null}
-            <div className="mt-6 flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                disabled={Boolean(renewingItemId || boostingItemId)}
-                onClick={() => setListingFeeAction(null)}
-              >
-                Hủy
-              </Button>
-              <Button
-                disabled={Boolean(renewingItemId || boostingItemId) || listingFeesLoading || !listingFees}
-                onClick={() => void confirmListingFeeAction()}
-              >
-                {renewingItemId || boostingItemId
-                  ? 'Đang xử lý...'
-                  : listingFeeAction.type === 'renew' ? 'Gia hạn' : 'Đẩy bài'}
-              </Button>
+        <DialogFrame>
+          <h2 className="text-xl font-bold">
+            {listingFeeAction.type === 'renew' ? 'Xác nhận gia hạn bài' : 'Xác nhận đẩy bài'}
+          </h2>
+          <p className="mt-2 text-sm font-semibold">{listingFeeAction.item.title}</p>
+          <p className="mt-2 text-sm leading-6 text-text-muted">
+            {listingFeesLoading
+              ? 'Đang tải mức phí hiện hành...'
+              : listingFees
+                ? listingFeeAction.type === 'renew'
+                  ? `Phí gia hạn: ${listingFees.renewFee} Credit.`
+                  : `Phí đẩy bài: ${listingFees.boostFee} Credit, hiệu lực ${listingFees.boostDays} ngày.`
+                : 'Không tải được mức phí hiện hành. Vui lòng đóng hộp thoại và thử lại.'}
+          </p>
+          {listingFeeError ? (
+            <div className="mt-4">
+              <Alert tone="error">{listingFeeError}</Alert>
+              {listingFeeNeedsTopUp ? (
+                <Link className="mt-3 inline-block" to="/credit">
+                  <Button>Nạp Credit</Button>
+                </Link>
+              ) : null}
             </div>
+          ) : null}
+          <div className="mt-6 flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              disabled={Boolean(renewingItemId || boostingItemId)}
+              onClick={() => setListingFeeAction(null)}
+            >
+              Hủy
+            </Button>
+            <Button
+              disabled={Boolean(renewingItemId || boostingItemId) || listingFeesLoading || !listingFees}
+              onClick={() => void confirmListingFeeAction()}
+            >
+              {renewingItemId || boostingItemId
+                ? 'Đang xử lý...'
+                : listingFeeAction.type === 'renew' ? 'Gia hạn' : 'Đẩy bài'}
+            </Button>
           </div>
-        </div>
+        </DialogFrame>
       ) : null}
 
       {removeConfirmId ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/45 sm:place-items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="w-full rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6"
-          >
-            <h2 className="text-xl font-bold">Gỡ bài đăng?</h2>
-            <p className="mt-2 text-sm leading-6 text-text-muted">
-              Bài đăng sẽ không còn hiển thị với người dùng khác.
-            </p>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="ghost" disabled={Boolean(removingItemId)} onClick={() => setRemoveConfirmId('')}>
-                Hủy
-              </Button>
-              <Button
-                variant="danger"
-                disabled={Boolean(removingItemId)}
-                onClick={() => void removeApiItem(removeConfirmId)}
-              >
-                {removingItemId ? 'Đang gỡ...' : 'Xác nhận gỡ'}
-              </Button>
-            </div>
+        <DialogFrame>
+          <h2 className="text-xl font-bold">Gỡ bài đăng?</h2>
+          <p className="mt-2 text-sm leading-6 text-text-muted">
+            Bài đăng sẽ không còn hiển thị với người dùng khác.
+          </p>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="ghost" disabled={Boolean(removingItemId)} onClick={() => setRemoveConfirmId('')}>
+              Hủy
+            </Button>
+            <Button
+              variant="danger"
+              disabled={Boolean(removingItemId)}
+              onClick={() => void removeApiItem(removeConfirmId)}
+            >
+              {removingItemId ? 'Đang gỡ...' : 'Xác nhận gỡ'}
+            </Button>
           </div>
-        </div>
+        </DialogFrame>
       ) : null}
 
       {acceptRequest && acceptItem && acceptRequesterName ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/45 sm:place-items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="w-full rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6"
-          >
-            <h2 className="text-xl font-bold">Xác nhận chọn người</h2>
-            <p className="mt-2 text-sm leading-6 text-text-muted">
-              {acceptRequest.type === 'gift'
-                ? `Bạn muốn chọn ${acceptRequesterName} để nhận ${acceptItem.title}?`
-                : `Bạn muốn trao đổi ${acceptItem.title} với ${acceptRequest.offeredItemTitle ?? 'món được đề nghị'}?`}
-            </p>
-            <div className="mt-3 rounded-md bg-surface-low p-3">
-              <p className="text-xs font-semibold text-text-muted">Thông tin người nhận:</p>
-              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                <strong className="text-sm">{acceptRequesterName}</strong>
-                <ReputationBadge
-                  trustStars={acceptRequest.requesterTrustStars}
-                  rank={acceptRequest.requesterRank}
-                  asDescribedRate={acceptRequest.requesterAsDescribedRate}
-                />
-              </div>
-            </div>
-            {acceptError ? (
-              <div className="mt-3 rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
-                {acceptError}
-              </div>
-            ) : null}
-            <div className="mt-6 flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                disabled={selectingRequestId === acceptRequest.id}
-                onClick={() => {
-                  setAcceptError('');
-                  setAcceptConfirmId('');
-                }}
-              >
-                Hủy
-              </Button>
-              <Button
-                disabled={selectingRequestId === acceptRequest.id}
-                onClick={() => {
-                  void selectApiRequest(acceptApiRequest ?? acceptRequest);
-                }}
-              >
-                {selectingRequestId === acceptRequest.id ? 'Đang chọn...' : 'Xác nhận'}
-              </Button>
+        <DialogFrame>
+          <h2 className="text-xl font-bold">Xác nhận chọn người</h2>
+          <p className="mt-2 text-sm leading-6 text-text-muted">
+            {acceptRequest.type === 'gift'
+              ? `Bạn muốn chọn ${acceptRequesterName} để nhận ${acceptItem.title}?`
+              : `Bạn muốn trao đổi ${acceptItem.title} với ${acceptRequest.offeredItemTitle ?? 'món được đề nghị'}?`}
+          </p>
+          <div className="mt-3 rounded-md bg-surface-low p-3">
+            <p className="text-xs font-semibold text-text-muted">Thông tin người nhận:</p>
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+              <strong className="text-sm">{acceptRequesterName}</strong>
+              <ReputationBadge
+                trustStars={acceptRequest.requesterTrustStars}
+                rank={acceptRequest.requesterRank}
+                asDescribedRate={acceptRequest.requesterAsDescribedRate}
+              />
             </div>
           </div>
-        </div>
+          {acceptError ? (
+            <div className="mt-3 rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
+              {acceptError}
+            </div>
+          ) : null}
+          <div className="mt-6 flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              disabled={selectingRequestId === acceptRequest.id}
+              onClick={() => {
+                setAcceptError('');
+                setAcceptConfirmId('');
+              }}
+            >
+              Hủy
+            </Button>
+            <Button
+              disabled={selectingRequestId === acceptRequest.id}
+              onClick={() => {
+                void selectApiRequest(acceptApiRequest ?? acceptRequest);
+              }}
+            >
+              {selectingRequestId === acceptRequest.id ? 'Đang chọn...' : 'Xác nhận'}
+            </Button>
+          </div>
+        </DialogFrame>
       ) : null}
     </div>
   );

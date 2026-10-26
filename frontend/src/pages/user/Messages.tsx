@@ -16,6 +16,7 @@ import {
   TextArea,
   TypeBadge,
 } from '../../components/ui';
+import { DialogFrame } from '../../components/Dialog';
 import {
   classifyAmbiguousContact,
   contactSafetyLayer1,
@@ -1591,106 +1592,102 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         />
       ) : null}
       {disputeOpen && selected ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/45 sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
-          <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
-            <h2 className="text-xl font-bold">Gửi khiếu nại giao dịch</h2>
-            <p className="mt-1 text-sm text-text-muted">{conversationTitle(selected)}</p>
-            <Select
-              className="mt-5"
-              label="Lý do"
-              value={disputeReason}
-              disabled={disputeSubmitting}
-              onChange={(event) => setDisputeReason(event.target.value as ReportReason | '')}
-            >
-              <option value="">Chọn lý do khiếu nại</option>
-              {Object.entries(disputeReasonLabels).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </Select>
-            <TextArea
-              className="mt-4"
-              label="Nội dung (không bắt buộc)"
-              value={disputeNote}
-              maxLength={500}
-              disabled={disputeSubmitting}
-              onChange={(event) => setDisputeNote(event.target.value)}
-            />
-            <p className="mt-1 text-right text-xs text-text-muted">{disputeNote.length}/500</p>
-            <Field
-              className="mt-4"
-              label="Minh chứng"
-              type="file"
-              accept="image/*"
-              multiple
-              disabled={disputeSubmitting}
-              onChange={(event) => setDisputeEvidence(Array.from(event.target.files ?? []))}
-            />
-            {disputeEvidence.length ? (
-              <p className="mt-2 text-xs text-text-muted">Đã chọn {disputeEvidence.length} ảnh.</p>
-            ) : null}
-            {disputeError ? <div className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">{disputeError}</div> : null}
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="ghost" disabled={disputeSubmitting} onClick={() => setDisputeOpen(false)}>Hủy</Button>
-              <Button disabled={disputeSubmitting || !disputeReason} onClick={() => void submitDispute()}>
-                {disputeSubmitting ? 'Đang gửi...' : 'Gửi khiếu nại'}
-              </Button>
-            </div>
+        <DialogFrame>
+          <h2 className="text-xl font-bold">Gửi khiếu nại giao dịch</h2>
+          <p className="mt-1 text-sm text-text-muted">{conversationTitle(selected)}</p>
+          <Select
+            className="mt-5"
+            label="Lý do"
+            value={disputeReason}
+            disabled={disputeSubmitting}
+            onChange={(event) => setDisputeReason(event.target.value as ReportReason | '')}
+          >
+            <option value="">Chọn lý do khiếu nại</option>
+            {Object.entries(disputeReasonLabels).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </Select>
+          <TextArea
+            className="mt-4"
+            label="Nội dung (không bắt buộc)"
+            value={disputeNote}
+            maxLength={500}
+            disabled={disputeSubmitting}
+            onChange={(event) => setDisputeNote(event.target.value)}
+          />
+          <p className="mt-1 text-right text-xs text-text-muted">{disputeNote.length}/500</p>
+          <Field
+            className="mt-4"
+            label="Minh chứng"
+            type="file"
+            accept="image/*"
+            multiple
+            disabled={disputeSubmitting}
+            onChange={(event) => setDisputeEvidence(Array.from(event.target.files ?? []))}
+          />
+          {disputeEvidence.length ? (
+            <p className="mt-2 text-xs text-text-muted">Đã chọn {disputeEvidence.length} ảnh.</p>
+          ) : null}
+          {disputeError ? <div className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">{disputeError}</div> : null}
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="ghost" disabled={disputeSubmitting} onClick={() => setDisputeOpen(false)}>Hủy</Button>
+            <Button disabled={disputeSubmitting || !disputeReason} onClick={() => void submitDispute()}>
+              {disputeSubmitting ? 'Đang gửi...' : 'Gửi khiếu nại'}
+            </Button>
           </div>
-        </div>
+        </DialogFrame>
       ) : null}
       {responseDisputeId !== null ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/45 sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
-          <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
-            <h2 className="text-xl font-bold">Giải trình khiếu nại</h2>
-            <p className="mt-1 text-sm text-text-muted">Gửi nội dung giải trình cho khiếu nại liên quan đến bạn.</p>
-            {responseNotice ? (
-              <div className="mt-5 space-y-4">
-                <div className="rounded-md bg-success-soft p-3 text-sm text-success">{responseNotice}</div>
-                <div className="flex justify-end">
-                  <Button onClick={() => navigate('/messages')}>Về trang Tin nhắn</Button>
-                </div>
+        <DialogFrame>
+          <h2 className="text-xl font-bold">Giải trình khiếu nại</h2>
+          <p className="mt-1 text-sm text-text-muted">Gửi nội dung giải trình cho khiếu nại liên quan đến bạn.</p>
+          {responseNotice ? (
+            <div className="mt-5 space-y-4">
+              <div className="rounded-md bg-success-soft p-3 text-sm text-success">{responseNotice}</div>
+              <div className="flex justify-end">
+                <Button onClick={() => navigate('/messages')}>Về trang Tin nhắn</Button>
               </div>
-            ) : (
-              <>
-                <TextArea
-                  className="mt-5"
-                  label="Nội dung giải trình"
-                  value={responseNote}
-                  maxLength={1000}
-                  disabled={responseSubmitting}
-                  onChange={(event) => setResponseNote(event.target.value)}
-                />
-                <p className="mt-1 text-right text-xs text-text-muted">{responseNote.length}/1000</p>
-                <Field
-                  className="mt-4"
-                  label="Minh chứng"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  disabled={responseSubmitting}
-                  onChange={(event) => setResponseEvidence(Array.from(event.target.files ?? []))}
-                />
-                {responseEvidence.length ? (
-                  <p className="mt-2 text-xs text-text-muted">Đã chọn {responseEvidence.length} ảnh.</p>
-                ) : null}
-                {(!Number.isSafeInteger(responseDisputeId) || responseDisputeId <= 0) ? (
-                  <div className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">Đường dẫn khiếu nại không hợp lệ.</div>
-                ) : responseError ? (
-                  <div className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">{responseError}</div>
-                ) : null}
-                <div className="mt-6 flex justify-end gap-2">
-                  <Button variant="ghost" disabled={responseSubmitting} onClick={() => navigate('/messages')}>Hủy</Button>
-                  <Button
-                    disabled={responseSubmitting || !responseNote.trim() || !Number.isSafeInteger(responseDisputeId) || responseDisputeId <= 0}
-                    onClick={() => void submitDisputeResponse()}
-                  >
-                    {responseSubmitting ? 'Đang gửi...' : 'Gửi giải trình'}
-                  </Button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+            </div>
+          ) : (
+            <>
+              <TextArea
+                className="mt-5"
+                label="Nội dung giải trình"
+                value={responseNote}
+                maxLength={1000}
+                disabled={responseSubmitting}
+                onChange={(event) => setResponseNote(event.target.value)}
+              />
+              <p className="mt-1 text-right text-xs text-text-muted">{responseNote.length}/1000</p>
+              <Field
+                className="mt-4"
+                label="Minh chứng"
+                type="file"
+                accept="image/*"
+                multiple
+                disabled={responseSubmitting}
+                onChange={(event) => setResponseEvidence(Array.from(event.target.files ?? []))}
+              />
+              {responseEvidence.length ? (
+                <p className="mt-2 text-xs text-text-muted">Đã chọn {responseEvidence.length} ảnh.</p>
+              ) : null}
+              {(!Number.isSafeInteger(responseDisputeId) || responseDisputeId <= 0) ? (
+                <div className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">Đường dẫn khiếu nại không hợp lệ.</div>
+              ) : responseError ? (
+                <div className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">{responseError}</div>
+              ) : null}
+              <div className="mt-6 flex justify-end gap-2">
+                <Button variant="ghost" disabled={responseSubmitting} onClick={() => navigate('/messages')}>Hủy</Button>
+                <Button
+                  disabled={responseSubmitting || !responseNote.trim() || !Number.isSafeInteger(responseDisputeId) || responseDisputeId <= 0}
+                  onClick={() => void submitDisputeResponse()}
+                >
+                  {responseSubmitting ? 'Đang gửi...' : 'Gửi giải trình'}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogFrame>
       ) : null}
     </div>
   );
@@ -1720,53 +1717,46 @@ export function SelectRequestDialog({
   }, [onCancel, submitting]);
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-end bg-black/45 sm:place-items-center sm:p-4" role="presentation">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="select-request-title"
-        className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6"
-      >
-        <h2 id="select-request-title" className="text-xl font-bold">Xác nhận chọn người giao dịch</h2>
-        <div className="mt-4 flex items-center gap-3 rounded-md bg-surface-low p-3">
-          <Avatar user={{ name: participantName, avatarInitials: avatarInitials(participantName), avatarUrl: undefined }} />
-          <div className="min-w-0 flex-1">
-            <strong className="block truncate text-sm">{participantName}</strong>
-            <div className="mt-1">
-              <ReputationBadge
-                trustStars={conversation.request.receiverTrustStars ?? conversation.request.trustStars}
-                rank={conversation.request.receiverRank ?? conversation.request.rank}
-                asDescribedRate={conversation.request.receiverAsDescribedRate ?? conversation.request.asDescribedRate}
-              />
-            </div>
-            <p className="mt-1 text-xs text-text-muted">
-              {requestFallbackTitle(conversation.request)}
-            </p>
+    <DialogFrame labelledBy="select-request-title">
+      <h2 id="select-request-title" className="text-xl font-bold">Xác nhận chọn người giao dịch</h2>
+      <div className="mt-4 flex items-center gap-3 rounded-md bg-surface-low p-3">
+        <Avatar user={{ name: participantName, avatarInitials: avatarInitials(participantName), avatarUrl: undefined }} />
+        <div className="min-w-0 flex-1">
+          <strong className="block truncate text-sm">{participantName}</strong>
+          <div className="mt-1">
+            <ReputationBadge
+              trustStars={conversation.request.receiverTrustStars ?? conversation.request.trustStars}
+              rank={conversation.request.receiverRank ?? conversation.request.rank}
+              asDescribedRate={conversation.request.receiverAsDescribedRate ?? conversation.request.asDescribedRate}
+            />
           </div>
-        </div>
-        <div className="mt-4 space-y-2 text-sm leading-6 text-text-secondary">
-          <p>
-            Bài đăng: <strong className="text-text-primary">{conversation.item?.title ?? conversation.request.itemTitle ?? 'Không xác định'}</strong>
+          <p className="mt-1 text-xs text-text-muted">
+            {requestFallbackTitle(conversation.request)}
           </p>
-          <p>Gửi lúc: {new Date(conversation.request.createdAt).toLocaleString('vi-VN')}</p>
-          {conversation.request.type === 'SWAP' ? (
-            <p>
-              Món đề xuất: <strong className="text-text-primary">{conversation.offeredItem?.title ?? conversation.request.offeredItemTitle ?? 'Không xác định'}</strong>
-            </p>
-          ) : null}
-        </div>
-        <p className="mt-4 rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
-          Khi bạn xác nhận chọn người này để giao dịch, yêu cầu sẽ được chấp nhận và các yêu cầu đang chờ khác của cùng bài đăng sẽ tự động bị từ chối.
-        </p>
-        {error ? <p role="alert" className="mt-4 rounded-md bg-error-soft p-3 text-sm text-error">{error}</p> : null}
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="ghost" autoFocus disabled={submitting} onClick={onCancel}>Hủy</Button>
-          <Button disabled={submitting} onClick={onConfirm}>
-            {submitting ? 'Đang chọn...' : 'Xác nhận chọn'}
-          </Button>
         </div>
       </div>
-    </div>
+      <div className="mt-4 space-y-2 text-sm leading-6 text-text-secondary">
+        <p>
+          Bài đăng: <strong className="text-text-primary">{conversation.item?.title ?? conversation.request.itemTitle ?? 'Không xác định'}</strong>
+        </p>
+        <p>Gửi lúc: {new Date(conversation.request.createdAt).toLocaleString('vi-VN')}</p>
+        {conversation.request.type === 'SWAP' ? (
+          <p>
+            Món đề xuất: <strong className="text-text-primary">{conversation.offeredItem?.title ?? conversation.request.offeredItemTitle ?? 'Không xác định'}</strong>
+          </p>
+        ) : null}
+      </div>
+      <p className="mt-4 rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
+        Khi bạn xác nhận chọn người này để giao dịch, yêu cầu sẽ được chấp nhận và các yêu cầu đang chờ khác của cùng bài đăng sẽ tự động bị từ chối.
+      </p>
+      {error ? <p role="alert" className="mt-4 rounded-md bg-error-soft p-3 text-sm text-error">{error}</p> : null}
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="ghost" autoFocus disabled={submitting} onClick={onCancel}>Hủy</Button>
+        <Button disabled={submitting} onClick={onConfirm}>
+          {submitting ? 'Đang chọn...' : 'Xác nhận chọn'}
+        </Button>
+      </div>
+    </DialogFrame>
   );
 }
 

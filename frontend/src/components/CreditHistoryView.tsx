@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { CreditHistory, CreditHistoryType } from '../types/domain';
 import { Alert, Button, Icon } from './ui';
+import { DialogFrame } from './Dialog';
 import {
   HISTORY_PAGE_SIZE,
   itemTitleOf,
@@ -288,49 +289,38 @@ export function CreditTransactionDetail({
   onClose: () => void;
 }) {
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4"
-      onMouseDown={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="credit-detail-title"
-        className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-lg sm:p-7"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-4">
-          <h2 id="credit-detail-title" className="text-xl font-bold text-text-primary">
-            Chi tiết giao dịch Credit
-          </h2>
-          <button
-            type="button"
-            aria-label="Đóng"
-            onClick={onClose}
-            className="grid size-11 shrink-0 place-items-center rounded-md text-text-muted transition hover:bg-surface-low hover:text-text-primary"
-          >
-            <Icon name="close" className="size-5" />
-          </button>
-        </div>
-        <dl className="mt-6 divide-y divide-border rounded-lg bg-surface-low px-4">
-          <DetailRow label="Loại giao dịch" value={historyTitle(entry)} />
-          {relatedItemTitle ? <DetailRow label="Món đồ" value={relatedItemTitle} /> : null}
-          <DetailRow
-            label="Số Credit"
-            value={`${entry.amount > 0 ? '+' : ''}${entry.amount} Credit`}
-            valueClass={historyTone(entry) === 'negative' ? 'text-error' : 'text-success'}
-          />
-          <DetailRow label="Số dư trước" value={`${balanceBefore(entry)} Credit`} />
-          <DetailRow label="Số dư sau" value={`${entry.balance} Credit`} />
-          <DetailRow label="Thời gian" value={formatDateTime(entry.createdAt)} />
-          <DetailRow label="Trạng thái" value={historyStatus(entry)} />
-        </dl>
-        <div className="mt-5 rounded-lg border border-border p-4 text-sm">
-          <p className="font-semibold text-text-primary">Nội dung liên quan</p>
-          <p className="mt-2 text-text-secondary">{entry.note || entry.description}</p>
-        </div>
+    <DialogFrame labelledBy="credit-detail-title" onClose={onClose}>
+      <div className="flex items-start justify-between gap-4">
+        <h2 id="credit-detail-title" className="text-xl font-bold text-text-primary">
+          Chi tiết giao dịch Credit
+        </h2>
+        <button
+          type="button"
+          aria-label="Đóng"
+          onClick={onClose}
+          className="grid size-11 shrink-0 place-items-center rounded-md text-text-muted transition hover:bg-surface-low hover:text-text-primary"
+        >
+          <Icon name="close" className="size-5" />
+        </button>
       </div>
-    </div>
+      <dl className="mt-6 divide-y divide-border rounded-lg bg-surface-low px-4">
+        <DetailRow label="Loại giao dịch" value={historyTitle(entry)} />
+        {relatedItemTitle ? <DetailRow label="Món đồ" value={relatedItemTitle} /> : null}
+        <DetailRow
+          label="Số Credit"
+          value={`${entry.amount > 0 ? '+' : ''}${entry.amount} Credit`}
+          valueClass={historyTone(entry) === 'negative' ? 'text-error' : 'text-success'}
+        />
+        <DetailRow label="Số dư trước" value={`${balanceBefore(entry)} Credit`} />
+        <DetailRow label="Số dư sau" value={`${entry.balance} Credit`} />
+        <DetailRow label="Thời gian" value={formatDateTime(entry.createdAt)} />
+        <DetailRow label="Trạng thái" value={historyStatus(entry)} />
+      </dl>
+      <div className="mt-5 rounded-lg border border-border p-4 text-sm">
+        <p className="font-semibold text-text-primary">Nội dung liên quan</p>
+        <p className="mt-2 text-text-secondary">{entry.note || entry.description}</p>
+      </div>
+    </DialogFrame>
   );
 }
 
