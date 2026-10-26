@@ -163,3 +163,21 @@ Giữ nguyên có chủ đích để không đổi màu Home trước demo; đâ
 - Đã thêm `--color-primary-faint`, `--color-secondary-hover` vào `:root` (đúng giá trị tailwind) và dùng thay `#f2f7f5`, `#984629`.
 - Đã sửa duy nhất chữ không đạt AA: `.home-lifecycle .home-value span` `#8fa59b` (2,51:1 trên `#f8fbf9`) → `var(--color-text-muted)` (5,33:1).
 - Hướng xử lý sau demo: gom các tint về 3–4 mức `color-mix(in srgb, var(--color-primary) N%, #fff)` hoặc thêm token `primary-wash` ở `tailwind.config.js`, rồi so ảnh chụp Home trước và sau.
+
+## K. Cập nhật sau Đợt 7 (trang công khai)
+
+Chỉ đổi className và CSS, không đổi chữ, hành vi, `data-testid`.
+- `Home.tsx`: bóng tuỳ ý của ảnh hero → `shadow-lg`; `bg-red-50` → `bg-error-soft`; ô báo tải có `role="status"`/`role="alert"`; bỏ `size="sm"` ở nút "Thử lại".
+- `home-content.css`: chip lọc "Món đồ mới" 38 → 44px; nút mũi tên cuộn ngang 36×42 (mobile 30×38) → 44×44.
+- `HomeCommunity.tsx`, `HomeMotion.tsx`: không cần sửa (không có màu/cỡ chữ lệch token).
+- `Browse.tsx`: vòng focus ô tìm `ring-primary/25`, placeholder `text-text-muted`, chip bộ lọc đang chọn `min-h-11`, bỏ `size="sm"` (2 nút), trạng thái tải dùng `LoadingState` (lưới khung xương) thay `EmptyState`.
+- `browse.css`: nút "Đặt lại" 32 → 44px, ô sắp xếp và nút đổi kiểu hiển thị 44px.
+- `ProductDetail.tsx`: trạng thái tải dùng `Skeleton` (không còn `Alert` cảnh báo); hộp ghi chú `bg-emerald-50`/`bg-amber-50` → `bg-success-soft`/`bg-warning-soft`; ảnh nhỏ có viền focus. Thẻ người đăng và biến `owner` không đụng tới.
+- `AI.tsx`: `rounded-2xl` → `rounded-xl` (2 chỗ), bỏ `size="sm"`.
+
+Nợ còn lại: `Home.tsx` còn `bg-[#0d332c]` (2 chỗ) và `text-[#a9d5c6]`, `text-[52px]` ở tiêu đề hero (giữ để không đổi màu Home, xem mục nợ kỹ thuật); `Home.tsx` còn nút "Đăng món đồ" dựng tay (`<button>` cùng kiểu `home-final-primary`).
+
+### Ghi chú cho PR #332 (bổ sung Đợt 7)
+- `Home.tsx`: chỉ đổi className của hero, ô báo tải và bỏ `size` ở một nút. Không đụng `HomeProductCard`, footer thẻ bài.
+- `Browse.tsx`: không đụng thẻ bài; chỉ ô tìm, chip lọc, nút lọc và khối trạng thái tải.
+- `ProductDetail.tsx`: khối tải đầu hàm, 4 hộp ghi chú và viền ảnh nhỏ. Thẻ người đăng, `owner` giữ nguyên.

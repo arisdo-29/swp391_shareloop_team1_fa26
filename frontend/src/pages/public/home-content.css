@@ -53,8 +53,8 @@
 .home-content .home-discovery-controls button {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   background: white;
@@ -604,8 +604,8 @@
     inset-inline: -10px;
   }
   .home-content .home-discovery-controls button {
-    width: 30px;
-    height: 38px;
+    width: 44px;
+    height: 44px;
   }
   .home-content .home-category {
     min-height: 300px;
@@ -1361,7 +1361,7 @@
   margin: -6px 0 22px;
 }
 .home-content .home-new-filters button {
-  min-height: 38px;
+  min-height: 44px;
   border: 1px solid #d7e5de;
   border-radius: 999px;
   background: var(--color-surface);

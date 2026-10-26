@@ -77,7 +77,7 @@
 }
 
 .browse-filter-reset {
-  min-height: 2rem;
+  min-height: 2.75rem;
   padding: 0.35rem 0.55rem;
   border: 0;
   border-radius: 7px;
@@ -186,7 +186,7 @@
 .browse-sort {
   position: relative;
   display: flex;
-  height: 2.25rem;
+  height: 2.875rem;
   align-items: center;
   gap: 0.35rem;
   padding-left: 0.75rem;
@@ -228,7 +228,7 @@
 .browse-view-toggle {
   display: flex;
   gap: 0.25rem;
-  padding: 0.2rem;
+  padding: 0;
   border: 1px solid var(--color-border);
   border-radius: 10px;
   background: #f7f9f8;
@@ -236,8 +236,8 @@
 
 .browse-view-toggle button {
   display: grid;
-  width: 2rem;
-  height: 2rem;
+  width: 2.75rem;
+  height: 2.75rem;
   place-items: center;
   border: 0;
   border-radius: 7px;

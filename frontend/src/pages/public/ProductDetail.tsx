@@ -4,6 +4,7 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser, selectData } from '../../app/store';
 import {
   Alert,
+  Skeleton,
   Button,
   ConditionBadge,
   Icon,
@@ -114,7 +115,23 @@ export function ProductDetail() {
   if (loadingItem)
     return (
       <div className="page-shell">
-        <Alert tone="warning">{itemError || 'Đang tải chi tiết bài đăng...'}</Alert>
+        {itemError ? (
+          <Alert tone="warning">{itemError}</Alert>
+        ) : (
+          <div
+            role="status"
+            aria-label="Đang tải chi tiết bài đăng"
+            className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]"
+          >
+            <div className="space-y-4">
+              <Skeleton className="aspect-[4/3] w-full" />
+              <Skeleton className="h-8 w-2/3" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+            </div>
+            <Skeleton className="h-64 w-full" />
+          </div>
+        )}
       </div>
     );
 
@@ -281,7 +298,7 @@ export function ProductDetail() {
                   aria-label={`Xem ảnh ${index + 1}`}
                   aria-pressed={selectedImageIndex === index}
                   onClick={() => setSelectedImageIndex(index)}
-                  className={`shrink-0 overflow-hidden rounded-md ${selectedImageIndex === index ? 'ring-2 ring-primary' : 'ring-1 ring-border'}`}
+                  className={`shrink-0 overflow-hidden rounded-md focus-visible:outline-primary ${selectedImageIndex === index ? 'ring-2 ring-primary' : 'ring-1 ring-border'}`}
                 >
                   <ItemImage
                     src={image}
@@ -368,12 +385,12 @@ export function ProductDetail() {
               </p>
             ) : null}
             {requestSuccess ? (
-              <div className="mt-3 rounded-md bg-emerald-50 p-3 text-xs leading-5 text-success">
+              <div className="mt-3 rounded-md bg-success-soft p-3 text-xs leading-5 text-success">
                 <p>{requestSuccess}</p>
               </div>
             ) : null}
             {requestError ? (
-              <div className="mt-3 rounded-md bg-amber-50 p-3 text-xs leading-5 text-warning">
+              <div className="mt-3 rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
                 <p>{requestError}</p>
               </div>
             ) : null}
@@ -401,7 +418,7 @@ export function ProductDetail() {
               </Button>
             ) : null}
             {reportNotice ? (
-              <div className="mt-3 rounded-md bg-emerald-50 p-3 text-xs leading-5 text-success">
+              <div className="mt-3 rounded-md bg-success-soft p-3 text-xs leading-5 text-success">
                 {reportNotice}
               </div>
             ) : null}
@@ -453,7 +470,7 @@ export function ProductDetail() {
                   </label>
                 ))}
                 {!eligibleOfferedItems.length ? (
-                  <p className="rounded-md bg-amber-50 p-3 text-xs leading-5 text-warning">
+                  <p className="rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
                     Bạn chưa có món đã duyệt, còn hoạt động và chưa nằm trong giao dịch khác để trao đổi.
                   </p>
                 ) : null}
