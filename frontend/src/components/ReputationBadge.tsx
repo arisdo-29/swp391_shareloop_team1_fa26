@@ -10,10 +10,10 @@ export interface ReputationBadgeProps {
 
 function rankBadgeColor(rank?: string | null) {
   const upper = rank?.toUpperCase().trim();
-  if (upper === 'DIAMOND') return 'bg-cyan-50 text-cyan-700 ring-cyan-600/20';
-  if (upper === 'GOLD') return 'bg-amber-50 text-amber-800 ring-amber-600/20';
-  if (upper === 'SILVER') return 'bg-slate-100 text-slate-700 ring-slate-500/20';
-  return 'bg-orange-50 text-orange-800 ring-orange-600/20'; // BRONZE
+  if (upper === 'DIAMOND') return 'bg-info-soft text-info ring-info/20';
+  if (upper === 'GOLD') return 'bg-warning-soft text-warning ring-warning/20';
+  if (upper === 'SILVER') return 'bg-surface-low text-text-secondary ring-text-muted/20';
+  return 'bg-secondary-soft text-secondary-hover ring-secondary/20'; // BRONZE
 }
 
 /**
@@ -39,7 +39,7 @@ export function ReputationBadge({
       <span className={`inline-flex flex-wrap items-center gap-1.5 text-xs ${className}`}>
         {rankLabel ? (
           <span
-            className={`inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${rankBadgeColor(
+            className={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-2xs font-semibold ring-1 ring-inset ${rankBadgeColor(
               rank,
             )}`}
           >
@@ -47,13 +47,13 @@ export function ReputationBadge({
           </span>
         ) : null}
         {starsText !== '—' ? (
-          <span className="inline-flex items-center gap-0.5 font-medium text-amber-600" title="Sao uy tín">
+          <span className="inline-flex items-center gap-0.5 font-medium text-warning" title="Sao uy tín">
             <span aria-hidden="true">★</span>
             <span>{starsText}/5</span>
           </span>
         ) : null}
         {rateText !== '—' ? (
-          <span className="text-[11px] text-text-muted" title="Tỉ lệ đúng mô tả">
+          <span className="text-2xs text-text-muted" title="Tỉ lệ đúng mô tả">
             ({rateText} đúng mô tả)
           </span>
         ) : null}
@@ -65,7 +65,7 @@ export function ReputationBadge({
     <div className={`flex flex-wrap items-center gap-2 text-xs ${className}`}>
       {rankLabel ? (
         <span
-          className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${rankBadgeColor(
+          className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${rankBadgeColor(
             rank,
           )}`}
         >
@@ -73,14 +73,14 @@ export function ReputationBadge({
         </span>
       ) : null}
       {starsText !== '—' ? (
-        <span className="inline-flex items-center gap-1 font-semibold text-amber-600" title="Sao uy tín">
+        <span className="inline-flex items-center gap-1 font-semibold text-warning" title="Sao uy tín">
           <span aria-hidden="true" className="text-sm leading-none">★</span>
           <span>{starsText}/5 sao</span>
         </span>
       ) : null}
       {rateText !== '—' ? (
         <span
-          className="inline-flex items-center rounded bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20"
+          className="inline-flex items-center rounded-sm bg-success-soft px-2 py-0.5 font-medium text-success ring-1 ring-inset ring-success/20"
           title="Tỉ lệ đúng mô tả"
         >
           {rateText} đúng mô tả

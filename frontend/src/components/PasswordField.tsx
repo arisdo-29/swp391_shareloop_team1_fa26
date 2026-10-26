@@ -40,7 +40,7 @@ export function PasswordField({
           aria-label={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
           aria-pressed={visible}
           onClick={() => setVisible((current) => !current)}
-          className="absolute inset-y-0 right-1 my-auto grid size-9 place-items-center rounded-md text-text-muted hover:bg-surface-low hover:text-primary"
+          className="absolute inset-y-0 right-0 my-auto grid size-11 place-items-center rounded-md text-text-muted transition hover:bg-surface-low hover:text-primary"
         >
           <Icon name={visible ? 'eyeSlash' : 'eye'} className="size-5" />
         </button>

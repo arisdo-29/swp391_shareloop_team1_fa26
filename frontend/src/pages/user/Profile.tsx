@@ -456,7 +456,7 @@ export function Profile() {
                 <Link
                   key={id}
                   to="/credit"
-                  className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-semibold text-text-secondary hover:bg-surface-low"
+                  className="flex w-full items-center gap-3 min-h-11 rounded-md px-3 py-2.5 text-left text-sm font-semibold transition text-text-secondary hover:bg-surface-low"
                 >
                   <Icon name={icon} className="size-5" />
                   {label}
@@ -465,14 +465,14 @@ export function Profile() {
                 <button
                   key={id}
                   onClick={() => changeTab(id)}
-                  className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-semibold ${tab === id ? 'bg-primary-faint text-primary' : 'text-text-secondary hover:bg-surface-low'}`}
+                  className={`flex w-full items-center gap-3 min-h-11 rounded-md px-3 py-2.5 text-left text-sm font-semibold transition ${tab === id ? 'bg-primary-faint text-primary' : 'text-text-secondary hover:bg-surface-low'}`}
                 >
                   <Icon name={icon} className="size-5" />
                   {label}
                 </button>
               ),
             )}
-            <Link to="/change-password" className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-semibold text-text-secondary hover:bg-surface-low">
+            <Link to="/change-password" className="flex w-full items-center gap-3 min-h-11 rounded-md px-3 py-2.5 text-left text-sm font-semibold transition text-text-secondary hover:bg-surface-low">
               <Icon name="shield" className="size-5" />
               Đổi mật khẩu
             </Link>
@@ -531,7 +531,6 @@ export function Profile() {
                   <Button
                       type="button"
                       className="mt-2"
-                      size="sm"
                       variant="outline"
                       onClick={() => {
                         setPhoneChangeOpen(true);
@@ -564,14 +563,13 @@ export function Profile() {
                 <div className="mt-5 rounded-lg border border-border bg-surface-low p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h3 className="font-semibold text-text">Đổi số điện thoại</h3>
+                      <h3 className="font-semibold text-text-primary">Đổi số điện thoại</h3>
                       <p className="mt-1 text-sm text-text-muted">
                         Mã xác nhận sẽ được gửi đến email của tài khoản.
                       </p>
                     </div>
                     <Button
                       type="button"
-                      size="sm"
                       variant="ghost"
                       onClick={closePhoneChange}
                       disabled={phoneChangeSending || phoneChangeConfirming}
@@ -654,7 +652,7 @@ export function Profile() {
               {profileLoadError ? <div className="mt-5"><Alert tone="error">{profileLoadError}</Alert></div> : null}
               {profileSaveError ? <div className="mt-5"><Alert tone="error">{profileSaveError}</Alert></div> : null}
               {profileLoadError && !profileSaving ? (
-                <Button className="mt-3" size="sm" variant="outline" onClick={() => setProfileReloadKey((key) => key + 1)}>
+                <Button className="mt-3" variant="outline" onClick={() => setProfileReloadKey((key) => key + 1)}>
                   Tải lại hồ sơ
                 </Button>
               ) : null}
@@ -670,20 +668,20 @@ export function Profile() {
               {reputationError ? (
                 <div className="space-y-3">
                   <Alert tone="error">{reputationError}</Alert>
-                  <Button size="sm" variant="outline" onClick={() => setReputationReloadKey((key) => key + 1)}>
+                  <Button variant="outline" onClick={() => setReputationReloadKey((key) => key + 1)}>
                     Thử lại
                   </Button>
                 </div>
               ) : null}
               {reputation ? (
                 <>
-                  <section className="grid gap-5 rounded-xl bg-white p-6 ring-1 ring-border/80 sm:grid-cols-4">
+                  <section className="grid gap-5 rounded-xl bg-white p-5 ring-1 ring-border/80 sm:grid-cols-2 sm:p-6 lg:grid-cols-4">
                     <Stat label="Tổng điểm" value={reputation.totalPoints} detail="Điểm hoạt động" />
                     <Stat label="Hạng thành viên" value={getRankLabel(reputation.rank)} detail="Dựa trên điểm uy tín" />
                     <Stat label="Sao uy tín" value={`${reputation.trustStars}/5`} detail="Mức tin cậy hiện tại" />
                     <Stat
                       label="Tỉ lệ đúng mô tả"
-                      value={reputation.accuracyRate === null ? 'Chưa đủ giao dịch để tính' : `${Math.round(reputation.accuracyRate * 100)}%`}
+                      value={reputation.accuracyRate === null ? <span className="block whitespace-normal text-base leading-6">Chưa đủ giao dịch để tính</span> : `${Math.round(reputation.accuracyRate * 100)}%`}
                       detail="Từ giao dịch được đánh giá"
                     />
                   </section>
@@ -711,9 +709,8 @@ export function Profile() {
                       </div>
                     )}
                     {reputation.history.totalPages > 1 ? (
-                      <div className="flex items-center justify-between border-t border-border px-5 py-4">
+                      <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
                         <Button
-                          size="sm"
                           variant="outline"
                           disabled={reputationLoading || reputation.history.number <= 0}
                           onClick={() => setReputationPage((page) => Math.max(0, page - 1))}
@@ -724,7 +721,6 @@ export function Profile() {
                           Trang {reputation.history.number + 1}/{reputation.history.totalPages}
                         </span>
                         <Button
-                          size="sm"
                           variant="outline"
                           disabled={reputationLoading || reputation.history.number + 1 >= reputation.history.totalPages}
                           onClick={() => setReputationPage((page) => page + 1)}

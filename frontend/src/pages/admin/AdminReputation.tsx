@@ -58,7 +58,6 @@ function EditableValue({
     <span className="inline-flex items-center gap-2">
       <span className="font-semibold tabular-nums">{formatConfigValue(config)}</span>
       <Button
-        size="sm"
         variant="ghost"
         className="!min-h-7 !px-2"
         aria-label={`Sửa ${config.label}`}
@@ -117,7 +116,7 @@ export function AdminReputation() {
       ) : error ? (
         <div className="space-y-3">
           <Alert tone="error">{error}</Alert>
-          <Button size="sm" variant="outline" onClick={reload}>
+          <Button variant="outline" onClick={reload}>
             Thử lại
           </Button>
         </div>

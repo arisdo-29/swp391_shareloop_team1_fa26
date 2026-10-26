@@ -173,7 +173,7 @@ export function ForgotPassword() {
               <PasswordField label="Mật khẩu mới" value={newPassword} onChange={setNewPassword} autoComplete="new-password" />
               <PasswordField label="Xác nhận mật khẩu mới" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
               {otpSeconds !== null ? (
-                <p className={`text-center text-xs ${otpSeconds === 0 ? 'text-error' : 'text-text-muted'}`}>
+                <p className={`text-center text-xs ${otpSeconds === 0 ? 'text-error' : 'text-text-secondary'}`}>
                   {otpSeconds === 0 ? 'Mã OTP đã hết hạn.' : `Mã OTP hết hạn sau ${formatCountdown(otpSeconds)}.`}
                 </p>
               ) : null}

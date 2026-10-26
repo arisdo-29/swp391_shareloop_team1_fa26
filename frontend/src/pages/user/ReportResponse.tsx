@@ -66,7 +66,7 @@ export function ReportResponse() {
         title="Giải trình báo cáo"
         description={validReportId ? 'Gửi nội dung giải trình cho báo cáo liên quan đến bạn.' : 'Đường dẫn báo cáo không hợp lệ'}
       />
-      <section className="mx-auto max-w-2xl space-y-4 rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
+      <section className="mx-auto max-w-2xl space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-border/80 sm:p-6">
         {!validReportId ? <Alert tone="error">Đường dẫn báo cáo không hợp lệ.</Alert> : success ? (
           <>
             <Alert tone="success">Giải trình đã được gửi đến quản trị viên.</Alert>
@@ -94,7 +94,7 @@ export function ReportResponse() {
               <p className="text-xs text-text-muted">Đã chọn {evidenceFiles.length} ảnh minh chứng.</p>
             ) : null}
             {error ? <Alert tone="error">{error}</Alert> : null}
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button variant="ghost" disabled={submitting} onClick={() => navigate('/messages')}>Hủy</Button>
               <Button disabled={submitting || !response.trim()} onClick={() => void submit()}>
                 {submitting ? 'Đang gửi...' : 'Gửi giải trình'}

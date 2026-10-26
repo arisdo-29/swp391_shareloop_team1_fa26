@@ -296,7 +296,6 @@ export function AdminComplaints() {
                     <td>{statusLabels[report.status]}</td>
                     <td>
                       <Button
-                        size="sm"
                         variant="outline"
                         disabled={submitting}
                         onClick={() => {
@@ -338,7 +337,7 @@ export function AdminComplaints() {
       )}
       {selectedId !== null && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="report-detail-title"

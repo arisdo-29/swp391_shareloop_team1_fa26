@@ -379,7 +379,7 @@ export function Post() {
               <span>{error}</span>
               {errorCode === WALLET_INSUFFICIENT_BALANCE ? (
                 <Link to="/credit">
-                  <Button size="sm">Nạp Credit</Button>
+                  <Button>Nạp Credit</Button>
                 </Link>
               ) : null}
             </div>
@@ -397,7 +397,8 @@ export function Post() {
                   setType('gift');
                   setErrors((current) => ({ ...current, type: undefined }));
                 }}
-                className={`rounded-md border p-4 text-left transition ${type === 'gift' ? 'border-primary bg-primary-faint text-primary' : 'border-border hover:border-primary/40'}`}
+                aria-pressed={type === 'gift'}
+                className={`min-h-11 rounded-md border p-4 text-left transition ${type === 'gift' ? 'border-primary bg-primary-faint text-primary' : 'border-border hover:border-primary/40'}`}
               >
                 <strong className="block text-sm">Cho tặng</strong>
                 <span className="mt-1 block text-xs text-text-muted">
@@ -410,7 +411,8 @@ export function Post() {
                   setType('trade');
                   setErrors((current) => ({ ...current, type: undefined }));
                 }}
-                className={`rounded-md border p-4 text-left transition ${type === 'trade' ? 'border-secondary bg-secondary-soft text-secondary' : 'border-border hover:border-secondary/40'}`}
+                aria-pressed={type === 'trade'}
+                className={`min-h-11 rounded-md border p-4 text-left transition ${type === 'trade' ? 'border-secondary bg-secondary-soft text-secondary' : 'border-border hover:border-secondary/40'}`}
               >
                 <strong className="block text-sm">Trao đổi</strong>
                 <span className="mt-1 block text-xs text-text-muted">
@@ -630,8 +632,8 @@ export function Post() {
                     className="aspect-square rounded-md object-cover"
                   />
                   <div className="absolute bottom-1 left-1 right-1 flex justify-between gap-1">
-                    <button type="button" className="rounded bg-white px-2 text-xs" aria-label={`Đưa ảnh ${index + 1} về trước`} disabled={index === 0 || submitting || mediaUploading} onClick={() => moveImage(index, -1)}>←</button>
-                    <button type="button" className="rounded bg-white px-2 text-xs" aria-label={`Đưa ảnh ${index + 1} ra sau`} disabled={index === images.length - 1 || submitting || mediaUploading} onClick={() => moveImage(index, 1)}>→</button>
+                    <button type="button" className="grid size-9 place-items-center rounded-md bg-white text-xs shadow-sm transition hover:bg-primary-faint disabled:opacity-40" aria-label={`Đưa ảnh ${index + 1} về trước`} disabled={index === 0 || submitting || mediaUploading} onClick={() => moveImage(index, -1)}>←</button>
+                    <button type="button" className="grid size-9 place-items-center rounded-md bg-white text-xs shadow-sm transition hover:bg-primary-faint disabled:opacity-40" aria-label={`Đưa ảnh ${index + 1} ra sau`} disabled={index === images.length - 1 || submitting || mediaUploading} onClick={() => moveImage(index, 1)}>→</button>
                   </div>
                   <button
                     type="button"
@@ -656,7 +658,7 @@ export function Post() {
                           : undefined,
                       }));
                     }}
-                    className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-white text-error shadow-sm"
+                    className="absolute right-1 top-1 grid size-8 place-items-center rounded-full bg-white text-error shadow-sm transition hover:bg-error-soft"
                   >
                     <Icon name="close" className="size-3" />
                   </button>
@@ -674,7 +676,7 @@ export function Post() {
         </aside>
       </form>
       {confirmOpen ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
+        <div className="fixed inset-0 z-40 grid place-items-end bg-black/45 sm:place-items-center sm:p-4">
           <div
             role="dialog"
             aria-modal="true"

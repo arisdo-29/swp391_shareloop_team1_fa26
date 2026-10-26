@@ -38,9 +38,9 @@ const roleLabels: Record<AdminAccountRole, string> = {
 };
 
 function stateBadgeClass(state: AdminAccountState) {
-  if (state === 'ACTIVE') return 'bg-emerald-50 text-success';
-  if (state === 'PENDING_VERIFICATION') return 'bg-amber-50 text-warning';
-  return 'bg-red-50 text-error';
+  if (state === 'ACTIVE') return 'bg-success-soft text-success';
+  if (state === 'PENDING_VERIFICATION') return 'bg-warning-soft text-warning';
+  return 'bg-error-soft text-error';
 }
 
 /** Khóa chỉ dành cho người dùng chưa bị cấm, mở khóa chỉ khi tài khoản đang ở trạng thái "Đã khóa". */
@@ -159,7 +159,7 @@ export function AdminAccounts() {
       {error ? (
         <div className="mb-4 space-y-3">
           <Alert tone="error">{error}</Alert>
-          <Button variant="outline" size="sm" onClick={() => setReloadKey((key) => key + 1)}>
+          <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
             Thử lại
           </Button>
         </div>
@@ -193,7 +193,7 @@ export function AdminAccounts() {
                       <td>{roleLabels[account.role]}</td>
                       <td>
                         <span
-                          className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-[11px] font-semibold ${stateBadgeClass(account.status)}`}
+                          className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${stateBadgeClass(account.status)}`}
                         >
                           {stateLabels[account.status]}
                         </span>
@@ -205,7 +205,6 @@ export function AdminAccounts() {
                         <div className="flex flex-wrap items-center gap-2">
                           {action ? (
                             <Button
-                              size="sm"
                               variant={action === 'lock' ? 'danger' : 'outline'}
                               onClick={() => {
                                 setNotice('');

@@ -59,7 +59,7 @@ export function AdminUserPicker({
           <p className="truncate text-sm font-semibold text-text-primary">{selected.fullName}</p>
           <p className="truncate text-xs text-text-muted">{selected.email}</p>
         </div>
-        <Button size="sm" variant="outline" disabled={disabled} onClick={() => onSelect(null)}>
+        <Button variant="outline" disabled={disabled} onClick={() => onSelect(null)}>
           Đổi người
         </Button>
       </div>

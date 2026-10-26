@@ -43,12 +43,12 @@ const dashboardActions = [
 function activityTone(type: string) {
   const normalizedType = type.toUpperCase();
   if (['REJECT', 'LOCK', 'DELETE', 'REMOVE', 'FAIL'].some((keyword) => normalizedType.includes(keyword))) {
-    return 'bg-red-50 text-error';
+    return 'bg-error-soft text-error';
   }
   if (['APPROVE', 'CREATE', 'ADD', 'UNLOCK', 'ACTIVATE'].some((keyword) => normalizedType.includes(keyword))) {
-    return 'bg-emerald-50 text-success';
+    return 'bg-success-soft text-success';
   }
-  return 'bg-blue-50 text-info';
+  return 'bg-info-soft text-info';
 }
 
 export function AdminOperationsDashboard() {
@@ -82,8 +82,8 @@ export function AdminOperationsDashboard() {
   }, [reload]);
   const metrics = report ? [
     { label: 'Tiền thu', value: formatVnd(report.cashAmountVnd), icon: 'payments', tone: 'bg-primary-faint text-primary' },
-    { label: 'Credit cộng', value: report.creditInTotal.toLocaleString('vi-VN'), icon: 'add', tone: 'bg-emerald-50 text-success' },
-    { label: 'Credit trừ', value: report.creditOutTotal.toLocaleString('vi-VN'), icon: 'transaction', tone: 'bg-orange-50 text-secondary' },
+    { label: 'Credit cộng', value: report.creditInTotal.toLocaleString('vi-VN'), icon: 'add', tone: 'bg-success-soft text-success' },
+    { label: 'Credit trừ', value: report.creditOutTotal.toLocaleString('vi-VN'), icon: 'transaction', tone: 'bg-secondary-soft text-secondary' },
   ] : [];
 
   return <>
@@ -263,7 +263,7 @@ export function AdminFinanceReport() {
       <section className="rounded-lg bg-white p-5 ring-1 ring-border">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="section-title">Đối chiếu tiền thu và Credit nạp</h2>
-          <span className={`rounded-sm px-2 py-1 text-xs font-semibold ${report.reconciliation.matched ? 'bg-emerald-50 text-success' : 'bg-amber-50 text-warning'}`}>
+          <span className={`rounded-sm px-2 py-1 text-xs font-semibold ${report.reconciliation.matched ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}>
             {report.reconciliation.matched ? 'Khớp' : 'Có chênh lệch'}
           </span>
         </div>

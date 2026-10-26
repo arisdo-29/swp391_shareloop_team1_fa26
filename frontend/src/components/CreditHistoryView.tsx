@@ -54,7 +54,7 @@ export function CreditHistorySection({
                 <button
                   key={tab.id}
                   onClick={() => onTabChange(tab.id)}
-                  className={`border-b-2 px-3 py-2.5 text-sm font-semibold ${current.id === tab.id ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text-primary'}`}
+                  className={`min-h-11 border-b-2 px-3 py-2.5 text-sm font-semibold transition ${current.id === tab.id ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text-primary'}`}
                 >
                   {tab.label} ({countFor(tab)})
                 </button>
@@ -110,7 +110,7 @@ export function HistoryDateFilter({
     ['quarter', 'Quý này'],
     ['all', 'Tất cả'],
   ];
-  const dateInputClass = 'rounded-md border border-border bg-white px-2 py-1.5 text-sm';
+  const dateInputClass = 'min-h-11 rounded-md border border-border bg-white px-3 py-2 text-sm';
 
   return (
     <div className="mt-4 space-y-3">
@@ -118,7 +118,6 @@ export function HistoryDateFilter({
         {quickButtons.map(([range, label]) => (
           <Button
             key={range}
-            size="sm"
             variant="outline"
             onClick={() => onChange(...quickRangeDates(range))}
           >
@@ -166,7 +165,6 @@ export function HistoryPagination({
   return (
     <div className="mt-4 flex items-center justify-between text-sm">
       <Button
-        size="sm"
         variant="outline"
         disabled={page === 0}
         onClick={() => onPageChange(page - 1)}
@@ -177,7 +175,6 @@ export function HistoryPagination({
         Trang {page + 1} / {totalPages}
       </span>
       <Button
-        size="sm"
         variant="outline"
         disabled={page + 1 >= totalPages}
         onClick={() => onPageChange(page + 1)}
@@ -292,14 +289,14 @@ export function CreditTransactionDetail({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4"
+      className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4"
       onMouseDown={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="credit-detail-title"
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-2xl sm:p-7"
+        className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-lg sm:p-7"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
@@ -310,7 +307,7 @@ export function CreditTransactionDetail({
             type="button"
             aria-label="Đóng"
             onClick={onClose}
-            className="rounded-md p-1 text-text-muted hover:bg-surface-low hover:text-text-primary"
+            className="grid size-11 shrink-0 place-items-center rounded-md text-text-muted transition hover:bg-surface-low hover:text-text-primary"
           >
             <Icon name="close" className="size-5" />
           </button>

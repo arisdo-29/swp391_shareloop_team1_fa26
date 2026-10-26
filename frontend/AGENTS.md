@@ -15,7 +15,10 @@ SHARELOOP is a React + TypeScript + Vite frontend prototype using Tailwind, Redu
 
 ## Design System Rules
 
-Use SHARELOOP tokens from `tailwind.config.js` and `src/styles/globals.css`: primary `#00685F`, secondary `#9D4300`, background `#F8F9FF`, surface tokens, Be Vietnam Pro, radius and shadows from the design system.
+Use SHARELOOP tokens from `tailwind.config.js` and `src/styles/globals.css`: primary `#145C4E`, secondary `#B85C35`, background `#F5F7F6`, surface tokens (`surface`, `surface-low`, `surface-container`, `surface-high`), text tokens (`text-primary`, `text-secondary`, `text-muted`), Be Vietnam Pro, radius and shadows from the design system. `tailwind.config.js` is the source of truth for the values.
+
+- Colors, radius and shadow come from tokens only. Do not write hex codes in components, and do not use default Tailwind colors (`gray-*`, `red-*`, `amber-*`, `emerald-*`, `blue-*`...) when a token exists. If a token is missing, add it to `tailwind.config.js` first.
+- Follow `frontend/DESIGN.md` for typography, spacing, states and shared components.
 
 Never redesign existing SHARELOOP UI without instruction.
 
@@ -57,4 +60,4 @@ Add a route in `src/app/router.tsx`, reuse `AppShell` or `AdminLayout`, and load
 
 ## Adding Components
 
-Use existing tokens, Material Symbols, and component variants. Add reusable controls to `src/components/ui.tsx` or split them into a focused component folder if they grow.
+Use existing tokens, Phosphor icons through the `Icon` component in `src/components/ui.tsx`, and component variants. Add reusable controls to `src/components/ui.tsx` or split them into a focused component folder if they grow.
