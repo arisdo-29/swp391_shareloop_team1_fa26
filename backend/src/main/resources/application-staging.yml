@@ -1,0 +1,6 @@
+# Profile staging: dùng cùng với prod (SPRING_PROFILES_ACTIVE=prod,staging) để thêm cấu hình riêng của staging.
+# Có thể ghi đè bằng biến môi trường SHARELOOP_POSTLIMITBYPASSEMAILS=email1,email2
+shareloop:
+  post-limit-bypass-emails:
+    - tester1@shareloop.test
+    - tester2@shareloop.test

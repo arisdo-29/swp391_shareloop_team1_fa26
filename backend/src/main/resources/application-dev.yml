@@ -11,6 +11,16 @@ spring:
     host: localhost
     port: 1025
 
+# module item: tài khoản test được bỏ qua giới hạn đăng bài (không có hiệu lực ở production)
+shareloop:
+  post-limit-bypass-emails:
+    - tester1@shareloop.test
+    - tester2@shareloop.test
+  # Tạo sẵn 2 tài khoản trên (đã xác minh, không cần OTP). Mật khẩu chỉ dùng cho dev.
+  seed-test-accounts:
+    enabled: true
+    password: ${SHARELOOP_SEEDTESTACCOUNTS_PASSWORD:Dev@12345}
+
 app:
   # module auth (BE1)
   jwt:

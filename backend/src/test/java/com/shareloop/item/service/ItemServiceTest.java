@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import com.shareloop.catalog.service.CategoryAttributeService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
+import com.shareloop.item.PostLimitProperties;
 import com.shareloop.item.dto.CreateItemRequest;
 import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.dto.UpdateItemRequest;
@@ -94,6 +95,9 @@ class ItemServiceTest {
 
     @Mock
     ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    PostLimitProperties postLimitProperties;
 
     @InjectMocks
     ItemService itemService;
@@ -187,6 +191,48 @@ class ItemServiceTest {
                     assertThat(businessException.getDetails()).containsEntry("limit", 3);
                 });
         verify(itemRepository, never()).saveAndFlush(any(Item.class));
+        verifyNoInteractions(postFeeService);
+    }
+
+    @Test
+    void createItem_whenEmailInBypassList_createsItemOverLimitAndHoldsFee() {
+        // given
+        imageLimits();
+        when(userService.findEmailById(10L)).thenReturn("tester1@shareloop.test");
+        when(postLimitProperties.canBypassPostLimit("tester1@shareloop.test")).thenReturn(true);
+        when(itemRepository.saveAndFlush(any(Item.class))).thenAnswer(invocation -> {
+            Item item = invocation.getArgument(0);
+            ReflectionTestUtils.setField(item, "id", 100L);
+            return item;
+        });
+        CreateItemRequest request = new CreateItemRequest(
+                1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
+
+        // when
+        ItemResponse response = itemService.createItem(10L, request);
+
+        // then
+        assertThat(response.id()).isEqualTo(100L);
+        verify(itemRepository, never()).countByDonorIdAndStatusInAndIsActiveTrue(anyLong(), any());
+        verify(postFeeService).holdPostFee(100L, 10L);
+    }
+
+    @Test
+    void createItem_whenEmailNotInBypassListAndOverLimit_throwsLimitReachedAndHoldsNoFee() {
+        // given
+        when(userService.findEmailById(10L)).thenReturn("user@shareloop.com");
+        when(postLimitProperties.canBypassPostLimit("user@shareloop.com")).thenReturn(false);
+        when(itemRepository.countByDonorIdAndStatusInAndIsActiveTrue(
+                        10L, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED)))
+                .thenReturn(3L);
+        CreateItemRequest request = new CreateItemRequest(
+                1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
+
+        // when
+        assertThatThrownBy(() -> itemService.createItem(10L, request))
+                // then
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_ACTIVE_LIMIT_REACHED);
         verifyNoInteractions(postFeeService);
     }
 
