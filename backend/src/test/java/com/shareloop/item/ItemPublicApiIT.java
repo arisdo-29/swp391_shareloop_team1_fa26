@@ -67,6 +67,54 @@ class ItemPublicApiIT extends IntegrationTest {
     }
 
     @Test
+    void boostedItemsLeadEachFilteredPageWithoutDuplicates() throws Exception {
+        long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long areaId = jdbc.sql("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long userId = jdbc.sql(
+                        "INSERT INTO users (email, password_hash, full_name, phone, status) "
+                                + "VALUES ('boost-list-test@shareloop.local', 'unused', 'Test', '0900000777', 'ACTIVE') RETURNING id")
+                .query(Long.class)
+                .single();
+        for (int number = 0; number < 7; number++) {
+            Item item = item(userId, categoryId, areaId, "Bài boost-filter-unique " + number);
+            item.approve();
+            items.saveAndFlush(item);
+            if (number < 4) {
+                jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP + INTERVAL '1 day' WHERE id = :id")
+                        .param("id", item.getId())
+                        .update();
+            }
+        }
+
+        mvc.perform(get("/api/v1/items")
+                        .param("q", "boost-filter-unique")
+                        .param("page", "0")
+                        .param("size", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(7))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.items.length()").value(4))
+                .andExpect(jsonPath("$.items[0].title").value("Bài boost-filter-unique 3"))
+                .andExpect(jsonPath("$.items[1].title").value("Bài boost-filter-unique 2"))
+                .andExpect(jsonPath("$.items[2].title").value("Bài boost-filter-unique 1"))
+                .andExpect(jsonPath("$.items[0].boostedUntil").isNotEmpty())
+                .andExpect(jsonPath("$.items[1].boostedUntil").isNotEmpty())
+                .andExpect(jsonPath("$.items[2].boostedUntil").isNotEmpty());
+        mvc.perform(get("/api/v1/items")
+                        .param("q", "boost-filter-unique")
+                        .param("page", "1")
+                        .param("size", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(3))
+                .andExpect(jsonPath("$.items[0].title").value("Bài boost-filter-unique 0"))
+                .andExpect(jsonPath("$.items[0].boostedUntil").isNotEmpty());
+    }
+
+    @Test
     void searchIgnoresAccentsAndCombinesCategoryAndAreaFilters() throws Exception {
         long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
                 .query(Long.class)

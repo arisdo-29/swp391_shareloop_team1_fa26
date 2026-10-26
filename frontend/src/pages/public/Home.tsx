@@ -17,6 +17,7 @@ import type { Item, ItemType, User } from '../../types/domain';
 import { catalogApi } from '../../services/catalogApi';
 import type { AreaResponse, CategoryResponse } from '../../services/catalogApi';
 import { itemApi, type ItemResponse, type PageResponse } from '../../services/itemApi';
+import { BoostBadge } from '../../components/BoostBadge';
 import { toAreaNameMap, toAreaOptions, toCategoryNameMap, toFeItem, type AreaOption } from '../../services/mappers';
 import { categoryBrowsePath } from '../../utils/browseFilters';
 import { HomeLifecycle, HomeProcess } from './HomeCommunity';
@@ -96,6 +97,7 @@ function HomeProductCard({ item, owner, tradeFor }: { item: Item; owner?: User; 
         <span className="absolute left-3 top-3">
           <TypeBadge type={item.type} />
         </span>
+        <span className="absolute right-3 top-3"><BoostBadge boostedUntil={item.boostedUntil} /></span>
       </div>
       <div className="home-product-card-copy">
         <h3>{item.title}</h3>
@@ -114,7 +116,7 @@ function HomeProductCard({ item, owner, tradeFor }: { item: Item; owner?: User; 
           <span className="min-w-0 truncate">{owner.name}</span>
         </p>
       ) : null}
-        <div className="home-product-card-footer"><span><Icon name="location" className="size-4" />{item.district}</span><span><Icon name="star" className="size-4 text-warning" weight="fill" />{owner?.reputationStars ?? 5}</span></div>
+        <div className="home-product-card-footer"><span><Icon name="location" className="size-4" />{item.district}</span>{owner ? <span><Icon name="star" className="size-4 text-warning" weight="fill" />{owner.reputationStars}</span> : null}</div>
         <span className="home-product-card-link">Xem chi tiết <Icon name="arrow" className="size-3.5" /></span>
       </div>
     </Link>
@@ -351,7 +353,11 @@ export function Home() {
       items
         .filter((item) => item.status === 'approved' || item.status === 'APPROVED')
         .filter((item) => !item.expiresAt || new Date(item.expiresAt).getTime() >= Date.now())
-        .sort((a, b) => b.postedAt.localeCompare(a.postedAt)),
+        .sort((a, b) => {
+          const aBoosted = Boolean(a.boostedUntil && new Date(a.boostedUntil).getTime() > Date.now());
+          const bBoosted = Boolean(b.boostedUntil && new Date(b.boostedUntil).getTime() > Date.now());
+          return Number(bBoosted) - Number(aBoosted) || b.postedAt.localeCompare(a.postedAt);
+        }),
     [items],
   );
   const gifts = approved.filter((item) => item.type === 'gift');

@@ -47,6 +47,10 @@ public final class ItemMapper {
                 defectImages != null ? defectImages : List.of(),
                 operatingStatus,
                 displayWindow != null ? displayWindow.expireAt() : null,
-                displayWindow != null ? displayWindow.boostedUntil() : null);
+                displayWindow != null ? displayWindow.boostedUntil() : null,
+                null,
+                null,
+                null,
+                null);
     }
 }
