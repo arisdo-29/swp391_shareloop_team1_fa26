@@ -30,7 +30,38 @@ public record ItemResponse(
         OperatingStatus operatingStatus,
         // Hai cột do module listingfee quản lý; null khi bài chưa từng được duyệt / chưa từng được đẩy.
         Instant expireAt,
-        Instant boostedUntil) {
+        Instant boostedUntil,
+        String donorName,
+        Integer donorTrustStars,
+        String donorRank,
+        Double donorAsDescribedRate) {
+
+    public ItemResponse withDonor(String name, Integer trustStars, String rank, Double asDescribedRate) {
+        return new ItemResponse(
+                id,
+                donorId,
+                categoryId,
+                areaId,
+                offerType,
+                title,
+                description,
+                desiredItem,
+                condition,
+                defectNote,
+                brand,
+                images,
+                status,
+                createdAt,
+                updatedAt,
+                defectImages,
+                operatingStatus,
+                expireAt,
+                boostedUntil,
+                name,
+                trustStars,
+                rank,
+                asDescribedRate);
+    }
 
     public ItemResponse(
             Long id,
@@ -65,6 +96,10 @@ public record ItemResponse(
                 createdAt,
                 updatedAt,
                 List.of(),
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null);
@@ -102,6 +137,10 @@ public record ItemResponse(
                 createdAt,
                 updatedAt,
                 List.of(),
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null);

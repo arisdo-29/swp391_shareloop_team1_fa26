@@ -1,8 +1,8 @@
 package com.shareloop.item.controller;
 
-import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.item.dto.CreateItemRequest;
+import com.shareloop.item.dto.ItemListPageResponse;
 import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.dto.UpdateItemRequest;
 import com.shareloop.item.entity.ItemCondition;
@@ -96,7 +96,7 @@ public class ItemController {
 
     @Operation(summary = "Danh sách bài đã duyệt")
     @GetMapping("/api/v1/items")
-    public PageResponse<ItemResponse> listPublic(
+    public ItemListPageResponse listPublic(
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Long areaId,
             @RequestParam(required = false) String q,

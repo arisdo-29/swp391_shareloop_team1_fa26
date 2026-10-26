@@ -30,11 +30,14 @@ import com.shareloop.media.service.MediaService;
 import com.shareloop.moderation.ModerationResult;
 import com.shareloop.moderation.event.ItemScreeningRequestedEvent;
 import com.shareloop.moderation.service.ContentModerationService;
+import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.dto.UserBrief;
+import com.shareloop.user.service.UserService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +51,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -85,6 +90,9 @@ class ItemServiceTest {
     ReputationService reputationService;
 
     @Mock
+    UserService userService;
+
+    @Mock
     ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
@@ -99,6 +107,12 @@ class ItemServiceTest {
         lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_BRONZE)).thenReturn(3);
         // Mock mặc định trả false nên phải cho phép đăng bài, riêng test 0 sao sẽ ghi đè
         lenient().when(reputationService.canPost(anyLong())).thenReturn(true);
+        lenient()
+                .when(reputationService.getReputationSummary(10L))
+                .thenReturn(new ReputationSummary(10L, 4, Rank.SILVER, 0.9));
+        lenient()
+                .when(userService.findBriefs(List.of(10L)))
+                .thenReturn(Map.of(10L, new UserBrief(10L, "Người thật", "user@example.test")));
     }
 
     @Test
@@ -348,6 +362,10 @@ class ItemServiceTest {
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.status()).isEqualTo(ItemStatus.APPROVED);
+        assertThat(response.donorName()).isEqualTo("Người thật");
+        assertThat(response.donorTrustStars()).isEqualTo(4);
+        assertThat(response.donorRank()).isEqualTo("SILVER");
+        assertThat(response.donorAsDescribedRate()).isEqualTo(0.9);
     }
 
     @Test
@@ -706,5 +724,30 @@ class ItemServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_REMOVE_NOT_ALLOWED);
         assertThat(item.isDeleted()).isFalse();
         verifyNoInteractions(postFeeService);
+    }
+
+    @Test
+    void listPublicItemsCapsBoostsAndKeepsAllItemsAcrossPages() {
+        List<Item> items = new java.util.ArrayList<>();
+        for (long id = 7; id >= 1; id--) {
+            Item item = new Item(
+                    10L, 1L, 1L, OfferType.GIVE, "Item " + id, "Description", null, ItemCondition.NEW, null, null);
+            item.approve();
+            ReflectionTestUtils.setField(item, "id", id);
+            items.add(item);
+        }
+        when(configService.getInt(ConfigKey.BOOST_MAX_PER_PAGE)).thenReturn(3);
+        when(listingFeeQueryService.findActiveBoostedIds(any())).thenReturn(List.of(1L, 2L, 3L, 4L));
+        when(itemRepository.findVisibleByFilters(any(), any(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(items));
+        when(listingFeeQueryService.findDisplayWindows(any())).thenReturn(Map.of());
+
+        var first = itemService.listPublicItems(null, null, null, null, null, 0, 4);
+        var second = itemService.listPublicItems(null, null, null, null, null, 1, 4);
+
+        assertThat(first.items()).extracting(ItemResponse::id).containsExactly(4L, 3L, 2L, 7L);
+        assertThat(second.items()).extracting(ItemResponse::id).containsExactly(1L, 6L, 5L);
+        assertThat(first.totalElements()).isEqualTo(7);
+        assertThat(first.totalPages()).isEqualTo(2);
     }
 }

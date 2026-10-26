@@ -110,6 +110,10 @@ export interface Item {
   postedAt: string;
   expiresAt?: string;
   boostedUntil?: string;
+  donorName?: string;
+  donorTrustStars?: number;
+  donorRank?: string;
+  donorAsDescribedRate?: number;
 }
 
 export interface Transaction {

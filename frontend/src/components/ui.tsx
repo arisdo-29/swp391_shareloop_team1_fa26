@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import type { Item, ItemCondition, ItemType, TransactionStatus, User } from '../types/domain';
 import { conditionLabel, txLabel } from '../utils/formatting';
 import { resolveMediaUrl } from '../services/mediaUrl';
+import { BoostBadge } from './BoostBadge';
 
 const iconMap = {
   search: Icons.MagnifyingGlass,
@@ -440,6 +441,7 @@ export function ProductCard({ item, owner }: { item: Item; owner?: User }) {
         <div className="absolute left-3 top-3">
           <TypeBadge type={item.type} />
         </div>
+        <div className="absolute right-3 top-3"><BoostBadge boostedUntil={item.boostedUntil} /></div>
       </div>
       <div className="p-3 sm:p-4">
         <h3 className="line-clamp-2 min-h-10 text-sm font-bold leading-5 text-text-primary sm:min-h-11 sm:text-[15px] sm:leading-[1.45]">

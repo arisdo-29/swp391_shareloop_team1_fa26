@@ -9,7 +9,6 @@ import {
   ConditionBadge,
   Icon,
   ItemImage,
-  OwnerCard,
   StatusBadge,
   TextArea,
   TypeBadge,
@@ -19,9 +18,10 @@ import { catalogApi } from '../../services/catalogApi';
 import { itemApi } from '../../services/itemApi';
 import { requestApi, toBackendUserId, toFeItemRequest } from '../../services/requestApi';
 import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
-import type { Item, ItemRequest, User } from '../../types/domain';
+import type { Item, ItemRequest } from '../../types/domain';
 import type { ApiError } from '../../services/http';
 import { ReportDialog } from '../../components/ReportDialog';
+import { ReputationBadge } from '../../components/ReputationBadge';
 
 import { requestStatusLabel } from '../../utils/request';
 import { reputationBlockedMessage } from '../../utils/apiErrorMessages';
@@ -152,27 +152,6 @@ export function ProductDetail() {
       </div>
     );
 
-  const owner = data.users.find((x) => x.id === item.ownerId) ??
-    ({
-      id: item.ownerId,
-      username: item.ownerId,
-      password: '',
-      name: 'Người đăng',
-      email: '',
-      phone: '',
-      district: item.district,
-      avatarInitials: '',
-      totalCredit: 0,
-      availableCredit: 0,
-      holdCredit: 0,
-      rewardPoints: 0,
-      reputationStars: 5,
-      rank: 'Thành viên',
-      status: 'active',
-      role: 'user',
-      joinedAt: item.postedAt,
-      totalTx: 0,
-    } satisfies User);
   const own = user?.id === item.ownerId;
   const activeListing =
     (item.status === 'approved' || item.status === 'APPROVED') &&
@@ -423,16 +402,16 @@ export function ProductDetail() {
               </div>
             ) : null}
           </div>
-          {owner ? (
-            <OwnerCard owner={owner} />
-          ) : (
-            <section className="rounded-xl bg-white p-5 ring-1 ring-border/80">
-              <h2 className="font-bold">Thông tin người đăng</h2>
-              <p className="mt-2 text-sm leading-6 text-text-muted">
-                Chưa có hồ sơ công khai hoặc điểm uy tín của người đăng cho bài này.
-              </p>
-            </section>
-          )}
+          <section className="rounded-xl bg-white p-5 ring-1 ring-border/80">
+            <h2 className="font-bold">Thông tin người đăng</h2>
+            <p className="mt-3 font-semibold">{item.donorName || 'Chưa có tên hiển thị'}</p>
+            <ReputationBadge
+              className="mt-3"
+              trustStars={item.donorTrustStars}
+              rank={item.donorRank}
+              asDescribedRate={item.donorAsDescribedRate}
+            />
+          </section>
         </aside>
       </div>
 

@@ -129,5 +129,9 @@ export function toFeItem(
     postedAt: item.createdAt,
     expiresAt: item.expireAt ?? undefined,
     boostedUntil: item.boostedUntil ?? undefined,
+    donorName: item.donorName ?? undefined,
+    donorTrustStars: item.donorTrustStars ?? undefined,
+    donorRank: item.donorRank ?? undefined,
+    donorAsDescribedRate: item.donorAsDescribedRate ?? undefined,
   };
 }

@@ -7,6 +7,7 @@ import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.dto.AdminItemDetail;
 import com.shareloop.item.dto.CreateItemRequest;
 import com.shareloop.item.dto.ItemAttributeValue;
+import com.shareloop.item.dto.ItemListPageResponse;
 import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.dto.UpdateItemRequest;
 import com.shareloop.item.entity.Item;
@@ -30,11 +31,14 @@ import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.service.UserService;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,6 +67,7 @@ public class ItemService {
     private final ListingFeeQueryService listingFeeQueryService;
     private final CategoryAttributeService categoryAttributeService;
     private final ReputationService reputationService;
+    private final UserService userService;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
 
@@ -77,6 +82,7 @@ public class ItemService {
             ListingFeeQueryService listingFeeQueryService,
             CategoryAttributeService categoryAttributeService,
             ReputationService reputationService,
+            UserService userService,
             ApplicationEventPublisher eventPublisher,
             ObjectMapper objectMapper) {
         this.itemRepository = itemRepository;
@@ -89,6 +95,7 @@ public class ItemService {
         this.listingFeeQueryService = listingFeeQueryService;
         this.categoryAttributeService = categoryAttributeService;
         this.reputationService = reputationService;
+        this.userService = userService;
         this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
     }
@@ -280,7 +287,14 @@ public class ItemService {
 
         boolean isOwner = currentUserId != null && currentUserId.equals(item.getDonorId());
         if ((item.getStatus() == ItemStatus.APPROVED && item.isActive()) || isOwner) {
-            return toResponse(item, findDisplayWindow(item.getId()));
+            var donor = userService.findBriefs(List.of(item.getDonorId())).get(item.getDonorId());
+            var reputation = reputationService.getReputationSummary(item.getDonorId());
+            return toResponse(item, findDisplayWindow(item.getId()))
+                    .withDonor(
+                            donor == null ? null : donor.fullName(),
+                            reputation.trustStars(),
+                            reputation.rank().name(),
+                            reputation.asDescribedRate());
         }
 
         throw new BusinessException(ItemErrorCode.ITEM_NOT_FOUND);
@@ -314,25 +328,54 @@ public class ItemService {
 
     /**
      * Danh sách công khai bài APPROVED còn hiển thị (FR-50). Mọi bộ lọc đều không bắt buộc và kết hợp được với nhau;
-     * lọc ngay ở database để phân trang và tổng số luôn đúng.
+     * lọc ở database trước khi phân trang để tổng số luôn đúng.
      */
     @Transactional(readOnly = true)
-    public PageResponse<ItemResponse> listPublicItems(
+    public ItemListPageResponse listPublicItems(
             Long categoryId, Long areaId, String q, ItemCondition condition, OfferType offerType, int page, int size) {
-        if (q == null || q.isBlank()) {
-            PageRequest pageRequest =
-                    PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
-            return toPageResponse(itemRepository.findVisibleByFilters(
-                    ItemStatus.APPROVED, categoryId, areaId, condition, offerType, pageRequest));
-        }
-        // Truy vấn native so sánh theo chuỗi nên đổi enum sang tên
-        return toPageResponse(itemRepository.searchVisibleByFilters(
-                categoryId,
-                areaId,
-                condition == null ? null : condition.name(),
-                offerType == null ? null : offerType.name(),
-                q.trim(),
-                PageRequest.of(page, size)));
+        int configuredLimit = Math.max(0, configService.getInt(ConfigKey.BOOST_MAX_PER_PAGE));
+        int boostLimit = Math.min(size, configuredLimit);
+        Set<Long> activeBoosts =
+                boostLimit == 0 ? Set.of() : Set.copyOf(listingFeeQueryService.findActiveBoostedIds(Instant.now()));
+        List<Item> boosted = new ArrayList<>();
+        List<Item> regular = new ArrayList<>();
+        int batch = 0;
+        Page<Item> found;
+        do {
+            PageRequest request =
+                    PageRequest.of(batch++, 500, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+            found = q == null || q.isBlank()
+                    ? itemRepository.findVisibleByFilters(
+                            ItemStatus.APPROVED, categoryId, areaId, condition, offerType, request)
+                    : itemRepository.searchVisibleByFilters(
+                            categoryId,
+                            areaId,
+                            condition == null ? null : condition.name(),
+                            offerType == null ? null : offerType.name(),
+                            q.trim(),
+                            PageRequest.of(batch - 1, 500));
+            for (Item item : found.getContent()) {
+                (activeBoosts.contains(item.getId()) ? boosted : regular).add(item);
+            }
+        } while (found.hasNext());
+        int total = boosted.size() + regular.size();
+        int totalPages = Math.max(
+                (total + size - 1) / size, boostLimit == 0 ? 0 : (boosted.size() + boostLimit - 1) / boostLimit);
+        int boostStart = (int) Math.min((long) page * boostLimit, boosted.size());
+        int boostEnd = Math.min(boostStart + boostLimit, boosted.size());
+        int regularStart = (int) Math.min(Math.max(0L, (long) page * size - boostStart), regular.size());
+        int regularEnd = Math.min(regularStart + size - (boostEnd - boostStart), regular.size());
+        List<Item> selected = new ArrayList<>(boosted.subList(boostStart, boostEnd));
+        selected.addAll(regular.subList(regularStart, regularEnd));
+        Map<Long, DisplayWindow> windows = findDisplayWindows(selected);
+        return new ItemListPageResponse(
+                selected.stream()
+                        .map(item -> toResponse(item, windows.get(item.getId())))
+                        .toList(),
+                page,
+                size,
+                total,
+                totalPages);
     }
 
     /** Search gateway for the AI assistant; the database remains the source of every returned item. */

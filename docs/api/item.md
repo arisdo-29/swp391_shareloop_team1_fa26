@@ -143,7 +143,7 @@ Xem danh sách tất cả các bài đăng do chính mình tạo (sắp xếp m�
 
 ## 4. GET /api/v1/items
 
-Danh sách bài `APPROVED` còn hiển thị, mới nhất trước. Không cần đăng nhập.
+Danh sách bài `APPROVED` còn hiển thị. Trong cùng bộ lọc, mỗi trang hiển thị tối đa `boost_max_per_page` bài đang được đẩy ở đầu trang; các bài còn lại xếp mới nhất trước. Không cần đăng nhập.
 
 Tham số tùy chọn: `q` (tìm trong tiêu đề và mô tả, không phân biệt dấu/hoa thường),
 `categoryId`, `areaId` (lọc đúng id, kết hợp được với `q`),
@@ -154,8 +154,10 @@ lọc ở server nên `totalElements` và phân trang tính trên kết quả đ
 Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&offerType=GIVE`. `q` rỗng hoặc chỉ có khoảng trắng tương đương không tìm kiếm; `%` và `_` được xem là ký tự thường.
 
 ```json
-{ "items": [], "page": 0, "size": 20, "totalElements": 0 }
+{ "items": [], "page": 0, "size": 20, "totalElements": 0, "totalPages": 0 }
 ```
+
+`totalPages` là số trang thực tế. Khi bài đang đẩy nhiều hơn số chỗ đẩy cho phép, trang cuối có thể chưa đầy `size` để vẫn giữ giới hạn mỗi trang; dùng `totalPages` để điều hướng thay vì tự tính từ `totalElements / size`.
 
 `400 VALIDATION_FAILED` khi tham số phân trang sai. `400` khi `condition` hoặc `offerType` không thuộc các giá trị trên.
 
@@ -203,6 +205,10 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&o
 | `updatedAt` | string | Thời điểm cập nhật ISO-8601 UTC |
 | `expireAt` | string? | Hạn hiển thị ISO-8601 UTC (cột `expire_at`, module listingfee). `null` khi bài chưa từng được duyệt |
 | `boostedUntil` | string? | Thời điểm hết đẩy bài ISO-8601 UTC (cột `boosted_until`, module listingfee). `null` khi bài chưa từng được đẩy; giá trị đã qua nghĩa là hết đẩy |
+| `donorName` | string? | Tên người đăng; chỉ có ở API chi tiết |
+| `donorTrustStars` | number? | Sao uy tín người đăng; chỉ có ở API chi tiết |
+| `donorRank` | string? | Hạng người đăng; chỉ có ở API chi tiết |
+| `donorAsDescribedRate` | number? | Tỉ lệ đúng mô tả thang 0–1; chỉ có ở API chi tiết |
 
 `expireAt` và `boostedUntil` có trong mọi API trả `ItemResponse` (tạo, sửa, chi tiết, bài của tôi, danh sách công khai).
 Với danh sách, hai trường này được đọc bằng một query cho cả trang qua `ListingFeeQueryService.findDisplayWindows`.

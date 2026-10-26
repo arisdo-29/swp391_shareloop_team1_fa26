@@ -7,6 +7,7 @@ import { conditionLabel } from '../../utils/formatting';
 import type { Item, ItemType } from '../../types/domain';
 import { catalogApi, type CategoryResponse } from '../../services/catalogApi';
 import { itemApi, type ApiCondition, type ItemResponse, type OfferType } from '../../services/itemApi';
+import { BoostBadge } from '../../components/BoostBadge';
 import type { ApiError } from '../../services/http';
 import {
   toAreaOptions,
@@ -65,6 +66,7 @@ export function Browse() {
   const [mobileFilters, setMobileFilters] = useState(false);
   const [page, setPage] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [sortMode, setSortMode] = useState<'newest' | 'expiring'>('newest');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
@@ -120,12 +122,14 @@ export function Browse() {
         setItemResponses(response.items);
         setPage(response.page);
         setTotalElements(response.totalElements);
+        setTotalPages(response.totalPages ?? Math.ceil(response.totalElements / PAGE_SIZE));
       })
       .catch((caught) => {
         if (!active) return;
         const apiError = caught as ApiError;
         setItemResponses([]);
         setTotalElements(0);
+        setTotalPages(0);
         setItemsError(apiError.message || 'Không tải được danh sách bài đăng.');
       })
       .finally(() => {
@@ -161,15 +165,16 @@ export function Browse() {
 
   // Hình thức và tình trạng đã được server lọc, ở đây chỉ sắp xếp trong trang hiện tại
   const sortedResults = useMemo(() => {
-    const next = [...items];
+    const boosted = items.filter((item) => item.boostedUntil && new Date(item.boostedUntil).getTime() > Date.now());
+    const next = items.filter((item) => !item.boostedUntil || new Date(item.boostedUntil).getTime() <= Date.now());
     if (sortMode === 'expiring') {
-      return next.sort((a, b) => {
+      return [...boosted, ...next.sort((a, b) => {
         const aExpiry = a.expiresAt ? new Date(a.expiresAt).getTime() : Number.POSITIVE_INFINITY;
         const bExpiry = b.expiresAt ? new Date(b.expiresAt).getTime() : Number.POSITIVE_INFINITY;
         return aExpiry - bExpiry;
-      });
+      })];
     }
-    return next.sort((a, b) => b.postedAt.localeCompare(a.postedAt));
+    return [...boosted, ...next.sort((a, b) => b.postedAt.localeCompare(a.postedAt))];
   }, [items, sortMode]);
   const reset = () => {
     setParams(resetBrowseSearchParams(params));
@@ -423,7 +428,7 @@ export function Browse() {
                 }
               />
             )}
-            {!itemsLoading && !itemsError && totalElements > PAGE_SIZE ? (
+            {!itemsLoading && !itemsError && totalPages > 1 ? (
               <div className="browse-pagination">
                 <Button
                   variant="outline"
@@ -433,11 +438,11 @@ export function Browse() {
                   Trang trước
                 </Button>
                 <span>
-                  Trang {page + 1} / {Math.ceil(totalElements / PAGE_SIZE)}
+                  Trang {page + 1} / {totalPages}
                 </span>
                 <Button
                   variant="outline"
-                  disabled={(page + 1) * PAGE_SIZE >= totalElements}
+                  disabled={page + 1 >= totalPages}
                   onClick={() => setPage((current) => current + 1)}
                 >
                   Trang sau
@@ -464,6 +469,7 @@ const BrowseProductCard = memo(function BrowseProductCard({ item }: { item: Item
         <span className="browse-product-card__badge">
           <TypeBadge type={item.type} />
         </span>
+        <span className="absolute right-3 top-3"><BoostBadge boostedUntil={item.boostedUntil} /></span>
       </div>
       <div className="browse-product-card__content">
         <h2>{item.title}</h2>
