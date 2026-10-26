@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Alert, Button, EmptyState, PageHeader, SearchField, SkeletonRows } from '../../components/ui';
+import { Alert, Button, EmptyState, ItemImage, PageHeader, SearchField, SkeletonRows } from '../../components/ui';
 import { adminModerationApi, type ReviewQueueItem } from '../../services/adminModerationApi';
 import { adminErrorMessage } from './adminErrors';
 import { displayFlag, displayModerationNote, displayRisk } from './moderationDisplay';
@@ -15,6 +15,21 @@ function normalize(value: string) {
 function matchesQuery(item: ReviewQueueItem, query: string) {
   const text = [item.title, item.donorName ?? '', displayRisk(item.aiRisk), displayFlag(item.moderationFlag)];
   return normalize(text.join(' ')).includes(normalize(query));
+}
+
+async function loadMissingThumbnails(items: ReviewQueueItem[]) {
+  return Promise.all(
+    items.map(async (item) => {
+      if (item.thumbnailUrl?.trim()) return item;
+      try {
+        const detail = await adminModerationApi.detail(item.id);
+        const thumbnailUrl = detail.images.find((image) => image.trim());
+        return thumbnailUrl ? { ...item, thumbnailUrl } : item;
+      } catch {
+        return item;
+      }
+    }),
+  );
 }
 
 /** Hàng chờ duyệt bài: mỗi bài một hàng gọn, bấm "Xem chi tiết & duyệt" để sang trang duyệt riêng. */
@@ -39,8 +54,9 @@ export function AdminModerationList() {
     setError('');
     adminModerationApi
       .pendingReviews({ page: 0, size: QUEUE_SIZE })
-      .then((response) => {
-        if (active) setItems(response.items);
+      .then(async (response) => {
+        const itemsWithThumbnails = await loadMissingThumbnails(response.items);
+        if (active) setItems(itemsWithThumbnails);
       })
       .catch((caught) => {
         if (!active) return;
@@ -126,15 +142,25 @@ function QueueRow({ item }: { item: ReviewQueueItem }) {
   return (
     <tr>
       <td className="max-w-md">
-        <p className="font-semibold leading-6 text-text-primary">{item.title}</p>
-        {flag || note ? (
-          <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-            {flag ? (
-              <span className="rounded-sm bg-error-soft px-2 py-1 font-semibold text-error">{flag}</span>
+        <div className="flex min-w-0 items-center gap-3">
+          <ItemImage
+            src={item.thumbnailUrl ?? undefined}
+            alt={`Ảnh ${item.title}`}
+            loading="lazy"
+            className="size-12 shrink-0 rounded-sm object-cover"
+          />
+          <div className="min-w-0">
+            <p className="font-semibold leading-6 text-text-primary">{item.title}</p>
+            {flag || note ? (
+              <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                {flag ? (
+                  <span className="rounded-sm bg-error-soft px-2 py-1 font-semibold text-error">{flag}</span>
+                ) : null}
+                {note && note !== flag ? <span className="text-text-secondary">{note}</span> : null}
+              </p>
             ) : null}
-            {note && note !== flag ? <span className="text-text-secondary">{note}</span> : null}
-          </p>
-        ) : null}
+          </div>
+        </div>
       </td>
       <td>{item.donorName || 'Tài khoản đã xóa'}</td>
       <td className="whitespace-nowrap">
