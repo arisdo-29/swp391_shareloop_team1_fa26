@@ -80,7 +80,7 @@ export function AdminFinanceUsers() {
       {error ? (
         <div className="mb-4 space-y-3">
           <Alert tone="error">{error}</Alert>
-          <Button variant="outline" size="sm" onClick={() => setReloadKey((key) => key + 1)}>
+          <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
             Thử lại
           </Button>
         </div>
@@ -116,7 +116,7 @@ export function AdminFinanceUsers() {
                     <td className="text-right tabular-nums">{user.totalToppedUpCredit}</td>
                     <td className="text-right">
                       <Link to={`/admin/finance/users/${user.userId}`}>
-                        <Button size="sm" variant="outline">
+                        <Button variant="outline">
                           Xem chi tiết
                         </Button>
                       </Link>
@@ -251,7 +251,7 @@ export function AdminFinanceUserDetail() {
       {summaryError ? (
         <div className="mb-4 space-y-3">
           <Alert tone="error">{summaryError}</Alert>
-          <Button variant="outline" size="sm" onClick={() => setReloadKey((key) => key + 1)}>
+          <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
             Thử lại
           </Button>
         </div>
@@ -267,7 +267,7 @@ export function AdminFinanceUserDetail() {
       {historyError ? (
         <div className="mt-6 space-y-3">
           <Alert tone="error">{historyError}</Alert>
-          <Button variant="outline" size="sm" onClick={() => setReloadKey((key) => key + 1)}>
+          <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
             Thử tải lại
           </Button>
         </div>

@@ -199,7 +199,6 @@ export function AdminAuthenticity() {
               <div>
                 <p className="font-bold text-text-primary">{item.title}</p>
                 <p className="mt-1 text-xs text-text-muted">
-                  Bài #{item.id} · Người đăng #{item.donorId} ·{' '}
                   {item.offerType === 'GIVE' ? 'Cho tặng' : 'Trao đổi'}
                 </p>
               </div>
@@ -246,7 +245,7 @@ export function AdminAuthenticity() {
           role="presentation"
         >
           <div
-            className="w-full max-w-lg rounded-lg border border-border bg-white p-5 shadow-xl sm:p-6"
+            className="w-full max-w-lg rounded-lg border border-border bg-white p-5 shadow-lg sm:p-6"
             role="dialog"
             aria-modal="true"
             aria-labelledby="authenticity-dialog-title"
@@ -260,7 +259,7 @@ export function AdminAuthenticity() {
                   {actionContent[selectedAction].title}
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-text-secondary">
-                  Bài đăng #{itemId}. {actionContent[selectedAction].description}
+                  {actionContent[selectedAction].description}
                 </p>
               </div>
             </div>

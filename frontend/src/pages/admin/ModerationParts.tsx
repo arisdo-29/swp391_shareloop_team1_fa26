@@ -128,7 +128,7 @@ export function RejectReasonsContent({
           <p className="text-sm font-bold text-text-primary">Lý do từ chối</p>
           <p className="mt-1 text-xs text-text-muted">Có thể chọn một hoặc nhiều lý do phù hợp.</p>
         </div>
-        <span className="shrink-0 rounded-full bg-red-50 px-3 py-1 text-sm font-bold text-error" aria-live="polite">
+        <span className="shrink-0 rounded-full bg-error-soft px-3 py-1 text-sm font-bold text-error" aria-live="polite">
           {selectedCount}/{totalCount}
         </span>
       </div>
@@ -249,7 +249,6 @@ export function ModerationImageGallery({
           {preview.images.length > 1 ? (
             <div className="mt-4 flex items-center justify-between gap-3">
               <Button
-                size="sm"
                 variant="outline"
                 onClick={() => setPreview((current) => current ? { ...current, index: (current.index - 1 + current.images.length) % current.images.length } : null)}
               >
@@ -257,7 +256,6 @@ export function ModerationImageGallery({
               </Button>
               <span className="text-xs text-text-muted">{preview.index + 1}/{preview.images.length}</span>
               <Button
-                size="sm"
                 variant="outline"
                 onClick={() => setPreview((current) => current ? { ...current, index: (current.index + 1) % current.images.length } : null)}
               >

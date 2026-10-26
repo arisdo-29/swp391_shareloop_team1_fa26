@@ -127,7 +127,7 @@ export function Register() {
         </div>
         <p className="mt-6 text-center text-sm text-text-muted">
           Đã có tài khoản?{' '}
-          <Link to="/login" className="font-semibold text-primary">
+          <Link to="/login" className="inline-flex min-h-11 items-center font-semibold text-primary hover:text-primary-hover hover:underline">
             Đăng nhập
           </Link>
         </p>

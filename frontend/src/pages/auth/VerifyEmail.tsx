@@ -151,7 +151,7 @@ export function VerifyEmail() {
             }}
           />
           {otpSeconds !== null ? (
-            <p className={`text-center text-xs ${otpSeconds === 0 ? 'text-error' : 'text-text-muted'}`}>
+            <p className={`text-center text-xs ${otpSeconds === 0 ? 'text-error' : 'text-text-secondary'}`}>
               {otpSeconds === 0 ? 'Mã OTP đã hết hạn.' : `Mã OTP hết hạn sau ${formatCountdown(otpSeconds)}.`}
             </p>
           ) : null}

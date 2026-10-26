@@ -102,3 +102,14 @@ Còn lại (không xử lý trong Đợt 2 vì rủi ro cao hoặc đụng `ui.t
 - Messages vẫn có khung cao cố định `lg:h-[calc(100dvh-140px)] lg:min-h-[680px]` và file 1779 dòng; chưa tách file vì ngoài phạm vi chỉnh giao diện.
 - Nút xếp lại và xóa ảnh trong Post chỉ cao 32–36px vì nằm trên ảnh thu nhỏ (ngoại lệ có chủ đích).
 - Nút "Nạp Credit" trên thẻ số dư là `<button>` thô vì cần nền trắng trên nền xanh; nên có biến thể `Button` nền sáng (phần 2).
+
+## G. Cập nhật sau Đợt 3 (auth và admin) — tổng kết phần 1
+
+Đã xử lý:
+- `login.css`: bỏ toàn bộ hex và `rgba(...)`, dùng biến CSS trong `globals.css` (`var(--color-*)` và `color-mix`); liên kết "Quên mật khẩu" và "Đăng ký ngay" cao 44px; vòng focus đậm hơn.
+- `PasswordField`: nút hiện/ẩn mật khẩu `size-11`. `Register`: liên kết "Đăng nhập" cao 44px. Chữ đếm ngược OTP dùng `text-secondary`.
+- Admin: tất cả badge/ghi chú/lỗi dùng `*-soft`, bỏ `size="sm"`, `text-2xs`, lớp phủ `bg-black/45`, `shadow-lg`. `FinanceCharts` dùng `var(--color-*)` thay hex.
+- `AdminAuthenticity`: bỏ ID kỹ thuật (`Bài #12`, `Người đăng #5`, `Bài đăng #12`) khỏi chữ hiển thị.
+- Bỏ qua đúng yêu cầu: bảng khu vực trong `AdminPages.tsx` (`ApiAdminAreas`, `ApiAreaModal`), còn nguyên `size="sm"`.
+
+Còn lại cho phần 2 (cần sửa `ui.tsx` hoặc trang công khai): xem mục C; thêm `home-content.css` và `browse.css` còn hex, trong đó 9 chỗ vẫn dùng #73807b cũ; bảng admin chưa có khung chờ dạng skeleton; hộp thoại tự dựng ở AdminComplaints, AdminAuthenticity, AdminPages chưa gộp vào `Dialog`.

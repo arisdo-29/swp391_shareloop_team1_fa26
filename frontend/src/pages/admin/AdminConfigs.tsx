@@ -69,7 +69,7 @@ export function AdminConfigs() {
       ) : error ? (
         <div className="space-y-3">
           <Alert tone="error">{error}</Alert>
-          <Button size="sm" variant="outline" onClick={reload}>
+          <Button variant="outline" onClick={reload}>
             Thử lại
           </Button>
         </div>
@@ -101,7 +101,6 @@ export function AdminConfigs() {
                         </td>
                         <td className="text-right">
                           <Button
-                            size="sm"
                             variant="outline"
                             onClick={() => {
                               clearSaveError();
