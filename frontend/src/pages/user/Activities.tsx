@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
-import { selectCurrentUser, selectData } from '../../app/store';
+import { selectCurrentUser } from '../../app/store';
 import {
   Alert,
   Avatar,
   Button,
-  ConditionBadge,
   EmptyState,
   Field,
   Icon,
@@ -35,7 +34,7 @@ import {
 import { mediaApi } from '../../services/mediaApi';
 import { toAreaNameMap, toAreaOptions, toCategoryNameMap, toFeItem, type AreaOption } from '../../services/mappers';
 import { requestApi, toBackendUserId, toFeItemRequest } from '../../services/requestApi';
-import type { Item, ItemRequest, User } from '../../types/domain';
+import type { Item, ItemRequest } from '../../types/domain';
 import type { ApiError } from '../../services/http';
 import { useWallet } from '../../app/useWallet';
 import { canChat, requestStatusLabel } from '../../utils/request';
@@ -76,7 +75,6 @@ type EditFormErrors = Partial<Record<
 
 export function Activities() {
   const location = useLocation();
-  const data = useAppSelector(selectData);
   const user = useAppSelector(selectCurrentUser)!;
   const { refresh: refreshWallet } = useWallet();
   const [tab, setTab] = useState<'items' | 'transactions'>('items');
@@ -270,13 +268,9 @@ export function Activities() {
   const acceptApiRequest = Object.values(apiRequestsByItem)
     .flat()
     .find((request) => request.id === acceptConfirmId);
-  const acceptRequest = acceptApiRequest ?? data.itemRequests.find((request) => request.id === acceptConfirmId);
-  const acceptItem = (acceptApiRequest ? myItems : data.items).find((item) => item.id === acceptRequest?.itemId);
-  const acceptRequester = acceptRequest
-    ? data.users.find((entry) => entry.id === acceptRequest.requesterId) ??
-      apiDisplayUser(acceptRequest.requesterId, acceptRequest.requesterName)
-    : undefined;
-  const acceptOfferedItem = data.items.find((item) => item.id === acceptRequest?.offeredItemId);
+  const acceptRequest = acceptApiRequest;
+  const acceptItem = myItems.find((item) => item.id === acceptRequest?.itemId);
+  const acceptRequesterName = acceptRequest ? requesterDisplayName(acceptRequest) : undefined;
   const cancelApiRequest = async (requestId: string) => {
     if (!currentUserId || cancelingRequestId) return;
     const numericRequestId = Number(requestId.replace(/^api_req_/, ''));
@@ -450,9 +444,7 @@ export function Activities() {
                 const canUseListingFee = apiItem && item.status === 'APPROVED';
                 const canBoost = canUseListingFee && item.categoryId !== undefined &&
                   boostableCategoryIds.includes(item.categoryId);
-                const itemRequests = apiItem
-                  ? apiRequestsByItem[item.id] ?? []
-                  : data.itemRequests.filter((request) => request.itemId === item.id);
+                const itemRequests = apiRequestsByItem[item.id] ?? [];
                 const hasAcceptedRequest = itemRequests.some((request) => request.status === 'RESERVED');
                 return (
                   <div key={item.id}>
@@ -559,8 +551,7 @@ export function Activities() {
                         itemStatus={item.status}
                         hasAcceptedRequest={hasAcceptedRequest}
                         itemRequests={itemRequests}
-                        data={data}
-                        allowAccept={!apiItem || Boolean(currentUserId)}
+                        allowAccept={Boolean(currentUserId)}
                         onAccept={(requestId) => {
                           setAcceptError('');
                           setAcceptConfirmId(requestId);
@@ -732,7 +723,7 @@ export function Activities() {
         </div>
       ) : null}
 
-      {acceptRequest && acceptItem && acceptRequester ? (
+      {acceptRequest && acceptItem && acceptRequesterName ? (
         <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
           <div
             role="dialog"
@@ -742,13 +733,13 @@ export function Activities() {
             <h2 className="text-xl font-bold">Xác nhận chọn người</h2>
             <p className="mt-2 text-sm leading-6 text-text-muted">
               {acceptRequest.type === 'gift'
-                ? `Bạn muốn chọn ${acceptRequester.name} để nhận ${acceptItem.title}?`
-                : `Bạn muốn trao đổi ${acceptItem.title} với ${acceptRequest.offeredItemTitle ?? acceptOfferedItem?.title ?? 'món được đề nghị'}?`}
+                ? `Bạn muốn chọn ${acceptRequesterName} để nhận ${acceptItem.title}?`
+                : `Bạn muốn trao đổi ${acceptItem.title} với ${acceptRequest.offeredItemTitle ?? 'món được đề nghị'}?`}
             </p>
             <div className="mt-3 rounded-md bg-surface-low p-3">
               <p className="text-xs font-semibold text-text-muted">Thông tin người nhận:</p>
               <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                <strong className="text-sm">{acceptRequester.name}</strong>
+                <strong className="text-sm">{acceptRequesterName}</strong>
                 <ReputationBadge
                   trustStars={acceptRequest.requesterTrustStars}
                   rank={acceptRequest.requesterRank}
@@ -1171,28 +1162,9 @@ function nameInitials(name: string): string {
   return lastTwoWords.map((word) => word.charAt(0)).join('').toUpperCase();
 }
 
-function apiDisplayUser(userId: string, name?: string): User {
-  const trimmedName = name?.trim() ?? '';
-  return {
-    id: userId,
-    username: userId,
-    password: '',
-    name: trimmedName || 'Người dùng',
-    email: '',
-    phone: '',
-    district: '',
-    avatarInitials: trimmedName ? nameInitials(trimmedName) : '',
-    totalCredit: 0,
-    availableCredit: 0,
-    holdCredit: 0,
-    rewardPoints: 0,
-    reputationStars: 5,
-    rank: 'Thành viên',
-    status: 'active',
-    role: 'user',
-    joinedAt: new Date().toISOString(),
-    totalTx: 0,
-  };
+// Backend có thể không trả tên người gửi yêu cầu nên cần tên dự phòng để không hiện ô trống.
+function requesterDisplayName(request: ItemRequest): string {
+  return request.requesterName?.trim() || 'Người dùng';
 }
 
 function SentRequestPanel({
@@ -1271,14 +1243,12 @@ function RequestPanel({
   itemStatus,
   hasAcceptedRequest,
   itemRequests,
-  data,
   allowAccept,
   onAccept,
 }: {
   itemStatus: string;
   hasAcceptedRequest: boolean;
-  itemRequests: ReturnType<typeof selectData>['itemRequests'];
-  data: ReturnType<typeof selectData>;
+  itemRequests: ItemRequest[];
   allowAccept: boolean;
   onAccept: (requestId: string) => void;
 }) {
@@ -1288,20 +1258,15 @@ function RequestPanel({
       {itemRequests.length ? (
         <div className="mt-3 space-y-3">
           {itemRequests.map((request) => {
-            const requester =
-              data.users.find((entry) => entry.id === request.requesterId) ??
-              apiDisplayUser(request.requesterId, request.requesterName);
-            const offeredItem = request.offeredItemId
-              ? data.items.find((entry) => entry.id === request.offeredItemId)
-              : undefined;
+            const requesterName = requesterDisplayName(request);
             return (
               <article key={request.id} className="rounded-md border border-border p-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex min-w-0 gap-3">
-                    <Avatar user={requester} />
+                    <Avatar user={{ name: requesterName, avatarInitials: nameInitials(requesterName) }} />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <strong className="truncate text-sm">{requester.name}</strong>
+                        <strong className="truncate text-sm">{requesterName}</strong>
                         <TypeBadge type={request.type} />
                         <span className="rounded-sm bg-amber-50 px-2 py-1 text-[11px] font-semibold text-warning">
                           {requestStatusLabel[request.status]}
@@ -1342,27 +1307,12 @@ function RequestPanel({
                     ) : null}
                   </div>
                 </div>
-                {request.type === 'trade' && (request.offeredItemTitle || offeredItem) ? (
+                {request.type === 'trade' && request.offeredItemTitle ? (
                   <div className="mt-3 rounded-md bg-surface-low p-3">
                     <p className="text-xs font-bold text-text-muted">Món đề nghị trao đổi</p>
                     <div className="mt-2 flex items-center gap-3">
-                      {offeredItem?.images?.[0] ? (
-                        <ItemImage
-                          src={offeredItem.images[0]}
-                          alt={request.offeredItemTitle ?? offeredItem.title}
-                          className="size-14 rounded-md object-cover"
-                        />
-                      ) : null}
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-bold">
-                          {request.offeredItemTitle ?? offeredItem?.title ?? 'Món đề nghị trao đổi'}
-                        </p>
-                        {offeredItem ? (
-                          <div className="mt-1 flex flex-wrap gap-2">
-                            <ConditionBadge condition={offeredItem.condition} />
-                            <span className="text-xs text-text-muted">{offeredItem.district}</span>
-                          </div>
-                        ) : null}
+                        <p className="truncate text-sm font-bold">{request.offeredItemTitle}</p>
                       </div>
                       {request.offeredItemId ? (
                         <Link to={`/items/${request.offeredItemId}`}>

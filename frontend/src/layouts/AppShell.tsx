@@ -32,7 +32,7 @@ function AppShellContent() {
   const { pathname } = location;
   const navigate = useNavigate();
   const user = useAppSelector(selectCurrentUser);
-  const { isApiAccount, wallet } = useWallet();
+  const { wallet } = useWallet();
   const isAdmin = user?.role === 'admin';
   const isHome = pathname === '/' && !isAdmin;
   const dispatch = useAppDispatch();
@@ -178,7 +178,7 @@ function AppShellContent() {
                   }`}
                 >
                   <Icon name="wallet" className="size-[18px]" />
-                  {isApiAccount ? (wallet ? wallet.available : '--') : user.availableCredit} Credit
+                  {wallet ? wallet.available : '--'} Credit
                 </Link>
                 <Link to="/post" className="hidden sm:block">
                   <Button size="sm">

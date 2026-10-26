@@ -58,7 +58,7 @@ const isOperatingStatus = (value: string): value is OperatingStatus =>
 
 export function Post() {
   const user = useAppSelector(selectCurrentUser)!;
-  const { isApiAccount, wallet, loading: walletLoading, error: walletError, refresh: refreshWallet } = useWallet();
+  const { wallet, loading: walletLoading, error: walletError, refresh: refreshWallet } = useWallet();
   const navigate = useNavigate();
   const [categories, setCategories] = useState<string[]>([]);
   const [districts, setDistricts] = useState<AreaOption[]>([]);
@@ -94,7 +94,7 @@ export function Post() {
   const submitInFlight = useRef(false);
   const currentUserId = toBackendUserId(user.id);
   const mediaUploading = mediaUploadState === 'uploading';
-  const availableCredit = isApiAccount ? wallet?.available ?? null : user.availableCredit;
+  const availableCredit = wallet?.available ?? null;
   // Phí đăng bài Trao đổi đọc từ Backend (GET /listing-fees); null khi chưa tải được.
   const [postFee, setPostFee] = useState<number | null>(null);
   const [postFeeError, setPostFeeError] = useState('');
@@ -136,7 +136,6 @@ export function Post() {
   }, []);
 
   useEffect(() => {
-    if (!isApiAccount) return;
     let active = true;
     itemApi
       .getListingFees()
@@ -153,13 +152,13 @@ export function Post() {
     return () => {
       active = false;
     };
-  }, [isApiAccount]);
+  }, []);
 
   useEffect(() => {
     const categoryId = categoryIds.get(category);
     setOperatingStatus('');
     setErrors((current) => ({ ...current, operatingStatus: undefined }));
-    if (!isApiAccount || !categoryId) {
+    if (!categoryId) {
       setCategoryAttributes([]);
       setAttributesError('');
       setAttributesLoading(false);
@@ -177,7 +176,7 @@ export function Post() {
       })
       .finally(() => { if (active) setAttributesLoading(false); });
     return () => { active = false; };
-  }, [category, categoryIds, isApiAccount]);
+  }, [category, categoryIds]);
 
   const validate = () => {
     const nextErrors: FormErrors = {};
@@ -206,15 +205,11 @@ export function Post() {
     e.preventDefault();
     setErrorCode('');
     if (!validate()) return;
-    if (!isApiAccount && user.reputationStars <= 0) {
-      setError('Uy tín của bạn đang ở mức 0 nên hiện không thể đăng bài mới.');
-      return;
-    }
     if (!currentUserId) {
       setError(BACKEND_SESSION_REQUIRED);
       return;
     }
-    if (type === 'trade' && isApiAccount && availableCredit === null) {
+    if (type === 'trade' && availableCredit === null) {
       setError(walletLoading ? 'Đang tải số dư Credit. Vui lòng chờ trong giây lát.' : walletError || 'Chưa thể xác minh số dư Credit.');
       return;
     }
@@ -239,7 +234,7 @@ export function Post() {
       setConfirmOpen(false);
       return;
     }
-    if (type === 'trade' && isApiAccount && availableCredit === null) {
+    if (type === 'trade' && availableCredit === null) {
       setError(walletLoading ? 'Đang tải số dư Credit. Vui lòng chờ trong giây lát.' : walletError || 'Chưa thể xác minh số dư Credit.');
       setConfirmOpen(false);
       return;
@@ -459,7 +454,7 @@ export function Post() {
             {errors.category ? <span className="hidden text-xs text-error sm:block">{errors.category}</span> : <span />}
             {errors.condition ? <span className="text-xs text-error">{errors.condition}</span> : null}
           </div>
-          {isApiAccount && category && (attributesLoading || Boolean(attributesError) || categoryAttributes.length > 0) ? (
+          {category && (attributesLoading || Boolean(attributesError) || categoryAttributes.length > 0) ? (
             <div className="rounded-lg bg-surface-low p-4 text-sm">
               <p className="font-semibold text-text-primary">Thông tin theo danh mục</p>
               {attributesLoading ? <p className="mt-2 text-text-muted">Đang tải thuộc tính...</p> : null}

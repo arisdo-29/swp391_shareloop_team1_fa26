@@ -56,8 +56,6 @@ export type CreditHistoryType =
   | 'RELEASE_HOLD'
   | 'ADMIN_ADJUSTMENT';
 export type CreditHistoryStatus = 'completed' | 'holding' | 'refunded' | 'pending';
-export type KeywordAction = 'flag' | 'block';
-export type ComplaintStatus = 'received' | 'processing' | 'resolved' | 'rejected' | 'violation_confirmed';
 
 export interface User {
   id: string;
@@ -112,20 +110,6 @@ export interface Item {
   postedAt: string;
   expiresAt?: string;
   boostedUntil?: string;
-}
-
-export interface Handover {
-  id: string;
-  transactionId: string;
-  date: string;
-  time: string;
-  district: string;
-  address: string;
-  method: 'Gặp trực tiếp' | 'Giao hàng';
-  note?: string;
-  proposedBy: string;
-  agreedBy?: string;
-  status: 'proposed' | 'confirmed';
 }
 
 export interface Transaction {
@@ -183,26 +167,6 @@ export interface ItemRequest {
   createdAt: string;
 }
 
-export interface Conversation {
-  id: string;
-  transactionId: string;
-  participantIds: string[];
-  itemId: string;
-  lastMessage: string;
-  lastMessageAt: string;
-  unreadCount: number;
-}
-
-export interface Message {
-  id: string;
-  convId: string;
-  sender: string | 'system';
-  type: 'chat' | 'system' | 'handover_card';
-  text?: string;
-  handoverId?: string;
-  time: string;
-}
-
 export interface CreditHistory {
   id: string;
   userId: string;
@@ -216,173 +180,4 @@ export interface CreditHistory {
   ref?: string;
   note: string;
   createdAt: string;
-}
-
-export interface Topup {
-  id: string;
-  code: string;
-  userId: string;
-  amount: number;
-  vnd: number;
-  method: string;
-  status: 'pending' | 'confirming' | 'completed' | 'failed';
-  createdAt: string;
-  confirmedAt?: string;
-}
-
-export interface Dispute {
-  id: string;
-  transactionId: string;
-  reporterId: string;
-  reason: string;
-  status: 'open' | 'reviewing' | 'resolved' | 'closed';
-  resolution?: string;
-  adminNote?: string;
-  createdAt: string;
-}
-
-export interface ForbiddenKeyword {
-  id: string;
-  keyword: string;
-  detections: number;
-  action: KeywordAction;
-}
-
-export interface SupportedDistrict {
-  id: string;
-  name: string;
-  status: 'active' | 'inactive';
-}
-
-export interface Complaint {
-  id: string;
-  reporterId: string;
-  reportedUserId: string;
-  transactionId: string;
-  reason: string;
-  content: string;
-  evidence: string[];
-  createdAt: string;
-  status: ComplaintStatus;
-  adminNote?: string;
-  resolution?: string;
-  response?: string;
-  responseEvidence?: string[];
-  responseDueAt?: string;
-  responseSubmittedAt?: string;
-  resolvedAt?: string;
-}
-
-export interface RankRule {
-  id: string;
-  name: string;
-  minPoints: number;
-  maxPoints?: number;
-  benefits?: string;
-  status?: 'active' | 'inactive';
-}
-
-export type ReputationPointRuleKey =
-  | 'transaction_completed'
-  | 'handover_confirmed_on_time'
-  | 'valid_complaint'
-  | 'unreasoned_cancel'
-  | 'content_violation'
-  | `custom_${string}`;
-
-export interface ReputationPointRule {
-  id: string;
-  key: ReputationPointRuleKey;
-  behavior: string;
-  type: 'plus' | 'minus';
-  points: number;
-  status: 'active' | 'paused';
-  description: string;
-}
-
-export interface ReputationPointHistory {
-  id: string;
-  userId: string;
-  ruleId: string;
-  event: string;
-  change: number;
-  pointsAfter: number;
-  ref?: string;
-  createdAt: string;
-}
-
-export interface AdminAuditLog {
-  id: string;
-  adminId: string;
-  action: string;
-  targetType: 'user' | 'item' | 'transaction' | 'dispute' | 'setting' | 'keyword' | 'district' | 'complaint' | 'rank' | 'point_rule';
-  targetId: string;
-  detail: string;
-  previousValue?: string;
-  newValue?: string;
-  reason?: string;
-  createdAt: string;
-}
-
-export interface SystemSetting {
-  key: string;
-  value: string | number;
-  label: string;
-  updatedAt: string;
-  updatedBy: string;
-}
-
-export interface AppStateData {
-  currentUserId: string | null;
-  systemRevenue: number;
-  users: User[];
-  items: Item[];
-  itemRequests: ItemRequest[];
-  transactions: Transaction[];
-  handovers: Handover[];
-  conversations: Conversation[];
-  messages: Message[];
-  creditHistory: CreditHistory[];
-  topups: Topup[];
-  disputes: Dispute[];
-  keywords: ForbiddenKeyword[];
-  districts: SupportedDistrict[];
-  complaints: Complaint[];
-  ranks: RankRule[];
-  pointRules: ReputationPointRule[];
-  pointHistory: ReputationPointHistory[];
-  auditLogs: AdminAuditLog[];
-  settings: SystemSetting[];
-  passwordReset?: PasswordResetState;
-  emailVerification?: EmailVerificationState;
-}
-
-export interface PasswordResetState {
-  id: string;
-  email: string;
-  userId?: string;
-  otpHash: string;
-  expiresAt: string;
-  resendAvailableAt: string;
-  attempts: number;
-  verified: boolean;
-  resetToken?: string;
-}
-
-export interface PendingRegistration {
-  name: string;
-  username: string;
-  email: string;
-  phone: string;
-  district: string;
-  passwordHash: string;
-}
-
-export interface EmailVerificationState {
-  id: string;
-  registration: PendingRegistration;
-  otpHash: string;
-  expiresAt: string;
-  resendAvailableAt: string;
-  attempts: number;
 }
