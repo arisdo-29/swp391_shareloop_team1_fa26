@@ -23,7 +23,9 @@ vi.mock('./HomeMotion', () => ({
 }));
 
 vi.mock('./HomeCommunity', () => ({
-  HomeLifecycle: () => null,
+  HomeLifecycle: ({ items }: { items: Array<{ title: string }> }) => (
+    <div data-testid="home-lifecycle-items">{items.map((entry) => entry.title).join('|')}</div>
+  ),
   HomeProcess: () => null,
 }));
 
@@ -330,7 +332,7 @@ describe('trạng thái tải bài đăng trên Home', () => {
     expect(screen.queryByRole('button', { name: `Hiển thị ảnh ${carouselItems[0].title}` })).toBeNull();
   });
 
-  it('LoopAI giữ 3 gợi ý tương tác và dùng ảnh minh họa riêng', async () => {
+  it('LoopAI giữ 3 bài boost gần nhất, 3 gợi ý tương tác và ảnh minh họa riêng', async () => {
     const boostedItems = Array.from({ length: 4 }, (_, index): ItemResponse => ({
       ...item,
       id: 580 + index,
@@ -360,6 +362,9 @@ describe('trạng thái tải bài đăng trên Home', () => {
     expect(section!.querySelector<HTMLImageElement>('.home-suggestion-visual img')?.getAttribute('src'))
       .toBe(browseSuggestionBox);
     expect(section!.querySelectorAll('.home-ai-suggestions svg')).toHaveLength(3);
+    expect(screen.getByTestId('home-lifecycle-items').textContent).toBe(
+      [boostedItems[3].title, boostedItems[2].title, boostedItems[1].title].join('|'),
+    );
   });
 
   it('hiển thị 5 bài trao đổi mới nhất, không ưu tiên boost và không hiện nhãn Được đẩy', async () => {
