@@ -113,3 +113,25 @@ Còn lại (không xử lý trong Đợt 2 vì rủi ro cao hoặc đụng `ui.t
 - Bỏ qua đúng yêu cầu: bảng khu vực trong `AdminPages.tsx` (`ApiAdminAreas`, `ApiAreaModal`), còn nguyên `size="sm"`.
 
 Còn lại cho phần 2 (cần sửa `ui.tsx` hoặc trang công khai): xem mục C; thêm `home-content.css` và `browse.css` còn hex, trong đó 9 chỗ vẫn dùng #73807b cũ; bảng admin chưa có khung chờ dạng skeleton; hộp thoại tự dựng ở AdminComplaints, AdminAuthenticity, AdminPages chưa gộp vào `Dialog`.
+
+## H. Cập nhật sau Đợt 4 (component dùng chung `ui.tsx`)
+
+Đã xử lý trong mục C (nặng):
+- `Button`: cỡ `sm` đổi `min-h-9` → `min-h-11`; `danger` dùng `bg-error-soft`, hết `bg-red-50`/`bg-red-100`.
+- `IconButton`: `size-10` → `size-11`, thêm trạng thái disabled.
+- `StatusBadge`: tách bảng nhãn (`itemStatusLabel`, `otherStatusLabel`) và hai hàm `statusLabel`, `statusTone`; nền `*-soft`; `text-2xs`. Nhãn và thứ tự ưu tiên giữ như cũ.
+- `Alert`: nền và viền `*-soft`, `border-*/20`. Chưa thêm `role` vì nhiều trang đã tự bọc `role="alert"`/`role="status"`, thêm nữa sẽ đọc trùng.
+- `ProductCard`: `bg-[#FFFAF5]` → `bg-surface`.
+- `Field`, `TextArea`, `Select`: có `aria-invalid`, `aria-describedby`, `hint` và `error` đồng bộ; dòng lỗi có `role="alert"`.
+- `SearchField`: vòng focus `ring-primary/25`, hover viền rõ hơn, placeholder đủ tương phản.
+- Thêm `Skeleton` và `SkeletonRows` (chưa dùng ở trang nào, dành cho Đợt 5).
+- `TypeBadge`, `ConditionBadge`, `Avatar`: `text-[11px]` → `text-2xs`.
+
+Còn lại: `ProductCard`/`HorizontalProductCard`/`OwnerCard` vẫn dùng `text-xs text-text-muted`; `PageHeader` chưa có biến thể gọn; `LoadingState` chỉ dạng lưới thẻ.
+
+### Ghi chú cho PR #332
+Đợt 4 chỉ sửa `ui.tsx`, không đổi tên, props hay export. Khối đã đổi:
+- `ProductCard`: chỉ đổi className ở thẻ `Link` ngoài cùng (`bg-[#FFFAF5]` → `bg-surface`). Footer thẻ bài và khối `owner` không đụng tới.
+- `OwnerCard`, `HorizontalProductCard`: không sửa.
+- `TypeBadge`, `ConditionBadge`, `StatusBadge`, `Avatar`: chỉ đổi className cỡ chữ. `StatusBadge` đổi cấu trúc bên trong (hàm `statusLabel`, `statusTone`); nếu #332 thêm trạng thái mới (ví dụ nhãn "Được đẩy") thì thêm vào `otherStatusLabel`.
+- `Home.tsx`, `Browse.tsx`, `ProductDetail.tsx`: chưa sửa ở đợt này.
