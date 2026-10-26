@@ -6,7 +6,7 @@ import { OtpInput } from '../../components/OtpInput';
 import { authApi } from '../../services/authApi';
 import { authErrorMessage } from '../../services/authErrors';
 import type { ApiError } from '../../services/http';
-import { passwordRules, validEmail, validatePassword } from '../../utils/passwordSecurity';
+import { passwordRules, validEmail, validatePassword } from '../../utils/validation';
 import { createOtpValue } from '../../utils/otp';
 
 interface ApiResetState {
@@ -99,6 +99,7 @@ export function ForgotPassword() {
 
   const resetPassword = async (event: FormEvent) => {
     event.preventDefault();
+    if (processing) return;
     setError('');
     const code = otp.join('');
     if (!/^\d{6}$/.test(code)) {
@@ -154,7 +155,6 @@ export function ForgotPassword() {
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              error={error && !validEmail(email) ? error : undefined}
               autoComplete="email"
             />
           ) : null}
@@ -173,7 +173,7 @@ export function ForgotPassword() {
               <PasswordField label="Mật khẩu mới" value={newPassword} onChange={setNewPassword} autoComplete="new-password" />
               <PasswordField label="Xác nhận mật khẩu mới" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
               {otpSeconds !== null ? (
-                <p className={`text-center text-xs ${otpSeconds === 0 ? 'text-error' : 'text-text-muted'}`}>
+                <p className={`text-center text-xs ${otpSeconds === 0 ? 'text-error' : 'text-text-secondary'}`}>
                   {otpSeconds === 0 ? 'Mã OTP đã hết hạn.' : `Mã OTP hết hạn sau ${formatCountdown(otpSeconds)}.`}
                 </p>
               ) : null}

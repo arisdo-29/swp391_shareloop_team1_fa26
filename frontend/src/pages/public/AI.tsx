@@ -126,7 +126,7 @@ export function AI() {
       />
 
       <div className="space-y-8">
-        <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-border/80">
+        <section className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-border/80">
           <div className="bg-gradient-to-br from-primary-faint via-white to-secondary-soft px-5 py-7 sm:px-8 sm:py-9">
             <div className="mx-auto max-w-3xl">
               <div className="flex items-center gap-3">
@@ -178,13 +178,13 @@ export function AI() {
                 chargedCredits={chargedCredits}
               />
             ) : <Alert tone={quotaError ? 'error' : 'info'}>{quotaError || 'Đang tải hạn mức tìm kiếm...'}</Alert>}
-            {quotaError ? <Button variant="outline" size="sm" onClick={() => { void aiApi.quota().then((response) => { setQuota(response); setQuotaError(''); }).catch((error: ApiError) => setQuotaError(error.message)); }}>Thử tải hạn mức</Button> : null}
+            {quotaError ? <Button variant="outline" onClick={() => { void aiApi.quota().then((response) => { setQuota(response); setQuotaError(''); }).catch((error: ApiError) => setQuotaError(error.message)); }}>Thử tải hạn mức</Button> : null}
             {quota ? <p className="mt-3 text-xs text-text-muted">Mỗi lần tìm hoặc chuyển trang dùng một lượt. Hết lượt miễn phí, mỗi lượt tốn {quota.feeCredits} Credit. Nếu hệ thống chuyển sang tìm kiếm thường, lượt và phí sẽ được hoàn lại.</p> : null}
           </div>
         </section>
 
         {status !== 'idle' ? (
-          <section className="rounded-2xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
+          <section className="rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary">

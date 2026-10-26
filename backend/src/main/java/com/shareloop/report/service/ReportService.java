@@ -190,7 +190,7 @@ public class ReportService {
             notificationService.notifyAdmins(
                     "ITEM_AUTO_HIDDEN",
                     "Bài đăng bị ẩn do nhiều báo cáo",
-                    "Bài #" + itemId + " đã tự ẩn sau " + pendingReports
+                    "Bài" + quotedTitle(itemTitle(itemId)) + " đã tự ẩn sau " + pendingReports
                             + " báo cáo đang chờ xử lý. Vui lòng xem xét trong hàng chờ khiếu nại.",
                     "/admin/complaints");
         }
@@ -273,7 +273,7 @@ public class ReportService {
         }
 
         // 4. Kiểm tra cửa sổ khiếu nại (7 ngày sau completedAt)
-        int windowDays = disputeDays("DISPUTE_WINDOW_DAYS", ConfigKey.COMPLAINT_WINDOW_DAYS);
+        int windowDays = disputeDays(ConfigKey.COMPLAINT_WINDOW_DAYS);
         Instant completedAt = reqSnapshot.completedAt() != null ? reqSnapshot.completedAt() : Instant.now(clock);
         Instant deadline = completedAt.plus(Duration.ofDays(windowDays));
         if (Instant.now(clock).isAfter(deadline)) {
@@ -289,7 +289,7 @@ public class ReportService {
         List<Long> evidenceMediaIds = request.evidenceMediaIds();
 
         // 7. Mở cửa sổ giải trình 3 ngày cho bên bị khiếu nại
-        int responseDays = disputeDays("DISPUTE_RESPONSE_DAYS", ConfigKey.RESPONSE_WINDOW_DAYS);
+        int responseDays = disputeDays(ConfigKey.RESPONSE_WINDOW_DAYS);
         Instant now = Instant.now(clock);
         Instant responseDueAt = now.plus(Duration.ofDays(responseDays));
         Long respondentId = userId.equals(donorId) ? receiverId : donorId;
@@ -310,16 +310,75 @@ public class ReportService {
 
         // 8. Gửi thông báo cho bên bị khiếu nại
         if (notificationService != null) {
+            // Gọi giao dịch bằng tên món thay cho "Giao dịch #id"
+            String transaction = "Giao dịch" + quotedTitle(itemTitle(reqSnapshot.itemId()));
             notificationService.notify(
                     respondentId,
                     "DISPUTE_OPENED",
-                    "Giao dịch #" + requestId + " bị khiếu nại",
-                    "Giao dịch #" + requestId + " đã bị đối tác khiếu nại. Bạn có " + responseDays
-                            + " ngày để giải trình.",
+                    transaction + " bị khiếu nại",
+                    transaction + " đã bị đối tác khiếu nại. Bạn có " + responseDays + " ngày để giải trình.",
                     "/me/disputes/" + saved.getId());
         }
 
         return saved;
+    }
+
+    /**
+     * Tự mở report NOT_AS_DESCRIBED khi bên nhận chọn "Không đúng mô tả" lúc xác nhận giao nhận (FR-85, BR-R05).
+     * Khác openDisputeReport ở chỗ không đòi giao dịch đã COMPLETED, vì bên nhận có thể trả lời trước khi bên cho xác
+     * nhận. Mỗi bên nhận chỉ có một report cho mỗi giao dịch: gọi lại thì bỏ qua, không lỗi.
+     *
+     * @throws BusinessException REPORT_TARGET_NOT_FOUND khi không thấy giao dịch hoặc bài đăng; DISPUTE_NOT_A_PARTY khi
+     *     receiverId không phải bên nhận của giao dịch
+     */
+    @Transactional
+    public void openNotAsDescribedReport(Long receiverId, Long requestId, String reason) {
+        // Event có thể tới hai lần nên kiểm trùng trước, không ném lỗi
+        if (reportRepository.existsByReporterIdAndTargetTypeAndRequestId(receiverId, TargetType.REQUEST, requestId)) {
+            return;
+        }
+
+        RequestSnapshot requestSnapshot = findRequest(requestId);
+        if (requestSnapshot == null) {
+            throw new BusinessException(ReportErrorCode.REPORT_TARGET_NOT_FOUND, "Không tìm thấy yêu cầu giao dịch.");
+        }
+        if (!receiverId.equals(requestSnapshot.receiverId())) {
+            throw new BusinessException(ReportErrorCode.DISPUTE_NOT_A_PARTY);
+        }
+        ItemSummary itemSummary = itemQueryService.getSummary(requestSnapshot.itemId());
+        if (itemSummary == null) {
+            throw new BusinessException(
+                    ReportErrorCode.REPORT_TARGET_NOT_FOUND, "Không tìm thấy bài đăng của giao dịch.");
+        }
+
+        // Bên cho là bên bị báo cáo và có thời hạn giải trình như khiếu nại thường (FR-90)
+        int responseDays = disputeDays(ConfigKey.RESPONSE_WINDOW_DAYS);
+        Instant responseDueAt = Instant.now(clock).plus(Duration.ofDays(responseDays));
+        Report report = Report.createDispute(
+                receiverId,
+                requestId,
+                requestSnapshot.itemId(),
+                itemSummary.donorId(),
+                ReportReason.NOT_AS_DESCRIBED,
+                reason,
+                null,
+                responseDueAt);
+        Report saved = reportRepository.save(report);
+
+        if (notificationService != null) {
+            notificationService.notify(
+                    itemSummary.donorId(),
+                    "DISPUTE_OPENED",
+                    "Món đồ bị báo không đúng mô tả",
+                    "Người nhận báo món đồ không đúng mô tả. Bạn có " + responseDays + " ngày để giải trình.",
+                    "/me/disputes/" + saved.getId());
+        }
+    }
+
+    /** Giao dịch đã có report nào chưa (FR-87: job tự hoàn tất chỉ xử lý giao dịch không có report). */
+    @Transactional(readOnly = true)
+    public boolean hasReportForRequest(Long requestId) {
+        return reportRepository.existsByRequestId(requestId);
     }
 
     /**
@@ -398,21 +457,28 @@ public class ReportService {
 
         report.conclude(decision, adminId, note);
 
+        // Ghi chú mặc định gọi báo cáo bằng tên bài, không dùng "báo cáo #id". Báo cáo người dùng không có bài thì để
+        // trống.
+        String title = itemTitle(report.getItemId());
+        String about = title == null || title.isBlank() ? "" : " về “" + title + "”";
+
         if (decision == ReportDecision.DISMISS) {
             if (activityLogService != null) {
+                Map<String, Object> logPayload = new HashMap<>();
+                logPayload.put("decision", "DISMISS");
+                logPayload.put("reportId", reportId);
+                logPayload.put("targetType", report.getTargetType().name());
+                // Nhật ký Admin dùng itemId để hiện tên bài thay cho "Báo cáo #id"
+                if (report.getItemId() != null) {
+                    logPayload.put("itemId", report.getItemId());
+                }
                 activityLogService.log(
                         ActivityType.REPORT_DISMISSED.name(),
                         adminId,
                         "REPORT",
                         reportId,
-                        Map.of(
-                                "decision",
-                                "DISMISS",
-                                "reportId",
-                                reportId,
-                                "targetType",
-                                report.getTargetType().name()),
-                        note != null ? note : "Bác bỏ báo cáo #" + reportId);
+                        logPayload,
+                        note != null ? note : "Bác bỏ báo cáo" + about);
             }
         } else if (decision == ReportDecision.UPHOLD) {
             Long violatorId = resolveViolator(report);
@@ -420,7 +486,7 @@ public class ReportService {
             // BR-U04: Trừ 1 sao uy tín
             if (violatorId != null && reputationService != null) {
                 reputationService.deductStar(
-                        violatorId, 1, note != null ? note : "Bị kết luận vi phạm khiếu nại #" + reportId);
+                        violatorId, 1, note != null ? note : "Bị kết luận vi phạm theo báo cáo" + about);
             }
 
             // BR-A07: Nếu lý do thuộc nhóm nghiêm trọng, rà soát ẩn toàn bộ bài đăng khác của người vi phạm
@@ -444,6 +510,9 @@ public class ReportService {
                 }
                 logPayload.put("starsDeducted", 1);
                 logPayload.put("seriousViolation", serious);
+                if (report.getItemId() != null) {
+                    logPayload.put("itemId", report.getItemId());
+                }
 
                 activityLogService.log(
                         ActivityType.REPORT_UPHELD.name(),
@@ -451,7 +520,7 @@ public class ReportService {
                         "REPORT",
                         reportId,
                         logPayload,
-                        note != null ? note : "Chấp thuận báo cáo #" + reportId + ", xử phạt trừ 1 sao uy tín");
+                        note != null ? note : "Chấp thuận báo cáo" + about + ", xử phạt trừ 1 sao uy tín");
             }
         }
 
@@ -471,15 +540,23 @@ public class ReportService {
                 saved.getResolvedAt());
     }
 
-    private int disputeDays(String legacyKey, ConfigKey fallback) {
-        if (configService == null) return fallback.getDefaultValue();
-        try {
-            return configService.getDecimal(legacyKey).intValueExact();
-        } catch (BusinessException exception) {
-            if (exception.getErrorCode() != com.shareloop.setting.SettingErrorCode.SETTING_CONFIG_NOT_FOUND)
-                throw exception;
-            return configService.getInt(fallback);
+    // Đọc đúng key mà trang Admin sửa (ConfigKey, viết thường), không đọc key viết hoa cũ của migration.
+    // configService null chỉ gặp ở unit test dựng service rút gọn; khi đó dùng giá trị mặc định.
+    private int disputeDays(ConfigKey key) {
+        return configService != null ? configService.getInt(key) : key.getDefaultValue();
+    }
+
+    // Tên bài để đưa vào câu chữ thay cho "Bài #id", "Giao dịch #id". Không tìm được thì trả null.
+    private String itemTitle(Long itemId) {
+        if (itemId == null || itemQueryService == null) {
+            return null;
         }
+        return itemQueryService.findTitles(List.of(itemId)).get(itemId);
+    }
+
+    // " “Tên bài”" khi có tên, chuỗi rỗng khi không có, để ghép vào cuối câu chữ
+    private static String quotedTitle(String title) {
+        return title == null || title.isBlank() ? "" : " “" + title + "”";
     }
 
     private Long resolveViolator(Report report) {

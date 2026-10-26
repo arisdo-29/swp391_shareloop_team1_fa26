@@ -12,4 +12,9 @@ public interface RequestParticipantProjection {
     String getType();
 
     String getStatus();
+
+    /** Bài của giao dịch: dùng làm câu chữ lý do cộng điểm thay cho "giao dịch #id". */
+    Long getItemId();
+
+    String getItemTitle();
 }

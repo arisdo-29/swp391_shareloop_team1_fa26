@@ -35,7 +35,7 @@ app:
     local-dir: ./uploads            # chỉ dùng khi type = local
   # module integration/ai (BE2)
   ai:
-    api-key: ${AI_API_KEY:}
+    api-key: ${OPENROUTER_API_KEY:}
   # module integration/payment (BE1)
   payment:
     provider: ${PAYMENT_PROVIDER:mock}

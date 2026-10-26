@@ -33,7 +33,7 @@ export function AdminAnomalyContent() {
     setLoading(true);
     setError('');
     adminAnomalyApi
-      .getReport()
+      .report()
       .then((response) => {
         if (active) setReport(response);
       })

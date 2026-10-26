@@ -6,16 +6,13 @@ export interface HistoryTab {
   id: string;
   label: string;
   matches: (entry: CreditHistory) => boolean;
-  // Đơn nạp đang chờ xác nhận (chỉ có ở tài khoản demo) cũng được tính vào tab này.
-  withPendingTopups?: boolean;
 }
 
-const allTab: HistoryTab = { id: 'all', label: 'Tất cả', matches: () => true, withPendingTopups: true };
+const allTab: HistoryTab = { id: 'all', label: 'Tất cả', matches: () => true };
 const topUpTab: HistoryTab = {
   id: 'topup',
   label: 'Nạp Credit',
   matches: (entry) => entry.type === 'TOPUP',
-  withPendingTopups: true,
 };
 
 // Người dùng tự xem: gộp mọi khoản chi vào một tab 'Chi tiêu'.
@@ -77,32 +74,21 @@ export function endOfDayIso(date: string) {
   return new Date(new Date(`${date}T00:00:00+07:00`).getTime() + DAY_MS).toISOString();
 }
 
-const legacyHistoryPattern =
-  /swap|give|giu phi|giữ phí|giu giao dich|giữ giao dịch|tam giu|tạm giữ/i;
+// Mọi dòng có itemId đều ghi ref theo một định dạng chung để đọc lại tên món ở danh sách và hộp chi tiết.
+const ITEM_REF_PATTERN = /^item:(.+)$/;
 
-export function isPostFee(entry: CreditHistory) {
-  return entry.type === 'SPEND' && /^phi dang bai|^phí đăng bài/i.test(entry.description);
+export function itemIdOf(entry: CreditHistory) {
+  return entry.ref?.match(ITEM_REF_PATTERN)?.[1];
 }
 
-export function isVisibleCreditHistory(entry: CreditHistory) {
-  if (['TRANSACTION_FEE', 'HOLD', 'RELEASE_HOLD'].includes(entry.type)) return false;
-  if (legacyHistoryPattern.test(`${entry.description} ${entry.note}`)) return false;
-  return (
-    entry.type === 'TOPUP' ||
-    entry.type === 'AI_SPEND' ||
-    entry.type === 'RECEIVE_FEE' ||
-    entry.type === 'ADMIN_ADJUSTMENT' ||
-    isPostFee(entry)
-  );
+// Tra tên món theo id ghi trong dòng lịch sử; bài không còn trong map thì không có tên.
+export function itemTitleOf(entry: CreditHistory, itemTitles: Map<string, string>) {
+  const itemId = itemIdOf(entry);
+  return itemId ? itemTitles.get(itemId) : undefined;
 }
 
-export function postFeeItemId(entry: CreditHistory) {
-  return (
-    entry.ref?.match(/^post:(.+):fee$/)?.[1] ?? entry.transactionId.match(/^post:(.+):fee$/)?.[1]
-  );
-}
-
-const walletTransactionLabels: Record<WalletTransactionResponse['type'], string> = {
+// Dùng chung cho lịch sử Credit và báo cáo tài chính để một loại phí chỉ có một tên gọi.
+export const walletTransactionLabels: Record<WalletTransactionResponse['type'], string> = {
   TOP_UP: 'Nạp Credit',
   POST_FEE: 'Phí đăng bài',
   EDIT_FEE: 'Phí chỉnh sửa bài',
@@ -112,28 +98,37 @@ const walletTransactionLabels: Record<WalletTransactionResponse['type'], string>
   ADMIN_ADJUST: 'Điều chỉnh bởi quản trị viên',
 };
 
+const AI_REFUND_LABEL = 'Hoàn phí tìm kiếm AI';
+
+// Backend ghi hoàn phí AI thành dòng AI_SEARCH_FEE có số dương. Đổi sang REFUND để không lẫn vào tab Chi tiêu.
+// Bỏ note vì note đó có số dòng gốc (dùng để chặn hoàn trùng), người dùng không cần thấy.
+function isAiRefund(entry: WalletTransactionResponse) {
+  return entry.type === 'AI_SEARCH_FEE' && entry.amount > 0;
+}
+
+function toHistoryType(entry: WalletTransactionResponse): CreditHistoryType {
+  if (entry.type === 'TOP_UP') return 'TOPUP';
+  if (isAiRefund(entry)) return 'REFUND';
+  if (entry.type === 'AI_SEARCH_FEE') return 'AI_SPEND';
+  if (entry.type === 'ADMIN_ADJUST') return 'ADMIN_ADJUSTMENT';
+  return 'SPEND';
+}
+
 export function toCreditHistory(entry: WalletTransactionResponse, userId: string): CreditHistory {
-  const type: CreditHistoryType =
-    entry.type === 'TOP_UP'
-      ? 'TOPUP'
-      : entry.type === 'AI_SEARCH_FEE'
-        ? 'AI_SPEND'
-        : entry.type === 'ADMIN_ADJUST'
-          ? 'ADMIN_ADJUSTMENT'
-          : 'SPEND';
+  const refund = isAiRefund(entry);
   return {
     id: `api_wallet_${entry.id}`,
     userId,
     transactionId: entry.paymentOrderId
       ? `payment-order-${entry.paymentOrderId}`
       : `ledger-${entry.id}`,
-    type,
+    type: toHistoryType(entry),
     amount: entry.amount,
     balance: entry.balanceAfter,
-    description: walletTransactionLabels[entry.type],
+    description: refund ? AI_REFUND_LABEL : walletTransactionLabels[entry.type],
     status: 'completed',
-    ref: entry.type === 'POST_FEE' && entry.itemId ? `post:${entry.itemId}:fee` : undefined,
-    note: entry.note ?? '',
+    ref: entry.itemId ? `item:${entry.itemId}` : undefined,
+    note: refund ? '' : (entry.note ?? ''),
     createdAt: entry.createdAt,
   };
 }

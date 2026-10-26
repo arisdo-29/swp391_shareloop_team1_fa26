@@ -8,6 +8,7 @@ import com.shareloop.listingfee.repository.ItemDisplayWindowRow;
 import com.shareloop.listingfee.repository.ItemFeeRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -50,6 +51,11 @@ public class ListingFeeQueryService {
             displayWindows.put(row.getId(), new DisplayWindow(row.getExpireAt(), row.getBoostedUntil()));
         }
         return displayWindows;
+    }
+
+    /** Id bài còn hạn đẩy; module item tự áp dụng bộ lọc và phân trang công khai. */
+    public List<Long> findActiveBoostedIds(Instant now) {
+        return itemFeeRepository.findActiveBoostedIds(now);
     }
 
     /**

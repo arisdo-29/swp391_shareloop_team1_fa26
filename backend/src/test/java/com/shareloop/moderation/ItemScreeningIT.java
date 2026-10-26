@@ -24,6 +24,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 class ItemScreeningIT extends IntegrationTest {
+    private static final String MODEL = "google/gemma-4-31b-it:free";
     private static final String LOW = """
             {"contactInfo":{"found":false,"evidence":null},
              "prohibited":{"found":false,"category":null,"evidence":null},
@@ -88,7 +89,7 @@ class ItemScreeningIT extends IntegrationTest {
 
     @Test
     void highRiskFlagsPendingItemAndLogsCallWithoutAccountData() throws Exception {
-        when(aiClient.screen(any(), any())).thenReturn(new AiResponse("gemini-3.5-flash-lite", HIGH));
+        when(aiClient.screen(any(), any())).thenReturn(new AiResponse(MODEL, HIGH));
 
         screeningService.screen(event());
 
@@ -96,7 +97,7 @@ class ItemScreeningIT extends IntegrationTest {
         assertThat(value("status")).isEqualTo("PENDING_REVIEW");
         assertThat(value("ai_result ->> 'flag'")).isEqualTo("REVIEW");
         assertThat(value("ai_result ->> 'reason'")).isEqualTo("Có thông tin liên hệ");
-        assertThat(value("ai_result ->> 'model'")).isEqualTo("gemini-3.5-flash-lite");
+        assertThat(value("ai_result ->> 'model'")).isEqualTo(MODEL);
         assertThat(jdbc.sql("SELECT count(*) FROM activity_logs WHERE type = 'AI_USAGE' AND target_id = :itemId")
                         .param("itemId", itemId)
                         .query(Integer.class)
@@ -128,7 +129,7 @@ class ItemScreeningIT extends IntegrationTest {
 
     @Test
     void invalidJsonLeavesItemUnchecked() throws Exception {
-        when(aiClient.screen(any(), any())).thenReturn(new AiResponse("gemini-3.5-flash-lite", "{\"risk\":\"high\"}"));
+        when(aiClient.screen(any(), any())).thenReturn(new AiResponse(MODEL, "{\"risk\":\"high\"}"));
 
         screeningService.screen(event());
 
@@ -142,7 +143,7 @@ class ItemScreeningIT extends IntegrationTest {
             jdbc.sql("UPDATE items SET title = 'New title' WHERE id = :itemId")
                     .param("itemId", itemId)
                     .update();
-            return new AiResponse("gemini-3.5-flash-lite", HIGH);
+            return new AiResponse(MODEL, HIGH);
         });
 
         screeningService.screen(event());
@@ -157,7 +158,7 @@ class ItemScreeningIT extends IntegrationTest {
                         + "WHERE id = :itemId")
                 .param("itemId", itemId)
                 .update();
-        when(aiClient.screen(any(), any())).thenReturn(new AiResponse("gemini-3.5-flash-lite", LOW));
+        when(aiClient.screen(any(), any())).thenReturn(new AiResponse(MODEL, LOW));
 
         screeningService.screen(event());
 

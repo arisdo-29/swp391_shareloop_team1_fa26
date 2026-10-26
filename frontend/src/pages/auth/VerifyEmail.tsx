@@ -8,7 +8,7 @@ import { authApi } from '../../services/authApi';
 import { authErrorMessage } from '../../services/authErrors';
 import type { ApiError } from '../../services/http';
 import { fetchSessionUser } from '../../services/session';
-import { validEmail } from '../../utils/passwordSecurity';
+import { validEmail } from '../../utils/validation';
 import { createOtpValue } from '../../utils/otp';
 
 type VerifyEmailState = {
@@ -76,6 +76,7 @@ export function VerifyEmail() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (processing) return;
     const normalizedEmail = email.trim().toLowerCase();
     const code = otp.join('');
     setError('');
@@ -150,7 +151,7 @@ export function VerifyEmail() {
             }}
           />
           {otpSeconds !== null ? (
-            <p className={`text-center text-xs ${otpSeconds === 0 ? 'text-error' : 'text-text-muted'}`}>
+            <p className={`text-center text-xs ${otpSeconds === 0 ? 'text-error' : 'text-text-secondary'}`}>
               {otpSeconds === 0 ? 'Mã OTP đã hết hạn.' : `Mã OTP hết hạn sau ${formatCountdown(otpSeconds)}.`}
             </p>
           ) : null}

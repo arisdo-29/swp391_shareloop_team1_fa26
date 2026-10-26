@@ -23,6 +23,13 @@ management:
     mail:
       enabled: false                # không để /actuator/health báo DOWN vì không nối được SMTP
 
+# Production không có tài khoản nào được bỏ qua giới hạn đăng bài
+shareloop:
+  post-limit-bypass-emails: []
+  # Mặc định TẮT. Staging bật bằng SHARELOOP_SEEDTESTACCOUNTS_ENABLED=true và đặt SHARELOOP_SEEDTESTACCOUNTS_PASSWORD
+  seed-test-accounts:
+    enabled: false
+
 app:
   jwt:
     secret: ${JWT_SECRET}
@@ -37,7 +44,7 @@ app:
       access-key: ${S3_ACCESS_KEY:}
       secret-key: ${S3_SECRET_KEY:}
   ai:
-    api-key: ${AI_API_KEY}
+    api-key: ${OPENROUTER_API_KEY}
   payment:
     mock:
       enabled: ${PAYMENT_MOCK_ENABLED:false}  # staging đặt true để demo nạp giả lập; production để false

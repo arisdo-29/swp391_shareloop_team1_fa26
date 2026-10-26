@@ -106,6 +106,31 @@ class ReviewServiceTest {
     }
 
     @Test
+    void approveNotifiesDonorAfterSavingSnapshot() {
+        service.approve(8L, List.of(new ChecklistAnswer(11L, true), new ChecklistAnswer(12L, true)), 1L);
+
+        InOrder order = inOrder(reviewItem, notificationService);
+        order.verify(reviewItem).approve(anyMap(), any(Instant.class), eq(1L));
+        order.verify(notificationService)
+                .notify(
+                        99L,
+                        "POST_APPROVED",
+                        "Bài đăng đã được duyệt",
+                        "Bài đăng của bạn đã được duyệt và đang hiển thị công khai.",
+                        "/items/8");
+    }
+
+    @Test
+    void approveWhenDonorNotFoundDoesNotFailOrNotifyButLogsActivity() {
+        when(reviewItemRepository.findDonorIdByItemId(8L)).thenReturn(Optional.empty());
+
+        service.approve(8L, List.of(new ChecklistAnswer(11L, true), new ChecklistAnswer(12L, true)), 1L);
+
+        verify(notificationService, never()).notify(anyLong(), anyString(), anyString(), anyString(), anyString());
+        verify(activityLogService).log(eq("REVIEW_APPROVE"), eq(1L), eq("ITEM"), eq(8L), anyMap(), isNull());
+    }
+
+    @Test
     void incompleteChecklistDoesNotChargeOrApproveOrLog() {
         assertThatThrownBy(() -> service.approve(8L, List.of(new ChecklistAnswer(11L, true)), 1L))
                 .isInstanceOf(BusinessException.class)

@@ -68,7 +68,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const value = useMemo<WalletContextValue>(() => {
     const matchesCurrentUser = backendUserId !== null && state.userId === backendUserId;
     return {
-      isApiAccount: backendUserId !== null,
       wallet: matchesCurrentUser ? state.wallet : null,
       loading: backendUserId !== null && (!matchesCurrentUser || state.loading),
       error: matchesCurrentUser ? state.error : '',

@@ -2,14 +2,11 @@ import { useState, type FormEvent } from 'react';
 import { authApi } from '../services/authApi';
 import { authErrorMessage } from '../services/authErrors';
 import type { ApiError } from '../services/http';
-import { toBackendUserId } from '../services/requestApi';
-import type { User } from '../types/domain';
-import { passwordRules, validatePassword } from '../utils/passwordSecurity';
+import { passwordRules, validatePassword } from '../utils/validation';
 import { Alert, Button } from './ui';
 import { PasswordField } from './PasswordField';
 
-export function ChangePasswordForm({ user }: { user: User }) {
-  const isApiAccount = toBackendUserId(user.id) !== null;
+export function ChangePasswordForm() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -46,11 +43,7 @@ export function ChangePasswordForm({ user }: { user: User }) {
       setNewError(passwordRules.different);
       return;
     }
-    if (!isApiAccount) {
-      setCurrentError('Tài khoản demo không thể đổi mật khẩu qua Backend.');
-      return;
-    }
-
+    if (processing) return;
     setProcessing(true);
     try {
       await authApi.changePassword({ currentPassword, newPassword });

@@ -1,5 +1,6 @@
 package com.shareloop.audit.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -10,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.shareloop.audit.ActivityType;
 import com.shareloop.audit.AuditErrorCode;
 import com.shareloop.audit.dto.ActivityLogDto;
 import com.shareloop.audit.dto.ActivityTypeDto;
@@ -20,8 +22,11 @@ import com.shareloop.config.ClockConfig;
 import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
+import io.swagger.v3.oas.annotations.Parameter;
+import java.lang.reflect.Method;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -143,5 +148,18 @@ class AdminActivityLogControllerTest {
                         .param("to", "2026-10-10"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_DATE_RANGE"));
+    }
+
+    @Test
+    @DisplayName("Dropdown loại hành động trên Swagger liệt kê đủ mọi ActivityType")
+    void typeParameter_allowableValuesMatchActivityTypeEnum() throws Exception {
+        Method list = AdminActivityLogController.class.getMethod(
+                "list", Long.class, String.class, LocalDate.class, LocalDate.class, int.class, int.class);
+        Parameter typeParameter = list.getParameters()[1].getAnnotation(Parameter.class);
+
+        assertThat(typeParameter.schema().allowableValues())
+                .containsExactlyInAnyOrder(Arrays.stream(ActivityType.values())
+                        .map(ActivityType::code)
+                        .toArray(String[]::new));
     }
 }

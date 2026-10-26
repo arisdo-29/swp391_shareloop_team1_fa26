@@ -33,6 +33,7 @@ import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
+import com.shareloop.request.event.NotAsDescribedReportedEvent;
 import com.shareloop.request.repository.RequestRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
@@ -51,6 +52,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 @ExtendWith(MockitoExtension.class)
@@ -79,6 +81,9 @@ class RequestServiceTest {
 
     @Mock
     JdbcClient jdbcClient;
+
+    @Mock
+    ApplicationEventPublisher eventPublisher;
 
     @Spy
     @InjectMocks
@@ -277,8 +282,10 @@ class RequestServiceTest {
 
         assertThat(otherRequest.getStatus()).isEqualTo(RequestStatus.REJECTED);
         org.mockito.Mockito.verify(itemService).reserve(1L);
-        org.mockito.Mockito.verify(notificationService).notify(eq(10L), eq("REQUEST_ACCEPTED"), any(), any(), any());
-        org.mockito.Mockito.verify(notificationService).notify(eq(11L), eq("REQUEST_REJECTED"), any(), any(), any());
+        org.mockito.Mockito.verify(notificationService)
+                .notify(eq(10L), eq("REQUEST_ACCEPTED"), any(), any(), eq("/requests/101"));
+        org.mockito.Mockito.verify(notificationService)
+                .notify(eq(11L), eq("REQUEST_REJECTED"), any(), any(), eq("/requests/102"));
     }
 
     @Test
@@ -305,7 +312,8 @@ class RequestServiceTest {
         assertThat(response.status()).isEqualTo("RESERVED");
         assertThat(otherSwapRequest.getStatus()).isEqualTo(RequestStatus.CANCELLED);
         assertThat(otherSwapRequest.getCancelReason()).isNotNull();
-        org.mockito.Mockito.verify(notificationService).notify(eq(10L), eq("REQUEST_CANCELLED"), any(), any(), any());
+        org.mockito.Mockito.verify(notificationService)
+                .notify(eq(10L), eq("REQUEST_CANCELLED"), any(), any(), eq("/requests/103"));
     }
 
     @Test
@@ -807,6 +815,55 @@ class RequestServiceTest {
         verify(reputationService).onCompleted(101L);
         verify(notificationService).notify(eq(10L), eq("TRANSACTION_COMPLETED"), any(), any(), any());
         verify(notificationService).notify(eq(20L), eq("TRANSACTION_COMPLETED"), any(), any(), any());
+    }
+
+    @Test
+    void confirmHandover_whenReceiverSaysNotAsDescribed_publishesReportEvent() {
+        // given
+        stubLogisticsConfirmedRequest();
+
+        // when
+        requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(false, "  Máy không bật được  "));
+
+        // then: lý do được cắt khoảng trắng thừa trước khi làm mô tả report
+        verify(eventPublisher).publishEvent(new NotAsDescribedReportedEvent(101L, 10L, "Máy không bật được"));
+    }
+
+    @Test
+    void confirmHandover_whenReceiverSaysAsDescribed_publishesNoReportEvent() {
+        // given
+        stubLogisticsConfirmedRequest();
+
+        // when
+        requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(true, null));
+
+        // then
+        verify(eventPublisher, never()).publishEvent(any(NotAsDescribedReportedEvent.class));
+    }
+
+    @Test
+    void confirmHandover_whenDonorConfirms_publishesNoReportEvent() {
+        // given
+        stubLogisticsConfirmedRequest();
+
+        // when
+        requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null, null));
+
+        // then
+        verify(eventPublisher, never()).publishEvent(any(NotAsDescribedReportedEvent.class));
+    }
+
+    /** Request đã chốt lịch (LOGISTICS_CONFIRMED) của bên nhận 10, bài đăng thuộc bên cho 20. */
+    private void stubLogisticsConfirmedRequest() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.select(Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
+        request.confirmLogistics(false, false, Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
     }
 
     @Test

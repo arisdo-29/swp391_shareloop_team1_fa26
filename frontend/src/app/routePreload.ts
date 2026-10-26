@@ -29,8 +29,7 @@ export function preloadRoute(pathname: string): Promise<unknown> {
   else if (pathname === '/admin/finance/topup-orders') page = import('../pages/admin/AdminTopUpOrders');
   else if (pathname.startsWith('/admin/finance/users')) page = import('../pages/admin/AdminFinanceUsers');
   else if (pathname === '/admin/finance') page = import('../pages/admin/AdminFinancePages');
-  else if (pathname === '/admin/transactions' || pathname.startsWith('/admin/transactions/')) {
-    page = import('../pages/admin/AdminUnderDevelopment');
-  } else page = import('../pages/admin/AdminPages');
+  else if (pathname === '/admin/alerts') page = import('../pages/admin/AdminAnomalies');
+  else page = import('../pages/admin/AdminPages');
   return Promise.all([layout, page]);
 }

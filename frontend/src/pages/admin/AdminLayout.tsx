@@ -9,7 +9,7 @@ const sections = [
       ['article', 'Duyệt bài', '/admin/moderation'],
       // Tạm ẩn "Xác minh hàng chính hãng" (/admin/authenticity): chưa có luồng xác nhận và chưa có BR. Code BE vẫn giữ.
       ['shield', 'Checklist duyệt bài', '/admin/checklist'],
-      ['history', 'Bài quá hạn', '/admin/expired-posts'],
+      // Tạm ẩn "Bài quá hạn" (/admin/expired-posts): backend chưa có API danh sách cho Admin.
       ['box', 'Danh mục', '/admin/categories'],
       ['shield', 'Từ khóa cấm', '/admin/keywords'],
       ['location', 'Khu vực', '/admin/districts'],
@@ -25,7 +25,7 @@ const sections = [
   {
     label: 'Giao dịch',
     items: [
-      ['transaction', 'Giao dịch', '/admin/transactions'],
+      // Tạm ẩn "Giao dịch" (/admin/transactions): backend chưa có API danh sách giao dịch cho Admin.
       ['shield', 'Khiếu nại', '/admin/complaints'],
       ['activity', 'Cảnh báo bất thường', '/admin/alerts'],
     ],
@@ -52,7 +52,7 @@ export function AdminLayout() {
     <>
       {sections.map((section) => (
         <div key={section.label} className="mb-5">
-          <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-wider text-text-muted">
+          <p className="mb-1.5 px-3 text-2xs font-bold uppercase tracking-wider text-text-secondary">
             {section.label}
           </p>
           {section.items.map(([icon, label, to]) => (
@@ -62,7 +62,7 @@ export function AdminLayout() {
               to={to}
               onClick={() => setOpen(false)}
               className={({ isActive }) =>
-                `mb-0.5 flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition ${isActive ? 'bg-primary text-white' : 'text-text-secondary hover:bg-surface-low hover:text-text-primary'}`
+                `mb-0.5 flex min-h-11 items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition ${isActive ? 'bg-primary text-white' : 'text-text-secondary hover:bg-surface-low hover:text-text-primary'}`
               }
             >
               <Icon name={icon} className="size-[18px]" />
@@ -82,7 +82,9 @@ export function AdminLayout() {
         </div>
         <button
           onClick={() => setOpen(!open)}
-          className="grid size-10 place-items-center rounded-md border border-border bg-white"
+          aria-label={open ? 'Đóng menu quản trị' : 'Mở menu quản trị'}
+          aria-expanded={open}
+          className="grid size-11 place-items-center rounded-md border border-border bg-white text-text-secondary transition hover:border-primary/50 hover:bg-primary-faint hover:text-primary"
         >
           <Icon name={open ? 'close' : 'menu'} className="size-5" />
         </button>
@@ -91,7 +93,7 @@ export function AdminLayout() {
         className={`${open ? 'block' : 'hidden'} h-fit rounded-lg bg-white p-2 ring-1 ring-border/80 lg:sticky lg:top-24 lg:block lg:max-h-[calc(100dvh-120px)] lg:overflow-y-auto`}
       >
         <div className="hidden border-b border-border px-3 pb-4 pt-2 lg:block">
-          <p className="text-[10px] font-bold tracking-wider text-primary">SHARELOOP</p>
+          <p className="text-2xs font-bold tracking-wider text-primary">SHARELOOP</p>
           <p className="mt-1 text-sm font-bold">Operations Console</p>
         </div>
         <nav className="pt-3">{nav}</nav>

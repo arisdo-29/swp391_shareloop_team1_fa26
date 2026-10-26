@@ -1,12 +1,18 @@
 import { memo, useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import browseBanner from '../../assets/browse-banner-shareloop-dark.webp';
-import { Button, ConditionBadge, EmptyState, Icon, ItemImage, TypeBadge } from '../../components/ui';
+import { Button, ConditionBadge, EmptyState, Icon, ItemImage, LoadingState, TypeBadge } from '../../components/ui';
 import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
-import type { Item, ItemCondition, ItemType } from '../../types/domain';
+import type { Item, ItemType } from '../../types/domain';
 import { catalogApi, type CategoryResponse } from '../../services/catalogApi';
-import { itemApi, type ItemResponse } from '../../services/itemApi';
+import {
+  itemApi,
+  type ApiCondition,
+  type ItemResponse,
+  type OfferType,
+  type PageResponse,
+} from '../../services/itemApi';
 import type { ApiError } from '../../services/http';
 import {
   toAreaOptions,
@@ -23,6 +29,8 @@ import {
 import './browse.css';
 
 const PAGE_SIZE = 20;
+// Giá trị hình thức ở thanh địa chỉ (gift, trade) khác tên của API
+const OFFER_TYPE_BY_TYPE: Record<ItemType, OfferType> = { gift: 'GIVE', trade: 'SWAP' };
 const pendingBrowseItemRequests = new Map<string, ReturnType<typeof itemApi.list>>();
 
 function loadBrowseItems(params: Parameters<typeof itemApi.list>[0]) {
@@ -37,6 +45,50 @@ function loadBrowseItems(params: Parameters<typeof itemApi.list>[0]) {
   });
   pendingBrowseItemRequests.set(requestKey, request);
   return request;
+}
+
+async function loadPaginatedBrowseItems(
+  params: Parameters<typeof itemApi.list>[0],
+  page: number,
+  boostedOnly: boolean,
+): Promise<PageResponse<ItemResponse>> {
+  const firstPage = await loadBrowseItems({ ...params, page: 0, size: PAGE_SIZE });
+  const sourceTotalPages =
+    firstPage.totalPages ?? Math.ceil(firstPage.totalElements / (firstPage.size || PAGE_SIZE));
+  const remainingPages = await Promise.all(
+    Array.from({ length: Math.max(0, sourceTotalPages - 1) }, (_, index) =>
+      loadBrowseItems({ ...params, page: index + 1, size: PAGE_SIZE }),
+    ),
+  );
+  const now = Date.now();
+  const uniqueItems = Array.from(
+    new Map(
+      [firstPage.items, ...remainingPages.map((response) => response.items)]
+        .flat()
+        .map((item) => [item.id, item]),
+    ).values(),
+  );
+  const pageItems = boostedOnly
+    ? uniqueItems
+        .filter(
+          (item) =>
+            item.status === 'APPROVED' &&
+            (!item.expireAt || new Date(item.expireAt).getTime() >= now) &&
+            Boolean(item.boostedUntil && new Date(item.boostedUntil).getTime() > now),
+        )
+        .sort((a, b) => b.boostedUntil!.localeCompare(a.boostedUntil!))
+    : uniqueItems;
+  const totalElements = pageItems.length;
+  const totalPages = Math.ceil(totalElements / PAGE_SIZE);
+  const safePage = totalPages ? Math.min(page, totalPages - 1) : 0;
+
+  return {
+    items: pageItems.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE),
+    page: safePage,
+    size: PAGE_SIZE,
+    totalElements,
+    totalPages,
+  };
 }
 
 export function Browse() {
@@ -56,13 +108,15 @@ export function Browse() {
   const categoryId = positiveIntegerParam(params.get('categoryId'));
   const category = categoryId ? String(categoryId) : '';
   const conditionParam = params.get('condition');
-  const condition: ItemCondition | '' = (CONDITIONS as readonly string[]).includes(conditionParam ?? '')
-    ? conditionParam as ItemCondition
+  const condition: ApiCondition | '' = (CONDITIONS as readonly string[]).includes(conditionParam ?? '')
+    ? conditionParam as ApiCondition
     : '';
   const district = params.get('district') ?? '';
+  const boostedOnly = params.get('boosted') === 'true';
   const [mobileFilters, setMobileFilters] = useState(false);
   const [page, setPage] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [sortMode, setSortMode] = useState<'newest' | 'expiring'>('newest');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
@@ -101,27 +155,31 @@ export function Browse() {
     setItemsLoading(true);
     setItemsError('');
     const parsedAreaId = district ? Number(district) : undefined;
-    loadBrowseItems({
+    const requestParams = {
       categoryId,
       areaId:
         parsedAreaId !== undefined && Number.isSafeInteger(parsedAreaId) && parsedAreaId > 0
           ? parsedAreaId
           : undefined,
       q: q.trim() || undefined,
-      page,
-      size: PAGE_SIZE,
-    })
+      condition: condition || undefined,
+      offerType: type ? OFFER_TYPE_BY_TYPE[type] : undefined,
+    };
+    const request = loadPaginatedBrowseItems(requestParams, page, boostedOnly);
+    request
       .then((response) => {
         if (!active) return;
         setItemResponses(response.items);
         setPage(response.page);
         setTotalElements(response.totalElements);
+        setTotalPages(response.totalPages ?? Math.ceil(response.totalElements / PAGE_SIZE));
       })
       .catch((caught) => {
         if (!active) return;
         const apiError = caught as ApiError;
         setItemResponses([]);
         setTotalElements(0);
+        setTotalPages(0);
         setItemsError(apiError.message || 'Không tải được danh sách bài đăng.');
       })
       .finally(() => {
@@ -130,7 +188,7 @@ export function Browse() {
     return () => {
       active = false;
     };
-  }, [categoryId, district, itemsReloadKey, page, q]);
+  }, [boostedOnly, categoryId, condition, district, itemsReloadKey, page, q, type]);
 
   useEffect(() => {
     if (!district || districts.some((area) => String(area.id) === district)) return;
@@ -146,6 +204,7 @@ export function Browse() {
     setPage(0);
   };
 
+  const selectedCategoryName = categories.find((entry) => entry.id === categoryId)?.name;
   const selectedDistrictLabel = districts.find((area) => String(area.id) === district)?.label ?? district;
 
   const items = useMemo(() => {
@@ -154,24 +213,19 @@ export function Browse() {
     return itemResponses.map((item) => toFeItem(item, categoryNames, areaNames));
   }, [categories, districts, itemResponses]);
 
-  const results = useMemo(
-    () =>
-      items
-        .filter((i) => !type || i.type === type)
-        .filter((i) => !condition || i.condition === condition),
-    [items, type, condition],
-  );
+  // Hình thức và tình trạng đã được server lọc, ở đây chỉ sắp xếp trong trang hiện tại
   const sortedResults = useMemo(() => {
-    const next = [...results];
+    const boosted = items.filter((item) => item.boostedUntil && new Date(item.boostedUntil).getTime() > Date.now());
+    const next = items.filter((item) => !item.boostedUntil || new Date(item.boostedUntil).getTime() <= Date.now());
     if (sortMode === 'expiring') {
-      return next.sort((a, b) => {
+      return [...boosted, ...next.sort((a, b) => {
         const aExpiry = a.expiresAt ? new Date(a.expiresAt).getTime() : Number.POSITIVE_INFINITY;
         const bExpiry = b.expiresAt ? new Date(b.expiresAt).getTime() : Number.POSITIVE_INFINITY;
         return aExpiry - bExpiry;
-      });
+      })];
     }
-    return next.sort((a, b) => b.postedAt.localeCompare(a.postedAt));
-  }, [results, sortMode]);
+    return [...boosted, ...next.sort((a, b) => b.postedAt.localeCompare(a.postedAt))];
+  }, [items, sortMode]);
   const reset = () => {
     setParams(resetBrowseSearchParams(params));
     setPage(0);
@@ -184,10 +238,11 @@ export function Browse() {
           clear: () => setFilter('type', ''),
         }
       : null,
-    categoryId
+    // Chưa tải xong danh mục hoặc không tìm thấy tên thì ẩn chip, không hiện id kỹ thuật
+    selectedCategoryName
       ? {
           key: 'category',
-          label: categories.find((entry) => entry.id === categoryId)?.name ?? `Danh mục #${categoryId}`,
+          label: selectedCategoryName,
           clear: () => setFilter('categoryId', ''),
         }
       : null,
@@ -205,7 +260,7 @@ export function Browse() {
 
   const filters = (
     <>
-      <div className="flex h-11 items-center rounded-xl border border-border bg-white px-3 transition hover:border-primary/40 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
+      <div className="flex h-11 items-center rounded-xl border border-border bg-white px-3 transition hover:border-primary/40 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/25">
         <Icon name="search" className="size-4 shrink-0 text-text-muted" />
         <input
           value={q}
@@ -213,7 +268,7 @@ export function Browse() {
             setFilter('q', e.target.value);
           }}
           placeholder="Tìm tên món đồ..."
-          className="min-w-0 flex-1 border-0 bg-transparent px-2.5 text-sm outline-none placeholder:text-text-muted/70"
+          className="min-w-0 flex-1 border-0 bg-transparent px-2.5 text-sm outline-none placeholder:text-text-muted"
         />
       </div>
       {activeFilters.length ? (
@@ -223,7 +278,7 @@ export function Browse() {
               key={filter.key}
               type="button"
               onClick={filter.clear}
-              className="inline-flex min-h-7 max-w-full items-start gap-1.5 rounded-full border border-primary/15 bg-primary-faint px-2.5 py-1.5 text-left text-xs font-semibold leading-4 text-primary transition hover:border-primary/40 hover:bg-primary-soft"
+              className="inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-full border border-primary/15 bg-primary-faint px-2.5 py-1.5 text-left text-xs font-semibold leading-4 text-primary transition hover:border-primary/40 hover:bg-primary-soft"
             >
               <span className="min-w-0 break-words">{filter.label}</span>
               <Icon name="close" className="mt-0.5 size-3 shrink-0" />
@@ -258,9 +313,9 @@ export function Browse() {
             <option key={entry.id} value={entry.id}>{entry.name}</option>
           ))}
         </FilterSelect>
-        {categoryId ? (
+        {selectedCategoryName ? (
           <p className="-mt-1 break-words px-1 text-xs leading-5 text-text-muted">
-            Đã chọn: <span className="font-semibold text-text-secondary">{categories.find((entry) => entry.id === categoryId)?.name ?? `Danh mục #${categoryId}`}</span>
+            Đã chọn: <span className="font-semibold text-text-secondary">{selectedCategoryName}</span>
           </p>
         ) : null}
         <FilterSelect
@@ -294,7 +349,7 @@ export function Browse() {
         {catalogError ? (
           <div className="space-y-2">
             <p className="text-xs text-error">{catalogError}</p>
-            <Button variant="outline" size="sm" onClick={() => setCatalogReloadKey((key) => key + 1)}>
+            <Button variant="outline" onClick={() => setCatalogReloadKey((key) => key + 1)}>
               Thử tải lại
             </Button>
           </div>
@@ -302,7 +357,6 @@ export function Browse() {
       </div>
       <Button
         type="button"
-        size="sm"
         className="browse-filter-apply"
         onClick={() => setMobileFilters(false)}
       >
@@ -359,7 +413,7 @@ export function Browse() {
           <section className="min-w-0" aria-label="Danh sách món đồ">
             <div className="browse-toolbar">
               <p>
-                <strong>{results.length}</strong> món phù hợp
+                <strong>{totalElements}</strong> món phù hợp
               </p>
               <div className="browse-toolbar__controls">
                 <label className="browse-sort">
@@ -398,7 +452,9 @@ export function Browse() {
             </div>
 
             {itemsLoading ? (
-              <EmptyState title="Đang tải bài đăng" text="Vui lòng chờ trong giây lát." />
+              <div role="status" aria-label="Đang tải bài đăng">
+                <LoadingState />
+              </div>
             ) : itemsError ? (
               <EmptyState
                 title="Không tải được bài đăng"
@@ -422,7 +478,7 @@ export function Browse() {
                 }
               />
             )}
-            {!itemsLoading && !itemsError && totalElements > PAGE_SIZE ? (
+            {!itemsLoading && !itemsError && totalPages > 1 ? (
               <div className="browse-pagination">
                 <Button
                   variant="outline"
@@ -432,11 +488,11 @@ export function Browse() {
                   Trang trước
                 </Button>
                 <span>
-                  Trang {page + 1} / {Math.ceil(totalElements / PAGE_SIZE)}
+                  Trang {page + 1} / {totalPages}
                 </span>
                 <Button
                   variant="outline"
-                  disabled={(page + 1) * PAGE_SIZE >= totalElements}
+                  disabled={page + 1 >= totalPages}
                   onClick={() => setPage((current) => current + 1)}
                 >
                   Trang sau

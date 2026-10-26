@@ -256,6 +256,8 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
   - Nếu có truyền `mediaIds`: gọi `MediaService.attach(mediaIds, currentUserId)` và lưu vào `request_media_mappings` với stage `HANDOVER` (FR-86, BR-T09).
   - Bên cho xác nhận -> ghi nhận `donorHandoverAt`.
   - Bên nhận xác nhận -> bắt buộc trả lời `asDescribed` (nếu chọn `false` bắt buộc có lý do); ghi nhận `receiverHandoverAt` và `asDescribed`.
+  - Bên nhận chọn `asDescribed = false`: sau khi giao dịch commit, `RequestService` phát event `NotAsDescribedReportedEvent` (`requestId`, `receiverId`, `reason`) và module report tự mở một report `NOT_AS_DESCRIBED`, mô tả là `notAsDescribedReason` (FR-85, BR-R05, xem [report.md](report.md)). Request không gọi thẳng `ReportService` để tránh vòng phụ thuộc. Lỗi mở report không làm mất câu trả lời của bên nhận, chỉ được ghi log.
+  - Giao dịch đã có report thì job tự hoàn tất sau `auto_confirm_days` ngày bỏ qua, không tự `COMPLETED` (FR-87, BR-T06). Giao dịch ở lại `AWAITING_HANDOVER` cho đến khi bên còn lại tự xác nhận.
   - Một bên xác nhận: Request chuyển sang trạng thái `AWAITING_HANDOVER` (BR-D02).
   - Cả hai bên đều đã xác nhận:
     - Request chuyển sang trạng thái `COMPLETED` và ghi nhận `completedAt`.
@@ -374,8 +376,8 @@ Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (F
 | `donorName` | string? | Họ tên chủ bài đăng. `null` khi tài khoản đã bị xoá. Không kèm email/số điện thoại (BR-T11) |
 | `offeredItemTitle` | string? | Tiêu đề món người xin đề nghị đổi (chỉ yêu cầu `SWAP`) |
 | `receiverTrustStars` | number? | Số sao uy tín của người gửi yêu cầu (TrustStars: 1-5). Alias: `trustStars` (FR-65) |
-| `receiverRank` | string? | Hạng uy tín của người gửi yêu cầu (`BRONZE`, `SILVER`, `GOLD`, `PLATINUM`, `DIAMOND`). Alias: `rank` (FR-65) |
-| `receiverAsDescribedRate` | number? | Tỉ lệ giao dịch đúng mô tả của người gửi yêu cầu (0.00 - 1.00; `null` nếu chưa có giao dịch hoàn tất). Alias: `asDescribedRate` (FR-65) |
+| `receiverRank` | string? | Hạng uy tín của người gửi yêu cầu (`BRONZE`, `SILVER`, `GOLD`, `DIAMOND`). Alias: `rank` (FR-65) |
+| `receiverAsDescribedRate` | number? | Tỉ lệ giao dịch đúng mô tả của người gửi yêu cầu, thang 0.00 - 1.00 (vd `0.92` là 92%). `null` khi có dưới 3 giao dịch hoàn tất đã được đánh giá "đúng mô tả?" (SRS 6.12). Alias: `asDescribedRate` (FR-65) |
 
 ### ScheduleRequest
 

@@ -9,7 +9,7 @@ import { authApi } from '../../services/authApi';
 import { authErrorMessage } from '../../services/authErrors';
 import type { ApiError } from '../../services/http';
 import { fetchSessionUser } from '../../services/session';
-import { validEmail } from '../../utils/passwordSecurity';
+import { validEmail } from '../../utils/validation';
 import './login.css';
 
 export function Login() {
@@ -23,6 +23,7 @@ export function Login() {
   const successNotice = (location.state as { notice?: string } | null)?.notice;
 
   const login = async (inputEmail: string, pass: string) => {
+    if (processing) return;
     const normalized = inputEmail.trim().toLowerCase();
     setError('');
     if (!normalized) {

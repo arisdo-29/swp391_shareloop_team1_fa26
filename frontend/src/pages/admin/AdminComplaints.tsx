@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, EmptyState, PageHeader, Select, TextArea } from '../../components/ui';
+import { Alert, Button, EmptyState, PageHeader, Select, TextArea, SkeletonRows } from '../../components/ui';
+import { DialogFrame } from '../../components/Dialog';
 import {
   reportApi,
   type AdminReportDetail,
@@ -263,7 +264,7 @@ export function AdminComplaints() {
         </Select>
       </div>
       {listLoading ? (
-        <EmptyState title="Đang tải khiếu nại" text="Vui lòng chờ trong giây lát." />
+        <SkeletonRows label="Đang tải khiếu nại" />
       ) : listError ? (
         <div role="alert" className="space-y-3">
           <Alert tone="warning">{listError}</Alert>
@@ -296,7 +297,6 @@ export function AdminComplaints() {
                     <td>{statusLabels[report.status]}</td>
                     <td>
                       <Button
-                        size="sm"
                         variant="outline"
                         disabled={submitting}
                         onClick={() => {
@@ -337,145 +337,138 @@ export function AdminComplaints() {
         <EmptyState title="Không có khiếu nại" text="Không có hồ sơ phù hợp bộ lọc hiện tại." />
       )}
       {selectedId !== null && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="report-detail-title"
-        >
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-6">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 id="report-detail-title" className="section-title">
-                Hồ sơ khiếu nại
-              </h2>
-              <Button variant="ghost" disabled={submitting} onClick={() => setSelectedId(null)}>
-                Đóng
+        <DialogFrame labelledBy="report-detail-title" size="xl">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 id="report-detail-title" className="section-title">
+              Hồ sơ khiếu nại
+            </h2>
+            <Button variant="ghost" disabled={submitting} onClick={() => setSelectedId(null)}>
+              Đóng
+            </Button>
+          </div>
+          {detailLoading && <p role="status">Đang tải hồ sơ…</p>}
+          {detailError && (
+            <div role="alert" className="mb-4 space-y-2">
+              <Alert tone="warning">{detailError}</Alert>
+              <Button disabled={submitting} onClick={() => setReload((value) => value + 1)}>
+                Thử tải lại
               </Button>
             </div>
-            {detailLoading && <p role="status">Đang tải hồ sơ…</p>}
-            {detailError && (
-              <div role="alert" className="mb-4 space-y-2">
-                <Alert tone="warning">{detailError}</Alert>
-                <Button disabled={submitting} onClick={() => setReload((value) => value + 1)}>
-                  Thử tải lại
-                </Button>
+          )}
+          {detail && (
+            <div className="space-y-4 text-sm">
+              <p>
+                Người gửi: {detail.reporter.fullName ?? 'Người dùng'}
+              </p>
+              <p>
+                Người bị báo cáo:{' '}
+                {detail.reportedUser
+                  ? (detail.reportedUser.fullName ?? 'Người dùng')
+                  : 'Không còn xác định được'}
+              </p>
+              <p>
+                Bài đăng liên quan:{' '}
+                {detail.relatedItemId
+                  ? (detail.relatedItemTitle ?? 'Bài đăng đã bị xóa')
+                  : 'Không có'}
+                {' · '}Gắn với giao dịch: {detail.report.requestId ? 'Có' : 'Không'}
+              </p>
+              <p>
+                Trạng thái: {statusLabels[detail.report.status]} · Gửi lúc:{' '}
+                {date(detail.report.createdAt)} · Giai đoạn:{' '}
+                {detail.report.stage === 'BEFORE' ? 'Trước giao dịch' : 'Sau giao dịch'}
+              </p>
+              <div className="rounded-md bg-background p-3">
+                <strong>{reasonLabels[detail.report.reason] ?? detail.report.reason}</strong>
+                <p className="mt-2 whitespace-pre-wrap">{detail.report.description}</p>
               </div>
-            )}
-            {detail && (
-              <div className="space-y-4 text-sm">
-                <p>
-                  Người gửi: {detail.reporter.fullName ?? 'Người dùng'}
+              <EvidenceGallery
+                reportId={detail.report.id}
+                title="Bằng chứng người gửi"
+                evidence={detail.evidence}
+              />
+              <div>
+                <h3 className="font-semibold">Giải trình</h3>
+                <p className="whitespace-pre-wrap">{detail.response ?? 'Chưa có giải trình.'}</p>
+                <p className="text-text-muted">
+                  Thời điểm giải trình: {date(detail.respondedAt)}
                 </p>
-                <p>
-                  Người bị báo cáo:{' '}
-                  {detail.reportedUser
-                    ? (detail.reportedUser.fullName ?? 'Người dùng')
-                    : 'Không còn xác định được'}
-                </p>
-                <p>
-                  Bài đăng liên quan:{' '}
-                  {detail.relatedItemId
-                    ? (detail.relatedItemTitle ?? 'Bài đăng đã bị xóa')
-                    : 'Không có'}
-                  {' · '}Gắn với giao dịch: {detail.report.requestId ? 'Có' : 'Không'}
-                </p>
-                <p>
-                  Trạng thái: {statusLabels[detail.report.status]} · Gửi lúc:{' '}
-                  {date(detail.report.createdAt)} · Giai đoạn:{' '}
-                  {detail.report.stage === 'BEFORE' ? 'Trước giao dịch' : 'Sau giao dịch'}
-                </p>
+              </div>
+              <p>
+                Hạn giải trình:{' '}
+                {detail.responseDueAt
+                  ? date(detail.responseDueAt)
+                  : 'Không có hạn được lưu cho hồ sơ này.'}
+              </p>
+              <EvidenceGallery
+                reportId={detail.report.id}
+                title="Bằng chứng người giải trình"
+                evidence={detail.responseEvidence}
+              />
+              {concluded(detail.report.status) ? (
                 <div className="rounded-md bg-background p-3">
-                  <strong>{reasonLabels[detail.report.reason] ?? detail.report.reason}</strong>
-                  <p className="mt-2 whitespace-pre-wrap">{detail.report.description}</p>
-                </div>
-                <EvidenceGallery
-                  reportId={detail.report.id}
-                  title="Bằng chứng người gửi"
-                  evidence={detail.evidence}
-                />
-                <div>
-                  <h3 className="font-semibold">Giải trình</h3>
-                  <p className="whitespace-pre-wrap">{detail.response ?? 'Chưa có giải trình.'}</p>
-                  <p className="text-text-muted">
-                    Thời điểm giải trình: {date(detail.respondedAt)}
+                  <h3 className="font-semibold">Kết luận đã lưu</h3>
+                  <p className="whitespace-pre-wrap">
+                    {detail.resolution || 'Không có ghi chú.'}
+                  </p>
+                  <p>
+                    {detail.resolvedByName ?? 'Quản trị viên'} đã kết luận · {date(detail.resolvedAt)} · Đã trừ{' '}
+                    {detail.starsDeducted} sao
                   </p>
                 </div>
-                <p>
-                  Hạn giải trình:{' '}
-                  {detail.responseDueAt
-                    ? date(detail.responseDueAt)
-                    : 'Không có hạn được lưu cho hồ sơ này.'}
-                </p>
-                <EvidenceGallery
-                  reportId={detail.report.id}
-                  title="Bằng chứng người giải trình"
-                  evidence={detail.responseEvidence}
-                />
-                {concluded(detail.report.status) ? (
-                  <div className="rounded-md bg-background p-3">
-                    <h3 className="font-semibold">Kết luận đã lưu</h3>
-                    <p className="whitespace-pre-wrap">
-                      {detail.resolution || 'Không có ghi chú.'}
-                    </p>
-                    <p>
-                      {detail.resolvedByName ?? 'Quản trị viên'} đã kết luận · {date(detail.resolvedAt)} · Đã trừ{' '}
-                      {detail.starsDeducted} sao
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <Select
-                      label="Kết luận"
-                      value={decision}
-                      disabled={submitting || confirming}
-                      onChange={(event) => setDecision(event.target.value as ReportDecision)}
-                    >
-                      <option value="UPHOLD">Có cơ sở</option>
-                      <option value="DISMISS">Bác bỏ</option>
-                    </Select>
-                    <TextArea
-                      label="Ghi chú kết luận (tối đa 500 ký tự, không bắt buộc)"
-                      value={note}
-                      maxLength={500}
-                      disabled={submitting || confirming}
-                      onChange={(event) => setNote(event.target.value)}
-                    />
-                    {confirming ? (
-                      <div className="space-y-3 rounded-md bg-background p-3">
-                        <p>
-                          Xác nhận{' '}
-                          {decision === 'UPHOLD'
-                            ? 'khiếu nại có cơ sở và áp dụng chế tài'
-                            : 'bác bỏ khiếu nại'}
-                          ? Kết luận được lưu ngay sau khi gửi.
-                        </p>
-                        <div className="flex gap-2">
-                          <Button disabled={submitting} onClick={() => void submit()}>
-                            {submitting ? 'Đang gửi…' : 'Xác nhận gửi'}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            disabled={submitting}
-                            onClick={() => setConfirming(false)}
-                          >
-                            Quay lại
-                          </Button>
-                        </div>
+              ) : (
+                <>
+                  <Select
+                    label="Kết luận"
+                    value={decision}
+                    disabled={submitting || confirming}
+                    onChange={(event) => setDecision(event.target.value as ReportDecision)}
+                  >
+                    <option value="UPHOLD">Có cơ sở</option>
+                    <option value="DISMISS">Bác bỏ</option>
+                  </Select>
+                  <TextArea
+                    label="Ghi chú kết luận (tối đa 500 ký tự, không bắt buộc)"
+                    value={note}
+                    maxLength={500}
+                    disabled={submitting || confirming}
+                    onChange={(event) => setNote(event.target.value)}
+                  />
+                  {confirming ? (
+                    <div className="space-y-3 rounded-md bg-background p-3">
+                      <p>
+                        Xác nhận{' '}
+                        {decision === 'UPHOLD'
+                          ? 'khiếu nại có cơ sở và áp dụng chế tài'
+                          : 'bác bỏ khiếu nại'}
+                        ? Kết luận được lưu ngay sau khi gửi.
+                      </p>
+                      <div className="flex gap-2">
+                        <Button disabled={submitting} onClick={() => void submit()}>
+                          {submitting ? 'Đang gửi…' : 'Xác nhận gửi'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          disabled={submitting}
+                          onClick={() => setConfirming(false)}
+                        >
+                          Quay lại
+                        </Button>
                       </div>
-                    ) : (
-                      <Button
-                        disabled={submitting || note.length > 500}
-                        onClick={() => setConfirming(true)}
-                      >
-                        Kết luận
-                      </Button>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+                    </div>
+                  ) : (
+                    <Button
+                      disabled={submitting || note.length > 500}
+                      onClick={() => setConfirming(true)}
+                    >
+                      Kết luận
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </DialogFrame>
       )}
     </section>
   );

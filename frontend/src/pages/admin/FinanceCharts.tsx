@@ -2,11 +2,11 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { formatVnd } from '../../utils/formatting';
 import type { DailyCash } from '../../services/adminFinanceApi';
 
-// Màu lấy từ token trong tailwind.config.js: primary, secondary, info. Mỗi biểu đồ chỉ có một chuỗi
+// Màu lấy từ biến CSS trong globals.css (cùng giá trị token primary, secondary, info). Mỗi biểu đồ chỉ có một chuỗi
 // nên không cần bảng màu phân loại, nhãn nằm ngay trên trục nên không phụ thuộc vào màu.
-const CHART_COLORS = { credit: '#145C4E', debit: '#B85C35', cash: '#356A8A' } as const;
-const AXIS_INK = '#46534F';
-const GRID_LINE = '#D7DEDB';
+const CHART_COLORS = { credit: 'var(--color-primary)', debit: 'var(--color-secondary)', cash: 'var(--color-info)' } as const;
+const AXIS_INK = 'var(--color-text-secondary)';
+const GRID_LINE = 'var(--color-border)';
 const AXIS_FONT = 12;
 
 export interface ChartRow {
@@ -76,7 +76,7 @@ export function CreditByTypeChart({
             axisLine={false}
             tickLine={false}
           />
-          <Tooltip cursor={{ fill: '#F0F3F2' }} content={<ChartTooltip unit="Credit" />} />
+          <Tooltip cursor={{ fill: 'var(--color-surface-low)' }} content={<ChartTooltip unit="Credit" />} />
           <Bar dataKey="value" fill={CHART_COLORS[tone]} radius={[0, 4, 4, 0]} maxBarSize={20} />
         </BarChart>
       </ResponsiveContainer>
@@ -129,7 +129,7 @@ export function CashByDayChart({ days }: { days: DailyCash[] }) {
             axisLine={false}
             tickLine={false}
           />
-          <Tooltip cursor={{ fill: '#F0F3F2' }} content={<VndTooltip />} />
+          <Tooltip cursor={{ fill: 'var(--color-surface-low)' }} content={<VndTooltip />} />
           <Bar dataKey="value" fill={CHART_COLORS.cash} radius={[4, 4, 0, 0]} maxBarSize={28} />
         </BarChart>
       </ResponsiveContainer>

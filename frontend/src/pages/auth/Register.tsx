@@ -7,7 +7,7 @@ import {
   validEmail,
   validVietnamPhone,
   validatePassword,
-} from '../../utils/passwordSecurity';
+} from '../../utils/validation';
 import { authApi } from '../../services/authApi';
 import { authErrorMessage } from '../../services/authErrors';
 import type { ApiError } from '../../services/http';
@@ -23,6 +23,7 @@ export function Register() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (processing) return;
     const nextErrors: Record<string, string> = {};
     const trimmedName = name.trim();
     const trimmedEmail = email.trim().toLowerCase();
@@ -60,7 +61,8 @@ export function Register() {
       });
     } catch (apiError) {
       const error = apiError as ApiError;
-      const field = error.field === 'fullName' ? 'name' : error.field;
+      // Backend không gắn field cho lỗi trùng số điện thoại nên chỉ về đúng ô nhập bằng mã lỗi.
+      const field = error.code === 'AUTH_PHONE_ALREADY_USED' ? 'phone' : error.field === 'fullName' ? 'name' : error.field;
       setErrors(
         field && ['name', 'email', 'phone', 'password'].includes(field)
           ? { [field]: authErrorMessage(error) }
@@ -125,7 +127,7 @@ export function Register() {
         </div>
         <p className="mt-6 text-center text-sm text-text-muted">
           Đã có tài khoản?{' '}
-          <Link to="/login" className="font-semibold text-primary">
+          <Link to="/login" className="inline-flex min-h-11 items-center font-semibold text-primary hover:text-primary-hover hover:underline">
             Đăng nhập
           </Link>
         </p>

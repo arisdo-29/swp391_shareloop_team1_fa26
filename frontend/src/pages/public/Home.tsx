@@ -12,6 +12,7 @@ import {
   SearchField,
   TypeBadge,
 } from '../../components/ui';
+import { DialogFrame } from '../../components/Dialog';
 import type { Item, ItemType, User } from '../../types/domain';
 import { catalogApi } from '../../services/catalogApi';
 import type { AreaResponse, CategoryResponse } from '../../services/catalogApi';
@@ -29,6 +30,7 @@ const newItemFilters: Array<{ value: 'all' | ItemType; label: string }> = [
 ];
 
 let pendingHomeItemsRequest: Promise<PageResponse<ItemResponse>> | null = null;
+let pendingHomeFeaturedItemsRequest: Promise<ItemResponse[]> | null = null;
 
 function loadHomeItems() {
   if (pendingHomeItemsRequest) return pendingHomeItemsRequest;
@@ -37,6 +39,27 @@ function loadHomeItems() {
     if (pendingHomeItemsRequest === request) pendingHomeItemsRequest = null;
   });
   pendingHomeItemsRequest = request;
+  return request;
+}
+
+function loadHomeFeaturedItems() {
+  if (pendingHomeFeaturedItemsRequest) return pendingHomeFeaturedItemsRequest;
+
+  const request = loadHomeItems()
+    .then(async (firstPage) => {
+      const totalPages =
+        firstPage.totalPages ?? Math.ceil(firstPage.totalElements / (firstPage.size || 100));
+      const remainingPages = await Promise.all(
+        Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) =>
+          itemApi.list({ page: index + 1, size: 100 }),
+        ),
+      );
+      return [firstPage.items, ...remainingPages.map((response) => response.items)].flat();
+    })
+    .finally(() => {
+      if (pendingHomeFeaturedItemsRequest === request) pendingHomeFeaturedItemsRequest = null;
+    });
+  pendingHomeFeaturedItemsRequest = request;
   return request;
 }
 
@@ -82,7 +105,15 @@ function HomeSection({ children, className = '' }: { children: ReactNode; classN
   );
 }
 
-function HomeProductCard({ item, owner, tradeFor }: { item: Item; owner?: User; tradeFor?: string }) {
+function HomeProductCard({
+  item,
+  owner,
+  tradeFor,
+}: {
+  item: Item;
+  owner?: User;
+  tradeFor?: string;
+}) {
   return (
     <Link to={`/items/${item.id}`} className="home-product-card group">
       <div className="home-product-card-image">
@@ -113,7 +144,7 @@ function HomeProductCard({ item, owner, tradeFor }: { item: Item; owner?: User; 
           <span className="min-w-0 truncate">{owner.name}</span>
         </p>
       ) : null}
-        <div className="home-product-card-footer"><span><Icon name="location" className="size-4" />{item.district}</span><span><Icon name="star" className="size-4 text-warning" weight="fill" />{owner?.reputationStars ?? 5}</span></div>
+        <div className="home-product-card-footer"><span><Icon name="location" className="size-4" />{item.district}</span>{owner ? <span><Icon name="star" className="size-4 text-warning" weight="fill" />{owner.reputationStars}</span> : null}</div>
         <span className="home-product-card-link">Xem chi tiết <Icon name="arrow" className="size-3.5" /></span>
       </div>
     </Link>
@@ -214,7 +245,7 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
 
           <Link
             to={`/items/${activeItem.id}`}
-            className="group relative block h-[300px] overflow-hidden rounded-xl bg-black/20 shadow-[0_24px_70px_rgba(0,0,0,0.32)] ring-1 ring-white/20 sm:h-[380px] lg:h-[430px]"
+            className="group relative block h-[300px] overflow-hidden rounded-xl bg-black/20 shadow-lg ring-1 ring-white/20 sm:h-[380px] lg:h-[430px]"
             aria-label={`Xem chi tiết ${activeItem.title}`}
           >
             {slides.map((item, index) => (
@@ -292,6 +323,7 @@ export function Home() {
   const currentUser = useAppSelector(selectCurrentUser);
   const navigate = useNavigate();
   const [itemResponses, setItemResponses] = useState<ItemResponse[]>([]);
+  const [featuredItemResponses, setFeaturedItemResponses] = useState<ItemResponse[]>([]);
   const [categoryResponses, setCategoryResponses] = useState<CategoryResponse[]>([]);
   const [areaResponses, setAreaResponses] = useState<AreaResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -315,13 +347,16 @@ export function Home() {
       if (active) setAreaResponses(areaData);
     }).catch(() => undefined);
 
-    void loadHomeItems()
-      .then((response) => {
-        if (active) setItemResponses(response.items);
+    void Promise.all([loadHomeItems(), loadHomeFeaturedItems()])
+      .then(([response, featuredResponses]) => {
+        if (!active) return;
+        setItemResponses(response.items);
+        setFeaturedItemResponses(featuredResponses);
       })
       .catch((caught: { message?: string }) => {
         if (!active) return;
         setItemResponses([]);
+        setFeaturedItemResponses([]);
         setLoadError(caught.message || 'Không tải được bài đăng.');
       })
       .finally(() => {
@@ -344,23 +379,38 @@ export function Home() {
     () => itemResponses.map((entry) => toFeItem(entry, categoryNameMap, areaNameMap)),
     [areaNameMap, categoryNameMap, itemResponses],
   );
+  const featuredItems = useMemo(
+    () => featuredItemResponses.map((entry) => toFeItem(entry, categoryNameMap, areaNameMap)),
+    [areaNameMap, categoryNameMap, featuredItemResponses],
+  );
 
   const approved = useMemo(
     () =>
       items
         .filter((item) => item.status === 'approved' || item.status === 'APPROVED')
         .filter((item) => !item.expiresAt || new Date(item.expiresAt).getTime() >= Date.now())
-        .sort((a, b) => b.postedAt.localeCompare(a.postedAt)),
+        .sort((a, b) => {
+          const aBoosted = Boolean(a.boostedUntil && new Date(a.boostedUntil).getTime() > Date.now());
+          const bBoosted = Boolean(b.boostedUntil && new Date(b.boostedUntil).getTime() > Date.now());
+          return Number(bBoosted) - Number(aBoosted) || b.postedAt.localeCompare(a.postedAt);
+        }),
     [items],
   );
   const gifts = approved.filter((item) => item.type === 'gift');
-  const trades = approved.filter((item) => item.type === 'trade');
+  const newestApproved = [...approved].sort((a, b) => b.postedAt.localeCompare(a.postedAt));
+  const trades = newestApproved.filter((item) => item.type === 'trade');
   const newItems = (
     newItemFilter === 'all'
-      ? approved
-      : approved.filter((item) => item.type === newItemFilter)
+      ? newestApproved
+      : newestApproved.filter((item) => item.type === newItemFilter)
   ).slice(0, 5);
-  const featured = approved.slice(0, 8);
+  const boostedItems = featuredItems
+    .filter((item) => item.status === 'approved' || item.status === 'APPROVED')
+    .filter((item) => !item.expiresAt || new Date(item.expiresAt).getTime() >= Date.now())
+    .filter((item) => item.boostedUntil && new Date(item.boostedUntil).getTime() > Date.now())
+    .sort((a, b) => b.boostedUntil!.localeCompare(a.boostedUntil!));
+  const heroItems = boostedItems.filter((item) => item.images.length > 0).slice(0, 8);
+  const featured = boostedItems.slice(0, 5);
   const districtCounts = districtOptions.slice(0, 6).map((area) => ({
     name: area.label,
     id: area.id,
@@ -385,7 +435,7 @@ export function Home() {
 
   return (
     <div className="home-page pb-12 sm:pb-16">
-      <HomeHeroCarousel items={approved}>
+      <HomeHeroCarousel items={heroItems}>
         <div className="max-w-2xl">
           <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-fixed">
             Cộng đồng cho tặng và trao đổi tại TP.HCM
@@ -439,11 +489,11 @@ export function Home() {
 
       {loading || loadError ? (
         <div className="home-inner py-5">
-          <div className={`rounded-lg p-4 text-sm ${loadError ? 'bg-red-50 text-error' : 'bg-primary-faint text-primary'}`}>
+          <div role={loadError ? 'alert' : 'status'} className={`rounded-lg p-4 text-sm ${loadError ? 'bg-error-soft text-error' : 'bg-primary-faint text-primary'}`}>
             {loadError ? (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span>{loadError}</span>
-                <Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Thử lại</Button>
+                <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Thử lại</Button>
               </div>
             ) : 'Đang tải bài đăng mới nhất...'}
           </div>
@@ -475,7 +525,7 @@ export function Home() {
         </HomeSection>
 
         <HomeSection className="home-band">
-          <SectionHeading title="Món đồ mới trong cộng đồng" description="Những món đồ vừa được chia sẻ và đang chờ một vòng đời mới." href="/browse" />
+          <SectionHeading title="Món đồ mới" description="Những món đồ vừa được chia sẻ và đang chờ một vòng đời mới." href="/browse" />
           <div className="home-new-filters" role="tablist" aria-label="Lọc món đồ mới">
             {newItemFilters.map((filter) => (
               <button
@@ -497,9 +547,9 @@ export function Home() {
         </HomeSection>
 
         <HomeSection className="home-band">
-          <SectionHeading title="Được quan tâm trong cộng đồng" description="Những món đồ nổi bật đang sẵn sàng cho một kết nối mới." href="/browse" />
-          <div className="home-product-grid">
-            {featured.slice(0, 5).map((item) => (
+          <SectionHeading title="Tin nổi bật" description="Những món đồ nổi bật đang sẵn sàng cho một kết nối mới." href="/browse?boosted=true" />
+          <div className="home-product-grid home-new-items-grid">
+            {featured.map((item) => (
               <HomeProductCard key={item.id} item={item} />
             ))}
           </div>
@@ -585,21 +635,15 @@ export function Home() {
 
       </HomeMotion>
       {loginPromptOpen ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="w-full rounded-t-xl bg-white p-5 text-text-primary shadow-lg sm:max-w-md sm:rounded-xl sm:p-6"
-          >
-            <h2 className="text-xl font-bold">Bạn cần đăng nhập để đăng đồ.</h2>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setLoginPromptOpen(false)}>
-                Để sau
-              </Button>
-              <Button onClick={() => navigate('/login')}>Đăng nhập</Button>
-            </div>
+        <DialogFrame size="sm" className="text-text-primary">
+          <h2 className="text-xl font-bold">Bạn cần đăng nhập để đăng đồ.</h2>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setLoginPromptOpen(false)}>
+              Để sau
+            </Button>
+            <Button onClick={() => navigate('/login')}>Đăng nhập</Button>
           </div>
-        </div>
+        </DialogFrame>
       ) : null}
     </div>
   );

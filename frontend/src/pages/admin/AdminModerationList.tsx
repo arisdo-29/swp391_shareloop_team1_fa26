@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Alert, Button, EmptyState, PageHeader, SearchField } from '../../components/ui';
+import { Alert, Button, EmptyState, PageHeader, SearchField, SkeletonRows } from '../../components/ui';
 import { adminModerationApi, type ReviewQueueItem } from '../../services/adminModerationApi';
 import { adminErrorMessage } from './adminErrors';
 import { displayFlag, displayModerationNote, displayRisk } from './moderationDisplay';
@@ -80,14 +80,14 @@ export function AdminModerationList() {
       {error ? (
         <div className="mb-4 space-y-3">
           <Alert tone="error">{error}</Alert>
-          <Button variant="outline" size="sm" onClick={() => setReloadKey((key) => key + 1)}>
+          <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
             Thử tải lại
           </Button>
         </div>
       ) : null}
 
       {loading ? (
-        <EmptyState title="Đang tải bài chờ duyệt" text="Vui lòng chờ trong giây lát." />
+        <SkeletonRows label="Đang tải bài chờ duyệt" />
       ) : rows.length ? (
         <div className="table-wrap">
           <table className="data-table">
@@ -130,7 +130,7 @@ function QueueRow({ item }: { item: ReviewQueueItem }) {
         {flag || note ? (
           <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
             {flag ? (
-              <span className="rounded-sm bg-red-50 px-2 py-1 font-semibold text-error">{flag}</span>
+              <span className="rounded-sm bg-error-soft px-2 py-1 font-semibold text-error">{flag}</span>
             ) : null}
             {note && note !== flag ? <span className="text-text-secondary">{note}</span> : null}
           </p>
@@ -144,7 +144,7 @@ function QueueRow({ item }: { item: ReviewQueueItem }) {
       <td className="whitespace-nowrap text-xs">{new Date(item.createdAt).toLocaleString('vi-VN')}</td>
       <td className="text-right">
         <Link to={`/admin/moderation/${item.id}`}>
-          <Button size="sm">Xem chi tiết & duyệt</Button>
+          <Button>Xem chi tiết & duyệt</Button>
         </Link>
       </td>
     </tr>

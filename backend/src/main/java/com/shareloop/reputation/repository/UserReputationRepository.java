@@ -29,7 +29,8 @@ public interface UserReputationRepository extends JpaRepository<UserReputation, 
      * Lấy thông tin hai bên tham gia giao dịch và loại yêu cầu (Cho hoặc Trao đổi) khi hoàn tất.
      */
     @Query(value = """
-            SELECT i.donor_id AS donorId, r.receiver_id AS receiverId, r.type AS type, r.status AS status
+            SELECT i.donor_id AS donorId, r.receiver_id AS receiverId, r.type AS type, r.status AS status,
+                   i.id AS itemId, i.title AS itemTitle
             FROM requests r
             JOIN items i ON r.item_id = i.id
             WHERE r.id = :requestId
@@ -114,4 +115,16 @@ public interface UserReputationRepository extends JpaRepository<UserReputation, 
             WHERE i.donor_id = :userId AND r.status = 'COMPLETED'
             """, nativeQuery = true)
     Double calculateAsDescribedRate(@Param("userId") Long userId);
+
+    /**
+     * Đếm số giao dịch COMPLETED mà người dùng làm chủ bài và bên nhận đã trả lời "đúng mô tả?". Dùng để chỉ hiện tỉ lệ
+     * đúng mô tả khi đủ số giao dịch tối thiểu (SRS 6.12).
+     */
+    @Query(value = """
+            SELECT COUNT(*)
+            FROM requests r
+            JOIN items i ON r.item_id = i.id
+            WHERE i.donor_id = :userId AND r.status = 'COMPLETED' AND r.as_described IS NOT NULL
+            """, nativeQuery = true)
+    long countRatedCompletedAsDonor(@Param("userId") Long userId);
 }

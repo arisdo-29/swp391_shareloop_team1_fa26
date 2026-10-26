@@ -9,7 +9,7 @@ export const demoPaymentEnabled =
 export const demoPaymentUnavailableMessage =
   'Thanh toán thử nghiệm chưa được bật trong môi trường này.';
 export const backendMockProviderMessage =
-  'Backend đang cấu hình cổng thanh toán thử nghiệm. Vui lòng chuyển cấu hình Backend sang MANUAL hoặc VNPAY để nạp Credit.';
+  'Cổng thanh toán chưa sẵn sàng nên chưa thể nạp Credit lúc này. Vui lòng thử lại sau hoặc liên hệ quản trị viên.';
 
 const confirmationAttempts = new Map<string, Promise<TopUpConfirmResponse>>();
 

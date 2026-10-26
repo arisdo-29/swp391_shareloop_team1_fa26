@@ -9,8 +9,19 @@
   --color-background: #f5f7f6;
   --color-surface: #fff;
   --color-text-primary: #17211e;
-  --color-text-muted: #73807b;
+  --color-text-muted: #5f6b66;
   --color-border: #d7dedb;
+  --color-secondary: #b85c35;
+  --color-info: #356a8a;
+  --color-text-secondary: #46534f;
+  --color-surface-low: #f0f3f2;
+  --color-primary-fixed: #cde4dc;
+  --color-primary-hover: #0f4a3f;
+  --color-primary-soft: #e7f1ed;
+  --color-secondary-soft: #f8ede8;
+  --color-surface-container: #e5eae8;
+  --color-primary-faint: #f2f7f5;
+  --color-secondary-hover: #984629;
   color-scheme: light;
   font-synthesis: none;
 }
@@ -48,11 +59,11 @@ img {
   max-width: 100%;
 }
 ::selection {
-  background: #cde4dc;
-  color: #0f4a3f;
+  background: var(--color-primary-fixed);
+  color: var(--color-primary-hover);
 }
 :focus-visible {
-  outline: 3px solid rgba(20, 92, 78, 0.2);
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 

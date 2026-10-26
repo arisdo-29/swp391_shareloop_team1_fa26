@@ -16,6 +16,8 @@ export interface ItemListParams {
   q?: string;
   categoryId?: number;
   areaId?: number;
+  condition?: ApiCondition;
+  offerType?: OfferType;
   page?: number;
   size?: number;
 }
@@ -25,6 +27,7 @@ export interface PageResponse<T> {
   page: number;
   size: number;
   totalElements: number;
+  totalPages?: number;
 }
 
 export type OfferType = 'GIVE' | 'SWAP';
@@ -68,6 +71,10 @@ export interface ItemResponse extends CreateItemRequest {
   updatedAt: string;
   expireAt: string | null;
   boostedUntil: string | null;
+  donorName?: string | null;
+  donorTrustStars?: number | null;
+  donorRank?: string | null;
+  donorAsDescribedRate?: number | null;
 }
 
 // Contract: docs/api/listingfee.md (GET /api/v1/items/{id}/edit-quote)
@@ -115,6 +122,8 @@ export function itemListUrl(params: ItemListParams = {}): string {
   if (params.q !== undefined) query.set('q', params.q);
   if (params.categoryId !== undefined) query.set('categoryId', String(params.categoryId));
   if (params.areaId !== undefined) query.set('areaId', String(params.areaId));
+  if (params.condition !== undefined) query.set('condition', params.condition);
+  if (params.offerType !== undefined) query.set('offerType', params.offerType);
   if (params.page !== undefined) query.set('page', String(params.page));
   if (params.size !== undefined) query.set('size', String(params.size));
   return query.size ? `${itemApiEndpoints.list}?${query}` : itemApiEndpoints.list;

@@ -101,8 +101,12 @@ sau khi gắn chuyển `ATTACHED`, `PRIVATE`. Lỗi media rollback cả việc t
 Khi báo cáo `REQUEST`, cả `POST /reports` và `POST /requests/{requestId}/disputes` dùng
 cùng luồng kiểm tra giao dịch `COMPLETED`, người tham gia, cửa sổ khiếu nại và chống gửi lặp.
 Hệ thống lưu người bị báo cáo, ID bài và `responseDueAt`, chuyển `AWAITING_RESPONSE`.
-Ưu tiên các khoá `DISPUTE_WINDOW_DAYS`/`DISPUTE_RESPONSE_DAYS` của contract dispute;
-nếu không có thì đọc `ConfigKey.COMPLAINT_WINDOW_DAYS`/`RESPONSE_WINDOW_DAYS`.
+Hạn khiếu nại và hạn giải trình đọc thẳng `ConfigKey.COMPLAINT_WINDOW_DAYS` (`complaint_window_days`, mặc định 7)
+và `ConfigKey.RESPONSE_WINDOW_DAYS` (`response_window_days`, mặc định 3), đúng key trang Admin sửa.
+Khoá viết hoa cũ `DISPUTE_WINDOW_DAYS`/`DISPUTE_RESPONSE_DAYS` không còn được đọc.
+Thông báo `DISPUTE_OPENED` và `ITEM_AUTO_HIDDEN` gọi bằng tên bài (vd `Giao dịch “Nồi cơm điện” bị khiếu nại`), không dùng `#id`.
+Ghi chú mặc định khi Admin kết luận mà không nhập ghi chú: `Bác bỏ báo cáo về “<tên bài>”`,
+`Chấp thuận báo cáo về “<tên bài>”, xử phạt trừ 1 sao uy tín` (báo cáo người dùng không có bài thì bỏ phần “về …”).
 Cả hai luồng dùng Clock được inject. Báo cáo `ITEM` lưu thêm ID chủ bài để giữ danh tính đối tượng.
 
 `POST /api/v1/reports/{reportId}/response` yêu cầu Bearer JWT của bên bị báo cáo:
@@ -118,6 +122,23 @@ giải trình lần hai, sau hạn, hoặc khi hồ sơ không còn `AWAITING_RE
 Endpoint `POST /disputes/{disputeId}/response` hiện có vẫn nhận `{note, evidenceMediaIds}`,
 trả `200` và giữ các mã lỗi `DISPUTE_*` riêng. Cả hai endpoint đều gắn bằng chứng riêng tư
 qua cùng gateway và chuyển `AWAITING_RESPONSE` về `OPEN` sau khi giải trình, đúng mục 5 (Sơ đồ trạng thái) trong Luồng hoạt động & ERD.
+
+### Report tự mở khi bên nhận chọn "Không đúng mô tả" (FR-85, BR-R05)
+
+Không có endpoint mới. Khi bên nhận gọi `POST /api/v1/requests/{id}/confirm-handover` với `asDescribed = false`,
+module request phát event `NotAsDescribedReportedEvent`. Listener trong module report
+(`@TransactionalEventListener(AFTER_COMMIT)`, chạy trong transaction mới) gọi
+`ReportService.openNotAsDescribedReport(receiverId, requestId, reason)`:
+
+- Tạo đúng 1 report: `targetType = REQUEST`, `reason = NOT_AS_DESCRIBED`, `stage = AFTER`, `status = AWAITING_RESPONSE`,
+  `description` là lý do bên nhận nhập, `targetUserId` là chủ bài, `responseDueAt` theo `DISPUTE_RESPONSE_DAYS`.
+  Không thêm bảng hay cột.
+- Khác `POST /requests/{requestId}/disputes`: không đòi giao dịch đã `COMPLETED` và không xét cửa sổ khiếu nại
+  7 ngày, vì bên nhận có thể trả lời khi giao dịch còn `AWAITING_HANDOVER`.
+- Chống trùng: bên nhận đã có report `REQUEST` cho giao dịch này thì bỏ qua, không lỗi.
+- Gửi thông báo `DISPUTE_OPENED` cho chủ bài, dẫn tới `/me/disputes/{reportId}` để giải trình.
+- Chủ bài và Admin xử lý như khiếu nại thường (`POST /disputes/{disputeId}/response`, `.../conclude`).
+- `ReportService.hasReportForRequest(requestId)` cho job tự hoàn tất ở module request bỏ qua giao dịch đã có report (FR-87).
 
 Lỗi ghi bổ sung: `400 VALIDATION_FAILED`; `403 REPORT_NOT_PARTICIPANT` (giải trình qua `/reports`)
 hoặc `DISPUTE_NOT_A_PARTY` (tạo báo cáo `REQUEST`);

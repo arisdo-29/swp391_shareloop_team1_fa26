@@ -7,7 +7,7 @@ import { adminAnomalyApi } from '../../services/adminAnomalyApi';
 import { AdminAnomalyContent } from './AdminAnomalyContent';
 
 vi.mock('../../services/adminAnomalyApi', () => ({
-  adminAnomalyApi: { getReport: vi.fn() },
+  adminAnomalyApi: { report: vi.fn() },
 }));
 
 afterEach(() => {
@@ -17,7 +17,7 @@ afterEach(() => {
 
 describe('AdminAnomalyContent', () => {
   it('hiển thị các cặp giao dịch lặp từ Backend', async () => {
-    vi.mocked(adminAnomalyApi.getReport).mockResolvedValue({
+    vi.mocked(adminAnomalyApi.report).mockResolvedValue({
       generatedAt: '2026-10-22T03:00:00Z',
       pairWindowDays: 90,
       pairThreshold: 5,
@@ -36,11 +36,11 @@ describe('AdminAnomalyContent', () => {
     expect(await screen.findByText('Nguyễn Văn An')).toBeTruthy();
     expect(screen.getByText('Trần Thị Bình')).toBeTruthy();
     expect(screen.getByText('6')).toBeTruthy();
-    expect(adminAnomalyApi.getReport).toHaveBeenCalledOnce();
+    expect(adminAnomalyApi.report).toHaveBeenCalledOnce();
   });
 
   it('hiển thị trạng thái rỗng khi Backend không trả cảnh báo', async () => {
-    vi.mocked(adminAnomalyApi.getReport).mockResolvedValue({
+    vi.mocked(adminAnomalyApi.report).mockResolvedValue({
       generatedAt: '2026-10-22T03:00:00Z',
       pairWindowDays: 90,
       pairThreshold: 5,
@@ -54,7 +54,7 @@ describe('AdminAnomalyContent', () => {
 
   it('hiển thị lỗi phân quyền và cho phép tải lại', async () => {
     const user = userEvent.setup();
-    vi.mocked(adminAnomalyApi.getReport)
+    vi.mocked(adminAnomalyApi.report)
       .mockRejectedValueOnce({ status: 403 })
       .mockResolvedValueOnce({
         generatedAt: '2026-10-22T03:00:00Z',
@@ -67,6 +67,6 @@ describe('AdminAnomalyContent', () => {
 
     expect(await screen.findByText('Tài khoản hiện tại không có quyền xem cảnh báo bất thường.')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Thử tải lại' }));
-    await waitFor(() => expect(adminAnomalyApi.getReport).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(adminAnomalyApi.report).toHaveBeenCalledTimes(2));
   });
 });

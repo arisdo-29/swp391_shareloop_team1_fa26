@@ -24,6 +24,7 @@ import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestMediaMapping;
 import com.shareloop.request.entity.RequestStatus;
+import com.shareloop.request.event.NotAsDescribedReportedEvent;
 import com.shareloop.request.mapper.RequestMapper;
 import com.shareloop.request.repository.RequestMediaRepository;
 import com.shareloop.request.repository.RequestRepository;
@@ -38,6 +39,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,6 +68,7 @@ public class RequestService {
     private final JdbcClient jdbcClient;
     private final MediaService mediaService;
     private final RequestMediaRepository requestMediaRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Autowired
     public RequestService(
@@ -78,7 +81,8 @@ public class RequestService {
             @Autowired(required = false) ReputationService reputationService,
             @Autowired(required = false) JdbcClient jdbcClient,
             @Autowired(required = false) MediaService mediaService,
-            @Autowired(required = false) RequestMediaRepository requestMediaRepository) {
+            @Autowired(required = false) RequestMediaRepository requestMediaRepository,
+            @Autowired(required = false) ApplicationEventPublisher eventPublisher) {
         this.requestRepository = requestRepository;
         this.notificationService = notificationService;
         this.configService = configService;
@@ -89,6 +93,7 @@ public class RequestService {
         this.jdbcClient = jdbcClient;
         this.mediaService = mediaService;
         this.requestMediaRepository = requestMediaRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     public RequestService(
@@ -110,6 +115,7 @@ public class RequestService {
                 reputationService,
                 jdbcClient,
                 null,
+                null,
                 null);
     }
 
@@ -129,6 +135,7 @@ public class RequestService {
                 userService,
                 null,
                 jdbcClient,
+                null,
                 null,
                 null);
     }
@@ -320,7 +327,7 @@ public class RequestService {
                         "REQUEST_REJECTED",
                         "Yêu cầu không được chọn",
                         "Chủ bài đã chọn người nhận khác cho món đồ này.",
-                        "/items/" + selectedRequest.getItemId());
+                        "/requests/" + other.getId());
             }
         }
 
@@ -337,7 +344,7 @@ public class RequestService {
                             "REQUEST_CANCELLED",
                             "Yêu cầu trao đổi bị huỷ",
                             "Món đồ bạn đề nghị đã được chọn trong một giao dịch khác.",
-                            "/items/" + otherSwap.getItemId());
+                            "/requests/" + otherSwap.getId());
                 }
             }
         }
@@ -561,6 +568,13 @@ public class RequestService {
 
         request.confirmHandover(isDonor, asDescribed, Instant.now());
         Request saved = requestRepository.save(request);
+
+        // Chọn "Không đúng mô tả" thì báo cho module report mở report (BR-R05). Event chỉ được xử lý sau khi
+        // giao dịch này commit, nên lỗi mở report không làm mất câu trả lời của người nhận.
+        if (Boolean.FALSE.equals(asDescribed) && eventPublisher != null) {
+            eventPublisher.publishEvent(new NotAsDescribedReportedEvent(
+                    requestId, currentUserId, requestDto.notAsDescribedReason().trim()));
+        }
 
         long otherUserId = isDonor ? request.getReceiverId() : item.donorId();
 

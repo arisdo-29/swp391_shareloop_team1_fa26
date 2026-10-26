@@ -67,6 +67,54 @@ class ItemPublicApiIT extends IntegrationTest {
     }
 
     @Test
+    void boostedItemsLeadEachFilteredPageWithoutDuplicates() throws Exception {
+        long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long areaId = jdbc.sql("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long userId = jdbc.sql(
+                        "INSERT INTO users (email, password_hash, full_name, phone, status) "
+                                + "VALUES ('boost-list-test@shareloop.local', 'unused', 'Test', '0900000777', 'ACTIVE') RETURNING id")
+                .query(Long.class)
+                .single();
+        for (int number = 0; number < 7; number++) {
+            Item item = item(userId, categoryId, areaId, "Bài boost-filter-unique " + number);
+            item.approve();
+            items.saveAndFlush(item);
+            if (number < 4) {
+                jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP + INTERVAL '1 day' WHERE id = :id")
+                        .param("id", item.getId())
+                        .update();
+            }
+        }
+
+        mvc.perform(get("/api/v1/items")
+                        .param("q", "boost-filter-unique")
+                        .param("page", "0")
+                        .param("size", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(7))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.items.length()").value(4))
+                .andExpect(jsonPath("$.items[0].title").value("Bài boost-filter-unique 3"))
+                .andExpect(jsonPath("$.items[1].title").value("Bài boost-filter-unique 2"))
+                .andExpect(jsonPath("$.items[2].title").value("Bài boost-filter-unique 1"))
+                .andExpect(jsonPath("$.items[0].boostedUntil").isNotEmpty())
+                .andExpect(jsonPath("$.items[1].boostedUntil").isNotEmpty())
+                .andExpect(jsonPath("$.items[2].boostedUntil").isNotEmpty());
+        mvc.perform(get("/api/v1/items")
+                        .param("q", "boost-filter-unique")
+                        .param("page", "1")
+                        .param("size", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(3))
+                .andExpect(jsonPath("$.items[0].title").value("Bài boost-filter-unique 0"))
+                .andExpect(jsonPath("$.items[0].boostedUntil").isNotEmpty());
+    }
+
+    @Test
     void searchIgnoresAccentsAndCombinesCategoryAndAreaFilters() throws Exception {
         long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
                 .query(Long.class)
@@ -149,6 +197,71 @@ class ItemPublicApiIT extends IntegrationTest {
         mvc.perform(get("/api/v1/items").param("q", "  ").param("areaId", String.valueOf(areaId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(3));
+    }
+
+    @Test
+    void filtersByConditionAndOfferTypeTogetherWithKeywordAndCategory() throws Exception {
+        // given
+        long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long otherCategoryId = jdbc.sql(
+                        "SELECT id FROM item_categories WHERE is_active = true ORDER BY id OFFSET 1 LIMIT 1")
+                .query(Long.class)
+                .single();
+        long areaId = jdbc.sql("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long userId = jdbc.sql(
+                        "INSERT INTO users (email, password_hash, full_name, phone, status) "
+                                + "VALUES ('filter-item-test@shareloop.local', 'unused', 'Test', '0900000777', 'ACTIVE') RETURNING id")
+                .query(Long.class)
+                .single();
+        Item newGive = approvedItem(userId, categoryId, areaId, "Sách cũ loại một", OfferType.GIVE, ItemCondition.NEW);
+        approvedItem(userId, categoryId, areaId, "Sách cũ loại hai", OfferType.GIVE, ItemCondition.NEW);
+        approvedItem(userId, categoryId, areaId, "Sách cũ đã dùng", OfferType.GIVE, ItemCondition.GOOD);
+        approvedItem(userId, categoryId, areaId, "Sách cũ đổi chác", OfferType.SWAP, ItemCondition.NEW);
+        approvedItem(userId, otherCategoryId, areaId, "Sách cũ khác danh mục", OfferType.GIVE, ItemCondition.NEW);
+        approvedItem(userId, categoryId, areaId, "Bút máy", OfferType.GIVE, ItemCondition.NEW);
+
+        // when và then: đủ bốn bộ lọc, tổng số đúng và phân trang theo kết quả đã lọc
+        mvc.perform(get("/api/v1/items")
+                        .param("q", "sach cu")
+                        .param("categoryId", String.valueOf(categoryId))
+                        .param("condition", "NEW")
+                        .param("offerType", "GIVE")
+                        .param("page", "1")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(newGive.getId()));
+
+        // không có q thì đi qua truy vấn khác nhưng kết quả phải giống nhau
+        mvc.perform(get("/api/v1/items")
+                        .param("categoryId", String.valueOf(categoryId))
+                        .param("condition", "NEW")
+                        .param("offerType", "GIVE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(3));
+
+        mvc.perform(get("/api/v1/items").param("condition", "GOOD").param("offerType", "SWAP"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
+
+        mvc.perform(get("/api/v1/items").param("offerType", "SWAP").param("q", "sach cu"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1));
+
+        mvc.perform(get("/api/v1/items").param("condition", "BROKEN")).andExpect(status().isBadRequest());
+    }
+
+    private Item approvedItem(
+            long userId, long categoryId, long areaId, String title, OfferType offerType, ItemCondition condition) {
+        String desiredItem = offerType == OfferType.SWAP ? "Món mong muốn" : null;
+        Item item = new Item(userId, categoryId, areaId, offerType, title, "Mô tả", desiredItem, condition, null, null);
+        item.approve();
+        return items.saveAndFlush(item);
     }
 
     private Item item(long userId, long categoryId, long areaId, String title) {

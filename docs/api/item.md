@@ -13,10 +13,10 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
 
 ## AI sàng lọc sau khi gửi bài
 
-- Sau khi transaction tạo hoặc sửa bài commit thành công, luồng nền gửi nội dung bài đến Gemini. Chỉ gửi tiêu đề, mô tả, món mong muốn, danh mục, tình trạng và loại bài; không gửi ảnh hay dữ liệu tài khoản người đăng.
+- Sau khi transaction tạo hoặc sửa bài commit thành công, luồng nền gửi nội dung bài đến OpenRouter. Chỉ gửi tiêu đề, mô tả, món mong muốn, danh mục, tình trạng và loại bài; không gửi ảnh hay dữ liệu tài khoản người đăng.
 - Tầng 2 ghi `items.ai_risk` (`LOW`, `MEDIUM`, `HIGH`) và `items.ai_result` đã kiểm tra schema, gồm kết quả, model và thời điểm kiểm. Kết quả nghi vấn có cờ `REVIEW` và lý do cho hàng chờ duyệt. Tầng 2 không đổi trạng thái hay phí bài đăng, và giữ nguyên lý do `REVIEW` của tầng 1 nếu đã có.
 - Khi nhà cung cấp lỗi, quá hạn hoặc trả JSON sai, `ai_risk` vẫn là `UNCHECKED` (giao diện hiện "AI chưa kiểm"); bài vẫn ở hàng chờ duyệt. Mỗi lượt gọi đã thử được ghi `AiUsage` với lần thử, kết quả, thời lượng và model khi có, không ghi nội dung bài hay API key.
-- Model mặc định: `gemini-3.5-flash-lite` qua Gemini API. Đặt Gemini API key vào `AI_API_KEY` trong môi trường chạy của profile production, không đưa vào Git. `item_ai_timeout_seconds` mặc định 15 giây tổng cộng cho tối đa một lần thử lại; có thể chỉnh `item_ai_retries` bằng cấu hình admin. Gói Gemini miễn phí có thể sử dụng nội dung gửi lên để cải thiện sản phẩm; cân nhắc gói có thanh toán trước khi xử lý bài đăng thật.
+- Model qua OpenRouter API: ưu tiên `google/gemma-4-31b-it:free`, chuyển sang `google/gemma-4-26b-a4b-it:free` khi model đầu không khả dụng. Đặt OpenRouter API key vào `OPENROUTER_API_KEY` trong môi trường chạy của profile production, không đưa vào Git. `item_ai_timeout_seconds` mặc định 15 giây tổng cộng cho tối đa một lần thử lại; có thể chỉnh `item_ai_retries` bằng cấu hình admin. Giới hạn lượt của model miễn phí có thể khiến sàng lọc AI không khả dụng; khi đó hệ thống giữ nhánh dự phòng hiện có.
 
 ---
 
@@ -78,6 +78,7 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
 ```
 
 - **Lỗi:**
+  - `403 ITEM_REPUTATION_BLOCKED`: Người đăng có 0 sao uy tín (FR-92, BR-U05). Được kiểm tra đầu tiên, trước hạn mức bài, kiểm duyệt và giữ phí; không tạo bài, không giữ phí.
   - `400 VALIDATION_FAILED`: Dữ liệu đầu vào không hợp lệ (thiếu trường bắt buộc, vượt độ dài).
   - `400 ITEM_SWAP_DESIRED_ITEM_REQUIRED`: Đăng bài SWAP nhưng thiếu món mong muốn.
   - `400 ITEM_DEFECT_NOTE_REQUIRED`: Đồ DEFECTIVE nhưng thiếu mô tả lỗi.
@@ -116,7 +117,7 @@ Xem chi tiết một bài đăng theo ID.
 - **Xác thực:** Bearer Token, chỉ chủ bài. Body gồm các trường nội dung như `CreateItemRequest`; `images` và `defectImages` có thể bỏ qua để giữ ảnh hiện tại, hoặc gửi danh sách URL media của chính chủ bài để thay và sắp lại thứ tự. Khi đổi sang `DEFECTIVE` phải có ít nhất một ảnh lỗi; khi chọn danh mục điện tử phải gửi `operatingStatus`.
 - **Luồng:** Từ chối bài đã `RESERVED`/`TRADED`/`EXPIRED` hoặc có Request từ `RESERVED` trở lên. Không cho đổi bài `GIVE` sang `SWAP` (bài Cho tặng miễn phí đăng, đổi sang Trao đổi sẽ né được phí đăng): trả `409 ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED`, không giữ phí hay đổi bài; muốn trao đổi thì đăng bài `SWAP` mới. Chiều `SWAP` sang `GIVE` vẫn cho phép. Kiểm duyệt tầng 1 tiêu đề, mô tả và món mong muốn; nội dung bị chặn trả `422`, không giữ phí hay đổi bài. Sau đó gọi `quoteEdit` và `holdEditFee` theo [luật phí sửa](listingfee.md). Bài thành `PENDING_REVIEW`, tạm ẩn để Admin duyệt lại.
 - **Thành công:** `200 OK`, `ItemResponse` mới.
-- **Lỗi chính:** `401 UNAUTHORIZED`, `403 ITEM_NOT_OWNER`, `404 ITEM_NOT_FOUND`, `409 ITEM_EDIT_NOT_ALLOWED`, `409 ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED`, `422 ITEM_MODERATION_BLOCKED` (`field: content`), `422 ITEM_INVALID_IMAGE_COUNT`, lỗi media và `402 WALLET_INSUFFICIENT_BALANCE`.
+- **Lỗi chính:** `401 UNAUTHORIZED`, `403 ITEM_NOT_OWNER`, `403 ITEM_REPUTATION_BLOCKED` (chủ bài có 0 sao uy tín, kiểm tra ngay sau khi xác nhận chủ bài, không giữ phí sửa), `404 ITEM_NOT_FOUND`, `409 ITEM_EDIT_NOT_ALLOWED`, `409 ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED`, `422 ITEM_MODERATION_BLOCKED` (`field: content`), `422 ITEM_INVALID_IMAGE_COUNT`, lỗi media và `402 WALLET_INSUFFICIENT_BALANCE`.
 
 ---
 
@@ -142,19 +143,23 @@ Xem danh sách tất cả các bài đăng do chính mình tạo (sắp xếp m�
 
 ## 4. GET /api/v1/items
 
-Danh sách bài `APPROVED` còn hiển thị, mới nhất trước. Không cần đăng nhập.
+Danh sách bài `APPROVED` còn hiển thị. Trong cùng bộ lọc, mỗi trang hiển thị tối đa `boost_max_per_page` bài đang được đẩy ở đầu trang; các bài còn lại xếp mới nhất trước. Không cần đăng nhập.
 
 Tham số tùy chọn: `q` (tìm trong tiêu đề và mô tả, không phân biệt dấu/hoa thường),
-`categoryId`, `areaId` (lọc đúng id, kết hợp được với `q`), `page` (từ 0, mặc định 0),
-`size` (1–100, mặc định 20). Kết quả là `PageResponse<ItemResponse>`:
+`categoryId`, `areaId` (lọc đúng id, kết hợp được với `q`),
+`condition` (`NEW`, `LIKE_NEW`, `GOOD`, `DEFECTIVE`), `offerType` (`GIVE`, `SWAP`),
+`page` (từ 0, mặc định 0), `size` (1–100, mặc định 20). Tất cả bộ lọc đều không bắt buộc và kết hợp được với nhau;
+lọc ở server nên `totalElements` và phân trang tính trên kết quả đã lọc (FR-50). Kết quả là `PageResponse<ItemResponse>`:
 
-Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2`. `q` rỗng hoặc chỉ có khoảng trắng tương đương không tìm kiếm; `%` và `_` được xem là ký tự thường.
+Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&offerType=GIVE`. `q` rỗng hoặc chỉ có khoảng trắng tương đương không tìm kiếm; `%` và `_` được xem là ký tự thường.
 
 ```json
-{ "items": [], "page": 0, "size": 20, "totalElements": 0 }
+{ "items": [], "page": 0, "size": 20, "totalElements": 0, "totalPages": 0 }
 ```
 
-`400 VALIDATION_FAILED` khi tham số phân trang sai.
+`totalPages` là số trang thực tế. Khi bài đang đẩy nhiều hơn số chỗ đẩy cho phép, trang cuối có thể chưa đầy `size` để vẫn giữ giới hạn mỗi trang; dùng `totalPages` để điều hướng thay vì tự tính từ `totalElements / size`.
+
+`400 VALIDATION_FAILED` khi tham số phân trang sai. `400` khi `condition` hoặc `offerType` không thuộc các giá trị trên.
 
 ---
 
@@ -200,6 +205,10 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2`. `q` rỗng ho�
 | `updatedAt` | string | Thời điểm cập nhật ISO-8601 UTC |
 | `expireAt` | string? | Hạn hiển thị ISO-8601 UTC (cột `expire_at`, module listingfee). `null` khi bài chưa từng được duyệt |
 | `boostedUntil` | string? | Thời điểm hết đẩy bài ISO-8601 UTC (cột `boosted_until`, module listingfee). `null` khi bài chưa từng được đẩy; giá trị đã qua nghĩa là hết đẩy |
+| `donorName` | string? | Tên người đăng; chỉ có ở API chi tiết |
+| `donorTrustStars` | number? | Sao uy tín người đăng; chỉ có ở API chi tiết |
+| `donorRank` | string? | Hạng người đăng; chỉ có ở API chi tiết |
+| `donorAsDescribedRate` | number? | Tỉ lệ đúng mô tả thang 0–1; chỉ có ở API chi tiết |
 
 `expireAt` và `boostedUntil` có trong mọi API trả `ItemResponse` (tạo, sửa, chi tiết, bài của tôi, danh sách công khai).
 Với danh sách, hai trường này được đọc bằng một query cho cả trang qua `ListingFeeQueryService.findDisplayWindows`.
@@ -224,6 +233,7 @@ Với danh sách, hai trường này được đọc bằng một query cho cả
 | `ITEM_EDIT_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được sửa |
 | `ITEM_REMOVE_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được gỡ |
 | `ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED` | 409 | Sửa bài Cho tặng (`GIVE`) sang Trao đổi (`SWAP`); phải đăng bài Trao đổi mới |
+| `ITEM_REPUTATION_BLOCKED` | 403 | Người đăng hoặc sửa bài có 0 sao uy tín (FR-92, BR-U05) |
 | `ITEM_MODERATION_BLOCKED` | 422 | Nội dung tạo hoặc sửa bị kiểm duyệt tầng 1 chặn |
 | `VALIDATION_FAILED` | 400 | Sai định dạng hoặc thiếu trường bắt buộc |
 | `UNAUTHORIZED` | 401 | Thiếu token hoặc token không hợp lệ |

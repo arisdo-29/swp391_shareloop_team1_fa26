@@ -126,16 +126,16 @@ class ActivityLogQueryServiceTest {
     }
 
     @Test
-    void search_whenUserNotFound_returnsPlaceholderName() {
+    void search_whenUserNotFound_returnsDeletedAccountLabel() {
         // given
         givenLogs(List.of(newLog(1L, ActivityType.USER_LOCK, 9L, "USER", 7L, null, "Spam")));
 
         // when
         ActivityLogDto dto = firstRow(service.search(null, null, null, null, 0, 20));
 
-        // then
-        assertThat(dto.actorName()).isEqualTo("Người dùng #9");
-        assertThat(dto.targetTitle()).isEqualTo("Người dùng #7");
+        // then: không hiện "Người dùng #id"
+        assertThat(dto.actorName()).isEqualTo("Tài khoản đã xoá");
+        assertThat(dto.targetTitle()).isEqualTo("Tài khoản đã xoá");
     }
 
     @Test
@@ -159,17 +159,34 @@ class ActivityLogQueryServiceTest {
     }
 
     @Test
-    void search_whenConfigUpdate_returnsReadableDetailAndConfigKey() {
-        // given
-        Map<String, Object> data = Map.of("key", "POST_FEE", "oldValue", "5", "newValue", "10");
-        givenLogs(List.of(newLog(1L, ActivityType.CONFIG_UPDATE, 3L, "CONFIG", null, data, "Tăng phí")));
+    void search_whenConfigUpdate_returnsVietnameseConfigLabel() {
+        // given: ConfigService ghi key viết thường; log cũ có thể là key viết hoa
+        givenLogs(List.of(
+                newLog(
+                        1L,
+                        ActivityType.CONFIG_UPDATE,
+                        3L,
+                        "CONFIG",
+                        null,
+                        Map.of("key", "post_fee", "oldValue", "5", "newValue", "10"),
+                        "Tăng phí"),
+                newLog(
+                        2L,
+                        ActivityType.CONFIG_UPDATE,
+                        3L,
+                        "CONFIG",
+                        null,
+                        Map.of("key", "REPUTATION_GOLD_MIN", "oldValue", "150", "newValue", "200"),
+                        null)));
 
         // when
-        ActivityLogDto dto = firstRow(service.search(null, null, null, null, 0, 20));
+        List<ActivityLogDto> rows =
+                service.search(null, null, null, null, 0, 20).getContent();
 
-        // then
-        assertThat(dto.targetTitle()).isEqualTo("POST_FEE");
-        assertThat(dto.detail()).isEqualTo("POST_FEE: 5 → 10");
+        // then: hiện nhãn tiếng Việt như trang cấu hình, không hiện key thô
+        assertThat(rows.get(0).targetTitle()).isEqualTo("Phí đăng bài");
+        assertThat(rows.get(0).detail()).isEqualTo("Phí đăng bài: 5 → 10");
+        assertThat(rows.get(1).targetTitle()).isEqualTo("Điểm tối thiểu hạng Vàng");
     }
 
     @Test
@@ -186,19 +203,45 @@ class ActivityLogQueryServiceTest {
     }
 
     @Test
-    void search_whenReportAndRequestTargets_returnsNumberedTitles() {
-        // given
+    void search_whenLegacyAiUsage_returnsSearchOutcomeInDetail() {
+        Map<String, Object> data = Map.of("role", "SEARCH", "outcome", "FAILED", "durationMs", 123);
+        givenLogs(List.of(new ActivityLog("AiUsage", 3L, "AI_SEARCH", null, data, null, CREATED_AT)));
+
+        ActivityLogDto dto = firstRow(service.search(null, null, null, null, 0, 20));
+
+        assertThat(dto.typeLabel()).isEqualTo("Gọi AI kiểm duyệt");
+        assertThat(dto.detail()).isEqualTo("Tìm đồ AI: FAILED (123 ms)");
+    }
+
+    @Test
+    void search_whenAiUsage_returnsModerationOutcomeInDetail() {
+        Map<String, Object> data = Map.of("outcome", "SUCCESS", "durationMs", 300);
+        givenLogs(List.of(newLog(1L, ActivityType.AI_USAGE, 3L, "ITEM", 42L, data, null)));
+
+        ActivityLogDto dto = firstRow(service.search(null, null, null, null, 0, 20));
+
+        assertThat(dto.detail()).isEqualTo("Kiểm duyệt AI: SUCCESS (300 ms)");
+    }
+
+    @Test
+    void search_whenReportAndRequestTargets_returnsItemTitlesWithoutIds() {
+        // given: log mới lưu itemId trong data, log cũ thì không
+        when(itemQueryService.findTitles(anyCollection())).thenReturn(Map.of(42L, "Áo khoác size M"));
         givenLogs(List.of(
-                newLog(1L, ActivityType.REPORT_UPHELD, 3L, "REPORT", 11L, null, null),
-                newLog(2L, ActivityType.POINTS, 4L, "REQUEST", 12L, null, null)));
+                newLog(1L, ActivityType.REPORT_UPHELD, 3L, "REPORT", 11L, Map.of("itemId", 42L), null),
+                newLog(2L, ActivityType.POINTS, 4L, "REQUEST", 12L, Map.of("itemId", 42L), null),
+                newLog(3L, ActivityType.REPORT_DISMISSED, 3L, "REPORT", 13L, null, null),
+                newLog(4L, ActivityType.POINTS, 4L, "REQUEST", 14L, null, null)));
 
         // when
         List<ActivityLogDto> rows =
                 service.search(null, null, null, null, 0, 20).getContent();
 
-        // then
-        assertThat(rows.get(0).targetTitle()).isEqualTo("Báo cáo #11");
-        assertThat(rows.get(1).targetTitle()).isEqualTo("Yêu cầu #12");
+        // then: gọi bằng tên bài, không hiện "Báo cáo #11", "Yêu cầu #12"
+        assertThat(rows.get(0).targetTitle()).isEqualTo("Báo cáo về “Áo khoác size M”");
+        assertThat(rows.get(1).targetTitle()).isEqualTo("Giao dịch món “Áo khoác size M”");
+        assertThat(rows.get(2).targetTitle()).isEqualTo("Báo cáo");
+        assertThat(rows.get(3).targetTitle()).isEqualTo("Giao dịch");
     }
 
     @Test
