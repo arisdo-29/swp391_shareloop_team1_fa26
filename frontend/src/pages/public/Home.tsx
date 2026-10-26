@@ -411,6 +411,7 @@ export function Home() {
     .sort((a, b) => b.boostedUntil!.localeCompare(a.boostedUntil!));
   const heroItems = boostedItems.filter((item) => item.images.length > 0).slice(0, 8);
   const featured = boostedItems.slice(0, 5);
+  const aiPreviewItems = boostedItems.filter((item) => item.images.length > 0).slice(0, 3);
   const districtCounts = districtOptions.slice(0, 6).map((area) => ({
     name: area.label,
     id: area.id,
@@ -592,28 +593,36 @@ export function Home() {
               <Icon name="ai" className="size-10 text-primary" weight="light" />
               <p className="text-sm font-semibold text-primary">Bạn đang tìm món gì?</p>
               <div className="home-ai-suggestions">
-                {['Đèn bàn để đọc sách', 'Sách cho cuối tuần', 'Đồ dùng góc học tập'].map((suggestion) => (
-                  <Link key={suggestion} to="/ai">
-                    <Icon name="search" className="size-4" />
-                    <span>{suggestion}</span>
-                    <Icon name="arrow" className="size-4" />
-                  </Link>
-                ))}
+                {aiPreviewItems.map((item, index) => {
+                  const suggestion = ['Đèn bàn để đọc sách', 'Sách cho cuối tuần', 'Đồ dùng góc học tập'][index];
+                  return (
+                    <Link key={item.id} to="/ai">
+                      <ItemImage
+                        src={item.images[0]}
+                        alt=""
+                        loading="lazy"
+                        className="size-4 shrink-0 rounded-sm object-cover"
+                      />
+                      <span>{suggestion}</span>
+                      <Icon name="arrow" className="size-4" />
+                    </Link>
+                  );
+                })}
               </div>
             </div>
             <div className="home-ai-copy">
               <p className="text-xs font-bold text-primary">LoopAI</p>
-              <h2>Diễn tả món bạn cần theo cách tự nhiên</h2>
-              <p>Thử “Tìm xe đạp mini miễn phí ở Bình Thạnh” để nhận gợi ý từ các bài đăng hiện có.</p>
+              <h2>Tìm món đồ bạn cần <br />cùng AI</h2>
+              <p>Chỉ cần mô tả món đồ mong muốn, LoopAI sẽ giúp bạn tìm kiếm và gợi ý những món đồ phù hợp trong cộng đồng ShareLoop.</p>
               <Link to="/ai" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-bold text-white transition hover:bg-primary-hover">
-                <Icon name="ai" className="size-[18px]" />Mở trợ lý AI<Icon name="arrow" className="size-4" />
+                <Icon name="ai" className="size-[18px]" />Khám phá cùng AI<Icon name="arrow" className="size-4" />
               </Link>
             </div>
           </div>
         </HomeSection>
 
         <div className="home-final-cluster">
-          <HomeLifecycle items={gifts.slice(0, 3)} />
+          <HomeLifecycle items={aiPreviewItems} />
           <HomeProcess />
           <HomeSection className="home-band home-cta-band">
             <div className="home-final">

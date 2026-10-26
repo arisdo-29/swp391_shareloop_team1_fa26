@@ -7,22 +7,6 @@ const values = [
   ['search', '02', 'TÌM ĐỒ', 'Tìm món đồ bạn đang cần'],
   ['group', '03', 'GẶP GỠ & TRAO ĐỔI', 'Hoàn tất một vòng đời mới'],
 ];
-const lifecycleImage = (id: string) =>
-  `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1000&q=82`;
-const lifecycleImages = [
-  {
-    src: lifecycleImage('photo-1518455027359-f3f8164ba6bd'),
-    alt: 'Warm study corner with a desk lamp and books',
-  },
-  {
-    src: lifecycleImage('photo-1542291026-7eec264c27ff'),
-    alt: 'Clean Nike sneakers in natural lifestyle light',
-  },
-  {
-    src: lifecycleImage('photo-1523381294911-8d3cead13475'),
-    alt: 'Clothes hanging in a bright reuse-focused space',
-  },
-];
 const steps = [
   ['add', 'Đăng hoặc tìm món', 'Chia sẻ món bạn có, hoặc lọc theo nhu cầu và quận.'],
   ['messages', 'Trò chuyện và chốt lịch', 'Thống nhất món trao đổi, thời gian và điểm giao nhận.'],
@@ -59,15 +43,18 @@ export function HomeLifecycle({ items }: { items: Item[] }) {
           </div>
           <div className="home-lifecycle-visual">
             <div className="home-lifecycle-collage" aria-label="Một số món đồ trong cộng đồng">
-              {lifecycleImages.map((image, index) => (
-                <ItemImage
-                  key={items[index]?.id ?? image.src}
-                  src={image.src}
-                  alt={image.alt}
-                  loading="lazy"
-                  className={`home-lifecycle-collage-image home-lifecycle-collage-image-${index + 1}`}
-                />
-              ))}
+              {items
+                .filter((item) => item.images.length > 0)
+                .slice(0, 3)
+                .map((item, index) => (
+                  <ItemImage
+                    key={item.id}
+                    src={item.images[0]}
+                    alt={item.title}
+                    loading="lazy"
+                    className={`home-lifecycle-collage-image home-lifecycle-collage-image-${index + 1}`}
+                  />
+                ))}
             </div>
           </div>
           </div>
