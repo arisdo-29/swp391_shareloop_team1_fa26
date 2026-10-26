@@ -220,6 +220,14 @@ public class UserService {
     }
 
     /**
+     * Email của một người dùng; trả null nếu không tìm thấy (user đã xoá mềm bị @SQLRestriction loại).
+     */
+    @Transactional(readOnly = true)
+    public String findEmailById(Long userId) {
+        return userRepository.findById(userId).map(User::getEmail).orElse(null);
+    }
+
+    /**
      * Tên và email của nhiều người dùng trong một lần truy vấn, dùng cho trang nhật ký Admin (FR-115). User đã xoá
      * mềm bị @SQLRestriction loại nên không có trong map; người gọi tự xử lý id thiếu.
      */
