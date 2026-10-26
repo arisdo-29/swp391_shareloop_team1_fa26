@@ -346,8 +346,8 @@ function AppShellContent() {
           <Outlet />
         </Suspense>
       </main>
-      {/* Quản trị viên chỉ làm việc trong khu vực admin nên không hiện chân trang dành cho người dùng. */}
-      {!isAdmin ? (
+      {/* Quản trị viên và trang đăng nhập không hiện chân trang dành cho người dùng. */}
+      {!isAdmin && pathname !== '/login' ? (
         <footer className="mt-auto border-t border-border bg-white">
           <div className="mx-auto w-full max-w-[1280px] px-4 pb-8 pt-12 sm:px-6 sm:pt-14 lg:px-8">
             <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">

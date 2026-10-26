@@ -20,7 +20,11 @@ import { DialogFrame } from '../../components/Dialog';
 import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import { fileToDataUrl } from '../../utils/files';
-import { catalogApi, type CategoryAttributeResponse, type CategoryResponse } from '../../services/catalogApi';
+import {
+  catalogApi,
+  type CategoryAttributeResponse,
+  type CategoryResponse,
+} from '../../services/catalogApi';
 import {
   itemApi,
   type ApiCondition,
@@ -33,7 +37,13 @@ import {
   type UpdateItemRequest,
 } from '../../services/itemApi';
 import { mediaApi } from '../../services/mediaApi';
-import { toAreaNameMap, toAreaOptions, toCategoryNameMap, toFeItem, type AreaOption } from '../../services/mappers';
+import {
+  toAreaNameMap,
+  toAreaOptions,
+  toCategoryNameMap,
+  toFeItem,
+  type AreaOption,
+} from '../../services/mappers';
 import { requestApi, toBackendUserId, toFeItemRequest } from '../../services/requestApi';
 import type { Item, ItemRequest } from '../../types/domain';
 import type { ApiError } from '../../services/http';
@@ -69,10 +79,19 @@ const OPERATING_STATUS_LABELS: Record<OperatingStatus, string> = {
 const isOperatingStatus = (value: string): value is OperatingStatus =>
   value === 'NORMAL' || value === 'PARTIAL' || value === 'NOT_WORKING';
 
-type EditFormErrors = Partial<Record<
-  'title' | 'description' | 'desiredItem' | 'brand' | 'images' | 'defectNote' | 'defectImages' | 'operatingStatus',
-  string
->>;
+type EditFormErrors = Partial<
+  Record<
+    | 'title'
+    | 'description'
+    | 'desiredItem'
+    | 'brand'
+    | 'images'
+    | 'defectNote'
+    | 'defectImages'
+    | 'operatingStatus',
+    string
+  >
+>;
 
 export function Activities() {
   const location = useLocation();
@@ -121,7 +140,8 @@ export function Activities() {
     let active = true;
     setListingFees(null);
     setListingFeesLoading(true);
-    itemApi.getListingFees()
+    itemApi
+      .getListingFees()
       .then((fees) => {
         if (active) setListingFees(fees);
       })
@@ -174,9 +194,13 @@ export function Activities() {
         toCategoryNameMap(editCategories),
         new Map(editAreas.map((area) => [area.id, area.label])),
       );
-      setMyItems((current) => current.map((item) => item.id === mapped.id
-        ? { ...mapped, expiresAt: item.expiresAt, boostedUntil: item.boostedUntil }
-        : item));
+      setMyItems((current) =>
+        current.map((item) =>
+          item.id === mapped.id
+            ? { ...mapped, expiresAt: item.expiresAt, boostedUntil: item.boostedUntil }
+            : item,
+        ),
+      );
       setEditingId('');
       setApiEditingItem(null);
       setEditNotice('Đã cập nhật bài đăng và gửi duyệt lại.');
@@ -185,9 +209,12 @@ export function Activities() {
       const apiError = error as ApiError;
       const insufficientCredit = apiError.code === WALLET_INSUFFICIENT_BALANCE;
       setEditQuoteNeedsTopUp(insufficientCredit);
-      setEditQuoteError(insufficientCredit
-        ? 'Số dư khả dụng không đủ để chỉnh sửa bài. Vui lòng nạp thêm Credit.'
-        : reputationBlockedMessage(apiError.code) ?? (apiError.message || 'Không cập nhật được bài đăng.'));
+      setEditQuoteError(
+        insufficientCredit
+          ? 'Số dư khả dụng không đủ để chỉnh sửa bài. Vui lòng nạp thêm Credit.'
+          : (reputationBlockedMessage(apiError.code) ??
+              (apiError.message || 'Không cập nhật được bài đăng.')),
+      );
     } finally {
       setEditSaving(false);
     }
@@ -224,13 +251,20 @@ export function Activities() {
         active = false;
       };
     }
-    Promise.all([catalogApi.categories(), catalogApi.areas(), itemApi.mine(), requestApi.mine(currentUserId)])
+    Promise.all([
+      catalogApi.categories(),
+      catalogApi.areas(),
+      itemApi.mine(),
+      requestApi.mine(currentUserId),
+    ])
       .then(async ([categories, areas, items, sentRequests]) => {
         if (!active) return;
         const categoryNames = toCategoryNameMap(categories);
         const areaNames = toAreaNameMap(areas);
         setEditCategories(categories.filter((category) => !category.restricted));
-        setBoostableCategoryIds(categories.filter((category) => category.boostable).map((category) => category.id));
+        setBoostableCategoryIds(
+          categories.filter((category) => category.boostable).map((category) => category.id),
+        );
         setEditAreas(toAreaOptions(areas));
         const mappedItems = items.map((item) => toFeItem(item, categoryNames, areaNames));
         const requestEntries = await Promise.all(
@@ -262,10 +296,14 @@ export function Activities() {
       active = false;
     };
   }, [currentUserId, itemsReloadKey, user.id]);
-  const apiTransactions = [...new Map([
-    ...apiSentRequests,
-    ...Object.values(apiRequestsByItem).flat(),
-  ].map((request) => [request.id, request])).values()];
+  const apiTransactions = [
+    ...new Map(
+      [...apiSentRequests, ...Object.values(apiRequestsByItem).flat()].map((request) => [
+        request.id,
+        request,
+      ]),
+    ).values(),
+  ];
   const acceptApiRequest = Object.values(apiRequestsByItem)
     .flat()
     .find((request) => request.id === acceptConfirmId);
@@ -280,7 +318,9 @@ export function Activities() {
     try {
       const request = await requestApi.cancel(numericRequestId, currentUserId);
       setApiSentRequests((current) =>
-        current.map((entry) => (entry.id === requestId ? toFeItemRequest(request, user.id) : entry)),
+        current.map((entry) =>
+          entry.id === requestId ? toFeItemRequest(request, user.id) : entry,
+        ),
       );
     } catch {
       setMyItemsError('Không hủy được yêu cầu. Vui lòng thử lại.');
@@ -303,9 +343,11 @@ export function Activities() {
     try {
       if (type === 'renew') {
         const renewed = await itemApi.renewItem(itemId);
-        setMyItems((current) => current.map((entry) =>
-          entry.id === item.id ? { ...entry, expiresAt: renewed.expireAt } : entry,
-        ));
+        setMyItems((current) =>
+          current.map((entry) =>
+            entry.id === item.id ? { ...entry, expiresAt: renewed.expireAt } : entry,
+          ),
+        );
         setListingFeeNotice(
           renewed.fee > 0
             ? `Đã gia hạn bài và trừ ${renewed.fee} Credit.`
@@ -313,9 +355,11 @@ export function Activities() {
         );
       } else {
         const boosted = await itemApi.boostItem(itemId);
-        setMyItems((current) => current.map((entry) =>
-          entry.id === item.id ? { ...entry, boostedUntil: boosted.boostedUntil } : entry,
-        ));
+        setMyItems((current) =>
+          current.map((entry) =>
+            entry.id === item.id ? { ...entry, boostedUntil: boosted.boostedUntil } : entry,
+          ),
+        );
         setListingFeeNotice('Đã đẩy bài thành công.');
       }
       refreshWallet();
@@ -324,9 +368,12 @@ export function Activities() {
       const apiError = error as ApiError;
       const insufficientCredit = apiError.code === WALLET_INSUFFICIENT_BALANCE;
       setListingFeeNeedsTopUp(insufficientCredit);
-      setListingFeeError(insufficientCredit
-        ? `Số dư khả dụng không đủ để ${type === 'renew' ? 'gia hạn' : 'đẩy'} bài. Vui lòng nạp thêm Credit.`
-        : apiError.message || `Không ${type === 'renew' ? 'gia hạn' : 'đẩy'} được bài đăng. Vui lòng thử lại.`);
+      setListingFeeError(
+        insufficientCredit
+          ? `Số dư khả dụng không đủ để ${type === 'renew' ? 'gia hạn' : 'đẩy'} bài. Vui lòng nạp thêm Credit.`
+          : apiError.message ||
+              `Không ${type === 'renew' ? 'gia hạn' : 'đẩy'} được bài đăng. Vui lòng thử lại.`,
+      );
     } finally {
       listingFeeInFlight.current = false;
       setRenewingItemId('');
@@ -368,7 +415,9 @@ export function Activities() {
           [request.itemId]: requests.map((entry) => toFeItemRequest(entry)),
         }));
         const mappedItem = toFeItem(item, toCategoryNameMap(categories), toAreaNameMap(areas));
-        setMyItems((current) => current.map((entry) => (entry.id === request.itemId ? mappedItem : entry)));
+        setMyItems((current) =>
+          current.map((entry) => (entry.id === request.itemId ? mappedItem : entry)),
+        );
       } catch {
         setSelectNotice('Đã chọn người nhận, nhưng chưa thể cập nhật đầy đủ trạng thái mới nhất.');
       }
@@ -412,16 +461,16 @@ export function Activities() {
           <Alert tone="warning">{selectNotice}</Alert>
         </div>
       ) : null}
-      <div className="mb-6 flex gap-1 border-b border-border">
+      <div className="mb-7 inline-flex w-full gap-1 rounded-lg bg-surface-low p-1 sm:w-auto">
         <button
           onClick={() => setTab('items')}
-          className={`min-h-11 border-b-2 px-4 py-3 text-sm font-semibold transition ${tab === 'items' ? 'border-primary text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
+          className={`flex-1 rounded-md px-4 py-2.5 text-sm font-semibold transition sm:flex-none ${tab === 'items' ? 'bg-white text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
         >
           Món đã đăng <span className="ml-1 text-xs">({myItems.length})</span>
         </button>
         <button
           onClick={() => setTab('transactions')}
-          className={`min-h-11 border-b-2 px-4 py-3 text-sm font-semibold transition ${tab === 'transactions' ? 'border-primary text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
+          className={`flex-1 rounded-md px-4 py-2.5 text-sm font-semibold transition sm:flex-none ${tab === 'transactions' ? 'bg-white text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
         >
           Giao dịch <span className="ml-1 text-xs">({apiTransactions.length})</span>
         </button>
@@ -435,38 +484,52 @@ export function Activities() {
             <EmptyState
               title="Không tải được bài đăng"
               text={myItemsError}
-              action={<Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>Thử lại</Button>}
+              action={
+                <Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>
+                  Thử lại
+                </Button>
+              }
             />
           ) : myItems.length ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {myItems.map((item) => {
                 const apiItem = /^\d+$/.test(item.id);
                 const canEdit = ['PENDING_REVIEW', 'APPROVED', 'REJECTED'].includes(item.status);
                 const canUseListingFee = apiItem && item.status === 'APPROVED';
-                const canBoost = canUseListingFee && item.categoryId !== undefined &&
+                const canBoost =
+                  canUseListingFee &&
+                  item.categoryId !== undefined &&
                   boostableCategoryIds.includes(item.categoryId);
                 const itemRequests = apiRequestsByItem[item.id] ?? [];
-                const hasAcceptedRequest = itemRequests.some((request) => request.status === 'RESERVED');
+                const hasAcceptedRequest = itemRequests.some(
+                  (request) => request.status === 'RESERVED',
+                );
                 return (
-                  <div key={item.id}>
-                    <article className="grid gap-4 rounded-lg bg-white p-3 ring-1 ring-border/80 sm:grid-cols-[120px_1fr_auto] sm:items-center">
-                      <ItemImage
-                        src={item.images[0]}
-                        alt={item.title}
-                        className="aspect-[4/3] w-full rounded-md object-cover sm:w-[120px]"
-                      />
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
+                  <div key={item.id} className="min-w-0">
+                    <article className="group grid grid-cols-[92px_minmax(0,1fr)] items-start gap-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-border/70 transition duration-300 hover:shadow-md hover:ring-primary/20 sm:grid-cols-[140px_minmax(0,1fr)] sm:gap-5 sm:p-4 xl:grid-cols-[140px_minmax(220px,1fr)_auto]">
+                      <Link
+                        to={`/items/${item.id}`}
+                        className="relative block aspect-square overflow-hidden rounded-lg bg-surface-container sm:aspect-[4/3]"
+                      >
+                        <ItemImage
+                          src={item.images[0]}
+                          alt={item.title}
+                          className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                        />
+                      </Link>
+                      <div className="min-w-0 py-0.5">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
                           <TypeBadge type={item.type} />
                           <StatusBadge status={item.status} />
                         </div>
                         <Link
                           to={`/items/${item.id}`}
-                          className="mt-2 block truncate font-bold hover:text-primary"
+                          className="block truncate text-sm font-bold text-text-primary transition hover:text-primary sm:text-base"
                         >
                           {item.title}
                         </Link>
-                        <p className="mt-1 text-xs text-text-muted">
+                        <p className="mt-2 flex items-center gap-1.5 text-xs text-text-muted">
+                          <Icon name="location" className="size-3.5 shrink-0" />
                           {item.expiresAt
                             ? `Hết hạn: ${new Date(item.expiresAt).toLocaleDateString('vi-VN')} · `
                             : ''}
@@ -477,69 +540,88 @@ export function Activities() {
                             Đang được đẩy đến {new Date(item.boostedUntil).toLocaleString('vi-VN')}
                           </p>
                         ) : null}
-                        {(item.status === 'rejected' || item.status === 'REJECTED' || item.status === 'VIOLATION') && (item.rejectionReason || item.moderationReason) ? (
+                        {(item.status === 'rejected' ||
+                          item.status === 'REJECTED' ||
+                          item.status === 'VIOLATION') &&
+                        (item.rejectionReason || item.moderationReason) ? (
                           <p className="mt-2 rounded-md bg-error-soft px-3 py-2 text-xs leading-5 text-error">
                             Lý do kiểm duyệt: {item.rejectionReason ?? item.moderationReason}
                           </p>
                         ) : null}
                       </div>
-                      <div className="flex flex-wrap gap-2 sm:justify-end">
+                      <div className="col-span-2 grid w-full grid-cols-2 items-center gap-2 border-t border-border/60 pt-3 sm:grid-cols-3 xl:col-span-1 xl:self-center xl:grid-cols-[repeat(6,auto)] xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon="messages"
+                          className="w-full whitespace-nowrap"
+                          onClick={() =>
+                            setRequestsItemId(requestsItemId === item.id ? '' : item.id)
+                          }
+                        >
+                          Yêu cầu ({itemRequests.length})
+                        </Button>
                         <Link to={`/items/${item.id}`}>
-                          <Button variant="outline" icon="eye">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            icon="eye"
+                            className="w-full whitespace-nowrap"
+                          >
                             Xem chi tiết
                           </Button>
                         </Link>
                         <Button
-                          variant="outline"
-                          icon="messages"
-                          onClick={() => setRequestsItemId(requestsItemId === item.id ? '' : item.id)}
-                        >
-                          Yêu cầu ({itemRequests.length})
-                        </Button>
-                        <Button
+                          size="sm"
                           variant="ghost"
                           icon="edit"
+                          className="w-full whitespace-nowrap"
                           disabled={!canEdit}
                           onClick={() => void openEditor(item)}
                         >
-                          Sửa
+                          Sửa bài
                         </Button>
                         <Button
+                          size="sm"
                           variant="danger"
                           icon="trash"
-                          disabled={['RESERVED', 'TRADED', 'EXPIRED', 'removed'].includes(item.status) || removingItemId === item.id}
+                          className="w-full whitespace-nowrap"
+                          disabled={
+                            ['RESERVED', 'TRADED', 'EXPIRED', 'removed'].includes(item.status) ||
+                            removingItemId === item.id
+                          }
                           onClick={() => setRemoveConfirmId(item.id)}
                         >
-                          Gỡ
+                          Gỡ bài
                         </Button>
-                        {canUseListingFee ? (
-                          <Button
-                            variant="outline"
-                            icon="renew"
-                            disabled={Boolean(renewingItemId || boostingItemId)}
-                            onClick={() => {
-                              setListingFeeError('');
-                              setListingFeeNeedsTopUp(false);
-                              setListingFeeAction({ type: 'renew', item });
-                            }}
-                          >
-                            {renewingItemId === item.id ? 'Đang gia hạn...' : 'Gia hạn'}
-                          </Button>
-                        ) : null}
-                        {canBoost ? (
-                          <Button
-                            variant="outline"
-                            icon="arrow"
-                            disabled={Boolean(renewingItemId || boostingItemId)}
-                            onClick={() => {
-                              setListingFeeError('');
-                              setListingFeeNeedsTopUp(false);
-                              setListingFeeAction({ type: 'boost', item });
-                            }}
-                          >
-                            {boostingItemId === item.id ? 'Đang đẩy...' : 'Đẩy bài'}
-                          </Button>
-                        ) : null}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon="renew"
+                          className="w-full whitespace-nowrap"
+                          disabled={!canUseListingFee || Boolean(renewingItemId || boostingItemId)}
+                          onClick={() => {
+                            setListingFeeError('');
+                            setListingFeeNeedsTopUp(false);
+                            setListingFeeAction({ type: 'renew', item });
+                          }}
+                        >
+                          {renewingItemId === item.id ? 'Đang gia hạn...' : 'Gia hạn'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon="arrow"
+                          className="w-full whitespace-nowrap"
+                          disabled={!canBoost || Boolean(renewingItemId || boostingItemId)}
+                          onClick={() => {
+                            setListingFeeError('');
+                            setListingFeeNeedsTopUp(false);
+                            setListingFeeAction({ type: 'boost', item });
+                          }}
+                        >
+                          {boostingItemId === item.id ? 'Đang đẩy...' : 'Đẩy bài'}
+                        </Button>
                       </div>
                     </article>
                     {requestsItemId === item.id ? (
@@ -586,7 +668,11 @@ export function Activities() {
             <EmptyState
               title="Không tải được giao dịch"
               text={myItemsError}
-              action={<Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>Thử lại</Button>}
+              action={
+                <Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>
+                  Thử lại
+                </Button>
+              }
             />
           ) : (
             <SentRequestPanel
@@ -634,7 +720,9 @@ export function Activities() {
               />
             ) : editQuoteLoading ? null : (
               <div className="mt-6 flex justify-end">
-                <Button variant="ghost" onClick={() => setEditingId('')}>Hủy</Button>
+                <Button variant="ghost" onClick={() => setEditingId('')}>
+                  Hủy
+                </Button>
               </div>
             )}
           </div>
@@ -675,12 +763,16 @@ export function Activities() {
               Hủy
             </Button>
             <Button
-              disabled={Boolean(renewingItemId || boostingItemId) || listingFeesLoading || !listingFees}
+              disabled={
+                Boolean(renewingItemId || boostingItemId) || listingFeesLoading || !listingFees
+              }
               onClick={() => void confirmListingFeeAction()}
             >
               {renewingItemId || boostingItemId
                 ? 'Đang xử lý...'
-                : listingFeeAction.type === 'renew' ? 'Gia hạn' : 'Đẩy bài'}
+                : listingFeeAction.type === 'renew'
+                  ? 'Gia hạn'
+                  : 'Đẩy bài'}
             </Button>
           </div>
         </DialogFrame>
@@ -693,7 +785,11 @@ export function Activities() {
             Bài đăng sẽ không còn hiển thị với người dùng khác.
           </p>
           <div className="mt-6 flex justify-end gap-2">
-            <Button variant="ghost" disabled={Boolean(removingItemId)} onClick={() => setRemoveConfirmId('')}>
+            <Button
+              variant="ghost"
+              disabled={Boolean(removingItemId)}
+              onClick={() => setRemoveConfirmId('')}
+            >
               Hủy
             </Button>
             <Button
@@ -784,8 +880,12 @@ function EditItemForm({
   const [images, setImages] = useState(item.images);
   const [newImages, setNewImages] = useState<Array<{ file: File; preview: string }>>([]);
   const [defectImages, setDefectImages] = useState(item.defectImages ?? []);
-  const [newDefectImages, setNewDefectImages] = useState<Array<{ file: File; preview: string }>>([]);
-  const [operatingStatus, setOperatingStatus] = useState<OperatingStatus | ''>(item.operatingStatus ?? '');
+  const [newDefectImages, setNewDefectImages] = useState<Array<{ file: File; preview: string }>>(
+    [],
+  );
+  const [operatingStatus, setOperatingStatus] = useState<OperatingStatus | ''>(
+    item.operatingStatus ?? '',
+  );
   const [categoryAttributes, setCategoryAttributes] = useState<CategoryAttributeResponse[]>([]);
   const [attributesLoading, setAttributesLoading] = useState(false);
   const [attributesError, setAttributesError] = useState('');
@@ -810,7 +910,8 @@ function EditItemForm({
     let active = true;
     setAttributesLoading(true);
     setAttributesError('');
-    catalogApi.categoryAttributes(categoryId)
+    catalogApi
+      .categoryAttributes(categoryId)
       .then((response) => {
         if (active) setCategoryAttributes(response);
       })
@@ -861,16 +962,23 @@ function EditItemForm({
       return;
     }
     if (totalImageCount + files.length > ITEM_IMAGES_MAX) {
-      setErrors((current) => ({ ...current, images: `Chỉ được chọn tối đa ${ITEM_IMAGES_MAX} ảnh.` }));
+      setErrors((current) => ({
+        ...current,
+        images: `Chỉ được chọn tối đa ${ITEM_IMAGES_MAX} ảnh.`,
+      }));
       return;
     }
     try {
       const previews = await Promise.all(files.map(fileToDataUrl));
-      setNewImages((current) => [...current, ...files.map((file, index) => ({ file, preview: previews[index] }))]);
+      setNewImages((current) => [
+        ...current,
+        ...files.map((file, index) => ({ file, preview: previews[index] })),
+      ]);
       const nextCount = totalImageCount + files.length;
       setErrors((current) => ({
         ...current,
-        images: nextCount < ITEM_IMAGES_MIN ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.` : undefined,
+        images:
+          nextCount < ITEM_IMAGES_MIN ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.` : undefined,
       }));
     } catch {
       setUploadError('Không đọc được ảnh đã chọn. Vui lòng chọn lại.');
@@ -941,28 +1049,78 @@ function EditItemForm({
       }}
     >
       <div>
-        <Select label="Hình thức" value={offerType} disabled={formDisabled} onChange={(event) => setOfferType(event.target.value as OfferType)}>
+        <Select
+          label="Hình thức"
+          value={offerType}
+          disabled={formDisabled}
+          onChange={(event) => setOfferType(event.target.value as OfferType)}
+        >
           <option value="GIVE">Cho tặng</option>
-          <option value="SWAP" disabled={item.offerType === 'GIVE'}>Trao đổi</option>
+          <option value="SWAP" disabled={item.offerType === 'GIVE'}>
+            Trao đổi
+          </option>
         </Select>
-        {item.offerType === 'GIVE' ? <p className="mt-1 text-xs text-text-muted">Muốn trao đổi thì đăng bài mới.</p> : null}
+        {item.offerType === 'GIVE' ? (
+          <p className="mt-1 text-xs text-text-muted">Muốn trao đổi thì đăng bài mới.</p>
+        ) : null}
       </div>
       {offerType === 'SWAP' ? (
-        <Field label="Món muốn đổi" value={desiredItem} disabled={formDisabled} error={errors.desiredItem} onChange={(event) => setDesiredItem(event.target.value)} />
+        <Field
+          label="Món muốn đổi"
+          value={desiredItem}
+          disabled={formDisabled}
+          error={errors.desiredItem}
+          onChange={(event) => setDesiredItem(event.target.value)}
+        />
       ) : null}
-      <Field label="Tên món đồ" value={title} disabled={formDisabled} error={errors.title} onChange={(event) => setTitle(event.target.value)} />
-      <Select label="Danh mục" value={categoryId} disabled={formDisabled} onChange={(event) => setCategoryId(Number(event.target.value))}>
-        {!categories.some((category) => category.id === categoryId) ? <option value={categoryId}>Danh mục hiện tại</option> : null}
+      <Field
+        label="Tên món đồ"
+        value={title}
+        disabled={formDisabled}
+        error={errors.title}
+        onChange={(event) => setTitle(event.target.value)}
+      />
+      <Select
+        label="Danh mục"
+        value={categoryId}
+        disabled={formDisabled}
+        onChange={(event) => setCategoryId(Number(event.target.value))}
+      >
+        {!categories.some((category) => category.id === categoryId) ? (
+          <option value={categoryId}>Danh mục hiện tại</option>
+        ) : null}
         {[...categories]
-          .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'vi'))
-          .map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+          .sort(
+            (left, right) =>
+              left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'vi'),
+          )
+          .map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
       </Select>
-      <Select label="Tình trạng" value={condition} disabled={formDisabled} onChange={(event) => setCondition(event.target.value as ApiCondition)}>
-        {CONDITIONS.map((value) => <option key={value} value={value}>{conditionLabel[value]}</option>)}
+      <Select
+        label="Tình trạng"
+        value={condition}
+        disabled={formDisabled}
+        onChange={(event) => setCondition(event.target.value as ApiCondition)}
+      >
+        {CONDITIONS.map((value) => (
+          <option key={value} value={value}>
+            {conditionLabel[value]}
+          </option>
+        ))}
       </Select>
       {condition === 'DEFECTIVE' ? (
         <>
-          <TextArea label="Ghi chú lỗi" value={defectNote} disabled={formDisabled} error={errors.defectNote} onChange={(event) => setDefectNote(event.target.value)} />
+          <TextArea
+            label="Ghi chú lỗi"
+            value={defectNote}
+            disabled={formDisabled}
+            error={errors.defectNote}
+            onChange={(event) => setDefectNote(event.target.value)}
+          />
           <ImageEditor
             label="Ảnh lỗi"
             hint="Cần ít nhất một ảnh thể hiện rõ lỗi."
@@ -973,43 +1131,92 @@ function EditItemForm({
             onAdd={addDefectImages}
             onRemoveExisting={(index) => {
               setDefectImages((current) => current.filter((_, itemIndex) => itemIndex !== index));
-              if (totalDefectImageCount - 1 === 0) setErrors((current) => ({ ...current, defectImages: 'Vui lòng chọn ít nhất một ảnh lỗi.' }));
+              if (totalDefectImageCount - 1 === 0)
+                setErrors((current) => ({
+                  ...current,
+                  defectImages: 'Vui lòng chọn ít nhất một ảnh lỗi.',
+                }));
             }}
             onRemoveNew={(index) => {
-              setNewDefectImages((current) => current.filter((_, itemIndex) => itemIndex !== index));
-              if (totalDefectImageCount - 1 === 0) setErrors((current) => ({ ...current, defectImages: 'Vui lòng chọn ít nhất một ảnh lỗi.' }));
+              setNewDefectImages((current) =>
+                current.filter((_, itemIndex) => itemIndex !== index),
+              );
+              if (totalDefectImageCount - 1 === 0)
+                setErrors((current) => ({
+                  ...current,
+                  defectImages: 'Vui lòng chọn ít nhất một ảnh lỗi.',
+                }));
             }}
           />
         </>
       ) : null}
-      <Field label="Thương hiệu (không bắt buộc)" value={brand} disabled={formDisabled} error={errors.brand} onChange={(event) => setBrand(event.target.value)} />
-      <Select label="Khu vực" value={areaId} disabled={formDisabled} onChange={(event) => setAreaId(Number(event.target.value))}>
-        {!areas.some((area) => area.id === areaId) ? <option value={areaId}>Khu vực hiện tại</option> : null}
-        {areas.map((area) => <option key={area.id} value={area.id}>{area.label}</option>)}
+      <Field
+        label="Thương hiệu (không bắt buộc)"
+        value={brand}
+        disabled={formDisabled}
+        error={errors.brand}
+        onChange={(event) => setBrand(event.target.value)}
+      />
+      <Select
+        label="Khu vực"
+        value={areaId}
+        disabled={formDisabled}
+        onChange={(event) => setAreaId(Number(event.target.value))}
+      >
+        {!areas.some((area) => area.id === areaId) ? (
+          <option value={areaId}>Khu vực hiện tại</option>
+        ) : null}
+        {areas.map((area) => (
+          <option key={area.id} value={area.id}>
+            {area.label}
+          </option>
+        ))}
       </Select>
-      <TextArea label="Mô tả" value={description} disabled={formDisabled} error={errors.description} onChange={(event) => setDescription(event.target.value)} />
-      {attributesLoading ? <p className="text-xs text-text-muted">Đang tải thuộc tính danh mục...</p> : null}
+      <TextArea
+        label="Mô tả"
+        value={description}
+        disabled={formDisabled}
+        error={errors.description}
+        onChange={(event) => setDescription(event.target.value)}
+      />
+      {attributesLoading ? (
+        <p className="text-xs text-text-muted">Đang tải thuộc tính danh mục...</p>
+      ) : null}
       {attributesError ? <p className="text-xs text-error">{attributesError}</p> : null}
       {!attributesLoading && !attributesError && sortedCategoryAttributes.length ? (
         <div className="flex flex-wrap gap-2">
           {sortedCategoryAttributes.map((attribute) => (
-            <span key={attribute.id} className="rounded-full bg-surface-low px-3 py-1 text-xs ring-1 ring-border">
+            <span
+              key={attribute.id}
+              className="rounded-full bg-surface-low px-3 py-1 text-xs ring-1 ring-border"
+            >
               {attribute.name}
               {attribute.required ? ' · bắt buộc' : ''}
-              {attribute.options.length ? ` · ${attribute.options.join(', ')}` : ` · ${attribute.dataType}`}
+              {attribute.options.length
+                ? ` · ${attribute.options.join(', ')}`
+                : ` · ${attribute.dataType}`}
             </span>
           ))}
         </div>
       ) : null}
       {operatingStatusAttribute ? (
         <div>
-          <Select label={`${operatingStatusAttribute.name}${operatingStatusRequired ? '' : ' (không bắt buộc)'}`} value={operatingStatus} disabled={formDisabled} onChange={(event) => setOperatingStatus(event.target.value as OperatingStatus | '')}>
+          <Select
+            label={`${operatingStatusAttribute.name}${operatingStatusRequired ? '' : ' (không bắt buộc)'}`}
+            value={operatingStatus}
+            disabled={formDisabled}
+            onChange={(event) => setOperatingStatus(event.target.value as OperatingStatus | '')}
+          >
             <option value="">Chọn trạng thái hoạt động</option>
             {operatingStatusOptions.map((option) => (
-              <option key={option} value={option}>{OPERATING_STATUS_LABELS[option]}</option>
+              <option key={option} value={option}>
+                {OPERATING_STATUS_LABELS[option]}
+              </option>
             ))}
           </Select>
-          {errors.operatingStatus ? <span className="mt-1 block text-xs text-error">{errors.operatingStatus}</span> : null}
+          {errors.operatingStatus ? (
+            <span className="mt-1 block text-xs text-error">{errors.operatingStatus}</span>
+          ) : null}
         </div>
       ) : null}
       <ImageEditor
@@ -1023,18 +1230,34 @@ function EditItemForm({
         onRemoveExisting={(index) => {
           setImages((current) => current.filter((_, itemIndex) => itemIndex !== index));
           const nextCount = totalImageCount - 1;
-          setErrors((current) => ({ ...current, images: nextCount < ITEM_IMAGES_MIN ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.` : undefined }));
+          setErrors((current) => ({
+            ...current,
+            images:
+              nextCount < ITEM_IMAGES_MIN
+                ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.`
+                : undefined,
+          }));
         }}
         onRemoveNew={(index) => {
           setNewImages((current) => current.filter((_, itemIndex) => itemIndex !== index));
           const nextCount = totalImageCount - 1;
-          setErrors((current) => ({ ...current, images: nextCount < ITEM_IMAGES_MIN ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.` : undefined }));
+          setErrors((current) => ({
+            ...current,
+            images:
+              nextCount < ITEM_IMAGES_MIN
+                ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.`
+                : undefined,
+          }));
         }}
       />
       {uploadError ? <Alert tone="error">{uploadError}</Alert> : null}
       <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="ghost" disabled={formDisabled} onClick={onCancel}>Hủy</Button>
-        <Button type="submit" disabled={formDisabled || attributesLoading}>{uploading || disabled ? 'Đang lưu...' : 'Lưu thay đổi'}</Button>
+        <Button type="button" variant="ghost" disabled={formDisabled} onClick={onCancel}>
+          Hủy
+        </Button>
+        <Button type="submit" disabled={formDisabled || attributesLoading}>
+          {uploading || disabled ? 'Đang lưu...' : 'Lưu thay đổi'}
+        </Button>
       </div>
     </form>
   );
@@ -1063,7 +1286,9 @@ function ImageEditor({
 }) {
   return (
     <div>
-      <label className={`block rounded-lg border border-dashed p-4 text-sm ${error ? 'border-error' : 'border-border'}`}>
+      <label
+        className={`block rounded-lg border border-dashed p-4 text-sm ${error ? 'border-error' : 'border-border'}`}
+      >
         <span className="font-semibold">{label}</span>
         <span className="mt-1 block text-xs text-text-muted">{hint}</span>
         <input
@@ -1137,7 +1362,10 @@ function EditableImage({
 function nameInitials(name: string): string {
   const words = name.trim().split(/\s+/);
   const lastTwoWords = words.slice(-2);
-  return lastTwoWords.map((word) => word.charAt(0)).join('').toUpperCase();
+  return lastTwoWords
+    .map((word) => word.charAt(0))
+    .join('')
+    .toUpperCase();
 }
 
 // Backend có thể không trả tên người gửi yêu cầu nên cần tên dự phòng để không hiện ô trống.
@@ -1158,43 +1386,74 @@ function SentRequestPanel({
 }) {
   const currentUser = useAppSelector(selectCurrentUser);
   return (
-    <div className="rounded-lg bg-white p-4 ring-1 ring-border/80">
-      <h3 className="text-sm font-bold">Yêu cầu giao dịch</h3>
+    <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-border/70 sm:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border/60 pb-4">
+        <div>
+          <h3 className="text-base font-bold text-text-primary">Yêu cầu giao dịch</h3>
+          <p className="mt-1 text-xs text-text-muted">Theo dõi các yêu cầu bạn đã gửi</p>
+        </div>
+        <span className="rounded-full bg-primary-soft px-2.5 py-1 text-xs font-bold text-primary">
+          {itemRequests.length} yêu cầu
+        </span>
+      </div>
       {itemRequests.length ? (
-        <div className="mt-3 space-y-3">
+        <div className="mt-4 divide-y divide-border/60">
           {itemRequests.map((request) => {
             const item = items.find((entry) => entry.id === request.itemId);
+            const requestComplete = request.status === 'COMPLETED';
+            const requestStopped = ['REJECTED', 'CANCELLED', 'DISPUTED'].includes(request.status);
             return (
-              <article key={request.id} className="rounded-md border border-border p-3">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <strong className="truncate text-sm">{request.itemTitle ?? item?.title ?? 'Bài đăng'}</strong>
-                      <TypeBadge type={request.type} />
-                      <span className="rounded-sm bg-warning-soft px-2 py-1 text-2xs font-semibold text-warning">
-                        {requestStatusLabel[request.status]}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-text-muted">
-                      {new Date(request.createdAt).toLocaleString('vi-VN')}
-                    </p>
-                    {request.offeredItemId || request.offeredItemTitle ? (
-                      <p className="mt-2 text-xs text-text-muted">
-                        Món đề nghị trao đổi: {request.offeredItemTitle ?? items.find((entry) => entry.id === request.offeredItemId)?.title ?? 'Món đề nghị'}
+              <article key={request.id} className="py-4 first:pt-0 last:pb-0">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <Link
+                    to={`/items/${request.itemId}`}
+                    className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4"
+                  >
+                    <ItemImage
+                      src={item?.images[0]}
+                      alt={request.itemTitle ?? item?.title ?? 'Ảnh món đồ'}
+                      className="size-20 shrink-0 rounded-lg object-cover ring-1 ring-border/60 sm:size-24"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-2xs font-semibold uppercase tracking-wide text-text-muted">
+                        Món yêu cầu
                       </p>
-                    ) : null}
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
+                      <strong className="mt-1 block truncate text-sm text-text-primary transition hover:text-primary sm:text-base">
+                        {request.itemTitle ?? item?.title ?? `Bài đăng #${request.itemId}`}
+                      </strong>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <TypeBadge type={request.type} />
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-2xs font-bold ${
+                            requestComplete
+                              ? 'bg-success-soft text-success'
+                              : requestStopped
+                                ? 'bg-error-soft text-error'
+                                : 'bg-warning-soft text-warning'
+                          }`}
+                        >
+                          {requestStatusLabel[request.status]}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs text-text-muted">
+                        {new Date(request.createdAt).toLocaleString('vi-VN')}
+                      </p>
+                    </div>
+                  </Link>
+                  <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col sm:items-stretch">
                     <Link to={`/requests/${request.id.replace(/^api_req_/, '')}`}>
-                      <Button variant="outline">Chi tiết giao dịch</Button>
+                      <Button size="sm" className="w-full" icon="eye">
+                        Xem chi tiết
+                      </Button>
                     </Link>
                     <Link to={`/items/${request.itemId}`}>
-                      <Button variant="outline" icon="eye">
+                      <Button size="sm" className="w-full" variant="outline">
                         Xem bài
                       </Button>
                     </Link>
                     {request.status === 'PENDING' && request.requesterId === currentUser?.id ? (
                       <Button
+                        size="sm"
                         variant="ghost"
                         icon="close"
                         disabled={cancelingRequestId === request.id}
@@ -1205,6 +1464,14 @@ function SentRequestPanel({
                     ) : null}
                   </div>
                 </div>
+                {request.offeredItemId || request.offeredItemTitle ? (
+                  <p className="mt-3 rounded-md bg-surface-low px-3 py-2 text-xs text-text-muted sm:ml-28">
+                    Món đề nghị trao đổi:{' '}
+                    {request.offeredItemTitle ??
+                      items.find((entry) => entry.id === request.offeredItemId)?.title ??
+                      'Món đề nghị'}
+                  </p>
+                ) : null}
               </article>
             );
           })}
@@ -1240,7 +1507,9 @@ function RequestPanel({
               <article key={request.id} className="rounded-md border border-border p-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex min-w-0 gap-3">
-                    <Avatar user={{ name: requesterName, avatarInitials: nameInitials(requesterName) }} />
+                    <Avatar
+                      user={{ name: requesterName, avatarInitials: nameInitials(requesterName) }}
+                    />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <strong className="truncate text-sm">{requesterName}</strong>
@@ -1261,7 +1530,9 @@ function RequestPanel({
                         {new Date(request.createdAt).toLocaleString('vi-VN')}
                       </p>
                       {request.message ? (
-                        <p className="mt-2 text-sm leading-6 text-text-secondary">{request.message}</p>
+                        <p className="mt-2 text-sm leading-6 text-text-secondary">
+                          {request.message}
+                        </p>
                       ) : null}
                     </div>
                   </div>
@@ -1272,12 +1543,11 @@ function RequestPanel({
                           Nhắn tin
                         </Button>
                       </Link>
-                    ) : allowAccept && request.status === 'PENDING' && !hasAcceptedRequest && !['IN_TRANSACTION', 'RESERVED'].includes(itemStatus) ? (
-                      <Button
-                        variant="outline"
-                        icon="check"
-                        onClick={() => onAccept(request.id)}
-                      >
+                    ) : allowAccept &&
+                      request.status === 'PENDING' &&
+                      !hasAcceptedRequest &&
+                      !['IN_TRANSACTION', 'RESERVED'].includes(itemStatus) ? (
+                      <Button variant="outline" icon="check" onClick={() => onAccept(request.id)}>
                         Chọn người này
                       </Button>
                     ) : null}

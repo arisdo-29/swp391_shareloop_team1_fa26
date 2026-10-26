@@ -6,8 +6,13 @@ import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import type { Item, ItemType } from '../../types/domain';
 import { catalogApi, type CategoryResponse } from '../../services/catalogApi';
-import { itemApi, type ApiCondition, type ItemResponse, type OfferType } from '../../services/itemApi';
-import { BoostBadge } from '../../components/BoostBadge';
+import {
+  itemApi,
+  type ApiCondition,
+  type ItemResponse,
+  type OfferType,
+  type PageResponse,
+} from '../../services/itemApi';
 import type { ApiError } from '../../services/http';
 import {
   toAreaOptions,
@@ -42,6 +47,50 @@ function loadBrowseItems(params: Parameters<typeof itemApi.list>[0]) {
   return request;
 }
 
+async function loadPaginatedBrowseItems(
+  params: Parameters<typeof itemApi.list>[0],
+  page: number,
+  boostedOnly: boolean,
+): Promise<PageResponse<ItemResponse>> {
+  const firstPage = await loadBrowseItems({ ...params, page: 0, size: PAGE_SIZE });
+  const sourceTotalPages =
+    firstPage.totalPages ?? Math.ceil(firstPage.totalElements / (firstPage.size || PAGE_SIZE));
+  const remainingPages = await Promise.all(
+    Array.from({ length: Math.max(0, sourceTotalPages - 1) }, (_, index) =>
+      loadBrowseItems({ ...params, page: index + 1, size: PAGE_SIZE }),
+    ),
+  );
+  const now = Date.now();
+  const uniqueItems = Array.from(
+    new Map(
+      [firstPage.items, ...remainingPages.map((response) => response.items)]
+        .flat()
+        .map((item) => [item.id, item]),
+    ).values(),
+  );
+  const pageItems = boostedOnly
+    ? uniqueItems
+        .filter(
+          (item) =>
+            item.status === 'APPROVED' &&
+            (!item.expireAt || new Date(item.expireAt).getTime() >= now) &&
+            Boolean(item.boostedUntil && new Date(item.boostedUntil).getTime() > now),
+        )
+        .sort((a, b) => b.boostedUntil!.localeCompare(a.boostedUntil!))
+    : uniqueItems;
+  const totalElements = pageItems.length;
+  const totalPages = Math.ceil(totalElements / PAGE_SIZE);
+  const safePage = totalPages ? Math.min(page, totalPages - 1) : 0;
+
+  return {
+    items: pageItems.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE),
+    page: safePage,
+    size: PAGE_SIZE,
+    totalElements,
+    totalPages,
+  };
+}
+
 export function Browse() {
   const [params, setParams] = useSearchParams();
   const [itemResponses, setItemResponses] = useState<ItemResponse[]>([]);
@@ -63,6 +112,7 @@ export function Browse() {
     ? conditionParam as ApiCondition
     : '';
   const district = params.get('district') ?? '';
+  const boostedOnly = params.get('boosted') === 'true';
   const [mobileFilters, setMobileFilters] = useState(false);
   const [page, setPage] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
@@ -105,7 +155,7 @@ export function Browse() {
     setItemsLoading(true);
     setItemsError('');
     const parsedAreaId = district ? Number(district) : undefined;
-    loadBrowseItems({
+    const requestParams = {
       categoryId,
       areaId:
         parsedAreaId !== undefined && Number.isSafeInteger(parsedAreaId) && parsedAreaId > 0
@@ -114,9 +164,9 @@ export function Browse() {
       q: q.trim() || undefined,
       condition: condition || undefined,
       offerType: type ? OFFER_TYPE_BY_TYPE[type] : undefined,
-      page,
-      size: PAGE_SIZE,
-    })
+    };
+    const request = loadPaginatedBrowseItems(requestParams, page, boostedOnly);
+    request
       .then((response) => {
         if (!active) return;
         setItemResponses(response.items);
@@ -138,7 +188,7 @@ export function Browse() {
     return () => {
       active = false;
     };
-  }, [categoryId, condition, district, itemsReloadKey, page, q, type]);
+  }, [boostedOnly, categoryId, condition, district, itemsReloadKey, page, q, type]);
 
   useEffect(() => {
     if (!district || districts.some((area) => String(area.id) === district)) return;
@@ -469,7 +519,6 @@ const BrowseProductCard = memo(function BrowseProductCard({ item }: { item: Item
         <span className="browse-product-card__badge">
           <TypeBadge type={item.type} />
         </span>
-        <span className="absolute right-3 top-3"><BoostBadge boostedUntil={item.boostedUntil} /></span>
       </div>
       <div className="browse-product-card__content">
         <h2>{item.title}</h2>

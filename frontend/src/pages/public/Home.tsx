@@ -17,7 +17,6 @@ import type { Item, ItemType, User } from '../../types/domain';
 import { catalogApi } from '../../services/catalogApi';
 import type { AreaResponse, CategoryResponse } from '../../services/catalogApi';
 import { itemApi, type ItemResponse, type PageResponse } from '../../services/itemApi';
-import { BoostBadge } from '../../components/BoostBadge';
 import { toAreaNameMap, toAreaOptions, toCategoryNameMap, toFeItem, type AreaOption } from '../../services/mappers';
 import { categoryBrowsePath } from '../../utils/browseFilters';
 import { HomeLifecycle, HomeProcess } from './HomeCommunity';
@@ -31,6 +30,7 @@ const newItemFilters: Array<{ value: 'all' | ItemType; label: string }> = [
 ];
 
 let pendingHomeItemsRequest: Promise<PageResponse<ItemResponse>> | null = null;
+let pendingHomeFeaturedItemsRequest: Promise<ItemResponse[]> | null = null;
 
 function loadHomeItems() {
   if (pendingHomeItemsRequest) return pendingHomeItemsRequest;
@@ -39,6 +39,27 @@ function loadHomeItems() {
     if (pendingHomeItemsRequest === request) pendingHomeItemsRequest = null;
   });
   pendingHomeItemsRequest = request;
+  return request;
+}
+
+function loadHomeFeaturedItems() {
+  if (pendingHomeFeaturedItemsRequest) return pendingHomeFeaturedItemsRequest;
+
+  const request = loadHomeItems()
+    .then(async (firstPage) => {
+      const totalPages =
+        firstPage.totalPages ?? Math.ceil(firstPage.totalElements / (firstPage.size || 100));
+      const remainingPages = await Promise.all(
+        Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) =>
+          itemApi.list({ page: index + 1, size: 100 }),
+        ),
+      );
+      return [firstPage.items, ...remainingPages.map((response) => response.items)].flat();
+    })
+    .finally(() => {
+      if (pendingHomeFeaturedItemsRequest === request) pendingHomeFeaturedItemsRequest = null;
+    });
+  pendingHomeFeaturedItemsRequest = request;
   return request;
 }
 
@@ -84,7 +105,15 @@ function HomeSection({ children, className = '' }: { children: ReactNode; classN
   );
 }
 
-function HomeProductCard({ item, owner, tradeFor }: { item: Item; owner?: User; tradeFor?: string }) {
+function HomeProductCard({
+  item,
+  owner,
+  tradeFor,
+}: {
+  item: Item;
+  owner?: User;
+  tradeFor?: string;
+}) {
   return (
     <Link to={`/items/${item.id}`} className="home-product-card group">
       <div className="home-product-card-image">
@@ -97,7 +126,6 @@ function HomeProductCard({ item, owner, tradeFor }: { item: Item; owner?: User; 
         <span className="absolute left-3 top-3">
           <TypeBadge type={item.type} />
         </span>
-        <span className="absolute right-3 top-3"><BoostBadge boostedUntil={item.boostedUntil} /></span>
       </div>
       <div className="home-product-card-copy">
         <h3>{item.title}</h3>
@@ -295,6 +323,7 @@ export function Home() {
   const currentUser = useAppSelector(selectCurrentUser);
   const navigate = useNavigate();
   const [itemResponses, setItemResponses] = useState<ItemResponse[]>([]);
+  const [featuredItemResponses, setFeaturedItemResponses] = useState<ItemResponse[]>([]);
   const [categoryResponses, setCategoryResponses] = useState<CategoryResponse[]>([]);
   const [areaResponses, setAreaResponses] = useState<AreaResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -318,13 +347,16 @@ export function Home() {
       if (active) setAreaResponses(areaData);
     }).catch(() => undefined);
 
-    void loadHomeItems()
-      .then((response) => {
-        if (active) setItemResponses(response.items);
+    void Promise.all([loadHomeItems(), loadHomeFeaturedItems()])
+      .then(([response, featuredResponses]) => {
+        if (!active) return;
+        setItemResponses(response.items);
+        setFeaturedItemResponses(featuredResponses);
       })
       .catch((caught: { message?: string }) => {
         if (!active) return;
         setItemResponses([]);
+        setFeaturedItemResponses([]);
         setLoadError(caught.message || 'Không tải được bài đăng.');
       })
       .finally(() => {
@@ -347,6 +379,10 @@ export function Home() {
     () => itemResponses.map((entry) => toFeItem(entry, categoryNameMap, areaNameMap)),
     [areaNameMap, categoryNameMap, itemResponses],
   );
+  const featuredItems = useMemo(
+    () => featuredItemResponses.map((entry) => toFeItem(entry, categoryNameMap, areaNameMap)),
+    [areaNameMap, categoryNameMap, featuredItemResponses],
+  );
 
   const approved = useMemo(
     () =>
@@ -361,13 +397,20 @@ export function Home() {
     [items],
   );
   const gifts = approved.filter((item) => item.type === 'gift');
-  const trades = approved.filter((item) => item.type === 'trade');
+  const newestApproved = [...approved].sort((a, b) => b.postedAt.localeCompare(a.postedAt));
+  const trades = newestApproved.filter((item) => item.type === 'trade');
   const newItems = (
     newItemFilter === 'all'
-      ? approved
-      : approved.filter((item) => item.type === newItemFilter)
+      ? newestApproved
+      : newestApproved.filter((item) => item.type === newItemFilter)
   ).slice(0, 5);
-  const featured = approved.slice(0, 8);
+  const boostedItems = featuredItems
+    .filter((item) => item.status === 'approved' || item.status === 'APPROVED')
+    .filter((item) => !item.expiresAt || new Date(item.expiresAt).getTime() >= Date.now())
+    .filter((item) => item.boostedUntil && new Date(item.boostedUntil).getTime() > Date.now())
+    .sort((a, b) => b.boostedUntil!.localeCompare(a.boostedUntil!));
+  const heroItems = boostedItems.filter((item) => item.images.length > 0).slice(0, 8);
+  const featured = boostedItems.slice(0, 5);
   const districtCounts = districtOptions.slice(0, 6).map((area) => ({
     name: area.label,
     id: area.id,
@@ -392,7 +435,7 @@ export function Home() {
 
   return (
     <div className="home-page pb-12 sm:pb-16">
-      <HomeHeroCarousel items={approved}>
+      <HomeHeroCarousel items={heroItems}>
         <div className="max-w-2xl">
           <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-fixed">
             Cộng đồng cho tặng và trao đổi tại TP.HCM
@@ -482,7 +525,7 @@ export function Home() {
         </HomeSection>
 
         <HomeSection className="home-band">
-          <SectionHeading title="Món đồ mới trong cộng đồng" description="Những món đồ vừa được chia sẻ và đang chờ một vòng đời mới." href="/browse" />
+          <SectionHeading title="Món đồ mới" description="Những món đồ vừa được chia sẻ và đang chờ một vòng đời mới." href="/browse" />
           <div className="home-new-filters" role="tablist" aria-label="Lọc món đồ mới">
             {newItemFilters.map((filter) => (
               <button
@@ -504,9 +547,9 @@ export function Home() {
         </HomeSection>
 
         <HomeSection className="home-band">
-          <SectionHeading title="Được quan tâm trong cộng đồng" description="Những món đồ nổi bật đang sẵn sàng cho một kết nối mới." href="/browse" />
-          <div className="home-product-grid">
-            {featured.slice(0, 5).map((item) => (
+          <SectionHeading title="Tin nổi bật" description="Những món đồ nổi bật đang sẵn sàng cho một kết nối mới." href="/browse?boosted=true" />
+          <div className="home-product-grid home-new-items-grid">
+            {featured.map((item) => (
               <HomeProductCard key={item.id} item={item} />
             ))}
           </div>
