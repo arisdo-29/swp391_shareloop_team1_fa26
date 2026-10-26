@@ -4,6 +4,7 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser, selectData } from '../../app/store';
 import {
   Alert,
+  Skeleton,
   Button,
   ConditionBadge,
   Icon,
@@ -13,6 +14,7 @@ import {
   TextArea,
   TypeBadge,
 } from '../../components/ui';
+import { DialogFrame } from '../../components/Dialog';
 import { catalogApi } from '../../services/catalogApi';
 import { itemApi } from '../../services/itemApi';
 import { requestApi, toBackendUserId, toFeItemRequest } from '../../services/requestApi';
@@ -113,7 +115,23 @@ export function ProductDetail() {
   if (loadingItem)
     return (
       <div className="page-shell">
-        <Alert tone="warning">{itemError || 'Đang tải chi tiết bài đăng...'}</Alert>
+        {itemError ? (
+          <Alert tone="warning">{itemError}</Alert>
+        ) : (
+          <div
+            role="status"
+            aria-label="Đang tải chi tiết bài đăng"
+            className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]"
+          >
+            <div className="space-y-4">
+              <Skeleton className="aspect-[4/3] w-full" />
+              <Skeleton className="h-8 w-2/3" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+            </div>
+            <Skeleton className="h-64 w-full" />
+          </div>
+        )}
       </div>
     );
 
@@ -280,7 +298,7 @@ export function ProductDetail() {
                   aria-label={`Xem ảnh ${index + 1}`}
                   aria-pressed={selectedImageIndex === index}
                   onClick={() => setSelectedImageIndex(index)}
-                  className={`shrink-0 overflow-hidden rounded-md ${selectedImageIndex === index ? 'ring-2 ring-primary' : 'ring-1 ring-border'}`}
+                  className={`shrink-0 overflow-hidden rounded-md focus-visible:outline-primary ${selectedImageIndex === index ? 'ring-2 ring-primary' : 'ring-1 ring-border'}`}
                 >
                   <ItemImage
                     src={image}
@@ -367,12 +385,12 @@ export function ProductDetail() {
               </p>
             ) : null}
             {requestSuccess ? (
-              <div className="mt-3 rounded-md bg-emerald-50 p-3 text-xs leading-5 text-success">
+              <div className="mt-3 rounded-md bg-success-soft p-3 text-xs leading-5 text-success">
                 <p>{requestSuccess}</p>
               </div>
             ) : null}
             {requestError ? (
-              <div className="mt-3 rounded-md bg-amber-50 p-3 text-xs leading-5 text-warning">
+              <div className="mt-3 rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
                 <p>{requestError}</p>
               </div>
             ) : null}
@@ -400,7 +418,7 @@ export function ProductDetail() {
               </Button>
             ) : null}
             {reportNotice ? (
-              <div className="mt-3 rounded-md bg-emerald-50 p-3 text-xs leading-5 text-success">
+              <div className="mt-3 rounded-md bg-success-soft p-3 text-xs leading-5 text-success">
                 {reportNotice}
               </div>
             ) : null}
@@ -419,86 +437,74 @@ export function ProductDetail() {
       </div>
 
       {requestOpen ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="w-full rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6"
-          >
-            <h2 className="text-xl font-bold">
-              {item.type === 'gift' ? 'Gửi yêu cầu nhận' : 'Đề nghị trao đổi'}
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-text-muted">
-              {item.type === 'gift'
-                ? 'Bạn muốn gửi yêu cầu nhận món đồ này?'
-                : 'Chọn một món của bạn để đề nghị trao đổi.'}
-            </p>
-            {item.type === 'trade' ? (
-              <div className="mt-5">
-                <span className="label">Món bạn muốn dùng để trao đổi</span>
-                <div className="space-y-2">
-                  {eligibleOfferedItems.map((entry) => (
-                    <label
-                      key={entry.id}
-                      className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 transition ${offeredItemId === entry.id ? 'border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
-                    >
-                      <input
-                        type="radio"
-                        name="offeredItem"
-                        value={entry.id}
-                        checked={offeredItemId === entry.id}
-                        onChange={() => setOfferedItemId(entry.id)}
-                      />
-                      <ItemImage src={entry.images[0]} alt={entry.title} className="size-12 rounded-md object-cover" />
-                      <span className="min-w-0 flex-1">
-                        <strong className="block truncate text-sm">{entry.title}</strong>
-                        <span className="text-xs text-text-muted">{entry.district}</span>
-                      </span>
-                    </label>
-                  ))}
-                  {!eligibleOfferedItems.length ? (
-                    <p className="rounded-md bg-amber-50 p-3 text-xs leading-5 text-warning">
-                      Bạn chưa có món đã duyệt, còn hoạt động và chưa nằm trong giao dịch khác để trao đổi.
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
+        <DialogFrame>
+          <h2 className="text-xl font-bold">
+            {item.type === 'gift' ? 'Gửi yêu cầu nhận' : 'Đề nghị trao đổi'}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-text-muted">
+            {item.type === 'gift'
+              ? 'Bạn muốn gửi yêu cầu nhận món đồ này?'
+              : 'Chọn một món của bạn để đề nghị trao đổi.'}
+          </p>
+          {item.type === 'trade' ? (
             <div className="mt-5">
-              <TextArea
-                label="Lời nhắn cho người đăng"
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-              />
+              <span className="label">Món bạn muốn dùng để trao đổi</span>
+              <div className="space-y-2">
+                {eligibleOfferedItems.map((entry) => (
+                  <label
+                    key={entry.id}
+                    className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 transition ${offeredItemId === entry.id ? 'border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
+                  >
+                    <input
+                      type="radio"
+                      name="offeredItem"
+                      value={entry.id}
+                      checked={offeredItemId === entry.id}
+                      onChange={() => setOfferedItemId(entry.id)}
+                    />
+                    <ItemImage src={entry.images[0]} alt={entry.title} className="size-12 rounded-md object-cover" />
+                    <span className="min-w-0 flex-1">
+                      <strong className="block truncate text-sm">{entry.title}</strong>
+                      <span className="text-xs text-text-muted">{entry.district}</span>
+                    </span>
+                  </label>
+                ))}
+                {!eligibleOfferedItems.length ? (
+                  <p className="rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
+                    Bạn chưa có món đã duyệt, còn hoạt động và chưa nằm trong giao dịch khác để trao đổi.
+                  </p>
+                ) : null}
+              </div>
             </div>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setRequestOpen(false)}>
-                Hủy
-              </Button>
-              <Button onClick={submitRequest} disabled={requestSubmitting || (item.type === 'trade' && !eligibleOfferedItems.length)}>
-                {item.type === 'gift' ? 'Gửi yêu cầu' : 'Gửi đề nghị trao đổi'}
-              </Button>
-            </div>
+          ) : null}
+          <div className="mt-5">
+            <TextArea
+              label="Lời nhắn cho người đăng"
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+            />
           </div>
-        </div>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setRequestOpen(false)}>
+              Hủy
+            </Button>
+            <Button onClick={submitRequest} disabled={requestSubmitting || (item.type === 'trade' && !eligibleOfferedItems.length)}>
+              {item.type === 'gift' ? 'Gửi yêu cầu' : 'Gửi đề nghị trao đổi'}
+            </Button>
+          </div>
+        </DialogFrame>
       ) : null}
 
       {loginPromptOpen ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="w-full rounded-t-xl bg-white p-5 shadow-lg sm:max-w-md sm:rounded-xl sm:p-6"
-          >
-            <h2 className="text-xl font-bold">Bạn cần đăng nhập để sử dụng chức năng này.</h2>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setLoginPromptOpen(false)}>
-                Để sau
-              </Button>
-              <Button onClick={() => navigate('/login')}>Đăng nhập</Button>
-            </div>
+        <DialogFrame size="sm">
+          <h2 className="text-xl font-bold">Bạn cần đăng nhập để sử dụng chức năng này.</h2>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setLoginPromptOpen(false)}>
+              Để sau
+            </Button>
+            <Button onClick={() => navigate('/login')}>Đăng nhập</Button>
           </div>
-        </div>
+        </DialogFrame>
       ) : null}
 
       {reportOpen && currentUserId && !own ? (

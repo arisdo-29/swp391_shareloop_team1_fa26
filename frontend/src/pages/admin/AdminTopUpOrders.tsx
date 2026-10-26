@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { Pagination } from '../../components/Pagination';
-import { Alert, Button, EmptyState, PageHeader, TextArea } from '../../components/ui';
+import { Alert, Button, PageHeader, TextArea, SkeletonRows } from '../../components/ui';
 import { adminFinanceApi } from '../../services/adminFinanceApi';
 import type { ApiError } from '../../services/http';
 import type { PageResponse } from '../../services/itemApi';
@@ -168,7 +168,7 @@ export function AdminTopUpOrders() {
       ) : null}
 
       {loading && !result ? (
-        <EmptyState title="Đang tải đơn nạp" text="Vui lòng chờ trong giây lát." />
+        <SkeletonRows label="Đang tải đơn nạp" />
       ) : result ? (
         <div>
           <div className="table-wrap">

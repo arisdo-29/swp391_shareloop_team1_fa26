@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Alert, Button, EmptyState, PageHeader } from '../../components/ui';
+import { Alert, Button, EmptyState, PageHeader, SkeletonRows } from '../../components/ui';
 import type { AdminConfigResponse } from '../../services/adminConfigApi';
 import { ConfigEditDialog } from './ConfigEditDialog';
 import { formatConfigValue } from './configDisplay';
@@ -65,7 +65,7 @@ export function AdminConfigs() {
       ) : null}
 
       {loading ? (
-        <EmptyState title="Đang tải cấu hình" text="Vui lòng chờ trong giây lát." />
+        <SkeletonRows label="Đang tải cấu hình" />
       ) : error ? (
         <div className="space-y-3">
           <Alert tone="error">{error}</Alert>

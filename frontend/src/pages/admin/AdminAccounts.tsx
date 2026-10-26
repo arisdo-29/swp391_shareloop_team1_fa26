@@ -5,11 +5,11 @@ import { Pagination } from '../../components/Pagination';
 import {
   Alert,
   Button,
-  EmptyState,
   PageHeader,
   SearchField,
   Select,
   TextArea,
+  SkeletonRows,
 } from '../../components/ui';
 import { adminFinanceApi } from '../../services/adminFinanceApi';
 import {
@@ -166,7 +166,7 @@ export function AdminAccounts() {
       ) : null}
 
       {loading && !result ? (
-        <EmptyState title="Đang tải danh sách tài khoản" text="Vui lòng chờ trong giây lát." />
+        <SkeletonRows label="Đang tải danh sách tài khoản" />
       ) : result ? (
         <>
           <div className="table-wrap">

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, EmptyState, PageHeader } from '../../components/ui';
+import { Alert, Button, EmptyState, PageHeader, SkeletonRows } from '../../components/ui';
 import { adminAnomalyApi, type AnomalyReportResponse, type AnomalyUser } from '../../services/adminAnomalyApi';
 import type { ApiError } from '../../services/http';
 
@@ -70,7 +70,7 @@ export function AdminAnomalies() {
       {error ? <Alert tone="error">{error}</Alert> : null}
 
       {loading && !report ? (
-        <EmptyState title="Đang tải cảnh báo" text="Vui lòng chờ trong giây lát." />
+        <SkeletonRows label="Đang tải cảnh báo" />
       ) : report && report.repeatedPairs.length === 0 ? (
         <EmptyState
           icon="activity"

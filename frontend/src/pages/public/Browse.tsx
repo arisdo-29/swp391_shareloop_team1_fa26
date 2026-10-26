@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import browseBanner from '../../assets/browse-banner-shareloop-dark.webp';
-import { Button, ConditionBadge, EmptyState, Icon, ItemImage, TypeBadge } from '../../components/ui';
+import { Button, ConditionBadge, EmptyState, Icon, ItemImage, LoadingState, TypeBadge } from '../../components/ui';
 import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import type { Item, ItemType } from '../../types/domain';
@@ -205,7 +205,7 @@ export function Browse() {
 
   const filters = (
     <>
-      <div className="flex h-11 items-center rounded-xl border border-border bg-white px-3 transition hover:border-primary/40 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
+      <div className="flex h-11 items-center rounded-xl border border-border bg-white px-3 transition hover:border-primary/40 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/25">
         <Icon name="search" className="size-4 shrink-0 text-text-muted" />
         <input
           value={q}
@@ -213,7 +213,7 @@ export function Browse() {
             setFilter('q', e.target.value);
           }}
           placeholder="Tìm tên món đồ..."
-          className="min-w-0 flex-1 border-0 bg-transparent px-2.5 text-sm outline-none placeholder:text-text-muted/70"
+          className="min-w-0 flex-1 border-0 bg-transparent px-2.5 text-sm outline-none placeholder:text-text-muted"
         />
       </div>
       {activeFilters.length ? (
@@ -223,7 +223,7 @@ export function Browse() {
               key={filter.key}
               type="button"
               onClick={filter.clear}
-              className="inline-flex min-h-7 max-w-full items-start gap-1.5 rounded-full border border-primary/15 bg-primary-faint px-2.5 py-1.5 text-left text-xs font-semibold leading-4 text-primary transition hover:border-primary/40 hover:bg-primary-soft"
+              className="inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-full border border-primary/15 bg-primary-faint px-2.5 py-1.5 text-left text-xs font-semibold leading-4 text-primary transition hover:border-primary/40 hover:bg-primary-soft"
             >
               <span className="min-w-0 break-words">{filter.label}</span>
               <Icon name="close" className="mt-0.5 size-3 shrink-0" />
@@ -294,7 +294,7 @@ export function Browse() {
         {catalogError ? (
           <div className="space-y-2">
             <p className="text-xs text-error">{catalogError}</p>
-            <Button variant="outline" size="sm" onClick={() => setCatalogReloadKey((key) => key + 1)}>
+            <Button variant="outline" onClick={() => setCatalogReloadKey((key) => key + 1)}>
               Thử tải lại
             </Button>
           </div>
@@ -302,7 +302,6 @@ export function Browse() {
       </div>
       <Button
         type="button"
-        size="sm"
         className="browse-filter-apply"
         onClick={() => setMobileFilters(false)}
       >
@@ -398,7 +397,9 @@ export function Browse() {
             </div>
 
             {itemsLoading ? (
-              <EmptyState title="Đang tải bài đăng" text="Vui lòng chờ trong giây lát." />
+              <div role="status" aria-label="Đang tải bài đăng">
+                <LoadingState />
+              </div>
             ) : itemsError ? (
               <EmptyState
                 title="Không tải được bài đăng"

@@ -12,6 +12,7 @@ import {
   SearchField,
   TypeBadge,
 } from '../../components/ui';
+import { DialogFrame } from '../../components/Dialog';
 import type { Item, ItemType, User } from '../../types/domain';
 import { catalogApi } from '../../services/catalogApi';
 import type { AreaResponse, CategoryResponse } from '../../services/catalogApi';
@@ -214,7 +215,7 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
 
           <Link
             to={`/items/${activeItem.id}`}
-            className="group relative block h-[300px] overflow-hidden rounded-xl bg-black/20 shadow-[0_24px_70px_rgba(0,0,0,0.32)] ring-1 ring-white/20 sm:h-[380px] lg:h-[430px]"
+            className="group relative block h-[300px] overflow-hidden rounded-xl bg-black/20 shadow-lg ring-1 ring-white/20 sm:h-[380px] lg:h-[430px]"
             aria-label={`Xem chi tiết ${activeItem.title}`}
           >
             {slides.map((item, index) => (
@@ -439,11 +440,11 @@ export function Home() {
 
       {loading || loadError ? (
         <div className="home-inner py-5">
-          <div className={`rounded-lg p-4 text-sm ${loadError ? 'bg-red-50 text-error' : 'bg-primary-faint text-primary'}`}>
+          <div role={loadError ? 'alert' : 'status'} className={`rounded-lg p-4 text-sm ${loadError ? 'bg-error-soft text-error' : 'bg-primary-faint text-primary'}`}>
             {loadError ? (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span>{loadError}</span>
-                <Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Thử lại</Button>
+                <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Thử lại</Button>
               </div>
             ) : 'Đang tải bài đăng mới nhất...'}
           </div>
@@ -585,21 +586,15 @@ export function Home() {
 
       </HomeMotion>
       {loginPromptOpen ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="w-full rounded-t-xl bg-white p-5 text-text-primary shadow-lg sm:max-w-md sm:rounded-xl sm:p-6"
-          >
-            <h2 className="text-xl font-bold">Bạn cần đăng nhập để đăng đồ.</h2>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setLoginPromptOpen(false)}>
-                Để sau
-              </Button>
-              <Button onClick={() => navigate('/login')}>Đăng nhập</Button>
-            </div>
+        <DialogFrame size="sm" className="text-text-primary">
+          <h2 className="text-xl font-bold">Bạn cần đăng nhập để đăng đồ.</h2>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setLoginPromptOpen(false)}>
+              Để sau
+            </Button>
+            <Button onClick={() => navigate('/login')}>Đăng nhập</Button>
           </div>
-        </div>
+        </DialogFrame>
       ) : null}
     </div>
   );

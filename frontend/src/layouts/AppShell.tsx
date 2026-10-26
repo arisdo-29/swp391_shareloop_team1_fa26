@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { actions, selectCurrentUser } from '../app/store';
 import { Button, Icon, IconButton } from '../components/ui';
+import { DialogFrame } from '../components/Dialog';
 import { authApi } from '../services/authApi';
 import { NotificationMenu } from '../components/NotificationMenu';
 import { ShareLoopLogo } from '../components/ShareLoopLogo';
@@ -399,24 +400,17 @@ function AppShellContent() {
         </footer>
       ) : null}
       {loginPromptOpen ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/45 sm:place-items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="login-prompt-title"
-            className="w-full rounded-t-xl bg-white p-5 text-text-primary shadow-lg sm:max-w-md sm:rounded-xl sm:p-6"
-          >
-            <h2 id="login-prompt-title" className="text-xl font-bold">Bạn cần đăng nhập để đăng đồ.</h2>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setLoginPromptOpen(false)}>
-                Để sau
-              </Button>
-              <Link to="/login" onClick={() => setLoginPromptOpen(false)}>
-                <Button>Đăng nhập</Button>
-              </Link>
-            </div>
+        <DialogFrame labelledBy="login-prompt-title" size="sm" className="text-text-primary">
+          <h2 id="login-prompt-title" className="text-xl font-bold">Bạn cần đăng nhập để đăng đồ.</h2>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setLoginPromptOpen(false)}>
+              Để sau
+            </Button>
+            <Link to="/login" onClick={() => setLoginPromptOpen(false)}>
+              <Button>Đăng nhập</Button>
+            </Link>
           </div>
-        </div>
+        </DialogFrame>
       ) : null}
     </div>
   );

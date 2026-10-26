@@ -113,3 +113,71 @@ Còn lại (không xử lý trong Đợt 2 vì rủi ro cao hoặc đụng `ui.t
 - Bỏ qua đúng yêu cầu: bảng khu vực trong `AdminPages.tsx` (`ApiAdminAreas`, `ApiAreaModal`), còn nguyên `size="sm"`.
 
 Còn lại cho phần 2 (cần sửa `ui.tsx` hoặc trang công khai): xem mục C; thêm `home-content.css` và `browse.css` còn hex, trong đó 9 chỗ vẫn dùng #73807b cũ; bảng admin chưa có khung chờ dạng skeleton; hộp thoại tự dựng ở AdminComplaints, AdminAuthenticity, AdminPages chưa gộp vào `Dialog`.
+
+## H. Cập nhật sau Đợt 4 (component dùng chung `ui.tsx`)
+
+Đã xử lý trong mục C (nặng):
+- `Button`: cỡ `sm` đổi `min-h-9` → `min-h-11`; `danger` dùng `bg-error-soft`, hết `bg-red-50`/`bg-red-100`.
+- `IconButton`: `size-10` → `size-11`, thêm trạng thái disabled.
+- `StatusBadge`: tách bảng nhãn (`itemStatusLabel`, `otherStatusLabel`) và hai hàm `statusLabel`, `statusTone`; nền `*-soft`; `text-2xs`. Nhãn và thứ tự ưu tiên giữ như cũ.
+- `Alert`: nền và viền `*-soft`, `border-*/20`. Chưa thêm `role` vì nhiều trang đã tự bọc `role="alert"`/`role="status"`, thêm nữa sẽ đọc trùng.
+- `ProductCard`: `bg-[#FFFAF5]` → `bg-surface`.
+- `Field`, `TextArea`, `Select`: có `aria-invalid`, `aria-describedby`, `hint` và `error` đồng bộ; dòng lỗi có `role="alert"`.
+- `SearchField`: vòng focus `ring-primary/25`, hover viền rõ hơn, placeholder đủ tương phản.
+- Thêm `Skeleton` và `SkeletonRows` (chưa dùng ở trang nào, dành cho Đợt 5).
+- `TypeBadge`, `ConditionBadge`, `Avatar`: `text-[11px]` → `text-2xs`.
+
+Còn lại: `ProductCard`/`HorizontalProductCard`/`OwnerCard` vẫn dùng `text-xs text-text-muted`; `PageHeader` chưa có biến thể gọn; `LoadingState` chỉ dạng lưới thẻ.
+
+### Ghi chú cho PR #332
+Đợt 4 chỉ sửa `ui.tsx`, không đổi tên, props hay export. Khối đã đổi:
+- `ProductCard`: chỉ đổi className ở thẻ `Link` ngoài cùng (`bg-[#FFFAF5]` → `bg-surface`). Footer thẻ bài và khối `owner` không đụng tới.
+- `OwnerCard`, `HorizontalProductCard`: không sửa.
+- `TypeBadge`, `ConditionBadge`, `StatusBadge`, `Avatar`: chỉ đổi className cỡ chữ. `StatusBadge` đổi cấu trúc bên trong (hàm `statusLabel`, `statusTone`); nếu #332 thêm trạng thái mới (ví dụ nhãn "Được đẩy") thì thêm vào `otherStatusLabel`.
+- `Home.tsx`, `Browse.tsx`, `ProductDetail.tsx`: chưa sửa ở đợt này.
+
+## I. Cập nhật sau Đợt 5 (hộp thoại và khung chờ bảng admin)
+
+Đã xử lý:
+- `Dialog.tsx`: thêm `DialogFrame` chỉ vẽ khung (lớp phủ `bg-black/45`, `z-50`, tấm trắng `shadow-lg`, bottom-sheet trên mobile, `role="dialog"`, `aria-modal`, `aria-labelledby`). Có `onClose` tuỳ chọn để thêm Esc và bấm nền. `Dialog` cũ dựng trên `DialogFrame`, nút đóng cao 44px.
+- Gộp khung tự dựng vào `DialogFrame` (nội dung bên trong giữ nguyên, chỉ lùi một cấp): `AppShell` (đăng nhập), `CreditHistoryView` (thêm Esc), `Activities` (3 hộp), `Post`, `ReportDialog`, `Messages` (3 hộp), `AdminAuthenticity`, `AdminComplaints`, `AdminPages` (`ApiAreaModal`), `Home` (nhắc đăng nhập), `ProductDetail` (2 hộp).
+- Các hộp giữ cách đóng cũ (Messages chọn yêu cầu, AdminPages có bộ lắng nghe Esc riêng nên không truyền `onClose`).
+- Khung chờ `SkeletonRows` thay `EmptyState` "Đang tải..." ở: `AdminAccounts`, `AdminAnomalies`, `AdminComplaints`, `AdminConfigs`, `AdminFinanceUsers`, `AdminModerationList`, `AdminReputation`, `AdminTopUpOrders`, `AdminPages` (nhật ký, từ điển, checklist). `aria-label` giữ đúng chữ cũ.
+
+Còn lại: `AdminFinancePages` (tổng quan, báo cáo, nhật ký), `AdminModerationDetail`, `AdminFinanceUsers` (lịch sử Credit) vẫn là chữ hoặc `EmptyState`; chờ ở Activities, Messages, Credit, Browse, ProductDetail dồn sang Đợt 7 hoặc đợt sau. `AdminComplaints` đổi chiều rộng hộp từ `max-w-2xl` sang `max-w-3xl` (cỡ `xl`, xem mục J).
+
+### Ghi chú cho PR #332 (bổ sung Đợt 5)
+- `Home.tsx`: chỉ thay khung hộp thoại "Bạn cần đăng nhập để đăng đồ" (khối cuối file) và thêm một dòng import `DialogFrame`. Không động tới hero, thẻ bài, uy tín.
+- `ProductDetail.tsx`: chỉ thay khung của hai hộp thoại (`requestOpen`, `loginPromptOpen`) và thêm một dòng import. Thẻ người đăng và biến `owner` giữ nguyên. Nội dung hai hộp bị lùi một cấp thụt lề, nên git có thể báo conflict khi #332 sửa trong chính hai khối này.
+- `ui.tsx`: không sửa thêm ở Đợt 5.
+
+## J. Cập nhật sau Đợt 6 (CSS trang công khai)
+
+- `AdminComplaints`: hộp chi tiết khiếu nại dùng `DialogFrame size="xl"` (max-w-3xl) vì có ảnh bằng chứng và form kết luận. Cập nhật lại mục I (không thu xuống `max-w-xl`).
+- `browse.css`, `home-content.css`: không còn `#73807b`. Hex trùng đúng giá trị biến đã đổi sang `var(--color-*)`; `rgba(20, 92, 78, a)` đổi sang `color-mix(in srgb, var(--color-primary) a%, transparent)`. Phần hex còn lại xem mục "Nợ kỹ thuật" ngay bên dưới.
+
+### Nợ kỹ thuật: hex còn lại trong CSS trang công khai (sau Đợt 6)
+Giữ nguyên có chủ đích để không đổi màu Home trước demo; đây là bảng màu riêng của Home, không thuộc hệ token chung.
+- `browse.css`: 4 hex xám xanh (`#e0e6e3`, `#f7f9f8`, `#edf0ef`, `#e7ecea`) và 3 `rgba(20, 45, 38, …)` cho bóng.
+- `home-content.css`: 57 hex gồm các tint xanh rêu (`#edf2f1`, `#d7e5de`, `#d6e3dd`, `#c6d9cf`...), xanh rêu đậm (`#143f35`, `#123f35`, `#0f5f4e`, `#0f6b59`), kem cam (`#fffaf5`, `#fbf3ee`, `#f8eee7`), xanh dương nhạt (`#f2f6fa`, `#eef3fb`...), vàng ô liu (`#f4f1dd`, `#6a641d`), xám xanh dùng cho chữ (`#53625d`, `#61706b`, `#6b766f`), màu có alpha (`#ffffffb3`, `#17211e0d`, `#142d3812`) và 4 `rgba` cho bóng/viền.
+- Đã thêm `--color-primary-faint`, `--color-secondary-hover` vào `:root` (đúng giá trị tailwind) và dùng thay `#f2f7f5`, `#984629`.
+- Đã sửa duy nhất chữ không đạt AA: `.home-lifecycle .home-value span` `#8fa59b` (2,51:1 trên `#f8fbf9`) → `var(--color-text-muted)` (5,33:1).
+- Hướng xử lý sau demo: gom các tint về 3–4 mức `color-mix(in srgb, var(--color-primary) N%, #fff)` hoặc thêm token `primary-wash` ở `tailwind.config.js`, rồi so ảnh chụp Home trước và sau.
+
+## K. Cập nhật sau Đợt 7 (trang công khai)
+
+Chỉ đổi className và CSS, không đổi chữ, hành vi, `data-testid`.
+- `Home.tsx`: bóng tuỳ ý của ảnh hero → `shadow-lg`; `bg-red-50` → `bg-error-soft`; ô báo tải có `role="status"`/`role="alert"`; bỏ `size="sm"` ở nút "Thử lại".
+- `home-content.css`: chip lọc "Món đồ mới" 38 → 44px; nút mũi tên cuộn ngang 36×42 (mobile 30×38) → 44×44.
+- `HomeCommunity.tsx`, `HomeMotion.tsx`: không cần sửa (không có màu/cỡ chữ lệch token).
+- `Browse.tsx`: vòng focus ô tìm `ring-primary/25`, placeholder `text-text-muted`, chip bộ lọc đang chọn `min-h-11`, bỏ `size="sm"` (2 nút), trạng thái tải dùng `LoadingState` (lưới khung xương) thay `EmptyState`.
+- `browse.css`: nút "Đặt lại" 32 → 44px, ô sắp xếp và nút đổi kiểu hiển thị 44px.
+- `ProductDetail.tsx`: trạng thái tải dùng `Skeleton` (không còn `Alert` cảnh báo); hộp ghi chú `bg-emerald-50`/`bg-amber-50` → `bg-success-soft`/`bg-warning-soft`; ảnh nhỏ có viền focus. Thẻ người đăng và biến `owner` không đụng tới.
+- `AI.tsx`: `rounded-2xl` → `rounded-xl` (2 chỗ), bỏ `size="sm"`.
+
+Nợ còn lại: `Home.tsx` còn `bg-[#0d332c]` (2 chỗ) và `text-[#a9d5c6]`, `text-[52px]` ở tiêu đề hero (giữ để không đổi màu Home, xem mục nợ kỹ thuật); `Home.tsx` còn nút "Đăng món đồ" dựng tay (`<button>` cùng kiểu `home-final-primary`).
+
+### Ghi chú cho PR #332 (bổ sung Đợt 7)
+- `Home.tsx`: chỉ đổi className của hero, ô báo tải và bỏ `size` ở một nút. Không đụng `HomeProductCard`, footer thẻ bài.
+- `Browse.tsx`: không đụng thẻ bài; chỉ ô tìm, chip lọc, nút lọc và khối trạng thái tải.
+- `ProductDetail.tsx`: khối tải đầu hàm, 4 hộp ghi chú và viền ảnh nhỏ. Thẻ người đăng, `owner` giữ nguyên.
