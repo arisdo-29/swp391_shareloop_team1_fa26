@@ -291,7 +291,6 @@ export function Credit() {
         <div className="mb-6 space-y-3">
           <Alert>Đơn đang chờ xác nhận từ hệ thống. Credit chưa được cộng cho giao dịch này.</Alert>
           <Button
-            size="sm"
             variant="outline"
             onClick={() => {
               setOrderCheckKey((key) => key + 1);
@@ -314,7 +313,7 @@ export function Credit() {
         </div>
       ) : null}
       {completedCredits !== null ? (
-        <div className="mb-6 flex items-start gap-3 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-success">
+        <div className="mb-6 flex items-start gap-3 rounded-lg border border-success/20 bg-success-soft px-4 py-3 text-success">
           <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-white">
             <Icon name="check" className="size-4" weight="bold" />
           </span>
@@ -328,14 +327,14 @@ export function Credit() {
       <section className="overflow-hidden rounded-xl bg-primary text-white shadow-lg">
         <div className="grid gap-8 px-6 py-7 sm:px-8 md:grid-cols-[1fr_auto] md:items-end lg:px-10 lg:py-9">
           <div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-white/70">
+            <div className="flex items-center gap-2 text-xs font-semibold text-white/85">
               <Icon name="wallet" className="size-4" />
               Số dư Credit
             </div>
             <div className="mt-3 text-4xl font-bold tabular-nums sm:text-5xl">
               {wallet ? formatCredit(wallet.creditBalance) : '--'}
             </div>
-            <p className="mt-3 text-sm text-white/70">
+            <p className="mt-3 text-sm text-white/85">
               Tỷ lệ quy đổi được xác định khi tạo đơn.
             </p>
           </div>
@@ -542,7 +541,7 @@ function ApiTopUpOrder({
     <div className="rounded-xl bg-white px-5 py-8 ring-1 ring-border/80 sm:px-8">
       <div className="mx-auto max-w-2xl text-center">
         <span
-          className={`mx-auto grid size-14 place-items-center rounded-lg ${paid ? 'bg-emerald-50 text-success' : 'bg-amber-50 text-warning'}`}
+          className={`mx-auto grid size-14 place-items-center rounded-lg ${paid ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}
         >
           <Icon name={paid ? 'check' : 'history'} className="size-7" />
         </span>
@@ -562,7 +561,7 @@ function ApiTopUpOrder({
           <DetailRow label="Trạng thái" value={paymentStatusLabels[order.status]} />
         </dl>
         {order.provider === 'MOCK' && !paid ? (
-          <p className="mt-4 rounded-md bg-amber-50 p-3 text-sm text-warning">
+          <p className="mt-4 rounded-md bg-warning-soft p-3 text-sm text-warning">
             {backendMockProviderMessage}
           </p>
         ) : null}
@@ -619,7 +618,7 @@ export function HeldFeesSection({
       {!loading && error ? (
         <div className="mt-3 space-y-3">
           <Alert tone="error">{error}</Alert>
-          <Button size="sm" variant="outline" onClick={onRetry}>
+          <Button variant="outline" onClick={onRetry}>
             Thử lại
           </Button>
         </div>
@@ -642,7 +641,7 @@ export function HeldFeesSection({
                   {heldFee.title}
                 </Link>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span className="inline-flex rounded-sm bg-primary-soft px-2 py-1 text-[11px] font-bold text-primary">
+                  <span className="inline-flex rounded-sm bg-primary-soft px-2 py-1 text-2xs font-bold text-primary">
                     {heldFeeOfferTypeLabels[heldFee.offerType]}
                   </span>
                   <StatusBadge status={heldFee.status} />

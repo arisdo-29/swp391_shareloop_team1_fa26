@@ -151,7 +151,7 @@ export function DemoPaymentCheckout() {
             </div>
           ) : (
             <div className="mt-7 space-y-3">
-              <Button className="w-full" onClick={confirm}>
+              <Button className="w-full" size="lg" onClick={confirm}>
                 Xác nhận thanh toán thử nghiệm
               </Button>
               <Button className="w-full" variant="outline" size="lg" onClick={returnToCredit}>

@@ -129,11 +129,11 @@ export interface ApiConversation {
 
 function requestStatusClass(status: RequestResponse['status']) {
   if (status === 'REJECTED' || status === 'CANCELLED' || status === 'DISPUTED') {
-    return 'bg-red-50 text-error';
+    return 'bg-error-soft text-error';
   }
-  if (status === 'COMPLETED') return 'bg-emerald-50 text-success';
+  if (status === 'COMPLETED') return 'bg-success-soft text-success';
   if (status === 'RESERVED') return 'bg-primary-soft text-primary';
-  return 'bg-amber-50 text-warning';
+  return 'bg-warning-soft text-warning';
 }
 
 // Chủ bài lấy từ yêu cầu trước, vì bài đã giữ chỗ hoặc đã trao đổi không còn tải được qua API công khai.
@@ -206,7 +206,7 @@ export function RequestDetailsTabs({
           role="tab"
           aria-selected={activeTab === value}
           onClick={() => onChange(value)}
-          className={`rounded px-3 py-2 text-xs font-semibold transition ${
+          className={`min-h-11 rounded-md px-3 py-2 text-xs font-semibold transition ${
             activeTab === value
               ? 'bg-white text-primary shadow-sm ring-1 ring-border/70'
               : 'text-text-muted hover:text-text-primary'
@@ -955,7 +955,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
             ) : conversationError ? (
               <div className="space-y-3 p-5 text-sm text-error">
                 <p>{conversationError}</p>
-                <Button variant="outline" size="sm" onClick={() => setConversationReloadKey((key) => key + 1)}>
+                <Button variant="outline" onClick={() => setConversationReloadKey((key) => key + 1)}>
                   Thử tải lại
                 </Button>
               </div>
@@ -996,20 +996,19 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                           </span>
                         ) : null}
                         <span className="mt-2 flex items-center justify-between gap-2">
-                          <span className={`rounded-sm px-2 py-1 text-[11px] font-semibold ${requestStatusClass(request.status)}`}>
+                          <span className={`rounded-sm px-2 py-1 text-2xs font-semibold ${requestStatusClass(request.status)}`}>
                             {requestStatusLabel[request.status]}
                           </span>
-                          <span className="shrink-0 text-[10px] text-text-muted">
+                          <span className="shrink-0 text-2xs text-text-muted">
                             {new Date(request.createdAt).toLocaleDateString('vi-VN')}
                           </span>
                         </span>
                       </span>
                     </button>
                     <div className="mt-2 flex flex-wrap justify-end gap-2">
-                      <Button size="sm" variant="outline" onClick={openDetails}>Xem chi tiết</Button>
+                      <Button variant="outline" onClick={openDetails}>Xem chi tiết</Button>
                       {selectable ? (
                         <Button
-                          size="sm"
                           disabled={selectSubmitting}
                           onClick={() => {
                             setSelectError('');
@@ -1043,10 +1042,10 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 <p className="mt-1 truncate text-xs text-text-muted">Trao đổi với {selectedParticipantName}</p>
               </div>
               <span className="rounded-sm bg-primary-faint px-2.5 py-1 text-xs font-semibold text-primary">{requestStatusLabel[selected.request.status]}</span>
-              <Button size="sm" variant="outline" className="xl:hidden" onClick={() => setMobileDetailsOpen(true)}>
+              <Button variant="outline" className="xl:hidden" onClick={() => setMobileDetailsOpen(true)}>
                 Chi tiết
               </Button>
-              <Button size="sm" variant="ghost" className="hidden xl:inline-flex" onClick={() => setRightPanelCollapsed((current) => !current)}>
+              <Button variant="ghost" className="hidden xl:inline-flex" onClick={() => setRightPanelCollapsed((current) => !current)}>
                 {rightPanelCollapsed ? 'Mở thông tin' : 'Thu gọn'}
               </Button>
             </header>
@@ -1054,24 +1053,24 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
               <button
                 type="button"
                 aria-label="Đóng bảng chi tiết"
-                className="fixed inset-0 z-30 bg-black/30 xl:hidden"
+                className="fixed inset-0 z-30 bg-black/45 xl:hidden"
                 onClick={() => setMobileDetailsOpen(false)}
               />
             ) : null}
             <aside
               aria-label="Thông tin yêu cầu"
-              className={`${mobileDetailsOpen ? 'fixed inset-x-3 bottom-3 top-20 z-40 flex' : 'hidden'} min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-white shadow-xl xl:static xl:col-start-2 xl:row-span-4 xl:row-start-1 xl:rounded-none xl:border-y-0 xl:border-r-0 xl:border-l xl:shadow-none ${rightPanelCollapsed ? 'xl:hidden' : 'xl:flex'}`}
+              className={`${mobileDetailsOpen ? 'fixed inset-x-3 bottom-3 top-20 z-40 flex' : 'hidden'} min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-white shadow-lg xl:static xl:col-start-2 xl:row-span-4 xl:row-start-1 xl:rounded-none xl:border-y-0 xl:border-r-0 xl:border-l xl:shadow-none ${rightPanelCollapsed ? 'xl:hidden' : 'xl:flex'}`}
             >
               <div className="shrink-0 border-b border-border p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{requestFallbackTitle(selected.request)}</p>
+                    <p className="text-2xs font-semibold uppercase tracking-wide text-text-muted">{requestFallbackTitle(selected.request)}</p>
                     <h3 className="mt-1 truncate text-sm font-bold">{conversationTitle(selected)}</h3>
                   </div>
                   <button
                     type="button"
                     aria-label="Đóng bảng chi tiết"
-                    className="grid size-9 shrink-0 place-items-center rounded-md text-text-muted hover:bg-surface-low"
+                    className="grid size-11 shrink-0 place-items-center rounded-md text-text-muted transition hover:bg-surface-low"
                     onClick={() => {
                       setMobileDetailsOpen(false);
                       setRightPanelCollapsed(true);
@@ -1097,7 +1096,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <strong className="text-sm">{requestFallbackTitle(selected.request)}</strong>
                     <TypeBadge type={selected.request.type === 'SWAP' ? 'trade' : 'gift'} />
-                    <span className={`rounded-sm px-2 py-1 text-[11px] font-semibold ${requestStatusClass(selected.request.status)}`}>
+                    <span className={`rounded-sm px-2 py-1 text-2xs font-semibold ${requestStatusClass(selected.request.status)}`}>
                       {requestStatusLabel[selected.request.status]}
                     </span>
                   </div>
@@ -1125,7 +1124,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       className="size-16 shrink-0 rounded-md object-cover"
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-text-muted">Món đề xuất trao đổi</span>
+                      <span className="block text-2xs font-semibold uppercase tracking-wide text-text-muted">Món đề xuất trao đổi</span>
                       <strong className="mt-1 block truncate text-sm">{selected.offeredItem.title}</strong>
                       <span className="mt-1 line-clamp-2 block text-xs leading-5 text-text-muted">{selected.offeredItem.description}</span>
                       <span className="mt-1 block text-xs font-semibold text-text-secondary">
@@ -1143,11 +1142,11 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 )
               ) : null}
                   <div className="mt-4 grid gap-2">
-                    <Button size="sm" variant="outline" onClick={() => navigate(`/items/${selected.request.itemId}`)}>
+                    <Button variant="outline" onClick={() => navigate(`/items/${selected.request.itemId}`)}>
                       Xem chi tiết bài đăng
                     </Button>
                     {reportTargetUserId && reportTargetUserId !== currentUserId ? (
-                      <Button size="sm" variant="ghost" icon="shield" onClick={() => setReportOpen(true)}>
+                      <Button variant="ghost" icon="shield" onClick={() => setReportOpen(true)}>
                         Báo cáo người dùng
                       </Button>
                     ) : null}
@@ -1177,7 +1176,6 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       {selectedAsDonor ? (
                         canSelectRequest(selected, conversations, currentUserId) ? (
                           <Button
-                            size="sm"
                             disabled={selectSubmitting}
                             onClick={() => {
                               setSelectError('');
@@ -1190,7 +1188,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                           <span className="text-xs text-text-muted">Bài đăng đã có yêu cầu được chọn.</span>
                         )
                       ) : (
-                        <Button size="sm" variant="outline" disabled={logisticsSubmitting} onClick={() => void cancelPendingRequest()}>Hủy yêu cầu</Button>
+                        <Button variant="outline" disabled={logisticsSubmitting} onClick={() => void cancelPendingRequest()}>Hủy yêu cầu</Button>
                       )}
                     </div>
                   ) : null}
@@ -1313,7 +1311,6 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                           onChange={(event) => setRequestMediaFiles(Array.from(event.target.files ?? []))}
                         />
                         <Button
-                          size="sm"
                           variant="outline"
                           disabled={requestMediaSubmitting || !requestMediaFiles.length}
                           onClick={() => void attachRequestMedia()}
@@ -1329,7 +1326,6 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   ) : null}
                   <div className="flex flex-wrap gap-2">
                     <Button
-                      size="sm"
                       variant="outline"
                       disabled={!canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || !meetingFormValid || logisticsSubmitting}
                       onClick={() => void saveSchedule()}
@@ -1337,20 +1333,18 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       Lưu lịch hẹn
                     </Button>
                     <Button
-                      size="sm"
                       disabled={!canConfirmSchedule}
                       onClick={() => void confirmLogistics()}
                     >
                       {currentPartyConfirmedAt ? 'Đã xác nhận lịch' : 'Xác nhận lịch'}
                     </Button>
                     {selected.request.contactRevealedAt ? (
-                      <Button size="sm" variant="ghost" disabled={logisticsSubmitting} onClick={() => void loadContact()}>
+                      <Button variant="ghost" disabled={logisticsSubmitting} onClick={() => void loadContact()}>
                         Xem liên hệ
                       </Button>
                     ) : null}
                     {canConfirmHandover(selected.request.status) && selected.request.contactRevealedAt ? (
                       <Button
-                        size="sm"
                         variant="outline"
                         disabled={Boolean(currentHandoverAt) || logisticsSubmitting}
                         onClick={() => void confirmApiHandover()}
@@ -1360,7 +1354,6 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     ) : null}
                     {selected.request.status === 'COMPLETED' ? (
                       <Button
-                        size="sm"
                         variant="outline"
                         icon="shield"
                         onClick={() => {
@@ -1380,7 +1373,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
               </div>
             </aside>
             {reportNotice || disputeNotice ? (
-              <div role="status" className="shrink-0 space-y-2 border-b border-border bg-emerald-50 px-4 py-3 text-xs text-success sm:px-5 xl:col-start-1 xl:row-start-2">
+              <div role="status" className="shrink-0 space-y-2 border-b border-border bg-success-soft px-4 py-3 text-xs text-success sm:px-5 xl:col-start-1 xl:row-start-2">
                 {reportNotice ? <p>{reportNotice}</p> : null}
                 {disputeNotice ? <p>{disputeNotice}</p> : null}
               </div>
@@ -1436,7 +1429,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   if (entry.moderation && entry.moderation !== 'PASS') {
                     return (
                       <div key={entry.id} className="flex justify-center">
-                        <span className="max-w-xl rounded-md bg-red-50 px-3 py-2 text-center text-xs text-error">
+                        <span className="max-w-xl rounded-md bg-error-soft px-3 py-2 text-center text-xs text-error">
                           {entry.blockedReason || 'Tin nhắn này không vượt qua kiểm duyệt.'}
                         </span>
                       </div>
@@ -1445,7 +1438,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   if (system) {
                     return (
                       <div key={entry.id} className="flex justify-center">
-                        <span className="rounded-md bg-surface-container px-3 py-1.5 text-center text-[11px] text-text-muted">{entry.content}</span>
+                        <span className="rounded-md bg-surface-container px-3 py-1.5 text-center text-2xs text-text-muted">{entry.content}</span>
                       </div>
                     );
                   }
@@ -1480,11 +1473,11 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         ) : null}
                         {entry.content ? <p className="whitespace-pre-wrap break-words">{entry.content}</p> : null}
                         {messageOfferStatusLabel(entry.offerStatus) ? (
-                          <span className={`mt-1.5 inline-flex rounded-sm px-2 py-0.5 text-[10px] font-semibold ${mine ? 'bg-white/15 text-white' : 'bg-primary-faint text-primary'}`}>
+                          <span className={`mt-1.5 inline-flex rounded-sm px-2 py-0.5 text-2xs font-semibold ${mine ? 'bg-white/15 text-white' : 'bg-primary-faint text-primary'}`}>
                             {messageOfferStatusLabel(entry.offerStatus)}
                           </span>
                         ) : null}
-                        <span className={`mt-1 block text-[10px] ${mine ? 'text-white/65' : 'text-text-muted'}`}>{new Date(entry.createdAt).toLocaleString('vi-VN')}</span>
+                        <span className={`mt-1 block text-2xs ${mine ? 'text-white/65' : 'text-text-muted'}`}>{new Date(entry.createdAt).toLocaleString('vi-VN')}</span>
                       </div>
                     </div>
                   );
@@ -1598,7 +1591,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         />
       ) : null}
       {disputeOpen && selected ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-40 grid place-items-end bg-black/45 sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
           <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
             <h2 className="text-xl font-bold">Gửi khiếu nại giao dịch</h2>
             <p className="mt-1 text-sm text-text-muted">{conversationTitle(selected)}</p>
@@ -1635,7 +1628,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
             {disputeEvidence.length ? (
               <p className="mt-2 text-xs text-text-muted">Đã chọn {disputeEvidence.length} ảnh.</p>
             ) : null}
-            {disputeError ? <div className="mt-4 rounded-md bg-red-50 p-3 text-xs text-error">{disputeError}</div> : null}
+            {disputeError ? <div className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">{disputeError}</div> : null}
             <div className="mt-6 flex justify-end gap-2">
               <Button variant="ghost" disabled={disputeSubmitting} onClick={() => setDisputeOpen(false)}>Hủy</Button>
               <Button disabled={disputeSubmitting || !disputeReason} onClick={() => void submitDispute()}>
@@ -1646,13 +1639,13 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         </div>
       ) : null}
       {responseDisputeId !== null ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-40 grid place-items-end bg-black/45 sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
           <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
             <h2 className="text-xl font-bold">Giải trình khiếu nại</h2>
             <p className="mt-1 text-sm text-text-muted">Gửi nội dung giải trình cho khiếu nại liên quan đến bạn.</p>
             {responseNotice ? (
               <div className="mt-5 space-y-4">
-                <div className="rounded-md bg-emerald-50 p-3 text-sm text-success">{responseNotice}</div>
+                <div className="rounded-md bg-success-soft p-3 text-sm text-success">{responseNotice}</div>
                 <div className="flex justify-end">
                   <Button onClick={() => navigate('/messages')}>Về trang Tin nhắn</Button>
                 </div>
@@ -1681,9 +1674,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   <p className="mt-2 text-xs text-text-muted">Đã chọn {responseEvidence.length} ảnh.</p>
                 ) : null}
                 {(!Number.isSafeInteger(responseDisputeId) || responseDisputeId <= 0) ? (
-                  <div className="mt-4 rounded-md bg-red-50 p-3 text-xs text-error">Đường dẫn khiếu nại không hợp lệ.</div>
+                  <div className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">Đường dẫn khiếu nại không hợp lệ.</div>
                 ) : responseError ? (
-                  <div className="mt-4 rounded-md bg-red-50 p-3 text-xs text-error">{responseError}</div>
+                  <div className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">{responseError}</div>
                 ) : null}
                 <div className="mt-6 flex justify-end gap-2">
                   <Button variant="ghost" disabled={responseSubmitting} onClick={() => navigate('/messages')}>Hủy</Button>
@@ -1727,7 +1720,7 @@ export function SelectRequestDialog({
   }, [onCancel, submitting]);
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-end bg-black/30 sm:place-items-center sm:p-4" role="presentation">
+    <div className="fixed inset-0 z-50 grid place-items-end bg-black/45 sm:place-items-center sm:p-4" role="presentation">
       <div
         role="dialog"
         aria-modal="true"
@@ -1762,10 +1755,10 @@ export function SelectRequestDialog({
             </p>
           ) : null}
         </div>
-        <p className="mt-4 rounded-md bg-amber-50 p-3 text-xs leading-5 text-warning">
+        <p className="mt-4 rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
           Khi bạn xác nhận chọn người này để giao dịch, yêu cầu sẽ được chấp nhận và các yêu cầu đang chờ khác của cùng bài đăng sẽ tự động bị từ chối.
         </p>
-        {error ? <p role="alert" className="mt-4 rounded-md bg-red-50 p-3 text-sm text-error">{error}</p> : null}
+        {error ? <p role="alert" className="mt-4 rounded-md bg-error-soft p-3 text-sm text-error">{error}</p> : null}
         <div className="mt-6 flex justify-end gap-2">
           <Button variant="ghost" autoFocus disabled={submitting} onClick={onCancel}>Hủy</Button>
           <Button disabled={submitting} onClick={onConfirm}>

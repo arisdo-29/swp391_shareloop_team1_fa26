@@ -414,13 +414,13 @@ export function Activities() {
       <div className="mb-6 flex gap-1 border-b border-border">
         <button
           onClick={() => setTab('items')}
-          className={`border-b-2 px-4 py-3 text-sm font-semibold ${tab === 'items' ? 'border-primary text-primary' : 'border-transparent text-text-muted'}`}
+          className={`min-h-11 border-b-2 px-4 py-3 text-sm font-semibold transition ${tab === 'items' ? 'border-primary text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
         >
           Món đã đăng <span className="ml-1 text-xs">({myItems.length})</span>
         </button>
         <button
           onClick={() => setTab('transactions')}
-          className={`border-b-2 px-4 py-3 text-sm font-semibold ${tab === 'transactions' ? 'border-primary text-primary' : 'border-transparent text-text-muted'}`}
+          className={`min-h-11 border-b-2 px-4 py-3 text-sm font-semibold transition ${tab === 'transactions' ? 'border-primary text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
         >
           Giao dịch <span className="ml-1 text-xs">({apiTransactions.length})</span>
         </button>
@@ -477,19 +477,18 @@ export function Activities() {
                           </p>
                         ) : null}
                         {(item.status === 'rejected' || item.status === 'REJECTED' || item.status === 'VIOLATION') && (item.rejectionReason || item.moderationReason) ? (
-                          <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-xs leading-5 text-error">
+                          <p className="mt-2 rounded-md bg-error-soft px-3 py-2 text-xs leading-5 text-error">
                             Lý do kiểm duyệt: {item.rejectionReason ?? item.moderationReason}
                           </p>
                         ) : null}
                       </div>
                       <div className="flex flex-wrap gap-2 sm:justify-end">
                         <Link to={`/items/${item.id}`}>
-                          <Button size="sm" variant="outline" icon="eye">
+                          <Button variant="outline" icon="eye">
                             Xem chi tiết
                           </Button>
                         </Link>
                         <Button
-                          size="sm"
                           variant="outline"
                           icon="messages"
                           onClick={() => setRequestsItemId(requestsItemId === item.id ? '' : item.id)}
@@ -497,7 +496,6 @@ export function Activities() {
                           Yêu cầu ({itemRequests.length})
                         </Button>
                         <Button
-                          size="sm"
                           variant="ghost"
                           icon="edit"
                           disabled={!canEdit}
@@ -506,7 +504,6 @@ export function Activities() {
                           Sửa
                         </Button>
                         <Button
-                          size="sm"
                           variant="danger"
                           icon="trash"
                           disabled={['RESERVED', 'TRADED', 'EXPIRED', 'removed'].includes(item.status) || removingItemId === item.id}
@@ -516,7 +513,6 @@ export function Activities() {
                         </Button>
                         {canUseListingFee ? (
                           <Button
-                            size="sm"
                             variant="outline"
                             icon="renew"
                             disabled={Boolean(renewingItemId || boostingItemId)}
@@ -531,7 +527,6 @@ export function Activities() {
                         ) : null}
                         {canBoost ? (
                           <Button
-                            size="sm"
                             variant="outline"
                             icon="arrow"
                             disabled={Boolean(renewingItemId || boostingItemId)}
@@ -604,8 +599,8 @@ export function Activities() {
       )}
 
       {editingId ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
-          <div className="max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
+        <div className="fixed inset-0 z-40 grid place-items-end bg-black/45 sm:place-items-center sm:p-4">
+          <div className="max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
             <h2 className="text-xl font-bold">Chỉnh sửa bài đăng</h2>
             <p className="mt-1 text-sm text-text-muted">Bài sẽ chờ duyệt lại sau khi lưu.</p>
             {/^[0-9]+$/.test(editingId) ? (
@@ -621,7 +616,7 @@ export function Activities() {
                 ) : null}
                 {editQuoteNeedsTopUp ? (
                   <Link className="mt-3 inline-block" to="/credit">
-                    <Button size="sm">Nạp Credit</Button>
+                    <Button>Nạp Credit</Button>
                   </Link>
                 ) : null}
               </div>
@@ -646,7 +641,7 @@ export function Activities() {
       ) : null}
 
       {listingFeeAction ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
+        <div className="fixed inset-0 z-40 grid place-items-end bg-black/45 sm:place-items-center sm:p-4">
           <div
             role="dialog"
             aria-modal="true"
@@ -670,7 +665,7 @@ export function Activities() {
                 <Alert tone="error">{listingFeeError}</Alert>
                 {listingFeeNeedsTopUp ? (
                   <Link className="mt-3 inline-block" to="/credit">
-                    <Button size="sm">Nạp Credit</Button>
+                    <Button>Nạp Credit</Button>
                   </Link>
                 ) : null}
               </div>
@@ -697,7 +692,7 @@ export function Activities() {
       ) : null}
 
       {removeConfirmId ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
+        <div className="fixed inset-0 z-40 grid place-items-end bg-black/45 sm:place-items-center sm:p-4">
           <div
             role="dialog"
             aria-modal="true"
@@ -724,7 +719,7 @@ export function Activities() {
       ) : null}
 
       {acceptRequest && acceptItem && acceptRequesterName ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 sm:place-items-center sm:p-4">
+        <div className="fixed inset-0 z-40 grid place-items-end bg-black/45 sm:place-items-center sm:p-4">
           <div
             role="dialog"
             aria-modal="true"
@@ -748,7 +743,7 @@ export function Activities() {
               </div>
             </div>
             {acceptError ? (
-              <div className="mt-3 rounded-md bg-amber-50 p-3 text-xs leading-5 text-warning">
+              <div className="mt-3 rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
                 {acceptError}
               </div>
             ) : null}
@@ -1147,7 +1142,7 @@ function EditableImage({
         aria-label="Xóa ảnh"
         disabled={disabled}
         onClick={onRemove}
-        className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-white text-error shadow-sm"
+        className="absolute right-1 top-1 grid size-8 place-items-center rounded-full bg-white text-error shadow-sm transition hover:bg-error-soft"
       >
         <Icon name="close" className="size-3" />
       </button>
@@ -1193,7 +1188,7 @@ function SentRequestPanel({
                     <div className="flex flex-wrap items-center gap-2">
                       <strong className="truncate text-sm">{request.itemTitle ?? item?.title ?? 'Bài đăng'}</strong>
                       <TypeBadge type={request.type} />
-                      <span className="rounded-sm bg-amber-50 px-2 py-1 text-[11px] font-semibold text-warning">
+                      <span className="rounded-sm bg-warning-soft px-2 py-1 text-2xs font-semibold text-warning">
                         {requestStatusLabel[request.status]}
                       </span>
                     </div>
@@ -1208,16 +1203,15 @@ function SentRequestPanel({
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
                     <Link to={`/requests/${request.id.replace(/^api_req_/, '')}`}>
-                      <Button size="sm" variant="outline">Chi tiết giao dịch</Button>
+                      <Button variant="outline">Chi tiết giao dịch</Button>
                     </Link>
                     <Link to={`/items/${request.itemId}`}>
-                      <Button size="sm" variant="outline" icon="eye">
+                      <Button variant="outline" icon="eye">
                         Xem bài
                       </Button>
                     </Link>
                     {request.status === 'PENDING' && request.requesterId === currentUser?.id ? (
                       <Button
-                        size="sm"
                         variant="ghost"
                         icon="close"
                         disabled={cancelingRequestId === request.id}
@@ -1268,7 +1262,7 @@ function RequestPanel({
                       <div className="flex flex-wrap items-center gap-2">
                         <strong className="truncate text-sm">{requesterName}</strong>
                         <TypeBadge type={request.type} />
-                        <span className="rounded-sm bg-amber-50 px-2 py-1 text-[11px] font-semibold text-warning">
+                        <span className="rounded-sm bg-warning-soft px-2 py-1 text-2xs font-semibold text-warning">
                           {requestStatusLabel[request.status]}
                         </span>
                       </div>
@@ -1291,13 +1285,12 @@ function RequestPanel({
                   <div className="flex shrink-0 flex-wrap gap-2">
                     {canChat(request.status) ? (
                       <Link to={`/requests/${request.id.replace(/^api_req_/, '')}`}>
-                        <Button size="sm" variant="outline" icon="messages">
+                        <Button variant="outline" icon="messages">
                           Nhắn tin
                         </Button>
                       </Link>
                     ) : allowAccept && request.status === 'PENDING' && !hasAcceptedRequest && !['IN_TRANSACTION', 'RESERVED'].includes(itemStatus) ? (
                       <Button
-                        size="sm"
                         variant="outline"
                         icon="check"
                         onClick={() => onAccept(request.id)}
@@ -1316,7 +1309,7 @@ function RequestPanel({
                       </div>
                       {request.offeredItemId ? (
                         <Link to={`/items/${request.offeredItemId}`}>
-                          <Button size="sm" variant="outline" icon="eye">
+                          <Button variant="outline" icon="eye">
                             Xem chi tiết
                           </Button>
                         </Link>
