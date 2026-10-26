@@ -24,13 +24,7 @@ import { toBackendUserId } from '../../services/requestApi';
 import { resolveMediaUrl } from '../../services/mediaUrl';
 import { reputationApi, type MyReputation } from '../../services/reputationApi';
 import { createOtpValue } from '../../utils/otp';
-
-const reputationRankLabel: Record<MyReputation['rank'], string> = {
-  BRONZE: 'Đồng',
-  SILVER: 'Bạc',
-  GOLD: 'Vàng',
-  DIAMOND: 'Kim cương',
-};
+import { getRankLabel } from '../../utils/reputation';
 
 type ProfileTab = 'profile' | 'reputation';
 
@@ -445,7 +439,7 @@ export function Profile() {
               <div className="mt-1">
                 {isAdmin ? <RankBadge rank="Quản trị hệ thống" /> : null}
                 {!isAdmin && reputation ? (
-                  <RankBadge rank={`Hạng ${reputationRankLabel[reputation.rank]}`} />
+                  <RankBadge rank={`Hạng ${getRankLabel(reputation.rank)}`} />
                 ) : null}
               </div>
             </div>
@@ -685,7 +679,7 @@ export function Profile() {
                 <>
                   <section className="grid gap-5 rounded-xl bg-white p-6 ring-1 ring-border/80 sm:grid-cols-4">
                     <Stat label="Tổng điểm" value={reputation.totalPoints} detail="Điểm hoạt động" />
-                    <Stat label="Hạng thành viên" value={reputationRankLabel[reputation.rank]} detail="Dựa trên điểm uy tín" />
+                    <Stat label="Hạng thành viên" value={getRankLabel(reputation.rank)} detail="Dựa trên điểm uy tín" />
                     <Stat label="Sao uy tín" value={`${reputation.trustStars}/5`} detail="Mức tin cậy hiện tại" />
                     <Stat
                       label="Tỉ lệ đúng mô tả"
