@@ -470,7 +470,7 @@ export function Home() {
 
           <form
             onSubmit={submit}
-            className="mt-6 grid gap-2 rounded-lg bg-white/[0.12] p-2 shadow-lg ring-1 ring-white/20 backdrop-blur-md sm:grid-cols-[1fr_176px_auto]"
+            className="home-hero-search-form mt-6 grid gap-2 rounded-lg p-2 sm:grid-cols-[1fr_176px_auto]"
           >
             <SearchField
               value={q}
