@@ -57,6 +57,9 @@ const paymentProviderLabels: Record<PaymentProvider, string> = {
   MANUAL: 'QR minh họa, quản trị viên duyệt',
 };
 
+// Mức chọn nhanh chỉ điền sẵn ô số tiền; backend vẫn kiểm tra mức tối thiểu và bước tiền.
+const QUICK_TOPUP_AMOUNTS = [20_000, 50_000, 100_000, 200_000];
+
 const topUpAmountInvalidMessage =
   'Số tiền nạp chưa hợp lệ. Theo giá trị mặc định, số tiền cần chia hết cho 1.000đ và tối thiểu 10.000đ. Các mức này có thể thay đổi theo cấu hình hệ thống.';
 
@@ -293,8 +296,8 @@ export function Credit() {
   return (
     <div className="page-shell">
       <PageHeader
-        title="Credit của bạn"
-        description="Quản lý số dư, nạp Credit và theo dõi các giao dịch của bạn."
+        title="Ví Credit"
+        description="Credit dùng để đăng bài Trao đổi, gia hạn, đẩy bài và tìm bằng trợ lý. Xin đồ và trao đổi luôn miễn phí."
       />
 
       {walletLoading ? (
@@ -345,39 +348,57 @@ export function Credit() {
         </div>
       ) : null}
 
-      <section className="overflow-hidden rounded-xl bg-primary text-white shadow-lg">
-        <div className="grid gap-8 px-6 py-7 sm:px-8 md:grid-cols-[1fr_auto] md:items-end lg:px-10 lg:py-9">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <section aria-label="Số dư" className="flex flex-col gap-5 rounded-xl bg-primary p-6 text-white">
           <div>
-            <p className="text-xs font-semibold text-white/85">Số dư Credit</p>
-            <div className="mt-3 text-4xl font-bold tabular-nums sm:text-5xl">
-              {wallet ? formatCredit(wallet.creditBalance) : '--'}
-            </div>
-            <p className="mt-3 text-sm text-white/85">
-              Tỷ lệ quy đổi được xác định khi tạo đơn.
+            <p className="text-sm text-primary-fixed">Khả dụng</p>
+            <p className="mt-1 text-4xl font-extrabold tabular-nums">
+              {wallet ? wallet.available : '--'} <span className="text-lg font-semibold">Credit</span>
             </p>
           </div>
-          <button
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-white px-4 py-2 text-sm font-bold text-primary shadow-sm transition duration-200 hover:bg-primary-soft active:translate-y-px"
-            onClick={() => {
-              setStep('select');
-              document.getElementById('topup')?.scrollIntoView({ behavior: 'smooth' });
-            }}
-          >
-            Nạp Credit
-          </button>
-        </div>
-        <div className="grid border-t border-white/15 bg-white/5 sm:grid-cols-2">
-          <BalanceMetric
-            label="Khả dụng"
-            value={wallet?.available ?? null}
-          />
-          <BalanceMetric
-            label="Đang giữ"
-            value={wallet?.heldCredit ?? null}
-            bordered
-          />
-        </div>
-      </section>
+          <div className="grid grid-cols-2 gap-3 border-t border-white/20 pt-4">
+            <BalanceMetric label="Đang giữ" value={wallet?.heldCredit ?? null} note="Phí của bài đang chờ duyệt" />
+            <BalanceMetric label="Tổng" value={wallet?.creditBalance ?? null} note="Khả dụng cộng đang giữ" />
+          </div>
+        </section>
+
+        <section id="topup" aria-label="Nạp Credit" className="scroll-mt-24">
+          {loadPendingTopUp()?.orderCode ? (
+            <Link
+              className="mb-3 inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline"
+              to={`/credit?orderCode=${encodeURIComponent(loadPendingTopUp()!.orderCode)}`}
+            >
+              Mở lại đơn nạp gần nhất
+            </Link>
+          ) : null}
+          {topUpError ? (
+            <div className="mb-3">
+              <Alert tone="error">{topUpError}</Alert>
+            </div>
+          ) : null}
+          {step === 'select' ? (
+            <ApiTopupSelection
+              amountVnd={apiAmountVnd}
+              onAmountChange={setApiAmountVnd}
+              onContinue={() => void continuePayment()}
+              submitting={topUpSubmitting}
+              processing={topUpProcessing}
+            />
+          ) : null}
+          {step === 'pending' && apiTopUpOrder ? (
+            <ApiTopUpOrder
+              order={apiTopUpOrder}
+              onNewTopup={() => {
+                setApiTopUpOrder(null);
+                setReturnState('idle');
+                clearPendingTopUp();
+                setTopUpError('');
+                setStep('select');
+              }}
+            />
+          ) : null}
+        </section>
+      </div>
 
       <HeldFeesSection
         heldFees={heldFees}
@@ -385,43 +406,6 @@ export function Credit() {
         error={heldFeesError}
         onRetry={() => setHeldFeesReloadKey((key) => key + 1)}
       />
-
-      <section id="topup" className="mt-8 scroll-mt-24">
-        {loadPendingTopUp()?.orderCode ? (
-          <Link
-            className="mb-4 inline-block text-primary underline"
-            to={`/credit?orderCode=${encodeURIComponent(loadPendingTopUp()!.orderCode)}`}
-          >
-            Mở lại đơn nạp gần nhất
-          </Link>
-        ) : null}
-        {topUpError ? (
-          <div className="mb-4">
-            <Alert tone="error">{topUpError}</Alert>
-          </div>
-        ) : null}
-        {step === 'select' ? (
-          <ApiTopupSelection
-            amountVnd={apiAmountVnd}
-            onAmountChange={setApiAmountVnd}
-            onContinue={() => void continuePayment()}
-            submitting={topUpSubmitting}
-            processing={topUpProcessing}
-          />
-        ) : null}
-        {step === 'pending' && apiTopUpOrder ? (
-          <ApiTopUpOrder
-            order={apiTopUpOrder}
-            onNewTopup={() => {
-              setApiTopUpOrder(null);
-              setReturnState('idle');
-              clearPendingTopUp();
-              setTopUpError('');
-              setStep('select');
-            }}
-          />
-        ) : null}
-      </section>
 
       {apiHistoryLoading ? (
         <div className="mt-8">
@@ -481,9 +465,9 @@ function CreditSummary({ summary, held }: { summary: CreditHistorySummary | null
   ];
   return (
     <div className="mt-4">
-      <dl className="grid grid-cols-2 overflow-hidden rounded-lg bg-white ring-1 ring-border/80 sm:grid-cols-4">
-        {cells.map(([label, value, tone], index) => (
-          <div key={label} className={`px-4 py-3 ${index > 0 ? 'border-border/70 sm:border-l' : ''} ${index > 1 ? 'border-t sm:border-t-0' : ''}`}>
+      <dl className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        {cells.map(([label, value, tone]) => (
+          <div key={label} className="rounded-md bg-surface-low px-4 py-3">
             <dt className="text-xs font-medium text-text-muted">{label}</dt>
             <dd className={`mt-1 text-lg font-bold tabular-nums ${tone}`}>{value}</dd>
           </div>
@@ -500,23 +484,12 @@ function CreditSummary({ summary, held }: { summary: CreditHistorySummary | null
   );
 }
 
-function BalanceMetric({
-  label,
-  value,
-  bordered = false,
-}: {
-  label: string;
-  value: number | null;
-  bordered?: boolean;
-}) {
+function BalanceMetric({ label, value, note }: { label: string; value: number | null; note: string }) {
   return (
-    <div
-      className={`px-6 py-4 sm:px-8 lg:px-10 ${bordered ? 'border-t border-white/15 sm:border-l sm:border-t-0' : ''}`}
-    >
-      <p className="text-xs font-medium text-white/60">{label}</p>
-      <p className="mt-1 text-xl font-bold tabular-nums">
-        {value === null ? '--' : `${value} Credit`}
-      </p>
+    <div>
+      <p className="text-xs text-primary-fixed">{label}</p>
+      <p className="mt-0.5 text-xl font-bold tabular-nums">{value === null ? '--' : `${value} Credit`}</p>
+      <p className="mt-0.5 text-xs text-primary-fixed">{note}</p>
     </div>
   );
 }
@@ -537,13 +510,28 @@ function ApiTopupSelection({
   const parsedAmount = Number(amountVnd);
   const validAmount = Number.isSafeInteger(parsedAmount) && parsedAmount > 0;
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-      <div className="rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-7">
+    <div className="flex h-full flex-col gap-4 rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
+      <div>
         <h2 className="section-title">Nạp Credit</h2>
-        <p className="mt-2 text-sm text-text-muted">
-          Nhập số tiền muốn nạp. Số Credit quy đổi sẽ được hiển thị sau khi tạo đơn.
+        <p className="mt-1 text-sm text-text-secondary">
+          Chọn nhanh hoặc nhập số tiền. Số Credit nhận được hiện ngay khi tạo đơn.
         </p>
-        <div className="mt-6 max-w-sm">
+      </div>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Chọn nhanh số tiền">
+        {QUICK_TOPUP_AMOUNTS.map((amount) => (
+          <button
+            key={amount}
+            type="button"
+            aria-pressed={parsedAmount === amount}
+            onClick={() => onAmountChange(String(amount))}
+            className={`min-h-11 rounded-md border px-4 text-sm font-semibold transition ${parsedAmount === amount ? 'border-primary bg-primary-faint text-primary' : 'border-border hover:border-primary/50'}`}
+          >
+            {formatVnd(amount)}
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[200px] flex-1">
           <Field
             label="Số tiền nạp (VND)"
             type="number"
@@ -552,28 +540,15 @@ function ApiTopupSelection({
             value={amountVnd}
             onChange={(event) => onAmountChange(event.target.value)}
             placeholder="Nhập số tiền"
-            hint="Nhập số nguyên dương. Mức tối thiểu và bước tiền nạp được áp dụng theo quy định hiện hành."
           />
         </div>
-      </div>
-      <aside className="h-fit rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
-        <h2 className="text-base font-bold">Tóm tắt thanh toán</h2>
-        <p className="mt-3 text-sm text-text-muted">
-          Credit chỉ được cộng sau khi khoản thanh toán được xác nhận.
-        </p>
-        <Button
-          className="mt-5 w-full"
-          size="lg"
-          onClick={onContinue}
-          disabled={!validAmount || submitting}
-        >
-          {processing
-            ? 'Đang xử lý thanh toán...'
-            : submitting
-              ? 'Đang tạo đơn...'
-              : 'Tạo đơn nạp Credit'}
+        <Button size="lg" onClick={onContinue} disabled={!validAmount || submitting}>
+          {processing ? 'Đang xử lý thanh toán...' : submitting ? 'Đang tạo đơn...' : 'Tạo đơn nạp'}
         </Button>
-      </aside>
+      </div>
+      <p className="text-xs leading-5 text-text-muted">
+        Credit chỉ được cộng sau khi thanh toán được xác nhận. Mức tối thiểu theo quy định hiện hành.
+      </p>
     </div>
   );
 }
@@ -655,7 +630,7 @@ export function HeldFeesSection({
   onRetry: () => void;
 }) {
   return (
-    <section className="mt-8">
+    <section className="mt-5 rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
       <h2 className="section-title">Bài đang giữ phí</h2>
       <p className="mt-1 text-xs text-text-muted">
         Được trừ khi bài được duyệt, nhả lại nếu bài bị từ chối hoặc bị gỡ.
@@ -677,7 +652,7 @@ export function HeldFeesSection({
         <p className="mt-3 text-sm text-text-muted">Không có bài nào đang giữ phí.</p>
       ) : null}
       {!loading && !error && heldFees.length ? (
-        <ul className="mt-3 divide-y divide-border overflow-hidden rounded-xl bg-white ring-1 ring-border/80">
+        <ul className="mt-3 divide-y divide-border overflow-hidden rounded-md ring-1 ring-border/80">
           {heldFees.map((heldFee) => (
             <li
               key={heldFee.itemId}

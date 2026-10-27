@@ -60,7 +60,7 @@ describe('AI search quota', () => {
 
     expect(await screen.findByText('Còn 5 lượt miễn phí')).toBeTruthy();
     await user.type(screen.getByRole('textbox', { name: 'Mô tả món đồ cần tìm' }), 'Tìm sách cũ');
-    await user.click(screen.getByRole('button', { name: 'Tìm' }));
+    await user.click(screen.getByRole('button', { name: 'Tìm giúp tôi' }));
 
     await waitFor(() => expect(aiApi.search).toHaveBeenCalledWith('Tìm sách cũ', 0, 20));
     await waitFor(() => expect(aiApi.quota).toHaveBeenCalledTimes(2));
@@ -91,7 +91,7 @@ describe('AI search quota', () => {
 
     expect(await screen.findByText('Còn 5 lượt miễn phí')).toBeTruthy();
     await user.type(screen.getByRole('textbox', { name: 'Mô tả món đồ cần tìm' }), 'Tìm sách cũ');
-    await user.click(screen.getByRole('button', { name: 'Tìm' }));
+    await user.click(screen.getByRole('button', { name: 'Tìm giúp tôi' }));
 
     await waitFor(() => expect(aiApi.quota).toHaveBeenCalledTimes(2));
     expect(screen.getByText('Còn 5 lượt miễn phí')).toBeTruthy();
@@ -116,7 +116,7 @@ describe('AI search quota', () => {
     );
 
     await user.type(screen.getByRole('textbox', { name: 'Mô tả món đồ cần tìm' }), 'bàn học');
-    await user.click(screen.getByRole('button', { name: 'Tìm' }));
+    await user.click(screen.getByRole('button', { name: 'Tìm giúp tôi' }));
 
     expect(await screen.findByText(/Không có món khớp tất cả bộ lọc AI đã chọn/)).toBeTruthy();
     expect(screen.getByText('Bộ lọc trợ lý hiểu được')).toBeTruthy();

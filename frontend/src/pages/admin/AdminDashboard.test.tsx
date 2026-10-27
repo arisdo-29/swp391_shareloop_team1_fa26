@@ -11,6 +11,10 @@ vi.mock('../../services/adminAuditApi', () => ({
   adminAuditApi: { list: vi.fn() },
 }));
 
+vi.mock('./AdminTodoCards', () => ({
+  AdminTodoCards: () => null,
+}));
+
 vi.mock('../../services/adminFinanceApi', () => ({
   adminFinanceApi: { report: vi.fn() },
 }));

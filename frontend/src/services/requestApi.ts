@@ -96,6 +96,8 @@ export function toFeItemRequest(request: RequestResponse, requesterId = apiUserI
     type: request.type === 'SWAP' ? 'trade' : 'gift',
     itemId: String(request.itemId),
     itemTitle: request.itemTitle ?? undefined,
+    itemImage: request.itemImage ?? undefined,
+    donorName: request.donorName ?? undefined,
     offeredItemId: request.offeredItemId ? String(request.offeredItemId) : undefined,
     offeredItemTitle: request.offeredItemTitle ?? undefined,
     requesterId,

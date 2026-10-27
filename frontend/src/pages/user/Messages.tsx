@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import {
+  Alert,
   Avatar,
   Button,
   EmptyState,
@@ -11,6 +12,7 @@ import {
   ItemImage,
   SearchField,
   Select,
+  SkeletonRows,
   StatusBadge,
   TextArea,
   TypeBadge,
@@ -127,13 +129,11 @@ export interface ApiConversation {
   offeredItem?: ItemResponse;
 }
 
-function requestStatusClass(status: RequestResponse['status']) {
-  if (status === 'REJECTED' || status === 'CANCELLED' || status === 'DISPUTED') {
-    return 'bg-error-soft text-error';
-  }
-  if (status === 'COMPLETED') return 'bg-success-soft text-success';
-  if (status === 'RESERVED') return 'bg-primary-soft text-primary';
-  return 'bg-warning-soft text-warning';
+function requestStatusTextClass(status: RequestResponse['status']) {
+  if (status === 'REJECTED' || status === 'CANCELLED' || status === 'DISPUTED') return 'text-error';
+  if (status === 'COMPLETED') return 'text-success';
+  if (status === 'PENDING') return 'text-text-muted';
+  return 'text-secondary-hover';
 }
 
 // Chủ bài lấy từ yêu cầu trước, vì bài đã giữ chỗ hoặc đã trao đổi không còn tải được qua API công khai.
@@ -187,38 +187,6 @@ function mergeConversationRequests(
   });
 }
 
-export function RequestDetailsTabs({
-  activeTab,
-  onChange,
-}: {
-  activeTab: 'info' | 'schedule';
-  onChange: (tab: 'info' | 'schedule') => void;
-}) {
-  return (
-    <div className="grid grid-cols-2 gap-1 rounded-md bg-surface-low p-1" role="tablist" aria-label="Chi tiết yêu cầu">
-      {([
-        ['info', 'Thông tin'],
-        ['schedule', 'Lịch giao nhận'],
-      ] as const).map(([value, label]) => (
-        <button
-          key={value}
-          type="button"
-          role="tab"
-          aria-selected={activeTab === value}
-          onClick={() => onChange(value)}
-          className={`min-h-11 rounded-md px-3 py-2 text-xs font-semibold transition ${
-            activeTab === value
-              ? 'bg-white text-primary shadow-sm ring-1 ring-border/70'
-              : 'text-text-muted hover:text-text-primary'
-          }`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // Khi chưa có tiêu đề món đồ thì gọi theo loại yêu cầu, không in id kỹ thuật ra màn hình.
 function requestFallbackTitle(request: RequestResponse) {
   return request.type === 'SWAP' ? 'Yêu cầu trao đổi' : 'Yêu cầu nhận đồ';
@@ -253,8 +221,6 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [selectError, setSelectError] = useState('');
   const [mobileChat, setMobileChat] = useState(false);
   const [conversationQuery, setConversationQuery] = useState('');
-  const [detailsTab, setDetailsTab] = useState<'info' | 'schedule'>('info');
-  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [deliveryMethod, setDeliveryMethod] = useState<'IN_PERSON' | 'SHIPPING'>('IN_PERSON');
   const [meetingPlace, setMeetingPlace] = useState('');
@@ -370,7 +336,6 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const selected = conversations.find(({ request }) => request.id === selectedRequestId);
   const selectCandidate = conversations.find(({ request }) => request.id === selectCandidateId);
   const selectedParticipantName = selected ? requestParticipantName(selected, currentUserId) : '';
-  const selectedItemTitle = selected ? (selected.item?.title ?? selected.request.itemTitle?.trim()) : undefined;
   const chatEnabled = selected ? canChat(selected.request.status) : false;
   const requestMediaEnabled = selected
     ? ['LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER', 'COMPLETED', 'DISPUTED'].includes(selected.request.status)
@@ -933,27 +898,53 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       })
     : conversations;
 
+  const otherPartyConfirmedAt = selected
+    ? selectedAsDonor
+      ? selected.request.receiverScheduleOkAt
+      : selected.request.donorScheduleOkAt
+    : undefined;
+  const otherPartyHandoverAt = selected
+    ? selectedAsDonor
+      ? selected.request.receiverHandoverAt
+      : selected.request.donorHandoverAt
+    : undefined;
+  const scheduleLocked = !selected || !canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting;
+  const openConversation = (requestId: number) => {
+    setSelectedRequestId(requestId);
+    setMobileChat(true);
+    setMobileDetailsOpen(false);
+    setReportOpen(false);
+    setReportNotice('');
+    setDisputeNotice('');
+    navigate(requestConversationPath(requestId));
+  };
+
   return (
     <div className="page-shell py-5 sm:py-7">
-      <div className="overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-border/80 lg:grid lg:h-[calc(100dvh-140px)] lg:min-h-[680px] lg:grid-cols-[290px_minmax(0,1fr)]">
-        <aside className={`${mobileChat ? 'hidden lg:flex' : 'flex'} min-h-0 flex-col overflow-hidden border-r border-border`}>
-          <div className="flex h-16 items-center justify-between border-b border-border px-5">
-            <h1 className="text-lg font-bold">Tin nhắn</h1>
-            <span className="text-xs text-text-muted">{conversations.length} cuộc trò chuyện</span>
+      <div className="grid gap-4 lg:h-[calc(100dvh-140px)] lg:min-h-[640px] lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_360px]">
+        <aside
+          aria-label="Cuộc trò chuyện"
+          className={`${mobileChat ? 'hidden lg:flex' : 'flex'} min-h-0 flex-col overflow-hidden rounded-lg bg-white ring-1 ring-border/80`}
+        >
+          <div className="px-4 pb-3 pt-4">
+            <div className="flex items-baseline justify-between gap-3">
+              <h1 className="text-xl font-bold">Tin nhắn</h1>
+              <span className="text-xs text-text-muted">{conversations.length} cuộc</span>
+            </div>
+            <div className="mt-3">
+              <SearchField
+                aria-label="Tìm kiếm cuộc trò chuyện"
+                placeholder="Tìm món hoặc người"
+                value={conversationQuery}
+                onChange={(event) => setConversationQuery(event.target.value)}
+              />
+            </div>
           </div>
-          <div className="border-b border-border p-3">
-            <SearchField
-              aria-label="Tìm kiếm cuộc trò chuyện"
-              placeholder="Tìm món đồ hoặc người liên quan"
-              value={conversationQuery}
-              onChange={(event) => setConversationQuery(event.target.value)}
-            />
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
             {loadingConversations ? (
-              <div className="p-5 text-sm text-text-muted">Đang tải cuộc trò chuyện...</div>
+              <SkeletonRows rows={5} label="Đang tải cuộc trò chuyện" />
             ) : conversationError ? (
-              <div className="space-y-3 p-5 text-sm text-error">
+              <div className="space-y-3 p-3 text-sm text-error">
                 <p>{conversationError}</p>
                 <Button variant="outline" onClick={() => setConversationReloadKey((key) => key + 1)}>
                   Thử tải lại
@@ -963,52 +954,33 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
               filteredConversations.map((conversation) => {
                 const { request } = conversation;
                 const participantName = requestParticipantName(conversation, currentUserId);
-                const selectable = canSelectRequest(conversation, conversations, currentUserId);
-                const openDetails = () => {
-                  setSelectedRequestId(request.id);
-                  setMobileChat(true);
-                  setMobileDetailsOpen(false);
-                  setReportOpen(false);
-                  setReportNotice('');
-                  setDisputeNotice('');
-                  navigate(requestConversationPath(request.id));
-                };
+                const active = request.id === selectedRequestId;
                 return (
-                  <article
-                    key={request.id}
-                    className={`border-b border-border/70 p-3 transition ${request.id === selectedRequestId ? 'bg-primary-faint ring-1 ring-inset ring-primary/25' : 'hover:bg-background'}`}
-                  >
-                    <button type="button" onClick={openDetails} className="flex w-full gap-3 text-left">
-                      <Avatar
-                        user={{ name: participantName, avatarInitials: avatarInitials(participantName), avatarUrl: undefined }}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <strong className="block truncate text-sm">{conversationTitle(conversation)}</strong>
-                        <span className="mt-1 block truncate text-xs text-text-muted">{participantName}</span>
-                        {donorIdOf(conversation) === currentUserId ? (
-                          <span className="mt-1 block">
-                            <ReputationBadge
-                              trustStars={request.receiverTrustStars ?? request.trustStars}
-                              rank={request.receiverRank ?? request.rank}
-                              asDescribedRate={request.receiverAsDescribedRate ?? request.asDescribedRate}
-                              compact
-                            />
-                          </span>
-                        ) : null}
-                        <span className="mt-2 flex items-center justify-between gap-2">
-                          <span className={`rounded-sm px-2 py-1 text-2xs font-semibold ${requestStatusClass(request.status)}`}>
-                            {requestStatusLabel[request.status]}
-                          </span>
+                  <div key={request.id} className={`rounded-md ${active ? 'bg-primary-faint' : 'hover:bg-surface-low'}`}>
+                    <button
+                      type="button"
+                      aria-current={active ? 'true' : undefined}
+                      onClick={() => openConversation(request.id)}
+                      className="grid w-full grid-cols-[40px_minmax(0,1fr)] gap-3 p-2.5 text-left"
+                    >
+                      <Avatar user={{ name: participantName, avatarInitials: avatarInitials(participantName), avatarUrl: undefined }} />
+                      <span className="min-w-0">
+                        <span className="flex items-baseline justify-between gap-2">
+                          <strong className="truncate text-sm">{participantName}</strong>
                           <span className="shrink-0 text-2xs text-text-muted">
                             {new Date(request.createdAt).toLocaleDateString('vi-VN')}
                           </span>
                         </span>
+                        <span className="mt-0.5 block truncate text-xs text-text-secondary">{conversationTitle(conversation)}</span>
+                        <span className={`mt-0.5 block text-xs font-semibold ${requestStatusTextClass(request.status)}`}>
+                          {requestStatusLabel[request.status]}
+                        </span>
                       </span>
                     </button>
-                    <div className="mt-2 flex flex-wrap justify-end gap-2">
-                      <Button variant="outline" onClick={openDetails}>Xem chi tiết</Button>
-                      {selectable ? (
+                    {canSelectRequest(conversation, conversations, currentUserId) ? (
+                      <div className="px-2.5 pb-2.5 pl-[62px]">
                         <Button
+                          size="sm"
                           disabled={selectSubmitting}
                           onClick={() => {
                             setSelectError('');
@@ -1017,13 +989,13 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         >
                           Chọn người này
                         </Button>
-                      ) : null}
-                    </div>
-                  </article>
+                      </div>
+                    ) : null}
+                  </div>
                 );
               })
             ) : (
-              <div className="p-5">
+              <div className="p-2">
                 <EmptyState
                   title={conversationQuery ? 'Không tìm thấy cuộc trò chuyện' : 'Chưa có yêu cầu'}
                   text={conversationQuery ? 'Thử tìm bằng tên món đồ, người liên quan hoặc trạng thái khác.' : 'Các yêu cầu nhận hoặc trao đổi món đồ sẽ xuất hiện tại đây.'}
@@ -1034,188 +1006,305 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         </aside>
 
         {selected ? (
-          <section className={`${mobileChat ? 'flex' : 'hidden lg:flex'} min-h-[680px] flex-col overflow-hidden lg:min-h-0 xl:grid xl:grid-rows-[64px_auto_minmax(0,1fr)_auto] ${rightPanelCollapsed ? 'xl:grid-cols-[minmax(0,1fr)]' : 'xl:grid-cols-[minmax(0,1fr)_340px]'}`}>
-            <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4 sm:px-5 xl:col-start-1 xl:row-start-1">
-              <Button variant="outline" size="sm" className="lg:hidden" onClick={() => setMobileChat(false)}>
-                Quay lại
-              </Button>
-              <div className="min-w-0 flex-1">
-                <h2 className="truncate text-sm font-bold">{conversationTitle(selected)}</h2>
-                <p className="mt-1 truncate text-xs text-text-muted">Trao đổi với {selectedParticipantName}</p>
+          <>
+            <section
+              aria-label={`Cuộc trò chuyện với ${selectedParticipantName}`}
+              className={`${mobileChat ? 'flex' : 'hidden lg:flex'} min-h-[640px] min-w-0 flex-col overflow-hidden rounded-lg bg-white ring-1 ring-border/80 lg:min-h-0`}
+            >
+              <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border px-4 py-3">
+                <Button variant="outline" size="sm" className="lg:hidden" onClick={() => setMobileChat(false)}>
+                  Quay lại
+                </Button>
+                <span className="hidden sm:inline-flex">
+                  <Avatar
+                    size="sm"
+                    user={{ name: selectedParticipantName, avatarInitials: avatarInitials(selectedParticipantName), avatarUrl: undefined }}
+                  />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <strong className="block truncate text-sm">{selectedParticipantName}</strong>
+                  {selectedAsDonor ? (
+                    <div className="mt-0.5">
+                      <ReputationBadge
+                        trustStars={selected.request.receiverTrustStars ?? selected.request.trustStars}
+                        rank={selected.request.receiverRank ?? selected.request.rank}
+                        asDescribedRate={selected.request.receiverAsDescribedRate ?? selected.request.asDescribedRate}
+                        compact
+                      />
+                    </div>
+                  ) : null}
+                </div>
+                {reportTargetUserId && reportTargetUserId !== currentUserId ? (
+                  <Button variant="ghost" size="sm" className="hidden sm:inline-flex" onClick={() => setReportOpen(true)}>
+                    Báo cáo
+                  </Button>
+                ) : null}
+                <Button variant="outline" size="sm" className="xl:hidden" onClick={() => setMobileDetailsOpen(true)}>
+                  Tiến trình
+                </Button>
+              </header>
+
+              <button
+                type="button"
+                onClick={() => navigate(`/items/${selected.request.itemId}`)}
+                className="mx-4 mt-3 flex shrink-0 items-center gap-3 rounded-md bg-surface-low p-2.5 text-left transition hover:bg-primary-faint"
+              >
+                <ItemImage
+                  src={selected.item?.images[0] ?? selected.request.itemImage ?? undefined}
+                  alt={conversationTitle(selected)}
+                  className="h-11 w-14 shrink-0 rounded-md object-cover"
+                />
+                <span className="min-w-0 flex-1">
+                  <strong className="block truncate text-sm">{conversationTitle(selected)}</strong>
+                  <span className="mt-0.5 block text-xs text-text-secondary">
+                    {selectedAsDonor ? 'Bài của bạn' : 'Bạn đang xin món này'} · {requestStatusLabel[selected.request.status]}
+                  </span>
+                </span>
+                <TypeBadge type={selected.request.type === 'SWAP' ? 'trade' : 'gift'} />
+              </button>
+
+              {reportNotice || disputeNotice ? (
+                <div role="status" className="mx-4 mt-3 space-y-1 rounded-md bg-success-soft px-3 py-2 text-xs text-success">
+                  {reportNotice ? <p>{reportNotice}</p> : null}
+                  {disputeNotice ? <p>{disputeNotice}</p> : null}
+                </div>
+              ) : null}
+
+              <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 py-4">
+                {pinnedItemsError ? (
+                  <div className="flex items-center justify-center gap-3 text-xs text-error">
+                    <p>{pinnedItemsError}</p>
+                    <button type="button" className="shrink-0 font-semibold underline" onClick={() => setPinnedItemsReloadKey((key) => key + 1)}>
+                      Thử tải lại
+                    </button>
+                  </div>
+                ) : null}
+                {!pinnedItemsLoading && pinnedItems.length ? (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {pinnedItems.map((pinnedItem) => (
+                      <button
+                        key={pinnedItem.id}
+                        type="button"
+                        className="flex min-w-[220px] items-center gap-3 rounded-md p-2 text-left ring-1 ring-border/70 transition hover:bg-surface-low"
+                        onClick={() => navigate(`/items/${pinnedItem.id}`)}
+                      >
+                        <ItemImage src={pinnedItem.imageUrl ?? undefined} alt={pinnedItem.title} className="size-12 shrink-0 rounded-md object-cover" />
+                        <span className="min-w-0 flex-1">
+                          <strong className="block truncate text-xs">{pinnedItem.title}</strong>
+                          <span className="mt-1 flex flex-wrap gap-1.5">
+                            <TypeBadge type={pinnedItem.offerType === 'GIVE' ? 'gift' : 'trade'} />
+                            <StatusBadge status={pinnedItem.status} />
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {loadingMessages ? (
+                  <p className="text-center text-sm text-text-muted">Đang tải tin nhắn...</p>
+                ) : messages.length ? (
+                  messages.map((entry) => (
+                    <ChatMessage
+                      key={entry.id}
+                      entry={entry}
+                      mine={entry.senderId === currentUserId}
+                      onOpenItem={(itemId) => navigate(`/items/${itemId}`)}
+                    />
+                  ))
+                ) : (
+                  <p className="mx-auto max-w-sm py-10 text-center text-sm leading-6 text-text-muted">
+                    {chatEnabled
+                      ? 'Chưa có tin nhắn. Hãy gửi lời chào để bắt đầu.'
+                      : 'Cuộc trò chuyện mở khi chủ bài chọn yêu cầu này.'}
+                  </p>
+                )}
+                <div ref={messagesEndRef} aria-hidden="true" />
               </div>
-              <span className="rounded-sm bg-primary-faint px-2.5 py-1 text-xs font-semibold text-primary">{requestStatusLabel[selected.request.status]}</span>
-              <Button variant="outline" className="xl:hidden" onClick={() => setMobileDetailsOpen(true)}>
-                Chi tiết
-              </Button>
-              <Button variant="ghost" className="hidden xl:inline-flex" onClick={() => setRightPanelCollapsed((current) => !current)}>
-                {rightPanelCollapsed ? 'Mở thông tin' : 'Thu gọn'}
-              </Button>
-            </header>
+
+              <div className="shrink-0 space-y-2 border-t border-border px-4 py-3">
+                {messageError ? (
+                  <div role="alert" className="flex items-center justify-between gap-3 rounded-md bg-error-soft px-3 py-2 text-xs text-error">
+                    <p>{messageError}</p>
+                    <button type="button" className="shrink-0 font-semibold underline" onClick={() => setMessageReloadKey((key) => key + 1)}>
+                      Tải lại
+                    </button>
+                  </div>
+                ) : null}
+                {chatImage ? (
+                  <p className="flex min-w-0 items-center gap-2 text-xs text-text-secondary">
+                    <span className="max-w-56 truncate">Ảnh: {chatImage.name}</span>
+                    <button
+                      type="button"
+                      className="font-semibold text-error underline"
+                      disabled={sending}
+                      onClick={() => {
+                        setChatImage(null);
+                        if (chatImageInputRef.current) chatImageInputRef.current.value = '';
+                      }}
+                    >
+                      Bỏ ảnh
+                    </button>
+                  </p>
+                ) : null}
+                {shareableItems.length ? (
+                  <select
+                    aria-label="Chia sẻ bài của bạn"
+                    className="input min-h-10 py-2 text-xs"
+                    value={shareItemId}
+                    disabled={sending || !chatEnabled || !!chatImage}
+                    onChange={(event) => setShareItemId(event.target.value)}
+                  >
+                    <option value="">Không kèm bài đăng của bạn</option>
+                    {shareableItems.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        Kèm bài: {item.title}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                <form
+                  className="flex items-center gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void send();
+                  }}
+                >
+                  <label className="min-w-0 flex-1">
+                    <span className="sr-only">Tin nhắn</span>
+                    <input
+                      className="input"
+                      value={message}
+                      maxLength={2000}
+                      onChange={(event) => {
+                        setMessage(event.target.value);
+                        if (messageError) setMessageError('');
+                      }}
+                      placeholder={chatEnabled ? 'Nhập tin nhắn...' : 'Chưa thể nhắn tin'}
+                      disabled={sending || !chatEnabled}
+                    />
+                  </label>
+                  <label
+                    title={requestMediaEnabled ? 'Gửi một ảnh' : 'Mở sau khi chốt lịch hẹn'}
+                    className={`inline-flex min-h-11 shrink-0 cursor-pointer items-center rounded-md border border-border px-3 text-xs font-semibold text-text-secondary ${sending || !chatEnabled || !requestMediaEnabled || !!shareItemId ? 'pointer-events-none opacity-40' : 'hover:bg-surface-low'}`}
+                  >
+                    Gửi ảnh
+                    <input
+                      ref={chatImageInputRef}
+                      className="sr-only"
+                      type="file"
+                      accept="image/*"
+                      disabled={sending || !chatEnabled || !requestMediaEnabled || !!shareItemId}
+                      onChange={(event) => {
+                        setChatImage(event.target.files?.[0] ?? null);
+                        if (messageError) setMessageError('');
+                      }}
+                    />
+                  </label>
+                  <Button aria-label="Gửi tin nhắn" disabled={sending || !chatEnabled || (!message.trim() && !shareItemId && !chatImage)}>
+                    {sending ? 'Đang gửi' : 'Gửi'}
+                  </Button>
+                </form>
+                {chatEnabled && !requestMediaEnabled ? (
+                  <p className="text-2xs text-text-muted">Gửi ảnh được sau khi hai bên chốt lịch hẹn.</p>
+                ) : null}
+              </div>
+            </section>
+
             {mobileDetailsOpen ? (
               <button
                 type="button"
-                aria-label="Đóng bảng chi tiết"
+                aria-label="Đóng bảng tiến trình"
                 className="fixed inset-0 z-30 bg-black/45 xl:hidden"
                 onClick={() => setMobileDetailsOpen(false)}
               />
             ) : null}
             <aside
-              aria-label="Thông tin yêu cầu"
-              className={`${mobileDetailsOpen ? 'fixed inset-x-3 bottom-3 top-20 z-40 flex' : 'hidden'} min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-white shadow-lg xl:static xl:col-start-2 xl:row-span-4 xl:row-start-1 xl:rounded-none xl:border-y-0 xl:border-r-0 xl:border-l xl:shadow-none ${rightPanelCollapsed ? 'xl:hidden' : 'xl:flex'}`}
+              aria-label="Tiến trình giao dịch"
+              className={`${mobileDetailsOpen ? 'fixed inset-x-3 bottom-3 top-20 z-40 flex' : 'hidden'} min-h-0 flex-col overflow-hidden rounded-lg bg-white shadow-lg ring-1 ring-border/80 xl:static xl:flex xl:shadow-none`}
             >
-              <div className="shrink-0 border-b border-border p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-2xs font-semibold uppercase tracking-wide text-text-muted">{requestFallbackTitle(selected.request)}</p>
-                    <h3 className="mt-1 truncate text-sm font-bold">{conversationTitle(selected)}</h3>
-                  </div>
-                  <button
-                    type="button"
-                    aria-label="Đóng bảng chi tiết"
-                    className="grid size-11 shrink-0 place-items-center rounded-md text-text-muted transition hover:bg-surface-low"
-                    onClick={() => {
-                      setMobileDetailsOpen(false);
-                      setRightPanelCollapsed(true);
-                    }}
-                  >
-                    <Icon name="close" className="size-4" />
-                  </button>
-                </div>
-                <RequestDetailsTabs activeTab={detailsTab} onChange={setDetailsTab} />
+              <div className="flex shrink-0 items-center justify-between gap-3 px-5 pb-2 pt-4">
+                <h2 className="text-lg font-bold">Tiến trình giao dịch</h2>
+                <button
+                  type="button"
+                  aria-label="Đóng bảng tiến trình"
+                  className="grid size-11 shrink-0 place-items-center rounded-md text-text-muted transition hover:bg-surface-low xl:hidden"
+                  onClick={() => setMobileDetailsOpen(false)}
+                >
+                  <Icon name="close" className="size-4" />
+                </button>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-              {detailsTab === 'info' ? (
-                <div className="p-4">
-              <div className="flex flex-wrap items-start gap-3">
-                <Avatar
-                  user={{
-                    name: selectedParticipantName,
-                    avatarInitials: avatarInitials(selectedParticipantName),
-                    avatarUrl: undefined,
-                  }}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <strong className="text-sm">{requestFallbackTitle(selected.request)}</strong>
-                    <TypeBadge type={selected.request.type === 'SWAP' ? 'trade' : 'gift'} />
-                    <span className={`rounded-sm px-2 py-1 text-2xs font-semibold ${requestStatusClass(selected.request.status)}`}>
-                      {requestStatusLabel[selected.request.status]}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-text-muted">
-                    Gửi lúc {new Date(selected.request.createdAt).toLocaleString('vi-VN')}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-text-secondary">
-                    {selected.request.type === 'GIVE'
-                      ? (selectedItemTitle ? `Đề nghị nhận món “${selectedItemTitle}”.` : 'Đề nghị nhận món này.')
-                      : (selectedItemTitle ? `Đề nghị trao đổi với món “${selectedItemTitle}”.` : 'Đề nghị trao đổi với món này.')}
-                  </p>
-                  <p className="mt-1 text-xs text-text-muted">Yêu cầu này chưa có nội dung ghi chú riêng.</p>
-                </div>
-              </div>
-              {selected.request.type === 'SWAP' ? (
-                selected.offeredItem ? (
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/items/${selected.offeredItem!.id}`)}
-                    className="mt-3 flex w-full items-center gap-3 rounded-md bg-surface-low p-3 text-left transition hover:bg-primary-faint"
-                  >
-                    <ItemImage
-                      src={selected.offeredItem.images[0]}
-                      alt={selected.offeredItem.title}
-                      className="size-16 shrink-0 rounded-md object-cover"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-2xs font-semibold uppercase tracking-wide text-text-muted">Món đề xuất trao đổi</span>
-                      <strong className="mt-1 block truncate text-sm">{selected.offeredItem.title}</strong>
-                      <span className="mt-1 line-clamp-2 block text-xs leading-5 text-text-muted">{selected.offeredItem.description}</span>
-                      <span className="mt-1 block text-xs font-semibold text-text-secondary">
-                        {apiConditionLabel[selected.offeredItem.condition]}
-                      </span>
-                    </span>
-                  </button>
-                ) : (
-                  <p className="mt-3 rounded-md bg-surface-low p-3 text-sm text-text-secondary">
-                    Món đề xuất trao đổi:{' '}
-                    <strong className="text-text-primary">
-                      {selected.request.offeredItemTitle ?? 'Không tải được chi tiết món đề xuất'}
-                    </strong>
-                  </p>
-                )
-              ) : null}
-                  <div className="mt-4 grid gap-2">
-                    <Button variant="outline" onClick={() => navigate(`/items/${selected.request.itemId}`)}>
-                      Xem chi tiết bài đăng
-                    </Button>
-                    {reportTargetUserId && reportTargetUserId !== currentUserId ? (
-                      <Button variant="ghost" onClick={() => setReportOpen(true)}>
-                        Báo cáo người dùng
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              ) : (
-              <div className="p-4">
-              {logisticsLoading ? (
-                <p className="text-xs text-text-muted">Đang tải thông tin giao nhận...</p>
-              ) : (
-                <div className="space-y-3">
-                  {selected.request.status === 'PENDING' ? (
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-sm">
-                      <div>
-                        <p>Yêu cầu đang chờ chủ bài chọn người nhận.</p>
-                        {selectedAsDonor ? (
-                          <div className="mt-1">
-                            <ReputationBadge
-                              trustStars={selected.request.receiverTrustStars ?? selected.request.trustStars}
-                              rank={selected.request.receiverRank ?? selected.request.rank}
-                              asDescribedRate={selected.request.receiverAsDescribedRate ?? selected.request.asDescribedRate}
-                              compact
-                            />
-                          </div>
-                        ) : null}
-                      </div>
-                      {selectedAsDonor ? (
-                        canSelectRequest(selected, conversations, currentUserId) ? (
-                          <Button
-                            disabled={selectSubmitting}
-                            onClick={() => {
-                              setSelectError('');
-                              setSelectCandidateId(selected.request.id);
-                            }}
-                          >
-                            Chọn người này
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-text-muted">Bài đăng đã có yêu cầu được chọn.</span>
-                        )
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 pb-5">
+                <TransactionSteps status={selected.request.status} />
+
+                {logisticsLoading ? <p className="text-xs text-text-muted">Đang tải thông tin giao nhận...</p> : null}
+
+                {selected.request.status === 'PENDING' ? (
+                  <div className="space-y-3 text-sm">
+                    <p className="leading-6 text-text-secondary">
+                      {selectedAsDonor
+                        ? 'Người này đang chờ bạn chọn. Chọn xong thì cuộc trò chuyện mới mở.'
+                        : 'Yêu cầu đang chờ chủ bài chọn người nhận.'}
+                    </p>
+                    {selectedAsDonor ? (
+                      canSelectRequest(selected, conversations, currentUserId) ? (
+                        <Button
+                          disabled={selectSubmitting}
+                          onClick={() => {
+                            setSelectError('');
+                            setSelectCandidateId(selected.request.id);
+                          }}
+                        >
+                          Chọn người này
+                        </Button>
                       ) : (
-                        <Button variant="outline" disabled={logisticsSubmitting} onClick={() => void cancelPendingRequest()}>Hủy yêu cầu</Button>
-                      )}
+                        <p className="text-xs text-text-muted">Bài đăng đã có yêu cầu được chọn.</p>
+                      )
+                    ) : (
+                      <Button variant="outline" disabled={logisticsSubmitting} onClick={() => void cancelPendingRequest()}>
+                        Hủy yêu cầu
+                      </Button>
+                    )}
+                  </div>
+                ) : null}
+
+                {selected.request.status === 'REJECTED' || selected.request.status === 'CANCELLED' ? (
+                  <Alert tone="warning">
+                    {selected.request.status === 'REJECTED' ? 'Chủ bài đã chọn người khác cho món này.' : 'Yêu cầu này đã bị hủy.'}
+                  </Alert>
+                ) : null}
+
+                {canSchedule(selected.request.status) && !selected.request.contactRevealedAt ? (
+                  <div className="space-y-3">
+                    <div>
+                      <h3 className="text-sm font-bold">Hẹn lịch giao nhận</h3>
+                      <p className="mt-1 text-xs leading-5 text-text-secondary">
+                        Một bên lưu lịch, cả hai cùng xác nhận. Khi đó hai bên mới thấy số điện thoại của nhau.
+                      </p>
                     </div>
-                  ) : null}
-                  {canConfirmHandover(selected.request.status) && !selectedAsDonor && !currentHandoverAt ? (
-                    <div className="space-y-2">
-                      <Select label="Món đồ có đúng mô tả không?" value={asDescribed} disabled={logisticsSubmitting} onChange={(event) => setAsDescribed(event.target.value)}>
-                        <option value="">Chọn đánh giá</option>
-                        <option value="yes">Đúng mô tả</option>
-                        <option value="no">Không đúng mô tả</option>
-                      </Select>
-                      {asDescribed === 'no' ? <TextArea label="Lý do không đúng mô tả" value={notAsDescribedReason} disabled={logisticsSubmitting} onChange={(event) => setNotAsDescribedReason(event.target.value)} /> : null}
-                    </div>
-                  ) : null}
-                  <div className="grid gap-2">
-                    <Select
-                      label="Hình thức"
-                      value={deliveryMethod}
-                      onChange={(event) => setDeliveryMethod(event.target.value as 'IN_PERSON' | 'SHIPPING')}
-                      disabled={!canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
-                    >
-                      <option value="IN_PERSON">Gặp trực tiếp</option>
-                      <option value="SHIPPING">Giao hàng</option>
-                    </Select>
+                    {otherPartyConfirmedAt ? (
+                      <Alert tone="info">{selectedParticipantName} đã xác nhận lịch đang lưu.</Alert>
+                    ) : null}
+                    <fieldset className="grid grid-cols-2 gap-2">
+                      <legend className="mb-1.5 text-xs font-semibold text-text-secondary">Hình thức</legend>
+                      {([
+                        ['IN_PERSON', 'Gặp trực tiếp', 'Hẹn tại chỗ công cộng'],
+                        ['SHIPPING', 'Giao hàng', 'Gửi qua đơn vị vận chuyển'],
+                      ] as const).map(([value, label, hint]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={deliveryMethod === value}
+                          disabled={scheduleLocked}
+                          onClick={() => setDeliveryMethod(value)}
+                          className={`flex flex-col gap-0.5 rounded-md border p-2.5 text-left transition disabled:opacity-50 ${deliveryMethod === value ? 'border-primary bg-primary-faint' : 'border-border hover:bg-surface-low'}`}
+                        >
+                          <strong className="text-sm">{label}</strong>
+                          <span className="text-2xs text-text-muted">{hint}</span>
+                        </button>
+                      ))}
+                    </fieldset>
                     <Field
-                      label="Địa điểm"
+                      label={deliveryMethod === 'SHIPPING' ? 'Địa chỉ nhận hàng' : 'Địa điểm gặp'}
                       value={meetingPlace}
                       maxLength={255}
                       error={meetingPlace ? meetingPlaceValidation ?? undefined : undefined}
@@ -1223,7 +1312,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         setMeetingPlace(event.target.value);
                         setLogisticsError('');
                       }}
-                      disabled={!canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
+                      disabled={scheduleLocked}
                     />
                     <Field
                       label="Thời gian"
@@ -1236,332 +1325,216 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         setScheduleNow(new Date());
                         setLogisticsError('');
                       }}
-                      disabled={!canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
+                      disabled={scheduleLocked}
                     />
+                    <label className="flex items-start gap-2 text-xs leading-5 text-text-secondary">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 size-4 accent-primary"
+                        checked={agreeToWaiver}
+                        onChange={(event) => setAgreeToWaiver(event.target.checked)}
+                        disabled={scheduleLocked}
+                      />
+                      <span>Tôi đồng ý cam kết trách nhiệm giao nhận.</span>
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" disabled={scheduleLocked || !meetingFormValid} onClick={() => void saveSchedule()}>
+                        Lưu lịch hẹn
+                      </Button>
+                      <Button disabled={!canConfirmSchedule} onClick={() => void confirmLogistics()}>
+                        {currentPartyConfirmedAt ? 'Đã xác nhận lịch' : 'Xác nhận lịch'}
+                      </Button>
+                    </div>
                   </div>
-                  <label className="flex items-start gap-2 text-xs text-text-secondary">
-                    <input
-                      type="checkbox"
-                      checked={agreeToWaiver}
-                      onChange={(event) => setAgreeToWaiver(event.target.checked)}
-                      disabled={!canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting}
-                    />
-                    <span>Tôi đồng ý cam kết trách nhiệm giao nhận.</span>
-                  </label>
-                  {logisticsError ? (
-                    <div className="flex items-center justify-between gap-3 text-xs text-error">
-                      <p>{logisticsError}</p>
-                      <button type="button" className="shrink-0 font-semibold underline" onClick={() => setLogisticsReloadKey((key) => key + 1)}>
-                        Tải lại
-                      </button>
-                    </div>
-                  ) : null}
-                  {logisticsNotice ? <p className="text-xs font-semibold text-success">{logisticsNotice}</p> : null}
-                  {contact ? (
-                    <div className="rounded-md bg-primary-faint p-3 text-xs leading-5 text-text-secondary">
-                      <strong className="text-text-primary">{contact.fullName}</strong>
-                      <p>{contact.email}</p>
-                      <p>{contact.phone}</p>
-                    </div>
-                  ) : null}
-                  {requestMediaEnabled ? (
-                    <div className="rounded-md border border-border bg-background p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <strong className="text-sm">Minh chứng giao dịch</strong>
-                        <span className="text-xs text-text-muted">
-                          {requestMediaLoading ? 'Đang tải...' : `${requestMedia.length} ảnh`}
-                        </span>
+                ) : null}
+
+                {selected.request.contactRevealedAt ? (
+                  <div className="space-y-3">
+                    {selected.request.meetingTime || selected.request.meetingPlace ? (
+                      <div className="rounded-md bg-surface-low px-3.5 py-3 text-sm">
+                        <strong className="block">
+                          {selected.request.deliveryMethod === 'SHIPPING' ? 'Giao hàng' : 'Gặp'}{' '}
+                          {selected.request.meetingTime ? new Date(selected.request.meetingTime).toLocaleString('vi-VN') : ''}
+                        </strong>
+                        <span className="text-text-secondary">{selected.request.meetingPlace}</span>
                       </div>
-                      {requestMedia.length ? (
-                        <div className="mt-3 flex gap-2 overflow-x-auto">
-                          {requestMedia.map((entry) => (
-                            <a
-                              key={entry.mediaId}
-                              href={resolveMediaUrl(entry.url)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="shrink-0"
-                              title={`${entry.stage === 'HANDOVER' ? 'Giao nhận' : 'Khiếu nại'} · ${new Date(entry.createdAt).toLocaleString('vi-VN')}`}
-                            >
-                              <ItemImage
-                                src={entry.url}
-                                alt="Ảnh minh chứng"
-                                className="size-16 rounded-md object-cover"
-                              />
-                            </a>
-                          ))}
-                        </div>
-                      ) : !requestMediaLoading ? (
-                        <p className="mt-2 text-xs text-text-muted">Chưa có ảnh minh chứng.</p>
-                      ) : null}
-                      <div className="mt-3 grid gap-2">
+                    ) : null}
+                    {contact ? (
+                      <div className="rounded-md border border-border px-3.5 py-3 text-sm leading-6">
+                        <strong className="block">Liên hệ {contact.fullName}</strong>
+                        <span className="block">{contact.phone}</span>
+                        <span className="block text-text-secondary">{contact.email}</span>
+                      </div>
+                    ) : (
+                      <Button variant="outline" disabled={logisticsSubmitting} onClick={() => void loadContact()}>
+                        Xem số điện thoại
+                      </Button>
+                    )}
+                  </div>
+                ) : null}
+
+                {canConfirmHandover(selected.request.status) && selected.request.contactRevealedAt ? (
+                  <div className="space-y-3">
+                    {otherPartyHandoverAt && !currentHandoverAt ? (
+                      <Alert tone="warning">
+                        {selectedParticipantName} đã xác nhận {selectedAsDonor ? 'đã nhận đồ' : 'đã giao đồ'}. Hãy xác nhận phía bạn.
+                      </Alert>
+                    ) : null}
+                    {!selectedAsDonor && !currentHandoverAt ? (
+                      <>
                         <Select
-                          label="Giai đoạn"
-                          value={requestMediaStage}
-                          disabled={requestMediaSubmitting}
-                          onChange={(event) => setRequestMediaStage(event.target.value as RequestMediaStage)}
+                          label="Món đồ có đúng mô tả không?"
+                          value={asDescribed}
+                          disabled={logisticsSubmitting}
+                          onChange={(event) => setAsDescribed(event.target.value)}
                         >
-                          <option value="HANDOVER">Giao nhận</option>
-                          <option value="DISPUTE">Khiếu nại</option>
+                          <option value="">Chọn đánh giá</option>
+                          <option value="yes">Đúng mô tả</option>
+                          <option value="no">Không đúng mô tả</option>
                         </Select>
-                        <Field
-                          label="Bổ sung ảnh"
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          disabled={requestMediaSubmitting}
-                          onChange={(event) => setRequestMediaFiles(Array.from(event.target.files ?? []))}
-                        />
-                        <Button
-                          variant="outline"
-                          disabled={requestMediaSubmitting || !requestMediaFiles.length}
-                          onClick={() => void attachRequestMedia()}
-                        >
-                          {requestMediaSubmitting ? 'Đang tải...' : 'Thêm ảnh'}
-                        </Button>
-                      </div>
-                      {requestMediaFiles.length ? (
-                        <p className="mt-2 text-xs text-text-muted">Đã chọn {requestMediaFiles.length} ảnh.</p>
-                      ) : null}
-                      {requestMediaError ? <p className="mt-2 text-xs text-error">{requestMediaError}</p> : null}
-                    </div>
-                  ) : null}
-                  <div className="flex flex-wrap gap-2">
+                        {asDescribed === 'no' ? (
+                          <TextArea
+                            label="Lý do không đúng mô tả"
+                            value={notAsDescribedReason}
+                            disabled={logisticsSubmitting}
+                            onChange={(event) => setNotAsDescribedReason(event.target.value)}
+                          />
+                        ) : null}
+                      </>
+                    ) : null}
+                    <Button className="w-full" disabled={Boolean(currentHandoverAt) || logisticsSubmitting} onClick={() => void confirmApiHandover()}>
+                      {currentHandoverAt
+                        ? selectedAsDonor ? 'Bạn đã xác nhận đã giao' : 'Bạn đã xác nhận đã nhận'
+                        : selectedAsDonor ? 'Tôi đã giao đồ' : 'Tôi đã nhận được đồ'}
+                    </Button>
+                  </div>
+                ) : null}
+
+                {selected.request.status === 'COMPLETED' ? (
+                  <div className="space-y-3">
+                    <Alert tone="success">
+                      Giao dịch đã hoàn tất
+                      {selected.request.completedAt ? ` lúc ${new Date(selected.request.completedAt).toLocaleString('vi-VN')}` : ''}.
+                    </Alert>
                     <Button
                       variant="outline"
-                      disabled={!canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || !meetingFormValid || logisticsSubmitting}
-                      onClick={() => void saveSchedule()}
-                    >
-                      Lưu lịch hẹn
-                    </Button>
-                    <Button
-                      disabled={!canConfirmSchedule}
-                      onClick={() => void confirmLogistics()}
-                    >
-                      {currentPartyConfirmedAt ? 'Đã xác nhận lịch' : 'Xác nhận lịch'}
-                    </Button>
-                    {selected.request.contactRevealedAt ? (
-                      <Button variant="ghost" disabled={logisticsSubmitting} onClick={() => void loadContact()}>
-                        Xem liên hệ
-                      </Button>
-                    ) : null}
-                    {canConfirmHandover(selected.request.status) && selected.request.contactRevealedAt ? (
-                      <Button
-                        variant="outline"
-                        disabled={Boolean(currentHandoverAt) || logisticsSubmitting}
-                        onClick={() => void confirmApiHandover()}
-                      >
-                        {currentHandoverAt ? 'Đã xác nhận bàn giao' : 'Xác nhận bàn giao'}
-                      </Button>
-                    ) : null}
-                    {selected.request.status === 'COMPLETED' ? (
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setDisputeError('');
-                          setDisputeNotice('');
-                          setDisputeOpen(true);
-                        }}
-                      >
-                        Gửi khiếu nại
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              )}
-              </div>
-              )}
-              </div>
-            </aside>
-            {reportNotice || disputeNotice ? (
-              <div role="status" className="shrink-0 space-y-2 border-b border-border bg-success-soft px-4 py-3 text-xs text-success sm:px-5 xl:col-start-1 xl:row-start-2">
-                {reportNotice ? <p>{reportNotice}</p> : null}
-                {disputeNotice ? <p>{disputeNotice}</p> : null}
-              </div>
-            ) : null}
-            <div className={`min-h-0 flex-1 space-y-3 overflow-y-auto bg-background px-4 pb-6 pt-5 sm:px-6 xl:col-start-1 ${reportNotice || disputeNotice ? 'xl:row-start-3' : 'xl:row-start-2 xl:row-span-2'}`}>
-              {pinnedItemsLoading ? (
-                <p className="text-center text-xs text-text-muted">Đang tải thẻ sản phẩm ghim...</p>
-              ) : pinnedItemsError ? (
-                <div className="flex items-center justify-center gap-3 text-xs text-error">
-                  <p>{pinnedItemsError}</p>
-                  <button
-                    type="button"
-                    className="shrink-0 font-semibold underline"
-                    onClick={() => setPinnedItemsReloadKey((key) => key + 1)}
-                  >
-                    Thử tải lại
-                  </button>
-                </div>
-              ) : !pinnedItems.length ? (
-                <p className="text-center text-xs text-text-muted">Cuộc trò chuyện này không có sản phẩm ghim.</p>
-              ) : null}
-              {pinnedItems.length ? (
-                <div className="mb-4 flex gap-3 overflow-x-auto rounded-lg bg-white p-3 ring-1 ring-border/70">
-                  {pinnedItems.map((pinnedItem) => (
-                    <button
-                      key={pinnedItem.id}
-                      type="button"
-                      className="flex min-w-[240px] items-center gap-3 rounded-md p-2 text-left transition hover:bg-surface-low"
-                      onClick={() => navigate(`/items/${pinnedItem.id}`)}
-                    >
-                      <ItemImage
-                        src={pinnedItem.imageUrl ?? undefined}
-                        alt={pinnedItem.title}
-                        className="size-14 shrink-0 rounded-md object-cover"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <strong className="block truncate text-sm">{pinnedItem.title}</strong>
-                        <span className="mt-1 flex flex-wrap gap-1.5">
-                          <TypeBadge type={pinnedItem.offerType === 'GIVE' ? 'gift' : 'trade'} />
-                          <StatusBadge status={pinnedItem.status} />
-                        </span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              {loadingMessages ? (
-                <p className="text-center text-sm text-text-muted">Đang tải tin nhắn...</p>
-              ) : messages.length ? (
-                messages.map((entry) => {
-                  const mine = entry.senderId === currentUserId;
-                  const system = entry.kind.toUpperCase() === 'SYSTEM';
-                  if (entry.moderation && entry.moderation !== 'PASS') {
-                    return (
-                      <div key={entry.id} className="flex justify-center">
-                        <span className="max-w-xl rounded-md bg-error-soft px-3 py-2 text-center text-xs text-error">
-                          {entry.blockedReason || 'Tin nhắn này không vượt qua kiểm duyệt.'}
-                        </span>
-                      </div>
-                    );
-                  }
-                  if (system) {
-                    return (
-                      <div key={entry.id} className="flex justify-center">
-                        <span className="rounded-md bg-surface-container px-3 py-1.5 text-center text-2xs text-text-muted">{entry.content}</span>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div key={entry.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[82%] rounded-lg px-3.5 py-2.5 text-sm leading-6 sm:max-w-[70%] ${mine ? 'rounded-br-sm bg-primary text-white' : 'rounded-bl-sm bg-white text-text-primary ring-1 ring-border/70'}`}>
-                        {entry.itemCard ? (
-                          <button type="button" className="mb-2 flex w-full items-center gap-3 rounded-md bg-white p-3 text-left text-text-primary" onClick={() => navigate(`/items/${entry.itemCard!.id}`)}>
-                            <ItemImage src={entry.itemCard.imageUrl ?? undefined} alt={entry.itemCard.title} className="size-14 rounded-md object-cover" />
-                            <span className="min-w-0">
-                              <strong className="block break-words">{entry.itemCard.title}</strong>
-                              <span className="mt-1 flex flex-wrap gap-1.5">
-                                <TypeBadge type={entry.itemCard.offerType === 'GIVE' ? 'gift' : 'trade'} />
-                                <StatusBadge status={entry.itemCard.status} />
-                              </span>
-                            </span>
-                          </button>
-                        ) : null}
-                        {entry.mediaId ? (
-                          <a
-                            href={resolveMediaUrl(`/api/v1/media/${entry.mediaId}`)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="mb-2 block"
-                          >
-                            <img
-                              src={resolveMediaUrl(`/api/v1/media/${entry.mediaId}`)}
-                              alt="Ảnh trong cuộc trò chuyện"
-                              className="max-h-72 max-w-full rounded-md object-contain"
-                            />
-                          </a>
-                        ) : null}
-                        {entry.content ? <p className="whitespace-pre-wrap break-words">{entry.content}</p> : null}
-                        {messageOfferStatusLabel(entry.offerStatus) ? (
-                          <span className={`mt-1.5 inline-flex rounded-sm px-2 py-0.5 text-2xs font-semibold ${mine ? 'bg-white/15 text-white' : 'bg-primary-faint text-primary'}`}>
-                            {messageOfferStatusLabel(entry.offerStatus)}
-                          </span>
-                        ) : null}
-                        <span className={`mt-1 block text-2xs ${mine ? 'text-white/65' : 'text-text-muted'}`}>{new Date(entry.createdAt).toLocaleString('vi-VN')}</span>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <EmptyState title={chatEnabled ? "Chưa có tin nhắn" : "Chưa mở chat"} text={chatEnabled ? "Hãy gửi lời chào để bắt đầu cuộc trò chuyện." : "Chat chỉ mở khi yêu cầu được chọn."} />
-              )}
-              <div ref={messagesEndRef} aria-hidden="true" />
-            </div>
-            <div className="shrink-0 border-t border-border bg-white p-3 sm:p-4 xl:col-start-1 xl:row-start-4">
-              <Select label="Chia sẻ bài của bạn" value={shareItemId} disabled={sending || !chatEnabled || !!chatImage} onChange={(event) => setShareItemId(event.target.value)}>
-                <option value="">Không đính kèm bài đăng</option>
-                {shareableItems.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-              </Select>
-              <div className="mb-3 flex flex-wrap items-center gap-3 text-xs">
-                <label className={`inline-flex min-h-11 cursor-pointer items-center rounded-md border border-border px-3 py-2 font-semibold ${sending || !chatEnabled || !requestMediaEnabled || !!shareItemId ? 'pointer-events-none opacity-50' : 'hover:bg-surface-low'}`}>
-                  Đính kèm ảnh
-                  <input
-                    ref={chatImageInputRef}
-                    className="sr-only"
-                    type="file"
-                    accept="image/*"
-                    disabled={sending || !chatEnabled || !requestMediaEnabled || !!shareItemId}
-                    onChange={(event) => {
-                      setChatImage(event.target.files?.[0] ?? null);
-                      if (messageError) setMessageError('');
-                    }}
-                  />
-                </label>
-                {chatImage ? (
-                  <span className="flex min-w-0 items-center gap-2 text-text-secondary">
-                    <span className="max-w-56 truncate">{chatImage.name}</span>
-                    <button
-                      type="button"
-                      className="font-semibold text-error underline"
-                      disabled={sending}
+                      className="w-full"
                       onClick={() => {
-                        setChatImage(null);
-                        if (chatImageInputRef.current) chatImageInputRef.current.value = '';
+                        setDisputeError('');
+                        setDisputeNotice('');
+                        setDisputeOpen(true);
                       }}
                     >
-                      Bỏ ảnh
-                    </button>
-                  </span>
-                ) : !requestMediaEnabled && chatEnabled ? (
-                  <span className="text-text-muted">Có thể gửi ảnh sau khi hai bên chốt lịch hẹn.</span>
+                      Khiếu nại giao dịch
+                    </Button>
+                  </div>
                 ) : null}
+
+                {selected.request.status === 'DISPUTED' ? (
+                  <Alert tone="warning">Giao dịch đang có khiếu nại. Admin sẽ xem xét và báo kết quả cho hai bên.</Alert>
+                ) : null}
+
+                {logisticsError ? (
+                  <div role="alert" className="flex items-center justify-between gap-3 rounded-md bg-error-soft px-3 py-2 text-xs text-error">
+                    <p>{logisticsError}</p>
+                    <button type="button" className="shrink-0 font-semibold underline" onClick={() => setLogisticsReloadKey((key) => key + 1)}>
+                      Tải lại
+                    </button>
+                  </div>
+                ) : null}
+                {logisticsNotice ? <p className="text-xs font-semibold text-success">{logisticsNotice}</p> : null}
+
+                {requestMediaEnabled ? (
+                  <section className="space-y-2 border-t border-border pt-4">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <h3 className="text-sm font-bold">Ảnh giao nhận</h3>
+                      <span className="text-xs text-text-muted">{requestMediaLoading ? 'Đang tải...' : `${requestMedia.length} ảnh`}</span>
+                    </div>
+                    <p className="text-xs leading-5 text-text-muted">Chụp món đồ lúc giao. Admin xem khi có khiếu nại.</p>
+                    {requestMedia.length ? (
+                      <div className="flex gap-2 overflow-x-auto">
+                        {requestMedia.map((entry) => (
+                          <a
+                            key={entry.mediaId}
+                            href={resolveMediaUrl(entry.url)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="shrink-0"
+                            title={`${entry.stage === 'HANDOVER' ? 'Giao nhận' : 'Khiếu nại'} · ${new Date(entry.createdAt).toLocaleString('vi-VN')}`}
+                          >
+                            <ItemImage src={entry.url} alt="Ảnh minh chứng" className="size-14 rounded-md object-cover" />
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
+                    <Select
+                      label="Giai đoạn"
+                      value={requestMediaStage}
+                      disabled={requestMediaSubmitting}
+                      onChange={(event) => setRequestMediaStage(event.target.value as RequestMediaStage)}
+                    >
+                      <option value="HANDOVER">Giao nhận</option>
+                      <option value="DISPUTE">Khiếu nại</option>
+                    </Select>
+                    <Field
+                      label="Chọn ảnh"
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      disabled={requestMediaSubmitting}
+                      onChange={(event) => setRequestMediaFiles(Array.from(event.target.files ?? []))}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={requestMediaSubmitting || !requestMediaFiles.length}
+                      onClick={() => void attachRequestMedia()}
+                    >
+                      {requestMediaSubmitting ? 'Đang tải...' : requestMediaFiles.length ? `Thêm ${requestMediaFiles.length} ảnh` : 'Thêm ảnh'}
+                    </Button>
+                    {requestMediaError ? <p className="text-xs text-error">{requestMediaError}</p> : null}
+                  </section>
+                ) : null}
+
+                <section className="space-y-3 border-t border-border pt-4 text-sm">
+                  <h3 className="text-sm font-bold">{requestFallbackTitle(selected.request)}</h3>
+                  <p className="text-xs text-text-muted">Gửi lúc {new Date(selected.request.createdAt).toLocaleString('vi-VN')}</p>
+                  {selected.request.type === 'SWAP' ? (
+                    selected.offeredItem ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/items/${selected.offeredItem!.id}`)}
+                        className="flex w-full items-center gap-3 rounded-md bg-surface-low p-2.5 text-left transition hover:bg-primary-faint"
+                      >
+                        <ItemImage src={selected.offeredItem.images[0]} alt={selected.offeredItem.title} className="size-12 shrink-0 rounded-md object-cover" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-2xs font-semibold text-text-muted">Món mang đổi</span>
+                          <strong className="block truncate text-sm">{selected.offeredItem.title}</strong>
+                          <span className="block text-xs text-text-secondary">{apiConditionLabel[selected.offeredItem.condition]}</span>
+                        </span>
+                      </button>
+                    ) : (
+                      <p className="rounded-md bg-surface-low p-2.5 text-text-secondary">
+                        Món mang đổi:{' '}
+                        <strong className="text-text-primary">{selected.request.offeredItemTitle ?? 'Không tải được chi tiết món'}</strong>
+                      </p>
+                    )
+                  ) : null}
+                  <Button variant="outline" className="w-full" onClick={() => navigate(`/items/${selected.request.itemId}`)}>
+                    Xem bài đăng
+                  </Button>
+                  {reportTargetUserId && reportTargetUserId !== currentUserId ? (
+                    <Button variant="ghost" className="w-full" onClick={() => setReportOpen(true)}>
+                      Báo cáo người dùng
+                    </Button>
+                  ) : null}
+                </section>
               </div>
-              {messageError ? (
-                <div className="mb-2 flex items-center justify-between gap-3 text-xs text-error">
-                  <p>{messageError}</p>
-                  <button type="button" className="shrink-0 font-semibold underline" onClick={() => setMessageReloadKey((key) => key + 1)}>
-                    Tải lại
-                  </button>
-                </div>
-              ) : null}
-              <form
-                className="flex items-end gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void send();
-                }}
-              >
-                <Field
-                  className="h-11"
-                  value={message}
-                  maxLength={2000}
-                  onChange={(event) => {
-                    setMessage(event.target.value);
-                    if (messageError) setMessageError('');
-                  }}
-                  placeholder="Nhập tin nhắn..."
-                  disabled={sending || !chatEnabled}
-                />
-                <Button aria-label="Gửi tin nhắn" disabled={sending || !chatEnabled || (!message.trim() && !shareItemId && !chatImage)}>
-                  {sending ? 'Đang gửi' : 'Gửi'}
-                </Button>
-              </form>
-            </div>
-          </section>
+            </aside>
+          </>
         ) : (
-          <section className="hidden min-h-[680px] place-items-center lg:grid lg:min-h-0">
-            <EmptyState title="Chọn cuộc trò chuyện" text="Chọn một yêu cầu đã được chấp nhận để xem tin nhắn." />
+          <section className="hidden place-items-center rounded-lg bg-white ring-1 ring-border/80 lg:grid xl:col-span-2">
+            <EmptyState title="Chọn cuộc trò chuyện" text="Chọn một yêu cầu ở cột bên trái để xem tin nhắn." />
           </section>
         )}
       </div>
@@ -1759,3 +1732,107 @@ export function SelectRequestDialog({
   );
 }
 
+const transactionSteps = ['Được chọn', 'Chốt lịch', 'Giao nhận', 'Hoàn tất'] as const;
+
+// Số bước đã xong theo trạng thái yêu cầu; -1 là chưa vào giao dịch (đang chờ, bị từ chối, đã hủy).
+function completedStepCount(status: RequestResponse['status']) {
+  if (status === 'RESERVED' || status === 'AWAITING_LOGISTICS') return 1;
+  if (status === 'LOGISTICS_CONFIRMED' || status === 'AWAITING_HANDOVER') return 2;
+  if (status === 'COMPLETED' || status === 'DISPUTED') return 4;
+  return -1;
+}
+
+/** Thanh 4 bước của giao dịch. Chỉ hiển thị trạng thái backend trả về, không tự đổi trạng thái. */
+function TransactionSteps({ status }: { status: RequestResponse['status'] }) {
+  const done = completedStepCount(status);
+  if (done < 0) return null;
+  return (
+    <ol className="grid grid-cols-4 gap-1.5" aria-label={`Đã xong ${Math.min(done, 4)} trên 4 bước`}>
+      {transactionSteps.map((label, index) => {
+        const state = index < done ? 'done' : index === done ? 'current' : 'todo';
+        return (
+          <li key={label} aria-current={state === 'current' ? 'step' : undefined} className="flex flex-col gap-1.5">
+            <span
+              className={`h-1.5 rounded-full ${state === 'done' ? 'bg-primary' : state === 'current' ? 'bg-secondary' : 'bg-surface-high'}`}
+            />
+            <span
+              className={`text-2xs font-semibold ${state === 'done' ? 'text-primary' : state === 'current' ? 'text-secondary-hover' : 'text-text-muted'}`}
+            >
+              {label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function ChatMessage({
+  entry,
+  mine,
+  onOpenItem,
+}: {
+  entry: MessageResponse;
+  mine: boolean;
+  onOpenItem: (itemId: number) => void;
+}) {
+  if (entry.moderation && entry.moderation !== 'PASS') {
+    return (
+      <div className="flex justify-center">
+        <span className="max-w-xl rounded-md bg-error-soft px-3 py-2 text-center text-xs text-error">
+          {entry.blockedReason || 'Tin nhắn này không vượt qua kiểm duyệt.'}
+        </span>
+      </div>
+    );
+  }
+  if (entry.kind.toUpperCase() === 'SYSTEM') {
+    return (
+      <div className="flex justify-center">
+        <span className="rounded-full bg-primary-faint px-3 py-1.5 text-center text-2xs text-text-secondary">{entry.content}</span>
+      </div>
+    );
+  }
+  const offerLabel = messageOfferStatusLabel(entry.offerStatus);
+  return (
+    <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+      <div
+        className={`max-w-[82%] rounded-lg px-3.5 py-2.5 text-sm leading-6 sm:max-w-[70%] ${mine ? 'rounded-br-sm bg-primary text-white' : 'rounded-bl-sm bg-surface-low text-text-primary'}`}
+      >
+        {entry.itemCard ? (
+          <button
+            type="button"
+            className="mb-2 flex w-full items-center gap-3 rounded-md bg-white p-2.5 text-left text-text-primary"
+            onClick={() => onOpenItem(entry.itemCard!.id)}
+          >
+            <ItemImage src={entry.itemCard.imageUrl ?? undefined} alt={entry.itemCard.title} className="size-12 rounded-md object-cover" />
+            <span className="min-w-0">
+              <strong className="block break-words text-sm">{entry.itemCard.title}</strong>
+              <span className="mt-1 flex flex-wrap gap-1.5">
+                <TypeBadge type={entry.itemCard.offerType === 'GIVE' ? 'gift' : 'trade'} />
+                <StatusBadge status={entry.itemCard.status} />
+              </span>
+            </span>
+          </button>
+        ) : null}
+        {entry.mediaId ? (
+          <a href={resolveMediaUrl(`/api/v1/media/${entry.mediaId}`)} target="_blank" rel="noreferrer" className="mb-2 block">
+            <img
+              src={resolveMediaUrl(`/api/v1/media/${entry.mediaId}`)}
+              alt="Ảnh trong cuộc trò chuyện"
+              className="max-h-72 max-w-full rounded-md object-contain"
+            />
+          </a>
+        ) : null}
+        {entry.content ? <p className="whitespace-pre-wrap break-words">{entry.content}</p> : null}
+        {offerLabel ? (
+          <span className={`mt-1.5 inline-flex rounded-sm px-2 py-0.5 text-2xs font-semibold ${mine ? 'bg-white/15 text-white' : 'bg-white text-primary'}`}>
+            {offerLabel}
+          </span>
+        ) : null}
+        <span className={`mt-1 block text-2xs ${mine ? 'text-white/70' : 'text-text-muted'}`}>
+          {new Date(entry.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+        </span>
+      </div>
+    </div>
+  );
+}

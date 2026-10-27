@@ -159,6 +159,8 @@ export interface ItemRequest {
   type: ItemType;
   itemId: string;
   itemTitle?: string;
+  itemImage?: string;
+  donorName?: string;
   offeredItemId?: string;
   offeredItemTitle?: string;
   requesterId: string;

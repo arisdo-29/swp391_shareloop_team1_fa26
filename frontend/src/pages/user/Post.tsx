@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
@@ -360,197 +360,282 @@ export function Post() {
     setImages(nextImages);
   };
 
+  const selectImages = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.currentTarget.value = '';
+    setMediaUploadState('idle');
+    setMediaUploadError('');
+    if (files.length > ITEM_IMAGES_MAX) {
+      setErrors((current) => ({ ...current, images: `Chỉ được chọn tối đa ${ITEM_IMAGES_MAX} ảnh.` }));
+      setImageFiles([]);
+      setImages([]);
+      setUploadedImageUrls(new Map());
+      return;
+    }
+    if (files.some((file) => !file.type.startsWith('image/'))) {
+      setErrors((current) => ({ ...current, images: 'Vui lòng chỉ chọn tệp hình ảnh.' }));
+      setImageFiles([]);
+      setImages([]);
+      setUploadedImageUrls(new Map());
+      return;
+    }
+    setErrors((current) => ({
+      ...current,
+      images: !SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST && files.length < ITEM_IMAGES_MIN ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.` : undefined,
+    }));
+    try {
+      const previews = await Promise.all(files.map(fileToDataUrl));
+      setImageFiles(files);
+      setImages(previews);
+      setUploadedImageUrls((current) =>
+        new Map(files.flatMap((file) => {
+          const url = current.get(file);
+          return url ? [[file, url] as const] : [];
+        })),
+      );
+    } catch {
+      setImageFiles([]);
+      setImages([]);
+      setUploadedImageUrls(new Map());
+      setMediaUploadState('error');
+      setMediaUploadError('Không đọc được ảnh đã chọn. Vui lòng chọn lại.');
+    }
+  };
+
+  const removeImage = (index: number) => {
+    const removedFile = imageFiles[index];
+    setImageFiles(imageFiles.filter((_, itemIndex) => itemIndex !== index));
+    setImages(images.filter((_, itemIndex) => itemIndex !== index));
+    setUploadedImageUrls((current) => {
+      const next = new Map(current);
+      if (removedFile) next.delete(removedFile);
+      return next;
+    });
+    setMediaUploadState('idle');
+    setMediaUploadError('');
+    const remainingCount = imageFiles.length - 1;
+    setErrors((current) => ({
+      ...current,
+      images: !SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST && remainingCount < ITEM_IMAGES_MIN ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.` : undefined,
+    }));
+  };
+
+  const missingImages = Math.max(0, ITEM_IMAGES_MIN - images.length);
+  const infoReady = Boolean(title.trim() && category && condition && description.trim());
+  const feeLabel = type === 'gift' ? 'Miễn phí' : type === 'trade' ? (postFee === null ? '--' : `${postFee} Credit`) : 'Chọn hình thức';
+
   return (
-    <div className="page-shell max-w-4xl">
+    <div className="page-shell">
       <PageHeader
-        title="Đăng món đồ"
-        description="Thông tin rõ ràng giúp món đồ sớm tìm được người phù hợp."
+        title="Đăng tin"
+        description="Admin duyệt bài trước khi bài hiện ra. Phí đăng chỉ trừ khi bài được duyệt, bị từ chối thì hoàn lại."
       />
       {error ? (
-        <Alert tone="error">
-          {errorCode === ITEM_MODERATION_BLOCKED ? (
-            <div>
-              <p className="font-bold text-error">{MODERATION_BLOCKED_TITLE}</p>
-              <p className="mt-1 whitespace-normal break-words leading-6">{error}</p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <span>{error}</span>
-              {errorCode === WALLET_INSUFFICIENT_BALANCE ? (
-                <Link to="/credit">
-                  <Button>Nạp Credit</Button>
-                </Link>
-              ) : null}
-            </div>
-          )}
-        </Alert>
+        <div className="mb-5">
+          <Alert tone="error">
+            {errorCode === ITEM_MODERATION_BLOCKED ? (
+              <div>
+                <p className="font-bold text-error">{MODERATION_BLOCKED_TITLE}</p>
+                <p className="mt-1 whitespace-normal break-words leading-6">{error}</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span>{error}</span>
+                {errorCode === WALLET_INSUFFICIENT_BALANCE ? (
+                  <Link to="/credit">
+                    <Button>Nạp Credit</Button>
+                  </Link>
+                ) : null}
+              </div>
+            )}
+          </Alert>
+        </div>
       ) : null}
-      <form onSubmit={submit} className="grid gap-6 lg:grid-cols-[1fr_280px]">
-        <section className="space-y-5 rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
-          <div>
-            <span className="label">Hình thức</span>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setType('gift');
-                  setErrors((current) => ({ ...current, type: undefined }));
-                }}
-                aria-pressed={type === 'gift'}
-                className={`min-h-11 rounded-md border p-4 text-left transition ${type === 'gift' ? 'border-primary bg-primary-faint text-primary' : 'border-border hover:border-primary/40'}`}
-              >
-                <strong className="block text-sm">Cho tặng</strong>
-                <span className="mt-1 block text-xs text-text-muted">
-                  Trao món đồ mà không cần đổi lại
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setType('trade');
-                  setErrors((current) => ({ ...current, type: undefined }));
-                }}
-                aria-pressed={type === 'trade'}
-                className={`min-h-11 rounded-md border p-4 text-left transition ${type === 'trade' ? 'border-secondary bg-secondary-soft text-secondary' : 'border-border hover:border-secondary/40'}`}
-              >
-                <strong className="block text-sm">Trao đổi</strong>
-                <span className="mt-1 block text-xs text-text-muted">
-                  Đổi lấy một món phù hợp khác
-                </span>
-              </button>
-            </div>
-            {errors.type ? <span className="mt-1.5 block text-xs text-error">{errors.type}</span> : null}
-          </div>
-          <Field
-            label="Tiêu đề"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ví dụ: Xe đạp mini màu xanh"
-            error={errors.title}
-          />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Select label="Danh mục" value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="">Chọn danh mục</option>
-              {catalogLoading ? <option disabled>Đang tải danh mục...</option> : null}
-              {!catalogLoading && !categories.length ? <option disabled>Chưa có danh mục</option> : null}
-              {categories.map((c) => (
-                <option key={c}>{c}</option>
+      <form onSubmit={submit} className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 space-y-4">
+          <PostStep number={1} title="Bạn muốn cho hay đổi?">
+            <div className="grid grid-cols-2 gap-2.5">
+              {([
+                ['gift', 'Cho tặng', 'Tặng miễn phí cho người cần'],
+                ['trade', 'Trao đổi', 'Đổi lấy một món bạn cần'],
+              ] as const).map(([value, label, hint]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={type === value}
+                  onClick={() => {
+                    setType(value);
+                    setErrors((current) => ({ ...current, type: undefined }));
+                  }}
+                  className={`flex flex-col gap-1 rounded-md border p-4 text-left transition ${type === value ? 'border-2 border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
+                >
+                  <strong className="text-sm">{label}</strong>
+                  <span className="text-xs text-text-secondary">{hint}</span>
+                </button>
               ))}
-            </Select>
-            {errors.category ? <span className="mt-[-10px] block text-xs text-error sm:hidden">{errors.category}</span> : null}
-            <Select
-              label="Tình trạng món đồ"
-              value={condition}
-              onChange={(e) => setCondition(e.target.value as ItemCondition | '')}
-            >
-              <option value="">Chọn tình trạng</option>
-              {CONDITIONS.map((c) => (
-                <option key={c} value={c}>
-                  {conditionLabel[c]}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="grid gap-1 sm:grid-cols-2">
-            {errors.category ? <span className="hidden text-xs text-error sm:block">{errors.category}</span> : <span />}
-            {errors.condition ? <span className="text-xs text-error">{errors.condition}</span> : null}
-          </div>
-          {category && (attributesLoading || Boolean(attributesError) || categoryAttributes.length > 0) ? (
-            <div className="rounded-lg bg-surface-low p-4 text-sm">
-              <p className="font-semibold text-text-primary">Thông tin theo danh mục</p>
-              {attributesLoading ? <p className="mt-2 text-text-muted">Đang tải thuộc tính...</p> : null}
-              {attributesError ? <p className="mt-2 text-error">{attributesError}</p> : null}
-              {!attributesLoading && !attributesError && categoryAttributes.length ? (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {sortedCategoryAttributes.map((attribute) => (
-                    <span key={attribute.id} className="rounded-full bg-white px-3 py-1 text-xs ring-1 ring-border">
-                      {attribute.name}
-                      {attribute.required ? ' · bắt buộc' : ''}
-                      {attribute.options.length ? ` · ${attribute.options.join(', ')}` : ` · ${attribute.dataType}`}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-              {categoryAttributes.length ? <p className="mt-2 text-xs text-text-muted">Hãy nêu các thông tin trên trong phần mô tả để người xem dễ đánh giá món đồ.</p> : null}
             </div>
-          ) : null}
-          <Select
-            label="Khu vực"
-            value={district}
-            onChange={(e) => setDistrict(e.target.value)}
-          >
-            <option value="">Chọn khu vực</option>
-            {catalogLoading ? <option disabled>Đang tải khu vực...</option> : null}
-            {!catalogLoading && !districts.length ? <option disabled>Chưa có khu vực</option> : null}
-            {districts.map((d) => (
-              <option key={d.id} value={d.id}>{d.label}</option>
-            ))}
-          </Select>
-          {errors.district ? <span className="mt-[-14px] block text-xs text-error">{errors.district}</span> : null}
-          {catalogError ? <span className="mt-[-14px] block text-xs text-error">{catalogError}</span> : null}
-          <TextArea
-            label="Mô tả"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Tình trạng thực tế, kích thước và những lưu ý cần biết..."
-            error={errors.description}
-          />
-          {type === 'trade' ? (
-            <Field
-              label="Bạn muốn đổi lấy gì?"
-              value={tradeFor}
-              onChange={(e) => setTradeFor(e.target.value)}
-              placeholder="Ví dụ: Sách thiếu nhi hoặc cây để bàn"
-              error={errors.tradeFor}
-            />
-          ) : null}
-          <Field
-            label="Thương hiệu (không bắt buộc)"
-            value={brand}
-            onChange={(event) => setBrand(event.target.value)}
-            error={errors.brand}
-          />
-          {condition === 'DEFECTIVE' ? (
-            <>
-              <TextArea
-                label="Mô tả lỗi"
-                value={defectNote}
-                onChange={(event) => setDefectNote(event.target.value)}
-                error={errors.defectNote}
+            {errors.type ? <span className="block text-xs text-error">{errors.type}</span> : null}
+            {type === 'trade' ? (
+              <Field
+                label="Bạn muốn đổi lấy gì?"
+                value={tradeFor}
+                onChange={(e) => setTradeFor(e.target.value)}
+                placeholder="Ví dụ: áo sơ mi nam size M"
+                hint="Hiện nổi bật trên bài để người khác biết nên đề nghị món gì."
+                error={errors.tradeFor}
               />
-              <label className="block rounded-lg border border-dashed border-border p-4 text-sm">
-                <span className="font-semibold">Ảnh lỗi</span>
-                <span className="mt-1 block text-xs text-text-muted">Chọn ít nhất một ảnh thể hiện rõ lỗi.</span>
+            ) : null}
+          </PostStep>
+
+          <PostStep number={2} title="Ảnh món đồ">
+            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5">
+              {images.map((image, index) => (
+                <div key={image.slice(-16) + index} className="relative">
+                  <ItemImage src={image} alt={`Ảnh món đồ ${index + 1}`} className="aspect-square w-full rounded-md object-cover" />
+                  {index === 0 ? (
+                    <span className="absolute left-1.5 top-1.5 rounded-sm bg-primary px-1.5 py-0.5 text-2xs font-bold text-white">Ảnh bìa</span>
+                  ) : null}
+                  <button
+                    type="button"
+                    aria-label="Xóa ảnh"
+                    disabled={submitting || mediaUploading}
+                    onClick={() => removeImage(index)}
+                    className="absolute right-1 top-1 grid size-8 place-items-center rounded-full bg-white text-error shadow-sm transition hover:bg-error-soft"
+                  >
+                    <Icon name="close" className="size-3" />
+                  </button>
+                  <div className="absolute bottom-1 left-1 right-1 flex justify-between gap-1">
+                    <button type="button" className="min-h-8 rounded-md bg-white px-2 text-2xs font-semibold shadow-sm transition hover:bg-primary-faint disabled:opacity-40" aria-label={`Đưa ảnh ${index + 1} về trước`} disabled={index === 0 || submitting || mediaUploading} onClick={() => moveImage(index, -1)}>Trước</button>
+                    <button type="button" className="min-h-8 rounded-md bg-white px-2 text-2xs font-semibold shadow-sm transition hover:bg-primary-faint disabled:opacity-40" aria-label={`Đưa ảnh ${index + 1} ra sau`} disabled={index === images.length - 1 || submitting || mediaUploading} onClick={() => moveImage(index, 1)}>Sau</button>
+                  </div>
+                </div>
+              ))}
+              <label className={`flex aspect-square cursor-pointer flex-col items-center justify-center rounded-md border border-dashed text-center text-sm font-semibold text-primary transition hover:bg-primary-faint ${errors.images ? 'border-error' : 'border-text-muted'}`}>
+                {images.length ? 'Chọn lại ảnh' : 'Thêm ảnh'}
                 <input
-                  className="mt-3 block w-full text-xs"
+                  className="sr-only"
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   multiple
                   disabled={submitting || mediaUploading}
-                  onChange={async (event) => {
-                    const files = Array.from(event.target.files ?? []);
-                    setDefectImageFiles(files);
-                    setUploadedDefectImageUrls(new Map());
-                    setDefectImagePreviews(await Promise.all(files.map(fileToDataUrl)));
-                    setErrors((current) => ({ ...current, defectImages: files.length ? undefined : current.defectImages }));
-                  }}
+                  onChange={(event) => void selectImages(event)}
                 />
-                {errors.defectImages ? <span className="mt-2 block text-xs text-error">{errors.defectImages}</span> : null}
-                {defectImagePreviews.length ? (
-                  <div className="mt-3 grid grid-cols-4 gap-2">
-                    {defectImagePreviews.map((preview, index) => (
-                      <ItemImage key={`${preview.slice(-16)}-${index}`} src={preview} alt={`Ảnh lỗi ${index + 1}`} className="aspect-square rounded-md object-cover" />
+              </label>
+            </div>
+            <p className="text-xs leading-5 text-text-secondary">
+              Cần {ITEM_IMAGES_MIN} đến {ITEM_IMAGES_MAX} ảnh chụp thật, chọn cùng lúc.
+              {images.length ? ` Đã có ${images.length}${missingImages ? `, cần thêm ít nhất ${missingImages}` : ''}.` : ''} Ảnh đầu là ảnh bìa.
+            </p>
+            {errors.images ? <span className="block text-xs text-error">{errors.images}</span> : null}
+            {mediaUploadError ? <span className="block text-xs text-error">{mediaUploadError}</span> : null}
+          </PostStep>
+
+          <PostStep number={3} title="Thông tin món đồ">
+            <Field
+              label="Tên món đồ"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Ví dụ: Xe đạp mini màu xanh"
+              hint="Tối đa 150 ký tự."
+              error={errors.title}
+            />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Select label="Danh mục" value={category} error={errors.category} onChange={(e) => setCategory(e.target.value)}>
+                <option value="">Chọn danh mục</option>
+                {catalogLoading ? <option disabled>Đang tải danh mục...</option> : null}
+                {!catalogLoading && !categories.length ? <option disabled>Chưa có danh mục</option> : null}
+                {categories.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </Select>
+              <Field
+                label="Thương hiệu (không bắt buộc)"
+                value={brand}
+                onChange={(event) => setBrand(event.target.value)}
+                placeholder="Ví dụ: Casio"
+                error={errors.brand}
+              />
+            </div>
+            {category && (attributesLoading || Boolean(attributesError) || categoryAttributes.length > 0) ? (
+              <div className="rounded-md bg-surface-low p-3 text-sm">
+                <p className="font-semibold">Nên nêu trong mô tả</p>
+                {attributesLoading ? <p className="mt-1 text-text-muted">Đang tải thuộc tính...</p> : null}
+                {attributesError ? <p className="mt-1 text-error">{attributesError}</p> : null}
+                {!attributesLoading && !attributesError && categoryAttributes.length ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {sortedCategoryAttributes.map((attribute) => (
+                      <span key={attribute.id} className="rounded-full bg-white px-2.5 py-1 text-xs ring-1 ring-border">
+                        {attribute.name}
+                        {attribute.required ? ' · bắt buộc' : ''}
+                        {attribute.options.length ? ` · ${attribute.options.join(', ')}` : ''}
+                      </span>
                     ))}
                   </div>
                 ) : null}
-              </label>
-            </>
-          ) : null}
-          {operatingStatusAttribute ? (
-            <div>
+              </div>
+            ) : null}
+            <fieldset>
+              <legend className="label">Tình trạng</legend>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {CONDITIONS.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={condition === value}
+                    onClick={() => {
+                      setCondition(value);
+                      setErrors((current) => ({ ...current, condition: undefined }));
+                    }}
+                    className={`flex flex-col gap-0.5 rounded-md border p-3 text-left transition ${condition === value ? 'border-2 border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
+                  >
+                    <strong className="text-sm">{conditionLabel[value]}</strong>
+                    <span className="text-2xs text-text-muted">{CONDITION_HINTS[value]}</span>
+                  </button>
+                ))}
+              </div>
+              {errors.condition ? <span className="mt-1.5 block text-xs text-error">{errors.condition}</span> : null}
+            </fieldset>
+            {condition === 'DEFECTIVE' ? (
+              <div className="space-y-3 rounded-md border border-secondary-fixed bg-secondary-soft p-4">
+                <TextArea
+                  label="Lỗi cụ thể"
+                  value={defectNote}
+                  placeholder="Ví dụ: công tắc lúc bật lúc không"
+                  onChange={(event) => setDefectNote(event.target.value)}
+                  error={errors.defectNote}
+                />
+                <div>
+                  <span className="label">Ảnh chụp rõ chỗ lỗi</span>
+                  <input
+                    className="block w-full text-xs"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    disabled={submitting || mediaUploading}
+                    onChange={async (event) => {
+                      const files = Array.from(event.target.files ?? []);
+                      setDefectImageFiles(files);
+                      setUploadedDefectImageUrls(new Map());
+                      setDefectImagePreviews(await Promise.all(files.map(fileToDataUrl)));
+                      setErrors((current) => ({ ...current, defectImages: files.length ? undefined : current.defectImages }));
+                    }}
+                  />
+                  {errors.defectImages ? <span className="mt-2 block text-xs text-error">{errors.defectImages}</span> : null}
+                  {defectImagePreviews.length ? (
+                    <div className="mt-3 grid grid-cols-4 gap-2">
+                      {defectImagePreviews.map((preview, index) => (
+                        <ItemImage key={`${preview.slice(-16)}-${index}`} src={preview} alt={`Ảnh lỗi ${index + 1}`} className="aspect-square rounded-md object-cover" />
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            {operatingStatusAttribute ? (
               <Select
                 label={`${operatingStatusAttribute.name}${operatingStatusRequired ? '' : ' (không bắt buộc)'}`}
                 value={operatingStatus}
+                error={errors.operatingStatus}
                 onChange={(event) => setOperatingStatus(event.target.value as OperatingStatus | '')}
               >
                 <option value="">Chọn trạng thái hoạt động</option>
@@ -558,118 +643,56 @@ export function Post() {
                   <option key={option} value={option}>{OPERATING_STATUS_LABELS[option]}</option>
                 ))}
               </Select>
-              {errors.operatingStatus ? <span className="mt-1 block text-xs text-error">{errors.operatingStatus}</span> : null}
-            </div>
-          ) : null}
-        </section>
-        <aside className="space-y-4">
-          <label className={`flex aspect-[4/3] w-full flex-col items-center justify-center rounded-lg border border-dashed bg-white text-center transition hover:border-primary ${errors.images ? 'border-error' : 'border-border'}`}>
-            <strong className="text-sm text-primary">Thêm hình ảnh</strong>
-            <span className="mt-1 text-xs text-text-muted">
-              Từ {ITEM_IMAGES_MIN} đến {ITEM_IMAGES_MAX} ảnh · thứ tự chọn là thứ tự hiển thị
-            </span>
-            <input
-              className="hidden"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              multiple
-              disabled={submitting || mediaUploading}
-              onChange={async (event) => {
-                const selectedFiles = Array.from(event.target.files ?? []);
-                setMediaUploadState('idle');
-                setMediaUploadError('');
-                if (selectedFiles.length > ITEM_IMAGES_MAX) {
-                  setErrors((current) => ({ ...current, images: `Chỉ được chọn tối đa ${ITEM_IMAGES_MAX} ảnh.` }));
-                  setImageFiles([]);
-                  setImages([]);
-                  setUploadedImageUrls(new Map());
-                  event.currentTarget.value = '';
-                  return;
-                }
-                const files = selectedFiles;
-                if (files.some((file) => !file.type.startsWith('image/'))) {
-                  setErrors((current) => ({ ...current, images: 'Vui lòng chỉ chọn tệp hình ảnh.' }));
-                  setImageFiles([]);
-                  setImages([]);
-                  setUploadedImageUrls(new Map());
-                  return;
-                } else if (!SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST && files.length < ITEM_IMAGES_MIN) {
-                  setErrors((current) => ({ ...current, images: `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.` }));
-                } else {
-                  setErrors((current) => ({ ...current, images: undefined }));
-                }
-                try {
-                  const previews = await Promise.all(files.map(fileToDataUrl));
-                  setImageFiles(files);
-                  setImages(previews);
-                  setUploadedImageUrls((current) =>
-                    new Map(files.flatMap((file) => {
-                      const url = current.get(file);
-                      return url ? [[file, url] as const] : [];
-                    })),
-                  );
-                } catch {
-                  setImageFiles([]);
-                  setImages([]);
-                  setUploadedImageUrls(new Map());
-                  setMediaUploadState('error');
-                  setMediaUploadError('Không đọc được ảnh đã chọn. Vui lòng chọn lại.');
-                }
-              }}
+            ) : null}
+            <TextArea
+              label="Mô tả"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Kích thước, đã dùng bao lâu, phụ kiện kèm theo, cách nhận."
+              hint="Không ghi số điện thoại, Zalo hay link. Bài có thông tin liên hệ sẽ bị từ chối."
+              error={errors.description}
             />
-          </label>
-          {errors.images ? <span className="block text-xs text-error">{errors.images}</span> : null}
-          {mediaUploadError ? <span className="block text-xs text-error">{mediaUploadError}</span> : null}
-          {images.length ? (
-            <div className="grid grid-cols-3 gap-2">
-              {images.map((image, index) => (
-                <div key={image.slice(-16) + index} className="relative">
-                  <ItemImage
-                    src={image}
-                    alt={`Ảnh món đồ ${index + 1}`}
-                    className="aspect-square rounded-md object-cover"
-                  />
-                  <div className="absolute bottom-1 left-1 right-1 flex justify-between gap-1">
-                    <button type="button" className="min-h-9 rounded-md bg-white px-2 text-xs font-semibold shadow-sm transition hover:bg-primary-faint disabled:opacity-40" aria-label={`Đưa ảnh ${index + 1} về trước`} disabled={index === 0 || submitting || mediaUploading} onClick={() => moveImage(index, -1)}>Trước</button>
-                    <button type="button" className="min-h-9 rounded-md bg-white px-2 text-xs font-semibold shadow-sm transition hover:bg-primary-faint disabled:opacity-40" aria-label={`Đưa ảnh ${index + 1} ra sau`} disabled={index === images.length - 1 || submitting || mediaUploading} onClick={() => moveImage(index, 1)}>Sau</button>
-                  </div>
-                  <button
-                    type="button"
-                    aria-label="Xóa ảnh"
-                    disabled={submitting || mediaUploading}
-                    onClick={() => {
-                      const removedFile = imageFiles[index];
-                      setImageFiles(imageFiles.filter((_, itemIndex) => itemIndex !== index));
-                      setImages(images.filter((_, itemIndex) => itemIndex !== index));
-                      setUploadedImageUrls((current) => {
-                        const next = new Map(current);
-                        if (removedFile) next.delete(removedFile);
-                        return next;
-                      });
-                      setMediaUploadState('idle');
-                      setMediaUploadError('');
-                      const remainingCount = imageFiles.length - 1;
-                      setErrors((current) => ({
-                        ...current,
-                        images: !SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST && remainingCount < ITEM_IMAGES_MIN
-                          ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.`
-                          : undefined,
-                      }));
-                    }}
-                    className="absolute right-1 top-1 grid size-8 place-items-center rounded-full bg-white text-error shadow-sm transition hover:bg-error-soft"
-                  >
-                    <Icon name="close" className="size-3" />
-                  </button>
-                </div>
+          </PostStep>
+
+          <PostStep number={4} title="Khu vực giao nhận">
+            <Select
+              label="Quận"
+              value={district}
+              error={errors.district || catalogError || undefined}
+              hint="Người tìm theo quận sẽ thấy bài của bạn."
+              onChange={(e) => setDistrict(e.target.value)}
+            >
+              <option value="">Chọn quận</option>
+              {catalogLoading ? <option disabled>Đang tải khu vực...</option> : null}
+              {!catalogLoading && !districts.length ? <option disabled>Chưa có khu vực</option> : null}
+              {districts.map((d) => (
+                <option key={d.id} value={d.id}>{d.label}</option>
               ))}
-            </div>
-          ) : null}
-          <div className="space-y-1 rounded-lg bg-white p-4 text-xs leading-5 text-text-secondary ring-1 ring-border/80">
-            <p className="whitespace-nowrap text-text-primary"><strong>Cho tặng:</strong> miễn phí</p>
-            <p className="whitespace-nowrap text-text-primary"><strong>Trao đổi:</strong> phí đăng bài {postFee === null ? "--" : postFee} Credit</p>
-          </div>
+            </Select>
+          </PostStep>
+        </div>
+
+        <aside aria-label="Tóm tắt" className="space-y-4 rounded-lg bg-white p-5 ring-1 ring-border/80 lg:sticky lg:top-24">
+          <h2 className="text-base font-bold">Tóm tắt</h2>
+          <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2.5 text-sm">
+            <dt className="text-text-secondary">Hình thức</dt>
+            <dd className="font-semibold">{type === 'gift' ? 'Cho tặng' : type === 'trade' ? 'Trao đổi' : '--'}</dd>
+            <dt className="text-text-secondary">Phí đăng</dt>
+            <dd className="font-bold">{feeLabel}</dd>
+            <dt className="text-text-secondary">Số dư khả dụng</dt>
+            <dd className="font-semibold tabular-nums">{availableCredit === null ? '--' : `${availableCredit} Credit`}</dd>
+          </dl>
+          <ul className="list-disc space-y-1 pl-5 text-xs leading-5">
+            <li className={missingImages ? 'text-warning' : 'text-success'}>
+              {missingImages ? `Ảnh: còn thiếu ${missingImages} trong ${ITEM_IMAGES_MIN} ảnh tối thiểu` : `Đã có ${images.length} ảnh`}
+            </li>
+            <li className={infoReady ? 'text-success' : 'text-warning'}>
+              {infoReady ? 'Đã điền tên, danh mục, tình trạng, mô tả' : 'Còn thiếu tên, danh mục, tình trạng hoặc mô tả'}
+            </li>
+            <li className={district ? 'text-success' : 'text-warning'}>{district ? 'Đã chọn quận' : 'Chưa chọn quận'}</li>
+          </ul>
           <Button className="w-full" size="lg" disabled={submitting || mediaUploading || catalogLoading}>
-            Đăng bài
+            Gửi duyệt bài
           </Button>
         </aside>
       </form>
@@ -725,5 +748,24 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       <span className="text-text-muted">{label}</span>
       <strong className="text-text-primary">{value}</strong>
     </div>
+  );
+}
+
+const CONDITION_HINTS: Record<(typeof CONDITIONS)[number], string> = {
+  NEW: 'Chưa dùng',
+  LIKE_NEW: 'Dùng vài lần',
+  GOOD: 'Có dấu hiệu dùng',
+  DEFECTIVE: 'Có lỗi, cần nêu rõ',
+};
+
+function PostStep({ number, title, children }: { number: number; title: string; children: ReactNode }) {
+  return (
+    <section aria-labelledby={`post-step-${number}`} className="space-y-4 rounded-lg bg-white p-5 ring-1 ring-border/80 sm:p-6">
+      <h2 id={`post-step-${number}`} className="flex items-center gap-2.5 text-base font-bold">
+        <span className="grid size-7 place-items-center rounded-full bg-primary-soft text-sm text-primary">{number}</span>
+        {title}
+      </h2>
+      {children}
+    </section>
   );
 }

@@ -41,59 +41,74 @@ export function CreditHistorySection({
   const history = allHistory.filter(current.matches);
   const countFor = (tab: HistoryTab) => allHistory.filter(tab.matches).length;
 
+  const days = groupByDay(history);
+
   return (
-    <section className="mt-10">
-      <h2 className="section-title">Lịch sử Credit</h2>
+    <section aria-labelledby="credit-history-title" className="mt-5 space-y-4 rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="credit-history-title" className="section-title">Lịch sử Credit</h2>
+        {!unavailable ? (
+          <div role="tablist" aria-label="Loại giao dịch" className="inline-flex flex-wrap gap-1 rounded-lg bg-surface-low p-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={current.id === tab.id}
+                onClick={() => onTabChange(tab.id)}
+                className={`min-h-9 rounded-md px-3 text-xs font-semibold transition ${current.id === tab.id ? 'bg-white text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
+              >
+                {tab.label} ({countFor(tab)})
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
       {dateFilter}
       {summary}
       {unavailable ? (
-        <div className="mt-4 rounded-xl bg-white px-5 py-12 text-center text-sm text-text-muted ring-1 ring-border/80">
-          Chưa thể tải lịch sử Credit.
+        <p className="py-10 text-center text-sm text-text-muted">Chưa thể tải lịch sử Credit.</p>
+      ) : history.length ? (
+        <div className="space-y-4">
+          {days.map(([day, entries]) => (
+            <div key={day}>
+              <h3 className="mb-1.5 text-xs font-bold text-text-muted">{day}</h3>
+              <div className="overflow-hidden rounded-md ring-1 ring-border/80">
+                {entries.map((entry) => {
+                  const itemTitle = itemTitleOf(entry, itemTitles);
+                  return (
+                    <HistoryRow
+                      key={entry.id}
+                      title={historyTitle(entry)}
+                      subtitle={itemTitle}
+                      date={entry.createdAt}
+                      amount={entry.amount}
+                      status={historyStatus(entry)}
+                      tone={historyTone(entry)}
+                      onClick={() => onSelect(entry)}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
-        <>
-          <div className="mt-4 overflow-x-auto border-b border-border">
-            <div className="flex min-w-max gap-1">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => onTabChange(tab.id)}
-                  className={`min-h-11 border-b-2 px-3 py-2.5 text-sm font-semibold transition ${current.id === tab.id ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text-primary'}`}
-                >
-                  {tab.label} ({countFor(tab)})
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="overflow-hidden rounded-b-xl bg-white ring-1 ring-border/80">
-            {history.map((entry) => {
-              const itemTitle = itemTitleOf(entry, itemTitles);
-              const title = itemTitle
-                ? `${historyTitle(entry)} - ${itemTitle}`
-                : historyTitle(entry);
-              return (
-                <HistoryRow
-                  key={entry.id}
-                  title={title}
-                  date={entry.createdAt}
-                  amount={entry.amount}
-                  status={historyStatus(entry)}
-                  tone={historyTone(entry)}
-                  onClick={() => onSelect(entry)}
-                />
-              );
-            })}
-            {!history.length ? (
-              <div className="px-5 py-12 text-center text-sm text-text-muted">
-                Chưa có giao dịch phù hợp.
-              </div>
-            ) : null}
-          </div>
-          {pagination}
-        </>
+        <p className="py-10 text-center text-sm text-text-muted">Chưa có giao dịch phù hợp.</p>
       )}
+      {!unavailable ? pagination : null}
     </section>
   );
+}
+
+// Gom các dòng theo ngày (giờ Việt Nam do trình duyệt hiển thị), giữ thứ tự mới nhất trước như API trả về.
+function groupByDay(entries: CreditHistory[]) {
+  const groups = new Map<string, CreditHistory[]>();
+  entries.forEach((entry) => {
+    const day = new Date(entry.createdAt).toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+    groups.set(day, [...(groups.get(day) ?? []), entry]);
+  });
+  return [...groups.entries()];
 }
 
 export function HistoryDateFilter({
@@ -116,19 +131,25 @@ export function HistoryDateFilter({
   const dateInputClass = 'min-h-11 rounded-md border border-border bg-white px-3 py-2 text-sm';
 
   return (
-    <div className="mt-4 space-y-3">
-      <div className="flex flex-wrap gap-2">
-        {quickButtons.map(([range, label]) => (
-          <Button
-            key={range}
-            variant="outline"
-            onClick={() => onChange(...quickRangeDates(range))}
-          >
-            {label}
-          </Button>
-        ))}
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Khoảng thời gian">
+        {quickButtons.map(([range, label]) => {
+          const [rangeFrom, rangeTo] = quickRangeDates(range);
+          const active = rangeFrom === fromDate && rangeTo === toDate;
+          return (
+            <button
+              key={range}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(rangeFrom, rangeTo)}
+              className={`min-h-9 rounded-full border px-3 text-xs font-semibold transition ${active ? 'border-primary bg-primary-soft text-primary' : 'border-border bg-white text-text-secondary hover:border-primary/50'}`}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
-      <div className="flex flex-wrap items-center gap-3 text-sm">
+      <div className="flex flex-wrap items-center gap-3 text-sm text-text-secondary">
         <label className="flex items-center gap-2">
           Từ ngày
           <input
@@ -190,6 +211,7 @@ export function HistoryPagination({
 
 function HistoryRow({
   title,
+  subtitle,
   date,
   amount,
   status,
@@ -197,6 +219,7 @@ function HistoryRow({
   onClick,
 }: {
   title: string;
+  subtitle?: string;
   date: string;
   amount: number;
   status: string;
@@ -217,12 +240,12 @@ function HistoryRow({
     <button
       type="button"
       onClick={onClick}
-      className="grid w-full cursor-pointer grid-cols-[1fr_auto] gap-4 border-b border-border/70 px-4 py-4 text-left transition hover:bg-surface-low last:border-0 sm:px-5"
+      className="grid w-full cursor-pointer grid-cols-[1fr_auto] gap-4 border-b border-border/70 px-4 py-3 text-left transition hover:bg-surface-low last:border-0"
     >
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-text-primary">{title}</p>
-        <p className="mt-1 truncate text-xs text-text-muted">
-          {new Date(date).toLocaleString('vi-VN')}
+        <p className="truncate text-sm font-semibold text-text-primary">{subtitle ? `${title} - ${subtitle}` : title}</p>
+        <p className="mt-0.5 truncate text-xs text-text-muted">
+          {new Date(date).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
         </p>
       </div>
       <div className="self-center text-right">

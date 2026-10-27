@@ -4,12 +4,12 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser, selectData } from '../../app/store';
 import {
   Alert,
+  Avatar,
   Skeleton,
   Button,
   ConditionBadge,
   ItemImage,
   StatusBadge,
-  TextArea,
   TypeBadge,
 } from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
@@ -32,9 +32,7 @@ export function ProductDetail() {
   const navigate = useNavigate();
   const [requestError, setRequestError] = useState('');
   const [requestSuccess, setRequestSuccess] = useState('');
-  const [requestOpen, setRequestOpen] = useState(false);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
-  const [message, setMessage] = useState('');
   const [offeredItemId, setOfferedItemId] = useState('');
   const [apiItem, setApiItem] = useState<Item | null>(null);
   const [apiOfferedItems, setApiOfferedItems] = useState<Item[]>([]);
@@ -174,7 +172,8 @@ export function ProductDetail() {
       )
     : [];
 
-  const openRequest = () => {
+  // Kiểm tra giống backend trước khi gửi để báo lỗi sớm; backend vẫn là nơi quyết định cuối cùng.
+  const submitRequest = async () => {
     setRequestError('');
     setRequestSuccess('');
     if (!user) {
@@ -185,7 +184,7 @@ export function ProductDetail() {
       setRequestError('Vui lòng đăng nhập bằng tài khoản thật để gửi yêu cầu.');
       return;
     }
-    if (own || !activeListing) return;
+    if (own || !activeListing || requestSubmitting) return;
     if (user.reputationStars <= 0) {
       setRequestError('Uy tín của bạn đang ở mức 0 nên hiện không thể gửi yêu cầu.');
       return;
@@ -194,22 +193,11 @@ export function ProductDetail() {
       setRequestError(`Bạn đã gửi yêu cầu cho món đồ này. Trạng thái hiện tại: ${requestStatusLabel[existingRequest.status]}.`);
       return;
     }
-    setRequestOpen(true);
-  };
-
-  const submitRequest = async () => {
-    if (!user) return;
     if (item.type === 'trade' && !offeredItemId) {
       setRequestError('Vui lòng chọn món bạn muốn dùng để trao đổi.');
       return;
     }
-    if (requestSubmitting) return;
-    if (!currentUserId) {
-      setRequestError('Vui lòng đăng nhập bằng tài khoản thật để gửi yêu cầu.');
-      return;
-    }
     setRequestSubmitting(true);
-    setRequestError('');
     try {
       const request = await requestApi.create(
         Number(item.id),
@@ -217,8 +205,6 @@ export function ProductDetail() {
         item.type === 'trade' ? Number(offeredItemId) : undefined,
       );
       setApiSentRequests((current) => [toFeItemRequest(request, user.id), ...current]);
-      setRequestOpen(false);
-      setMessage('');
       setOfferedItemId('');
       setRequestSuccess(item.type === 'gift' ? 'Đã gửi yêu cầu nhận.' : 'Đã gửi đề nghị trao đổi.');
     } catch (caught) {
@@ -250,224 +236,214 @@ export function ProductDetail() {
     }
   };
 
+  const images = item.images.length ? item.images : [''];
+  const operatingLabel = item.operatingStatus
+    ? { NORMAL: 'Hoạt động bình thường', PARTIAL: 'Hoạt động một phần', NOT_WORKING: 'Không hoạt động' }[item.operatingStatus]
+    : '';
+
   return (
-    <div className="page-shell">
-      <Link
-        to="/browse"
-        className="mb-5 inline-flex items-center gap-1 text-sm font-semibold text-text-muted hover:text-primary"
-      >
-        {'<-'} Quay lại tìm đồ
+    <div className="page-shell pt-6">
+      <Link to="/browse" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary-hover">
+        Quay lại tìm đồ
       </Link>
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <main className="min-w-0">
-          <div className="overflow-hidden rounded-xl bg-surface-container">
-            <ItemImage
-              src={item.images[selectedImageIndex] ?? item.images[0]}
-              alt={item.title}
-              className="aspect-[4/3] w-full object-cover"
-            />
+      <div className="mt-2 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <article className="min-w-0 space-y-6">
+          <div className="grid gap-3 md:grid-cols-[88px_minmax(0,1fr)]">
+            {images.length > 1 ? (
+              <div className="order-2 flex gap-2 overflow-x-auto md:order-1 md:flex-col md:overflow-visible">
+                {images.map((image, index) => (
+                  <button
+                    key={`${image}-${index}`}
+                    type="button"
+                    aria-label={`Xem ảnh ${index + 1}`}
+                    aria-pressed={selectedImageIndex === index}
+                    onClick={() => setSelectedImageIndex(index)}
+                    className={`shrink-0 overflow-hidden rounded-md ${selectedImageIndex === index ? 'ring-2 ring-primary' : 'ring-1 ring-border'}`}
+                  >
+                    <ItemImage src={image} alt={`${item.title} - ảnh ${index + 1}`} className="h-16 w-20 object-cover md:w-full" />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className={`order-1 overflow-hidden rounded-xl bg-surface-container md:order-2 ${images.length > 1 ? '' : 'md:col-span-2'}`}>
+              <ItemImage
+                src={images[selectedImageIndex] ?? images[0]}
+                alt={item.title}
+                className="aspect-[4/3] w-full object-cover md:aspect-auto md:h-[440px]"
+              />
+            </div>
           </div>
-          {item.images.length > 1 ? (
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-              {item.images.map((image, index) => (
-                <button
-                  key={`${image}-${index}`}
-                  type="button"
-                  aria-label={`Xem ảnh ${index + 1}`}
-                  aria-pressed={selectedImageIndex === index}
-                  onClick={() => setSelectedImageIndex(index)}
-                  className={`shrink-0 overflow-hidden rounded-md focus-visible:outline-primary ${selectedImageIndex === index ? 'ring-2 ring-primary' : 'ring-1 ring-border'}`}
-                >
-                  <ItemImage
-                    src={image}
-                    alt={`${item.title} - ảnh ${index + 1}`}
-                    className="h-16 w-20 object-cover sm:h-20 sm:w-24"
-                  />
-                </button>
-              ))}
+
+          <div className="space-y-2.5">
+            <div className="flex flex-wrap gap-2">
+              <TypeBadge type={item.type} />
+              <ConditionBadge condition={item.condition} />
+              {!activeListing ? <StatusBadge status={item.status} /> : null}
+            </div>
+            <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{item.title}</h1>
+            <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-text-muted">
+              <span>{item.district}</span>
+              <span>{item.category}</span>
+              {item.brand ? <span>Thương hiệu {item.brand}</span> : null}
+              <span>
+                Đăng {new Date(item.postedAt).toLocaleDateString('vi-VN')}
+                {item.expiresAt ? `, hiển thị đến ${new Date(item.expiresAt).toLocaleDateString('vi-VN')}` : ''}
+              </span>
+            </p>
+          </div>
+
+          {item.tradeFor ? (
+            <div className="rounded-lg border border-secondary-fixed bg-secondary-soft px-4 py-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-secondary-hover">Chủ bài muốn đổi lấy</p>
+              <p className="mt-1 text-base font-bold">{item.tradeFor}</p>
+              <p className="mt-1 text-sm text-text-secondary">Đề nghị món khác vẫn được, chủ bài sẽ cân nhắc.</p>
             </div>
           ) : null}
-          <div className="mt-6 flex flex-wrap gap-2">
-            <TypeBadge type={item.type} />
-            <ConditionBadge condition={item.condition} />
-            <StatusBadge status={item.status} />
-          </div>
-          <h1 className="mt-4 text-3xl font-bold leading-tight sm:text-4xl">{item.title}</h1>
-          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-text-muted">
-            <span>{item.district}</span>
-            <span>{item.category}</span>
-            <span>Đăng {new Date(item.postedAt).toLocaleDateString('vi-VN')}</span>
-          </div>
-          <section className="mt-8 border-t border-border pt-6">
-            <h2 className="section-title">Về món đồ này</h2>
-            <p className="mt-3 max-w-3xl whitespace-pre-line text-[15px] leading-7 text-text-secondary">
-              {item.description}
-            </p>
-            {item.brand ? (
-              <p className="mt-3 text-sm text-text-secondary">
-                <strong>Thương hiệu:</strong> {item.brand}
-              </p>
-            ) : null}
+
+          <section aria-labelledby="item-description" className="space-y-3">
+            <h2 id="item-description" className="section-title">Mô tả</h2>
+            <p className="max-w-3xl whitespace-pre-line text-[15px] leading-7">{item.description}</p>
             {item.defectNote ? (
-              <p className="mt-3 text-sm text-text-secondary">
-                <strong>Lưu ý tình trạng:</strong> {item.defectNote}
+              <p className="text-sm text-text-secondary">
+                <strong className="text-text-primary">Lưu ý tình trạng:</strong> {item.defectNote}
               </p>
             ) : null}
-            {item.operatingStatus ? (
-              <p className="mt-3 text-sm text-text-secondary">
-                <strong>Trạng thái hoạt động:</strong>{' '}
-                {{ NORMAL: 'Bình thường', PARTIAL: 'Một phần', NOT_WORKING: 'Không hoạt động' }[item.operatingStatus]}
+            {operatingLabel ? (
+              <p className="text-sm text-text-secondary">
+                <strong className="text-text-primary">Trạng thái hoạt động:</strong> {operatingLabel}
               </p>
             ) : null}
             {item.defectImages?.length ? (
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
                 {item.defectImages.map((image, index) => (
                   <ItemImage key={`${image}-${index}`} src={image} alt={`Ảnh lỗi ${index + 1}`} className="aspect-square rounded-md object-cover" />
                 ))}
               </div>
             ) : null}
-            {item.tradeFor ? (
-              <div className="mt-5 rounded-lg bg-secondary-soft p-4 text-sm leading-6 text-secondary">
-                <strong>Mong muốn trao đổi:</strong> {item.tradeFor}
-              </div>
-            ) : null}
           </section>
-        </main>
-        <aside className="space-y-4 lg:sticky lg:top-24 lg:h-fit">
-          <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
-            <p className="text-xs font-semibold text-text-muted">
-              {item.type === 'gift' ? 'Yêu cầu nhận món' : 'Gửi đề nghị trao đổi'}
-            </p>
-            <h2 className="mt-1 text-lg font-bold">{item.district}</h2>
-            <p className="mt-2 text-sm leading-6 text-text-muted">
-              Gửi yêu cầu miễn phí. Transaction và chat chỉ mở sau khi chủ bài chọn bạn.
-            </p>
-            <Button
-              className="mt-5 w-full"
+
+          <section aria-labelledby="item-owner" className="flex flex-wrap items-center gap-4 rounded-lg bg-white px-4 py-4 ring-1 ring-border/80">
+            <Avatar
               size="lg"
-              disabled={own || !activeListing}
-              onClick={openRequest}
-            >
-              {own
-                ? 'Đây là món của bạn'
-                : item.type === 'gift'
-                  ? 'Yêu cầu nhận'
-                  : 'Đề nghị trao đổi'}
-            </Button>
-            {!user ? (
-              <p className="mt-3 text-center text-xs text-text-muted">
-                Bạn cần đăng nhập trước khi gửi yêu cầu.
-              </p>
-            ) : null}
-            {requestSuccess ? (
-              <div className="mt-3 rounded-md bg-success-soft p-3 text-xs leading-5 text-success">
-                <p>{requestSuccess}</p>
-              </div>
-            ) : null}
-            {requestError ? (
-              <div className="mt-3 rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
-                <p>{requestError}</p>
-              </div>
-            ) : null}
-            {isApiId && existingRequest?.status === 'PENDING' ? (
-              <Button
-                className="mt-3 w-full"
-                variant="outline"
-                disabled={requestSubmitting}
-                onClick={() => void cancelApiRequest(existingRequest.id)}
-              >
-                Hủy yêu cầu
-              </Button>
-            ) : null}
-            {currentUserId && !own ? (
-              <Button
-                className="mt-3 w-full"
-                variant="ghost"
-                onClick={() => {
-                  setReportNotice('');
-                  setReportOpen(true);
-                }}
-              >
-                Báo cáo vi phạm
-              </Button>
-            ) : null}
-            {reportNotice ? (
-              <div className="mt-3 rounded-md bg-success-soft p-3 text-xs leading-5 text-success">
-                {reportNotice}
-              </div>
-            ) : null}
-          </div>
-          <section className="rounded-xl bg-white p-5 ring-1 ring-border/80">
-            <h2 className="font-bold">Thông tin người đăng</h2>
-            <p className="mt-3 font-semibold">{item.donorName || 'Chưa có tên hiển thị'}</p>
-            <ReputationBadge
-              className="mt-3"
-              trustStars={item.donorTrustStars}
-              rank={item.donorRank}
-              asDescribedRate={item.donorAsDescribedRate}
+              user={{ name: item.donorName || 'Người đăng', avatarInitials: initialsOf(item.donorName || '') }}
             />
+            <div className="min-w-0 flex-1 space-y-1">
+              <h2 id="item-owner" className="text-base font-bold">{item.donorName || 'Người đăng'}</h2>
+              <ReputationBadge trustStars={item.donorTrustStars} rank={item.donorRank} asDescribedRate={item.donorAsDescribedRate} />
+            </div>
           </section>
+        </article>
+
+        <aside
+          aria-label={item.type === 'gift' ? 'Xin món này' : 'Đề nghị trao đổi'}
+          className="space-y-4 rounded-xl bg-white p-5 ring-1 ring-border/80 lg:sticky lg:top-24"
+        >
+          {own ? (
+            <>
+              <h2 className="text-lg font-bold">Đây là bài của bạn</h2>
+              <p className="text-sm leading-6 text-text-secondary">Xem người xin và chọn người nhận ở trang Hoạt động.</p>
+              <Link to="/activities">
+                <Button className="w-full">Mở Hoạt động</Button>
+              </Link>
+            </>
+          ) : existingRequest ? (
+            <>
+              <h2 className="text-lg font-bold">Bạn đã gửi yêu cầu</h2>
+              <p className="text-sm leading-6 text-text-secondary">
+                Trạng thái: <strong className="text-text-primary">{requestStatusLabel[existingRequest.status]}</strong>
+              </p>
+              {existingRequest.status === 'RESERVED' ? (
+                <Link to={`/requests/${existingRequest.id.replace(/^api_req_/, '')}`}>
+                  <Button className="w-full">Mở cuộc trò chuyện</Button>
+                </Link>
+              ) : null}
+              {existingRequest.status === 'PENDING' ? (
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  disabled={requestSubmitting}
+                  onClick={() => void cancelApiRequest(existingRequest.id)}
+                >
+                  Hủy yêu cầu
+                </Button>
+              ) : null}
+            </>
+          ) : !activeListing ? (
+            <>
+              <h2 className="text-lg font-bold">Bài không còn nhận yêu cầu</h2>
+              <p className="text-sm leading-6 text-text-secondary">Món này đã có người nhận, hết hạn hoặc đang chờ duyệt.</p>
+              <Link to="/browse">
+                <Button variant="outline" className="w-full">Tìm món khác</Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <h2 className="text-lg font-bold">{item.type === 'gift' ? 'Xin món này' : 'Đề nghị trao đổi'}</h2>
+              {item.type === 'trade' && user ? (
+                <fieldset className="space-y-2">
+                  <legend className="label">Chọn món bạn mang đổi</legend>
+                  {eligibleOfferedItems.map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      aria-pressed={offeredItemId === entry.id}
+                      onClick={() => setOfferedItemId(entry.id)}
+                      className={`flex w-full items-center gap-3 rounded-md border p-2.5 text-left transition ${offeredItemId === entry.id ? 'border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
+                    >
+                      <ItemImage src={entry.images[0]} alt={entry.title} className="h-11 w-14 shrink-0 rounded-md object-cover" />
+                      <span className="min-w-0 flex-1">
+                        <strong className="block truncate text-sm">{entry.title}</strong>
+                        <span className="text-xs text-text-muted">{entry.district}</span>
+                      </span>
+                    </button>
+                  ))}
+                  {!eligibleOfferedItems.length ? (
+                    <p className="rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
+                      Bạn chưa có món đã duyệt, còn hoạt động và chưa nằm trong giao dịch khác để trao đổi.
+                    </p>
+                  ) : null}
+                  <Link to="/post" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary-hover">
+                    Đăng món mới để đổi
+                  </Link>
+                </fieldset>
+              ) : null}
+              <Button
+                size="lg"
+                className="w-full"
+                disabled={requestSubmitting || (Boolean(user) && item.type === 'trade' && !eligibleOfferedItems.length)}
+                onClick={() => void submitRequest()}
+              >
+                {requestSubmitting
+                  ? 'Đang gửi...'
+                  : !user
+                    ? 'Đăng nhập để gửi yêu cầu'
+                    : item.type === 'gift'
+                      ? 'Gửi yêu cầu, miễn phí'
+                      : 'Gửi đề nghị, miễn phí'}
+              </Button>
+              <ul className="list-disc space-y-1 pl-5 text-xs leading-5 text-text-secondary">
+                <li>Chat mở khi chủ bài chọn bạn. Bạn có thể hủy yêu cầu tới lúc đó.</li>
+                <li>Số điện thoại chỉ hiện khi hai bên đã chốt lịch hẹn.</li>
+              </ul>
+            </>
+          )}
+          {requestSuccess ? <Alert tone="success">{requestSuccess}</Alert> : null}
+          {requestError ? <Alert tone="warning">{requestError}</Alert> : null}
+          {reportNotice ? <Alert tone="success">{reportNotice}</Alert> : null}
+          {currentUserId && !own ? (
+            <button
+              type="button"
+              className="min-h-11 text-sm font-semibold text-text-secondary hover:text-error"
+              onClick={() => {
+                setReportNotice('');
+                setReportOpen(true);
+              }}
+            >
+              Báo cáo bài đăng
+            </button>
+          ) : null}
         </aside>
       </div>
-
-      {requestOpen ? (
-        <DialogFrame>
-          <h2 className="text-xl font-bold">
-            {item.type === 'gift' ? 'Gửi yêu cầu nhận' : 'Đề nghị trao đổi'}
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-text-muted">
-            {item.type === 'gift'
-              ? 'Bạn muốn gửi yêu cầu nhận món đồ này?'
-              : 'Chọn một món của bạn để đề nghị trao đổi.'}
-          </p>
-          {item.type === 'trade' ? (
-            <div className="mt-5">
-              <span className="label">Món bạn muốn dùng để trao đổi</span>
-              <div className="space-y-2">
-                {eligibleOfferedItems.map((entry) => (
-                  <label
-                    key={entry.id}
-                    className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 transition ${offeredItemId === entry.id ? 'border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
-                  >
-                    <input
-                      type="radio"
-                      name="offeredItem"
-                      value={entry.id}
-                      checked={offeredItemId === entry.id}
-                      onChange={() => setOfferedItemId(entry.id)}
-                    />
-                    <ItemImage src={entry.images[0]} alt={entry.title} className="size-12 rounded-md object-cover" />
-                    <span className="min-w-0 flex-1">
-                      <strong className="block truncate text-sm">{entry.title}</strong>
-                      <span className="text-xs text-text-muted">{entry.district}</span>
-                    </span>
-                  </label>
-                ))}
-                {!eligibleOfferedItems.length ? (
-                  <p className="rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
-                    Bạn chưa có món đã duyệt, còn hoạt động và chưa nằm trong giao dịch khác để trao đổi.
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-          <div className="mt-5">
-            <TextArea
-              label="Lời nhắn cho người đăng"
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-            />
-          </div>
-          <div className="mt-6 flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setRequestOpen(false)}>
-              Hủy
-            </Button>
-            <Button onClick={submitRequest} disabled={requestSubmitting || (item.type === 'trade' && !eligibleOfferedItems.length)}>
-              {item.type === 'gift' ? 'Gửi yêu cầu' : 'Gửi đề nghị trao đổi'}
-            </Button>
-          </div>
-        </DialogFrame>
-      ) : null}
 
       {loginPromptOpen ? (
         <DialogFrame size="sm">
@@ -494,4 +470,14 @@ export function ProductDetail() {
       ) : null}
     </div>
   );
+}
+
+function initialsOf(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(-2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
 }

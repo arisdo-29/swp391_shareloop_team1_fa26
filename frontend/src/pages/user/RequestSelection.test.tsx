@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 
-import { useState } from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -14,11 +13,7 @@ import {
   requestConversationPath,
   shouldRefreshConversationDetail,
 } from '../../utils/chatMessages';
-import {
-  RequestDetailsTabs,
-  SelectRequestDialog,
-  type ApiConversation,
-} from './Messages';
+import { SelectRequestDialog, type ApiConversation } from './Messages';
 
 const request: RequestResponse = {
   id: 101,
@@ -89,25 +84,6 @@ describe('chọn người giao dịch', () => {
     expect(canChat('CANCELLED')).toBe(false);
     expect(canChat('RESERVED')).toBe(true);
     expect(canChat('COMPLETED')).toBe(true);
-  });
-
-  it('chuyển qua lại giữa tab Thông tin và Lịch giao nhận', async () => {
-    const user = userEvent.setup();
-
-    function TabsHarness() {
-      const [activeTab, setActiveTab] = useState<'info' | 'schedule'>('info');
-      return <RequestDetailsTabs activeTab={activeTab} onChange={setActiveTab} />;
-    }
-
-    render(<TabsHarness />);
-    const informationTab = screen.getByRole('tab', { name: 'Thông tin' });
-    const scheduleTab = screen.getByRole('tab', { name: 'Lịch giao nhận' });
-    expect(informationTab.getAttribute('aria-selected')).toBe('true');
-    expect(scheduleTab.getAttribute('aria-selected')).toBe('false');
-
-    await user.click(scheduleTab);
-    expect(informationTab.getAttribute('aria-selected')).toBe('false');
-    expect(scheduleTab.getAttribute('aria-selected')).toBe('true');
   });
 
   it('không xác nhận khi chỉ mở hoặc hủy modal', async () => {

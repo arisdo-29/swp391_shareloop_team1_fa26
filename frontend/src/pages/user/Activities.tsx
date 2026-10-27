@@ -12,6 +12,7 @@ import {
   ItemImage,
   PageHeader,
   Select,
+  SkeletonRows,
   StatusBadge,
   TextArea,
   TypeBadge,
@@ -95,7 +96,7 @@ export function Activities() {
   const location = useLocation();
   const user = useAppSelector(selectCurrentUser)!;
   const { refresh: refreshWallet } = useWallet();
-  const [tab, setTab] = useState<'items' | 'transactions'>('items');
+  const [tab, setTab] = useState<'items' | 'sent'>('items');
   const [editingId, setEditingId] = useState('');
   const [removeConfirmId, setRemoveConfirmId] = useState('');
   const [requestsItemId, setRequestsItemId] = useState('');
@@ -294,14 +295,6 @@ export function Activities() {
       active = false;
     };
   }, [currentUserId, itemsReloadKey, user.id]);
-  const apiTransactions = [
-    ...new Map(
-      [...apiSentRequests, ...Object.values(apiRequestsByItem).flat()].map((request) => [
-        request.id,
-        request,
-      ]),
-    ).values(),
-  ];
   const acceptApiRequest = Object.values(apiRequestsByItem)
     .flat()
     .find((request) => request.id === acceptConfirmId);
@@ -428,169 +421,171 @@ export function Activities() {
     }
   };
 
+  const allReceivedRequests = Object.values(apiRequestsByItem).flat();
+  const itemsWaitingForChoice = myItems.filter((item) => {
+    const requests = apiRequestsByItem[item.id] ?? [];
+    return requests.some((request) => request.status === 'PENDING') && !requests.some((request) => canChat(request.status));
+  });
+  const pendingRequestCount = itemsWaitingForChoice.reduce(
+    (total, item) => total + (apiRequestsByItem[item.id] ?? []).filter((request) => request.status === 'PENDING').length,
+    0,
+  );
+  const awaitingScheduleCount = new Set(
+    [...apiSentRequests, ...allReceivedRequests]
+      .filter((request) => request.status === 'RESERVED' || request.status === 'AWAITING_LOGISTICS')
+      .map((request) => request.id),
+  ).size;
+  const sentSelectedCount = apiSentRequests.filter((request) => canChat(request.status)).length;
+  const sentPendingCount = apiSentRequests.filter((request) => request.status === 'PENDING').length;
+  const pageNotice = (location.state as { notice?: string } | null)?.notice;
+
   return (
     <div className="page-shell">
       <PageHeader
         title="Hoạt động"
-        description="Quản lý bài đăng, yêu cầu và tiến trình giao dịch của bạn."
+        description="Quản lý bài đăng và chọn người nhận ở đây. Sau khi chọn, hẹn lịch và bàn giao diễn ra trong Tin nhắn."
         action={
           <Link to="/post">
-            <Button>Đăng món mới</Button>
+            <Button>Đăng tin</Button>
           </Link>
         }
       />
-      {(location.state as { notice?: string } | null)?.notice ? (
-        <div className="mb-5">
-          <Alert tone="success">{(location.state as { notice: string }).notice}</Alert>
-        </div>
-      ) : null}
-      {editNotice ? (
-        <div className="mb-5">
-          <Alert tone="warning">{editNotice}</Alert>
-        </div>
-      ) : null}
-      {listingFeeNotice ? (
-        <div className="mb-5">
-          <Alert tone="success">{listingFeeNotice}</Alert>
-        </div>
-      ) : null}
-      {selectNotice ? (
-        <div className="mb-5">
-          <Alert tone="warning">{selectNotice}</Alert>
-        </div>
-      ) : null}
-      <div className="mb-7 inline-flex w-full gap-1 rounded-lg bg-surface-low p-1 sm:w-auto">
-        <button
-          onClick={() => setTab('items')}
-          className={`flex-1 rounded-md px-4 py-2.5 text-sm font-semibold transition sm:flex-none ${tab === 'items' ? 'bg-white text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
-        >
-          Món đã đăng <span className="ml-1 text-xs">({myItems.length})</span>
-        </button>
-        <button
-          onClick={() => setTab('transactions')}
-          className={`flex-1 rounded-md px-4 py-2.5 text-sm font-semibold transition sm:flex-none ${tab === 'transactions' ? 'bg-white text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
-        >
-          Giao dịch <span className="ml-1 text-xs">({apiTransactions.length})</span>
-        </button>
+      <div className="space-y-3 empty:hidden [&:not(:empty)]:mb-6">
+        {pageNotice ? <Alert tone="success">{pageNotice}</Alert> : null}
+        {editNotice ? <Alert tone="warning">{editNotice}</Alert> : null}
+        {listingFeeNotice ? <Alert tone="success">{listingFeeNotice}</Alert> : null}
+        {selectNotice ? <Alert tone="warning">{selectNotice}</Alert> : null}
       </div>
 
-      {tab === 'items' ? (
-        <section>
-          {myItemsLoading ? (
-            <EmptyState title="Đang tải bài đăng" text="Vui lòng chờ trong giây lát." />
-          ) : myItemsError ? (
-            <EmptyState
-              title="Không tải được bài đăng"
-              text={myItemsError}
-              action={
-                <Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>
-                  Thử lại
-                </Button>
-              }
-            />
-          ) : myItems.length ? (
-            <div className="space-y-4">
-              {myItems.map((item) => {
-                const apiItem = /^\d+$/.test(item.id);
-                const canEdit = ['PENDING_REVIEW', 'APPROVED', 'REJECTED'].includes(item.status);
-                const canUseListingFee = apiItem && item.status === 'APPROVED';
-                const canBoost =
-                  canUseListingFee &&
-                  item.categoryId !== undefined &&
-                  boostableCategoryIds.includes(item.categoryId);
-                const itemRequests = apiRequestsByItem[item.id] ?? [];
-                const hasAcceptedRequest = itemRequests.some(
-                  (request) => request.status === 'RESERVED',
-                );
-                return (
-                  <div key={item.id} className="min-w-0">
-                    <article className="group grid grid-cols-[92px_minmax(0,1fr)] items-start gap-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-border/70 transition duration-300 hover:shadow-md hover:ring-primary/20 sm:grid-cols-[140px_minmax(0,1fr)] sm:gap-5 sm:p-4 xl:grid-cols-[140px_minmax(220px,1fr)_auto]">
-                      <Link
-                        to={`/items/${item.id}`}
-                        className="relative block aspect-square overflow-hidden rounded-lg bg-surface-container sm:aspect-[4/3]"
-                      >
-                        <ItemImage
-                          src={item.images[0]}
-                          alt={item.title}
-                          className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-                        />
-                      </Link>
-                      <div className="min-w-0 py-0.5">
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <TypeBadge type={item.type} />
-                          <StatusBadge status={item.status} />
-                        </div>
-                        <Link
-                          to={`/items/${item.id}`}
-                          className="block truncate text-sm font-bold text-text-primary transition hover:text-primary sm:text-base"
-                        >
-                          {item.title}
-                        </Link>
-                        <p className="mt-2 text-xs text-text-muted">
-                          {item.expiresAt
-                            ? `Hết hạn: ${new Date(item.expiresAt).toLocaleDateString('vi-VN')} · `
-                            : ''}
+      {!myItemsLoading && !myItemsError ? (
+        <section aria-label="Việc cần bạn xử lý" className="mb-7 grid gap-3 md:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => setTab('items')}
+            className="flex flex-col gap-1 rounded-lg border border-primary-fixed bg-white px-4 py-4 text-left transition hover:bg-primary-faint"
+          >
+            <span className="text-xs font-semibold text-text-secondary">Chờ bạn chọn người</span>
+            <span className="text-2xl font-bold tabular-nums text-primary">{itemsWaitingForChoice.length} bài</span>
+            <span className="text-xs leading-5 text-text-muted">
+              {pendingRequestCount ? `${pendingRequestCount} người đang xin.` : 'Chưa có ai đang chờ bạn chọn.'}
+            </span>
+          </button>
+          <Link
+            to="/messages"
+            className="flex flex-col gap-1 rounded-lg border border-secondary-fixed bg-white px-4 py-4 transition hover:bg-secondary-soft"
+          >
+            <span className="text-xs font-semibold text-text-secondary">Giao dịch chờ chốt lịch</span>
+            <span className="text-2xl font-bold tabular-nums text-secondary-hover">{awaitingScheduleCount} giao dịch</span>
+            <span className="text-xs leading-5 text-text-muted">Mở Tin nhắn để hẹn lịch giao nhận.</span>
+          </Link>
+          <button
+            type="button"
+            onClick={() => setTab('sent')}
+            className="flex flex-col gap-1 rounded-lg border border-border bg-white px-4 py-4 text-left transition hover:bg-surface-low"
+          >
+            <span className="text-xs font-semibold text-text-secondary">Yêu cầu bạn đã gửi</span>
+            <span className="text-2xl font-bold tabular-nums">{apiSentRequests.length} yêu cầu</span>
+            <span className="text-xs leading-5 text-text-muted">
+              {sentSelectedCount} đã được chọn, {sentPendingCount} đang chờ chủ bài.
+            </span>
+          </button>
+        </section>
+      ) : null}
+
+      <div role="tablist" aria-label="Danh sách" className="mb-5 inline-flex w-full gap-1 rounded-lg bg-surface-low p-1 sm:w-auto">
+        {([
+          ['items', `Bài của tôi (${myItems.length})`],
+          ['sent', `Yêu cầu tôi đã gửi (${apiSentRequests.length})`],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={tab === value}
+            onClick={() => setTab(value)}
+            className={`min-h-11 flex-1 rounded-md px-4 text-sm font-semibold transition sm:flex-none ${tab === value ? 'bg-white text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {myItemsLoading ? (
+        <SkeletonRows rows={4} label="Đang tải hoạt động" />
+      ) : myItemsError ? (
+        <EmptyState
+          title="Không tải được dữ liệu"
+          text={myItemsError}
+          action={
+            <Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>
+              Thử lại
+            </Button>
+          }
+        />
+      ) : tab === 'items' ? (
+        myItems.length ? (
+          <div className="space-y-4">
+            {myItems.map((item) => {
+              const apiItem = /^\d+$/.test(item.id);
+              const canEdit = ['PENDING_REVIEW', 'APPROVED', 'REJECTED'].includes(item.status);
+              const canUseListingFee = apiItem && item.status === 'APPROVED';
+              const canBoost =
+                canUseListingFee && item.categoryId !== undefined && boostableCategoryIds.includes(item.categoryId);
+              const canRemove = !['RESERVED', 'TRADED', 'EXPIRED', 'removed'].includes(item.status);
+              const itemRequests = apiRequestsByItem[item.id] ?? [];
+              const pendingRequests = itemRequests.filter((request) => request.status === 'PENDING');
+              const chosenRequest = itemRequests.find((request) => canChat(request.status));
+              const hasAcceptedRequest = itemRequests.some((request) => request.status === 'RESERVED');
+              const summary = itemSummary(item, pendingRequests.length, chosenRequest);
+              const open = requestsItemId === item.id;
+              return (
+                <article key={item.id} className="overflow-hidden rounded-lg bg-white ring-1 ring-border/80">
+                  <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 p-4 sm:grid-cols-[140px_minmax(0,1fr)] sm:gap-5">
+                    <Link to={`/items/${item.id}`} className="block self-start overflow-hidden rounded-md bg-surface-container">
+                      <ItemImage src={item.images[0]} alt={item.title} className="aspect-[4/3] w-full object-cover" />
+                    </Link>
+                    <div className="min-w-0 space-y-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <TypeBadge type={item.type} />
+                        <StatusBadge status={item.status} />
+                        <span className="text-xs text-text-muted">
                           {item.district}
-                        </p>
-                        {item.boostedUntil ? (
-                          <p className="mt-1 text-xs font-medium text-primary">
-                            Đang được đẩy đến {new Date(item.boostedUntil).toLocaleString('vi-VN')}
-                          </p>
-                        ) : null}
-                        {(item.status === 'rejected' ||
-                          item.status === 'REJECTED' ||
-                          item.status === 'VIOLATION') &&
-                        (item.rejectionReason || item.moderationReason) ? (
-                          <p className="mt-2 rounded-md bg-error-soft px-3 py-2 text-xs leading-5 text-error">
-                            Lý do kiểm duyệt: {item.rejectionReason ?? item.moderationReason}
-                          </p>
-                        ) : null}
+                          {item.expiresAt ? ` · hết hạn ${new Date(item.expiresAt).toLocaleDateString('vi-VN')}` : ''}
+                        </span>
                       </div>
-                      <div className="col-span-2 grid w-full grid-cols-2 items-center gap-2 border-t border-border/60 pt-3 sm:grid-cols-3 xl:col-span-1 xl:self-center xl:grid-cols-[repeat(6,auto)] xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full whitespace-nowrap"
-                          onClick={() =>
-                            setRequestsItemId(requestsItemId === item.id ? '' : item.id)
-                          }
-                        >
-                          Yêu cầu ({itemRequests.length})
-                        </Button>
-                        <Link to={`/items/${item.id}`}>
+                      <Link to={`/items/${item.id}`} className="block truncate text-base font-bold transition hover:text-primary">
+                        {item.title}
+                      </Link>
+                      <p className="text-sm leading-6">
+                        <strong>{summary.headline}</strong> <span className="text-text-secondary">{summary.detail}</span>
+                      </p>
+                      {item.boostedUntil && new Date(item.boostedUntil).getTime() > Date.now() ? (
+                        <p className="text-xs font-semibold text-primary">
+                          Đang được đẩy đến {new Date(item.boostedUntil).toLocaleString('vi-VN')}
+                        </p>
+                      ) : null}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {itemRequests.length ? (
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="w-full whitespace-nowrap"
+                            variant={pendingRequests.length && !chosenRequest ? 'primary' : 'outline'}
+                            aria-expanded={open}
+                            onClick={() => setRequestsItemId(open ? '' : item.id)}
                           >
-                            Xem chi tiết
+                            {open ? 'Ẩn yêu cầu' : `Xem ${itemRequests.length} yêu cầu`}
                           </Button>
-                        </Link>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="w-full whitespace-nowrap"
-                          disabled={!canEdit}
-                          onClick={() => void openEditor(item)}
-                        >
+                        ) : null}
+                        {chosenRequest ? (
+                          <Link to={`/requests/${chosenRequest.id.replace(/^api_req_/, '')}`}>
+                            <Button size="sm">Mở cuộc trò chuyện</Button>
+                          </Link>
+                        ) : null}
+                        <Button size="sm" variant="outline" disabled={!canEdit} onClick={() => void openEditor(item)}>
                           Sửa bài
                         </Button>
                         <Button
                           size="sm"
-                          variant="danger"
-                          className="w-full whitespace-nowrap"
-                          disabled={
-                            ['RESERVED', 'TRADED', 'EXPIRED', 'removed'].includes(item.status) ||
-                            removingItemId === item.id
-                          }
-                          onClick={() => setRemoveConfirmId(item.id)}
-                        >
-                          Gỡ bài
-                        </Button>
-                        <Button
-                          size="sm"
                           variant="outline"
-                          className="w-full whitespace-nowrap"
                           disabled={!canUseListingFee || Boolean(renewingItemId || boostingItemId)}
                           onClick={() => {
                             setListingFeeError('');
@@ -603,7 +598,6 @@ export function Activities() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="w-full whitespace-nowrap"
                           disabled={!canBoost || Boolean(renewingItemId || boostingItemId)}
                           onClick={() => {
                             setListingFeeError('');
@@ -613,67 +607,52 @@ export function Activities() {
                         >
                           {boostingItemId === item.id ? 'Đang đẩy...' : 'Đẩy bài'}
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={!canRemove || removingItemId === item.id}
+                          onClick={() => setRemoveConfirmId(item.id)}
+                        >
+                          Gỡ bài
+                        </Button>
                       </div>
-                    </article>
-                    {requestsItemId === item.id ? (
-                      <RequestPanel
-                        itemStatus={item.status}
-                        hasAcceptedRequest={hasAcceptedRequest}
-                        itemRequests={itemRequests}
-                        allowAccept={Boolean(currentUserId)}
-                        onAccept={(requestId) => {
-                          setAcceptError('');
-                          setAcceptConfirmId(requestId);
-                        }}
-                      />
-                    ) : null}
+                      {lockNote(item, canBoost) ? <p className="text-xs leading-5 text-text-muted">{lockNote(item, canBoost)}</p> : null}
+                    </div>
                   </div>
-                );
-              })}
-              {currentUserId ? (
-                <SentRequestPanel
-                  itemRequests={apiSentRequests}
-                  items={myItems}
-                  cancelingRequestId={cancelingRequestId}
-                  onCancel={(requestId) => void cancelApiRequest(requestId)}
-                />
-              ) : null}
-            </div>
-          ) : (
-            <EmptyState
-              title="Bạn chưa đăng món nào"
-              text="Đăng món đầu tiên để bắt đầu chia sẻ với cộng đồng."
-              action={
-                <Link to="/post">
-                  <Button>Đăng món đồ</Button>
-                </Link>
-              }
-            />
-          )}
-        </section>
+                  {open ? (
+                    <RequestPanel
+                      itemStatus={item.status}
+                      hasAcceptedRequest={hasAcceptedRequest}
+                      itemRequests={itemRequests}
+                      allowAccept={Boolean(currentUserId)}
+                      onAccept={(requestId) => {
+                        setAcceptError('');
+                        setAcceptConfirmId(requestId);
+                      }}
+                    />
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyState
+            title="Bạn chưa đăng món nào"
+            text="Đăng món đầu tiên để bắt đầu chia sẻ với cộng đồng."
+            action={
+              <Link to="/post">
+                <Button>Đăng tin</Button>
+              </Link>
+            }
+          />
+        )
       ) : (
-        <section>
-          {myItemsLoading ? (
-            <EmptyState title="Đang tải giao dịch" text="Vui lòng chờ trong giây lát." />
-          ) : myItemsError ? (
-            <EmptyState
-              title="Không tải được giao dịch"
-              text={myItemsError}
-              action={
-                <Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>
-                  Thử lại
-                </Button>
-              }
-            />
-          ) : (
-            <SentRequestPanel
-              itemRequests={apiTransactions}
-              items={myItems}
-              cancelingRequestId={cancelingRequestId}
-              onCancel={(requestId) => void cancelApiRequest(requestId)}
-            />
-          )}
-        </section>
+        <SentRequestList
+          itemRequests={apiSentRequests}
+          items={myItems}
+          cancelingRequestId={cancelingRequestId}
+          onCancel={(requestId) => void cancelApiRequest(requestId)}
+        />
       )}
 
       {editingId ? (
@@ -1364,7 +1343,59 @@ function requesterDisplayName(request: ItemRequest): string {
   return request.requesterName?.trim() || 'Người dùng';
 }
 
-function SentRequestPanel({
+/** Câu tóm tắt tình trạng của một bài: đang có bao nhiêu người xin, đã chọn ai, hay đang chờ duyệt. */
+function itemSummary(item: Item, pendingCount: number, chosenRequest?: ItemRequest) {
+  const status = item.status.toUpperCase();
+  if (chosenRequest) {
+    return {
+      headline: `Đã chọn ${requesterDisplayName(chosenRequest)}.`,
+      detail: chosenRequest.status === 'COMPLETED' ? 'Giao dịch đã hoàn tất.' : 'Hẹn lịch và bàn giao trong Tin nhắn.',
+    };
+  }
+  if (status === 'PENDING_REVIEW') return { headline: 'Admin đang duyệt bài.', detail: 'Bài chưa hiện với người khác.' };
+  if (status === 'REJECTED' || status === 'VIOLATION') {
+    return {
+      headline: 'Bài chưa được duyệt.',
+      detail: item.rejectionReason || item.moderationReason || 'Sửa bài rồi gửi duyệt lại.',
+    };
+  }
+  if (status === 'EXPIRED') return { headline: 'Bài đã hết hạn hiển thị.', detail: 'Bài không còn hiện với người khác.' };
+  if (pendingCount) {
+    return {
+      headline: `${pendingCount} người muốn ${item.type === 'trade' ? 'đổi' : 'nhận'}.`,
+      detail: 'Chọn 1 người để mở chat và hẹn lịch.',
+    };
+  }
+  if (status === 'APPROVED') return { headline: 'Chưa có ai gửi yêu cầu.', detail: 'Đẩy bài để nhiều người thấy hơn.' };
+  return { headline: '', detail: '' };
+}
+
+/** Giải thích vì sao một số nút đang khoá, để người dùng không phải đoán. */
+function lockNote(item: Item, canBoost: boolean) {
+  const status = item.status.toUpperCase();
+  if (status === 'RESERVED') return 'Không sửa, gia hạn, đẩy hay gỡ được khi đã chọn người nhận.';
+  if (status === 'PENDING_REVIEW') return 'Gia hạn và đẩy bài mở sau khi bài được duyệt.';
+  if (status === 'APPROVED' && !canBoost) return 'Danh mục của bài này không cho đẩy bài.';
+  return '';
+}
+
+function sentRequestDetail(request: ItemRequest) {
+  const owner = request.donorName?.trim() || 'Chủ bài';
+  if (request.status === 'PENDING') return `Gửi ${new Date(request.createdAt).toLocaleDateString('vi-VN')}. Bạn hủy được tới khi chủ bài chọn.`;
+  if (request.status === 'REJECTED') return `${owner} đã chọn người khác.`;
+  if (request.status === 'CANCELLED') return 'Yêu cầu đã hủy.';
+  if (request.status === 'COMPLETED') return 'Giao dịch đã hoàn tất.';
+  if (request.status === 'DISPUTED') return 'Giao dịch đang có khiếu nại.';
+  return `${owner} đã chọn bạn. Hẹn lịch giao nhận trong Tin nhắn.`;
+}
+
+function requestChipClass(status: ItemRequest['status']) {
+  if (status === 'COMPLETED' || canChat(status)) return 'bg-success-soft text-success';
+  if (status === 'PENDING') return 'bg-warning-soft text-warning';
+  return 'bg-error-soft text-error';
+}
+
+function SentRequestList({
   itemRequests,
   items,
   cancelingRequestId,
@@ -1376,99 +1407,66 @@ function SentRequestPanel({
   onCancel: (requestId: string) => void;
 }) {
   const currentUser = useAppSelector(selectCurrentUser);
+  if (!itemRequests.length) {
+    return (
+      <EmptyState
+        title="Bạn chưa gửi yêu cầu nào"
+        text="Tìm món bạn cần và gửi yêu cầu, hoàn toàn miễn phí."
+        action={
+          <Link to="/browse">
+            <Button>Tìm đồ</Button>
+          </Link>
+        }
+      />
+    );
+  }
   return (
-    <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-border/70 sm:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border/60 pb-4">
-        <div>
-          <h3 className="text-base font-bold text-text-primary">Yêu cầu giao dịch</h3>
-          <p className="mt-1 text-xs text-text-muted">Theo dõi các yêu cầu bạn đã gửi</p>
-        </div>
-        <span className="rounded-full bg-primary-soft px-2.5 py-1 text-xs font-bold text-primary">
-          {itemRequests.length} yêu cầu
-        </span>
-      </div>
-      {itemRequests.length ? (
-        <div className="mt-4 divide-y divide-border/60">
-          {itemRequests.map((request) => {
-            const item = items.find((entry) => entry.id === request.itemId);
-            const requestComplete = request.status === 'COMPLETED';
-            const requestStopped = ['REJECTED', 'CANCELLED', 'DISPUTED'].includes(request.status);
-            return (
-              <article key={request.id} className="py-4 first:pt-0 last:pb-0">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <Link
-                    to={`/items/${request.itemId}`}
-                    className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4"
-                  >
-                    <ItemImage
-                      src={item?.images[0]}
-                      alt={request.itemTitle ?? item?.title ?? 'Ảnh món đồ'}
-                      className="size-20 shrink-0 rounded-lg object-cover ring-1 ring-border/60 sm:size-24"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-2xs font-semibold uppercase tracking-wide text-text-muted">
-                        Món yêu cầu
-                      </p>
-                      <strong className="mt-1 block truncate text-sm text-text-primary transition hover:text-primary sm:text-base">
-                        {request.itemTitle ?? item?.title ?? `Bài đăng #${request.itemId}`}
-                      </strong>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <TypeBadge type={request.type} />
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-2xs font-bold ${
-                            requestComplete
-                              ? 'bg-success-soft text-success'
-                              : requestStopped
-                                ? 'bg-error-soft text-error'
-                                : 'bg-warning-soft text-warning'
-                          }`}
-                        >
-                          {requestStatusLabel[request.status]}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-xs text-text-muted">
-                        {new Date(request.createdAt).toLocaleString('vi-VN')}
-                      </p>
-                    </div>
-                  </Link>
-                  <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col sm:items-stretch">
-                    <Link to={`/requests/${request.id.replace(/^api_req_/, '')}`}>
-                      <Button size="sm" className="w-full">
-                        Xem chi tiết
-                      </Button>
-                    </Link>
-                    <Link to={`/items/${request.itemId}`}>
-                      <Button size="sm" className="w-full" variant="outline">
-                        Xem bài
-                      </Button>
-                    </Link>
-                    {request.status === 'PENDING' && request.requesterId === currentUser?.id ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={cancelingRequestId === request.id}
-                        onClick={() => onCancel(request.id)}
-                      >
-                        Hủy yêu cầu
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-                {request.offeredItemId || request.offeredItemTitle ? (
-                  <p className="mt-3 rounded-md bg-surface-low px-3 py-2 text-xs text-text-muted sm:ml-28">
-                    Món đề nghị trao đổi:{' '}
-                    {request.offeredItemTitle ??
-                      items.find((entry) => entry.id === request.offeredItemId)?.title ??
-                      'Món đề nghị'}
-                  </p>
-                ) : null}
-              </article>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="mt-3 text-sm text-text-muted">Bạn chưa gửi yêu cầu nào.</p>
-      )}
+    <div className="space-y-3">
+      {itemRequests.map((request) => {
+        const title = request.itemTitle ?? items.find((entry) => entry.id === request.itemId)?.title ?? 'Món đồ';
+        const offeredTitle =
+          request.offeredItemTitle ?? items.find((entry) => entry.id === request.offeredItemId)?.title;
+        return (
+          <article
+            key={request.id}
+            className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-4 rounded-lg bg-white p-3 ring-1 ring-border/80 sm:grid-cols-[96px_minmax(0,1fr)_auto] sm:px-4"
+          >
+            <Link to={`/items/${request.itemId}`} className="block overflow-hidden rounded-md bg-surface-container">
+              <ItemImage src={request.itemImage} alt={title} className="aspect-[4/3] w-full object-cover" />
+            </Link>
+            <div className="min-w-0 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <TypeBadge type={request.type} />
+                <span className={`rounded-sm px-2 py-1 text-2xs font-bold ${requestChipClass(request.status)}`}>
+                  {requestStatusLabel[request.status]}
+                </span>
+              </div>
+              <Link to={`/items/${request.itemId}`} className="block truncate text-sm font-bold transition hover:text-primary sm:text-base">
+                {title}
+              </Link>
+              <p className="text-xs leading-5 text-text-secondary sm:text-sm">{sentRequestDetail(request)}</p>
+              {offeredTitle ? <p className="text-xs text-text-muted">Món mang đổi: {offeredTitle}</p> : null}
+            </div>
+            <div className="col-span-2 flex flex-wrap gap-2 sm:col-span-1 sm:justify-end">
+              {canChat(request.status) ? (
+                <Link to={`/requests/${request.id.replace(/^api_req_/, '')}`}>
+                  <Button size="sm">Mở cuộc trò chuyện</Button>
+                </Link>
+              ) : null}
+              {request.status === 'PENDING' && request.requesterId === currentUser?.id ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={cancelingRequestId === request.id}
+                  onClick={() => onCancel(request.id)}
+                >
+                  {cancelingRequestId === request.id ? 'Đang hủy...' : 'Hủy yêu cầu'}
+                </Button>
+              ) : null}
+            </div>
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -1486,87 +1484,69 @@ function RequestPanel({
   allowAccept: boolean;
   onAccept: (requestId: string) => void;
 }) {
+  const canChoose = allowAccept && !hasAcceptedRequest && !['IN_TRANSACTION', 'RESERVED'].includes(itemStatus);
   return (
-    <div className="mt-2 rounded-lg bg-white p-4 ring-1 ring-border/80">
-      <h3 className="text-sm font-bold">Yêu cầu cho bài đăng</h3>
-      {itemRequests.length ? (
-        <div className="mt-3 space-y-3">
-          {itemRequests.map((request) => {
-            const requesterName = requesterDisplayName(request);
-            return (
-              <article key={request.id} className="rounded-md border border-border p-3">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex min-w-0 gap-3">
-                    <Avatar
-                      user={{ name: requesterName, avatarInitials: nameInitials(requesterName) }}
-                    />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <strong className="truncate text-sm">{requesterName}</strong>
-                        <TypeBadge type={request.type} />
-                        <span className="rounded-sm bg-warning-soft px-2 py-1 text-2xs font-semibold text-warning">
-                          {requestStatusLabel[request.status]}
-                        </span>
-                      </div>
-                      <div className="mt-1">
-                        <ReputationBadge
-                          trustStars={request.requesterTrustStars}
-                          rank={request.requesterRank}
-                          asDescribedRate={request.requesterAsDescribedRate}
-                          compact
-                        />
-                      </div>
-                      <p className="mt-1 text-xs text-text-muted">
-                        {new Date(request.createdAt).toLocaleString('vi-VN')}
-                      </p>
-                      {request.message ? (
-                        <p className="mt-2 text-sm leading-6 text-text-secondary">
-                          {request.message}
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    {canChat(request.status) ? (
-                      <Link to={`/requests/${request.id.replace(/^api_req_/, '')}`}>
-                        <Button variant="outline">
-                          Nhắn tin
-                        </Button>
-                      </Link>
-                    ) : allowAccept &&
-                      request.status === 'PENDING' &&
-                      !hasAcceptedRequest &&
-                      !['IN_TRANSACTION', 'RESERVED'].includes(itemStatus) ? (
-                      <Button variant="outline" onClick={() => onAccept(request.id)}>
-                        Chọn người này
-                      </Button>
-                    ) : null}
-                  </div>
+    <div className="border-t border-border bg-primary-faint px-4 pb-5 pt-4">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-bold">{canChoose ? 'Chọn 1 người nhận' : 'Yêu cầu cho bài này'}</h3>
+        {canChoose ? (
+          <p className="text-xs text-text-secondary">Khi bạn chọn, các yêu cầu còn lại tự đóng và chat với người được chọn mở ra.</p>
+        ) : null}
+      </div>
+      <div className="space-y-2">
+        {itemRequests.map((request) => {
+          const requesterName = requesterDisplayName(request);
+          return (
+            <div
+              key={request.id}
+              className="grid grid-cols-[40px_minmax(0,1fr)] items-center gap-3 rounded-md bg-white p-3 ring-1 ring-border/80 sm:grid-cols-[40px_minmax(0,1fr)_auto]"
+            >
+              <Avatar user={{ name: requesterName, avatarInitials: nameInitials(requesterName) }} />
+              <div className="min-w-0 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <strong className="text-sm">{requesterName}</strong>
+                  <ReputationBadge
+                    trustStars={request.requesterTrustStars}
+                    rank={request.requesterRank}
+                    asDescribedRate={request.requesterAsDescribedRate}
+                    compact
+                  />
+                  <span className="text-xs text-text-muted">· {new Date(request.createdAt).toLocaleDateString('vi-VN')}</span>
                 </div>
+                {request.message ? <p className="truncate text-xs text-text-secondary">{request.message}</p> : null}
                 {request.type === 'trade' && request.offeredItemTitle ? (
-                  <div className="mt-3 rounded-md bg-surface-low p-3">
-                    <p className="text-xs font-bold text-text-muted">Món đề nghị trao đổi</p>
-                    <div className="mt-2 flex items-center gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-bold">{request.offeredItemTitle}</p>
-                      </div>
-                      {request.offeredItemId ? (
-                        <Link to={`/items/${request.offeredItemId}`}>
-                          <Button variant="outline">
-                            Xem chi tiết
-                          </Button>
-                        </Link>
-                      ) : null}
-                    </div>
-                  </div>
+                  <p className="text-xs text-text-secondary">
+                    Mang đổi:{' '}
+                    {request.offeredItemId ? (
+                      <Link to={`/items/${request.offeredItemId}`} className="font-semibold text-primary hover:underline">
+                        {request.offeredItemTitle}
+                      </Link>
+                    ) : (
+                      <strong>{request.offeredItemTitle}</strong>
+                    )}
+                  </p>
                 ) : null}
-              </article>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="mt-3 text-sm text-text-muted">Chưa có yêu cầu nào cho món này.</p>
-      )}
+                {request.status !== 'PENDING' ? (
+                  <span className={`inline-flex rounded-sm px-2 py-0.5 text-2xs font-bold ${requestChipClass(request.status)}`}>
+                    {requestStatusLabel[request.status]}
+                  </span>
+                ) : null}
+              </div>
+              <div className="col-span-2 flex justify-end sm:col-span-1">
+                {canChat(request.status) ? (
+                  <Link to={`/requests/${request.id.replace(/^api_req_/, '')}`}>
+                    <Button size="sm" variant="outline">Nhắn tin</Button>
+                  </Link>
+                ) : canChoose && request.status === 'PENDING' ? (
+                  <Button size="sm" onClick={() => onAccept(request.id)}>
+                    Chọn người này
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

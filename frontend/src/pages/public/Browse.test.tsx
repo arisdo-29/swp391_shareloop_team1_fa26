@@ -5,7 +5,6 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import browseBanner from '../../assets/browse-banner-shareloop-dark.webp';
 import { catalogApi, type CategoryResponse } from '../../services/catalogApi';
 import { itemApi, type ItemResponse } from '../../services/itemApi';
 import { categoryBrowsePath } from '../../utils/browseFilters';
@@ -136,15 +135,13 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     expect(await screen.findByText(book.title)).toBeTruthy();
   });
 
-  it('đổi Grid/List và sắp xếp mà không gọi lại API items', async () => {
+  it('đổi cách sắp xếp mà không gọi lại API items', async () => {
     const user = userEvent.setup();
     renderBrowse();
 
     expect(await screen.findByText(book.title)).toBeTruthy();
     await waitFor(() => expect(itemApi.list).toHaveBeenCalledTimes(1));
 
-    await user.click(screen.getByRole('button', { name: 'Xem dạng danh sách' }));
-    expect(screen.getByRole('button', { name: 'Xem dạng danh sách' }).getAttribute('aria-pressed')).toBe('true');
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'expiring');
 
     expect(itemApi.list).toHaveBeenCalledTimes(1);
@@ -186,7 +183,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
       expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({ page: 0, size: 20 }));
       expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({ page: 1, size: 20 }));
     });
-    expect(container.querySelectorAll('.browse-product-card')).toHaveLength(20);
+    expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(20);
     expect(screen.queryByText(expiredBoostItem.title)).toBeNull();
     expect(screen.queryByText(unboostedItem.title)).toBeNull();
     expect(screen.queryByText('Được đẩy')).toBeNull();
@@ -195,7 +192,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     await user.click(screen.getByRole('button', { name: 'Trang sau' }));
 
     expect(await screen.findByText(boostedItems[0].title)).toBeTruthy();
-    await waitFor(() => expect(container.querySelectorAll('.browse-product-card')).toHaveLength(1));
+    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(1));
     expect(screen.getByText('Trang 2 / 2')).toBeTruthy();
   });
 
@@ -222,22 +219,22 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     }));
 
     const { container } = renderBrowse();
-    const visibleTitles = () => Array.from(container.querySelectorAll('.browse-product-card h2'))
+    const visibleTitles = () => Array.from(container.querySelectorAll('[data-browse-results] > a h3'))
       .map((node) => node.textContent ?? '');
     const titlesAcrossPages: string[] = [];
 
     expect(await screen.findByText(sourceItems[0].title)).toBeTruthy();
-    await waitFor(() => expect(container.querySelectorAll('.browse-product-card')).toHaveLength(20));
+    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(20));
     expect(screen.getByText('Trang 1 / 3')).toBeTruthy();
     titlesAcrossPages.push(...visibleTitles());
 
     await user.click(screen.getByRole('button', { name: 'Trang sau' }));
-    await waitFor(() => expect(container.querySelectorAll('.browse-product-card')).toHaveLength(20));
+    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(20));
     expect(screen.getByText('Trang 2 / 3')).toBeTruthy();
     titlesAcrossPages.push(...visibleTitles());
 
     await user.click(screen.getByRole('button', { name: 'Trang sau' }));
-    await waitFor(() => expect(container.querySelectorAll('.browse-product-card')).toHaveLength(5));
+    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(5));
     expect(screen.getByText('Trang 3 / 3')).toBeTruthy();
     titlesAcrossPages.push(...visibleTitles());
 
@@ -277,21 +274,12 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     const { container } = renderBrowse();
 
     expect(await screen.findByText(expiringBook.title)).toBeTruthy();
-    const titles = () => Array.from(container.querySelectorAll('.browse-product-card h2')).map((node) => node.textContent);
+    const titles = () => Array.from(container.querySelectorAll('[data-browse-results] > a h3')).map((node) => node.textContent);
     expect(titles()).toEqual([book.title, expiringBook.title]);
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'expiring');
     expect(titles()).toEqual([expiringBook.title, book.title]);
     expect(itemApi.list).toHaveBeenCalledTimes(1);
-  });
-
-  it('dùng đúng banner Browse đã duyệt', () => {
-    const { container } = renderBrowse();
-    const banner = container.querySelector<HTMLImageElement>('.browse-banner img');
-
-    expect(banner?.getAttribute('src')).toBe(browseBanner);
-    expect(banner?.getAttribute('width')).toBe('2158');
-    expect(banner?.getAttribute('height')).toBe('729');
   });
 
   it('nút áp dụng giữ bộ lọc tức thời và đóng bảng lọc trên mobile', async () => {
@@ -364,10 +352,10 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     renderBrowse();
     await screen.findByText(book.title);
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Hình thức' }), 'trade');
+    await user.click(screen.getByRole('button', { name: 'Trao đổi' }));
     await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ offerType: 'SWAP' })));
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Tình trạng' }), 'LIKE_NEW');
+    await user.click(screen.getByRole('button', { name: 'Như mới' }));
     await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(
       expect.objectContaining({ offerType: 'SWAP', condition: 'LIKE_NEW', page: 0 }),
     ));
