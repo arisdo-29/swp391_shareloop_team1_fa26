@@ -72,13 +72,25 @@ class OpenRouterSearchClientTest {
     }
 
     @Test
-    void rejectsTextResponseWithoutRequiredToolCall() throws Exception {
-        try (var server = new OpenRouterTestServer("{\"choices\":[{\"message\":{\"content\":\"{}\"}}]}", 200)) {
+    void acceptsJsonObjectWhenProviderReturnsContentInsteadOfToolCall() throws Exception {
+        try (var server = new OpenRouterTestServer(
+                "{\"choices\":[{\"message\":{\"tool_calls\":null,\"content\":\"{}\"}}]}", 200)) {
+            var client = new OpenRouterSearchClient(server.gateway(), "Prompt");
+
+            AiResponse result = client.extract("sách", "{}", Duration.ofSeconds(15));
+
+            assertThat(result.content()).isEqualTo("{}");
+        }
+    }
+
+    @Test
+    void rejectsNonJsonContentWithoutRequiredToolCall() throws Exception {
+        try (var server = new OpenRouterTestServer("{\"choices\":[{\"message\":{\"content\":\"not JSON\"}}]}", 200)) {
             var client = new OpenRouterSearchClient(server.gateway(), "Prompt");
 
             assertThatThrownBy(() -> client.extract("sách", "{}", Duration.ofSeconds(15)))
                     .isInstanceOf(IOException.class)
-                    .hasMessage("OpenRouter API returned no single tool call");
+                    .hasMessage("OpenRouter API returned no JSON object");
         }
     }
 
