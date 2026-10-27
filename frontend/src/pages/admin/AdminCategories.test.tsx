@@ -55,6 +55,14 @@ describe('ApiAdminCategories', () => {
     await screen.findByText('Đồ điện tử');
 
     const rows = screen.getAllByRole('row').slice(1);
+    const up = within(rows[1]).getByRole('button', { name: 'Chuyển lên' });
+    const down = within(rows[1]).getByRole('button', { name: 'Chuyển xuống' });
+    expect(up.textContent).toBe('');
+    expect(down.textContent).toBe('');
+    expect(up.querySelector('svg')?.classList.contains('-rotate-90')).toBe(true);
+    expect(down.querySelector('svg')?.classList.contains('rotate-90')).toBe(true);
+    expect(up.getAttribute('title')).toBe('Đưa danh mục này lên trên một vị trí');
+    expect(down.getAttribute('title')).toBe('Đưa danh mục này xuống dưới một vị trí');
     expect((within(rows[0]).getByRole('button', { name: 'Chuyển lên' }) as HTMLButtonElement).disabled).toBe(true);
     expect((within(rows[2]).getByRole('button', { name: 'Chuyển xuống' }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -96,6 +104,10 @@ describe('ApiAdminCategories', () => {
     await screen.findByText('Đồ điện tử');
 
     await user.click(screen.getByRole('button', { name: 'Thêm danh mục' }));
+    const dialog = screen.getByRole('dialog', { name: 'Thêm danh mục' });
+    expect(within(dialog).queryByText('Danh mục hạn chế')).toBeNull();
+    expect(dialog.querySelectorAll('input[type="checkbox"]')).toHaveLength(1);
+    expect(within(dialog).getByRole('checkbox', { name: 'Cho phép đẩy tin' })).toBeTruthy();
     await user.type(screen.getByRole('textbox', { name: 'Tên danh mục' }), 'Nội thất');
     await user.click(screen.getByRole('button', { name: 'Lưu' }));
 

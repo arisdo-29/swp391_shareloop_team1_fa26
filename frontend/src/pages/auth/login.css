@@ -1,8 +1,8 @@
 .login-page {
   position: relative;
   isolation: isolate;
-  min-height: calc(100dvh - 68px);
-  overflow-x: clip;
+  min-height: calc(100dvh - 68px - 1px);
+  overflow: clip;
   background:
     radial-gradient(circle at 8% 16%, color-mix(in srgb, var(--color-primary-fixed) 68%, transparent), transparent 29rem),
     radial-gradient(circle at 92% 88%, color-mix(in srgb, var(--color-secondary-soft) 58%, transparent), transparent 25rem),

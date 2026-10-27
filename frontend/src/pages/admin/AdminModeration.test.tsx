@@ -220,6 +220,54 @@ describe('AdminModerationDetail', () => {
     vi.mocked(adminModerationApi.rejectReasons).mockResolvedValue(['Hình ảnh không phù hợp']);
   });
 
+  it('giữ khung ảnh chính co theo ảnh có giới hạn, chọn thumbnail và phóng to ảnh đang chọn', async () => {
+    const user = userEvent.setup();
+    vi.mocked(adminModerationApi.detail).mockResolvedValue(detail({
+      images: ['/api/v1/media/101', '/api/v1/media/102', '/api/v1/media/103'],
+      defectImages: ['/api/v1/media/104'],
+    }));
+    renderDetail();
+
+    await screen.findByRole('heading', { name: 'Áo khoác gió nam' });
+    const mainImage = screen.getByRole('img', { name: 'Ảnh món đồ 1' });
+    expect(screen.getAllByRole('img', { name: /^Ảnh món đồ \d+$/ })).toHaveLength(1);
+    expect(mainImage.classList.contains('object-contain')).toBe(true);
+    expect(mainImage.classList.contains('h-auto')).toBe(true);
+    expect(mainImage.classList.contains('w-auto')).toBe(true);
+    expect(mainImage.classList.contains('max-h-56')).toBe(true);
+    expect(mainImage.classList.contains('max-w-full')).toBe(true);
+    expect(mainImage.parentElement?.classList.contains('w-fit')).toBe(true);
+    expect(mainImage.parentElement?.classList.contains('mx-auto')).toBe(true);
+    const thumbnails = screen.getAllByRole('button', { name: /^Chọn ảnh món đồ \d+$/ });
+    expect(thumbnails).toHaveLength(3);
+    thumbnails.forEach((thumbnail, index) => {
+      const image = within(thumbnail).getByRole('img');
+      expect(image.getAttribute('src')).toContain(`/api/v1/media/${101 + index}`);
+      expect(image.classList.contains('object-contain')).toBe(true);
+      expect(image.classList.contains('h-auto')).toBe(true);
+      expect(image.classList.contains('w-auto')).toBe(true);
+      expect(image.classList.contains('max-h-20')).toBe(true);
+      expect(image.classList.contains('max-w-20')).toBe(true);
+    });
+    expect(screen.getByRole('img', { name: 'Ảnh lỗi 1' }).classList.contains('size-20')).toBe(true);
+
+    await user.click(thumbnails[1]);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const selectedImage = screen.getByRole('img', { name: 'Ảnh món đồ 2' });
+    expect(selectedImage.getAttribute('src')).toContain('/api/v1/media/102');
+    expect(selectedImage.parentElement?.classList.contains('w-fit')).toBe(true);
+    expect(selectedImage.classList.contains('max-h-56')).toBe(true);
+    expect(thumbnails[1].getAttribute('aria-pressed')).toBe('true');
+    expect(thumbnails[0].getAttribute('aria-pressed')).toBe('false');
+    await user.click(screen.getByRole('button', { name: 'Xem lớn ảnh món đồ 2' }));
+    const preview = screen.getByRole('dialog', { name: 'Ảnh món đồ 2/3' });
+    expect(within(preview).getByRole('img', { name: 'Ảnh món đồ 2' }).getAttribute('src'))
+      .toContain('/api/v1/media/102');
+    await user.click(within(preview).getByRole('button', { name: 'Ảnh sau' }));
+    expect(within(screen.getByRole('dialog', { name: 'Ảnh món đồ 3/3' }))
+      .getByRole('img', { name: 'Ảnh món đồ 3' }).getAttribute('src')).toContain('/api/v1/media/103');
+  });
+
   it('hiện đủ thông tin để duyệt trên cùng một trang, dùng endpoint của admin', async () => {
     renderDetail();
 

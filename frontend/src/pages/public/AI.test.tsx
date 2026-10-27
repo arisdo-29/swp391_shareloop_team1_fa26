@@ -93,7 +93,7 @@ describe('AI search quota', () => {
 
     await waitFor(() => expect(aiApi.quota).toHaveBeenCalledTimes(2));
     expect(screen.getByText('Còn 5 lượt miễn phí')).toBeTruthy();
-    expect(screen.getByText('AI hiện không phản hồi. Đây là kết quả tìm kiếm thường; lượt miễn phí và Credit của bạn không bị trừ.')).toBeTruthy();
+    expect(screen.queryByText('AI hiện không phản hồi. Đây là kết quả tìm kiếm thường; lượt miễn phí và Credit của bạn không bị trừ.')).toBeNull();
     expect(screen.getByText('Từ khóa tìm kiếm thường')).toBeTruthy();
   });
 });
