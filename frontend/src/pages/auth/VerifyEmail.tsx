@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch } from '../../app/hooks';
 import { actions } from '../../app/store';
 import { Alert, Button, Field } from '../../components/ui';
+import { AuthLayout } from './AuthLayout';
 import { OtpInput } from '../../components/OtpInput';
 import { authApi } from '../../services/authApi';
 import { authErrorMessage } from '../../services/authErrors';
@@ -115,13 +116,10 @@ export function VerifyEmail() {
   };
 
   return (
-    <div className="page-shell flex min-h-[620px] items-center justify-center">
-      <form
-        onSubmit={submit}
-        className="w-full max-w-md rounded-xl bg-white p-6 shadow-md ring-1 ring-border/70 sm:p-8"
-      >
-        <h1 className="text-2xl font-bold">Xác thực email</h1>
-        <p className="mt-2 text-sm leading-6 text-text-muted">Nhập email và mã OTP đã được gửi đến email của bạn.</p>
+    <AuthLayout>
+      <form onSubmit={submit} aria-labelledby="verify-title">
+        <h2 id="verify-title" className="text-2xl font-bold">Nhập mã xác minh</h2>
+        <p className="mt-2 text-sm leading-6 text-text-secondary">Mã 6 số đã được gửi tới email của bạn.</p>
         {!email ? (
           <div className="mt-5">
             <Alert tone="warning">
@@ -155,7 +153,7 @@ export function VerifyEmail() {
               {otpSeconds === 0 ? 'Mã OTP đã hết hạn.' : `Mã OTP hết hạn sau ${formatCountdown(otpSeconds)}.`}
             </p>
           ) : null}
-          <Button className="w-full" disabled={processing || otpSeconds === 0}>
+          <Button size="lg" className="w-full" disabled={processing || otpSeconds === 0}>
             {processing ? 'Đang xác nhận...' : 'Xác nhận'}
           </Button>
           <Button
@@ -169,6 +167,6 @@ export function VerifyEmail() {
           </Button>
         </div>
       </form>
-    </div>
+    </AuthLayout>
   );
 }

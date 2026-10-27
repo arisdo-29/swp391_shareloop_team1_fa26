@@ -361,7 +361,7 @@ describe('trạng thái tải bài đăng trên Home', () => {
     expect(within(section!).getByText('Đồ dùng góc học tập')).toBeTruthy();
     expect(section!.querySelector<HTMLImageElement>('.home-suggestion-visual img')?.getAttribute('src'))
       .toBe(browseSuggestionBox);
-    expect(section!.querySelectorAll('.home-ai-suggestions svg')).toHaveLength(3);
+    expect(section!.querySelectorAll('.home-ai-suggestions svg')).toHaveLength(0);
     expect(screen.getByTestId('home-lifecycle-items').textContent).toBe(
       [boostedItems[3].title, boostedItems[2].title, boostedItems[1].title].join('|'),
     );

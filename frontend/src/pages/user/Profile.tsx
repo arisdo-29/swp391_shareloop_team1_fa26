@@ -7,7 +7,6 @@ import {
   Alert,
   Button,
   Field,
-  Icon,
   PageHeader,
   RankBadge,
   Select,
@@ -22,7 +21,12 @@ import { toAreaOptions, type AreaOption } from '../../services/mappers';
 import type { ApiError } from '../../services/http';
 import { toBackendUserId } from '../../services/requestApi';
 import { resolveMediaUrl } from '../../services/mediaUrl';
-import { reputationApi, type MyReputation } from '../../services/reputationApi';
+import {
+  reputationApi,
+  summarizePointHistory,
+  type MyReputation,
+  type PointHistorySummary,
+} from '../../services/reputationApi';
 import { createOtpValue } from '../../utils/otp';
 import { getRankLabel } from '../../utils/reputation';
 
@@ -178,6 +182,7 @@ export function Profile() {
   const [reputationLoading, setReputationLoading] = useState(false);
   const [reputationError, setReputationError] = useState('');
   const [reputationReloadKey, setReputationReloadKey] = useState(0);
+  const [pointSummary, setPointSummary] = useState<PointHistorySummary | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -236,6 +241,23 @@ export function Profile() {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [phoneResendCooldown]);
+
+  // Tổng điểm được cộng, bị trừ trên toàn bộ lịch sử; tải lại cùng lúc với thông tin uy tín.
+  useEffect(() => {
+    if (tab !== 'reputation' || isAdmin) return undefined;
+    let active = true;
+    reputationApi
+      .listAllPointHistory()
+      .then((entries) => {
+        if (active) setPointSummary(summarizePointHistory(entries));
+      })
+      .catch(() => {
+        if (active) setPointSummary(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [tab, isAdmin, reputationReloadKey]);
 
   // Gọi ngay khi mở trang để cột trái có hạng thật, tab Uy tín dùng lại cùng kết quả. Admin không có uy tín.
   useEffect(() => {
@@ -447,33 +469,30 @@ export function Profile() {
           <nav className="space-y-1 border-t border-border pt-4">
             {(
               [
-                ['profile', 'Hồ sơ', 'user'],
-                ['credit', 'Credit', 'wallet'],
-                ['reputation', 'Uy tín & Hạng', 'star'],
+                ['profile', 'Hồ sơ'],
+                ['credit', 'Ví Credit'],
+                ['reputation', 'Uy tín & Hạng'],
               ] as const
-            ).map(([id, label, icon]) =>
+            ).map(([id, label]) =>
               id === 'credit' && !isAdmin ? (
                 <Link
                   key={id}
                   to="/credit"
-                  className="flex w-full items-center gap-3 min-h-11 rounded-md px-3 py-2.5 text-left text-sm font-semibold transition text-text-secondary hover:bg-surface-low"
+                  className="flex w-full items-center min-h-11 rounded-md px-3 py-2.5 text-left text-sm font-semibold transition text-text-secondary hover:bg-surface-low"
                 >
-                  <Icon name={icon} className="size-5" />
                   {label}
                 </Link>
               ) : id === 'credit' ? null : isAdmin && id === 'reputation' ? null : (
                 <button
                   key={id}
                   onClick={() => changeTab(id)}
-                  className={`flex w-full items-center gap-3 min-h-11 rounded-md px-3 py-2.5 text-left text-sm font-semibold transition ${tab === id ? 'bg-primary-faint text-primary' : 'text-text-secondary hover:bg-surface-low'}`}
+                  className={`flex w-full items-center min-h-11 rounded-md px-3 py-2.5 text-left text-sm font-semibold transition ${tab === id ? 'bg-primary-faint text-primary' : 'text-text-secondary hover:bg-surface-low'}`}
                 >
-                  <Icon name={icon} className="size-5" />
                   {label}
                 </button>
               ),
             )}
-            <Link to="/change-password" className="flex w-full items-center gap-3 min-h-11 rounded-md px-3 py-2.5 text-left text-sm font-semibold transition text-text-secondary hover:bg-surface-low">
-              <Icon name="shield" className="size-5" />
+            <Link to="/change-password" className="flex w-full items-center min-h-11 rounded-md px-3 py-2.5 text-left text-sm font-semibold transition text-text-secondary hover:bg-surface-low">
               Đổi mật khẩu
             </Link>
           </nav>
@@ -488,11 +507,8 @@ export function Profile() {
                     Thông tin dùng để liên hệ trong giao dịch.
                   </p>
                 </div>
-                <label
-                  className="grid size-11 cursor-pointer place-items-center rounded-md bg-primary-soft text-primary"
-                  title="Đổi ảnh đại diện"
-                >
-                  <Icon name="image" className="size-5" />
+                <label className="inline-flex min-h-11 cursor-pointer items-center rounded-md border border-border bg-white px-3 text-sm font-semibold text-text-secondary transition hover:border-primary/50 hover:bg-primary-faint hover:text-primary">
+                  Đổi ảnh đại diện
                   <input
                     className="hidden"
                     type="file"
@@ -690,6 +706,7 @@ export function Profile() {
                       <h2 className="section-title">Lịch sử uy tín</h2>
                       <p className="mt-1 text-xs text-text-muted">{reputation.history.totalElements} lần thay đổi điểm</p>
                     </div>
+                    <PointSummary summary={pointSummary} />
                     {reputation.history.content.length ? reputation.history.content.map((entry, index) => (
                       <div
                         key={`${entry.createdAt}-${index}`}
@@ -737,5 +754,25 @@ export function Profile() {
         </main>
       </div>
     </div>
+  );
+}
+
+function PointSummary({ summary }: { summary: PointHistorySummary | null }) {
+  if (!summary) return null;
+  const cells: Array<[string, string, string]> = [
+    ['Đã được cộng', `+${summary.gained}`, 'text-success'],
+    ['Bị trừ', summary.lost ? `-${summary.lost}` : '0', 'text-error'],
+    ['Số lần thay đổi', String(summary.changes), 'text-text-primary'],
+    ['Không được cộng', String(summary.notCounted), 'text-text-secondary'],
+  ];
+  return (
+    <dl className="grid grid-cols-2 border-b border-border sm:grid-cols-4">
+      {cells.map(([label, value, tone], index) => (
+        <div key={label} className={`px-5 py-3 ${index > 0 ? 'border-border/70 sm:border-l' : ''} ${index > 1 ? 'border-t sm:border-t-0' : ''}`}>
+          <dt className="text-xs font-medium text-text-muted">{label}</dt>
+          <dd className={`mt-1 text-lg font-bold tabular-nums ${tone}`}>{value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }

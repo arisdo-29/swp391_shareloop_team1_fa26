@@ -242,7 +242,7 @@ export function AdminFinanceUserDetail() {
         description={summary ? [summary.email, summary.phone].filter(Boolean).join(' · ') : undefined}
         action={
           <Link to="/admin/finance/users">
-            <Button variant="outline" icon="arrow">
+            <Button variant="outline">
               Về danh sách
             </Button>
           </Link>

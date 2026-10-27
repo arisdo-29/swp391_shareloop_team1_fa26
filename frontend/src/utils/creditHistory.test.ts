@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { WalletTransactionResponse } from '../services/walletApi';
-import { adminHistoryTabs, itemIdOf, toCreditHistory, userHistoryTabs } from './creditHistory';
+import type { CreditHistory } from '../types/domain';
+import {
+  adminHistoryTabs,
+  itemIdOf,
+  summarizeCreditHistory,
+  toCreditHistory,
+  userHistoryTabs,
+} from './creditHistory';
 
 function entry(
   id: number,
@@ -118,5 +125,37 @@ describe('toCreditHistory theo từng loại phí', () => {
     // then
     expect(charge.type).toBe('AI_SPEND');
     expect(spendTab.matches(charge)).toBe(true);
+  });
+});
+
+describe('summarizeCreditHistory', () => {
+  const entry = (type: CreditHistory['type'], amount: number): CreditHistory => ({
+    id: `${type}-${amount}`,
+    userId: 'api_1',
+    transactionId: 'ledger-1',
+    type,
+    amount,
+    balance: 0,
+    description: '',
+    status: 'completed',
+    note: '',
+    createdAt: '2026-10-20T08:00:00Z',
+  });
+
+  it('cộng riêng tiền nạp, tiền chi, tiền hoàn và điều chỉnh của Admin', () => {
+    const summary = summarizeCreditHistory([
+      entry('TOPUP', 50),
+      entry('TOPUP', 10),
+      entry('SPEND', -5),
+      entry('AI_SPEND', -2),
+      entry('REFUND', 2),
+      entry('ADMIN_ADJUSTMENT', -3),
+    ]);
+
+    expect(summary).toEqual({ toppedUp: 60, spent: 7, refunded: 2, adjusted: -3 });
+  });
+
+  it('trả về 0 khi chưa có lịch sử', () => {
+    expect(summarizeCreditHistory([])).toEqual({ toppedUp: 0, spent: 0, refunded: 0, adjusted: 0 });
   });
 });

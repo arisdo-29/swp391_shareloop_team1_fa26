@@ -1,5 +1,4 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
-import { Icon } from '../../components/ui';
 
 export function HomeMotion({ children }: { children: ReactNode }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -116,7 +115,7 @@ export function HomeDiscoveryRail({
           aria-label={`Xem trước: ${label}`}
           title="Xem trước"
         >
-          <Icon name="arrow" className="size-5 rotate-180" />
+          Trước
         </button>
         <button
           type="button"
@@ -126,7 +125,7 @@ export function HomeDiscoveryRail({
           aria-label={`Xem tiếp: ${label}`}
           title="Xem tiếp"
         >
-          <Icon name="arrow" className="size-5" />
+          Tiếp
         </button>
       </div>
       <div

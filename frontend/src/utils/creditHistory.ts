@@ -132,3 +132,27 @@ export function toCreditHistory(entry: WalletTransactionResponse, userId: string
     createdAt: entry.createdAt,
   };
 }
+
+export interface CreditHistorySummary {
+  toppedUp: number; // tổng Credit đã nạp
+  spent: number; // tổng Credit đã chi (số dương)
+  refunded: number; // tổng Credit được hoàn
+  adjusted: number; // tổng Admin điều chỉnh (có thể âm)
+}
+
+/**
+ * Cộng các dòng lịch sử đã có từ backend để hiện tổng theo khoảng thời gian.
+ * Chỉ đọc số backend trả về, không đổi số dư; số dư thật vẫn lấy từ GET /wallet.
+ */
+export function summarizeCreditHistory(entries: CreditHistory[]): CreditHistorySummary {
+  return entries.reduce<CreditHistorySummary>(
+    (summary, entry) => {
+      if (entry.type === 'TOPUP') summary.toppedUp += entry.amount;
+      else if (entry.type === 'REFUND') summary.refunded += entry.amount;
+      else if (entry.type === 'ADMIN_ADJUSTMENT') summary.adjusted += entry.amount;
+      else if (entry.amount < 0) summary.spent += -entry.amount;
+      return summary;
+    },
+    { toppedUp: 0, spent: 0, refunded: 0, adjusted: 0 },
+  );
+}

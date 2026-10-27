@@ -4,7 +4,7 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import { useWallet } from '../../app/useWallet';
 import { AiSearchNotices } from '../../components/ai/AiSearchNotices';
-import { Alert, Button, EmptyState, Icon, PageHeader, ProductCard, TextArea } from '../../components/ui';
+import { Alert, Button, EmptyState, PageHeader, ProductCard, Spinner, TextArea } from '../../components/ui';
 import { aiApi, type AiQuotaResponse } from '../../services/aiApi';
 import { catalogApi, type CategoryResponse, type AreaResponse } from '../../services/catalogApi';
 import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
@@ -137,10 +137,7 @@ export function AI() {
         <section className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-border/80">
           <div className="bg-gradient-to-br from-primary-faint via-white to-secondary-soft px-5 py-7 sm:px-8 sm:py-9">
             <div className="mx-auto max-w-3xl">
-              <div className="flex items-center gap-3">
-                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-white shadow-sm">
-                  <Icon name="ai" className="size-6" weight="bold" />
-                </span>
+              <div>
                 <div>
                   <h2 className="text-xl font-bold text-text-primary">Bạn đang tìm món đồ nào?</h2>
                   <p className="mt-1 text-sm leading-6 text-text-muted">
@@ -168,7 +165,6 @@ export function AI() {
                   </span>
                   <Button
                     type="submit"
-                    icon="search"
                     disabled={status === 'loading' || !query.trim() || !quota || !user}
                   >
                     {status === 'loading' ? 'Đang tìm...' : 'Tìm'}
@@ -211,7 +207,7 @@ export function AI() {
 
             {status === 'loading' ? (
               <div className="mt-5 flex items-center gap-3 rounded-lg bg-surface-low px-4 py-5 text-sm text-text-muted">
-                <Icon name="renew" className="size-5 animate-spin text-primary" />
+                <Spinner className="size-5 text-primary" />
                 Đang đọc mô tả và chuẩn bị kết quả...
               </div>
             ) : status === 'error' ? (

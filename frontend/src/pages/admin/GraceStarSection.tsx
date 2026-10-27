@@ -110,7 +110,7 @@ export function GraceStarSection() {
             </Alert>
           </div>
         ) : null}
-        <Button type="submit" icon="star" disabled={submitting || !ready}>
+        <Button type="submit" disabled={submitting || !ready}>
           Cấp 1 sao ân hạn
         </Button>
       </form>
@@ -147,7 +147,7 @@ export function GraceStarSection() {
             <Button type="button" variant="outline" disabled={submitting} onClick={closeConfirmation}>
               Hủy
             </Button>
-            <Button type="button" icon="star" disabled={submitting} onClick={() => void confirmGrant()}>
+            <Button type="button" disabled={submitting} onClick={() => void confirmGrant()}>
               {submitting ? 'Đang cấp sao…' : 'Xác nhận cấp 1 sao'}
             </Button>
           </div>

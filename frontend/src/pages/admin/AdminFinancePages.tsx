@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Alert, Button, EmptyState, Field, Icon, PageHeader, Stat } from '../../components/ui';
+import { Alert, Button, EmptyState, Field, PageHeader, Stat } from '../../components/ui';
 import { adminFinanceApi, type FinanceSummary } from '../../services/adminFinanceApi';
 import { adminAuditApi, type ActivityLogResponse } from '../../services/adminAuditApi';
 import type { ApiError } from '../../services/http';
@@ -33,11 +33,11 @@ function downloadBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(url);
 }
 const dashboardActions = [
-  { to: '/admin/moderation', label: 'Duyệt bài', icon: 'article' },
-  { to: '/admin/finance', label: 'Báo cáo tài chính', icon: 'payments' },
-  { to: '/admin/users', label: 'Quản lý tài khoản', icon: 'group' },
-  { to: '/admin/checklist', label: 'Checklist duyệt bài', icon: 'check' },
-  { to: '/admin/audit-logs', label: 'Nhật ký hoạt động', icon: 'history' },
+  { to: '/admin/moderation', label: 'Duyệt bài' },
+  { to: '/admin/finance', label: 'Báo cáo tài chính' },
+  { to: '/admin/users', label: 'Quản lý tài khoản' },
+  { to: '/admin/checklist', label: 'Checklist duyệt bài' },
+  { to: '/admin/audit-logs', label: 'Nhật ký hoạt động' },
 ] as const;
 
 function activityTone(type: string) {
@@ -81,9 +81,9 @@ export function AdminOperationsDashboard() {
     return () => { active = false; };
   }, [reload]);
   const metrics = report ? [
-    { label: 'Tiền thu', value: formatVnd(report.cashAmountVnd), icon: 'payments', tone: 'bg-primary-faint text-primary' },
-    { label: 'Credit cộng', value: report.creditInTotal.toLocaleString('vi-VN'), icon: 'add', tone: 'bg-success-soft text-success' },
-    { label: 'Credit trừ', value: report.creditOutTotal.toLocaleString('vi-VN'), icon: 'transaction', tone: 'bg-secondary-soft text-secondary' },
+    { label: 'Tiền thu', value: formatVnd(report.cashAmountVnd), tone: 'border-primary' },
+    { label: 'Credit cộng', value: report.creditInTotal.toLocaleString('vi-VN'), tone: 'border-success' },
+    { label: 'Credit trừ', value: report.creditOutTotal.toLocaleString('vi-VN'), tone: 'border-secondary' },
   ] : [];
 
   return <>
@@ -101,11 +101,8 @@ export function AdminOperationsDashboard() {
         ) : report ? (
           <div className="grid gap-4 sm:grid-cols-3">
             {metrics.map((metric) => (
-              <section key={metric.label} className="rounded-xl border border-border/80 bg-white p-5 shadow-sm">
-                <div className={`flex size-11 items-center justify-center rounded-lg ${metric.tone}`}>
-                  <Icon name={metric.icon} className="size-5" weight="bold" />
-                </div>
-                <p className="mt-4 text-sm font-medium text-text-muted">{metric.label}</p>
+              <section key={metric.label} className={`rounded-xl border border-l-4 border-border/80 bg-white p-5 shadow-sm ${metric.tone}`}>
+                <p className="text-sm font-medium text-text-muted">{metric.label}</p>
                 <p className="mt-1 break-words text-2xl font-bold tabular-nums text-text-primary">{metric.value}</p>
               </section>
             ))}
@@ -120,9 +117,8 @@ export function AdminOperationsDashboard() {
               <h2 className="section-title">Hoạt động gần đây</h2>
               <p className="mt-1 text-sm text-text-muted">Các thay đổi mới nhất được ghi nhận trong hệ thống.</p>
             </div>
-            <Link className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary-hover" to="/admin/audit-logs">
+            <Link className="text-sm font-semibold text-primary hover:text-primary-hover" to="/admin/audit-logs">
               Xem tất cả
-              <Icon name="arrow" className="size-4" />
             </Link>
           </div>
           {logsError ? (
@@ -178,13 +174,9 @@ export function AdminOperationsDashboard() {
             <Link
               key={action.to}
               to={action.to}
-              className="group flex min-w-0 items-center gap-3 rounded-lg border border-border/70 px-3.5 py-3 text-sm font-semibold text-text-secondary transition hover:border-primary/30 hover:bg-primary-faint hover:text-primary"
+              className="flex min-h-11 min-w-0 items-center rounded-lg border border-border/70 px-3.5 py-3 text-sm font-semibold text-text-secondary transition hover:border-primary/30 hover:bg-primary-faint hover:text-primary"
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-surface-low text-primary transition group-hover:bg-white">
-                <Icon name={action.icon} className="size-[18px]" weight="bold" />
-              </span>
-              <span className="min-w-0 flex-1">{action.label}</span>
-              <Icon name="arrow" className="size-4 shrink-0 text-text-muted transition group-hover:translate-x-0.5 group-hover:text-primary" />
+              {action.label}
             </Link>
           ))}
         </nav>
@@ -244,7 +236,7 @@ export function AdminFinanceReport() {
   };
 
   return <>
-    <PageHeader title="Báo cáo tài chính" description="Tiền thu, Credit cộng và Credit trừ theo sổ hệ thống." action={<div className="flex flex-wrap gap-2"><Button variant="outline" icon="download" disabled={exporting} onClick={() => void exportCsv()}>{exporting ? 'Đang xuất...' : 'Xuất báo cáo CSV'}</Button><Link to="/admin/finance/users"><Button variant="outline">Tra cứu người dùng</Button></Link></div>} />
+    <PageHeader title="Báo cáo tài chính" description="Tiền thu, Credit cộng và Credit trừ theo sổ hệ thống." action={<div className="flex flex-wrap gap-2"><Button variant="outline" disabled={exporting} onClick={() => void exportCsv()}>{exporting ? 'Đang xuất...' : 'Xuất báo cáo CSV'}</Button><Link to="/admin/finance/users"><Button variant="outline">Tra cứu người dùng</Button></Link></div>} />
     <form className="mb-5 flex flex-wrap items-end gap-3" onSubmit={submit}>
       <Field label="Từ ngày" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
       <Field label="Đến ngày" type="date" value={to} onChange={(event) => setTo(event.target.value)} />

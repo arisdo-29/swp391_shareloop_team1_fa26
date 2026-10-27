@@ -7,7 +7,6 @@ import {
   Skeleton,
   Button,
   ConditionBadge,
-  Icon,
   ItemImage,
   StatusBadge,
   TextArea,
@@ -295,10 +294,7 @@ export function ProductDetail() {
           </div>
           <h1 className="mt-4 text-3xl font-bold leading-tight sm:text-4xl">{item.title}</h1>
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-text-muted">
-            <span className="inline-flex items-center gap-1.5">
-              <Icon name="location" className="size-4" />
-              {item.district}
-            </span>
+            <span>{item.district}</span>
             <span>{item.category}</span>
             <span>Đăng {new Date(item.postedAt).toLocaleDateString('vi-VN')}</span>
           </div>
@@ -387,7 +383,6 @@ export function ProductDetail() {
               <Button
                 className="mt-3 w-full"
                 variant="ghost"
-                icon="shield"
                 onClick={() => {
                   setReportNotice('');
                   setReportOpen(true);

@@ -61,4 +61,18 @@ export const walletApi = {
     });
     return data;
   },
+  /** Tải hết các trang lịch sử trong khoảng thời gian (mỗi trang 100 dòng, tối đa maxPages trang). */
+  async listAllTransactions(
+    params: Omit<WalletTransactionParams, 'page' | 'size'> = {},
+    maxPages = 20,
+  ): Promise<WalletTransactionResponse[]> {
+    const size = 100;
+    const entries: WalletTransactionResponse[] = [];
+    for (let page = 0; page < maxPages; page += 1) {
+      const response = await walletApi.listTransactions({ ...params, page, size });
+      entries.push(...response.items);
+      if (entries.length >= response.totalElements || response.items.length < size) break;
+    }
+    return entries;
+  },
 };

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type Dispatch } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
-import { Alert, Button, Field, Icon, PageHeader, StatusBadge } from '../../components/ui';
+import { Alert, Button, Field, PageHeader, StatusBadge } from '../../components/ui';
 import {
   CreditHistorySection,
   CreditTransactionDetail,
@@ -16,8 +16,10 @@ import {
   endOfDayIso,
   itemTitleOf,
   startOfDayIso,
+  summarizeCreditHistory,
   toCreditHistory,
   userHistoryTabs,
+  type CreditHistorySummary,
 } from '../../utils/creditHistory';
 import type { CreditHistory } from '../../types/domain';
 import { formatCredit, formatVnd } from '../../utils/formatting';
@@ -87,6 +89,7 @@ export function Credit() {
   const [toDate, setToDate] = useState('');
   const [historyPage, setHistoryPage] = useState(0);
   const [historyTotal, setHistoryTotal] = useState(0);
+  const [historySummary, setHistorySummary] = useState<CreditHistorySummary | null>(null);
   const [itemTitles, setItemTitles] = useState<Map<string, string>>(() => new Map());
   const [heldFees, setHeldFees] = useState<HeldFeeItem[]>([]);
   const [heldFeesLoading, setHeldFeesLoading] = useState(true);
@@ -176,6 +179,27 @@ export function Credit() {
       active = false;
     };
   }, [historyReloadKey, user.id, fromDate, toDate, historyPage, dateRangeError]);
+
+  // Tổng nạp, chi, hoàn trong khoảng ngày đang lọc: tải đủ mọi trang rồi cộng lại để hiển thị.
+  useEffect(() => {
+    if (dateRangeError) return;
+    let active = true;
+    setHistorySummary(null);
+    walletApi
+      .listAllTransactions({
+        from: fromDate ? startOfDayIso(fromDate) : undefined,
+        to: toDate ? endOfDayIso(toDate) : undefined,
+      })
+      .then((entries) => {
+        if (active) setHistorySummary(summarizeCreditHistory(entries.map((entry) => toCreditHistory(entry, user.id))));
+      })
+      .catch(() => {
+        if (active) setHistorySummary(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [historyReloadKey, user.id, fromDate, toDate, dateRangeError]);
 
   // Đổi bộ lọc ngày thì quay về trang đầu.
   const changeDateRange = (nextFrom: string, nextTo: string) => {
@@ -313,10 +337,7 @@ export function Credit() {
         </div>
       ) : null}
       {completedCredits !== null ? (
-        <div className="mb-6 flex items-start gap-3 rounded-lg border border-success/20 bg-success-soft px-4 py-3 text-success">
-          <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-white">
-            <Icon name="check" className="size-4" weight="bold" />
-          </span>
+        <div className="mb-6 rounded-lg border border-success/20 bg-success-soft px-4 py-3 text-success">
           <div>
             <p className="text-sm font-bold">Nạp thành công +{completedCredits} Credit</p>
             <p className="mt-0.5 text-xs leading-5">Số dư ví đã được cập nhật từ hệ thống.</p>
@@ -327,10 +348,7 @@ export function Credit() {
       <section className="overflow-hidden rounded-xl bg-primary text-white shadow-lg">
         <div className="grid gap-8 px-6 py-7 sm:px-8 md:grid-cols-[1fr_auto] md:items-end lg:px-10 lg:py-9">
           <div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-white/85">
-              <Icon name="wallet" className="size-4" />
-              Số dư Credit
-            </div>
+            <p className="text-xs font-semibold text-white/85">Số dư Credit</p>
             <div className="mt-3 text-4xl font-bold tabular-nums sm:text-5xl">
               {wallet ? formatCredit(wallet.creditBalance) : '--'}
             </div>
@@ -427,6 +445,7 @@ export function Credit() {
         onTabChange={setHistoryTab}
         onSelect={setSelectedEntry}
         unavailable={false}
+        summary={<CreditSummary summary={historySummary} held={wallet?.heldCredit ?? null} />}
         dateFilter={
           <HistoryDateFilter
             fromDate={fromDate}
@@ -446,6 +465,37 @@ export function Credit() {
           relatedItemTitle={selectedItemTitle}
         />
       ) : null}
+    </div>
+  );
+}
+
+/** Bốn ô tổng của khoảng ngày đang lọc. "Đang giữ" là số hiện tại của ví, không theo khoảng ngày. */
+function CreditSummary({ summary, held }: { summary: CreditHistorySummary | null; held: number | null }) {
+  const show = (value: number, sign: '+' | '-' | '') =>
+    summary === null ? '--' : `${value > 0 ? sign : ''}${formatCredit(value)}`;
+  const cells: Array<[string, string, string]> = [
+    ['Đã nạp', show(summary?.toppedUp ?? 0, '+'), 'text-success'],
+    ['Đã chi', show(summary?.spent ?? 0, '-'), 'text-error'],
+    ['Được hoàn', show(summary?.refunded ?? 0, '+'), 'text-text-primary'],
+    ['Đang giữ', held === null ? '--' : formatCredit(held), 'text-warning'],
+  ];
+  return (
+    <div className="mt-4">
+      <dl className="grid grid-cols-2 overflow-hidden rounded-lg bg-white ring-1 ring-border/80 sm:grid-cols-4">
+        {cells.map(([label, value, tone], index) => (
+          <div key={label} className={`px-4 py-3 ${index > 0 ? 'border-border/70 sm:border-l' : ''} ${index > 1 ? 'border-t sm:border-t-0' : ''}`}>
+            <dt className="text-xs font-medium text-text-muted">{label}</dt>
+            <dd className={`mt-1 text-lg font-bold tabular-nums ${tone}`}>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {summary && summary.adjusted !== 0 ? (
+        <p className="mt-2 text-xs text-text-muted">
+          Admin điều chỉnh trong khoảng này: {summary.adjusted > 0 ? '+' : ''}
+          {formatCredit(summary.adjusted)} Credit.
+        </p>
+      ) : null}
+      <p className="mt-2 text-xs text-text-muted">Tổng tính theo khoảng ngày đang chọn. Đang giữ là số hiện tại của ví.</p>
     </div>
   );
 }
@@ -541,11 +591,11 @@ function ApiTopUpOrder({
     <div className="rounded-xl bg-white px-5 py-8 ring-1 ring-border/80 sm:px-8">
       <div className="mx-auto max-w-2xl text-center">
         <span
-          className={`mx-auto grid size-14 place-items-center rounded-lg ${paid ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}
+          className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${paid ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}
         >
-          <Icon name={paid ? 'check' : 'history'} className="size-7" />
+          {paymentStatusLabels[order.status]}
         </span>
-        <h2 className="mt-5 text-2xl font-bold">
+        <h2 className="mt-4 text-2xl font-bold">
           {paid ? 'Nạp Credit thành công' : 'Đơn nạp Credit đã được tạo'}
         </h2>
         <p className="mt-2 text-sm leading-6 text-text-muted">

@@ -7,7 +7,6 @@ import {
   Button,
   ConditionBadge,
   EmptyState,
-  Icon,
   ItemImage,
   SearchField,
   TypeBadge,
@@ -23,22 +22,18 @@ import { HomeLifecycle, HomeProcess } from './HomeCommunity';
 import { HomeDiscoveryRail, HomeMotion } from './HomeMotion';
 import browseSuggestionBox from '../../assets/browse-suggestion-box.png';
 import './home-content.css';
-const categoryIcons = ['device', 'chair', 'book', 'shirt', 'package', 'star', 'ai', 'edit'];
 const aiSuggestions = [
   {
     title: 'Đèn bàn để đọc sách',
     description: 'Tìm ánh sáng phù hợp cho góc đọc sách.',
-    icon: 'chair',
   },
   {
     title: 'Sách cho cuối tuần',
     description: 'Khám phá những cuốn sách đang được sẻ chia.',
-    icon: 'book',
   },
   {
     title: 'Đồ dùng góc học tập',
     description: 'Bổ sung món đồ hữu ích cho góc học tập.',
-    icon: 'package',
   },
 ] as const;
 const newItemFilters: Array<{ value: 'all' | ItemType; label: string }> = [
@@ -103,10 +98,9 @@ function SectionHeading({
       {href ? (
         <Link
           to={href}
-          className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-primary transition hover:text-primary-hover"
+          className="shrink-0 text-sm font-semibold text-primary transition hover:text-primary-hover"
         >
           {linkLabel}
-          <Icon name="arrow" className="size-4" />
         </Link>
       ) : null}
     </div>
@@ -162,8 +156,10 @@ function HomeProductCard({
           <span className="min-w-0 truncate">{owner.name}</span>
         </p>
       ) : null}
-        <div className="home-product-card-footer"><span><Icon name="location" className="size-4" />{item.district}</span>{owner ? <span><Icon name="star" className="size-4 text-warning" weight="fill" />{owner.reputationStars}</span> : null}</div>
-        <span className="home-product-card-link">Xem chi tiết <Icon name="arrow" className="size-3.5" /></span>
+        <div className="home-product-card-footer">
+          <span>{item.district}</span>
+          {owner ? <span>{owner.reputationStars ? `${owner.reputationStars.toLocaleString('vi-VN')} sao` : 'Chưa có đánh giá'}</span> : null}
+        </div>
       </div>
     </Link>
   );
@@ -287,8 +283,7 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
               <h2 className="mt-2 line-clamp-2 text-xl font-extrabold leading-tight text-white sm:text-2xl">
                 {activeItem.title}
               </h2>
-              <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-white/80 sm:text-sm">
-                <Icon name="location" className="size-4" />
+              <p className="mt-2 text-xs font-medium text-white/80 sm:text-sm">
                 {activeItem.district}
               </p>
             </div>
@@ -528,13 +523,10 @@ export function Home() {
         <HomeSection className="home-band home-categories-band">
           <SectionHeading title="Khám phá theo danh mục" description="Tìm nhanh những món đồ đang được chia sẻ trong cộng đồng." href="/browse" />
           <HomeDiscoveryRail label="Khám phá theo danh mục" variant="categories">
-            {categories.map((category, index) => {
+            {categories.map((category) => {
               const categoryItems = approved.filter((item) => item.categoryId === category.id);
               return (
                 <Link key={category.id} to={categoryBrowsePath(category.id)} className="home-category group">
-                  <span className="home-category-icon">
-                    <Icon name={categoryIcons[index % categoryIcons.length]} />
-                  </span>
                   <span className="home-category-label">{category.name}</span>
                   <span className="home-category-count">{categoryItems.length} món đồ</span>
                 </Link>
@@ -599,7 +591,7 @@ export function Home() {
           <div className="home-district-panel" aria-label="Khám phá quanh quận của bạn">
             {districtCounts.map(({ name, id, count }) => (
               <Link key={id} to={`/browse?district=${id}`} className="home-district">
-                <Icon name="location" className="size-6" /><h3>{name}</h3><span>{count} món đang có</span>
+                <h3>{name}</h3><span>{count} món đang có</span>
               </Link>
             ))}
           </div>
@@ -612,7 +604,6 @@ export function Home() {
             <div className="home-ai home-suggestion-feature" aria-labelledby="home-suggestion-title">
               <div className="home-suggestion-copy">
                 <span className="home-suggestion-eyebrow">
-                  <Icon name="ai" className="size-4" weight="fill" />
                   Gợi ý từ LoopAI
                 </span>
                 <h2 id="home-suggestion-title">Bạn đang tìm món gì?</h2>
@@ -624,9 +615,6 @@ export function Home() {
                     const suggestion = aiSuggestions[index];
                     return (
                       <Link key={item.id} to="/ai">
-                        <span className="home-suggestion-card-icon">
-                          <Icon name={suggestion.icon} className="size-5" weight="duotone" />
-                        </span>
                         <span className="home-suggestion-card-copy">
                           <strong>{suggestion.title}</strong>
                           <span>{suggestion.description}</span>
@@ -658,11 +646,11 @@ export function Home() {
               </div>
               <div className="flex flex-wrap items-center gap-5">
                 {currentUser ? (
-                  <Link to="/post" className="home-final-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-primary transition"><Icon name="add" className="size-[18px]" weight="bold" />Đăng món đồ</Link>
+                  <Link to="/post" className="home-final-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-primary transition">Đăng món đồ</Link>
                 ) : (
-                  <button type="button" onClick={() => setLoginPromptOpen(true)} className="home-final-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-primary transition"><Icon name="add" className="size-[18px]" weight="bold" />Đăng món đồ</button>
+                  <button type="button" onClick={() => setLoginPromptOpen(true)} className="home-final-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-primary transition">Đăng món đồ</button>
                 )}
-                <Link to="/browse" className="inline-flex items-center gap-2 text-sm font-bold text-primary">Tìm đồ <Icon name="arrow" className="size-4" /></Link>
+                <Link to="/browse" className="text-sm font-bold text-primary">Tìm đồ</Link>
               </div>
             </div>
           </HomeSection>

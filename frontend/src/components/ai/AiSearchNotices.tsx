@@ -1,4 +1,4 @@
-import { Alert, Icon } from '../ui';
+import { Alert } from '../ui';
 
 export interface AiSearchNoticesProps {
   remainingFreeSearches: number | null;
@@ -13,10 +13,7 @@ export function AiSearchNotices({
 }: AiSearchNoticesProps) {
   return (
     <div className="space-y-3" aria-live="polite">
-      <div className="flex items-start gap-3 rounded-lg bg-primary-faint px-4 py-3 text-sm text-text-secondary">
-        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-white text-primary">
-          <Icon name={remainingFreeSearches && remainingFreeSearches > 0 ? 'gift' : 'wallet'} className="size-4" />
-        </span>
+      <div className="rounded-lg bg-primary-faint px-4 py-3 text-sm text-text-secondary">
         <div>
           <p className="font-bold text-text-primary">Hạn mức tìm kiếm</p>
           <p className="mt-0.5 leading-5">

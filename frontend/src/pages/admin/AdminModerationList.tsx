@@ -126,7 +126,6 @@ export function AdminModerationList() {
         </div>
       ) : (
         <EmptyState
-          icon="shield"
           title={query ? 'Không tìm thấy bài phù hợp' : 'Không có bài chờ duyệt'}
           text={query ? 'Hãy thử từ khóa khác.' : 'Hiện chưa có bài đăng nào trong hàng chờ.'}
         />

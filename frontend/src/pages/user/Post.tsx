@@ -4,7 +4,7 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import { Alert, Button, Field, Icon, ItemImage, PageHeader, Select, TextArea } from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
-import { CONDITIONS } from '../../constants/domain';
+import { CONDITIONS, ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import type { ItemCondition, ItemType } from '../../types/domain';
 import { fileToDataUrl } from '../../utils/files';
@@ -35,8 +35,6 @@ const MODERATION_BLOCKED_TITLE = 'Bài đăng chưa đáp ứng quy định';
 const BACKEND_SESSION_REQUIRED = 'Vui lòng đăng nhập bằng tài khoản thật để đăng bài.';
 const SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST =
   import.meta.env.DEV && import.meta.env.VITE_POST_SKIP_MEDIA_UPLOAD === 'true';
-const ITEM_IMAGES_MIN = 3;
-const ITEM_IMAGES_MAX = 8;
 
 const CONDITION_TO_API: Record<ItemCondition, ApiCondition> = {
   NEW: 'NEW',
@@ -566,8 +564,7 @@ export function Post() {
         </section>
         <aside className="space-y-4">
           <label className={`flex aspect-[4/3] w-full flex-col items-center justify-center rounded-lg border border-dashed bg-white text-center transition hover:border-primary ${errors.images ? 'border-error' : 'border-border'}`}>
-            <Icon name="image" className="size-8 text-primary" />
-            <strong className="mt-3 text-sm">Thêm hình ảnh</strong>
+            <strong className="text-sm text-primary">Thêm hình ảnh</strong>
             <span className="mt-1 text-xs text-text-muted">
               Từ {ITEM_IMAGES_MIN} đến {ITEM_IMAGES_MAX} ảnh · thứ tự chọn là thứ tự hiển thị
             </span>
@@ -633,8 +630,8 @@ export function Post() {
                     className="aspect-square rounded-md object-cover"
                   />
                   <div className="absolute bottom-1 left-1 right-1 flex justify-between gap-1">
-                    <button type="button" className="grid size-9 place-items-center rounded-md bg-white text-xs shadow-sm transition hover:bg-primary-faint disabled:opacity-40" aria-label={`Đưa ảnh ${index + 1} về trước`} disabled={index === 0 || submitting || mediaUploading} onClick={() => moveImage(index, -1)}>←</button>
-                    <button type="button" className="grid size-9 place-items-center rounded-md bg-white text-xs shadow-sm transition hover:bg-primary-faint disabled:opacity-40" aria-label={`Đưa ảnh ${index + 1} ra sau`} disabled={index === images.length - 1 || submitting || mediaUploading} onClick={() => moveImage(index, 1)}>→</button>
+                    <button type="button" className="min-h-9 rounded-md bg-white px-2 text-xs font-semibold shadow-sm transition hover:bg-primary-faint disabled:opacity-40" aria-label={`Đưa ảnh ${index + 1} về trước`} disabled={index === 0 || submitting || mediaUploading} onClick={() => moveImage(index, -1)}>Trước</button>
+                    <button type="button" className="min-h-9 rounded-md bg-white px-2 text-xs font-semibold shadow-sm transition hover:bg-primary-faint disabled:opacity-40" aria-label={`Đưa ảnh ${index + 1} ra sau`} disabled={index === images.length - 1 || submitting || mediaUploading} onClick={() => moveImage(index, 1)}>Sau</button>
                   </div>
                   <button
                     type="button"

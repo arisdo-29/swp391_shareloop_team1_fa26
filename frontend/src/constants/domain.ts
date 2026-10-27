@@ -60,3 +60,7 @@ export const ADMIN_ROUTES = [
   '/admin/settings/ranks',
   '/admin/audit-logs',
 ] as const;
+
+/** Số ảnh thật bắt buộc cho mỗi bài đăng (giống kiểm tra của backend khi tạo và sửa bài). */
+export const ITEM_IMAGES_MIN = 3;
+export const ITEM_IMAGES_MAX = 8;

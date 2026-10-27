@@ -69,13 +69,14 @@ afterEach(() => {
 });
 
 describe('đăng nhập Admin', () => {
-  it('bỏ icon tái sử dụng ở phần giới thiệu và banner nhưng giữ icon môi trường', () => {
+  it('hiển thị biểu mẫu gọn với tab chuyển sang tạo tài khoản', () => {
     const { container } = renderLogin();
 
-    expect(container.querySelector('.login-welcome__eyebrow-icon')).toBeNull();
-    expect(container.querySelector('.login-welcome__story-mark')).toBeNull();
-    const environmentCard = screen.getByRole('heading', { name: 'Bảo vệ môi trường' }).closest('article');
-    expect(environmentCard?.querySelector('svg')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Chào bạn quay lại' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Tạo tài khoản' }).getAttribute('href')).toBe('/register');
+    expect(screen.getByRole('link', { name: 'ShareLoop hoạt động thế nào?' }).getAttribute('href')).toBe('/about');
+    // Chỉ còn icon hiện/ẩn mật khẩu, không còn icon trang trí.
+    expect(container.querySelectorAll('svg')).toHaveLength(1);
   });
 
   it('xác thực, dispatch Redux rồi điều hướng tới Dashboard', async () => {

@@ -3287,3 +3287,24 @@
     transition: none;
   }
 }
+
+/* Nút cuộn danh mục dùng chữ "Trước" / "Tiếp" thay cho mũi tên. */
+.home-content .home-discovery-controls button {
+  width: auto;
+  min-width: 56px;
+  padding-inline: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Thẻ danh mục không còn icon: tên ở trên, số món nằm sát đáy thẻ. */
+.home-content .home-rail-categories .home-category {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 120px;
+  padding: 14px;
+}
+.home-content .home-rail-categories .home-category-count {
+  margin-top: auto;
+}

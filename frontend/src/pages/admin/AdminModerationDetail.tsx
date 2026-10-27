@@ -134,7 +134,7 @@ export function AdminModerationDetail() {
 
   const backLink = (
     <Link to="/admin/moderation">
-      <Button variant="outline" icon="arrow">
+      <Button variant="outline">
         Về danh sách
       </Button>
     </Link>

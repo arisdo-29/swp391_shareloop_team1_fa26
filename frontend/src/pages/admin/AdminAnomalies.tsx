@@ -73,7 +73,6 @@ export function AdminAnomalies() {
         <SkeletonRows label="Đang tải cảnh báo" />
       ) : report && report.repeatedPairs.length === 0 ? (
         <EmptyState
-          icon="activity"
           title="Chưa có cảnh báo nào"
           text="Hiện không có cặp người dùng nào vượt ngưỡng giao dịch lặp."
         />
