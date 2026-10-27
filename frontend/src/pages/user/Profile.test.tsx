@@ -30,8 +30,9 @@ vi.mock('../../services/catalogApi', () => ({
   catalogApi: { areas: vi.fn() },
 }));
 
-vi.mock('../../services/reputationApi', () => ({
-  reputationApi: { getMyReputation: vi.fn() },
+vi.mock('../../services/reputationApi', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../services/reputationApi')>()),
+  reputationApi: { getMyReputation: vi.fn(), listAllPointHistory: vi.fn() },
 }));
 
 function buildUser(role: User['role']): User {
@@ -70,6 +71,7 @@ beforeEach(() => {
   } as Awaited<ReturnType<typeof userApi.getMe>>);
   vi.mocked(catalogApi.areas).mockResolvedValue([]);
   vi.mocked(reputationApi.getMyReputation).mockResolvedValue(buildReputation());
+  vi.mocked(reputationApi.listAllPointHistory).mockResolvedValue([]);
 });
 
 afterEach(() => {

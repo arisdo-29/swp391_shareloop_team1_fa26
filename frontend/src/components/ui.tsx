@@ -7,122 +7,54 @@ import type {
 } from 'react';
 import { useEffect, useId, useState } from 'react';
 import type { IconWeight } from '@phosphor-icons/react';
-import { MagnifyingGlass } from '@phosphor-icons/react/dist/csr/MagnifyingGlass';
-import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
-import { Wallet } from '@phosphor-icons/react/dist/csr/Wallet';
-import { MapPin } from '@phosphor-icons/react/dist/csr/MapPin';
-import { Star } from '@phosphor-icons/react/dist/csr/Star';
-import { Package } from '@phosphor-icons/react/dist/csr/Package';
-import { CalendarBlank } from '@phosphor-icons/react/dist/csr/CalendarBlank';
-import { PaperPlaneTilt } from '@phosphor-icons/react/dist/csr/PaperPlaneTilt';
-import { List } from '@phosphor-icons/react/dist/csr/List';
 import { X } from '@phosphor-icons/react/dist/csr/X';
+import { List } from '@phosphor-icons/react/dist/csr/List';
 import { Eye } from '@phosphor-icons/react/dist/csr/Eye';
 import { EyeSlash } from '@phosphor-icons/react/dist/csr/EyeSlash';
 import { CaretDown } from '@phosphor-icons/react/dist/csr/CaretDown';
-import { House } from '@phosphor-icons/react/dist/csr/House';
-import { ArrowsClockwise } from '@phosphor-icons/react/dist/csr/ArrowsClockwise';
-import { Sparkle } from '@phosphor-icons/react/dist/csr/Sparkle';
-import { DeviceMobile } from '@phosphor-icons/react/dist/csr/DeviceMobile';
-import { Chair } from '@phosphor-icons/react/dist/csr/Chair';
-import { BookOpen } from '@phosphor-icons/react/dist/csr/BookOpen';
-import { TShirt } from '@phosphor-icons/react/dist/csr/TShirt';
-import { ChatCircleDots } from '@phosphor-icons/react/dist/csr/ChatCircleDots';
 import { Bell } from '@phosphor-icons/react/dist/csr/Bell';
-import { SquaresFour } from '@phosphor-icons/react/dist/csr/SquaresFour';
-import { SignOut } from '@phosphor-icons/react/dist/csr/SignOut';
 import { UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
-import { PencilSimple } from '@phosphor-icons/react/dist/csr/PencilSimple';
-import { Trash } from '@phosphor-icons/react/dist/csr/Trash';
-import { ArrowClockwise } from '@phosphor-icons/react/dist/csr/ArrowClockwise';
 import { Image } from '@phosphor-icons/react/dist/csr/Image';
-import { VideoCamera } from '@phosphor-icons/react/dist/csr/VideoCamera';
-import { Check } from '@phosphor-icons/react/dist/csr/Check';
-import { ShieldCheck } from '@phosphor-icons/react/dist/csr/ShieldCheck';
-import { Funnel } from '@phosphor-icons/react/dist/csr/Funnel';
-import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
-import { Files } from '@phosphor-icons/react/dist/csr/Files';
-import { Users } from '@phosphor-icons/react/dist/csr/Users';
-import { ArrowsLeftRight } from '@phosphor-icons/react/dist/csr/ArrowsLeftRight';
-import { Coins } from '@phosphor-icons/react/dist/csr/Coins';
-import { GearSix } from '@phosphor-icons/react/dist/csr/GearSix';
-import { ClockCounterClockwise } from '@phosphor-icons/react/dist/csr/ClockCounterClockwise';
-import { DownloadSimple } from '@phosphor-icons/react/dist/csr/DownloadSimple';
-import { Circle } from '@phosphor-icons/react/dist/csr/Circle';
 import { Link } from 'react-router-dom';
 import type { Item, ItemCondition, ItemType, TransactionStatus, User } from '../types/domain';
 import { conditionLabel, txLabel } from '../utils/formatting';
 import { resolveMediaUrl } from '../services/mediaUrl';
 
+// Chỉ giữ icon có chức năng (đóng, mở menu, hiện mật khẩu, mở danh sách, thông báo, đính kèm ảnh).
+// Icon trang trí như mũi tên, kính lúp, dấu cộng đã bỏ: nút và nhãn dùng chữ.
 const iconMap = {
-  search: MagnifyingGlass,
-  add: Plus,
-  wallet: Wallet,
-  location: MapPin,
-  star: Star,
-  box: Package,
-  calendar: CalendarBlank,
-  send: PaperPlaneTilt,
-  menu: List,
   close: X,
+  menu: List,
   eye: Eye,
   eyeSlash: EyeSlash,
   chevronDown: CaretDown,
-  home: House,
-  browse: MagnifyingGlass,
-  activity: ArrowsClockwise,
-  ai: Sparkle,
-  device: DeviceMobile,
-  chair: Chair,
-  book: BookOpen,
-  shirt: TShirt,
-  package: Package,
-  messages: ChatCircleDots,
   bell: Bell,
-  admin: SquaresFour,
-  logout: SignOut,
   user: UserCircle,
-  edit: PencilSimple,
-  trash: Trash,
-  renew: ArrowClockwise,
   image: Image,
-  video: VideoCamera,
-  check: Check,
-  shield: ShieldCheck,
-  filter: Funnel,
-  arrow: ArrowRight,
-  dashboard: SquaresFour,
-  article: Files,
-  group: Users,
-  transaction: ArrowsLeftRight,
-  payments: Coins,
-  settings: GearSix,
-  history: ClockCounterClockwise,
-  download: DownloadSimple,
 } as const;
+
+export type IconName = keyof typeof iconMap;
 
 export function Icon({
   name,
   className = '',
   weight = 'regular',
 }: {
-  name: keyof typeof iconMap | string;
+  name: IconName;
   className?: string;
   weight?: IconWeight;
 }) {
-  const Glyph = iconMap[name as keyof typeof iconMap] ?? Circle;
+  const Glyph = iconMap[name];
   return <Glyph aria-hidden className={className} weight={weight} />;
 }
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
-  icon?: keyof typeof iconMap;
 };
 export function Button({
   variant = 'primary',
   size = 'md',
-  icon,
   children,
   className = '',
   ...props
@@ -149,7 +81,6 @@ export function Button({
       className={`inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap border font-semibold transition duration-200 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 ${variants[variant]} ${sizes[size]} ${className}`}
       {...props}
     >
-      {icon ? <Icon name={icon} className="size-[18px]" weight="bold" /> : null}
       {children}
     </button>
   );
@@ -160,7 +91,7 @@ export function IconButton({
   label,
   className = '',
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { icon: keyof typeof iconMap; label: string }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { icon: IconName; label: string }) {
   return (
     <button
       aria-label={label}
@@ -265,8 +196,7 @@ export function Select(
 export function SearchField(props: InputHTMLAttributes<HTMLInputElement>) {
   // Vòng focus vẽ ở khung ngoài (focus-within) nên ô input bên trong không cần viền riêng.
   return (
-    <div className="flex min-h-11 items-center rounded-md border border-border bg-white px-3 transition hover:border-text-muted focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/25">
-      <Icon name="search" className="size-5 text-text-muted" />
+    <div className="flex min-h-11 items-center rounded-md border border-border bg-white px-1 transition hover:border-text-muted focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/25">
       <input
         className="w-full border-0 bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-text-muted"
         {...props}
@@ -278,7 +208,7 @@ export function SearchField(props: InputHTMLAttributes<HTMLInputElement>) {
 export function TypeBadge({ type }: { type: ItemType }) {
   return (
     <span
-      className={`inline-flex items-center rounded-sm px-2 py-1 text-2xs font-bold ${type === 'gift' ? 'bg-primary-soft text-primary' : 'bg-secondary-soft text-secondary'}`}
+      className={`inline-flex items-center rounded-sm px-2 py-1 text-2xs font-bold ${type === 'gift' ? 'bg-primary-soft text-primary' : 'bg-secondary-soft text-secondary-hover'}`}
     >
       {type === 'gift' ? 'Cho tặng' : 'Trao đổi'}
     </span>
@@ -286,7 +216,7 @@ export function TypeBadge({ type }: { type: ItemType }) {
 }
 export function ConditionBadge({ condition }: { condition: ItemCondition }) {
   return (
-    <span className="inline-flex rounded-sm bg-surface-low px-2 py-1 text-2xs font-medium text-text-secondary">
+    <span className="inline-flex shrink-0 whitespace-nowrap rounded-sm bg-surface-low px-2 py-1 text-2xs font-medium text-text-secondary">
       {conditionLabel[condition]}
     </span>
   );
@@ -349,22 +279,17 @@ export function RankBadge({ rank }: { rank: string }) {
 }
 
 export function EmptyState({
-  icon = 'box',
   title,
   text,
   action,
 }: {
-  icon?: keyof typeof iconMap;
   title: string;
   text: string;
   action?: ReactNode;
 }) {
   return (
     <div className="rounded-lg border border-dashed border-border bg-white px-6 py-12 text-center">
-      <span className="mx-auto flex size-12 items-center justify-center rounded-lg bg-surface-low text-text-muted">
-        <Icon name={icon} className="size-6" />
-      </span>
-      <h3 className="mt-4 text-base font-bold">{title}</h3>
+      <h3 className="text-base font-bold">{title}</h3>
       <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-text-muted">{text}</p>
       {action ? <div className="mt-5">{action}</div> : null}
     </div>
@@ -386,6 +311,16 @@ export function LoadingState() {
         </div>
       ))}
     </div>
+  );
+}
+
+/** Vòng xoay chờ nhỏ, thay cho icon mũi tên quay. */
+export function Spinner({ className = 'size-5' }: { className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={`inline-block shrink-0 animate-spin rounded-full border-2 border-current border-r-transparent ${className}`}
+    />
   );
 }
 
@@ -438,8 +373,8 @@ export function ItemImage({
       onError={() => setFailedSrc(imageSrc)}
     />
   ) : (
-    <div role="img" aria-label={alt} className={`grid place-items-center bg-surface-container text-text-muted ${className}`}>
-      <Icon name="image" className="size-6" />
+    <div role="img" aria-label={alt} className={`grid place-items-center bg-surface-container text-xs font-medium text-text-muted ${className}`}>
+      Chưa có ảnh
     </div>
   );
 }
@@ -497,21 +432,13 @@ export function ProductCard({ item, owner }: { item: Item; owner?: User }) {
           </div>
         ) : null}
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-3 text-xs text-text-muted">
-          <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
-            <Icon name="location" className="size-4 shrink-0" />
-            {item.district}
-          </span>
+          <span className="min-w-0 truncate">{item.district}</span>
           {owner ? (
-            <span className="inline-flex shrink-0 items-center gap-1">
-              <Icon name="star" className="size-4 text-warning" weight="fill" />
-              {owner.reputationStars}
+            <span className="shrink-0 font-semibold text-text-secondary">
+              {owner.reputationStars ? `${owner.reputationStars.toLocaleString('vi-VN')} sao` : 'Chưa có đánh giá'}
             </span>
           ) : null}
         </div>
-        <span className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-primary transition group-hover:text-primary-hover">
-          Xem chi tiết
-          <Icon name="arrow" className="size-3.5" />
-        </span>
       </div>
     </Link>
   );
@@ -555,9 +482,8 @@ export function OwnerCard({ owner }: { owner: User }) {
       </div>
       <div className="mt-4 flex items-center justify-between">
         <RankBadge rank={owner.rank} />
-        <span className="inline-flex items-center gap-1 text-sm font-bold text-warning">
-          <Icon name="star" className="size-4" weight="fill" />
-          {owner.reputationStars}
+        <span className="text-sm font-bold text-text-secondary">
+          {owner.reputationStars ? `${owner.reputationStars.toLocaleString('vi-VN')} sao` : 'Chưa có đánh giá'}
         </span>
       </div>
     </div>

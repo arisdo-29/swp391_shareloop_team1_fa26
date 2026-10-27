@@ -260,9 +260,9 @@ export function Browse() {
 
   const filters = (
     <>
-      <div className="flex h-11 items-center rounded-xl border border-border bg-white px-3 transition hover:border-primary/40 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/25">
-        <Icon name="search" className="size-4 shrink-0 text-text-muted" />
+      <div className="flex h-11 items-center rounded-xl border border-border bg-white px-1 transition hover:border-primary/40 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/25">
         <input
+          aria-label="Tìm tên món đồ"
           value={q}
           onChange={(e) => {
             setFilter('q', e.target.value);
@@ -289,7 +289,6 @@ export function Browse() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
         <FilterSelect
           label="Hình thức"
-          icon="transaction"
           value={type}
           onChange={(e) => setFilter('type', e.target.value)}
         >
@@ -299,7 +298,6 @@ export function Browse() {
         </FilterSelect>
         <FilterSelect
           label="Danh mục"
-          icon="package"
           value={category}
           title={categories.find((entry) => entry.id === categoryId)?.name}
           onChange={(e) => {
@@ -320,7 +318,6 @@ export function Browse() {
         ) : null}
         <FilterSelect
           label="Tình trạng"
-          icon="check"
           value={condition}
           onChange={(e) => setFilter('condition', e.target.value)}
         >
@@ -333,7 +330,6 @@ export function Browse() {
         </FilterSelect>
         <FilterSelect
           label="Khu vực"
-          icon="location"
           value={district}
           onChange={(e) => {
             setFilter('district', e.target.value);
@@ -382,7 +378,6 @@ export function Browse() {
         <div className="browse-mobile-filter">
           <Button
             variant="outline"
-            icon="filter"
             onClick={() => setMobileFilters(!mobileFilters)}
             aria-expanded={mobileFilters}
             aria-controls="browse-filters"
@@ -397,12 +392,7 @@ export function Browse() {
             className={`browse-filters ${mobileFilters ? 'is-open' : ''}`}
           >
             <div className="browse-filters__header">
-              <div className="browse-filters__title">
-                <span>
-                  <Icon name="filter" className="size-4" weight="bold" />
-                </span>
-                Bộ lọc
-              </div>
+              <div className="browse-filters__title">Bộ lọc</div>
               <button type="button" onClick={reset} className="browse-filter-reset">
                 Đặt lại
               </button>
@@ -436,7 +426,7 @@ export function Browse() {
                     aria-pressed={viewMode === 'grid'}
                     onClick={() => setViewMode('grid')}
                   >
-                    <Icon name="dashboard" className="size-[18px]" />
+                    Lưới
                   </button>
                   <button
                     type="button"
@@ -445,7 +435,7 @@ export function Browse() {
                     aria-pressed={viewMode === 'list'}
                     onClick={() => setViewMode('list')}
                   >
-                    <Icon name="menu" className="size-[18px]" />
+                    Danh sách
                   </button>
                 </div>
               </div>
@@ -528,14 +518,7 @@ const BrowseProductCard = memo(function BrowseProductCard({ item }: { item: Item
           <span title={item.category}>{item.category}</span>
         </div>
         <div className="browse-product-card__footer">
-          <span>
-            <Icon name="location" className="size-4" />
-            {item.district}
-          </span>
-          <span className="browse-product-card__link">
-            Xem chi tiết
-            <Icon name="arrow" className="size-3.5" />
-          </span>
+          <span>{item.district}</span>
         </div>
       </div>
     </Link>
@@ -544,17 +527,13 @@ const BrowseProductCard = memo(function BrowseProductCard({ item }: { item: Item
 
 function FilterSelect({
   label,
-  icon,
   children,
   className = '',
   ...props
-}: SelectHTMLAttributes<HTMLSelectElement> & { label: string; icon: string; children: ReactNode }) {
+}: SelectHTMLAttributes<HTMLSelectElement> & { label: string; children: ReactNode }) {
   return (
     <label className="browse-filter-field">
-      <span className="browse-filter-field__label">
-        <Icon name={icon} className="size-3.5" weight="bold" />
-        {label}
-      </span>
+      <span className="browse-filter-field__label">{label}</span>
       <span className="relative block">
         <select
           className={`browse-filter-field__select ${className}`}

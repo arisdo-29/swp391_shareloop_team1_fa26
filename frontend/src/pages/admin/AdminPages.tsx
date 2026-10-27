@@ -200,7 +200,7 @@ export function AdminAuditLogs() {
       ) : (
         <>
           {logs.length === 0 ? (
-            <EmptyState icon="history" title="Chưa có nhật ký" text="Không có hành động nào phù hợp với bộ lọc hiện tại." />
+            <EmptyState title="Chưa có nhật ký" text="Không có hành động nào phù hợp với bộ lọc hiện tại." />
           ) : (
             <div className="table-wrap">
               <table className="data-table">
@@ -533,7 +533,7 @@ function ApiAdminKeywords() {
   return (
     <Panel
       title="Từ khóa kiểm duyệt"
-      action={<Button icon="add" onClick={() => setEditing('new')}>Thêm từ khóa</Button>}
+      action={<Button onClick={() => setEditing('new')}>Thêm từ khóa</Button>}
     >
       {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
       {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
@@ -623,7 +623,7 @@ function ApiAdminAreas() {
     }
   };
 
-  return <Panel title="Khu vực" description="Quản lý tỉnh, thành phố và khu vực con dùng cho tìm kiếm và đăng bài." action={<Button icon="add" onClick={() => setEditing('new')}>Thêm khu vực</Button>}>
+  return <Panel title="Khu vực" description="Quản lý tỉnh, thành phố và khu vực con dùng cho tìm kiếm và đăng bài." action={<Button onClick={() => setEditing('new')}>Thêm khu vực</Button>}>
     {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
     {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
     {loading ? <EmptyState title="Đang tải khu vực" text="Vui lòng chờ trong giây lát." /> : areas.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Tên</th><th>Khu vực cha</th><th>Cấp</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>{areas.map((area) => <tr key={area.id}><td className="font-semibold">{area.name}</td><td>{areas.find((entry) => entry.id === area.parentId)?.name ?? '—'}</td><td>{area.level === 1 ? 'Thành phố' : area.level === 2 ? 'Quận' : area.level}</td><td>{area.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td className="space-x-2"><Button size="sm" variant="ghost" disabled={savingId === area.id} onClick={() => setEditing(area)}>Sửa</Button><Button size="sm" variant="outline" disabled={savingId === area.id} onClick={() => void toggleActive(area)}>{area.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có khu vực" text="Hiện chưa có khu vực nào." />}
@@ -766,12 +766,12 @@ function ApiAdminChecklist() {
   };
 
   return (
-    <Panel title="Checklist duyệt bài" description="Quản lý và sắp xếp các tiêu chí mà quản trị viên phải xác nhận khi duyệt bài." action={<Button icon="add" disabled={loading || savingId !== null} onClick={() => { setEditingError(''); setEditing('new'); }}>Thêm tiêu chí</Button>}>
+    <Panel title="Checklist duyệt bài" description="Quản lý và sắp xếp các tiêu chí mà quản trị viên phải xác nhận khi duyệt bài." action={<Button disabled={loading || savingId !== null} onClick={() => { setEditingError(''); setEditing('new'); }}>Thêm tiêu chí</Button>}>
       {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
       {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
       {loading ? <SkeletonRows label="Đang tải checklist" /> : entries.length ? (
         <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Tiêu chí</th><th className="whitespace-nowrap">Trạng thái</th><th className="min-w-[430px] whitespace-nowrap">Thao tác</th></tr></thead><tbody>
-          {entries.map((entry, index) => <tr key={entry.id}><td>{index + 1}</td><td className="font-semibold">{entry.question}</td><td className="whitespace-nowrap"><span className={`rounded-sm px-2 py-1 text-xs font-semibold ${entry.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}>{entry.active ? 'Đang hoạt động' : 'Không hoạt động'}</span></td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" variant="ghost" aria-label="Chuyển lên" title="Đưa mục này lên trên một vị trí" disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}><Icon name="arrow" className="size-4 -rotate-90" /></Button><Button className="!px-2 whitespace-nowrap" variant="ghost" aria-label="Chuyển xuống" title="Đưa mục này xuống dưới một vị trí" disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}><Icon name="arrow" className="size-4 rotate-90" /></Button><Button className="!px-2 whitespace-nowrap" variant="outline" title="Chỉnh sửa câu tiêu chí" disabled={savingId !== null} onClick={() => { setEditingError(''); setEditing(entry); }}>Sửa nội dung</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title={entry.active ? 'Không hiển thị mục này khi duyệt bài (không xoá)' : 'Hiển thị lại mục này khi duyệt bài'} disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}
+          {entries.map((entry, index) => <tr key={entry.id}><td>{index + 1}</td><td className="font-semibold">{entry.question}</td><td className="whitespace-nowrap"><span className={`rounded-sm px-2 py-1 text-xs font-semibold ${entry.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}>{entry.active ? 'Đang hoạt động' : 'Không hoạt động'}</span></td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" variant="ghost" title="Đưa mục này lên trên một vị trí" disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}>Lên</Button><Button className="!px-2 whitespace-nowrap" variant="ghost" title="Đưa mục này xuống dưới một vị trí" disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}>Xuống</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title="Chỉnh sửa câu tiêu chí" disabled={savingId !== null} onClick={() => { setEditingError(''); setEditing(entry); }}>Sửa nội dung</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title={entry.active ? 'Không hiển thị mục này khi duyệt bài (không xoá)' : 'Hiển thị lại mục này khi duyệt bài'} disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}
         </tbody></table></div>
       ) : error ? null : <EmptyState title="Chưa có tiêu chí" text="Hiện chưa có tiêu chí duyệt bài nào." />}
       {editing ? <ChecklistEditModal entry={editing === 'new' ? null : editing} saving={savingId !== null} error={editingError} onClose={() => { if (savingId === null) { setEditing(null); setEditingError(''); } }} onSave={(question) => void save(question)} /> : null}
@@ -893,10 +893,10 @@ export function ApiAdminCategories() {
   const hasParentCategory = categories.some((category) => category.parentId != null);
   const busy = savingId !== null;
 
-  return <Panel title="Danh mục" description="Thứ tự trong bảng cũng là thứ tự danh mục hiển thị cho người dùng." action={<Button icon="add" disabled={loading || busy} onClick={() => setEditing('new')}>Thêm danh mục</Button>}>
+  return <Panel title="Danh mục" description="Thứ tự trong bảng cũng là thứ tự danh mục hiển thị cho người dùng." action={<Button disabled={loading || busy} onClick={() => setEditing('new')}>Thêm danh mục</Button>}>
     {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
     {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
-    {loading ? <EmptyState title="Đang tải danh mục" text="Vui lòng chờ trong giây lát." /> : categories.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Tên</th>{hasParentCategory ? <th>Danh mục cha</th> : null}<th>Phân loại</th><th>Trạng thái</th><th className="whitespace-nowrap">Thao tác</th></tr></thead><tbody>{categories.map((category, index) => <tr key={category.id}><td>{index + 1}</td><td className="font-semibold">{category.name}</td>{hasParentCategory ? <td>{categories.find((entry) => entry.id === category.parentId)?.name ?? '—'}</td> : null}<td>{category.restricted ? 'Hạn chế' : 'Thông thường'}</td><td>{category.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" variant="ghost" aria-label="Chuyển lên" title="Đưa danh mục này lên trên một vị trí" disabled={busy || index === 0} onClick={() => void move(index, -1)}><Icon name="arrow" className="size-4 -rotate-90" /></Button><Button className="!px-2 whitespace-nowrap" variant="ghost" aria-label="Chuyển xuống" title="Đưa danh mục này xuống dưới một vị trí" disabled={busy || index === categories.length - 1} onClick={() => void move(index, 1)}><Icon name="arrow" className="size-4 rotate-90" /></Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => setEditing(category)}>Sửa</Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => void toggleActive(category)}>{category.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có danh mục" text="Hiện chưa có danh mục nào." />}
+    {loading ? <EmptyState title="Đang tải danh mục" text="Vui lòng chờ trong giây lát." /> : categories.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Tên</th>{hasParentCategory ? <th>Danh mục cha</th> : null}<th>Phân loại</th><th>Trạng thái</th><th className="whitespace-nowrap">Thao tác</th></tr></thead><tbody>{categories.map((category, index) => <tr key={category.id}><td>{index + 1}</td><td className="font-semibold">{category.name}</td>{hasParentCategory ? <td>{categories.find((entry) => entry.id === category.parentId)?.name ?? '—'}</td> : null}<td>{category.restricted ? 'Hạn chế' : 'Thông thường'}</td><td>{category.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" variant="ghost" title="Đưa danh mục này lên trên một vị trí" disabled={busy || index === 0} onClick={() => void move(index, -1)}>Lên</Button><Button className="!px-2 whitespace-nowrap" variant="ghost" title="Đưa danh mục này xuống dưới một vị trí" disabled={busy || index === categories.length - 1} onClick={() => void move(index, 1)}>Xuống</Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => setEditing(category)}>Sửa</Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => void toggleActive(category)}>{category.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có danh mục" text="Hiện chưa có danh mục nào." />}
     {SHOW_CATEGORY_ATTRIBUTES && !loading && categories.length ? <ApiCategoryAttributes categories={categories} /> : null}
     {editing ? <ApiCategoryModal category={editing === 'new' ? null : editing} categories={categories} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
   </Panel>;
@@ -985,7 +985,7 @@ function ApiCategoryAttributes({ categories }: { categories: AdminCategoryRespon
       <Select label="Thuộc tính của danh mục" value={categoryId} onChange={(event) => { setCategoryId(Number(event.target.value)); setEditing(null); setNotice(''); }}>
         {categories.map((category) => <option key={category.id} value={category.id}>{category.name}{category.active ? '' : ' (đang ẩn)'}</option>)}
       </Select>
-      <Button icon="add" onClick={() => setEditing('new')}>Thêm thuộc tính</Button>
+      <Button onClick={() => setEditing('new')}>Thêm thuộc tính</Button>
     </div>
     {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
     {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}

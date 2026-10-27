@@ -27,7 +27,6 @@ public interface ReviewQueueRepository extends Repository<com.shareloop.item.ent
             ORDER BY CASE WHEN COALESCE(i.ai_result ->> 'flag', i.ai_result ->> 'moderation') = 'REVIEW'
                           THEN 0 ELSE 1 END,
                      u.trust_stars ASC,
-                     u.created_at DESC,
                      i.created_at ASC,
                      i.id ASC
             """, nativeQuery = true)

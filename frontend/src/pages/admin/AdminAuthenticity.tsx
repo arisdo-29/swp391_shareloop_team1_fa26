@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Alert, Button, Field, Icon, PageHeader, StatusBadge, TextArea } from '../../components/ui';
+import { Alert, Button, Field, PageHeader, StatusBadge, TextArea } from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
 import {
   adminAuthenticityApi,
@@ -215,7 +215,6 @@ export function AdminAuthenticity() {
         <div className="mt-6 grid gap-3 md:grid-cols-3">
           <Button
             type="button"
-            icon="shield"
             disabled={submitting || !item}
             onClick={() => openConfirmation('grant')}
           >
@@ -242,10 +241,7 @@ export function AdminAuthenticity() {
 
       {selectedAction && itemId !== null ? (
         <DialogFrame labelledBy="authenticity-dialog-title">
-          <div className="flex items-start gap-3">
-            <div className="grid size-10 shrink-0 place-items-center rounded-full bg-primary-faint text-primary">
-              <Icon name="shield" className="size-5" weight="bold" />
-            </div>
+          <div>
             <div>
               <h2 id="authenticity-dialog-title" className="text-lg font-bold text-text-primary">
                 {actionContent[selectedAction].title}

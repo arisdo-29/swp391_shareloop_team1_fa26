@@ -8,7 +8,6 @@ import {
   EmptyState,
   Field,
   Icon,
-  IconButton,
   ItemImage,
   SearchField,
   Select,
@@ -115,7 +114,7 @@ export function Messages() {
   if (!backendUserId) {
     return (
       <div className="page-shell">
-        <EmptyState icon="messages" title="Chưa đăng nhập" text="Vui lòng đăng nhập lại để xem tin nhắn." />
+        <EmptyState title="Chưa đăng nhập" text="Vui lòng đăng nhập lại để xem tin nhắn." />
       </div>
     );
   }
@@ -1037,7 +1036,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         {selected ? (
           <section className={`${mobileChat ? 'flex' : 'hidden lg:flex'} min-h-[680px] flex-col overflow-hidden lg:min-h-0 xl:grid xl:grid-rows-[64px_auto_minmax(0,1fr)_auto] ${rightPanelCollapsed ? 'xl:grid-cols-[minmax(0,1fr)]' : 'xl:grid-cols-[minmax(0,1fr)_340px]'}`}>
             <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4 sm:px-5 xl:col-start-1 xl:row-start-1">
-              <IconButton icon="arrow" label="Quay lại" className="rotate-180 lg:hidden" onClick={() => setMobileChat(false)} />
+              <Button variant="outline" size="sm" className="lg:hidden" onClick={() => setMobileChat(false)}>
+                Quay lại
+              </Button>
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-sm font-bold">{conversationTitle(selected)}</h2>
                 <p className="mt-1 truncate text-xs text-text-muted">Trao đổi với {selectedParticipantName}</p>
@@ -1147,7 +1148,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       Xem chi tiết bài đăng
                     </Button>
                     {reportTargetUserId && reportTargetUserId !== currentUserId ? (
-                      <Button variant="ghost" icon="shield" onClick={() => setReportOpen(true)}>
+                      <Button variant="ghost" onClick={() => setReportOpen(true)}>
                         Báo cáo người dùng
                       </Button>
                     ) : null}
@@ -1356,7 +1357,6 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     {selected.request.status === 'COMPLETED' ? (
                       <Button
                         variant="outline"
-                        icon="shield"
                         onClick={() => {
                           setDisputeError('');
                           setDisputeNotice('');
@@ -1494,8 +1494,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 {shareableItems.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
               </Select>
               <div className="mb-3 flex flex-wrap items-center gap-3 text-xs">
-                <label className={`inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 font-semibold ${sending || !chatEnabled || !requestMediaEnabled || !!shareItemId ? 'pointer-events-none opacity-50' : 'hover:bg-surface-low'}`}>
-                  <Icon name="image" className="size-4" />
+                <label className={`inline-flex min-h-11 cursor-pointer items-center rounded-md border border-border px-3 py-2 font-semibold ${sending || !chatEnabled || !requestMediaEnabled || !!shareItemId ? 'pointer-events-none opacity-50' : 'hover:bg-surface-low'}`}>
                   Đính kèm ảnh
                   <input
                     ref={chatImageInputRef}
@@ -1554,7 +1553,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   placeholder="Nhập tin nhắn..."
                   disabled={sending || !chatEnabled}
                 />
-                <Button aria-label="Gửi tin nhắn" icon="send" disabled={sending || !chatEnabled || (!message.trim() && !shareItemId && !chatImage)}>
+                <Button aria-label="Gửi tin nhắn" disabled={sending || !chatEnabled || (!message.trim() && !shareItemId && !chatImage)}>
                   {sending ? 'Đang gửi' : 'Gửi'}
                 </Button>
               </form>

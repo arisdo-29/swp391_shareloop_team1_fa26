@@ -1,16 +1,16 @@
-import { Icon, ItemImage } from '../../components/ui';
+import { ItemImage } from '../../components/ui';
 import { Link } from 'react-router-dom';
 import type { Item } from '../../types/domain';
 
 const values = [
-  ['package', '01', 'CHO ĐI', 'Món đồ bạn không còn dùng'],
-  ['search', '02', 'TÌM ĐỒ', 'Tìm món đồ bạn đang cần'],
-  ['group', '03', 'GẶP GỠ & TRAO ĐỔI', 'Hoàn tất một vòng đời mới'],
+  ['01', 'CHO ĐI', 'Món đồ bạn không còn dùng'],
+  ['02', 'TÌM ĐỒ', 'Tìm món đồ bạn đang cần'],
+  ['03', 'GẶP GỠ & TRAO ĐỔI', 'Hoàn tất một vòng đời mới'],
 ];
 const steps = [
-  ['add', 'Đăng hoặc tìm món', 'Chia sẻ món bạn có, hoặc lọc theo nhu cầu và quận.'],
-  ['messages', 'Trò chuyện và chốt lịch', 'Thống nhất món trao đổi, thời gian và điểm giao nhận.'],
-  ['check', 'Xác nhận hoàn tất', 'Hai bên xác nhận bàn giao để khép lại giao dịch an toàn.'],
+  ['Đăng hoặc tìm món', 'Chia sẻ món bạn có, hoặc lọc theo nhu cầu và quận.'],
+  ['Trò chuyện và chốt lịch', 'Thống nhất món trao đổi, thời gian và điểm giao nhận.'],
+  ['Xác nhận hoàn tất', 'Hai bên xác nhận bàn giao để khép lại giao dịch an toàn.'],
 ];
 
 export function HomeLifecycle({ items }: { items: Item[] }) {
@@ -27,9 +27,8 @@ export function HomeLifecycle({ items }: { items: Item[] }) {
             </p>
             <span className="home-lifecycle-divider" aria-hidden="true" />
             <div className="home-lifecycle-steps">
-              {values.map(([icon, number, title, description]) => (
+              {values.map(([number, title, description]) => (
                 <article key={number} className="home-value">
-                  <Icon name={icon} className="size-6" />
                   <span>{number}</span>
                   <h3>{title}</h3>
                   <p>{description}</p>
@@ -38,7 +37,6 @@ export function HomeLifecycle({ items }: { items: Item[] }) {
             </div>
             <Link to="/browse" className="home-lifecycle-cta">
               Khám phá món đồ
-              <Icon name="arrow" className="size-4" />
             </Link>
           </div>
           <div className="home-lifecycle-visual">
@@ -68,18 +66,21 @@ export function HomeProcess() {
       <section className="home-process home-inner">
         <div className="home-process-intro">
           <h2>Một vòng chia sẻ thật đơn giản</h2>
-          <p>Mọi kết nối bắt đầu từ một món đồ còn giá trị.</p>
+          <p>
+            Mọi kết nối bắt đầu từ một món đồ còn giá trị.{' '}
+            <Link to="/about" className="font-semibold text-primary">
+              Xem hướng dẫn chi tiết
+            </Link>
+          </p>
         </div>
         <ol>
-          {steps.map(([icon, title, description], index) => (
+          {steps.map(([title, description], index) => (
             <li key={title}>
               <div className="home-step-top">
                 <span>0{index + 1}</span>
-                <Icon name={icon} className="size-5" />
               </div>
               <h3>{title}</h3>
               <p>{description}</p>
-              {index < steps.length - 1 && <Icon name="arrow" className="home-step-arrow size-4" />}
             </li>
           ))}
         </ol>

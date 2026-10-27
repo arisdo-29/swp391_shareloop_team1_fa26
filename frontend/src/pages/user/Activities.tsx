@@ -17,7 +17,7 @@ import {
   TypeBadge,
 } from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
-import { CONDITIONS } from '../../constants/domain';
+import { CONDITIONS, ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import { fileToDataUrl } from '../../utils/files';
 import {
@@ -67,8 +67,6 @@ function getEditQuoteReasonLabel(reason: string) {
 type ListingFeeAction = { type: 'renew' | 'boost'; item: Item };
 const WALLET_INSUFFICIENT_BALANCE = 'WALLET_INSUFFICIENT_BALANCE';
 
-const ITEM_IMAGES_MIN = 3;
-const ITEM_IMAGES_MAX = 8;
 
 const OPERATING_STATUS_LABELS: Record<OperatingStatus, string> = {
   NORMAL: 'Hoạt động bình thường',
@@ -437,7 +435,7 @@ export function Activities() {
         description="Quản lý bài đăng, yêu cầu và tiến trình giao dịch của bạn."
         action={
           <Link to="/post">
-            <Button icon="add">Đăng món mới</Button>
+            <Button>Đăng món mới</Button>
           </Link>
         }
       />
@@ -528,8 +526,7 @@ export function Activities() {
                         >
                           {item.title}
                         </Link>
-                        <p className="mt-2 flex items-center gap-1.5 text-xs text-text-muted">
-                          <Icon name="location" className="size-3.5 shrink-0" />
+                        <p className="mt-2 text-xs text-text-muted">
                           {item.expiresAt
                             ? `Hết hạn: ${new Date(item.expiresAt).toLocaleDateString('vi-VN')} · `
                             : ''}
@@ -553,7 +550,6 @@ export function Activities() {
                         <Button
                           size="sm"
                           variant="outline"
-                          icon="messages"
                           className="w-full whitespace-nowrap"
                           onClick={() =>
                             setRequestsItemId(requestsItemId === item.id ? '' : item.id)
@@ -565,7 +561,6 @@ export function Activities() {
                           <Button
                             size="sm"
                             variant="outline"
-                            icon="eye"
                             className="w-full whitespace-nowrap"
                           >
                             Xem chi tiết
@@ -574,7 +569,6 @@ export function Activities() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          icon="edit"
                           className="w-full whitespace-nowrap"
                           disabled={!canEdit}
                           onClick={() => void openEditor(item)}
@@ -584,7 +578,6 @@ export function Activities() {
                         <Button
                           size="sm"
                           variant="danger"
-                          icon="trash"
                           className="w-full whitespace-nowrap"
                           disabled={
                             ['RESERVED', 'TRADED', 'EXPIRED', 'removed'].includes(item.status) ||
@@ -597,7 +590,6 @@ export function Activities() {
                         <Button
                           size="sm"
                           variant="outline"
-                          icon="renew"
                           className="w-full whitespace-nowrap"
                           disabled={!canUseListingFee || Boolean(renewingItemId || boostingItemId)}
                           onClick={() => {
@@ -611,7 +603,6 @@ export function Activities() {
                         <Button
                           size="sm"
                           variant="outline"
-                          icon="arrow"
                           className="w-full whitespace-nowrap"
                           disabled={!canBoost || Boolean(renewingItemId || boostingItemId)}
                           onClick={() => {
@@ -1442,7 +1433,7 @@ function SentRequestPanel({
                   </Link>
                   <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col sm:items-stretch">
                     <Link to={`/requests/${request.id.replace(/^api_req_/, '')}`}>
-                      <Button size="sm" className="w-full" icon="eye">
+                      <Button size="sm" className="w-full">
                         Xem chi tiết
                       </Button>
                     </Link>
@@ -1455,7 +1446,6 @@ function SentRequestPanel({
                       <Button
                         size="sm"
                         variant="ghost"
-                        icon="close"
                         disabled={cancelingRequestId === request.id}
                         onClick={() => onCancel(request.id)}
                       >
@@ -1539,7 +1529,7 @@ function RequestPanel({
                   <div className="flex shrink-0 flex-wrap gap-2">
                     {canChat(request.status) ? (
                       <Link to={`/requests/${request.id.replace(/^api_req_/, '')}`}>
-                        <Button variant="outline" icon="messages">
+                        <Button variant="outline">
                           Nhắn tin
                         </Button>
                       </Link>
@@ -1547,7 +1537,7 @@ function RequestPanel({
                       request.status === 'PENDING' &&
                       !hasAcceptedRequest &&
                       !['IN_TRANSACTION', 'RESERVED'].includes(itemStatus) ? (
-                      <Button variant="outline" icon="check" onClick={() => onAccept(request.id)}>
+                      <Button variant="outline" onClick={() => onAccept(request.id)}>
                         Chọn người này
                       </Button>
                     ) : null}
@@ -1562,7 +1552,7 @@ function RequestPanel({
                       </div>
                       {request.offeredItemId ? (
                         <Link to={`/items/${request.offeredItemId}`}>
-                          <Button variant="outline" icon="eye">
+                          <Button variant="outline">
                             Xem chi tiết
                           </Button>
                         </Link>

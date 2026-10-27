@@ -103,7 +103,6 @@ export function AdminAnomalyContent() {
         </>
       ) : (
         <EmptyState
-          icon="shield"
           title="Không có cảnh báo bất thường"
           text="Hiện chưa phát hiện cặp người dùng có giao dịch lặp vượt ngưỡng."
         />

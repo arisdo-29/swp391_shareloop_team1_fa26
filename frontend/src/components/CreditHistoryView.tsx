@@ -23,6 +23,7 @@ export function CreditHistorySection({
   onSelect,
   unavailable = false,
   dateFilter = null,
+  summary = null,
   pagination = null,
 }: {
   itemTitles: Map<string, string>;
@@ -33,6 +34,7 @@ export function CreditHistorySection({
   onSelect: (entry: CreditHistory) => void;
   unavailable?: boolean;
   dateFilter?: ReactNode;
+  summary?: ReactNode;
   pagination?: ReactNode;
 }) {
   const current = tabs.find((tab) => tab.id === activeTab) ?? tabs[0];
@@ -43,6 +45,7 @@ export function CreditHistorySection({
     <section className="mt-10">
       <h2 className="section-title">Lịch sử Credit</h2>
       {dateFilter}
+      {summary}
       {unavailable ? (
         <div className="mt-4 rounded-xl bg-white px-5 py-12 text-center text-sm text-text-muted ring-1 ring-border/80">
           Chưa thể tải lịch sử Credit.
@@ -71,7 +74,6 @@ export function CreditHistorySection({
               return (
                 <HistoryRow
                   key={entry.id}
-                  icon={historyIcon(entry)}
                   title={title}
                   date={entry.createdAt}
                   amount={entry.amount}
@@ -187,7 +189,6 @@ export function HistoryPagination({
 }
 
 function HistoryRow({
-  icon,
   title,
   date,
   amount,
@@ -195,7 +196,6 @@ function HistoryRow({
   tone,
   onClick,
 }: {
-  icon: 'wallet' | 'payments' | 'history' | 'renew';
   title: string;
   date: string;
   amount: number;
@@ -217,18 +217,13 @@ function HistoryRow({
     <button
       type="button"
       onClick={onClick}
-      className="grid w-full cursor-pointer grid-cols-[1fr_auto_auto] gap-4 border-b border-border/70 px-4 py-4 text-left transition hover:bg-surface-low last:border-0 sm:px-5"
+      className="grid w-full cursor-pointer grid-cols-[1fr_auto] gap-4 border-b border-border/70 px-4 py-4 text-left transition hover:bg-surface-low last:border-0 sm:px-5"
     >
-      <div className="flex min-w-0 gap-3">
-        <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md bg-surface-low text-primary">
-          <Icon name={icon} className="size-5" />
-        </span>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-text-primary">{title}</p>
-          <p className="mt-1 truncate text-xs text-text-muted">
-            {new Date(date).toLocaleString('vi-VN')}
-          </p>
-        </div>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-text-primary">{title}</p>
+        <p className="mt-1 truncate text-xs text-text-muted">
+          {new Date(date).toLocaleString('vi-VN')}
+        </p>
       </div>
       <div className="self-center text-right">
         <strong className={`block whitespace-nowrap text-sm tabular-nums ${amountClass}`}>
@@ -237,7 +232,6 @@ function HistoryRow({
         </strong>
         <span className="mt-1 block text-xs text-text-muted">{status}</span>
       </div>
-      <Icon name="chevronDown" className="-rotate-90 self-center text-text-muted" />
     </button>
   );
 }
@@ -271,12 +265,6 @@ function historyStatus(entry: CreditHistory) {
 function historyTone(entry: CreditHistory): 'positive' | 'negative' | 'hold' | 'pending' {
   if (entry.amount > 0) return 'positive';
   return 'negative';
-}
-
-function historyIcon(entry: CreditHistory): 'wallet' | 'payments' | 'history' | 'renew' {
-  if (entry.type === 'TOPUP') return 'wallet';
-  if (entry.type === 'REFUND' || entry.type === 'RELEASE_HOLD') return 'renew';
-  return 'payments';
 }
 
 export function CreditTransactionDetail({
