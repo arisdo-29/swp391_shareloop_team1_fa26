@@ -183,6 +183,11 @@ export function AI() {
               />
             ) : <Alert tone={quotaError ? 'error' : 'info'}>{quotaError || 'Đang tải hạn mức tìm kiếm...'}</Alert>}
             {quotaError ? <Button variant="outline" onClick={() => { void aiApi.quota().then((response) => { setQuota(response); setQuotaError(''); }).catch((error: ApiError) => setQuotaError(error.message)); }}>Thử tải hạn mức</Button> : null}
+            {status === 'success' && fallback ? (
+              <div className="mt-3">
+                <Alert tone="info">AI hiện không phản hồi. Đây là kết quả tìm kiếm thường; lượt miễn phí và Credit của bạn không bị trừ.</Alert>
+              </div>
+            ) : null}
             {quota ? <p className="mt-3 text-xs text-text-muted">Mỗi lần tìm hoặc chuyển trang dùng một lượt. Hết lượt miễn phí, mỗi lượt tốn {quota.feeCredits} Credit. Nếu hệ thống chuyển sang tìm kiếm thường, lượt và phí sẽ được hoàn lại.</p> : null}
           </div>
         </section>

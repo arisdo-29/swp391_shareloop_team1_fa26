@@ -64,6 +64,7 @@ describe('AI search quota', () => {
     await waitFor(() => expect(aiApi.search).toHaveBeenCalledWith('Tìm sách cũ', 0, 20));
     await waitFor(() => expect(aiApi.quota).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('Còn 4 lượt miễn phí')).toBeTruthy();
+    expect(screen.queryByText('AI hiện không phản hồi. Đây là kết quả tìm kiếm thường; lượt miễn phí và Credit của bạn không bị trừ.')).toBeNull();
   });
 
   it('giữ nguyên quota khi Backend fallback sang tìm kiếm thường', async () => {
@@ -92,7 +93,7 @@ describe('AI search quota', () => {
 
     await waitFor(() => expect(aiApi.quota).toHaveBeenCalledTimes(2));
     expect(screen.getByText('Còn 5 lượt miễn phí')).toBeTruthy();
-    expect(screen.queryByText('AI hiện không phản hồi. Đây là kết quả tìm kiếm thường; lượt miễn phí và Credit của bạn không bị trừ.')).toBeNull();
+    expect(screen.getByText('AI hiện không phản hồi. Đây là kết quả tìm kiếm thường; lượt miễn phí và Credit của bạn không bị trừ.')).toBeTruthy();
     expect(screen.getByText('Từ khóa tìm kiếm thường')).toBeTruthy();
   });
 });
