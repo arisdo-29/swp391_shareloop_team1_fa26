@@ -157,8 +157,17 @@ public class AiSearchService {
 
     private static String safeFailureDetail(Exception exception) {
         String message = exception.getMessage();
-        if (message != null && message.matches("OpenRouter API returned HTTP [1-5][0-9]{2}")) {
+        if (message != null
+                && (message.matches("OpenRouter API returned HTTP [1-5][0-9]{2}")
+                        || message.equals("OpenRouter API returned no single tool call")
+                        || message.equals("OpenRouter API returned invalid tool arguments")
+                        || message.equals("OpenRouter API returned no JSON object"))) {
             return message;
+        }
+        if (exception.getCause() != null) {
+            return exception.getClass().getSimpleName()
+                    + " caused by "
+                    + exception.getCause().getClass().getSimpleName();
         }
         return exception.getClass().getSimpleName();
     }

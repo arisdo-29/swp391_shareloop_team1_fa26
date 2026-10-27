@@ -95,17 +95,34 @@ final class OpenRouterGateway {
         JsonNode root = mapper.readTree(body);
         JsonNode message = root.path("choices").path(0).path("message");
         JsonNode toolCalls = message.path("tool_calls");
-        if (!toolCalls.isArray() || toolCalls.size() != 1) {
+        String content;
+        if (toolCalls.isArray() && toolCalls.size() == 1) {
+            JsonNode function = toolCalls.path(0).path("function");
+            JsonNode arguments = function.path("arguments");
+            if (!schemaName.equals(function.path("name").asText())
+                    || !arguments.isTextual()
+                    || !isJsonObject(arguments.asText())) {
+                throw new IOException("OpenRouter API returned invalid tool arguments");
+            }
+            content = arguments.asText();
+        } else if ((toolCalls.isMissingNode() || toolCalls.isNull())
+                && message.path("content").isTextual()) {
+            content = message.path("content").asText();
+            if (!isJsonObject(content)) {
+                throw new IOException("OpenRouter API returned no JSON object");
+            }
+        } else {
             throw new IOException("OpenRouter API returned no single tool call");
         }
-        JsonNode function = toolCalls.path(0).path("function");
-        JsonNode arguments = function.path("arguments");
-        if (!schemaName.equals(function.path("name").asText())
-                || !arguments.isTextual()
-                || !mapper.readTree(arguments.asText()).isObject()) {
-            throw new IOException("OpenRouter API returned invalid tool arguments");
-        }
         String model = root.path("model").asText();
-        return new AiResponse(model.isBlank() ? PRIMARY_MODEL : model, arguments.asText());
+        return new AiResponse(model.isBlank() ? PRIMARY_MODEL : model, content);
+    }
+
+    private boolean isJsonObject(String content) {
+        try {
+            return mapper.readTree(content).isObject();
+        } catch (RuntimeException exception) {
+            return false;
+        }
     }
 }
