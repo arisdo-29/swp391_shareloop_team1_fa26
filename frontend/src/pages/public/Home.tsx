@@ -21,8 +21,26 @@ import { toAreaNameMap, toAreaOptions, toCategoryNameMap, toFeItem, type AreaOpt
 import { categoryBrowsePath } from '../../utils/browseFilters';
 import { HomeLifecycle, HomeProcess } from './HomeCommunity';
 import { HomeDiscoveryRail, HomeMotion } from './HomeMotion';
+import browseSuggestionBox from '../../assets/browse-suggestion-box.png';
 import './home-content.css';
 const categoryIcons = ['device', 'chair', 'book', 'shirt', 'package', 'star', 'ai', 'edit'];
+const aiSuggestions = [
+  {
+    title: 'Đèn bàn để đọc sách',
+    description: 'Tìm ánh sáng phù hợp cho góc đọc sách.',
+    icon: 'chair',
+  },
+  {
+    title: 'Sách cho cuối tuần',
+    description: 'Khám phá những cuốn sách đang được sẻ chia.',
+    icon: 'book',
+  },
+  {
+    title: 'Đồ dùng góc học tập',
+    description: 'Bổ sung món đồ hữu ích cho góc học tập.',
+    icon: 'package',
+  },
+] as const;
 const newItemFilters: Array<{ value: 'all' | ItemType; label: string }> = [
   { value: 'all', label: 'Tất cả' },
   { value: 'gift', label: 'Cho tặng' },
@@ -121,7 +139,7 @@ function HomeProductCard({
           src={item.images[0]}
           alt={item.title}
           loading="lazy"
-          className="size-full object-cover transition duration-500 group-hover:scale-[1.03]"
+          className="size-full object-contain object-center transition duration-500 group-hover:scale-[1.03]"
         />
         <span className="absolute left-3 top-3">
           <TypeBadge type={item.type} />
@@ -587,43 +605,51 @@ export function Home() {
           </div>
         </HomeSection>
 
-        <HomeSection className="home-band home-ai-section">
-          <div className="home-ai">
-            <div className="home-ai-visual">
-              <Icon name="ai" className="size-10 text-primary" weight="light" />
-              <p className="text-sm font-semibold text-primary">Bạn đang tìm món gì?</p>
-              <div className="home-ai-suggestions">
-                {aiPreviewItems.map((item, index) => {
-                  const suggestion = ['Đèn bàn để đọc sách', 'Sách cho cuối tuần', 'Đồ dùng góc học tập'][index];
-                  return (
-                    <Link key={item.id} to="/ai">
-                      <ItemImage
-                        src={item.images[0]}
-                        alt=""
-                        loading="lazy"
-                        className="size-4 shrink-0 rounded-sm object-cover"
-                      />
-                      <span>{suggestion}</span>
-                      <Icon name="arrow" className="size-4" />
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="home-ai-copy">
-              <p className="text-xs font-bold text-primary">LoopAI</p>
-              <h2>Tìm món đồ bạn cần <br />cùng AI</h2>
-              <p>Chỉ cần mô tả món đồ mong muốn, LoopAI sẽ giúp bạn tìm kiếm và gợi ý những món đồ phù hợp trong cộng đồng ShareLoop.</p>
-              <Link to="/ai" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-bold text-white transition hover:bg-primary-hover">
-                <Icon name="ai" className="size-[18px]" />Khám phá cùng AI<Icon name="arrow" className="size-4" />
-              </Link>
-            </div>
-          </div>
-        </HomeSection>
-
         <div className="home-final-cluster">
           <HomeLifecycle items={aiPreviewItems} />
           <HomeProcess />
+          <HomeSection className="home-band home-ai-section">
+            <div className="home-ai home-suggestion-feature" aria-labelledby="home-suggestion-title">
+              <div className="home-suggestion-copy">
+                <span className="home-suggestion-eyebrow">
+                  <Icon name="ai" className="size-4" weight="fill" />
+                  Gợi ý từ LoopAI
+                </span>
+                <h2 id="home-suggestion-title">Bạn đang tìm món gì?</h2>
+                <p>
+                  Mô tả món đồ bạn cần, LoopAI sẽ gợi ý những lựa chọn phù hợp từ cộng đồng ShareLoop.
+                </p>
+                <div className="home-ai-suggestions">
+                  {aiPreviewItems.map((item, index) => {
+                    const suggestion = aiSuggestions[index];
+                    return (
+                      <Link key={item.id} to="/ai">
+                        <span className="home-suggestion-card-icon">
+                          <Icon name={suggestion.icon} className="size-5" weight="duotone" />
+                        </span>
+                        <span className="home-suggestion-card-copy">
+                          <strong>{suggestion.title}</strong>
+                          <span>{suggestion.description}</span>
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="home-suggestion-visual" aria-hidden="true">
+                <span />
+                <img
+                  src={browseSuggestionBox}
+                  alt=""
+                  width="1536"
+                  height="1024"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+            </div>
+          </HomeSection>
           <HomeSection className="home-band home-cta-band">
             <div className="home-final">
               <div>

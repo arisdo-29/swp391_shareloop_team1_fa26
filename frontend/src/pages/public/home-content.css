@@ -727,7 +727,7 @@
   flex-direction: column;
   overflow: hidden;
   border-radius: 8px;
-  background: #FFFAF5;
+  background: var(--color-surface);
   box-shadow: 0 0 0 1px var(--color-border);
   transition: transform 300ms var(--home-ease), box-shadow 300ms;
 }
@@ -737,10 +737,18 @@
 }
 .home-content .home-product-card-image {
   position: relative;
+  display: flex;
   aspect-ratio: 4 / 3;
   flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
-  background: #edf2f1;
+  background-color: var(--color-surface);
+}
+
+.home-content .home-product-card-image img {
+  object-fit: contain;
+  object-position: center;
 }
 .home-content .home-product-card-copy {
   display: flex;
@@ -908,9 +916,11 @@
 .home-content .home-final-cluster {
   display: flex;
   flex-direction: column;
+  margin-top: 68px;
 }
 .home-content .home-final-cluster .home-process {
-  margin-bottom: 72px;
+  min-height: 0;
+  margin-bottom: 7px;
 }
 .home-content .home-final-cluster .home-cta-band {
   margin-bottom: 72px;
@@ -952,7 +962,9 @@
   .home-content .home-final-cluster .home-ai-section {
     margin-bottom: 28px;
   }
-  .home-content .home-final-cluster .home-process,
+  .home-content .home-final-cluster .home-process {
+    margin-bottom: 6px;
+  }
   .home-content .home-final-cluster .home-cta-band {
     margin-bottom: 64px;
   }
@@ -2390,7 +2402,8 @@
 
 /* Compact the requested Home sections within the shared container. */
 .home-content .home-process {
-  padding-block: 56px;
+  min-height: 0;
+  padding-block: 9px;
 }
 .home-content .home-process-intro {
   flex-direction: column;
@@ -2404,7 +2417,7 @@
 }
 .home-content .home-process ol {
   max-width: 1080px;
-  margin: 32px auto 0;
+  margin: 8px auto 0;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
 }
@@ -2515,7 +2528,7 @@
 }
 @media (max-width: 639px) {
   .home-content .home-process {
-    padding-block: 40px;
+    padding-block: 7px;
   }
   .home-content .home-process ol {
     grid-template-columns: 1fr;
@@ -2634,7 +2647,7 @@
   height: 100%;
   min-width: 0;
   padding: 0;
-  background: #FFFAF5;
+  background: var(--color-surface);
   box-shadow: 0 0 0 1px var(--color-border);
 }
 .home-content .home-rail-new-items .home-discovery-track > a.home-product-card > .home-product-card-image {
@@ -2846,7 +2859,7 @@
 /* Lifecycle section: compact 40/60 card inside the shared Home container. */
 .home-content .home-final-cluster .home-values {
   margin-top: 0;
-  margin-bottom: 64px;
+  margin-bottom: 32px;
   padding-block: 0;
   border-block: 0;
   background: transparent;
@@ -2969,7 +2982,7 @@
 }
 @media (max-width: 639px) {
   .home-content .home-final-cluster .home-values {
-    margin-bottom: 56px;
+    margin-bottom: 28px;
   }
   .home-content .home-final-cluster .home-lifecycle-copy {
     padding: 28px 20px;
@@ -2997,5 +3010,266 @@
     right: 5%;
     width: 36%;
     height: 78%;
+  }
+}
+
+/* LoopAI suggestion feature */
+.home-content .home-ai.home-suggestion-feature {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1.65fr) minmax(18rem, 0.75fr);
+  align-items: stretch;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 14%, transparent);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--color-surface) 78%, transparent) 0 12%, transparent 34%),
+    linear-gradient(120deg, var(--color-primary-faint), var(--color-primary-soft));
+}
+
+.home-content .home-ai.home-suggestion-feature::before,
+.home-content .home-ai.home-suggestion-feature::after {
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary-fixed) 58%, transparent);
+  content: '';
+  pointer-events: none;
+}
+
+.home-content .home-ai.home-suggestion-feature::before {
+  top: -7rem;
+  right: 12%;
+  width: 18rem;
+  height: 18rem;
+}
+
+.home-content .home-ai.home-suggestion-feature::after {
+  bottom: -8rem;
+  left: -2rem;
+  width: 20rem;
+  height: 14rem;
+  opacity: 0.4;
+}
+
+.home-content .home-suggestion-copy {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+  padding: 2rem 0 2rem 2.25rem;
+}
+
+.home-content .home-suggestion-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.55rem;
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.home-content .home-suggestion-copy h2 {
+  color: var(--color-primary);
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+}
+
+.home-content .home-suggestion-copy > p {
+  max-width: 42rem;
+  margin-top: 0.6rem;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+
+.home-content .home-suggestion-feature .home-ai-suggestions {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 1.35rem;
+}
+
+.home-content .home-suggestion-feature .home-ai-suggestions a {
+  display: grid;
+  min-width: 0;
+  min-height: 5.25rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 13%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
+  color: var(--color-text-primary);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-primary) 8%, transparent);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.home-content .home-suggestion-feature .home-ai-suggestions a:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  transform: translateY(-2px);
+}
+
+.home-content .home-suggestion-feature .home-ai-suggestions a:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 28%, transparent);
+  outline-offset: 2px;
+}
+
+.home-content .home-suggestion-feature .home-ai-suggestions a .home-suggestion-card-icon {
+  display: flex;
+  width: 2.35rem;
+  height: 2.35rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 10px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  line-height: 0;
+}
+
+.home-content .home-suggestion-feature .home-ai-suggestions a .home-suggestion-card-icon svg {
+  display: block;
+  margin: 0;
+  line-height: 0;
+  vertical-align: middle;
+}
+
+.home-content .home-suggestion-feature .home-ai-suggestions a .home-suggestion-card-icon svg,
+.home-content .home-suggestion-feature .home-ai-suggestions a:hover .home-suggestion-card-icon svg {
+  transform: none;
+  transition: none;
+}
+
+.home-content .home-suggestion-card-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.home-content .home-suggestion-card-copy strong {
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.home-content .home-suggestion-card-copy > span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.home-content .home-suggestion-visual {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-width: 0;
+  min-height: 18rem;
+  place-items: end center;
+  padding: 1rem 1.25rem 0 0;
+}
+
+.home-content .home-suggestion-visual > span {
+  position: absolute;
+  right: -12%;
+  bottom: -42%;
+  width: 116%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-surface) 74%, transparent);
+}
+
+.home-content .home-suggestion-visual img {
+  position: relative;
+  display: block;
+  width: min(100%, 27rem);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 14px 22px color-mix(in srgb, var(--color-primary) 18%, transparent));
+}
+
+@media (max-width: 1199px) {
+  .home-content .home-ai.home-suggestion-feature {
+    grid-template-columns: minmax(0, 1.6fr) minmax(15rem, 0.7fr);
+  }
+
+  .home-content .home-suggestion-copy {
+    padding: 1.75rem 0 1.75rem 1.75rem;
+  }
+
+  .home-content .home-suggestion-feature .home-ai-suggestions a {
+    align-content: start;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+}
+
+@media (max-width: 1023px) {
+  .home-content .home-ai.home-suggestion-feature {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-content .home-suggestion-copy {
+    padding: 1.75rem;
+  }
+
+  .home-content .home-suggestion-visual {
+    min-height: 12rem;
+    margin-top: -2rem;
+    padding: 0 1rem;
+  }
+
+  .home-content .home-suggestion-visual img {
+    width: min(52%, 24rem);
+  }
+}
+
+@media (max-width: 639px) {
+  .home-content .home-ai.home-suggestion-feature {
+    border-radius: 14px;
+  }
+
+  .home-content .home-suggestion-copy {
+    padding: 1.35rem;
+  }
+
+  .home-content .home-suggestion-feature .home-ai-suggestions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-content .home-suggestion-feature .home-ai-suggestions a {
+    min-height: 4.5rem;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .home-content .home-suggestion-visual {
+    min-height: 10rem;
+    margin-top: -1rem;
+  }
+
+  .home-content .home-suggestion-visual img {
+    width: min(76%, 20rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-content .home-suggestion-feature .home-ai-suggestions a {
+    transition: none;
   }
 }

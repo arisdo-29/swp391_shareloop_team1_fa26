@@ -382,14 +382,10 @@ export function ItemImage({
   loading?: 'eager' | 'lazy';
   fetchPriority?: 'high' | 'low' | 'auto';
 }) {
-  const [failed, setFailed] = useState(false);
   const imageSrc = resolveMediaUrl(src);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
-  useEffect(() => {
-    setFailed(false);
-  }, [imageSrc]);
-
-  return imageSrc && !failed ? (
+  return imageSrc && failedSrc !== imageSrc ? (
     <img
       src={imageSrc}
       alt={alt}
@@ -397,7 +393,7 @@ export function ItemImage({
       decoding="async"
       fetchPriority={fetchPriority}
       className={className}
-      onError={() => setFailed(true)}
+      onError={() => setFailedSrc(imageSrc)}
     />
   ) : (
     <div role="img" aria-label={alt} className={`grid place-items-center bg-surface-container text-text-muted ${className}`}>

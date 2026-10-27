@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { catalogApi, type AreaResponse, type CategoryResponse } from '../../services/catalogApi';
 import { itemApi, type ItemResponse, type PageResponse } from '../../services/itemApi';
 import { Home } from './Home';
+import browseSuggestionBox from '../../assets/browse-suggestion-box.png';
 
 vi.mock('../../app/hooks', () => ({
   useAppSelector: () => null,
@@ -22,7 +23,9 @@ vi.mock('./HomeMotion', () => ({
 }));
 
 vi.mock('./HomeCommunity', () => ({
-  HomeLifecycle: () => null,
+  HomeLifecycle: ({ items }: { items: Array<{ title: string }> }) => (
+    <div data-testid="home-lifecycle-items">{items.map((entry) => entry.title).join('|')}</div>
+  ),
   HomeProcess: () => null,
 }));
 
@@ -329,7 +332,7 @@ describe('trạng thái tải bài đăng trên Home', () => {
     expect(screen.queryByRole('button', { name: `Hiển thị ảnh ${carouselItems[0].title}` })).toBeNull();
   });
 
-  it('LoopAI dùng ảnh của 3 bài được đẩy gần nhất theo thời gian đẩy', async () => {
+  it('LoopAI giữ 3 bài boost gần nhất, 3 gợi ý tương tác và ảnh minh họa riêng', async () => {
     const boostedItems = Array.from({ length: 4 }, (_, index): ItemResponse => ({
       ...item,
       id: 580 + index,
@@ -347,16 +350,21 @@ describe('trạng thái tải bài đăng trên Home', () => {
 
     renderHome();
 
-    const heading = await screen.findByRole('heading', { name: 'Tìm món đồ bạn cần cùng AI' });
+    const heading = await screen.findByRole('heading', { name: 'Bạn đang tìm món gì?' });
     const section = heading.closest('section');
     expect(section).toBeTruthy();
-    await waitFor(() => expect(section!.querySelectorAll('.home-ai-suggestions img')).toHaveLength(3));
-    expect(Array.from(section!.querySelectorAll('.home-ai-suggestions img')).map((image) => image.getAttribute('src')))
-      .toEqual([
-        'https://example.com/loop-ai-4.jpg',
-        'https://example.com/loop-ai-3.jpg',
-        'https://example.com/loop-ai-2.jpg',
-      ]);
+    await waitFor(() => expect(section!.querySelectorAll('.home-ai-suggestions a')).toHaveLength(3));
+    const suggestionLinks = within(section!).getAllByRole('link');
+    expect(suggestionLinks.map((link) => link.getAttribute('href'))).toEqual(['/ai', '/ai', '/ai']);
+    expect(within(section!).getByText('Đèn bàn để đọc sách')).toBeTruthy();
+    expect(within(section!).getByText('Sách cho cuối tuần')).toBeTruthy();
+    expect(within(section!).getByText('Đồ dùng góc học tập')).toBeTruthy();
+    expect(section!.querySelector<HTMLImageElement>('.home-suggestion-visual img')?.getAttribute('src'))
+      .toBe(browseSuggestionBox);
+    expect(section!.querySelectorAll('.home-ai-suggestions svg')).toHaveLength(3);
+    expect(screen.getByTestId('home-lifecycle-items').textContent).toBe(
+      [boostedItems[3].title, boostedItems[2].title, boostedItems[1].title].join('|'),
+    );
   });
 
   it('hiển thị 5 bài trao đổi mới nhất, không ưu tiên boost và không hiện nhãn Được đẩy', async () => {

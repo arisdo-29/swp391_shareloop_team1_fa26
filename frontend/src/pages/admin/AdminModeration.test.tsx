@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -33,6 +33,7 @@ const queueItems: ReviewQueueItem[] = [
     donorId: 9,
     donorName: 'Nguyễn Văn A',
     title: 'Áo khoác gió nam',
+    thumbnailUrl: '/api/v1/media/101',
     aiRisk: 'LOW',
     moderationFlag: 'REVIEW',
     flagReason: 'Có từ khoá cần xem xét: zalo',
@@ -46,6 +47,7 @@ const queueItems: ReviewQueueItem[] = [
     donorId: 10,
     donorName: 'Trần Thị B',
     title: 'Bàn học gỗ',
+    thumbnailUrl: null,
     aiRisk: 'UNCHECKED',
     moderationFlag: 'NONE',
     donorTrustStars: null,
@@ -132,10 +134,42 @@ describe('AdminModerationList', () => {
     expect(screen.getByText('Cần xem kỹ')).toBeTruthy();
     expect(screen.getByText('Có từ khoá cần xem xét: zalo')).toBeTruthy();
     expect(screen.getByText('3/5 sao')).toBeTruthy();
+    const thumbnail = screen.getByRole('img', { name: 'Ảnh Áo khoác gió nam' });
+    expect(thumbnail.getAttribute('src')).toContain('/api/v1/media/101');
+    expect(screen.getByRole('img', { name: 'Ảnh Bàn học gỗ' }).tagName).toBe('DIV');
+    fireEvent.error(thumbnail);
+    await waitFor(() => {
+      expect(screen.getByRole('img', { name: 'Ảnh Áo khoác gió nam' }).tagName).toBe('DIV');
+    });
     const page = document.body.textContent ?? '';
     for (const hidden of ['NONE', 'REVIEW', '#', 'Người dùng #', 'Tải chi tiết và hình ảnh']) {
       expect(page).not.toContain(hidden);
     }
+  });
+
+  it('lấy ảnh đầu tiên từ chi tiết khi response hàng chờ không có thumbnail', async () => {
+    vi.mocked(adminModerationApi.pendingReviews).mockResolvedValue({
+      items: [{ ...queueItems[0], thumbnailUrl: null }],
+      checklist,
+      page: 0,
+      size: 100,
+    });
+    vi.mocked(adminModerationApi.detail).mockResolvedValue(
+      detail({ images: ['/api/v1/media/202', '/api/v1/media/203'] }),
+    );
+
+    render(
+      <MemoryRouter>
+        <AdminModerationList />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('img', { name: 'Ảnh Áo khoác gió nam' }).getAttribute('src')).toContain(
+        '/api/v1/media/202',
+      );
+    });
+    expect(adminModerationApi.detail).toHaveBeenCalledWith(42);
   });
 
   it('nút Xem chi tiết & duyệt dẫn sang trang riêng của bài, không mở popup', async () => {

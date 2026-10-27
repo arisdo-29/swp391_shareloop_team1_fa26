@@ -6,6 +6,7 @@ export interface ReviewQueueItem {
   donorId: number;
   donorName?: string | null;
   title: string;
+  thumbnailUrl?: string | null;
   aiRisk?: string | null;
   moderationFlag?: string | null;
   flagReason?: string | null;
