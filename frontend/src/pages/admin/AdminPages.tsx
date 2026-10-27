@@ -59,11 +59,40 @@ export function AdminSettings() {
   return <AdminConfigs />;
 }
 
+const AUDIT_LOG_PAGE_SIZE = 20;
+
+type AuditPaginationItem = number | 'start-ellipsis' | 'end-ellipsis';
+
+function auditPaginationItems(currentPage: number, totalPages: number): AuditPaginationItem[] {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index);
+
+  const lastPage = totalPages - 1;
+  let rangeStart: number;
+  let rangeEnd: number;
+
+  if (currentPage <= 2) {
+    rangeStart = 1;
+    rangeEnd = 3;
+  } else if (currentPage >= lastPage - 2) {
+    rangeStart = lastPage - 3;
+    rangeEnd = lastPage - 1;
+  } else {
+    rangeStart = currentPage - 1;
+    rangeEnd = currentPage + 1;
+  }
+
+  const items: AuditPaginationItem[] = [0];
+  if (rangeStart > 1) items.push('start-ellipsis');
+  for (let pageIndex = rangeStart; pageIndex <= rangeEnd; pageIndex += 1) items.push(pageIndex);
+  if (rangeEnd < lastPage - 1) items.push('end-ellipsis');
+  items.push(lastPage);
+  return items;
+}
+
 export function AdminAuditLogs() {
   const [actionTypes, setActionTypes] = useState<{ type: string; label: string }[]>([]);
   const [logs, setLogs] = useState<ActivityLogResponse[]>([]);
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(20);
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -87,12 +116,23 @@ export function AdminAuditLogs() {
     setError('');
 
     adminAuditApi
-      .list({ ...filters, page, size: pageSize })
+      .list({ ...filters, page, size: AUDIT_LOG_PAGE_SIZE })
       .then((response) => {
         if (!active) return;
-        setLogs(response.content);
+
+        const responseTotalPages = Math.max(response.totalPages, 0);
+        const lastPage = Math.max(responseTotalPages - 1, 0);
+        const responsePage = Math.min(Math.max(response.number, 0), lastPage);
+
         setTotalElements(response.totalElements);
-        setTotalPages(response.totalPages);
+        setTotalPages(responseTotalPages);
+
+        if (page !== responsePage) {
+          setPage(responsePage);
+          return;
+        }
+
+        setLogs(response.content);
       })
       .catch((apiError: ApiError) => {
         if (!active) return;
@@ -108,7 +148,7 @@ export function AdminAuditLogs() {
     return () => {
       active = false;
     };
-  }, [filters, page, pageSize, reloadKey]);
+  }, [filters, page, reloadKey]);
 
   const applyFilters = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -157,58 +197,80 @@ export function AdminAuditLogs() {
             Thử lại
           </Button>
         </div>
-      ) : logs.length === 0 ? (
-        <EmptyState icon="history" title="Chưa có nhật ký" text="Không có hành động nào phù hợp với bộ lọc hiện tại." />
       ) : (
         <>
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Thời gian</th>
-                  <th>Người thực hiện</th>
-                  <th>Hành động</th>
-                  <th>Đối tượng</th>
-                  <th>Chi tiết</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log) => (
-                  <tr key={log.id}>
-                    <td className="whitespace-nowrap">{formatActivityLogTime(log.createdAt)}</td>
-                    <td>{log.actorName ?? (log.actorId ? 'Quản trị viên' : 'Hệ thống')}</td>
-                    <td>{log.typeLabel ?? activityLogTypeLabel(log.type)}</td>
-                    <td>{activityLogTarget(log)}</td>
-                    <td><ActivityLogDetail log={log} /></td>
+          {logs.length === 0 ? (
+            <EmptyState icon="history" title="Chưa có nhật ký" text="Không có hành động nào phù hợp với bộ lọc hiện tại." />
+          ) : (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Thời gian</th>
+                    <th>Người thực hiện</th>
+                    <th>Hành động</th>
+                    <th>Đối tượng</th>
+                    <th>Chi tiết</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {logs.map((log) => (
+                    <tr key={log.id}>
+                      <td className="whitespace-nowrap">{formatActivityLogTime(log.createdAt)}</td>
+                      <td>{log.actorName ?? (log.actorId ? 'Quản trị viên' : 'Hệ thống')}</td>
+                      <td>{log.typeLabel ?? activityLogTypeLabel(log.type)}</td>
+                      <td>{activityLogTarget(log)}</td>
+                      <td><ActivityLogDetail log={log} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           <div className="mt-4 flex flex-col gap-3 rounded-lg bg-white p-3 text-sm text-text-secondary ring-1 ring-border/80 sm:flex-row sm:items-center sm:justify-between">
             <p>
               {totalElements.toLocaleString('vi-VN')} bản ghi · Trang {page + 1}/{Math.max(totalPages, 1)}
             </p>
-            <div className="flex items-center gap-2">
-              <Select
-                aria-label="Số bản ghi mỗi trang"
-                value={pageSize}
-                onChange={(event) => {
-                  setPageSize(Number(event.target.value));
-                  setPage(0);
-                }}
+            <nav
+              aria-label="Phân trang nhật ký"
+              className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end"
+            >
+              <Button
+                className="min-w-24 flex-1 sm:flex-none"
+                variant="outline"
+                disabled={page === 0}
+                onClick={() => setPage((value) => Math.max(0, value - 1))}
               >
-                <option value={10}>10 / trang</option>
-                <option value={20}>20 / trang</option>
-                <option value={50}>50 / trang</option>
-              </Select>
-              <Button variant="outline" disabled={page === 0} onClick={() => setPage((value) => value - 1)}>
-                Trang trước
+                Trước
               </Button>
-              <Button variant="outline" disabled={page + 1 >= totalPages} onClick={() => setPage((value) => value + 1)}>
-                Trang sau
+              {auditPaginationItems(page, Math.max(totalPages, 1)).map((item) =>
+                typeof item === 'number' ? (
+                  <Button
+                    key={item}
+                    aria-label={`Trang ${item + 1}`}
+                    aria-current={item === page ? 'page' : undefined}
+                    className="min-w-11 px-3"
+                    size="sm"
+                    variant={item === page ? 'primary' : 'outline'}
+                    onClick={() => setPage(item)}
+                  >
+                    {item + 1}
+                  </Button>
+                ) : (
+                  <span key={item} aria-hidden="true" className="px-1 text-text-muted">
+                    …
+                  </span>
+                ),
+              )}
+              <Button
+                className="min-w-24 flex-1 sm:flex-none"
+                variant="outline"
+                disabled={page + 1 >= totalPages}
+                onClick={() => setPage((value) => Math.min(Math.max(totalPages - 1, 0), value + 1))}
+              >
+                Sau
               </Button>
-            </div>
+            </nav>
           </div>
         </>
       )}
@@ -709,7 +771,7 @@ function ApiAdminChecklist() {
       {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
       {loading ? <SkeletonRows label="Đang tải checklist" /> : entries.length ? (
         <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Tiêu chí</th><th className="whitespace-nowrap">Trạng thái</th><th className="min-w-[430px] whitespace-nowrap">Thao tác</th></tr></thead><tbody>
-          {entries.map((entry, index) => <tr key={entry.id}><td>{index + 1}</td><td className="font-semibold">{entry.question}</td><td className="whitespace-nowrap"><span className={`rounded-sm px-2 py-1 text-xs font-semibold ${entry.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}>{entry.active ? 'Đang hoạt động' : 'Không hoạt động'}</span></td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" variant="ghost" title="Đưa mục này lên trên một vị trí" disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}>Chuyển lên</Button><Button className="!px-2 whitespace-nowrap" variant="ghost" title="Đưa mục này xuống dưới một vị trí" disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}>Chuyển xuống</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title="Chỉnh sửa câu tiêu chí" disabled={savingId !== null} onClick={() => { setEditingError(''); setEditing(entry); }}>Sửa nội dung</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title={entry.active ? 'Không hiển thị mục này khi duyệt bài (không xoá)' : 'Hiển thị lại mục này khi duyệt bài'} disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}
+          {entries.map((entry, index) => <tr key={entry.id}><td>{index + 1}</td><td className="font-semibold">{entry.question}</td><td className="whitespace-nowrap"><span className={`rounded-sm px-2 py-1 text-xs font-semibold ${entry.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}>{entry.active ? 'Đang hoạt động' : 'Không hoạt động'}</span></td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" variant="ghost" aria-label="Chuyển lên" title="Đưa mục này lên trên một vị trí" disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}><Icon name="arrow" className="size-4 -rotate-90" /></Button><Button className="!px-2 whitespace-nowrap" variant="ghost" aria-label="Chuyển xuống" title="Đưa mục này xuống dưới một vị trí" disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}><Icon name="arrow" className="size-4 rotate-90" /></Button><Button className="!px-2 whitespace-nowrap" variant="outline" title="Chỉnh sửa câu tiêu chí" disabled={savingId !== null} onClick={() => { setEditingError(''); setEditing(entry); }}>Sửa nội dung</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title={entry.active ? 'Không hiển thị mục này khi duyệt bài (không xoá)' : 'Hiển thị lại mục này khi duyệt bài'} disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}
         </tbody></table></div>
       ) : error ? null : <EmptyState title="Chưa có tiêu chí" text="Hiện chưa có tiêu chí duyệt bài nào." />}
       {editing ? <ChecklistEditModal entry={editing === 'new' ? null : editing} saving={savingId !== null} error={editingError} onClose={() => { if (savingId === null) { setEditing(null); setEditingError(''); } }} onSave={(question) => void save(question)} /> : null}
@@ -834,7 +896,7 @@ export function ApiAdminCategories() {
   return <Panel title="Danh mục" description="Thứ tự trong bảng cũng là thứ tự danh mục hiển thị cho người dùng." action={<Button icon="add" disabled={loading || busy} onClick={() => setEditing('new')}>Thêm danh mục</Button>}>
     {notice ? <div className="mb-4"><Alert tone="success">{notice}</Alert></div> : null}
     {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
-    {loading ? <EmptyState title="Đang tải danh mục" text="Vui lòng chờ trong giây lát." /> : categories.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Tên</th>{hasParentCategory ? <th>Danh mục cha</th> : null}<th>Phân loại</th><th>Trạng thái</th><th className="whitespace-nowrap">Thao tác</th></tr></thead><tbody>{categories.map((category, index) => <tr key={category.id}><td>{index + 1}</td><td className="font-semibold">{category.name}</td>{hasParentCategory ? <td>{categories.find((entry) => entry.id === category.parentId)?.name ?? '—'}</td> : null}<td>{category.restricted ? 'Hạn chế' : 'Thông thường'}</td><td>{category.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" variant="ghost" title="Đưa danh mục này lên trên một vị trí" disabled={busy || index === 0} onClick={() => void move(index, -1)}>Chuyển lên</Button><Button className="!px-2 whitespace-nowrap" variant="ghost" title="Đưa danh mục này xuống dưới một vị trí" disabled={busy || index === categories.length - 1} onClick={() => void move(index, 1)}>Chuyển xuống</Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => setEditing(category)}>Sửa</Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => void toggleActive(category)}>{category.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có danh mục" text="Hiện chưa có danh mục nào." />}
+    {loading ? <EmptyState title="Đang tải danh mục" text="Vui lòng chờ trong giây lát." /> : categories.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Tên</th>{hasParentCategory ? <th>Danh mục cha</th> : null}<th>Phân loại</th><th>Trạng thái</th><th className="whitespace-nowrap">Thao tác</th></tr></thead><tbody>{categories.map((category, index) => <tr key={category.id}><td>{index + 1}</td><td className="font-semibold">{category.name}</td>{hasParentCategory ? <td>{categories.find((entry) => entry.id === category.parentId)?.name ?? '—'}</td> : null}<td>{category.restricted ? 'Hạn chế' : 'Thông thường'}</td><td>{category.active ? 'Đang dùng' : 'Tạm ẩn'}</td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" variant="ghost" aria-label="Chuyển lên" title="Đưa danh mục này lên trên một vị trí" disabled={busy || index === 0} onClick={() => void move(index, -1)}><Icon name="arrow" className="size-4 -rotate-90" /></Button><Button className="!px-2 whitespace-nowrap" variant="ghost" aria-label="Chuyển xuống" title="Đưa danh mục này xuống dưới một vị trí" disabled={busy || index === categories.length - 1} onClick={() => void move(index, 1)}><Icon name="arrow" className="size-4 rotate-90" /></Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => setEditing(category)}>Sửa</Button><Button className="!px-2 whitespace-nowrap" variant="outline" disabled={busy} onClick={() => void toggleActive(category)}>{category.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có danh mục" text="Hiện chưa có danh mục nào." />}
     {SHOW_CATEGORY_ATTRIBUTES && !loading && categories.length ? <ApiCategoryAttributes categories={categories} /> : null}
     {editing ? <ApiCategoryModal category={editing === 'new' ? null : editing} categories={categories} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
   </Panel>;
@@ -843,10 +905,10 @@ export function ApiAdminCategories() {
 export function ApiCategoryModal({ category, categories, saving, onClose, onSave }: { category: AdminCategoryResponse | null; categories: AdminCategoryResponse[]; saving: boolean; onClose: () => void; onSave: (input: AdminCategoryRequest) => void }) {
   const [name, setName] = useState(category?.name ?? '');
   const [parentId, setParentId] = useState(category?.parentId ? String(category.parentId) : '');
-  const [restricted, setRestricted] = useState(category?.restricted ?? false);
+  const [restricted] = useState(category?.restricted ?? false);
   const [boostable, setBoostable] = useState(category?.boostable ?? false);
   return <Modal title={category ? 'Sửa danh mục' : 'Thêm danh mục'} onClose={onClose}>
-    <div className="space-y-4"><Field label="Tên danh mục" value={name} onChange={(event) => setName(event.target.value)} /><Select label="Danh mục cha" value={parentId} onChange={(event) => setParentId(event.target.value)}><option value="">Không có</option>{categories.filter((entry) => entry.id !== category?.id).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</Select><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={restricted} onChange={(event) => setRestricted(event.target.checked)} />Danh mục hạn chế</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={boostable} onChange={(event) => setBoostable(event.target.checked)} />Cho phép đẩy tin</label>{category ? null : <p className="text-xs leading-5 text-text-muted">Danh mục mới tự xếp cuối danh sách. Dùng nút Chuyển lên hoặc Chuyển xuống để đổi vị trí.</p>}</div>
+    <div className="space-y-4"><Field label="Tên danh mục" value={name} onChange={(event) => setName(event.target.value)} /><Select label="Danh mục cha" value={parentId} onChange={(event) => setParentId(event.target.value)}><option value="">Không có</option>{categories.filter((entry) => entry.id !== category?.id).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</Select><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={boostable} onChange={(event) => setBoostable(event.target.checked)} />Cho phép đẩy tin</label>{category ? null : <p className="text-xs leading-5 text-text-muted">Danh mục mới tự xếp cuối danh sách. Dùng nút Chuyển lên hoặc Chuyển xuống để đổi vị trí.</p>}</div>
     <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !name.trim()} onClick={() => onSave({ name: name.trim(), parentId: parentId ? Number(parentId) : null, restricted, boostable })}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
   </Modal>;
 }

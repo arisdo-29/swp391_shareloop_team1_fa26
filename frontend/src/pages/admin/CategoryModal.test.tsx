@@ -50,6 +50,7 @@ describe('ApiCategoryModal', () => {
     const user = userEvent.setup();
     const { onSave } = renderModal();
 
+    expect(screen.queryByRole('checkbox', { name: 'Danh mục hạn chế' })).toBeNull();
     await user.type(screen.getByRole('textbox', { name: 'Tên danh mục' }), 'Nội thất');
     await user.click(screen.getByRole('checkbox', { name: 'Cho phép đẩy tin' }));
     await user.click(screen.getByRole('button', { name: 'Lưu' }));
@@ -65,9 +66,12 @@ describe('ApiCategoryModal', () => {
 
   it('sửa danh mục giữ nguyên thông tin cũ và không gửi sortOrder', async () => {
     const user = userEvent.setup();
-    const { onSave } = renderModal(existingCategory);
+    const { onSave } = renderModal({ ...existingCategory, restricted: true });
 
     expect(screen.getByRole('dialog', { name: 'Sửa danh mục' })).toBeTruthy();
+    expect(screen.queryByText('Danh mục hạn chế')).toBeNull();
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    expect(screen.getByRole('checkbox', { name: 'Cho phép đẩy tin' })).toBeTruthy();
     expect(screen.queryByText(/tự xếp cuối danh sách/)).toBeNull();
     const nameInput = screen.getByRole('textbox', { name: 'Tên danh mục' }) as HTMLInputElement;
     expect(nameInput.value).toBe('Đồ điện tử');
@@ -78,7 +82,7 @@ describe('ApiCategoryModal', () => {
     expect(onSave).toHaveBeenCalledWith({
       name: 'Điện tử gia dụng',
       parentId: null,
-      restricted: false,
+      restricted: true,
       boostable: true,
     });
   });

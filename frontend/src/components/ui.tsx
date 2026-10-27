@@ -6,57 +6,99 @@ import type {
   TextareaHTMLAttributes,
 } from 'react';
 import { useEffect, useId, useState } from 'react';
-import * as Icons from '@phosphor-icons/react';
+import type { IconWeight } from '@phosphor-icons/react';
+import { MagnifyingGlass } from '@phosphor-icons/react/dist/csr/MagnifyingGlass';
+import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
+import { Wallet } from '@phosphor-icons/react/dist/csr/Wallet';
+import { MapPin } from '@phosphor-icons/react/dist/csr/MapPin';
+import { Star } from '@phosphor-icons/react/dist/csr/Star';
+import { Package } from '@phosphor-icons/react/dist/csr/Package';
+import { CalendarBlank } from '@phosphor-icons/react/dist/csr/CalendarBlank';
+import { PaperPlaneTilt } from '@phosphor-icons/react/dist/csr/PaperPlaneTilt';
+import { List } from '@phosphor-icons/react/dist/csr/List';
+import { X } from '@phosphor-icons/react/dist/csr/X';
+import { Eye } from '@phosphor-icons/react/dist/csr/Eye';
+import { EyeSlash } from '@phosphor-icons/react/dist/csr/EyeSlash';
+import { CaretDown } from '@phosphor-icons/react/dist/csr/CaretDown';
+import { House } from '@phosphor-icons/react/dist/csr/House';
+import { ArrowsClockwise } from '@phosphor-icons/react/dist/csr/ArrowsClockwise';
+import { Sparkle } from '@phosphor-icons/react/dist/csr/Sparkle';
+import { DeviceMobile } from '@phosphor-icons/react/dist/csr/DeviceMobile';
+import { Chair } from '@phosphor-icons/react/dist/csr/Chair';
+import { BookOpen } from '@phosphor-icons/react/dist/csr/BookOpen';
+import { TShirt } from '@phosphor-icons/react/dist/csr/TShirt';
+import { ChatCircleDots } from '@phosphor-icons/react/dist/csr/ChatCircleDots';
+import { Bell } from '@phosphor-icons/react/dist/csr/Bell';
+import { SquaresFour } from '@phosphor-icons/react/dist/csr/SquaresFour';
+import { SignOut } from '@phosphor-icons/react/dist/csr/SignOut';
+import { UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
+import { PencilSimple } from '@phosphor-icons/react/dist/csr/PencilSimple';
+import { Trash } from '@phosphor-icons/react/dist/csr/Trash';
+import { ArrowClockwise } from '@phosphor-icons/react/dist/csr/ArrowClockwise';
+import { Image } from '@phosphor-icons/react/dist/csr/Image';
+import { VideoCamera } from '@phosphor-icons/react/dist/csr/VideoCamera';
+import { Check } from '@phosphor-icons/react/dist/csr/Check';
+import { ShieldCheck } from '@phosphor-icons/react/dist/csr/ShieldCheck';
+import { Funnel } from '@phosphor-icons/react/dist/csr/Funnel';
+import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
+import { Files } from '@phosphor-icons/react/dist/csr/Files';
+import { Users } from '@phosphor-icons/react/dist/csr/Users';
+import { ArrowsLeftRight } from '@phosphor-icons/react/dist/csr/ArrowsLeftRight';
+import { Coins } from '@phosphor-icons/react/dist/csr/Coins';
+import { GearSix } from '@phosphor-icons/react/dist/csr/GearSix';
+import { ClockCounterClockwise } from '@phosphor-icons/react/dist/csr/ClockCounterClockwise';
+import { DownloadSimple } from '@phosphor-icons/react/dist/csr/DownloadSimple';
+import { Circle } from '@phosphor-icons/react/dist/csr/Circle';
 import { Link } from 'react-router-dom';
 import type { Item, ItemCondition, ItemType, TransactionStatus, User } from '../types/domain';
 import { conditionLabel, txLabel } from '../utils/formatting';
 import { resolveMediaUrl } from '../services/mediaUrl';
 
 const iconMap = {
-  search: Icons.MagnifyingGlass,
-  add: Icons.Plus,
-  wallet: Icons.Wallet,
-  location: Icons.MapPin,
-  star: Icons.Star,
-  box: Icons.Package,
-  calendar: Icons.CalendarBlank,
-  send: Icons.PaperPlaneTilt,
-  menu: Icons.List,
-  close: Icons.X,
-  eye: Icons.Eye,
-  eyeSlash: Icons.EyeSlash,
-  chevronDown: Icons.CaretDown,
-  home: Icons.House,
-  browse: Icons.MagnifyingGlass,
-  activity: Icons.ArrowsClockwise,
-  ai: Icons.Sparkle,
-  device: Icons.DeviceMobile,
-  chair: Icons.Chair,
-  book: Icons.BookOpen,
-  shirt: Icons.TShirt,
-  package: Icons.Package,
-  messages: Icons.ChatCircleDots,
-  bell: Icons.Bell,
-  admin: Icons.SquaresFour,
-  logout: Icons.SignOut,
-  user: Icons.UserCircle,
-  edit: Icons.PencilSimple,
-  trash: Icons.Trash,
-  renew: Icons.ArrowClockwise,
-  image: Icons.Image,
-  video: Icons.VideoCamera,
-  check: Icons.Check,
-  shield: Icons.ShieldCheck,
-  filter: Icons.Funnel,
-  arrow: Icons.ArrowRight,
-  dashboard: Icons.SquaresFour,
-  article: Icons.Files,
-  group: Icons.Users,
-  transaction: Icons.ArrowsLeftRight,
-  payments: Icons.Coins,
-  settings: Icons.GearSix,
-  history: Icons.ClockCounterClockwise,
-  download: Icons.DownloadSimple,
+  search: MagnifyingGlass,
+  add: Plus,
+  wallet: Wallet,
+  location: MapPin,
+  star: Star,
+  box: Package,
+  calendar: CalendarBlank,
+  send: PaperPlaneTilt,
+  menu: List,
+  close: X,
+  eye: Eye,
+  eyeSlash: EyeSlash,
+  chevronDown: CaretDown,
+  home: House,
+  browse: MagnifyingGlass,
+  activity: ArrowsClockwise,
+  ai: Sparkle,
+  device: DeviceMobile,
+  chair: Chair,
+  book: BookOpen,
+  shirt: TShirt,
+  package: Package,
+  messages: ChatCircleDots,
+  bell: Bell,
+  admin: SquaresFour,
+  logout: SignOut,
+  user: UserCircle,
+  edit: PencilSimple,
+  trash: Trash,
+  renew: ArrowClockwise,
+  image: Image,
+  video: VideoCamera,
+  check: Check,
+  shield: ShieldCheck,
+  filter: Funnel,
+  arrow: ArrowRight,
+  dashboard: SquaresFour,
+  article: Files,
+  group: Users,
+  transaction: ArrowsLeftRight,
+  payments: Coins,
+  settings: GearSix,
+  history: ClockCounterClockwise,
+  download: DownloadSimple,
 } as const;
 
 export function Icon({
@@ -66,9 +108,9 @@ export function Icon({
 }: {
   name: keyof typeof iconMap | string;
   className?: string;
-  weight?: Icons.IconWeight;
+  weight?: IconWeight;
 }) {
-  const Glyph = iconMap[name as keyof typeof iconMap] ?? Icons.Circle;
+  const Glyph = iconMap[name as keyof typeof iconMap] ?? Circle;
   return <Glyph aria-hidden className={className} weight={weight} />;
 }
 

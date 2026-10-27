@@ -280,26 +280,42 @@ function ModerationThumbnailGroup({
   onPreview: (src: string, index: number) => void;
   mainThumbnail?: boolean;
 }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const activeIndex = Math.min(selectedIndex, images.length - 1);
+
   return (
     <div>
       <p className="mb-2 text-xs font-semibold text-text-secondary">{label}</p>
-      <div className={mainThumbnail ? 'grid grid-cols-4 gap-2' : 'flex flex-wrap gap-2'}>
+      {mainThumbnail ? (
+        <button
+          type="button"
+          aria-label={`Xem lớn ${label.toLowerCase()} ${activeIndex + 1}`}
+          onClick={() => onPreview(images[activeIndex], activeIndex)}
+          className="mx-auto mb-2 block w-fit max-w-full overflow-hidden rounded-md bg-white ring-1 ring-border transition hover:ring-primary/50"
+        >
+          <ItemImage
+            src={images[activeIndex]}
+            alt={`${label} ${activeIndex + 1}`}
+            className="h-auto w-auto max-h-56 max-w-full object-contain"
+          />
+        </button>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
         {images.map((image, index) => (
           <button
             key={`${image}-${index}`}
             type="button"
-            aria-label={`Xem lớn ${label.toLowerCase()} ${index + 1}`}
-            onClick={() => onPreview(image, index)}
+            aria-label={`${mainThumbnail ? 'Chọn' : 'Xem lớn'} ${label.toLowerCase()} ${index + 1}`}
+            aria-pressed={mainThumbnail ? index === activeIndex : undefined}
+            onClick={() => mainThumbnail ? setSelectedIndex(index) : onPreview(image, index)}
             className={`overflow-hidden rounded-md bg-white ring-1 ring-border transition hover:ring-primary/50 ${
-              mainThumbnail && index === 0 ? 'col-span-4' : ''
+              mainThumbnail ? 'block shrink-0 self-start' : ''
             }`}
           >
             <ItemImage
               src={image}
-              alt={`${label} ${index + 1}`}
-              className={`${
-                mainThumbnail && index === 0 ? 'h-56 w-full' : 'size-20'
-              } object-cover`}
+              alt={`${mainThumbnail ? 'Ảnh thu nhỏ món đồ' : label} ${index + 1}`}
+              className={mainThumbnail ? 'h-auto w-auto max-h-20 max-w-20 object-contain' : 'size-20 object-cover'}
             />
           </button>
         ))}
