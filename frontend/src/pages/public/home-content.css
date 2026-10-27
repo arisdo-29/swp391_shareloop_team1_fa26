@@ -469,6 +469,20 @@
   outline: 2px solid var(--color-primary);
   outline-offset: 3px;
 }
+.home-page .home-hero-search-form > div:first-child,
+.home-page .home-hero-search-form > div:first-child:hover,
+.home-page .home-hero-search-form > div:first-child:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: none;
+}
+.home-page .home-hero-search-form > div:first-child input,
+.home-page .home-hero-search-form > div:first-child input:hover,
+.home-page .home-hero-search-form > div:first-child input:focus,
+.home-page .home-hero-search-form > div:first-child input:focus-visible {
+  border: 0;
+  outline: none;
+  box-shadow: none;
+}
 .home-content a span > svg:last-child,
 .home-content .home-ai a svg:last-child {
   transition: transform 240ms var(--home-ease);

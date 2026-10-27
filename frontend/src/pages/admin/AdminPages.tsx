@@ -59,11 +59,40 @@ export function AdminSettings() {
   return <AdminConfigs />;
 }
 
+const AUDIT_LOG_PAGE_SIZE = 20;
+
+type AuditPaginationItem = number | 'start-ellipsis' | 'end-ellipsis';
+
+function auditPaginationItems(currentPage: number, totalPages: number): AuditPaginationItem[] {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index);
+
+  const lastPage = totalPages - 1;
+  let rangeStart: number;
+  let rangeEnd: number;
+
+  if (currentPage <= 2) {
+    rangeStart = 1;
+    rangeEnd = 3;
+  } else if (currentPage >= lastPage - 2) {
+    rangeStart = lastPage - 3;
+    rangeEnd = lastPage - 1;
+  } else {
+    rangeStart = currentPage - 1;
+    rangeEnd = currentPage + 1;
+  }
+
+  const items: AuditPaginationItem[] = [0];
+  if (rangeStart > 1) items.push('start-ellipsis');
+  for (let pageIndex = rangeStart; pageIndex <= rangeEnd; pageIndex += 1) items.push(pageIndex);
+  if (rangeEnd < lastPage - 1) items.push('end-ellipsis');
+  items.push(lastPage);
+  return items;
+}
+
 export function AdminAuditLogs() {
   const [actionTypes, setActionTypes] = useState<{ type: string; label: string }[]>([]);
   const [logs, setLogs] = useState<ActivityLogResponse[]>([]);
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(20);
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -87,12 +116,23 @@ export function AdminAuditLogs() {
     setError('');
 
     adminAuditApi
-      .list({ ...filters, page, size: pageSize })
+      .list({ ...filters, page, size: AUDIT_LOG_PAGE_SIZE })
       .then((response) => {
         if (!active) return;
-        setLogs(response.content);
+
+        const responseTotalPages = Math.max(response.totalPages, 0);
+        const lastPage = Math.max(responseTotalPages - 1, 0);
+        const responsePage = Math.min(Math.max(response.number, 0), lastPage);
+
         setTotalElements(response.totalElements);
-        setTotalPages(response.totalPages);
+        setTotalPages(responseTotalPages);
+
+        if (page !== responsePage) {
+          setPage(responsePage);
+          return;
+        }
+
+        setLogs(response.content);
       })
       .catch((apiError: ApiError) => {
         if (!active) return;
@@ -108,7 +148,7 @@ export function AdminAuditLogs() {
     return () => {
       active = false;
     };
-  }, [filters, page, pageSize, reloadKey]);
+  }, [filters, page, reloadKey]);
 
   const applyFilters = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -157,58 +197,80 @@ export function AdminAuditLogs() {
             Thử lại
           </Button>
         </div>
-      ) : logs.length === 0 ? (
-        <EmptyState icon="history" title="Chưa có nhật ký" text="Không có hành động nào phù hợp với bộ lọc hiện tại." />
       ) : (
         <>
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Thời gian</th>
-                  <th>Người thực hiện</th>
-                  <th>Hành động</th>
-                  <th>Đối tượng</th>
-                  <th>Chi tiết</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log) => (
-                  <tr key={log.id}>
-                    <td className="whitespace-nowrap">{formatActivityLogTime(log.createdAt)}</td>
-                    <td>{log.actorName ?? (log.actorId ? 'Quản trị viên' : 'Hệ thống')}</td>
-                    <td>{log.typeLabel ?? activityLogTypeLabel(log.type)}</td>
-                    <td>{activityLogTarget(log)}</td>
-                    <td><ActivityLogDetail log={log} /></td>
+          {logs.length === 0 ? (
+            <EmptyState icon="history" title="Chưa có nhật ký" text="Không có hành động nào phù hợp với bộ lọc hiện tại." />
+          ) : (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Thời gian</th>
+                    <th>Người thực hiện</th>
+                    <th>Hành động</th>
+                    <th>Đối tượng</th>
+                    <th>Chi tiết</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {logs.map((log) => (
+                    <tr key={log.id}>
+                      <td className="whitespace-nowrap">{formatActivityLogTime(log.createdAt)}</td>
+                      <td>{log.actorName ?? (log.actorId ? 'Quản trị viên' : 'Hệ thống')}</td>
+                      <td>{log.typeLabel ?? activityLogTypeLabel(log.type)}</td>
+                      <td>{activityLogTarget(log)}</td>
+                      <td><ActivityLogDetail log={log} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           <div className="mt-4 flex flex-col gap-3 rounded-lg bg-white p-3 text-sm text-text-secondary ring-1 ring-border/80 sm:flex-row sm:items-center sm:justify-between">
             <p>
               {totalElements.toLocaleString('vi-VN')} bản ghi · Trang {page + 1}/{Math.max(totalPages, 1)}
             </p>
-            <div className="flex items-center gap-2">
-              <Select
-                aria-label="Số bản ghi mỗi trang"
-                value={pageSize}
-                onChange={(event) => {
-                  setPageSize(Number(event.target.value));
-                  setPage(0);
-                }}
+            <nav
+              aria-label="Phân trang nhật ký"
+              className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end"
+            >
+              <Button
+                className="min-w-24 flex-1 sm:flex-none"
+                variant="outline"
+                disabled={page === 0}
+                onClick={() => setPage((value) => Math.max(0, value - 1))}
               >
-                <option value={10}>10 / trang</option>
-                <option value={20}>20 / trang</option>
-                <option value={50}>50 / trang</option>
-              </Select>
-              <Button variant="outline" disabled={page === 0} onClick={() => setPage((value) => value - 1)}>
-                Trang trước
+                Trước
               </Button>
-              <Button variant="outline" disabled={page + 1 >= totalPages} onClick={() => setPage((value) => value + 1)}>
-                Trang sau
+              {auditPaginationItems(page, Math.max(totalPages, 1)).map((item) =>
+                typeof item === 'number' ? (
+                  <Button
+                    key={item}
+                    aria-label={`Trang ${item + 1}`}
+                    aria-current={item === page ? 'page' : undefined}
+                    className="min-w-11 px-3"
+                    size="sm"
+                    variant={item === page ? 'primary' : 'outline'}
+                    onClick={() => setPage(item)}
+                  >
+                    {item + 1}
+                  </Button>
+                ) : (
+                  <span key={item} aria-hidden="true" className="px-1 text-text-muted">
+                    …
+                  </span>
+                ),
+              )}
+              <Button
+                className="min-w-24 flex-1 sm:flex-none"
+                variant="outline"
+                disabled={page + 1 >= totalPages}
+                onClick={() => setPage((value) => Math.min(Math.max(totalPages - 1, 0), value + 1))}
+              >
+                Sau
               </Button>
-            </div>
+            </nav>
           </div>
         </>
       )}
