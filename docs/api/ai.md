@@ -29,11 +29,14 @@ Response `200`:
   },
   "quota": { "freeUsesRemaining": 4, "feeCredits": 2, "hasToppedUp": true },
   "chargedCredits": 0,
-  "fallback": false
+  "fallback": false,
+  "broadened": false
 }
 ```
 
-`filters` là bộ lọc do OpenRouter dùng `cohere/north-mini-code:free` trích xuất qua lời gọi hàm với schema riêng và được backend kiểm tra lại trước khi truy vấn. Model này không hỗ trợ `response_format`; backend chỉ nhận đối số JSON của hàm đúng tên và đúng một lời gọi. `categoryId` phải thuộc danh mục đang hoạt động; `areaId` phải là ID quận/huyện đang hoạt động. `condition` thuộc `NEW`, `LIKE_NEW`, `GOOD`, `DEFECTIVE`; `offerType` thuộc `GIVE`, `SWAP`. Mỗi trường có thể là `null`. `results.items` là `ItemResponse` từ cơ sở dữ liệu, chỉ gồm bài `APPROVED`, còn hoạt động và chưa xoá. LLM không tạo bài, diễn giải kết quả hay quyết định bài nào được duyệt.
+`filters` là bộ lọc do OpenRouter dùng `cohere/north-mini-code:free` trích xuất qua lời gọi hàm với schema riêng và được backend kiểm tra lại trước khi truy vấn. Model này không hỗ trợ `response_format`; backend nhận đối số JSON của hàm đúng tên hoặc JSON hợp lệ trong nội dung phản hồi. `categoryId` phải thuộc danh mục đang hoạt động; `areaId` phải là ID quận/huyện đang hoạt động. `condition` thuộc `NEW`, `LIKE_NEW`, `GOOD`, `DEFECTIVE`; `offerType` thuộc `GIVE`, `SWAP`. Mỗi trường có thể là `null`. `results.items` là `ItemResponse` từ cơ sở dữ liệu, chỉ gồm bài `APPROVED`, còn hoạt động và chưa xoá. LLM không tạo bài, diễn giải kết quả hay quyết định bài nào được duyệt.
+
+Backend truy vấn bằng đầy đủ bộ lọc trước. Nếu không có bài và AI đã trả từ khóa cùng ít nhất một bộ lọc khác, backend thử tìm theo từ khóa, không giới hạn danh mục, khu vực, tình trạng hoặc hình thức. Nếu lượt tìm thứ hai có bài, `broadened: true`; `filters` vẫn là bộ lọc AI đã hiểu để FE giải thích vì sao kết quả được mở rộng. Đây vẫn là một lượt gọi AI và không có phí bổ sung. `fallback: true` chỉ dành cho trường hợp AI lỗi hoặc thiếu key; kết quả mở rộng sau lời gọi AI thành công có `fallback: false`.
 
 Nội dung `query` được gửi riêng ở vai trò `user`; chỉ thị hệ thống chứa schema và ID danh mục/quận huyện hợp lệ. Backend không đính kèm hồ sơ, tên, email, số điện thoại hoặc dữ liệu ví từ tài khoản người dùng tới OpenRouter. Bộ lọc tầng 1 từ chối thông tin liên hệ rõ ràng trong câu nhập; người dùng vẫn cần tránh nhập tên hoặc dữ liệu cá nhân khác. Backend ghi `AiUsage` cho từng lượt gọi với vai trò `SEARCH`, model, kết quả và thời gian; không ghi câu người dùng hoặc API key.
 
