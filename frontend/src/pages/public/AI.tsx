@@ -34,6 +34,7 @@ export function AI() {
   const [searchError, setSearchError] = useState('');
   const [chargedCredits, setChargedCredits] = useState(0);
   const [fallback, setFallback] = useState(false);
+  const [broadened, setBroadened] = useState(false);
   const [needsTopUp, setNeedsTopUp] = useState(false);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [areas, setAreas] = useState<AreaResponse[]>([]);
@@ -48,6 +49,7 @@ export function AI() {
     setResults([]);
     setChargedCredits(0);
     setFallback(false);
+    setBroadened(false);
     setNeedsTopUp(false);
     if (userId) {
       aiApi.quota().then((response) => { if (active) setQuota(response); })
@@ -73,6 +75,7 @@ export function AI() {
     setSearchError('');
     setChargedCredits(0);
     setFallback(false);
+    setBroadened(false);
     setNeedsTopUp(false);
     setSubmittedQuery(normalizedQuery);
     setStatus('loading');
@@ -95,6 +98,7 @@ export function AI() {
       setQuota(response.quota);
       setChargedCredits(response.chargedCredits);
       setFallback(response.fallback);
+      setBroadened(response.broadened);
       setStatus('success');
       if (response.chargedCredits > 0) refreshWallet();
       try {
@@ -261,6 +265,14 @@ export function AI() {
                 </span>
               ) : null}
             </div>
+
+            {broadened ? (
+              <div className="mt-5">
+                <Alert tone="warning">
+                  Không có món khớp tất cả bộ lọc AI đã chọn. Các món dưới đây khớp từ khóa nhưng có thể khác danh mục, khu vực, tình trạng hoặc hình thức bạn yêu cầu.
+                </Alert>
+              </div>
+            ) : null}
 
             {results.length ? (
               <>

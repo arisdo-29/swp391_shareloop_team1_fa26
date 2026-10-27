@@ -20,6 +20,7 @@ export interface AiSearchResponse {
   quota: AiQuotaResponse;
   chargedCredits: number;
   fallback: boolean;
+  broadened: boolean;
 }
 
 export interface AiQuotaResponse {

@@ -8,4 +8,5 @@ public record AiSearchResponse(
         PageResponse<ItemResponse> results,
         AiQuotaResponse quota,
         int chargedCredits,
-        boolean fallback) {}
+        boolean fallback,
+        boolean broadened) {}
