@@ -41,7 +41,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)
 class AiSearchServiceTest {
-    private static final String MODEL = "google/gemma-4-31b-it:free";
+    private static final String MODEL = "cohere/north-mini-code:free";
 
     @Mock
     AiSearchClient aiClient;

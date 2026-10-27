@@ -118,7 +118,7 @@ class AiQuotaIT extends IntegrationTest {
         when(aiClient.extract(eq("sách"), any(), eq(Duration.ofSeconds(15))))
                 .thenReturn(
                         new AiResponse(
-                                "google/gemma-4-31b-it:free",
+                                "cohere/north-mini-code:free",
                                 "{\"keywords\":\"sách\",\"categoryId\":null,\"areaId\":null,\"condition\":null,\"offerType\":null}"));
         when(categoryService.listActive()).thenReturn(List.of());
         when(areaService.listTree()).thenReturn(List.of());
