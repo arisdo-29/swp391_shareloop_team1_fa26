@@ -1,10 +1,26 @@
 # Profile prod: mọi thông tin kết nối và bí mật đọc từ biến môi trường,
 # không có giá trị mặc định cho bí mật. Xem .env.example.
 spring:
+  # Giảm RAM cho Render 512 MB: chỉ tạo bean khi cần, tắt JMX
+  main:
+    lazy-initialization: true
+  jmx:
+    enabled: false
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      idle-timeout: 60000
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        query:
+          plan_cache_max_size: 64
+        default_batch_fetch_size: 20
   flyway:
     out-of-order: false
   mail:
@@ -14,7 +30,19 @@ spring:
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
 
+logging:
+  level:
+    org.hibernate.SQL: WARN
+
 server:
+  port: ${PORT:8080}                # Render cấp cổng qua biến PORT
+  compression:
+    enabled: false
+  tomcat:
+    threads:
+      max: 20
+      min-spare: 2
+    accept-count: 20
   # Chạy sau proxy của nơi deploy: đọc IP thật của người dùng từ header X-Forwarded-For
   forward-headers-strategy: framework
 
@@ -22,6 +50,13 @@ management:
   health:
     mail:
       enabled: false                # không để /actuator/health báo DOWN vì không nối được SMTP
+
+# Production không có tài khoản nào được bỏ qua giới hạn đăng bài
+shareloop:
+  post-limit-bypass-emails: []
+  # Mặc định TẮT. Staging bật bằng SHARELOOP_SEEDTESTACCOUNTS_ENABLED=true và đặt SHARELOOP_SEEDTESTACCOUNTS_PASSWORD
+  seed-test-accounts:
+    enabled: false
 
 app:
   jwt:

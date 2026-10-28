@@ -12,6 +12,7 @@ import {
 const Home = lazy(() => import('../pages/public/Home').then((module) => ({ default: module.Home })));
 const Browse = lazy(() => import('../pages/public/Browse').then((module) => ({ default: module.Browse })));
 const ProductDetail = lazy(() => import('../pages/public/ProductDetail').then((module) => ({ default: module.ProductDetail })));
+const About = lazy(() => import('../pages/public/About').then((module) => ({ default: module.About })));
 const AI = lazy(() => import('../pages/public/AI').then((module) => ({ default: module.AI })));
 const Login = lazy(() => import('../pages/auth/Login').then((module) => ({ default: module.Login })));
 const Register = lazy(() => import('../pages/auth/Register').then((module) => ({ default: module.Register })));
@@ -29,6 +30,7 @@ const ReportResponse = lazy(() => import('../pages/user/ReportResponse').then((m
 const AdminLayout = lazy(() => import('../pages/admin/AdminLayout').then((module) => ({ default: module.AdminLayout })));
 const AdminAnomalies = lazy(() => import('../pages/admin/AdminAnomalies').then((module) => ({ default: module.AdminAnomalies })));
 const AdminComplaints = lazy(() => import('../pages/admin/AdminComplaints').then((module) => ({ default: module.AdminComplaints })));
+const AdminTransactions = lazy(() => import('../pages/admin/AdminTransactions').then((module) => ({ default: module.AdminTransactions })));
 const AdminTopUpOrders = lazy(() => import('../pages/admin/AdminTopUpOrders').then((module) => ({ default: module.AdminTopUpOrders })));
 const AdminReputation = lazy(() => import('../pages/admin/AdminReputation').then((module) => ({ default: module.AdminReputation })));
 const AdminAccounts = lazy(() => import('../pages/admin/AdminAccounts').then((module) => ({ default: module.AdminAccounts })));
@@ -54,6 +56,7 @@ export const router = createBrowserRouter([
           { path: '/browse', element: <Browse /> },
           { path: '/items/:id', element: <ProductDetail /> },
           { path: '/product/:id', element: <ProductDetail /> },
+          { path: '/about', element: <About /> },
         ],
       },
       {
@@ -115,8 +118,8 @@ export const router = createBrowserRouter([
               { path: 'reputation', element: <AdminReputation /> },
               // Gộp "Khóa tài khoản" vào Quản lý tài khoản: giữ đường dẫn cũ để link đã lưu vẫn dùng được.
               { path: 'locked-users', element: <Navigate to="/admin/users" replace /> },
-              { path: 'transactions', element: <Navigate to="/admin" replace /> },
-              { path: 'transactions/:transactionId', element: <Navigate to="/admin" replace /> },
+              { path: 'transactions', element: <AdminTransactions /> },
+              { path: 'transactions/:transactionId', element: <Navigate to="/admin/transactions" replace /> },
               { path: 'complaints', element: <AdminComplaints /> },
               { path: 'disputes', element: <AdminComplaints /> },
               { path: 'alerts', element: <AdminAnomalies /> },

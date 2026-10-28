@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -15,8 +16,10 @@ import static org.mockito.Mockito.when;
 import com.shareloop.catalog.service.CategoryAttributeService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
+import com.shareloop.item.PostLimitProperties;
 import com.shareloop.item.dto.CreateItemRequest;
 import com.shareloop.item.dto.ItemResponse;
+import com.shareloop.item.dto.PostingQuotaResponse;
 import com.shareloop.item.dto.UpdateItemRequest;
 import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
@@ -30,11 +33,14 @@ import com.shareloop.media.service.MediaService;
 import com.shareloop.moderation.ModerationResult;
 import com.shareloop.moderation.event.ItemScreeningRequestedEvent;
 import com.shareloop.moderation.service.ContentModerationService;
+import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.dto.UserBrief;
+import com.shareloop.user.service.UserService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +54,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -85,7 +93,13 @@ class ItemServiceTest {
     ReputationService reputationService;
 
     @Mock
+    UserService userService;
+
+    @Mock
     ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    PostLimitProperties postLimitProperties;
 
     @InjectMocks
     ItemService itemService;
@@ -97,8 +111,15 @@ class ItemServiceTest {
                 .thenReturn(ModerationResult.pass());
         lenient().when(reputationService.getRank(10L)).thenReturn(Rank.BRONZE);
         lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_BRONZE)).thenReturn(3);
+        lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_GIVE_ITEMS)).thenReturn(5);
         // Mock mặc định trả false nên phải cho phép đăng bài, riêng test 0 sao sẽ ghi đè
         lenient().when(reputationService.canPost(anyLong())).thenReturn(true);
+        lenient()
+                .when(reputationService.getReputationSummary(10L))
+                .thenReturn(new ReputationSummary(10L, 4, Rank.SILVER, 0.9));
+        lenient()
+                .when(userService.findBriefs(List.of(10L)))
+                .thenReturn(Map.of(10L, new UserBrief(10L, "Người thật", "user@example.test")));
     }
 
     @Test
@@ -158,11 +179,20 @@ class ItemServiceTest {
 
     @Test
     void createItemAtBronzeLimitReturnsConfiguredLimit() {
-        when(itemRepository.countByDonorIdAndStatusInAndIsActiveTrue(
-                        10L, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED)))
+        when(itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(
+                        10L, OfferType.SWAP, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED)))
                 .thenReturn(3L);
         CreateItemRequest request = new CreateItemRequest(
-                1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
+                1L,
+                1L,
+                OfferType.SWAP,
+                "Sách Toán",
+                "Sách mới",
+                "Sách Văn",
+                ItemCondition.NEW,
+                null,
+                null,
+                threeImages());
 
         assertThatThrownBy(() -> itemService.createItem(10L, request))
                 .isInstanceOf(BusinessException.class)
@@ -177,11 +207,162 @@ class ItemServiceTest {
     }
 
     @Test
+    void createItem_whenSixthGiveItem_throwsGiveLimitReachedWithDetails() {
+        // given: mọi hạng tối đa 5 bài Cho tặng
+        when(itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(
+                        10L, OfferType.GIVE, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED)))
+                .thenReturn(5L);
+        CreateItemRequest request = new CreateItemRequest(
+                1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
+
+        // when
+        assertThatThrownBy(() -> itemService.createItem(10L, request))
+                // then
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode()).isEqualTo(ItemErrorCode.ITEM_GIVE_LIMIT_REACHED);
+                    assertThat(businessException.getDetails())
+                            .containsEntry("limit", 5)
+                            .containsEntry("activeCount", 5L);
+                });
+        verifyNoInteractions(postFeeService);
+    }
+
+    @Test
+    void createItem_whenGiveItemsFullButCreatingSwap_isNotBlockedByGiveCount() {
+        // given: 5 bài Cho tặng nhưng hạng Đồng cho 3 bài Trao đổi và hiện có 0
+        imageLimits();
+        when(itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(
+                        10L, OfferType.SWAP, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED)))
+                .thenReturn(0L);
+        CreateItemRequest request = new CreateItemRequest(
+                1L,
+                1L,
+                OfferType.SWAP,
+                "Sách Toán",
+                "Sách mới",
+                "Sách Văn",
+                ItemCondition.NEW,
+                null,
+                null,
+                threeImages());
+        when(itemRepository.saveAndFlush(any(Item.class))).thenAnswer(invocation -> {
+            Item item = invocation.getArgument(0);
+            ReflectionTestUtils.setField(item, "id", 100L);
+            return item;
+        });
+
+        // when
+        ItemResponse response = itemService.createItem(10L, request);
+
+        // then
+        assertThat(response.id()).isEqualTo(100L);
+        verify(itemRepository, never())
+                .countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(anyLong(), eq(OfferType.GIVE), any());
+    }
+
+    @Test
+    void getPostingQuota_returnsSeparateGiveAndSwapCountsWithRankLimits() {
+        // given
+        when(userService.findEmailById(10L)).thenReturn("user@shareloop.com");
+        when(postLimitProperties.canBypassPostLimit("user@shareloop.com")).thenReturn(false);
+        when(reputationService.getRank(10L)).thenReturn(Rank.GOLD);
+        when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_GOLD)).thenReturn(15);
+        List<ItemStatus> counted = List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED);
+        when(itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(10L, OfferType.GIVE, counted))
+                .thenReturn(2L);
+        when(itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(10L, OfferType.SWAP, counted))
+                .thenReturn(9L);
+
+        // when
+        PostingQuotaResponse quota = itemService.getPostingQuota(10L);
+
+        // then
+        assertThat(quota.give()).isEqualTo(new PostingQuotaResponse.Quota(2, 5));
+        assertThat(quota.swap()).isEqualTo(new PostingQuotaResponse.Quota(9, 15));
+        assertThat(quota.rank()).isEqualTo("GOLD");
+    }
+
+    @Test
+    void getPostingQuota_whenDiamond_swapLimitIsUnlimited() {
+        // given
+        when(userService.findEmailById(10L)).thenReturn("user@shareloop.com");
+        when(postLimitProperties.canBypassPostLimit("user@shareloop.com")).thenReturn(false);
+        when(reputationService.getRank(10L)).thenReturn(Rank.DIAMOND);
+        when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_DIAMOND)).thenReturn(-1);
+
+        // when
+        PostingQuotaResponse quota = itemService.getPostingQuota(10L);
+
+        // then
+        assertThat(quota.swap().limit()).isEqualTo(-1);
+        assertThat(quota.give().limit()).isEqualTo(5);
+    }
+
+    @Test
+    void getPostingQuota_whenBypassAccount_reportsUnlimited() {
+        // given
+        when(userService.findEmailById(10L)).thenReturn("tester@shareloop.com");
+        when(postLimitProperties.canBypassPostLimit("tester@shareloop.com")).thenReturn(true);
+        when(reputationService.getRank(10L)).thenReturn(Rank.BRONZE);
+
+        // when
+        PostingQuotaResponse quota = itemService.getPostingQuota(10L);
+
+        // then
+        assertThat(quota.give().limit()).isEqualTo(-1);
+        assertThat(quota.swap().limit()).isEqualTo(-1);
+    }
+
+    @Test
+    void createItem_whenEmailInBypassList_createsItemOverLimitAndHoldsFee() {
+        // given
+        imageLimits();
+        when(userService.findEmailById(10L)).thenReturn("tester1@shareloop.test");
+        when(postLimitProperties.canBypassPostLimit("tester1@shareloop.test")).thenReturn(true);
+        when(itemRepository.saveAndFlush(any(Item.class))).thenAnswer(invocation -> {
+            Item item = invocation.getArgument(0);
+            ReflectionTestUtils.setField(item, "id", 100L);
+            return item;
+        });
+        CreateItemRequest request = new CreateItemRequest(
+                1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
+
+        // when
+        ItemResponse response = itemService.createItem(10L, request);
+
+        // then
+        assertThat(response.id()).isEqualTo(100L);
+        verify(itemRepository, never()).countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(anyLong(), any(), any());
+        verify(postFeeService).holdPostFee(100L, 10L);
+    }
+
+    @Test
+    void createItem_whenEmailNotInBypassListAndOverLimit_throwsLimitReachedAndHoldsNoFee() {
+        // given
+        when(userService.findEmailById(10L)).thenReturn("user@shareloop.com");
+        when(postLimitProperties.canBypassPostLimit("user@shareloop.com")).thenReturn(false);
+        when(itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(
+                        10L, OfferType.GIVE, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED)))
+                .thenReturn(5L);
+        CreateItemRequest request = new CreateItemRequest(
+                1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
+
+        // when
+        assertThatThrownBy(() -> itemService.createItem(10L, request))
+                // then
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_GIVE_LIMIT_REACHED);
+        verifyNoInteractions(postFeeService);
+    }
+
+    @Test
     void createItemUsesSilverConfiguredLimit() {
         when(reputationService.getRank(10L)).thenReturn(Rank.SILVER);
         when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_SILVER)).thenReturn(7);
-        when(itemRepository.countByDonorIdAndStatusInAndIsActiveTrue(
-                        10L, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED)))
+        when(itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(
+                        10L, OfferType.SWAP, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED)))
                 .thenReturn(7L);
         CreateItemRequest request = new CreateItemRequest(
                 1L,
@@ -207,7 +388,16 @@ class ItemServiceTest {
         when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_DIAMOND)).thenReturn(-1);
         imageLimits();
         CreateItemRequest request = new CreateItemRequest(
-                1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
+                1L,
+                1L,
+                OfferType.SWAP,
+                "Sách Toán",
+                "Sách mới",
+                "Sách Văn",
+                ItemCondition.NEW,
+                null,
+                null,
+                threeImages());
         when(itemRepository.saveAndFlush(any(Item.class))).thenAnswer(invocation -> {
             Item item = invocation.getArgument(0);
             ReflectionTestUtils.setField(item, "id", 100L);
@@ -216,7 +406,7 @@ class ItemServiceTest {
 
         itemService.createItem(10L, request);
 
-        verify(itemRepository, never()).countByDonorIdAndStatusInAndIsActiveTrue(anyLong(), any());
+        verify(itemRepository, never()).countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(anyLong(), any(), any());
     }
 
     @Test
@@ -348,6 +538,10 @@ class ItemServiceTest {
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.status()).isEqualTo(ItemStatus.APPROVED);
+        assertThat(response.donorName()).isEqualTo("Người thật");
+        assertThat(response.donorTrustStars()).isEqualTo(4);
+        assertThat(response.donorRank()).isEqualTo("SILVER");
+        assertThat(response.donorAsDescribedRate()).isEqualTo(0.9);
     }
 
     @Test
@@ -575,6 +769,35 @@ class ItemServiceTest {
     }
 
     @Test
+    void releaseIfReserved_whenItemReserved_returnsItemToApproved() {
+        // given
+        Item item = new Item(10L, 1L, 1L, OfferType.SWAP, "Sách", "Mô tả", "Vở", ItemCondition.NEW, null, null);
+        item.approve();
+        item.reserve();
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        // when
+        itemService.releaseIfReserved(1L);
+
+        // then
+        assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
+    }
+
+    @Test
+    void releaseIfReserved_whenItemNotReserved_doesNothing() {
+        // given
+        Item item = new Item(10L, 1L, 1L, OfferType.SWAP, "Sách", "Mô tả", "Vở", ItemCondition.NEW, null, null);
+        item.approve();
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        // when
+        itemService.releaseIfReserved(1L);
+
+        // then
+        assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
+    }
+
+    @Test
     void markTradedSetsStatusToTraded() {
         Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
         item.approve();
@@ -706,5 +929,30 @@ class ItemServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_REMOVE_NOT_ALLOWED);
         assertThat(item.isDeleted()).isFalse();
         verifyNoInteractions(postFeeService);
+    }
+
+    @Test
+    void listPublicItemsCapsBoostsAndKeepsAllItemsAcrossPages() {
+        List<Item> items = new java.util.ArrayList<>();
+        for (long id = 7; id >= 1; id--) {
+            Item item = new Item(
+                    10L, 1L, 1L, OfferType.GIVE, "Item " + id, "Description", null, ItemCondition.NEW, null, null);
+            item.approve();
+            ReflectionTestUtils.setField(item, "id", id);
+            items.add(item);
+        }
+        when(configService.getInt(ConfigKey.BOOST_MAX_PER_PAGE)).thenReturn(3);
+        when(listingFeeQueryService.findActiveBoostedIds(any())).thenReturn(List.of(1L, 2L, 3L, 4L));
+        when(itemRepository.findVisibleByFilters(any(), any(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(items));
+        when(listingFeeQueryService.findDisplayWindows(any())).thenReturn(Map.of());
+
+        var first = itemService.listPublicItems(null, null, null, null, null, 0, 4);
+        var second = itemService.listPublicItems(null, null, null, null, null, 1, 4);
+
+        assertThat(first.items()).extracting(ItemResponse::id).containsExactly(4L, 3L, 2L, 7L);
+        assertThat(second.items()).extracting(ItemResponse::id).containsExactly(1L, 6L, 5L);
+        assertThat(first.totalElements()).isEqualTo(7);
+        assertThat(first.totalPages()).isEqualTo(2);
     }
 }

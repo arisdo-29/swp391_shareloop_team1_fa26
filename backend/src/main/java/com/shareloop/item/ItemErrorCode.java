@@ -13,6 +13,7 @@ public enum ItemErrorCode implements ErrorCode {
     ITEM_INVALID_IMAGE(HttpStatus.BAD_REQUEST, "Ảnh phải là URL trả về từ API upload media."),
     ITEM_INVALID_IMAGE_COUNT(HttpStatus.UNPROCESSABLE_CONTENT, "Bài đăng cần từ 3 đến 8 ảnh."),
     ITEM_ACTIVE_LIMIT_REACHED(HttpStatus.CONFLICT, "Bạn đã đạt giới hạn bài đăng đang hoạt động."),
+    ITEM_GIVE_LIMIT_REACHED(HttpStatus.CONFLICT, "Bạn đã đạt giới hạn bài Cho tặng đang hoạt động."),
     ITEM_DEFECT_IMAGES_REQUIRED(HttpStatus.UNPROCESSABLE_CONTENT, "Đồ có lỗi cần ít nhất một ảnh chụp chỗ lỗi."),
     ITEM_DEFECT_IMAGES_NOT_ALLOWED(HttpStatus.UNPROCESSABLE_CONTENT, "Chỉ đồ có lỗi mới dùng ảnh lỗi."),
     ITEM_OPERATING_STATUS_REQUIRED(HttpStatus.UNPROCESSABLE_CONTENT, "Đồ điện tử cần khai trạng thái hoạt động."),

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Button, EmptyState, PageHeader } from '../../components/ui';
+import { Alert, Button, EmptyState, PageHeader, SkeletonRows } from '../../components/ui';
 import type { AdminConfigResponse } from '../../services/adminConfigApi';
 import { ConfigEditDialog } from './ConfigEditDialog';
 import { GraceStarSection } from './GraceStarSection';
@@ -58,7 +58,6 @@ function EditableValue({
     <span className="inline-flex items-center gap-2">
       <span className="font-semibold tabular-nums">{formatConfigValue(config)}</span>
       <Button
-        size="sm"
         variant="ghost"
         className="!min-h-7 !px-2"
         aria-label={`Sửa ${config.label}`}
@@ -113,11 +112,11 @@ export function AdminReputation() {
       ) : null}
 
       {loading ? (
-        <EmptyState title="Đang tải cấu hình" text="Vui lòng chờ trong giây lát." />
+        <SkeletonRows label="Đang tải cấu hình" />
       ) : error ? (
         <div className="space-y-3">
           <Alert tone="error">{error}</Alert>
-          <Button size="sm" variant="outline" onClick={reload}>
+          <Button variant="outline" onClick={reload}>
             Thử lại
           </Button>
         </div>

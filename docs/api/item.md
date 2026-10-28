@@ -18,7 +18,7 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
 - Sau khi transaction tạo hoặc sửa bài commit thành công, luồng nền gửi nội dung bài đến OpenRouter. Chỉ gửi tiêu đề, mô tả, món mong muốn, danh mục, tình trạng và loại bài; không gửi ảnh hay dữ liệu tài khoản người đăng.
 - Tầng 2 ghi `items.ai_risk` (`LOW`, `MEDIUM`, `HIGH`) và `items.ai_result` đã kiểm tra schema, gồm kết quả, model và thời điểm kiểm. Kết quả nghi vấn có cờ `REVIEW` và lý do cho hàng chờ duyệt. Tầng 2 không đổi trạng thái hay phí bài đăng, và giữ nguyên lý do `REVIEW` của tầng 1 nếu đã có.
 - Khi nhà cung cấp lỗi, quá hạn hoặc trả JSON sai, `ai_risk` vẫn là `UNCHECKED` (giao diện hiện "AI chưa kiểm"); bài vẫn ở hàng chờ duyệt. Mỗi lượt gọi đã thử được ghi `AiUsage` với lần thử, kết quả, thời lượng và model khi có, không ghi nội dung bài hay API key.
-- Model qua OpenRouter API: ưu tiên `google/gemma-4-31b-it:free`, chuyển sang `google/gemma-4-26b-a4b-it:free` khi model đầu không khả dụng. Đặt OpenRouter API key vào `OPENROUTER_API_KEY` trong môi trường chạy của profile production, không đưa vào Git. `item_ai_timeout_seconds` mặc định 15 giây tổng cộng cho tối đa một lần thử lại; có thể chỉnh `item_ai_retries` bằng cấu hình admin. Giới hạn lượt của model miễn phí có thể khiến sàng lọc AI không khả dụng; khi đó hệ thống giữ nhánh dự phòng hiện có.
+- Model qua OpenRouter API: `cohere/north-mini-code:free`, trả kết quả qua lời gọi hàm có schema. Đặt OpenRouter API key vào `OPENROUTER_API_KEY` trong môi trường chạy của profile production, không đưa vào Git. `item_ai_timeout_seconds` mặc định 15 giây tổng cộng cho tối đa một lần thử lại; có thể chỉnh `item_ai_retries` bằng cấu hình admin. Giới hạn lượt của model miễn phí có thể khiến sàng lọc AI không khả dụng; khi đó hệ thống giữ nhánh dự phòng hiện có.
 
 ---
 
@@ -86,7 +86,8 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
   - `400 ITEM_DEFECT_NOTE_REQUIRED`: Đồ DEFECTIVE nhưng thiếu mô tả lỗi.
   - `400 ITEM_INVALID_IMAGE`: `images[]` chứa URL không phải URL trả về từ `POST /api/v1/media`.
   - `422 ITEM_INVALID_IMAGE_COUNT` (`field: images`): Có ít hơn 3 hoặc nhiều hơn 8 ảnh.
-  - `409 ITEM_ACTIVE_LIMIT_REACHED` (`details.limit`, `details.activeCount`): Đã đạt hạn mức bài đang hiển thị hoặc chờ duyệt; thông báo nêu hạn mức hiện tại.
+  - `409 ITEM_ACTIVE_LIMIT_REACHED` (`details.limit`, `details.activeCount`): Bài Trao đổi (`SWAP`) đã đạt hạn mức theo hạng (`max_active_items_*`: Đồng 5, Bạc 8, Vàng 15, Kim cương -1 là không giới hạn); chỉ đếm bài `SWAP` đang hiển thị hoặc chờ duyệt. Thông báo nêu hạn mức hiện tại.
+  - `409 ITEM_GIVE_LIMIT_REACHED` (`details.limit`, `details.activeCount`): Bài Cho tặng (`GIVE`) đã đạt hạn mức chung mọi hạng (`max_active_give_items`, mặc định 5); chỉ đếm bài `GIVE`. Tài khoản trong danh sách bỏ qua giới hạn của cấu hình test vẫn được bỏ qua cả hai hạn mức.
   - `422 ITEM_DEFECT_IMAGES_REQUIRED` (`field: defectImages`): Bài `DEFECTIVE` không có ảnh lỗi.
   - `422 ITEM_OPERATING_STATUS_REQUIRED` (`field: operatingStatus`): Đồ điện tử chưa khai trạng thái hoạt động.
   - `422 ITEM_DEFECT_IMAGES_NOT_ALLOWED` / `ITEM_OPERATING_STATUS_NOT_ALLOWED`: Gửi dữ liệu dành cho điều kiện hoặc danh mục khác.
@@ -143,9 +144,29 @@ Xem danh sách tất cả các bài đăng do chính mình tạo (sắp xếp m�
 
 ---
 
+## 3b. GET /api/v1/me/posting-quota
+
+Hạn mức đăng bài hiện tại cho trang Đăng tin (cần đăng nhập). Cho tặng và Trao đổi đếm riêng, chỉ tính bài `PENDING_REVIEW` và `APPROVED` đang hiển thị.
+
+- **Thành công:** `200 OK`
+
+```json
+{
+  "give": { "active": 2, "limit": 5 },
+  "swap": { "active": 9, "limit": 15 },
+  "rank": "GOLD"
+}
+```
+
+- `limit = -1` nghĩa là không giới hạn (hạng Kim cương với Trao đổi, hoặc tài khoản được bỏ qua giới hạn).
+- `rank`: `BRONZE`, `SILVER`, `GOLD`, `DIAMOND`.
+- **Lỗi:** `401` khi chưa đăng nhập.
+
+---
+
 ## 4. GET /api/v1/items
 
-Danh sách bài `APPROVED` còn hiển thị, mới nhất trước. Không cần đăng nhập.
+Danh sách bài `APPROVED` còn hiển thị. Trong cùng bộ lọc, mỗi trang hiển thị tối đa `boost_max_per_page` bài đang được đẩy ở đầu trang; các bài còn lại xếp mới nhất trước. Không cần đăng nhập.
 
 Tham số tùy chọn: `q` (tìm trong tiêu đề và mô tả, không phân biệt dấu/hoa thường),
 `categoryId`, `areaId` (lọc đúng id, kết hợp được với `q`),
@@ -156,8 +177,10 @@ lọc ở server nên `totalElements` và phân trang tính trên kết quả đ
 Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&offerType=GIVE`. `q` rỗng hoặc chỉ có khoảng trắng tương đương không tìm kiếm; `%` và `_` được xem là ký tự thường.
 
 ```json
-{ "items": [], "page": 0, "size": 20, "totalElements": 0 }
+{ "items": [], "page": 0, "size": 20, "totalElements": 0, "totalPages": 0 }
 ```
+
+`totalPages` là số trang thực tế. Khi bài đang đẩy nhiều hơn số chỗ đẩy cho phép, trang cuối có thể chưa đầy `size` để vẫn giữ giới hạn mỗi trang; dùng `totalPages` để điều hướng thay vì tự tính từ `totalElements / size`.
 
 `400 VALIDATION_FAILED` khi tham số phân trang sai. `400` khi `condition` hoặc `offerType` không thuộc các giá trị trên.
 
@@ -205,6 +228,10 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&o
 | `updatedAt` | string | Thời điểm cập nhật ISO-8601 UTC |
 | `expireAt` | string? | Hạn hiển thị ISO-8601 UTC (cột `expire_at`, module listingfee). `null` khi bài chưa từng được duyệt |
 | `boostedUntil` | string? | Thời điểm hết đẩy bài ISO-8601 UTC (cột `boosted_until`, module listingfee). `null` khi bài chưa từng được đẩy; giá trị đã qua nghĩa là hết đẩy |
+| `donorName` | string? | Tên người đăng; chỉ có ở API chi tiết |
+| `donorTrustStars` | number? | Sao uy tín người đăng; chỉ có ở API chi tiết |
+| `donorRank` | string? | Hạng người đăng; chỉ có ở API chi tiết |
+| `donorAsDescribedRate` | number? | Tỉ lệ đúng mô tả thang 0–1; chỉ có ở API chi tiết |
 
 `expireAt` và `boostedUntil` có trong mọi API trả `ItemResponse` (tạo, sửa, chi tiết, bài của tôi, danh sách công khai).
 Với danh sách, hai trường này được đọc bằng một query cho cả trang qua `ListingFeeQueryService.findDisplayWindows`.
@@ -220,7 +247,8 @@ Với danh sách, hai trường này được đọc bằng một query cho cả
 | `ITEM_DEFECT_NOTE_REQUIRED` | 400 | Bài đăng có tình trạng DEFECTIVE nhưng thiếu mô tả lỗi |
 | `ITEM_INVALID_IMAGE` | 400 | URL ảnh không phải URL do API media trả về |
 | `ITEM_INVALID_IMAGE_COUNT` | 422 | `images` có ít hơn 3 hoặc nhiều hơn 8 phần tử |
-| `ITEM_ACTIVE_LIMIT_REACHED` | 409 | Đã đạt hạn mức bài active theo hạng; thông báo nêu hạn mức |
+| `ITEM_ACTIVE_LIMIT_REACHED` | 409 | Bài Trao đổi đã đạt hạn mức theo hạng; thông báo nêu hạn mức |
+| `ITEM_GIVE_LIMIT_REACHED` | 409 | Bài Cho tặng đã đạt hạn mức chung (`max_active_give_items`); có `details.limit`, `details.activeCount` |
 | `ITEM_DEFECT_IMAGES_REQUIRED` | 422 | Bài `DEFECTIVE` thiếu ảnh lỗi |
 | `ITEM_DEFECT_IMAGES_NOT_ALLOWED` | 422 | Bài không `DEFECTIVE` lại gửi ảnh lỗi |
 | `ITEM_OPERATING_STATUS_REQUIRED` | 422 | Bài điện tử thiếu trạng thái hoạt động |

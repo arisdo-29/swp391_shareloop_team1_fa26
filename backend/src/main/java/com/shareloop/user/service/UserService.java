@@ -220,6 +220,32 @@ public class UserService {
     }
 
     /**
+     * Email của một người dùng; trả null nếu không tìm thấy (user đã xoá mềm bị @SQLRestriction loại).
+     */
+    @Transactional(readOnly = true)
+    public String findEmailById(Long userId) {
+        return userRepository.findById(userId).map(User::getEmail).orElse(null);
+    }
+
+    /**
+     * Trong số các id cho trước, những tài khoản đang bị khoá (is_active = false hoặc BANNED). Một lần truy vấn cho
+     * cả danh sách, dùng cho bộ lọc giao dịch bị kẹt của Admin.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Set<Long> findLockedIds(Collection<Long> ids) {
+        java.util.Set<Long> lockedIds = new java.util.HashSet<>();
+        if (ids == null || ids.isEmpty()) {
+            return lockedIds;
+        }
+        for (User user : userRepository.findAllById(ids)) {
+            if (!user.isActive() || user.getStatus() == UserStatus.BANNED) {
+                lockedIds.add(user.getId());
+            }
+        }
+        return lockedIds;
+    }
+
+    /**
      * Tên và email của nhiều người dùng trong một lần truy vấn, dùng cho trang nhật ký Admin (FR-115). User đã xoá
      * mềm bị @SQLRestriction loại nên không có trong map; người gọi tự xử lý id thiếu.
      */

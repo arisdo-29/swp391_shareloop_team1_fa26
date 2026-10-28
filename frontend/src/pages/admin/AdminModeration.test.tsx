@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -33,6 +33,7 @@ const queueItems: ReviewQueueItem[] = [
     donorId: 9,
     donorName: 'Nguyễn Văn A',
     title: 'Áo khoác gió nam',
+    thumbnailUrl: '/api/v1/media/101',
     aiRisk: 'LOW',
     moderationFlag: 'REVIEW',
     flagReason: 'Có từ khoá cần xem xét: zalo',
@@ -46,6 +47,7 @@ const queueItems: ReviewQueueItem[] = [
     donorId: 10,
     donorName: 'Trần Thị B',
     title: 'Bàn học gỗ',
+    thumbnailUrl: null,
     aiRisk: 'UNCHECKED',
     moderationFlag: 'NONE',
     donorTrustStars: null,
@@ -132,6 +134,13 @@ describe('AdminModerationList', () => {
     expect(screen.getByText('Cần xem kỹ')).toBeTruthy();
     expect(screen.getByText('Có từ khoá cần xem xét: zalo')).toBeTruthy();
     expect(screen.getByText('3/5 sao')).toBeTruthy();
+    const thumbnail = screen.getByRole('img', { name: 'Ảnh Áo khoác gió nam' });
+    expect(thumbnail.getAttribute('src')).toContain('/api/v1/media/101');
+    expect(screen.getByRole('img', { name: 'Ảnh Bàn học gỗ' }).tagName).toBe('DIV');
+    fireEvent.error(thumbnail);
+    await waitFor(() => {
+      expect(screen.getByRole('img', { name: 'Ảnh Áo khoác gió nam' }).tagName).toBe('DIV');
+    });
     const page = document.body.textContent ?? '';
     for (const hidden of ['NONE', 'REVIEW', '#', 'Người dùng #', 'Tải chi tiết và hình ảnh']) {
       expect(page).not.toContain(hidden);
@@ -171,6 +180,31 @@ describe('AdminModerationList', () => {
     expect(screen.queryByText('AI nghi có số điện thoại trong ảnh')).toBeNull();
     expect(screen.getAllByText('Cần xem kỹ')).toHaveLength(1);
     expect(screen.getByText('Có từ khoá cần xem xét: zalo')).toBeTruthy();
+  });
+
+  it('lấy ảnh đầu tiên từ chi tiết khi response hàng chờ không có thumbnail', async () => {
+    vi.mocked(adminModerationApi.pendingReviews).mockResolvedValue({
+      items: [{ ...queueItems[0], thumbnailUrl: null }],
+      checklist,
+      page: 0,
+      size: 100,
+    });
+    vi.mocked(adminModerationApi.detail).mockResolvedValue(
+      detail({ images: ['/api/v1/media/202', '/api/v1/media/203'] }),
+    );
+
+    render(
+      <MemoryRouter>
+        <AdminModerationList />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('img', { name: 'Ảnh Áo khoác gió nam' }).getAttribute('src')).toContain(
+        '/api/v1/media/202',
+      );
+    });
+    expect(adminModerationApi.detail).toHaveBeenCalledWith(42);
   });
 
   it('nút Xem chi tiết & duyệt dẫn sang trang riêng của bài, không mở popup', async () => {
@@ -219,6 +253,54 @@ describe('AdminModerationDetail', () => {
   beforeEach(() => {
     vi.mocked(adminModerationApi.detail).mockResolvedValue(detail());
     vi.mocked(adminModerationApi.rejectReasons).mockResolvedValue(['Hình ảnh không phù hợp']);
+  });
+
+  it('giữ khung ảnh chính co theo ảnh có giới hạn, chọn thumbnail và phóng to ảnh đang chọn', async () => {
+    const user = userEvent.setup();
+    vi.mocked(adminModerationApi.detail).mockResolvedValue(detail({
+      images: ['/api/v1/media/101', '/api/v1/media/102', '/api/v1/media/103'],
+      defectImages: ['/api/v1/media/104'],
+    }));
+    renderDetail();
+
+    await screen.findByRole('heading', { name: 'Áo khoác gió nam' });
+    const mainImage = screen.getByRole('img', { name: 'Ảnh món đồ 1' });
+    expect(screen.getAllByRole('img', { name: /^Ảnh món đồ \d+$/ })).toHaveLength(1);
+    expect(mainImage.classList.contains('object-contain')).toBe(true);
+    expect(mainImage.classList.contains('h-auto')).toBe(true);
+    expect(mainImage.classList.contains('w-auto')).toBe(true);
+    expect(mainImage.classList.contains('max-h-56')).toBe(true);
+    expect(mainImage.classList.contains('max-w-full')).toBe(true);
+    expect(mainImage.parentElement?.classList.contains('w-fit')).toBe(true);
+    expect(mainImage.parentElement?.classList.contains('mx-auto')).toBe(true);
+    const thumbnails = screen.getAllByRole('button', { name: /^Chọn ảnh món đồ \d+$/ });
+    expect(thumbnails).toHaveLength(3);
+    thumbnails.forEach((thumbnail, index) => {
+      const image = within(thumbnail).getByRole('img');
+      expect(image.getAttribute('src')).toContain(`/api/v1/media/${101 + index}`);
+      expect(image.classList.contains('object-contain')).toBe(true);
+      expect(image.classList.contains('h-auto')).toBe(true);
+      expect(image.classList.contains('w-auto')).toBe(true);
+      expect(image.classList.contains('max-h-20')).toBe(true);
+      expect(image.classList.contains('max-w-20')).toBe(true);
+    });
+    expect(screen.getByRole('img', { name: 'Ảnh lỗi 1' }).classList.contains('size-20')).toBe(true);
+
+    await user.click(thumbnails[1]);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const selectedImage = screen.getByRole('img', { name: 'Ảnh món đồ 2' });
+    expect(selectedImage.getAttribute('src')).toContain('/api/v1/media/102');
+    expect(selectedImage.parentElement?.classList.contains('w-fit')).toBe(true);
+    expect(selectedImage.classList.contains('max-h-56')).toBe(true);
+    expect(thumbnails[1].getAttribute('aria-pressed')).toBe('true');
+    expect(thumbnails[0].getAttribute('aria-pressed')).toBe('false');
+    await user.click(screen.getByRole('button', { name: 'Xem lớn ảnh món đồ 2' }));
+    const preview = screen.getByRole('dialog', { name: 'Ảnh món đồ 2/3' });
+    expect(within(preview).getByRole('img', { name: 'Ảnh món đồ 2' }).getAttribute('src'))
+      .toContain('/api/v1/media/102');
+    await user.click(within(preview).getByRole('button', { name: 'Ảnh sau' }));
+    expect(within(screen.getByRole('dialog', { name: 'Ảnh món đồ 3/3' }))
+      .getByRole('img', { name: 'Ảnh món đồ 3' }).getAttribute('src')).toContain('/api/v1/media/103');
   });
 
   it('hiện đủ thông tin để duyệt trên cùng một trang, dùng endpoint của admin', async () => {

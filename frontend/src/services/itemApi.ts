@@ -10,6 +10,7 @@ export const itemApiEndpoints = {
   renew: (id: number) => `/api/v1/items/${id}/renew`,
   boost: (id: number) => `/api/v1/items/${id}/boost`,
   listingFees: '/api/v1/listing-fees',
+  postingQuota: '/api/v1/me/posting-quota',
 } as const;
 
 export interface ItemListParams {
@@ -27,6 +28,7 @@ export interface PageResponse<T> {
   page: number;
   size: number;
   totalElements: number;
+  totalPages?: number;
 }
 
 export type OfferType = 'GIVE' | 'SWAP';
@@ -70,6 +72,10 @@ export interface ItemResponse extends CreateItemRequest {
   updatedAt: string;
   expireAt: string | null;
   boostedUntil: string | null;
+  donorName?: string | null;
+  donorTrustStars?: number | null;
+  donorRank?: string | null;
+  donorAsDescribedRate?: number | null;
 }
 
 // Contract: docs/api/listingfee.md (GET /api/v1/items/{id}/edit-quote)
@@ -128,6 +134,18 @@ export async function listItems(params: ItemListParams = {}): Promise<PageRespon
   return itemApi.list(params);
 }
 
+// Hạn mức bài đăng (docs/api/item.md mục 3b); limit = -1 là không giới hạn.
+export interface PostingQuotaEntry {
+  active: number;
+  limit: number;
+}
+
+export interface PostingQuota {
+  give: PostingQuotaEntry;
+  swap: PostingQuotaEntry;
+  rank: 'BRONZE' | 'SILVER' | 'GOLD' | 'DIAMOND';
+}
+
 export const itemApi = {
   async getListingFees(): Promise<ListingFeeConfigResponse> {
     const { data } = await http.get<ListingFeeConfigResponse>(itemApiEndpoints.listingFees);
@@ -135,6 +153,10 @@ export const itemApi = {
   },
   async list(params: ItemListParams = {}): Promise<PageResponse<ItemResponse>> {
     const { data } = await http.get<PageResponse<ItemResponse>>(itemApiEndpoints.list, { params });
+    return data;
+  },
+  async postingQuota(): Promise<PostingQuota> {
+    const { data } = await http.get<PostingQuota>(itemApiEndpoints.postingQuota);
     return data;
   },
   async create(input: CreateItemRequest): Promise<ItemResponse> {

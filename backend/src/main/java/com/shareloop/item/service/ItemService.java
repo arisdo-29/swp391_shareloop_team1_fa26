@@ -4,10 +4,13 @@ import com.shareloop.catalog.service.CategoryAttributeService;
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
+import com.shareloop.item.PostLimitProperties;
 import com.shareloop.item.dto.AdminItemDetail;
 import com.shareloop.item.dto.CreateItemRequest;
 import com.shareloop.item.dto.ItemAttributeValue;
+import com.shareloop.item.dto.ItemListPageResponse;
 import com.shareloop.item.dto.ItemResponse;
+import com.shareloop.item.dto.PostingQuotaResponse;
 import com.shareloop.item.dto.UpdateItemRequest;
 import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
@@ -30,11 +33,14 @@ import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.service.UserService;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,8 +69,10 @@ public class ItemService {
     private final ListingFeeQueryService listingFeeQueryService;
     private final CategoryAttributeService categoryAttributeService;
     private final ReputationService reputationService;
+    private final UserService userService;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final PostLimitProperties postLimitProperties;
 
     public ItemService(
             ItemRepository itemRepository,
@@ -77,8 +85,10 @@ public class ItemService {
             ListingFeeQueryService listingFeeQueryService,
             CategoryAttributeService categoryAttributeService,
             ReputationService reputationService,
+            UserService userService,
             ApplicationEventPublisher eventPublisher,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            PostLimitProperties postLimitProperties) {
         this.itemRepository = itemRepository;
         this.jdbcClient = jdbcClient;
         this.mediaService = mediaService;
@@ -89,8 +99,10 @@ public class ItemService {
         this.listingFeeQueryService = listingFeeQueryService;
         this.categoryAttributeService = categoryAttributeService;
         this.reputationService = reputationService;
+        this.userService = userService;
         this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
+        this.postLimitProperties = postLimitProperties;
     }
 
     /**
@@ -116,7 +128,10 @@ public class ItemService {
         List<Long> defectMediaIds = parseMediaIds(request.defectImages());
         validateDefectImages(request.condition(), defectMediaIds);
         Optional<Long> operatingAttributeId = requireOperatingStatus(request.categoryId(), request.operatingStatus());
-        checkActiveItemLimit(donorId);
+        // Tài khoản test trong danh sách cấu hình được bỏ qua giới hạn số bài; phí đăng bài vẫn bị giữ như thường
+        if (!canBypassPostLimit(donorId)) {
+            checkActiveItemLimit(donorId, request.offerType());
+        }
 
         String moderationText = request.desiredItem() == null
                 ? request.description()
@@ -280,7 +295,14 @@ public class ItemService {
 
         boolean isOwner = currentUserId != null && currentUserId.equals(item.getDonorId());
         if ((item.getStatus() == ItemStatus.APPROVED && item.isActive()) || isOwner) {
-            return toResponse(item, findDisplayWindow(item.getId()));
+            var donor = userService.findBriefs(List.of(item.getDonorId())).get(item.getDonorId());
+            var reputation = reputationService.getReputationSummary(item.getDonorId());
+            return toResponse(item, findDisplayWindow(item.getId()))
+                    .withDonor(
+                            donor == null ? null : donor.fullName(),
+                            reputation.trustStars(),
+                            reputation.rank().name(),
+                            reputation.asDescribedRate());
         }
 
         throw new BusinessException(ItemErrorCode.ITEM_NOT_FOUND);
@@ -314,25 +336,54 @@ public class ItemService {
 
     /**
      * Danh sách công khai bài APPROVED còn hiển thị (FR-50). Mọi bộ lọc đều không bắt buộc và kết hợp được với nhau;
-     * lọc ngay ở database để phân trang và tổng số luôn đúng.
+     * lọc ở database trước khi phân trang để tổng số luôn đúng.
      */
     @Transactional(readOnly = true)
-    public PageResponse<ItemResponse> listPublicItems(
+    public ItemListPageResponse listPublicItems(
             Long categoryId, Long areaId, String q, ItemCondition condition, OfferType offerType, int page, int size) {
-        if (q == null || q.isBlank()) {
-            PageRequest pageRequest =
-                    PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
-            return toPageResponse(itemRepository.findVisibleByFilters(
-                    ItemStatus.APPROVED, categoryId, areaId, condition, offerType, pageRequest));
-        }
-        // Truy vấn native so sánh theo chuỗi nên đổi enum sang tên
-        return toPageResponse(itemRepository.searchVisibleByFilters(
-                categoryId,
-                areaId,
-                condition == null ? null : condition.name(),
-                offerType == null ? null : offerType.name(),
-                q.trim(),
-                PageRequest.of(page, size)));
+        int configuredLimit = Math.max(0, configService.getInt(ConfigKey.BOOST_MAX_PER_PAGE));
+        int boostLimit = Math.min(size, configuredLimit);
+        Set<Long> activeBoosts =
+                boostLimit == 0 ? Set.of() : Set.copyOf(listingFeeQueryService.findActiveBoostedIds(Instant.now()));
+        List<Item> boosted = new ArrayList<>();
+        List<Item> regular = new ArrayList<>();
+        int batch = 0;
+        Page<Item> found;
+        do {
+            PageRequest request =
+                    PageRequest.of(batch++, 500, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+            found = q == null || q.isBlank()
+                    ? itemRepository.findVisibleByFilters(
+                            ItemStatus.APPROVED, categoryId, areaId, condition, offerType, request)
+                    : itemRepository.searchVisibleByFilters(
+                            categoryId,
+                            areaId,
+                            condition == null ? null : condition.name(),
+                            offerType == null ? null : offerType.name(),
+                            q.trim(),
+                            PageRequest.of(batch - 1, 500));
+            for (Item item : found.getContent()) {
+                (activeBoosts.contains(item.getId()) ? boosted : regular).add(item);
+            }
+        } while (found.hasNext());
+        int total = boosted.size() + regular.size();
+        int totalPages = Math.max(
+                (total + size - 1) / size, boostLimit == 0 ? 0 : (boosted.size() + boostLimit - 1) / boostLimit);
+        int boostStart = (int) Math.min((long) page * boostLimit, boosted.size());
+        int boostEnd = Math.min(boostStart + boostLimit, boosted.size());
+        int regularStart = (int) Math.min(Math.max(0L, (long) page * size - boostStart), regular.size());
+        int regularEnd = Math.min(regularStart + size - (boostEnd - boostStart), regular.size());
+        List<Item> selected = new ArrayList<>(boosted.subList(boostStart, boostEnd));
+        selected.addAll(regular.subList(regularStart, regularEnd));
+        Map<Long, DisplayWindow> windows = findDisplayWindows(selected);
+        return new ItemListPageResponse(
+                selected.stream()
+                        .map(item -> toResponse(item, windows.get(item.getId())))
+                        .toList(),
+                page,
+                size,
+                total,
+                totalPages);
     }
 
     /** Search gateway for the AI assistant; the database remains the source of every returned item. */
@@ -375,6 +426,17 @@ public class ItemService {
         transition(itemId, ItemStatus.RESERVED, ItemStatus.APPROVED);
     }
 
+    /**
+     * Nhả giữ chỗ nếu món đang RESERVED, món ở trạng thái khác thì bỏ qua. Dùng cho món mang đổi: giao dịch SWAP
+     * tạo trước khi món này được giữ chỗ chưa từng đặt nó sang RESERVED, nên huỷ giao dịch đó không được ném lỗi.
+     */
+    @Transactional
+    public void releaseIfReserved(long itemId) {
+        if (requireItem(itemId).getStatus() == ItemStatus.RESERVED) {
+            release(itemId);
+        }
+    }
+
     @Transactional
     public void hide(long itemId) {
         requireItem(itemId).deactivate();
@@ -411,6 +473,30 @@ public class ItemService {
             postFeeService.releaseHeldFee(itemId, "DELETED");
         }
         item.markDeleted();
+    }
+
+    /**
+     * Ẩn mọi bài APPROVED đang hiển thị của một chủ bài (is_active = false, không đổi status), dùng khi khoá tài khoản.
+     *
+     * @return id các bài vừa ẩn, để mở khoá thì hiện lại đúng những bài này
+     */
+    @Transactional
+    public List<Long> hideApprovedItemsOfUser(long userId) {
+        List<Item> items = itemRepository.findByDonorIdAndStatusAndIsActiveTrue(userId, ItemStatus.APPROVED);
+        List<Long> hiddenIds = new ArrayList<>();
+        for (Item item : items) {
+            item.deactivate();
+            hiddenIds.add(item.getId());
+        }
+        return hiddenIds;
+    }
+
+    /** Hiện lại các bài đã bị ẩn khi khoá tài khoản; bài không còn tồn tại thì bỏ qua. */
+    @Transactional
+    public void unhideItems(List<Long> itemIds) {
+        for (Item item : itemRepository.findAllById(itemIds)) {
+            item.activate();
+        }
     }
 
     @Transactional
@@ -491,7 +577,16 @@ public class ItemService {
         }
     }
 
-    private void checkActiveItemLimit(Long donorId) {
+    private boolean canBypassPostLimit(Long donorId) {
+        String email = userService.findEmailById(donorId);
+        return postLimitProperties.canBypassPostLimit(email);
+    }
+
+    // Bài Cho tặng dùng một hạn mức chung mọi hạng; bài Trao đổi dùng hạn mức theo hạng. Hai loại đếm riêng.
+    private int limitFor(Long donorId, OfferType offerType) {
+        if (offerType == OfferType.GIVE) {
+            return configService.getInt(ConfigKey.MAX_ACTIVE_GIVE_ITEMS);
+        }
         Rank rank = reputationService.getRank(donorId);
         ConfigKey limitKey =
                 switch (rank) {
@@ -500,7 +595,16 @@ public class ItemService {
                     case GOLD -> ConfigKey.MAX_ACTIVE_ITEMS_GOLD;
                     case DIAMOND -> ConfigKey.MAX_ACTIVE_ITEMS_DIAMOND;
                 };
-        int limit = configService.getInt(limitKey);
+        return configService.getInt(limitKey);
+    }
+
+    private long countActive(Long donorId, OfferType offerType) {
+        return itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(
+                donorId, offerType, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED));
+    }
+
+    private void checkActiveItemLimit(Long donorId, OfferType offerType) {
+        int limit = limitFor(donorId, offerType);
         if (limit < 0) {
             return;
         }
@@ -511,15 +615,32 @@ public class ItemService {
                 .param("ownerId", donorId)
                 .query()
                 .singleRow();
-        long activeCount = itemRepository.countByDonorIdAndStatusInAndIsActiveTrue(
-                donorId, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED));
-        if (activeCount >= limit) {
-            throw new BusinessException(
-                    ItemErrorCode.ITEM_ACTIVE_LIMIT_REACHED,
-                    "Bạn chỉ được có tối đa %d bài đang hiển thị hoặc chờ duyệt.".formatted(limit),
-                    null,
-                    Map.of("limit", limit, "activeCount", activeCount));
+        long activeCount = countActive(donorId, offerType);
+        if (activeCount < limit) {
+            return;
         }
+        boolean isGive = offerType == OfferType.GIVE;
+        throw new BusinessException(
+                isGive ? ItemErrorCode.ITEM_GIVE_LIMIT_REACHED : ItemErrorCode.ITEM_ACTIVE_LIMIT_REACHED,
+                "Bạn chỉ được có tối đa %d bài %s đang hiển thị hoặc chờ duyệt."
+                        .formatted(limit, isGive ? "Cho tặng" : "Trao đổi"),
+                null,
+                Map.of("limit", limit, "activeCount", activeCount));
+    }
+
+    /**
+     * Hạn mức đăng bài hiện tại của người dùng (Cho tặng và Trao đổi tách riêng). Tài khoản được bỏ qua giới hạn
+     * (PostLimitProperties) có hạn mức -1, tức không giới hạn.
+     */
+    @Transactional(readOnly = true)
+    public PostingQuotaResponse getPostingQuota(Long userId) {
+        boolean bypass = canBypassPostLimit(userId);
+        int giveLimit = bypass ? -1 : limitFor(userId, OfferType.GIVE);
+        int swapLimit = bypass ? -1 : limitFor(userId, OfferType.SWAP);
+        return new PostingQuotaResponse(
+                new PostingQuotaResponse.Quota(countActive(userId, OfferType.GIVE), giveLimit),
+                new PostingQuotaResponse.Quota(countActive(userId, OfferType.SWAP), swapLimit),
+                reputationService.getRank(userId).name());
     }
 
     private void replaceMediaMappings(long itemId, long userId, List<Long> photos, List<Long> defects) {

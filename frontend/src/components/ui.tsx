@@ -5,82 +5,56 @@ import type {
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from 'react';
-import { useEffect, useState } from 'react';
-import * as Icons from '@phosphor-icons/react';
+import { useEffect, useId, useState } from 'react';
+import type { IconWeight } from '@phosphor-icons/react';
+import { X } from '@phosphor-icons/react/dist/csr/X';
+import { List } from '@phosphor-icons/react/dist/csr/List';
+import { Eye } from '@phosphor-icons/react/dist/csr/Eye';
+import { EyeSlash } from '@phosphor-icons/react/dist/csr/EyeSlash';
+import { CaretDown } from '@phosphor-icons/react/dist/csr/CaretDown';
+import { Bell } from '@phosphor-icons/react/dist/csr/Bell';
+import { UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
+import { Image } from '@phosphor-icons/react/dist/csr/Image';
 import { Link } from 'react-router-dom';
 import type { Item, ItemCondition, ItemType, TransactionStatus, User } from '../types/domain';
 import { conditionLabel, txLabel } from '../utils/formatting';
 import { resolveMediaUrl } from '../services/mediaUrl';
 
+// Chỉ giữ icon có chức năng (đóng, mở menu, hiện mật khẩu, mở danh sách, thông báo, đính kèm ảnh).
+// Icon trang trí như mũi tên, kính lúp, dấu cộng đã bỏ: nút và nhãn dùng chữ.
 const iconMap = {
-  search: Icons.MagnifyingGlass,
-  add: Icons.Plus,
-  wallet: Icons.Wallet,
-  location: Icons.MapPin,
-  star: Icons.Star,
-  box: Icons.Package,
-  calendar: Icons.CalendarBlank,
-  send: Icons.PaperPlaneTilt,
-  menu: Icons.List,
-  close: Icons.X,
-  eye: Icons.Eye,
-  eyeSlash: Icons.EyeSlash,
-  chevronDown: Icons.CaretDown,
-  home: Icons.House,
-  browse: Icons.MagnifyingGlass,
-  activity: Icons.ArrowsClockwise,
-  ai: Icons.Sparkle,
-  device: Icons.DeviceMobile,
-  chair: Icons.Chair,
-  book: Icons.BookOpen,
-  shirt: Icons.TShirt,
-  package: Icons.Package,
-  messages: Icons.ChatCircleDots,
-  bell: Icons.Bell,
-  admin: Icons.SquaresFour,
-  logout: Icons.SignOut,
-  user: Icons.UserCircle,
-  edit: Icons.PencilSimple,
-  trash: Icons.Trash,
-  renew: Icons.ArrowClockwise,
-  image: Icons.Image,
-  video: Icons.VideoCamera,
-  check: Icons.Check,
-  shield: Icons.ShieldCheck,
-  filter: Icons.Funnel,
-  arrow: Icons.ArrowRight,
-  dashboard: Icons.SquaresFour,
-  article: Icons.Files,
-  group: Icons.Users,
-  transaction: Icons.ArrowsLeftRight,
-  payments: Icons.Coins,
-  settings: Icons.GearSix,
-  history: Icons.ClockCounterClockwise,
-  download: Icons.DownloadSimple,
+  close: X,
+  menu: List,
+  eye: Eye,
+  eyeSlash: EyeSlash,
+  chevronDown: CaretDown,
+  bell: Bell,
+  user: UserCircle,
+  image: Image,
 } as const;
+
+export type IconName = keyof typeof iconMap;
 
 export function Icon({
   name,
   className = '',
   weight = 'regular',
 }: {
-  name: keyof typeof iconMap | string;
+  name: IconName;
   className?: string;
-  weight?: Icons.IconWeight;
+  weight?: IconWeight;
 }) {
-  const Glyph = iconMap[name as keyof typeof iconMap] ?? Icons.Circle;
+  const Glyph = iconMap[name];
   return <Glyph aria-hidden className={className} weight={weight} />;
 }
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
-  icon?: keyof typeof iconMap;
 };
 export function Button({
   variant = 'primary',
   size = 'md',
-  icon,
   children,
   className = '',
   ...props
@@ -94,10 +68,11 @@ export function Button({
       'border-border bg-white text-text-secondary hover:border-primary/50 hover:bg-primary-faint hover:text-primary',
     ghost:
       'border-transparent bg-transparent text-text-secondary hover:bg-surface-low hover:text-text-primary',
-    danger: 'border-error/20 bg-red-50 text-error hover:bg-red-100',
+    danger: 'border-error/20 bg-error-soft text-error hover:border-error/40 hover:bg-error/15',
   };
+  // Cỡ sm vẫn cao 44px để đủ vùng bấm trên màn cảm ứng, chỉ khác ở chữ và đệm ngang.
   const sizes = {
-    sm: 'min-h-9 px-3 py-1.5 text-xs rounded-md',
+    sm: 'min-h-11 px-3 py-1.5 text-xs rounded-md',
     md: 'min-h-11 px-4 py-2 text-sm rounded-md',
     lg: 'min-h-12 px-5 py-3 text-sm rounded-md',
   };
@@ -106,7 +81,6 @@ export function Button({
       className={`inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap border font-semibold transition duration-200 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 ${variants[variant]} ${sizes[size]} ${className}`}
       {...props}
     >
-      {icon ? <Icon name={icon} className="size-[18px]" weight="bold" /> : null}
       {children}
     </button>
   );
@@ -117,12 +91,12 @@ export function IconButton({
   label,
   className = '',
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { icon: keyof typeof iconMap; label: string }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { icon: IconName; label: string }) {
   return (
     <button
       aria-label={label}
       title={label}
-      className={`inline-flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-white text-text-secondary transition hover:border-primary/50 hover:bg-primary-faint hover:text-primary active:translate-y-px ${className}`}
+      className={`inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-white text-text-secondary transition hover:border-primary/50 hover:bg-primary-faint hover:text-primary active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 ${className}`}
       {...props}
     >
       <Icon name={icon} className="size-5" />
@@ -130,57 +104,101 @@ export function IconButton({
   );
 }
 
+const errorInputClass = 'border-error focus:border-error focus:ring-error/20';
+
+/** Dòng lỗi hoặc gợi ý dưới ô nhập. Lỗi có role="alert" để trình đọc màn hình đọc ngay khi xuất hiện. */
+function FieldMessage({ id, error, hint }: { id: string; error?: string; hint?: string }) {
+  if (error) {
+    return (
+      <span id={id} role="alert" className="mt-1.5 block text-xs text-error">
+        {error}
+      </span>
+    );
+  }
+  if (hint) {
+    return (
+      <span id={id} className="mt-1.5 block text-xs text-text-muted">
+        {hint}
+      </span>
+    );
+  }
+  return null;
+}
+
 export function Field(
   props: InputHTMLAttributes<HTMLInputElement> & { label?: string; error?: string; hint?: string },
 ) {
   const { label, error, hint, className = '', ...rest } = props;
+  // useId sinh id duy nhất để aria-describedby trỏ đúng dòng lỗi/gợi ý của ô này.
+  const messageId = useId();
+  const hasMessage = Boolean(error || hint);
   return (
     <label className="block min-w-0">
       {label ? <span className="label">{label}</span> : null}
       <input
-        className={`input ${error ? 'border-error focus:border-error focus:ring-error/10' : ''} ${className}`}
+        className={`input ${error ? errorInputClass : ''} ${className}`}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={hasMessage ? messageId : undefined}
         {...rest}
       />
-      {error ? (
-        <span className="mt-1.5 block text-xs text-error">{error}</span>
-      ) : hint ? (
-        <span className="mt-1.5 block text-xs text-text-muted">{hint}</span>
-      ) : null}
+      <FieldMessage id={messageId} error={error} hint={hint} />
     </label>
   );
 }
 export function TextArea(
-  props: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string; error?: string },
+  props: TextareaHTMLAttributes<HTMLTextAreaElement> & {
+    label?: string;
+    error?: string;
+    hint?: string;
+  },
 ) {
-  const { label, error, className = '', ...rest } = props;
+  const { label, error, hint, className = '', ...rest } = props;
+  const messageId = useId();
+  const hasMessage = Boolean(error || hint);
   return (
     <label className="block">
       {label ? <span className="label">{label}</span> : null}
       <textarea
-        className={`input min-h-28 resize-y ${error ? 'border-error' : ''} ${className}`}
+        className={`input min-h-28 resize-y ${error ? errorInputClass : ''} ${className}`}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={hasMessage ? messageId : undefined}
         {...rest}
       />
-      {error ? <span className="mt-1.5 block text-xs text-error">{error}</span> : null}
+      <FieldMessage id={messageId} error={error} hint={hint} />
     </label>
   );
 }
-export function Select(props: SelectHTMLAttributes<HTMLSelectElement> & { label?: string }) {
-  const { label, className = '', children, ...rest } = props;
+export function Select(
+  props: SelectHTMLAttributes<HTMLSelectElement> & {
+    label?: string;
+    error?: string;
+    hint?: string;
+  },
+) {
+  const { label, error, hint, className = '', children, ...rest } = props;
+  const messageId = useId();
+  const hasMessage = Boolean(error || hint);
   return (
     <label className="block">
       {label ? <span className="label">{label}</span> : null}
-      <select className={`input ${className}`} {...rest}>
+      <select
+        className={`input ${error ? errorInputClass : ''} ${className}`}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={hasMessage ? messageId : undefined}
+        {...rest}
+      >
         {children}
       </select>
+      <FieldMessage id={messageId} error={error} hint={hint} />
     </label>
   );
 }
 export function SearchField(props: InputHTMLAttributes<HTMLInputElement>) {
+  // Vòng focus vẽ ở khung ngoài (focus-within) nên ô input bên trong không cần viền riêng.
   return (
-    <div className="flex min-h-11 items-center rounded-md border border-border bg-white px-3 transition focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
-      <Icon name="search" className="size-5 text-text-muted" />
+    <div className="flex min-h-11 items-center rounded-md border border-border bg-white px-1 transition hover:border-text-muted focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/25">
       <input
-        className="w-full border-0 bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-text-muted/70"
+        className="w-full border-0 bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-text-muted"
         {...props}
       />
     </div>
@@ -190,7 +208,7 @@ export function SearchField(props: InputHTMLAttributes<HTMLInputElement>) {
 export function TypeBadge({ type }: { type: ItemType }) {
   return (
     <span
-      className={`inline-flex items-center rounded-sm px-2 py-1 text-[11px] font-bold ${type === 'gift' ? 'bg-primary-soft text-primary' : 'bg-secondary-soft text-secondary'}`}
+      className={`inline-flex items-center rounded-sm px-2 py-1 text-2xs font-bold ${type === 'gift' ? 'bg-primary-soft text-primary' : 'bg-secondary-soft text-secondary-hover'}`}
     >
       {type === 'gift' ? 'Cho tặng' : 'Trao đổi'}
     </span>
@@ -198,54 +216,57 @@ export function TypeBadge({ type }: { type: ItemType }) {
 }
 export function ConditionBadge({ condition }: { condition: ItemCondition }) {
   return (
-    <span className="inline-flex rounded-sm bg-surface-low px-2 py-1 text-[11px] font-medium text-text-secondary">
+    <span className="inline-flex shrink-0 whitespace-nowrap rounded-sm bg-surface-low px-2 py-1 text-2xs font-medium text-text-secondary">
       {conditionLabel[condition]}
     </span>
   );
 }
+// Nhãn riêng của bài đăng; được ưu tiên hơn nhãn giao dịch (txLabel) như trước đây.
+const itemStatusLabel: Record<string, string> = {
+  RESERVED: 'Đã giữ chỗ',
+  TRADED: 'Đã trao đổi',
+  EXPIRED: 'Hết hạn',
+};
+// Nhãn cho các trạng thái còn lại (bài đăng viết thường, tài khoản, kiểm duyệt).
+const otherStatusLabel: Record<string, string> = {
+  approved: 'Đã duyệt',
+  APPROVED: 'Đã duyệt',
+  pending: 'Chờ duyệt',
+  PENDING_REVIEW: 'Chờ duyệt',
+  rejected: 'Từ chối',
+  REJECTED: 'Từ chối',
+  VIOLATION: 'Vi phạm',
+  expired: 'Hết hạn',
+  IN_TRANSACTION: 'Đang giao dịch',
+  removed: 'Đã gỡ',
+  locked: 'Đã khóa',
+  suspended: 'Tạm khóa',
+};
+const dangerStatuses = ['rejected', 'REJECTED', 'VIOLATION', 'removed', 'locked', 'DISPUTED', 'CANCELLED'];
+const okStatuses = ['approved', 'APPROVED', 'active', 'COMPLETED', 'TRADED'];
+
+function statusLabel(status: string): string {
+  if (status in itemStatusLabel) return itemStatusLabel[status];
+  if (status in txLabel) return txLabel[status as TransactionStatus];
+  return otherStatusLabel[status] ?? 'Hoạt động';
+}
+
+function statusTone(status: string): string {
+  if (dangerStatuses.includes(status)) return 'bg-error-soft text-error';
+  if (okStatuses.includes(status)) return 'bg-success-soft text-success';
+  return 'bg-warning-soft text-warning';
+}
+
 export function StatusBadge({
   status,
 }: {
   status: TransactionStatus | Item['status'] | User['status'];
 }) {
-  const backendItemLabel: Partial<Record<Item['status'], string>> = {
-    RESERVED: 'Đã giữ chỗ',
-    TRADED: 'Đã trao đổi',
-    EXPIRED: 'Hết hạn',
-  };
-  const label =
-    status in backendItemLabel
-      ? backendItemLabel[status as Item['status']]
-      : status in txLabel
-      ? txLabel[status as TransactionStatus]
-      : status === 'approved' || status === 'APPROVED'
-        ? 'Đã duyệt'
-        : status === 'pending' || status === 'PENDING_REVIEW'
-          ? 'Chờ duyệt'
-          : status === 'rejected' || status === 'REJECTED'
-            ? 'Từ chối'
-            : status === 'VIOLATION'
-              ? 'Vi phạm'
-              : status === 'expired' || status === 'EXPIRED'
-              ? 'Hết hạn'
-              : status === 'IN_TRANSACTION' || status === 'RESERVED'
-                ? 'Đang giao dịch'
-                : status === 'TRADED'
-                  ? 'Đã trao đổi'
-                : status === 'removed'
-                ? 'Đã gỡ'
-                : status === 'locked'
-                  ? 'Đã khóa'
-                  : status === 'suspended'
-                    ? 'Tạm khóa'
-                    : 'Hoạt động';
-  const danger = ['rejected', 'REJECTED', 'VIOLATION', 'removed', 'locked', 'DISPUTED', 'CANCELLED'].includes(status);
-  const ok = ['approved', 'APPROVED', 'active', 'COMPLETED', 'TRADED'].includes(status);
   return (
     <span
-      className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-[11px] font-semibold ${danger ? 'bg-red-50 text-error' : ok ? 'bg-emerald-50 text-success' : 'bg-amber-50 text-warning'}`}
+      className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${statusTone(status)}`}
     >
-      {label}
+      {statusLabel(status)}
     </span>
   );
 }
@@ -258,22 +279,17 @@ export function RankBadge({ rank }: { rank: string }) {
 }
 
 export function EmptyState({
-  icon = 'box',
   title,
   text,
   action,
 }: {
-  icon?: keyof typeof iconMap;
   title: string;
   text: string;
   action?: ReactNode;
 }) {
   return (
     <div className="rounded-lg border border-dashed border-border bg-white px-6 py-12 text-center">
-      <span className="mx-auto flex size-12 items-center justify-center rounded-lg bg-surface-low text-text-muted">
-        <Icon name={icon} className="size-6" />
-      </span>
-      <h3 className="mt-4 text-base font-bold">{title}</h3>
+      <h3 className="text-base font-bold">{title}</h3>
       <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-text-muted">{text}</p>
       {action ? <div className="mt-5">{action}</div> : null}
     </div>
@@ -298,6 +314,38 @@ export function LoadingState() {
   );
 }
 
+/** Vòng xoay chờ nhỏ, thay cho icon mũi tên quay. */
+export function Spinner({ className = 'size-5' }: { className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={`inline-block shrink-0 animate-spin rounded-full border-2 border-current border-r-transparent ${className}`}
+    />
+  );
+}
+
+/** Khối chờ một hình chữ nhật; đặt kích thước bằng className, ví dụ "h-4 w-2/3". */
+export function Skeleton({ className = '' }: { className?: string }) {
+  return <div aria-hidden className={`animate-pulse rounded-md bg-surface-container ${className}`} />;
+}
+
+/** Các hàng chờ cho bảng hoặc danh sách chat. Một vùng role="status" duy nhất để trình đọc báo "đang tải". */
+export function SkeletonRows({ rows = 5, label = 'Đang tải dữ liệu' }: { rows?: number; label?: string }) {
+  return (
+    <div role="status" aria-label={label} className="space-y-3">
+      {Array.from({ length: rows }, (_, index) => (
+        <div key={index} className="flex items-center gap-3">
+          <Skeleton className="size-10 shrink-0" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-3 w-1/3" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ItemImage({
   src,
   alt,
@@ -311,14 +359,10 @@ export function ItemImage({
   loading?: 'eager' | 'lazy';
   fetchPriority?: 'high' | 'low' | 'auto';
 }) {
-  const [failed, setFailed] = useState(false);
   const imageSrc = resolveMediaUrl(src);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
-  useEffect(() => {
-    setFailed(false);
-  }, [imageSrc]);
-
-  return imageSrc && !failed ? (
+  return imageSrc && failedSrc !== imageSrc ? (
     <img
       src={imageSrc}
       alt={alt}
@@ -326,11 +370,11 @@ export function ItemImage({
       decoding="async"
       fetchPriority={fetchPriority}
       className={className}
-      onError={() => setFailed(true)}
+      onError={() => setFailedSrc(imageSrc)}
     />
   ) : (
-    <div role="img" aria-label={alt} className={`grid place-items-center bg-surface-container text-text-muted ${className}`}>
-      <Icon name="image" className="size-6" />
+    <div role="img" aria-label={alt} className={`grid place-items-center bg-surface-container text-xs font-medium text-text-muted ${className}`}>
+      Chưa có ảnh
     </div>
   );
 }
@@ -343,10 +387,10 @@ export function Alert({
   children: ReactNode;
 }) {
   const cls = {
-    info: 'border-blue-100 bg-blue-50 text-info',
-    success: 'border-emerald-100 bg-emerald-50 text-success',
-    warning: 'border-amber-100 bg-amber-50 text-warning',
-    error: 'border-red-100 bg-red-50 text-error',
+    info: 'border-info/20 bg-info-soft text-info',
+    success: 'border-success/20 bg-success-soft text-success',
+    warning: 'border-warning/20 bg-warning-soft text-warning',
+    error: 'border-error/20 bg-error-soft text-error',
   };
   return (
     <div className={`rounded-md border px-4 py-3 text-sm leading-6 ${cls[tone]}`}>{children}</div>
@@ -357,7 +401,7 @@ export function ProductCard({ item, owner }: { item: Item; owner?: User }) {
   return (
     <Link
       to={`/items/${item.id}`}
-      className="group block min-w-0 overflow-hidden rounded-lg bg-[#FFFAF5] ring-1 ring-border/80 transition duration-300 hover:-translate-y-1 hover:shadow-md hover:ring-primary/20"
+      className="group block min-w-0 overflow-hidden rounded-lg bg-surface ring-1 ring-border/80 transition duration-300 hover:-translate-y-1 hover:shadow-md hover:ring-primary/20"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-surface-container">
         <ItemImage
@@ -388,21 +432,13 @@ export function ProductCard({ item, owner }: { item: Item; owner?: User }) {
           </div>
         ) : null}
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-3 text-xs text-text-muted">
-          <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
-            <Icon name="location" className="size-4 shrink-0" />
-            {item.district}
-          </span>
+          <span className="min-w-0 truncate">{item.district}</span>
           {owner ? (
-            <span className="inline-flex shrink-0 items-center gap-1">
-              <Icon name="star" className="size-4 text-warning" weight="fill" />
-              {owner.reputationStars}
+            <span className="shrink-0 font-semibold text-text-secondary">
+              {owner.reputationStars ? `${owner.reputationStars.toLocaleString('vi-VN')} sao` : 'Chưa có đánh giá'}
             </span>
           ) : null}
         </div>
-        <span className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-primary transition group-hover:text-primary-hover">
-          Xem chi tiết
-          <Icon name="arrow" className="size-3.5" />
-        </span>
       </div>
     </Link>
   );
@@ -446,9 +482,8 @@ export function OwnerCard({ owner }: { owner: User }) {
       </div>
       <div className="mt-4 flex items-center justify-between">
         <RankBadge rank={owner.rank} />
-        <span className="inline-flex items-center gap-1 text-sm font-bold text-warning">
-          <Icon name="star" className="size-4" weight="fill" />
-          {owner.reputationStars}
+        <span className="text-sm font-bold text-text-secondary">
+          {owner.reputationStars ? `${owner.reputationStars.toLocaleString('vi-VN')} sao` : 'Chưa có đánh giá'}
         </span>
       </div>
     </div>
@@ -461,7 +496,7 @@ export function Avatar({
   user: Pick<User, 'name' | 'avatarInitials' | 'avatarUrl'>;
   size?: 'sm' | 'md' | 'lg';
 }) {
-  const cls = { sm: 'size-8 text-[11px]', md: 'size-10 text-xs', lg: 'size-14 text-base' };
+  const cls = { sm: 'size-8 text-2xs', md: 'size-10 text-xs', lg: 'size-14 text-base' };
   const avatarSrc = resolveMediaUrl(user.avatarUrl);
   const [failed, setFailed] = useState(false);
 

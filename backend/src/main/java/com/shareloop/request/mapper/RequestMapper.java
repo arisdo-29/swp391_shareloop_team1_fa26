@@ -74,6 +74,7 @@ public final class RequestMapper {
                 itemInfo.itemImage(),
                 itemInfo.donorId(),
                 itemInfo.donorName(),
-                itemInfo.offeredItemTitle());
+                itemInfo.offeredItemTitle(),
+                request.getCancelReason());
     }
 }

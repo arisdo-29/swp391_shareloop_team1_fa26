@@ -133,7 +133,7 @@ export function AdminModerationDetail() {
 
   const backLink = (
     <Link to="/admin/moderation">
-      <Button variant="outline" icon="arrow">
+      <Button variant="outline">
         Về danh sách
       </Button>
     </Link>
@@ -146,7 +146,7 @@ export function AdminModerationDetail() {
         <PageHeader title="Duyệt bài" action={backLink} />
         <div className="space-y-3" role="alert">
           <Alert tone="error">{loadError || 'Không tải được chi tiết bài đăng.'}</Alert>
-          <Button variant="outline" size="sm" onClick={() => setReloadKey((key) => key + 1)}>
+          <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
             Thử tải lại
           </Button>
         </div>
@@ -258,7 +258,7 @@ function DonorAndModeration({ detail }: { detail: ReviewItemDetail }) {
           <Fact label="Cờ kiểm duyệt" value={flag || 'Không có cờ'} />
         </dl>
         {note && note !== flag ? (
-          <p className="mt-4 rounded-md border border-amber-100 bg-amber-50 p-3 text-sm leading-6 text-warning">
+          <p className="mt-4 rounded-md border border-warning/20 bg-warning-soft p-3 text-sm leading-6 text-warning">
             {note}
           </p>
         ) : null}
@@ -267,7 +267,7 @@ function DonorAndModeration({ detail }: { detail: ReviewItemDetail }) {
             <p className="text-xs font-semibold text-text-muted">Từ khóa khớp</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {detail.matchedTerms.map((term) => (
-                <span key={term} className="rounded-sm bg-amber-50 px-2 py-1 text-xs font-semibold text-warning">
+                <span key={term} className="rounded-sm bg-warning-soft px-2 py-1 text-xs font-semibold text-warning">
                   {term}
                 </span>
               ))}

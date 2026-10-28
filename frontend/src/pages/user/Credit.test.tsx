@@ -5,7 +5,9 @@ import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { HeldFeeItem } from '../../services/walletApi';
+import { CreditHistorySection, CreditTransactionDetail } from '../../components/CreditHistoryView';
+import type { HeldFeeItem, WalletTransactionResponse } from '../../services/walletApi';
+import { toCreditHistory, userHistoryTabs } from '../../utils/creditHistory';
 import { HeldFeesSection } from './Credit';
 
 const heldFees: HeldFeeItem[] = [
@@ -94,5 +96,112 @@ describe('Credit đang giữ', () => {
     expect(screen.getByText('Đã duyệt')).toBeTruthy();
     expect(screen.getByText('10 Credit')).toBeTruthy();
     expect(screen.getByText('Phí sửa')).toBeTruthy();
+  });
+});
+
+function walletEntry(
+  id: number,
+  type: WalletTransactionResponse['type'],
+  amount: number,
+  extra: Partial<WalletTransactionResponse> = {},
+): WalletTransactionResponse {
+  return {
+    id,
+    type,
+    amount,
+    balanceAfter: 50,
+    itemId: null,
+    paymentOrderId: null,
+    note: null,
+    createdAt: '2026-10-05T03:00:00Z',
+    ...extra,
+  };
+}
+
+describe('Lịch sử Credit của người dùng', () => {
+  const history = [
+    walletEntry(1, 'POST_FEE', -5, { itemId: 42 }),
+    walletEntry(2, 'EDIT_FEE', -2, { itemId: 42 }),
+    walletEntry(3, 'RENEW_FEE', -3, { itemId: 99 }),
+    walletEntry(4, 'BOOST_FEE', -4, { itemId: 42 }),
+    walletEntry(5, 'AI_SEARCH_FEE', 2, { note: 'Hoàn phí AI #9' }),
+  ].map((entry) => toCreditHistory(entry, '7'));
+
+  function renderHistory(activeTab = 'all') {
+    return render(
+      <CreditHistorySection
+        itemTitles={new Map([['42', 'Xe đạp mini']])}
+        allHistory={history}
+        tabs={userHistoryTabs}
+        activeTab={activeTab}
+        onTabChange={() => undefined}
+        onSelect={() => undefined}
+      />,
+    );
+  }
+
+  it('hiện đúng nhãn theo loại phí và ghép tên món khi bài còn trong danh sách', () => {
+    // given
+    // when
+    renderHistory();
+
+    // then
+    expect(screen.getByText('Phí đăng bài - Xe đạp mini')).toBeTruthy();
+    expect(screen.getByText('Phí chỉnh sửa bài - Xe đạp mini')).toBeTruthy();
+    expect(screen.getByText('Phí đẩy tin - Xe đạp mini')).toBeTruthy();
+    expect(screen.queryByText('Chi tiêu')).toBeNull();
+  });
+
+  it('không hiện tên món khi bài không còn trong danh sách', () => {
+    // given
+    // when
+    renderHistory();
+
+    // then
+    expect(screen.getByText('Phí gia hạn bài')).toBeTruthy();
+  });
+
+  it('hiện hoàn phí AI bằng nhãn riêng, không có số và không nằm trong tab Chi tiêu', () => {
+    // given
+    // when
+    const { container } = renderHistory();
+
+    // then
+    expect(screen.getByText('Hoàn phí tìm kiếm AI')).toBeTruthy();
+    expect(container.textContent).not.toContain('#');
+    cleanup();
+    renderHistory('spend');
+    expect(screen.queryByText('Hoàn phí tìm kiếm AI')).toBeNull();
+  });
+
+  it('hộp chi tiết hiện tên món và nhãn đúng loại phí', () => {
+    // given
+    const entry = history[1];
+
+    // when
+    render(
+      <CreditTransactionDetail
+        entry={entry}
+        relatedItemTitle="Xe đạp mini"
+        onClose={() => undefined}
+      />,
+    );
+
+    // then
+    expect(screen.getAllByText('Phí chỉnh sửa bài').length).toBeGreaterThan(0);
+    expect(screen.getByText('Món đồ')).toBeTruthy();
+    expect(screen.getByText('Xe đạp mini')).toBeTruthy();
+  });
+
+  it('hộp chi tiết hoàn phí AI không hiện note có số', () => {
+    // given
+    const refund = history[4];
+
+    // when
+    const { container } = render(<CreditTransactionDetail entry={refund} onClose={() => undefined} />);
+
+    // then
+    expect(container.textContent).not.toContain('#');
+    expect(screen.getAllByText('Hoàn phí tìm kiếm AI').length).toBeGreaterThan(0);
   });
 });

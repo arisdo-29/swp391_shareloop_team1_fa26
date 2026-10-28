@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useWallet } from '../../app/useWallet';
-import { Alert, Button, Icon } from '../../components/ui';
+import { Alert, Button, Spinner } from '../../components/ui';
 import {
   confirmDemoPayment,
   demoPaymentEnabled,
   demoPaymentErrorMessage,
+  demoPaymentUnavailableMessage,
 } from '../../services/paymentFlow';
 import { clearPendingTopUp, loadPendingTopUp } from '../../services/topUpSession';
 import { formatVnd } from '../../utils/formatting';
@@ -22,6 +23,9 @@ export function DemoPaymentCheckout() {
     [location.search],
   );
   const [order, setOrder] = useState<TopUpOrderResponse | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const pendingOrderCode = orderCode ?? loadPendingTopUp()?.orderCode;
+  const [loading, setLoading] = useState(Boolean(pendingOrderCode) && demoPaymentEnabled);
 
   const returnToCredit = () => {
     if (!error) clearPendingTopUp();
@@ -32,6 +36,8 @@ export function DemoPaymentCheckout() {
     let active = true;
     const code = orderCode ?? loadPendingTopUp()?.orderCode;
     if (!code || !demoPaymentEnabled) return;
+    setLoading(true);
+    setError('');
     paymentApi
       .getOrder(code)
       .then((result) => {
@@ -39,11 +45,14 @@ export function DemoPaymentCheckout() {
       })
       .catch((caught) => {
         if (active) setError(demoPaymentErrorMessage(caught));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
     return () => {
       active = false;
     };
-  }, [orderCode]);
+  }, [orderCode, reloadKey]);
 
   const confirm = () => {
     if (!order || processing) return;
@@ -67,16 +76,35 @@ export function DemoPaymentCheckout() {
     navigate('/credit', { replace: true });
   };
 
-  if (!order || !demoPaymentEnabled) {
+  if (loading) {
     return (
       <div className="page-shell py-10">
         <div className="mx-auto max-w-xl rounded-xl bg-white p-6 text-center shadow-sm ring-1 ring-border/80 sm:p-8">
-          <Alert tone="error">
-            Không tìm thấy đơn thanh toán hợp lệ. Vui lòng tạo lại đơn nạp Credit.
-          </Alert>
-          <Button className="mt-5" variant="outline" onClick={discardInvalidOrder}>
-            Quay về trang Credit
-          </Button>
+          <Alert>Đang tải đơn thanh toán...</Alert>
+        </div>
+      </div>
+    );
+  }
+
+  if (!order || !demoPaymentEnabled) {
+    // Lỗi tải đơn (mất mạng, máy chủ lỗi) cho thử lại; đơn không tồn tại thì chỉ cho quay về.
+    const message = !demoPaymentEnabled
+      ? demoPaymentUnavailableMessage
+      : error || 'Không tìm thấy đơn thanh toán hợp lệ. Vui lòng tạo lại đơn nạp Credit.';
+    return (
+      <div className="page-shell py-10">
+        <div className="mx-auto max-w-xl rounded-xl bg-white p-6 text-center shadow-sm ring-1 ring-border/80 sm:p-8">
+          <Alert tone="error">{message}</Alert>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            {error && demoPaymentEnabled ? (
+              <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
+                Thử tải lại
+              </Button>
+            ) : null}
+            <Button variant="outline" onClick={discardInvalidOrder}>
+              Quay về trang Credit
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -86,10 +114,7 @@ export function DemoPaymentCheckout() {
     <div className="page-shell py-8 sm:py-12">
       <section className="mx-auto max-w-xl overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-border/80">
         <header className="bg-primary px-6 py-7 text-center text-white sm:px-8">
-          <span className="mx-auto grid size-12 place-items-center rounded-lg bg-white/15 ring-1 ring-white/25">
-            <Icon name="renew" className="size-6" weight="bold" />
-          </span>
-          <p className="mt-3 text-lg font-extrabold tracking-wide">
+          <p className="text-lg font-extrabold tracking-wide">
             SHARE<span className="text-primary-fixed">LOOP</span>
           </p>
           <h1 className="mt-4 text-2xl font-bold">Xác nhận thanh toán thử nghiệm</h1>
@@ -109,21 +134,20 @@ export function DemoPaymentCheckout() {
             <CheckoutRow label="Credit nhận được" value={`${order.credits} Credit`} emphasized />
           </dl>
 
-          <p className="mt-5 flex items-center justify-center gap-2 text-xs text-text-muted">
-            <Icon name="shield" className="size-4 text-primary" />
+          <p className="mt-5 text-center text-xs text-text-muted">
             Vui lòng không đóng trang trong lúc giao dịch đang được xử lý.
           </p>
 
           {processing ? (
             <div className="mt-7 flex justify-center">
               <span className="inline-flex items-center gap-2 text-sm font-semibold text-primary">
-                <Icon name="renew" className="size-5 animate-spin" />
+                <Spinner className="size-5" />
                 Đang xử lý thanh toán...
               </span>
             </div>
           ) : (
             <div className="mt-7 space-y-3">
-              <Button className="w-full" onClick={confirm}>
+              <Button className="w-full" size="lg" onClick={confirm}>
                 Xác nhận thanh toán thử nghiệm
               </Button>
               <Button className="w-full" variant="outline" size="lg" onClick={returnToCredit}>

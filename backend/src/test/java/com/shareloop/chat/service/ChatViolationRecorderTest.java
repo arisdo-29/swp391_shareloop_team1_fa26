@@ -13,6 +13,9 @@ import com.shareloop.chat.repository.MessageRepository;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.dto.ContactInfo;
+import com.shareloop.user.service.UserService;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +23,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
  * Unit test cho việc ghi nhận vi phạm chat và ngưỡng cảnh báo Admin (FR-76, FR-78; BR-C04).
@@ -36,11 +40,32 @@ class ChatViolationRecorderTest {
     @Mock
     ConfigService configService;
 
+    @Mock
+    UserService userService;
+
+    @Mock
+    JdbcClient jdbcClient;
+
+    @Mock
+    JdbcClient.StatementSpec statementSpec;
+
+    @Mock
+    JdbcClient.MappedQuerySpec<String> querySpec;
+
     @InjectMocks
     ChatViolationRecorder violationRecorder;
 
     private static final long REQUEST_ID = 200L;
     private static final long SENDER_ID = 15L;
+
+    private void mockSenderAndItem() {
+        when(userService.findContact(SENDER_ID))
+                .thenReturn(new ContactInfo(SENDER_ID, "Nguyễn Văn A", "a@example.com", "0912345678"));
+        when(jdbcClient.sql(any(String.class))).thenReturn(statementSpec);
+        when(statementSpec.param(eq("requestId"), any())).thenReturn(statementSpec);
+        when(statementSpec.query(String.class)).thenReturn(querySpec);
+        when(querySpec.optional()).thenReturn(Optional.of("Bàn phím cơ"));
+    }
 
     @Test
     @DisplayName("Lưu tin nhắn bị chặn vào database với trạng thái BLOCKED và tier 1")
@@ -83,6 +108,7 @@ class ChatViolationRecorderTest {
     @Test
     @DisplayName("Khi số vi phạm đạt ngưỡng (3 lần) thì gửi cảnh báo tới Admin qua NotificationService (BR-C04, FR-76)")
     void recordViolation_reachesThreshold_alertsAdmin() {
+        mockSenderAndItem();
         when(configService.getInt(ConfigKey.CHAT_VIOLATION_ALERT)).thenReturn(3);
         when(messageRepository.countByRequestIdAndModeration(REQUEST_ID, MessageModeration.BLOCKED))
                 .thenReturn(3L);
@@ -94,14 +120,16 @@ class ChatViolationRecorderTest {
         verify(notificationService)
                 .notifyAdmins(
                         eq("CHAT_VIOLATION_ALERT"),
-                        eq("Cảnh báo vi phạm chat trong yêu cầu #200"),
-                        eq("Yêu cầu giao dịch #200 đã có 3 tin nhắn bị chặn do vi phạm quy định."),
-                        eq("/requests/200"));
+                        eq("Cảnh báo vi phạm chat: Nguyễn Văn A (Bàn phím cơ)"),
+                        eq(
+                                "Nguyễn Văn A có 3 tin nhắn bị chặn do vi phạm quy định trong giao dịch món \"Bàn phím cơ\"."),
+                        eq("/admin/users"));
     }
 
     @Test
     @DisplayName("Khi số vi phạm vượt ngưỡng (4 lần > 3) thì tiếp tục gửi cảnh báo tới Admin")
     void recordViolation_exceedsThreshold_alertsAdmin() {
+        mockSenderAndItem();
         when(configService.getInt(ConfigKey.CHAT_VIOLATION_ALERT)).thenReturn(3);
         when(messageRepository.countByRequestIdAndModeration(REQUEST_ID, MessageModeration.BLOCKED))
                 .thenReturn(4L);
@@ -113,9 +141,10 @@ class ChatViolationRecorderTest {
         verify(notificationService)
                 .notifyAdmins(
                         eq("CHAT_VIOLATION_ALERT"),
-                        eq("Cảnh báo vi phạm chat trong yêu cầu #200"),
-                        eq("Yêu cầu giao dịch #200 đã có 4 tin nhắn bị chặn do vi phạm quy định."),
-                        eq("/requests/200"));
+                        eq("Cảnh báo vi phạm chat: Nguyễn Văn A (Bàn phím cơ)"),
+                        eq(
+                                "Nguyễn Văn A có 4 tin nhắn bị chặn do vi phạm quy định trong giao dịch món \"Bàn phím cơ\"."),
+                        eq("/admin/users"));
     }
 
     @Test

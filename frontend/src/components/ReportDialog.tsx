@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { ApiError } from '../services/http';
 import { reportApi, type ReportReason, type ReportTarget } from '../services/reportApi';
 import { Button, IconButton, Select, TextArea } from './ui';
+import { DialogFrame } from './Dialog';
 import { mediaApi } from '../services/mediaApi';
 
 const reportReasonLabels: Record<ReportReason, string> = {
@@ -65,58 +66,56 @@ export function ReportDialog({ target, contextLabel, onClose, onSuccess }: Repor
   };
 
   return (
-    <div className="fixed inset-0 z-40 grid place-items-end bg-black/30 p-0 sm:place-items-center sm:p-4" role="dialog" aria-modal="true">
-      <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold">Gửi báo cáo vi phạm</h2>
-            <p className="mt-1 text-sm text-text-muted">{contextLabel} sẽ được chuyển đến quản trị viên xem xét.</p>
-          </div>
-          <IconButton icon="close" label="Đóng" onClick={onClose} disabled={submitting} />
+    <DialogFrame>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold">Gửi báo cáo vi phạm</h2>
+          <p className="mt-1 text-sm text-text-muted">{contextLabel} sẽ được chuyển đến quản trị viên xem xét.</p>
         </div>
-        <Select
-          className="mt-5"
-          label="Lý do"
-          value={reason}
-          onChange={(event) => setReason(event.target.value as ReportReason | '')}
-          disabled={submitting}
-        >
-          <option value="">Chọn lý do báo cáo</option>
-          {Object.entries(reportReasonLabels).map(([value, label]) => (
-            <option key={value} value={value}>{label}</option>
-          ))}
-        </Select>
-        <TextArea
-          className="mt-4"
-          label="Mô tả chi tiết (không bắt buộc)"
-          value={description}
-          maxLength={REPORT_DESCRIPTION_MAX_LENGTH}
-          onChange={(event) => setDescription(event.target.value)}
-          disabled={submitting}
-        />
-        <p className="mt-1 text-right text-xs text-text-muted">{description.length}/{REPORT_DESCRIPTION_MAX_LENGTH}</p>
-        <label className="mt-4 block">
-          <span className="label">Ảnh minh chứng (không bắt buộc)</span>
-          <input
-            className="input"
-            type="file"
-            accept="image/*"
-            multiple
-            disabled={submitting}
-            onChange={(event) => setEvidenceFiles(Array.from(event.target.files ?? []))}
-          />
-        </label>
-        {evidenceFiles.length ? (
-          <p className="mt-2 text-xs text-text-muted">Đã chọn {evidenceFiles.length} ảnh minh chứng.</p>
-        ) : null}
-        {error ? <div className="mt-3 rounded-md bg-red-50 p-3 text-xs text-error">{error}</div> : null}
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose} disabled={submitting}>Hủy</Button>
-          <Button onClick={() => void submit()} disabled={submitting || !reason}>
-            {submitting ? 'Đang gửi...' : 'Gửi báo cáo'}
-          </Button>
-        </div>
+        <IconButton icon="close" label="Đóng" onClick={onClose} disabled={submitting} />
       </div>
-    </div>
+      <Select
+        className="mt-5"
+        label="Lý do"
+        value={reason}
+        onChange={(event) => setReason(event.target.value as ReportReason | '')}
+        disabled={submitting}
+      >
+        <option value="">Chọn lý do báo cáo</option>
+        {Object.entries(reportReasonLabels).map(([value, label]) => (
+          <option key={value} value={value}>{label}</option>
+        ))}
+      </Select>
+      <TextArea
+        className="mt-4"
+        label="Mô tả chi tiết (không bắt buộc)"
+        value={description}
+        maxLength={REPORT_DESCRIPTION_MAX_LENGTH}
+        onChange={(event) => setDescription(event.target.value)}
+        disabled={submitting}
+      />
+      <p className="mt-1 text-right text-xs text-text-muted">{description.length}/{REPORT_DESCRIPTION_MAX_LENGTH}</p>
+      <label className="mt-4 block">
+        <span className="label">Ảnh minh chứng (không bắt buộc)</span>
+        <input
+          className="input"
+          type="file"
+          accept="image/*"
+          multiple
+          disabled={submitting}
+          onChange={(event) => setEvidenceFiles(Array.from(event.target.files ?? []))}
+        />
+      </label>
+      {evidenceFiles.length ? (
+        <p className="mt-2 text-xs text-text-muted">Đã chọn {evidenceFiles.length} ảnh minh chứng.</p>
+      ) : null}
+      {error ? <div className="mt-3 rounded-md bg-red-50 p-3 text-xs text-error">{error}</div> : null}
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="ghost" onClick={onClose} disabled={submitting}>Hủy</Button>
+        <Button onClick={() => void submit()} disabled={submitting || !reason}>
+          {submitting ? 'Đang gửi...' : 'Gửi báo cáo'}
+        </Button>
+      </div>
+    </DialogFrame>
   );
 }

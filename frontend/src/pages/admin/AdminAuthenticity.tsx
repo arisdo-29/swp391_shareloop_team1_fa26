@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { Alert, Button, Field, Icon, PageHeader, StatusBadge, TextArea } from '../../components/ui';
+import { Alert, Button, Field, PageHeader, StatusBadge, TextArea } from '../../components/ui';
+import { DialogFrame } from '../../components/Dialog';
 import {
   adminAuthenticityApi,
   authenticityErrorMessage,
@@ -199,7 +200,6 @@ export function AdminAuthenticity() {
               <div>
                 <p className="font-bold text-text-primary">{item.title}</p>
                 <p className="mt-1 text-xs text-text-muted">
-                  Bài #{item.id} · Người đăng #{item.donorId} ·{' '}
                   {item.offerType === 'GIVE' ? 'Cho tặng' : 'Trao đổi'}
                 </p>
               </div>
@@ -215,7 +215,6 @@ export function AdminAuthenticity() {
         <div className="mt-6 grid gap-3 md:grid-cols-3">
           <Button
             type="button"
-            icon="shield"
             disabled={submitting || !item}
             onClick={() => openConfirmation('grant')}
           >
@@ -241,84 +240,71 @@ export function AdminAuthenticity() {
       </div>
 
       {selectedAction && itemId !== null ? (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4"
-          role="presentation"
-        >
-          <div
-            className="w-full max-w-lg rounded-lg border border-border bg-white p-5 shadow-xl sm:p-6"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="authenticity-dialog-title"
-          >
-            <div className="flex items-start gap-3">
-              <div className="grid size-10 shrink-0 place-items-center rounded-full bg-primary-faint text-primary">
-                <Icon name="shield" className="size-5" weight="bold" />
-              </div>
-              <div>
-                <h2 id="authenticity-dialog-title" className="text-lg font-bold text-text-primary">
-                  {actionContent[selectedAction].title}
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-text-secondary">
-                  Bài đăng #{itemId}. {actionContent[selectedAction].description}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <Alert tone="warning">{STATUS_WARNING}</Alert>
-            </div>
-
-            {notice?.tone === 'error' ? (
-              <div className="mt-4" role="alert">
-                <Alert tone="error">{notice.message}</Alert>
-              </div>
-            ) : null}
-
-            {selectedAction !== 'grant' ? (
-              <div className="mt-4">
-                <TextArea
-                  label="Lý do"
-                  required
-                  autoFocus
-                  placeholder="Nhập lý do từ chối hoặc thu hồi xác minh"
-                  value={reason}
-                  error={reasonError}
-                  disabled={submitting}
-                  onChange={(event) => {
-                    setReason(event.target.value);
-                    if (reasonError) setReasonError('');
-                  }}
-                />
-              </div>
-            ) : null}
-
-            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={submitting}
-                onClick={closeConfirmation}
-              >
-                Hủy
-              </Button>
-              <Button
-                type="button"
-                variant={
-                  selectedAction === 'revoke'
-                    ? 'danger'
-                    : selectedAction === 'reject'
-                      ? 'secondary'
-                      : 'primary'
-                }
-                disabled={submitting}
-                onClick={submitAction}
-              >
-                {submitting ? 'Đang xử lý…' : actionContent[selectedAction].confirm}
-              </Button>
+        <DialogFrame labelledBy="authenticity-dialog-title">
+          <div>
+            <div>
+              <h2 id="authenticity-dialog-title" className="text-lg font-bold text-text-primary">
+                {actionContent[selectedAction].title}
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-text-secondary">
+                {actionContent[selectedAction].description}
+              </p>
             </div>
           </div>
-        </div>
+
+          <div className="mt-4">
+            <Alert tone="warning">{STATUS_WARNING}</Alert>
+          </div>
+
+          {notice?.tone === 'error' ? (
+            <div className="mt-4" role="alert">
+              <Alert tone="error">{notice.message}</Alert>
+            </div>
+          ) : null}
+
+          {selectedAction !== 'grant' ? (
+            <div className="mt-4">
+              <TextArea
+                label="Lý do"
+                required
+                autoFocus
+                placeholder="Nhập lý do từ chối hoặc thu hồi xác minh"
+                value={reason}
+                error={reasonError}
+                disabled={submitting}
+                onChange={(event) => {
+                  setReason(event.target.value);
+                  if (reasonError) setReasonError('');
+                }}
+              />
+            </div>
+          ) : null}
+
+          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={submitting}
+              onClick={closeConfirmation}
+            >
+              Hủy
+            </Button>
+            <Button
+              type="button"
+              variant={
+                selectedAction === 'revoke'
+                  ? 'danger'
+                  : selectedAction === 'reject'
+                    ? 'secondary'
+                    : 'primary'
+              }
+              disabled={submitting}
+              onClick={submitAction}
+            >
+              {submitting ? 'Đang xử lý…' : actionContent[selectedAction].confirm}
+            </Button>
+          </div>
+        </DialogFrame>
       ) : null}
     </section>
   );

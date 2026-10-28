@@ -1,24 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { actions, selectCurrentUser, selectData } from '../../app/store';
+import { actions, selectCurrentUser } from '../../app/store';
 import {
   Avatar,
   Alert,
   Button,
   Field,
-  Icon,
   PageHeader,
   RankBadge,
   Select,
-  Stat,
 } from '../../components/ui';
-import { formatCredit } from '../../utils/formatting';
 import { fileToDataUrl } from '../../utils/files';
-import { ChangePasswordForm } from '../../components/ChangePasswordForm';
 import { OtpInput } from '../../components/OtpInput';
-import { validEmail, validVietnamPhone } from '../../utils/validation';
-import { useWallet } from '../../app/useWallet';
 import { userApi } from '../../services/userApi';
 import { catalogApi } from '../../services/catalogApi';
 import { mediaApi } from '../../services/mediaApi';
@@ -26,15 +20,21 @@ import { toAreaOptions, type AreaOption } from '../../services/mappers';
 import type { ApiError } from '../../services/http';
 import { toBackendUserId } from '../../services/requestApi';
 import { resolveMediaUrl } from '../../services/mediaUrl';
-import { reputationApi, type MyReputation } from '../../services/reputationApi';
+import {
+  reputationApi,
+  summarizePointHistory,
+  type MyReputation,
+  type PointHistorySummary,
+} from '../../services/reputationApi';
 import { createOtpValue } from '../../utils/otp';
+import { getRankLabel } from '../../utils/reputation';
 
-const reputationRankLabel: Record<MyReputation['rank'], string> = {
-  BRONZE: 'Đồng',
-  SILVER: 'Bạc',
-  GOLD: 'Vàng',
-  DIAMOND: 'Kim cương',
-};
+type ProfileTab = 'profile' | 'reputation';
+
+// Chỉ nhận tab hợp lệ từ URL, giá trị lạ thì về tab Hồ sơ.
+function tabFromSearch(value: string | null): ProfileTab {
+  return value === 'reputation' ? 'reputation' : 'profile';
+}
 
 function reputationErrorMessage(error: unknown) {
   const apiError = error as Partial<ApiError>;
@@ -145,21 +145,22 @@ function phoneChangeErrorMessage(error: ApiError) {
 export function Profile() {
   const user = useAppSelector(selectCurrentUser)!;
   const isAdmin = user.role === 'admin';
-  const data = useAppSelector(selectData);
   const dispatch = useAppDispatch();
-  const { wallet } = useWallet();
-  const isApiAccount = toBackendUserId(user.id) !== null;
-  const [tab, setTab] = useState<'profile' | 'credit' | 'reputation' | 'password'>('profile');
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Tab lấy từ URL để thông báo có thể trỏ thẳng tới /profile?tab=reputation.
+  const tab: ProfileTab = isAdmin ? 'profile' : tabFromSearch(searchParams.get('tab'));
+  const changeTab = (nextTab: ProfileTab) => {
+    setSearchParams(nextTab === 'profile' ? {} : { tab: nextTab }, { replace: true });
+  };
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [phone, setPhone] = useState(user.phone);
-  const [district, setDistrict] = useState(user.district);
   const [apiAreaId, setApiAreaId] = useState('');
   const [apiAvatarMediaId, setApiAvatarMediaId] = useState<number | null>(null);
   const [apiAreas, setApiAreas] = useState<AreaOption[]>([]);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [profileLoading, setProfileLoading] = useState(isApiAccount);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileReloadKey, setProfileReloadKey] = useState(0);
   const [profileLoadError, setProfileLoadError] = useState('');
@@ -180,14 +181,9 @@ export function Profile() {
   const [reputationLoading, setReputationLoading] = useState(false);
   const [reputationError, setReputationError] = useState('');
   const [reputationReloadKey, setReputationReloadKey] = useState(0);
-  const history = data.creditHistory.filter((h) => h.userId === user.id);
-  const topups = data.topups.filter((t) => t.userId === user.id);
-  const districts = data.districts
-    .filter((entry) => entry.status === 'active')
-    .map((entry) => entry.name);
+  const [pointSummary, setPointSummary] = useState<PointHistorySummary | null>(null);
 
   useEffect(() => {
-    if (!isApiAccount) return;
     let active = true;
     setProfileLoading(true);
     setProfileLoadError('');
@@ -227,7 +223,7 @@ export function Profile() {
     return () => {
       active = false;
     };
-  }, [dispatch, isApiAccount, profileReloadKey, user.id]);
+  }, [dispatch, profileReloadKey, user.id]);
 
   useEffect(() => {
     if (phoneOtpExpiresIn === null || phoneOtpExpiresIn <= 0) return;
@@ -245,8 +241,26 @@ export function Profile() {
     return () => window.clearInterval(timer);
   }, [phoneResendCooldown]);
 
+  // Tổng điểm được cộng, bị trừ trên toàn bộ lịch sử; tải lại cùng lúc với thông tin uy tín.
   useEffect(() => {
-    if (!isApiAccount || tab !== 'reputation') return;
+    if (tab !== 'reputation' || isAdmin) return undefined;
+    let active = true;
+    reputationApi
+      .listAllPointHistory()
+      .then((entries) => {
+        if (active) setPointSummary(summarizePointHistory(entries));
+      })
+      .catch(() => {
+        if (active) setPointSummary(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [tab, isAdmin, reputationReloadKey]);
+
+  // Gọi ngay khi mở trang để cột trái có hạng thật, tab Uy tín dùng lại cùng kết quả. Admin không có uy tín.
+  useEffect(() => {
+    if (isAdmin) return;
     let active = true;
     setReputationLoading(true);
     setReputationError('');
@@ -263,7 +277,7 @@ export function Profile() {
     return () => {
       active = false;
     };
-  }, [isApiAccount, reputationPage, reputationReloadKey, tab]);
+  }, [isAdmin, reputationPage, reputationReloadKey]);
 
   const closePhoneChange = () => {
     setPhoneChangeOpen(false);
@@ -277,7 +291,7 @@ export function Profile() {
   };
 
   const sendPhoneOtp = async () => {
-    if (!isApiAccount || phoneChangeSending || phoneChangeConfirming) return;
+    if (phoneChangeSending || phoneChangeConfirming) return;
     const normalizedPhone = newPhone.trim();
     setPhoneChangeError('');
     setPhoneChangeNotice('');
@@ -326,7 +340,7 @@ export function Profile() {
   };
 
   const confirmPhoneChange = async () => {
-    if (!isApiAccount || phoneChangeSending || phoneChangeConfirming) return;
+    if (phoneChangeSending || phoneChangeConfirming) return;
     const normalizedPhone = newPhone.trim();
     setPhoneChangeError('');
     setPhoneChangeNotice('');
@@ -393,56 +407,43 @@ export function Profile() {
       setProfileSaveError('Vui lòng nhập họ và tên.');
       return;
     }
-    if (!isApiAccount && !validEmail(email)) {
-      setProfileSaveError('Email không đúng định dạng.');
-      return;
+    if (profileSaving) return;
+    setProfileSaving(true);
+    try {
+      const uploaded = avatarFile ? await mediaApi.upload(avatarFile) : null;
+      const parsedAreaId = Number(apiAreaId);
+      const profile = await userApi.updateMe({
+        fullName: name.trim(),
+        areaId: Number.isSafeInteger(parsedAreaId) && parsedAreaId > 0 ? parsedAreaId : null,
+        avatarMediaId: uploaded?.mediaId ?? apiAvatarMediaId,
+      });
+      const districtLabel = apiAreas.find((area) => area.id === profile.areaId)?.label ?? '';
+      const nextAvatarUrl = resolveMediaUrl(profile.avatarUrl) || undefined;
+      setAvatarUrl(nextAvatarUrl);
+      setApiAvatarMediaId(profile.avatarMediaId);
+      setAvatarFile(null);
+      dispatch(actions.updateProfile({
+        userId: user.id,
+        name: profile.fullName,
+        email: profile.email,
+        phone: profile.phone ?? '',
+        district: districtLabel,
+        avatarUrl: nextAvatarUrl,
+      }));
+      setProfileNotice('Cập nhật hồ sơ thành công.');
+    } catch (error) {
+      setProfileSaveError(profileSaveErrorMessage(error));
+    } finally {
+      setProfileSaving(false);
     }
-    if (!isApiAccount && !validVietnamPhone(phone)) {
-      setProfileSaveError('Số điện thoại Việt Nam không hợp lệ.');
-      return;
-    }
-    if (isApiAccount) {
-      setProfileSaving(true);
-      try {
-        const uploaded = avatarFile ? await mediaApi.upload(avatarFile) : null;
-        const parsedAreaId = Number(apiAreaId);
-        const profile = await userApi.updateMe({
-          fullName: name.trim(),
-          areaId: Number.isSafeInteger(parsedAreaId) && parsedAreaId > 0 ? parsedAreaId : null,
-          avatarMediaId: uploaded?.mediaId ?? apiAvatarMediaId,
-        });
-        const districtLabel = apiAreas.find((area) => area.id === profile.areaId)?.label ?? '';
-        const nextAvatarUrl = resolveMediaUrl(profile.avatarUrl) || undefined;
-        setAvatarUrl(nextAvatarUrl);
-        setApiAvatarMediaId(profile.avatarMediaId);
-        setAvatarFile(null);
-        dispatch(actions.updateProfile({
-          userId: user.id,
-          name: profile.fullName,
-          email: profile.email,
-          phone: profile.phone ?? '',
-          district: districtLabel,
-          avatarUrl: nextAvatarUrl,
-        }));
-        setProfileNotice('Cập nhật hồ sơ thành công.');
-      } catch (error) {
-        setProfileSaveError(profileSaveErrorMessage(error));
-      } finally {
-        setProfileSaving(false);
-      }
-      return;
-    }
-    dispatch(actions.updateProfile({ userId: user.id, name: name.trim(), email: email.trim().toLowerCase(), phone: phone.trim(), district, avatarUrl }));
-    setProfileNotice('Cập nhật hồ sơ thành công.');
   };
+
   return (
     <div className="page-shell">
-      <PageHeader
-        title="Tài khoản của bạn"
-      />
-      <div className="grid gap-7 lg:grid-cols-[240px_1fr]">
-        <aside>
-          <div className="flex items-center gap-3 pb-5">
+      <PageHeader title="Tài khoản" />
+      <div className="grid items-start gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <aside className="rounded-lg bg-white p-3 ring-1 ring-border/80">
+          <div className="flex items-center gap-3 px-2 pb-4 pt-2">
             <Avatar
               user={{
                 ...user,
@@ -450,64 +451,61 @@ export function Profile() {
                 avatarInitials: name.trim().split(/\s+/).map((part) => part[0]).slice(-2).join('').toUpperCase(),
                 avatarUrl,
               }}
-              size="lg"
             />
             <div className="min-w-0">
-              <h2 className="truncate font-bold">{name}</h2>
+              <h2 className="truncate text-sm font-bold">{name}</h2>
+              <p className="truncate text-xs text-text-muted">{email}</p>
               <div className="mt-1">
-                <RankBadge rank={isAdmin ? 'Quản trị hệ thống' : user.rank} />
+                {isAdmin ? <RankBadge rank="Quản trị hệ thống" /> : null}
+                {!isAdmin && reputation ? (
+                  <RankBadge rank={`Hạng ${getRankLabel(reputation.rank)}`} />
+                ) : null}
               </div>
             </div>
           </div>
-          <nav className="space-y-1 border-t border-border pt-4">
+          <nav aria-label="Mục tài khoản" className="space-y-1 border-t border-border pt-2">
             {(
               [
-                ['profile', 'Hồ sơ', 'user'],
-                ['credit', 'Credit', 'wallet'],
-                ['reputation', 'Uy tín & Hạng', 'star'],
+                ['profile', 'Hồ sơ'],
+                ['credit', 'Ví Credit'],
+                ['reputation', 'Uy tín & Hạng'],
               ] as const
-            ).map(([id, label, icon]) =>
+            ).map(([id, label]) =>
               id === 'credit' && !isAdmin ? (
                 <Link
                   key={id}
                   to="/credit"
-                  className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-semibold text-text-secondary hover:bg-surface-low"
+                  className="flex w-full items-center min-h-11 rounded-md px-3 py-2.5 text-left text-sm font-semibold transition text-text-secondary hover:bg-surface-low"
                 >
-                  <Icon name={icon} className="size-5" />
                   {label}
                 </Link>
               ) : id === 'credit' ? null : isAdmin && id === 'reputation' ? null : (
                 <button
                   key={id}
-                  onClick={() => setTab(id)}
-                  className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-semibold ${tab === id ? 'bg-primary-faint text-primary' : 'text-text-secondary hover:bg-surface-low'}`}
+                  onClick={() => changeTab(id)}
+                  className={`flex w-full items-center min-h-11 rounded-md px-3 py-2.5 text-left text-sm font-semibold transition ${tab === id ? 'bg-primary-faint text-primary' : 'text-text-secondary hover:bg-surface-low'}`}
                 >
-                  <Icon name={icon} className="size-5" />
                   {label}
                 </button>
               ),
             )}
-            <Link to="/change-password" className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-semibold text-text-secondary hover:bg-surface-low">
-              <Icon name="shield" className="size-5" />
+            <Link to="/change-password" className="flex w-full items-center min-h-11 rounded-md px-3 py-2.5 text-left text-sm font-semibold transition text-text-secondary hover:bg-surface-low">
               Đổi mật khẩu
             </Link>
           </nav>
         </aside>
         <main className="min-w-0">
           {tab === 'profile' ? (
-            <section className="rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
-              <div className="flex items-center justify-between">
+            <section className="rounded-lg bg-white p-5 ring-1 ring-border/80 sm:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="section-title">Thông tin cá nhân</h2>
                   <p className="mt-1 text-sm text-text-muted">
                     Thông tin dùng để liên hệ trong giao dịch.
                   </p>
                 </div>
-                <label
-                  className="grid size-11 cursor-pointer place-items-center rounded-md bg-primary-soft text-primary"
-                  title="Đổi ảnh đại diện"
-                >
-                  <Icon name="image" className="size-5" />
+                <label className="inline-flex min-h-11 cursor-pointer items-center rounded-md border border-border bg-white px-3 text-sm font-semibold text-text-secondary transition hover:border-primary/50 hover:bg-primary-faint hover:text-primary">
+                  Đổi ảnh đại diện
                   <input
                     className="hidden"
                     type="file"
@@ -532,22 +530,20 @@ export function Profile() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  readOnly={isApiAccount}
-                  className={isApiAccount ? 'bg-surface-low' : undefined}
+                  readOnly
+                  className="bg-surface-low"
                 />
                 <div>
                   <Field
                     label="Số điện thoại"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    readOnly={isApiAccount}
-                    className={isApiAccount ? 'bg-surface-low' : undefined}
+                    readOnly
+                    className="bg-surface-low"
                   />
-                  {isApiAccount ? (
-                    <Button
+                  <Button
                       type="button"
                       className="mt-2"
-                      size="sm"
                       variant="outline"
                       onClick={() => {
                         setPhoneChangeOpen(true);
@@ -564,35 +560,29 @@ export function Profile() {
                     >
                       Đổi số điện thoại
                     </Button>
-                  ) : null}
                 </div>
                 <Select
                   label="Khu vực mặc định"
-                  value={isApiAccount ? apiAreaId : district}
-                  onChange={(e) => isApiAccount ? setApiAreaId(e.target.value) : setDistrict(e.target.value)}
+                  value={apiAreaId}
+                  onChange={(e) => setApiAreaId(e.target.value)}
                 >
-                  {isApiAccount ? <option value="">Chưa chọn khu vực</option> : null}
-                  {(isApiAccount ? apiAreas : districts).map((entry) =>
-                    typeof entry === 'string' ? (
-                      <option key={entry}>{entry}</option>
-                    ) : (
-                      <option key={entry.id} value={entry.id}>{entry.label}</option>
-                    ),
-                  )}
+                  <option value="">Chưa chọn khu vực</option>
+                  {apiAreas.map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.label}</option>
+                  ))}
                 </Select>
               </div>
-              {isApiAccount && phoneChangeOpen ? (
+              {phoneChangeOpen ? (
                 <div className="mt-5 rounded-lg border border-border bg-surface-low p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h3 className="font-semibold text-text">Đổi số điện thoại</h3>
+                      <h3 className="font-semibold text-text-primary">Đổi số điện thoại</h3>
                       <p className="mt-1 text-sm text-text-muted">
                         Mã xác nhận sẽ được gửi đến email của tài khoản.
                       </p>
                     </div>
                     <Button
                       type="button"
-                      size="sm"
                       variant="ghost"
                       onClick={closePhoneChange}
                       disabled={phoneChangeSending || phoneChangeConfirming}
@@ -674,8 +664,8 @@ export function Profile() {
               {profileLoading ? <div className="mt-5"><Alert>Đang tải hồ sơ...</Alert></div> : null}
               {profileLoadError ? <div className="mt-5"><Alert tone="error">{profileLoadError}</Alert></div> : null}
               {profileSaveError ? <div className="mt-5"><Alert tone="error">{profileSaveError}</Alert></div> : null}
-              {profileLoadError && isApiAccount && !profileSaving ? (
-                <Button className="mt-3" size="sm" variant="outline" onClick={() => setProfileReloadKey((key) => key + 1)}>
+              {profileLoadError && !profileSaving ? (
+                <Button className="mt-3" variant="outline" onClick={() => setProfileReloadKey((key) => key + 1)}>
                   Tải lại hồ sơ
                 </Button>
               ) : null}
@@ -685,121 +675,51 @@ export function Profile() {
               </Button>
             </section>
           ) : null}
-          {tab === 'credit' ? (
-            <div className="space-y-6">
-              <section className="rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
-                <div className="grid gap-6 sm:grid-cols-3">
-                  <Stat label="Tổng Credit" value={isApiAccount ? (wallet ? formatCredit(wallet.creditBalance) : '--') : formatCredit(user.totalCredit)} />
-                  <Stat
-                    label="Khả dụng"
-                    value={isApiAccount ? (wallet ? formatCredit(wallet.available) : '--') : formatCredit(user.availableCredit)}
-                    detail="Có thể dùng cho giao dịch"
-                  />
-                  <Stat
-                    label="Đang giữ"
-                    value={isApiAccount ? (wallet ? formatCredit(wallet.heldCredit) : '--') : formatCredit(user.holdCredit)}
-                    detail="Chưa được chi tiêu"
-                  />
-                </div>
-                {isApiAccount || import.meta.env.DEV ? <div className="mt-6 border-t border-border pt-5">
-                  {isApiAccount ? (
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <h2 className="section-title">Nạp Credit</h2>
-                        <p className="mt-1 text-sm text-text-muted">
-                          Tạo đơn nạp và theo dõi trạng thái thanh toán tại trang Credit.
-                        </p>
-                      </div>
-                      <Link to="/credit">
-                        <Button>Đi đến trang Credit</Button>
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <h2 className="section-title">Nạp Credit thử</h2>
-                        <p className="mt-1 text-sm text-text-muted">
-                          Thanh toán thử — Không sử dụng tiền thật. Tính năng chỉ khả dụng khi được hệ thống bật.
-                        </p>
-                      </div>
-                      <Link to="/credit">
-                        <Button>Đi đến trang Credit</Button>
-                      </Link>
-                    </div>
-                  )}
-                </div> : null}
-              </section>
-              <section className="rounded-xl bg-white ring-1 ring-border/80">
-                <div className="border-b border-border px-5 py-4">
-                  <h2 className="section-title">Lịch sử Credit</h2>
-                </div>
-                {[
-                  ...topups.map((t) => ({
-                    id: t.id,
-                    note: t.method === 'Thanh toán thử' ? `Nạp thử ${t.amount} Credit` : `Nạp ${t.amount} Credit`,
-                    amount: t.status === 'completed' ? t.amount : 0,
-                    date: t.createdAt,
-                    status: t.status,
-                  })),
-                  ...history.map((h) => ({
-                    id: h.id,
-                    note: h.note,
-                    amount: h.amount,
-                    date: h.createdAt,
-                    status: 'record',
-                  })),
-                ].map((row) => (
-                  <div
-                    key={row.id}
-                    className="grid grid-cols-[1fr_auto] gap-4 border-b border-border/70 px-5 py-4 last:border-0"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{row.note}</p>
-                      <p className="mt-1 text-xs text-text-muted">
-                        {new Date(row.date).toLocaleDateString('vi-VN')} ·{' '}
-                        {row.status === 'pending' ? 'Chờ xác nhận' : 'Đã ghi nhận'}
-                      </p>
-                    </div>
-                    <strong
-                      className={`text-sm tabular-nums ${row.amount < 0 ? 'text-error' : row.amount > 0 ? 'text-success' : 'text-warning'}`}
-                    >
-                      {row.amount > 0 ? '+' : ''}
-                      {row.amount || 'Đang chờ'}
-                    </strong>
-                  </div>
-                ))}
-              </section>
-            </div>
-          ) : null}
-          {tab === 'password' ? <ChangePasswordForm user={user} /> : null}
-          {tab === 'reputation' && isApiAccount ? (
+          {tab === 'reputation' ? (
             <div className="space-y-6">
               {reputationLoading && !reputation ? <Alert>Đang tải thông tin uy tín...</Alert> : null}
               {reputationError ? (
                 <div className="space-y-3">
                   <Alert tone="error">{reputationError}</Alert>
-                  <Button size="sm" variant="outline" onClick={() => setReputationReloadKey((key) => key + 1)}>
+                  <Button variant="outline" onClick={() => setReputationReloadKey((key) => key + 1)}>
                     Thử lại
                   </Button>
                 </div>
               ) : null}
               {reputation ? (
                 <>
-                  <section className="grid gap-5 rounded-xl bg-white p-6 ring-1 ring-border/80 sm:grid-cols-4">
-                    <Stat label="Tổng điểm" value={reputation.totalPoints} detail="Điểm hoạt động" />
-                    <Stat label="Hạng thành viên" value={reputationRankLabel[reputation.rank]} detail="Dựa trên điểm uy tín" />
-                    <Stat label="Sao uy tín" value={`${reputation.trustStars}/5`} detail="Mức tin cậy hiện tại" />
-                    <Stat
-                      label="Tỉ lệ đúng mô tả"
-                      value={reputation.accuracyRate === null ? 'Chưa có' : `${Math.round(reputation.accuracyRate * 100)}%`}
-                      detail="Từ giao dịch được đánh giá"
-                    />
+                  <section aria-label="Tóm tắt uy tín" className="grid gap-3 md:grid-cols-[2fr_1fr_1fr]">
+                    <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
+                      <p className="text-xs font-semibold text-text-secondary">Hạng thành viên</p>
+                      <p className="mt-2 flex items-baseline gap-2.5">
+                        <strong className="text-2xl">{getRankLabel(reputation.rank)}</strong>
+                        <span className="text-sm text-text-muted">{reputation.totalPoints} điểm uy tín</span>
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-text-secondary">Điểm tăng khi bạn hoàn tất giao dịch và quyết định hạng.</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
+                      <p className="text-xs font-semibold text-text-secondary">Sao uy tín</p>
+                      <p className="mt-2 text-xl font-bold">{reputation.trustStars} / 5</p>
+                      <p className="mt-1 text-xs leading-5 text-text-muted">Giảm khi bị báo cáo đúng.</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
+                      <p className="text-xs font-semibold text-text-secondary">Đúng mô tả</p>
+                      <p className="mt-2 text-xl font-bold">
+                        {reputation.accuracyRate === null ? (
+                          <span className="block text-sm font-semibold leading-6">Chưa đủ giao dịch để tính</span>
+                        ) : (
+                          `${Math.round(reputation.accuracyRate * 100)}%`
+                        )}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-text-muted">Từ đánh giá của người nhận.</p>
+                    </div>
                   </section>
-                  <section className="rounded-xl bg-white ring-1 ring-border/80">
+                  <section className="overflow-hidden rounded-lg bg-white ring-1 ring-border/80">
                     <div className="border-b border-border px-5 py-4">
                       <h2 className="section-title">Lịch sử uy tín</h2>
                       <p className="mt-1 text-xs text-text-muted">{reputation.history.totalElements} lần thay đổi điểm</p>
                     </div>
+                    <PointSummary summary={pointSummary} />
                     {reputation.history.content.length ? reputation.history.content.map((entry, index) => (
                       <div
                         key={`${entry.createdAt}-${index}`}
@@ -819,9 +739,8 @@ export function Profile() {
                       </div>
                     )}
                     {reputation.history.totalPages > 1 ? (
-                      <div className="flex items-center justify-between border-t border-border px-5 py-4">
+                      <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
                         <Button
-                          size="sm"
                           variant="outline"
                           disabled={reputationLoading || reputation.history.number <= 0}
                           onClick={() => setReputationPage((page) => Math.max(0, page - 1))}
@@ -832,7 +751,6 @@ export function Profile() {
                           Trang {reputation.history.number + 1}/{reputation.history.totalPages}
                         </span>
                         <Button
-                          size="sm"
                           variant="outline"
                           disabled={reputationLoading || reputation.history.number + 1 >= reputation.history.totalPages}
                           onClick={() => setReputationPage((page) => page + 1)}
@@ -845,39 +763,29 @@ export function Profile() {
                 </>
               ) : null}
             </div>
-          ) : tab === 'reputation' ? (
-            <div className="space-y-6">
-              <section className="grid gap-5 rounded-xl bg-white p-6 ring-1 ring-border/80 sm:grid-cols-3">
-                <Stat label="Reward Points" value={user.rewardPoints} detail="Điểm hoạt động" />
-                <Stat label="Hạng thành viên" value={user.rank} detail="Dựa trên điểm và lịch sử" />
-                <Stat
-                  label="Reputation Stars"
-                  value={user.reputationStars.toFixed(1)}
-                  detail="Đánh giá từ cộng đồng"
-                />
-              </section>
-              <section className="rounded-xl bg-white p-6 ring-1 ring-border/80">
-                <h2 className="section-title">Lịch sử uy tín</h2>
-                <div className="mt-4 space-y-3">
-                  {[
-                    'Hoàn tất giao dịch đúng lịch',
-                    'Phản hồi tích cực từ thành viên',
-                    'Xác nhận bàn giao đầy đủ',
-                  ].map((text, i) => (
-                    <div
-                      key={text}
-                      className="flex items-center justify-between rounded-md bg-background p-3 text-sm"
-                    >
-                      <span>{text}</span>
-                      <span className="font-semibold text-success">+{[5, 3, 2][i]} điểm</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </div>
           ) : null}
         </main>
       </div>
     </div>
+  );
+}
+
+function PointSummary({ summary }: { summary: PointHistorySummary | null }) {
+  if (!summary) return null;
+  const cells: Array<[string, string, string]> = [
+    ['Đã được cộng', `+${summary.gained}`, 'text-success'],
+    ['Bị trừ', summary.lost ? `-${summary.lost}` : '0', 'text-error'],
+    ['Số lần thay đổi', String(summary.changes), 'text-text-primary'],
+    ['Không được cộng', String(summary.notCounted), 'text-text-secondary'],
+  ];
+  return (
+    <dl className="grid grid-cols-2 gap-2.5 border-b border-border p-4 sm:grid-cols-4">
+      {cells.map(([label, value, tone]) => (
+        <div key={label} className="rounded-md bg-surface-low px-4 py-3">
+          <dt className="text-xs font-medium text-text-muted">{label}</dt>
+          <dd className={`mt-1 text-lg font-bold tabular-nums ${tone}`}>{value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }

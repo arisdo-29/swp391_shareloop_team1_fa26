@@ -1,10 +1,12 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Alert, Button, EmptyState, Field, Icon, PageHeader, Stat } from '../../components/ui';
+import { Alert, Button, EmptyState, Field, PageHeader, Stat } from '../../components/ui';
 import { adminFinanceApi, type FinanceSummary } from '../../services/adminFinanceApi';
 import { adminAuditApi, type ActivityLogResponse } from '../../services/adminAuditApi';
 import type { ApiError } from '../../services/http';
 import { formatVnd } from '../../utils/formatting';
+import { walletTransactionLabels } from '../../utils/creditHistory';
+import { AdminTodoCards } from './AdminTodoCards';
 
 const CashByDayChart = lazy(() =>
   import('./FinanceCharts').then((module) => ({ default: module.CashByDayChart })),
@@ -13,10 +15,7 @@ const CreditByTypeChart = lazy(() =>
   import('./FinanceCharts').then((module) => ({ default: module.CreditByTypeChart })),
 );
 
-const transactionLabels: Record<string, string> = {
-  TOP_UP: 'Nạp Credit', POST_FEE: 'Phí đăng bài', EDIT_FEE: 'Phí sửa bài',
-  RENEW_FEE: 'Phí gia hạn', BOOST_FEE: 'Phí đẩy bài', AI_SEARCH_FEE: 'Phí tìm bằng AI', ADMIN_ADJUST: 'Điều chỉnh',
-};
+const transactionLabels: Record<string, string> = walletTransactionLabels;
 
 function errorMessage(error: unknown) {
   const apiError = error as ApiError;
@@ -34,23 +33,16 @@ function downloadBlob(blob: Blob, fileName: string) {
   anchor.remove();
   URL.revokeObjectURL(url);
 }
-const dashboardActions = [
-  { to: '/admin/moderation', label: 'Duyệt bài', icon: 'article' },
-  { to: '/admin/finance', label: 'Báo cáo tài chính', icon: 'payments' },
-  { to: '/admin/users', label: 'Quản lý tài khoản', icon: 'group' },
-  { to: '/admin/checklist', label: 'Checklist duyệt bài', icon: 'check' },
-  { to: '/admin/audit-logs', label: 'Nhật ký hoạt động', icon: 'history' },
-] as const;
 
 function activityTone(type: string) {
   const normalizedType = type.toUpperCase();
   if (['REJECT', 'LOCK', 'DELETE', 'REMOVE', 'FAIL'].some((keyword) => normalizedType.includes(keyword))) {
-    return 'bg-red-50 text-error';
+    return 'bg-error-soft text-error';
   }
   if (['APPROVE', 'CREATE', 'ADD', 'UNLOCK', 'ACTIVATE'].some((keyword) => normalizedType.includes(keyword))) {
-    return 'bg-emerald-50 text-success';
+    return 'bg-success-soft text-success';
   }
-  return 'bg-blue-50 text-info';
+  return 'bg-info-soft text-info';
 }
 
 export function AdminOperationsDashboard() {
@@ -83,17 +75,20 @@ export function AdminOperationsDashboard() {
     return () => { active = false; };
   }, [reload]);
   const metrics = report ? [
-    { label: 'Tiền thu', value: formatVnd(report.cashAmountVnd), icon: 'payments', tone: 'bg-primary-faint text-primary' },
-    { label: 'Credit cộng', value: report.creditInTotal.toLocaleString('vi-VN'), icon: 'add', tone: 'bg-emerald-50 text-success' },
-    { label: 'Credit trừ', value: report.creditOutTotal.toLocaleString('vi-VN'), icon: 'transaction', tone: 'bg-orange-50 text-secondary' },
+    { label: 'Tiền thu', value: formatVnd(report.cashAmountVnd), tone: 'border-l-primary' },
+    { label: 'Credit cộng', value: report.creditInTotal.toLocaleString('vi-VN'), tone: 'border-l-success' },
+    { label: 'Credit trừ', value: report.creditOutTotal.toLocaleString('vi-VN'), tone: 'border-l-secondary' },
   ] : [];
 
   return <>
     <PageHeader
-      title="Tổng quan vận hành"
-      description="Theo dõi nhanh số liệu tài chính và những hoạt động mới nhất trên ShareLoop."
+      title="Tổng quan"
+      description="Việc đang chờ, số liệu tài chính và thao tác quản trị gần đây."
     />
-    <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_18rem] xl:items-start">
+    <div className="mb-6">
+      <AdminTodoCards />
+    </div>
+    <div className="grid min-w-0 gap-6">
       <div className="min-w-0 space-y-6">
         {reportError ? (
           <Alert tone="error">
@@ -103,11 +98,8 @@ export function AdminOperationsDashboard() {
         ) : report ? (
           <div className="grid gap-4 sm:grid-cols-3">
             {metrics.map((metric) => (
-              <section key={metric.label} className="rounded-xl border border-border/80 bg-white p-5 shadow-sm">
-                <div className={`flex size-11 items-center justify-center rounded-lg ${metric.tone}`}>
-                  <Icon name={metric.icon} className="size-5" weight="bold" />
-                </div>
-                <p className="mt-4 text-sm font-medium text-text-muted">{metric.label}</p>
+              <section key={metric.label} className={`rounded-xl border border-l-4 border-border/80 bg-white p-5 shadow-sm ${metric.tone}`}>
+                <p className="text-sm font-medium text-text-muted">{metric.label}</p>
                 <p className="mt-1 break-words text-2xl font-bold tabular-nums text-text-primary">{metric.value}</p>
               </section>
             ))}
@@ -122,9 +114,8 @@ export function AdminOperationsDashboard() {
               <h2 className="section-title">Hoạt động gần đây</h2>
               <p className="mt-1 text-sm text-text-muted">Các thay đổi mới nhất được ghi nhận trong hệ thống.</p>
             </div>
-            <Link className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary-hover" to="/admin/audit-logs">
+            <Link className="text-sm font-semibold text-primary hover:text-primary-hover" to="/admin/audit-logs">
               Xem tất cả
-              <Icon name="arrow" className="size-4" />
             </Link>
           </div>
           {logsError ? (
@@ -172,25 +163,6 @@ export function AdminOperationsDashboard() {
         </section>
       </div>
 
-      <aside className="rounded-xl border border-border/80 bg-white p-4 shadow-sm sm:p-5 xl:sticky xl:top-6">
-        <h2 className="text-base font-bold text-text-primary">Thao tác nhanh</h2>
-        <p className="mt-1 text-sm leading-6 text-text-muted">Truy cập các công cụ quản trị thường dùng.</p>
-        <nav aria-label="Thao tác nhanh" className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-          {dashboardActions.map((action) => (
-            <Link
-              key={action.to}
-              to={action.to}
-              className="group flex min-w-0 items-center gap-3 rounded-lg border border-border/70 px-3.5 py-3 text-sm font-semibold text-text-secondary transition hover:border-primary/30 hover:bg-primary-faint hover:text-primary"
-            >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-surface-low text-primary transition group-hover:bg-white">
-                <Icon name={action.icon} className="size-[18px]" weight="bold" />
-              </span>
-              <span className="min-w-0 flex-1">{action.label}</span>
-              <Icon name="arrow" className="size-4 shrink-0 text-text-muted transition group-hover:translate-x-0.5 group-hover:text-primary" />
-            </Link>
-          ))}
-        </nav>
-      </aside>
     </div>
   </>;
 }
@@ -201,6 +173,7 @@ export function AdminFinanceReport() {
   const [filters, setFilters] = useState({ from: '', to: '' });
   const [report, setReport] = useState<FinanceSummary | null>(null);
   const [error, setError] = useState('');
+  const [rangeError, setRangeError] = useState('');
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
   const [exporting, setExporting] = useState(false);
@@ -220,7 +193,8 @@ export function AdminFinanceReport() {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (from && to && from > to) { setError('Từ ngày phải trước hoặc bằng đến ngày.'); return; }
+    if (from && to && from > to) { setRangeError('Từ ngày phải trước hoặc bằng đến ngày.'); return; }
+    setRangeError('');
     setFilters({ from, to });
   };
 
@@ -244,12 +218,13 @@ export function AdminFinanceReport() {
   };
 
   return <>
-    <PageHeader title="Báo cáo tài chính" description="Tiền thu, Credit cộng và Credit trừ theo sổ hệ thống." action={<div className="flex flex-wrap gap-2"><Button variant="outline" icon="download" disabled={exporting} onClick={() => void exportCsv()}>{exporting ? 'Đang xuất…' : 'Xuất báo cáo CSV'}</Button><Link to="/admin/finance/users"><Button variant="outline">Tra cứu người dùng</Button></Link></div>} />
+    <PageHeader title="Báo cáo tài chính" description="Tiền thu, Credit cộng và Credit trừ theo sổ hệ thống." action={<div className="flex flex-wrap gap-2"><Button variant="outline" disabled={exporting} onClick={() => void exportCsv()}>{exporting ? 'Đang xuất...' : 'Xuất báo cáo CSV'}</Button><Link to="/admin/finance/users"><Button variant="outline">Tra cứu người dùng</Button></Link></div>} />
     <form className="mb-5 flex flex-wrap items-end gap-3" onSubmit={submit}>
       <Field label="Từ ngày" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
       <Field label="Đến ngày" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
       <Button type="submit" disabled={loading}>Lọc</Button>
     </form>
+    {rangeError ? <div className="mb-4" role="alert"><Alert tone="error">{rangeError}</Alert></div> : null}
     {exportError ? <div className="mb-4" role="alert"><Alert tone="error">Không xuất được báo cáo CSV. {exportError}</Alert></div> : null}
     {exportNotice ? <div className="mb-4" role="status"><Alert tone="success">{exportNotice}</Alert></div> : null}
     {error ? <Alert tone="error">{error} <button type="button" className="underline" onClick={() => setReload((value) => value + 1)}>Thử lại</button></Alert> : null}
@@ -262,7 +237,7 @@ export function AdminFinanceReport() {
       <section className="rounded-lg bg-white p-5 ring-1 ring-border">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="section-title">Đối chiếu tiền thu và Credit nạp</h2>
-          <span className={`rounded-sm px-2 py-1 text-xs font-semibold ${report.reconciliation.matched ? 'bg-emerald-50 text-success' : 'bg-amber-50 text-warning'}`}>
+          <span className={`rounded-sm px-2 py-1 text-xs font-semibold ${report.reconciliation.matched ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}>
             {report.reconciliation.matched ? 'Khớp' : 'Có chênh lệch'}
           </span>
         </div>

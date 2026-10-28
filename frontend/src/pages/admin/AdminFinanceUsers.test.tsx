@@ -127,13 +127,13 @@ describe('AdminFinanceUserDetail', () => {
     renderDetail();
 
     await screen.findByRole('heading', { name: 'Lan An' });
-    expect(await screen.findByRole('button', { name: 'Tất cả (3)' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Nạp Credit (1)' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Cộng Credit (1)' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Trừ Credit (1)' })).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: 'Tất cả (3)' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Nạp Credit (1)' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Cộng Credit (1)' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Trừ Credit (1)' })).toBeTruthy();
     expect(screen.getByText('Tổng đã nạp')).toBeTruthy();
 
-    await user.click(screen.getByRole('button', { name: 'Trừ Credit (1)' }));
+    await user.click(screen.getByRole('tab', { name: 'Trừ Credit (1)' }));
     expect(screen.getByText('Phí đăng bài')).toBeTruthy();
     expect(screen.queryByText('Cập nhật hệ thống')).toBeNull();
   });
@@ -152,6 +152,35 @@ describe('AdminFinanceUserDetail', () => {
         expect.objectContaining({ from: '2026-09-30T17:00:00.000Z', page: 0, size: 20 }),
       ),
     );
+  });
+
+  it('hiện đúng nhãn phí sửa, gia hạn, đẩy và hoàn phí AI, không kèm tên món', async () => {
+    // given
+    const user = userEvent.setup();
+    vi.mocked(adminFinanceApi.userHistory).mockResolvedValue({
+      items: [
+        { ...entry(1, 'EDIT_FEE', -2), itemId: 42 },
+        { ...entry(2, 'RENEW_FEE', -3), itemId: 42 },
+        { ...entry(3, 'BOOST_FEE', -4), itemId: 42 },
+        { ...entry(4, 'AI_SEARCH_FEE', 2), note: 'Hoàn phí AI #9' },
+      ],
+      page: 0,
+      size: 20,
+      totalElements: 4,
+    });
+
+    // when
+    renderDetail();
+    await screen.findByRole('tab', { name: 'Tất cả (4)' });
+
+    // then
+    expect(screen.getByText('Phí chỉnh sửa bài')).toBeTruthy();
+    expect(screen.getByText('Phí gia hạn bài')).toBeTruthy();
+    expect(screen.getByText('Phí đẩy tin')).toBeTruthy();
+    expect(screen.getByText('Hoàn phí tìm kiếm AI')).toBeTruthy();
+    await user.click(screen.getByRole('tab', { name: 'Cộng Credit (1)' }));
+    expect(screen.getByText('Hoàn phí tìm kiếm AI')).toBeTruthy();
+    expect(screen.queryByText('Phí đẩy tin')).toBeNull();
   });
 
   it('báo lỗi rõ ràng khi không có người dùng', async () => {

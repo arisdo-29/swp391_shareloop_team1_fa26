@@ -11,11 +11,23 @@ import com.shareloop.request.entity.RequestStatus;
  * @param donorId       id chủ bài đăng (người tặng / trao đổi đồ)
  * @param itemId        id bài đăng chính của yêu cầu
  * @param offeredItemId id món đề nghị trao đổi nếu là bài SWAP (có thể null)
+ * @param type          GIVE hoặc SWAP; null khi nơi dựng ngữ cảnh không biết loại giao dịch
  */
 public record RequestChatContext(
-        Long requestId, RequestStatus status, Long receiverId, Long donorId, Long itemId, Long offeredItemId) {
+        Long requestId,
+        RequestStatus status,
+        Long receiverId,
+        Long donorId,
+        Long itemId,
+        Long offeredItemId,
+        String type) {
+
+    public RequestChatContext(
+            Long requestId, RequestStatus status, Long receiverId, Long donorId, Long itemId, Long offeredItemId) {
+        this(requestId, status, receiverId, donorId, itemId, offeredItemId, null);
+    }
 
     public RequestChatContext(Long requestId, RequestStatus status, Long receiverId, Long donorId) {
-        this(requestId, status, receiverId, donorId, null, null);
+        this(requestId, status, receiverId, donorId, null, null, null);
     }
 }

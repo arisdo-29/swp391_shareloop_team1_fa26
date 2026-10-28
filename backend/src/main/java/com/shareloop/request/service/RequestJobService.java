@@ -138,7 +138,7 @@ public class RequestJobService {
             return false;
         }
 
-        request.cancel("Hết hạn do chủ bài chưa chọn");
+        request.cancel(Request.CANCEL_BY_SYSTEM + "Hết hạn do chủ bài chưa chọn");
         requestRepository.save(request);
 
         notificationService.notify(
@@ -165,11 +165,14 @@ public class RequestJobService {
             return false;
         }
 
-        request.cancel("Huỷ tự động do quá hạn 10 ngày không chốt lịch");
+        request.cancel(Request.CANCEL_BY_SYSTEM + "Huỷ tự động do quá hạn 10 ngày không chốt lịch");
         requestRepository.save(request);
 
         // Nhả giữ chỗ bài đăng về APPROVED (BR-T10)
         itemService.release(request.getItemId());
+        if (request.getOfferedItemId() != null) {
+            itemService.releaseIfReserved(request.getOfferedItemId());
+        }
 
         Long donorId = findDonorId(request.getItemId());
         if (donorId != null) {

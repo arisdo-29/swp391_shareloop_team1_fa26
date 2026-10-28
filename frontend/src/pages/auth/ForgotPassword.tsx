@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Alert, Button, Field, PageHeader } from '../../components/ui';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Alert, Button, Field } from '../../components/ui';
+import { AuthLayout } from './AuthLayout';
 import { PasswordField } from '../../components/PasswordField';
 import { OtpInput } from '../../components/OtpInput';
 import { authApi } from '../../services/authApi';
@@ -99,6 +100,7 @@ export function ForgotPassword() {
 
   const resetPassword = async (event: FormEvent) => {
     event.preventDefault();
+    if (processing) return;
     setError('');
     const code = otp.join('');
     if (!/^\d{6}$/.test(code)) {
@@ -135,15 +137,22 @@ export function ForgotPassword() {
   };
 
   return (
-    <div className="page-shell flex min-h-[620px] items-center justify-center">
-      <form
-        onSubmit={step === 'email' ? submitEmail : resetPassword}
-        className="w-full max-w-md rounded-xl bg-white p-6 shadow-md ring-1 ring-border/70 sm:p-8"
-      >
-        <PageHeader
-          title="Quên mật khẩu"
-          description="Khôi phục quyền truy cập an toàn cho tài khoản của bạn."
-        />
+    <AuthLayout>
+      <form onSubmit={step === 'email' ? submitEmail : resetPassword} aria-labelledby="forgot-title">
+        <Link
+          to="/login"
+          className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary-hover"
+        >
+          Về đăng nhập
+        </Link>
+        <h2 id="forgot-title" className="mt-2 text-2xl font-bold">
+          {step === 'email' ? 'Quên mật khẩu' : 'Đặt mật khẩu mới'}
+        </h2>
+        <p className="mb-5 mt-2 text-sm leading-6 text-text-secondary">
+          {step === 'email'
+            ? 'Nhập email đã đăng ký, chúng tôi gửi mã để đặt lại mật khẩu.'
+            : 'Nhập mã trong email và mật khẩu mới của bạn.'}
+        </p>
         {notice ? <Alert tone="info">{notice}</Alert> : null}
         {error ? <div className="mt-4"><Alert tone="error">{error}</Alert></div> : null}
         <div className="mt-6 space-y-4">
@@ -154,7 +163,6 @@ export function ForgotPassword() {
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              error={error && !validEmail(email) ? error : undefined}
               autoComplete="email"
             />
           ) : null}
@@ -173,7 +181,7 @@ export function ForgotPassword() {
               <PasswordField label="Mật khẩu mới" value={newPassword} onChange={setNewPassword} autoComplete="new-password" />
               <PasswordField label="Xác nhận mật khẩu mới" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
               {otpSeconds !== null ? (
-                <p className={`text-center text-xs ${otpSeconds === 0 ? 'text-error' : 'text-text-muted'}`}>
+                <p className={`text-center text-xs ${otpSeconds === 0 ? 'text-error' : 'text-text-secondary'}`}>
                   {otpSeconds === 0 ? 'Mã OTP đã hết hạn.' : `Mã OTP hết hạn sau ${formatCountdown(otpSeconds)}.`}
                 </p>
               ) : null}
@@ -188,11 +196,11 @@ export function ForgotPassword() {
               </Button>
             </>
           ) : null}
-          <Button className="w-full" disabled={processing || (step === 'reset' && otpSeconds === 0)}>
+          <Button size="lg" className="w-full" disabled={processing || (step === 'reset' && otpSeconds === 0)}>
             {processing ? 'Đang xử lý...' : step === 'email' ? 'Gửi mã OTP' : 'Đặt lại mật khẩu'}
           </Button>
         </div>
       </form>
-    </div>
+    </AuthLayout>
   );
 }

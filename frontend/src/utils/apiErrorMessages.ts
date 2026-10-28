@@ -42,3 +42,22 @@ export function moderationBlockedMessage(error: Pick<ApiError, 'details'>): stri
   }
   return DEFAULT_MODERATION_MESSAGE;
 }
+
+export const CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN = 'CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN';
+export const ITEM_GIVE_LIMIT_REACHED = 'ITEM_GIVE_LIMIT_REACHED';
+
+const CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN_MESSAGE =
+  'Người nhận đồ Cho tặng không gửi ảnh trong cuộc trò chuyện được. Bạn có thể nhắn bằng chữ.';
+
+/** Câu cho lỗi người nhận đồ Cho tặng gửi ảnh. Trả null khi lỗi không phải loại này. */
+export function chatImageForbiddenMessage(code: string | undefined): string | null {
+  return code === CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN ? CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN_MESSAGE : null;
+}
+
+/** Câu cho lỗi vượt hạn mức bài Cho tặng, kèm hạn mức nếu backend trả details.limit. Trả null với lỗi khác. */
+export function giveLimitMessage(error: Pick<ApiError, 'code' | 'details'>): string | null {
+  if (error.code !== ITEM_GIVE_LIMIT_REACHED) return null;
+  const limit = error.details?.limit;
+  const suffix = typeof limit === 'number' ? ` (tối đa ${limit} bài)` : '';
+  return `Bạn đã đạt số bài Cho tặng đang hiển thị hoặc chờ duyệt${suffix}. Hãy chờ bài được trao hoặc gỡ bớt bài trước khi đăng thêm.`;
+}

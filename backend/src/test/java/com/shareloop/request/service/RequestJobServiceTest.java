@@ -190,6 +190,28 @@ class RequestJobServiceTest {
             assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
             verify(itemService).release(1L);
         }
+
+        @Test
+        @DisplayName("Giao dịch SWAP quá hạn thì nhả cả bài chính lẫn món mang đổi")
+        void expireSilentReservedRequests_whenSwapOverdue_releasesBothItems() {
+            // given
+            when(configService.getInt(ConfigKey.CHAT_OPEN_DAYS)).thenReturn(10);
+            Instant cutoff = now.minus(10, ChronoUnit.DAYS);
+            Request request = new Request(1L, 10L, 50L, "SWAP");
+            ReflectionTestUtils.setField(request, "id", 203L);
+            request.select(cutoff.minus(1, ChronoUnit.HOURS));
+            when(requestRepository.findSilentReservedRequests(cutoff)).thenReturn(List.of(request));
+            when(requestRepository.findById(203L)).thenReturn(Optional.of(request));
+            when(itemQueryService.getSummary(1L)).thenReturn(new ItemSummary(1L, 20L, null, null));
+
+            // when
+            int cancelledCount = requestJobService.expireSilentReservedRequests(now);
+
+            // then
+            assertThat(cancelledCount).isEqualTo(1);
+            verify(itemService).release(1L);
+            verify(itemService).releaseIfReserved(50L);
+        }
     }
 
     @Nested
@@ -260,6 +282,29 @@ class RequestJobServiceTest {
             verify(requestRepository, never()).save(request);
             verify(itemService, never()).markTraded(anyLong());
             verify(reputationService, never()).onCompleted(anyLong());
+        }
+
+        @Test
+        @DisplayName("Giao dịch DISPUTED có một bên đã xác nhận quá 3 ngày vẫn không bị tự hoàn tất")
+        void autoConfirmHandoverRequests_whenRequestDisputed_doesNotComplete() {
+            // given
+            when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
+            Instant cutoff = now.minus(3, ChronoUnit.DAYS);
+            Request request = new Request(1L, 10L, null, "GIVE");
+            ReflectionTestUtils.setField(request, "id", 304L);
+            ReflectionTestUtils.setField(request, "status", RequestStatus.DISPUTED);
+            ReflectionTestUtils.setField(request, "donorHandoverAt", cutoff.minus(1, ChronoUnit.HOURS));
+            when(requestRepository.findOverdueHandoverRequests(cutoff)).thenReturn(List.of(request));
+            when(requestRepository.findById(304L)).thenReturn(Optional.of(request));
+
+            // when
+            int completedCount = requestJobService.autoConfirmHandoverRequests(now);
+
+            // then
+            assertThat(completedCount).isZero();
+            assertThat(request.getStatus()).isEqualTo(RequestStatus.DISPUTED);
+            verify(requestRepository, never()).save(request);
+            verify(itemService, never()).markTraded(anyLong());
         }
 
         @Test

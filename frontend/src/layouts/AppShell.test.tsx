@@ -12,7 +12,6 @@ const { currentUser, dispatchMock, logoutMock } = vi.hoisted(() => ({
     name: 'Test User',
     email: 'test@example.com',
     role: 'user',
-    availableCredit: 5,
   },
   dispatchMock: vi.fn(),
   logoutMock: vi.fn().mockResolvedValue(undefined),

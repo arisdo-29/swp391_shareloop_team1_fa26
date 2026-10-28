@@ -2,7 +2,6 @@ import { createContext, useContext } from 'react';
 import type { WalletResponse } from '../services/walletApi';
 
 export interface WalletContextValue {
-  isApiAccount: boolean;
   wallet: WalletResponse | null;
   loading: boolean;
   error: string;

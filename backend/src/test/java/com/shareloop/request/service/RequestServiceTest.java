@@ -282,8 +282,10 @@ class RequestServiceTest {
 
         assertThat(otherRequest.getStatus()).isEqualTo(RequestStatus.REJECTED);
         org.mockito.Mockito.verify(itemService).reserve(1L);
-        org.mockito.Mockito.verify(notificationService).notify(eq(10L), eq("REQUEST_ACCEPTED"), any(), any(), any());
-        org.mockito.Mockito.verify(notificationService).notify(eq(11L), eq("REQUEST_REJECTED"), any(), any(), any());
+        org.mockito.Mockito.verify(notificationService)
+                .notify(eq(10L), eq("REQUEST_ACCEPTED"), any(), any(), eq("/requests/101"));
+        org.mockito.Mockito.verify(notificationService)
+                .notify(eq(11L), eq("REQUEST_REJECTED"), any(), any(), eq("/requests/102"));
     }
 
     @Test
@@ -310,7 +312,48 @@ class RequestServiceTest {
         assertThat(response.status()).isEqualTo("RESERVED");
         assertThat(otherSwapRequest.getStatus()).isEqualTo(RequestStatus.CANCELLED);
         assertThat(otherSwapRequest.getCancelReason()).isNotNull();
-        org.mockito.Mockito.verify(notificationService).notify(eq(10L), eq("REQUEST_CANCELLED"), any(), any(), any());
+        org.mockito.Mockito.verify(notificationService)
+                .notify(eq(10L), eq("REQUEST_CANCELLED"), any(), any(), eq("/requests/103"));
+    }
+
+    @Test
+    @DisplayName("Chọn yêu cầu SWAP thì giữ chỗ cả bài chính lẫn món mang đổi")
+    void selectReceiver_whenSwapRequest_reservesBothItems() {
+        // given
+        Request selectedRequest = new Request(1L, 10L, 50L, "SWAP");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+
+        // when
+        requestService.selectReceiver(101L, 20L);
+
+        // then
+        org.mockito.Mockito.verify(itemService).reserve(1L);
+        org.mockito.Mockito.verify(itemService).reserve(50L);
+    }
+
+    @Test
+    @DisplayName("Chọn yêu cầu GIVE thì chỉ giữ chỗ bài chính")
+    void selectReceiver_whenGiveRequest_reservesOnlyMainItem() {
+        // given
+        Request selectedRequest = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+
+        // when
+        requestService.selectReceiver(101L, 20L);
+
+        // then
+        org.mockito.Mockito.verify(itemService).reserve(1L);
+        org.mockito.Mockito.verifyNoMoreInteractions(itemService);
     }
 
     @Test

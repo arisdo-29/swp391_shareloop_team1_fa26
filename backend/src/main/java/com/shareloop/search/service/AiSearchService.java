@@ -5,9 +5,11 @@ import com.shareloop.catalog.dto.AreaResponse;
 import com.shareloop.catalog.dto.CategoryResponse;
 import com.shareloop.catalog.service.AreaService;
 import com.shareloop.catalog.service.CategoryService;
+import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.integration.ai.AiResponse;
 import com.shareloop.integration.ai.AiSearchClient;
+import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.service.ItemService;
@@ -129,20 +131,36 @@ public class AiSearchService {
             logCall(userId, response.model(), "INVALID_RESPONSE", started, reservation);
             return fallback(userId, query, page, size);
         }
+        PageResponse<ItemResponse> results = itemService.searchApprovedForAi(
+                filters.categoryId(),
+                filters.areaId(),
+                filters.keywords(),
+                filters.condition(),
+                filters.offerType(),
+                page,
+                size);
+        boolean broadened = false;
+        if (results.totalElements() == 0
+                && filters.keywords() != null
+                && (filters.categoryId() != null
+                        || filters.areaId() != null
+                        || filters.condition() != null
+                        || filters.offerType() != null)) {
+            PageResponse<ItemResponse> keywordResults =
+                    itemService.searchApprovedForAi(null, null, filters.keywords(), null, null, page, size);
+            if (keywordResults.totalElements() > 0) {
+                results = keywordResults;
+                broadened = true;
+            }
+        }
         logCall(userId, response.model(), "SUCCESS", started, reservation);
         return new AiSearchResponse(
                 filters,
-                itemService.searchApprovedForAi(
-                        filters.categoryId(),
-                        filters.areaId(),
-                        filters.keywords(),
-                        filters.condition(),
-                        filters.offerType(),
-                        page,
-                        size),
+                results,
                 quotaService.getQuota(userId),
                 reservation.paid() ? configService.getInt(ConfigKey.AI_SEARCH_FEE) : 0,
-                false);
+                false,
+                broadened);
     }
 
     private AiSearchResponse fallback(long userId, String query, int page, int size) {
@@ -152,13 +170,23 @@ public class AiSearchService {
                 itemService.searchApprovedForAi(null, null, keywords, null, null, page, size),
                 quotaService.getQuota(userId),
                 0,
-                true);
+                true,
+                false);
     }
 
     private static String safeFailureDetail(Exception exception) {
         String message = exception.getMessage();
-        if (message != null && message.matches("OpenRouter API returned HTTP [1-5][0-9]{2}")) {
+        if (message != null
+                && (message.matches("OpenRouter API returned HTTP [1-5][0-9]{2}")
+                        || message.equals("OpenRouter API returned no single tool call")
+                        || message.equals("OpenRouter API returned invalid tool arguments")
+                        || message.equals("OpenRouter API returned no JSON object"))) {
             return message;
+        }
+        if (exception.getCause() != null) {
+            return exception.getClass().getSimpleName()
+                    + " caused by "
+                    + exception.getCause().getClass().getSimpleName();
         }
         return exception.getClass().getSimpleName();
     }

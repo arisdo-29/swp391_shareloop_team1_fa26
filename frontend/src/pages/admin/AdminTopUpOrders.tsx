@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { Pagination } from '../../components/Pagination';
-import { Alert, Button, EmptyState, PageHeader, TextArea } from '../../components/ui';
+import { Alert, Button, PageHeader, TextArea, SkeletonRows } from '../../components/ui';
 import { adminFinanceApi } from '../../services/adminFinanceApi';
 import type { ApiError } from '../../services/http';
 import type { PageResponse } from '../../services/itemApi';
@@ -24,9 +24,9 @@ function statusLabel(order: TopUpOrderDetailResponse) {
 }
 
 function statusClass(status: PaymentOrderStatus) {
-  if (status === 'SUCCESS') return 'bg-emerald-50 text-success';
-  if (status === 'PENDING') return 'bg-amber-50 text-warning';
-  if (status === 'FAILED') return 'bg-red-50 text-error';
+  if (status === 'SUCCESS') return 'bg-success-soft text-success';
+  if (status === 'PENDING') return 'bg-warning-soft text-warning';
+  if (status === 'FAILED') return 'bg-error-soft text-error';
   return 'bg-surface-low text-text-muted';
 }
 
@@ -153,7 +153,14 @@ export function AdminTopUpOrders() {
         </label>
       </div>
 
-      {error ? <Alert tone="error">{error}</Alert> : null}
+      {error ? (
+        <div className="space-y-3">
+          <Alert tone="error">{error}</Alert>
+          <Button variant="outline" onClick={() => setReloadKey((current) => current + 1)}>
+            Thử lại
+          </Button>
+        </div>
+      ) : null}
       {notice ? (
         <div role="status">
           <Alert tone="success">{notice}</Alert>
@@ -161,7 +168,7 @@ export function AdminTopUpOrders() {
       ) : null}
 
       {loading && !result ? (
-        <EmptyState title="Đang tải đơn nạp" text="Vui lòng chờ trong giây lát." />
+        <SkeletonRows label="Đang tải đơn nạp" />
       ) : result ? (
         <div>
           <div className="table-wrap">
@@ -240,7 +247,7 @@ function TopUpRow({
       </td>
       <td>
         <span
-          className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-[11px] font-semibold ${statusClass(order.status)}`}
+          className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${statusClass(order.status)}`}
         >
           {statusLabel(order)}
         </span>
@@ -264,10 +271,10 @@ function TopUpRow({
       <td>
         {canReview(order) ? (
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => onAction('approve')}>
+            <Button onClick={() => onAction('approve')}>
               Phê duyệt
             </Button>
-            <Button size="sm" variant="danger" onClick={() => onAction('reject')}>
+            <Button variant="danger" onClick={() => onAction('reject')}>
               Từ chối
             </Button>
           </div>

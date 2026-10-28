@@ -40,6 +40,7 @@ beforeEach(() => {
     quota: { freeUsesRemaining: 5, feeCredits: 2, hasToppedUp: true },
     chargedCredits: 0,
     fallback: false,
+    broadened: false,
   });
 });
 
@@ -59,11 +60,12 @@ describe('AI search quota', () => {
 
     expect(await screen.findByText('Còn 5 lượt miễn phí')).toBeTruthy();
     await user.type(screen.getByRole('textbox', { name: 'Mô tả món đồ cần tìm' }), 'Tìm sách cũ');
-    await user.click(screen.getByRole('button', { name: 'Tìm' }));
+    await user.click(screen.getByRole('button', { name: 'Tìm giúp tôi' }));
 
     await waitFor(() => expect(aiApi.search).toHaveBeenCalledWith('Tìm sách cũ', 0, 20));
     await waitFor(() => expect(aiApi.quota).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('Còn 4 lượt miễn phí')).toBeTruthy();
+    expect(screen.queryByText('AI hiện không phản hồi. Đây là kết quả tìm kiếm thường; lượt miễn phí và Credit của bạn không bị trừ.')).toBeNull();
   });
 
   it('giữ nguyên quota khi Backend fallback sang tìm kiếm thường', async () => {
@@ -79,6 +81,7 @@ describe('AI search quota', () => {
       quota: { freeUsesRemaining: 5, feeCredits: 2, hasToppedUp: true },
       chargedCredits: 0,
       fallback: true,
+      broadened: false,
     });
     render(
       <MemoryRouter>
@@ -88,9 +91,34 @@ describe('AI search quota', () => {
 
     expect(await screen.findByText('Còn 5 lượt miễn phí')).toBeTruthy();
     await user.type(screen.getByRole('textbox', { name: 'Mô tả món đồ cần tìm' }), 'Tìm sách cũ');
-    await user.click(screen.getByRole('button', { name: 'Tìm' }));
+    await user.click(screen.getByRole('button', { name: 'Tìm giúp tôi' }));
 
     await waitFor(() => expect(aiApi.quota).toHaveBeenCalledTimes(2));
     expect(screen.getByText('Còn 5 lượt miễn phí')).toBeTruthy();
+    expect(screen.queryByText('AI hiện không phản hồi. Đây là kết quả tìm kiếm thường; lượt miễn phí và Credit của bạn không bị trừ.')).toBeNull();
+    expect(screen.getByText('Từ khóa tìm kiếm thường')).toBeTruthy();
+  });
+
+  it('giải thích khi kết quả được mở rộng theo từ khóa', async () => {
+    const user = userEvent.setup();
+    vi.mocked(aiApi.search).mockResolvedValue({
+      filters: { keywords: 'bàn học', categoryId: 7, areaId: null, condition: null, offerType: null },
+      results: { items: [], page: 0, size: 20, totalElements: 1 },
+      quota: { freeUsesRemaining: 0, feeCredits: 2, hasToppedUp: true },
+      chargedCredits: 2,
+      fallback: false,
+      broadened: true,
+    });
+    render(
+      <MemoryRouter>
+        <AI />
+      </MemoryRouter>,
+    );
+
+    await user.type(screen.getByRole('textbox', { name: 'Mô tả món đồ cần tìm' }), 'bàn học');
+    await user.click(screen.getByRole('button', { name: 'Tìm giúp tôi' }));
+
+    expect(await screen.findByText(/Không có món khớp tất cả bộ lọc AI đã chọn/)).toBeTruthy();
+    expect(screen.getByText('Bộ lọc trợ lý hiểu được')).toBeTruthy();
   });
 });

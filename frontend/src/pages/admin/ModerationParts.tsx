@@ -128,7 +128,7 @@ export function RejectReasonsContent({
           <p className="text-sm font-bold text-text-primary">Lý do từ chối</p>
           <p className="mt-1 text-xs text-text-muted">Có thể chọn một hoặc nhiều lý do phù hợp.</p>
         </div>
-        <span className="shrink-0 rounded-full bg-red-50 px-3 py-1 text-sm font-bold text-error" aria-live="polite">
+        <span className="shrink-0 rounded-full bg-error-soft px-3 py-1 text-sm font-bold text-error" aria-live="polite">
           {selectedCount}/{totalCount}
         </span>
       </div>
@@ -249,7 +249,6 @@ export function ModerationImageGallery({
           {preview.images.length > 1 ? (
             <div className="mt-4 flex items-center justify-between gap-3">
               <Button
-                size="sm"
                 variant="outline"
                 onClick={() => setPreview((current) => current ? { ...current, index: (current.index - 1 + current.images.length) % current.images.length } : null)}
               >
@@ -257,7 +256,6 @@ export function ModerationImageGallery({
               </Button>
               <span className="text-xs text-text-muted">{preview.index + 1}/{preview.images.length}</span>
               <Button
-                size="sm"
                 variant="outline"
                 onClick={() => setPreview((current) => current ? { ...current, index: (current.index + 1) % current.images.length } : null)}
               >
@@ -282,26 +280,42 @@ function ModerationThumbnailGroup({
   onPreview: (src: string, index: number) => void;
   mainThumbnail?: boolean;
 }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const activeIndex = Math.min(selectedIndex, images.length - 1);
+
   return (
     <div>
       <p className="mb-2 text-xs font-semibold text-text-secondary">{label}</p>
-      <div className={mainThumbnail ? 'grid grid-cols-4 gap-2' : 'flex flex-wrap gap-2'}>
+      {mainThumbnail ? (
+        <button
+          type="button"
+          aria-label={`Xem lớn ${label.toLowerCase()} ${activeIndex + 1}`}
+          onClick={() => onPreview(images[activeIndex], activeIndex)}
+          className="mx-auto mb-2 block w-fit max-w-full overflow-hidden rounded-md bg-white ring-1 ring-border transition hover:ring-primary/50"
+        >
+          <ItemImage
+            src={images[activeIndex]}
+            alt={`${label} ${activeIndex + 1}`}
+            className="h-auto w-auto max-h-56 max-w-full object-contain"
+          />
+        </button>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
         {images.map((image, index) => (
           <button
             key={`${image}-${index}`}
             type="button"
-            aria-label={`Xem lớn ${label.toLowerCase()} ${index + 1}`}
-            onClick={() => onPreview(image, index)}
+            aria-label={`${mainThumbnail ? 'Chọn' : 'Xem lớn'} ${label.toLowerCase()} ${index + 1}`}
+            aria-pressed={mainThumbnail ? index === activeIndex : undefined}
+            onClick={() => mainThumbnail ? setSelectedIndex(index) : onPreview(image, index)}
             className={`overflow-hidden rounded-md bg-white ring-1 ring-border transition hover:ring-primary/50 ${
-              mainThumbnail && index === 0 ? 'col-span-4' : ''
+              mainThumbnail ? 'block shrink-0 self-start' : ''
             }`}
           >
             <ItemImage
               src={image}
-              alt={`${label} ${index + 1}`}
-              className={`${
-                mainThumbnail && index === 0 ? 'h-56 w-full' : 'size-20'
-              } object-cover`}
+              alt={`${mainThumbnail ? 'Ảnh thu nhỏ món đồ' : label} ${index + 1}`}
+              className={mainThumbnail ? 'h-auto w-auto max-h-20 max-w-20 object-contain' : 'size-20 object-cover'}
             />
           </button>
         ))}

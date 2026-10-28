@@ -24,6 +24,16 @@ export function canConfirmHandover(status: ItemRequestStatus) {
   return status === 'LOGISTICS_CONFIRMED' || status === 'AWAITING_HANDOVER';
 }
 
+// Hai bên được huỷ giao dịch sau khi đã chọn người (docs/api/request.md mục 13). Backend vẫn kiểm lại.
+export function canCancelTransaction(status: ItemRequestStatus) {
+  return status === 'RESERVED' || status === 'AWAITING_LOGISTICS' || status === 'LOGISTICS_CONFIRMED' || status === 'AWAITING_HANDOVER';
+}
+
+// Chỉ hiện nút "chưa nhận được / chưa giao được" khi bên kia đã xác nhận bàn giao còn mình thì chưa (mục 14).
+export function canReportHandoverIssue(status: ItemRequestStatus, otherConfirmedAt?: string, currentConfirmedAt?: string) {
+  return status === 'AWAITING_HANDOVER' && Boolean(otherConfirmedAt) && !currentConfirmedAt;
+}
+
 const selectedRequestStatuses: ItemRequestStatus[] = [
   'RESERVED',
   'AWAITING_LOGISTICS',

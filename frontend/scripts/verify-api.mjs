@@ -28,7 +28,7 @@ const bundle = await build({
       export { requestApi, toFeItemRequest } from './src/services/requestApi.ts';
       export { canChat, canSchedule, canConfirmHandover, canSelectPendingRequest, requestStatusLabel } from './src/utils/request.ts';
       export { applyOtpBackspace, applyOtpChange, applyOtpPaste, createOtpValue } from './src/utils/otp.ts';
-      export { loadPersistedState } from './src/utils/storage.ts';`,
+      export { store } from './src/app/store.ts';`,
     resolveDir: process.cwd(),
     loader: 'ts',
     sourcefile: 'api-verification.ts',
@@ -442,14 +442,14 @@ await test('bên nhận giữ nguyên lựa chọn không đúng mô tả và l�
   });
 });
 
-await test('khởi tạo bỏ qua dữ liệu nghiệp vụ cũ và số dư lưu trên trình duyệt', () => {
+await test('store khởi tạo rỗng, bỏ qua dữ liệu nghiệp vụ và số dư lưu trên trình duyệt', () => {
   memory.set(
     'shareloop:v1:state',
     JSON.stringify({ currentUserId: 'user_001', users: [{ availableCredit: 999999 }] }),
   );
-  const state = api.loadPersistedState();
+  const state = api.store.getState().data;
   assert.equal(state.currentUserId, null);
-  for (const key of ['users', 'items', 'transactions', 'creditHistory', 'topups', 'complaints'])
+  for (const key of ['users', 'transactions'])
     assert.deepEqual(state[key], []);
 });
 

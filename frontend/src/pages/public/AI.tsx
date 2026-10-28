@@ -4,7 +4,7 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import { useWallet } from '../../app/useWallet';
 import { AiSearchNotices } from '../../components/ai/AiSearchNotices';
-import { Alert, Button, EmptyState, Icon, PageHeader, ProductCard, TextArea } from '../../components/ui';
+import { Alert, Button, EmptyState, ProductCard, Spinner, TextArea } from '../../components/ui';
 import { aiApi, type AiQuotaResponse } from '../../services/aiApi';
 import { catalogApi, type CategoryResponse, type AreaResponse } from '../../services/catalogApi';
 import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
@@ -33,6 +33,8 @@ export function AI() {
   const [quotaError, setQuotaError] = useState('');
   const [searchError, setSearchError] = useState('');
   const [chargedCredits, setChargedCredits] = useState(0);
+  const [fallback, setFallback] = useState(false);
+  const [broadened, setBroadened] = useState(false);
   const [needsTopUp, setNeedsTopUp] = useState(false);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [areas, setAreas] = useState<AreaResponse[]>([]);
@@ -46,6 +48,8 @@ export function AI() {
     setStatus('idle');
     setResults([]);
     setChargedCredits(0);
+    setFallback(false);
+    setBroadened(false);
     setNeedsTopUp(false);
     if (userId) {
       aiApi.quota().then((response) => { if (active) setQuota(response); })
@@ -70,6 +74,8 @@ export function AI() {
     setQueryError('');
     setSearchError('');
     setChargedCredits(0);
+    setFallback(false);
+    setBroadened(false);
     setNeedsTopUp(false);
     setSubmittedQuery(normalizedQuery);
     setStatus('loading');
@@ -91,6 +97,8 @@ export function AI() {
       setPage(response.results.page);
       setQuota(response.quota);
       setChargedCredits(response.chargedCredits);
+      setFallback(response.fallback);
+      setBroadened(response.broadened);
       setStatus('success');
       if (response.chargedCredits > 0) refreshWallet();
       try {
@@ -119,188 +127,164 @@ export function AI() {
   };
 
   return (
-    <div className="page-shell">
-      <PageHeader
-        title="Trợ lý tìm đồ"
-        description="Mô tả món đồ bạn cần, ShareLoop sẽ giúp bạn thu hẹp kết quả phù hợp."
-      />
-
-      <div className="space-y-8">
-        <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-border/80">
-          <div className="bg-gradient-to-br from-primary-faint via-white to-secondary-soft px-5 py-7 sm:px-8 sm:py-9">
-            <div className="mx-auto max-w-3xl">
-              <div className="flex items-center gap-3">
-                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-white shadow-sm">
-                  <Icon name="ai" className="size-6" weight="bold" />
-                </span>
-                <div>
-                  <h2 className="text-xl font-bold text-text-primary">Bạn đang tìm món đồ nào?</h2>
-                  <p className="mt-1 text-sm leading-6 text-text-muted">
-                    Bạn có thể nói rõ món đồ, tình trạng, hình thức và khu vực mong muốn.
-                  </p>
-                </div>
-              </div>
-
-              <form className="mt-6" onSubmit={submit}>
-                <TextArea
-                  value={query}
-                  maxLength={MAX_QUERY_LENGTH}
-                  rows={5}
-                  placeholder="Ví dụ: Mình cần tìm một chiếc bàn học còn tốt ở Quận 7, ưu tiên đồ cho tặng."
-                  aria-label="Mô tả món đồ cần tìm"
-                  error={queryError}
-                  onChange={(event) => {
-                    setQuery(event.target.value);
-                    if (queryError) setQueryError('');
-                  }}
+    <div className="page-shell space-y-6">
+      <section aria-labelledby="ai-title" className="space-y-4 rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-7">
+        <div>
+          <h1 id="ai-title" className="page-title">Bạn cần món gì?</h1>
+          <p className="page-intro">
+            Tả bằng lời thường: món gì, tình trạng, cho tặng hay đổi, ở quận nào. Trợ lý chuyển thành bộ lọc cho bạn.
+          </p>
+        </div>
+        <form className="space-y-3" onSubmit={submit}>
+          <TextArea
+            value={query}
+            maxLength={MAX_QUERY_LENGTH}
+            rows={3}
+            placeholder="Ví dụ: Mình cần một cái bàn học còn tốt ở Bình Thạnh, ưu tiên đồ cho tặng."
+            aria-label="Mô tả món đồ cần tìm"
+            error={queryError}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              if (queryError) setQueryError('');
+            }}
+          />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 flex-1">
+              {quota ? (
+                <AiSearchNotices
+                  remainingFreeSearches={quota.freeUsesRemaining}
+                  feeCredits={quota.feeCredits}
+                  chargedCredits={chargedCredits}
                 />
-                <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="text-xs tabular-nums text-text-muted">
-                    {query.length}/{MAX_QUERY_LENGTH} ký tự
+              ) : user ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className={`text-sm ${quotaError ? 'text-error' : 'text-text-muted'}`}>
+                    {quotaError || 'Đang tải hạn mức tìm kiếm...'}
                   </span>
-                  <Button
-                    type="submit"
-                    icon="search"
-                    disabled={status === 'loading' || !query.trim() || !quota || !user}
-                  >
-                    {status === 'loading' ? 'Đang tìm...' : 'Tìm'}
+                  {quotaError ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        void aiApi
+                          .quota()
+                          .then((response) => {
+                            setQuota(response);
+                            setQuotaError('');
+                          })
+                          .catch((error: ApiError) => setQuotaError(error.message));
+                      }}
+                    >
+                      Thử tải hạn mức
+                    </Button>
+                  ) : null}
+                </div>
+              ) : (
+                <span className="text-sm text-text-muted">Đăng nhập để dùng trợ lý tìm đồ.</span>
+              )}
+            </div>
+            <Button type="submit" size="lg" disabled={status === 'loading' || !query.trim() || !quota || !user}>
+              {status === 'loading' ? 'Đang tìm...' : 'Tìm giúp tôi'}
+            </Button>
+          </div>
+        </form>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-text-muted">Thử:</span>
+          {AI_EXAMPLES.map((example) => (
+            <button
+              key={example}
+              type="button"
+              onClick={() => setQuery(example)}
+              className="min-h-9 rounded-full border border-border bg-white px-3 text-xs font-semibold text-text-secondary transition hover:border-primary/50 hover:text-primary"
+            >
+              {example}
+            </button>
+          ))}
+        </div>
+        {quota ? (
+          <p className="text-xs leading-5 text-text-muted">
+            Mỗi lần tìm hoặc chuyển trang dùng một lượt. Hết lượt miễn phí, mỗi lượt tốn {quota.feeCredits} Credit. Nếu hệ thống chuyển sang tìm kiếm thường, lượt và phí được hoàn lại.
+          </p>
+        ) : null}
+      </section>
+
+      {status === 'loading' ? (
+        <div role="status" className="flex items-center gap-3 rounded-lg bg-white px-4 py-5 text-sm text-text-muted ring-1 ring-border/80">
+          <Spinner className="size-5 text-primary" />
+          Đang đọc mô tả và chuẩn bị kết quả...
+        </div>
+      ) : null}
+
+      {status === 'error' ? (
+        <EmptyState
+          title="Chưa thể tìm đồ lúc này"
+          text={searchError}
+          action={
+            <Button variant={needsTopUp ? 'primary' : 'outline'} onClick={() => (needsTopUp ? navigate('/credit') : void search(submittedQuery, page))}>
+              {needsTopUp ? 'Nạp Credit' : 'Thử lại'}
+            </Button>
+          }
+        />
+      ) : null}
+
+      {status === 'success' ? (
+        <section aria-labelledby="ai-results" className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 id="ai-results" className="mr-2 text-xl font-bold">
+              {totalElements} món phù hợp
+            </h2>
+            <span className="text-sm text-text-muted">{fallback ? 'Từ khóa tìm kiếm thường' : 'Bộ lọc trợ lý hiểu được'}</span>
+            {filters.length ? (
+              filters.map((filter) => (
+                <span
+                  key={filter.label}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-primary bg-primary-soft px-3 text-xs text-text-secondary"
+                >
+                  <span className="font-semibold text-primary">{filter.label}:</span>
+                  {filter.value}
+                </span>
+              ))
+            ) : (
+              <span className="text-sm text-text-secondary">chưa nhận ra bộ lọc cụ thể, kết quả chọn theo từ khóa.</span>
+            )}
+          </div>
+          {broadened ? (
+            <Alert tone="warning">
+              Không có món khớp tất cả bộ lọc AI đã chọn. Các món dưới đây khớp từ khóa nhưng có thể khác danh mục, khu vực, tình trạng hoặc hình thức bạn yêu cầu.
+            </Alert>
+          ) : null}
+          {results.length ? (
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+                {results.map((item) => (
+                  <ProductCard key={item.id} item={item} />
+                ))}
+              </div>
+              {totalPages > 1 ? (
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <Button variant="outline" disabled={page === 0} onClick={() => void search(submittedQuery, page - 1)}>
+                    Trang trước
                   </Button>
+                  <span className="text-sm text-text-muted">
+                    {page + 1} / {totalPages}
+                  </span>
+                  <Button variant="outline" disabled={page + 1 >= totalPages} onClick={() => void search(submittedQuery, page + 1)}>
+                    Trang sau
+                  </Button>
+                  <span className="w-full text-center text-xs text-text-muted">Chuyển trang dùng thêm 1 lượt.</span>
                 </div>
-              </form>
-            </div>
-          </div>
-
-          <div className="border-t border-border/70 p-5 sm:p-6">
-            {quota ? (
-              <AiSearchNotices
-                remainingFreeSearches={quota.freeUsesRemaining}
-                feeCredits={quota.feeCredits}
-                chargedCredits={chargedCredits}
-              />
-            ) : <Alert tone={quotaError ? 'error' : 'info'}>{quotaError || 'Đang tải hạn mức tìm kiếm...'}</Alert>}
-            {quotaError ? <Button variant="outline" size="sm" onClick={() => { void aiApi.quota().then((response) => { setQuota(response); setQuotaError(''); }).catch((error: ApiError) => setQuotaError(error.message)); }}>Thử tải hạn mức</Button> : null}
-            {quota ? <p className="mt-3 text-xs text-text-muted">Mỗi lần tìm hoặc chuyển trang dùng một lượt. Hết lượt miễn phí, mỗi lượt tốn {quota.feeCredits} Credit. Nếu hệ thống chuyển sang tìm kiếm thường, lượt và phí sẽ được hoàn lại.</p> : null}
-          </div>
+              ) : null}
+            </>
+          ) : (
+            <EmptyState
+              title="Chưa tìm thấy món phù hợp"
+              text="Hãy thử mô tả rộng hơn, đổi khu vực hoặc bỏ bớt yêu cầu về tình trạng."
+            />
+          )}
         </section>
-
-        {status !== 'idle' ? (
-          <section className="rounded-2xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary">
-                  Bộ lọc trợ lý hiểu được
-                </p>
-                <h2 className="mt-1 text-lg font-bold text-text-primary">
-                  {submittedQuery ? 'Từ mô tả của bạn' : 'Bộ lọc tìm kiếm'}
-                </h2>
-              </div>
-              {status === 'success' ? (
-                <span className="text-sm text-text-muted">
-                  {results.length} món phù hợp
-                </span>
-              ) : null}
-            </div>
-
-            {status === 'loading' ? (
-              <div className="mt-5 flex items-center gap-3 rounded-lg bg-surface-low px-4 py-5 text-sm text-text-muted">
-                <Icon name="renew" className="size-5 animate-spin text-primary" />
-                Đang đọc mô tả và chuẩn bị kết quả...
-              </div>
-            ) : status === 'error' ? (
-              <div className="mt-5">
-                <EmptyState
-                  title="Chưa thể tìm đồ lúc này"
-                  text={searchError}
-                  action={
-                    <Button variant={needsTopUp ? 'primary' : 'outline'} onClick={() => needsTopUp ? navigate('/credit') : void search(submittedQuery, page)}>
-                      {needsTopUp ? 'Nạp Credit' : 'Thử lại'}
-                    </Button>
-                  }
-                />
-              </div>
-            ) : (
-              <div className="mt-5">
-                {filters.length ? (
-                  <div className="flex flex-wrap gap-2">
-                    {filters.map((filter) => (
-                      <span
-                        key={filter.label}
-                        className="inline-flex items-center gap-2 rounded-full bg-primary-faint px-3 py-2 text-sm text-text-secondary ring-1 ring-primary/10"
-                      >
-                        <span className="font-semibold text-primary">{filter.label}:</span>
-                        {filter.value}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="rounded-lg bg-surface-low px-4 py-3 text-sm leading-6 text-text-muted">
-                    Chưa nhận ra bộ lọc cụ thể. Kết quả được chọn theo các từ khóa trong mô tả.
-                  </p>
-                )}
-              </div>
-            )}
-          </section>
-        ) : null}
-
-        {status === 'success' ? (
-          <section>
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <h2 className="section-title">Kết quả phù hợp</h2>
-                <p className="mt-1 text-sm text-text-muted">
-                  Các món đồ đang có trên ShareLoop.
-                </p>
-              </div>
-              {results.length ? (
-                <span className="text-sm text-text-muted">
-                  Trang {page + 1}/{totalPages}
-                </span>
-              ) : null}
-            </div>
-
-            {results.length ? (
-              <>
-                <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {results.map((item) => (
-                    <ProductCard
-                      key={item.id}
-                      item={item}
-                    />
-                  ))}
-                </div>
-                {totalPages > 1 ? (
-                  <div className="mt-6 flex items-center justify-center gap-3">
-                    <Button
-                      variant="outline"
-                      disabled={page === 0}
-                      onClick={() => void search(submittedQuery, page - 1)}
-                    >
-                      Trang trước
-                    </Button>
-                    <span className="text-sm text-text-muted">
-                      {page + 1} / {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      disabled={page + 1 >= totalPages}
-                      onClick={() => void search(submittedQuery, page + 1)}
-                    >
-                      Trang sau
-                    </Button>
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <div className="mt-5">
-                <EmptyState
-                  title="Chưa tìm thấy món phù hợp"
-                  text="Hãy thử mô tả rộng hơn, đổi khu vực hoặc bỏ bớt yêu cầu về tình trạng."
-                />
-              </div>
-            )}
-          </section>
-        ) : null}
-      </div>
+      ) : null}
     </div>
   );
 }
+
+const AI_EXAMPLES = ['Sách tiếng Anh lớp 10 ở Quận 3', 'Xe đạp trẻ em, đổi được', 'Nồi cơm điện còn dùng tốt'];

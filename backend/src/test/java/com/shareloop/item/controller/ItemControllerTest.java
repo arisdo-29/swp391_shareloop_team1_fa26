@@ -160,4 +160,28 @@ class ItemControllerTest {
                 .andExpect(jsonPath("$[0].id").value(1))
                 .andExpect(jsonPath("$[0].title").value("Sách của tôi"));
     }
+
+    @Test
+    @DisplayName("Xem hạn mức đăng bài trả về 200 OK với số đang dùng và hạn mức")
+    void getPostingQuota_withToken_returns200() throws Exception {
+        String token = jwtService.issue(10L, false);
+        when(itemService.getPostingQuota(10L))
+                .thenReturn(new com.shareloop.item.dto.PostingQuotaResponse(
+                        new com.shareloop.item.dto.PostingQuotaResponse.Quota(2, 5),
+                        new com.shareloop.item.dto.PostingQuotaResponse.Quota(9, -1),
+                        "DIAMOND"));
+
+        mockMvc.perform(get("/api/v1/me/posting-quota").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.give.active").value(2))
+                .andExpect(jsonPath("$.give.limit").value(5))
+                .andExpect(jsonPath("$.swap.limit").value(-1))
+                .andExpect(jsonPath("$.rank").value("DIAMOND"));
+    }
+
+    @Test
+    @DisplayName("Xem hạn mức đăng bài không có token trả về 401")
+    void getPostingQuota_withoutToken_returns401() throws Exception {
+        mockMvc.perform(get("/api/v1/me/posting-quota")).andExpect(status().isUnauthorized());
+    }
 }

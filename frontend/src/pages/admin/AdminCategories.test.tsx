@@ -55,8 +55,15 @@ describe('ApiAdminCategories', () => {
     await screen.findByText('Đồ điện tử');
 
     const rows = screen.getAllByRole('row').slice(1);
-    expect((within(rows[0]).getByRole('button', { name: 'Chuyển lên' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((within(rows[2]).getByRole('button', { name: 'Chuyển xuống' }) as HTMLButtonElement).disabled).toBe(true);
+    const up = within(rows[1]).getByRole('button', { name: 'Lên' });
+    const down = within(rows[1]).getByRole('button', { name: 'Xuống' });
+    // Nút dùng chữ, không còn icon mũi tên.
+    expect(up.querySelector('svg')).toBeNull();
+    expect(down.querySelector('svg')).toBeNull();
+    expect(up.getAttribute('title')).toBe('Đưa danh mục này lên trên một vị trí');
+    expect(down.getAttribute('title')).toBe('Đưa danh mục này xuống dưới một vị trí');
+    expect((within(rows[0]).getByRole('button', { name: 'Lên' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(rows[2]).getByRole('button', { name: 'Xuống' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('chuyển xuống gửi toàn bộ id theo thứ tự mới rồi hiện danh sách Backend trả về', async () => {
@@ -70,7 +77,7 @@ describe('ApiAdminCategories', () => {
     await screen.findByText('Đồ điện tử');
 
     const firstRow = screen.getAllByRole('row')[1];
-    await user.click(within(firstRow).getByRole('button', { name: 'Chuyển xuống' }));
+    await user.click(within(firstRow).getByRole('button', { name: 'Xuống' }));
 
     await waitFor(() => expect(adminCategoryApi.reorder).toHaveBeenCalledWith([2, 1, 5]));
     await waitFor(() => expect(names()).toEqual(['Quần áo', 'Đồ điện tử', '10']));
@@ -83,7 +90,7 @@ describe('ApiAdminCategories', () => {
     render(<ApiAdminCategories />);
     await screen.findByText('Đồ điện tử');
 
-    await user.click(within(screen.getAllByRole('row')[1]).getByRole('button', { name: 'Chuyển xuống' }));
+    await user.click(within(screen.getAllByRole('row')[1]).getByRole('button', { name: 'Xuống' }));
 
     expect(await screen.findByText('Danh sách danh mục đã thay đổi.')).toBeTruthy();
     expect(names()).toEqual(['Đồ điện tử', 'Quần áo', '10']);
@@ -96,6 +103,10 @@ describe('ApiAdminCategories', () => {
     await screen.findByText('Đồ điện tử');
 
     await user.click(screen.getByRole('button', { name: 'Thêm danh mục' }));
+    const dialog = screen.getByRole('dialog', { name: 'Thêm danh mục' });
+    expect(within(dialog).queryByText('Danh mục hạn chế')).toBeNull();
+    expect(dialog.querySelectorAll('input[type="checkbox"]')).toHaveLength(1);
+    expect(within(dialog).getByRole('checkbox', { name: 'Cho phép đẩy tin' })).toBeTruthy();
     await user.type(screen.getByRole('textbox', { name: 'Tên danh mục' }), 'Nội thất');
     await user.click(screen.getByRole('button', { name: 'Lưu' }));
 

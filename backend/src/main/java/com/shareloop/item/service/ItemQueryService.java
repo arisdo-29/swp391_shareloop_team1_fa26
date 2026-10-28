@@ -39,6 +39,13 @@ public class ItemQueryService {
         return new ItemSummary(item.getId(), item.getDonorId(), item.getOfferType(), item.getStatus());
     }
 
+    /** Id mọi bài của một chủ bài, dùng để tìm giao dịch của người đó khi khoá tài khoản. */
+    public List<Long> findItemIdsByDonor(long donorId) {
+        return repository.findByDonorIdOrderByCreatedAtDesc(donorId).stream()
+                .map(Item::getId)
+                .toList();
+    }
+
     public boolean isApproved(long itemId) {
         Item item = repository.findById(itemId).orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
         return item.isActive() && item.getStatus() == ItemStatus.APPROVED;

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,7 +42,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)
 class AiSearchServiceTest {
-    private static final String MODEL = "google/gemma-4-31b-it:free";
+    private static final String MODEL = "cohere/north-mini-code:free";
 
     @Mock
     AiSearchClient aiClient;
@@ -87,7 +88,7 @@ class AiSearchServiceTest {
                         {"keywords":"sách cũ","categoryId":1,"areaId":11,
                          "condition":"GOOD","offerType":"GIVE"}
                         """));
-        PageResponse<ItemResponse> page = new PageResponse<>(List.of(), 0, 20, 0);
+        PageResponse<ItemResponse> page = new PageResponse<>(List.of(mock(ItemResponse.class)), 0, 20, 1);
         when(itemService.searchApprovedForAi(1L, 11L, "sách cũ", ItemCondition.GOOD, OfferType.GIVE, 0, 20))
                 .thenReturn(page);
 
@@ -97,8 +98,54 @@ class AiSearchServiceTest {
         assertThat(result.filters().areaId()).isEqualTo(11L);
         assertThat(result.results()).isSameAs(page);
         assertThat(result.fallback()).isFalse();
+        assertThat(result.broadened()).isFalse();
         assertThat(result.quota().freeUsesRemaining()).isEqualTo(4);
         verify(activityLogService).log(eq("AI_USAGE"), eq(7L), eq("AI_SEARCH"), eq(null), anyMap(), eq(null));
+    }
+
+    @Test
+    void retriesKeywordsWhenAiFiltersHideAvailableItems() throws Exception {
+        ready();
+        when(aiClient.extract(eq("Tìm bàn học"), any(), eq(Duration.ofSeconds(15))))
+                .thenReturn(new AiResponse(MODEL, """
+                        {"keywords":"bàn học","categoryId":1,"areaId":11,
+                         "condition":"NEW","offerType":"GIVE"}
+                        """));
+        PageResponse<ItemResponse> empty = new PageResponse<>(List.of(), 0, 20, 0);
+        PageResponse<ItemResponse> keywordResults = new PageResponse<>(List.of(mock(ItemResponse.class)), 0, 20, 1);
+        when(itemService.searchApprovedForAi(1L, 11L, "bàn học", ItemCondition.NEW, OfferType.GIVE, 0, 20))
+                .thenReturn(empty);
+        when(itemService.searchApprovedForAi(null, null, "bàn học", null, null, 0, 20))
+                .thenReturn(keywordResults);
+
+        AiSearchResponse result = service.search(7L, "Tìm bàn học", 0, 20);
+
+        assertThat(result.results()).isSameAs(keywordResults);
+        assertThat(result.filters().categoryId()).isEqualTo(1L);
+        assertThat(result.filters().areaId()).isEqualTo(11L);
+        assertThat(result.broadened()).isTrue();
+        assertThat(result.fallback()).isFalse();
+        verify(quotaService, never()).refund(eq(7L), any());
+    }
+
+    @Test
+    void keepsEmptyResultsWhenKeywordsAlsoFindNothing() throws Exception {
+        ready();
+        when(aiClient.extract(eq("Tìm bàn học"), any(), eq(Duration.ofSeconds(15))))
+                .thenReturn(new AiResponse(MODEL, """
+                        {"keywords":"bàn học","categoryId":1,"areaId":null,
+                         "condition":null,"offerType":null}
+                        """));
+        PageResponse<ItemResponse> empty = new PageResponse<>(List.of(), 0, 20, 0);
+        when(itemService.searchApprovedForAi(1L, null, "bàn học", null, null, 0, 20))
+                .thenReturn(empty);
+        when(itemService.searchApprovedForAi(null, null, "bàn học", null, null, 0, 20))
+                .thenReturn(empty);
+
+        AiSearchResponse result = service.search(7L, "Tìm bàn học", 0, 20);
+
+        assertThat(result.results()).isSameAs(empty);
+        assertThat(result.broadened()).isFalse();
     }
 
     @Test

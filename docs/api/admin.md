@@ -103,8 +103,9 @@ Không trả `#<id>` trong `targetTitle`, `actorName`. Log `REPORT_DISMISSED`, `
 | `REVIEW_APPROVE` | Duyệt bài | `ITEM` | `checks` (câu hỏi checklist và kết quả) |
 | `REVIEW_REJECT` | Từ chối bài | `ITEM` | - (lý do ở `reason`) |
 | `CONFIG_UPDATE` | Sửa cấu hình | `CONFIG` | `key`, `oldValue`, `newValue` |
-| `USER_LOCK` | Khoá tài khoản | `USER` | - |
-| `USER_UNLOCK` | Mở khoá tài khoản | `USER` | - |
+| `USER_LOCK` | Khoá tài khoản | `USER` | `cancelledRequests` (số giao dịch đã huỷ), `releasedCredit` (số Credit đã nhả), `hiddenItemIds` (id các bài đã ẩn) |
+| `USER_UNLOCK` | Mở khoá tài khoản | `USER` | `restoredItems` (số bài được hiện lại) |
+| `REQUEST_CANCEL` | Huỷ giao dịch | `REQUEST` | - (lý do ở `reason`, có tiền tố người huỷ) |
 | `REPORT_DISMISSED` | Bác bỏ báo cáo | `REPORT` | `decision`, `reportId`, `targetType` |
 | `REPORT_UPHELD` | Chấp nhận báo cáo | `REPORT` | `decision`, `reportId`, `targetType`, `violatorId`, `starsDeducted`, `seriousViolation` |
 | `POINTS` | Cộng điểm | `REQUEST` | `points` (điểm thực cộng, có thể 0), `basePoints`, `totalPoints`, `rank`, `role`, `pairTransactionNo`, `pointsToday` |
@@ -457,6 +458,17 @@ Khoá tài khoản người dùng và ghi nhật ký hoạt động (FR-107, Iss
 }
 ```
 
+- **Dọn dẹp tự động trong cùng transaction** (qua event `UserLockedEvent`, lỗi thì việc khoá cũng rollback):
+  - Mọi giao dịch của người bị khoá (vai chủ bài hoặc người nhận) đang `PENDING`, `RESERVED`, `AWAITING_LOGISTICS`,
+    `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER` chuyển `CANCELLED` với `cancelReason = "[Hệ thống] Tài khoản bị khoá"`.
+    Bài chính và món mang đổi được nhả về `APPROVED`, bên còn lại nhận thông báo `TRANSACTION_CANCELLED`.
+    Giao dịch `DISPUTED` không bị huỷ để Admin phân xử.
+  - Các bài `PENDING_REVIEW` của người bị khoá đang giữ phí đăng hoặc phí sửa (`fee_state = HELD`, phí lớn hơn 0) bị
+    từ chối như khi Admin từ chối bài (lý do "Tài khoản bị khoá", ghi `REVIEW_REJECT`), phí giữ được nhả về ví qua
+    `CreditService.release`.
+  - Mọi bài `APPROVED` đang hiển thị của người bị khoá (kể cả bài vừa được nhả ở trên) bị ẩn bằng `is_active = false`, không đổi `status`.
+  - Activity log `USER_LOCK` có `data = { "cancelledRequests": n, "releasedCredit": n, "hiddenItemIds": [id, ...] }`.
+  - Mở khoá (`POST /unlock`) hiện lại **đúng** các bài trong `hiddenItemIds` của dòng `USER_LOCK` mới nhất (bài Admin hoặc chủ bài đã ẩn từ trước vẫn ẩn). Giao dịch đã huỷ và bài đã từ chối khi khoá **không** được khôi phục. Activity log `USER_UNLOCK` có `data = { "restoredItems": n }`.
 - **Thành công:** `200 OK` (không có body).
 - **Mã lỗi:**
 
@@ -579,3 +591,53 @@ Cảnh báo bất thường cho Admin (FR-113, UC-52, BR-U08, Issue #148). Kết
 | `200` | Thành công | Trả về danh sách cảnh báo (có thể rỗng) |
 | `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
 | `403` | Forbidden | Người dùng không có vai trò Admin |
+
+---
+
+## Giao dịch (Admin)
+
+Quy ước chung như các mục Admin khác: JWT Admin (`hasRole('ADMIN')`), lỗi `401` khi chưa đăng nhập, `403` khi không phải Admin.
+
+### GET /api/v1/admin/requests
+
+Danh sách giao dịch, mới nhất trước. Mọi tham số đều tuỳ chọn.
+
+| Tham số | Kiểu | Mặc định | Ý nghĩa |
+|---|---|---|---|
+| `status` | string | - | Lọc theo trạng thái (`PENDING`, `RESERVED`, `AWAITING_LOGISTICS`, `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER`, `COMPLETED`, `DISPUTED`, `REJECTED`, `CANCELLED`) |
+| `stuck` | boolean | - | `true`: chỉ giao dịch bị kẹt; `false`: chỉ giao dịch không kẹt |
+| `q` | string | - | Khớp một phần (không phân biệt hoa thường) tên bài, tên chủ bài, tên người nhận; hoặc đúng mã giao dịch |
+| `page` | number | `0` | Số trang, bắt đầu từ 0 |
+| `size` | number | `20` | 1 đến 100 |
+
+- **Giao dịch bị kẹt:** đang `RESERVED`, `AWAITING_LOGISTICS`, `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER` hoặc `DISPUTED`, và thoả một trong hai:
+  - Quá giờ hẹn (`meetingTime`) hơn `stuck_request_hours` giờ (cấu hình, mặc định 48) mà chưa bên nào xác nhận bàn giao.
+  - Chủ bài hoặc người nhận đang bị khoá tài khoản (xét trước).
+- **Thành công:** `200 OK`
+
+```json
+{
+  "items": [
+    {
+      "id": 5, "itemId": 1, "itemTitle": "Xe đạp cũ", "type": "GIVE", "status": "LOGISTICS_CONFIRMED",
+      "donorId": 20, "donorName": "An", "receiverId": 10, "receiverName": "Bình",
+      "meetingTime": "2026-10-25T09:00:00Z", "createdAt": "2026-10-20T08:00:00Z",
+      "flagReason": "Quá giờ hẹn hơn 48 giờ mà chưa bên nào xác nhận bàn giao"
+    }
+  ],
+  "page": 0, "size": 20, "totalElements": 1, "totalPages": 1
+}
+```
+
+- `flagReason` là `null` khi giao dịch không bị kẹt. `itemTitle`, `donorName`, `receiverName` có thể `null` khi bài hoặc tài khoản đã xoá.
+- Lọc và phân trang làm trong bộ nhớ sau khi đọc các giao dịch khớp `status`, vì tên bài và tên người thuộc module khác.
+
+### POST /api/v1/admin/requests/{id}/cancel
+
+Admin huỷ giao dịch đã được chọn người (thường là giao dịch kẹt).
+
+- **Body:** `{ "reason": string }`, 5 đến 500 ký tự.
+- **Trạng thái được huỷ:** `RESERVED`, `AWAITING_LOGISTICS`, `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER`, `DISPUTED`. Trạng thái khác trả `409 REQUEST_INVALID_STATE_TRANSITION`.
+- **Hành vi:** giống `POST /requests/{id}/cancel-transaction` ở `request.md` (nhả bài chính và món mang đổi về `APPROVED`), khác ở chỗ `cancelReason` có tiền tố `[Admin] `, thông báo `TRANSACTION_CANCELLED` gửi cho **cả hai bên**, và activity log `REQUEST_CANCEL` có `actorId` là Admin. Khiếu nại đang mở của giao dịch `DISPUTED` không tự đóng, Admin kết luận riêng ở trang khiếu nại.
+- **Thành công:** `200 OK`, trả `RequestResponse` với `status = CANCELLED`.
+- **Lỗi:** `400 VALIDATION_FAILED`, `404 REQUEST_NOT_FOUND`, `409 REQUEST_INVALID_STATE_TRANSITION`.

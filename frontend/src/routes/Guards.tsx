@@ -1,17 +1,16 @@
 import { useEffect } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
-import { actions, selectCurrentUser, selectData } from '../app/store';
+import { actions, selectCurrentUser } from '../app/store';
 
 function useValidSession() {
   const dispatch = useAppDispatch();
-  const { currentUserId, users } = useAppSelector(selectData);
-  const current = users.find((user) => user.id === currentUserId);
-  const invalid = Boolean(currentUserId && (!current || current.status !== 'active'));
+  const user = useAppSelector(selectCurrentUser);
+  // Tài khoản không còn hoạt động (bị khoá, tạm ngưng) thì đăng xuất khỏi phiên.
+  const invalid = Boolean(user && user.status !== 'active');
   useEffect(() => {
     if (invalid) dispatch(actions.logout());
   }, [dispatch, invalid]);
-  const user = useAppSelector(selectCurrentUser);
   return invalid ? null : user;
 }
 

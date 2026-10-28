@@ -6,8 +6,11 @@ import com.shareloop.chat.repository.MessageRepository;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.dto.ContactInfo;
+import com.shareloop.user.service.UserService;
 import java.math.BigDecimal;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,15 +27,26 @@ public class ChatViolationRecorder {
     private final MessageRepository messageRepository;
     private final NotificationService notificationService;
     private final ConfigService configService;
+    private final UserService userService;
+    private final JdbcClient jdbcClient;
 
     @Autowired
     public ChatViolationRecorder(
             MessageRepository messageRepository,
             NotificationService notificationService,
-            @Autowired(required = false) ConfigService configService) {
+            @Autowired(required = false) ConfigService configService,
+            @Autowired(required = false) UserService userService,
+            @Autowired(required = false) JdbcClient jdbcClient) {
         this.messageRepository = messageRepository;
         this.notificationService = notificationService;
         this.configService = configService;
+        this.userService = userService;
+        this.jdbcClient = jdbcClient;
+    }
+
+    public ChatViolationRecorder(
+            MessageRepository messageRepository, NotificationService notificationService, ConfigService configService) {
+        this(messageRepository, notificationService, configService, null, null);
     }
 
     /**
@@ -68,13 +82,45 @@ public class ChatViolationRecorder {
         }
 
         if (violationCount >= threshold && notificationService != null) {
-            String title = "Cảnh báo vi phạm chat trong yêu cầu #" + requestId;
-            String body = "Yêu cầu giao dịch #" + requestId + " đã có " + violationCount
-                    + " tin nhắn bị chặn do vi phạm quy định.";
-            String link = "/requests/" + requestId;
+            String senderName = resolveSenderName(senderId);
+            String itemTitle = resolveItemTitle(requestId);
+            String title = "Cảnh báo vi phạm chat: " + senderName + " (" + itemTitle + ")";
+            String body = senderName + " có " + violationCount
+                    + " tin nhắn bị chặn do vi phạm quy định trong giao dịch món \"" + itemTitle + "\".";
+            String link = "/admin/users";
             notificationService.notifyAdmins("CHAT_VIOLATION_ALERT", title, body, link);
         }
 
         return violationCount;
+    }
+
+    private String resolveSenderName(long senderId) {
+        if (userService != null) {
+            try {
+                ContactInfo contact = userService.findContact(senderId);
+                if (contact != null
+                        && contact.fullName() != null
+                        && !contact.fullName().isBlank()) {
+                    return contact.fullName();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return "Người dùng #" + senderId;
+    }
+
+    private String resolveItemTitle(long requestId) {
+        if (jdbcClient != null) {
+            try {
+                return jdbcClient
+                        .sql("SELECT i.title FROM requests r JOIN items i ON i.id = r.item_id WHERE r.id = :requestId")
+                        .param("requestId", requestId)
+                        .query(String.class)
+                        .optional()
+                        .orElse("yêu cầu #" + requestId);
+            } catch (Exception ignored) {
+            }
+        }
+        return "yêu cầu #" + requestId;
     }
 }

@@ -293,6 +293,85 @@ class ReportServiceTest {
 
     // ==================== NOT_AS_DESCRIBED TỰ ĐỘNG (FR-85, BR-R05) ====================
 
+    // ==================== BÁO CHƯA NHẬN / CHƯA GIAO ĐƯỢC ĐỒ ====================
+
+    @Test
+    void openHandoverIssueReport_whenReceiverReports_createsNoShowDisputeForDonorWithEvidence() {
+        // given
+        ReportService.RequestSnapshot snapshot = new ReportService.RequestSnapshot(100L, 200L, 10L, "DISPUTED", null);
+        doReturn(snapshot).when(reportService).findRequest(100L);
+        when(itemQueryService.getSummary(200L))
+                .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.APPROVED));
+        when(evidenceService.attach(List.of(7L), 10L)).thenReturn("[7]");
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> {
+            Report saved = inv.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 6L);
+            return saved;
+        });
+
+        // when
+        reportService.openHandoverIssueReport(10L, 100L, "Chờ mãi không thấy người giao", List.of(7L));
+
+        // then
+        ArgumentCaptor<Report> captor = ArgumentCaptor.forClass(Report.class);
+        verify(reportRepository).save(captor.capture());
+        Report report = captor.getValue();
+        assertThat(report.getReporterId()).isEqualTo(10L);
+        assertThat(report.getTargetUserId()).isEqualTo(20L);
+        assertThat(report.getReason()).isEqualTo(ReportReason.NO_SHOW);
+        assertThat(report.getDescription()).isEqualTo("Chờ mãi không thấy người giao");
+        assertThat(report.getEvidence()).isEqualTo("[7]");
+        assertThat(report.getStatus()).isEqualTo(ReportStatus.AWAITING_RESPONSE);
+        verify(notificationService).notify(eq(20L), eq("DISPUTE_OPENED"), any(), any(), eq("/me/disputes/6"));
+    }
+
+    @Test
+    void openHandoverIssueReport_whenDonorReports_respondentIsReceiver() {
+        // given
+        ReportService.RequestSnapshot snapshot = new ReportService.RequestSnapshot(100L, 200L, 10L, "DISPUTED", null);
+        doReturn(snapshot).when(reportService).findRequest(100L);
+        when(itemQueryService.getSummary(200L))
+                .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.APPROVED));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // when
+        reportService.openHandoverIssueReport(20L, 100L, "Người nhận không đến lấy", null);
+
+        // then
+        ArgumentCaptor<Report> captor = ArgumentCaptor.forClass(Report.class);
+        verify(reportRepository).save(captor.capture());
+        assertThat(captor.getValue().getTargetUserId()).isEqualTo(10L);
+    }
+
+    @Test
+    void openHandoverIssueReport_whenCalledTwice_createsOnlyOneReport() {
+        // given
+        when(reportRepository.existsByReporterIdAndTargetTypeAndRequestId(10L, TargetType.REQUEST, 100L))
+                .thenReturn(true);
+
+        // when
+        reportService.openHandoverIssueReport(10L, 100L, "Chưa nhận được", null);
+
+        // then
+        verify(reportRepository, never()).save(any(Report.class));
+    }
+
+    @Test
+    void openHandoverIssueReport_whenNotAParty_throwsNotAParty() {
+        // given
+        ReportService.RequestSnapshot snapshot = new ReportService.RequestSnapshot(100L, 200L, 10L, "DISPUTED", null);
+        doReturn(snapshot).when(reportService).findRequest(100L);
+        when(itemQueryService.getSummary(200L))
+                .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.APPROVED));
+
+        // when / then
+        assertThatThrownBy(() -> reportService.openHandoverIssueReport(99L, 100L, "Ghi chú", null))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(ReportErrorCode.DISPUTE_NOT_A_PARTY));
+        verify(reportRepository, never()).save(any(Report.class));
+    }
+
     @Test
     void openNotAsDescribedReport_whenAwaitingHandover_createsDisputeForDonor() {
         // given: bên nhận trả lời trước nên giao dịch mới ở AWAITING_HANDOVER, chưa COMPLETED
@@ -673,6 +752,57 @@ class ReportServiceTest {
                         eq(reportId),
                         anyMap(),
                         eq("Không đủ bằng chứng"));
+    }
+
+    @Test
+    @DisplayName("Kết luận UPHOLD khiếu nại giao dịch: yêu cầu RequestService giải quyết DISPUTED theo hướng huỷ")
+    void conclude_upholdRequestReport_resolvesDisputedRequestAsCancelled() {
+        // given
+        Report report = new Report(
+                100L, TargetType.REQUEST, 105L, 200L, 77L, ReportReason.NO_SHOW, "Chưa nhận được", ReportStage.AFTER);
+        ReflectionTestUtils.setField(report, "id", 14L);
+        when(reportRepository.findByIdForUpdate(14L)).thenReturn(Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // when
+        reportService.conclude(1L, 14L, new ConcludeReportRequest(ReportDecision.UPHOLD, null));
+
+        // then
+        verify(requestService).resolveDisputedRequest(77L, true);
+    }
+
+    @Test
+    @DisplayName("Kết luận DISMISS khiếu nại giao dịch: yêu cầu RequestService giải quyết DISPUTED theo hướng hoàn tất")
+    void conclude_dismissRequestReport_resolvesDisputedRequestAsCompleted() {
+        // given
+        Report report = new Report(
+                100L, TargetType.REQUEST, 105L, 200L, 77L, ReportReason.NO_SHOW, "Chưa nhận được", ReportStage.AFTER);
+        ReflectionTestUtils.setField(report, "id", 15L);
+        when(reportRepository.findByIdForUpdate(15L)).thenReturn(Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // when
+        reportService.conclude(1L, 15L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
+
+        // then
+        verify(requestService).resolveDisputedRequest(77L, false);
+    }
+
+    @Test
+    @DisplayName("Kết luận báo cáo bài đăng không đụng tới giao dịch")
+    void conclude_itemReport_doesNotResolveRequest() {
+        // given
+        Report report =
+                new Report(100L, TargetType.ITEM, 105L, null, null, ReportReason.OTHER, "Báo cáo", ReportStage.BEFORE);
+        ReflectionTestUtils.setField(report, "id", 16L);
+        when(reportRepository.findByIdForUpdate(16L)).thenReturn(Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // when
+        reportService.conclude(1L, 16L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
+
+        // then
+        verify(requestService, never()).resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test

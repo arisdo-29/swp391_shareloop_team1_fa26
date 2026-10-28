@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Alert, Button, EmptyState, PageHeader, SearchField } from '../../components/ui';
+import { Alert, Button, PageHeader, SearchField, SkeletonRows } from '../../components/ui';
 import {
   CreditHistorySection,
   CreditTransactionDetail,
@@ -13,7 +13,7 @@ import {
   type AdminFinanceUserSummary,
 } from '../../services/adminFinanceApi';
 import type { PageResponse } from '../../services/itemApi';
-import type { CreditHistory, Topup } from '../../types/domain';
+import type { CreditHistory } from '../../types/domain';
 import {
   HISTORY_PAGE_SIZE,
   adminHistoryTabs,
@@ -25,6 +25,8 @@ import { useDebouncedValue } from '../../utils/useDebouncedValue';
 import { adminErrorMessage } from './adminErrors';
 
 const USER_PAGE_SIZE = 20;
+// Admin không có danh sách bài của người dùng nên lịch sử không hiện tên món.
+const noItemTitles = new Map<string, string>();
 
 /** Danh sách người dùng kèm số dư Credit: mở trang là thấy ngay, gõ để tìm theo tên, email hoặc số điện thoại. */
 export function AdminFinanceUsers() {
@@ -78,13 +80,13 @@ export function AdminFinanceUsers() {
       {error ? (
         <div className="mb-4 space-y-3">
           <Alert tone="error">{error}</Alert>
-          <Button variant="outline" size="sm" onClick={() => setReloadKey((key) => key + 1)}>
+          <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
             Thử lại
           </Button>
         </div>
       ) : null}
       {loading && !result ? (
-        <EmptyState title="Đang tải danh sách" text="Vui lòng chờ trong giây lát." />
+        <SkeletonRows label="Đang tải danh sách" />
       ) : result ? (
         <>
           <div className="table-wrap">
@@ -114,7 +116,7 @@ export function AdminFinanceUsers() {
                     <td className="text-right tabular-nums">{user.totalToppedUpCredit}</td>
                     <td className="text-right">
                       <Link to={`/admin/finance/users/${user.userId}`}>
-                        <Button size="sm" variant="outline">
+                        <Button variant="outline">
                           Xem chi tiết
                         </Button>
                       </Link>
@@ -170,7 +172,7 @@ export function AdminFinanceUserDetail() {
   const [toDate, setToDate] = useState('');
   const [page, setPage] = useState(0);
   const [reloadKey, setReloadKey] = useState(0);
-  const [selected, setSelected] = useState<CreditHistory | Topup | null>(null);
+  const [selected, setSelected] = useState<CreditHistory | null>(null);
   const dateRangeError =
     fromDate && toDate && fromDate > toDate ? '"Từ ngày" không được sau "Đến ngày".' : '';
 
@@ -240,7 +242,7 @@ export function AdminFinanceUserDetail() {
         description={summary ? [summary.email, summary.phone].filter(Boolean).join(' · ') : undefined}
         action={
           <Link to="/admin/finance/users">
-            <Button variant="outline" icon="arrow">
+            <Button variant="outline">
               Về danh sách
             </Button>
           </Link>
@@ -249,7 +251,7 @@ export function AdminFinanceUserDetail() {
       {summaryError ? (
         <div className="mb-4 space-y-3">
           <Alert tone="error">{summaryError}</Alert>
-          <Button variant="outline" size="sm" onClick={() => setReloadKey((key) => key + 1)}>
+          <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
             Thử lại
           </Button>
         </div>
@@ -265,7 +267,7 @@ export function AdminFinanceUserDetail() {
       {historyError ? (
         <div className="mt-6 space-y-3">
           <Alert tone="error">{historyError}</Alert>
-          <Button variant="outline" size="sm" onClick={() => setReloadKey((key) => key + 1)}>
+          <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
             Thử tải lại
           </Button>
         </div>
@@ -276,9 +278,8 @@ export function AdminFinanceUserDetail() {
         </div>
       ) : null}
       <CreditHistorySection
-        items={[]}
+        itemTitles={noItemTitles}
         allHistory={history}
-        pendingTopups={[]}
         tabs={adminHistoryTabs}
         activeTab={tab}
         onTabChange={setTab}
