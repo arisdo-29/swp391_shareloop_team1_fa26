@@ -45,9 +45,10 @@ public record ReviewQueueItem(
         @Schema(description = "Thời điểm bài đăng được tạo", example = "2026-10-14T10:00:00Z")
         Instant createdAt) {
 
-    public static final Comparator<ReviewQueueItem> QUEUE_ORDER = Comparator.comparing(
-                    ReviewQueueItem::isFlagged, Comparator.reverseOrder())
-            .thenComparingInt(ReviewQueueItem::donorTrustStars)
+    // BR-A08 (SRS v11): cờ AI không còn ưu tiên. Cùng thứ tự với ReviewQueueRepository, trừ bước "tài khoản mới"
+    // vì DTO không mang ngày tạo tài khoản.
+    public static final Comparator<ReviewQueueItem> QUEUE_ORDER = Comparator.comparingInt(
+                    ReviewQueueItem::donorTrustStars)
             .thenComparing(ReviewQueueItem::createdAt, Comparator.nullsLast(Comparator.naturalOrder()))
             .thenComparing(ReviewQueueItem::id, Comparator.nullsLast(Comparator.naturalOrder()));
 

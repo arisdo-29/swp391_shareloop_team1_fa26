@@ -143,6 +143,15 @@ public enum ConfigKey {
             ConfigGroup.AI,
             "Thời gian chờ AI kiểm duyệt chat",
             "Số giây chờ AI kiểm duyệt tin nhắn. Nếu AI lỗi thì tin nhắn bị chặn nhưng không tính là vi phạm."),
+    ITEM_AI_SCREENING_ENABLED(
+            "item_ai_screening_enabled",
+            "false",
+            ConfigGroup.AI,
+            "Bật AI sàng lọc bài đăng",
+            "Bật thì bài mới hoặc vừa sửa được AI gắn cờ trước khi vào hàng chờ duyệt. SRS v11 tắt tầng này.",
+            ValueType.BOOLEAN,
+            null,
+            null),
     ITEM_AI_TIMEOUT_SECONDS(
             "item_ai_timeout_seconds",
             "15",

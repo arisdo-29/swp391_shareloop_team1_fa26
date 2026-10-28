@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Alert, Button, EmptyState, ItemImage, PageHeader, SearchField, SkeletonRows } from '../../components/ui';
 import { adminModerationApi, type ReviewQueueItem } from '../../services/adminModerationApi';
 import { adminErrorMessage } from './adminErrors';
-import { displayFlag, displayModerationNote, displayRisk } from './moderationDisplay';
+import { displayModerationNote, displayRuleFlag } from './moderationDisplay';
 
 // Hàng chờ có thứ tự ưu tiên từ Backend nên lấy một lượt đủ lớn và tìm kiếm ngay trên danh sách này.
 const QUEUE_SIZE = 100;
@@ -13,7 +13,7 @@ function normalize(value: string) {
 }
 
 function matchesQuery(item: ReviewQueueItem, query: string) {
-  const text = [item.title, item.donorName ?? '', displayRisk(item.aiRisk), displayFlag(item.moderationFlag)];
+  const text = [item.title, item.donorName ?? '', displayRuleFlag(item)];
   return normalize(text.join(' ')).includes(normalize(query));
 }
 
@@ -112,7 +112,6 @@ export function AdminModerationList() {
                 <th>Bài đăng</th>
                 <th>Người đăng</th>
                 <th>Uy tín</th>
-                <th>Rủi ro</th>
                 <th>Thời gian đăng</th>
                 <th></th>
               </tr>
@@ -135,9 +134,8 @@ export function AdminModerationList() {
 }
 
 function QueueRow({ item }: { item: ReviewQueueItem }) {
-  const flag = displayFlag(item.moderationFlag);
+  const flag = displayRuleFlag(item);
   const note = displayModerationNote(item);
-  const risk = displayRisk(item.aiRisk);
   return (
     <tr>
       <td className="max-w-md">
@@ -165,7 +163,6 @@ function QueueRow({ item }: { item: ReviewQueueItem }) {
       <td className="whitespace-nowrap">
         {item.donorTrustStars == null ? 'Chưa có dữ liệu' : `${item.donorTrustStars}/5 sao`}
       </td>
-      <td>{risk || '—'}</td>
       <td className="whitespace-nowrap text-xs">{new Date(item.createdAt).toLocaleString('vi-VN')}</td>
       <td className="text-right">
         <Link to={`/admin/moderation/${item.id}`}>
