@@ -93,7 +93,7 @@ function AppShellContent() {
         ['/admin/moderation', 'Quản lý món đồ'],
         ['/admin/users', 'Người dùng'],
         ['/admin/complaints', 'Báo cáo / Khiếu nại'],
-        // Tạm ẩn "Giao dịch" (/admin/transactions): backend chưa có API danh sách giao dịch cho Admin.
+        ['/admin/transactions', 'Giao dịch'],
         ['/admin/finance', 'Thống kê'],
       ]
     : user

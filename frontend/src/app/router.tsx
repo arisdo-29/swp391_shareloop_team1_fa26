@@ -30,6 +30,7 @@ const ReportResponse = lazy(() => import('../pages/user/ReportResponse').then((m
 const AdminLayout = lazy(() => import('../pages/admin/AdminLayout').then((module) => ({ default: module.AdminLayout })));
 const AdminAnomalies = lazy(() => import('../pages/admin/AdminAnomalies').then((module) => ({ default: module.AdminAnomalies })));
 const AdminComplaints = lazy(() => import('../pages/admin/AdminComplaints').then((module) => ({ default: module.AdminComplaints })));
+const AdminTransactions = lazy(() => import('../pages/admin/AdminTransactions').then((module) => ({ default: module.AdminTransactions })));
 const AdminTopUpOrders = lazy(() => import('../pages/admin/AdminTopUpOrders').then((module) => ({ default: module.AdminTopUpOrders })));
 const AdminReputation = lazy(() => import('../pages/admin/AdminReputation').then((module) => ({ default: module.AdminReputation })));
 const AdminAccounts = lazy(() => import('../pages/admin/AdminAccounts').then((module) => ({ default: module.AdminAccounts })));
@@ -117,8 +118,8 @@ export const router = createBrowserRouter([
               { path: 'reputation', element: <AdminReputation /> },
               // Gộp "Khóa tài khoản" vào Quản lý tài khoản: giữ đường dẫn cũ để link đã lưu vẫn dùng được.
               { path: 'locked-users', element: <Navigate to="/admin/users" replace /> },
-              { path: 'transactions', element: <Navigate to="/admin" replace /> },
-              { path: 'transactions/:transactionId', element: <Navigate to="/admin" replace /> },
+              { path: 'transactions', element: <AdminTransactions /> },
+              { path: 'transactions/:transactionId', element: <Navigate to="/admin/transactions" replace /> },
               { path: 'complaints', element: <AdminComplaints /> },
               { path: 'disputes', element: <AdminComplaints /> },
               { path: 'alerts', element: <AdminAnomalies /> },

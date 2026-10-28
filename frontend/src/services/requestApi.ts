@@ -22,6 +22,8 @@ export interface RequestResponse {
   receiverHandoverAt?: string;
   asDescribed?: boolean;
   completedAt?: string;
+  // Lý do huỷ kèm tiền tố người huỷ: "[Chủ bài] ", "[Người nhận] ", "[Hệ thống] "; giữ nguyên khi hiển thị.
+  cancelReason?: string | null;
   createdAt: string;
   receiverName?: string | null;
   receiverTrustStars?: number | null;
@@ -56,6 +58,11 @@ export interface ConfirmLogisticsRequestBody {
 export interface HandoverConfirmRequestBody {
   asDescribed?: boolean;
   notAsDescribedReason?: string;
+}
+
+export interface HandoverIssueBody {
+  note: string;
+  evidenceMediaIds?: number[];
 }
 
 export interface RequestContactResponse {
@@ -165,6 +172,20 @@ export const requestApi = {
   },
   async confirmLogistics(id: number, currentUserId: number, body?: ConfirmLogisticsRequestBody) {
     const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/confirm-logistics`, body ?? {}, {
+      params: { currentUserId },
+    });
+    return data;
+  },
+  async cancelTransaction(id: number, currentUserId: number, reason: string) {
+    const { data } = await http.post<RequestResponse>(
+      `/api/v1/requests/${id}/cancel-transaction`,
+      { reason },
+      { params: { currentUserId } },
+    );
+    return data;
+  },
+  async reportHandoverIssue(id: number, currentUserId: number, body: HandoverIssueBody) {
+    const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/handover-issue`, body, {
       params: { currentUserId },
     });
     return data;

@@ -35,7 +35,16 @@ import {
 } from '../../services/requestApi';
 import type { ApiError } from '../../services/http';
 import { ReportDialog } from '../../components/ReportDialog';
-import { canChat, canConfirmHandover, canSchedule, canSelectPendingRequest, requestStatusLabel } from '../../utils/request';
+import {
+  canCancelTransaction,
+  canChat,
+  canConfirmHandover,
+  canReportHandoverIssue,
+  canSchedule,
+  canSelectPendingRequest,
+  requestStatusLabel,
+} from '../../utils/request';
+import { chatImageForbiddenMessage } from '../../utils/apiErrorMessages';
 import { mediaApi } from '../../services/mediaApi';
 import { openDispute, respondDispute, type ReportReason } from '../../services/reportApi';
 import { resolveMediaUrl } from '../../services/mediaUrl';
@@ -261,6 +270,15 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [requestMediaLoading, setRequestMediaLoading] = useState(false);
   const [requestMediaSubmitting, setRequestMediaSubmitting] = useState(false);
   const [requestMediaError, setRequestMediaError] = useState('');
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+  const [issueOpen, setIssueOpen] = useState(false);
+  const [issueNote, setIssueNote] = useState('');
+  const [issueEvidence, setIssueEvidence] = useState<File[]>([]);
+  const [issueSubmitting, setIssueSubmitting] = useState(false);
+  const [issueError, setIssueError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatImageInputRef = useRef<HTMLInputElement>(null);
   const activeRequestId = useRef<number | null>(null);
@@ -520,6 +538,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
 
   const selectedDonorId = selected ? donorIdOf(selected) : undefined;
   const selectedAsDonor = selectedDonorId === currentUserId;
+  // Người nhận trong giao dịch Cho tặng không gửi ảnh được (backend trả CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN)
+  const isGiftReceiver = selected?.request.type === 'GIVE' && !selectedAsDonor;
   const reportTargetUserId = selectedDonorId
     ? selectedDonorId === currentUserId
       ? selected!.request.receiverId
@@ -716,6 +736,62 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     }
   };
 
+  const cancelReasonError = (error: unknown) => {
+    const apiError = error as Partial<ApiError>;
+    const messages: Record<string, string> = {
+      REQUEST_FORBIDDEN: 'Bạn không phải một bên của giao dịch này.',
+      REQUEST_NOT_FOUND: 'Không tìm thấy giao dịch này.',
+      REQUEST_INVALID_STATE_TRANSITION: 'Giao dịch ở trạng thái hiện tại không thể huỷ hoặc đã thay đổi. Vui lòng tải lại.',
+      VALIDATION_FAILED: 'Lý do huỷ phải từ 5 đến 500 ký tự.',
+    };
+    return (apiError.code && messages[apiError.code]) || 'Không huỷ được giao dịch lúc này. Vui lòng thử lại.';
+  };
+
+  const submitCancelTransaction = async () => {
+    const reason = cancelReason.trim();
+    if (!selected || cancelSubmitting || !canCancelTransaction(selected.request.status) || reason.length < 5) return;
+    setCancelSubmitting(true);
+    setCancelError('');
+    try {
+      const request = await requestApi.cancelTransaction(selected.request.id, currentUserId, reason);
+      updateSelectedRequest(request);
+      setCancelOpen(false);
+      setCancelReason('');
+      setLogisticsNotice('Đã huỷ giao dịch. Bài đăng được mở lại cho người khác.');
+    } catch (error) {
+      setCancelError(cancelReasonError(error));
+      if ((error as ApiError).status === 409) setLogisticsReloadKey((key) => key + 1);
+    } finally {
+      setCancelSubmitting(false);
+    }
+  };
+
+  const submitHandoverIssue = async () => {
+    const note = issueNote.trim();
+    if (!selected || issueSubmitting || note.length < 5) return;
+    setIssueSubmitting(true);
+    setIssueError('');
+    try {
+      const evidenceMediaIds = issueEvidence.length ? await uploadEvidence(issueEvidence) : undefined;
+      const request = await requestApi.reportHandoverIssue(selected.request.id, currentUserId, { note, evidenceMediaIds });
+      updateSelectedRequest(request);
+      setIssueOpen(false);
+      setIssueNote('');
+      setIssueEvidence([]);
+      setLogisticsNotice('Đã gửi báo cáo. Admin sẽ xem xét và báo kết quả cho hai bên.');
+    } catch (error) {
+      const apiError = error as ApiError;
+      setIssueError(
+        apiError.code === 'REQUEST_INVALID_STATE_TRANSITION'
+          ? 'Chỉ báo được khi đối phương đã xác nhận bàn giao còn bạn thì chưa. Vui lòng tải lại.'
+          : disputeErrorMessage(error),
+      );
+      if (apiError.status === 409) setLogisticsReloadKey((key) => key + 1);
+    } finally {
+      setIssueSubmitting(false);
+    }
+  };
+
   const send = async () => {
     const content = message.trim();
     if (
@@ -732,6 +808,10 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     }
     if (chatImage && shareItemId) {
       setMessageError('Chỉ gửi một ảnh hoặc một thẻ sản phẩm trong mỗi tin nhắn.');
+      return;
+    }
+    if (chatImage && isGiftReceiver) {
+      setMessageError(chatImageForbiddenMessage('CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN') ?? '');
       return;
     }
     if (chatImage && !requestMediaEnabled) {
@@ -771,7 +851,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     } catch (error) {
       const apiError = error as ApiError;
       if (activeRequestId.current !== selectedRequestId) return;
-      setMessageError(apiError.message || 'Không gửi được tin nhắn. Vui lòng thử lại.');
+      setMessageError(
+        chatImageForbiddenMessage(apiError.code) || apiError.message || 'Không gửi được tin nhắn. Vui lòng thử lại.',
+      );
     } finally {
       sendInFlight.current = false;
       setSending(false);
@@ -1183,6 +1265,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       disabled={sending || !chatEnabled}
                     />
                   </label>
+                  {isGiftReceiver ? null : (
                   <label
                     title={requestMediaEnabled ? 'Gửi một ảnh' : 'Mở sau khi chốt lịch hẹn'}
                     className={`inline-flex min-h-11 shrink-0 cursor-pointer items-center rounded-md border border-border px-3 text-xs font-semibold text-text-secondary ${sending || !chatEnabled || !requestMediaEnabled || !!shareItemId ? 'pointer-events-none opacity-40' : 'hover:bg-surface-low'}`}
@@ -1200,11 +1283,12 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       }}
                     />
                   </label>
+                  )}
                   <Button aria-label="Gửi tin nhắn" disabled={sending || !chatEnabled || (!message.trim() && !shareItemId && !chatImage)}>
                     {sending ? 'Đang gửi' : 'Gửi'}
                   </Button>
                 </form>
-                {chatEnabled && !requestMediaEnabled ? (
+                {chatEnabled && !requestMediaEnabled && !isGiftReceiver ? (
                   <p className="text-2xs text-text-muted">Gửi ảnh được sau khi hai bên chốt lịch hẹn.</p>
                 ) : null}
               </div>
@@ -1269,7 +1353,11 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
 
                 {selected.request.status === 'REJECTED' || selected.request.status === 'CANCELLED' ? (
                   <Alert tone="warning">
-                    {selected.request.status === 'REJECTED' ? 'Chủ bài đã chọn người khác cho món này.' : 'Yêu cầu này đã bị hủy.'}
+                    {selected.request.status === 'REJECTED'
+                      ? 'Chủ bài đã chọn người khác cho món này.'
+                      : selected.request.cancelReason
+                        ? `Yêu cầu này đã bị hủy. Lý do: ${selected.request.cancelReason}`
+                        : 'Yêu cầu này đã bị hủy.'}
                   </Alert>
                 ) : null}
 
@@ -1407,6 +1495,19 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         ? selectedAsDonor ? 'Bạn đã xác nhận đã giao' : 'Bạn đã xác nhận đã nhận'
                         : selectedAsDonor ? 'Tôi đã giao đồ' : 'Tôi đã nhận được đồ'}
                     </Button>
+                    {canReportHandoverIssue(selected.request.status, otherPartyHandoverAt, currentHandoverAt) ? (
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        disabled={logisticsSubmitting}
+                        onClick={() => {
+                          setIssueError('');
+                          setIssueOpen(true);
+                        }}
+                      >
+                        {selectedAsDonor ? 'Tôi chưa giao được' : 'Tôi chưa nhận được'}
+                      </Button>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -1529,6 +1630,25 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     </Button>
                   ) : null}
                 </section>
+
+                {canCancelTransaction(selected.request.status) ? (
+                  <section className="space-y-2 border-t border-border pt-4">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={cancelSubmitting}
+                      onClick={() => {
+                        setCancelError('');
+                        setCancelOpen(true);
+                      }}
+                    >
+                      Huỷ giao dịch
+                    </Button>
+                    <p className="text-xs leading-5 text-text-muted">
+                      Cần nêu lý do. Bài đăng mở lại cho người khác, không mất phí đăng lần nữa.
+                    </p>
+                  </section>
+                ) : null}
               </div>
             </aside>
           </>
@@ -1562,6 +1682,68 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
             setReportNotice('Báo cáo đã được gửi đến quản trị viên để xem xét.');
           }}
         />
+      ) : null}
+      {cancelOpen && selected ? (
+        <DialogFrame labelledBy="cancel-transaction-title" busy={cancelSubmitting} onClose={() => setCancelOpen(false)}>
+          <h2 id="cancel-transaction-title" className="text-xl font-bold">Huỷ giao dịch</h2>
+          <p className="mt-1 text-sm text-text-muted">{conversationTitle(selected)}</p>
+          <p className="mt-3 text-sm leading-6 text-text-secondary">
+            Bên còn lại sẽ nhận được lý do này. Bài đăng mở lại cho người khác, không mất phí đăng lần nữa.
+          </p>
+          <TextArea
+            className="mt-4"
+            label="Lý do huỷ (bắt buộc)"
+            value={cancelReason}
+            maxLength={500}
+            disabled={cancelSubmitting}
+            onChange={(event) => setCancelReason(event.target.value)}
+          />
+          <p className="mt-1 text-right text-xs text-text-muted">{cancelReason.length}/500</p>
+          {cancelError ? <div role="alert" className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">{cancelError}</div> : null}
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="ghost" disabled={cancelSubmitting} onClick={() => setCancelOpen(false)}>Giữ giao dịch</Button>
+            <Button disabled={cancelSubmitting || cancelReason.trim().length < 5} onClick={() => void submitCancelTransaction()}>
+              {cancelSubmitting ? 'Đang huỷ...' : 'Huỷ giao dịch'}
+            </Button>
+          </div>
+        </DialogFrame>
+      ) : null}
+      {issueOpen && selected ? (
+        <DialogFrame labelledBy="handover-issue-title" busy={issueSubmitting} onClose={() => setIssueOpen(false)}>
+          <h2 id="handover-issue-title" className="text-xl font-bold">
+            {selectedAsDonor ? 'Tôi chưa giao được' : 'Tôi chưa nhận được'}
+          </h2>
+          <p className="mt-1 text-sm text-text-muted">{conversationTitle(selected)}</p>
+          <p className="mt-3 text-sm leading-6 text-text-secondary">
+            {selectedParticipantName} đã xác nhận bàn giao nhưng phía bạn thì chưa xong. Giao dịch sẽ chuyển sang khiếu nại để Admin xem xét.
+          </p>
+          <TextArea
+            className="mt-4"
+            label="Mô tả sự cố (bắt buộc)"
+            value={issueNote}
+            maxLength={1000}
+            disabled={issueSubmitting}
+            onChange={(event) => setIssueNote(event.target.value)}
+          />
+          <p className="mt-1 text-right text-xs text-text-muted">{issueNote.length}/1000</p>
+          <Field
+            className="mt-4"
+            label="Ảnh minh chứng"
+            type="file"
+            accept="image/*"
+            multiple
+            disabled={issueSubmitting}
+            onChange={(event) => setIssueEvidence(Array.from(event.target.files ?? []))}
+          />
+          {issueEvidence.length ? <p className="mt-2 text-xs text-text-muted">Đã chọn {issueEvidence.length} ảnh.</p> : null}
+          {issueError ? <div role="alert" className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">{issueError}</div> : null}
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="ghost" disabled={issueSubmitting} onClick={() => setIssueOpen(false)}>Đóng</Button>
+            <Button disabled={issueSubmitting || issueNote.trim().length < 5} onClick={() => void submitHandoverIssue()}>
+              {issueSubmitting ? 'Đang gửi...' : 'Gửi báo cáo'}
+            </Button>
+          </div>
+        </DialogFrame>
       ) : null}
       {disputeOpen && selected ? (
         <DialogFrame>

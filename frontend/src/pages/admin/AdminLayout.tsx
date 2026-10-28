@@ -21,7 +21,7 @@ const sections = [
     items: [
       ['Tài khoản', '/admin/users'],
       ['Uy tín và hạng', '/admin/reputation'],
-      // Tạm ẩn "Giao dịch" (/admin/transactions): backend chưa có API danh sách giao dịch cho Admin.
+      ['Giao dịch', '/admin/transactions'],
       ['Khiếu nại và báo cáo', '/admin/complaints'],
     ],
   },

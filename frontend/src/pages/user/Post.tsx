@@ -10,13 +10,15 @@ import type { ItemCondition, ItemType } from '../../types/domain';
 import { fileToDataUrl } from '../../utils/files';
 import { catalogApi, type CategoryAttributeResponse } from '../../services/catalogApi';
 import { toAreaOptions, toCategoryIdByName, toCategoryNames, type AreaOption } from '../../services/mappers';
-import { itemApi, type ApiCondition, type OperatingStatus } from '../../services/itemApi';
+import { itemApi, type ApiCondition, type OperatingStatus, type PostingQuota } from '../../services/itemApi';
+import { postingQuotaRow } from '../../utils/postingQuota';
 import { mediaApi } from '../../services/mediaApi';
 import type { ApiError } from '../../services/http';
 import { toBackendUserId } from '../../services/requestApi';
 import { useWallet } from '../../app/useWallet';
 import {
   ITEM_MODERATION_BLOCKED,
+  giveLimitMessage,
   moderationBlockedMessage,
   reputationBlockedMessage,
 } from '../../utils/apiErrorMessages';
@@ -97,6 +99,8 @@ export function Post() {
   // Phí đăng bài Trao đổi đọc từ Backend (GET /listing-fees); null khi chưa tải được.
   const [postFee, setPostFee] = useState<number | null>(null);
   const [postFeeError, setPostFeeError] = useState('');
+  // Hạn mức bài Cho tặng và Trao đổi; null khi chưa tải được, khi đó ô hạn mức hiện "--".
+  const [postingQuota, setPostingQuota] = useState<PostingQuota | null>(null);
   const sortedCategoryAttributes = [...categoryAttributes].sort(
     (left, right) => left.sortOrder - right.sortOrder || left.id - right.id,
   );
@@ -128,6 +132,21 @@ export function Post() {
       })
       .finally(() => {
         if (active) setCatalogLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    itemApi
+      .postingQuota()
+      .then((quota) => {
+        if (active) setPostingQuota(quota);
+      })
+      .catch(() => {
+        if (active) setPostingQuota(null);
       });
     return () => {
       active = false;
@@ -339,7 +358,8 @@ export function Post() {
         ? INSUFFICIENT_CREDIT_MESSAGE
         : apiError.code === ITEM_MODERATION_BLOCKED
           ? moderationBlockedMessage(apiError)
-          : reputationBlockedMessage(apiError.code)
+          : giveLimitMessage(apiError)
+            ?? reputationBlockedMessage(apiError.code)
             ?? (apiError.message || 'Không đăng được bài. Vui lòng kiểm tra thông tin và thử lại.'));
       if (apiError.code === WALLET_INSUFFICIENT_BALANCE) refreshWallet();
       setConfirmOpen(false);
@@ -422,6 +442,7 @@ export function Post() {
 
   const missingImages = Math.max(0, ITEM_IMAGES_MIN - images.length);
   const infoReady = Boolean(title.trim() && category && condition && description.trim());
+  const quotaRow = postingQuotaRow(type, postingQuota);
   const feeLabel = type === 'gift' ? 'Miễn phí' : type === 'trade' ? (postFee === null ? '--' : `${postFee} Credit`) : 'Chọn hình thức';
 
   return (
@@ -679,6 +700,12 @@ export function Post() {
             <dd className="font-semibold">{type === 'gift' ? 'Cho tặng' : type === 'trade' ? 'Trao đổi' : '--'}</dd>
             <dt className="text-text-secondary">Phí đăng</dt>
             <dd className="font-bold">{feeLabel}</dd>
+            {quotaRow ? (
+              <>
+                <dt className="text-text-secondary">{quotaRow.label}</dt>
+                <dd className="font-semibold tabular-nums">{quotaRow.value}</dd>
+              </>
+            ) : null}
             <dt className="text-text-secondary">Số dư khả dụng</dt>
             <dd className="font-semibold tabular-nums">{availableCredit === null ? '--' : `${availableCredit} Credit`}</dd>
           </dl>
