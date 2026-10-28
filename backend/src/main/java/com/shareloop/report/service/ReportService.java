@@ -187,13 +187,30 @@ public class ReportService {
 
         itemService.hide(itemId);
         if (pendingReports == threshold && notificationService != null) {
+            String title = itemTitle(itemId);
             notificationService.notifyAdmins(
                     "ITEM_AUTO_HIDDEN",
                     "Bài đăng bị ẩn do nhiều báo cáo",
-                    "Bài" + quotedTitle(itemTitle(itemId)) + " đã tự ẩn sau " + pendingReports
+                    "Bài" + quotedTitle(title) + " đã tự ẩn sau " + pendingReports
                             + " báo cáo đang chờ xử lý. Vui lòng xem xét trong hàng chờ khiếu nại.",
                     "/admin/complaints");
+            notifyDonorItemHidden(itemId, title);
         }
+    }
+
+    // U04: chủ bài cũng phải biết bài đang tạm ẩn; bấm thông báo mở trang Hoạt động.
+    private void notifyDonorItemHidden(long itemId, String title) {
+        ItemSummary summary = itemQueryService.getSummary(itemId);
+        if (summary == null || summary.donorId() == null) {
+            return;
+        }
+        notificationService.notify(
+                summary.donorId(),
+                "ITEM_AUTO_HIDDEN",
+                "Bài đăng đang tạm ẩn",
+                (title == null || title.isBlank() ? "Bài của bạn" : "Bài «" + title + "»")
+                        + " đang tạm ẩn do có nhiều báo cáo. Admin sẽ xem xét và báo kết quả.",
+                "/activities");
     }
 
     private ReportResponse toReportResponse(Report saved) {

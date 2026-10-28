@@ -34,7 +34,41 @@ public record ItemResponse(
         String donorName,
         Integer donorTrustStars,
         String donorRank,
-        Double donorAsDescribedRate) {
+        Double donorAsDescribedRate,
+        // Chỉ có giá trị khi chủ bài hoặc Admin xem; người khác nhận null. hidden = bài đang is_active = false.
+        Boolean hidden,
+        // Lý do ẩn; null cho tới khi lưu lý do ẩn (C06).
+        String hiddenReason) {
+
+    /** Gắn trạng thái tạm ẩn cho chủ bài hoặc Admin (U04). */
+    public ItemResponse withVisibility(boolean isHidden, String reason) {
+        return new ItemResponse(
+                id,
+                donorId,
+                categoryId,
+                areaId,
+                offerType,
+                title,
+                description,
+                desiredItem,
+                condition,
+                defectNote,
+                brand,
+                images,
+                status,
+                createdAt,
+                updatedAt,
+                defectImages,
+                operatingStatus,
+                expireAt,
+                boostedUntil,
+                donorName,
+                donorTrustStars,
+                donorRank,
+                donorAsDescribedRate,
+                isHidden,
+                isHidden ? reason : null);
+    }
 
     public ItemResponse withDonor(String name, Integer trustStars, String rank, Double asDescribedRate) {
         return new ItemResponse(
@@ -60,7 +94,9 @@ public record ItemResponse(
                 name,
                 trustStars,
                 rank,
-                asDescribedRate);
+                asDescribedRate,
+                hidden,
+                hiddenReason);
     }
 
     public ItemResponse(
@@ -102,6 +138,8 @@ public record ItemResponse(
                 null,
                 null,
                 null,
+                null,
+                null,
                 null);
     }
 
@@ -137,6 +175,8 @@ public record ItemResponse(
                 createdAt,
                 updatedAt,
                 List.of(),
+                null,
+                null,
                 null,
                 null,
                 null,

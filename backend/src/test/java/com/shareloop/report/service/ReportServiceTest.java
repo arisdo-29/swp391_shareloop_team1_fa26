@@ -266,6 +266,24 @@ class ReportServiceTest {
     }
 
     @Test
+    @DisplayName("U04: vừa đủ ngưỡng thì chủ bài nhận thông báo bài đang tạm ẩn, bấm mở trang Hoạt động")
+    void reportItem_reachesThreshold_notifiesDonor() {
+        givenItemCanBeReported(1L, 10L, 2L);
+        when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, 10L, PENDING))
+                .thenReturn(3L);
+
+        reportService.create(1L, itemReport(10L));
+
+        verify(notificationService)
+                .notify(
+                        2L,
+                        "ITEM_AUTO_HIDDEN",
+                        "Bài đăng đang tạm ẩn",
+                        "Bài «Bàn học gỗ» đang tạm ẩn do có nhiều báo cáo. Admin sẽ xem xét và báo kết quả.",
+                        "/activities");
+    }
+
+    @Test
     @DisplayName("BR-A03: report thứ 4 vào bài đã ẩn: vẫn giữ ẩn nhưng không báo Admin lần nữa")
     void reportItem_aboveThreshold_doesNotNotifyAdminsAgain() {
         givenItemCanBeReported(1L, 10L, 2L);
@@ -276,6 +294,7 @@ class ReportServiceTest {
 
         verify(itemService).hide(10L);
         verify(notificationService, never()).notifyAdmins(anyString(), anyString(), anyString(), anyString());
+        verify(notificationService, never()).notify(anyLong(), anyString(), anyString(), anyString(), anyString());
     }
 
     private void givenItemCanBeReported(Long reporterId, Long itemId, Long donorId) {
