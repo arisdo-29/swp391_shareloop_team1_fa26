@@ -1,16 +1,17 @@
 import { Suspense, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Icon } from '../../components/ui';
+// Nhóm menu theo bản thiết kế: nội dung, người dùng, tài chính, hệ thống.
 const sections = [
-  { label: 'Tổng quan', items: [['Tổng quan', '/admin']] },
+  { label: '', items: [['Tổng quan', '/admin']] },
   {
     label: 'Nội dung',
     items: [
       ['Duyệt bài', '/admin/moderation'],
       // Tạm ẩn "Xác minh hàng chính hãng" (/admin/authenticity): chưa có luồng xác nhận và chưa có BR. Code BE vẫn giữ.
-      ['Checklist duyệt bài', '/admin/checklist'],
       // Tạm ẩn "Bài quá hạn" (/admin/expired-posts): backend chưa có API danh sách cho Admin.
       ['Danh mục', '/admin/categories'],
+      ['Checklist duyệt bài', '/admin/checklist'],
       ['Từ khóa cấm', '/admin/keywords'],
       ['Khu vực', '/admin/districts'],
     ],
@@ -18,16 +19,10 @@ const sections = [
   {
     label: 'Người dùng',
     items: [
-      ['Quản lý tài khoản', '/admin/users'],
-      ['Uy tín & Hạng', '/admin/reputation'],
-    ],
-  },
-  {
-    label: 'Giao dịch',
-    items: [
-      // Tạm ẩn "Giao dịch" (/admin/transactions): backend chưa có API danh sách giao dịch cho Admin.
-      ['Khiếu nại', '/admin/complaints'],
-      ['Cảnh báo bất thường', '/admin/alerts'],
+      ['Tài khoản', '/admin/users'],
+      ['Uy tín và hạng', '/admin/reputation'],
+      ['Giao dịch', '/admin/transactions'],
+      ['Khiếu nại và báo cáo', '/admin/complaints'],
     ],
   },
   {
@@ -39,22 +34,25 @@ const sections = [
     ],
   },
   {
-    label: 'Cấu hình',
+    label: 'Hệ thống',
     items: [
-      ['Cấu hình hệ thống', '/admin/settings/fees'],
+      ['Cấu hình phí', '/admin/settings/fees'],
+      ['Nhật ký hoạt động', '/admin/audit-logs'],
+      ['Cảnh báo bất thường', '/admin/alerts'],
     ],
   },
-  { label: 'Hệ thống', items: [['Nhật ký hành động', '/admin/audit-logs']] },
 ] as const;
 export function AdminLayout() {
   const [open, setOpen] = useState(false);
   const nav = (
     <>
       {sections.map((section) => (
-        <div key={section.label} className="mb-5">
-          <p className="mb-1.5 px-3 text-2xs font-bold uppercase tracking-wider text-text-secondary">
-            {section.label}
-          </p>
+        <div key={section.label || 'overview'} className="mb-4">
+          {section.label ? (
+            <p className="mb-1.5 px-3 text-2xs font-bold uppercase tracking-wider text-text-secondary">
+              {section.label}
+            </p>
+          ) : null}
           {section.items.map(([label, to]) => (
             <NavLink
               end={to === '/admin' || to === '/admin/finance'}
@@ -76,8 +74,7 @@ export function AdminLayout() {
     <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:grid lg:grid-cols-[230px_1fr] lg:gap-8 lg:px-8">
       <div className="mb-5 flex items-center justify-between lg:hidden">
         <div>
-          <p className="text-xs font-semibold text-primary">SHARELOOP OPERATIONS</p>
-          <h1 className="text-xl font-bold">Quản trị</h1>
+          <p className="text-xl font-bold">Quản trị</p>
         </div>
         <button
           onClick={() => setOpen(!open)}
@@ -91,11 +88,7 @@ export function AdminLayout() {
       <aside
         className={`${open ? 'block' : 'hidden'} h-fit rounded-lg bg-white p-2 ring-1 ring-border/80 lg:sticky lg:top-24 lg:block lg:max-h-[calc(100dvh-120px)] lg:overflow-y-auto`}
       >
-        <div className="hidden border-b border-border px-3 pb-4 pt-2 lg:block">
-          <p className="text-2xs font-bold tracking-wider text-primary">SHARELOOP</p>
-          <p className="mt-1 text-sm font-bold">Operations Console</p>
-        </div>
-        <nav className="pt-3">{nav}</nav>
+        <nav aria-label="Quản trị" className="pt-1">{nav}</nav>
       </aside>
       <main className="min-w-0 pt-2 lg:pt-0">
         <Suspense fallback={<div className="min-h-[620px]" aria-hidden="true" />}>

@@ -10,7 +10,6 @@ import {
   PageHeader,
   RankBadge,
   Select,
-  Stat,
 } from '../../components/ui';
 import { fileToDataUrl } from '../../utils/files';
 import { OtpInput } from '../../components/OtpInput';
@@ -441,12 +440,10 @@ export function Profile() {
 
   return (
     <div className="page-shell">
-      <PageHeader
-        title="Tài khoản của bạn"
-      />
-      <div className="grid gap-7 lg:grid-cols-[240px_1fr]">
-        <aside>
-          <div className="flex items-center gap-3 pb-5">
+      <PageHeader title="Tài khoản" />
+      <div className="grid items-start gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <aside className="rounded-lg bg-white p-3 ring-1 ring-border/80">
+          <div className="flex items-center gap-3 px-2 pb-4 pt-2">
             <Avatar
               user={{
                 ...user,
@@ -454,10 +451,10 @@ export function Profile() {
                 avatarInitials: name.trim().split(/\s+/).map((part) => part[0]).slice(-2).join('').toUpperCase(),
                 avatarUrl,
               }}
-              size="lg"
             />
             <div className="min-w-0">
-              <h2 className="truncate font-bold">{name}</h2>
+              <h2 className="truncate text-sm font-bold">{name}</h2>
+              <p className="truncate text-xs text-text-muted">{email}</p>
               <div className="mt-1">
                 {isAdmin ? <RankBadge rank="Quản trị hệ thống" /> : null}
                 {!isAdmin && reputation ? (
@@ -466,7 +463,7 @@ export function Profile() {
               </div>
             </div>
           </div>
-          <nav className="space-y-1 border-t border-border pt-4">
+          <nav aria-label="Mục tài khoản" className="space-y-1 border-t border-border pt-2">
             {(
               [
                 ['profile', 'Hồ sơ'],
@@ -499,8 +496,8 @@ export function Profile() {
         </aside>
         <main className="min-w-0">
           {tab === 'profile' ? (
-            <section className="rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
-              <div className="flex items-center justify-between">
+            <section className="rounded-lg bg-white p-5 ring-1 ring-border/80 sm:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="section-title">Thông tin cá nhân</h2>
                   <p className="mt-1 text-sm text-text-muted">
@@ -691,17 +688,33 @@ export function Profile() {
               ) : null}
               {reputation ? (
                 <>
-                  <section className="grid gap-5 rounded-xl bg-white p-5 ring-1 ring-border/80 sm:grid-cols-2 sm:p-6 lg:grid-cols-4">
-                    <Stat label="Tổng điểm" value={reputation.totalPoints} detail="Điểm hoạt động" />
-                    <Stat label="Hạng thành viên" value={getRankLabel(reputation.rank)} detail="Dựa trên điểm uy tín" />
-                    <Stat label="Sao uy tín" value={`${reputation.trustStars}/5`} detail="Mức tin cậy hiện tại" />
-                    <Stat
-                      label="Tỉ lệ đúng mô tả"
-                      value={reputation.accuracyRate === null ? <span className="block whitespace-normal text-base leading-6">Chưa đủ giao dịch để tính</span> : `${Math.round(reputation.accuracyRate * 100)}%`}
-                      detail="Từ giao dịch được đánh giá"
-                    />
+                  <section aria-label="Tóm tắt uy tín" className="grid gap-3 md:grid-cols-[2fr_1fr_1fr]">
+                    <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
+                      <p className="text-xs font-semibold text-text-secondary">Hạng thành viên</p>
+                      <p className="mt-2 flex items-baseline gap-2.5">
+                        <strong className="text-2xl">{getRankLabel(reputation.rank)}</strong>
+                        <span className="text-sm text-text-muted">{reputation.totalPoints} điểm uy tín</span>
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-text-secondary">Điểm tăng khi bạn hoàn tất giao dịch và quyết định hạng.</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
+                      <p className="text-xs font-semibold text-text-secondary">Sao uy tín</p>
+                      <p className="mt-2 text-xl font-bold">{reputation.trustStars} / 5</p>
+                      <p className="mt-1 text-xs leading-5 text-text-muted">Giảm khi bị báo cáo đúng.</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
+                      <p className="text-xs font-semibold text-text-secondary">Đúng mô tả</p>
+                      <p className="mt-2 text-xl font-bold">
+                        {reputation.accuracyRate === null ? (
+                          <span className="block text-sm font-semibold leading-6">Chưa đủ giao dịch để tính</span>
+                        ) : (
+                          `${Math.round(reputation.accuracyRate * 100)}%`
+                        )}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-text-muted">Từ đánh giá của người nhận.</p>
+                    </div>
                   </section>
-                  <section className="rounded-xl bg-white ring-1 ring-border/80">
+                  <section className="overflow-hidden rounded-lg bg-white ring-1 ring-border/80">
                     <div className="border-b border-border px-5 py-4">
                       <h2 className="section-title">Lịch sử uy tín</h2>
                       <p className="mt-1 text-xs text-text-muted">{reputation.history.totalElements} lần thay đổi điểm</p>
@@ -766,9 +779,9 @@ function PointSummary({ summary }: { summary: PointHistorySummary | null }) {
     ['Không được cộng', String(summary.notCounted), 'text-text-secondary'],
   ];
   return (
-    <dl className="grid grid-cols-2 border-b border-border sm:grid-cols-4">
-      {cells.map(([label, value, tone], index) => (
-        <div key={label} className={`px-5 py-3 ${index > 0 ? 'border-border/70 sm:border-l' : ''} ${index > 1 ? 'border-t sm:border-t-0' : ''}`}>
+    <dl className="grid grid-cols-2 gap-2.5 border-b border-border p-4 sm:grid-cols-4">
+      {cells.map(([label, value, tone]) => (
+        <div key={label} className="rounded-md bg-surface-low px-4 py-3">
           <dt className="text-xs font-medium text-text-muted">{label}</dt>
           <dd className={`mt-1 text-lg font-bold tabular-nums ${tone}`}>{value}</dd>
         </div>

@@ -36,9 +36,29 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
     List<Request> findByOfferedItemIdAndStatus(Long offeredItemId, RequestStatus status);
 
     /**
+     * Yêu cầu của một người nhận đang ở một trong các trạng thái cho trước (dọn dẹp khi khoá tài khoản).
+     */
+    List<Request> findByReceiverIdAndStatusIn(Long receiverId, Collection<RequestStatus> statuses);
+
+    /**
+     * Yêu cầu gửi tới một nhóm bài đăng đang ở một trong các trạng thái cho trước (dọn dẹp khi khoá chủ bài).
+     */
+    List<Request> findByItemIdInAndStatusIn(Collection<Long> itemIds, Collection<RequestStatus> statuses);
+
+    /**
      * Danh sách yêu cầu do người dùng gửi đi, sắp theo thời gian tạo mới nhất lên trước.
      */
     List<Request> findByReceiverIdOrderByCreatedAtDesc(Long receiverId);
+
+    /**
+     * Mọi yêu cầu, mới nhất trước, cho danh sách giao dịch của Admin.
+     */
+    List<Request> findAllByOrderByCreatedAtDesc();
+
+    /**
+     * Yêu cầu theo trạng thái, mới nhất trước, cho danh sách giao dịch của Admin.
+     */
+    List<Request> findByStatusOrderByCreatedAtDesc(RequestStatus status);
 
     /**
      * Kiểm tra bài đăng đã có yêu cầu ở trạng thái RESERVED trở lên hay chưa (F07 bước 1, BR-D04).

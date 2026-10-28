@@ -68,6 +68,17 @@ public class ActivityLogQueryService {
         return logs.map(log -> toDto(log, users, itemTitles));
     }
 
+    /**
+     * Dữ liệu (cột data) của dòng nhật ký mới nhất thuộc một loại hành động trên một đối tượng; rỗng nếu chưa có dòng
+     * nào hoặc dòng đó không có data.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<Map<String, Object>> findLatestData(String type, Long targetId) {
+        return repository
+                .findFirstByTypeAndTargetIdOrderByIdDesc(type, targetId)
+                .map(ActivityLog::getData);
+    }
+
     /** Danh sách loại hành động kèm nhãn tiếng Việt cho bộ lọc phía FE. */
     public List<ActivityTypeDto> listTypes() {
         List<ActivityTypeDto> types = new ArrayList<>();

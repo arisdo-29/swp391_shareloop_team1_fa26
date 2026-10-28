@@ -154,7 +154,10 @@ export function NotificationMenu({
       {open ? (
         <div className="absolute right-0 top-12 z-50 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-lg bg-white text-text-primary shadow-lg ring-1 ring-border">
           <div className="border-b border-border px-4 py-3">
-            <h2 className="text-sm font-bold">Thông báo</h2>
+            <h2 className="text-base font-bold">
+              Thông báo
+              {unreadCount ? <span className="ml-2 text-xs font-semibold text-error">{unreadCount} mới</span> : null}
+            </h2>
             {countError ? <p className="mt-1 text-xs leading-5 text-error">{countError}</p> : null}
           </div>
           {!backendUserId ? (

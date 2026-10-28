@@ -127,13 +127,13 @@ describe('AdminFinanceUserDetail', () => {
     renderDetail();
 
     await screen.findByRole('heading', { name: 'Lan An' });
-    expect(await screen.findByRole('button', { name: 'Tất cả (3)' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Nạp Credit (1)' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Cộng Credit (1)' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Trừ Credit (1)' })).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: 'Tất cả (3)' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Nạp Credit (1)' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Cộng Credit (1)' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Trừ Credit (1)' })).toBeTruthy();
     expect(screen.getByText('Tổng đã nạp')).toBeTruthy();
 
-    await user.click(screen.getByRole('button', { name: 'Trừ Credit (1)' }));
+    await user.click(screen.getByRole('tab', { name: 'Trừ Credit (1)' }));
     expect(screen.getByText('Phí đăng bài')).toBeTruthy();
     expect(screen.queryByText('Cập nhật hệ thống')).toBeNull();
   });
@@ -171,14 +171,14 @@ describe('AdminFinanceUserDetail', () => {
 
     // when
     renderDetail();
-    await screen.findByRole('button', { name: 'Tất cả (4)' });
+    await screen.findByRole('tab', { name: 'Tất cả (4)' });
 
     // then
     expect(screen.getByText('Phí chỉnh sửa bài')).toBeTruthy();
     expect(screen.getByText('Phí gia hạn bài')).toBeTruthy();
     expect(screen.getByText('Phí đẩy tin')).toBeTruthy();
     expect(screen.getByText('Hoàn phí tìm kiếm AI')).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Cộng Credit (1)' }));
+    await user.click(screen.getByRole('tab', { name: 'Cộng Credit (1)' }));
     expect(screen.getByText('Hoàn phí tìm kiếm AI')).toBeTruthy();
     expect(screen.queryByText('Phí đẩy tin')).toBeNull();
   });

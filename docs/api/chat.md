@@ -29,6 +29,7 @@ Gửi tin nhắn mới (văn bản, ảnh hoặc chia sẻ thẻ bài đăng) tr
 - Gửi tin nhắn văn bản: truyền `content`, `mediaId = null`, `refItemId = null`.
 - Gửi ảnh: truyền `mediaId` (nhận được từ API tải ảnh `POST /api/v1/media`), `content` là ghi chú/caption tuỳ chọn.
   - **Quy tắc gửi ảnh (FR-75, BR-C05):** Ảnh chỉ được phép gửi sau khi hai bên đã xác nhận lịch hẹn (từ trạng thái `LOGISTICS_CONFIRMED` trở lên). Gửi trước thời điểm này sẽ bị chặn với lỗi `CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN`.
+  - **Người nhận trong giao dịch Cho tặng không gửi ảnh:** Khi `Request.type = GIVE` và người gửi là người nhận (`receiverId`), tin nhắn có `mediaId` bị chặn với `403 CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN`. Chủ bài vẫn gửi ảnh được sau khi chốt lịch. Tin chữ và thẻ bài (`refItemId`) không bị ảnh hưởng. Giao dịch Trao đổi (`SWAP`) giữ nguyên như cũ cho cả hai phía.
 - Gửi thẻ bài đăng (FR-70, BR-C07): truyền `refItemId` (id bài đăng muốn chia sẻ), `content` là lời nhắn kèm theo (tuỳ chọn).
   - **Quy tắc chia sẻ thẻ bài (BR-C07):** Chỉ chia sẻ được thẻ của bài đăng ở trạng thái đã được duyệt (`APPROVED`). Nếu chia sẻ bài chưa duyệt hoặc không tồn tại sẽ bị từ chối với lỗi tương ứng.
 - Trước khi chốt lịch, nội dung bị tầng 1 xác định vi phạm sẽ bị chặn ngay. Chỉ nội dung có dấu hiệu liên hệ nhưng chưa đủ chắc chắn mới được gửi tới tầng 2 OpenRouter (`cohere/north-mini-code:free`, trả kết quả qua lời gọi hàm có schema), kèm tối đa 3 tin chat hợp lệ gần nhất; ngưỡng `chat_ai_threshold` lấy từ cấu hình, thời gian chờ tối đa 5 giây. Tin bị chặn ở tầng 2 vẫn trả `CHAT_MESSAGE_BLOCKED` với lý do. Khi OpenRouter chưa được cấu hình hoặc gọi lỗi, hệ thống giữ kết quả tầng 1.
@@ -69,6 +70,7 @@ Gửi tin nhắn mới (văn bản, ảnh hoặc chia sẻ thẻ bài đăng) tr
   - `404 NOT_FOUND` (`CHAT_ITEM_NOT_FOUND`): Không tìm thấy bài đăng để chia sẻ thẻ.
   - `409 CONFLICT` (`CHAT_REQUEST_NOT_RESERVED`): Yêu cầu chưa ở trạng thái `RESERVED`.
   - `409 CONFLICT` (`CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN`): Gửi ảnh trước khi hai bên xác nhận lịch hẹn (`LOGISTICS_CONFIRMED`) (FR-75, BR-C05).
+  - `403 FORBIDDEN` (`CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN`): Người nhận trong giao dịch Cho tặng gửi tin có ảnh.
 
 ---
 

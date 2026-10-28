@@ -375,6 +375,64 @@ public class ReportService {
         }
     }
 
+    /**
+     * Mở khiếu nại NO_SHOW khi một bên báo chưa nhận được hoặc chưa giao được đồ lúc giao dịch đã sang DISPUTED.
+     * Bên còn lại là bên bị báo cáo và có thời hạn giải trình như khiếu nại thường (FR-90). Mỗi người chỉ có một
+     * report cho mỗi giao dịch: gọi lại thì bỏ qua, không lỗi.
+     *
+     * @param reporterId bên báo sự cố, phải là chủ bài hoặc người nhận của giao dịch
+     * @param evidenceMediaIds id media minh chứng, có thể null hoặc rỗng
+     * @throws BusinessException REPORT_TARGET_NOT_FOUND khi không thấy giao dịch hoặc bài đăng; DISPUTE_NOT_A_PARTY
+     *     khi reporterId không thuộc giao dịch
+     */
+    @Transactional
+    public void openHandoverIssueReport(Long reporterId, Long requestId, String note, List<Long> evidenceMediaIds) {
+        if (reportRepository.existsByReporterIdAndTargetTypeAndRequestId(reporterId, TargetType.REQUEST, requestId)) {
+            return;
+        }
+
+        RequestSnapshot requestSnapshot = findRequest(requestId);
+        if (requestSnapshot == null) {
+            throw new BusinessException(ReportErrorCode.REPORT_TARGET_NOT_FOUND, "Không tìm thấy yêu cầu giao dịch.");
+        }
+        ItemSummary itemSummary = itemQueryService.getSummary(requestSnapshot.itemId());
+        if (itemSummary == null) {
+            throw new BusinessException(
+                    ReportErrorCode.REPORT_TARGET_NOT_FOUND, "Không tìm thấy bài đăng của giao dịch.");
+        }
+        Long donorId = itemSummary.donorId();
+        Long receiverId = requestSnapshot.receiverId();
+        boolean reporterIsReceiver = reporterId.equals(receiverId);
+        if (!reporterIsReceiver && !reporterId.equals(donorId)) {
+            throw new BusinessException(ReportErrorCode.DISPUTE_NOT_A_PARTY);
+        }
+
+        Long respondentId = reporterIsReceiver ? donorId : receiverId;
+        int responseDays = disputeDays(ConfigKey.RESPONSE_WINDOW_DAYS);
+        Instant responseDueAt = Instant.now(clock).plus(Duration.ofDays(responseDays));
+        Report report = Report.createDispute(
+                reporterId,
+                requestId,
+                requestSnapshot.itemId(),
+                respondentId,
+                ReportReason.NO_SHOW,
+                note,
+                evidenceService.attach(evidenceMediaIds, reporterId),
+                responseDueAt);
+        Report saved = reportRepository.save(report);
+
+        if (notificationService != null) {
+            String issue = reporterIsReceiver ? "chưa nhận được đồ" : "chưa giao được đồ";
+            notificationService.notify(
+                    respondentId,
+                    "DISPUTE_OPENED",
+                    "Đối phương báo " + issue,
+                    "Đối phương báo " + issue + " dù bạn đã xác nhận bàn giao. Bạn có " + responseDays
+                            + " ngày để giải trình.",
+                    "/me/disputes/" + saved.getId());
+        }
+    }
+
     /** Giao dịch đã có report nào chưa (FR-87: job tự hoàn tất chỉ xử lý giao dịch không có report). */
     @Transactional(readOnly = true)
     public boolean hasReportForRequest(Long requestId) {
@@ -522,6 +580,12 @@ public class ReportService {
                         logPayload,
                         note != null ? note : "Chấp thuận báo cáo" + about + ", xử phạt trừ 1 sao uy tín");
             }
+        }
+
+        // Khiếu nại mở từ handover-issue đưa giao dịch vào DISPUTED; kết luận xong phải đưa nó ra. Giao dịch không ở
+        // DISPUTED (khiếu nại mở sau COMPLETED, báo cáo bài/người) thì RequestService bỏ qua.
+        if (requestService != null && report.getTargetType() == TargetType.REQUEST && report.getRequestId() != null) {
+            requestService.resolveDisputedRequest(report.getRequestId(), decision == ReportDecision.UPHOLD);
         }
 
         Report saved = reportRepository.save(report);

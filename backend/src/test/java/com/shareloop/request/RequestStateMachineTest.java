@@ -23,7 +23,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 /**
  * Unit test kiểm thử toàn diện máy trạng thái Request entity (ERD 5.1, Hình 21; Spike S8; Issue #127).
  * Kiểm tra:
- * 1. Từng mũi tên hợp lệ (13 test độc lập với các domain methods tương ứng).
+ * 1. Từng mũi tên hợp lệ (14 test độc lập với các domain methods tương ứng).
  * 2. Mọi chuyển trạng thái không hợp lệ trong ma trận đều ném BusinessException(REQUEST_INVALID_STATE_TRANSITION).
  * 3. Các quy tắc nghiệp vụ ràng buộc trạng thái: BR-T05 (khoá lịch sau khi đã chốt), BR-R01, waiver khi shipping, v.v.
  * 4. Các kịch bản vòng đời hoàn chỉnh (End-to-End Lifecycle Flows).
@@ -42,6 +42,7 @@ class RequestStateMachineTest {
             "LOGISTICS_CONFIRMED->CANCELLED",
             "AWAITING_HANDOVER->COMPLETED",
             "AWAITING_HANDOVER->DISPUTED",
+            "AWAITING_HANDOVER->CANCELLED",
             "DISPUTED->COMPLETED",
             "DISPUTED->CANCELLED");
 
@@ -329,6 +330,16 @@ class RequestStateMachineTest {
         }
 
         @Test
+        @DisplayName("Mũi tên 14: AWAITING_HANDOVER -> CANCELLED (Huỷ giao dịch khi một bên đã xác nhận giao nhận)")
+        void awaitingHandoverToCancelled() {
+            Request request = createRequest(RequestStatus.AWAITING_HANDOVER);
+
+            request.cancel("Huỷ giao dịch");
+
+            assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        }
+
+        @Test
         @DisplayName("Mũi tên 12: DISPUTED -> COMPLETED (Admin xử lý khiếu nại công nhận giao dịch thành công)")
         void disputedToCompleted() {
             Request request = createRequest(RequestStatus.DISPUTED);
@@ -410,13 +421,10 @@ class RequestStateMachineTest {
         }
 
         @Test
-        @DisplayName("cancel() khi ở AWAITING_HANDOVER, COMPLETED, REJECTED, CANCELLED đều ném lỗi")
+        @DisplayName("cancel() khi ở COMPLETED, REJECTED, CANCELLED đều ném lỗi")
         void cancel_whenNotAllowed_throwsException() {
-            List<RequestStatus> cannotCancelStatuses = List.of(
-                    RequestStatus.AWAITING_HANDOVER,
-                    RequestStatus.COMPLETED,
-                    RequestStatus.REJECTED,
-                    RequestStatus.CANCELLED);
+            List<RequestStatus> cannotCancelStatuses =
+                    List.of(RequestStatus.COMPLETED, RequestStatus.REJECTED, RequestStatus.CANCELLED);
 
             for (RequestStatus status : cannotCancelStatuses) {
                 Request request = createRequest(status);

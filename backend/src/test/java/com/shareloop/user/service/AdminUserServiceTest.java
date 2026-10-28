@@ -4,28 +4,41 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.shareloop.audit.service.ActivityLogQueryService;
 import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.user.UserErrorCode;
+import com.shareloop.user.event.UserLockedEvent;
+import com.shareloop.user.event.UserUnlockedEvent;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 
 class AdminUserServiceTest {
 
     private final UserService userService = mock(UserService.class);
     private final ActivityLogService activityLogService = mock(ActivityLogService.class);
+    private final ActivityLogQueryService activityLogQueryService = mock(ActivityLogQueryService.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
     private AdminUserService adminUserService;
 
     @BeforeEach
     void setUp() {
-        adminUserService = new AdminUserService(userService, activityLogService);
+        adminUserService =
+                new AdminUserService(userService, activityLogService, activityLogQueryService, eventPublisher);
     }
 
     @Test
@@ -38,7 +51,44 @@ class AdminUserServiceTest {
         adminUserService.lock(adminId, targetUserId, reason);
 
         verify(userService).lock(targetUserId, reason);
-        verify(activityLogService).log("USER_LOCK", adminId, "USER", targetUserId, (String) null, reason);
+        verify(eventPublisher).publishEvent(any(UserLockedEvent.class));
+        verify(activityLogService)
+                .log(
+                        "USER_LOCK",
+                        adminId,
+                        "USER",
+                        targetUserId,
+                        Map.<String, Object>of(
+                                "cancelledRequests", 0, "releasedCredit", 0L, "hiddenItemIds", List.of()),
+                        reason);
+    }
+
+    @Test
+    @DisplayName("Khoá user: số giao dịch đã huỷ và Credit đã nhả do listener cộng vào được ghi vào nhật ký")
+    void lock_whenListenersCleanUp_logsCleanupTotals() {
+        // given
+        doAnswer(invocation -> {
+                    UserLockedEvent event = invocation.getArgument(0);
+                    event.cleanup().addCancelledRequests(2);
+                    event.cleanup().addReleasedCredit(15);
+                    return null;
+                })
+                .when(eventPublisher)
+                .publishEvent(any(UserLockedEvent.class));
+
+        // when
+        adminUserService.lock(1L, 10L, "Vi phạm");
+
+        // then
+        verify(activityLogService)
+                .log(
+                        "USER_LOCK",
+                        1L,
+                        "USER",
+                        10L,
+                        Map.<String, Object>of(
+                                "cancelledRequests", 2, "releasedCredit", 15L, "hiddenItemIds", List.of()),
+                        "Vi phạm");
     }
 
     @Test
@@ -85,7 +135,26 @@ class AdminUserServiceTest {
         adminUserService.unlock(adminId, targetUserId, reason);
 
         verify(userService).unlock(targetUserId);
-        verify(activityLogService).log("USER_UNLOCK", adminId, "USER", targetUserId, (String) null, reason);
+        verify(activityLogService)
+                .log("USER_UNLOCK", adminId, "USER", targetUserId, Map.<String, Object>of("restoredItems", 0), reason);
+    }
+
+    @Test
+    @DisplayName("Mở khoá: hiện lại đúng các bài đã ẩn lúc khoá, đọc id từ nhật ký USER_LOCK")
+    void unlock_restoresItemsHiddenAtLockTime() {
+        // given: id lưu trong JSON có thể đọc ra Integer hoặc Long
+        when(activityLogQueryService.findLatestData("USER_LOCK", 10L))
+                .thenReturn(Optional.of(Map.of("hiddenItemIds", List.of(5, 6L))));
+
+        // when
+        adminUserService.unlock(1L, 10L, "Đã giải trình");
+
+        // then
+        ArgumentCaptor<UserUnlockedEvent> captor = ArgumentCaptor.forClass(UserUnlockedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().hiddenItemIds()).containsExactly(5L, 6L);
+        verify(activityLogService)
+                .log("USER_UNLOCK", 1L, "USER", 10L, Map.<String, Object>of("restoredItems", 2), "Đã giải trình");
     }
 
     @Test

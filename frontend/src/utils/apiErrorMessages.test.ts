@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { moderationBlockedMessage, reputationBlockedMessage } from './apiErrorMessages';
+import {
+  chatImageForbiddenMessage,
+  giveLimitMessage,
+  moderationBlockedMessage,
+  reputationBlockedMessage,
+} from './apiErrorMessages';
 
 describe('reputationBlockedMessage', () => {
   it('trả câu dễ hiểu cho lỗi đăng và sửa bài khi 0 sao', () => {
@@ -43,5 +48,32 @@ describe('moderationBlockedMessage', () => {
 
   it('dùng câu chung khi không có reasonCode', () => {
     expect(moderationBlockedMessage({ details: undefined })).toContain('quy định của ShareLoop');
+  });
+});
+
+describe('chatImageForbiddenMessage', () => {
+  it('trả câu dễ hiểu khi người nhận đồ Cho tặng gửi ảnh', () => {
+    expect(chatImageForbiddenMessage('CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN')).toContain('không gửi ảnh');
+  });
+
+  it('trả null với lỗi khác', () => {
+    expect(chatImageForbiddenMessage('CHAT_MESSAGE_BLOCKED')).toBeNull();
+    expect(chatImageForbiddenMessage(undefined)).toBeNull();
+  });
+});
+
+describe('giveLimitMessage', () => {
+  it('nêu hạn mức khi backend trả details.limit', () => {
+    const message = giveLimitMessage({ code: 'ITEM_GIVE_LIMIT_REACHED', details: { limit: 5, activeCount: 5 } });
+    expect(message).toContain('tối đa 5 bài');
+    expect(message).not.toContain('ITEM_GIVE_LIMIT_REACHED');
+  });
+
+  it('vẫn có câu khi thiếu details', () => {
+    expect(giveLimitMessage({ code: 'ITEM_GIVE_LIMIT_REACHED' })).toContain('Cho tặng');
+  });
+
+  it('trả null với lỗi khác', () => {
+    expect(giveLimitMessage({ code: 'ITEM_ACTIVE_LIMIT_REACHED' })).toBeNull();
   });
 });

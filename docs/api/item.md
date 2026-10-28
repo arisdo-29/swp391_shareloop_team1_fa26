@@ -84,7 +84,8 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
   - `400 ITEM_DEFECT_NOTE_REQUIRED`: Đồ DEFECTIVE nhưng thiếu mô tả lỗi.
   - `400 ITEM_INVALID_IMAGE`: `images[]` chứa URL không phải URL trả về từ `POST /api/v1/media`.
   - `422 ITEM_INVALID_IMAGE_COUNT` (`field: images`): Có ít hơn 3 hoặc nhiều hơn 8 ảnh.
-  - `409 ITEM_ACTIVE_LIMIT_REACHED` (`details.limit`, `details.activeCount`): Đã đạt hạn mức bài đang hiển thị hoặc chờ duyệt; thông báo nêu hạn mức hiện tại.
+  - `409 ITEM_ACTIVE_LIMIT_REACHED` (`details.limit`, `details.activeCount`): Bài Trao đổi (`SWAP`) đã đạt hạn mức theo hạng (`max_active_items_*`: Đồng 5, Bạc 8, Vàng 15, Kim cương -1 là không giới hạn); chỉ đếm bài `SWAP` đang hiển thị hoặc chờ duyệt. Thông báo nêu hạn mức hiện tại.
+  - `409 ITEM_GIVE_LIMIT_REACHED` (`details.limit`, `details.activeCount`): Bài Cho tặng (`GIVE`) đã đạt hạn mức chung mọi hạng (`max_active_give_items`, mặc định 5); chỉ đếm bài `GIVE`. Tài khoản trong danh sách bỏ qua giới hạn của cấu hình test vẫn được bỏ qua cả hai hạn mức.
   - `422 ITEM_DEFECT_IMAGES_REQUIRED` (`field: defectImages`): Bài `DEFECTIVE` không có ảnh lỗi.
   - `422 ITEM_OPERATING_STATUS_REQUIRED` (`field: operatingStatus`): Đồ điện tử chưa khai trạng thái hoạt động.
   - `422 ITEM_DEFECT_IMAGES_NOT_ALLOWED` / `ITEM_OPERATING_STATUS_NOT_ALLOWED`: Gửi dữ liệu dành cho điều kiện hoặc danh mục khác.
@@ -138,6 +139,26 @@ Xem danh sách tất cả các bài đăng do chính mình tạo (sắp xếp m�
 - **Thành công:** `200 OK`, mảng `ItemResponse` (mảng rỗng nếu chưa đăng bài nào).
 - **Lỗi:**
   - `401 UNAUTHORIZED`: Chưa đăng nhập.
+
+---
+
+## 3b. GET /api/v1/me/posting-quota
+
+Hạn mức đăng bài hiện tại cho trang Đăng tin (cần đăng nhập). Cho tặng và Trao đổi đếm riêng, chỉ tính bài `PENDING_REVIEW` và `APPROVED` đang hiển thị.
+
+- **Thành công:** `200 OK`
+
+```json
+{
+  "give": { "active": 2, "limit": 5 },
+  "swap": { "active": 9, "limit": 15 },
+  "rank": "GOLD"
+}
+```
+
+- `limit = -1` nghĩa là không giới hạn (hạng Kim cương với Trao đổi, hoặc tài khoản được bỏ qua giới hạn).
+- `rank`: `BRONZE`, `SILVER`, `GOLD`, `DIAMOND`.
+- **Lỗi:** `401` khi chưa đăng nhập.
 
 ---
 
@@ -224,7 +245,8 @@ Với danh sách, hai trường này được đọc bằng một query cho cả
 | `ITEM_DEFECT_NOTE_REQUIRED` | 400 | Bài đăng có tình trạng DEFECTIVE nhưng thiếu mô tả lỗi |
 | `ITEM_INVALID_IMAGE` | 400 | URL ảnh không phải URL do API media trả về |
 | `ITEM_INVALID_IMAGE_COUNT` | 422 | `images` có ít hơn 3 hoặc nhiều hơn 8 phần tử |
-| `ITEM_ACTIVE_LIMIT_REACHED` | 409 | Đã đạt hạn mức bài active theo hạng; thông báo nêu hạn mức |
+| `ITEM_ACTIVE_LIMIT_REACHED` | 409 | Bài Trao đổi đã đạt hạn mức theo hạng; thông báo nêu hạn mức |
+| `ITEM_GIVE_LIMIT_REACHED` | 409 | Bài Cho tặng đã đạt hạn mức chung (`max_active_give_items`); có `details.limit`, `details.activeCount` |
 | `ITEM_DEFECT_IMAGES_REQUIRED` | 422 | Bài `DEFECTIVE` thiếu ảnh lỗi |
 | `ITEM_DEFECT_IMAGES_NOT_ALLOWED` | 422 | Bài không `DEFECTIVE` lại gửi ảnh lỗi |
 | `ITEM_OPERATING_STATUS_REQUIRED` | 422 | Bài điện tử thiếu trạng thái hoạt động |

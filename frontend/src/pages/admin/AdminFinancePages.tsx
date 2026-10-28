@@ -6,6 +6,7 @@ import { adminAuditApi, type ActivityLogResponse } from '../../services/adminAud
 import type { ApiError } from '../../services/http';
 import { formatVnd } from '../../utils/formatting';
 import { walletTransactionLabels } from '../../utils/creditHistory';
+import { AdminTodoCards } from './AdminTodoCards';
 
 const CashByDayChart = lazy(() =>
   import('./FinanceCharts').then((module) => ({ default: module.CashByDayChart })),
@@ -32,13 +33,6 @@ function downloadBlob(blob: Blob, fileName: string) {
   anchor.remove();
   URL.revokeObjectURL(url);
 }
-const dashboardActions = [
-  { to: '/admin/moderation', label: 'Duyệt bài' },
-  { to: '/admin/finance', label: 'Báo cáo tài chính' },
-  { to: '/admin/users', label: 'Quản lý tài khoản' },
-  { to: '/admin/checklist', label: 'Checklist duyệt bài' },
-  { to: '/admin/audit-logs', label: 'Nhật ký hoạt động' },
-] as const;
 
 function activityTone(type: string) {
   const normalizedType = type.toUpperCase();
@@ -81,17 +75,20 @@ export function AdminOperationsDashboard() {
     return () => { active = false; };
   }, [reload]);
   const metrics = report ? [
-    { label: 'Tiền thu', value: formatVnd(report.cashAmountVnd), tone: 'border-primary' },
-    { label: 'Credit cộng', value: report.creditInTotal.toLocaleString('vi-VN'), tone: 'border-success' },
-    { label: 'Credit trừ', value: report.creditOutTotal.toLocaleString('vi-VN'), tone: 'border-secondary' },
+    { label: 'Tiền thu', value: formatVnd(report.cashAmountVnd), tone: 'border-l-primary' },
+    { label: 'Credit cộng', value: report.creditInTotal.toLocaleString('vi-VN'), tone: 'border-l-success' },
+    { label: 'Credit trừ', value: report.creditOutTotal.toLocaleString('vi-VN'), tone: 'border-l-secondary' },
   ] : [];
 
   return <>
     <PageHeader
-      title="Tổng quan vận hành"
-      description="Theo dõi nhanh số liệu tài chính và những hoạt động mới nhất trên ShareLoop."
+      title="Tổng quan"
+      description="Việc đang chờ, số liệu tài chính và thao tác quản trị gần đây."
     />
-    <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_18rem] xl:items-start">
+    <div className="mb-6">
+      <AdminTodoCards />
+    </div>
+    <div className="grid min-w-0 gap-6">
       <div className="min-w-0 space-y-6">
         {reportError ? (
           <Alert tone="error">
@@ -166,21 +163,6 @@ export function AdminOperationsDashboard() {
         </section>
       </div>
 
-      <aside className="rounded-xl border border-border/80 bg-white p-4 shadow-sm sm:p-5 xl:sticky xl:top-6">
-        <h2 className="text-base font-bold text-text-primary">Thao tác nhanh</h2>
-        <p className="mt-1 text-sm leading-6 text-text-muted">Truy cập các công cụ quản trị thường dùng.</p>
-        <nav aria-label="Thao tác nhanh" className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-          {dashboardActions.map((action) => (
-            <Link
-              key={action.to}
-              to={action.to}
-              className="flex min-h-11 min-w-0 items-center rounded-lg border border-border/70 px-3.5 py-3 text-sm font-semibold text-text-secondary transition hover:border-primary/30 hover:bg-primary-faint hover:text-primary"
-            >
-              {action.label}
-            </Link>
-          ))}
-        </nav>
-      </aside>
     </div>
   </>;
 }

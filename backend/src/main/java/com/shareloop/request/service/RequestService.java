@@ -1,5 +1,7 @@
 package com.shareloop.request.service;
 
+import com.shareloop.audit.ActivityType;
+import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.dto.ItemCardDto;
@@ -12,9 +14,11 @@ import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.RequestErrorCode;
+import com.shareloop.request.dto.CancelTransactionRequest;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.HandoverConfirmRequest;
+import com.shareloop.request.dto.HandoverIssueRequest;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestItemInfo;
@@ -24,6 +28,7 @@ import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestMediaMapping;
 import com.shareloop.request.entity.RequestStatus;
+import com.shareloop.request.event.HandoverIssueReportedEvent;
 import com.shareloop.request.event.NotAsDescribedReportedEvent;
 import com.shareloop.request.mapper.RequestMapper;
 import com.shareloop.request.repository.RequestMediaRepository;
@@ -34,6 +39,7 @@ import com.shareloop.user.dto.ContactInfo;
 import com.shareloop.user.service.UserService;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,6 +64,22 @@ public class RequestService {
             RequestStatus.AWAITING_HANDOVER,
             RequestStatus.DISPUTED);
 
+    // Các trạng thái mà một trong hai bên được tự huỷ giao dịch đã chọn người
+    private static final Set<RequestStatus> CANCELLABLE_TRANSACTION_STATUSES = Set.of(
+            RequestStatus.RESERVED,
+            RequestStatus.AWAITING_LOGISTICS,
+            RequestStatus.LOGISTICS_CONFIRMED,
+            RequestStatus.AWAITING_HANDOVER);
+
+    // Giao dịch đang mở bị huỷ khi khoá tài khoản (DISPUTED để Admin phân xử nên không nằm trong danh sách)
+    private static final Set<RequestStatus> LOCK_CANCEL_STATUSES = Set.of(
+            RequestStatus.PENDING,
+            RequestStatus.RESERVED,
+            RequestStatus.AWAITING_LOGISTICS,
+            RequestStatus.LOGISTICS_CONFIRMED,
+            RequestStatus.AWAITING_HANDOVER);
+    private static final String LOCKED_ACCOUNT_REASON = "Tài khoản bị khoá";
+
     private final RequestRepository requestRepository;
     private final NotificationService notificationService;
     private final ConfigService configService;
@@ -69,6 +91,7 @@ public class RequestService {
     private final MediaService mediaService;
     private final RequestMediaRepository requestMediaRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final ActivityLogService activityLogService;
 
     @Autowired
     public RequestService(
@@ -82,7 +105,8 @@ public class RequestService {
             @Autowired(required = false) JdbcClient jdbcClient,
             @Autowired(required = false) MediaService mediaService,
             @Autowired(required = false) RequestMediaRepository requestMediaRepository,
-            @Autowired(required = false) ApplicationEventPublisher eventPublisher) {
+            @Autowired(required = false) ApplicationEventPublisher eventPublisher,
+            @Autowired(required = false) ActivityLogService activityLogService) {
         this.requestRepository = requestRepository;
         this.notificationService = notificationService;
         this.configService = configService;
@@ -94,6 +118,7 @@ public class RequestService {
         this.mediaService = mediaService;
         this.requestMediaRepository = requestMediaRepository;
         this.eventPublisher = eventPublisher;
+        this.activityLogService = activityLogService;
     }
 
     public RequestService(
@@ -116,6 +141,7 @@ public class RequestService {
                 jdbcClient,
                 null,
                 null,
+                null,
                 null);
     }
 
@@ -135,6 +161,7 @@ public class RequestService {
                 userService,
                 null,
                 jdbcClient,
+                null,
                 null,
                 null,
                 null);
@@ -268,7 +295,7 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
         }
 
-        request.cancel("Người gửi tự huỷ yêu cầu");
+        request.cancel(Request.CANCEL_BY_RECEIVER + "Người gửi tự huỷ yêu cầu");
         Request saved = requestRepository.save(request);
 
         // Thông báo cho chủ bài đăng biết yêu cầu đã bị huỷ
@@ -337,7 +364,8 @@ public class RequestService {
                     selectedRequest.getOfferedItemId(), RequestStatus.PENDING);
             for (Request otherSwap : otherSwapRequests) {
                 if (!otherSwap.getId().equals(selectedRequest.getId())) {
-                    otherSwap.cancel("Món đồ bạn đề nghị đã được đem trao đổi trong một giao dịch khác.");
+                    otherSwap.cancel(Request.CANCEL_BY_SYSTEM
+                            + "Món đồ bạn đề nghị đã được đem trao đổi trong một giao dịch khác.");
                     requestRepository.save(otherSwap);
                     notificationService.notify(
                             otherSwap.getReceiverId(),
@@ -349,8 +377,12 @@ public class RequestService {
             }
         }
 
-        // 3. Giữ chỗ bài đăng qua ItemService.reserve
+        // 3. Giữ chỗ bài đăng qua ItemService.reserve. Món mang đổi cũng bị giữ trong cùng transaction: nếu nó không
+        // còn APPROVED thì reserve ném lỗi và cả lần chọn người nhận được hoàn tác.
         itemService.reserve(selectedRequest.getItemId());
+        if (selectedRequest.getOfferedItemId() != null) {
+            itemService.reserve(selectedRequest.getOfferedItemId());
+        }
 
         // 4. Bắn thông báo cho người nhận được chọn
         notificationService.notify(
@@ -361,6 +393,249 @@ public class RequestService {
                 "/requests/" + selectedRequest.getId());
 
         return toResponse(saved);
+    }
+
+    /**
+     * Chủ bài hoặc người nhận huỷ giao dịch sau khi đã chọn người, khi còn ở RESERVED, AWAITING_LOGISTICS,
+     * LOGISTICS_CONFIRMED hoặc AWAITING_HANDOVER. Bài chính và món mang đổi được nhả về APPROVED để mở lại cho người
+     * khác; phí đăng không bị tính lại vì bài không qua duyệt lần nữa.
+     *
+     * @param requestId id của giao dịch
+     * @param currentUserId id người huỷ (phải là chủ bài hoặc người nhận)
+     * @param requestDto lý do huỷ, 5 đến 500 ký tự
+     * @return RequestResponse sau khi huỷ
+     * @throws BusinessException REQUEST_NOT_FOUND, REQUEST_FORBIDDEN khi không phải một trong hai bên,
+     *     REQUEST_INVALID_STATE_TRANSITION khi trạng thái không cho huỷ
+     */
+    @Transactional
+    public RequestResponse cancelTransaction(long requestId, long currentUserId, CancelTransactionRequest requestDto) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+        ItemSnapshot item = findItemSnapshot(request.getItemId())
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+
+        boolean isDonor = item.donorId() == currentUserId;
+        boolean isReceiver = request.getReceiverId() == currentUserId;
+        if (!isDonor && !isReceiver) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+        // DISPUTED vẫn có cạnh sang CANCELLED nhưng chỉ Admin phân xử mới được đi, nên chặn riêng ở đây
+        if (!CANCELLABLE_TRANSACTION_STATUSES.contains(request.getStatus())) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+
+        String reason = requestDto.reason().trim();
+        String prefix = isDonor ? Request.CANCEL_BY_DONOR : Request.CANCEL_BY_RECEIVER;
+        request.cancel(prefix + reason);
+        Request saved = requestRepository.save(request);
+
+        releaseReservedItems(saved);
+
+        long otherUserId = isDonor ? saved.getReceiverId() : item.donorId();
+        notificationService.notify(
+                otherUserId,
+                "TRANSACTION_CANCELLED",
+                "Giao dịch đã bị huỷ",
+                "Đối phương đã huỷ giao dịch. Lý do: " + reason,
+                "/requests/" + saved.getId());
+
+        if (activityLogService != null) {
+            activityLogService.log(
+                    ActivityType.REQUEST_CANCEL.name(),
+                    currentUserId,
+                    "REQUEST",
+                    saved.getId(),
+                    (String) null,
+                    prefix + reason);
+        }
+
+        return toResponse(saved);
+    }
+
+    /**
+     * Một bên báo "chưa nhận được" / "chưa giao được" khi bên kia đã xác nhận bàn giao còn mình thì chưa.
+     *
+     * <p>Request chuyển AWAITING_HANDOVER sang DISPUTED và mở khiếu nại NO_SHOW qua event cho module report. Giao dịch
+     * DISPUTED không bị job tự xác nhận hoàn tất vì job chỉ xử lý AWAITING_HANDOVER.
+     *
+     * @throws BusinessException REQUEST_NOT_FOUND, REQUEST_FORBIDDEN khi không phải một trong hai bên,
+     *     REQUEST_INVALID_STATE_TRANSITION khi sai trạng thái hoặc sai điều kiện xác nhận bàn giao
+     */
+    @Transactional
+    public RequestResponse reportHandoverIssue(long requestId, long currentUserId, HandoverIssueRequest requestDto) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+        ItemSnapshot item = findItemSnapshot(request.getItemId())
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+
+        boolean isDonor = item.donorId() == currentUserId;
+        boolean isReceiver = request.getReceiverId() == currentUserId;
+        if (!isDonor && !isReceiver) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+
+        request.openHandoverIssue(isDonor);
+        Request saved = requestRepository.save(request);
+
+        // Listener của module report chạy ngay trong transaction này để report và DISPUTED cùng thành công hoặc cùng
+        // rollback.
+        eventPublisher.publishEvent(new HandoverIssueReportedEvent(
+                requestId, currentUserId, requestDto.note().trim(), requestDto.evidenceMediaIds()));
+
+        return toResponse(saved);
+    }
+
+    /**
+     * Đưa giao dịch DISPUTED ra khỏi trạng thái tranh chấp khi Admin kết luận khiếu nại. Giao dịch không ở DISPUTED
+     * (ví dụ khiếu nại mở sau khi đã COMPLETED) thì bỏ qua, không làm gì.
+     *
+     * <p>Chấp nhận khiếu nại: CANCELLED, nhả cả hai món về APPROVED. Bác bỏ: COMPLETED như một lần hoàn tất bình
+     * thường (hai món sang TRADED, cộng điểm uy tín). Cả hai bên đều được thông báo kết quả.
+     *
+     * @param requestId giao dịch của khiếu nại
+     * @param upheld true nếu Admin chấp nhận khiếu nại, false nếu bác bỏ
+     * @return true nếu giao dịch đã được xử lý
+     */
+    @Transactional
+    public boolean resolveDisputedRequest(long requestId, boolean upheld) {
+        Request request = requestRepository.findById(requestId).orElse(null);
+        if (request == null || request.getStatus() != RequestStatus.DISPUTED) {
+            return false;
+        }
+
+        String message;
+        if (upheld) {
+            request.cancel(Request.CANCEL_BY_SYSTEM + "Admin chấp nhận khiếu nại, giao dịch bị huỷ");
+            requestRepository.save(request);
+            itemService.releaseIfReserved(request.getItemId());
+            if (request.getOfferedItemId() != null) {
+                itemService.releaseIfReserved(request.getOfferedItemId());
+            }
+            message = "Admin đã chấp nhận khiếu nại: giao dịch bị huỷ và bài đăng được mở lại.";
+        } else {
+            request.completeAfterDispute(Instant.now());
+            requestRepository.save(request);
+            itemService.markTraded(request.getItemId());
+            if (request.getOfferedItemId() != null) {
+                itemService.markTraded(request.getOfferedItemId());
+            }
+            if (reputationService != null) {
+                reputationService.onCompleted(request.getId());
+            }
+            message = "Admin đã bác bỏ khiếu nại: giao dịch được công nhận hoàn tất.";
+        }
+
+        notifyBothParties(request, upheld ? "TRANSACTION_CANCELLED" : "TRANSACTION_COMPLETED", message);
+        return true;
+    }
+
+    private void notifyBothParties(Request request, String type, String message) {
+        String link = "/requests/" + request.getId();
+        notificationService.notify(request.getReceiverId(), type, "Kết quả khiếu nại giao dịch", message, link);
+        findItemSnapshot(request.getItemId())
+                .ifPresent(item ->
+                        notificationService.notify(item.donorId(), type, "Kết quả khiếu nại giao dịch", message, link));
+    }
+
+    /**
+     * Huỷ mọi giao dịch đang mở (PENDING, RESERVED, AWAITING_LOGISTICS, LOGISTICS_CONFIRMED, AWAITING_HANDOVER) của một
+     * tài khoản vừa bị khoá, dù họ là chủ bài hay người nhận. Bài và món mang đổi được nhả về APPROVED, bên còn lại được
+     * thông báo. Dùng releaseIfReserved cho cả hai món để dữ liệu lệch không làm hỏng việc khoá tài khoản.
+     *
+     * @param lockedUserId tài khoản bị khoá
+     * @return số giao dịch đã huỷ
+     */
+    @Transactional
+    public int cancelOpenRequestsOfLockedUser(long lockedUserId) {
+        Map<Long, Request> openRequests = new LinkedHashMap<>();
+        for (Request request : requestRepository.findByReceiverIdAndStatusIn(lockedUserId, LOCK_CANCEL_STATUSES)) {
+            openRequests.put(request.getId(), request);
+        }
+        List<Long> ownItemIds = itemQueryService.findItemIdsByDonor(lockedUserId);
+        if (!ownItemIds.isEmpty()) {
+            for (Request request : requestRepository.findByItemIdInAndStatusIn(ownItemIds, LOCK_CANCEL_STATUSES)) {
+                openRequests.put(request.getId(), request);
+            }
+        }
+
+        for (Request request : openRequests.values()) {
+            cancelBecauseUserLocked(request, lockedUserId);
+        }
+        return openRequests.size();
+    }
+
+    private void cancelBecauseUserLocked(Request request, long lockedUserId) {
+        boolean wasPending = request.getStatus() == RequestStatus.PENDING;
+        request.cancel(Request.CANCEL_BY_SYSTEM + LOCKED_ACCOUNT_REASON);
+        requestRepository.save(request);
+
+        // Yêu cầu PENDING chưa giữ chỗ món nào nên không có gì để nhả
+        if (!wasPending) {
+            itemService.releaseIfReserved(request.getItemId());
+            if (request.getOfferedItemId() != null) {
+                itemService.releaseIfReserved(request.getOfferedItemId());
+            }
+        }
+
+        long donorId =
+                findItemSnapshot(request.getItemId()).map(ItemSnapshot::donorId).orElse(lockedUserId);
+        long otherUserId = donorId == lockedUserId ? request.getReceiverId() : donorId;
+        if (otherUserId == lockedUserId) {
+            return;
+        }
+        notificationService.notify(
+                otherUserId,
+                "TRANSACTION_CANCELLED",
+                "Giao dịch đã bị huỷ",
+                "Giao dịch đã bị huỷ vì tài khoản của đối phương đã bị khoá.",
+                "/requests/" + request.getId());
+    }
+
+    /**
+     * Admin huỷ giao dịch đang mở hoặc đang DISPUTED (thường là giao dịch kẹt). Cùng cách huỷ như
+     * {@link #cancelTransaction}: nhả bài chính và món mang đổi về APPROVED, nhưng thông báo cả hai bên và ghi
+     * activity log với người thực hiện là Admin.
+     *
+     * @throws BusinessException REQUEST_NOT_FOUND, REQUEST_INVALID_STATE_TRANSITION khi giao dịch đã kết thúc hoặc
+     *     chưa được chọn người
+     */
+    @Transactional
+    public RequestResponse cancelByAdmin(long requestId, long adminId, CancelTransactionRequest requestDto) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+        boolean cancellable = CANCELLABLE_TRANSACTION_STATUSES.contains(request.getStatus())
+                || request.getStatus() == RequestStatus.DISPUTED;
+        if (!cancellable) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+
+        String reason = requestDto.reason().trim();
+        request.cancel(Request.CANCEL_BY_ADMIN + reason);
+        Request saved = requestRepository.save(request);
+        releaseReservedItems(saved);
+
+        notifyBothParties(saved, "TRANSACTION_CANCELLED", "Admin đã huỷ giao dịch. Lý do: " + reason);
+        if (activityLogService != null) {
+            activityLogService.log(
+                    ActivityType.REQUEST_CANCEL.name(),
+                    adminId,
+                    "REQUEST",
+                    saved.getId(),
+                    (String) null,
+                    Request.CANCEL_BY_ADMIN + reason);
+        }
+        return toResponse(saved);
+    }
+
+    // Nhả bài chính về APPROVED. Món mang đổi dùng releaseIfReserved vì giao dịch SWAP cũ có thể chưa giữ chỗ nó.
+    private void releaseReservedItems(Request request) {
+        itemService.release(request.getItemId());
+        if (request.getOfferedItemId() != null) {
+            itemService.releaseIfReserved(request.getOfferedItemId());
+        }
     }
 
     /**
@@ -783,7 +1058,8 @@ public class RequestService {
                 request.getReceiverId(),
                 item.donorId(),
                 request.getItemId(),
-                request.getOfferedItemId());
+                request.getOfferedItemId(),
+                request.getType());
     }
 
     // Phản hồi của các thao tác (tạo, huỷ, chọn, chốt lịch...) cũng kèm tên người xin và tên món đồ, để giao diện

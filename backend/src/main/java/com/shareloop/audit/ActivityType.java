@@ -10,6 +10,7 @@ public enum ActivityType {
     CONFIG_UPDATE("Sửa cấu hình"),
     USER_LOCK("Khoá tài khoản"),
     USER_UNLOCK("Mở khoá tài khoản"),
+    REQUEST_CANCEL("Huỷ giao dịch"),
     REPORT_DISMISSED("Bác bỏ báo cáo"),
     REPORT_UPHELD("Chấp nhận báo cáo"),
     POINTS("Cộng điểm"),

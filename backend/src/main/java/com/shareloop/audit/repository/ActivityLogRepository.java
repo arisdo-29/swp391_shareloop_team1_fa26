@@ -12,4 +12,7 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long>,
     long countByType(String type);
 
     List<ActivityLog> findByType(String type);
+
+    // Dòng nhật ký mới nhất của một loại hành động trên một đối tượng, dùng để đọc lại dữ liệu lúc khoá tài khoản
+    java.util.Optional<ActivityLog> findFirstByTypeAndTargetIdOrderByIdDesc(String type, Long targetId);
 }
