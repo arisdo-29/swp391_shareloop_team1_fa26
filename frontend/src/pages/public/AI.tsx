@@ -203,7 +203,7 @@ export function AI() {
         </div>
         {quota ? (
           <p className="text-xs leading-5 text-text-muted">
-            Mỗi lần tìm hoặc chuyển trang dùng một lượt. Hết lượt miễn phí, mỗi lượt tốn {quota.feeCredits} Credit. Nếu hệ thống chuyển sang tìm kiếm thường, lượt và phí được hoàn lại.
+            Mỗi lần tìm hoặc chuyển trang có kết quả dùng một lượt. Hết lượt miễn phí, mỗi lượt có kết quả tốn {quota.feeCredits} Credit. Tìm kiếm thường hoặc không có kết quả không tính phí.
           </p>
         ) : null}
       </section>
@@ -271,14 +271,14 @@ export function AI() {
                   <Button variant="outline" disabled={page + 1 >= totalPages} onClick={() => void search(submittedQuery, page + 1)}>
                     Trang sau
                   </Button>
-                  <span className="w-full text-center text-xs text-text-muted">Chuyển trang dùng thêm 1 lượt.</span>
+                  <span className="w-full text-center text-xs text-text-muted">Chuyển trang có kết quả dùng thêm 1 lượt.</span>
                 </div>
               ) : null}
             </>
           ) : (
             <EmptyState
               title="Chưa tìm thấy món phù hợp"
-              text="Hãy thử mô tả rộng hơn, đổi khu vực hoặc bỏ bớt yêu cầu về tình trạng."
+              text="Không tìm thấy món phù hợp – lượt này không tính phí. Hãy thử mô tả rộng hơn, đổi khu vực hoặc bỏ bớt yêu cầu về tình trạng."
             />
           )}
         </section>

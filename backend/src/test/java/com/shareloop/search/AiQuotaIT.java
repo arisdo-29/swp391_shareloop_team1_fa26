@@ -14,10 +14,10 @@ import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.integration.ai.AiResponse;
 import com.shareloop.integration.ai.AiSearchClient;
+import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.search.dto.AiSearchResponse;
 import com.shareloop.search.service.AiQuotaService;
-import com.shareloop.search.service.AiQuotaService.Reservation;
 import com.shareloop.search.service.AiSearchService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
@@ -63,45 +63,36 @@ class AiQuotaIT extends IntegrationTest {
     }
 
     @Test
-    void trialIsOnceUntilTopUpAndRefundRestoresIt() {
+    void trialIsConsumedOnlyWhenSearchHasResults() {
         assertThat(quotaService.getQuota(userId).freeUsesRemaining()).isEqualTo(1);
-        Reservation trial = quotaService.reserve(userId);
-        assertThat(trial.paid()).isFalse();
-        assertThat(quotaService.getQuota(userId).freeUsesRemaining()).isZero();
-        quotaService.refund(userId, trial);
+        quotaService.checkAvailable(userId);
         assertThat(quotaService.getQuota(userId).freeUsesRemaining()).isEqualTo(1);
-        quotaService.reserve(userId);
+        assertThat(quotaService.consume(userId)).isFalse();
         assertThat(quotaService.getQuota(userId).freeUsesRemaining()).isZero();
     }
 
     @Test
-    void toppedUpUserGetsFivePerDayThenPaysAndRefundsExactCharge() {
+    void toppedUpUserGetsFivePerDayThenPaysOnce() {
         jdbc.sql("UPDATE users SET has_topped_up = true, credit_balance = 10 WHERE id = :id")
                 .param("id", userId)
                 .update();
         assertThat(quotaService.getQuota(userId).freeUsesRemaining()).isEqualTo(5);
         for (int i = 0; i < 5; i++) {
-            assertThat(quotaService.reserve(userId).paid()).isFalse();
+            assertThat(quotaService.consume(userId)).isFalse();
         }
         assertThat(quotaService.getQuota(userId).freeUsesRemaining()).isZero();
-        Reservation paid = quotaService.reserve(userId);
-        assertThat(paid.paid()).isTrue();
+        quotaService.checkAvailable(userId);
+        assertThat(quotaService.consume(userId)).isTrue();
         assertThat(jdbc.sql("SELECT credit_balance FROM users WHERE id = :id")
                         .param("id", userId)
                         .query(Long.class)
                         .single())
                 .isEqualTo(8);
-        quotaService.refund(userId, paid);
-        assertThat(jdbc.sql("SELECT credit_balance FROM users WHERE id = :id")
-                        .param("id", userId)
-                        .query(Long.class)
-                        .single())
-                .isEqualTo(10);
         assertThat(jdbc.sql("SELECT count(*) FROM credit_ledger WHERE user_id = :id AND type = 'AI_SEARCH_FEE'")
                         .param("id", userId)
                         .query(Long.class)
                         .single())
-                .isEqualTo(2);
+                .isEqualTo(1);
     }
 
     @Test
@@ -125,7 +116,9 @@ class AiQuotaIT extends IntegrationTest {
         when(configService.getInt(ConfigKey.AI_SEARCH_TIMEOUT_SECONDS)).thenReturn(15);
         when(configService.getInt(ConfigKey.AI_SEARCH_FEE)).thenReturn(2);
         when(itemService.searchApprovedForAi(null, null, "sách", null, null, 0, 20))
-                .thenReturn(new PageResponse<>(List.of(), 0, 20, 0));
+                .thenReturn(
+                        new PageResponse<>(List.of(), 0, 20, 0),
+                        new PageResponse<>(List.of(mock(ItemResponse.class)), 0, 20, 1));
         AiSearchService searchService = new AiSearchService(
                 aiClient,
                 categoryService,
@@ -135,6 +128,15 @@ class AiQuotaIT extends IntegrationTest {
                 quotaService,
                 mock(ActivityLogService.class),
                 new JsonMapper());
+
+        AiSearchResponse empty = searchService.search(userId, "sách", 0, 20);
+        assertThat(empty.results().totalElements()).isZero();
+        assertThat(empty.quota().freeUsesRemaining()).isEqualTo(5);
+        assertThat(jdbc.sql("SELECT count(*) FROM credit_ledger WHERE user_id = :id")
+                        .param("id", userId)
+                        .query(Long.class)
+                        .single())
+                .isZero();
 
         for (int remaining = 4; remaining >= 0; remaining--) {
             AiSearchResponse response = searchService.search(userId, "sách", 0, 20);
@@ -160,9 +162,9 @@ class AiQuotaIT extends IntegrationTest {
                 .update();
         assertThat(quotaService.getQuota(userId).freeUsesRemaining()).isEqualTo(5);
         for (int i = 0; i < 5; i++) {
-            quotaService.reserve(userId);
+            quotaService.consume(userId);
         }
-        assertThatThrownBy(() -> quotaService.reserve(userId))
+        assertThatThrownBy(() -> quotaService.checkAvailable(userId))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(error -> assertThat(((BusinessException) error).getErrorCode())
                         .isEqualTo(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE));
