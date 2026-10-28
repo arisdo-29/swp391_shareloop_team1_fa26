@@ -181,7 +181,7 @@ Báo cáo một bài đăng hoặc một người dùng vi phạm quy tắc cộ
   - Cơ chế tự động bảo vệ (BR-A03, FR-49, Issue #151): Khi một bài đăng có đủ `report_hide_threshold` báo cáo (mặc định **3**, Admin sửa được qua cấu hình) **đang chờ xử lý**, hệ thống tự ẩn bài (`itemService.hide(itemId)`).
     - Chỉ đếm báo cáo `targetType = ITEM` ở trạng thái `OPEN` hoặc `AWAITING_RESPONSE`; báo cáo đã `DISMISSED` hoặc `RESOLVED` không tính.
     - Ẩn bài nghĩa là `is_active = false`, **giữ nguyên `status`** (ERD mục F16). Hàng chờ xử lý là trang khiếu nại của Admin (`GET /api/v1/admin/reports`), nơi các báo cáo `OPEN` đã nằm sẵn.
-    - Đúng lúc bài vừa chạm ngưỡng, mọi Admin nhận một thông báo `type = ITEM_AUTO_HIDDEN`, `link = /admin/complaints`. Báo cáo sau đó vào bài đã ẩn không gửi lại thông báo.
+    - Đúng lúc bài vừa chạm ngưỡng, mọi Admin nhận một thông báo `type = ITEM_AUTO_HIDDEN`, `link = /admin/complaints`. Chủ bài cũng nhận một thông báo `type = ITEM_AUTO_HIDDEN`, nội dung `Bài «{tên bài}» đang tạm ẩn do có nhiều báo cáo. Admin sẽ xem xét và báo kết quả.`, `link = /activities` (U04). Báo cáo sau đó vào bài đã ẩn không gửi lại thông báo.
 
 - **Request Body:**
 

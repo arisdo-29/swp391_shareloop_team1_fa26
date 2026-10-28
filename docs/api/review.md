@@ -8,11 +8,12 @@ Tất cả các endpoint trong module này yêu cầu quyền **ADMIN** (Bearer 
 
 Lấy trang bài đăng đang chờ duyệt (`PENDING_REVIEW`) kèm danh sách điều kiện đạt `checklist` hiện hành, chỉ gồm mục active theo `sort_order`, rồi `id`.
 
-### Thứ tự ưu tiên sắp xếp:
-1. Bài có cờ kiểm duyệt `moderationFlag = 'REVIEW'` đứng trước bài không có cờ.
-2. Người đăng có uy tín (`trust_stars`) thấp hơn đứng trước (ưu tiên soát tài khoản rủi ro cao).
-3. Tài khoản người đăng mới hơn đứng trước.
-4. Bài đăng chờ lâu hơn đứng trước; trường `id` dùng để phá hòa ổn định.
+### Thứ tự ưu tiên sắp xếp (BR-A08, SRS v11 — không còn xét cờ AI):
+1. Người đăng có uy tín (`trust_stars`) thấp hơn đứng trước (ưu tiên soát tài khoản rủi ro cao).
+2. Tài khoản người đăng mới hơn đứng trước.
+3. Bài đăng chờ lâu hơn đứng trước; trường `id` dùng để phá hòa ổn định.
+
+Các trường `aiRisk`, `moderationFlag`, `flagReason` vẫn có trong response để tương thích, nhưng không ảnh hưởng thứ tự. Khi AI sàng lọc tắt (`item_ai_screening_enabled = false`), `aiRisk` luôn là `UNCHECKED`; `moderationFlag`/`matchedTerms` chỉ còn đến từ từ khoá mức REVIEW của tầng 1.
 
 ### Query Parameters
 | Tham số | Kiểu | Mặc định | Giới hạn | Mô tả |

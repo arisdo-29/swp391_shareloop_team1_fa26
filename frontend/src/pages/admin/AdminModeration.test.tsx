@@ -147,6 +147,41 @@ describe('AdminModerationList', () => {
     }
   });
 
+  it('SRS v11: không còn cột rủi ro AI và không hiện cờ do AI gắn, cờ từ khoá tầng 1 vẫn hiện', async () => {
+    vi.mocked(adminModerationApi.pendingReviews).mockResolvedValue({
+      items: [
+        ...queueItems,
+        {
+          id: 44,
+          donorId: 11,
+          donorName: 'Lê Văn C',
+          title: 'Điện thoại cũ',
+          aiRisk: 'HIGH',
+          moderationFlag: 'REVIEW',
+          flagReason: 'AI nghi có số điện thoại trong ảnh',
+          flagReasonCode: 'AI nghi có số điện thoại trong ảnh',
+          matchedTerms: [],
+          donorTrustStars: 5,
+          createdAt: '2026-10-16T10:00:00Z',
+        },
+      ],
+      checklist,
+      page: 0,
+      size: 100,
+    });
+    render(
+      <MemoryRouter>
+        <AdminModerationList />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Điện thoại cũ');
+    expect(screen.queryByRole('columnheader', { name: 'Rủi ro' })).toBeNull();
+    expect(screen.queryByText('AI nghi có số điện thoại trong ảnh')).toBeNull();
+    expect(screen.getAllByText('Cần xem kỹ')).toHaveLength(1);
+    expect(screen.getByText('Có từ khoá cần xem xét: zalo')).toBeTruthy();
+  });
+
   it('lấy ảnh đầu tiên từ chi tiết khi response hàng chờ không có thumbnail', async () => {
     vi.mocked(adminModerationApi.pendingReviews).mockResolvedValue({
       items: [{ ...queueItems[0], thumbnailUrl: null }],
@@ -290,6 +325,24 @@ describe('AdminModerationDetail', () => {
     }
     expect(screen.getByText('Ảnh là ảnh thật của đúng món đồ')).toBeTruthy();
     expect(screen.queryByText(/Không thể đọc chi tiết/)).toBeNull();
+    expect(screen.queryByText('Mức rủi ro')).toBeNull();
+  });
+
+  it('SRS v11: bài chỉ có cờ AI thì trang chi tiết ghi "Không có cờ" và không hiện lý do AI', async () => {
+    vi.mocked(adminModerationApi.detail).mockResolvedValue(
+      detail({
+        aiRisk: 'HIGH',
+        flagReasonCode: 'AI nghi có số điện thoại trong ảnh',
+        flagReason: 'AI nghi có số điện thoại trong ảnh',
+        matchedTerms: [],
+      }),
+    );
+    renderDetail();
+
+    await screen.findByRole('heading', { name: 'Áo khoác gió nam' });
+    expect(screen.getByText('Không có cờ')).toBeTruthy();
+    expect(screen.queryByText('AI nghi có số điện thoại trong ảnh')).toBeNull();
+    expect(screen.queryByText('Cần xem kỹ')).toBeNull();
   });
 
   it('chỉ cho duyệt khi tích đủ checklist rồi quay về danh sách với thông báo', async () => {

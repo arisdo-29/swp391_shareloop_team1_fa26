@@ -110,6 +110,9 @@ export interface Item {
   postedAt: string;
   expiresAt?: string;
   boostedUntil?: string;
+  // Bài đang tạm ẩn (is_active = false), chỉ chủ bài và Admin thấy.
+  hidden?: boolean;
+  hiddenReason?: string;
   donorName?: string;
   donorTrustStars?: number;
   donorRank?: string;

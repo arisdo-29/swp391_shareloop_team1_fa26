@@ -51,6 +51,9 @@ public final class ItemMapper {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 null);
     }
 }

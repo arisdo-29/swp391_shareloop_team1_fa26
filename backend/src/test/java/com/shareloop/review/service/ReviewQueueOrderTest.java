@@ -15,8 +15,8 @@ class ReviewQueueOrderTest {
     private final Instant now = Instant.parse("2026-10-17T10:00:00Z");
 
     @Test
-    @DisplayName("Bài có cờ REVIEW đứng trước bài không có cờ, dù bài không cờ có người đăng rủi ro hơn và chờ lâu hơn")
-    void flaggedBeforeUnflaggedEvenIfUnflaggedHasLowerTrustStars() {
+    @DisplayName("SRS v11: cờ AI không còn ưu tiên, người đăng ít sao hơn đứng trước dù bài kia có cờ REVIEW")
+    void flagNoLongerJumpsTheQueue_lowerTrustStarsFirst() {
         ReviewQueueItem unflaggedRisky = new ReviewQueueItem(
                 1L,
                 10L,
@@ -45,7 +45,7 @@ class ReviewQueueOrderTest {
         List<ReviewQueueItem> items = new ArrayList<>(List.of(unflaggedRisky, flaggedTrusted));
         items.sort(ReviewQueueItem.QUEUE_ORDER);
 
-        assertThat(items).containsExactly(flaggedTrusted, unflaggedRisky);
+        assertThat(items).containsExactly(unflaggedRisky, flaggedTrusted);
     }
 
     @Test

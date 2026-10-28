@@ -595,6 +595,51 @@ class ItemServiceTest {
     }
 
     @Test
+    @DisplayName("U04: chủ bài xem bài bị tự ẩn thấy hidden = true")
+    void getItem_hiddenApprovedItem_owner_seesHiddenFlag() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        item.deactivate();
+        ReflectionTestUtils.setField(item, "id", 1L);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        ItemResponse response = itemService.getItem(1L, 10L);
+
+        assertThat(response.status()).isEqualTo(ItemStatus.APPROVED);
+        assertThat(response.hidden()).isTrue();
+        assertThat(response.hiddenReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("U04: người khác xem bài công khai không nhận trường hidden")
+    void getItem_approved_public_hasNoHiddenFlag() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        ReflectionTestUtils.setField(item, "id", 1L);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        assertThat(itemService.getItem(1L, 99L).hidden()).isNull();
+        assertThat(itemService.getItem(1L, null).hidden()).isNull();
+    }
+
+    @Test
+    @DisplayName("U04: danh sách bài của tôi đánh dấu bài đang tạm ẩn")
+    void listMyItems_marksHiddenItems() {
+        Item visible = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách 1", "Mô tả", null, ItemCondition.NEW, null, null);
+        Item hidden = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách 2", "Mô tả", null, ItemCondition.NEW, null, null);
+        visible.approve();
+        hidden.approve();
+        hidden.deactivate();
+        ReflectionTestUtils.setField(visible, "id", 1L);
+        ReflectionTestUtils.setField(hidden, "id", 2L);
+        when(itemRepository.findByDonorIdOrderByCreatedAtDesc(10L)).thenReturn(List.of(visible, hidden));
+
+        List<ItemResponse> responses = itemService.listMyItems(10L);
+
+        assertThat(responses).extracting(ItemResponse::hidden).containsExactly(false, true);
+    }
+
+    @Test
     @DisplayName("Xem bài không tồn tại ném lỗi ITEM_NOT_FOUND")
     void getItem_notFound_throwsNotFound() {
         when(itemRepository.findById(999L)).thenReturn(Optional.empty());
