@@ -6,9 +6,8 @@ import type { ApiError } from '../../services/http';
 import { adminErrorMessage } from './adminErrors';
 import {
   conditionLabels,
-  displayFlag,
   displayModerationNote,
-  displayRisk,
+  displayRuleFlag,
   offerTypeLabels,
   operatingStatusLabels,
 } from './moderationDisplay';
@@ -241,9 +240,8 @@ function ItemFacts({ detail }: { detail: ReviewItemDetail }) {
 }
 
 function DonorAndModeration({ detail }: { detail: ReviewItemDetail }) {
-  const flag = displayFlag(detail.moderationFlag);
+  const flag = displayRuleFlag(detail);
   const note = displayModerationNote(detail);
-  const risk = displayRisk(detail.aiRisk);
   return (
     <>
       <Section title="Người đăng">
@@ -257,7 +255,6 @@ function DonorAndModeration({ detail }: { detail: ReviewItemDetail }) {
       </Section>
       <Section title="Kết quả kiểm duyệt tự động">
         <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-          <Fact label="Mức rủi ro" value={risk || NO_DATA} />
           <Fact label="Cờ kiểm duyệt" value={flag || 'Không có cờ'} />
         </dl>
         {note && note !== flag ? (

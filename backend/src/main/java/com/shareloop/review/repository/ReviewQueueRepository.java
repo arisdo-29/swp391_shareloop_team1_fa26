@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface ReviewQueueRepository extends Repository<com.shareloop.item.entity.Item, Long> {
 
+    // BR-A08 (SRS v11): không xét cờ AI nữa. Ít sao uy tín trước, rồi tài khoản mới, rồi bài chờ lâu.
     @Query(value = """
             SELECT i.id AS id,
                    i.donor_id AS donorId,
@@ -24,9 +25,7 @@ public interface ReviewQueueRepository extends Repository<com.shareloop.item.ent
             WHERE i.status = 'PENDING_REVIEW'
               AND i.is_deleted = FALSE
               AND u.is_deleted = FALSE
-            ORDER BY CASE WHEN COALESCE(i.ai_result ->> 'flag', i.ai_result ->> 'moderation') = 'REVIEW'
-                          THEN 0 ELSE 1 END,
-                     u.trust_stars ASC,
+            ORDER BY u.trust_stars ASC,
                      u.created_at DESC,
                      i.created_at ASC,
                      i.id ASC
