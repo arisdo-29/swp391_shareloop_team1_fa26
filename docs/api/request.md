@@ -7,6 +7,31 @@ Người sở hữu: BE3 (@dwargon73-sketch).
 
 ---
 
+## Vòng đời trạng thái (14 cạnh hợp lệ)
+
+Mọi đổi trạng thái đi qua `RequestStatus.canTransition`; cạnh không có trong bảng trả `409 REQUEST_INVALID_STATE_TRANSITION`.
+
+| Từ | Sang | Khi nào |
+|---|---|---|
+| `PENDING` | `RESERVED` | Chủ bài chọn người nhận |
+| `PENDING` | `REJECTED` | Chủ bài chọn người khác |
+| `PENDING` | `CANCELLED` | Người nhận tự huỷ, job hết hạn, khoá tài khoản |
+| `RESERVED` | `AWAITING_LOGISTICS` | Có người đề xuất lịch hẹn |
+| `RESERVED` | `CANCELLED` | Huỷ giao dịch, job quá 10 ngày chưa chốt lịch, khoá tài khoản |
+| `AWAITING_LOGISTICS` | `LOGISTICS_CONFIRMED` | Hai bên chốt lịch |
+| `AWAITING_LOGISTICS` | `CANCELLED` | Như `RESERVED` |
+| `LOGISTICS_CONFIRMED` | `AWAITING_HANDOVER` | Một bên xác nhận bàn giao |
+| `LOGISTICS_CONFIRMED` | `CANCELLED` | Huỷ giao dịch, khoá tài khoản |
+| `AWAITING_HANDOVER` | `COMPLETED` | Bên còn lại xác nhận, hoặc job tự xác nhận sau `AUTO_CONFIRM_DAYS` |
+| `AWAITING_HANDOVER` | `DISPUTED` | `POST /requests/{id}/handover-issue` |
+| `AWAITING_HANDOVER` | `CANCELLED` | Huỷ giao dịch, khoá tài khoản |
+| `DISPUTED` | `COMPLETED` | Admin bác bỏ khiếu nại (`DISMISS`) |
+| `DISPUTED` | `CANCELLED` | Admin chấp nhận khiếu nại (`UPHOLD`), hoặc Admin huỷ giao dịch kẹt |
+
+`COMPLETED`, `REJECTED`, `CANCELLED` là trạng thái cuối. Không có cạnh `LOGISTICS_CONFIRMED -> DISPUTED`.
+
+---
+
 ## 1. POST /api/v1/items/{itemId}/requests
 
 Gửi yêu cầu xin đồ (với bài Give) hoặc đề nghị trao đổi đồ (với bài Swap) (F10 bước 1, UC-20).
