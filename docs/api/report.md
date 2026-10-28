@@ -245,10 +245,10 @@ Một trong hai bên tham gia giao dịch (người cho hoặc người nhận) 
   - Yêu cầu giao dịch phải tồn tại trong hệ thống (`404 REPORT_TARGET_NOT_FOUND`).
   - Người khiếu nại bắt buộc phải là một bên trong giao dịch (`donorId` hoặc `receiverId`); người ngoài không có quyền khiếu nại (`403 DISPUTE_NOT_A_PARTY`).
   - Giao dịch bắt buộc phải ở trạng thái đã hoàn thành `COMPLETED` (`409 DISPUTE_REQUEST_NOT_COMPLETED`).
-  - Cửa sổ khiếu nại: Khiếu nại phải được gửi trong vòng 7 ngày kể từ thời điểm giao dịch hoàn thành (`completedAt`). Quá 7 ngày sẽ bị từ chối (`422 DISPUTE_WINDOW_EXPIRED`). Số ngày được cấu hình qua `DISPUTE_WINDOW_DAYS` (mặc định 7 ngày).
+  - Cửa sổ khiếu nại: Khiếu nại phải được gửi trong vòng 24 giờ (1 ngày) kể từ thời điểm giao dịch hoàn thành (`completedAt`). Quá 24 giờ sẽ bị từ chối (`422 DISPUTE_WINDOW_EXPIRED`). Số ngày được cấu hình qua `complaint_window_days` (mặc định 1 ngày).
   - Mỗi người chỉ được khiếu nại giao dịch này một lần (`409 REPORT_ALREADY_REPORTED`).
   - Người khiếu nại có thể đính kèm danh sách ID media làm bằng chứng. Các media file phải tồn tại và thuộc quyền sở hữu của người gửi (`403 MEDIA_NOT_OWNER`, `404 MEDIA_NOT_FOUND`).
-  - Sau khi mở khiếu nại thành công, hệ thống mở cửa sổ 3 ngày cho bên bị khiếu nại gửi giải trình (`responseDueAt = now + 3 days`), cấu hình qua `DISPUTE_RESPONSE_DAYS` (mặc định 3 ngày). Trạng thái bản ghi là `AWAITING_RESPONSE`.
+  - Sau khi mở khiếu nại thành công, hệ thống mở cửa sổ 48 giờ (2 ngày) cho bên bị khiếu nại gửi giải trình (`responseDueAt = now + 48 hours`), cấu hình qua `response_window_days` (mặc định 2 ngày). Trạng thái bản ghi là `AWAITING_RESPONSE`.
   - Hệ thống gửi thông báo trong ứng dụng cho bên bị khiếu nại (`notificationService.notify`).
 
 - **Request Body:**
@@ -285,7 +285,7 @@ Một trong hai bên tham gia giao dịch (người cho hoặc người nhận) 
     - `DISPUTE_REQUEST_NOT_COMPLETED`: Giao dịch chưa chuyển sang trạng thái COMPLETED.
     - `REPORT_ALREADY_REPORTED`: Người dùng đã khiếu nại giao dịch này trước đó.
   - `422 UNPROCESSABLE_ENTITY`:
-    - `DISPUTE_WINDOW_EXPIRED`: Đã quá 7 ngày kể từ lúc giao dịch hoàn tất.
+    - `DISPUTE_WINDOW_EXPIRED`: Đã quá 24 giờ kể từ lúc giao dịch hoàn tất.
 
 ---
 
@@ -299,7 +299,7 @@ Bên bị khiếu nại gửi văn bản giải trình kèm bằng chứng đố
   - Chỉ bên bị khiếu nại (`respondent`) mới có quyền gửi giải trình (`403 DISPUTE_NOT_RESPONDENT`).
   - Khiếu nại chưa bị đóng hoặc đã được Admin kết luận (`409 DISPUTE_ALREADY_CONCLUDED`).
   - Bên bị khiếu nại chỉ được gửi giải trình đúng 1 lần (`409 DISPUTE_ALREADY_RESPONDED`).
-  - Giải trình phải được gửi trong vòng 3 ngày kể từ lúc khiếu nại được mở (`now <= responseDueAt`). Quá 3 ngày sẽ bị từ chối (`422 DISPUTE_RESPONSE_WINDOW_EXPIRED`).
+  - Giải trình phải được gửi trong vòng 48 giờ (2 ngày) kể từ lúc khiếu nại được mở (`now <= responseDueAt`). Quá 48 giờ sẽ bị từ chối (`422 DISPUTE_RESPONSE_WINDOW_EXPIRED`).
   - Có thể đính kèm danh sách ID media làm bằng chứng. Các media file phải tồn tại và thuộc quyền sở hữu của người giải trình.
 
 - **Request Body:**

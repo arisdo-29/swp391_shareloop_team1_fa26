@@ -76,6 +76,7 @@ export interface ItemResponse extends CreateItemRequest {
   donorTrustStars?: number | null;
   donorRank?: string | null;
   donorAsDescribedRate?: number | null;
+  donorLocked?: boolean | null;
   // Chỉ có khi chủ bài hoặc Admin xem; người khác nhận null (U04).
   hidden?: boolean | null;
   hiddenReason?: string | null;

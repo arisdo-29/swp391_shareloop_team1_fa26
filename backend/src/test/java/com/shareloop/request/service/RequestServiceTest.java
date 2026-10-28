@@ -93,6 +93,7 @@ class RequestServiceTest {
     void setUp() {
         lenient().when(configService.getInt(ConfigKey.MAX_PENDING_REQUESTS)).thenReturn(5);
         lenient().when(reputationService.canRequest(anyLong())).thenReturn(true);
+        lenient().when(userService.isLocked(anyLong())).thenReturn(false);
     }
 
     @Test
@@ -166,6 +167,54 @@ class RequestServiceTest {
         assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
+                });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi bài đăng bị ẩn (is_active = false)")
+    void createRequest_whenItemNotActive_throwsBusinessException() {
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.existsByItemIdAndReceiverIdAndStatusIn(eq(1L), eq(10L), anySet()))
+                .thenReturn(false);
+
+        doReturn(Optional.of(new RequestService.ItemSnapshot(99L, "GIVE", "APPROVED", false)))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
+                });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi chủ bài đăng đang bị khoá tài khoản")
+    void createRequest_whenDonorLocked_throwsBusinessException() {
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.existsByItemIdAndReceiverIdAndStatusIn(eq(1L), eq(10L), anySet()))
+                .thenReturn(false);
+
+        doReturn(Optional.of(new RequestService.ItemSnapshot(99L, "GIVE", "APPROVED", true)))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(userService.isLocked(99L)).thenReturn(true);
+
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
+                });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi chính người gửi yêu cầu bị khoá tài khoản")
+    void createRequest_whenReceiverLocked_throwsBusinessException() {
+        when(userService.isLocked(10L)).thenReturn(true);
+
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_REPUTATION_BLOCKED);
                 });
     }
 
@@ -397,6 +446,53 @@ class RequestServiceTest {
         assertThatThrownBy(() -> requestService.selectReceiver(101L, 20L))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+                });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi chọn người nhận đang bị khoá tài khoản")
+    void selectReceiver_whenReceiverLocked_throwsInvalidStateTransition() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED", true)))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(userService.isLocked(10L)).thenReturn(true);
+
+        assertThatThrownBy(() -> requestService.selectReceiver(101L, 20L))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+                });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi bài đăng đã bị ẩn mà chủ bài cố chọn người nhận")
+    void selectReceiver_whenItemNotActive_throwsItemNotAvailable() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED", false)))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        assertThatThrownBy(() -> requestService.selectReceiver(101L, 20L))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
+                });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi chủ bài đang bị khoá mà cố chọn người nhận")
+    void selectReceiver_whenDonorLocked_throwsForbidden() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED", true)))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(userService.isLocked(20L)).thenReturn(true);
+
+        assertThatThrownBy(() -> requestService.selectReceiver(101L, 20L))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_FORBIDDEN);
                 });
     }
 

@@ -35,14 +35,14 @@ public class DisputeController {
     }
 
     /**
-     * Một trong hai bên của giao dịch gửi khiếu nại trong vòng 7 ngày sau khi giao dịch Completed.
+     * Một trong hai bên của giao dịch gửi khiếu nại trong vòng 24 giờ sau khi giao dịch Completed (U08).
      */
     @Operation(
             summary = "Khiếu nại giao dịch đã hoàn thành",
             description =
                     "Một trong hai bên (người cho hoặc người nhận) của giao dịch đã Completed có thể gửi khiếu nại "
-                            + "trong vòng 7 ngày kể từ thời điểm hoàn tất. Bên bị khiếu nại sẽ có 3 ngày để giải trình kèm bằng chứng.")
-    @ApiResponse(responseCode = "201", description = "Ghi nhận khiếu nại thành công, mở cửa sổ 3 ngày giải trình")
+                            + "trong vòng 24 giờ kể từ thời điểm hoàn tất. Bên bị khiếu nại sẽ có 48 giờ để giải trình kèm bằng chứng.")
+    @ApiResponse(responseCode = "201", description = "Ghi nhận khiếu nại thành công, mở cửa sổ 48 giờ giải trình")
     @ApiResponse(responseCode = "400", description = "Dữ liệu yêu cầu không hợp lệ")
     @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
     @ApiResponse(responseCode = "403", description = "Người gọi không phải là một bên trong giao dịch này")
@@ -50,7 +50,7 @@ public class DisputeController {
     @ApiResponse(
             responseCode = "409",
             description = "Giao dịch chưa hoàn thành hoặc người dùng đã khiếu nại giao dịch này trước đó")
-    @ApiResponse(responseCode = "422", description = "Đã quá thời hạn 7 ngày sau Completed để gửi khiếu nại")
+    @ApiResponse(responseCode = "422", description = "Đã quá thời hạn 24 giờ sau Completed để gửi khiếu nại")
     @PostMapping("/requests/{requestId}/disputes")
     @ResponseStatus(HttpStatus.CREATED)
     public DisputeResponse open(
@@ -61,12 +61,12 @@ public class DisputeController {
     }
 
     /**
-     * Bên bị khiếu nại gửi giải trình kèm bằng chứng trong vòng 3 ngày kể từ lúc khiếu nại được mở.
+     * Bên bị khiếu nại gửi giải trình kèm bằng chứng trong vòng 48 giờ kể từ lúc khiếu nại được mở (U08).
      */
     @Operation(
             summary = "Giải trình khiếu nại giao dịch",
             description =
-                    "Chỉ bên bị khiếu nại mới có quyền gửi giải trình, trong thời hạn 3 ngày kể từ lúc khiếu nại được mở. "
+                    "Chỉ bên bị khiếu nại mới có quyền gửi giải trình, trong thời hạn 48 giờ kể từ lúc khiếu nại được mở. "
                             + "Có thể đính kèm danh sách ID media làm bằng chứng đối chất.")
     @ApiResponse(responseCode = "200", description = "Ghi nhận giải trình thành công")
     @ApiResponse(responseCode = "400", description = "Nội dung giải trình trống hoặc vượt quá 1000 ký tự")
@@ -74,7 +74,7 @@ public class DisputeController {
     @ApiResponse(responseCode = "403", description = "Người gọi không phải là bên bị khiếu nại")
     @ApiResponse(responseCode = "404", description = "Không tìm thấy khiếu nại giao dịch")
     @ApiResponse(responseCode = "409", description = "Đã gửi bản giải trình trước đó hoặc khiếu nại đã được kết luận")
-    @ApiResponse(responseCode = "422", description = "Đã quá thời hạn 3 ngày để gửi giải trình")
+    @ApiResponse(responseCode = "422", description = "Đã quá thời hạn 48 giờ để gửi giải trình")
     @PostMapping("/disputes/{disputeId}/response")
     @ResponseStatus(HttpStatus.OK)
     public void respond(

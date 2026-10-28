@@ -583,6 +583,18 @@ class ItemServiceTest {
     }
 
     @Test
+    void itemOfLockedDonorIsNotPublic() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(userService.isLocked(10L)).thenReturn(true);
+
+        assertThatThrownBy(() -> itemService.getItem(1L, null))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
+    }
+
+    @Test
     @DisplayName("U04: chủ bài xem bài bị tự ẩn thấy hidden = true")
     void getItem_hiddenApprovedItem_owner_seesHiddenFlag() {
         Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);

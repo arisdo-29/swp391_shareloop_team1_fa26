@@ -104,10 +104,10 @@ class ReportServiceTest {
         // Hạn khiếu nại và hạn giải trình đọc đúng ConfigKey (key viết thường mà trang Admin sửa)
         org.mockito.Mockito.lenient()
                 .when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_DAYS))
-                .thenReturn(7);
+                .thenReturn(1);
         org.mockito.Mockito.lenient()
                 .when(configService.getInt(ConfigKey.RESPONSE_WINDOW_DAYS))
-                .thenReturn(3);
+                .thenReturn(2);
         // Tên bài dùng trong câu chữ thông báo và ghi chú thay cho "#id"
         org.mockito.Mockito.lenient()
                 .when(itemQueryService.findTitles(any()))
@@ -465,15 +465,15 @@ class ReportServiceTest {
     // ==================== DISPUTE TESTS (#112) ====================
 
     @Test
-    @DisplayName("Mở khiếu nại giao dịch đã COMPLETED trong vòng 7 ngày: thành công và mở cửa sổ giải trình 3 ngày")
-    void openDispute_completedWithin7Days_success() {
+    @DisplayName("Mở khiếu nại giao dịch đã COMPLETED trong vòng 24 giờ: thành công và mở cửa sổ giải trình 48 giờ")
+    void openDispute_completedWithin24Hours_success() {
         Long receiverId = 10L;
         Long donorId = 20L;
         Long requestId = 100L;
         Long itemId = 200L;
 
         ReportService.RequestSnapshot snapshot = new ReportService.RequestSnapshot(
-                requestId, itemId, receiverId, "COMPLETED", BASE_TIME.minus(Duration.ofDays(2)));
+                requestId, itemId, receiverId, "COMPLETED", BASE_TIME.minus(Duration.ofHours(12)));
         doReturn(snapshot).when(reportService).findRequest(requestId);
 
         when(itemQueryService.getSummary(itemId))
@@ -493,7 +493,7 @@ class ReportServiceTest {
         DisputeResponse response = reportService.openDispute(receiverId, requestId, request);
 
         assertThat(response.id()).isEqualTo(1L);
-        assertThat(response.responseDueAt()).isEqualTo(BASE_TIME.plus(Duration.ofDays(3)));
+        assertThat(response.responseDueAt()).isEqualTo(BASE_TIME.plus(Duration.ofDays(2)));
 
         verify(evidenceService).attach(List.of(50L), receiverId);
         verify(notificationService)
@@ -501,7 +501,7 @@ class ReportServiceTest {
                         eq(donorId),
                         eq("DISPUTE_OPENED"),
                         eq("Giao dịch “Nồi cơm điện” bị khiếu nại"),
-                        eq("Giao dịch “Nồi cơm điện” đã bị đối tác khiếu nại. Bạn có 3 ngày để giải trình."),
+                        eq("Giao dịch “Nồi cơm điện” đã bị đối tác khiếu nại. Bạn có 48 giờ để giải trình."),
                         eq("/me/disputes/1"));
     }
 
@@ -529,14 +529,14 @@ class ReportServiceTest {
     }
 
     @Test
-    @DisplayName("Khiếu nại sau 7 ngày ném lỗi DISPUTE_WINDOW_EXPIRED (422)")
-    void openDispute_after7Days_throwsException() {
+    @DisplayName("Khiếu nại sau 24 giờ ném lỗi DISPUTE_WINDOW_EXPIRED (422)")
+    void openDispute_after24Hours_throwsException() {
         Long receiverId = 10L;
         Long donorId = 20L;
         Long requestId = 102L;
         Long itemId = 202L;
 
-        Instant completedAt = BASE_TIME.minus(Duration.ofDays(8));
+        Instant completedAt = BASE_TIME.minus(Duration.ofHours(25));
         ReportService.RequestSnapshot snapshot =
                 new ReportService.RequestSnapshot(requestId, itemId, receiverId, "COMPLETED", completedAt);
         doReturn(snapshot).when(reportService).findRequest(requestId);
@@ -602,8 +602,8 @@ class ReportServiceTest {
     }
 
     @Test
-    @DisplayName("Bên bị khiếu nại giải trình trong vòng 3 ngày kèm bằng chứng: thành công")
-    void respondDispute_within3Days_success() {
+    @DisplayName("Bên bị khiếu nại giải trình trong vòng 48 giờ kèm bằng chứng: thành công")
+    void respondDispute_within48Hours_success() {
         Long respondentId = 20L;
         Long disputeId = 1L;
 
@@ -615,7 +615,7 @@ class ReportServiceTest {
                 ReportReason.NOT_AS_DESCRIBED,
                 "Áo rách",
                 "[50]",
-                BASE_TIME.plus(Duration.ofDays(3)));
+                BASE_TIME.plus(Duration.ofDays(2)));
         ReflectionTestUtils.setField(dispute, "id", disputeId);
 
         when(reportRepository.findByIdForUpdate(disputeId)).thenReturn(Optional.of(dispute));
@@ -635,8 +635,8 @@ class ReportServiceTest {
     }
 
     @Test
-    @DisplayName("Giải trình sau 3 ngày hết hạn ném lỗi DISPUTE_RESPONSE_WINDOW_EXPIRED (422)")
-    void respondDispute_after3Days_throwsExpired() {
+    @DisplayName("Giải trình sau 48 giờ hết hạn ném lỗi DISPUTE_RESPONSE_WINDOW_EXPIRED (422)")
+    void respondDispute_after48Hours_throwsExpired() {
         Long respondentId = 20L;
         Long disputeId = 2L;
 

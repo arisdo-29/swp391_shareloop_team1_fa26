@@ -172,8 +172,11 @@ public class RequestService {
      */
     @Transactional
     public RequestResponse createRequest(long itemId, long receiverId, CreateRequest requestDto) {
-        // 0. Vô hiệu quyền gửi yêu cầu khi TrustStars về 0 (FR-92, BR-U05)
+        // 0. Vô hiệu quyền gửi yêu cầu khi TrustStars về 0 (FR-92, BR-U05) hoặc tài khoản bị khoá
         if (reputationService != null && !reputationService.canRequest(receiverId)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_REPUTATION_BLOCKED);
+        }
+        if (userService != null && userService.isLocked(receiverId)) {
             throw new BusinessException(RequestErrorCode.REQUEST_REPUTATION_BLOCKED);
         }
 
@@ -198,8 +201,13 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_SELF_OFFER_NOT_ALLOWED);
         }
 
-        // Bài phải ở trạng thái APPROVED
-        if (!"APPROVED".equals(targetItem.status())) {
+        // Bài phải ở trạng thái APPROVED và đang hoạt động (không bị ẩn)
+        if (!"APPROVED".equals(targetItem.status()) || !targetItem.isActive()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
+        }
+
+        // Không gửi yêu cầu tới bài của người dùng đang bị khoá tài khoản
+        if (userService != null && userService.isLocked(targetItem.donorId())) {
             throw new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
         }
 
@@ -213,8 +221,10 @@ public class RequestService {
             ItemSnapshot offeredItem = findItemSnapshot(offeredItemId)
                     .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
 
-            // Món đề nghị phải là của chính người gửi và đang APPROVED (BR-S01, BR-S03)
-            if (offeredItem.donorId() != receiverId || !"APPROVED".equals(offeredItem.status())) {
+            // Món đề nghị phải là của chính người gửi, đang APPROVED và đang hoạt động (BR-S01, BR-S03)
+            if (offeredItem.donorId() != receiverId
+                    || !"APPROVED".equals(offeredItem.status())
+                    || !offeredItem.isActive()) {
                 throw new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
             }
         }
@@ -248,15 +258,29 @@ public class RequestService {
 
         // Mọi yêu cầu trong danh sách cùng một bài nên tra thẻ bài đăng một lần rồi dùng lại.
         Map<Long, ItemCardDto> itemCards = new HashMap<>();
-        return requestRepository.findByItemIdOrderByCreatedAtDesc(itemId).stream()
+        List<Request> requests = requestRepository.findByItemIdOrderByCreatedAtDesc(itemId);
+        List<Long> requestIds = requests.stream().map(Request::getId).toList();
+        Map<Long, Instant> lastMessageMap = findLastMessageAtMap(requestIds);
+        return requests.stream()
                 .map(request -> {
                     String receiverName = findUserName(request.getReceiverId());
                     ReputationSummary rep = findReceiverReputation(request.getReceiverId());
                     Integer trustStars = rep != null ? rep.trustStars() : 5;
                     String rank = rep != null && rep.rank() != null ? rep.rank().name() : Rank.BRONZE.name();
                     Double asDescribedRate = rep != null ? rep.asDescribedRate() : null;
+                    Instant complaintDeadline = request.getCompletedAt() != null
+                            ? request.getCompletedAt().plus(java.time.Duration.ofHours(24))
+                            : null;
+                    Instant lastMessageAt = request.getId() != null ? lastMessageMap.get(request.getId()) : null;
                     return RequestMapper.toResponse(
-                            request, receiverName, trustStars, rank, asDescribedRate, findItemInfo(request, itemCards));
+                            request,
+                            receiverName,
+                            trustStars,
+                            rank,
+                            asDescribedRate,
+                            findItemInfo(request, itemCards),
+                            complaintDeadline,
+                            lastMessageAt);
                 })
                 .toList();
     }
@@ -267,14 +291,28 @@ public class RequestService {
     @Transactional(readOnly = true)
     public List<RequestResponse> listMyRequests(long currentUserId) {
         Map<Long, ItemCardDto> itemCards = new HashMap<>();
-        return requestRepository.findByReceiverIdOrderByCreatedAtDesc(currentUserId).stream()
-                .map(request -> RequestMapper.toResponse(
-                        request,
-                        findUserName(request.getReceiverId()),
-                        null,
-                        null,
-                        null,
-                        findItemInfo(request, itemCards)))
+        List<Request> requests = requestRepository.findByReceiverIdOrderByCreatedAtDesc(currentUserId);
+        List<Long> requestIds = requests.stream()
+                .map(Request::getId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        Map<Long, Instant> lastMessageMap = findLastMessageAtMap(requestIds);
+        return requests.stream()
+                .map(request -> {
+                    Instant complaintDeadline = request.getCompletedAt() != null
+                            ? request.getCompletedAt().plus(java.time.Duration.ofHours(24))
+                            : null;
+                    Instant lastMessageAt = request.getId() != null ? lastMessageMap.get(request.getId()) : null;
+                    return RequestMapper.toResponse(
+                            request,
+                            findUserName(request.getReceiverId()),
+                            null,
+                            null,
+                            null,
+                            findItemInfo(request, itemCards),
+                            complaintDeadline,
+                            lastMessageAt);
+                })
                 .toList();
     }
 
@@ -332,6 +370,18 @@ public class RequestService {
 
         if (item.donorId() != currentUserId) {
             throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+
+        if (userService != null && userService.isLocked(currentUserId)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+
+        if (!item.isActive()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
+        }
+
+        if (userService != null && userService.isLocked(selectedRequest.getReceiverId())) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
         }
 
         if (selectedRequest.getStatus() != RequestStatus.PENDING) {
@@ -658,15 +708,27 @@ public class RequestService {
 
         String receiverName = findUserName(request.getReceiverId());
         RequestItemInfo itemInfo = findItemInfo(request, new HashMap<>());
+        Instant complaintDeadline =
+                request.getCompletedAt() != null ? request.getCompletedAt().plus(java.time.Duration.ofHours(24)) : null;
+        Instant lastMessageAt = findLastMessageAt(request.getId());
         if (item.donorId() == currentUserId) {
             ReputationSummary rep = findReceiverReputation(request.getReceiverId());
             Integer trustStars = rep != null ? rep.trustStars() : 5;
             String rank = rep != null && rep.rank() != null ? rep.rank().name() : Rank.BRONZE.name();
             Double asDescribedRate = rep != null ? rep.asDescribedRate() : null;
-            return RequestMapper.toResponse(request, receiverName, trustStars, rank, asDescribedRate, itemInfo);
+            return RequestMapper.toResponse(
+                    request,
+                    receiverName,
+                    trustStars,
+                    rank,
+                    asDescribedRate,
+                    itemInfo,
+                    complaintDeadline,
+                    lastMessageAt);
         }
 
-        return RequestMapper.toResponse(request, receiverName, null, null, null, itemInfo);
+        return RequestMapper.toResponse(
+                request, receiverName, null, null, null, itemInfo, complaintDeadline, lastMessageAt);
     }
 
     /**
@@ -867,18 +929,18 @@ public class RequestService {
                 reputationService.onCompleted(targetRequestId);
             }
 
-            // 3. Gửi thông báo COMPLETED cho cả hai bên
+            // 3. Gửi thông báo COMPLETED cho cả hai bên (kèm nhắc nhở hạn khiếu nại 24h - U08)
             notificationService.notify(
                     currentUserId,
                     "TRANSACTION_COMPLETED",
                     "Giao dịch hoàn tất",
-                    "Giao dịch đã được hai bên xác nhận hoàn tất thành công.",
+                    "Giao dịch đã được hai bên xác nhận hoàn tất thành công. Bạn có 24 giờ để gửi khiếu nại nếu món đồ có vấn đề.",
                     "/requests/" + targetRequestId);
             notificationService.notify(
                     otherUserId,
                     "TRANSACTION_COMPLETED",
                     "Giao dịch hoàn tất",
-                    "Giao dịch đã được hai bên xác nhận hoàn tất thành công.",
+                    "Giao dịch đã được hai bên xác nhận hoàn tất thành công. Bạn có 24 giờ để gửi khiếu nại nếu món đồ có vấn đề.",
                     "/requests/" + targetRequestId);
         } else if (saved.getStatus() == RequestStatus.AWAITING_HANDOVER) {
             long targetRequestId = saved.getId() != null ? saved.getId() : requestId;
@@ -1065,13 +1127,19 @@ public class RequestService {
     // Phản hồi của các thao tác (tạo, huỷ, chọn, chốt lịch...) cũng kèm tên người xin và tên món đồ, để giao diện
     // không bị mất tên khi thay yêu cầu cũ bằng phản hồi mới.
     private RequestResponse toResponse(Request request) {
+        Instant complaintDeadline = request != null && request.getCompletedAt() != null
+                ? request.getCompletedAt().plus(java.time.Duration.ofHours(24))
+                : null;
+        Instant lastMessageAt = request != null ? findLastMessageAt(request.getId()) : null;
         return RequestMapper.toResponse(
                 request,
                 findUserName(request.getReceiverId()),
                 null,
                 null,
                 null,
-                findItemInfo(request, new HashMap<>()));
+                findItemInfo(request, new HashMap<>()),
+                complaintDeadline,
+                lastMessageAt);
     }
 
     // Tên món đồ, ảnh đầu tiên và tên chủ bài để giao diện hiện tên thay vì id. Cần vì GET /items/{id} chỉ cho xem
@@ -1150,7 +1218,8 @@ public class RequestService {
                     return Optional.of(new ItemSnapshot(
                             summary.donorId(),
                             summary.offerType() != null ? summary.offerType().name() : null,
-                            summary.status() != null ? summary.status().name() : null));
+                            summary.status() != null ? summary.status().name() : null,
+                            summary.active()));
                 }
             } catch (BusinessException e) {
                 if (e.getErrorCode() == ItemErrorCode.ITEM_NOT_FOUND) {
@@ -1161,14 +1230,68 @@ public class RequestService {
         }
         if (jdbcClient != null) {
             return jdbcClient
-                    .sql("SELECT donor_id, offer_type, status FROM items WHERE id = :id AND is_deleted = false")
+                    .sql(
+                            "SELECT donor_id, offer_type, status, is_active FROM items WHERE id = :id AND is_deleted = false")
                     .param("id", itemId)
                     .query((rs, rowNum) -> new ItemSnapshot(
-                            rs.getLong("donor_id"), rs.getString("offer_type"), rs.getString("status")))
+                            rs.getLong("donor_id"),
+                            rs.getString("offer_type"),
+                            rs.getString("status"),
+                            rs.getBoolean("is_active")))
                     .optional();
         }
         return Optional.empty();
     }
 
-    record ItemSnapshot(long donorId, String offerType, String status) {}
+    private Instant findLastMessageAt(Long requestId) {
+        if (jdbcClient == null || requestId == null) {
+            return null;
+        }
+        try {
+            return jdbcClient
+                    .sql("SELECT MAX(created_at) FROM messages WHERE request_id = :requestId")
+                    .param("requestId", requestId)
+                    .query(Instant.class)
+                    .optional()
+                    .orElse(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Map<Long, Instant> findLastMessageAtMap(List<Long> requestIds) {
+        if (jdbcClient == null || requestIds == null || requestIds.isEmpty()) {
+            return new HashMap<>();
+        }
+        List<Long> validIds =
+                requestIds.stream().filter(java.util.Objects::nonNull).toList();
+        if (validIds.isEmpty()) {
+            return new HashMap<>();
+        }
+        try {
+            Map<Long, Instant> map = new HashMap<>();
+            jdbcClient
+                    .sql(
+                            "SELECT request_id, MAX(created_at) AS last_message_at FROM messages WHERE request_id IN (:requestIds) GROUP BY request_id")
+                    .param("requestIds", validIds)
+                    .query((rs, rowNum) -> {
+                        long reqId = rs.getLong("request_id");
+                        java.sql.Timestamp ts = rs.getTimestamp("last_message_at");
+                        if (ts != null) {
+                            map.put(reqId, ts.toInstant());
+                        }
+                        return null;
+                    })
+                    .list();
+            return map;
+        } catch (Exception e) {
+            return new HashMap<>();
+        }
+    }
+
+    record ItemSnapshot(long donorId, String offerType, String status, boolean isActive) {
+        ItemSnapshot(long donorId, String offerType, String status) {
+            this(donorId, offerType, status, true);
+        }
+    }
 }

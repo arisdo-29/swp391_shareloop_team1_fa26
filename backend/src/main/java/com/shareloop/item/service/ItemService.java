@@ -294,7 +294,8 @@ public class ItemService {
         Item item = itemRepository.findById(id).orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
 
         boolean isOwner = currentUserId != null && currentUserId.equals(item.getDonorId());
-        if ((item.getStatus() == ItemStatus.APPROVED && item.isActive()) || isOwner) {
+        boolean donorLocked = userService.isLocked(item.getDonorId());
+        if ((item.getStatus() == ItemStatus.APPROVED && item.isActive() && !donorLocked) || isOwner) {
             var donor = userService.findBriefs(List.of(item.getDonorId())).get(item.getDonorId());
             var reputation = reputationService.getReputationSummary(item.getDonorId());
             ItemResponse response = toResponse(item, findDisplayWindow(item.getId()))
@@ -302,7 +303,8 @@ public class ItemService {
                             donor == null ? null : donor.fullName(),
                             reputation.trustStars(),
                             reputation.rank().name(),
-                            reputation.asDescribedRate());
+                            reputation.asDescribedRate(),
+                            donorLocked);
             // U04: chỉ chủ bài biết bài đang tạm ẩn; người khác nhận hidden = null.
             return isOwner ? withHiddenState(response, item) : response;
         }

@@ -150,8 +150,10 @@ export function ProductDetail() {
     );
 
   const own = user?.id === item.ownerId;
+  const isDonorLocked = Boolean(item.donorLocked);
   const activeListing =
     (item.status === 'approved' || item.status === 'APPROVED') &&
+    !isDonorLocked &&
     (!item.expiresAt || new Date(item.expiresAt).getTime() >= Date.now());
   const existingRequest = user
     ? apiSentRequests.find(
@@ -371,7 +373,11 @@ export function ProductDetail() {
           ) : !activeListing ? (
             <>
               <h2 className="text-lg font-bold">Bài không còn nhận yêu cầu</h2>
-              <p className="text-sm leading-6 text-text-secondary">Món này đã có người nhận, hết hạn hoặc đang chờ duyệt.</p>
+              <p className="text-sm leading-6 text-text-secondary">
+                {isDonorLocked
+                  ? 'Tài khoản người đăng hiện đang bị tạm khóa nên bài đăng không nhận yêu cầu mới.'
+                  : 'Món này đã có người nhận, hết hạn hoặc đang chờ duyệt.'}
+              </p>
               <Link to="/browse">
                 <Button variant="outline" className="w-full">Tìm món khác</Button>
               </Link>

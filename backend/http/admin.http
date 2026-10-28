@@ -5,3 +5,8 @@
 GET {{host}}/api/v1/admin/configs
 Authorization: Bearer {{adminToken}}
 Accept: application/json
+
+### Cảnh báo bất thường: Cặp giao dịch lặp (FR-113, BR-U08)
+GET {{host}}/api/v1/admin/anomalies
+Authorization: Bearer {{adminToken}}
+Accept: application/json

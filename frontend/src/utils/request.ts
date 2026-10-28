@@ -16,6 +16,18 @@ export function canChat(status: ItemRequestStatus) {
   return ['RESERVED', 'AWAITING_LOGISTICS', 'LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER', 'COMPLETED', 'DISPUTED'].includes(status);
 }
 
+export function canViewChat(status: ItemRequestStatus) {
+  return [
+    'RESERVED',
+    'AWAITING_LOGISTICS',
+    'LOGISTICS_CONFIRMED',
+    'AWAITING_HANDOVER',
+    'COMPLETED',
+    'DISPUTED',
+    'CANCELLED',
+  ].includes(status);
+}
+
 export function canSchedule(status: ItemRequestStatus) {
   return status === 'RESERVED' || status === 'AWAITING_LOGISTICS';
 }
@@ -52,3 +64,27 @@ export function canSelectPendingRequest(
   if (itemOwnerId !== currentUserId || status !== 'PENDING') return false;
   return !siblingStatuses.some((siblingStatus) => selectedRequestStatuses.includes(siblingStatus));
 }
+
+export function isRequestUnread(lastMessageAt?: string | null, requestId?: number): boolean {
+  if (!lastMessageAt || !requestId) return false;
+  try {
+    const seen = localStorage.getItem(`shareloop_last_seen_chat_${requestId}`);
+    if (!seen) return true;
+    return new Date(lastMessageAt).getTime() > new Date(seen).getTime();
+  } catch {
+    return false;
+  }
+}
+
+export function markRequestChatSeen(requestId?: number): void {
+  if (!requestId) return;
+  try {
+    localStorage.setItem(`shareloop_last_seen_chat_${requestId}`, new Date().toISOString());
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('shareloop_chat_seen', { detail: { requestId } }));
+    }
+  } catch {
+    /* Storage may be blocked or unavailable. */
+  }
+}
+

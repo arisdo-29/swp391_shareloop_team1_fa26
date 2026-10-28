@@ -422,6 +422,20 @@ class ChatServiceTest {
         }
 
         @Test
+        @DisplayName("Ném lỗi CHAT_REQUEST_NOT_RESERVED khi gửi tin nhắn trong giao dịch đã huỷ CANCELLED (U07)")
+        void sendMessage_throwsWhenRequestCancelled() {
+            RequestChatContext context =
+                    new RequestChatContext(REQUEST_ID, RequestStatus.CANCELLED, RECEIVER_ID, DONOR_ID);
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(context);
+
+            SendMessageRequest req = new SendMessageRequest("Tin nhắn mới");
+            assertThatThrownBy(() -> chatService.sendMessage(REQUEST_ID, RECEIVER_ID, req))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                            .isEqualTo(ChatErrorCode.CHAT_REQUEST_NOT_RESERVED));
+        }
+
+        @Test
         @DisplayName("Ném lỗi CHAT_ITEM_NOT_APPROVED khi chia sẻ bài chưa APPROVED (FR-70, BR-C07)")
         void sendMessage_itemCard_throwsWhenNotApproved() {
             RequestChatContext context =
@@ -609,6 +623,22 @@ class ChatServiceTest {
         }
 
         @Test
+        @DisplayName("Lấy tin nhắn thành công khi giao dịch ở trạng thái CANCELLED (U07)")
+        void getMessages_success_whenRequestCancelled() {
+            RequestChatContext context =
+                    new RequestChatContext(REQUEST_ID, RequestStatus.CANCELLED, RECEIVER_ID, DONOR_ID);
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(context);
+
+            Message m1 = new Message(REQUEST_ID, RECEIVER_ID, "Tin nhắn cũ");
+            when(messageRepository.findByRequestIdOrderByIdAsc(REQUEST_ID)).thenReturn(List.of(m1));
+
+            List<MessageResponse> list = chatService.getMessages(REQUEST_ID, RECEIVER_ID, null);
+
+            assertThat(list).hasSize(1);
+            assertThat(list.get(0).content()).isEqualTo("Tin nhắn cũ");
+        }
+
+        @Test
         @DisplayName("Ném lỗi CHAT_REQUEST_NOT_RESERVED khi xem tin nhắn của Request chưa RESERVED")
         void getMessages_throwsWhenNotReserved() {
             RequestChatContext context =
@@ -676,6 +706,23 @@ class ChatServiceTest {
                     .isInstanceOf(BusinessException.class)
                     .satisfies(e ->
                             assertThat(((BusinessException) e).getErrorCode()).isEqualTo(ChatErrorCode.CHAT_FORBIDDEN));
+        }
+
+        @Test
+        @DisplayName("Ghim thẻ sản phẩm thành công khi yêu cầu ở trạng thái CANCELLED (U07)")
+        void getPinnedItems_success_whenRequestCancelled() {
+            RequestChatContext context =
+                    new RequestChatContext(REQUEST_ID, RequestStatus.CANCELLED, RECEIVER_ID, DONOR_ID, 50L, null);
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(context);
+
+            ItemCardDto mainCard =
+                    new ItemCardDto(50L, "Áo khoác", OfferType.GIVE, ItemStatus.APPROVED, "/api/v1/media/50", DONOR_ID);
+            when(itemQueryService.getItemCard(50L)).thenReturn(mainCard);
+
+            List<ItemCardDto> pinned = chatService.getPinnedItems(REQUEST_ID, RECEIVER_ID);
+
+            assertThat(pinned).hasSize(1);
+            assertThat(pinned.get(0).id()).isEqualTo(50L);
         }
 
         @Test
