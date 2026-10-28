@@ -4,6 +4,7 @@ import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.item.dto.CreateItemRequest;
 import com.shareloop.item.dto.ItemListPageResponse;
 import com.shareloop.item.dto.ItemResponse;
+import com.shareloop.item.dto.PostingQuotaResponse;
 import com.shareloop.item.dto.UpdateItemRequest;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.OfferType;
@@ -87,6 +88,16 @@ public class ItemController {
     /**
      * Xem danh sách bài đăng của tôi (cần đăng nhập).
      */
+    /**
+     * Hạn mức đăng bài hiện tại (Cho tặng và Trao đổi) cho trang Đăng tin.
+     */
+    @Operation(summary = "Hạn mức đăng bài của tôi")
+    @GetMapping("/api/v1/me/posting-quota")
+    public PostingQuotaResponse getPostingQuota(
+            @io.swagger.v3.oas.annotations.Parameter(hidden = true) @CurrentUserId Long currentUserId) {
+        return itemService.getPostingQuota(currentUserId);
+    }
+
     @Operation(summary = "Danh sách bài đăng của tôi")
     @GetMapping("/api/v1/me/items")
     public List<ItemResponse> listMyItems(

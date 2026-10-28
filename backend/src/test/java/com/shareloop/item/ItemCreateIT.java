@@ -98,28 +98,49 @@ class ItemCreateIT extends IntegrationTest {
     }
 
     @Test
-    void activeLimitCountsPendingAndVisibleApprovedForBothOfferTypes() throws Exception {
+    void giveLimitCountsOnlyVisibleGiveItemsAndIgnoresSwapItems() throws Exception {
         long owner = user(10);
         long[] images = media(owner);
+        // 5 bài Cho tặng được tính (chờ duyệt hoặc đã duyệt đang hiển thị), các bài còn lại không tính
         item(owner, "GIVE", "PENDING_REVIEW", true, false);
-        item(owner, "SWAP", "PENDING_REVIEW", true, false);
+        item(owner, "GIVE", "PENDING_REVIEW", true, false);
+        item(owner, "GIVE", "PENDING_REVIEW", true, false);
+        item(owner, "GIVE", "APPROVED", true, false);
         long approved = item(owner, "GIVE", "APPROVED", true, false);
         item(owner, "GIVE", "APPROVED", false, false);
         item(owner, "GIVE", "REJECTED", true, false);
         item(owner, "GIVE", "APPROVED", true, true);
+        item(owner, "SWAP", "PENDING_REVIEW", true, false);
 
         mvc.perform(create(owner, body("Sách học", "Sách còn tốt", images)))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("ITEM_ACTIVE_LIMIT_REACHED"))
-                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("3")))
-                .andExpect(jsonPath("$.details.limit").value(3))
-                .andExpect(jsonPath("$.details.activeCount").value(3));
+                .andExpect(jsonPath("$.code").value("ITEM_GIVE_LIMIT_REACHED"))
+                .andExpect(jsonPath("$.details.limit").value(5))
+                .andExpect(jsonPath("$.details.activeCount").value(5));
         assertThat(held(owner)).isZero();
 
         jdbc.sql("UPDATE items SET is_active = false WHERE id = :id")
                 .param("id", approved)
                 .update();
         mvc.perform(create(owner, body("Sách học", "Sách còn tốt", images))).andExpect(status().isCreated());
+    }
+
+    @Test
+    void swapLimitFollowsRankAndIgnoresGiveItems() throws Exception {
+        long owner = user(10);
+        long[] images = media(owner);
+        // Hạng Đồng tối đa 5 bài Trao đổi; 5 bài Cho tặng không chiếm hạn mức này
+        for (int index = 0; index < 5; index++) {
+            item(owner, "SWAP", "PENDING_REVIEW", true, false);
+            item(owner, "GIVE", "PENDING_REVIEW", true, false);
+        }
+
+        mvc.perform(create(owner, body("SWAP", "Sách học", "Sách còn tốt", images)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ITEM_ACTIVE_LIMIT_REACHED"))
+                .andExpect(jsonPath("$.details.limit").value(5))
+                .andExpect(jsonPath("$.details.activeCount").value(5));
+        assertThat(held(owner)).isZero();
     }
 
     @Test

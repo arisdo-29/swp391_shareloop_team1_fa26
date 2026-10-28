@@ -10,6 +10,7 @@ import com.shareloop.item.dto.CreateItemRequest;
 import com.shareloop.item.dto.ItemAttributeValue;
 import com.shareloop.item.dto.ItemListPageResponse;
 import com.shareloop.item.dto.ItemResponse;
+import com.shareloop.item.dto.PostingQuotaResponse;
 import com.shareloop.item.dto.UpdateItemRequest;
 import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
@@ -129,7 +130,7 @@ public class ItemService {
         Optional<Long> operatingAttributeId = requireOperatingStatus(request.categoryId(), request.operatingStatus());
         // Tài khoản test trong danh sách cấu hình được bỏ qua giới hạn số bài; phí đăng bài vẫn bị giữ như thường
         if (!canBypassPostLimit(donorId)) {
-            checkActiveItemLimit(donorId);
+            checkActiveItemLimit(donorId, request.offerType());
         }
 
         String moderationText = request.desiredItem() == null
@@ -474,6 +475,30 @@ public class ItemService {
         item.markDeleted();
     }
 
+    /**
+     * Ẩn mọi bài APPROVED đang hiển thị của một chủ bài (is_active = false, không đổi status), dùng khi khoá tài khoản.
+     *
+     * @return id các bài vừa ẩn, để mở khoá thì hiện lại đúng những bài này
+     */
+    @Transactional
+    public List<Long> hideApprovedItemsOfUser(long userId) {
+        List<Item> items = itemRepository.findByDonorIdAndStatusAndIsActiveTrue(userId, ItemStatus.APPROVED);
+        List<Long> hiddenIds = new ArrayList<>();
+        for (Item item : items) {
+            item.deactivate();
+            hiddenIds.add(item.getId());
+        }
+        return hiddenIds;
+    }
+
+    /** Hiện lại các bài đã bị ẩn khi khoá tài khoản; bài không còn tồn tại thì bỏ qua. */
+    @Transactional
+    public void unhideItems(List<Long> itemIds) {
+        for (Item item : itemRepository.findAllById(itemIds)) {
+            item.activate();
+        }
+    }
+
     @Transactional
     public void hideAllOfUser(long userId) {
         itemRepository.findByDonorIdAndIsActiveTrue(userId).forEach(Item::deactivate);
@@ -557,7 +582,11 @@ public class ItemService {
         return postLimitProperties.canBypassPostLimit(email);
     }
 
-    private void checkActiveItemLimit(Long donorId) {
+    // Bài Cho tặng dùng một hạn mức chung mọi hạng; bài Trao đổi dùng hạn mức theo hạng. Hai loại đếm riêng.
+    private int limitFor(Long donorId, OfferType offerType) {
+        if (offerType == OfferType.GIVE) {
+            return configService.getInt(ConfigKey.MAX_ACTIVE_GIVE_ITEMS);
+        }
         Rank rank = reputationService.getRank(donorId);
         ConfigKey limitKey =
                 switch (rank) {
@@ -566,7 +595,16 @@ public class ItemService {
                     case GOLD -> ConfigKey.MAX_ACTIVE_ITEMS_GOLD;
                     case DIAMOND -> ConfigKey.MAX_ACTIVE_ITEMS_DIAMOND;
                 };
-        int limit = configService.getInt(limitKey);
+        return configService.getInt(limitKey);
+    }
+
+    private long countActive(Long donorId, OfferType offerType) {
+        return itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(
+                donorId, offerType, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED));
+    }
+
+    private void checkActiveItemLimit(Long donorId, OfferType offerType) {
+        int limit = limitFor(donorId, offerType);
         if (limit < 0) {
             return;
         }
@@ -577,15 +615,32 @@ public class ItemService {
                 .param("ownerId", donorId)
                 .query()
                 .singleRow();
-        long activeCount = itemRepository.countByDonorIdAndStatusInAndIsActiveTrue(
-                donorId, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED));
-        if (activeCount >= limit) {
-            throw new BusinessException(
-                    ItemErrorCode.ITEM_ACTIVE_LIMIT_REACHED,
-                    "Bạn chỉ được có tối đa %d bài đang hiển thị hoặc chờ duyệt.".formatted(limit),
-                    null,
-                    Map.of("limit", limit, "activeCount", activeCount));
+        long activeCount = countActive(donorId, offerType);
+        if (activeCount < limit) {
+            return;
         }
+        boolean isGive = offerType == OfferType.GIVE;
+        throw new BusinessException(
+                isGive ? ItemErrorCode.ITEM_GIVE_LIMIT_REACHED : ItemErrorCode.ITEM_ACTIVE_LIMIT_REACHED,
+                "Bạn chỉ được có tối đa %d bài %s đang hiển thị hoặc chờ duyệt."
+                        .formatted(limit, isGive ? "Cho tặng" : "Trao đổi"),
+                null,
+                Map.of("limit", limit, "activeCount", activeCount));
+    }
+
+    /**
+     * Hạn mức đăng bài hiện tại của người dùng (Cho tặng và Trao đổi tách riêng). Tài khoản được bỏ qua giới hạn
+     * (PostLimitProperties) có hạn mức -1, tức không giới hạn.
+     */
+    @Transactional(readOnly = true)
+    public PostingQuotaResponse getPostingQuota(Long userId) {
+        boolean bypass = canBypassPostLimit(userId);
+        int giveLimit = bypass ? -1 : limitFor(userId, OfferType.GIVE);
+        int swapLimit = bypass ? -1 : limitFor(userId, OfferType.SWAP);
+        return new PostingQuotaResponse(
+                new PostingQuotaResponse.Quota(countActive(userId, OfferType.GIVE), giveLimit),
+                new PostingQuotaResponse.Quota(countActive(userId, OfferType.SWAP), swapLimit),
+                reputationService.getRank(userId).name());
     }
 
     private void replaceMediaMappings(long itemId, long userId, List<Long> photos, List<Long> defects) {
