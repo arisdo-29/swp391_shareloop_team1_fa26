@@ -404,7 +404,7 @@ class ChatServiceTest {
 
             long refItemId = 45L;
             ItemCardDto card = new ItemCardDto(
-                    refItemId, "Bàn học gỗ", OfferType.SWAP, ItemStatus.APPROVED, "/api/v1/media/1", RECEIVER_ID);
+                    refItemId, "Bàn học gỗ", OfferType.SWAP, ItemStatus.APPROVED, "/api/v1/media/1", DONOR_ID);
             when(itemQueryService.getItemCard(refItemId)).thenReturn(card);
 
             Message savedMessage =
@@ -419,37 +419,6 @@ class ChatServiceTest {
             assertThat(response.refItemId()).isEqualTo(refItemId);
             assertThat(response.itemCard()).isEqualTo(card);
             verify(messageRepository).save(any(Message.class));
-        }
-
-        @Test
-        @DisplayName("Ném lỗi CHAT_FORBIDDEN khi người gửi không sở hữu thẻ bài đăng chia sẻ")
-        void sendMessage_itemCard_throwsWhenSenderNotOwner() {
-            RequestChatContext context =
-                    new RequestChatContext(REQUEST_ID, RequestStatus.RESERVED, RECEIVER_ID, DONOR_ID);
-            when(requestService.getChatContext(REQUEST_ID)).thenReturn(context);
-
-            long refItemId = 45L;
-            ItemCardDto card = new ItemCardDto(
-                    refItemId, "Bàn học gỗ", OfferType.SWAP, ItemStatus.APPROVED, "/api/v1/media/1", DONOR_ID);
-            when(itemQueryService.getItemCard(refItemId)).thenReturn(card);
-
-            SendMessageRequest req = new SendMessageRequest("Xem món này nhé", null, refItemId);
-            assertThatThrownBy(() -> chatService.sendMessage(REQUEST_ID, RECEIVER_ID, req))
-                    .isInstanceOf(BusinessException.class)
-                    .satisfies(e ->
-                            assertThat(((BusinessException) e).getErrorCode()).isEqualTo(ChatErrorCode.CHAT_FORBIDDEN));
-        }
-
-        @Test
-        @DisplayName("Ném lỗi CHAT_FORBIDDEN khi người nhận trong giao dịch GIVE chia sẻ thẻ bài đăng (N04)")
-        void sendMessage_itemCard_throwsWhenGiveReceiverSends() {
-            when(requestService.getChatContext(REQUEST_ID)).thenReturn(contextOfType("GIVE"));
-
-            SendMessageRequest req = new SendMessageRequest("Xem món này nhé", null, 45L);
-            assertThatThrownBy(() -> chatService.sendMessage(REQUEST_ID, RECEIVER_ID, req))
-                    .isInstanceOf(BusinessException.class)
-                    .satisfies(e ->
-                            assertThat(((BusinessException) e).getErrorCode()).isEqualTo(ChatErrorCode.CHAT_FORBIDDEN));
         }
 
         @Test
@@ -475,7 +444,7 @@ class ChatServiceTest {
 
             long refItemId = 45L;
             ItemCardDto card = new ItemCardDto(
-                    refItemId, "Bàn học gỗ", OfferType.SWAP, ItemStatus.PENDING_REVIEW, "/api/v1/media/1", RECEIVER_ID);
+                    refItemId, "Bàn học gỗ", OfferType.SWAP, ItemStatus.PENDING_REVIEW, "/api/v1/media/1", DONOR_ID);
             when(itemQueryService.getItemCard(refItemId)).thenReturn(card);
 
             SendMessageRequest req = new SendMessageRequest("Xem món này nhé", null, refItemId);

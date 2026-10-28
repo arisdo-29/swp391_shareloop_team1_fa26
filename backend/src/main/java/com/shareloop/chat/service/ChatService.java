@@ -128,11 +128,6 @@ public class ChatService {
             throw new BusinessException(ChatErrorCode.CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN);
         }
 
-        // Người nhận đồ Cho tặng không được chia sẻ kèm thẻ bài đăng (N04)
-        if (hasRefItem && "GIVE".equals(context.type()) && currentUserId.equals(context.receiverId())) {
-            throw new BusinessException(ChatErrorCode.CHAT_FORBIDDEN);
-        }
-
         // Chặn gửi ảnh trước khi hai bên chốt lịch (FR-75, BR-C05)
         if (hasMedia) {
             if (context.status() == RequestStatus.RESERVED || context.status() == RequestStatus.AWAITING_LOGISTICS) {
@@ -156,9 +151,6 @@ public class ChatService {
                 }
                 if (sharedCard.status() != ItemStatus.APPROVED) {
                     throw new BusinessException(ChatErrorCode.CHAT_ITEM_NOT_APPROVED);
-                }
-                if (sharedCard.donorId() == null || !sharedCard.donorId().equals(currentUserId)) {
-                    throw new BusinessException(ChatErrorCode.CHAT_FORBIDDEN);
                 }
             }
         }

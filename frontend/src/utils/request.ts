@@ -83,6 +83,8 @@ export function markRequestChatSeen(requestId?: number): void {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('shareloop_chat_seen', { detail: { requestId } }));
     }
-  } catch {}
+  } catch {
+    /* Storage may be blocked or unavailable. */
+  }
 }
 
