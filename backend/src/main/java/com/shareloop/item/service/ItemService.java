@@ -425,6 +425,17 @@ public class ItemService {
         transition(itemId, ItemStatus.RESERVED, ItemStatus.APPROVED);
     }
 
+    /**
+     * Nhả giữ chỗ nếu món đang RESERVED, món ở trạng thái khác thì bỏ qua. Dùng cho món mang đổi: giao dịch SWAP
+     * tạo trước khi món này được giữ chỗ chưa từng đặt nó sang RESERVED, nên huỷ giao dịch đó không được ném lỗi.
+     */
+    @Transactional
+    public void releaseIfReserved(long itemId) {
+        if (requireItem(itemId).getStatus() == ItemStatus.RESERVED) {
+            release(itemId);
+        }
+    }
+
     @Transactional
     public void hide(long itemId) {
         requireItem(itemId).deactivate();

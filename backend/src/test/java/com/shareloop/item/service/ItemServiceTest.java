@@ -639,6 +639,35 @@ class ItemServiceTest {
     }
 
     @Test
+    void releaseIfReserved_whenItemReserved_returnsItemToApproved() {
+        // given
+        Item item = new Item(10L, 1L, 1L, OfferType.SWAP, "Sách", "Mô tả", "Vở", ItemCondition.NEW, null, null);
+        item.approve();
+        item.reserve();
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        // when
+        itemService.releaseIfReserved(1L);
+
+        // then
+        assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
+    }
+
+    @Test
+    void releaseIfReserved_whenItemNotReserved_doesNothing() {
+        // given
+        Item item = new Item(10L, 1L, 1L, OfferType.SWAP, "Sách", "Mô tả", "Vở", ItemCondition.NEW, null, null);
+        item.approve();
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        // when
+        itemService.releaseIfReserved(1L);
+
+        // then
+        assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
+    }
+
+    @Test
     void markTradedSetsStatusToTraded() {
         Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
         item.approve();

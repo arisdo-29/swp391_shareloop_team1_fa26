@@ -120,7 +120,10 @@ Chủ bài đăng chọn đúng một người nhận cho bài đăng (F10 bư�
 - **Hành vi nghiệp vụ:**
   - Request được chọn chuyển sang trạng thái `RESERVED` (`reservedAt` được ghi nhận).
   - Tất cả các Request khác gửi tới cùng bài đăng đang ở trạng thái `PENDING` sẽ tự động chuyển sang `REJECTED`.
-  - Bài đăng chuyển sang trạng thái `RESERVED` qua `ItemService.reserve(itemId)`.
+  - Bài đăng chuyển sang trạng thái `RESERVED` qua `ItemService.reserve(itemId)`. Với yêu cầu `SWAP`, món mang đổi
+    (`offeredItemId`) cũng chuyển `RESERVED` trong cùng transaction; nếu món đó không còn `APPROVED` thì cả lần chọn bị
+    hoàn tác và trả `409 ITEM_INVALID_STATUS_TRANSITION`.
+  - Khi giao dịch bị huỷ (người dùng, job hết hạn), cả hai món được nhả về `APPROVED`.
   - Người nhận được chọn nhận thông báo `REQUEST_ACCEPTED`.
   - Các người nhận bị từ chối nhận thông báo `REQUEST_REJECTED`.
 - **Thành công:** `200 OK`, trả về `RequestResponse` của yêu cầu được chọn (`status = RESERVED`).
@@ -334,6 +337,55 @@ Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (F
 
 ---
 
+## 13. POST /api/v1/requests/{id}/cancel-transaction
+
+Chủ bài hoặc người nhận huỷ giao dịch sau khi chủ bài đã chọn người nhận.
+
+- **Xác thực:** Bắt buộc JWT (phải là chủ bài `donorId` hoặc người nhận `receiverId` của giao dịch).
+- **Path variable:** `id` (id của request).
+- **Body:** `CancelTransactionRequest` (`reason` bắt buộc, 5 đến 500 ký tự).
+- **Trạng thái được huỷ:** `RESERVED`, `AWAITING_LOGISTICS`, `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER`.
+  `PENDING` huỷ qua `POST /requests/{id}/cancel` (mục 4). `COMPLETED`, `DISPUTED`, `CANCELLED`, `REJECTED` trả `409`.
+- **Hành vi nghiệp vụ:**
+  - Request chuyển sang `CANCELLED`. `cancelReason` lưu `"[Chủ bài] "` hoặc `"[Người nhận] "` cộng lý do đã cắt khoảng trắng
+    hai đầu (tối đa 600 ký tự). Không có cột riêng cho người huỷ.
+  - Bài chính và món mang đổi (nếu `SWAP`) được nhả về `APPROVED`, bài mở lại cho người khác. Không tính lại phí đăng
+    vì bài không qua duyệt lần nữa.
+  - Bên còn lại nhận thông báo `TRANSACTION_CANCELLED` kèm lý do.
+  - Ghi activity log `REQUEST_CANCEL` (`targetType = REQUEST`, `reason` là `cancelReason`).
+- **Thành công:** `200 OK`, trả về `RequestResponse` với `status = CANCELLED`.
+- **Lỗi:**
+  - `400 VALIDATION_FAILED`: `reason` trống hoặc ngoài 5 đến 500 ký tự.
+  - `403 REQUEST_FORBIDDEN`: Không phải chủ bài hoặc người nhận.
+  - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
+  - `409 REQUEST_INVALID_STATE_TRANSITION`: Trạng thái hiện tại không cho huỷ.
+
+---
+
+## 14. POST /api/v1/requests/{id}/handover-issue
+
+Báo "Tôi chưa nhận được đồ" (người nhận) hoặc "Tôi chưa giao được" (chủ bài) khi bên kia đã xác nhận bàn giao còn mình
+thì chưa.
+
+- **Xác thực:** Bắt buộc JWT (chủ bài hoặc người nhận của giao dịch).
+- **Path variable:** `id` (id của request).
+- **Body:** `HandoverIssueRequest` (`note` bắt buộc 5 đến 1000 ký tự, `evidenceMediaIds` tuỳ chọn).
+- **Điều kiện:** Request đang `AWAITING_HANDOVER`, bên kia **đã** xác nhận bàn giao và người gọi **chưa**. Mọi trường hợp
+  khác (kể cả `LOGISTICS_CONFIRMED`, vì lúc đó chưa bên nào xác nhận) trả `409`.
+- **Hành vi nghiệp vụ:**
+  - Request chuyển `AWAITING_HANDOVER` sang `DISPUTED`.
+  - Mở khiếu nại `NO_SHOW` cho giao dịch qua module report, xem `report.md` mục "Report tự mở khi báo chưa nhận được".
+    Bên còn lại nhận thông báo `DISPUTE_OPENED`.
+  - Job tự xác nhận sau `AUTO_CONFIRM_DAYS` ngày chỉ xử lý `AWAITING_HANDOVER` nên bỏ qua giao dịch `DISPUTED`.
+- **Thành công:** `200 OK`, trả về `RequestResponse` với `status = DISPUTED`.
+- **Lỗi:**
+  - `400 VALIDATION_FAILED`: `note` trống hoặc ngoài 5 đến 1000 ký tự.
+  - `403 REQUEST_FORBIDDEN`: Không phải chủ bài hoặc người nhận.
+  - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
+  - `409 REQUEST_INVALID_STATE_TRANSITION`: Sai trạng thái hoặc sai điều kiện xác nhận bàn giao.
+
+---
+
 ## DTO Models
 
 ### RequestMediaResponse
@@ -368,6 +420,7 @@ Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (F
 | `receiverHandoverAt` | string? | Thời điểm người nhận xác nhận đã nhận ISO-8601 UTC |
 | `asDescribed` | boolean? | Người nhận đánh giá món đồ đúng mô tả hay không |
 | `completedAt` | string? | Thời điểm hoàn tất giao dịch ISO-8601 UTC |
+| `cancelReason` | string? | Lý do huỷ, có tiền tố người huỷ `[Chủ bài] `, `[Người nhận] ` hoặc `[Hệ thống] `. Có khi `status = CANCELLED` |
 | `createdAt` | string | Thời điểm tạo ISO-8601 UTC |
 | `receiverName` | string? | Họ tên người gửi yêu cầu (có trong danh sách theo bài, danh sách của tôi và chi tiết). Có thể `null`. Không kèm email/số điện thoại (BR-T11) |
 | `itemTitle` | string? | Tiêu đề bài đăng được yêu cầu, có ở mọi API trả `RequestResponse` (kể cả khi bài đã `RESERVED` trở lên, lúc `GET /items/{id}` không còn cho người xin xem). `null` khi bài đã bị xoá |
@@ -387,6 +440,19 @@ Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (F
 | `meetingPlace` | string | Có | Tối đa 255 ký tự |
 | `meetingTime` | string | Có | Thời gian hẹn ISO-8601 UTC ở tương lai |
 | `agreeToWaiver` | boolean | Không | Bắt buộc true nếu là SHIPPING |
+
+### CancelTransactionRequest
+
+| Trường | Kiểu | Bắt buộc | Ràng buộc |
+|---|---|---|---|
+| `reason` | string | Có | 5 đến 500 ký tự (sau khi cắt khoảng trắng hai đầu nên dùng `maxLength = 500` ở client) |
+
+### HandoverIssueRequest
+
+| Trường | Kiểu | Bắt buộc | Ràng buộc |
+|---|---|---|---|
+| `note` | string | Có | 5 đến 1000 ký tự |
+| `evidenceMediaIds` | number[] | Không | Id ảnh/video minh chứng đã tải lên |
 
 ### ConfirmLogisticsRequest
 

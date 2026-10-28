@@ -123,6 +123,20 @@ Endpoint `POST /disputes/{disputeId}/response` hiện có vẫn nhận `{note, e
 trả `200` và giữ các mã lỗi `DISPUTE_*` riêng. Cả hai endpoint đều gắn bằng chứng riêng tư
 qua cùng gateway và chuyển `AWAITING_RESPONSE` về `OPEN` sau khi giải trình, đúng mục 5 (Sơ đồ trạng thái) trong Luồng hoạt động & ERD.
 
+### Report tự mở khi báo "chưa nhận được" / "chưa giao được" đồ
+
+Không có endpoint mới. Khi một bên gọi `POST /api/v1/requests/{id}/handover-issue`, module request chuyển Request sang
+`DISPUTED` rồi phát event `HandoverIssueReportedEvent`. Listener trong module report (`@EventListener`, chạy **cùng
+transaction** với bước chuyển `DISPUTED`, lỗi thì cả hai rollback) gọi
+`ReportService.openHandoverIssueReport(reporterId, requestId, note, evidenceMediaIds)`:
+
+- Tạo đúng 1 report: `targetType = REQUEST`, `reason = NO_SHOW`, `stage = AFTER`, `status = AWAITING_RESPONSE`,
+  `description` là ghi chú của người báo, `evidence` lấy từ `evidenceMediaIds` qua `ReportEvidenceService.attach`,
+  `targetUserId` là bên còn lại, `responseDueAt` theo `DISPUTE_RESPONSE_DAYS`. Không thêm bảng hay cột.
+- Chống trùng: người báo đã có report `REQUEST` cho giao dịch này thì bỏ qua, không lỗi.
+- Gửi thông báo `DISPUTE_OPENED` cho bên còn lại, dẫn tới `/me/disputes/{reportId}` để giải trình.
+- Chủ bài, người nhận và Admin xử lý như khiếu nại thường (`POST /disputes/{disputeId}/response`, `.../conclude`).
+
 ### Report tự mở khi bên nhận chọn "Không đúng mô tả" (FR-85, BR-R05)
 
 Không có endpoint mới. Khi bên nhận gọi `POST /api/v1/requests/{id}/confirm-handover` với `asDescribed = false`,

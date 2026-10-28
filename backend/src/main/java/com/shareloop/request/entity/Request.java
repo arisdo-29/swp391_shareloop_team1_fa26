@@ -20,6 +20,11 @@ import org.hibernate.annotations.SQLRestriction;
 @SQLRestriction("is_deleted = false")
 public class Request extends BaseEntity {
 
+    // Tiền tố ghi vào cancel_reason để người xem biết ai huỷ (không có cột riêng cho người huỷ)
+    public static final String CANCEL_BY_DONOR = "[Chủ bài] ";
+    public static final String CANCEL_BY_RECEIVER = "[Người nhận] ";
+    public static final String CANCEL_BY_SYSTEM = "[Hệ thống] ";
+
     @Column(name = "item_id", nullable = false)
     private Long itemId;
 
@@ -81,7 +86,8 @@ public class Request extends BaseEntity {
     @Column(name = "completed_at")
     private Instant completedAt;
 
-    @Column(name = "cancel_reason", length = 100)
+    // 500 ký tự người dùng nhập + tiền tố người huỷ
+    @Column(name = "cancel_reason", length = 600)
     private String cancelReason;
 
     protected Request() {}
@@ -254,6 +260,23 @@ public class Request extends BaseEntity {
         } else if (this.status == RequestStatus.LOGISTICS_CONFIRMED) {
             transitionTo(RequestStatus.AWAITING_HANDOVER);
         }
+    }
+
+    /**
+     * Một bên báo chưa nhận được hoặc chưa giao được đồ: chuyển AWAITING_HANDOVER sang DISPUTED.
+     *
+     * <p>Chỉ hợp lệ khi bên kia đã xác nhận bàn giao còn bên báo thì chưa; trạng thái hoặc điều kiện sai thì ném
+     * REQUEST_INVALID_STATE_TRANSITION.
+     *
+     * @param isDonor true nếu người báo là chủ bài, false nếu là người nhận
+     */
+    public void openHandoverIssue(boolean isDonor) {
+        boolean selfConfirmed = isDonor ? this.donorHandoverAt != null : this.receiverHandoverAt != null;
+        boolean otherConfirmed = isDonor ? this.receiverHandoverAt != null : this.donorHandoverAt != null;
+        if (this.status != RequestStatus.AWAITING_HANDOVER || selfConfirmed || !otherConfirmed) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+        transitionTo(RequestStatus.DISPUTED);
     }
 
     /**

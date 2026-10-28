@@ -36,9 +36,11 @@ public record RequestResponse(
         String itemImage,
         Long donorId,
         String donorName,
-        String offeredItemTitle) {
+        String offeredItemTitle,
+        String cancelReason) {
 
-    // Dạng 23 tham số (chưa có tên món và chủ bài) để code và test đang gọi vẫn compile; 5 trường mới để null.
+    // Dạng 23 tham số (chưa có tên món, chủ bài và lý do huỷ) để code và test đang gọi vẫn compile; 6 trường mới để
+    // null.
     public RequestResponse(
             Long id,
             Long itemId,
@@ -87,6 +89,7 @@ public record RequestResponse(
                 receiverTrustStars,
                 receiverRank,
                 receiverAsDescribedRate,
+                null,
                 null,
                 null,
                 null,

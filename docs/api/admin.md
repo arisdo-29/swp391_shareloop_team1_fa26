@@ -103,8 +103,9 @@ Không trả `#<id>` trong `targetTitle`, `actorName`. Log `REPORT_DISMISSED`, `
 | `REVIEW_APPROVE` | Duyệt bài | `ITEM` | `checks` (câu hỏi checklist và kết quả) |
 | `REVIEW_REJECT` | Từ chối bài | `ITEM` | - (lý do ở `reason`) |
 | `CONFIG_UPDATE` | Sửa cấu hình | `CONFIG` | `key`, `oldValue`, `newValue` |
-| `USER_LOCK` | Khoá tài khoản | `USER` | - |
+| `USER_LOCK` | Khoá tài khoản | `USER` | `cancelledRequests` (số giao dịch đã huỷ), `releasedCredit` (số Credit đã nhả) |
 | `USER_UNLOCK` | Mở khoá tài khoản | `USER` | - |
+| `REQUEST_CANCEL` | Huỷ giao dịch | `REQUEST` | - (lý do ở `reason`, có tiền tố người huỷ) |
 | `REPORT_DISMISSED` | Bác bỏ báo cáo | `REPORT` | `decision`, `reportId`, `targetType` |
 | `REPORT_UPHELD` | Chấp nhận báo cáo | `REPORT` | `decision`, `reportId`, `targetType`, `violatorId`, `starsDeducted`, `seriousViolation` |
 | `POINTS` | Cộng điểm | `REQUEST` | `points` (điểm thực cộng, có thể 0), `basePoints`, `totalPoints`, `rank`, `role`, `pairTransactionNo`, `pointsToday` |
@@ -457,6 +458,15 @@ Khoá tài khoản người dùng và ghi nhật ký hoạt động (FR-107, Iss
 }
 ```
 
+- **Dọn dẹp tự động trong cùng transaction** (qua event `UserLockedEvent`, lỗi thì việc khoá cũng rollback):
+  - Mọi giao dịch của người bị khoá (vai chủ bài hoặc người nhận) đang `PENDING`, `RESERVED`, `AWAITING_LOGISTICS`,
+    `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER` chuyển `CANCELLED` với `cancelReason = "[Hệ thống] Tài khoản bị khoá"`.
+    Bài chính và món mang đổi được nhả về `APPROVED`, bên còn lại nhận thông báo `TRANSACTION_CANCELLED`.
+    Giao dịch `DISPUTED` không bị huỷ để Admin phân xử.
+  - Các bài `PENDING_REVIEW` của người bị khoá đang giữ phí đăng hoặc phí sửa (`fee_state = HELD`, phí lớn hơn 0) bị
+    từ chối như khi Admin từ chối bài (lý do "Tài khoản bị khoá", ghi `REVIEW_REJECT`), phí giữ được nhả về ví qua
+    `CreditService.release`.
+  - Activity log `USER_LOCK` có `data = { "cancelledRequests": n, "releasedCredit": n }`.
 - **Thành công:** `200 OK` (không có body).
 - **Mã lỗi:**
 

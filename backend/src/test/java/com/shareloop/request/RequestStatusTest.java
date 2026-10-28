@@ -19,11 +19,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * Unit test kiểm thử toàn diện máy trạng thái RequestStatus (ERD 5.1, Hình 21; Spike S8; Issue #127).
- * Kiểm tra đầy đủ 13 mũi tên hợp lệ và toàn bộ các chuyển trạng thái không hợp lệ trong ma trận 81 ô.
+ * Kiểm tra đầy đủ 14 mũi tên hợp lệ và toàn bộ các chuyển trạng thái không hợp lệ trong ma trận 81 ô.
  */
 class RequestStatusTest {
 
-    // Tập hợp 13 mũi tên hợp lệ theo sơ đồ vòng đời Request (ERD 5.1)
+    // Tập hợp 14 mũi tên hợp lệ theo sơ đồ vòng đời Request (ERD 5.1)
     private static final Set<String> VALID_TRANSITION_KEYS = Set.of(
             "PENDING->RESERVED",
             "PENDING->REJECTED",
@@ -36,6 +36,7 @@ class RequestStatusTest {
             "LOGISTICS_CONFIRMED->CANCELLED",
             "AWAITING_HANDOVER->COMPLETED",
             "AWAITING_HANDOVER->DISPUTED",
+            "AWAITING_HANDOVER->CANCELLED",
             "DISPUTED->COMPLETED",
             "DISPUTED->CANCELLED");
 
@@ -83,6 +84,10 @@ class RequestStatusTest {
                         RequestStatus.AWAITING_HANDOVER,
                         RequestStatus.DISPUTED,
                         "Không đúng mô tả hoặc phát sinh tranh chấp giao nhận (FR-88, BR-T07, UC-28, F16)"),
+                Arguments.of(
+                        RequestStatus.AWAITING_HANDOVER,
+                        RequestStatus.CANCELLED,
+                        "Huỷ giao dịch sau khi chọn người hoặc khoá tài khoản một bên"),
                 Arguments.of(
                         RequestStatus.DISPUTED,
                         RequestStatus.COMPLETED,
@@ -198,9 +203,15 @@ class RequestStatusTest {
             assertTrue(RequestStatus.canTransition(RequestStatus.DISPUTED, RequestStatus.CANCELLED));
         }
 
+        @Test
+        @DisplayName("Mũi tên 14: AWAITING_HANDOVER -> CANCELLED khi huỷ giao dịch hoặc khoá tài khoản một bên")
+        void transition_AwaitingHandover_To_Cancelled() {
+            assertTrue(RequestStatus.canTransition(RequestStatus.AWAITING_HANDOVER, RequestStatus.CANCELLED));
+        }
+
         @ParameterizedTest(name = "[{index}] {0} -> {1}: {2}")
         @MethodSource("com.shareloop.request.RequestStatusTest#provideValidTransitions")
-        @DisplayName("Tất cả 13 mũi tên hợp lệ đều trả về true")
+        @DisplayName("Tất cả 14 mũi tên hợp lệ đều trả về true")
         void allValidTransitionsReturnTrue(RequestStatus from, RequestStatus to, String description) {
             assertThat(RequestStatus.canTransition(from, to))
                     .as("Chuyển từ %s sang %s phải hợp lệ (%s)", from, to, description)
@@ -214,7 +225,7 @@ class RequestStatusTest {
 
         @ParameterizedTest(name = "[{index}] {0} -> {1} phải bị từ chối")
         @MethodSource("com.shareloop.request.RequestStatusTest#provideInvalidTransitions")
-        @DisplayName("Tất cả 68 chuyển đổi khác trạng thái và 9 chuyển đổi sang chính nó đều trả về false")
+        @DisplayName("Tất cả 67 ô không hợp lệ (gồm 9 ô chuyển sang chính nó) đều trả về false")
         void allInvalidTransitionsReturnFalse(RequestStatus from, RequestStatus to) {
             assertThat(RequestStatus.canTransition(from, to))
                     .as("Chuyển từ %s sang %s không hợp lệ và phải trả về false", from, to)
@@ -222,7 +233,7 @@ class RequestStatusTest {
         }
 
         @Test
-        @DisplayName("Tổng số mũi tên hợp lệ phải đúng bằng 13 và số không hợp lệ là 68 + 9 = 77")
+        @DisplayName("Tổng số mũi tên hợp lệ phải đúng bằng 14 và số ô không hợp lệ là 67")
         void transitionMatrixTotals() {
             int validCount = 0;
             int invalidCount = 0;
@@ -235,10 +246,10 @@ class RequestStatusTest {
                     }
                 }
             }
-            assertThat(validCount).as("Số mũi tên hợp lệ phải đúng bằng 13").isEqualTo(13);
+            assertThat(validCount).as("Số mũi tên hợp lệ phải đúng bằng 14").isEqualTo(14);
             assertThat(invalidCount)
-                    .as("Số ô không hợp lệ phải đúng bằng 81 - 13 = 68")
-                    .isEqualTo(68);
+                    .as("Số ô không hợp lệ phải đúng bằng 81 - 14 = 67")
+                    .isEqualTo(67);
         }
     }
 

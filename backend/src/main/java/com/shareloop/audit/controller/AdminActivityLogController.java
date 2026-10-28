@@ -58,6 +58,7 @@ public class AdminActivityLogController {
                                                 "CONFIG_UPDATE",
                                                 "USER_LOCK",
                                                 "USER_UNLOCK",
+                                                "REQUEST_CANCEL",
                                                 "REPORT_DISMISSED",
                                                 "REPORT_UPHELD",
                                                 "POINTS",

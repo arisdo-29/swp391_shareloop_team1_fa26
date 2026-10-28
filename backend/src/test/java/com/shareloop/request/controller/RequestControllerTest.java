@@ -76,6 +76,62 @@ class RequestControllerTest {
     }
 
     @Test
+    @DisplayName("Huỷ giao dịch với lý do hợp lệ trả về 200 OK")
+    void cancelTransaction_withValidReason_returns200() throws Exception {
+        String token = jwtService.issue(10L, false);
+        when(requestService.cancelTransaction(eq(100L), eq(10L), any()))
+                .thenReturn(
+                        new RequestResponse(100L, 1L, 10L, null, "GIVE", "CANCELLED", null, null, null, Instant.now()));
+
+        mockMvc.perform(post("/api/v1/requests/100/cancel-transaction")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Tôi không đi được nữa\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+    }
+
+    @Test
+    @DisplayName("Báo sự cố giao nhận với ghi chú hợp lệ trả về 200 OK")
+    void reportHandoverIssue_withValidNote_returns200() throws Exception {
+        String token = jwtService.issue(10L, false);
+        when(requestService.reportHandoverIssue(eq(100L), eq(10L), any()))
+                .thenReturn(
+                        new RequestResponse(100L, 1L, 10L, null, "GIVE", "DISPUTED", null, null, null, Instant.now()));
+
+        mockMvc.perform(post("/api/v1/requests/100/handover-issue")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"note\":\"Chưa nhận được đồ\",\"evidenceMediaIds\":[7]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DISPUTED"));
+    }
+
+    @Test
+    @DisplayName("Báo sự cố giao nhận thiếu ghi chú trả về 400")
+    void reportHandoverIssue_withoutNote_returns400() throws Exception {
+        String token = jwtService.issue(10L, false);
+
+        mockMvc.perform(post("/api/v1/requests/100/handover-issue")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"evidenceMediaIds\":[7]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Huỷ giao dịch với lý do quá ngắn trả về 400")
+    void cancelTransaction_withShortReason_returns400() throws Exception {
+        String token = jwtService.issue(10L, false);
+
+        mockMvc.perform(post("/api/v1/requests/100/cancel-transaction")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"ab\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("Xem danh sách yêu cầu của bài đăng trả về 200 OK")
     void listByItem_withToken_returns200() throws Exception {
         String token = jwtService.issue(99L, false);

@@ -8,6 +8,10 @@ import com.shareloop.user.UserErrorCode;
 import com.shareloop.user.dto.AdminAccountRole;
 import com.shareloop.user.dto.AdminAccountState;
 import com.shareloop.user.dto.AdminUserSummary;
+import com.shareloop.user.event.UserLockCleanup;
+import com.shareloop.user.event.UserLockedEvent;
+import java.util.Map;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,10 +24,13 @@ public class AdminUserService {
 
     private final UserService userService;
     private final ActivityLogService activityLogService;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public AdminUserService(UserService userService, ActivityLogService activityLogService) {
+    public AdminUserService(
+            UserService userService, ActivityLogService activityLogService, ApplicationEventPublisher eventPublisher) {
         this.userService = userService;
         this.activityLogService = activityLogService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -49,7 +56,15 @@ public class AdminUserService {
         }
 
         userService.lock(userId, reason);
-        activityLogService.log(ActivityType.USER_LOCK.name(), adminId, "USER", userId, (String) null, reason);
+
+        // Các module khác nghe sự kiện này để huỷ giao dịch đang mở và nhả phí đang giữ, cộng kết quả vào cleanup
+        UserLockCleanup cleanup = new UserLockCleanup();
+        eventPublisher.publishEvent(new UserLockedEvent(adminId, userId, cleanup));
+
+        Map<String, Object> data = Map.of(
+                "cancelledRequests", cleanup.getCancelledRequests(),
+                "releasedCredit", cleanup.getReleasedCredit());
+        activityLogService.log(ActivityType.USER_LOCK.name(), adminId, "USER", userId, data, reason);
     }
 
     /**

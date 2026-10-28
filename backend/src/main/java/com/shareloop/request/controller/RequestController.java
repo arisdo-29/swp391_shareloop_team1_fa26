@@ -1,9 +1,11 @@
 package com.shareloop.request.controller;
 
 import com.shareloop.common.security.CurrentUserId;
+import com.shareloop.request.dto.CancelTransactionRequest;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.HandoverConfirmRequest;
+import com.shareloop.request.dto.HandoverIssueRequest;
 import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.dto.ScheduleRequest;
@@ -74,6 +76,18 @@ public class RequestController {
     }
 
     /**
+     * Chủ bài hoặc người nhận huỷ giao dịch sau khi đã chọn người, bắt buộc nêu lý do.
+     */
+    @Operation(summary = "Huỷ giao dịch sau khi đã chọn người nhận")
+    @PostMapping("/api/v1/requests/{id}/cancel-transaction")
+    public RequestResponse cancelTransaction(
+            @PathVariable long id,
+            @CurrentUserId Long currentUserId,
+            @Valid @RequestBody CancelTransactionRequest request) {
+        return requestService.cancelTransaction(id, currentUserId, request);
+    }
+
+    /**
      * Chủ bài đăng chọn người nhận, các yêu cầu khác tự động bị từ chối.
      */
     @Operation(summary = "Chủ bài đăng chọn người nhận cho món đồ")
@@ -132,6 +146,18 @@ public class RequestController {
             @CurrentUserId Long currentUserId,
             @RequestBody(required = false) HandoverConfirmRequest request) {
         return requestService.confirmHandover(id, currentUserId, request);
+    }
+
+    /**
+     * Báo "chưa nhận được" / "chưa giao được" khi bên kia đã xác nhận bàn giao còn mình thì chưa.
+     */
+    @Operation(summary = "Báo chưa nhận được hoặc chưa giao được đồ, mở khiếu nại")
+    @PostMapping("/api/v1/requests/{id}/handover-issue")
+    public RequestResponse reportHandoverIssue(
+            @PathVariable long id,
+            @CurrentUserId Long currentUserId,
+            @Valid @RequestBody HandoverIssueRequest request) {
+        return requestService.reportHandoverIssue(id, currentUserId, request);
     }
 
     /**
