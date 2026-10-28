@@ -133,5 +133,7 @@ export function toFeItem(
     donorTrustStars: item.donorTrustStars ?? undefined,
     donorRank: item.donorRank ?? undefined,
     donorAsDescribedRate: item.donorAsDescribedRate ?? undefined,
+    hidden: item.hidden ?? undefined,
+    hiddenReason: item.hiddenReason ?? undefined,
   };
 }

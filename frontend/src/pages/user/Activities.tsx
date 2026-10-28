@@ -528,7 +528,8 @@ export function Activities() {
             {myItems.map((item) => {
               const apiItem = /^\d+$/.test(item.id);
               const canEdit = ['PENDING_REVIEW', 'APPROVED', 'REJECTED'].includes(item.status);
-              const canUseListingFee = apiItem && item.status === 'APPROVED';
+              // Bài đang tạm ẩn (U04) không gia hạn hay đẩy được cho tới khi Admin xem xét xong.
+              const canUseListingFee = apiItem && item.status === 'APPROVED' && !item.hidden;
               const canBoost =
                 canUseListingFee && item.categoryId !== undefined && boostableCategoryIds.includes(item.categoryId);
               const canRemove = !['RESERVED', 'TRADED', 'EXPIRED', 'removed'].includes(item.status);
@@ -547,7 +548,13 @@ export function Activities() {
                     <div className="min-w-0 space-y-2.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <TypeBadge type={item.type} />
-                        <StatusBadge status={item.status} />
+                        {item.hidden ? (
+                          <span className="inline-flex whitespace-nowrap rounded-sm bg-warning-soft px-2 py-1 text-2xs font-semibold text-warning">
+                            Đang tạm ẩn
+                          </span>
+                        ) : (
+                          <StatusBadge status={item.status} />
+                        )}
                         <span className="text-xs text-text-muted">
                           {item.district}
                           {item.expiresAt ? ` · hết hạn ${new Date(item.expiresAt).toLocaleDateString('vi-VN')}` : ''}
@@ -556,6 +563,11 @@ export function Activities() {
                       <Link to={`/items/${item.id}`} className="block truncate text-base font-bold transition hover:text-primary">
                         {item.title}
                       </Link>
+                      {item.hidden ? (
+                        <p className="text-sm leading-6 text-warning">
+                          {item.hiddenReason?.trim() || 'Bài đang tạm ẩn khỏi Tìm đồ. Admin sẽ xem xét và báo kết quả.'}
+                        </p>
+                      ) : null}
                       <p className="text-sm leading-6">
                         <strong>{summary.headline}</strong> <span className="text-text-secondary">{summary.detail}</span>
                       </p>
@@ -1374,6 +1386,7 @@ function itemSummary(item: Item, pendingCount: number, chosenRequest?: ItemReque
 function lockNote(item: Item, canBoost: boolean) {
   const status = item.status.toUpperCase();
   if (status === 'RESERVED') return 'Không sửa, gia hạn, đẩy hay gỡ được khi đã chọn người nhận.';
+  if (item.hidden) return 'Không gia hạn hay đẩy được khi bài đang tạm ẩn.';
   if (status === 'PENDING_REVIEW') return 'Gia hạn và đẩy bài mở sau khi bài được duyệt.';
   if (status === 'APPROVED' && !canBoost) return 'Danh mục của bài này không cho đẩy bài.';
   return '';

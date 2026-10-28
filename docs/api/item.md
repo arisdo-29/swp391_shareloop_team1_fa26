@@ -232,6 +232,8 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&o
 | `donorTrustStars` | number? | Sao uy tín người đăng; chỉ có ở API chi tiết |
 | `donorRank` | string? | Hạng người đăng; chỉ có ở API chi tiết |
 | `donorAsDescribedRate` | number? | Tỉ lệ đúng mô tả thang 0–1; chỉ có ở API chi tiết |
+| `hidden` | boolean? | Bài đang tạm ẩn (`is_active = false`), ví dụ tự ẩn do đủ báo cáo đang chờ (U04). Chỉ có khi **chủ bài** xem (chi tiết, sửa, bài của tôi) hoặc Admin xem; người khác nhận `null` |
+| `hiddenReason` | string? | Lý do ẩn. Hiện luôn `null` vì chưa lưu lý do ẩn (C06); FE hiện câu mặc định |
 
 `expireAt` và `boostedUntil` có trong mọi API trả `ItemResponse` (tạo, sửa, chi tiết, bài của tôi, danh sách công khai).
 Với danh sách, hai trường này được đọc bằng một query cho cả trang qua `ListingFeeQueryService.findDisplayWindows`.

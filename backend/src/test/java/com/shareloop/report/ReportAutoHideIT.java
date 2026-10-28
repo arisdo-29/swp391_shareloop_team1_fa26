@@ -56,7 +56,8 @@ class ReportAutoHideIT extends IntegrationTest {
     @Test
     void create_dismissedReportsDoNotCount_hidesItemAtThirdPendingReport() {
         long admin = insertUser(true);
-        itemId = insertApprovedItem(insertUser(false));
+        long donor = insertUser(false);
+        itemId = insertApprovedItem(donor);
 
         // Report đầu đã bị Admin bác bỏ: không còn tính vào ngưỡng
         ReportResponse dismissed = reportService.create(insertUser(false), itemReport());
@@ -81,6 +82,13 @@ class ReportAutoHideIT extends IntegrationTest {
                         String.class,
                         admin))
                 .isEqualTo("/admin/complaints");
+        // U04: chủ bài cũng nhận đúng một thông báo, dẫn về trang Hoạt động
+        assertThat(adminNotifications(donor)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                        "SELECT link FROM notifications WHERE user_id = ? AND type = 'ITEM_AUTO_HIDDEN'",
+                        String.class,
+                        donor))
+                .isEqualTo("/activities");
     }
 
     private CreateReportRequest itemReport() {

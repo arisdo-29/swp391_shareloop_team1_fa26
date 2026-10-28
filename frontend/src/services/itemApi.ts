@@ -76,6 +76,9 @@ export interface ItemResponse extends CreateItemRequest {
   donorTrustStars?: number | null;
   donorRank?: string | null;
   donorAsDescribedRate?: number | null;
+  // Chỉ có khi chủ bài hoặc Admin xem; người khác nhận null (U04).
+  hidden?: boolean | null;
+  hiddenReason?: string | null;
 }
 
 // Contract: docs/api/listingfee.md (GET /api/v1/items/{id}/edit-quote)

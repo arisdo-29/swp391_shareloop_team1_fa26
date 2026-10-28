@@ -280,7 +280,7 @@ public class ItemService {
             saveReviewFlag(itemId, moderation);
         }
         eventPublisher.publishEvent(ItemScreeningRequestedEvent.from(item));
-        return toResponse(item, findDisplayWindow(itemId));
+        return withHiddenState(toResponse(item, findDisplayWindow(itemId)), item);
     }
 
     /**
@@ -297,12 +297,14 @@ public class ItemService {
         if ((item.getStatus() == ItemStatus.APPROVED && item.isActive()) || isOwner) {
             var donor = userService.findBriefs(List.of(item.getDonorId())).get(item.getDonorId());
             var reputation = reputationService.getReputationSummary(item.getDonorId());
-            return toResponse(item, findDisplayWindow(item.getId()))
+            ItemResponse response = toResponse(item, findDisplayWindow(item.getId()))
                     .withDonor(
                             donor == null ? null : donor.fullName(),
                             reputation.trustStars(),
                             reputation.rank().name(),
                             reputation.asDescribedRate());
+            // U04: chỉ chủ bài biết bài đang tạm ẩn; người khác nhận hidden = null.
+            return isOwner ? withHiddenState(response, item) : response;
         }
 
         throw new BusinessException(ItemErrorCode.ITEM_NOT_FOUND);
@@ -316,7 +318,7 @@ public class ItemService {
     @Transactional(readOnly = true)
     public AdminItemDetail getItemForAdmin(long itemId) {
         Item item = requireItem(itemId);
-        ItemResponse response = toResponse(item, findDisplayWindow(itemId));
+        ItemResponse response = withHiddenState(toResponse(item, findDisplayWindow(itemId)), item);
         return new AdminItemDetail(response, item.isActive(), findAttributeValues(itemId));
     }
 
@@ -329,9 +331,14 @@ public class ItemService {
         Map<Long, DisplayWindow> displayWindows = findDisplayWindows(items);
         List<ItemResponse> responses = new ArrayList<>();
         for (Item item : items) {
-            responses.add(toResponse(item, displayWindows.get(item.getId())));
+            responses.add(withHiddenState(toResponse(item, displayWindows.get(item.getId())), item));
         }
         return responses;
+    }
+
+    // Bài đang is_active = false (tự ẩn do báo cáo, Admin ẩn, hết sao) là "đang tạm ẩn". Lý do lấy từ C06 khi có.
+    private static ItemResponse withHiddenState(ItemResponse response, Item item) {
+        return response.withVisibility(!item.isActive(), null);
     }
 
     /**
