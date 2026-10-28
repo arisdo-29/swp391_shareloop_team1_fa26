@@ -36,7 +36,7 @@ public class ItemQueryService {
 
     public ItemSummary getSummary(long itemId) {
         Item item = repository.findById(itemId).orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
-        return new ItemSummary(item.getId(), item.getDonorId(), item.getOfferType(), item.getStatus());
+        return new ItemSummary(item.getId(), item.getDonorId(), item.getOfferType(), item.getStatus(), item.isActive());
     }
 
     /** Id mọi bài của một chủ bài, dùng để tìm giao dịch của người đó khi khoá tài khoản. */

@@ -38,6 +38,8 @@ export interface RequestResponse {
   trustStars?: number | null;
   rank?: string | null;
   asDescribedRate?: number | null;
+  complaintDeadline?: string | null;
+  lastMessageAt?: string | null;
 }
 
 export interface CreateRequestBody {

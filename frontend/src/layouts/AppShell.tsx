@@ -9,6 +9,8 @@ import { NotificationMenu } from '../components/NotificationMenu';
 import { ShareLoopLogo } from '../components/ShareLoopLogo';
 import { WalletProvider } from '../app/WalletContext';
 import { useWallet } from '../app/useWallet';
+import { requestApi, toBackendUserId } from '../services/requestApi';
+import { isRequestUnread } from '../utils/request';
 
 // Trang tài khoản dùng khung riêng (AuthLayout) nên không cần chân trang.
 const authPaths = new Set([
@@ -51,7 +53,40 @@ function AppShellContent() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const headerActionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!user || isAdmin) {
+      setHasUnreadChat(false);
+      return;
+    }
+    const numericUserId = toBackendUserId(user.id);
+    if (!numericUserId) return;
+
+    let active = true;
+    const checkUnread = async () => {
+      try {
+        const requests = await requestApi.mine(numericUserId);
+        if (!active) return;
+        const unreadExists = requests.some((req) => isRequestUnread(req.lastMessageAt, req.id));
+        setHasUnreadChat(unreadExists);
+      } catch {
+        // Ignored
+      }
+    };
+
+    void checkUnread();
+    const handleSeen = () => void checkUnread();
+    window.addEventListener('shareloop_chat_seen', handleSeen);
+    const interval = window.setInterval(checkUnread, 30_000);
+
+    return () => {
+      active = false;
+      window.removeEventListener('shareloop_chat_seen', handleSeen);
+      window.clearInterval(interval);
+    };
+  }, [user, isAdmin, pathname]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -160,7 +195,7 @@ function AppShellContent() {
                   key={to}
                   to={to}
                   className={({ isActive }) =>
-                    `inline-flex min-h-11 items-center whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition ${
+                    `inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition ${
                       isHome
                         ? isActive
                           ? 'bg-white/15 text-white'
@@ -171,7 +206,10 @@ function AppShellContent() {
                     }`
                   }
                 >
-                  {label}
+                  <span>{label}</span>
+                  {to === '/messages' && hasUnreadChat ? (
+                    <span className="size-2 rounded-full bg-error" title="Có tin nhắn mới" />
+                  ) : null}
                 </NavLink>
               ))}
             </nav>
@@ -319,7 +357,7 @@ function AppShellContent() {
                 to={to}
                 onClick={closeMenus}
                 className={({ isActive }) =>
-                  `flex items-center rounded-md px-3 py-3 text-sm font-semibold ${
+                  `flex items-center justify-between rounded-md px-3 py-3 text-sm font-semibold ${
                     isHome
                       ? isActive
                         ? 'bg-white/15 text-white'
@@ -330,7 +368,10 @@ function AppShellContent() {
                   }`
                 }
               >
-                {label}
+                <span>{label}</span>
+                {to === '/messages' && hasUnreadChat ? (
+                  <span className="size-2 rounded-full bg-error" title="Có tin nhắn mới" />
+                ) : null}
               </NavLink>
             ))}
             {user && !isAdmin ? (

@@ -76,6 +76,7 @@ export interface ItemResponse extends CreateItemRequest {
   donorTrustStars?: number | null;
   donorRank?: string | null;
   donorAsDescribedRate?: number | null;
+  donorLocked?: boolean | null;
 }
 
 // Contract: docs/api/listingfee.md (GET /api/v1/items/{id}/edit-quote)

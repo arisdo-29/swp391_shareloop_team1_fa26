@@ -114,6 +114,7 @@ export interface Item {
   donorTrustStars?: number;
   donorRank?: string;
   donorAsDescribedRate?: number;
+  donorLocked?: boolean;
 }
 
 export interface Transaction {

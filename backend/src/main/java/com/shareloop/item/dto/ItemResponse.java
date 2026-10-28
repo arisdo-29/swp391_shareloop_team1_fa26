@@ -34,9 +34,11 @@ public record ItemResponse(
         String donorName,
         Integer donorTrustStars,
         String donorRank,
-        Double donorAsDescribedRate) {
+        Double donorAsDescribedRate,
+        Boolean donorLocked) {
 
-    public ItemResponse withDonor(String name, Integer trustStars, String rank, Double asDescribedRate) {
+    public ItemResponse withDonor(
+            String name, Integer trustStars, String rank, Double asDescribedRate, Boolean donorLocked) {
         return new ItemResponse(
                 id,
                 donorId,
@@ -60,7 +62,63 @@ public record ItemResponse(
                 name,
                 trustStars,
                 rank,
-                asDescribedRate);
+                asDescribedRate,
+                donorLocked);
+    }
+
+    public ItemResponse withDonor(String name, Integer trustStars, String rank, Double asDescribedRate) {
+        return withDonor(name, trustStars, rank, asDescribedRate, null);
+    }
+
+    public ItemResponse(
+            Long id,
+            Long donorId,
+            Long categoryId,
+            Long areaId,
+            OfferType offerType,
+            String title,
+            String description,
+            String desiredItem,
+            ItemCondition condition,
+            String defectNote,
+            String brand,
+            List<String> images,
+            ItemStatus status,
+            Instant createdAt,
+            Instant updatedAt,
+            List<String> defectImages,
+            OperatingStatus operatingStatus,
+            Instant expireAt,
+            Instant boostedUntil,
+            String donorName,
+            Integer donorTrustStars,
+            String donorRank,
+            Double donorAsDescribedRate) {
+        this(
+                id,
+                donorId,
+                categoryId,
+                areaId,
+                offerType,
+                title,
+                description,
+                desiredItem,
+                condition,
+                defectNote,
+                brand,
+                images,
+                status,
+                createdAt,
+                updatedAt,
+                defectImages,
+                operatingStatus,
+                expireAt,
+                boostedUntil,
+                donorName,
+                donorTrustStars,
+                donorRank,
+                donorAsDescribedRate,
+                null);
     }
 
     public ItemResponse(

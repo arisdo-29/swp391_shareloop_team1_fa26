@@ -25,8 +25,9 @@ const bundle = await build({
       export { startPayment, confirmDemoPayment } from './src/services/paymentFlow.ts';
       export { loadPendingTopUp, savePendingTopUp } from './src/services/topUpSession.ts';
       export { adminAuditApi } from './src/services/adminAuditApi.ts';
+      export { adminAnomalyApi } from './src/services/adminAnomalyApi.ts';
       export { requestApi, toFeItemRequest } from './src/services/requestApi.ts';
-      export { canChat, canSchedule, canConfirmHandover, canSelectPendingRequest, requestStatusLabel } from './src/utils/request.ts';
+      export { canChat, canViewChat, canSchedule, canConfirmHandover, canSelectPendingRequest, requestStatusLabel } from './src/utils/request.ts';
       export { applyOtpBackspace, applyOtpChange, applyOtpPaste, createOtpValue } from './src/utils/otp.ts';
       export { store } from './src/app/store.ts';`,
     resolveDir: process.cwd(),
@@ -393,6 +394,9 @@ await test('AWAITING_LOGISTICS vẫn cho sửa lịch, các trạng thái sau ch
     assert.equal(api.canChat(status), true);
   for (const status of ['PENDING', 'REJECTED', 'CANCELLED'])
     assert.equal(api.canChat(status), false);
+  assert.equal(api.canViewChat('CANCELLED'), true);
+  assert.equal(api.canViewChat('RESERVED'), true);
+  assert.equal(api.canViewChat('PENDING'), false);
 });
 
 await test('chỉ mở xác nhận giao nhận ở LOGISTICS_CONFIRMED hoặc AWAITING_HANDOVER', () => {
@@ -551,4 +555,18 @@ await test('OTP paste phân bổ đủ mã, bỏ chữ cái và cho phép sửa 
   assert.deepEqual(corrected.value, ['1', '2', '9', '4', '5', '6']);
   assert.equal(corrected.focusIndex, 3);
   assert.deepEqual(api.createOtpValue(), ['', '', '', '', '', '']);
+});
+
+await test('adminAnomalyApi.report gọi đúng endpoint /api/v1/admin/anomalies', async () => {
+  requests = [];
+  nextResponse = {
+    generatedAt: '2026-10-28T20:00:00Z',
+    pairWindowDays: 90,
+    pairThreshold: 5,
+    repeatedPairs: [],
+  };
+  const result = await api.adminAnomalyApi.report();
+  assert.equal(requests[0].method, 'get');
+  assert.equal(requests[0].url, '/api/v1/admin/anomalies');
+  assert.deepEqual(result, nextResponse);
 });

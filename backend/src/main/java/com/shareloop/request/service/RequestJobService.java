@@ -239,14 +239,14 @@ public class RequestJobService {
                     donorId,
                     "TRANSACTION_COMPLETED",
                     "Giao dịch đã tự động hoàn tất",
-                    "Giao dịch đã được hệ thống tự động hoàn tất do đối phương không phản hồi sau 3 ngày.",
+                    "Giao dịch đã được hệ thống tự động hoàn tất do đối phương không phản hồi sau 3 ngày. Bạn có 24 giờ để gửi khiếu nại nếu món đồ có vấn đề.",
                     "/requests/" + request.getId());
         }
         notificationService.notify(
                 request.getReceiverId(),
                 "TRANSACTION_COMPLETED",
                 "Giao dịch đã tự động hoàn tất",
-                "Giao dịch đã được hệ thống tự động hoàn tất do đối phương không phản hồi sau 3 ngày.",
+                "Giao dịch đã được hệ thống tự động hoàn tất do đối phương không phản hồi sau 3 ngày. Bạn có 24 giờ để gửi khiếu nại nếu món đồ có vấn đề.",
                 "/requests/" + request.getId());
 
         return true;

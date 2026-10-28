@@ -38,10 +38,13 @@ import { ReportDialog } from '../../components/ReportDialog';
 import {
   canCancelTransaction,
   canChat,
+  canViewChat,
   canConfirmHandover,
   canReportHandoverIssue,
   canSchedule,
   canSelectPendingRequest,
+  isRequestUnread,
+  markRequestChatSeen,
   requestStatusLabel,
 } from '../../utils/request';
 import { chatImageForbiddenMessage } from '../../utils/apiErrorMessages';
@@ -91,8 +94,8 @@ const disputeErrorLabels: Record<string, string> = {
   DISPUTE_NOT_A_PARTY: 'Bạn không phải là một bên của giao dịch này.',
   DISPUTE_NOT_RESPONDENT: 'Chỉ người bị khiếu nại mới có thể gửi giải trình.',
   DISPUTE_REQUEST_NOT_COMPLETED: 'Giao dịch chưa hoàn tất nên chưa thể khiếu nại.',
-  DISPUTE_WINDOW_EXPIRED: 'Đã quá thời hạn gửi khiếu nại.',
-  DISPUTE_RESPONSE_WINDOW_EXPIRED: 'Đã quá thời hạn gửi giải trình.',
+  DISPUTE_WINDOW_EXPIRED: 'Đã quá thời hạn 24 giờ để khiếu nại giao dịch.',
+  DISPUTE_RESPONSE_WINDOW_EXPIRED: 'Đã quá thời hạn 48 giờ để gửi giải trình.',
   DISPUTE_NOT_FOUND: 'Không tìm thấy khiếu nại này.',
   DISPUTE_ALREADY_CONCLUDED: 'Khiếu nại đã được quản trị viên kết luận.',
   DISPUTE_ALREADY_RESPONDED: 'Bạn đã gửi giải trình cho khiếu nại này.',
@@ -354,6 +357,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const selected = conversations.find(({ request }) => request.id === selectedRequestId);
   const selectCandidate = conversations.find(({ request }) => request.id === selectCandidateId);
   const selectedParticipantName = selected ? requestParticipantName(selected, currentUserId) : '';
+  const isCancelled = selected?.request.status === 'CANCELLED';
+  const chatViewable = selected ? canViewChat(selected.request.status) : false;
   const chatEnabled = selected ? canChat(selected.request.status) : false;
   const requestMediaEnabled = selected
     ? ['LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER', 'COMPLETED', 'DISPUTED'].includes(selected.request.status)
@@ -412,7 +417,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     setChatImage(null);
     if (chatImageInputRef.current) chatImageInputRef.current.value = '';
     setShareItemId('');
-    if (selectedRequestId === null || !chatEnabled) {
+    if (selectedRequestId === null || !chatViewable) {
       setMessages([]);
       setMessageError('');
       setLoadingMessages(false);
@@ -460,10 +465,10 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       active = false;
       if (pollingId !== undefined) window.clearTimeout(pollingId);
     };
-  }, [chatEnabled, currentUserId, messageReloadKey, selectedRequestId]);
+  }, [chatViewable, currentUserId, messageReloadKey, selectedRequestId]);
 
   useEffect(() => {
-    if (selectedRequestId === null || !chatEnabled) {
+    if (selectedRequestId === null || !chatViewable) {
       setPinnedItems([]);
       setPinnedItemsLoading(false);
       setPinnedItemsError('');
@@ -490,7 +495,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     return () => {
       active = false;
     };
-  }, [chatEnabled, pinnedItemsReloadKey, selectedRequestId]);
+  }, [chatViewable, pinnedItemsReloadKey, selectedRequestId]);
 
   useEffect(() => {
     if (selectedRequestId === null) return;
@@ -814,6 +819,10 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       setMessageError(chatImageForbiddenMessage('CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN') ?? '');
       return;
     }
+    if (shareItemId && isGiftReceiver) {
+      setMessageError('Người nhận đồ Cho tặng không thể chia sẻ bài đăng.');
+      return;
+    }
     if (chatImage && !requestMediaEnabled) {
       setMessageError('Chỉ được gửi ảnh sau khi hai bên đã chốt lịch hẹn.');
       return;
@@ -881,7 +890,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       setDisputeNote('');
       setDisputeEvidence([]);
       setDisputeNotice(
-        `Khiếu nại của bạn đã được gửi. Hạn giải trình: ${new Date(response.responseDueAt).toLocaleString('vi-VN')}.`,
+        `Khiếu nại của bạn đã được gửi. Đối tác có 48 giờ để giải trình (hạn: ${new Date(response.responseDueAt).toLocaleString('vi-VN')}).`,
       );
       setConversationReloadKey((key) => key + 1);
     } catch (error) {
@@ -991,8 +1000,15 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       : selected.request.donorHandoverAt
     : undefined;
   const scheduleLocked = !selected || !canSchedule(selected.request.status) || Boolean(selected.request.contactRevealedAt) || logisticsSubmitting;
+  useEffect(() => {
+    if (selectedRequestId) {
+      markRequestChatSeen(selectedRequestId);
+    }
+  }, [selectedRequestId]);
+
   const openConversation = (requestId: number) => {
     setSelectedRequestId(requestId);
+    markRequestChatSeen(requestId);
     setMobileChat(true);
     setMobileDetailsOpen(false);
     setReportOpen(false);
@@ -1037,6 +1053,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 const { request } = conversation;
                 const participantName = requestParticipantName(conversation, currentUserId);
                 const active = request.id === selectedRequestId;
+                const unread = !active && isRequestUnread(request.lastMessageAt, request.id);
                 return (
                   <div key={request.id} className={`rounded-md ${active ? 'bg-primary-faint' : 'hover:bg-surface-low'}`}>
                     <button
@@ -1045,17 +1062,38 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       onClick={() => openConversation(request.id)}
                       className="grid w-full grid-cols-[40px_minmax(0,1fr)] gap-3 p-2.5 text-left"
                     >
-                      <Avatar user={{ name: participantName, avatarInitials: avatarInitials(participantName), avatarUrl: undefined }} />
+                      <div className="relative">
+                        <Avatar user={{ name: participantName, avatarInitials: avatarInitials(participantName), avatarUrl: undefined }} />
+                        {unread ? (
+                          <span
+                            className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-error ring-2 ring-white"
+                            title="Tin nhắn mới"
+                          />
+                        ) : null}
+                      </div>
                       <span className="min-w-0">
                         <span className="flex items-baseline justify-between gap-2">
-                          <strong className="truncate text-sm">{participantName}</strong>
+                          <strong className={`truncate text-sm ${unread ? 'font-bold text-text-primary' : ''}`}>
+                            {participantName}
+                          </strong>
                           <span className="shrink-0 text-2xs text-text-muted">
-                            {new Date(request.createdAt).toLocaleDateString('vi-VN')}
+                            {request.lastMessageAt
+                              ? new Date(request.lastMessageAt).toLocaleDateString('vi-VN')
+                              : new Date(request.createdAt).toLocaleDateString('vi-VN')}
                           </span>
                         </span>
-                        <span className="mt-0.5 block truncate text-xs text-text-secondary">{conversationTitle(conversation)}</span>
-                        <span className={`mt-0.5 block text-xs font-semibold ${requestStatusTextClass(request.status)}`}>
-                          {requestStatusLabel[request.status]}
+                        <span className={`mt-0.5 block truncate text-xs ${unread ? 'font-semibold text-text-primary' : 'text-text-secondary'}`}>
+                          {conversationTitle(conversation)}
+                        </span>
+                        <span className="mt-0.5 flex items-center justify-between gap-1">
+                          <span className={`text-xs font-semibold ${requestStatusTextClass(request.status)}`}>
+                            {requestStatusLabel[request.status]}
+                          </span>
+                          {unread ? (
+                            <span className="rounded-full bg-error/10 px-1.5 py-0.2 text-2xs font-bold text-error">
+                              Mới
+                            </span>
+                          ) : null}
                         </span>
                       </span>
                     </button>
@@ -1195,15 +1233,22 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   ))
                 ) : (
                   <p className="mx-auto max-w-sm py-10 text-center text-sm leading-6 text-text-muted">
-                    {chatEnabled
-                      ? 'Chưa có tin nhắn. Hãy gửi lời chào để bắt đầu.'
-                      : 'Cuộc trò chuyện mở khi chủ bài chọn yêu cầu này.'}
+                    {isCancelled
+                      ? 'Giao dịch đã bị huỷ.'
+                      : chatEnabled
+                        ? 'Chưa có tin nhắn. Hãy gửi lời chào để bắt đầu.'
+                        : 'Cuộc trò chuyện mở khi chủ bài chọn yêu cầu này.'}
                   </p>
                 )}
                 <div ref={messagesEndRef} aria-hidden="true" />
               </div>
 
               <div className="shrink-0 space-y-2 border-t border-border px-4 py-3">
+                {isCancelled ? (
+                  <div role="status" className="rounded-md border border-border bg-surface-low px-3 py-2 text-center text-xs text-text-secondary">
+                    Giao dịch đã bị huỷ. Cuộc trò chuyện đang ở chế độ chỉ xem.
+                  </div>
+                ) : null}
                 {messageError ? (
                   <div role="alert" className="flex items-center justify-between gap-3 rounded-md bg-error-soft px-3 py-2 text-xs text-error">
                     <p>{messageError}</p>
@@ -1228,7 +1273,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     </button>
                   </p>
                 ) : null}
-                {shareableItems.length ? (
+                {shareableItems.length && !isGiftReceiver ? (
                   <select
                     aria-label="Chia sẻ bài của bạn"
                     className="input min-h-10 py-2 text-xs"
@@ -1261,7 +1306,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         setMessage(event.target.value);
                         if (messageError) setMessageError('');
                       }}
-                      placeholder={chatEnabled ? 'Nhập tin nhắn...' : 'Chưa thể nhắn tin'}
+                      placeholder={isCancelled ? 'Giao dịch đã huỷ (chỉ xem)' : chatEnabled ? 'Nhập tin nhắn...' : 'Chưa thể nhắn tin'}
                       disabled={sending || !chatEnabled}
                     />
                   </label>
@@ -1517,17 +1562,28 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       Giao dịch đã hoàn tất
                       {selected.request.completedAt ? ` lúc ${new Date(selected.request.completedAt).toLocaleString('vi-VN')}` : ''}.
                     </Alert>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => {
-                        setDisputeError('');
-                        setDisputeNotice('');
-                        setDisputeOpen(true);
-                      }}
-                    >
-                      Khiếu nại giao dịch
-                    </Button>
+                    {selected.request.completedAt && (Date.now() - new Date(selected.request.completedAt).getTime() > 24 * 60 * 60 * 1000) ? (
+                      <p className="text-xs text-text-muted">
+                        Đã hết thời hạn 24 giờ để khiếu nại sau khi giao dịch hoàn tất.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs text-text-muted">
+                          Bạn có 24 giờ kể từ lúc hoàn tất để khiếu nại nếu món đồ có vấn đề. Đối tác sẽ có 48 giờ để giải trình.
+                        </p>
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => {
+                            setDisputeError('');
+                            setDisputeNotice('');
+                            setDisputeOpen(true);
+                          }}
+                        >
+                          Khiếu nại giao dịch
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ) : null}
 
@@ -1749,6 +1805,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         <DialogFrame>
           <h2 className="text-xl font-bold">Gửi khiếu nại giao dịch</h2>
           <p className="mt-1 text-sm text-text-muted">{conversationTitle(selected)}</p>
+          <div className="mt-3 rounded-md bg-warning-soft p-3 text-xs text-warning">
+            Lưu ý: Thời hạn gửi khiếu nại là 24 giờ kể từ lúc hoàn tất giao dịch. Sau khi bạn gửi khiếu nại, đối tác sẽ có 48 giờ để gửi giải trình kèm minh chứng đối chất.
+          </div>
           <Select
             className="mt-5"
             label="Lý do"

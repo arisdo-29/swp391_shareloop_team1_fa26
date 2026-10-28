@@ -32,7 +32,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ChatService {
 
-    private static final Set<RequestStatus> ALLOWED_CHAT_STATUSES = Set.of(
+    private static final Set<RequestStatus> ALLOWED_READ_CHAT_STATUSES = Set.of(
+            RequestStatus.RESERVED,
+            RequestStatus.AWAITING_LOGISTICS,
+            RequestStatus.LOGISTICS_CONFIRMED,
+            RequestStatus.AWAITING_HANDOVER,
+            RequestStatus.COMPLETED,
+            RequestStatus.DISPUTED,
+            RequestStatus.CANCELLED);
+
+    private static final Set<RequestStatus> ALLOWED_SEND_CHAT_STATUSES = Set.of(
             RequestStatus.RESERVED,
             RequestStatus.AWAITING_LOGISTICS,
             RequestStatus.LOGISTICS_CONFIRMED,
@@ -109,9 +118,19 @@ public class ChatService {
 
         RequestChatContext context = validateAndGetChatContext(requestId, currentUserId);
 
+        // Khung chat chỉ được gửi tin nhắn mới khi giao dịch chưa bị huỷ (từ RESERVED đến DISPUTED)
+        if (!ALLOWED_SEND_CHAT_STATUSES.contains(context.status())) {
+            throw new BusinessException(ChatErrorCode.CHAT_REQUEST_NOT_RESERVED);
+        }
+
         // Người nhận đồ Cho tặng không gửi ảnh; chủ bài vẫn gửi được, thẻ bài và chữ không bị ảnh hưởng
         if (hasMedia && "GIVE".equals(context.type()) && currentUserId.equals(context.receiverId())) {
             throw new BusinessException(ChatErrorCode.CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN);
+        }
+
+        // Người nhận đồ Cho tặng không được chia sẻ kèm thẻ bài đăng (N04)
+        if (hasRefItem && "GIVE".equals(context.type()) && currentUserId.equals(context.receiverId())) {
+            throw new BusinessException(ChatErrorCode.CHAT_FORBIDDEN);
         }
 
         // Chặn gửi ảnh trước khi hai bên chốt lịch (FR-75, BR-C05)
@@ -137,6 +156,9 @@ public class ChatService {
                 }
                 if (sharedCard.status() != ItemStatus.APPROVED) {
                     throw new BusinessException(ChatErrorCode.CHAT_ITEM_NOT_APPROVED);
+                }
+                if (sharedCard.donorId() == null || !sharedCard.donorId().equals(currentUserId)) {
+                    throw new BusinessException(ChatErrorCode.CHAT_FORBIDDEN);
                 }
             }
         }
@@ -314,8 +336,8 @@ public class ChatService {
             throw e;
         }
 
-        // 1. Kiểm tra trạng thái: Khung chat chỉ mở khi Request từ RESERVED trở lên
-        if (!ALLOWED_CHAT_STATUSES.contains(context.status())) {
+        // 1. Kiểm tra trạng thái: Khung chat xem được khi Request từ RESERVED trở lên hoặc CANCELLED
+        if (!ALLOWED_READ_CHAT_STATUSES.contains(context.status())) {
             throw new BusinessException(ChatErrorCode.CHAT_REQUEST_NOT_RESERVED);
         }
 

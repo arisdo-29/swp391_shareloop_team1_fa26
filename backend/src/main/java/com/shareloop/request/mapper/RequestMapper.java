@@ -46,6 +46,32 @@ public final class RequestMapper {
         if (request == null) {
             return null;
         }
+        java.time.Instant complaintDeadline =
+                request.getCompletedAt() != null ? request.getCompletedAt().plus(java.time.Duration.ofHours(24)) : null;
+        return toResponse(
+                request,
+                receiverName,
+                receiverTrustStars,
+                receiverRank,
+                receiverAsDescribedRate,
+                itemInfo,
+                complaintDeadline,
+                null);
+    }
+
+    // Map đầy đủ kèm thời hạn khiếu nại (U08) và thời gian tin nhắn mới nhất (U03).
+    public static RequestResponse toResponse(
+            Request request,
+            String receiverName,
+            Integer receiverTrustStars,
+            String receiverRank,
+            Double receiverAsDescribedRate,
+            RequestItemInfo itemInfo,
+            java.time.Instant complaintDeadline,
+            java.time.Instant lastMessageAt) {
+        if (request == null) {
+            return null;
+        }
         return new RequestResponse(
                 request.getId(),
                 request.getItemId(),
@@ -75,6 +101,8 @@ public final class RequestMapper {
                 itemInfo.donorId(),
                 itemInfo.donorName(),
                 itemInfo.offeredItemTitle(),
-                request.getCancelReason());
+                request.getCancelReason(),
+                complaintDeadline,
+                lastMessageAt);
     }
 }

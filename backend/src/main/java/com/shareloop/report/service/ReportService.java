@@ -316,7 +316,7 @@ public class ReportService {
                     respondentId,
                     "DISPUTE_OPENED",
                     transaction + " bị khiếu nại",
-                    transaction + " đã bị đối tác khiếu nại. Bạn có " + responseDays + " ngày để giải trình.",
+                    transaction + " đã bị đối tác khiếu nại. Bạn có " + (responseDays * 24) + " giờ để giải trình.",
                     "/me/disputes/" + saved.getId());
         }
 
@@ -370,7 +370,7 @@ public class ReportService {
                     itemSummary.donorId(),
                     "DISPUTE_OPENED",
                     "Món đồ bị báo không đúng mô tả",
-                    "Người nhận báo món đồ không đúng mô tả. Bạn có " + responseDays + " ngày để giải trình.",
+                    "Người nhận báo món đồ không đúng mô tả. Bạn có " + (responseDays * 24) + " giờ để giải trình.",
                     "/me/disputes/" + saved.getId());
         }
     }
@@ -427,8 +427,8 @@ public class ReportService {
                     respondentId,
                     "DISPUTE_OPENED",
                     "Đối phương báo " + issue,
-                    "Đối phương báo " + issue + " dù bạn đã xác nhận bàn giao. Bạn có " + responseDays
-                            + " ngày để giải trình.",
+                    "Đối phương báo " + issue + " dù bạn đã xác nhận bàn giao. Bạn có " + (responseDays * 24)
+                            + " giờ để giải trình.",
                     "/me/disputes/" + saved.getId());
         }
     }

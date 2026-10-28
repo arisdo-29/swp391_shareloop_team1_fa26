@@ -261,16 +261,16 @@ public enum ConfigKey {
             "Giao dịch quá giờ hẹn hơn số giờ này mà chưa bên nào xác nhận bàn giao thì Admin thấy ở bộ lọc Bị kẹt."),
     COMPLAINT_WINDOW_DAYS(
             "complaint_window_days",
-            "7",
+            "1",
             ConfigGroup.TRANSACTION,
             "Hạn khiếu nại",
-            "Số ngày được khiếu nại sau khi giao dịch hoàn tất."),
+            "Số ngày được khiếu nại sau khi giao dịch hoàn tất (mặc định 1 ngày / 24 giờ)."),
     RESPONSE_WINDOW_DAYS(
             "response_window_days",
-            "3",
+            "2",
             ConfigGroup.TRANSACTION,
             "Hạn giải trình",
-            "Số ngày bên bị khiếu nại được giải trình."),
+            "Số ngày bên bị khiếu nại được giải trình (mặc định 2 ngày / 48 giờ)."),
     DAILY_POINTS_CAP(
             "daily_points_cap",
             "30",
