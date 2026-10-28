@@ -1,6 +1,7 @@
 package com.shareloop.user.service;
 
 import com.shareloop.audit.ActivityType;
+import com.shareloop.audit.service.ActivityLogQueryService;
 import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
@@ -10,6 +11,9 @@ import com.shareloop.user.dto.AdminAccountState;
 import com.shareloop.user.dto.AdminUserSummary;
 import com.shareloop.user.event.UserLockCleanup;
 import com.shareloop.user.event.UserLockedEvent;
+import com.shareloop.user.event.UserUnlockedEvent;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -24,12 +28,17 @@ public class AdminUserService {
 
     private final UserService userService;
     private final ActivityLogService activityLogService;
+    private final ActivityLogQueryService activityLogQueryService;
     private final ApplicationEventPublisher eventPublisher;
 
     public AdminUserService(
-            UserService userService, ActivityLogService activityLogService, ApplicationEventPublisher eventPublisher) {
+            UserService userService,
+            ActivityLogService activityLogService,
+            ActivityLogQueryService activityLogQueryService,
+            ApplicationEventPublisher eventPublisher) {
         this.userService = userService;
         this.activityLogService = activityLogService;
+        this.activityLogQueryService = activityLogQueryService;
         this.eventPublisher = eventPublisher;
     }
 
@@ -61,9 +70,11 @@ public class AdminUserService {
         UserLockCleanup cleanup = new UserLockCleanup();
         eventPublisher.publishEvent(new UserLockedEvent(adminId, userId, cleanup));
 
+        // hiddenItemIds lưu lại để mở khoá hiện đúng những bài này (không có cột đánh dấu bài bị ẩn do khoá)
         Map<String, Object> data = Map.of(
                 "cancelledRequests", cleanup.getCancelledRequests(),
-                "releasedCredit", cleanup.getReleasedCredit());
+                "releasedCredit", cleanup.getReleasedCredit(),
+                "hiddenItemIds", cleanup.getHiddenItemIds());
         activityLogService.log(ActivityType.USER_LOCK.name(), adminId, "USER", userId, data, reason);
     }
 
@@ -77,6 +88,29 @@ public class AdminUserService {
     @Transactional
     public void unlock(Long adminId, Long userId, String reason) {
         userService.unlock(userId);
-        activityLogService.log(ActivityType.USER_UNLOCK.name(), adminId, "USER", userId, (String) null, reason);
+
+        List<Long> hiddenItemIds = findItemIdsHiddenByLock(userId);
+        eventPublisher.publishEvent(new UserUnlockedEvent(userId, hiddenItemIds));
+
+        Map<String, Object> data = Map.of("restoredItems", hiddenItemIds.size());
+        activityLogService.log(ActivityType.USER_UNLOCK.name(), adminId, "USER", userId, data, reason);
+    }
+
+    // Id bài đã ẩn lúc khoá nằm trong data của dòng USER_LOCK mới nhất; không có thì không hiện lại bài nào
+    private List<Long> findItemIdsHiddenByLock(Long userId) {
+        Object stored = activityLogQueryService
+                .findLatestData(ActivityType.USER_LOCK.name(), userId)
+                .map(data -> data.get("hiddenItemIds"))
+                .orElse(null);
+        if (!(stored instanceof List<?> values)) {
+            return List.of();
+        }
+        List<Long> itemIds = new ArrayList<>();
+        for (Object value : values) {
+            if (value instanceof Number number) {
+                itemIds.add(number.longValue());
+            }
+        }
+        return itemIds;
     }
 }

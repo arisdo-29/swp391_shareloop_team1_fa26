@@ -288,6 +288,75 @@ class ChatServiceTest {
                     .attach(any(), org.mockito.ArgumentMatchers.anyLong());
         }
 
+        private RequestChatContext contextOfType(String type) {
+            return new RequestChatContext(
+                    REQUEST_ID, RequestStatus.LOGISTICS_CONFIRMED, RECEIVER_ID, DONOR_ID, 1L, null, type);
+        }
+
+        @Test
+        @DisplayName("Người nhận trong giao dịch GIVE gửi ảnh thì bị CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN")
+        void sendMessage_image_throwsWhenGiveReceiverSends() {
+            // given
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(contextOfType("GIVE"));
+
+            // when / then
+            assertThatThrownBy(
+                            () -> chatService.sendMessage(REQUEST_ID, RECEIVER_ID, new SendMessageRequest(null, 50L)))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                            .isEqualTo(ChatErrorCode.CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN));
+            org.mockito.Mockito.verify(mediaService, org.mockito.Mockito.never())
+                    .attach(any(), org.mockito.ArgumentMatchers.anyLong());
+        }
+
+        @Test
+        @DisplayName("Chủ bài trong giao dịch GIVE vẫn gửi được ảnh sau khi chốt lịch")
+        void sendMessage_image_successWhenGiveDonorSends() {
+            // given
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(contextOfType("GIVE"));
+            when(messageRepository.save(any(Message.class)))
+                    .thenReturn(new Message(REQUEST_ID, DONOR_ID, MessageKind.IMAGE, null, 51L));
+
+            // when
+            MessageResponse response = chatService.sendMessage(REQUEST_ID, DONOR_ID, new SendMessageRequest(null, 51L));
+
+            // then
+            assertThat(response.kind()).isEqualTo(MessageKind.IMAGE.name());
+            verify(mediaService).attach(List.of(51L), DONOR_ID);
+        }
+
+        @Test
+        @DisplayName("Hai phía trong giao dịch SWAP đều gửi được ảnh như cũ")
+        void sendMessage_image_successWhenSwapReceiverSends() {
+            // given
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(contextOfType("SWAP"));
+            when(messageRepository.save(any(Message.class)))
+                    .thenReturn(new Message(REQUEST_ID, RECEIVER_ID, MessageKind.IMAGE, null, 52L));
+
+            // when
+            MessageResponse response =
+                    chatService.sendMessage(REQUEST_ID, RECEIVER_ID, new SendMessageRequest(null, 52L));
+
+            // then
+            assertThat(response.kind()).isEqualTo(MessageKind.IMAGE.name());
+        }
+
+        @Test
+        @DisplayName("Người nhận trong giao dịch GIVE vẫn nhắn chữ được")
+        void sendMessage_text_successWhenGiveReceiverSends() {
+            // given
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(contextOfType("GIVE"));
+            when(messageRepository.save(any(Message.class)))
+                    .thenReturn(new Message(REQUEST_ID, RECEIVER_ID, "Cảm ơn bạn"));
+
+            // when
+            MessageResponse response =
+                    chatService.sendMessage(REQUEST_ID, RECEIVER_ID, new SendMessageRequest("Cảm ơn bạn", null));
+
+            // then
+            assertThat(response.content()).isEqualTo("Cảm ơn bạn");
+        }
+
         @Test
         @DisplayName(
                 "Ném lỗi CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN khi gửi ảnh ở trạng thái AWAITING_LOGISTICS (FR-75, BR-C05)")

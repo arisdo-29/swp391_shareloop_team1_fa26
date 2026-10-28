@@ -75,6 +75,38 @@ class AdminUserLockCascadeIT extends IntegrationTest {
                 .contains("\"releasedCredit\": 10");
     }
 
+    @Test
+    @DisplayName("Khoá ẩn mọi bài APPROVED (kể cả bài vừa được nhả); mở khoá chỉ hiện lại đúng các bài bị ẩn do khoá")
+    void lockThenUnlock_hidesApprovedItemsAndRestoresOnlyThoseHiddenByLock() {
+        // given: một bài đang hiển thị, một bài RESERVED có giao dịch mở, một bài đã bị ẩn từ trước
+        long adminId = insertUser(0, 0);
+        long lockedUserId = insertUser(0, 0);
+        long receiverId = insertUser(0, 0);
+        long visibleItemId = insertItem(lockedUserId, "GIVE", "APPROVED", "NONE", 0);
+        long reservedItemId = insertItem(lockedUserId, "GIVE", "RESERVED", "NONE", 0);
+        insertRequest(reservedItemId, receiverId, "RESERVED");
+        long alreadyHiddenItemId = insertItem(lockedUserId, "GIVE", "APPROVED", "NONE", 0);
+        jdbc.update("UPDATE items SET is_active = false WHERE id = ?", alreadyHiddenItemId);
+
+        // when: khoá
+        adminUserService.lock(adminId, lockedUserId, "Vi phạm");
+
+        // then: bài nhả về APPROVED và mọi bài đều bị ẩn, status không đổi
+        assertThat(itemStatusOf(reservedItemId)).isEqualTo("APPROVED");
+        assertThat(itemActiveOf(visibleItemId)).isFalse();
+        assertThat(itemActiveOf(reservedItemId)).isFalse();
+        assertThat(itemStatusOf(visibleItemId)).isEqualTo("APPROVED");
+
+        // when: mở khoá
+        adminUserService.unlock(adminId, lockedUserId, "Đã giải trình");
+
+        // then: chỉ hiện lại bài bị ẩn do khoá, bài Admin ẩn từ trước vẫn ẩn
+        assertThat(itemActiveOf(visibleItemId)).isTrue();
+        assertThat(itemActiveOf(reservedItemId)).isTrue();
+        assertThat(itemActiveOf(alreadyHiddenItemId)).isFalse();
+        assertThat(isActive(lockedUserId)).isTrue();
+    }
+
     // ---------- Tiện ích hỗ trợ test ----------
 
     private long insertUser(int creditBalance, int heldCredit) {
@@ -130,6 +162,10 @@ class AdminUserLockCascadeIT extends IntegrationTest {
 
     private String itemStatusOf(long itemId) {
         return jdbc.queryForObject("SELECT status FROM items WHERE id = ?", String.class, itemId);
+    }
+
+    private boolean itemActiveOf(long itemId) {
+        return jdbc.queryForObject("SELECT is_active FROM items WHERE id = ?", Boolean.class, itemId);
     }
 
     private int heldCreditOf(long userId) {

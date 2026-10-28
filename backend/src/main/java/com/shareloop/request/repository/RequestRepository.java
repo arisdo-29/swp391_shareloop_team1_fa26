@@ -51,6 +51,16 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
     List<Request> findByReceiverIdOrderByCreatedAtDesc(Long receiverId);
 
     /**
+     * Mọi yêu cầu, mới nhất trước, cho danh sách giao dịch của Admin.
+     */
+    List<Request> findAllByOrderByCreatedAtDesc();
+
+    /**
+     * Yêu cầu theo trạng thái, mới nhất trước, cho danh sách giao dịch của Admin.
+     */
+    List<Request> findByStatusOrderByCreatedAtDesc(RequestStatus status);
+
+    /**
      * Kiểm tra bài đăng đã có yêu cầu ở trạng thái RESERVED trở lên hay chưa (F07 bước 1, BR-D04).
      */
     @Query("""

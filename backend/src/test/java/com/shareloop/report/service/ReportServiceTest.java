@@ -755,6 +755,57 @@ class ReportServiceTest {
     }
 
     @Test
+    @DisplayName("Kết luận UPHOLD khiếu nại giao dịch: yêu cầu RequestService giải quyết DISPUTED theo hướng huỷ")
+    void conclude_upholdRequestReport_resolvesDisputedRequestAsCancelled() {
+        // given
+        Report report = new Report(
+                100L, TargetType.REQUEST, 105L, 200L, 77L, ReportReason.NO_SHOW, "Chưa nhận được", ReportStage.AFTER);
+        ReflectionTestUtils.setField(report, "id", 14L);
+        when(reportRepository.findByIdForUpdate(14L)).thenReturn(Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // when
+        reportService.conclude(1L, 14L, new ConcludeReportRequest(ReportDecision.UPHOLD, null));
+
+        // then
+        verify(requestService).resolveDisputedRequest(77L, true);
+    }
+
+    @Test
+    @DisplayName("Kết luận DISMISS khiếu nại giao dịch: yêu cầu RequestService giải quyết DISPUTED theo hướng hoàn tất")
+    void conclude_dismissRequestReport_resolvesDisputedRequestAsCompleted() {
+        // given
+        Report report = new Report(
+                100L, TargetType.REQUEST, 105L, 200L, 77L, ReportReason.NO_SHOW, "Chưa nhận được", ReportStage.AFTER);
+        ReflectionTestUtils.setField(report, "id", 15L);
+        when(reportRepository.findByIdForUpdate(15L)).thenReturn(Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // when
+        reportService.conclude(1L, 15L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
+
+        // then
+        verify(requestService).resolveDisputedRequest(77L, false);
+    }
+
+    @Test
+    @DisplayName("Kết luận báo cáo bài đăng không đụng tới giao dịch")
+    void conclude_itemReport_doesNotResolveRequest() {
+        // given
+        Report report =
+                new Report(100L, TargetType.ITEM, 105L, null, null, ReportReason.OTHER, "Báo cáo", ReportStage.BEFORE);
+        ReflectionTestUtils.setField(report, "id", 16L);
+        when(reportRepository.findByIdForUpdate(16L)).thenReturn(Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // when
+        reportService.conclude(1L, 16L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
+
+        // then
+        verify(requestService, never()).resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
     @DisplayName("Kết luận không kèm ghi chú: ghi chú mặc định gọi báo cáo bằng tên bài, không có #id")
     void conclude_withoutNote_defaultNotesUseItemTitle() {
         Long adminId = 1L;

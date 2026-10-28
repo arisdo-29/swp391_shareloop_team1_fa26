@@ -109,6 +109,11 @@ public class ChatService {
 
         RequestChatContext context = validateAndGetChatContext(requestId, currentUserId);
 
+        // Người nhận đồ Cho tặng không gửi ảnh; chủ bài vẫn gửi được, thẻ bài và chữ không bị ảnh hưởng
+        if (hasMedia && "GIVE".equals(context.type()) && currentUserId.equals(context.receiverId())) {
+            throw new BusinessException(ChatErrorCode.CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN);
+        }
+
         // Chặn gửi ảnh trước khi hai bên chốt lịch (FR-75, BR-C05)
         if (hasMedia) {
             if (context.status() == RequestStatus.RESERVED || context.status() == RequestStatus.AWAITING_LOGISTICS) {

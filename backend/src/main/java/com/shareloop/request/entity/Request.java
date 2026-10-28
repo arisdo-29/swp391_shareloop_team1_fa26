@@ -24,6 +24,7 @@ public class Request extends BaseEntity {
     public static final String CANCEL_BY_DONOR = "[Chủ bài] ";
     public static final String CANCEL_BY_RECEIVER = "[Người nhận] ";
     public static final String CANCEL_BY_SYSTEM = "[Hệ thống] ";
+    public static final String CANCEL_BY_ADMIN = "[Admin] ";
 
     @Column(name = "item_id", nullable = false)
     private Long itemId;
@@ -277,6 +278,16 @@ public class Request extends BaseEntity {
             throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
         }
         transitionTo(RequestStatus.DISPUTED);
+    }
+
+    /**
+     * Admin bác bỏ khiếu nại: giao dịch DISPUTED được công nhận hoàn tất như bình thường.
+     *
+     * @param now thời điểm hoàn tất
+     */
+    public void completeAfterDispute(Instant now) {
+        transitionTo(RequestStatus.COMPLETED);
+        this.completedAt = now;
     }
 
     /**

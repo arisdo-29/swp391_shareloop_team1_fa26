@@ -76,16 +76,35 @@ class ChatServiceIT extends IntegrationTest {
         long receiverId = insertUser();
         long itemId = insertItem(donorId, "RESERVED");
         long requestId = insertRequest(itemId, receiverId, "RESERVED");
-        long mediaId = insertMedia(receiverId, "UPLOADED");
+        long mediaId = insertMedia(donorId, "UPLOADED");
 
         SendMessageRequest request = new SendMessageRequest("Ảnh thực tế", mediaId);
 
-        assertThatThrownBy(() -> chatService.sendMessage(requestId, receiverId, request))
+        assertThatThrownBy(() -> chatService.sendMessage(requestId, donorId, request))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(ChatErrorCode.CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN));
 
         // Kiểm tra media vẫn ở trạng thái UPLOADED, chưa bị attach
+        String mediaStatus = jdbc.queryForObject("SELECT status FROM media_files WHERE id = ?", String.class, mediaId);
+        assertThat(mediaStatus).isEqualTo("UPLOADED");
+    }
+
+    @Test
+    @DisplayName(
+            "Người nhận trong giao dịch Cho tặng gửi ảnh bị CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN và media không bị attach")
+    void sendMessage_image_giveReceiver_throwsForbidden() {
+        long donorId = insertUser();
+        long receiverId = insertUser();
+        long itemId = insertItem(donorId, "RESERVED");
+        long requestId = insertRequest(itemId, receiverId, "LOGISTICS_CONFIRMED");
+        long mediaId = insertMedia(receiverId, "UPLOADED");
+
+        assertThatThrownBy(() -> chatService.sendMessage(requestId, receiverId, new SendMessageRequest(null, mediaId)))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(ChatErrorCode.CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN));
+
         String mediaStatus = jdbc.queryForObject("SELECT status FROM media_files WHERE id = ?", String.class, mediaId);
         assertThat(mediaStatus).isEqualTo("UPLOADED");
     }
@@ -97,11 +116,11 @@ class ChatServiceIT extends IntegrationTest {
         long receiverId = insertUser();
         long itemId = insertItem(donorId, "RESERVED");
         long requestId = insertRequest(itemId, receiverId, "LOGISTICS_CONFIRMED");
-        long mediaId = insertMedia(receiverId, "UPLOADED");
+        long mediaId = insertMedia(donorId, "UPLOADED");
 
         SendMessageRequest request = new SendMessageRequest("Gói đồ đây bạn nhé", mediaId);
 
-        MessageResponse response = chatService.sendMessage(requestId, receiverId, request);
+        MessageResponse response = chatService.sendMessage(requestId, donorId, request);
 
         assertThat(response).isNotNull();
         assertThat(response.kind()).isEqualTo(MessageKind.IMAGE.name());

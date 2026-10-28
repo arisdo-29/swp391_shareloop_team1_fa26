@@ -5,6 +5,7 @@ import com.shareloop.listingfee.service.ListingFeeQueryService;
 import com.shareloop.review.service.ReviewService;
 import com.shareloop.user.event.UserLockedEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
@@ -27,6 +28,7 @@ public class UserLockedHeldFeeListener {
 
     // @EventListener thường: chạy cùng transaction với lúc khoá, lỗi thì cả việc khoá cũng rollback.
     @EventListener
+    @Order(20)
     public void onUserLocked(UserLockedEvent event) {
         for (HeldFeeItem heldItem : listingFeeQueryService.findHeldFees(event.userId())) {
             // Bài đã duyệt không còn ở hàng chờ nên không từ chối được; findHeldFees chỉ trả bài đang giữ phí
