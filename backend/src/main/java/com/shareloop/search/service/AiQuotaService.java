@@ -7,6 +7,7 @@ import com.shareloop.search.entity.AiQuotaAccount;
 import com.shareloop.search.repository.AiQuotaAccountRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.wallet.WalletErrorCode;
 import com.shareloop.wallet.dto.WalletResponse;
 import com.shareloop.wallet.service.CreditService;
 import java.time.Clock;
@@ -39,7 +40,34 @@ public class AiQuotaService {
         return snapshot(account, wallet.hasToppedUp(), LocalDate.now(clock));
     }
 
-    /** Reserve in a short transaction; do not hold a user row lock during the network call. */
+    /** Check affordability before calling the provider without changing the wallet or free allowance. */
+    @Transactional(readOnly = true)
+    public void checkAvailable(long userId) {
+        AiQuotaAccount account = requireAccount(userId);
+        WalletResponse wallet = creditService.getWallet(userId);
+        if (remaining(account, wallet.hasToppedUp(), LocalDate.now(clock)) == 0
+                && wallet.available() < configService.getInt(ConfigKey.AI_SEARCH_FEE)) {
+            throw new BusinessException(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE);
+        }
+    }
+
+    /** Consume only after at least one result exists; wallet and allowance updates share this transaction. */
+    @Transactional
+    public boolean consume(long userId) {
+        creditService.lockWalletRow(userId);
+        AiQuotaAccount account = requireAccount(userId);
+        boolean toppedUp = creditService.getWallet(userId).hasToppedUp();
+        LocalDate today = LocalDate.now(clock);
+        if (remaining(account, toppedUp, today) > 0) {
+            account.use(today, toppedUp);
+            return false;
+        }
+        creditService.chargeAiSearch(userId);
+        return true;
+    }
+
+    /** Legacy accounting API retained for wallet tests; AI search uses checkAvailable/consume. */
+    @Deprecated
     @Transactional
     public Reservation reserve(long userId) {
         creditService.lockWalletRow(userId);
@@ -53,6 +81,7 @@ public class AiQuotaService {
         return new Reservation(today, toppedUp, creditService.chargeAiSearch(userId));
     }
 
+    @Deprecated
     @Transactional
     public void refund(long userId, Reservation reservation) {
         creditService.lockWalletRow(userId);
@@ -80,6 +109,7 @@ public class AiQuotaService {
         return Math.max(0, allowance - used);
     }
 
+    @Deprecated
     public record Reservation(LocalDate date, boolean toppedUp, Long ledgerId) {
         public boolean paid() {
             return ledgerId != null;

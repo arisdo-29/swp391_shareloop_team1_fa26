@@ -26,12 +26,10 @@ import com.shareloop.item.service.ItemService;
 import com.shareloop.search.SearchErrorCode;
 import com.shareloop.search.dto.AiQuotaResponse;
 import com.shareloop.search.dto.AiSearchResponse;
-import com.shareloop.search.service.AiQuotaService.Reservation;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
-import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -100,7 +98,26 @@ class AiSearchServiceTest {
         assertThat(result.fallback()).isFalse();
         assertThat(result.broadened()).isFalse();
         assertThat(result.quota().freeUsesRemaining()).isEqualTo(4);
+        verify(quotaService).checkAvailable(7L);
+        verify(quotaService).consume(7L);
         verify(activityLogService).log(eq("AI_USAGE"), eq(7L), eq("AI_SEARCH"), eq(null), anyMap(), eq(null));
+    }
+
+    @Test
+    void resultAfterFreeAllowanceChargesConfiguredFee() throws Exception {
+        ready();
+        when(aiClient.extract(any(), any(), any())).thenReturn(new AiResponse(MODEL, """
+                {"keywords":"sách","categoryId":null,"areaId":null,
+                 "condition":null,"offerType":null}
+                """));
+        when(itemService.searchApprovedForAi(null, null, "sách", null, null, 0, 20))
+                .thenReturn(new PageResponse<>(List.of(mock(ItemResponse.class)), 0, 20, 1));
+        when(quotaService.consume(7L)).thenReturn(true);
+        when(configService.getInt(ConfigKey.AI_SEARCH_FEE)).thenReturn(2);
+
+        AiSearchResponse result = service.search(7L, "Tìm sách", 0, 20);
+
+        assertThat(result.chargedCredits()).isEqualTo(2);
     }
 
     @Test
@@ -125,7 +142,7 @@ class AiSearchServiceTest {
         assertThat(result.filters().areaId()).isEqualTo(11L);
         assertThat(result.broadened()).isTrue();
         assertThat(result.fallback()).isFalse();
-        verify(quotaService, never()).refund(eq(7L), any());
+        verify(quotaService).consume(7L);
     }
 
     @Test
@@ -146,34 +163,52 @@ class AiSearchServiceTest {
 
         assertThat(result.results()).isSameAs(empty);
         assertThat(result.broadened()).isFalse();
+        assertThat(result.chargedCredits()).isZero();
+        verify(quotaService, never()).consume(7L);
     }
 
     @Test
-    void unknownDistrictFallsBackAndRefundsBeforeDatabaseQuery() throws Exception {
+    void doesNotChargeWhenRequestedPageHasNoItems() throws Exception {
+        ready();
+        when(aiClient.extract(any(), any(), any())).thenReturn(new AiResponse(MODEL, """
+                {"keywords":"sách","categoryId":null,"areaId":null,
+                 "condition":null,"offerType":null}
+                """));
+        when(itemService.searchApprovedForAi(null, null, "sách", null, null, 3, 20))
+                .thenReturn(new PageResponse<>(List.of(), 3, 20, 1));
+
+        AiSearchResponse result = service.search(7L, "Tìm sách", 3, 20);
+
+        assertThat(result.chargedCredits()).isZero();
+        verify(quotaService, never()).consume(7L);
+    }
+
+    @Test
+    void unknownDistrictFallsBackWithoutConsumingQuota() throws Exception {
         ready();
         when(aiClient.extract(any(), any(), any())).thenReturn(new AiResponse(MODEL, """
                 {"keywords":"sách","categoryId":1,"areaId":10,"condition":null,"offerType":null}
                 """));
         AiSearchResponse result = service.search(7L, "Tìm sách cũ ở quận 1", 0, 20);
         assertThat(result.fallback()).isTrue();
-        verify(quotaService).refund(eq(7L), any());
+        verify(quotaService, never()).consume(7L);
         verify(itemService).searchApprovedForAi(null, null, "Tìm sách cũ ở quận 1", null, null, 0, 20);
     }
 
     @Test
-    void timeoutRefundsAndFallsBack() throws Exception {
+    void timeoutFallsBackWithoutConsumingQuota() throws Exception {
         ready();
         when(aiClient.model()).thenReturn(MODEL);
         when(aiClient.extract(any(), any(), any())).thenThrow(new HttpTimeoutException("timed out"));
         assertThat(service.search(7L, "Tìm sách cũ ở quận 1", 0, 20).fallback()).isTrue();
-        verify(quotaService).refund(eq(7L), any());
+        verify(quotaService, never()).consume(7L);
     }
 
     @Test
     void missingApiKeyFallsBackWithoutReserving() throws Exception {
         assertThat(service.search(7L, "Tìm sách cũ ở quận 1", 0, 20).fallback()).isTrue();
         verify(aiClient, never()).extract(any(), any(), any());
-        verify(quotaService, never()).reserve(any(Long.class));
+        verify(quotaService, never()).checkAvailable(any(Long.class));
     }
 
     @Test
@@ -196,7 +231,6 @@ class AiSearchServiceTest {
                         (short) 1,
                         List.of(new AreaResponse(11L, "Quận 1", 10L, (short) 2, List.of())))));
         when(configService.getInt(ConfigKey.AI_SEARCH_TIMEOUT_SECONDS)).thenReturn(15);
-        when(quotaService.reserve(7L)).thenReturn(new Reservation(LocalDate.of(2026, 10, 19), true, null));
         when(quotaService.getQuota(7L)).thenReturn(new AiQuotaResponse(4, 2, true));
     }
 

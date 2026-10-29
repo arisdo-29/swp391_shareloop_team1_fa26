@@ -17,7 +17,6 @@ import com.shareloop.moderation.ContactInfoDetector;
 import com.shareloop.search.SearchErrorCode;
 import com.shareloop.search.dto.AiSearchFilters;
 import com.shareloop.search.dto.AiSearchResponse;
-import com.shareloop.search.service.AiQuotaService.Reservation;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import java.net.http.HttpTimeoutException;
@@ -97,26 +96,23 @@ public class AiSearchService {
         Set<Long> districtIds = districts.stream().map(AreaResponse::id).collect(Collectors.toSet());
 
         Duration timeout = Duration.ofSeconds(configService.getInt(ConfigKey.AI_SEARCH_TIMEOUT_SECONDS));
-        Reservation reservation = quotaService.reserve(userId);
+        quotaService.checkAvailable(userId);
         long started = System.nanoTime();
         AiResponse response;
         try {
             response = aiClient.extract(query.trim(), allowedFilters, timeout);
         } catch (HttpTimeoutException exception) {
             LOGGER.warn("AI search fallback: provider request timed out");
-            quotaService.refund(userId, reservation);
-            logCall(userId, aiClient.model(), "TIMEOUT", started, reservation);
+            logCall(userId, aiClient.model(), "TIMEOUT", started, false);
             return fallback(userId, query, page, size);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             LOGGER.warn("AI search fallback: provider request was interrupted");
-            quotaService.refund(userId, reservation);
-            logCall(userId, aiClient.model(), "INTERRUPTED", started, reservation);
+            logCall(userId, aiClient.model(), "INTERRUPTED", started, false);
             return fallback(userId, query, page, size);
         } catch (Exception exception) {
             LOGGER.warn("AI search fallback: provider call failed ({})", safeFailureDetail(exception));
-            quotaService.refund(userId, reservation);
-            logCall(userId, aiClient.model(), "FAILED", started, reservation);
+            logCall(userId, aiClient.model(), "FAILED", started, false);
             return fallback(userId, query, page, size);
         }
 
@@ -127,8 +123,7 @@ public class AiSearchService {
             LOGGER.warn(
                     "AI search fallback: provider response failed validation ({})",
                     exception.getClass().getSimpleName());
-            quotaService.refund(userId, reservation);
-            logCall(userId, response.model(), "INVALID_RESPONSE", started, reservation);
+            logCall(userId, response.model(), "INVALID_RESPONSE", started, false);
             return fallback(userId, query, page, size);
         }
         PageResponse<ItemResponse> results = itemService.searchApprovedForAi(
@@ -153,12 +148,14 @@ public class AiSearchService {
                 broadened = true;
             }
         }
-        logCall(userId, response.model(), "SUCCESS", started, reservation);
+        boolean hasResults = !results.items().isEmpty();
+        boolean paid = hasResults && quotaService.consume(userId);
+        logCall(userId, response.model(), hasResults ? "SUCCESS" : "NO_RESULTS", started, paid);
         return new AiSearchResponse(
                 filters,
                 results,
                 quotaService.getQuota(userId),
-                reservation.paid() ? configService.getInt(ConfigKey.AI_SEARCH_FEE) : 0,
+                paid ? configService.getInt(ConfigKey.AI_SEARCH_FEE) : 0,
                 false,
                 broadened);
     }
@@ -240,7 +237,7 @@ public class AiSearchService {
         return Enum.valueOf(type, node.asText());
     }
 
-    private void logCall(long userId, String model, String outcome, long started, Reservation reservation) {
+    private void logCall(long userId, String model, String outcome, long started, boolean paid) {
         activityLogService.log(
                 "AI_USAGE",
                 userId,
@@ -252,9 +249,7 @@ public class AiSearchService {
                         "model",
                         model,
                         "billing",
-                        "SUCCESS".equals(outcome)
-                                ? (reservation.paid() ? "CREDIT" : "FREE")
-                                : (reservation.paid() ? "REFUNDED_CREDIT" : "REFUNDED_FREE"),
+                        "SUCCESS".equals(outcome) ? (paid ? "CREDIT" : "FREE") : "NONE",
                         "outcome",
                         outcome,
                         "durationMs",
