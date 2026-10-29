@@ -42,6 +42,7 @@ function entry(
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.clearAllMocks();
 });
 
@@ -138,7 +139,7 @@ describe('AdminFinanceUserDetail', () => {
     expect(screen.queryByText('Cập nhật hệ thống')).toBeNull();
   });
 
-  it('gửi khoảng ngày theo giờ Việt Nam khi lọc lịch sử', async () => {
+  it('gửi khoảng ngày theo định dạng LocalDate khi lọc lịch sử', async () => {
     const user = userEvent.setup();
     renderDetail();
     await screen.findByRole('heading', { name: 'Lan An' });
@@ -149,8 +150,47 @@ describe('AdminFinanceUserDetail', () => {
     await waitFor(() =>
       expect(adminFinanceApi.userHistory).toHaveBeenLastCalledWith(
         7,
-        expect.objectContaining({ from: '2026-09-30T17:00:00.000Z', page: 0, size: 20 }),
+        expect.objectContaining({ from: '2026-10-01', page: 0, size: 20 }),
       ),
+    );
+  });
+
+  it('chỉ active một nút lọc nhanh, bỏ active khi sửa tay và không gửi ngày khi chọn Tất cả', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-10-29T08:00:00+07:00'));
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderDetail();
+    await screen.findByRole('heading', { name: 'Lan An' });
+
+    const monthButton = screen.getByRole('button', { name: 'Tháng này' });
+    const quarterButton = screen.getByRole('button', { name: 'Quý này' });
+    const allButton = screen.getByRole('button', { name: 'Tất cả' });
+
+    await user.click(monthButton);
+    expect(monthButton.getAttribute('aria-pressed')).toBe('true');
+    expect(quarterButton.getAttribute('aria-pressed')).toBe('false');
+    await waitFor(() =>
+      expect(adminFinanceApi.userHistory).toHaveBeenLastCalledWith(7, {
+        from: '2026-10-01',
+        to: '2026-10-29',
+        page: 0,
+        size: 20,
+      }),
+    );
+
+    await user.click(quarterButton);
+    expect(monthButton.getAttribute('aria-pressed')).toBe('false');
+    expect(quarterButton.getAttribute('aria-pressed')).toBe('true');
+
+    await user.clear(screen.getByLabelText('Từ ngày'));
+    await user.type(screen.getByLabelText('Từ ngày'), '2026-10-02');
+    for (const button of [monthButton, quarterButton, allButton]) {
+      expect(button.getAttribute('aria-pressed')).toBe('false');
+    }
+
+    await user.click(allButton);
+    await waitFor(() =>
+      expect(adminFinanceApi.userHistory).toHaveBeenLastCalledWith(7, { page: 0, size: 20 }),
     );
   });
 

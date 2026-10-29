@@ -106,6 +106,19 @@ describe.each([
   ['desktop', 1280],
   ['mobile', 375],
 ])('AppShell header dropdowns on %s', (_viewport, width) => {
+  it('shows the about link after the AI assistant for signed-in users', () => {
+    renderShell(width);
+
+    const header = screen.getByRole('banner');
+    const headerLinks = within(header).getAllByRole('link');
+    const aiIndex = headerLinks.findIndex((link) => link.textContent === 'Trợ lý AI');
+    const aboutIndex = headerLinks.findIndex((link) => link.textContent === 'Giới thiệu');
+
+    expect(aiIndex).toBeGreaterThanOrEqual(0);
+    expect(aboutIndex).toBe(aiIndex + 1);
+    expect(headerLinks[aboutIndex].getAttribute('href')).toBe('/about');
+  });
+
   it('closes dropdowns on route changes, outside clicks, Escape, and menu item clicks', async () => {
     const user = userEvent.setup();
     renderShell(width);
@@ -169,6 +182,18 @@ describe.each([
     expect(dispatchMock).toHaveBeenCalledOnce();
     expect(screen.getByTestId('pathname').textContent).toBe('/login');
     expect(screen.queryByText('test@example.com')).toBeNull();
+  });
+});
+
+describe('AppShell footer support links', () => {
+  it('trỏ tới ba trang hỗ trợ và địa chỉ email', () => {
+    renderShell(1280);
+
+    expect(screen.getByRole('link', { name: 'Giới thiệu ShareLoop' }).getAttribute('href')).toBe('/about');
+    expect(screen.getByRole('link', { name: 'Hướng dẫn sử dụng' }).getAttribute('href')).toBe('/guide');
+    expect(screen.getByRole('link', { name: 'An toàn khi giao nhận' }).getAttribute('href')).toBe('/safety');
+    expect(screen.getByRole('link', { name: 'support@shareloop.vn' }).getAttribute('href'))
+      .toBe('mailto:support@shareloop.vn');
   });
 });
 

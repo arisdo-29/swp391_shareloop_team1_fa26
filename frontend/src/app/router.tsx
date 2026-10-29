@@ -13,6 +13,8 @@ const Home = lazy(() => import('../pages/public/Home').then((module) => ({ defau
 const Browse = lazy(() => import('../pages/public/Browse').then((module) => ({ default: module.Browse })));
 const ProductDetail = lazy(() => import('../pages/public/ProductDetail').then((module) => ({ default: module.ProductDetail })));
 const About = lazy(() => import('../pages/public/About').then((module) => ({ default: module.About })));
+const Guide = lazy(() => import('../pages/public/Guide').then((module) => ({ default: module.Guide })));
+const Safety = lazy(() => import('../pages/public/Safety').then((module) => ({ default: module.Safety })));
 const AI = lazy(() => import('../pages/public/AI').then((module) => ({ default: module.AI })));
 const Login = lazy(() => import('../pages/auth/Login').then((module) => ({ default: module.Login })));
 const Register = lazy(() => import('../pages/auth/Register').then((module) => ({ default: module.Register })));
@@ -49,6 +51,7 @@ export const router = createBrowserRouter([
   {
     element: <AppShell />,
     children: [
+      { path: '/about', element: <About /> },
       {
         element: <PublicRoute />,
         children: [
@@ -56,7 +59,8 @@ export const router = createBrowserRouter([
           { path: '/browse', element: <Browse /> },
           { path: '/items/:id', element: <ProductDetail /> },
           { path: '/product/:id', element: <ProductDetail /> },
-          { path: '/about', element: <About /> },
+          { path: '/guide', element: <Guide /> },
+          { path: '/safety', element: <Safety /> },
         ],
       },
       {
