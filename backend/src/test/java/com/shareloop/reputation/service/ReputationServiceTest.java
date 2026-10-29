@@ -21,8 +21,6 @@ import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
-import com.shareloop.reputation.ReputationErrorCode;
-import com.shareloop.reputation.dto.GraceStarResponse;
 import com.shareloop.reputation.dto.MyReputationResponse;
 import com.shareloop.reputation.dto.RepeatedPair;
 import com.shareloop.reputation.dto.ReputationSummary;
@@ -719,80 +717,7 @@ class ReputationServiceTest {
     }
 
     @Nested
-    @DisplayName("6. Cấp sao ân hạn (grantGraceStar - FR-95, Issue #150)")
-    class GraceStarTests {
-
-        private static final long ADMIN_ID = 99L;
-        private static final long USER_ID = 7L;
-
-        @Test
-        @DisplayName("Người dùng 0 sao chưa từng được cấp: lên 1 sao, đánh dấu đã dùng, ghi GRACE_STAR")
-        void grantGraceStar_userAtZeroStars_grantsOneStar() {
-            UserReputation user = new UserReputation(USER_ID, (short) 0, 40, Rank.BRONZE);
-            when(userReputationRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
-
-            GraceStarResponse response = service.grantGraceStar(ADMIN_ID, USER_ID, "Đã giải trình");
-
-            assertThat(response).isEqualTo(new GraceStarResponse(USER_ID, 1, true));
-            assertThat(user.getTrustStars()).isEqualTo(1);
-            assertThat(user.isGraceStarUsed()).isTrue();
-            verify(userReputationRepository).save(user);
-            verify(activityLogService)
-                    .log(
-                            "GRACE_STAR",
-                            ADMIN_ID,
-                            "USER",
-                            USER_ID,
-                            Map.<String, Object>of("before", 0, "after", 1),
-                            "Đã giải trình");
-        }
-
-        @Test
-        @DisplayName("Về 0 sao lần hai rồi xin cấp lại: 409 REPUTATION_GRACE_STAR_ALREADY_USED")
-        void grantGraceStar_secondTime_throwsAlreadyUsed() {
-            UserReputation user = new UserReputation(USER_ID, (short) 0, 40, Rank.BRONZE);
-            when(userReputationRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
-            service.grantGraceStar(ADMIN_ID, USER_ID, "Lần đầu");
-            service.deductStar(USER_ID, 1, "Tái phạm");
-
-            BusinessException ex =
-                    assertThrows(BusinessException.class, () -> service.grantGraceStar(ADMIN_ID, USER_ID, "Lần hai"));
-
-            assertThat(ex.getErrorCode()).isEqualTo(ReputationErrorCode.REPUTATION_GRACE_STAR_ALREADY_USED);
-            assertThat(ex.getErrorCode().status().value()).isEqualTo(409);
-            assertThat(user.getTrustStars()).isZero();
-        }
-
-        @Test
-        @DisplayName("Người dùng vẫn còn sao: 409 REPUTATION_GRACE_STAR_NOT_ELIGIBLE, không ghi log")
-        void grantGraceStar_userStillHasStars_throwsNotEligible() {
-            UserReputation user = new UserReputation(USER_ID, (short) 2, 40, Rank.BRONZE);
-            when(userReputationRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
-
-            BusinessException ex = assertThrows(
-                    BusinessException.class, () -> service.grantGraceStar(ADMIN_ID, USER_ID, "Xin thêm sao"));
-
-            assertThat(ex.getErrorCode()).isEqualTo(ReputationErrorCode.REPUTATION_GRACE_STAR_NOT_ELIGIBLE);
-            assertThat(user.isGraceStarUsed()).isFalse();
-            verify(userReputationRepository, never()).save(any());
-            verify(activityLogService, never())
-                    .log(anyString(), any(), anyString(), anyLong(), any(Map.class), anyString());
-        }
-
-        @Test
-        @DisplayName("Không tìm thấy người dùng: 404 USER_NOT_FOUND")
-        void grantGraceStar_userNotFound_throwsUserNotFound() {
-            when(userReputationRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.empty());
-
-            BusinessException ex = assertThrows(
-                    BusinessException.class, () -> service.grantGraceStar(ADMIN_ID, USER_ID, "Đã giải trình"));
-
-            assertThat(ex.getErrorCode()).isEqualTo(UserErrorCode.USER_NOT_FOUND);
-        }
-    }
-
-    @Nested
-    @DisplayName("7. Cặp giao dịch lặp cho cảnh báo Admin (findRepeatedPairs - FR-113, Issue #148)")
+    @DisplayName("6. Cặp giao dịch lặp cho cảnh báo Admin (findRepeatedPairs - FR-113, Issue #148)")
     class RepeatedPairsTests {
 
         @Test

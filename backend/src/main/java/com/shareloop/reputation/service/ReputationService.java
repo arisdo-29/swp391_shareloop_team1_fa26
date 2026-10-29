@@ -7,8 +7,6 @@ import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
-import com.shareloop.reputation.ReputationErrorCode;
-import com.shareloop.reputation.dto.GraceStarResponse;
 import com.shareloop.reputation.dto.MyReputationResponse;
 import com.shareloop.reputation.dto.PointHistoryDto;
 import com.shareloop.reputation.dto.RepeatedPair;
@@ -480,44 +478,6 @@ public class ReputationService {
     @Transactional
     public void deductStar(Long userId, int amount) {
         deductStar(userId, amount, null);
-    }
-
-    /**
-     * Admin cấp 1 sao ân hạn cho người dùng đang có 0 sao (FR-95, BR-U09, UC-51, Issue #150). Mỗi tài khoản chỉ được
-     * cấp một lần; hành động ghi nhật ký GRACE_STAR kèm lý do.
-     *
-     * @param adminId Admin thực hiện
-     * @param userId người được cấp
-     * @param reason lý do cấp, bắt buộc
-     * @return số sao sau khi cấp
-     * @throws BusinessException USER_NOT_FOUND khi không có người dùng; REPUTATION_GRACE_STAR_ALREADY_USED khi đã cấp
-     *     trước đó; REPUTATION_GRACE_STAR_NOT_ELIGIBLE khi người dùng vẫn còn sao
-     */
-    @Transactional
-    public GraceStarResponse grantGraceStar(Long adminId, Long userId, String reason) {
-        UserReputation user = userReputationRepository
-                .findByIdForUpdate(userId)
-                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
-        if (user.isGraceStarUsed()) {
-            throw new BusinessException(ReputationErrorCode.REPUTATION_GRACE_STAR_ALREADY_USED);
-        }
-        if (user.getTrustStars() > 0) {
-            throw new BusinessException(ReputationErrorCode.REPUTATION_GRACE_STAR_NOT_ELIGIBLE);
-        }
-
-        user.grantGraceStar();
-        userReputationRepository.save(user);
-
-        if (activityLogService != null) {
-            activityLogService.log(
-                    ActivityType.GRACE_STAR.name(),
-                    adminId,
-                    "USER",
-                    userId,
-                    Map.of("before", 0, "after", user.getTrustStars()),
-                    reason);
-        }
-        return new GraceStarResponse(userId, user.getTrustStars(), user.isGraceStarUsed());
     }
 
     /**
