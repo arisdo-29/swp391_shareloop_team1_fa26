@@ -261,6 +261,7 @@ public class RequestService {
         List<Request> requests = requestRepository.findByItemIdOrderByCreatedAtDesc(itemId);
         List<Long> requestIds = requests.stream().map(Request::getId).toList();
         Map<Long, Instant> lastMessageMap = findLastMessageAtMap(requestIds);
+        int complaintHours = complaintWindowHours();
         return requests.stream()
                 .map(request -> {
                     String receiverName = findUserName(request.getReceiverId());
@@ -268,9 +269,7 @@ public class RequestService {
                     Integer trustStars = rep != null ? rep.trustStars() : 5;
                     String rank = rep != null && rep.rank() != null ? rep.rank().name() : Rank.BRONZE.name();
                     Double asDescribedRate = rep != null ? rep.asDescribedRate() : null;
-                    Instant complaintDeadline = request.getCompletedAt() != null
-                            ? request.getCompletedAt().plus(java.time.Duration.ofHours(24))
-                            : null;
+                    Instant complaintDeadline = ComplaintWindow.deadline(request.getCompletedAt(), complaintHours);
                     Instant lastMessageAt = request.getId() != null ? lastMessageMap.get(request.getId()) : null;
                     return RequestMapper.toResponse(
                             request,
@@ -297,11 +296,10 @@ public class RequestService {
                 .filter(java.util.Objects::nonNull)
                 .toList();
         Map<Long, Instant> lastMessageMap = findLastMessageAtMap(requestIds);
+        int complaintHours = complaintWindowHours();
         return requests.stream()
                 .map(request -> {
-                    Instant complaintDeadline = request.getCompletedAt() != null
-                            ? request.getCompletedAt().plus(java.time.Duration.ofHours(24))
-                            : null;
+                    Instant complaintDeadline = ComplaintWindow.deadline(request.getCompletedAt(), complaintHours);
                     Instant lastMessageAt = request.getId() != null ? lastMessageMap.get(request.getId()) : null;
                     return RequestMapper.toResponse(
                             request,
@@ -708,8 +706,7 @@ public class RequestService {
 
         String receiverName = findUserName(request.getReceiverId());
         RequestItemInfo itemInfo = findItemInfo(request, new HashMap<>());
-        Instant complaintDeadline =
-                request.getCompletedAt() != null ? request.getCompletedAt().plus(java.time.Duration.ofHours(24)) : null;
+        Instant complaintDeadline = ComplaintWindow.deadline(request.getCompletedAt(), complaintWindowHours());
         Instant lastMessageAt = findLastMessageAt(request.getId());
         if (item.donorId() == currentUserId) {
             ReputationSummary rep = findReceiverReputation(request.getReceiverId());
@@ -929,18 +926,22 @@ public class RequestService {
                 reputationService.onCompleted(targetRequestId);
             }
 
-            // 3. Gửi thông báo COMPLETED cho cả hai bên (kèm nhắc nhở hạn khiếu nại 24h - U08)
+            // 3. Gửi thông báo COMPLETED cho cả hai bên, ghi rõ hạn khiếu nại (U08)
+            int complaintHours = complaintWindowHours();
+            Instant completedAt = saved.getCompletedAt() != null ? saved.getCompletedAt() : Instant.now();
+            String completedBody = "Giao dịch đã được hai bên xác nhận hoàn tất thành công. "
+                    + ComplaintWindow.sentence(complaintHours, ComplaintWindow.deadline(completedAt, complaintHours));
             notificationService.notify(
                     currentUserId,
                     "TRANSACTION_COMPLETED",
                     "Giao dịch hoàn tất",
-                    "Giao dịch đã được hai bên xác nhận hoàn tất thành công. Bạn có 24 giờ để gửi khiếu nại nếu món đồ có vấn đề.",
+                    completedBody,
                     "/requests/" + targetRequestId);
             notificationService.notify(
                     otherUserId,
                     "TRANSACTION_COMPLETED",
                     "Giao dịch hoàn tất",
-                    "Giao dịch đã được hai bên xác nhận hoàn tất thành công. Bạn có 24 giờ để gửi khiếu nại nếu món đồ có vấn đề.",
+                    completedBody,
                     "/requests/" + targetRequestId);
         } else if (saved.getStatus() == RequestStatus.AWAITING_HANDOVER) {
             long targetRequestId = saved.getId() != null ? saved.getId() : requestId;
@@ -1124,11 +1125,16 @@ public class RequestService {
                 request.getType());
     }
 
+    // Số giờ được khiếu nại sau hoàn tất (U08), đọc ConfigService để không viết cứng 24 giờ.
+    private int complaintWindowHours() {
+        return configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS);
+    }
+
     // Phản hồi của các thao tác (tạo, huỷ, chọn, chốt lịch...) cũng kèm tên người xin và tên món đồ, để giao diện
     // không bị mất tên khi thay yêu cầu cũ bằng phản hồi mới.
     private RequestResponse toResponse(Request request) {
         Instant complaintDeadline = request != null && request.getCompletedAt() != null
-                ? request.getCompletedAt().plus(java.time.Duration.ofHours(24))
+                ? ComplaintWindow.deadline(request.getCompletedAt(), complaintWindowHours())
                 : null;
         Instant lastMessageAt = request != null ? findLastMessageAt(request.getId()) : null;
         return RequestMapper.toResponse(

@@ -954,6 +954,38 @@ class RequestServiceTest {
     }
 
     @Test
+    @DisplayName("U08: hoàn tất thì trả hạn khiếu nại theo cấu hình và báo cả hai bên kèm giờ hết hạn")
+    void confirmHandover_whenCompleted_returnsComplaintDeadlineAndNotifiesItWithTime() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.select(Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
+        request.confirmLogistics(false, false, Instant.now());
+        request.confirmHandover(true, null, Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).thenReturn(24);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(true, null));
+
+        assertThat(response.complaintDeadline())
+                .isEqualTo(request.getCompletedAt().plus(24, ChronoUnit.HOURS));
+        String expectedBody = "Giao dịch đã được hai bên xác nhận hoàn tất thành công\\. Bạn có 24 giờ, đến"
+                + " \\d{2}:\\d{2} \\d{2}/\\d{2}, để khiếu nại nếu có vấn đề\\.";
+        for (long userId : List.of(10L, 20L)) {
+            verify(notificationService)
+                    .notify(
+                            eq(userId),
+                            eq("TRANSACTION_COMPLETED"),
+                            any(),
+                            org.mockito.ArgumentMatchers.matches(expectedBody),
+                            any());
+        }
+    }
+
+    @Test
     void confirmHandover_whenReceiverSaysNotAsDescribed_publishesReportEvent() {
         // given
         stubLogisticsConfirmedRequest();

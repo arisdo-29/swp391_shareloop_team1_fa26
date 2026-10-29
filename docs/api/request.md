@@ -445,6 +445,7 @@ thì chưa.
 | `receiverHandoverAt` | string? | Thời điểm người nhận xác nhận đã nhận ISO-8601 UTC |
 | `asDescribed` | boolean? | Người nhận đánh giá món đồ đúng mô tả hay không |
 | `completedAt` | string? | Thời điểm hoàn tất giao dịch ISO-8601 UTC |
+| `complaintDeadline` | string? | Hạn khiếu nại = `completedAt` + `complaint_window_hours` (24 giờ, U08); `null` khi chưa hoàn tất. Thông báo `TRANSACTION_COMPLETED` gửi hai bên ghi `Bạn có 24 giờ, đến HH:mm dd/MM, để khiếu nại nếu có vấn đề.` |
 | `cancelReason` | string? | Lý do huỷ, có tiền tố người huỷ `[Chủ bài] `, `[Người nhận] ` hoặc `[Hệ thống] `. Có khi `status = CANCELLED` |
 | `createdAt` | string | Thời điểm tạo ISO-8601 UTC |
 | `receiverName` | string? | Họ tên người gửi yêu cầu (có trong danh sách theo bài, danh sách của tôi và chi tiết). Có thể `null`. Không kèm email/số điện thoại (BR-T11) |

@@ -268,18 +268,19 @@ public enum ConfigKey {
             ConfigGroup.TRANSACTION,
             "Ngưỡng giao dịch bị kẹt",
             "Giao dịch quá giờ hẹn hơn số giờ này mà chưa bên nào xác nhận bàn giao thì Admin thấy ở bộ lọc Bị kẹt."),
-    COMPLAINT_WINDOW_DAYS(
-            "complaint_window_days",
-            "1",
+    // U08 (chốt C4, 28/10): hai hạn này cố định, Admin không xem hay sửa được (xem adminEditable).
+    COMPLAINT_WINDOW_HOURS(
+            "complaint_window_hours",
+            "24",
             ConfigGroup.TRANSACTION,
             "Hạn khiếu nại",
-            "Số ngày được khiếu nại sau khi giao dịch hoàn tất (mặc định 1 ngày / 24 giờ)."),
-    RESPONSE_WINDOW_DAYS(
-            "response_window_days",
-            "2",
+            "Số giờ được khiếu nại sau khi giao dịch hoàn tất."),
+    RESPONSE_WINDOW_HOURS(
+            "response_window_hours",
+            "48",
             ConfigGroup.TRANSACTION,
             "Hạn giải trình",
-            "Số ngày bên bị khiếu nại được giải trình (mặc định 2 ngày / 48 giờ)."),
+            "Số giờ bên bị khiếu nại được giải trình, tính từ lúc nhận thông báo."),
     DAILY_POINTS_CAP(
             "daily_points_cap",
             "30",
@@ -391,6 +392,14 @@ public enum ConfigKey {
 
     public String getAttrKey() {
         return key;
+    }
+
+    /**
+     * Admin có được xem và sửa khoá này ở trang Cấu hình không. Khoá không sửa được vẫn đọc qua ConfigService để con
+     * số nghiệp vụ chỉ khai báo một chỗ, nhưng chỉ đổi được bằng migration.
+     */
+    public boolean adminEditable() {
+        return this != COMPLAINT_WINDOW_HOURS && this != RESPONSE_WINDOW_HOURS;
     }
 
     public String defaultValue() {

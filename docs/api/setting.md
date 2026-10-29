@@ -35,10 +35,13 @@ Trả danh sách cấu hình nghiệp vụ cho Admin. Endpoint đọc giá trị
 | `AI` | AI trợ lý và sàng lọc | `ai_free_per_day`, `ai_trial_uses`, `ai_search_timeout_seconds`, `chat_ai_threshold`, `chat_ai_timeout_seconds`, `item_ai_screening_enabled` (`true`/`false`, mặc định `false` theo SRS v11), `item_ai_timeout_seconds`, `item_ai_retries` |
 | `MODERATION` | Kiểm duyệt và báo cáo | `chat_violation_alert`, `review_sla_hours`, `report_hide_threshold` |
 | `ACCOUNT` | Tài khoản và OTP | `otp_ttl_minutes`, `otp_max_failed`, `otp_resend_cooldown_seconds`, `pending_account_ttl_hours`, `accounts_per_ip_24h`, `phone_change_interval_days` |
-| `TRANSACTION` | Yêu cầu và giao dịch | `max_pending_requests`, `request_pending_days`, `chat_open_days`, `auto_confirm_days`, `stuck_request_hours`, `complaint_window_days`, `response_window_days` |
+| `TRANSACTION` | Yêu cầu và giao dịch | `max_pending_requests`, `request_pending_days`, `chat_open_days`, `auto_confirm_days`, `stuck_request_hours` |
 | `REPUTATION` | Uy tín và hạng | `post_display_days_gold`, `max_active_items_*` (Trao đổi theo hạng: Đồng 5, Bạc 8, Vàng 15, Kim cương -1), `max_active_give_items` (Cho tặng, mặc định 5), `daily_points_cap`, `reputation_*` |
 
 Trang Cấu hình hệ thống bỏ nhóm `REPUTATION`; nhóm này hiện ở trang Uy tín và Hạng.
+
+Hai khoá cố định `complaint_window_hours` (24) và `response_window_hours` (48) (U08) không có trong `GET /admin/configs`;
+`PUT` vào hai khoá này trả `400 SETTING_CONFIG_NOT_EDITABLE`. Backend vẫn đọc chúng qua `ConfigService`, chỉ đổi bằng migration.
 
 ## PUT /api/v1/admin/configs/{key}
 

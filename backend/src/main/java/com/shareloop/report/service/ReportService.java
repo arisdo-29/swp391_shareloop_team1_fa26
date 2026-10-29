@@ -31,6 +31,8 @@ import com.shareloop.setting.service.ConfigService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -46,6 +48,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReportService {
 
     /** Report chưa có kết luận; DISMISSED và RESOLVED không tính vào ngưỡng tự ẩn bài. */
+    private static final DateTimeFormatter DEADLINE_FORMAT =
+            DateTimeFormatter.ofPattern("HH:mm dd/MM").withZone(ZoneId.of("Asia/Ho_Chi_Minh"));
+
     private static final List<ReportStatus> PENDING_STATUSES =
             List.of(ReportStatus.OPEN, ReportStatus.AWAITING_RESPONSE);
 
@@ -289,10 +294,10 @@ public class ReportService {
             throw new BusinessException(ReportErrorCode.DISPUTE_REQUEST_NOT_COMPLETED);
         }
 
-        // 4. Kiểm tra cửa sổ khiếu nại (7 ngày sau completedAt)
-        int windowDays = disputeDays(ConfigKey.COMPLAINT_WINDOW_DAYS);
+        // 4. Kiểm tra cửa sổ khiếu nại (24 giờ sau completedAt, U08)
+        int windowHours = windowHours(ConfigKey.COMPLAINT_WINDOW_HOURS);
         Instant completedAt = reqSnapshot.completedAt() != null ? reqSnapshot.completedAt() : Instant.now(clock);
-        Instant deadline = completedAt.plus(Duration.ofDays(windowDays));
+        Instant deadline = completedAt.plus(Duration.ofHours(windowHours));
         if (Instant.now(clock).isAfter(deadline)) {
             throw new BusinessException(ReportErrorCode.DISPUTE_WINDOW_EXPIRED);
         }
@@ -305,10 +310,10 @@ public class ReportService {
         // 6. Kiểm tra và đính kèm bằng chứng nếu có
         List<Long> evidenceMediaIds = request.evidenceMediaIds();
 
-        // 7. Mở cửa sổ giải trình 3 ngày cho bên bị khiếu nại
-        int responseDays = disputeDays(ConfigKey.RESPONSE_WINDOW_DAYS);
+        // 7. Mở cửa sổ giải trình 48 giờ cho bên bị khiếu nại, tính từ lúc gửi thông báo (ngay sau khi lưu)
+        int responseHours = windowHours(ConfigKey.RESPONSE_WINDOW_HOURS);
         Instant now = Instant.now(clock);
-        Instant responseDueAt = now.plus(Duration.ofDays(responseDays));
+        Instant responseDueAt = now.plus(Duration.ofHours(responseHours));
         Long respondentId = userId.equals(donorId) ? receiverId : donorId;
 
         String evidenceStr = evidenceService.attach(evidenceMediaIds, userId);
@@ -333,7 +338,7 @@ public class ReportService {
                     respondentId,
                     "DISPUTE_OPENED",
                     transaction + " bị khiếu nại",
-                    transaction + " đã bị đối tác khiếu nại. Bạn có " + (responseDays * 24) + " giờ để giải trình.",
+                    transaction + " đã bị đối tác khiếu nại. " + responseWindowSentence(responseHours, responseDueAt),
                     "/me/disputes/" + saved.getId());
         }
 
@@ -369,8 +374,8 @@ public class ReportService {
         }
 
         // Bên cho là bên bị báo cáo và có thời hạn giải trình như khiếu nại thường (FR-90)
-        int responseDays = disputeDays(ConfigKey.RESPONSE_WINDOW_DAYS);
-        Instant responseDueAt = Instant.now(clock).plus(Duration.ofDays(responseDays));
+        int responseHours = windowHours(ConfigKey.RESPONSE_WINDOW_HOURS);
+        Instant responseDueAt = Instant.now(clock).plus(Duration.ofHours(responseHours));
         Report report = Report.createDispute(
                 receiverId,
                 requestId,
@@ -387,7 +392,7 @@ public class ReportService {
                     itemSummary.donorId(),
                     "DISPUTE_OPENED",
                     "Món đồ bị báo không đúng mô tả",
-                    "Người nhận báo món đồ không đúng mô tả. Bạn có " + (responseDays * 24) + " giờ để giải trình.",
+                    "Người nhận báo món đồ không đúng mô tả. " + responseWindowSentence(responseHours, responseDueAt),
                     "/me/disputes/" + saved.getId());
         }
     }
@@ -425,8 +430,8 @@ public class ReportService {
         }
 
         Long respondentId = reporterIsReceiver ? donorId : receiverId;
-        int responseDays = disputeDays(ConfigKey.RESPONSE_WINDOW_DAYS);
-        Instant responseDueAt = Instant.now(clock).plus(Duration.ofDays(responseDays));
+        int responseHours = windowHours(ConfigKey.RESPONSE_WINDOW_HOURS);
+        Instant responseDueAt = Instant.now(clock).plus(Duration.ofHours(responseHours));
         Report report = Report.createDispute(
                 reporterId,
                 requestId,
@@ -444,8 +449,8 @@ public class ReportService {
                     respondentId,
                     "DISPUTE_OPENED",
                     "Đối phương báo " + issue,
-                    "Đối phương báo " + issue + " dù bạn đã xác nhận bàn giao. Bạn có " + (responseDays * 24)
-                            + " giờ để giải trình.",
+                    "Đối phương báo " + issue + " dù bạn đã xác nhận bàn giao. "
+                            + responseWindowSentence(responseHours, responseDueAt),
                     "/me/disputes/" + saved.getId());
         }
     }
@@ -621,10 +626,15 @@ public class ReportService {
                 saved.getResolvedAt());
     }
 
-    // Đọc đúng key mà trang Admin sửa (ConfigKey, viết thường), không đọc key viết hoa cũ của migration.
-    // configService null chỉ gặp ở unit test dựng service rút gọn; khi đó dùng giá trị mặc định.
-    private int disputeDays(ConfigKey key) {
+    // Hạn khiếu nại và hạn giải trình tính theo giờ (U08). configService null chỉ gặp ở unit test dựng service rút
+    // gọn; khi đó dùng giá trị mặc định.
+    private int windowHours(ConfigKey key) {
         return configService != null ? configService.getInt(key) : key.getDefaultValue();
+    }
+
+    // "Bạn có 48 giờ, đến 14:30 31/10, để giải trình." Giờ hiển thị theo múi giờ Việt Nam.
+    private static String responseWindowSentence(int hours, Instant dueAt) {
+        return "Bạn có " + hours + " giờ, đến " + DEADLINE_FORMAT.format(dueAt) + ", để giải trình.";
     }
 
     // Tên bài để đưa vào câu chữ thay cho "Bài #id", "Giao dịch #id". Không tìm được thì trả null.

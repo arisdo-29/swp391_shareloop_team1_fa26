@@ -41,6 +41,21 @@ export function canCancelTransaction(status: ItemRequestStatus) {
   return status === 'RESERVED' || status === 'AWAITING_LOGISTICS' || status === 'LOGISTICS_CONFIRMED' || status === 'AWAITING_HANDOVER';
 }
 
+// U08: còn khiếu nại được khi giao dịch hoàn tất và chưa qua complaintDeadline backend trả về.
+// Không có hạn (dữ liệu cũ) thì vẫn cho mở form, backend là nơi kiểm cuối cùng.
+export function canOpenComplaint(status: ItemRequestStatus, complaintDeadline?: string | null, now = Date.now()) {
+  if (status !== 'COMPLETED') return false;
+  if (!complaintDeadline) return true;
+  return now < new Date(complaintDeadline).getTime();
+}
+
+// "14:30 31/10" theo giờ máy người dùng.
+export function formatDeadline(value: string) {
+  const date = new Date(value);
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())} ${pad(date.getDate())}/${pad(date.getMonth() + 1)}`;
+}
+
 // Chỉ hiện nút "chưa nhận được / chưa giao được" khi bên kia đã xác nhận bàn giao còn mình thì chưa (mục 14).
 export function canReportHandoverIssue(status: ItemRequestStatus, otherConfirmedAt?: string, currentConfirmedAt?: string) {
   return status === 'AWAITING_HANDOVER' && Boolean(otherConfirmedAt) && !currentConfirmedAt;

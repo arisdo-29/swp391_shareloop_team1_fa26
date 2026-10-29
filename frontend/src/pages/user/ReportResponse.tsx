@@ -74,6 +74,10 @@ export function ReportResponse() {
           </>
         ) : (
           <>
+            <Alert tone="info">
+              Bạn có 48 giờ kể từ lúc nhận thông báo để gửi giải trình. Giờ hết hạn ghi trong thông báo, quá hạn thì báo
+              cáo không còn nhận giải trình.
+            </Alert>
             <TextArea
               label="Nội dung giải trình"
               value={response}

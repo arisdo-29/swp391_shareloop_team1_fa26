@@ -101,9 +101,12 @@ sau khi gắn chuyển `ATTACHED`, `PRIVATE`. Lỗi media rollback cả việc t
 Khi báo cáo `REQUEST`, cả `POST /reports` và `POST /requests/{requestId}/disputes` dùng
 cùng luồng kiểm tra giao dịch `COMPLETED`, người tham gia, cửa sổ khiếu nại và chống gửi lặp.
 Hệ thống lưu người bị báo cáo, ID bài và `responseDueAt`, chuyển `AWAITING_RESPONSE`.
-Hạn khiếu nại và hạn giải trình đọc thẳng `ConfigKey.COMPLAINT_WINDOW_DAYS` (`complaint_window_days`, mặc định 7)
-và `ConfigKey.RESPONSE_WINDOW_DAYS` (`response_window_days`, mặc định 3), đúng key trang Admin sửa.
-Khoá viết hoa cũ `DISPUTE_WINDOW_DAYS`/`DISPUTE_RESPONSE_DAYS` không còn được đọc.
+Hạn khiếu nại và hạn giải trình tính theo **giờ** (U08): `ConfigKey.COMPLAINT_WINDOW_HOURS` (`complaint_window_hours` = 24)
+và `ConfigKey.RESPONSE_WINDOW_HOURS` (`response_window_hours` = 48). Hai số cố định: không hiện ở trang Cấu hình,
+`PUT /admin/configs` trả `400 SETTING_CONFIG_NOT_EDITABLE`, chỉ đổi bằng migration. Khoá cũ tính theo ngày và khoá viết hoa
+`DISPUTE_*_DAYS` đã bị xoá mềm (V202610291000).
+Thông báo `DISPUTE_OPENED` gửi bên bị khiếu nại ghi rõ giờ hết hạn: `... Bạn có 48 giờ, đến HH:mm dd/MM, để giải trình.`
+(giờ Việt Nam), hạn tính từ lúc tạo báo cáo và gửi thông báo.
 Thông báo `DISPUTE_OPENED` và `ITEM_AUTO_HIDDEN` gọi bằng tên bài (vd `Giao dịch “Nồi cơm điện” bị khiếu nại`), không dùng `#id`.
 Ghi chú mặc định khi Admin kết luận mà không nhập ghi chú: `Bác bỏ báo cáo về “<tên bài>”`,
 `Chấp thuận báo cáo về “<tên bài>”, xử phạt trừ 1 sao uy tín` (báo cáo người dùng không có bài thì bỏ phần “về …”).
@@ -132,7 +135,7 @@ transaction** với bước chuyển `DISPUTED`, lỗi thì cả hai rollback) g
 
 - Tạo đúng 1 report: `targetType = REQUEST`, `reason = NO_SHOW`, `stage = AFTER`, `status = AWAITING_RESPONSE`,
   `description` là ghi chú của người báo, `evidence` lấy từ `evidenceMediaIds` qua `ReportEvidenceService.attach`,
-  `targetUserId` là bên còn lại, `responseDueAt` theo `DISPUTE_RESPONSE_DAYS`. Không thêm bảng hay cột.
+  `targetUserId` là bên còn lại, `responseDueAt` theo `response_window_hours` (48 giờ). Không thêm bảng hay cột.
 - Chống trùng: người báo đã có report `REQUEST` cho giao dịch này thì bỏ qua, không lỗi.
 - Gửi thông báo `DISPUTE_OPENED` cho bên còn lại, dẫn tới `/me/disputes/{reportId}` để giải trình.
 - Chủ bài, người nhận và Admin xử lý như khiếu nại thường (`POST /disputes/{disputeId}/response`, `.../conclude`).
@@ -145,7 +148,7 @@ module request phát event `NotAsDescribedReportedEvent`. Listener trong module 
 `ReportService.openNotAsDescribedReport(receiverId, requestId, reason)`:
 
 - Tạo đúng 1 report: `targetType = REQUEST`, `reason = NOT_AS_DESCRIBED`, `stage = AFTER`, `status = AWAITING_RESPONSE`,
-  `description` là lý do bên nhận nhập, `targetUserId` là chủ bài, `responseDueAt` theo `DISPUTE_RESPONSE_DAYS`.
+  `description` là lý do bên nhận nhập, `targetUserId` là chủ bài, `responseDueAt` theo `response_window_hours` (48 giờ).
   Không thêm bảng hay cột.
 - Khác `POST /requests/{requestId}/disputes`: không đòi giao dịch đã `COMPLETED` và không xét cửa sổ khiếu nại
   7 ngày, vì bên nhận có thể trả lời khi giao dịch còn `AWAITING_HANDOVER`.
@@ -245,10 +248,10 @@ Một trong hai bên tham gia giao dịch (người cho hoặc người nhận) 
   - Yêu cầu giao dịch phải tồn tại trong hệ thống (`404 REPORT_TARGET_NOT_FOUND`).
   - Người khiếu nại bắt buộc phải là một bên trong giao dịch (`donorId` hoặc `receiverId`); người ngoài không có quyền khiếu nại (`403 DISPUTE_NOT_A_PARTY`).
   - Giao dịch bắt buộc phải ở trạng thái đã hoàn thành `COMPLETED` (`409 DISPUTE_REQUEST_NOT_COMPLETED`).
-  - Cửa sổ khiếu nại: Khiếu nại phải được gửi trong vòng 24 giờ (1 ngày) kể từ thời điểm giao dịch hoàn thành (`completedAt`). Quá 24 giờ sẽ bị từ chối (`422 DISPUTE_WINDOW_EXPIRED`). Số ngày được cấu hình qua `complaint_window_days` (mặc định 1 ngày).
+  - Cửa sổ khiếu nại: Khiếu nại phải được gửi trong vòng 24 giờ (1 ngày) kể từ thời điểm giao dịch hoàn thành (`completedAt`). Quá 24 giờ sẽ bị từ chối (`422 DISPUTE_WINDOW_EXPIRED`). Số giờ lấy từ `complaint_window_hours` (24, cố định).
   - Mỗi người chỉ được khiếu nại giao dịch này một lần (`409 REPORT_ALREADY_REPORTED`).
   - Người khiếu nại có thể đính kèm danh sách ID media làm bằng chứng. Các media file phải tồn tại và thuộc quyền sở hữu của người gửi (`403 MEDIA_NOT_OWNER`, `404 MEDIA_NOT_FOUND`).
-  - Sau khi mở khiếu nại thành công, hệ thống mở cửa sổ 48 giờ (2 ngày) cho bên bị khiếu nại gửi giải trình (`responseDueAt = now + 48 hours`), cấu hình qua `response_window_days` (mặc định 2 ngày). Trạng thái bản ghi là `AWAITING_RESPONSE`.
+  - Sau khi mở khiếu nại thành công, hệ thống mở cửa sổ 48 giờ (2 ngày) cho bên bị khiếu nại gửi giải trình (`responseDueAt = now + 48 hours`), lấy từ `response_window_hours` (48, cố định). Trạng thái bản ghi là `AWAITING_RESPONSE`.
   - Hệ thống gửi thông báo trong ứng dụng cho bên bị khiếu nại (`notificationService.notify`).
 
 - **Request Body:**

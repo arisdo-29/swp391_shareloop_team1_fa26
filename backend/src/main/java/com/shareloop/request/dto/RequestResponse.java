@@ -102,7 +102,8 @@ public record RequestResponse(
                 donorName,
                 offeredItemTitle,
                 cancelReason,
-                completedAt != null ? completedAt.plus(java.time.Duration.ofHours(24)) : null,
+                // Hạn khiếu nại đọc ConfigService nên chỉ RequestService tính được (U08); dạng rút gọn để null.
+                null,
                 null);
     }
 

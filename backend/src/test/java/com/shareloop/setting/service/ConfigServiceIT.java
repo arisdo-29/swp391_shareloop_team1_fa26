@@ -50,6 +50,31 @@ class ConfigServiceIT extends IntegrationTest {
     }
 
     @Test
+    void u08_migrationSeedsHourWindowsAndSoftDeletesDayKeys() {
+        // Đọc từ dòng DB do migration ghi, không phải giá trị mặc định trong ConfigKey
+        assertThat(jdbc.queryForObject(
+                        "SELECT attr_value FROM website_attributes WHERE attr_group = 'CONFIG'"
+                                + " AND attr_key = 'complaint_window_hours' AND is_deleted = FALSE",
+                        String.class))
+                .isEqualTo("24");
+        assertThat(jdbc.queryForObject(
+                        "SELECT attr_value FROM website_attributes WHERE attr_group = 'CONFIG'"
+                                + " AND attr_key = 'response_window_hours' AND is_deleted = FALSE",
+                        String.class))
+                .isEqualTo("48");
+        assertThat(configService.getInt(com.shareloop.setting.ConfigKey.COMPLAINT_WINDOW_HOURS))
+                .isEqualTo(24);
+        assertThat(configService.getInt(com.shareloop.setting.ConfigKey.RESPONSE_WINDOW_HOURS))
+                .isEqualTo(48);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM website_attributes WHERE attr_group = 'CONFIG' AND is_deleted = FALSE AND"
+                                + " attr_key IN ('complaint_window_days', 'response_window_days',"
+                                + " 'DISPUTE_WINDOW_DAYS', 'DISPUTE_RESPONSE_DAYS')",
+                        Integer.class))
+                .isZero();
+    }
+
+    @Test
     void ignoresInactiveLexiconAndChecklistRows() {
         jdbc.update("INSERT INTO website_attributes (attr_group, attr_key, attr_value, extra, sort_order, is_active) "
                 + "VALUES ('BANNED_KEYWORD', 'config_service_it_inactive', 'inactive', "
