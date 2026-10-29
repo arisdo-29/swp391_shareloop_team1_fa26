@@ -17,7 +17,7 @@ const sections = [
     ],
   },
   {
-    label: 'Người dùng',
+    label: '',
     items: [
       ['Tài khoản', '/admin/users'],
       ['Uy tín và hạng', '/admin/reputation'],
@@ -26,7 +26,7 @@ const sections = [
     ],
   },
   {
-    label: 'Tài chính',
+    label: '',
     items: [
       ['Báo cáo tài chính', '/admin/finance'],
       ['Đơn nạp Credit', '/admin/finance/topup-orders'],
@@ -47,7 +47,7 @@ export function AdminLayout() {
   const nav = (
     <>
       {sections.map((section) => (
-        <div key={section.label || 'overview'} className="mb-4">
+        <div key={section.items[0][1]} className="mb-4">
           {section.label ? (
             <p className="mb-1.5 px-3 text-2xs font-bold uppercase tracking-wider text-text-secondary">
               {section.label}

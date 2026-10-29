@@ -531,6 +531,7 @@ export function Profile() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   readOnly
+                  hint="Email dùng để đăng nhập nên không thể thay đổi."
                   className="bg-surface-low"
                 />
                 <div>

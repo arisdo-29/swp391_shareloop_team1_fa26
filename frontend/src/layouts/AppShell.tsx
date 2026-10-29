@@ -149,6 +149,7 @@ function AppShellContent() {
         ['/browse', 'Tìm đồ'],
         ['/activities', 'Hoạt động'],
         ['/ai', 'Trợ lý AI'],
+        ['/about', 'Giới thiệu'],
         ['/messages', 'Tin nhắn'],
       ]
     : [
@@ -444,10 +445,10 @@ function AppShellContent() {
                   <Link to="/about" className="block py-2 transition hover:text-primary">
                     Giới thiệu ShareLoop
                   </Link>
-                  <Link to="/about#cach-dung" className="block py-2 transition hover:text-primary">
+                  <Link to="/guide" className="block py-2 transition hover:text-primary">
                     Hướng dẫn sử dụng
                   </Link>
-                  <Link to="/about#an-toan" className="block py-2 transition hover:text-primary">
+                  <Link to="/safety" className="block py-2 transition hover:text-primary">
                     An toàn khi giao nhận
                   </Link>
                   <a href="mailto:support@shareloop.vn" className="block py-2 transition hover:text-primary">

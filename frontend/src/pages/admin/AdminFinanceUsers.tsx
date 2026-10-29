@@ -17,8 +17,6 @@ import type { CreditHistory } from '../../types/domain';
 import {
   HISTORY_PAGE_SIZE,
   adminHistoryTabs,
-  endOfDayIso,
-  startOfDayIso,
   toCreditHistory,
 } from '../../utils/creditHistory';
 import { useDebouncedValue } from '../../utils/useDebouncedValue';
@@ -199,10 +197,13 @@ export function AdminFinanceUserDetail() {
     let active = true;
     setHistoryLoading(true);
     setHistoryError('');
+    const dateParams = {
+      ...(fromDate ? { from: fromDate } : {}),
+      ...(toDate ? { to: toDate } : {}),
+    };
     adminFinanceApi
       .userHistory(userId, {
-        from: fromDate ? startOfDayIso(fromDate) : undefined,
-        to: toDate ? endOfDayIso(toDate) : undefined,
+        ...dateParams,
         page,
         size: HISTORY_PAGE_SIZE,
       })
