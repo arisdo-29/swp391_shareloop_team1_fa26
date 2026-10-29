@@ -74,8 +74,8 @@ import { ReputationBadge } from '../../components/ReputationBadge';
 
 const apiConditionLabel: Record<ItemResponse['condition'], string> = {
   NEW: 'Mới',
-  LIKE_NEW: 'Như mới',
-  GOOD: 'Còn tốt',
+  LIKE_NEW: 'Ít sử dụng',
+  GOOD: 'Đã dùng nhiều',
   DEFECTIVE: 'Có lỗi',
 };
 

@@ -388,7 +388,7 @@ export function ProductDetail() {
             <>
               <h2 className="text-lg font-bold">{item.type === 'gift' ? 'Xin món này' : 'Đề nghị trao đổi'}</h2>
               {item.type === 'trade' && user ? (
-                <fieldset className="space-y-2">
+                <fieldset className="min-w-0 w-full max-w-full space-y-2">
                   <legend className="label">Chọn món bạn mang đổi</legend>
                   {eligibleOfferedItems.map((entry) => (
                     <button
@@ -396,12 +396,12 @@ export function ProductDetail() {
                       type="button"
                       aria-pressed={offeredItemId === entry.id}
                       onClick={() => setOfferedItemId(entry.id)}
-                      className={`flex w-full items-center gap-3 rounded-md border p-2.5 text-left transition ${offeredItemId === entry.id ? 'border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
+                      className={`box-border flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-md border p-2.5 text-left transition ${offeredItemId === entry.id ? 'border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
                     >
                       <ItemImage src={entry.images[0]} alt={entry.title} className="h-11 w-14 shrink-0 rounded-md object-cover" />
-                      <span className="min-w-0 flex-1">
-                        <strong className="block truncate text-sm">{entry.title}</strong>
-                        <span className="text-xs text-text-muted">{entry.district}</span>
+                      <span className="min-w-0 max-w-full flex-1 overflow-hidden">
+                        <strong className="block whitespace-normal break-words text-sm leading-5">{entry.title}</strong>
+                        <span className="block break-words text-xs text-text-muted">{entry.district}</span>
                       </span>
                     </button>
                   ))}

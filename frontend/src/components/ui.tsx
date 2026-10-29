@@ -104,7 +104,7 @@ export function IconButton({
   );
 }
 
-const errorInputClass = 'border-error focus:border-error focus:ring-error/20';
+const errorInputClass = 'border-error focus:border-error';
 
 /** Dòng lỗi hoặc gợi ý dưới ô nhập. Lỗi có role="alert" để trình đọc màn hình đọc ngay khi xuất hiện. */
 function FieldMessage({ id, error, hint }: { id: string; error?: string; hint?: string }) {
@@ -194,9 +194,9 @@ export function Select(
   );
 }
 export function SearchField(props: InputHTMLAttributes<HTMLInputElement>) {
-  // Vòng focus vẽ ở khung ngoài (focus-within) nên ô input bên trong không cần viền riêng.
+  // Ô tìm kiếm không có viền riêng; wrapper đổi sang một viền xanh khi focus.
   return (
-    <div className="flex min-h-11 items-center rounded-md border border-border bg-white px-1 transition hover:border-text-muted focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/25">
+    <div className="flex min-h-11 items-center rounded-md border border-border bg-white px-1 transition hover:border-text-muted focus-within:border-primary">
       <input
         className="w-full border-0 bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-text-muted"
         {...props}

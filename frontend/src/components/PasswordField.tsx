@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { type FocusEventHandler, useId, useState } from 'react';
 import { Icon } from './ui';
 
 export function PasswordField({
@@ -7,12 +7,14 @@ export function PasswordField({
   onChange,
   error,
   autoComplete,
+  onBlur,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   error?: string;
   autoComplete?: string;
+  onBlur?: FocusEventHandler<HTMLInputElement>;
 }) {
   const [visible, setVisible] = useState(false);
   const inputId = useId();
@@ -32,8 +34,9 @@ export function PasswordField({
           aria-invalid={Boolean(error) || undefined}
           aria-describedby={error ? errorId : undefined}
           onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
           autoComplete={autoComplete}
-          className={`input password-input pr-12 ${error ? 'border-error focus:border-error focus:ring-error/10' : ''}`}
+          className={`input password-input pr-12 ${error ? 'border-error focus:border-error' : ''}`}
         />
         <button
           type="button"
