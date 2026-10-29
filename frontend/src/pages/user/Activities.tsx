@@ -58,6 +58,8 @@ const editQuoteReasonLabel: Record<EditQuoteReason, string> = {
   PENDING_REVIEW_OVERWRITE: 'Cập nhật bản sửa đang chờ duyệt',
   FIRST_FREE_EDIT: 'Lượt sửa miễn phí đầu tiên',
   PAID_EDIT: 'Lượt sửa có phí',
+  OFFER_TYPE_CHANGE_FREE: 'Đổi hình thức đăng miễn phí',
+  OFFER_TYPE_CHANGE_POST_FEE: 'Đổi hình thức đăng, tính phí đăng bài',
 };
 
 function getEditQuoteReasonLabel(reason: string) {
