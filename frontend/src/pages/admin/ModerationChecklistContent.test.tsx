@@ -8,7 +8,12 @@ import type { ReviewChecklistItem } from '../../services/adminModerationApi';
 import { ModerationChecklistContent } from './ModerationParts';
 
 const checklist: ReviewChecklistItem[] = [
-  { id: 11, key: 'content', statement: 'Nội dung phù hợp quy định' },
+  {
+    id: 11,
+    key: 'content',
+    statement: 'Nội dung phù hợp quy định',
+    description: 'Đạt khi nội dung mô tả đúng món đồ. Từ chối nếu nội dung sai lệch.',
+  },
   { id: 22, key: 'images', statement: 'Hình ảnh thể hiện đúng món đồ' },
   { id: 33, key: 'contact', statement: 'Không chứa thông tin liên hệ trái phép' },
 ];
@@ -43,6 +48,7 @@ describe('ModerationChecklistContent', () => {
     const confirmButton = screen.getByRole('button', { name: 'Xác nhận duyệt bài' });
     expect(screen.getByText('0/3')).toBeTruthy();
     expect(screen.getAllByRole('checkbox')).toHaveLength(3);
+    expect(screen.getByText(checklist[0].description!)).toBeTruthy();
     expect((confirmButton as HTMLButtonElement).disabled).toBe(true);
     expect(onConfirm).not.toHaveBeenCalled();
 

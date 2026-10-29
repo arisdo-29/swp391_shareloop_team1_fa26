@@ -58,6 +58,7 @@ export function ModerationChecklistContent({
             >
               <input
                 type="checkbox"
+                aria-label={entry.statement}
                 checked={answers[index] ?? false}
                 disabled={disabled}
                 autoFocus={index === 0}

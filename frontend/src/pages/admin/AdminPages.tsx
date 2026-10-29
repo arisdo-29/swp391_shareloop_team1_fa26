@@ -692,6 +692,19 @@ function ApiAdminChecklist() {
   const mutationLock = useRef(false);
 
   useEffect(() => {
+    const refetch = () => setReloadKey((key) => key + 1);
+    const refetchWhenVisible = () => {
+      if (document.visibilityState === 'visible') refetch();
+    };
+    window.addEventListener('focus', refetch);
+    document.addEventListener('visibilitychange', refetchWhenVisible);
+    return () => {
+      window.removeEventListener('focus', refetch);
+      document.removeEventListener('visibilitychange', refetchWhenVisible);
+    };
+  }, []);
+
+  useEffect(() => {
     let active = true;
     setLoading(true);
     setError('');

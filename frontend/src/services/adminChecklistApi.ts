@@ -27,7 +27,10 @@ export function validateChecklistItemIds(itemIds: number[]) {
 
 export const adminChecklistApi = {
   async list() {
-    const { data } = await http.get<AdminChecklistEntry[]>('/api/v1/admin/checklist');
+    const { data } = await http.get<AdminChecklistEntry[]>('/api/v1/admin/checklist', {
+      // Tránh browser/CDN trả lại checklist cũ sau khi Backend vừa cập nhật cấu hình.
+      params: { _: Date.now() },
+    });
     return data;
   },
   async create(input: AdminChecklistRequest) {

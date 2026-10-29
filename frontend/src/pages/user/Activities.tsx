@@ -67,8 +67,7 @@ function getEditQuoteReasonLabel(reason: string) {
 }
 
 type ListingFeeAction = { type: 'renew' | 'boost'; item: Item };
-// Báo giá đã gộp: newTime là mốc hết đẩy mới (boost) hoặc hạn mới (renew), ISO-8601 UTC.
-type ListingFeeQuote = { fee: number; newTime: string; allowed: boolean; reason: string | null };
+type ListingFeeQuote = { fee: number };
 const WALLET_INSUFFICIENT_BALANCE = 'WALLET_INSUFFICIENT_BALANCE';
 
 
@@ -137,22 +136,17 @@ export function Activities() {
   const listingFeeInFlight = useRef(false);
   const currentUserId = toBackendUserId(user.id);
 
-  // Mở hộp Đẩy/Gia hạn thì hỏi BE báo giá (chỉ đọc, không trừ Credit); số hiện ra là số BE sẽ trừ thật.
+  // Swagger chỉ công bố bảng phí chung; điều kiện thực hiện và số Credit trừ thật vẫn do API POST kiểm tra.
   useEffect(() => {
     if (!currentUserId || !listingFeeAction) return;
     let active = true;
-    const itemId = Number(listingFeeAction.item.id);
     setFeeQuote(null);
     setFeeQuoteLoading(true);
-    const request =
-      listingFeeAction.type === 'renew'
-        ? itemApi.getRenewQuote(itemId).then(
-            (quote): ListingFeeQuote => ({ ...quote, newTime: quote.newExpireAt }),
-          )
-        : itemApi.getBoostQuote(itemId).then(
-            (quote): ListingFeeQuote => ({ ...quote, newTime: quote.newBoostedUntil }),
-          );
-    request
+    itemApi
+      .getListingFees()
+      .then((fees): ListingFeeQuote => ({
+        fee: listingFeeAction.type === 'renew' ? fees.renewFee : fees.boostFee,
+      }))
       .then((quote) => {
         if (active) setFeeQuote(quote);
       })
@@ -741,12 +735,7 @@ export function Activities() {
           {feeQuoteLoading ? (
             <p className="mt-2 text-sm leading-6 text-text-muted">Đang tính phí...</p>
           ) : feeQuote ? (
-            <div className="mt-2 space-y-1 text-sm leading-6 text-text-muted">
-              <p>
-                {listingFeeAction.type === 'renew'
-                  ? `Hạn mới: ${formatQuoteDate(feeQuote.newTime)}`
-                  : `Đẩy đến ${formatQuoteDateTime(feeQuote.newTime)}`}
-              </p>
+            <div className="mt-2 text-sm leading-6 text-text-muted">
               <p>
                 {feeQuote.fee > 0
                   ? `Phí: ${feeQuote.fee} Credit. Phí không hoàn lại.`
@@ -758,11 +747,6 @@ export function Activities() {
               Không tải được báo giá. Vui lòng đóng hộp thoại và thử lại.
             </p>
           )}
-          {feeQuote && !feeQuote.allowed ? (
-            <div className="mt-4">
-              <Alert tone="error">{feeQuote.reason ?? 'Hiện chưa thực hiện được thao tác này.'}</Alert>
-            </div>
-          ) : null}
           {creditShortage > 0 ? (
             <div className="mt-4">
               <Alert tone="warning">{`Số dư khả dụng còn thiếu ${creditShortage} Credit.`}</Alert>
@@ -794,7 +778,6 @@ export function Activities() {
                 Boolean(renewingItemId || boostingItemId) ||
                 feeQuoteLoading ||
                 !feeQuote ||
-                !feeQuote.allowed ||
                 creditShortage > 0
               }
               onClick={() => void confirmListingFeeAction()}
@@ -1479,30 +1462,6 @@ function itemSummary(item: Item, pendingCount: number, chosenRequest?: ItemReque
   }
   if (status === 'APPROVED') return { headline: 'Chưa có ai gửi yêu cầu.', detail: 'Đẩy bài để nhiều người thấy hơn.' };
   return { headline: '', detail: '' };
-}
-
-// Hiển thị theo múi giờ Việt Nam: "HH:mm dd/MM/yyyy" (đẩy bài) và "dd/MM/yyyy" (gia hạn).
-function formatQuoteDateTime(iso: string) {
-  const formatted = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(new Date(iso));
-  const [date, time] = formatted.split(', ');
-  return `${time} ${date}`;
-}
-
-function formatQuoteDate(iso: string) {
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(new Date(iso));
 }
 
 /** Giải thích vì sao một số nút đang khoá, để người dùng không phải đoán. */

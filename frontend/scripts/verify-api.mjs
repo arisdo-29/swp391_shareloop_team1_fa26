@@ -171,6 +171,14 @@ await test('thuộc tính danh mục gọi đúng path và không tự thêm que
   assert.equal(requests[0].params, undefined);
 });
 
+await test('phí gia hạn và đẩy bài đọc từ endpoint bảng phí đang có trong Swagger', async () => {
+  requests = [];
+  nextResponse = { renewFee: 2, boostFee: 3 };
+  assert.deepEqual(await api.itemApi.getListingFees(), nextResponse);
+  assert.equal(requests[0].method, 'get');
+  assert.equal(requests[0].url, '/api/v1/listing-fees');
+});
+
 await test('authenticity grant không gửi body; reject và revoke chỉ gửi reason', async () => {
   requests = [];
   nextResponse = undefined;
@@ -201,25 +209,45 @@ await test('duyệt gửi ID điều kiện cùng đáp án, không ghép lại 
 
 await test('Admin Checklist dùng đúng method, path và request body cho đủ 5 API', async () => {
   requests = [];
-  const first = { id: 3, key: 'photo', question: 'Ảnh đúng món đồ?', sortOrder: 10, active: true };
+  const first = {
+    id: 3,
+    key: 'photo',
+    question: 'Ảnh đúng món đồ?',
+    sortOrder: 10,
+    active: true,
+    description: 'Đạt khi có từ 3 ảnh chụp thật.',
+  };
   const second = { id: 1, key: 'content', question: 'Nội dung phù hợp?', sortOrder: 20, active: false };
 
   nextResponse = [first, second];
   assert.deepEqual(await api.adminChecklistApi.list(), [first, second]);
   assert.equal(requests[0].method, 'get');
   assert.equal(requests[0].url, '/api/v1/admin/checklist');
+  assert.equal(typeof requests[0].params._, 'number');
 
   nextResponse = first;
-  await api.adminChecklistApi.create({ question: 'Ảnh đúng món đồ?' });
+  await api.adminChecklistApi.create({
+    question: 'Ảnh đúng món đồ?',
+    description: 'Đạt khi có từ 3 ảnh chụp thật.',
+  });
   assert.equal(requests[1].method, 'post');
   assert.equal(requests[1].url, '/api/v1/admin/checklist');
-  assert.deepEqual(requests[1].body, { question: 'Ảnh đúng món đồ?' });
+  assert.deepEqual(requests[1].body, {
+    question: 'Ảnh đúng món đồ?',
+    description: 'Đạt khi có từ 3 ảnh chụp thật.',
+  });
 
   nextResponse = { ...first, question: 'Ảnh là ảnh thật của đúng món đồ?' };
-  await api.adminChecklistApi.update(3, { question: 'Ảnh là ảnh thật của đúng món đồ?' });
+  await api.adminChecklistApi.update(3, {
+    question: 'Ảnh là ảnh thật của đúng món đồ?',
+    description: 'Đạt khi ảnh rõ nét. Từ chối nếu dùng ảnh mạng.',
+  });
   assert.equal(requests[2].method, 'put');
   assert.equal(requests[2].url, '/api/v1/admin/checklist/3');
-  assert.deepEqual(requests[2].body, { question: 'Ảnh là ảnh thật của đúng món đồ?' });
+  assert.deepEqual(requests[2].body, {
+    question: 'Ảnh là ảnh thật của đúng món đồ?',
+    description: 'Đạt khi ảnh rõ nét. Từ chối nếu dùng ảnh mạng.',
+  });
 
   nextResponse = [second, first];
   await api.adminChecklistApi.reorder([1, 3]);
