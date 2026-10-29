@@ -166,21 +166,26 @@ Hạn mức đăng bài hiện tại cho trang Đăng tin (cần đăng nhập).
 
 ## 4. GET /api/v1/items
 
-Danh sách bài `APPROVED` còn hiển thị. Trong cùng bộ lọc, mỗi trang hiển thị tối đa `boost_max_per_page` bài đang được đẩy ở đầu trang; các bài còn lại xếp mới nhất trước. Không cần đăng nhập.
+Danh sách bài `APPROVED` còn hiển thị. Trong cùng bộ lọc, tất cả bài đang được đẩy xếp trước bài thường. Không cần đăng nhập.
 
 Tham số tùy chọn: `q` (tìm trong tiêu đề và mô tả, không phân biệt dấu/hoa thường),
 `categoryId`, `areaId` (lọc đúng id, kết hợp được với `q`),
 `condition` (`NEW`, `LIKE_NEW`, `GOOD`, `DEFECTIVE`), `offerType` (`GIVE`, `SWAP`),
-`page` (từ 0, mặc định 0), `size` (1–100, mặc định 20). Tất cả bộ lọc đều không bắt buộc và kết hợp được với nhau;
+`page` (từ 0, mặc định 0), `size` (1–100, mặc định 24), `boosted` (mặc định `false`; `true` chỉ lấy bài đang được đẩy), `sort` (`newest` hoặc `expiring`, mặc định `newest`). Tất cả bộ lọc đều không bắt buộc và kết hợp được với nhau;
 lọc ở server nên `totalElements` và phân trang tính trên kết quả đã lọc (FR-50). Kết quả là `PageResponse<ItemResponse>`:
 
 Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&offerType=GIVE`. `q` rỗng hoặc chỉ có khoảng trắng tương đương không tìm kiếm; `%` và `_` được xem là ký tự thường.
 
 ```json
-{ "items": [], "page": 0, "size": 20, "totalElements": 0, "totalPages": 0 }
+{ "items": [], "page": 0, "size": 24, "totalElements": 0, "totalPages": 0 }
 ```
 
-`totalPages` là số trang thực tế. Khi bài đang đẩy nhiều hơn số chỗ đẩy cho phép, trang cuối có thể chưa đầy `size` để vẫn giữ giới hạn mỗi trang; dùng `totalPages` để điều hướng thay vì tự tính từ `totalElements / size`.
+`totalPages` là số trang thực tế. Backend lọc, sắp xếp, đếm và phân trang trong database; mỗi trang trừ trang cuối có đủ `size` bài nếu dữ liệu không đổi giữa các request. Ví dụ có 30 bài đẩy và 18 bài thường, `size=24`: trang 1 gồm 24 bài đẩy; trang 2 gồm 6 bài đẩy và 18 bài thường. Chế độ `boosted=true` phân trang riêng các bài đang được đẩy, tối đa `size` bài mỗi trang.
+
+- `sort=newest`: bài đẩy xếp theo lần kích hoạt hoặc gia hạn đẩy gần nhất; sau đó bài thường xếp theo thời điểm tạo mới nhất.
+- `sort=expiring`: bài đẩy xếp theo `expire_at` tăng dần; sau đó bài thường cũng xếp theo `expire_at` tăng dần. Bài có `expire_at` rỗng đứng cuối trong từng nhóm. Nếu trùng hạn, ưu tiên bài tạo mới hơn rồi đến ID lớn hơn.
+
+`400` khi `sort` không thuộc hai giá trị trên.
 
 `400 VALIDATION_FAILED` khi tham số phân trang sai. `400` khi `condition` hoặc `offerType` không thuộc các giá trị trên.
 

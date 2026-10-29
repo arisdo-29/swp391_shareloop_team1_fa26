@@ -1,4 +1,4 @@
-export const browseFilterKeys = ['q', 'type', 'categoryId', 'condition', 'district'] as const;
+export const browseFilterKeys = ['q', 'type', 'categoryId', 'condition', 'district', 'sort'] as const;
 
 export type BrowseFilterKey = (typeof browseFilterKeys)[number];
 

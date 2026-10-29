@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -114,8 +115,10 @@ public class ItemController {
             @RequestParam(required = false) ItemCondition condition,
             @RequestParam(required = false) OfferType offerType,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return itemService.listPublicItems(categoryId, areaId, q, condition, offerType, page, size);
+            @RequestParam(defaultValue = "24") @Min(1) @Max(100) int size,
+            @RequestParam(defaultValue = "false") boolean boosted,
+            @RequestParam(defaultValue = "newest") @Pattern(regexp = "newest|expiring") String sort) {
+        return itemService.listPublicItems(categoryId, areaId, q, condition, offerType, page, size, boosted, sort);
     }
 
     private Long parseUserId(Jwt jwt) {

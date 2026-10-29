@@ -54,8 +54,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -989,7 +987,7 @@ class ItemServiceTest {
     }
 
     @Test
-    void listPublicItemsCapsBoostsAndKeepsAllItemsAcrossPages() {
+    void listPublicItemsPlacesAllBoostsBeforeRegularItemsAcrossPages() {
         List<Item> items = new java.util.ArrayList<>();
         for (long id = 7; id >= 1; id--) {
             Item item = new Item(
@@ -998,17 +996,43 @@ class ItemServiceTest {
             ReflectionTestUtils.setField(item, "id", id);
             items.add(item);
         }
-        when(configService.getInt(ConfigKey.BOOST_MAX_PER_PAGE)).thenReturn(3);
-        when(listingFeeQueryService.findActiveBoostedIds(any())).thenReturn(List.of(1L, 2L, 3L, 4L));
-        when(itemRepository.findVisibleByFilters(any(), any(), any(), any(), any(), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(items));
+        when(itemRepository.countPublicBrowseItems(
+                        eq(null), eq(null), eq(null), eq(null), eq(""), eq(1), any(Instant.class)))
+                .thenReturn(4L);
+        when(itemRepository.countPublicBrowseItems(
+                        eq(null), eq(null), eq(null), eq(null), eq(""), eq(2), any(Instant.class)))
+                .thenReturn(3L);
+        when(itemRepository.findPublicBrowseItems(
+                        eq(null),
+                        eq(null),
+                        eq(null),
+                        eq(null),
+                        eq(""),
+                        eq(1),
+                        any(Instant.class),
+                        eq("newest"),
+                        eq(4),
+                        eq(0L)))
+                .thenReturn(List.of(items.get(3), items.get(4), items.get(5), items.get(6)));
+        when(itemRepository.findPublicBrowseItems(
+                        eq(null),
+                        eq(null),
+                        eq(null),
+                        eq(null),
+                        eq(""),
+                        eq(2),
+                        any(Instant.class),
+                        eq("newest"),
+                        eq(4),
+                        eq(0L)))
+                .thenReturn(List.of(items.get(0), items.get(1), items.get(2)));
         when(listingFeeQueryService.findDisplayWindows(any())).thenReturn(Map.of());
 
         var first = itemService.listPublicItems(null, null, null, null, null, 0, 4);
         var second = itemService.listPublicItems(null, null, null, null, null, 1, 4);
 
-        assertThat(first.items()).extracting(ItemResponse::id).containsExactly(4L, 3L, 2L, 7L);
-        assertThat(second.items()).extracting(ItemResponse::id).containsExactly(1L, 6L, 5L);
+        assertThat(first.items()).extracting(ItemResponse::id).containsExactly(4L, 3L, 2L, 1L);
+        assertThat(second.items()).extracting(ItemResponse::id).containsExactly(7L, 6L, 5L);
         assertThat(first.totalElements()).isEqualTo(7);
         assertThat(first.totalPages()).isEqualTo(2);
     }

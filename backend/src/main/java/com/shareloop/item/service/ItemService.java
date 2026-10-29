@@ -40,14 +40,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -350,40 +348,89 @@ public class ItemService {
     @Transactional(readOnly = true)
     public ItemListPageResponse listPublicItems(
             Long categoryId, Long areaId, String q, ItemCondition condition, OfferType offerType, int page, int size) {
-        int configuredLimit = Math.max(0, configService.getInt(ConfigKey.BOOST_MAX_PER_PAGE));
-        int boostLimit = Math.min(size, configuredLimit);
-        Set<Long> activeBoosts =
-                boostLimit == 0 ? Set.of() : Set.copyOf(listingFeeQueryService.findActiveBoostedIds(Instant.now()));
-        List<Item> boosted = new ArrayList<>();
-        List<Item> regular = new ArrayList<>();
-        int batch = 0;
-        Page<Item> found;
-        do {
-            PageRequest request =
-                    PageRequest.of(batch++, 500, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
-            found = q == null || q.isBlank()
-                    ? itemRepository.findVisibleByFilters(
-                            ItemStatus.APPROVED, categoryId, areaId, condition, offerType, request)
-                    : itemRepository.searchVisibleByFilters(
-                            categoryId,
-                            areaId,
-                            condition == null ? null : condition.name(),
-                            offerType == null ? null : offerType.name(),
-                            q.trim(),
-                            PageRequest.of(batch - 1, 500));
-            for (Item item : found.getContent()) {
-                (activeBoosts.contains(item.getId()) ? boosted : regular).add(item);
+        return listPublicItems(categoryId, areaId, q, condition, offerType, page, size, false);
+    }
+
+    @Transactional(readOnly = true)
+    public ItemListPageResponse listPublicItems(
+            Long categoryId,
+            Long areaId,
+            String q,
+            ItemCondition condition,
+            OfferType offerType,
+            int page,
+            int size,
+            boolean boostedOnly) {
+        return listPublicItems(categoryId, areaId, q, condition, offerType, page, size, boostedOnly, "newest");
+    }
+
+    @Transactional(readOnly = true)
+    public ItemListPageResponse listPublicItems(
+            Long categoryId,
+            Long areaId,
+            String q,
+            ItemCondition condition,
+            OfferType offerType,
+            int page,
+            int size,
+            boolean boostedOnly,
+            String sort) {
+        Instant now = Instant.now();
+        String keywords = q == null ? "" : q.trim();
+        String conditionName = condition == null ? null : condition.name();
+        String offerTypeName = offerType == null ? null : offerType.name();
+        long boostedCount = itemRepository.countPublicBrowseItems(
+                categoryId, areaId, conditionName, offerTypeName, keywords, 1, now);
+        long regularCount = boostedOnly
+                ? 0
+                : itemRepository.countPublicBrowseItems(
+                        categoryId, areaId, conditionName, offerTypeName, keywords, 2, now);
+        long total = boostedCount + regularCount;
+        int totalPages = (int) ((total + size - 1) / size);
+        List<Item> selected = new ArrayList<>();
+        if (boostedOnly) {
+            selected.addAll(itemRepository.findPublicBrowseItems(
+                    categoryId,
+                    areaId,
+                    conditionName,
+                    offerTypeName,
+                    keywords,
+                    1,
+                    now,
+                    sort,
+                    size,
+                    (long) page * size));
+        } else {
+            int boostCountOnPage = (int) Math.min(size, Math.max(0L, boostedCount - (long) page * size));
+            if (boostCountOnPage > 0) {
+                selected.addAll(itemRepository.findPublicBrowseItems(
+                        categoryId,
+                        areaId,
+                        conditionName,
+                        offerTypeName,
+                        keywords,
+                        1,
+                        now,
+                        sort,
+                        boostCountOnPage,
+                        (long) page * size));
             }
-        } while (found.hasNext());
-        int total = boosted.size() + regular.size();
-        int totalPages = Math.max(
-                (total + size - 1) / size, boostLimit == 0 ? 0 : (boosted.size() + boostLimit - 1) / boostLimit);
-        int boostStart = (int) Math.min((long) page * boostLimit, boosted.size());
-        int boostEnd = Math.min(boostStart + boostLimit, boosted.size());
-        int regularStart = (int) Math.min(Math.max(0L, (long) page * size - boostStart), regular.size());
-        int regularEnd = Math.min(regularStart + size - (boostEnd - boostStart), regular.size());
-        List<Item> selected = new ArrayList<>(boosted.subList(boostStart, boostEnd));
-        selected.addAll(regular.subList(regularStart, regularEnd));
+            int regularSlots = size - boostCountOnPage;
+            long regularOffset = Math.max(0L, (long) page * size - boostedCount);
+            if (regularSlots > 0 && regularOffset < regularCount) {
+                selected.addAll(itemRepository.findPublicBrowseItems(
+                        categoryId,
+                        areaId,
+                        conditionName,
+                        offerTypeName,
+                        keywords,
+                        2,
+                        now,
+                        sort,
+                        regularSlots,
+                        regularOffset));
+            }
+        }
         Map<Long, DisplayWindow> windows = findDisplayWindows(selected);
         return new ItemListPageResponse(
                 selected.stream()
