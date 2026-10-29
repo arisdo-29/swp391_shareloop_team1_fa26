@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AppShell } from './AppShell';
 
-const { currentUser, dispatchMock, logoutMock } = vi.hoisted(() => ({
+const { currentUser, dispatchMock, logoutMock, requestApiMineMock } = vi.hoisted(() => ({
   currentUser: {
     id: 'local-user',
     name: 'Test User',
@@ -15,6 +15,7 @@ const { currentUser, dispatchMock, logoutMock } = vi.hoisted(() => ({
   },
   dispatchMock: vi.fn(),
   logoutMock: vi.fn().mockResolvedValue(undefined),
+  requestApiMineMock: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('../app/hooks', () => ({
@@ -25,6 +26,17 @@ vi.mock('../app/hooks', () => ({
 vi.mock('../services/authApi', () => ({
   authApi: { logout: logoutMock },
 }));
+
+vi.mock('../services/requestApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/requestApi')>();
+  return {
+    ...actual,
+    requestApi: {
+      ...actual.requestApi,
+      mine: requestApiMineMock,
+    },
+  };
+});
 
 vi.mock('../components/NotificationMenu', () => ({
   NotificationMenu: ({
@@ -159,3 +171,40 @@ describe.each([
     expect(screen.queryByText('test@example.com')).toBeNull();
   });
 });
+
+describe('AppShell unread chat polling visibility', () => {
+  it('pauses polling when document is hidden and fetches immediately when visible', async () => {
+    vi.useFakeTimers();
+    currentUser.id = 'api_1';
+    requestApiMineMock.mockClear();
+
+    let visibilityState = 'visible';
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => visibilityState,
+    });
+
+    renderShell(1280);
+
+    // Initial check fired on mount
+    expect(requestApiMineMock).toHaveBeenCalledTimes(1);
+
+    // When tab becomes hidden, interval skips fetching
+    visibilityState = 'hidden';
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(requestApiMineMock).toHaveBeenCalledTimes(1);
+
+    // When tab becomes visible again, visibilitychange triggers immediate fetch
+    visibilityState = 'visible';
+    fireEvent(document, new Event('visibilitychange'));
+    expect(requestApiMineMock).toHaveBeenCalledTimes(2);
+
+    // Next interval after visible works
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(requestApiMineMock).toHaveBeenCalledTimes(3);
+
+    vi.useRealTimers();
+    currentUser.id = 'local-user';
+  });
+});
+
