@@ -4,11 +4,15 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { reportApi, type AdminReportDetail, type ReportResponse } from '../../services/reportApi';
+import { formatDeadline } from '../../utils/request';
 import { AdminComplaints } from './AdminComplaints';
 
 vi.mock('../../services/reportApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../services/reportApi')>();
-  return { ...actual, reportApi: { ...actual.reportApi, list: vi.fn(), detail: vi.fn() } };
+  return {
+    ...actual,
+    reportApi: { ...actual.reportApi, list: vi.fn(), detail: vi.fn(), conclude: vi.fn() },
+  };
 });
 
 afterEach(() => {
@@ -73,6 +77,28 @@ async function openDetail(value: AdminReportDetail) {
   return { dialog, result: heading.closest('section') as HTMLElement };
 }
 
+// Hồ sơ chưa kết luận: không có khối "Kết quả xử lý", chờ nút Kết luận hiện ra.
+async function openPendingDetail(value: AdminReportDetail) {
+  const user = userEvent.setup();
+  vi.mocked(reportApi.list).mockResolvedValue({
+    items: [value.report],
+    page: 0,
+    size: 20,
+    totalElements: 1,
+    totalPages: 1,
+  });
+  vi.mocked(reportApi.detail).mockResolvedValue(value);
+  render(<AdminComplaints />);
+  await user.click(await screen.findByRole('button', { name: 'Xem chi tiết' }));
+  const dialog = screen.getByRole('dialog');
+  const concludeButton = (await within(dialog).findByRole('button', {
+    name: 'Kết luận',
+  })) as HTMLButtonElement;
+  return { user, dialog, concludeButton };
+}
+
+const pending = { resolvedBy: null, resolvedAt: null, resolvedByName: null };
+
 // Giá trị của một dòng trong <dl>: dt là nhãn, dd ngay sau là giá trị.
 function rowValue(container: HTMLElement, label: string) {
   return within(container).getByText(label, { selector: 'dt' }).nextElementSibling?.textContent;
@@ -100,5 +126,51 @@ describe('AdminComplaints', () => {
     expect(rowValue(result, 'Hệ quả')).toBe('Trừ 1 sao uy tín · Ẩn bài đăng');
     expect(rowValue(result, 'Ghi chú')).toBe('Ảnh không khớp mô tả');
     expect(dialog.textContent).not.toMatch(/Đã trừ/);
+  });
+
+  it('D-15: còn hạn giải trình thì khoá nút Kết luận và hiện hạn dạng giờ:phút ngày/tháng', async () => {
+    const dueAt = '2026-10-31T07:30:00Z';
+    const { dialog, concludeButton } = await openPendingDetail(
+      detail(
+        { status: 'AWAITING_RESPONSE' },
+        { ...pending, responseDueAt: dueAt, responseWindowOpen: true },
+      ),
+    );
+
+    expect(concludeButton.disabled).toBe(true);
+    const notice = within(dialog).getByText(/Chỉ kết luận được khi bên bị báo cáo đã giải trình/);
+    expect(notice.textContent).toContain(`Hạn giải trình: ${formatDeadline(dueAt)}.`);
+    expect(reportApi.conclude).not.toHaveBeenCalled();
+  });
+
+  it('D-15: đã hết hạn giải trình thì Admin kết luận được', async () => {
+    const { dialog, concludeButton } = await openPendingDetail(
+      detail(
+        { status: 'AWAITING_RESPONSE' },
+        { ...pending, responseDueAt: '2026-10-20T03:00:00Z', responseWindowOpen: false },
+      ),
+    );
+
+    expect(concludeButton.disabled).toBe(false);
+    expect(within(dialog).queryByText(/Chỉ kết luận được khi/)).toBeNull();
+  });
+
+  it('D-15: server báo còn hạn giải trình thì hiện cảnh báo và tải lại hồ sơ', async () => {
+    const { user, dialog, concludeButton } = await openPendingDetail(
+      detail({ status: 'OPEN' }, { ...pending, responseWindowOpen: false }),
+    );
+    vi.mocked(reportApi.conclude).mockRejectedValue({
+      code: 'REPORT_RESPONSE_WINDOW_OPEN',
+      status: 409,
+      message: 'Bên bị báo cáo vẫn đang trong hạn giải trình, chưa thể kết luận.',
+    });
+
+    await user.click(concludeButton);
+    await user.click(within(dialog).getByRole('button', { name: 'Xác nhận gửi' }));
+
+    expect(
+      await screen.findByText('Bên bị báo cáo vẫn đang trong hạn giải trình, chưa thể kết luận.'),
+    ).toBeTruthy();
+    expect(reportApi.detail).toHaveBeenCalledTimes(2);
   });
 });

@@ -51,11 +51,11 @@ Yêu cầu Admin; `reportId` là số nguyên dương. Response:
   "evidence": [{"id": 12, "url": "/api/v1/admin/reports/71/evidence/12", "available": true}],
   "responseEvidence": [{"id": 15, "url": null, "available": false}],
   "resolvedBy": null, "resolution": null, "starsDeducted": 0, "resolvedAt": null,
-  "relatedItemTitle": "Áo khoác gió nam", "resolvedByName": null
+  "relatedItemTitle": "Áo khoác gió nam", "resolvedByName": null, "responseWindowOpen": false
 }
 ```
 
-`relatedItemTitle` là tiêu đề bài đăng liên quan (`null` khi không có hoặc bài đã bị xoá). `resolvedByName` là họ tên Admin đã kết luận (`null` khi chưa kết luận).
+`relatedItemTitle` là tiêu đề bài đăng liên quan (`null` khi không có hoặc bài đã bị xoá). `resolvedByName` là họ tên Admin đã kết luận (`null` khi chưa kết luận). `responseWindowOpen` là `true` khi hồ sơ đang `AWAITING_RESPONSE` và chưa quá `responseDueAt` (tính theo giờ server): Admin chưa được kết luận (D-15, BC-10), FE khoá nút Kết luận và hiện hạn giải trình.
 
 Không trả email, số điện thoại hoặc storage key. Tên có thể `null` nếu người dùng không
 còn khả dụng; `reportedUser` có thể `null` nếu không xác định được bên bị báo cáo.
@@ -165,9 +165,11 @@ media: `403 MEDIA_NOT_OWNER`, `404 MEDIA_NOT_FOUND`,
 `409 MEDIA_NOT_UPLOADED`, `422 MEDIA_INVALID_FILE` (ID trùng).
 
 Admin vẫn dùng `POST .../conclude` với `{decision: "UPHOLD" | "DISMISS", note}`;
-ghi chú không bắt buộc, tối đa 500 ký tự. Không thêm hạn chế thời điểm kết luận.
+ghi chú không bắt buộc, tối đa 500 ký tự. Chỉ kết luận được khi bên bị báo cáo đã giải trình hoặc đã hết hạn
+giải trình (D-15, BC-10, xem mục 4); khi `responseWindowOpen = true` FE khoá nút và hiện `Hạn giải trình: hh:mm dd/MM`.
 FE xác nhận trước khi gửi, khoá nút khi gửi, tải lại list theo bộ lọc hiện tại và chi tiết
-sau thành công; nếu `409 REPORT_ALREADY_CONCLUDED`, báo hồ sơ đã được xử lý và tải lại.
+sau thành công; nếu `409 REPORT_ALREADY_CONCLUDED`, báo hồ sơ đã được xử lý và tải lại; nếu
+`409 REPORT_RESPONSE_WINDOW_OPEN`, báo còn hạn giải trình và tải lại.
 Các request đọc bị huỷ/bỏ qua khi chuyển hồ sơ hoặc bộ lọc.
 
 ---
@@ -341,6 +343,7 @@ Admin đưa ra kết luận xử lý đối với báo cáo hoặc khiếu nại
 - **Quy tắc nghiệp vụ:**
   - Báo cáo phải tồn tại trong hệ thống (`404 REPORT_NOT_FOUND`).
   - Báo cáo chưa được kết luận trước đó; nếu đã ở trạng thái `RESOLVED` hoặc `DISMISSED` thì từ chối xử lý (`409 REPORT_ALREADY_CONCLUDED`).
+  - **Chỉ kết luận khi đã giải trình hoặc hết hạn (D-15, BC-10):** hồ sơ đang `AWAITING_RESPONSE` và `now <= responseDueAt` thì từ chối (`409 REPORT_RESPONSE_WINDOW_OPEN`, `details.responseDueAt` là hạn giải trình dạng ISO-8601). Bên bị báo cáo giải trình xong thì hồ sơ về `OPEN` và kết luận được ngay; quá hạn mà chưa giải trình thì cũng kết luận được.
   - **Giao dịch đang `DISPUTED`** (khiếu nại `REQUEST` mở từ `POST /requests/{id}/handover-issue`): kết luận xong thì giao dịch được đưa ra khỏi `DISPUTED`. `UPHOLD` -> giao dịch `CANCELLED` (`cancelReason` có tiền tố `[Hệ thống]`), nhả cả hai món về `APPROVED`. `DISMISS` -> giao dịch `COMPLETED` như hoàn tất bình thường (hai món `TRADED`, cộng điểm uy tín). Cả hai bên nhận thông báo kết quả. Khiếu nại mở sau khi giao dịch đã `COMPLETED` (`POST /requests/{requestId}/disputes`) không đổi trạng thái giao dịch, chỉ áp dụng trừ sao như trước.
   - **Khi kết luận DISMISS (Bác bỏ / Không có cơ sở):**
     - Trạng thái báo cáo chuyển thành `DISMISSED`.
@@ -404,6 +407,7 @@ Admin đưa ra kết luận xử lý đối với báo cáo hoặc khiếu nại
     - `REPORT_NOT_FOUND`: Báo cáo vi phạm với `reportId` tương ứng không tồn tại.
   - `409 CONFLICT`:
     - `REPORT_ALREADY_CONCLUDED`: Báo cáo vi phạm đã được kết luận xử lý trước đó.
+    - `REPORT_RESPONSE_WINDOW_OPEN`: Bên bị báo cáo vẫn đang trong hạn giải trình, chưa thể kết luận; `details.responseDueAt` là hạn.
 
 ---
 
