@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Button, EmptyState, PageHeader, Select, TextArea, SkeletonRows } from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
 import {
@@ -35,6 +35,51 @@ const reasonLabels: Record<string, string> = {
 const date = (value: string | null) =>
   value ? new Date(value).toLocaleString('vi-VN') : 'Chưa có';
 const concluded = (status: ReportStatus) => status === 'RESOLVED' || status === 'DISMISSED';
+const statusTones: Record<ReportStatus, string> = {
+  OPEN: 'bg-warning-soft text-warning',
+  AWAITING_RESPONSE: 'bg-info-soft text-info',
+  RESOLVED: 'bg-error-soft text-error',
+  DISMISSED: 'bg-surface-container text-text-secondary',
+};
+
+// Cùng kiểu StatusBadge trong ui.tsx nhưng theo bộ trạng thái của hồ sơ khiếu nại.
+function ReportStatusBadge({ status }: { status: ReportStatus }) {
+  return (
+    <span
+      className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${statusTones[status]}`}
+    >
+      {statusLabels[status]}
+    </span>
+  );
+}
+
+function DetailRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid gap-0.5 sm:grid-cols-[9rem_1fr] sm:gap-3">
+      <dt className="text-text-secondary">{label}</dt>
+      <dd className="min-w-0 break-words text-text-primary">{children}</dd>
+    </div>
+  );
+}
+
+function reportedUserName(detail: AdminReportDetail) {
+  return detail.reportedUser ? (detail.reportedUser.fullName ?? 'Người dùng') : 'Không còn xác định được';
+}
+
+// Hệ quả của kết luận đã lưu, khớp với xử lý ở backend (ReportService.conclude).
+function consequences(detail: AdminReportDetail) {
+  const upheld = detail.report.status === 'RESOLVED';
+  const parts = [detail.starsDeducted > 0 ? `Trừ ${detail.starsDeducted} sao uy tín` : 'Không trừ sao'];
+  if (detail.report.targetType === 'ITEM') parts.push(upheld ? 'Ẩn bài đăng' : 'Không ẩn bài');
+  if (detail.report.targetType === 'REQUEST') {
+    parts.push(
+      upheld
+        ? 'Giao dịch đang tranh chấp (nếu có) bị huỷ'
+        : 'Giao dịch đang tranh chấp (nếu có) trở về Hoàn tất',
+    );
+  }
+  return parts.join(' · ');
+}
 function errorMessage(error: ApiError) {
   if (error.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
   if (error.status === 403) return 'Tài khoản hiện tại không có quyền xử lý khiếu nại.';
@@ -95,20 +140,18 @@ function EvidenceGallery({
 }) {
   return (
     <div>
-      <h3 className="mb-2 font-semibold">{title}</h3>
-      {evidence.length ? (
-        <div className="grid grid-cols-2 gap-2">
-          {evidence.map((entry) => (
-            <EvidenceImage
-              key={`${reportId}-${entry.id}-${entry.available}`}
-              reportId={reportId}
-              evidence={entry}
-            />
-          ))}
-        </div>
-      ) : (
-        <p className="text-text-muted">Không có bằng chứng được gửi.</p>
-      )}
+      <p className="mb-2 font-semibold text-text-secondary">
+        {title} ({evidence.length})
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        {evidence.map((entry) => (
+          <EvidenceImage
+            key={`${reportId}-${entry.id}-${entry.available}`}
+            reportId={reportId}
+            evidence={entry}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -294,7 +337,9 @@ export function AdminComplaints() {
                     </td>
                     <td>{reasonLabels[report.reason] ?? report.reason}</td>
                     <td>{date(report.createdAt)}</td>
-                    <td>{statusLabels[report.status]}</td>
+                    <td>
+                      <ReportStatusBadge status={report.status} />
+                    </td>
                     <td>
                       <Button
                         variant="outline"
@@ -338,10 +383,18 @@ export function AdminComplaints() {
       )}
       {selectedId !== null && (
         <DialogFrame labelledBy="report-detail-title" size="xl">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 id="report-detail-title" className="section-title">
-              Hồ sơ khiếu nại
-            </h2>
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 id="report-detail-title" className="section-title">
+                  Hồ sơ khiếu nại
+                </h2>
+                {detail && <ReportStatusBadge status={detail.report.status} />}
+              </div>
+              {detail && (
+                <p className="mt-1 text-sm text-text-secondary">Gửi lúc {date(detail.report.createdAt)}</p>
+              )}
+            </div>
             <Button variant="ghost" disabled={submitting} onClick={() => setSelectedId(null)}>
               Đóng
             </Button>
@@ -357,67 +410,84 @@ export function AdminComplaints() {
           )}
           {detail && (
             <div className="space-y-4 text-sm">
-              <p>
-                Người gửi: {detail.reporter.fullName ?? 'Người dùng'}
-              </p>
-              <p>
-                Người bị báo cáo:{' '}
-                {detail.reportedUser
-                  ? (detail.reportedUser.fullName ?? 'Người dùng')
-                  : 'Không còn xác định được'}
-              </p>
-              <p>
-                Bài đăng liên quan:{' '}
-                {detail.relatedItemId
-                  ? (detail.relatedItemTitle ?? 'Bài đăng đã bị xóa')
-                  : 'Không có'}
-                {' · '}Gắn với giao dịch: {detail.report.requestId ? 'Có' : 'Không'}
-              </p>
-              <p>
-                Trạng thái: {statusLabels[detail.report.status]} · Gửi lúc:{' '}
-                {date(detail.report.createdAt)} · Giai đoạn:{' '}
-                {detail.report.stage === 'BEFORE' ? 'Trước giao dịch' : 'Sau giao dịch'}
-              </p>
-              <div className="rounded-md bg-background p-3">
-                <strong>{reasonLabels[detail.report.reason] ?? detail.report.reason}</strong>
-                <p className="mt-2 whitespace-pre-wrap">{detail.report.description}</p>
-              </div>
-              <EvidenceGallery
-                reportId={detail.report.id}
-                title="Bằng chứng người gửi"
-                evidence={detail.evidence}
-              />
-              <div>
-                <h3 className="font-semibold">Giải trình</h3>
-                <p className="whitespace-pre-wrap">{detail.response ?? 'Chưa có giải trình.'}</p>
-                <p className="text-text-muted">
-                  Thời điểm giải trình: {date(detail.respondedAt)}
-                </p>
-              </div>
-              <p>
-                Hạn giải trình:{' '}
-                {detail.responseDueAt
-                  ? date(detail.responseDueAt)
-                  : 'Không có hạn được lưu cho hồ sơ này.'}
-              </p>
-              <EvidenceGallery
-                reportId={detail.report.id}
-                title="Bằng chứng người giải trình"
-                evidence={detail.responseEvidence}
-              />
-              {concluded(detail.report.status) ? (
-                <div className="rounded-md bg-background p-3">
-                  <h3 className="font-semibold">Kết luận đã lưu</h3>
-                  <p className="whitespace-pre-wrap">
-                    {detail.resolution || 'Không có ghi chú.'}
-                  </p>
-                  <p>
-                    {detail.resolvedByName ?? 'Quản trị viên'} đã kết luận · {date(detail.resolvedAt)} · Đã trừ{' '}
-                    {detail.starsDeducted} sao
-                  </p>
+              <dl className="space-y-2">
+                <DetailRow label="Người gửi">{detail.reporter.fullName ?? 'Người dùng'}</DetailRow>
+                <DetailRow label="Người bị báo cáo">{reportedUserName(detail)}</DetailRow>
+                {detail.relatedItemId !== null && (
+                  <DetailRow label="Bài đăng liên quan">
+                    {detail.relatedItemTitle ?? 'Bài đăng đã bị xóa'}
+                  </DetailRow>
+                )}
+                <DetailRow label="Giai đoạn">
+                  {detail.report.stage === 'BEFORE' ? 'Trước giao dịch' : 'Sau giao dịch'}
+                </DetailRow>
+              </dl>
+              <section className="space-y-3 border-t border-border pt-4">
+                <h3 className="font-semibold text-text-primary">Nội dung khiếu nại</h3>
+                <div className="rounded-md bg-surface-low p-3">
+                  <strong>{reasonLabels[detail.report.reason] ?? detail.report.reason}</strong>
+                  <p className="mt-2 whitespace-pre-wrap">{detail.report.description}</p>
                 </div>
+                {detail.evidence.length ? (
+                  <EvidenceGallery
+                    reportId={detail.report.id}
+                    title="Ảnh bằng chứng của người gửi"
+                    evidence={detail.evidence}
+                  />
+                ) : (
+                  <p className="text-text-secondary">Không kèm ảnh bằng chứng.</p>
+                )}
+              </section>
+              <section className="space-y-3 border-t border-border pt-4">
+                <h3 className="font-semibold text-text-primary">Giải trình</h3>
+                {detail.response ? (
+                  <>
+                    <div className="rounded-md bg-surface-low p-3">
+                      <p className="whitespace-pre-wrap">{detail.response}</p>
+                    </div>
+                    {detail.respondedAt && (
+                      <p className="text-text-secondary">Giải trình lúc {date(detail.respondedAt)}</p>
+                    )}
+                    {detail.responseEvidence.length > 0 && (
+                      <EvidenceGallery
+                        reportId={detail.report.id}
+                        title="Ảnh bằng chứng của người giải trình"
+                        evidence={detail.responseEvidence}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <p className="text-text-secondary">
+                    Chưa có giải trình.
+                    {detail.responseDueAt ? ` Hạn giải trình: ${date(detail.responseDueAt)}.` : ''}
+                  </p>
+                )}
+              </section>
+              {concluded(detail.report.status) ? (
+                <section className="rounded-md bg-surface-low p-4">
+                  <h3 className="mb-3 font-semibold text-text-primary">Kết quả xử lý</h3>
+                  <dl className="space-y-2">
+                    <DetailRow label="Kết luận">
+                      {detail.report.status === 'RESOLVED' ? 'Có cơ sở' : 'Không có cơ sở'}
+                    </DetailRow>
+                    <DetailRow
+                      label={detail.report.status === 'RESOLVED' ? 'Người bị xử lý' : 'Người bị báo cáo'}
+                    >
+                      {reportedUserName(detail)}
+                    </DetailRow>
+                    <DetailRow label="Hệ quả">{consequences(detail)}</DetailRow>
+                    {detail.resolution?.trim() && (
+                      <DetailRow label="Ghi chú">
+                        <span className="whitespace-pre-wrap">{detail.resolution}</span>
+                      </DetailRow>
+                    )}
+                  </dl>
+                  <p className="mt-3 border-t border-border pt-3 text-text-secondary">
+                    {detail.resolvedByName ?? 'Quản trị viên'} kết luận lúc {date(detail.resolvedAt)}
+                  </p>
+                </section>
               ) : (
-                <>
+                <section className="space-y-4 border-t border-border pt-4">
                   <Select
                     label="Kết luận"
                     value={decision}
@@ -425,7 +495,7 @@ export function AdminComplaints() {
                     onChange={(event) => setDecision(event.target.value as ReportDecision)}
                   >
                     <option value="UPHOLD">Có cơ sở</option>
-                    <option value="DISMISS">Bác bỏ</option>
+                    <option value="DISMISS">Không có cơ sở (bác bỏ)</option>
                   </Select>
                   <TextArea
                     label="Ghi chú kết luận (tối đa 500 ký tự, không bắt buộc)"
@@ -464,7 +534,7 @@ export function AdminComplaints() {
                       Kết luận
                     </Button>
                   )}
-                </>
+                </section>
               )}
             </div>
           )}
