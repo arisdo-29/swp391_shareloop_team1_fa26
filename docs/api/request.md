@@ -21,7 +21,6 @@ Mọi đổi trạng thái đi qua `RequestStatus.canTransition`; cạnh không 
 | `AWAITING_LOGISTICS` | `LOGISTICS_CONFIRMED` | Hai bên chốt lịch |
 | `AWAITING_LOGISTICS` | `CANCELLED` | Như `RESERVED` |
 | `LOGISTICS_CONFIRMED` | `AWAITING_HANDOVER` | Một bên xác nhận bàn giao |
-| `LOGISTICS_CONFIRMED` | `DISPUTED` | Bên nhận xác nhận bàn giao nhưng chọn không đúng mô tả (D-04) |
 | `LOGISTICS_CONFIRMED` | `CANCELLED` | Huỷ giao dịch, khoá tài khoản |
 | `AWAITING_HANDOVER` | `COMPLETED` | Bên còn lại xác nhận, hoặc job tự xác nhận sau `AUTO_CONFIRM_DAYS` |
 | `AWAITING_HANDOVER` | `DISPUTED` | `POST /requests/{id}/handover-issue` hoặc bên nhận xác nhận không đúng mô tả |
@@ -29,7 +28,7 @@ Mọi đổi trạng thái đi qua `RequestStatus.canTransition`; cạnh không 
 | `DISPUTED` | `COMPLETED` | Admin bác bỏ khiếu nại (`DISMISS`) |
 | `DISPUTED` | `CANCELLED` | Admin chấp nhận khiếu nại (`UPHOLD`), hoặc Admin huỷ giao dịch kẹt |
 
-`COMPLETED`, `REJECTED`, `CANCELLED` là trạng thái cuối.
+`COMPLETED`, `REJECTED`, `CANCELLED` là trạng thái cuối. Không có cạnh `LOGISTICS_CONFIRMED -> DISPUTED`.
 
 Khi chủ bài đổi hình thức `GIVE` ↔ `SWAP` bằng `PUT /api/v1/items/{id}`, mọi Request `PENDING` của bài chuyển sang `CANCELLED` và người gửi nhận thông báo `REQUEST_CANCELLED`. Việc huỷ nằm trong cùng transaction sửa bài; nếu sửa bài hoặc giữ phí thất bại, Request giữ nguyên.
 

@@ -39,7 +39,6 @@ class RequestStateMachineTest {
             "AWAITING_LOGISTICS->LOGISTICS_CONFIRMED",
             "AWAITING_LOGISTICS->CANCELLED",
             "LOGISTICS_CONFIRMED->AWAITING_HANDOVER",
-            "LOGISTICS_CONFIRMED->DISPUTED",
             "LOGISTICS_CONFIRMED->CANCELLED",
             "AWAITING_HANDOVER->COMPLETED",
             "AWAITING_HANDOVER->DISPUTED",
@@ -261,7 +260,7 @@ class RequestStateMachineTest {
         }
 
         @Test
-        @DisplayName("Mũi tên 8d: LOGISTICS_CONFIRMED -> DISPUTED (Người nhận bấm trước nhưng chọn không đúng mô tả)")
+        @DisplayName("Người nhận bấm trước nhưng chọn không đúng mô tả -> DISPUTED")
         void logisticsConfirmedToDisputed_receiverSaysNotAsDescribed() {
             Request request = createRequest(RequestStatus.LOGISTICS_CONFIRMED);
             Instant now = Instant.now();
@@ -273,14 +272,6 @@ class RequestStateMachineTest {
             assertThat(request.getAsDescribed()).isFalse();
             assertThat(request.getDonorHandoverAt()).isNull();
             assertThat(request.getCompletedAt()).isNull();
-        }
-
-        @Test
-        @DisplayName("Mũi tên 8e: LOGISTICS_CONFIRMED -> DISPUTED (chuyển trực tiếp qua transitionTo())")
-        void logisticsConfirmedToDisputed_directTransition() {
-            Request request = createRequest(RequestStatus.LOGISTICS_CONFIRMED);
-            request.transitionTo(RequestStatus.DISPUTED);
-            assertThat(request.getStatus()).isEqualTo(RequestStatus.DISPUTED);
         }
 
         @Test
