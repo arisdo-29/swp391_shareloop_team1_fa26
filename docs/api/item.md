@@ -166,7 +166,7 @@ Hạn mức đăng bài hiện tại cho trang Đăng tin (cần đăng nhập).
 
 ## 4. GET /api/v1/items
 
-Danh sách bài `APPROVED` còn hiển thị. Trong cùng bộ lọc, tất cả bài đang được đẩy xếp trước bài thường. Không cần đăng nhập.
+Danh sách bài `APPROVED` còn hiển thị (`is_active = true`, chưa xoá mềm, `expire_at` rỗng hoặc lớn hơn thời điểm hiện tại). Trong cùng bộ lọc, tất cả bài đang được đẩy xếp trước bài thường. Không cần đăng nhập.
 
 Tham số tùy chọn: `q` (tìm trong tiêu đề và mô tả, không phân biệt dấu/hoa thường),
 `categoryId`, `areaId` (lọc đúng id, kết hợp được với `q`),

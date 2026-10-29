@@ -5,8 +5,11 @@ import com.shareloop.catalog.dto.CategoryResponse;
 import com.shareloop.catalog.mapper.CategoryMapper;
 import com.shareloop.catalog.repository.ItemCategoryRepository;
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.item.service.ItemService;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,16 +19,19 @@ public class CategoryService {
 
     private final ItemCategoryRepository repository;
     private final CategoryMapper mapper;
+    private final ItemService itemService;
 
-    public CategoryService(ItemCategoryRepository repository, CategoryMapper mapper) {
+    public CategoryService(ItemCategoryRepository repository, CategoryMapper mapper, @Lazy ItemService itemService) {
         this.repository = repository;
         this.mapper = mapper;
+        this.itemService = itemService;
     }
 
     /** Danh mục đang dùng, theo thứ tự hiển thị. */
     public List<CategoryResponse> listActive() {
+        Map<Long, Long> counts = itemService.countPublicItemsByCategory();
         return repository.findByIsActiveTrueOrderBySortOrderAscIdAsc().stream()
-                .map(mapper::toResponse)
+                .map(category -> mapper.toResponse(category, counts.getOrDefault(category.getId(), 0L)))
                 .toList();
     }
 
@@ -39,9 +45,10 @@ public class CategoryService {
 
     /** Danh mục ẩn hoặc đã xoá mềm coi như không tồn tại. */
     public CategoryResponse getById(long id) {
-        return repository
+        var category = repository
                 .findByIdAndIsActiveTrue(id)
-                .map(mapper::toResponse)
                 .orElseThrow(() -> new BusinessException(CatalogErrorCode.CATALOG_CATEGORY_NOT_FOUND));
+        return mapper.toResponse(
+                category, itemService.countPublicItemsByCategory().getOrDefault(id, 0L));
     }
 }

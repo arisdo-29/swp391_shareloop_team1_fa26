@@ -18,6 +18,7 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     @Query(
             value = "SELECT count(*) FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + "AND (i.expire_at IS NULL OR i.expire_at > :now) "
                     + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
                     + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
                     + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
@@ -31,7 +32,15 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             Long categoryId, Long areaId, String condition, String offerType, String q, int mode, Instant now);
 
     @Query(
+            value = "SELECT i.category_id, count(*) FROM items i "
+                    + "WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + "AND (i.expire_at IS NULL OR i.expire_at > :now) GROUP BY i.category_id",
+            nativeQuery = true)
+    List<Object[]> countPublicItemsByCategory(Instant now);
+
+    @Query(
             value = "SELECT i.* FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + "AND (i.expire_at IS NULL OR i.expire_at > :now) "
                     + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
                     + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
                     + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "

@@ -32,6 +32,7 @@ vi.mock('./HomeCommunity', () => ({
 vi.mock('../../services/catalogApi', () => ({
   catalogApi: {
     categories: vi.fn(),
+    categoriesWithCounts: vi.fn(),
     areas: vi.fn(),
   },
 }));
@@ -43,7 +44,7 @@ vi.mock('../../services/itemApi', () => ({
 }));
 
 const categories: CategoryResponse[] = [
-  { id: 7, name: 'Sách', parentId: null, restricted: false, boostable: true, sortOrder: 1 },
+  { id: 7, name: 'Sách', parentId: null, restricted: false, boostable: true, sortOrder: 1, activeItemCount: 3 },
 ];
 
 const areas: AreaResponse[] = [
@@ -109,6 +110,7 @@ function renderHomeInStrictMode() {
 
 beforeEach(() => {
   vi.mocked(catalogApi.categories).mockResolvedValue(categories);
+  vi.mocked(catalogApi.categoriesWithCounts).mockResolvedValue(categories);
   vi.mocked(catalogApi.areas).mockResolvedValue(areas);
   vi.mocked(itemApi.list).mockResolvedValue(itemPage);
 });
@@ -148,6 +150,17 @@ describe('trạng thái tải bài đăng trên Home', () => {
     const categoryLink = categoryLabel?.closest('a');
     expect(categoryLink?.getAttribute('href')).toBe('/browse?categoryId=7');
     expect(container.querySelector('.home-category-arrow')).toBeNull();
+  });
+
+  it('hiển thị số danh mục từ API và giữ link quận không kèm số đếm', async () => {
+    const { container } = renderHome();
+
+    await waitFor(() => expect(container.querySelector('.home-category-count')).toBeTruthy());
+    expect(container.querySelector('.home-category-count')?.textContent).toBe('3 món đồ');
+    const districtLink = container.querySelector('.home-district');
+    expect(districtLink).toBeTruthy();
+    expect(districtLink?.getAttribute('href')).toBe('/browse?district=1');
+    expect(districtLink?.textContent).not.toContain('món đang có');
   });
 
   it('kết thúc loading và hiển thị bài đăng khi API items thành công', async () => {
@@ -418,7 +431,7 @@ describe('trạng thái tải bài đăng trên Home', () => {
   it('không để categories hoặc areas chậm chặn bài đăng đã tải xong', async () => {
     const categoriesRequest = deferred<CategoryResponse[]>();
     const areasRequest = deferred<AreaResponse[]>();
-    vi.mocked(catalogApi.categories).mockReturnValue(categoriesRequest.promise);
+    vi.mocked(catalogApi.categoriesWithCounts).mockReturnValue(categoriesRequest.promise);
     vi.mocked(catalogApi.areas).mockReturnValue(areasRequest.promise);
 
     renderHome();

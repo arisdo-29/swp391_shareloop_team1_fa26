@@ -2169,7 +2169,8 @@
   background: var(--color-surface);
 }
 .home-content .home-district {
-  min-height: 132px;
+  min-height: 88px;
+  align-items: center;
   border-right: 1px solid #d6e3dd;
   background: var(--color-surface);
   transition:

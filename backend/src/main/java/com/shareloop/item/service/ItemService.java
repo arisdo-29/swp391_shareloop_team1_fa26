@@ -36,6 +36,7 @@ import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.service.UserService;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -349,6 +350,16 @@ public class ItemService {
     public ItemListPageResponse listPublicItems(
             Long categoryId, Long areaId, String q, ItemCondition condition, OfferType offerType, int page, int size) {
         return listPublicItems(categoryId, areaId, q, condition, offerType, page, size, false);
+    }
+
+    /** Số bài công khai theo danh mục, dùng cùng điều kiện hiển thị với danh sách Tìm đồ. */
+    @Transactional(readOnly = true)
+    public Map<Long, Long> countPublicItemsByCategory() {
+        Map<Long, Long> counts = new HashMap<>();
+        for (Object[] row : itemRepository.countPublicItemsByCategory(Instant.now())) {
+            counts.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
+        }
+        return counts;
     }
 
     @Transactional(readOnly = true)
