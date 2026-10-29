@@ -385,40 +385,31 @@ export function Post() {
     event.currentTarget.value = '';
     setMediaUploadState('idle');
     setMediaUploadError('');
-    if (files.length > ITEM_IMAGES_MAX) {
+    if (!files.length) return;
+    const nextImageCount = imageFiles.length + files.length;
+    if (nextImageCount > ITEM_IMAGES_MAX) {
       setErrors((current) => ({ ...current, images: `Chỉ được chọn tối đa ${ITEM_IMAGES_MAX} ảnh.` }));
-      setImageFiles([]);
-      setImages([]);
-      setUploadedImageUrls(new Map());
       return;
     }
     if (files.some((file) => !file.type.startsWith('image/'))) {
       setErrors((current) => ({ ...current, images: 'Vui lòng chỉ chọn tệp hình ảnh.' }));
-      setImageFiles([]);
-      setImages([]);
-      setUploadedImageUrls(new Map());
       return;
     }
     setErrors((current) => ({
       ...current,
-      images: !SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST && files.length < ITEM_IMAGES_MIN ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.` : undefined,
+      images: nextImageCount >= ITEM_IMAGES_MIN
+        ? undefined
+        : current.images === `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.`
+          ? current.images
+          : undefined,
     }));
     try {
       const previews = await Promise.all(files.map(fileToDataUrl));
-      setImageFiles(files);
-      setImages(previews);
-      setUploadedImageUrls((current) =>
-        new Map(files.flatMap((file) => {
-          const url = current.get(file);
-          return url ? [[file, url] as const] : [];
-        })),
-      );
+      setImageFiles((current) => [...current, ...files]);
+      setImages((current) => [...current, ...previews]);
     } catch {
-      setImageFiles([]);
-      setImages([]);
-      setUploadedImageUrls(new Map());
       setMediaUploadState('error');
-      setMediaUploadError('Không đọc được ảnh đã chọn. Vui lòng chọn lại.');
+      setMediaUploadError('Không đọc được ảnh vừa chọn. Vui lòng thử lại.');
     }
   };
 
@@ -436,7 +427,10 @@ export function Post() {
     const remainingCount = imageFiles.length - 1;
     setErrors((current) => ({
       ...current,
-      images: !SKIP_MEDIA_UPLOAD_FOR_ITEM_TEST && remainingCount < ITEM_IMAGES_MIN ? `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.` : undefined,
+      images: remainingCount < ITEM_IMAGES_MIN
+        && current.images === `Vui lòng chọn ít nhất ${ITEM_IMAGES_MIN} ảnh.`
+        ? current.images
+        : undefined,
     }));
   };
 
@@ -532,20 +526,20 @@ export function Post() {
                 </div>
               ))}
               <label className={`flex aspect-square cursor-pointer flex-col items-center justify-center rounded-md border border-dashed text-center text-sm font-semibold text-primary transition hover:bg-primary-faint ${errors.images ? 'border-error' : 'border-text-muted'}`}>
-                {images.length ? 'Chọn lại ảnh' : 'Thêm ảnh'}
+                Thêm ảnh
                 <input
                   className="sr-only"
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   multiple
-                  disabled={submitting || mediaUploading}
+                  disabled={submitting || mediaUploading || imageFiles.length >= ITEM_IMAGES_MAX}
                   onChange={(event) => void selectImages(event)}
                 />
               </label>
             </div>
             <p className="text-xs leading-5 text-text-secondary">
-              Cần {ITEM_IMAGES_MIN} đến {ITEM_IMAGES_MAX} ảnh chụp thật, chọn cùng lúc.
-              {images.length ? ` Đã có ${images.length}${missingImages ? `, cần thêm ít nhất ${missingImages}` : ''}.` : ''} Ảnh đầu là ảnh bìa.
+              Cần {ITEM_IMAGES_MIN} đến {ITEM_IMAGES_MAX} ảnh chụp thật, có thể chọn nhiều lần.
+              {images.length ? ` Đã có ${images.length}/${ITEM_IMAGES_MAX} ảnh.` : ''} Ảnh đầu là ảnh bìa.
             </p>
             {errors.images ? <span className="block text-xs text-error">{errors.images}</span> : null}
             {mediaUploadError ? <span className="block text-xs text-error">{mediaUploadError}</span> : null}
@@ -710,8 +704,8 @@ export function Post() {
             <dd className="font-semibold tabular-nums">{availableCredit === null ? '--' : `${availableCredit} Credit`}</dd>
           </dl>
           <ul className="list-disc space-y-1 pl-5 text-xs leading-5">
-            <li className={missingImages ? 'text-warning' : 'text-success'}>
-              {missingImages ? `Ảnh: còn thiếu ${missingImages} trong ${ITEM_IMAGES_MIN} ảnh tối thiểu` : `Đã có ${images.length} ảnh`}
+            <li className={missingImages ? 'text-text-secondary' : 'text-success'}>
+              Đã có {images.length}/{ITEM_IMAGES_MAX} ảnh
             </li>
             <li className={infoReady ? 'text-success' : 'text-warning'}>
               {infoReady ? 'Đã điền tên, danh mục, tình trạng, mô tả' : 'Còn thiếu tên, danh mục, tình trạng hoặc mô tả'}

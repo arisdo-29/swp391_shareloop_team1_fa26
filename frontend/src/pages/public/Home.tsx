@@ -11,16 +11,21 @@ import {
   SearchField,
   TypeBadge,
 } from '../../components/ui';
-import { DialogFrame } from '../../components/Dialog';
 import type { Item, ItemType, User } from '../../types/domain';
 import { catalogApi } from '../../services/catalogApi';
 import type { AreaResponse, CategoryResponse } from '../../services/catalogApi';
 import { itemApi, type ItemResponse, type PageResponse } from '../../services/itemApi';
 import { toAreaNameMap, toAreaOptions, toCategoryNameMap, toFeItem, type AreaOption } from '../../services/mappers';
-import { categoryBrowsePath } from '../../utils/browseFilters';
+import {
+  BROWSE_PAGE_SIZE,
+  browseSearchPath,
+  categoryBrowsePath,
+  districtBrowsePath,
+} from '../../utils/browseFilters';
 import { HomeLifecycle, HomeProcess } from './HomeCommunity';
 import { HomeDiscoveryRail, HomeMotion } from './HomeMotion';
 import browseSuggestionBox from '../../assets/browse-suggestion-box.png';
+import { loginPath } from '../../utils/authRedirect';
 import './home-content.css';
 const aiSuggestions = [
   {
@@ -44,6 +49,36 @@ const newItemFilters: Array<{ value: 'all' | ItemType; label: string }> = [
 
 let pendingHomeItemsRequest: Promise<PageResponse<ItemResponse>> | null = null;
 let pendingHomeFeaturedItemsRequest: Promise<ItemResponse[]> | null = null;
+let pendingHomeCategoriesRequest: Promise<CategoryResponse[]> | null = null;
+
+function loadHomeCategories() {
+  if (pendingHomeCategoriesRequest) return pendingHomeCategoriesRequest;
+
+  const request = catalogApi.categories()
+    .then(async (categories) => {
+      const visibleCategories = categories.filter((category) => !category.restricted);
+      const counts = await Promise.all(
+        visibleCategories.map(async (category) => {
+          const response = await itemApi.list({
+            categoryId: category.id,
+            page: 0,
+            size: BROWSE_PAGE_SIZE,
+          });
+          return [category.id, response.totalElements] as const;
+        }),
+      );
+      const countByCategoryId = new Map(counts);
+      return categories.map((category) => ({
+        ...category,
+        activeItemCount: countByCategoryId.get(category.id) ?? category.activeItemCount,
+      }));
+    })
+    .finally(() => {
+      if (pendingHomeCategoriesRequest === request) pendingHomeCategoriesRequest = null;
+    });
+  pendingHomeCategoriesRequest = request;
+  return request;
+}
 
 function loadHomeItems() {
   if (pendingHomeItemsRequest) return pendingHomeItemsRequest;
@@ -345,14 +380,13 @@ export function Home() {
   const [q, setQ] = useState('');
   const [district, setDistrict] = useState('');
   const [newItemFilter, setNewItemFilter] = useState<'all' | ItemType>('all');
-  const [loginPromptOpen, setLoginPromptOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setLoadError('');
 
-    void catalogApi.categoriesWithCounts().then((categoryData) => {
+    void loadHomeCategories().then((categoryData) => {
       if (active) setCategoryResponses(categoryData);
     }).catch(() => undefined);
 
@@ -436,14 +470,14 @@ export function Home() {
       to: categoryBrowsePath(category.id),
     })),
     ...(districtOptions[0]
-      ? [{ label: districtOptions[0].label, to: `/browse?district=${districtOptions[0].id}` }]
+      ? [{ label: districtOptions[0].label, to: districtBrowsePath(districtOptions[0].id) }]
       : []),
   ];
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const districtQuery = district ? `&district=${encodeURIComponent(district)}` : '';
-    navigate(`/browse?q=${encodeURIComponent(q)}${districtQuery}`);
+    const selectedAreaId = districtOptions.find((area) => String(area.id) === district)?.id;
+    navigate(browseSearchPath(q, selectedAreaId));
   };
 
   return (
@@ -483,7 +517,7 @@ export function Home() {
                 <option key={area.id} value={area.id}>{area.label}</option>
               ))}
             </select>
-            <Button>Tìm đồ</Button>
+            <Button type="submit">Tìm đồ</Button>
           </form>
 
           <div className="mt-4 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap">
@@ -588,7 +622,7 @@ export function Home() {
           <SectionHeading title="Khám phá quanh quận của bạn" description="Chọn khu vực thuận tiện để hẹn giao nhận trực tiếp." href="/browse" linkLabel="Xem mọi khu vực" />
           <div className="home-district-panel" aria-label="Khám phá quanh quận của bạn">
             {districtLinks.map(({ name, id }) => (
-              <Link key={id} to={`/browse?district=${id}`} className="home-district">
+              <Link key={id} to={districtBrowsePath(id)} className="home-district">
                 <h3>{name}</h3>
               </Link>
             ))}
@@ -646,7 +680,7 @@ export function Home() {
                 {currentUser ? (
                   <Link to="/post" className="home-final-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-primary transition">Đăng món đồ</Link>
                 ) : (
-                  <button type="button" onClick={() => setLoginPromptOpen(true)} className="home-final-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-primary transition">Đăng món đồ</button>
+                  <button type="button" onClick={() => navigate(loginPath('/post'))} className="home-final-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-primary transition">Đăng món đồ</button>
                 )}
                 <Link to="/browse" className="text-sm font-bold text-primary">Tìm đồ</Link>
               </div>
@@ -655,17 +689,6 @@ export function Home() {
         </div>
 
       </HomeMotion>
-      {loginPromptOpen ? (
-        <DialogFrame size="sm" className="text-text-primary">
-          <h2 className="text-xl font-bold">Bạn cần đăng nhập để đăng đồ.</h2>
-          <div className="mt-6 flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setLoginPromptOpen(false)}>
-              Để sau
-            </Button>
-            <Button onClick={() => navigate('/login')}>Đăng nhập</Button>
-          </div>
-        </DialogFrame>
-      ) : null}
     </div>
   );
 }

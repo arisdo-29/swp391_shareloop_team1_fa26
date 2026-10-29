@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Button,
@@ -28,13 +28,14 @@ import {
   type AreaOption,
 } from '../../services/mappers';
 import {
+  BROWSE_PAGE_SIZE,
   positiveIntegerParam,
   resetBrowseSearchParams,
   updateBrowseSearchParams,
   type BrowseFilterKey,
 } from '../../utils/browseFilters';
+import { useDebouncedValue } from '../../utils/useDebouncedValue';
 
-const PAGE_SIZE = 24;
 // Giá trị hình thức ở thanh địa chỉ (gift, trade) khác tên của API
 const OFFER_TYPE_BY_TYPE: Record<ItemType, OfferType> = { gift: 'GIVE', trade: 'SWAP' };
 const pendingBrowseItemRequests = new Map<string, ReturnType<typeof itemApi.list>>();
@@ -53,6 +54,58 @@ function loadBrowseItems(params: Parameters<typeof itemApi.list>[0]) {
   return request;
 }
 
+function normalizeSearchText(value: string) {
+  return value
+    .trim()
+    .toLocaleLowerCase('vi-VN')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/\s+/g, ' ');
+}
+
+export function filterItemsByKeyword(items: ItemResponse[], query: string) {
+  const keyword = query.trim().toLocaleLowerCase('vi-VN').replace(/\s+/g, ' ');
+  if (!keyword) return items;
+
+  const searchableText = (item: ItemResponse) => `${item.title} ${item.description}`
+    .toLocaleLowerCase('vi-VN')
+    .replace(/\s+/g, ' ');
+  const exactMatches = items.filter((item) => searchableText(item).includes(keyword));
+  if (exactMatches.length) return exactMatches;
+
+  const normalizedKeyword = normalizeSearchText(keyword);
+  return items.filter((item) => normalizeSearchText(searchableText(item)).includes(normalizedKeyword));
+}
+
+async function loadFilteredBrowseItems(params: NonNullable<Parameters<typeof itemApi.list>[0]>) {
+  const { page = 0, size = BROWSE_PAGE_SIZE, q, ...filters } = params;
+  if (!q) return loadBrowseItems(params);
+
+  const firstPage = await loadBrowseItems({ ...filters, q, page: 0, size });
+  const sourceTotalPages = firstPage.totalPages
+    ?? Math.ceil(firstPage.totalElements / (firstPage.size || size));
+  const remainingPages = sourceTotalPages > 1
+    ? await Promise.all(Array.from(
+      { length: sourceTotalPages - 1 },
+      (_, index) => loadBrowseItems({ ...filters, q, page: index + 1, size }),
+    ))
+    : [];
+  const matches = filterItemsByKeyword(
+    [firstPage, ...remainingPages].flatMap((response) => response.items),
+    q,
+  );
+  const start = page * size;
+
+  return {
+    items: matches.slice(start, start + size),
+    page,
+    size,
+    totalElements: matches.length,
+    totalPages: Math.ceil(matches.length / size),
+  };
+}
+
 export function Browse() {
   const [params, setParams] = useSearchParams();
   const [itemResponses, setItemResponses] = useState<ItemResponse[]>([]);
@@ -65,6 +118,9 @@ export function Browse() {
   const [catalogReloadKey, setCatalogReloadKey] = useState(0);
   const [itemsReloadKey, setItemsReloadKey] = useState(0);
   const q = params.get('q') ?? '';
+  const [queryInput, setQueryInput] = useState(q);
+  const debouncedQuery = useDebouncedValue(queryInput);
+  const lastAppliedQueryRef = useRef(q);
   const typeParam = params.get('type');
   const type: ItemType | '' = typeParam === 'gift' || typeParam === 'trade' ? typeParam : '';
   const categoryId = positiveIntegerParam(params.get('categoryId'));
@@ -73,13 +129,29 @@ export function Browse() {
   const condition: ApiCondition | '' = (CONDITIONS as readonly string[]).includes(conditionParam ?? '')
     ? conditionParam as ApiCondition
     : '';
-  const district = params.get('district') ?? '';
+  const legacyDistrict = params.get('district') ?? '';
+  const rawAreaId = params.get('areaId') ?? legacyDistrict;
+  const areaId = positiveIntegerParam(rawAreaId);
+  const areaFilterValue = areaId ? String(areaId) : '';
   const boostedOnly = params.get('boosted') === 'true';
   const [mobileFilters, setMobileFilters] = useState(false);
   const [page, setPage] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const sortMode = params.get('sort') === 'expiring' ? 'expiring' : 'newest';
+
+  useEffect(() => {
+    if (debouncedQuery === lastAppliedQueryRef.current) return;
+    lastAppliedQueryRef.current = debouncedQuery;
+    setParams((current) => updateBrowseSearchParams(current, { q: debouncedQuery }), { replace: true });
+    setPage(0);
+  }, [debouncedQuery, setParams]);
+
+  useEffect(() => {
+    if (q === lastAppliedQueryRef.current) return;
+    lastAppliedQueryRef.current = q;
+    setQueryInput(q);
+  }, [q]);
 
   useEffect(() => {
     let active = true;
@@ -115,23 +187,19 @@ export function Browse() {
     let active = true;
     setItemsLoading(true);
     setItemsError('');
-    const parsedAreaId = district ? Number(district) : undefined;
     const requestParams = {
       categoryId,
-      areaId:
-        parsedAreaId !== undefined && Number.isSafeInteger(parsedAreaId) && parsedAreaId > 0
-          ? parsedAreaId
-          : undefined,
+      areaId,
       q: q.trim() || undefined,
       condition: condition || undefined,
       offerType: type ? OFFER_TYPE_BY_TYPE[type] : undefined,
     };
-    const request = loadBrowseItems({
+    const request = loadFilteredBrowseItems({
       ...requestParams,
       boosted: boostedOnly || undefined,
       ...(sortMode === 'expiring' ? { sort: sortMode } : {}),
       page,
-      size: PAGE_SIZE,
+      size: BROWSE_PAGE_SIZE,
     });
     request
       .then((response) => {
@@ -139,7 +207,7 @@ export function Browse() {
         setItemResponses(response.items);
         setPage(response.page);
         setTotalElements(response.totalElements);
-        setTotalPages(response.totalPages ?? Math.ceil(response.totalElements / PAGE_SIZE));
+        setTotalPages(response.totalPages ?? Math.ceil(response.totalElements / BROWSE_PAGE_SIZE));
       })
       .catch((caught) => {
         if (!active) return;
@@ -155,16 +223,16 @@ export function Browse() {
     return () => {
       active = false;
     };
-  }, [boostedOnly, categoryId, condition, district, itemsReloadKey, page, q, sortMode, type]);
+  }, [areaId, boostedOnly, categoryId, condition, itemsReloadKey, page, q, sortMode, type]);
 
   useEffect(() => {
-    if (!district || districts.some((area) => String(area.id) === district)) return;
-    const matched = districts.find((area) => area.label === district || area.name === district);
-    if (matched) {
-      setParams(updateBrowseSearchParams(params, { district: String(matched.id) }), { replace: true });
-      setPage(0);
-    }
-  }, [district, districts, params, setParams]);
+    if (!legacyDistrict || params.has('areaId')) return;
+    const matchedAreaId = positiveIntegerParam(legacyDistrict)
+      ?? districts.find((area) => area.label === legacyDistrict || area.name === legacyDistrict)?.id;
+    if (!matchedAreaId) return;
+    setParams(updateBrowseSearchParams(params, { areaId: String(matchedAreaId) }), { replace: true });
+    setPage(0);
+  }, [districts, legacyDistrict, params, setParams]);
 
   const setFilter = (key: BrowseFilterKey, value: string) => {
     setParams(updateBrowseSearchParams(params, { [key]: value }));
@@ -172,7 +240,7 @@ export function Browse() {
   };
 
   const selectedCategoryName = categories.find((entry) => entry.id === categoryId)?.name;
-  const selectedDistrictLabel = districts.find((area) => String(area.id) === district)?.label ?? district;
+  const selectedDistrictLabel = districts.find((area) => area.id === areaId)?.label ?? '';
 
   const items = useMemo(() => {
     const categoryNames = toCategoryNameMap(categories);
@@ -207,8 +275,8 @@ export function Browse() {
           clear: () => setFilter('condition', ''),
         }
       : null,
-    district
-      ? { key: 'district', label: selectedDistrictLabel, clear: () => setFilter('district', '') }
+    areaId && selectedDistrictLabel
+      ? { key: 'areaId', label: selectedDistrictLabel, clear: () => setFilter('areaId', '') }
       : null,
   ].filter(Boolean) as Array<{ key: string; label: string; clear: () => void }>;
 
@@ -226,8 +294,8 @@ export function Browse() {
     <div className="space-y-5">
       <SearchField
         aria-label="Tìm tên món đồ"
-        value={q}
-        onChange={(event) => setFilter('q', event.target.value)}
+        value={queryInput}
+        onChange={(event) => setQueryInput(event.target.value)}
         placeholder="Tên món đồ"
       />
       <ChipGroup label="Hình thức" options={typeOptions} value={type} onChange={(value) => setFilter('type', value)} />
@@ -252,7 +320,7 @@ export function Browse() {
         value={condition}
         onChange={(value) => setFilter('condition', value)}
       />
-      <Select label="Quận" value={district} onChange={(event) => setFilter('district', event.target.value)}>
+      <Select label="Quận" value={areaFilterValue} onChange={(event) => setFilter('areaId', event.target.value)}>
         <option value="">Tất cả quận</option>
         {catalogLoading ? <option disabled>Đang tải khu vực...</option> : null}
         {!catalogLoading && !districts.length ? <option disabled>Chưa có khu vực</option> : null}

@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { actions, selectCurrentUser } from '../app/store';
+import { loginPath, safeInternalNextPath } from '../utils/authRedirect';
 
 function useValidSession() {
   const dispatch = useAppDispatch();
@@ -23,23 +24,32 @@ export function PublicRoute() {
 
 export function GuestOnlyRoute() {
   const user = useValidSession();
-  return user ? <Navigate to={isAdminUser(user) ? '/admin' : '/'} replace /> : <Outlet />;
+  const location = useLocation();
+  const nextPath = safeInternalNextPath(new URLSearchParams(location.search).get('next'));
+  return user ? <Navigate to={nextPath ?? (isAdminUser(user) ? '/admin' : '/')} replace /> : <Outlet />;
 }
 
 export function ProtectedRoute() {
   const user = useValidSession();
+  const location = useLocation();
   if (isAdminUser(user)) return <Navigate to="/admin" replace />;
-  return user?.status === 'active' ? <Outlet /> : <Navigate to="/login" replace />;
+  return user?.status === 'active'
+    ? <Outlet />
+    : <Navigate to={loginPath(`${location.pathname}${location.search}${location.hash}`)} replace />;
 }
 
 export function ProfileRoute() {
   const user = useValidSession();
-  return user?.status === 'active' ? <Outlet /> : <Navigate to="/login" replace />;
+  const location = useLocation();
+  return user?.status === 'active'
+    ? <Outlet />
+    : <Navigate to={loginPath(`${location.pathname}${location.search}${location.hash}`)} replace />;
 }
 
 export function AdminRoute() {
   const user = useValidSession();
-  if (!user) return <Navigate to="/login" replace />;
+  const location = useLocation();
+  if (!user) return <Navigate to={loginPath(`${location.pathname}${location.search}${location.hash}`)} replace />;
   if (user.status !== 'active' || user.role !== 'admin') return <Navigate to="/" replace />;
   return <Outlet />;
 }

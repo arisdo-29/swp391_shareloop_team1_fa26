@@ -3,7 +3,6 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { actions, selectCurrentUser } from '../app/store';
 import { Button, Icon, IconButton } from '../components/ui';
-import { DialogFrame } from '../components/Dialog';
 import { authApi } from '../services/authApi';
 import { NotificationMenu } from '../components/NotificationMenu';
 import { ShareLoopLogo } from '../components/ShareLoopLogo';
@@ -11,6 +10,7 @@ import { WalletProvider } from '../app/WalletContext';
 import { useWallet } from '../app/useWallet';
 import { requestApi, toBackendUserId } from '../services/requestApi';
 import { isRequestUnread } from '../utils/request';
+import { loginPath } from '../utils/authRedirect';
 
 // Trang tài khoản dùng khung riêng (AuthLayout) nên không cần chân trang.
 const authPaths = new Set([
@@ -52,7 +52,6 @@ function AppShellContent() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
-  const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const headerActionsRef = useRef<HTMLDivElement>(null);
 
@@ -115,15 +114,6 @@ function AppShellContent() {
     setProfileOpen(false);
     setNotificationOpen(false);
   }, [location.hash, location.pathname, location.search]);
-
-  useEffect(() => {
-    // Esc đóng cả hộp thoại nhắc đăng nhập, giống Dialog dùng chung.
-    const closeLoginPrompt = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setLoginPromptOpen(false);
-    };
-    document.addEventListener('keydown', closeLoginPrompt);
-    return () => document.removeEventListener('keydown', closeLoginPrompt);
-  }, []);
 
   useEffect(() => {
     const closeDropdowns = () => {
@@ -433,7 +423,7 @@ function AppShellContent() {
               </div>
               <FooterGroup
                 title="Khám phá"
-                onPostClick={!user ? () => setLoginPromptOpen(true) : undefined}
+                onPostClick={!user ? () => navigate(loginPath('/post')) : undefined}
                 links={[
                   ['Tìm đồ', '/browse'],
                   ['Trợ lý AI', '/ai'],
@@ -471,19 +461,6 @@ function AppShellContent() {
             </div>
           </div>
         </footer>
-      ) : null}
-      {loginPromptOpen ? (
-        <DialogFrame labelledBy="login-prompt-title" size="sm" className="text-text-primary">
-          <h2 id="login-prompt-title" className="text-xl font-bold">Bạn cần đăng nhập để đăng đồ.</h2>
-          <div className="mt-6 flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setLoginPromptOpen(false)}>
-              Để sau
-            </Button>
-            <Link to="/login" onClick={() => setLoginPromptOpen(false)}>
-              <Button>Đăng nhập</Button>
-            </Link>
-          </div>
-        </DialogFrame>
       ) : null}
     </div>
   );

@@ -3,7 +3,7 @@
 import { StrictMode, type ReactNode } from 'react';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { catalogApi, type CategoryResponse } from '../../services/catalogApi';
 import { itemApi, type ItemResponse } from '../../services/itemApi';
@@ -123,6 +123,86 @@ afterEach(() => {
 });
 
 describe('lọc danh mục trên trang Tìm đồ', () => {
+  it('chỉ hiển thị món có tiêu đề hoặc mô tả khớp từ khóa và đồng bộ tổng số', async () => {
+    const lamp: ItemResponse = {
+      ...book,
+      id: 801,
+      title: 'Kệ trang trí kết hợp đèn LED',
+      description: 'Ánh sáng dịu nhẹ cho phòng ngủ.',
+    };
+    const unrelatedBag: ItemResponse = {
+      ...book,
+      id: 802,
+      title: 'Túi đeo chéo CEMMERY',
+      description: 'Mẫu túi thời trang nhỏ gọn.',
+    };
+    const blackShirt: ItemResponse = {
+      ...book,
+      id: 803,
+      title: 'Áo dài nam cách tân',
+      description: 'Màu đen phối vàng ánh kim.',
+    };
+    vi.mocked(itemApi.list).mockResolvedValue({
+      items: [unrelatedBag, lamp, blackShirt],
+      page: 0,
+      size: 24,
+      totalElements: 3,
+      totalPages: 1,
+    });
+
+    renderBrowse(['/browse?q=%C4%91%C3%A8n']);
+
+    expect(await screen.findByText(lamp.title)).toBeTruthy();
+    expect(screen.queryByText(unrelatedBag.title)).toBeNull();
+    expect(screen.queryByText(blackShirt.title)).toBeNull();
+    expect(screen.getByText('1 món')).toBeTruthy();
+  });
+
+  it('tìm được tiêu đề khi từ khóa không có dấu tiếng Việt', async () => {
+    const lamp: ItemResponse = {
+      ...book,
+      id: 804,
+      title: 'Đèn trang trí để bàn',
+      description: 'Ánh sáng vàng dịu.',
+    };
+    vi.mocked(itemApi.list).mockResolvedValue({
+      items: [lamp],
+      page: 0,
+      size: 24,
+      totalElements: 1,
+      totalPages: 1,
+    });
+
+    renderBrowse(['/browse?q=den%20trang%20tri']);
+
+    expect(await screen.findByText(lamp.title)).toBeTruthy();
+    expect(screen.getByText('1 món')).toBeTruthy();
+  });
+
+  it('cho phép nhập từ khóa liên tục, giữ focus và chỉ lọc sau debounce', async () => {
+    const user = userEvent.setup();
+    renderBrowse();
+
+    await waitFor(() => expect(itemApi.list).toHaveBeenCalledTimes(1));
+    const searchInput = screen.getByRole('textbox', { name: 'Tìm tên món đồ' }) as HTMLInputElement;
+
+    await user.click(searchInput);
+    await user.type(searchInput, 'tai nghe Sony');
+
+    expect(searchInput.value).toBe('tai nghe Sony');
+    expect(document.activeElement).toBe(searchInput);
+    expect(itemApi.list).toHaveBeenCalledTimes(1);
+
+    await waitFor(() => expect(screen.getByTestId('location').textContent)
+      .toBe('/browse?q=tai+nghe+Sony'));
+    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
+      q: 'tai nghe Sony',
+      page: 0,
+      size: 24,
+    })));
+    expect(document.activeElement).toBe(searchInput);
+  });
+
   it('dùng chung request items đang chạy khi StrictMode mount lại Browse', async () => {
     let resolveItems!: (value: { items: ItemResponse[]; page: number; size: number; totalElements: number }) => void;
     const itemsRequest = new Promise<{ items: ItemResponse[]; page: number; size: number; totalElements: number }>((resolve) => {
@@ -304,6 +384,155 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     expect(discoveryLink).toBeTruthy();
     await user.click(discoveryLink!);
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/browse?categoryId=42'));
+  });
+
+  it('tìm từ Home giữ nguyên từ khóa và gửi đúng areaId của quận tới API', async () => {
+    vi.mocked(catalogApi.areas).mockResolvedValue([
+      {
+        id: 1,
+        name: 'TP. Hồ Chí Minh',
+        parentId: null,
+        level: 1,
+        children: [
+          { id: 2, name: 'Quận 1', parentId: 1, level: 2, children: [] },
+          { id: 3, name: 'Quận 3', parentId: 1, level: 2, children: [] },
+          { id: 4, name: 'Quận 5', parentId: 1, level: 2, children: [] },
+        ],
+      },
+    ]);
+    const districtBook: ItemResponse = {
+      ...book,
+      id: 701,
+      areaId: 3,
+      title: 'Tai nghe Sony tại Quận 3',
+    };
+    const otherDistrictBook: ItemResponse = {
+      ...book,
+      id: 702,
+      areaId: 2,
+      title: 'Tai nghe tại Quận 1',
+    };
+    vi.mocked(itemApi.list).mockImplementation(async (params = {}) => ({
+      items: params.areaId === 3 && params.q === 'tai nghe Sony'
+        ? [districtBook]
+        : [otherDistrictBook],
+      page: params.page ?? 0,
+      size: params.size ?? 24,
+      totalElements: 1,
+      totalPages: 1,
+    }));
+    const user = userEvent.setup();
+    const view = render(
+      <MemoryRouter initialEntries={['/']}>
+        <LocationState />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/browse" element={<Browse />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.type(screen.getByRole('textbox', { name: 'Từ khóa tìm kiếm' }), 'tai nghe Sony');
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Chọn quận' }), '3');
+    await user.click(screen.getByRole('button', { name: 'Tìm đồ' }));
+
+    await waitFor(() => expect(screen.getByTestId('location').textContent)
+      .toBe('/browse?q=tai%20nghe%20Sony&areaId=3'));
+    await waitFor(() => expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({
+      areaId: 3,
+      q: 'tai nghe Sony',
+      page: 0,
+      size: 24,
+    })));
+    const districtSelect = await screen.findByRole('combobox', { name: 'Quận' });
+    await waitFor(() => expect((districtSelect as HTMLSelectElement).value).toBe('3'));
+    expect((screen.getByRole('textbox', { name: 'Tìm tên món đồ' }) as HTMLInputElement).value)
+      .toBe('tai nghe Sony');
+    expect(await screen.findByText(districtBook.title)).toBeTruthy();
+    expect(screen.queryByText(otherDistrictBook.title)).toBeNull();
+
+    view.unmount();
+    vi.clearAllMocks();
+    renderBrowse(['/browse?q=tai%20nghe%20Sony&areaId=3']);
+
+    const reloadedDistrictSelect = await screen.findByRole('combobox', { name: 'Quận' });
+    await waitFor(() => expect((reloadedDistrictSelect as HTMLSelectElement).value).toBe('3'));
+    expect((screen.getByRole('textbox', { name: 'Tìm tên món đồ' }) as HTMLInputElement).value)
+      .toBe('tai nghe Sony');
+    await waitFor(() => expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({
+      areaId: 3,
+      q: 'tai nghe Sony',
+      page: 0,
+      size: 24,
+    })));
+    expect(await screen.findByText(districtBook.title)).toBeTruthy();
+    expect(screen.queryByText(otherDistrictBook.title)).toBeNull();
+  });
+
+  it.each([
+    [2, 'Quận 1'],
+    [4, 'Quận 5'],
+  ])('click Tìm đồ từ Home chuyển sang Browse với areaId=%i (%s)', async (areaId) => {
+    vi.mocked(catalogApi.areas).mockResolvedValue([
+      {
+        id: 1,
+        name: 'TP. Hồ Chí Minh',
+        parentId: null,
+        level: 1,
+        children: [
+          { id: 2, name: 'Quận 1', parentId: 1, level: 2, children: [] },
+          { id: 3, name: 'Quận 3', parentId: 1, level: 2, children: [] },
+          { id: 4, name: 'Quận 5', parentId: 1, level: 2, children: [] },
+        ],
+      },
+    ]);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <LocationState />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/browse" element={<Browse />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Chọn quận' }), String(areaId));
+    await user.click(screen.getByRole('button', { name: 'Tìm đồ' }));
+
+    await waitFor(() => expect(screen.getByTestId('location').textContent)
+      .toBe(`/browse?q=&areaId=${areaId}`));
+    await waitFor(() => expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({
+      areaId,
+      q: undefined,
+      page: 0,
+      size: 24,
+    })));
+  });
+
+  it('chuẩn hóa URL district cũ sang areaId và vẫn gửi đúng bộ lọc khi tải lại', async () => {
+    vi.mocked(catalogApi.areas).mockResolvedValue([
+      {
+        id: 1,
+        name: 'TP. Hồ Chí Minh',
+        parentId: null,
+        level: 1,
+        children: [{ id: 3, name: 'Quận 3', parentId: 1, level: 2, children: [] }],
+      },
+    ]);
+
+    renderBrowse(['/browse?q=tai%20nghe&district=3']);
+
+    await waitFor(() => expect(screen.getByTestId('location').textContent)
+      .toBe('/browse?q=tai+nghe&areaId=3'));
+    const districtSelect = await screen.findByRole('combobox', { name: 'Quận' });
+    await waitFor(() => expect((districtSelect as HTMLSelectElement).value).toBe('3'));
+    await waitFor(() => expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({
+      areaId: 3,
+      q: 'tai nghe',
+      page: 0,
+      size: 24,
+    })));
   });
 
   it('đọc categoryId từ URL, tự chọn tên đầy đủ và gửi đúng ID tới API', async () => {

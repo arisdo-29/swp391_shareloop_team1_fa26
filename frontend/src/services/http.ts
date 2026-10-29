@@ -1,7 +1,7 @@
 import axios, { AxiosError } from 'axios';
 
 // Địa chỉ backend: đặt trong .env.local (máy cá nhân) và Environment Variables trên Vercel.
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'https://shareloop-api.onrender.com';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'https://shareloop-api-648813583458.asia-southeast1.run.app';
 const TOKEN_KEY = 'shareloop:accessToken';
 const TOKEN_TYPE_KEY = 'shareloop:tokenType';
 const TOKEN_EXPIRES_AT_KEY = 'shareloop:tokenExpiresAt';
@@ -58,7 +58,7 @@ export interface ApiError {
 
 export const http = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 70_000, // Render free ngủ sau 15 phút, lần gọi đầu có thể mất khoảng 1 phút
+  timeout: 70_000,
 });
 
 http.interceptors.request.use((config) => {

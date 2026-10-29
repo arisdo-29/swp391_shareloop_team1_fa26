@@ -43,12 +43,24 @@ const admin: User = {
   rank: 'Thành viên mới', status: 'active', role: 'admin', joinedAt: '2026-10-24T00:00:00Z', totalTx: 0,
 };
 
-function renderLogin() {
+const member: User = {
+  ...admin,
+  id: 'api_8',
+  username: 'member@shareloop.vn',
+  email: 'member@shareloop.vn',
+  name: 'Thành viên',
+  role: 'user',
+};
+
+function renderLogin(initialEntry = '/login') {
   return render(
-    <MemoryRouter initialEntries={['/login']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/admin" element={<div>Admin destination</div>} />
+        <Route path="/" element={<div>Home destination</div>} />
+        <Route path="/items/:id" element={<div>Item destination</div>} />
+        <Route path="/post" element={<div>Post destination</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -98,6 +110,40 @@ describe('đăng nhập Admin', () => {
     expect(vi.mocked(fetchSessionUser).mock.invocationCallOrder[0]).toBeLessThan(
       mocks.dispatch.mock.invocationCallOrder[0],
     );
+  });
+
+  it('điều hướng người dùng về đường dẫn nội bộ trong next sau đăng nhập', async () => {
+    vi.mocked(authApi.login).mockResolvedValue({
+      accessToken: 'token', tokenType: 'Bearer', expiresIn: 3600,
+      user: { id: 8, email: member.email, fullName: member.name, isAdmin: false },
+    });
+    vi.mocked(fetchSessionUser).mockResolvedValue(member);
+    const user = userEvent.setup();
+    renderLogin('/login?next=%2Fitems%2F49%3Ffrom%3Dbrowse');
+
+    await user.type(screen.getByLabelText('Email'), member.email);
+    await user.type(screen.getByLabelText('Mật khẩu'), 'Secret123!');
+    await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
+
+    expect(await screen.findByText('Item destination')).toBeTruthy();
+    expect(preloadRoute).toHaveBeenCalledWith('/items/49?from=browse');
+  });
+
+  it('từ chối next bắt đầu bằng hai dấu gạch chéo và về trang chủ', async () => {
+    vi.mocked(authApi.login).mockResolvedValue({
+      accessToken: 'token', tokenType: 'Bearer', expiresIn: 3600,
+      user: { id: 8, email: member.email, fullName: member.name, isAdmin: false },
+    });
+    vi.mocked(fetchSessionUser).mockResolvedValue(member);
+    const user = userEvent.setup();
+    renderLogin('/login?next=%2F%2Fevil.example');
+
+    await user.type(screen.getByLabelText('Email'), member.email);
+    await user.type(screen.getByLabelText('Mật khẩu'), 'Secret123!');
+    await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
+
+    expect(await screen.findByText('Home destination')).toBeTruthy();
+    expect(preloadRoute).toHaveBeenCalledWith('/');
   });
 
   it('giữ nguyên màn đăng nhập và kết thúc processing khi xác thực thất bại', async () => {
