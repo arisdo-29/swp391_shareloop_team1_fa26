@@ -68,6 +68,35 @@ class MailTemplateRendererTest {
     }
 
     @Test
+    void renderChangePhoneOtp_containsCodeHeadingAndChangePhoneNote() {
+        // given
+        String code = "482915";
+
+        // when
+        String html = mailTemplateRenderer.renderChangePhoneOtp(code, 5);
+
+        // then: mẫu riêng, không lẫn lời của email đăng ký hay đặt lại mật khẩu
+        assertThat(html)
+                .contains(code)
+                .contains("5 phút")
+                .contains("Mã xác nhận đổi số điện thoại")
+                .contains("đổi số điện thoại trên ShareLoop")
+                .doesNotContain("Nếu bạn không đăng ký")
+                .doesNotContain("{{");
+    }
+
+    @Test
+    void renderChangePhoneOtp_codeIsFirstSixDigitSequence() {
+        // when
+        String html = mailTemplateRenderer.renderChangePhoneOtp("482915", 5);
+
+        // then
+        Matcher matcher = Pattern.compile("\\d{6}").matcher(html);
+        assertThat(matcher.find()).isTrue();
+        assertThat(matcher.group()).isEqualTo("482915");
+    }
+
+    @Test
     void renderNotification_escapesHtmlInValues() {
         // given
         String title = "<script>alert('x')</script>";

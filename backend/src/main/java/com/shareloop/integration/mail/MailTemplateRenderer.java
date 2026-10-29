@@ -23,6 +23,9 @@ public class MailTemplateRenderer {
     private static final String PASSWORD_RESET_NOTE = "Bạn vừa yêu cầu đặt lại mật khẩu ShareLoop. Nếu không phải bạn,"
             + " hãy bỏ qua email này. Mật khẩu hiện tại vẫn giữ nguyên.";
 
+    private static final String CHANGE_PHONE_NOTE = "Bạn vừa yêu cầu đổi số điện thoại trên ShareLoop. Nếu không phải"
+            + " bạn, hãy bỏ qua email này; số điện thoại hiện tại vẫn giữ nguyên.";
+
     /**
      * Nội dung email OTP đăng ký (FR-02) từ mẫu otp.html.
      *
@@ -36,6 +39,13 @@ public class MailTemplateRenderer {
     /** Nội dung email OTP đặt lại mật khẩu (FR-09): cùng mẫu otp.html, chỉ khác dòng ghi chú cuối. */
     public String renderPasswordResetOtp(String code, int ttlMinutes) {
         return renderOtpWithNote(code, ttlMinutes, PASSWORD_RESET_NOTE);
+    }
+
+    /** Nội dung email OTP đổi số điện thoại (FR-07) từ mẫu riêng otp-change-phone.html. */
+    public String renderChangePhoneOtp(String code, int ttlMinutes) {
+        return render(
+                "otp-change-phone",
+                Map.of("otp", code, "ttlMinutes", String.valueOf(ttlMinutes), "purposeNote", CHANGE_PHONE_NOTE));
     }
 
     /**
