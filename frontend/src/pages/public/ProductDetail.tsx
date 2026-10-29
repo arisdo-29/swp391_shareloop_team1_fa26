@@ -24,10 +24,7 @@ import { ReputationBadge } from '../../components/ReputationBadge';
 import { requestStatusLabel } from '../../utils/request';
 import { reputationBlockedMessage } from '../../utils/apiErrorMessages';
 import { loginPath } from '../../utils/authRedirect';
-<<<<<<< HEAD
 import { productDetailBackLink } from '../../utils/productDetailNavigation';
-=======
->>>>>>> origin/develop
 
 export function ProductDetail() {
   const { id } = useParams();
