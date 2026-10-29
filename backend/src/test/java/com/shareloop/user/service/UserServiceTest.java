@@ -35,6 +35,8 @@ import com.shareloop.user.dto.UpdateProfileRequest;
 import com.shareloop.user.entity.OtpPurpose;
 import com.shareloop.user.entity.User;
 import com.shareloop.user.entity.UserStatus;
+import com.shareloop.user.event.UserLockCleanup;
+import com.shareloop.user.event.UserLockedEvent;
 import com.shareloop.user.mapper.UserMapper;
 import com.shareloop.user.repository.UserRepository;
 import java.time.Instant;
@@ -45,8 +47,10 @@ import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -77,6 +81,9 @@ class UserServiceTest {
     @Mock
     RequestQueryService requestQueryService;
 
+    @Mock
+    ApplicationEventPublisher eventPublisher;
+
     UserService service;
 
     @BeforeEach
@@ -88,7 +95,8 @@ class UserServiceTest {
                 mediaService,
                 otpService,
                 configService,
-                requestQueryService);
+                requestQueryService,
+                eventPublisher);
     }
 
     @Test
@@ -247,6 +255,59 @@ class UserServiceTest {
 
         // when, then
         assertErrorCode(() -> service.unlock(USER_ID), UserErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    void ban_whenActive_setsBannedAndPublishesLockedEventForCleanup() {
+        // given
+        User user = givenUser();
+
+        // when
+        UserLockCleanup cleanup = service.ban(USER_ID);
+
+        // then: status đổi sang BANNED; dọn dẹp chạy qua cùng UserLockedEvent với khoá, không có Admin thực hiện
+        assertThat(user.getStatus()).isEqualTo(UserStatus.BANNED);
+        assertThat(cleanup).isNotNull();
+        ArgumentCaptor<UserLockedEvent> event = ArgumentCaptor.forClass(UserLockedEvent.class);
+        verify(eventPublisher).publishEvent(event.capture());
+        assertThat(event.getValue().userId()).isEqualTo(USER_ID);
+        assertThat(event.getValue().adminId()).isNull();
+        assertThat(event.getValue().cleanup()).isSameAs(cleanup);
+    }
+
+    @Test
+    void ban_whenAlreadyBanned_returnsNullAndDoesNotCleanUpAgain() {
+        // given
+        User user = givenUser();
+        user.ban();
+
+        // when
+        UserLockCleanup cleanup = service.ban(USER_ID);
+
+        // then
+        assertThat(cleanup).isNull();
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    void ban_whenUserNotFound_throwsUserNotFound() {
+        // given
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+
+        // when, then
+        assertErrorCode(() -> service.ban(USER_ID), UserErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    void isBanned_trueOnlyForBannedStatus() {
+        // given
+        User user = givenUser();
+
+        // when, then: khoá (is_active = false) không phải cấm
+        user.deactivate();
+        assertThat(service.isBanned(USER_ID)).isFalse();
+        user.ban();
+        assertThat(service.isBanned(USER_ID)).isTrue();
     }
 
     @Test

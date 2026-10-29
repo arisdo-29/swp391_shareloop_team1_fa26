@@ -81,7 +81,7 @@ public class AuthService {
      * <p>Quy tắc: sai email và sai mật khẩu cùng trả một lỗi để không dò được email; chỉ khi mật khẩu đúng mới
      * kiểm trạng thái tài khoản.
      *
-     * @throws BusinessException AUTH_INVALID_CREDENTIALS, AUTH_EMAIL_NOT_VERIFIED, AUTH_ACCOUNT_LOCKED
+     * @throws BusinessException AUTH_INVALID_CREDENTIALS, AUTH_EMAIL_NOT_VERIFIED, AUTH_ACCOUNT_LOCKED, AUTH_ACCOUNT_BANNED
      */
     public AuthResponse login(LoginRequest request) {
         User user = findUserWithMatchingPassword(request);
@@ -302,8 +302,12 @@ public class AuthService {
         if (user.getStatus() == UserStatus.PENDING_VERIFICATION) {
             throw new BusinessException(AuthErrorCode.AUTH_EMAIL_NOT_VERIFIED);
         }
-        // Khoá tài khoản là is_active = false (status vẫn giữ nguyên), nên phải kiểm cả hai.
-        if (user.getStatus() == UserStatus.BANNED || !user.isActive()) {
+        // Cấm (BANNED) kiểm trước: tài khoản vừa bị khoá vừa bị cấm thì báo cấm.
+        if (user.getStatus() == UserStatus.BANNED) {
+            throw new BusinessException(AuthErrorCode.AUTH_ACCOUNT_BANNED);
+        }
+        // Khoá tài khoản là is_active = false (status vẫn giữ nguyên).
+        if (!user.isActive()) {
             throw new BusinessException(AuthErrorCode.AUTH_ACCOUNT_LOCKED);
         }
     }

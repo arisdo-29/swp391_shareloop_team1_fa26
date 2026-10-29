@@ -41,19 +41,23 @@ Tiếp nhận sự kiện giao dịch chuyển sang trạng thái `COMPLETED` (F
 - **Tính lại hạng ngay lập tức**: Cập nhật trực tiếp `rank_level` của người dùng tương ứng với tổng điểm mới.
 - **Chống cộng trùng (Idempotent)**: Kiểm tra qua nhật ký `activity_logs` loại `POINTS`, bỏ qua nếu request đã được cộng điểm trước đó.
 - **Ghi nhật ký**: Ghi nhận thay đổi điểm vào `activity_logs` với `type = 'POINTS'`; `data` gồm `points` (điểm thực cộng), `basePoints` (điểm theo loại giao dịch), `totalPoints`, `rank`, `role`, `pairTransactionNo`, `pointsToday`, `itemId` (bài của giao dịch). Lý do gọi giao dịch bằng tên món, vd `Cộng 10 điểm hoàn tất giao dịch món “Nồi cơm điện” (vai trò cho/tặng)`, không dùng `#id`.
-- **Hết sao**: khi về 0 sao, gửi thông báo `TRUST_STARS_DEPLETED` có link `/profile?tab=reputation` (tab uy tín trong trang hồ sơ).
+- **Hết sao**: khi về 0 sao, tài khoản bị cấm (`BANNED`) và nhận thông báo `TRUST_STARS_DEPLETED` có link `/profile?tab=reputation` (tab uy tín trong trang hồ sơ); chi tiết ở mục 1.5.
 
 ### 1.5. `void deductStar(Long userId, int amount, String reason)`
 Trừ sao uy tín của người dùng khi có vi phạm được kết luận (FR-91, FR-92, BR-U04, BR-U05, Issue #114):
 - Trừ số sao chỉ định, chặn không cho âm (tối thiểu `0` sao).
 - Đặt `clean_streak = 0`: vi phạm làm mất chuỗi giao dịch sạch (BR-U09, Issue #150).
 - Ghi nhận nhật ký vào `activity_logs` với `type = 'STARS'`.
-- Khi số sao chuyển từ `> 0` về đúng `0` sao:
-  - Ẩn toàn bộ bài đăng đang hiển thị của người này (`ItemService.hideAllOfUser`).
-  - Gửi thông báo cảnh báo qua `NotificationService`.
-  - Không gửi thông báo hoặc ẩn bài lặp lại nếu trước đó tài khoản đã ở mức `0` sao.
-
-> Chưa làm: BR-U09 "về 0 sao lần hai (đã dùng sao ân hạn) thì khoá vĩnh viễn". Đang chờ lead chốt có làm và khoá bằng cách nào.
+- Trừ xong mà vẫn còn sao (UT-03): gửi thông báo `TRUST_STARS_DEDUCTED`, nội dung
+  `Bạn bị trừ N sao. Bạn còn M sao trước khi tài khoản bị cấm.`, link `/profile?tab=reputation`.
+- Khi số sao chuyển từ `> 0` về đúng `0` sao (D-09, cấm tự động):
+  - Đặt `users.status = BANNED` qua `UserService.ban`, kèm dọn dẹp giống khoá tài khoản (phát `UserLockedEvent`):
+    huỷ giao dịch đang mở (trừ `DISPUTED`, giữ lại để Admin kết luận), nhả bài, từ chối bài chờ duyệt và nhả phí,
+    ẩn bài `APPROVED`. Sau đó ẩn nốt mọi bài còn hiển thị (`ItemService.hideAllOfUser`).
+  - Ghi nhật ký `USER_BAN` (`actorId = null`) với `data = { cancelledRequests, releasedCredit, hiddenItemIds }`.
+  - Gửi thông báo `TRUST_STARS_DEPLETED` (tiêu đề `Tài khoản đã bị cấm`), không còn nhắc sao ân hạn.
+  - Từ đó đăng nhập trả `403 AUTH_ACCOUNT_BANNED`, token đã cấp cũng bị chặn với cùng mã (`docs/api/auth.md`).
+  - Không cấm, không ghi nhật ký hay gửi thông báo lặp lại nếu trước đó tài khoản đã ở mức `0` sao hoặc đã `BANNED`.
 
 ### 1.6. `boolean canPost(Long userId)` / `boolean canRequest(Long userId)`
 Kiểm tra quyền đăng bài mới và gửi yêu cầu giao dịch:

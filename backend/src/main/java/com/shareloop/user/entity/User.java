@@ -164,6 +164,11 @@ public class User extends BaseEntity {
         this.status = UserStatus.ACTIVE;
     }
 
+    /** Cấm vĩnh viễn khi hết sao uy tín (D-09). Khác khoá: khoá chỉ tắt is_active, cấm đổi status sang BANNED. */
+    public void ban() {
+        this.status = UserStatus.BANNED;
+    }
+
     public void recordRegistrationIp(String registrationIp) {
         this.registrationIp = registrationIp;
     }

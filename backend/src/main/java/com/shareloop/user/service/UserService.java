@@ -22,6 +22,8 @@ import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.entity.OtpPurpose;
 import com.shareloop.user.entity.User;
 import com.shareloop.user.entity.UserStatus;
+import com.shareloop.user.event.UserLockCleanup;
+import com.shareloop.user.event.UserLockedEvent;
 import com.shareloop.user.mapper.UserMapper;
 import com.shareloop.user.repository.UserRepository;
 import java.time.Instant;
@@ -31,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -56,6 +59,7 @@ public class UserService {
     private final OtpService otpService;
     private final ConfigService configService;
     private final RequestQueryService requestQueryService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Autowired
     public UserService(
@@ -65,7 +69,8 @@ public class UserService {
             MediaService mediaService,
             OtpService otpService,
             ConfigService configService,
-            @Autowired(required = false) RequestQueryService requestQueryService) {
+            @Autowired(required = false) RequestQueryService requestQueryService,
+            ApplicationEventPublisher eventPublisher) {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
         this.areaService = areaService;
@@ -73,11 +78,12 @@ public class UserService {
         this.otpService = otpService;
         this.configService = configService;
         this.requestQueryService = requestQueryService;
+        this.eventPublisher = eventPublisher;
     }
 
     public UserService(
             UserRepository userRepository, UserMapper userMapper, AreaService areaService, MediaService mediaService) {
-        this(userRepository, userMapper, areaService, mediaService, null, null, null);
+        this(userRepository, userMapper, areaService, mediaService, null, null, null, null);
     }
 
     /**
@@ -157,6 +163,33 @@ public class UserService {
     }
 
     /**
+     * Cấm tài khoản khi sao uy tín về 0 (D-09, UT-03).
+     *
+     * <p>Quy tắc: đặt {@code status = BANNED} rồi dọn dẹp giống khoá tài khoản bằng cách phát {@link UserLockedEvent}:
+     * huỷ giao dịch đang mở (trừ đang tranh chấp, để Admin kết luận), nhả bài, từ chối bài chờ duyệt và nhả phí, ẩn bài.
+     * Đã BANNED rồi thì không làm gì và trả null.
+     *
+     * <p>Transaction: REQUIRED, các listener chạy cùng transaction; một bước lỗi thì cả việc cấm cũng rollback.
+     * Người gọi: reputation.
+     *
+     * @param userId tài khoản bị cấm
+     * @return kết quả dọn dẹp để người gọi ghi nhật ký; null khi tài khoản đã bị cấm từ trước
+     * @throws com.shareloop.common.exception.BusinessException USER_NOT_FOUND khi không có user
+     */
+    @Transactional
+    public UserLockCleanup ban(long userId) {
+        User user = findUser(userId);
+        if (user.getStatus() == UserStatus.BANNED) {
+            return null;
+        }
+        user.ban();
+        // Không có Admin thực hiện: hệ thống tự cấm khi hết sao
+        UserLockCleanup cleanup = new UserLockCleanup();
+        eventPublisher.publishEvent(new UserLockedEvent(null, userId, cleanup));
+        return cleanup;
+    }
+
+    /**
      * Mở khoá tài khoản (FR-107, UC-50).
      *
      * <p>Quy tắc: đặt {@code is_active = true}, không đổi {@code status}.
@@ -208,6 +241,18 @@ public class UserService {
         return userRepository
                 .findById(userId)
                 .map(user -> !user.isActive() || user.getStatus() == UserStatus.BANNED)
+                .orElse(false);
+    }
+
+    /**
+     * Tài khoản có đang {@code BANNED} không. LockedAccountFilter dùng để trả đúng mã AUTH_ACCOUNT_BANNED thay vì
+     * AUTH_ACCOUNT_LOCKED cho token cũ. Không có user thì trả false.
+     */
+    @Transactional(readOnly = true)
+    public boolean isBanned(long userId) {
+        return userRepository
+                .findById(userId)
+                .map(user -> user.getStatus() == UserStatus.BANNED)
                 .orElse(false);
     }
 

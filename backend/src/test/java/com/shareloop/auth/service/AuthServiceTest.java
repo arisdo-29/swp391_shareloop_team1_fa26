@@ -124,13 +124,23 @@ class AuthServiceTest {
     }
 
     @Test
-    void login_whenAccountBanned_throwsAccountLocked() {
+    void login_whenAccountBanned_throwsAccountBanned() {
         // given
         givenUser(UserStatus.BANNED, true);
         when(passwordEncoder.matches(PASSWORD, HASH)).thenReturn(true);
 
-        // when, then
-        assertErrorCode(new LoginRequest(EMAIL, PASSWORD), AuthErrorCode.AUTH_ACCOUNT_LOCKED);
+        // when, then: cấm (hết sao, D-09) có mã riêng, tách khỏi khoá
+        assertErrorCode(new LoginRequest(EMAIL, PASSWORD), AuthErrorCode.AUTH_ACCOUNT_BANNED);
+    }
+
+    @Test
+    void login_whenAccountBannedAndInactive_throwsAccountBanned() {
+        // given
+        givenUser(UserStatus.BANNED, false);
+        when(passwordEncoder.matches(PASSWORD, HASH)).thenReturn(true);
+
+        // when, then: vừa bị khoá vừa bị cấm thì báo cấm
+        assertErrorCode(new LoginRequest(EMAIL, PASSWORD), AuthErrorCode.AUTH_ACCOUNT_BANNED);
     }
 
     @Test
