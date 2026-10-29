@@ -9,7 +9,9 @@ import com.shareloop.wallet.dto.CreditTypeTotal;
 import com.shareloop.wallet.dto.DailyCashTotal;
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
 import com.shareloop.wallet.dto.TopUpReconciliation;
+import com.shareloop.wallet.dto.WalletHistoryCounts;
 import com.shareloop.wallet.dto.WalletResponse;
+import com.shareloop.wallet.dto.WalletTransactionPage;
 import com.shareloop.wallet.dto.WalletTransactionResponse;
 import com.shareloop.wallet.entity.CreditLedgerEntry;
 import com.shareloop.wallet.entity.CreditTxType;
@@ -367,6 +369,34 @@ public class CreditService {
                         userId, rangeStart, rangeEnd, PageRequest.of(page, size, newestFirst))
                 .map(walletMapper::toTransactionResponse);
         return PageResponse.from(result);
+    }
+
+    /**
+     * Lịch sử ví của chính người dùng kèm số dòng theo tab (GET /wallet/transactions, V02).
+     *
+     * <p>Quy tắc: items và phân trang giống {@link #getTransactions}; thêm counts {all, topUp, spend} đếm trên cả
+     * khoảng [from, to) đang lọc, không theo trang, để số trên tab không đổi khi chuyển trang. Spend là khoản trừ
+     * Credit (amount âm) trừ Admin điều chỉnh.
+     *
+     * <p>Transaction: read-only, không khoá dòng.
+     *
+     * @throws com.shareloop.common.exception.BusinessException WALLET_INVALID_DATE_RANGE khi from không trước to
+     */
+    @Transactional(readOnly = true)
+    public WalletTransactionPage getMyTransactions(long userId, Instant from, Instant to, int page, int size) {
+        // Gọi getTransactions trước: hàm đó kiểm from < to nên khoảng sai báo lỗi ngay, không đếm.
+        PageResponse<WalletTransactionResponse> pageResponse = getTransactions(userId, from, to, page, size);
+
+        Instant rangeStart = from != null ? from : EARLIEST;
+        Instant rangeEnd = to != null ? to : LATEST;
+        WalletHistoryCounts counts = new WalletHistoryCounts(
+                creditLedgerRepository.countByUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                        userId, rangeStart, rangeEnd),
+                creditLedgerRepository.countByUserIdAndTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                        userId, CreditTxType.TOP_UP, rangeStart, rangeEnd),
+                creditLedgerRepository.countSpend(userId, CreditTxType.ADMIN_ADJUST, rangeStart, rangeEnd));
+        return new WalletTransactionPage(
+                pageResponse.items(), pageResponse.page(), pageResponse.size(), pageResponse.totalElements(), counts);
     }
 
     /**

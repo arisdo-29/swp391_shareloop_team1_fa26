@@ -8,7 +8,9 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.support.IntegrationTest;
+import com.shareloop.wallet.dto.WalletHistoryCounts;
 import com.shareloop.wallet.dto.WalletResponse;
+import com.shareloop.wallet.dto.WalletTransactionPage;
 import com.shareloop.wallet.dto.WalletTransactionResponse;
 import com.shareloop.wallet.entity.CreditTxType;
 import com.shareloop.wallet.service.CreditService;
@@ -523,6 +525,43 @@ class CreditServiceIT extends IntegrationTest {
 
         // then
         assertThat(result.items()).extracting(WalletTransactionResponse::amount).containsExactly(-3, -2);
+    }
+
+    @Test
+    void getMyTransactions_countsWholeRangeNotJustCurrentPage() {
+        // given: trong khoảng có 1 nạp, 2 chi tiêu (phí AI), 1 hoàn phí AI (dương), 1 Admin điều chỉnh âm;
+        // ngoài khoảng có thêm 1 dòng nạp và 1 dòng của người khác
+        long userId = insertUser(0, 0);
+        long otherUserId = insertUser(0, 0);
+        insertLedger(userId, 20, "TOP_UP", "2026-10-02T08:00:00Z");
+        insertLedger(userId, -5, "AI_SEARCH_FEE", "2026-10-03T08:00:00Z");
+        insertLedger(userId, -5, "POST_FEE", "2026-10-04T08:00:00Z");
+        insertLedger(userId, 5, "AI_SEARCH_FEE", "2026-10-05T08:00:00Z");
+        insertLedger(userId, -3, "ADMIN_ADJUST", "2026-10-06T08:00:00Z");
+        insertLedger(userId, 20, "TOP_UP", "2026-09-01T08:00:00Z");
+        insertLedger(otherUserId, -5, "POST_FEE", "2026-10-04T08:00:00Z");
+
+        // when: xem trang đầu chỉ 2 dòng
+        WalletTransactionPage result = creditService.getMyTransactions(
+                userId, Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-11-01T00:00:00Z"), 0, 2);
+
+        // then: items theo trang, nhưng counts tính trên cả 5 dòng trong khoảng
+        assertThat(result.items()).hasSize(2);
+        assertThat(result.totalElements()).isEqualTo(5);
+        assertThat(result.counts()).isEqualTo(new WalletHistoryCounts(5, 1, 2));
+    }
+
+    @Test
+    void getMyTransactions_whenFromNotBeforeTo_throwsInvalidDateRange() {
+        // given
+        long userId = insertUser(0, 0);
+        Instant sameMoment = Instant.parse("2026-10-01T00:00:00Z");
+
+        // when
+        Throwable thrown = catchThrowable(() -> creditService.getMyTransactions(userId, sameMoment, sameMoment, 0, 20));
+
+        // then
+        assertBusinessError(thrown, WalletErrorCode.WALLET_INVALID_DATE_RANGE);
     }
 
     @Test

@@ -29,6 +29,17 @@ export interface WalletTransactionResponse {
   createdAt: string; // ISO-8601 UTC
 }
 
+// Số dòng theo tab, BE đếm trên cả khoảng thời gian đang lọc (không theo trang).
+export interface WalletHistoryCounts {
+  all: number;
+  topUp: number;
+  spend: number;
+}
+
+export type WalletTransactionPage = PageResponse<WalletTransactionResponse> & {
+  counts: WalletHistoryCounts;
+};
+
 export interface WalletTransactionParams {
   from?: string; // ISO-8601 UTC, gồm
   to?: string; // ISO-8601 UTC, không gồm
@@ -55,8 +66,8 @@ export const walletApi = {
     const { data } = await http.get<WalletResponse>('/api/v1/wallet');
     return data;
   },
-  async listTransactions(params: WalletTransactionParams = {}): Promise<PageResponse<WalletTransactionResponse>> {
-    const { data } = await http.get<PageResponse<WalletTransactionResponse>>('/api/v1/wallet/transactions', {
+  async listTransactions(params: WalletTransactionParams = {}): Promise<WalletTransactionPage> {
+    const { data } = await http.get<WalletTransactionPage>('/api/v1/wallet/transactions', {
       params,
     });
     return data;

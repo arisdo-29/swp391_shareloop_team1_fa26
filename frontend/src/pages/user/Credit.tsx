@@ -24,7 +24,7 @@ import {
 import type { CreditHistory } from '../../types/domain';
 import { formatCredit, formatVnd } from '../../utils/formatting';
 import { useWallet } from '../../app/useWallet';
-import { walletApi, type HeldFeeItem } from '../../services/walletApi';
+import { walletApi, type HeldFeeItem, type WalletHistoryCounts } from '../../services/walletApi';
 import {
   paymentApi,
   type PaymentOrderStatus,
@@ -92,6 +92,7 @@ export function Credit() {
   const [toDate, setToDate] = useState('');
   const [historyPage, setHistoryPage] = useState(0);
   const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyCounts, setHistoryCounts] = useState<WalletHistoryCounts | null>(null);
   const [historySummary, setHistorySummary] = useState<CreditHistorySummary | null>(null);
   const [itemTitles, setItemTitles] = useState<Map<string, string>>(() => new Map());
   const [heldFees, setHeldFees] = useState<HeldFeeItem[]>([]);
@@ -168,6 +169,7 @@ export function Credit() {
         if (!active) return;
         setApiHistory(response.items.map((entry) => toCreditHistory(entry, user.id)));
         setHistoryTotal(response.totalElements);
+        setHistoryCounts(response.counts);
       })
       .catch((caught) => {
         if (!active) return;
@@ -425,6 +427,11 @@ export function Credit() {
         itemTitles={itemTitles}
         allHistory={apiHistory}
         tabs={userHistoryTabs}
+        tabCounts={
+          historyCounts
+            ? { all: historyCounts.all, topup: historyCounts.topUp, spend: historyCounts.spend }
+            : undefined
+        }
         activeTab={historyTab}
         onTabChange={setHistoryTab}
         onSelect={setSelectedEntry}

@@ -152,6 +152,27 @@ describe('Lịch sử Credit của người dùng', () => {
     expect(screen.queryByText('Chi tiêu')).toBeNull();
   });
 
+  it('hiện số trên tab từ counts của BE thay vì đếm các dòng của trang hiện tại', () => {
+    // given: trang hiện tại chỉ có vài dòng nhưng BE đếm cả khoảng lọc
+    render(
+      <CreditHistorySection
+        itemTitles={new Map()}
+        allHistory={history}
+        tabs={userHistoryTabs}
+        tabCounts={{ all: 42, topup: 6, spend: 35 }}
+        activeTab="all"
+        onTabChange={() => undefined}
+        onSelect={() => undefined}
+      />,
+    );
+
+    // when
+    const tabLabels = screen.getAllByRole('tab').map((tab) => tab.textContent);
+
+    // then
+    expect(tabLabels).toEqual(['Tất cả (42)', 'Nạp Credit (6)', 'Chi tiêu (35)']);
+  });
+
   it('không hiện tên món khi bài không còn trong danh sách', () => {
     // given
     // when

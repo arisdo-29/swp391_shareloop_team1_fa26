@@ -1,9 +1,8 @@
 package com.shareloop.wallet.controller;
 
-import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.wallet.dto.WalletResponse;
-import com.shareloop.wallet.dto.WalletTransactionResponse;
+import com.shareloop.wallet.dto.WalletTransactionPage;
 import com.shareloop.wallet.service.CreditService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -42,12 +41,12 @@ public class WalletController {
     // from, to dạng ISO-8601 UTC (ví dụ 2026-10-01T00:00:00Z); Spring tự đổi chuỗi sang Instant.
     @Operation(summary = "Lịch sử ví của tôi, mới nhất trước")
     @GetMapping("/transactions")
-    public PageResponse<WalletTransactionResponse> listMyTransactions(
+    public WalletTransactionPage listMyTransactions(
             @Parameter(hidden = true) @CurrentUserId Long currentUserId,
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return creditService.getTransactions(currentUserId, from, to, page, size);
+        return creditService.getMyTransactions(currentUserId, from, to, page, size);
     }
 }

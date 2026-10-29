@@ -18,6 +18,7 @@ export function CreditHistorySection({
   itemTitles,
   allHistory,
   tabs,
+  tabCounts,
   activeTab,
   onTabChange,
   onSelect,
@@ -29,6 +30,8 @@ export function CreditHistorySection({
   itemTitles: Map<string, string>;
   allHistory: CreditHistory[];
   tabs: HistoryTab[];
+  // Số trên từng tab (theo id tab) do BE đếm cả khoảng lọc; không truyền thì đếm trên các dòng đang có.
+  tabCounts?: Record<string, number>;
   activeTab: string;
   onTabChange: (tabId: string) => void;
   onSelect: (entry: CreditHistory) => void;
@@ -39,7 +42,7 @@ export function CreditHistorySection({
 }) {
   const current = tabs.find((tab) => tab.id === activeTab) ?? tabs[0];
   const history = allHistory.filter(current.matches);
-  const countFor = (tab: HistoryTab) => allHistory.filter(tab.matches).length;
+  const countFor = (tab: HistoryTab) => tabCounts?.[tab.id] ?? allHistory.filter(tab.matches).length;
 
   const days = groupByDay(history);
 
