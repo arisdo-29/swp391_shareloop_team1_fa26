@@ -105,6 +105,7 @@ Không trả `#<id>` trong `targetTitle`, `actorName`. Log `REPORT_DISMISSED`, `
 | `CONFIG_UPDATE` | Sửa cấu hình | `CONFIG` | `key`, `oldValue`, `newValue` |
 | `USER_LOCK` | Khoá tài khoản | `USER` | `cancelledRequests` (số giao dịch đã huỷ), `releasedCredit` (số Credit đã nhả), `hiddenItemIds` (id các bài đã ẩn) |
 | `USER_UNLOCK` | Mở khoá tài khoản | `USER` | `restoredItems` (số bài được hiện lại) |
+| `USER_BAN` | Cấm tài khoản | `USER` (`actorId = null`, hệ thống tự cấm khi hết sao) | `cancelledRequests`, `releasedCredit`, `hiddenItemIds` (cùng nghĩa với `USER_LOCK`) |
 | `REQUEST_CANCEL` | Huỷ giao dịch | `REQUEST` | - (lý do ở `reason`, có tiền tố người huỷ) |
 | `REPORT_DISMISSED` | Bác bỏ báo cáo | `REPORT` | `decision`, `reportId`, `targetType` |
 | `REPORT_UPHELD` | Chấp nhận báo cáo | `REPORT` | `decision`, `reportId`, `targetType`, `violatorId`, `starsDeducted`, `seriousViolation` |
