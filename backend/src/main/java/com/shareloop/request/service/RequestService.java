@@ -218,6 +218,12 @@ public class RequestService {
             if (offeredItemId == null) {
                 throw new BusinessException(RequestErrorCode.REQUEST_SWAP_OFFERED_ITEM_REQUIRED);
             }
+        } else if (offeredItemId != null) {
+            // Bài Cho không nhận món đổi kèm (YC-04, chưa hỗ trợ D-02)
+            throw new BusinessException(RequestErrorCode.REQUEST_OFFERED_ITEM_NOT_ALLOWED);
+        }
+
+        if (offeredItemId != null) {
             ItemSnapshot offeredItem = findItemSnapshot(offeredItemId)
                     .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
 

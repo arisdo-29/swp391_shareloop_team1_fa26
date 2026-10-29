@@ -263,6 +263,93 @@ class RequestServiceTest {
     }
 
     @Test
+    @DisplayName("Ném lỗi khi bài Cho nhận món đổi gửi kèm (YC-04)")
+    void createRequest_whenGiveWithOfferedItem_throwsBusinessException() {
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.existsByItemIdAndReceiverIdAndStatusIn(eq(1L), eq(10L), anySet()))
+                .thenReturn(false);
+
+        doReturn(Optional.of(new RequestService.ItemSnapshot(99L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(5L)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_OFFERED_ITEM_NOT_ALLOWED);
+                });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi món đề nghị trong bài Trao đổi không phải của người gửi")
+    void createRequest_whenSwapWithOfferedItemNotOwned_throwsBusinessException() {
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.existsByItemIdAndReceiverIdAndStatusIn(eq(1L), eq(10L), anySet()))
+                .thenReturn(false);
+
+        doReturn(Optional.of(new RequestService.ItemSnapshot(99L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(88L, "SWAP", "APPROVED", true)))
+                .when(requestService)
+                .findItemSnapshot(5L);
+
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(5L)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
+                });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi món đề nghị trong bài Trao đổi chưa được duyệt (không APPROVED)")
+    void createRequest_whenSwapWithOfferedItemNotApproved_throwsBusinessException() {
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.existsByItemIdAndReceiverIdAndStatusIn(eq(1L), eq(10L), anySet()))
+                .thenReturn(false);
+
+        doReturn(Optional.of(new RequestService.ItemSnapshot(99L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "PENDING", true)))
+                .when(requestService)
+                .findItemSnapshot(5L);
+
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(5L)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
+                });
+    }
+
+    @Test
+    @DisplayName("Tạo yêu cầu SWAP thành công khi món đề nghị hợp lệ")
+    void createRequest_whenSwapSuccess_savesAndReturnsResponse() {
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.existsByItemIdAndReceiverIdAndStatusIn(eq(1L), eq(10L), anySet()))
+                .thenReturn(false);
+
+        doReturn(Optional.of(new RequestService.ItemSnapshot(99L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED", true)))
+                .when(requestService)
+                .findItemSnapshot(5L);
+
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RequestResponse response = requestService.createRequest(1L, 10L, new CreateRequest(5L));
+
+        assertThat(response).isNotNull();
+        assertThat(response.itemId()).isEqualTo(1L);
+        assertThat(response.receiverId()).isEqualTo(10L);
+        assertThat(response.offeredItemId()).isEqualTo(5L);
+        assertThat(response.type()).isEqualTo("SWAP");
+        assertThat(response.status()).isEqualTo("PENDING");
+    }
+
+    @Test
     @DisplayName("Người gửi tự huỷ yêu cầu thành công khi còn PENDING (BR-R04)")
     void cancelRequest_whenSuccess_cancelsAndReturnsResponse() {
         Request request = new Request(1L, 10L, null, "GIVE");
