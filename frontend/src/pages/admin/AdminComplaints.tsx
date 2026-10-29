@@ -11,6 +11,7 @@ import {
   type ReportEvidence,
 } from '../../services/reportApi';
 import type { ApiError } from '../../services/http';
+import { formatDeadline } from '../../utils/request';
 
 const statusLabels: Record<ReportStatus, string> = {
   OPEN: 'Chờ xử lý',
@@ -233,6 +234,7 @@ export function AdminComplaints() {
     if (
       !detail ||
       concluded(detail.report.status) ||
+      detail.responseWindowOpen ||
       submittingRef.current ||
       !confirming ||
       note.length > 500
@@ -249,7 +251,14 @@ export function AdminComplaints() {
       setReload((value) => value + 1);
     } catch (error) {
       const failure = error as ApiError;
-      if (failure.status === 409) {
+      if (failure.code === 'REPORT_RESPONSE_WINDOW_OPEN') {
+        // Dữ liệu trên trang đã cũ (mở hồ sơ trước khi nó chuyển sang chờ giải trình): tải lại để thấy hạn giải trình
+        setNoticeTone('warning');
+        setNotice('Bên bị báo cáo vẫn đang trong hạn giải trình, chưa thể kết luận.');
+        setConfirming(false);
+        setDetail(null);
+        setReload((value) => value + 1);
+      } else if (failure.status === 409) {
         setNoticeTone('warning');
         setNotice('Hồ sơ đã được quản trị viên khác xử lý. Đang tải lại trạng thái.');
         setDetail(null);
@@ -460,7 +469,9 @@ export function AdminComplaints() {
                 ) : (
                   <p className="text-text-secondary">
                     Chưa có giải trình.
-                    {detail.responseDueAt ? ` Hạn giải trình: ${date(detail.responseDueAt)}.` : ''}
+                    {detail.responseDueAt
+                      ? ` Hạn giải trình: ${formatDeadline(detail.responseDueAt)}.`
+                      : ''}
                   </p>
                 )}
               </section>
@@ -489,10 +500,16 @@ export function AdminComplaints() {
                 </section>
               ) : (
                 <section className="space-y-4 border-t border-border pt-4">
+                  {detail.responseWindowOpen && detail.responseDueAt ? (
+                    <Alert tone="info">
+                      Hạn giải trình: {formatDeadline(detail.responseDueAt)}. Chỉ kết luận được khi
+                      bên bị báo cáo đã giải trình hoặc đã hết hạn.
+                    </Alert>
+                  ) : null}
                   <Select
                     label="Kết luận"
                     value={decision}
-                    disabled={submitting || confirming}
+                    disabled={submitting || confirming || detail.responseWindowOpen}
                     onChange={(event) => setDecision(event.target.value as ReportDecision)}
                   >
                     <option value="UPHOLD">Có cơ sở</option>
@@ -502,7 +519,7 @@ export function AdminComplaints() {
                     label="Ghi chú kết luận (tối đa 500 ký tự, không bắt buộc)"
                     value={note}
                     maxLength={500}
-                    disabled={submitting || confirming}
+                    disabled={submitting || confirming || detail.responseWindowOpen}
                     onChange={(event) => setNote(event.target.value)}
                   />
                   {confirming ? (
@@ -535,7 +552,7 @@ export function AdminComplaints() {
           <div className="mt-6 flex items-center justify-between gap-3 border-t border-border pt-4">
             {detail && !concluded(detail.report.status) && !confirming && (
               <Button
-                disabled={submitting || note.length > 500}
+                disabled={submitting || note.length > 500 || detail.responseWindowOpen}
                 onClick={() => setConfirming(true)}
               >
                 Kết luận

@@ -79,6 +79,8 @@ export interface AdminReportDetail {
   resolvedAt: string | null;
   relatedItemTitle?: string | null;
   resolvedByName?: string | null;
+  /** Backend tính: còn chờ giải trình và chưa tới hạn thì Admin chưa được kết luận (D-15, BC-10). */
+  responseWindowOpen?: boolean;
 }
 export interface ReportEvidence {
   id: number;
