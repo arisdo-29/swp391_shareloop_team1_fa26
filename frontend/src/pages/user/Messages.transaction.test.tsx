@@ -3,7 +3,7 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Provider } from 'react-redux';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { actions, store } from '../../app/store';
 import { chatApi } from '../../services/chatApi';
@@ -95,6 +95,11 @@ const request = (overrides: Partial<RequestResponse> = {}): RequestResponse => (
   ...overrides,
 });
 
+function LocationProbe() {
+  const location = useLocation();
+  return <span data-testid="location">{`${location.pathname}${location.search}`}</span>;
+}
+
 /** Dựng trang Tin nhắn cho người dùng `viewerId` với giao dịch `current` đang mở. */
 async function renderMessages(viewerId: number, current: RequestResponse) {
   store.dispatch(actions.loginFromApi(user(viewerId)));
@@ -112,6 +117,7 @@ async function renderMessages(viewerId: number, current: RequestResponse) {
       <MemoryRouter initialEntries={['/requests/101']}>
         <Routes>
           <Route path="/requests/:requestId" element={<Messages />} />
+          <Route path="/items/:itemId" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>
     </Provider>,
@@ -132,6 +138,15 @@ afterEach(() => {
 });
 
 describe('Huỷ giao dịch trong bảng Tiến trình', () => {
+  it('mở bài đăng kèm nguồn từ trang tin nhắn', async () => {
+    const userEvents = userEvent.setup();
+    await renderMessages(RECEIVER_ID, request());
+
+    await userEvents.click(await screen.findByRole('button', { name: 'Xem bài đăng' }));
+
+    expect(screen.getByTestId('location').textContent).toBe('/items/45?from=messages');
+  });
+
   it.each(['RESERVED', 'AWAITING_LOGISTICS', 'LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER'] as const)(
     'hiện khối Huỷ giao dịch và chú thích khi trạng thái %s',
     async (status) => {

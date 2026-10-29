@@ -83,7 +83,6 @@ export function AdminOperationsDashboard() {
   return <>
     <PageHeader
       title="Tổng quan"
-      description="Việc đang chờ, số liệu tài chính và thao tác quản trị gần đây."
     />
     <div className="mb-6">
       <AdminTodoCards />

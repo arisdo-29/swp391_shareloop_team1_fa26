@@ -276,7 +276,14 @@ function AppShellContent() {
                     }`}
                     aria-expanded={profileOpen}
                   >
-                    <span className="inline-block max-w-[120px] truncate text-sm font-semibold">
+                    <span
+                      title={user.name}
+                      className={
+                        isAdmin
+                          ? 'inline-block max-w-[50vw] whitespace-normal break-words text-sm font-semibold leading-tight sm:max-w-none sm:shrink-0 sm:whitespace-nowrap'
+                          : 'inline-block max-w-[120px] truncate text-sm font-semibold'
+                      }
+                    >
                       {user.name}
                     </span>
                     <Icon

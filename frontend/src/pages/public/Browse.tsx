@@ -348,7 +348,6 @@ export function Browse() {
     <div className="page-shell">
       <PageHeader
         title={boostedOnly ? 'Tin nổi bật' : 'Tìm đồ'}
-        description="Bộ lọc áp dụng ngay khi bạn chọn. Tìm theo quận, không theo khoảng cách."
       />
       <div className="mb-4 lg:hidden">
         <Button

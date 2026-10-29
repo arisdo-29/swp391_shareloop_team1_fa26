@@ -17,20 +17,20 @@ const sections = [
     ],
   },
   {
-    label: '',
+    label: 'Quản lý người dùng',
     items: [
       ['Tài khoản', '/admin/users'],
       ['Uy tín và hạng', '/admin/reputation'],
       ['Giao dịch', '/admin/transactions'],
       ['Khiếu nại và báo cáo', '/admin/complaints'],
+      ['Tra cứu người dùng', '/admin/finance/users'],
     ],
   },
   {
-    label: '',
+    label: 'Tài chính & Credit',
     items: [
       ['Báo cáo tài chính', '/admin/finance'],
       ['Đơn nạp Credit', '/admin/finance/topup-orders'],
-      ['Tra cứu người dùng', '/admin/finance/users'],
     ],
   },
   {
@@ -47,9 +47,12 @@ export function AdminLayout() {
   const nav = (
     <>
       {sections.map((section) => (
-        <div key={section.items[0][1]} className="mb-4">
+        <div
+          key={section.items[0][1]}
+          className="mb-4 border-t border-border/80 pt-4 first:border-t-0 first:pt-0"
+        >
           {section.label ? (
-            <p className="mb-1.5 px-3 text-2xs font-bold uppercase tracking-wider text-text-secondary">
+            <p className="mb-1.5 rounded-md bg-surface-low px-3 py-2 text-xs font-bold uppercase tracking-wider text-primary">
               {section.label}
             </p>
           ) : null}
@@ -60,7 +63,7 @@ export function AdminLayout() {
               to={to}
               onClick={() => setOpen(false)}
               className={({ isActive }) =>
-                `mb-0.5 flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-medium transition ${isActive ? 'bg-primary text-white' : 'text-text-secondary hover:bg-surface-low hover:text-text-primary'}`
+                `mb-0.5 flex min-h-11 items-center rounded-md py-2 pl-5 pr-3 text-sm font-medium transition ${isActive ? 'bg-primary text-white' : 'text-text-secondary hover:bg-surface-low hover:text-text-primary'}`
               }
             >
               {label}

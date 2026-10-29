@@ -14,6 +14,7 @@ import {
   SkeletonRows,
 } from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
+import { Pagination } from '../../components/Pagination';
 import { adminLexiconApi, type AdminLexiconEntry, type AdminLexiconRequest, type LexiconMatch } from '../../services/adminLexiconApi';
 import {
   adminCategoryApi,
@@ -449,12 +450,15 @@ const lexiconScopeLabels: Record<string, string> = {
   BOTH: 'Bài đăng và tin nhắn',
 };
 
+const LEXICON_PAGE_SIZE = 20;
+
 function getLexiconLabel(labels: Record<string, string>, value: string) {
   return labels[value.trim().toUpperCase()] ?? 'Khác';
 }
 
 function ApiAdminKeywords() {
   const [entries, setEntries] = useState<AdminLexiconEntry[]>([]);
+  const [page, setPage] = useState(0);
   const [editing, setEditing] = useState<AdminLexiconEntry | null | 'new'>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
@@ -464,6 +468,10 @@ function ApiAdminKeywords() {
   const [testText, setTestText] = useState('');
   const [testMatches, setTestMatches] = useState<LexiconMatch[]>([]);
   const [testing, setTesting] = useState(false);
+  const pageEntries = entries.slice(
+    page * LEXICON_PAGE_SIZE,
+    (page + 1) * LEXICON_PAGE_SIZE,
+  );
 
   useEffect(() => {
     let active = true;
@@ -543,9 +551,18 @@ function ApiAdminKeywords() {
         {testMatches.length ? <div className="mt-3 space-y-1 text-xs text-text-secondary">{testMatches.map((match, index) => <p key={`${match.keyword}-${index}`}><strong>{match.keyword}</strong> · {getLexiconLabel(lexiconLevelLabels, match.level)} · {getLexiconLabel(lexiconGroupLabels, match.group)} · {match.matchedAs}</p>)}</div> : null}
       </section>
       {loading ? <SkeletonRows label="Đang tải từ điển" /> : entries.length ? (
-        <div className="table-wrap"><table className="data-table"><thead><tr><th>Từ khóa</th><th>Nhóm</th><th>Mức độ</th><th>Phạm vi</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
-          {entries.map((entry) => <tr key={entry.id}><td className="font-semibold">{entry.keyword}</td><td>{getLexiconLabel(lexiconGroupLabels, entry.group)}</td><td>{getLexiconLabel(lexiconLevelLabels, entry.level)}</td><td>{getLexiconLabel(lexiconScopeLabels, entry.scope)}</td><td>{entry.active ? 'Đang hiển thị' : 'Đang ẩn'}</td><td className="space-x-2"><Button variant="ghost" disabled={savingId === entry.id} onClick={() => setEditing(entry)}>Sửa</Button><Button variant="outline" disabled={savingId === entry.id} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ngưng' : 'Kích hoạt'}</Button></td></tr>)}
-        </tbody></table></div>
+        <>
+          <div className="table-wrap"><table className="data-table"><thead><tr><th>Từ khóa</th><th>Nhóm</th><th>Mức độ</th><th>Phạm vi</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
+            {pageEntries.map((entry) => <tr key={entry.id}><td className="font-semibold">{entry.keyword}</td><td>{getLexiconLabel(lexiconGroupLabels, entry.group)}</td><td>{getLexiconLabel(lexiconLevelLabels, entry.level)}</td><td>{getLexiconLabel(lexiconScopeLabels, entry.scope)}</td><td>{entry.active ? 'Đang hiển thị' : 'Đang ẩn'}</td><td className="space-x-2"><Button variant="ghost" disabled={savingId === entry.id} onClick={() => setEditing(entry)}>Sửa</Button><Button variant="outline" disabled={savingId === entry.id} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ngưng' : 'Kích hoạt'}</Button></td></tr>)}
+          </tbody></table></div>
+          <Pagination
+            page={page}
+            size={LEXICON_PAGE_SIZE}
+            totalElements={entries.length}
+            disabled={savingId !== null}
+            onPageChange={setPage}
+          />
+        </>
       ) : <EmptyState title="Chưa có từ khóa" text="Hiện chưa có mục từ điển kiểm duyệt nào." />}
       {editing ? <ApiLexiconModal entry={editing === 'new' ? null : editing} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
     </Panel>

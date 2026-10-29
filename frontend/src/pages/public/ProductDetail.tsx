@@ -24,6 +24,7 @@ import { ReputationBadge } from '../../components/ReputationBadge';
 import { requestStatusLabel } from '../../utils/request';
 import { reputationBlockedMessage } from '../../utils/apiErrorMessages';
 import { loginPath } from '../../utils/authRedirect';
+import { productDetailBackLink } from '../../utils/productDetailNavigation';
 
 export function ProductDetail() {
   const { id } = useParams();
@@ -47,6 +48,7 @@ export function ProductDetail() {
   const isApiId = Boolean(id && /^\d+$/.test(id));
   const item = apiItem;
   const currentUserId = toBackendUserId(user?.id);
+  const backLink = productDetailBackLink(location.search);
 
   useEffect(() => {
     if (!id || !/^\d+$/.test(id)) return;
@@ -245,8 +247,8 @@ export function ProductDetail() {
 
   return (
     <div className="page-shell pt-6">
-      <Link to="/browse" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary-hover">
-        Quay lại tìm đồ
+      <Link to={backLink.target} className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary-hover">
+        {backLink.label}
       </Link>
       <div className="mt-2 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
         <article className="min-w-0 space-y-6">
