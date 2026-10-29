@@ -83,7 +83,7 @@ public class BoostService {
         requireWithinExpireAt(newBoostedUntil, itemFee.getExpireAt());
 
         chargeBoostFee(userId, itemId);
-        itemFee.extendBoostedUntil(newBoostedUntil);
+        itemFee.extendBoostedUntil(newBoostedUntil, now);
         long creditBalance = creditService.getWallet(userId).creditBalance();
         return new BoostResponse(itemId, newBoostedUntil, creditBalance);
     }

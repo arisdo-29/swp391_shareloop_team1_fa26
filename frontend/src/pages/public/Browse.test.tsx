@@ -112,7 +112,7 @@ function renderBrowseInStrictMode() {
 beforeEach(() => {
   vi.mocked(catalogApi.categories).mockResolvedValue(categories);
   vi.mocked(catalogApi.areas).mockResolvedValue([]);
-  vi.mocked(itemApi.list).mockResolvedValue({ items: [book], page: 0, size: 20, totalElements: 1 });
+  vi.mocked(itemApi.list).mockResolvedValue({ items: [book], page: 0, size: 24, totalElements: 1 });
 });
 
 afterEach(() => {
@@ -131,7 +131,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     renderBrowseInStrictMode();
 
     expect(itemApi.list).toHaveBeenCalledTimes(1);
-    resolveItems({ items: [book], page: 0, size: 20, totalElements: 1 });
+    resolveItems({ items: [book], page: 0, size: 24, totalElements: 1 });
     expect(await screen.findByText(book.title)).toBeTruthy();
   });
 
@@ -148,74 +148,53 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     expect(screen.getByText(book.description)).toBeTruthy();
   });
 
-  it('hiển thị đầy đủ bài đang được đẩy từ mọi trang API và phân trang kết quả', async () => {
+  it('chế độ tin nổi bật chỉ tải trang hiện tại từ API', async () => {
     const user = userEvent.setup();
-    const boostedItems = Array.from({ length: 21 }, (_, index): ItemResponse => ({
+    const boostedItems = Array.from({ length: 25 }, (_, index): ItemResponse => ({
       ...book,
       id: 600 + index,
       title: `Bài được đẩy ${index + 1}`,
       boostedUntil: new Date(Date.UTC(2099, 0, index + 1, 8)).toISOString(),
     }));
-    const expiredBoostItem: ItemResponse = {
+    vi.mocked(itemApi.list).mockImplementation(async ({ page = 0, size = 24 } = {}) => ({
+      items: boostedItems.slice(page * size, (page + 1) * size),
+      page,
+      size,
+      totalElements: boostedItems.length,
+      totalPages: Math.ceil(boostedItems.length / size),
+    }));
+
+    const { container } = renderBrowse(['/browse?boosted=true']);
+
+    expect(await screen.findByText(boostedItems[23].title)).toBeTruthy();
+    expect(itemApi.list).toHaveBeenCalledTimes(1);
+    expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({ boosted: true, page: 0, size: 24 }));
+    expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(24);
+    expect(screen.getByText('Trang 1 / 2')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+
+    expect(await screen.findByText(boostedItems[24].title)).toBeTruthy();
+    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(1));
+    expect(screen.getByText('Trang 2 / 2')).toBeTruthy();
+    expect(itemApi.list).toHaveBeenCalledTimes(2);
+    expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ boosted: true, page: 1, size: 24 }));
+  });
+
+  it('hiển thị đủ 24 món trên mỗi trang trừ trang cuối và chỉ tải trang được xem', async () => {
+    const user = userEvent.setup();
+    const sourceItems = Array.from({ length: 49 }, (_, index): ItemResponse => ({
       ...book,
-      id: 700,
-      title: 'Bài hết hiệu lực đẩy',
-      boostedUntil: '2020-01-01T08:00:00Z',
-    };
-    const unboostedItem: ItemResponse = {
-      ...book,
-      id: 701,
-      title: 'Bài chưa được đẩy',
-    };
-    const sourceItems = [...boostedItems, expiredBoostItem, unboostedItem];
-    vi.mocked(itemApi.list).mockImplementation(async ({ page = 0, size = 20 } = {}) => ({
+      id: 800 + index,
+      title: `Pagination item ${index + 1}`,
+      createdAt: new Date(Date.UTC(2026, 9, 25, 8, 0, 49 - index)).toISOString(),
+    }));
+    vi.mocked(itemApi.list).mockImplementation(async ({ page = 0, size = 24 } = {}) => ({
       items: sourceItems.slice(page * size, (page + 1) * size),
       page,
       size,
       totalElements: sourceItems.length,
       totalPages: Math.ceil(sourceItems.length / size),
-    }));
-
-    const { container } = renderBrowse(['/browse?boosted=true']);
-
-    expect(await screen.findByText(boostedItems[20].title)).toBeTruthy();
-    await waitFor(() => {
-      expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({ page: 0, size: 20 }));
-      expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({ page: 1, size: 20 }));
-    });
-    expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(20);
-    expect(screen.queryByText(expiredBoostItem.title)).toBeNull();
-    expect(screen.queryByText(unboostedItem.title)).toBeNull();
-    expect(screen.queryByText('Được đẩy')).toBeNull();
-    expect(screen.getByText('Trang 1 / 2')).toBeTruthy();
-
-    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
-
-    expect(await screen.findByText(boostedItems[0].title)).toBeTruthy();
-    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(1));
-    expect(screen.getByText('Trang 2 / 2')).toBeTruthy();
-  });
-
-  it('repaginates uneven API pages into complete pages of 20 without gaps or duplicates', async () => {
-    const user = userEvent.setup();
-    const sourceItems = Array.from({ length: 45 }, (_, index): ItemResponse => ({
-      ...book,
-      id: 800 + index,
-      title: `Pagination item ${index + 1}`,
-      createdAt: new Date(Date.UTC(2026, 9, 25, 8, 0, 45 - index)).toISOString(),
-    }));
-    const apiPages = [
-      sourceItems.slice(0, 20),
-      [sourceItems[19], ...sourceItems.slice(20, 24)],
-      sourceItems.slice(24, 44),
-      sourceItems.slice(44),
-    ];
-    vi.mocked(itemApi.list).mockImplementation(async ({ page = 0, size = 20 } = {}) => ({
-      items: apiPages[page] ?? [],
-      page,
-      size,
-      totalElements: sourceItems.length,
-      totalPages: apiPages.length,
     }));
 
     const { container } = renderBrowse();
@@ -224,24 +203,26 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     const titlesAcrossPages: string[] = [];
 
     expect(await screen.findByText(sourceItems[0].title)).toBeTruthy();
-    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(20));
+    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(24));
+    expect(itemApi.list).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Trang 1 / 3')).toBeTruthy();
     titlesAcrossPages.push(...visibleTitles());
 
     await user.click(screen.getByRole('button', { name: 'Trang sau' }));
-    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(20));
+    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(24));
     expect(screen.getByText('Trang 2 / 3')).toBeTruthy();
     titlesAcrossPages.push(...visibleTitles());
 
     await user.click(screen.getByRole('button', { name: 'Trang sau' }));
-    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(5));
+    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(1));
     expect(screen.getByText('Trang 3 / 3')).toBeTruthy();
     titlesAcrossPages.push(...visibleTitles());
 
     expect(new Set(titlesAcrossPages)).toEqual(new Set(sourceItems.map((item) => item.title)));
     expect(titlesAcrossPages).toHaveLength(sourceItems.length);
-    for (let page = 0; page < apiPages.length; page += 1) {
-      expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({ page, size: 20 }));
+    expect(itemApi.list).toHaveBeenCalledTimes(3);
+    for (let page = 0; page < 3; page += 1) {
+      expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({ page, size: 24 }));
     }
   });
 
@@ -253,7 +234,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     vi.mocked(itemApi.list).mockResolvedValue({
       items: [boostedBook],
       page: 0,
-      size: 20,
+      size: 24,
       totalElements: 1,
     });
 
@@ -267,7 +248,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     vi.mocked(itemApi.list).mockResolvedValue({
       items: [expiringBook, book],
       page: 0,
-      size: 20,
+      size: 24,
       totalElements: 2,
     });
     const user = userEvent.setup();
@@ -326,7 +307,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
       areaId: undefined,
       q: undefined,
       page: 0,
-      size: 20,
+      size: 24,
     }));
     expect(await screen.findByText('Bộ giáo trình đại học')).toBeTruthy();
   });
@@ -342,7 +323,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
       condition: 'NEW',
       offerType: 'GIVE',
       page: 0,
-      size: 20,
+      size: 24,
     }));
     expect(await screen.findByText(book.title)).toBeTruthy();
   });

@@ -83,6 +83,10 @@ class BoostServiceIT extends IntegrationTest {
                 jdbc.queryForMap("SELECT amount, type FROM credit_ledger WHERE item_id = ?", itemId);
         assertThat(ledgerRow.get("amount")).isEqualTo(-boostFee());
         assertThat(ledgerRow.get("type")).isEqualTo("BOOST_FEE");
+        Instant lastBoostedAt = jdbc.queryForObject(
+                        "SELECT last_boosted_at FROM items WHERE id = ?", Timestamp.class, itemId)
+                .toInstant();
+        assertThat(lastBoostedAt).isBetween(before, after);
     }
 
     @Test
@@ -91,6 +95,8 @@ class BoostServiceIT extends IntegrationTest {
         Instant currentBoostedUntil = daysFromNow(2);
         long ownerId = insertUser(START_BALANCE);
         long itemId = insertItem(ownerId, "APPROVED", true, boostableCategory(), daysFromNow(30), currentBoostedUntil);
+        Instant previousBoostedAt = Instant.now().minus(1, ChronoUnit.DAYS);
+        jdbc.update("UPDATE items SET last_boosted_at = ? WHERE id = ?", Timestamp.from(previousBoostedAt), itemId);
 
         // when
         BoostResponse response = boostService.boost(itemId, ownerId);
@@ -99,6 +105,10 @@ class BoostServiceIT extends IntegrationTest {
         Instant expectedBoostedUntil = currentBoostedUntil.plus(boostDays(), ChronoUnit.DAYS);
         assertThat(response.boostedUntil()).isEqualTo(expectedBoostedUntil);
         assertThat(boostedUntilOf(itemId)).isEqualTo(expectedBoostedUntil);
+        Instant lastBoostedAt = jdbc.queryForObject(
+                        "SELECT last_boosted_at FROM items WHERE id = ?", Timestamp.class, itemId)
+                .toInstant();
+        assertThat(lastBoostedAt).isAfter(previousBoostedAt);
     }
 
     // ---------- vượt giới hạn ----------

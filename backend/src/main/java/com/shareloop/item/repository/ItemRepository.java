@@ -4,6 +4,7 @@ import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
+import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,6 +15,45 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface ItemRepository extends JpaRepository<Item, Long> {
+
+    @Query(
+            value = "SELECT count(*) FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
+                    + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
+                    + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
+                    + "AND (CAST(:offerType AS varchar) IS NULL OR i.offer_type = :offerType) "
+                    + "AND f_unaccent(lower(i.title || ' ' || i.description)) LIKE "
+                    + "'%' || replace(replace(replace(f_unaccent(lower(:q)), '!', '!!'), '%', '!%'), '_', '!_') || '%' ESCAPE '!' "
+                    + "AND (:mode = 0 OR (:mode = 1 AND i.boosted_until > :now) "
+                    + "OR (:mode = 2 AND (i.boosted_until IS NULL OR i.boosted_until <= :now)))",
+            nativeQuery = true)
+    long countPublicBrowseItems(
+            Long categoryId, Long areaId, String condition, String offerType, String q, int mode, Instant now);
+
+    @Query(
+            value = "SELECT i.* FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
+                    + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
+                    + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
+                    + "AND (CAST(:offerType AS varchar) IS NULL OR i.offer_type = :offerType) "
+                    + "AND f_unaccent(lower(i.title || ' ' || i.description)) LIKE "
+                    + "'%' || replace(replace(replace(f_unaccent(lower(:q)), '!', '!!'), '%', '!%'), '_', '!_') || '%' ESCAPE '!' "
+                    + "AND (:mode = 0 OR (:mode = 1 AND i.boosted_until > :now) "
+                    + "OR (:mode = 2 AND (i.boosted_until IS NULL OR i.boosted_until <= :now))) "
+                    + "ORDER BY CASE WHEN :mode = 1 THEN i.last_boosted_at END DESC NULLS LAST, "
+                    + "i.created_at DESC, i.id DESC "
+                    + "LIMIT :limit OFFSET :offset",
+            nativeQuery = true)
+    List<Item> findPublicBrowseItems(
+            Long categoryId,
+            Long areaId,
+            String condition,
+            String offerType,
+            String q,
+            int mode,
+            Instant now,
+            int limit,
+            long offset);
 
     List<Item> findByDonorIdOrderByCreatedAtDesc(Long donorId);
 

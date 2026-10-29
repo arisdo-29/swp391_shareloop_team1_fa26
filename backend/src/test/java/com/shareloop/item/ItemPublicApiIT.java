@@ -84,8 +84,10 @@ class ItemPublicApiIT extends IntegrationTest {
             item.approve();
             items.saveAndFlush(item);
             if (number < 4) {
-                jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP + INTERVAL '1 day' WHERE id = :id")
+                jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP + INTERVAL '1 day', "
+                                + "last_boosted_at = CURRENT_TIMESTAMP - (:age * INTERVAL '1 minute') WHERE id = :id")
                         .param("id", item.getId())
+                        .param("age", 3 - number)
                         .update();
             }
         }
@@ -101,6 +103,7 @@ class ItemPublicApiIT extends IntegrationTest {
                 .andExpect(jsonPath("$.items[0].title").value("Bài boost-filter-unique 3"))
                 .andExpect(jsonPath("$.items[1].title").value("Bài boost-filter-unique 2"))
                 .andExpect(jsonPath("$.items[2].title").value("Bài boost-filter-unique 1"))
+                .andExpect(jsonPath("$.items[3].title").value("Bài boost-filter-unique 0"))
                 .andExpect(jsonPath("$.items[0].boostedUntil").isNotEmpty())
                 .andExpect(jsonPath("$.items[1].boostedUntil").isNotEmpty())
                 .andExpect(jsonPath("$.items[2].boostedUntil").isNotEmpty());
@@ -110,8 +113,78 @@ class ItemPublicApiIT extends IntegrationTest {
                         .param("size", "4"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(3))
-                .andExpect(jsonPath("$.items[0].title").value("Bài boost-filter-unique 0"))
-                .andExpect(jsonPath("$.items[0].boostedUntil").isNotEmpty());
+                .andExpect(jsonPath("$.items[0].title").value("Bài boost-filter-unique 6"));
+        mvc.perform(get("/api/v1/items").param("q", "boost-filter-unique").param("boosted", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(4))
+                .andExpect(jsonPath("$.items.length()").value(4));
+    }
+
+    @Test
+    void browseDefaultsToTwentyFourItemsAndOnlyLastPageIsShort() throws Exception {
+        long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long areaId = jdbc.sql("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long userId = jdbc.sql(
+                        "INSERT INTO users (email, password_hash, full_name, phone, status) "
+                                + "VALUES ('browse-24-test@shareloop.local', 'unused', 'Test', '0900000778', 'ACTIVE') RETURNING id")
+                .query(Long.class)
+                .single();
+        for (int number = 0; number < 49; number++) {
+            Item entry = item(userId, categoryId, areaId, "Bài browse-24-unique " + number);
+            entry.approve();
+            items.saveAndFlush(entry);
+        }
+        for (int page = 0; page < 3; page++) {
+            mvc.perform(get("/api/v1/items").param("q", "browse-24-unique").param("page", String.valueOf(page)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.size").value(24))
+                    .andExpect(jsonPath("$.totalElements").value(49))
+                    .andExpect(jsonPath("$.totalPages").value(3))
+                    .andExpect(jsonPath("$.items.length()").value(page == 2 ? 1 : 24));
+        }
+    }
+
+    @Test
+    void thirtyBoostsFillFirstPageAndMixWithRegularItemsOnSecondPage() throws Exception {
+        long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long areaId = jdbc.sql("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long userId = jdbc.sql(
+                        "INSERT INTO users (email, password_hash, full_name, phone, status) "
+                                + "VALUES ('boost-priority-test@shareloop.local', 'unused', 'Test', '0900000779', 'ACTIVE') RETURNING id")
+                .query(Long.class)
+                .single();
+        for (int number = 0; number < 48; number++) {
+            Item entry = item(userId, categoryId, areaId, "Bài boost-priority-unique " + number);
+            entry.approve();
+            items.saveAndFlush(entry);
+            if (number < 30) {
+                jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP + INTERVAL '1 day', "
+                                + "last_boosted_at = CURRENT_TIMESTAMP - (:age * INTERVAL '1 minute') WHERE id = :id")
+                        .param("id", entry.getId())
+                        .param("age", 29 - number)
+                        .update();
+            }
+        }
+        mvc.perform(get("/api/v1/items").param("q", "boost-priority-unique"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.items.length()").value(24))
+                .andExpect(jsonPath("$.items[0].title").value("Bài boost-priority-unique 29"))
+                .andExpect(jsonPath("$.items[23].title").value("Bài boost-priority-unique 6"));
+        mvc.perform(get("/api/v1/items").param("q", "boost-priority-unique").param("page", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(24))
+                .andExpect(jsonPath("$.items[0].title").value("Bài boost-priority-unique 5"))
+                .andExpect(jsonPath("$.items[5].title").value("Bài boost-priority-unique 0"))
+                .andExpect(jsonPath("$.items[6].title").value("Bài boost-priority-unique 47"));
     }
 
     @Test

@@ -57,6 +57,9 @@ public class ItemFee extends SliceAudit {
     @Column(name = "boosted_until")
     private Instant boostedUntil;
 
+    @Column(name = "last_boosted_at")
+    private Instant lastBoostedAt;
+
     protected ItemFee() {}
 
     public Long getId() {
@@ -93,6 +96,10 @@ public class ItemFee extends SliceAudit {
 
     public Instant getBoostedUntil() {
         return boostedUntil;
+    }
+
+    public Instant getLastBoostedAt() {
+        return lastBoostedAt;
     }
 
     /** Ghi nhận đang giữ phí; từ CHARGED hoặc RELEASED vẫn giữ lại được (lượt sửa sau). */
@@ -139,8 +146,9 @@ public class ItemFee extends SliceAudit {
     }
 
     /** Kéo dài thời gian đẩy bài (C15, FR-36); người gọi đã tính mốc mới, đã kiểm giới hạn và đã thu phí. */
-    public void extendBoostedUntil(Instant newBoostedUntil) {
+    public void extendBoostedUntil(Instant newBoostedUntil, Instant boostedAt) {
         this.boostedUntil = newBoostedUntil;
+        this.lastBoostedAt = boostedAt;
     }
 
     private void requireHeld() {

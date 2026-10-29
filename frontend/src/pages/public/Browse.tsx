@@ -19,7 +19,6 @@ import {
   type ApiCondition,
   type ItemResponse,
   type OfferType,
-  type PageResponse,
 } from '../../services/itemApi';
 import type { ApiError } from '../../services/http';
 import {
@@ -35,7 +34,7 @@ import {
   type BrowseFilterKey,
 } from '../../utils/browseFilters';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 24;
 // Giá trị hình thức ở thanh địa chỉ (gift, trade) khác tên của API
 const OFFER_TYPE_BY_TYPE: Record<ItemType, OfferType> = { gift: 'GIVE', trade: 'SWAP' };
 const pendingBrowseItemRequests = new Map<string, ReturnType<typeof itemApi.list>>();
@@ -52,50 +51,6 @@ function loadBrowseItems(params: Parameters<typeof itemApi.list>[0]) {
   });
   pendingBrowseItemRequests.set(requestKey, request);
   return request;
-}
-
-async function loadPaginatedBrowseItems(
-  params: Parameters<typeof itemApi.list>[0],
-  page: number,
-  boostedOnly: boolean,
-): Promise<PageResponse<ItemResponse>> {
-  const firstPage = await loadBrowseItems({ ...params, page: 0, size: PAGE_SIZE });
-  const sourceTotalPages =
-    firstPage.totalPages ?? Math.ceil(firstPage.totalElements / (firstPage.size || PAGE_SIZE));
-  const remainingPages = await Promise.all(
-    Array.from({ length: Math.max(0, sourceTotalPages - 1) }, (_, index) =>
-      loadBrowseItems({ ...params, page: index + 1, size: PAGE_SIZE }),
-    ),
-  );
-  const now = Date.now();
-  const uniqueItems = Array.from(
-    new Map(
-      [firstPage.items, ...remainingPages.map((response) => response.items)]
-        .flat()
-        .map((item) => [item.id, item]),
-    ).values(),
-  );
-  const pageItems = boostedOnly
-    ? uniqueItems
-        .filter(
-          (item) =>
-            item.status === 'APPROVED' &&
-            (!item.expireAt || new Date(item.expireAt).getTime() >= now) &&
-            Boolean(item.boostedUntil && new Date(item.boostedUntil).getTime() > now),
-        )
-        .sort((a, b) => b.boostedUntil!.localeCompare(a.boostedUntil!))
-    : uniqueItems;
-  const totalElements = pageItems.length;
-  const totalPages = Math.ceil(totalElements / PAGE_SIZE);
-  const safePage = totalPages ? Math.min(page, totalPages - 1) : 0;
-
-  return {
-    items: pageItems.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE),
-    page: safePage,
-    size: PAGE_SIZE,
-    totalElements,
-    totalPages,
-  };
 }
 
 export function Browse() {
@@ -171,7 +126,7 @@ export function Browse() {
       condition: condition || undefined,
       offerType: type ? OFFER_TYPE_BY_TYPE[type] : undefined,
     };
-    const request = loadPaginatedBrowseItems(requestParams, page, boostedOnly);
+    const request = loadBrowseItems({ ...requestParams, boosted: boostedOnly || undefined, page, size: PAGE_SIZE });
     request
       .then((response) => {
         if (!active) return;

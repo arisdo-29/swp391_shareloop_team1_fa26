@@ -114,8 +114,9 @@ public class ItemController {
             @RequestParam(required = false) ItemCondition condition,
             @RequestParam(required = false) OfferType offerType,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return itemService.listPublicItems(categoryId, areaId, q, condition, offerType, page, size);
+            @RequestParam(defaultValue = "24") @Min(1) @Max(100) int size,
+            @RequestParam(defaultValue = "false") boolean boosted) {
+        return itemService.listPublicItems(categoryId, areaId, q, condition, offerType, page, size, boosted);
     }
 
     private Long parseUserId(Jwt jwt) {

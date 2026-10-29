@@ -98,12 +98,6 @@ public enum ConfigKey {
             ConfigGroup.POSTING,
             "Số ngày đẩy tối đa",
             "Tổng thời gian đẩy bài cộng dồn tối đa, tính từ thời điểm hiện tại."),
-    BOOST_MAX_PER_PAGE(
-            "boost_max_per_page",
-            "3",
-            ConfigGroup.POSTING,
-            "Số bài đẩy tối đa mỗi trang",
-            "Số bài đang được đẩy hiển thị ở đầu mỗi trang kết quả."),
     AI_SEARCH_FEE(
             "ai_search_fee",
             "2",
