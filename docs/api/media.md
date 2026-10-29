@@ -17,6 +17,9 @@ Thành công `201`:
 Tệp được lưu Local với khóa ngẫu nhiên; bản ghi `media_files` có trạng thái `UPLOADED`.
 `GET /api/v1/media/{id}` công khai chỉ đọc ảnh `PUBLIC` đang dùng, trả đúng MIME và bytes.
 
+Response thành công của `GET /api/v1/media/{id}` có header `Cache-Control: max-age=604800, public`
+(7 ngày, không `immutable` vì Admin có thể ẩn ảnh); response lỗi không được cache 7 ngày.
+
 Lỗi: `422 MEDIA_INVALID_FILE`, `422 MEDIA_FILE_TOO_LARGE`, `401 UNAUTHORIZED`,
 `500 MEDIA_STORAGE_ERROR`.
 

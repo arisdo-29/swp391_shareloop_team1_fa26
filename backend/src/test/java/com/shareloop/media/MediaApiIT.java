@@ -1,9 +1,12 @@
 package com.shareloop.media;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -69,6 +72,22 @@ class MediaApiIT extends IntegrationTest {
     }
 
     @Test
+    void readPublic_whenSuccess_returnsPublicCacheControlForSevenDays() throws Exception {
+        // given
+        byte[] jpg = {(byte) 0xff, (byte) 0xd8, (byte) 0xff, 0x01};
+        MediaFile media = repository.saveAndFlush(new MediaFile("cached.jpg", "image/jpeg", 4));
+        when(storage.read("cached.jpg")).thenReturn(jpg);
+
+        // when
+        var result = mvc.perform(get("/api/v1/media/{id}", media.getId()));
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", containsString("max-age=604800")))
+                .andExpect(header().string("Cache-Control", containsString("public")));
+    }
+
+    @Test
     void readPublic_whenStorageFileMissing_returnsNotFoundFileMissing() throws Exception {
         // given
         MediaFile media = repository.saveAndFlush(new MediaFile("lost-on-render.jpg", "image/jpeg", 4));
@@ -78,7 +97,10 @@ class MediaApiIT extends IntegrationTest {
         var result = mvc.perform(get("/api/v1/media/{id}", media.getId()));
 
         // then
-        result.andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("MEDIA_FILE_MISSING"));
+        result.andExpect(status().isNotFound())
+                // Spring Security tự gắn no-cache cho response lỗi; chỉ cần chắc không bị cache 7 ngày.
+                .andExpect(header().string("Cache-Control", not(containsString("max-age=604800"))))
+                .andExpect(jsonPath("$.code").value("MEDIA_FILE_MISSING"));
     }
 
     @Test
