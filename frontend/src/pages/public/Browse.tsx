@@ -79,7 +79,7 @@ export function Browse() {
   const [page, setPage] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  const [sortMode, setSortMode] = useState<'newest' | 'expiring'>('newest');
+  const sortMode = params.get('sort') === 'expiring' ? 'expiring' : 'newest';
 
   useEffect(() => {
     let active = true;
@@ -126,7 +126,13 @@ export function Browse() {
       condition: condition || undefined,
       offerType: type ? OFFER_TYPE_BY_TYPE[type] : undefined,
     };
-    const request = loadBrowseItems({ ...requestParams, boosted: boostedOnly || undefined, page, size: PAGE_SIZE });
+    const request = loadBrowseItems({
+      ...requestParams,
+      boosted: boostedOnly || undefined,
+      ...(sortMode === 'expiring' ? { sort: sortMode } : {}),
+      page,
+      size: PAGE_SIZE,
+    });
     request
       .then((response) => {
         if (!active) return;
@@ -149,7 +155,7 @@ export function Browse() {
     return () => {
       active = false;
     };
-  }, [boostedOnly, categoryId, condition, district, itemsReloadKey, page, q, type]);
+  }, [boostedOnly, categoryId, condition, district, itemsReloadKey, page, q, sortMode, type]);
 
   useEffect(() => {
     if (!district || districts.some((area) => String(area.id) === district)) return;
@@ -174,19 +180,6 @@ export function Browse() {
     return itemResponses.map((item) => toFeItem(item, categoryNames, areaNames));
   }, [categories, districts, itemResponses]);
 
-  // Hình thức và tình trạng đã được server lọc, ở đây chỉ sắp xếp trong trang hiện tại
-  const sortedResults = useMemo(() => {
-    const boosted = items.filter((item) => item.boostedUntil && new Date(item.boostedUntil).getTime() > Date.now());
-    const next = items.filter((item) => !item.boostedUntil || new Date(item.boostedUntil).getTime() <= Date.now());
-    if (sortMode === 'expiring') {
-      return [...boosted, ...next.sort((a, b) => {
-        const aExpiry = a.expiresAt ? new Date(a.expiresAt).getTime() : Number.POSITIVE_INFINITY;
-        const bExpiry = b.expiresAt ? new Date(b.expiresAt).getTime() : Number.POSITIVE_INFINITY;
-        return aExpiry - bExpiry;
-      })];
-    }
-    return [...boosted, ...next.sort((a, b) => b.postedAt.localeCompare(a.postedAt))];
-  }, [items, sortMode]);
   const reset = () => {
     setParams(resetBrowseSearchParams(params));
     setPage(0);
@@ -348,7 +341,7 @@ export function Browse() {
                 aria-label="Sắp xếp"
                 className="input min-h-10 w-auto py-2"
                 value={sortMode}
-                onChange={(event) => setSortMode(event.target.value as 'newest' | 'expiring')}
+                onChange={(event) => setFilter('sort', event.target.value === 'newest' ? '' : 'expiring')}
               >
                 <option value="newest">Mới nhất</option>
                 <option value="expiring">Sắp hết hạn</option>
@@ -366,9 +359,9 @@ export function Browse() {
               text={itemsError}
               action={<Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>Thử tải lại</Button>}
             />
-          ) : sortedResults.length ? (
+          ) : items.length ? (
             <div data-browse-results className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
-              {sortedResults.map((item) => (
+              {items.map((item) => (
                 <ProductCard key={item.id} item={item} />
               ))}
             </div>

@@ -361,6 +361,20 @@ public class ItemService {
             int page,
             int size,
             boolean boostedOnly) {
+        return listPublicItems(categoryId, areaId, q, condition, offerType, page, size, boostedOnly, "newest");
+    }
+
+    @Transactional(readOnly = true)
+    public ItemListPageResponse listPublicItems(
+            Long categoryId,
+            Long areaId,
+            String q,
+            ItemCondition condition,
+            OfferType offerType,
+            int page,
+            int size,
+            boolean boostedOnly,
+            String sort) {
         Instant now = Instant.now();
         String keywords = q == null ? "" : q.trim();
         String conditionName = condition == null ? null : condition.name();
@@ -376,7 +390,16 @@ public class ItemService {
         List<Item> selected = new ArrayList<>();
         if (boostedOnly) {
             selected.addAll(itemRepository.findPublicBrowseItems(
-                    categoryId, areaId, conditionName, offerTypeName, keywords, 1, now, size, (long) page * size));
+                    categoryId,
+                    areaId,
+                    conditionName,
+                    offerTypeName,
+                    keywords,
+                    1,
+                    now,
+                    sort,
+                    size,
+                    (long) page * size));
         } else {
             int boostCountOnPage = (int) Math.min(size, Math.max(0L, boostedCount - (long) page * size));
             if (boostCountOnPage > 0) {
@@ -388,6 +411,7 @@ public class ItemService {
                         keywords,
                         1,
                         now,
+                        sort,
                         boostCountOnPage,
                         (long) page * size));
             }
@@ -402,6 +426,7 @@ public class ItemService {
                         keywords,
                         2,
                         now,
+                        sort,
                         regularSlots,
                         regularOffset));
             }
