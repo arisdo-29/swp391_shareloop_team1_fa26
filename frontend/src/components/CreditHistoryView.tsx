@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { CreditHistory, CreditHistoryType } from '../types/domain';
 import { Alert, Button, Icon } from './ui';
 import { DialogFrame } from './Dialog';
@@ -125,6 +125,7 @@ export function HistoryDateFilter({
   error: string;
   onChange: (fromDate: string, toDate: string) => void;
 }) {
+  const [activeQuickRange, setActiveQuickRange] = useState<QuickRange | null>('all');
   const quickButtons: Array<[QuickRange, string]> = [
     ['7days', '7 ngày'],
     ['month', 'Tháng này'],
@@ -138,13 +139,16 @@ export function HistoryDateFilter({
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Khoảng thời gian">
         {quickButtons.map(([range, label]) => {
           const [rangeFrom, rangeTo] = quickRangeDates(range);
-          const active = rangeFrom === fromDate && rangeTo === toDate;
+          const active = activeQuickRange === range;
           return (
             <button
               key={range}
               type="button"
               aria-pressed={active}
-              onClick={() => onChange(rangeFrom, rangeTo)}
+              onClick={() => {
+                setActiveQuickRange(range);
+                onChange(rangeFrom, rangeTo);
+              }}
               className={`min-h-9 rounded-full border px-3 text-xs font-semibold transition ${active ? 'border-primary bg-primary-soft text-primary' : 'border-border bg-white text-text-secondary hover:border-primary/50'}`}
             >
               {label}
@@ -159,7 +163,10 @@ export function HistoryDateFilter({
             type="date"
             className={dateInputClass}
             value={fromDate}
-            onChange={(event) => onChange(event.target.value, toDate)}
+            onChange={(event) => {
+              setActiveQuickRange(null);
+              onChange(event.target.value, toDate);
+            }}
           />
         </label>
         <label className="flex items-center gap-2">
@@ -168,7 +175,10 @@ export function HistoryDateFilter({
             type="date"
             className={dateInputClass}
             value={toDate}
-            onChange={(event) => onChange(fromDate, event.target.value)}
+            onChange={(event) => {
+              setActiveQuickRange(null);
+              onChange(fromDate, event.target.value);
+            }}
           />
         </label>
       </div>
