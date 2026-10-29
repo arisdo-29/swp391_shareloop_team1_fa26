@@ -10,6 +10,7 @@ import { authErrorMessage } from '../../services/authErrors';
 import type { ApiError } from '../../services/http';
 import { fetchSessionUser } from '../../services/session';
 import { validEmail } from '../../utils/validation';
+import { safeInternalNextPath } from '../../utils/authRedirect';
 import { AuthLayout } from './AuthLayout';
 
 export function Login() {
@@ -21,6 +22,7 @@ export function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const successNotice = (location.state as { notice?: string } | null)?.notice;
+  const nextPath = safeInternalNextPath(new URLSearchParams(location.search).get('next'));
 
   const login = async (inputEmail: string, pass: string) => {
     if (processing) return;
@@ -41,10 +43,11 @@ export function Login() {
     setProcessing(true);
     try {
       const authentication = await authApi.login({ email: normalized, password: pass });
-      void preloadRoute(authentication.user.isAdmin ? '/admin' : '/').catch(() => undefined);
+      const destination = nextPath ?? (authentication.user.isAdmin ? '/admin' : '/');
+      void preloadRoute(destination).catch(() => undefined);
       const user = await fetchSessionUser();
       dispatch(actions.loginFromApi(user));
-      navigate(user.role === 'admin' ? '/admin' : '/');
+      navigate(nextPath ?? (user.role === 'admin' ? '/admin' : '/'), { replace: true });
     } catch (apiError) {
       const authError = apiError as ApiError;
       if (authError.code === 'AUTH_EMAIL_NOT_VERIFIED') {

@@ -22,7 +22,7 @@ The repository includes `vercel.json` with the SPA rewrite required by React Rou
 
 1. Push this repository to GitHub, GitLab, or Bitbucket.
 2. In Vercel, select **Add New Project** and import the repository.
-3. Chọn framework **Vite**, cấu hình `VITE_API_BASE_URL` là địa chỉ backend trong Project Settings → Environment Variables, sau đó build và deploy. Giá trị mặc định trong code là `https://shareloop-api.onrender.com`.
+3. Chọn framework **Vite**, cấu hình `VITE_API_BASE_URL` là địa chỉ backend trong Project Settings → Environment Variables, sau đó build và deploy. Giá trị mặc định trong code là `https://shareloop-api-648813583458.asia-southeast1.run.app`.
 
 Every push to the production branch creates a production deployment. Other branches and pull requests receive preview deployments.
 

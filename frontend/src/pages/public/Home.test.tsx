@@ -2,7 +2,7 @@
 
 import { StrictMode, type ReactNode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { catalogApi, type AreaResponse, type CategoryResponse } from '../../services/catalogApi';
 import { itemApi, type ItemResponse, type PageResponse } from '../../services/itemApi';
@@ -80,6 +80,11 @@ const itemPage: PageResponse<ItemResponse> = {
   totalElements: 1,
 };
 
+function LocationState() {
+  const location = useLocation();
+  return <output data-testid="location">{location.pathname}{location.search}</output>;
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -93,6 +98,7 @@ function deferred<T>() {
 function renderHome() {
   return render(
     <MemoryRouter>
+      <LocationState />
       <Home />
     </MemoryRouter>,
   );
@@ -126,9 +132,18 @@ describe('trạng thái tải bài đăng trên Home', () => {
 
     const searchButton = screen.getByRole('button', { name: 'Tìm đồ' });
     const areaSelect = screen.getByRole('combobox', { name: 'Chọn quận' });
+    expect(searchButton.getAttribute('type')).toBe('submit');
     expect(searchButton.querySelector('svg')).toBeNull();
     expect(areaSelect.classList.contains('appearance-none')).toBe(true);
     expect(areaSelect.querySelector('option')).toBeTruthy();
+  });
+
+  it('giữ trang đăng món trong next khi khách chọn Đăng món đồ', () => {
+    renderHome();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đăng món đồ' }));
+
+    expect(screen.getByTestId('location').textContent).toBe('/login?next=%2Fpost');
   });
 
   it('dùng chung request items đang chạy khi StrictMode mount lại Home', async () => {
@@ -152,14 +167,21 @@ describe('trạng thái tải bài đăng trên Home', () => {
     expect(container.querySelector('.home-category-arrow')).toBeNull();
   });
 
-  it('hiển thị số danh mục từ API và giữ link quận không kèm số đếm', async () => {
+  it('hiển thị totalElements từ cùng bộ lọc danh mục của trang Tìm đồ và giữ link quận không kèm số đếm', async () => {
+    vi.mocked(itemApi.list).mockImplementation(async (params = {}) => {
+      if (params.categoryId === 7) {
+        return { items: [], page: 0, size: 24, totalElements: 37, totalPages: 2 };
+      }
+      return itemPage;
+    });
     const { container } = renderHome();
 
     await waitFor(() => expect(container.querySelector('.home-category-count')).toBeTruthy());
-    expect(container.querySelector('.home-category-count')?.textContent).toBe('3 món đồ');
+    expect(container.querySelector('.home-category-count')?.textContent).toBe('37 món đồ');
+    expect(itemApi.list).toHaveBeenCalledWith({ categoryId: 7, page: 0, size: 24 });
     const districtLink = container.querySelector('.home-district');
     expect(districtLink).toBeTruthy();
-    expect(districtLink?.getAttribute('href')).toBe('/browse?district=1');
+    expect(districtLink?.getAttribute('href')).toBe('/browse?areaId=1');
     expect(districtLink?.textContent).not.toContain('món đang có');
   });
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser, selectData } from '../../app/store';
 import {
@@ -12,7 +12,6 @@ import {
   StatusBadge,
   TypeBadge,
 } from '../../components/ui';
-import { DialogFrame } from '../../components/Dialog';
 import { catalogApi } from '../../services/catalogApi';
 import { itemApi } from '../../services/itemApi';
 import { requestApi, toBackendUserId, toFeItemRequest } from '../../services/requestApi';
@@ -24,15 +23,16 @@ import { ReputationBadge } from '../../components/ReputationBadge';
 
 import { requestStatusLabel } from '../../utils/request';
 import { reputationBlockedMessage } from '../../utils/apiErrorMessages';
+import { loginPath } from '../../utils/authRedirect';
 
 export function ProductDetail() {
   const { id } = useParams();
   const data = useAppSelector(selectData);
   const user = useAppSelector(selectCurrentUser);
   const navigate = useNavigate();
+  const location = useLocation();
   const [requestError, setRequestError] = useState('');
   const [requestSuccess, setRequestSuccess] = useState('');
-  const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const [offeredItemId, setOfferedItemId] = useState('');
   const [apiItem, setApiItem] = useState<Item | null>(null);
   const [apiOfferedItems, setApiOfferedItems] = useState<Item[]>([]);
@@ -179,7 +179,7 @@ export function ProductDetail() {
     setRequestError('');
     setRequestSuccess('');
     if (!user) {
-      setLoginPromptOpen(true);
+      navigate(loginPath(`${location.pathname}${location.search}${location.hash}`));
       return;
     }
     if (!currentUserId) {
@@ -298,7 +298,7 @@ export function ProductDetail() {
             <div className="rounded-lg border border-secondary-fixed bg-secondary-soft px-4 py-4">
               <p className="text-xs font-bold uppercase tracking-wide text-secondary-hover">Chủ bài muốn đổi lấy</p>
               <p className="mt-1 text-base font-bold">{item.tradeFor}</p>
-              <p className="mt-1 text-sm text-text-secondary">Đề nghị món khác vẫn được, chủ bài sẽ cân nhắc.</p>
+              <p className="mt-1 text-sm text-text-secondary">Gợi ý: nếu bạn có món khác, hãy ghi vào đề nghị để chủ bài cân nhắc.</p>
             </div>
           ) : null}
 
@@ -450,18 +450,6 @@ export function ProductDetail() {
           ) : null}
         </aside>
       </div>
-
-      {loginPromptOpen ? (
-        <DialogFrame size="sm">
-          <h2 className="text-xl font-bold">Bạn cần đăng nhập để sử dụng chức năng này.</h2>
-          <div className="mt-6 flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setLoginPromptOpen(false)}>
-              Để sau
-            </Button>
-            <Button onClick={() => navigate('/login')}>Đăng nhập</Button>
-          </div>
-        </DialogFrame>
-      ) : null}
 
       {reportOpen && currentUserId && !own ? (
         <ReportDialog
