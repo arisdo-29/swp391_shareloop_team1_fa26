@@ -89,6 +89,7 @@ Quy tắc:
 - Không được trùng với số điện thoại đang hoạt động của tài khoản khác (`status = ACTIVE`) (`409 USER_PHONE_ALREADY_USED`).
 - Giới hạn tần suất đổi số điện thoại: tối đa 1 lần trong 30 ngày (cấu hình `phone_change_interval_days`). Nếu chưa đủ thời gian → `400 USER_PHONE_CHANGE_COOLDOWN` kèm `details.retryAfterDays`.
 - Chặn đổi số khi người dùng đang tham gia vào giao dịch đang diễn ra đã trao đổi liên lạc nhưng chưa hoàn tất (Request ở trạng thái `LOGISTICS_CONFIRMED` hoặc `DELIVERING`) (`409 USER_PHONE_CHANGE_ACTIVE_DELIVERY`).
+- Email OTP đổi số có tiêu đề riêng "Mã xác nhận đổi số điện thoại" và mẫu riêng (không dùng chung mẫu đăng ký). Gửi mail lỗi chỉ ghi log lỗi (kèm mục đích và email nhận, không có mã OTP), API vẫn trả `200`.
 - OTP gửi về email hiện tại của tài khoản với mục đích `CHANGE_PHONE`, thời hạn theo `otp_ttl_minutes` (5 phút) và giới hạn gửi lại `otp_resend_cooldown_seconds` (60 giây).
 
 ```json
