@@ -7,7 +7,6 @@ const quota: PostingQuota = {
   give: { active: 2, limit: 5 },
   swap: { active: 9, limit: -1 },
   rank: 'DIAMOND',
-  nextPostFee: 0,
 };
 
 describe('postingQuotaRow', () => {
