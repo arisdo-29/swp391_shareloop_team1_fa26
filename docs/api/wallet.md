@@ -37,7 +37,10 @@ dịch làm đổi số dư thật: nạp, phí đăng/sửa/gia hạn/đẩy b�
 
   Lọc theo tuần/tháng/quý: FE tự tính `from`, `to` (ví dụ tháng 10/2026 giờ Việt Nam:
   `from=2026-09-30T17:00:00Z&to=2026-10-31T17:00:00Z`).
-- Thành công: `200`, một `PageResponse<WalletTransactionResponse>`; sắp theo `createdAt` giảm dần, rồi `id` giảm dần.
+- Thành công: `200`, một `WalletTransactionPage` (các trường của `PageResponse` kèm `counts`); sắp theo `createdAt`
+  giảm dần, rồi `id` giảm dần.
+- `counts` đếm trên **toàn bộ** khoảng `from`..`to` đang lọc, không theo trang, nên số trên tab không đổi khi chuyển
+  trang. FE hiện số này, không tự đếm từ trang đang xem.
 - Lỗi: `401 UNAUTHORIZED`; `400 VALIDATION_FAILED` khi `page`/`size` ngoài khoảng hoặc `from`/`to` sai định dạng;
   `422 WALLET_INVALID_DATE_RANGE` khi `from` không trước `to`.
 
@@ -51,9 +54,30 @@ dịch làm đổi số dư thật: nạp, phí đăng/sửa/gia hạn/đẩy b�
   ],
   "page": 0,
   "size": 20,
-  "totalElements": 2
+  "totalElements": 2,
+  "counts": { "all": 2, "topUp": 1, "spend": 1 }
 }
 ```
+
+## WalletTransactionPage
+
+| Trường          | Kiểu                       | Ý nghĩa                                              |
+|-----------------|----------------------------|------------------------------------------------------|
+| `items`         | `WalletTransactionResponse[]` | Các dòng của trang hiện tại                       |
+| `page`          | number                     | Số trang (từ 0)                                      |
+| `size`          | number                     | Số dòng mỗi trang                                    |
+| `totalElements` | number                     | Tổng số dòng trong khoảng lọc (bằng `counts.all`)    |
+| `counts`        | `WalletHistoryCounts`      | Số dòng theo tab, trên cả khoảng lọc                 |
+
+## WalletHistoryCounts
+
+| Trường  | Kiểu   | Ý nghĩa                                                                                       |
+|---------|--------|-----------------------------------------------------------------------------------------------|
+| `all`   | number | Mọi dòng trong khoảng                                                                         |
+| `topUp` | number | Dòng nạp Credit (`type = TOP_UP`)                                                             |
+| `spend` | number | Dòng chi tiêu: khoản trừ Credit (`amount < 0`) trừ `ADMIN_ADJUST`; hoàn phí AI (`AI_SEARCH_FEE` dương) không tính |
+
+`GET /api/v1/admin/finance/users/{userId}/history` (Admin) vẫn trả `PageResponse` thường, không có `counts`.
 
 ## WalletResponse
 

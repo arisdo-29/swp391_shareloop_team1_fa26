@@ -6,14 +6,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.shareloop.auth.service.JwtService;
-import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.config.ClockConfig;
 import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
 import com.shareloop.wallet.WalletErrorCode;
+import com.shareloop.wallet.dto.WalletHistoryCounts;
 import com.shareloop.wallet.dto.WalletResponse;
+import com.shareloop.wallet.dto.WalletTransactionPage;
 import com.shareloop.wallet.dto.WalletTransactionResponse;
 import com.shareloop.wallet.entity.CreditTxType;
 import com.shareloop.wallet.service.CreditService;
@@ -98,8 +99,8 @@ class WalletControllerTest {
         Instant to = Instant.parse("2026-11-01T00:00:00Z");
         WalletTransactionResponse topUpRow = new WalletTransactionResponse(
                 12L, CreditTxType.TOP_UP, 20, 40, null, 7L, null, Instant.parse("2026-10-14T03:15:00Z"));
-        when(creditService.getTransactions(10L, from, to, 0, 20))
-                .thenReturn(new PageResponse<>(List.of(topUpRow), 0, 20, 1));
+        when(creditService.getMyTransactions(10L, from, to, 0, 20))
+                .thenReturn(new WalletTransactionPage(List.of(topUpRow), 0, 20, 1, new WalletHistoryCounts(1, 1, 0)));
 
         // when + then
         mockMvc.perform(get("/api/v1/wallet/transactions")
@@ -112,7 +113,10 @@ class WalletControllerTest {
                 .andExpect(jsonPath("$.items[0].balanceAfter").value(40))
                 .andExpect(jsonPath("$.items[0].paymentOrderId").value(7))
                 .andExpect(jsonPath("$.items[0].createdAt").value("2026-10-14T03:15:00Z"))
-                .andExpect(jsonPath("$.totalElements").value(1));
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.counts.all").value(1))
+                .andExpect(jsonPath("$.counts.topUp").value(1))
+                .andExpect(jsonPath("$.counts.spend").value(0));
     }
 
     @Test
@@ -133,7 +137,7 @@ class WalletControllerTest {
         // given
         String token = jwtService.issue(10L, false);
         Instant moment = Instant.parse("2026-10-01T00:00:00Z");
-        when(creditService.getTransactions(10L, moment, moment, 0, 20))
+        when(creditService.getMyTransactions(10L, moment, moment, 0, 20))
                 .thenThrow(new BusinessException(WalletErrorCode.WALLET_INVALID_DATE_RANGE));
 
         // when + then
