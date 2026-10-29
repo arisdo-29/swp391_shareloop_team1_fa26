@@ -1,5 +1,5 @@
 import { PAGE_SIZE_OPTIONS, pageSlots } from '../utils/pagination';
-import { Button } from './ui';
+import { Button, Select } from './ui';
 
 /**
  * Thanh phân trang dùng chung. `page` đếm từ 0 như API.
@@ -42,10 +42,11 @@ export function Pagination({
           Hiển thị {start}–{end} trên {safeTotal} kết quả
         </p>
         {onSizeChange ? (
-          <label className="flex items-center gap-2 text-sm text-text-muted">
-            Mỗi trang
-            <select
-              className="min-h-9 rounded-md border border-border bg-white px-2 text-sm text-text-primary focus:border-primary focus:outline-none disabled:opacity-40"
+          <div className="flex items-center gap-2 text-sm text-text-muted">
+            <span>Mỗi trang</span>
+            <Select
+              aria-label="Mỗi trang"
+              className="min-h-9 min-w-20 px-2 text-sm text-text-primary disabled:opacity-40"
               value={safeSize}
               disabled={disabled}
               onChange={(event) => onSizeChange(Number(event.target.value))}
@@ -59,8 +60,8 @@ export function Pagination({
                   {option}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </div>
         ) : null}
       </div>
 

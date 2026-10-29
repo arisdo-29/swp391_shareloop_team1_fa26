@@ -12,6 +12,7 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import { ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
 import { itemApi, type ListingFeeConfigResponse } from '../../services/itemApi';
+import { BOOST_BENEFITS, BOOST_REFUND_POLICY } from '../../utils/boostMessages';
 import './about.css';
 
 /** Các con số là luật cố định (Business Rule v12 / SRS Final Report 09/11) nên ghi thẳng trong text. Gom một chỗ để dễ rà soát. */
@@ -180,6 +181,7 @@ export function About() {
           <nav aria-label="Mục trong trang" className="about-anchor-nav">
             <AnchorChip href="#cach-dung">Cách dùng</AnchorChip>
             <AnchorChip href="#credit">Credit</AnchorChip>
+            <AnchorChip href="#day-bai">Đẩy bài</AnchorChip>
             <AnchorChip href="#an-toan">An toàn</AnchorChip>
             <AnchorChip href="#hoi-dap">Hỏi đáp</AnchorChip>
           </nav>
@@ -295,6 +297,8 @@ export function About() {
           </section>
         </div>
 
+        <BoostRulesSection fees={fees} />
+
         <section id="hoi-dap" aria-labelledby="faq-title" className="about-faq scroll-mt-24">
           <SectionHeading
             id="faq-title"
@@ -329,6 +333,60 @@ export function About() {
         </section>
       </div>
     </div>
+  );
+}
+
+function BoostRulesSection({ fees }: { fees: ListingFeeConfigResponse | null }) {
+  return (
+    <section id="day-bai" aria-labelledby="boost-rules-title" className="about-section scroll-mt-24">
+      <SectionHeading
+        id="boost-rules-title"
+        eyebrow="Đẩy bài"
+        title="Quy định đẩy bài"
+        description="Quyền lợi hiển thị, cách gia hạn và thời gian nghỉ giữa các đợt đẩy."
+      />
+      <div className="about-step-grid">
+        <article className="about-step-card">
+          <h3>Quy tắc gia hạn và lộ trình</h3>
+          <div className="about-info-group">
+            <h3>Nếu mua thêm gói</h3>
+            <p>
+              {fees
+                ? `Mỗi gói kéo dài thêm ${fees.boostDays} ngày. Một đợt đẩy liên tục tối đa ${fees.boostMaxDays} ngày và không vượt quá hạn hiển thị của bài.`
+                : 'Bạn có thể mua thêm gói để kéo dài đợt đẩy tới mốc tối đa hệ thống hiển thị trong báo giá, nhưng không vượt quá hạn hiển thị của bài.'}
+            </p>
+          </div>
+          <div className="about-info-group">
+            <h3>Nếu không mua thêm</h3>
+            <p>
+              Sau khi hết thời gian đẩy, bài phải nghỉ {RULES.boostCooldownDays} ngày mới được đẩy
+              lại. Số suất đẩy có giới hạn, nên mỗi bài phải chờ giữa hai đợt để nhường lượt cho bài
+              đăng khác.
+            </p>
+          </div>
+        </article>
+
+        <article className="about-step-card">
+          <h3>Quyền lợi hiển thị và lưu ý</h3>
+          <ul className="about-safety-list">
+            {BOOST_BENEFITS.map((benefit) => (
+              <li key={benefit.label}>
+                <CheckCircle aria-hidden="true" weight="fill" />
+                <span>
+                  <strong>{benefit.label}:</strong> {benefit.text}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="about-free-note">
+            <CheckCircle aria-hidden="true" weight="fill" />
+            <p>
+              <strong>Chính sách hoàn phí:</strong> {BOOST_REFUND_POLICY}
+            </p>
+          </div>
+        </article>
+      </div>
+    </section>
   );
 }
 

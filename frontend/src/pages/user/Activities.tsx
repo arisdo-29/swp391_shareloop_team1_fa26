@@ -859,46 +859,52 @@ export function Activities() {
                             <Button size="sm">Mở cuộc trò chuyện</Button>
                           </Link>
                         ) : null}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={!canEdit}
-                          onClick={() => void openEditor(item)}
-                        >
-                          Sửa bài
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={!canUseListingFee || Boolean(renewingItemId || boostingItemId)}
-                          onClick={() => {
-                            setListingFeeError('');
-                            setListingFeeNeedsTopUp(false);
-                            setListingFeeAction({ type: 'renew', item });
-                          }}
-                        >
-                          {renewingItemId === item.id ? 'Đang gia hạn...' : 'Gia hạn'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={!canBoost || Boolean(renewingItemId || boostingItemId)}
-                          onClick={() => {
-                            setListingFeeError('');
-                            setListingFeeNeedsTopUp(false);
-                            setListingFeeAction({ type: 'boost', item });
-                          }}
-                        >
-                          {boostingItemId === item.id ? 'Đang đẩy...' : 'Đẩy bài'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          disabled={!canRemove || removingItemId === item.id}
-                          onClick={() => setRemoveConfirmId(item.id)}
-                        >
-                          Gỡ bài
-                        </Button>
+                        <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full"
+                            disabled={!canEdit}
+                            onClick={() => void openEditor(item)}
+                          >
+                            Sửa bài
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full"
+                            disabled={!canUseListingFee || Boolean(renewingItemId || boostingItemId)}
+                            onClick={() => {
+                              setListingFeeError('');
+                              setListingFeeNeedsTopUp(false);
+                              setListingFeeAction({ type: 'renew', item });
+                            }}
+                          >
+                            {renewingItemId === item.id ? 'Đang gia hạn...' : 'Gia hạn'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full"
+                            disabled={!canBoost || Boolean(renewingItemId || boostingItemId)}
+                            onClick={() => {
+                              setListingFeeError('');
+                              setListingFeeNeedsTopUp(false);
+                              setListingFeeAction({ type: 'boost', item });
+                            }}
+                          >
+                            {boostingItemId === item.id ? 'Đang đẩy...' : 'Đẩy bài'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full !border-error/25 !text-error/80 hover:!border-error/40 hover:!bg-error-soft hover:!text-error"
+                            disabled={!canRemove || removingItemId === item.id}
+                            onClick={() => setRemoveConfirmId(item.id)}
+                          >
+                            Gỡ bài
+                          </Button>
+                        </div>
                       </div>
                       {lockNote(item, canBoost) ? (
                         <p className="text-xs leading-5 text-text-muted">

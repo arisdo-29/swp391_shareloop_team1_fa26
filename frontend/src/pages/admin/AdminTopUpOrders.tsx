@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pagination } from '../../components/Pagination';
-import { Alert, Button, PageHeader, SkeletonRows } from '../../components/ui';
+import { Alert, Button, PageHeader, Select, SkeletonRows } from '../../components/ui';
 import { adminFinanceApi } from '../../services/adminFinanceApi';
 import type { ApiError } from '../../services/http';
 import type { PageResponse } from '../../services/itemApi';
@@ -92,10 +92,9 @@ export function AdminTopUpOrders() {
       />
 
       <div className="flex flex-wrap items-end gap-4 rounded-lg bg-white p-4 ring-1 ring-border">
-        <label className="grid gap-1.5 text-sm font-medium">
-          Trạng thái
-          <select
-            className="rounded-md border border-border bg-white px-3 py-2"
+        <div className="min-w-48">
+          <Select
+            label="Trạng thái"
             value={status}
             onChange={(event) => {
               setStatus(event.target.value as PaymentOrderStatus | '');
@@ -108,8 +107,8 @@ export function AdminTopUpOrders() {
                 {label}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </div>
       </div>
 
       {error ? (

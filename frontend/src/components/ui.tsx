@@ -1,11 +1,15 @@
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
+  KeyboardEvent as ReactKeyboardEvent,
+  OptionHTMLAttributes,
+  ReactElement,
   ReactNode,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from 'react';
-import { useEffect, useId, useState } from 'react';
+import { Children, isValidElement, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { IconWeight } from '@phosphor-icons/react';
 import { X } from '@phosphor-icons/react/dist/csr/X';
 import { List } from '@phosphor-icons/react/dist/csr/List';
@@ -236,23 +240,267 @@ export function Select(
     hint?: string;
   },
 ) {
-  const { label, error, hint, className = '', children, ...rest } = props;
+  const {
+    label,
+    error,
+    hint,
+    className = '',
+    children,
+    value,
+    defaultValue,
+    disabled,
+    onChange,
+    onKeyDown,
+    onMouseDown,
+    onPointerDown,
+    ...rest
+  } = props;
   const messageId = useId();
+  const selectId = useId();
+  const listboxId = useId();
   const hasMessage = Boolean(error || hint);
+  const selectRef = useRef<HTMLSelectElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
+  const [open, setOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0, width: 0, maxHeight: 240 });
+  const options = useMemo(() => selectOptions(children), [children]);
+  const controlled = value !== undefined;
+  const initialValue = normalizeSelectValue(defaultValue) ?? options.find((option) => !option.disabled)?.value ?? '';
+  const [uncontrolledValue, setUncontrolledValue] = useState(initialValue);
+  const selectedValue = normalizeSelectValue(value) ?? uncontrolledValue;
+  const selectedIndex = options.findIndex((option) => option.value === selectedValue);
+  const [activeIndex, setActiveIndex] = useState(() => Math.max(0, selectedIndex));
+
+  const updateMenuPosition = () => {
+    const select = selectRef.current;
+    if (!select) return;
+    const rect = select.getBoundingClientRect();
+    const viewportPadding = 12;
+    const availableBelow = window.innerHeight - rect.bottom - viewportPadding - 6;
+    const menuWidth = Math.min(rect.width, window.innerWidth - viewportPadding * 2);
+    setMenuPosition({
+      left: Math.max(viewportPadding, Math.min(rect.left, window.innerWidth - menuWidth - viewportPadding)),
+      top: rect.bottom + 6,
+      width: menuWidth,
+      maxHeight: Math.min(320, Math.max(0, availableBelow)),
+    });
+  };
+
+  const openMenu = () => {
+    if (disabled || !options.length) return;
+    updateMenuPosition();
+    setActiveIndex(selectedIndex >= 0 && !options[selectedIndex]?.disabled ? selectedIndex : firstEnabledOption(options));
+    setOpen(true);
+  };
+
+  const chooseOption = (index: number) => {
+    const option = options[index];
+    const select = selectRef.current;
+    if (!option || option.disabled || !select) return;
+    select.value = option.value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    setOpen(false);
+    select.focus();
+  };
+
+  const moveActive = (direction: 1 | -1) => {
+    if (!options.length) return;
+    let next = activeIndex;
+    for (let count = 0; count < options.length; count += 1) {
+      next = (next + direction + options.length) % options.length;
+      if (!options[next]?.disabled) {
+        setActiveIndex(next);
+        return;
+      }
+    }
+  };
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLSelectElement>) => {
+    onKeyDown?.(event);
+    if (event.defaultPrevented || disabled) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!open) openMenu();
+      else moveActive(event.key === 'ArrowDown' ? 1 : -1);
+      return;
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      if (open) chooseOption(activeIndex);
+      else openMenu();
+      return;
+    }
+    if (event.key === 'Escape' && open) {
+      event.preventDefault();
+      setOpen(false);
+      return;
+    }
+    if (open && (event.key === 'Home' || event.key === 'End')) {
+      event.preventDefault();
+      setActiveIndex(event.key === 'Home' ? firstEnabledOption(options) : lastEnabledOption(options));
+      return;
+    }
+    if (open && event.key.length === 1) {
+      const query = event.key.toLocaleLowerCase('vi-VN');
+      const match = options.findIndex(
+        (option, index) => index > activeIndex && !option.disabled && option.label.toLocaleLowerCase('vi-VN').startsWith(query),
+      );
+      const wrappedMatch = options.findIndex(
+        (option) => !option.disabled && option.label.toLocaleLowerCase('vi-VN').startsWith(query),
+      );
+      setActiveIndex(match >= 0 ? match : wrappedMatch >= 0 ? wrappedMatch : activeIndex);
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!selectRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
+    };
+    const reposition = () => updateMenuPosition();
+    document.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const activeOption = menuRef.current?.querySelector<HTMLElement>(`[data-option-index="${activeIndex}"]`);
+    activeOption?.scrollIntoView?.({ block: 'nearest' });
+  }, [activeIndex, open]);
+
   return (
-    <label className="block">
+    <label className="block" htmlFor={rest.id ?? selectId}>
       {label ? <span className="label">{label}</span> : null}
-      <select
-        className={`input ${error ? errorInputClass : ''} ${className}`}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={hasMessage ? messageId : undefined}
-        {...rest}
-      >
-        {children}
-      </select>
+      <span className="relative block">
+        <select
+          ref={selectRef}
+          id={rest.id ?? selectId}
+          className={`input cursor-pointer appearance-none rounded-xl border-border bg-white pr-10 transition hover:border-[#A9C8BB] focus:border-primary disabled:cursor-not-allowed ${error ? errorInputClass : ''} ${className}`}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={hasMessage ? messageId : undefined}
+          aria-expanded={open}
+          aria-controls={open ? listboxId : undefined}
+          aria-activedescendant={open && activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
+          disabled={disabled}
+          value={value}
+          defaultValue={defaultValue}
+          onChange={(event) => {
+            if (!controlled) setUncontrolledValue(event.target.value);
+            onChange?.(event);
+          }}
+          onKeyDown={handleKeyDown}
+          onMouseDown={onMouseDown}
+          onPointerDown={(event) => {
+            onPointerDown?.(event);
+            if (event.defaultPrevented || disabled || !event.isPrimary || event.button !== 0) return;
+            event.preventDefault();
+            selectRef.current?.focus();
+            if (open) setOpen(false);
+            else openMenu();
+          }}
+          {...rest}
+        >
+          {children}
+        </select>
+        <CaretDown
+          aria-hidden="true"
+          className={`pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-text-muted transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+          weight="bold"
+        />
+      </span>
       <FieldMessage id={messageId} error={error} hint={hint} />
+      {open
+        ? createPortal(
+            <ul
+              ref={menuRef}
+              id={listboxId}
+              role="listbox"
+              aria-label={label ?? rest['aria-label']}
+              className="shareloop-select-menu fixed z-[100] overflow-y-auto rounded-xl border border-[#C9DCD4] bg-white p-1.5 shadow-[0_14px_36px_rgba(15,61,48,0.16)]"
+              style={menuPosition}
+            >
+              {options.map((option, index) => {
+                const selected = option.value === selectedValue;
+                const active = index === activeIndex;
+                return (
+                  <li
+                    key={`${option.value}-${index}`}
+                    id={`${listboxId}-option-${index}`}
+                    role="option"
+                    aria-selected={selected}
+                    aria-disabled={option.disabled || undefined}
+                    data-option-index={index}
+                    onPointerMove={() => {
+                      if (!option.disabled) setActiveIndex(index);
+                    }}
+                    onPointerDown={(event) => event.preventDefault()}
+                    onClick={() => chooseOption(index)}
+                    className={`flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                      option.disabled
+                        ? 'cursor-not-allowed text-text-muted opacity-55'
+                        : selected
+                          ? 'cursor-pointer bg-[#EAF4EF] text-[#0B3B2E]'
+                          : active
+                            ? 'cursor-pointer bg-[#D7E9E1] text-[#0B3B2E]'
+                            : 'cursor-pointer text-text-primary hover:bg-[#D7E9E1]'
+                    }`}
+                  >
+                    <span className={`min-w-0 flex-1 truncate ${selected ? 'font-semibold' : ''}`}>{option.label}</span>
+                    {selected ? <Check aria-hidden="true" className="size-4 shrink-0 text-primary" weight="bold" /> : null}
+                  </li>
+                );
+              })}
+            </ul>,
+            document.body,
+          )
+        : null}
     </label>
   );
+}
+
+interface SelectOption {
+  value: string;
+  label: string;
+  disabled: boolean;
+}
+
+function selectOptions(children: ReactNode): SelectOption[] {
+  return Children.toArray(children).flatMap((child) => {
+    if (!isValidElement(child) || child.type !== 'option') return [];
+    const option = child as ReactElement<OptionHTMLAttributes<HTMLOptionElement>>;
+    const label = reactNodeText(option.props.children);
+    return [{ value: normalizeSelectValue(option.props.value) ?? label, label, disabled: Boolean(option.props.disabled) }];
+  });
+}
+
+function reactNodeText(node: ReactNode): string {
+  return Children.toArray(node)
+    .map((child) => (typeof child === 'string' || typeof child === 'number' ? String(child) : ''))
+    .join('')
+    .trim();
+}
+
+function normalizeSelectValue(value: string | number | readonly string[] | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  return Array.isArray(value) ? String(value[0] ?? '') : String(value);
+}
+
+function firstEnabledOption(options: SelectOption[]): number {
+  return Math.max(0, options.findIndex((option) => !option.disabled));
+}
+
+function lastEnabledOption(options: SelectOption[]): number {
+  for (let index = options.length - 1; index >= 0; index -= 1) {
+    if (!options[index]?.disabled) return index;
+  }
+  return 0;
 }
 export function SearchField(props: InputHTMLAttributes<HTMLInputElement>) {
   // Ô tìm kiếm không có viền riêng; wrapper đổi sang một viền xanh khi focus.
@@ -508,7 +756,7 @@ export function ProductCard({
       to={`/items/${item.id}${from === 'ai' ? '?from=ai' : ''}`}
       className="group flex h-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-[16px] border border-[#E5E7EB] bg-white shadow-[0_4px_14px_rgba(15,23,42,0.10)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_12px_28px_rgba(15,23,42,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-hover focus-visible:ring-offset-2"
     >
-      <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden rounded-t-[15px] bg-[#F3F4F6]">
+      <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden rounded-t-[15px] bg-[#F3F4F6] xl:min-h-[200px]">
         <ItemImage
           src={item.images[0]}
           alt={item.title}
@@ -530,11 +778,11 @@ export function ProductCard({
           </span>
         ) : null}
       </div>
-      <div className="flex min-w-0 flex-1 flex-col p-3.5 sm:p-4">
-        <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-[#111827] sm:text-[15px]">
+      <div className="flex min-w-0 flex-1 flex-col p-4 lg:p-5">
+        <h3 className="h-5 !min-h-5 line-clamp-1 text-sm font-semibold leading-5 text-[#111827] sm:text-[15px]">
           {item.title}
         </h3>
-        <p className="mt-1.5 line-clamp-2 text-xs leading-[1.55] text-[#6B7280] sm:text-[13px]">
+        <p className="mt-2 h-5 !min-h-5 line-clamp-1 text-xs leading-5 text-[#6B7280] sm:text-[13px]">
           {description}
         </p>
         {tradeFor ? (
@@ -542,18 +790,18 @@ export function ProductCard({
             <span className="font-medium text-[#374151]">Đang tìm:</span> {tradeFor}
           </p>
         ) : null}
-        <div className="mt-2.5 flex min-w-0 flex-wrap items-center gap-1.5">
+        <div className="mb-4 mt-3.5 flex min-w-0 items-center gap-1.5">
           <span className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${productCardConditionClass(item.condition)}`}>
             {conditionLabel[item.condition]}
           </span>
           <span
             title={item.category}
-            className="inline-flex min-w-0 flex-1 truncate rounded-full bg-[#F3F4F6] px-2.5 py-1 text-[11px] font-medium text-[#374151]"
+            className="inline-flex min-w-0 max-w-[65%] flex-1 rounded-full bg-[#F3F4F6] px-2.5 py-1 text-[11px] font-medium text-[#374151]"
           >
-            {item.category}
+            <span className="min-w-0 truncate">{item.category}</span>
           </span>
         </div>
-        <div className="mt-auto flex min-w-0 items-center gap-1.5 border-t border-[#F3F4F6] pt-3 text-xs text-[#374151]">
+        <div className="mt-auto flex min-w-0 items-center gap-1.5 border-t border-[#F3F4F6] pt-4 text-xs text-[#374151]">
           {footer ?? (
             <>
               <MapPin aria-hidden className="size-3.5 shrink-0" weight="fill" />

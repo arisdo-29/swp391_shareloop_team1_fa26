@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { Pagination } from '../../components/Pagination';
-import { Alert, Button, PageHeader, SkeletonRows, TextArea } from '../../components/ui';
+import { Alert, Button, PageHeader, Select, SkeletonRows, TextArea } from '../../components/ui';
 import { adminRequestApi, type AdminRequestPage, type AdminRequestRow } from '../../services/adminRequestApi';
 import type { ApiError } from '../../services/http';
 import type { ItemRequestStatus } from '../../types/domain';
@@ -115,10 +115,9 @@ export function AdminTransactions() {
           setPage(0);
         }}
       >
-        <label className="grid gap-1.5 text-sm font-medium">
-          Trạng thái
-          <select
-            className="rounded-md border border-border bg-white px-3 py-2"
+        <div className="min-w-48">
+          <Select
+            label="Trạng thái"
             value={status}
             onChange={(event) => {
               setStatus(event.target.value as ItemRequestStatus | '');
@@ -131,8 +130,8 @@ export function AdminTransactions() {
                 {label}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </div>
         <label className="grid gap-1.5 text-sm font-medium">
           Tìm theo tên bài, tên người hoặc mã
           <input

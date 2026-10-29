@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Alert, Button, EmptyState, ItemImage, PageHeader, SearchField, SkeletonRows } from '../../components/ui';
+import { Alert, Button, EmptyState, ItemImage, PageHeader, SearchField, Select, SkeletonRows } from '../../components/ui';
 import { adminModerationApi, type ReviewQueueItem } from '../../services/adminModerationApi';
 import { adminErrorMessage } from './adminErrors';
 import { displayModerationNote, displayRuleFlag } from './moderationDisplay';
@@ -93,16 +93,16 @@ export function AdminModerationList() {
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
-        <select
+        <Select
           aria-label="Lọc theo loại bài"
-          className="h-9 rounded-md border border-border bg-white px-2.5 text-xs text-text-primary focus:border-brand-primary focus:outline-none"
+          className="h-9 px-2.5 text-xs text-text-primary"
           value={filterType}
           onChange={(event) => setFilterType(event.target.value as 'all' | 'new' | 'edited')}
         >
           <option value="all">Tất cả ({items.length})</option>
           <option value="new">Bài mới ({items.filter((item) => !item.isEdited).length})</option>
           <option value="edited">Bài sửa ({items.filter((item) => !!item.isEdited).length})</option>
-        </select>
+        </Select>
         <span className="text-xs text-text-muted">{rows.length} bài đăng</span>
       </div>
 
