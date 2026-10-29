@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.shareloop.audit.service.ActivityLogService;
@@ -134,13 +135,42 @@ class ConfigServiceTest {
     }
 
     @Test
-    void listIncludesEveryKeyAndUsesDefaultWhenNoActiveValueExists() {
+    void u08_complaintAndResponseWindows_areHiddenFromAdminList() {
+        when(repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc("CONFIG"))
+                .thenReturn(List.of());
+
+        assertThat(service.listConfigs())
+                .extracting(config -> config.key())
+                .doesNotContain("complaint_window_hours", "response_window_hours");
+    }
+
+    @Test
+    void u08_complaintAndResponseWindows_cannotBeUpdatedByAdmin() {
+        for (ConfigKey key : List.of(ConfigKey.COMPLAINT_WINDOW_HOURS, ConfigKey.RESPONSE_WINDOW_HOURS)) {
+            assertThatThrownBy(() -> service.update(key, "72", "Thử sửa", 1L))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                    .isEqualTo(SettingErrorCode.SETTING_CONFIG_NOT_EDITABLE);
+        }
+        verifyNoInteractions(repository, activityLogService);
+    }
+
+    @Test
+    void u08_hiddenWindows_areStillReadThroughConfigService() {
+        when(repository.findConfigValueByAttrKey("complaint_window_hours")).thenReturn(Optional.of("24"));
+
+        assertThat(service.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).isEqualTo(24);
+        assertThat(service.getInt(ConfigKey.RESPONSE_WINDOW_HOURS)).isEqualTo(48);
+    }
+
+    @Test
+    void listIncludesEveryEditableKeyAndUsesDefaultWhenNoActiveValueExists() {
         when(repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc("CONFIG"))
                 .thenReturn(List.of());
 
         var configs = service.listConfigs();
 
-        assertThat(configs).hasSize(ConfigKey.values().length);
+        assertThat(configs).hasSize(ConfigKey.values().length - 2);
         assertThat(configs).anySatisfy(config -> {
             assertThat(config.key()).isEqualTo("post_fee");
             assertThat(config.value()).isEqualTo("5");

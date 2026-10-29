@@ -42,7 +42,9 @@ import {
   canConfirmHandover,
   canReportHandoverIssue,
   canSchedule,
+  canOpenComplaint,
   canSelectPendingRequest,
+  formatDeadline,
   isRequestUnread,
   markRequestChatSeen,
   requestStatusLabel,
@@ -1535,6 +1537,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         ) : null}
                       </>
                     ) : null}
+                    {!currentHandoverAt ? (
+                      <p className="text-xs font-semibold text-warning">Sau khi hoàn tất, bạn chỉ có 24 giờ để khiếu nại.</p>
+                    ) : null}
                     <Button className="w-full" disabled={Boolean(currentHandoverAt) || logisticsSubmitting} onClick={() => void confirmApiHandover()}>
                       {currentHandoverAt
                         ? selectedAsDonor ? 'Bạn đã xác nhận đã giao' : 'Bạn đã xác nhận đã nhận'
@@ -1562,14 +1567,17 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       Giao dịch đã hoàn tất
                       {selected.request.completedAt ? ` lúc ${new Date(selected.request.completedAt).toLocaleString('vi-VN')}` : ''}.
                     </Alert>
-                    {selected.request.completedAt && (Date.now() - new Date(selected.request.completedAt).getTime() > 24 * 60 * 60 * 1000) ? (
-                      <p className="text-xs text-text-muted">
-                        Đã hết thời hạn 24 giờ để khiếu nại sau khi giao dịch hoàn tất.
-                      </p>
+                    {!canOpenComplaint(selected.request.status, selected.request.complaintDeadline) ? (
+                      <p className="text-sm text-text-secondary">Đã hết hạn khiếu nại.</p>
                     ) : (
                       <div className="space-y-2">
-                        <p className="text-xs text-text-muted">
-                          Bạn có 24 giờ kể từ lúc hoàn tất để khiếu nại nếu món đồ có vấn đề. Đối tác sẽ có 48 giờ để giải trình.
+                        {selected.request.complaintDeadline ? (
+                          <p className="text-sm font-semibold text-text-primary">
+                            Khiếu nại được đến {formatDeadline(selected.request.complaintDeadline)}
+                          </p>
+                        ) : null}
+                        <p className="text-xs text-text-secondary">
+                          Chỉ khiếu nại khi món đồ có vấn đề. Đối tác sẽ có 48 giờ để giải trình.
                         </p>
                         <Button
                           variant="outline"
@@ -1853,7 +1861,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       {responseDisputeId !== null ? (
         <DialogFrame>
           <h2 className="text-xl font-bold">Giải trình khiếu nại</h2>
-          <p className="mt-1 text-sm text-text-muted">Gửi nội dung giải trình cho khiếu nại liên quan đến bạn.</p>
+          <p className="mt-1 text-sm text-text-secondary">
+            Bạn có 48 giờ kể từ lúc nhận thông báo để gửi giải trình. Giờ hết hạn ghi trong thông báo khiếu nại.
+          </p>
           {responseNotice ? (
             <div className="mt-5 space-y-4">
               <div className="rounded-md bg-success-soft p-3 text-sm text-success">{responseNotice}</div>

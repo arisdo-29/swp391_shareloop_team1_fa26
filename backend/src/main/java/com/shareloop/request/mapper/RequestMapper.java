@@ -46,17 +46,9 @@ public final class RequestMapper {
         if (request == null) {
             return null;
         }
-        java.time.Instant complaintDeadline =
-                request.getCompletedAt() != null ? request.getCompletedAt().plus(java.time.Duration.ofHours(24)) : null;
+        // Hạn khiếu nại cần đọc ConfigService nên do RequestService tính và truyền vào overload đầy đủ (U08).
         return toResponse(
-                request,
-                receiverName,
-                receiverTrustStars,
-                receiverRank,
-                receiverAsDescribedRate,
-                itemInfo,
-                complaintDeadline,
-                null);
+                request, receiverName, receiverTrustStars, receiverRank, receiverAsDescribedRate, itemInfo, null, null);
     }
 
     // Map đầy đủ kèm thời hạn khiếu nại (U08) và thời gian tin nhắn mới nhất (U03).

@@ -233,20 +233,25 @@ public class RequestJobService {
             reputationService.onCompleted(request.getId());
         }
 
+        // Ghi rõ hạn khiếu nại tính từ lúc hệ thống hoàn tất (U08)
+        int complaintHours = configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS);
+        Instant completedAt = request.getCompletedAt() != null ? request.getCompletedAt() : now;
+        String body = "Giao dịch đã được hệ thống tự động hoàn tất do đối phương không phản hồi sau 3 ngày. "
+                + ComplaintWindow.sentence(complaintHours, ComplaintWindow.deadline(completedAt, complaintHours));
         Long donorId = findDonorId(request.getItemId());
         if (donorId != null) {
             notificationService.notify(
                     donorId,
                     "TRANSACTION_COMPLETED",
                     "Giao dịch đã tự động hoàn tất",
-                    "Giao dịch đã được hệ thống tự động hoàn tất do đối phương không phản hồi sau 3 ngày. Bạn có 24 giờ để gửi khiếu nại nếu món đồ có vấn đề.",
+                    body,
                     "/requests/" + request.getId());
         }
         notificationService.notify(
                 request.getReceiverId(),
                 "TRANSACTION_COMPLETED",
                 "Giao dịch đã tự động hoàn tất",
-                "Giao dịch đã được hệ thống tự động hoàn tất do đối phương không phản hồi sau 3 ngày. Bạn có 24 giờ để gửi khiếu nại nếu món đồ có vấn đề.",
+                body,
                 "/requests/" + request.getId());
 
         return true;

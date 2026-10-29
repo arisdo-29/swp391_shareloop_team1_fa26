@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canCancelTransaction, canReportHandoverIssue } from './request';
+import { canCancelTransaction, canOpenComplaint, canReportHandoverIssue, formatDeadline } from './request';
 
 describe('canCancelTransaction', () => {
   it('cho huỷ ở bốn trạng thái sau khi đã chọn người', () => {
@@ -33,5 +33,31 @@ describe('canReportHandoverIssue', () => {
   it('không hiện ở trạng thái khác', () => {
     expect(canReportHandoverIssue('LOGISTICS_CONFIRMED', confirmedAt, undefined)).toBe(false);
     expect(canReportHandoverIssue('DISPUTED', confirmedAt, undefined)).toBe(false);
+  });
+});
+
+describe('canOpenComplaint (U08)', () => {
+  const deadline = '2026-10-30T07:30:00Z';
+  const deadlineMs = new Date(deadline).getTime();
+
+  it('còn trong 24 giờ sau hoàn tất thì còn khiếu nại được', () => {
+    expect(canOpenComplaint('COMPLETED', deadline, deadlineMs - 1)).toBe(true);
+  });
+
+  it('quá hạn thì ẩn nút khiếu nại', () => {
+    expect(canOpenComplaint('COMPLETED', deadline, deadlineMs)).toBe(false);
+    expect(canOpenComplaint('COMPLETED', deadline, deadlineMs + 60_000)).toBe(false);
+  });
+
+  it('chỉ giao dịch đã hoàn tất mới khiếu nại được', () => {
+    expect(canOpenComplaint('AWAITING_HANDOVER', deadline, deadlineMs - 1)).toBe(false);
+    expect(canOpenComplaint('DISPUTED', deadline, deadlineMs - 1)).toBe(false);
+  });
+});
+
+describe('formatDeadline', () => {
+  it('ghi giờ:phút ngày/tháng có số 0 đứng trước', () => {
+    const local = new Date(2026, 9, 5, 7, 3);
+    expect(formatDeadline(local.toISOString())).toBe('07:03 05/10');
   });
 });

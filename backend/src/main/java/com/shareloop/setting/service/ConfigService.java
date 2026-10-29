@@ -40,6 +40,7 @@ public class ConfigService {
                                 (first, ignored) -> first));
 
         return Arrays.stream(ConfigKey.values())
+                .filter(ConfigKey::adminEditable)
                 .map(key -> toResponse(key, configuredValues.getOrDefault(key.key(), key.defaultValue())))
                 .toList();
     }
@@ -176,6 +177,9 @@ public class ConfigService {
 
     @Transactional
     public ConfigResponse update(ConfigKey key, String value, String reason, Long adminId) {
+        if (key != null && !key.adminEditable()) {
+            throw new BusinessException(SettingErrorCode.SETTING_CONFIG_NOT_EDITABLE);
+        }
         validateValue(key, value);
         value = value.trim();
         validateRankThresholds(key, value);

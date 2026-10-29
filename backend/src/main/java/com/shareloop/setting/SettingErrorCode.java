@@ -7,6 +7,7 @@ public enum SettingErrorCode implements ErrorCode {
     SETTING_CONFIG_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy cấu hình."),
     SETTING_CONFIG_INVALID_TYPE(HttpStatus.BAD_REQUEST, "Giá trị cấu hình không đúng kiểu."),
     SETTING_CONFIG_OUT_OF_RANGE(HttpStatus.BAD_REQUEST, "Giá trị cấu hình nằm ngoài khoảng cho phép."),
+    SETTING_CONFIG_NOT_EDITABLE(HttpStatus.BAD_REQUEST, "Cấu hình này cố định, Admin không sửa được."),
     SETTING_RANK_THRESHOLD_ORDER(
             HttpStatus.BAD_REQUEST, "Điểm tối thiểu các hạng phải tăng dần: Bạc nhỏ hơn Vàng, Vàng nhỏ hơn Kim cương."),
     SETTING_LEXICON_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy từ khóa kiểm duyệt."),

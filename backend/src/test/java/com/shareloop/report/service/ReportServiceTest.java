@@ -42,7 +42,6 @@ import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.service.RequestService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -101,13 +100,13 @@ class ReportServiceTest {
 
     @BeforeEach
     void setUp() {
-        // Hạn khiếu nại và hạn giải trình đọc đúng ConfigKey (key viết thường mà trang Admin sửa)
+        // U08: hạn khiếu nại 24 giờ, hạn giải trình 48 giờ, đọc qua ConfigKey
         org.mockito.Mockito.lenient()
-                .when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_DAYS))
-                .thenReturn(1);
+                .when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS))
+                .thenReturn(24);
         org.mockito.Mockito.lenient()
-                .when(configService.getInt(ConfigKey.RESPONSE_WINDOW_DAYS))
-                .thenReturn(2);
+                .when(configService.getInt(ConfigKey.RESPONSE_WINDOW_HOURS))
+                .thenReturn(48);
         // Tên bài dùng trong câu chữ thông báo và ghi chú thay cho "#id"
         org.mockito.Mockito.lenient()
                 .when(itemQueryService.findTitles(any()))
@@ -501,7 +500,8 @@ class ReportServiceTest {
                         eq(donorId),
                         eq("DISPUTE_OPENED"),
                         eq("Giao dịch “Nồi cơm điện” bị khiếu nại"),
-                        eq("Giao dịch “Nồi cơm điện” đã bị đối tác khiếu nại. Bạn có 48 giờ để giải trình."),
+                        eq("Giao dịch “Nồi cơm điện” đã bị đối tác khiếu nại. Bạn có 48 giờ, đến 17:00 20/10, để"
+                                + " giải trình."),
                         eq("/me/disputes/1"));
     }
 
@@ -1054,13 +1054,13 @@ class ReportServiceTest {
                 .when(reportService)
                 .findRequest(7L);
         when(itemQueryService.getSummary(5L)).thenReturn(new ItemSummary(5L, 20L, OfferType.GIVE, ItemStatus.APPROVED));
-        // Admin đổi hạn giải trình (key viết thường response_window_days) sang 4 ngày -> hạn đổi theo
-        when(configService.getInt(ConfigKey.RESPONSE_WINDOW_DAYS)).thenReturn(4);
+        // Hạn giải trình đi theo cấu hình response_window_hours (đổi bằng migration) -> hạn đổi theo
+        when(configService.getInt(ConfigKey.RESPONSE_WINDOW_HOURS)).thenReturn(72);
         when(evidenceService.attach(java.util.List.of(12L), 10L)).thenReturn("[12]");
         when(reportRepository.save(any())).thenAnswer(invocation -> {
             Report report = invocation.getArgument(0);
             assertThat(report.getEvidence()).isEqualTo("[12]");
-            assertThat(report.getResponseDueAt()).isEqualTo(BASE_TIME.plus(Duration.ofDays(4)));
+            assertThat(report.getResponseDueAt()).isEqualTo(BASE_TIME.plus(Duration.ofHours(72)));
             return report;
         });
         var result = reportService.createReport(
@@ -1103,30 +1103,36 @@ class ReportServiceTest {
     }
 
     @Test
-    @DisplayName("Hạn khiếu nại, hạn giải trình đi theo key viết thường Admin sửa, bỏ qua key viết hoa cũ")
-    void disputeDeadlinesFollowLowercaseConfigKeysAndIgnoreLegacyUppercaseKeys() {
-        doReturn(new ReportService.RequestSnapshot(100L, 200L, 10L, "COMPLETED", BASE_TIME))
+    @DisplayName("U08: còn trong 24 giờ sau hoàn tất thì mở được khiếu nại, hạn giải trình là 48 giờ")
+    void dispute_within24HoursAfterCompleted_opensWith48HourResponseWindow() {
+        doReturn(new ReportService.RequestSnapshot(100L, 200L, 10L, "COMPLETED", BASE_TIME.minus(Duration.ofHours(23))))
                 .when(reportService)
                 .findRequest(100L);
         when(itemQueryService.getSummary(200L))
                 .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.TRADED));
-        // Key viết hoa do migration cũ seed: có giá trị khác nhưng không được dùng nữa
-        org.mockito.Mockito.lenient()
-                .when(configService.getDecimal("DISPUTE_WINDOW_DAYS"))
-                .thenReturn(new BigDecimal("1"));
-        org.mockito.Mockito.lenient()
-                .when(configService.getDecimal("DISPUTE_RESPONSE_DAYS"))
-                .thenReturn(new BigDecimal("1"));
-        when(configService.getInt(com.shareloop.setting.ConfigKey.COMPLAINT_WINDOW_DAYS))
-                .thenReturn(10);
-        when(configService.getInt(com.shareloop.setting.ConfigKey.RESPONSE_WINDOW_DAYS))
-                .thenReturn(4);
         when(reportRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
         var result =
                 reportService.openDispute(10L, 100L, new CreateDisputeRequest(ReportReason.OTHER, "Nội dung", null));
-        assertThat(result.responseDueAt()).isEqualTo(BASE_TIME.plus(Duration.ofDays(4)));
-        verify(configService).getInt(com.shareloop.setting.ConfigKey.COMPLAINT_WINDOW_DAYS);
-        verify(configService).getInt(com.shareloop.setting.ConfigKey.RESPONSE_WINDOW_DAYS);
+
+        assertThat(result.responseDueAt()).isEqualTo(BASE_TIME.plus(Duration.ofHours(48)));
+        verify(configService).getInt(ConfigKey.COMPLAINT_WINDOW_HOURS);
+        verify(configService).getInt(ConfigKey.RESPONSE_WINDOW_HOURS);
+    }
+
+    @Test
+    @DisplayName("U08: quá 24 giờ sau hoàn tất thì API khiếu nại bị từ chối")
+    void dispute_after24HoursAfterCompleted_isRejected() {
+        doReturn(new ReportService.RequestSnapshot(100L, 200L, 10L, "COMPLETED", BASE_TIME.minus(Duration.ofHours(25))))
+                .when(reportService)
+                .findRequest(100L);
+        when(itemQueryService.getSummary(200L))
+                .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.TRADED));
+
+        assertThatThrownBy(() -> reportService.openDispute(
+                        10L, 100L, new CreateDisputeRequest(ReportReason.OTHER, "Nội dung", null)))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.DISPUTE_WINDOW_EXPIRED);
+        verify(reportRepository, never()).save(any());
     }
 
     @Test
