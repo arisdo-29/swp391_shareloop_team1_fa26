@@ -126,21 +126,19 @@ class ItemCreateIT extends IntegrationTest {
     }
 
     @Test
-    void swapLimitFollowsRankAndIgnoresGiveItems() throws Exception {
-        long owner = user(10);
+    void sixthSwapUsesOverQuotaFeeAndIgnoresGiveItems() throws Exception {
+        long owner = user(20);
         long[] images = media(owner);
-        // Hạng Đồng tối đa 5 bài Trao đổi; 5 bài Cho tặng không chiếm hạn mức này
+        // Hạng Đồng có 5 bài Trao đổi phí thường; bài Cho không chiếm ngưỡng này.
         for (int index = 0; index < 5; index++) {
             item(owner, "SWAP", "PENDING_REVIEW", true, false);
             item(owner, "GIVE", "PENDING_REVIEW", true, false);
         }
 
         mvc.perform(create(owner, body("SWAP", "Sách học", "Sách còn tốt", images)))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("ITEM_ACTIVE_LIMIT_REACHED"))
-                .andExpect(jsonPath("$.details.limit").value(5))
-                .andExpect(jsonPath("$.details.activeCount").value(5));
-        assertThat(held(owner)).isZero();
+                .andExpect(status().isCreated());
+        assertThat(pendingFeeOf(itemId(owner))).isEqualTo(10);
+        assertThat(held(owner)).isEqualTo(10);
     }
 
     @Test
@@ -216,7 +214,7 @@ class ItemCreateIT extends IntegrationTest {
     }
 
     @Test
-    void approveGive_whenCreatedWithZeroCredit_setsExpireAtAndPostFeePaidWithoutLedger() throws Exception {
+    void approveGive_whenCreatedWithZeroCredit_setsExpireAtWithoutPostFeeOrLedger() throws Exception {
         // given: tài khoản 0 Credit vừa đăng bài Cho tặng
         long owner = user(0);
         long[] images = media(owner);
@@ -239,7 +237,7 @@ class ItemCreateIT extends IntegrationTest {
                         .param("id", itemId)
                         .query(Boolean.class)
                         .single())
-                .isTrue();
+                .isFalse();
         assertThat(jdbc.sql("SELECT expire_at IS NOT NULL FROM items WHERE id = :id")
                         .param("id", itemId)
                         .query(Boolean.class)

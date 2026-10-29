@@ -39,10 +39,10 @@ const configs: AdminConfigResponse[] = [
   config('reputation_silver_min', '50', 'Điểm tối thiểu hạng Bạc'),
   config('reputation_gold_min', '200', 'Điểm tối thiểu hạng Vàng'),
   config('reputation_diamond_min', '500', 'Điểm tối thiểu hạng Kim cương'),
-  config('max_active_items_bronze', '3', 'Số bài tối đa hạng Đồng'),
-  config('max_active_items_silver', '5', 'Số bài tối đa hạng Bạc'),
-  config('max_active_items_gold', '10', 'Số bài tối đa hạng Vàng'),
-  config('max_active_items_diamond', '-1', 'Số bài tối đa hạng Kim cương'),
+  config('max_active_items_bronze', '5', 'Ngưỡng phí thường Trao đổi hạng Đồng'),
+  config('max_active_items_silver', '8', 'Ngưỡng phí thường Trao đổi hạng Bạc'),
+  config('max_active_items_gold', '15', 'Ngưỡng phí thường Trao đổi hạng Vàng'),
+  config('max_active_items_diamond', '-1', 'Ngưỡng phí thường Trao đổi hạng Kim cương'),
   config('post_display_days_gold', '45', 'Số ngày hiển thị bài hạng Vàng'),
   config('post_display_days', '30', 'Số ngày hiển thị bài', 'POSTING'),
   config('reputation_give_donor', '10', 'Điểm người cho khi hoàn tất'),
@@ -76,10 +76,11 @@ async function selectUser(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('AdminReputation cấu hình hạng', () => {
-  it('hiện bảng hạng bằng tiếng Việt, -1 là không giới hạn và không lặp key hạng ở bảng quy tắc', async () => {
+  it('hiện ngưỡng phí thường theo hạng và không lặp key ở bảng quy tắc', async () => {
     render(<AdminReputation />);
 
     const rankTable = (await screen.findByText('Kim cương')).closest('table')!;
+    expect(within(rankTable).getByRole('columnheader', { name: 'Số bài Trao đổi phí thường' })).toBeTruthy();
     expect(within(rankTable).getByText('Không giới hạn')).toBeTruthy();
     expect(within(rankTable).getByText('45')).toBeTruthy();
     // Ba hạng còn lại dùng số ngày hiển thị mặc định của hệ thống.

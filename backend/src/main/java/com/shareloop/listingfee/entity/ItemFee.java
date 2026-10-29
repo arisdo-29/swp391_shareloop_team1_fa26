@@ -119,7 +119,7 @@ public class ItemFee extends SliceAudit {
     public void markCharged() {
         requireHeld();
         this.feeState = ItemFeeState.CHARGED;
-        if (pendingFeeType == ItemFeeType.POST) {
+        if (pendingFeeType == ItemFeeType.POST && pendingFee > 0) {
             this.postFeePaid = true;
         }
         // Lượt chỉ tính khi bản sửa được duyệt (BR-D07 (4)), nên bật ở đây chứ không bật lúc giữ phí;

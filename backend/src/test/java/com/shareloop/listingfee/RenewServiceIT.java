@@ -108,6 +108,38 @@ class RenewServiceIT extends IntegrationTest {
     }
 
     @Test
+    void quoteRenew_whenGiveItem_reportsRenewFeeAndChangesNothing() {
+        Instant oldExpireAt = Instant.now().plus(5, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        long ownerId = insertUser(START_BALANCE);
+        long itemId = insertItem(ownerId, "APPROVED", oldExpireAt, "GIVE");
+
+        RenewQuote quote = renewService.quoteRenew(itemId, ownerId);
+
+        assertThat(quote)
+                .isEqualTo(new RenewQuote(RENEW_FEE, oldExpireAt.plus(RENEW_DAYS, ChronoUnit.DAYS), true, null));
+        assertThat(expireAtOf(itemId)).isEqualTo(oldExpireAt);
+        assertThat(balanceOf(ownerId)).isEqualTo(START_BALANCE);
+        assertThat(ledgerCountOfItem(itemId)).isZero();
+    }
+
+    @Test
+    void renew_whenGiveItem_chargesRenewFeeAndRecordsLedger() {
+        Instant oldExpireAt = Instant.now().plus(5, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        long ownerId = insertUser(START_BALANCE);
+        long itemId = insertItem(ownerId, "APPROVED", oldExpireAt, "GIVE");
+
+        RenewResponse response = renewService.renew(itemId, ownerId);
+
+        assertThat(response.fee()).isEqualTo(RENEW_FEE);
+        assertThat(expireAtOf(itemId)).isEqualTo(oldExpireAt.plus(RENEW_DAYS, ChronoUnit.DAYS));
+        assertThat(balanceOf(ownerId)).isEqualTo(START_BALANCE - RENEW_FEE);
+        Map<String, Object> ledgerRow =
+                jdbc.queryForMap("SELECT amount, type FROM credit_ledger WHERE item_id = ?", itemId);
+        assertThat(ledgerRow.get("amount")).isEqualTo(-RENEW_FEE);
+        assertThat(ledgerRow.get("type")).isEqualTo("RENEW_FEE");
+    }
+
+    @Test
     void quoteRenew_whenItemPendingReview_returnsNotAllowedWithReason() {
         // given
         long ownerId = insertUser(START_BALANCE);
@@ -235,6 +267,20 @@ class RenewServiceIT extends IntegrationTest {
         assertThat(ledgerCountOfItem(itemId)).isZero();
     }
 
+    @Test
+    void renew_whenGiveBalanceNotEnough_throwsInsufficientBalanceAndKeepsExpireAt() {
+        Instant oldExpireAt = Instant.now().plus(5, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        long ownerId = insertUser(RENEW_FEE - 1);
+        long itemId = insertItem(ownerId, "APPROVED", oldExpireAt, "GIVE");
+
+        Throwable thrown = catchThrowable(() -> renewService.renew(itemId, ownerId));
+
+        assertBusinessError(thrown, WalletErrorCode.WALLET_INSUFFICIENT_BALANCE);
+        assertThat(balanceOf(ownerId)).isEqualTo(RENEW_FEE - 1);
+        assertThat(expireAtOf(itemId)).isEqualTo(oldExpireAt);
+        assertThat(ledgerCountOfItem(itemId)).isZero();
+    }
+
     // ---------- hai luồng cùng lúc ----------
 
     @Test
@@ -313,16 +359,22 @@ class RenewServiceIT extends IntegrationTest {
 
     // Bài ở status cho trước, phí đăng đã trừ; expireAt có thể null (bài chưa từng được duyệt).
     private long insertItem(long donorId, String status, Instant expireAt) {
+        return insertItem(donorId, status, expireAt, "SWAP");
+    }
+
+    private long insertItem(long donorId, String status, Instant expireAt, String offerType) {
         Timestamp expireAtValue = expireAt == null ? null : Timestamp.from(expireAt);
         return jdbc.queryForObject(
-                "INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, condition,"
+                "INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, desired_item, condition,"
                         + " status, post_fee_paid, fee_state, pending_fee, pending_fee_type, expire_at)"
-                        + " VALUES (?, ?, ?, 'GIVE', 'Renew IT item', 'Mô tả', 'NEW', ?, true, 'CHARGED', 5, 'POST', ?)"
+                        + " VALUES (?, ?, ?, ?, 'Renew IT item', 'Mô tả', ?, 'NEW', ?, true, 'CHARGED', 5, 'POST', ?)"
                         + " RETURNING id",
                 Long.class,
                 donorId,
                 seedCategoryId(),
                 seedAreaId(),
+                offerType,
+                offerType.equals("SWAP") ? "Món mong muốn" : null,
                 status,
                 expireAtValue);
     }

@@ -96,11 +96,11 @@ export function Post() {
   const currentUserId = toBackendUserId(user.id);
   const mediaUploading = mediaUploadState === 'uploading';
   const availableCredit = wallet?.available ?? null;
-  // Phí đăng bài Trao đổi đọc từ Backend (GET /listing-fees); null khi chưa tải được.
-  const [postFee, setPostFee] = useState<number | null>(null);
   const [postFeeError, setPostFeeError] = useState('');
   // Hạn mức bài Cho tặng và Trao đổi; null khi chưa tải được, khi đó ô hạn mức hiện "--".
   const [postingQuota, setPostingQuota] = useState<PostingQuota | null>(null);
+  // Báo giá bài kế tiếp đã tính theo hạng và số bài đang hoạt động tại Backend.
+  const postFee = postingQuota?.nextPostFee ?? null;
   const sortedCategoryAttributes = [...categoryAttributes].sort(
     (left, right) => left.sortOrder - right.sortOrder || left.id - right.id,
   );
@@ -143,29 +143,16 @@ export function Post() {
     itemApi
       .postingQuota()
       .then((quota) => {
-        if (active) setPostingQuota(quota);
+        if (active) {
+          setPostingQuota(quota);
+          setPostFeeError('');
+        }
       })
       .catch(() => {
-        if (active) setPostingQuota(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    itemApi
-      .getListingFees()
-      .then((fees) => {
-        if (!active) return;
-        setPostFee(fees.postFeeSwap);
-        setPostFeeError('');
-      })
-      .catch(() => {
-        if (!active) return;
-        setPostFee(null);
-        setPostFeeError('Chưa tải được phí đăng bài. Vui lòng thử lại.');
+        if (active) {
+          setPostingQuota(null);
+          setPostFeeError('Chưa tải được phí đăng bài. Vui lòng thử lại.');
+        }
       });
     return () => {
       active = false;
@@ -219,7 +206,7 @@ export function Post() {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     setErrorCode('');
     if (!validate()) return;
@@ -231,15 +218,22 @@ export function Post() {
       setError(walletLoading ? 'Đang tải số dư Credit. Vui lòng chờ trong giây lát.' : walletError || 'Chưa thể xác minh số dư Credit.');
       return;
     }
-    if (type === 'trade' && postFee === null) {
-      setError(postFeeError || 'Đang tải phí đăng bài. Vui lòng chờ trong giây lát.');
-      return;
-    }
-    if (type === 'trade' && postFee !== null && availableCredit !== null && availableCredit < postFee) {
-      setErrorCode(WALLET_INSUFFICIENT_BALANCE);
-      setError(INSUFFICIENT_CREDIT_MESSAGE);
-      setConfirmOpen(false);
-      return;
+    if (type === 'trade') {
+      try {
+        const currentQuota = await itemApi.postingQuota();
+        setPostingQuota(currentQuota);
+        setPostFeeError('');
+        if (availableCredit !== null && availableCredit < currentQuota.nextPostFee) {
+          setErrorCode(WALLET_INSUFFICIENT_BALANCE);
+          setError(INSUFFICIENT_CREDIT_MESSAGE);
+          setConfirmOpen(false);
+          return;
+        }
+      } catch {
+        setPostFeeError('Chưa tải được phí đăng bài. Vui lòng thử lại.');
+        setError('Chưa tải được phí đăng bài. Vui lòng thử lại.');
+        return;
+      }
     }
     setError('');
     setConfirmOpen(true);
@@ -261,6 +255,19 @@ export function Post() {
       setError(postFeeError || 'Đang tải phí đăng bài. Vui lòng chờ trong giây lát.');
       setConfirmOpen(false);
       return;
+    }
+    if (type === 'trade') {
+      try {
+        const currentQuota = await itemApi.postingQuota();
+        if (currentQuota.nextPostFee !== postFee) {
+          setPostingQuota(currentQuota);
+          setError('Mức phí vừa thay đổi. Vui lòng xem lại số Credit trong hộp xác nhận.');
+          return;
+        }
+      } catch {
+        setError('Chưa xác minh được phí đăng bài. Vui lòng thử lại.');
+        return;
+      }
     }
     if (type === 'trade' && postFee !== null && availableCredit !== null && availableCredit < postFee) {
       setErrorCode(WALLET_INSUFFICIENT_BALANCE);
@@ -703,6 +710,11 @@ export function Post() {
             <dt className="text-text-secondary">Số dư khả dụng</dt>
             <dd className="font-semibold tabular-nums">{availableCredit === null ? '--' : `${availableCredit} Credit`}</dd>
           </dl>
+          {type === 'trade' && quotaRow && postFee !== null ? (
+            <p className="text-sm text-text-secondary">
+              {quotaRow.label} {quotaRow.value} – bài này phí {postFee} Credit.
+            </p>
+          ) : null}
           <ul className="list-disc space-y-1 pl-5 text-xs leading-5">
             <li className={missingImages ? 'text-text-secondary' : 'text-success'}>
               Đã có {images.length}/{ITEM_IMAGES_MAX} ảnh
@@ -722,6 +734,7 @@ export function Post() {
           <h2 id="post-fee-title" className="text-xl font-bold text-text-primary">
             Xác nhận đăng bài
           </h2>
+          {error ? <div className="mt-3"><Alert tone="error">{error}</Alert></div> : null}
           {type === 'gift' ? (
             <p className="mt-2 text-sm leading-6 text-text-muted">Bài cho tặng được đăng miễn phí.</p>
           ) : (
