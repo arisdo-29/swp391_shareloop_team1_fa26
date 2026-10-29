@@ -59,6 +59,8 @@ shareloop:
     enabled: false
 
 app:
+  async:
+    inline: ${ASYNC_INLINE:false}
   jwt:
     secret: ${JWT_SECRET}
   cors:
@@ -82,3 +84,5 @@ app:
     from: ${MAIL_FROM}
     brevo:
       api-key: ${BREVO_API_KEY:}
+  jobs:
+    trigger-token: ${JOBS_TRIGGER_TOKEN:}

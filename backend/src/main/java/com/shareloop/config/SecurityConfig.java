@@ -42,7 +42,12 @@ public class SecurityConfig {
     };
 
     private static final String[] PERMIT_ALL = {
-        "/api/v1/auth/**", "/actuator/health", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**"
+        "/api/v1/auth/**",
+        "/actuator/health",
+        "/swagger-ui/**",
+        "/swagger-ui.html",
+        "/v3/api-docs/**",
+        "/internal/jobs/**"
     };
 
     @Bean
