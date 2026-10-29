@@ -65,7 +65,10 @@ function AppShellContent() {
     if (!numericUserId) return;
 
     let active = true;
+    let intervalId: number | undefined;
+
     const checkUnread = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
         const requests = await requestApi.mine(numericUserId);
         if (!active) return;
@@ -76,15 +79,34 @@ function AppShellContent() {
       }
     };
 
+    const resetInterval = () => {
+      if (intervalId !== undefined) {
+        window.clearInterval(intervalId);
+      }
+      intervalId = window.setInterval(checkUnread, 30_000);
+    };
+
     void checkUnread();
+    resetInterval();
+
     const handleSeen = () => void checkUnread();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void checkUnread();
+        resetInterval();
+      }
+    };
+
     window.addEventListener('shareloop_chat_seen', handleSeen);
-    const interval = window.setInterval(checkUnread, 30_000);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       active = false;
       window.removeEventListener('shareloop_chat_seen', handleSeen);
-      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (intervalId !== undefined) {
+        window.clearInterval(intervalId);
+      }
     };
   }, [user, isAdmin, pathname]);
 
