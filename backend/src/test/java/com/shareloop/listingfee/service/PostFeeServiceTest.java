@@ -3,6 +3,7 @@ package com.shareloop.listingfee.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.item.service.ItemService;
 import com.shareloop.listingfee.repository.ItemFeeRepository;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
@@ -34,12 +35,15 @@ class PostFeeServiceTest {
     @Mock
     ReputationService reputationService;
 
+    @Mock
+    ItemService itemService;
+
     private PostFeeService postFeeService;
 
     @BeforeEach
     void setUp() {
         postFeeService = new PostFeeService(
-                itemFeeRepository, creditService, configService, reputationService, Clock.systemUTC());
+                itemFeeRepository, creditService, configService, reputationService, itemService, Clock.systemUTC());
     }
 
     @Test

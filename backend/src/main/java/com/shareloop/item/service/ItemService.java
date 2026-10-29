@@ -127,9 +127,9 @@ public class ItemService {
         List<Long> defectMediaIds = parseMediaIds(request.defectImages());
         validateDefectImages(request.condition(), defectMediaIds);
         Optional<Long> operatingAttributeId = requireOperatingStatus(request.categoryId(), request.operatingStatus());
-        // Tài khoản test trong danh sách cấu hình được bỏ qua giới hạn số bài; phí đăng bài vẫn bị giữ như thường
-        if (!canBypassPostLimit(donorId)) {
-            checkActiveItemLimit(donorId, request.offerType());
+        // Tài khoản test được bỏ qua giới hạn bài Cho và luôn dùng phí thường cho bài Trao đổi.
+        if (request.offerType() == OfferType.GIVE && !canBypassPostLimit(donorId)) {
+            checkActiveGiveLimit(donorId);
         }
 
         String moderationText = request.desiredItem() == null
@@ -190,7 +190,7 @@ public class ItemService {
 
     /**
      * Gửi bản sửa của bài, bài quay về PENDING_REVIEW (F07 bước 4); phí sửa do PostFeeService.holdEditFee quyết.
-     * Không cho đổi bài Cho tặng sang Trao đổi (né phí đăng): ném ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED.
+     * Đổi hình thức được báo lại phí đăng theo lịch sử thu phí của chính bài.
      */
     @Transactional
     public ItemResponse updateItem(long itemId, long userId, UpdateItemRequest request) {
@@ -206,10 +206,10 @@ public class ItemService {
                 || requestQueryService.hasReservedOrHigherRequest(itemId)) {
             throw new BusinessException(ItemErrorCode.ITEM_EDIT_NOT_ALLOWED);
         }
-        // Bài GIVE miễn phí đăng, bài SWAP mất phí đăng: cho đổi GIVE sang SWAP thì né được phí, nên chặn.
-        // Chiều SWAP sang GIVE vẫn cho phép. Kiểm trước khi giữ phí sửa (holdEditFee) để không đụng tới ví.
-        if (item.getOfferType() == OfferType.GIVE && request.offerType() == OfferType.SWAP) {
-            throw new BusinessException(ItemErrorCode.ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED);
+        if (request.offerType() == OfferType.GIVE
+                && (item.getOfferType() != OfferType.GIVE || item.getStatus() == ItemStatus.REJECTED)
+                && !canBypassPostLimit(userId)) {
+            checkActiveGiveLimit(userId);
         }
         validateContent(request.offerType(), request.desiredItem(), request.condition(), request.defectNote());
         String moderationText = request.desiredItem() == null
@@ -246,8 +246,8 @@ public class ItemService {
         }
         validateDefectImages(request.condition(), newDefectMediaIds);
         Optional<Long> operatingAttributeId = requireOperatingStatus(request.categoryId(), request.operatingStatus());
-        postFeeService.quoteEdit(itemId, userId);
-        postFeeService.holdEditFee(itemId, userId);
+        postFeeService.quoteEdit(itemId, userId, request.offerType());
+        postFeeService.holdEditFee(itemId, userId, request.offerType());
         if (requestQueryService.hasReservedOrHigherRequest(itemId)) {
             throw new BusinessException(ItemErrorCode.ITEM_EDIT_NOT_ALLOWED);
         }
@@ -649,12 +649,12 @@ public class ItemService {
         return postLimitProperties.canBypassPostLimit(email);
     }
 
-    // Bài Cho tặng dùng một hạn mức chung mọi hạng; bài Trao đổi dùng hạn mức theo hạng. Hai loại đếm riêng.
-    private int limitFor(Long donorId, OfferType offerType) {
-        if (offerType == OfferType.GIVE) {
-            return configService.getInt(ConfigKey.MAX_ACTIVE_GIVE_ITEMS);
-        }
-        Rank rank = reputationService.getRank(donorId);
+    private long countActive(Long donorId, OfferType offerType) {
+        return itemRepository.countActivePostingItems(donorId, offerType.name(), null, Instant.now());
+    }
+
+    private int swapRegularLimit(Long userId) {
+        Rank rank = reputationService.getRank(userId);
         ConfigKey limitKey =
                 switch (rank) {
                     case BRONZE -> ConfigKey.MAX_ACTIVE_ITEMS_BRONZE;
@@ -665,13 +665,23 @@ public class ItemService {
         return configService.getInt(limitKey);
     }
 
-    private long countActive(Long donorId, OfferType offerType) {
-        return itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(
-                donorId, offerType, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED));
+    /** Báo phí của bài Trao đổi tiếp theo; loại trừ chính bài đó khi đang đổi từ Cho sang Trao đổi. */
+    @Transactional(readOnly = true)
+    public int nextPostFee(Long userId, OfferType offerType, Long excludedItemId) {
+        if (offerType == OfferType.GIVE) {
+            return 0;
+        }
+        int regularLimit = swapRegularLimit(userId);
+        if (canBypassPostLimit(userId) || regularLimit < 0) {
+            return configService.getInt(ConfigKey.POST_FEE);
+        }
+        long active =
+                itemRepository.countActivePostingItems(userId, OfferType.SWAP.name(), excludedItemId, Instant.now());
+        return configService.getInt(active < regularLimit ? ConfigKey.POST_FEE : ConfigKey.POST_FEE_OVER_QUOTA);
     }
 
-    private void checkActiveItemLimit(Long donorId, OfferType offerType) {
-        int limit = limitFor(donorId, offerType);
+    private void checkActiveGiveLimit(Long donorId) {
+        int limit = configService.getInt(ConfigKey.MAX_ACTIVE_GIVE_ITEMS);
         if (limit < 0) {
             return;
         }
@@ -682,32 +692,34 @@ public class ItemService {
                 .param("ownerId", donorId)
                 .query()
                 .singleRow();
-        long activeCount = countActive(donorId, offerType);
+        long activeCount = countActive(donorId, OfferType.GIVE);
         if (activeCount < limit) {
             return;
         }
-        boolean isGive = offerType == OfferType.GIVE;
         throw new BusinessException(
-                isGive ? ItemErrorCode.ITEM_GIVE_LIMIT_REACHED : ItemErrorCode.ITEM_ACTIVE_LIMIT_REACHED,
-                "Bạn chỉ được có tối đa %d bài %s đang hiển thị hoặc chờ duyệt."
-                        .formatted(limit, isGive ? "Cho tặng" : "Trao đổi"),
+                ItemErrorCode.ITEM_GIVE_LIMIT_REACHED,
+                "Bạn chỉ được có tối đa %d bài Cho tặng đang hiển thị hoặc chờ duyệt.".formatted(limit),
                 null,
                 Map.of("limit", limit, "activeCount", activeCount));
     }
 
     /**
-     * Hạn mức đăng bài hiện tại của người dùng (Cho tặng và Trao đổi tách riêng). Tài khoản được bỏ qua giới hạn
-     * (PostLimitProperties) có hạn mức -1, tức không giới hạn.
+     * Số bài đang hoạt động theo hình thức; Cho tặng có hạn mức, Trao đổi có ngưỡng phí thường theo hạng.
+     * Tài khoản được bỏ qua giới hạn (PostLimitProperties) có hạn mức -1 và luôn dùng phí thường.
      */
     @Transactional(readOnly = true)
     public PostingQuotaResponse getPostingQuota(Long userId) {
         boolean bypass = canBypassPostLimit(userId);
-        int giveLimit = bypass ? -1 : limitFor(userId, OfferType.GIVE);
-        int swapLimit = bypass ? -1 : limitFor(userId, OfferType.SWAP);
+        int giveLimit = bypass ? -1 : configService.getInt(ConfigKey.MAX_ACTIVE_GIVE_ITEMS);
+        int swapLimit = bypass ? -1 : swapRegularLimit(userId);
+        long swapActive = countActive(userId, OfferType.SWAP);
+        int nextPostFee = configService.getInt(
+                swapLimit < 0 || swapActive < swapLimit ? ConfigKey.POST_FEE : ConfigKey.POST_FEE_OVER_QUOTA);
         return new PostingQuotaResponse(
                 new PostingQuotaResponse.Quota(countActive(userId, OfferType.GIVE), giveLimit),
-                new PostingQuotaResponse.Quota(countActive(userId, OfferType.SWAP), swapLimit),
-                reputationService.getRank(userId).name());
+                new PostingQuotaResponse.Quota(swapActive, swapLimit),
+                reputationService.getRank(userId).name(),
+                nextPostFee);
     }
 
     private void replaceMediaMappings(long itemId, long userId, List<Long> photos, List<Long> defects) {

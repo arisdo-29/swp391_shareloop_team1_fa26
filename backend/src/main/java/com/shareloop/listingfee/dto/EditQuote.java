@@ -45,6 +45,10 @@ public record EditQuote(
         /** Đã duyệt nhưng chưa dùng lượt miễn phí (free_edit_used = false): miễn phí một lần (C14). */
         FIRST_FREE_EDIT,
         /** Đã dùng lượt miễn phí sau duyệt: tính phí sửa (C14b). */
-        PAID_EDIT
+        PAID_EDIT,
+        /** Đổi hình thức bài đã trả phí đăng sang hình thức khác, không thu lại phí đăng. */
+        OFFER_TYPE_CHANGE_FREE,
+        /** Đổi bài chưa trả phí đăng sang Trao đổi, giữ phí đăng theo ngưỡng hiện tại. */
+        OFFER_TYPE_CHANGE_POST_FEE
     }
 }

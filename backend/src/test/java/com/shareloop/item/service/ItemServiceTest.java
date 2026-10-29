@@ -118,7 +118,7 @@ class ItemServiceTest {
                 .when(contentModerationService.checkPost(anyLong(), any(), any()))
                 .thenReturn(ModerationResult.pass());
         lenient().when(reputationService.getRank(10L)).thenReturn(Rank.BRONZE);
-        lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_BRONZE)).thenReturn(3);
+        lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_BRONZE)).thenReturn(5);
         lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_GIVE_ITEMS)).thenReturn(5);
         // Mock mặc định trả false nên phải cho phép đăng bài, riêng test 0 sao sẽ ghi đè
         lenient().when(reputationService.canPost(anyLong())).thenReturn(true);
@@ -186,39 +186,28 @@ class ItemServiceTest {
     }
 
     @Test
-    void createItemAtBronzeLimitReturnsConfiguredLimit() {
-        when(itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(
-                        10L, OfferType.SWAP, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED)))
-                .thenReturn(3L);
-        CreateItemRequest request = new CreateItemRequest(
-                1L,
-                1L,
-                OfferType.SWAP,
-                "Sách Toán",
-                "Sách mới",
-                "Sách Văn",
-                ItemCondition.NEW,
-                null,
-                null,
-                threeImages());
+    void nextPostFeeAtBronzeRegularLimitUsesOverQuotaFee() {
+        when(itemRepository.countActivePostingItems(eq(10L), eq("SWAP"), eq(null), any(Instant.class)))
+                .thenReturn(5L);
+        when(configService.getInt(ConfigKey.POST_FEE_OVER_QUOTA)).thenReturn(10);
 
-        assertThatThrownBy(() -> itemService.createItem(10L, request))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(exception -> {
-                    BusinessException businessException = (BusinessException) exception;
-                    assertThat(businessException.getErrorCode()).isEqualTo(ItemErrorCode.ITEM_ACTIVE_LIMIT_REACHED);
-                    assertThat(businessException.getMessage()).contains("3");
-                    assertThat(businessException.getDetails()).containsEntry("limit", 3);
-                });
-        verify(itemRepository, never()).saveAndFlush(any(Item.class));
-        verifyNoInteractions(postFeeService);
+        assertThat(itemService.nextPostFee(10L, OfferType.SWAP, null)).isEqualTo(10);
+    }
+
+    @Test
+    void nextPostFeeForBypassAccountAlwaysUsesRegularFee() {
+        when(userService.findEmailById(10L)).thenReturn("tester@shareloop.test");
+        when(postLimitProperties.canBypassPostLimit("tester@shareloop.test")).thenReturn(true);
+        when(configService.getInt(ConfigKey.POST_FEE)).thenReturn(5);
+
+        assertThat(itemService.nextPostFee(10L, OfferType.SWAP, null)).isEqualTo(5);
+        verify(itemRepository, never()).countActivePostingItems(anyLong(), any(), any(), any());
     }
 
     @Test
     void createItem_whenSixthGiveItem_throwsGiveLimitReachedWithDetails() {
         // given: mọi hạng tối đa 5 bài Cho tặng
-        when(itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(
-                        10L, OfferType.GIVE, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED)))
+        when(itemRepository.countActivePostingItems(eq(10L), eq("GIVE"), eq(null), any(Instant.class)))
                 .thenReturn(5L);
         CreateItemRequest request = new CreateItemRequest(
                 1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
@@ -241,9 +230,6 @@ class ItemServiceTest {
     void createItem_whenGiveItemsFullButCreatingSwap_isNotBlockedByGiveCount() {
         // given: 5 bài Cho tặng nhưng hạng Đồng cho 3 bài Trao đổi và hiện có 0
         imageLimits();
-        when(itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(
-                        10L, OfferType.SWAP, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED)))
-                .thenReturn(0L);
         CreateItemRequest request = new CreateItemRequest(
                 1L,
                 1L,
@@ -266,8 +252,7 @@ class ItemServiceTest {
 
         // then
         assertThat(response.id()).isEqualTo(100L);
-        verify(itemRepository, never())
-                .countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(anyLong(), eq(OfferType.GIVE), any());
+        verify(itemRepository, never()).countActivePostingItems(eq(10L), eq("GIVE"), any(), any());
     }
 
     @Test
@@ -277,10 +262,10 @@ class ItemServiceTest {
         when(postLimitProperties.canBypassPostLimit("user@shareloop.com")).thenReturn(false);
         when(reputationService.getRank(10L)).thenReturn(Rank.GOLD);
         when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_GOLD)).thenReturn(15);
-        List<ItemStatus> counted = List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED);
-        when(itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(10L, OfferType.GIVE, counted))
+        when(configService.getInt(ConfigKey.POST_FEE)).thenReturn(5);
+        when(itemRepository.countActivePostingItems(eq(10L), eq("GIVE"), eq(null), any(Instant.class)))
                 .thenReturn(2L);
-        when(itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(10L, OfferType.SWAP, counted))
+        when(itemRepository.countActivePostingItems(eq(10L), eq("SWAP"), eq(null), any(Instant.class)))
                 .thenReturn(9L);
 
         // when
@@ -290,6 +275,7 @@ class ItemServiceTest {
         assertThat(quota.give()).isEqualTo(new PostingQuotaResponse.Quota(2, 5));
         assertThat(quota.swap()).isEqualTo(new PostingQuotaResponse.Quota(9, 15));
         assertThat(quota.rank()).isEqualTo("GOLD");
+        assertThat(quota.nextPostFee()).isEqualTo(5);
     }
 
     @Test
@@ -299,6 +285,7 @@ class ItemServiceTest {
         when(postLimitProperties.canBypassPostLimit("user@shareloop.com")).thenReturn(false);
         when(reputationService.getRank(10L)).thenReturn(Rank.DIAMOND);
         when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_DIAMOND)).thenReturn(-1);
+        when(configService.getInt(ConfigKey.POST_FEE)).thenReturn(5);
 
         // when
         PostingQuotaResponse quota = itemService.getPostingQuota(10L);
@@ -342,7 +329,7 @@ class ItemServiceTest {
 
         // then
         assertThat(response.id()).isEqualTo(100L);
-        verify(itemRepository, never()).countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(anyLong(), any(), any());
+        verify(itemRepository, never()).countActivePostingItems(anyLong(), any(), any(), any());
         verify(postFeeService).holdPostFee(100L, 10L);
     }
 
@@ -351,8 +338,7 @@ class ItemServiceTest {
         // given
         when(userService.findEmailById(10L)).thenReturn("user@shareloop.com");
         when(postLimitProperties.canBypassPostLimit("user@shareloop.com")).thenReturn(false);
-        when(itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(
-                        10L, OfferType.GIVE, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED)))
+        when(itemRepository.countActivePostingItems(eq(10L), eq("GIVE"), eq(null), any(Instant.class)))
                 .thenReturn(5L);
         CreateItemRequest request = new CreateItemRequest(
                 1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
@@ -366,55 +352,24 @@ class ItemServiceTest {
     }
 
     @Test
-    void createItemUsesSilverConfiguredLimit() {
+    void nextPostFeeUsesSilverConfiguredRegularLimit() {
         when(reputationService.getRank(10L)).thenReturn(Rank.SILVER);
-        when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_SILVER)).thenReturn(7);
-        when(itemRepository.countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(
-                        10L, OfferType.SWAP, List.of(ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED)))
-                .thenReturn(7L);
-        CreateItemRequest request = new CreateItemRequest(
-                1L,
-                1L,
-                OfferType.SWAP,
-                "Sách Toán",
-                "Sách mới",
-                "Sách Văn",
-                ItemCondition.NEW,
-                null,
-                null,
-                threeImages());
+        when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_SILVER)).thenReturn(8);
+        when(itemRepository.countActivePostingItems(eq(10L), eq("SWAP"), eq(null), any(Instant.class)))
+                .thenReturn(8L);
+        when(configService.getInt(ConfigKey.POST_FEE_OVER_QUOTA)).thenReturn(10);
 
-        assertThatThrownBy(() -> itemService.createItem(10L, request))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("7");
-        verify(configService).getInt(ConfigKey.MAX_ACTIVE_ITEMS_SILVER);
+        assertThat(itemService.nextPostFee(10L, OfferType.SWAP, null)).isEqualTo(10);
     }
 
     @Test
-    void diamondRankSkipsItemCount() {
+    void diamondRankAlwaysUsesRegularPostFee() {
         when(reputationService.getRank(10L)).thenReturn(Rank.DIAMOND);
         when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_DIAMOND)).thenReturn(-1);
-        imageLimits();
-        CreateItemRequest request = new CreateItemRequest(
-                1L,
-                1L,
-                OfferType.SWAP,
-                "Sách Toán",
-                "Sách mới",
-                "Sách Văn",
-                ItemCondition.NEW,
-                null,
-                null,
-                threeImages());
-        when(itemRepository.saveAndFlush(any(Item.class))).thenAnswer(invocation -> {
-            Item item = invocation.getArgument(0);
-            ReflectionTestUtils.setField(item, "id", 100L);
-            return item;
-        });
+        when(configService.getInt(ConfigKey.POST_FEE)).thenReturn(5);
 
-        itemService.createItem(10L, request);
-
-        verify(itemRepository, never()).countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(anyLong(), any(), any());
+        assertThat(itemService.nextPostFee(10L, OfferType.SWAP, null)).isEqualTo(5);
+        verify(itemRepository, never()).countActivePostingItems(anyLong(), any(), any(), any());
     }
 
     @Test

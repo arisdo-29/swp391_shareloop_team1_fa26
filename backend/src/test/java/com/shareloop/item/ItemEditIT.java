@@ -86,9 +86,12 @@ class ItemEditIT extends IntegrationTest {
     }
 
     @Test
-    void updateItem_whenGiveChangedToSwap_throwsOfferTypeChangeNotAllowed() throws Exception {
-        // given: bài Cho tặng đã duyệt; bản sửa đổi sang Trao đổi (có desiredItem hợp lệ)
+    void updateItem_whenUnpaidGiveChangesToSwap_holdsPostFee() throws Exception {
+        // Bài Cho tặng đã duyệt nhưng chưa từng trả phí đăng Trao đổi.
         long ownerId = user("item-edit-owner8@shareloop.local", "0900000761");
+        jdbc.sql("UPDATE users SET credit_balance = 20 WHERE id = :id")
+                .param("id", ownerId)
+                .update();
         long itemId = approvedItem(ownerId);
         String swapBody = body("Tên mới", "Mô tả mới")
                 .replace("\"offerType\":\"GIVE\"", "\"offerType\":\"SWAP\",\"desiredItem\":\"Sách khác\"");
@@ -98,19 +101,23 @@ class ItemEditIT extends IntegrationTest {
                         .header("Authorization", "Bearer " + jwtService.issue(ownerId, false))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(swapBody))
-                // then: bị chặn trước khi giữ phí sửa, bài và ví giữ nguyên
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING_REVIEW"));
         assertThat(jdbc.sql("SELECT offer_type FROM items WHERE id = :id")
                         .param("id", itemId)
                         .query(String.class)
                         .single())
-                .isEqualTo("GIVE");
+                .isEqualTo("SWAP");
         assertThat(jdbc.sql("SELECT held_credit FROM users WHERE id = :id")
                         .param("id", ownerId)
                         .query(Integer.class)
                         .single())
-                .isZero();
+                .isEqualTo(5);
+        assertThat(jdbc.sql("SELECT pending_fee FROM items WHERE id = :id")
+                        .param("id", itemId)
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(5);
     }
 
     @Test
@@ -288,7 +295,7 @@ class ItemEditIT extends IntegrationTest {
         return jdbc.sql("INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, condition, "
                         + "status, approved_at, post_fee_paid, fee_state, free_edit_used) "
                         + "VALUES (:ownerId, :categoryId, :areaId, 'GIVE', 'Tên cũ', 'Mô tả cũ', 'GOOD', "
-                        + "'APPROVED', now(), true, 'CHARGED', true) RETURNING id")
+                        + "'APPROVED', now(), false, 'CHARGED', true) RETURNING id")
                 .param("ownerId", ownerId)
                 .param("categoryId", categoryId)
                 .param("areaId", areaId)

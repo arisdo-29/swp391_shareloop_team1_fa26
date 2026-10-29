@@ -5,13 +5,12 @@ lỗi theo định dạng thống nhất (xem `wallet.md`).
 
 Người sở hữu: BE1. Module giữ, trừ, nhả phí đăng bài và phí sửa bài (C01, C02, C14, C14b), đặt thời hạn hiển thị
 `expire_at` khi duyệt lần đầu, gia hạn bài (C16) và đẩy bài (C15). Mọi mức phí và số ngày đọc từ ConfigService
-(`post_fee`, `edit_fee`, `renew_fee`, `post_display_days`, `post_display_days_gold`, `boost_fee`, `boost_days`,
+(`post_fee`, `post_fee_over_quota`, `edit_fee`, `renew_fee`, `post_display_days`, `post_display_days_gold`, `boost_fee`, `boost_days`,
 `boost_max_days`), không viết cứng. Có một job nền chuyển bài
 quá hạn sang `EXPIRED` (mục "Job nền"). Đổi tiền chỉ qua `wallet.CreditService`.
 
-Phí đăng (`post_fee`) chỉ áp dụng cho bài Trao đổi (`SWAP`); bài Cho tặng (`GIVE`) miễn phí đăng, kể cả khi gửi lại
-bài bị từ chối. Phí sửa bài sau duyệt (`edit_fee`) áp dụng cho cả hai loại. Không cho sửa bài `GIVE` thành `SWAP`
-(`409 ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED`, xem `item.md`) để không né được phí đăng.
+Phí đăng (`post_fee` hoặc `post_fee_over_quota`) chỉ áp dụng cho bài Trao đổi (`SWAP`); bài Cho tặng (`GIVE`) miễn phí đăng, kể cả khi gửi lại
+bài bị từ chối. Bài Trao đổi vượt ngưỡng phí thường theo hạng vẫn đăng được với phí cao hơn. Khi đổi hình thức, bài đã trả phí đăng Trao đổi không được hoàn và không phải trả lại; bài Cho chưa trả phí chuyển sang Trao đổi giữ 5 hoặc 10 Credit theo ngưỡng hiện tại.
 
 ## GET /api/v1/listing-fees
 
@@ -41,10 +40,10 @@ ConfigService ở mỗi lần gọi, nên Admin đổi cấu hình (`PUT /api/v1
 
 | Trường                   | Kiểu   | Khoá cấu hình               | Ý nghĩa                                                          |
 |--------------------------|--------|-----------------------------|------------------------------------------------------------------|
-| `postFeeSwap`            | number | `post_fee`                  | Phí đăng bài SWAP (Credit), giữ khi gửi bài, trừ khi được duyệt  |
+| `postFeeSwap`            | number | `post_fee`                  | Phí thường của bài SWAP; phí bài kế tiếp theo tài khoản ở `GET /me/posting-quota` |
 | `postFeeGive`            | number | (không có)                  | Luôn `0`: bài GIVE đăng miễn phí, quy tắc cố định                |
 | `editFee`                | number | `edit_fee`                  | Phí mỗi lượt sửa sau khi đã dùng lượt sửa miễn phí               |
-| `renewFee`               | number | `renew_fee`                 | Phí gia hạn bài                                                  |
+| `renewFee`               | number | `renew_fee`                 | Phí gia hạn mọi bài, mặc định 5 Credit                            |
 | `renewExpiredWindowDays` | number | `renew_expired_window_days` | Số ngày sau khi hết hạn vẫn được gia hạn (API gia hạn bài `EXPIRED` chưa hỗ trợ, xem mục renew) |
 | `boostFee`               | number | `boost_fee`                 | Phí mỗi lần đẩy bài                                              |
 | `boostDays`              | number | `boost_days`                | Số ngày được đẩy thêm sau mỗi lần đẩy                            |
@@ -104,6 +103,7 @@ tiền, không đổi dữ liệu. Số `amount` trả về đúng bằng số `
 
 - Xác thực: **bắt buộc** Bearer Token. Id người dùng lấy từ token, không nhận từ client.
 - Tham số đường dẫn: `id` — id bài đăng.
+- Query `offerType` tùy chọn (`GIVE` hoặc `SWAP`): hình thức sau khi sửa. Bỏ qua thì báo giá giữ nguyên hình thức hiện tại. FE gửi tham số này khi người dùng đổi hình thức để popup hiện đúng 0/5/10 Credit.
 - Thành công: `200`, một `EditQuote`.
 - Lỗi: `401 UNAUTHORIZED`; `403 LISTINGFEE_NOT_OWNER` khi không phải chủ bài; `404 LISTINGFEE_ITEM_NOT_FOUND` khi không
   có bài hoặc bài đã xoá.
@@ -129,10 +129,12 @@ Swagger hiển thị mô tả từng giá trị của `reason` (ghi trong `@Sche
 | Giá trị                    | Ý nghĩa                                                                                     |
 |----------------------------|---------------------------------------------------------------------------------------------|
 | `NOT_YET_APPROVED`         | Bài chưa từng được duyệt và phí đăng đang được giữ (bài chờ duyệt lần đầu): sửa miễn phí.   |
-| `REPOST_FEE`               | Bài chưa từng được duyệt và phí đăng đã được nhả (bị từ chối): gửi lại phải giữ lại `post_fee`. |
+| `REPOST_FEE`               | Bài chưa từng được duyệt và phí đăng đã được nhả: gửi lại tính phí đăng theo hình thức và số bài đang hoạt động (Trao đổi 5 hoặc 10; Cho 0). |
 | `PENDING_REVIEW_OVERWRITE` | Bài đã duyệt và đang có một bản sửa chờ duyệt: sửa đè, không thêm phí, không thêm lượt.    |
 | `FIRST_FREE_EDIT`          | Bài đã duyệt nhưng chưa dùng lượt sửa miễn phí: miễn phí một lần.                           |
 | `PAID_EDIT`                | Đã dùng lượt sửa miễn phí sau duyệt: tính phí sửa (`edit_fee`).                             |
+| `OFFER_TYPE_CHANGE_FREE`   | Đổi sang Cho hoặc đổi lại Trao đổi sau khi bài đã trả phí đăng: không giữ thêm phí.          |
+| `OFFER_TYPE_CHANGE_POST_FEE` | Đổi bài chưa trả phí đăng sang Trao đổi: giữ 5 hoặc 10 Credit theo ngưỡng hiện tại.     |
 
 ### Luật báo giá (xét từ trên xuống, gặp dòng đúng thì dừng)
 
@@ -142,10 +144,12 @@ miễn phí.
 | `reason`                   | Điều kiện                                                       | `free` | `amount`   |
 |----------------------------|-----------------------------------------------------------------|--------|------------|
 | `NOT_YET_APPROVED`         | Chưa từng duyệt, phí đăng đang giữ (bài chờ duyệt lần đầu)      | true   | 0          |
-| `REPOST_FEE`               | Chưa từng duyệt, phí đăng đã nhả (bị từ chối): giữ lại phí đăng | false  | `post_fee` (bài `SWAP`); bài `GIVE`: `free = true`, 0 |
+| `REPOST_FEE`               | Chưa từng duyệt, phí đăng đã nhả (bị từ chối): giữ lại phí đăng | Theo mức phí | `post_fee` hoặc `post_fee_over_quota` (bài `SWAP`); bài `GIVE`: `free = true`, 0 |
 | `PENDING_REVIEW_OVERWRITE` | Đã duyệt, đang có bản sửa chờ duyệt: sửa đè (UC-14 2a)          | true   | 0          |
 | `FIRST_FREE_EDIT`          | Đã duyệt, chưa dùng lượt sửa miễn phí (C14)                     | true   | 0          |
 | `PAID_EDIT`                | Đã duyệt, đã dùng lượt miễn phí (C14b)                          | false  | `edit_fee` |
+| `OFFER_TYPE_CHANGE_FREE`   | Đổi sang Cho, hoặc đổi lại Trao đổi khi bài đã trả phí đăng      | true   | 0          |
+| `OFFER_TYPE_CHANGE_POST_FEE` | Bài chưa trả phí đăng đổi sang Trao đổi (kể cả nộp lại sau từ chối) | Theo mức phí | `post_fee` hoặc `post_fee_over_quota` |
 
 Khi Admin cấu hình `post_fee` hoặc `edit_fee` bằng 0 thì `REPOST_FEE` / `PAID_EDIT` trả `free = true`, `amount = 0`.
 
@@ -157,8 +161,7 @@ Gia hạn bài của chính mình (F08 bước 1, FR-28, BR-D03, BR-P12). Trừ 
 - Xác thực: **bắt buộc** Bearer Token. Id người dùng lấy từ token, không nhận từ client.
 - Tham số đường dẫn: `id` là id bài đăng. Không có body.
 - Điều kiện: người gọi là chủ bài; bài đang `APPROVED`. Gia hạn lúc nào cũng được, không cần chờ sắp hết hạn.
-- Phí: `renew_fee` (mặc định 5 Credit), trừ từ số dư khả dụng (`credit_balance - held_credit`) và ghi `credit_ledger`
-  loại `RENEW_FEE`. Phí cấu hình bằng 0 thì không đụng ví, không ghi `credit_ledger`.
+- Phí: mọi bài `GIVE` và `SWAP` đều trừ `renew_fee` (mặc định 5 Credit) từ số dư khả dụng (`credit_balance - held_credit`) và ghi `credit_ledger` loại `RENEW_FEE`. Phí cấu hình bằng 0 thì không đụng ví.
 - Hạn mới: `expire_at = max(now, expire_at cũ) + post_display_days` ngày (mặc định 30), áp dụng như nhau cho mọi hạng.
   Bài còn hạn thì cộng nối tiếp; bài đã quá hạn nhưng job chưa chuyển `EXPIRED`, hoặc chưa có `expire_at`, thì tính từ
   lúc gia hạn.
@@ -276,9 +279,8 @@ hạn mới với `POST /items/{id}/renew`.
 | `allowed`     | boolean        | `true` khi bài đang `APPROVED`                                                   |
 | `reason`      | string \| null | Lý do không gia hạn được, tiếng Việt; `null` khi `allowed = true`                |
 
-Ghi chú: hiện `fee` là `renew_fee` cho mọi bài, kể cả bài `GIVE`, vì `POST /items/{id}/renew` đang thu như vậy.
-Khi luật miễn phí gia hạn bài `GIVE` được làm (N02), cả báo giá và gia hạn thật cùng trả `0` vì dùng chung một hàm
-tính phí; FE hiện "Miễn phí" mỗi khi `fee = 0`.
+`fee` là `renew_fee` cho mọi bài, kể cả bài `GIVE`. Báo giá và gia hạn thật dùng chung một hàm tính phí; FE chỉ hiện
+"Miễn phí" khi Admin cấu hình `renew_fee = 0`.
 
 ## Mã lỗi
 
@@ -304,7 +306,7 @@ Mọi hàm chạy trong transaction của người gọi (REQUIRED). Khoá luôn
 | Hàm                               | Người gọi                         | Việc làm                                                                 |
 |-----------------------------------|-----------------------------------|--------------------------------------------------------------------------|
 | `quoteEdit(itemId, userId)`       | item (PUT), endpoint ở trên       | Trả `EditQuote`; chỉ đọc, không khoá                                     |
-| `holdPostFee(itemId, userId)`     | item (tạo bài)                    | Giữ `post_fee` (bài `SWAP`) hoặc 0 (bài `GIVE`), `fee_state = HELD`, loại POST |
+| `holdPostFee(itemId, userId)`     | item (tạo bài)                    | Giữ `post_fee` hoặc `post_fee_over_quota` (bài `SWAP`) hoặc 0 (bài `GIVE`), `fee_state = HELD`, loại POST |
 | `holdEditFee(itemId, userId)`     | item (sửa bài)                    | Giữ đúng `amount` của `quoteEdit`; đang HELD thì không làm gì            |
 | `chargeHeldFee(itemId)`           | review (duyệt)                    | Trừ khoản đang giữ, `fee_state = CHARGED`; loại POST thì đặt `expire_at` |
 | `releaseHeldFee(itemId, reason)`  | review (từ chối), item (xoá bài)  | Nhả khoản đang giữ, `fee_state = RELEASED`                               |

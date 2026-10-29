@@ -79,6 +79,15 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
     long countByDonorIdAndOfferTypeAndStatusInAndIsActiveTrue(
             Long donorId, OfferType offerType, List<ItemStatus> statuses);
 
+    @Query(
+            value = "SELECT count(*) FROM items i WHERE i.donor_id = :donorId AND i.offer_type = :offerType "
+                    + "AND i.is_active AND NOT i.is_deleted "
+                    + "AND (CAST(:excludedItemId AS bigint) IS NULL OR i.id <> :excludedItemId) "
+                    + "AND (i.status = 'PENDING_REVIEW' OR (i.status = 'APPROVED' "
+                    + "AND (i.expire_at IS NULL OR i.expire_at > :now)))",
+            nativeQuery = true)
+    long countActivePostingItems(Long donorId, String offerType, Long excludedItemId, Instant now);
+
     @Query("select i from Item i where i.status = :status and i.isActive = true "
             + "and (:categoryId is null or i.categoryId = :categoryId) "
             + "and (:areaId is null or i.areaId = :areaId) "
