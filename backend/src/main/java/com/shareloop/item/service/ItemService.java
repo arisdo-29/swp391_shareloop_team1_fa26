@@ -18,6 +18,7 @@ import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.entity.OperatingStatus;
 import com.shareloop.item.event.ItemOfferTypeChangedEvent;
+import com.shareloop.item.event.ItemRemovedEvent;
 import com.shareloop.item.mapper.ItemMapper;
 import com.shareloop.item.repository.ItemRepository;
 import com.shareloop.listingfee.dto.DisplayWindow;
@@ -545,6 +546,7 @@ public class ItemService {
             postFeeService.releaseHeldFee(itemId, "DELETED");
         }
         item.markDeleted();
+        eventPublisher.publishEvent(new ItemRemovedEvent(itemId, item.getDonorId()));
     }
 
     /**

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
@@ -1332,5 +1333,32 @@ class RequestServiceTest {
         assertThat(resp.receiverTrustStars()).isEqualTo(4);
         assertThat(resp.receiverRank()).isEqualTo("GOLD");
         assertThat(resp.receiverAsDescribedRate()).isEqualTo(100.0);
+    }
+
+    @Test
+    @DisplayName("cancelPendingRequestsForItemRemoved: Huỷ các yêu cầu PENDING và gửi thông báo khi bài bị gỡ")
+    void cancelPendingRequestsForItemRemoved_cancelsPendingRequestsAndNotifies() {
+        // given
+        Request req1 = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(req1, "id", 101L);
+        Request req2 = new Request(1L, 11L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(req2, "id", 102L);
+
+        when(requestRepository.findByItemIdAndStatus(1L, RequestStatus.PENDING)).thenReturn(List.of(req1, req2));
+
+        // when
+        int count = requestService.cancelPendingRequestsForItemRemoved(1L);
+
+        // then
+        assertThat(count).isEqualTo(2);
+        assertThat(req1.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        assertThat(req1.getCancelReason()).isEqualTo("[Hệ thống] Bài đã bị gỡ");
+        assertThat(req2.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        assertThat(req2.getCancelReason()).isEqualTo("[Hệ thống] Bài đã bị gỡ");
+
+        verify(notificationService)
+                .notify(eq(10L), eq("REQUEST_CANCELLED"), anyString(), anyString(), eq("/requests/101"));
+        verify(notificationService)
+                .notify(eq(11L), eq("REQUEST_CANCELLED"), anyString(), anyString(), eq("/requests/102"));
     }
 }

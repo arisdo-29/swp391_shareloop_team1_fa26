@@ -637,6 +637,23 @@ public class RequestService {
         return pendingRequests.size();
     }
 
+    /** Huỷ các yêu cầu PENDING khi bài đăng bị gỡ (D-13, BD-11). */
+    @Transactional
+    public int cancelPendingRequestsForItemRemoved(long itemId) {
+        List<Request> pendingRequests = requestRepository.findByItemIdAndStatus(itemId, RequestStatus.PENDING);
+        for (Request request : pendingRequests) {
+            request.cancel(Request.CANCEL_BY_SYSTEM + "Bài đã bị gỡ");
+            requestRepository.save(request);
+            notificationService.notify(
+                    request.getReceiverId(),
+                    "REQUEST_CANCELLED",
+                    "Yêu cầu đã bị huỷ",
+                    "Bài đăng đã bị gỡ nên yêu cầu đang chờ của bạn đã bị huỷ.",
+                    "/requests/" + request.getId());
+        }
+        return pendingRequests.size();
+    }
+
     private void cancelBecauseUserLocked(Request request, long lockedUserId) {
         boolean wasPending = request.getStatus() == RequestStatus.PENDING;
         request.cancel(Request.CANCEL_BY_SYSTEM + LOCKED_ACCOUNT_REASON);
