@@ -10,6 +10,7 @@ import com.shareloop.auth.dto.RegisterRequest;
 import com.shareloop.auth.dto.ResendOtpRequest;
 import com.shareloop.auth.dto.ResetPasswordRequest;
 import com.shareloop.auth.dto.VerifyOtpRequest;
+import com.shareloop.auth.event.PasswordChangedEvent;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
@@ -25,6 +26,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +49,7 @@ public class AuthService {
     private final ConfigService configService;
     private final DisposableEmailDomains disposableEmailDomains;
     private final Clock clock;
+    private final ApplicationEventPublisher eventPublisher;
     private final long jwtTtlMinutes;
 
     public AuthService(
@@ -58,6 +61,7 @@ public class AuthService {
             ConfigService configService,
             DisposableEmailDomains disposableEmailDomains,
             Clock clock,
+            ApplicationEventPublisher eventPublisher,
             @Value("${app.jwt.ttl-minutes}") long jwtTtlMinutes) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -67,6 +71,7 @@ public class AuthService {
         this.configService = configService;
         this.disposableEmailDomains = disposableEmailDomains;
         this.clock = clock;
+        this.eventPublisher = eventPublisher;
         this.jwtTtlMinutes = jwtTtlMinutes;
     }
 
@@ -176,6 +181,8 @@ public class AuthService {
             throw new BusinessException(AuthErrorCode.AUTH_NEW_PASSWORD_SAME_AS_CURRENT, null, "newPassword", null);
         }
         user.changePasswordHash(passwordEncoder.encode(request.newPassword()));
+        // Listener chỉ gửi mail báo sau khi transaction này commit, nên đổi mật khẩu lỗi thì không có mail.
+        eventPublisher.publishEvent(new PasswordChangedEvent(user.getEmail(), clock.instant()));
     }
 
     /**

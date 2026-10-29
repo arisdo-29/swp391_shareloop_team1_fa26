@@ -14,6 +14,7 @@ import com.shareloop.auth.dto.ForgotPasswordRequest;
 import com.shareloop.auth.dto.LoginRequest;
 import com.shareloop.auth.dto.OtpSentResponse;
 import com.shareloop.auth.dto.ResetPasswordRequest;
+import com.shareloop.auth.event.PasswordChangedEvent;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
@@ -28,8 +29,10 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -61,6 +64,9 @@ class AuthServiceTest {
     @Mock
     ConfigService configService;
 
+    @Mock
+    ApplicationEventPublisher eventPublisher;
+
     AuthService service;
 
     @BeforeEach
@@ -74,6 +80,7 @@ class AuthServiceTest {
                 configService,
                 new DisposableEmailDomains(),
                 Clock.systemUTC(),
+                eventPublisher,
                 TTL_MINUTES);
     }
 
@@ -225,6 +232,38 @@ class AuthServiceTest {
 
         // then
         assertThat(user.getPasswordHash()).isEqualTo("hash-of-new-password");
+    }
+
+    @Test
+    void changePassword_whenValid_publishesPasswordChangedEventForUserEmail() {
+        // given
+        givenUserById();
+        when(passwordEncoder.matches(PASSWORD, HASH)).thenReturn(true);
+        when(passwordEncoder.matches(NEW_PASSWORD, HASH)).thenReturn(false);
+        when(passwordEncoder.encode(NEW_PASSWORD)).thenReturn("hash-of-new-password");
+
+        // when
+        service.changePassword(7L, new ChangePasswordRequest(PASSWORD, NEW_PASSWORD));
+
+        // then: sự kiện mang email của chủ tài khoản và thời điểm đổi, không mang mật khẩu
+        ArgumentCaptor<PasswordChangedEvent> captor = ArgumentCaptor.forClass(PasswordChangedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().email()).isEqualTo(EMAIL);
+        assertThat(captor.getValue().changedAt()).isNotNull();
+    }
+
+    @Test
+    void changePassword_whenCurrentPasswordWrong_publishesNoEvent() {
+        // given
+        givenUserById();
+        when(passwordEncoder.matches("Sai@12345", HASH)).thenReturn(false);
+        ChangePasswordRequest request = new ChangePasswordRequest("Sai@12345", NEW_PASSWORD);
+
+        // when
+        assertThatThrownBy(() -> service.changePassword(7L, request)).isInstanceOf(BusinessException.class);
+
+        // then
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
