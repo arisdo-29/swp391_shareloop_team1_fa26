@@ -252,7 +252,12 @@ public class Request extends BaseEntity {
             this.asDescribed = asDescribed;
         }
 
-        if (this.donorHandoverAt != null && this.receiverHandoverAt != null) {
+        if (Boolean.FALSE.equals(this.asDescribed)) {
+            if (this.status == RequestStatus.LOGISTICS_CONFIRMED) {
+                transitionTo(RequestStatus.AWAITING_HANDOVER);
+            }
+            transitionTo(RequestStatus.DISPUTED);
+        } else if (this.donorHandoverAt != null && this.receiverHandoverAt != null) {
             if (this.status == RequestStatus.LOGISTICS_CONFIRMED) {
                 transitionTo(RequestStatus.AWAITING_HANDOVER);
             }

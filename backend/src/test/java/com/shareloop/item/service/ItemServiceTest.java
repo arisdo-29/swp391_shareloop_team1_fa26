@@ -25,6 +25,7 @@ import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
+import com.shareloop.item.event.ItemRemovedEvent;
 import com.shareloop.item.repository.ItemRepository;
 import com.shareloop.listingfee.dto.DisplayWindow;
 import com.shareloop.listingfee.service.ListingFeeQueryService;
@@ -924,6 +925,7 @@ class ItemServiceTest {
         itemService.remove(1L, 10L);
         assertThat(item.isDeleted()).isTrue();
         verify(postFeeService).releaseHeldFee(1L, "DELETED");
+        verify(eventPublisher).publishEvent(new ItemRemovedEvent(1L, 10L));
 
         Item reserved =
                 new Item(10L, 1L, 1L, OfferType.GIVE, "Pen", "Description", null, ItemCondition.NEW, null, null);
