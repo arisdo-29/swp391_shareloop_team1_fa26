@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.common.exception.ErrorCode;
+import com.shareloop.listingfee.dto.RenewQuote;
 import com.shareloop.listingfee.dto.RenewResponse;
 import com.shareloop.listingfee.service.RenewService;
 import com.shareloop.support.IntegrationTest;
@@ -86,6 +87,52 @@ class RenewServiceIT extends IntegrationTest {
                 jdbc.queryForMap("SELECT amount, type FROM credit_ledger WHERE item_id = ?", itemId);
         assertThat(ledgerRow.get("amount")).isEqualTo(-RENEW_FEE);
         assertThat(ledgerRow.get("type")).isEqualTo("RENEW_FEE");
+    }
+
+    @Test
+    void quoteRenew_whenApprovedOwner_matchesRealRenewAndChangesNothing() {
+        // given: bài còn hạn 5 ngày
+        Instant oldExpireAt = Instant.now().plus(5, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        long ownerId = insertUser(START_BALANCE);
+        long itemId = insertItem(ownerId, "APPROVED", oldExpireAt);
+
+        // when
+        RenewQuote quote = renewService.quoteRenew(itemId, ownerId);
+
+        // then: cùng phí và hạn mới với renew thật, nhưng chưa trừ tiền, chưa đổi expire_at
+        assertThat(quote)
+                .isEqualTo(new RenewQuote(RENEW_FEE, oldExpireAt.plus(RENEW_DAYS, ChronoUnit.DAYS), true, null));
+        assertThat(expireAtOf(itemId)).isEqualTo(oldExpireAt);
+        assertThat(balanceOf(ownerId)).isEqualTo(START_BALANCE);
+        assertThat(ledgerCountOfItem(itemId)).isZero();
+    }
+
+    @Test
+    void quoteRenew_whenItemPendingReview_returnsNotAllowedWithReason() {
+        // given
+        long ownerId = insertUser(START_BALANCE);
+        long itemId = insertItem(ownerId, "PENDING_REVIEW", null);
+
+        // when
+        RenewQuote quote = renewService.quoteRenew(itemId, ownerId);
+
+        // then
+        assertThat(quote.allowed()).isFalse();
+        assertThat(quote.reason()).isEqualTo(ListingFeeErrorCode.LISTINGFEE_RENEW_NOT_ALLOWED.defaultMessage());
+    }
+
+    @Test
+    void quoteRenew_whenCallerIsNotOwner_throwsNotOwner() {
+        // given
+        long ownerId = insertUser(START_BALANCE);
+        long strangerId = insertUser(START_BALANCE);
+        long itemId = insertItem(ownerId, "APPROVED", Instant.now().plus(5, ChronoUnit.DAYS));
+
+        // when
+        Throwable thrown = catchThrowable(() -> renewService.quoteRenew(itemId, strangerId));
+
+        // then
+        assertBusinessError(thrown, ListingFeeErrorCode.LISTINGFEE_NOT_OWNER);
     }
 
     @Test

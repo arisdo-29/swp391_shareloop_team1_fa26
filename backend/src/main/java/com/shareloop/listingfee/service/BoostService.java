@@ -4,6 +4,7 @@ import com.shareloop.catalog.service.CategoryService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.listingfee.ListingFeeErrorCode;
+import com.shareloop.listingfee.dto.BoostQuote;
 import com.shareloop.listingfee.dto.BoostResponse;
 import com.shareloop.listingfee.entity.ItemFee;
 import com.shareloop.listingfee.repository.ItemFeeRepository;
@@ -16,6 +17,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -86,6 +88,42 @@ public class BoostService {
         itemFee.extendBoostedUntil(newBoostedUntil, now);
         long creditBalance = creditService.getWallet(userId).creditBalance();
         return new BoostResponse(itemId, newBoostedUntil, creditBalance);
+    }
+
+    /**
+     * Báo trước một lần đẩy bài (GET /items/{id}/boost-quote): phí, mốc hết đẩy mới và có được đẩy không.
+     *
+     * <p>Dùng chung với {@link #boost} cùng hàm tính mốc mới, cùng các hàm kiểm điều kiện và cùng cách đọc phí, nên
+     * số báo giá khớp số thật. Chỉ đọc: không khoá, không trừ tiền. Không được đẩy thì trả allowed = false kèm lý
+     * do (thông điệp của mã lỗi mà {@link #boost} sẽ ném), không ném lỗi nghiệp vụ.
+     *
+     * @param itemId bài định đẩy
+     * @param userId người gọi, phải là chủ bài
+     * @return phí, mốc hết đẩy mới, allowed và reason
+     * @throws BusinessException LISTINGFEE_ITEM_NOT_FOUND, LISTINGFEE_NOT_OWNER
+     */
+    // NOT_SUPPORTED: không chạy trong transaction. Khi CategoryService ném lỗi (danh mục ẩn) mà ta bắt lại để báo
+    // allowed = false, nếu đang chung một transaction thì nó bị đánh dấu rollback-only và commit sẽ báo lỗi.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public BoostQuote quoteBoost(long itemId, long userId) {
+        ItemFeeSnapshot snapshot = readSnapshot(itemId);
+        requireOwner(snapshot, userId);
+        ItemFee itemFee = itemFeeRepository
+                .findById(itemId)
+                .orElseThrow(() -> new BusinessException(ListingFeeErrorCode.LISTINGFEE_ITEM_NOT_FOUND));
+
+        Instant now = clock.instant();
+        Instant newBoostedUntil = calculateNewBoostedUntil(itemFee.getBoostedUntil(), now);
+        int fee = configService.getInt(ConfigKey.BOOST_FEE);
+        try {
+            requireVisibleApproved(snapshot);
+            requireCategoryBoostable(snapshot.getCategoryId());
+            requireWithinMaxDays(newBoostedUntil, now);
+            requireWithinExpireAt(newBoostedUntil, itemFee.getExpireAt());
+        } catch (BusinessException notAllowed) {
+            return new BoostQuote(fee, newBoostedUntil, false, notAllowed.getMessage());
+        }
+        return new BoostQuote(fee, newBoostedUntil, true, null);
     }
 
     // Đang được đẩy thì cộng nối tiếp từ mốc cũ (mua thêm gói, SRS 4.6); chưa đẩy hoặc đã hết đẩy thì tính từ now.

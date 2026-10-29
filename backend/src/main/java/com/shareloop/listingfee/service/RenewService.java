@@ -2,7 +2,9 @@ package com.shareloop.listingfee.service;
 
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.entity.ItemStatus;
+import com.shareloop.item.entity.OfferType;
 import com.shareloop.listingfee.ListingFeeErrorCode;
+import com.shareloop.listingfee.dto.RenewQuote;
 import com.shareloop.listingfee.dto.RenewResponse;
 import com.shareloop.listingfee.entity.ItemFee;
 import com.shareloop.listingfee.repository.ItemFeeRepository;
@@ -75,7 +77,7 @@ public class RenewService {
         // Đọc lại status sau khi khoá: trong lúc chờ khoá, bài có thể đã bị đổi trạng thái.
         requireApproved(readSnapshot(itemId));
 
-        int fee = configService.getInt(ConfigKey.RENEW_FEE);
+        int fee = calculateRenewFee(snapshot.getOfferType());
         // CreditService.spend không nhận số 0 (WALLET_INVALID_AMOUNT); phí 0 nghĩa là không có gì để trừ.
         if (fee > 0) {
             creditService.spend(userId, fee, CreditTxType.RENEW_FEE, itemId);
@@ -84,6 +86,41 @@ public class RenewService {
         Instant newExpireAt = calculateNewExpireAt(itemFee.getExpireAt());
         itemFee.extendExpireAt(newExpireAt);
         return new RenewResponse(itemId, fee, newExpireAt);
+    }
+
+    /**
+     * Báo trước một lần gia hạn (GET /items/{id}/renew-quote): phí, hạn mới và có được gia hạn không.
+     *
+     * <p>Dùng chung với {@link #renew} hàm tính phí, hàm tính hạn mới và hàm kiểm điều kiện, nên số báo giá khớp số
+     * thật. Chỉ đọc: không khoá, không trừ tiền. Không được gia hạn thì trả allowed = false kèm lý do, không ném lỗi
+     * nghiệp vụ.
+     *
+     * @param itemId bài định gia hạn
+     * @param userId người gọi, phải là chủ bài
+     * @return phí, hạn mới, allowed và reason
+     * @throws BusinessException LISTINGFEE_ITEM_NOT_FOUND, LISTINGFEE_NOT_OWNER
+     */
+    @Transactional(readOnly = true)
+    public RenewQuote quoteRenew(long itemId, long userId) {
+        ItemFeeSnapshot snapshot = readSnapshot(itemId);
+        requireOwner(snapshot, userId);
+        ItemFee itemFee = itemFeeRepository
+                .findById(itemId)
+                .orElseThrow(() -> new BusinessException(ListingFeeErrorCode.LISTINGFEE_ITEM_NOT_FOUND));
+
+        int fee = calculateRenewFee(snapshot.getOfferType());
+        Instant newExpireAt = calculateNewExpireAt(itemFee.getExpireAt());
+        if (snapshot.getStatus() != ItemStatus.APPROVED) {
+            String reason = ListingFeeErrorCode.LISTINGFEE_RENEW_NOT_ALLOWED.defaultMessage();
+            return new RenewQuote(fee, newExpireAt, false, reason);
+        }
+        return new RenewQuote(fee, newExpireAt, true, null);
+    }
+
+    // Một chỗ duy nhất quyết định phí gia hạn, cả báo giá lẫn gia hạn thật đều gọi. Hiện mọi bài đều thu renew_fee,
+    // kể cả bài GIVE; luật "gia hạn bài Cho miễn phí" thuộc N02, khi làm chỉ cần sửa ở hàm này.
+    private int calculateRenewFee(OfferType offerType) {
+        return configService.getInt(ConfigKey.RENEW_FEE);
     }
 
     // SRS F08: expire_at = max(now, expire_at) + số ngày. Còn hạn thì cộng nối tiếp để không mất ngày đã trả; đã quá
