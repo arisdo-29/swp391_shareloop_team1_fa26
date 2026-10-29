@@ -22,6 +22,7 @@ export interface ItemListParams {
   page?: number;
   size?: number;
   boosted?: boolean;
+  sort?: 'newest' | 'expiring';
 }
 
 export interface PageResponse<T> {
@@ -131,6 +132,7 @@ export function itemListUrl(params: ItemListParams = {}): string {
   if (params.condition !== undefined) query.set('condition', params.condition);
   if (params.offerType !== undefined) query.set('offerType', params.offerType);
   if (params.boosted !== undefined) query.set('boosted', String(params.boosted));
+  if (params.sort !== undefined) query.set('sort', params.sort);
   if (params.page !== undefined) query.set('page', String(params.page));
   if (params.size !== undefined) query.set('size', String(params.size));
   return query.size ? `${itemApiEndpoints.list}?${query}` : itemApiEndpoints.list;

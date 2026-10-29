@@ -1003,10 +1003,28 @@ class ItemServiceTest {
                         eq(null), eq(null), eq(null), eq(null), eq(""), eq(2), any(Instant.class)))
                 .thenReturn(3L);
         when(itemRepository.findPublicBrowseItems(
-                        eq(null), eq(null), eq(null), eq(null), eq(""), eq(1), any(Instant.class), eq(4), eq(0L)))
+                        eq(null),
+                        eq(null),
+                        eq(null),
+                        eq(null),
+                        eq(""),
+                        eq(1),
+                        any(Instant.class),
+                        eq("newest"),
+                        eq(4),
+                        eq(0L)))
                 .thenReturn(List.of(items.get(3), items.get(4), items.get(5), items.get(6)));
         when(itemRepository.findPublicBrowseItems(
-                        eq(null), eq(null), eq(null), eq(null), eq(""), eq(2), any(Instant.class), eq(4), eq(0L)))
+                        eq(null),
+                        eq(null),
+                        eq(null),
+                        eq(null),
+                        eq(""),
+                        eq(2),
+                        any(Instant.class),
+                        eq("newest"),
+                        eq(4),
+                        eq(0L)))
                 .thenReturn(List.of(items.get(0), items.get(1), items.get(2)));
         when(listingFeeQueryService.findDisplayWindows(any())).thenReturn(Map.of());
 

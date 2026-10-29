@@ -135,7 +135,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     expect(await screen.findByText(book.title)).toBeTruthy();
   });
 
-  it('đổi cách sắp xếp mà không gọi lại API items', async () => {
+  it('đổi cách sắp xếp thì gửi sort lên API và lưu vào URL', async () => {
     const user = userEvent.setup();
     renderBrowse();
 
@@ -144,7 +144,9 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'expiring');
 
-    expect(itemApi.list).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(itemApi.list).toHaveBeenCalledTimes(2));
+    expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'expiring', page: 0, size: 24 }));
+    expect(screen.getByTestId('location').textContent).toBe('/browse?sort=expiring');
     expect(screen.getByText(book.description)).toBeTruthy();
   });
 
@@ -244,23 +246,30 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     expect(screen.queryByText('Được đẩy')).toBeNull();
   });
 
-  it('sắp xếp danh sách hiện tại mà không thay dữ liệu hoặc gọi API mới', async () => {
-    vi.mocked(itemApi.list).mockResolvedValue({
-      items: [expiringBook, book],
+  it('hiển thị đúng thứ tự toàn cục do API trả về và F5 giữ chế độ sắp xếp', async () => {
+    vi.mocked(itemApi.list).mockImplementation(async ({ sort } = {}) => ({
+      items: sort === 'expiring' ? [expiringBook, book] : [book, expiringBook],
       page: 0,
       size: 24,
       totalElements: 2,
-    });
+    }));
     const user = userEvent.setup();
-    const { container } = renderBrowse();
+    const view = renderBrowse();
+    const { container } = view;
 
     expect(await screen.findByText(expiringBook.title)).toBeTruthy();
     const titles = () => Array.from(container.querySelectorAll('[data-browse-results] > a h3')).map((node) => node.textContent);
     expect(titles()).toEqual([book.title, expiringBook.title]);
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'expiring');
-    expect(titles()).toEqual([expiringBook.title, book.title]);
-    expect(itemApi.list).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(titles()).toEqual([expiringBook.title, book.title]));
+    expect(screen.getByTestId('location').textContent).toBe('/browse?sort=expiring');
+
+    view.unmount();
+    renderBrowse(['/browse?sort=expiring']);
+    expect((screen.getByRole('combobox', { name: 'Sắp xếp' }) as HTMLSelectElement).value).toBe('expiring');
+    await waitFor(() => expect(itemApi.list).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'expiring' })));
   });
 
   it('nút áp dụng giữ bộ lọc tức thời và đóng bảng lọc trên mobile', async () => {

@@ -40,7 +40,8 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
                     + "'%' || replace(replace(replace(f_unaccent(lower(:q)), '!', '!!'), '%', '!%'), '_', '!_') || '%' ESCAPE '!' "
                     + "AND (:mode = 0 OR (:mode = 1 AND i.boosted_until > :now) "
                     + "OR (:mode = 2 AND (i.boosted_until IS NULL OR i.boosted_until <= :now))) "
-                    + "ORDER BY CASE WHEN :mode = 1 THEN i.last_boosted_at END DESC NULLS LAST, "
+                    + "ORDER BY CASE WHEN :sort = 'expiring' THEN i.expire_at END ASC NULLS LAST, "
+                    + "CASE WHEN :sort = 'newest' AND :mode = 1 THEN i.last_boosted_at END DESC NULLS LAST, "
                     + "i.created_at DESC, i.id DESC "
                     + "LIMIT :limit OFFSET :offset",
             nativeQuery = true)
@@ -52,6 +53,7 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             String q,
             int mode,
             Instant now,
+            String sort,
             int limit,
             long offset);
 
