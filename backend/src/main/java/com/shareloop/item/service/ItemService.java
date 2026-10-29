@@ -17,6 +17,7 @@ import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.entity.OperatingStatus;
+import com.shareloop.item.event.ItemOfferTypeChangedEvent;
 import com.shareloop.item.mapper.ItemMapper;
 import com.shareloop.item.repository.ItemRepository;
 import com.shareloop.listingfee.dto.DisplayWindow;
@@ -253,6 +254,7 @@ public class ItemService {
         }
 
         Long previousCategoryId = item.getCategoryId();
+        boolean offerTypeChanged = item.getOfferType() != request.offerType();
         item.submitEdit(
                 request.categoryId(),
                 request.areaId(),
@@ -277,6 +279,9 @@ public class ItemService {
                 .update();
         if (moderation.status() == ModerationStatus.REVIEW) {
             saveReviewFlag(itemId, moderation);
+        }
+        if (offerTypeChanged) {
+            eventPublisher.publishEvent(new ItemOfferTypeChangedEvent(itemId));
         }
         eventPublisher.publishEvent(ItemScreeningRequestedEvent.from(item));
         return withHiddenState(toResponse(item, findDisplayWindow(itemId)), item);

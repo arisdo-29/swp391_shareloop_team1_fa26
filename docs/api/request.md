@@ -30,6 +30,8 @@ Mọi đổi trạng thái đi qua `RequestStatus.canTransition`; cạnh không 
 
 `COMPLETED`, `REJECTED`, `CANCELLED` là trạng thái cuối. Không có cạnh `LOGISTICS_CONFIRMED -> DISPUTED`.
 
+Khi chủ bài đổi hình thức `GIVE` ↔ `SWAP` bằng `PUT /api/v1/items/{id}`, mọi Request `PENDING` của bài chuyển sang `CANCELLED` và người gửi nhận thông báo `REQUEST_CANCELLED`. Việc huỷ nằm trong cùng transaction sửa bài; nếu sửa bài hoặc giữ phí thất bại, Request giữ nguyên.
+
 ---
 
 ## 1. POST /api/v1/items/{itemId}/requests

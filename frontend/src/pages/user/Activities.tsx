@@ -1131,6 +1131,9 @@ function EditItemForm({
                 ? `Chuyển sang Trao đổi sẽ giữ ${pendingOfferQuote.amount} Credit khi gửi duyệt. Phí chỉ trừ khi bản sửa được duyệt; bị từ chối sẽ nhả lại.`
                 : 'Chuyển lại sang Trao đổi miễn phí vì bài này đã trả phí đăng Trao đổi trước đó.'}
           </p>
+          <p className="mt-2 text-sm leading-6 text-text-secondary">
+            Khi lưu, bài sẽ chờ duyệt lại và mọi yêu cầu đang chờ của bài sẽ bị huỷ. Người gửi yêu cầu sẽ nhận được thông báo.
+          </p>
           <div className="mt-6 flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => { setPendingOfferType(null); setPendingOfferQuote(null); }}>Hủy</Button>
             <Button type="button" onClick={() => {
