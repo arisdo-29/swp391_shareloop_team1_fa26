@@ -5,6 +5,8 @@ import com.shareloop.media.dto.MediaResponse;
 import com.shareloop.media.service.MediaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.Duration;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,10 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/v1/media")
 public class MediaController {
+    // Cho trình duyệt giữ ảnh 7 ngày để đỡ tải lại từ backend.
+    private static final CacheControl IMAGE_CACHE_CONTROL =
+            CacheControl.maxAge(Duration.ofDays(7)).cachePublic();
+
     private final MediaService service;
 
     public MediaController(MediaService service) {
@@ -44,7 +50,10 @@ public class MediaController {
     @GetMapping("/{id}")
     public ResponseEntity<byte[]> read(@PathVariable long id) {
         MediaService.MediaContent content = service.readPublic(id);
+        // Chỉ response thành công mới có Cache-Control; lỗi ném từ service nên không đi qua đây.
+        // Không dùng immutable vì Admin có thể ẩn ảnh sau này.
         return ResponseEntity.ok()
+                .cacheControl(IMAGE_CACHE_CONTROL)
                 .contentType(MediaType.parseMediaType(content.mimeType()))
                 .body(content.bytes());
     }
