@@ -90,7 +90,9 @@ export type EditQuoteReason =
   | 'REPOST_FEE'
   | 'PENDING_REVIEW_OVERWRITE'
   | 'FIRST_FREE_EDIT'
-  | 'PAID_EDIT';
+  | 'PAID_EDIT'
+  | 'OFFER_TYPE_CHANGE_FREE'
+  | 'OFFER_TYPE_CHANGE_POST_FEE';
 
 export interface EditQuote {
   free: boolean; // true khi amount = 0
@@ -152,6 +154,7 @@ export interface PostingQuota {
   give: PostingQuotaEntry;
   swap: PostingQuotaEntry;
   rank: 'BRONZE' | 'SILVER' | 'GOLD' | 'DIAMOND';
+  nextPostFee: number;
 }
 
 export const itemApi = {
@@ -186,8 +189,8 @@ export const itemApi = {
     const { data } = await http.get<ItemResponse[]>(itemApiEndpoints.myItems);
     return data;
   },
-  async getEditQuote(id: number): Promise<EditQuote> {
-    const { data } = await http.get<EditQuote>(itemApiEndpoints.editQuote(id));
+  async getEditQuote(id: number, offerType?: OfferType): Promise<EditQuote> {
+    const { data } = await http.get<EditQuote>(itemApiEndpoints.editQuote(id), { params: offerType ? { offerType } : undefined });
     return data;
   },
   async renewItem(id: number): Promise<RenewResponse> {
