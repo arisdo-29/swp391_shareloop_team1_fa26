@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, EmptyState, PageHeader, SkeletonRows } from '../../components/ui';
+import { Alert, EmptyState, PageHeader, SkeletonRows } from '../../components/ui';
 import { adminAnomalyApi, type AnomalyReportResponse, type AnomalyUser } from '../../services/adminAnomalyApi';
 import type { ApiError } from '../../services/http';
 
@@ -27,7 +27,6 @@ export function AdminAnomalies() {
   const [report, setReport] = useState<AnomalyReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -49,23 +48,11 @@ export function AdminAnomalies() {
     return () => {
       active = false;
     };
-  }, [reloadKey]);
+  }, []);
 
   return (
     <section className="space-y-5">
-      <PageHeader
-        title="Cảnh báo bất thường"
-        description={
-          report
-            ? `Cảnh báo khi hai người có hơn ${report.pairThreshold} giao dịch hoàn tất với nhau trong ${report.pairWindowDays} ngày gần nhất.`
-            : 'Các cặp người dùng giao dịch lặp với nhau nhiều bất thường.'
-        }
-        action={
-          <Button variant="outline" disabled={loading} onClick={() => setReloadKey((current) => current + 1)}>
-            Làm mới
-          </Button>
-        }
-      />
+      <PageHeader title="Cảnh báo bất thường" />
 
       {error ? <Alert tone="error">{error}</Alert> : null}
 
