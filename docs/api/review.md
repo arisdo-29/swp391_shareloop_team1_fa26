@@ -40,8 +40,8 @@ Các trường `aiRisk`, `moderationFlag`, `flagReason` vẫn có trong response
     }
   ],
   "checklist": [
-    {"id": 11, "key": "real_photos", "statement": "Ảnh là ảnh thật của đúng món đồ, đủ số lượng, không lấy trên mạng."},
-    {"id": 12, "key": "category_match", "statement": "Danh mục đúng với món đồ."}
+    {"id": 11, "key": "real_photos", "statement": "Ảnh chụp thực tế rõ nét của đúng món đồ, từ 3 ảnh trở lên, không dùng ảnh mạng.", "description": "Đạt khi có từ 3 ảnh chụp thật, rõ nét, đủ góc của đúng món đồ. Từ chối nếu dùng ảnh tải từ mạng..."},
+    {"id": 12, "key": "category_match", "statement": "Danh mục và thẻ phân loại phản ánh đúng món đồ.", "description": null}
   ],
   "page": 0,
   "size": 20
@@ -100,8 +100,8 @@ Chi tiết một bài đăng cho Admin kiểm duyệt, ở **mọi trạng thái
   "matchedTerms": ["zalo"],
   "authStatus": "NONE",
   "checklist": [
-    {"id": 11, "key": "real_photos", "statement": "Ảnh là ảnh thật của đúng món đồ, đủ số lượng, không lấy trên mạng."},
-    {"id": 12, "key": "category_match", "statement": "Danh mục đúng với món đồ."}
+    {"id": 11, "key": "real_photos", "statement": "Ảnh chụp thực tế rõ nét của đúng món đồ, từ 3 ảnh trở lên, không dùng ảnh mạng.", "description": "Đạt khi có từ 3 ảnh chụp thật, rõ nét, đủ góc của đúng món đồ. Từ chối nếu dùng ảnh tải từ mạng..."},
+    {"id": 12, "key": "category_match", "statement": "Danh mục và thẻ phân loại phản ánh đúng món đồ.", "description": null}
   ],
   "createdAt": "2026-10-14T10:00:00Z",
   "updatedAt": "2026-10-14T10:05:00Z"
@@ -161,7 +161,7 @@ Duyệt bài đăng đang chờ kiểm duyệt. Gửi đáp án theo `id` của 
 
 ---
 
-Snapshot và log `REVIEW_APPROVE` lưu `{"checks":[{"id":11,"key":"real_photos","statement":"Ảnh là ảnh thật của đúng món đồ, đủ số lượng, không lấy trên mạng.","passed":true}]}` theo thứ tự cấu hình. Snapshot cũ được chuyển từ câu seed có `key`, `statement`, `passed`, không bổ sung `id` hồi tố.
+Snapshot và log `REVIEW_APPROVE` lưu `{"checks":[{"id":11,"key":"real_photos","statement":"Ảnh là ảnh thật của đúng món đồ, đủ số lượng, không lấy trên mạng.","passed":true}]}` theo thứ tự cấu hình, kèm `description` khi mục có mô tả (Q01). Snapshot cũ được chuyển từ câu seed có `key`, `statement`, `passed`, không bổ sung `id` hồi tố.
 
 `flagReasonCode` giữ mã gốc hoặc lý do tự do; `flagReason` là câu tiếng Việt, nối từ khớp khi mã là `LEXICON_REVIEW`. `matchedTerms` là mảng chuỗi, rỗng nếu dữ liệu cũ không có. Các trường này cũng áp dụng endpoint tương thích cũ.
 

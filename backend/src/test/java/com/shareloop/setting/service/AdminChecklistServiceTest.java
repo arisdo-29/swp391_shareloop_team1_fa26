@@ -67,6 +67,38 @@ class AdminChecklistServiceTest {
     }
 
     @Test
+    void q01_createStoresPassConditionDescription() {
+        when(repository.findByAttrGroupOrderBySortOrderAscIdAsc("CHECKLIST")).thenReturn(List.of());
+        when(repository.saveAndFlush(any(WebsiteAttribute.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.create(
+                new AdminChecklistRequest("Ảnh thật của đúng món đồ.", "  Đạt khi có từ 3 ảnh chụp thật.  "), ADMIN_ID);
+
+        assertThat(result.description()).isEqualTo("Đạt khi có từ 3 ảnh chụp thật.");
+    }
+
+    @Test
+    void q01_updateChangesDescription_nullKeepsIt_blankClearsIt() {
+        WebsiteAttribute item =
+                new WebsiteAttribute("CHECKLIST", "real_photos", "Câu cũ", Map.of("description", "Mô tả cũ"), 10);
+        when(repository.findById(1L)).thenReturn(Optional.of(item));
+        when(repository.saveAndFlush(any(WebsiteAttribute.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Client cũ không gửi mô tả: giữ nguyên
+        assertThat(service.update(1L, new AdminChecklistRequest("Câu mới"), ADMIN_ID)
+                        .description())
+                .isEqualTo("Mô tả cũ");
+        assertThat(service.update(1L, new AdminChecklistRequest("Câu mới", "Đạt khi đủ 3 ảnh."), ADMIN_ID)
+                        .description())
+                .isEqualTo("Đạt khi đủ 3 ảnh.");
+        // Admin xoá trắng ô mô tả: xoá mô tả
+        assertThat(service.update(1L, new AdminChecklistRequest("Câu mới", " "), ADMIN_ID)
+                        .description())
+                .isNull();
+        assertThat(item.getExtra()).doesNotContainKey("description");
+    }
+
+    @Test
     void updateThrowsNotFoundWhenIdDoesNotExist() {
         when(repository.findById(99L)).thenReturn(Optional.empty());
 

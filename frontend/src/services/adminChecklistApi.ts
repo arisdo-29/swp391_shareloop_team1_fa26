@@ -1,6 +1,7 @@
 import { http } from './http';
 
 export const ADMIN_CHECKLIST_QUESTION_MAX_LENGTH = 255;
+export const ADMIN_CHECKLIST_DESCRIPTION_MAX_LENGTH = 1000;
 
 export interface AdminChecklistEntry {
   id: number;
@@ -8,10 +9,14 @@ export interface AdminChecklistEntry {
   question: string;
   sortOrder: number;
   active: boolean;
+  // Mô tả điều kiện đạt (Q01), null khi chưa có.
+  description?: string | null;
 }
 
 export interface AdminChecklistRequest {
   question: string;
+  // Chuỗi rỗng thì xoá mô tả, bỏ trường thì giữ mô tả cũ.
+  description?: string;
 }
 
 export function validateChecklistItemIds(itemIds: number[]) {
