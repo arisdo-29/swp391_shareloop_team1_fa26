@@ -58,13 +58,19 @@ export function ModerationChecklistContent({
             >
               <input
                 type="checkbox"
+                aria-label={entry.statement}
                 checked={answers[index] ?? false}
                 disabled={disabled}
                 autoFocus={index === 0}
                 onChange={(event) => onToggle(index, event.target.checked)}
                 className="mt-1 size-4 shrink-0 accent-primary"
               />
-              <span>{entry.statement}</span>
+              <span className="min-w-0">
+                <span className="block font-semibold text-text-primary">{entry.statement}</span>
+                {entry.description ? (
+                  <span className="mt-1 block text-xs leading-5 text-text-muted">{entry.description}</span>
+                ) : null}
+              </span>
             </label>
           ))}
         </div>

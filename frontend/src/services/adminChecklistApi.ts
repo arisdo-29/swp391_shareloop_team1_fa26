@@ -1,6 +1,7 @@
 import { http } from './http';
 
 export const ADMIN_CHECKLIST_QUESTION_MAX_LENGTH = 255;
+export const ADMIN_CHECKLIST_DESCRIPTION_MAX_LENGTH = 1000;
 
 export interface AdminChecklistEntry {
   id: number;
@@ -8,10 +9,12 @@ export interface AdminChecklistEntry {
   question: string;
   sortOrder: number;
   active: boolean;
+  description?: string | null;
 }
 
 export interface AdminChecklistRequest {
   question: string;
+  description?: string | null;
 }
 
 export function validateChecklistItemIds(itemIds: number[]) {
@@ -22,7 +25,10 @@ export function validateChecklistItemIds(itemIds: number[]) {
 
 export const adminChecklistApi = {
   async list() {
-    const { data } = await http.get<AdminChecklistEntry[]>('/api/v1/admin/checklist');
+    const { data } = await http.get<AdminChecklistEntry[]>('/api/v1/admin/checklist', {
+      // Tránh browser/CDN trả lại checklist cũ sau khi Backend vừa cập nhật cấu hình.
+      params: { _: Date.now() },
+    });
     return data;
   },
   async create(input: AdminChecklistRequest) {

@@ -23,6 +23,10 @@ const targetLabels: Record<ReportTargetType, string> = {
   USER: 'Người dùng',
   REQUEST: 'Giao dịch',
 };
+const targetFilterOptions = [
+  { value: 'ITEM', label: 'Báo cáo bài đăng' },
+  { value: 'USER', label: 'Báo cáo người dùng' },
+] satisfies { value: ReportTargetType; label: string }[];
 const reasonLabels: Record<string, string> = {
   NOT_AS_DESCRIBED: 'Không đúng mô tả',
   COUNTERFEIT: 'Hàng giả',
@@ -298,10 +302,10 @@ export function AdminComplaints() {
             setSelectedId(null);
           }}
         >
-          <option value="">Tất cả đối tượng</option>
-          {Object.entries(targetLabels).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
+          <option value="">Nội dung báo cáo</option>
+          {targetFilterOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </Select>
@@ -320,7 +324,7 @@ export function AdminComplaints() {
               <thead>
                 <tr>
                   <th>Người gửi</th>
-                  <th>Đối tượng</th>
+                  <th>Nội dung bị khiếu nại</th>
                   <th>Lý do</th>
                   <th>Ngày gửi</th>
                   <th>Trạng thái</th>
@@ -383,7 +387,7 @@ export function AdminComplaints() {
       )}
       {selectedId !== null && (
         <DialogFrame labelledBy="report-detail-title" size="xl">
-          <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="mb-4">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 id="report-detail-title" className="section-title">
@@ -395,9 +399,6 @@ export function AdminComplaints() {
                 <p className="mt-1 text-sm text-text-secondary">Gửi lúc {date(detail.report.createdAt)}</p>
               )}
             </div>
-            <Button variant="ghost" disabled={submitting} onClick={() => setSelectedId(null)}>
-              Đóng
-            </Button>
           </div>
           {detailLoading && <p role="status">Đang tải hồ sơ…</p>}
           {detailError && (
@@ -526,18 +527,29 @@ export function AdminComplaints() {
                         </Button>
                       </div>
                     </div>
-                  ) : (
-                    <Button
-                      disabled={submitting || note.length > 500}
-                      onClick={() => setConfirming(true)}
-                    >
-                      Kết luận
-                    </Button>
-                  )}
+                  ) : null}
                 </section>
               )}
             </div>
           )}
+          <div className="mt-6 flex items-center justify-between gap-3 border-t border-border pt-4">
+            {detail && !concluded(detail.report.status) && !confirming && (
+              <Button
+                disabled={submitting || note.length > 500}
+                onClick={() => setConfirming(true)}
+              >
+                Kết luận
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              className="ml-auto"
+              disabled={submitting}
+              onClick={() => setSelectedId(null)}
+            >
+              Đóng
+            </Button>
+          </div>
         </DialogFrame>
       )}
     </section>

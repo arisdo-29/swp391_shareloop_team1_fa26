@@ -9,6 +9,7 @@ import {
   type ReviewItemDetail,
   type ReviewQueueItem,
 } from '../../services/adminModerationApi';
+import { adminChecklistApi } from '../../services/adminChecklistApi';
 import { AdminModerationDetail } from './AdminModerationDetail';
 import { AdminModerationList } from './AdminModerationList';
 
@@ -20,6 +21,10 @@ vi.mock('../../services/adminModerationApi', () => ({
     approve: vi.fn(),
     reject: vi.fn(),
   },
+}));
+
+vi.mock('../../services/adminChecklistApi', () => ({
+  adminChecklistApi: { list: vi.fn() },
 }));
 
 const checklist = [
@@ -253,6 +258,39 @@ describe('AdminModerationDetail', () => {
   beforeEach(() => {
     vi.mocked(adminModerationApi.detail).mockResolvedValue(detail());
     vi.mocked(adminModerationApi.rejectReasons).mockResolvedValue(['Hình ảnh không phù hợp']);
+    vi.mocked(adminChecklistApi.list).mockResolvedValue(
+      checklist.map((entry, index) => ({
+        id: entry.id,
+        key: entry.key,
+        question: entry.statement,
+        sortOrder: index + 1,
+        active: true,
+      })),
+    );
+  });
+
+  it('dùng checklist active mới nhất từ API quản trị thay cho checklist cũ trong chi tiết bài', async () => {
+    vi.mocked(adminModerationApi.detail).mockResolvedValue(detail({
+      checklist: [{ id: 99, key: 'old', statement: 'Tiêu chí cũ' }],
+    }));
+    vi.mocked(adminChecklistApi.list).mockResolvedValue([
+      { id: 99, key: 'old', question: 'Tiêu chí cũ', sortOrder: 1, active: false },
+      {
+        id: 22,
+        key: 'new',
+        question: 'Tiêu chí mới từ Backend',
+        sortOrder: 2,
+        active: true,
+        description: 'Đạt khi dữ liệu hợp lệ. Từ chối nếu dữ liệu sai.',
+      },
+    ]);
+
+    renderDetail();
+
+    expect(await screen.findByRole('checkbox', { name: 'Tiêu chí mới từ Backend' })).toBeTruthy();
+    expect(screen.getByText('Đạt khi dữ liệu hợp lệ. Từ chối nếu dữ liệu sai.')).toBeTruthy();
+    expect(screen.queryByText('Tiêu chí cũ')).toBeNull();
+    expect(adminChecklistApi.list).toHaveBeenCalledTimes(1);
   });
 
   it('giữ khung ảnh chính co theo ảnh có giới hạn, chọn thumbnail và phóng to ảnh đang chọn', async () => {
@@ -319,7 +357,7 @@ describe('AdminModerationDetail', () => {
       'Kích cỡ',
       'Áo còn mới 90 phần trăm',
       'zalo',
-      'Cần xem kỹ',
+      'Có dấu hiệu vi phạm',
     ]) {
       expect(screen.getAllByText(text).length).toBeGreaterThan(0);
     }
@@ -328,7 +366,7 @@ describe('AdminModerationDetail', () => {
     expect(screen.queryByText('Mức rủi ro')).toBeNull();
   });
 
-  it('SRS v11: bài chỉ có cờ AI thì trang chi tiết ghi "Không có cờ" và không hiện lý do AI', async () => {
+  it('SRS v11: bài chỉ có cờ AI thì trang chi tiết ghi "Không phát hiện vi phạm" và không hiện lý do AI', async () => {
     vi.mocked(adminModerationApi.detail).mockResolvedValue(
       detail({
         aiRisk: 'HIGH',
@@ -340,7 +378,7 @@ describe('AdminModerationDetail', () => {
     renderDetail();
 
     await screen.findByRole('heading', { name: 'Áo khoác gió nam' });
-    expect(screen.getByText('Không có cờ')).toBeTruthy();
+    expect(screen.getByText('Không phát hiện vi phạm')).toBeTruthy();
     expect(screen.queryByText('AI nghi có số điện thoại trong ảnh')).toBeNull();
     expect(screen.queryByText('Cần xem kỹ')).toBeNull();
   });
@@ -366,7 +404,33 @@ describe('AdminModerationDetail', () => {
         ],
       }),
     );
+    expect(adminChecklistApi.list).toHaveBeenCalledTimes(2);
     expect(await screen.findByText(/Đã duyệt bài "Áo khoác gió nam"/)).toBeTruthy();
+  });
+
+  it('refetch checklist trước khi duyệt và bắt tích lại nếu Backend vừa thay đổi', async () => {
+    const user = userEvent.setup();
+    vi.mocked(adminChecklistApi.list)
+      .mockResolvedValueOnce(checklist.map((entry, index) => ({
+        id: entry.id,
+        key: entry.key,
+        question: entry.statement,
+        sortOrder: index + 1,
+        active: true,
+      })))
+      .mockResolvedValueOnce([
+        { id: 33, key: 'latest', question: 'Checklist vừa cập nhật', sortOrder: 1, active: true },
+      ]);
+    renderDetail();
+    await screen.findByRole('heading', { name: 'Áo khoác gió nam' });
+
+    await user.click(screen.getByLabelText('Ảnh là ảnh thật của đúng món đồ'));
+    await user.click(screen.getByLabelText('Danh mục đúng với món đồ'));
+    await user.click(screen.getByRole('button', { name: 'Xác nhận duyệt bài' }));
+
+    expect(await screen.findByText(/Checklist đã thay đổi/)).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: 'Checklist vừa cập nhật' })).toBeTruthy();
+    expect(adminModerationApi.approve).not.toHaveBeenCalled();
   });
 
   it('từ chối bằng lý do mẫu rồi quay về danh sách', async () => {

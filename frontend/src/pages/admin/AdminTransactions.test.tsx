@@ -57,7 +57,7 @@ describe('AdminTransactions', () => {
     render(<AdminTransactions />);
     await screen.findByText('Xe đạp cũ');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Bị kẹt' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Quá giờ xác nhận bàn giao' }));
 
     await waitFor(() =>
       expect(adminRequestApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ stuck: true, page: 0 })),

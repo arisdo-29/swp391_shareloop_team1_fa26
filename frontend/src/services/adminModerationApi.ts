@@ -64,7 +64,12 @@ export interface ReviewItemDetail {
   updatedAt: string;
 }
 
-export interface ReviewChecklistItem { id: number; key: string; statement: string }
+export interface ReviewChecklistItem {
+  id: number;
+  key: string;
+  statement: string;
+  description?: string | null;
+}
 export interface ApproveReviewRequest { answers: { id: number; passed: boolean }[] }
 export interface RejectReviewRequest { reason: string }
 

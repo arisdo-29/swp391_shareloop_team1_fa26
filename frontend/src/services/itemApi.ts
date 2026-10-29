@@ -9,8 +9,6 @@ export const itemApiEndpoints = {
   editQuote: (id: number) => `/api/v1/items/${id}/edit-quote`,
   renew: (id: number) => `/api/v1/items/${id}/renew`,
   boost: (id: number) => `/api/v1/items/${id}/boost`,
-  boostQuote: (id: number) => `/api/v1/items/${id}/boost-quote`,
-  renewQuote: (id: number) => `/api/v1/items/${id}/renew-quote`,
   listingFees: '/api/v1/listing-fees',
   postingQuota: '/api/v1/me/posting-quota',
 } as const;
@@ -107,22 +105,6 @@ export interface RenewResponse {
   expireAt: string; // hạn hiển thị mới, ISO-8601 UTC
 }
 
-// Contract: docs/api/listingfee.md (GET /api/v1/items/{id}/boost-quote)
-export interface BoostQuote {
-  fee: number;
-  newBoostedUntil: string; // mốc hết đẩy mới nếu đẩy ngay, ISO-8601 UTC
-  allowed: boolean;
-  reason: string | null; // lý do không đẩy được, tiếng Việt; null khi allowed
-}
-
-// Contract: docs/api/listingfee.md (GET /api/v1/items/{id}/renew-quote)
-export interface RenewQuote {
-  fee: number; // 0 là miễn phí
-  newExpireAt: string; // hạn mới nếu gia hạn ngay, ISO-8601 UTC
-  allowed: boolean;
-  reason: string | null;
-}
-
 export interface BoostResponse {
   itemId: number;
   boostedUntil: string;
@@ -206,14 +188,6 @@ export const itemApi = {
   },
   async getEditQuote(id: number): Promise<EditQuote> {
     const { data } = await http.get<EditQuote>(itemApiEndpoints.editQuote(id));
-    return data;
-  },
-  async getBoostQuote(id: number): Promise<BoostQuote> {
-    const { data } = await http.get<BoostQuote>(itemApiEndpoints.boostQuote(id));
-    return data;
-  },
-  async getRenewQuote(id: number): Promise<RenewQuote> {
-    const { data } = await http.get<RenewQuote>(itemApiEndpoints.renewQuote(id));
     return data;
   },
   async renewItem(id: number): Promise<RenewResponse> {
