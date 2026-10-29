@@ -576,7 +576,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     await user.click(screen.getByRole('button', { name: 'Trao đổi' }));
     await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ offerType: 'SWAP' })));
 
-    await user.click(screen.getByRole('button', { name: 'Như mới' }));
+    await user.click(screen.getByRole('button', { name: 'Ít sử dụng' }));
     await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(
       expect.objectContaining({ offerType: 'SWAP', condition: 'LIKE_NEW', page: 0 }),
     ));

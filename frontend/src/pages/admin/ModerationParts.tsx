@@ -54,7 +54,7 @@ export function ModerationChecklistContent({
           {checklist.map((entry, index) => (
             <label
               key={entry.id}
-              className="flex cursor-pointer items-start gap-3 rounded-md border border-border/80 p-3 text-sm leading-6 transition hover:bg-surface-low has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/40"
+              className="flex cursor-pointer items-start gap-3 rounded-md border border-border/80 p-3 text-sm leading-6 transition hover:bg-surface-low"
             >
               <input
                 type="checkbox"
@@ -144,7 +144,7 @@ export function RejectReasonsContent({
           {normalizedReasons.map((reason) => (
             <label
               key={reason}
-              className="flex cursor-pointer items-start gap-3 rounded-md border border-border/80 p-3 text-sm leading-6 transition hover:bg-surface-low has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/40"
+              className="flex cursor-pointer items-start gap-3 rounded-md border border-border/80 p-3 text-sm leading-6 transition hover:bg-surface-low"
             >
               <input
                 type="checkbox"
@@ -162,7 +162,7 @@ export function RejectReasonsContent({
       )}
 
       <div className="mt-4 border-t border-border/70 pt-4">
-        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border/80 p-3 text-sm font-semibold leading-6 transition hover:bg-surface-low has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/40">
+        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border/80 p-3 text-sm font-semibold leading-6 transition hover:bg-surface-low">
           <input
             type="checkbox"
             checked={includeOther}

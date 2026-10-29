@@ -22,6 +22,7 @@
   --color-surface-container: #e5eae8;
   --color-primary-faint: #f2f7f5;
   --color-secondary-hover: #984629;
+  --color-error: #b44444;
   color-scheme: light;
   font-synthesis: none;
 }
@@ -67,6 +68,39 @@ img {
   outline-offset: 2px;
 }
 
+/* Form controls chỉ dùng một viền 1px khi focus, không dùng outline hoặc focus shadow. */
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible,
+.form-control:focus,
+.form-select:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+input:not([type='checkbox']):not([type='radio']):focus,
+input:not([type='checkbox']):not([type='radio']):focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible,
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--color-primary);
+}
+
+input[aria-invalid='true']:focus,
+input[aria-invalid='true']:focus-visible,
+textarea[aria-invalid='true']:focus,
+textarea[aria-invalid='true']:focus-visible,
+select[aria-invalid='true']:focus,
+select[aria-invalid='true']:focus-visible {
+  border-color: var(--color-error);
+}
+
 @layer components {
   .page-shell {
     @apply mx-auto w-full max-w-[1280px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12;
@@ -84,7 +118,7 @@ img {
     @apply rounded-lg bg-white ring-1 ring-border/80 shadow-sm;
   }
   .input {
-    @apply min-h-11 w-full rounded-md border border-border bg-white px-3.5 py-2.5 text-sm text-text-primary outline-none transition duration-200 placeholder:text-text-muted/70 hover:border-text-muted focus:border-primary focus:ring-4 focus:ring-primary/10 disabled:cursor-not-allowed disabled:bg-surface-low;
+    @apply min-h-11 w-full rounded-md border border-border bg-white px-3.5 py-2.5 text-sm text-text-primary outline-none transition duration-200 placeholder:text-text-muted/70 hover:border-text-muted focus:border-primary disabled:cursor-not-allowed disabled:bg-surface-low;
   }
   .table-wrap {
     @apply overflow-x-auto rounded-lg bg-white ring-1 ring-border/80;
