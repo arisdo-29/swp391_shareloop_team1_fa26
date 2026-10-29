@@ -66,9 +66,9 @@ export function ModerationChecklistContent({
                 className="mt-1 size-4 shrink-0 accent-primary"
               />
               <span className="min-w-0">
-                <span className="block font-semibold text-text-primary">{entry.statement}</span>
+                <span className="block font-medium text-text-primary">{entry.statement}</span>
                 {entry.description ? (
-                  <span className="mt-1 block text-xs leading-5 text-text-muted">{entry.description}</span>
+                  <span className="mt-1 block text-xs leading-5 text-text-secondary">{entry.description}</span>
                 ) : null}
               </span>
             </label>

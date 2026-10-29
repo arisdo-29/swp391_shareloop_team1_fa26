@@ -9,12 +9,14 @@ export interface AdminChecklistEntry {
   question: string;
   sortOrder: number;
   active: boolean;
+  // Mô tả điều kiện đạt (Q01), null khi chưa có.
   description?: string | null;
 }
 
 export interface AdminChecklistRequest {
   question: string;
-  description?: string | null;
+  // Chuỗi rỗng thì xoá mô tả, bỏ trường thì giữ mô tả cũ.
+  description?: string;
 }
 
 export function validateChecklistItemIds(itemIds: number[]) {
