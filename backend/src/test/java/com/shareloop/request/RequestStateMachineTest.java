@@ -39,6 +39,7 @@ class RequestStateMachineTest {
             "AWAITING_LOGISTICS->LOGISTICS_CONFIRMED",
             "AWAITING_LOGISTICS->CANCELLED",
             "LOGISTICS_CONFIRMED->AWAITING_HANDOVER",
+            "LOGISTICS_CONFIRMED->DISPUTED",
             "LOGISTICS_CONFIRMED->CANCELLED",
             "AWAITING_HANDOVER->COMPLETED",
             "AWAITING_HANDOVER->DISPUTED",
@@ -260,6 +261,29 @@ class RequestStateMachineTest {
         }
 
         @Test
+        @DisplayName("Mũi tên 8d: LOGISTICS_CONFIRMED -> DISPUTED (Người nhận bấm trước nhưng chọn không đúng mô tả)")
+        void logisticsConfirmedToDisputed_receiverSaysNotAsDescribed() {
+            Request request = createRequest(RequestStatus.LOGISTICS_CONFIRMED);
+            Instant now = Instant.now();
+
+            request.confirmHandover(false, false, now);
+
+            assertThat(request.getStatus()).isEqualTo(RequestStatus.DISPUTED);
+            assertThat(request.getReceiverHandoverAt()).isEqualTo(now);
+            assertThat(request.getAsDescribed()).isFalse();
+            assertThat(request.getDonorHandoverAt()).isNull();
+            assertThat(request.getCompletedAt()).isNull();
+        }
+
+        @Test
+        @DisplayName("Mũi tên 8e: LOGISTICS_CONFIRMED -> DISPUTED (chuyển trực tiếp qua transitionTo())")
+        void logisticsConfirmedToDisputed_directTransition() {
+            Request request = createRequest(RequestStatus.LOGISTICS_CONFIRMED);
+            request.transitionTo(RequestStatus.DISPUTED);
+            assertThat(request.getStatus()).isEqualTo(RequestStatus.DISPUTED);
+        }
+
+        @Test
         @DisplayName("Mũi tên 9: LOGISTICS_CONFIRMED -> CANCELLED (Huỷ khi đã chốt lịch nhưng chưa giao nhận)")
         void logisticsConfirmedToCancelled() {
             Request request = createRequest(RequestStatus.LOGISTICS_CONFIRMED);
@@ -327,6 +351,22 @@ class RequestStateMachineTest {
             request.transitionTo(RequestStatus.DISPUTED);
 
             assertThat(request.getStatus()).isEqualTo(RequestStatus.DISPUTED);
+        }
+
+        @Test
+        @DisplayName("Mũi tên 11b: AWAITING_HANDOVER -> DISPUTED (Người nhận xác nhận sau nhưng chọn không đúng mô tả)")
+        void awaitingHandoverToDisputed_receiverSaysNotAsDescribed() {
+            Request request = createRequest(RequestStatus.LOGISTICS_CONFIRMED);
+            Instant t1 = Instant.now();
+            request.confirmHandover(true, null, t1); // donor confirmed first -> status is AWAITING_HANDOVER
+            assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
+
+            Instant t2 = t1.plusSeconds(10);
+            request.confirmHandover(false, false, t2); // receiver says not as described
+
+            assertThat(request.getStatus()).isEqualTo(RequestStatus.DISPUTED);
+            assertThat(request.getAsDescribed()).isFalse();
+            assertThat(request.getCompletedAt()).isNull();
         }
 
         @Test

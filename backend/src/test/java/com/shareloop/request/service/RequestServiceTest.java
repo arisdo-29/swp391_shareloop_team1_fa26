@@ -1074,15 +1074,53 @@ class RequestServiceTest {
     }
 
     @Test
+    @DisplayName(
+            "confirmHandover: Người nhận chọn không đúng mô tả -> chuyển DISPUTED, không markTraded, phát report event")
     void confirmHandover_whenReceiverSaysNotAsDescribed_publishesReportEvent() {
         // given
         stubLogisticsConfirmedRequest();
 
         // when
-        requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(false, "  Máy không bật được  "));
+        RequestResponse response =
+                requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(false, "  Máy không bật được  "));
 
-        // then: lý do được cắt khoảng trắng thừa trước khi làm mô tả report
+        // then
+        assertThat(response.status()).isEqualTo("DISPUTED");
+        verify(itemService, never()).markTraded(anyLong());
         verify(eventPublisher).publishEvent(new NotAsDescribedReportedEvent(101L, 10L, "Máy không bật được"));
+    }
+
+    @Test
+    @DisplayName(
+            "confirmHandover: Người nhận xác nhận sau donor nhưng chọn không đúng mô tả -> chuyển DISPUTED, không COMPLETED")
+    void confirmHandover_whenReceiverConfirmsAfterDonorNotAsDescribed_transitionsToDisputed() {
+        // given: donor đã xác nhận trước -> status là AWAITING_HANDOVER
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.select(Instant.now());
+        request.proposeSchedule(
+                "IN_PERSON",
+                "FPT",
+                Instant.now().plus(1, java.time.temporal.ChronoUnit.DAYS),
+                true,
+                false,
+                Instant.now());
+        request.confirmLogistics(false, false, Instant.now());
+        request.confirmHandover(true, null, Instant.now());
+
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        RequestResponse response =
+                requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(false, "Món đồ bị vỡ màn hình"));
+
+        // then
+        assertThat(response.status()).isEqualTo("DISPUTED");
+        verify(itemService, never()).markTraded(anyLong());
+        verify(eventPublisher).publishEvent(new NotAsDescribedReportedEvent(101L, 10L, "Món đồ bị vỡ màn hình"));
     }
 
     @Test

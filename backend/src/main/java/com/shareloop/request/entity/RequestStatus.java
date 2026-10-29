@@ -30,7 +30,7 @@ public enum RequestStatus {
             case PENDING -> to == RESERVED || to == REJECTED || to == CANCELLED;
             case RESERVED -> to == AWAITING_LOGISTICS || to == CANCELLED;
             case AWAITING_LOGISTICS -> to == LOGISTICS_CONFIRMED || to == CANCELLED;
-            case LOGISTICS_CONFIRMED -> to == AWAITING_HANDOVER || to == CANCELLED;
+            case LOGISTICS_CONFIRMED -> to == AWAITING_HANDOVER || to == DISPUTED || to == CANCELLED;
             // Huỷ ở AWAITING_HANDOVER dành cho huỷ giao dịch sau khi chọn người và khoá tài khoản
             case AWAITING_HANDOVER -> to == COMPLETED || to == DISPUTED || to == CANCELLED;
             case DISPUTED -> to == COMPLETED || to == CANCELLED;
