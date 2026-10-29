@@ -216,6 +216,70 @@ Gia hạn bài của chính mình (F08 bước 1, FR-28, BR-D03, BR-P12). Trừ 
 | `boostedUntil`  | string | Thời điểm hết đẩy mới, ISO-8601 UTC                     |
 | `creditBalance` | number | Số dư Credit (`credit_balance`) của chủ bài sau khi trừ |
 
+## GET /api/v1/items/{id}/boost-quote
+
+Báo trước một lần đẩy bài để FE hiện phí, mốc hết đẩy mới và lý do nếu chưa đẩy được. Chỉ đọc: không trừ tiền, không
+đổi dữ liệu. Tính bằng đúng các hàm của `POST /items/{id}/boost` (cùng công thức mốc mới, cùng điều kiện, cùng
+`boost_fee`), nên số báo giá khớp số thật tại thời điểm gọi.
+
+- Xác thực: **bắt buộc** Bearer Token. Id người dùng lấy từ token, không nhận từ client.
+- Tham số đường dẫn: `id` là id bài đăng.
+- Thành công: `200`, một `BoostQuote`. Bài không đẩy được vẫn trả `200` với `allowed = false` và `reason`.
+- Lỗi: `401 UNAUTHORIZED`; `403 LISTINGFEE_NOT_OWNER`; `404 LISTINGFEE_ITEM_NOT_FOUND`.
+
+```json
+{ "fee": 5, "newBoostedUntil": "2026-11-02T08:00:00Z", "allowed": true, "reason": null }
+```
+
+```json
+{
+  "fee": 5,
+  "newBoostedUntil": "2026-11-20T08:00:00Z",
+  "allowed": false,
+  "reason": "Tổng thời gian đẩy vượt quá số ngày tối đa cho phép."
+}
+```
+
+## BoostQuote
+
+| Trường            | Kiểu           | Ý nghĩa                                                                                  |
+|-------------------|----------------|------------------------------------------------------------------------------------------|
+| `fee`             | number         | Số Credit sẽ bị trừ khi đẩy (`boost_fee`)                                                |
+| `newBoostedUntil` | string         | Mốc hết đẩy mới nếu đẩy ngay: `max(now, boosted_until cũ) + boost_days`, ISO-8601 UTC     |
+| `allowed`         | boolean        | `true` khi đẩy ngay được (không tính số dư: thiếu Credit chỉ lộ ra ở `POST` bằng `402`)  |
+| `reason`          | string \| null | Lý do không đẩy được, tiếng Việt, hiển thị thẳng; `null` khi `allowed = true`            |
+
+`allowed = false` khi: bài không `APPROVED` hoặc đang bị ẩn; danh mục không `boostable`; mốc mới vượt
+`now + boost_max_days` (tối đa 14 ngày); mốc mới vượt `expire_at` của bài. `reason` là thông điệp của mã lỗi tương
+ứng ở `POST /items/{id}/boost`.
+
+## GET /api/v1/items/{id}/renew-quote
+
+Báo trước một lần gia hạn: phí, hạn mới và lý do nếu chưa gia hạn được. Chỉ đọc, dùng chung hàm tính phí và hàm tính
+hạn mới với `POST /items/{id}/renew`.
+
+- Xác thực: **bắt buộc** Bearer Token. Id người dùng lấy từ token.
+- Tham số đường dẫn: `id` là id bài đăng.
+- Thành công: `200`, một `RenewQuote`. Bài không gia hạn được vẫn trả `200` với `allowed = false` và `reason`.
+- Lỗi: `401 UNAUTHORIZED`; `403 LISTINGFEE_NOT_OWNER`; `404 LISTINGFEE_ITEM_NOT_FOUND`.
+
+```json
+{ "fee": 5, "newExpireAt": "2026-11-28T08:00:00Z", "allowed": true, "reason": null }
+```
+
+## RenewQuote
+
+| Trường        | Kiểu           | Ý nghĩa                                                                          |
+|---------------|----------------|----------------------------------------------------------------------------------|
+| `fee`         | number         | Số Credit sẽ bị trừ khi gia hạn; `0` là miễn phí                                 |
+| `newExpireAt` | string         | Hạn mới nếu gia hạn ngay: `max(now, expire_at cũ) + post_display_days`, ISO-8601 UTC |
+| `allowed`     | boolean        | `true` khi bài đang `APPROVED`                                                   |
+| `reason`      | string \| null | Lý do không gia hạn được, tiếng Việt; `null` khi `allowed = true`                |
+
+Ghi chú: hiện `fee` là `renew_fee` cho mọi bài, kể cả bài `GIVE`, vì `POST /items/{id}/renew` đang thu như vậy.
+Khi luật miễn phí gia hạn bài `GIVE` được làm (N02), cả báo giá và gia hạn thật cùng trả `0` vì dùng chung một hàm
+tính phí; FE hiện "Miễn phí" mỗi khi `fee = 0`.
+
 ## Mã lỗi
 
 | code                          | HTTP | Khi nào                                                      | Lộ ra qua API                 |

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.common.exception.ErrorCode;
+import com.shareloop.listingfee.dto.BoostQuote;
 import com.shareloop.listingfee.dto.BoostResponse;
 import com.shareloop.listingfee.service.BoostService;
 import com.shareloop.setting.ConfigKey;
@@ -144,6 +145,76 @@ class BoostServiceIT extends IntegrationTest {
         assertBusinessError(thrown, ListingFeeErrorCode.LISTINGFEE_BOOST_EXCEEDS_EXPIRY);
         assertThat(balanceOf(ownerId)).isEqualTo(START_BALANCE);
         assertThat(boostedUntilOf(itemId)).isNull();
+    }
+
+    // ---------- báo giá ----------
+
+    @Test
+    void quoteBoost_whenAllowed_matchesRealBoostAndChangesNothing() {
+        // given: bài đang được đẩy, còn hạn dài
+        Instant currentBoostedUntil = daysFromNow(2).truncatedTo(ChronoUnit.SECONDS);
+        long ownerId = insertUser(START_BALANCE);
+        long itemId = insertItem(ownerId, "APPROVED", true, boostableCategory(), daysFromNow(60), currentBoostedUntil);
+
+        // when
+        BoostQuote quote = boostService.quoteBoost(itemId, ownerId);
+
+        // then: báo giá cộng dồn từ mốc cũ, không trừ tiền, không đổi boosted_until
+        assertThat(quote.allowed()).isTrue();
+        assertThat(quote.reason()).isNull();
+        assertThat(quote.fee()).isEqualTo(boostFee());
+        assertThat(quote.newBoostedUntil()).isEqualTo(currentBoostedUntil.plus(boostDays(), ChronoUnit.DAYS));
+        assertThat(balanceOf(ownerId)).isEqualTo(START_BALANCE);
+        assertThat(boostedUntilOf(itemId)).isEqualTo(currentBoostedUntil);
+        assertThat(ledgerCountOfItem(itemId)).isZero();
+    }
+
+    @Test
+    void quoteBoost_whenTotalExceedsMaxDays_returnsNotAllowedWithReason() {
+        // given: cộng thêm một gói sẽ vượt boost_max_days
+        long ownerId = insertUser(START_BALANCE);
+        long itemId = insertItem(
+                ownerId,
+                "APPROVED",
+                true,
+                boostableCategory(),
+                daysFromNow(60),
+                daysFromNow(boostMaxDays() - boostDays() + 1));
+
+        // when
+        BoostQuote quote = boostService.quoteBoost(itemId, ownerId);
+
+        // then
+        assertThat(quote.allowed()).isFalse();
+        assertThat(quote.reason()).isEqualTo(ListingFeeErrorCode.LISTINGFEE_BOOST_LIMIT_EXCEEDED.defaultMessage());
+    }
+
+    @Test
+    void quoteBoost_whenCategoryNotBoostable_returnsNotAllowedWithReason() {
+        // given
+        long ownerId = insertUser(START_BALANCE);
+        long itemId = insertItem(ownerId, "APPROVED", true, insertCategory(false), daysFromNow(30), null);
+
+        // when
+        BoostQuote quote = boostService.quoteBoost(itemId, ownerId);
+
+        // then
+        assertThat(quote.allowed()).isFalse();
+        assertThat(quote.reason()).isEqualTo(ListingFeeErrorCode.LISTINGFEE_CATEGORY_NOT_BOOSTABLE.defaultMessage());
+    }
+
+    @Test
+    void quoteBoost_whenCallerIsNotOwner_throwsNotOwner() {
+        // given
+        long ownerId = insertUser(START_BALANCE);
+        long strangerId = insertUser(START_BALANCE);
+        long itemId = insertItem(ownerId, "APPROVED", true, boostableCategory(), daysFromNow(30), null);
+
+        // when
+        Throwable thrown = catchThrowable(() -> boostService.quoteBoost(itemId, strangerId));
+
+        // then
+        assertBusinessError(thrown, ListingFeeErrorCode.LISTINGFEE_NOT_OWNER);
     }
 
     // ---------- sai điều kiện ----------

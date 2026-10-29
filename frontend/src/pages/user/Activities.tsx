@@ -32,7 +32,6 @@ import {
   type EditQuote,
   type EditQuoteReason,
   type ItemResponse,
-  type ListingFeeConfigResponse,
   type OfferType,
   type OperatingStatus,
   type UpdateItemRequest,
@@ -66,6 +65,8 @@ function getEditQuoteReasonLabel(reason: string) {
 }
 
 type ListingFeeAction = { type: 'renew' | 'boost'; item: Item };
+// Báo giá đã gộp: newTime là mốc hết đẩy mới (boost) hoặc hạn mới (renew), ISO-8601 UTC.
+type ListingFeeQuote = { fee: number; newTime: string; allowed: boolean; reason: string | null };
 const WALLET_INSUFFICIENT_BALANCE = 'WALLET_INSUFFICIENT_BALANCE';
 
 
@@ -95,7 +96,7 @@ type EditFormErrors = Partial<
 export function Activities() {
   const location = useLocation();
   const user = useAppSelector(selectCurrentUser)!;
-  const { refresh: refreshWallet } = useWallet();
+  const { wallet, refresh: refreshWallet } = useWallet();
   const [tab, setTab] = useState<'items' | 'sent'>('items');
   const [editingId, setEditingId] = useState('');
   const [removeConfirmId, setRemoveConfirmId] = useState('');
@@ -120,8 +121,8 @@ export function Activities() {
   const [renewingItemId, setRenewingItemId] = useState('');
   const [boostingItemId, setBoostingItemId] = useState('');
   const [listingFeeAction, setListingFeeAction] = useState<ListingFeeAction | null>(null);
-  const [listingFees, setListingFees] = useState<ListingFeeConfigResponse | null>(null);
-  const [listingFeesLoading, setListingFeesLoading] = useState(false);
+  const [feeQuote, setFeeQuote] = useState<ListingFeeQuote | null>(null);
+  const [feeQuoteLoading, setFeeQuoteLoading] = useState(false);
   const [listingFeeError, setListingFeeError] = useState('');
   const [listingFeeNeedsTopUp, setListingFeeNeedsTopUp] = useState(false);
   const [listingFeeNotice, setListingFeeNotice] = useState('');
@@ -134,21 +135,30 @@ export function Activities() {
   const listingFeeInFlight = useRef(false);
   const currentUserId = toBackendUserId(user.id);
 
+  // Mở hộp Đẩy/Gia hạn thì hỏi BE báo giá (chỉ đọc, không trừ Credit); số hiện ra là số BE sẽ trừ thật.
   useEffect(() => {
     if (!currentUserId || !listingFeeAction) return;
     let active = true;
-    setListingFees(null);
-    setListingFeesLoading(true);
-    itemApi
-      .getListingFees()
-      .then((fees) => {
-        if (active) setListingFees(fees);
+    const itemId = Number(listingFeeAction.item.id);
+    setFeeQuote(null);
+    setFeeQuoteLoading(true);
+    const request =
+      listingFeeAction.type === 'renew'
+        ? itemApi.getRenewQuote(itemId).then(
+            (quote): ListingFeeQuote => ({ ...quote, newTime: quote.newExpireAt }),
+          )
+        : itemApi.getBoostQuote(itemId).then(
+            (quote): ListingFeeQuote => ({ ...quote, newTime: quote.newBoostedUntil }),
+          );
+    request
+      .then((quote) => {
+        if (active) setFeeQuote(quote);
       })
       .catch(() => {
-        if (active) setListingFees(null);
+        if (active) setFeeQuote(null);
       })
       .finally(() => {
-        if (active) setListingFeesLoading(false);
+        if (active) setFeeQuoteLoading(false);
       });
     return () => {
       active = false;
@@ -319,6 +329,10 @@ export function Activities() {
       setCancelingRequestId('');
     }
   };
+
+  // Số Credit còn thiếu so với phí BE báo; chỉ để hiển thị, việc trừ tiền và kiểm số dư thật vẫn ở BE.
+  const creditShortage =
+    feeQuote && wallet && feeQuote.fee > wallet.available ? feeQuote.fee - wallet.available : 0;
 
   const confirmListingFeeAction = async () => {
     if (!listingFeeAction || listingFeeInFlight.current) return;
@@ -717,15 +731,39 @@ export function Activities() {
             {listingFeeAction.type === 'renew' ? 'Xác nhận gia hạn bài' : 'Xác nhận đẩy bài'}
           </h2>
           <p className="mt-2 text-sm font-semibold">{listingFeeAction.item.title}</p>
-          <p className="mt-2 text-sm leading-6 text-text-muted">
-            {listingFeesLoading
-              ? 'Đang tải mức phí hiện hành...'
-              : listingFees
-                ? listingFeeAction.type === 'renew'
-                  ? `Phí gia hạn: ${listingFees.renewFee} Credit.`
-                  : `Phí đẩy bài: ${listingFees.boostFee} Credit, hiệu lực ${listingFees.boostDays} ngày.`
-                : 'Không tải được mức phí hiện hành. Vui lòng đóng hộp thoại và thử lại.'}
-          </p>
+          {feeQuoteLoading ? (
+            <p className="mt-2 text-sm leading-6 text-text-muted">Đang tính phí...</p>
+          ) : feeQuote ? (
+            <div className="mt-2 space-y-1 text-sm leading-6 text-text-muted">
+              <p>
+                {listingFeeAction.type === 'renew'
+                  ? `Hạn mới: ${formatQuoteDate(feeQuote.newTime)}`
+                  : `Đẩy đến ${formatQuoteDateTime(feeQuote.newTime)}`}
+              </p>
+              <p>
+                {feeQuote.fee > 0
+                  ? `Phí: ${feeQuote.fee} Credit. Phí không hoàn lại.`
+                  : 'Miễn phí'}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm leading-6 text-text-muted">
+              Không tải được báo giá. Vui lòng đóng hộp thoại và thử lại.
+            </p>
+          )}
+          {feeQuote && !feeQuote.allowed ? (
+            <div className="mt-4">
+              <Alert tone="error">{feeQuote.reason ?? 'Hiện chưa thực hiện được thao tác này.'}</Alert>
+            </div>
+          ) : null}
+          {creditShortage > 0 ? (
+            <div className="mt-4">
+              <Alert tone="warning">{`Số dư khả dụng còn thiếu ${creditShortage} Credit.`}</Alert>
+              <Link className="mt-3 inline-block" to="/credit">
+                <Button>Nạp Credit</Button>
+              </Link>
+            </div>
+          ) : null}
           {listingFeeError ? (
             <div className="mt-4">
               <Alert tone="error">{listingFeeError}</Alert>
@@ -746,7 +784,11 @@ export function Activities() {
             </Button>
             <Button
               disabled={
-                Boolean(renewingItemId || boostingItemId) || listingFeesLoading || !listingFees
+                Boolean(renewingItemId || boostingItemId) ||
+                feeQuoteLoading ||
+                !feeQuote ||
+                !feeQuote.allowed ||
+                creditShortage > 0
               }
               onClick={() => void confirmListingFeeAction()}
             >
@@ -1380,6 +1422,30 @@ function itemSummary(item: Item, pendingCount: number, chosenRequest?: ItemReque
   }
   if (status === 'APPROVED') return { headline: 'Chưa có ai gửi yêu cầu.', detail: 'Đẩy bài để nhiều người thấy hơn.' };
   return { headline: '', detail: '' };
+}
+
+// Hiển thị theo múi giờ Việt Nam: "HH:mm dd/MM/yyyy" (đẩy bài) và "dd/MM/yyyy" (gia hạn).
+function formatQuoteDateTime(iso: string) {
+  const formatted = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(iso));
+  const [date, time] = formatted.split(', ');
+  return `${time} ${date}`;
+}
+
+function formatQuoteDate(iso: string) {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(iso));
 }
 
 /** Giải thích vì sao một số nút đang khoá, để người dùng không phải đoán. */

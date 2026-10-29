@@ -1,6 +1,7 @@
 package com.shareloop.listingfee.controller;
 
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,6 +13,7 @@ import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
 import com.shareloop.listingfee.ListingFeeErrorCode;
+import com.shareloop.listingfee.dto.BoostQuote;
 import com.shareloop.listingfee.dto.BoostResponse;
 import com.shareloop.listingfee.service.BoostService;
 import java.time.Instant;
@@ -29,6 +31,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class BoostControllerTest {
 
     private static final String URL = "/api/v1/items/31/boost";
+    private static final String QUOTE_URL = "/api/v1/items/31/boost-quote";
 
     @Autowired
     MockMvc mockMvc;
@@ -62,6 +65,32 @@ class BoostControllerTest {
                 .andExpect(jsonPath("$.itemId").value(31))
                 .andExpect(jsonPath("$.boostedUntil").value("2026-10-20T08:00:00Z"))
                 .andExpect(jsonPath("$.creditBalance").value(15));
+    }
+
+    @Test
+    void boostQuote_withoutToken_returns401() throws Exception {
+        // given: request không có header Authorization
+
+        // when + then
+        mockMvc.perform(get(QUOTE_URL))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void boostQuote_whenNotAllowed_returnsReason() throws Exception {
+        // given: token của user 10, service báo không được đẩy
+        String token = jwtService.issue(10L, false);
+        when(boostService.quoteBoost(31L, 10L))
+                .thenReturn(new BoostQuote(5, Instant.parse("2026-11-02T08:00:00Z"), false, "Vượt hạn của bài."));
+
+        // when + then
+        mockMvc.perform(get(QUOTE_URL).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fee").value(5))
+                .andExpect(jsonPath("$.newBoostedUntil").value("2026-11-02T08:00:00Z"))
+                .andExpect(jsonPath("$.allowed").value(false))
+                .andExpect(jsonPath("$.reason").value("Vượt hạn của bài."));
     }
 
     @Test
