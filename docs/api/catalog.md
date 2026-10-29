@@ -56,8 +56,8 @@ Danh sách danh mục đang dùng (`is_active = true`, chưa xoá mềm), sắp 
 
 ```json
 [
-  { "id": 1, "name": "Sách", "parentId": null, "restricted": false, "boostable": true, "sortOrder": 1 },
-  { "id": 7, "name": "Truyện tranh", "parentId": 1, "restricted": false, "boostable": true, "sortOrder": 2 }
+  { "id": 1, "name": "Sách", "parentId": null, "restricted": false, "boostable": true, "sortOrder": 1, "activeItemCount": 4 },
+  { "id": 7, "name": "Truyện tranh", "parentId": 1, "restricted": false, "boostable": true, "sortOrder": 2, "activeItemCount": 0 }
 ]
 ```
 
@@ -71,7 +71,7 @@ Chi tiết một danh mục đang dùng.
 - Lỗi: `400 VALIDATION_FAILED` (`field` = `id`) khi `id` không phải số, ví dụ `GET /api/v1/categories/abc`.
 
 ```json
-{ "id": 1, "name": "Sách", "parentId": null, "restricted": false, "boostable": true, "sortOrder": 1 }
+{ "id": 1, "name": "Sách", "parentId": null, "restricted": false, "boostable": true, "sortOrder": 1, "activeItemCount": 4 }
 ```
 
 ## CategoryResponse
@@ -84,6 +84,7 @@ Chi tiết một danh mục đang dùng.
 | `restricted` | boolean | Danh mục hạn chế (cần kiểm duyệt thêm)               |
 | `boostable`  | boolean | Cho phép đẩy tin (boost) bài đăng thuộc danh mục này |
 | `sortOrder`  | number  | Thứ tự hiển thị, nhỏ đứng trước                      |
+| `activeItemCount` | number | Số bài APPROVED đang hiển thị, chưa hết hạn của riêng danh mục; bằng `totalElements` của `GET /api/v1/items?categoryId={id}` khi không thêm bộ lọc |
 
 ## GET /api/v1/categories/{categoryId}/attributes
 

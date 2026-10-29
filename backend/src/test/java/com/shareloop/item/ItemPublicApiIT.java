@@ -1,9 +1,11 @@
 package com.shareloop.item;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.jayway.jsonpath.JsonPath;
 import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.OfferType;
@@ -59,6 +61,65 @@ class ItemPublicApiIT extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.items[0].title").value("Bài đã duyệt"));
+    }
+
+    @Test
+    void categoryCountMatchesBrowseAcrossBoostPagesAndExcludesExpiredItems() throws Exception {
+        long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long areaId = jdbc.sql("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long userId = jdbc.sql(
+                        "INSERT INTO users (email, password_hash, full_name, phone, status) "
+                                + "VALUES ('category-count-test@shareloop.local', 'unused', 'Test', '0900000888', 'ACTIVE') RETURNING id")
+                .query(Long.class)
+                .single();
+        for (int number = 0; number < 5; number++) {
+            Item entry = item(userId, categoryId, areaId, "category-count-unique " + number);
+            entry.approve();
+            items.saveAndFlush(entry);
+            if (number < 4) {
+                jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP + INTERVAL '1 day', "
+                                + "last_boosted_at = CURRENT_TIMESTAMP WHERE id = :id")
+                        .param("id", entry.getId())
+                        .update();
+            }
+        }
+        Item expired = item(userId, categoryId, areaId, "category-count-unique expired");
+        expired.approve();
+        items.saveAndFlush(expired);
+        jdbc.sql("UPDATE items SET expire_at = CURRENT_TIMESTAMP - INTERVAL '1 day' WHERE id = :id")
+                .param("id", expired.getId())
+                .update();
+        Item hidden = item(userId, categoryId, areaId, "category-count-unique hidden");
+        hidden.approve();
+        hidden.deactivate();
+        items.saveAndFlush(hidden);
+        items.saveAndFlush(item(userId, categoryId, areaId, "category-count-unique pending"));
+
+        String browseBody = mvc.perform(get("/api/v1/items").param("categoryId", String.valueOf(categoryId)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String categoryBody = mvc.perform(get("/api/v1/categories/{id}", categoryId))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        Number browseCount = JsonPath.read(browseBody, "$.totalElements");
+        Number categoryCount = JsonPath.read(categoryBody, "$.activeItemCount");
+        assertThat(categoryCount.longValue()).isEqualTo(browseCount.longValue());
+        mvc.perform(get("/api/v1/items")
+                        .param("categoryId", String.valueOf(categoryId))
+                        .param("q", "category-count-unique")
+                        .param("size", "2")
+                        .param("page", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(5))
+                .andExpect(jsonPath("$.items.length()").value(1));
     }
 
     @Test

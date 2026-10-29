@@ -9,12 +9,17 @@ import org.springframework.stereotype.Component;
 public class CategoryMapper {
 
     public CategoryResponse toResponse(ItemCategory category) {
+        return toResponse(category, 0);
+    }
+
+    public CategoryResponse toResponse(ItemCategory category, long activeItemCount) {
         return new CategoryResponse(
                 category.getId(),
                 category.getName(),
                 category.getParentId(),
                 category.isRestricted(),
                 category.isBoostable(),
-                category.getSortOrder());
+                category.getSortOrder(),
+                activeItemCount);
     }
 }

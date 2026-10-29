@@ -352,7 +352,7 @@ export function Home() {
     setLoading(true);
     setLoadError('');
 
-    void catalogApi.categories().then((categoryData) => {
+    void catalogApi.categoriesWithCounts().then((categoryData) => {
       if (active) setCategoryResponses(categoryData);
     }).catch(() => undefined);
 
@@ -425,10 +425,9 @@ export function Home() {
   const heroItems = boostedItems.filter((item) => item.images.length > 0).slice(0, 8);
   const featured = boostedItems.slice(0, 5);
   const aiPreviewItems = boostedItems.filter((item) => item.images.length > 0).slice(0, 3);
-  const districtCounts = districtOptions.slice(0, 6).map((area) => ({
+  const districtLinks = districtOptions.slice(0, 6).map((area) => ({
     name: area.label,
     id: area.id,
-    count: approved.filter((item) => item.district === area.label).length,
   }));
   const quickLinks = [
     { label: 'Đồ cho tặng', to: '/browse?type=gift' },
@@ -524,11 +523,10 @@ export function Home() {
           <SectionHeading title="Khám phá theo danh mục" description="Tìm nhanh những món đồ đang được chia sẻ trong cộng đồng." href="/browse" />
           <HomeDiscoveryRail label="Khám phá theo danh mục" variant="categories">
             {categories.map((category) => {
-              const categoryItems = approved.filter((item) => item.categoryId === category.id);
               return (
                 <Link key={category.id} to={categoryBrowsePath(category.id)} className="home-category group">
                   <span className="home-category-label">{category.name}</span>
-                  <span className="home-category-count">{categoryItems.length} món đồ</span>
+                  <span className="home-category-count">{category.activeItemCount} món đồ</span>
                 </Link>
               );
             })}
@@ -589,9 +587,9 @@ export function Home() {
         <HomeSection className="home-band">
           <SectionHeading title="Khám phá quanh quận của bạn" description="Chọn khu vực thuận tiện để hẹn giao nhận trực tiếp." href="/browse" linkLabel="Xem mọi khu vực" />
           <div className="home-district-panel" aria-label="Khám phá quanh quận của bạn">
-            {districtCounts.map(({ name, id, count }) => (
+            {districtLinks.map(({ name, id }) => (
               <Link key={id} to={`/browse?district=${id}`} className="home-district">
-                <h3>{name}</h3><span>{count} món đang có</span>
+                <h3>{name}</h3>
               </Link>
             ))}
           </div>

@@ -37,13 +37,15 @@ class CategoryControllerTest {
 
     @Test
     void listReturns200WithoutToken() throws Exception {
-        when(categoryService.listActive()).thenReturn(List.of(new CategoryResponse(1L, "Sách", null, false, true, 1)));
+        when(categoryService.listActive())
+                .thenReturn(List.of(new CategoryResponse(1L, "Sách", null, false, true, 1, 4)));
 
         mockMvc.perform(get("/api/v1/categories"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(1))
                 .andExpect(jsonPath("$[0].name").value("Sách"))
-                .andExpect(jsonPath("$[0].boostable").value(true));
+                .andExpect(jsonPath("$[0].boostable").value(true))
+                .andExpect(jsonPath("$[0].activeItemCount").value(4));
     }
 
     @Test

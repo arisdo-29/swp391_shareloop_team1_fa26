@@ -102,6 +102,16 @@ class ItemServiceTest {
     @InjectMocks
     ItemService itemService;
 
+    @Test
+    void countPublicItemsByCategoryMapsGroupedRows() {
+        when(itemRepository.countPublicItemsByCategory(any(Instant.class)))
+                .thenReturn(List.<Object[]>of(new Object[] {7L, 4L}, new Object[] {9L, 1L}));
+
+        assertThat(itemService.countPublicItemsByCategory())
+                .containsEntry(7L, 4L)
+                .containsEntry(9L, 1L);
+    }
+
     @BeforeEach
     void allowCleanContent() {
         lenient()

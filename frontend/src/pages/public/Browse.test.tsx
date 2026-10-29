@@ -32,6 +32,7 @@ vi.mock('./HomeCommunity', () => ({
 vi.mock('../../services/catalogApi', () => ({
   catalogApi: {
     categories: vi.fn(),
+    categoriesWithCounts: vi.fn(),
     areas: vi.fn(),
   },
 }));
@@ -44,8 +45,8 @@ vi.mock('../../services/itemApi', () => ({
 
 const longCategoryName = 'Sách, truyện, giáo trình, văn phòng phẩm';
 const categories: CategoryResponse[] = [
-  { id: 7, name: 'Đồ điện tử', parentId: null, restricted: false, boostable: true, sortOrder: 1 },
-  { id: 42, name: longCategoryName, parentId: null, restricted: false, boostable: true, sortOrder: 2 },
+  { id: 7, name: 'Đồ điện tử', parentId: null, restricted: false, boostable: true, sortOrder: 1, activeItemCount: 0 },
+  { id: 42, name: longCategoryName, parentId: null, restricted: false, boostable: true, sortOrder: 2, activeItemCount: 0 },
 ];
 
 const book: ItemResponse = {
@@ -111,6 +112,7 @@ function renderBrowseInStrictMode() {
 
 beforeEach(() => {
   vi.mocked(catalogApi.categories).mockResolvedValue(categories);
+  vi.mocked(catalogApi.categoriesWithCounts).mockResolvedValue(categories);
   vi.mocked(catalogApi.areas).mockResolvedValue([]);
   vi.mocked(itemApi.list).mockResolvedValue({ items: [book], page: 0, size: 24, totalElements: 1 });
 });

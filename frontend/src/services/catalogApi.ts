@@ -14,6 +14,7 @@ export interface CategoryResponse {
   restricted: boolean;
   boostable: boolean;
   sortOrder: number;
+  activeItemCount: number;
 }
 
 export interface AreaResponse {
@@ -91,6 +92,10 @@ export const catalogApi = {
   },
   categories(): Promise<CategoryResponse[]> {
     return categoriesResource.read();
+  },
+  async categoriesWithCounts(): Promise<CategoryResponse[]> {
+    const { data } = await http.get<CategoryResponse[]>(catalogApiEndpoints.categories);
+    return data;
   },
   async category(id: number): Promise<CategoryResponse> {
     const { data } = await http.get<CategoryResponse>(catalogApiEndpoints.category(id));
