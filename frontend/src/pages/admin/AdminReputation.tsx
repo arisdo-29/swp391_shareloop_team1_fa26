@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Alert, Button, EmptyState, PageHeader, SkeletonRows } from '../../components/ui';
 import type { AdminConfigResponse } from '../../services/adminConfigApi';
 import { ConfigEditDialog } from './ConfigEditDialog';
-import { GraceStarSection } from './GraceStarSection';
 import { formatConfigValue } from './configDisplay';
 import {
   DIAMOND_MIN_KEY,
@@ -18,30 +17,30 @@ const POST_DISPLAY_DAYS_GOLD_KEY = 'post_display_days_gold';
 interface RankRow {
   name: string;
   minPointsKey: string | null;
-  maxItemsKey: string;
+  regularFeeLimitKey: string;
   displayDaysKey: string | null;
 }
 
 const RANKS: RankRow[] = [
-  { name: 'Đồng', minPointsKey: null, maxItemsKey: 'max_active_items_bronze', displayDaysKey: null },
-  { name: 'Bạc', minPointsKey: SILVER_MIN_KEY, maxItemsKey: 'max_active_items_silver', displayDaysKey: null },
+  { name: 'Đồng', minPointsKey: null, regularFeeLimitKey: 'max_active_items_bronze', displayDaysKey: null },
+  { name: 'Bạc', minPointsKey: SILVER_MIN_KEY, regularFeeLimitKey: 'max_active_items_silver', displayDaysKey: null },
   {
     name: 'Vàng',
     minPointsKey: GOLD_MIN_KEY,
-    maxItemsKey: 'max_active_items_gold',
+    regularFeeLimitKey: 'max_active_items_gold',
     displayDaysKey: POST_DISPLAY_DAYS_GOLD_KEY,
   },
   {
     name: 'Kim cương',
     minPointsKey: DIAMOND_MIN_KEY,
-    maxItemsKey: 'max_active_items_diamond',
+    regularFeeLimitKey: 'max_active_items_diamond',
     displayDaysKey: null,
   },
 ];
 
 // Các key đã nằm trong bảng hạng nên không lặp lại ở bảng quy tắc cộng điểm.
 const RANK_TABLE_KEYS = new Set(
-  RANKS.flatMap((rank) => [rank.minPointsKey, rank.maxItemsKey, rank.displayDaysKey]).filter(
+  RANKS.flatMap((rank) => [rank.minPointsKey, rank.regularFeeLimitKey, rank.displayDaysKey]).filter(
     (key): key is string => key !== null,
   ),
 );
@@ -69,7 +68,7 @@ function EditableValue({
   );
 }
 
-/** Uy tín và Hạng: cấu hình hạng thành viên, quy tắc cộng điểm (dùng API cấu hình có sẵn) và cấp sao ân hạn. */
+/** Uy tín và Hạng: cấu hình hạng thành viên và quy tắc cộng điểm (dùng API cấu hình có sẵn). */
 export function AdminReputation() {
   const { configs, loading, error, reload, saving, saveError, setSaveError, clearSaveError, update } =
     useAdminConfigs();
@@ -125,8 +124,7 @@ export function AdminReputation() {
           <section>
             <h2 className="mb-1 section-title">Hạng thành viên</h2>
             <p className="mb-3 text-sm text-text-muted">
-              Điểm tối thiểu phải tăng dần: Bạc nhỏ hơn Vàng, Vàng nhỏ hơn Kim cương. Hạn mức bài đăng -1 nghĩa là không
-              giới hạn.
+              Điểm tối thiểu phải tăng dần: Bạc nhỏ hơn Vàng, Vàng nhỏ hơn Kim cương. Bài Trao đổi vượt ngưỡng phí thường vẫn được đăng với phí cao hơn.
             </p>
             <div className="table-wrap">
               <table className="data-table">
@@ -134,7 +132,7 @@ export function AdminReputation() {
                   <tr>
                     <th>Hạng</th>
                     <th>Điểm tối thiểu</th>
-                    <th>Số bài đăng tối đa</th>
+                    <th>Số bài Trao đổi phí thường</th>
                     <th>Số ngày hiển thị bài</th>
                   </tr>
                 </thead>
@@ -152,7 +150,7 @@ export function AdminReputation() {
                           )}
                         </td>
                         <td>
-                          <EditableValue config={byKey(rank.maxItemsKey)} onEdit={openEditor} />
+                          <EditableValue config={byKey(rank.regularFeeLimitKey)} onEdit={openEditor} />
                         </td>
                         <td>
                           {rank.displayDaysKey ? (
@@ -206,8 +204,6 @@ export function AdminReputation() {
           </section>
         </>
       )}
-
-      <GraceStarSection />
 
       {editing ? (
         <ConfigEditDialog

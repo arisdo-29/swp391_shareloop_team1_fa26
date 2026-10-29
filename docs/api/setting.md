@@ -30,13 +30,13 @@ Trả danh sách cấu hình nghiệp vụ cho Admin. Endpoint đọc giá trị
 
 | `group` | `groupLabel` | Gồm các khoá |
 |---|---|---|
-| `FEES` | Phí và nạp tiền | `vnd_per_credit`, `topup_min_credits`, `post_fee`, `edit_fee`, `renew_fee`, `boost_fee`, `ai_search_fee`, `payment_order_expire_minutes` |
+| `FEES` | Phí và nạp tiền | `vnd_per_credit`, `topup_min_credits`, `post_fee`, `post_fee_over_quota`, `edit_fee`, `renew_fee`, `boost_fee`, `ai_search_fee`, `payment_order_expire_minutes` |
 | `POSTING` | Đăng bài và hiển thị | `post_display_days`, `renew_expired_window_days`, `boost_days`, `boost_max_days`, `item_photos_min`, `item_photos_max`, `image_max_mb`, `media_orphan_hours` |
 | `AI` | AI trợ lý và sàng lọc | `ai_free_per_day`, `ai_trial_uses`, `ai_search_timeout_seconds`, `chat_ai_threshold`, `chat_ai_timeout_seconds`, `item_ai_screening_enabled` (`true`/`false`, mặc định `false` theo SRS v11), `item_ai_timeout_seconds`, `item_ai_retries` |
-| `MODERATION` | Kiểm duyệt và báo cáo | `chat_violation_alert`, `review_sla_hours`, `report_hide_threshold` |
+| `MODERATION` | Kiểm duyệt và báo cáo | `chat_violation_alert`, `report_hide_threshold` (`review_sla_hours` đã bỏ, KD-06) |
 | `ACCOUNT` | Tài khoản và OTP | `otp_ttl_minutes`, `otp_max_failed`, `otp_resend_cooldown_seconds`, `pending_account_ttl_hours`, `accounts_per_ip_24h`, `phone_change_interval_days` |
 | `TRANSACTION` | Yêu cầu và giao dịch | `max_pending_requests`, `request_pending_days`, `chat_open_days`, `auto_confirm_days`, `stuck_request_hours` |
-| `REPUTATION` | Uy tín và hạng | `post_display_days_gold`, `max_active_items_*` (Trao đổi theo hạng: Đồng 5, Bạc 8, Vàng 15, Kim cương -1), `max_active_give_items` (Cho tặng, mặc định 5), `daily_points_cap`, `reputation_*` |
+| `REPUTATION` | Uy tín và hạng | `post_display_days_gold`, `max_active_items_*` (ngưỡng phí thường Trao đổi: Đồng 5, Bạc 8, Vàng 15, Kim cương -1), `max_active_give_items` (Cho tặng, mặc định 5), `daily_points_cap`, `reputation_*` |
 
 Trang Cấu hình hệ thống bỏ nhóm `REPUTATION`; nhóm này hiện ở trang Uy tín và Hạng.
 
@@ -140,7 +140,9 @@ Response là danh sách các match:
 
 ## Admin review checklist (#37)
 
-Các endpoint quản lý bộ điều kiện đạt checklist kiểm duyệt bài đăng (nhóm `CHECKLIST` trong `website_attributes`). Chỉ Admin được gọi. Dùng câu “đạt thì tích”: `true` nghĩa là bài đáp ứng điều kiện. API quản lý vẫn giữ tên trường `question`; API hàng chờ trả mục active dạng `{id, key, statement}` theo `sort_order`, rồi `id` (xem [Review API](review.md)).
+Các endpoint quản lý bộ điều kiện đạt checklist kiểm duyệt bài đăng (nhóm `CHECKLIST` trong `website_attributes`). Chỉ Admin được gọi. Dùng câu “đạt thì tích”: `true` nghĩa là bài đáp ứng điều kiện. API quản lý vẫn giữ tên trường `question`; API hàng chờ trả mục active dạng `{id, key, statement, description}` theo `sort_order`, rồi `id` (xem [Review API](review.md)).
+
+**Mô tả điều kiện đạt (Q01):** mỗi mục có thêm `description` dạng `Đạt khi ... Từ chối nếu ...`, lưu ở `extra.description` của chính dòng `CHECKLIST`, không thêm bảng hay cột. Trang Duyệt bài hiện mô tả ngay dưới tên mục. `GET` trả `description` (`null` khi chưa có). `POST`/`PUT` nhận `description` không bắt buộc, tối đa 1000 ký tự: bỏ trường thì giữ mô tả cũ, chuỗi rỗng thì xoá mô tả. Migration `V202610291200` đổi 10 câu seed theo bảng của Tân (chỉ khi câu chưa bị Admin sửa) và thêm mô tả cho mục chưa có.
 
 ### GET /api/v1/admin/checklist
 

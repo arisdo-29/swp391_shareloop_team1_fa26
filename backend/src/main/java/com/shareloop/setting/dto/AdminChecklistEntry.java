@@ -16,4 +16,12 @@ public record AdminChecklistEntry(
         int sortOrder,
 
         @Schema(description = "Trạng thái kích hoạt", example = "true")
-        boolean active) {}
+        boolean active,
+
+        @Schema(description = "Mô tả điều kiện đạt (Q01); null khi chưa có", example = "Đạt khi có từ 3 ảnh chụp thật.")
+        String description) {
+
+    public AdminChecklistEntry(Long id, String key, String question, int sortOrder, boolean active) {
+        this(id, key, question, sortOrder, active, null);
+    }
+}

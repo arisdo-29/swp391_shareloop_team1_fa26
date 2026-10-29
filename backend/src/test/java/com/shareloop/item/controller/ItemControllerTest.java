@@ -169,13 +169,15 @@ class ItemControllerTest {
                 .thenReturn(new com.shareloop.item.dto.PostingQuotaResponse(
                         new com.shareloop.item.dto.PostingQuotaResponse.Quota(2, 5),
                         new com.shareloop.item.dto.PostingQuotaResponse.Quota(9, -1),
-                        "DIAMOND"));
+                        "DIAMOND",
+                        5));
 
         mockMvc.perform(get("/api/v1/me/posting-quota").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.give.active").value(2))
                 .andExpect(jsonPath("$.give.limit").value(5))
                 .andExpect(jsonPath("$.swap.limit").value(-1))
+                .andExpect(jsonPath("$.nextPostFee").value(5))
                 .andExpect(jsonPath("$.rank").value("DIAMOND"));
     }
 

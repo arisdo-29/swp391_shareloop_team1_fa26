@@ -26,6 +26,8 @@ public interface ItemFeeSnapshot {
 
     boolean getFreeEditUsed();
 
+    boolean getPostFeePaid();
+
     // Cột status thuộc module item; listingfee chỉ đọc để kiểm bài còn được gia hạn không, không bao giờ ghi.
     ItemStatus getStatus();
 

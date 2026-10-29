@@ -58,8 +58,8 @@ const editQuoteReasonLabel: Record<EditQuoteReason, string> = {
   PENDING_REVIEW_OVERWRITE: 'Cập nhật bản sửa đang chờ duyệt',
   FIRST_FREE_EDIT: 'Lượt sửa miễn phí đầu tiên',
   PAID_EDIT: 'Lượt sửa có phí',
-  OFFER_TYPE_CHANGE_FREE: 'Đổi hình thức đăng miễn phí',
-  OFFER_TYPE_CHANGE_POST_FEE: 'Đổi hình thức đăng, tính phí đăng bài',
+  OFFER_TYPE_CHANGE_FREE: 'Đổi hình thức không thu thêm phí đăng',
+  OFFER_TYPE_CHANGE_POST_FEE: 'Đổi sang Trao đổi và giữ phí đăng',
 };
 
 function getEditQuoteReasonLabel(reason: string) {
@@ -191,8 +191,12 @@ export function Activities() {
     setEditQuoteError('');
     setEditQuoteNeedsTopUp(false);
     try {
-      const latestQuote = await itemApi.getEditQuote(apiEditingItem.id);
+      const latestQuote = await itemApi.getEditQuote(apiEditingItem.id, input.offerType);
       setEditQuote(latestQuote);
+      if (editQuote && latestQuote.amount !== editQuote.amount) {
+        setEditQuoteError(`Mức phí vừa đổi thành ${latestQuote.amount} Credit. Vui lòng xem lại và bấm Lưu lần nữa.`);
+        return;
+      }
       const updated = await itemApi.update(apiEditingItem.id, input);
       const mapped = toFeItem(
         updated,
@@ -709,6 +713,7 @@ export function Activities() {
                 disabled={editSaving || editQuoteLoading}
                 onCancel={() => setEditingId('')}
                 onSave={saveApiItem}
+                onQuoteChange={setEditQuote}
               />
             ) : editQuoteLoading ? null : (
               <div className="mt-6 flex justify-end">
@@ -869,6 +874,7 @@ function EditItemForm({
   disabled,
   onCancel,
   onSave,
+  onQuoteChange,
 }: {
   item: ItemResponse;
   categories: CategoryResponse[];
@@ -876,8 +882,12 @@ function EditItemForm({
   disabled: boolean;
   onCancel: () => void;
   onSave: (input: UpdateItemRequest) => Promise<void>;
+  onQuoteChange: (quote: EditQuote) => void;
 }) {
   const [offerType, setOfferType] = useState<OfferType>(item.offerType);
+  const [pendingOfferType, setPendingOfferType] = useState<OfferType | null>(null);
+  const [pendingOfferQuote, setPendingOfferQuote] = useState<EditQuote | null>(null);
+  const [switchQuoteLoading, setSwitchQuoteLoading] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description);
   const [desiredItem, setDesiredItem] = useState(item.desiredItem ?? '');
@@ -913,7 +923,31 @@ function EditItemForm({
   );
   const operatingStatusRequired = operatingStatusAttribute?.required ?? false;
   const operatingStatusOptions = operatingStatusAttribute?.options.filter(isOperatingStatus) ?? [];
-  const formDisabled = disabled || uploading;
+  const formDisabled = disabled || uploading || switchQuoteLoading;
+
+  const chooseOfferType = async (target: OfferType) => {
+    if (target === offerType) return;
+    if (target === item.offerType) {
+      setOfferType(target);
+      try {
+        onQuoteChange(await itemApi.getEditQuote(item.id, target));
+      } catch {
+        setUploadError('Không tải được phí sửa bài. Vui lòng thử lại.');
+      }
+      return;
+    }
+    setSwitchQuoteLoading(true);
+    setUploadError('');
+    try {
+      const quote = await itemApi.getEditQuote(item.id, target);
+      setPendingOfferQuote(quote);
+      setPendingOfferType(target);
+    } catch {
+      setUploadError('Không tải được phí đổi hình thức. Vui lòng thử lại.');
+    } finally {
+      setSwitchQuoteLoading(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -1062,17 +1096,38 @@ function EditItemForm({
           label="Hình thức"
           value={offerType}
           disabled={formDisabled}
-          onChange={(event) => setOfferType(event.target.value as OfferType)}
+          onChange={(event) => { void chooseOfferType(event.target.value as OfferType); }}
         >
           <option value="GIVE">Cho tặng</option>
-          <option value="SWAP" disabled={item.offerType === 'GIVE'}>
+          <option value="SWAP">
             Trao đổi
           </option>
         </Select>
-        {item.offerType === 'GIVE' ? (
-          <p className="mt-1 text-xs text-text-muted">Muốn trao đổi thì đăng bài mới.</p>
-        ) : null}
       </div>
+      {pendingOfferType && pendingOfferQuote ? (
+        <DialogFrame>
+          <h2 className="text-xl font-bold">Xác nhận đổi hình thức bài</h2>
+          <p className="mt-3 text-sm leading-6 text-text-secondary">
+            {pendingOfferType === 'GIVE'
+              ? 'Chuyển sang Cho tặng. Phí Trao đổi đã thu trước đó sẽ không được hoàn lại. Khoản phí đang giữ (nếu có) sẽ được nhả khi gửi bản sửa.'
+              : pendingOfferQuote.amount > 0
+                ? `Chuyển sang Trao đổi sẽ giữ ${pendingOfferQuote.amount} Credit khi gửi duyệt. Phí chỉ trừ khi bản sửa được duyệt; bị từ chối sẽ nhả lại.`
+                : 'Chuyển lại sang Trao đổi miễn phí vì bài này đã trả phí đăng Trao đổi trước đó.'}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-text-secondary">
+            Khi lưu, bài sẽ chờ duyệt lại và mọi yêu cầu đang chờ của bài sẽ bị huỷ. Người gửi yêu cầu sẽ nhận được thông báo.
+          </p>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => { setPendingOfferType(null); setPendingOfferQuote(null); }}>Hủy</Button>
+            <Button type="button" onClick={() => {
+              setOfferType(pendingOfferType);
+              onQuoteChange(pendingOfferQuote);
+              setPendingOfferType(null);
+              setPendingOfferQuote(null);
+            }}>Xác nhận chuyển</Button>
+          </div>
+        </DialogFrame>
+      ) : null}
       {offerType === 'SWAP' ? (
         <Field
           label="Món muốn đổi"

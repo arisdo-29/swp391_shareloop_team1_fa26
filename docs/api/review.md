@@ -40,8 +40,8 @@ Các trường `aiRisk`, `moderationFlag`, `flagReason` vẫn có trong response
     }
   ],
   "checklist": [
-    {"id": 11, "key": "real_photos", "statement": "Ảnh là ảnh thật của đúng món đồ, đủ số lượng, không lấy trên mạng."},
-    {"id": 12, "key": "category_match", "statement": "Danh mục đúng với món đồ."}
+    {"id": 11, "key": "real_photos", "statement": "Ảnh chụp thực tế rõ nét của đúng món đồ, từ 3 ảnh trở lên, không dùng ảnh mạng.", "description": "Đạt khi có từ 3 ảnh chụp thật, rõ nét, đủ góc của đúng món đồ. Từ chối nếu dùng ảnh tải từ mạng..."},
+    {"id": 12, "key": "category_match", "statement": "Danh mục và thẻ phân loại phản ánh đúng món đồ.", "description": null}
   ],
   "page": 0,
   "size": 20
@@ -100,8 +100,8 @@ Chi tiết một bài đăng cho Admin kiểm duyệt, ở **mọi trạng thái
   "matchedTerms": ["zalo"],
   "authStatus": "NONE",
   "checklist": [
-    {"id": 11, "key": "real_photos", "statement": "Ảnh là ảnh thật của đúng món đồ, đủ số lượng, không lấy trên mạng."},
-    {"id": 12, "key": "category_match", "statement": "Danh mục đúng với món đồ."}
+    {"id": 11, "key": "real_photos", "statement": "Ảnh chụp thực tế rõ nét của đúng món đồ, từ 3 ảnh trở lên, không dùng ảnh mạng.", "description": "Đạt khi có từ 3 ảnh chụp thật, rõ nét, đủ góc của đúng món đồ. Từ chối nếu dùng ảnh tải từ mạng..."},
+    {"id": 12, "key": "category_match", "statement": "Danh mục và thẻ phân loại phản ánh đúng món đồ.", "description": null}
   ],
   "createdAt": "2026-10-14T10:00:00Z",
   "updatedAt": "2026-10-14T10:05:00Z"
@@ -161,7 +161,7 @@ Duyệt bài đăng đang chờ kiểm duyệt. Gửi đáp án theo `id` của 
 
 ---
 
-Snapshot và log `REVIEW_APPROVE` lưu `{"checks":[{"id":11,"key":"real_photos","statement":"Ảnh là ảnh thật của đúng món đồ, đủ số lượng, không lấy trên mạng.","passed":true}]}` theo thứ tự cấu hình. Snapshot cũ được chuyển từ câu seed có `key`, `statement`, `passed`, không bổ sung `id` hồi tố.
+Snapshot và log `REVIEW_APPROVE` lưu `{"checks":[{"id":11,"key":"real_photos","statement":"Ảnh là ảnh thật của đúng món đồ, đủ số lượng, không lấy trên mạng.","passed":true}]}` theo thứ tự cấu hình, kèm `description` khi mục có mô tả (Q01). Snapshot cũ được chuyển từ câu seed có `key`, `statement`, `passed`, không bổ sung `id` hồi tố.
 
 `flagReasonCode` giữ mã gốc hoặc lý do tự do; `flagReason` là câu tiếng Việt, nối từ khớp khi mã là `LEXICON_REVIEW`. `matchedTerms` là mảng chuỗi, rỗng nếu dữ liệu cũ không có. Các trường này cũng áp dụng endpoint tương thích cũ.
 
@@ -331,19 +331,11 @@ Thu hồi nhãn hàng chính hãng khi phát hiện chứng từ giả mạo. Ch
 
 ---
 
-## 9. Job cảnh báo bài chờ duyệt quá SLA (`ReviewSlaJob`, không có API)
+## 9. (Đã bỏ) Job cảnh báo bài chờ duyệt quá SLA (`ReviewSlaJob`)
 
-Cảnh báo Admin khi có bài chờ duyệt quá SLA (FR-121, BR-A02, Issue #151). Job chạy phút 45 mỗi giờ khi `app.jobs.enabled=true` (dev, prod), gọi `ReviewSlaService.alertOverdueReviews(now)`.
-
-- **Bài quá SLA:** `status = PENDING_REVIEW`, chưa xoá mềm, và `updated_at <= now - review_sla_hours` (mặc định `24` giờ, đọc từ `ConfigService`). Bài chờ **đúng** 24 giờ đã tính là quá SLA.
-- **Mốc tính thời gian chờ:** `updated_at`, tức lần gửi gần nhất. Bài đã duyệt mà sửa thì quay lại `PENDING_REVIEW` và được tính lại từ lúc gửi bản sửa. Người đăng sửa trong lúc chờ thì thời gian chờ cũng tính lại.
-- **Thông báo:** Mỗi lượt chạy gửi **một** thông báo tổng hợp cho mọi Admin, không gửi theo từng bài (không có bảng lưu bài nào đã được cảnh báo). Còn bài quá SLA thì lượt sau báo lại. Không có bài nào quá SLA thì không gửi.
-
-| Trường | Giá trị |
-|---|---|
-| `type` | `REVIEW_SLA_OVERDUE` |
-| `title` | `Bài chờ duyệt quá SLA` |
-| `body` | `"<N> bài đã chờ duyệt từ 24 giờ trở lên. Vui lòng xử lý hàng chờ duyệt."` |
-| `link` | `/admin/moderation` |
-
+Nhóm chốt bỏ thông báo nhắc Admin bài chờ duyệt quá 24 giờ (KD-06, TD-04) vì dễ làm trôi thông báo quan trọng.
+`ReviewSlaJob`, `ReviewSlaService` và loại thông báo `REVIEW_SLA_OVERDUE` đã xoá. Job cũng không còn chạy qua
+`POST /internal/jobs/run`. Cấu hình `review_sla_hours` được xoá mềm (migration
+`V202610301100__review_retire_sla_hours_config`) nên không còn hiện ở trang cấu hình Admin. Thông báo cũ đã gửi vẫn giữ
+nguyên. Thứ tự hàng chờ duyệt (mục 1) không đổi.
 

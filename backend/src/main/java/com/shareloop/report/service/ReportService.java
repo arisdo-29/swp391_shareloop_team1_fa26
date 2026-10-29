@@ -531,6 +531,14 @@ public class ReportService {
         if (report.getStatus() == ReportStatus.RESOLVED || report.getStatus() == ReportStatus.DISMISSED) {
             throw new BusinessException(ReportErrorCode.REPORT_ALREADY_CONCLUDED);
         }
+        // D-15, BC-10: còn hạn giải trình thì chưa kết luận; trả kèm hạn để FE hiện cho Admin
+        if (report.isResponseWindowOpen(Instant.now(clock))) {
+            throw new BusinessException(
+                    ReportErrorCode.REPORT_RESPONSE_WINDOW_OPEN,
+                    null,
+                    null,
+                    Map.of("responseDueAt", report.getResponseDueAt().toString()));
+        }
 
         ReportDecision decision = request.decision();
         String note = request.note() != null ? request.note().trim() : null;

@@ -53,7 +53,7 @@ class MoneyFlowConcurrencyIT extends MoneyFlowTestBase {
         assertThat(List.of(renewFee, boostFee)).containsOnly(postFee);
         long userId = createUser();
         grantCredit(userId, 2 * postFee);
-        long renewItemId = insertApprovedItem(userId);
+        long renewItemId = insertApprovedSwapItem(userId);
         long boostItemId = insertApprovedItem(userId);
         List<String> images = uploadedImages(userId);
 

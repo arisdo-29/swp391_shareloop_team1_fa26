@@ -56,6 +56,7 @@ public class AdminChecklistService {
                 + 10;
         String attrKey = "chk_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         WebsiteAttribute attribute = new WebsiteAttribute(ATTR_GROUP, attrKey, question, null, sortOrder);
+        attribute.updateChecklistDescription(normalizeDescription(request.description()));
         WebsiteAttribute saved = repository.saveAndFlush(attribute);
         logAction(ActivityType.CHECKLIST_CREATE, adminId, saved);
         return toResponse(saved);
@@ -71,6 +72,10 @@ public class AdminChecklistService {
         WebsiteAttribute attribute = requireEntry(id);
         String question = validateQuestion(request);
         attribute.updateChecklist(question);
+        // null: client cũ không gửi mô tả thì giữ nguyên. Chuỗi rỗng: Admin xoá mô tả.
+        if (request.description() != null) {
+            attribute.updateChecklistDescription(normalizeDescription(request.description()));
+        }
         WebsiteAttribute saved = repository.saveAndFlush(attribute);
         logAction(ActivityType.CHECKLIST_UPDATE, adminId, saved);
         return toResponse(saved);
@@ -162,6 +167,10 @@ public class AdminChecklistService {
     private void logAction(ActivityType type, Long adminId, WebsiteAttribute attribute) {
         Map<String, Object> data = new HashMap<>();
         data.put("question", attribute.getAttrValue());
+        String description = descriptionOf(attribute);
+        if (description != null) {
+            data.put("description", description);
+        }
         data.put("active", attribute.isActive());
         activityLogService.log(type.name(), adminId, LOG_TARGET_TYPE, attribute.getId(), data, null);
     }
@@ -187,6 +196,16 @@ public class AdminChecklistService {
                 attribute.getAttrKey(),
                 attribute.getAttrValue(),
                 attribute.getSortOrder(),
-                attribute.isActive());
+                attribute.isActive(),
+                descriptionOf(attribute));
+    }
+
+    private static String descriptionOf(WebsiteAttribute attribute) {
+        Map<String, Object> extra = attribute.getExtra();
+        return extra != null && extra.get("description") instanceof String description ? description : null;
+    }
+
+    private static String normalizeDescription(String description) {
+        return description == null || description.isBlank() ? null : description.trim();
     }
 }

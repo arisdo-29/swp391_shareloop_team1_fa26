@@ -14,6 +14,8 @@ import com.shareloop.report.repository.ReportRepository;
 import com.shareloop.request.service.RequestService;
 import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.service.UserService;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,18 +33,21 @@ public class AdminReportQueryService {
     private final ItemQueryService items;
     private final RequestService requests;
     private final ReportEvidenceService evidence;
+    private final Clock clock;
 
     public AdminReportQueryService(
             ReportRepository reports,
             UserService users,
             ItemQueryService items,
             RequestService requests,
-            ReportEvidenceService evidence) {
+            ReportEvidenceService evidence,
+            Clock clock) {
         this.reports = reports;
         this.users = users;
         this.items = items;
         this.requests = requests;
         this.evidence = evidence;
+        this.clock = clock;
     }
 
     /**
@@ -114,7 +119,9 @@ public class AdminReportQueryService {
                 report.getStarsDeducted(),
                 report.getResolvedAt(),
                 itemTitle,
-                nameOf(briefs, report.getResolvedBy()));
+                nameOf(briefs, report.getResolvedBy()),
+                // Cùng luật với ReportService.conclude, tính theo giờ server để FE không phải tự so giờ máy
+                report.isResponseWindowOpen(Instant.now(clock)));
     }
 
     // Id bài đăng liên quan của từng hồ sơ. Hồ sơ REQUEST lấy bài qua giao dịch, giao dịch đã xoá thì bỏ qua.
