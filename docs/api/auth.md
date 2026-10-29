@@ -183,6 +183,9 @@ Quy tắc:
   dùng `401`: FE gặp `401` sẽ coi là hết phiên và đăng xuất.
 - Mật khẩu mới trùng mật khẩu hiện tại → `AUTH_NEW_PASSWORD_SAME_AS_CURRENT` (`field` = `newPassword`).
 - Mật khẩu mới lưu dạng BCrypt.
+- Đổi thành công thì gửi email báo cho chủ tài khoản: "Mật khẩu ShareLoop vừa được đổi lúc HH:mm dd/MM. Nếu không
+  phải bạn, hãy dùng Quên mật khẩu ngay." (giờ Việt Nam, `Asia/Ho_Chi_Minh`). Mail gửi sau khi commit và chạy nền như
+  email OTP; gửi lỗi chỉ ghi log, API vẫn trả `204`. Không thêm OTP vào luồng đổi mật khẩu.
 - JWT không lưu trạng thái: sau khi đổi, **token đang dùng vẫn hợp lệ** đến khi hết hạn; FE không cần đăng nhập lại.
   Thu hồi token cũ nằm ngoài phạm vi.
 
