@@ -93,6 +93,10 @@ class ItemEditIT extends IntegrationTest {
                 .param("id", ownerId)
                 .update();
         long itemId = approvedItem(ownerId);
+        long firstReceiverId = user("item-edit-receiver8a@shareloop.local", "0900000762");
+        long secondReceiverId = user("item-edit-receiver8b@shareloop.local", "0900000763");
+        long firstRequestId = pendingRequest(itemId, firstReceiverId, "GIVE");
+        long secondRequestId = pendingRequest(itemId, secondReceiverId, "GIVE");
         String swapBody = body("Tên mới", "Mô tả mới")
                 .replace("\"offerType\":\"GIVE\"", "\"offerType\":\"SWAP\",\"desiredItem\":\"Sách khác\"");
 
@@ -103,6 +107,7 @@ class ItemEditIT extends IntegrationTest {
                         .content(swapBody))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PENDING_REVIEW"));
+        entityManager.flush();
         assertThat(jdbc.sql("SELECT offer_type FROM items WHERE id = :id")
                         .param("id", itemId)
                         .query(String.class)
@@ -118,6 +123,90 @@ class ItemEditIT extends IntegrationTest {
                         .query(Integer.class)
                         .single())
                 .isEqualTo(5);
+        assertThat(jdbc.sql("SELECT status FROM requests WHERE id IN (:first, :second) ORDER BY id")
+                        .param("first", firstRequestId)
+                        .param("second", secondRequestId)
+                        .query(String.class)
+                        .list())
+                .containsExactly("CANCELLED", "CANCELLED");
+        assertThat(jdbc.sql("SELECT type FROM notifications WHERE user_id IN (:first, :second) ORDER BY user_id")
+                        .param("first", firstReceiverId)
+                        .param("second", secondReceiverId)
+                        .query(String.class)
+                        .list())
+                .containsExactly("REQUEST_CANCELLED", "REQUEST_CANCELLED");
+    }
+
+    @Test
+    void updateItem_whenGiveChangesToSwapWithoutCredit_keepsItemAndPendingRequest() throws Exception {
+        long ownerId = user("item-edit-owner8c@shareloop.local", "0900000764");
+        long receiverId = user("item-edit-receiver8c@shareloop.local", "0900000765");
+        long itemId = approvedItem(ownerId);
+        long requestId = pendingRequest(itemId, receiverId, "GIVE");
+        jdbc.sql("UPDATE users SET credit_balance = 0 WHERE id = :id")
+                .param("id", ownerId)
+                .update();
+        String swapBody = body("Tên mới", "Mô tả mới")
+                .replace("\"offerType\":\"GIVE\"", "\"offerType\":\"SWAP\",\"desiredItem\":\"Sách khác\"");
+
+        mvc.perform(put("/api/v1/items/{id}", itemId)
+                        .header("Authorization", "Bearer " + jwtService.issue(ownerId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(swapBody))
+                .andExpect(status().isPaymentRequired())
+                .andExpect(jsonPath("$.code").value("WALLET_INSUFFICIENT_BALANCE"));
+
+        entityManager.flush();
+        assertThat(jdbc.sql("SELECT offer_type FROM items WHERE id = :id")
+                        .param("id", itemId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("GIVE");
+        assertThat(jdbc.sql("SELECT status FROM requests WHERE id = :id")
+                        .param("id", requestId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("PENDING");
+        assertThat(jdbc.sql("SELECT count(*) FROM notifications WHERE user_id = :id")
+                        .param("id", receiverId)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    @Test
+    void updateItem_whenSwapChangesToGive_cancelsPendingRequestWithoutRefund() throws Exception {
+        long ownerId = user("item-edit-owner8d@shareloop.local", "0900000766");
+        long receiverId = user("item-edit-receiver8d@shareloop.local", "0900000767");
+        long itemId = approvedItem(ownerId);
+        jdbc.sql("UPDATE items SET offer_type = 'SWAP', desired_item = 'Sách', post_fee_paid = true WHERE id = :id")
+                .param("id", itemId)
+                .update();
+        long requestId = pendingRequest(itemId, receiverId, "SWAP");
+
+        mvc.perform(put("/api/v1/items/{id}", itemId)
+                        .header("Authorization", "Bearer " + jwtService.issue(ownerId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Tên mới", "Mô tả mới")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING_REVIEW"));
+
+        entityManager.flush();
+        assertThat(jdbc.sql("SELECT status FROM requests WHERE id = :id")
+                        .param("id", requestId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("CANCELLED");
+        assertThat(jdbc.sql("SELECT post_fee_paid FROM items WHERE id = :id")
+                        .param("id", itemId)
+                        .query(Boolean.class)
+                        .single())
+                .isTrue();
+        assertThat(jdbc.sql("SELECT credit_balance FROM users WHERE id = :id")
+                        .param("id", ownerId)
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(20);
     }
 
     @Test
@@ -299,6 +388,16 @@ class ItemEditIT extends IntegrationTest {
                 .param("ownerId", ownerId)
                 .param("categoryId", categoryId)
                 .param("areaId", areaId)
+                .query(Long.class)
+                .single();
+    }
+
+    private long pendingRequest(long itemId, long receiverId, String type) {
+        return jdbc.sql("INSERT INTO requests (item_id, receiver_id, type, status) "
+                        + "VALUES (:itemId, :receiverId, :type, 'PENDING') RETURNING id")
+                .param("itemId", itemId)
+                .param("receiverId", receiverId)
+                .param("type", type)
                 .query(Long.class)
                 .single();
     }
