@@ -76,6 +76,17 @@ public class WebsiteAttribute extends BaseEntity {
         this.attrValue = question;
     }
 
+    /** Mô tả điều kiện đạt của mục checklist (Q01), lưu ở extra.description. null hoặc rỗng thì xoá. */
+    public void updateChecklistDescription(String description) {
+        java.util.HashMap<String, Object> values = new java.util.HashMap<>(getExtra());
+        if (description == null || description.isBlank()) {
+            values.remove("description");
+        } else {
+            values.put("description", description);
+        }
+        this.extra = values.isEmpty() ? null : Map.copyOf(values);
+    }
+
     public void updateSortOrder(int sortOrder) {
         this.sortOrder = sortOrder;
     }

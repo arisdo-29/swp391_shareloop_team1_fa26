@@ -46,7 +46,24 @@ class ConfigServiceIT extends IntegrationTest {
         assertThat(checklist)
                 .extracting(ChecklistItem::statement)
                 .hasSizeGreaterThanOrEqualTo(1)
-                .startsWith("Không cần sang tên, đăng ký hay công chứng để đổi chủ.");
+                .startsWith("Món đồ không thuộc diện tài sản phải đăng ký sang tên hay công chứng.");
+    }
+
+    @Test
+    void q01_everySeededChecklistItemHasPassConditionWithoutSemicolon() {
+        List<ChecklistItem> checklist = configService.checklistItems();
+
+        assertThat(checklist).hasSize(10);
+        assertThat(checklist).allSatisfy(item -> {
+            assertThat(item.description()).startsWith("Đạt khi").contains("Từ chối nếu");
+            assertThat(item.statement()).doesNotContain(";");
+            assertThat(item.description()).doesNotContain(";");
+        });
+        assertThat(checklist)
+                .filteredOn(item -> item.key().equals("desired_item"))
+                .singleElement()
+                .satisfies(item ->
+                        assertThat(item.statement()).isEqualTo("Nhu cầu trao đổi rõ ràng, không ghi chung chung."));
     }
 
     @Test
