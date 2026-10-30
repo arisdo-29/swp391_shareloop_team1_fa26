@@ -3,18 +3,20 @@ import { Button, PageHeader } from '../../components/ui';
 
 const safetySections = [
   ['Trước khi gặp', [
-    'Trao đổi và thống nhất thông tin trong cuộc trò chuyện của ShareLoop.',
-    'Chọn nơi công cộng, đông người và thời gian thuận tiện cho cả hai bên.',
+    'Trao đổi trong cuộc trò chuyện của ShareLoop. Trước khi chốt lịch, tin chứa số điện thoại, email, link, mạng xã hội bị chặn. Sau khi chốt, họ tên, email, số điện thoại của nhau hiện trong giao dịch, chỉ trong app.',
+    'Gặp trực tiếp thì chọn nơi công cộng, đông người. Gửi qua đơn vị vận chuyển thì hai bên tự gửi và đều bấm cam kết tự chịu trách nhiệm.',
     'Không chuyển tiền, đặt cọc hoặc cung cấp thông tin tài chính.',
   ]],
   ['Khi giao nhận', [
-    'Kiểm tra món đồ và đối chiếu với hình ảnh, mô tả trong bài đăng.',
+    'Kiểm tra món đồ và đối chiếu với hình ảnh, mô tả trong bài đăng trước khi bấm "Đã nhận". ShareLoop không bồi thường tiền hàng hay phí gửi.',
     'Không nhận món có dấu hiệu nguy hiểm, bị cấm hoặc khác đáng kể so với mô tả.',
     'Chỉ xác nhận đã giao hoặc đã nhận sau khi việc giao nhận thực sự hoàn tất.',
   ]],
   ['Khi có vấn đề', [
     'Giữ lại nội dung trao đổi và bằng chứng liên quan.',
     'Dùng chức năng Báo cáo trên bài đăng hoặc trong giao dịch để gửi thông tin cho quản trị viên.',
+    'Báo "không đúng mô tả", "chưa nhận được đồ" hoặc "chưa giao được": giao dịch sang tranh chấp, bên kia có 48 giờ giải trình và Admin kết luận. Lúc này bạn không tự huỷ được.',
+    'Khiếu nại giao dịch trong 24 giờ sau khi hoàn tất.',
     'Dừng cuộc hẹn nếu bạn cảm thấy không an toàn.',
   ]],
 ] as const;
