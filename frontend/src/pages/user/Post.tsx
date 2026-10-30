@@ -742,15 +742,6 @@ export function Post() {
               label="Phí đăng bài"
               value={type === 'gift' ? 'Miễn phí' : postFee === null ? '--' : `${postFee} Credit`}
             />
-            <SummaryRow label="Số dư hiện tại" value={availableCredit === null ? '--' : `${availableCredit} Credit`} />
-            <SummaryRow
-              label="Khả dụng sau khi giữ"
-              value={
-                availableCredit === null || (type !== 'gift' && postFee === null)
-                  ? '--'
-                  : `${type === 'gift' ? availableCredit : availableCredit - (postFee ?? 0)} Credit`
-              }
-            />
           </div>
           <div className="mt-6 flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={submitting || mediaUploading}>
