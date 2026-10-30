@@ -115,6 +115,8 @@ export interface BoostResponse {
 
 export interface ListingFeeConfigResponse {
   postFeeSwap: number;
+  /** Phí đăng Trao đổi khi vượt hạn mức theo hạng. BE chưa trả field này ở GET /listing-fees nên để optional. */
+  postFeeSwapOverQuota?: number;
   postFeeGive: number;
   editFee: number;
   renewFee: number;
