@@ -6,15 +6,20 @@ import com.shareloop.wallet.entity.PaymentProvider;
 import java.time.Clock;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Component
+// @Lazy(false): prod bật lazy-initialization, nhưng thiếu biến VNPAY phải làm app lỗi ngay lúc khởi động.
+@Lazy(false)
 @ConditionalOnProperty(name = "app.payment.provider", havingValue = "vnpay")
 public class VnPayClient implements PaymentGatewayClient {
     private final ConfigService configService;
@@ -30,16 +35,30 @@ public class VnPayClient implements PaymentGatewayClient {
             @Value("${app.payment.vnpay.pay-url:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}") String payUrl,
             @Value("${app.payment.vnpay.return-url:}") String returnUrl,
             @Value("${app.payment.vnpay.tmn-code:}") String tmnCode,
-            @Value("${app.payment.vnpay.hash-secret:}") String secret) {
-        if (payUrl.isBlank() || returnUrl.isBlank() || tmnCode.isBlank() || secret.isBlank()) {
-            throw new IllegalArgumentException("VNPAY requires pay-url, return-url, tmn-code and hash-secret");
-        }
+            @Value("${app.payment.vnpay.hash-secret:}") String secret,
+            @Value("${app.payment.vnpay.fe-result-url:}") String feResultUrl) {
+        requireConfigured(payUrl, returnUrl, tmnCode, secret, feResultUrl);
         this.configService = configService;
         this.clock = clock;
         this.payUrl = payUrl;
         this.returnUrl = returnUrl;
         this.tmnCode = tmnCode;
         this.secret = secret;
+    }
+
+    // Báo đúng tên biến môi trường còn thiếu để người deploy sửa ngay, thay vì để lỗi chữ ký lúc thanh toán.
+    private static void requireConfigured(
+            String payUrl, String returnUrl, String tmnCode, String secret, String feResultUrl) {
+        List<String> missing = new ArrayList<>();
+        if (payUrl.isBlank()) missing.add("VNPAY_PAY_URL");
+        if (returnUrl.isBlank()) missing.add("VNPAY_RETURN_URL");
+        if (tmnCode.isBlank()) missing.add("VNPAY_TMN_CODE");
+        if (secret.isBlank()) missing.add("VNPAY_HASH_SECRET");
+        if (feResultUrl.isBlank()) missing.add("VNPAY_FE_RESULT_URL");
+        if (!missing.isEmpty()) {
+            throw new IllegalStateException("PAYMENT_PROVIDER=vnpay but these environment variables are missing: "
+                    + String.join(", ", missing));
+        }
     }
 
     @Override

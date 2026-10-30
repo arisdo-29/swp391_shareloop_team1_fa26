@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.integration.payment.VnPayTestData;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
 import com.shareloop.support.IntegrationTest;
 import com.shareloop.wallet.entity.PaymentOrder;
 import com.shareloop.wallet.entity.PaymentProvider;
@@ -51,6 +53,9 @@ class VnPayCallbackIT extends IntegrationTest {
 
     @Autowired
     ManualTopUpService manual;
+
+    @Autowired
+    ConfigService configService;
 
     @MockitoSpyBean
     CreditService credit;
@@ -250,19 +255,25 @@ class VnPayCallbackIT extends IntegrationTest {
     @Test
     void mockAndManualOperations_cannotConfirmVnpayOrder() {
         assertNotPayable(() -> payment.confirmMockPayment(userId, orderCode));
-        assertNotPayable(() -> manual.markPaid(userId, orderCode));
-        assertNotPayable(() -> manual.approve(userId, orderCode, null));
-        assertNotPayable(() -> manual.reject(userId, orderCode, "wrong provider"));
+        // Provider hiện tại không phải manual nên thao tác thủ công bị chặn ngay từ đầu (K2).
+        assertBlocked(() -> manual.markPaid(userId, orderCode), WalletErrorCode.WALLET_MANUAL_TOPUP_DISABLED);
+        assertBlocked(() -> manual.approve(userId, orderCode, null), WalletErrorCode.WALLET_MANUAL_TOPUP_DISABLED);
+        assertBlocked(
+                () -> manual.reject(userId, orderCode, "wrong provider"), WalletErrorCode.WALLET_MANUAL_TOPUP_DISABLED);
         assertPristineOrder();
         assertNoCredits();
     }
 
     private void assertNotPayable(org.assertj.core.api.ThrowableAssert.ThrowingCallable operation) {
+        assertBlocked(operation, WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE);
+    }
+
+    private void assertBlocked(
+            org.assertj.core.api.ThrowableAssert.ThrowingCallable operation, WalletErrorCode expected) {
         assertThatThrownBy(operation)
                 .isInstanceOfSatisfying(
                         BusinessException.class,
-                        ex -> assertThat(ex.getErrorCode())
-                                .isEqualTo(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(expected));
     }
 
     @Test
@@ -296,6 +307,56 @@ class VnPayCallbackIT extends IntegrationTest {
                 .andExpect(redirectedUrl("http://localhost:5173/credit?orderCode=&status=INVALID_SIGNATURE"));
         assertPristineOrder();
         assertNoCredits();
+    }
+
+    @Test
+    void ipn_whenPendingOrderPastDeadlineAndGrace_marksExpiredWithoutCredits() throws Exception {
+        // given: đơn còn PENDING (job chưa chạy) nhưng đã quá hạn cả dung sai
+        makeOrderOlderThanDeadlineBy(graceMinutes() + 1);
+
+        // when, then: VNPAY báo thành công vẫn không được cộng
+        ipn(signed("2000000", "00", "00"), "02");
+        assertStatus("EXPIRED");
+        assertNoCredits();
+    }
+
+    @Test
+    void ipn_whenPendingOrderPastDeadlineButWithinGrace_creditsOnce() throws Exception {
+        // given: quá hạn 1 phút nhưng còn trong dung sai đồng hồ
+        makeOrderOlderThanDeadlineBy(Math.max(graceMinutes() - 1, 0));
+
+        // when
+        ipn(signed("2000000", "00", "00"), "00");
+
+        // then
+        assertStatus("SUCCESS");
+        assertThat(credit.getWallet(userId).creditBalance()).isEqualTo(20);
+    }
+
+    @Test
+    void ipn_whenOrderStillBeforeDeadline_creditsOnce() throws Exception {
+        // given: đơn mới tạo ở setUp, còn xa hạn
+
+        // when
+        ipn(signed("2000000", "00", "00"), "00");
+
+        // then
+        assertStatus("SUCCESS");
+        assertThat(credit.getWallet(userId).creditBalance()).isEqualTo(20);
+    }
+
+    private long graceMinutes() {
+        return 2; // khớp app.payment.vnpay.expiry-grace-minutes trong application.yml
+    }
+
+    // Lùi created_at để đơn vượt hạn (payment_order_expire_minutes) đúng extraMinutes phút.
+    private void makeOrderOlderThanDeadlineBy(long extraMinutes) {
+        long ageMinutes = configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES) + extraMinutes;
+        jdbc.update(
+                "UPDATE payment_orders SET created_at = ? WHERE order_code = ?",
+                java.sql.Timestamp.from(
+                        java.time.Instant.now().minus(ageMinutes, java.time.temporal.ChronoUnit.MINUTES)),
+                orderCode);
     }
 
     private void assertNoCredits() {
