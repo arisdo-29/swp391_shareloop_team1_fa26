@@ -2,12 +2,19 @@ import type { ItemCondition, TransactionStatus } from '../types/domain';
 
 export const conditionLabel: Record<ItemCondition, string> = {
   NEW: 'Mới',
-  LIKE_NEW: 'Như mới',
-  GOOD: 'Còn tốt',
+  LIKE_NEW: 'Ít sử dụng',
+  GOOD: 'Đã dùng nhiều',
   DEFECTIVE: 'Có lỗi',
   new: 'Mới',
-  good: 'Dùng tốt',
-  used: 'Đã qua dùng',
+  good: 'Đã dùng nhiều',
+  used: 'Có lỗi',
+};
+
+export const conditionDescription: Record<'NEW' | 'LIKE_NEW' | 'GOOD' | 'DEFECTIVE', string> = {
+  NEW: 'Chưa sử dụng',
+  LIKE_NEW: 'Mới dùng vài lần, còn đẹp',
+  GOOD: 'Có trầy xước hoặc hao mòn, vẫn dùng tốt',
+  DEFECTIVE: 'Có hư hỏng, cần nêu rõ',
 };
 
 export const txLabel: Record<TransactionStatus, string> = {

@@ -14,7 +14,6 @@ import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
 import com.shareloop.listingfee.job.ItemExpiryJob;
 import com.shareloop.request.job.RequestJob;
-import com.shareloop.review.job.ReviewSlaJob;
 import com.shareloop.user.job.PendingAccountCleanupJob;
 import com.shareloop.wallet.job.PaymentExpiryJob;
 import org.junit.jupiter.api.DisplayName;
@@ -51,15 +50,12 @@ class InternalJobControllerTest {
     @MockitoBean
     private PaymentExpiryJob paymentExpiryJob;
 
-    @MockitoBean
-    private ReviewSlaJob reviewSlaJob;
-
     @Test
     @DisplayName("Thiếu header X-Job-Token trả 403 và không job nào chạy")
     void runJobs_withoutToken_returns403() throws Exception {
         mockMvc.perform(post(URL)).andExpect(status().isForbidden());
 
-        verifyNoInteractions(itemExpiryJob, requestJob, pendingAccountCleanupJob, paymentExpiryJob, reviewSlaJob);
+        verifyNoInteractions(itemExpiryJob, requestJob, pendingAccountCleanupJob, paymentExpiryJob);
     }
 
     @Test
@@ -67,11 +63,11 @@ class InternalJobControllerTest {
     void runJobs_withWrongToken_returns403() throws Exception {
         mockMvc.perform(post(URL).header("X-Job-Token", "wrong-token")).andExpect(status().isForbidden());
 
-        verifyNoInteractions(itemExpiryJob, requestJob, pendingAccountCleanupJob, paymentExpiryJob, reviewSlaJob);
+        verifyNoInteractions(itemExpiryJob, requestJob, pendingAccountCleanupJob, paymentExpiryJob);
     }
 
     @Test
-    @DisplayName("Đúng token trả 200, đủ 5 job được gọi và trả về ok")
+    @DisplayName("Đúng token trả 200, đủ 4 job được gọi và trả về ok")
     void runJobs_withValidToken_runsAllJobsSuccessfully() throws Exception {
         mockMvc.perform(post(URL).header("X-Job-Token", VALID_TOKEN))
                 .andExpect(status().isOk())
@@ -79,13 +75,12 @@ class InternalJobControllerTest {
                 .andExpect(jsonPath("$.requestJob").value("ok"))
                 .andExpect(jsonPath("$.pendingAccountCleanupJob").value("ok"))
                 .andExpect(jsonPath("$.paymentExpiryJob").value("ok"))
-                .andExpect(jsonPath("$.reviewSlaJob").value("ok"));
+                .andExpect(jsonPath("$.reviewSlaJob").doesNotExist());
 
         verify(itemExpiryJob).run();
         verify(requestJob).run();
         verify(pendingAccountCleanupJob).run();
         verify(paymentExpiryJob).run();
-        verify(reviewSlaJob).run();
     }
 
     @Test
@@ -99,12 +94,11 @@ class InternalJobControllerTest {
                 .andExpect(jsonPath("$.requestJob").value("failed"))
                 .andExpect(jsonPath("$.pendingAccountCleanupJob").value("ok"))
                 .andExpect(jsonPath("$.paymentExpiryJob").value("ok"))
-                .andExpect(jsonPath("$.reviewSlaJob").value("ok"));
+                .andExpect(jsonPath("$.reviewSlaJob").doesNotExist());
 
         verify(itemExpiryJob).run();
         verify(requestJob).run();
         verify(pendingAccountCleanupJob).run();
         verify(paymentExpiryJob).run();
-        verify(reviewSlaJob).run();
     }
 }

@@ -1,10 +1,7 @@
 package com.shareloop.reputation;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import com.shareloop.common.exception.BusinessException;
-import com.shareloop.reputation.dto.GraceStarResponse;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.support.IntegrationTest;
 import java.sql.Date;
@@ -119,36 +116,6 @@ class ReputationRulesIT extends IntegrationTest {
         assertThat(totalPoints(donor)).isEqualTo(15);
         assertThat(jdbc.queryForObject("SELECT points_today FROM users WHERE id = ?", Integer.class, donor))
                 .isEqualTo(30);
-    }
-
-    @Test
-    void grantGraceStar_onlyOncePerAccount() {
-        long admin = insertUser();
-        long user = insertUser();
-        jdbc.update("UPDATE users SET trust_stars = 0 WHERE id = ?", user);
-
-        GraceStarResponse response = reputationService.grantGraceStar(admin, user, "Đã giải trình");
-
-        assertThat(response).isEqualTo(new GraceStarResponse(user, 1, true));
-        assertThat(jdbc.queryForObject("SELECT trust_stars FROM users WHERE id = ?", Integer.class, user))
-                .isEqualTo(1);
-        assertThat(jdbc.queryForObject("SELECT grace_star_used FROM users WHERE id = ?", Boolean.class, user))
-                .isTrue();
-        assertThat(jdbc.queryForObject(
-                        "SELECT reason FROM activity_logs WHERE type = 'GRACE_STAR' AND target_id = ? AND actor_id = ?",
-                        String.class,
-                        user,
-                        admin))
-                .isEqualTo("Đã giải trình");
-
-        // Về 0 sao lần hai: không được cấp lại
-        jdbc.update("UPDATE users SET trust_stars = 0 WHERE id = ?", user);
-        BusinessException ex = assertThrows(
-                BusinessException.class, () -> reputationService.grantGraceStar(admin, user, "Xin lần hai"));
-
-        assertThat(ex.getErrorCode()).isEqualTo(ReputationErrorCode.REPUTATION_GRACE_STAR_ALREADY_USED);
-        assertThat(jdbc.queryForObject("SELECT trust_stars FROM users WHERE id = ?", Integer.class, user))
-                .isZero();
     }
 
     private long insertUser() {

@@ -351,7 +351,7 @@ describe('AdminModerationDetail', () => {
       '3/5 sao',
       'Quần áo',
       'Quận 1',
-      'Còn tốt',
+      'Đã dùng nhiều',
       'Trao đổi',
       'Giày thể thao size 42',
       'Kích cỡ',

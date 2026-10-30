@@ -1,4 +1,10 @@
-import { useRef, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from 'react';
+import {
+  useLayoutEffect,
+  useRef,
+  type ChangeEvent,
+  type ClipboardEvent,
+  type KeyboardEvent,
+} from 'react';
 import { applyOtpBackspace, applyOtpChange, applyOtpPaste } from '../utils/otp';
 
 interface OtpInputProps {
@@ -19,6 +25,16 @@ export function OtpInput({
   autoFocus = false,
 }: OtpInputProps) {
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const pendingFocusRef = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    const focusIndex = pendingFocusRef.current;
+    if (focusIndex === null) return;
+    pendingFocusRef.current = null;
+    const input = inputRefs.current[focusIndex];
+    input?.focus();
+    input?.select();
+  }, [value]);
 
   const focusInput = (index: number) => {
     const input = inputRefs.current[index];
@@ -27,16 +43,14 @@ export function OtpInput({
   };
 
   const commit = (nextValue: string[], focusIndex: number) => {
+    // Chỉ chuyển focus sau khi parent đã lưu và render mảng OTP mới.
+    pendingFocusRef.current = focusIndex;
     onChange(nextValue);
-    focusInput(focusIndex);
   };
 
   const handleChange = (index: number, event: ChangeEvent<HTMLInputElement>) => {
     const result = applyOtpChange(value, index, event.target.value);
-    onChange(result.value);
-    if (/\d/.test(event.target.value)) {
-      focusInput(Math.min(index + 1, value.length - 1));
-    }
+    commit(result.value, result.focusIndex);
   };
 
   const handleKeyDown = (index: number, event: KeyboardEvent<HTMLInputElement>) => {
@@ -87,10 +101,10 @@ export function OtpInput({
             onPaste={(event) => handlePaste(index, event)}
             onFocus={(event) => event.currentTarget.select()}
             onClick={(event) => event.currentTarget.select()}
-            className={`aspect-square min-w-0 rounded-md border text-center text-lg font-bold outline-none focus:ring-4 ${
+            className={`aspect-square min-w-0 rounded-md border text-center text-lg font-bold outline-none ${
               invalid
-                ? 'border-error focus:border-error focus:ring-error/10'
-                : 'border-border focus:border-primary focus:ring-primary/10'
+                ? 'border-error focus:border-error'
+                : 'border-border focus:border-primary'
             } disabled:cursor-not-allowed disabled:bg-surface-container disabled:opacity-60`}
           />
         ))}

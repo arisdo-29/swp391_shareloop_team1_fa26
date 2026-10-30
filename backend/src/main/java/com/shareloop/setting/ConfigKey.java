@@ -194,12 +194,6 @@ public enum ConfigKey {
             ConfigGroup.POSTING,
             "Thời gian giữ ảnh chưa dùng",
             "Số giờ giữ ảnh đã tải lên nhưng chưa gắn vào bài nào. Quá mốc này ảnh sẽ bị dọn."),
-    REVIEW_SLA_HOURS(
-            "review_sla_hours",
-            "24",
-            ConfigGroup.MODERATION,
-            "Hạn duyệt bài",
-            "Số giờ tối đa một bài được chờ duyệt. Quá mốc này hệ thống cảnh báo Admin."),
     REPORT_HIDE_THRESHOLD(
             "report_hide_threshold",
             "3",

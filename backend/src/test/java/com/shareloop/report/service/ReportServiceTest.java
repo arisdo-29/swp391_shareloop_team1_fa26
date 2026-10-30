@@ -1049,6 +1049,72 @@ class ReportServiceTest {
     }
 
     @Test
+    @DisplayName("D-15: đang chờ giải trình và còn hạn thì chưa kết luận được, trả kèm hạn giải trình")
+    void conclude_whileResponseWindowOpen_throwsWindowOpenAndChangesNothing() {
+        Report report = awaitingResponseReport(17L, BASE_TIME.plusSeconds(3600));
+
+        assertThatThrownBy(() ->
+                        reportService.conclude(1L, 17L, new ConcludeReportRequest(ReportDecision.UPHOLD, "Có cơ sở")))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> {
+                    BusinessException business = (BusinessException) ex;
+                    assertThat(business.getErrorCode()).isEqualTo(ReportErrorCode.REPORT_RESPONSE_WINDOW_OPEN);
+                    assertThat(business.getErrorCode().status().value()).isEqualTo(409);
+                    assertThat(business.getDetails())
+                            .containsEntry(
+                                    "responseDueAt", BASE_TIME.plusSeconds(3600).toString());
+                });
+
+        assertThat(report.getStatus()).isEqualTo(ReportStatus.AWAITING_RESPONSE);
+        verify(reputationService, never()).deductStar(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any());
+    }
+
+    @Test
+    @DisplayName("D-15: đúng mốc hạn giải trình vẫn tính là còn hạn (giống respond)")
+    void conclude_exactlyAtDeadline_isStillBlocked() {
+        awaitingResponseReport(18L, BASE_TIME);
+
+        assertThatThrownBy(
+                        () -> reportService.conclude(1L, 18L, new ConcludeReportRequest(ReportDecision.DISMISS, null)))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.REPORT_RESPONSE_WINDOW_OPEN);
+    }
+
+    @Test
+    @DisplayName("D-15: đã quá hạn giải trình mà chưa giải trình thì Admin kết luận được")
+    void conclude_afterResponseDeadline_isAllowed() {
+        Report report = awaitingResponseReport(19L, BASE_TIME.minusSeconds(1));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ReportConclusionResponse response =
+                reportService.conclude(1L, 19L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
+
+        assertThat(response.status()).isEqualTo(ReportStatus.DISMISSED);
+        assertThat(report.getStatus()).isEqualTo(ReportStatus.DISMISSED);
+    }
+
+    @Test
+    @DisplayName("D-15: bên bị báo cáo đã giải trình (status về OPEN) thì kết luận được dù còn trong hạn")
+    void conclude_afterResponseWithinWindow_isAllowed() {
+        Report report = awaitingResponseReport(20L, BASE_TIME.plusSeconds(3600));
+        report.respond("Đã giải trình", null, BASE_TIME.minusSeconds(60));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ReportConclusionResponse response =
+                reportService.conclude(1L, 20L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
+
+        assertThat(response.status()).isEqualTo(ReportStatus.DISMISSED);
+    }
+
+    private Report awaitingResponseReport(long reportId, java.time.Instant responseDueAt) {
+        Report report = new Report(
+                100L, TargetType.USER, null, 200L, null, ReportReason.HARASSMENT, "Quấy rối", ReportStage.BEFORE);
+        ReflectionTestUtils.setField(report, "id", reportId);
+        report.awaitResponse(responseDueAt);
+        when(reportRepository.findByIdForUpdate(reportId)).thenReturn(Optional.of(report));
+        return report;
+    }
+
+    @Test
     void requestCreationStoresPrivateEvidenceAndConfiguredDeadline() {
         doReturn(new ReportService.RequestSnapshot(7L, 5L, 10L, "COMPLETED", BASE_TIME))
                 .when(reportService)

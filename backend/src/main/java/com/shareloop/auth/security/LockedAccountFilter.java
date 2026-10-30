@@ -22,7 +22,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Chặn token đã cấp của tài khoản bị khoá (FR-107). JWT không lưu trạng thái nên token cấp trước khi khoá vẫn hợp lệ
- * tới lúc hết hạn; filter này kiểm lại tài khoản ở mỗi request có token và trả 403 AUTH_ACCOUNT_LOCKED.
+ * tới lúc hết hạn; filter này kiểm lại tài khoản ở mỗi request có token và trả 403 AUTH_ACCOUNT_LOCKED (bị khoá)
+ * hoặc AUTH_ACCOUNT_BANNED (bị cấm khi hết sao).
  *
  * <p>Không gắn @Component: filter được đăng ký trong {@link LockedAccountFilterConfig}, để các test @WebMvcTest không
  * tự nạp filter này (chúng không có UserService thật).
@@ -49,7 +50,11 @@ public class LockedAccountFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         Long userId = findUserIdFromToken();
         if (userId != null && userService.isLocked(userId)) {
-            writeLockedError(response, userId);
+            // Chỉ hỏi thêm khi đã bị chặn, nên request bình thường vẫn chỉ tốn một truy vấn.
+            AuthErrorCode errorCode = userService.isBanned(userId)
+                    ? AuthErrorCode.AUTH_ACCOUNT_BANNED
+                    : AuthErrorCode.AUTH_ACCOUNT_LOCKED;
+            writeLockedError(response, errorCode, userId);
             return; // dừng tại đây, không cho request đi tiếp vào controller
         }
         chain.doFilter(request, response);
@@ -70,15 +75,16 @@ public class LockedAccountFilter extends OncePerRequestFilter {
     }
 
     // Lỗi ở tầng filter không qua @RestControllerAdvice, nên tự ghi ErrorResponse như SecurityConfig.writeError.
-    private void writeLockedError(HttpServletResponse response, Long userId) throws IOException {
-        AuthErrorCode errorCode = AuthErrorCode.AUTH_ACCOUNT_LOCKED;
-        String reason = activityLogQueryService != null
-                ? activityLogQueryService
-                        .findLatestReason(ActivityType.USER_LOCK.name(), userId)
-                        .map(String::trim)
-                        .filter(r -> !r.isEmpty())
-                        .orElse(null)
-                : null;
+    private void writeLockedError(HttpServletResponse response, AuthErrorCode errorCode, Long userId)
+            throws IOException {
+        String reason = null;
+        if (errorCode == AuthErrorCode.AUTH_ACCOUNT_LOCKED && activityLogQueryService != null) {
+            reason = activityLogQueryService
+                    .findLatestReason(ActivityType.USER_LOCK.name(), userId)
+                    .map(String::trim)
+                    .filter(r -> !r.isEmpty())
+                    .orElse(null);
+        }
         String message = reason == null ? errorCode.defaultMessage() : "Tài khoản đã bị khoá. Lý do: " + reason;
         Map<String, Object> details = reason == null ? null : Map.of("reason", reason);
         var body = new ErrorResponse(errorCode.code(), message, null, details, MDC.get(TraceIdFilter.MDC_KEY));

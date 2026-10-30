@@ -5,7 +5,7 @@ import { selectCurrentUser } from '../../app/store';
 import { Alert, Button, Field, Icon, ItemImage, PageHeader, Select, TextArea } from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
 import { CONDITIONS, ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
-import { conditionLabel } from '../../utils/formatting';
+import { conditionDescription, conditionLabel } from '../../utils/formatting';
 import type { ItemCondition, ItemType } from '../../types/domain';
 import { fileToDataUrl } from '../../utils/files';
 import { catalogApi, type CategoryAttributeResponse } from '../../services/catalogApi';
@@ -611,7 +611,7 @@ export function Post() {
                     className={`flex flex-col gap-0.5 rounded-md border p-3 text-left transition ${condition === value ? 'border-2 border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
                   >
                     <strong className="text-sm">{conditionLabel[value]}</strong>
-                    <span className="text-2xs text-text-muted">{CONDITION_HINTS[value]}</span>
+                    <span className="text-2xs text-text-muted">{conditionDescription[value]}</span>
                   </button>
                 ))}
               </div>
@@ -749,15 +749,6 @@ export function Post() {
               label="Phí đăng bài"
               value={type === 'gift' ? 'Miễn phí' : postFee === null ? '--' : `${postFee} Credit`}
             />
-            <SummaryRow label="Số dư hiện tại" value={availableCredit === null ? '--' : `${availableCredit} Credit`} />
-            <SummaryRow
-              label="Khả dụng sau khi giữ"
-              value={
-                availableCredit === null || (type !== 'gift' && postFee === null)
-                  ? '--'
-                  : `${type === 'gift' ? availableCredit : availableCredit - (postFee ?? 0)} Credit`
-              }
-            />
           </div>
           <div className="mt-6 flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={submitting || mediaUploading}>
@@ -784,13 +775,6 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
-const CONDITION_HINTS: Record<(typeof CONDITIONS)[number], string> = {
-  NEW: 'Chưa dùng',
-  LIKE_NEW: 'Dùng vài lần',
-  GOOD: 'Có dấu hiệu dùng',
-  DEFECTIVE: 'Có lỗi, cần nêu rõ',
-};
 
 function PostStep({ number, title, children }: { number: number; title: string; children: ReactNode }) {
   return (

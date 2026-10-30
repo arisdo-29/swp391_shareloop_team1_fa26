@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Alert, Button, EmptyState, PageHeader, SkeletonRows } from '../../components/ui';
 import type { AdminConfigResponse } from '../../services/adminConfigApi';
 import { ConfigEditDialog } from './ConfigEditDialog';
-import { GraceStarSection } from './GraceStarSection';
 import { formatConfigValue } from './configDisplay';
 import {
   DIAMOND_MIN_KEY,
@@ -69,7 +68,7 @@ function EditableValue({
   );
 }
 
-/** Uy tín và Hạng: cấu hình hạng thành viên, quy tắc cộng điểm (dùng API cấu hình có sẵn) và cấp sao ân hạn. */
+/** Uy tín và Hạng: cấu hình hạng thành viên và quy tắc cộng điểm (dùng API cấu hình có sẵn). */
 export function AdminReputation() {
   const { configs, loading, error, reload, saving, saveError, setSaveError, clearSaveError, update } =
     useAdminConfigs();
@@ -205,8 +204,6 @@ export function AdminReputation() {
           </section>
         </>
       )}
-
-      <GraceStarSection />
 
       {editing ? (
         <ConfigEditDialog

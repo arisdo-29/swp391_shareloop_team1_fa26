@@ -105,6 +105,7 @@ Không trả `#<id>` trong `targetTitle`, `actorName`. Log `REPORT_DISMISSED`, `
 | `CONFIG_UPDATE` | Sửa cấu hình | `CONFIG` | `key`, `oldValue`, `newValue` |
 | `USER_LOCK` | Khoá tài khoản | `USER` | `cancelledRequests` (số giao dịch đã huỷ), `releasedCredit` (số Credit đã nhả), `hiddenItemIds` (id các bài đã ẩn) |
 | `USER_UNLOCK` | Mở khoá tài khoản | `USER` | `restoredItems` (số bài được hiện lại) |
+| `USER_BAN` | Cấm tài khoản | `USER` (`actorId = null`, hệ thống tự cấm khi hết sao) | `cancelledRequests`, `releasedCredit`, `hiddenItemIds` (cùng nghĩa với `USER_LOCK`) |
 | `REQUEST_CANCEL` | Huỷ giao dịch | `REQUEST` | - (lý do ở `reason`, có tiền tố người huỷ) |
 | `REPORT_DISMISSED` | Bác bỏ báo cáo | `REPORT` | `decision`, `reportId`, `targetType` |
 | `REPORT_UPHELD` | Chấp nhận báo cáo | `REPORT` | `decision`, `reportId`, `targetType`, `violatorId`, `starsDeducted`, `seriousViolation` |
@@ -128,7 +129,7 @@ Không trả `#<id>` trong `targetTitle`, `actorName`. Log `REPORT_DISMISSED`, `
 | `AREA_CREATE` | Thêm khu vực | `AREA` | `name`, `active` |
 | `AREA_UPDATE` | Sửa khu vực | `AREA` | `name`, `active` |
 | `AREA_TOGGLE` | Bật/tắt khu vực | `AREA` | `name`, `active` |
-| `GRACE_STAR` | Cấp sao ân hạn | `USER` | `before`, `after` (lý do Admin nhập ở `reason`) |
+| `GRACE_STAR` | Cấp sao ân hạn | `USER` | `before`, `after` (lý do Admin nhập ở `reason`). Chỉ còn ở nhật ký cũ: sao ân hạn đã bỏ (UT-09) |
 | `STAR_RESTORED` | Tự hồi sao | `USER` (`actorId = null`) | `before`, `after`, `cleanStreak` |
 
 > Bản ghi cũ có `type = 'AiUsage'` được migration `V202610191500__audit_rename_ai_usage` đổi thành `AI_USAGE`.
@@ -511,41 +512,12 @@ Mở khoá tài khoản người dùng và ghi nhật ký hoạt động (FR-107
 
 ---
 
-## 6. POST /api/v1/admin/users/{userId}/grace-star
+## 6. (Đã bỏ) POST /api/v1/admin/users/{userId}/grace-star
 
-Cấp 1 sao ân hạn cho người dùng đang có 0 sao (FR-95, BR-U09, UC-51, Issue #150). Mỗi tài khoản chỉ được cấp **một lần** (`grace_star_used` chỉ đổi `false → true`). Bắt buộc có lý do; hành động ghi nhật ký `GRACE_STAR`.
-
-- **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
-- **Path Variable:** `userId` (ID người dùng được cấp).
-- **Request Body:**
-
-```json
-{
-  "reason": "Đã giải trình và cam kết không tái phạm"
-}
-```
-
-- **Thành công:** `200 OK`, trả về `GraceStarResponse`. Người dùng có lại 1 sao nên đăng bài và gửi yêu cầu được trở lại (BR-U05); bài đã bị ẩn lúc về 0 sao vẫn giữ nguyên trạng thái ẩn.
-
-```json
-{
-  "userId": 42,
-  "trustStars": 1,
-  "graceStarUsed": true
-}
-```
-
-- **Mã lỗi:**
-
-| Mã | Ý nghĩa | Mô tả |
-|----|---------|-------|
-| `200` | Thành công | Đã cấp 1 sao và ghi nhật ký |
-| `400` | Bad Request | `VALIDATION_FAILED`: Thiếu lý do hoặc lý do vượt quá 500 ký tự |
-| `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
-| `403` | Forbidden | Người dùng không có vai trò Admin |
-| `404` | Not Found | `USER_NOT_FOUND`: Người dùng không tồn tại |
-| `409` | Conflict | `REPUTATION_GRACE_STAR_ALREADY_USED`: Đã được cấp sao ân hạn trước đó (kể cả khi về 0 sao lần hai) |
-| `409` | Conflict | `REPUTATION_GRACE_STAR_NOT_ELIGIBLE`: Người dùng vẫn còn sao (chỉ cấp khi đang 0 sao) |
+Nhóm đã chốt không dùng sao ân hạn (UT-09). Endpoint, `GraceStarRequest`, `GraceStarResponse`, `ReputationErrorCode` và hai mã lỗi
+`REPUTATION_GRACE_STAR_ALREADY_USED`, `REPUTATION_GRACE_STAR_NOT_ELIGIBLE` đã xoá. Gọi vào đường dẫn cũ nhận lỗi như
+đường dẫn không tồn tại. Cột `users.grace_star_used` vẫn còn (ERD đã chốt) nhưng không dùng nữa. Người hết sao bị cấm
+theo D-09 (xem `reputation.md` mục 1.5).
 
 ---
 

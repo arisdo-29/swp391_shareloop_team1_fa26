@@ -21,8 +21,6 @@ import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
-import com.shareloop.reputation.ReputationErrorCode;
-import com.shareloop.reputation.dto.GraceStarResponse;
 import com.shareloop.reputation.dto.MyReputationResponse;
 import com.shareloop.reputation.dto.RepeatedPair;
 import com.shareloop.reputation.dto.ReputationSummary;
@@ -33,6 +31,8 @@ import com.shareloop.reputation.repository.UserReputationRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.UserErrorCode;
+import com.shareloop.user.event.UserLockCleanup;
+import com.shareloop.user.service.UserService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -86,6 +86,9 @@ class ReputationServiceTest {
     @Mock
     private NotificationService notificationService;
 
+    @Mock
+    private UserService userService;
+
     private ReputationService service;
 
     @BeforeEach
@@ -111,6 +114,7 @@ class ReputationServiceTest {
                 activityLogQueryService,
                 itemService,
                 notificationService,
+                userService,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -423,18 +427,32 @@ class ReputationServiceTest {
             verify(userReputationRepository).save(user);
             verify(activityLogService)
                     .log(eq("STARS"), any(), eq("USER"), eq(userId), any(java.util.Map.class), anyString());
-            // Vẫn còn 3 sao, không vô hiệu hóa bài hay gửi thông báo hết sao
+            // UT-03: báo số sao còn lại trước khi bị cấm
+            verify(notificationService)
+                    .notify(
+                            userId,
+                            "TRUST_STARS_DEDUCTED",
+                            "Bạn bị trừ sao uy tín",
+                            "Bạn bị trừ 2 sao. Bạn còn 3 sao trước khi tài khoản bị cấm.",
+                            "/profile?tab=reputation");
+            // Vẫn còn 3 sao: không cấm, không ẩn bài, không gửi thông báo hết sao
+            verify(userService, never()).ban(anyLong());
             verify(itemService, never()).hideAllOfUser(anyLong());
             verify(notificationService, never())
                     .notify(anyLong(), eq("TRUST_STARS_DEPLETED"), anyString(), anyString(), anyString());
         }
 
         @Test
-        void deductStar_dropsToZero_disablesPostingAndNotifiesExactlyOnce() {
+        void deductStar_dropsToZero_bansAccountAndNotifiesExactlyOnce() {
             long userId = 2L;
             UserReputation user = new UserReputation(userId, (short) 1, 100, Rank.SILVER);
             when(userReputationRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
             when(userReputationRepository.findById(userId)).thenReturn(Optional.of(user));
+            UserLockCleanup cleanup = new UserLockCleanup();
+            cleanup.addCancelledRequests(2);
+            cleanup.addReleasedCredit(15);
+            cleanup.addHiddenItemIds(List.of(40L));
+            when(userService.ban(userId)).thenReturn(cleanup);
 
             service.deductStar(userId, 1, "Vi phạm quy định nhiều lần");
 
@@ -442,15 +460,41 @@ class ReputationServiceTest {
             assertThat(service.canPost(userId)).isFalse();
             assertThat(service.canRequest(userId)).isFalse();
 
-            // Ẩn toàn bộ bài đăng và gửi thông báo trỏ về tab uy tín trong hồ sơ (FE không có /me/reputation)
+            // D-09: cấm qua UserService (dọn dẹp như khoá) và ghi USER_BAN kèm kết quả dọn dẹp, người thực hiện null
+            verify(userService, times(1)).ban(userId);
+            verify(activityLogService)
+                    .log(
+                            eq("USER_BAN"),
+                            isNull(),
+                            eq("USER"),
+                            eq(userId),
+                            eq(Map.<String, Object>of(
+                                    "cancelledRequests", 2, "releasedCredit", 15L, "hiddenItemIds", List.of(40L))),
+                            anyString());
             verify(itemService, times(1)).hideAllOfUser(userId);
+            // Thông báo trỏ về tab uy tín trong hồ sơ (FE không có /me/reputation), không còn nhắc sao ân hạn
             verify(notificationService, times(1))
                     .notify(
                             eq(userId),
                             eq("TRUST_STARS_DEPLETED"),
                             anyString(),
-                            argThat(body -> !body.contains("TrustStars")),
+                            argThat(body -> body.contains("bị cấm") && !body.contains("ân hạn")),
                             eq("/profile?tab=reputation"));
+            verify(notificationService, never())
+                    .notify(anyLong(), eq("TRUST_STARS_DEDUCTED"), anyString(), anyString(), anyString());
+        }
+
+        @Test
+        void deductStar_dropsToZeroWhenAlreadyBanned_doesNotLogBanAgain() {
+            long userId = 5L;
+            UserReputation user = new UserReputation(userId, (short) 1, 100, Rank.SILVER);
+            when(userReputationRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
+            when(userService.ban(userId)).thenReturn(null);
+
+            service.deductStar(userId, 1, "Tái phạm sau sao ân hạn");
+
+            verify(activityLogService, never())
+                    .log(eq("USER_BAN"), any(), anyString(), anyLong(), any(Map.class), anyString());
         }
 
         @Test
@@ -465,10 +509,10 @@ class ReputationServiceTest {
             assertThat(user.getTrustStars()).isEqualTo(0); // Không âm
             assertThat(service.canPost(userId)).isFalse();
 
-            // Không gọi hideAllOfUser hay notification lần thứ hai
+            // Không cấm lại, không gọi hideAllOfUser hay gửi thông báo nào nữa
+            verify(userService, never()).ban(anyLong());
             verify(itemService, never()).hideAllOfUser(anyLong());
-            verify(notificationService, never())
-                    .notify(anyLong(), eq("TRUST_STARS_DEPLETED"), anyString(), anyString(), anyString());
+            verify(notificationService, never()).notify(anyLong(), anyString(), anyString(), anyString(), anyString());
         }
 
         @Test
@@ -480,6 +524,7 @@ class ReputationServiceTest {
             service.deductStar(userId, 5, "Vi phạm nghiêm trọng");
 
             assertThat(user.getTrustStars()).isEqualTo(0); // 2 - 5 -> 0, không âm
+            verify(userService, times(1)).ban(userId);
             verify(itemService, times(1)).hideAllOfUser(userId);
         }
     }
@@ -719,80 +764,7 @@ class ReputationServiceTest {
     }
 
     @Nested
-    @DisplayName("6. Cấp sao ân hạn (grantGraceStar - FR-95, Issue #150)")
-    class GraceStarTests {
-
-        private static final long ADMIN_ID = 99L;
-        private static final long USER_ID = 7L;
-
-        @Test
-        @DisplayName("Người dùng 0 sao chưa từng được cấp: lên 1 sao, đánh dấu đã dùng, ghi GRACE_STAR")
-        void grantGraceStar_userAtZeroStars_grantsOneStar() {
-            UserReputation user = new UserReputation(USER_ID, (short) 0, 40, Rank.BRONZE);
-            when(userReputationRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
-
-            GraceStarResponse response = service.grantGraceStar(ADMIN_ID, USER_ID, "Đã giải trình");
-
-            assertThat(response).isEqualTo(new GraceStarResponse(USER_ID, 1, true));
-            assertThat(user.getTrustStars()).isEqualTo(1);
-            assertThat(user.isGraceStarUsed()).isTrue();
-            verify(userReputationRepository).save(user);
-            verify(activityLogService)
-                    .log(
-                            "GRACE_STAR",
-                            ADMIN_ID,
-                            "USER",
-                            USER_ID,
-                            Map.<String, Object>of("before", 0, "after", 1),
-                            "Đã giải trình");
-        }
-
-        @Test
-        @DisplayName("Về 0 sao lần hai rồi xin cấp lại: 409 REPUTATION_GRACE_STAR_ALREADY_USED")
-        void grantGraceStar_secondTime_throwsAlreadyUsed() {
-            UserReputation user = new UserReputation(USER_ID, (short) 0, 40, Rank.BRONZE);
-            when(userReputationRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
-            service.grantGraceStar(ADMIN_ID, USER_ID, "Lần đầu");
-            service.deductStar(USER_ID, 1, "Tái phạm");
-
-            BusinessException ex =
-                    assertThrows(BusinessException.class, () -> service.grantGraceStar(ADMIN_ID, USER_ID, "Lần hai"));
-
-            assertThat(ex.getErrorCode()).isEqualTo(ReputationErrorCode.REPUTATION_GRACE_STAR_ALREADY_USED);
-            assertThat(ex.getErrorCode().status().value()).isEqualTo(409);
-            assertThat(user.getTrustStars()).isZero();
-        }
-
-        @Test
-        @DisplayName("Người dùng vẫn còn sao: 409 REPUTATION_GRACE_STAR_NOT_ELIGIBLE, không ghi log")
-        void grantGraceStar_userStillHasStars_throwsNotEligible() {
-            UserReputation user = new UserReputation(USER_ID, (short) 2, 40, Rank.BRONZE);
-            when(userReputationRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
-
-            BusinessException ex = assertThrows(
-                    BusinessException.class, () -> service.grantGraceStar(ADMIN_ID, USER_ID, "Xin thêm sao"));
-
-            assertThat(ex.getErrorCode()).isEqualTo(ReputationErrorCode.REPUTATION_GRACE_STAR_NOT_ELIGIBLE);
-            assertThat(user.isGraceStarUsed()).isFalse();
-            verify(userReputationRepository, never()).save(any());
-            verify(activityLogService, never())
-                    .log(anyString(), any(), anyString(), anyLong(), any(Map.class), anyString());
-        }
-
-        @Test
-        @DisplayName("Không tìm thấy người dùng: 404 USER_NOT_FOUND")
-        void grantGraceStar_userNotFound_throwsUserNotFound() {
-            when(userReputationRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.empty());
-
-            BusinessException ex = assertThrows(
-                    BusinessException.class, () -> service.grantGraceStar(ADMIN_ID, USER_ID, "Đã giải trình"));
-
-            assertThat(ex.getErrorCode()).isEqualTo(UserErrorCode.USER_NOT_FOUND);
-        }
-    }
-
-    @Nested
-    @DisplayName("7. Cặp giao dịch lặp cho cảnh báo Admin (findRepeatedPairs - FR-113, Issue #148)")
+    @DisplayName("6. Cặp giao dịch lặp cho cảnh báo Admin (findRepeatedPairs - FR-113, Issue #148)")
     class RepeatedPairsTests {
 
         @Test

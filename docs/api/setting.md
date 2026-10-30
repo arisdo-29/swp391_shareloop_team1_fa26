@@ -33,7 +33,7 @@ Trả danh sách cấu hình nghiệp vụ cho Admin. Endpoint đọc giá trị
 | `FEES` | Phí và nạp tiền | `vnd_per_credit`, `topup_min_credits`, `post_fee`, `post_fee_over_quota`, `edit_fee`, `renew_fee`, `boost_fee`, `ai_search_fee`, `payment_order_expire_minutes` |
 | `POSTING` | Đăng bài và hiển thị | `post_display_days`, `renew_expired_window_days`, `boost_days`, `boost_max_days`, `item_photos_min`, `item_photos_max`, `image_max_mb`, `media_orphan_hours` |
 | `AI` | AI trợ lý và sàng lọc | `ai_free_per_day`, `ai_trial_uses`, `ai_search_timeout_seconds`, `chat_ai_threshold`, `chat_ai_timeout_seconds`, `item_ai_screening_enabled` (`true`/`false`, mặc định `false` theo SRS v11), `item_ai_timeout_seconds`, `item_ai_retries` |
-| `MODERATION` | Kiểm duyệt và báo cáo | `chat_violation_alert`, `review_sla_hours`, `report_hide_threshold` |
+| `MODERATION` | Kiểm duyệt và báo cáo | `chat_violation_alert`, `report_hide_threshold` (`review_sla_hours` đã bỏ, KD-06) |
 | `ACCOUNT` | Tài khoản và OTP | `otp_ttl_minutes`, `otp_max_failed`, `otp_resend_cooldown_seconds`, `pending_account_ttl_hours`, `accounts_per_ip_24h`, `phone_change_interval_days` |
 | `TRANSACTION` | Yêu cầu và giao dịch | `max_pending_requests`, `request_pending_days`, `chat_open_days`, `auto_confirm_days`, `stuck_request_hours` |
 | `REPUTATION` | Uy tín và hạng | `post_display_days_gold`, `max_active_items_*` (ngưỡng phí thường Trao đổi: Đồng 5, Bạc 8, Vàng 15, Kim cương -1), `max_active_give_items` (Cho tặng, mặc định 5), `daily_points_cap`, `reputation_*` |

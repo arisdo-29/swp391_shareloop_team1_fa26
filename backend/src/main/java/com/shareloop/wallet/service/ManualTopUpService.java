@@ -3,6 +3,7 @@ package com.shareloop.wallet.service;
 import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.integration.payment.PaymentGatewayClient;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.dto.UserBrief;
@@ -35,6 +36,7 @@ public class ManualTopUpService {
     private final ConfigService config;
     private final ActivityLogService audit;
     private final UserService userService;
+    private final PaymentGatewayClient paymentGatewayClient;
     private final Clock clock;
 
     public ManualTopUpService(
@@ -43,7 +45,9 @@ public class ManualTopUpService {
             ConfigService config,
             ActivityLogService audit,
             UserService userService,
+            PaymentGatewayClient paymentGatewayClient,
             Clock clock) {
+        this.paymentGatewayClient = paymentGatewayClient;
         this.orders = orders;
         this.creditService = creditService;
         this.config = config;
@@ -61,6 +65,7 @@ public class ManualTopUpService {
     // Giữ EXPIRED khi trả lỗi 409 cho thao tác trên đơn vừa hết hạn.
     @Transactional(noRollbackFor = BusinessException.class)
     public TopUpOrderDetailResponse markPaid(long userId, String code) {
+        requireManualProviderEnabled();
         PaymentOrder order = lockOwned(userId, code);
         expireIfNecessary(order);
         requireManualPending(order);
@@ -69,21 +74,23 @@ public class ManualTopUpService {
     }
 
     /**
-     * Danh sách đơn nạp thủ công cho Admin, đơn mới tạo nằm trên cùng. status null nghĩa là mọi trạng thái;
+     * Danh sách đơn nạp cho Admin, đơn mới tạo nằm trên cùng. provider null nghĩa là mọi cổng thanh toán (VNPAY, MOCK,
+     * MANUAL), nên Admin xem được cả đơn VNPay; status null nghĩa là mọi trạng thái;
      * submittedOnly = true chỉ lấy đơn người dùng đã bấm xác nhận thanh toán. Kèm tên chủ đơn và tên Admin duyệt.
      */
     @Transactional(readOnly = true)
     public PageResponse<TopUpOrderDetailResponse> list(
-            PaymentOrderStatus status, boolean submittedOnly, int page, int size) {
+            PaymentProvider provider, PaymentOrderStatus status, boolean submittedOnly, int page, int size) {
         Sort newestFirst = Sort.by(Sort.Direction.DESC, "createdAt", "id");
         Page<PaymentOrder> orderPage =
-                orders.findManualOrders(status, submittedOnly, PageRequest.of(page, size, newestFirst));
+                orders.findOrders(provider, status, submittedOnly, PageRequest.of(page, size, newestFirst));
         // Hỏi tên của cả trang bằng một truy vấn, không hỏi từng đơn.
         Map<Long, UserBrief> briefs = findBriefs(orderPage.getContent());
         return PageResponse.from(orderPage.map(order -> detail(order, briefs)));
     }
 
     public TopUpOrderDetailResponse approve(long adminId, String code, String note) {
+        requireManualProviderEnabled();
         PaymentOrder order = lock(code);
         requireSubmitted(order);
         if (order.getStatus() == PaymentOrderStatus.SUCCESS) return adminDetail(order);
@@ -95,6 +102,7 @@ public class ManualTopUpService {
     }
 
     public TopUpOrderDetailResponse reject(long adminId, String code, String reason) {
+        requireManualProviderEnabled();
         if (reason == null || reason.isBlank() || reason.length() > 500) {
             throw new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE);
         }
@@ -105,6 +113,15 @@ public class ManualTopUpService {
         order.review(adminId, clock.instant(), reason.trim());
         log("TOP_UP_REJECTED", adminId, order, reason.trim());
         return adminDetail(order);
+    }
+
+    // Nạp thủ công chỉ dùng khi PAYMENT_PROVIDER=manual; ở deploy (vnpay) chặn để không ai tự cộng Credit không qua
+    // cổng.
+    // Xem đơn (getOrder, list) vẫn mở cho mọi provider.
+    private void requireManualProviderEnabled() {
+        if (paymentGatewayClient.provider() != PaymentProvider.MANUAL) {
+            throw new BusinessException(WalletErrorCode.WALLET_MANUAL_TOPUP_DISABLED);
+        }
     }
 
     private PaymentOrder lockOwned(long userId, String code) {
