@@ -1,5 +1,7 @@
 package com.shareloop.auth.service;
 
+import com.shareloop.audit.ActivityType;
+import com.shareloop.audit.service.ActivityLogQueryService;
 import com.shareloop.auth.AuthErrorCode;
 import com.shareloop.auth.dto.AuthResponse;
 import com.shareloop.auth.dto.ChangePasswordRequest;
@@ -24,6 +26,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
@@ -50,6 +53,7 @@ public class AuthService {
     private final DisposableEmailDomains disposableEmailDomains;
     private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
+    private final ActivityLogQueryService activityLogQueryService;
     private final long jwtTtlMinutes;
 
     public AuthService(
@@ -62,6 +66,7 @@ public class AuthService {
             DisposableEmailDomains disposableEmailDomains,
             Clock clock,
             ApplicationEventPublisher eventPublisher,
+            ActivityLogQueryService activityLogQueryService,
             @Value("${app.jwt.ttl-minutes}") long jwtTtlMinutes) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -72,6 +77,7 @@ public class AuthService {
         this.disposableEmailDomains = disposableEmailDomains;
         this.clock = clock;
         this.eventPublisher = eventPublisher;
+        this.activityLogQueryService = activityLogQueryService;
         this.jwtTtlMinutes = jwtTtlMinutes;
     }
 
@@ -304,6 +310,20 @@ public class AuthService {
         }
         // Khoá tài khoản là is_active = false (status vẫn giữ nguyên), nên phải kiểm cả hai.
         if (user.getStatus() == UserStatus.BANNED || !user.isActive()) {
+            String reason = activityLogQueryService != null
+                    ? activityLogQueryService
+                            .findLatestReason(ActivityType.USER_LOCK.name(), user.getId())
+                            .map(String::trim)
+                            .filter(r -> !r.isEmpty())
+                            .orElse(null)
+                    : null;
+            if (reason != null) {
+                throw new BusinessException(
+                        AuthErrorCode.AUTH_ACCOUNT_LOCKED,
+                        "Tài khoản đã bị khoá. Lý do: " + reason,
+                        null,
+                        Map.of("reason", reason));
+            }
             throw new BusinessException(AuthErrorCode.AUTH_ACCOUNT_LOCKED);
         }
     }

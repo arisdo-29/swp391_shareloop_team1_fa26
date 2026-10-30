@@ -79,6 +79,20 @@ public class ActivityLogQueryService {
                 .map(ActivityLog::getData);
     }
 
+    /**
+     * Lý do (cột reason) của dòng nhật ký mới nhất thuộc một loại hành động trên một đối tượng; rỗng nếu chưa có dòng
+     * nào hoặc dòng đó không có reason.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<String> findLatestReason(String type, Long targetId) {
+        if (type == null || targetId == null) {
+            return java.util.Optional.empty();
+        }
+        return repository
+                .findFirstByTypeAndTargetIdOrderByIdDesc(type, targetId)
+                .map(ActivityLog::getReason);
+    }
+
     /** Danh sách loại hành động kèm nhãn tiếng Việt cho bộ lọc phía FE. */
     public List<ActivityTypeDto> listTypes() {
         List<ActivityTypeDto> types = new ArrayList<>();
