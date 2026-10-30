@@ -74,6 +74,11 @@ app:
   ai:
     api-key: ${OPENROUTER_API_KEY}
   payment:
+    # Deploy mặc định VNPAY. Thiếu biến VNPAY_* thì app báo lỗi nêu tên biến ngay lúc khởi động (xem VnPayClient).
+    provider: ${PAYMENT_PROVIDER:vnpay}
+    vnpay:
+      return-url: ${VNPAY_RETURN_URL:}
+      fe-result-url: ${VNPAY_FE_RESULT_URL:}    # không có mặc định localhost ở prod
     mock:
       enabled: ${PAYMENT_MOCK_ENABLED:false}  # staging đặt true để demo nạp giả lập; production để false
   # module integration/mail (BE1)

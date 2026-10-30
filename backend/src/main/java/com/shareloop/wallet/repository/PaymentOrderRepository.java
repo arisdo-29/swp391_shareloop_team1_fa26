@@ -2,6 +2,7 @@ package com.shareloop.wallet.repository;
 
 import com.shareloop.wallet.entity.PaymentOrder;
 import com.shareloop.wallet.entity.PaymentOrderStatus;
+import com.shareloop.wallet.entity.PaymentProvider;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
@@ -15,9 +16,11 @@ import org.springframework.data.repository.query.Param;
 
 public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long> {
 
-    @Query("select o from PaymentOrder o where o.provider = com.shareloop.wallet.entity.PaymentProvider.MANUAL"
+    /** Danh sách đơn nạp cho Admin; provider hoặc status null nghĩa là không lọc theo tiêu chí đó. */
+    @Query("select o from PaymentOrder o where (:provider is null or o.provider = :provider)"
             + " and (:status is null or o.status = :status) and (:submittedOnly = false or o.submittedAt is not null)")
-    org.springframework.data.domain.Page<PaymentOrder> findManualOrders(
+    org.springframework.data.domain.Page<PaymentOrder> findOrders(
+            @Param("provider") PaymentProvider provider,
             @Param("status") PaymentOrderStatus status,
             @Param("submittedOnly") boolean submittedOnly,
             org.springframework.data.domain.Pageable pageable);

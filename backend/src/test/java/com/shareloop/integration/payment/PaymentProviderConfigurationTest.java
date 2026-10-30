@@ -93,15 +93,20 @@ class PaymentProviderConfigurationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"VNPAY_TMN_CODE", "VNPAY_HASH_SECRET", "VNPAY_RETURN_URL", "VNPAY_PAY_URL"})
+    @ValueSource(
+            strings = {"VNPAY_TMN_CODE", "VNPAY_HASH_SECRET", "VNPAY_RETURN_URL", "VNPAY_PAY_URL", "VNPAY_FE_RESULT_URL"
+            })
     void vnpayFailsClearlyWhenRequiredConfigurationIsBlank(String missing) {
+        // given: thiếu đúng một biến
         var environment = vnpayEnvironment();
         environment.put(missing, " ");
+
+        // when, then: lỗi khởi động nêu đúng tên biến thiếu
         runner(environment)
                 .run(context -> assertThat(context)
                         .hasFailed()
                         .getFailure()
-                        .hasRootCauseInstanceOf(IllegalArgumentException.class)
-                        .hasStackTraceContaining("VNPAY requires pay-url, return-url, tmn-code and hash-secret"));
+                        .hasRootCauseInstanceOf(IllegalStateException.class)
+                        .hasStackTraceContaining(missing));
     }
 }

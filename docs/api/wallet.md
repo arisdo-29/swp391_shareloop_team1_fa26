@@ -89,6 +89,7 @@ dịch làm đổi số dư thật: nạp, phí đăng/sửa/gia hạn/đẩy b�
 | `WALLET_TOPUP_AMOUNT_INVALID`      | 422  | Số tiền nạp dưới mức tối thiểu hoặc không phải bội số             | xem `payment.md`    |
 | `WALLET_PAYMENT_ORDER_NOT_FOUND`   | 404  | Không có đơn nạp hoặc đơn của người khác                          | xem `payment.md`    |
 | `WALLET_PAYMENT_ORDER_NOT_PAYABLE` | 409  | Đơn nạp `FAILED` hoặc `EXPIRED`                                   | xem `payment.md`    |
+| `WALLET_MANUAL_TOPUP_DISABLED`     | 409  | Gọi mark-paid/approve/reject khi `PAYMENT_PROVIDER` khác `manual` | xem `payment.md`    |
 
 Định dạng lỗi (`field` và `details` chỉ có khi liên quan):
 
@@ -204,5 +205,9 @@ Hai hàm đọc theo lô cho danh sách tra cứu của Admin (read-only, không
 
 `AdminFinanceService.listUsers` lấy danh sách người dùng thường qua `UserService.searchAccounts` rồi ghép hai hàm trên. Endpoint: `GET /api/v1/admin/finance/users` và `GET /api/v1/admin/finance/users/{userId}/wallet`, xem `admin.md` mục 3.1 và 3.2.
 
-Danh sách yêu cầu MANUAL và thao tác admin duyệt/từ chối: xem `GET /admin/finance/topup-orders` cùng các API
+Danh sách đơn nạp và thao tác admin duyệt/từ chối: xem `GET /admin/finance/topup-orders` cùng các API
 trong `payment.md`. Bộ lọc userId cho danh sách đơn chưa được cung cấp.
+
+> **Thay đổi cho FE (U3):** `GET /admin/finance/topup-orders` nay trả đơn của **mọi provider** (trước chỉ MANUAL) và có
+> tham số tuỳ chọn `provider=VNPAY|MOCK|MANUAL`. `mark-paid`, `approve`, `reject` chỉ chạy khi `PAYMENT_PROVIDER=manual`,
+> ngược lại trả `409 WALLET_MANUAL_TOPUP_DISABLED` (bảng lỗi bên dưới).

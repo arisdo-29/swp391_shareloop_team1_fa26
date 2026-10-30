@@ -7,12 +7,14 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.reset;
 
 import com.shareloop.audit.service.ActivityLogService;
+import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.support.IntegrationTest;
 import com.shareloop.wallet.dto.TopUpOrderDetailResponse;
 import com.shareloop.wallet.entity.PaymentOrderStatus;
+import com.shareloop.wallet.entity.PaymentProvider;
 import com.shareloop.wallet.service.CreditService;
 import com.shareloop.wallet.service.ManualTopUpService;
 import com.shareloop.wallet.service.PaymentExpiryService;
@@ -88,7 +90,7 @@ class ManualTopUpIT extends IntegrationTest {
         assertThat(balance(user)).isZero();
         assertThat(ledger(user)).isZero();
         assertThat(credit.getWallet(user).hasToppedUp()).isFalse();
-        assertThat(manual.list(PaymentOrderStatus.PENDING, true, 0, 20).items())
+        assertThat(manual.list(null, PaymentOrderStatus.PENDING, true, 0, 20).items())
                 .extracting(TopUpOrderDetailResponse::orderCode)
                 .contains(code);
     }
@@ -106,7 +108,8 @@ class ManualTopUpIT extends IntegrationTest {
         manual.approve(admin, newerCode, "đã kiểm tra");
 
         // when: không lọc trạng thái, không bắt buộc đã gửi
-        List<TopUpOrderDetailResponse> items = manual.list(null, false, 0, 100).items();
+        List<TopUpOrderDetailResponse> items =
+                manual.list(null, null, false, 0, 100).items();
 
         // then
         List<String> codes =
@@ -122,6 +125,27 @@ class ManualTopUpIT extends IntegrationTest {
     }
 
     @Test
+    void list_whenProviderGiven_filtersByProviderAndWithoutItReturnsAll() {
+        // given: một đơn MANUAL và một đơn VNPAY của cùng người dùng
+        long owner = user();
+        String manualCode = order(owner);
+        String vnpayCode = order(owner);
+        jdbc.update("UPDATE payment_orders SET provider = 'VNPAY' WHERE order_code = ?", vnpayCode);
+
+        // when
+        List<String> vnpayOnly = codes(manual.list(PaymentProvider.VNPAY, null, false, 0, 100));
+        List<String> all = codes(manual.list(null, null, false, 0, 100));
+
+        // then: lọc VNPAY thì không có đơn MANUAL; không lọc thì thấy cả hai
+        assertThat(vnpayOnly).contains(vnpayCode).doesNotContain(manualCode);
+        assertThat(all).contains(vnpayCode, manualCode);
+    }
+
+    private List<String> codes(PageResponse<TopUpOrderDetailResponse> page) {
+        return page.items().stream().map(TopUpOrderDetailResponse::orderCode).toList();
+    }
+
+    @Test
     void list_whenSubmittedOnly_hidesOrdersNotYetSubmitted() {
         // given
         long owner = user();
@@ -130,7 +154,7 @@ class ManualTopUpIT extends IntegrationTest {
         manual.markPaid(owner, submittedCode);
 
         // when
-        List<String> codes = manual.list(PaymentOrderStatus.PENDING, true, 0, 100).items().stream()
+        List<String> codes = manual.list(null, PaymentOrderStatus.PENDING, true, 0, 100).items().stream()
                 .map(TopUpOrderDetailResponse::orderCode)
                 .toList();
 

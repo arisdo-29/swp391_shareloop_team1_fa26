@@ -45,6 +45,7 @@ app:
       fe-result-url: ${VNPAY_FE_RESULT_URL:http://localhost:5173/credit}
       tmn-code: ${VNPAY_TMN_CODE:}
       hash-secret: ${VNPAY_HASH_SECRET:}
+      expiry-grace-minutes: 2       # dung sai đồng hồ server và VNPAY khi IPN so với hạn của đơn (hạn gốc: payment_order_expire_minutes)
     mock:
       enabled: false                # bật endpoint mock-confirm (tự cộng Credit không cần tiền); chỉ bật ở dev, staging
   # module integration/mail (BE1)

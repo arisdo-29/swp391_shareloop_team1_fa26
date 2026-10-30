@@ -6,6 +6,7 @@ import com.shareloop.wallet.dto.RejectTopUpRequest;
 import com.shareloop.wallet.dto.ReviewTopUpRequest;
 import com.shareloop.wallet.dto.TopUpOrderDetailResponse;
 import com.shareloop.wallet.entity.PaymentOrderStatus;
+import com.shareloop.wallet.entity.PaymentProvider;
 import com.shareloop.wallet.service.ManualTopUpService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -31,12 +32,14 @@ public class AdminTopUpController {
 
     @GetMapping
     public PageResponse<TopUpOrderDetailResponse> list(
+            // Bỏ trống provider nghĩa là lấy mọi cổng (VNPAY, MOCK, MANUAL).
+            @RequestParam(required = false) PaymentProvider provider,
             // Bỏ trống status nghĩa là lấy mọi trạng thái; submittedOnly mặc định false nên thấy cả đơn chưa gửi.
             @RequestParam(required = false) PaymentOrderStatus status,
             @RequestParam(defaultValue = "false") boolean submittedOnly,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return service.list(status, submittedOnly, page, size);
+        return service.list(provider, status, submittedOnly, page, size);
     }
 
     @PostMapping("/{orderCode}/approve")
