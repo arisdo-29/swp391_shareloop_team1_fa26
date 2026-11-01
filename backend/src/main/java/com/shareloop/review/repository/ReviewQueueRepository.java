@@ -44,4 +44,18 @@ public interface ReviewQueueRepository extends Repository<com.shareloop.item.ent
               AND i.is_deleted = FALSE
             """, nativeQuery = true)
     List<Object[]> findModerationInfo(@Param("itemId") long itemId);
+
+    /**
+     * Mọi bài đang chờ duyệt của một chủ bài, kể cả bài miễn phí (giữ phí 0) mà truy vấn giữ phí bỏ qua (L5). Dùng khi
+     * khoá tài khoản để từ chối hết, không để bài nào còn trong hàng chờ.
+     */
+    @Query(value = """
+            SELECT i.id
+            FROM items i
+            WHERE i.donor_id = :donorId
+              AND i.status = 'PENDING_REVIEW'
+              AND i.is_deleted = FALSE
+            ORDER BY i.id
+            """, nativeQuery = true)
+    List<Long> findPendingReviewItemIdsByDonor(@Param("donorId") long donorId);
 }

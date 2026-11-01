@@ -1,10 +1,6 @@
 package com.shareloop.review.event;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,35 +29,37 @@ class UserLockedHeldFeeListenerTest {
     UserLockedHeldFeeListener listener;
 
     @Test
-    void onUserLocked_rejectsPendingReviewItemsAndCountsReleasedCredit() {
-        // given
+    void onUserLocked_rejectsEveryPendingItemAndCountsOnlyHeldFees() {
+        // given: bài 1, 2 có phí; bài 3 là bài Cho tặng giữ phí 0 nên không có trong danh sách giữ phí
         when(listingFeeQueryService.findHeldFees(10L))
                 .thenReturn(List.of(
                         new HeldFeeItem(1L, "Bài A", "SWAP", "PENDING_REVIEW", 5, "POST"),
-                        new HeldFeeItem(2L, "Bài B", "SWAP", "PENDING_REVIEW", 2, "EDIT")));
+                        new HeldFeeItem(2L, "Bài B", "SWAP", "PENDING_REVIEW", 2, "EDIT"),
+                        new HeldFeeItem(4L, "Bài D", "SWAP", "APPROVED", 9, "EDIT")));
+        when(reviewService.rejectPendingItemsOfUser(10L, "[Hệ thống] Tài khoản bị khoá", 99L))
+                .thenReturn(List.of(1L, 2L, 3L));
         UserLockCleanup cleanup = new UserLockCleanup();
 
         // when
         listener.onUserLocked(new UserLockedEvent(99L, 10L, cleanup));
 
-        // then
-        verify(reviewService).reject(1L, "Tài khoản bị khoá", 99L);
-        verify(reviewService).reject(2L, "Tài khoản bị khoá", 99L);
+        // then: L5 từ chối cả bài miễn phí; Credit nhả chỉ tính bài thật sự giữ phí và vừa bị từ chối
+        verify(reviewService).rejectPendingItemsOfUser(10L, "[Hệ thống] Tài khoản bị khoá", 99L);
         assertThat(cleanup.getReleasedCredit()).isEqualTo(7);
     }
 
     @Test
-    void onUserLocked_skipsItemsNotPendingReview() {
+    void onUserLocked_whenNoPendingItems_releasesNothing() {
         // given
-        when(listingFeeQueryService.findHeldFees(10L))
-                .thenReturn(List.of(new HeldFeeItem(3L, "Bài C", "SWAP", "APPROVED", 5, "POST")));
+        when(listingFeeQueryService.findHeldFees(10L)).thenReturn(List.of());
+        when(reviewService.rejectPendingItemsOfUser(10L, UserLockedHeldFeeListener.LOCK_REASON, null))
+                .thenReturn(List.of());
         UserLockCleanup cleanup = new UserLockCleanup();
 
-        // when
-        listener.onUserLocked(new UserLockedEvent(99L, 10L, cleanup));
+        // when: cấm tự động khi hết sao không có Admin thực hiện
+        listener.onUserLocked(new UserLockedEvent(null, 10L, cleanup));
 
         // then
-        verify(reviewService, never()).reject(anyLong(), anyString(), eq(99L));
         assertThat(cleanup.getReleasedCredit()).isZero();
     }
 }
