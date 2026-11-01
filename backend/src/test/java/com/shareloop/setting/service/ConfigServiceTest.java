@@ -76,13 +76,13 @@ class ConfigServiceTest {
 
     @Test
     void getDecimalReadsThresholdAndReportsInvalidTypeWithKey() {
-        when(repository.findConfigValueByAttrKey("chat_ai_threshold")).thenReturn(Optional.of("0.7"));
-        assertThat(service.getDecimal(ConfigKey.CHAT_AI_THRESHOLD)).isEqualByComparingTo("0.7");
+        when(repository.findConfigValueByAttrKey("test_decimal")).thenReturn(Optional.of("0.7"));
+        assertThat(service.getDecimal("test_decimal")).isEqualByComparingTo("0.7");
 
-        when(repository.findConfigValueByAttrKey("chat_ai_threshold")).thenReturn(Optional.of("abc"));
-        assertThatThrownBy(() -> service.getDecimal(ConfigKey.CHAT_AI_THRESHOLD))
+        when(repository.findConfigValueByAttrKey("test_decimal")).thenReturn(Optional.of("abc"));
+        assertThatThrownBy(() -> service.getDecimal("test_decimal"))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage("Configuration 'chat_ai_threshold' must be decimal: 'abc'")
+                .hasMessage("Configuration 'test_decimal' must be decimal: 'abc'")
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(SettingErrorCode.SETTING_CONFIG_INVALID_TYPE);
     }
@@ -99,23 +99,17 @@ class ConfigServiceTest {
     }
 
     @Test
-    void updateRejectsInvalidDecimalAndOutOfRangeThreshold() {
-        assertThatThrownBy(() -> service.update(ConfigKey.CHAT_AI_THRESHOLD, "abc", null, 1L))
+    void updateRejectsInvalidInteger() {
+        assertThatThrownBy(() -> service.update(ConfigKey.POST_FEE, "abc", null, 1L))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage("Configuration 'chat_ai_threshold' must be a decimal: 'abc'")
+                .hasMessage("Configuration 'post_fee' must be an integer: 'abc'")
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(SettingErrorCode.SETTING_CONFIG_INVALID_TYPE);
-
-        assertThatThrownBy(() -> service.update(ConfigKey.CHAT_AI_THRESHOLD, "1.5", null, 1L))
-                .isInstanceOf(BusinessException.class)
-                .hasMessage("Configuration 'chat_ai_threshold' must be within 0..1: '1.5'")
-                .extracting(exception -> ((BusinessException) exception).getErrorCode())
-                .isEqualTo(SettingErrorCode.SETTING_CONFIG_OUT_OF_RANGE);
     }
 
     @Test
-    void updatedDecimalIsReturnedOnTheNextRead() {
-        AtomicReference<String> storedValue = new AtomicReference<>("0.7");
+    void updatedValueIsReturnedOnTheNextRead() {
+        AtomicReference<String> storedValue = new AtomicReference<>("5");
         var attribute = mock(WebsiteAttribute.class);
         when(attribute.getAttrValue()).thenAnswer(invocation -> storedValue.get());
         doAnswer(invocation -> {
@@ -124,14 +118,13 @@ class ConfigServiceTest {
                 })
                 .when(attribute)
                 .updateValue(anyString());
-        when(repository.findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", "chat_ai_threshold"))
+        when(repository.findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", "post_fee"))
                 .thenReturn(Optional.of(attribute));
-        when(repository.findConfigValueByAttrKey("chat_ai_threshold"))
-                .thenAnswer(invocation -> Optional.of(storedValue.get()));
+        when(repository.findConfigValueByAttrKey("post_fee")).thenAnswer(invocation -> Optional.of(storedValue.get()));
 
-        service.update(ConfigKey.CHAT_AI_THRESHOLD, "0.8", null, 1L);
+        service.update(ConfigKey.POST_FEE, "10", null, 1L);
 
-        assertThat(service.getDecimal(ConfigKey.CHAT_AI_THRESHOLD)).isEqualByComparingTo("0.8");
+        assertThat(service.getInt(ConfigKey.POST_FEE)).isEqualTo(10);
     }
 
     @Test

@@ -128,21 +128,6 @@ public enum ConfigKey {
             ConfigGroup.AI,
             "Thời gian chờ AI tìm kiếm",
             "Số giây chờ AI trợ lý trả lời. Quá thời gian thì hoàn lượt và chuyển sang tìm kiếm thường."),
-    CHAT_AI_THRESHOLD(
-            "chat_ai_threshold",
-            "0.7",
-            ConfigGroup.AI,
-            "Ngưỡng chặn tin nhắn của AI",
-            "Độ tin cậy tối thiểu, từ 0 đến 1, để AI chặn một tin nhắn.",
-            ValueType.DECIMAL,
-            BigDecimal.ZERO,
-            BigDecimal.ONE),
-    CHAT_AI_TIMEOUT_SECONDS(
-            "chat_ai_timeout_seconds",
-            "5",
-            ConfigGroup.AI,
-            "Thời gian chờ AI kiểm duyệt chat",
-            "Số giây chờ AI kiểm duyệt tin nhắn. Nếu AI lỗi thì tin nhắn bị chặn nhưng không tính là vi phạm."),
     ITEM_AI_SCREENING_ENABLED(
             "item_ai_screening_enabled",
             "false",
