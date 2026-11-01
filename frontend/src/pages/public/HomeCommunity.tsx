@@ -5,12 +5,12 @@ import type { Item } from '../../types/domain';
 const values = [
   ['01', 'CHO ĐI', 'Món đồ bạn không còn dùng'],
   ['02', 'TÌM ĐỒ', 'Tìm món đồ bạn đang cần'],
-  ['03', 'GẶP GỠ & TRAO ĐỔI', 'Hoàn tất một vòng đời mới'],
+  ['03', 'GIAO NHẬN & TRAO ĐỔI', 'Gặp trực tiếp hoặc gửi vận chuyển, hoàn tất một vòng đời mới'],
 ];
 const steps = [
-  ['Đăng hoặc tìm món', 'Chia sẻ món bạn có, hoặc lọc theo nhu cầu và quận.'],
-  ['Trò chuyện và chốt lịch', 'Thống nhất món trao đổi, thời gian và điểm giao nhận.'],
-  ['Xác nhận hoàn tất', 'Hai bên xác nhận bàn giao để khép lại giao dịch an toàn.'],
+  ['Đăng hoặc tìm món', 'Chia sẻ món bạn có, hoặc lọc theo nhu cầu và quận. Khách xem được, muốn gửi yêu cầu thì đăng nhập.'],
+  ['Chọn người và chốt lịch', 'Chủ bài chọn một người, hai bên trò chuyện rồi cùng đồng ý lịch gặp trực tiếp hoặc gửi qua đơn vị vận chuyển.'],
+  ['Xác nhận hoàn tất', 'Chủ bài bấm "Đã giao", người nhận bấm "Đã nhận" và cho biết đồ có đúng mô tả không.'],
 ];
 
 export function HomeLifecycle({ items }: { items: Item[] }) {

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.audit.service.ActivityLogQueryService;
 import com.shareloop.auth.AuthErrorCode;
 import com.shareloop.auth.dto.AuthResponse;
 import com.shareloop.auth.dto.ChangePasswordRequest;
@@ -67,6 +68,9 @@ class AuthServiceTest {
     @Mock
     ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    ActivityLogQueryService activityLogQueryService;
+
     AuthService service;
 
     @BeforeEach
@@ -81,6 +85,7 @@ class AuthServiceTest {
                 new DisposableEmailDomains(),
                 Clock.systemUTC(),
                 eventPublisher,
+                activityLogQueryService,
                 TTL_MINUTES);
     }
 
@@ -151,6 +156,40 @@ class AuthServiceTest {
 
         // when, then
         assertErrorCode(new LoginRequest(EMAIL, PASSWORD), AuthErrorCode.AUTH_ACCOUNT_LOCKED);
+    }
+
+    @Test
+    void login_whenAccountInactiveWithReason_throwsAccountLockedWithReasonInMessageAndDetails() {
+        // given
+        User user = givenUser(UserStatus.ACTIVE, false);
+        when(passwordEncoder.matches(PASSWORD, HASH)).thenReturn(true);
+        when(activityLogQueryService.findLatestReason("USER_LOCK", user.getId()))
+                .thenReturn(Optional.of("spam bài"));
+
+        // when, then
+        assertThatThrownBy(() -> service.login(new LoginRequest(EMAIL, PASSWORD)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_ACCOUNT_LOCKED);
+                    assertThat(ex.getMessage()).isEqualTo("Tài khoản đã bị khoá. Lý do: spam bài");
+                    assertThat(ex.getDetails()).containsEntry("reason", "spam bài");
+                });
+    }
+
+    @Test
+    void login_whenAccountInactiveWithoutReason_throwsAccountLockedWithDefaultMessage() {
+        // given
+        User user = givenUser(UserStatus.ACTIVE, false);
+        when(passwordEncoder.matches(PASSWORD, HASH)).thenReturn(true);
+        when(activityLogQueryService.findLatestReason("USER_LOCK", user.getId()))
+                .thenReturn(Optional.empty());
+
+        // when, then
+        assertThatThrownBy(() -> service.login(new LoginRequest(EMAIL, PASSWORD)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(AuthErrorCode.AUTH_ACCOUNT_LOCKED);
+                    assertThat(ex.getMessage()).isEqualTo(AuthErrorCode.AUTH_ACCOUNT_LOCKED.defaultMessage());
+                    assertThat(ex.getDetails()).isNull();
+                });
     }
 
     @Test
