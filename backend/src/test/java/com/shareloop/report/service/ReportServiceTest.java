@@ -1507,7 +1507,6 @@ class ReportServiceTest {
                         eq("Xác minh hàng không đúng mô tả"));
     }
 
-<<<<<<< HEAD
     // ---------- D-07: báo cáo bài (BC-03 yêu cầu giải trình, BC-04 bác bỏ mở lại bài, BC-05 chấp thuận đóng báo cáo
     // khác)
 
@@ -1786,7 +1785,8 @@ class ReportServiceTest {
                         org.mockito.ArgumentMatchers.<java.util.Map<String, Object>>argThat(
                                 data -> List.of(42L, 43L).equals(data.get("closedReportIds"))),
                         anyString());
-=======
+    }
+
     @Test
     @DisplayName("U5-BE: findDisputeResponseDueAt trả null khi requestId null")
     void findDisputeResponseDueAt_whenNullRequestId_returnsNull() {
@@ -1859,6 +1859,5 @@ class ReportServiceTest {
         assertThat(map).hasSize(2).containsEntry(reqId1, due1).containsEntry(reqId2, due2);
         assertThat(reportService.findDisputeResponseDueAtMap(List.of())).isEmpty();
         assertThat(reportService.findDisputeResponseDueAtMap(null)).isEmpty();
->>>>>>> origin/develop
     }
 }
