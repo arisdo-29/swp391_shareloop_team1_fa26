@@ -240,4 +240,16 @@ public class Report extends BaseEntity {
             this.starsDeducted = 1;
         }
     }
+
+    /**
+     * Đóng một báo cáo đang chờ của cùng bài khi Admin đã chấp thuận báo cáo khác về bài đó (D-07, BC-05): tính là có
+     * cơ sở nhưng không trừ sao, vì mỗi bài chỉ bị trừ 1 sao cho lần chấp thuận.
+     */
+    public void closeWithUpheldReport(Long adminId, String note) {
+        this.status = ReportStatus.RESOLVED;
+        this.resolvedBy = adminId;
+        this.resolution = note;
+        this.resolvedAt = Instant.now();
+        this.starsDeducted = 0;
+    }
 }

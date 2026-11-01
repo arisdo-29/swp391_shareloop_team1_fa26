@@ -23,7 +23,10 @@ public enum ReportErrorCode implements ErrorCode {
     REPORT_ALREADY_CONCLUDED(HttpStatus.CONFLICT, "Báo cáo này đã được kết luận trước đó."),
     // D-15, BC-10: chỉ kết luận khi bên bị báo cáo đã giải trình hoặc đã hết hạn giải trình.
     REPORT_RESPONSE_WINDOW_OPEN(
-            HttpStatus.CONFLICT, "Bên bị báo cáo vẫn đang trong hạn giải trình, chưa thể kết luận.");
+            HttpStatus.CONFLICT, "Bên bị báo cáo vẫn đang trong hạn giải trình, chưa thể kết luận."),
+    // D-07, BC-03: chỉ báo cáo bài hoặc người dùng đang Chờ xử lý và chưa có giải trình mới yêu cầu giải trình được.
+    REPORT_RESPONSE_REQUEST_NOT_ALLOWED(
+            HttpStatus.CONFLICT, "Chỉ yêu cầu giải trình được với báo cáo đang chờ xử lý và chưa có giải trình.");
 
     private final HttpStatus status;
     private final String defaultMessage;

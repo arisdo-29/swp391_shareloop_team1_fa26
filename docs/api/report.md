@@ -349,6 +349,7 @@ Admin đưa ra kết luận xử lý đối với báo cáo hoặc khiếu nại
     - Trạng thái báo cáo chuyển thành `DISMISSED`.
     - Không trừ sao uy tín, không ẩn bài đăng.
     - Ghi nhận nhật ký hành động Admin (`activity_logs` loại `REPORT_DISMISSED`).
+    - **Báo cáo bài (D-07, BC-04):** bài đang tạm ẩn được mở lại (`is_active = true`) khi đủ cả bốn điều kiện: không còn báo cáo nào khác của bài đang `OPEN`/`AWAITING_RESPONSE`, bài chưa từng có báo cáo `RESOLVED`, chủ bài không bị khoá hay cấm, chủ bài còn sao (`trust_stars > 0`). Chủ bài nhận thông báo `ITEM_REOPENED` (link `/activities`). Bài đã xoá hoặc đang hiển thị thì bỏ qua.
   - **Khi kết luận UPHOLD (Chấp thuận / Khiếu nại có cơ sở):**
     - Trạng thái báo cáo chuyển thành `RESOLVED`.
     - Xác định người vi phạm (`violatorId`):
@@ -359,7 +360,8 @@ Admin đưa ra kết luận xử lý đối với báo cáo hoặc khiếu nại
     - Nếu lý do vi phạm thuộc nhóm nghiêm trọng cấu hình qua `REPORT_SERIOUS_REASONS` (mặc định: `PROHIBITED_ITEM`, `COUNTERFEIT`):
       - Hệ thống tự động ẩn toàn bộ các bài đăng đang hoạt động khác của người vi phạm để rà soát (`itemService.hideAllOfUser(violatorId)`, BR-A07).
     - Nếu đối tượng báo cáo là bài đăng cụ thể (`ITEM`), tự động ẩn bài đăng đó (`itemService.hide(itemId)`).
-    - Ghi nhận nhật ký hành động Admin (`activity_logs` loại `REPORT_UPHELD`).
+    - **Báo cáo bài (D-07, BC-05):** các báo cáo khác của cùng bài đang `OPEN`/`AWAITING_RESPONSE` đóng theo: `RESOLVED`, `starsDeducted = 0`, `resolution = "Đóng theo kết luận báo cáo #<id>"`. Chủ bài chỉ bị trừ 1 sao cho lần chấp thuận này.
+    - Ghi nhận nhật ký hành động Admin (`activity_logs` loại `REPORT_UPHELD`; có `closedReportIds` khi đóng theo báo cáo khác).
   - Cập nhật thông tin Admin kết luận (`resolved_by`), ghi chú kết luận (`resolution`) và thời điểm kết luận (`resolved_at`).
 
 - **Request Body:**
@@ -408,6 +410,27 @@ Admin đưa ra kết luận xử lý đối với báo cáo hoặc khiếu nại
   - `409 CONFLICT`:
     - `REPORT_ALREADY_CONCLUDED`: Báo cáo vi phạm đã được kết luận xử lý trước đó.
     - `REPORT_RESPONSE_WINDOW_OPEN`: Bên bị báo cáo vẫn đang trong hạn giải trình, chưa thể kết luận; `details.responseDueAt` là hạn.
+
+---
+
+## 5. POST /api/v1/admin/reports/{reportId}/request-response
+
+Admin yêu cầu bên bị báo cáo giải trình (D-07, BC-03).
+
+- **Xác thực:** Bearer Token có quyền `ROLE_ADMIN`.
+- **Request Body:** không có.
+- **Quy tắc nghiệp vụ:**
+  - Chỉ áp dụng cho báo cáo bài (`ITEM`) hoặc người dùng (`USER`) đang `OPEN` và chưa có giải trình. Khiếu nại giao dịch (`REQUEST`) đã tự `AWAITING_RESPONSE` lúc mở nên không dùng endpoint này.
+  - Chuyển sang `AWAITING_RESPONSE`, `responseDueAt = now + response_window_hours` (48 giờ).
+  - **Báo cáo bài nhiều báo cáo:** mọi báo cáo `OPEN` chưa giải trình của cùng bài chuyển cùng lúc với **một hạn chung**. Nếu bài đã có báo cáo đang chờ giải trình còn hạn thì dùng lại hạn đó, không kéo dài. Chủ bài nhận **một** thông báo (nội dung có câu "Bạn chỉ cần giải trình một lần cho cả bài.").
+  - Chủ bài giải trình một lần qua `POST /api/v1/reports/{reportId}/response` thì mọi báo cáo cùng bài đang chờ giải trình (còn hạn) nhận chung nội dung và ảnh giải trình, cùng trở về `OPEN`.
+  - Chủ bài (báo cáo `ITEM`) hoặc người bị báo cáo (`USER`) nhận thông báo `REPORT_RESPONSE_REQUESTED`, nội dung có hạn dạng `Bạn có 48 giờ, đến 14:30 31/10, để giải trình.`, link `/me/reports/{reportId}` (trang gửi giải trình, gọi `POST /api/v1/reports/{reportId}/response`).
+  - Ghi nhật ký `REPORT_RESPONSE_REQUESTED` (`data`: `reportId`, `reportIds` (các báo cáo vừa chuyển), `targetType`, `responseDueAt`, `itemId` nếu có).
+  - Sau đó Admin chỉ kết luận được khi đã có giải trình hoặc đã hết hạn (D-15, mục 4).
+- **Thành công:** `204 No Content`.
+- **Mã lỗi:** `401`; `403`; `404 REPORT_NOT_FOUND`; `409 REPORT_ALREADY_CONCLUDED` (đã kết luận); `409 REPORT_RESPONSE_REQUEST_NOT_ALLOWED` (là khiếu nại giao dịch, không còn `OPEN` hoặc đã có giải trình).
+
+FE (`/admin/complaints`): nút "Yêu cầu giải trình" hiện khi hồ sơ `OPEN`, không phải `REQUEST` và chưa có giải trình; gửi xong tải lại hồ sơ.
 
 ---
 

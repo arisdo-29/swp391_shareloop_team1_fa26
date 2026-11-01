@@ -265,6 +265,140 @@ class AdminReportApiIT extends IntegrationTest {
                 .isEqualTo(4);
     }
 
+    @Test
+    void itemReportFlow_requestResponseThenDismissAllReopensHiddenItem() throws Exception {
+        long donor = user("Item donor");
+        long item = approvedItem(donor);
+        String adminAuth = "Bearer " + jwt.issue(user("Item admin"), true);
+        // 3 báo cáo đang chờ: chạm ngưỡng report_hide_threshold nên bài tự ẩn
+        long first = reportItem(user("Reporter 1"), item);
+        long second = reportItem(user("Reporter 2"), item);
+        long third = reportItem(user("Reporter 3"), item);
+        assertThat(itemActive(item)).isFalse();
+
+        // BC-03: Admin yêu cầu giải trình một lần, cả 3 báo cáo của bài cùng chờ giải trình với chung một hạn
+        requestResponseAndRespond(first, donor, adminAuth, second, third);
+        mvc.perform(post("/api/v1/admin/reports/" + first + "/request-response").header("Authorization", adminAuth))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REPORT_RESPONSE_REQUEST_NOT_ALLOWED"));
+
+        // BC-04: bác bỏ lần lượt, chỉ mở lại bài khi không còn báo cáo nào chờ
+        dismiss(first, adminAuth);
+        dismiss(second, adminAuth);
+        assertThat(itemActive(item)).isFalse();
+        dismiss(third, adminAuth);
+        assertThat(itemActive(item)).isTrue();
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = 'ITEM_REOPENED'",
+                        Integer.class,
+                        donor))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void itemReportFlow_upholdClosesOtherPendingReportsAndDeductsOneStar() throws Exception {
+        long donor = user("Upheld donor");
+        long item = approvedItem(donor);
+        String adminAuth = "Bearer " + jwt.issue(user("Upheld admin"), true);
+        long first = reportItem(user("Reporter A"), item);
+        long second = reportItem(user("Reporter B"), item);
+        long third = reportItem(user("Reporter C"), item);
+        // Xong khi (L1): yêu cầu giải trình, chủ bài giải trình một lần, Admin chấp thuận một lần
+        requestResponseAndRespond(first, donor, adminAuth, second, third);
+
+        mvc.perform(post("/api/v1/admin/reports/" + first + "/conclude")
+                        .header("Authorization", adminAuth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"UPHOLD\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.starsDeducted").value(1));
+        reports.flush();
+
+        // BC-05: hai báo cáo còn lại đóng theo, không trừ thêm sao; bài vẫn ẩn
+        for (long other : new long[] {second, third}) {
+            var row = jdbc.queryForMap("SELECT status, stars_deducted, resolution FROM reports WHERE id = ?", other);
+            assertThat(row)
+                    .containsEntry("status", "RESOLVED")
+                    .containsEntry("resolution", "Đóng theo kết luận báo cáo #" + first);
+            // Driver PostgreSQL trả SMALLINT thành Integer, so theo giá trị số để không lệch kiểu Short/Integer
+            assertThat(((Number) row.get("stars_deducted")).intValue()).isZero();
+        }
+        assertThat(jdbc.queryForObject("SELECT trust_stars FROM users WHERE id = ?", Integer.class, donor))
+                .isEqualTo(4);
+        assertThat(itemActive(item)).isFalse();
+    }
+
+    private long approvedItem(long donor) {
+        return jdbc.queryForObject("""
+                INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, condition, status)
+                VALUES (?, (SELECT id FROM item_categories ORDER BY id LIMIT 1),
+                        (SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1),
+                        'GIVE', 'Item report IT', 'Mô tả', 'GOOD', 'APPROVED') RETURNING id
+                """, Long.class, donor);
+    }
+
+    private long reportItem(long reporter, long item) throws Exception {
+        String created = mvc.perform(post("/api/v1/reports")
+                        .header("Authorization", "Bearer " + jwt.issue(reporter, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"targetType":"ITEM","itemId":%d,"reason":"OTHER","description":"Ảnh lấy trên mạng"}
+                                """.formatted(item)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        reports.flush();
+        return JsonMapper.builder().build().readTree(created).get("id").asLong();
+    }
+
+    // Admin yêu cầu giải trình qua một báo cáo; mọi báo cáo của bài cùng chờ, chung hạn, chủ bài nhận một thông báo.
+    // Chủ bài giải trình một lần qua báo cáo đó thì cả bài có giải trình và trở về OPEN.
+    private void requestResponseAndRespond(long reportId, long donor, String adminAuth, long... siblings)
+            throws Exception {
+        mvc.perform(post("/api/v1/admin/reports/" + reportId + "/request-response")
+                        .header("Authorization", adminAuth))
+                .andExpect(status().isNoContent());
+        reports.flush();
+        java.sql.Timestamp dueAt = jdbc.queryForObject(
+                "SELECT response_due_at FROM reports WHERE id = ?", java.sql.Timestamp.class, reportId);
+        for (long sibling : siblings) {
+            assertThat(jdbc.queryForMap("SELECT status, response_due_at FROM reports WHERE id = ?", sibling))
+                    .containsEntry("status", "AWAITING_RESPONSE")
+                    .containsEntry("response_due_at", dueAt);
+        }
+        assertThat(jdbc.queryForObject(
+                        "SELECT link FROM notifications WHERE user_id = ? AND type = 'REPORT_RESPONSE_REQUESTED'",
+                        String.class,
+                        donor))
+                .isEqualTo("/me/reports/" + reportId);
+
+        mvc.perform(post("/api/v1/reports/" + reportId + "/response")
+                        .header("Authorization", "Bearer " + jwt.issue(donor, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"response\":\"Ảnh tự chụp\",\"evidenceMediaIds\":[]}"))
+                .andExpect(status().isNoContent());
+        reports.flush();
+        for (long sibling : siblings) {
+            assertThat(jdbc.queryForMap("SELECT status, response FROM reports WHERE id = ?", sibling))
+                    .containsEntry("status", "OPEN")
+                    .containsEntry("response", "Ảnh tự chụp");
+        }
+    }
+
+    private void dismiss(long reportId, String adminAuth) throws Exception {
+        mvc.perform(post("/api/v1/admin/reports/" + reportId + "/conclude")
+                        .header("Authorization", adminAuth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"DISMISS\"}"))
+                .andExpect(status().isOk());
+        reports.flush();
+    }
+
+    private boolean itemActive(long item) {
+        return jdbc.queryForObject("SELECT is_active FROM items WHERE id = ?", Boolean.class, item);
+    }
+
     private long user(String name) {
         return jdbc.queryForObject(
                 """

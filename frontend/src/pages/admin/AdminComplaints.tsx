@@ -275,6 +275,43 @@ export function AdminComplaints() {
     }
   }
 
+  // D-07, BC-03: báo cáo bài hoặc người dùng đang Chờ xử lý, chưa có giải trình thì Admin yêu cầu giải trình được.
+  // Khiếu nại giao dịch tự chờ giải trình lúc mở nên không có nút này. Backend kiểm lại.
+  const canRequestResponse =
+    !!detail &&
+    detail.report.status === 'OPEN' &&
+    detail.report.targetType !== 'REQUEST' &&
+    !detail.response;
+
+  async function requestResponse() {
+    if (!detail || !canRequestResponse || submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    setDetailError('');
+    try {
+      await reportApi.requestResponse(detail.report.id);
+      setNoticeTone('success');
+      setNotice('Đã yêu cầu giải trình. Bên bị báo cáo có 48 giờ để gửi giải trình.');
+      setDetail(null);
+      setReload((value) => value + 1);
+    } catch (error) {
+      const failure = error as ApiError;
+      if (failure.status === 409) {
+        setNoticeTone('warning');
+        setNotice('Hồ sơ không còn ở trạng thái Chờ xử lý. Đang tải lại trạng thái.');
+        setDetail(null);
+        setReload((value) => value + 1);
+      } else {
+        setDetailError(errorMessage(failure));
+        if (failure.status === 404 || failure.status === 403 || failure.status === 401)
+          setDetail(null);
+      }
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  }
+
   return (
     <section>
       <PageHeader title="Khiếu nại" description="Hồ sơ cần quản trị viên xem xét và kết luận." />
@@ -556,6 +593,15 @@ export function AdminComplaints() {
                 onClick={() => setConfirming(true)}
               >
                 Kết luận
+              </Button>
+            )}
+            {canRequestResponse && !confirming && (
+              <Button
+                variant="outline"
+                disabled={submitting}
+                onClick={() => void requestResponse()}
+              >
+                Yêu cầu giải trình
               </Button>
             )}
             <Button

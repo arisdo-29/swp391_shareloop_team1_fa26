@@ -44,4 +44,14 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
 
     /** Đếm report của một bài theo loại đối tượng và trạng thái; dùng cho ngưỡng tự ẩn bài (BR-A03). */
     long countByTargetTypeAndItemIdAndStatusIn(TargetType targetType, Long itemId, Collection<ReportStatus> statuses);
+
+    /**
+     * Các report khác của cùng bài theo trạng thái, bỏ report đang kết luận (D-07): chấp thuận thì đóng các report này,
+     * bác bỏ thì chỉ mở lại bài khi danh sách rỗng.
+     */
+    List<Report> findByTargetTypeAndItemIdAndStatusInAndIdNot(
+            TargetType targetType, Long itemId, Collection<ReportStatus> statuses, Long excludedId);
+
+    /** Bài đã có report được chấp thuận chưa; có thì bác bỏ report khác không mở lại bài (D-07). */
+    boolean existsByTargetTypeAndItemIdAndStatus(TargetType targetType, Long itemId, ReportStatus status);
 }

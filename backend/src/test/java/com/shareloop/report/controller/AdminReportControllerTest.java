@@ -246,4 +246,31 @@ class AdminReportControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("REPORT_ALREADY_CONCLUDED"));
     }
+
+    @Test
+    @DisplayName("D-07: Admin yêu cầu giải trình trả 204; không phải Admin bị chặn")
+    void requestResponse_admin_returns204AndRequiresAdmin() throws Exception {
+        mockMvc.perform(post(BASE_URL + "/5/request-response")
+                        .header("Authorization", "Bearer " + jwtService.issue(ADMIN_ID, true)))
+                .andExpect(status().isNoContent());
+        org.mockito.Mockito.verify(reportService).requestResponse(ADMIN_ID, 5L);
+
+        mockMvc.perform(post(BASE_URL + "/5/request-response")).andExpect(status().isUnauthorized());
+        mockMvc.perform(post(BASE_URL + "/5/request-response")
+                        .header("Authorization", "Bearer " + jwtService.issue(NORMAL_USER_ID, false)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("D-07: báo cáo không còn Chờ xử lý trả 409 REPORT_RESPONSE_REQUEST_NOT_ALLOWED")
+    void requestResponse_notAllowed_returns409() throws Exception {
+        org.mockito.Mockito.doThrow(new BusinessException(ReportErrorCode.REPORT_RESPONSE_REQUEST_NOT_ALLOWED))
+                .when(reportService)
+                .requestResponse(ADMIN_ID, 6L);
+
+        mockMvc.perform(post(BASE_URL + "/6/request-response")
+                        .header("Authorization", "Bearer " + jwtService.issue(ADMIN_ID, true)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REPORT_RESPONSE_REQUEST_NOT_ALLOWED"));
+    }
 }

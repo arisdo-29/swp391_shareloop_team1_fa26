@@ -28,11 +28,13 @@ import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.service.RequestService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.service.UserService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -62,6 +64,7 @@ public class ReportService {
     private final ActivityLogService activityLogService;
     private final ConfigService configService;
     private final RequestService requestService;
+    private final UserService userService;
     private final ReportEvidenceService evidenceService;
     private final JdbcClient jdbcClient;
     private final Clock clock;
@@ -77,6 +80,7 @@ public class ReportService {
             @Autowired(required = false) ActivityLogService activityLogService,
             @Autowired(required = false) ConfigService configService,
             @Autowired(required = false) RequestService requestService,
+            @Autowired(required = false) UserService userService,
             @Autowired(required = false) JdbcClient jdbcClient,
             @Autowired(required = false) Clock clock) {
         this.reportRepository = reportRepository;
@@ -88,6 +92,7 @@ public class ReportService {
         this.activityLogService = activityLogService;
         this.configService = configService;
         this.requestService = requestService;
+        this.userService = userService;
         this.jdbcClient = jdbcClient;
         this.clock = clock != null ? clock : Clock.systemUTC();
     }
@@ -247,7 +252,19 @@ public class ReportService {
                 || now.isAfter(report.getResponseDueAt())) {
             throw new BusinessException(ReportErrorCode.REPORT_RESPONSE_NOT_ALLOWED);
         }
-        report.respond(input.response().trim(), evidenceService.attach(input.evidenceMediaIds(), userId), now);
+        String response = input.response().trim();
+        String responseEvidence = evidenceService.attach(input.evidenceMediaIds(), userId);
+        report.respond(response, responseEvidence, now);
+
+        // D-07: báo cáo bài cùng chờ giải trình (chung hạn) nhận chung bản giải trình, chủ bài chỉ gửi một lần
+        if (report.getTargetType() == TargetType.ITEM && report.getItemId() != null) {
+            for (Report sibling : reportRepository.findByTargetTypeAndItemIdAndStatusInAndIdNot(
+                    TargetType.ITEM, report.getItemId(), List.of(ReportStatus.AWAITING_RESPONSE), reportId)) {
+                if (sibling.isResponseWindowOpen(now) && sibling.getRespondedAt() == null) {
+                    sibling.respond(response, responseEvidence, now);
+                }
+            }
+        }
     }
 
     /**
@@ -545,7 +562,95 @@ public class ReportService {
     }
 
     /**
+     * Admin yêu cầu bên bị báo cáo giải trình (D-07, BC-03): báo cáo bài hoặc người dùng đang Chờ xử lý (OPEN) chuyển
+     * sang Chờ giải trình (AWAITING_RESPONSE), hạn theo response_window_hours (48 giờ), báo chủ bài hoặc người bị báo
+     * cáo kèm hạn. Khiếu nại giao dịch đã tự chờ giải trình lúc mở nên không đi qua đây.
+     *
+     * <p>Báo cáo bài: mọi báo cáo OPEN chưa giải trình của cùng bài chuyển cùng lúc với một hạn chung, chủ bài nhận
+     * một thông báo và giải trình một lần cho cả bài (xem {@link #respond}). Bài đã có báo cáo đang chờ giải trình còn
+     * hạn thì dùng lại hạn đó.
+     *
+     * @throws BusinessException REPORT_NOT_FOUND; REPORT_ALREADY_CONCLUDED khi đã kết luận;
+     *     REPORT_RESPONSE_REQUEST_NOT_ALLOWED khi là khiếu nại giao dịch, không còn OPEN hoặc đã có giải trình
+     */
+    @Transactional
+    public void requestResponse(Long adminId, long reportId) {
+        Report report = reportRepository
+                .findByIdForUpdate(reportId)
+                .orElseThrow(() -> new BusinessException(ReportErrorCode.REPORT_NOT_FOUND));
+        if (report.getStatus() == ReportStatus.RESOLVED || report.getStatus() == ReportStatus.DISMISSED) {
+            throw new BusinessException(ReportErrorCode.REPORT_ALREADY_CONCLUDED);
+        }
+        Long respondentId = report.getTargetType() == TargetType.REQUEST ? null : resolveViolator(report);
+        if (report.getStatus() != ReportStatus.OPEN || report.getRespondedAt() != null || respondentId == null) {
+            throw new BusinessException(ReportErrorCode.REPORT_RESPONSE_REQUEST_NOT_ALLOWED);
+        }
+
+        int responseHours = windowHours(ConfigKey.RESPONSE_WINDOW_HOURS);
+        Instant now = Instant.now(clock);
+        Instant responseDueAt = now.plus(Duration.ofHours(responseHours));
+        boolean itemReport = report.getTargetType() == TargetType.ITEM && report.getItemId() != null;
+        List<Report> group = new ArrayList<>(List.of(report));
+        boolean reusedDeadline = false;
+        if (itemReport) {
+            for (Report sibling : reportRepository.findByTargetTypeAndItemIdAndStatusInAndIdNot(
+                    TargetType.ITEM, report.getItemId(), PENDING_STATUSES, reportId)) {
+                if (sibling.isResponseWindowOpen(now) && sibling.getRespondedAt() == null) {
+                    // Bài đang chờ giải trình: báo cáo mới vào chung hạn cũ, không kéo dài thêm
+                    responseDueAt = sibling.getResponseDueAt();
+                    reusedDeadline = true;
+                } else if (sibling.getStatus() == ReportStatus.OPEN && sibling.getRespondedAt() == null) {
+                    group.add(sibling);
+                }
+            }
+        }
+        List<Long> reportIds = new ArrayList<>();
+        for (Report pending : group) {
+            pending.awaitResponse(responseDueAt);
+            reportRepository.save(pending);
+            reportIds.add(pending.getId());
+        }
+
+        String title = itemTitle(report.getItemId());
+        if (notificationService != null) {
+            String deadline = reusedDeadline
+                    ? "Hạn giải trình vẫn là " + DEADLINE_FORMAT.format(responseDueAt) + "."
+                    : responseWindowSentence(responseHours, responseDueAt);
+            notificationService.notify(
+                    respondentId,
+                    "REPORT_RESPONSE_REQUESTED",
+                    itemReport ? "Bài đăng cần giải trình" : "Bạn cần giải trình một báo cáo",
+                    (itemReport
+                                    ? "Bài" + quotedTitle(title) + " đang bị báo cáo. Bạn chỉ cần giải trình một lần"
+                                            + " cho cả bài. "
+                                    : "Bạn đang bị báo cáo. ")
+                            + deadline,
+                    "/me/reports/" + reportId);
+        }
+        if (activityLogService != null) {
+            Map<String, Object> logPayload = new HashMap<>();
+            logPayload.put("reportId", reportId);
+            logPayload.put("reportIds", reportIds);
+            logPayload.put("targetType", report.getTargetType().name());
+            logPayload.put("responseDueAt", responseDueAt.toString());
+            if (report.getItemId() != null) {
+                logPayload.put("itemId", report.getItemId());
+            }
+            activityLogService.log(
+                    ActivityType.REPORT_RESPONSE_REQUESTED.name(),
+                    adminId,
+                    "REPORT",
+                    reportId,
+                    logPayload,
+                    "Yêu cầu giải trình báo cáo" + (title == null || title.isBlank() ? "" : " về “" + title + "”"));
+        }
+    }
+
+    /**
      * Admin kết luận khiếu nại (FR-91, FR-93, BR-U04, BR-A07, Issue #113).
+     *
+     * <p>Báo cáo bài (D-07): bác bỏ thì mở lại bài đang tạm ẩn nếu không còn báo cáo nào chờ (BC-04); chấp thuận thì đóng
+     * các báo cáo đang chờ khác của bài, chỉ trừ 1 sao (BC-05).
      */
     @Transactional
     public ReportConclusionResponse conclude(Long adminId, Long reportId, ConcludeReportRequest request) {
@@ -603,6 +708,9 @@ public class ReportService {
                         logPayload,
                         note != null ? note : "Bác bỏ báo cáo" + about);
             }
+            if (report.getTargetType() == TargetType.ITEM && report.getItemId() != null) {
+                reopenItemIfNoPendingReports(report.getItemId(), reportId, title);
+            }
         } else if (decision == ReportDecision.UPHOLD) {
             Long violatorId = resolveViolator(report);
 
@@ -623,6 +731,16 @@ public class ReportService {
                 itemService.hide(report.getItemId());
             }
 
+            // BC-05: các báo cáo đang chờ khác của cùng bài đóng theo, không trừ thêm sao
+            List<Long> closedReportIds = new ArrayList<>();
+            if (report.getTargetType() == TargetType.ITEM && report.getItemId() != null) {
+                for (Report other : reportRepository.findByTargetTypeAndItemIdAndStatusInAndIdNot(
+                        TargetType.ITEM, report.getItemId(), PENDING_STATUSES, reportId)) {
+                    other.closeWithUpheldReport(adminId, "Đóng theo kết luận báo cáo #" + reportId);
+                    closedReportIds.add(other.getId());
+                }
+            }
+
             if (activityLogService != null) {
                 Map<String, Object> logPayload = new HashMap<>();
                 logPayload.put("decision", "UPHOLD");
@@ -633,6 +751,9 @@ public class ReportService {
                 }
                 logPayload.put("starsDeducted", 1);
                 logPayload.put("seriousViolation", serious);
+                if (!closedReportIds.isEmpty()) {
+                    logPayload.put("closedReportIds", closedReportIds);
+                }
                 if (report.getItemId() != null) {
                     logPayload.put("itemId", report.getItemId());
                 }
@@ -667,6 +788,48 @@ public class ReportService {
                 saved.getResolution(),
                 saved.getStarsDeducted(),
                 saved.getResolvedAt());
+    }
+
+    /**
+     * BC-04: bác bỏ báo cáo thì mở lại bài đang tạm ẩn khi đủ cả bốn điều kiện: không còn báo cáo nào của bài đang chờ,
+     * bài chưa từng có báo cáo được chấp thuận, chủ bài không bị khoá hay cấm, chủ bài còn sao (canPost). Bài đã xoá
+     * hoặc đang hiển thị thì bỏ qua.
+     */
+    private void reopenItemIfNoPendingReports(long itemId, long dismissedReportId, String title) {
+        if (itemService == null
+                || !reportRepository
+                        .findByTargetTypeAndItemIdAndStatusInAndIdNot(
+                                TargetType.ITEM, itemId, PENDING_STATUSES, dismissedReportId)
+                        .isEmpty()
+                || reportRepository.existsByTargetTypeAndItemIdAndStatus(
+                        TargetType.ITEM, itemId, ReportStatus.RESOLVED)) {
+            return;
+        }
+        ItemSummary summary;
+        try {
+            summary = itemQueryService.getSummary(itemId);
+        } catch (BusinessException deleted) {
+            return; // bài đã bị xoá: không có gì để mở lại, nhưng việc bác bỏ vẫn phải lưu
+        }
+        if (summary == null || summary.active() || summary.donorId() == null) {
+            return;
+        }
+        long donorId = summary.donorId();
+        if ((userService != null && userService.isLocked(donorId))
+                || (reputationService != null && !reputationService.canPost(donorId))) {
+            return;
+        }
+
+        itemService.unhide(itemId);
+        if (notificationService != null) {
+            notificationService.notify(
+                    donorId,
+                    "ITEM_REOPENED",
+                    "Bài đăng đã hiển thị lại",
+                    (title == null || title.isBlank() ? "Bài của bạn" : "Bài «" + title + "»")
+                            + " đã hiển thị lại sau khi Admin xem xét báo cáo và thấy không có vi phạm.",
+                    "/activities");
+        }
     }
 
     // Hạn khiếu nại và hạn giải trình tính theo giờ (U08). configService null chỉ gặp ở unit test dựng service rút

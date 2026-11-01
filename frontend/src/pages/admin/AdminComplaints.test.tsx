@@ -11,7 +11,13 @@ vi.mock('../../services/reportApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../services/reportApi')>();
   return {
     ...actual,
-    reportApi: { ...actual.reportApi, list: vi.fn(), detail: vi.fn(), conclude: vi.fn() },
+    reportApi: {
+      ...actual.reportApi,
+      list: vi.fn(),
+      detail: vi.fn(),
+      conclude: vi.fn(),
+      requestResponse: vi.fn(),
+    },
   };
 });
 
@@ -172,5 +178,41 @@ describe('AdminComplaints', () => {
       await screen.findByText('Bên bị báo cáo vẫn đang trong hạn giải trình, chưa thể kết luận.'),
     ).toBeTruthy();
     expect(reportApi.detail).toHaveBeenCalledTimes(2);
+  });
+
+  it('D-07: báo cáo bài đang Chờ xử lý có nút Yêu cầu giải trình, bấm thì gọi API và tải lại', async () => {
+    const { user, dialog } = await openPendingDetail(
+      detail({ status: 'OPEN', targetType: 'ITEM' }, { ...pending, responseWindowOpen: false }),
+    );
+    vi.mocked(reportApi.requestResponse).mockResolvedValue(undefined);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Yêu cầu giải trình' }));
+
+    expect(reportApi.requestResponse).toHaveBeenCalledWith(7);
+    expect(
+      await screen.findByText('Đã yêu cầu giải trình. Bên bị báo cáo có 48 giờ để gửi giải trình.'),
+    ).toBeTruthy();
+    expect(reportApi.detail).toHaveBeenCalledTimes(2);
+  });
+
+  it('D-07: khiếu nại giao dịch hoặc hồ sơ đã có giải trình thì không có nút Yêu cầu giải trình', async () => {
+    const { dialog } = await openPendingDetail(
+      detail(
+        { status: 'OPEN', targetType: 'REQUEST', requestId: 9 },
+        { ...pending, responseWindowOpen: false },
+      ),
+    );
+    expect(within(dialog).queryByRole('button', { name: 'Yêu cầu giải trình' })).toBeNull();
+    cleanup();
+
+    const responded = await openPendingDetail(
+      detail(
+        { status: 'OPEN', targetType: 'ITEM' },
+        { ...pending, response: 'Ảnh tự chụp', responseWindowOpen: false },
+      ),
+    );
+    expect(
+      within(responded.dialog).queryByRole('button', { name: 'Yêu cầu giải trình' }),
+    ).toBeNull();
   });
 });
