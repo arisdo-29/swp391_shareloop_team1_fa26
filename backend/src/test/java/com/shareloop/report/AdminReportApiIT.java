@@ -316,10 +316,12 @@ class AdminReportApiIT extends IntegrationTest {
 
         // BC-05: hai báo cáo còn lại đóng theo, không trừ thêm sao; bài vẫn ẩn
         for (long other : new long[] {second, third}) {
-            assertThat(jdbc.queryForMap("SELECT status, stars_deducted, resolution FROM reports WHERE id = ?", other))
+            var row = jdbc.queryForMap("SELECT status, stars_deducted, resolution FROM reports WHERE id = ?", other);
+            assertThat(row)
                     .containsEntry("status", "RESOLVED")
-                    .containsEntry("stars_deducted", (short) 0)
                     .containsEntry("resolution", "Đóng theo kết luận báo cáo #" + first);
+            // Driver PostgreSQL trả SMALLINT thành Integer, so theo giá trị số để không lệch kiểu Short/Integer
+            assertThat(((Number) row.get("stars_deducted")).intValue()).isZero();
         }
         assertThat(jdbc.queryForObject("SELECT trust_stars FROM users WHERE id = ?", Integer.class, donor))
                 .isEqualTo(4);
