@@ -87,7 +87,7 @@ class ItemEditIT extends IntegrationTest {
 
     @Test
     void updateItem_whenUnpaidGiveChangesToSwap_holdsPostFee() throws Exception {
-        // Bài Cho tặng đã duyệt nhưng chưa từng trả phí đăng Trao đổi.
+        // Bài Cho tặng đã duyệt nhưng sửa sang Trao đổi bị chặn 409 (BD-10, D-02).
         long ownerId = user("item-edit-owner8@shareloop.local", "0900000761");
         jdbc.sql("UPDATE users SET credit_balance = 20 WHERE id = :id")
                 .param("id", ownerId)
@@ -105,77 +105,30 @@ class ItemEditIT extends IntegrationTest {
                         .header("Authorization", "Bearer " + jwtService.issue(ownerId, false))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(swapBody))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("PENDING_REVIEW"));
-        entityManager.flush();
-        assertThat(jdbc.sql("SELECT offer_type FROM items WHERE id = :id")
-                        .param("id", itemId)
-                        .query(String.class)
-                        .single())
-                .isEqualTo("SWAP");
-        assertThat(jdbc.sql("SELECT held_credit FROM users WHERE id = :id")
-                        .param("id", ownerId)
-                        .query(Integer.class)
-                        .single())
-                .isEqualTo(5);
-        assertThat(jdbc.sql("SELECT pending_fee FROM items WHERE id = :id")
-                        .param("id", itemId)
-                        .query(Integer.class)
-                        .single())
-                .isEqualTo(5);
-        assertThat(jdbc.sql("SELECT status FROM requests WHERE id IN (:first, :second) ORDER BY id")
-                        .param("first", firstRequestId)
-                        .param("second", secondRequestId)
-                        .query(String.class)
-                        .list())
-                .containsExactly("CANCELLED", "CANCELLED");
-        assertThat(jdbc.sql("SELECT type FROM notifications WHERE user_id IN (:first, :second) ORDER BY user_id")
-                        .param("first", firstReceiverId)
-                        .param("second", secondReceiverId)
-                        .query(String.class)
-                        .list())
-                .containsExactly("REQUEST_CANCELLED", "REQUEST_CANCELLED");
-    }
-
-    @Test
-    void updateItem_whenGiveChangesToSwapWithoutCredit_keepsItemAndPendingRequest() throws Exception {
-        long ownerId = user("item-edit-owner8c@shareloop.local", "0900000764");
-        long receiverId = user("item-edit-receiver8c@shareloop.local", "0900000765");
-        long itemId = approvedItem(ownerId);
-        long requestId = pendingRequest(itemId, receiverId, "GIVE");
-        jdbc.sql("UPDATE users SET credit_balance = 0 WHERE id = :id")
-                .param("id", ownerId)
-                .update();
-        String swapBody = body("Tên mới", "Mô tả mới")
-                .replace("\"offerType\":\"GIVE\"", "\"offerType\":\"SWAP\",\"desiredItem\":\"Sách khác\"");
-
-        mvc.perform(put("/api/v1/items/{id}", itemId)
-                        .header("Authorization", "Bearer " + jwtService.issue(ownerId, false))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(swapBody))
-                .andExpect(status().isPaymentRequired())
-                .andExpect(jsonPath("$.code").value("WALLET_INSUFFICIENT_BALANCE"));
-
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED"))
+                .andExpect(jsonPath("$.message").value("Không đổi hình thức Cho tặng / Trao đổi khi sửa bài."));
         entityManager.flush();
         assertThat(jdbc.sql("SELECT offer_type FROM items WHERE id = :id")
                         .param("id", itemId)
                         .query(String.class)
                         .single())
                 .isEqualTo("GIVE");
-        assertThat(jdbc.sql("SELECT status FROM requests WHERE id = :id")
-                        .param("id", requestId)
-                        .query(String.class)
-                        .single())
-                .isEqualTo("PENDING");
-        assertThat(jdbc.sql("SELECT count(*) FROM notifications WHERE user_id = :id")
-                        .param("id", receiverId)
-                        .query(Long.class)
+        assertThat(jdbc.sql("SELECT held_credit FROM users WHERE id = :id")
+                        .param("id", ownerId)
+                        .query(Integer.class)
                         .single())
                 .isZero();
+        assertThat(jdbc.sql("SELECT status FROM requests WHERE id IN (:first, :second) ORDER BY id")
+                        .param("first", firstRequestId)
+                        .param("second", secondRequestId)
+                        .query(String.class)
+                        .list())
+                .containsExactly("PENDING", "PENDING");
     }
 
     @Test
-    void updateItem_whenSwapChangesToGive_cancelsPendingRequestWithoutRefund() throws Exception {
+    void updateItem_whenSwapChangesToGive_throwsOfferTypeChangeNotAllowed() throws Exception {
         long ownerId = user("item-edit-owner8d@shareloop.local", "0900000766");
         long receiverId = user("item-edit-receiver8d@shareloop.local", "0900000767");
         long itemId = approvedItem(ownerId);
@@ -188,25 +141,21 @@ class ItemEditIT extends IntegrationTest {
                         .header("Authorization", "Bearer " + jwtService.issue(ownerId, false))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body("Tên mới", "Mô tả mới")))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("PENDING_REVIEW"));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED"))
+                .andExpect(jsonPath("$.message").value("Không đổi hình thức Cho tặng / Trao đổi khi sửa bài."));
 
         entityManager.flush();
+        assertThat(jdbc.sql("SELECT offer_type FROM items WHERE id = :id")
+                        .param("id", itemId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("SWAP");
         assertThat(jdbc.sql("SELECT status FROM requests WHERE id = :id")
                         .param("id", requestId)
                         .query(String.class)
                         .single())
-                .isEqualTo("CANCELLED");
-        assertThat(jdbc.sql("SELECT post_fee_paid FROM items WHERE id = :id")
-                        .param("id", itemId)
-                        .query(Boolean.class)
-                        .single())
-                .isTrue();
-        assertThat(jdbc.sql("SELECT credit_balance FROM users WHERE id = :id")
-                        .param("id", ownerId)
-                        .query(Integer.class)
-                        .single())
-                .isEqualTo(20);
+                .isEqualTo("PENDING");
     }
 
     @Test

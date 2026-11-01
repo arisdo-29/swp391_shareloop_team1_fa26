@@ -1003,4 +1003,51 @@ class ItemServiceTest {
         assertThat(first.totalElements()).isEqualTo(7);
         assertThat(first.totalPages()).isEqualTo(2);
     }
+
+    @Test
+    void updateItem_whenGiveChangesToSwap_throwsOfferTypeChangeNotAllowed() {
+        long itemId = 50L;
+        long userId = 10L;
+        Item giveItem =
+                new Item(userId, 1L, 1L, OfferType.GIVE, "Tiêu đề", "Mô tả", null, ItemCondition.NEW, null, null);
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(giveItem));
+
+        UpdateItemRequest request = new UpdateItemRequest(
+                1L,
+                1L,
+                OfferType.SWAP,
+                "Tiêu đề",
+                "Mô tả",
+                "Món cần đổi",
+                ItemCondition.NEW,
+                null,
+                null,
+                null,
+                null,
+                null);
+
+        assertThatThrownBy(() -> itemService.updateItem(itemId, userId, request))
+                .isInstanceOf(BusinessException.class)
+                .matches(
+                        e -> ((BusinessException) e).getErrorCode() == ItemErrorCode.ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED)
+                .hasMessage("Không đổi hình thức Cho tặng / Trao đổi khi sửa bài.");
+    }
+
+    @Test
+    void updateItem_whenSwapChangesToGive_throwsOfferTypeChangeNotAllowed() {
+        long itemId = 51L;
+        long userId = 10L;
+        Item swapItem = new Item(
+                userId, 1L, 1L, OfferType.SWAP, "Tiêu đề", "Mô tả", "Món cần đổi", ItemCondition.NEW, null, null);
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(swapItem));
+
+        UpdateItemRequest request = new UpdateItemRequest(
+                1L, 1L, OfferType.GIVE, "Tiêu đề", "Mô tả", null, ItemCondition.NEW, null, null, null, null, null);
+
+        assertThatThrownBy(() -> itemService.updateItem(itemId, userId, request))
+                .isInstanceOf(BusinessException.class)
+                .matches(
+                        e -> ((BusinessException) e).getErrorCode() == ItemErrorCode.ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED)
+                .hasMessage("Không đổi hình thức Cho tặng / Trao đổi khi sửa bài.");
+    }
 }
