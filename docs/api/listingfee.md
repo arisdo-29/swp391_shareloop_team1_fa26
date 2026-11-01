@@ -27,7 +27,6 @@ ConfigService ở mỗi lần gọi, nên Admin đổi cấu hình (`PUT /api/v1
   "postFeeGive": 0,
   "editFee": 5,
   "renewFee": 5,
-  "renewExpiredWindowDays": 7,
   "boostFee": 5,
   "boostDays": 3,
   "boostMaxDays": 14,
@@ -44,7 +43,6 @@ ConfigService ở mỗi lần gọi, nên Admin đổi cấu hình (`PUT /api/v1
 | `postFeeGive`            | number | (không có)                  | Luôn `0`: bài GIVE đăng miễn phí, quy tắc cố định                |
 | `editFee`                | number | `edit_fee`                  | Phí mỗi lượt sửa sau khi đã dùng lượt sửa miễn phí               |
 | `renewFee`               | number | `renew_fee`                 | Phí gia hạn mọi bài, mặc định 5 Credit                            |
-| `renewExpiredWindowDays` | number | `renew_expired_window_days` | Số ngày sau khi hết hạn vẫn được gia hạn (API gia hạn bài `EXPIRED` chưa hỗ trợ, xem mục renew) |
 | `boostFee`               | number | `boost_fee`                 | Phí mỗi lần đẩy bài                                              |
 | `boostDays`              | number | `boost_days`                | Số ngày được đẩy thêm sau mỗi lần đẩy                            |
 | `boostMaxDays`           | number | `boost_max_days`            | `boostedUntil` không được vượt `now + boostMaxDays`              |
@@ -165,7 +163,7 @@ Gia hạn bài của chính mình (F08 bước 1, FR-28, BR-D03, BR-P12). Trừ 
 - Lỗi: `401 UNAUTHORIZED`; `402 WALLET_INSUFFICIENT_BALANCE` khi không đủ Credit khả dụng; `403 LISTINGFEE_NOT_OWNER`;
   `404 LISTINGFEE_ITEM_NOT_FOUND` khi không có bài hoặc bài đã xoá; `409 LISTINGFEE_RENEW_NOT_ALLOWED` khi bài không ở
   `APPROVED` (đang chờ duyệt, bị từ chối, đã giữ chỗ, đã trao, đã hết hạn).
-- Chưa hỗ trợ: gia hạn bài đã `EXPIRED` trong `renew_expired_window_days` (SRS F08, C27). Phần này cần module item
+- Chưa hỗ trợ: gia hạn bài đã `EXPIRED` (SRS F08, C27). Khoá `renew_expired_window_days` đã xoá mềm ở L13 vì chưa có luồng nào đọc; làm luồng này thì thêm lại khoá bằng migration mới. Phần này cần module item
   chuyển `EXPIRED → APPROVED`, sẽ làm ở issue sau.
 
 ```json
