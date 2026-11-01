@@ -262,77 +262,17 @@ Endpoint kế thừa dùng để lấy danh sách bài đăng chờ duyệt mà 
 
 ---
 
-## 7. POST /api/v1/admin/authenticity/{id}/grant
+## 7–9. (Đã bỏ) API nhãn chính hãng `/api/v1/admin/authenticity/{id}/grant`, `/reject`, `/revoke`
 
-Cấp nhãn hàng chính hãng sau khi Admin đối chiếu chứng từ đạt. Chuyển `auth_status` từ `PENDING` sang `VERIFIED`.
-
-### Path Parameters
-- `id`: ID bài đăng cần cấp nhãn.
-
-### Response & Mã lỗi
-| Mã HTTP | Mã lỗi / Chi tiết | Ý nghĩa |
-|---------|-------------------|---------|
-| 204 | - | Cấp nhãn thành công (No Content) |
-| 401 | `UNAUTHORIZED` | Chưa đăng nhập |
-| 403 | `FORBIDDEN` | Không có quyền Admin |
-| 404 | `AUTHENTICITY_ITEM_NOT_FOUND` | Không tìm thấy bài đăng |
-| 409 | `AUTHENTICITY_INVALID_STATUS` | Bài đăng không ở trạng thái chờ xét duyệt chứng từ (`PENDING`) |
+Gỡ ở L16 vì chưa có luồng xác nhận chứng từ và chưa có Business Rule. `AdminAuthenticityController`,
+`AuthenticityService`, `AuthenticityDecisionRequest`, bốn mã lỗi `AUTHENTICITY_*` và FE `adminAuthenticityApi.ts`, trang
+`/admin/authenticity` đã xoá (đường dẫn cũ chuyển về `/admin`). Gọi vào các endpoint này nhận lỗi như đường dẫn không tồn
+tại. Cột `items.auth_status` vẫn giữ theo ERD, chỉ còn đọc ở `authStatus` của mục 2. Loại nhật ký `AUTH_GRANT`,
+`AUTH_REJECT`, `AUTH_REVOKE` giữ để hiện nhãn cho nhật ký cũ.
 
 ---
 
-## 8. POST /api/v1/admin/authenticity/{id}/reject
-
-Từ chối cấp nhãn hàng chính hãng kèm lý do bắt buộc. Chuyển `auth_status` từ `PENDING` sang `REJECTED`.
-
-### Path Parameters
-- `id`: ID bài đăng cần từ chối cấp nhãn.
-
-### Request Body (`AuthenticityDecisionRequest`)
-```json
-{
-  "reason": "Chứng từ mờ, không rõ số serial hoặc hoá đơn không khớp thông tin sản phẩm."
-}
-```
-
-### Response & Mã lỗi
-| Mã HTTP | Mã lỗi / Chi tiết | Ý nghĩa |
-|---------|-------------------|---------|
-| 204 | - | Từ chối nhãn thành công (No Content) |
-| 400 | `VALIDATION_FAILED` / `AUTHENTICITY_REASON_REQUIRED` | Thiếu lý do hoặc lý do chỉ toàn khoảng trắng |
-| 401 | `UNAUTHORIZED` | Chưa đăng nhập |
-| 403 | `FORBIDDEN` | Không có quyền Admin |
-| 404 | `AUTHENTICITY_ITEM_NOT_FOUND` | Không tìm thấy bài đăng |
-| 409 | `AUTHENTICITY_INVALID_STATUS` | Bài đăng không ở trạng thái chờ xét duyệt chứng từ (`PENDING`) |
-
----
-
-## 9. POST /api/v1/admin/authenticity/{id}/revoke
-
-Thu hồi nhãn hàng chính hãng khi phát hiện chứng từ giả mạo. Chỉ áp dụng cho bài đăng đang có nhãn chính hãng (`VERIFIED`). Chuyển `auth_status` sang `REVOKED`.
-
-### Path Parameters
-- `id`: ID bài đăng cần thu hồi nhãn.
-
-### Request Body (`AuthenticityDecisionRequest`)
-```json
-{
-  "reason": "Xác minh phát hiện hoá đơn/chứng từ giả mạo sau khi nhận báo cáo vi phạm."
-}
-```
-
-### Response & Mã lỗi
-| Mã HTTP | Mã lỗi / Chi tiết | Ý nghĩa |
-|---------|-------------------|---------|
-| 204 | - | Thu hồi nhãn thành công (No Content) |
-| 400 | `VALIDATION_FAILED` / `AUTHENTICITY_REASON_REQUIRED` | Thiếu lý do hoặc lý do chỉ toàn khoảng trắng |
-| 401 | `UNAUTHORIZED` | Chưa đăng nhập |
-| 403 | `FORBIDDEN` | Không có quyền Admin |
-| 404 | `AUTHENTICITY_ITEM_NOT_FOUND` | Không tìm thấy bài đăng |
-| 409 | `AUTHENTICITY_NOT_VERIFIED` | Bài đăng chưa được cấp nhãn chính hãng (không ở trạng thái `VERIFIED`) |
-
----
-
-## 9. (Đã bỏ) Job cảnh báo bài chờ duyệt quá SLA (`ReviewSlaJob`)
+## 10. (Đã bỏ) Job cảnh báo bài chờ duyệt quá SLA (`ReviewSlaJob`)
 
 Nhóm chốt bỏ thông báo nhắc Admin bài chờ duyệt quá 24 giờ (KD-06, TD-04) vì dễ làm trôi thông báo quan trọng.
 `ReviewSlaJob`, `ReviewSlaService` và loại thông báo `REVIEW_SLA_OVERDUE` đã xoá. Job cũng không còn chạy qua

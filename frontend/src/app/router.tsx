@@ -108,7 +108,7 @@ export const router = createBrowserRouter([
               { index: true, element: <AdminDashboard /> },
               { path: 'moderation', element: <AdminModerationList /> },
               { path: 'moderation/:itemId', element: <AdminModerationDetail /> },
-              // Tạm ẩn trang Nhãn chính hãng (chưa có luồng xác nhận, chưa có BR): đưa về trang tổng quan.
+              // L16: đã gỡ trang và API Nhãn chính hãng; giữ đường dẫn cũ để link đã lưu quay về trang tổng quan.
               { path: 'authenticity', element: <Navigate to="/admin" replace /> },
               { path: 'checklist', element: <AdminContentPage kind="checklist" /> },
               // Tạm ẩn Bài quá hạn và Giao dịch: backend chưa có API cho Admin, đưa về trang tổng quan.
