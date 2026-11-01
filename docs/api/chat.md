@@ -32,7 +32,7 @@ Gửi tin nhắn mới (văn bản, ảnh hoặc chia sẻ thẻ bài đăng) tr
   - **Người nhận trong giao dịch Cho tặng không gửi ảnh:** Khi `Request.type = GIVE` và người gửi là người nhận (`receiverId`), tin nhắn có `mediaId` bị chặn với `403 CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN`. Chủ bài vẫn gửi ảnh được sau khi chốt lịch. Tin chữ và thẻ bài (`refItemId`) không bị ảnh hưởng. Giao dịch Trao đổi (`SWAP`) giữ nguyên như cũ cho cả hai phía.
 - Gửi thẻ bài đăng (FR-70, BR-C07): truyền `refItemId` (id bài đăng muốn chia sẻ), `content` là lời nhắn kèm theo (tuỳ chọn).
   - **Quy tắc chia sẻ thẻ bài (BR-C07):** Chỉ chia sẻ được thẻ của bài đăng ở trạng thái đã được duyệt (`APPROVED`). Nếu chia sẻ bài chưa duyệt hoặc không tồn tại sẽ bị từ chối với lỗi tương ứng.
-- Trước khi chốt lịch, nội dung bị tầng 1 xác định vi phạm sẽ bị chặn ngay. Chỉ nội dung có dấu hiệu liên hệ nhưng chưa đủ chắc chắn mới được gửi tới tầng 2 OpenRouter (`cohere/north-mini-code:free`, trả kết quả qua lời gọi hàm có schema), kèm tối đa 3 tin chat hợp lệ gần nhất; ngưỡng `chat_ai_threshold` lấy từ cấu hình, thời gian chờ tối đa 5 giây. Tin bị chặn ở tầng 2 vẫn trả `CHAT_MESSAGE_BLOCKED` với lý do. Khi OpenRouter chưa được cấu hình hoặc gọi lỗi, hệ thống giữ kết quả tầng 1.
+- Trước khi chốt lịch, nội dung chứa thông tin liên hệ (số điện thoại, mạng xã hội, link ngoài) hoặc từ khoá cấm sẽ bị chặn ngay và ghi nhận vi phạm (`CHAT_MESSAGE_BLOCKED`). Theo BR v11.2 (D-17, CH-04), hệ thống chỉ dùng bộ lọc regex và từ khoá tĩnh tầng 1, không dùng AI kiểm tra tin nhắn.
 
 - **Thành công:** `201 Created`, trả về `MessageResponse`.
 

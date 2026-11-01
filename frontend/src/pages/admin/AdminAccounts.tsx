@@ -216,7 +216,7 @@ export function AdminAccounts() {
                           ) : null}
                           {account.role === 'USER' ? (
                             <Link
-                              className="text-xs font-semibold text-primary hover:underline"
+                              className="text-xs font-semibold text-link hover:underline"
                               to={`/admin/finance/users/${account.id}`}
                             >
                               Xem Credit

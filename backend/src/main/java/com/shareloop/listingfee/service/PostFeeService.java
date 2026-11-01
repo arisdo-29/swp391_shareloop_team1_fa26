@@ -1,6 +1,7 @@
 package com.shareloop.listingfee.service;
 
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.listingfee.ListingFeeErrorCode;
@@ -96,7 +97,12 @@ public class PostFeeService {
     public EditQuote quoteEdit(long itemId, long userId, OfferType targetOfferType) {
         ItemFeeSnapshot snapshot = readSnapshot(itemId);
         requireOwner(snapshot, userId);
-        return toEditQuote(snapshot, targetOfferType == null ? snapshot.getOfferType() : targetOfferType, itemId);
+        if (targetOfferType != null && targetOfferType != snapshot.getOfferType()) {
+            throw new BusinessException(
+                    ItemErrorCode.ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED,
+                    "Không đổi hình thức Cho tặng / Trao đổi khi sửa bài.");
+        }
+        return toEditQuote(snapshot, itemId);
     }
 
     /**
@@ -137,8 +143,7 @@ public class PostFeeService {
      * Giữ phí khi gửi bản sửa (C14, C14b, F07 bước 4). ItemService gọi hàm này cho MỌI lần sửa; hàm tự quyết giữ bao
      * nhiêu, đúng bằng số {@link #quoteEdit} báo.
      *
-     * <p>Quy tắc: đang HELD và giữ nguyên hình thức thì sửa đè, không giữ thêm. Khi đổi hình thức, nhả khoản đang giữ
-     * và giữ lại đúng báo giá mới. Còn lại giữ {@code amount} của
+     * <p>Quy tắc: đang HELD thì sửa đè, không giữ thêm. Còn lại giữ {@code amount} của
      * báo giá: REPOST_FEE giữ loại POST; FIRST_FREE_EDIT và PAID_EDIT giữ loại EDIT (lượt miễn phí giữ 0 Credit, chỉ
      * để lúc duyệt biết mà bật free_edit_used). Phí 0 thì không đụng ví. Không bật free_edit_used ở đây: lượt chỉ tính
      * khi bản sửa được duyệt (BR-D07), xem {@link #chargeHeldFee}.
@@ -164,21 +169,17 @@ public class PostFeeService {
         // chụp đọc sau đó đã thấy HELD của luồng đầu. Đọc bằng projection (không phải entity) nên luôn lấy dữ liệu mới.
         creditService.lockWalletRow(userId);
         ItemFeeSnapshot snapshot = readSnapshot(itemId);
-        OfferType requestedType = targetOfferType == null ? snapshot.getOfferType() : targetOfferType;
-        boolean changingType = requestedType != snapshot.getOfferType();
-        if (snapshot.getFeeState() == ItemFeeState.HELD && !changingType) {
+        if (targetOfferType != null && targetOfferType != snapshot.getOfferType()) {
+            throw new BusinessException(
+                    ItemErrorCode.ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED,
+                    "Không đổi hình thức Cho tặng / Trao đổi khi sửa bài.");
+        }
+        if (snapshot.getFeeState() == ItemFeeState.HELD) {
             return;
         }
 
-        EditQuote quote = toEditQuote(snapshot, requestedType, itemId);
-        ItemFeeType feeType = quote.reason() == EditQuote.Reason.REPOST_FEE
-                        || quote.reason() == EditQuote.Reason.OFFER_TYPE_CHANGE_POST_FEE
-                ? ItemFeeType.POST
-                : ItemFeeType.EDIT;
-        if (snapshot.getFeeState() == ItemFeeState.HELD && snapshot.getPendingFee() > 0) {
-            creditService.release(
-                    userId, snapshot.getPendingFee(), toCreditTxType(snapshot.getPendingFeeType()), itemId);
-        }
+        EditQuote quote = toEditQuote(snapshot, itemId);
+        ItemFeeType feeType = quote.reason() == EditQuote.Reason.REPOST_FEE ? ItemFeeType.POST : ItemFeeType.EDIT;
         holdOnWallet(userId, quote.amount(), feeType, itemId);
 
         ItemFee itemFee = lockItemFee(itemId);
@@ -265,23 +266,7 @@ public class PostFeeService {
     }
 
     // Bảng luật trong Javadoc quoteEdit; mỗi điều kiện một dòng, xét từ trên xuống, gặp dòng đúng là trả về.
-    private EditQuote toEditQuote(ItemFeeSnapshot snapshot, OfferType targetOfferType, long itemId) {
-        if (targetOfferType != snapshot.getOfferType()) {
-            if (targetOfferType == OfferType.GIVE || snapshot.getPostFeePaid()) {
-                return freeQuote(EditQuote.Reason.OFFER_TYPE_CHANGE_FREE);
-            }
-            return paidQuote(
-                    itemService.nextPostFee(snapshot.getDonorId(), OfferType.SWAP, itemId),
-                    EditQuote.Reason.OFFER_TYPE_CHANGE_POST_FEE);
-        }
-        if (targetOfferType == OfferType.SWAP && !snapshot.getPostFeePaid() && snapshot.getEverApproved()) {
-            if (snapshot.getFeeState() == ItemFeeState.HELD && snapshot.getPendingFeeType() == ItemFeeType.POST) {
-                return freeQuote(EditQuote.Reason.PENDING_REVIEW_OVERWRITE);
-            }
-            return paidQuote(
-                    itemService.nextPostFee(snapshot.getDonorId(), OfferType.SWAP, itemId),
-                    EditQuote.Reason.OFFER_TYPE_CHANGE_POST_FEE);
-        }
+    private EditQuote toEditQuote(ItemFeeSnapshot snapshot, long itemId) {
         boolean feeHeld = snapshot.getFeeState() == ItemFeeState.HELD;
         if (!snapshot.getEverApproved() && feeHeld) {
             return freeQuote(EditQuote.Reason.NOT_YET_APPROVED);

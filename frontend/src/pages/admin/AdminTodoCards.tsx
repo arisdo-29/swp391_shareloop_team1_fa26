@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminModerationApi } from '../../services/adminModerationApi';
 import { reportApi } from '../../services/reportApi';
-import { adminFinanceApi } from '../../services/adminFinanceApi';
 import { adminAnomalyApi } from '../../services/adminAnomalyApi';
 
 // Hàng đợi duyệt bài không trả tổng số nên đọc một trang lớn; vượt ngưỡng thì hiện "100+".
@@ -13,16 +12,15 @@ type Count = number | null | 'error';
 interface TodoCounts {
   reviews: Count;
   reports: Count;
-  topUps: Count;
   anomalies: Count;
 }
 
 /**
- * Bốn ô "Việc cần làm" ở trang Tổng quan. Mỗi ô tự tải bằng API đọc sẵn có,
+ * Các ô "Việc cần làm" ở trang Tổng quan. Mỗi ô tự tải bằng API đọc sẵn có,
  * ô nào lỗi thì chỉ ô đó hiện "--", các ô khác vẫn dùng được.
  */
 export function AdminTodoCards() {
-  const [counts, setCounts] = useState<TodoCounts>({ reviews: null, reports: null, topUps: null, anomalies: null });
+  const [counts, setCounts] = useState<TodoCounts>({ reviews: null, reports: null, anomalies: null });
 
   useEffect(() => {
     let active = true;
@@ -43,10 +41,6 @@ export function AdminTodoCards() {
         reportApi.list({ page: 0, size: 1, status: 'AWAITING_RESPONSE' }),
       ]).then(([open, awaiting]) => open.totalElements + awaiting.totalElements),
     );
-    load(
-      'topUps',
-      adminFinanceApi.topUpOrders({ page: 0, size: 1, status: 'PENDING', submittedOnly: true }).then((page) => page.totalElements),
-    );
     load('anomalies', adminAnomalyApi.report().then((report) => report.repeatedPairs.length));
     return () => {
       active = false;
@@ -56,7 +50,6 @@ export function AdminTodoCards() {
   const cards: Array<{ to: string; label: string; count: Count; note: string; capped?: boolean }> = [
     { to: '/admin/moderation', label: 'Bài chờ duyệt', count: counts.reviews, note: 'Duyệt sớm để bài hiện cho mọi người.', capped: true },
     { to: '/admin/complaints', label: 'Khiếu nại và báo cáo đang mở', count: counts.reports, note: 'Gồm cả việc đang chờ giải trình.' },
-    { to: '/admin/finance/topup-orders', label: 'Đơn nạp chờ xác nhận', count: counts.topUps, note: 'Người dùng đã báo chuyển khoản.' },
     { to: '/admin/alerts', label: 'Cảnh báo giao dịch lặp', count: counts.anomalies, note: 'Cặp người dùng giao dịch lặp nhiều lần.' },
   ];
 

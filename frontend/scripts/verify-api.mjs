@@ -62,41 +62,38 @@ api.http.defaults.adapter = async (config) => {
   return { data: nextResponse, status: 200, statusText: 'OK', headers: {}, config };
 };
 
-await test('MANUAL tạo đơn, đọc lại và mark-paid qua API; không gọi mock-confirm khi bắt đầu', async () => {
+await test('VNPay tạo đơn, đọc lại và chuyển hướng; không gọi mock-confirm khi bắt đầu', async () => {
   requests = [];
   nextResponse = {
-    orderCode: 'manual-code',
-    provider: 'MANUAL',
+    orderCode: 'vnpay-code',
+    provider: 'VNPAY',
     status: 'PENDING',
     credits: 20,
     amountVnd: 20000,
-    redirectUrl: '/wallet/topup/manual-checkout?orderCode=manual-code',
+    redirectUrl: 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?orderCode=vnpay-code',
   };
   const order = await api.paymentApi.createTopUpOrder({ amountVnd: 20000 });
   assert.deepEqual(requests[0].body, { amountVnd: 20000 });
   await assert.rejects(api.confirmDemoPayment(order));
   assert.equal(await api.startPayment(order), undefined);
-  assert.deepEqual(navigations, ['/wallet/topup/manual-checkout?orderCode=manual-code']);
+  assert.deepEqual(navigations, [nextResponse.redirectUrl]);
   assert.equal(requests.length, 1);
   assert.deepEqual(await api.paymentApi.getOrder(order.orderCode), nextResponse);
-  assert.equal(requests[1].url, '/api/v1/wallet/topup-orders/manual-code');
+  assert.equal(requests[1].url, '/api/v1/wallet/topup-orders/vnpay-code');
   assert.equal(requests[1].method, 'get');
-  nextResponse = { ...nextResponse, submittedAt: '2026-10-20T07:00:00Z' };
-  assert.equal((await api.paymentApi.markPaid(order.orderCode)).status, 'PENDING');
-  assert.equal(requests[2].url, '/api/v1/wallet/topup-orders/manual-code/mark-paid');
-  assert.equal(requests[2].body, undefined);
+  assert.equal(api.paymentApi.markPaid, undefined);
 });
 
 await test('session chỉ giữ mã tham chiếu; không tin số tiền và trạng thái trong storage', () => {
   api.savePendingTopUp({
-    orderCode: 'manual-code',
+    orderCode: 'vnpay-code',
     amountVnd: 20000,
     credits: 20,
     status: 'PENDING',
-    provider: 'MANUAL',
+    provider: 'VNPAY',
   });
   assert.deepEqual(JSON.parse(sessionStorage.getItem('shareloop:pendingTopUp')), {
-    orderCode: 'manual-code',
+    orderCode: 'vnpay-code',
   });
   sessionStorage.setItem(
     'shareloop:pendingTopUp',
@@ -107,18 +104,14 @@ await test('session chỉ giữ mã tham chiếu; không tin số tiền và tr�
   assert.equal(api.loadPendingTopUp(), null);
 });
 
-await test('admin duyệt/từ chối chỉ gửi ghi chú và lý do, giữ phân trang', async () => {
+await test('admin chỉ đọc danh sách đơn nạp và giữ phân trang', async () => {
   requests = [];
-  const params = { page: 2, size: 10, status: 'PENDING', submittedOnly: true };
+  const params = { page: 2, size: 10, status: 'PENDING' };
   await api.adminFinanceApi.topUpOrders(params);
   assert.equal(requests[0].url, '/api/v1/admin/finance/topup-orders');
   assert.deepEqual(requests[0].params, params);
-  await api.adminFinanceApi.approveTopUp('code', 'checked');
-  assert.equal(requests[1].url, '/api/v1/admin/finance/topup-orders/code/approve');
-  assert.deepEqual(requests[1].body, { note: 'checked' });
-  await api.adminFinanceApi.rejectTopUp('code', 'invalid');
-  assert.equal(requests[2].url, '/api/v1/admin/finance/topup-orders/code/reject');
-  assert.deepEqual(requests[2].body, { reason: 'invalid' });
+  assert.equal(api.adminFinanceApi.approveTopUp, undefined);
+  assert.equal(api.adminFinanceApi.rejectTopUp, undefined);
 });
 
 await test('quota không tìm kiếm hoặc tiêu lượt; search giữ quota và kết quả dự phòng', async () => {

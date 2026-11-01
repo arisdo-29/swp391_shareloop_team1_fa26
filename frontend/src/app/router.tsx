@@ -27,7 +27,6 @@ const Messages = lazy(() => import('../pages/user/Messages').then((module) => ({
 const Profile = lazy(() => import('../pages/user/Profile').then((module) => ({ default: module.Profile })));
 const Credit = lazy(() => import('../pages/user/Credit').then((module) => ({ default: module.Credit })));
 const DemoPaymentCheckout = lazy(() => import('../pages/user/DemoPaymentCheckout').then((module) => ({ default: module.DemoPaymentCheckout })));
-const ManualPaymentCheckout = lazy(() => import('../pages/user/ManualPaymentCheckout').then((module) => ({ default: module.ManualPaymentCheckout })));
 const ReportResponse = lazy(() => import('../pages/user/ReportResponse').then((module) => ({ default: module.ReportResponse })));
 const AdminLayout = lazy(() => import('../pages/admin/AdminLayout').then((module) => ({ default: module.AdminLayout })));
 const AdminAnomalies = lazy(() => import('../pages/admin/AdminAnomalies').then((module) => ({ default: module.AdminAnomalies })));
@@ -86,7 +85,6 @@ export const router = createBrowserRouter([
           { path: '/me/reports/:reportId', element: <ReportResponse /> },
           { path: '/credit', element: <Credit /> },
           { path: '/wallet', element: <Credit /> },
-          { path: '/wallet/topup/manual-checkout', element: <ManualPaymentCheckout /> },
           {
             path: '/wallet/topup/mock-checkout',
             element: <DemoPaymentCheckout />,

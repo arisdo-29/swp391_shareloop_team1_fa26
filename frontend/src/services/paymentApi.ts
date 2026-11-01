@@ -53,12 +53,6 @@ export const paymentApi = {
     );
     return data;
   },
-  async markPaid(orderCode: string): Promise<TopUpOrderDetailResponse> {
-    const { data } = await http.post<TopUpOrderDetailResponse>(
-      `${paymentApiEndpoints.createTopUpOrder}/${encodeURIComponent(orderCode)}/mark-paid`,
-    );
-    return data;
-  },
   async createTopUpOrder(input: CreateTopUpOrderRequest): Promise<TopUpOrderResponse> {
     const { data } = await http.post<TopUpOrderResponse>(
       paymentApiEndpoints.createTopUpOrder,

@@ -479,6 +479,41 @@ public class ReportService {
     }
 
     /**
+     * Hạn giải trình của khiếu nại đang mở thuộc giao dịch (U5-BE, D-04, GN-07).
+     * Chỉ có giá trị khi giao dịch có khiếu nại ở trạng thái OPEN hoặc AWAITING_RESPONSE.
+     */
+    @Transactional(readOnly = true)
+    public Instant findDisputeResponseDueAt(Long requestId) {
+        if (requestId == null) {
+            return null;
+        }
+        return reportRepository
+                .findFirstByTargetTypeAndRequestIdAndStatusInOrderByCreatedAtDesc(
+                        TargetType.REQUEST, requestId, PENDING_STATUSES)
+                .map(Report::getResponseDueAt)
+                .orElse(null);
+    }
+
+    /**
+     * Tra cứu hạn giải trình cho danh sách giao dịch (U5-BE).
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Instant> findDisputeResponseDueAtMap(java.util.Collection<Long> requestIds) {
+        if (requestIds == null || requestIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Report> reports = reportRepository.findByTargetTypeAndRequestIdInAndStatusIn(
+                TargetType.REQUEST, requestIds, PENDING_STATUSES);
+        Map<Long, Instant> result = new HashMap<>();
+        for (Report report : reports) {
+            if (report.getRequestId() != null && report.getResponseDueAt() != null) {
+                result.putIfAbsent(report.getRequestId(), report.getResponseDueAt());
+            }
+        }
+        return result;
+    }
+
+    /**
      * Bên bị khiếu nại gửi giải trình kèm bằng chứng trong vòng 3 ngày (FR-90, BR-T08, Issue #112).
      */
     @Transactional

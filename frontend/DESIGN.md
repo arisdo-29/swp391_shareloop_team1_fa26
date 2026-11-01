@@ -1,86 +1,96 @@
 ---
 name: ShareLoop
-description: Nền tảng trao tặng và trao đổi đồ cũ trong cộng đồng, giao diện xanh rêu sạch, ấm và dễ tin cậy.
+description: Nền tảng trao tặng và trao đổi đồ cũ trong cộng đồng, giao diện Emerald Forest Green hiện đại, thanh lịch và dễ tin cậy.
 colors:
-  primary: "#145C4E"
-  primary-hover: "#0F4A3F"
-  primary-fixed: "#CDE4DC"
-  primary-soft: "#E7F1ED"
-  primary-faint: "#F2F7F5"
-  secondary: "#B85C35"
-  secondary-hover: "#984629"
-  secondary-fixed: "#F2D3C5"
-  secondary-soft: "#F8EDE8"
-  background: "#F5F7F6"
-  surface: "#FFFFFF"
-  surface-low: "#F0F3F2"
-  surface-container: "#E5EAE8"
-  surface-high: "#D8E0DD"
-  text-primary: "#17211E"
-  text-secondary: "#46534F"
-  text-muted: "#5F6B66"
-  border: "#D7DEDB"
-  success: "#277A55"
-  warning: "#8C5410"
-  error: "#B44444"
-  info: "#356A8A"
+  success-100: '#FFFFFF'
+  success-200: '#D7E9E1'
+  success-300: '#B4DAC9'
+  success-500: '#31936B'
+  success-700: '#176B4B'
+  success-800: '#0B3F30'
+  primary: '#176B4B'
+  primary-hover: '#0B3F30'
+  primary-fixed: '#D7E9E1'
+  primary-soft: '#FFFFFF'
+  primary-faint: '#D7E9E1'
+  secondary: '#0B3F30'
+  secondary-hover: '#176B4B'
+  secondary-fixed: '#D7E9E1'
+  secondary-soft: '#FFFFFF'
+  accent: '#31936B'
+  highlight: '#B4DAC9'
+  sage: '#B4DAC9'
+  light-sage: '#D7E9E1'
+  background: '#D7E9E1'
+  surface: '#FFFFFF'
+  surface-low: '#FFFFFF'
+  surface-container: '#D7E9E1'
+  surface-high: '#31936B'
+  text-primary: '#0B3F30'
+  text-secondary: '#0B3F30'
+  text-muted: '#0B3F30'
+  border: '#B4DAC9'
+  success: '#176B4B'
+  warning: '#8A5B17'
+  error: '#B04444'
+  info: '#3F6475'
 typography:
   page-title:
-    fontFamily: "Be Vietnam Pro, system-ui, sans-serif"
-    fontSize: "1.5rem"
+    fontFamily: 'Be Vietnam Pro, system-ui, sans-serif'
+    fontSize: '1.5rem'
     fontWeight: 700
     lineHeight: 1.25
   section-title:
-    fontFamily: "Be Vietnam Pro, system-ui, sans-serif"
-    fontSize: "1.125rem"
+    fontFamily: 'Be Vietnam Pro, system-ui, sans-serif'
+    fontSize: '1.125rem'
     fontWeight: 700
     lineHeight: 1.25
   body:
-    fontFamily: "Be Vietnam Pro, system-ui, sans-serif"
-    fontSize: "0.875rem"
+    fontFamily: 'Be Vietnam Pro, system-ui, sans-serif'
+    fontSize: '0.875rem'
     fontWeight: 400
     lineHeight: 1.5
   label:
-    fontFamily: "Be Vietnam Pro, system-ui, sans-serif"
-    fontSize: "0.75rem"
+    fontFamily: 'Be Vietnam Pro, system-ui, sans-serif'
+    fontSize: '0.75rem'
     fontWeight: 600
 rounded:
-  sm: "6px"
-  md: "10px"
-  lg: "14px"
-  xl: "18px"
+  sm: '6px'
+  md: '10px'
+  lg: '14px'
+  xl: '18px'
 spacing:
-  xs: "4px"
-  sm: "8px"
-  md: "16px"
-  lg: "24px"
-  xl: "32px"
+  xs: '4px'
+  sm: '8px'
+  md: '16px'
+  lg: '24px'
+  xl: '32px'
 components:
   button-primary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.surface}"
-    rounded: "{rounded.md}"
-    padding: "8px 16px"
-    height: "44px"
+    backgroundColor: '{colors.primary}'
+    textColor: '{colors.surface}'
+    rounded: '{rounded.md}'
+    padding: '8px 16px'
+    height: '44px'
   button-secondary:
-    backgroundColor: "{colors.secondary}"
-    textColor: "{colors.surface}"
-    rounded: "{rounded.md}"
-    height: "44px"
+    backgroundColor: '{colors.secondary}'
+    textColor: '{colors.surface}'
+    rounded: '{rounded.md}'
+    height: '44px'
   button-outline:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text-secondary}"
-    rounded: "{rounded.md}"
-    height: "44px"
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.text-secondary}'
+    rounded: '{rounded.md}'
+    height: '44px'
   input:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text-primary}"
-    rounded: "{rounded.md}"
-    padding: "10px 14px"
-    height: "44px"
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.text-primary}'
+    rounded: '{rounded.md}'
+    padding: '10px 14px'
+    height: '44px'
   card:
-    backgroundColor: "{colors.surface}"
-    rounded: "{rounded.lg}"
+    backgroundColor: '{colors.surface}'
+    rounded: '{rounded.lg}'
 ---
 
 # Design System: ShareLoop
@@ -91,37 +101,43 @@ components:
 
 **Creative North Star: "Góc trao đổi của hàng xóm"**
 
-ShareLoop là sàn trao tặng và trao đổi đồ cũ, nên giao diện phải làm người lạ thấy an tâm: nền sáng hơi xanh, xanh rêu đậm cho hành động chính, cam đất ấm cho điểm nhấn trao đổi. Màn hình ứng dụng (người dùng, quản trị) ưu tiên dễ quét và nhất quán hơn là hiệu ứng; thương hiệu thể hiện qua màu, bo góc và cách đặt chữ tiếng Việt, không qua trang trí.
+ShareLoop là sàn trao tặng và trao đổi đồ cũ, nên giao diện phải làm người lạ thấy an tâm: nền Emerald Forest Green nhạt, thẻ trắng sạch, `primary` cho hành động chính và `secondary` cho header, navigation cùng các vùng tối. Màn hình ứng dụng (người dùng, quản trị) ưu tiên dễ quét và nhất quán hơn là hiệu ứng; thương hiệu thể hiện qua màu, bo góc và cách đặt chữ tiếng Việt, không qua trang trí.
 
-Mật độ vừa phải: thẻ trắng viền mảnh trên nền xám xanh nhạt, chữ nhỏ gọn (14px) nhưng thoáng dòng. Trang công khai (Home, Browse, AI) được phép giàu hình ảnh hơn; trang thao tác (Post, Messages, Credit, Admin) giữ phẳng và rõ.
+Mật độ vừa phải: thẻ trắng viền #B4DAC9 mảnh trên nền #D7E9E1, chữ nhỏ gọn (14px) nhưng thoáng dòng. Trang công khai (Home, Browse, AI) được phép giàu hình ảnh hơn; trang thao tác (Post, Messages, Credit, Admin) giữ phẳng và rõ.
 
 **Key Characteristics:**
-- Một màu hành động duy nhất: xanh rêu `primary`. Cam đất `secondary` chỉ dùng cho nhãn "Trao đổi" và nút phụ hiếm.
+
+- Một màu hành động duy nhất: `primary` #176B4B. `secondary` #0B3F30 dùng cho nhãn "Trao đổi", banner và vùng tối.
 - Bề mặt phẳng, phân lớp bằng viền mảnh (`ring-1 ring-border`) và nền `surface-low`; bóng đổ chỉ khi hover hoặc nổi lên (menu, hộp thoại).
 - Bo góc vừa (10–14px), không tròn hoàn toàn ngoài avatar/chip.
 - Icon duy nhất: Phosphor, qua component `Icon`.
 
 ## Colors
 
-Bảng màu xanh rêu – cam đất trên nền trung tính hơi xanh. Mọi màu lấy từ token Tailwind; không viết hex trong component.
+Bảng màu Emerald Forest Green trên nền xanh nhạt, với thẻ và form màu trắng. Mọi màu lấy từ token Tailwind; không viết hex trong component.
 
 ### Primary
-- **Xanh rêu đậm** (`primary`, #145C4E): nút chính, liên kết, mục điều hướng đang chọn, focus. Hover dùng `primary-hover`.
-- **Xanh rêu nhạt** (`primary-fixed`, `primary-soft`, `primary-faint`): nền chip/badge, hover hàng bảng, mục menu đang chọn. `primary-faint` là nền hover nhẹ nhất.
+
+- **Primary** (`primary`, #176B4B): nút chính, liên kết, mục điều hướng đang chọn, focus. Hover dùng #0B3F30 qua `primary-hover`.
+- **Success100/200** (`primary-fixed`, `primary-soft`, `primary-faint`): nền chip/badge, hover hàng bảng, mục menu đang chọn.
 
 ### Secondary
-- **Cam đất** (`secondary`, #B85C35): nhãn "Trao đổi", nút phụ. `secondary-soft` / `secondary-fixed` là nền nhãn.
+
+- **Dark forest** (`secondary`, #0B3F30): nhãn "Trao đổi", banner, header, navigation và vùng tối.
 
 ### Neutral
-- **Nền trang** (`background`, #F5F7F6), **thẻ** (`surface`, #FFFFFF), **nền phụ** (`surface-low`), **nền ô/skeleton** (`surface-container`), **nền nhấn** (`surface-high`).
+
+- **Nền trang** (`background`, Success200), **thẻ** (`surface`, Success100/#FFFFFF), **nền phụ** (`surface-low`, Success100), **nền nhấn** (`surface-high`, Success500).
 - **Chữ**: `text-primary` (nội dung chính), `text-secondary` (nhãn, mô tả), `text-muted` (phụ chú; chỉ dùng cho chữ ≥ 14px hoặc thông tin không thiết yếu vì độ tương phản thấp, xem ui-audit).
-- **Viền** (`border`, #D7DEDB).
+- **Viền và highlight nhẹ** (`border`, #B4DAC9); **accent** (`accent`, #31936B) chỉ dùng cho điểm nhấn trang trí, không dùng cho chữ nhỏ trên nền trắng.
 
 ### Semantic
-- `success` #277A55, `warning` #8C5410, `error` #B44444, `info` #356A8A: màu chữ/icon cho trạng thái. Nền nhạt đi kèm hiện chưa có token (đang dùng `bg-*-50` mặc định, là việc tồn đọng của Đợt 1).
+
+- `success` #176B4B, `warning` #8A5B17, `error` #B04444, `info` #3F6475: màu chữ/icon cho trạng thái. Warning, error và info giữ token riêng để không bị lẫn với Emerald Forest Green.
 
 ### Named Rules
-**The One Voice Rule.** `primary` là giọng chính; mỗi khu vực chỉ có một nút `primary`. Cam đất không dùng cho hành động chính.
+
+**The One Voice Rule.** `primary` là giọng chính; mỗi khu vực chỉ có một nút `primary`. `secondary` không dùng cho hành động chính.
 
 **The Token Only Rule.** Không hex, không `gray-*`/`red-*`/`amber-*`/`emerald-*`/`blue-*` khi đã có token tương đương. Thiếu token thì thêm vào `tailwind.config.js` rồi mới dùng.
 
@@ -132,6 +148,7 @@ Bảng màu xanh rêu – cam đất trên nền trung tính hơi xanh. Mọi m�
 **Character:** Chữ không chân, đủ dấu tiếng Việt rõ nét; tiêu đề đậm, nội dung nhẹ, tạo nhịp quét nhanh.
 
 ### Hierarchy
+
 - **Page title** (`.page-title`; 700, 24px → 30px từ `sm`, leading tight): tiêu đề trang, một `h1` mỗi trang.
 - **Section title** (`.section-title`; 700, 18px → 20px): tiêu đề khối trong trang.
 - **Body** (400–500, `text-sm` 14px, leading 24px): nội dung chính; mô tả trang `text-sm sm:text-base`.
@@ -140,6 +157,7 @@ Bảng màu xanh rêu – cam đất trên nền trung tính hơi xanh. Mọi m�
 - **Số liệu**: `tabular-nums`, `text-2xl font-bold` (component `Stat`).
 
 ### Named Rules
+
 **The No Tiny Text Rule.** Dưới 12px chỉ dành cho badge/chip, và chữ phải đạt tương phản AA. Không dùng `text-muted` cho chữ dưới 12px.
 
 **The Heading Order Rule.** Mỗi trang một `h1` (qua `PageHeader`), khối con dùng `h2`/`h3` theo thứ tự.
@@ -158,11 +176,13 @@ Bảng màu xanh rêu – cam đất trên nền trung tính hơi xanh. Mọi m�
 Phẳng khi nghỉ, phân lớp bằng viền và tông nền; bóng đổ là phản hồi trạng thái.
 
 ### Shadow Vocabulary
+
 - **sm** (`0 1px 2px rgba(20,45,38,.05)`): thẻ `.card` khi nghỉ.
 - **md** (`0 10px 30px rgba(20,45,38,.08)`): thẻ hover, khung chat lớn.
 - **lg** (`0 24px 60px rgba(20,45,38,.12)`): menu thả xuống, hộp thoại.
 
 ### Named Rules
+
 **The Flat-By-Default Rule.** Không thêm bóng cho thẻ tĩnh. Chỉ dùng `shadow-sm|md|lg`; không dùng `shadow-xl`, `shadow-2xl` hay giá trị tuỳ ý.
 
 ## Shapes
@@ -174,6 +194,7 @@ Bo góc: `sm` 6px (badge, chip), `md` 10px (nút, ô nhập), `lg` 14px (thẻ),
 Dùng lại component trong `src/components/ui.tsx` trước khi tự viết.
 
 ### Danh sách component dùng chung (`ui.tsx`)
+
 `Icon`, `Button` (primary, secondary, outline, ghost, danger; sm/md/lg), `IconButton`, `Field`, `TextArea`, `Select`, `SearchField`, `TypeBadge`, `ConditionBadge`, `StatusBadge`, `RankBadge`, `EmptyState`, `LoadingState`, `ItemImage`, `Alert` (info, success, warning, error), `ProductCard`, `HorizontalProductCard`, `OwnerCard`, `Avatar`, `Stat`, `PageHeader`.
 
 Ngoài `ui.tsx`: `Dialog` (hộp thoại xác nhận), `Pagination`, `PasswordField`, `OtpInput`, `ReputationBadge`, `NotificationMenu`, `ReportDialog`, `ShareLoopLogo`.
@@ -181,36 +202,44 @@ Ngoài `ui.tsx`: `Dialog` (hộp thoại xác nhận), `Pagination`, `PasswordFi
 Lớp tiện ích trong `globals.css`: `.page-shell`, `.page-title`, `.page-intro`, `.section-title`, `.card`, `.input`, `.label`, `.table-wrap`, `.data-table`, `.surface-section`.
 
 ### Buttons
+
 - Cao tối thiểu 44px (`md`), 48px (`lg`). Cỡ `sm` (36px) chỉ dùng trong hàng dày đặc trên desktop và không là hành động duy nhất trên mobile.
 - `primary`: nền xanh rêu, chữ trắng; hover `primary-hover`. `outline`: viền `border`, chữ `text-secondary`. `ghost`: không viền. `danger`: chữ `error` trên nền nhạt.
 - Disabled: `opacity-40` + `cursor-not-allowed`, không đổi hover. Đang xử lý: giữ chiều rộng, đổi nhãn (ví dụ "Đang gửi...") và `disabled`.
 
 ### Inputs / Fields
+
 - `.input`: cao 44px, viền `border`, hover viền `text-muted`, focus viền `primary` + vòng `ring-4 ring-primary/10`. Lỗi: viền `error`, thông báo `text-xs text-error` ngay dưới ô. Disabled: nền `surface-low`.
 - Mỗi ô có `label` hiển thị; placeholder không thay nhãn.
 
 ### Cards / Containers
+
 - `.card` / `.surface-section`: nền trắng, `ring-1 ring-border`, bo `lg`/`xl`, đệm 20–24px. Không lồng thẻ trong thẻ.
 
 ### Navigation
+
 - Header: mục đang chọn `bg-primary-faint text-primary`, chưa chọn `text-text-secondary`, hover `bg-surface-low`.
 - Admin: mục đang chọn `bg-primary text-white`. Mục menu cao tối thiểu 44px trên màn cảm ứng.
 
 ### Badges / Status
+
 - Nhãn trạng thái dùng `StatusBadge`: nền nhạt + chữ màu ngữ nghĩa (đỏ = lỗi/từ chối, xanh = hoàn tất, vàng = chờ). Không tự dựng badge mới cho trạng thái giao dịch/bài đăng.
 
 ### Bảng (admin)
+
 - `.table-wrap` + `.data-table`: tiêu đề `surface-low`, hàng cách nhau bằng viền, hover `primary-faint`. Cột trạng thái dùng `StatusBadge`.
 
 ## Do's and Don'ts
 
 ### Do:
+
 - **Do** dùng `PageHeader` cho tiêu đề trang, `EmptyState`/`LoadingState`/`Alert` cho trạng thái.
 - **Do** có `focus-visible` rõ cho mọi phần tử bấm được; giữ vòng focus nhìn thấy được trên nền trắng và nền xanh.
 - **Do** giữ nguyên `aria-label`, `role`, `data-testid` khi đổi giao diện (test dựa vào chúng).
 - **Do** đặt chữ hiển thị bằng tiếng Việt có dấu, câu ngắn, dùng nhãn thân thiện.
 
 ### Don't:
+
 - **Don't** viết hex, `rgb()` trong component; không dùng màu Tailwind mặc định khi có token.
 - **Don't** dùng icon ngoài Phosphor (qua `Icon`); không dùng emoji làm icon.
 - **Don't** tự viết nút/badge/hộp thoại mới khi `ui.tsx` hoặc `Dialog` đã có.
@@ -218,6 +247,7 @@ Lớp tiện ích trong `globals.css`: `.page-shell`, `.page-title`, `.page-intr
 - **Don't** để chữ dài tràn ngang: dùng `truncate`/`line-clamp` + `min-w-0`.
 
 ### Không được làm
+
 - Không đổi business logic, API call, điều kiện hiển thị, luồng giao dịch/Credit, phân quyền khi chỉnh giao diện.
 - Không thêm thư viện npm mới; không lấy bảng màu, font, style từ catalog hay DESIGN.md của brand khác.
 - Không tính, đổi hay hiển thị sai Credit trên trình duyệt; không thay đổi trạng thái giao dịch ở frontend.

@@ -36,6 +36,12 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     /** Giao dịch đã có report nào chưa; dùng để job tự hoàn tất bỏ qua giao dịch đang bị báo cáo (FR-87). */
     boolean existsByRequestId(Long requestId);
 
+    Optional<Report> findFirstByTargetTypeAndRequestIdAndStatusInOrderByCreatedAtDesc(
+            TargetType targetType, Long requestId, Collection<ReportStatus> statuses);
+
+    List<Report> findByTargetTypeAndRequestIdInAndStatusIn(
+            TargetType targetType, Collection<Long> requestIds, Collection<ReportStatus> statuses);
+
     /** Đếm report của một bài theo loại đối tượng và trạng thái; dùng cho ngưỡng tự ẩn bài (BR-A03). */
     long countByTargetTypeAndItemIdAndStatusIn(TargetType targetType, Long itemId, Collection<ReportStatus> statuses);
 

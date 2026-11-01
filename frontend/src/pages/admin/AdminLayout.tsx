@@ -49,10 +49,10 @@ export function AdminLayout() {
       {sections.map((section) => (
         <div
           key={section.items[0][1]}
-          className="mb-4 border-t border-border/80 pt-4 first:border-t-0 first:pt-0"
+          className="mb-4 border-t border-admin-divider pt-4 first:border-t-0 first:pt-0"
         >
           {section.label ? (
-            <p className="mb-1.5 rounded-md bg-surface-low px-3 py-2 text-xs font-bold uppercase tracking-wider text-primary">
+            <p className="mb-1.5 rounded-md bg-admin-group px-3 py-2 text-xs font-bold uppercase tracking-wider text-admin-label">
               {section.label}
             </p>
           ) : null}
@@ -63,7 +63,7 @@ export function AdminLayout() {
               to={to}
               onClick={() => setOpen(false)}
               className={({ isActive }) =>
-                `mb-0.5 flex min-h-11 items-center rounded-md py-2 pl-5 pr-3 text-sm font-medium transition ${isActive ? 'bg-primary text-white' : 'text-text-secondary hover:bg-surface-low hover:text-text-primary'}`
+                `mb-0.5 flex min-h-11 items-center rounded-md py-2 pl-5 pr-3 text-sm transition ${isActive ? 'bg-primary font-bold text-white' : 'font-medium text-admin-text hover:bg-admin-group'}`
               }
             >
               {label}
@@ -83,15 +83,17 @@ export function AdminLayout() {
           onClick={() => setOpen(!open)}
           aria-label={open ? 'Đóng menu quản trị' : 'Mở menu quản trị'}
           aria-expanded={open}
-          className="grid size-11 place-items-center rounded-md border border-border bg-white text-text-secondary transition hover:border-primary/50 hover:bg-primary-faint hover:text-primary"
+          className="grid size-11 place-items-center rounded-md border border-border bg-secondary text-white transition hover:border-primary-fixed hover:bg-primary-hover"
         >
           <Icon name={open ? 'close' : 'menu'} className="size-5" />
         </button>
       </div>
       <aside
-        className={`${open ? 'block' : 'hidden'} h-fit rounded-lg bg-white p-2 ring-1 ring-border/80 lg:sticky lg:top-24 lg:block lg:max-h-[calc(100dvh-120px)] lg:overflow-y-auto`}
+        className={`${open ? 'block' : 'hidden'} h-fit rounded-lg bg-admin-sidebar p-2 shadow-admin [scrollbar-color:var(--color-admin-divider)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--color-admin-divider)] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:w-2 lg:sticky lg:top-24 lg:block lg:max-h-[calc(100dvh-120px)] lg:overflow-y-auto`}
       >
-        <nav aria-label="Quản trị" className="pt-1">{nav}</nav>
+        <nav aria-label="Quản trị" className="pt-1">
+          {nav}
+        </nav>
       </aside>
       <main className="min-w-0 pt-2 lg:pt-0">
         <Suspense fallback={<div className="min-h-[620px]" aria-hidden="true" />}>

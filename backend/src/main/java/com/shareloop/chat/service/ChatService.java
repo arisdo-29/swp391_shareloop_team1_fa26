@@ -55,14 +55,13 @@ public class ChatService {
     private final MediaService mediaService;
     private final ItemQueryService itemQueryService;
     private final ChatViolationRecorder chatViolationRecorder;
-    private final ChatAiModerationService chatAiModerationService;
 
     public ChatService(
             MessageRepository messageRepository,
             RequestService requestService,
             ChatContactFilter chatContactFilter,
             MediaService mediaService) {
-        this(messageRepository, requestService, chatContactFilter, mediaService, null, null, null);
+        this(messageRepository, requestService, chatContactFilter, mediaService, null, null);
     }
 
     public ChatService(
@@ -71,7 +70,7 @@ public class ChatService {
             ChatContactFilter chatContactFilter,
             MediaService mediaService,
             ItemQueryService itemQueryService) {
-        this(messageRepository, requestService, chatContactFilter, mediaService, itemQueryService, null, null);
+        this(messageRepository, requestService, chatContactFilter, mediaService, itemQueryService, null);
     }
 
     @Autowired
@@ -81,15 +80,13 @@ public class ChatService {
             ChatContactFilter chatContactFilter,
             MediaService mediaService,
             @Autowired(required = false) ItemQueryService itemQueryService,
-            @Autowired(required = false) ChatViolationRecorder chatViolationRecorder,
-            @Autowired(required = false) ChatAiModerationService chatAiModerationService) {
+            @Autowired(required = false) ChatViolationRecorder chatViolationRecorder) {
         this.messageRepository = messageRepository;
         this.requestService = requestService;
         this.chatContactFilter = chatContactFilter;
         this.mediaService = mediaService;
         this.itemQueryService = itemQueryService;
         this.chatViolationRecorder = chatViolationRecorder;
-        this.chatAiModerationService = chatAiModerationService;
     }
 
     /**
@@ -156,7 +153,6 @@ public class ChatService {
         }
 
         // Lọc thông tin liên hệ và từ khoá cấm mức BLOCK (FR-72, FR-74, FR-78; BR-C01, BR-A10, BR-C06)
-        ChatAiModerationService.Decision aiDecision = null;
         if (hasContent) {
             boolean isBeforeLogistics =
                     context.status() == RequestStatus.RESERVED || context.status() == RequestStatus.AWAITING_LOGISTICS;
@@ -186,25 +182,6 @@ public class ChatService {
                     }
                     throw e;
                 }
-                if (chatAiModerationService != null) {
-                    aiDecision = chatAiModerationService
-                            .evaluate(context.requestId(), request.content())
-                            .orElse(null);
-                    if (aiDecision != null && aiDecision.blocked()) {
-                        if (chatViolationRecorder != null) {
-                            chatViolationRecorder.recordViolationAndAlertAdmin(
-                                    context.requestId(),
-                                    currentUserId,
-                                    request.content().trim(),
-                                    aiDecision.reason(),
-                                    2,
-                                    aiDecision.confidence());
-                        }
-                        throw new BusinessException(
-                                ChatErrorCode.CHAT_MESSAGE_BLOCKED,
-                                "Tin nhắn bị chặn do chứa " + aiDecision.reason() + ".");
-                    }
-                }
             }
         }
 
@@ -222,9 +199,6 @@ public class ChatService {
             message = new Message(context.requestId(), currentUserId, MessageKind.IMAGE, content, request.mediaId());
         } else {
             message = new Message(context.requestId(), currentUserId, content);
-        }
-        if (aiDecision != null) {
-            message.setAiConfidence(aiDecision.confidence());
         }
         Message saved = messageRepository.save(message);
 

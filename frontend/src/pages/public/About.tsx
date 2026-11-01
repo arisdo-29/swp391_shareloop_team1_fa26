@@ -1,10 +1,18 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import {
+  CaretDown,
+  CheckCircle,
+  Coins,
+  MapPin,
+  ShieldCheck,
+  SealCheck,
+} from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
-import { Button } from '../../components/ui';
 import { ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
 import { itemApi, type ListingFeeConfigResponse } from '../../services/itemApi';
+import './about.css';
 
 /** Các con số là luật cố định (Business Rule v11.2) nên ghi thẳng trong text. Gom một chỗ để dễ rà soát. */
 const RULES = {
@@ -22,13 +30,18 @@ const RULES = {
 } as const;
 
 const reasons = [
-  ['Gần nhà', 'Tìm theo quận. Hẹn gặp ở chỗ công cộng gần bạn, hoặc gửi qua đơn vị vận chuyển nếu hai bên đồng ý.'],
+  [
+    'Gần nhà',
+    'Tìm theo quận. Hẹn gặp ở chỗ công cộng gần bạn, hoặc gửi qua đơn vị vận chuyển nếu hai bên đồng ý.',
+  ],
   ['Biết ai đáng tin', 'Mỗi người có hạng, sao uy tín và tỉ lệ đúng mô tả từ các lần giao trước.'],
   [
     'Bài được duyệt',
     'Hệ thống tự kiểm khi bạn gửi bài, rồi Admin duyệt từng bài theo checklist. Không có AI trong khâu duyệt bài và kiểm tin nhắn.',
   ],
 ] as const;
+
+const reasonIcons = [MapPin, ShieldCheck, SealCheck] as const;
 
 const receiverSteps = [
   [
@@ -54,7 +67,10 @@ const giverSteps = [
     'Đăng bài',
     `Chụp từ ${ITEM_IMAGES_MIN} đến ${ITEM_IMAGES_MAX} ảnh thật của chính bạn, mỗi ảnh tối đa 5 MB. Bài Trao đổi ghi rõ món mong muốn. Đồ có lỗi thì mô tả lỗi và chụp ảnh lỗi. Bài Cho tặng đăng miễn phí.`,
   ],
-  ['Chờ duyệt', 'Admin duyệt bài. Bị từ chối thì bạn thấy lý do, sửa và nộp lại được. Phí đăng đang giữ sẽ được trả lại.'],
+  [
+    'Chờ duyệt',
+    'Admin duyệt bài. Bị từ chối thì bạn thấy lý do, sửa và nộp lại được. Phí đăng đang giữ sẽ được trả lại.',
+  ],
   [
     'Chọn một người',
     'Xem sao, hạng, tỉ lệ đúng mô tả và món đem đổi của từng người, rồi chọn đúng 1 người. Những người còn lại tự nhận thông báo.',
@@ -133,7 +149,10 @@ const faqs = [
     'Bài Cho tặng: người cho +10, người nhận +2. Bài Trao đổi: mỗi bên +6. Tối đa 30 điểm mỗi ngày, và từ giao dịch thứ 3 giữa cùng hai người trong 90 ngày thì không cộng điểm.',
   ],
   ['Sao về 0 thì sao?', 'Tài khoản bị cấm và không đăng nhập được. Không có sao ân hạn.'],
-  ['Tài khoản bị khoá thì sao?', 'Admin có thể khoá tài khoản kèm lý do. Khi đăng nhập, bạn sẽ thấy lý do đó.'],
+  [
+    'Tài khoản bị khoá thì sao?',
+    'Admin có thể khoá tài khoản kèm lý do. Khi đăng nhập, bạn sẽ thấy lý do đó.',
+  ],
 ] as const;
 
 /** Trang giới thiệu ShareLoop và hướng dẫn sử dụng. Ai cũng xem được, kể cả khách chưa đăng nhập. */
@@ -142,17 +161,18 @@ export function About() {
   const fees = useListingFees(Boolean(user));
 
   return (
-    <div>
-      <section className="bg-primary-hover text-white">
-        <div className="mx-auto w-full max-w-[1280px] px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
-          <p className="text-xs font-bold uppercase tracking-[0.08em] text-primary-fixed">Giới thiệu</p>
-          <h1 className="mt-3 max-w-3xl text-3xl font-extrabold leading-tight sm:text-4xl lg:text-5xl">
-            ShareLoop giúp món đồ còn tốt đến tay người cần, ngay trong quận của bạn.
+    <div className="about-page">
+      <section className="about-hero text-white">
+        <div className="about-container about-hero-inner">
+          <p className="about-eyebrow">Giới thiệu</p>
+          <h1 className="about-hero-title">
+            ShareLoop giúp <span>món đồ còn tốt</span> đến tay người cần, ngay trong quận của bạn.
           </h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-primary-soft">
-            Không mua bán. Bạn cho tặng món không dùng nữa, hoặc đổi lấy món mình cần, rồi giao nhận trực tiếp hoặc qua đơn vị vận chuyển.
+          <p className="about-hero-description">
+            Không mua bán. Bạn cho tặng món không dùng nữa, hoặc đổi lấy món mình cần, rồi giao nhận
+            trực tiếp hoặc qua đơn vị vận chuyển.
           </p>
-          <nav aria-label="Mục trong trang" className="mt-6 flex flex-wrap gap-2 text-sm font-semibold">
+          <nav aria-label="Mục trong trang" className="about-anchor-nav">
             <AnchorChip href="#cach-dung">Cách dùng</AnchorChip>
             <AnchorChip href="#credit">Credit</AnchorChip>
             <AnchorChip href="#an-toan">An toàn</AnchorChip>
@@ -161,112 +181,145 @@ export function About() {
         </div>
       </section>
 
-      <div className="page-shell space-y-12">
-        <section aria-label="Vì sao chọn ShareLoop" className="grid gap-4 md:grid-cols-3">
-          {reasons.map(([title, text]) => (
-            <div key={title} className="card p-6">
-              <h2 className="text-lg font-bold">{title}</h2>
-              <p className="mt-2 text-sm leading-6 text-text-secondary">{text}</p>
-            </div>
-          ))}
+      <div className="about-container about-content">
+        <section aria-label="Vì sao chọn ShareLoop" className="about-reasons">
+          {reasons.map(([title, text], index) => {
+            const ReasonIcon = reasonIcons[index];
+            return (
+              <article key={title} className="about-reason-card">
+                <span className="about-icon-box" aria-hidden="true">
+                  <ReasonIcon weight="duotone" />
+                </span>
+                <h2>{title}</h2>
+                <p>{text}</p>
+              </article>
+            );
+          })}
         </section>
 
-        <section id="cach-dung" aria-labelledby="how-title" className="scroll-mt-24">
-          <h2 id="how-title" className="page-title">Cách dùng trong 4 bước</h2>
-          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <section id="cach-dung" aria-labelledby="how-title" className="about-section scroll-mt-24">
+          <SectionHeading
+            id="how-title"
+            eyebrow="Quy trình"
+            title="Cách dùng trong 4 bước"
+            description="Hai hành trình rõ ràng cho người nhận và người đăng đồ."
+          />
+          <div className="about-step-grid">
             <StepCard title="Khi bạn muốn nhận hoặc đổi đồ" steps={receiverSteps} />
             <StepCard title="Khi bạn muốn cho hoặc đổi đồ" steps={giverSteps} />
           </div>
         </section>
 
-        <section aria-labelledby="compare-title" className="table-wrap">
-          <h2 id="compare-title" className="section-title px-5 pt-5 sm:px-6">
-            Cho tặng và Trao đổi khác nhau thế nào
-          </h2>
-          <table className="mt-4 w-full min-w-[560px] border-collapse text-left text-sm">
-            <thead className="bg-surface-low text-xs font-bold text-text-secondary">
-              <tr>
-                <th scope="col" className="px-5 py-3 sm:px-6"><span className="sr-only">Nội dung</span></th>
-                <th scope="col" className="px-5 py-3">Cho tặng</th>
-                <th scope="col" className="px-5 py-3">Trao đổi</th>
-              </tr>
-            </thead>
-            <tbody>
-              <CompareRow label="Phí đăng">
-                <td className="px-5 py-3">Miễn phí</td>
-                <td className="px-5 py-3">
-                  {fees
-                    ? `${fees.postFeeSwap} Credit nếu còn trong hạn mức. Giữ khi gửi bài, chỉ trừ khi Admin duyệt lần đầu`
-                    : 'Có phí đăng nếu còn trong hạn mức. Giữ khi gửi bài, chỉ trừ khi Admin duyệt lần đầu'}
-                </td>
-              </CompareRow>
-              <CompareRow label="Hạn mức">
-                <td className="px-5 py-3">
-                  Tối đa {RULES.giveLimit} bài đang hiển thị hoặc chờ duyệt, áp dụng cho mọi hạng
-                </td>
-                <td className="px-5 py-3">
-                  Đồng 5 bài, Bạc 8 bài, Vàng 15 bài, Kim cương không giới hạn. Vượt hạn mức vẫn đăng được
-                </td>
-              </CompareRow>
-              <CompareRow label="Món đổi">
-                <td className="px-5 py-3">Người xin được kèm một bài của mình, không bắt buộc</td>
-                <td className="px-5 py-3">Người xin có thể gửi yêu cầu mà không kèm món đổi</td>
-              </CompareRow>
-              <CompareRow label="Điểm khi hoàn tất">
-                <td className="px-5 py-3">Người cho +10, người nhận +2</td>
-                <td className="px-5 py-3">Mỗi bên +6</td>
-              </CompareRow>
-              <CompareRow label="Khi chọn người">
-                <td className="px-5 py-3">
-                  Chọn người có kèm món đổi thì bài chuyển sang Trao đổi, bạn trả phí đăng Trao đổi
-                </td>
-                <td className="px-5 py-3">
-                  Chọn người không kèm món đổi thì bài chuyển sang Cho tặng, phí đã trả không được hoàn
-                </td>
-              </CompareRow>
-            </tbody>
-          </table>
-          <p className="px-5 pb-5 pt-3 text-xs leading-5 text-text-muted sm:px-6">
-            Chủ bài không đồng ý chuyển hình thức thì không chọn được người đó. Điểm uy tín tính theo hình thức cuối cùng của bài khi giao dịch hoàn tất.
+        <section aria-labelledby="compare-title" className="about-compare-card">
+          <div className="about-compare-heading">
+            <p className="about-section-eyebrow">So sánh nhanh</p>
+            <h2 id="compare-title">Cho tặng và Trao đổi khác nhau thế nào</h2>
+          </div>
+          <div className="about-table-scroll">
+            <table className="about-compare-table">
+              <thead>
+                <tr>
+                  <th scope="col">
+                    <span className="sr-only">Nội dung</span>
+                  </th>
+                  <th scope="col">Cho tặng</th>
+                  <th scope="col">Trao đổi</th>
+                </tr>
+              </thead>
+              <tbody>
+                <CompareRow label="Phí đăng">
+                  <td>Miễn phí</td>
+                  <td>
+                    {fees
+                      ? `${fees.postFeeSwap} Credit nếu còn trong hạn mức. Giữ khi gửi bài, chỉ trừ khi Admin duyệt lần đầu`
+                      : 'Có phí đăng nếu còn trong hạn mức. Giữ khi gửi bài, chỉ trừ khi Admin duyệt lần đầu'}
+                  </td>
+                </CompareRow>
+                <CompareRow label="Hạn mức">
+                  <td>
+                    Tối đa {RULES.giveLimit} bài đang hiển thị hoặc chờ duyệt, áp dụng cho mọi hạng
+                  </td>
+                  <td>
+                    Đồng 5 bài, Bạc 8 bài, Vàng 15 bài, Kim cương không giới hạn. Vượt hạn mức vẫn
+                    đăng được
+                  </td>
+                </CompareRow>
+                <CompareRow label="Món đổi">
+                  <td>Người xin được kèm một bài của mình, không bắt buộc</td>
+                  <td>Người xin có thể gửi yêu cầu mà không kèm món đổi</td>
+                </CompareRow>
+                <CompareRow label="Điểm khi hoàn tất">
+                  <td>Người cho +10, người nhận +2</td>
+                  <td>Mỗi bên +6</td>
+                </CompareRow>
+                <CompareRow label="Khi chọn người">
+                  <td>
+                    Chọn người có kèm món đổi thì bài chuyển sang Trao đổi, bạn trả phí đăng Trao
+                    đổi
+                  </td>
+                  <td>
+                    Chọn người không kèm món đổi thì bài chuyển sang Cho tặng, phí đã trả không được
+                    hoàn
+                  </td>
+                </CompareRow>
+              </tbody>
+            </table>
+          </div>
+          <p className="about-table-note">
+            Chủ bài không đồng ý chuyển hình thức thì không chọn được người đó. Điểm uy tín tính
+            theo hình thức cuối cùng của bài khi giao dịch hoàn tất.
           </p>
         </section>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="about-info-grid">
           <CreditSection fees={fees} />
 
-          <section id="an-toan" aria-labelledby="safety-title" className="card scroll-mt-24 p-6">
-            <h2 id="safety-title" className="section-title">An toàn khi giao nhận</h2>
-            <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm leading-6">
-              {safetyTips.map((tip) => (
-                <li key={tip}>{tip}</li>
-              ))}
-            </ul>
+          <section
+            id="an-toan"
+            aria-labelledby="safety-title"
+            className="about-info-card scroll-mt-24"
+          >
+            <InfoHeading
+              icon={<ShieldCheck weight="duotone" />}
+              title="An toàn khi giao nhận"
+              id="safety-title"
+            />
+            <SafetyGroup title="Gặp và giao đồ" tips={safetyTips.slice(0, 3)} />
+            <SafetyGroup title="Thông tin và thanh toán" tips={safetyTips.slice(3, 5)} />
+            <SafetyGroup title="Báo cáo và khiếu nại" tips={safetyTips.slice(5)} />
           </section>
         </div>
 
-        <section id="hoi-dap" aria-labelledby="faq-title" className="card scroll-mt-24 p-6">
-          <h2 id="faq-title" className="section-title">Câu hỏi thường gặp</h2>
-          <div className="mt-2 divide-y divide-border">
+        <section id="hoi-dap" aria-labelledby="faq-title" className="about-faq scroll-mt-24">
+          <SectionHeading
+            id="faq-title"
+            eyebrow="Hỗ trợ"
+            title="Câu hỏi thường gặp"
+            description="Những điều cần biết trước khi bắt đầu cho tặng hoặc trao đổi."
+          />
+          <div className="about-faq-list">
             {faqs.map(([question, answer], index) => (
-              <details key={question} open={index === 0} className="group py-3">
-                <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold marker:text-text-muted">
-                  {question}
+              <details key={question} open={index === 0}>
+                <summary>
+                  <span>{question}</span>
+                  <CaretDown className="about-faq-caret" weight="bold" aria-hidden="true" />
                 </summary>
-                <p className="pb-1 text-sm leading-6 text-text-secondary">{answer}</p>
+                <div className="about-faq-answer">
+                  <p>{answer}</p>
+                </div>
               </details>
             ))}
           </div>
         </section>
 
-        <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-primary p-6 text-white sm:p-8">
+        <section className="about-cta">
           <div>
-            <h2 className="text-2xl font-bold">Nhà bạn có món nào còn tốt?</h2>
-            <p className="mt-1.5 text-primary-soft">Đăng bài Cho tặng đầu tiên, miễn phí.</p>
+            <p className="about-cta-eyebrow">Bắt đầu một vòng đời mới</p>
+            <h2>Nhà bạn có món nào còn tốt?</h2>
+            <p>Đăng bài Cho tặng đầu tiên, miễn phí.</p>
           </div>
-          <Link to={user ? '/post' : '/register'}>
-            <Button size="lg" variant="outline" className="!border-white !text-primary">
-              {user ? 'Đăng đồ' : 'Tạo tài khoản'}
-            </Button>
+          <Link to={user ? '/post' : '/register'} className="about-cta-button">
+            {user ? 'Đăng đồ' : 'Tạo tài khoản'}
           </Link>
         </section>
       </div>
@@ -274,23 +327,89 @@ export function About() {
   );
 }
 
+function SectionHeading({
+  eyebrow,
+  title,
+  description,
+  id,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  id?: string;
+}) {
+  return (
+    <div className="about-section-heading">
+      <p className="about-section-eyebrow">{eyebrow}</p>
+      <h2 id={id}>{title}</h2>
+      <p>{description}</p>
+    </div>
+  );
+}
+
+function InfoHeading({ icon, title, id }: { icon: ReactNode; title: string; id: string }) {
+  return (
+    <div className="about-info-heading">
+      <span className="about-icon-box" aria-hidden="true">
+        {icon}
+      </span>
+      <h2 id={id}>{title}</h2>
+    </div>
+  );
+}
+
+function SafetyGroup({ title, tips }: { title: string; tips: readonly string[] }) {
+  return (
+    <div className="about-info-group">
+      <h3>{title}</h3>
+      <ul className="about-safety-list">
+        {tips.map((tip) => (
+          <li key={tip}>
+            <CheckCircle aria-hidden="true" weight="fill" />
+            <span>{tip}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Mục Credit: có số phí khi đã đăng nhập, khách chỉ thấy mô tả chung không kèm số. */
 function CreditSection({ fees }: { fees: ListingFeeConfigResponse | null }) {
   return (
-    <section id="credit" aria-labelledby="credit-title" className="card scroll-mt-24 p-6">
-      <h2 id="credit-title" className="section-title">Credit dùng vào đâu</h2>
-      <p className="mt-3 text-sm leading-6 text-text-secondary">
-        1 Credit = 1.000đ. Bạn nạp qua VNPay, tối thiểu 10 Credit, số tiền là bội số của 1.000đ. Credit không đổi ra tiền, không tặng và không chuyển cho người khác.
+    <section id="credit" aria-labelledby="credit-title" className="about-info-card scroll-mt-24">
+      <InfoHeading
+        icon={<Coins weight="duotone" />}
+        title="Credit dùng vào đâu"
+        id="credit-title"
+      />
+      <div className="about-info-group">
+        <h3>Giá trị và cách nạp</h3>
+        <p>
+          1 Credit = 1.000đ. Bạn nạp qua VNPay, tối thiểu 10 Credit, số tiền là bội số của 1.000đ.
+          Credit không đổi ra tiền, không tặng và không chuyển cho người khác.
+        </p>
+      </div>
+      <div className="about-free-note">
+        <CheckCircle aria-hidden="true" weight="fill" />
+        <p>
+          <strong>Miễn phí hoàn toàn:</strong> tìm kiếm thường, gửi yêu cầu, chat, chốt lịch, giao
+          nhận, báo cáo và khiếu nại.
+        </p>
+      </div>
+      <div className="about-info-group">
+        <h3>Các hoạt động dùng Credit</h3>
+        {fees ? <FeeList fees={fees} /> : <GenericFeeList />}
+      </div>
+      <p className="about-info-note">
+        {fees
+          ? 'Mức phí theo cấu hình hiện tại của hệ thống.'
+          : 'Đăng nhập để xem mức phí hiện tại.'}
       </p>
-      <p className="mt-2 text-sm leading-6 text-text-secondary">
-        Miễn phí hoàn toàn: tìm kiếm thường, gửi yêu cầu, chat, chốt lịch, giao nhận, báo cáo và khiếu nại.
-      </p>
-      {fees ? <FeeList fees={fees} /> : <GenericFeeList />}
-      <p className="mt-3 text-xs leading-5 text-text-muted">
-        {fees ? 'Mức phí theo cấu hình hiện tại của hệ thống.' : 'Đăng nhập để xem mức phí hiện tại.'}
-      </p>
-      <p className="mt-2 text-xs leading-5 text-text-muted">
-        Phí đăng được giữ khi gửi duyệt, trừ thật khi Admin duyệt lần đầu, trả lại khi bị từ chối hoặc khi bạn gỡ bài trước lúc duyệt. Bài đã duyệt rồi bị gỡ, hết hạn hay giao dịch không thành thì không hoàn. Phí gia hạn và đẩy bài trừ ngay khi bấm, không hoàn.
+      <p className="about-info-note">
+        Phí đăng được giữ khi gửi duyệt, trừ thật khi Admin duyệt lần đầu, trả lại khi bị từ chối
+        hoặc khi bạn gỡ bài trước lúc duyệt. Bài đã duyệt rồi bị gỡ, hết hạn hay giao dịch không
+        thành thì không hoàn. Phí gia hạn và đẩy bài trừ ngay khi bấm, không hoàn.
       </p>
     </section>
   );
@@ -303,16 +422,27 @@ function FeeList({ fees }: { fees: ListingFeeConfigResponse }) {
       : `Đăng vượt hạn mức: ${fees.postFeeSwapOverQuota} Credit mỗi bài`;
 
   return (
-    <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm leading-6">
+    <ul className="about-compact-list">
       <li>Đăng bài Trao đổi trong hạn mức: {fees.postFeeSwap} Credit</li>
       <li>{overQuotaText}</li>
       <li>Chuyển bài Cho tặng sang Trao đổi: {fees.postFeeSwap} Credit</li>
-      <li>Sửa bài từ lần thứ hai: {fees.editFee} Credit, chỉ trừ khi bản sửa được duyệt. Lần sửa đầu sau khi bài được duyệt miễn phí</li>
-      <li>Gia hạn bài thêm {fees.postDisplayDays} ngày: {fees.renewFee} Credit</li>
-      <li>Đẩy bài lên đầu {fees.boostDays} ngày: {fees.boostFee} Credit</li>
-      <li>Đẩy cộng dồn được, nhưng không quá {fees.boostMaxDays} ngày và không quá hạn hiển thị của bài</li>
       <li>
-        Bài hiển thị {fees.postDisplayDays} ngày từ lần duyệt đầu, hạng Vàng trở lên {fees.postDisplayDaysGold} ngày
+        Sửa bài từ lần thứ hai: {fees.editFee} Credit, chỉ trừ khi bản sửa được duyệt. Lần sửa đầu
+        sau khi bài được duyệt miễn phí
+      </li>
+      <li>
+        Gia hạn bài thêm {fees.postDisplayDays} ngày: {fees.renewFee} Credit
+      </li>
+      <li>
+        Đẩy bài lên đầu {fees.boostDays} ngày: {fees.boostFee} Credit
+      </li>
+      <li>
+        Đẩy cộng dồn được, nhưng không quá {fees.boostMaxDays} ngày và không quá hạn hiển thị của
+        bài
+      </li>
+      <li>
+        Bài hiển thị {fees.postDisplayDays} ngày từ lần duyệt đầu, hạng Vàng trở lên{' '}
+        {fees.postDisplayDaysGold} ngày
       </li>
       <li>Trợ lý AI khi hết lượt miễn phí: {RULES.aiFeePerUse} Credit mỗi lượt</li>
     </ul>
@@ -321,7 +451,7 @@ function FeeList({ fees }: { fees: ListingFeeConfigResponse }) {
 
 function GenericFeeList() {
   return (
-    <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm leading-6">
+    <ul className="about-compact-list">
       <li>Đăng bài Trao đổi, kể cả khi vượt hạn mức</li>
       <li>Chuyển bài Cho tặng sang Trao đổi</li>
       <li>Sửa bài từ lần thứ hai</li>
@@ -360,42 +490,41 @@ function useListingFees(signedIn: boolean) {
 
 function AnchorChip({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <a
-      href={href}
-      className="inline-flex min-h-11 items-center rounded-full border border-white/35 px-4 text-white transition hover:bg-white/10"
-    >
+    <a href={href} className="about-anchor-chip">
       {children}
     </a>
   );
 }
 
-function StepCard({ title, steps }: { title: string; steps: ReadonlyArray<readonly [string, string]> }) {
+function StepCard({
+  title,
+  steps,
+}: {
+  title: string;
+  steps: ReadonlyArray<readonly [string, string]>;
+}) {
   return (
-    <div className="card p-6">
-      <h3 className="text-lg font-bold">{title}</h3>
-      <ol className="mt-4 space-y-4">
+    <article className="about-step-card">
+      <h3>{title}</h3>
+      <ol className="about-timeline">
         {steps.map(([name, text], index) => (
-          <li key={name} className="grid grid-cols-[32px_1fr] gap-3">
-            <span className="grid size-8 place-items-center rounded-full bg-primary-soft text-sm font-bold text-primary">
-              {index + 1}
-            </span>
-            <div>
-              <p className="text-sm font-bold">{name}</p>
-              <p className="mt-1 text-sm leading-6 text-text-secondary">{text}</p>
+          <li key={name}>
+            <span className="about-step-number">{String(index + 1).padStart(2, '0')}</span>
+            <div className="about-step-copy">
+              <h4>{name}</h4>
+              <p>{text}</p>
             </div>
           </li>
         ))}
       </ol>
-    </div>
+    </article>
   );
 }
 
 function CompareRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <tr className="border-t border-border/70">
-      <th scope="row" className="px-5 py-3 font-semibold sm:px-6">
-        {label}
-      </th>
+    <tr>
+      <th scope="row">{label}</th>
       {children}
     </tr>
   );

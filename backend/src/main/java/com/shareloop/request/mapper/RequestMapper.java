@@ -61,6 +61,29 @@ public final class RequestMapper {
             RequestItemInfo itemInfo,
             java.time.Instant complaintDeadline,
             java.time.Instant lastMessageAt) {
+        return toResponse(
+                request,
+                receiverName,
+                receiverTrustStars,
+                receiverRank,
+                receiverAsDescribedRate,
+                itemInfo,
+                complaintDeadline,
+                lastMessageAt,
+                null);
+    }
+
+    // Map đầy đủ kèm thời hạn khiếu nại (U08), tin nhắn mới nhất (U03) và hạn giải trình khiếu nại (U5-BE).
+    public static RequestResponse toResponse(
+            Request request,
+            String receiverName,
+            Integer receiverTrustStars,
+            String receiverRank,
+            Double receiverAsDescribedRate,
+            RequestItemInfo itemInfo,
+            java.time.Instant complaintDeadline,
+            java.time.Instant lastMessageAt,
+            java.time.Instant disputeResponseDueAt) {
         if (request == null) {
             return null;
         }
@@ -95,6 +118,7 @@ public final class RequestMapper {
                 itemInfo.offeredItemTitle(),
                 request.getCancelReason(),
                 complaintDeadline,
-                lastMessageAt);
+                lastMessageAt,
+                disputeResponseDueAt);
     }
 }

@@ -15,6 +15,7 @@ import { CaretDown } from '@phosphor-icons/react/dist/csr/CaretDown';
 import { Bell } from '@phosphor-icons/react/dist/csr/Bell';
 import { UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
 import { Image } from '@phosphor-icons/react/dist/csr/Image';
+import { MapPin } from '@phosphor-icons/react/dist/csr/MapPin';
 import { Link } from 'react-router-dom';
 import type { Item, ItemCondition, ItemType, TransactionStatus, User } from '../types/domain';
 import { conditionLabel, txLabel } from '../utils/formatting';
@@ -397,47 +398,71 @@ export function Alert({
   );
 }
 
-export function ProductCard({ item, owner }: { item: Item; owner?: User }) {
+function productCardDescription(description: string) {
+  return description.replace(/Thông tin sản phẩm\s*Tên sản phẩm:\s*/giu, '').trim();
+}
+
+function productCardConditionClass(condition: ItemCondition) {
+  if (condition === 'NEW' || condition === 'new') {
+    return 'bg-surface-low text-primary-hover';
+  }
+  if (condition === 'LIKE_NEW') {
+    return 'bg-[#FEF3C7] text-[#92400E]';
+  }
+  return 'bg-[#FFEDD5] text-[#9A3412]';
+}
+
+export function ProductCard({ item, tradeFor }: { item: Item; tradeFor?: string }) {
+  const description = productCardDescription(item.description);
+
   return (
     <Link
       to={`/items/${item.id}`}
-      className="group block min-w-0 overflow-hidden rounded-lg bg-surface ring-1 ring-border/80 transition duration-300 hover:-translate-y-1 hover:shadow-md hover:ring-primary/20"
+      className="group flex h-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-[16px] border border-[#E5E7EB] bg-white shadow-[0_4px_14px_rgba(15,23,42,0.10)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_12px_28px_rgba(15,23,42,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-hover focus-visible:ring-offset-2"
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-surface-container">
+      <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden rounded-t-[15px] bg-[#F3F4F6]">
         <ItemImage
           src={item.images[0]}
           alt={item.title}
           loading="lazy"
-          className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+          className="size-full object-cover transition duration-200 group-hover:scale-[1.04]"
         />
-        <div className="absolute left-3 top-3">
-          <TypeBadge type={item.type} />
-        </div>
+        <span
+          className={`absolute left-3 top-3 inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium shadow-sm ${
+            item.type === 'gift'
+              ? 'bg-[#0B3B2E] text-white'
+              : 'bg-[#E0B25A] text-[#3A2208]'
+          }`}
+        >
+          {item.type === 'gift' ? 'Cho tặng' : 'Trao đổi'}
+        </span>
       </div>
-      <div className="p-3 sm:p-4">
-        <h3 className="line-clamp-2 min-h-10 text-sm font-bold leading-5 text-text-primary sm:min-h-11 sm:text-[15px] sm:leading-[1.45]">
+      <div className="flex min-w-0 flex-1 flex-col p-3.5 sm:p-4">
+        <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-[#111827] sm:text-[15px]">
           {item.title}
         </h3>
-        <p className="mt-2 line-clamp-2 text-xs leading-5 text-text-muted">
-          {item.description}
+        <p className="mt-1.5 line-clamp-2 text-xs leading-[1.55] text-[#6B7280] sm:text-[13px]">
+          {description}
         </p>
-        <div className="mt-3 flex min-w-0 items-center gap-2">
-          <ConditionBadge condition={item.condition} />
-          <span className="min-w-0 truncate text-xs text-text-muted">{item.category}</span>
-        </div>
-        {owner ? (
-          <div className="mt-3 flex min-w-0 items-center gap-2 text-xs font-semibold text-text-secondary">
-            <Avatar user={owner} size="sm" />
-            <span className="min-w-0 truncate">{owner.name}</span>
-          </div>
+        {tradeFor ? (
+          <p className="mt-1 truncate text-xs text-[#6B7280]">
+            <span className="font-medium text-[#374151]">Đang tìm:</span> {tradeFor}
+          </p>
         ) : null}
-        <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-3 text-xs text-text-muted">
+        <div className="mt-2.5 flex min-w-0 flex-wrap items-center gap-1.5">
+          <span className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${productCardConditionClass(item.condition)}`}>
+            {conditionLabel[item.condition]}
+          </span>
+          <span
+            title={item.category}
+            className="inline-flex min-w-0 flex-1 truncate rounded-full bg-[#F3F4F6] px-2.5 py-1 text-[11px] font-medium text-[#374151]"
+          >
+            {item.category}
+          </span>
+        </div>
+        <div className="mt-auto flex min-w-0 items-center gap-1.5 border-t border-[#F3F4F6] pt-3 text-xs text-[#374151]">
+          <MapPin aria-hidden className="size-3.5 shrink-0" weight="fill" />
           <span className="min-w-0 truncate">{item.district}</span>
-          {owner ? (
-            <span className="shrink-0 font-semibold text-text-secondary">
-              {owner.reputationStars ? `${owner.reputationStars.toLocaleString('vi-VN')} sao` : 'Chưa có đánh giá'}
-            </span>
-          ) : null}
         </div>
       </div>
     </Link>

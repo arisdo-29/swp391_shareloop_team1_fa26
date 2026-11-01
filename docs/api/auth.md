@@ -140,6 +140,8 @@ Quy tắc:
   (FE đưa người dùng sang màn nhập OTP, gọi `/resend-otp` nếu cần);
   `BANNED` → `AUTH_ACCOUNT_BANNED` (kiểm trước, kể cả khi đồng thời bị khoá); `is_active = false` →
   `AUTH_ACCOUNT_LOCKED`. Chỉ `ACTIVE` và `is_active = true` mới được cấp JWT.
+  Khi tài khoản bị khoá kèm lý do (từ Admin), response trả thêm `details.reason` và `message` dạng
+  `"Tài khoản đã bị khoá. Lý do: <lý do>"`. Nếu không có lý do, `message` mặc định là `"Tài khoản đã bị khoá."` và không có `details`.
 - Tài khoản đã xoá mềm coi như không tồn tại (`AUTH_INVALID_CREDENTIALS`).
 
 ```json
@@ -359,7 +361,7 @@ Trả về từ `/verify-otp` và `/login`.
 | `AUTH_OTP_RESEND_TOO_SOON`      | 429  | `/register`, `/resend-otp` gửi lại trước `otp_resend_cooldown_seconds`; `details.retryAfterSeconds`. `/forgot-password` không trả mã này |
 | `AUTH_EMAIL_NOT_VERIFIED`       | 403  | Đăng nhập khi tài khoản còn `PENDING_VERIFICATION`                                  |
 | `AUTH_INVALID_CREDENTIALS`      | 401  | Sai email hoặc sai mật khẩu (không phân biệt)                                       |
-| `AUTH_ACCOUNT_LOCKED`           | 403  | Tài khoản bị khoá (`is_active = false`)                                             |
+| `AUTH_ACCOUNT_LOCKED`           | 403  | Tài khoản bị khoá (`is_active = false`); kèm `details.reason` nếu Admin nhập lý do khi khoá |
 | `AUTH_ACCOUNT_BANNED`           | 403  | Tài khoản bị cấm (`status = BANNED`, hết sao uy tín), message "Tài khoản đã bị cấm." |
 | `AUTH_CURRENT_PASSWORD_INCORRECT` | 400 | Đổi mật khẩu: mật khẩu hiện tại không đúng, `field` = `currentPassword`            |
 | `AUTH_NEW_PASSWORD_SAME_AS_CURRENT` | 400 | Đổi / đặt lại mật khẩu: mật khẩu mới trùng mật khẩu hiện tại, `field` = `newPassword` |
@@ -372,6 +374,10 @@ Quyết định đã chốt: dùng `429` cho gọi quá nhanh (`AUTH_OTP_RESEND_
 
 ```json
 { "code": "AUTH_OTP_INVALID", "message": "Mã OTP không đúng.", "details": { "remainingAttempts": 3 }, "traceId": "a1b2c3d4" }
+```
+
+```json
+{ "code": "AUTH_ACCOUNT_LOCKED", "message": "Tài khoản đã bị khoá. Lý do: spam bài", "details": { "reason": "spam bài" }, "traceId": "a1b2c3d4" }
 ```
 
 ```json

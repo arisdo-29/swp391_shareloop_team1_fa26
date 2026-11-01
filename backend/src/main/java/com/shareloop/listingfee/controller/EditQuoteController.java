@@ -1,7 +1,6 @@
 package com.shareloop.listingfee.controller;
 
 import com.shareloop.common.security.CurrentUserId;
-import com.shareloop.item.entity.OfferType;
 import com.shareloop.listingfee.dto.EditQuote;
 import com.shareloop.listingfee.service.PostFeeService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -10,7 +9,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Controller mỏng: chỉ nhận request, gọi service, trả DTO thẳng (không bọc). Lỗi để GlobalExceptionHandler xử lý. */
@@ -29,10 +27,7 @@ public class EditQuoteController {
     // id người dùng lấy từ token, không nhận từ client.
     @Operation(summary = "Báo giá lượt sửa bài của tôi (miễn phí hay giữ bao nhiêu Credit)")
     @GetMapping("/{id}/edit-quote")
-    public EditQuote getEditQuote(
-            @PathVariable long id,
-            @RequestParam(required = false) OfferType offerType,
-            @Parameter(hidden = true) @CurrentUserId Long currentUserId) {
-        return postFeeService.quoteEdit(id, currentUserId, offerType);
+    public EditQuote getEditQuote(@PathVariable long id, @Parameter(hidden = true) @CurrentUserId Long currentUserId) {
+        return postFeeService.quoteEdit(id, currentUserId);
     }
 }

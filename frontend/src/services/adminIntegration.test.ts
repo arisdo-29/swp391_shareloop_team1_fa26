@@ -48,7 +48,7 @@ describe('Admin API integrations', () => {
     expect(get).toHaveBeenNthCalledWith(2, '/api/v1/admin/finance/users/7/wallet');
   });
 
-  it('danh sách đơn nạp không ép status và submittedOnly khi không truyền', async () => {
+  it('danh sách đơn nạp không ép status khi không truyền', async () => {
     const get = vi
       .spyOn(http, 'get')
       .mockResolvedValue({ data: { items: [], page: 0, size: 10, totalElements: 0 } });

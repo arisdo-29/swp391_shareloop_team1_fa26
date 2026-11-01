@@ -6,10 +6,31 @@ const TOKEN_KEY = 'shareloop:accessToken';
 const TOKEN_TYPE_KEY = 'shareloop:tokenType';
 const TOKEN_EXPIRES_AT_KEY = 'shareloop:tokenExpiresAt';
 const USER_ID_KEY = 'shareloop:userId';
-let unauthorizedHandler: (() => void) | null = null;
+const BLOCKED_ACCOUNT_CODES = new Set(['AUTH_ACCOUNT_LOCKED', 'AUTH_ACCOUNT_BANNED']);
 
-export function setUnauthorizedHandler(handler: (() => void) | null) {
+export interface SessionTermination {
+  code: string;
+  message: string;
+}
+
+let unauthorizedHandler: ((termination: SessionTermination) => void) | null = null;
+
+export function setUnauthorizedHandler(handler: ((termination: SessionTermination) => void) | null) {
   unauthorizedHandler = handler;
+}
+
+function isLoginRequest(url: string | undefined) {
+  if (!url) return false;
+  return url.split('?')[0].replace(/\/+$/, '').endsWith('/api/v1/auth/login');
+}
+
+function blockedAccountMessage(body: Partial<ApiError>) {
+  const reason = typeof body.details?.reason === 'string' ? body.details.reason.trim() : '';
+  const message = body.message?.trim();
+  if (reason && !message?.includes(reason)) {
+    return `${message || 'Tài khoản đã bị khoá.'} Lý do: ${reason}`;
+  }
+  return message || (body.code === 'AUTH_ACCOUNT_BANNED' ? 'Tài khoản đã bị cấm.' : 'Tài khoản đã bị khoá.');
 }
 
 export const tokenStorage = {
@@ -72,13 +93,23 @@ http.interceptors.response.use(
   (error: AxiosError<Partial<ApiError>>) => {
     const status = error.response?.status ?? 0;
     const body = error.response?.data;
-    if (status === 401 && body?.code !== 'AUTH_INVALID_CREDENTIALS') {
+    const code = body?.code ?? (status === 0 ? 'NETWORK_ERROR' : 'UNKNOWN_ERROR');
+    const blockedAccount = BLOCKED_ACCOUNT_CODES.has(code) && (status === 401 || status === 403);
+    const expiredSession = status === 401 && code !== 'AUTH_INVALID_CREDENTIALS';
+    if (!isLoginRequest(error.config?.url) && (blockedAccount || expiredSession)) {
       const hadApiToken = Boolean(tokenStorage.get());
       tokenStorage.clear();
-      if (hadApiToken) unauthorizedHandler?.();
+      if (hadApiToken) {
+        unauthorizedHandler?.({
+          code,
+          message: blockedAccount
+            ? blockedAccountMessage(body ?? { code })
+            : 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+        });
+      }
     }
     const apiError: ApiError = {
-      code: body?.code ?? (status === 0 ? 'NETWORK_ERROR' : 'UNKNOWN_ERROR'),
+      code,
       message: body?.message ?? 'Không kết nối được máy chủ, vui lòng thử lại.',
       field: body?.field,
       details: body?.details,

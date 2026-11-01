@@ -161,7 +161,7 @@ export function Register() {
             autoComplete="new-password"
             error={errors.password}
           />
-          <Button size="lg" className="w-full" disabled={processing}>
+          <Button size="lg" className="auth-entry-submit w-full" disabled={processing}>
             {processing ? 'Đang gửi mã...' : 'Đăng ký'}
           </Button>
         </div>

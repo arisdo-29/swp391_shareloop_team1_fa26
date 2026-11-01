@@ -47,6 +47,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -1506,6 +1507,7 @@ class ReportServiceTest {
                         eq("Xác minh hàng không đúng mô tả"));
     }
 
+<<<<<<< HEAD
     // ---------- D-07: báo cáo bài (BC-03 yêu cầu giải trình, BC-04 bác bỏ mở lại bài, BC-05 chấp thuận đóng báo cáo
     // khác)
 
@@ -1784,5 +1786,79 @@ class ReportServiceTest {
                         org.mockito.ArgumentMatchers.<java.util.Map<String, Object>>argThat(
                                 data -> List.of(42L, 43L).equals(data.get("closedReportIds"))),
                         anyString());
+=======
+    @Test
+    @DisplayName("U5-BE: findDisputeResponseDueAt trả null khi requestId null")
+    void findDisputeResponseDueAt_whenNullRequestId_returnsNull() {
+        assertThat(reportService.findDisputeResponseDueAt(null)).isNull();
+    }
+
+    @Test
+    @DisplayName("U5-BE: findDisputeResponseDueAt trả responseDueAt của khiếu nại đang mở")
+    void findDisputeResponseDueAt_whenDisputeExists_returnsDueAt() {
+        Long reqId = 123L;
+        Instant expectedDue = Instant.parse("2026-11-03T10:00:00Z");
+        Report report = new Report(
+                10L, TargetType.REQUEST, null, null, reqId, ReportReason.NOT_AS_DESCRIBED, "Lý do", ReportStage.BEFORE);
+        ReflectionTestUtils.setField(report, "responseDueAt", expectedDue);
+
+        when(reportRepository.findFirstByTargetTypeAndRequestIdAndStatusInOrderByCreatedAtDesc(
+                        eq(TargetType.REQUEST), eq(reqId), any()))
+                .thenReturn(Optional.of(report));
+
+        Instant actualDue = reportService.findDisputeResponseDueAt(reqId);
+        assertThat(actualDue).isEqualTo(expectedDue);
+    }
+
+    @Test
+    @DisplayName("U5-BE: findDisputeResponseDueAt trả null khi không có khiếu nại đang mở")
+    void findDisputeResponseDueAt_whenNoDispute_returnsNull() {
+        Long reqId = 123L;
+        when(reportRepository.findFirstByTargetTypeAndRequestIdAndStatusInOrderByCreatedAtDesc(
+                        eq(TargetType.REQUEST), eq(reqId), any()))
+                .thenReturn(Optional.empty());
+
+        assertThat(reportService.findDisputeResponseDueAt(reqId)).isNull();
+    }
+
+    @Test
+    @DisplayName("U5-BE: findDisputeResponseDueAtMap tra cứu theo lô cho danh sách requestId")
+    void findDisputeResponseDueAtMap_batchLookup_success() {
+        Long reqId1 = 101L;
+        Long reqId2 = 102L;
+        Instant due1 = Instant.parse("2026-11-03T12:00:00Z");
+        Instant due2 = Instant.parse("2026-11-03T15:00:00Z");
+
+        Report r1 = new Report(
+                10L,
+                TargetType.REQUEST,
+                null,
+                null,
+                reqId1,
+                ReportReason.NOT_AS_DESCRIBED,
+                "Lý do 1",
+                ReportStage.BEFORE);
+        ReflectionTestUtils.setField(r1, "responseDueAt", due1);
+
+        Report r2 = new Report(
+                11L,
+                TargetType.REQUEST,
+                null,
+                null,
+                reqId2,
+                ReportReason.NOT_AS_DESCRIBED,
+                "Lý do 2",
+                ReportStage.BEFORE);
+        ReflectionTestUtils.setField(r2, "responseDueAt", due2);
+
+        when(reportRepository.findByTargetTypeAndRequestIdInAndStatusIn(
+                        eq(TargetType.REQUEST), eq(List.of(reqId1, reqId2)), any()))
+                .thenReturn(List.of(r1, r2));
+
+        Map<Long, Instant> map = reportService.findDisputeResponseDueAtMap(List.of(reqId1, reqId2));
+        assertThat(map).hasSize(2).containsEntry(reqId1, due1).containsEntry(reqId2, due2);
+        assertThat(reportService.findDisputeResponseDueAtMap(List.of())).isEmpty();
+        assertThat(reportService.findDisputeResponseDueAtMap(null)).isEmpty();
+>>>>>>> origin/develop
     }
 }
