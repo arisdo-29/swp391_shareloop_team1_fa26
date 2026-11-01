@@ -53,7 +53,11 @@ class ConfigServiceIT extends IntegrationTest {
     void q01_everySeededChecklistItemHasPassConditionWithoutSemicolon() {
         List<ChecklistItem> checklist = configService.checklistItems();
 
-        assertThat(checklist).hasSize(10);
+        // M6: food_safety đã xoá mềm nên còn 9 câu
+        assertThat(checklist).hasSize(9);
+        assertThat(checklist).extracting(ChecklistItem::key).doesNotContain("food_safety");
+        // Chỉ bỏ câu checklist, từ khoá cấm về thực phẩm (V202610241200) vẫn chặn tại form
+        assertThat(configService.lexicon()).extracting(LexiconEntry::term).contains("thực phẩm tươi sống");
         assertThat(checklist).allSatisfy(item -> {
             assertThat(item.description()).startsWith("Đạt khi").contains("Từ chối nếu");
             assertThat(item.statement()).doesNotContain(";");

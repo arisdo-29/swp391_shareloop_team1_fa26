@@ -144,6 +144,8 @@ Các endpoint quản lý bộ điều kiện đạt checklist kiểm duyệt bà
 
 **Mô tả điều kiện đạt (Q01):** mỗi mục có thêm `description` dạng `Đạt khi ... Từ chối nếu ...`, lưu ở `extra.description` của chính dòng `CHECKLIST`, không thêm bảng hay cột. Trang Duyệt bài hiện mô tả ngay dưới tên mục. `GET` trả `description` (`null` khi chưa có). `POST`/`PUT` nhận `description` không bắt buộc, tối đa 1000 ký tự: bỏ trường thì giữ mô tả cũ, chuỗi rỗng thì xoá mô tả. Migration `V202610291200` đổi 10 câu seed theo bảng của Tân (chỉ khi câu chưa bị Admin sửa) và thêm mô tả cho mục chưa có.
 
+**Bỏ thực phẩm (M6):** migration `V202611011600__setting_retire_food_safety_checklist` xoá mềm mục `food_safety`, checklist seed còn 9 câu. Các từ khoá cấm nhóm `FOOD_BEVERAGE` (`V202610241200`) vẫn giữ để chặn tại form.
+
 ### GET /api/v1/admin/checklist
 
 Trả toàn bộ danh sách các câu hỏi checklist theo thứ tự `sort_order`, bao gồm cả các mục đã ẩn (`active: false`).
