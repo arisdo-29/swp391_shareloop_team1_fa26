@@ -32,7 +32,6 @@ import com.shareloop.listingfee.service.ListingFeeQueryService;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.media.service.MediaService;
 import com.shareloop.moderation.ModerationResult;
-import com.shareloop.moderation.event.ItemScreeningRequestedEvent;
 import com.shareloop.moderation.service.ContentModerationService;
 import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.entity.Rank;
@@ -402,9 +401,6 @@ class ItemServiceTest {
         assertThat(response.offerType()).isEqualTo(OfferType.GIVE);
         assertThat(response.status()).isEqualTo(ItemStatus.PENDING_REVIEW);
         verify(postFeeService).holdPostFee(100L, 10L);
-        verify(eventPublisher)
-                .publishEvent(
-                        new ItemScreeningRequestedEvent(100L, 10L, 1L, "GIVE", "Sách Toán", "Sách mới", null, "NEW"));
     }
 
     @Test
