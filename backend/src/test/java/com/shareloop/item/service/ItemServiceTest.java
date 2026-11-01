@@ -140,12 +140,29 @@ class ItemServiceTest {
         lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_GIVE_ITEMS)).thenReturn(5);
         // Mock mặc định trả false nên phải cho phép đăng bài, riêng test 0 sao sẽ ghi đè
         lenient().when(reputationService.canPost(anyLong())).thenReturn(true);
+        lenient().when(userService.isAdmin(anyLong())).thenReturn(false);
         lenient()
                 .when(reputationService.getReputationSummary(10L))
                 .thenReturn(new ReputationSummary(10L, 4, Rank.SILVER, 0.9));
         lenient()
                 .when(userService.findBriefs(List.of(10L)))
                 .thenReturn(Map.of(10L, new UserBrief(10L, "Người thật", "user@example.test")));
+    }
+
+    @Test
+    void createItem_whenAdmin_throwsItemAdminBlockedAndHoldsNoFee() {
+        // given
+        when(userService.isAdmin(10L)).thenReturn(true);
+        CreateItemRequest request = new CreateItemRequest(
+                1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
+
+        // when
+        assertThatThrownBy(() -> itemService.createItem(10L, request))
+                // then
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_ADMIN_BLOCKED);
+        verify(itemRepository, never()).saveAndFlush(any(Item.class));
+        verifyNoInteractions(postFeeService, contentModerationService, mediaService);
     }
 
     @Test
@@ -540,6 +557,36 @@ class ItemServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
                         .isEqualTo(AreaErrorCode.CATALOG_AREA_NOT_FOUND));
+
+        verify(contentModerationService, never()).checkPost(anyLong(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Sửa bài thất bại khi người sửa là quản trị viên")
+    void updateItem_whenAdmin_throwsItemAdminBlocked() {
+        Item item = new Item(
+                10L, 1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, "NXB Trẻ");
+        ReflectionTestUtils.setField(item, "id", 100L);
+        when(itemRepository.findById(100L)).thenReturn(Optional.of(item));
+        when(userService.isAdmin(10L)).thenReturn(true);
+
+        UpdateItemRequest request = new UpdateItemRequest(
+                1L,
+                1L,
+                OfferType.GIVE,
+                "Sách Toán",
+                "Sách mới",
+                null,
+                ItemCondition.NEW,
+                null,
+                "NXB Trẻ",
+                null,
+                null,
+                null);
+
+        assertThatThrownBy(() -> itemService.updateItem(100L, 10L, request))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_ADMIN_BLOCKED);
 
         verify(contentModerationService, never()).checkPost(anyLong(), any(), any());
     }

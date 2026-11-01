@@ -458,4 +458,14 @@ public class UserService {
         }
         return trimmed;
     }
+
+    /**
+     * Kiểm tra tài khoản có cờ is_admin = true hay không (TK-13).
+     *
+     * <p>Người gọi: module item (ItemService), module request (RequestService) để chặn quản trị viên tham gia giao dịch.
+     */
+    @Transactional(readOnly = true)
+    public boolean isAdmin(long userId) {
+        return userRepository.existsByIdAndAdminTrue(userId);
+    }
 }

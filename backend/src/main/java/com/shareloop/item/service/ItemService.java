@@ -652,6 +652,9 @@ public class ItemService {
     }
 
     private void requireCanPost(Long userId) {
+        if (userService != null && userService.isAdmin(userId)) {
+            throw new BusinessException(ItemErrorCode.ITEM_ADMIN_BLOCKED);
+        }
         if (!reputationService.canPost(userId)) {
             throw new BusinessException(ItemErrorCode.ITEM_REPUTATION_BLOCKED);
         }

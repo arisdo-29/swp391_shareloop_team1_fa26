@@ -99,6 +99,18 @@ class RequestServiceTest {
         lenient().when(configService.getInt(ConfigKey.MAX_PENDING_REQUESTS)).thenReturn(5);
         lenient().when(reputationService.canRequest(anyLong())).thenReturn(true);
         lenient().when(userService.isLocked(anyLong())).thenReturn(false);
+        lenient().when(userService.isAdmin(anyLong())).thenReturn(false);
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi người gửi yêu cầu là quản trị viên (TK-13)")
+    void createRequest_whenAdmin_throwsRequestAdminBlocked() {
+        when(userService.isAdmin(10L)).thenReturn(true);
+
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_ADMIN_BLOCKED);
+                });
     }
 
     @Test
