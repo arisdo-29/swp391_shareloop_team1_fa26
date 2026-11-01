@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminFinanceApi } from '../../services/adminFinanceApi';
@@ -8,7 +8,7 @@ import type { TopUpOrderDetailResponse } from '../../services/paymentApi';
 import { AdminTopUpOrders } from './AdminTopUpOrders';
 
 vi.mock('../../services/adminFinanceApi', () => ({
-  adminFinanceApi: { topUpOrders: vi.fn(), approveTopUp: vi.fn(), rejectTopUp: vi.fn() },
+  adminFinanceApi: { topUpOrders: vi.fn() },
 }));
 
 function order(overrides: Partial<TopUpOrderDetailResponse>): TopUpOrderDetailResponse {
@@ -17,12 +17,12 @@ function order(overrides: Partial<TopUpOrderDetailResponse>): TopUpOrderDetailRe
     amountVnd: 50000,
     credits: 50,
     status: 'PENDING',
-    provider: 'MANUAL',
+    provider: 'VNPAY',
     userId: 11,
     vndPerCredit: 1000,
     createdAt: '2026-10-20T03:00:00Z',
     expiresAt: '2026-10-20T04:00:00Z',
-    submittedAt: '2026-10-20T03:10:00Z',
+    submittedAt: null,
     reviewedBy: null,
     reviewedAt: null,
     reviewNote: null,
@@ -40,18 +40,13 @@ const orders = [
     status: 'SUCCESS',
     userName: 'Bình Trần',
     userEmail: 'binh@example.com',
-    reviewedBy: 9,
-    reviewedByName: 'Quản trị Minh',
     reviewedAt: '2026-10-19T03:00:00Z',
-    reviewNote: 'Đã đối chiếu sao kê',
   }),
   order({
     orderCode: 'SLREJECT',
     status: 'FAILED',
     userName: 'Chi Lê',
     userEmail: 'chi@example.com',
-    reviewedBy: 9,
-    reviewedByName: 'Quản trị Minh',
     reviewedAt: '2026-10-18T03:00:00Z',
   }),
 ];
@@ -70,98 +65,49 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function rowOf(name: string) {
-  return screen.getByText(name).closest('tr')!;
-}
-
 describe('AdminTopUpOrders', () => {
-  it('mở trang là tải tất cả đơn: không ép trạng thái và không chỉ lấy đơn đã xác nhận', async () => {
+  it('mở trang là tải tất cả đơn mà không ép trạng thái', async () => {
     render(<AdminTopUpOrders />);
 
     await screen.findByText('Lan An');
     expect(adminFinanceApi.topUpOrders).toHaveBeenCalledWith({ page: 0, size: 10 });
     expect((screen.getByLabelText('Trạng thái') as HTMLSelectElement).value).toBe('');
-    expect((screen.getByLabelText('Chỉ đơn đã xác nhận thanh toán') as HTMLInputElement).checked).toBe(false);
   });
 
-  it('hiện tên người dùng và tên người duyệt, không hiện mã đơn, ID, cổng thanh toán hay tỷ giá', async () => {
+  it('hiện thông tin người dùng và trạng thái, không hiện chi tiết kỹ thuật', async () => {
     render(<AdminTopUpOrders />);
     await screen.findByText('Lan An');
 
     expect(screen.getByText('an@example.com')).toBeTruthy();
-    expect(within(rowOf('Bình Trần')).getByText(/Người duyệt: Quản trị Minh/)).toBeTruthy();
-    expect(within(rowOf('Bình Trần')).getByText('Thành công')).toBeTruthy();
-    expect(within(rowOf('Chi Lê')).getByText('Từ chối')).toBeTruthy();
+    expect(screen.getAllByText('Thành công').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Thất bại').length).toBeGreaterThan(0);
     const page = document.body.textContent ?? '';
-    for (const hidden of ['SL5F3A9C0D1E2B44A', 'User #', 'Admin:', 'MANUAL', '/Credit', 'Nguồn', 'Không thể duyệt thủ công']) {
+    for (const hidden of ['SL5F3A9C0D1E2B44A', 'User #', 'Admin:', 'VNPAY', '/Credit', 'Nguồn']) {
       expect(page).not.toContain(hidden);
     }
   });
 
-  it('chỉ đơn chờ duyệt đã xác nhận có nút xử lý, đơn đã xử lý để dấu gạch', async () => {
+  it('chỉ hiển thị danh sách theo dõi, không có thao tác duyệt thủ công', async () => {
     render(<AdminTopUpOrders />);
     await screen.findByText('Lan An');
 
-    expect(within(rowOf('Lan An')).getByRole('button', { name: 'Phê duyệt' })).toBeTruthy();
-    expect(within(rowOf('Bình Trần')).queryByRole('button')).toBeNull();
-    expect(within(rowOf('Bình Trần')).getAllByText('—').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Phê duyệt' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Từ chối' })).toBeNull();
   });
 
-  it('lọc theo trạng thái và checkbox gửi đúng tham số', async () => {
+  it('lọc theo trạng thái gửi đúng tham số', async () => {
     const user = userEvent.setup();
     render(<AdminTopUpOrders />);
     await screen.findByText('Lan An');
 
     await user.selectOptions(screen.getByLabelText('Trạng thái'), 'PENDING');
-    await user.click(screen.getByLabelText('Chỉ đơn đã xác nhận thanh toán'));
 
     await waitFor(() =>
       expect(adminFinanceApi.topUpOrders).toHaveBeenLastCalledWith({
         status: 'PENDING',
-        submittedOnly: true,
         page: 0,
         size: 10,
       }),
-    );
-  });
-
-  it('phê duyệt đơn xác nhận bằng tên người dùng rồi tải lại danh sách', async () => {
-    const user = userEvent.setup();
-    vi.mocked(adminFinanceApi.approveTopUp).mockResolvedValue(order({ status: 'SUCCESS' }));
-    render(<AdminTopUpOrders />);
-    await screen.findByText('Lan An');
-
-    await user.click(within(rowOf('Lan An')).getByRole('button', { name: 'Phê duyệt' }));
-    const dialog = screen.getByRole('dialog', { name: 'Xác nhận xử lý đơn nạp' });
-    expect(within(dialog).getByText('Lan An')).toBeTruthy();
-    expect(dialog.textContent).not.toContain('#11');
-    await user.click(within(dialog).getByRole('button', { name: 'Xác nhận' }));
-
-    await waitFor(() =>
-      expect(adminFinanceApi.approveTopUp).toHaveBeenCalledWith('SL5F3A9C0D1E2B44A7B8C9D0E1F2A3B4C', ''),
-    );
-    expect(await screen.findByText(/Đã phê duyệt đơn nạp/)).toBeTruthy();
-    expect(adminFinanceApi.topUpOrders).toHaveBeenCalledTimes(2);
-  });
-
-  it('từ chối đơn bắt buộc có lý do', async () => {
-    const user = userEvent.setup();
-    vi.mocked(adminFinanceApi.rejectTopUp).mockResolvedValue(order({ status: 'FAILED' }));
-    render(<AdminTopUpOrders />);
-    await screen.findByText('Lan An');
-
-    await user.click(within(rowOf('Lan An')).getByRole('button', { name: 'Từ chối' }));
-    const dialog = screen.getByRole('dialog', { name: 'Xác nhận xử lý đơn nạp' });
-    const confirm = within(dialog).getByRole('button', { name: 'Xác nhận' }) as HTMLButtonElement;
-    expect(confirm.disabled).toBe(true);
-    await user.type(within(dialog).getByRole('textbox'), 'Chưa nhận được tiền');
-    await user.click(confirm);
-
-    await waitFor(() =>
-      expect(adminFinanceApi.rejectTopUp).toHaveBeenCalledWith(
-        'SL5F3A9C0D1E2B44A7B8C9D0E1F2A3B4C',
-        'Chưa nhận được tiền',
-      ),
     );
   });
 

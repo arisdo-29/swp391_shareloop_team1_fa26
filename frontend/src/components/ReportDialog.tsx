@@ -109,7 +109,7 @@ export function ReportDialog({ target, contextLabel, onClose, onSuccess }: Repor
       {evidenceFiles.length ? (
         <p className="mt-2 text-xs text-text-muted">Đã chọn {evidenceFiles.length} ảnh minh chứng.</p>
       ) : null}
-      {error ? <div className="mt-3 rounded-md bg-red-50 p-3 text-xs text-error">{error}</div> : null}
+      {error ? <div className="mt-3 rounded-md bg-error-soft p-3 text-xs text-error">{error}</div> : null}
       <div className="mt-6 flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose} disabled={submitting}>Hủy</Button>
         <Button onClick={() => void submit()} disabled={submitting || !reason}>

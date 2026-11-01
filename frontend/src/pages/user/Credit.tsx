@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type Dispatch } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import { Alert, Button, Field, PageHeader, StatusBadge } from '../../components/ui';
@@ -51,11 +51,11 @@ const paymentStatusLabels: Record<PaymentOrderStatus, string> = {
   EXPIRED: 'Đơn đã hết hạn',
 };
 
-const paymentProviderLabels: Record<PaymentProvider, string> = {
-  VNPAY: 'VNPAY',
-  MOCK: 'Thanh toán thử nghiệm',
-  MANUAL: 'QR minh họa, quản trị viên duyệt',
-};
+function paymentProviderLabel(provider: PaymentProvider) {
+  if (provider === 'VNPAY') return 'VNPAY';
+  if (provider === 'MOCK') return 'Thanh toán thử nghiệm';
+  return 'Không hỗ trợ';
+}
 
 // Mức chọn nhanh chỉ điền sẵn ô số tiền; backend vẫn kiểm tra mức tối thiểu và bước tiền.
 const QUICK_TOPUP_AMOUNTS = [20_000, 50_000, 100_000, 200_000];
@@ -72,7 +72,6 @@ function topUpCreateErrorMessage(error: unknown) {
 
 export function Credit() {
   const user = useAppSelector(selectCurrentUser)!;
-  const navigate = useNavigate();
   const location = useLocation();
   const [apiAmountVnd, setApiAmountVnd] = useState('');
   const [step, setStep] = useState<Step>('select');
@@ -228,12 +227,6 @@ export function Credit() {
       .getOrder(code)
       .then((order) => {
         if (!active) return;
-        if (order.provider === 'MANUAL' && order.status !== 'SUCCESS') {
-          navigate('/wallet/topup/manual-checkout?orderCode=' + encodeURIComponent(code), {
-            replace: true,
-          });
-          return;
-        }
         setApiTopUpOrder({ ...order, redirectUrl: '' });
         setStep('pending');
         setReturnState(
@@ -260,7 +253,7 @@ export function Credit() {
     return () => {
       active = false;
     };
-  }, [location.search, navigate, refreshWallet, orderCheckKey]);
+  }, [location.search, refreshWallet, orderCheckKey]);
 
   const selectedItemTitle = selectedEntry ? itemTitleOf(selectedEntry, itemTitles) : undefined;
 
@@ -367,7 +360,7 @@ export function Credit() {
         <section id="topup" aria-label="Nạp Credit" className="scroll-mt-24">
           {loadPendingTopUp()?.orderCode ? (
             <Link
-              className="mb-3 inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline"
+              className="mb-3 inline-flex min-h-11 items-center text-sm font-semibold text-link hover:underline"
               to={`/credit?orderCode=${encodeURIComponent(loadPendingTopUp()!.orderCode)}`}
             >
               Mở lại đơn nạp gần nhất
@@ -589,7 +582,7 @@ function ApiTopUpOrder({
           <DetailRow label="Mã đơn" value={order.orderCode} />
           <DetailRow label="Số tiền" value={formatVnd(order.amountVnd)} />
           <DetailRow label="Credit dự kiến" value={`${order.credits} Credit`} />
-          <DetailRow label="Cổng thanh toán" value={paymentProviderLabels[order.provider]} />
+          <DetailRow label="Cổng thanh toán" value={paymentProviderLabel(order.provider)} />
           <DetailRow label="Trạng thái" value={paymentStatusLabels[order.status]} />
         </dl>
         {order.provider === 'MOCK' && !paid ? (
@@ -667,7 +660,7 @@ export function HeldFeesSection({
             >
               <div className="min-w-0">
                 <Link
-                  className="block truncate font-semibold text-primary hover:underline"
+                  className="block truncate font-semibold text-link hover:underline"
                   to={`/items/${heldFee.itemId}`}
                 >
                   {heldFee.title}

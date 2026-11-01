@@ -52,7 +52,7 @@ export function AdminConfigs() {
       />
       <p className="mb-5 rounded-md bg-primary-faint p-4 text-sm leading-6 text-text-secondary">
         Hạng thành viên và quy tắc điểm uy tín được cấu hình ở trang{' '}
-        <Link className="font-semibold text-primary underline" to="/admin/reputation">
+        <Link className="font-semibold text-link underline" to="/admin/reputation">
           Uy tín & Hạng
         </Link>
         .

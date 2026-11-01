@@ -28,16 +28,17 @@ import {
   type AreaOption,
 } from '../../services/mappers';
 import {
-  BROWSE_PAGE_SIZE,
   positiveIntegerParam,
   resetBrowseSearchParams,
   updateBrowseSearchParams,
   type BrowseFilterKey,
 } from '../../utils/browseFilters';
 import { useDebouncedValue } from '../../utils/useDebouncedValue';
+import './browse.css';
 
 // Giá trị hình thức ở thanh địa chỉ (gift, trade) khác tên của API
 const OFFER_TYPE_BY_TYPE: Record<ItemType, OfferType> = { gift: 'GIVE', trade: 'SWAP' };
+const BROWSE_RESULTS_PAGE_SIZE = 20;
 const pendingBrowseItemRequests = new Map<string, ReturnType<typeof itemApi.list>>();
 
 function loadBrowseItems(params: Parameters<typeof itemApi.list>[0]) {
@@ -54,55 +55,21 @@ function loadBrowseItems(params: Parameters<typeof itemApi.list>[0]) {
   return request;
 }
 
-function normalizeSearchText(value: string) {
-  return value
-    .trim()
-    .toLocaleLowerCase('vi-VN')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/\s+/g, ' ');
-}
+function normalizeBrowsePage(
+  response: Awaited<ReturnType<typeof itemApi.list>>,
+  requestedPage: number,
+) {
+  if (response.items.length <= BROWSE_RESULTS_PAGE_SIZE) return response;
 
-export function filterItemsByKeyword(items: ItemResponse[], query: string) {
-  const keyword = query.trim().toLocaleLowerCase('vi-VN').replace(/\s+/g, ' ');
-  if (!keyword) return items;
-
-  const searchableText = (item: ItemResponse) => `${item.title} ${item.description}`
-    .toLocaleLowerCase('vi-VN')
-    .replace(/\s+/g, ' ');
-  const exactMatches = items.filter((item) => searchableText(item).includes(keyword));
-  if (exactMatches.length) return exactMatches;
-
-  const normalizedKeyword = normalizeSearchText(keyword);
-  return items.filter((item) => normalizeSearchText(searchableText(item)).includes(normalizedKeyword));
-}
-
-async function loadFilteredBrowseItems(params: NonNullable<Parameters<typeof itemApi.list>[0]>) {
-  const { page = 0, size = BROWSE_PAGE_SIZE, q, ...filters } = params;
-  if (!q) return loadBrowseItems(params);
-
-  const firstPage = await loadBrowseItems({ ...filters, q, page: 0, size });
-  const sourceTotalPages = firstPage.totalPages
-    ?? Math.ceil(firstPage.totalElements / (firstPage.size || size));
-  const remainingPages = sourceTotalPages > 1
-    ? await Promise.all(Array.from(
-      { length: sourceTotalPages - 1 },
-      (_, index) => loadBrowseItems({ ...filters, q, page: index + 1, size }),
-    ))
-    : [];
-  const matches = filterItemsByKeyword(
-    [firstPage, ...remainingPages].flatMap((response) => response.items),
-    q,
-  );
-  const start = page * size;
-
+  const totalElements = response.totalElements || response.items.length;
+  const start = requestedPage * BROWSE_RESULTS_PAGE_SIZE;
   return {
-    items: matches.slice(start, start + size),
-    page,
-    size,
-    totalElements: matches.length,
-    totalPages: Math.ceil(matches.length / size),
+    ...response,
+    items: response.items.slice(start, start + BROWSE_RESULTS_PAGE_SIZE),
+    page: requestedPage,
+    size: BROWSE_RESULTS_PAGE_SIZE,
+    totalElements,
+    totalPages: Math.ceil(totalElements / BROWSE_RESULTS_PAGE_SIZE),
   };
 }
 
@@ -126,8 +93,10 @@ export function Browse() {
   const categoryId = positiveIntegerParam(params.get('categoryId'));
   const category = categoryId ? String(categoryId) : '';
   const conditionParam = params.get('condition');
-  const condition: ApiCondition | '' = (CONDITIONS as readonly string[]).includes(conditionParam ?? '')
-    ? conditionParam as ApiCondition
+  const condition: ApiCondition | '' = (CONDITIONS as readonly string[]).includes(
+    conditionParam ?? '',
+  )
+    ? (conditionParam as ApiCondition)
     : '';
   const legacyDistrict = params.get('district') ?? '';
   const rawAreaId = params.get('areaId') ?? legacyDistrict;
@@ -143,7 +112,9 @@ export function Browse() {
   useEffect(() => {
     if (debouncedQuery === lastAppliedQueryRef.current) return;
     lastAppliedQueryRef.current = debouncedQuery;
-    setParams((current) => updateBrowseSearchParams(current, { q: debouncedQuery }), { replace: true });
+    setParams((current) => updateBrowseSearchParams(current, { q: debouncedQuery }), {
+      replace: true,
+    });
     setPage(0);
   }, [debouncedQuery, setParams]);
 
@@ -194,20 +165,23 @@ export function Browse() {
       condition: condition || undefined,
       offerType: type ? OFFER_TYPE_BY_TYPE[type] : undefined,
     };
-    const request = loadFilteredBrowseItems({
+    const request = loadBrowseItems({
       ...requestParams,
       boosted: boostedOnly || undefined,
       ...(sortMode === 'expiring' ? { sort: sortMode } : {}),
       page,
-      size: BROWSE_PAGE_SIZE,
+      size: BROWSE_RESULTS_PAGE_SIZE,
     });
     request
-      .then((response) => {
+      .then((rawResponse) => {
         if (!active) return;
+        const response = normalizeBrowsePage(rawResponse, page);
         setItemResponses(response.items);
         setPage(response.page);
         setTotalElements(response.totalElements);
-        setTotalPages(response.totalPages ?? Math.ceil(response.totalElements / BROWSE_PAGE_SIZE));
+        setTotalPages(
+          response.totalPages ?? Math.ceil(response.totalElements / BROWSE_RESULTS_PAGE_SIZE),
+        );
       })
       .catch((caught) => {
         if (!active) return;
@@ -227,10 +201,13 @@ export function Browse() {
 
   useEffect(() => {
     if (!legacyDistrict || params.has('areaId')) return;
-    const matchedAreaId = positiveIntegerParam(legacyDistrict)
-      ?? districts.find((area) => area.label === legacyDistrict || area.name === legacyDistrict)?.id;
+    const matchedAreaId =
+      positiveIntegerParam(legacyDistrict) ??
+      districts.find((area) => area.label === legacyDistrict || area.name === legacyDistrict)?.id;
     if (!matchedAreaId) return;
-    setParams(updateBrowseSearchParams(params, { areaId: String(matchedAreaId) }), { replace: true });
+    setParams(updateBrowseSearchParams(params, { areaId: String(matchedAreaId) }), {
+      replace: true,
+    });
     setPage(0);
   }, [districts, legacyDistrict, params, setParams]);
 
@@ -291,14 +268,19 @@ export function Browse() {
   ];
 
   const filters = (
-    <div className="space-y-5">
+    <div className="browse-filters-body">
       <SearchField
         aria-label="Tìm tên món đồ"
         value={queryInput}
         onChange={(event) => setQueryInput(event.target.value)}
         placeholder="Tên món đồ"
       />
-      <ChipGroup label="Hình thức" options={typeOptions} value={type} onChange={(value) => setFilter('type', value)} />
+      <ChipGroup
+        label="Hình thức"
+        options={typeOptions}
+        value={type}
+        onChange={(value) => setFilter('type', value)}
+      />
       <Select
         label="Danh mục"
         value={category}
@@ -320,7 +302,11 @@ export function Browse() {
         value={condition}
         onChange={(value) => setFilter('condition', value)}
       />
-      <Select label="Quận" value={areaFilterValue} onChange={(event) => setFilter('areaId', event.target.value)}>
+      <Select
+        label="Quận"
+        value={areaFilterValue}
+        onChange={(event) => setFilter('areaId', event.target.value)}
+      >
         <option value="">Tất cả quận</option>
         {catalogLoading ? <option disabled>Đang tải khu vực...</option> : null}
         {!catalogLoading && !districts.length ? <option disabled>Chưa có khu vực</option> : null}
@@ -345,11 +331,11 @@ export function Browse() {
   );
 
   return (
-    <div className="page-shell">
-      <PageHeader
-        title={boostedOnly ? 'Tin nổi bật' : 'Tìm đồ'}
-      />
-      <div className="mb-4 lg:hidden">
+    <div className="browse-page page-shell">
+      <div className="browse-heading">
+        <PageHeader title={boostedOnly ? 'Tin nổi bật' : 'Tìm đồ'} />
+      </div>
+      <div className="browse-mobile-filter lg:hidden">
         <Button
           variant="outline"
           onClick={() => setMobileFilters(!mobileFilters)}
@@ -360,30 +346,28 @@ export function Browse() {
         </Button>
       </div>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+      <div className="browse-layout">
         <aside
           id="browse-filters"
           aria-label="Bộ lọc"
-          className={`${mobileFilters ? 'block' : 'hidden'} rounded-lg bg-white p-5 ring-1 ring-border/80 lg:sticky lg:top-24 lg:block`}
+          className={`${mobileFilters ? 'block' : 'hidden'} browse-filter-card lg:sticky lg:top-24 lg:block`}
         >
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-base font-bold">Bộ lọc</h2>
-            <button
-              type="button"
-              onClick={reset}
-              className="min-h-11 px-1 text-sm font-semibold text-primary hover:text-primary-hover"
-            >
+          <div className="browse-filter-heading">
+            <h2>Bộ lọc</h2>
+            <button type="button" onClick={reset} className="browse-reset-button">
               Đặt lại
             </button>
           </div>
           {filters}
         </aside>
 
-        <section className="min-w-0 space-y-4" aria-label="Danh sách món đồ">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <strong className="text-base">{totalElements} món</strong>
-              {activeFilters.length ? <span className="text-sm text-text-muted">đang lọc:</span> : null}
+        <section className="browse-results" aria-label="Danh sách món đồ">
+          <div className="browse-results-toolbar">
+            <div className="browse-results-summary">
+              <strong>{totalElements} món</strong>
+              {activeFilters.length ? (
+                <span className="text-sm text-text-muted">đang lọc:</span>
+              ) : null}
               {activeFilters.map((filter) => (
                 <button
                   key={filter.key}
@@ -397,18 +381,24 @@ export function Browse() {
                 </button>
               ))}
               {activeFilters.length > 1 ? (
-                <button type="button" onClick={reset} className="min-h-9 px-1 text-sm font-semibold text-primary hover:text-primary-hover">
+                <button
+                  type="button"
+                  onClick={reset}
+                  className="min-h-9 px-1 text-sm font-semibold text-primary hover:text-primary-hover"
+                >
                   Xoá tất cả
                 </button>
               ) : null}
             </div>
-            <label className="flex items-center gap-2 text-sm text-text-secondary">
+            <label className="browse-sort-control">
               Sắp xếp
               <select
                 aria-label="Sắp xếp"
-                className="input min-h-10 w-auto py-2"
+                className="input"
                 value={sortMode}
-                onChange={(event) => setFilter('sort', event.target.value === 'newest' ? '' : 'expiring')}
+                onChange={(event) =>
+                  setFilter('sort', event.target.value === 'newest' ? '' : 'expiring')
+                }
               >
                 <option value="newest">Mới nhất</option>
                 <option value="expiring">Sắp hết hạn</option>
@@ -424,10 +414,14 @@ export function Browse() {
             <EmptyState
               title="Không tải được bài đăng"
               text={itemsError}
-              action={<Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>Thử tải lại</Button>}
+              action={
+                <Button variant="outline" onClick={() => setItemsReloadKey((key) => key + 1)}>
+                  Thử tải lại
+                </Button>
+              }
             />
           ) : items.length ? (
-            <div data-browse-results className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
+            <div data-browse-results className="browse-product-grid">
               {items.map((item) => (
                 <ProductCard key={item.id} item={item} />
               ))}
@@ -444,17 +438,25 @@ export function Browse() {
             />
           )}
           {!itemsLoading && !itemsError && totalPages > 1 ? (
-            <div className="flex items-center justify-center gap-3 pt-2">
-              <Button variant="outline" disabled={page === 0} onClick={() => setPage((current) => Math.max(0, current - 1))}>
+            <nav className="browse-pagination" aria-label="Phân trang sản phẩm">
+              <Button
+                variant="outline"
+                disabled={page === 0}
+                onClick={() => setPage((current) => Math.max(0, current - 1))}
+              >
                 Trang trước
               </Button>
               <span className="text-sm text-text-secondary">
                 Trang {page + 1} / {totalPages}
               </span>
-              <Button variant="outline" disabled={page + 1 >= totalPages} onClick={() => setPage((current) => current + 1)}>
+              <Button
+                variant="outline"
+                disabled={page + 1 >= totalPages}
+                onClick={() => setPage((current) => current + 1)}
+              >
                 Trang sau
               </Button>
-            </div>
+            </nav>
           ) : null}
         </section>
       </div>
@@ -475,9 +477,9 @@ function ChipGroup<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <fieldset>
+    <fieldset className="browse-chip-group">
       <legend className="label">{label}</legend>
-      <div className="flex flex-wrap gap-1.5">
+      <div>
         {options.map(([optionValue, optionLabel]) => {
           const active = optionValue === value;
           return (
@@ -486,7 +488,7 @@ function ChipGroup<T extends string>({
               type="button"
               aria-pressed={active}
               onClick={() => onChange(optionValue)}
-              className={`min-h-9 rounded-full border px-3 text-xs font-semibold transition ${active ? 'border-primary bg-primary-soft text-primary' : 'border-border bg-white text-text-secondary hover:border-primary/50'}`}
+              className={active ? 'is-active' : ''}
             >
               {optionLabel}
             </button>

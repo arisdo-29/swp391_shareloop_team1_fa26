@@ -67,7 +67,12 @@ function getEditQuoteReasonLabel(reason: string) {
 }
 
 type ListingFeeAction = { type: 'renew' | 'boost'; item: Item };
-type ListingFeeQuote = { fee: number };
+type ListingFeeQuote = {
+  fee: number;
+  newDeadline: string;
+  allowed: boolean;
+  reason: string | null;
+};
 const WALLET_INSUFFICIENT_BALANCE = 'WALLET_INSUFFICIENT_BALANCE';
 
 
@@ -136,17 +141,33 @@ export function Activities() {
   const listingFeeInFlight = useRef(false);
   const currentUserId = toBackendUserId(user.id);
 
-  // Swagger chỉ công bố bảng phí chung; điều kiện thực hiện và số Credit trừ thật vẫn do API POST kiểm tra.
+  // Báo giá chỉ đọc dùng cùng phép tính với thao tác thật để hạn mới hiển thị khớp Backend.
   useEffect(() => {
     if (!currentUserId || !listingFeeAction) return;
+    const itemId = Number(listingFeeAction.item.id);
+    if (!Number.isSafeInteger(itemId)) return;
     let active = true;
     setFeeQuote(null);
     setFeeQuoteLoading(true);
-    itemApi
-      .getListingFees()
-      .then((fees): ListingFeeQuote => ({
-        fee: listingFeeAction.type === 'renew' ? fees.renewFee : fees.boostFee,
-      }))
+    const quoteRequest =
+      listingFeeAction.type === 'renew'
+        ? itemApi.getRenewQuote(itemId).then(
+            (quote): ListingFeeQuote => ({
+              fee: quote.fee,
+              newDeadline: quote.newExpireAt,
+              allowed: quote.allowed,
+              reason: quote.reason,
+            }),
+          )
+        : itemApi.getBoostQuote(itemId).then(
+            (quote): ListingFeeQuote => ({
+              fee: quote.fee,
+              newDeadline: quote.newBoostedUntil,
+              allowed: quote.allowed,
+              reason: quote.reason,
+            }),
+          );
+    quoteRequest
       .then((quote) => {
         if (active) setFeeQuote(quote);
       })
@@ -460,7 +481,7 @@ export function Activities() {
         description="Quản lý bài đăng và chọn người nhận ở đây. Sau khi chọn, hẹn lịch và bàn giao diễn ra trong Tin nhắn."
         action={
           <Link to="/post">
-            <Button>Đăng tin</Button>
+            <Button className="bronze-action">Đăng tin</Button>
           </Link>
         }
       />
@@ -574,7 +595,7 @@ export function Activities() {
                           {item.expiresAt ? ` · hết hạn ${new Date(item.expiresAt).toLocaleDateString('vi-VN')}` : ''}
                         </span>
                       </div>
-                      <Link to={`/items/${item.id}`} className="block truncate text-base font-bold transition hover:text-primary">
+                      <Link to={`/items/${item.id}`} className="block truncate text-base font-bold transition hover:text-link">
                         {item.title}
                       </Link>
                       {item.hidden ? (
@@ -667,7 +688,7 @@ export function Activities() {
             text="Đăng món đầu tiên để bắt đầu chia sẻ với cộng đồng."
             action={
               <Link to="/post">
-                <Button>Đăng tin</Button>
+                <Button className="bronze-action">Đăng tin</Button>
               </Link>
             }
           />
@@ -727,8 +748,12 @@ export function Activities() {
       ) : null}
 
       {listingFeeAction ? (
-        <DialogFrame>
-          <h2 className="text-xl font-bold">
+        <DialogFrame
+          labelledBy="listing-fee-confirm-title"
+          busy={Boolean(renewingItemId || boostingItemId)}
+          onClose={() => setListingFeeAction(null)}
+        >
+          <h2 id="listing-fee-confirm-title" className="text-xl font-bold">
             {listingFeeAction.type === 'renew' ? 'Xác nhận gia hạn bài' : 'Xác nhận đẩy bài'}
           </h2>
           <p className="mt-2 text-sm font-semibold">{listingFeeAction.item.title}</p>
@@ -741,12 +766,25 @@ export function Activities() {
                   ? `Phí: ${feeQuote.fee} Credit. Phí không hoàn lại.`
                   : 'Miễn phí'}
               </p>
+              <p className="mt-1 text-text-primary">
+                <strong>
+                  {listingFeeAction.type === 'renew' ? 'Hạn hiển thị mới' : 'Hạn đẩy mới'}:
+                </strong>{' '}
+                {new Date(feeQuote.newDeadline).toLocaleString('vi-VN')}
+              </p>
             </div>
           ) : (
             <p className="mt-2 text-sm leading-6 text-text-muted">
               Không tải được báo giá. Vui lòng đóng hộp thoại và thử lại.
             </p>
           )}
+          {feeQuote && !feeQuote.allowed ? (
+            <div className="mt-4">
+              <Alert tone="warning">
+                {feeQuote.reason || 'Thao tác này hiện chưa thể thực hiện.'}
+              </Alert>
+            </div>
+          ) : null}
           {creditShortage > 0 ? (
             <div className="mt-4">
               <Alert tone="warning">{`Số dư khả dụng còn thiếu ${creditShortage} Credit.`}</Alert>
@@ -778,15 +816,14 @@ export function Activities() {
                 Boolean(renewingItemId || boostingItemId) ||
                 feeQuoteLoading ||
                 !feeQuote ||
+                !feeQuote.allowed ||
                 creditShortage > 0
               }
               onClick={() => void confirmListingFeeAction()}
             >
               {renewingItemId || boostingItemId
                 ? 'Đang xử lý...'
-                : listingFeeAction.type === 'renew'
-                  ? 'Gia hạn'
-                  : 'Đẩy bài'}
+                : 'Xác nhận'}
             </Button>
           </div>
         </DialogFrame>
@@ -1536,7 +1573,7 @@ function SentRequestList({
                   {requestStatusLabel[request.status]}
                 </span>
               </div>
-              <Link to={`/items/${request.itemId}`} className="block truncate text-sm font-bold transition hover:text-primary sm:text-base">
+              <Link to={`/items/${request.itemId}`} className="block truncate text-sm font-bold transition hover:text-link sm:text-base">
                 {title}
               </Link>
               <p className="text-xs leading-5 text-text-secondary sm:text-sm">{sentRequestDetail(request)}</p>
@@ -1613,7 +1650,7 @@ function RequestPanel({
                   <p className="text-xs text-text-secondary">
                     Mang đổi:{' '}
                     {request.offeredItemId ? (
-                      <Link to={`/items/${request.offeredItemId}`} className="font-semibold text-primary hover:underline">
+                      <Link to={`/items/${request.offeredItemId}`} className="font-semibold text-link hover:underline">
                         {request.offeredItemTitle}
                       </Link>
                     ) : (

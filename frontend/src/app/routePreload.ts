@@ -13,7 +13,6 @@ export function preloadRoute(pathname: string): Promise<unknown> {
   if (pathname === '/profile') return import('../pages/user/Profile');
   if (pathname === '/change-password') return import('../pages/auth/ChangePassword');
   if (pathname === '/credit' || pathname === '/wallet') return import('../pages/user/Credit');
-  if (pathname === '/wallet/topup/manual-checkout') return import('../pages/user/ManualPaymentCheckout');
   if (pathname === '/wallet/topup/mock-checkout') return import('../pages/user/DemoPaymentCheckout');
   if (pathname.startsWith('/me/reports/')) return import('../pages/user/ReportResponse');
   if (!pathname.startsWith('/admin')) return Promise.resolve();
