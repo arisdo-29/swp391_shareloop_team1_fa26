@@ -23,6 +23,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // Số tài khoản tạo từ một IP sau mốc since (FR-10). Tài khoản đã xoá mềm (ví dụ bị job dọn PENDING) không tính.
     long countByRegistrationIpAndCreatedAtAfter(String registrationIp, Instant since);
 
+    // Kiểm tra tài khoản có cờ is_admin = true. Tài khoản xoá mềm bị @SQLRestriction loại sẵn.
+    boolean existsByIdAndAdminTrue(Long id);
+
     /**
      * Id các tài khoản đủ điều kiện để job dọn tài khoản chưa xác thực xoá mềm (FR-117, BR-U06): đúng status, tạo
      * trước createdBefore, và không có OTP còn hạn tại now. Tài khoản đã xoá mềm bị @SQLRestriction loại sẵn.

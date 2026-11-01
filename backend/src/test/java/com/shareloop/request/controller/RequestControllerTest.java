@@ -9,10 +9,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.shareloop.auth.service.JwtService;
+import com.shareloop.common.exception.BusinessException;
 import com.shareloop.config.ClockConfig;
 import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
+import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestResponse;
@@ -73,6 +75,21 @@ class RequestControllerTest {
                 .andExpect(jsonPath("$.itemId").value(1))
                 .andExpect(jsonPath("$.receiverId").value(10))
                 .andExpect(jsonPath("$.status").value("PENDING"));
+    }
+
+    @Test
+    @DisplayName("Admin gửi yêu cầu giao dịch trả về 403 REQUEST_ADMIN_BLOCKED (TK-13)")
+    void create_whenAdmin_returns403() throws Exception {
+        String token = jwtService.issue(10L, true);
+        when(requestService.createRequest(eq(1L), eq(10L), any(CreateRequest.class)))
+                .thenThrow(new BusinessException(RequestErrorCode.REQUEST_ADMIN_BLOCKED));
+
+        mockMvc.perform(post("/api/v1/items/1/requests")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"offeredItemId\":null}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("REQUEST_ADMIN_BLOCKED"));
     }
 
     @Test

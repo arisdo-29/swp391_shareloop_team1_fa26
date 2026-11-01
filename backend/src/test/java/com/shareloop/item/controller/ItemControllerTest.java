@@ -9,10 +9,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.shareloop.auth.service.JwtService;
+import com.shareloop.common.exception.BusinessException;
 import com.shareloop.config.ClockConfig;
 import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
+import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.dto.CreateItemRequest;
 import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.entity.ItemCondition;
@@ -95,6 +97,30 @@ class ItemControllerTest {
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.donorId").value(10))
                 .andExpect(jsonPath("$.status").value("PENDING_REVIEW"));
+    }
+
+    @Test
+    @DisplayName("Admin đăng bài trả về 403 ITEM_ADMIN_BLOCKED (TK-13)")
+    void create_whenAdmin_returns403() throws Exception {
+        String token = jwtService.issue(10L, true);
+        when(itemService.createItem(eq(10L), any(CreateItemRequest.class)))
+                .thenThrow(new BusinessException(ItemErrorCode.ITEM_ADMIN_BLOCKED));
+
+        mockMvc.perform(post("/api/v1/items")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                          "categoryId": 1,
+                          "areaId": 1,
+                          "offerType": "GIVE",
+                          "title": "Sách giáo trình",
+                          "description": "Mô tả sách",
+                          "condition": "NEW"
+                        }
+                        """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ITEM_ADMIN_BLOCKED"));
     }
 
     @Test

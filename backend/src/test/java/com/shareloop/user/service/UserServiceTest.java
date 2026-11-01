@@ -614,6 +614,20 @@ class UserServiceTest {
         assertThat(items.get(2).role()).isEqualTo(AdminAccountRole.ADMIN);
     }
 
+    @Test
+    void isAdmin_returnsTrueWhenUserIsAdmin() {
+        when(userRepository.existsByIdAndAdminTrue(10L)).thenReturn(true);
+
+        assertThat(service.isAdmin(10L)).isTrue();
+    }
+
+    @Test
+    void isAdmin_returnsFalseWhenUserIsNotAdmin() {
+        when(userRepository.existsByIdAndAdminTrue(20L)).thenReturn(false);
+
+        assertThat(service.isAdmin(20L)).isFalse();
+    }
+
     private User givenUser() {
         User user = new User(EMAIL, "hash", "Nguyễn Văn An", PHONE, false, UserStatus.ACTIVE);
         ReflectionTestUtils.setField(user, "id", USER_ID); // id do DB sinh, test phải gán tay

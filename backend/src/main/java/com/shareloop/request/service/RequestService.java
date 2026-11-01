@@ -208,6 +208,11 @@ public class RequestService {
      */
     @Transactional
     public RequestResponse createRequest(long itemId, long receiverId, CreateRequest requestDto) {
+        // Admin không tham gia giao dịch (TK-13)
+        if (userService != null && userService.isAdmin(receiverId)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_ADMIN_BLOCKED);
+        }
+
         // 0. Vô hiệu quyền gửi yêu cầu khi TrustStars về 0 (FR-92, BR-U05) hoặc tài khoản bị khoá
         if (reputationService != null && !reputationService.canRequest(receiverId)) {
             throw new BusinessException(RequestErrorCode.REQUEST_REPUTATION_BLOCKED);
