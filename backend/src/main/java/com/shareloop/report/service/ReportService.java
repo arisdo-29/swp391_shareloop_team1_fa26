@@ -39,8 +39,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -892,29 +890,17 @@ public class ReportService {
         return report.getTargetUserId();
     }
 
+    // L13: chỉ đọc khoá chữ thường report_serious_reasons qua ConfigKey (Admin sửa được); khoá chữ hoa trùng đã xoá
+    // mềm.
+    // configService null chỉ gặp ở unit test dựng service rút gọn: dùng giá trị mặc định của khoá.
     private boolean isSeriousReason(ReportReason reason) {
         if (reason == null) {
             return false;
         }
-        String configured = null;
-        if (configService != null) {
-            try {
-                configured = configService.getRaw("REPORT_SERIOUS_REASONS");
-            } catch (Exception e1) {
-                try {
-                    configured = configService.getRaw("report_serious_reasons");
-                } catch (Exception ignored) {
-                }
-            }
-        }
-        if (configured == null || configured.isBlank()) {
-            configured = "PROHIBITED_ITEM,COUNTERFEIT";
-        }
-        Set<String> seriousSet = Arrays.stream(configured.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(Collectors.toSet());
-        return seriousSet.contains(reason.name());
+        List<String> seriousReasons = configService != null
+                ? configService.getCodes(ConfigKey.REPORT_SERIOUS_REASONS)
+                : Arrays.asList(ConfigKey.REPORT_SERIOUS_REASONS.defaultValue().split(","));
+        return seriousReasons.contains(reason.name());
     }
 
     RequestSnapshot findRequest(Long requestId) {

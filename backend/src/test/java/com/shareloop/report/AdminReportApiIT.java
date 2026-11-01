@@ -261,6 +261,8 @@ class AdminReportApiIT extends IntegrationTest {
                         .content("{\"decision\":\"UPHOLD\",\"note\":\"Có cơ sở\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.starsDeducted").value(1));
+        // Trừ sao đi qua JPA trong cùng transaction của test: flush trước để JDBC đọc thấy
+        reports.flush();
         assertThat(jdbc.queryForObject("SELECT trust_stars FROM users WHERE id = ?", Integer.class, target))
                 .isEqualTo(4);
     }

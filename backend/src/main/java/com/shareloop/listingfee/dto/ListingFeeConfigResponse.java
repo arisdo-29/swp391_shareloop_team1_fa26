@@ -17,9 +17,6 @@ public record ListingFeeConfigResponse(
         @Schema(description = "Phí gia hạn bài (Credit)", example = "5")
         int renewFee,
 
-        @Schema(description = "Số ngày sau khi hết hạn vẫn còn được gia hạn bài", example = "7")
-        int renewExpiredWindowDays,
-
         @Schema(description = "Phí mỗi lần đẩy bài (Credit)", example = "5")
         int boostFee,
 
