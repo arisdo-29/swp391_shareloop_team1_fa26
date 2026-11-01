@@ -128,27 +128,6 @@ public enum ConfigKey {
             ConfigGroup.AI,
             "Thời gian chờ AI tìm kiếm",
             "Số giây chờ AI trợ lý trả lời. Quá thời gian thì hoàn lượt và chuyển sang tìm kiếm thường."),
-    ITEM_AI_SCREENING_ENABLED(
-            "item_ai_screening_enabled",
-            "false",
-            ConfigGroup.AI,
-            "Bật AI sàng lọc bài đăng",
-            "Bật thì bài mới hoặc vừa sửa được AI gắn cờ trước khi vào hàng chờ duyệt. SRS v11 tắt tầng này.",
-            ValueType.BOOLEAN,
-            null,
-            null),
-    ITEM_AI_TIMEOUT_SECONDS(
-            "item_ai_timeout_seconds",
-            "15",
-            ConfigGroup.AI,
-            "Thời gian chờ AI sàng lọc bài",
-            "Số giây chờ AI sàng lọc bài đăng mới."),
-    ITEM_AI_RETRIES(
-            "item_ai_retries",
-            "1",
-            ConfigGroup.AI,
-            "Số lần thử lại AI sàng lọc bài",
-            "Số lần thử lại khi AI sàng lọc bài đăng bị lỗi."),
     CHAT_VIOLATION_ALERT(
             "chat_violation_alert",
             "3",

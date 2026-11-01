@@ -27,7 +27,6 @@ import com.shareloop.media.MediaErrorCode;
 import com.shareloop.media.service.MediaService;
 import com.shareloop.moderation.ModerationResult;
 import com.shareloop.moderation.ModerationStatus;
-import com.shareloop.moderation.event.ItemScreeningRequestedEvent;
 import com.shareloop.moderation.service.ContentModerationService;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
@@ -180,7 +179,6 @@ public class ItemService {
         if (moderation.status() == ModerationStatus.REVIEW) {
             saveReviewFlag(saved.getId(), moderation);
         }
-        eventPublisher.publishEvent(ItemScreeningRequestedEvent.from(saved));
         return ItemMapper.toResponse(
                 saved,
                 mediaUrls(mediaIds),
@@ -277,14 +275,9 @@ public class ItemService {
                     newDefectMediaIds);
         }
         replaceOperatingStatus(itemId, previousCategoryId, operatingAttributeId, request.operatingStatus());
-        jdbcClient
-                .sql("UPDATE items SET ai_risk = 'UNCHECKED', ai_result = NULL WHERE id = :itemId")
-                .param("itemId", itemId)
-                .update();
         if (moderation.status() == ModerationStatus.REVIEW) {
             saveReviewFlag(itemId, moderation);
         }
-        eventPublisher.publishEvent(ItemScreeningRequestedEvent.from(item));
         return withHiddenState(toResponse(item, findDisplayWindow(itemId)), item);
     }
 
