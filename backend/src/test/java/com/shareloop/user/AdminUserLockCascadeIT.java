@@ -107,6 +107,29 @@ class AdminUserLockCascadeIT extends IntegrationTest {
         assertThat(isActive(lockedUserId)).isTrue();
     }
 
+    @Test
+    @DisplayName("L5: khoá thì từ chối mọi bài chờ duyệt, kể cả bài Cho giữ phí 0 và bài dữ liệu cũ không giữ phí")
+    void lock_rejectsEveryPendingReviewItemIncludingFreeOnes() {
+        // given: bài Trao đổi giữ 10 Credit, bài Cho giữ phí 0 (findHeldFees bỏ qua), bài cũ chưa từng giữ phí
+        long adminId = insertUser(0, 0);
+        long lockedUserId = insertUser(100, 10);
+        long paidItemId = insertItem(lockedUserId, "SWAP", "PENDING_REVIEW", "HELD", 10);
+        long freeGiveItemId = insertItem(lockedUserId, "GIVE", "PENDING_REVIEW", "HELD", 0);
+        long legacyItemId = insertItem(lockedUserId, "GIVE", "PENDING_REVIEW", "NONE", 0);
+
+        // when
+        adminUserService.lock(adminId, lockedUserId, "Vi phạm");
+
+        // then: không bài nào còn ở hàng chờ, lý do ghi rõ do hệ thống; chỉ phí thật được nhả về ví
+        for (long itemId : new long[] {paidItemId, freeGiveItemId, legacyItemId}) {
+            assertThat(itemStatusOf(itemId)).isEqualTo("REJECTED");
+            assertThat(jdbc.queryForObject("SELECT reject_reason FROM items WHERE id = ?", String.class, itemId))
+                    .isEqualTo("[Hệ thống] Tài khoản bị khoá");
+        }
+        assertThat(heldCreditOf(lockedUserId)).isZero();
+        assertThat(lockLogData(lockedUserId)).contains("\"releasedCredit\": 10");
+    }
+
     // ---------- Tiện ích hỗ trợ test ----------
 
     private long insertUser(int creditBalance, int heldCredit) {

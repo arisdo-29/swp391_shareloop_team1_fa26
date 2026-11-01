@@ -153,6 +153,7 @@ Duyệt bài đăng đang chờ kiểm duyệt. Gửi đáp án theo `id` của 
 | 400 | `REVIEW_CHECKLIST_INCOMPLETE` | Thiếu ID đang active, trùng ID hoặc có `passed = false` |
 | 409 | `REVIEW_CHECKLIST_OUTDATED` | Có ID không thuộc checklist đang active; tải lại trang |
 | 409 | `REVIEW_CHECKLIST_NOT_CONFIGURED` | Chưa có mục checklist đang active |
+| 409 | `REVIEW_DONOR_LOCKED` | Chủ bài đang bị khoá hoặc bị cấm (L5): bài không được duyệt để hiện công khai |
 | 401 | `UNAUTHORIZED` | Chưa đăng nhập |
 | 403 | `FORBIDDEN` | Không có quyền Admin |
 | 404 | `REVIEW_ITEM_NOT_FOUND` | Không tìm thấy bài đăng (hoặc đã xoá mềm) |

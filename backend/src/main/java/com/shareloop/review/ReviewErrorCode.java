@@ -9,6 +9,8 @@ public enum ReviewErrorCode implements ErrorCode {
     REVIEW_CHECKLIST_NOT_CONFIGURED(HttpStatus.CONFLICT, "Checklist duyệt bài chưa được cấu hình."),
     REVIEW_CHECKLIST_INCOMPLETE(HttpStatus.BAD_REQUEST, "Cần trả lời đạt tất cả mục checklist để duyệt bài."),
     REVIEW_CHECKLIST_OUTDATED(HttpStatus.CONFLICT, "Checklist vừa được cập nhật, vui lòng tải lại trang."),
+    // L5: bài của tài khoản bị khoá hoặc bị cấm không được hiện công khai.
+    REVIEW_DONOR_LOCKED(HttpStatus.CONFLICT, "Chủ bài đang bị khoá hoặc bị cấm nên không duyệt được bài."),
     AUTHENTICITY_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy bài đăng cần xét duyệt chứng từ."),
     AUTHENTICITY_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "Lý do là bắt buộc."),
     AUTHENTICITY_INVALID_STATUS(

@@ -464,9 +464,10 @@ Khoá tài khoản người dùng và ghi nhật ký hoạt động (FR-107, Iss
     `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER` chuyển `CANCELLED` với `cancelReason = "[Hệ thống] Tài khoản bị khoá"`.
     Bài chính và món mang đổi được nhả về `APPROVED`, bên còn lại nhận thông báo `TRANSACTION_CANCELLED`.
     Giao dịch `DISPUTED` không bị huỷ để Admin phân xử.
-  - Các bài `PENDING_REVIEW` của người bị khoá đang giữ phí đăng hoặc phí sửa (`fee_state = HELD`, phí lớn hơn 0) bị
-    từ chối như khi Admin từ chối bài (lý do "Tài khoản bị khoá", ghi `REVIEW_REJECT`), phí giữ được nhả về ví qua
-    `CreditService.release`.
+  - **Mọi** bài `PENDING_REVIEW` của người bị khoá hoặc bị cấm (L5), kể cả bài Cho tặng và bản sửa miễn phí (giữ phí 0),
+    bị từ chối như khi Admin từ chối bài (lý do `"[Hệ thống] Tài khoản bị khoá"`, ghi `REVIEW_REJECT`). Bài đang giữ phí
+    (`fee_state = HELD`) được nhả phí về ví qua `CreditService.release`; bài không giữ phí (dữ liệu cũ) vẫn bị từ chối,
+    không làm hỏng việc khoá. Không bài nào của người bị khoá còn trong hàng chờ.
   - Mọi bài `APPROVED` đang hiển thị của người bị khoá (kể cả bài vừa được nhả ở trên) bị ẩn bằng `is_active = false`, không đổi `status`.
   - Activity log `USER_LOCK` có `data = { "cancelledRequests": n, "releasedCredit": n, "hiddenItemIds": [id, ...] }`.
   - Mở khoá (`POST /unlock`) hiện lại **đúng** các bài trong `hiddenItemIds` của dòng `USER_LOCK` mới nhất (bài Admin hoặc chủ bài đã ẩn từ trước vẫn ẩn). Giao dịch đã huỷ và bài đã từ chối khi khoá **không** được khôi phục. Activity log `USER_UNLOCK` có `data = { "restoredItems": n }`.
