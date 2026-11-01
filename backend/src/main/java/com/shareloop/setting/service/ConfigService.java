@@ -148,8 +148,11 @@ public class ConfigService {
     /** Các mục checklist duyệt bài đang dùng (kèm id, key) theo sort_order rồi id; dùng để ghép đáp án theo id. */
     public List<ChecklistItem> checklistItems() {
         return repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc("CHECKLIST").stream()
-                .map(attribute ->
-                        new ChecklistItem(attribute.getId(), attribute.getAttrKey(), attribute.getAttrValue()))
+                .map(attribute -> new ChecklistItem(
+                        attribute.getId(),
+                        attribute.getAttrKey(),
+                        attribute.getAttrValue(),
+                        stringValue(attribute.getExtra(), "description")))
                 .toList();
     }
 
@@ -161,7 +164,7 @@ public class ConfigService {
     }
 
     private static String stringValue(Map<String, Object> values, String key) {
-        Object value = values.get(key);
+        Object value = values == null ? null : values.get(key);
         return value instanceof String string ? string : null;
     }
 

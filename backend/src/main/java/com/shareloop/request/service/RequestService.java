@@ -218,6 +218,12 @@ public class RequestService {
             if (offeredItemId == null) {
                 throw new BusinessException(RequestErrorCode.REQUEST_SWAP_OFFERED_ITEM_REQUIRED);
             }
+        } else if (offeredItemId != null) {
+            // Bài Cho không nhận món đổi kèm (YC-04, chưa hỗ trợ D-02)
+            throw new BusinessException(RequestErrorCode.REQUEST_OFFERED_ITEM_NOT_ALLOWED);
+        }
+
+        if (offeredItemId != null) {
             ItemSnapshot offeredItem = findItemSnapshot(offeredItemId)
                     .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
 
@@ -612,6 +618,40 @@ public class RequestService {
             cancelBecauseUserLocked(request, lockedUserId);
         }
         return openRequests.size();
+    }
+
+    /** Huỷ yêu cầu PENDING cũ khi bài đổi giữa Cho tặng và Trao đổi trong cùng transaction sửa bài. */
+    @Transactional
+    public int cancelPendingRequestsForOfferTypeChange(long itemId) {
+        List<Request> pendingRequests = requestRepository.findByItemIdAndStatus(itemId, RequestStatus.PENDING);
+        for (Request request : pendingRequests) {
+            request.cancel(Request.CANCEL_BY_SYSTEM + "Chủ bài đã đổi hình thức đăng.");
+            requestRepository.save(request);
+            notificationService.notify(
+                    request.getReceiverId(),
+                    "REQUEST_CANCELLED",
+                    "Yêu cầu đã bị huỷ",
+                    "Chủ bài đã đổi hình thức đăng nên yêu cầu đang chờ của bạn đã bị huỷ.",
+                    "/requests/" + request.getId());
+        }
+        return pendingRequests.size();
+    }
+
+    /** Huỷ các yêu cầu PENDING khi bài đăng bị gỡ (D-13, BD-11). */
+    @Transactional
+    public int cancelPendingRequestsForItemRemoved(long itemId) {
+        List<Request> pendingRequests = requestRepository.findByItemIdAndStatus(itemId, RequestStatus.PENDING);
+        for (Request request : pendingRequests) {
+            request.cancel(Request.CANCEL_BY_SYSTEM + "Bài đã bị gỡ");
+            requestRepository.save(request);
+            notificationService.notify(
+                    request.getReceiverId(),
+                    "REQUEST_CANCELLED",
+                    "Yêu cầu đã bị huỷ",
+                    "Bài đăng đã bị gỡ nên yêu cầu đang chờ của bạn đã bị huỷ.",
+                    "/requests/" + request.getId());
+        }
+        return pendingRequests.size();
     }
 
     private void cancelBecauseUserLocked(Request request, long lockedUserId) {

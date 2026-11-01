@@ -2,13 +2,10 @@ package com.shareloop.report.event;
 
 import com.shareloop.report.service.ReportService;
 import com.shareloop.request.event.NotAsDescribedReportedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 
-/** Mở report NOT_AS_DESCRIBED sau khi bên nhận xác nhận giao nhận xong (FR-85, BR-R05). */
+/** Mở report NOT_AS_DESCRIBED khi bên nhận báo không đúng mô tả (FR-85, BR-R05, D-04). */
 @Component
 public class NotAsDescribedReportedListener {
     private final ReportService reportService;
@@ -17,10 +14,9 @@ public class NotAsDescribedReportedListener {
         this.reportService = reportService;
     }
 
-    // AFTER_COMMIT: chỉ chạy khi việc xác nhận giao nhận đã lưu thành công, nếu bước đó rollback thì không có report.
-    // REQUIRES_NEW: lúc này transaction cũ đã đóng, muốn ghi report phải mở transaction mới.
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    // @EventListener thường (không phải AFTER_COMMIT): chạy cùng transaction với lúc Request sang DISPUTED.
+    // Mở khiếu nại lỗi thì cả hai cùng rollback, tránh giao dịch DISPUTED mà không có report để Admin xử lý.
+    @EventListener
     public void onNotAsDescribed(NotAsDescribedReportedEvent event) {
         reportService.openNotAsDescribedReport(event.receiverId(), event.requestId(), event.reason());
     }

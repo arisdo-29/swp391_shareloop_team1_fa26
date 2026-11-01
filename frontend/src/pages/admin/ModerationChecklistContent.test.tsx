@@ -85,3 +85,31 @@ describe('ModerationChecklistContent', () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 });
+
+describe('ModerationChecklistContent – Q01 điều kiện đạt', () => {
+  it('hiện mô tả "Đạt khi..." ngay dưới tên mục, mục chưa có mô tả thì chỉ hiện tên', () => {
+    render(
+      <ModerationChecklistContent
+        checklist={[
+          {
+            id: 1,
+            key: 'real_photos',
+            statement: 'Ảnh chụp thực tế rõ nét của đúng món đồ, từ 3 ảnh trở lên, không dùng ảnh mạng.',
+            description: 'Đạt khi có từ 3 ảnh chụp thật. Từ chối nếu dùng ảnh tải từ mạng.',
+          },
+          { id: 2, key: 'category_match', statement: 'Danh mục và thẻ phân loại phản ánh đúng món đồ.', description: null },
+        ]}
+        answers={[false, false]}
+        disabled={false}
+        onToggle={() => undefined}
+        onCancel={() => undefined}
+        onConfirm={() => undefined}
+      />,
+    );
+
+    const photos = screen.getByRole('checkbox', { name: /Ảnh chụp thực tế rõ nét/ });
+    expect(photos.closest('label')?.textContent).toContain('Đạt khi có từ 3 ảnh chụp thật. Từ chối nếu dùng ảnh tải từ mạng.');
+    const category = screen.getByRole('checkbox', { name: /Danh mục và thẻ phân loại/ });
+    expect(category.closest('label')?.textContent).toBe('Danh mục và thẻ phân loại phản ánh đúng món đồ.');
+  });
+});

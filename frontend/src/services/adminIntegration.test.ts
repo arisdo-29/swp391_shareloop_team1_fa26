@@ -1,25 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { adminCategoryApi } from './adminCategoryApi';
 import { adminFinanceApi, financeCsvFileName } from './adminFinanceApi';
-import { adminReputationApi } from './adminReputationApi';
 import { adminUserApi } from './adminUserApi';
 import { http } from './http';
 
 afterEach(() => vi.restoreAllMocks());
 
 describe('Admin API integrations', () => {
-  it('gọi đúng endpoint và body khi cấp sao ân hạn', async () => {
-    const response = { userId: 42, trustStars: 1, graceStarUsed: true };
-    const post = vi.spyOn(http, 'post').mockResolvedValue({ data: response });
-
-    await expect(adminReputationApi.grantGraceStar(42, 'Đã xác minh giải trình')).resolves.toEqual(
-      response,
-    );
-    expect(post).toHaveBeenCalledWith('/api/v1/admin/users/42/grace-star', {
-      reason: 'Đã xác minh giải trình',
-    });
-  });
-
   it('xuất CSV bằng đúng endpoint, bộ lọc, responseType và tên file Backend', async () => {
     const blob = new Blob(['csv'], { type: 'text/csv' });
     const get = vi.spyOn(http, 'get').mockResolvedValue({

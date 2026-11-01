@@ -110,6 +110,57 @@ class AdminReportApiIT extends IntegrationTest {
     }
 
     @Test
+    void concludeIsBlockedWhileResponseWindowIsOpen() throws Exception {
+        long reporter = user("Window reporter");
+        long target = user("Window target");
+        long admin = user("Window admin");
+        String adminAuth = "Bearer " + jwt.issue(admin, true);
+        String created = mvc.perform(post("/api/v1/reports")
+                        .header("Authorization", "Bearer " + jwt.issue(reporter, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"targetType":"USER","targetUserId":%d,"reason":"OTHER","description":"Chờ giải trình"}
+                                """.formatted(target)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long reportId = JsonMapper.builder().build().readTree(created).get("id").asLong();
+        var report = reports.findById(reportId).orElseThrow();
+        report.awaitResponse(java.time.Instant.now().plusSeconds(3600));
+        reports.flush();
+
+        // D-15, BC-10: còn hạn giải trình thì trang chi tiết báo khoá và kết luận bị chặn
+        mvc.perform(get("/api/v1/admin/reports/" + reportId).header("Authorization", adminAuth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.responseWindowOpen").value(true));
+        mvc.perform(post("/api/v1/admin/reports/" + reportId + "/conclude")
+                        .header("Authorization", adminAuth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"UPHOLD\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REPORT_RESPONSE_WINDOW_OPEN"))
+                .andExpect(jsonPath("$.details.responseDueAt").isNotEmpty());
+        assertThat(jdbc.queryForObject("SELECT trust_stars FROM users WHERE id = ?", Integer.class, target))
+                .isEqualTo(5);
+
+        // Giải trình xong thì kết luận được ngay, không cần chờ hết hạn
+        mvc.perform(post("/api/v1/reports/" + reportId + "/response")
+                        .header("Authorization", "Bearer " + jwt.issue(target, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"response\":\"Giải trình\",\"evidenceMediaIds\":[]}"))
+                .andExpect(status().isNoContent());
+        reports.flush();
+        mvc.perform(get("/api/v1/admin/reports/" + reportId).header("Authorization", adminAuth))
+                .andExpect(jsonPath("$.responseWindowOpen").value(false));
+        mvc.perform(post("/api/v1/admin/reports/" + reportId + "/conclude")
+                        .header("Authorization", adminAuth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"DISMISS\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void bothPartiesEvidenceIsPrivateAndAdminCanConcludeOnlyOnce() throws Exception {
         long reporter = user("Reporter");
         long target = user("Target");

@@ -40,6 +40,7 @@ class ConfigKeyTest {
     void reputationAndActiveItemKeys_areGroupedForTheReputationPage() {
         assertThat(ConfigKey.MAX_ACTIVE_ITEMS_BRONZE.group()).isEqualTo(ConfigGroup.REPUTATION);
         assertThat(ConfigKey.MAX_ACTIVE_ITEMS_DIAMOND.group()).isEqualTo(ConfigGroup.REPUTATION);
+        assertThat(ConfigKey.MAX_ACTIVE_GIVE_ITEMS.group()).isEqualTo(ConfigGroup.REPUTATION);
         assertThat(ConfigKey.POST_DISPLAY_DAYS_GOLD.group()).isEqualTo(ConfigGroup.REPUTATION);
         assertThat(ConfigKey.DAILY_POINTS_CAP.group()).isEqualTo(ConfigGroup.REPUTATION);
         assertThat(ConfigKey.REPUTATION_SILVER_MIN.group()).isEqualTo(ConfigGroup.REPUTATION);

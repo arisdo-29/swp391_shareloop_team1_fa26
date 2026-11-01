@@ -14,6 +14,7 @@ public enum RequestErrorCode implements ErrorCode {
     REQUEST_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy bài đăng."),
     REQUEST_SWAP_OFFERED_ITEM_REQUIRED(
             HttpStatus.UNPROCESSABLE_ENTITY, "Yêu cầu trao đổi bắt buộc phải chọn món đề nghị."),
+    REQUEST_OFFERED_ITEM_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "Bài đăng cho tặng không nhận món đề nghị trao đổi."),
     REQUEST_SCHEDULE_LOCKED(HttpStatus.CONFLICT, "Lịch hẹn đã được xác nhận và bị khoá, không thể chỉnh sửa."),
     REQUEST_SCHEDULE_PAST_TIME(HttpStatus.BAD_REQUEST, "Thời gian hẹn giao nhận phải ở tương lai."),
     REQUEST_WAIVER_REQUIRED(

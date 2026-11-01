@@ -19,7 +19,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Chặn token đã cấp của tài khoản bị khoá (FR-107). JWT không lưu trạng thái nên token cấp trước khi khoá vẫn hợp lệ
- * tới lúc hết hạn; filter này kiểm lại tài khoản ở mỗi request có token và trả 403 AUTH_ACCOUNT_LOCKED.
+ * tới lúc hết hạn; filter này kiểm lại tài khoản ở mỗi request có token và trả 403 AUTH_ACCOUNT_LOCKED (bị khoá)
+ * hoặc AUTH_ACCOUNT_BANNED (bị cấm khi hết sao).
  *
  * <p>Không gắn @Component: filter được đăng ký trong {@link LockedAccountFilterConfig}, để các test @WebMvcTest không
  * tự nạp filter này (chúng không có UserService thật).
@@ -39,7 +40,11 @@ public class LockedAccountFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         Long userId = findUserIdFromToken();
         if (userId != null && userService.isLocked(userId)) {
-            writeLockedError(response);
+            // Chỉ hỏi thêm khi đã bị chặn, nên request bình thường vẫn chỉ tốn một truy vấn.
+            AuthErrorCode errorCode = userService.isBanned(userId)
+                    ? AuthErrorCode.AUTH_ACCOUNT_BANNED
+                    : AuthErrorCode.AUTH_ACCOUNT_LOCKED;
+            writeLockedError(response, errorCode);
             return; // dừng tại đây, không cho request đi tiếp vào controller
         }
         chain.doFilter(request, response);
@@ -60,8 +65,7 @@ public class LockedAccountFilter extends OncePerRequestFilter {
     }
 
     // Lỗi ở tầng filter không qua @RestControllerAdvice, nên tự ghi ErrorResponse như SecurityConfig.writeError.
-    private void writeLockedError(HttpServletResponse response) throws IOException {
-        AuthErrorCode errorCode = AuthErrorCode.AUTH_ACCOUNT_LOCKED;
+    private void writeLockedError(HttpServletResponse response, AuthErrorCode errorCode) throws IOException {
         var body = new ErrorResponse(
                 errorCode.code(), errorCode.defaultMessage(), null, null, MDC.get(TraceIdFilter.MDC_KEY));
         response.setStatus(errorCode.status().value());

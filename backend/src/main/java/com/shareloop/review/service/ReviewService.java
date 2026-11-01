@@ -241,6 +241,9 @@ public class ReviewService {
             check.put("id", checklistItem.id());
             check.put("key", checklistItem.key());
             check.put("statement", checklistItem.statement());
+            if (checklistItem.description() != null) {
+                check.put("description", checklistItem.description());
+            }
             check.put("passed", true);
             checks.add(check);
         }

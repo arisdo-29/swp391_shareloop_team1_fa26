@@ -3,6 +3,7 @@ import type { PostingQuota } from '../services/itemApi';
 import { postingQuotaRow } from './postingQuota';
 
 const quota: PostingQuota = {
+  nextPostFee: 10,
   give: { active: 2, limit: 5 },
   swap: { active: 9, limit: -1 },
   rank: 'DIAMOND',

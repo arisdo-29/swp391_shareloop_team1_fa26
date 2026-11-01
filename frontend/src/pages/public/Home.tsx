@@ -251,7 +251,7 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
 
   if (slides.length === 0) {
     return (
-      <section className="border-b border-primary-hover/30 bg-[#0d332c]">
+      <section className="border-b border-primary-hover/30 bg-primary-hover">
         <div className="home-inner pb-8 pt-[100px] sm:pb-10 sm:pt-[108px] lg:pb-12 lg:pt-[116px]">
           {children}
         </div>
@@ -262,7 +262,7 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
   const activeItem = slides[activeIndex];
 
   return (
-    <section className="relative isolate overflow-hidden border-b border-primary-hover/30 bg-[#0d332c]">
+    <section className="relative isolate overflow-hidden border-b border-primary-hover/30 bg-primary-hover">
       <div className="absolute inset-[-28px] z-0 overflow-hidden" aria-hidden="true">
         {slides.map((item, index) => (
           <ItemImage
@@ -279,14 +279,8 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
           />
         ))}
       </div>
-     <div
-  className="absolute inset-0 z-0 bg-[linear-gradient(90deg,rgba(4,29,14,0.38)_0%,rgba(6,35,29,0.28)_40%,rgba(5,30,25,0.16)_70%,rgba(3,22,18,0.06)_100%)]"
-  aria-hidden="true"
-/>
-      <div
-        className="absolute inset-0 z-0 bg-[linear-gradient(180deg,rgba(20,92,78,0.03)_0%,rgba(5,28,24,0.08)_62%,rgba(3,22,18,0.5)_100%)]"
-        aria-hidden="true"
-      />
+      <div className="home-hero-wash absolute inset-0 z-0" aria-hidden="true" />
+      <div className="home-hero-vignette absolute inset-0 z-0" aria-hidden="true" />
 
       <div className="home-inner relative z-10 pb-8 pt-[100px] sm:pb-10 sm:pt-[108px] lg:pb-12 lg:pt-[116px]">
         <div className="grid gap-8 lg:grid-cols-[1.04fr_.96fr] lg:items-center lg:gap-10">
@@ -490,7 +484,7 @@ export function Home() {
           <h1 className="mt-3 text-4xl font-extrabold leading-[1.12] text-white sm:text-5xl lg:text-[52px]">
             Món đồ cũ.
             <br />
-            <span className="text-[#a9d5c6]">Một vòng đời mới.</span>
+            <span className="text-primary-fixed">Một vòng đời mới.</span>
           </h1>
           <p className="mt-4 max-w-xl text-sm leading-6 text-white/75 sm:text-base sm:leading-7">
             Tìm những món đồ còn tốt từ người trong cộng đồng, theo đúng quận bạn thuận tiện gặp gỡ.

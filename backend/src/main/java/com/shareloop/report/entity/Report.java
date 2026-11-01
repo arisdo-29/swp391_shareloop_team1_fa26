@@ -192,6 +192,15 @@ public class Report extends BaseEntity {
         this.evidence = evidence;
     }
 
+    /**
+     * Còn đang chờ giải trình và chưa tới hạn (D-15, BC-10): Admin chưa được kết luận. Giải trình xong thì status về
+     * OPEN; hết hạn mà chưa giải trình thì Admin kết luận được luôn. Mốc đúng bằng hạn vẫn tính là còn hạn, giống
+     * {@code ReportService.respond}.
+     */
+    public boolean isResponseWindowOpen(Instant now) {
+        return status == ReportStatus.AWAITING_RESPONSE && responseDueAt != null && !now.isAfter(responseDueAt);
+    }
+
     public void awaitResponse(Instant dueAt) {
         this.responseDueAt = dueAt;
         this.status = ReportStatus.AWAITING_RESPONSE;

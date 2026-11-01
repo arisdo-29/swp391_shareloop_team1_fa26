@@ -10,7 +10,8 @@ Người sở hữu: BE1 (review: BE3 @dwargon73-sketch theo Issue #147). File n
 
 - Các endpoint **bắt buộc** `Authorization: Bearer <accessToken>`. Id người dùng lấy từ token (claim `sub`),
   không nhận từ client, nên chỉ xem và sửa được hồ sơ của chính mình (BR-U03).
-- Tài khoản bị khoá (FR-107) hoặc `BANNED`: **mọi** endpoint cần token trả `403 AUTH_ACCOUNT_LOCKED`, kể cả với token
+- Tài khoản bị khoá (FR-107) hoặc `BANNED`: **mọi** endpoint cần token trả `403 AUTH_ACCOUNT_LOCKED` (bị khoá) hoặc
+  `403 AUTH_ACCOUNT_BANNED` (bị cấm khi hết sao), kể cả với token
   cấp trước lúc khoá (server kiểm lại tài khoản ở mỗi request). FE gặp mã này thì xoá phiên và về màn đăng nhập.
 - Email **không đổi** ở đây. Body có gửi kèm `email` thì server bỏ qua. Đổi số điện thoại qua luồng riêng (FR-07, OTP email).
 - Khu vực lấy từ `GET /api/v1/areas` (`docs/api/catalog.md`). Ảnh đại diện upload trước qua `POST /api/v1/media`
@@ -186,7 +187,8 @@ Có đủ các trường của `AuthUserResponse` (`docs/api/auth.md`) cộng th
 | `UNAUTHORIZED`                     | 401  | Thiếu, sai hoặc hết hạn token (`CommonErrorCode`)                        |
 | `VALIDATION_FAILED`                | 400  | Body thiếu trường hoặc sai định dạng, `field` = tên trường               |
 | `USER_AREA_INVALID`                | 400  | `areaId` không tồn tại hoặc khu vực đã ngừng hoạt động, `field` = `areaId` |
-| `AUTH_ACCOUNT_LOCKED`              | 403  | Tài khoản đã bị khoá hoặc `BANNED` (`AuthErrorCode`), kể cả token cũ     |
+| `AUTH_ACCOUNT_LOCKED`              | 403  | Tài khoản đã bị khoá (`AuthErrorCode`), kể cả token cũ                   |
+| `AUTH_ACCOUNT_BANNED`              | 403  | Tài khoản `BANNED` (hết sao uy tín, `AuthErrorCode`), kể cả token cũ     |
 | `USER_NOT_FOUND`                   | 404  | Tài khoản trong token không còn tồn tại                                  |
 | `MEDIA_NOT_FOUND`                  | 404  | `avatarMediaId` không tồn tại (`MediaErrorCode`)                         |
 | `MEDIA_NOT_OWNER`                  | 403  | Ảnh không do người này upload                                            |
@@ -228,6 +230,15 @@ Lỗi là `BusinessException` với mã của `UserErrorCode`; nếu để lọt
   ActivityLogService (admin bắt buộc lý do theo #116).
 - Có hiệu lực ngay: đăng nhập trả `403 AUTH_ACCOUNT_LOCKED`, token đã cấp cũng bị chặn ở request kế tiếp.
 - REQUIRED: gọi trong transaction của người gọi thì cùng commit / rollback với việc ghi nhật ký.
+
+### ban (D-09, UT-03)
+
+- Người gọi: reputation, khi sao uy tín về 0. Đặt `status = BANNED` (`is_active` giữ nguyên) rồi phát
+  `UserLockedEvent` (`adminId = null`) để dọn dẹp như khoá: huỷ giao dịch đang mở trừ `DISPUTED`, nhả bài, từ chối
+  bài chờ duyệt và nhả phí, ẩn bài `APPROVED`. Trả `UserLockCleanup` để người gọi ghi nhật ký `USER_BAN`.
+- Đã `BANNED` thì không làm gì, trả `null`.
+- Có hiệu lực ngay: đăng nhập trả `403 AUTH_ACCOUNT_BANNED`, token đã cấp cũng bị chặn với cùng mã.
+- REQUIRED, các listener chạy cùng transaction: một bước lỗi thì cả việc cấm cũng rollback.
 
 ### findContact (FR-82, BR-T11, BR-T12)
 

@@ -23,12 +23,14 @@ Mọi đổi trạng thái đi qua `RequestStatus.canTransition`; cạnh không 
 | `LOGISTICS_CONFIRMED` | `AWAITING_HANDOVER` | Một bên xác nhận bàn giao |
 | `LOGISTICS_CONFIRMED` | `CANCELLED` | Huỷ giao dịch, khoá tài khoản |
 | `AWAITING_HANDOVER` | `COMPLETED` | Bên còn lại xác nhận, hoặc job tự xác nhận sau `AUTO_CONFIRM_DAYS` |
-| `AWAITING_HANDOVER` | `DISPUTED` | `POST /requests/{id}/handover-issue` |
+| `AWAITING_HANDOVER` | `DISPUTED` | `POST /requests/{id}/handover-issue` hoặc bên nhận xác nhận không đúng mô tả |
 | `AWAITING_HANDOVER` | `CANCELLED` | Huỷ giao dịch, khoá tài khoản |
 | `DISPUTED` | `COMPLETED` | Admin bác bỏ khiếu nại (`DISMISS`) |
 | `DISPUTED` | `CANCELLED` | Admin chấp nhận khiếu nại (`UPHOLD`), hoặc Admin huỷ giao dịch kẹt |
 
 `COMPLETED`, `REJECTED`, `CANCELLED` là trạng thái cuối. Không có cạnh `LOGISTICS_CONFIRMED -> DISPUTED`.
+
+Khi chủ bài đổi hình thức `GIVE` ↔ `SWAP` bằng `PUT /api/v1/items/{id}`, mọi Request `PENDING` của bài chuyển sang `CANCELLED` và người gửi nhận thông báo `REQUEST_CANCELLED`. Việc huỷ nằm trong cùng transaction sửa bài; nếu sửa bài hoặc giữ phí thất bại, Request giữ nguyên.
 
 ---
 
@@ -67,6 +69,7 @@ Gửi yêu cầu xin đồ (với bài Give) hoặc đề nghị trao đổi đ�
   - `400 REQUEST_SELF_OFFER_NOT_ALLOWED`: Gửi yêu cầu tới bài của chính mình (BR-R01).
   - `400 REQUEST_LIMIT_EXCEEDED`: Đã có 5 yêu cầu đang ở trạng thái PENDING (BR-U02).
   - `400 REQUEST_SWAP_OFFERED_ITEM_REQUIRED`: Bài đăng là Trao đổi nhưng không đính kèm món đề nghị (BR-S02).
+  - `400 REQUEST_OFFERED_ITEM_NOT_ALLOWED`: Bài đăng cho tặng không nhận món đề nghị trao đổi (YC-04).
   - `403 REQUEST_REPUTATION_BLOCKED`: Tài khoản có 0 sao uy tín, bị vô hiệu hoá quyền gửi yêu cầu giao dịch (BR-U05, FR-92).
   - `404 REQUEST_ITEM_NOT_FOUND`: Không tìm thấy bài đăng hoặc bài đã bị xoá/gỡ.
   - `409 REQUEST_ITEM_NOT_AVAILABLE`: Bài đăng không ở trạng thái sẵn sàng nhận yêu cầu (không phải APPROVED).

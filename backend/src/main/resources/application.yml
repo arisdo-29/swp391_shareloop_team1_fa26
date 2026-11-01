@@ -26,7 +26,7 @@ server:
 app:
   # module auth (BE1)
   jwt:
-    ttl-minutes: 120
+    ttl-minutes: 1440
   # module auth / config (BE1)
   cors: {}
   # module media (BE2)

@@ -2,6 +2,7 @@ package com.shareloop.listingfee.service;
 
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.entity.OfferType;
+import com.shareloop.item.service.ItemService;
 import com.shareloop.listingfee.ListingFeeErrorCode;
 import com.shareloop.listingfee.dto.EditQuote;
 import com.shareloop.listingfee.entity.ItemFee;
@@ -17,6 +18,7 @@ import com.shareloop.wallet.entity.CreditTxType;
 import com.shareloop.wallet.service.CreditService;
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +54,7 @@ public class PostFeeService {
     private final CreditService creditService;
     private final ConfigService configService;
     private final ReputationService reputationService;
+    private final ItemService itemService;
     private final Clock clock;
 
     public PostFeeService(
@@ -59,11 +62,13 @@ public class PostFeeService {
             CreditService creditService,
             ConfigService configService,
             ReputationService reputationService,
+            @Lazy ItemService itemService,
             Clock clock) {
         this.itemFeeRepository = itemFeeRepository;
         this.creditService = creditService;
         this.configService = configService;
         this.reputationService = reputationService;
+        this.itemService = itemService;
         this.clock = clock;
     }
 
@@ -84,15 +89,20 @@ public class PostFeeService {
      */
     @Transactional(readOnly = true)
     public EditQuote quoteEdit(long itemId, long userId) {
+        return quoteEdit(itemId, userId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public EditQuote quoteEdit(long itemId, long userId, OfferType targetOfferType) {
         ItemFeeSnapshot snapshot = readSnapshot(itemId);
         requireOwner(snapshot, userId);
-        return toEditQuote(snapshot);
+        return toEditQuote(snapshot, targetOfferType == null ? snapshot.getOfferType() : targetOfferType, itemId);
     }
 
     /**
      * Giữ phí đăng khi tạo bài (C01, C02, F05 bước 3).
      *
-     * <p>Quy tắc: bài SWAP có số phí = ConfigKey post_fee; bài GIVE miễn phí (số phí = 0). Phí lớn hơn 0 thì gọi
+     * <p>Quy tắc: bài SWAP lấy phí thường hoặc phí vượt ngưỡng theo số bài đang hoạt động; bài GIVE miễn phí. Phí lớn hơn 0 thì gọi
      * {@code CreditService.hold(userId, fee, POST_FEE, itemId)}; phí bằng 0 (bài GIVE, hoặc Admin cấu hình miễn phí)
      * thì không đụng ví. Sau đó luôn ghi fee_state = HELD, pending_fee = fee, pending_fee_type = POST, kể cả bài GIVE,
      * để lúc duyệt chargeHeldFee chạy được và đặt expire_at.
@@ -113,7 +123,9 @@ public class PostFeeService {
             throw new BusinessException(ListingFeeErrorCode.LISTINGFEE_ALREADY_HELD);
         }
 
-        int fee = postFeeFor(snapshot.getOfferType());
+        // Khoá ví trước khi đếm: hai lần đăng đồng thời của cùng chủ bài phải lấy hai mức phí kế tiếp khác nhau.
+        creditService.lockWalletRow(userId);
+        int fee = itemService.nextPostFee(userId, snapshot.getOfferType(), itemId);
         holdOnWallet(userId, fee, ItemFeeType.POST, itemId);
 
         // Khoá items sau users. markHeld tự kiểm lại "đang HELD" trên dữ liệu vừa khoá; ném lỗi thì hoàn tác cả hold.
@@ -125,7 +137,8 @@ public class PostFeeService {
      * Giữ phí khi gửi bản sửa (C14, C14b, F07 bước 4). ItemService gọi hàm này cho MỌI lần sửa; hàm tự quyết giữ bao
      * nhiêu, đúng bằng số {@link #quoteEdit} báo.
      *
-     * <p>Quy tắc: đang HELD (bài đang chờ duyệt) thì sửa đè, không làm gì (UC-14 2a). Còn lại giữ {@code amount} của
+     * <p>Quy tắc: đang HELD và giữ nguyên hình thức thì sửa đè, không giữ thêm. Khi đổi hình thức, nhả khoản đang giữ
+     * và giữ lại đúng báo giá mới. Còn lại giữ {@code amount} của
      * báo giá: REPOST_FEE giữ loại POST; FIRST_FREE_EDIT và PAID_EDIT giữ loại EDIT (lượt miễn phí giữ 0 Credit, chỉ
      * để lúc duyệt biết mà bật free_edit_used). Phí 0 thì không đụng ví. Không bật free_edit_used ở đây: lượt chỉ tính
      * khi bản sửa được duyệt (BR-D07), xem {@link #chargeHeldFee}.
@@ -140,6 +153,10 @@ public class PostFeeService {
      *     WALLET_INSUFFICIENT_BALANCE
      */
     public void holdEditFee(long itemId, long userId) {
+        holdEditFee(itemId, userId, null);
+    }
+
+    public void holdEditFee(long itemId, long userId, OfferType targetOfferType) {
         // Kiểm sớm chủ bài trên ảnh chụp chưa khoá: người khác gọi thì báo lỗi ngay, không khoá ví của ai.
         requireOwner(readSnapshot(itemId), userId);
 
@@ -147,15 +164,28 @@ public class PostFeeService {
         // chụp đọc sau đó đã thấy HELD của luồng đầu. Đọc bằng projection (không phải entity) nên luôn lấy dữ liệu mới.
         creditService.lockWalletRow(userId);
         ItemFeeSnapshot snapshot = readSnapshot(itemId);
-        if (snapshot.getFeeState() == ItemFeeState.HELD) {
+        OfferType requestedType = targetOfferType == null ? snapshot.getOfferType() : targetOfferType;
+        boolean changingType = requestedType != snapshot.getOfferType();
+        if (snapshot.getFeeState() == ItemFeeState.HELD && !changingType) {
             return;
         }
 
-        EditQuote quote = toEditQuote(snapshot);
-        ItemFeeType feeType = quote.reason() == EditQuote.Reason.REPOST_FEE ? ItemFeeType.POST : ItemFeeType.EDIT;
+        EditQuote quote = toEditQuote(snapshot, requestedType, itemId);
+        ItemFeeType feeType = quote.reason() == EditQuote.Reason.REPOST_FEE
+                        || quote.reason() == EditQuote.Reason.OFFER_TYPE_CHANGE_POST_FEE
+                ? ItemFeeType.POST
+                : ItemFeeType.EDIT;
+        if (snapshot.getFeeState() == ItemFeeState.HELD && snapshot.getPendingFee() > 0) {
+            creditService.release(
+                    userId, snapshot.getPendingFee(), toCreditTxType(snapshot.getPendingFeeType()), itemId);
+        }
         holdOnWallet(userId, quote.amount(), feeType, itemId);
 
         ItemFee itemFee = lockItemFee(itemId);
+        if (snapshot.getFeeState() == ItemFeeState.HELD) {
+            requireSameHeldFee(itemFee, snapshot);
+            itemFee.markReleased();
+        }
         itemFee.markHeld(quote.amount(), feeType);
     }
 
@@ -164,7 +194,7 @@ public class PostFeeService {
      *
      * <p>Quy tắc: đọc pending_fee và pending_fee_type của bài; pending_fee lớn hơn 0 thì gọi
      * {@code CreditService.chargeHeld} (bằng 0 thì không đụng ví, không ghi credit_ledger); fee_state = CHARGED. Loại
-     * POST (chỉ có ở lần duyệt đầu) thì post_fee_paid = true và expire_at = lúc duyệt + post_display_days ngày, hoặc
+     * POST thì post_fee_paid = true khi có khoản phí đăng thực trả; chỉ lần duyệt đầu mới đặt expire_at = lúc duyệt + post_display_days ngày, hoặc
      * post_display_days_gold ngày khi chủ bài từ hạng Vàng trở lên (BR-D03, FR-29, UC-40). Loại EDIT thì free_edit_used = true (lượt sửa chỉ tính khi được duyệt) và không đổi expire_at.
      * pending_fee và pending_fee_type giữ nguyên sau khi trừ (lý do ở Javadoc lớp).
      *
@@ -191,7 +221,7 @@ public class PostFeeService {
         ItemFee itemFee = lockItemFee(itemId);
         requireSameHeldFee(itemFee, snapshot);
         itemFee.markCharged();
-        if (itemFee.getPendingFeeType() == ItemFeeType.POST) {
+        if (itemFee.getPendingFeeType() == ItemFeeType.POST && !snapshot.getEverApproved()) {
             int displayDays = displayDaysAfterApproval(snapshot.getDonorId());
             itemFee.startDisplayPeriod(clock.instant().plus(displayDays, ChronoUnit.DAYS));
         }
@@ -235,13 +265,31 @@ public class PostFeeService {
     }
 
     // Bảng luật trong Javadoc quoteEdit; mỗi điều kiện một dòng, xét từ trên xuống, gặp dòng đúng là trả về.
-    private EditQuote toEditQuote(ItemFeeSnapshot snapshot) {
+    private EditQuote toEditQuote(ItemFeeSnapshot snapshot, OfferType targetOfferType, long itemId) {
+        if (targetOfferType != snapshot.getOfferType()) {
+            if (targetOfferType == OfferType.GIVE || snapshot.getPostFeePaid()) {
+                return freeQuote(EditQuote.Reason.OFFER_TYPE_CHANGE_FREE);
+            }
+            return paidQuote(
+                    itemService.nextPostFee(snapshot.getDonorId(), OfferType.SWAP, itemId),
+                    EditQuote.Reason.OFFER_TYPE_CHANGE_POST_FEE);
+        }
+        if (targetOfferType == OfferType.SWAP && !snapshot.getPostFeePaid() && snapshot.getEverApproved()) {
+            if (snapshot.getFeeState() == ItemFeeState.HELD && snapshot.getPendingFeeType() == ItemFeeType.POST) {
+                return freeQuote(EditQuote.Reason.PENDING_REVIEW_OVERWRITE);
+            }
+            return paidQuote(
+                    itemService.nextPostFee(snapshot.getDonorId(), OfferType.SWAP, itemId),
+                    EditQuote.Reason.OFFER_TYPE_CHANGE_POST_FEE);
+        }
         boolean feeHeld = snapshot.getFeeState() == ItemFeeState.HELD;
         if (!snapshot.getEverApproved() && feeHeld) {
             return freeQuote(EditQuote.Reason.NOT_YET_APPROVED);
         }
         if (!snapshot.getEverApproved()) {
-            return paidQuote(postFeeFor(snapshot.getOfferType()), EditQuote.Reason.REPOST_FEE);
+            return paidQuote(
+                    itemService.nextPostFee(snapshot.getDonorId(), snapshot.getOfferType(), itemId),
+                    EditQuote.Reason.REPOST_FEE);
         }
         if (feeHeld) {
             return freeQuote(EditQuote.Reason.PENDING_REVIEW_OVERWRITE);
@@ -250,14 +298,6 @@ public class PostFeeService {
             return freeQuote(EditQuote.Reason.FIRST_FREE_EDIT);
         }
         return paidQuote(configService.getInt(ConfigKey.EDIT_FEE), EditQuote.Reason.PAID_EDIT);
-    }
-
-    // Chỉ bài Trao đổi mất phí đăng; bài Cho tặng miễn phí để khuyến khích cho đồ (kể cả tài khoản 0 Credit).
-    private int postFeeFor(OfferType offerType) {
-        if (offerType == OfferType.GIVE) {
-            return 0;
-        }
-        return configService.getInt(ConfigKey.POST_FEE);
     }
 
     private EditQuote freeQuote(EditQuote.Reason reason) {

@@ -51,9 +51,9 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
 - Danh mục điện tử bắt buộc `operatingStatus`: `NORMAL`, `PARTIAL` hoặc `NOT_WORKING`; giá trị lưu trong `item_attribute_mappings`.
 - `images` bắt buộc có 3–8 URL ảnh đã upload của chính người đăng (giới hạn từ `ConfigKey.ITEM_PHOTOS_MIN/MAX`); thứ tự gửi là thứ tự hiển thị.
 - Bài đăng mới tạo có trạng thái mặc định là `PENDING_REVIEW`.
-- Số bài `PENDING_REVIEW` hoặc `APPROVED` còn active của mỗi người đăng bị giới hạn theo hạng hiện tại (`ReputationService.getRank`): Đồng 3, Bạc 5, Vàng 10, Kim Cương không giới hạn theo cấu hình `MAX_ACTIVE_ITEMS_*`. Bài GIVE và SWAP được tính chung.
+- Bài Cho tặng có hạn mức riêng `max_active_give_items` (mặc định 5). Bài Trao đổi không bị chặn theo số lượng; `max_active_items_*` là ngưỡng phí thường theo hạng: Đồng 5, Bạc 8, Vàng 15, Kim cương không giới hạn. Chỉ đếm bài `PENDING_REVIEW` hoặc `APPROVED` đang hoạt động và chưa hết hạn.
 - Kiểm duyệt tầng 1 áp dụng cho tiêu đề, mô tả và món mong muốn: `BLOCK` từ chối; `REVIEW` vẫn tạo bài và gắn cờ trong hàng chờ Admin.
-- Khi tạo thành công, gọi `PostFeeService.holdPostFee`. Phí đăng chỉ áp dụng cho bài `SWAP` (mặc định 5 Credit, theo cấu hình `post_fee`); phí chỉ bị trừ lúc Admin duyệt. Bài `GIVE` miễn phí đăng: tài khoản 0 Credit vẫn đăng được, bài vẫn ở `fee_state = HELD` với `pending_fee = 0` và không đụng tới ví. Lỗi ở bất kỳ bước nào sẽ rollback bài, phí giữ và trạng thái ảnh.
+- Khi tạo thành công, gọi `PostFeeService.holdPostFee`. Bài `SWAP` trong ngưỡng theo hạng giữ `post_fee` (mặc định 5 Credit); bài vượt ngưỡng giữ `post_fee_over_quota` (mặc định 10 Credit) và vẫn đăng được. Phí chỉ bị trừ lúc Admin duyệt. Bài `GIVE` miễn phí đăng: tài khoản 0 Credit vẫn đăng được, bài vẫn ở `fee_state = HELD` với `pending_fee = 0`. Lỗi ở bất kỳ bước nào sẽ rollback bài, phí giữ và trạng thái ảnh.
 
 - **Thành công:** `201 Created`, trả về `ItemResponse`.
 
@@ -86,7 +86,6 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
   - `400 ITEM_DEFECT_NOTE_REQUIRED`: Đồ DEFECTIVE nhưng thiếu mô tả lỗi.
   - `400 ITEM_INVALID_IMAGE`: `images[]` chứa URL không phải URL trả về từ `POST /api/v1/media`.
   - `422 ITEM_INVALID_IMAGE_COUNT` (`field: images`): Có ít hơn 3 hoặc nhiều hơn 8 ảnh.
-  - `409 ITEM_ACTIVE_LIMIT_REACHED` (`details.limit`, `details.activeCount`): Bài Trao đổi (`SWAP`) đã đạt hạn mức theo hạng (`max_active_items_*`: Đồng 5, Bạc 8, Vàng 15, Kim cương -1 là không giới hạn); chỉ đếm bài `SWAP` đang hiển thị hoặc chờ duyệt. Thông báo nêu hạn mức hiện tại.
   - `409 ITEM_GIVE_LIMIT_REACHED` (`details.limit`, `details.activeCount`): Bài Cho tặng (`GIVE`) đã đạt hạn mức chung mọi hạng (`max_active_give_items`, mặc định 5); chỉ đếm bài `GIVE`. Tài khoản trong danh sách bỏ qua giới hạn của cấu hình test vẫn được bỏ qua cả hai hạn mức.
   - `422 ITEM_DEFECT_IMAGES_REQUIRED` (`field: defectImages`): Bài `DEFECTIVE` không có ảnh lỗi.
   - `422 ITEM_OPERATING_STATUS_REQUIRED` (`field: operatingStatus`): Đồ điện tử chưa khai trạng thái hoạt động.
@@ -118,9 +117,9 @@ Xem chi tiết một bài đăng theo ID.
 ## PUT /api/v1/items/{id}
 
 - **Xác thực:** Bearer Token, chỉ chủ bài. Body gồm các trường nội dung như `CreateItemRequest`; `images` và `defectImages` có thể bỏ qua để giữ ảnh hiện tại, hoặc gửi danh sách URL media của chính chủ bài để thay và sắp lại thứ tự. Khi đổi sang `DEFECTIVE` phải có ít nhất một ảnh lỗi; khi chọn danh mục điện tử phải gửi `operatingStatus`.
-- **Luồng:** Từ chối bài đã `RESERVED`/`TRADED`/`EXPIRED` hoặc có Request từ `RESERVED` trở lên. Không cho đổi bài `GIVE` sang `SWAP` (bài Cho tặng miễn phí đăng, đổi sang Trao đổi sẽ né được phí đăng): trả `409 ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED`, không giữ phí hay đổi bài; muốn trao đổi thì đăng bài `SWAP` mới. Chiều `SWAP` sang `GIVE` vẫn cho phép. Kiểm duyệt tầng 1 tiêu đề, mô tả và món mong muốn; nội dung bị chặn trả `422`, không giữ phí hay đổi bài. Sau đó gọi `quoteEdit` và `holdEditFee` theo [luật phí sửa](listingfee.md). Bài thành `PENDING_REVIEW`, tạm ẩn để Admin duyệt lại.
+- **Luồng:** Từ chối bài đã `RESERVED`/`TRADED`/`EXPIRED` hoặc có Request từ `RESERVED` trở lên. Cho phép đổi `GIVE` ↔ `SWAP`. Đổi sang `GIVE` phải còn chỗ trong hạn mức Cho tặng; phí đăng Trao đổi đã thu không hoàn. Đổi sang `SWAP` khi bài chưa từng trả phí đăng Trao đổi sẽ giữ 5 hoặc 10 Credit theo số bài Trao đổi đang hoạt động và ngưỡng của hạng; bài đã trả phí đăng thì không thu lại. Kiểm duyệt tầng 1 tiêu đề, mô tả và món mong muốn; nội dung bị chặn trả `422`, không giữ phí hay đổi bài. Sau đó gọi `quoteEdit` và `holdEditFee` theo [luật phí sửa](listingfee.md). Bài thành `PENDING_REVIEW`, tạm ẩn để Admin duyệt lại. Nếu đổi hình thức, các Request `PENDING` của bài được huỷ trong cùng transaction và người gửi nhận thông báo; lỗi lưu bài hoặc giữ phí thì không huỷ yêu cầu.
 - **Thành công:** `200 OK`, `ItemResponse` mới.
-- **Lỗi chính:** `401 UNAUTHORIZED`, `403 ITEM_NOT_OWNER`, `403 ITEM_REPUTATION_BLOCKED` (chủ bài có 0 sao uy tín, kiểm tra ngay sau khi xác nhận chủ bài, không giữ phí sửa), `404 ITEM_NOT_FOUND`, `409 ITEM_EDIT_NOT_ALLOWED`, `409 ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED`, `422 ITEM_MODERATION_BLOCKED` (`field: content`), `422 ITEM_INVALID_IMAGE_COUNT`, lỗi media và `402 WALLET_INSUFFICIENT_BALANCE`.
+- **Lỗi chính:** `401 UNAUTHORIZED`, `403 ITEM_NOT_OWNER`, `403 ITEM_REPUTATION_BLOCKED` (chủ bài có 0 sao uy tín), `404 ITEM_NOT_FOUND`, `409 ITEM_EDIT_NOT_ALLOWED`, `409 ITEM_GIVE_LIMIT_REACHED`, `422 ITEM_MODERATION_BLOCKED` (`field: content`), `422 ITEM_INVALID_IMAGE_COUNT`, lỗi media và `402 WALLET_INSUFFICIENT_BALANCE`.
 
 ---
 
@@ -146,7 +145,7 @@ Xem danh sách tất cả các bài đăng do chính mình tạo (sắp xếp m�
 
 ## 3b. GET /api/v1/me/posting-quota
 
-Hạn mức đăng bài hiện tại cho trang Đăng tin (cần đăng nhập). Cho tặng và Trao đổi đếm riêng, chỉ tính bài `PENDING_REVIEW` và `APPROVED` đang hiển thị.
+Hạn mức và phí bài kế tiếp cho trang Đăng tin (cần đăng nhập). Cho tặng và Trao đổi đếm riêng; chỉ tính bài `PENDING_REVIEW` và `APPROVED` còn hạn, đang hoạt động. `swap.limit` là ngưỡng phí thường, không phải mức chặn đăng bài.
 
 - **Thành công:** `200 OK`
 
@@ -154,12 +153,14 @@ Hạn mức đăng bài hiện tại cho trang Đăng tin (cần đăng nhập).
 {
   "give": { "active": 2, "limit": 5 },
   "swap": { "active": 9, "limit": 15 },
-  "rank": "GOLD"
+  "rank": "GOLD",
+  "nextPostFee": 5
 }
 ```
 
-- `limit = -1` nghĩa là không giới hạn (hạng Kim cương với Trao đổi, hoặc tài khoản được bỏ qua giới hạn).
+- `limit = -1` nghĩa là không giới hạn (hạng Kim cương với Trao đổi, hoặc tài khoản được bỏ qua hạn mức).
 - `rank`: `BRONZE`, `SILVER`, `GOLD`, `DIAMOND`.
+- `nextPostFee`: phí Credit cho bài Trao đổi tiếp theo; `post_fee` khi dưới ngưỡng hoặc tài khoản được bỏ qua hạn mức, `post_fee_over_quota` khi đã đạt ngưỡng.
 - **Lỗi:** `401` khi chưa đăng nhập.
 
 ---
@@ -254,7 +255,6 @@ Với danh sách, hai trường này được đọc bằng một query cho cả
 | `ITEM_DEFECT_NOTE_REQUIRED` | 400 | Bài đăng có tình trạng DEFECTIVE nhưng thiếu mô tả lỗi |
 | `ITEM_INVALID_IMAGE` | 400 | URL ảnh không phải URL do API media trả về |
 | `ITEM_INVALID_IMAGE_COUNT` | 422 | `images` có ít hơn 3 hoặc nhiều hơn 8 phần tử |
-| `ITEM_ACTIVE_LIMIT_REACHED` | 409 | Bài Trao đổi đã đạt hạn mức theo hạng; thông báo nêu hạn mức |
 | `ITEM_GIVE_LIMIT_REACHED` | 409 | Bài Cho tặng đã đạt hạn mức chung (`max_active_give_items`); có `details.limit`, `details.activeCount` |
 | `ITEM_DEFECT_IMAGES_REQUIRED` | 422 | Bài `DEFECTIVE` thiếu ảnh lỗi |
 | `ITEM_DEFECT_IMAGES_NOT_ALLOWED` | 422 | Bài không `DEFECTIVE` lại gửi ảnh lỗi |
@@ -263,7 +263,6 @@ Với danh sách, hai trường này được đọc bằng một query cho cả
 | `ITEM_NOT_OWNER` | 403 | Sửa bài không phải của mình |
 | `ITEM_EDIT_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được sửa |
 | `ITEM_REMOVE_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được gỡ |
-| `ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED` | 409 | Sửa bài Cho tặng (`GIVE`) sang Trao đổi (`SWAP`); phải đăng bài Trao đổi mới |
 | `ITEM_REPUTATION_BLOCKED` | 403 | Người đăng hoặc sửa bài có 0 sao uy tín (FR-92, BR-U05) |
 | `ITEM_MODERATION_BLOCKED` | 422 | Nội dung tạo hoặc sửa bị kiểm duyệt tầng 1 chặn |
 | `VALIDATION_FAILED` | 400 | Sai định dạng hoặc thiếu trường bắt buộc |

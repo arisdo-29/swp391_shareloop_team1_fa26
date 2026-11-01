@@ -6,7 +6,13 @@ import { Link, NavLink } from 'react-router-dom';
  * bên trái là câu giới thiệu ngắn, bên phải là biểu mẫu.
  * `showTabs` hiện cặp tab "Đăng nhập / Tạo tài khoản" để chuyển qua lại.
  */
-export function AuthLayout({ showTabs = false, children }: { showTabs?: boolean; children: ReactNode }) {
+export function AuthLayout({
+  showTabs = false,
+  children,
+}: {
+  showTabs?: boolean;
+  children: ReactNode;
+}) {
   return (
     <div className="flex min-h-[calc(100vh-68px)] flex-col lg:flex-row">
       <aside className="flex flex-col justify-between gap-6 bg-primary-hover px-6 py-8 text-white sm:px-10 lg:w-[44%] lg:px-12 lg:py-14">
@@ -20,14 +26,20 @@ export function AuthLayout({ showTabs = false, children }: { showTabs?: boolean;
             Cho tặng và trao đổi đồ cũ với hàng xóm cùng quận.
           </p>
         </div>
-        <Link to="/about" className="text-sm font-semibold text-primary-fixed underline-offset-4 hover:underline">
+        <Link
+          to="/about"
+          className="text-sm font-semibold text-primary-fixed underline-offset-4 hover:underline"
+        >
           ShareLoop hoạt động thế nào?
         </Link>
       </aside>
       <div className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6 lg:items-center">
-        <div className="w-full max-w-[420px]">
+        <div className="w-full max-w-[420px] rounded-xl bg-white p-5 shadow-md ring-1 ring-border/80 sm:p-6">
           {showTabs ? (
-            <nav aria-label="Tài khoản" className="mb-6 grid grid-cols-2 gap-1 rounded-lg bg-surface-container p-1">
+            <nav
+              aria-label="Tài khoản"
+              className="mb-6 grid grid-cols-2 gap-1 rounded-lg bg-surface-container p-1"
+            >
               <AuthTab to="/login">Đăng nhập</AuthTab>
               <AuthTab to="/register">Tạo tài khoản</AuthTab>
             </nav>
@@ -45,7 +57,9 @@ function AuthTab({ to, children }: { to: string; children: ReactNode }) {
       to={to}
       className={({ isActive }) =>
         `flex min-h-11 items-center justify-center rounded-md text-sm font-semibold transition ${
-          isActive ? 'bg-white text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'
+          isActive
+            ? 'bg-white text-primary shadow-sm'
+            : 'text-text-secondary hover:text-text-primary'
         }`
       }
     >
