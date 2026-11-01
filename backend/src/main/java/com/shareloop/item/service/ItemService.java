@@ -1,6 +1,8 @@
 package com.shareloop.item.service;
 
+import com.shareloop.catalog.service.AreaService;
 import com.shareloop.catalog.service.CategoryAttributeService;
+import com.shareloop.catalog.service.CategoryService;
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
@@ -45,6 +47,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -72,6 +75,8 @@ public class ItemService {
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
     private final PostLimitProperties postLimitProperties;
+    private final CategoryService categoryService;
+    private final AreaService areaService;
 
     public ItemService(
             ItemRepository itemRepository,
@@ -87,7 +92,9 @@ public class ItemService {
             UserService userService,
             ApplicationEventPublisher eventPublisher,
             ObjectMapper objectMapper,
-            PostLimitProperties postLimitProperties) {
+            PostLimitProperties postLimitProperties,
+            @Lazy CategoryService categoryService,
+            AreaService areaService) {
         this.itemRepository = itemRepository;
         this.jdbcClient = jdbcClient;
         this.mediaService = mediaService;
@@ -102,6 +109,8 @@ public class ItemService {
         this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
         this.postLimitProperties = postLimitProperties;
+        this.categoryService = categoryService;
+        this.areaService = areaService;
     }
 
     /**
@@ -112,6 +121,8 @@ public class ItemService {
     public ItemResponse createItem(Long donorId, CreateItemRequest request) {
         // Kiểm tra sao uy tín đầu tiên để không giữ phí hay kiểm duyệt cho người đã bị khoá quyền đăng bài
         requireCanPost(donorId);
+        categoryService.getById(request.categoryId());
+        areaService.getDistrict(request.areaId());
 
         // SWAP bắt buộc phải có món mong muốn (BR-S02, ck_items_swap_desired)
         if (request.offerType() == OfferType.SWAP
@@ -215,6 +226,8 @@ public class ItemService {
                 && !canBypassPostLimit(userId)) {
             checkActiveGiveLimit(userId);
         }
+        categoryService.getById(request.categoryId());
+        areaService.getDistrict(request.areaId());
         validateContent(request.offerType(), request.desiredItem(), request.condition(), request.defectNote());
         String moderationText = request.desiredItem() == null
                 ? request.description()

@@ -13,7 +13,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.catalog.AreaErrorCode;
+import com.shareloop.catalog.CatalogErrorCode;
+import com.shareloop.catalog.dto.AreaResponse;
+import com.shareloop.catalog.dto.CategoryResponse;
+import com.shareloop.catalog.service.AreaService;
 import com.shareloop.catalog.service.CategoryAttributeService;
+import com.shareloop.catalog.service.CategoryService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.PostLimitProperties;
@@ -99,6 +105,12 @@ class ItemServiceTest {
     @Mock
     PostLimitProperties postLimitProperties;
 
+    @Mock
+    CategoryService categoryService;
+
+    @Mock
+    AreaService areaService;
+
     @InjectMocks
     ItemService itemService;
 
@@ -117,6 +129,12 @@ class ItemServiceTest {
         lenient()
                 .when(contentModerationService.checkPost(anyLong(), any(), any()))
                 .thenReturn(ModerationResult.pass());
+        lenient()
+                .when(categoryService.getById(anyLong()))
+                .thenReturn(new CategoryResponse(1L, "Sách", null, false, true, 1));
+        lenient()
+                .when(areaService.getDistrict(anyLong()))
+                .thenReturn(new AreaResponse(1L, "Quận 1", 10L, (short) 2, List.of()));
         lenient().when(reputationService.getRank(10L)).thenReturn(Rank.BRONZE);
         lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_ITEMS_BRONZE)).thenReturn(5);
         lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_GIVE_ITEMS)).thenReturn(5);
@@ -430,6 +448,100 @@ class ItemServiceTest {
         assertThat(response.id()).isEqualTo(101L);
         assertThat(response.desiredItem()).isEqualTo("Sách C#");
         assertThat(response.offerType()).isEqualTo(OfferType.SWAP);
+    }
+
+    @Test
+    @DisplayName("Tạo bài thất bại khi danh mục đang ẩn hoặc không tồn tại (KD-08)")
+    void createItem_whenCategoryNotFoundOrHidden_throwsCatalogCategoryNotFound() {
+        CreateItemRequest request = new CreateItemRequest(
+                99L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
+        when(categoryService.getById(99L))
+                .thenThrow(new BusinessException(CatalogErrorCode.CATALOG_CATEGORY_NOT_FOUND));
+
+        assertThatThrownBy(() -> itemService.createItem(10L, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(CatalogErrorCode.CATALOG_CATEGORY_NOT_FOUND));
+
+        verify(contentModerationService, never()).checkPost(anyLong(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Tạo bài thất bại khi khu vực không phải quận/huyện active")
+    void createItem_whenAreaNotActiveDistrict_throwsCatalogAreaNotFound() {
+        CreateItemRequest request = new CreateItemRequest(
+                1L, 99L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, null, threeImages());
+        when(areaService.getDistrict(99L)).thenThrow(new BusinessException(AreaErrorCode.CATALOG_AREA_NOT_FOUND));
+
+        assertThatThrownBy(() -> itemService.createItem(10L, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(AreaErrorCode.CATALOG_AREA_NOT_FOUND));
+
+        verify(contentModerationService, never()).checkPost(anyLong(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Sửa bài thất bại khi danh mục đang ẩn hoặc không tồn tại (KD-08)")
+    void updateItem_whenCategoryNotFoundOrHidden_throwsCatalogCategoryNotFound() {
+        Item item = new Item(
+                10L, 1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, "NXB Trẻ");
+        ReflectionTestUtils.setField(item, "id", 100L);
+        when(itemRepository.findById(100L)).thenReturn(Optional.of(item));
+
+        UpdateItemRequest request = new UpdateItemRequest(
+                99L,
+                1L,
+                OfferType.GIVE,
+                "Sách Toán",
+                "Sách mới",
+                null,
+                ItemCondition.NEW,
+                null,
+                "NXB Trẻ",
+                null,
+                null,
+                null);
+        when(categoryService.getById(99L))
+                .thenThrow(new BusinessException(CatalogErrorCode.CATALOG_CATEGORY_NOT_FOUND));
+
+        assertThatThrownBy(() -> itemService.updateItem(100L, 10L, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(CatalogErrorCode.CATALOG_CATEGORY_NOT_FOUND));
+
+        verify(contentModerationService, never()).checkPost(anyLong(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Sửa bài thất bại khi khu vực không phải quận/huyện active")
+    void updateItem_whenAreaNotActiveDistrict_throwsCatalogAreaNotFound() {
+        Item item = new Item(
+                10L, 1L, 1L, OfferType.GIVE, "Sách Toán", "Sách mới", null, ItemCondition.NEW, null, "NXB Trẻ");
+        ReflectionTestUtils.setField(item, "id", 100L);
+        when(itemRepository.findById(100L)).thenReturn(Optional.of(item));
+
+        UpdateItemRequest request = new UpdateItemRequest(
+                1L,
+                99L,
+                OfferType.GIVE,
+                "Sách Toán",
+                "Sách mới",
+                null,
+                ItemCondition.NEW,
+                null,
+                "NXB Trẻ",
+                null,
+                null,
+                null);
+        when(areaService.getDistrict(99L)).thenThrow(new BusinessException(AreaErrorCode.CATALOG_AREA_NOT_FOUND));
+
+        assertThatThrownBy(() -> itemService.updateItem(100L, 10L, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(AreaErrorCode.CATALOG_AREA_NOT_FOUND));
+
+        verify(contentModerationService, never()).checkPost(anyLong(), any(), any());
     }
 
     @Test
