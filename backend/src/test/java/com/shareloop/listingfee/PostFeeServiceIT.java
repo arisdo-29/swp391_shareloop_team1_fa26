@@ -1,10 +1,12 @@
 package com.shareloop.listingfee;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.common.exception.ErrorCode;
+import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.listingfee.dto.EditQuote;
 import com.shareloop.listingfee.service.PostFeeService;
@@ -122,76 +124,31 @@ class PostFeeServiceIT extends IntegrationTest {
     }
 
     @Test
-    void giveToSwapChargesPostFeeOnceWithoutResettingDisplayPeriod() {
+    void giveToSwap_whenOfferTypeDiffers_throwsOfferTypeChangeNotAllowed() {
         long ownerId = insertUser(START_BALANCE, 0);
         long itemId = insertApprovedItem(ownerId, false);
-        Instant originalExpiry = Instant.parse("2030-01-15T10:00:00Z");
-        jdbc.update("UPDATE items SET expire_at = ? WHERE id = ?", Timestamp.from(originalExpiry), itemId);
 
-        EditQuote quote = postFeeService.quoteEdit(itemId, ownerId, OfferType.SWAP);
-        assertThat(quote.amount()).isEqualTo(POST_FEE);
-        postFeeService.holdEditFee(itemId, ownerId, OfferType.SWAP);
-        assertThat(heldOf(ownerId)).isEqualTo(POST_FEE);
-        postFeeService.chargeHeldFee(itemId);
+        assertThatThrownBy(() -> postFeeService.quoteEdit(itemId, ownerId, OfferType.SWAP))
+                .isInstanceOf(BusinessException.class)
+                .matches(e ->
+                        ((BusinessException) e).getErrorCode() == ItemErrorCode.ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED);
 
-        assertThat(balanceOf(ownerId)).isEqualTo(START_BALANCE - POST_FEE);
-        assertThat(feeColumnsOf(itemId).get("post_fee_paid")).isEqualTo(true);
-        assertThat(expireAtOf(itemId)).isEqualTo(originalExpiry);
-        jdbc.update("UPDATE items SET offer_type = 'SWAP', desired_item = 'Món đổi' WHERE id = ?", itemId);
-        assertThat(postFeeService.quoteEdit(itemId, ownerId, OfferType.GIVE).amount())
-                .isZero();
-        postFeeService.holdEditFee(itemId, ownerId, OfferType.GIVE);
-        postFeeService.chargeHeldFee(itemId);
-        jdbc.update("UPDATE items SET offer_type = 'GIVE', desired_item = NULL WHERE id = ?", itemId);
-        assertThat(postFeeService.quoteEdit(itemId, ownerId, OfferType.SWAP).amount())
-                .isZero();
-        assertThat(balanceOf(ownerId)).isEqualTo(START_BALANCE - POST_FEE);
+        assertThatThrownBy(() -> postFeeService.holdEditFee(itemId, ownerId, OfferType.SWAP))
+                .isInstanceOf(BusinessException.class)
+                .matches(e ->
+                        ((BusinessException) e).getErrorCode() == ItemErrorCode.ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED);
     }
 
     @Test
-    void giveToSwapBeyondBronzeRegularLimitHoldsTenCredits() {
-        long ownerId = insertUser(START_BALANCE, 0);
-        long giveItemId = insertApprovedItem(ownerId, false);
-        for (int index = 0; index < 5; index++) {
-            insertItem(ownerId);
-        }
-
-        EditQuote quote = postFeeService.quoteEdit(giveItemId, ownerId, OfferType.SWAP);
-        assertThat(quote.amount()).isEqualTo(10);
-        postFeeService.holdEditFee(giveItemId, ownerId, OfferType.SWAP);
-        assertThat(heldOf(ownerId)).isEqualTo(10);
-
-        postFeeService.releaseHeldFee(giveItemId, "REJECTED");
-        assertThat(heldOf(ownerId)).isZero();
-        assertThat(balanceOf(ownerId)).isEqualTo(START_BALANCE);
-    }
-
-    @Test
-    void rejectedGiveToSwapConversionStillRequiresPostFeeOnResubmission() {
-        long ownerId = insertUser(START_BALANCE, 0);
-        long itemId = insertApprovedItem(ownerId, false);
-        postFeeService.holdEditFee(itemId, ownerId, OfferType.SWAP);
-        jdbc.update("UPDATE items SET offer_type = 'SWAP', desired_item = 'Món đổi' WHERE id = ?", itemId);
-        postFeeService.releaseHeldFee(itemId, "REJECTED");
-        jdbc.update("UPDATE items SET status = 'REJECTED' WHERE id = ?", itemId);
-
-        EditQuote quote = postFeeService.quoteEdit(itemId, ownerId, OfferType.SWAP);
-        assertThat(quote.amount()).isEqualTo(POST_FEE);
-        postFeeService.holdEditFee(itemId, ownerId, OfferType.SWAP);
-        assertThat(heldOf(ownerId)).isEqualTo(POST_FEE);
-    }
-
-    @Test
-    void pendingSwapChangedToGiveReleasesHeldPostFee() {
+    void pendingSwapChangedToGive_throwsOfferTypeChangeNotAllowed() {
         long ownerId = insertUser(START_BALANCE, 0);
         long itemId = insertItem(ownerId);
         postFeeService.holdPostFee(itemId, ownerId);
 
-        postFeeService.holdEditFee(itemId, ownerId, OfferType.GIVE);
-
-        assertThat(heldOf(ownerId)).isZero();
-        assertThat(feeColumnsOf(itemId).get("pending_fee")).isEqualTo(0);
-        assertThat(feeColumnsOf(itemId).get("fee_state")).isEqualTo("HELD");
+        assertThatThrownBy(() -> postFeeService.holdEditFee(itemId, ownerId, OfferType.GIVE))
+                .isInstanceOf(BusinessException.class)
+                .matches(e ->
+                        ((BusinessException) e).getErrorCode() == ItemErrorCode.ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED);
     }
 
     @Test

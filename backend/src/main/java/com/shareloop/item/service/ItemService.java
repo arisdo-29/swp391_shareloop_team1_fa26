@@ -17,7 +17,6 @@ import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.entity.OperatingStatus;
-import com.shareloop.item.event.ItemOfferTypeChangedEvent;
 import com.shareloop.item.event.ItemRemovedEvent;
 import com.shareloop.item.mapper.ItemMapper;
 import com.shareloop.item.repository.ItemRepository;
@@ -208,8 +207,13 @@ public class ItemService {
                 || requestQueryService.hasReservedOrHigherRequest(itemId)) {
             throw new BusinessException(ItemErrorCode.ITEM_EDIT_NOT_ALLOWED);
         }
+        if (request.offerType() != item.getOfferType()) {
+            throw new BusinessException(
+                    ItemErrorCode.ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED,
+                    "Không đổi hình thức Cho tặng / Trao đổi khi sửa bài.");
+        }
         if (request.offerType() == OfferType.GIVE
-                && (item.getOfferType() != OfferType.GIVE || item.getStatus() == ItemStatus.REJECTED)
+                && item.getStatus() == ItemStatus.REJECTED
                 && !canBypassPostLimit(userId)) {
             checkActiveGiveLimit(userId);
         }
@@ -248,14 +252,13 @@ public class ItemService {
         }
         validateDefectImages(request.condition(), newDefectMediaIds);
         Optional<Long> operatingAttributeId = requireOperatingStatus(request.categoryId(), request.operatingStatus());
-        postFeeService.quoteEdit(itemId, userId, request.offerType());
-        postFeeService.holdEditFee(itemId, userId, request.offerType());
+        postFeeService.quoteEdit(itemId, userId);
+        postFeeService.holdEditFee(itemId, userId);
         if (requestQueryService.hasReservedOrHigherRequest(itemId)) {
             throw new BusinessException(ItemErrorCode.ITEM_EDIT_NOT_ALLOWED);
         }
 
         Long previousCategoryId = item.getCategoryId();
-        boolean offerTypeChanged = item.getOfferType() != request.offerType();
         item.submitEdit(
                 request.categoryId(),
                 request.areaId(),
@@ -280,9 +283,6 @@ public class ItemService {
                 .update();
         if (moderation.status() == ModerationStatus.REVIEW) {
             saveReviewFlag(itemId, moderation);
-        }
-        if (offerTypeChanged) {
-            eventPublisher.publishEvent(new ItemOfferTypeChangedEvent(itemId));
         }
         eventPublisher.publishEvent(ItemScreeningRequestedEvent.from(item));
         return withHiddenState(toResponse(item, findDisplayWindow(itemId)), item);

@@ -102,8 +102,7 @@ Báo trước lượt sửa tới của bài là miễn phí hay phải giữ ba
 tiền, không đổi dữ liệu. Số `amount` trả về đúng bằng số `PUT /items/{id}` sẽ giữ khi gửi bản sửa.
 
 - Xác thực: **bắt buộc** Bearer Token. Id người dùng lấy từ token, không nhận từ client.
-- Tham số đường dẫn: `id` — id bài đăng.
-- Query `offerType` tùy chọn (`GIVE` hoặc `SWAP`): hình thức sau khi sửa. Bỏ qua thì báo giá giữ nguyên hình thức hiện tại. FE gửi tham số này khi người dùng đổi hình thức để popup hiện đúng 0/5/10 Credit.
+- Tham số đường dẫn: `id` — id bài đăng. Không nhận body hay query `offerType` (hình thức là thuộc tính cố định theo BD-10).
 - Thành công: `200`, một `EditQuote`.
 - Lỗi: `401 UNAUTHORIZED`; `403 LISTINGFEE_NOT_OWNER` khi không phải chủ bài; `404 LISTINGFEE_ITEM_NOT_FOUND` khi không
   có bài hoặc bài đã xoá.
@@ -133,8 +132,6 @@ Swagger hiển thị mô tả từng giá trị của `reason` (ghi trong `@Sche
 | `PENDING_REVIEW_OVERWRITE` | Bài đã duyệt và đang có một bản sửa chờ duyệt: sửa đè, không thêm phí, không thêm lượt.    |
 | `FIRST_FREE_EDIT`          | Bài đã duyệt nhưng chưa dùng lượt sửa miễn phí: miễn phí một lần.                           |
 | `PAID_EDIT`                | Đã dùng lượt sửa miễn phí sau duyệt: tính phí sửa (`edit_fee`).                             |
-| `OFFER_TYPE_CHANGE_FREE`   | Đổi sang Cho hoặc đổi lại Trao đổi sau khi bài đã trả phí đăng: không giữ thêm phí.          |
-| `OFFER_TYPE_CHANGE_POST_FEE` | Đổi bài chưa trả phí đăng sang Trao đổi: giữ 5 hoặc 10 Credit theo ngưỡng hiện tại.     |
 
 ### Luật báo giá (xét từ trên xuống, gặp dòng đúng thì dừng)
 
@@ -148,8 +145,6 @@ miễn phí.
 | `PENDING_REVIEW_OVERWRITE` | Đã duyệt, đang có bản sửa chờ duyệt: sửa đè (UC-14 2a)          | true   | 0          |
 | `FIRST_FREE_EDIT`          | Đã duyệt, chưa dùng lượt sửa miễn phí (C14)                     | true   | 0          |
 | `PAID_EDIT`                | Đã duyệt, đã dùng lượt miễn phí (C14b)                          | false  | `edit_fee` |
-| `OFFER_TYPE_CHANGE_FREE`   | Đổi sang Cho, hoặc đổi lại Trao đổi khi bài đã trả phí đăng      | true   | 0          |
-| `OFFER_TYPE_CHANGE_POST_FEE` | Bài chưa trả phí đăng đổi sang Trao đổi (kể cả nộp lại sau từ chối) | Theo mức phí | `post_fee` hoặc `post_fee_over_quota` |
 
 Khi Admin cấu hình `post_fee` hoặc `edit_fee` bằng 0 thì `REPOST_FEE` / `PAID_EDIT` trả `free = true`, `amount = 0`.
 

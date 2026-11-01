@@ -11,7 +11,6 @@ import com.shareloop.config.ClockConfig;
 import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
-import com.shareloop.item.entity.OfferType;
 import com.shareloop.listingfee.ListingFeeErrorCode;
 import com.shareloop.listingfee.dto.EditQuote;
 import com.shareloop.listingfee.service.PostFeeService;
@@ -51,7 +50,7 @@ class EditQuoteControllerTest {
     void getEditQuote_withToken_returnsQuoteForTokenUser() throws Exception {
         // given: token của user 10, service báo lượt sửa có phí
         String token = jwtService.issue(10L, false);
-        when(postFeeService.quoteEdit(31L, 10L, null)).thenReturn(new EditQuote(false, 5, EditQuote.Reason.PAID_EDIT));
+        when(postFeeService.quoteEdit(31L, 10L)).thenReturn(new EditQuote(false, 5, EditQuote.Reason.PAID_EDIT));
 
         // when + then
         mockMvc.perform(get("/api/v1/items/31/edit-quote").header("Authorization", "Bearer " + token))
@@ -62,23 +61,10 @@ class EditQuoteControllerTest {
     }
 
     @Test
-    void getEditQuote_withTargetSwap_returnsConversionFee() throws Exception {
-        String token = jwtService.issue(10L, false);
-        when(postFeeService.quoteEdit(31L, 10L, OfferType.SWAP))
-                .thenReturn(new EditQuote(false, 10, EditQuote.Reason.OFFER_TYPE_CHANGE_POST_FEE));
-
-        mockMvc.perform(get("/api/v1/items/31/edit-quote")
-                        .param("offerType", "SWAP")
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.amount").value(10));
-    }
-
-    @Test
     void getEditQuote_whenNotOwner_returns403() throws Exception {
         // given
         String token = jwtService.issue(10L, false);
-        when(postFeeService.quoteEdit(31L, 10L, null))
+        when(postFeeService.quoteEdit(31L, 10L))
                 .thenThrow(new BusinessException(ListingFeeErrorCode.LISTINGFEE_NOT_OWNER));
 
         // when + then
