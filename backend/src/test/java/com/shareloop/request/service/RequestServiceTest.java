@@ -22,6 +22,7 @@ import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.report.service.ReportService;
 import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
@@ -85,6 +86,9 @@ class RequestServiceTest {
 
     @Mock
     ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    ReportService reportService;
 
     @Spy
     @InjectMocks
@@ -1398,5 +1402,90 @@ class RequestServiceTest {
                 .notify(eq(10L), eq("REQUEST_CANCELLED"), anyString(), anyString(), eq("/requests/101"));
         verify(notificationService)
                 .notify(eq(11L), eq("REQUEST_CANCELLED"), anyString(), anyString(), eq("/requests/102"));
+    }
+
+    @Test
+    @DisplayName("U5-BE: getDetail trả disputeResponseDueAt khi request ở trạng thái DISPUTED")
+    void getDetail_whenDisputed_returnsDisputeResponseDueAt() {
+        long requestId = 101L;
+        long donorId = 1L;
+        long receiverId = 2L;
+        long itemId = 10L;
+        Instant dueAt = Instant.parse("2026-11-03T10:00:00Z");
+
+        Request request = new Request(itemId, receiverId, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", requestId);
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "status", RequestStatus.DISPUTED);
+
+        when(requestRepository.findById(requestId)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(donorId, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(itemId);
+        when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).thenReturn(24);
+        when(reportService.findDisputeResponseDueAt(requestId)).thenReturn(dueAt);
+
+        RequestResponse response = requestService.getDetail(requestId, receiverId);
+
+        assertThat(response.status()).isEqualTo(RequestStatus.DISPUTED.name());
+        assertThat(response.disputeResponseDueAt()).isEqualTo(dueAt);
+        verify(reportService).findDisputeResponseDueAt(requestId);
+    }
+
+    @Test
+    @DisplayName("U5-BE: getDetail trả disputeResponseDueAt null khi request không phải DISPUTED")
+    void getDetail_whenNotDisputed_disputeResponseDueAtIsNull() {
+        long requestId = 102L;
+        long donorId = 1L;
+        long receiverId = 2L;
+        long itemId = 10L;
+
+        Request request = new Request(itemId, receiverId, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", requestId);
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "status", RequestStatus.RESERVED);
+
+        when(requestRepository.findById(requestId)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(donorId, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(itemId);
+        when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).thenReturn(24);
+
+        RequestResponse response = requestService.getDetail(requestId, receiverId);
+
+        assertThat(response.status()).isEqualTo(RequestStatus.RESERVED.name());
+        assertThat(response.disputeResponseDueAt()).isNull();
+        verify(reportService, never()).findDisputeResponseDueAt(anyLong());
+    }
+
+    @Test
+    @DisplayName("U5-BE: listMyRequests trả disputeResponseDueAt cho các request DISPUTED")
+    void listMyRequests_whenHasDisputed_includesDisputeResponseDueAt() {
+        long currentUserId = 2L;
+        long reqId1 = 201L;
+        long reqId2 = 202L;
+        Instant dueAt = Instant.parse("2026-11-03T18:00:00Z");
+
+        Request reqDisputed = new Request(10L, currentUserId, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(reqDisputed, "id", reqId1);
+        org.springframework.test.util.ReflectionTestUtils.setField(reqDisputed, "status", RequestStatus.DISPUTED);
+
+        Request reqPending = new Request(11L, currentUserId, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(reqPending, "id", reqId2);
+        org.springframework.test.util.ReflectionTestUtils.setField(reqPending, "status", RequestStatus.PENDING);
+
+        when(requestRepository.findByReceiverIdOrderByCreatedAtDesc(currentUserId))
+                .thenReturn(List.of(reqDisputed, reqPending));
+        when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).thenReturn(24);
+        when(reportService.findDisputeResponseDueAtMap(List.of(reqId1))).thenReturn(Map.of(reqId1, dueAt));
+
+        List<RequestResponse> list = requestService.listMyRequests(currentUserId);
+
+        assertThat(list).hasSize(2);
+        RequestResponse respDisputed =
+                list.stream().filter(r -> r.id().equals(reqId1)).findFirst().orElseThrow();
+        RequestResponse respPending =
+                list.stream().filter(r -> r.id().equals(reqId2)).findFirst().orElseThrow();
+
+        assertThat(respDisputed.disputeResponseDueAt()).isEqualTo(dueAt);
+        assertThat(respPending.disputeResponseDueAt()).isNull();
     }
 }
