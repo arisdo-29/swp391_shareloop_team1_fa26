@@ -8,7 +8,12 @@ import type { ReviewChecklistItem } from '../../services/adminModerationApi';
 import { ModerationChecklistContent } from './ModerationParts';
 
 const checklist: ReviewChecklistItem[] = [
-  { id: 11, key: 'content', statement: 'Nội dung phù hợp quy định' },
+  {
+    id: 11,
+    key: 'content',
+    statement: 'Nội dung phù hợp quy định',
+    description: 'Đạt khi nội dung mô tả đúng món đồ. Từ chối nếu nội dung sai lệch.',
+  },
   { id: 22, key: 'images', statement: 'Hình ảnh thể hiện đúng món đồ' },
   { id: 33, key: 'contact', statement: 'Không chứa thông tin liên hệ trái phép' },
 ];
@@ -43,6 +48,7 @@ describe('ModerationChecklistContent', () => {
     const confirmButton = screen.getByRole('button', { name: 'Xác nhận duyệt bài' });
     expect(screen.getByText('0/3')).toBeTruthy();
     expect(screen.getAllByRole('checkbox')).toHaveLength(3);
+    expect(screen.getByText(checklist[0].description!)).toBeTruthy();
     expect((confirmButton as HTMLButtonElement).disabled).toBe(true);
     expect(onConfirm).not.toHaveBeenCalled();
 
@@ -77,5 +83,33 @@ describe('ModerationChecklistContent', () => {
     expect(screen.getByText(/Backend chưa cung cấp checklist/)).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Xác nhận duyệt bài' }) as HTMLButtonElement).disabled).toBe(true);
     expect(onConfirm).not.toHaveBeenCalled();
+  });
+});
+
+describe('ModerationChecklistContent – Q01 điều kiện đạt', () => {
+  it('hiện mô tả "Đạt khi..." ngay dưới tên mục, mục chưa có mô tả thì chỉ hiện tên', () => {
+    render(
+      <ModerationChecklistContent
+        checklist={[
+          {
+            id: 1,
+            key: 'real_photos',
+            statement: 'Ảnh chụp thực tế rõ nét của đúng món đồ, từ 3 ảnh trở lên, không dùng ảnh mạng.',
+            description: 'Đạt khi có từ 3 ảnh chụp thật. Từ chối nếu dùng ảnh tải từ mạng.',
+          },
+          { id: 2, key: 'category_match', statement: 'Danh mục và thẻ phân loại phản ánh đúng món đồ.', description: null },
+        ]}
+        answers={[false, false]}
+        disabled={false}
+        onToggle={() => undefined}
+        onCancel={() => undefined}
+        onConfirm={() => undefined}
+      />,
+    );
+
+    const photos = screen.getByRole('checkbox', { name: /Ảnh chụp thực tế rõ nét/ });
+    expect(photos.closest('label')?.textContent).toContain('Đạt khi có từ 3 ảnh chụp thật. Từ chối nếu dùng ảnh tải từ mạng.');
+    const category = screen.getByRole('checkbox', { name: /Danh mục và thẻ phân loại/ });
+    expect(category.closest('label')?.textContent).toBe('Danh mục và thẻ phân loại phản ánh đúng món đồ.');
   });
 });

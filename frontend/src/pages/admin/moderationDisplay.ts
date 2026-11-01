@@ -24,8 +24,8 @@ const moderationReasonLabel: Record<string, string> = {
 
 export const conditionLabels: Record<ApiCondition, string> = {
   NEW: 'Mới',
-  LIKE_NEW: 'Như mới',
-  GOOD: 'Còn tốt',
+  LIKE_NEW: 'Ít sử dụng',
+  GOOD: 'Đã dùng nhiều',
   DEFECTIVE: 'Có lỗi',
 };
 

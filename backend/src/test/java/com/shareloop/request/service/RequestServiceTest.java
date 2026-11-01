@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
@@ -21,6 +22,7 @@ import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.report.service.ReportService;
 import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
@@ -85,6 +87,9 @@ class RequestServiceTest {
     @Mock
     ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    ReportService reportService;
+
     @Spy
     @InjectMocks
     RequestService requestService;
@@ -94,6 +99,18 @@ class RequestServiceTest {
         lenient().when(configService.getInt(ConfigKey.MAX_PENDING_REQUESTS)).thenReturn(5);
         lenient().when(reputationService.canRequest(anyLong())).thenReturn(true);
         lenient().when(userService.isLocked(anyLong())).thenReturn(false);
+        lenient().when(userService.isAdmin(anyLong())).thenReturn(false);
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi người gửi yêu cầu là quản trị viên (TK-13)")
+    void createRequest_whenAdmin_throwsRequestAdminBlocked() {
+        when(userService.isAdmin(10L)).thenReturn(true);
+
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_ADMIN_BLOCKED);
+                });
     }
 
     @Test
@@ -259,6 +276,93 @@ class RequestServiceTest {
         assertThat(response.itemId()).isEqualTo(1L);
         assertThat(response.receiverId()).isEqualTo(10L);
         assertThat(response.type()).isEqualTo("GIVE");
+        assertThat(response.status()).isEqualTo("PENDING");
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi bài Cho nhận món đổi gửi kèm (YC-04)")
+    void createRequest_whenGiveWithOfferedItem_throwsBusinessException() {
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.existsByItemIdAndReceiverIdAndStatusIn(eq(1L), eq(10L), anySet()))
+                .thenReturn(false);
+
+        doReturn(Optional.of(new RequestService.ItemSnapshot(99L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(5L)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_OFFERED_ITEM_NOT_ALLOWED);
+                });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi món đề nghị trong bài Trao đổi không phải của người gửi")
+    void createRequest_whenSwapWithOfferedItemNotOwned_throwsBusinessException() {
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.existsByItemIdAndReceiverIdAndStatusIn(eq(1L), eq(10L), anySet()))
+                .thenReturn(false);
+
+        doReturn(Optional.of(new RequestService.ItemSnapshot(99L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(88L, "SWAP", "APPROVED", true)))
+                .when(requestService)
+                .findItemSnapshot(5L);
+
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(5L)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
+                });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi món đề nghị trong bài Trao đổi chưa được duyệt (không APPROVED)")
+    void createRequest_whenSwapWithOfferedItemNotApproved_throwsBusinessException() {
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.existsByItemIdAndReceiverIdAndStatusIn(eq(1L), eq(10L), anySet()))
+                .thenReturn(false);
+
+        doReturn(Optional.of(new RequestService.ItemSnapshot(99L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "PENDING", true)))
+                .when(requestService)
+                .findItemSnapshot(5L);
+
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(5L)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
+                });
+    }
+
+    @Test
+    @DisplayName("Tạo yêu cầu SWAP thành công khi món đề nghị hợp lệ")
+    void createRequest_whenSwapSuccess_savesAndReturnsResponse() {
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.existsByItemIdAndReceiverIdAndStatusIn(eq(1L), eq(10L), anySet()))
+                .thenReturn(false);
+
+        doReturn(Optional.of(new RequestService.ItemSnapshot(99L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED", true)))
+                .when(requestService)
+                .findItemSnapshot(5L);
+
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RequestResponse response = requestService.createRequest(1L, 10L, new CreateRequest(5L));
+
+        assertThat(response).isNotNull();
+        assertThat(response.itemId()).isEqualTo(1L);
+        assertThat(response.receiverId()).isEqualTo(10L);
+        assertThat(response.offeredItemId()).isEqualTo(5L);
+        assertThat(response.type()).isEqualTo("SWAP");
         assertThat(response.status()).isEqualTo("PENDING");
     }
 
@@ -986,15 +1090,53 @@ class RequestServiceTest {
     }
 
     @Test
+    @DisplayName(
+            "confirmHandover: Người nhận chọn không đúng mô tả -> chuyển DISPUTED, không markTraded, phát report event")
     void confirmHandover_whenReceiverSaysNotAsDescribed_publishesReportEvent() {
         // given
         stubLogisticsConfirmedRequest();
 
         // when
-        requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(false, "  Máy không bật được  "));
+        RequestResponse response =
+                requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(false, "  Máy không bật được  "));
 
-        // then: lý do được cắt khoảng trắng thừa trước khi làm mô tả report
+        // then
+        assertThat(response.status()).isEqualTo("DISPUTED");
+        verify(itemService, never()).markTraded(anyLong());
         verify(eventPublisher).publishEvent(new NotAsDescribedReportedEvent(101L, 10L, "Máy không bật được"));
+    }
+
+    @Test
+    @DisplayName(
+            "confirmHandover: Người nhận xác nhận sau donor nhưng chọn không đúng mô tả -> chuyển DISPUTED, không COMPLETED")
+    void confirmHandover_whenReceiverConfirmsAfterDonorNotAsDescribed_transitionsToDisputed() {
+        // given: donor đã xác nhận trước -> status là AWAITING_HANDOVER
+        Request request = new Request(1L, 10L, null, "GIVE");
+        request.select(Instant.now());
+        request.proposeSchedule(
+                "IN_PERSON",
+                "FPT",
+                Instant.now().plus(1, java.time.temporal.ChronoUnit.DAYS),
+                true,
+                false,
+                Instant.now());
+        request.confirmLogistics(false, false, Instant.now());
+        request.confirmHandover(true, null, Instant.now());
+
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        RequestResponse response =
+                requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(false, "Món đồ bị vỡ màn hình"));
+
+        // then
+        assertThat(response.status()).isEqualTo("DISPUTED");
+        verify(itemService, never()).markTraded(anyLong());
+        verify(eventPublisher).publishEvent(new NotAsDescribedReportedEvent(101L, 10L, "Món đồ bị vỡ màn hình"));
     }
 
     @Test
@@ -1245,5 +1387,117 @@ class RequestServiceTest {
         assertThat(resp.receiverTrustStars()).isEqualTo(4);
         assertThat(resp.receiverRank()).isEqualTo("GOLD");
         assertThat(resp.receiverAsDescribedRate()).isEqualTo(100.0);
+    }
+
+    @Test
+    @DisplayName("cancelPendingRequestsForItemRemoved: Huỷ các yêu cầu PENDING và gửi thông báo khi bài bị gỡ")
+    void cancelPendingRequestsForItemRemoved_cancelsPendingRequestsAndNotifies() {
+        // given
+        Request req1 = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(req1, "id", 101L);
+        Request req2 = new Request(1L, 11L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(req2, "id", 102L);
+
+        when(requestRepository.findByItemIdAndStatus(1L, RequestStatus.PENDING)).thenReturn(List.of(req1, req2));
+
+        // when
+        int count = requestService.cancelPendingRequestsForItemRemoved(1L);
+
+        // then
+        assertThat(count).isEqualTo(2);
+        assertThat(req1.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        assertThat(req1.getCancelReason()).isEqualTo("[Hệ thống] Bài đã bị gỡ");
+        assertThat(req2.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        assertThat(req2.getCancelReason()).isEqualTo("[Hệ thống] Bài đã bị gỡ");
+
+        verify(notificationService)
+                .notify(eq(10L), eq("REQUEST_CANCELLED"), anyString(), anyString(), eq("/requests/101"));
+        verify(notificationService)
+                .notify(eq(11L), eq("REQUEST_CANCELLED"), anyString(), anyString(), eq("/requests/102"));
+    }
+
+    @Test
+    @DisplayName("U5-BE: getDetail trả disputeResponseDueAt khi request ở trạng thái DISPUTED")
+    void getDetail_whenDisputed_returnsDisputeResponseDueAt() {
+        long requestId = 101L;
+        long donorId = 1L;
+        long receiverId = 2L;
+        long itemId = 10L;
+        Instant dueAt = Instant.parse("2026-11-03T10:00:00Z");
+
+        Request request = new Request(itemId, receiverId, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", requestId);
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "status", RequestStatus.DISPUTED);
+
+        when(requestRepository.findById(requestId)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(donorId, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(itemId);
+        when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).thenReturn(24);
+        when(reportService.findDisputeResponseDueAt(requestId)).thenReturn(dueAt);
+
+        RequestResponse response = requestService.getDetail(requestId, receiverId);
+
+        assertThat(response.status()).isEqualTo(RequestStatus.DISPUTED.name());
+        assertThat(response.disputeResponseDueAt()).isEqualTo(dueAt);
+        verify(reportService).findDisputeResponseDueAt(requestId);
+    }
+
+    @Test
+    @DisplayName("U5-BE: getDetail trả disputeResponseDueAt null khi request không phải DISPUTED")
+    void getDetail_whenNotDisputed_disputeResponseDueAtIsNull() {
+        long requestId = 102L;
+        long donorId = 1L;
+        long receiverId = 2L;
+        long itemId = 10L;
+
+        Request request = new Request(itemId, receiverId, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", requestId);
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "status", RequestStatus.RESERVED);
+
+        when(requestRepository.findById(requestId)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(donorId, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(itemId);
+        when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).thenReturn(24);
+
+        RequestResponse response = requestService.getDetail(requestId, receiverId);
+
+        assertThat(response.status()).isEqualTo(RequestStatus.RESERVED.name());
+        assertThat(response.disputeResponseDueAt()).isNull();
+        verify(reportService, never()).findDisputeResponseDueAt(anyLong());
+    }
+
+    @Test
+    @DisplayName("U5-BE: listMyRequests trả disputeResponseDueAt cho các request DISPUTED")
+    void listMyRequests_whenHasDisputed_includesDisputeResponseDueAt() {
+        long currentUserId = 2L;
+        long reqId1 = 201L;
+        long reqId2 = 202L;
+        Instant dueAt = Instant.parse("2026-11-03T18:00:00Z");
+
+        Request reqDisputed = new Request(10L, currentUserId, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(reqDisputed, "id", reqId1);
+        org.springframework.test.util.ReflectionTestUtils.setField(reqDisputed, "status", RequestStatus.DISPUTED);
+
+        Request reqPending = new Request(11L, currentUserId, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(reqPending, "id", reqId2);
+        org.springframework.test.util.ReflectionTestUtils.setField(reqPending, "status", RequestStatus.PENDING);
+
+        when(requestRepository.findByReceiverIdOrderByCreatedAtDesc(currentUserId))
+                .thenReturn(List.of(reqDisputed, reqPending));
+        when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).thenReturn(24);
+        when(reportService.findDisputeResponseDueAtMap(List.of(reqId1))).thenReturn(Map.of(reqId1, dueAt));
+
+        List<RequestResponse> list = requestService.listMyRequests(currentUserId);
+
+        assertThat(list).hasSize(2);
+        RequestResponse respDisputed =
+                list.stream().filter(r -> r.id().equals(reqId1)).findFirst().orElseThrow();
+        RequestResponse respPending =
+                list.stream().filter(r -> r.id().equals(reqId2)).findFirst().orElseThrow();
+
+        assertThat(respDisputed.disputeResponseDueAt()).isEqualTo(dueAt);
+        assertThat(respPending.disputeResponseDueAt()).isNull();
     }
 }

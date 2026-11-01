@@ -72,7 +72,8 @@ class ManualTopUpControllerTest {
         verify(service).getOrder(42L, "code");
         verify(service).markPaid(42L, "code");
         String admin = "Bearer " + jwt.issue(1L, true);
-        when(service.list(any(), anyBoolean(), anyInt(), anyInt())).thenReturn(new PageResponse<>(List.of(), 0, 20, 0));
+        when(service.list(any(), any(), anyBoolean(), anyInt(), anyInt()))
+                .thenReturn(new PageResponse<>(List.of(), 0, 20, 0));
         mvc.perform(get(ADMIN).header("Authorization", admin)).andExpect(status().isOk());
         mvc.perform(post(ADMIN + "/code/approve")
                         .header("Authorization", admin)
@@ -92,13 +93,14 @@ class ManualTopUpControllerTest {
     void adminList_withoutParameters_asksForEveryStatusAndUnsubmittedOrders() throws Exception {
         // given
         String admin = "Bearer " + jwt.issue(1L, true);
-        when(service.list(any(), anyBoolean(), anyInt(), anyInt())).thenReturn(new PageResponse<>(List.of(), 0, 20, 0));
+        when(service.list(any(), any(), anyBoolean(), anyInt(), anyInt()))
+                .thenReturn(new PageResponse<>(List.of(), 0, 20, 0));
 
         // when
         mvc.perform(get(ADMIN).header("Authorization", admin)).andExpect(status().isOk());
 
         // then: status null là mọi trạng thái, submittedOnly mặc định false
-        verify(service).list(isNull(), eq(false), eq(0), eq(20));
+        verify(service).list(isNull(), isNull(), eq(false), eq(0), eq(20));
     }
 
     @Test

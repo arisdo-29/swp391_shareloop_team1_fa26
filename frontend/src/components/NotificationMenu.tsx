@@ -142,7 +142,7 @@ export function NotificationMenu({
       <IconButton
         icon="bell"
         label={unreadCount ? `Thông báo, ${unreadCount} chưa đọc` : 'Thông báo'}
-        className={isHome ? '!border-white/30 !bg-white/10 !text-white hover:!bg-white/20 hover:!text-white' : ''}
+        className={isHome ? 'site-header-icon-button' : ''}
         aria-expanded={open}
         onClick={toggle}
       />
@@ -198,7 +198,7 @@ export function NotificationMenu({
                           {notification.link?.startsWith('/') && !notification.link.startsWith('//') && !notification.link.includes('\\') ? (
                             <Link
                               to={notification.link}
-                              className="text-primary hover:underline"
+                              className="text-link hover:underline"
                               onClick={() => {
                                 void markAsRead(notification);
                                 onOpenChange(false);
@@ -212,7 +212,7 @@ export function NotificationMenu({
                               type="button"
                               disabled={markingId !== null}
                               onClick={() => void markAsRead(notification)}
-                              className="text-text-secondary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                              className="text-text-secondary hover:text-link disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               {markingId === notification.id ? 'Đang cập nhật...' : 'Đánh dấu đã đọc'}
                             </button>

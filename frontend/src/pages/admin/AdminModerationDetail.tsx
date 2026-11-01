@@ -2,6 +2,10 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Alert, Button, EmptyState, PageHeader } from '../../components/ui';
 import { adminModerationApi, type ReviewItemDetail } from '../../services/adminModerationApi';
+import {
+  adminChecklistApi,
+  type AdminChecklistEntry,
+} from '../../services/adminChecklistApi';
 import type { ApiError } from '../../services/http';
 import { adminErrorMessage } from './adminErrors';
 import {
@@ -18,6 +22,30 @@ import {
 } from './ModerationParts';
 
 const NO_DATA = 'Chưa có dữ liệu';
+
+function activeReviewChecklist(entries: AdminChecklistEntry[]) {
+  return [...entries]
+    .filter((entry) => entry.active)
+    .sort((left, right) => left.sortOrder - right.sortOrder || left.id - right.id)
+    .map((entry) => ({
+      id: entry.id,
+      key: entry.key,
+      statement: entry.question,
+      description: entry.description,
+    }));
+}
+
+function sameChecklist(
+  left: ReviewItemDetail['checklist'],
+  right: ReviewItemDetail['checklist'],
+) {
+  return left.length === right.length && left.every((entry, index) => (
+    entry.id === right[index]?.id &&
+    entry.key === right[index]?.key &&
+    entry.statement === right[index]?.statement &&
+    entry.description === right[index]?.description
+  ));
+}
 
 function Fact({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -60,12 +88,17 @@ export function AdminModerationDetail() {
     let active = true;
     setLoading(true);
     setLoadError('');
-    Promise.all([adminModerationApi.detail(itemId), adminModerationApi.rejectReasons()])
-      .then(([response, reasons]) => {
+    Promise.all([
+      adminModerationApi.detail(itemId),
+      adminModerationApi.rejectReasons(),
+      adminChecklistApi.list(),
+    ])
+      .then(([response, reasons, checklistEntries]) => {
         if (!active) return;
-        setDetail(response);
+        const currentChecklist = activeReviewChecklist(checklistEntries);
+        setDetail({ ...response, checklist: currentChecklist });
         setRejectReasons(reasons);
-        setAnswers(response.checklist.map(() => false));
+        setAnswers(currentChecklist.map(() => false));
       })
       .catch((caught) => {
         if (!active) return;
@@ -94,6 +127,13 @@ export function AdminModerationDetail() {
     setBusy(true);
     setActionError('');
     try {
+      const currentChecklist = activeReviewChecklist(await adminChecklistApi.list());
+      if (!sameChecklist(detail.checklist, currentChecklist)) {
+        setDetail({ ...detail, checklist: currentChecklist });
+        setAnswers(currentChecklist.map(() => false));
+        setNotice('Checklist đã thay đổi. Vui lòng kiểm tra và tích lại các điều kiện.');
+        return;
+      }
       await adminModerationApi.approve(detail.id, {
         answers: detail.checklist.map((entry, index) => ({ id: entry.id, passed: answers[index] })),
       });
@@ -255,7 +295,10 @@ function DonorAndModeration({ detail }: { detail: ReviewItemDetail }) {
       </Section>
       <Section title="Kết quả kiểm duyệt tự động">
         <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-          <Fact label="Cờ kiểm duyệt" value={flag || 'Không có cờ'} />
+          <Fact
+            label="Phát hiện vi phạm"
+            value={flag ? 'Có dấu hiệu vi phạm' : 'Không phát hiện vi phạm'}
+          />
         </dl>
         {note && note !== flag ? (
           <p className="mt-4 rounded-md border border-warning/20 bg-warning-soft p-3 text-sm leading-6 text-warning">

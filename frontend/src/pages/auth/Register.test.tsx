@@ -104,3 +104,64 @@ describe('Register lỗi từ backend', () => {
     expect(screen.queryByText(/Request failed/)).toBeNull();
   });
 });
+
+describe('Register kiểm tra dữ liệu phía trình duyệt', () => {
+  it('hiện lỗi ngay khi rời từng ô không hợp lệ', async () => {
+    renderRegister();
+    const user = userEvent.setup();
+
+    const nameInput = screen.getByLabelText(/Họ và tên/);
+    await user.click(nameInput);
+    await user.tab();
+    expect(screen.getByText('Vui lòng nhập họ và tên.')).toBeTruthy();
+    expect(nameInput.getAttribute('aria-invalid')).toBe('true');
+
+    const emailInput = screen.getByLabelText(/Email/);
+    await user.type(emailInput, 'email-sai');
+    await user.tab();
+    expect(screen.getByText('Email không đúng định dạng.')).toBeTruthy();
+
+    const phoneInput = screen.getByLabelText(/Số điện thoại/);
+    await user.type(phoneInput, '12345');
+    await user.tab();
+    expect(
+      screen.getByText('Số điện thoại phải có dạng 0xxxxxxxxx hoặc +84xxxxxxxxx.'),
+    ).toBeTruthy();
+
+    const passwordInput = screen.getByLabelText('Mật khẩu');
+    await user.type(passwordInput, 'ngan');
+    await user.tab();
+    expect(screen.getByText('Mật khẩu phải có từ 8–64 ký tự.')).toBeTruthy();
+  });
+
+  it('chỉ kiểm tra lại và xóa lỗi sau khi người dùng rời ô', async () => {
+    renderRegister();
+    const user = userEvent.setup();
+    const emailInput = screen.getByLabelText(/Email/);
+
+    await user.type(emailInput, 'email-sai');
+    await user.tab();
+    expect(screen.getByText('Email không đúng định dạng.')).toBeTruthy();
+
+    await user.clear(emailInput);
+    await user.type(emailInput, 'hop.le@example.com');
+    expect(screen.getByText('Email không đúng định dạng.')).toBeTruthy();
+    expect(emailInput.getAttribute('aria-invalid')).toBe('true');
+
+    await user.tab();
+    expect(screen.queryByText('Email không đúng định dạng.')).toBeNull();
+    expect(emailInput.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('hiện lỗi cho mọi ô và không gọi API khi submit form không hợp lệ', async () => {
+    renderRegister();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Đăng ký' }));
+
+    expect(screen.getByText('Vui lòng nhập họ và tên.')).toBeTruthy();
+    expect(screen.getByText('Vui lòng nhập email.')).toBeTruthy();
+    expect(screen.getByText('Vui lòng nhập số điện thoại.')).toBeTruthy();
+    expect(screen.getByText('Vui lòng nhập mật khẩu.')).toBeTruthy();
+    expect(authApi.register).not.toHaveBeenCalled();
+  });
+});

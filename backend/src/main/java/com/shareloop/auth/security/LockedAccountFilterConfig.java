@@ -1,5 +1,6 @@
 package com.shareloop.auth.security;
 
+import com.shareloop.audit.service.ActivityLogQueryService;
 import com.shareloop.user.service.UserService;
 import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -17,8 +18,9 @@ public class LockedAccountFilterConfig {
     // FilterRegistrationBean: cách Spring Boot gắn một Filter vào servlet kèm thứ tự chạy, thay cho @Component.
     @Bean
     public FilterRegistrationBean<LockedAccountFilter> lockedAccountFilter(
-            UserService userService, ObjectMapper objectMapper) {
-        var registration = new FilterRegistrationBean<>(new LockedAccountFilter(userService, objectMapper));
+            UserService userService, ActivityLogQueryService activityLogQueryService, ObjectMapper objectMapper) {
+        var registration = new FilterRegistrationBean<>(
+                new LockedAccountFilter(userService, activityLogQueryService, objectMapper));
         registration.setOrder(ORDER_AFTER_SPRING_SECURITY);
         return registration;
     }

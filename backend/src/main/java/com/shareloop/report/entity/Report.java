@@ -192,6 +192,15 @@ public class Report extends BaseEntity {
         this.evidence = evidence;
     }
 
+    /**
+     * Còn đang chờ giải trình và chưa tới hạn (D-15, BC-10): Admin chưa được kết luận. Giải trình xong thì status về
+     * OPEN; hết hạn mà chưa giải trình thì Admin kết luận được luôn. Mốc đúng bằng hạn vẫn tính là còn hạn, giống
+     * {@code ReportService.respond}.
+     */
+    public boolean isResponseWindowOpen(Instant now) {
+        return status == ReportStatus.AWAITING_RESPONSE && responseDueAt != null && !now.isAfter(responseDueAt);
+    }
+
     public void awaitResponse(Instant dueAt) {
         this.responseDueAt = dueAt;
         this.status = ReportStatus.AWAITING_RESPONSE;
@@ -230,5 +239,17 @@ public class Report extends BaseEntity {
         if (decision == com.shareloop.report.dto.ReportDecision.UPHOLD) {
             this.starsDeducted = 1;
         }
+    }
+
+    /**
+     * Đóng một báo cáo đang chờ của cùng bài khi Admin đã chấp thuận báo cáo khác về bài đó (D-07, BC-05): tính là có
+     * cơ sở nhưng không trừ sao, vì mỗi bài chỉ bị trừ 1 sao cho lần chấp thuận.
+     */
+    public void closeWithUpheldReport(Long adminId, String note) {
+        this.status = ReportStatus.RESOLVED;
+        this.resolvedBy = adminId;
+        this.resolution = note;
+        this.resolvedAt = Instant.now();
+        this.starsDeducted = 0;
     }
 }

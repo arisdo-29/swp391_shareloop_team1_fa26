@@ -10,6 +10,7 @@ import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.media.service.MediaService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.report.service.ReportService;
 import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
@@ -46,6 +47,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -92,6 +94,7 @@ public class RequestService {
     private final RequestMediaRepository requestMediaRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final ActivityLogService activityLogService;
+    private final ReportService reportService;
 
     @Autowired
     public RequestService(
@@ -106,7 +109,8 @@ public class RequestService {
             @Autowired(required = false) MediaService mediaService,
             @Autowired(required = false) RequestMediaRepository requestMediaRepository,
             @Autowired(required = false) ApplicationEventPublisher eventPublisher,
-            @Autowired(required = false) ActivityLogService activityLogService) {
+            @Autowired(required = false) ActivityLogService activityLogService,
+            @Autowired(required = false) @Lazy ReportService reportService) {
         this.requestRepository = requestRepository;
         this.notificationService = notificationService;
         this.configService = configService;
@@ -119,6 +123,36 @@ public class RequestService {
         this.requestMediaRepository = requestMediaRepository;
         this.eventPublisher = eventPublisher;
         this.activityLogService = activityLogService;
+        this.reportService = reportService;
+    }
+
+    public RequestService(
+            RequestRepository requestRepository,
+            NotificationService notificationService,
+            ConfigService configService,
+            ItemService itemService,
+            ItemQueryService itemQueryService,
+            UserService userService,
+            ReputationService reputationService,
+            JdbcClient jdbcClient,
+            MediaService mediaService,
+            RequestMediaRepository requestMediaRepository,
+            ApplicationEventPublisher eventPublisher,
+            ActivityLogService activityLogService) {
+        this(
+                requestRepository,
+                notificationService,
+                configService,
+                itemService,
+                itemQueryService,
+                userService,
+                reputationService,
+                jdbcClient,
+                mediaService,
+                requestMediaRepository,
+                eventPublisher,
+                activityLogService,
+                null);
     }
 
     public RequestService(
@@ -139,6 +173,7 @@ public class RequestService {
                 userService,
                 reputationService,
                 jdbcClient,
+                null,
                 null,
                 null,
                 null,
@@ -164,6 +199,7 @@ public class RequestService {
                 null,
                 null,
                 null,
+                null,
                 null);
     }
 
@@ -172,6 +208,11 @@ public class RequestService {
      */
     @Transactional
     public RequestResponse createRequest(long itemId, long receiverId, CreateRequest requestDto) {
+        // Admin không tham gia giao dịch (TK-13)
+        if (userService != null && userService.isAdmin(receiverId)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_ADMIN_BLOCKED);
+        }
+
         // 0. Vô hiệu quyền gửi yêu cầu khi TrustStars về 0 (FR-92, BR-U05) hoặc tài khoản bị khoá
         if (reputationService != null && !reputationService.canRequest(receiverId)) {
             throw new BusinessException(RequestErrorCode.REQUEST_REPUTATION_BLOCKED);
@@ -218,6 +259,12 @@ public class RequestService {
             if (offeredItemId == null) {
                 throw new BusinessException(RequestErrorCode.REQUEST_SWAP_OFFERED_ITEM_REQUIRED);
             }
+        } else if (offeredItemId != null) {
+            // Bài Cho không nhận món đổi kèm (YC-04, chưa hỗ trợ D-02)
+            throw new BusinessException(RequestErrorCode.REQUEST_OFFERED_ITEM_NOT_ALLOWED);
+        }
+
+        if (offeredItemId != null) {
             ItemSnapshot offeredItem = findItemSnapshot(offeredItemId)
                     .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
 
@@ -261,6 +308,12 @@ public class RequestService {
         List<Request> requests = requestRepository.findByItemIdOrderByCreatedAtDesc(itemId);
         List<Long> requestIds = requests.stream().map(Request::getId).toList();
         Map<Long, Instant> lastMessageMap = findLastMessageAtMap(requestIds);
+        List<Long> disputedRequestIds = requests.stream()
+                .filter(r -> r.getStatus() == RequestStatus.DISPUTED)
+                .map(Request::getId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        Map<Long, Instant> disputeDueMap = findDisputeResponseDueAtMap(disputedRequestIds);
         int complaintHours = complaintWindowHours();
         return requests.stream()
                 .map(request -> {
@@ -271,6 +324,10 @@ public class RequestService {
                     Double asDescribedRate = rep != null ? rep.asDescribedRate() : null;
                     Instant complaintDeadline = ComplaintWindow.deadline(request.getCompletedAt(), complaintHours);
                     Instant lastMessageAt = request.getId() != null ? lastMessageMap.get(request.getId()) : null;
+                    Instant disputeResponseDueAt =
+                            (request.getStatus() == RequestStatus.DISPUTED && request.getId() != null)
+                                    ? disputeDueMap.get(request.getId())
+                                    : null;
                     return RequestMapper.toResponse(
                             request,
                             receiverName,
@@ -279,7 +336,8 @@ public class RequestService {
                             asDescribedRate,
                             findItemInfo(request, itemCards),
                             complaintDeadline,
-                            lastMessageAt);
+                            lastMessageAt,
+                            disputeResponseDueAt);
                 })
                 .toList();
     }
@@ -296,11 +354,21 @@ public class RequestService {
                 .filter(java.util.Objects::nonNull)
                 .toList();
         Map<Long, Instant> lastMessageMap = findLastMessageAtMap(requestIds);
+        List<Long> disputedRequestIds = requests.stream()
+                .filter(r -> r.getStatus() == RequestStatus.DISPUTED)
+                .map(Request::getId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        Map<Long, Instant> disputeDueMap = findDisputeResponseDueAtMap(disputedRequestIds);
         int complaintHours = complaintWindowHours();
         return requests.stream()
                 .map(request -> {
                     Instant complaintDeadline = ComplaintWindow.deadline(request.getCompletedAt(), complaintHours);
                     Instant lastMessageAt = request.getId() != null ? lastMessageMap.get(request.getId()) : null;
+                    Instant disputeResponseDueAt =
+                            (request.getStatus() == RequestStatus.DISPUTED && request.getId() != null)
+                                    ? disputeDueMap.get(request.getId())
+                                    : null;
                     return RequestMapper.toResponse(
                             request,
                             findUserName(request.getReceiverId()),
@@ -309,7 +377,8 @@ public class RequestService {
                             null,
                             findItemInfo(request, itemCards),
                             complaintDeadline,
-                            lastMessageAt);
+                            lastMessageAt,
+                            disputeResponseDueAt);
                 })
                 .toList();
     }
@@ -614,6 +683,23 @@ public class RequestService {
         return openRequests.size();
     }
 
+    /** Huỷ các yêu cầu PENDING khi bài đăng bị gỡ (D-13, BD-11). */
+    @Transactional
+    public int cancelPendingRequestsForItemRemoved(long itemId) {
+        List<Request> pendingRequests = requestRepository.findByItemIdAndStatus(itemId, RequestStatus.PENDING);
+        for (Request request : pendingRequests) {
+            request.cancel(Request.CANCEL_BY_SYSTEM + "Bài đã bị gỡ");
+            requestRepository.save(request);
+            notificationService.notify(
+                    request.getReceiverId(),
+                    "REQUEST_CANCELLED",
+                    "Yêu cầu đã bị huỷ",
+                    "Bài đăng đã bị gỡ nên yêu cầu đang chờ của bạn đã bị huỷ.",
+                    "/requests/" + request.getId());
+        }
+        return pendingRequests.size();
+    }
+
     private void cancelBecauseUserLocked(Request request, long lockedUserId) {
         boolean wasPending = request.getStatus() == RequestStatus.PENDING;
         request.cancel(Request.CANCEL_BY_SYSTEM + LOCKED_ACCOUNT_REASON);
@@ -708,6 +794,7 @@ public class RequestService {
         RequestItemInfo itemInfo = findItemInfo(request, new HashMap<>());
         Instant complaintDeadline = ComplaintWindow.deadline(request.getCompletedAt(), complaintWindowHours());
         Instant lastMessageAt = findLastMessageAt(request.getId());
+        Instant disputeResponseDueAt = findDisputeResponseDueAt(request);
         if (item.donorId() == currentUserId) {
             ReputationSummary rep = findReceiverReputation(request.getReceiverId());
             Integer trustStars = rep != null ? rep.trustStars() : 5;
@@ -721,11 +808,20 @@ public class RequestService {
                     asDescribedRate,
                     itemInfo,
                     complaintDeadline,
-                    lastMessageAt);
+                    lastMessageAt,
+                    disputeResponseDueAt);
         }
 
         return RequestMapper.toResponse(
-                request, receiverName, null, null, null, itemInfo, complaintDeadline, lastMessageAt);
+                request,
+                receiverName,
+                null,
+                null,
+                null,
+                itemInfo,
+                complaintDeadline,
+                lastMessageAt,
+                disputeResponseDueAt);
     }
 
     /**
@@ -1137,6 +1233,7 @@ public class RequestService {
                 ? ComplaintWindow.deadline(request.getCompletedAt(), complaintWindowHours())
                 : null;
         Instant lastMessageAt = request != null ? findLastMessageAt(request.getId()) : null;
+        Instant disputeResponseDueAt = findDisputeResponseDueAt(request);
         return RequestMapper.toResponse(
                 request,
                 findUserName(request.getReceiverId()),
@@ -1145,7 +1242,24 @@ public class RequestService {
                 null,
                 findItemInfo(request, new HashMap<>()),
                 complaintDeadline,
-                lastMessageAt);
+                lastMessageAt,
+                disputeResponseDueAt);
+    }
+
+    // Hạn giải trình của khiếu nại đang mở thuộc giao dịch (U5-BE, D-04, GN-07).
+    // Chỉ có giá trị khi status == DISPUTED, ngược lại là null.
+    private Instant findDisputeResponseDueAt(Request request) {
+        if (request == null || request.getStatus() != RequestStatus.DISPUTED || request.getId() == null) {
+            return null;
+        }
+        return reportService != null ? reportService.findDisputeResponseDueAt(request.getId()) : null;
+    }
+
+    private Map<Long, Instant> findDisputeResponseDueAtMap(List<Long> disputedRequestIds) {
+        if (disputedRequestIds == null || disputedRequestIds.isEmpty() || reportService == null) {
+            return Map.of();
+        }
+        return reportService.findDisputeResponseDueAtMap(disputedRequestIds);
     }
 
     // Tên món đồ, ảnh đầu tiên và tên chủ bài để giao diện hiện tên thay vì id. Cần vì GET /items/{id} chỉ cho xem

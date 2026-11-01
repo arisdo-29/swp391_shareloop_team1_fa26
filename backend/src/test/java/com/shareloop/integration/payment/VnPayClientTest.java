@@ -25,7 +25,8 @@ class VnPayClientTest {
                 "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html",
                 "https://example.com/return",
                 "TEST",
-                "test-secret");
+                "test-secret",
+                "https://example.com/credit");
         var params = new HashMap<String, String>();
         for (String pair :
                 URI.create(client.buildRedirectUrl("abc", 20000)).getRawQuery().split("&")) {

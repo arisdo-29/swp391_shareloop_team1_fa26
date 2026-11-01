@@ -3,13 +3,18 @@ import type { AuthUserResponse } from './authApi';
 import type { MeResponse } from './userApi';
 import type { AreaResponse, CategoryResponse } from './catalogApi';
 import type { ItemResponse } from './itemApi';
+import type { MyReputation } from './reputationApi';
 import { resolveMediaUrl } from './mediaUrl';
 
 export interface AreaOption { id: number; name: string; label: string }
 
 export const apiUserId = (id: number) => `api_${id}`;
 
-export function toFeUser(user: AuthUserResponse | MeResponse, district = ''): User {
+export function toFeUser(
+  user: AuthUserResponse | MeResponse,
+  district: string,
+  reputation: Pick<MyReputation, 'trustStars' | 'rank'>,
+): User {
   const profile = user as MeResponse;
   return {
     id: apiUserId(user.id),
@@ -25,8 +30,9 @@ export function toFeUser(user: AuthUserResponse | MeResponse, district = ''): Us
     availableCredit: 0,
     holdCredit: 0,
     rewardPoints: 0,
-    reputationStars: 5,
-    rank: 'Thành viên mới',
+    reputationStars: reputation.trustStars,
+    rank: reputation.rank,
+    // /me chỉ trả hồ sơ cho token của tài khoản ACTIVE và chưa bị khóa.
     status: 'active',
     role: user.isAdmin ? 'admin' : 'user',
     joinedAt: new Date().toISOString(),

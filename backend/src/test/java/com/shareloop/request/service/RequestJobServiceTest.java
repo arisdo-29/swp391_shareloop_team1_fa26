@@ -257,7 +257,7 @@ class RequestJobServiceTest {
 
         @Test
         void autoConfirmHandoverRequests_whenRequestHasReport_doesNotComplete() {
-            // given: bên nhận đã xác nhận "không đúng mô tả" nên có report, bên cho im lặng quá 3 ngày
+            // given: bên cho đã xác nhận giao đồ nhưng có report khiếu nại chưa xử lý, bên nhận im lặng quá 3 ngày
             when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
             Instant cutoff = now.minus(3, ChronoUnit.DAYS);
 
@@ -267,7 +267,7 @@ class RequestJobServiceTest {
             request.proposeSchedule(
                     "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(4, ChronoUnit.DAYS));
             request.confirmLogistics(false, false, now.minus(4, ChronoUnit.DAYS));
-            request.confirmHandover(false, false, cutoff.minus(1, ChronoUnit.HOURS));
+            request.confirmHandover(true, null, cutoff.minus(1, ChronoUnit.HOURS));
 
             when(requestRepository.findOverdueHandoverRequests(cutoff)).thenReturn(List.of(request));
             when(requestRepository.findById(303L)).thenReturn(Optional.of(request));

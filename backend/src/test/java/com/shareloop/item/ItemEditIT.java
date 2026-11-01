@@ -86,10 +86,17 @@ class ItemEditIT extends IntegrationTest {
     }
 
     @Test
-    void updateItem_whenGiveChangedToSwap_throwsOfferTypeChangeNotAllowed() throws Exception {
-        // given: bài Cho tặng đã duyệt; bản sửa đổi sang Trao đổi (có desiredItem hợp lệ)
+    void updateItem_whenUnpaidGiveChangesToSwap_holdsPostFee() throws Exception {
+        // Bài Cho tặng đã duyệt nhưng sửa sang Trao đổi bị chặn 409 (BD-10, D-02).
         long ownerId = user("item-edit-owner8@shareloop.local", "0900000761");
+        jdbc.sql("UPDATE users SET credit_balance = 20 WHERE id = :id")
+                .param("id", ownerId)
+                .update();
         long itemId = approvedItem(ownerId);
+        long firstReceiverId = user("item-edit-receiver8a@shareloop.local", "0900000762");
+        long secondReceiverId = user("item-edit-receiver8b@shareloop.local", "0900000763");
+        long firstRequestId = pendingRequest(itemId, firstReceiverId, "GIVE");
+        long secondRequestId = pendingRequest(itemId, secondReceiverId, "GIVE");
         String swapBody = body("Tên mới", "Mô tả mới")
                 .replace("\"offerType\":\"GIVE\"", "\"offerType\":\"SWAP\",\"desiredItem\":\"Sách khác\"");
 
@@ -98,9 +105,10 @@ class ItemEditIT extends IntegrationTest {
                         .header("Authorization", "Bearer " + jwtService.issue(ownerId, false))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(swapBody))
-                // then: bị chặn trước khi giữ phí sửa, bài và ví giữ nguyên
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED"));
+                .andExpect(jsonPath("$.code").value("ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED"))
+                .andExpect(jsonPath("$.message").value("Không đổi hình thức Cho tặng / Trao đổi khi sửa bài."));
+        entityManager.flush();
         assertThat(jdbc.sql("SELECT offer_type FROM items WHERE id = :id")
                         .param("id", itemId)
                         .query(String.class)
@@ -111,6 +119,43 @@ class ItemEditIT extends IntegrationTest {
                         .query(Integer.class)
                         .single())
                 .isZero();
+        assertThat(jdbc.sql("SELECT status FROM requests WHERE id IN (:first, :second) ORDER BY id")
+                        .param("first", firstRequestId)
+                        .param("second", secondRequestId)
+                        .query(String.class)
+                        .list())
+                .containsExactly("PENDING", "PENDING");
+    }
+
+    @Test
+    void updateItem_whenSwapChangesToGive_throwsOfferTypeChangeNotAllowed() throws Exception {
+        long ownerId = user("item-edit-owner8d@shareloop.local", "0900000766");
+        long receiverId = user("item-edit-receiver8d@shareloop.local", "0900000767");
+        long itemId = approvedItem(ownerId);
+        jdbc.sql("UPDATE items SET offer_type = 'SWAP', desired_item = 'Sách', post_fee_paid = true WHERE id = :id")
+                .param("id", itemId)
+                .update();
+        long requestId = pendingRequest(itemId, receiverId, "SWAP");
+
+        mvc.perform(put("/api/v1/items/{id}", itemId)
+                        .header("Authorization", "Bearer " + jwtService.issue(ownerId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Tên mới", "Mô tả mới")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED"))
+                .andExpect(jsonPath("$.message").value("Không đổi hình thức Cho tặng / Trao đổi khi sửa bài."));
+
+        entityManager.flush();
+        assertThat(jdbc.sql("SELECT offer_type FROM items WHERE id = :id")
+                        .param("id", itemId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("SWAP");
+        assertThat(jdbc.sql("SELECT status FROM requests WHERE id = :id")
+                        .param("id", requestId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("PENDING");
     }
 
     @Test
@@ -288,10 +333,20 @@ class ItemEditIT extends IntegrationTest {
         return jdbc.sql("INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, condition, "
                         + "status, approved_at, post_fee_paid, fee_state, free_edit_used) "
                         + "VALUES (:ownerId, :categoryId, :areaId, 'GIVE', 'Tên cũ', 'Mô tả cũ', 'GOOD', "
-                        + "'APPROVED', now(), true, 'CHARGED', true) RETURNING id")
+                        + "'APPROVED', now(), false, 'CHARGED', true) RETURNING id")
                 .param("ownerId", ownerId)
                 .param("categoryId", categoryId)
                 .param("areaId", areaId)
+                .query(Long.class)
+                .single();
+    }
+
+    private long pendingRequest(long itemId, long receiverId, String type) {
+        return jdbc.sql("INSERT INTO requests (item_id, receiver_id, type, status) "
+                        + "VALUES (:itemId, :receiverId, :type, 'PENDING') RETURNING id")
+                .param("itemId", itemId)
+                .param("receiverId", receiverId)
+                .param("type", type)
                 .query(Long.class)
                 .single();
     }

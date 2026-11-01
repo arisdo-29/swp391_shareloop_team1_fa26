@@ -141,7 +141,7 @@ export function ForgotPassword() {
       <form onSubmit={step === 'email' ? submitEmail : resetPassword} aria-labelledby="forgot-title">
         <Link
           to="/login"
-          className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary-hover"
+          className="inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary"
         >
           Về đăng nhập
         </Link>

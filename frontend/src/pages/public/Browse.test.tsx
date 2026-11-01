@@ -45,8 +45,24 @@ vi.mock('../../services/itemApi', () => ({
 
 const longCategoryName = 'Sách, truyện, giáo trình, văn phòng phẩm';
 const categories: CategoryResponse[] = [
-  { id: 7, name: 'Đồ điện tử', parentId: null, restricted: false, boostable: true, sortOrder: 1, activeItemCount: 0 },
-  { id: 42, name: longCategoryName, parentId: null, restricted: false, boostable: true, sortOrder: 2, activeItemCount: 0 },
+  {
+    id: 7,
+    name: 'Đồ điện tử',
+    parentId: null,
+    restricted: false,
+    boostable: true,
+    sortOrder: 1,
+    activeItemCount: 0,
+  },
+  {
+    id: 42,
+    name: longCategoryName,
+    parentId: null,
+    restricted: false,
+    boostable: true,
+    sortOrder: 2,
+    activeItemCount: 0,
+  },
 ];
 
 const book: ItemResponse = {
@@ -84,9 +100,16 @@ function LocationState() {
   const navigate = useNavigate();
   return (
     <>
-      <output data-testid="location">{location.pathname}{location.search}</output>
-      <button type="button" onClick={() => navigate(-1)}>Quay lại lịch sử</button>
-      <button type="button" onClick={() => navigate(1)}>Đi tới lịch sử</button>
+      <output data-testid="location">
+        {location.pathname}
+        {location.search}
+      </output>
+      <button type="button" onClick={() => navigate(-1)}>
+        Quay lại lịch sử
+      </button>
+      <button type="button" onClick={() => navigate(1)}>
+        Đi tới lịch sử
+      </button>
     </>
   );
 }
@@ -114,7 +137,7 @@ beforeEach(() => {
   vi.mocked(catalogApi.categories).mockResolvedValue(categories);
   vi.mocked(catalogApi.categoriesWithCounts).mockResolvedValue(categories);
   vi.mocked(catalogApi.areas).mockResolvedValue([]);
-  vi.mocked(itemApi.list).mockResolvedValue({ items: [book], page: 0, size: 24, totalElements: 1 });
+  vi.mocked(itemApi.list).mockResolvedValue({ items: [book], page: 0, size: 20, totalElements: 1 });
 });
 
 afterEach(() => {
@@ -123,7 +146,7 @@ afterEach(() => {
 });
 
 describe('lọc danh mục trên trang Tìm đồ', () => {
-  it('chỉ hiển thị món có tiêu đề hoặc mô tả khớp từ khóa và đồng bộ tổng số', async () => {
+  it('hiển thị trực tiếp trang kết quả từ khóa do API trả về', async () => {
     const lamp: ItemResponse = {
       ...book,
       id: 801,
@@ -143,10 +166,10 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
       description: 'Màu đen phối vàng ánh kim.',
     };
     vi.mocked(itemApi.list).mockResolvedValue({
-      items: [unrelatedBag, lamp, blackShirt],
+      items: [lamp],
       page: 0,
-      size: 24,
-      totalElements: 3,
+      size: 20,
+      totalElements: 1,
       totalPages: 1,
     });
 
@@ -168,7 +191,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     vi.mocked(itemApi.list).mockResolvedValue({
       items: [lamp],
       page: 0,
-      size: 24,
+      size: 20,
       totalElements: 1,
       totalPages: 1,
     });
@@ -193,19 +216,34 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     expect(document.activeElement).toBe(searchInput);
     expect(itemApi.list).toHaveBeenCalledTimes(1);
 
-    await waitFor(() => expect(screen.getByTestId('location').textContent)
-      .toBe('/browse?q=tai+nghe+Sony'));
-    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({
-      q: 'tai nghe Sony',
-      page: 0,
-      size: 24,
-    })));
+    await waitFor(() =>
+      expect(screen.getByTestId('location').textContent).toBe('/browse?q=tai+nghe+Sony'),
+    );
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          q: 'tai nghe Sony',
+          page: 0,
+          size: 20,
+        }),
+      ),
+    );
     expect(document.activeElement).toBe(searchInput);
   });
 
   it('dùng chung request items đang chạy khi StrictMode mount lại Browse', async () => {
-    let resolveItems!: (value: { items: ItemResponse[]; page: number; size: number; totalElements: number }) => void;
-    const itemsRequest = new Promise<{ items: ItemResponse[]; page: number; size: number; totalElements: number }>((resolve) => {
+    let resolveItems!: (value: {
+      items: ItemResponse[];
+      page: number;
+      size: number;
+      totalElements: number;
+    }) => void;
+    const itemsRequest = new Promise<{
+      items: ItemResponse[];
+      page: number;
+      size: number;
+      totalElements: number;
+    }>((resolve) => {
       resolveItems = resolve;
     });
     vi.mocked(itemApi.list).mockReturnValue(itemsRequest);
@@ -213,7 +251,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     renderBrowseInStrictMode();
 
     expect(itemApi.list).toHaveBeenCalledTimes(1);
-    resolveItems({ items: [book], page: 0, size: 24, totalElements: 1 });
+    resolveItems({ items: [book], page: 0, size: 20, totalElements: 1 });
     expect(await screen.findByText(book.title)).toBeTruthy();
   });
 
@@ -227,7 +265,9 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'expiring');
 
     await waitFor(() => expect(itemApi.list).toHaveBeenCalledTimes(2));
-    expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'expiring', page: 0, size: 24 }));
+    expect(itemApi.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'expiring', page: 0, size: 20 }),
+    );
     expect(screen.getByTestId('location').textContent).toBe('/browse?sort=expiring');
     expect(screen.getByText(book.description)).toBeTruthy();
   });
@@ -240,7 +280,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
       title: `Bài được đẩy ${index + 1}`,
       boostedUntil: new Date(Date.UTC(2099, 0, index + 1, 8)).toISOString(),
     }));
-    vi.mocked(itemApi.list).mockImplementation(async ({ page = 0, size = 24 } = {}) => ({
+    vi.mocked(itemApi.list).mockImplementation(async ({ page = 0, size = 20 } = {}) => ({
       items: boostedItems.slice(page * size, (page + 1) * size),
       page,
       size,
@@ -250,31 +290,43 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
 
     const { container } = renderBrowse(['/browse?boosted=true']);
 
-    expect(await screen.findByText(boostedItems[23].title)).toBeTruthy();
+    expect(await screen.findByText(boostedItems[19].title)).toBeTruthy();
     expect(itemApi.list).toHaveBeenCalledTimes(1);
-    expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({ boosted: true, page: 0, size: 24 }));
-    expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(24);
+    expect(itemApi.list).toHaveBeenCalledWith(
+      expect.objectContaining({ boosted: true, page: 0, size: 20 }),
+    );
+    expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(20);
     expect(screen.getByText('Trang 1 / 2')).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: 'Trang sau' }));
 
     expect(await screen.findByText(boostedItems[24].title)).toBeTruthy();
-    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(1));
+    await waitFor(() =>
+      expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(5),
+    );
     expect(screen.getByText('Trang 2 / 2')).toBeTruthy();
     expect(itemApi.list).toHaveBeenCalledTimes(2);
-    expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ boosted: true, page: 1, size: 24 }));
+    expect(itemApi.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ boosted: true, page: 1, size: 20 }),
+    );
   });
 
-  it('hiển thị đủ 24 món trên mỗi trang trừ trang cuối và chỉ tải trang được xem', async () => {
+  it.each([
+    [19, 1, 19],
+    [20, 1, 20],
+    [21, 2, 1],
+    [40, 2, 20],
+    [41, 3, 1],
+  ])('phân trang đúng 20 món với tổng %i sản phẩm', async (total, expectedPages, lastPageSize) => {
     const user = userEvent.setup();
-    const sourceItems = Array.from({ length: 49 }, (_, index): ItemResponse => ({
+    const sourceItems = Array.from({ length: total }, (_, index): ItemResponse => ({
       ...book,
       id: 800 + index,
       title: `Pagination item ${index + 1}`,
-      createdAt: new Date(Date.UTC(2026, 9, 25, 8, 0, 49 - index)).toISOString(),
+      createdAt: new Date(Date.UTC(2026, 9, 25, 8, 0, total - index)).toISOString(),
     }));
-    vi.mocked(itemApi.list).mockImplementation(async ({ page = 0, size = 24 } = {}) => ({
-      items: sourceItems.slice(page * size, (page + 1) * size),
+    vi.mocked(itemApi.list).mockImplementation(async ({ page = 0, size = 20 } = {}) => ({
+      items: total === 21 ? sourceItems : sourceItems.slice(page * size, (page + 1) * size),
       page,
       size,
       totalElements: sourceItems.length,
@@ -282,31 +334,46 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     }));
 
     const { container } = renderBrowse();
-    const visibleTitles = () => Array.from(container.querySelectorAll('[data-browse-results] > a h3'))
-      .map((node) => node.textContent ?? '');
+    const visibleTitles = () =>
+      Array.from(container.querySelectorAll('[data-browse-results] > a h3')).map(
+        (node) => node.textContent ?? '',
+      );
     const titlesAcrossPages: string[] = [];
 
     expect(await screen.findByText(sourceItems[0].title)).toBeTruthy();
-    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(24));
+    await waitFor(() =>
+      expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(
+        Math.min(20, total),
+      ),
+    );
     expect(itemApi.list).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('Trang 1 / 3')).toBeTruthy();
     titlesAcrossPages.push(...visibleTitles());
 
-    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
-    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(24));
-    expect(screen.getByText('Trang 2 / 3')).toBeTruthy();
-    titlesAcrossPages.push(...visibleTitles());
-
-    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
-    await waitFor(() => expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(1));
-    expect(screen.getByText('Trang 3 / 3')).toBeTruthy();
-    titlesAcrossPages.push(...visibleTitles());
+    if (expectedPages === 1) {
+      expect(screen.queryByRole('navigation', { name: 'Phân trang sản phẩm' })).toBeNull();
+    } else {
+      expect(screen.getByText(`Trang 1 / ${expectedPages}`)).toBeTruthy();
+      for (let pageIndex = 1; pageIndex < expectedPages; pageIndex += 1) {
+        await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+        expect(await screen.findByText(sourceItems[pageIndex * 20].title)).toBeTruthy();
+        const expectedSize = pageIndex === expectedPages - 1 ? lastPageSize : 20;
+        await waitFor(() =>
+          expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(
+            expectedSize,
+          ),
+        );
+        expect(screen.getByText(`Trang ${pageIndex + 1} / ${expectedPages}`)).toBeTruthy();
+        titlesAcrossPages.push(...visibleTitles());
+      }
+    }
 
     expect(new Set(titlesAcrossPages)).toEqual(new Set(sourceItems.map((item) => item.title)));
     expect(titlesAcrossPages).toHaveLength(sourceItems.length);
-    expect(itemApi.list).toHaveBeenCalledTimes(3);
-    for (let page = 0; page < 3; page += 1) {
-      expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({ page, size: 24 }));
+    expect(itemApi.list).toHaveBeenCalledTimes(expectedPages);
+    for (let pageIndex = 0; pageIndex < expectedPages; pageIndex += 1) {
+      expect(itemApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ page: pageIndex, size: 20 }),
+      );
     }
   });
 
@@ -318,7 +385,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     vi.mocked(itemApi.list).mockResolvedValue({
       items: [boostedBook],
       page: 0,
-      size: 24,
+      size: 20,
       totalElements: 1,
     });
 
@@ -332,7 +399,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     vi.mocked(itemApi.list).mockImplementation(async ({ sort } = {}) => ({
       items: sort === 'expiring' ? [expiringBook, book] : [book, expiringBook],
       page: 0,
-      size: 24,
+      size: 20,
       totalElements: 2,
     }));
     const user = userEvent.setup();
@@ -340,7 +407,10 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     const { container } = view;
 
     expect(await screen.findByText(expiringBook.title)).toBeTruthy();
-    const titles = () => Array.from(container.querySelectorAll('[data-browse-results] > a h3')).map((node) => node.textContent);
+    const titles = () =>
+      Array.from(container.querySelectorAll('[data-browse-results] > a h3')).map(
+        (node) => node.textContent,
+      );
     expect(titles()).toEqual([book.title, expiringBook.title]);
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'expiring');
@@ -349,9 +419,13 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
 
     view.unmount();
     renderBrowse(['/browse?sort=expiring']);
-    expect((screen.getByRole('combobox', { name: 'Sắp xếp' }) as HTMLSelectElement).value).toBe('expiring');
+    expect((screen.getByRole('combobox', { name: 'Sắp xếp' }) as HTMLSelectElement).value).toBe(
+      'expiring',
+    );
     await waitFor(() => expect(itemApi.list).toHaveBeenCalledTimes(3));
-    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'expiring' })));
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'expiring' })),
+    );
   });
 
   it('nút áp dụng giữ bộ lọc tức thời và đóng bảng lọc trên mobile', async () => {
@@ -379,11 +453,17 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
       </MemoryRouter>,
     );
 
-    const categoryLinks = await screen.findAllByRole('link', { name: new RegExp(longCategoryName) });
-    const discoveryLink = categoryLinks.find((link) => link.getAttribute('href') === '/browse?categoryId=42');
+    const categoryLinks = await screen.findAllByRole('link', {
+      name: new RegExp(longCategoryName),
+    });
+    const discoveryLink = categoryLinks.find(
+      (link) => link.getAttribute('href') === '/browse?categoryId=42',
+    );
     expect(discoveryLink).toBeTruthy();
     await user.click(discoveryLink!);
-    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/browse?categoryId=42'));
+    await waitFor(() =>
+      expect(screen.getByTestId('location').textContent).toBe('/browse?categoryId=42'),
+    );
   });
 
   it('tìm từ Home giữ nguyên từ khóa và gửi đúng areaId của quận tới API', async () => {
@@ -413,11 +493,10 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
       title: 'Tai nghe tại Quận 1',
     };
     vi.mocked(itemApi.list).mockImplementation(async (params = {}) => ({
-      items: params.areaId === 3 && params.q === 'tai nghe Sony'
-        ? [districtBook]
-        : [otherDistrictBook],
+      items:
+        params.areaId === 3 && params.q === 'tai nghe Sony' ? [districtBook] : [otherDistrictBook],
       page: params.page ?? 0,
-      size: params.size ?? 24,
+      size: params.size ?? 20,
       totalElements: 1,
       totalPages: 1,
     }));
@@ -436,18 +515,26 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     await user.selectOptions(await screen.findByRole('combobox', { name: 'Chọn quận' }), '3');
     await user.click(screen.getByRole('button', { name: 'Tìm đồ' }));
 
-    await waitFor(() => expect(screen.getByTestId('location').textContent)
-      .toBe('/browse?q=tai%20nghe%20Sony&areaId=3'));
-    await waitFor(() => expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({
-      areaId: 3,
-      q: 'tai nghe Sony',
-      page: 0,
-      size: 24,
-    })));
+    await waitFor(() =>
+      expect(screen.getByTestId('location').textContent).toBe(
+        '/browse?q=tai%20nghe%20Sony&areaId=3',
+      ),
+    );
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({
+          areaId: 3,
+          q: 'tai nghe Sony',
+          page: 0,
+          size: 20,
+        }),
+      ),
+    );
     const districtSelect = await screen.findByRole('combobox', { name: 'Quận' });
     await waitFor(() => expect((districtSelect as HTMLSelectElement).value).toBe('3'));
-    expect((screen.getByRole('textbox', { name: 'Tìm tên món đồ' }) as HTMLInputElement).value)
-      .toBe('tai nghe Sony');
+    expect(
+      (screen.getByRole('textbox', { name: 'Tìm tên món đồ' }) as HTMLInputElement).value,
+    ).toBe('tai nghe Sony');
     expect(await screen.findByText(districtBook.title)).toBeTruthy();
     expect(screen.queryByText(otherDistrictBook.title)).toBeNull();
 
@@ -457,14 +544,19 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
 
     const reloadedDistrictSelect = await screen.findByRole('combobox', { name: 'Quận' });
     await waitFor(() => expect((reloadedDistrictSelect as HTMLSelectElement).value).toBe('3'));
-    expect((screen.getByRole('textbox', { name: 'Tìm tên món đồ' }) as HTMLInputElement).value)
-      .toBe('tai nghe Sony');
-    await waitFor(() => expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({
-      areaId: 3,
-      q: 'tai nghe Sony',
-      page: 0,
-      size: 24,
-    })));
+    expect(
+      (screen.getByRole('textbox', { name: 'Tìm tên món đồ' }) as HTMLInputElement).value,
+    ).toBe('tai nghe Sony');
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({
+          areaId: 3,
+          q: 'tai nghe Sony',
+          page: 0,
+          size: 20,
+        }),
+      ),
+    );
     expect(await screen.findByText(districtBook.title)).toBeTruthy();
     expect(screen.queryByText(otherDistrictBook.title)).toBeNull();
   });
@@ -497,17 +589,25 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
       </MemoryRouter>,
     );
 
-    await user.selectOptions(await screen.findByRole('combobox', { name: 'Chọn quận' }), String(areaId));
+    await user.selectOptions(
+      await screen.findByRole('combobox', { name: 'Chọn quận' }),
+      String(areaId),
+    );
     await user.click(screen.getByRole('button', { name: 'Tìm đồ' }));
 
-    await waitFor(() => expect(screen.getByTestId('location').textContent)
-      .toBe(`/browse?q=&areaId=${areaId}`));
-    await waitFor(() => expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({
-      areaId,
-      q: undefined,
-      page: 0,
-      size: 24,
-    })));
+    await waitFor(() =>
+      expect(screen.getByTestId('location').textContent).toBe(`/browse?q=&areaId=${areaId}`),
+    );
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({
+          areaId,
+          q: undefined,
+          page: 0,
+          size: 20,
+        }),
+      ),
+    );
   });
 
   it('chuẩn hóa URL district cũ sang areaId và vẫn gửi đúng bộ lọc khi tải lại', async () => {
@@ -523,16 +623,21 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
 
     renderBrowse(['/browse?q=tai%20nghe&district=3']);
 
-    await waitFor(() => expect(screen.getByTestId('location').textContent)
-      .toBe('/browse?q=tai+nghe&areaId=3'));
+    await waitFor(() =>
+      expect(screen.getByTestId('location').textContent).toBe('/browse?q=tai+nghe&areaId=3'),
+    );
     const districtSelect = await screen.findByRole('combobox', { name: 'Quận' });
     await waitFor(() => expect((districtSelect as HTMLSelectElement).value).toBe('3'));
-    await waitFor(() => expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({
-      areaId: 3,
-      q: 'tai nghe',
-      page: 0,
-      size: 24,
-    })));
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({
+          areaId: 3,
+          q: 'tai nghe',
+          page: 0,
+          size: 20,
+        }),
+      ),
+    );
   });
 
   it('đọc categoryId từ URL, tự chọn tên đầy đủ và gửi đúng ID tới API', async () => {
@@ -542,13 +647,15 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     await waitFor(() => expect((categorySelect as HTMLSelectElement).value).toBe('42'));
     expect(screen.getAllByText(longCategoryName).length).toBeGreaterThanOrEqual(2);
     expect(categorySelect.getAttribute('title')).toBe(longCategoryName);
-    await waitFor(() => expect(itemApi.list).toHaveBeenCalledWith({
-      categoryId: 42,
-      areaId: undefined,
-      q: undefined,
-      page: 0,
-      size: 24,
-    }));
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenCalledWith({
+        categoryId: 42,
+        areaId: undefined,
+        q: undefined,
+        page: 0,
+        size: 20,
+      }),
+    );
     expect(await screen.findByText('Bộ giáo trình đại học')).toBeTruthy();
   });
 
@@ -556,15 +663,17 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     // book có tình trạng GOOD nhưng URL lọc NEW: server đã lọc nên trang vẫn hiện đúng những gì API trả về
     renderBrowse(['/browse?type=gift&condition=NEW']);
 
-    await waitFor(() => expect(itemApi.list).toHaveBeenCalledWith({
-      categoryId: undefined,
-      areaId: undefined,
-      q: undefined,
-      condition: 'NEW',
-      offerType: 'GIVE',
-      page: 0,
-      size: 24,
-    }));
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenCalledWith({
+        categoryId: undefined,
+        areaId: undefined,
+        q: undefined,
+        condition: 'NEW',
+        offerType: 'GIVE',
+        page: 0,
+        size: 20,
+      }),
+    );
     expect(await screen.findByText(book.title)).toBeTruthy();
   });
 
@@ -574,18 +683,24 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     await screen.findByText(book.title);
 
     await user.click(screen.getByRole('button', { name: 'Trao đổi' }));
-    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ offerType: 'SWAP' })));
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ offerType: 'SWAP' })),
+    );
 
-    await user.click(screen.getByRole('button', { name: 'Như mới' }));
-    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(
-      expect.objectContaining({ offerType: 'SWAP', condition: 'LIKE_NEW', page: 0 }),
-    ));
+    await user.click(screen.getByRole('button', { name: 'Ít sử dụng' }));
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ offerType: 'SWAP', condition: 'LIKE_NEW', page: 0 }),
+      ),
+    );
   });
 
   it('không hiện id kỹ thuật khi không tìm thấy tên danh mục', async () => {
     renderBrowse(['/browse?categoryId=9999']);
 
-    await waitFor(() => expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({ categoryId: 9999 })));
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({ categoryId: 9999 })),
+    );
     await screen.findByText(book.title);
     expect(screen.queryByText(/Danh mục #/)).toBeNull();
   });
@@ -596,13 +711,21 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     const categorySelect = await screen.findByRole('combobox', { name: 'Danh mục' });
 
     await user.selectOptions(categorySelect, '42');
-    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/browse?categoryId=42'));
-    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ categoryId: 42 })));
+    await waitFor(() =>
+      expect(screen.getByTestId('location').textContent).toBe('/browse?categoryId=42'),
+    );
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ categoryId: 42 })),
+    );
 
     await user.click(screen.getByRole('button', { name: 'Đặt lại' }));
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/browse'));
     expect((categorySelect as HTMLSelectElement).value).toBe('');
-    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ categoryId: undefined })));
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ categoryId: undefined }),
+      ),
+    );
   });
 
   it('khôi phục đúng danh mục khi dùng Back và Forward', async () => {
@@ -613,10 +736,14 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
 
     await user.click(screen.getByRole('button', { name: 'Quay lại lịch sử' }));
     await waitFor(() => expect((categorySelect as HTMLSelectElement).value).toBe('42'));
-    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ categoryId: 42 })));
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ categoryId: 42 })),
+    );
 
     await user.click(screen.getByRole('button', { name: 'Đi tới lịch sử' }));
     await waitFor(() => expect((categorySelect as HTMLSelectElement).value).toBe('7'));
-    await waitFor(() => expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ categoryId: 7 })));
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ categoryId: 7 })),
+    );
   });
 });

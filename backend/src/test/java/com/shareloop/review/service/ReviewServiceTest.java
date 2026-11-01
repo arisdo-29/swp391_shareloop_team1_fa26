@@ -409,4 +409,40 @@ class ReviewServiceTest {
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(ReviewErrorCode.REVIEW_ITEM_NOT_FOUND);
     }
+
+    @Test
+    void approveWhenDonorLockedOrBannedThrowsAndChangesNothing() {
+        // L5: chủ bài bị khoá hoặc cấm (isLocked tính cả hai) thì bài không được duyệt
+        when(userService.isLocked(99L)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.approve(
+                        8L, List.of(new ChecklistAnswer(11L, true), new ChecklistAnswer(12L, true)), 1L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(ReviewErrorCode.REVIEW_DONOR_LOCKED);
+        verifyNoInteractions(itemService, postFeeService, notificationService, activityLogService);
+    }
+
+    @Test
+    void rejectPendingItemsOfUserRejectsEveryPendingItemAndReleasesFeeOnlyWhenHeld() {
+        // given: bài 8 đang giữ phí, bài 9 là dữ liệu cũ không giữ phí (fee_state khác HELD)
+        ReviewItem legacyItem = mock(ReviewItem.class);
+        when(reviewItemRepository.findById(9L)).thenReturn(Optional.of(legacyItem));
+        when(reviewItemRepository.findDonorIdByItemId(9L)).thenReturn(Optional.of(99L));
+        when(queueRepository.findPendingReviewItemIdsByDonor(99L)).thenReturn(List.of(8L, 9L));
+        when(postFeeService.hasHeldFee(8L)).thenReturn(true);
+        when(postFeeService.hasHeldFee(9L)).thenReturn(false);
+
+        // when
+        List<Long> rejected = service.rejectPendingItemsOfUser(99L, "[Hệ thống] Tài khoản bị khoá", null);
+
+        // then: cả hai bài sang REJECTED; chỉ bài giữ phí mới nhả phí, bài kia không làm hỏng việc khoá
+        assertThat(rejected).containsExactly(8L, 9L);
+        verify(itemService).markRejected(8L);
+        verify(itemService).markRejected(9L);
+        verify(postFeeService).releaseHeldFee(8L, "REJECTED");
+        verify(postFeeService, never()).releaseHeldFee(eq(9L), anyString());
+        verify(reviewItem).reject(eq("[Hệ thống] Tài khoản bị khoá"), any(), isNull());
+        verify(legacyItem).reject(eq("[Hệ thống] Tài khoản bị khoá"), any(), isNull());
+    }
 }

@@ -331,6 +331,15 @@ abstract class MoneyFlowTestBase extends IntegrationTest {
                 .single();
     }
 
+    /** Bài Trao đổi đã duyệt để kiểm tra các luồng phí gia hạn có thu Credit. */
+    protected long insertApprovedSwapItem(long donorId) {
+        long itemId = insertApprovedItem(donorId);
+        jdbc.sql("UPDATE items SET offer_type = 'SWAP', desired_item = 'Sách khác' WHERE id = :itemId")
+                .param("itemId", itemId)
+                .update();
+        return itemId;
+    }
+
     /** Số media UPLOADED (đủ ITEM_PHOTOS_MIN) của user, dạng đường dẫn như FE gửi lên. */
     protected List<String> uploadedImages(long userId) {
         int count = configService.getInt(ConfigKey.ITEM_PHOTOS_MIN);

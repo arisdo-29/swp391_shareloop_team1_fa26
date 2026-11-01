@@ -43,8 +43,7 @@ public class UserReputation extends SliceAudit {
     @Column(name = "clean_streak", nullable = false)
     private int cleanStreak;
 
-    @Column(name = "grace_star_used", nullable = false)
-    private boolean graceStarUsed;
+    // Cột grace_star_used vẫn còn trong bảng (ERD đã chốt) nhưng không map: nhóm đã bỏ sao ân hạn (UT-09).
 
     protected UserReputation() {}
 
@@ -81,10 +80,6 @@ public class UserReputation extends SliceAudit {
 
     public int getCleanStreak() {
         return cleanStreak;
-    }
-
-    public boolean isGraceStarUsed() {
-        return graceStarUsed;
     }
 
     public void addPoints(int points, Rank newRank) {
@@ -151,11 +146,5 @@ public class UserReputation extends SliceAudit {
     /** Vi phạm làm mất chuỗi giao dịch sạch (BR-U09). */
     public void resetCleanStreak() {
         this.cleanStreak = 0;
-    }
-
-    /** Cấp 1 sao ân hạn (FR-95); grace_star_used chỉ đổi false → true. */
-    public void grantGraceStar() {
-        this.trustStars = 1;
-        this.graceStarUsed = true;
     }
 }

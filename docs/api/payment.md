@@ -3,12 +3,16 @@
 Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất (xem `docs/api/wallet.md`).
 
-Người sở hữu: BE1. Chọn cổng qua `app.payment.provider=mock|vnpay|manual`, mặc định `mock`.
+Người sở hữu: BE1. Chọn cổng qua `app.payment.provider=mock|vnpay|manual`. Mặc định `mock` ở dev/test, **`vnpay` ở profile prod** (deploy).
 `MockPaymentClient` giả lập thanh toán; `VnPayClient` tạo URL chuyển sang VNPAY.
+
+> **Thay đổi trước demo (K2):** nạp thủ công (MANUAL) chỉ hoạt động khi `PAYMENT_PROVIDER=manual`. Khi provider khác manual
+> (deploy dùng `vnpay`), `POST /wallet/topup-orders/{orderCode}/mark-paid`, `POST /admin/finance/topup-orders/{orderCode}/approve`
+> và `.../reject` trả `409 WALLET_MANUAL_TOPUP_DISABLED`. `GET /wallet/topup-orders/{orderCode}` và danh sách Admin vẫn dùng được cho mọi provider.
 
 ## QR minh họa, admin duyệt thủ công (MANUAL)
 
-Backend dùng `PAYMENT_PROVIDER=manual`, `PAYMENT_MOCK_ENABLED=false`, kể cả profile prod.
+Chỉ dùng khi `PAYMENT_PROVIDER=manual`; bản deploy không dùng luồng này.
 Frontend không cần `VITE_DEMO_PAYMENT=true` hoặc mode staging. MANUAL không gọi ngân hàng, VietQR hay cổng bên ngoài.
 
 1. User vào `/credit`, nhập số tiền, tạo đơn bằng API hiện có. Backend lấy chủ đơn từ token,
@@ -73,16 +77,21 @@ Khác chủ trả 404 như API đọc; sai provider/trạng thái trả `409 WAL
 
 ### GET /api/v1/admin/finance/topup-orders
 
-Chỉ ADMIN (401 chưa đăng nhập, 403 user thường). Chỉ liệt kê MANUAL, query:
+Chỉ ADMIN (401 chưa đăng nhập, 403 user thường). Liệt kê đơn nạp của mọi provider (VNPAY, MOCK, MANUAL), query:
+
+> **Thay đổi cho FE (U3):** trước đây endpoint chỉ trả đơn `MANUAL`. Nay mặc định trả **tất cả provider**, nên trang
+> `/admin/finance/topup-orders` thấy được đơn VNPay (đọc trường `provider` của từng dòng). Muốn như cũ, truyền `provider=MANUAL`.
+> Nút duyệt/từ chối chỉ nên hiện cho dòng `provider=MANUAL` khi backend chạy `manual`; ngoài ra API trả `409 WALLET_MANUAL_TOPUP_DISABLED`.
 
 | Tham số | Mặc định | Ý nghĩa |
 | --- | --- | --- |
+| provider | (bỏ trống) | VNPAY/MOCK/MANUAL; bỏ trống là mọi provider |
 | status | (bỏ trống) | PENDING/SUCCESS/FAILED/EXPIRED; bỏ trống là mọi trạng thái |
 | submittedOnly | false | true chỉ lấy đơn người dùng đã bấm xác nhận thanh toán; false lấy cả đơn chưa gửi |
 | page | 0 | Số trang >= 0 |
 | size | 20 | 1..100 |
 
-Mặc định (không truyền gì) hiện tất cả đơn nạp thủ công ở mọi trạng thái. Trả 200 `PageResponse<TopUpOrderDetailResponse>`:
+Mặc định (không truyền gì) hiện tất cả đơn nạp ở mọi provider và mọi trạng thái. Trả 200 `PageResponse<TopUpOrderDetailResponse>`:
 `items`, `page`, `size`, `totalElements`; sắp theo thời điểm tạo `createdAt` giảm dần (đơn mới nhất lên đầu) rồi `id` giảm dần.
 
 > **Thay đổi so với bản trước:** `status` từng mặc định `PENDING` và `submittedOnly` từng mặc định `true` (chỉ hiện đơn chờ duyệt). Client muốn giữ cách cũ phải truyền rõ `status=PENDING&submittedOnly=true`. Thứ tự sắp xếp cũng đổi từ `submittedAt` sang `createdAt`.
@@ -227,6 +236,7 @@ Ví dụ khi đã xử lý kết quả: `{"RspCode":"00","Message":"Confirm Succ
 | `00` | Confirm Success | Đã xử lý kết quả thành công hoặc thất bại của cổng |
 | `01` | Order not found | Không tìm thấy đơn VNPAY |
 | `02` | Order already confirmed | Đơn không còn PENDING |
+| `02` | Order expired | Thanh toán thành công nhưng đơn đã quá hạn: đơn thành EXPIRED, không cộng Credit |
 | `04` | Invalid amount | Số tiền thiếu, sai định dạng hoặc không khớp |
 | `97` | Invalid signature | Chữ ký sai hoặc thiếu |
 | `99` | Unknown error | Lỗi xử lý khác; transaction được rollback |
@@ -242,16 +252,23 @@ FE đọc API trạng thái đơn bằng mã tham chiếu; không suy ra đã c�
 
 Mapping `VNPAY_*` nằm trong `application.yml` dùng chung; prod kế thừa cùng giá trị mặc định.
 Chỉ chọn VNPAY mới cần cấu hình merchant; MOCK/MANUAL khởi động được khi thiếu thông tin VNPay.
-Thiếu hoặc để trắng pay-url, return-url, tmn-code hay hash-secret khi chọn VNPAY sẽ làm startup thất bại với thông báo rõ ràng.
+Thiếu hoặc để trắng pay-url, return-url, tmn-code, hash-secret hay fe-result-url khi chọn VNPAY sẽ làm startup thất bại,
+thông báo nêu đúng tên các biến thiếu (`VNPAY_RETURN_URL`, `VNPAY_TMN_CODE`...). Profile prod mặc định `PAYMENT_PROVIDER=vnpay`
+và không có mặc định localhost cho bất kỳ URL nào.
+
+IPN muộn: đơn còn PENDING nhưng đã quá `payment_order_expire_minutes` cộng dung sai `app.payment.vnpay.expiry-grace-minutes`
+(mặc định 2 phút, bù lệch đồng hồ với VNPAY) thì IPN hợp lệ, thành công **không** cộng Credit: đơn chuyển EXPIRED, trả `RspCode=02`
+(`Order expired`) và ghi log WARN gồm `orderCode`, số tiền, `vnp_TransactionNo` để đối soát tay. URL thanh toán luôn gửi
+`vnp_ExpireDate` = thời điểm tạo + `payment_order_expire_minutes`.
 
 | Biến | Ý nghĩa / mặc định |
 | --- | --- |
-| `PAYMENT_PROVIDER` | `mock` (mặc định), `vnpay` hoặc `manual` |
+| `PAYMENT_PROVIDER` | `vnpay` (mặc định ở prod), `mock` (mặc định ở dev/test) hoặc `manual` |
 | `VNPAY_TMN_CODE` | Mã merchant; bắt buộc khi chọn VNPAY |
 | `VNPAY_HASH_SECRET` | Khóa ký từ merchant; bắt buộc khi chọn VNPAY; không đưa vào FE |
 | `VNPAY_PAY_URL` | `https://sandbox.vnpayment.vn/paymentv2/vpcpay.html` |
 | `VNPAY_RETURN_URL` | URL backend `/api/v1/payments/vnpay/return`; mặc định rỗng, phải cấu hình khi chọn VNPAY |
-| `VNPAY_FE_RESULT_URL` | URL FE kết quả; mặc định `http://localhost:5173/credit`, khi deploy đặt `https://<frontend-domain>/credit` |
+| `VNPAY_FE_RESULT_URL` | URL FE kết quả, bắt buộc khi chọn VNPAY ở prod (không có mặc định); đặt `https://<frontend-domain>/credit`. Dev mặc định `http://localhost:5173/credit` |
 | `PAYMENT_MOCK_ENABLED` | Bật endpoint mock-confirm; đặt false cho MANUAL; backend vẫn chặn tự cộng khi chọn manual nếu biến này vô tình bật |
 
 Phải khai báo IPN URL `https://<render-domain>/api/v1/payments/vnpay/ipn` trong trang quản trị merchant sandbox của VNPAY.

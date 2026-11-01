@@ -53,7 +53,29 @@ function AppShellContent() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
+  const [homeHeaderSolid, setHomeHeaderSolid] = useState(false);
   const headerActionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isHome) {
+      setHomeHeaderSolid(false);
+      return undefined;
+    }
+
+    const updateHeaderBackground = () => {
+      const hero = document.querySelector<HTMLElement>('[data-home-hero]');
+      const heroBottom = hero?.getBoundingClientRect().bottom ?? window.innerHeight;
+      setHomeHeaderSolid(heroBottom <= 68);
+    };
+
+    updateHeaderBackground();
+    window.addEventListener('scroll', updateHeaderBackground, { passive: true });
+    window.addEventListener('resize', updateHeaderBackground);
+    return () => {
+      window.removeEventListener('scroll', updateHeaderBackground);
+      window.removeEventListener('resize', updateHeaderBackground);
+    };
+  }, [isHome]);
 
   useEffect(() => {
     if (!user || isAdmin) {
@@ -144,20 +166,20 @@ function AppShellContent() {
         ['/admin/finance', 'Thống kê'],
       ]
     : user
-    ? [
-        ['/', 'Trang chủ'],
-        ['/browse', 'Tìm đồ'],
-        ['/activities', 'Hoạt động'],
-        ['/ai', 'Trợ lý AI'],
-        ['/about', 'Giới thiệu'],
-        ['/messages', 'Tin nhắn'],
-      ]
-    : [
-        ['/', 'Trang chủ'],
-        ['/browse', 'Tìm đồ'],
-        ['/ai', 'Trợ lý AI'],
-        ['/about', 'Giới thiệu'],
-      ];
+      ? [
+          ['/', 'Trang chủ'],
+          ['/browse', 'Tìm đồ'],
+          ['/activities', 'Hoạt động'],
+          ['/ai', 'Trợ lý AI'],
+          ['/about', 'Giới thiệu'],
+          ['/messages', 'Tin nhắn'],
+        ]
+      : [
+          ['/', 'Trang chủ'],
+          ['/browse', 'Tìm đồ'],
+          ['/ai', 'Trợ lý AI'],
+          ['/about', 'Giới thiệu'],
+        ];
   const closeMenus = () => {
     setMobileOpen(false);
     setProfileOpen(false);
@@ -170,7 +192,7 @@ function AppShellContent() {
     navigate('/login', { replace: true });
   };
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-background">
       <ScrollToTop />
       <a
         href="#main-content"
@@ -179,25 +201,33 @@ function AppShellContent() {
         Bỏ qua điều hướng
       </a>
       <header
-        className={`top-0 z-30 border-b backdrop-blur-md ${
+        className={`site-header top-0 z-30 border-b backdrop-blur-md ${
           isHome
-            ? 'absolute inset-x-0 border-white/15 bg-black/10 text-white'
-            : 'sticky border-border/80 bg-white/95'
+            ? `site-header-home fixed inset-x-0 ${homeHeaderSolid ? 'site-header-home-solid' : ''}`
+            : 'sticky'
         }`}
       >
-        <div className="mx-auto flex h-[68px] w-full max-w-[1280px] items-center gap-5 px-4 sm:px-6 lg:px-8">
-          <Link to={isAdmin ? '/admin' : '/'} onClick={closeMenus} className="flex shrink-0 items-center gap-2.5">
+        <div className="mx-auto flex h-[68px] w-full max-w-[1440px] items-center gap-5 px-4 sm:px-6">
+          <Link
+            to={isAdmin ? '/admin' : '/'}
+            onClick={closeMenus}
+            className="flex shrink-0 items-center gap-2.5"
+          >
             <span
               className={`grid size-9 place-items-center rounded-md text-white ${
-                isHome ? 'bg-white/15 ring-1 ring-white/25' : 'bg-primary'
+                isHome ? 'bg-white/15 ring-1 ring-white/25' : 'bg-accent'
               }`}
             >
               <ShareLoopLogo className="size-5" />
             </span>
-            <span
-              className={`text-base font-extrabold ${isHome ? 'text-white' : 'text-text-primary'}`}
-            >
-              {isAdmin ? 'SHARELOOP ADMIN' : <>SHARE<span className={isHome ? 'text-primary-fixed' : 'text-primary'}>LOOP</span></>}
+            <span className="text-base font-extrabold text-white">
+              {isAdmin ? (
+                'SHARELOOP ADMIN'
+              ) : (
+                <>
+                  SHARE<span className="text-white">LOOP</span>
+                </>
+              )}
             </span>
           </Link>
           {!isAdmin ? (
@@ -208,14 +238,10 @@ function AppShellContent() {
                   key={to}
                   to={to}
                   className={({ isActive }) =>
-                    `inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition ${
-                      isHome
-                        ? isActive
-                          ? 'bg-white/15 text-white'
-                          : 'text-white/80 hover:bg-white/10 hover:text-white'
-                        : isActive
-                          ? 'bg-primary-faint text-primary'
-                          : 'text-text-secondary hover:bg-surface-low hover:text-text-primary'
+                    `inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition focus-visible:bg-white/[0.14] focus-visible:outline-none ${
+                      isActive
+                        ? `${isHome ? 'bg-white/[0.16]' : 'bg-white/[0.14]'} text-white`
+                        : `${isHome ? 'text-white' : 'text-white/80'} hover:bg-white/10 hover:text-white`
                     }`
                   }
                 >
@@ -240,27 +266,27 @@ function AppShellContent() {
           >
             {user ? (
               <>
-                {!isAdmin ? <>
-                <Link
-                  to="/credit"
-                  aria-label={`Ví Credit: ${wallet ? wallet.available : 'chưa tải'} Credit khả dụng`}
-                  className={`hidden min-h-11 items-center rounded-md border px-3 py-2 text-xs font-semibold transition sm:flex ${
-                    isHome
-                      ? 'border-white/25 bg-black/10 text-white/90 hover:border-white/50 hover:bg-white/10 hover:text-white'
-                      : 'border-border bg-white text-text-secondary hover:border-primary/30 hover:bg-primary-faint hover:text-primary'
-                  }`}
-                >
-                  {wallet ? wallet.available : '--'} Credit
-                </Link>
-                <Link to="/post" className="hidden sm:block">
-                  <Button>
-                    Đăng đồ
-                  </Button>
-                </Link>
-                </> : null}
+                {!isAdmin ? (
+                  <>
+                    <Link
+                      to="/credit"
+                      aria-label={`Ví Credit: ${wallet ? wallet.available : 'chưa tải'} Credit khả dụng`}
+                      className="site-header-credit hidden min-h-11 items-center rounded-md border px-3 py-2 text-xs font-semibold transition sm:flex"
+                    >
+                      {wallet ? wallet.available : '--'} Credit
+                    </Link>
+                    <Link to="/post" className="hidden sm:block">
+                      <Button
+                        className="bronze-action"
+                      >
+                        Đăng đồ
+                      </Button>
+                    </Link>
+                  </>
+                ) : null}
                 <NotificationMenu
                   userId={user.id}
-                  isHome={isHome}
+                  isHome
                   open={notificationOpen}
                   onOpenChange={setNotificationOpen}
                   onOpen={() => setProfileOpen(false)}
@@ -271,25 +297,27 @@ function AppShellContent() {
                       setProfileOpen(!profileOpen);
                       setNotificationOpen(false);
                     }}
-                    className={`flex min-h-11 items-center gap-1 rounded-md px-2 transition ${
-                      isHome ? 'hover:bg-white/10' : 'hover:bg-surface-low'
-                    }`}
+                    className="flex min-h-11 items-center gap-1 rounded-md px-2 transition hover:bg-white/10"
                     aria-expanded={profileOpen}
                   >
-                    <span className="inline-block max-w-[120px] truncate text-sm font-semibold">
+                    <span
+                      title={user.name}
+                      className={
+                        isAdmin
+                          ? 'inline-block max-w-[50vw] whitespace-normal break-words text-sm font-semibold leading-tight sm:max-w-none sm:shrink-0 sm:whitespace-nowrap'
+                          : 'inline-block max-w-[120px] truncate text-sm font-semibold'
+                      }
+                    >
                       {user.name}
                     </span>
-                    <Icon
-                      name="chevronDown"
-                      className={`size-4 ${
-                        isHome ? 'text-white/75' : 'text-text-muted'
-                      }`}
-                    />
+                    <Icon name="chevronDown" className="size-4 text-white/75" />
                   </button>
                   {profileOpen ? (
                     <div className="absolute right-0 top-12 w-60 rounded-lg bg-white p-2 text-text-primary shadow-lg ring-1 ring-border">
                       <div className="border-b border-border/70 px-3 py-2.5">
-                        <p className="truncate text-sm font-bold">{isAdmin ? 'Quản trị viên' : user.name}</p>
+                        <p className="truncate text-sm font-bold">
+                          {isAdmin ? 'Quản trị viên' : user.name}
+                        </p>
                         <p className="mt-0.5 truncate text-xs text-text-secondary">{user.email}</p>
                       </div>
                       <Link
@@ -299,14 +327,20 @@ function AppShellContent() {
                       >
                         {isAdmin ? 'Hồ sơ quản trị' : 'Hồ sơ'}
                       </Link>
-                      {!isAdmin ? <Link
-                        to="/credit"
+                      {!isAdmin ? (
+                        <Link
+                          to="/credit"
+                          onClick={closeMenus}
+                          className="flex items-center rounded-md min-h-11 px-3 py-2 text-sm text-text-secondary transition hover:bg-surface-low"
+                        >
+                          Ví Credit
+                        </Link>
+                      ) : null}
+                      <Link
+                        to="/change-password"
                         onClick={closeMenus}
                         className="flex items-center rounded-md min-h-11 px-3 py-2 text-sm text-text-secondary transition hover:bg-surface-low"
                       >
-                        Ví Credit
-                      </Link> : null}
-                      <Link to="/change-password" onClick={closeMenus} className="flex items-center rounded-md min-h-11 px-3 py-2 text-sm text-text-secondary transition hover:bg-surface-low">
                         Đổi mật khẩu
                       </Link>
                       {isAdmin ? (
@@ -334,16 +368,16 @@ function AppShellContent() {
               <>
                 <Link
                   to="/login"
-                  className={`hidden min-h-11 items-center px-2 text-sm font-semibold sm:inline-flex ${
-                    isHome
-                      ? 'text-white/85 hover:text-white'
-                      : 'text-text-secondary hover:text-primary'
-                  }`}
+                  className="hidden min-h-11 items-center px-2 text-sm font-semibold text-white hover:text-white sm:inline-flex"
                 >
                   Đăng nhập
                 </Link>
                 <Link to="/register">
-                  <Button>Đăng ký</Button>
+                  <Button
+                    className="bronze-action"
+                  >
+                    Đăng ký
+                  </Button>
                 </Link>
               </>
             )}
@@ -351,18 +385,14 @@ function AppShellContent() {
               <IconButton
                 icon={mobileOpen ? 'close' : 'menu'}
                 label="Mở điều hướng"
-                className={`!size-11 lg:hidden ${isHome ? '!border-white/30 !bg-white/10 !text-white hover:!bg-white/20 hover:!text-white' : ''}`}
+                className="site-header-icon-button !size-11 lg:hidden"
                 onClick={() => setMobileOpen(!mobileOpen)}
               />
             ) : null}
           </div>
         </div>
         {mobileOpen && !isAdmin ? (
-          <nav
-            className={`border-t px-4 py-3 lg:hidden ${
-              isHome ? 'border-white/15 bg-primary-hover/95 text-white' : 'border-border bg-white'
-            }`}
-          >
+          <nav className={`site-header-mobile border-t px-4 py-3 lg:hidden ${isHome ? 'site-header-home-mobile' : ''}`}>
             {nav.map(([to, label]) => (
               <NavLink
                 end={to === '/'}
@@ -370,14 +400,10 @@ function AppShellContent() {
                 to={to}
                 onClick={closeMenus}
                 className={({ isActive }) =>
-                  `flex items-center justify-between rounded-md px-3 py-3 text-sm font-semibold ${
-                    isHome
-                      ? isActive
-                        ? 'bg-white/15 text-white'
-                        : 'text-white/80'
-                      : isActive
-                        ? 'bg-primary-faint text-primary'
-                        : 'text-text-secondary'
+                  `flex items-center justify-between rounded-md px-3 py-3 text-sm font-semibold focus-visible:bg-white/[0.14] focus-visible:outline-none ${
+                    isActive
+                      ? `${isHome ? 'bg-white/[0.16]' : 'bg-white/[0.14]'} text-white`
+                      : isHome ? 'text-white' : 'text-white/80'
                   }`
                 }
               >
@@ -391,7 +417,7 @@ function AppShellContent() {
               <Link
                 to="/post"
                 onClick={closeMenus}
-                className="mt-2 flex min-h-11 items-center justify-center rounded-md bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-hover"
+                className="bronze-action mt-2 flex min-h-11 items-center justify-center rounded-md border px-4 py-3 text-sm transition"
               >
                 Đăng đồ
               </Link>
@@ -406,19 +432,19 @@ function AppShellContent() {
       </main>
       {/* Quản trị viên và các trang tài khoản không hiện chân trang dành cho người dùng. */}
       {!isAdmin && !authPaths.has(pathname) ? (
-        <footer className="mt-auto border-t border-border bg-white">
-          <div className="mx-auto w-full max-w-[1280px] px-4 pb-8 pt-12 sm:px-6 sm:pt-14 lg:px-8">
+        <footer className="site-footer mt-auto border-t">
+          <div className="mx-auto w-full max-w-[1440px] px-4 pb-8 pt-12 sm:px-6 sm:pt-14">
             <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
               <div className="max-w-sm">
                 <Link to="/" className="inline-flex items-center gap-2.5">
                   <span className="grid size-9 place-items-center rounded-md bg-primary text-white">
                     <ShareLoopLogo className="size-5" />
                   </span>
-                  <strong className="text-base font-extrabold text-text-primary">
-                    SHARE<span className="text-primary">LOOP</span>
+                  <strong className="site-footer-brand text-base font-extrabold">
+                    SHARE<span>LOOP</span>
                   </strong>
                 </Link>
-                <p className="mt-4 text-sm leading-6 text-text-secondary">
+                <p className="site-footer-copy mt-4 text-sm leading-6">
                   Trao món đồ cũ, mở một vòng đời mới cho cộng đồng.
                 </p>
               </div>
@@ -440,24 +466,27 @@ function AppShellContent() {
                 ]}
               />
               <div>
-                <h2 className="text-sm font-bold text-text-primary">Hỗ trợ</h2>
-                <nav className="mt-3 space-y-1 text-sm leading-6 text-text-secondary">
-                  <Link to="/about" className="block py-2 transition hover:text-primary">
+                <h2 className="site-footer-title text-sm font-bold">Hỗ trợ</h2>
+                <nav className="mt-3 space-y-1 text-sm leading-6">
+                  <Link to="/about" className="site-footer-link block py-2 transition">
                     Giới thiệu ShareLoop
                   </Link>
-                  <Link to="/guide" className="block py-2 transition hover:text-primary">
+                  <Link to="/guide" className="site-footer-link block py-2 transition">
                     Hướng dẫn sử dụng
                   </Link>
-                  <Link to="/safety" className="block py-2 transition hover:text-primary">
+                  <Link to="/safety" className="site-footer-link block py-2 transition">
                     An toàn khi giao nhận
                   </Link>
-                  <a href="mailto:support@shareloop.vn" className="block py-2 transition hover:text-primary">
+                  <a
+                    href="mailto:support@shareloop.vn"
+                    className="site-footer-link block py-2 transition"
+                  >
                     support@shareloop.vn
                   </a>
                 </nav>
               </div>
             </div>
-            <div className="mt-12 flex flex-col gap-3 border-t border-border pt-6 text-xs text-text-secondary sm:flex-row sm:items-center sm:justify-between">
+            <div className="site-footer-copy mt-12 flex flex-col gap-3 border-t border-border pt-6 text-xs sm:flex-row sm:items-center sm:justify-between">
               <p>© 2026 SHARELOOP</p>
             </div>
           </div>
@@ -478,7 +507,7 @@ function FooterGroup({
 }) {
   return (
     <div>
-      <h2 className="text-sm font-bold text-text-primary">{title}</h2>
+      <h2 className="site-footer-title text-sm font-bold">{title}</h2>
       <nav className="mt-3 space-y-1">
         {links.map(([label, to]) =>
           onPostClick && to === '/post' ? (
@@ -486,7 +515,7 @@ function FooterGroup({
               key={to}
               type="button"
               onClick={onPostClick}
-              className="block py-2 text-left text-sm leading-6 text-text-secondary transition hover:text-primary"
+              className="site-footer-link block py-2 text-left text-sm leading-6 transition"
             >
               {label}
             </button>
@@ -494,7 +523,7 @@ function FooterGroup({
             <Link
               key={to}
               to={to}
-              className="block py-2 text-sm leading-6 text-text-secondary transition hover:text-primary"
+              className="site-footer-link block py-2 text-sm leading-6 transition"
             >
               {label}
             </Link>

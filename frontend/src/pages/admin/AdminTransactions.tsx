@@ -152,7 +152,7 @@ export function AdminTransactions() {
             setPage(0);
           }}
         >
-          Bị kẹt
+          Quá giờ xác nhận bàn giao
         </Button>
       </form>
 

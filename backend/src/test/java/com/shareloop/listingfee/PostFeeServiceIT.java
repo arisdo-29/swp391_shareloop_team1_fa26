@@ -1,10 +1,13 @@
 package com.shareloop.listingfee;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.common.exception.ErrorCode;
+import com.shareloop.item.ItemErrorCode;
+import com.shareloop.item.entity.OfferType;
 import com.shareloop.listingfee.dto.EditQuote;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.support.IntegrationTest;
@@ -82,6 +85,70 @@ class PostFeeServiceIT extends IntegrationTest {
         assertThat(fee.get("fee_state")).isEqualTo("HELD");
         assertThat(fee.get("pending_fee")).isEqualTo(POST_FEE);
         assertThat(fee.get("pending_fee_type")).isEqualTo("POST");
+    }
+
+    @Test
+    void sixthActiveSwapHoldsTenCreditsAndRejectionReleasesTen() {
+        long ownerId = insertUser(START_BALANCE, 0);
+        for (int index = 0; index < 5; index++) {
+            insertItem(ownerId);
+        }
+        long sixthItemId = insertItem(ownerId);
+
+        postFeeService.holdPostFee(sixthItemId, ownerId);
+        assertThat(feeColumnsOf(sixthItemId).get("pending_fee")).isEqualTo(10);
+        assertThat(heldOf(ownerId)).isEqualTo(10);
+
+        postFeeService.releaseHeldFee(sixthItemId, "REJECTED");
+        assertThat(heldOf(ownerId)).isZero();
+        assertThat(balanceOf(ownerId)).isEqualTo(START_BALANCE);
+        assertThat(ledgerCountOfItem(sixthItemId)).isZero();
+    }
+
+    @Test
+    void expiredSwapNoLongerUsesRegularFeeSlot() {
+        long ownerId = insertUser(START_BALANCE, 0);
+        long expiredItemId = insertItem(ownerId);
+        jdbc.update(
+                "UPDATE items SET status = 'APPROVED', expire_at = now() - interval '1 day' WHERE id = ?",
+                expiredItemId);
+        for (int index = 0; index < 4; index++) {
+            insertItem(ownerId);
+        }
+        long nextItemId = insertItem(ownerId);
+
+        postFeeService.holdPostFee(nextItemId, ownerId);
+
+        assertThat(feeColumnsOf(nextItemId).get("pending_fee")).isEqualTo(POST_FEE);
+        assertThat(heldOf(ownerId)).isEqualTo(POST_FEE);
+    }
+
+    @Test
+    void giveToSwap_whenOfferTypeDiffers_throwsOfferTypeChangeNotAllowed() {
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, false);
+
+        assertThatThrownBy(() -> postFeeService.quoteEdit(itemId, ownerId, OfferType.SWAP))
+                .isInstanceOf(BusinessException.class)
+                .matches(e ->
+                        ((BusinessException) e).getErrorCode() == ItemErrorCode.ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED);
+
+        assertThatThrownBy(() -> postFeeService.holdEditFee(itemId, ownerId, OfferType.SWAP))
+                .isInstanceOf(BusinessException.class)
+                .matches(e ->
+                        ((BusinessException) e).getErrorCode() == ItemErrorCode.ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED);
+    }
+
+    @Test
+    void pendingSwapChangedToGive_throwsOfferTypeChangeNotAllowed() {
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertItem(ownerId);
+        postFeeService.holdPostFee(itemId, ownerId);
+
+        assertThatThrownBy(() -> postFeeService.holdEditFee(itemId, ownerId, OfferType.GIVE))
+                .isInstanceOf(BusinessException.class)
+                .matches(e ->
+                        ((BusinessException) e).getErrorCode() == ItemErrorCode.ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED);
     }
 
     @Test
@@ -739,7 +806,7 @@ class PostFeeServiceIT extends IntegrationTest {
                         + " status, approved_at, post_fee_paid, fee_state, pending_fee, pending_fee_type,"
                         + " free_edit_used)"
                         + " VALUES (?, ?, ?, 'GIVE', 'ListingFee IT item', 'Mô tả', 'NEW',"
-                        + " 'APPROVED', now(), true, 'CHARGED', ?, 'POST', ?) RETURNING id",
+                        + " 'APPROVED', now(), false, 'CHARGED', ?, 'POST', ?) RETURNING id",
                 Long.class,
                 donorId,
                 seedCategoryId(),

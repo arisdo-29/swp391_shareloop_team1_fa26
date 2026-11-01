@@ -14,6 +14,7 @@ import {
   SkeletonRows,
 } from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
+import { Pagination } from '../../components/Pagination';
 import { adminLexiconApi, type AdminLexiconEntry, type AdminLexiconRequest, type LexiconMatch } from '../../services/adminLexiconApi';
 import {
   adminCategoryApi,
@@ -25,6 +26,7 @@ import {
 import { adminAreaApi, type AdminAreaRequest, type AdminAreaResponse } from '../../services/adminAreaApi';
 import type { AttributeDataType } from '../../services/catalogApi';
 import {
+  ADMIN_CHECKLIST_DESCRIPTION_MAX_LENGTH,
   ADMIN_CHECKLIST_QUESTION_MAX_LENGTH,
   adminChecklistApi,
   type AdminChecklistEntry,
@@ -449,12 +451,15 @@ const lexiconScopeLabels: Record<string, string> = {
   BOTH: 'Bài đăng và tin nhắn',
 };
 
+const LEXICON_PAGE_SIZE = 20;
+
 function getLexiconLabel(labels: Record<string, string>, value: string) {
   return labels[value.trim().toUpperCase()] ?? 'Khác';
 }
 
 function ApiAdminKeywords() {
   const [entries, setEntries] = useState<AdminLexiconEntry[]>([]);
+  const [page, setPage] = useState(0);
   const [editing, setEditing] = useState<AdminLexiconEntry | null | 'new'>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
@@ -464,6 +469,10 @@ function ApiAdminKeywords() {
   const [testText, setTestText] = useState('');
   const [testMatches, setTestMatches] = useState<LexiconMatch[]>([]);
   const [testing, setTesting] = useState(false);
+  const pageEntries = entries.slice(
+    page * LEXICON_PAGE_SIZE,
+    (page + 1) * LEXICON_PAGE_SIZE,
+  );
 
   useEffect(() => {
     let active = true;
@@ -543,9 +552,18 @@ function ApiAdminKeywords() {
         {testMatches.length ? <div className="mt-3 space-y-1 text-xs text-text-secondary">{testMatches.map((match, index) => <p key={`${match.keyword}-${index}`}><strong>{match.keyword}</strong> · {getLexiconLabel(lexiconLevelLabels, match.level)} · {getLexiconLabel(lexiconGroupLabels, match.group)} · {match.matchedAs}</p>)}</div> : null}
       </section>
       {loading ? <SkeletonRows label="Đang tải từ điển" /> : entries.length ? (
-        <div className="table-wrap"><table className="data-table"><thead><tr><th>Từ khóa</th><th>Nhóm</th><th>Mức độ</th><th>Phạm vi</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
-          {entries.map((entry) => <tr key={entry.id}><td className="font-semibold">{entry.keyword}</td><td>{getLexiconLabel(lexiconGroupLabels, entry.group)}</td><td>{getLexiconLabel(lexiconLevelLabels, entry.level)}</td><td>{getLexiconLabel(lexiconScopeLabels, entry.scope)}</td><td>{entry.active ? 'Đang hiển thị' : 'Đang ẩn'}</td><td className="space-x-2"><Button variant="ghost" disabled={savingId === entry.id} onClick={() => setEditing(entry)}>Sửa</Button><Button variant="outline" disabled={savingId === entry.id} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ngưng' : 'Kích hoạt'}</Button></td></tr>)}
-        </tbody></table></div>
+        <>
+          <div className="table-wrap"><table className="data-table"><thead><tr><th>Từ khóa</th><th>Nhóm</th><th>Mức độ</th><th>Phạm vi</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
+            {pageEntries.map((entry) => <tr key={entry.id}><td className="font-semibold">{entry.keyword}</td><td>{getLexiconLabel(lexiconGroupLabels, entry.group)}</td><td>{getLexiconLabel(lexiconLevelLabels, entry.level)}</td><td>{getLexiconLabel(lexiconScopeLabels, entry.scope)}</td><td>{entry.active ? 'Đang hiển thị' : 'Đang ẩn'}</td><td className="space-x-2"><Button variant="ghost" disabled={savingId === entry.id} onClick={() => setEditing(entry)}>Sửa</Button><Button variant="outline" disabled={savingId === entry.id} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ngưng' : 'Kích hoạt'}</Button></td></tr>)}
+          </tbody></table></div>
+          <Pagination
+            page={page}
+            size={LEXICON_PAGE_SIZE}
+            totalElements={entries.length}
+            disabled={savingId !== null}
+            onPageChange={setPage}
+          />
+        </>
       ) : <EmptyState title="Chưa có từ khóa" text="Hiện chưa có mục từ điển kiểm duyệt nào." />}
       {editing ? <ApiLexiconModal entry={editing === 'new' ? null : editing} saving={savingId !== null} onClose={() => setEditing(null)} onSave={(input) => void save(input)} /> : null}
     </Panel>
@@ -674,6 +692,19 @@ function ApiAdminChecklist() {
   const mutationLock = useRef(false);
 
   useEffect(() => {
+    const refetch = () => setReloadKey((key) => key + 1);
+    const refetchWhenVisible = () => {
+      if (document.visibilityState === 'visible') refetch();
+    };
+    window.addEventListener('focus', refetch);
+    document.addEventListener('visibilitychange', refetchWhenVisible);
+    return () => {
+      window.removeEventListener('focus', refetch);
+      document.removeEventListener('visibilitychange', refetchWhenVisible);
+    };
+  }, []);
+
+  useEffect(() => {
     let active = true;
     setLoading(true);
     setError('');
@@ -690,14 +721,16 @@ function ApiAdminChecklist() {
     return () => { active = false; };
   }, [reloadKey]);
 
-  const save = async (question: string) => {
+  const save = async (question: string, description: string) => {
     const trimmedQuestion = question.trim();
+    const trimmedDescription = description.trim();
     const currentEditing = editing;
     if (
       mutationLock.current ||
       !currentEditing ||
       !trimmedQuestion ||
-      trimmedQuestion.length > ADMIN_CHECKLIST_QUESTION_MAX_LENGTH
+      trimmedQuestion.length > ADMIN_CHECKLIST_QUESTION_MAX_LENGTH ||
+      trimmedDescription.length > ADMIN_CHECKLIST_DESCRIPTION_MAX_LENGTH
     ) return;
     mutationLock.current = true;
     setSavingId(currentEditing === 'new' ? 0 : currentEditing.id);
@@ -705,8 +738,8 @@ function ApiAdminChecklist() {
     setNotice('');
     try {
       const saved = currentEditing === 'new'
-        ? await adminChecklistApi.create({ question: trimmedQuestion })
-        : await adminChecklistApi.update(currentEditing.id, { question: trimmedQuestion });
+        ? await adminChecklistApi.create({ question: trimmedQuestion, description: trimmedDescription })
+        : await adminChecklistApi.update(currentEditing.id, { question: trimmedQuestion, description: trimmedDescription });
       setEntries((current) => sortAdminChecklist(currentEditing === 'new'
         ? [...current, saved]
         : current.map((entry) => entry.id === saved.id ? saved : entry)
@@ -771,17 +804,19 @@ function ApiAdminChecklist() {
       {error ? <div className="mb-4 space-y-3"><Alert tone="error">{error}</Alert><Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Tải lại</Button></div> : null}
       {loading ? <SkeletonRows label="Đang tải checklist" /> : entries.length ? (
         <div className="table-wrap"><table className="data-table"><thead><tr><th>Thứ tự</th><th>Tiêu chí</th><th className="whitespace-nowrap">Trạng thái</th><th className="min-w-[430px] whitespace-nowrap">Thao tác</th></tr></thead><tbody>
-          {entries.map((entry, index) => <tr key={entry.id}><td>{index + 1}</td><td className="font-semibold">{entry.question}</td><td className="whitespace-nowrap"><span className={`rounded-sm px-2 py-1 text-xs font-semibold ${entry.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}>{entry.active ? 'Đang hoạt động' : 'Không hoạt động'}</span></td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" variant="ghost" title="Đưa mục này lên trên một vị trí" disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}>Lên</Button><Button className="!px-2 whitespace-nowrap" variant="ghost" title="Đưa mục này xuống dưới một vị trí" disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}>Xuống</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title="Chỉnh sửa câu tiêu chí" disabled={savingId !== null} onClick={() => { setEditingError(''); setEditing(entry); }}>Sửa nội dung</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title={entry.active ? 'Không hiển thị mục này khi duyệt bài (không xoá)' : 'Hiển thị lại mục này khi duyệt bài'} disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}
+          {entries.map((entry, index) => <tr key={entry.id}><td>{index + 1}</td><td><p className="font-semibold">{entry.question}</p>{entry.description ? <p className="mt-1 text-xs leading-5 text-text-secondary">{entry.description}</p> : <p className="mt-1 text-xs text-warning">Chưa có mô tả điều kiện đạt</p>}</td><td className="whitespace-nowrap"><span className={`rounded-sm px-2 py-1 text-xs font-semibold ${entry.active ? 'bg-success-soft text-success' : 'bg-surface-low text-text-muted'}`}>{entry.active ? 'Đang hoạt động' : 'Không hoạt động'}</span></td><td><div className="flex flex-nowrap gap-1"><Button className="!px-2 whitespace-nowrap" variant="ghost" title="Đưa mục này lên trên một vị trí" disabled={savingId !== null || index === 0} onClick={() => void move(index, -1)}>Lên</Button><Button className="!px-2 whitespace-nowrap" variant="ghost" title="Đưa mục này xuống dưới một vị trí" disabled={savingId !== null || index === entries.length - 1} onClick={() => void move(index, 1)}>Xuống</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title="Chỉnh sửa câu tiêu chí" disabled={savingId !== null} onClick={() => { setEditingError(''); setEditing(entry); }}>Sửa nội dung</Button><Button className="!px-2 whitespace-nowrap" variant="outline" title={entry.active ? 'Không hiển thị mục này khi duyệt bài (không xoá)' : 'Hiển thị lại mục này khi duyệt bài'} disabled={savingId !== null} onClick={() => void toggleActive(entry)}>{entry.active ? 'Tạm ẩn' : 'Kích hoạt'}</Button></div></td></tr>)}
         </tbody></table></div>
       ) : error ? null : <EmptyState title="Chưa có tiêu chí" text="Hiện chưa có tiêu chí duyệt bài nào." />}
-      {editing ? <ChecklistEditModal entry={editing === 'new' ? null : editing} saving={savingId !== null} error={editingError} onClose={() => { if (savingId === null) { setEditing(null); setEditingError(''); } }} onSave={(question) => void save(question)} /> : null}
+      {editing ? <ChecklistEditModal entry={editing === 'new' ? null : editing} saving={savingId !== null} error={editingError} onClose={() => { if (savingId === null) { setEditing(null); setEditingError(''); } }} onSave={(question, description) => void save(question, description)} /> : null}
     </Panel>
   );
 }
 
-function ChecklistEditModal({ entry, saving, error, onClose, onSave }: { entry: AdminChecklistEntry | null; saving: boolean; error: string; onClose: () => void; onSave: (question: string) => void }) {
+function ChecklistEditModal({ entry, saving, error, onClose, onSave }: { entry: AdminChecklistEntry | null; saving: boolean; error: string; onClose: () => void; onSave: (question: string, description: string) => void }) {
   const [question, setQuestion] = useState(entry?.question ?? '');
+  const [description, setDescription] = useState(entry?.description ?? '');
   const questionTooLong = question.length > ADMIN_CHECKLIST_QUESTION_MAX_LENGTH;
+  const descriptionTooLong = description.length > ADMIN_CHECKLIST_DESCRIPTION_MAX_LENGTH;
   return <Modal title={entry ? 'Sửa tiêu chí' : 'Thêm tiêu chí'} onClose={onClose}>
     <TextArea
       label="Nội dung tiêu chí"
@@ -793,8 +828,19 @@ function ChecklistEditModal({ entry, saving, error, onClose, onSave }: { entry: 
     <p className={`mt-1.5 text-right text-xs ${questionTooLong ? 'text-error' : 'text-text-muted'}`}>
       {question.length}/{ADMIN_CHECKLIST_QUESTION_MAX_LENGTH} ký tự
     </p>
+    <TextArea
+      label="Mô tả điều kiện đạt"
+      placeholder="Đạt khi ... Từ chối nếu ..."
+      value={description}
+      onChange={(event) => setDescription(event.target.value)}
+      disabled={saving}
+      error={descriptionTooLong ? `Mô tả không được vượt quá ${ADMIN_CHECKLIST_DESCRIPTION_MAX_LENGTH} ký tự.` : undefined}
+    />
+    <p className={`mt-1.5 text-right text-xs ${descriptionTooLong ? 'text-error' : 'text-text-muted'}`}>
+      {description.length}/{ADMIN_CHECKLIST_DESCRIPTION_MAX_LENGTH} ký tự. Người duyệt thấy mô tả này ngay dưới tiêu chí.
+    </p>
     {error ? <div className="mt-4"><Alert tone="error">{error}</Alert></div> : null}
-    <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !question.trim() || questionTooLong} onClick={() => onSave(question.trim())}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
+    <div className="mt-6 flex justify-end gap-2"><Button variant="ghost" disabled={saving} onClick={onClose}>Hủy</Button><Button disabled={saving || !question.trim() || questionTooLong || descriptionTooLong} onClick={() => onSave(question.trim(), description.trim())}>{saving ? 'Đang lưu...' : 'Lưu'}</Button></div>
   </Modal>;
 }
 

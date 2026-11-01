@@ -133,11 +133,19 @@ public class ReviewService {
     /**
      * Duyệt bài: đáp án ghép theo id mục checklist, phải đủ mọi mục đang dùng, không trùng và đều đạt.
      * Ném REVIEW_CHECKLIST_NOT_CONFIGURED, REVIEW_CHECKLIST_INCOMPLETE hoặc REVIEW_CHECKLIST_OUTDATED (có id không
-     * còn thuộc checklist đang dùng). Snapshot lưu nguyên câu điều kiện tại thời điểm duyệt.
+     * còn thuộc checklist đang dùng). Snapshot lưu nguyên câu điều kiện tại thời điểm duyệt. Chủ bài đang bị khoá hoặc
+     * bị cấm thì ném REVIEW_DONOR_LOCKED (L5): bài không được hiện công khai.
      */
     @Transactional
     public void approve(long itemId, List<ChecklistAnswer> answers, Long adminId) {
         ReviewItem reviewItem = requireReviewItem(itemId);
+        // isLocked tính cả bị khoá (is_active = false) lẫn bị cấm (BANNED)
+        if (reviewItemRepository
+                .findDonorIdByItemId(itemId)
+                .filter(userService::isLocked)
+                .isPresent()) {
+            throw new BusinessException(ReviewErrorCode.REVIEW_DONOR_LOCKED);
+        }
         List<ChecklistItem> checklistItems = configService.checklistItems();
         validateAnswers(checklistItems, answers);
 
@@ -168,6 +176,26 @@ public class ReviewService {
 
     @Transactional
     public void reject(long itemId, String reason, Long adminId) {
+        reject(itemId, reason, adminId, false);
+    }
+
+    /**
+     * Từ chối mọi bài đang chờ duyệt của một chủ bài, dùng khi khoá hoặc cấm tài khoản (L5). Gồm cả bài Cho tặng và
+     * bản sửa miễn phí (giữ phí 0). Bài có giữ phí thì nhả phí như Admin từ chối; bài không giữ phí (dữ liệu cũ) vẫn từ
+     * chối được, không để lỗi phí làm hỏng cả việc khoá.
+     *
+     * @return id các bài vừa từ chối, để người gọi cộng số Credit đã nhả
+     */
+    @Transactional
+    public List<Long> rejectPendingItemsOfUser(long userId, String reason, Long adminId) {
+        List<Long> itemIds = repository.findPendingReviewItemIdsByDonor(userId);
+        for (Long itemId : itemIds) {
+            reject(itemId, reason, adminId, true);
+        }
+        return itemIds;
+    }
+
+    private void reject(long itemId, String reason, Long adminId, boolean releaseOnlyIfHeld) {
         if (reason == null || reason.isBlank()) {
             throw new BusinessException(ReviewErrorCode.REVIEW_REJECT_REASON_REQUIRED);
         }
@@ -176,7 +204,9 @@ public class ReviewService {
 
         // Cùng thứ tự với approve: kiểm trạng thái trước, rồi mới nhả phí.
         itemService.markRejected(itemId);
-        postFeeService.releaseHeldFee(itemId, "REJECTED");
+        if (!releaseOnlyIfHeld || postFeeService.hasHeldFee(itemId)) {
+            postFeeService.releaseHeldFee(itemId, "REJECTED");
+        }
         reviewItem.reject(reason.trim(), Instant.now(), adminId);
 
         reviewItemRepository
@@ -241,6 +271,9 @@ public class ReviewService {
             check.put("id", checklistItem.id());
             check.put("key", checklistItem.key());
             check.put("statement", checklistItem.statement());
+            if (checklistItem.description() != null) {
+                check.put("description", checklistItem.description());
+            }
             check.put("passed", true);
             checks.add(check);
         }

@@ -4,19 +4,21 @@ import com.shareloop.listingfee.dto.HeldFeeItem;
 import com.shareloop.listingfee.service.ListingFeeQueryService;
 import com.shareloop.review.service.ReviewService;
 import com.shareloop.user.event.UserLockedEvent;
+import java.util.HashMap;
+import java.util.Map;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * Từ chối các bài chưa duyệt đang giữ phí của tài khoản vừa bị khoá và nhả phí về ví, đúng cơ chế khi Admin từ chối bài
- * (ReviewService.reject: bài sang REJECTED rồi nhả phí qua CreditService.release).
+ * Từ chối mọi bài chờ duyệt của tài khoản vừa bị khoá hoặc bị cấm (L5), kể cả bài Cho tặng và bản sửa miễn phí, rồi nhả
+ * phí đang giữ về ví, đúng cơ chế khi Admin từ chối bài (ReviewService: bài sang REJECTED, nhả phí qua
+ * CreditService.release). Không bài nào của người bị khoá còn nằm trong hàng chờ để Admin lỡ duyệt.
  */
 @Component
 public class UserLockedHeldFeeListener {
 
-    static final String LOCK_REASON = "Tài khoản bị khoá";
-    private static final String PENDING_REVIEW = "PENDING_REVIEW";
+    static final String LOCK_REASON = "[Hệ thống] Tài khoản bị khoá";
 
     private final ListingFeeQueryService listingFeeQueryService;
     private final ReviewService reviewService;
@@ -30,13 +32,14 @@ public class UserLockedHeldFeeListener {
     @EventListener
     @Order(20)
     public void onUserLocked(UserLockedEvent event) {
+        // Đọc phí đang giữ TRƯỚC khi từ chối: từ chối xong thì phí đã nhả, không còn trong danh sách giữ phí
+        Map<Long, Integer> heldFeeByItemId = new HashMap<>();
         for (HeldFeeItem heldItem : listingFeeQueryService.findHeldFees(event.userId())) {
-            // Bài đã duyệt không còn ở hàng chờ nên không từ chối được; findHeldFees chỉ trả bài đang giữ phí
-            if (!PENDING_REVIEW.equals(heldItem.status())) {
-                continue;
-            }
-            reviewService.reject(heldItem.itemId(), LOCK_REASON, event.adminId());
-            event.cleanup().addReleasedCredit(heldItem.pendingFee());
+            heldFeeByItemId.put(heldItem.itemId(), heldItem.pendingFee());
+        }
+
+        for (Long itemId : reviewService.rejectPendingItemsOfUser(event.userId(), LOCK_REASON, event.adminId())) {
+            event.cleanup().addReleasedCredit(heldFeeByItemId.getOrDefault(itemId, 0));
         }
     }
 }

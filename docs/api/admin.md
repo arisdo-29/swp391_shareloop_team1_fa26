@@ -105,9 +105,11 @@ Không trả `#<id>` trong `targetTitle`, `actorName`. Log `REPORT_DISMISSED`, `
 | `CONFIG_UPDATE` | Sửa cấu hình | `CONFIG` | `key`, `oldValue`, `newValue` |
 | `USER_LOCK` | Khoá tài khoản | `USER` | `cancelledRequests` (số giao dịch đã huỷ), `releasedCredit` (số Credit đã nhả), `hiddenItemIds` (id các bài đã ẩn) |
 | `USER_UNLOCK` | Mở khoá tài khoản | `USER` | `restoredItems` (số bài được hiện lại) |
+| `USER_BAN` | Cấm tài khoản | `USER` (`actorId = null`, hệ thống tự cấm khi hết sao) | `cancelledRequests`, `releasedCredit`, `hiddenItemIds` (cùng nghĩa với `USER_LOCK`) |
 | `REQUEST_CANCEL` | Huỷ giao dịch | `REQUEST` | - (lý do ở `reason`, có tiền tố người huỷ) |
 | `REPORT_DISMISSED` | Bác bỏ báo cáo | `REPORT` | `decision`, `reportId`, `targetType` |
-| `REPORT_UPHELD` | Chấp nhận báo cáo | `REPORT` | `decision`, `reportId`, `targetType`, `violatorId`, `starsDeducted`, `seriousViolation` |
+| `REPORT_UPHELD` | Chấp nhận báo cáo | `REPORT` | `decision`, `reportId`, `targetType`, `violatorId`, `starsDeducted`, `seriousViolation`, `closedReportIds` (báo cáo cùng bài đóng theo, D-07) |
+| `REPORT_RESPONSE_REQUESTED` | Yêu cầu giải trình | `REPORT` | `reportId`, `reportIds`, `targetType`, `responseDueAt`, `itemId` (nếu có) |
 | `POINTS` | Cộng điểm | `REQUEST` | `points` (điểm thực cộng, có thể 0), `basePoints`, `totalPoints`, `rank`, `role`, `pairTransactionNo`, `pointsToday` |
 | `STARS` | Trừ sao | `USER` | `amount`, `before`, `after` |
 | `AI_USAGE` | Gọi AI kiểm duyệt | `ITEM` | `attempt`, `outcome`, `durationMs`, `model` |
@@ -128,7 +130,7 @@ Không trả `#<id>` trong `targetTitle`, `actorName`. Log `REPORT_DISMISSED`, `
 | `AREA_CREATE` | Thêm khu vực | `AREA` | `name`, `active` |
 | `AREA_UPDATE` | Sửa khu vực | `AREA` | `name`, `active` |
 | `AREA_TOGGLE` | Bật/tắt khu vực | `AREA` | `name`, `active` |
-| `GRACE_STAR` | Cấp sao ân hạn | `USER` | `before`, `after` (lý do Admin nhập ở `reason`) |
+| `GRACE_STAR` | Cấp sao ân hạn | `USER` | `before`, `after` (lý do Admin nhập ở `reason`). Chỉ còn ở nhật ký cũ: sao ân hạn đã bỏ (UT-09) |
 | `STAR_RESTORED` | Tự hồi sao | `USER` (`actorId = null`) | `before`, `after`, `cleanStreak` |
 
 > Bản ghi cũ có `type = 'AiUsage'` được migration `V202610191500__audit_rename_ai_usage` đổi thành `AI_USAGE`.
@@ -463,9 +465,10 @@ Khoá tài khoản người dùng và ghi nhật ký hoạt động (FR-107, Iss
     `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER` chuyển `CANCELLED` với `cancelReason = "[Hệ thống] Tài khoản bị khoá"`.
     Bài chính và món mang đổi được nhả về `APPROVED`, bên còn lại nhận thông báo `TRANSACTION_CANCELLED`.
     Giao dịch `DISPUTED` không bị huỷ để Admin phân xử.
-  - Các bài `PENDING_REVIEW` của người bị khoá đang giữ phí đăng hoặc phí sửa (`fee_state = HELD`, phí lớn hơn 0) bị
-    từ chối như khi Admin từ chối bài (lý do "Tài khoản bị khoá", ghi `REVIEW_REJECT`), phí giữ được nhả về ví qua
-    `CreditService.release`.
+  - **Mọi** bài `PENDING_REVIEW` của người bị khoá hoặc bị cấm (L5), kể cả bài Cho tặng và bản sửa miễn phí (giữ phí 0),
+    bị từ chối như khi Admin từ chối bài (lý do `"[Hệ thống] Tài khoản bị khoá"`, ghi `REVIEW_REJECT`). Bài đang giữ phí
+    (`fee_state = HELD`) được nhả phí về ví qua `CreditService.release`; bài không giữ phí (dữ liệu cũ) vẫn bị từ chối,
+    không làm hỏng việc khoá. Không bài nào của người bị khoá còn trong hàng chờ.
   - Mọi bài `APPROVED` đang hiển thị của người bị khoá (kể cả bài vừa được nhả ở trên) bị ẩn bằng `is_active = false`, không đổi `status`.
   - Activity log `USER_LOCK` có `data = { "cancelledRequests": n, "releasedCredit": n, "hiddenItemIds": [id, ...] }`.
   - Mở khoá (`POST /unlock`) hiện lại **đúng** các bài trong `hiddenItemIds` của dòng `USER_LOCK` mới nhất (bài Admin hoặc chủ bài đã ẩn từ trước vẫn ẩn). Giao dịch đã huỷ và bài đã từ chối khi khoá **không** được khôi phục. Activity log `USER_UNLOCK` có `data = { "restoredItems": n }`.
@@ -511,41 +514,12 @@ Mở khoá tài khoản người dùng và ghi nhật ký hoạt động (FR-107
 
 ---
 
-## 6. POST /api/v1/admin/users/{userId}/grace-star
+## 6. (Đã bỏ) POST /api/v1/admin/users/{userId}/grace-star
 
-Cấp 1 sao ân hạn cho người dùng đang có 0 sao (FR-95, BR-U09, UC-51, Issue #150). Mỗi tài khoản chỉ được cấp **một lần** (`grace_star_used` chỉ đổi `false → true`). Bắt buộc có lý do; hành động ghi nhật ký `GRACE_STAR`.
-
-- **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
-- **Path Variable:** `userId` (ID người dùng được cấp).
-- **Request Body:**
-
-```json
-{
-  "reason": "Đã giải trình và cam kết không tái phạm"
-}
-```
-
-- **Thành công:** `200 OK`, trả về `GraceStarResponse`. Người dùng có lại 1 sao nên đăng bài và gửi yêu cầu được trở lại (BR-U05); bài đã bị ẩn lúc về 0 sao vẫn giữ nguyên trạng thái ẩn.
-
-```json
-{
-  "userId": 42,
-  "trustStars": 1,
-  "graceStarUsed": true
-}
-```
-
-- **Mã lỗi:**
-
-| Mã | Ý nghĩa | Mô tả |
-|----|---------|-------|
-| `200` | Thành công | Đã cấp 1 sao và ghi nhật ký |
-| `400` | Bad Request | `VALIDATION_FAILED`: Thiếu lý do hoặc lý do vượt quá 500 ký tự |
-| `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
-| `403` | Forbidden | Người dùng không có vai trò Admin |
-| `404` | Not Found | `USER_NOT_FOUND`: Người dùng không tồn tại |
-| `409` | Conflict | `REPUTATION_GRACE_STAR_ALREADY_USED`: Đã được cấp sao ân hạn trước đó (kể cả khi về 0 sao lần hai) |
-| `409` | Conflict | `REPUTATION_GRACE_STAR_NOT_ELIGIBLE`: Người dùng vẫn còn sao (chỉ cấp khi đang 0 sao) |
+Nhóm đã chốt không dùng sao ân hạn (UT-09). Endpoint, `GraceStarRequest`, `GraceStarResponse`, `ReputationErrorCode` và hai mã lỗi
+`REPUTATION_GRACE_STAR_ALREADY_USED`, `REPUTATION_GRACE_STAR_NOT_ELIGIBLE` đã xoá. Gọi vào đường dẫn cũ nhận lỗi như
+đường dẫn không tồn tại. Cột `users.grace_star_used` vẫn còn (ERD đã chốt) nhưng không dùng nữa. Người hết sao bị cấm
+theo D-09 (xem `reputation.md` mục 1.5).
 
 ---
 

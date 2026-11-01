@@ -52,7 +52,7 @@ const member: User = {
   role: 'user',
 };
 
-function renderLogin(initialEntry = '/login') {
+function renderLogin(initialEntry: string | { pathname: string; state: { sessionError: string } } = '/login') {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
@@ -81,6 +81,15 @@ afterEach(() => {
 });
 
 describe('đăng nhập Admin', () => {
+  it('hiện lý do khi phiên đang đăng nhập bị hệ thống khoá', () => {
+    renderLogin({
+      pathname: '/login',
+      state: { sessionError: 'Tài khoản đã bị khoá. Lý do: spam bài' },
+    });
+
+    expect(screen.getByText('Tài khoản đã bị khoá. Lý do: spam bài')).toBeTruthy();
+  });
+
   it('hiển thị biểu mẫu gọn với tab chuyển sang tạo tài khoản', () => {
     const { container } = renderLogin();
 
@@ -159,5 +168,48 @@ describe('đăng nhập Admin', () => {
     await waitFor(() => expect((screen.getByRole('button', { name: 'Đăng nhập' }) as HTMLButtonElement).disabled).toBe(false));
     expect(fetchSessionUser).not.toHaveBeenCalled();
     expect(mocks.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('hiện lý do và hướng dẫn hỗ trợ khi tài khoản bị khoá', async () => {
+    vi.mocked(authApi.login).mockRejectedValue({
+      code: 'AUTH_ACCOUNT_LOCKED',
+      status: 403,
+      message: 'Tài khoản đã bị khoá.',
+      details: { reason: 'Đăng nội dung vi phạm' },
+    });
+    const user = userEvent.setup();
+    renderLogin();
+
+    await user.type(screen.getByLabelText('Email'), member.email);
+    await user.type(screen.getByLabelText('Mật khẩu'), 'Secret123!');
+    await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
+
+    expect(
+      await screen.findByText(
+        'Tài khoản của bạn đã bị khoá. Lý do: Đăng nội dung vi phạm. Vui lòng liên hệ bộ phận hỗ trợ để được giải đáp.',
+      ),
+    ).toBeTruthy();
+    expect(fetchSessionUser).not.toHaveBeenCalled();
+  });
+
+  it('hiện câu chung khi tài khoản bị khoá nhưng không có lý do', async () => {
+    vi.mocked(authApi.login).mockRejectedValue({
+      code: 'AUTH_ACCOUNT_LOCKED',
+      status: 403,
+      message: 'Tài khoản đã bị khoá.',
+    });
+    const user = userEvent.setup();
+    renderLogin();
+
+    await user.type(screen.getByLabelText('Email'), member.email);
+    await user.type(screen.getByLabelText('Mật khẩu'), 'Secret123!');
+    await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
+
+    expect(
+      await screen.findByText(
+        'Tài khoản của bạn đã bị khoá. Vui lòng liên hệ bộ phận hỗ trợ để được giải đáp.',
+      ),
+    ).toBeTruthy();
+    expect(document.body.textContent).not.toContain('Lý do:');
   });
 });

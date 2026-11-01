@@ -4,14 +4,16 @@ import { userApi } from './userApi';
 import { tokenStorage } from './http';
 import { catalogApi } from './catalogApi';
 import { toAreaOptions, toFeUser } from './mappers';
+import { reputationApi } from './reputationApi';
 
 export async function fetchSessionUser() {
   const profile = await userApi.getMe();
-  if (profile.isAdmin || profile.areaId === null) return toFeUser(profile);
-
-  const areas = await catalogApi.areas();
+  const [reputation, areas] = await Promise.all([
+    reputationApi.getMyReputation(0, 1),
+    profile.isAdmin || profile.areaId === null ? Promise.resolve([]) : catalogApi.areas(),
+  ]);
   const district = toAreaOptions(areas).find((area) => area.id === profile.areaId)?.label ?? '';
-  return toFeUser(profile, district);
+  return toFeUser(profile, district, reputation);
 }
 
 /** Goi khi mo app: con token va userId API thi hoi /me de khoi phuc phien dang nhap. */

@@ -74,8 +74,8 @@ import { ReputationBadge } from '../../components/ReputationBadge';
 
 const apiConditionLabel: Record<ItemResponse['condition'], string> = {
   NEW: 'Mới',
-  LIKE_NEW: 'Như mới',
-  GOOD: 'Còn tốt',
+  LIKE_NEW: 'Ít sử dụng',
+  GOOD: 'Đã dùng nhiều',
   DEFECTIVE: 'Có lỗi',
 };
 
@@ -1685,7 +1685,11 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       </p>
                     )
                   ) : null}
-                  <Button variant="outline" className="w-full" onClick={() => navigate(`/items/${selected.request.itemId}`)}>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => navigate(`/items/${selected.request.itemId}?from=messages`)}
+                  >
                     Xem bài đăng
                   </Button>
                   {reportTargetUserId && reportTargetUserId !== currentUserId ? (

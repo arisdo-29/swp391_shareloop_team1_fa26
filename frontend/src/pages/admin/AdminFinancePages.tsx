@@ -83,7 +83,6 @@ export function AdminOperationsDashboard() {
   return <>
     <PageHeader
       title="Tổng quan"
-      description="Việc đang chờ, số liệu tài chính và thao tác quản trị gần đây."
     />
     <div className="mb-6">
       <AdminTodoCards />
@@ -114,7 +113,7 @@ export function AdminOperationsDashboard() {
               <h2 className="section-title">Hoạt động gần đây</h2>
               <p className="mt-1 text-sm text-text-muted">Các thay đổi mới nhất được ghi nhận trong hệ thống.</p>
             </div>
-            <Link className="text-sm font-semibold text-primary hover:text-primary-hover" to="/admin/audit-logs">
+            <Link className="text-sm font-semibold text-link hover:text-secondary" to="/admin/audit-logs">
               Xem tất cả
             </Link>
           </div>

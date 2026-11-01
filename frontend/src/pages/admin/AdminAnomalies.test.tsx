@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { adminAnomalyApi, type AnomalyReportResponse } from '../../services/adminAnomalyApi';
 import { AdminAnomalies } from './AdminAnomalies';
@@ -40,7 +39,7 @@ describe('AdminAnomalies', () => {
     expect(within(row).getByText('Trần Thị Bình')).toBeTruthy();
     expect(within(row).getByText('Không có email')).toBeTruthy();
     expect(within(row).getByText('6')).toBeTruthy();
-    expect(screen.getByText(/hơn 5 giao dịch hoàn tất với nhau trong 90 ngày/)).toBeTruthy();
+    expect(screen.queryByText(/hơn 5 giao dịch hoàn tất với nhau trong 90 ngày/)).toBeNull();
     expect(screen.queryByText(/#3|#7/)).toBeNull();
   });
 
@@ -52,18 +51,16 @@ describe('AdminAnomalies', () => {
     expect(await screen.findByText('Chưa có cảnh báo nào')).toBeTruthy();
   });
 
-  it('hiện lỗi khi không tải được và cho làm mới', async () => {
-    const user = userEvent.setup();
-    vi.mocked(adminAnomalyApi.report)
-      .mockRejectedValueOnce({ status: 500, code: 'INTERNAL_ERROR', message: 'Máy chủ đang bận.' })
-      .mockResolvedValueOnce(reportWithPair);
+  it('hiện lỗi khi không tải được và không hiện nút làm mới', async () => {
+    vi.mocked(adminAnomalyApi.report).mockRejectedValue({
+      status: 500,
+      code: 'INTERNAL_ERROR',
+      message: 'Máy chủ đang bận.',
+    });
 
     render(<AdminAnomalies />);
     expect(await screen.findByText('Máy chủ đang bận.')).toBeTruthy();
 
-    await user.click(screen.getByRole('button', { name: 'Làm mới' }));
-
-    expect(await screen.findByText('Nguyễn Văn An')).toBeTruthy();
-    await waitFor(() => expect(adminAnomalyApi.report).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole('button', { name: 'Làm mới' })).toBeNull();
   });
 });

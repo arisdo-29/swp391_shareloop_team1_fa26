@@ -9,14 +9,14 @@ import { OtpInput } from './OtpInput';
 
 afterEach(cleanup);
 
-function OtpHarness({ onSubmit = () => undefined }: { onSubmit?: () => void }) {
+function OtpHarness({ onSubmit = () => undefined }: { onSubmit?: (otp: string) => void }) {
   const [otp, setOtp] = useState(() => createOtpValue());
 
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        onSubmit();
+        onSubmit(otp.join(''));
       }}
     >
       <OtpInput value={otp} onChange={setOtp} />
@@ -25,7 +25,7 @@ function OtpHarness({ onSubmit = () => undefined }: { onSubmit?: () => void }) {
   );
 }
 
-function renderOtp(onSubmit?: () => void) {
+function renderOtp(onSubmit?: (otp: string) => void) {
   return render(
     <StrictMode>
       <OtpHarness onSubmit={onSubmit} />
@@ -38,21 +38,21 @@ function otpInputs() {
 }
 
 describe('OtpInput focus interaction', () => {
-  it('nhập 123456 theo đúng từng ô, không bỏ qua và không tự submit', async () => {
+  it('nhập và submit chính xác 123456, không lặp chữ số trước', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     renderOtp(onSubmit);
     const inputs = otpInputs();
 
     await user.click(inputs[0]);
-    for (let index = 0; index < 6; index += 1) {
-      await user.keyboard(String(index + 1));
-      expect(inputs[index].value).toBe(String(index + 1));
-      expect(document.activeElement).toBe(inputs[Math.min(index + 1, 5)]);
-    }
+    await user.keyboard('123456');
 
     expect(inputs.map((input) => input.value)).toEqual(['1', '2', '3', '4', '5', '6']);
+    expect(document.activeElement).toBe(inputs[5]);
     expect(onSubmit).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Xác nhận' }));
+    expect(onSubmit).toHaveBeenCalledWith('123456');
   });
 
   it('một input event có giá trị ghép vẫn chỉ thay một ô và đi đúng một bước', async () => {

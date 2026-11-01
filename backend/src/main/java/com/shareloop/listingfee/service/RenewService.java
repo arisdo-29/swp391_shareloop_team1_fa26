@@ -2,7 +2,6 @@ package com.shareloop.listingfee.service;
 
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.entity.ItemStatus;
-import com.shareloop.item.entity.OfferType;
 import com.shareloop.listingfee.ListingFeeErrorCode;
 import com.shareloop.listingfee.dto.RenewQuote;
 import com.shareloop.listingfee.dto.RenewResponse;
@@ -51,12 +50,12 @@ public class RenewService {
     /**
      * Gia hạn bài của chính mình (F08 bước 1, POST /items/{id}/renew).
      *
-     * <p>Quy tắc: chỉ chủ bài, bài phải đang APPROVED; gia hạn lúc nào cũng được. Phí = ConfigKey renew_fee, trừ
-     * ngay qua {@code CreditService.spend} (RENEW_FEE, ghi credit_ledger); phí 0 thì không đụng ví. expire_at mới =
-     * max(now, expire_at cũ) + post_display_days ngày, không phụ thuộc hạng (BR-P12: áp dụng cho mọi bài).
+     * <p>Quy tắc: chỉ chủ bài, bài phải đang APPROVED; gia hạn lúc nào cũng được. Mọi bài trừ ConfigKey renew_fee qua
+     * {@code CreditService.spend} và ghi credit_ledger khi phí lớn hơn 0. expire_at mới =
+     * max(now, expire_at cũ) + post_display_days ngày, không phụ thuộc hạng.
      *
-     * <p>Transaction: REQUIRED. Khoá dòng users của chủ bài rồi dòng items (cùng thứ tự với PostFeeService). Hai lần
-     * gia hạn cùng lúc chạy lần lượt; lần sau cộng tiếp từ expire_at lần trước vừa ghi, không mất lần nào.
+     * <p>Transaction: REQUIRED. Khoá users rồi items. Hai lần gia hạn cùng lúc
+     * chạy lần lượt; lần sau cộng tiếp từ expire_at lần trước vừa ghi.
      *
      * @param itemId bài cần gia hạn
      * @param userId người gọi, lấy từ token
@@ -75,9 +74,9 @@ public class RenewService {
         creditService.lockWalletRow(userId);
         ItemFee itemFee = lockItemFee(itemId);
         // Đọc lại status sau khi khoá: trong lúc chờ khoá, bài có thể đã bị đổi trạng thái.
-        requireApproved(readSnapshot(itemId));
-
-        int fee = calculateRenewFee(snapshot.getOfferType());
+        ItemFeeSnapshot lockedSnapshot = readSnapshot(itemId);
+        requireApproved(lockedSnapshot);
+        int fee = calculateRenewFee();
         // CreditService.spend không nhận số 0 (WALLET_INVALID_AMOUNT); phí 0 nghĩa là không có gì để trừ.
         if (fee > 0) {
             creditService.spend(userId, fee, CreditTxType.RENEW_FEE, itemId);
@@ -108,7 +107,7 @@ public class RenewService {
                 .findById(itemId)
                 .orElseThrow(() -> new BusinessException(ListingFeeErrorCode.LISTINGFEE_ITEM_NOT_FOUND));
 
-        int fee = calculateRenewFee(snapshot.getOfferType());
+        int fee = calculateRenewFee();
         Instant newExpireAt = calculateNewExpireAt(itemFee.getExpireAt());
         if (snapshot.getStatus() != ItemStatus.APPROVED) {
             String reason = ListingFeeErrorCode.LISTINGFEE_RENEW_NOT_ALLOWED.defaultMessage();
@@ -117,9 +116,8 @@ public class RenewService {
         return new RenewQuote(fee, newExpireAt, true, null);
     }
 
-    // Một chỗ duy nhất quyết định phí gia hạn, cả báo giá lẫn gia hạn thật đều gọi. Hiện mọi bài đều thu renew_fee,
-    // kể cả bài GIVE; luật "gia hạn bài Cho miễn phí" thuộc N02, khi làm chỉ cần sửa ở hàm này.
-    private int calculateRenewFee(OfferType offerType) {
+    // Một chỗ duy nhất quyết định phí gia hạn, cả báo giá lẫn gia hạn thật đều gọi.
+    private int calculateRenewFee() {
         return configService.getInt(ConfigKey.RENEW_FEE);
     }
 

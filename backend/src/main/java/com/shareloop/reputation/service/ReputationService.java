@@ -7,8 +7,6 @@ import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
-import com.shareloop.reputation.ReputationErrorCode;
-import com.shareloop.reputation.dto.GraceStarResponse;
 import com.shareloop.reputation.dto.MyReputationResponse;
 import com.shareloop.reputation.dto.PointHistoryDto;
 import com.shareloop.reputation.dto.RepeatedPair;
@@ -20,6 +18,8 @@ import com.shareloop.reputation.repository.UserReputationRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.UserErrorCode;
+import com.shareloop.user.event.UserLockCleanup;
+import com.shareloop.user.service.UserService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -54,18 +54,28 @@ public class ReputationService {
     private final ActivityLogQueryService activityLogQueryService;
     private final ObjectProvider<ItemService> itemServiceProvider;
     private final NotificationService notificationService;
+    // ObjectProvider như ItemService: lấy UserService lúc gọi, tránh vòng phụ thuộc khi khởi tạo bean
+    private final ObjectProvider<UserService> userServiceProvider;
     private final Clock clock;
 
     public ReputationService() {
-        this(null, null, null, null, (ObjectProvider<ItemService>) null, null, Clock.systemUTC());
+        this(null, null, null, null, (ObjectProvider<ItemService>) null, null, null, Clock.systemUTC());
     }
 
     public ReputationService(UserReputationRepository userReputationRepository) {
-        this(null, userReputationRepository, null, null, (ObjectProvider<ItemService>) null, null, Clock.systemUTC());
+        this(
+                null,
+                userReputationRepository,
+                null,
+                null,
+                (ObjectProvider<ItemService>) null,
+                null,
+                null,
+                Clock.systemUTC());
     }
 
     public ReputationService(ConfigService configService) {
-        this(configService, null, null, null, (ObjectProvider<ItemService>) null, null, Clock.systemUTC());
+        this(configService, null, null, null, (ObjectProvider<ItemService>) null, null, null, Clock.systemUTC());
     }
 
     public ReputationService(ConfigService configService, UserReputationRepository userReputationRepository) {
@@ -75,6 +85,7 @@ public class ReputationService {
                 null,
                 null,
                 (ObjectProvider<ItemService>) null,
+                null,
                 null,
                 Clock.systemUTC());
     }
@@ -92,6 +103,7 @@ public class ReputationService {
                 null,
                 itemService != null ? new SimpleObjectProvider<>(itemService) : null,
                 notificationService,
+                null,
                 Clock.systemUTC());
     }
 
@@ -108,8 +120,29 @@ public class ReputationService {
                 userReputationRepository,
                 activityLogService,
                 activityLogQueryService,
+                itemService,
+                notificationService,
+                null,
+                clock);
+    }
+
+    public ReputationService(
+            ConfigService configService,
+            UserReputationRepository userReputationRepository,
+            ActivityLogService activityLogService,
+            ActivityLogQueryService activityLogQueryService,
+            ItemService itemService,
+            NotificationService notificationService,
+            UserService userService,
+            Clock clock) {
+        this(
+                configService,
+                userReputationRepository,
+                activityLogService,
+                activityLogQueryService,
                 itemService != null ? new SimpleObjectProvider<>(itemService) : null,
                 notificationService,
+                userService != null ? new SimpleObjectProvider<>(userService) : null,
                 clock);
     }
 
@@ -121,6 +154,7 @@ public class ReputationService {
             @Autowired(required = false) ActivityLogQueryService activityLogQueryService,
             @Autowired(required = false) ObjectProvider<ItemService> itemServiceProvider,
             @Autowired(required = false) NotificationService notificationService,
+            @Autowired(required = false) ObjectProvider<UserService> userServiceProvider,
             Clock clock) {
         this.configService = configService;
         this.userReputationRepository = userReputationRepository;
@@ -128,6 +162,7 @@ public class ReputationService {
         this.activityLogQueryService = activityLogQueryService;
         this.itemServiceProvider = itemServiceProvider;
         this.notificationService = notificationService;
+        this.userServiceProvider = userServiceProvider;
         this.clock = clock;
     }
 
@@ -425,8 +460,10 @@ public class ReputationService {
      *   <li>Trừ số lượng sao chỉ định, không để âm (tối thiểu 0 sao).</li>
      *   <li>Vi phạm làm mất chuỗi giao dịch sạch: clean_streak về 0 (BR-U09, Issue #150).</li>
      *   <li>Ghi nhật ký hành động (activity_logs STARS).</li>
-     *   <li>Nếu số sao trước đó > 0 và sau khi trừ về đúng 0 sao: vô hiệu hoá quyền đăng bài bằng cách ẩn toàn bộ
-     *   bài đăng đang hiển thị của người này và gửi thông báo cảnh báo (chỉ gửi đúng 1 lần khi chạm mốc 0).</li>
+     *   <li>Trừ xong mà vẫn còn sao: báo người dùng số sao còn lại trước khi bị cấm (UT-03).</li>
+     *   <li>Nếu số sao trước đó > 0 và sau khi trừ về đúng 0 sao: cấm tài khoản (users.status = BANNED, D-09) qua
+     *   UserService, kèm dọn dẹp như khoá tài khoản (huỷ giao dịch đang mở trừ đang tranh chấp, nhả bài, từ chối bài
+     *   chờ duyệt và nhả phí, ẩn bài), ghi nhật ký USER_BAN và gửi thông báo (chỉ đúng 1 lần khi chạm mốc 0).</li>
      * </ul>
      *
      * @param userId ID người dùng bị trừ sao
@@ -460,64 +497,62 @@ public class ReputationService {
                     reason != null ? reason : "Trừ " + amount + " sao uy tín");
         }
 
+        // Đã 0 sao từ trước thì không trừ được gì: không báo lại, không cấm lại
+        if (newStars > 0 && newStars < before && notificationService != null) {
+            notificationService.notify(
+                    userId,
+                    "TRUST_STARS_DEDUCTED",
+                    "Bạn bị trừ sao uy tín",
+                    "Bạn bị trừ " + (before - newStars) + " sao. Bạn còn " + newStars
+                            + " sao trước khi tài khoản bị cấm.",
+                    // FE không có trang /me/reputation (ra 404), tab uy tín nằm trong trang hồ sơ
+                    "/profile?tab=reputation");
+        }
+
         // Chỉ xử lý khi trước đó còn sao và sau khi trừ chạm mốc 0 sao
         if (before > 0 && newStars == 0) {
+            banBecauseStarsDepleted(userId);
             if (itemServiceProvider != null) {
+                // Dọn nốt bài ở trạng thái khác APPROVED (bị từ chối, hết hạn) mà luồng khoá không ẩn
                 itemServiceProvider.ifAvailable(service -> service.hideAllOfUser(userId));
             }
             if (notificationService != null) {
                 notificationService.notify(
                         userId,
                         "TRUST_STARS_DEPLETED",
-                        "Sao uy tín đã về 0",
-                        "Điểm uy tín của bạn đã về 0. Quyền đăng bài và gửi yêu cầu giao dịch đã bị vô hiệu hoá. Vui lòng gửi khiếu nại để được xem xét cấp sao ân hạn.",
-                        // FE không có trang /me/reputation (ra 404), tab uy tín nằm trong trang hồ sơ
+                        "Tài khoản đã bị cấm",
+                        "Sao uy tín của bạn đã về 0 nên tài khoản đã bị cấm. Các giao dịch đang mở đã bị huỷ và bài"
+                                + " đăng đã bị ẩn.",
                         "/profile?tab=reputation");
             }
         }
     }
 
+    // D-09: đặt BANNED và dọn dẹp qua UserService (UserLockedEvent), rồi ghi nhật ký USER_BAN với kết quả dọn dẹp.
+    private void banBecauseStarsDepleted(long userId) {
+        UserService userService = userServiceProvider != null ? userServiceProvider.getIfAvailable() : null;
+        if (userService == null) {
+            return;
+        }
+        UserLockCleanup cleanup = userService.ban(userId);
+        if (cleanup == null || activityLogService == null) {
+            return; // đã bị cấm từ trước
+        }
+        activityLogService.log(
+                ActivityType.USER_BAN.name(),
+                null,
+                "USER",
+                userId,
+                Map.of(
+                        "cancelledRequests", cleanup.getCancelledRequests(),
+                        "releasedCredit", cleanup.getReleasedCredit(),
+                        "hiddenItemIds", cleanup.getHiddenItemIds()),
+                "Sao uy tín về 0, hệ thống tự cấm tài khoản");
+    }
+
     @Transactional
     public void deductStar(Long userId, int amount) {
         deductStar(userId, amount, null);
-    }
-
-    /**
-     * Admin cấp 1 sao ân hạn cho người dùng đang có 0 sao (FR-95, BR-U09, UC-51, Issue #150). Mỗi tài khoản chỉ được
-     * cấp một lần; hành động ghi nhật ký GRACE_STAR kèm lý do.
-     *
-     * @param adminId Admin thực hiện
-     * @param userId người được cấp
-     * @param reason lý do cấp, bắt buộc
-     * @return số sao sau khi cấp
-     * @throws BusinessException USER_NOT_FOUND khi không có người dùng; REPUTATION_GRACE_STAR_ALREADY_USED khi đã cấp
-     *     trước đó; REPUTATION_GRACE_STAR_NOT_ELIGIBLE khi người dùng vẫn còn sao
-     */
-    @Transactional
-    public GraceStarResponse grantGraceStar(Long adminId, Long userId, String reason) {
-        UserReputation user = userReputationRepository
-                .findByIdForUpdate(userId)
-                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
-        if (user.isGraceStarUsed()) {
-            throw new BusinessException(ReputationErrorCode.REPUTATION_GRACE_STAR_ALREADY_USED);
-        }
-        if (user.getTrustStars() > 0) {
-            throw new BusinessException(ReputationErrorCode.REPUTATION_GRACE_STAR_NOT_ELIGIBLE);
-        }
-
-        user.grantGraceStar();
-        userReputationRepository.save(user);
-
-        if (activityLogService != null) {
-            activityLogService.log(
-                    ActivityType.GRACE_STAR.name(),
-                    adminId,
-                    "USER",
-                    userId,
-                    Map.of("before", 0, "after", user.getTrustStars()),
-                    reason);
-        }
-        return new GraceStarResponse(userId, user.getTrustStars(), user.isGraceStarUsed());
     }
 
     /**

@@ -62,41 +62,38 @@ api.http.defaults.adapter = async (config) => {
   return { data: nextResponse, status: 200, statusText: 'OK', headers: {}, config };
 };
 
-await test('MANUAL tạo đơn, đọc lại và mark-paid qua API; không gọi mock-confirm khi bắt đầu', async () => {
+await test('VNPay tạo đơn, đọc lại và chuyển hướng; không gọi mock-confirm khi bắt đầu', async () => {
   requests = [];
   nextResponse = {
-    orderCode: 'manual-code',
-    provider: 'MANUAL',
+    orderCode: 'vnpay-code',
+    provider: 'VNPAY',
     status: 'PENDING',
     credits: 20,
     amountVnd: 20000,
-    redirectUrl: '/wallet/topup/manual-checkout?orderCode=manual-code',
+    redirectUrl: 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?orderCode=vnpay-code',
   };
   const order = await api.paymentApi.createTopUpOrder({ amountVnd: 20000 });
   assert.deepEqual(requests[0].body, { amountVnd: 20000 });
   await assert.rejects(api.confirmDemoPayment(order));
   assert.equal(await api.startPayment(order), undefined);
-  assert.deepEqual(navigations, ['/wallet/topup/manual-checkout?orderCode=manual-code']);
+  assert.deepEqual(navigations, [nextResponse.redirectUrl]);
   assert.equal(requests.length, 1);
   assert.deepEqual(await api.paymentApi.getOrder(order.orderCode), nextResponse);
-  assert.equal(requests[1].url, '/api/v1/wallet/topup-orders/manual-code');
+  assert.equal(requests[1].url, '/api/v1/wallet/topup-orders/vnpay-code');
   assert.equal(requests[1].method, 'get');
-  nextResponse = { ...nextResponse, submittedAt: '2026-10-20T07:00:00Z' };
-  assert.equal((await api.paymentApi.markPaid(order.orderCode)).status, 'PENDING');
-  assert.equal(requests[2].url, '/api/v1/wallet/topup-orders/manual-code/mark-paid');
-  assert.equal(requests[2].body, undefined);
+  assert.equal(api.paymentApi.markPaid, undefined);
 });
 
 await test('session chỉ giữ mã tham chiếu; không tin số tiền và trạng thái trong storage', () => {
   api.savePendingTopUp({
-    orderCode: 'manual-code',
+    orderCode: 'vnpay-code',
     amountVnd: 20000,
     credits: 20,
     status: 'PENDING',
-    provider: 'MANUAL',
+    provider: 'VNPAY',
   });
   assert.deepEqual(JSON.parse(sessionStorage.getItem('shareloop:pendingTopUp')), {
-    orderCode: 'manual-code',
+    orderCode: 'vnpay-code',
   });
   sessionStorage.setItem(
     'shareloop:pendingTopUp',
@@ -107,18 +104,14 @@ await test('session chỉ giữ mã tham chiếu; không tin số tiền và tr�
   assert.equal(api.loadPendingTopUp(), null);
 });
 
-await test('admin duyệt/từ chối chỉ gửi ghi chú và lý do, giữ phân trang', async () => {
+await test('admin chỉ đọc danh sách đơn nạp và giữ phân trang', async () => {
   requests = [];
-  const params = { page: 2, size: 10, status: 'PENDING', submittedOnly: true };
+  const params = { page: 2, size: 10, status: 'PENDING' };
   await api.adminFinanceApi.topUpOrders(params);
   assert.equal(requests[0].url, '/api/v1/admin/finance/topup-orders');
   assert.deepEqual(requests[0].params, params);
-  await api.adminFinanceApi.approveTopUp('code', 'checked');
-  assert.equal(requests[1].url, '/api/v1/admin/finance/topup-orders/code/approve');
-  assert.deepEqual(requests[1].body, { note: 'checked' });
-  await api.adminFinanceApi.rejectTopUp('code', 'invalid');
-  assert.equal(requests[2].url, '/api/v1/admin/finance/topup-orders/code/reject');
-  assert.deepEqual(requests[2].body, { reason: 'invalid' });
+  assert.equal(api.adminFinanceApi.approveTopUp, undefined);
+  assert.equal(api.adminFinanceApi.rejectTopUp, undefined);
 });
 
 await test('quota không tìm kiếm hoặc tiêu lượt; search giữ quota và kết quả dự phòng', async () => {
@@ -171,6 +164,14 @@ await test('thuộc tính danh mục gọi đúng path và không tự thêm que
   assert.equal(requests[0].params, undefined);
 });
 
+await test('phí gia hạn và đẩy bài đọc từ endpoint bảng phí đang có trong Swagger', async () => {
+  requests = [];
+  nextResponse = { renewFee: 2, boostFee: 3 };
+  assert.deepEqual(await api.itemApi.getListingFees(), nextResponse);
+  assert.equal(requests[0].method, 'get');
+  assert.equal(requests[0].url, '/api/v1/listing-fees');
+});
+
 await test('authenticity grant không gửi body; reject và revoke chỉ gửi reason', async () => {
   requests = [];
   nextResponse = undefined;
@@ -201,25 +202,45 @@ await test('duyệt gửi ID điều kiện cùng đáp án, không ghép lại 
 
 await test('Admin Checklist dùng đúng method, path và request body cho đủ 5 API', async () => {
   requests = [];
-  const first = { id: 3, key: 'photo', question: 'Ảnh đúng món đồ?', sortOrder: 10, active: true };
+  const first = {
+    id: 3,
+    key: 'photo',
+    question: 'Ảnh đúng món đồ?',
+    sortOrder: 10,
+    active: true,
+    description: 'Đạt khi có từ 3 ảnh chụp thật.',
+  };
   const second = { id: 1, key: 'content', question: 'Nội dung phù hợp?', sortOrder: 20, active: false };
 
   nextResponse = [first, second];
   assert.deepEqual(await api.adminChecklistApi.list(), [first, second]);
   assert.equal(requests[0].method, 'get');
   assert.equal(requests[0].url, '/api/v1/admin/checklist');
+  assert.equal(typeof requests[0].params._, 'number');
 
   nextResponse = first;
-  await api.adminChecklistApi.create({ question: 'Ảnh đúng món đồ?' });
+  await api.adminChecklistApi.create({
+    question: 'Ảnh đúng món đồ?',
+    description: 'Đạt khi có từ 3 ảnh chụp thật.',
+  });
   assert.equal(requests[1].method, 'post');
   assert.equal(requests[1].url, '/api/v1/admin/checklist');
-  assert.deepEqual(requests[1].body, { question: 'Ảnh đúng món đồ?' });
+  assert.deepEqual(requests[1].body, {
+    question: 'Ảnh đúng món đồ?',
+    description: 'Đạt khi có từ 3 ảnh chụp thật.',
+  });
 
   nextResponse = { ...first, question: 'Ảnh là ảnh thật của đúng món đồ?' };
-  await api.adminChecklistApi.update(3, { question: 'Ảnh là ảnh thật của đúng món đồ?' });
+  await api.adminChecklistApi.update(3, {
+    question: 'Ảnh là ảnh thật của đúng món đồ?',
+    description: 'Đạt khi ảnh rõ nét. Từ chối nếu dùng ảnh mạng.',
+  });
   assert.equal(requests[2].method, 'put');
   assert.equal(requests[2].url, '/api/v1/admin/checklist/3');
-  assert.deepEqual(requests[2].body, { question: 'Ảnh là ảnh thật của đúng món đồ?' });
+  assert.deepEqual(requests[2].body, {
+    question: 'Ảnh là ảnh thật của đúng món đồ?',
+    description: 'Đạt khi ảnh rõ nét. Từ chối nếu dùng ảnh mạng.',
+  });
 
   nextResponse = [second, first];
   await api.adminChecklistApi.reorder([1, 3]);

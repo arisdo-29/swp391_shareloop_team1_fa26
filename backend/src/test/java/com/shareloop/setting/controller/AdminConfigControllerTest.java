@@ -40,45 +40,45 @@ class AdminConfigControllerTest {
     @MockitoBean
     ConfigService configService;
 
-    private static ConfigResponse thresholdResponse() {
+    private static ConfigResponse postFeeResponse() {
         return new ConfigResponse(
-                "chat_ai_threshold",
-                "0.8",
-                "0.7",
-                "Ngưỡng chặn tin nhắn của AI",
-                "Độ tin cậy tối thiểu để AI chặn một tin nhắn.",
-                "AI",
-                "AI trợ lý và sàng lọc");
+                "post_fee",
+                "10",
+                "5",
+                "Phí đăng bài",
+                "Số Credit được giữ khi đăng bài.",
+                "FEES",
+                "Phí bài đăng và nạp Credit");
     }
 
     @Test
     void adminCanListConfigsWithLabelDescriptionAndGroup() throws Exception {
-        when(configService.listConfigs()).thenReturn(java.util.List.of(thresholdResponse()));
+        when(configService.listConfigs()).thenReturn(java.util.List.of(postFeeResponse()));
         String adminToken = jwtService.issue(1L, true);
 
         mockMvc.perform(get("/api/v1/admin/configs").header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].key").value("chat_ai_threshold"))
-                .andExpect(jsonPath("$[0].label").value("Ngưỡng chặn tin nhắn của AI"))
-                .andExpect(jsonPath("$[0].description").value("Độ tin cậy tối thiểu để AI chặn một tin nhắn."))
-                .andExpect(jsonPath("$[0].group").value("AI"))
-                .andExpect(jsonPath("$[0].groupLabel").value("AI trợ lý và sàng lọc"));
+                .andExpect(jsonPath("$[0].key").value("post_fee"))
+                .andExpect(jsonPath("$[0].label").value("Phí đăng bài"))
+                .andExpect(jsonPath("$[0].description").value("Số Credit được giữ khi đăng bài."))
+                .andExpect(jsonPath("$[0].group").value("FEES"))
+                .andExpect(jsonPath("$[0].groupLabel").value("Phí bài đăng và nạp Credit"));
     }
 
     @Test
     void adminCanUpdateConfigUsingBodyKeyAndValue() throws Exception {
-        when(configService.update(ConfigKey.CHAT_AI_THRESHOLD, "0.8", null, 1L)).thenReturn(thresholdResponse());
+        when(configService.update(ConfigKey.POST_FEE, "10", null, 1L)).thenReturn(postFeeResponse());
         String adminToken = jwtService.issue(1L, true);
 
         mockMvc.perform(put("/api/v1/admin/configs")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"key\":\"chat_ai_threshold\",\"value\":\"0.8\"}"))
+                        .content("{\"key\":\"post_fee\",\"value\":\"10\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.key").value("chat_ai_threshold"))
-                .andExpect(jsonPath("$.value").value("0.8"));
+                .andExpect(jsonPath("$.key").value("post_fee"))
+                .andExpect(jsonPath("$.value").value("10"));
 
-        verify(configService).update(ConfigKey.CHAT_AI_THRESHOLD, "0.8", null, 1L);
+        verify(configService).update(ConfigKey.POST_FEE, "10", null, 1L);
     }
 
     @Test
@@ -88,7 +88,7 @@ class AdminConfigControllerTest {
         mockMvc.perform(put("/api/v1/admin/configs")
                         .header("Authorization", "Bearer " + userToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"key\":\"chat_ai_threshold\",\"value\":\"0.8\"}"))
+                        .content("{\"key\":\"post_fee\",\"value\":\"10\"}"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
@@ -109,16 +109,15 @@ class AdminConfigControllerTest {
 
     @Test
     void legacyPathCanStillUpdateConfig() throws Exception {
-        when(configService.update(ConfigKey.CHAT_AI_THRESHOLD, "0.8", "raise threshold", 1L))
-                .thenReturn(thresholdResponse());
+        when(configService.update(ConfigKey.POST_FEE, "10", "raise fee", 1L)).thenReturn(postFeeResponse());
         String adminToken = jwtService.issue(1L, true);
 
-        mockMvc.perform(put("/api/v1/admin/configs/chat_ai_threshold")
+        mockMvc.perform(put("/api/v1/admin/configs/post_fee")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"value\":\"0.8\",\"reason\":\"raise threshold\"}"))
+                        .content("{\"value\":\"10\",\"reason\":\"raise fee\"}"))
                 .andExpect(status().isOk());
 
-        verify(configService).update(ConfigKey.CHAT_AI_THRESHOLD, "0.8", "raise threshold", 1L);
+        verify(configService).update(ConfigKey.POST_FEE, "10", "raise fee", 1L);
     }
 }

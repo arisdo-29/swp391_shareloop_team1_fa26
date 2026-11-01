@@ -58,6 +58,8 @@ const editQuoteReasonLabel: Record<EditQuoteReason, string> = {
   PENDING_REVIEW_OVERWRITE: 'Cập nhật bản sửa đang chờ duyệt',
   FIRST_FREE_EDIT: 'Lượt sửa miễn phí đầu tiên',
   PAID_EDIT: 'Lượt sửa có phí',
+  OFFER_TYPE_CHANGE_FREE: 'Đổi hình thức không thu thêm phí đăng',
+  OFFER_TYPE_CHANGE_POST_FEE: 'Đổi sang Trao đổi và giữ phí đăng',
 };
 
 function getEditQuoteReasonLabel(reason: string) {
@@ -65,8 +67,12 @@ function getEditQuoteReasonLabel(reason: string) {
 }
 
 type ListingFeeAction = { type: 'renew' | 'boost'; item: Item };
-// Báo giá đã gộp: newTime là mốc hết đẩy mới (boost) hoặc hạn mới (renew), ISO-8601 UTC.
-type ListingFeeQuote = { fee: number; newTime: string; allowed: boolean; reason: string | null };
+type ListingFeeQuote = {
+  fee: number;
+  newDeadline: string;
+  allowed: boolean;
+  reason: string | null;
+};
 const WALLET_INSUFFICIENT_BALANCE = 'WALLET_INSUFFICIENT_BALANCE';
 
 
@@ -135,22 +141,33 @@ export function Activities() {
   const listingFeeInFlight = useRef(false);
   const currentUserId = toBackendUserId(user.id);
 
-  // Mở hộp Đẩy/Gia hạn thì hỏi BE báo giá (chỉ đọc, không trừ Credit); số hiện ra là số BE sẽ trừ thật.
+  // Báo giá chỉ đọc dùng cùng phép tính với thao tác thật để hạn mới hiển thị khớp Backend.
   useEffect(() => {
     if (!currentUserId || !listingFeeAction) return;
-    let active = true;
     const itemId = Number(listingFeeAction.item.id);
+    if (!Number.isSafeInteger(itemId)) return;
+    let active = true;
     setFeeQuote(null);
     setFeeQuoteLoading(true);
-    const request =
+    const quoteRequest =
       listingFeeAction.type === 'renew'
         ? itemApi.getRenewQuote(itemId).then(
-            (quote): ListingFeeQuote => ({ ...quote, newTime: quote.newExpireAt }),
+            (quote): ListingFeeQuote => ({
+              fee: quote.fee,
+              newDeadline: quote.newExpireAt,
+              allowed: quote.allowed,
+              reason: quote.reason,
+            }),
           )
         : itemApi.getBoostQuote(itemId).then(
-            (quote): ListingFeeQuote => ({ ...quote, newTime: quote.newBoostedUntil }),
+            (quote): ListingFeeQuote => ({
+              fee: quote.fee,
+              newDeadline: quote.newBoostedUntil,
+              allowed: quote.allowed,
+              reason: quote.reason,
+            }),
           );
-    request
+    quoteRequest
       .then((quote) => {
         if (active) setFeeQuote(quote);
       })
@@ -195,8 +212,12 @@ export function Activities() {
     setEditQuoteError('');
     setEditQuoteNeedsTopUp(false);
     try {
-      const latestQuote = await itemApi.getEditQuote(apiEditingItem.id);
+      const latestQuote = await itemApi.getEditQuote(apiEditingItem.id, input.offerType);
       setEditQuote(latestQuote);
+      if (editQuote && latestQuote.amount !== editQuote.amount) {
+        setEditQuoteError(`Mức phí vừa đổi thành ${latestQuote.amount} Credit. Vui lòng xem lại và bấm Lưu lần nữa.`);
+        return;
+      }
       const updated = await itemApi.update(apiEditingItem.id, input);
       const mapped = toFeItem(
         updated,
@@ -460,7 +481,7 @@ export function Activities() {
         description="Quản lý bài đăng và chọn người nhận ở đây. Sau khi chọn, hẹn lịch và bàn giao diễn ra trong Tin nhắn."
         action={
           <Link to="/post">
-            <Button>Đăng tin</Button>
+            <Button className="bronze-action">Đăng tin</Button>
           </Link>
         }
       />
@@ -574,7 +595,7 @@ export function Activities() {
                           {item.expiresAt ? ` · hết hạn ${new Date(item.expiresAt).toLocaleDateString('vi-VN')}` : ''}
                         </span>
                       </div>
-                      <Link to={`/items/${item.id}`} className="block truncate text-base font-bold transition hover:text-primary">
+                      <Link to={`/items/${item.id}`} className="block truncate text-base font-bold transition hover:text-link">
                         {item.title}
                       </Link>
                       {item.hidden ? (
@@ -667,7 +688,7 @@ export function Activities() {
             text="Đăng món đầu tiên để bắt đầu chia sẻ với cộng đồng."
             action={
               <Link to="/post">
-                <Button>Đăng tin</Button>
+                <Button className="bronze-action">Đăng tin</Button>
               </Link>
             }
           />
@@ -713,6 +734,7 @@ export function Activities() {
                 disabled={editSaving || editQuoteLoading}
                 onCancel={() => setEditingId('')}
                 onSave={saveApiItem}
+                onQuoteChange={setEditQuote}
               />
             ) : editQuoteLoading ? null : (
               <div className="mt-6 flex justify-end">
@@ -726,24 +748,29 @@ export function Activities() {
       ) : null}
 
       {listingFeeAction ? (
-        <DialogFrame>
-          <h2 className="text-xl font-bold">
+        <DialogFrame
+          labelledBy="listing-fee-confirm-title"
+          busy={Boolean(renewingItemId || boostingItemId)}
+          onClose={() => setListingFeeAction(null)}
+        >
+          <h2 id="listing-fee-confirm-title" className="text-xl font-bold">
             {listingFeeAction.type === 'renew' ? 'Xác nhận gia hạn bài' : 'Xác nhận đẩy bài'}
           </h2>
           <p className="mt-2 text-sm font-semibold">{listingFeeAction.item.title}</p>
           {feeQuoteLoading ? (
             <p className="mt-2 text-sm leading-6 text-text-muted">Đang tính phí...</p>
           ) : feeQuote ? (
-            <div className="mt-2 space-y-1 text-sm leading-6 text-text-muted">
-              <p>
-                {listingFeeAction.type === 'renew'
-                  ? `Hạn mới: ${formatQuoteDate(feeQuote.newTime)}`
-                  : `Đẩy đến ${formatQuoteDateTime(feeQuote.newTime)}`}
-              </p>
+            <div className="mt-2 text-sm leading-6 text-text-muted">
               <p>
                 {feeQuote.fee > 0
                   ? `Phí: ${feeQuote.fee} Credit. Phí không hoàn lại.`
                   : 'Miễn phí'}
+              </p>
+              <p className="mt-1 text-text-primary">
+                <strong>
+                  {listingFeeAction.type === 'renew' ? 'Hạn hiển thị mới' : 'Hạn đẩy mới'}:
+                </strong>{' '}
+                {new Date(feeQuote.newDeadline).toLocaleString('vi-VN')}
               </p>
             </div>
           ) : (
@@ -753,7 +780,9 @@ export function Activities() {
           )}
           {feeQuote && !feeQuote.allowed ? (
             <div className="mt-4">
-              <Alert tone="error">{feeQuote.reason ?? 'Hiện chưa thực hiện được thao tác này.'}</Alert>
+              <Alert tone="warning">
+                {feeQuote.reason || 'Thao tác này hiện chưa thể thực hiện.'}
+              </Alert>
             </div>
           ) : null}
           {creditShortage > 0 ? (
@@ -794,9 +823,7 @@ export function Activities() {
             >
               {renewingItemId || boostingItemId
                 ? 'Đang xử lý...'
-                : listingFeeAction.type === 'renew'
-                  ? 'Gia hạn'
-                  : 'Đẩy bài'}
+                : 'Xác nhận'}
             </Button>
           </div>
         </DialogFrame>
@@ -884,6 +911,7 @@ function EditItemForm({
   disabled,
   onCancel,
   onSave,
+  onQuoteChange,
 }: {
   item: ItemResponse;
   categories: CategoryResponse[];
@@ -891,8 +919,12 @@ function EditItemForm({
   disabled: boolean;
   onCancel: () => void;
   onSave: (input: UpdateItemRequest) => Promise<void>;
+  onQuoteChange: (quote: EditQuote) => void;
 }) {
   const [offerType, setOfferType] = useState<OfferType>(item.offerType);
+  const [pendingOfferType, setPendingOfferType] = useState<OfferType | null>(null);
+  const [pendingOfferQuote, setPendingOfferQuote] = useState<EditQuote | null>(null);
+  const [switchQuoteLoading, setSwitchQuoteLoading] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description);
   const [desiredItem, setDesiredItem] = useState(item.desiredItem ?? '');
@@ -928,7 +960,31 @@ function EditItemForm({
   );
   const operatingStatusRequired = operatingStatusAttribute?.required ?? false;
   const operatingStatusOptions = operatingStatusAttribute?.options.filter(isOperatingStatus) ?? [];
-  const formDisabled = disabled || uploading;
+  const formDisabled = disabled || uploading || switchQuoteLoading;
+
+  const chooseOfferType = async (target: OfferType) => {
+    if (target === offerType) return;
+    if (target === item.offerType) {
+      setOfferType(target);
+      try {
+        onQuoteChange(await itemApi.getEditQuote(item.id, target));
+      } catch {
+        setUploadError('Không tải được phí sửa bài. Vui lòng thử lại.');
+      }
+      return;
+    }
+    setSwitchQuoteLoading(true);
+    setUploadError('');
+    try {
+      const quote = await itemApi.getEditQuote(item.id, target);
+      setPendingOfferQuote(quote);
+      setPendingOfferType(target);
+    } catch {
+      setUploadError('Không tải được phí đổi hình thức. Vui lòng thử lại.');
+    } finally {
+      setSwitchQuoteLoading(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -1077,17 +1133,38 @@ function EditItemForm({
           label="Hình thức"
           value={offerType}
           disabled={formDisabled}
-          onChange={(event) => setOfferType(event.target.value as OfferType)}
+          onChange={(event) => { void chooseOfferType(event.target.value as OfferType); }}
         >
           <option value="GIVE">Cho tặng</option>
-          <option value="SWAP" disabled={item.offerType === 'GIVE'}>
+          <option value="SWAP">
             Trao đổi
           </option>
         </Select>
-        {item.offerType === 'GIVE' ? (
-          <p className="mt-1 text-xs text-text-muted">Muốn trao đổi thì đăng bài mới.</p>
-        ) : null}
       </div>
+      {pendingOfferType && pendingOfferQuote ? (
+        <DialogFrame>
+          <h2 className="text-xl font-bold">Xác nhận đổi hình thức bài</h2>
+          <p className="mt-3 text-sm leading-6 text-text-secondary">
+            {pendingOfferType === 'GIVE'
+              ? 'Chuyển sang Cho tặng. Phí Trao đổi đã thu trước đó sẽ không được hoàn lại. Khoản phí đang giữ (nếu có) sẽ được nhả khi gửi bản sửa.'
+              : pendingOfferQuote.amount > 0
+                ? `Chuyển sang Trao đổi sẽ giữ ${pendingOfferQuote.amount} Credit khi gửi duyệt. Phí chỉ trừ khi bản sửa được duyệt; bị từ chối sẽ nhả lại.`
+                : 'Chuyển lại sang Trao đổi miễn phí vì bài này đã trả phí đăng Trao đổi trước đó.'}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-text-secondary">
+            Khi lưu, bài sẽ chờ duyệt lại và mọi yêu cầu đang chờ của bài sẽ bị huỷ. Người gửi yêu cầu sẽ nhận được thông báo.
+          </p>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => { setPendingOfferType(null); setPendingOfferQuote(null); }}>Hủy</Button>
+            <Button type="button" onClick={() => {
+              setOfferType(pendingOfferType);
+              onQuoteChange(pendingOfferQuote);
+              setPendingOfferType(null);
+              setPendingOfferQuote(null);
+            }}>Xác nhận chuyển</Button>
+          </div>
+        </DialogFrame>
+      ) : null}
       {offerType === 'SWAP' ? (
         <Field
           label="Món muốn đổi"
@@ -1424,30 +1501,6 @@ function itemSummary(item: Item, pendingCount: number, chosenRequest?: ItemReque
   return { headline: '', detail: '' };
 }
 
-// Hiển thị theo múi giờ Việt Nam: "HH:mm dd/MM/yyyy" (đẩy bài) và "dd/MM/yyyy" (gia hạn).
-function formatQuoteDateTime(iso: string) {
-  const formatted = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(new Date(iso));
-  const [date, time] = formatted.split(', ');
-  return `${time} ${date}`;
-}
-
-function formatQuoteDate(iso: string) {
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(new Date(iso));
-}
-
 /** Giải thích vì sao một số nút đang khoá, để người dùng không phải đoán. */
 function lockNote(item: Item, canBoost: boolean) {
   const status = item.status.toUpperCase();
@@ -1520,7 +1573,7 @@ function SentRequestList({
                   {requestStatusLabel[request.status]}
                 </span>
               </div>
-              <Link to={`/items/${request.itemId}`} className="block truncate text-sm font-bold transition hover:text-primary sm:text-base">
+              <Link to={`/items/${request.itemId}`} className="block truncate text-sm font-bold transition hover:text-link sm:text-base">
                 {title}
               </Link>
               <p className="text-xs leading-5 text-text-secondary sm:text-sm">{sentRequestDetail(request)}</p>
@@ -1597,7 +1650,7 @@ function RequestPanel({
                   <p className="text-xs text-text-secondary">
                     Mang đổi:{' '}
                     {request.offeredItemId ? (
-                      <Link to={`/items/${request.offeredItemId}`} className="font-semibold text-primary hover:underline">
+                      <Link to={`/items/${request.offeredItemId}`} className="font-semibold text-link hover:underline">
                         {request.offeredItemTitle}
                       </Link>
                     ) : (

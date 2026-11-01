@@ -17,7 +17,9 @@ import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.service.RequestService;
 import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.service.UserService;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -31,7 +33,9 @@ class AdminReportQueryServiceTest {
     final ItemQueryService items = mock(ItemQueryService.class);
     final RequestService requests = mock(RequestService.class);
     final ReportEvidenceService evidence = mock(ReportEvidenceService.class);
-    final AdminReportQueryService service = new AdminReportQueryService(reports, users, items, requests, evidence);
+    static final Instant NOW = Instant.parse("2026-10-30T03:00:00Z");
+    final AdminReportQueryService service =
+            new AdminReportQueryService(reports, users, items, requests, evidence, Clock.fixed(NOW, ZoneOffset.UTC));
 
     Report report(TargetType type, Long itemId, Long targetId, Long requestId) {
         var report =
@@ -156,6 +160,22 @@ class AdminReportQueryServiceTest {
                 new Report(10L, type, itemId, targetId, requestId, ReportReason.OTHER, "Nội dung", ReportStage.BEFORE);
         ReflectionTestUtils.setField(report, "id", id);
         return report;
+    }
+
+    @Test
+    void detail_responseWindowOpenOnlyWhileAwaitingResponseBeforeDeadline() {
+        var report = report(TargetType.USER, null, 20L, null);
+
+        // OPEN (chưa yêu cầu giải trình hoặc đã giải trình xong): kết luận được
+        assertThat(service.detail(1L).responseWindowOpen()).isFalse();
+
+        // Chờ giải trình, còn hạn: chưa kết luận được
+        report.awaitResponse(NOW.plusSeconds(3600));
+        assertThat(service.detail(1L).responseWindowOpen()).isTrue();
+
+        // Chờ giải trình nhưng đã quá hạn: kết luận được
+        report.awaitResponse(NOW.minusSeconds(1));
+        assertThat(service.detail(1L).responseWindowOpen()).isFalse();
     }
 
     @Test

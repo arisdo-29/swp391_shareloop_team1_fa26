@@ -68,30 +68,15 @@ export function financeCsvFileName(contentDisposition: string | undefined) {
 }
 
 export const adminFinanceApi = {
-  // Bỏ trống status là mọi trạng thái, bỏ trống submittedOnly là false (docs/api/payment.md).
+  // Bỏ trống status là mọi trạng thái (docs/api/payment.md).
   async topUpOrders(params: {
     page: number;
     size: number;
     status?: PaymentOrderStatus;
-    submittedOnly?: boolean;
   }) {
     const { data } = await http.get<PageResponse<TopUpOrderDetailResponse>>(
       '/api/v1/admin/finance/topup-orders',
       { params },
-    );
-    return data;
-  },
-  async approveTopUp(orderCode: string, note: string) {
-    const { data } = await http.post<TopUpOrderDetailResponse>(
-      `/api/v1/admin/finance/topup-orders/${encodeURIComponent(orderCode)}/approve`,
-      { note },
-    );
-    return data;
-  },
-  async rejectTopUp(orderCode: string, reason: string) {
-    const { data } = await http.post<TopUpOrderDetailResponse>(
-      `/api/v1/admin/finance/topup-orders/${encodeURIComponent(orderCode)}/reject`,
-      { reason },
     );
     return data;
   },

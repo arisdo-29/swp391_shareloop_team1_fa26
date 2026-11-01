@@ -13,6 +13,17 @@ import { validEmail } from '../../utils/validation';
 import { safeInternalNextPath } from '../../utils/authRedirect';
 import { AuthLayout } from './AuthLayout';
 
+function loginErrorMessage(error: ApiError) {
+  if (error.code === 'AUTH_ACCOUNT_LOCKED' || error.code === 'AUTH_ACCOUNT_BANNED') {
+    const reason = typeof error.details?.reason === 'string' ? error.details.reason.trim() : '';
+    const status = error.code === 'AUTH_ACCOUNT_BANNED' ? 'bị cấm' : 'bị khoá';
+    const base = `Tài khoản của bạn đã ${status}.`;
+    const reasonMessage = reason ? ` Lý do: ${reason}.` : '';
+    return `${base}${reasonMessage} Vui lòng liên hệ bộ phận hỗ trợ để được giải đáp.`;
+  }
+  return authErrorMessage(error);
+}
+
 export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,7 +32,9 @@ export function Login() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  const successNotice = (location.state as { notice?: string } | null)?.notice;
+  const locationState = location.state as { notice?: string; sessionError?: string } | null;
+  const successNotice = locationState?.notice;
+  const sessionError = locationState?.sessionError;
   const nextPath = safeInternalNextPath(new URLSearchParams(location.search).get('next'));
 
   const login = async (inputEmail: string, pass: string) => {
@@ -54,7 +67,7 @@ export function Login() {
         navigate('/verify-email', { state: { email: normalized } });
         return;
       }
-      setError(authErrorMessage(authError));
+      setError(loginErrorMessage(authError));
     } finally {
       setProcessing(false);
     }
@@ -71,6 +84,7 @@ export function Login() {
         <h2 id="login-title" className="text-2xl font-bold">
           Chào bạn quay lại
         </h2>
+        {sessionError ? <Alert tone="error">{sessionError}</Alert> : null}
         {error ? <Alert tone="error">{error}</Alert> : null}
         {successNotice ? <Alert tone="success">{successNotice}</Alert> : null}
         <Field
@@ -90,12 +104,12 @@ export function Login() {
         <div className="flex justify-end">
           <Link
             to="/forgot-password"
-            className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary-hover"
+            className="auth-entry-forgot inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary"
           >
             Quên mật khẩu?
           </Link>
         </div>
-        <Button size="lg" className="w-full" disabled={processing}>
+        <Button size="lg" className="auth-entry-submit w-full" disabled={processing}>
           {processing ? 'Đang đăng nhập...' : 'Đăng nhập'}
         </Button>
       </form>

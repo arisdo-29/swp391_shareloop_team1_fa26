@@ -11,6 +11,7 @@ import {
   type ReportEvidence,
 } from '../../services/reportApi';
 import type { ApiError } from '../../services/http';
+import { formatDeadline } from '../../utils/request';
 
 const statusLabels: Record<ReportStatus, string> = {
   OPEN: 'Chờ xử lý',
@@ -23,6 +24,10 @@ const targetLabels: Record<ReportTargetType, string> = {
   USER: 'Người dùng',
   REQUEST: 'Giao dịch',
 };
+const targetFilterOptions = [
+  { value: 'ITEM', label: 'Báo cáo bài đăng' },
+  { value: 'USER', label: 'Báo cáo người dùng' },
+] satisfies { value: ReportTargetType; label: string }[];
 const reasonLabels: Record<string, string> = {
   NOT_AS_DESCRIBED: 'Không đúng mô tả',
   COUNTERFEIT: 'Hàng giả',
@@ -229,6 +234,7 @@ export function AdminComplaints() {
     if (
       !detail ||
       concluded(detail.report.status) ||
+      detail.responseWindowOpen ||
       submittingRef.current ||
       !confirming ||
       note.length > 500
@@ -245,7 +251,14 @@ export function AdminComplaints() {
       setReload((value) => value + 1);
     } catch (error) {
       const failure = error as ApiError;
-      if (failure.status === 409) {
+      if (failure.code === 'REPORT_RESPONSE_WINDOW_OPEN') {
+        // Dữ liệu trên trang đã cũ (mở hồ sơ trước khi nó chuyển sang chờ giải trình): tải lại để thấy hạn giải trình
+        setNoticeTone('warning');
+        setNotice('Bên bị báo cáo vẫn đang trong hạn giải trình, chưa thể kết luận.');
+        setConfirming(false);
+        setDetail(null);
+        setReload((value) => value + 1);
+      } else if (failure.status === 409) {
         setNoticeTone('warning');
         setNotice('Hồ sơ đã được quản trị viên khác xử lý. Đang tải lại trạng thái.');
         setDetail(null);
@@ -259,6 +272,43 @@ export function AdminComplaints() {
       submittingRef.current = false;
       setSubmitting(false);
       setConfirming(false);
+    }
+  }
+
+  // D-07, BC-03: báo cáo bài hoặc người dùng đang Chờ xử lý, chưa có giải trình thì Admin yêu cầu giải trình được.
+  // Khiếu nại giao dịch tự chờ giải trình lúc mở nên không có nút này. Backend kiểm lại.
+  const canRequestResponse =
+    !!detail &&
+    detail.report.status === 'OPEN' &&
+    detail.report.targetType !== 'REQUEST' &&
+    !detail.response;
+
+  async function requestResponse() {
+    if (!detail || !canRequestResponse || submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    setDetailError('');
+    try {
+      await reportApi.requestResponse(detail.report.id);
+      setNoticeTone('success');
+      setNotice('Đã yêu cầu giải trình. Bên bị báo cáo có 48 giờ để gửi giải trình.');
+      setDetail(null);
+      setReload((value) => value + 1);
+    } catch (error) {
+      const failure = error as ApiError;
+      if (failure.status === 409) {
+        setNoticeTone('warning');
+        setNotice('Hồ sơ không còn ở trạng thái Chờ xử lý. Đang tải lại trạng thái.');
+        setDetail(null);
+        setReload((value) => value + 1);
+      } else {
+        setDetailError(errorMessage(failure));
+        if (failure.status === 404 || failure.status === 403 || failure.status === 401)
+          setDetail(null);
+      }
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   }
 
@@ -298,10 +348,10 @@ export function AdminComplaints() {
             setSelectedId(null);
           }}
         >
-          <option value="">Tất cả đối tượng</option>
-          {Object.entries(targetLabels).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
+          <option value="">Nội dung báo cáo</option>
+          {targetFilterOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </Select>
@@ -320,7 +370,7 @@ export function AdminComplaints() {
               <thead>
                 <tr>
                   <th>Người gửi</th>
-                  <th>Đối tượng</th>
+                  <th>Nội dung bị khiếu nại</th>
                   <th>Lý do</th>
                   <th>Ngày gửi</th>
                   <th>Trạng thái</th>
@@ -383,7 +433,7 @@ export function AdminComplaints() {
       )}
       {selectedId !== null && (
         <DialogFrame labelledBy="report-detail-title" size="xl">
-          <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="mb-4">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 id="report-detail-title" className="section-title">
@@ -395,9 +445,6 @@ export function AdminComplaints() {
                 <p className="mt-1 text-sm text-text-secondary">Gửi lúc {date(detail.report.createdAt)}</p>
               )}
             </div>
-            <Button variant="ghost" disabled={submitting} onClick={() => setSelectedId(null)}>
-              Đóng
-            </Button>
           </div>
           {detailLoading && <p role="status">Đang tải hồ sơ…</p>}
           {detailError && (
@@ -459,7 +506,9 @@ export function AdminComplaints() {
                 ) : (
                   <p className="text-text-secondary">
                     Chưa có giải trình.
-                    {detail.responseDueAt ? ` Hạn giải trình: ${date(detail.responseDueAt)}.` : ''}
+                    {detail.responseDueAt
+                      ? ` Hạn giải trình: ${formatDeadline(detail.responseDueAt)}.`
+                      : ''}
                   </p>
                 )}
               </section>
@@ -488,10 +537,16 @@ export function AdminComplaints() {
                 </section>
               ) : (
                 <section className="space-y-4 border-t border-border pt-4">
+                  {detail.responseWindowOpen && detail.responseDueAt ? (
+                    <Alert tone="info">
+                      Hạn giải trình: {formatDeadline(detail.responseDueAt)}. Chỉ kết luận được khi
+                      bên bị báo cáo đã giải trình hoặc đã hết hạn.
+                    </Alert>
+                  ) : null}
                   <Select
                     label="Kết luận"
                     value={decision}
-                    disabled={submitting || confirming}
+                    disabled={submitting || confirming || detail.responseWindowOpen}
                     onChange={(event) => setDecision(event.target.value as ReportDecision)}
                   >
                     <option value="UPHOLD">Có cơ sở</option>
@@ -501,7 +556,7 @@ export function AdminComplaints() {
                     label="Ghi chú kết luận (tối đa 500 ký tự, không bắt buộc)"
                     value={note}
                     maxLength={500}
-                    disabled={submitting || confirming}
+                    disabled={submitting || confirming || detail.responseWindowOpen}
                     onChange={(event) => setNote(event.target.value)}
                   />
                   {confirming ? (
@@ -526,18 +581,38 @@ export function AdminComplaints() {
                         </Button>
                       </div>
                     </div>
-                  ) : (
-                    <Button
-                      disabled={submitting || note.length > 500}
-                      onClick={() => setConfirming(true)}
-                    >
-                      Kết luận
-                    </Button>
-                  )}
+                  ) : null}
                 </section>
               )}
             </div>
           )}
+          <div className="mt-6 flex items-center justify-between gap-3 border-t border-border pt-4">
+            {detail && !concluded(detail.report.status) && !confirming && (
+              <Button
+                disabled={submitting || note.length > 500 || detail.responseWindowOpen}
+                onClick={() => setConfirming(true)}
+              >
+                Kết luận
+              </Button>
+            )}
+            {canRequestResponse && !confirming && (
+              <Button
+                variant="outline"
+                disabled={submitting}
+                onClick={() => void requestResponse()}
+              >
+                Yêu cầu giải trình
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              className="ml-auto"
+              disabled={submitting}
+              onClick={() => setSelectedId(null)}
+            >
+              Đóng
+            </Button>
+          </div>
         </DialogFrame>
       )}
     </section>

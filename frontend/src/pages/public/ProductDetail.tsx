@@ -24,6 +24,7 @@ import { ReputationBadge } from '../../components/ReputationBadge';
 import { requestStatusLabel } from '../../utils/request';
 import { reputationBlockedMessage } from '../../utils/apiErrorMessages';
 import { loginPath } from '../../utils/authRedirect';
+import { productDetailBackLink } from '../../utils/productDetailNavigation';
 
 export function ProductDetail() {
   const { id } = useParams();
@@ -47,6 +48,7 @@ export function ProductDetail() {
   const isApiId = Boolean(id && /^\d+$/.test(id));
   const item = apiItem;
   const currentUserId = toBackendUserId(user?.id);
+  const backLink = productDetailBackLink(location.search);
 
   useEffect(() => {
     if (!id || !/^\d+$/.test(id)) return;
@@ -245,8 +247,8 @@ export function ProductDetail() {
 
   return (
     <div className="page-shell pt-6">
-      <Link to="/browse" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary-hover">
-        Quay lại tìm đồ
+      <Link to={backLink.target} className="inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary">
+        {backLink.label}
       </Link>
       <div className="mt-2 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
         <article className="min-w-0 space-y-6">
@@ -386,7 +388,7 @@ export function ProductDetail() {
             <>
               <h2 className="text-lg font-bold">{item.type === 'gift' ? 'Xin món này' : 'Đề nghị trao đổi'}</h2>
               {item.type === 'trade' && user ? (
-                <fieldset className="space-y-2">
+                <fieldset className="min-w-0 w-full max-w-full space-y-2">
                   <legend className="label">Chọn món bạn mang đổi</legend>
                   {eligibleOfferedItems.map((entry) => (
                     <button
@@ -394,12 +396,12 @@ export function ProductDetail() {
                       type="button"
                       aria-pressed={offeredItemId === entry.id}
                       onClick={() => setOfferedItemId(entry.id)}
-                      className={`flex w-full items-center gap-3 rounded-md border p-2.5 text-left transition ${offeredItemId === entry.id ? 'border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
+                      className={`box-border flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-md border p-2.5 text-left transition ${offeredItemId === entry.id ? 'border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
                     >
                       <ItemImage src={entry.images[0]} alt={entry.title} className="h-11 w-14 shrink-0 rounded-md object-cover" />
-                      <span className="min-w-0 flex-1">
-                        <strong className="block truncate text-sm">{entry.title}</strong>
-                        <span className="text-xs text-text-muted">{entry.district}</span>
+                      <span className="min-w-0 max-w-full flex-1 overflow-hidden">
+                        <strong className="block whitespace-normal break-words text-sm leading-5">{entry.title}</strong>
+                        <span className="block break-words text-xs text-text-muted">{entry.district}</span>
                       </span>
                     </button>
                   ))}
@@ -408,7 +410,7 @@ export function ProductDetail() {
                       Bạn chưa có món đã duyệt, còn hoạt động và chưa nằm trong giao dịch khác để trao đổi.
                     </p>
                   ) : null}
-                  <Link to="/post" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary-hover">
+                  <Link to="/post" className="inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary">
                     Đăng món mới để đổi
                   </Link>
                 </fieldset>

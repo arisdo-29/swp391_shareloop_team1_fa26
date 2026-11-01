@@ -9,10 +9,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.shareloop.auth.service.JwtService;
+import com.shareloop.common.exception.BusinessException;
 import com.shareloop.config.ClockConfig;
 import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
+import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.dto.CreateItemRequest;
 import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.entity.ItemCondition;
@@ -98,6 +100,30 @@ class ItemControllerTest {
     }
 
     @Test
+    @DisplayName("Admin đăng bài trả về 403 ITEM_ADMIN_BLOCKED (TK-13)")
+    void create_whenAdmin_returns403() throws Exception {
+        String token = jwtService.issue(10L, true);
+        when(itemService.createItem(eq(10L), any(CreateItemRequest.class)))
+                .thenThrow(new BusinessException(ItemErrorCode.ITEM_ADMIN_BLOCKED));
+
+        mockMvc.perform(post("/api/v1/items")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                          "categoryId": 1,
+                          "areaId": 1,
+                          "offerType": "GIVE",
+                          "title": "Sách giáo trình",
+                          "description": "Mô tả sách",
+                          "condition": "NEW"
+                        }
+                        """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ITEM_ADMIN_BLOCKED"));
+    }
+
+    @Test
     @DisplayName("Xem chi tiết bài đăng không cần token trả về 200 OK")
     void getById_public_returns200() throws Exception {
         ItemResponse response = new ItemResponse(
@@ -169,13 +195,15 @@ class ItemControllerTest {
                 .thenReturn(new com.shareloop.item.dto.PostingQuotaResponse(
                         new com.shareloop.item.dto.PostingQuotaResponse.Quota(2, 5),
                         new com.shareloop.item.dto.PostingQuotaResponse.Quota(9, -1),
-                        "DIAMOND"));
+                        "DIAMOND",
+                        5));
 
         mockMvc.perform(get("/api/v1/me/posting-quota").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.give.active").value(2))
                 .andExpect(jsonPath("$.give.limit").value(5))
                 .andExpect(jsonPath("$.swap.limit").value(-1))
+                .andExpect(jsonPath("$.nextPostFee").value(5))
                 .andExpect(jsonPath("$.rank").value("DIAMOND"));
     }
 

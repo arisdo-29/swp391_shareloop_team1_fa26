@@ -3,6 +3,7 @@ package com.shareloop.listingfee.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.shareloop.item.service.ItemService;
 import com.shareloop.listingfee.repository.ItemFeeRepository;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
@@ -10,6 +11,7 @@ import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.wallet.service.CreditService;
 import java.time.Clock;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,12 +36,15 @@ class PostFeeServiceTest {
     @Mock
     ReputationService reputationService;
 
+    @Mock
+    ItemService itemService;
+
     private PostFeeService postFeeService;
 
     @BeforeEach
     void setUp() {
         postFeeService = new PostFeeService(
-                itemFeeRepository, creditService, configService, reputationService, Clock.systemUTC());
+                itemFeeRepository, creditService, configService, reputationService, itemService, Clock.systemUTC());
     }
 
     @Test
@@ -79,5 +84,37 @@ class PostFeeServiceTest {
 
         // then
         assertThat(displayDays).isEqualTo(30);
+    }
+
+    @Test
+    void quoteEdit_whenOfferTypeDiffersFromSnapshot_throwsOfferTypeChangeNotAllowed() {
+        long itemId = 100L;
+        com.shareloop.listingfee.repository.ItemFeeSnapshot snapshot =
+                org.mockito.Mockito.mock(com.shareloop.listingfee.repository.ItemFeeSnapshot.class);
+        when(snapshot.getDonorId()).thenReturn(DONOR_ID);
+        when(snapshot.getOfferType()).thenReturn(com.shareloop.item.entity.OfferType.GIVE);
+        when(itemFeeRepository.findFeeSnapshotById(itemId)).thenReturn(Optional.of(snapshot));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> postFeeService.quoteEdit(itemId, DONOR_ID, com.shareloop.item.entity.OfferType.SWAP))
+                .isInstanceOf(com.shareloop.common.exception.BusinessException.class)
+                .matches(e -> ((com.shareloop.common.exception.BusinessException) e).getErrorCode()
+                        == com.shareloop.item.ItemErrorCode.ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED);
+    }
+
+    @Test
+    void holdEditFee_whenOfferTypeDiffersFromSnapshot_throwsOfferTypeChangeNotAllowed() {
+        long itemId = 100L;
+        com.shareloop.listingfee.repository.ItemFeeSnapshot snapshot =
+                org.mockito.Mockito.mock(com.shareloop.listingfee.repository.ItemFeeSnapshot.class);
+        when(snapshot.getDonorId()).thenReturn(DONOR_ID);
+        when(snapshot.getOfferType()).thenReturn(com.shareloop.item.entity.OfferType.GIVE);
+        when(itemFeeRepository.findFeeSnapshotById(itemId)).thenReturn(Optional.of(snapshot));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> postFeeService.holdEditFee(itemId, DONOR_ID, com.shareloop.item.entity.OfferType.SWAP))
+                .isInstanceOf(com.shareloop.common.exception.BusinessException.class)
+                .matches(e -> ((com.shareloop.common.exception.BusinessException) e).getErrorCode()
+                        == com.shareloop.item.ItemErrorCode.ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED);
     }
 }

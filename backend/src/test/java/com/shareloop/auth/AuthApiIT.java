@@ -64,7 +64,7 @@ class AuthApiIT extends IntegrationTest {
                         .content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.expiresIn").value(7200))
+                .andExpect(jsonPath("$.expiresIn").value(86400))
                 .andExpect(jsonPath("$.user.email").value(EMAIL))
                 .andExpect(jsonPath("$.user.isAdmin").value(false))
                 .andReturn()

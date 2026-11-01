@@ -2,7 +2,6 @@ package com.shareloop.ops.controller;
 
 import com.shareloop.listingfee.job.ItemExpiryJob;
 import com.shareloop.request.job.RequestJob;
-import com.shareloop.review.job.ReviewSlaJob;
 import com.shareloop.user.job.PendingAccountCleanupJob;
 import com.shareloop.wallet.job.PaymentExpiryJob;
 import java.nio.charset.StandardCharsets;
@@ -35,21 +34,19 @@ public class InternalJobController {
     private final RequestJob requestJob;
     private final PendingAccountCleanupJob pendingAccountCleanupJob;
     private final PaymentExpiryJob paymentExpiryJob;
-    private final ReviewSlaJob reviewSlaJob;
 
+    // ReviewSlaJob đã gỡ (KD-06, TD-04): nhóm bỏ thông báo nhắc Admin bài chờ duyệt quá 24 giờ.
     public InternalJobController(
             @Value("${app.jobs.trigger-token:}") String triggerToken,
             ItemExpiryJob itemExpiryJob,
             RequestJob requestJob,
             PendingAccountCleanupJob pendingAccountCleanupJob,
-            PaymentExpiryJob paymentExpiryJob,
-            ReviewSlaJob reviewSlaJob) {
+            PaymentExpiryJob paymentExpiryJob) {
         this.triggerToken = triggerToken;
         this.itemExpiryJob = itemExpiryJob;
         this.requestJob = requestJob;
         this.pendingAccountCleanupJob = pendingAccountCleanupJob;
         this.paymentExpiryJob = paymentExpiryJob;
-        this.reviewSlaJob = reviewSlaJob;
     }
 
     @PostMapping("/run")
@@ -69,7 +66,6 @@ public class InternalJobController {
         results.put("requestJob", executeJob(requestJob::run, "requestJob"));
         results.put("pendingAccountCleanupJob", executeJob(pendingAccountCleanupJob::run, "pendingAccountCleanupJob"));
         results.put("paymentExpiryJob", executeJob(paymentExpiryJob::run, "paymentExpiryJob"));
-        results.put("reviewSlaJob", executeJob(reviewSlaJob::run, "reviewSlaJob"));
 
         return ResponseEntity.ok(results);
     }

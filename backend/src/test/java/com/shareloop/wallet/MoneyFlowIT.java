@@ -311,7 +311,7 @@ class MoneyFlowIT extends MoneyFlowTestBase {
         int renewFee = fee(ConfigKey.RENEW_FEE);
         long userId = createUser();
         grantCredit(userId, 3 * renewFee);
-        long itemId = insertApprovedItem(userId);
+        long itemId = insertApprovedSwapItem(userId);
 
         // when
         renewService.renew(itemId, userId);
@@ -329,7 +329,7 @@ class MoneyFlowIT extends MoneyFlowTestBase {
         assertThat(renewFee).isGreaterThan(1);
         long userId = createUser();
         grantCredit(userId, renewFee - 1);
-        long itemId = insertApprovedItem(userId);
+        long itemId = insertApprovedSwapItem(userId);
 
         // when
         Throwable thrown = catchThrowable(() -> renewService.renew(itemId, userId));
@@ -348,7 +348,7 @@ class MoneyFlowIT extends MoneyFlowTestBase {
         long userId = createUser();
         grantCredit(userId, postFee);
         createItem(userId, OfferType.SWAP);
-        long approvedItemId = insertApprovedItem(userId);
+        long approvedItemId = insertApprovedSwapItem(userId);
 
         // when
         Throwable thrown = catchThrowable(() -> renewService.renew(approvedItemId, userId));

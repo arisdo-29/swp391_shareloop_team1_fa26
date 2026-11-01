@@ -134,7 +134,7 @@ export function CashByDayChart({ days }: { days: DailyCash[] }) {
         </BarChart>
       </ResponsiveContainer>
       <details className="mt-3 text-sm">
-        <summary className="cursor-pointer font-semibold text-primary">Xem dạng bảng</summary>
+        <summary className="cursor-pointer font-semibold text-link">Xem dạng bảng</summary>
         <div className="table-wrap mt-2">
           <table className="data-table !min-w-0">
             <thead>

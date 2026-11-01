@@ -15,7 +15,9 @@ public enum WalletErrorCode implements ErrorCode {
             HttpStatus.UNPROCESSABLE_ENTITY, "Số tiền nạp phải đạt mức tối thiểu và là bội số của giá một Credit."),
     WALLET_INVALID_DATE_RANGE(HttpStatus.UNPROCESSABLE_ENTITY, "Thời điểm bắt đầu phải trước thời điểm kết thúc."),
     WALLET_AI_FEE_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy giao dịch phí AI cần hoàn."),
-    WALLET_AI_FEE_ALREADY_REFUNDED(HttpStatus.CONFLICT, "Giao dịch phí AI này đã được hoàn.");
+    WALLET_AI_FEE_ALREADY_REFUNDED(HttpStatus.CONFLICT, "Giao dịch phí AI này đã được hoàn."),
+    WALLET_MANUAL_TOPUP_DISABLED(
+            HttpStatus.CONFLICT, "Nạp Credit thủ công đang tắt (PAYMENT_PROVIDER khác manual), không thể thao tác.");
 
     private final HttpStatus status;
     private final String defaultMessage;

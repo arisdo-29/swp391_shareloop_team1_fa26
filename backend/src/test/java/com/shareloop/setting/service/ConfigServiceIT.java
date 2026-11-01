@@ -46,7 +46,28 @@ class ConfigServiceIT extends IntegrationTest {
         assertThat(checklist)
                 .extracting(ChecklistItem::statement)
                 .hasSizeGreaterThanOrEqualTo(1)
-                .startsWith("Không cần sang tên, đăng ký hay công chứng để đổi chủ.");
+                .startsWith("Món đồ không thuộc diện tài sản phải đăng ký sang tên hay công chứng.");
+    }
+
+    @Test
+    void q01_everySeededChecklistItemHasPassConditionWithoutSemicolon() {
+        List<ChecklistItem> checklist = configService.checklistItems();
+
+        // M6: food_safety đã xoá mềm nên còn 9 câu
+        assertThat(checklist).hasSize(9);
+        assertThat(checklist).extracting(ChecklistItem::key).doesNotContain("food_safety");
+        // Chỉ bỏ câu checklist, từ khoá cấm về thực phẩm (V202610241200) vẫn chặn tại form
+        assertThat(configService.lexicon()).extracting(LexiconEntry::term).contains("thực phẩm tươi sống");
+        assertThat(checklist).allSatisfy(item -> {
+            assertThat(item.description()).startsWith("Đạt khi").contains("Từ chối nếu");
+            assertThat(item.statement()).doesNotContain(";");
+            assertThat(item.description()).doesNotContain(";");
+        });
+        assertThat(checklist)
+                .filteredOn(item -> item.key().equals("desired_item"))
+                .singleElement()
+                .satisfies(item ->
+                        assertThat(item.statement()).isEqualTo("Nhu cầu trao đổi rõ ràng, không ghi chung chung."));
     }
 
     @Test

@@ -34,7 +34,7 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
     @Query(
             value = "SELECT donor_id AS \"donorId\", fee_state AS \"feeState\", pending_fee AS \"pendingFee\","
                     + " pending_fee_type AS \"pendingFeeType\", (approved_at IS NOT NULL) AS \"everApproved\","
-                    + " free_edit_used AS \"freeEditUsed\", status AS \"status\","
+                    + " free_edit_used AS \"freeEditUsed\", post_fee_paid AS \"postFeePaid\", status AS \"status\","
                     + " category_id AS \"categoryId\", is_active AS \"active\", offer_type AS \"offerType\""
                     + " FROM items WHERE id = :itemId AND is_deleted = false",
             nativeQuery = true)

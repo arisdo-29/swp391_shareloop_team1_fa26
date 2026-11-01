@@ -84,7 +84,7 @@ class NotAsDescribedReportIT extends IntegrationTest {
 
         // when
         confirmAsReceiver(requestId, receiverId, false, REASON)
-                .andExpect(jsonPath("$.status").value("AWAITING_HANDOVER"));
+                .andExpect(jsonPath("$.status").value("DISPUTED"));
 
         // then
         List<Map<String, Object>> reports = reportsOf(requestId);
@@ -99,7 +99,7 @@ class NotAsDescribedReportIT extends IntegrationTest {
     }
 
     @Test
-    void confirmHandover_whenDonorConfirmedFirstThenReceiverSaysNotAsDescribed_completesAndOpensReport()
+    void confirmHandover_whenDonorConfirmedFirstThenReceiverSaysNotAsDescribed_transitionsToDisputedAndOpensReport()
             throws Exception {
         // given
         long donorId = insertUser("Donor");
@@ -111,7 +111,7 @@ class NotAsDescribedReportIT extends IntegrationTest {
 
         // when
         confirmAsReceiver(requestId, receiverId, false, REASON)
-                .andExpect(jsonPath("$.status").value("COMPLETED"));
+                .andExpect(jsonPath("$.status").value("DISPUTED"));
 
         // then
         assertThat(reportsOf(requestId)).hasSize(1);
@@ -148,7 +148,7 @@ class NotAsDescribedReportIT extends IntegrationTest {
         requestJobService.autoConfirmHandoverRequests(Instant.now());
 
         // then
-        assertThat(statusOf(requestId)).isEqualTo("AWAITING_HANDOVER");
+        assertThat(statusOf(requestId)).isEqualTo("DISPUTED");
     }
 
     // ---------- Helper ----------

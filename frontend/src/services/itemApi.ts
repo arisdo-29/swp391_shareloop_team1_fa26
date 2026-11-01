@@ -7,10 +7,10 @@ export const itemApiEndpoints = {
   update: (id: number) => `/api/v1/items/${id}`,
   myItems: '/api/v1/me/items',
   editQuote: (id: number) => `/api/v1/items/${id}/edit-quote`,
+  renewQuote: (id: number) => `/api/v1/items/${id}/renew-quote`,
+  boostQuote: (id: number) => `/api/v1/items/${id}/boost-quote`,
   renew: (id: number) => `/api/v1/items/${id}/renew`,
   boost: (id: number) => `/api/v1/items/${id}/boost`,
-  boostQuote: (id: number) => `/api/v1/items/${id}/boost-quote`,
-  renewQuote: (id: number) => `/api/v1/items/${id}/renew-quote`,
   listingFees: '/api/v1/listing-fees',
   postingQuota: '/api/v1/me/posting-quota',
 } as const;
@@ -92,7 +92,9 @@ export type EditQuoteReason =
   | 'REPOST_FEE'
   | 'PENDING_REVIEW_OVERWRITE'
   | 'FIRST_FREE_EDIT'
-  | 'PAID_EDIT';
+  | 'PAID_EDIT'
+  | 'OFFER_TYPE_CHANGE_FREE'
+  | 'OFFER_TYPE_CHANGE_POST_FEE';
 
 export interface EditQuote {
   free: boolean; // true khi amount = 0
@@ -107,30 +109,30 @@ export interface RenewResponse {
   expireAt: string; // hạn hiển thị mới, ISO-8601 UTC
 }
 
-// Contract: docs/api/listingfee.md (GET /api/v1/items/{id}/boost-quote)
-export interface BoostQuote {
-  fee: number;
-  newBoostedUntil: string; // mốc hết đẩy mới nếu đẩy ngay, ISO-8601 UTC
-  allowed: boolean;
-  reason: string | null; // lý do không đẩy được, tiếng Việt; null khi allowed
-}
-
-// Contract: docs/api/listingfee.md (GET /api/v1/items/{id}/renew-quote)
-export interface RenewQuote {
-  fee: number; // 0 là miễn phí
-  newExpireAt: string; // hạn mới nếu gia hạn ngay, ISO-8601 UTC
-  allowed: boolean;
-  reason: string | null;
-}
-
 export interface BoostResponse {
   itemId: number;
   boostedUntil: string;
   creditBalance: number;
 }
 
+export interface RenewQuote {
+  fee: number;
+  newExpireAt: string;
+  allowed: boolean;
+  reason: string | null;
+}
+
+export interface BoostQuote {
+  fee: number;
+  newBoostedUntil: string;
+  allowed: boolean;
+  reason: string | null;
+}
+
 export interface ListingFeeConfigResponse {
   postFeeSwap: number;
+  /** Phí đăng Trao đổi khi vượt hạn mức theo hạng. BE chưa trả field này ở GET /listing-fees nên để optional. */
+  postFeeSwapOverQuota?: number;
   postFeeGive: number;
   editFee: number;
   renewFee: number;
@@ -170,6 +172,7 @@ export interface PostingQuota {
   give: PostingQuotaEntry;
   swap: PostingQuotaEntry;
   rank: 'BRONZE' | 'SILVER' | 'GOLD' | 'DIAMOND';
+  nextPostFee: number;
 }
 
 export const itemApi = {
@@ -204,16 +207,16 @@ export const itemApi = {
     const { data } = await http.get<ItemResponse[]>(itemApiEndpoints.myItems);
     return data;
   },
-  async getEditQuote(id: number): Promise<EditQuote> {
-    const { data } = await http.get<EditQuote>(itemApiEndpoints.editQuote(id));
-    return data;
-  },
-  async getBoostQuote(id: number): Promise<BoostQuote> {
-    const { data } = await http.get<BoostQuote>(itemApiEndpoints.boostQuote(id));
+  async getEditQuote(id: number, offerType?: OfferType): Promise<EditQuote> {
+    const { data } = await http.get<EditQuote>(itemApiEndpoints.editQuote(id), { params: offerType ? { offerType } : undefined });
     return data;
   },
   async getRenewQuote(id: number): Promise<RenewQuote> {
     const { data } = await http.get<RenewQuote>(itemApiEndpoints.renewQuote(id));
+    return data;
+  },
+  async getBoostQuote(id: number): Promise<BoostQuote> {
+    const { data } = await http.get<BoostQuote>(itemApiEndpoints.boostQuote(id));
     return data;
   },
   async renewItem(id: number): Promise<RenewResponse> {
