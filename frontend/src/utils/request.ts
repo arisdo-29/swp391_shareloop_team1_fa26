@@ -13,7 +13,14 @@ export const requestStatusLabel: Record<ItemRequestStatus, string> = {
 };
 
 export function canChat(status: ItemRequestStatus) {
-  return ['RESERVED', 'AWAITING_LOGISTICS', 'LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER', 'COMPLETED', 'DISPUTED'].includes(status);
+  return [
+    'RESERVED',
+    'AWAITING_LOGISTICS',
+    'LOGISTICS_CONFIRMED',
+    'AWAITING_HANDOVER',
+    'COMPLETED',
+    'DISPUTED',
+  ].includes(status);
 }
 
 export function canViewChat(status: ItemRequestStatus) {
@@ -38,26 +45,48 @@ export function canConfirmHandover(status: ItemRequestStatus) {
 
 // Hai bên được huỷ giao dịch sau khi đã chọn người (docs/api/request.md mục 13). Backend vẫn kiểm lại.
 export function canCancelTransaction(status: ItemRequestStatus) {
-  return status === 'RESERVED' || status === 'AWAITING_LOGISTICS' || status === 'LOGISTICS_CONFIRMED' || status === 'AWAITING_HANDOVER';
+  return (
+    status === 'RESERVED' ||
+    status === 'AWAITING_LOGISTICS' ||
+    status === 'LOGISTICS_CONFIRMED' ||
+    status === 'AWAITING_HANDOVER'
+  );
 }
 
 // U08: còn khiếu nại được khi giao dịch hoàn tất và chưa qua complaintDeadline backend trả về.
 // Không có hạn (dữ liệu cũ) thì vẫn cho mở form, backend là nơi kiểm cuối cùng.
-export function canOpenComplaint(status: ItemRequestStatus, complaintDeadline?: string | null, now = Date.now()) {
+export function canOpenComplaint(
+  status: ItemRequestStatus,
+  complaintDeadline?: string | null,
+  now = Date.now(),
+) {
   if (status !== 'COMPLETED') return false;
   if (!complaintDeadline) return true;
   return now < new Date(complaintDeadline).getTime();
 }
 
-// "14:30 31/10" theo giờ máy người dùng.
+// "14:30 31/10" theo múi giờ Việt Nam, không phụ thuộc múi giờ của thiết bị.
 export function formatDeadline(value: string) {
   const date = new Date(value);
-  const pad = (part: number) => String(part).padStart(2, '0');
-  return `${pad(date.getHours())}:${pad(date.getMinutes())} ${pad(date.getDate())}/${pad(date.getMonth() + 1)}`;
+  const parts = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const valueOf = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? '';
+  return `${valueOf('hour')}:${valueOf('minute')} ${valueOf('day')}/${valueOf('month')}`;
 }
 
 // Chỉ hiện nút "chưa nhận được / chưa giao được" khi bên kia đã xác nhận bàn giao còn mình thì chưa (mục 14).
-export function canReportHandoverIssue(status: ItemRequestStatus, otherConfirmedAt?: string, currentConfirmedAt?: string) {
+export function canReportHandoverIssue(
+  status: ItemRequestStatus,
+  otherConfirmedAt?: string,
+  currentConfirmedAt?: string,
+) {
   return status === 'AWAITING_HANDOVER' && Boolean(otherConfirmedAt) && !currentConfirmedAt;
 }
 
@@ -102,4 +131,3 @@ export function markRequestChatSeen(requestId?: number): void {
     /* Storage may be blocked or unavailable. */
   }
 }
-

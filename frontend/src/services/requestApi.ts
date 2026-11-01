@@ -40,6 +40,7 @@ export interface RequestResponse {
   asDescribedRate?: number | null;
   complaintDeadline?: string | null;
   lastMessageAt?: string | null;
+  disputeResponseDueAt?: string | null;
 }
 
 export interface CreateRequestBody {
@@ -96,7 +97,10 @@ export const toBackendUserId = (userId: string | null | undefined) => {
   return Number.isSafeInteger(id) ? id : null;
 };
 
-export function toFeItemRequest(request: RequestResponse, requesterId = apiUserId(request.receiverId)): ItemRequest {
+export function toFeItemRequest(
+  request: RequestResponse,
+  requesterId = apiUserId(request.receiverId),
+): ItemRequest {
   const trustStars = request.receiverTrustStars ?? request.trustStars;
   const rank = request.receiverRank ?? request.rank;
   const asDescribedRate = request.receiverAsDescribedRate ?? request.asDescribedRate;
@@ -173,9 +177,13 @@ export const requestApi = {
     return data;
   },
   async confirmLogistics(id: number, currentUserId: number, body?: ConfirmLogisticsRequestBody) {
-    const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/confirm-logistics`, body ?? {}, {
-      params: { currentUserId },
-    });
+    const { data } = await http.post<RequestResponse>(
+      `/api/v1/requests/${id}/confirm-logistics`,
+      body ?? {},
+      {
+        params: { currentUserId },
+      },
+    );
     return data;
   },
   async cancelTransaction(id: number, currentUserId: number, reason: string) {
@@ -187,9 +195,13 @@ export const requestApi = {
     return data;
   },
   async reportHandoverIssue(id: number, currentUserId: number, body: HandoverIssueBody) {
-    const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/handover-issue`, body, {
-      params: { currentUserId },
-    });
+    const { data } = await http.post<RequestResponse>(
+      `/api/v1/requests/${id}/handover-issue`,
+      body,
+      {
+        params: { currentUserId },
+      },
+    );
     return data;
   },
   async getContact(id: number, currentUserId: number) {
@@ -199,9 +211,13 @@ export const requestApi = {
     return data;
   },
   async confirmHandover(id: number, currentUserId: number, body?: HandoverConfirmRequestBody) {
-    const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/confirm-handover`, body ?? {}, {
-      params: { currentUserId },
-    });
+    const { data } = await http.post<RequestResponse>(
+      `/api/v1/requests/${id}/confirm-handover`,
+      body ?? {},
+      {
+        params: { currentUserId },
+      },
+    );
     return data;
   },
 };
