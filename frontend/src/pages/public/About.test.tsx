@@ -24,7 +24,6 @@ const feesWithoutOverQuota: ListingFeeConfigResponse = {
   postFeeGive: 0,
   editFee: 4,
   renewFee: 6,
-  renewExpiredWindowDays: 7,
   boostFee: 9,
   boostDays: 3,
   boostMaxDays: 14,

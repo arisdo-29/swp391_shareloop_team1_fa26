@@ -243,6 +243,13 @@ public class ConfigService {
                         throw invalidType(key.key(), "boolean", value);
                     }
                 }
+                case CODE_LIST -> {
+                    // Ít nhất một mã, mọi mã đều phải hợp lệ: gõ sai một mã thì chặn ngay thay vì lặng lẽ bị bỏ qua
+                    List<String> codes = splitCodes(rawValue);
+                    if (codes.isEmpty() || !key.allowedCodes().containsAll(codes)) {
+                        throw invalidType(key.key(), typeName(key.valueType()) + " " + key.allowedCodes(), value);
+                    }
+                }
             }
         } catch (NumberFormatException exception) {
             throw invalidType(key.key(), typeName(key.valueType()), value);
@@ -275,6 +282,29 @@ public class ConfigService {
             case INTEGER -> "an integer";
             case DECIMAL -> "a decimal";
             case BOOLEAN -> "a boolean";
+            case CODE_LIST -> "a comma-separated list of";
         };
+    }
+
+    /**
+     * Danh sách mã của khoá kiểu CODE_LIST (L13), ví dụ report_serious_reasons. Bỏ khoảng trắng và mã rỗng. Chưa có dòng
+     * trong DB thì dùng giá trị mặc định của khoá.
+     */
+    public List<String> getCodes(ConfigKey key) {
+        Objects.requireNonNull(key, "key must not be null");
+        if (key.valueType() != ValueType.CODE_LIST) {
+            throw invalidType(key.key(), "a code list", get(key));
+        }
+        return splitCodes(get(key));
+    }
+
+    private static List<String> splitCodes(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(code -> !code.isEmpty())
+                .toList();
     }
 }

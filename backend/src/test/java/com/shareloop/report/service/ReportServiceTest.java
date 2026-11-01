@@ -118,6 +118,10 @@ class ReportServiceTest {
         org.mockito.Mockito.lenient()
                 .when(configService.getInt(ConfigKey.REPORT_HIDE_THRESHOLD))
                 .thenReturn(3);
+        // L13: lý do nghiêm trọng đọc qua ConfigKey report_serious_reasons, mặc định hàng cấm và hàng giả
+        org.mockito.Mockito.lenient()
+                .when(configService.getCodes(ConfigKey.REPORT_SERIOUS_REASONS))
+                .thenReturn(List.of("PROHIBITED_ITEM", "COUNTERFEIT"));
         reportService = spy(new ReportService(
                 reportRepository,
                 itemQueryService,
@@ -940,7 +944,8 @@ class ReportServiceTest {
         when(reportRepository.findByIdForUpdate(reportId)).thenReturn(Optional.of(report));
         when(itemQueryService.getSummary(itemId))
                 .thenReturn(new ItemSummary(itemId, donorId, OfferType.GIVE, ItemStatus.APPROVED));
-        when(configService.getRaw("REPORT_SERIOUS_REASONS")).thenReturn("PROHIBITED_ITEM,COUNTERFEIT");
+        when(configService.getCodes(ConfigKey.REPORT_SERIOUS_REASONS))
+                .thenReturn(List.of("PROHIBITED_ITEM", "COUNTERFEIT"));
         when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ConcludeReportRequest request = new ConcludeReportRequest(ReportDecision.UPHOLD, "Vi phạm hàng cấm");

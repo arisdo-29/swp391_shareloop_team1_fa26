@@ -96,6 +96,29 @@ class ConfigServiceIT extends IntegrationTest {
     }
 
     @Test
+    void l13_migrationSoftDeletesUnusedKeysAndKeepsSeriousReasonsEditable() {
+        // Khoá không còn đọc ở đâu và khoá chữ hoa trùng đều đã xoá mềm
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM website_attributes WHERE attr_group = 'CONFIG' AND is_deleted = FALSE AND"
+                                + " attr_key IN ('renew_expired_window_days', 'media_orphan_hours',"
+                                + " 'boost_max_per_page', 'dispute_window_days', 'dispute_response_days',"
+                                + " 'REPUTATION_SILVER_MIN', 'REPUTATION_GOLD_MIN', 'REPUTATION_DIAMOND_MIN',"
+                                + " 'REPUTATION_GIVE_DONOR', 'REPUTATION_GIVE_RECEIVER', 'REPUTATION_SWAP_EACH',"
+                                + " 'REPORT_SERIOUS_REASONS')",
+                        Integer.class))
+                .isZero();
+        // Khoá chữ thường vẫn còn: hạng tín nhiệm đọc đúng dòng seed, lý do nghiêm trọng đọc qua ConfigKey
+        assertThat(configService.getInt(com.shareloop.setting.ConfigKey.REPUTATION_SILVER_MIN))
+                .isPositive();
+        assertThat(configService.getCodes(com.shareloop.setting.ConfigKey.REPORT_SERIOUS_REASONS))
+                .containsExactlyInAnyOrder("PROHIBITED_ITEM", "COUNTERFEIT");
+        assertThat(configService.listConfigs())
+                .extracting(config -> config.key())
+                .contains("report_serious_reasons")
+                .doesNotContain("renew_expired_window_days", "media_orphan_hours");
+    }
+
+    @Test
     void ignoresInactiveLexiconAndChecklistRows() {
         jdbc.update("INSERT INTO website_attributes (attr_group, attr_key, attr_value, extra, sort_order, is_active) "
                 + "VALUES ('BANNED_KEYWORD', 'config_service_it_inactive', 'inactive', "

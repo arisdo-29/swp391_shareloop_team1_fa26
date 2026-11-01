@@ -136,7 +136,6 @@ export interface ListingFeeConfigResponse {
   postFeeGive: number;
   editFee: number;
   renewFee: number;
-  renewExpiredWindowDays: number;
   boostFee: number;
   boostDays: number;
   boostMaxDays: number;

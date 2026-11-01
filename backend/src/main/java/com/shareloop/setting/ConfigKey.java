@@ -1,6 +1,7 @@
 package com.shareloop.setting;
 
 import java.math.BigDecimal;
+import java.util.Set;
 
 /**
  * Các khoá cấu hình nghiệp vụ và giá trị mặc định theo SRS v10 (ERD mục 7.10). Mỗi khoá có nhóm, tên và mô tả tiếng
@@ -85,12 +86,6 @@ public enum ConfigKey {
             ConfigGroup.FEES,
             "Phí gia hạn",
             "Số Credit bị trừ ngay khi gia hạn thêm một kỳ hiển thị cho bài."),
-    RENEW_EXPIRED_WINDOW_DAYS(
-            "renew_expired_window_days",
-            "7",
-            ConfigGroup.POSTING,
-            "Hạn gia hạn bài quá hạn",
-            "Số ngày sau khi bài hết hạn mà vẫn còn gia hạn được."),
     BOOST_FEE("boost_fee", "5", ConfigGroup.FEES, "Phí đẩy bài", "Số Credit cho mỗi gói đẩy bài, bị trừ ngay khi đẩy."),
     BOOST_DAYS(
             "boost_days",
@@ -152,18 +147,24 @@ public enum ConfigKey {
             ConfigGroup.POSTING,
             "Dung lượng ảnh tối đa",
             "Dung lượng tối đa của mỗi ảnh, tính bằng MB."),
-    MEDIA_ORPHAN_HOURS(
-            "media_orphan_hours",
-            "24",
-            ConfigGroup.POSTING,
-            "Thời gian giữ ảnh chưa dùng",
-            "Số giờ giữ ảnh đã tải lên nhưng chưa gắn vào bài nào. Quá mốc này ảnh sẽ bị dọn."),
     REPORT_HIDE_THRESHOLD(
             "report_hide_threshold",
             "3",
             ConfigGroup.MODERATION,
             "Ngưỡng tự ẩn bài bị báo cáo",
             "Số báo cáo đang mở khiến một bài tự động bị ẩn."),
+    // L13: trước đây chỉ đọc bằng getRaw và có cả khoá chữ hoa trùng; nay khai báo ở đây để Admin sửa được.
+    REPORT_SERIOUS_REASONS(
+            "report_serious_reasons",
+            "PROHIBITED_ITEM,COUNTERFEIT",
+            ConfigGroup.MODERATION,
+            "Lý do vi phạm nghiêm trọng",
+            "Các mã lý do báo cáo, cách nhau bởi dấu phẩy. Chấp thuận báo cáo có lý do này thì ẩn toàn bộ bài khác của"
+                    + " người vi phạm để rà soát. Mã hợp lệ: NOT_AS_DESCRIBED, COUNTERFEIT, PROHIBITED_ITEM, NO_SHOW,"
+                    + " WRONG_CONTACT_INFO, HARASSMENT, OTHER.",
+            ValueType.CODE_LIST,
+            null,
+            null),
     OTP_TTL_MINUTES(
             "otp_ttl_minutes", "5", ConfigGroup.ACCOUNT, "Hạn mã OTP", "Số phút mã OTP gửi qua email còn hiệu lực."),
     OTP_MAX_FAILED(
@@ -394,9 +395,31 @@ public enum ConfigKey {
         return maxValue;
     }
 
+    /**
+     * Mã được phép cho khoá kiểu {@link ValueType#CODE_LIST}; rỗng với các kiểu khác. Danh sách lý do báo cáo phải khớp
+     * enum ReportReason của module report và CHECK của cột reports.reason (có test kiểm khớp).
+     */
+    public Set<String> allowedCodes() {
+        return this == REPORT_SERIOUS_REASONS ? ReportReasonCodes.ALL : Set.of();
+    }
+
     public enum ValueType {
         INTEGER,
         DECIMAL,
-        BOOLEAN
+        BOOLEAN,
+        /** Danh sách mã cách nhau bởi dấu phẩy, mỗi mã thuộc {@link #allowedCodes()}. */
+        CODE_LIST
+    }
+
+    // Lớp lồng giữ hằng: enum không đọc được field static của chính nó trong lúc khởi tạo các hằng.
+    private static final class ReportReasonCodes {
+        static final Set<String> ALL = Set.of(
+                "NOT_AS_DESCRIBED",
+                "COUNTERFEIT",
+                "PROHIBITED_ITEM",
+                "NO_SHOW",
+                "WRONG_CONTACT_INFO",
+                "HARASSMENT",
+                "OTHER");
     }
 }

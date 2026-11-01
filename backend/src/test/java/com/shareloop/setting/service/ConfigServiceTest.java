@@ -99,6 +99,35 @@ class ConfigServiceTest {
     }
 
     @Test
+    void l13_getCodesReadsSeriousReasonsAndFallsBackToDefault() {
+        // chưa có dòng trong DB: dùng giá trị mặc định của ConfigKey
+        when(repository.findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", "report_serious_reasons"))
+                .thenReturn(Optional.empty());
+        assertThat(service.getCodes(ConfigKey.REPORT_SERIOUS_REASONS))
+                .containsExactly("PROHIBITED_ITEM", "COUNTERFEIT");
+
+        // Admin đã sửa: bỏ khoảng trắng và mã rỗng
+        WebsiteAttribute stored = mock(WebsiteAttribute.class);
+        when(stored.getAttrValue()).thenReturn(" HARASSMENT , ,COUNTERFEIT ");
+        when(repository.findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", "report_serious_reasons"))
+                .thenReturn(Optional.of(stored));
+        assertThat(service.getCodes(ConfigKey.REPORT_SERIOUS_REASONS)).containsExactly("HARASSMENT", "COUNTERFEIT");
+    }
+
+    @Test
+    void l13_validateValueAcceptsOnlyKnownReasonCodes() {
+        service.validateValue(ConfigKey.REPORT_SERIOUS_REASONS, "PROHIBITED_ITEM, HARASSMENT");
+
+        // gõ sai một mã hoặc để trống thì chặn, không để lặng lẽ mất tác dụng
+        for (String invalid : List.of("PROHIBITED_ITEM,PROHIBITED", "", " , ")) {
+            assertThatThrownBy(() -> service.validateValue(ConfigKey.REPORT_SERIOUS_REASONS, invalid))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                    .isEqualTo(SettingErrorCode.SETTING_CONFIG_INVALID_TYPE);
+        }
+    }
+
+    @Test
     void updateRejectsInvalidInteger() {
         assertThatThrownBy(() -> service.update(ConfigKey.POST_FEE, "abc", null, 1L))
                 .isInstanceOf(BusinessException.class)

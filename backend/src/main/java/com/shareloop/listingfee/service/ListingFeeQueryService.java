@@ -86,7 +86,6 @@ public class ListingFeeQueryService {
                 GIVE_POST_FEE,
                 configService.getInt(ConfigKey.EDIT_FEE),
                 configService.getInt(ConfigKey.RENEW_FEE),
-                configService.getInt(ConfigKey.RENEW_EXPIRED_WINDOW_DAYS),
                 configService.getInt(ConfigKey.BOOST_FEE),
                 configService.getInt(ConfigKey.BOOST_DAYS),
                 configService.getInt(ConfigKey.BOOST_MAX_DAYS),
