@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.shareloop.audit.service.ActivityLogQueryService;
 import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.report.service.ReportService;
 import com.shareloop.user.UserErrorCode;
 import com.shareloop.user.event.UserLockedEvent;
 import com.shareloop.user.event.UserUnlockedEvent;
@@ -32,13 +33,14 @@ class AdminUserServiceTest {
     private final ActivityLogService activityLogService = mock(ActivityLogService.class);
     private final ActivityLogQueryService activityLogQueryService = mock(ActivityLogQueryService.class);
     private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+    private final ReportService reportService = mock(ReportService.class);
 
     private AdminUserService adminUserService;
 
     @BeforeEach
     void setUp() {
-        adminUserService =
-                new AdminUserService(userService, activityLogService, activityLogQueryService, eventPublisher);
+        adminUserService = new AdminUserService(
+                userService, activityLogService, activityLogQueryService, eventPublisher, reportService);
     }
 
     @Test
@@ -136,7 +138,13 @@ class AdminUserServiceTest {
 
         verify(userService).unlock(targetUserId);
         verify(activityLogService)
-                .log("USER_UNLOCK", adminId, "USER", targetUserId, Map.<String, Object>of("restoredItems", 0), reason);
+                .log(
+                        "USER_UNLOCK",
+                        adminId,
+                        "USER",
+                        targetUserId,
+                        Map.<String, Object>of("restoredItems", 0, "keptHiddenItemIds", List.of()),
+                        reason);
     }
 
     @Test
@@ -154,7 +162,39 @@ class AdminUserServiceTest {
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().hiddenItemIds()).containsExactly(5L, 6L);
         verify(activityLogService)
-                .log("USER_UNLOCK", 1L, "USER", 10L, Map.<String, Object>of("restoredItems", 2), "Đã giải trình");
+                .log(
+                        "USER_UNLOCK",
+                        1L,
+                        "USER",
+                        10L,
+                        Map.<String, Object>of("restoredItems", 2, "keptHiddenItemIds", List.of()),
+                        "Đã giải trình");
+    }
+
+    @Test
+    @DisplayName("L6: mở khoá bỏ qua bài đã bị chấp thuận báo cáo hoặc còn đủ ngưỡng báo cáo chờ")
+    void unlock_keepsItemsHiddenWhenReportsRequireIt() {
+        // given: bài 5 bình thường; bài 6 bị chấp thuận báo cáo trong lúc khoá; bài 7 còn đủ ngưỡng báo cáo chờ
+        when(activityLogQueryService.findLatestData("USER_LOCK", 10L))
+                .thenReturn(Optional.of(Map.of("hiddenItemIds", List.of(5L, 6L, 7L))));
+        when(reportService.keepsItemHidden(6L)).thenReturn(true);
+        when(reportService.keepsItemHidden(7L)).thenReturn(true);
+
+        // when
+        adminUserService.unlock(1L, 10L, "Đã giải trình");
+
+        // then: chỉ bài 5 được hiện lại; nhật ký ghi bài nào vẫn ẩn
+        ArgumentCaptor<UserUnlockedEvent> captor = ArgumentCaptor.forClass(UserUnlockedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().hiddenItemIds()).containsExactly(5L);
+        verify(activityLogService)
+                .log(
+                        "USER_UNLOCK",
+                        1L,
+                        "USER",
+                        10L,
+                        Map.<String, Object>of("restoredItems", 1, "keptHiddenItemIds", List.of(6L, 7L)),
+                        "Đã giải trình");
     }
 
     @Test

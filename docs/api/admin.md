@@ -104,7 +104,7 @@ Không trả `#<id>` trong `targetTitle`, `actorName`. Log `REPORT_DISMISSED`, `
 | `REVIEW_REJECT` | Từ chối bài | `ITEM` | - (lý do ở `reason`) |
 | `CONFIG_UPDATE` | Sửa cấu hình | `CONFIG` | `key`, `oldValue`, `newValue` |
 | `USER_LOCK` | Khoá tài khoản | `USER` | `cancelledRequests` (số giao dịch đã huỷ), `releasedCredit` (số Credit đã nhả), `hiddenItemIds` (id các bài đã ẩn) |
-| `USER_UNLOCK` | Mở khoá tài khoản | `USER` | `restoredItems` (số bài được hiện lại) |
+| `USER_UNLOCK` | Mở khoá tài khoản | `USER` | `restoredItems` (số bài được hiện lại), `keptHiddenItemIds` (bài vẫn ẩn vì báo cáo, L6) |
 | `USER_BAN` | Cấm tài khoản | `USER` (`actorId = null`, hệ thống tự cấm khi hết sao) | `cancelledRequests`, `releasedCredit`, `hiddenItemIds` (cùng nghĩa với `USER_LOCK`) |
 | `REQUEST_CANCEL` | Huỷ giao dịch | `REQUEST` | - (lý do ở `reason`, có tiền tố người huỷ) |
 | `REPORT_DISMISSED` | Bác bỏ báo cáo | `REPORT` | `decision`, `reportId`, `targetType` |
@@ -469,7 +469,7 @@ Khoá tài khoản người dùng và ghi nhật ký hoạt động (FR-107, Iss
     `CreditService.release`.
   - Mọi bài `APPROVED` đang hiển thị của người bị khoá (kể cả bài vừa được nhả ở trên) bị ẩn bằng `is_active = false`, không đổi `status`.
   - Activity log `USER_LOCK` có `data = { "cancelledRequests": n, "releasedCredit": n, "hiddenItemIds": [id, ...] }`.
-  - Mở khoá (`POST /unlock`) hiện lại **đúng** các bài trong `hiddenItemIds` của dòng `USER_LOCK` mới nhất (bài Admin hoặc chủ bài đã ẩn từ trước vẫn ẩn). Giao dịch đã huỷ và bài đã từ chối khi khoá **không** được khôi phục. Activity log `USER_UNLOCK` có `data = { "restoredItems": n }`.
+  - Mở khoá (`POST /unlock`) hiện lại các bài trong `hiddenItemIds` của dòng `USER_LOCK` mới nhất (bài Admin hoặc chủ bài đã ẩn từ trước vẫn ẩn), **trừ** bài phải tiếp tục ẩn vì báo cáo (L6, `ReportService.keepsItemHidden`): bài có báo cáo `RESOLVED` (bị chấp thuận trong lúc khoá, ẩn vĩnh viễn) hoặc còn số báo cáo đang chờ ≥ `report_hide_threshold`. Giao dịch đã huỷ và bài đã từ chối khi khoá **không** được khôi phục. Activity log `USER_UNLOCK` có `data = { "restoredItems": n, "keptHiddenItemIds": [id, ...] }`.
 - **Thành công:** `200 OK` (không có body).
 - **Mã lỗi:**
 

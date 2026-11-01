@@ -203,6 +203,23 @@ public class ReportService {
         }
     }
 
+    /**
+     * Bài có phải tiếp tục ẩn vì báo cáo không (L6): đã có báo cáo được chấp thuận (RESOLVED, ẩn vĩnh viễn) hoặc số báo
+     * cáo đang chờ vẫn đạt ngưỡng report_hide_threshold (BR-A03). Mở khoá tài khoản hỏi hàm này để không hiện lại bài
+     * vi phạm.
+     */
+    @Transactional(readOnly = true)
+    public boolean keepsItemHidden(long itemId) {
+        if (reportRepository.countByTargetTypeAndItemIdAndStatusIn(
+                        TargetType.ITEM, itemId, List.of(ReportStatus.RESOLVED))
+                > 0) {
+            return true;
+        }
+        long pendingReports =
+                reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, itemId, PENDING_STATUSES);
+        return pendingReports >= configService.getInt(ConfigKey.REPORT_HIDE_THRESHOLD);
+    }
+
     // U04: chủ bài cũng phải biết bài đang tạm ẩn; bấm thông báo mở trang Hoạt động.
     private void notifyDonorItemHidden(long itemId, String title) {
         ItemSummary summary = itemQueryService.getSummary(itemId);

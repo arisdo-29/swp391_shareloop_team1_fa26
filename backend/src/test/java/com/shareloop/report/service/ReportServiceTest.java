@@ -233,6 +233,33 @@ class ReportServiceTest {
     }
 
     @Test
+    @DisplayName("L6: bài có báo cáo được chấp thuận thì tiếp tục ẩn khi mở khoá")
+    void keepsItemHidden_whenItemHasUpheldReport_returnsTrue() {
+        when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(
+                        TargetType.ITEM, 10L, List.of(ReportStatus.RESOLVED)))
+                .thenReturn(1L);
+
+        assertThat(reportService.keepsItemHidden(10L)).isTrue();
+    }
+
+    @Test
+    @DisplayName("L6: bài còn đủ ngưỡng báo cáo chờ (3) thì tiếp tục ẩn, dưới ngưỡng thì được hiện lại")
+    void keepsItemHidden_dependsOnPendingReportThreshold() {
+        for (long itemId : new long[] {10L, 11L}) {
+            when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(
+                            TargetType.ITEM, itemId, List.of(ReportStatus.RESOLVED)))
+                    .thenReturn(0L);
+        }
+        when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, 10L, PENDING))
+                .thenReturn(3L);
+        when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, 11L, PENDING))
+                .thenReturn(2L);
+
+        assertThat(reportService.keepsItemHidden(10L)).isTrue();
+        assertThat(reportService.keepsItemHidden(11L)).isFalse();
+    }
+
+    @Test
     @DisplayName("BR-A03: ngưỡng đọc từ ConfigService, chưa đủ ngưỡng cấu hình (5) thì chưa ẩn bài")
     void reportItem_belowConfiguredThreshold_doesNotHide() {
         givenItemCanBeReported(1L, 10L, 2L);
