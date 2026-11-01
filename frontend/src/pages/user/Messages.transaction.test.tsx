@@ -154,17 +154,22 @@ describe('Huỷ giao dịch trong bảng Tiến trình', () => {
 
       expect(await screen.findByRole('button', { name: 'Huỷ giao dịch' })).toBeTruthy();
       expect(
-        screen.getByText('Cần nêu lý do. Bài đăng mở lại cho người khác, không mất phí đăng lần nữa.'),
+        screen.getByText(
+          'Cần nêu lý do. Bài đăng mở lại cho người khác, không mất phí đăng lần nữa.',
+        ),
       ).toBeTruthy();
     },
   );
 
-  it.each(['COMPLETED', 'DISPUTED', 'CANCELLED'] as const)('không hiện khi trạng thái %s', async (status) => {
-    await renderMessages(RECEIVER_ID, request({ status }));
-    await screen.findByText('Xem bài đăng');
+  it.each(['COMPLETED', 'DISPUTED', 'CANCELLED'] as const)(
+    'không hiện khi trạng thái %s',
+    async (status) => {
+      await renderMessages(RECEIVER_ID, request({ status }));
+      await screen.findByText('Xem bài đăng');
 
-    expect(screen.queryByRole('button', { name: 'Huỷ giao dịch' })).toBeNull();
-  });
+      expect(screen.queryByRole('button', { name: 'Huỷ giao dịch' })).toBeNull();
+    },
+  );
 
   it('bắt buộc lý do rồi gọi API và cập nhật trạng thái trả về', async () => {
     const userEvents = userEvent.setup();
@@ -175,7 +180,9 @@ describe('Huỷ giao dịch trong bảng Tiến trình', () => {
 
     await userEvents.click(await screen.findByRole('button', { name: 'Huỷ giao dịch' }));
     const dialog = await screen.findByRole('dialog');
-    const submit = within(dialog).getByRole('button', { name: 'Huỷ giao dịch' }) as HTMLButtonElement;
+    const submit = within(dialog).getByRole('button', {
+      name: 'Huỷ giao dịch',
+    }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
 
     const reasonBox = within(dialog).getByLabelText(/Lý do huỷ/);
@@ -185,9 +192,31 @@ describe('Huỷ giao dịch trong bảng Tiến trình', () => {
     await userEvents.click(submit);
 
     await waitFor(() =>
-      expect(requestApi.cancelTransaction).toHaveBeenCalledWith(101, RECEIVER_ID, 'Tôi bận việc đột xuất'),
+      expect(requestApi.cancelTransaction).toHaveBeenCalledWith(
+        101,
+        RECEIVER_ID,
+        'Tôi bận việc đột xuất',
+      ),
     );
     expect(await screen.findByText(/Lý do: \[Người nhận\] Tôi bận việc đột xuất/)).toBeTruthy();
+  });
+});
+
+describe('Hạn giải trình khi giao dịch đang khiếu nại', () => {
+  it('hiện hạn theo giờ Việt Nam khi backend trả disputeResponseDueAt', async () => {
+    await renderMessages(
+      RECEIVER_ID,
+      request({ status: 'DISPUTED', disputeResponseDueAt: '2026-10-31T07:30:00Z' }),
+    );
+
+    expect(await screen.findByText(/chờ chủ bài giải trình trước 14:30 31\/10/)).toBeTruthy();
+  });
+
+  it('không hiện câu chờ giải trình khi deadline là null', async () => {
+    await renderMessages(RECEIVER_ID, request({ status: 'DISPUTED', disputeResponseDueAt: null }));
+
+    await screen.findByText(/Giao dịch đang có khiếu nại/);
+    expect(screen.queryByText(/chờ chủ bài giải trình trước/)).toBeNull();
   });
 });
 
@@ -229,7 +258,10 @@ describe('Báo chưa nhận được / chưa giao được', () => {
 
     await userEvents.click(await screen.findByRole('button', { name: 'Tôi chưa nhận được' }));
     const dialog = await screen.findByRole('dialog');
-    await userEvents.type(within(dialog).getByLabelText(/Mô tả sự cố/), 'Chờ mãi không thấy ai giao');
+    await userEvents.type(
+      within(dialog).getByLabelText(/Mô tả sự cố/),
+      'Chờ mãi không thấy ai giao',
+    );
     await userEvents.click(within(dialog).getByRole('button', { name: 'Gửi báo cáo' }));
 
     await waitFor(() =>

@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { canCancelTransaction, canOpenComplaint, canReportHandoverIssue, formatDeadline } from './request';
+import {
+  canCancelTransaction,
+  canOpenComplaint,
+  canReportHandoverIssue,
+  formatDeadline,
+} from './request';
 
 describe('canCancelTransaction', () => {
   it('cho huỷ ở bốn trạng thái sau khi đã chọn người', () => {
-    for (const status of ['RESERVED', 'AWAITING_LOGISTICS', 'LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER'] as const) {
+    for (const status of [
+      'RESERVED',
+      'AWAITING_LOGISTICS',
+      'LOGISTICS_CONFIRMED',
+      'AWAITING_HANDOVER',
+    ] as const) {
       expect(canCancelTransaction(status)).toBe(true);
     }
   });
@@ -56,8 +66,7 @@ describe('canOpenComplaint (U08)', () => {
 });
 
 describe('formatDeadline', () => {
-  it('ghi giờ:phút ngày/tháng có số 0 đứng trước', () => {
-    const local = new Date(2026, 9, 5, 7, 3);
-    expect(formatDeadline(local.toISOString())).toBe('07:03 05/10');
+  it('ghi giờ:phút ngày/tháng theo Asia/Ho_Chi_Minh', () => {
+    expect(formatDeadline('2026-10-05T00:03:00Z')).toBe('07:03 05/10');
   });
 });
