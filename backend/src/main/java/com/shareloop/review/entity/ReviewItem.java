@@ -1,8 +1,6 @@
 package com.shareloop.review.entity;
 
 import com.shareloop.common.entity.SliceAudit;
-import com.shareloop.common.exception.BusinessException;
-import com.shareloop.review.ReviewErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -58,29 +56,10 @@ public class ReviewItem extends SliceAudit {
         return id;
     }
 
+    // L16: đã gỡ cấp, từ chối, thu hồi nhãn chính hãng (chưa có luồng xác nhận và BR). Cột auth_status giữ lại theo ERD
+    // và chỉ còn đọc để trang chi tiết duyệt bài hiện trạng thái cũ.
     public AuthenticityStatus getAuthStatus() {
         return authStatus;
-    }
-
-    public void grantAuthenticity() {
-        if (this.authStatus != AuthenticityStatus.PENDING) {
-            throw new BusinessException(ReviewErrorCode.AUTHENTICITY_INVALID_STATUS);
-        }
-        this.authStatus = AuthenticityStatus.VERIFIED;
-    }
-
-    public void rejectAuthenticity() {
-        if (this.authStatus != AuthenticityStatus.PENDING) {
-            throw new BusinessException(ReviewErrorCode.AUTHENTICITY_INVALID_STATUS);
-        }
-        this.authStatus = AuthenticityStatus.REJECTED;
-    }
-
-    public void revokeAuthenticity() {
-        if (this.authStatus != AuthenticityStatus.VERIFIED) {
-            throw new BusinessException(ReviewErrorCode.AUTHENTICITY_NOT_VERIFIED);
-        }
-        this.authStatus = AuthenticityStatus.REVOKED;
     }
 
     public void approve(Map<String, Object> snapshot, Instant approvedAt, Long approvedBy) {
