@@ -552,11 +552,7 @@ export function AdminComplaints() {
           <div className="mt-6 flex items-center justify-between gap-3 border-t border-border pt-4">
             {detail && !concluded(detail.report.status) && !confirming && (
               <Button
-<<<<<<< HEAD
-                disabled={submitting || note.length > 500}
-=======
                 disabled={submitting || note.length > 500 || detail.responseWindowOpen}
->>>>>>> 3347be79a9da7739908621a2d134c1c004d3b690
                 onClick={() => setConfirming(true)}
               >
                 Kết luận

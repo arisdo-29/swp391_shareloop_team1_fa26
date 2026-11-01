@@ -247,7 +247,7 @@ export function ProductDetail() {
 
   return (
     <div className="page-shell pt-6">
-      <Link to={backLink.target} className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary-hover">
+      <Link to={backLink.target} className="inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary">
         {backLink.label}
       </Link>
       <div className="mt-2 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -410,7 +410,7 @@ export function ProductDetail() {
                       Bạn chưa có món đã duyệt, còn hoạt động và chưa nằm trong giao dịch khác để trao đổi.
                     </p>
                   ) : null}
-                  <Link to="/post" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary-hover">
+                  <Link to="/post" className="inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary">
                     Đăng món mới để đổi
                   </Link>
                 </fieldset>

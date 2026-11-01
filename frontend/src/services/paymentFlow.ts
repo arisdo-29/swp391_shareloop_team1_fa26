@@ -32,12 +32,6 @@ export function confirmDemoPayment(order: TopUpOrderResponse) {
 }
 
 export async function startPayment(order: TopUpOrderResponse): Promise<void> {
-  if (order.provider === 'MANUAL') {
-    window.location.assign(
-      '/wallet/topup/manual-checkout?orderCode=' + encodeURIComponent(order.orderCode),
-    );
-    return;
-  }
   if (order.provider !== 'VNPAY') throw new Error(backendMockProviderMessage);
 
   const redirectUrl = paymentRedirectUrl(order.redirectUrl);

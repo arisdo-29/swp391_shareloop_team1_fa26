@@ -7,6 +7,8 @@ export const itemApiEndpoints = {
   update: (id: number) => `/api/v1/items/${id}`,
   myItems: '/api/v1/me/items',
   editQuote: (id: number) => `/api/v1/items/${id}/edit-quote`,
+  renewQuote: (id: number) => `/api/v1/items/${id}/renew-quote`,
+  boostQuote: (id: number) => `/api/v1/items/${id}/boost-quote`,
   renew: (id: number) => `/api/v1/items/${id}/renew`,
   boost: (id: number) => `/api/v1/items/${id}/boost`,
   listingFees: '/api/v1/listing-fees',
@@ -113,6 +115,20 @@ export interface BoostResponse {
   creditBalance: number;
 }
 
+export interface RenewQuote {
+  fee: number;
+  newExpireAt: string;
+  allowed: boolean;
+  reason: string | null;
+}
+
+export interface BoostQuote {
+  fee: number;
+  newBoostedUntil: string;
+  allowed: boolean;
+  reason: string | null;
+}
+
 export interface ListingFeeConfigResponse {
   postFeeSwap: number;
   /** Phí đăng Trao đổi khi vượt hạn mức theo hạng. BE chưa trả field này ở GET /listing-fees nên để optional. */
@@ -193,6 +209,14 @@ export const itemApi = {
   },
   async getEditQuote(id: number, offerType?: OfferType): Promise<EditQuote> {
     const { data } = await http.get<EditQuote>(itemApiEndpoints.editQuote(id), { params: offerType ? { offerType } : undefined });
+    return data;
+  },
+  async getRenewQuote(id: number): Promise<RenewQuote> {
+    const { data } = await http.get<RenewQuote>(itemApiEndpoints.renewQuote(id));
+    return data;
+  },
+  async getBoostQuote(id: number): Promise<BoostQuote> {
+    const { data } = await http.get<BoostQuote>(itemApiEndpoints.boostQuote(id));
     return data;
   },
   async renewItem(id: number): Promise<RenewResponse> {

@@ -53,7 +53,29 @@ function AppShellContent() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
+  const [homeHeaderSolid, setHomeHeaderSolid] = useState(false);
   const headerActionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isHome) {
+      setHomeHeaderSolid(false);
+      return undefined;
+    }
+
+    const updateHeaderBackground = () => {
+      const hero = document.querySelector<HTMLElement>('[data-home-hero]');
+      const heroBottom = hero?.getBoundingClientRect().bottom ?? window.innerHeight;
+      setHomeHeaderSolid(heroBottom <= 68);
+    };
+
+    updateHeaderBackground();
+    window.addEventListener('scroll', updateHeaderBackground, { passive: true });
+    window.addEventListener('resize', updateHeaderBackground);
+    return () => {
+      window.removeEventListener('scroll', updateHeaderBackground);
+      window.removeEventListener('resize', updateHeaderBackground);
+    };
+  }, [isHome]);
 
   useEffect(() => {
     if (!user || isAdmin) {
@@ -179,13 +201,13 @@ function AppShellContent() {
         Bỏ qua điều hướng
       </a>
       <header
-        className={`top-0 z-30 border-b backdrop-blur-md ${
+        className={`site-header top-0 z-30 border-b backdrop-blur-md ${
           isHome
-            ? 'absolute inset-x-0 border-white/15 bg-black/10 text-white'
-            : 'sticky border-border/60 bg-secondary/95 text-white'
+            ? `site-header-home fixed inset-x-0 ${homeHeaderSolid ? 'site-header-home-solid' : ''}`
+            : 'sticky'
         }`}
       >
-        <div className="mx-auto flex h-[68px] w-full max-w-[1280px] items-center gap-5 px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex h-[68px] w-full max-w-[1440px] items-center gap-5 px-4 sm:px-6">
           <Link
             to={isAdmin ? '/admin' : '/'}
             onClick={closeMenus}
@@ -203,7 +225,7 @@ function AppShellContent() {
                 'SHARELOOP ADMIN'
               ) : (
                 <>
-                  SHARE<span className="text-primary-fixed">LOOP</span>
+                  SHARE<span className="text-white">LOOP</span>
                 </>
               )}
             </span>
@@ -216,10 +238,10 @@ function AppShellContent() {
                   key={to}
                   to={to}
                   className={({ isActive }) =>
-                    `inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition ${
+                    `inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition focus-visible:bg-white/[0.14] focus-visible:outline-none ${
                       isActive
-                        ? 'bg-white/15 text-white'
-                        : 'text-white/80 hover:bg-white/10 hover:text-white'
+                        ? `${isHome ? 'bg-white/[0.16]' : 'bg-white/[0.14]'} text-white`
+                        : `${isHome ? 'text-white' : 'text-white/80'} hover:bg-white/10 hover:text-white`
                     }`
                   }
                 >
@@ -249,16 +271,16 @@ function AppShellContent() {
                     <Link
                       to="/credit"
                       aria-label={`Ví Credit: ${wallet ? wallet.available : 'chưa tải'} Credit khả dụng`}
-                      className={`hidden min-h-11 items-center rounded-md border px-3 py-2 text-xs font-semibold transition sm:flex ${
-                        isHome
-                          ? 'border-white/25 bg-black/10 text-white/90 hover:border-white/50 hover:bg-white/10 hover:text-white'
-                          : 'border-white/25 bg-white/10 text-white/90 hover:border-white/50 hover:bg-white/20 hover:text-white'
-                      }`}
+                      className="site-header-credit hidden min-h-11 items-center rounded-md border px-3 py-2 text-xs font-semibold transition sm:flex"
                     >
                       {wallet ? wallet.available : '--'} Credit
                     </Link>
                     <Link to="/post" className="hidden sm:block">
-                      <Button>Đăng đồ</Button>
+                      <Button
+                        className="bronze-action"
+                      >
+                        Đăng đồ
+                      </Button>
                     </Link>
                   </>
                 ) : null}
@@ -346,12 +368,16 @@ function AppShellContent() {
               <>
                 <Link
                   to="/login"
-                  className="hidden min-h-11 items-center px-2 text-sm font-semibold text-white/85 hover:text-white sm:inline-flex"
+                  className="hidden min-h-11 items-center px-2 text-sm font-semibold text-white hover:text-white sm:inline-flex"
                 >
                   Đăng nhập
                 </Link>
                 <Link to="/register">
-                  <Button>Đăng ký</Button>
+                  <Button
+                    className="bronze-action"
+                  >
+                    Đăng ký
+                  </Button>
                 </Link>
               </>
             )}
@@ -359,20 +385,14 @@ function AppShellContent() {
               <IconButton
                 icon={mobileOpen ? 'close' : 'menu'}
                 label="Mở điều hướng"
-                className="!size-11 !border-white/30 !bg-white/10 !text-white hover:!bg-white/20 hover:!text-white lg:hidden"
+                className="site-header-icon-button !size-11 lg:hidden"
                 onClick={() => setMobileOpen(!mobileOpen)}
               />
             ) : null}
           </div>
         </div>
         {mobileOpen && !isAdmin ? (
-          <nav
-            className={`border-t px-4 py-3 lg:hidden ${
-              isHome
-                ? 'border-white/15 bg-primary-hover/95 text-white'
-                : 'border-border/60 bg-secondary/95 text-white'
-            }`}
-          >
+          <nav className={`site-header-mobile border-t px-4 py-3 lg:hidden ${isHome ? 'site-header-home-mobile' : ''}`}>
             {nav.map(([to, label]) => (
               <NavLink
                 end={to === '/'}
@@ -380,8 +400,10 @@ function AppShellContent() {
                 to={to}
                 onClick={closeMenus}
                 className={({ isActive }) =>
-                  `flex items-center justify-between rounded-md px-3 py-3 text-sm font-semibold ${
-                    isActive ? 'bg-white/15 text-white' : 'text-white/80'
+                  `flex items-center justify-between rounded-md px-3 py-3 text-sm font-semibold focus-visible:bg-white/[0.14] focus-visible:outline-none ${
+                    isActive
+                      ? `${isHome ? 'bg-white/[0.16]' : 'bg-white/[0.14]'} text-white`
+                      : isHome ? 'text-white' : 'text-white/80'
                   }`
                 }
               >
@@ -395,7 +417,7 @@ function AppShellContent() {
               <Link
                 to="/post"
                 onClick={closeMenus}
-                className="mt-2 flex min-h-11 items-center justify-center rounded-md bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-hover"
+                className="bronze-action mt-2 flex min-h-11 items-center justify-center rounded-md border px-4 py-3 text-sm transition"
               >
                 Đăng đồ
               </Link>
@@ -410,19 +432,19 @@ function AppShellContent() {
       </main>
       {/* Quản trị viên và các trang tài khoản không hiện chân trang dành cho người dùng. */}
       {!isAdmin && !authPaths.has(pathname) ? (
-        <footer className="mt-auto border-t border-border bg-white">
-          <div className="mx-auto w-full max-w-[1280px] px-4 pb-8 pt-12 sm:px-6 sm:pt-14 lg:px-8">
+        <footer className="site-footer mt-auto border-t">
+          <div className="mx-auto w-full max-w-[1440px] px-4 pb-8 pt-12 sm:px-6 sm:pt-14">
             <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
               <div className="max-w-sm">
                 <Link to="/" className="inline-flex items-center gap-2.5">
                   <span className="grid size-9 place-items-center rounded-md bg-primary text-white">
                     <ShareLoopLogo className="size-5" />
                   </span>
-                  <strong className="text-base font-extrabold text-text-primary">
-                    SHARE<span className="text-primary">LOOP</span>
+                  <strong className="site-footer-brand text-base font-extrabold">
+                    SHARE<span>LOOP</span>
                   </strong>
                 </Link>
-                <p className="mt-4 text-sm leading-6 text-text-secondary">
+                <p className="site-footer-copy mt-4 text-sm leading-6">
                   Trao món đồ cũ, mở một vòng đời mới cho cộng đồng.
                 </p>
               </div>
@@ -444,27 +466,27 @@ function AppShellContent() {
                 ]}
               />
               <div>
-                <h2 className="text-sm font-bold text-text-primary">Hỗ trợ</h2>
-                <nav className="mt-3 space-y-1 text-sm leading-6 text-text-secondary">
-                  <Link to="/about" className="block py-2 transition hover:text-primary">
+                <h2 className="site-footer-title text-sm font-bold">Hỗ trợ</h2>
+                <nav className="mt-3 space-y-1 text-sm leading-6">
+                  <Link to="/about" className="site-footer-link block py-2 transition">
                     Giới thiệu ShareLoop
                   </Link>
-                  <Link to="/guide" className="block py-2 transition hover:text-primary">
+                  <Link to="/guide" className="site-footer-link block py-2 transition">
                     Hướng dẫn sử dụng
                   </Link>
-                  <Link to="/safety" className="block py-2 transition hover:text-primary">
+                  <Link to="/safety" className="site-footer-link block py-2 transition">
                     An toàn khi giao nhận
                   </Link>
                   <a
                     href="mailto:support@shareloop.vn"
-                    className="block py-2 transition hover:text-primary"
+                    className="site-footer-link block py-2 transition"
                   >
                     support@shareloop.vn
                   </a>
                 </nav>
               </div>
             </div>
-            <div className="mt-12 flex flex-col gap-3 border-t border-border pt-6 text-xs text-text-secondary sm:flex-row sm:items-center sm:justify-between">
+            <div className="site-footer-copy mt-12 flex flex-col gap-3 border-t border-border pt-6 text-xs sm:flex-row sm:items-center sm:justify-between">
               <p>© 2026 SHARELOOP</p>
             </div>
           </div>
@@ -485,7 +507,7 @@ function FooterGroup({
 }) {
   return (
     <div>
-      <h2 className="text-sm font-bold text-text-primary">{title}</h2>
+      <h2 className="site-footer-title text-sm font-bold">{title}</h2>
       <nav className="mt-3 space-y-1">
         {links.map(([label, to]) =>
           onPostClick && to === '/post' ? (
@@ -493,7 +515,7 @@ function FooterGroup({
               key={to}
               type="button"
               onClick={onPostClick}
-              className="block py-2 text-left text-sm leading-6 text-text-secondary transition hover:text-primary"
+              className="site-footer-link block py-2 text-left text-sm leading-6 transition"
             >
               {label}
             </button>
@@ -501,7 +523,7 @@ function FooterGroup({
             <Link
               key={to}
               to={to}
-              className="block py-2 text-sm leading-6 text-text-secondary transition hover:text-primary"
+              className="site-footer-link block py-2 text-sm leading-6 transition"
             >
               {label}
             </Link>

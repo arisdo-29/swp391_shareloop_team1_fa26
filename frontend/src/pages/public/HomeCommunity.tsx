@@ -68,7 +68,7 @@ export function HomeProcess() {
           <h2>Một vòng chia sẻ thật đơn giản</h2>
           <p>
             Mọi kết nối bắt đầu từ một món đồ còn giá trị.{' '}
-            <Link to="/about" className="font-semibold text-primary">
+            <Link to="/about" className="font-semibold text-link">
               Xem hướng dẫn chi tiết
             </Link>
           </p>

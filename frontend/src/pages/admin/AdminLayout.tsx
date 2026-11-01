@@ -49,10 +49,10 @@ export function AdminLayout() {
       {sections.map((section) => (
         <div
           key={section.items[0][1]}
-          className="mb-4 border-t border-white/15 pt-4 first:border-t-0 first:pt-0"
+          className="mb-4 border-t border-admin-divider pt-4 first:border-t-0 first:pt-0"
         >
           {section.label ? (
-            <p className="mb-1.5 rounded-md bg-white/10 px-3 py-2 text-xs font-bold uppercase tracking-wider text-primary-fixed">
+            <p className="mb-1.5 rounded-md bg-admin-group px-3 py-2 text-xs font-bold uppercase tracking-wider text-admin-label">
               {section.label}
             </p>
           ) : null}
@@ -63,7 +63,7 @@ export function AdminLayout() {
               to={to}
               onClick={() => setOpen(false)}
               className={({ isActive }) =>
-                `mb-0.5 flex min-h-11 items-center rounded-md py-2 pl-5 pr-3 text-sm font-medium transition ${isActive ? 'bg-primary text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'}`
+                `mb-0.5 flex min-h-11 items-center rounded-md py-2 pl-5 pr-3 text-sm transition ${isActive ? 'bg-primary font-bold text-white' : 'font-medium text-admin-text hover:bg-admin-group'}`
               }
             >
               {label}
@@ -89,7 +89,7 @@ export function AdminLayout() {
         </button>
       </div>
       <aside
-        className={`${open ? 'block' : 'hidden'} h-fit rounded-lg bg-secondary p-2 shadow-md ring-1 ring-border/60 lg:sticky lg:top-24 lg:block lg:max-h-[calc(100dvh-120px)] lg:overflow-y-auto`}
+        className={`${open ? 'block' : 'hidden'} h-fit rounded-lg bg-admin-sidebar p-2 shadow-admin [scrollbar-color:var(--color-admin-divider)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--color-admin-divider)] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:w-2 lg:sticky lg:top-24 lg:block lg:max-h-[calc(100dvh-120px)] lg:overflow-y-auto`}
       >
         <nav aria-label="Quản trị" className="pt-1">
           {nav}

@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Dialog } from '../../components/Dialog';
+import { useEffect, useState } from 'react';
 import { Pagination } from '../../components/Pagination';
-import { Alert, Button, PageHeader, TextArea, SkeletonRows } from '../../components/ui';
+import { Alert, Button, PageHeader, SkeletonRows } from '../../components/ui';
 import { adminFinanceApi } from '../../services/adminFinanceApi';
 import type { ApiError } from '../../services/http';
 import type { PageResponse } from '../../services/itemApi';
@@ -11,17 +10,11 @@ import { formatVnd } from '../../utils/formatting';
 const PAGE_SIZE = 10;
 
 const statusLabels: Record<PaymentOrderStatus, string> = {
-  PENDING: 'Chờ duyệt',
+  PENDING: 'Chờ thanh toán',
   SUCCESS: 'Thành công',
   FAILED: 'Thất bại',
   EXPIRED: 'Hết hạn',
 };
-
-function statusLabel(order: TopUpOrderDetailResponse) {
-  // Đơn FAILED đã có người duyệt nghĩa là admin từ chối, đơn FAILED không có người duyệt là thanh toán lỗi.
-  if (order.status === 'FAILED' && order.reviewedBy !== null) return 'Từ chối';
-  return statusLabels[order.status];
-}
 
 function statusClass(status: PaymentOrderStatus) {
   if (status === 'SUCCESS') return 'bg-success-soft text-success';
@@ -37,31 +30,17 @@ function formatDateTime(value: string | null) {
 function getErrorMessage(error: unknown) {
   const apiError = error as Partial<ApiError>;
   if (apiError.status === 403) return 'Bạn không có quyền quản lý đơn nạp Credit.';
-  if (apiError.code === 'WALLET_PAYMENT_ORDER_NOT_PAYABLE') {
-    return 'Đơn nạp không còn đủ điều kiện xử lý. Vui lòng tải lại danh sách.';
-  }
-  return apiError.message || 'Không xử lý được yêu cầu. Vui lòng thử lại.';
-}
-
-/** Chỉ đơn chuyển khoản thủ công đã được người dùng bấm "đã thanh toán" mới duyệt được. */
-function canReview(order: TopUpOrderDetailResponse) {
-  return order.provider === 'MANUAL' && order.status === 'PENDING' && order.submittedAt !== null;
+  return apiError.message || 'Không tải được danh sách đơn nạp. Vui lòng thử lại.';
 }
 
 export function AdminTopUpOrders() {
   const [result, setResult] = useState<PageResponse<TopUpOrderDetailResponse> | null>(null);
   // '' là tất cả trạng thái: mở trang là thấy toàn bộ đơn, đơn mới nhất ở trên.
   const [status, setStatus] = useState<PaymentOrderStatus | ''>('');
-  const [submittedOnly, setSubmittedOnly] = useState(false);
   const [page, setPage] = useState(0);
   const [reloadKey, setReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [selected, setSelected] = useState<{
-    order: TopUpOrderDetailResponse;
-    action: 'approve' | 'reject';
-  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -71,7 +50,6 @@ export function AdminTopUpOrders() {
     adminFinanceApi
       .topUpOrders({
         status: status || undefined,
-        submittedOnly: submittedOnly || undefined,
         page,
         size: PAGE_SIZE,
       })
@@ -95,21 +73,13 @@ export function AdminTopUpOrders() {
     return () => {
       active = false;
     };
-  }, [page, reloadKey, status, submittedOnly]);
-
-  const closeDialog = useCallback(() => setSelected(null), []);
-
-  const onProcessed = (message: string) => {
-    setSelected(null);
-    setNotice(message);
-    setReloadKey((current) => current + 1);
-  };
+  }, [page, reloadKey, status]);
 
   return (
     <section className="space-y-5">
       <PageHeader
         title="Đơn nạp Credit"
-        description="Theo dõi mọi đơn nạp và duyệt các đơn chuyển khoản thủ công đã được người dùng xác nhận thanh toán."
+        description="Theo dõi trạng thái các đơn nạp Credit qua cổng thanh toán."
         action={
           <Button
             variant="outline"
@@ -140,17 +110,6 @@ export function AdminTopUpOrders() {
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2 pb-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            checked={submittedOnly}
-            onChange={(event) => {
-              setSubmittedOnly(event.target.checked);
-              setPage(0);
-            }}
-          />
-          Chỉ đơn đã xác nhận thanh toán
-        </label>
       </div>
 
       {error ? (
@@ -161,12 +120,6 @@ export function AdminTopUpOrders() {
           </Button>
         </div>
       ) : null}
-      {notice ? (
-        <div role="status">
-          <Alert tone="success">{notice}</Alert>
-        </div>
-      ) : null}
-
       {loading && !result ? (
         <SkeletonRows label="Đang tải đơn nạp" />
       ) : result ? (
@@ -179,25 +132,15 @@ export function AdminTopUpOrders() {
                   <th>Giá trị</th>
                   <th>Trạng thái</th>
                   <th>Thời gian</th>
-                  <th>Kết quả duyệt</th>
-                  <th>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 {result.items.map((order) => (
-                  <TopUpRow
-                    key={order.orderCode}
-                    order={order}
-                    onAction={(action) => {
-                      setNotice('');
-                      setError('');
-                      setSelected({ order, action });
-                    }}
-                  />
+                  <TopUpRow key={order.orderCode} order={order} />
                 ))}
                 {result.items.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center text-text-muted">
+                    <td colSpan={4} className="text-center text-text-muted">
                       Không có đơn nạp phù hợp bộ lọc hiện tại.
                     </td>
                   </tr>
@@ -214,27 +157,11 @@ export function AdminTopUpOrders() {
           />
         </div>
       ) : null}
-
-      {selected ? (
-        <ReviewDialog
-          order={selected.order}
-          action={selected.action}
-          onClose={closeDialog}
-          onDone={onProcessed}
-        />
-      ) : null}
     </section>
   );
 }
 
-function TopUpRow({
-  order,
-  onAction,
-}: {
-  order: TopUpOrderDetailResponse;
-  onAction: (action: 'approve' | 'reject') => void;
-}) {
-  const reviewed = order.reviewedAt !== null;
+function TopUpRow({ order }: { order: TopUpOrderDetailResponse }) {
   return (
     <tr>
       <td>
@@ -249,117 +176,13 @@ function TopUpRow({
         <span
           className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${statusClass(order.status)}`}
         >
-          {statusLabel(order)}
+          {statusLabels[order.status]}
         </span>
       </td>
       <td className="text-xs">
         <p>Tạo lúc: {formatDateTime(order.createdAt)}</p>
-        {order.submittedAt ? <p>Xác nhận thanh toán: {formatDateTime(order.submittedAt)}</p> : null}
         {order.status === 'PENDING' ? <p>Hết hạn: {formatDateTime(order.expiresAt)}</p> : null}
       </td>
-      <td className="text-xs">
-        {reviewed ? (
-          <>
-            <p>Người duyệt: {order.reviewedByName || 'Quản trị viên đã xóa'}</p>
-            <p>Lúc: {formatDateTime(order.reviewedAt)}</p>
-            {order.reviewNote ? <p className="max-w-52 break-words">Ghi chú: {order.reviewNote}</p> : null}
-          </>
-        ) : (
-          '—'
-        )}
-      </td>
-      <td>
-        {canReview(order) ? (
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => onAction('approve')}>
-              Phê duyệt
-            </Button>
-            <Button variant="danger" onClick={() => onAction('reject')}>
-              Từ chối
-            </Button>
-          </div>
-        ) : (
-          <span className="text-text-muted">—</span>
-        )}
-      </td>
     </tr>
-  );
-}
-
-function ReviewDialog({
-  order,
-  action,
-  onClose,
-  onDone,
-}: {
-  order: TopUpOrderDetailResponse;
-  action: 'approve' | 'reject';
-  onClose: () => void;
-  onDone: (message: string) => void;
-}) {
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const inFlight = useRef(false);
-  const approving = action === 'approve';
-  const reviewText = note.trim();
-
-  const submit = async () => {
-    if (inFlight.current) return;
-    if (!approving && !reviewText) {
-      setError('Vui lòng nhập lý do từ chối.');
-      return;
-    }
-    inFlight.current = true;
-    setBusy(true);
-    setError('');
-    try {
-      if (approving) {
-        await adminFinanceApi.approveTopUp(order.orderCode, reviewText);
-      } else {
-        await adminFinanceApi.rejectTopUp(order.orderCode, reviewText);
-      }
-      onDone(approving ? 'Đã phê duyệt đơn nạp và cộng Credit cho người dùng.' : 'Đã từ chối đơn nạp.');
-    } catch (caught) {
-      setError(getErrorMessage(caught));
-    } finally {
-      inFlight.current = false;
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Dialog title="Xác nhận xử lý đơn nạp" busy={busy} onClose={onClose}>
-      <p className="text-sm leading-6 text-text-secondary">
-        {approving ? 'Phê duyệt' : 'Từ chối'} đơn nạp <strong>{formatVnd(order.amountVnd)}</strong> (
-        {order.credits} Credit) của <strong>{order.userName || 'người dùng này'}</strong>?
-      </p>
-      <div className="mt-4">
-        <TextArea
-          label={approving ? 'Ghi chú (tùy chọn)' : 'Lý do từ chối (bắt buộc)'}
-          maxLength={500}
-          disabled={busy}
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-        />
-      </div>
-      {error ? (
-        <div className="mt-3" role="alert">
-          <Alert tone="error">{error}</Alert>
-        </div>
-      ) : null}
-      <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="outline" disabled={busy} onClick={onClose}>
-          Hủy
-        </Button>
-        <Button
-          variant={approving ? 'primary' : 'danger'}
-          disabled={busy || (!approving && !reviewText)}
-          onClick={() => void submit()}
-        >
-          {busy ? 'Đang xử lý...' : 'Xác nhận'}
-        </Button>
-      </div>
-    </Dialog>
   );
 }
