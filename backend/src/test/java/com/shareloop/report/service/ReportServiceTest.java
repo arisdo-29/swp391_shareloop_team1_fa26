@@ -92,6 +92,9 @@ class ReportServiceTest {
     RequestService requestService;
 
     @Mock
+    com.shareloop.user.service.UserService userService;
+
+    @Mock
     JdbcClient jdbcClient;
 
     Clock clock = Clock.fixed(BASE_TIME, ZoneId.of("UTC"));
@@ -124,6 +127,7 @@ class ReportServiceTest {
                 activityLogService,
                 configService,
                 requestService,
+                userService,
                 jdbcClient,
                 clock));
     }
@@ -1500,5 +1504,285 @@ class ReportServiceTest {
                         eq(reportId),
                         anyMap(),
                         eq("Xác minh hàng không đúng mô tả"));
+    }
+
+    // ---------- D-07: báo cáo bài (BC-03 yêu cầu giải trình, BC-04 bác bỏ mở lại bài, BC-05 chấp thuận đóng báo cáo
+    // khác)
+
+    private static final long ITEM_ID = 200L;
+    private static final long DONOR_ID = 20L;
+
+    private Report itemReport(long reportId, long reporterId) {
+        Report report = new Report(
+                reporterId,
+                TargetType.ITEM,
+                ITEM_ID,
+                DONOR_ID,
+                null,
+                ReportReason.OTHER,
+                "Ảnh mạng",
+                ReportStage.BEFORE);
+        ReflectionTestUtils.setField(report, "id", reportId);
+        return report;
+    }
+
+    private void givenHiddenItem() {
+        when(itemQueryService.getSummary(ITEM_ID))
+                .thenReturn(new ItemSummary(ITEM_ID, DONOR_ID, OfferType.GIVE, ItemStatus.APPROVED, false));
+    }
+
+    // Báo cáo được kết luận: lưu xong trả lại chính nó, các báo cáo khác của bài theo danh sách cho trước
+    private Report givenConcludable(long reportId, List<Report> otherPending) {
+        Report report = itemReport(reportId, 1L);
+        when(reportRepository.findByIdForUpdate(reportId)).thenReturn(Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(reportRepository.findByTargetTypeAndItemIdAndStatusInAndIdNot(TargetType.ITEM, ITEM_ID, PENDING, reportId))
+                .thenReturn(otherPending);
+        return report;
+    }
+
+    @Test
+    @DisplayName("BC-03: yêu cầu giải trình chuyển báo cáo bài sang Chờ giải trình, hạn 48 giờ, báo chủ bài kèm hạn")
+    void requestResponse_openItemReport_awaitsResponseAndNotifiesDonor() {
+        Report report = itemReport(31L, 1L);
+        when(reportRepository.findByIdForUpdate(31L)).thenReturn(Optional.of(report));
+        givenHiddenItem();
+
+        reportService.requestResponse(99L, 31L);
+
+        assertThat(report.getStatus()).isEqualTo(ReportStatus.AWAITING_RESPONSE);
+        assertThat(report.getResponseDueAt()).isEqualTo(BASE_TIME.plus(Duration.ofHours(48)));
+        verify(reportRepository).save(report);
+        // 10:00 UTC 18/10 + 48 giờ = 17:00 ngày 20/10 giờ Việt Nam
+        verify(notificationService)
+                .notify(
+                        eq(DONOR_ID),
+                        eq("REPORT_RESPONSE_REQUESTED"),
+                        eq("Bài đăng cần giải trình"),
+                        org.mockito.ArgumentMatchers.argThat(body -> body.contains("“Nồi cơm điện”")
+                                && body.contains("Bạn có 48 giờ, đến 17:00 20/10, để giải trình.")),
+                        eq("/me/reports/31"));
+        verify(activityLogService)
+                .log(eq("REPORT_RESPONSE_REQUESTED"), eq(99L), eq("REPORT"), eq(31L), anyMap(), anyString());
+    }
+
+    @Test
+    @DisplayName(
+            "BC-03: bài nhiều báo cáo thì mọi báo cáo OPEN chưa giải trình chuyển cùng lúc, chung một hạn, báo một lần")
+    void requestResponse_itemWithSeveralReports_movesAllOpenReportsWithSharedDeadline() {
+        Report report = itemReport(44L, 1L);
+        Report otherOpen = itemReport(45L, 2L);
+        Report alreadyResponded = itemReport(46L, 3L);
+        alreadyResponded.respond("Giải trình cũ", null, BASE_TIME.minusSeconds(60));
+        when(reportRepository.findByIdForUpdate(44L)).thenReturn(Optional.of(report));
+        when(reportRepository.findByTargetTypeAndItemIdAndStatusInAndIdNot(TargetType.ITEM, ITEM_ID, PENDING, 44L))
+                .thenReturn(List.of(otherOpen, alreadyResponded));
+        givenHiddenItem();
+
+        reportService.requestResponse(99L, 44L);
+
+        Instant dueAt = BASE_TIME.plus(Duration.ofHours(48));
+        assertThat(report.getStatus()).isEqualTo(ReportStatus.AWAITING_RESPONSE);
+        assertThat(otherOpen.getStatus()).isEqualTo(ReportStatus.AWAITING_RESPONSE);
+        assertThat(otherOpen.getResponseDueAt()).isEqualTo(dueAt);
+        // Báo cáo đã có giải trình thì giữ nguyên, không bắt giải trình lại
+        assertThat(alreadyResponded.getStatus()).isEqualTo(ReportStatus.OPEN);
+        verify(notificationService, org.mockito.Mockito.times(1))
+                .notify(
+                        eq(DONOR_ID),
+                        eq("REPORT_RESPONSE_REQUESTED"),
+                        anyString(),
+                        org.mockito.ArgumentMatchers.argThat(
+                                body -> body.contains("Bạn chỉ cần giải trình một lần cho cả bài.")),
+                        anyString());
+        verify(activityLogService)
+                .log(
+                        eq("REPORT_RESPONSE_REQUESTED"),
+                        eq(99L),
+                        eq("REPORT"),
+                        eq(44L),
+                        org.mockito.ArgumentMatchers.<java.util.Map<String, Object>>argThat(
+                                data -> List.of(44L, 45L).equals(data.get("reportIds"))),
+                        anyString());
+    }
+
+    @Test
+    @DisplayName("BC-03: bài đang chờ giải trình còn hạn thì báo cáo mới vào chung hạn cũ, không kéo dài")
+    void requestResponse_whenItemAlreadyAwaiting_reusesExistingDeadline() {
+        Report report = itemReport(47L, 1L);
+        Report awaiting = itemReport(48L, 2L);
+        Instant existingDueAt = BASE_TIME.plus(Duration.ofHours(10));
+        awaiting.awaitResponse(existingDueAt);
+        when(reportRepository.findByIdForUpdate(47L)).thenReturn(Optional.of(report));
+        when(reportRepository.findByTargetTypeAndItemIdAndStatusInAndIdNot(TargetType.ITEM, ITEM_ID, PENDING, 47L))
+                .thenReturn(List.of(awaiting));
+        givenHiddenItem();
+
+        reportService.requestResponse(99L, 47L);
+
+        assertThat(report.getResponseDueAt()).isEqualTo(existingDueAt);
+        assertThat(awaiting.getResponseDueAt()).isEqualTo(existingDueAt);
+        // 20:00 UTC 18/10 là 03:00 ngày 19/10 giờ Việt Nam
+        verify(notificationService)
+                .notify(
+                        eq(DONOR_ID),
+                        eq("REPORT_RESPONSE_REQUESTED"),
+                        anyString(),
+                        org.mockito.ArgumentMatchers.argThat(
+                                body -> body.endsWith("Hạn giải trình vẫn là 03:00 19/10.")),
+                        anyString());
+    }
+
+    @Test
+    @DisplayName(
+            "D-07: chủ bài giải trình một lần thì mọi báo cáo cùng bài đang chờ giải trình nhận chung bản giải trình")
+    void respond_itemReport_appliesResponseToAllAwaitingReportsOfItem() {
+        Report report = itemReport(49L, 1L);
+        Report sibling = itemReport(50L, 2L);
+        Instant dueAt = BASE_TIME.plus(Duration.ofHours(48));
+        report.awaitResponse(dueAt);
+        sibling.awaitResponse(dueAt);
+        when(reportRepository.findByIdForUpdate(49L)).thenReturn(Optional.of(report));
+        when(reportRepository.findByTargetTypeAndItemIdAndStatusInAndIdNot(
+                        TargetType.ITEM, ITEM_ID, List.of(ReportStatus.AWAITING_RESPONSE), 49L))
+                .thenReturn(List.of(sibling));
+        givenHiddenItem();
+        when(evidenceService.attach(List.of(15L), DONOR_ID)).thenReturn("[15]");
+
+        reportService.respond(
+                DONOR_ID, 49L, new com.shareloop.report.dto.RespondReportRequest(" Ảnh tự chụp ", List.of(15L)));
+
+        for (Report each : List.of(report, sibling)) {
+            assertThat(each.getStatus()).isEqualTo(ReportStatus.OPEN);
+            assertThat(each.getResponse()).isEqualTo("Ảnh tự chụp");
+            assertThat(each.getResponseEvidence()).isEqualTo("[15]");
+            assertThat(each.getRespondedAt()).isEqualTo(BASE_TIME);
+        }
+    }
+
+    @Test
+    @DisplayName("BC-03: không yêu cầu được khi báo cáo đã chờ giải trình hoặc là khiếu nại giao dịch")
+    void requestResponse_whenNotOpenOrDispute_throwsNotAllowed() {
+        Report awaiting = itemReport(32L, 1L);
+        awaiting.awaitResponse(BASE_TIME.plusSeconds(60));
+        Report dispute = Report.createDispute(
+                1L, 7L, ITEM_ID, DONOR_ID, ReportReason.OTHER, "Không đúng", null, BASE_TIME.plusSeconds(60));
+        ReflectionTestUtils.setField(dispute, "id", 33L);
+        dispute.respond("Đã giải trình", null, BASE_TIME);
+        when(reportRepository.findByIdForUpdate(32L)).thenReturn(Optional.of(awaiting));
+        when(reportRepository.findByIdForUpdate(33L)).thenReturn(Optional.of(dispute));
+        when(itemQueryService.getSummary(ITEM_ID))
+                .thenReturn(new ItemSummary(ITEM_ID, DONOR_ID, OfferType.GIVE, ItemStatus.APPROVED));
+
+        assertThatThrownBy(() -> reportService.requestResponse(99L, 32L))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.REPORT_RESPONSE_REQUEST_NOT_ALLOWED);
+        assertThatThrownBy(() -> reportService.requestResponse(99L, 33L))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.REPORT_RESPONSE_REQUEST_NOT_ALLOWED);
+        verify(notificationService, never()).notify(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("BC-03: báo cáo đã kết luận thì trả REPORT_ALREADY_CONCLUDED")
+    void requestResponse_whenConcluded_throwsAlreadyConcluded() {
+        Report report = itemReport(34L, 1L);
+        report.conclude(ReportDecision.DISMISS, 99L, null);
+        when(reportRepository.findByIdForUpdate(34L)).thenReturn(Optional.of(report));
+
+        assertThatThrownBy(() -> reportService.requestResponse(99L, 34L))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.REPORT_ALREADY_CONCLUDED);
+    }
+
+    @Test
+    @DisplayName("BC-04: bác bỏ báo cáo cuối cùng của bài đang tạm ẩn thì mở lại bài và báo chủ bài")
+    void conclude_dismissLastPendingReport_reopensHiddenItem() {
+        givenConcludable(35L, List.of());
+        givenHiddenItem();
+        when(userService.isLocked(DONOR_ID)).thenReturn(false);
+        when(reputationService.canPost(DONOR_ID)).thenReturn(true);
+
+        reportService.conclude(99L, 35L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
+
+        verify(itemService).unhide(ITEM_ID);
+        verify(notificationService)
+                .notify(eq(DONOR_ID), eq("ITEM_REOPENED"), anyString(), anyString(), eq("/activities"));
+    }
+
+    @Test
+    @DisplayName("BC-04: còn báo cáo khác đang chờ thì bác bỏ không mở lại bài")
+    void conclude_dismissWhileOtherReportsPending_keepsItemHidden() {
+        givenConcludable(36L, List.of(itemReport(37L, 2L)));
+
+        reportService.conclude(99L, 36L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
+
+        verify(itemService, never()).unhide(anyLong());
+    }
+
+    @Test
+    @DisplayName("BC-04: chủ bài bị khoá hoặc cấm thì bác bỏ không mở lại bài")
+    void conclude_dismissWhenDonorLocked_keepsItemHidden() {
+        givenConcludable(38L, List.of());
+        givenHiddenItem();
+        when(userService.isLocked(DONOR_ID)).thenReturn(true);
+
+        reportService.conclude(99L, 38L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
+
+        verify(itemService, never()).unhide(anyLong());
+    }
+
+    @Test
+    @DisplayName("BC-04: chủ bài đã hết sao thì bác bỏ không mở lại bài")
+    void conclude_dismissWhenDonorHasNoStars_keepsItemHidden() {
+        givenConcludable(39L, List.of());
+        givenHiddenItem();
+        when(userService.isLocked(DONOR_ID)).thenReturn(false);
+        when(reputationService.canPost(DONOR_ID)).thenReturn(false);
+
+        reportService.conclude(99L, 39L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
+
+        verify(itemService, never()).unhide(anyLong());
+    }
+
+    @Test
+    @DisplayName("BC-04: bài từng có báo cáo được chấp thuận thì bác bỏ báo cáo khác không mở lại bài")
+    void conclude_dismissWhenItemHasUpheldReport_keepsItemHidden() {
+        givenConcludable(40L, List.of());
+        when(reportRepository.existsByTargetTypeAndItemIdAndStatus(TargetType.ITEM, ITEM_ID, ReportStatus.RESOLVED))
+                .thenReturn(true);
+
+        reportService.conclude(99L, 40L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
+
+        verify(itemService, never()).unhide(anyLong());
+    }
+
+    @Test
+    @DisplayName("BC-05: chấp thuận đóng các báo cáo đang chờ khác của bài, chỉ trừ 1 sao")
+    void conclude_upholdItemReport_closesOtherPendingReportsWithoutExtraStars() {
+        Report otherOpen = itemReport(42L, 2L);
+        Report otherAwaiting = itemReport(43L, 3L);
+        otherAwaiting.awaitResponse(BASE_TIME.plusSeconds(3600));
+        givenConcludable(41L, List.of(otherOpen, otherAwaiting));
+        givenHiddenItem();
+
+        ReportConclusionResponse response =
+                reportService.conclude(99L, 41L, new ConcludeReportRequest(ReportDecision.UPHOLD, "Ảnh lấy trên mạng"));
+
+        assertThat(response.status()).isEqualTo(ReportStatus.RESOLVED);
+        assertThat(response.starsDeducted()).isEqualTo((short) 1);
+        for (Report other : List.of(otherOpen, otherAwaiting)) {
+            assertThat(other.getStatus()).isEqualTo(ReportStatus.RESOLVED);
+            assertThat(other.getStarsDeducted()).isZero();
+            assertThat(other.getResolvedBy()).isEqualTo(99L);
+            assertThat(other.getResolution()).isEqualTo("Đóng theo kết luận báo cáo #41");
+        }
+        verify(reputationService, org.mockito.Mockito.times(1)).deductStar(eq(DONOR_ID), eq(1), anyString());
+        verify(activityLogService)
+                .log(
+                        eq("REPORT_UPHELD"),
+                        eq(99L),
+                        eq("REPORT"),
+                        eq(41L),
+                        org.mockito.ArgumentMatchers.<java.util.Map<String, Object>>argThat(
+                                data -> List.of(42L, 43L).equals(data.get("closedReportIds"))),
+                        anyString());
     }
 }

@@ -84,6 +84,28 @@ public class AdminReportController {
                 .body(content.bytes());
     }
 
+    @Operation(
+            summary = "Yêu cầu bên bị báo cáo giải trình",
+            description =
+                    "Chỉ Admin (D-07, BC-03). Báo cáo bài hoặc người dùng đang Chờ xử lý chuyển sang Chờ giải trình, "
+                            + "hạn 48 giờ; chủ bài hoặc người bị báo cáo nhận thông báo kèm hạn. Khiếu nại giao dịch đã tự chờ "
+                            + "giải trình lúc mở nên không dùng endpoint này.")
+    @ApiResponse(responseCode = "204", description = "Đã chuyển sang Chờ giải trình và gửi thông báo")
+    @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
+    @ApiResponse(responseCode = "403", description = "Không có quyền Admin")
+    @ApiResponse(responseCode = "404", description = "Không tìm thấy báo cáo vi phạm")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Báo cáo đã kết luận, không còn Chờ xử lý, đã có giải trình hoặc là khiếu nại giao dịch")
+    @PostMapping("/{reportId}/request-response")
+    public ResponseEntity<Void> requestResponse(
+            @Parameter(hidden = true) @CurrentUserId Long adminId,
+            @Parameter(description = "ID báo cáo cần yêu cầu giải trình", example = "1") @PathVariable @Min(1)
+                    long reportId) {
+        reportService.requestResponse(adminId, reportId);
+        return ResponseEntity.noContent().build();
+    }
+
     /**
      * Admin kết luận một báo cáo vi phạm (UPHOLD hoặc DISMISS).
      */

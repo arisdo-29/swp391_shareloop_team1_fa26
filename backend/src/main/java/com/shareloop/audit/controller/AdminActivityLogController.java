@@ -62,6 +62,7 @@ public class AdminActivityLogController {
                                                 "REQUEST_CANCEL",
                                                 "REPORT_DISMISSED",
                                                 "REPORT_UPHELD",
+                                                "REPORT_RESPONSE_REQUESTED",
                                                 "POINTS",
                                                 "STARS",
                                                 "AI_USAGE",

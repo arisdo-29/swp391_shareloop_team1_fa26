@@ -14,6 +14,7 @@ public enum ActivityType {
     REQUEST_CANCEL("Huỷ giao dịch"),
     REPORT_DISMISSED("Bác bỏ báo cáo"),
     REPORT_UPHELD("Chấp nhận báo cáo"),
+    REPORT_RESPONSE_REQUESTED("Yêu cầu giải trình"),
     POINTS("Cộng điểm"),
     STARS("Trừ sao"),
     AI_USAGE("Gọi AI kiểm duyệt"),

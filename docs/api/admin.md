@@ -108,7 +108,8 @@ Không trả `#<id>` trong `targetTitle`, `actorName`. Log `REPORT_DISMISSED`, `
 | `USER_BAN` | Cấm tài khoản | `USER` (`actorId = null`, hệ thống tự cấm khi hết sao) | `cancelledRequests`, `releasedCredit`, `hiddenItemIds` (cùng nghĩa với `USER_LOCK`) |
 | `REQUEST_CANCEL` | Huỷ giao dịch | `REQUEST` | - (lý do ở `reason`, có tiền tố người huỷ) |
 | `REPORT_DISMISSED` | Bác bỏ báo cáo | `REPORT` | `decision`, `reportId`, `targetType` |
-| `REPORT_UPHELD` | Chấp nhận báo cáo | `REPORT` | `decision`, `reportId`, `targetType`, `violatorId`, `starsDeducted`, `seriousViolation` |
+| `REPORT_UPHELD` | Chấp nhận báo cáo | `REPORT` | `decision`, `reportId`, `targetType`, `violatorId`, `starsDeducted`, `seriousViolation`, `closedReportIds` (báo cáo cùng bài đóng theo, D-07) |
+| `REPORT_RESPONSE_REQUESTED` | Yêu cầu giải trình | `REPORT` | `reportId`, `reportIds`, `targetType`, `responseDueAt`, `itemId` (nếu có) |
 | `POINTS` | Cộng điểm | `REQUEST` | `points` (điểm thực cộng, có thể 0), `basePoints`, `totalPoints`, `rank`, `role`, `pairTransactionNo`, `pointsToday` |
 | `STARS` | Trừ sao | `USER` | `amount`, `before`, `after` |
 | `AI_USAGE` | Gọi AI kiểm duyệt | `ITEM` | `attempt`, `outcome`, `durationMs`, `model` |

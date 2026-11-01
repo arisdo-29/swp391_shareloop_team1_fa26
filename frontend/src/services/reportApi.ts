@@ -121,6 +121,10 @@ export const reportApi = {
   async respond(reportId: number, input: RespondReportRequest): Promise<void> {
     await http.post<void>(`/api/v1/reports/${reportId}/response`, input);
   },
+  /** Admin yêu cầu bên bị báo cáo giải trình trong 48 giờ (D-07, BC-03). */
+  async requestResponse(reportId: number): Promise<void> {
+    await http.post<void>(`/api/v1/admin/reports/${reportId}/request-response`);
+  },
   async evidence(reportId: number, mediaId: number, signal?: AbortSignal) {
     const { data } = await http.get<Blob>(`/api/v1/admin/reports/${reportId}/evidence/${mediaId}`, {
       responseType: 'blob',
