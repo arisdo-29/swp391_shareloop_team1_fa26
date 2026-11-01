@@ -32,7 +32,6 @@ import {
   type EditQuote,
   type EditQuoteReason,
   type ItemResponse,
-  type OfferType,
   type OperatingStatus,
   type UpdateItemRequest,
 } from '../../services/itemApi';
@@ -74,7 +73,7 @@ type ListingFeeQuote = {
   reason: string | null;
 };
 const WALLET_INSUFFICIENT_BALANCE = 'WALLET_INSUFFICIENT_BALANCE';
-
+const ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED = 'ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED';
 
 const OPERATING_STATUS_LABELS: Record<OperatingStatus, string> = {
   NORMAL: 'Hoạt động bình thường',
@@ -151,22 +150,18 @@ export function Activities() {
     setFeeQuoteLoading(true);
     const quoteRequest =
       listingFeeAction.type === 'renew'
-        ? itemApi.getRenewQuote(itemId).then(
-            (quote): ListingFeeQuote => ({
-              fee: quote.fee,
-              newDeadline: quote.newExpireAt,
-              allowed: quote.allowed,
-              reason: quote.reason,
-            }),
-          )
-        : itemApi.getBoostQuote(itemId).then(
-            (quote): ListingFeeQuote => ({
-              fee: quote.fee,
-              newDeadline: quote.newBoostedUntil,
-              allowed: quote.allowed,
-              reason: quote.reason,
-            }),
-          );
+        ? itemApi.getRenewQuote(itemId).then((quote): ListingFeeQuote => ({
+            fee: quote.fee,
+            newDeadline: quote.newExpireAt,
+            allowed: quote.allowed,
+            reason: quote.reason,
+          }))
+        : itemApi.getBoostQuote(itemId).then((quote): ListingFeeQuote => ({
+            fee: quote.fee,
+            newDeadline: quote.newBoostedUntil,
+            allowed: quote.allowed,
+            reason: quote.reason,
+          }));
     quoteRequest
       .then((quote) => {
         if (active) setFeeQuote(quote);
@@ -212,10 +207,12 @@ export function Activities() {
     setEditQuoteError('');
     setEditQuoteNeedsTopUp(false);
     try {
-      const latestQuote = await itemApi.getEditQuote(apiEditingItem.id, input.offerType);
+      const latestQuote = await itemApi.getEditQuote(apiEditingItem.id);
       setEditQuote(latestQuote);
       if (editQuote && latestQuote.amount !== editQuote.amount) {
-        setEditQuoteError(`Mức phí vừa đổi thành ${latestQuote.amount} Credit. Vui lòng xem lại và bấm Lưu lần nữa.`);
+        setEditQuoteError(
+          `Mức phí vừa đổi thành ${latestQuote.amount} Credit. Vui lòng xem lại và bấm Lưu lần nữa.`,
+        );
         return;
       }
       const updated = await itemApi.update(apiEditingItem.id, input);
@@ -238,11 +235,14 @@ export function Activities() {
     } catch (error) {
       const apiError = error as ApiError;
       const insufficientCredit = apiError.code === WALLET_INSUFFICIENT_BALANCE;
+      const offerTypeChangeNotAllowed = apiError.code === ITEM_OFFER_TYPE_CHANGE_NOT_ALLOWED;
       setEditQuoteNeedsTopUp(insufficientCredit);
       setEditQuoteError(
         insufficientCredit
           ? 'Số dư khả dụng không đủ để chỉnh sửa bài. Vui lòng nạp thêm Credit.'
-          : (reputationBlockedMessage(apiError.code) ??
+          : offerTypeChangeNotAllowed
+            ? apiError.message || 'Không đổi hình thức Cho tặng / Trao đổi khi sửa bài.'
+            : (reputationBlockedMessage(apiError.code) ??
               (apiError.message || 'Không cập nhật được bài đăng.')),
       );
     } finally {
@@ -459,10 +459,15 @@ export function Activities() {
   const allReceivedRequests = Object.values(apiRequestsByItem).flat();
   const itemsWaitingForChoice = myItems.filter((item) => {
     const requests = apiRequestsByItem[item.id] ?? [];
-    return requests.some((request) => request.status === 'PENDING') && !requests.some((request) => canChat(request.status));
+    return (
+      requests.some((request) => request.status === 'PENDING') &&
+      !requests.some((request) => canChat(request.status))
+    );
   });
   const pendingRequestCount = itemsWaitingForChoice.reduce(
-    (total, item) => total + (apiRequestsByItem[item.id] ?? []).filter((request) => request.status === 'PENDING').length,
+    (total, item) =>
+      total +
+      (apiRequestsByItem[item.id] ?? []).filter((request) => request.status === 'PENDING').length,
     0,
   );
   const awaitingScheduleCount = new Set(
@@ -500,18 +505,28 @@ export function Activities() {
             className="flex flex-col gap-1 rounded-lg border border-primary-fixed bg-white px-4 py-4 text-left transition hover:bg-primary-faint"
           >
             <span className="text-xs font-semibold text-text-secondary">Chờ bạn chọn người</span>
-            <span className="text-2xl font-bold tabular-nums text-primary">{itemsWaitingForChoice.length} bài</span>
+            <span className="text-2xl font-bold tabular-nums text-primary">
+              {itemsWaitingForChoice.length} bài
+            </span>
             <span className="text-xs leading-5 text-text-muted">
-              {pendingRequestCount ? `${pendingRequestCount} người đang xin.` : 'Chưa có ai đang chờ bạn chọn.'}
+              {pendingRequestCount
+                ? `${pendingRequestCount} người đang xin.`
+                : 'Chưa có ai đang chờ bạn chọn.'}
             </span>
           </button>
           <Link
             to="/messages"
             className="flex flex-col gap-1 rounded-lg border border-secondary-fixed bg-white px-4 py-4 transition hover:bg-secondary-soft"
           >
-            <span className="text-xs font-semibold text-text-secondary">Giao dịch chờ chốt lịch</span>
-            <span className="text-2xl font-bold tabular-nums text-secondary-hover">{awaitingScheduleCount} giao dịch</span>
-            <span className="text-xs leading-5 text-text-muted">Mở Tin nhắn để hẹn lịch giao nhận.</span>
+            <span className="text-xs font-semibold text-text-secondary">
+              Giao dịch chờ chốt lịch
+            </span>
+            <span className="text-2xl font-bold tabular-nums text-secondary-hover">
+              {awaitingScheduleCount} giao dịch
+            </span>
+            <span className="text-xs leading-5 text-text-muted">
+              Mở Tin nhắn để hẹn lịch giao nhận.
+            </span>
           </Link>
           <button
             type="button"
@@ -519,7 +534,9 @@ export function Activities() {
             className="flex flex-col gap-1 rounded-lg border border-border bg-white px-4 py-4 text-left transition hover:bg-surface-low"
           >
             <span className="text-xs font-semibold text-text-secondary">Yêu cầu bạn đã gửi</span>
-            <span className="text-2xl font-bold tabular-nums">{apiSentRequests.length} yêu cầu</span>
+            <span className="text-2xl font-bold tabular-nums">
+              {apiSentRequests.length} yêu cầu
+            </span>
             <span className="text-xs leading-5 text-text-muted">
               {sentSelectedCount} đã được chọn, {sentPendingCount} đang chờ chủ bài.
             </span>
@@ -527,11 +544,17 @@ export function Activities() {
         </section>
       ) : null}
 
-      <div role="tablist" aria-label="Danh sách" className="mb-5 inline-flex w-full gap-1 rounded-lg bg-surface-low p-1 sm:w-auto">
-        {([
-          ['items', `Bài của tôi (${myItems.length})`],
-          ['sent', `Yêu cầu tôi đã gửi (${apiSentRequests.length})`],
-        ] as const).map(([value, label]) => (
+      <div
+        role="tablist"
+        aria-label="Danh sách"
+        className="mb-5 inline-flex w-full gap-1 rounded-lg bg-surface-low p-1 sm:w-auto"
+      >
+        {(
+          [
+            ['items', `Bài của tôi (${myItems.length})`],
+            ['sent', `Yêu cầu tôi đã gửi (${apiSentRequests.length})`],
+          ] as const
+        ).map(([value, label]) => (
           <button
             key={value}
             type="button"
@@ -566,19 +589,35 @@ export function Activities() {
               // Bài đang tạm ẩn (U04) không gia hạn hay đẩy được cho tới khi Admin xem xét xong.
               const canUseListingFee = apiItem && item.status === 'APPROVED' && !item.hidden;
               const canBoost =
-                canUseListingFee && item.categoryId !== undefined && boostableCategoryIds.includes(item.categoryId);
+                canUseListingFee &&
+                item.categoryId !== undefined &&
+                boostableCategoryIds.includes(item.categoryId);
               const canRemove = !['RESERVED', 'TRADED', 'EXPIRED', 'removed'].includes(item.status);
               const itemRequests = apiRequestsByItem[item.id] ?? [];
-              const pendingRequests = itemRequests.filter((request) => request.status === 'PENDING');
+              const pendingRequests = itemRequests.filter(
+                (request) => request.status === 'PENDING',
+              );
               const chosenRequest = itemRequests.find((request) => canChat(request.status));
-              const hasAcceptedRequest = itemRequests.some((request) => request.status === 'RESERVED');
+              const hasAcceptedRequest = itemRequests.some(
+                (request) => request.status === 'RESERVED',
+              );
               const summary = itemSummary(item, pendingRequests.length, chosenRequest);
               const open = requestsItemId === item.id;
               return (
-                <article key={item.id} className="overflow-hidden rounded-lg bg-white ring-1 ring-border/80">
+                <article
+                  key={item.id}
+                  className="overflow-hidden rounded-lg bg-white ring-1 ring-border/80"
+                >
                   <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 p-4 sm:grid-cols-[140px_minmax(0,1fr)] sm:gap-5">
-                    <Link to={`/items/${item.id}`} className="block self-start overflow-hidden rounded-md bg-surface-container">
-                      <ItemImage src={item.images[0]} alt={item.title} className="aspect-[4/3] w-full object-cover" />
+                    <Link
+                      to={`/items/${item.id}`}
+                      className="block self-start overflow-hidden rounded-md bg-surface-container"
+                    >
+                      <ItemImage
+                        src={item.images[0]}
+                        alt={item.title}
+                        className="aspect-[4/3] w-full object-cover"
+                      />
                     </Link>
                     <div className="min-w-0 space-y-2.5">
                       <div className="flex flex-wrap items-center gap-2">
@@ -592,19 +631,26 @@ export function Activities() {
                         )}
                         <span className="text-xs text-text-muted">
                           {item.district}
-                          {item.expiresAt ? ` · hết hạn ${new Date(item.expiresAt).toLocaleDateString('vi-VN')}` : ''}
+                          {item.expiresAt
+                            ? ` · hết hạn ${new Date(item.expiresAt).toLocaleDateString('vi-VN')}`
+                            : ''}
                         </span>
                       </div>
-                      <Link to={`/items/${item.id}`} className="block truncate text-base font-bold transition hover:text-link">
+                      <Link
+                        to={`/items/${item.id}`}
+                        className="block truncate text-base font-bold transition hover:text-link"
+                      >
                         {item.title}
                       </Link>
                       {item.hidden ? (
                         <p className="text-sm leading-6 text-warning">
-                          {item.hiddenReason?.trim() || 'Bài đang tạm ẩn khỏi Tìm đồ. Admin sẽ xem xét và báo kết quả.'}
+                          {item.hiddenReason?.trim() ||
+                            'Bài đang tạm ẩn khỏi Tìm đồ. Admin sẽ xem xét và báo kết quả.'}
                         </p>
                       ) : null}
                       <p className="text-sm leading-6">
-                        <strong>{summary.headline}</strong> <span className="text-text-secondary">{summary.detail}</span>
+                        <strong>{summary.headline}</strong>{' '}
+                        <span className="text-text-secondary">{summary.detail}</span>
                       </p>
                       {item.boostedUntil && new Date(item.boostedUntil).getTime() > Date.now() ? (
                         <p className="text-xs font-semibold text-primary">
@@ -615,7 +661,9 @@ export function Activities() {
                         {itemRequests.length ? (
                           <Button
                             size="sm"
-                            variant={pendingRequests.length && !chosenRequest ? 'primary' : 'outline'}
+                            variant={
+                              pendingRequests.length && !chosenRequest ? 'primary' : 'outline'
+                            }
                             aria-expanded={open}
                             onClick={() => setRequestsItemId(open ? '' : item.id)}
                           >
@@ -627,7 +675,12 @@ export function Activities() {
                             <Button size="sm">Mở cuộc trò chuyện</Button>
                           </Link>
                         ) : null}
-                        <Button size="sm" variant="outline" disabled={!canEdit} onClick={() => void openEditor(item)}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!canEdit}
+                          onClick={() => void openEditor(item)}
+                        >
                           Sửa bài
                         </Button>
                         <Button
@@ -663,7 +716,11 @@ export function Activities() {
                           Gỡ bài
                         </Button>
                       </div>
-                      {lockNote(item, canBoost) ? <p className="text-xs leading-5 text-text-muted">{lockNote(item, canBoost)}</p> : null}
+                      {lockNote(item, canBoost) ? (
+                        <p className="text-xs leading-5 text-text-muted">
+                          {lockNote(item, canBoost)}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                   {open ? (
@@ -734,7 +791,6 @@ export function Activities() {
                 disabled={editSaving || editQuoteLoading}
                 onCancel={() => setEditingId('')}
                 onSave={saveApiItem}
-                onQuoteChange={setEditQuote}
               />
             ) : editQuoteLoading ? null : (
               <div className="mt-6 flex justify-end">
@@ -762,9 +818,7 @@ export function Activities() {
           ) : feeQuote ? (
             <div className="mt-2 text-sm leading-6 text-text-muted">
               <p>
-                {feeQuote.fee > 0
-                  ? `Phí: ${feeQuote.fee} Credit. Phí không hoàn lại.`
-                  : 'Miễn phí'}
+                {feeQuote.fee > 0 ? `Phí: ${feeQuote.fee} Credit. Phí không hoàn lại.` : 'Miễn phí'}
               </p>
               <p className="mt-1 text-text-primary">
                 <strong>
@@ -821,9 +875,7 @@ export function Activities() {
               }
               onClick={() => void confirmListingFeeAction()}
             >
-              {renewingItemId || boostingItemId
-                ? 'Đang xử lý...'
-                : 'Xác nhận'}
+              {renewingItemId || boostingItemId ? 'Đang xử lý...' : 'Xác nhận'}
             </Button>
           </div>
         </DialogFrame>
@@ -911,7 +963,6 @@ function EditItemForm({
   disabled,
   onCancel,
   onSave,
-  onQuoteChange,
 }: {
   item: ItemResponse;
   categories: CategoryResponse[];
@@ -919,12 +970,7 @@ function EditItemForm({
   disabled: boolean;
   onCancel: () => void;
   onSave: (input: UpdateItemRequest) => Promise<void>;
-  onQuoteChange: (quote: EditQuote) => void;
 }) {
-  const [offerType, setOfferType] = useState<OfferType>(item.offerType);
-  const [pendingOfferType, setPendingOfferType] = useState<OfferType | null>(null);
-  const [pendingOfferQuote, setPendingOfferQuote] = useState<EditQuote | null>(null);
-  const [switchQuoteLoading, setSwitchQuoteLoading] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description);
   const [desiredItem, setDesiredItem] = useState(item.desiredItem ?? '');
@@ -960,31 +1006,7 @@ function EditItemForm({
   );
   const operatingStatusRequired = operatingStatusAttribute?.required ?? false;
   const operatingStatusOptions = operatingStatusAttribute?.options.filter(isOperatingStatus) ?? [];
-  const formDisabled = disabled || uploading || switchQuoteLoading;
-
-  const chooseOfferType = async (target: OfferType) => {
-    if (target === offerType) return;
-    if (target === item.offerType) {
-      setOfferType(target);
-      try {
-        onQuoteChange(await itemApi.getEditQuote(item.id, target));
-      } catch {
-        setUploadError('Không tải được phí sửa bài. Vui lòng thử lại.');
-      }
-      return;
-    }
-    setSwitchQuoteLoading(true);
-    setUploadError('');
-    try {
-      const quote = await itemApi.getEditQuote(item.id, target);
-      setPendingOfferQuote(quote);
-      setPendingOfferType(target);
-    } catch {
-      setUploadError('Không tải được phí đổi hình thức. Vui lòng thử lại.');
-    } finally {
-      setSwitchQuoteLoading(false);
-    }
-  };
+  const formDisabled = disabled || uploading;
 
   useEffect(() => {
     let active = true;
@@ -1013,7 +1035,7 @@ function EditItemForm({
     if (!title.trim()) nextErrors.title = 'Vui lòng nhập tiêu đề.';
     else if (title.trim().length > 150) nextErrors.title = 'Tiêu đề tối đa 150 ký tự.';
     if (!description.trim()) nextErrors.description = 'Vui lòng nhập mô tả.';
-    if (offerType === 'SWAP' && !desiredItem.trim()) {
+    if (item.offerType === 'SWAP' && !desiredItem.trim()) {
       nextErrors.desiredItem = 'Vui lòng nhập món đồ mong muốn.';
     }
     if (brand.trim().length > 80) nextErrors.brand = 'Thương hiệu tối đa 80 ký tự.';
@@ -1097,10 +1119,10 @@ function EditItemForm({
       await onSave({
         categoryId,
         areaId,
-        offerType,
+        offerType: item.offerType,
         title: title.trim(),
         description: description.trim(),
-        desiredItem: offerType === 'SWAP' ? desiredItem.trim() : null,
+        desiredItem: item.offerType === 'SWAP' ? desiredItem.trim() : null,
         condition,
         defectNote: condition === 'DEFECTIVE' ? defectNote.trim() : null,
         brand: brand.trim() || null,
@@ -1131,41 +1153,15 @@ function EditItemForm({
       <div>
         <Select
           label="Hình thức"
-          value={offerType}
-          disabled={formDisabled}
-          onChange={(event) => { void chooseOfferType(event.target.value as OfferType); }}
+          value={item.offerType}
+          disabled
+          hint="Hình thức được giữ nguyên khi sửa bài. Muốn đổi, bạn cần đóng bài hiện tại và đăng bài mới."
         >
           <option value="GIVE">Cho tặng</option>
-          <option value="SWAP">
-            Trao đổi
-          </option>
+          <option value="SWAP">Trao đổi</option>
         </Select>
       </div>
-      {pendingOfferType && pendingOfferQuote ? (
-        <DialogFrame>
-          <h2 className="text-xl font-bold">Xác nhận đổi hình thức bài</h2>
-          <p className="mt-3 text-sm leading-6 text-text-secondary">
-            {pendingOfferType === 'GIVE'
-              ? 'Chuyển sang Cho tặng. Phí Trao đổi đã thu trước đó sẽ không được hoàn lại. Khoản phí đang giữ (nếu có) sẽ được nhả khi gửi bản sửa.'
-              : pendingOfferQuote.amount > 0
-                ? `Chuyển sang Trao đổi sẽ giữ ${pendingOfferQuote.amount} Credit khi gửi duyệt. Phí chỉ trừ khi bản sửa được duyệt; bị từ chối sẽ nhả lại.`
-                : 'Chuyển lại sang Trao đổi miễn phí vì bài này đã trả phí đăng Trao đổi trước đó.'}
-          </p>
-          <p className="mt-2 text-sm leading-6 text-text-secondary">
-            Khi lưu, bài sẽ chờ duyệt lại và mọi yêu cầu đang chờ của bài sẽ bị huỷ. Người gửi yêu cầu sẽ nhận được thông báo.
-          </p>
-          <div className="mt-6 flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => { setPendingOfferType(null); setPendingOfferQuote(null); }}>Hủy</Button>
-            <Button type="button" onClick={() => {
-              setOfferType(pendingOfferType);
-              onQuoteChange(pendingOfferQuote);
-              setPendingOfferType(null);
-              setPendingOfferQuote(null);
-            }}>Xác nhận chuyển</Button>
-          </div>
-        </DialogFrame>
-      ) : null}
-      {offerType === 'SWAP' ? (
+      {item.offerType === 'SWAP' ? (
         <Field
           label="Món muốn đổi"
           value={desiredItem}
@@ -1480,24 +1476,30 @@ function itemSummary(item: Item, pendingCount: number, chosenRequest?: ItemReque
   if (chosenRequest) {
     return {
       headline: `Đã chọn ${requesterDisplayName(chosenRequest)}.`,
-      detail: chosenRequest.status === 'COMPLETED' ? 'Giao dịch đã hoàn tất.' : 'Hẹn lịch và bàn giao trong Tin nhắn.',
+      detail:
+        chosenRequest.status === 'COMPLETED'
+          ? 'Giao dịch đã hoàn tất.'
+          : 'Hẹn lịch và bàn giao trong Tin nhắn.',
     };
   }
-  if (status === 'PENDING_REVIEW') return { headline: 'Admin đang duyệt bài.', detail: 'Bài chưa hiện với người khác.' };
+  if (status === 'PENDING_REVIEW')
+    return { headline: 'Admin đang duyệt bài.', detail: 'Bài chưa hiện với người khác.' };
   if (status === 'REJECTED' || status === 'VIOLATION') {
     return {
       headline: 'Bài chưa được duyệt.',
       detail: item.rejectionReason || item.moderationReason || 'Sửa bài rồi gửi duyệt lại.',
     };
   }
-  if (status === 'EXPIRED') return { headline: 'Bài đã hết hạn hiển thị.', detail: 'Bài không còn hiện với người khác.' };
+  if (status === 'EXPIRED')
+    return { headline: 'Bài đã hết hạn hiển thị.', detail: 'Bài không còn hiện với người khác.' };
   if (pendingCount) {
     return {
       headline: `${pendingCount} người muốn ${item.type === 'trade' ? 'đổi' : 'nhận'}.`,
       detail: 'Chọn 1 người để mở chat và hẹn lịch.',
     };
   }
-  if (status === 'APPROVED') return { headline: 'Chưa có ai gửi yêu cầu.', detail: 'Đẩy bài để nhiều người thấy hơn.' };
+  if (status === 'APPROVED')
+    return { headline: 'Chưa có ai gửi yêu cầu.', detail: 'Đẩy bài để nhiều người thấy hơn.' };
   return { headline: '', detail: '' };
 }
 
@@ -1513,7 +1515,8 @@ function lockNote(item: Item, canBoost: boolean) {
 
 function sentRequestDetail(request: ItemRequest) {
   const owner = request.donorName?.trim() || 'Chủ bài';
-  if (request.status === 'PENDING') return `Gửi ${new Date(request.createdAt).toLocaleDateString('vi-VN')}. Bạn hủy được tới khi chủ bài chọn.`;
+  if (request.status === 'PENDING')
+    return `Gửi ${new Date(request.createdAt).toLocaleDateString('vi-VN')}. Bạn hủy được tới khi chủ bài chọn.`;
   if (request.status === 'REJECTED') return `${owner} đã chọn người khác.`;
   if (request.status === 'CANCELLED') return 'Yêu cầu đã hủy.';
   if (request.status === 'COMPLETED') return 'Giao dịch đã hoàn tất.';
@@ -1555,29 +1558,49 @@ function SentRequestList({
   return (
     <div className="space-y-3">
       {itemRequests.map((request) => {
-        const title = request.itemTitle ?? items.find((entry) => entry.id === request.itemId)?.title ?? 'Món đồ';
+        const title =
+          request.itemTitle ??
+          items.find((entry) => entry.id === request.itemId)?.title ??
+          'Món đồ';
         const offeredTitle =
-          request.offeredItemTitle ?? items.find((entry) => entry.id === request.offeredItemId)?.title;
+          request.offeredItemTitle ??
+          items.find((entry) => entry.id === request.offeredItemId)?.title;
         return (
           <article
             key={request.id}
             className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-4 rounded-lg bg-white p-3 ring-1 ring-border/80 sm:grid-cols-[96px_minmax(0,1fr)_auto] sm:px-4"
           >
-            <Link to={`/items/${request.itemId}`} className="block overflow-hidden rounded-md bg-surface-container">
-              <ItemImage src={request.itemImage} alt={title} className="aspect-[4/3] w-full object-cover" />
+            <Link
+              to={`/items/${request.itemId}`}
+              className="block overflow-hidden rounded-md bg-surface-container"
+            >
+              <ItemImage
+                src={request.itemImage}
+                alt={title}
+                className="aspect-[4/3] w-full object-cover"
+              />
             </Link>
             <div className="min-w-0 space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">
                 <TypeBadge type={request.type} />
-                <span className={`rounded-sm px-2 py-1 text-2xs font-bold ${requestChipClass(request.status)}`}>
+                <span
+                  className={`rounded-sm px-2 py-1 text-2xs font-bold ${requestChipClass(request.status)}`}
+                >
                   {requestStatusLabel[request.status]}
                 </span>
               </div>
-              <Link to={`/items/${request.itemId}`} className="block truncate text-sm font-bold transition hover:text-link sm:text-base">
+              <Link
+                to={`/items/${request.itemId}`}
+                className="block truncate text-sm font-bold transition hover:text-link sm:text-base"
+              >
                 {title}
               </Link>
-              <p className="text-xs leading-5 text-text-secondary sm:text-sm">{sentRequestDetail(request)}</p>
-              {offeredTitle ? <p className="text-xs text-text-muted">Món mang đổi: {offeredTitle}</p> : null}
+              <p className="text-xs leading-5 text-text-secondary sm:text-sm">
+                {sentRequestDetail(request)}
+              </p>
+              {offeredTitle ? (
+                <p className="text-xs text-text-muted">Món mang đổi: {offeredTitle}</p>
+              ) : null}
             </div>
             <div className="col-span-2 flex flex-wrap gap-2 sm:col-span-1 sm:justify-end">
               {canChat(request.status) ? (
@@ -1616,13 +1639,18 @@ function RequestPanel({
   allowAccept: boolean;
   onAccept: (requestId: string) => void;
 }) {
-  const canChoose = allowAccept && !hasAcceptedRequest && !['IN_TRANSACTION', 'RESERVED'].includes(itemStatus);
+  const canChoose =
+    allowAccept && !hasAcceptedRequest && !['IN_TRANSACTION', 'RESERVED'].includes(itemStatus);
   return (
     <div className="border-t border-border bg-primary-faint px-4 pb-5 pt-4">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-bold">{canChoose ? 'Chọn 1 người nhận' : 'Yêu cầu cho bài này'}</h3>
+        <h3 className="text-sm font-bold">
+          {canChoose ? 'Chọn 1 người nhận' : 'Yêu cầu cho bài này'}
+        </h3>
         {canChoose ? (
-          <p className="text-xs text-text-secondary">Khi bạn chọn, các yêu cầu còn lại tự đóng và chat với người được chọn mở ra.</p>
+          <p className="text-xs text-text-secondary">
+            Khi bạn chọn, các yêu cầu còn lại tự đóng và chat với người được chọn mở ra.
+          </p>
         ) : null}
       </div>
       <div className="space-y-2">
@@ -1643,14 +1671,21 @@ function RequestPanel({
                     asDescribedRate={request.requesterAsDescribedRate}
                     compact
                   />
-                  <span className="text-xs text-text-muted">· {new Date(request.createdAt).toLocaleDateString('vi-VN')}</span>
+                  <span className="text-xs text-text-muted">
+                    · {new Date(request.createdAt).toLocaleDateString('vi-VN')}
+                  </span>
                 </div>
-                {request.message ? <p className="truncate text-xs text-text-secondary">{request.message}</p> : null}
+                {request.message ? (
+                  <p className="truncate text-xs text-text-secondary">{request.message}</p>
+                ) : null}
                 {request.type === 'trade' && request.offeredItemTitle ? (
                   <p className="text-xs text-text-secondary">
                     Mang đổi:{' '}
                     {request.offeredItemId ? (
-                      <Link to={`/items/${request.offeredItemId}`} className="font-semibold text-link hover:underline">
+                      <Link
+                        to={`/items/${request.offeredItemId}`}
+                        className="font-semibold text-link hover:underline"
+                      >
                         {request.offeredItemTitle}
                       </Link>
                     ) : (
@@ -1659,7 +1694,9 @@ function RequestPanel({
                   </p>
                 ) : null}
                 {request.status !== 'PENDING' ? (
-                  <span className={`inline-flex rounded-sm px-2 py-0.5 text-2xs font-bold ${requestChipClass(request.status)}`}>
+                  <span
+                    className={`inline-flex rounded-sm px-2 py-0.5 text-2xs font-bold ${requestChipClass(request.status)}`}
+                  >
                     {requestStatusLabel[request.status]}
                   </span>
                 ) : null}
@@ -1667,7 +1704,9 @@ function RequestPanel({
               <div className="col-span-2 flex justify-end sm:col-span-1">
                 {canChat(request.status) ? (
                   <Link to={`/requests/${request.id.replace(/^api_req_/, '')}`}>
-                    <Button size="sm" variant="outline">Nhắn tin</Button>
+                    <Button size="sm" variant="outline">
+                      Nhắn tin
+                    </Button>
                   </Link>
                 ) : canChoose && request.status === 'PENDING' ? (
                   <Button size="sm" onClick={() => onAccept(request.id)}>
