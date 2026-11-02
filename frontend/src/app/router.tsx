@@ -25,6 +25,8 @@ const Post = lazy(() => import('../pages/user/Post').then((module) => ({ default
 const Activities = lazy(() => import('../pages/user/Activities').then((module) => ({ default: module.Activities })));
 const Messages = lazy(() => import('../pages/user/Messages').then((module) => ({ default: module.Messages })));
 const Profile = lazy(() => import('../pages/user/Profile').then((module) => ({ default: module.Profile })));
+const TransactionProgress = lazy(() => import('../pages/user/TransactionProgress').then((module) => ({ default: module.TransactionProgress })));
+const UserProfile = lazy(() => import('../pages/user/UserProfile').then((module) => ({ default: module.UserProfile })));
 const Credit = lazy(() => import('../pages/user/Credit').then((module) => ({ default: module.Credit })));
 const DemoPaymentCheckout = lazy(() => import('../pages/user/DemoPaymentCheckout').then((module) => ({ default: module.DemoPaymentCheckout })));
 const ReportResponse = lazy(() => import('../pages/user/ReportResponse').then((module) => ({ default: module.ReportResponse })));
@@ -81,6 +83,9 @@ export const router = createBrowserRouter([
           { path: '/activities', element: <Activities /> },
           { path: '/messages', element: <Messages /> },
           { path: '/requests/:requestId', element: <Messages /> },
+          // Giữ chỗ: hai trang này dựng đầy đủ ở đợt sau (Tiến trình giao dịch, Hồ sơ công khai).
+          { path: '/requests/:requestId/progress', element: <TransactionProgress /> },
+          { path: '/users/:userId', element: <UserProfile /> },
           { path: '/me/disputes/:disputeId', element: <Messages /> },
           { path: '/me/reports/:reportId', element: <ReportResponse /> },
           { path: '/credit', element: <Credit /> },

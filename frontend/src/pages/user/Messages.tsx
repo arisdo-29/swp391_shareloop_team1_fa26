@@ -10,9 +10,7 @@ import {
   Field,
   Icon,
   ItemImage,
-  SearchField,
   Select,
-  SkeletonRows,
   StatusBadge,
   TextArea,
   TypeBadge,
@@ -45,9 +43,7 @@ import {
   canOpenComplaint,
   canSelectPendingRequest,
   formatDeadline,
-  isRequestUnread,
   markRequestChatSeen,
-  requestStatusLabel,
 } from '../../utils/request';
 import { chatImageForbiddenMessage } from '../../utils/apiErrorMessages';
 import { mediaApi } from '../../services/mediaApi';
@@ -66,11 +62,26 @@ import {
 import {
   CHAT_POLL_INTERVAL_MS,
   mergeChatMessages,
-  messageOfferStatusLabel,
   requestConversationPath,
+  transactionProgressPath,
   shouldRefreshConversationDetail,
 } from '../../utils/chatMessages';
 import { ReputationBadge } from '../../components/ReputationBadge';
+import { completedStepCount, transactionSteps } from '../../utils/transactionSteps';
+import { ConversationList } from '../../components/messages/ConversationList';
+import { ChatHeader } from '../../components/messages/ChatHeader';
+import { ChatMessage } from '../../components/messages/ChatMessage';
+import {
+  avatarInitials,
+  conversationTitle,
+  donorIdOf,
+  requestFallbackTitle,
+  requestParticipantName,
+  type ApiConversation,
+} from '../../components/messages/conversation';
+
+// Giữ đường import cũ cho các test và nơi đang import kiểu này từ trang Tin nhắn.
+export type { ApiConversation };
 
 const apiConditionLabel: Record<ItemResponse['condition'], string> = {
   NEW: 'Mới',
@@ -140,42 +151,6 @@ export function Messages() {
   return <ApiMessages currentUserId={backendUserId} />;
 }
 
-export interface ApiConversation {
-  request: RequestResponse;
-  item?: ItemResponse;
-  offeredItem?: ItemResponse;
-}
-
-function requestStatusTextClass(status: RequestResponse['status']) {
-  if (status === 'REJECTED' || status === 'CANCELLED' || status === 'DISPUTED') return 'text-error';
-  if (status === 'COMPLETED') return 'text-success';
-  if (status === 'PENDING') return 'text-text-muted';
-  return 'text-secondary-hover';
-}
-
-// Chủ bài lấy từ yêu cầu trước, vì bài đã giữ chỗ hoặc đã trao đổi không còn tải được qua API công khai.
-function donorIdOf(conversation: ApiConversation) {
-  return conversation.request.donorId ?? conversation.item?.donorId;
-}
-
-function requestParticipantName(conversation: ApiConversation, currentUserId: number) {
-  if (donorIdOf(conversation) === currentUserId) {
-    return conversation.request.receiverName?.trim() || 'Người gửi yêu cầu';
-  }
-  return conversation.request.donorName?.trim() || 'Chủ bài đăng';
-}
-
-function avatarInitials(name: string) {
-  if (name === 'Chủ bài đăng') return '';
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(-2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase();
-}
-
 function canSelectRequest(
   conversation: ApiConversation,
   conversations: ApiConversation[],
@@ -204,18 +179,6 @@ function mergeConversationRequests(
   });
 }
 
-// Khi chưa có tiêu đề món đồ thì gọi theo loại yêu cầu, không in id kỹ thuật ra màn hình.
-function requestFallbackTitle(request: RequestResponse) {
-  return request.type === 'SWAP' ? 'Yêu cầu trao đổi' : 'Yêu cầu nhận đồ';
-}
-
-function conversationTitle(conversation: ApiConversation) {
-  return (
-    conversation.item?.title ??
-    (conversation.request.itemTitle?.trim() || requestFallbackTitle(conversation.request))
-  );
-}
-
 function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const navigate = useNavigate();
   const { requestId, disputeId } = useParams();
@@ -237,7 +200,6 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [selectSubmitting, setSelectSubmitting] = useState(false);
   const [selectError, setSelectError] = useState('');
   const [mobileChat, setMobileChat] = useState(false);
-  const [conversationQuery, setConversationQuery] = useState('');
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [deliveryMethod, setDeliveryMethod] = useState<'IN_PERSON' | 'SHIPPING'>('IN_PERSON');
   const [meetingPlace, setMeetingPlace] = useState('');
@@ -384,6 +346,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       )
     : false;
   const selectedItemId = selected?.request.itemId;
+  // Món chính đã hiện ở thẻ dưới đầu khung chat, nên dải thẻ ghim chỉ còn các món khác (món đề nghị, bài được gửi kèm).
+  const extraPinnedItems = pinnedItems.filter((pinnedItem) => pinnedItem.id !== selectedItemId);
   const selectedItemDonorId = selected ? donorIdOf(selected) : undefined;
 
   useEffect(() => {
@@ -1088,21 +1052,6 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     !currentPartyConfirmedAt &&
     !logisticsSubmitting,
   );
-  const normalizedConversationQuery = conversationQuery.trim().toLocaleLowerCase('vi-VN');
-  const filteredConversations = normalizedConversationQuery
-    ? conversations.filter((conversation) => {
-        const searchable = [
-          conversationTitle(conversation),
-          requestParticipantName(conversation, currentUserId),
-          requestStatusLabel[conversation.request.status],
-          conversation.request.type,
-        ]
-          .join(' ')
-          .toLocaleLowerCase('vi-VN');
-        return searchable.includes(normalizedConversationQuery);
-      })
-    : conversations;
-
   const otherPartyConfirmedAt = selected
     ? selectedAsDonor
       ? selected.request.receiverScheduleOkAt
@@ -1136,134 +1085,25 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   };
 
   return (
-    <div className="page-shell py-5 sm:py-7">
-      <div className="grid gap-4 lg:h-[calc(100dvh-140px)] lg:min-h-[640px] lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_360px]">
-        <aside
-          aria-label="Cuộc trò chuyện"
-          className={`${mobileChat ? 'hidden lg:flex' : 'flex'} min-h-0 flex-col overflow-hidden rounded-lg bg-white ring-1 ring-border/80`}
-        >
-          <div className="px-4 pb-3 pt-4">
-            <div className="flex items-baseline justify-between gap-3">
-              <h1 className="text-xl font-bold">Tin nhắn</h1>
-              <span className="text-xs text-text-muted">{conversations.length} cuộc</span>
-            </div>
-            <div className="mt-3">
-              <SearchField
-                aria-label="Tìm kiếm cuộc trò chuyện"
-                placeholder="Tìm món hoặc người"
-                value={conversationQuery}
-                onChange={(event) => setConversationQuery(event.target.value)}
-              />
-            </div>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-            {loadingConversations ? (
-              <SkeletonRows rows={5} label="Đang tải cuộc trò chuyện" />
-            ) : conversationError ? (
-              <div className="space-y-3 p-3 text-sm text-error">
-                <p>{conversationError}</p>
-                <Button
-                  variant="outline"
-                  onClick={() => setConversationReloadKey((key) => key + 1)}
-                >
-                  Thử tải lại
-                </Button>
-              </div>
-            ) : filteredConversations.length ? (
-              filteredConversations.map((conversation) => {
-                const { request } = conversation;
-                const participantName = requestParticipantName(conversation, currentUserId);
-                const active = request.id === selectedRequestId;
-                const unread = !active && isRequestUnread(request.lastMessageAt, request.id);
-                return (
-                  <div
-                    key={request.id}
-                    className={`rounded-md ${active ? 'bg-primary-faint' : 'hover:bg-surface-low'}`}
-                  >
-                    <button
-                      type="button"
-                      aria-current={active ? 'true' : undefined}
-                      onClick={() => openConversation(request.id)}
-                      className="grid w-full grid-cols-[40px_minmax(0,1fr)] gap-3 p-2.5 text-left"
-                    >
-                      <div className="relative">
-                        <Avatar
-                          user={{
-                            name: participantName,
-                            avatarInitials: avatarInitials(participantName),
-                            avatarUrl: undefined,
-                          }}
-                        />
-                        {unread ? (
-                          <span
-                            className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-error ring-2 ring-white"
-                            title="Tin nhắn mới"
-                          />
-                        ) : null}
-                      </div>
-                      <span className="min-w-0">
-                        <span className="flex items-baseline justify-between gap-2">
-                          <strong
-                            className={`truncate text-sm ${unread ? 'font-bold text-text-primary' : ''}`}
-                          >
-                            {participantName}
-                          </strong>
-                          <span className="shrink-0 text-2xs text-text-muted">
-                            {request.lastMessageAt
-                              ? new Date(request.lastMessageAt).toLocaleDateString('vi-VN')
-                              : new Date(request.createdAt).toLocaleDateString('vi-VN')}
-                          </span>
-                        </span>
-                        <span
-                          className={`mt-0.5 block truncate text-xs ${unread ? 'font-semibold text-text-primary' : 'text-text-secondary'}`}
-                        >
-                          {conversationTitle(conversation)}
-                        </span>
-                        <span className="mt-0.5 flex items-center justify-between gap-1">
-                          <span
-                            className={`text-xs font-semibold ${requestStatusTextClass(request.status)}`}
-                          >
-                            {requestStatusLabel[request.status]}
-                          </span>
-                          {unread ? (
-                            <span className="rounded-full bg-error/10 px-1.5 py-0.2 text-2xs font-bold text-error">
-                              Mới
-                            </span>
-                          ) : null}
-                        </span>
-                      </span>
-                    </button>
-                    {canSelectRequest(conversation, conversations, currentUserId) ? (
-                      <div className="px-2.5 pb-2.5 pl-[62px]">
-                        <Button
-                          size="sm"
-                          disabled={selectSubmitting}
-                          onClick={() => {
-                            setSelectError('');
-                            setSelectCandidateId(request.id);
-                          }}
-                        >
-                          Chọn người này
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })
-            ) : (
-              <div className="p-2">
-                <EmptyState
-                  title={conversationQuery ? 'Không tìm thấy cuộc trò chuyện' : 'Chưa có yêu cầu'}
-                  text={
-                    conversationQuery
-                      ? 'Thử tìm bằng tên món đồ, người liên quan hoặc trạng thái khác.'
-                      : 'Các yêu cầu nhận hoặc trao đổi món đồ sẽ xuất hiện tại đây.'
-                  }
-                />
-              </div>
-            )}
-          </div>
-        </aside>
+    <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
+      {/* Cột thứ ba (bảng tiến trình cũ) giữ ở xl cho tới khi trang Tiến trình giao dịch thay thế. */}
+      <div className="grid gap-4 lg:h-[calc(100vh-9rem)] lg:min-h-[640px] lg:grid-cols-[minmax(300px,440px)_minmax(0,1fr)] xl:grid-cols-[minmax(300px,360px)_minmax(0,1fr)_360px]">
+        <ConversationList
+          className={mobileChat ? 'hidden lg:flex' : 'flex'}
+          conversations={conversations}
+          currentUserId={currentUserId}
+          selectedRequestId={selectedRequestId}
+          loading={loadingConversations}
+          error={conversationError}
+          onRetry={() => setConversationReloadKey((key) => key + 1)}
+          onOpen={openConversation}
+          canSelect={(conversation) => canSelectRequest(conversation, conversations, currentUserId)}
+          selectSubmitting={selectSubmitting}
+          onSelectCandidate={(id) => {
+            setSelectError('');
+            setSelectCandidateId(id);
+          }}
+        />
 
         {selected ? (
           <>
@@ -1271,82 +1111,14 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
               aria-label={`Cuộc trò chuyện với ${selectedParticipantName}`}
               className={`${mobileChat ? 'flex' : 'hidden lg:flex'} min-h-[640px] min-w-0 flex-col overflow-hidden rounded-lg bg-white ring-1 ring-border/80 lg:min-h-0`}
             >
-              <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border px-4 py-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="lg:hidden"
-                  onClick={() => setMobileChat(false)}
-                >
-                  Quay lại
-                </Button>
-                <span className="hidden sm:inline-flex">
-                  <Avatar
-                    size="sm"
-                    user={{
-                      name: selectedParticipantName,
-                      avatarInitials: avatarInitials(selectedParticipantName),
-                      avatarUrl: undefined,
-                    }}
-                  />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <strong className="block truncate text-sm">{selectedParticipantName}</strong>
-                  {selectedAsDonor ? (
-                    <div className="mt-0.5">
-                      <ReputationBadge
-                        trustStars={
-                          selected.request.receiverTrustStars ?? selected.request.trustStars
-                        }
-                        rank={selected.request.receiverRank ?? selected.request.rank}
-                        asDescribedRate={
-                          selected.request.receiverAsDescribedRate ??
-                          selected.request.asDescribedRate
-                        }
-                        compact
-                      />
-                    </div>
-                  ) : null}
-                </div>
-                {reportTargetUserId && reportTargetUserId !== currentUserId ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="hidden sm:inline-flex"
-                    onClick={() => setReportOpen(true)}
-                  >
-                    Báo cáo
-                  </Button>
-                ) : null}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="xl:hidden"
-                  onClick={() => setMobileDetailsOpen(true)}
-                >
-                  Tiến trình
-                </Button>
-              </header>
-
-              <button
-                type="button"
-                onClick={() => navigate(`/items/${selected.request.itemId}`)}
-                className="mx-4 mt-3 flex shrink-0 items-center gap-3 rounded-md bg-surface-low p-2.5 text-left transition hover:bg-primary-faint"
-              >
-                <ItemImage
-                  src={selected.item?.images[0] ?? selected.request.itemImage ?? undefined}
-                  alt={conversationTitle(selected)}
-                  className="h-11 w-14 shrink-0 rounded-md object-cover"
-                />
-                <span className="min-w-0 flex-1">
-                  <strong className="block truncate text-sm">{conversationTitle(selected)}</strong>
-                  <span className="mt-0.5 block text-xs text-text-secondary">
-                    {selectedAsDonor ? 'Bài của bạn' : 'Bạn đang xin món này'} ·{' '}
-                    {requestStatusLabel[selected.request.status]}
-                  </span>
-                </span>
-                <TypeBadge type={selected.request.type === 'SWAP' ? 'trade' : 'gift'} />
-              </button>
+              <ChatHeader
+                conversation={selected}
+                currentUserId={currentUserId}
+                canReport={Boolean(reportTargetUserId && reportTargetUserId !== currentUserId)}
+                onBack={() => setMobileChat(false)}
+                onReport={() => setReportOpen(true)}
+                onOpenDetails={() => setMobileDetailsOpen(true)}
+              />
 
               {reportNotice || disputeNotice ? (
                 <div
@@ -1371,9 +1143,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     </button>
                   </div>
                 ) : null}
-                {!pinnedItemsLoading && pinnedItems.length ? (
+                {!pinnedItemsLoading && extraPinnedItems.length ? (
                   <div className="flex gap-2 overflow-x-auto pb-1">
-                    {pinnedItems.map((pinnedItem) => (
+                    {extraPinnedItems.map((pinnedItem) => (
                       <button
                         key={pinnedItem.id}
                         type="button"
@@ -1404,6 +1176,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       key={entry.id}
                       entry={entry}
                       mine={entry.senderId === currentUserId}
+                      progressPath={transactionProgressPath(selected.request.id)}
                       onOpenItem={(itemId) => navigate(`/items/${itemId}`)}
                     />
                   ))
@@ -2389,16 +2162,6 @@ export function SelectRequestDialog({
   );
 }
 
-const transactionSteps = ['Được chọn', 'Chốt lịch', 'Giao nhận', 'Hoàn tất'] as const;
-
-// Số bước đã xong theo trạng thái yêu cầu; -1 là chưa vào giao dịch (đang chờ, bị từ chối, đã hủy).
-function completedStepCount(status: RequestResponse['status']) {
-  if (status === 'RESERVED' || status === 'AWAITING_LOGISTICS') return 1;
-  if (status === 'LOGISTICS_CONFIRMED' || status === 'AWAITING_HANDOVER') return 2;
-  if (status === 'COMPLETED' || status === 'DISPUTED') return 4;
-  return -1;
-}
-
 /** Thanh 4 bước của giao dịch. Chỉ hiển thị trạng thái backend trả về, không tự đổi trạng thái. */
 function TransactionSteps({ status }: { status: RequestResponse['status'] }) {
   const done = completedStepCount(status);
@@ -2428,93 +2191,5 @@ function TransactionSteps({ status }: { status: RequestResponse['status'] }) {
         );
       })}
     </ol>
-  );
-}
-
-function ChatMessage({
-  entry,
-  mine,
-  onOpenItem,
-}: {
-  entry: MessageResponse;
-  mine: boolean;
-  onOpenItem: (itemId: number) => void;
-}) {
-  if (entry.moderation && entry.moderation !== 'PASS') {
-    return (
-      <div className="flex justify-center">
-        <span className="max-w-xl rounded-md bg-error-soft px-3 py-2 text-center text-xs text-error">
-          {entry.blockedReason || 'Tin nhắn này không vượt qua kiểm duyệt.'}
-        </span>
-      </div>
-    );
-  }
-  if (entry.kind.toUpperCase() === 'SYSTEM') {
-    return (
-      <div className="flex justify-center">
-        <span className="rounded-full bg-primary-faint px-3 py-1.5 text-center text-2xs text-text-secondary">
-          {entry.content}
-        </span>
-      </div>
-    );
-  }
-  const offerLabel = messageOfferStatusLabel(entry.offerStatus);
-  return (
-    <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-      <div
-        className={`max-w-[82%] rounded-lg px-3.5 py-2.5 text-sm leading-6 sm:max-w-[70%] ${mine ? 'rounded-br-sm bg-primary text-white' : 'rounded-bl-sm bg-surface-low text-text-primary'}`}
-      >
-        {entry.itemCard ? (
-          <button
-            type="button"
-            className="mb-2 flex w-full items-center gap-3 rounded-md bg-white p-2.5 text-left text-text-primary"
-            onClick={() => onOpenItem(entry.itemCard!.id)}
-          >
-            <ItemImage
-              src={entry.itemCard.imageUrl ?? undefined}
-              alt={entry.itemCard.title}
-              className="size-12 rounded-md object-cover"
-            />
-            <span className="min-w-0">
-              <strong className="block break-words text-sm">{entry.itemCard.title}</strong>
-              <span className="mt-1 flex flex-wrap gap-1.5">
-                <TypeBadge type={entry.itemCard.offerType === 'GIVE' ? 'gift' : 'trade'} />
-                <StatusBadge status={entry.itemCard.status} />
-              </span>
-            </span>
-          </button>
-        ) : null}
-        {entry.mediaId ? (
-          <a
-            href={resolveMediaUrl(`/api/v1/media/${entry.mediaId}`)}
-            target="_blank"
-            rel="noreferrer"
-            className="mb-2 block"
-          >
-            <img
-              src={resolveMediaUrl(`/api/v1/media/${entry.mediaId}`)}
-              alt="Ảnh trong cuộc trò chuyện"
-              className="max-h-72 max-w-full rounded-md object-contain"
-            />
-          </a>
-        ) : null}
-        {entry.content ? <p className="whitespace-pre-wrap break-words">{entry.content}</p> : null}
-        {offerLabel ? (
-          <span
-            className={`mt-1.5 inline-flex rounded-sm px-2 py-0.5 text-2xs font-semibold ${mine ? 'bg-white/15 text-white' : 'bg-white text-primary'}`}
-          >
-            {offerLabel}
-          </span>
-        ) : null}
-        <span className={`mt-1 block text-2xs ${mine ? 'text-white/70' : 'text-text-muted'}`}>
-          {new Date(entry.createdAt).toLocaleString('vi-VN', {
-            hour: '2-digit',
-            minute: '2-digit',
-            day: '2-digit',
-            month: '2-digit',
-          })}
-        </span>
-      </div>
-    </div>
   );
 }

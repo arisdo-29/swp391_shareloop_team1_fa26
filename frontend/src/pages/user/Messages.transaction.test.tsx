@@ -297,3 +297,39 @@ describe('Gửi ảnh trong giao dịch Cho tặng', () => {
     expect(screen.getByText('Gửi ảnh')).toBeTruthy();
   });
 });
+
+describe('Khung chat gọn', () => {
+  it('chỉ có một thẻ món chính, dải thẻ ghim không lặp lại món đó', async () => {
+    // given: thẻ ghim gồm cả món chính và một món đề nghị
+    vi.mocked(chatApi.pinnedItems).mockResolvedValue([
+      { id: 45, title: 'Xe đạp cũ', offerType: 'GIVE', status: 'RESERVED', imageUrl: null, donorId: DONOR_ID },
+      { id: 77, title: 'Mũ bảo hiểm', offerType: 'SWAP', status: 'RESERVED', imageUrl: null, donorId: RECEIVER_ID },
+    ]);
+
+    // when
+    store.dispatch(actions.loginFromApi(user(RECEIVER_ID)));
+    vi.mocked(requestApi.mine).mockResolvedValue([request()]);
+    vi.mocked(itemApi.mine).mockResolvedValue([]);
+    vi.mocked(requestApi.forItem).mockResolvedValue([request()]);
+    vi.mocked(requestApi.get).mockResolvedValue(request());
+    vi.mocked(requestApi.media).mockResolvedValue([]);
+    vi.mocked(itemApi.detail).mockResolvedValue(item());
+    vi.mocked(chatApi.list).mockResolvedValue([]);
+    render(
+      <Provider store={store}>
+        <MemoryRouter initialEntries={['/requests/101']}>
+          <Routes>
+            <Route path="/requests/:requestId" element={<Messages />} />
+          </Routes>
+        </MemoryRouter>
+      </Provider>,
+    );
+    const chat = await screen.findByRole('region', { name: 'Cuộc trò chuyện với An Chủ Bài' });
+    await within(chat).findByText('Mũ bảo hiểm');
+
+    // then
+    expect(within(chat).getAllByText('Xe đạp cũ')).toHaveLength(1);
+    expect(within(chat).getByRole('button', { name: 'Xem tiến trình' })).toBeTruthy();
+    expect(within(chat).getByRole('button', { name: 'Xem hồ sơ' })).toBeTruthy();
+  });
+});

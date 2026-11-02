@@ -17,7 +17,14 @@ import { UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
 import { Image } from '@phosphor-icons/react/dist/csr/Image';
 import { MapPin } from '@phosphor-icons/react/dist/csr/MapPin';
 import { Link } from 'react-router-dom';
-import type { Item, ItemCondition, ItemType, TransactionStatus, User } from '../types/domain';
+import type {
+  Item,
+  ItemCondition,
+  ItemRequestStatus,
+  ItemType,
+  TransactionStatus,
+  User,
+} from '../types/domain';
 import { conditionLabel, txLabel } from '../utils/formatting';
 import { resolveMediaUrl } from '../services/mediaUrl';
 
@@ -258,16 +265,20 @@ function statusTone(status: string): string {
   return 'bg-warning-soft text-warning';
 }
 
+// label tuỳ chọn: nơi có bộ nhãn riêng (ví dụ requestStatusLabel của Request) truyền nhãn vào, màu vẫn theo status.
+// Không truyền label thì giữ nguyên nhãn cũ cho mọi chỗ đang dùng.
 export function StatusBadge({
   status,
+  label,
 }: {
-  status: TransactionStatus | Item['status'] | User['status'];
+  status: TransactionStatus | ItemRequestStatus | Item['status'] | User['status'];
+  label?: string;
 }) {
   return (
     <span
       className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${statusTone(status)}`}
     >
-      {statusLabel(status)}
+      {label ?? statusLabel(status)}
     </span>
   );
 }
