@@ -368,9 +368,10 @@ class CreditServiceIT extends IntegrationTest {
     void spend_whenPostFee_debitsBalanceDirectly() {
         // given
         long userId = insertUser(20, 0);
+        long itemId = insertItem(userId);
 
         // when
-        creditService.spend(userId, 5, CreditTxType.POST_FEE, 123L);
+        creditService.spend(userId, 5, CreditTxType.POST_FEE, itemId);
 
         // then
         assertThat(balanceOf(userId)).isEqualTo(15);
