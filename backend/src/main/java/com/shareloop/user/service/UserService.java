@@ -245,6 +245,15 @@ public class UserService {
     }
 
     /**
+     * Người khác có được xem hồ sơ và bài của tài khoản này không (hồ sơ công khai): tồn tại, đã xác thực, chưa bị
+     * khoá hay cấm. Không có user thì trả false. Người gọi: item (danh sách bài theo người).
+     */
+    @Transactional(readOnly = true)
+    public boolean isPubliclyVisible(long userId) {
+        return userRepository.findById(userId).map(User::isPubliclyVisible).orElse(false);
+    }
+
+    /**
      * Tài khoản có đang {@code BANNED} không. LockedAccountFilter dùng để trả đúng mã AUTH_ACCOUNT_BANNED thay vì
      * AUTH_ACCOUNT_LOCKED cho token cũ. Không có user thì trả false.
      */

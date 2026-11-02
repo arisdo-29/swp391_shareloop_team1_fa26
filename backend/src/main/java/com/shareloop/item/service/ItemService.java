@@ -14,6 +14,7 @@ import com.shareloop.item.dto.ItemListPageResponse;
 import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.dto.PostingQuotaResponse;
 import com.shareloop.item.dto.UpdateItemRequest;
+import com.shareloop.item.dto.UserItemTab;
 import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
@@ -35,6 +36,7 @@ import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.UserErrorCode;
 import com.shareloop.user.service.UserService;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -50,6 +52,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -297,8 +300,10 @@ public class ItemService {
     /**
      * Xem chi tiết bài đăng:
      * - Bài APPROVED: ai cũng xem được.
+     * - Bài TRADED (đã giao dịch thành công): ai cũng xem được ở chế độ chỉ xem, requestable = false để frontend ẩn
+     *   nút gửi yêu cầu. Không trả thông tin người nhận hay yêu cầu liên quan.
      * - Chủ bài đăng: xem được mọi trạng thái.
-     * - Còn lại: trả về ITEM_NOT_FOUND (404).
+     * - Còn lại (chờ duyệt, bị từ chối, hết hạn, bị ẩn, chủ bài bị khoá): trả về ITEM_NOT_FOUND (404).
      */
     @Transactional(readOnly = true)
     public ItemResponse getItem(Long id, Long currentUserId) {
@@ -306,21 +311,78 @@ public class ItemService {
 
         boolean isOwner = currentUserId != null && currentUserId.equals(item.getDonorId());
         boolean donorLocked = userService.isLocked(item.getDonorId());
-        if ((item.getStatus() == ItemStatus.APPROVED && item.isActive() && !donorLocked) || isOwner) {
-            var donor = userService.findBriefs(List.of(item.getDonorId())).get(item.getDonorId());
-            var reputation = reputationService.getReputationSummary(item.getDonorId());
-            ItemResponse response = toResponse(item, findDisplayWindow(item.getId()))
-                    .withDonor(
-                            donor == null ? null : donor.fullName(),
-                            reputation.trustStars(),
-                            reputation.rank().name(),
-                            reputation.asDescribedRate(),
-                            donorLocked);
-            // U04: chỉ chủ bài biết bài đang tạm ẩn; người khác nhận hidden = null.
-            return isOwner ? withHiddenState(response, item) : response;
+        boolean publiclyVisible = item.isActive() && !donorLocked && isPublicDetailStatus(item.getStatus());
+        if (!publiclyVisible && !isOwner) {
+            throw new BusinessException(ItemErrorCode.ITEM_NOT_FOUND);
         }
 
-        throw new BusinessException(ItemErrorCode.ITEM_NOT_FOUND);
+        var donor = userService.findBriefs(List.of(item.getDonorId())).get(item.getDonorId());
+        var reputation = reputationService.getReputationSummary(item.getDonorId());
+        boolean requestable = item.getStatus() == ItemStatus.APPROVED && item.isActive() && !donorLocked;
+        ItemResponse response = toResponse(item, findDisplayWindow(item.getId()))
+                .withDonor(
+                        donor == null ? null : donor.fullName(),
+                        reputation.trustStars(),
+                        reputation.rank().name(),
+                        reputation.asDescribedRate(),
+                        donorLocked)
+                .withTradeInfo(findCompletedAt(item), requestable);
+        // U04: chỉ chủ bài biết bài đang tạm ẩn; người khác nhận hidden = null.
+        return isOwner ? withHiddenState(response, item) : response;
+    }
+
+    // Trạng thái người ngoài được xem chi tiết: đang hiển thị, hoặc đã giao dịch xong (xem từ hồ sơ công khai).
+    private static boolean isPublicDetailStatus(ItemStatus status) {
+        return status == ItemStatus.APPROVED || status == ItemStatus.TRADED;
+    }
+
+    // Chỉ bài TRADED mới có thời điểm hoàn tất; bài khác không cần hỏi module request.
+    private Instant findCompletedAt(Item item) {
+        if (item.getStatus() != ItemStatus.TRADED) {
+            return null;
+        }
+        return requestQueryService
+                .findCompletedAtByItemIds(List.of(item.getId()))
+                .get(item.getId());
+    }
+
+    /**
+     * Danh sách bài của một người cho hồ sơ công khai. ACTIVE: bài APPROVED, không ẩn, còn hạn, mới nhất trước.
+     * DONE: bài TRADED, không ẩn, kèm completedAt, bài cập nhật gần nhất trước. Không bao giờ trả bài chờ duyệt, bị từ
+     * chối, hết hạn, đã gỡ; chủ hồ sơ tự xem cũng theo luật này.
+     *
+     * @throws BusinessException USER_NOT_FOUND khi người dùng không tồn tại, chưa xác thực, bị khoá hoặc bị cấm
+     */
+    @Transactional(readOnly = true)
+    public ItemListPageResponse listUserItems(long userId, UserItemTab tab, int page, int size) {
+        if (!userService.isPubliclyVisible(userId)) {
+            throw new BusinessException(UserErrorCode.USER_NOT_FOUND);
+        }
+        Page<Item> items = findUserItemsPage(userId, tab, PageRequest.of(page, size));
+
+        List<Long> itemIds = items.getContent().stream().map(Item::getId).toList();
+        Map<Long, DisplayWindow> displayWindows = listingFeeQueryService.findDisplayWindows(itemIds);
+        Map<Long, Instant> completedAtByItemId =
+                tab == UserItemTab.DONE ? requestQueryService.findCompletedAtByItemIds(itemIds) : Map.of();
+
+        List<ItemResponse> rows = new ArrayList<>();
+        for (Item item : items.getContent()) {
+            // Bài ở tab ACTIVE đều APPROVED và chủ bài không bị khoá nên còn nhận yêu cầu; bài DONE thì không.
+            boolean requestable = tab == UserItemTab.ACTIVE;
+            rows.add(toResponse(item, displayWindows.get(item.getId()))
+                    .withTradeInfo(completedAtByItemId.get(item.getId()), requestable));
+        }
+        return new ItemListPageResponse(rows, page, size, items.getTotalElements(), items.getTotalPages());
+    }
+
+    // DONE sắp theo updated_at vì bài TRADED không sửa được nữa, lần cập nhật cuối là lúc chuyển sang TRADED.
+    private Page<Item> findUserItemsPage(long userId, UserItemTab tab, PageRequest pageRequest) {
+        if (tab == UserItemTab.DONE) {
+            Sort newestFirst = Sort.by(Sort.Order.desc("updatedAt"), Sort.Order.desc("id"));
+            return itemRepository.findByDonorIdAndStatusAndIsActiveTrue(
+                    userId, ItemStatus.TRADED, pageRequest.withSort(newestFirst));
+        }
+        return itemRepository.findPublicActiveByDonor(userId, Instant.now(), pageRequest);
     }
 
     /**
