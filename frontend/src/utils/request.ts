@@ -81,6 +81,22 @@ export function formatDeadline(value: string) {
   return `${valueOf('hour')}:${valueOf('minute')} ${valueOf('day')}/${valueOf('month')}`;
 }
 
+// "18:30 31/10/2026" theo múi giờ Việt Nam, không hiện giây.
+export function formatDateTime(value: string) {
+  const parts = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(value));
+  const valueOf = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? '';
+  return `${valueOf('hour')}:${valueOf('minute')} ${valueOf('day')}/${valueOf('month')}/${valueOf('year')}`;
+}
+
 // Chỉ hiện nút "chưa nhận được / chưa giao được" khi bên kia đã xác nhận bàn giao còn mình thì chưa (mục 14).
 export function canReportHandoverIssue(
   status: ItemRequestStatus,

@@ -8,7 +8,7 @@ const sections = [
     label: 'Nội dung',
     items: [
       ['Duyệt bài', '/admin/moderation'],
-      // Tạm ẩn "Xác minh hàng chính hãng" (/admin/authenticity): chưa có luồng xác nhận và chưa có BR. Code BE vẫn giữ.
+      // L16: đã gỡ "Xác minh hàng chính hãng" (/admin/authenticity) ở cả FE lẫn BE.
       // Tạm ẩn "Bài quá hạn" (/admin/expired-posts): backend chưa có API danh sách cho Admin.
       ['Danh mục', '/admin/categories'],
       ['Checklist duyệt bài', '/admin/checklist'],

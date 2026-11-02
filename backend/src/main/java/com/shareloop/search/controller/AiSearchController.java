@@ -1,34 +1,37 @@
 package com.shareloop.search.controller;
 
 import com.shareloop.common.security.CurrentUserId;
+import com.shareloop.search.dto.AiDescriptionRequest;
+import com.shareloop.search.dto.AiDescriptionResponse;
 import com.shareloop.search.dto.AiQuotaResponse;
 import com.shareloop.search.dto.AiSearchRequest;
 import com.shareloop.search.dto.AiSearchResponse;
+import com.shareloop.search.service.AiDescriptionService;
 import com.shareloop.search.service.AiQuotaService;
 import com.shareloop.search.service.AiSearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "AI Search", description = "Trợ lý tìm đồ bằng bộ lọc do AI tách và dữ liệu bài đăng thật")
+@Tag(name = "AI", description = "Tìm đồ đang có và gợi ý bản nháp mô tả từ tên món")
 @RestController
 @Validated
 public class AiSearchController {
     private final AiSearchService service;
     private final AiQuotaService quotaService;
+    private final AiDescriptionService descriptionService;
 
-    public AiSearchController(AiSearchService service, AiQuotaService quotaService) {
+    public AiSearchController(
+            AiSearchService service, AiQuotaService quotaService, AiDescriptionService descriptionService) {
         this.service = service;
         this.quotaService = quotaService;
+        this.descriptionService = descriptionService;
     }
 
     @Operation(summary = "Xem lượt AI miễn phí còn lại và phí cho lượt tiếp theo")
@@ -37,13 +40,18 @@ public class AiSearchController {
         return quotaService.getQuota(currentUserId);
     }
 
-    @Operation(summary = "Tìm bài đã duyệt từ nhu cầu bằng câu tự nhiên")
+    @Operation(summary = "Nhận một gợi ý đồ từ các bài đăng còn khả dụng, không giữ hội thoại")
     @PostMapping("/api/v1/ai/search")
     public AiSearchResponse search(
+            @Parameter(hidden = true) @CurrentUserId Long currentUserId, @Valid @RequestBody AiSearchRequest request) {
+        return service.search(currentUserId, request.query());
+    }
+
+    @Operation(summary = "Gợi ý bản nháp mô tả từ tên món đồ, không đọc ảnh")
+    @PostMapping("/api/v1/ai/describe-item")
+    public AiDescriptionResponse describeItem(
             @Parameter(hidden = true) @CurrentUserId Long currentUserId,
-            @Valid @RequestBody AiSearchRequest request,
-            @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return service.search(currentUserId, request.query(), page, size);
+            @Valid @RequestBody AiDescriptionRequest request) {
+        return descriptionService.describe(currentUserId, request.title());
     }
 }

@@ -1,26 +1,19 @@
 import { http } from './http';
-import type { ApiCondition, ItemResponse, OfferType, PageResponse } from './itemApi';
+import type { ItemResponse, PageResponse } from './itemApi';
 
 export const aiApiEndpoints = {
   search: '/api/v1/ai/search',
   quota: '/api/v1/ai/quota',
+  describeItem: '/api/v1/ai/describe-item',
 } as const;
 
-export interface AiSearchFilters {
-  keywords: string | null;
-  categoryId: number | null;
-  areaId: number | null;
-  condition: ApiCondition | null;
-  offerType: OfferType | null;
-}
-
 export interface AiSearchResponse {
-  filters: AiSearchFilters;
+  message: string;
   results: PageResponse<ItemResponse>;
   quota: AiQuotaResponse;
   chargedCredits: number;
   fallback: boolean;
-  broadened: boolean;
+  outOfScope: boolean;
 }
 
 export interface AiQuotaResponse {
@@ -29,13 +22,24 @@ export interface AiQuotaResponse {
   hasToppedUp: boolean;
 }
 
+export interface AiDescriptionResponse {
+  description: string;
+  attributes: Array<{ name: string; value: string; requiresUserInput: boolean }>;
+  remainingUses: number;
+  message: string;
+}
+
 export const aiApi = {
+  async describeItem(title: string): Promise<AiDescriptionResponse> {
+    const { data } = await http.post<AiDescriptionResponse>(aiApiEndpoints.describeItem, { title });
+    return data;
+  },
   async quota() {
     const { data } = await http.get<AiQuotaResponse>(aiApiEndpoints.quota);
     return data;
   },
-  search: async (query: string, page = 0, size = 20): Promise<AiSearchResponse> => {
-    const response = await http.post<AiSearchResponse>(aiApiEndpoints.search, { query }, { params: { page, size } });
+  search: async (query: string): Promise<AiSearchResponse> => {
+    const response = await http.post<AiSearchResponse>(aiApiEndpoints.search, { query });
     return response.data;
   },
 };

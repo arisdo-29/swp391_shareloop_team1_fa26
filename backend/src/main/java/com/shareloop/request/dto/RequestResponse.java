@@ -1,6 +1,7 @@
 package com.shareloop.request.dto;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * DTO phản hồi thông tin của một yêu cầu giao dịch (F10, UC-26, UC-27).
@@ -40,7 +41,134 @@ public record RequestResponse(
         String cancelReason,
         Instant complaintDeadline,
         Instant lastMessageAt,
-        Instant disputeResponseDueAt) {
+        Instant disputeResponseDueAt,
+        // Ảnh đại diện hai bên (/api/v1/media/{id}), null khi chưa có ảnh; dùng cho danh sách cuộc trò chuyện.
+        String donorAvatarUrl,
+        String receiverAvatarUrl,
+        // true khi giao dịch đã hoàn tất và đã qua complaintDeadline (hết hạn khiếu nại); false trong mọi trường hợp
+        // khác. Backend tính, frontend không tự so giờ.
+        Boolean disputeExpired,
+        // Ảnh giao nhận và ảnh khiếu nại (stage HANDOVER, DISPUTE), cũ trước. Chỉ có ở GET /requests/{id};
+        // các danh sách để null, xem đủ qua GET /requests/{id}/media.
+        List<RequestMediaResponse> handoverMedia) {
+
+    // Dạng 32 tham số (chưa có ảnh đại diện, disputeExpired, handoverMedia) để code và test đang gọi vẫn compile.
+    public RequestResponse(
+            Long id,
+            Long itemId,
+            Long receiverId,
+            Long offeredItemId,
+            String type,
+            String status,
+            String deliveryMethod,
+            String meetingPlace,
+            Instant meetingTime,
+            Instant donorScheduleOkAt,
+            Instant receiverScheduleOkAt,
+            Instant donorWaiverAt,
+            Instant receiverWaiverAt,
+            Instant contactRevealedAt,
+            Instant donorHandoverAt,
+            Instant receiverHandoverAt,
+            Boolean asDescribed,
+            Instant completedAt,
+            Instant createdAt,
+            String receiverName,
+            Integer receiverTrustStars,
+            String receiverRank,
+            Double receiverAsDescribedRate,
+            String itemTitle,
+            String itemImage,
+            Long donorId,
+            String donorName,
+            String offeredItemTitle,
+            String cancelReason,
+            Instant complaintDeadline,
+            Instant lastMessageAt,
+            Instant disputeResponseDueAt) {
+        this(
+                id,
+                itemId,
+                receiverId,
+                offeredItemId,
+                type,
+                status,
+                deliveryMethod,
+                meetingPlace,
+                meetingTime,
+                donorScheduleOkAt,
+                receiverScheduleOkAt,
+                donorWaiverAt,
+                receiverWaiverAt,
+                contactRevealedAt,
+                donorHandoverAt,
+                receiverHandoverAt,
+                asDescribed,
+                completedAt,
+                createdAt,
+                receiverName,
+                receiverTrustStars,
+                receiverRank,
+                receiverAsDescribedRate,
+                itemTitle,
+                itemImage,
+                donorId,
+                donorName,
+                offeredItemTitle,
+                cancelReason,
+                complaintDeadline,
+                lastMessageAt,
+                disputeResponseDueAt,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    /** Gắn ảnh đại diện hai bên, cờ hết hạn khiếu nại và ảnh giao nhận (null ở danh sách). */
+    public RequestResponse withExtraInfo(
+            String newDonorAvatarUrl,
+            String newReceiverAvatarUrl,
+            boolean isDisputeExpired,
+            List<RequestMediaResponse> media) {
+        return new RequestResponse(
+                id,
+                itemId,
+                receiverId,
+                offeredItemId,
+                type,
+                status,
+                deliveryMethod,
+                meetingPlace,
+                meetingTime,
+                donorScheduleOkAt,
+                receiverScheduleOkAt,
+                donorWaiverAt,
+                receiverWaiverAt,
+                contactRevealedAt,
+                donorHandoverAt,
+                receiverHandoverAt,
+                asDescribed,
+                completedAt,
+                createdAt,
+                receiverName,
+                receiverTrustStars,
+                receiverRank,
+                receiverAsDescribedRate,
+                itemTitle,
+                itemImage,
+                donorId,
+                donorName,
+                offeredItemTitle,
+                cancelReason,
+                complaintDeadline,
+                lastMessageAt,
+                disputeResponseDueAt,
+                newDonorAvatarUrl,
+                newReceiverAvatarUrl,
+                isDisputeExpired,
+                media);
+    }
 
     // Dạng 30 tham số (chưa có disputeResponseDueAt) để code và test đang gọi vẫn compile.
     public RequestResponse(

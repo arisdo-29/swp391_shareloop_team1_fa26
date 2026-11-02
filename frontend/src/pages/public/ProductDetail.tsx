@@ -22,6 +22,7 @@ import { ReportDialog } from '../../components/ReportDialog';
 import { ReputationBadge } from '../../components/ReputationBadge';
 
 import { requestStatusLabel } from '../../utils/request';
+import { userProfilePath } from '../../utils/chatMessages';
 import { reputationBlockedMessage } from '../../utils/apiErrorMessages';
 import { loginPath } from '../../utils/authRedirect';
 import { productDetailBackLink } from '../../utils/productDetailNavigation';
@@ -158,8 +159,12 @@ export function ProductDetail() {
 
   const own = user?.id === item.ownerId;
   const isDonorLocked = Boolean(item.donorLocked);
+  // Bài đã giao dịch thành công: chỉ xem. Dựa vào cờ requestable backend trả, không tự suy từ trạng thái.
+  const isTradedReadOnly = item.status === 'TRADED' && item.requestable === false;
+  const ownerProfileId = toBackendUserId(item.ownerId);
   const activeListing =
     (item.status === 'approved' || item.status === 'APPROVED') &&
+    item.requestable !== false &&
     !isDonorLocked &&
     (!item.expiresAt || new Date(item.expiresAt).getTime() >= Date.now());
   const existingRequest = user
@@ -316,7 +321,11 @@ export function ProductDetail() {
             <div className="flex flex-wrap gap-2">
               <TypeBadge type={item.type} />
               <ConditionBadge condition={item.condition} />
-              {!activeListing ? <StatusBadge status={item.status} /> : null}
+              {isTradedReadOnly ? (
+                <StatusBadge status="TRADED" label="Đã giao dịch" />
+              ) : !activeListing ? (
+                <StatusBadge status={item.status} />
+              ) : null}
             </div>
             <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{item.title}</h1>
             <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-text-muted">
@@ -369,6 +378,11 @@ export function ProductDetail() {
               <h2 id="item-owner" className="text-base font-bold">{item.donorName || 'Người đăng'}</h2>
               <ReputationBadge trustStars={item.donorTrustStars} rank={item.donorRank} asDescribedRate={item.donorAsDescribedRate} />
             </div>
+            {ownerProfileId ? (
+              <Button variant="outline" onClick={() => navigate(userProfilePath(ownerProfileId))}>
+                Xem hồ sơ
+              </Button>
+            ) : null}
           </section>
         </article>
 
@@ -382,6 +396,16 @@ export function ProductDetail() {
               <p className="text-sm leading-6 text-text-secondary">Xem người xin và chọn người nhận ở trang Hoạt động.</p>
               <Link to="/activities">
                 <Button className="w-full">Mở Hoạt động</Button>
+              </Link>
+            </>
+          ) : isTradedReadOnly ? (
+            <>
+              <h2 className="text-lg font-bold">Đã giao dịch</h2>
+              <p className="text-sm leading-6 text-text-secondary">
+                Món này đã trao đổi xong nên không nhận yêu cầu mới. Bạn chỉ xem được chi tiết bài đăng.
+              </p>
+              <Link to="/browse">
+                <Button variant="outline" className="w-full">Tìm món khác</Button>
               </Link>
             </>
           ) : existingRequest ? (

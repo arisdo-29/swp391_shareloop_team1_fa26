@@ -15,7 +15,6 @@ const bundle = await build({
       export { aiApi } from './src/services/aiApi.ts';
       export { chatApi } from './src/services/chatApi.ts';
       export { catalogApi } from './src/services/catalogApi.ts';
-      export { adminAuthenticityApi, authenticityErrorMessage, beginAuthenticitySubmission, validateAuthenticityReason } from './src/services/adminAuthenticityApi.ts';
       export { adminModerationApi } from './src/services/adminModerationApi.ts';
       export { adminChecklistApi, validateChecklistItemIds } from './src/services/adminChecklistApi.ts';
       export { itemApi } from './src/services/itemApi.ts';
@@ -114,22 +113,28 @@ await test('admin chỉ đọc danh sách đơn nạp và giữ phân trang', as
   assert.equal(api.adminFinanceApi.rejectTopUp, undefined);
 });
 
-await test('quota không tìm kiếm hoặc tiêu lượt; search giữ quota và kết quả dự phòng', async () => {
+await test('quota không tìm kiếm hoặc tiêu lượt; search gửi một yêu cầu độc lập', async () => {
   requests = [];
   nextResponse = { freeUsesRemaining: 1, feeCredits: 2, hasToppedUp: false };
   assert.deepEqual(await api.aiApi.quota(), nextResponse);
   assert.equal(requests[0].method, 'get');
   assert.equal(requests[0].url, '/api/v1/ai/quota');
   nextResponse = {
-    filters: {},
-    results: { items: [], page: 2, size: 6, totalElements: 20 },
+    message: 'Mình chưa tìm thấy món phù hợp.',
+    results: { items: [], page: 0, size: 0, totalElements: 0 },
     quota: nextResponse,
-    fallback: true,
+    fallback: false,
     chargedCredits: 0,
+    outOfScope: false,
   };
-  assert.deepEqual(await api.aiApi.search('bàn học', 2, 6), nextResponse);
+  assert.deepEqual(await api.aiApi.search('bàn học'), nextResponse);
   assert.deepEqual(requests[1].body, { query: 'bàn học' });
-  assert.deepEqual(requests[1].params, { page: 2, size: 6 });
+  assert.equal(requests[1].params, undefined);
+  nextResponse = { description: 'Loại: Đồng hồ', attributes: [], remainingUses: 4, message: 'Bản nháp' };
+  assert.deepEqual(await api.aiApi.describeItem('Đồng hồ'), nextResponse);
+  assert.equal(requests[2].url, '/api/v1/ai/describe-item');
+  assert.deepEqual(requests[2].body, { title: 'Đồng hồ' });
+  assert.equal(requests[2].params, undefined);
 });
 
 await test('polling truyền afterId, pinned items dùng path canonical và tin nhắn gửi refItemId', async () => {
@@ -170,23 +175,6 @@ await test('phí gia hạn và đẩy bài đọc từ endpoint bảng phí đan
   assert.deepEqual(await api.itemApi.getListingFees(), nextResponse);
   assert.equal(requests[0].method, 'get');
   assert.equal(requests[0].url, '/api/v1/listing-fees');
-});
-
-await test('authenticity grant không gửi body; reject và revoke chỉ gửi reason', async () => {
-  requests = [];
-  nextResponse = undefined;
-  await api.adminAuthenticityApi.grant(42);
-  assert.equal(requests[0].url, '/api/v1/admin/authenticity/42/grant');
-  assert.equal(requests[0].method, 'post');
-  assert.equal(requests[0].body, undefined);
-  await api.adminAuthenticityApi.reject(42, 'Chứng từ không khớp');
-  assert.equal(requests[1].url, '/api/v1/admin/authenticity/42/reject');
-  assert.equal(requests[1].method, 'post');
-  assert.deepEqual(requests[1].body, { reason: 'Chứng từ không khớp' });
-  await api.adminAuthenticityApi.revoke(42, 'Chứng từ giả');
-  assert.equal(requests[2].url, '/api/v1/admin/authenticity/42/revoke');
-  assert.equal(requests[2].method, 'post');
-  assert.deepEqual(requests[2].body, { reason: 'Chứng từ giả' });
 });
 
 await test('duyệt gửi ID điều kiện cùng đáp án, không ghép lại theo vị trí', async () => {
@@ -504,42 +492,6 @@ await test('lỗi 403 và checklist cũ giữ code để giao diện xử lý', 
     );
   } finally {
     api.http.defaults.adapter = originalAdapter;
-  }
-});
-
-await test('authenticity xử lý 204 không body và validate lý do reject/revoke', async () => {
-  requests = [];
-  nextResponse = undefined;
-  assert.equal(await api.adminAuthenticityApi.grant(7), undefined);
-  assert.equal(api.validateAuthenticityReason('grant', ''), null);
-  assert.equal(api.validateAuthenticityReason('reject', '   '), 'Lý do là bắt buộc.');
-  assert.equal(api.validateAuthenticityReason('revoke', ''), 'Lý do là bắt buộc.');
-  assert.equal(api.validateAuthenticityReason('reject', 'Chứng từ không khớp'), null);
-});
-
-await test('authenticity không submit trước xác nhận và chặn double-submit khi đang loading', () => {
-  const lock = { current: false };
-  let requestCount = 0;
-  if (api.beginAuthenticitySubmission(lock, false)) requestCount += 1;
-  assert.equal(requestCount, 0);
-  assert.equal(lock.current, false);
-  assert.equal(api.beginAuthenticitySubmission(lock, true), true);
-  requestCount += 1;
-  assert.equal(api.beginAuthenticitySubmission(lock, true), false);
-  assert.equal(requestCount, 1);
-});
-
-await test('authenticity ánh xạ lỗi HTTP 400/401/403/404/409 và 500', () => {
-  const expected = new Map([
-    [400, 'Dữ liệu hoặc lý do không hợp lệ.'],
-    [401, 'Bạn chưa đăng nhập hoặc phiên đăng nhập đã hết hạn.'],
-    [403, 'Tài khoản hiện tại không có quyền Admin.'],
-    [404, 'Không tìm thấy bài đăng.'],
-    [409, 'Trạng thái bài đăng không cho phép thực hiện thao tác này.'],
-    [500, 'Hệ thống đang gặp lỗi. Vui lòng thử lại.'],
-  ]);
-  for (const [status, message] of expected) {
-    assert.equal(api.authenticityErrorMessage({ status }), message);
   }
 });
 

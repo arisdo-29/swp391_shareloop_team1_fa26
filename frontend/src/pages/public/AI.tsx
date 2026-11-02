@@ -4,16 +4,15 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import { useWallet } from '../../app/useWallet';
 import { AiSearchNotices } from '../../components/ai/AiSearchNotices';
-import { Alert, Button, EmptyState, ProductCard, Spinner, TextArea } from '../../components/ui';
+import { Button, EmptyState, ProductCard, Spinner, TextArea } from '../../components/ui';
 import { aiApi, type AiQuotaResponse } from '../../services/aiApi';
+import { clearAiSearchSnapshot, readAiSearchSnapshot, saveAiSearchSnapshot } from '../../services/aiSearchSession';
 import { catalogApi, type CategoryResponse, type AreaResponse } from '../../services/catalogApi';
 import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
-import { conditionLabel } from '../../utils/formatting';
 import type { ApiError } from '../../services/http';
 import type { Item } from '../../types/domain';
 
 const MAX_QUERY_LENGTH = 500;
-const PAGE_SIZE = 20;
 type SearchStatus = 'idle' | 'loading' | 'success' | 'error';
 
 export function AI() {
@@ -25,16 +24,12 @@ export function AI() {
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [queryError, setQueryError] = useState('');
   const [status, setStatus] = useState<SearchStatus>('idle');
-  const [filters, setFilters] = useState<{ label: string; value: string }[]>([]);
+  const [message, setMessage] = useState('');
   const [results, setResults] = useState<Item[]>([]);
-  const [page, setPage] = useState(0);
-  const [totalElements, setTotalElements] = useState(0);
   const [quota, setQuota] = useState<AiQuotaResponse | null>(null);
   const [quotaError, setQuotaError] = useState('');
   const [searchError, setSearchError] = useState('');
   const [chargedCredits, setChargedCredits] = useState(0);
-  const [fallback, setFallback] = useState(false);
-  const [broadened, setBroadened] = useState(false);
   const [needsTopUp, setNeedsTopUp] = useState(false);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [areas, setAreas] = useState<AreaResponse[]>([]);
@@ -43,13 +38,13 @@ export function AI() {
 
   useEffect(() => {
     let active = true;
+    const snapshot = userId ? readAiSearchSnapshot(userId) : null;
     setQuota(null);
     setQuotaError('');
-    setStatus('idle');
-    setResults([]);
-    setChargedCredits(0);
-    setFallback(false);
-    setBroadened(false);
+    setStatus(snapshot ? 'success' : 'idle');
+    setResults(snapshot?.items ?? []);
+    setMessage(snapshot?.message ?? '');
+    setChargedCredits(snapshot?.chargedCredits ?? 0);
     setNeedsTopUp(false);
     if (userId) {
       aiApi.quota().then((response) => { if (active) setQuota(response); })
@@ -61,8 +56,7 @@ export function AI() {
     return () => { active = false; generation.current += 1; inFlight.current = false; };
   }, [userId]);
 
-  const totalPages = Math.max(1, Math.ceil(totalElements / PAGE_SIZE));
-  const search = async (value = query, nextPage = 0) => {
+  const search = async (value = query) => {
     const normalizedQuery = value.trim();
     if (!normalizedQuery || normalizedQuery.length > MAX_QUERY_LENGTH) {
       setQueryError('Vui lòng nhập mô tả từ 1 đến 500 ký tự.');
@@ -71,34 +65,26 @@ export function AI() {
     if (!user || !quota || inFlight.current) return;
     inFlight.current = true;
     const currentGeneration = generation.current;
+    clearAiSearchSnapshot();
     setQueryError('');
     setSearchError('');
     setChargedCredits(0);
-    setFallback(false);
-    setBroadened(false);
     setNeedsTopUp(false);
+    setResults([]);
+    setMessage('');
     setSubmittedQuery(normalizedQuery);
     setStatus('loading');
     try {
-      const response = await aiApi.search(normalizedQuery, nextPage, PAGE_SIZE);
+      const response = await aiApi.search(normalizedQuery);
       if (currentGeneration !== generation.current) return;
       const categoryNames = toCategoryNameMap(categories);
       const areaNames = toAreaNameMap(areas);
-      const parsed = response.filters;
-      const understood: { label: string; value: string }[] = [];
-      if (parsed.keywords) understood.push({ label: 'Từ khóa', value: parsed.keywords });
-      if (parsed.categoryId) understood.push({ label: 'Danh mục', value: categoryNames.get(parsed.categoryId) ?? 'Danh mục phù hợp' });
-      if (parsed.areaId) understood.push({ label: 'Khu vực', value: areaNames.get(parsed.areaId) ?? 'Khu vực phù hợp' });
-      if (parsed.condition) understood.push({ label: 'Tình trạng', value: conditionLabel[parsed.condition] });
-      if (parsed.offerType) understood.push({ label: 'Hình thức', value: parsed.offerType === 'GIVE' ? 'Cho tặng' : 'Trao đổi' });
-      setFilters(understood);
-      setResults(response.results.items.map((item) => toFeItem(item, categoryNames, areaNames)));
-      setTotalElements(response.results.totalElements);
-      setPage(response.results.page);
+      const items = response.results.items.map((item) => toFeItem(item, categoryNames, areaNames));
+      setMessage(response.message);
+      setResults(items);
+      saveAiSearchSnapshot({ userId: user.id, message: response.message, items, chargedCredits: response.chargedCredits });
       setQuota(response.quota);
       setChargedCredits(response.chargedCredits);
-      setFallback(response.fallback);
-      setBroadened(response.broadened);
       setStatus('success');
       if (response.chargedCredits > 0) refreshWallet();
       try {
@@ -115,6 +101,7 @@ export function AI() {
       setSearchError(insufficientCredit ? 'Bạn đã hết lượt miễn phí và chưa đủ Credit cho lượt tìm tiếp theo.' : apiError.message || 'Không tìm được đồ. Vui lòng thử lại.');
       setStatus('error');
       setResults([]);
+      setMessage('');
       try { const latest = await aiApi.quota(); if (currentGeneration === generation.current) setQuota(latest); } catch { /* Giữ hạn mức đã tải, lần tìm tiếp theo vẫn do backend kiểm tra. */ }
     } finally {
       if (currentGeneration === generation.current) inFlight.current = false;
@@ -132,7 +119,7 @@ export function AI() {
         <div>
           <h1 id="ai-title" className="page-title">Bạn cần món gì?</h1>
           <p className="page-intro">
-            Tả bằng lời thường: món gì, tình trạng, cho tặng hay đổi, ở quận nào. Trợ lý chuyển thành bộ lọc cho bạn.
+            Kể điều bạn muốn món đồ giúp mình làm được, hoặc nói tên món cụ thể. Trợ lý sẽ tìm trong các bài đăng còn khả dụng.
           </p>
         </div>
         <form className="space-y-3" onSubmit={submit}>
@@ -203,7 +190,7 @@ export function AI() {
         </div>
         {quota ? (
           <p className="text-xs leading-5 text-text-muted">
-            Mỗi lần tìm hoặc chuyển trang có kết quả dùng một lượt. Hết lượt miễn phí, mỗi lượt có kết quả tốn {quota.feeCredits} Credit. Tìm kiếm thường hoặc không có kết quả không tính phí.
+            Mỗi tin nhắn là một lượt tìm mới. Chỉ lượt tìm ra món phù hợp mới dùng lượt miễn phí hoặc tính {quota.feeCredits} Credit khi đã hết lượt.
           </p>
         ) : null}
       </section>
@@ -220,7 +207,7 @@ export function AI() {
           title="Chưa thể tìm đồ lúc này"
           text={searchError}
           action={
-            <Button variant={needsTopUp ? 'primary' : 'outline'} onClick={() => (needsTopUp ? navigate('/credit') : void search(submittedQuery, page))}>
+            <Button variant={needsTopUp ? 'primary' : 'outline'} onClick={() => (needsTopUp ? navigate('/credit') : void search(submittedQuery))}>
               {needsTopUp ? 'Nạp Credit' : 'Thử lại'}
             </Button>
           }
@@ -229,58 +216,14 @@ export function AI() {
 
       {status === 'success' ? (
         <section aria-labelledby="ai-results" className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 id="ai-results" className="mr-2 text-xl font-bold">
-              {totalElements} món phù hợp
-            </h2>
-            <span className="text-sm text-text-muted">{fallback ? 'Từ khóa tìm kiếm thường' : 'Bộ lọc trợ lý hiểu được'}</span>
-            {filters.length ? (
-              filters.map((filter) => (
-                <span
-                  key={filter.label}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-primary bg-primary-soft px-3 text-xs text-text-secondary"
-                >
-                  <span className="font-semibold text-primary">{filter.label}:</span>
-                  {filter.value}
-                </span>
-              ))
-            ) : (
-              <span className="text-sm text-text-secondary">chưa nhận ra bộ lọc cụ thể, kết quả chọn theo từ khóa.</span>
-            )}
-          </div>
-          {broadened ? (
-            <Alert tone="warning">
-              Không có món khớp tất cả bộ lọc AI đã chọn. Các món dưới đây khớp từ khóa nhưng có thể khác danh mục, khu vực, tình trạng hoặc hình thức bạn yêu cầu.
-            </Alert>
-          ) : null}
+          <p id="ai-results" role="status" className="rounded-xl bg-primary-soft p-5 text-sm leading-7 text-text-primary ring-1 ring-primary/20">
+            {message}
+          </p>
           {results.length ? (
-            <>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-                {results.map((item) => (
-                  <ProductCard key={item.id} item={item} />
-                ))}
-              </div>
-              {totalPages > 1 ? (
-                <div className="flex flex-wrap items-center justify-center gap-3">
-                  <Button variant="outline" disabled={page === 0} onClick={() => void search(submittedQuery, page - 1)}>
-                    Trang trước
-                  </Button>
-                  <span className="text-sm text-text-muted">
-                    {page + 1} / {totalPages}
-                  </span>
-                  <Button variant="outline" disabled={page + 1 >= totalPages} onClick={() => void search(submittedQuery, page + 1)}>
-                    Trang sau
-                  </Button>
-                  <span className="w-full text-center text-xs text-text-muted">Chuyển trang có kết quả dùng thêm 1 lượt.</span>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <EmptyState
-              title="Chưa tìm thấy món phù hợp"
-              text="Không tìm thấy món phù hợp – lượt này không tính phí. Hãy thử mô tả rộng hơn, đổi khu vực hoặc bỏ bớt yêu cầu về tình trạng."
-            />
-          )}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+              {results.map((item) => <ProductCard key={item.id} item={item} from="ai" />)}
+            </div>
+          ) : null}
         </section>
       ) : null}
     </div>

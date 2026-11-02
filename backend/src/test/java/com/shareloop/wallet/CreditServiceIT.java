@@ -354,14 +354,29 @@ class CreditServiceIT extends IntegrationTest {
         long userId = insertUser(20, 0);
 
         // when
-        Throwable spendWithPostFee = catchThrowable(() -> creditService.spend(userId, 5, CreditTxType.POST_FEE, null));
+        Throwable spendWithTopUp = catchThrowable(() -> creditService.spend(userId, 5, CreditTxType.TOP_UP, null));
         Throwable holdWithRenewFee = catchThrowable(() -> creditService.hold(userId, 5, CreditTxType.RENEW_FEE, null));
 
         // then
-        assertThat(spendWithPostFee).isInstanceOf(IllegalArgumentException.class);
+        assertThat(spendWithTopUp).isInstanceOf(IllegalArgumentException.class);
         assertThat(holdWithRenewFee).isInstanceOf(IllegalArgumentException.class);
         assertThat(balanceOf(userId)).isEqualTo(20);
         assertThat(heldOf(userId)).isZero();
+    }
+
+    @Test
+    void spend_whenPostFee_debitsBalanceDirectly() {
+        // given
+        long userId = insertUser(20, 0);
+        long itemId = insertItem(userId);
+
+        // when
+        creditService.spend(userId, 5, CreditTxType.POST_FEE, itemId);
+
+        // then
+        assertThat(balanceOf(userId)).isEqualTo(15);
+        assertThat(heldOf(userId)).isZero();
+        assertThat(ledgerCountOf(userId)).isEqualTo(1);
     }
 
     // ---------- getWallet ----------

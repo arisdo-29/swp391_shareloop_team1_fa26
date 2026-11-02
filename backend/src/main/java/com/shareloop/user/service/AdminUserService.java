@@ -5,6 +5,7 @@ import com.shareloop.audit.service.ActivityLogQueryService;
 import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.report.service.ReportService;
 import com.shareloop.user.UserErrorCode;
 import com.shareloop.user.dto.AdminAccountRole;
 import com.shareloop.user.dto.AdminAccountState;
@@ -30,16 +31,19 @@ public class AdminUserService {
     private final ActivityLogService activityLogService;
     private final ActivityLogQueryService activityLogQueryService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ReportService reportService;
 
     public AdminUserService(
             UserService userService,
             ActivityLogService activityLogService,
             ActivityLogQueryService activityLogQueryService,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            ReportService reportService) {
         this.userService = userService;
         this.activityLogService = activityLogService;
         this.activityLogQueryService = activityLogQueryService;
         this.eventPublisher = eventPublisher;
+        this.reportService = reportService;
     }
 
     /**
@@ -89,10 +93,20 @@ public class AdminUserService {
     public void unlock(Long adminId, Long userId, String reason) {
         userService.unlock(userId);
 
-        List<Long> hiddenItemIds = findItemIdsHiddenByLock(userId);
-        eventPublisher.publishEvent(new UserUnlockedEvent(userId, hiddenItemIds));
+        // L6: bài trong lúc khoá đã bị chấp thuận báo cáo, hoặc vẫn đủ ngưỡng báo cáo chờ, thì tiếp tục ẩn
+        List<Long> restorableItemIds = new ArrayList<>();
+        List<Long> keptHiddenItemIds = new ArrayList<>();
+        for (Long itemId : findItemIdsHiddenByLock(userId)) {
+            if (reportService.keepsItemHidden(itemId)) {
+                keptHiddenItemIds.add(itemId);
+            } else {
+                restorableItemIds.add(itemId);
+            }
+        }
+        eventPublisher.publishEvent(new UserUnlockedEvent(userId, restorableItemIds));
 
-        Map<String, Object> data = Map.of("restoredItems", hiddenItemIds.size());
+        Map<String, Object> data =
+                Map.of("restoredItems", restorableItemIds.size(), "keptHiddenItemIds", keptHiddenItemIds);
         activityLogService.log(ActivityType.USER_UNLOCK.name(), adminId, "USER", userId, data, reason);
     }
 

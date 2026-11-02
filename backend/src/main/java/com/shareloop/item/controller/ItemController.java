@@ -6,6 +6,7 @@ import com.shareloop.item.dto.ItemListPageResponse;
 import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.dto.PostingQuotaResponse;
 import com.shareloop.item.dto.UpdateItemRequest;
+import com.shareloop.item.dto.UserItemTab;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.service.ItemService;
@@ -119,6 +120,19 @@ public class ItemController {
             @RequestParam(defaultValue = "false") boolean boosted,
             @RequestParam(defaultValue = "newest") @Pattern(regexp = "newest|expiring") String sort) {
         return itemService.listPublicItems(categoryId, areaId, q, condition, offerType, page, size, boosted, sort);
+    }
+
+    /**
+     * Bài của một người cho trang hồ sơ công khai (cần đăng nhập: /api/v1/users/** không công khai).
+     */
+    @Operation(summary = "Danh sách bài của một người ở hồ sơ công khai")
+    @GetMapping("/api/v1/users/{userId}/items")
+    public ItemListPageResponse listUserItems(
+            @PathVariable long userId,
+            @RequestParam(defaultValue = "ACTIVE") UserItemTab tab,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "12") @Min(1) @Max(50) int size) {
+        return itemService.listUserItems(userId, tab, page, size);
     }
 
     private Long parseUserId(Jwt jwt) {

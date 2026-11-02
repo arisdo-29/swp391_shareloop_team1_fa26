@@ -14,7 +14,7 @@ import jakarta.validation.constraints.Pattern;
 public record ChangePhoneRequest(
         @Schema(description = "Số điện thoại mới", example = "0901234567")
         @NotBlank(message = "Số điện thoại không được để trống")
-        @Pattern(regexp = "^(0|\\+84)\\d{9}$", message = "Số điện thoại không đúng định dạng (10 chữ số)")
+        @Pattern(regexp = "^(0|\\+84)[35789]\\d{8}$", message = "Số điện thoại không đúng định dạng.")
         String newPhone,
 
         @Schema(description = "Mã OTP 6 chữ số gửi qua email", example = "123456")

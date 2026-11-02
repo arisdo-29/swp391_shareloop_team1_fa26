@@ -30,3 +30,12 @@ export function shouldRefreshConversationDetail(pollCount: number): boolean {
 export function requestConversationPath(requestId: number): string {
   return `/requests/${requestId}`;
 }
+
+// Mỗi cuộc trò chuyện là một Request nên conversationId trên đường dẫn chính là id của Request.
+export function transactionProgressPath(requestId: number): string {
+  return `/messages/${requestId}/progress`;
+}
+
+export function userProfilePath(userId: number): string {
+  return `/users/${userId}`;
+}

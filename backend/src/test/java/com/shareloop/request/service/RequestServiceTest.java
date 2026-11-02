@@ -36,11 +36,15 @@ import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.event.NotAsDescribedReportedEvent;
+import com.shareloop.request.repository.RequestMediaRepository;
 import com.shareloop.request.repository.RequestRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.dto.ContactInfo;
 import com.shareloop.user.service.UserService;
+import com.shareloop.wallet.WalletErrorCode;
+import com.shareloop.wallet.entity.CreditTxType;
+import com.shareloop.wallet.service.CreditService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -84,11 +88,18 @@ class RequestServiceTest {
     @Mock
     JdbcClient jdbcClient;
 
+    // getDetail đọc thêm ảnh giao nhận; mock repository trả danh sách rỗng thay cho JdbcClient chưa stub câu SQL.
+    @Mock
+    RequestMediaRepository requestMediaRepository;
+
     @Mock
     ApplicationEventPublisher eventPublisher;
 
     @Mock
     ReportService reportService;
+
+    @Mock
+    CreditService creditService;
 
     @Spy
     @InjectMocks
@@ -97,6 +108,7 @@ class RequestServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(configService.getInt(ConfigKey.MAX_PENDING_REQUESTS)).thenReturn(5);
+        lenient().when(configService.getInt(ConfigKey.POST_FEE)).thenReturn(5);
         lenient().when(reputationService.canRequest(anyLong())).thenReturn(true);
         lenient().when(userService.isLocked(anyLong())).thenReturn(false);
         lenient().when(userService.isAdmin(anyLong())).thenReturn(false);
@@ -236,8 +248,8 @@ class RequestServiceTest {
     }
 
     @Test
-    @DisplayName("Ném lỗi khi bài Trao đổi nhưng không chọn món đề nghị (BR-S02)")
-    void createRequest_whenSwapWithoutOfferedItem_throwsBusinessException() {
+    @DisplayName("Tạo yêu cầu bài Trao đổi không chọn món đề nghị thành công (xin cho không, CD-01)")
+    void createRequest_whenSwapWithoutOfferedItem_success() {
         when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
                 .thenReturn(0L);
         when(requestRepository.existsByItemIdAndReceiverIdAndStatusIn(eq(1L), eq(10L), anySet()))
@@ -247,10 +259,16 @@ class RequestServiceTest {
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
-                .isInstanceOfSatisfying(BusinessException.class, ex -> {
-                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_SWAP_OFFERED_ITEM_REQUIRED);
-                });
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RequestResponse response = requestService.createRequest(1L, 10L, new CreateRequest(null));
+
+        assertThat(response).isNotNull();
+        assertThat(response.itemId()).isEqualTo(1L);
+        assertThat(response.receiverId()).isEqualTo(10L);
+        assertThat(response.offeredItemId()).isNull();
+        assertThat(response.type()).isEqualTo("SWAP");
+        assertThat(response.status()).isEqualTo("PENDING");
     }
 
     @Test
@@ -280,8 +298,35 @@ class RequestServiceTest {
     }
 
     @Test
-    @DisplayName("Ném lỗi khi bài Cho nhận món đổi gửi kèm (YC-04)")
-    void createRequest_whenGiveWithOfferedItem_throwsBusinessException() {
+    @DisplayName("Tạo yêu cầu bài Cho có gửi kèm món đổi thành công (đề nghị trao đổi, CD-01)")
+    void createRequest_whenGiveWithOfferedItem_success() {
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.existsByItemIdAndReceiverIdAndStatusIn(eq(1L), eq(10L), anySet()))
+                .thenReturn(false);
+
+        doReturn(Optional.of(new RequestService.ItemSnapshot(99L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "GIVE", "APPROVED", true)))
+                .when(requestService)
+                .findItemSnapshot(5L);
+
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RequestResponse response = requestService.createRequest(1L, 10L, new CreateRequest(5L));
+
+        assertThat(response).isNotNull();
+        assertThat(response.itemId()).isEqualTo(1L);
+        assertThat(response.receiverId()).isEqualTo(10L);
+        assertThat(response.offeredItemId()).isEqualTo(5L);
+        assertThat(response.type()).isEqualTo("GIVE");
+        assertThat(response.status()).isEqualTo("PENDING");
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi món đề nghị trùng với chính món đang yêu cầu (CD-01)")
+    void createRequest_whenOfferedItemSameAsTargetItem_throwsBusinessException() {
         when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
                 .thenReturn(0L);
         when(requestRepository.existsByItemIdAndReceiverIdAndStatusIn(eq(1L), eq(10L), anySet()))
@@ -291,9 +336,9 @@ class RequestServiceTest {
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(5L)))
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(1L)))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
-                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_OFFERED_ITEM_NOT_ALLOWED);
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_SELF_OFFER_NOT_ALLOWED);
                 });
     }
 
@@ -507,6 +552,81 @@ class RequestServiceTest {
         // then
         org.mockito.Mockito.verify(itemService).reserve(1L);
         org.mockito.Mockito.verifyNoMoreInteractions(itemService);
+    }
+
+    @Test
+    @DisplayName(
+            "Chủ bài Cho chọn yêu cầu kèm món đổi: trừ phí 5 Credit, đổi sang SWAP và giữ chỗ cả 2 món (CD-02, CD-06)")
+    void selectReceiver_whenGiveToSwap_chargesPostFeeAndConvertsBothTypesAndReservesBoth() {
+        // given: bài GIVE, request có offeredItemId
+        Request selectedRequest = new Request(1L, 10L, 50L, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+
+        // when
+        RequestResponse response = requestService.selectReceiver(101L, 20L);
+
+        // then
+        org.mockito.Mockito.verify(creditService).spend(20L, 5, CreditTxType.POST_FEE, 1L);
+        org.mockito.Mockito.verify(itemService).convertOfferType(1L, OfferType.SWAP);
+        assertThat(selectedRequest.getType()).isEqualTo("SWAP");
+        assertThat(response.type()).isEqualTo("SWAP");
+        org.mockito.Mockito.verify(itemService).reserve(1L);
+        org.mockito.Mockito.verify(itemService).reserve(50L);
+    }
+
+    @Test
+    @DisplayName(
+            "Chủ bài Cho chọn yêu cầu kèm món đổi nhưng không đủ Credit: ném lỗi WALLET_INSUFFICIENT_BALANCE (CD-02)")
+    void selectReceiver_whenGiveToSwap_insufficientBalance_throwsException() {
+        // given: bài GIVE, request có offeredItemId
+        Request selectedRequest = new Request(1L, 10L, 50L, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+
+        org.mockito.Mockito.doThrow(new BusinessException(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE))
+                .when(creditService)
+                .spend(20L, 5, CreditTxType.POST_FEE, 1L);
+
+        // when & then
+        assertThatThrownBy(() -> requestService.selectReceiver(101L, 20L))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE);
+                });
+
+        org.mockito.Mockito.verify(itemService, org.mockito.Mockito.never()).reserve(anyLong());
+    }
+
+    @Test
+    @DisplayName(
+            "Chủ bài Trao đổi chọn yêu cầu không kèm món: không hoàn phí, đổi sang GIVE và chỉ giữ chỗ 1 món (CD-04)")
+    void selectReceiver_whenSwapToGive_convertsBothTypesAndReservesOnlyMainItem() {
+        // given: bài SWAP, request không có offeredItemId
+        Request selectedRequest = new Request(1L, 10L, null, "SWAP");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+
+        // when
+        RequestResponse response = requestService.selectReceiver(101L, 20L);
+
+        // then
+        org.mockito.Mockito.verifyNoInteractions(creditService);
+        org.mockito.Mockito.verify(itemService).convertOfferType(1L, OfferType.GIVE);
+        assertThat(selectedRequest.getType()).isEqualTo("GIVE");
+        assertThat(response.type()).isEqualTo("GIVE");
+        org.mockito.Mockito.verify(itemService).reserve(1L);
+        org.mockito.Mockito.verify(itemService, org.mockito.Mockito.never()).reserve(50L);
     }
 
     @Test

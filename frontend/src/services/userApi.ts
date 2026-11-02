@@ -1,4 +1,5 @@
 import { http } from './http';
+import type { ItemResponse, PageResponse } from './itemApi';
 
 // Theo docs/api/user.md. Id người dùng lấy từ token, không gửi kèm.
 export interface MeResponse {
@@ -34,7 +35,35 @@ export interface ChangePhoneRequest {
   otp: string;
 }
 
+// Theo docs/api/user.md, GET /api/v1/users/{id}/profile. Không có email, số điện thoại, Credit, điểm thưởng.
+export interface PublicProfileResponse {
+  id: number;
+  fullName: string;
+  avatarUrl: string | null;
+  avatarInitials: string;
+  district: string | null;
+  rank: 'BRONZE' | 'SILVER' | 'GOLD' | 'DIAMOND';
+  trustStars: number;
+  // Thang 0–1; null khi dưới 3 giao dịch đã được đánh giá.
+  asDescribedRate: number | null;
+  completedTransactions: number;
+  joinedAt: string;
+}
+
+// Theo docs/api/item.md mục 5: ACTIVE là bài đang hiển thị, DONE là bài đã giao dịch thành công.
+export type UserItemTab = 'ACTIVE' | 'DONE';
+
 export const userApi = {
+  async getPublicProfile(id: number) {
+    const { data } = await http.get<PublicProfileResponse>(`/api/v1/users/${id}/profile`);
+    return data;
+  },
+  async getUserItems(id: number, tab: UserItemTab, page: number, size: number) {
+    const { data } = await http.get<PageResponse<ItemResponse>>(`/api/v1/users/${id}/items`, {
+      params: { tab, page, size },
+    });
+    return data;
+  },
   async getMe() {
     const { data } = await http.get<MeResponse>('/api/v1/me');
     return data;

@@ -17,6 +17,8 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -33,6 +35,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class RequestJobService {
 
     private static final Logger log = LoggerFactory.getLogger(RequestJobService.class);
+
+    // Xử lý theo lô nhỏ tối đa 100 bản ghi / lượt (Mục Q, tương tự ItemExpiryService).
+    private static final int BATCH_SIZE = 100;
 
     private final RequestRepository requestRepository;
     private final ItemService itemService;
@@ -76,12 +81,20 @@ public class RequestJobService {
         int pendingDays = configService.getInt(ConfigKey.REQUEST_PENDING_DAYS);
         Instant cutoff = now.minus(pendingDays, ChronoUnit.DAYS);
 
-        List<Request> expiredList = requestRepository.findByStatusAndCreatedAtBefore(RequestStatus.PENDING, cutoff);
         int count = 0;
-        for (Request request : expiredList) {
-            if (processInOwnTransaction(() -> expirePendingInTransaction(request.getId(), cutoff))) {
-                count++;
+        long lastSeenId = 0;
+        Pageable pageable = PageRequest.of(0, BATCH_SIZE);
+        List<Request> batch =
+                requestRepository.findByStatusAndCreatedAtBefore(RequestStatus.PENDING, cutoff, lastSeenId, pageable);
+        while (!batch.isEmpty()) {
+            for (Request request : batch) {
+                if (processInOwnTransaction(() -> expirePendingInTransaction(request.getId(), cutoff))) {
+                    count++;
+                }
             }
+            lastSeenId = batch.get(batch.size() - 1).getId();
+            batch = requestRepository.findByStatusAndCreatedAtBefore(
+                    RequestStatus.PENDING, cutoff, lastSeenId, pageable);
         }
         return count;
     }
@@ -97,12 +110,18 @@ public class RequestJobService {
         int chatDays = configService.getInt(ConfigKey.CHAT_OPEN_DAYS);
         Instant cutoff = now.minus(chatDays, ChronoUnit.DAYS);
 
-        List<Request> silentList = requestRepository.findSilentReservedRequests(cutoff);
         int count = 0;
-        for (Request request : silentList) {
-            if (processInOwnTransaction(() -> expireSilentReservedInTransaction(request.getId(), cutoff))) {
-                count++;
+        long lastSeenId = 0;
+        Pageable pageable = PageRequest.of(0, BATCH_SIZE);
+        List<Request> batch = requestRepository.findSilentReservedRequests(cutoff, lastSeenId, pageable);
+        while (!batch.isEmpty()) {
+            for (Request request : batch) {
+                if (processInOwnTransaction(() -> expireSilentReservedInTransaction(request.getId(), cutoff))) {
+                    count++;
+                }
             }
+            lastSeenId = batch.get(batch.size() - 1).getId();
+            batch = requestRepository.findSilentReservedRequests(cutoff, lastSeenId, pageable);
         }
         return count;
     }
@@ -117,12 +136,18 @@ public class RequestJobService {
         int autoConfirmDays = configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS);
         Instant cutoff = now.minus(autoConfirmDays, ChronoUnit.DAYS);
 
-        List<Request> overdueList = requestRepository.findOverdueHandoverRequests(cutoff);
         int count = 0;
-        for (Request request : overdueList) {
-            if (processInOwnTransaction(() -> autoConfirmInTransaction(request.getId(), cutoff, now))) {
-                count++;
+        long lastSeenId = 0;
+        Pageable pageable = PageRequest.of(0, BATCH_SIZE);
+        List<Request> batch = requestRepository.findOverdueHandoverRequests(cutoff, lastSeenId, pageable);
+        while (!batch.isEmpty()) {
+            for (Request request : batch) {
+                if (processInOwnTransaction(() -> autoConfirmInTransaction(request.getId(), cutoff, now))) {
+                    count++;
+                }
             }
+            lastSeenId = batch.get(batch.size() - 1).getId();
+            batch = requestRepository.findOverdueHandoverRequests(cutoff, lastSeenId, pageable);
         }
         return count;
     }

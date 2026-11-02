@@ -93,11 +93,24 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
 
     /**
      * Tìm các yêu cầu ở trạng thái cụ thể được tạo trước một mốc thời gian (FR-119, BR-R06).
+     * Phân trang kiểu keyset theo id > afterId, tối đa limit bản ghi (Mục Q).
      */
-    List<Request> findByStatusAndCreatedAtBefore(RequestStatus status, java.time.Instant cutoff);
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.status = :status
+        AND r.createdAt < :cutoff
+        AND r.id > :afterId
+        ORDER BY r.id ASC
+    """)
+    List<Request> findByStatusAndCreatedAtBefore(
+            @Param("status") RequestStatus status,
+            @Param("cutoff") java.time.Instant cutoff,
+            @Param("afterId") long afterId,
+            org.springframework.data.domain.Pageable pageable);
 
     /**
      * Tìm các yêu cầu RESERVED hoặc AWAITING_LOGISTICS quá hạn chưa chốt lịch (FR-120, BR-T10, FR-77, BR-C03).
+     * Phân trang kiểu keyset theo id > afterId, tối đa limit bản ghi (Mục Q).
      */
     @Query("""
         SELECT r FROM Request r
@@ -107,11 +120,17 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
         )
         AND r.reservedAt IS NOT NULL
         AND r.reservedAt < :cutoff
+        AND r.id > :afterId
+        ORDER BY r.id ASC
     """)
-    List<Request> findSilentReservedRequests(@Param("cutoff") java.time.Instant cutoff);
+    List<Request> findSilentReservedRequests(
+            @Param("cutoff") java.time.Instant cutoff,
+            @Param("afterId") long afterId,
+            org.springframework.data.domain.Pageable pageable);
 
     /**
      * Tìm các yêu cầu AWAITING_HANDOVER có đúng một bên xác nhận quá hạn im lặng (FR-87, BR-T06).
+     * Phân trang kiểu keyset theo id > afterId, tối đa limit bản ghi (Mục Q).
      */
     @Query("""
         SELECT r FROM Request r
@@ -121,6 +140,37 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
             OR
             (r.receiverHandoverAt IS NOT NULL AND r.donorHandoverAt IS NULL AND r.receiverHandoverAt < :cutoff)
         )
+        AND r.id > :afterId
+        ORDER BY r.id ASC
     """)
-    List<Request> findOverdueHandoverRequests(@Param("cutoff") java.time.Instant cutoff);
+    List<Request> findOverdueHandoverRequests(
+            @Param("cutoff") java.time.Instant cutoff,
+            @Param("afterId") long afterId,
+            org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Đếm giao dịch COMPLETED mà người dùng tham gia, ở vai người nhận hoặc chủ bài (hồ sơ công khai).
+     * Dùng native query vì donor_id nằm ở bảng items của module item, entity Request chỉ giữ item_id;
+     * cùng cách với {@link #hasActiveDelivery}.
+     */
+    @Query(value = """
+        SELECT COUNT(*) FROM requests r
+        WHERE (r.receiver_id = :userId OR EXISTS (
+            SELECT 1 FROM items i WHERE i.id = r.item_id AND i.donor_id = :userId
+        ))
+        AND r.status = 'COMPLETED'
+        AND r.is_deleted = false
+    """, nativeQuery = true)
+    long countCompletedByUser(@Param("userId") long userId);
+
+    /**
+     * Các yêu cầu COMPLETED gắn với một nhóm bài, ở vai bài chính (item_id) hoặc món đề nghị khi trao đổi
+     * (offered_item_id). Dùng để lấy thời điểm hoàn tất cho thẻ bài đã giao dịch.
+     */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.status = com.shareloop.request.entity.RequestStatus.COMPLETED
+        AND (r.itemId IN :itemIds OR r.offeredItemId IN :itemIds)
+    """)
+    List<Request> findCompletedByItemIds(@Param("itemIds") Collection<Long> itemIds);
 }

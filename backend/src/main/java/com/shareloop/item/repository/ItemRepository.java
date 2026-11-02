@@ -68,6 +68,23 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     List<Item> findByDonorIdOrderByCreatedAtDesc(Long donorId);
 
+    /**
+     * Bài đang hiển thị công khai của một người (tab "Đang hoạt động" ở hồ sơ): cùng điều kiện với trang Tìm đồ
+     * (APPROVED, không ẩn, chưa xoá, còn hạn), mới nhất trước. Native vì expire_at do module listingfee map, entity Item
+     * không có cột này.
+     */
+    @Query(
+            value = "SELECT i.* FROM items i WHERE i.donor_id = :donorId AND i.status = 'APPROVED' "
+                    + "AND i.is_active AND NOT i.is_deleted AND (i.expire_at IS NULL OR i.expire_at > :now) "
+                    + "ORDER BY i.created_at DESC, i.id DESC",
+            countQuery = "SELECT count(*) FROM items i WHERE i.donor_id = :donorId AND i.status = 'APPROVED' "
+                    + "AND i.is_active AND NOT i.is_deleted AND (i.expire_at IS NULL OR i.expire_at > :now)",
+            nativeQuery = true)
+    Page<Item> findPublicActiveByDonor(@Param("donorId") Long donorId, @Param("now") Instant now, Pageable pageable);
+
+    /** Bài theo chủ bài và trạng thái, không bị ẩn, có phân trang (tab "Đã giao dịch" ở hồ sơ dùng TRADED). */
+    Page<Item> findByDonorIdAndStatusAndIsActiveTrue(Long donorId, ItemStatus status, Pageable pageable);
+
     List<Item> findByDonorIdAndIsActiveTrue(Long donorId);
 
     List<Item> findByDonorIdAndStatusAndIsActiveTrue(Long donorId, ItemStatus status);

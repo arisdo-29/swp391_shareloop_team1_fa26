@@ -16,12 +16,21 @@ import { Bell } from '@phosphor-icons/react/dist/csr/Bell';
 import { UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
 import { Image } from '@phosphor-icons/react/dist/csr/Image';
 import { MapPin } from '@phosphor-icons/react/dist/csr/MapPin';
+import { Check } from '@phosphor-icons/react/dist/csr/Check';
 import { Link } from 'react-router-dom';
-import type { Item, ItemCondition, ItemType, TransactionStatus, User } from '../types/domain';
+import type {
+  Item,
+  ItemCondition,
+  ItemRequestStatus,
+  ItemType,
+  TransactionStatus,
+  User,
+} from '../types/domain';
 import { conditionLabel, txLabel } from '../utils/formatting';
 import { resolveMediaUrl } from '../services/mediaUrl';
 
-// Chỉ giữ icon có chức năng (đóng, mở menu, hiện mật khẩu, mở danh sách, thông báo, đính kèm ảnh).
+// Chỉ giữ icon có chức năng (đóng, mở menu, hiện mật khẩu, mở danh sách, thông báo, đính kèm ảnh,
+// dấu đã xong của bước giao dịch).
 // Icon trang trí như mũi tên, kính lúp, dấu cộng đã bỏ: nút và nhãn dùng chữ.
 const iconMap = {
   close: X,
@@ -32,6 +41,7 @@ const iconMap = {
   bell: Bell,
   user: UserCircle,
   image: Image,
+  check: Check,
 } as const;
 
 export type IconName = keyof typeof iconMap;
@@ -258,16 +268,20 @@ function statusTone(status: string): string {
   return 'bg-warning-soft text-warning';
 }
 
+// label tuỳ chọn: nơi có bộ nhãn riêng (ví dụ requestStatusLabel của Request) truyền nhãn vào, màu vẫn theo status.
+// Không truyền label thì giữ nguyên nhãn cũ cho mọi chỗ đang dùng.
 export function StatusBadge({
   status,
+  label,
 }: {
-  status: TransactionStatus | Item['status'] | User['status'];
+  status: TransactionStatus | ItemRequestStatus | Item['status'] | User['status'];
+  label?: string;
 }) {
   return (
     <span
       className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${statusTone(status)}`}
     >
-      {statusLabel(status)}
+      {label ?? statusLabel(status)}
     </span>
   );
 }
@@ -412,12 +426,26 @@ function productCardConditionClass(condition: ItemCondition) {
   return 'bg-[#FFEDD5] text-[#9A3412]';
 }
 
-export function ProductCard({ item, tradeFor }: { item: Item; tradeFor?: string }) {
+// imageLabel: nhãn phụ trên ảnh (ví dụ "Tạm ẩn"); footer: thay dòng khu vực ở chân thẻ (ví dụ ngày giao dịch).
+// Không truyền thì thẻ giữ nguyên như mọi chỗ đang dùng.
+export function ProductCard({
+  item,
+  tradeFor,
+  from,
+  imageLabel,
+  footer,
+}: {
+  item: Item;
+  tradeFor?: string;
+  from?: 'ai';
+  imageLabel?: string;
+  footer?: ReactNode;
+}) {
   const description = productCardDescription(item.description);
 
   return (
     <Link
-      to={`/items/${item.id}`}
+      to={`/items/${item.id}${from === 'ai' ? '?from=ai' : ''}`}
       className="group flex h-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-[16px] border border-[#E5E7EB] bg-white shadow-[0_4px_14px_rgba(15,23,42,0.10)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_12px_28px_rgba(15,23,42,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-hover focus-visible:ring-offset-2"
     >
       <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden rounded-t-[15px] bg-[#F3F4F6]">
@@ -436,6 +464,11 @@ export function ProductCard({ item, tradeFor }: { item: Item; tradeFor?: string 
         >
           {item.type === 'gift' ? 'Cho tặng' : 'Trao đổi'}
         </span>
+        {imageLabel ? (
+          <span className="absolute right-3 top-3 inline-flex rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-text-secondary shadow-sm">
+            {imageLabel}
+          </span>
+        ) : null}
       </div>
       <div className="flex min-w-0 flex-1 flex-col p-3.5 sm:p-4">
         <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-[#111827] sm:text-[15px]">
@@ -461,8 +494,12 @@ export function ProductCard({ item, tradeFor }: { item: Item; tradeFor?: string 
           </span>
         </div>
         <div className="mt-auto flex min-w-0 items-center gap-1.5 border-t border-[#F3F4F6] pt-3 text-xs text-[#374151]">
-          <MapPin aria-hidden className="size-3.5 shrink-0" weight="fill" />
-          <span className="min-w-0 truncate">{item.district}</span>
+          {footer ?? (
+            <>
+              <MapPin aria-hidden className="size-3.5 shrink-0" weight="fill" />
+              <span className="min-w-0 truncate">{item.district}</span>
+            </>
+          )}
         </div>
       </div>
     </Link>

@@ -106,19 +106,23 @@ class AiQuotaIT extends IntegrationTest {
         ItemService itemService = mock(ItemService.class);
         ConfigService configService = mock(ConfigService.class);
         when(aiClient.isAvailable()).thenReturn(true);
-        when(aiClient.extract(eq("sách"), any(), eq(Duration.ofSeconds(15))))
+        when(aiClient.model()).thenReturn("gemini-3.5-flash-lite");
+        when(aiClient.recommend(eq("sách"), any(), eq(Duration.ofSeconds(15))))
                 .thenReturn(
                         new AiResponse(
-                                "cohere/north-mini-code:free",
-                                "{\"keywords\":\"sách\",\"categoryId\":null,\"areaId\":null,\"condition\":null,\"offerType\":null}"));
-        when(categoryService.listActive()).thenReturn(List.of());
-        when(areaService.listTree()).thenReturn(List.of());
+                                "gemini-3.5-flash-lite", "{\"inScope\":true,\"itemIds\":[],\"message\":\"Chưa có\"}"),
+                        new AiResponse(
+                                "gemini-3.5-flash-lite",
+                                "{\"inScope\":true,\"itemIds\":[1],\"message\":\"Đã tìm thấy\"}"));
         when(configService.getInt(ConfigKey.AI_SEARCH_TIMEOUT_SECONDS)).thenReturn(15);
         when(configService.getInt(ConfigKey.AI_SEARCH_FEE)).thenReturn(2);
-        when(itemService.searchApprovedForAi(null, null, "sách", null, null, 0, 20))
-                .thenReturn(
-                        new PageResponse<>(List.of(), 0, 20, 0),
-                        new PageResponse<>(List.of(mock(ItemResponse.class)), 0, 20, 1));
+        when(categoryService.listActive()).thenReturn(List.of());
+        when(areaService.listTree()).thenReturn(List.of());
+        ItemResponse item = mock(ItemResponse.class);
+        when(item.id()).thenReturn(1L);
+        when(itemService.getItem(1L, null)).thenReturn(item);
+        when(itemService.searchApprovedForAi(null, null, "", null, null, 0, 100))
+                .thenReturn(new PageResponse<>(List.of(), 0, 100, 0), new PageResponse<>(List.of(item), 0, 100, 1));
         AiSearchService searchService = new AiSearchService(
                 aiClient,
                 categoryService,
@@ -129,7 +133,7 @@ class AiQuotaIT extends IntegrationTest {
                 mock(ActivityLogService.class),
                 new JsonMapper());
 
-        AiSearchResponse empty = searchService.search(userId, "sách", 0, 20);
+        AiSearchResponse empty = searchService.search(userId, "sách");
         assertThat(empty.results().totalElements()).isZero();
         assertThat(empty.quota().freeUsesRemaining()).isEqualTo(5);
         assertThat(jdbc.sql("SELECT count(*) FROM credit_ledger WHERE user_id = :id")
@@ -139,12 +143,12 @@ class AiQuotaIT extends IntegrationTest {
                 .isZero();
 
         for (int remaining = 4; remaining >= 0; remaining--) {
-            AiSearchResponse response = searchService.search(userId, "sách", 0, 20);
+            AiSearchResponse response = searchService.search(userId, "sách");
             assertThat(response.fallback()).isFalse();
             assertThat(response.quota().freeUsesRemaining()).isEqualTo(remaining);
             assertThat(response.chargedCredits()).isZero();
         }
-        AiSearchResponse paid = searchService.search(userId, "sách", 0, 20);
+        AiSearchResponse paid = searchService.search(userId, "sách");
         assertThat(paid.fallback()).isFalse();
         assertThat(paid.chargedCredits()).isEqualTo(2);
         assertThat(jdbc.sql("SELECT credit_balance FROM users WHERE id = :id")

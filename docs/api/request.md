@@ -30,13 +30,13 @@ Mọi đổi trạng thái đi qua `RequestStatus.canTransition`; cạnh không 
 
 `COMPLETED`, `REJECTED`, `CANCELLED` là trạng thái cuối. Không có cạnh `LOGISTICS_CONFIRMED -> DISPUTED`.
 
-Khi chủ bài đổi hình thức `GIVE` ↔ `SWAP` bằng `PUT /api/v1/items/{id}`, mọi Request `PENDING` của bài chuyển sang `CANCELLED` và người gửi nhận thông báo `REQUEST_CANCELLED`. Việc huỷ nằm trong cùng transaction sửa bài; nếu sửa bài hoặc giữ phí thất bại, Request giữ nguyên.
+Chuyển đổi hình thức Cho ↔ Trao đổi diễn ra linh hoạt tại thời điểm chủ bài chọn người nhận (CD-01 … CD-07, D-02). Khi chọn người, bài đăng và yêu cầu sẽ tự động đổi sang SWAP (nếu có món trao đổi kèm) hoặc GIVE (nếu không có món trao đổi), không thực hiện đổi hình thức qua API sửa bài đăng.
 
 ---
 
 ## 1. POST /api/v1/items/{itemId}/requests
 
-Gửi yêu cầu xin đồ (với bài Give) hoặc đề nghị trao đổi đồ (với bài Swap) (F10 bước 1, UC-20).
+Gửi yêu cầu xin đồ (với bài Give) hoặc đề nghị trao đổi đồ (với bài Swap) (F10 bước 1, UC-20, CD-01).
 
 - **Xác thực:** Bắt buộc JWT (`Member`).
 - **Path variable:** `itemId` (id của bài đăng muốn xin/đổi).
@@ -44,7 +44,7 @@ Gửi yêu cầu xin đồ (với bài Give) hoặc đề nghị trao đổi đ�
 
 ```json
 {
-  "offeredItemId": 12 // Bắt buộc nếu bài đăng là SWAP; để null nếu là GIVE
+  "offeredItemId": 12 // Tuỳ chọn cho cả bài GIVE và SWAP (CD-01). Cho phép gửi kèm món đổi khi xin bài GIVE; cho phép để null khi xin bài SWAP. Nếu có, món phải thuộc sở hữu của người gửi, đang APPROVED, is_active và khác itemId.
 }
 ```
 
@@ -66,14 +66,12 @@ Gửi yêu cầu xin đồ (với bài Give) hoặc đề nghị trao đổi đ�
 ```
 
 - **Lỗi:**
-  - `400 REQUEST_SELF_OFFER_NOT_ALLOWED`: Gửi yêu cầu tới bài của chính mình (BR-R01).
+  - `400 REQUEST_SELF_OFFER_NOT_ALLOWED`: Gửi yêu cầu tới bài của chính mình (BR-R01) hoặc chọn chính món đang xin làm món đề nghị (CD-01).
   - `400 REQUEST_LIMIT_EXCEEDED`: Đã có 5 yêu cầu đang ở trạng thái PENDING (BR-U02).
-  - `400 REQUEST_SWAP_OFFERED_ITEM_REQUIRED`: Bài đăng là Trao đổi nhưng không đính kèm món đề nghị (BR-S02).
-  - `400 REQUEST_OFFERED_ITEM_NOT_ALLOWED`: Bài đăng cho tặng không nhận món đề nghị trao đổi (YC-04).
   - `403 REQUEST_ADMIN_BLOCKED`: Quản trị viên không được gửi yêu cầu giao dịch (TK-13).
   - `403 REQUEST_REPUTATION_BLOCKED`: Tài khoản có 0 sao uy tín, bị vô hiệu hoá quyền gửi yêu cầu giao dịch (BR-U05, FR-92).
-  - `404 REQUEST_ITEM_NOT_FOUND`: Không tìm thấy bài đăng hoặc bài đã bị xoá/gỡ.
-  - `409 REQUEST_ITEM_NOT_AVAILABLE`: Bài đăng không ở trạng thái sẵn sàng nhận yêu cầu (không phải APPROVED).
+  - `404 REQUEST_ITEM_NOT_FOUND`: Không tìm thấy bài đăng hoặc món đề nghị không tồn tại.
+  - `409 REQUEST_ITEM_NOT_AVAILABLE`: Bài đăng hoặc món đề nghị không ở trạng thái sẵn sàng (không phải APPROVED, bị ẩn, hoặc không thuộc sở hữu người gửi).
   - `409 REQUEST_ALREADY_EXISTS`: Đã có yêu cầu đang hoạt động cho bài này (BR-R02).
 
 ---
@@ -147,20 +145,33 @@ Chủ bài đăng chọn đúng một người nhận cho bài đăng (F10 bư�
 - **Xác thực:** Bắt buộc JWT (phải là chủ bài đăng `donorId`).
 - **Path variable:** `id` (id của request được chọn).
 - **Hành vi nghiệp vụ:**
+  - **Chuyển đổi hình thức Cho ↔ Trao đổi (CD-01 … CD-07):**
+    - **Cho → Trao đổi (CD-02, CD-06):** Chủ bài Cho (`offer_type = 'GIVE'`) chọn yêu cầu có kèm món (`offeredItemId != null`):
+      - Trừ 5 Credit phí đăng bài (`POST_FEE`) từ ví của chủ bài ngay lúc chọn. Nếu số dư khả dụng không đủ, giao dịch không được chọn và trả lỗi `402 WALLET_INSUFFICIENT_BALANCE`.
+      - Bài đăng tự động đổi sang `SWAP` (`offer_type = 'SWAP'`).
+      - Yêu cầu được chọn đổi sang `SWAP` (`type = 'SWAP'`).
+      - Cả 2 món (`itemId` và `offeredItemId`) đều chuyển sang `RESERVED`.
+    - **Trao đổi → Cho (CD-04):** Chủ bài Trao đổi (`offer_type = 'SWAP'`) chọn yêu cầu không kèm món (`offeredItemId == null`):
+      - Không hoàn lại 5 Credit phí đăng bài đã nộp trước đó.
+      - Bài đăng tự động đổi sang `GIVE` (`offer_type = 'GIVE'`).
+      - Yêu cầu được chọn đổi sang `GIVE` (`type = 'GIVE'`).
+      - Chỉ 1 món (`itemId`) chuyển sang `RESERVED`.
+    - **Giữ nguyên hình thức (CD-03, CD-05):** Cho chọn Cho (giữ `GIVE`, chỉ giữ chỗ 1 món); Trao đổi chọn Trao đổi (giữ `SWAP`, giữ chỗ cả 2 món).
   - Request được chọn chuyển sang trạng thái `RESERVED` (`reservedAt` được ghi nhận).
   - Tất cả các Request khác gửi tới cùng bài đăng đang ở trạng thái `PENDING` sẽ tự động chuyển sang `REJECTED`.
-  - Bài đăng chuyển sang trạng thái `RESERVED` qua `ItemService.reserve(itemId)`. Với yêu cầu `SWAP`, món mang đổi
-    (`offeredItemId`) cũng chuyển `RESERVED` trong cùng transaction; nếu món đó không còn `APPROVED` thì cả lần chọn bị
-    hoàn tác và trả `409 ITEM_INVALID_STATUS_TRANSITION`.
-  - Khi giao dịch bị huỷ (người dùng, job hết hạn), cả hai món được nhả về `APPROVED`.
+  - Các yêu cầu PENDING khác ở các bài khác đang dùng cùng món đề nghị `offeredItemId` tự động bị `CANCELLED` (FR-66, BR-S03).
+  - Điểm uy tín khi hoàn tất (`COMPLETED`): tự động tính theo `requests.type` sau chuyển đổi (CD-07).
+  - Khi giao dịch bị huỷ (người dùng, job hết hạn), các món đã giữ chỗ được nhả về `APPROVED`.
   - Người nhận được chọn nhận thông báo `REQUEST_ACCEPTED`.
   - Các người nhận bị từ chối nhận thông báo `REQUEST_REJECTED`.
 - **Thành công:** `200 OK`, trả về `RequestResponse` của yêu cầu được chọn (`status = RESERVED`).
 - **Lỗi:**
+  - `402 WALLET_INSUFFICIENT_BALANCE`: Số dư Credit của chủ bài không đủ 5 Credit để chuyển từ Cho sang Trao đổi (CD-02, CD-06).
   - `403 REQUEST_FORBIDDEN`: Không phải chủ bài đăng.
   - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
   - `404 REQUEST_ITEM_NOT_FOUND`: Không tìm thấy bài đăng liên quan.
   - `409 REQUEST_INVALID_STATE_TRANSITION`: Yêu cầu không còn ở trạng thái `PENDING` để chọn.
+  - `409 ITEM_INVALID_STATUS_TRANSITION`: Món đồ (bài chính hoặc món đề nghị) không còn ở trạng thái `APPROVED` để giữ chỗ.
 
 ---
 
@@ -170,7 +181,8 @@ Xem chi tiết thông tin của một yêu cầu giao dịch (F10, UC-26).
 
 - **Xác thực:** Bắt buộc JWT (phải là chủ bài đăng `donorId` hoặc người nhận `receiverId`).
 - **Path variable:** `id` (id của request).
-- **Thành công:** `200 OK`, trả về `RequestResponse`.
+- **Thành công:** `200 OK`, trả về `RequestResponse`. Riêng endpoint này kèm `handoverMedia` (ảnh giao nhận, cùng dữ
+  liệu với `GET /requests/{id}/media`) để màn Tiến trình giao dịch chỉ cần một lần gọi.
 - **Lỗi:**
   - `403 REQUEST_FORBIDDEN`: Không phải thành viên tham gia giao dịch này.
   - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
@@ -278,7 +290,7 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
 ```json
 {
   "asDescribed": true,
-  "notAsDescribedReason": "Món đồ bị vỡ một góc không giống trong ảnh", // Bắt buộc nếu người nhận chọn asDescribed = false
+  "notAsDescribedReason": "Món đồ bị vỡ một góc không giống trong ảnh", // Bắt buộc nếu người nhận chọn asDescribed = false, tối đa 1000 ký tự (BC-01)
   "mediaIds": [1, 2] // Tuỳ chọn: danh sách ID ảnh/video minh chứng khi giao nhận (FR-86, BR-T09)
 }
 ```
@@ -298,6 +310,7 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
     - Gửi thông báo `TRANSACTION_COMPLETED` cho cả hai bên.
 - **Thành công:** `200 OK`, trả về `RequestResponse`.
 - **Lỗi:**
+  - `400 VALIDATION_FAILED`: Lý do không đúng mô tả vượt quá 1000 ký tự (BC-01).
   - `400 REQUEST_AS_DESCRIBED_REQUIRED`: Bên nhận chưa trả lời câu hỏi món đồ có đúng mô tả không.
   - `400 REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED`: Thiếu lý do khi chọn không đúng mô tả.
   - `403 REQUEST_FORBIDDEN`: Không phải thành viên tham gia giao dịch.
@@ -463,6 +476,13 @@ thì chưa.
 | `receiverAsDescribedRate` | number? | Tỉ lệ giao dịch đúng mô tả của người gửi yêu cầu, thang 0.00 - 1.00 (vd `0.92` là 92%). `null` khi có dưới 3 giao dịch hoàn tất đã được đánh giá "đúng mô tả?" (SRS 6.12). Alias: `asDescribedRate` (FR-65) |
 | `lastMessageAt` | string? | Thời điểm tin nhắn mới nhất trong hội thoại của giao dịch ISO-8601 UTC (U03). `null` khi chưa có tin nhắn nào |
 | `disputeResponseDueAt` | string? | Hạn giải trình của khiếu nại đang mở thuộc giao dịch ISO-8601 UTC (U5-BE, D-04, GN-07). Chỉ có giá trị khi `status = DISPUTED`, các trạng thái khác luôn là `null`. FE dùng để hiển thị thời hạn giải trình |
+| `donorAvatarUrl` | string? | Ảnh đại diện chủ bài, dạng `/api/v1/media/{id}`; `null` khi chưa có ảnh. Có ở mọi API trả `RequestResponse` |
+| `receiverAvatarUrl` | string? | Ảnh đại diện người nhận, cùng quy ước với `donorAvatarUrl` |
+| `disputeExpired` | boolean | `true` khi giao dịch đã hoàn tất và thời điểm hiện tại đã qua `complaintDeadline` (hết hạn khiếu nại); `false` trong mọi trường hợp khác, kể cả khi chưa hoàn tất. Backend tính từ `complaint_window_hours`, FE không tự so giờ |
+| `handoverMedia` | array? | Ảnh giao nhận và ảnh khiếu nại (`RequestMediaResponse`: `mediaId`, `url`, `stage` = `HANDOVER`/`DISPUTE`, `uploadedBy`, `createdAt`), cũ trước. **Chỉ có ở `GET /requests/{id}`**; các danh sách và phản hồi thao tác trả `null` (xem riêng qua `GET /requests/{id}/media`) |
+
+Các trường đã có từ trước và dùng cho màn Tiến trình giao dịch: `meetingTime`, `meetingPlace` (lịch giao nhận),
+`completedAt` (thời điểm hoàn tất), `complaintDeadline` (hạn khiếu nại).
 
 ### ScheduleRequest
 
@@ -497,7 +517,7 @@ thì chưa.
 | Trường | Kiểu | Bắt buộc | Ràng buộc |
 |---|---|---|---|
 | `asDescribed` | boolean | Bên nhận: Có | Bắt buộc với bên nhận |
-| `notAsDescribedReason` | string | Không | Bắt buộc nếu `asDescribed = false` |
+| `notAsDescribedReason` | string | Không | Bắt buộc nếu `asDescribed = false`, tối đa 1000 ký tự |
 | `mediaIds` | number[] | Không | Danh sách ID ảnh/video minh chứng khi giao nhận (FR-86, BR-T09) |
 
 ### AttachMediaRequest
@@ -542,3 +562,15 @@ thì chưa.
 | `REQUEST_INVALID_STATE_TRANSITION` | 409 | Chuyển đổi trạng thái không hợp lệ theo sơ đồ |
 | `REQUEST_FORBIDDEN` | 403 | Không có quyền thao tác trên yêu cầu này (hoặc người ngoài xem minh chứng) |
 
+
+## Dành cho module khác: RequestQueryService
+
+Không phải endpoint HTTP. Module khác đọc dữ kiện về Request qua `com.shareloop.request.service.RequestQueryService`
+(read-only), không inject `RequestRepository`.
+
+| Hàm | Người gọi | Ý nghĩa |
+|-----|-----------|---------|
+| `boolean hasReservedOrHigherRequest(long itemId)` | item | Bài đã có Request từ `RESERVED` trở lên |
+| `boolean hasActiveDelivery(long userId)` | user | Người dùng đang có giao dịch `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER` (BR-U10) |
+| `long countCompletedByUser(long userId)` | user (hồ sơ công khai) | Số Request `COMPLETED` người dùng tham gia, tính cả vai người nhận và chủ bài |
+| `Map<Long, Instant> findCompletedAtByItemIds(Collection<Long> itemIds)` | item (bài `TRADED`) | `completed_at` theo id bài; bài là bài chính (`item_id`) hoặc món đề nghị (`offered_item_id`) đều tính. Bài chưa có Request `COMPLETED` không có trong map |
