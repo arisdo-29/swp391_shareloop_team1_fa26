@@ -118,6 +118,10 @@ export interface Item {
   donorRank?: string;
   donorAsDescribedRate?: number;
   donorLocked?: boolean;
+  // Có khi bài đã giao dịch thành công (TRADED).
+  completedAt?: string;
+  // Backend trả false khi bài không còn nhận yêu cầu; undefined khi API không trả cờ này.
+  requestable?: boolean;
 }
 
 export interface Transaction {
