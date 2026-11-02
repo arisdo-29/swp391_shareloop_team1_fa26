@@ -412,12 +412,12 @@ function productCardConditionClass(condition: ItemCondition) {
   return 'bg-[#FFEDD5] text-[#9A3412]';
 }
 
-export function ProductCard({ item, tradeFor }: { item: Item; tradeFor?: string }) {
+export function ProductCard({ item, tradeFor, from }: { item: Item; tradeFor?: string; from?: 'ai' }) {
   const description = productCardDescription(item.description);
 
   return (
     <Link
-      to={`/items/${item.id}`}
+      to={`/items/${item.id}${from === 'ai' ? '?from=ai' : ''}`}
       className="group flex h-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-[16px] border border-[#E5E7EB] bg-white shadow-[0_4px_14px_rgba(15,23,42,0.10)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_12px_28px_rgba(15,23,42,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-hover focus-visible:ring-offset-2"
     >
       <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden rounded-t-[15px] bg-[#F3F4F6]">

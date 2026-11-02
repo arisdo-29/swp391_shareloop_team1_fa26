@@ -9,6 +9,13 @@ describe('productDetailBackLink', () => {
     });
   });
 
+  it('quay lại danh sách gợi ý khi mở bài từ trợ lý AI', () => {
+    expect(productDetailBackLink('?from=ai')).toEqual({
+      target: '/ai',
+      label: 'Quay lại gợi ý AI',
+    });
+  });
+
   it.each(['', '?from=browse', '?from=https://example.com', '?from=/messages'])(
     'bỏ qua nguồn không hợp lệ: %s',
     (search) => {
