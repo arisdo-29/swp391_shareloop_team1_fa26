@@ -7,7 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { actions, store } from '../../app/store';
 import { chatApi } from '../../services/chatApi';
 import { itemApi, type ItemResponse } from '../../services/itemApi';
-import { requestApi, type RequestResponse } from '../../services/requestApi';
+import {
+  requestApi,
+  type RequestMediaResponse,
+  type RequestResponse,
+} from '../../services/requestApi';
 import type { User } from '../../types/domain';
 import { Messages } from './Messages';
 
@@ -100,14 +104,18 @@ function LocationProbe() {
 }
 
 /** Dựng trang Tin nhắn cho người dùng `viewerId` với giao dịch `current` đang mở. */
-async function renderMessages(viewerId: number, current: RequestResponse) {
+async function renderMessages(
+  viewerId: number,
+  current: RequestResponse,
+  media: RequestMediaResponse[] = [],
+) {
   store.dispatch(actions.loginFromApi(user(viewerId)));
   const ownedItems = viewerId === DONOR_ID ? [item()] : [];
   vi.mocked(requestApi.mine).mockResolvedValue(viewerId === RECEIVER_ID ? [current] : []);
   vi.mocked(itemApi.mine).mockResolvedValue(ownedItems);
   vi.mocked(requestApi.forItem).mockResolvedValue([current]);
   vi.mocked(requestApi.get).mockResolvedValue(current);
-  vi.mocked(requestApi.media).mockResolvedValue([]);
+  vi.mocked(requestApi.media).mockResolvedValue(media);
   vi.mocked(itemApi.detail).mockResolvedValue(item());
   vi.mocked(chatApi.list).mockResolvedValue([]);
   vi.mocked(chatApi.pinnedItems).mockResolvedValue([]);

@@ -86,13 +86,6 @@
   text-underline-offset: 3px;
 }
 
-.auth-entry .auth-entry-about::after {
-  display: inline-block;
-  margin-left: 5px;
-  content: '→';
-  text-decoration: none;
-}
-
 .auth-entry .auth-entry-about:hover {
   color: white;
   text-decoration-thickness: 3px;

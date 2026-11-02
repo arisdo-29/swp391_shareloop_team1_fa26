@@ -26,6 +26,10 @@ import { userProfilePath } from '../../utils/chatMessages';
 import { reputationBlockedMessage } from '../../utils/apiErrorMessages';
 import { loginPath } from '../../utils/authRedirect';
 import { productDetailBackLink } from '../../utils/productDetailNavigation';
+import { findActiveSwapPair, isActiveRequestStatus } from '../../utils/swapRequest';
+
+const DUPLICATE_SWAP_MESSAGE =
+  'Hai món đồ này đã có yêu cầu trao đổi. Xem yêu cầu hiện có trước khi tiếp tục.';
 
 export function ProductDetail() {
   const { id } = useParams();
@@ -43,6 +47,7 @@ export function ProductDetail() {
   const [itemError, setItemError] = useState('');
   const [itemReloadKey, setItemReloadKey] = useState(0);
   const [requestSubmitting, setRequestSubmitting] = useState(false);
+  const [duplicateSwapRequest, setDuplicateSwapRequest] = useState<ItemRequest | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportNotice, setReportNotice] = useState('');
@@ -167,7 +172,7 @@ export function ProductDetail() {
         (request) =>
           request.itemId === item.id &&
           request.requesterId === user.id &&
-          (request.status === 'PENDING' || request.status === 'RESERVED'),
+          isActiveRequestStatus(request.status),
       )
     : undefined;
   const eligibleOfferedItems = user
@@ -185,6 +190,7 @@ export function ProductDetail() {
   const submitRequest = async () => {
     setRequestError('');
     setRequestSuccess('');
+    setDuplicateSwapRequest(null);
     if (!user) {
       navigate(loginPath(`${location.pathname}${location.search}${location.hash}`));
       return;
@@ -198,16 +204,44 @@ export function ProductDetail() {
       setRequestError('Uy tín của bạn đang ở mức 0 nên hiện không thể gửi yêu cầu.');
       return;
     }
-    if (existingRequest) {
-      setRequestError(`Bạn đã gửi yêu cầu cho món đồ này. Trạng thái hiện tại: ${requestStatusLabel[existingRequest.status]}.`);
-      return;
-    }
     if (item.type === 'trade' && !offeredItemId) {
       setRequestError('Vui lòng chọn món bạn muốn dùng để trao đổi.');
       return;
     }
+    const directSwapRequest =
+      item.type === 'trade'
+        ? findActiveSwapPair(apiSentRequests, item.id, offeredItemId)
+        : undefined;
+    if (directSwapRequest) {
+      setDuplicateSwapRequest(directSwapRequest);
+      setRequestError(DUPLICATE_SWAP_MESSAGE);
+      return;
+    }
+    if (existingRequest) {
+      setRequestError(`Bạn đã gửi yêu cầu cho món đồ này. Trạng thái hiện tại: ${requestStatusLabel[existingRequest.status]}.`);
+      return;
+    }
     setRequestSubmitting(true);
     try {
+      if (item.type === 'trade') {
+        let incomingRequests: ItemRequest[] = [];
+        try {
+          const response = await requestApi.forItem(Number(offeredItemId), currentUserId);
+          incomingRequests = response.map((request) => toFeItemRequest(request));
+        } catch {
+          // Không chặn khi không thể xác minh chiều ngược lại bằng API hiện có.
+        }
+        const reverseSwapRequest = findActiveSwapPair(
+          incomingRequests,
+          item.id,
+          offeredItemId,
+        );
+        if (reverseSwapRequest) {
+          setDuplicateSwapRequest(reverseSwapRequest);
+          setRequestError(DUPLICATE_SWAP_MESSAGE);
+          return;
+        }
+      }
       const request = await requestApi.create(
         Number(item.id),
         currentUserId,
@@ -380,7 +414,16 @@ export function ProductDetail() {
               <p className="text-sm leading-6 text-text-secondary">
                 Trạng thái: <strong className="text-text-primary">{requestStatusLabel[existingRequest.status]}</strong>
               </p>
-              {existingRequest.status === 'RESERVED' ? (
+              {item.type === 'trade' && existingRequest.type === 'trade' ? (
+                <>
+                  <Alert tone="warning">{DUPLICATE_SWAP_MESSAGE}</Alert>
+                  <Link to={`/requests/${existingRequest.id.replace(/^api_req_/, '')}`}>
+                    <Button className="w-full" variant="outline">
+                      Xem yêu cầu
+                    </Button>
+                  </Link>
+                </>
+              ) : existingRequest.status === 'RESERVED' ? (
                 <Link to={`/requests/${existingRequest.id.replace(/^api_req_/, '')}`}>
                   <Button className="w-full">Mở cuộc trò chuyện</Button>
                 </Link>
@@ -419,7 +462,11 @@ export function ProductDetail() {
                       key={entry.id}
                       type="button"
                       aria-pressed={offeredItemId === entry.id}
-                      onClick={() => setOfferedItemId(entry.id)}
+                      onClick={() => {
+                        setOfferedItemId(entry.id);
+                        setDuplicateSwapRequest(null);
+                        setRequestError('');
+                      }}
                       className={`box-border flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-md border p-2.5 text-left transition ${offeredItemId === entry.id ? 'border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
                     >
                       <ItemImage src={entry.images[0]} alt={entry.title} className="h-11 w-14 shrink-0 rounded-md object-cover" />
@@ -461,6 +508,13 @@ export function ProductDetail() {
           )}
           {requestSuccess ? <Alert tone="success">{requestSuccess}</Alert> : null}
           {requestError ? <Alert tone="warning">{requestError}</Alert> : null}
+          {duplicateSwapRequest ? (
+            <Link to={`/requests/${duplicateSwapRequest.id.replace(/^api_req_/, '')}`}>
+              <Button className="w-full" variant="outline">
+                Xem yêu cầu
+              </Button>
+            </Link>
+          ) : null}
           {reportNotice ? <Alert tone="success">{reportNotice}</Alert> : null}
           {currentUserId && !own ? (
             <button

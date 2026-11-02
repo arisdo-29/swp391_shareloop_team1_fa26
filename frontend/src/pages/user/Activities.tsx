@@ -49,6 +49,13 @@ import type { Item, ItemRequest } from '../../types/domain';
 import type { ApiError } from '../../services/http';
 import { useWallet } from '../../app/useWallet';
 import { canChat, requestStatusLabel } from '../../utils/request';
+import {
+  itemActivityStatusOptions,
+  matchesItemActivityStatus,
+  matchesSentRequestActivityStatus,
+  sentRequestActivityStatusOptions,
+  type ActivityStatusFilter,
+} from '../../utils/activityStatusFilter';
 import { reputationBlockedMessage } from '../../utils/apiErrorMessages';
 import { ReputationBadge } from '../../components/ReputationBadge';
 
@@ -104,6 +111,8 @@ export function Activities() {
   const user = useAppSelector(selectCurrentUser)!;
   const { wallet, refresh: refreshWallet } = useWallet();
   const [tab, setTab] = useState<'items' | 'sent'>('items');
+  const [itemStatusFilter, setItemStatusFilter] = useState<ActivityStatusFilter>('all');
+  const [sentStatusFilter, setSentStatusFilter] = useState<ActivityStatusFilter>('all');
   const [editingId, setEditingId] = useState('');
   const [removeConfirmId, setRemoveConfirmId] = useState('');
   const [requestsItemId, setRequestsItemId] = useState('');
@@ -478,6 +487,16 @@ export function Activities() {
   ).size;
   const sentSelectedCount = apiSentRequests.filter((request) => canChat(request.status)).length;
   const sentPendingCount = apiSentRequests.filter((request) => request.status === 'PENDING').length;
+  const filteredItems = myItems.filter((item) =>
+    matchesItemActivityStatus(item, itemStatusFilter, apiRequestsByItem[item.id] ?? []),
+  );
+  const filteredSentRequests = apiSentRequests.filter((request) =>
+    matchesSentRequestActivityStatus(request, sentStatusFilter),
+  );
+  const activeStatusFilter = tab === 'items' ? itemStatusFilter : sentStatusFilter;
+  const activeStatusOptions =
+    tab === 'items' ? itemActivityStatusOptions : sentRequestActivityStatusOptions;
+  const activeResultCount = tab === 'items' ? filteredItems.length : filteredSentRequests.length;
   const pageNotice = (location.state as { notice?: string } | null)?.notice;
 
   return (
@@ -545,28 +564,51 @@ export function Activities() {
         </section>
       ) : null}
 
-      <div
-        role="tablist"
-        aria-label="Danh sách"
-        className="mb-5 inline-flex w-full gap-1 rounded-lg bg-surface-low p-1 sm:w-auto"
-      >
-        {(
-          [
-            ['items', `Bài của tôi (${myItems.length})`],
-            ['sent', `Yêu cầu tôi đã gửi (${apiSentRequests.length})`],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={tab === value}
-            onClick={() => setTab(value)}
-            className={`min-h-11 flex-1 rounded-md px-4 text-sm font-semibold transition sm:flex-none ${tab === value ? 'bg-white text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div
+          role="tablist"
+          aria-label="Danh sách"
+          className="inline-flex w-full gap-1 rounded-lg bg-surface-low p-1 sm:w-auto"
+        >
+          {(
+            [
+              ['items', `Bài của tôi (${filteredItems.length})`],
+              ['sent', `Yêu cầu tôi đã gửi (${filteredSentRequests.length})`],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={tab === value}
+              onClick={() => setTab(value)}
+              className={`min-h-11 flex-1 rounded-md px-4 text-sm font-semibold transition sm:flex-none ${tab === value ? 'bg-white text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
+          <span className="shrink-0 text-xs text-text-muted">{activeResultCount} kết quả</span>
+          <div className="w-full sm:w-auto">
+            <Select
+              aria-label={`Lọc trạng thái ${tab === 'items' ? 'bài của tôi' : 'yêu cầu đã gửi'}`}
+              value={activeStatusFilter}
+              className="w-full sm:w-[190px]"
+              onChange={(event) => {
+                const filter = event.target.value as ActivityStatusFilter;
+                if (tab === 'items') setItemStatusFilter(filter);
+                else setSentStatusFilter(filter);
+              }}
+            >
+              {activeStatusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
       </div>
 
       {myItemsLoading ? (
@@ -582,9 +624,9 @@ export function Activities() {
           }
         />
       ) : tab === 'items' ? (
-        myItems.length ? (
+        filteredItems.length ? (
           <div className="space-y-4">
-            {myItems.map((item) => {
+            {filteredItems.map((item) => {
               const apiItem = /^\d+$/.test(item.id);
               const canEdit = ['PENDING_REVIEW', 'APPROVED', 'REJECTED'].includes(item.status);
               // Bài đang tạm ẩn (U04) không gia hạn hay đẩy được cho tới khi Admin xem xét xong.
@@ -742,18 +784,25 @@ export function Activities() {
           </div>
         ) : (
           <EmptyState
-            title="Bạn chưa đăng món nào"
-            text="Đăng món đầu tiên để bắt đầu chia sẻ với cộng đồng."
+            title={myItems.length ? 'Không có bài phù hợp' : 'Bạn chưa đăng món nào'}
+            text={
+              myItems.length
+                ? 'Thử chọn trạng thái khác để xem các bài còn lại.'
+                : 'Đăng món đầu tiên để bắt đầu chia sẻ với cộng đồng.'
+            }
             action={
-              <Link to="/post">
-                <Button className="bronze-action">Đăng tin</Button>
-              </Link>
+              myItems.length ? undefined : (
+                <Link to="/post">
+                  <Button className="bronze-action">Đăng tin</Button>
+                </Link>
+              )
             }
           />
         )
       ) : (
         <SentRequestList
-          itemRequests={apiSentRequests}
+          itemRequests={filteredSentRequests}
+          totalCount={apiSentRequests.length}
           items={myItems}
           cancelingRequestId={cancelingRequestId}
           onCancel={(requestId) => void cancelApiRequest(requestId)}
@@ -1534,11 +1583,13 @@ function requestChipClass(status: ItemRequest['status']) {
 
 function SentRequestList({
   itemRequests,
+  totalCount,
   items,
   cancelingRequestId,
   onCancel,
 }: {
   itemRequests: ItemRequest[];
+  totalCount: number;
   items: Item[];
   cancelingRequestId: string;
   onCancel: (requestId: string) => void;
@@ -1547,12 +1598,18 @@ function SentRequestList({
   if (!itemRequests.length) {
     return (
       <EmptyState
-        title="Bạn chưa gửi yêu cầu nào"
-        text="Tìm món bạn cần và gửi yêu cầu, hoàn toàn miễn phí."
+        title={totalCount ? 'Không có yêu cầu phù hợp' : 'Bạn chưa gửi yêu cầu nào'}
+        text={
+          totalCount
+            ? 'Thử chọn trạng thái khác để xem các yêu cầu còn lại.'
+            : 'Tìm món bạn cần và gửi yêu cầu, hoàn toàn miễn phí.'
+        }
         action={
-          <Link to="/browse">
-            <Button>Tìm đồ</Button>
-          </Link>
+          totalCount ? undefined : (
+            <Link to="/browse">
+              <Button>Tìm đồ</Button>
+            </Link>
+          )
         }
       />
     );
