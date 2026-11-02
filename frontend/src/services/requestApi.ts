@@ -41,6 +41,13 @@ export interface RequestResponse {
   complaintDeadline?: string | null;
   lastMessageAt?: string | null;
   disputeResponseDueAt?: string | null;
+  // Ảnh đại diện hai bên, dạng /api/v1/media/{id}; null khi chưa có ảnh.
+  donorAvatarUrl?: string | null;
+  receiverAvatarUrl?: string | null;
+  // Backend tính: true khi giao dịch đã hoàn tất và đã qua complaintDeadline.
+  disputeExpired?: boolean;
+  // Chỉ có ở GET /requests/{id}; các danh sách trả null.
+  handoverMedia?: RequestMediaResponse[] | null;
 }
 
 export interface CreateRequestBody {

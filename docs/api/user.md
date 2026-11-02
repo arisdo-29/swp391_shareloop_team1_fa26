@@ -132,6 +132,45 @@ Quy tắc:
 
 Response: Giống `GET /api/v1/me` (với trường `phone` mang giá trị mới).
 
+## GET /api/v1/users/{id}/profile
+
+Hồ sơ công khai của một người dùng (trang "Hồ sơ" khi xem người khác, mở từ khung chat, màn tiến trình giao dịch
+và thẻ người đăng ở chi tiết bài).
+
+- Xác thực: **bắt buộc**. Ai đăng nhập cũng xem được hồ sơ người khác và của chính mình.
+- Thành công: `200`, `PublicProfileResponse`.
+- Lỗi: `401 UNAUTHORIZED`, `404 USER_NOT_FOUND` khi tài khoản không tồn tại, đã xoá, chưa xác thực
+  (`PENDING_VERIFICATION`), bị khoá (`is_active = false`), bị cấm (`BANNED`) hoặc là Admin (`is_admin = true`, Admin
+  không tham gia giao dịch nên không có hồ sơ công khai). Cố ý trả 404 như không tồn tại để không lộ việc tài khoản
+  đang bị xử lý.
+
+Quy tắc:
+
+- **Không** trả email, số điện thoại, số dư Credit, điểm thưởng (`totalPoints`), địa chỉ chi tiết, `areaId`.
+- `rank`, `trustStars`, `asDescribedRate` lấy từ `ReputationService.getReputationSummary` (cùng số với thẻ người đăng
+  ở chi tiết bài, xem `reputation.md` mục 1.3). `asDescribedRate` thang 0–1, `null` khi dưới 3 giao dịch đã được đánh giá.
+- `completedTransactions`: số Request `COMPLETED` mà người này tham gia, tính cả vai cho và vai nhận
+  (`RequestQueryService.countCompletedByUser`).
+- `district`: tên khu vực mặc định; `null` khi chưa chọn, frontend ẩn dòng này.
+- `avatarInitials`: chữ đầu của từ đầu và từ cuối trong họ tên, viết hoa ("Nguyễn Văn An" → "NA"; tên một từ → một chữ).
+- `joinedAt`: thời điểm tạo tài khoản.
+- Danh sách bài của người này ở `GET /api/v1/users/{id}/items` (`docs/api/item.md` mục 5).
+
+```json
+{
+  "id": 42,
+  "fullName": "Nguyễn Văn An",
+  "avatarUrl": "/api/v1/media/30",
+  "avatarInitials": "NA",
+  "district": "Quận 3",
+  "rank": "GOLD",
+  "trustStars": 4,
+  "asDescribedRate": 0.92,
+  "completedTransactions": 18,
+  "joinedAt": "2026-03-01T08:00:00Z"
+}
+```
+
 ## DTO
 
 Tất cả là `record`, request có `@Valid`. Tên trường JSON là camelCase.
@@ -189,7 +228,7 @@ Có đủ các trường của `AuthUserResponse` (`docs/api/auth.md`) cộng th
 | `USER_AREA_INVALID`                | 400  | `areaId` không tồn tại hoặc khu vực đã ngừng hoạt động, `field` = `areaId` |
 | `AUTH_ACCOUNT_LOCKED`              | 403  | Tài khoản đã bị khoá (`AuthErrorCode`), kể cả token cũ                   |
 | `AUTH_ACCOUNT_BANNED`              | 403  | Tài khoản `BANNED` (hết sao uy tín, `AuthErrorCode`), kể cả token cũ     |
-| `USER_NOT_FOUND`                   | 404  | Tài khoản trong token không còn tồn tại                                  |
+| `USER_NOT_FOUND`                   | 404  | Tài khoản trong token không còn tồn tại; ở `GET /users/{id}/profile`: người cần xem không tồn tại, chưa xác thực, bị khoá, bị cấm hoặc là Admin |
 | `MEDIA_NOT_FOUND`                  | 404  | `avatarMediaId` không tồn tại (`MediaErrorCode`)                         |
 | `MEDIA_NOT_OWNER`                  | 403  | Ảnh không do người này upload                                            |
 | `MEDIA_NOT_UPLOADED`               | 409  | Ảnh đã được gắn ở chỗ khác hoặc không còn dùng được                       |
@@ -220,6 +259,7 @@ Lỗi là `BusinessException` với mã của `UserErrorCode`; nếu để lọt
 | `ContactInfo findContact(long userId)` | request (#93) | read-only | `USER_NOT_FOUND` (404) |
 | `PageResponse<AdminUserSummary> searchAccounts(String keyword, AdminAccountState state, AdminAccountRole role, int page, int size)` | admin, wallet | read-only | - |
 | `Map<Long, UserBrief> findBriefs(Collection<Long> ids)` | audit, review, report, wallet | read-only | - (id thiếu không có trong map) |
+| `boolean isPubliclyVisible(long userId)` | item (bài theo người ở hồ sơ công khai) | read-only | - (không có user thì `false`) |
 
 `searchAccounts` là hàm sau `GET /api/v1/admin/users` (xem `admin.md` mục 3.3): lọc tuỳ chọn theo từ khoá (họ tên, email, số điện thoại), trạng thái hiển thị (`ACTIVE`, `LOCKED`, `PENDING_VERIFICATION`, `BANNED`) và vai trò (`ADMIN`, `USER`), tài khoản mới nhất trước. Module wallet gọi với `role = USER` để dựng danh sách tra cứu tài chính.
 

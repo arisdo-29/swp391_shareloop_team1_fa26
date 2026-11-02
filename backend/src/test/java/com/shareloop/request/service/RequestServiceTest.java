@@ -36,6 +36,7 @@ import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.event.NotAsDescribedReportedEvent;
+import com.shareloop.request.repository.RequestMediaRepository;
 import com.shareloop.request.repository.RequestRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
@@ -86,6 +87,10 @@ class RequestServiceTest {
 
     @Mock
     JdbcClient jdbcClient;
+
+    // getDetail đọc thêm ảnh giao nhận; mock repository trả danh sách rỗng thay cho JdbcClient chưa stub câu SQL.
+    @Mock
+    RequestMediaRepository requestMediaRepository;
 
     @Mock
     ApplicationEventPublisher eventPublisher;

@@ -181,7 +181,8 @@ Xem chi tiết thông tin của một yêu cầu giao dịch (F10, UC-26).
 
 - **Xác thực:** Bắt buộc JWT (phải là chủ bài đăng `donorId` hoặc người nhận `receiverId`).
 - **Path variable:** `id` (id của request).
-- **Thành công:** `200 OK`, trả về `RequestResponse`.
+- **Thành công:** `200 OK`, trả về `RequestResponse`. Riêng endpoint này kèm `handoverMedia` (ảnh giao nhận, cùng dữ
+  liệu với `GET /requests/{id}/media`) để màn Tiến trình giao dịch chỉ cần một lần gọi.
 - **Lỗi:**
   - `403 REQUEST_FORBIDDEN`: Không phải thành viên tham gia giao dịch này.
   - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
@@ -475,6 +476,13 @@ thì chưa.
 | `receiverAsDescribedRate` | number? | Tỉ lệ giao dịch đúng mô tả của người gửi yêu cầu, thang 0.00 - 1.00 (vd `0.92` là 92%). `null` khi có dưới 3 giao dịch hoàn tất đã được đánh giá "đúng mô tả?" (SRS 6.12). Alias: `asDescribedRate` (FR-65) |
 | `lastMessageAt` | string? | Thời điểm tin nhắn mới nhất trong hội thoại của giao dịch ISO-8601 UTC (U03). `null` khi chưa có tin nhắn nào |
 | `disputeResponseDueAt` | string? | Hạn giải trình của khiếu nại đang mở thuộc giao dịch ISO-8601 UTC (U5-BE, D-04, GN-07). Chỉ có giá trị khi `status = DISPUTED`, các trạng thái khác luôn là `null`. FE dùng để hiển thị thời hạn giải trình |
+| `donorAvatarUrl` | string? | Ảnh đại diện chủ bài, dạng `/api/v1/media/{id}`; `null` khi chưa có ảnh. Có ở mọi API trả `RequestResponse` |
+| `receiverAvatarUrl` | string? | Ảnh đại diện người nhận, cùng quy ước với `donorAvatarUrl` |
+| `disputeExpired` | boolean | `true` khi giao dịch đã hoàn tất và thời điểm hiện tại đã qua `complaintDeadline` (hết hạn khiếu nại); `false` trong mọi trường hợp khác, kể cả khi chưa hoàn tất. Backend tính từ `complaint_window_hours`, FE không tự so giờ |
+| `handoverMedia` | array? | Ảnh giao nhận và ảnh khiếu nại (`RequestMediaResponse`: `mediaId`, `url`, `stage` = `HANDOVER`/`DISPUTE`, `uploadedBy`, `createdAt`), cũ trước. **Chỉ có ở `GET /requests/{id}`**; các danh sách và phản hồi thao tác trả `null` (xem riêng qua `GET /requests/{id}/media`) |
+
+Các trường đã có từ trước và dùng cho màn Tiến trình giao dịch: `meetingTime`, `meetingPlace` (lịch giao nhận),
+`completedAt` (thời điểm hoàn tất), `complaintDeadline` (hạn khiếu nại).
 
 ### ScheduleRequest
 
@@ -554,3 +562,15 @@ thì chưa.
 | `REQUEST_INVALID_STATE_TRANSITION` | 409 | Chuyển đổi trạng thái không hợp lệ theo sơ đồ |
 | `REQUEST_FORBIDDEN` | 403 | Không có quyền thao tác trên yêu cầu này (hoặc người ngoài xem minh chứng) |
 
+
+## Dành cho module khác: RequestQueryService
+
+Không phải endpoint HTTP. Module khác đọc dữ kiện về Request qua `com.shareloop.request.service.RequestQueryService`
+(read-only), không inject `RequestRepository`.
+
+| Hàm | Người gọi | Ý nghĩa |
+|-----|-----------|---------|
+| `boolean hasReservedOrHigherRequest(long itemId)` | item | Bài đã có Request từ `RESERVED` trở lên |
+| `boolean hasActiveDelivery(long userId)` | user | Người dùng đang có giao dịch `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER` (BR-U10) |
+| `long countCompletedByUser(long userId)` | user (hồ sơ công khai) | Số Request `COMPLETED` người dùng tham gia, tính cả vai người nhận và chủ bài |
+| `Map<Long, Instant> findCompletedAtByItemIds(Collection<Long> itemIds)` | item (bài `TRADED`) | `completed_at` theo id bài; bài là bài chính (`item_id`) hoặc món đề nghị (`offered_item_id`) đều tính. Bài chưa có Request `COMPLETED` không có trong map |

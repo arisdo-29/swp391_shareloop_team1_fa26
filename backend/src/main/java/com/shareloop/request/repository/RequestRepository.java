@@ -147,4 +147,30 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
             @Param("cutoff") java.time.Instant cutoff,
             @Param("afterId") long afterId,
             org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Đếm giao dịch COMPLETED mà người dùng tham gia, ở vai người nhận hoặc chủ bài (hồ sơ công khai).
+     * Dùng native query vì donor_id nằm ở bảng items của module item, entity Request chỉ giữ item_id;
+     * cùng cách với {@link #hasActiveDelivery}.
+     */
+    @Query(value = """
+        SELECT COUNT(*) FROM requests r
+        WHERE (r.receiver_id = :userId OR EXISTS (
+            SELECT 1 FROM items i WHERE i.id = r.item_id AND i.donor_id = :userId
+        ))
+        AND r.status = 'COMPLETED'
+        AND r.is_deleted = false
+    """, nativeQuery = true)
+    long countCompletedByUser(@Param("userId") long userId);
+
+    /**
+     * Các yêu cầu COMPLETED gắn với một nhóm bài, ở vai bài chính (item_id) hoặc món đề nghị khi trao đổi
+     * (offered_item_id). Dùng để lấy thời điểm hoàn tất cho thẻ bài đã giao dịch.
+     */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.status = com.shareloop.request.entity.RequestStatus.COMPLETED
+        AND (r.itemId IN :itemIds OR r.offeredItemId IN :itemIds)
+    """)
+    List<Request> findCompletedByItemIds(@Param("itemIds") Collection<Long> itemIds);
 }

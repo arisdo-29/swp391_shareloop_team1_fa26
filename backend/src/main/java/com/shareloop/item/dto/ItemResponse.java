@@ -43,7 +43,104 @@ public record ItemResponse(
         // Chỉ có giá trị khi chủ bài hoặc Admin xem; người khác nhận null. hidden = bài đang is_active = false.
         Boolean hidden,
         // Lý do ẩn; null cho tới khi lưu lý do ẩn (C06).
-        String hiddenReason) {
+        String hiddenReason,
+        // Thời điểm giao dịch hoàn tất; chỉ có khi bài đã TRADED (chi tiết bài và tab "Đã giao dịch" của hồ sơ).
+        Instant completedAt,
+        // Bài còn nhận yêu cầu không (APPROVED, đang hiển thị, chủ bài không bị khoá). false thì frontend ẩn nút
+        // "Gửi yêu cầu". null ở các danh sách chưa tính cờ này.
+        Boolean requestable) {
+
+    /** Constructor 26 tham số trước khi có completedAt, requestable; hai trường mới để null. */
+    public ItemResponse(
+            Long id,
+            Long donorId,
+            Long categoryId,
+            Long areaId,
+            OfferType offerType,
+            String title,
+            String description,
+            String desiredItem,
+            ItemCondition condition,
+            String defectNote,
+            String brand,
+            List<String> images,
+            ItemStatus status,
+            Instant createdAt,
+            Instant updatedAt,
+            List<String> defectImages,
+            OperatingStatus operatingStatus,
+            Instant expireAt,
+            Instant boostedUntil,
+            String donorName,
+            Integer donorTrustStars,
+            String donorRank,
+            Double donorAsDescribedRate,
+            Boolean donorLocked,
+            Boolean hidden,
+            String hiddenReason) {
+        this(
+                id,
+                donorId,
+                categoryId,
+                areaId,
+                offerType,
+                title,
+                description,
+                desiredItem,
+                condition,
+                defectNote,
+                brand,
+                images,
+                status,
+                createdAt,
+                updatedAt,
+                defectImages,
+                operatingStatus,
+                expireAt,
+                boostedUntil,
+                donorName,
+                donorTrustStars,
+                donorRank,
+                donorAsDescribedRate,
+                donorLocked,
+                hidden,
+                hiddenReason,
+                null,
+                null);
+    }
+
+    /** Gắn thông tin giao dịch: thời điểm hoàn tất (null nếu chưa TRADED) và bài còn nhận yêu cầu không. */
+    public ItemResponse withTradeInfo(Instant tradeCompletedAt, Boolean isRequestable) {
+        return new ItemResponse(
+                id,
+                donorId,
+                categoryId,
+                areaId,
+                offerType,
+                title,
+                description,
+                desiredItem,
+                condition,
+                defectNote,
+                brand,
+                images,
+                status,
+                createdAt,
+                updatedAt,
+                defectImages,
+                operatingStatus,
+                expireAt,
+                boostedUntil,
+                donorName,
+                donorTrustStars,
+                donorRank,
+                donorAsDescribedRate,
+                donorLocked,
+                hidden,
+                hiddenReason,
+                tradeCompletedAt,
+                isRequestable);
+    }
 
     /** Gắn trạng thái tạm ẩn cho chủ bài hoặc Admin (U04). */
     public ItemResponse withVisibility(boolean isHidden, String reason) {
@@ -73,7 +170,9 @@ public record ItemResponse(
                 donorAsDescribedRate,
                 donorLocked,
                 isHidden,
-                isHidden ? reason : null);
+                isHidden ? reason : null,
+                completedAt,
+                requestable);
     }
 
     public ItemResponse withDonor(
@@ -104,7 +203,9 @@ public record ItemResponse(
                 asDescribedRate,
                 donorLocked,
                 hidden,
-                hiddenReason);
+                hiddenReason,
+                completedAt,
+                requestable);
     }
 
     public ItemResponse withDonor(String name, Integer trustStars, String rank, Double asDescribedRate) {

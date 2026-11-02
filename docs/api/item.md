@@ -102,8 +102,15 @@ Xem chi tiết một bài đăng theo ID.
 - **Xác thực:** Không bắt buộc (công khai đối với bài đã duyệt).
 - **Quy tắc hiển thị:**
   - Bài ở trạng thái `APPROVED`: Bất kỳ ai (khách vãng lai hay thành viên khác) đều xem được.
-  - Bài ở các trạng thái khác (`PENDING_REVIEW`, `REJECTED`, `RESERVED`, `TRADED`, `EXPIRED`): Chỉ chính **chủ bài đăng** (`donorId`) mới xem được.
+  - Bài ở trạng thái `TRADED` (đã giao dịch thành công): bất kỳ ai cũng xem được ở **chế độ chỉ xem**, để mở từ tab
+    "Đã giao dịch" của hồ sơ công khai. Response có `requestable = false` và `completedAt`; không có thông tin người
+    nhận hay yêu cầu liên quan. Gọi thẳng `POST /api/v1/items/{id}/requests` vẫn bị chặn `409 REQUEST_ITEM_NOT_AVAILABLE`.
+  - Với cả hai trường hợp trên, bài phải đang hiển thị (`is_active = true`) và chủ bài không bị khoá.
+  - Bài ở các trạng thái khác (`PENDING_REVIEW`, `REJECTED`, `RESERVED`, `EXPIRED`): Chỉ chính **chủ bài đăng** (`donorId`) mới xem được.
   - Trường hợp bài không tồn tại, đã xoá mềm, hoặc người xem không phải chủ bài: Trả về `404 ITEM_NOT_FOUND`.
+- `requestable`: `true` khi bài `APPROVED`, đang hiển thị, chủ bài không bị khoá. Frontend ẩn nút "Gửi yêu cầu" khi
+  `false`. Cờ này không xét người xem (chủ bài xem bài của mình vẫn thấy `true`); các luật theo người gửi (bài của mình,
+  0 sao, Admin) vẫn do `POST /items/{id}/requests` kiểm.
 - **Thành công:** `200 OK`, trả về `ItemResponse`.
 - **Lỗi:**
   - `404 ITEM_NOT_FOUND`: Không tìm thấy bài đăng hoặc không có quyền xem.
@@ -188,6 +195,42 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&o
 
 ---
 
+## 5. GET /api/v1/users/{userId}/items
+
+Bài của một người cho trang hồ sơ công khai (xem `docs/api/user.md`, `GET /api/v1/users/{id}/profile`).
+
+- **Xác thực:** bắt buộc (`401 UNAUTHORIZED` khi thiếu token).
+- **Tham số:** `tab` (`ACTIVE` hoặc `DONE`, mặc định `ACTIVE`), `page` (từ 0, mặc định 0), `size` (1–50, mặc định 12).
+- **Thành công:** `200 OK`, trang `{ items, page, size, totalElements, totalPages }`, mỗi dòng là `ItemResponse`
+  (cùng kiểu thẻ bài của `GET /api/v1/items`).
+- **Lỗi:** `404 USER_NOT_FOUND` khi người dùng không tồn tại, chưa xác thực, bị khoá, bị cấm hoặc là Admin (cùng luật với hồ sơ);
+  `400` khi `tab` sai giá trị hoặc phân trang sai.
+
+Quy tắc:
+
+- `ACTIVE`: bài của người đó đang `APPROVED`, `is_active = true`, chưa xoá, `expire_at` rỗng hoặc chưa tới (cùng điều
+  kiện với trang Tìm đồ), mới tạo trước. Mỗi dòng `requestable = true`, `completedAt = null`.
+- `DONE`: bài của người đó đang `TRADED`, `is_active = true`, chưa xoá. Mỗi dòng có `completedAt` (thời điểm Request
+  `COMPLETED` của bài, kể cả khi bài là món đề nghị trong giao dịch trao đổi) và `requestable = false`. Sắp theo
+  `updatedAt` giảm dần: bài `TRADED` không sửa được nữa nên lần cập nhật cuối là lúc chuyển sang `TRADED`.
+- Không bao giờ trả bài `PENDING_REVIEW`, `REJECTED`, `RESERVED`, `EXPIRED`, bài hết hạn, bị ẩn hoặc đã gỡ. Chủ hồ sơ tự
+  xem hồ sơ mình cũng theo luật công khai này (bài của tôi xem ở `GET /api/v1/me/items`).
+- Các trường `donor*` để `null` như danh sách công khai; frontend lấy thông tin người từ API hồ sơ.
+
+```json
+{
+  "items": [
+    { "id": 51, "title": "Nồi cơm điện", "status": "TRADED", "images": ["/api/v1/media/90"],
+      "completedAt": "2026-10-31T11:30:00Z", "requestable": false }
+  ],
+  "page": 0, "size": 12, "totalElements": 1, "totalPages": 1
+}
+```
+
+(Ví dụ rút gọn, response thật có đủ các trường của `ItemResponse`.)
+
+---
+
 ## DTO Models
 
 ### CreateItemRequest
@@ -236,6 +279,8 @@ Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&o
 | `donorAsDescribedRate` | number? | Tỉ lệ đúng mô tả thang 0–1; chỉ có ở API chi tiết |
 | `hidden` | boolean? | Bài đang tạm ẩn (`is_active = false`), ví dụ tự ẩn do đủ báo cáo đang chờ (U04). Chỉ có khi **chủ bài** xem (chi tiết, sửa, bài của tôi) hoặc Admin xem; người khác nhận `null` |
 | `hiddenReason` | string? | Lý do ẩn. Hiện luôn `null` vì chưa lưu lý do ẩn (C06); FE hiện câu mặc định |
+| `completedAt` | string? | Thời điểm giao dịch hoàn tất ISO-8601 UTC. Chỉ có khi bài `TRADED`, ở API chi tiết và `GET /users/{id}/items?tab=DONE`; nơi khác `null` |
+| `requestable` | boolean? | Bài còn nhận yêu cầu không (`APPROVED`, đang hiển thị, chủ bài không bị khoá). Có ở API chi tiết và `GET /users/{id}/items`; các danh sách khác `null` |
 
 `expireAt` và `boostedUntil` có trong mọi API trả `ItemResponse` (tạo, sửa, chi tiết, bài của tôi, danh sách công khai).
 Với danh sách, hai trường này được đọc bằng một query cho cả trang qua `ListingFeeQueryService.findDisplayWindows`.
@@ -246,7 +291,8 @@ Với danh sách, hai trường này được đọc bằng một query cho cả
 
 | code | HTTP | Khi nào |
 |---|---|---|
-| `ITEM_NOT_FOUND` | 404 | Không tìm thấy bài đăng hoặc bài chưa duyệt mà người xem không phải chủ |
+| `ITEM_NOT_FOUND` | 404 | Không tìm thấy bài đăng hoặc bài không ở `APPROVED`/`TRADED` mà người xem không phải chủ |
+| `USER_NOT_FOUND` | 404 | `GET /users/{id}/items`: người dùng không tồn tại, chưa xác thực, bị khoá, bị cấm hoặc là Admin (mã của module user) |
 | `ITEM_SWAP_DESIRED_ITEM_REQUIRED` | 400 | Bài đăng SWAP nhưng thiếu món mong muốn |
 | `ITEM_DEFECT_NOTE_REQUIRED` | 400 | Bài đăng có tình trạng DEFECTIVE nhưng thiếu mô tả lỗi |
 | `ITEM_INVALID_IMAGE` | 400 | URL ảnh không phải URL do API media trả về |

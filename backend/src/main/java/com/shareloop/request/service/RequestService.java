@@ -332,7 +332,7 @@ public class RequestService {
                             (request.getStatus() == RequestStatus.DISPUTED && request.getId() != null)
                                     ? disputeDueMap.get(request.getId())
                                     : null;
-                    return RequestMapper.toResponse(
+                    RequestResponse response = RequestMapper.toResponse(
                             request,
                             receiverName,
                             trustStars,
@@ -342,6 +342,7 @@ public class RequestService {
                             complaintDeadline,
                             lastMessageAt,
                             disputeResponseDueAt);
+                    return addExtraInfo(response, null);
                 })
                 .toList();
     }
@@ -373,7 +374,7 @@ public class RequestService {
                             (request.getStatus() == RequestStatus.DISPUTED && request.getId() != null)
                                     ? disputeDueMap.get(request.getId())
                                     : null;
-                    return RequestMapper.toResponse(
+                    RequestResponse response = RequestMapper.toResponse(
                             request,
                             findUserName(request.getReceiverId()),
                             null,
@@ -383,6 +384,7 @@ public class RequestService {
                             complaintDeadline,
                             lastMessageAt,
                             disputeResponseDueAt);
+                    return addExtraInfo(response, null);
                 })
                 .toList();
     }
@@ -817,12 +819,14 @@ public class RequestService {
         Instant complaintDeadline = ComplaintWindow.deadline(request.getCompletedAt(), complaintWindowHours());
         Instant lastMessageAt = findLastMessageAt(request.getId());
         Instant disputeResponseDueAt = findDisputeResponseDueAt(request);
+        // Chi tiết là nơi duy nhất kèm ảnh giao nhận, để màn Tiến trình giao dịch không phải gọi thêm API.
+        List<RequestMediaResponse> handoverMedia = findHandoverMedia(request.getId());
         if (item.donorId() == currentUserId) {
             ReputationSummary rep = findReceiverReputation(request.getReceiverId());
             Integer trustStars = rep != null ? rep.trustStars() : 5;
             String rank = rep != null && rep.rank() != null ? rep.rank().name() : Rank.BRONZE.name();
             Double asDescribedRate = rep != null ? rep.asDescribedRate() : null;
-            return RequestMapper.toResponse(
+            RequestResponse response = RequestMapper.toResponse(
                     request,
                     receiverName,
                     trustStars,
@@ -832,9 +836,10 @@ public class RequestService {
                     complaintDeadline,
                     lastMessageAt,
                     disputeResponseDueAt);
+            return addExtraInfo(response, handoverMedia);
         }
 
-        return RequestMapper.toResponse(
+        RequestResponse response = RequestMapper.toResponse(
                 request,
                 receiverName,
                 null,
@@ -844,6 +849,7 @@ public class RequestService {
                 complaintDeadline,
                 lastMessageAt,
                 disputeResponseDueAt);
+        return addExtraInfo(response, handoverMedia);
     }
 
     /**
@@ -1146,6 +1152,14 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
         }
 
+        return findHandoverMedia(requestId);
+    }
+
+    // Đọc minh chứng của một yêu cầu, cũ trước. Không kiểm quyền: nơi gọi đã kiểm người xem là một trong hai bên.
+    private List<RequestMediaResponse> findHandoverMedia(Long requestId) {
+        if (requestId == null) {
+            return List.of();
+        }
         if (requestMediaRepository != null) {
             return requestMediaRepository.findByRequestIdOrderByCreatedAtAsc(requestId).stream()
                     .map(m -> new RequestMediaResponse(
@@ -1256,7 +1270,7 @@ public class RequestService {
                 : null;
         Instant lastMessageAt = request != null ? findLastMessageAt(request.getId()) : null;
         Instant disputeResponseDueAt = findDisputeResponseDueAt(request);
-        return RequestMapper.toResponse(
+        RequestResponse response = RequestMapper.toResponse(
                 request,
                 findUserName(request.getReceiverId()),
                 null,
@@ -1266,6 +1280,32 @@ public class RequestService {
                 complaintDeadline,
                 lastMessageAt,
                 disputeResponseDueAt);
+        return addExtraInfo(response, null);
+    }
+
+    // Gắn ảnh đại diện hai bên và cờ hết hạn khiếu nại; handoverMedia chỉ truyền ở chi tiết, danh sách để null.
+    private RequestResponse addExtraInfo(RequestResponse response, List<RequestMediaResponse> handoverMedia) {
+        if (response == null) {
+            return null;
+        }
+        String donorAvatarUrl = findAvatarUrl(response.donorId());
+        String receiverAvatarUrl = findAvatarUrl(response.receiverId());
+        boolean disputeExpired = isComplaintWindowClosed(response.complaintDeadline());
+        return response.withExtraInfo(donorAvatarUrl, receiverAvatarUrl, disputeExpired, handoverMedia);
+    }
+
+    // Hết hạn khiếu nại khi đã có hạn (giao dịch đã hoàn tất) và hiện tại không còn trước hạn đó (U08).
+    // complaintDeadline đã tính từ ConfigKey.COMPLAINT_WINDOW_HOURS nên ở đây không đọc lại cấu hình.
+    private static boolean isComplaintWindowClosed(Instant complaintDeadline) {
+        return complaintDeadline != null && !Instant.now().isBefore(complaintDeadline);
+    }
+
+    // userService null chỉ gặp ở unit test dựng service rút gọn; user không còn thì UserService trả null.
+    private String findAvatarUrl(Long userId) {
+        if (userId == null || userService == null) {
+            return null;
+        }
+        return userService.findAvatarUrl(userId);
     }
 
     // Hạn giải trình của khiếu nại đang mở thuộc giao dịch (U5-BE, D-04, GN-07).

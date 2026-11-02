@@ -201,6 +201,15 @@ public class User extends BaseEntity {
         this.phoneChangedAt = phoneChangedAt;
     }
 
+    /**
+     * Người khác có được xem hồ sơ công khai của tài khoản này không: phải đã xác thực, chưa bị cấm, không bị khoá và
+     * không phải Admin (Admin không tham gia giao dịch nên không có hồ sơ công khai). Tài khoản không đạt thì API trả
+     * 404 như không tồn tại, để không lộ việc tài khoản đang bị xử lý.
+     */
+    public boolean isPubliclyVisible() {
+        return isActive() && status == UserStatus.ACTIVE && !admin;
+    }
+
     /** Đổi số điện thoại (FR-07, BR-U10). Cập nhật số mới, lưu mốc đổi và xoá pending_phone. */
     public void changePhone(String newPhone, Instant changedAt) {
         this.phone = newPhone;
