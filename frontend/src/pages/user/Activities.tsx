@@ -18,6 +18,7 @@ import {
   TypeBadge,
 } from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
+import { DescribeItemSuggestion } from '../../components/ai/DescribeItemSuggestion';
 import { CONDITIONS, ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import { fileToDataUrl } from '../../utils/files';
@@ -1276,6 +1277,7 @@ function EditItemForm({
         error={errors.description}
         onChange={(event) => setDescription(event.target.value)}
       />
+      <DescribeItemSuggestion title={title} disabled={formDisabled} onUse={setDescription} />
       {attributesLoading ? (
         <p className="text-xs text-text-muted">Đang tải thuộc tính danh mục...</p>
       ) : null}
