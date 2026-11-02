@@ -5,6 +5,25 @@ lỗi theo định dạng thống nhất bên dưới.
 
 Người sở hữu: BE3 (@dwargon73-sketch). FR-68, FR-69, FR-70, FR-72, FR-75, FR-76, FR-78; BR-C01, BR-C02, BR-C03, BR-C04, BR-C05, BR-C07, BR-A10.
 
+## Danh sách cuộc trò chuyện
+
+Không có endpoint riêng: mỗi cuộc trò chuyện gắn với một Request (`requestId`). Màn Tin nhắn dựng danh sách từ
+`GET /api/v1/me/requests` (yêu cầu mình gửi) và `GET /api/v1/items/{itemId}/requests` (yêu cầu tới bài của mình),
+xem `docs/api/request.md`. Cả hai trả **đủ mọi cuộc, không phân trang**, nên lọc Tất cả / Chưa đọc / Đang giao dịch /
+Đã đóng và tìm theo tên món hoặc người làm ở frontend, backend không có tham số `filter`, `q`.
+
+Mỗi `RequestResponse` đã có đủ dữ liệu cho một dòng:
+
+| Cần cho dòng | Trường |
+|---|---|
+| Đối tác | `donorId`, `donorName`, `donorAvatarUrl` hoặc `receiverId`, `receiverName`, `receiverAvatarUrl` (tuỳ vai người xem) |
+| Món đồ | `itemId`, `itemTitle`, `itemImage`, `type` (`GIVE` / `SWAP`) |
+| Trạng thái | `status` |
+| Tin cuối | `lastMessageAt` |
+
+"Chưa đọc": backend **chưa** lưu mốc đã đọc (bảng `messages` không có cột đã đọc). Frontend so `lastMessageAt` với mốc
+đã xem lưu ở trình duyệt, nên trạng thái chưa đọc không đồng bộ giữa các thiết bị.
+
 ---
 
 ## 1. POST /api/v1/requests/{requestId}/messages

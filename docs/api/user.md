@@ -140,8 +140,9 @@ và thẻ người đăng ở chi tiết bài).
 - Xác thực: **bắt buộc**. Ai đăng nhập cũng xem được hồ sơ người khác và của chính mình.
 - Thành công: `200`, `PublicProfileResponse`.
 - Lỗi: `401 UNAUTHORIZED`, `404 USER_NOT_FOUND` khi tài khoản không tồn tại, đã xoá, chưa xác thực
-  (`PENDING_VERIFICATION`), bị khoá (`is_active = false`) hoặc bị cấm (`BANNED`). Cố ý trả 404 như không tồn tại để
-  không lộ việc tài khoản đang bị xử lý.
+  (`PENDING_VERIFICATION`), bị khoá (`is_active = false`), bị cấm (`BANNED`) hoặc là Admin (`is_admin = true`, Admin
+  không tham gia giao dịch nên không có hồ sơ công khai). Cố ý trả 404 như không tồn tại để không lộ việc tài khoản
+  đang bị xử lý.
 
 Quy tắc:
 
@@ -227,7 +228,7 @@ Có đủ các trường của `AuthUserResponse` (`docs/api/auth.md`) cộng th
 | `USER_AREA_INVALID`                | 400  | `areaId` không tồn tại hoặc khu vực đã ngừng hoạt động, `field` = `areaId` |
 | `AUTH_ACCOUNT_LOCKED`              | 403  | Tài khoản đã bị khoá (`AuthErrorCode`), kể cả token cũ                   |
 | `AUTH_ACCOUNT_BANNED`              | 403  | Tài khoản `BANNED` (hết sao uy tín, `AuthErrorCode`), kể cả token cũ     |
-| `USER_NOT_FOUND`                   | 404  | Tài khoản trong token không còn tồn tại; ở `GET /users/{id}/profile`: người cần xem không tồn tại, chưa xác thực, bị khoá hoặc bị cấm |
+| `USER_NOT_FOUND`                   | 404  | Tài khoản trong token không còn tồn tại; ở `GET /users/{id}/profile`: người cần xem không tồn tại, chưa xác thực, bị khoá, bị cấm hoặc là Admin |
 | `MEDIA_NOT_FOUND`                  | 404  | `avatarMediaId` không tồn tại (`MediaErrorCode`)                         |
 | `MEDIA_NOT_OWNER`                  | 403  | Ảnh không do người này upload                                            |
 | `MEDIA_NOT_UPLOADED`               | 409  | Ảnh đã được gắn ở chỗ khác hoặc không còn dùng được                       |

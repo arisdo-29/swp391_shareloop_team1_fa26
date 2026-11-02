@@ -141,6 +141,20 @@ class UserProfileServiceTest {
                 .isEqualTo(UserErrorCode.USER_NOT_FOUND);
     }
 
+    @Test
+    void getPublicProfile_whenUserIsAdmin_throwsUserNotFound() {
+        // given
+        User admin = new User("admin@shareloop.local", "hash", "Quản Trị", "0901000003", true, UserStatus.ACTIVE);
+        ReflectionTestUtils.setField(admin, "id", USER_ID);
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(admin));
+
+        // when, then
+        assertThatThrownBy(() -> service.getPublicProfile(USER_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+    }
+
     private User givenUser(String fullName, UserStatus status) {
         User user = new User("an@shareloop.local", "hash", fullName, "0901000002", false, status);
         ReflectionTestUtils.setField(user, "id", USER_ID);

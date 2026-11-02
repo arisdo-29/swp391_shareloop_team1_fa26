@@ -203,7 +203,7 @@ Bài của một người cho trang hồ sơ công khai (xem `docs/api/user.md`,
 - **Tham số:** `tab` (`ACTIVE` hoặc `DONE`, mặc định `ACTIVE`), `page` (từ 0, mặc định 0), `size` (1–50, mặc định 12).
 - **Thành công:** `200 OK`, trang `{ items, page, size, totalElements, totalPages }`, mỗi dòng là `ItemResponse`
   (cùng kiểu thẻ bài của `GET /api/v1/items`).
-- **Lỗi:** `404 USER_NOT_FOUND` khi người dùng không tồn tại, chưa xác thực, bị khoá hoặc bị cấm (cùng luật với hồ sơ);
+- **Lỗi:** `404 USER_NOT_FOUND` khi người dùng không tồn tại, chưa xác thực, bị khoá, bị cấm hoặc là Admin (cùng luật với hồ sơ);
   `400` khi `tab` sai giá trị hoặc phân trang sai.
 
 Quy tắc:
@@ -292,7 +292,7 @@ Với danh sách, hai trường này được đọc bằng một query cho cả
 | code | HTTP | Khi nào |
 |---|---|---|
 | `ITEM_NOT_FOUND` | 404 | Không tìm thấy bài đăng hoặc bài không ở `APPROVED`/`TRADED` mà người xem không phải chủ |
-| `USER_NOT_FOUND` | 404 | `GET /users/{id}/items`: người dùng không tồn tại, chưa xác thực, bị khoá hoặc bị cấm (mã của module user) |
+| `USER_NOT_FOUND` | 404 | `GET /users/{id}/items`: người dùng không tồn tại, chưa xác thực, bị khoá, bị cấm hoặc là Admin (mã của module user) |
 | `ITEM_SWAP_DESIRED_ITEM_REQUIRED` | 400 | Bài đăng SWAP nhưng thiếu món mong muốn |
 | `ITEM_DEFECT_NOTE_REQUIRED` | 400 | Bài đăng có tình trạng DEFECTIVE nhưng thiếu mô tả lỗi |
 | `ITEM_INVALID_IMAGE` | 400 | URL ảnh không phải URL do API media trả về |

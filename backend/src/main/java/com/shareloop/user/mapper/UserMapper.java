@@ -99,7 +99,8 @@ public class UserMapper {
         return AdminAccountState.ACTIVE;
     }
 
-    private String buildAvatarUrl(Long avatarMediaId) {
+    /** Đường dẫn ảnh đại diện dạng /api/v1/media/{id}; null khi chưa có ảnh. */
+    public String buildAvatarUrl(Long avatarMediaId) {
         if (avatarMediaId == null) {
             return null;
         }

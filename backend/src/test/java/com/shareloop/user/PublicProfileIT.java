@@ -121,6 +121,23 @@ class PublicProfileIT extends IntegrationTest {
     }
 
     @Test
+    void getProfile_whenUserIsAdmin_returns404OnBothEndpoints() throws Exception {
+        // given
+        long adminId = insertUser("profile-admin@shareloop.local", "Quản Trị", "0900111004");
+        jdbc.sql("UPDATE users SET is_admin = true WHERE id = :id")
+                .param("id", adminId)
+                .update();
+
+        // when, then
+        mvc.perform(get("/api/v1/users/{id}/profile", adminId).header("Authorization", "Bearer " + viewerToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+        mvc.perform(get("/api/v1/users/{id}/items", adminId).header("Authorization", "Bearer " + viewerToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+    }
+
+    @Test
     void getProfile_whenUserMissing_returns404() throws Exception {
         // when, then
         mvc.perform(get("/api/v1/users/{id}/profile", 999_999_999L).header("Authorization", "Bearer " + viewerToken))
