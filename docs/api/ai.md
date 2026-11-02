@@ -39,4 +39,4 @@ Cần JWT. Không tiêu lượt. Response:
 { "freeUsesRemaining": 5, "feeCredits": 2, "hasToppedUp": true }
 ```
 
-Giá trị lượt miễn phí, lượt thử và phí lấy từ `ai_free_per_day`, `ai_trial_uses`, `ai_search_fee`.
+Giá trị lượt miễn phí, lượt thử và phí lấy từ `ai_free_per_day`, `ai_trial_uses`, `ai_search_fee`. Lượt miễn phí hằng ngày được tính theo `Asia/Ho_Chi_Minh` và làm mới lúc 00:00 giờ Việt Nam.
