@@ -68,11 +68,6 @@ public class GeminiSearchClient implements AiSearchClient {
     }
 
     @Override
-    public AiResponse extract(String query, String catalog, Duration timeout) throws IOException, InterruptedException {
-        return recommend(query, catalog, timeout);
-    }
-
-    @Override
     public AiResponse recommend(String query, String catalog, Duration timeout)
             throws IOException, InterruptedException {
         if (!isAvailable()) {

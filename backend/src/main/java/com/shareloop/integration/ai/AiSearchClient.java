@@ -8,9 +8,5 @@ public interface AiSearchClient {
 
     String model();
 
-    AiResponse extract(String query, String allowedFilters, Duration timeout) throws Exception;
-
-    default AiResponse recommend(String query, String catalog, Duration timeout) throws Exception {
-        return extract(query, catalog, timeout);
-    }
+    AiResponse recommend(String query, String catalog, Duration timeout) throws Exception;
 }
