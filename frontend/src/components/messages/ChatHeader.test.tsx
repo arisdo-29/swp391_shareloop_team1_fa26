@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MessageResponse } from '../../services/chatApi';
+import type { ItemResponse } from '../../services/itemApi';
 import type { RequestResponse } from '../../services/requestApi';
 import { ChatHeader } from './ChatHeader';
 import { ChatMessage } from './ChatMessage';
@@ -12,6 +13,30 @@ import type { ApiConversation } from './conversation';
 
 const DONOR_ID = 9;
 const RECEIVER_ID = 12;
+
+const item = (overrides: Partial<ItemResponse> = {}): ItemResponse => ({
+  id: 45,
+  donorId: DONOR_ID,
+  categoryId: 1,
+  areaId: 1,
+  offerType: 'SWAP',
+  title: 'Xe đạp cũ',
+  description: 'Xe còn tốt, phanh hoạt động bình thường.',
+  desiredItem: 'Mũ bảo hiểm',
+  condition: 'GOOD',
+  defectNote: null,
+  brand: null,
+  images: ['/api/v1/media/45'],
+  defectImages: [],
+  operatingStatus: null,
+  status: 'APPROVED',
+  createdAt: '2026-10-20T08:00:00Z',
+  updatedAt: '2026-10-20T08:00:00Z',
+  expireAt: null,
+  boostedUntil: null,
+  donorName: 'An Chủ Bài',
+  ...overrides,
+});
 
 const conversation = (overrides: Partial<RequestResponse> = {}): ApiConversation => ({
   request: {
@@ -31,7 +56,7 @@ const conversation = (overrides: Partial<RequestResponse> = {}): ApiConversation
 
 function LocationProbe() {
   const location = useLocation();
-  return <span data-testid="location">{location.pathname}</span>;
+  return <span data-testid="location">{location.pathname}{location.search}</span>;
 }
 
 function renderHeader(
@@ -88,6 +113,59 @@ describe('ChatHeader', () => {
 
     // then
     expect(screen.getByText('Chủ bài đăng')).toBeTruthy();
+  });
+
+  it('chủ bài xem đủ hai món SWAP khi yêu cầu vẫn đang chờ và mở đúng món đề xuất', async () => {
+    const user = userEvent.setup();
+    const offeredItem = item({
+      id: 77,
+      donorId: RECEIVER_ID,
+      title: 'Mũ bảo hiểm 3/4',
+      description: 'Mũ ít sử dụng, kính còn trong.',
+      desiredItem: 'Xe đạp',
+      condition: 'LIKE_NEW',
+      images: ['/api/v1/media/77'],
+      donorName: 'Bình Người Nhận',
+    });
+    renderHeader(DONOR_ID, {
+      ...conversation({
+        type: 'SWAP',
+        status: 'PENDING',
+        offeredItemId: 77,
+        offeredItemTitle: offeredItem.title,
+      }),
+      item: item(),
+      offeredItem,
+    });
+
+    expect(screen.getByText('Món đồ của bạn')).toBeTruthy();
+    expect(screen.getByText('Món đồ bạn sẽ nhận')).toBeTruthy();
+    expect(screen.getByText('Mũ bảo hiểm 3/4')).toBeTruthy();
+    expect(screen.getByText('Ít sử dụng')).toBeTruthy();
+    expect(screen.queryByText('Mũ ít sử dụng, kính còn trong.')).toBeNull();
+    expect(screen.queryByText('Xe còn tốt, phanh hoạt động bình thường.')).toBeNull();
+    expect(screen.getByText('Chủ sở hữu: Bình Người Nhận')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Mũ bảo hiểm 3/4' }).getAttribute('src'))
+      .toContain('/api/v1/media/77');
+    expect(screen.getAllByRole('button', { name: 'Xem chi tiết' })).toHaveLength(2);
+
+    await user.click(screen.getAllByRole('button', { name: 'Xem chi tiết' })[1]);
+    expect(screen.getByTestId('location').textContent).toBe(
+      '/items/77?from=messages&requestId=101',
+    );
+  });
+
+  it('SWAP thiếu dữ liệu món đề xuất thì báo rõ và không tự tạo nội dung', () => {
+    renderHeader(DONOR_ID, conversation({
+      type: 'SWAP',
+      status: 'PENDING',
+      offeredItemId: undefined,
+      offeredItemTitle: null,
+    }));
+
+    expect(screen.getByText('API chưa cung cấp thông tin món đồ đề xuất cho yêu cầu này.'))
+      .toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Xem chi tiết' })).toHaveLength(1);
   });
 
   it('Xem hồ sơ mở hồ sơ của người bên kia', async () => {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import {
@@ -22,7 +22,12 @@ import { itemApi, type ItemResponse } from '../../services/itemApi';
 import { requestApi, toBackendUserId, type RequestResponse } from '../../services/requestApi';
 import type { ApiError } from '../../services/http';
 import { ReportDialog } from '../../components/ReportDialog';
-import { canChat, canViewChat, canSelectPendingRequest, markRequestChatSeen } from '../../utils/request';
+import {
+  canChat,
+  canViewChat,
+  canSelectPendingRequest,
+  markRequestChatSeen,
+} from '../../utils/request';
 import { chatImageForbiddenMessage } from '../../utils/apiErrorMessages';
 import { mediaApi } from '../../services/mediaApi';
 import { respondDispute } from '../../services/reportApi';
@@ -38,6 +43,7 @@ import { ChatHeader } from '../../components/messages/ChatHeader';
 import { ChatMessage } from '../../components/messages/ChatMessage';
 import { SelectRequestDialog } from '../../components/messages/SelectRequestDialog';
 import { disputeErrorMessage } from '../../utils/disputeErrors';
+import { productDetailFromRequestPath } from '../../utils/productDetailNavigation';
 import {
   donorIdOf,
   requestParticipantName,
@@ -91,9 +97,13 @@ function mergeConversationRequests(
 
 function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { requestId, disputeId } = useParams();
   const requestedId = requestId ? Number(requestId) : null;
   const responseDisputeId = disputeId ? Number(disputeId) : null;
+  const selectRequestParam = new URLSearchParams(location.search).get('selectRequest');
+  const selectRequestFromUrl =
+    selectRequestParam && /^[1-9]\d*$/.test(selectRequestParam) ? Number(selectRequestParam) : null;
   const [conversations, setConversations] = useState<ApiConversation[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
   const [messages, setMessages] = useState<MessageResponse[]>([]);
@@ -218,6 +228,15 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   // Món chính đã hiện ở thẻ dưới đầu khung chat, nên dải thẻ ghim chỉ còn các món khác (món đề nghị, bài được gửi kèm).
   const extraPinnedItems = pinnedItems.filter((pinnedItem) => pinnedItem.id !== selectedItemId);
   const selectedItemDonorId = selected ? donorIdOf(selected) : undefined;
+
+  useEffect(() => {
+    if (
+      selectRequestFromUrl &&
+      conversations.some(({ request }) => request.id === selectRequestFromUrl)
+    ) {
+      setSelectCandidateId(selectRequestFromUrl);
+    }
+  }, [conversations, selectRequestFromUrl]);
 
   useEffect(() => {
     if (!selectedItemId || selectedItemDonorId !== currentUserId) return;
@@ -580,6 +599,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
           onSelectCandidate={(id) => {
             setSelectError('');
             setSelectCandidateId(id);
+            setSelectedRequestId(id);
+            navigate(`${requestConversationPath(id)}?selectRequest=${id}`, { replace: true });
           }}
         />
 
@@ -786,7 +807,6 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 ) : null}
               </div>
             </section>
-
           </>
         ) : (
           <section className="hidden place-items-center rounded-lg bg-white ring-1 ring-border/80 lg:grid">
@@ -807,6 +827,10 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
             if (selectSubmitting) return;
             setSelectCandidateId(null);
             setSelectError('');
+            navigate(requestConversationPath(selectCandidate.request.id), { replace: true });
+          }}
+          onViewItem={(itemId) => {
+            navigate(productDetailFromRequestPath(itemId, selectCandidate.request.id, true));
           }}
           onConfirm={() => void confirmRequestSelection()}
         />

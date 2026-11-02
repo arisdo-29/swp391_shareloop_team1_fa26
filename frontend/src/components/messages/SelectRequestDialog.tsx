@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
-import { Avatar, Button } from '../ui';
+import type { ItemResponse } from '../../services/itemApi';
+import { Avatar, Button, ItemImage } from '../ui';
 import { DialogFrame } from '../Dialog';
 import { ReputationBadge } from '../ReputationBadge';
 import { avatarInitials, requestFallbackTitle, type ApiConversation } from './conversation';
+import { conditionLabel } from '../../utils/formatting';
 
 export function SelectRequestDialog({
   conversation,
@@ -11,6 +13,7 @@ export function SelectRequestDialog({
   error,
   onCancel,
   onConfirm,
+  onViewItem,
 }: {
   conversation: ApiConversation;
   participantName: string;
@@ -18,6 +21,7 @@ export function SelectRequestDialog({
   error: string;
   onCancel: () => void;
   onConfirm: () => void;
+  onViewItem?: (itemId: number) => void;
 }) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -26,6 +30,11 @@ export function SelectRequestDialog({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onCancel, submitting]);
+
+  const { request } = conversation;
+  const itemTitle = conversation.item?.title ?? request.itemTitle?.trim() ?? 'Không xác định';
+  const offeredTitle =
+    conversation.offeredItem?.title ?? request.offeredItemTitle?.trim() ?? 'Không xác định';
 
   return (
     <DialogFrame labelledBy="select-request-title">
@@ -58,24 +67,32 @@ export function SelectRequestDialog({
           </p>
         </div>
       </div>
-      <div className="mt-4 space-y-2 text-sm leading-6 text-text-secondary">
-        <p>
-          Bài đăng:{' '}
-          <strong className="text-text-primary">
-            {conversation.item?.title ?? conversation.request.itemTitle ?? 'Không xác định'}
-          </strong>
-        </p>
-        <p>Gửi lúc: {new Date(conversation.request.createdAt).toLocaleString('vi-VN')}</p>
-        {conversation.request.type === 'SWAP' ? (
-          <p>
-            Món đề xuất:{' '}
-            <strong className="text-text-primary">
-              {conversation.offeredItem?.title ??
-                conversation.request.offeredItemTitle ??
-                'Không xác định'}
-            </strong>
+      <div className="mt-4 text-sm leading-6 text-text-secondary">
+        <p>Gửi lúc: {new Date(request.createdAt).toLocaleString('vi-VN')}</p>
+        {request.type === 'SWAP' ? (
+          <div className="mt-3 grid items-stretch gap-3 sm:grid-cols-2">
+            <SelectionItemCard
+              label="Bài đăng"
+              item={conversation.item}
+              itemId={request.itemId}
+              title={itemTitle}
+              image={conversation.item?.images[0] ?? request.itemImage ?? undefined}
+              onViewItem={onViewItem}
+            />
+            <SelectionItemCard
+              label="Món đề xuất"
+              item={conversation.offeredItem}
+              itemId={request.offeredItemId}
+              title={offeredTitle}
+              image={conversation.offeredItem?.images[0]}
+              onViewItem={onViewItem}
+            />
+          </div>
+        ) : (
+          <p className="mt-2">
+            Bài đăng: <strong className="text-text-primary">{itemTitle}</strong>
           </p>
-        ) : null}
+        )}
       </div>
       <p className="mt-4 rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
         Khi bạn xác nhận chọn người này để giao dịch, yêu cầu sẽ được chấp nhận và các yêu cầu đang
@@ -95,5 +112,66 @@ export function SelectRequestDialog({
         </Button>
       </div>
     </DialogFrame>
+  );
+}
+
+function SelectionItemCard({
+  label,
+  item,
+  itemId,
+  title,
+  image,
+  onViewItem,
+}: {
+  label: string;
+  item?: ItemResponse;
+  itemId?: number;
+  title: string;
+  image?: string;
+  onViewItem?: (itemId: number) => void;
+}) {
+  const canView = Boolean(itemId && onViewItem);
+  const viewItem = () => {
+    if (itemId && onViewItem) onViewItem(itemId);
+  };
+
+  return (
+    <article
+      aria-label={label}
+      className="flex min-w-0 gap-3 rounded-md bg-white p-3 ring-1 ring-border"
+    >
+      <button
+        type="button"
+        aria-label={`Xem chi tiết ${title}`}
+        disabled={!canView}
+        onClick={viewItem}
+        className="size-20 shrink-0 overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default"
+      >
+        <ItemImage src={image} alt={title} className="size-20 object-cover" />
+      </button>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <p className="text-xs font-semibold text-primary">{label}</p>
+        <button
+          type="button"
+          disabled={!canView}
+          onClick={viewItem}
+          className="mt-1 line-clamp-2 text-left text-sm font-semibold leading-5 text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default"
+        >
+          {title}
+        </button>
+        <p className="mt-1 text-xs text-text-secondary">
+          Tình trạng: {item ? conditionLabel[item.condition] : 'Không xác định'}
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-2 w-full"
+          disabled={!canView}
+          onClick={viewItem}
+        >
+          Xem chi tiết
+        </Button>
+      </div>
+    </article>
   );
 }

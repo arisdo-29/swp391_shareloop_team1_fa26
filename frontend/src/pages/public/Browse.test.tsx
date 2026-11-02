@@ -316,7 +316,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     [20, 1, 20],
     [21, 2, 1],
     [40, 2, 20],
-    [41, 3, 1],
+    [45, 3, 5],
   ])('phân trang đúng 20 món với tổng %i sản phẩm', async (total, expectedPages, lastPageSize) => {
     const user = userEvent.setup();
     const sourceItems = Array.from({ length: total }, (_, index): ItemResponse => ({
@@ -326,7 +326,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
       createdAt: new Date(Date.UTC(2026, 9, 25, 8, 0, total - index)).toISOString(),
     }));
     vi.mocked(itemApi.list).mockImplementation(async ({ page = 0, size = 20 } = {}) => ({
-      items: total === 21 ? sourceItems : sourceItems.slice(page * size, (page + 1) * size),
+      items: sourceItems.slice(page * size, (page + 1) * size),
       page,
       size,
       totalElements: sourceItems.length,

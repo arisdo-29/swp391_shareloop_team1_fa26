@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Alert, Button } from '../ui';
 import { SelectRequestDialog } from '../messages/SelectRequestDialog';
 import type { ApiConversation } from '../messages/conversation';
 import { requestApi, type RequestResponse } from '../../services/requestApi';
 import type { ApiError } from '../../services/http';
 import { canSelectPendingRequest } from '../../utils/request';
+import { productDetailFromRequestPath } from '../../utils/productDetailNavigation';
 
 interface PendingCardProps {
   request: RequestResponse;
@@ -31,7 +33,11 @@ export function PendingCard(props: PendingCardProps) {
       <h2 id="pending-title" className="section-title">
         Chờ chọn người nhận
       </h2>
-      {props.viewerIsDonor ? <DonorPendingActions {...props} /> : <ReceiverPendingActions {...props} />}
+      {props.viewerIsDonor ? (
+        <DonorPendingActions {...props} />
+      ) : (
+        <ReceiverPendingActions {...props} />
+      )}
     </section>
   );
 }
@@ -72,6 +78,7 @@ function DonorPendingActions({
   partnerName,
   onUpdated,
 }: PendingCardProps) {
+  const navigate = useNavigate();
   const [siblingStatuses, setSiblingStatuses] = useState<RequestResponse['status'][] | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -95,7 +102,12 @@ function DonorPendingActions({
 
   const canSelect =
     siblingStatuses !== null &&
-    canSelectPendingRequest(request.status, request.donorId ?? undefined, currentUserId, siblingStatuses);
+    canSelectPendingRequest(
+      request.status,
+      request.donorId ?? undefined,
+      currentUserId,
+      siblingStatuses,
+    );
 
   const confirmSelection = async () => {
     setSubmitting(true);
@@ -105,7 +117,14 @@ function DonorPendingActions({
       const refreshed = await requestApi.forItem(request.itemId, currentUserId);
       const statuses = refreshed.map((entry) => entry.status);
       setSiblingStatuses(statuses);
-      if (!canSelectPendingRequest(request.status, request.donorId ?? undefined, currentUserId, statuses)) {
+      if (
+        !canSelectPendingRequest(
+          request.status,
+          request.donorId ?? undefined,
+          currentUserId,
+          statuses,
+        )
+      ) {
         setError(selectErrorMessages.REQUEST_INVALID_STATE_TRANSITION);
         return;
       }
@@ -148,6 +167,9 @@ function DonorPendingActions({
           error={error}
           onCancel={() => {
             if (!submitting) setDialogOpen(false);
+          }}
+          onViewItem={(itemId) => {
+            navigate(productDetailFromRequestPath(itemId, request.id, true));
           }}
           onConfirm={() => void confirmSelection()}
         />

@@ -3,6 +3,9 @@ import { Avatar, Button, ItemImage, StatusBadge, TypeBadge } from '../ui';
 import { ReputationBadge } from '../ReputationBadge';
 import { requestStatusLabel } from '../../utils/request';
 import { transactionProgressPath, userProfilePath } from '../../utils/chatMessages';
+import { conditionLabel } from '../../utils/formatting';
+import { productDetailFromRequestPath } from '../../utils/productDetailNavigation';
+import type { ItemResponse } from '../../services/itemApi';
 import { CompactProgress } from './CompactProgress';
 import {
   avatarInitials,
@@ -24,6 +27,79 @@ interface ChatHeaderProps {
   onReport: () => void;
 }
 
+function SwapItemCard({
+  label,
+  item,
+  fallbackTitle,
+  itemId,
+  ownerFallback,
+  requestId,
+}: {
+  label: string;
+  item?: ItemResponse;
+  fallbackTitle?: string | null;
+  itemId?: number;
+  ownerFallback: string;
+  requestId: number;
+}) {
+  const navigate = useNavigate();
+  const title = item?.title ?? fallbackTitle?.trim() ?? '';
+  const detailPath = itemId ? productDetailFromRequestPath(itemId, requestId) : null;
+  const openDetail = () => {
+    if (detailPath) navigate(detailPath);
+  };
+
+  return (
+    <article className="flex min-w-0 flex-1 flex-col rounded-md bg-white p-3 ring-1 ring-border/80">
+      <p className="text-xs font-semibold text-primary">{label}</p>
+      {title ? (
+        <div className="mt-2 flex min-w-0 flex-1 items-start gap-3">
+          <button
+            type="button"
+            className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={`Mở chi tiết ${title}`}
+            disabled={!detailPath}
+            onClick={openDetail}
+          >
+            <ItemImage
+              src={item?.images[0]}
+              alt={title}
+              className="size-20 rounded-md object-cover"
+            />
+          </button>
+          <div className="flex min-w-0 flex-1 flex-col self-stretch">
+            <button
+              type="button"
+              className="line-clamp-2 text-left text-sm font-bold text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              disabled={!detailPath}
+              onClick={openDetail}
+            >
+              {title}
+            </button>
+            {item ? (
+              <p className="mt-1 text-xs font-medium text-text-secondary">
+                {conditionLabel[item.condition]}
+              </p>
+            ) : null}
+            <p className="mt-1 truncate text-xs text-text-secondary">
+              Chủ sở hữu: {item?.donorName?.trim() || ownerFallback}
+            </p>
+            {detailPath ? (
+              <Button className="mt-auto self-start" size="sm" onClick={openDetail}>
+                Xem chi tiết
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <p className="mt-2 rounded-md bg-surface-low p-3 text-xs leading-5 text-text-muted">
+          API chưa cung cấp thông tin món đồ đề xuất cho yêu cầu này.
+        </p>
+      )}
+    </article>
+  );
+}
+
 /** Đầu khung chat: người bên kia, vai, Xem hồ sơ, Báo cáo, rồi một thẻ món đồ kèm tiến trình thu gọn. */
 export function ChatHeader({
   conversation,
@@ -38,6 +114,7 @@ export function ChatHeader({
   const partnerId = partnerIdOf(conversation, currentUserId);
   const viewerIsDonor = isDonorView(conversation, currentUserId);
   const title = conversationTitle(conversation);
+  const isSwap = request.type === 'SWAP';
 
   return (
     <div className="shrink-0 border-b border-border">
@@ -84,26 +161,53 @@ export function ChatHeader({
         </div>
       </header>
 
-      <div className="mx-4 mb-3 flex flex-wrap items-center gap-3 rounded-md p-2.5 ring-1 ring-border/80">
-        <button
-          type="button"
-          onClick={() => navigate(`/items/${request.itemId}`)}
-          className="flex min-h-11 min-w-0 flex-1 basis-60 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
-          <ItemImage
-            src={conversationImage(conversation)}
-            alt={title}
-            className="h-11 w-14 shrink-0 rounded-md object-cover"
-          />
-          <span className="min-w-0 flex-1">
-            <strong className="block truncate text-sm">{title}</strong>
-            <span className="mt-1 flex flex-wrap gap-1.5">
-              <TypeBadge type={request.type === 'SWAP' ? 'trade' : 'gift'} />
-              <StatusBadge status={request.status} label={requestStatusLabel[request.status]} />
+      <div className="mx-4 mb-3 rounded-md p-2.5 ring-1 ring-border/80">
+        {isSwap ? (
+          <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-stretch">
+            <SwapItemCard
+              label={viewerIsDonor ? 'Món đồ của bạn' : 'Món đồ của chủ bài'}
+              item={conversation.item}
+              fallbackTitle={request.itemTitle}
+              itemId={request.itemId}
+              ownerFallback={request.donorName?.trim() || 'Chủ bài đăng'}
+              requestId={request.id}
+            />
+            <div
+              aria-label="Trao đổi hai món đồ"
+              className="mx-auto grid size-9 place-items-center self-center rounded-full bg-primary-faint text-lg font-bold text-primary"
+            >
+              ↔
+            </div>
+            <SwapItemCard
+              label={viewerIsDonor ? 'Món đồ bạn sẽ nhận' : 'Món đồ bạn đề xuất'}
+              item={conversation.offeredItem}
+              fallbackTitle={request.offeredItemTitle}
+              itemId={request.offeredItemId}
+              ownerFallback={request.receiverName?.trim() || 'Người đề nghị trao đổi'}
+              requestId={request.id}
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => navigate(productDetailFromRequestPath(request.itemId, request.id))}
+            className="flex min-h-11 min-w-0 w-full items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <ItemImage
+              src={conversationImage(conversation)}
+              alt={title}
+              className="h-11 w-14 shrink-0 rounded-md object-cover"
+            />
+            <span className="min-w-0 flex-1">
+              <strong className="block truncate text-sm">{title}</strong>
+              <span className="mt-1 flex flex-wrap gap-1.5">
+                <TypeBadge type="gift" />
+                <StatusBadge status={request.status} label={requestStatusLabel[request.status]} />
+              </span>
             </span>
-          </span>
-        </button>
-        <div className="flex flex-wrap items-center gap-3">
+          </button>
+        )}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border/70 pt-3">
           <CompactProgress status={request.status} />
           <Button size="sm" onClick={() => navigate(transactionProgressPath(request.id))}>
             Xem tiến trình

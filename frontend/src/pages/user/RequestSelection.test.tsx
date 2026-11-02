@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ItemResponse } from '../../services/itemApi';
@@ -38,7 +38,7 @@ const item: ItemResponse = {
   condition: 'GOOD',
   defectNote: null,
   brand: null,
-  images: [],
+  images: ['/api/v1/media/45'],
   defectImages: [],
   operatingStatus: 'NORMAL',
   status: 'APPROVED',
@@ -54,6 +54,8 @@ const offeredItem: ItemResponse = {
   donorId: 12,
   title: 'Máy xay cà phê',
   description: 'Máy xay ít sử dụng.',
+  condition: 'LIKE_NEW',
+  images: ['/api/v1/media/78'],
 };
 
 const conversation: ApiConversation = { request, item, offeredItem };
@@ -68,7 +70,13 @@ describe('chọn người giao dịch', () => {
     expect(canSelectPendingRequest('PENDING', 9, 9, ['PENDING', 'RESERVED'])).toBe(false);
   });
 
-  it.each(['RESERVED', 'AWAITING_LOGISTICS', 'LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER', 'DISPUTED'] as const)(
+  it.each([
+    'RESERVED',
+    'AWAITING_LOGISTICS',
+    'LOGISTICS_CONFIRMED',
+    'AWAITING_HANDOVER',
+    'DISPUTED',
+  ] as const)(
     'không cho chọn thêm người khi cùng bài đã có yêu cầu ở trạng thái %s',
     (selectedStatus) => {
       expect(canSelectPendingRequest('PENDING', 9, 9, ['PENDING', selectedStatus])).toBe(false);
@@ -106,6 +114,68 @@ describe('chọn người giao dịch', () => {
     await user.click(screen.getByRole('button', { name: 'Hủy' }));
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('SWAP hiển thị hai card và xem đúng ID từng món mà không xác nhận', async () => {
+    const user = userEvent.setup();
+    const onViewItem = vi.fn();
+    const onConfirm = vi.fn();
+    render(
+      <SelectRequestDialog
+        conversation={conversation}
+        participantName="Nguyễn Văn A"
+        submitting={false}
+        error=""
+        onCancel={() => undefined}
+        onConfirm={onConfirm}
+        onViewItem={onViewItem}
+      />,
+    );
+
+    const listingCard = screen.getByRole('article', { name: 'Bài đăng' });
+    const offeredCard = screen.getByRole('article', { name: 'Món đề xuất' });
+    const listingThumbnail = within(listingCard).getByRole('img', { name: 'Máy pha cà phê' });
+    const offeredThumbnail = within(offeredCard).getByRole('img', { name: 'Máy xay cà phê' });
+
+    expect(listingThumbnail.className).toContain('size-20');
+    expect(listingThumbnail.className).toContain('object-cover');
+    expect(listingThumbnail.getAttribute('src')).toContain('/api/v1/media/45');
+    expect(offeredThumbnail.getAttribute('src')).toContain('/api/v1/media/78');
+    expect(within(listingCard).getByText(/Tình trạng: Đã dùng nhiều/)).toBeTruthy();
+    expect(within(offeredCard).getByText(/Tình trạng: Ít sử dụng/)).toBeTruthy();
+
+    await user.click(
+      within(listingCard).getByRole('button', { name: 'Xem chi tiết Máy pha cà phê' }),
+    );
+    await user.click(within(offeredCard).getByRole('button', { name: 'Xem chi tiết' }));
+    expect(onViewItem).toHaveBeenNthCalledWith(1, 45);
+    expect(onViewItem).toHaveBeenNthCalledWith(2, 78);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('SWAP thiếu ID thì dùng placeholder và vô hiệu hóa xem chi tiết', () => {
+    render(
+      <SelectRequestDialog
+        conversation={{
+          ...conversation,
+          request: { ...request, offeredItemId: undefined },
+          offeredItem: undefined,
+        }}
+        participantName="Nguyễn Văn A"
+        submitting={false}
+        error=""
+        onCancel={() => undefined}
+        onConfirm={() => undefined}
+        onViewItem={vi.fn()}
+      />,
+    );
+
+    const offeredCard = screen.getByRole('article', { name: 'Món đề xuất' });
+    expect(within(offeredCard).getByRole('img', { name: 'Không xác định' })).toBeTruthy();
+    expect(
+      (within(offeredCard).getByRole('button', { name: 'Xem chi tiết' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
   });
 
   it('hiển thị đúng chi tiết GIVE khi chuyển sang yêu cầu khác', () => {
@@ -173,7 +243,9 @@ describe('chọn người giao dịch', () => {
         onConfirm={onConfirm}
       />,
     );
-    expect((screen.getByRole('button', { name: 'Đang chọn...' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'Đang chọn...' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 });
 
@@ -194,8 +266,10 @@ describe('tích hợp tin nhắn API', () => {
   });
 
   it('gộp polling theo ID, không nhân đôi và luôn giữ đúng thứ tự', () => {
-    expect(mergeChatMessages([message(2, 'cũ')], [message(1, 'đầu'), message(2, 'mới')]))
-      .toEqual([message(1, 'đầu'), message(2, 'mới')]);
+    expect(mergeChatMessages([message(2, 'cũ')], [message(1, 'đầu'), message(2, 'mới')])).toEqual([
+      message(1, 'đầu'),
+      message(2, 'mới'),
+    ]);
   });
 
   it('chỉ tải lại chi tiết cuộc trò chuyện mỗi sáu lần polling', () => {

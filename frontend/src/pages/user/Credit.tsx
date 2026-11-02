@@ -61,7 +61,7 @@ function paymentProviderLabel(provider: PaymentProvider) {
 const QUICK_TOPUP_AMOUNTS = [20_000, 50_000, 100_000, 200_000];
 
 const topUpAmountInvalidMessage =
-  'Số tiền nạp chưa hợp lệ. Theo giá trị mặc định, số tiền cần chia hết cho 1.000đ và tối thiểu 10.000đ. Các mức này có thể thay đổi theo cấu hình hệ thống.';
+  'Số tiền nạp chưa hợp lệ. Theo giá trị mặc định, số tiền tối thiểu 10.000đ. Các mức này có thể thay đổi theo cấu hình hệ thống.';
 
 function topUpCreateErrorMessage(error: unknown) {
   const apiError = error as Partial<ApiError>;
