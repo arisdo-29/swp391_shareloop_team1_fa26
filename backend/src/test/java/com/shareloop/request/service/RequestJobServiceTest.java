@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -102,8 +103,9 @@ class RequestJobServiceTest {
             ReflectionTestUtils.setField(request, "id", 101L);
             ReflectionTestUtils.setField(request, "createdAt", cutoff.minus(1, ChronoUnit.HOURS));
 
-            when(requestRepository.findByStatusAndCreatedAtBefore(RequestStatus.PENDING, cutoff))
-                    .thenReturn(List.of(request));
+            when(requestRepository.findByStatusAndCreatedAtBefore(
+                            eq(RequestStatus.PENDING), eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
 
             int cancelledCount = requestJobService.expirePendingRequests(now);
@@ -113,6 +115,33 @@ class RequestJobServiceTest {
             assertThat(request.getCancelReason()).contains("Hết hạn");
             verify(requestRepository).save(request);
             verify(notificationService).notify(eq(10L), eq("REQUEST_EXPIRED"), anyString(), anyString(), contains("1"));
+        }
+
+        @Test
+        @DisplayName("Quét theo từng lô 100 bản ghi cho đến khi hết (Mục Q)")
+        void expirePendingRequests_whenMultipleBatches_processesAllUntilEmpty() {
+            when(configService.getInt(ConfigKey.REQUEST_PENDING_DAYS)).thenReturn(3);
+            Instant cutoff = now.minus(3, ChronoUnit.DAYS);
+
+            Request r1 = new Request(1L, 10L, null, "GIVE");
+            ReflectionTestUtils.setField(r1, "id", 101L);
+            ReflectionTestUtils.setField(r1, "createdAt", cutoff.minus(1, ChronoUnit.HOURS));
+
+            Request r2 = new Request(2L, 20L, null, "GIVE");
+            ReflectionTestUtils.setField(r2, "id", 102L);
+            ReflectionTestUtils.setField(r2, "createdAt", cutoff.minus(1, ChronoUnit.HOURS));
+
+            when(requestRepository.findByStatusAndCreatedAtBefore(
+                            eq(RequestStatus.PENDING), eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(r1), List.of(r2), List.of());
+            when(requestRepository.findById(101L)).thenReturn(Optional.of(r1));
+            when(requestRepository.findById(102L)).thenReturn(Optional.of(r2));
+
+            int cancelledCount = requestJobService.expirePendingRequests(now);
+
+            assertThat(cancelledCount).isEqualTo(2);
+            assertThat(r1.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+            assertThat(r2.getStatus()).isEqualTo(RequestStatus.CANCELLED);
         }
 
         @Test
@@ -126,8 +155,9 @@ class RequestJobServiceTest {
             // Vừa tạo sau cutoff
             ReflectionTestUtils.setField(request, "createdAt", cutoff.plus(1, ChronoUnit.HOURS));
 
-            when(requestRepository.findByStatusAndCreatedAtBefore(RequestStatus.PENDING, cutoff))
-                    .thenReturn(List.of(request));
+            when(requestRepository.findByStatusAndCreatedAtBefore(
+                            eq(RequestStatus.PENDING), eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
 
             int cancelledCount = requestJobService.expirePendingRequests(now);
@@ -153,7 +183,8 @@ class RequestJobServiceTest {
             ReflectionTestUtils.setField(request, "id", 201L);
             request.select(cutoff.minus(1, ChronoUnit.HOURS)); // status -> RESERVED, reservedAt set
 
-            when(requestRepository.findSilentReservedRequests(cutoff)).thenReturn(List.of(request));
+            when(requestRepository.findSilentReservedRequests(eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(201L)).thenReturn(Optional.of(request));
             when(itemQueryService.getSummary(1L)).thenReturn(new ItemSummary(1L, 20L, null, null));
 
@@ -170,6 +201,33 @@ class RequestJobServiceTest {
         }
 
         @Test
+        @DisplayName("Quét theo từng lô 100 bản ghi cho đến khi hết (Mục Q)")
+        void expireSilentReservedRequests_whenMultipleBatches_processesAllUntilEmpty() {
+            when(configService.getInt(ConfigKey.CHAT_OPEN_DAYS)).thenReturn(10);
+            Instant cutoff = now.minus(10, ChronoUnit.DAYS);
+
+            Request r1 = new Request(1L, 10L, null, "GIVE");
+            ReflectionTestUtils.setField(r1, "id", 201L);
+            r1.select(cutoff.minus(1, ChronoUnit.HOURS));
+
+            Request r2 = new Request(2L, 20L, null, "GIVE");
+            ReflectionTestUtils.setField(r2, "id", 202L);
+            r2.select(cutoff.minus(2, ChronoUnit.HOURS));
+
+            when(requestRepository.findSilentReservedRequests(eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(r1), List.of(r2), List.of());
+            when(requestRepository.findById(201L)).thenReturn(Optional.of(r1));
+            when(requestRepository.findById(202L)).thenReturn(Optional.of(r2));
+            when(itemQueryService.getSummary(anyLong())).thenReturn(new ItemSummary(1L, 99L, null, null));
+
+            int cancelledCount = requestJobService.expireSilentReservedRequests(now);
+
+            assertThat(cancelledCount).isEqualTo(2);
+            assertThat(r1.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+            assertThat(r2.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        }
+
+        @Test
         @DisplayName("Quá hạn 10 ngày ở AWAITING_LOGISTICS thì cũng huỷ và nhả bài")
         void expireSilentReservedRequests_whenAwaitingLogisticsOverdue_cancelsAndReleases() {
             when(configService.getInt(ConfigKey.CHAT_OPEN_DAYS)).thenReturn(10);
@@ -180,7 +238,8 @@ class RequestJobServiceTest {
             request.select(cutoff.minus(2, ChronoUnit.HOURS));
             request.proposeSchedule("DIRECT", "FPT Gate", now.plus(1, ChronoUnit.DAYS), true, false, cutoff);
 
-            when(requestRepository.findSilentReservedRequests(cutoff)).thenReturn(List.of(request));
+            when(requestRepository.findSilentReservedRequests(eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(202L)).thenReturn(Optional.of(request));
             when(itemQueryService.getSummary(1L)).thenReturn(new ItemSummary(1L, 20L, null, null));
 
@@ -200,7 +259,8 @@ class RequestJobServiceTest {
             Request request = new Request(1L, 10L, 50L, "SWAP");
             ReflectionTestUtils.setField(request, "id", 203L);
             request.select(cutoff.minus(1, ChronoUnit.HOURS));
-            when(requestRepository.findSilentReservedRequests(cutoff)).thenReturn(List.of(request));
+            when(requestRepository.findSilentReservedRequests(eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(203L)).thenReturn(Optional.of(request));
             when(itemQueryService.getSummary(1L)).thenReturn(new ItemSummary(1L, 20L, null, null));
 
@@ -234,7 +294,8 @@ class RequestJobServiceTest {
             request.confirmHandover(
                     true, null, cutoff.minus(2, ChronoUnit.HOURS)); // donor confirms -> AWAITING_HANDOVER
 
-            when(requestRepository.findOverdueHandoverRequests(cutoff)).thenReturn(List.of(request));
+            when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(301L)).thenReturn(Optional.of(request));
             when(itemQueryService.getSummary(1L)).thenReturn(new ItemSummary(1L, 20L, null, null));
 
@@ -256,6 +317,41 @@ class RequestJobServiceTest {
         }
 
         @Test
+        @DisplayName("Quét theo từng lô 100 bản ghi cho đến khi hết (Mục Q)")
+        void autoConfirmHandoverRequests_whenMultipleBatches_processesAllUntilEmpty() {
+            when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
+            Instant cutoff = now.minus(3, ChronoUnit.DAYS);
+
+            Request r1 = new Request(1L, 10L, null, "GIVE");
+            ReflectionTestUtils.setField(r1, "id", 301L);
+            r1.select(now.minus(5, ChronoUnit.DAYS));
+            r1.proposeSchedule(
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(4, ChronoUnit.DAYS));
+            r1.confirmLogistics(false, false, now.minus(4, ChronoUnit.DAYS));
+            r1.confirmHandover(true, null, cutoff.minus(2, ChronoUnit.HOURS));
+
+            Request r2 = new Request(2L, 20L, null, "GIVE");
+            ReflectionTestUtils.setField(r2, "id", 302L);
+            r2.select(now.minus(5, ChronoUnit.DAYS));
+            r2.proposeSchedule(
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(4, ChronoUnit.DAYS));
+            r2.confirmLogistics(false, false, now.minus(4, ChronoUnit.DAYS));
+            r2.confirmHandover(true, null, cutoff.minus(3, ChronoUnit.HOURS));
+
+            when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(r1), List.of(r2), List.of());
+            when(requestRepository.findById(301L)).thenReturn(Optional.of(r1));
+            when(requestRepository.findById(302L)).thenReturn(Optional.of(r2));
+            when(itemQueryService.getSummary(anyLong())).thenReturn(new ItemSummary(1L, 99L, null, null));
+
+            int completedCount = requestJobService.autoConfirmHandoverRequests(now);
+
+            assertThat(completedCount).isEqualTo(2);
+            assertThat(r1.getStatus()).isEqualTo(RequestStatus.COMPLETED);
+            assertThat(r2.getStatus()).isEqualTo(RequestStatus.COMPLETED);
+        }
+
+        @Test
         void autoConfirmHandoverRequests_whenRequestHasReport_doesNotComplete() {
             // given: bên cho đã xác nhận giao đồ nhưng có report khiếu nại chưa xử lý, bên nhận im lặng quá 3 ngày
             when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
@@ -269,7 +365,8 @@ class RequestJobServiceTest {
             request.confirmLogistics(false, false, now.minus(4, ChronoUnit.DAYS));
             request.confirmHandover(true, null, cutoff.minus(1, ChronoUnit.HOURS));
 
-            when(requestRepository.findOverdueHandoverRequests(cutoff)).thenReturn(List.of(request));
+            when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(303L)).thenReturn(Optional.of(request));
             when(reportService.hasReportForRequest(303L)).thenReturn(true);
 
@@ -294,7 +391,8 @@ class RequestJobServiceTest {
             ReflectionTestUtils.setField(request, "id", 304L);
             ReflectionTestUtils.setField(request, "status", RequestStatus.DISPUTED);
             ReflectionTestUtils.setField(request, "donorHandoverAt", cutoff.minus(1, ChronoUnit.HOURS));
-            when(requestRepository.findOverdueHandoverRequests(cutoff)).thenReturn(List.of(request));
+            when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(304L)).thenReturn(Optional.of(request));
 
             // when
@@ -323,7 +421,8 @@ class RequestJobServiceTest {
             request.confirmHandover(
                     false, true, cutoff.minus(1, ChronoUnit.HOURS)); // receiver confirms -> AWAITING_HANDOVER
 
-            when(requestRepository.findOverdueHandoverRequests(cutoff)).thenReturn(List.of(request));
+            when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(302L)).thenReturn(Optional.of(request));
             when(itemQueryService.getSummary(1L)).thenReturn(new ItemSummary(1L, 20L, null, null));
 
@@ -353,7 +452,8 @@ class RequestJobServiceTest {
             // Confirm mới 1 ngày trước (sau cutoff)
             request.confirmHandover(true, null, cutoff.plus(1, ChronoUnit.DAYS));
 
-            when(requestRepository.findOverdueHandoverRequests(cutoff)).thenReturn(List.of(request));
+            when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(303L)).thenReturn(Optional.of(request));
 
             int completedCount = requestJobService.autoConfirmHandoverRequests(now);
@@ -382,8 +482,9 @@ class RequestJobServiceTest {
             ReflectionTestUtils.setField(r2, "id", 402L);
             ReflectionTestUtils.setField(r2, "createdAt", cutoff.minus(1, ChronoUnit.HOURS));
 
-            when(requestRepository.findByStatusAndCreatedAtBefore(RequestStatus.PENDING, cutoff))
-                    .thenReturn(List.of(r1, r2));
+            when(requestRepository.findByStatusAndCreatedAtBefore(
+                            eq(RequestStatus.PENDING), eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(r1, r2), List.of());
 
             when(requestRepository.findById(401L)).thenThrow(new RuntimeException("Database timeout"));
             when(requestRepository.findById(402L)).thenReturn(Optional.of(r2));

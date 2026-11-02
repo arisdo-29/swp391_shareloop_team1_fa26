@@ -206,6 +206,20 @@ class MeControllerTest {
     }
 
     @Test
+    void changePhone_whenNonMobilePrefix_returns400ValidationFailed() throws Exception {
+        String body = "{\"newPhone\":\"0281234567\",\"otp\":\"123456\"}";
+
+        mockMvc.perform(put(URL + "/phone")
+                        .header("Authorization", bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.field").value("newPhone"));
+        verifyNoInteractions(userService);
+    }
+
+    @Test
     void changePhone_whenValid_returns200() throws Exception {
         ChangePhoneRequest request = new ChangePhoneRequest("0987654321", "123456");
         MeResponse updated = new MeResponse(

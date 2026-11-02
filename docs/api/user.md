@@ -82,7 +82,7 @@ Yêu cầu gửi mã OTP về email để chuẩn bị đổi số điện tho�
 - Xác thực: **bắt buộc**.
 - Request: `SendChangePhoneOtpRequest` (`newPhone`).
 - Thành công: `200`, `ChangePhoneOtpResponse`.
-- Lỗi: `401 UNAUTHORIZED`, `400 VALIDATION_FAILED` (số sai định dạng regex `^(0|\+84)\d{9}$`), `400 USER_PHONE_SAME_AS_CURRENT`, `409 USER_PHONE_ALREADY_USED`, `400 USER_PHONE_CHANGE_COOLDOWN` (`details.retryAfterDays`), `409 USER_PHONE_CHANGE_ACTIVE_DELIVERY`, `429 AUTH_OTP_COOLDOWN`.
+- Lỗi: `401 UNAUTHORIZED`, `400 VALIDATION_FAILED` (số sai định dạng regex `^(0|\+84)[35789]\d{8}$`), `400 USER_PHONE_SAME_AS_CURRENT`, `409 USER_PHONE_ALREADY_USED`, `400 USER_PHONE_CHANGE_COOLDOWN` (`details.retryAfterDays`), `409 USER_PHONE_CHANGE_ACTIVE_DELIVERY`, `429 AUTH_OTP_COOLDOWN`.
 
 Quy tắc:
 - Số điện thoại được chuẩn hoá tự động về dạng `0xxxxxxxxx` (nếu bắt đầu bằng `+84`).

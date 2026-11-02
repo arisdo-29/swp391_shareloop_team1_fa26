@@ -278,7 +278,7 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
 ```json
 {
   "asDescribed": true,
-  "notAsDescribedReason": "Món đồ bị vỡ một góc không giống trong ảnh", // Bắt buộc nếu người nhận chọn asDescribed = false
+  "notAsDescribedReason": "Món đồ bị vỡ một góc không giống trong ảnh", // Bắt buộc nếu người nhận chọn asDescribed = false, tối đa 1000 ký tự (BC-01)
   "mediaIds": [1, 2] // Tuỳ chọn: danh sách ID ảnh/video minh chứng khi giao nhận (FR-86, BR-T09)
 }
 ```
@@ -298,6 +298,7 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
     - Gửi thông báo `TRANSACTION_COMPLETED` cho cả hai bên.
 - **Thành công:** `200 OK`, trả về `RequestResponse`.
 - **Lỗi:**
+  - `400 VALIDATION_FAILED`: Lý do không đúng mô tả vượt quá 1000 ký tự (BC-01).
   - `400 REQUEST_AS_DESCRIBED_REQUIRED`: Bên nhận chưa trả lời câu hỏi món đồ có đúng mô tả không.
   - `400 REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED`: Thiếu lý do khi chọn không đúng mô tả.
   - `403 REQUEST_FORBIDDEN`: Không phải thành viên tham gia giao dịch.
@@ -497,7 +498,7 @@ thì chưa.
 | Trường | Kiểu | Bắt buộc | Ràng buộc |
 |---|---|---|---|
 | `asDescribed` | boolean | Bên nhận: Có | Bắt buộc với bên nhận |
-| `notAsDescribedReason` | string | Không | Bắt buộc nếu `asDescribed = false` |
+| `notAsDescribedReason` | string | Không | Bắt buộc nếu `asDescribed = false`, tối đa 1000 ký tự |
 | `mediaIds` | number[] | Không | Danh sách ID ảnh/video minh chứng khi giao nhận (FR-86, BR-T09) |
 
 ### AttachMediaRequest
