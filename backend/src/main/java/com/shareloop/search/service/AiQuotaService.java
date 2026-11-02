@@ -12,11 +12,14 @@ import com.shareloop.wallet.dto.WalletResponse;
 import com.shareloop.wallet.service.CreditService;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AiQuotaService {
+    private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
     private final AiQuotaAccountRepository repository;
     private final CreditService creditService;
     private final ConfigService configService;
@@ -37,7 +40,7 @@ public class AiQuotaService {
     public AiQuotaResponse getQuota(long userId) {
         AiQuotaAccount account = requireAccount(userId);
         WalletResponse wallet = creditService.getWallet(userId);
-        return snapshot(account, wallet.hasToppedUp(), LocalDate.now(clock));
+        return snapshot(account, wallet.hasToppedUp(), today());
     }
 
     /** Check affordability before calling the provider without changing the wallet or free allowance. */
@@ -45,7 +48,7 @@ public class AiQuotaService {
     public void checkAvailable(long userId) {
         AiQuotaAccount account = requireAccount(userId);
         WalletResponse wallet = creditService.getWallet(userId);
-        if (remaining(account, wallet.hasToppedUp(), LocalDate.now(clock)) == 0
+        if (remaining(account, wallet.hasToppedUp(), today()) == 0
                 && wallet.available() < configService.getInt(ConfigKey.AI_SEARCH_FEE)) {
             throw new BusinessException(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE);
         }
@@ -57,7 +60,7 @@ public class AiQuotaService {
         creditService.lockWalletRow(userId);
         AiQuotaAccount account = requireAccount(userId);
         boolean toppedUp = creditService.getWallet(userId).hasToppedUp();
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = today();
         if (remaining(account, toppedUp, today) > 0) {
             account.use(today, toppedUp);
             return false;
@@ -73,7 +76,7 @@ public class AiQuotaService {
         creditService.lockWalletRow(userId);
         AiQuotaAccount account = requireAccount(userId);
         boolean toppedUp = creditService.getWallet(userId).hasToppedUp();
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = today();
         if (remaining(account, toppedUp, today) > 0) {
             account.use(today, toppedUp);
             return new Reservation(today, toppedUp, null);
@@ -96,6 +99,10 @@ public class AiQuotaService {
         return repository
                 .findById(userId)
                 .orElseThrow(() -> new BusinessException(SearchErrorCode.SEARCH_ACCOUNT_NOT_FOUND));
+    }
+
+    private LocalDate today() {
+        return LocalDate.ofInstant(clock.instant(), VIETNAM_ZONE);
     }
 
     private AiQuotaResponse snapshot(AiQuotaAccount account, boolean toppedUp, LocalDate today) {

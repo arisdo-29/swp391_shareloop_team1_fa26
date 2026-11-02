@@ -113,22 +113,23 @@ await test('admin chỉ đọc danh sách đơn nạp và giữ phân trang', as
   assert.equal(api.adminFinanceApi.rejectTopUp, undefined);
 });
 
-await test('quota không tìm kiếm hoặc tiêu lượt; search giữ quota và kết quả dự phòng', async () => {
+await test('quota không tìm kiếm hoặc tiêu lượt; search gửi một yêu cầu độc lập', async () => {
   requests = [];
   nextResponse = { freeUsesRemaining: 1, feeCredits: 2, hasToppedUp: false };
   assert.deepEqual(await api.aiApi.quota(), nextResponse);
   assert.equal(requests[0].method, 'get');
   assert.equal(requests[0].url, '/api/v1/ai/quota');
   nextResponse = {
-    filters: {},
-    results: { items: [], page: 2, size: 6, totalElements: 20 },
+    message: 'Mình chưa tìm thấy món phù hợp.',
+    results: { items: [], page: 0, size: 0, totalElements: 0 },
     quota: nextResponse,
-    fallback: true,
+    fallback: false,
     chargedCredits: 0,
+    outOfScope: false,
   };
-  assert.deepEqual(await api.aiApi.search('bàn học', 2, 6), nextResponse);
+  assert.deepEqual(await api.aiApi.search('bàn học'), nextResponse);
   assert.deepEqual(requests[1].body, { query: 'bàn học' });
-  assert.deepEqual(requests[1].params, { page: 2, size: 6 });
+  assert.equal(requests[1].params, undefined);
 });
 
 await test('polling truyền afterId, pinned items dùng path canonical và tin nhắn gửi refItemId', async () => {

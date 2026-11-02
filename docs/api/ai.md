@@ -1,64 +1,42 @@
-# AI trợ lý tìm đồ — issue #124
+# Trợ lý tìm đồ ShareLoop
 
 ## POST `/api/v1/ai/search`
 
-Yêu cầu JWT của Member. Body:
+Cần JWT của Member. Mỗi request là một cuộc tìm độc lập; backend và Gemini không dùng lịch sử của lần trước. Body:
 
 ```json
-{ "query": "Tìm sách tiếng Anh cũ ở quận 1" }
+{ "query": "Mình muốn một món giúp vẻ ngoài có phong cách hơn" }
 ```
 
-`query` là câu tự nhiên không rỗng, tối đa 500 ký tự; từ chối nội dung có số điện thoại, email hoặc URL trước khi gọi AI. Không nhập tên riêng hoặc dữ liệu cá nhân khác trong nhu cầu tìm đồ. Query parameters `page` (mặc định `0`) và `size` (mặc định `20`, từ `1` đến `100`) phân trang kết quả. Mỗi request gọi AI một lần, kể cả khi đổi trang. FE gọi qua `frontend/src/services/aiApi.ts`.
+`query` dài 1–500 ký tự và không được chứa số điện thoại, email hoặc URL. Trợ lý chỉ phục vụ nhu cầu tìm đồ trong ShareLoop, kể cả khi người dùng mô tả công dụng hoặc cảm giác mong muốn thay vì tên món. Sau khi qua kiểm tra hạn mức và số dư, yêu cầu ngoài phạm vi nhận một lời từ chối ngắn, không tiêu lượt và không trừ Credit.
 
 Response `200`:
 
 ```json
 {
-  "filters": {
-    "keywords": "sách tiếng Anh",
-    "categoryId": 4,
-    "areaId": 12,
-    "condition": null,
-    "offerType": null
-  },
-  "results": {
-    "items": [],
-    "page": 0,
-    "size": 20,
-    "totalElements": 0
-  },
+  "message": "Mình đã xem nhu cầu của bạn và tìm được vài món đồ đang có trên ShareLoop có thể phù hợp. Bạn nhấn vào từng bài đăng để xem chi tiết nhé!",
+  "results": { "items": [], "page": 0, "size": 0, "totalElements": 0 },
   "quota": { "freeUsesRemaining": 5, "feeCredits": 2, "hasToppedUp": true },
   "chargedCredits": 0,
   "fallback": false,
-  "broadened": false
+  "outOfScope": false
 }
 ```
 
-`filters` là bộ lọc do OpenRouter dùng `cohere/north-mini-code:free` trích xuất qua lời gọi hàm với schema riêng và được backend kiểm tra lại trước khi truy vấn. Model này không hỗ trợ `response_format`; backend nhận đối số JSON của hàm đúng tên hoặc JSON hợp lệ trong nội dung phản hồi. `categoryId` phải thuộc danh mục đang hoạt động; `areaId` phải là ID quận/huyện đang hoạt động. `condition` thuộc `NEW`, `LIKE_NEW`, `GOOD`, `DEFECTIVE`; `offerType` thuộc `GIVE`, `SWAP`. Mỗi trường có thể là `null`. `results.items` là `ItemResponse` từ cơ sở dữ liệu, chỉ gồm bài `APPROVED`, còn hoạt động và chưa xoá. LLM không tạo bài, diễn giải kết quả hay quyết định bài nào được duyệt.
+Backend đọc toàn bộ bài `APPROVED`, còn hoạt động, chưa xoá và chưa hết hạn từ ItemService. Trạng thái `RESERVED`, `TRADED` và các trạng thái khác không vào danh sách ứng viên. Backend gửi ID và nội dung công khai liên quan của bài theo từng lô cho Gemini `gemini-3.5-flash-lite` qua Gemini Interactions API, với `store=false`. AI chọn tối đa 6 ID từ các ứng viên đã nhận. Khi kho bài lớn, mỗi lời gọi xét lô tiếp theo cùng danh sách rút gọn trước đó. Backend không gửi dữ liệu tài khoản, ví, giao dịch hoặc ảnh riêng tư. Trước khi trả kết quả, backend đọc lại từng bài bằng ItemService để loại bài đã bị giữ chỗ, hoàn tất, ẩn, khoá chủ bài hoặc hết hạn trong lúc AI xử lý. Mỗi ID kết quả luôn có bài đăng thật để người dùng mở xem.
 
-Backend truy vấn bằng đầy đủ bộ lọc trước. Nếu không có bài và AI đã trả từ khóa cùng ít nhất một bộ lọc khác, backend thử tìm theo từ khóa, không giới hạn danh mục, khu vực, tình trạng hoặc hình thức. Nếu lượt tìm thứ hai có bài, `broadened: true`; `filters` vẫn là bộ lọc AI đã hiểu để FE giải thích vì sao kết quả được mở rộng. Đây vẫn là một lượt gọi AI và không có phí bổ sung. Nếu cả hai lượt truy vấn không có bài, không trừ Credit hoặc lượt miễn phí, `chargedCredits: 0`. `fallback: true` chỉ dành cho trường hợp AI lỗi hoặc thiếu key; kết quả mở rộng sau lời gọi AI thành công có `fallback: false`.
+`message` là một tin nhắn ngắn do Gemini soạn cho lượt tìm có kết quả; backend chuẩn hoá và dùng lời nhắn an toàn mặc định nếu nội dung không hợp lệ. Không có endpoint nhắn tiếp hoặc lịch sử hội thoại. Trường hợp không có kết quả, ngoài phạm vi hoặc AI không khả dụng đều trả `items: []`, `chargedCredits: 0`; `fallback: true` chỉ khi AI không khả dụng hoặc phản hồi lỗi và không tự chuyển sang tìm từ khóa thường. Nếu AI trả ID không có trong danh sách đã cung cấp hoặc JSON sai schema, backend không trả ID đó và không tính phí.
 
-Nội dung `query` được gửi riêng ở vai trò `user`; chỉ thị hệ thống chứa schema và ID danh mục/quận huyện hợp lệ. Backend không đính kèm hồ sơ, tên, email, số điện thoại hoặc dữ liệu ví từ tài khoản người dùng tới OpenRouter. Bộ lọc tầng 1 từ chối thông tin liên hệ rõ ràng trong câu nhập; người dùng vẫn cần tránh nhập tên hoặc dữ liệu cá nhân khác. Backend ghi `AiUsage` cho từng lượt gọi với vai trò `SEARCH`, model, kết quả và thời gian; không ghi câu người dùng hoặc API key.
+Backend kiểm tra lượt miễn phí hoặc Credit khả dụng qua `AiQuotaService` **trước khi đọc danh sách bài và gọi Gemini**. Nếu đã hết lượt miễn phí và không đủ Credit, API trả `402 WALLET_INSUFFICIENT_BALANCE`; Gemini không được gọi. Hệ thống chỉ tiêu một lượt miễn phí hoặc trừ phí sau khi Gemini thành công **và** còn ít nhất một bài hợp lệ được trả về. Phí và hạn mức đọc từ cấu hình hiện có qua `AiQuotaService`; tiền chỉ đổi qua `CreditService`. Kết quả ghi activity log gồm model, trạng thái, thời gian và loại tính phí, không ghi nội dung người dùng hoặc API key.
 
-| HTTP | Code | Ý nghĩa |
-| --- | --- | --- |
-| 400 | `SEARCH_QUERY_INVALID` hoặc lỗi validation chung | Query hoặc phân trang không hợp lệ |
-| 401 | `UNAUTHORIZED` | Chưa đăng nhập |
-| 402 | `WALLET_INSUFFICIENT_BALANCE` | Hết lượt miễn phí và không đủ Credit khả dụng |
-| 404 | `SEARCH_ACCOUNT_NOT_FOUND` | Không tìm thấy tài khoản |
+Backend dùng `GEMINI_API_KEY` từ cấu hình `app.ai.api-key`. Không cấu hình key thì trả lời AI không khả dụng mà không trừ lượt hoặc Credit.
 
-Lỗi OpenRouter, phản hồi sai schema, thiếu key và quá thời gian `ai_search_timeout_seconds` được xử lý bằng kết quả tìm thường `200` có `fallback: true`.
+## GET `/api/v1/ai/quota`
 
-## Hạn mức và phí — issue #125
-
-`GET /api/v1/ai/quota` cần JWT, không tiêu lượt. Response:
+Cần JWT. Không tiêu lượt. Response:
 
 ```json
 { "freeUsesRemaining": 5, "feeCredits": 2, "hasToppedUp": true }
 ```
 
-Tài khoản đã từng nạp thành công có 5 lượt miễn phí mỗi ngày theo ngày của máy chủ. Tài khoản chưa nạp có 1 lượt dùng thử duy nhất. Mức lượt và phí lấy từ cấu hình `ai_free_per_day`, `ai_trial_uses`, `ai_search_fee`. Khi hết lượt miễn phí, backend kiểm tra đủ Credit khả dụng trước khi gọi AI; nếu không đủ, API trả `402 WALLET_INSUFFICIENT_BALANCE`. Chỉ khi tìm được ít nhất một bài hợp lệ mới trừ Credit qua CreditService hoặc tiêu lượt miễn phí. Mỗi request đổi trang cũng là một lượt gọi AI mới và chỉ tính phí khi có kết quả.
-
-`chargedCredits` là phí của lần gọi có kết quả, bằng 0 khi dùng lượt miễn phí hoặc không có kết quả. Nếu OpenRouter lỗi, trả JSON sai hoặc quá thời gian chờ, backend không trừ lượt hay Credit, tìm thường bằng chính câu nhập, trả `fallback: true`, `chargedCredits: 0`. Khi chưa cấu hình `OPENROUTER_API_KEY`, API cũng tìm thường và không trừ lượt. Tìm thường chỉ so khớp từ khoá với bài đã duyệt; nó không hiểu category, địa bàn hoặc ý định như mô hình AI. Có thể nhận kết quả rỗng dù AI sẽ hiểu câu nhập tốt hơn.
-
-FE trang trợ lý sẽ nối API ở issue #130. `frontend/src/services/aiApi.ts` đã có phương thức `search`; Miều cập nhật type theo các trường bổ sung và gọi endpoint quota để hiển thị lượt/phí trước khi bấm.
+Giá trị lượt miễn phí, lượt thử và phí lấy từ `ai_free_per_day`, `ai_trial_uses`, `ai_search_fee`. Lượt miễn phí hằng ngày được tính theo `Asia/Ho_Chi_Minh` và làm mới lúc 00:00 giờ Việt Nam.

@@ -11,14 +11,9 @@ lỗi theo định dạng thống nhất bên dưới.
 
 POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và gắn ảnh trong một transaction.
 
-## AI sàng lọc sau khi gửi bài
+## Kiểm duyệt khi gửi bài
 
-> **SRS v11: tầng này đang tắt.** Cấu hình `item_ai_screening_enabled` mặc định `false`: đăng hoặc sửa bài không gọi LLM, không ghi `AiUsage`, `ai_risk` giữ `UNCHECKED` và bài vào thẳng hàng chờ duyệt. Code vẫn giữ; Admin đặt cấu hình này thành `true` thì các mục dưới đây áp dụng lại.
-
-- Sau khi transaction tạo hoặc sửa bài commit thành công, luồng nền gửi nội dung bài đến OpenRouter. Chỉ gửi tiêu đề, mô tả, món mong muốn, danh mục, tình trạng và loại bài; không gửi ảnh hay dữ liệu tài khoản người đăng.
-- Tầng 2 ghi `items.ai_risk` (`LOW`, `MEDIUM`, `HIGH`) và `items.ai_result` đã kiểm tra schema, gồm kết quả, model và thời điểm kiểm. Kết quả nghi vấn có cờ `REVIEW` và lý do cho hàng chờ duyệt. Tầng 2 không đổi trạng thái hay phí bài đăng, và giữ nguyên lý do `REVIEW` của tầng 1 nếu đã có.
-- Khi nhà cung cấp lỗi, quá hạn hoặc trả JSON sai, `ai_risk` vẫn là `UNCHECKED` (giao diện hiện "AI chưa kiểm"); bài vẫn ở hàng chờ duyệt. Mỗi lượt gọi đã thử được ghi `AiUsage` với lần thử, kết quả, thời lượng và model khi có, không ghi nội dung bài hay API key.
-- Model qua OpenRouter API: `cohere/north-mini-code:free`, trả kết quả qua lời gọi hàm có schema. Đặt OpenRouter API key vào `OPENROUTER_API_KEY` trong môi trường chạy của profile production, không đưa vào Git. `item_ai_timeout_seconds` mặc định 15 giây tổng cộng cho tối đa một lần thử lại; có thể chỉnh `item_ai_retries` bằng cấu hình admin. Giới hạn lượt của model miễn phí có thể khiến sàng lọc AI không khả dụng; khi đó hệ thống giữ nhánh dự phòng hiện có.
+Đăng hoặc sửa bài chạy kiểm tra nội dung tự động bằng `ContentModerationService`, sau đó đưa bài vào hàng chờ Admin duyệt. Hệ thống không gọi mô hình AI để kiểm duyệt bài. Trường `ai_risk` cũ giữ giá trị `UNCHECKED`; `ai_result` vẫn lưu cờ `REVIEW`, lý do và từ khoá khớp của bước kiểm tra nội dung khi cần. Các cấu hình sàng lọc AI cũ đã được ngừng sử dụng.
 
 ---
 

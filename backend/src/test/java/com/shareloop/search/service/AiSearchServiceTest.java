@@ -3,16 +3,16 @@ package com.shareloop.search.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.shareloop.audit.service.ActivityLogService;
-import com.shareloop.catalog.dto.AreaResponse;
-import com.shareloop.catalog.dto.CategoryResponse;
 import com.shareloop.catalog.service.AreaService;
 import com.shareloop.catalog.service.CategoryService;
 import com.shareloop.common.api.PageResponse;
@@ -20,16 +20,15 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.integration.ai.AiResponse;
 import com.shareloop.integration.ai.AiSearchClient;
 import com.shareloop.item.dto.ItemResponse;
-import com.shareloop.item.entity.ItemCondition;
-import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.search.SearchErrorCode;
 import com.shareloop.search.dto.AiQuotaResponse;
 import com.shareloop.search.dto.AiSearchResponse;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
-import java.net.http.HttpTimeoutException;
+import com.shareloop.wallet.WalletErrorCode;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,8 +39,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)
 class AiSearchServiceTest {
-    private static final String MODEL = "cohere/north-mini-code:free";
-
     @Mock
     AiSearchClient aiClient;
 
@@ -79,165 +76,147 @@ class AiSearchServiceTest {
     }
 
     @Test
-    void validFiltersQueryOnlyTheItemServiceAndLogOneCall() throws Exception {
+    void findsRealItemsForAnIndirectNeedAndChargesOnce() throws Exception {
         ready();
-        when(aiClient.extract(eq("Tìm sách cũ ở quận 1"), any(), eq(Duration.ofSeconds(15))))
-                .thenReturn(new AiResponse(MODEL, """
-                        {"keywords":"sách cũ","categoryId":1,"areaId":11,
-                         "condition":"GOOD","offerType":"GIVE"}
-                        """));
-        PageResponse<ItemResponse> page = new PageResponse<>(List.of(mock(ItemResponse.class)), 0, 20, 1);
-        when(itemService.searchApprovedForAi(1L, 11L, "sách cũ", ItemCondition.GOOD, OfferType.GIVE, 0, 20))
-                .thenReturn(page);
+        ItemResponse accessory = item(11L);
+        ItemResponse book = item(12L);
+        when(itemService.searchApprovedForAi(null, null, "", null, null, 0, 100))
+                .thenReturn(new PageResponse<>(List.of(accessory, book), 0, 100, 2));
+        when(aiClient.recommend(eq("Muốn trông có phong cách hơn"), any(), eq(Duration.ofSeconds(15))))
+                .thenReturn(new AiResponse(
+                        "gemini-3.5-flash-lite",
+                        "{\"inScope\":true,\"itemIds\":[11],\"message\":\"Có món hợp với bạn\"}"));
+        when(itemService.getItem(11L, null)).thenReturn(accessory);
+        when(quotaService.consume(7L)).thenReturn(true);
+        when(configService.getInt(ConfigKey.AI_SEARCH_FEE)).thenReturn(2);
 
-        AiSearchResponse result = service.search(7L, "Tìm sách cũ ở quận 1", 0, 20);
+        AiSearchResponse result = service.search(7L, "Muốn trông có phong cách hơn");
 
-        assertThat(result.filters().categoryId()).isEqualTo(1L);
-        assertThat(result.filters().areaId()).isEqualTo(11L);
-        assertThat(result.results()).isSameAs(page);
-        assertThat(result.fallback()).isFalse();
-        assertThat(result.broadened()).isFalse();
-        assertThat(result.quota().freeUsesRemaining()).isEqualTo(4);
-        verify(quotaService).checkAvailable(7L);
+        assertThat(result.results().items()).containsExactly(accessory);
+        assertThat(result.message()).isEqualTo("Có món hợp với bạn");
+        assertThat(result.chargedCredits()).isEqualTo(2);
         verify(quotaService).consume(7L);
         verify(activityLogService).log(eq("AI_USAGE"), eq(7L), eq("AI_SEARCH"), eq(null), anyMap(), eq(null));
     }
 
     @Test
-    void resultAfterFreeAllowanceChargesConfiguredFee() throws Exception {
+    void rejectsInventedItemIdWithoutCharging() throws Exception {
         ready();
-        when(aiClient.extract(any(), any(), any())).thenReturn(new AiResponse(MODEL, """
-                {"keywords":"sách","categoryId":null,"areaId":null,
-                 "condition":null,"offerType":null}
-                """));
-        when(itemService.searchApprovedForAi(null, null, "sách", null, null, 0, 20))
-                .thenReturn(new PageResponse<>(List.of(mock(ItemResponse.class)), 0, 20, 1));
-        when(quotaService.consume(7L)).thenReturn(true);
-        when(configService.getInt(ConfigKey.AI_SEARCH_FEE)).thenReturn(2);
+        ItemResponse available = item(11L);
+        when(itemService.searchApprovedForAi(null, null, "", null, null, 0, 100))
+                .thenReturn(new PageResponse<>(List.of(available), 0, 100, 1));
+        when(aiClient.recommend(any(), any(), any()))
+                .thenReturn(new AiResponse(
+                        "gemini-3.5-flash-lite", "{\"inScope\":true,\"itemIds\":[999],\"message\":\"Có món\"}"));
 
-        AiSearchResponse result = service.search(7L, "Tìm sách", 0, 20);
+        AiSearchResponse result = service.search(7L, "Tìm đồng hồ");
 
-        assertThat(result.chargedCredits()).isEqualTo(2);
+        assertThat(result.fallback()).isTrue();
+        assertThat(result.results().items()).isEmpty();
+        verify(quotaService, never()).consume(7L);
     }
 
     @Test
-    void retriesKeywordsWhenAiFiltersHideAvailableItems() throws Exception {
+    void excludesItemThatWasReservedAfterModelSelection() throws Exception {
         ready();
-        when(aiClient.extract(eq("Tìm bàn học"), any(), eq(Duration.ofSeconds(15))))
-                .thenReturn(new AiResponse(MODEL, """
-                        {"keywords":"bàn học","categoryId":1,"areaId":11,
-                         "condition":"NEW","offerType":"GIVE"}
-                        """));
-        PageResponse<ItemResponse> empty = new PageResponse<>(List.of(), 0, 20, 0);
-        PageResponse<ItemResponse> keywordResults = new PageResponse<>(List.of(mock(ItemResponse.class)), 0, 20, 1);
-        when(itemService.searchApprovedForAi(1L, 11L, "bàn học", ItemCondition.NEW, OfferType.GIVE, 0, 20))
-                .thenReturn(empty);
-        when(itemService.searchApprovedForAi(null, null, "bàn học", null, null, 0, 20))
-                .thenReturn(keywordResults);
+        ItemResponse available = item(11L);
+        when(itemService.searchApprovedForAi(null, null, "", null, null, 0, 100))
+                .thenReturn(new PageResponse<>(List.of(available), 0, 100, 1));
+        when(aiClient.recommend(any(), any(), any()))
+                .thenReturn(new AiResponse(
+                        "gemini-3.5-flash-lite", "{\"inScope\":true,\"itemIds\":[11],\"message\":\"Có món\"}"));
+        when(itemService.getItem(11L, null)).thenThrow(new BusinessException(SearchErrorCode.SEARCH_QUERY_INVALID));
 
-        AiSearchResponse result = service.search(7L, "Tìm bàn học", 0, 20);
+        AiSearchResponse result = service.search(7L, "Tìm đồng hồ");
 
-        assertThat(result.results()).isSameAs(keywordResults);
-        assertThat(result.filters().categoryId()).isEqualTo(1L);
-        assertThat(result.filters().areaId()).isEqualTo(11L);
-        assertThat(result.broadened()).isTrue();
-        assertThat(result.fallback()).isFalse();
+        assertThat(result.results().items()).isEmpty();
+        assertThat(result.chargedCredits()).isZero();
+        verify(quotaService, never()).consume(7L);
+    }
+
+    @Test
+    void refusesOffTopicRequestWithoutCharging() throws Exception {
+        ready();
+        when(itemService.searchApprovedForAi(null, null, "", null, null, 0, 100))
+                .thenReturn(new PageResponse<>(List.of(), 0, 100, 0));
+        when(aiClient.recommend(any(), any(), any()))
+                .thenReturn(new AiResponse(
+                        "gemini-3.5-flash-lite", "{\"inScope\":false,\"itemIds\":[],\"message\":\"Ngoài phạm vi\"}"));
+
+        AiSearchResponse result = service.search(7L, "Thời tiết hôm nay?");
+
+        assertThat(result.outOfScope()).isTrue();
+        assertThat(result.results().items()).isEmpty();
+        verify(quotaService, never()).consume(7L);
+    }
+
+    @Test
+    void readsLaterDatabasePagesAndKeepsEarlierSuggestions() throws Exception {
+        ready();
+        List<ItemResponse> firstPage = new ArrayList<>();
+        for (long id = 1; id <= 100; id++) {
+            firstPage.add(item(id));
+        }
+        ItemResponse lastItem = item(101L);
+        when(itemService.searchApprovedForAi(null, null, "", null, null, 0, 100))
+                .thenReturn(new PageResponse<>(firstPage, 0, 100, 101));
+        when(itemService.searchApprovedForAi(null, null, "", null, null, 1, 100))
+                .thenReturn(new PageResponse<>(List.of(lastItem), 1, 100, 101));
+        when(aiClient.recommend(any(), any(), any()))
+                .thenReturn(
+                        new AiResponse(
+                                "gemini-3.5-flash-lite",
+                                "{\"inScope\":true,\"itemIds\":[1],\"message\":\"Đã xem lô đầu\"}"),
+                        new AiResponse(
+                                "gemini-3.5-flash-lite",
+                                "{\"inScope\":true,\"itemIds\":[101,1],\"message\":\"Có món phù hợp\"}"));
+        when(itemService.getItem(101L, null)).thenReturn(lastItem);
+        when(itemService.getItem(1L, null)).thenReturn(firstPage.get(0));
+
+        AiSearchResponse result = service.search(7L, "Tìm đồ trang sức");
+
+        assertThat(result.results().items()).containsExactly(lastItem, firstPage.get(0));
+        verify(aiClient, org.mockito.Mockito.times(2)).recommend(any(), any(), any());
         verify(quotaService).consume(7L);
     }
 
     @Test
-    void keepsEmptyResultsWhenKeywordsAlsoFindNothing() throws Exception {
-        ready();
-        when(aiClient.extract(eq("Tìm bàn học"), any(), eq(Duration.ofSeconds(15))))
-                .thenReturn(new AiResponse(MODEL, """
-                        {"keywords":"bàn học","categoryId":1,"areaId":null,
-                         "condition":null,"offerType":null}
-                        """));
-        PageResponse<ItemResponse> empty = new PageResponse<>(List.of(), 0, 20, 0);
-        when(itemService.searchApprovedForAi(1L, null, "bàn học", null, null, 0, 20))
-                .thenReturn(empty);
-        when(itemService.searchApprovedForAi(null, null, "bàn học", null, null, 0, 20))
-                .thenReturn(empty);
-
-        AiSearchResponse result = service.search(7L, "Tìm bàn học", 0, 20);
-
-        assertThat(result.results()).isSameAs(empty);
-        assertThat(result.broadened()).isFalse();
-        assertThat(result.chargedCredits()).isZero();
-        verify(quotaService, never()).consume(7L);
-    }
-
-    @Test
-    void doesNotChargeWhenRequestedPageHasNoItems() throws Exception {
-        ready();
-        when(aiClient.extract(any(), any(), any())).thenReturn(new AiResponse(MODEL, """
-                {"keywords":"sách","categoryId":null,"areaId":null,
-                 "condition":null,"offerType":null}
-                """));
-        when(itemService.searchApprovedForAi(null, null, "sách", null, null, 3, 20))
-                .thenReturn(new PageResponse<>(List.of(), 3, 20, 1));
-
-        AiSearchResponse result = service.search(7L, "Tìm sách", 3, 20);
-
-        assertThat(result.chargedCredits()).isZero();
-        verify(quotaService, never()).consume(7L);
-    }
-
-    @Test
-    void unknownDistrictFallsBackWithoutConsumingQuota() throws Exception {
-        ready();
-        when(aiClient.extract(any(), any(), any())).thenReturn(new AiResponse(MODEL, """
-                {"keywords":"sách","categoryId":1,"areaId":10,"condition":null,"offerType":null}
-                """));
-        AiSearchResponse result = service.search(7L, "Tìm sách cũ ở quận 1", 0, 20);
-        assertThat(result.fallback()).isTrue();
-        verify(quotaService, never()).consume(7L);
-        verify(itemService).searchApprovedForAi(null, null, "Tìm sách cũ ở quận 1", null, null, 0, 20);
-    }
-
-    @Test
-    void timeoutFallsBackWithoutConsumingQuota() throws Exception {
-        ready();
-        when(aiClient.model()).thenReturn(MODEL);
-        when(aiClient.extract(any(), any(), any())).thenThrow(new HttpTimeoutException("timed out"));
-        assertThat(service.search(7L, "Tìm sách cũ ở quận 1", 0, 20).fallback()).isTrue();
-        verify(quotaService, never()).consume(7L);
-    }
-
-    @Test
-    void missingApiKeyFallsBackWithoutReserving() throws Exception {
-        assertThat(service.search(7L, "Tìm sách cũ ở quận 1", 0, 20).fallback()).isTrue();
-        verify(aiClient, never()).extract(any(), any(), any());
-        verify(quotaService, never()).checkAvailable(any(Long.class));
-    }
-
-    @Test
-    void contactDetailsAreRejectedBeforeSendingUserTextToProvider() throws Exception {
-        assertThatThrownBy(() -> service.search(7L, "Tìm sách, gọi 0901234567", 0, 20))
+    void rejectsContactInfoBeforeProviderCall() throws Exception {
+        assertThatThrownBy(() -> service.search(7L, "Gọi 0901234567"))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(error -> assertThat(((BusinessException) error).getErrorCode())
                         .isEqualTo(SearchErrorCode.SEARCH_QUERY_INVALID));
-        verify(aiClient, never()).extract(any(), any(), any());
+        verify(aiClient, never()).recommend(any(), any(), any());
+    }
+
+    @Test
+    void insufficientCreditStopsBeforeReadingCatalogOrCallingGemini() throws Exception {
+        when(aiClient.isAvailable()).thenReturn(true);
+        doThrow(new BusinessException(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE))
+                .when(quotaService)
+                .checkAvailable(7L);
+
+        assertThatThrownBy(() -> service.search(7L, "Tìm đồng hồ"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(error -> assertThat(((BusinessException) error).getErrorCode())
+                        .isEqualTo(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE));
+        verify(itemService, never()).searchApprovedForAi(any(), any(), any(), any(), any(), anyInt(), anyInt());
+        verify(aiClient, never()).recommend(any(), any(), any());
+        verify(quotaService, never()).consume(7L);
     }
 
     private void ready() {
         when(aiClient.isAvailable()).thenReturn(true);
-        when(categoryService.listActive()).thenReturn(List.of(new CategoryResponse(1L, "Sách", null, false, true, 0)));
-        when(areaService.listTree())
-                .thenReturn(List.of(new AreaResponse(
-                        10L,
-                        "TP HCM",
-                        null,
-                        (short) 1,
-                        List.of(new AreaResponse(11L, "Quận 1", 10L, (short) 2, List.of())))));
+        when(aiClient.model()).thenReturn("gemini-3.5-flash-lite");
+        when(categoryService.listActive()).thenReturn(List.of());
+        when(areaService.listTree()).thenReturn(List.of());
         when(configService.getInt(ConfigKey.AI_SEARCH_TIMEOUT_SECONDS)).thenReturn(15);
         when(quotaService.getQuota(7L)).thenReturn(new AiQuotaResponse(4, 2, true));
     }
 
-    private void assertError(SearchErrorCode expected) {
-        assertThatThrownBy(() -> service.search(7L, "Tìm sách cũ ở quận 1", 0, 20))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(error ->
-                        assertThat(((BusinessException) error).getErrorCode()).isEqualTo(expected));
+    private static ItemResponse item(long id) {
+        ItemResponse item = mock(ItemResponse.class);
+        when(item.id()).thenReturn(id);
+        return item;
     }
 }

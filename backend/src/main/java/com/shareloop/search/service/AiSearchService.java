@@ -10,20 +10,18 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.integration.ai.AiResponse;
 import com.shareloop.integration.ai.AiSearchClient;
 import com.shareloop.item.dto.ItemResponse;
-import com.shareloop.item.entity.ItemCondition;
-import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.moderation.ContactInfoDetector;
 import com.shareloop.search.SearchErrorCode;
-import com.shareloop.search.dto.AiSearchFilters;
 import com.shareloop.search.dto.AiSearchResponse;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
-import java.net.http.HttpTimeoutException;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +32,17 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 public class AiSearchService {
     private static final Logger LOGGER = LoggerFactory.getLogger(AiSearchService.class);
-    private static final Set<String> FILTER_KEYS = Set.of("keywords", "categoryId", "areaId", "condition", "offerType");
+    private static final int DATABASE_PAGE_SIZE = 100;
+    private static final int MODEL_BATCH_SIZE = 100;
+    private static final int MAX_RECOMMENDATIONS = 6;
+    private static final String FOUND_MESSAGE =
+            "Mình đã xem nhu cầu của bạn và tìm được vài món đồ đang có trên ShareLoop có thể phù hợp. Bạn nhấn vào từng bài đăng để xem chi tiết nhé!";
+    private static final String EMPTY_MESSAGE =
+            "Mình đã xem các bài đăng đang có nhưng chưa tìm được món thật sự phù hợp. Bạn thử mô tả thêm công dụng hoặc điều bạn thích nhé!";
+    private static final String OUT_OF_SCOPE_MESSAGE =
+            "Mình chỉ có thể giúp bạn tìm đồ đang có trên ShareLoop. Bạn mô tả món đồ hoặc nhu cầu sử dụng, mình sẽ tìm giúp nhé!";
+    private static final String UNAVAILABLE_MESSAGE =
+            "Mình chưa thể tìm đồ bằng AI lúc này. Bạn vui lòng thử lại sau nhé!";
 
     private final AiSearchClient aiClient;
     private final CategoryService categoryService;
@@ -64,180 +72,153 @@ public class AiSearchService {
         this.mapper = mapper;
     }
 
-    public AiSearchResponse search(long userId, String query, int page, int size) {
+    public AiSearchResponse search(long userId, String query) {
         if (query == null
                 || query.isBlank()
                 || query.length() > 500
-                || !ContactInfoDetector.detect(query).isEmpty()
-                || page < 0
-                || size < 1
-                || size > 100) {
+                || !ContactInfoDetector.detect(query).isEmpty()) {
             throw new BusinessException(SearchErrorCode.SEARCH_QUERY_INVALID);
         }
         if (!aiClient.isAvailable()) {
-            LOGGER.warn("AI search fallback: provider API key is unavailable");
-            return fallback(userId, query, page, size);
+            return empty(userId, UNAVAILABLE_MESSAGE, true, false);
         }
-
-        List<CategoryResponse> categories = categoryService.listActive();
-        List<AreaResponse> districts = areaService.listTree().stream()
-                .flatMap(province -> province.children().stream())
-                .toList();
-        String allowedFilters = mapper.writeValueAsString(Map.of(
-                "categories",
-                        categories.stream()
-                                .map(category -> Map.of("id", category.id(), "name", category.name()))
-                                .toList(),
-                "districts",
-                        districts.stream()
-                                .map(area -> Map.of("id", area.id(), "name", area.name()))
-                                .toList()));
-        Set<Long> categoryIds = categories.stream().map(CategoryResponse::id).collect(Collectors.toSet());
-        Set<Long> districtIds = districts.stream().map(AreaResponse::id).collect(Collectors.toSet());
-
-        Duration timeout = Duration.ofSeconds(configService.getInt(ConfigKey.AI_SEARCH_TIMEOUT_SECONDS));
         quotaService.checkAvailable(userId);
         long started = System.nanoTime();
-        AiResponse response;
+        Duration timeout = Duration.ofSeconds(configService.getInt(ConfigKey.AI_SEARCH_TIMEOUT_SECONDS));
+        Map<Long, String> categoryNames = categoryService.listActive().stream()
+                .collect(Collectors.toMap(CategoryResponse::id, CategoryResponse::name));
+        Map<Long, String> areaNames = areaService.listTree().stream()
+                .flatMap(area ->
+                        java.util.stream.Stream.concat(java.util.stream.Stream.of(area), area.children().stream()))
+                .collect(Collectors.toMap(AreaResponse::id, AreaResponse::name));
+        LinkedHashMap<Long, ItemResponse> shortlist = new LinkedHashMap<>();
+        String reply = FOUND_MESSAGE;
+        List<ItemResponse> pending = new ArrayList<>(MODEL_BATCH_SIZE);
+        boolean called = false;
         try {
-            response = aiClient.extract(query.trim(), allowedFilters, timeout);
-        } catch (HttpTimeoutException exception) {
-            LOGGER.warn("AI search fallback: provider request timed out");
-            logCall(userId, aiClient.model(), "TIMEOUT", started, false);
-            return fallback(userId, query, page, size);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            LOGGER.warn("AI search fallback: provider request was interrupted");
-            logCall(userId, aiClient.model(), "INTERRUPTED", started, false);
-            return fallback(userId, query, page, size);
+            for (int databasePage = 0; ; databasePage++) {
+                PageResponse<ItemResponse> available =
+                        itemService.searchApprovedForAi(null, null, "", null, null, databasePage, DATABASE_PAGE_SIZE);
+                for (ItemResponse item : available.items()) {
+                    if (item.expireAt() != null && !item.expireAt().isAfter(Instant.now())) {
+                        continue;
+                    }
+                    pending.add(item);
+                    if (pending.size() == MODEL_BATCH_SIZE) {
+                        called = true;
+                        Selection selection = select(query, pending, shortlist, categoryNames, areaNames, timeout);
+                        if (!selection.inScope()) {
+                            logCall(userId, "OUT_OF_SCOPE", started, false);
+                            return empty(userId, OUT_OF_SCOPE_MESSAGE, false, true);
+                        }
+                        shortlist = selection.items();
+                        reply = selection.message();
+                        pending.clear();
+                    }
+                }
+                if ((long) (databasePage + 1) * DATABASE_PAGE_SIZE >= available.totalElements()) {
+                    break;
+                }
+            }
+            if (!pending.isEmpty() || !called) {
+                Selection selection = select(query, pending, shortlist, categoryNames, areaNames, timeout);
+                if (!selection.inScope()) {
+                    logCall(userId, "OUT_OF_SCOPE", started, false);
+                    return empty(userId, OUT_OF_SCOPE_MESSAGE, false, true);
+                }
+                shortlist = selection.items();
+                reply = selection.message();
+            }
         } catch (Exception exception) {
-            LOGGER.warn("AI search fallback: provider call failed ({})", safeFailureDetail(exception));
-            logCall(userId, aiClient.model(), "FAILED", started, false);
-            return fallback(userId, query, page, size);
+            if (exception instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            LOGGER.warn(
+                    "AI item recommendation unavailable ({})",
+                    exception.getClass().getSimpleName());
+            logCall(userId, "FAILED", started, false);
+            return empty(userId, UNAVAILABLE_MESSAGE, true, false);
         }
 
-        AiSearchFilters filters;
-        try {
-            filters = validate(response.content(), categoryIds, districtIds);
-        } catch (RuntimeException exception) {
-            LOGGER.warn(
-                    "AI search fallback: provider response failed validation ({})",
-                    exception.getClass().getSimpleName());
-            logCall(userId, response.model(), "INVALID_RESPONSE", started, false);
-            return fallback(userId, query, page, size);
-        }
-        PageResponse<ItemResponse> results = itemService.searchApprovedForAi(
-                filters.categoryId(),
-                filters.areaId(),
-                filters.keywords(),
-                filters.condition(),
-                filters.offerType(),
-                page,
-                size);
-        boolean broadened = false;
-        if (results.totalElements() == 0
-                && filters.keywords() != null
-                && (filters.categoryId() != null
-                        || filters.areaId() != null
-                        || filters.condition() != null
-                        || filters.offerType() != null)) {
-            PageResponse<ItemResponse> keywordResults =
-                    itemService.searchApprovedForAi(null, null, filters.keywords(), null, null, page, size);
-            if (keywordResults.totalElements() > 0) {
-                results = keywordResults;
-                broadened = true;
+        List<ItemResponse> verified = new ArrayList<>();
+        for (Long id : shortlist.keySet()) {
+            try {
+                ItemResponse current = itemService.getItem(id, null);
+                if (current.expireAt() == null || current.expireAt().isAfter(Instant.now())) {
+                    verified.add(current);
+                }
+            } catch (BusinessException exception) {
+                // A selected item can be reserved, traded or hidden while Gemini is reading.
             }
         }
-        boolean hasResults = !results.items().isEmpty();
-        boolean paid = hasResults && quotaService.consume(userId);
-        logCall(userId, response.model(), hasResults ? "SUCCESS" : "NO_RESULTS", started, paid);
+        boolean paid = !verified.isEmpty() && quotaService.consume(userId);
+        logCall(userId, verified.isEmpty() ? "NO_RESULTS" : "SUCCESS", started, paid);
         return new AiSearchResponse(
-                filters,
-                results,
+                verified.isEmpty() ? EMPTY_MESSAGE : reply,
+                new PageResponse<>(verified, 0, verified.size(), verified.size()),
                 quotaService.getQuota(userId),
                 paid ? configService.getInt(ConfigKey.AI_SEARCH_FEE) : 0,
                 false,
-                broadened);
-    }
-
-    private AiSearchResponse fallback(long userId, String query, int page, int size) {
-        String keywords = query.trim();
-        return new AiSearchResponse(
-                new AiSearchFilters(keywords, null, null, null, null),
-                itemService.searchApprovedForAi(null, null, keywords, null, null, page, size),
-                quotaService.getQuota(userId),
-                0,
-                true,
                 false);
     }
 
-    private static String safeFailureDetail(Exception exception) {
-        String message = exception.getMessage();
-        if (message != null
-                && (message.matches("OpenRouter API returned HTTP [1-5][0-9]{2}")
-                        || message.equals("OpenRouter API returned no single tool call")
-                        || message.equals("OpenRouter API returned invalid tool arguments")
-                        || message.equals("OpenRouter API returned no JSON object"))) {
-            return message;
+    private Selection select(
+            String query,
+            List<ItemResponse> batch,
+            LinkedHashMap<Long, ItemResponse> previous,
+            Map<Long, String> categoryNames,
+            Map<Long, String> areaNames,
+            Duration timeout)
+            throws Exception {
+        LinkedHashMap<Long, ItemResponse> offered = new LinkedHashMap<>(previous);
+        for (ItemResponse item : batch) {
+            offered.put(item.id(), item);
         }
-        if (exception.getCause() != null) {
-            return exception.getClass().getSimpleName()
-                    + " caused by "
-                    + exception.getCause().getClass().getSimpleName();
+        List<CatalogItem> catalog = offered.values().stream()
+                .map(item -> new CatalogItem(item, categoryNames.get(item.categoryId()), areaNames.get(item.areaId())))
+                .toList();
+        AiResponse response = aiClient.recommend(query.trim(), mapper.writeValueAsString(catalog), timeout);
+        JsonNode root = mapper.readTree(response.content());
+        if (!root.isObject()
+                || !root.path("inScope").isBoolean()
+                || !root.path("itemIds").isArray()
+                || !root.path("message").isTextual()) {
+            throw new IllegalArgumentException("Invalid AI recommendation response");
         }
-        return exception.getClass().getSimpleName();
+        if (!root.path("inScope").asBoolean()) {
+            return new Selection(false, new LinkedHashMap<>(), OUT_OF_SCOPE_MESSAGE);
+        }
+        LinkedHashMap<Long, ItemResponse> selected = new LinkedHashMap<>();
+        JsonNode ids = root.path("itemIds");
+        if (ids.size() > MAX_RECOMMENDATIONS) {
+            throw new IllegalArgumentException("Too many AI item recommendations");
+        }
+        for (JsonNode node : ids) {
+            if (!node.isIntegralNumber() || !offered.containsKey(node.longValue())) {
+                throw new IllegalArgumentException("AI referenced an unavailable item");
+            }
+            selected.putIfAbsent(node.longValue(), offered.get(node.longValue()));
+        }
+        String message = root.path("message").asText().trim().replaceAll("\\s+", " ");
+        if (message.isBlank()
+                || message.length() > 240
+                || !ContactInfoDetector.detect(message).isEmpty()) {
+            message = FOUND_MESSAGE;
+        }
+        return new Selection(true, selected, message);
     }
 
-    private AiSearchFilters validate(String content, Set<Long> categoryIds, Set<Long> districtIds) {
-        JsonNode node = mapper.readTree(content);
-        if (!node.isObject()
-                || node.size() != FILTER_KEYS.size()
-                || !FILTER_KEYS.stream().allMatch(node::has)) {
-            throw new IllegalArgumentException("Unexpected AI search response fields");
-        }
-        String keywords = nullableText(node.path("keywords"));
-        if (keywords != null && keywords.length() > 120) {
-            throw new IllegalArgumentException("Search keywords are too long");
-        }
-        Long categoryId = nullableId(node.path("categoryId"), categoryIds);
-        Long areaId = nullableId(node.path("areaId"), districtIds);
-        ItemCondition condition = nullableEnum(node.path("condition"), ItemCondition.class);
-        OfferType offerType = nullableEnum(node.path("offerType"), OfferType.class);
-        return new AiSearchFilters(keywords, categoryId, areaId, condition, offerType);
+    private AiSearchResponse empty(long userId, String message, boolean fallback, boolean outOfScope) {
+        return new AiSearchResponse(
+                message,
+                new PageResponse<>(List.of(), 0, 0, 0),
+                quotaService.getQuota(userId),
+                0,
+                fallback,
+                outOfScope);
     }
 
-    private static String nullableText(JsonNode node) {
-        if (node.isNull()) {
-            return null;
-        }
-        if (!node.isTextual()) {
-            throw new IllegalArgumentException("Expected text filter");
-        }
-        String text = node.asText().trim();
-        return text.isEmpty() ? null : text;
-    }
-
-    private static Long nullableId(JsonNode node, Set<Long> allowedIds) {
-        if (node.isNull()) {
-            return null;
-        }
-        if (!node.isIntegralNumber() || node.asLong() <= 0 || !allowedIds.contains(node.asLong())) {
-            throw new IllegalArgumentException("Unknown filter ID");
-        }
-        return node.asLong();
-    }
-
-    private static <T extends Enum<T>> T nullableEnum(JsonNode node, Class<T> type) {
-        if (node.isNull()) {
-            return null;
-        }
-        if (!node.isTextual()) {
-            throw new IllegalArgumentException("Expected enum filter");
-        }
-        return Enum.valueOf(type, node.asText());
-    }
-
-    private void logCall(long userId, String model, String outcome, long started, boolean paid) {
+    private void logCall(long userId, String outcome, long started, boolean paid) {
         activityLogService.log(
                 "AI_USAGE",
                 userId,
@@ -247,7 +228,7 @@ public class AiSearchService {
                         "role",
                         "SEARCH",
                         "model",
-                        model,
+                        aiClient.model(),
                         "billing",
                         "SUCCESS".equals(outcome) ? (paid ? "CREDIT" : "FREE") : "NONE",
                         "outcome",
@@ -255,5 +236,41 @@ public class AiSearchService {
                         "durationMs",
                         Duration.ofNanos(System.nanoTime() - started).toMillis()),
                 null);
+    }
+
+    private record Selection(boolean inScope, LinkedHashMap<Long, ItemResponse> items, String message) {}
+
+    private record CatalogItem(
+            Long id,
+            String title,
+            String description,
+            String desiredItem,
+            String condition,
+            String defectNote,
+            String brand,
+            String offerType,
+            Long categoryId,
+            String categoryName,
+            Long areaId,
+            String areaName,
+            String operatingStatus) {
+        CatalogItem(ItemResponse item, String categoryName, String areaName) {
+            this(
+                    item.id(),
+                    item.title(),
+                    item.description(),
+                    item.desiredItem(),
+                    item.condition() == null ? null : item.condition().name(),
+                    item.defectNote(),
+                    item.brand(),
+                    item.offerType() == null ? null : item.offerType().name(),
+                    item.categoryId(),
+                    categoryName,
+                    item.areaId(),
+                    areaName,
+                    item.operatingStatus() == null
+                            ? null
+                            : item.operatingStatus().name());
+        }
     }
 }
