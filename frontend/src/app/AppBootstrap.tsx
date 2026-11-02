@@ -5,6 +5,7 @@ import { preloadRoute } from './routePreload';
 import { store } from './store';
 import { tokenStorage } from '../services/http';
 import { restoreSession } from '../services/session';
+import { ToastHost } from '../components/ToastHost';
 
 export function AppBootstrap() {
   const [sessionReady, setSessionReady] = useState(() => !tokenStorage.get());
@@ -28,5 +29,10 @@ export function AppBootstrap() {
   }, [sessionReady]);
 
   if (!sessionReady) return null;
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <RouterProvider router={router} />
+      <ToastHost />
+    </>
+  );
 }

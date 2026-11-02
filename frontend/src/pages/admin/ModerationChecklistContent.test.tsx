@@ -67,7 +67,7 @@ describe('ModerationChecklistContent', () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
-  it('không cho duyệt khi Backend không cung cấp checklist', () => {
+  it('không cho duyệt khi chưa có checklist', () => {
     const onConfirm = vi.fn();
     render(
       <ModerationChecklistContent
@@ -80,7 +80,7 @@ describe('ModerationChecklistContent', () => {
       />,
     );
 
-    expect(screen.getByText(/Backend chưa cung cấp checklist/)).toBeTruthy();
+    expect(screen.getByText(/Chưa có checklist kiểm duyệt/)).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Xác nhận duyệt bài' }) as HTMLButtonElement).disabled).toBe(true);
     expect(onConfirm).not.toHaveBeenCalled();
   });

@@ -207,16 +207,22 @@ export function DisputeDialog({
   const [evidence, setEvidence] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [noteError, setNoteError] = useState('');
 
   const submit = async () => {
     if (!reason || submitting || request.status !== 'COMPLETED') return;
+    const trimmedNote = note.trim();
+    if (reason === 'OTHER' && !trimmedNote) {
+      setNoteError('Vui lòng nhập lý do khiếu nại.');
+      return;
+    }
     setSubmitting(true);
     setError('');
     try {
       const evidenceMediaIds = evidence.length ? await uploadEvidence(evidence) : undefined;
       const response = await openDispute(request.id, {
         reason,
-        note: note.trim() || undefined,
+        note: trimmedNote || undefined,
         evidenceMediaIds,
       });
       onSubmitted(
@@ -244,7 +250,11 @@ export function DisputeDialog({
         label="Lý do"
         value={reason}
         disabled={submitting}
-        onChange={(event) => setReason(event.target.value as ReportReason | '')}
+        onChange={(event) => {
+          const nextReason = event.target.value as ReportReason | '';
+          setReason(nextReason);
+          if (nextReason !== 'OTHER') setNoteError('');
+        }}
       >
         <option value="">Chọn lý do khiếu nại</option>
         {Object.entries(disputeReasonLabels).map(([value, label]) => (
@@ -259,7 +269,12 @@ export function DisputeDialog({
         value={note}
         maxLength={500}
         disabled={submitting}
-        onChange={(event) => setNote(event.target.value)}
+        error={noteError || undefined}
+        onChange={(event) => {
+          const nextNote = event.target.value;
+          setNote(nextNote);
+          if (nextNote.trim()) setNoteError('');
+        }}
       />
       <p className="mt-1 text-right text-xs text-text-muted">{note.length}/500</p>
       <Field

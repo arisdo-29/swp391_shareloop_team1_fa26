@@ -225,8 +225,13 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       )
     : false;
   const selectedItemId = selected?.request.itemId;
-  // Món chính đã hiện ở thẻ dưới đầu khung chat, nên dải thẻ ghim chỉ còn các món khác (món đề nghị, bài được gửi kèm).
-  const extraPinnedItems = pinnedItems.filter((pinnedItem) => pinnedItem.id !== selectedItemId);
+  const selectedOfferedItemId =
+    selected?.request.type === 'SWAP' ? selected.request.offeredItemId : undefined;
+  // Hai món của giao dịch SWAP đã nằm trong phần đầu khung chat; dải ghim chỉ dành cho món khác được gửi kèm.
+  const extraPinnedItems = pinnedItems.filter(
+    (pinnedItem) =>
+      pinnedItem.id !== selectedItemId && pinnedItem.id !== selectedOfferedItemId,
+  );
   const selectedItemDonorId = selected ? donorIdOf(selected) : undefined;
 
   useEffect(() => {
@@ -612,6 +617,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
             >
               <ChatHeader
                 conversation={selected}
+                pinnedItems={pinnedItems}
                 currentUserId={currentUserId}
                 canReport={Boolean(reportTargetUserId && reportTargetUserId !== currentUserId)}
                 onBack={() => setMobileChat(false)}

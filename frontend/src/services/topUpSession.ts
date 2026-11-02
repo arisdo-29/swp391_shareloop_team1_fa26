@@ -1,9 +1,12 @@
-import type { TopUpOrderResponse } from './paymentApi';
+import type { PaymentOrderStatus, TopUpOrderResponse } from './paymentApi';
 
 const STORAGE_KEY = 'shareloop:pendingTopUp';
 export interface PendingTopUpSession {
   orderCode: string;
 }
+
+export type VnPayReturnStatus = 'SUCCESS' | 'FAILED' | 'INVALID_SIGNATURE';
+export type TopUpReturnResult = 'success' | 'cancelled' | 'failed' | 'expired' | 'pending';
 
 export function savePendingTopUp(order: TopUpOrderResponse) {
   try {
@@ -49,4 +52,23 @@ export function paymentRedirectUrl(redirectUrl: string): string | null {
 
 export function returnOrderCode(params: URLSearchParams): string | null {
   return params.get('orderCode') ?? params.get('vnp_TxnRef');
+}
+
+export function vnpayReturnStatus(params: URLSearchParams): VnPayReturnStatus | null {
+  const status = params.get('status');
+  return status === 'SUCCESS' || status === 'FAILED' || status === 'INVALID_SIGNATURE'
+    ? status
+    : null;
+}
+
+/** Query trả về chỉ là tín hiệu từ cổng; trạng thái đơn do Backend trả về luôn được ưu tiên. */
+export function resolveTopUpReturnResult(
+  orderStatus: PaymentOrderStatus,
+  returnStatus: VnPayReturnStatus | null,
+): TopUpReturnResult {
+  if (orderStatus === 'SUCCESS') return 'success';
+  if (orderStatus === 'EXPIRED') return 'expired';
+  if (returnStatus === 'FAILED') return 'cancelled';
+  if (orderStatus === 'FAILED') return 'failed';
+  return 'pending';
 }

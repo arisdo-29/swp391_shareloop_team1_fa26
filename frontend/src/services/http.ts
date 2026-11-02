@@ -1,4 +1,6 @@
 import axios, { AxiosError } from 'axios';
+import { toast } from '../components/toast';
+import { mutationErrorMessage, mutationToastDefinition } from './mutationToast';
 
 // Địa chỉ backend: đặt trong .env.local (máy cá nhân) và Environment Variables trên Vercel.
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'https://shareloop-api-648813583458.asia-southeast1.run.app';
@@ -7,6 +9,16 @@ const TOKEN_TYPE_KEY = 'shareloop:tokenType';
 const TOKEN_EXPIRES_AT_KEY = 'shareloop:tokenExpiresAt';
 const USER_ID_KEY = 'shareloop:userId';
 const BLOCKED_ACCOUNT_CODES = new Set(['AUTH_ACCOUNT_LOCKED', 'AUTH_ACCOUNT_BANNED']);
+const TECHNICAL_MESSAGE_PATTERN =
+  /(?:\bbackend\b|\bapi\b|\bendpoint\b|\bbe\b|\/api\/v\d+|not implemented|unsupported)/i;
+
+export function userFacingErrorMessage(
+  message: string | null | undefined,
+  fallback = 'Hiện chưa thể thực hiện thao tác này.',
+) {
+  const normalized = message?.trim();
+  return normalized && !TECHNICAL_MESSAGE_PATTERN.test(normalized) ? normalized : fallback;
+}
 
 export interface SessionTermination {
   code: string;
@@ -89,7 +101,11 @@ http.interceptors.request.use((config) => {
 });
 
 http.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const definition = mutationToastDefinition(response.config.url, response.config.method);
+    if (definition) toast[definition.tone ?? 'success'](definition.success);
+    return response;
+  },
   (error: AxiosError<Partial<ApiError>>) => {
     const status = error.response?.status ?? 0;
     const body = error.response?.data;
@@ -110,12 +126,27 @@ http.interceptors.response.use(
     }
     const apiError: ApiError = {
       code,
-      message: body?.message ?? 'Không kết nối được máy chủ, vui lòng thử lại.',
+      message: userFacingErrorMessage(
+        body?.message,
+        status === 0
+          ? 'Không kết nối được máy chủ, vui lòng thử lại.'
+          : 'Hiện chưa thể thực hiện thao tác này.',
+      ),
       field: body?.field,
       details: body?.details,
       traceId: body?.traceId,
       status,
     };
+    if (body?.message && TECHNICAL_MESSAGE_PATTERN.test(body.message)) {
+      console.error('[ShareLoop] Đã ẩn thông báo kỹ thuật khỏi giao diện.', {
+        code,
+        status,
+        message: body.message,
+        traceId: body.traceId,
+      });
+    }
+    const definition = mutationToastDefinition(error.config?.url, error.config?.method);
+    if (definition) toast.error(mutationErrorMessage(apiError, definition.failure));
     return Promise.reject(apiError);
   },
 );

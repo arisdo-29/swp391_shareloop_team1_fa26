@@ -75,7 +75,7 @@ export function ModerationChecklistContent({
           ))}
         </div>
       ) : (
-        <Alert tone="warning">Backend chưa cung cấp checklist kiểm duyệt. Không thể xác nhận duyệt bài.</Alert>
+        <Alert tone="warning">Chưa có checklist kiểm duyệt. Hiện chưa thể xác nhận duyệt bài.</Alert>
       )}
 
       {error ? <div className="mt-4"><Alert tone="error">{error}</Alert></div> : null}
@@ -158,7 +158,7 @@ export function RejectReasonsContent({
           ))}
         </div>
       ) : (
-        <Alert tone="warning">Backend chưa cung cấp lý do mẫu. Bạn vẫn có thể nhập lý do khác.</Alert>
+        <Alert tone="warning">Chưa có lý do mẫu. Bạn vẫn có thể nhập lý do khác.</Alert>
       )}
 
       <div className="mt-4 border-t border-border/70 pt-4">

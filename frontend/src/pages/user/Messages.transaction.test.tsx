@@ -208,8 +208,13 @@ describe('Gửi ảnh trong giao dịch Cho tặng', () => {
 });
 
 describe('Khung chat gọn', () => {
-  it('chỉ có một thẻ món chính, dải thẻ ghim không lặp lại món đó', async () => {
-    // given: thẻ ghim gồm cả món chính và một món đề nghị
+  it('SWAP chỉ hiện đúng hai món ở đầu khung chat và không lặp món đề xuất bên dưới', async () => {
+    // given: API thẻ ghim trả cả bài đăng gốc và món đề xuất
+    const current = request({
+      type: 'SWAP',
+      offeredItemId: 77,
+      offeredItemTitle: 'Mũ bảo hiểm',
+    });
     vi.mocked(chatApi.pinnedItems).mockResolvedValue([
       {
         id: 45,
@@ -224,19 +229,21 @@ describe('Khung chat gọn', () => {
         title: 'Mũ bảo hiểm',
         offerType: 'SWAP',
         status: 'RESERVED',
-        imageUrl: null,
+        imageUrl: '/api/v1/media/77',
         donorId: RECEIVER_ID,
       },
     ]);
 
     // when
     store.dispatch(actions.loginFromApi(user(RECEIVER_ID)));
-    vi.mocked(requestApi.mine).mockResolvedValue([request()]);
+    vi.mocked(requestApi.mine).mockResolvedValue([current]);
     vi.mocked(itemApi.mine).mockResolvedValue([]);
-    vi.mocked(requestApi.forItem).mockResolvedValue([request()]);
-    vi.mocked(requestApi.get).mockResolvedValue(request());
+    vi.mocked(requestApi.forItem).mockResolvedValue([current]);
+    vi.mocked(requestApi.get).mockResolvedValue(current);
     vi.mocked(requestApi.media).mockResolvedValue([]);
-    vi.mocked(itemApi.detail).mockResolvedValue(item());
+    vi.mocked(itemApi.detail).mockImplementation((itemId) =>
+      itemId === 45 ? Promise.resolve(item()) : Promise.reject(new Error('Item unavailable')),
+    );
     vi.mocked(chatApi.list).mockResolvedValue([]);
     render(
       <Provider store={store}>
@@ -252,6 +259,10 @@ describe('Khung chat gọn', () => {
 
     // then
     expect(within(chat).getAllByText('Xe đạp cũ')).toHaveLength(1);
+    expect(within(chat).getAllByText('Mũ bảo hiểm')).toHaveLength(1);
+    expect(within(chat).getByRole('img', { name: 'Mũ bảo hiểm' }).getAttribute('src'))
+      .toContain('/api/v1/media/77');
+    expect(within(chat).getAllByRole('button', { name: 'Xem chi tiết' })).toHaveLength(2);
     expect(within(chat).getByRole('button', { name: 'Xem tiến trình' })).toBeTruthy();
     expect(within(chat).getByRole('button', { name: 'Xem hồ sơ' })).toBeTruthy();
   });

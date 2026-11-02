@@ -14,6 +14,7 @@ import { toAreaOptions, toCategoryIdByName, toCategoryNames, type AreaOption } f
 import { itemApi, type ApiCondition, type OperatingStatus, type PostingQuota } from '../../services/itemApi';
 import { postingQuotaRow } from '../../utils/postingQuota';
 import { mediaApi } from '../../services/mediaApi';
+import { toast } from '../../components/toast';
 import type { ApiError } from '../../services/http';
 import { toBackendUserId } from '../../services/requestApi';
 import { useWallet } from '../../app/useWallet';
@@ -440,6 +441,7 @@ export function Post() {
         ? current.images
         : undefined,
     }));
+    toast.success('Đã xóa ảnh khỏi bài đăng.');
   };
 
   const missingImages = Math.max(0, ITEM_IMAGES_MIN - images.length);

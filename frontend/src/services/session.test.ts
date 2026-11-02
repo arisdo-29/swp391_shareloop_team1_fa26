@@ -102,4 +102,31 @@ describe('khôi phục phiên Admin', () => {
     expect(userApi.getMe).toHaveBeenCalledTimes(1);
     expect(catalogApi.areas).not.toHaveBeenCalled();
   });
+
+  it('vẫn khôi phục người dùng khi API uy tín hoặc khu vực tạm thời thất bại', async () => {
+    vi.mocked(userApi.getMe).mockResolvedValue({ ...memberProfile, areaId: 12 });
+    vi.mocked(reputationApi.getMyReputation).mockRejectedValue({ status: 403, code: 'FORBIDDEN' });
+    vi.mocked(catalogApi.areas).mockRejectedValue(new Error('network'));
+
+    const user = await fetchSessionUser();
+
+    expect(user).toEqual(expect.objectContaining({
+      id: 'api_42',
+      status: 'active',
+      district: '',
+      reputationStars: 0,
+      rank: 'BRONZE',
+    }));
+  });
+
+  it('không logout khi lỗi khôi phục không làm mất JWT còn hạn', async () => {
+    vi.spyOn(tokenStorage, 'get').mockReturnValue('valid-token');
+    vi.spyOn(tokenStorage, 'getUserId').mockReturnValue(42);
+    vi.mocked(userApi.getMe).mockRejectedValue({ status: 503, code: 'SERVICE_UNAVAILABLE' });
+    const dispatch = vi.fn();
+
+    await restoreSession(dispatch, null);
+
+    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'data/logout' }));
+  });
 });

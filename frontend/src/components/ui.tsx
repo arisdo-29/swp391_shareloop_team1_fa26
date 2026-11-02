@@ -17,6 +17,7 @@ import { UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
 import { Image } from '@phosphor-icons/react/dist/csr/Image';
 import { MapPin } from '@phosphor-icons/react/dist/csr/MapPin';
 import { Check } from '@phosphor-icons/react/dist/csr/Check';
+import { WarningCircle } from '@phosphor-icons/react/dist/csr/WarningCircle';
 import { Link } from 'react-router-dom';
 import type {
   Item,
@@ -42,6 +43,7 @@ const iconMap = {
   user: UserCircle,
   image: Image,
   check: Check,
+  warning: WarningCircle,
 } as const;
 
 export type IconName = keyof typeof iconMap;

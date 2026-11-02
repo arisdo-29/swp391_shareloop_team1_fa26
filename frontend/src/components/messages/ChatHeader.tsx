@@ -5,12 +5,14 @@ import { requestStatusLabel } from '../../utils/request';
 import { transactionProgressPath, userProfilePath } from '../../utils/chatMessages';
 import { conditionLabel } from '../../utils/formatting';
 import { productDetailFromRequestPath } from '../../utils/productDetailNavigation';
+import type { PinnedItemResponse } from '../../services/chatApi';
 import type { ItemResponse } from '../../services/itemApi';
 import { CompactProgress } from './CompactProgress';
 import {
   avatarInitials,
   conversationImage,
   conversationTitle,
+  itemPrimaryImage,
   isDonorView,
   partnerAvatarUrl,
   partnerIdOf,
@@ -21,6 +23,7 @@ import {
 
 interface ChatHeaderProps {
   conversation: ApiConversation;
+  pinnedItems?: Array<Pick<PinnedItemResponse, 'id' | 'imageUrl'>>;
   currentUserId: number;
   canReport: boolean;
   onBack: () => void;
@@ -34,6 +37,7 @@ function SwapItemCard({
   itemId,
   ownerFallback,
   requestId,
+  fallbackImage,
 }: {
   label: string;
   item?: ItemResponse;
@@ -41,6 +45,7 @@ function SwapItemCard({
   itemId?: number;
   ownerFallback: string;
   requestId: number;
+  fallbackImage?: string | null;
 }) {
   const navigate = useNavigate();
   const title = item?.title ?? fallbackTitle?.trim() ?? '';
@@ -62,7 +67,7 @@ function SwapItemCard({
             onClick={openDetail}
           >
             <ItemImage
-              src={item?.images[0]}
+              src={itemPrimaryImage(item, fallbackImage)}
               alt={title}
               className="size-20 rounded-md object-cover"
             />
@@ -93,7 +98,7 @@ function SwapItemCard({
         </div>
       ) : (
         <p className="mt-2 rounded-md bg-surface-low p-3 text-xs leading-5 text-text-muted">
-          API chưa cung cấp thông tin món đồ đề xuất cho yêu cầu này.
+          Chưa có thông tin món đồ đề xuất cho yêu cầu này.
         </p>
       )}
     </article>
@@ -103,6 +108,7 @@ function SwapItemCard({
 /** Đầu khung chat: người bên kia, vai, Xem hồ sơ, Báo cáo, rồi một thẻ món đồ kèm tiến trình thu gọn. */
 export function ChatHeader({
   conversation,
+  pinnedItems = [],
   currentUserId,
   canReport,
   onBack,
@@ -115,6 +121,10 @@ export function ChatHeader({
   const viewerIsDonor = isDonorView(conversation, currentUserId);
   const title = conversationTitle(conversation);
   const isSwap = request.type === 'SWAP';
+  const pinnedImageFor = (itemId?: number) =>
+    itemId === undefined
+      ? undefined
+      : pinnedItems.find((pinnedItem) => pinnedItem.id === itemId)?.imageUrl;
 
   return (
     <div className="shrink-0 border-b border-border">
@@ -169,6 +179,7 @@ export function ChatHeader({
               item={conversation.item}
               fallbackTitle={request.itemTitle}
               itemId={request.itemId}
+              fallbackImage={pinnedImageFor(request.itemId) ?? request.itemImage}
               ownerFallback={request.donorName?.trim() || 'Chủ bài đăng'}
               requestId={request.id}
             />
@@ -183,6 +194,7 @@ export function ChatHeader({
               item={conversation.offeredItem}
               fallbackTitle={request.offeredItemTitle}
               itemId={request.offeredItemId}
+              fallbackImage={pinnedImageFor(request.offeredItemId)}
               ownerFallback={request.receiverName?.trim() || 'Người đề nghị trao đổi'}
               requestId={request.id}
             />
