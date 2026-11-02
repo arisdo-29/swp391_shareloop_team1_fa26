@@ -7,10 +7,8 @@ import java.time.Duration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
-@Component
 public class OpenRouterSearchClient implements AiSearchClient {
     private static final String SCHEMA = """
             {"type":"object","additionalProperties":false,

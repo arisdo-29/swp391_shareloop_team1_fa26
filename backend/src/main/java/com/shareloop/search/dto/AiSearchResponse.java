@@ -4,9 +4,9 @@ import com.shareloop.common.api.PageResponse;
 import com.shareloop.item.dto.ItemResponse;
 
 public record AiSearchResponse(
-        AiSearchFilters filters,
+        String message,
         PageResponse<ItemResponse> results,
         AiQuotaResponse quota,
         int chargedCredits,
         boolean fallback,
-        boolean broadened) {}
+        boolean outOfScope) {}

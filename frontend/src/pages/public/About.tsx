@@ -114,7 +114,7 @@ const faqs = [
   ],
   [
     'Trợ lý AI có mất phí không?',
-    `Chỉ thành viên đã đăng nhập dùng được: đã từng nạp Credit có ${RULES.aiFreePerDay} lượt miễn phí mỗi ngày, chưa nạp lần nào có 1 lượt dùng thử, hết lượt thì ${RULES.aiFeePerUse} Credit mỗi lượt. AI lỗi hoặc chạy quá lâu thì hệ thống chuyển sang tìm thường, không tính lượt và không trừ Credit.`,
+    `Chỉ thành viên đã đăng nhập dùng được: đã từng nạp Credit có ${RULES.aiFreePerDay} lượt miễn phí mỗi ngày, chưa nạp lần nào có 1 lượt dùng thử, hết lượt thì ${RULES.aiFeePerUse} Credit mỗi lượt tìm được món phù hợp. AI lỗi, không tìm được món hoặc câu hỏi ngoài phạm vi tìm đồ thì không tính lượt và không trừ Credit.`,
   ],
   [
     'Tôi có huỷ giao dịch được không?',
