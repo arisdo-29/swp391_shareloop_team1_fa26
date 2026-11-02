@@ -8,7 +8,7 @@ Cần JWT của Member. Mỗi request là một cuộc tìm độc lập; backen
 { "query": "Mình muốn một món giúp vẻ ngoài có phong cách hơn" }
 ```
 
-`query` dài 1–500 ký tự và không được chứa số điện thoại, email hoặc URL. Trợ lý chỉ phục vụ nhu cầu tìm đồ trong ShareLoop, kể cả khi người dùng mô tả công dụng hoặc cảm giác mong muốn thay vì tên món. Yêu cầu ngoài phạm vi nhận một lời từ chối ngắn, không tiêu lượt và không trừ Credit.
+`query` dài 1–500 ký tự và không được chứa số điện thoại, email hoặc URL. Trợ lý chỉ phục vụ nhu cầu tìm đồ trong ShareLoop, kể cả khi người dùng mô tả công dụng hoặc cảm giác mong muốn thay vì tên món. Sau khi qua kiểm tra hạn mức và số dư, yêu cầu ngoài phạm vi nhận một lời từ chối ngắn, không tiêu lượt và không trừ Credit.
 
 Response `200`:
 
@@ -27,7 +27,7 @@ Backend đọc toàn bộ bài `APPROVED`, còn hoạt động, chưa xoá và c
 
 `message` là một tin nhắn ngắn do Gemini soạn cho lượt tìm có kết quả; backend chuẩn hoá và dùng lời nhắn an toàn mặc định nếu nội dung không hợp lệ. Không có endpoint nhắn tiếp hoặc lịch sử hội thoại. Trường hợp không có kết quả, ngoài phạm vi hoặc AI không khả dụng đều trả `items: []`, `chargedCredits: 0`; `fallback: true` chỉ khi AI không khả dụng hoặc phản hồi lỗi và không tự chuyển sang tìm từ khóa thường. Nếu AI trả ID không có trong danh sách đã cung cấp hoặc JSON sai schema, backend không trả ID đó và không tính phí.
 
-Hệ thống chỉ tiêu một lượt miễn phí hoặc trừ phí sau khi Gemini thành công **và** còn ít nhất một bài hợp lệ được trả về. Phí và hạn mức đọc từ cấu hình hiện có qua `AiQuotaService`; tiền chỉ đổi qua `CreditService`. Khi có bài phù hợp nhưng đã hết lượt miễn phí và không đủ Credit, API trả `402 WALLET_INSUFFICIENT_BALANCE` và không trừ phí. Kết quả ghi activity log gồm model, trạng thái, thời gian và loại tính phí, không ghi nội dung người dùng hoặc API key.
+Backend kiểm tra lượt miễn phí hoặc Credit khả dụng qua `AiQuotaService` **trước khi đọc danh sách bài và gọi Gemini**. Nếu đã hết lượt miễn phí và không đủ Credit, API trả `402 WALLET_INSUFFICIENT_BALANCE`; Gemini không được gọi. Hệ thống chỉ tiêu một lượt miễn phí hoặc trừ phí sau khi Gemini thành công **và** còn ít nhất một bài hợp lệ được trả về. Phí và hạn mức đọc từ cấu hình hiện có qua `AiQuotaService`; tiền chỉ đổi qua `CreditService`. Kết quả ghi activity log gồm model, trạng thái, thời gian và loại tính phí, không ghi nội dung người dùng hoặc API key.
 
 Backend dùng `GEMINI_API_KEY` từ cấu hình `app.ai.api-key`. Không cấu hình key thì trả lời AI không khả dụng mà không trừ lượt hoặc Credit.
 

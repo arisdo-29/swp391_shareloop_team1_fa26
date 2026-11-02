@@ -3,8 +3,10 @@ package com.shareloop.search.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -24,6 +26,7 @@ import com.shareloop.search.dto.AiQuotaResponse;
 import com.shareloop.search.dto.AiSearchResponse;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.wallet.WalletErrorCode;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -184,6 +187,22 @@ class AiSearchServiceTest {
                 .satisfies(error -> assertThat(((BusinessException) error).getErrorCode())
                         .isEqualTo(SearchErrorCode.SEARCH_QUERY_INVALID));
         verify(aiClient, never()).recommend(any(), any(), any());
+    }
+
+    @Test
+    void insufficientCreditStopsBeforeReadingCatalogOrCallingGemini() throws Exception {
+        when(aiClient.isAvailable()).thenReturn(true);
+        doThrow(new BusinessException(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE))
+                .when(quotaService)
+                .checkAvailable(7L);
+
+        assertThatThrownBy(() -> service.search(7L, "Tìm đồng hồ"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(error -> assertThat(((BusinessException) error).getErrorCode())
+                        .isEqualTo(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE));
+        verify(itemService, never()).searchApprovedForAi(any(), any(), any(), any(), any(), anyInt(), anyInt());
+        verify(aiClient, never()).recommend(any(), any(), any());
+        verify(quotaService, never()).consume(7L);
     }
 
     private void ready() {

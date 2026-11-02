@@ -82,6 +82,7 @@ public class AiSearchService {
         if (!aiClient.isAvailable()) {
             return empty(userId, UNAVAILABLE_MESSAGE, true, false);
         }
+        quotaService.checkAvailable(userId);
         long started = System.nanoTime();
         Duration timeout = Duration.ofSeconds(configService.getInt(ConfigKey.AI_SEARCH_TIMEOUT_SECONDS));
         Map<Long, String> categoryNames = categoryService.listActive().stream()
@@ -149,9 +150,6 @@ public class AiSearchService {
             } catch (BusinessException exception) {
                 // A selected item can be reserved, traded or hidden while Gemini is reading.
             }
-        }
-        if (!verified.isEmpty()) {
-            quotaService.checkAvailable(userId);
         }
         boolean paid = !verified.isEmpty() && quotaService.consume(userId);
         logCall(userId, verified.isEmpty() ? "NO_RESULTS" : "SUCCESS", started, paid);
