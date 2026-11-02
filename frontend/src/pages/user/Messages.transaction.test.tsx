@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Provider } from 'react-redux';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -25,6 +26,7 @@ vi.mock('../../services/requestApi', async (importOriginal) => ({
     cancelTransaction: vi.fn(),
     reportHandoverIssue: vi.fn(),
     getContact: vi.fn(),
+    select: vi.fn(),
   },
 }));
 vi.mock('../../services/itemApi', async (importOriginal) => ({
@@ -156,6 +158,31 @@ describe('Trang Tin nhắn sau khi tách trang Tiến trình', () => {
   });
 });
 
+describe('Modal chọn người cho yêu cầu SWAP', () => {
+  it('xem đúng món đề xuất mà không tự xác nhận giao dịch', async () => {
+    const userEvents = userEvent.setup();
+    await renderMessages(
+      DONOR_ID,
+      request({
+        type: 'SWAP',
+        status: 'PENDING',
+        offeredItemId: 78,
+        offeredItemTitle: 'Máy xay cà phê',
+      }),
+    );
+
+    await userEvents.click(screen.getByRole('button', { name: 'Chọn người này' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Xác nhận chọn người giao dịch' });
+    const offeredCard = within(dialog).getByRole('article', { name: 'Món đề xuất' });
+    await userEvents.click(within(offeredCard).getByRole('button', { name: 'Xem chi tiết' }));
+
+    expect(screen.getByTestId('location').textContent).toBe(
+      '/items/78?from=messages&requestId=101&selectRequest=101',
+    );
+    expect(requestApi.select).not.toHaveBeenCalled();
+  });
+});
+
 describe('Gửi ảnh trong giao dịch Cho tặng', () => {
   it('ẩn nút Gửi ảnh và dòng gợi ý với người nhận đồ Cho tặng', async () => {
     await renderMessages(RECEIVER_ID, request({ type: 'GIVE', status: 'RESERVED' }));
@@ -184,8 +211,22 @@ describe('Khung chat gọn', () => {
   it('chỉ có một thẻ món chính, dải thẻ ghim không lặp lại món đó', async () => {
     // given: thẻ ghim gồm cả món chính và một món đề nghị
     vi.mocked(chatApi.pinnedItems).mockResolvedValue([
-      { id: 45, title: 'Xe đạp cũ', offerType: 'GIVE', status: 'RESERVED', imageUrl: null, donorId: DONOR_ID },
-      { id: 77, title: 'Mũ bảo hiểm', offerType: 'SWAP', status: 'RESERVED', imageUrl: null, donorId: RECEIVER_ID },
+      {
+        id: 45,
+        title: 'Xe đạp cũ',
+        offerType: 'GIVE',
+        status: 'RESERVED',
+        imageUrl: null,
+        donorId: DONOR_ID,
+      },
+      {
+        id: 77,
+        title: 'Mũ bảo hiểm',
+        offerType: 'SWAP',
+        status: 'RESERVED',
+        imageUrl: null,
+        donorId: RECEIVER_ID,
+      },
     ]);
 
     // when

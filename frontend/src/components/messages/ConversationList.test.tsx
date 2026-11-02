@@ -2,6 +2,7 @@
 
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RequestResponse } from '../../services/requestApi';
 import { markRequestChatSeen } from '../../utils/request';
@@ -26,7 +27,13 @@ const conversation = (overrides: Partial<RequestResponse>): ApiConversation => (
 });
 
 const conversations = [
-  conversation({ id: 1, itemTitle: 'Nồi cơm điện', status: 'AWAITING_HANDOVER', donorName: 'An' }),
+  conversation({
+    id: 1,
+    itemTitle: 'Nồi cơm điện',
+    itemImage: '/api/v1/media/101',
+    status: 'AWAITING_HANDOVER',
+    donorName: 'An',
+  }),
   conversation({ id: 2, itemTitle: 'Xe đạp cũ', status: 'COMPLETED', donorName: 'Cường' }),
   conversation({
     id: 3,
@@ -39,18 +46,20 @@ const conversations = [
 
 function renderList(selectedRequestId: number | null = null) {
   render(
-    <ConversationList
-      conversations={conversations}
-      currentUserId={VIEWER_ID}
-      selectedRequestId={selectedRequestId}
-      loading={false}
-      error=""
-      onRetry={vi.fn()}
-      onOpen={vi.fn()}
-      canSelect={() => false}
-      selectSubmitting={false}
-      onSelectCandidate={vi.fn()}
-    />,
+    <MemoryRouter>
+      <ConversationList
+        conversations={conversations}
+        currentUserId={VIEWER_ID}
+        selectedRequestId={selectedRequestId}
+        loading={false}
+        error=""
+        onRetry={vi.fn()}
+        onOpen={vi.fn()}
+        canSelect={() => false}
+        selectSubmitting={false}
+        onSelectCandidate={vi.fn()}
+      />
+    </MemoryRouter>,
   );
 }
 
@@ -108,7 +117,7 @@ describe('ConversationList', () => {
     expect(visibleTitles()).toEqual(['Xe đạp cũ', 'Bàn học gỗ']);
   });
 
-  it('tab Chưa đọc giữ cuộc có tin mới và hiện nhãn Mới', async () => {
+  it('tab Chưa đọc giữ cuộc có tin mới và hiện dấu chưa đọc gọn', async () => {
     // given
     const user = userEvent.setup();
     renderList();
@@ -118,7 +127,7 @@ describe('ConversationList', () => {
 
     // then
     expect(visibleTitles()).toEqual(['Bàn học gỗ']);
-    expect(screen.getByText('Mới')).toBeTruthy();
+    expect(screen.getByLabelText('Có tin chưa đọc')).toBeTruthy();
   });
 
   it('cuộc đang mở không tính là chưa đọc', async () => {
@@ -160,5 +169,25 @@ describe('ConversationList', () => {
     expect(screen.getByText('Chờ giao nhận')).toBeTruthy();
     expect(screen.getByText('Hoàn tất')).toBeTruthy();
     expect(screen.getByText('Đã hủy')).toBeTruthy();
+  });
+
+  it('hiển thị thumbnail từ API, placeholder và liên kết đúng tới chi tiết món đồ', () => {
+    // when
+    renderList();
+
+    // then
+    const itemLink = screen.getByRole('link', { name: 'Mở chi tiết Nồi cơm điện' });
+    expect(itemLink.getAttribute('href')).toBe('/items/45?from=messages&requestId=1');
+
+    const thumbnail = within(itemLink).getByRole('img', { name: 'Nồi cơm điện' });
+    expect(thumbnail.tagName).toBe('IMG');
+    expect(thumbnail.getAttribute('src')).toContain('/api/v1/media/101');
+    expect(thumbnail.className).toContain('size-[52px]');
+    expect(thumbnail.className).toContain('rounded-md');
+    expect(
+      screen.getByRole('button', { name: 'Mở cuộc trò chuyện với An' }).parentElement?.className,
+    ).toContain('h-[84px]');
+
+    expect(screen.getByRole('img', { name: 'Xe đạp cũ' }).tagName).toBe('DIV');
   });
 });

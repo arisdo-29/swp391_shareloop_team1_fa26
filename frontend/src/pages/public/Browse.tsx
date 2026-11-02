@@ -55,24 +55,6 @@ function loadBrowseItems(params: Parameters<typeof itemApi.list>[0]) {
   return request;
 }
 
-function normalizeBrowsePage(
-  response: Awaited<ReturnType<typeof itemApi.list>>,
-  requestedPage: number,
-) {
-  if (response.items.length <= BROWSE_RESULTS_PAGE_SIZE) return response;
-
-  const totalElements = response.totalElements || response.items.length;
-  const start = requestedPage * BROWSE_RESULTS_PAGE_SIZE;
-  return {
-    ...response,
-    items: response.items.slice(start, start + BROWSE_RESULTS_PAGE_SIZE),
-    page: requestedPage,
-    size: BROWSE_RESULTS_PAGE_SIZE,
-    totalElements,
-    totalPages: Math.ceil(totalElements / BROWSE_RESULTS_PAGE_SIZE),
-  };
-}
-
 export function Browse() {
   const [params, setParams] = useSearchParams();
   const [itemResponses, setItemResponses] = useState<ItemResponse[]>([]);
@@ -173,9 +155,8 @@ export function Browse() {
       size: BROWSE_RESULTS_PAGE_SIZE,
     });
     request
-      .then((rawResponse) => {
+      .then((response) => {
         if (!active) return;
-        const response = normalizeBrowsePage(rawResponse, page);
         setItemResponses(response.items);
         setPage(response.page);
         setTotalElements(response.totalElements);

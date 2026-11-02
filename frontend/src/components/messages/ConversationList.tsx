@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { Avatar, Button, EmptyState, SearchField, SkeletonRows, StatusBadge } from '../ui';
+import { Link } from 'react-router-dom';
+import { Button, EmptyState, ItemImage, SearchField, SkeletonRows, StatusBadge } from '../ui';
 import { isRequestUnread, requestStatusLabel } from '../../utils/request';
+import { productDetailFromRequestPath } from '../../utils/productDetailNavigation';
 import {
   conversationFilterLabels,
   matchesConversationFilter,
@@ -8,9 +10,8 @@ import {
   type ConversationFilter,
 } from '../../utils/conversationFilter';
 import {
-  avatarInitials,
+  conversationImage,
   conversationTitle,
-  partnerAvatarUrl,
   requestParticipantName,
   type ApiConversation,
 } from './conversation';
@@ -127,9 +128,7 @@ export function ConversationList({
         ) : (
           <div className="p-2">
             <EmptyState
-              title={
-                conversations.length ? 'Không có cuộc trò chuyện phù hợp' : 'Chưa có yêu cầu'
-              }
+              title={conversations.length ? 'Không có cuộc trò chuyện phù hợp' : 'Chưa có yêu cầu'}
               text={
                 conversations.length
                   ? 'Thử đổi bộ lọc hoặc tìm bằng tên món, tên người khác.'
@@ -165,65 +164,65 @@ function ConversationRow({
   const { request } = conversation;
   const participantName = requestParticipantName(conversation, currentUserId);
   const shownAt = request.lastMessageAt ?? request.createdAt;
+  const itemTitle = conversationTitle(conversation);
 
   return (
-    <div className={`rounded-md ${active ? 'bg-primary-soft' : 'hover:bg-primary-faint'}`}>
+    <div
+      className={`relative mb-1 h-[84px] overflow-hidden rounded-md last:mb-0 ${active ? 'bg-primary-faint' : 'bg-white hover:bg-primary-faint'}`}
+    >
       <button
         type="button"
+        aria-label={`Mở cuộc trò chuyện với ${participantName}`}
         aria-current={active ? 'true' : undefined}
         onClick={() => onOpen(request.id)}
-        className="grid min-h-11 w-full grid-cols-[40px_minmax(0,1fr)] gap-3 p-2.5 text-left"
-      >
-        <span className="relative">
-          <Avatar
-            user={{
-              name: participantName,
-              avatarInitials: avatarInitials(participantName),
-              avatarUrl: partnerAvatarUrl(conversation, currentUserId),
-            }}
+        className="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+      />
+      <div className="pointer-events-none grid h-full min-w-0 grid-cols-[52px_minmax(0,1fr)] items-center gap-2.5 px-2 py-2 text-left">
+        <Link
+          to={productDetailFromRequestPath(request.itemId, request.id)}
+          aria-label={`Mở chi tiết ${itemTitle}`}
+          className="pointer-events-auto relative z-10 size-[52px] overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <ItemImage
+            src={conversationImage(conversation)}
+            alt={itemTitle}
+            loading="lazy"
+            className="size-[52px] rounded-md object-cover"
           />
-          {unread ? (
-            <span
-              aria-label="Có tin chưa đọc"
-              className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-error ring-2 ring-white"
-            />
-          ) : null}
-        </span>
-        <span className="min-w-0">
-          <span className="flex items-baseline justify-between gap-2">
-            <strong className={`truncate text-sm ${unread ? 'font-bold' : 'font-semibold'}`}>
+        </Link>
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            {unread ? (
+              <span
+                aria-label="Có tin chưa đọc"
+                className="size-2 shrink-0 rounded-full bg-error"
+              />
+            ) : null}
+            <strong
+              className={`min-w-0 flex-1 truncate text-sm ${unread ? 'font-bold' : 'font-semibold'}`}
+            >
               {participantName}
             </strong>
             <span className="shrink-0 text-2xs text-text-secondary">
               {new Date(shownAt).toLocaleDateString('vi-VN')}
             </span>
-          </span>
-          <span
-            className={`mt-0.5 block truncate text-xs ${unread ? 'font-semibold text-text-primary' : 'text-text-secondary'}`}
-          >
-            {conversationTitle(conversation)}
-          </span>
-          <span className="mt-1 flex items-center gap-1.5">
+          </div>
+          <p className="mt-0.5 truncate text-xs leading-4 text-text-secondary">{itemTitle}</p>
+          <div className="mt-1 flex min-w-0 items-center gap-1.5">
             <StatusBadge status={request.status} label={requestStatusLabel[request.status]} />
-            {unread ? (
-              <span className="rounded-sm bg-error-soft px-2 py-1 text-2xs font-semibold text-error">
-                Mới
-              </span>
+            {canSelect ? (
+              <button
+                type="button"
+                disabled={selectSubmitting}
+                onClick={() => onSelectCandidate(request.id)}
+                className="pointer-events-auto relative z-10 ml-auto shrink-0 rounded-sm bg-primary px-2 py-1 text-2xs font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Chọn người này
+              </button>
             ) : null}
-          </span>
-        </span>
-      </button>
-      {canSelect ? (
-        <div className="px-2.5 pb-2.5 pl-[62px]">
-          <Button
-            size="sm"
-            disabled={selectSubmitting}
-            onClick={() => onSelectCandidate(request.id)}
-          >
-            Chọn người này
-          </Button>
+          </div>
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }
