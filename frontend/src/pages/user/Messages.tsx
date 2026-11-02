@@ -1885,20 +1885,20 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       Chụp món đồ lúc giao. Admin xem khi có khiếu nại.
                     </p>
                     {requestMedia.length ? (
-                      <div className="flex gap-2 overflow-x-auto">
+                      <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-3">
                         {requestMedia.map((entry) => (
                           <a
                             key={entry.mediaId}
                             href={resolveMediaUrl(entry.url)}
                             target="_blank"
                             rel="noreferrer"
-                            className="shrink-0"
+                            className="block size-[100px] overflow-hidden rounded-md ring-1 ring-border transition hover:ring-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                             title={`${entry.stage === 'HANDOVER' ? 'Giao nhận' : 'Khiếu nại'} · ${new Date(entry.createdAt).toLocaleString('vi-VN')}`}
                           >
                             <ItemImage
                               src={entry.url}
                               alt="Ảnh minh chứng"
-                              className="size-14 rounded-md object-cover"
+                              className="size-[100px] object-cover"
                             />
                           </a>
                         ))}

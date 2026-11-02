@@ -207,7 +207,7 @@ function AppShellContent() {
             : 'sticky'
         }`}
       >
-        <div className="mx-auto flex h-[68px] w-full max-w-[1440px] items-center gap-5 px-4 sm:px-6">
+        <div className="mx-auto flex min-h-[68px] w-full max-w-[1440px] items-center gap-5 px-4 py-2 sm:px-6">
           <Link
             to={isAdmin ? '/admin' : '/'}
             onClick={closeMenus}
@@ -220,7 +220,7 @@ function AppShellContent() {
             >
               <ShareLoopLogo className="size-5" />
             </span>
-            <span className="text-base font-extrabold text-white">
+            <span className="hidden text-base font-extrabold text-white md:inline">
               {isAdmin ? (
                 'SHARELOOP ADMIN'
               ) : (
@@ -231,7 +231,7 @@ function AppShellContent() {
             </span>
           </Link>
           {!isAdmin ? (
-            <nav className="hidden min-w-0 flex-1 items-center gap-0.5 lg:flex">
+            <nav className="hidden min-w-0 flex-1 items-center gap-0.5 xl:flex">
               {nav.map(([to, label]) => (
                 <NavLink
                   end={to === '/'}
@@ -255,7 +255,7 @@ function AppShellContent() {
           ) : null}
           <div
             ref={headerActionsRef}
-            className="ml-auto flex shrink-0 items-center gap-2"
+            className="ml-auto flex min-w-0 items-center gap-2"
             onClick={(event) => {
               const action = (event.target as HTMLElement).closest('a, button');
               if (action && !action.hasAttribute('aria-expanded')) {
@@ -271,11 +271,11 @@ function AppShellContent() {
                     <Link
                       to="/credit"
                       aria-label={`Ví Credit: ${wallet ? wallet.available : 'chưa tải'} Credit khả dụng`}
-                      className="site-header-credit hidden min-h-11 items-center rounded-md border px-3 py-2 text-xs font-semibold transition sm:flex"
+                      className="site-header-credit hidden min-h-11 shrink-0 items-center rounded-md border px-3 py-2 text-xs font-semibold transition sm:flex"
                     >
                       {wallet ? wallet.available : '--'} Credit
                     </Link>
-                    <Link to="/post" className="hidden sm:block">
+                    <Link to="/post" className="hidden shrink-0 sm:block">
                       <Button
                         className="bronze-action"
                       >
@@ -284,38 +284,36 @@ function AppShellContent() {
                     </Link>
                   </>
                 ) : null}
-                <NotificationMenu
-                  userId={user.id}
-                  isHome
-                  open={notificationOpen}
-                  onOpenChange={setNotificationOpen}
-                  onOpen={() => setProfileOpen(false)}
-                />
-                <div className="relative">
+                <div className="shrink-0">
+                  <NotificationMenu
+                    userId={user.id}
+                    isHome
+                    open={notificationOpen}
+                    onOpenChange={setNotificationOpen}
+                    onOpen={() => setProfileOpen(false)}
+                  />
+                </div>
+                <div className="relative min-w-0">
                   <button
                     onClick={() => {
                       setProfileOpen(!profileOpen);
                       setNotificationOpen(false);
                     }}
-                    className="flex min-h-11 items-center gap-1 rounded-md px-2 transition hover:bg-white/10"
+                    className="flex min-h-11 min-w-0 max-w-full items-center gap-1 rounded-md px-2 transition hover:bg-white/10"
                     aria-expanded={profileOpen}
                   >
                     <span
                       title={user.name}
-                      className={
-                        isAdmin
-                          ? 'inline-block max-w-[50vw] whitespace-normal break-words text-sm font-semibold leading-tight sm:max-w-none sm:shrink-0 sm:whitespace-nowrap'
-                          : 'inline-block max-w-[120px] truncate text-sm font-semibold'
-                      }
+                      className="min-w-0 whitespace-normal break-words text-right text-sm font-semibold leading-tight"
                     >
                       {user.name}
                     </span>
-                    <Icon name="chevronDown" className="size-4 text-white/75" />
+                    <Icon name="chevronDown" className="size-4 shrink-0 text-white/75" />
                   </button>
                   {profileOpen ? (
                     <div className="absolute right-0 top-12 w-60 rounded-lg bg-white p-2 text-text-primary shadow-lg ring-1 ring-border">
                       <div className="border-b border-border/70 px-3 py-2.5">
-                        <p className="truncate text-sm font-bold">
+                        <p className="break-words text-sm font-bold">
                           {isAdmin ? 'Quản trị viên' : user.name}
                         </p>
                         <p className="mt-0.5 truncate text-xs text-text-secondary">{user.email}</p>
@@ -385,14 +383,14 @@ function AppShellContent() {
               <IconButton
                 icon={mobileOpen ? 'close' : 'menu'}
                 label="Mở điều hướng"
-                className="site-header-icon-button !size-11 lg:hidden"
+                className="site-header-icon-button !size-11 shrink-0 xl:hidden"
                 onClick={() => setMobileOpen(!mobileOpen)}
               />
             ) : null}
           </div>
         </div>
         {mobileOpen && !isAdmin ? (
-          <nav className={`site-header-mobile border-t px-4 py-3 lg:hidden ${isHome ? 'site-header-home-mobile' : ''}`}>
+          <nav className={`site-header-mobile border-t px-4 py-3 xl:hidden ${isHome ? 'site-header-home-mobile' : ''}`}>
             {nav.map(([to, label]) => (
               <NavLink
                 end={to === '/'}

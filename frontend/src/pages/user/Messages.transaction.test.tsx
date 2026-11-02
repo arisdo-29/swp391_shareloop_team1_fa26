@@ -8,7 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { actions, store } from '../../app/store';
 import { chatApi } from '../../services/chatApi';
 import { itemApi, type ItemResponse } from '../../services/itemApi';
-import { requestApi, type RequestResponse } from '../../services/requestApi';
+import {
+  requestApi,
+  type RequestMediaResponse,
+  type RequestResponse,
+} from '../../services/requestApi';
 import type { User } from '../../types/domain';
 import { Messages } from './Messages';
 
@@ -101,14 +105,18 @@ function LocationProbe() {
 }
 
 /** Dựng trang Tin nhắn cho người dùng `viewerId` với giao dịch `current` đang mở. */
-async function renderMessages(viewerId: number, current: RequestResponse) {
+async function renderMessages(
+  viewerId: number,
+  current: RequestResponse,
+  media: RequestMediaResponse[] = [],
+) {
   store.dispatch(actions.loginFromApi(user(viewerId)));
   const ownedItems = viewerId === DONOR_ID ? [item()] : [];
   vi.mocked(requestApi.mine).mockResolvedValue(viewerId === RECEIVER_ID ? [current] : []);
   vi.mocked(itemApi.mine).mockResolvedValue(ownedItems);
   vi.mocked(requestApi.forItem).mockResolvedValue([current]);
   vi.mocked(requestApi.get).mockResolvedValue(current);
-  vi.mocked(requestApi.media).mockResolvedValue([]);
+  vi.mocked(requestApi.media).mockResolvedValue(media);
   vi.mocked(itemApi.detail).mockResolvedValue(item());
   vi.mocked(chatApi.list).mockResolvedValue([]);
   vi.mocked(chatApi.pinnedItems).mockResolvedValue([]);
@@ -217,6 +225,29 @@ describe('Hạn giải trình khi giao dịch đang khiếu nại', () => {
 
     await screen.findByText(/Giao dịch đang có khiếu nại/);
     expect(screen.queryByText(/chờ chủ bài giải trình trước/)).toBeNull();
+  });
+});
+
+describe('Ảnh giao nhận', () => {
+  it('hiển thị thumbnail 100px trong lưới và vẫn mở ảnh gốc khi nhấn', async () => {
+    await renderMessages(RECEIVER_ID, request(), [
+      {
+        mediaId: 72,
+        url: '/api/v1/media/72',
+        stage: 'HANDOVER',
+        uploadedBy: RECEIVER_ID,
+        createdAt: '2026-10-25T10:00:00Z',
+      },
+    ]);
+
+    const thumbnail = await screen.findByRole('img', { name: 'Ảnh minh chứng' });
+    const imageLink = thumbnail.closest('a');
+
+    expect(thumbnail.className).toContain('size-[100px]');
+    expect(thumbnail.className).toContain('object-cover');
+    expect(imageLink?.parentElement?.className).toContain('grid');
+    expect(imageLink?.getAttribute('href')).toContain('/api/v1/media/72');
+    expect(imageLink?.getAttribute('target')).toBe('_blank');
   });
 });
 
