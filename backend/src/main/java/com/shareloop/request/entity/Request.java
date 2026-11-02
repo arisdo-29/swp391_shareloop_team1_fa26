@@ -138,6 +138,18 @@ public class Request extends BaseEntity {
     }
 
     /**
+     * Chuyển đổi loại yêu cầu Cho ↔ Trao đổi khi chủ bài chọn người nhận (CD-02, CD-04, CD-06).
+     *
+     * @param newType loại mới ("GIVE" hoặc "SWAP")
+     */
+    public void convertType(String newType) {
+        if (newType == null || (!newType.equals("GIVE") && !newType.equals("SWAP"))) {
+            throw new IllegalArgumentException("Invalid request type: " + newType);
+        }
+        this.type = newType;
+    }
+
+    /**
      * Đề xuất hoặc cập nhật lịch hẹn giao nhận (FR-79, FR-80, BR-T01, BR-T02).
      *
      * <p>Chuyển sang AWAITING_LOGISTICS nếu đang là RESERVED.

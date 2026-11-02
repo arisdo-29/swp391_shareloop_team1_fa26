@@ -72,8 +72,8 @@ public class CreditService {
 
     // Dùng EnumSet vì contains(null) trả false; Set.of(...) sẽ ném NullPointerException khi type là null.
     private static final Set<CreditTxType> HELD_FEE_TYPES = EnumSet.of(CreditTxType.POST_FEE, CreditTxType.EDIT_FEE);
-    private static final Set<CreditTxType> SPEND_TYPES =
-            EnumSet.of(CreditTxType.RENEW_FEE, CreditTxType.BOOST_FEE, CreditTxType.AI_SEARCH_FEE);
+    private static final Set<CreditTxType> SPEND_TYPES = EnumSet.of(
+            CreditTxType.RENEW_FEE, CreditTxType.BOOST_FEE, CreditTxType.AI_SEARCH_FEE, CreditTxType.POST_FEE);
 
     private final WalletAccountRepository walletAccountRepository;
     private final CreditLedgerRepository creditLedgerRepository;
@@ -174,7 +174,7 @@ public class CreditService {
 
     /**
      * Trừ Credit ngay, không qua giữ chỗ: gia hạn (C16, RENEW_FEE), đẩy bài (C15, BOOST_FEE), AI trả lời
-     * (C17, AI_SEARCH_FEE).
+     * (C17, AI_SEARCH_FEE), chuyển đổi Cho sang Trao đổi khi chọn người nhận (CD-06, POST_FEE).
      *
      * <p>Quy tắc: nếu {@code credit_balance - held_credit >= amount} thì {@code credit_balance -= amount} và ghi
      * credit_ledger (amount âm, balance_after, item_id nếu có, type). Credit đang giữ cho bài khác không bị dùng.
@@ -184,11 +184,11 @@ public class CreditService {
      *
      * @param userId người bị trừ
      * @param amount số Credit trừ, phải lớn hơn 0
-     * @param type RENEW_FEE, BOOST_FEE hoặc AI_SEARCH_FEE
+     * @param type RENEW_FEE, BOOST_FEE, AI_SEARCH_FEE hoặc POST_FEE
      * @param itemId bài liên quan; null khi không gắn bài (AI_SEARCH_FEE)
      * @throws com.shareloop.common.exception.BusinessException WALLET_INSUFFICIENT_BALANCE khi khả dụng không đủ;
      *     WALLET_INVALID_AMOUNT; WALLET_NOT_FOUND
-     * @throws IllegalArgumentException khi type không phải RENEW_FEE, BOOST_FEE hoặc AI_SEARCH_FEE
+     * @throws IllegalArgumentException khi type không phải RENEW_FEE, BOOST_FEE, AI_SEARCH_FEE hoặc POST_FEE
      */
     public void spend(long userId, long amount, CreditTxType type, Long itemId) {
         requireAllowedType(type, SPEND_TYPES, "spend");
