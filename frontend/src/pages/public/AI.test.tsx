@@ -68,7 +68,7 @@ describe('AI search quota', () => {
     expect(screen.getByText('Mình chưa tìm thấy món phù hợp.')).toBeTruthy();
   });
 
-  it('giữ nguyên quota khi Backend fallback sang tìm kiếm thường', async () => {
+  it('giữ nguyên quota khi AI không khả dụng', async () => {
     const user = userEvent.setup();
     vi.mocked(aiApi.quota).mockReset().mockResolvedValue({
       freeUsesRemaining: 5,
