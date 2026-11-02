@@ -6,6 +6,7 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.dto.ItemCardDto;
 import com.shareloop.item.dto.ItemSummary;
+import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.media.service.MediaService;
@@ -38,6 +39,8 @@ import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.dto.ContactInfo;
 import com.shareloop.user.service.UserService;
+import com.shareloop.wallet.entity.CreditTxType;
+import com.shareloop.wallet.service.CreditService;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -95,6 +98,7 @@ public class RequestService {
     private final ApplicationEventPublisher eventPublisher;
     private final ActivityLogService activityLogService;
     private final ReportService reportService;
+    private final CreditService creditService;
 
     @Autowired
     public RequestService(
@@ -110,7 +114,8 @@ public class RequestService {
             @Autowired(required = false) RequestMediaRepository requestMediaRepository,
             @Autowired(required = false) ApplicationEventPublisher eventPublisher,
             @Autowired(required = false) ActivityLogService activityLogService,
-            @Autowired(required = false) @Lazy ReportService reportService) {
+            @Autowired(required = false) @Lazy ReportService reportService,
+            @Autowired(required = false) CreditService creditService) {
         this.requestRepository = requestRepository;
         this.notificationService = notificationService;
         this.configService = configService;
@@ -124,6 +129,7 @@ public class RequestService {
         this.eventPublisher = eventPublisher;
         this.activityLogService = activityLogService;
         this.reportService = reportService;
+        this.creditService = creditService;
     }
 
     public RequestService(
@@ -152,6 +158,7 @@ public class RequestService {
                 requestMediaRepository,
                 eventPublisher,
                 activityLogService,
+                null,
                 null);
     }
 
@@ -177,6 +184,7 @@ public class RequestService {
                 null,
                 null,
                 null,
+                null,
                 null);
     }
 
@@ -196,6 +204,7 @@ public class RequestService {
                 userService,
                 null,
                 jdbcClient,
+                null,
                 null,
                 null,
                 null,
@@ -254,21 +263,16 @@ public class RequestService {
 
         Long offeredItemId = requestDto != null ? requestDto.offeredItemId() : null;
 
-        // Nếu bài là SWAP, bắt buộc phải chọn món đề nghị (BR-S02)
-        if ("SWAP".equals(targetItem.offerType())) {
-            if (offeredItemId == null) {
-                throw new BusinessException(RequestErrorCode.REQUEST_SWAP_OFFERED_ITEM_REQUIRED);
-            }
-        } else if (offeredItemId != null) {
-            // Bài Cho không nhận món đổi kèm (YC-04, chưa hỗ trợ D-02)
-            throw new BusinessException(RequestErrorCode.REQUEST_OFFERED_ITEM_NOT_ALLOWED);
-        }
-
+        // CD-01: Cho phép gửi kèm món đổi khi xin bài Cho (đề nghị trao đổi),
+        // và cho phép không kèm món đổi khi xin bài Trao đổi (xin cho không).
         if (offeredItemId != null) {
+            if (offeredItemId.equals(itemId)) {
+                throw new BusinessException(RequestErrorCode.REQUEST_SELF_OFFER_NOT_ALLOWED);
+            }
             ItemSnapshot offeredItem = findItemSnapshot(offeredItemId)
                     .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
 
-            // Món đề nghị phải là của chính người gửi, đang APPROVED và đang hoạt động (BR-S01, BR-S03)
+            // Món đề nghị phải là của chính người gửi, đang APPROVED và đang hoạt động (BR-S01, BR-S03, CD-01)
             if (offeredItem.donorId() != receiverId
                     || !"APPROVED".equals(offeredItem.status())
                     || !offeredItem.isActive()) {
@@ -453,6 +457,24 @@ public class RequestService {
 
         if (selectedRequest.getStatus() != RequestStatus.PENDING) {
             throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+
+        // Chuyển đổi loại Cho ↔ Trao đổi khi chọn người nhận (CD-02, CD-04, CD-06)
+        boolean isGiveToSwap = "GIVE".equals(item.offerType()) && selectedRequest.getOfferedItemId() != null;
+        boolean isSwapToGive = "SWAP".equals(item.offerType()) && selectedRequest.getOfferedItemId() == null;
+
+        if (isGiveToSwap) {
+            // CD-02, CD-06: Trừ phí đăng bài (POST_FEE) từ chủ bài. Ném WALLET_INSUFFICIENT_BALANCE nếu không đủ.
+            if (creditService != null) {
+                int postFee = configService.getInt(ConfigKey.POST_FEE);
+                creditService.spend(currentUserId, postFee, CreditTxType.POST_FEE, selectedRequest.getItemId());
+            }
+            itemService.convertOfferType(selectedRequest.getItemId(), OfferType.SWAP);
+            selectedRequest.convertType("SWAP");
+        } else if (isSwapToGive) {
+            // CD-04: Chuyển sang GIVE, không hoàn lại phí đăng bài đã nộp trước đó.
+            itemService.convertOfferType(selectedRequest.getItemId(), OfferType.GIVE);
+            selectedRequest.convertType("GIVE");
         }
 
         // 1. Chuyển request được chọn sang RESERVED (qua canTransition)

@@ -516,6 +516,19 @@ public class ItemService {
         }
     }
 
+    /**
+     * Chuyển đổi loại bài đăng Cho ↔ Trao đổi khi chọn người nhận (CD-02, CD-04, CD-06).
+     *
+     * @param itemId id bài đăng
+     * @param newOfferType loại bài mới
+     */
+    @Transactional
+    public void convertOfferType(long itemId, OfferType newOfferType) {
+        Item item = requireItem(itemId);
+        item.convertOfferType(newOfferType);
+        itemRepository.save(item);
+    }
+
     @Transactional
     public void hide(long itemId) {
         requireItem(itemId).deactivate();

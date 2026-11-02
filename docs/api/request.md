@@ -30,13 +30,13 @@ Mọi đổi trạng thái đi qua `RequestStatus.canTransition`; cạnh không 
 
 `COMPLETED`, `REJECTED`, `CANCELLED` là trạng thái cuối. Không có cạnh `LOGISTICS_CONFIRMED -> DISPUTED`.
 
-Khi chủ bài đổi hình thức `GIVE` ↔ `SWAP` bằng `PUT /api/v1/items/{id}`, mọi Request `PENDING` của bài chuyển sang `CANCELLED` và người gửi nhận thông báo `REQUEST_CANCELLED`. Việc huỷ nằm trong cùng transaction sửa bài; nếu sửa bài hoặc giữ phí thất bại, Request giữ nguyên.
+Chuyển đổi hình thức Cho ↔ Trao đổi diễn ra linh hoạt tại thời điểm chủ bài chọn người nhận (CD-01 … CD-07, D-02). Khi chọn người, bài đăng và yêu cầu sẽ tự động đổi sang SWAP (nếu có món trao đổi kèm) hoặc GIVE (nếu không có món trao đổi), không thực hiện đổi hình thức qua API sửa bài đăng.
 
 ---
 
 ## 1. POST /api/v1/items/{itemId}/requests
 
-Gửi yêu cầu xin đồ (với bài Give) hoặc đề nghị trao đổi đồ (với bài Swap) (F10 bước 1, UC-20).
+Gửi yêu cầu xin đồ (với bài Give) hoặc đề nghị trao đổi đồ (với bài Swap) (F10 bước 1, UC-20, CD-01).
 
 - **Xác thực:** Bắt buộc JWT (`Member`).
 - **Path variable:** `itemId` (id của bài đăng muốn xin/đổi).
@@ -44,7 +44,7 @@ Gửi yêu cầu xin đồ (với bài Give) hoặc đề nghị trao đổi đ�
 
 ```json
 {
-  "offeredItemId": 12 // Bắt buộc nếu bài đăng là SWAP; để null nếu là GIVE
+  "offeredItemId": 12 // Tuỳ chọn cho cả bài GIVE và SWAP (CD-01). Cho phép gửi kèm món đổi khi xin bài GIVE; cho phép để null khi xin bài SWAP. Nếu có, món phải thuộc sở hữu của người gửi, đang APPROVED, is_active và khác itemId.
 }
 ```
 
@@ -66,14 +66,12 @@ Gửi yêu cầu xin đồ (với bài Give) hoặc đề nghị trao đổi đ�
 ```
 
 - **Lỗi:**
-  - `400 REQUEST_SELF_OFFER_NOT_ALLOWED`: Gửi yêu cầu tới bài của chính mình (BR-R01).
+  - `400 REQUEST_SELF_OFFER_NOT_ALLOWED`: Gửi yêu cầu tới bài của chính mình (BR-R01) hoặc chọn chính món đang xin làm món đề nghị (CD-01).
   - `400 REQUEST_LIMIT_EXCEEDED`: Đã có 5 yêu cầu đang ở trạng thái PENDING (BR-U02).
-  - `400 REQUEST_SWAP_OFFERED_ITEM_REQUIRED`: Bài đăng là Trao đổi nhưng không đính kèm món đề nghị (BR-S02).
-  - `400 REQUEST_OFFERED_ITEM_NOT_ALLOWED`: Bài đăng cho tặng không nhận món đề nghị trao đổi (YC-04).
   - `403 REQUEST_ADMIN_BLOCKED`: Quản trị viên không được gửi yêu cầu giao dịch (TK-13).
   - `403 REQUEST_REPUTATION_BLOCKED`: Tài khoản có 0 sao uy tín, bị vô hiệu hoá quyền gửi yêu cầu giao dịch (BR-U05, FR-92).
-  - `404 REQUEST_ITEM_NOT_FOUND`: Không tìm thấy bài đăng hoặc bài đã bị xoá/gỡ.
-  - `409 REQUEST_ITEM_NOT_AVAILABLE`: Bài đăng không ở trạng thái sẵn sàng nhận yêu cầu (không phải APPROVED).
+  - `404 REQUEST_ITEM_NOT_FOUND`: Không tìm thấy bài đăng hoặc món đề nghị không tồn tại.
+  - `409 REQUEST_ITEM_NOT_AVAILABLE`: Bài đăng hoặc món đề nghị không ở trạng thái sẵn sàng (không phải APPROVED, bị ẩn, hoặc không thuộc sở hữu người gửi).
   - `409 REQUEST_ALREADY_EXISTS`: Đã có yêu cầu đang hoạt động cho bài này (BR-R02).
 
 ---
@@ -147,20 +145,33 @@ Chủ bài đăng chọn đúng một người nhận cho bài đăng (F10 bư�
 - **Xác thực:** Bắt buộc JWT (phải là chủ bài đăng `donorId`).
 - **Path variable:** `id` (id của request được chọn).
 - **Hành vi nghiệp vụ:**
+  - **Chuyển đổi hình thức Cho ↔ Trao đổi (CD-01 … CD-07):**
+    - **Cho → Trao đổi (CD-02, CD-06):** Chủ bài Cho (`offer_type = 'GIVE'`) chọn yêu cầu có kèm món (`offeredItemId != null`):
+      - Trừ 5 Credit phí đăng bài (`POST_FEE`) từ ví của chủ bài ngay lúc chọn. Nếu số dư khả dụng không đủ, giao dịch không được chọn và trả lỗi `402 WALLET_INSUFFICIENT_BALANCE`.
+      - Bài đăng tự động đổi sang `SWAP` (`offer_type = 'SWAP'`).
+      - Yêu cầu được chọn đổi sang `SWAP` (`type = 'SWAP'`).
+      - Cả 2 món (`itemId` và `offeredItemId`) đều chuyển sang `RESERVED`.
+    - **Trao đổi → Cho (CD-04):** Chủ bài Trao đổi (`offer_type = 'SWAP'`) chọn yêu cầu không kèm món (`offeredItemId == null`):
+      - Không hoàn lại 5 Credit phí đăng bài đã nộp trước đó.
+      - Bài đăng tự động đổi sang `GIVE` (`offer_type = 'GIVE'`).
+      - Yêu cầu được chọn đổi sang `GIVE` (`type = 'GIVE'`).
+      - Chỉ 1 món (`itemId`) chuyển sang `RESERVED`.
+    - **Giữ nguyên hình thức (CD-03, CD-05):** Cho chọn Cho (giữ `GIVE`, chỉ giữ chỗ 1 món); Trao đổi chọn Trao đổi (giữ `SWAP`, giữ chỗ cả 2 món).
   - Request được chọn chuyển sang trạng thái `RESERVED` (`reservedAt` được ghi nhận).
   - Tất cả các Request khác gửi tới cùng bài đăng đang ở trạng thái `PENDING` sẽ tự động chuyển sang `REJECTED`.
-  - Bài đăng chuyển sang trạng thái `RESERVED` qua `ItemService.reserve(itemId)`. Với yêu cầu `SWAP`, món mang đổi
-    (`offeredItemId`) cũng chuyển `RESERVED` trong cùng transaction; nếu món đó không còn `APPROVED` thì cả lần chọn bị
-    hoàn tác và trả `409 ITEM_INVALID_STATUS_TRANSITION`.
-  - Khi giao dịch bị huỷ (người dùng, job hết hạn), cả hai món được nhả về `APPROVED`.
+  - Các yêu cầu PENDING khác ở các bài khác đang dùng cùng món đề nghị `offeredItemId` tự động bị `CANCELLED` (FR-66, BR-S03).
+  - Điểm uy tín khi hoàn tất (`COMPLETED`): tự động tính theo `requests.type` sau chuyển đổi (CD-07).
+  - Khi giao dịch bị huỷ (người dùng, job hết hạn), các món đã giữ chỗ được nhả về `APPROVED`.
   - Người nhận được chọn nhận thông báo `REQUEST_ACCEPTED`.
   - Các người nhận bị từ chối nhận thông báo `REQUEST_REJECTED`.
 - **Thành công:** `200 OK`, trả về `RequestResponse` của yêu cầu được chọn (`status = RESERVED`).
 - **Lỗi:**
+  - `402 WALLET_INSUFFICIENT_BALANCE`: Số dư Credit của chủ bài không đủ 5 Credit để chuyển từ Cho sang Trao đổi (CD-02, CD-06).
   - `403 REQUEST_FORBIDDEN`: Không phải chủ bài đăng.
   - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
   - `404 REQUEST_ITEM_NOT_FOUND`: Không tìm thấy bài đăng liên quan.
   - `409 REQUEST_INVALID_STATE_TRANSITION`: Yêu cầu không còn ở trạng thái `PENDING` để chọn.
+  - `409 ITEM_INVALID_STATUS_TRANSITION`: Món đồ (bài chính hoặc món đề nghị) không còn ở trạng thái `APPROVED` để giữ chỗ.
 
 ---
 

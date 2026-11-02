@@ -173,4 +173,21 @@ public class Item extends BaseEntity {
     public void markExpired() {
         transitionTo(ItemStatus.EXPIRED);
     }
+
+    /**
+     * Chuyển đổi hình thức Cho ↔ Trao đổi khi chọn người nhận (CD-02, CD-04, CD-06).
+     *
+     * <p>Khi chuyển sang SWAP, nếu chưa có desiredItem thì gán giá trị mặc định để thoả mãn check constraint CSDL.
+     *
+     * @param newOfferType loại mới (GIVE hoặc SWAP)
+     */
+    public void convertOfferType(OfferType newOfferType) {
+        if (newOfferType == null) {
+            throw new IllegalArgumentException("OfferType cannot be null");
+        }
+        this.offerType = newOfferType;
+        if (newOfferType == OfferType.SWAP && (this.desiredItem == null || this.desiredItem.isBlank())) {
+            this.desiredItem = "Trao đổi theo yêu cầu đã chọn";
+        }
+    }
 }
