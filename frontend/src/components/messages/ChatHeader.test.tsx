@@ -52,7 +52,6 @@ function renderHeader(
               canReport={canReport}
               onBack={vi.fn()}
               onReport={onReport}
-              onOpenDetails={vi.fn()}
             />
           }
         />
@@ -120,7 +119,7 @@ describe('ChatHeader', () => {
     await user.click(screen.getByRole('button', { name: 'Xem tiến trình' }));
 
     // then
-    expect(screen.getByTestId('location').textContent).toBe('/requests/101/progress');
+    expect(screen.getByTestId('location').textContent).toBe('/messages/101/progress');
   });
 
   it('chỉ có một thẻ món, kèm nhãn loại, nhãn trạng thái và thanh 4 đoạn', () => {
@@ -182,7 +181,7 @@ describe('ChatMessage', () => {
         <ChatMessage
           entry={systemMessage}
           mine={false}
-          progressPath="/requests/101/progress"
+          progressPath="/messages/101/progress"
           onOpenItem={vi.fn()}
         />
       </MemoryRouter>,
@@ -191,7 +190,7 @@ describe('ChatMessage', () => {
     // then
     expect(screen.getByText('Giao dịch đã hoàn tất.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Xem chi tiết' }).getAttribute('href')).toBe(
-      '/requests/101/progress',
+      '/messages/101/progress',
     );
   });
 });

@@ -16,6 +16,7 @@ import { Bell } from '@phosphor-icons/react/dist/csr/Bell';
 import { UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
 import { Image } from '@phosphor-icons/react/dist/csr/Image';
 import { MapPin } from '@phosphor-icons/react/dist/csr/MapPin';
+import { Check } from '@phosphor-icons/react/dist/csr/Check';
 import { Link } from 'react-router-dom';
 import type {
   Item,
@@ -28,7 +29,8 @@ import type {
 import { conditionLabel, txLabel } from '../utils/formatting';
 import { resolveMediaUrl } from '../services/mediaUrl';
 
-// Chỉ giữ icon có chức năng (đóng, mở menu, hiện mật khẩu, mở danh sách, thông báo, đính kèm ảnh).
+// Chỉ giữ icon có chức năng (đóng, mở menu, hiện mật khẩu, mở danh sách, thông báo, đính kèm ảnh,
+// dấu đã xong của bước giao dịch).
 // Icon trang trí như mũi tên, kính lúp, dấu cộng đã bỏ: nút và nhãn dùng chữ.
 const iconMap = {
   close: X,
@@ -39,6 +41,7 @@ const iconMap = {
   bell: Bell,
   user: UserCircle,
   image: Image,
+  check: Check,
 } as const;
 
 export type IconName = keyof typeof iconMap;

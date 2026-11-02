@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -122,7 +121,7 @@ async function renderMessages(viewerId: number, current: RequestResponse) {
       </MemoryRouter>
     </Provider>,
   );
-  await screen.findByLabelText('Tiến trình giao dịch');
+  await screen.findByRole('region', { name: /Cuộc trò chuyện với/ });
 }
 
 beforeEach(() => {
@@ -137,140 +136,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('Huỷ giao dịch trong bảng Tiến trình', () => {
-  it('mở bài đăng kèm nguồn từ trang tin nhắn', async () => {
-    const userEvents = userEvent.setup();
+// Huỷ giao dịch, hạn giải trình, báo chưa nhận được: đã chuyển sang TransactionProgress.test.tsx
+// cùng với chức năng (trang Tiến trình giao dịch).
+describe('Trang Tin nhắn sau khi tách trang Tiến trình', () => {
+  it('không còn cột Tiến trình giao dịch cũ, chỉ còn nút Xem tiến trình', async () => {
     await renderMessages(RECEIVER_ID, request());
 
-    await userEvents.click(await screen.findByRole('button', { name: 'Xem bài đăng' }));
-
-    expect(screen.getByTestId('location').textContent).toBe('/items/45?from=messages');
-  });
-
-  it.each(['RESERVED', 'AWAITING_LOGISTICS', 'LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER'] as const)(
-    'hiện khối Huỷ giao dịch và chú thích khi trạng thái %s',
-    async (status) => {
-      await renderMessages(RECEIVER_ID, request({ status }));
-
-      expect(await screen.findByRole('button', { name: 'Huỷ giao dịch' })).toBeTruthy();
-      expect(
-        screen.getByText(
-          'Cần nêu lý do. Bài đăng mở lại cho người khác, không mất phí đăng lần nữa.',
-        ),
-      ).toBeTruthy();
-    },
-  );
-
-  it.each(['COMPLETED', 'DISPUTED', 'CANCELLED'] as const)(
-    'không hiện khi trạng thái %s',
-    async (status) => {
-      await renderMessages(RECEIVER_ID, request({ status }));
-      await screen.findByText('Xem bài đăng');
-
-      expect(screen.queryByRole('button', { name: 'Huỷ giao dịch' })).toBeNull();
-    },
-  );
-
-  it('bắt buộc lý do rồi gọi API và cập nhật trạng thái trả về', async () => {
-    const userEvents = userEvent.setup();
-    vi.mocked(requestApi.cancelTransaction).mockResolvedValue(
-      request({ status: 'CANCELLED', cancelReason: '[Người nhận] Tôi bận việc đột xuất' }),
-    );
-    await renderMessages(RECEIVER_ID, request());
-
-    await userEvents.click(await screen.findByRole('button', { name: 'Huỷ giao dịch' }));
-    const dialog = await screen.findByRole('dialog');
-    const submit = within(dialog).getByRole('button', {
-      name: 'Huỷ giao dịch',
-    }) as HTMLButtonElement;
-    expect(submit.disabled).toBe(true);
-
-    const reasonBox = within(dialog).getByLabelText(/Lý do huỷ/);
-    expect(reasonBox.getAttribute('maxlength')).toBe('500');
-    await userEvents.type(reasonBox, 'Tôi bận việc đột xuất');
-    expect(within(dialog).getByText('21/500')).toBeTruthy();
-    await userEvents.click(submit);
-
-    await waitFor(() =>
-      expect(requestApi.cancelTransaction).toHaveBeenCalledWith(
-        101,
-        RECEIVER_ID,
-        'Tôi bận việc đột xuất',
-      ),
-    );
-    expect(await screen.findByText(/Lý do: \[Người nhận\] Tôi bận việc đột xuất/)).toBeTruthy();
-  });
-});
-
-describe('Hạn giải trình khi giao dịch đang khiếu nại', () => {
-  it('hiện hạn theo giờ Việt Nam khi backend trả disputeResponseDueAt', async () => {
-    await renderMessages(
-      RECEIVER_ID,
-      request({ status: 'DISPUTED', disputeResponseDueAt: '2026-10-31T07:30:00Z' }),
-    );
-
-    expect(await screen.findByText(/chờ chủ bài giải trình trước 14:30 31\/10/)).toBeTruthy();
-  });
-
-  it('không hiện câu chờ giải trình khi deadline là null', async () => {
-    await renderMessages(RECEIVER_ID, request({ status: 'DISPUTED', disputeResponseDueAt: null }));
-
-    await screen.findByText(/Giao dịch đang có khiếu nại/);
-    expect(screen.queryByText(/chờ chủ bài giải trình trước/)).toBeNull();
-  });
-});
-
-describe('Báo chưa nhận được / chưa giao được', () => {
-  it('người nhận thấy nút Tôi chưa nhận được khi chủ bài đã xác nhận còn mình chưa', async () => {
-    await renderMessages(
-      RECEIVER_ID,
-      request({ status: 'AWAITING_HANDOVER', donorHandoverAt: '2026-10-25T10:00:00Z' }),
-    );
-
-    expect(await screen.findByRole('button', { name: 'Tôi chưa nhận được' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Tôi đã nhận được đồ' })).toBeTruthy();
-  });
-
-  it('chủ bài thấy nút Tôi chưa giao được khi người nhận đã xác nhận còn mình chưa', async () => {
-    await renderMessages(
-      DONOR_ID,
-      request({ status: 'AWAITING_HANDOVER', receiverHandoverAt: '2026-10-25T10:00:00Z' }),
-    );
-
-    expect(await screen.findByRole('button', { name: 'Tôi chưa giao được' })).toBeTruthy();
-  });
-
-  it('không hiện nút khi bên kia chưa xác nhận hoặc mình đã xác nhận', async () => {
-    await renderMessages(RECEIVER_ID, request({ status: 'AWAITING_HANDOVER' }));
-    await screen.findByRole('button', { name: 'Tôi đã nhận được đồ' });
-    expect(screen.queryByRole('button', { name: 'Tôi chưa nhận được' })).toBeNull();
-  });
-
-  it('gửi ghi chú và cập nhật giao dịch sang khiếu nại', async () => {
-    const userEvents = userEvent.setup();
-    vi.mocked(requestApi.reportHandoverIssue).mockResolvedValue(
-      request({ status: 'DISPUTED', donorHandoverAt: '2026-10-25T10:00:00Z' }),
-    );
-    await renderMessages(
-      RECEIVER_ID,
-      request({ status: 'AWAITING_HANDOVER', donorHandoverAt: '2026-10-25T10:00:00Z' }),
-    );
-
-    await userEvents.click(await screen.findByRole('button', { name: 'Tôi chưa nhận được' }));
-    const dialog = await screen.findByRole('dialog');
-    await userEvents.type(
-      within(dialog).getByLabelText(/Mô tả sự cố/),
-      'Chờ mãi không thấy ai giao',
-    );
-    await userEvents.click(within(dialog).getByRole('button', { name: 'Gửi báo cáo' }));
-
-    await waitFor(() =>
-      expect(requestApi.reportHandoverIssue).toHaveBeenCalledWith(101, RECEIVER_ID, {
-        note: 'Chờ mãi không thấy ai giao',
-        evidenceMediaIds: undefined,
-      }),
-    );
-    expect(await screen.findByText(/Giao dịch đang có khiếu nại/)).toBeTruthy();
+    expect(screen.queryByLabelText('Tiến trình giao dịch')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Huỷ giao dịch' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Xem tiến trình' })).toBeTruthy();
   });
 });
 
