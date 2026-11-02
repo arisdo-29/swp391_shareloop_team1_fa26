@@ -4,6 +4,7 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import { Alert, Button, Field, Icon, ItemImage, PageHeader, Select, TextArea } from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
+import { DescribeItemSuggestion } from '../../components/ai/DescribeItemSuggestion';
 import { CONDITIONS, ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
 import { conditionDescription, conditionLabel } from '../../utils/formatting';
 import type { ItemCondition, ItemType } from '../../types/domain';
@@ -674,6 +675,7 @@ export function Post() {
               hint="Không ghi số điện thoại, Zalo hay link. Bài có thông tin liên hệ sẽ bị từ chối."
               error={errors.description}
             />
+            <DescribeItemSuggestion title={title} disabled={submitting} onUse={setDescription} />
           </PostStep>
 
           <PostStep number={4} title="Khu vực giao nhận">

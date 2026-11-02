@@ -123,6 +123,18 @@ public enum ConfigKey {
             ConfigGroup.AI,
             "Thời gian chờ AI tìm kiếm",
             "Số giây chờ AI trợ lý trả lời. Quá thời gian thì hoàn lượt và chuyển sang tìm kiếm thường."),
+    AI_DESCRIBE_PER_DAY(
+            "ai_describe_per_day",
+            "5",
+            ConfigGroup.AI,
+            "Lượt gợi ý mô tả mỗi ngày",
+            "Số lần tạo gợi ý mô tả miễn phí mỗi ngày cho mỗi thành viên."),
+    AI_DESCRIBE_TIMEOUT_SECONDS(
+            "ai_describe_timeout_seconds",
+            "20",
+            ConfigGroup.AI,
+            "Thời gian chờ gợi ý mô tả",
+            "Số giây tối đa chờ AI tạo gợi ý mô tả từ tên món đồ."),
     CHAT_VIOLATION_ALERT(
             "chat_violation_alert",
             "3",

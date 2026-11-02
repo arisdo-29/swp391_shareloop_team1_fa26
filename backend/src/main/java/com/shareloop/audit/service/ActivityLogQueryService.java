@@ -11,6 +11,7 @@ import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.service.UserService;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -48,6 +49,12 @@ public class ActivityLogQueryService {
         this.repository = repository;
         this.userService = userService;
         this.itemQueryService = itemQueryService;
+    }
+
+    @Transactional(readOnly = true)
+    public long countAiDescriptions(long actorId, Instant start, Instant end) {
+        return repository.countByTypeAndTargetTypeAndActorIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                "AI_USAGE", "AI_DESCRIBE", actorId, start, end);
     }
 
     /**

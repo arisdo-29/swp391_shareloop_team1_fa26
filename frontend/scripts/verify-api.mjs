@@ -130,6 +130,11 @@ await test('quota không tìm kiếm hoặc tiêu lượt; search gửi một y�
   assert.deepEqual(await api.aiApi.search('bàn học'), nextResponse);
   assert.deepEqual(requests[1].body, { query: 'bàn học' });
   assert.equal(requests[1].params, undefined);
+  nextResponse = { description: 'Loại: Đồng hồ', attributes: [], remainingUses: 4, message: 'Bản nháp' };
+  assert.deepEqual(await api.aiApi.describeItem('Đồng hồ'), nextResponse);
+  assert.equal(requests[2].url, '/api/v1/ai/describe-item');
+  assert.deepEqual(requests[2].body, { title: 'Đồng hồ' });
+  assert.equal(requests[2].params, undefined);
 });
 
 await test('polling truyền afterId, pinned items dùng path canonical và tin nhắn gửi refItemId', async () => {

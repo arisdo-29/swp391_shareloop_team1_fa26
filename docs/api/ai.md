@@ -40,3 +40,29 @@ Cần JWT. Không tiêu lượt. Response:
 ```
 
 Giá trị lượt miễn phí, lượt thử và phí lấy từ `ai_free_per_day`, `ai_trial_uses`, `ai_search_fee`. Lượt miễn phí hằng ngày được tính theo `Asia/Ho_Chi_Minh` và làm mới lúc 00:00 giờ Việt Nam.
+
+## POST `/api/v1/ai/describe-item`
+
+Cần JWT của Member. Tạo bản nháp mô tả chỉ từ tên món đồ, không nhận `mediaIds`, không đọc hoặc gửi ảnh. Body:
+
+```json
+{ "title": "Đồng hồ Casio màu đen" }
+```
+
+`title` bắt buộc, tối đa 150 ký tự, không chứa thông tin liên hệ hoặc từ bị chặn. Backend kiểm tra tối đa `ai_describe_per_day` (mặc định 5) lượt thành công/người/ngày theo `Asia/Ho_Chi_Minh`, dựa trên `activity_logs` loại `AI_USAGE` và `target_type=AI_DESCRIBE`. Quá hạn mức trả `429 AI_DESCRIPTION_LIMIT_REACHED`; không gọi Gemini. Thời gian chờ lấy từ `ai_describe_timeout_seconds` (mặc định 20 giây).
+
+Response thành công:
+
+```json
+{
+  "description": "Đồng hồ Casio màu đen.\nLoại: Đồng hồ\nThương hiệu: Casio\nMàu: đen\nKích thước: … x … x … cm",
+  "attributes": [
+    { "name": "Thương hiệu", "value": "Casio", "requiresUserInput": false },
+    { "name": "Kích thước", "value": "… x … x … cm", "requiresUserInput": true }
+  ],
+  "remainingUses": 4,
+  "message": "Đây là bản nháp từ tên món đồ. Bạn hãy kiểm tra và sửa lại trước khi đăng nhé."
+}
+```
+
+Danh sách thực tế còn các mục Loại, Chất liệu, Tình trạng gợi ý, Khối lượng, Dung tích, Thời gian đã dùng, Tình trạng hoạt động, Phụ kiện và Lỗi. AI chỉ điền thông tin nêu rõ trong tên; những thông tin chưa biết để dấu `…`, người đăng tự xác nhận. Server loại phần có thông tin liên hệ hoặc từ thuộc lexicon kiểm duyệt trước khi trả. Nút “Dùng gợi ý” ở form chỉ chép bản nháp vào ô Mô tả để người đăng sửa; không tự chọn ô Tình trạng hay tự gửi bài. Nếu Gemini lỗi hoặc quá giờ, trả `description: ""`, `attributes: []`, thông báo tự viết mô tả và không tính lượt. Bài đăng vẫn qua kiểm duyệt nội dung và Admin như bình thường.
