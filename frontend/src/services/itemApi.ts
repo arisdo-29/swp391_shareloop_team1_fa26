@@ -84,6 +84,10 @@ export interface ItemResponse extends CreateItemRequest {
   // Chỉ có khi chủ bài hoặc Admin xem; người khác nhận null (U04).
   hidden?: boolean | null;
   hiddenReason?: string | null;
+  // Thời điểm giao dịch hoàn tất; chỉ có khi bài TRADED (chi tiết và tab DONE của hồ sơ).
+  completedAt?: string | null;
+  // Bài còn nhận yêu cầu không, backend tính. false thì ẩn nút gửi yêu cầu. null ở các danh sách khác.
+  requestable?: boolean | null;
 }
 
 // Contract: docs/api/listingfee.md (GET /api/v1/items/{id}/edit-quote)

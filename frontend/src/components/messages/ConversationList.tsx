@@ -80,7 +80,12 @@ export function ConversationList({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <div role="tablist" aria-label="Lọc cuộc trò chuyện" className="flex flex-wrap gap-1.5">
+        {/* Một hàng; màn hẹp thì cuộn ngang trong hàng tab, không rớt dòng. Đệm 2px để vòng focus không bị cắt. */}
+        <div
+          role="tablist"
+          aria-label="Lọc cuộc trò chuyện"
+          className="-mx-0.5 flex flex-nowrap gap-1.5 overflow-x-auto p-0.5"
+        >
           {filters.map((value) => (
             <button
               key={value}
@@ -88,7 +93,7 @@ export function ConversationList({
               role="tab"
               aria-selected={filter === value}
               onClick={() => setFilter(value)}
-              className={`min-h-11 rounded-full px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${filter === value ? 'bg-primary text-white' : 'text-text-secondary ring-1 ring-border hover:bg-primary-faint'}`}
+              className={`min-h-11 shrink-0 whitespace-nowrap rounded-md px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${filter === value ? 'bg-primary text-white' : 'text-text-secondary ring-1 ring-border hover:bg-primary-faint'}`}
             >
               {conversationFilterLabels[value]}
             </button>

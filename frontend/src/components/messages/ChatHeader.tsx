@@ -22,8 +22,6 @@ interface ChatHeaderProps {
   canReport: boolean;
   onBack: () => void;
   onReport: () => void;
-  // Mở bảng tiến trình cũ ở màn hẹp; bỏ khi trang Tiến trình giao dịch thay thế bảng này.
-  onOpenDetails: () => void;
 }
 
 /** Đầu khung chat: người bên kia, vai, Xem hồ sơ, Báo cáo, rồi một thẻ món đồ kèm tiến trình thu gọn. */
@@ -33,7 +31,6 @@ export function ChatHeader({
   canReport,
   onBack,
   onReport,
-  onOpenDetails,
 }: ChatHeaderProps) {
   const navigate = useNavigate();
   const { request } = conversation;
@@ -84,9 +81,6 @@ export function ChatHeader({
               Báo cáo
             </Button>
           ) : null}
-          <Button variant="ghost" size="sm" className="xl:hidden" onClick={onOpenDetails}>
-            Thao tác
-          </Button>
         </div>
       </header>
 

@@ -83,8 +83,9 @@ export const router = createBrowserRouter([
           { path: '/activities', element: <Activities /> },
           { path: '/messages', element: <Messages /> },
           { path: '/requests/:requestId', element: <Messages /> },
-          // Giữ chỗ: hai trang này dựng đầy đủ ở đợt sau (Tiến trình giao dịch, Hồ sơ công khai).
-          { path: '/requests/:requestId/progress', element: <TransactionProgress /> },
+          // conversationId là id của Request; chỉ hai bên giao dịch xem được (backend trả 403 cho người ngoài).
+          { path: '/messages/:conversationId/progress', element: <TransactionProgress /> },
+          // Giữ chỗ: Hồ sơ công khai dựng đầy đủ ở đợt sau.
           { path: '/users/:userId', element: <UserProfile /> },
           { path: '/me/disputes/:disputeId', element: <Messages /> },
           { path: '/me/reports/:reportId', element: <ReportResponse /> },

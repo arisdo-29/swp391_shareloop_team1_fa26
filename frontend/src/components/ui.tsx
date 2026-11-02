@@ -16,6 +16,7 @@ import { Bell } from '@phosphor-icons/react/dist/csr/Bell';
 import { UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
 import { Image } from '@phosphor-icons/react/dist/csr/Image';
 import { MapPin } from '@phosphor-icons/react/dist/csr/MapPin';
+import { Check } from '@phosphor-icons/react/dist/csr/Check';
 import { Link } from 'react-router-dom';
 import type {
   Item,
@@ -28,7 +29,8 @@ import type {
 import { conditionLabel, txLabel } from '../utils/formatting';
 import { resolveMediaUrl } from '../services/mediaUrl';
 
-// Chỉ giữ icon có chức năng (đóng, mở menu, hiện mật khẩu, mở danh sách, thông báo, đính kèm ảnh).
+// Chỉ giữ icon có chức năng (đóng, mở menu, hiện mật khẩu, mở danh sách, thông báo, đính kèm ảnh,
+// dấu đã xong của bước giao dịch).
 // Icon trang trí như mũi tên, kính lúp, dấu cộng đã bỏ: nút và nhãn dùng chữ.
 const iconMap = {
   close: X,
@@ -39,6 +41,7 @@ const iconMap = {
   bell: Bell,
   user: UserCircle,
   image: Image,
+  check: Check,
 } as const;
 
 export type IconName = keyof typeof iconMap;
@@ -423,7 +426,21 @@ function productCardConditionClass(condition: ItemCondition) {
   return 'bg-[#FFEDD5] text-[#9A3412]';
 }
 
-export function ProductCard({ item, tradeFor, from }: { item: Item; tradeFor?: string; from?: 'ai' }) {
+// imageLabel: nhãn phụ trên ảnh (ví dụ "Tạm ẩn"); footer: thay dòng khu vực ở chân thẻ (ví dụ ngày giao dịch).
+// Không truyền thì thẻ giữ nguyên như mọi chỗ đang dùng.
+export function ProductCard({
+  item,
+  tradeFor,
+  from,
+  imageLabel,
+  footer,
+}: {
+  item: Item;
+  tradeFor?: string;
+  from?: 'ai';
+  imageLabel?: string;
+  footer?: ReactNode;
+}) {
   const description = productCardDescription(item.description);
 
   return (
@@ -447,6 +464,11 @@ export function ProductCard({ item, tradeFor, from }: { item: Item; tradeFor?: s
         >
           {item.type === 'gift' ? 'Cho tặng' : 'Trao đổi'}
         </span>
+        {imageLabel ? (
+          <span className="absolute right-3 top-3 inline-flex rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-text-secondary shadow-sm">
+            {imageLabel}
+          </span>
+        ) : null}
       </div>
       <div className="flex min-w-0 flex-1 flex-col p-3.5 sm:p-4">
         <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-[#111827] sm:text-[15px]">
@@ -472,8 +494,12 @@ export function ProductCard({ item, tradeFor, from }: { item: Item; tradeFor?: s
           </span>
         </div>
         <div className="mt-auto flex min-w-0 items-center gap-1.5 border-t border-[#F3F4F6] pt-3 text-xs text-[#374151]">
-          <MapPin aria-hidden className="size-3.5 shrink-0" weight="fill" />
-          <span className="min-w-0 truncate">{item.district}</span>
+          {footer ?? (
+            <>
+              <MapPin aria-hidden className="size-3.5 shrink-0" weight="fill" />
+              <span className="min-w-0 truncate">{item.district}</span>
+            </>
+          )}
         </div>
       </div>
     </Link>
