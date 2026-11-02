@@ -144,7 +144,7 @@ public class RequestController {
     public RequestResponse confirmHandover(
             @PathVariable long id,
             @CurrentUserId Long currentUserId,
-            @RequestBody(required = false) HandoverConfirmRequest request) {
+            @Valid @RequestBody(required = false) HandoverConfirmRequest request) {
         return requestService.confirmHandover(id, currentUserId, request);
     }
 

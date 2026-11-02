@@ -2,6 +2,7 @@ package com.shareloop.request.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -16,6 +17,7 @@ import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
 import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.CreateRequest;
+import com.shareloop.request.dto.HandoverConfirmRequest;
 import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.service.RequestService;
@@ -470,5 +472,47 @@ class RequestControllerTest {
         mockMvc.perform(get("/api/v1/requests/100/media"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("Xác nhận bàn giao với lý do không đúng mô tả vượt 1000 ký tự trả về 400 (BC-01)")
+    void confirmHandover_whenReasonTooLong_returns400() throws Exception {
+        String token = jwtService.issue(10L, false);
+        String longReason = "a".repeat(1001);
+        String body = """
+                {
+                  "asDescribed": false,
+                  "notAsDescribedReason": "%s"
+                }
+                """.formatted(longReason);
+
+        mockMvc.perform(post("/api/v1/requests/100/confirm-handover")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.field").value("notAsDescribedReason"));
+        verifyNoInteractions(requestService);
+    }
+
+    @Test
+    @DisplayName("Xác nhận bàn giao hợp lệ trả về 200 OK")
+    void confirmHandover_whenValid_returns200() throws Exception {
+        String token = jwtService.issue(10L, false);
+        when(requestService.confirmHandover(eq(100L), eq(10L), any(HandoverConfirmRequest.class)))
+                .thenReturn(
+                        new RequestResponse(100L, 1L, 10L, null, "GIVE", "COMPLETED", null, null, null, Instant.now()));
+
+        mockMvc.perform(post("/api/v1/requests/100/confirm-handover")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                          "asDescribed": true
+                        }
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
     }
 }
