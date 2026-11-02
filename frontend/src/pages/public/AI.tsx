@@ -6,6 +6,7 @@ import { useWallet } from '../../app/useWallet';
 import { AiSearchNotices } from '../../components/ai/AiSearchNotices';
 import { Button, EmptyState, ProductCard, Spinner, TextArea } from '../../components/ui';
 import { aiApi, type AiQuotaResponse } from '../../services/aiApi';
+import { clearAiSearchSnapshot, readAiSearchSnapshot, saveAiSearchSnapshot } from '../../services/aiSearchSession';
 import { catalogApi, type CategoryResponse, type AreaResponse } from '../../services/catalogApi';
 import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
 import type { ApiError } from '../../services/http';
@@ -37,12 +38,13 @@ export function AI() {
 
   useEffect(() => {
     let active = true;
+    const snapshot = userId ? readAiSearchSnapshot(userId) : null;
     setQuota(null);
     setQuotaError('');
-    setStatus('idle');
-    setResults([]);
-    setMessage('');
-    setChargedCredits(0);
+    setStatus(snapshot ? 'success' : 'idle');
+    setResults(snapshot?.items ?? []);
+    setMessage(snapshot?.message ?? '');
+    setChargedCredits(snapshot?.chargedCredits ?? 0);
     setNeedsTopUp(false);
     if (userId) {
       aiApi.quota().then((response) => { if (active) setQuota(response); })
@@ -63,10 +65,13 @@ export function AI() {
     if (!user || !quota || inFlight.current) return;
     inFlight.current = true;
     const currentGeneration = generation.current;
+    clearAiSearchSnapshot();
     setQueryError('');
     setSearchError('');
     setChargedCredits(0);
     setNeedsTopUp(false);
+    setResults([]);
+    setMessage('');
     setSubmittedQuery(normalizedQuery);
     setStatus('loading');
     try {
@@ -74,8 +79,10 @@ export function AI() {
       if (currentGeneration !== generation.current) return;
       const categoryNames = toCategoryNameMap(categories);
       const areaNames = toAreaNameMap(areas);
+      const items = response.results.items.map((item) => toFeItem(item, categoryNames, areaNames));
       setMessage(response.message);
-      setResults(response.results.items.map((item) => toFeItem(item, categoryNames, areaNames)));
+      setResults(items);
+      saveAiSearchSnapshot({ userId: user.id, message: response.message, items, chargedCredits: response.chargedCredits });
       setQuota(response.quota);
       setChargedCredits(response.chargedCredits);
       setStatus('success');
@@ -214,7 +221,7 @@ export function AI() {
           </p>
           {results.length ? (
             <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-              {results.map((item) => <ProductCard key={item.id} item={item} />)}
+              {results.map((item) => <ProductCard key={item.id} item={item} from="ai" />)}
             </div>
           ) : null}
         </section>

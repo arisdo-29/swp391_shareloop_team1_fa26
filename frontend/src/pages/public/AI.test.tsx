@@ -2,9 +2,10 @@
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { aiApi } from '../../services/aiApi';
+import type { ItemResponse } from '../../services/itemApi';
 import { AI } from './AI';
 
 vi.mock('../../app/hooks', () => ({
@@ -31,6 +32,7 @@ vi.mock('../../services/catalogApi', () => ({
 }));
 
 beforeEach(() => {
+  sessionStorage.clear();
   vi.mocked(aiApi.quota)
     .mockResolvedValueOnce({ freeUsesRemaining: 5, feeCredits: 2, hasToppedUp: true })
     .mockResolvedValueOnce({ freeUsesRemaining: 4, feeCredits: 2, hasToppedUp: true });
@@ -119,5 +121,61 @@ describe('AI search quota', () => {
 
     expect(await screen.findByText('Mình chỉ hỗ trợ tìm đồ trên ShareLoop.')).toBeTruthy();
     expect(screen.queryByText('Bộ lọc trợ lý hiểu được')).toBeNull();
+  });
+
+  it('giữ gợi ý khi xem bài rồi quay lại mà không tìm hoặc trừ lượt lần nữa', async () => {
+    const user = userEvent.setup();
+    const item: ItemResponse = {
+      id: 12,
+      donorId: 9,
+      categoryId: 2,
+      areaId: 3,
+      offerType: 'GIVE',
+      title: 'Đèn bàn học',
+      description: 'Đèn còn dùng tốt',
+      desiredItem: null,
+      condition: 'GOOD',
+      defectNote: null,
+      brand: null,
+      images: [],
+      defectImages: [],
+      operatingStatus: null,
+      status: 'APPROVED',
+      createdAt: '2026-11-02T10:00:00Z',
+      updatedAt: '2026-11-02T10:00:00Z',
+      expireAt: null,
+      boostedUntil: null,
+    };
+    vi.mocked(aiApi.quota).mockReset().mockResolvedValue({ freeUsesRemaining: 4, feeCredits: 2, hasToppedUp: true });
+    vi.mocked(aiApi.search).mockResolvedValue({
+      message: 'Mình tìm được món này cho bạn nhé!',
+      results: { items: [item], page: 0, size: 1, totalElements: 1 },
+      quota: { freeUsesRemaining: 4, feeCredits: 2, hasToppedUp: true },
+      chargedCredits: 0,
+      fallback: false,
+      outOfScope: false,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/ai']}>
+        <Routes>
+          <Route path="/ai" element={<AI />} />
+          <Route path="/items/:id" element={<Link to="/ai">Quay lại gợi ý AI</Link>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Còn 4 lượt miễn phí');
+    await user.type(screen.getByRole('textbox', { name: 'Mô tả món đồ cần tìm' }), 'Cần đèn học');
+    await user.click(screen.getByRole('button', { name: 'Tìm giúp tôi' }));
+    expect(await screen.findByText('Mình tìm được món này cho bạn nhé!')).toBeTruthy();
+    const itemLink = screen.getByRole('link', { name: /Đèn bàn học/ });
+    expect(itemLink.getAttribute('href')).toBe('/items/12?from=ai');
+    await user.click(itemLink);
+    await user.click(screen.getByRole('link', { name: 'Quay lại gợi ý AI' }));
+
+    expect(await screen.findByText('Mình tìm được món này cho bạn nhé!')).toBeTruthy();
+    expect(screen.getByText('Đèn bàn học')).toBeTruthy();
+    expect(aiApi.search).toHaveBeenCalledTimes(1);
   });
 });
