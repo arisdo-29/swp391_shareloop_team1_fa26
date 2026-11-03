@@ -74,7 +74,7 @@ export function AdminLayout() {
     </>
   );
   return (
-    <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:grid lg:grid-cols-[230px_1fr] lg:gap-8 lg:px-8">
+    <div className="wide-shell py-6 lg:grid lg:grid-cols-[230px_minmax(0,1fr)] lg:gap-[clamp(1.25rem,2vw,2rem)]">
       <div className="mb-5 flex items-center justify-between lg:hidden">
         <div>
           <p className="text-xl font-bold">Quản trị</p>

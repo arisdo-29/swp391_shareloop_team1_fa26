@@ -11,9 +11,9 @@
 }
 
 .about-container {
-  width: min(100%, 1440px);
+  width: min(100%, var(--layout-wide-max));
   margin-inline: auto;
-  padding-inline: 24px;
+  padding-inline: var(--layout-gutter);
 }
 
 .about-hero {
@@ -120,8 +120,8 @@
 .about-content {
   display: flex;
   flex-direction: column;
-  gap: 64px;
-  padding-block: 56px 64px;
+  gap: clamp(44px, 4.5vw, 64px);
+  padding-block: clamp(36px, 4vw, 56px) clamp(48px, 4.5vw, 64px);
 }
 
 .about-reasons {
@@ -587,10 +587,6 @@
 }
 
 @media (max-width: 640px) {
-  .about-container {
-    padding-inline: 16px;
-  }
-
   .about-hero-inner {
     padding-block: 34px 32px;
   }

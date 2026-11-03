@@ -2069,7 +2069,7 @@
 }
 .home-content .home-band,
 .home-content .home-inner {
-  max-width: 1540px;
+  max-width: var(--layout-wide-max);
 }
 .home-content .home-band {
   padding-top: clamp(56px, 6vw, 84px);
@@ -2371,9 +2371,9 @@
 }
 .home-content .home-inner {
   width: 100%;
-  max-width: 1440px;
+  max-width: var(--layout-wide-max);
   margin-inline: auto;
-  padding-inline: 48px;
+  padding-inline: var(--layout-gutter);
 }
 .home-content .home-gift-band .home-band {
   padding-top: 72px;
@@ -2386,11 +2386,6 @@
 }
 .home-content .home-discovery-controls {
   inset-inline: 0;
-}
-@media (min-width: 1600px) {
-  .home-content .home-inner {
-    padding-inline: 64px;
-  }
 }
 @media (max-width: 1023px) {
   .home-content .home-inner {
@@ -2775,9 +2770,9 @@
 /* Shared Home content container: keeps every section on one horizontal axis. */
 .home-page .home-inner {
   width: 100%;
-  max-width: 1500px;
+  max-width: var(--layout-wide-max);
   margin-inline: auto;
-  padding-inline: 24px;
+  padding-inline: var(--layout-gutter);
 }
 .home-content .home-ai-section + .home-final-cluster {
   margin-top: 48px;
@@ -2801,19 +2796,9 @@
 .home-content .home-lifecycle-collage {
   overflow: hidden;
 }
-@media (min-width: 1024px) {
-  .home-page .home-inner {
-    padding-inline: 48px;
-  }
-}
-@media (min-width: 1280px) {
-  .home-page .home-inner {
-    padding-inline: 56px;
-  }
-}
 @media (min-width: 768px) and (max-width: 1023px) {
   .home-page .home-inner {
-    padding-inline: 32px;
+    padding-inline: var(--layout-gutter);
   }
 }
 @media (max-width: 1023px) {
@@ -3591,9 +3576,9 @@
 /* Final Home alignment, process timeline, and closing-section rhythm. */
 .home-page .home-inner {
   width: 100%;
-  max-width: 1440px;
+  max-width: var(--layout-wide-max);
   margin-inline: auto;
-  padding-inline: 16px;
+  padding-inline: var(--layout-gutter);
 }
 
 .home-content .home-product-grid {
@@ -3722,17 +3707,6 @@
   z-index: 1;
 }
 
-@media (min-width: 640px) {
-  .home-page .home-inner {
-    padding-inline: 24px;
-  }
-}
-
-@media (min-width: 1024px) {
-  .home-page .home-inner {
-    padding-inline: 24px;
-  }
-}
 
 @media (min-width: 1280px) {
   .home-content .home-product-grid {
