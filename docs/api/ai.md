@@ -55,14 +55,15 @@ Response thành công:
 
 ```json
 {
-  "description": "Đồng hồ Casio màu đen.\nLoại: Đồng hồ\nThương hiệu: Casio\nMàu: đen\nKích thước: … x … x … cm",
+  "description": "Món đồ: Đồng hồ Casio màu đen.\nLoại: Đồng hồ\nThương hiệu: Casio\nMàu: đen\nMặt đồng hồ: …\nDây đeo: …",
   "attributes": [
-    { "name": "Thương hiệu", "value": "Casio", "requiresUserInput": false },
-    { "name": "Kích thước", "value": "… x … x … cm", "requiresUserInput": true }
+    { "name": "Thương hiệu", "value": "Casio", "requiresUserInput": false, "prompt": null },
+    { "name": "Mặt đồng hồ", "value": "…", "requiresUserInput": true, "prompt": "Mặt chiếc đồng hồ Casio này có kiểu dáng và kích cỡ ra sao?" },
+    { "name": "Dây đeo", "value": "…", "requiresUserInput": true, "prompt": "Dây đeo hiện làm bằng chất liệu gì?" }
   ],
   "remainingUses": 4,
   "message": "Đây là bản nháp từ tên món đồ. Bạn hãy kiểm tra và sửa lại trước khi đăng nhé."
 }
 ```
 
-Danh sách thực tế còn các mục Loại, Chất liệu, Tình trạng gợi ý, Khối lượng, Dung tích, Thời gian đã dùng, Tình trạng hoạt động, Phụ kiện và Lỗi. AI chỉ điền thông tin nêu rõ trong tên; những thông tin chưa biết để dấu `…`, người đăng tự xác nhận. Server loại phần có thông tin liên hệ hoặc từ thuộc lexicon kiểm duyệt trước khi trả. Nút “Dùng gợi ý” ở form chỉ chép bản nháp vào ô Mô tả để người đăng sửa; không tự chọn ô Tình trạng hay tự gửi bài. Nếu Gemini lỗi hoặc quá giờ, trả `description: ""`, `attributes: []`, thông báo tự viết mô tả và không tính lượt. Bài đăng vẫn qua kiểm duyệt nội dung và Admin như bình thường.
+Gemini tự viết 2–4 câu hỏi riêng cho tên món; tên mục và câu hỏi không lấy từ danh sách thuộc tính cố định. Backend chỉ đưa vào bản nháp những thông tin AI trích ra được nguyên văn từ tên, cùng các mục cần người đăng tự điền. Câu hỏi hiển thị bên dưới bản nháp để hướng dẫn người đăng sửa mô tả. Backend kiểm tra độ dài, thông tin liên hệ, lexicon, câu hỏi trùng lặp, con số không có trong tên và trường hợp sai ngữ cảnh rõ ràng như dung tích của đồng hồ. Nếu không còn câu hỏi hợp lệ, lượt đó không bị tính. Giá trị chưa biết để dấu `…`, người đăng tự xác nhận. Nút “Dùng gợi ý” ở form chỉ chép bản nháp vào ô Mô tả để người đăng sửa; không tự chọn ô Tình trạng hay tự gửi bài. Nếu Gemini lỗi hoặc quá giờ, trả `description: ""`, `attributes: []`, thông báo tự viết mô tả và không tính lượt. Bài đăng vẫn qua kiểm duyệt nội dung và Admin như bình thường.

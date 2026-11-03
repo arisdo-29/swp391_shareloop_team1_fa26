@@ -64,23 +64,51 @@ class AiDescriptionServiceTest {
         when(client.describe("Đồng hồ Casio màu đen", Duration.ofSeconds(20))).thenReturn("""
                         {"itemType":"Đồng hồ",
                          "brand":"Casio","color":"đen","material":"thép","conditionHint":"Như mới",
-                         "accessories":"hộp","defects":"","extra":"ignored"}
+                         "accessories":"hộp","defects":"",
+                         "suggestions":[
+                           {"name":"Mặt đồng hồ","question":"Mặt chiếc đồng hồ Casio này có kiểu dáng và kích cỡ ra sao?"},
+                           {"name":"Dây đeo","question":"Dây đeo hiện làm bằng chất liệu gì?"},
+                           {"name":"Mặt 40 mm","question":"Mặt đồng hồ 40 mm có trầy xước không?"},
+                           {"name":"Dung tích","question":"Đồng hồ có dung tích bao nhiêu?"}],
+                         "extra":"ignored"}
                         """);
 
         AiDescriptionResponse response = service.describe(7L, "Đồng hồ Casio màu đen");
 
-        assertThat(response.description()).contains("Thương hiệu: Casio", "Màu: đen", "Kích thước: … x … x … cm");
-        assertThat(response.description()).contains("Chất liệu: …", "Tình trạng gợi ý: …", "Phụ kiện: …");
+        assertThat(response.description()).contains("Thương hiệu: Casio", "Màu: đen", "Mặt đồng hồ: …");
+        assertThat(response.description()).doesNotContain("Dung tích", "Mặt 40 mm", "Chất liệu: …", "Như mới", "hộp");
         assertThat(response.attributes().stream()
-                        .filter(attribute -> attribute.name().equals("Tình trạng hoạt động"))
+                        .filter(attribute -> attribute.name().equals("Mặt đồng hồ"))
                         .findFirst()
                         .orElseThrow()
                         .requiresUserInput())
                 .isTrue();
+        assertThat(response.attributes().stream()
+                        .filter(attribute -> attribute.name().equals("Mặt đồng hồ"))
+                        .findFirst()
+                        .orElseThrow()
+                        .prompt())
+                .contains("Casio này");
         assertThat(response.remainingUses()).isEqualTo(4);
         verify(logQueryService)
                 .countAiDescriptions(7L, Instant.parse("2026-11-02T17:00:00Z"), Instant.parse("2026-11-03T17:00:00Z"));
         verify(logService).log(eq("AI_USAGE"), eq(7L), eq("AI_DESCRIBE"), eq(null), anyMap(), eq(null));
+    }
+
+    @Test
+    void containerSuggestsCapacityButNotWatchDetails() throws Exception {
+        when(client.describe("Bình nước LocknLock", Duration.ofSeconds(20))).thenReturn("""
+                {"itemType":"Bình nước","brand":"LocknLock","color":"","material":"",
+                 "conditionHint":"","accessories":"","defects":"",
+                 "suggestions":[
+                   {"name":"Dung tích","question":"Bình nước này chứa được bao nhiêu lít?"},
+                   {"name":"Khả năng giữ nhiệt","question":"Bình giữ nhiệt được trong bao lâu?"}]}
+                """);
+
+        AiDescriptionResponse response = service.describe(7L, "Bình nước LocknLock");
+
+        assertThat(response.description()).contains("Dung tích: …", "Khả năng giữ nhiệt: …", "Thương hiệu: LocknLock");
+        assertThat(response.description()).doesNotContain("Mặt đồng hồ", "Dây đeo");
     }
 
     @Test
@@ -121,12 +149,30 @@ class AiDescriptionServiceTest {
     }
 
     @Test
+    void unrelatedDetailsDoNotUseDailyAllowance() throws Exception {
+        when(client.describe("Đồng hồ", Duration.ofSeconds(20))).thenReturn("""
+                {"itemType":"Đồng hồ","brand":"","color":"","material":"",
+                 "conditionHint":"","accessories":"","defects":"",
+                 "suggestions":[{"name":"Dung tích","question":"Đồng hồ có dung tích bao nhiêu?"}]}
+                """);
+
+        AiDescriptionResponse response = service.describe(7L, "Đồng hồ");
+
+        assertThat(response.description()).isEmpty();
+        assertThat(response.remainingUses()).isEqualTo(5);
+        verify(logService).log(eq("AI_USAGE"), eq(7L), eq("AI_DESCRIBE_ERROR"), eq(null), anyMap(), eq(null));
+    }
+
+    @Test
     void stripsContactInformationFromProviderFields() throws Exception {
         when(client.describe("Đồng hồ", Duration.ofSeconds(20))).thenReturn("""
                         {"itemType":"Đồng hồ","brand":"0912345678","color":"","material":"",
-                         "conditionHint":"","accessories":"","defects":""}
+                         "conditionHint":"","accessories":"","defects":"",
+                         "suggestions":[
+                           {"name":"Mặt đồng hồ","question":"Mặt đồng hồ có kích cỡ ra sao?"},
+                           {"name":"Liên hệ","question":"Gọi 0912345678 để biết thêm?"}]}
                         """);
         AiDescriptionResponse response = service.describe(7L, "Đồng hồ");
-        assertThat(response.description()).doesNotContain("0912345678").contains("Thương hiệu: …");
+        assertThat(response.description()).doesNotContain("0912345678", "Thương hiệu:", "Liên hệ:");
     }
 }
