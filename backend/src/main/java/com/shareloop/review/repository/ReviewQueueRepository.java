@@ -8,7 +8,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface ReviewQueueRepository extends Repository<com.shareloop.item.entity.Item, Long> {
 
-    // BR-A08 (SRS v11): không xét cờ AI nữa. Ít sao uy tín trước, rồi tài khoản mới, rồi bài chờ lâu.
+    // BR-A08: không xét cờ AI. Ít sao uy tín trước; cùng số sao thì người mới (số bài đã từng được duyệt, tức
+    // approved_at khác rỗng, không quá :newcomerMaxApproved) trước; rồi bài chờ lâu trước.
     @Query(value = """
             SELECT i.id AS id,
                    i.donor_id AS donorId,
@@ -25,11 +26,15 @@ public interface ReviewQueueRepository extends Repository<com.shareloop.item.ent
               AND i.is_deleted = FALSE
               AND u.is_deleted = FALSE
             ORDER BY u.trust_stars ASC,
-                     u.created_at DESC,
+                     CASE WHEN (SELECT COUNT(*)
+                                FROM items approved
+                                WHERE approved.donor_id = i.donor_id
+                                  AND approved.approved_at IS NOT NULL) <= :newcomerMaxApproved
+                          THEN 0 ELSE 1 END ASC,
                      i.created_at ASC,
                      i.id ASC
             """, nativeQuery = true)
-    List<Object[]> findPendingReviewQueue(Pageable pageable);
+    List<Object[]> findPendingReviewQueue(Pageable pageable, @Param("newcomerMaxApproved") int newcomerMaxApproved);
 
     // Thông tin kiểm duyệt của một bài ở mọi trạng thái (Admin xem chi tiết); cùng cách đọc ai_result như hàng chờ.
     @Query(value = """

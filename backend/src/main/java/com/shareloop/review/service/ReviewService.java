@@ -22,6 +22,7 @@ import com.shareloop.review.dto.ReviewQueueResponse;
 import com.shareloop.review.entity.ReviewItem;
 import com.shareloop.review.repository.ReviewItemRepository;
 import com.shareloop.review.repository.ReviewQueueRepository;
+import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.dto.ChecklistItem;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.dto.UserBrief;
@@ -92,7 +93,9 @@ public class ReviewService {
      * flagReasonCode; với LEXICON_REVIEW câu hiển thị kèm danh sách từ khoá đã khớp.
      */
     public List<ReviewQueueItem> listPending(int page, int size) {
-        List<Object[]> rows = repository.findPendingReviewQueue(PageRequest.of(page, size));
+        // Ngưỡng "người mới" đọc từ config để Admin đổi được (BR-A08); repository dùng nó để xếp người mới trước.
+        int newcomerMaxApproved = configService.getInt(ConfigKey.REVIEW_NEWCOMER_MAX_APPROVED);
+        List<Object[]> rows = repository.findPendingReviewQueue(PageRequest.of(page, size), newcomerMaxApproved);
         Map<Long, UserBrief> donors = findDonors(rows);
 
         List<ReviewQueueItem> items = new ArrayList<>();

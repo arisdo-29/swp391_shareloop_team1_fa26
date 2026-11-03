@@ -216,7 +216,7 @@ export function AdminModerationDetail() {
           <DonorAndModeration detail={detail} />
         </div>
 
-        <aside className="rounded-lg bg-white p-5 ring-1 ring-border/80 lg:sticky lg:top-24 lg:max-h-[calc(100dvh-120px)] lg:overflow-y-auto">
+        <aside className="rounded-lg bg-white p-5 ring-1 ring-border/80 lg:sticky lg:top-24">
           {reviewable ? (
             <ReviewPanel
               detail={detail}

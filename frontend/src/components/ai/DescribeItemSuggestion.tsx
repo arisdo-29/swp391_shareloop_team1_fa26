@@ -62,7 +62,7 @@ export function DescribeItemSuggestion({
           <pre className="whitespace-pre-wrap break-words rounded-md bg-white p-3 font-sans text-sm leading-6 text-text-primary">{suggestion.description}</pre>
           <ul className="space-y-1 text-xs text-text-secondary">
             {suggestion.attributes.filter((attribute) => attribute.requiresUserInput).map((attribute) => (
-              <li key={attribute.name}>{attribute.name}: bạn cần tự điền hoặc xác nhận.</li>
+              <li key={attribute.name}>{attribute.prompt || `${attribute.name}: bạn cần tự điền hoặc xác nhận.`}</li>
             ))}
           </ul>
           <Button type="button" onClick={() => { onUse(suggestion.description); setSuggestion(null); }}>
