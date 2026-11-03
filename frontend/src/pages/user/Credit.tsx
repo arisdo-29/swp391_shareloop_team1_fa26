@@ -33,16 +33,30 @@ import {
 } from '../../services/paymentApi';
 import type { ApiError } from '../../services/http';
 import { backendMockProviderMessage, startPayment } from '../../services/paymentFlow';
+import { toast } from '../../components/toast';
 import {
   clearPendingTopUp,
   loadPendingTopUp,
   paymentRedirectUrl,
+  resolveTopUpReturnResult,
   returnOrderCode,
   savePendingTopUp,
+  vnpayReturnStatus,
 } from '../../services/topUpSession';
 
 type Step = 'select' | 'pending';
-type ReturnState = 'idle' | 'pending' | 'failed' | 'invalid' | 'checking' | 'success';
+type ReturnState =
+  | 'idle'
+  | 'pending'
+  | 'cancelled'
+  | 'failed'
+  | 'expired'
+  | 'invalid'
+  | 'checking'
+  | 'success';
+
+const PAYMENT_CANCELLED_MESSAGE =
+  'Bạn đã hủy thanh toán. Tài khoản chưa bị trừ tiền.';
 
 const paymentStatusLabels: Record<PaymentOrderStatus, string> = {
   PENDING: 'Đang chờ thanh toán',
@@ -54,7 +68,7 @@ const paymentStatusLabels: Record<PaymentOrderStatus, string> = {
 function paymentProviderLabel(provider: PaymentProvider) {
   if (provider === 'VNPAY') return 'VNPAY';
   if (provider === 'MOCK') return 'Thanh toán thử nghiệm';
-  return 'Không hỗ trợ';
+  return 'Không khả dụng';
 }
 
 // Mức chọn nhanh chỉ điền sẵn ô số tiền; backend vẫn kiểm tra mức tối thiểu và bước tiền.
@@ -213,9 +227,11 @@ export function Credit() {
   };
 
   useEffect(() => {
-    const code = returnOrderCode(new URLSearchParams(location.search));
+    const params = new URLSearchParams(location.search);
+    const code = returnOrderCode(params);
+    const gatewayReturnStatus = vnpayReturnStatus(params);
     if (!code) {
-      if (new URLSearchParams(location.search).get('status') === 'INVALID_SIGNATURE') {
+      if (gatewayReturnStatus === 'INVALID_SIGNATURE') {
         setReturnState('invalid');
         clearPendingTopUp();
       }
@@ -229,19 +245,17 @@ export function Credit() {
         if (!active) return;
         setApiTopUpOrder({ ...order, redirectUrl: '' });
         setStep('pending');
-        setReturnState(
-          order.status === 'SUCCESS'
-            ? 'success'
-            : order.status === 'FAILED'
-              ? 'failed'
-              : order.status === 'EXPIRED'
-                ? 'idle'
-                : 'pending',
-        );
-        if (order.status === 'SUCCESS') {
+        const result = resolveTopUpReturnResult(order.status, gatewayReturnStatus);
+        setReturnState(result);
+        if (result === 'success') {
           clearPendingTopUp();
           refreshWallet();
           setHistoryReloadKey((key) => key + 1);
+        } else if (result === 'cancelled') {
+          clearPendingTopUp();
+          toast.warning(PAYMENT_CANCELLED_MESSAGE);
+        } else if (result === 'failed' || result === 'expired') {
+          clearPendingTopUp();
         }
       })
       .catch((caught: ApiError) => {
@@ -325,6 +339,16 @@ export function Credit() {
       {returnState === 'failed' ? (
         <div className="mb-6">
           <Alert tone="error">Thanh toán không thành công. Credit chưa được cộng vào ví.</Alert>
+        </div>
+      ) : null}
+      {returnState === 'cancelled' ? (
+        <div className="mb-6">
+          <Alert tone="warning">{PAYMENT_CANCELLED_MESSAGE}</Alert>
+        </div>
+      ) : null}
+      {returnState === 'expired' ? (
+        <div className="mb-6">
+          <Alert tone="warning">Đơn thanh toán đã hết hạn. Credit chưa được cộng vào ví.</Alert>
         </div>
       ) : null}
       {returnState === 'invalid' ? (

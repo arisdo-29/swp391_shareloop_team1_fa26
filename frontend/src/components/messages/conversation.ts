@@ -70,6 +70,17 @@ export function conversationTitle(conversation: ApiConversation) {
   );
 }
 
+export function itemPrimaryImage(
+  item?: Pick<ItemResponse, 'images'>,
+  ...fallbacks: Array<string | null | undefined>
+) {
+  const candidates = [...(item?.images ?? []), ...fallbacks];
+  const image = candidates.find(
+    (candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0,
+  );
+  return image?.trim();
+}
+
 export function conversationImage(conversation: ApiConversation) {
-  return conversation.item?.images[0] ?? conversation.request.itemImage ?? undefined;
+  return itemPrimaryImage(conversation.item, conversation.request.itemImage);
 }

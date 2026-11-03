@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { actions, store } from '../../app/store';
 import { itemApi } from '../../services/itemApi';
+import { mediaApi } from '../../services/mediaApi';
 import { requestApi, type RequestResponse } from '../../services/requestApi';
 import type { ItemRequestStatus, User } from '../../types/domain';
 import { TransactionProgress } from './TransactionProgress';
@@ -340,7 +341,8 @@ describe('Nút theo trạng thái và vai', () => {
 });
 
 describe('Ảnh giao nhận', () => {
-  it('đếm và hiện ảnh lấy từ handoverMedia của API chi tiết', async () => {
+  it('hiện thumbnail 100px và mở ảnh lớn trong modal', async () => {
+    const userEvents = userEvent.setup();
     // when
     await renderProgress(
       RECEIVER_ID,
@@ -360,6 +362,39 @@ describe('Ảnh giao nhận', () => {
     // then
     expect(screen.getByText('1 ảnh')).toBeTruthy();
     expect(screen.getByText('Giao nhận 18:40 31/10/2026')).toBeTruthy();
+    const thumbnail = screen.getByRole('img', { name: 'Ảnh giao nhận' });
+    expect(thumbnail.className).toContain('size-[100px]');
+    expect(thumbnail.className).toContain('object-cover');
+    expect(screen.queryByRole('button', { name: /Xóa ảnh/ })).toBeNull();
+
+    await userEvents.click(screen.getByRole('button', { name: 'Xem ảnh giao nhận' }));
+    const dialog = screen.getByRole('dialog', { name: 'Xem ảnh giao nhận' });
+    expect(within(dialog).getByRole('img', { name: 'Ảnh giao nhận kích thước lớn' }))
+      .toBeTruthy();
+    await userEvents.click(within(dialog).getByRole('button', { name: 'Đóng' }));
+    expect(screen.queryByRole('dialog', { name: 'Xem ảnh giao nhận' })).toBeNull();
+  });
+
+  it('không hiển thị thao tác xóa ảnh khi hệ thống chưa hỗ trợ', async () => {
+    await renderProgress(
+      RECEIVER_ID,
+      request({
+        handoverMedia: [
+          {
+            mediaId: 8,
+            url: '/api/v1/media/8',
+            stage: 'HANDOVER',
+            uploadedBy: RECEIVER_ID,
+            createdAt: '2026-10-31T11:40:00Z',
+          },
+        ],
+      }),
+    );
+
+    expect(screen.queryByRole('button', { name: 'Xóa ảnh' })).toBeNull();
+    expect(screen.queryByText(/Backend|API|endpoint/i)).toBeNull();
+    expect(screen.getByText('1 ảnh')).toBeTruthy();
+    expect(requestApi.attachMedia).not.toHaveBeenCalled();
   });
 
   it('chưa có ảnh thì hiện trạng thái rỗng và Thêm ảnh bị khoá', async () => {
@@ -371,6 +406,34 @@ describe('Ảnh giao nhận', () => {
     expect((screen.getByRole('button', { name: 'Thêm ảnh' }) as HTMLButtonElement).disabled).toBe(
       true,
     );
+  });
+
+  it('khóa thao tác và hiện trạng thái đang tải trong lúc thêm ảnh', async () => {
+    const userEvents = userEvent.setup();
+    let resolveUpload!: (value: { mediaId: number; url: string }) => void;
+    vi.mocked(mediaApi.upload).mockReturnValue(
+      new Promise((resolve) => {
+        resolveUpload = resolve;
+      }),
+    );
+    vi.mocked(requestApi.attachMedia).mockResolvedValue([]);
+    await renderProgress(RECEIVER_ID, request());
+    const input = screen.getByLabelText('Chọn ảnh') as HTMLInputElement;
+
+    await userEvents.upload(input, new File(['image'], 'handover.png', { type: 'image/png' }));
+    await userEvents.click(screen.getByRole('button', { name: 'Thêm 1 ảnh' }));
+
+    expect(screen.getByRole('button', { name: 'Đang tải...' })).toBeTruthy();
+    expect(input.disabled).toBe(true);
+    resolveUpload({ mediaId: 9, url: '/api/v1/media/9' });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Thêm ảnh' })).toBeTruthy();
+    });
+    expect(mediaApi.upload).toHaveBeenCalledTimes(1);
+    expect(requestApi.attachMedia).toHaveBeenCalledWith(101, {
+      mediaIds: [9],
+      stage: 'HANDOVER',
+    });
   });
 
   it('chưa chốt lịch thì không có khối ảnh', async () => {

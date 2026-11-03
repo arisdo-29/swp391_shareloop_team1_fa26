@@ -9,8 +9,12 @@ import { reputationApi } from './reputationApi';
 export async function fetchSessionUser() {
   const profile = await userApi.getMe();
   const [reputation, areas] = await Promise.all([
-    reputationApi.getMyReputation(0, 1),
-    profile.isAdmin || profile.areaId === null ? Promise.resolve([]) : catalogApi.areas(),
+    reputationApi
+      .getMyReputation(0, 1)
+      .catch(() => ({ trustStars: 0, rank: 'BRONZE' as const })),
+    profile.isAdmin || profile.areaId === null
+      ? Promise.resolve([])
+      : catalogApi.areas().catch(() => []),
   ]);
   const district = toAreaOptions(areas).find((area) => area.id === profile.areaId)?.label ?? '';
   return toFeUser(profile, district, reputation);
@@ -29,8 +33,15 @@ export async function restoreSession(dispatch: AppDispatch, currentUserId: strin
     return;
   }
   try {
-    dispatch(actions.loginFromApi(await fetchSessionUser()));
+    const user = await fetchSessionUser();
+    // Một API phụ có thể lỗi 403 mà không phải lỗi xác thực. Chỉ khôi phục Redux nếu token vẫn còn.
+    if (!tokenStorage.get()) {
+      dispatch(actions.logout());
+      return;
+    }
+    dispatch(actions.loginFromApi(user));
   } catch {
-    dispatch(actions.logout()); // token het han: interceptor da xoa token
+    // Interceptor chỉ xóa token khi JWT không hợp lệ/hết hạn hoặc tài khoản bị khóa/cấm.
+    if (!tokenStorage.get()) dispatch(actions.logout());
   }
 }

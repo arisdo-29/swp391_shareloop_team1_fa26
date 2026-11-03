@@ -4,7 +4,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MessageResponse } from '../../services/chatApi';
+import type { MessageResponse, PinnedItemResponse } from '../../services/chatApi';
 import type { ItemResponse } from '../../services/itemApi';
 import type { RequestResponse } from '../../services/requestApi';
 import { ChatHeader } from './ChatHeader';
@@ -64,6 +64,7 @@ function renderHeader(
   current: ApiConversation,
   canReport = true,
   onReport = vi.fn(),
+  pinnedItems: Array<Pick<PinnedItemResponse, 'id' | 'imageUrl'>> = [],
 ) {
   render(
     <MemoryRouter initialEntries={['/requests/101']}>
@@ -73,6 +74,7 @@ function renderHeader(
           element={
             <ChatHeader
               conversation={current}
+              pinnedItems={pinnedItems}
               currentUserId={viewerId}
               canReport={canReport}
               onBack={vi.fn()}
@@ -163,7 +165,7 @@ describe('ChatHeader', () => {
       offeredItemTitle: null,
     }));
 
-    expect(screen.getByText('API chưa cung cấp thông tin món đồ đề xuất cho yêu cầu này.'))
+    expect(screen.getByText('Chưa có thông tin món đồ đề xuất cho yêu cầu này.'))
       .toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Xem chi tiết' })).toHaveLength(1);
   });
@@ -233,6 +235,50 @@ describe('ChatHeader', () => {
     cleanup();
     renderHeader(RECEIVER_ID, conversation(), false);
     expect(screen.queryByRole('button', { name: 'Báo cáo' })).toBeNull();
+  });
+
+  it('uses the pinned offered item image when item detail is unavailable in both swap views', async () => {
+    const user = userEvent.setup();
+    const mainItem = item({
+      title: 'Mon cua chu bai',
+      images: [' ', '/api/v1/media/main-valid'],
+    });
+    const swapConversation: ApiConversation = {
+      ...conversation({
+        type: 'SWAP',
+        status: 'PENDING',
+        itemTitle: mainItem.title,
+        offeredItemId: 77,
+        offeredItemTitle: 'Dong ho treo tuong doi chim cong',
+      }),
+      item: mainItem,
+    };
+    const pinnedItems = [
+      { id: 45, imageUrl: '/api/v1/media/main-pinned' },
+      { id: 77, imageUrl: '/api/v1/media/clock' },
+    ];
+
+    renderHeader(DONOR_ID, swapConversation, true, vi.fn(), pinnedItems);
+
+    const mainImage = screen.getByRole('img', { name: 'Mon cua chu bai' });
+    const offeredImage = screen.getByRole('img', { name: 'Dong ho treo tuong doi chim cong' });
+    expect(mainImage.getAttribute('src')).toContain('/api/v1/media/main-valid');
+    expect(offeredImage.getAttribute('src')).toContain('/api/v1/media/clock');
+    expect(offeredImage.className).toContain('size-20');
+    expect(offeredImage.className).toContain('object-cover');
+    expect(screen.queryByText('Chưa có ảnh')).toBeNull();
+
+    await user.click(offeredImage.closest('button') as HTMLButtonElement);
+    expect(screen.getByTestId('location').textContent).toBe(
+      '/items/77?from=messages&requestId=101',
+    );
+
+    cleanup();
+    renderHeader(RECEIVER_ID, swapConversation, true, vi.fn(), pinnedItems);
+    expect(screen.getByRole('img', { name: 'Mon cua chu bai' }).getAttribute('src'))
+      .toContain('/api/v1/media/main-valid');
+    expect(screen.getByRole('img', { name: 'Dong ho treo tuong doi chim cong' }).getAttribute('src'))
+      .toContain('/api/v1/media/clock');
   });
 });
 

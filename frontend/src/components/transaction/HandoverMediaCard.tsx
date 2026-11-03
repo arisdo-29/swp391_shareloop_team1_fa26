@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Field, ItemImage, Select } from '../ui';
+import { Dialog } from '../Dialog';
 import {
   requestApi,
   type RequestMediaResponse,
@@ -7,7 +8,6 @@ import {
   type RequestResponse,
 } from '../../services/requestApi';
 import { mediaApi } from '../../services/mediaApi';
-import { resolveMediaUrl } from '../../services/mediaUrl';
 import type { ApiError } from '../../services/http';
 import { formatDateTime } from '../../utils/request';
 
@@ -37,6 +37,7 @@ const attachErrorMessages: Record<string, string> = {
 /** Khối "Ảnh giao nhận". Ảnh đã có lấy từ handoverMedia của GET /requests/{id}. */
 export function HandoverMediaCard({ request }: { request: RequestResponse }) {
   const [media, setMedia] = useState<RequestMediaResponse[]>(request.handoverMedia ?? []);
+  const [preview, setPreview] = useState<RequestMediaResponse | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [stage, setStage] = useState<RequestMediaStage>(
     request.status === 'DISPUTED' ? 'DISPUTE' : 'HANDOVER',
@@ -88,22 +89,24 @@ export function HandoverMediaCard({ request }: { request: RequestResponse }) {
         Chụp món đồ lúc giao. Admin xem khi có khiếu nại.
       </p>
       {media.length ? (
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <ul className="flex flex-wrap gap-3">
           {media.map((entry) => (
-            <li key={entry.mediaId} className="min-w-0">
-              <a
-                href={resolveMediaUrl(entry.url)}
-                target="_blank"
-                rel="noreferrer"
-                className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <ItemImage
-                  src={entry.url}
-                  alt={`Ảnh ${stageLabels[entry.stage].toLowerCase()}`}
-                  className="aspect-square w-full rounded-md object-cover"
-                />
-              </a>
-              <p className="mt-1 truncate text-2xs text-text-secondary">
+            <li key={entry.mediaId} className="w-[100px] min-w-0">
+              <div className="relative size-[100px]">
+                <button
+                  type="button"
+                  aria-label={`Xem ảnh ${stageLabels[entry.stage].toLowerCase()}`}
+                  onClick={() => setPreview(entry)}
+                  className="block size-[100px] overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <ItemImage
+                    src={entry.url}
+                    alt={`Ảnh ${stageLabels[entry.stage].toLowerCase()}`}
+                    className="size-[100px] rounded-md object-cover"
+                  />
+                </button>
+              </div>
+              <p className="mt-1 line-clamp-2 text-2xs leading-4 text-text-secondary">
                 {stageLabels[entry.stage]} {formatDateTime(entry.createdAt)}
               </p>
             </li>
@@ -138,6 +141,18 @@ export function HandoverMediaCard({ request }: { request: RequestResponse }) {
         </Button>
       </div>
       {error ? <Alert tone="error">{error}</Alert> : null}
+      {preview ? (
+        <Dialog title="Xem ảnh giao nhận" wide onClose={() => setPreview(null)}>
+          <ItemImage
+            src={preview.url}
+            alt={`Ảnh ${stageLabels[preview.stage].toLowerCase()} kích thước lớn`}
+            className="max-h-[70dvh] w-full rounded-md bg-surface-low object-contain"
+          />
+          <p className="mt-3 text-xs text-text-secondary">
+            {stageLabels[preview.stage]} · {formatDateTime(preview.createdAt)}
+          </p>
+        </Dialog>
+      ) : null}
     </section>
   );
 }
