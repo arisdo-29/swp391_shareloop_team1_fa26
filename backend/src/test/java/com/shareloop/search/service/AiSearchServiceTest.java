@@ -136,6 +136,57 @@ class AiSearchServiceTest {
     }
 
     @Test
+    void explicitShirtSearchDropsShoesSelectedByModel() throws Exception {
+        ready();
+        ItemResponse shoes = listing(11L, "Giày thể thao phối áo", "Giày còn dùng tốt");
+        ItemResponse shirt = listing(12L, "Áo sơ mi", "Áo màu trắng");
+        when(itemService.searchApprovedForAi(null, null, "", null, null, 0, 100))
+                .thenReturn(new PageResponse<>(List.of(shoes, shirt), 0, 100, 2));
+        when(aiClient.recommend(any(), any(), any()))
+                .thenReturn(new AiResponse(
+                        "gemini-3.5-flash-lite",
+                        "{\"inScope\":true,\"itemIds\":[11,12],\"message\":\"Có món phù hợp\"}"));
+        when(itemService.getItem(12L, null)).thenReturn(shirt);
+
+        AiSearchResponse result = service.search(7L, "Tìm áo");
+
+        assertThat(result.results().items()).containsExactly(shirt);
+        verify(itemService, never()).getItem(11L, null);
+    }
+
+    @Test
+    void explicitShirtSearchDoesNotChargeForOnlyShoes() throws Exception {
+        ready();
+        ItemResponse shoes = listing(11L, "Giày thể thao", "Giày còn dùng tốt");
+        when(itemService.searchApprovedForAi(null, null, "", null, null, 0, 100))
+                .thenReturn(new PageResponse<>(List.of(shoes), 0, 100, 1));
+        when(aiClient.recommend(any(), any(), any()))
+                .thenReturn(new AiResponse(
+                        "gemini-3.5-flash-lite", "{\"inScope\":true,\"itemIds\":[11],\"message\":\"Có món phù hợp\"}"));
+
+        AiSearchResponse result = service.search(7L, "Tìm áo");
+
+        assertThat(result.results().items()).isEmpty();
+        verify(quotaService, never()).consume(7L);
+    }
+
+    @Test
+    void broadStyleRequestCanStillRecommendShoes() throws Exception {
+        ready();
+        ItemResponse shoes = listing(11L, "Giày thể thao", "Giày còn dùng tốt");
+        when(itemService.searchApprovedForAi(null, null, "", null, null, 0, 100))
+                .thenReturn(new PageResponse<>(List.of(shoes), 0, 100, 1));
+        when(aiClient.recommend(any(), any(), any()))
+                .thenReturn(new AiResponse(
+                        "gemini-3.5-flash-lite", "{\"inScope\":true,\"itemIds\":[11],\"message\":\"Có món phù hợp\"}"));
+        when(itemService.getItem(11L, null)).thenReturn(shoes);
+
+        AiSearchResponse result = service.search(7L, "Muốn phong cách hơn");
+
+        assertThat(result.results().items()).containsExactly(shoes);
+    }
+
+    @Test
     void rejectsInventedItemIdWithoutCharging() throws Exception {
         ready();
         ItemResponse available = item(11L);
@@ -254,5 +305,23 @@ class AiSearchServiceTest {
         ItemResponse item = mock(ItemResponse.class);
         when(item.id()).thenReturn(id);
         return item;
+    }
+
+    private static ItemResponse listing(long id, String title, String description) {
+        return new ItemResponse(
+                id,
+                null,
+                null,
+                null,
+                OfferType.GIVE,
+                title,
+                description,
+                null,
+                null,
+                null,
+                null,
+                ItemStatus.APPROVED,
+                null,
+                null);
     }
 }
