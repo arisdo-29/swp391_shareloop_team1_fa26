@@ -18,6 +18,23 @@ import { Image } from '@phosphor-icons/react/dist/csr/Image';
 import { MapPin } from '@phosphor-icons/react/dist/csr/MapPin';
 import { Check } from '@phosphor-icons/react/dist/csr/Check';
 import { WarningCircle } from '@phosphor-icons/react/dist/csr/WarningCircle';
+import { SquaresFour } from '@phosphor-icons/react/dist/csr/SquaresFour';
+import { CheckSquare } from '@phosphor-icons/react/dist/csr/CheckSquare';
+import { ListBullets } from '@phosphor-icons/react/dist/csr/ListBullets';
+import { ListChecks } from '@phosphor-icons/react/dist/csr/ListChecks';
+import { Prohibit } from '@phosphor-icons/react/dist/csr/Prohibit';
+import { Users } from '@phosphor-icons/react/dist/csr/Users';
+import { Medal } from '@phosphor-icons/react/dist/csr/Medal';
+import { ArrowsLeftRight } from '@phosphor-icons/react/dist/csr/ArrowsLeftRight';
+import { Flag } from '@phosphor-icons/react/dist/csr/Flag';
+import { MagnifyingGlass } from '@phosphor-icons/react/dist/csr/MagnifyingGlass';
+import { ChartLineUp } from '@phosphor-icons/react/dist/csr/ChartLineUp';
+import { Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
+import { SlidersHorizontal } from '@phosphor-icons/react/dist/csr/SlidersHorizontal';
+import { Scroll } from '@phosphor-icons/react/dist/csr/Scroll';
+import { Warning } from '@phosphor-icons/react/dist/csr/Warning';
+import { CaretLeft } from '@phosphor-icons/react/dist/csr/CaretLeft';
+import { CaretRight } from '@phosphor-icons/react/dist/csr/CaretRight';
 import { Link } from 'react-router-dom';
 import type {
   Item,
@@ -44,6 +61,25 @@ const iconMap = {
   image: Image,
   check: Check,
   warning: WarningCircle,
+  // Icon cho menu quản trị (AdminLayout).
+  dashboard: SquaresFour,
+  moderation: CheckSquare,
+  category: ListBullets,
+  checklist: ListChecks,
+  banned: Prohibit,
+  district: MapPin,
+  users: Users,
+  reputation: Medal,
+  transactions: ArrowsLeftRight,
+  complaints: Flag,
+  lookup: MagnifyingGlass,
+  report: ChartLineUp,
+  topup: Receipt,
+  fees: SlidersHorizontal,
+  auditLog: Scroll,
+  alert: Warning,
+  caretLeft: CaretLeft,
+  caretRight: CaretRight,
 } as const;
 
 export type IconName = keyof typeof iconMap;

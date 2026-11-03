@@ -341,15 +341,6 @@ function AppShellContent() {
                       >
                         Đổi mật khẩu
                       </Link>
-                      {isAdmin ? (
-                        <Link
-                          to="/profile"
-                          onClick={closeMenus}
-                          className="flex items-center rounded-md min-h-11 px-3 py-2 text-sm text-text-secondary transition hover:bg-surface-low"
-                        >
-                          Chỉnh sửa hồ sơ
-                        </Link>
-                      ) : null}
                       <button
                         onClick={() => {
                           logout();
