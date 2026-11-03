@@ -20,6 +20,8 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.integration.ai.AiResponse;
 import com.shareloop.integration.ai.AiSearchClient;
 import com.shareloop.item.dto.ItemResponse;
+import com.shareloop.item.entity.ItemStatus;
+import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.search.SearchErrorCode;
 import com.shareloop.search.dto.AiQuotaResponse;
@@ -33,6 +35,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import tools.jackson.databind.json.JsonMapper;
@@ -97,6 +100,39 @@ class AiSearchServiceTest {
         assertThat(result.chargedCredits()).isEqualTo(2);
         verify(quotaService).consume(7L);
         verify(activityLogService).log(eq("AI_USAGE"), eq(7L), eq("AI_SEARCH"), eq(null), anyMap(), eq(null));
+    }
+
+    @Test
+    void swapWishlistIsNeverSentAsAnAvailableItem() throws Exception {
+        ready();
+        ItemResponse swap = new ItemResponse(
+                11L,
+                null,
+                null,
+                null,
+                OfferType.SWAP,
+                "Bàn học",
+                "Bàn gỗ còn dùng được",
+                "Đồng hồ",
+                null,
+                null,
+                null,
+                ItemStatus.APPROVED,
+                null,
+                null);
+        when(itemService.searchApprovedForAi(null, null, "", null, null, 0, 100))
+                .thenReturn(new PageResponse<>(List.of(swap), 0, 100, 1));
+        when(aiClient.recommend(any(), any(), any()))
+                .thenReturn(new AiResponse(
+                        "gemini-3.5-flash-lite", "{\"inScope\":true,\"itemIds\":[],\"message\":\"Chưa có món\"}"));
+
+        AiSearchResponse result = service.search(7L, "Tìm đồng hồ");
+
+        ArgumentCaptor<String> catalog = ArgumentCaptor.forClass(String.class);
+        verify(aiClient).recommend(eq("Tìm đồng hồ"), catalog.capture(), eq(Duration.ofSeconds(15)));
+        assertThat(catalog.getValue()).contains("Bàn học", "SWAP").doesNotContain("desiredItem", "Đồng hồ");
+        assertThat(result.results().items()).isEmpty();
+        verify(quotaService, never()).consume(7L);
     }
 
     @Test
