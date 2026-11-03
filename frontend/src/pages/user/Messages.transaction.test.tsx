@@ -94,3 +94,176 @@ const request = (overrides: Partial<RequestResponse> = {}): RequestResponse => (
   contactRevealedAt: '2026-10-21T08:00:00Z',
   createdAt: '2026-10-20T09:00:00Z',
   itemTitle: 'Xe đạp cũ',
+  donorId: DONOR_ID,
+  donorName: 'An Chủ Bài',
+  receiverName: 'Bình Người Nhận',
+  ...overrides,
+});
+
+function LocationProbe() {
+  const location = useLocation();
+  return <span data-testid="location">{`${location.pathname}${location.search}`}</span>;
+}
+
+/** Dựng trang Tin nhắn cho người dùng `viewerId` với giao dịch `current` đang mở. */
+async function renderMessages(
+  viewerId: number,
+  current: RequestResponse,
+  media: RequestMediaResponse[] = [],
+) {
+  store.dispatch(actions.loginFromApi(user(viewerId)));
+  const ownedItems = viewerId === DONOR_ID ? [item()] : [];
+  vi.mocked(requestApi.mine).mockResolvedValue(viewerId === RECEIVER_ID ? [current] : []);
+  vi.mocked(itemApi.mine).mockResolvedValue(ownedItems);
+  vi.mocked(requestApi.forItem).mockResolvedValue([current]);
+  vi.mocked(requestApi.get).mockResolvedValue(current);
+  vi.mocked(requestApi.media).mockResolvedValue(media);
+  vi.mocked(itemApi.detail).mockResolvedValue(item());
+  vi.mocked(chatApi.list).mockResolvedValue([]);
+  vi.mocked(chatApi.pinnedItems).mockResolvedValue([]);
+  render(
+    <Provider store={store}>
+      <MemoryRouter initialEntries={['/requests/101']}>
+        <Routes>
+          <Route path="/requests/:requestId" element={<Messages />} />
+          <Route path="/items/:itemId" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>
+    </Provider>,
+  );
+  await screen.findByRole('region', { name: /Cuộc trò chuyện với/ });
+}
+
+beforeEach(() => {
+  vi.stubGlobal('scrollTo', vi.fn());
+  Element.prototype.scrollIntoView = vi.fn();
+});
+
+afterEach(() => {
+  cleanup();
+  store.dispatch(actions.logout());
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
+});
+
+// Huỷ giao dịch, hạn giải trình, báo chưa nhận được: đã chuyển sang TransactionProgress.test.tsx
+// cùng với chức năng (trang Tiến trình giao dịch).
+describe('Trang Tin nhắn sau khi tách trang Tiến trình', () => {
+  it('không còn cột Tiến trình giao dịch cũ, chỉ còn nút Xem tiến trình', async () => {
+    await renderMessages(RECEIVER_ID, request());
+
+    expect(screen.queryByLabelText('Tiến trình giao dịch')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Huỷ giao dịch' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Xem tiến trình' })).toBeTruthy();
+  });
+});
+
+describe('Modal chọn người cho yêu cầu SWAP', () => {
+  it('xem đúng món đề xuất mà không tự xác nhận giao dịch', async () => {
+    const userEvents = userEvent.setup();
+    await renderMessages(
+      DONOR_ID,
+      request({
+        type: 'SWAP',
+        status: 'PENDING',
+        offeredItemId: 78,
+        offeredItemTitle: 'Máy xay cà phê',
+      }),
+    );
+
+    await userEvents.click(screen.getByRole('button', { name: 'Chọn người này' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Xác nhận chọn người giao dịch' });
+    const offeredCard = within(dialog).getByRole('article', { name: 'Món đề xuất' });
+    await userEvents.click(within(offeredCard).getByRole('button', { name: 'Xem chi tiết' }));
+
+    expect(screen.getByTestId('location').textContent).toBe(
+      '/items/78?from=messages&requestId=101&selectRequest=101',
+    );
+    expect(requestApi.select).not.toHaveBeenCalled();
+  });
+});
+
+describe('Gửi ảnh trong giao dịch Cho tặng', () => {
+  it('ẩn nút Gửi ảnh và dòng gợi ý với người nhận đồ Cho tặng', async () => {
+    await renderMessages(RECEIVER_ID, request({ type: 'GIVE', status: 'RESERVED' }));
+    await screen.findByPlaceholderText('Nhập tin nhắn...');
+
+    expect(screen.queryByText('Gửi ảnh')).toBeNull();
+    expect(screen.queryByText('Gửi ảnh được sau khi hai bên chốt lịch hẹn.')).toBeNull();
+  });
+
+  it('chủ bài trong giao dịch Cho tặng vẫn thấy nút Gửi ảnh', async () => {
+    await renderMessages(DONOR_ID, request({ type: 'GIVE' }));
+    await screen.findByPlaceholderText('Nhập tin nhắn...');
+
+    expect(screen.getByText('Gửi ảnh')).toBeTruthy();
+  });
+
+  it('người nhận trong giao dịch Trao đổi vẫn thấy nút Gửi ảnh', async () => {
+    await renderMessages(RECEIVER_ID, request({ type: 'SWAP' }));
+    await screen.findByPlaceholderText('Nhập tin nhắn...');
+
+    expect(screen.getByText('Gửi ảnh')).toBeTruthy();
+  });
+});
+
+describe('Khung chat gọn', () => {
+  it('SWAP chỉ hiện đúng hai món ở đầu khung chat và không lặp món đề xuất bên dưới', async () => {
+    // given: API thẻ ghim trả cả bài đăng gốc và món đề xuất
+    const current = request({
+      type: 'SWAP',
+      offeredItemId: 77,
+      offeredItemTitle: 'Mũ bảo hiểm',
+    });
+    vi.mocked(chatApi.pinnedItems).mockResolvedValue([
+      {
+        id: 45,
+        title: 'Xe đạp cũ',
+        offerType: 'GIVE',
+        status: 'RESERVED',
+        imageUrl: null,
+        donorId: DONOR_ID,
+      },
+      {
+        id: 77,
+        title: 'Mũ bảo hiểm',
+        offerType: 'SWAP',
+        status: 'RESERVED',
+        imageUrl: '/api/v1/media/77',
+        donorId: RECEIVER_ID,
+      },
+    ]);
+
+    // when
+    store.dispatch(actions.loginFromApi(user(RECEIVER_ID)));
+    vi.mocked(requestApi.mine).mockResolvedValue([current]);
+    vi.mocked(itemApi.mine).mockResolvedValue([]);
+    vi.mocked(requestApi.forItem).mockResolvedValue([current]);
+    vi.mocked(requestApi.get).mockResolvedValue(current);
+    vi.mocked(requestApi.media).mockResolvedValue([]);
+    vi.mocked(itemApi.detail).mockImplementation((itemId) =>
+      itemId === 45 ? Promise.resolve(item()) : Promise.reject(new Error('Item unavailable')),
+    );
+    vi.mocked(chatApi.list).mockResolvedValue([]);
+    render(
+      <Provider store={store}>
+        <MemoryRouter initialEntries={['/requests/101']}>
+          <Routes>
+            <Route path="/requests/:requestId" element={<Messages />} />
+          </Routes>
+        </MemoryRouter>
+      </Provider>,
+    );
+    const chat = await screen.findByRole('region', { name: 'Cuộc trò chuyện với An Chủ Bài' });
+    await within(chat).findByText('Mũ bảo hiểm');
+
+    // then
+    expect(within(chat).getAllByText('Xe đạp cũ')).toHaveLength(1);
+    expect(within(chat).getAllByText('Mũ bảo hiểm')).toHaveLength(1);
+    expect(within(chat).getByRole('img', { name: 'Mũ bảo hiểm' }).getAttribute('src'))
+      .toContain('/api/v1/media/77');
+    expect(within(chat).getAllByRole('button', { name: 'Xem chi tiết' })).toHaveLength(2);
+    expect(within(chat).getByRole('button', { name: 'Xem tiến trình' })).toBeTruthy();
+    expect(within(chat).getByRole('button', { name: 'Xem hồ sơ' })).toBeTruthy();
+  });
+});
