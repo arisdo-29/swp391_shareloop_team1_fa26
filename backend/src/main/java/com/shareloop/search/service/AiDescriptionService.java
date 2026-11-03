@@ -20,7 +20,9 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,7 @@ public class AiDescriptionService {
     private static final Logger LOGGER = LoggerFactory.getLogger(AiDescriptionService.class);
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final String FAILURE_MESSAGE = "Chưa gợi ý được, bạn tự viết mô tả nhé.";
+    private static final Pattern NUMBER = Pattern.compile("\\d+(?:[.,]\\d+)?");
 
     private final GeminiDescriptionClient client;
     private final AiQuotaAccountRepository accountRepository;
@@ -98,7 +101,14 @@ public class AiDescriptionService {
                             .allMatch(name -> fields.path(name).isTextual())) {
                 throw new IllegalArgumentException("Description must match the expected JSON schema");
             }
+            JsonNode suggestions = fields.path("suggestions");
+            if (!suggestions.isArray() || suggestions.isEmpty() || suggestions.size() > 4) {
+                throw new IllegalArgumentException("Description suggestions must contain one to four items");
+            }
             List<AttributeSuggestion> attributes = attributes(fields, normalizedTitle, postLexicon);
+            if (attributes.stream().noneMatch(AttributeSuggestion::requiresUserInput)) {
+                throw new IllegalArgumentException("Description has no relevant details to confirm");
+            }
             StringBuilder description =
                     new StringBuilder("Món đồ: ").append(normalizedTitle).append('.');
             for (AttributeSuggestion attribute : attributes) {
@@ -148,25 +158,39 @@ public class AiDescriptionService {
 
     private List<AttributeSuggestion> attributes(JsonNode fields, String title, List<LexiconEntry> lexicon) {
         List<AttributeSuggestion> result = new ArrayList<>();
-        result.add(suggest("Loại", grounded(fields.path("itemType").asText(""), title, lexicon), "…", false));
-        result.add(suggest("Thương hiệu", grounded(fields.path("brand").asText(""), title, lexicon), "…", false));
-        result.add(suggest("Màu", grounded(fields.path("color").asText(""), title, lexicon), "…", false));
-        result.add(suggest("Chất liệu", grounded(fields.path("material").asText(""), title, lexicon), "…", false));
-        result.add(suggest(
-                "Tình trạng gợi ý", grounded(fields.path("conditionHint").asText(""), title, lexicon), "…", true));
-        result.add(new AttributeSuggestion("Kích thước", "… x … x … cm", true));
-        result.add(new AttributeSuggestion("Khối lượng", "…", true));
-        result.add(new AttributeSuggestion("Dung tích", "…", true));
-        result.add(new AttributeSuggestion("Thời gian đã dùng", "…", true));
-        result.add(new AttributeSuggestion("Tình trạng hoạt động", "…", true));
-        result.add(suggest("Phụ kiện", grounded(fields.path("accessories").asText(""), title, lexicon), "…", false));
-        result.add(suggest("Lỗi", grounded(fields.path("defects").asText(""), title, lexicon), "…", false));
+        addIfKnown(result, "Loại", fields.path("itemType").asText(""), title, lexicon);
+        addIfKnown(result, "Thương hiệu", fields.path("brand").asText(""), title, lexicon);
+        addIfKnown(result, "Màu", fields.path("color").asText(""), title, lexicon);
+        addIfKnown(result, "Chất liệu", fields.path("material").asText(""), title, lexicon);
+        addIfKnown(result, "Tình trạng theo tên", fields.path("conditionHint").asText(""), title, lexicon);
+        addIfKnown(result, "Phụ kiện", fields.path("accessories").asText(""), title, lexicon);
+        addIfKnown(result, "Lỗi", fields.path("defects").asText(""), title, lexicon);
+        for (JsonNode suggestion : fields.path("suggestions")) {
+            if (!suggestion.isObject()) continue;
+            String name = safe(suggestion.path("name").asText(""), lexicon, 40);
+            String question = safe(suggestion.path("question").asText(""), lexicon, 160);
+            if (name.isBlank()
+                    || question.isBlank()
+                    || !question.endsWith("?")
+                    || unrelatedCapacity(title, name + " " + question)
+                    || NUMBER.matcher(name + " " + question).results().anyMatch(match -> !title.contains(match.group()))
+                    || result.stream().anyMatch(attribute -> attribute.name().equalsIgnoreCase(name))) continue;
+            result.add(new AttributeSuggestion(name, "…", true, question));
+        }
         return List.copyOf(result);
     }
 
-    private AttributeSuggestion suggest(String name, String value, String placeholder, boolean alwaysUserInput) {
-        boolean missing = value.isBlank();
-        return new AttributeSuggestion(name, missing ? placeholder : value, alwaysUserInput || missing);
+    private void addIfKnown(
+            List<AttributeSuggestion> result, String name, String value, String title, List<LexiconEntry> lexicon) {
+        String known = grounded(value, title, lexicon);
+        if (!known.isBlank()) result.add(new AttributeSuggestion(name, known, false, null));
+    }
+
+    private boolean unrelatedCapacity(String title, String suggestion) {
+        String subject = title.toLowerCase(Locale.ROOT);
+        String prompt = suggestion.toLowerCase(Locale.ROOT);
+        return prompt.contains("dung tích")
+                && (subject.contains("đồng hồ") || subject.contains("trang sức") || subject.contains("nhẫn"));
     }
 
     private String grounded(String value, String title, List<LexiconEntry> lexicon) {

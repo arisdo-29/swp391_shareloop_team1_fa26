@@ -48,7 +48,7 @@ describe('FinanceCharts', () => {
       <CreditByTypeChart
         title="Credit trừ theo loại"
         tone="debit"
-        rows={[{ label: 'Phí đăng bài', value: 40, detail: '8 bút toán' }]}
+        rows={[{ label: 'Phí đăng bài', value: 40, detail: '8 lượt' }]}
       />,
     );
 

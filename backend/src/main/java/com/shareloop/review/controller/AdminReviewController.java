@@ -57,7 +57,7 @@ public class AdminReviewController {
     @Operation(
             summary = "Danh sách hàng chờ duyệt",
             description =
-                    "Sắp xếp: bài có cờ REVIEW trước, người đăng có trust_stars thấp trước, tài khoản mới hơn trước, bài chờ lâu hơn trước. Kèm checklist kiểm duyệt hiện hành.")
+                    "Sắp xếp: người đăng có trust_stars thấp trước; cùng số sao thì người mới (số bài đã từng được duyệt không quá ngưỡng review_newcomer_max_approved, mặc định 3) trước; rồi bài chờ lâu hơn trước. Kèm checklist kiểm duyệt hiện hành.")
     @ApiResponse(responseCode = "200", description = "Trả về hàng chờ đã sắp xếp kèm checklist")
     @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
     @ApiResponse(responseCode = "403", description = "Không có quyền Admin")

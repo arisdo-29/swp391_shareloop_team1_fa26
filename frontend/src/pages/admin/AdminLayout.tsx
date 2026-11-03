@@ -85,7 +85,12 @@ export function AdminLayout() {
   );
   return (
     <div
+ feat/r2-u5-fe
       className={`wide-shell py-6 lg:grid lg:items-start lg:gap-[clamp(1.25rem,2vw,2rem)] ${collapsed ? 'lg:grid-cols-[72px_minmax(0,1fr)]' : 'lg:grid-cols-[250px_minmax(0,1fr)]'}`}
+
+      // Từ màn lg bỏ max-width và padding để sidebar sát mép trái; mobile giữ padding như cũ.
+      className={`px-4 py-6 sm:px-6 lg:grid lg:items-start lg:p-0 ${collapsed ? 'lg:grid-cols-[72px_1fr]' : 'lg:grid-cols-[250px_1fr]'}`}
+develop
     >
       <div className="mb-5 flex items-center justify-between lg:hidden">
         <div>
@@ -101,8 +106,14 @@ export function AdminLayout() {
         </button>
       </div>
       <aside
+feat/r2-u5-fe
         className={`${open ? 'block' : 'hidden'} h-fit rounded-lg bg-admin-sidebar p-3 shadow-admin [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:sticky lg:top-24 lg:block lg:max-h-[calc(100dvh-120px)] lg:overflow-y-auto ${collapsed ? 'lg:px-2' : ''}`}
       >
+
+        className={`${open ? 'block' : 'hidden'} h-fit rounded-lg bg-admin-sidebar p-3 shadow-admin [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:sticky lg:top-[68px] lg:block lg:h-[calc(100dvh-68px)] lg:overflow-y-auto lg:rounded-none lg:shadow-none ${collapsed ? 'lg:px-2' : ''}`}
+      >
+        {/* Thanh tiêu đề của sidebar + nút thu gọn (chỉ hiện từ màn lg) */}
+ develop
         <div
           className={`mb-3 hidden items-center border-b border-admin-divider/20 pb-3 lg:flex ${collapsed ? 'justify-center' : 'justify-between pl-2'}`}
         >
@@ -123,7 +134,12 @@ export function AdminLayout() {
         </div>
         <nav aria-label="Quản trị">{nav}</nav>
       </aside>
+feat/r2-u5-fe
       <main className="min-w-0 pt-2 lg:pt-0">
+
+      <main className="min-w-0 pt-2 lg:p-8">
+        {/* Giữ nội dung không quá rộng trên màn lớn như trước khi sidebar sát mép */}
+ develop
         <div className="mx-auto w-full max-w-[1200px]">
           <Suspense fallback={<div className="min-h-[620px]" aria-hidden="true" />}>
             <Outlet />

@@ -45,7 +45,7 @@ function ChartEmpty() {
   );
 }
 
-/** Cột ngang: mỗi loại bút toán một cột, nhãn tiếng Việt nằm bên trái nên dễ đọc hơn cột đứng. */
+/** Cột ngang: mỗi loại giao dịch Credit một cột, nhãn tiếng Việt nằm bên trái nên dễ đọc hơn cột đứng. */
 export function CreditByTypeChart({
   title,
   rows,

@@ -25,8 +25,11 @@ public class GeminiDescriptionClient {
               "material":{"type":"string"},
               "conditionHint":{"type":"string"},
               "accessories":{"type":"string"},
-              "defects":{"type":"string"}},
-             "required":["itemType","brand","color","material","conditionHint","accessories","defects"],
+              "defects":{"type":"string"},
+              "suggestions":{"type":"array","items":{"type":"object","properties":{
+                "name":{"type":"string"},"question":{"type":"string"}},
+                "required":["name","question"],"additionalProperties":false}}},
+             "required":["itemType","brand","color","material","conditionHint","accessories","defects","suggestions"],
              "additionalProperties":false}
             """;
     private static final String INSTRUCTION = """
@@ -35,6 +38,13 @@ public class GeminiDescriptionClient {
             Không có ảnh. Không được nói đã xem ảnh hoặc suy đoán tình trạng, thông số, thương hiệu, màu,
             chất liệu, phụ kiện hay lỗi nếu tên không nói rõ. Trường chưa biết trả chuỗi rỗng.
             itemType có thể là loại món rút ra từ tên. Các trường còn lại chỉ điền khi tên nêu rõ.
+            suggestions: tự viết 2–4 câu hỏi tiếng Việt NGẮN, riêng cho chính món đồ trong tên,
+            giúp người đăng bổ sung thông tin còn thiếu. Mỗi phần tử có name là nhãn ngắn cho
+            chi tiết cần điền và question là câu hỏi tự nhiên, cụ thể, kết thúc bằng dấu hỏi.
+            Không dùng danh sách câu hỏi chung. Không hỏi lại điều tên đã cho biết.
+            Ví dụ đồng hồ có thể hỏi về mặt, dây hoặc bộ máy; bình nước có thể hỏi dung tích
+            và khả năng giữ nhiệt; sách có thể hỏi tình trạng trang. Đồng hồ không có dung tích.
+            Chỉ hỏi về đặc điểm có ý nghĩa với món được nêu; không tự trả lời hoặc đoán giá trị.
             Không đưa số điện thoại, email, địa chỉ, URL hoặc lời mời liên hệ vào câu trả lời.
             """;
 

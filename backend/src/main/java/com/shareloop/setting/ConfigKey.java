@@ -141,6 +141,14 @@ public enum ConfigKey {
             ConfigGroup.MODERATION,
             "Ngưỡng cảnh báo vi phạm chat",
             "Số tin nhắn vi phạm trong một giao dịch thì cảnh báo Admin."),
+    // BR-A08: người đăng có số bài đã từng được duyệt không vượt ngưỡng này được xếp trước trong hàng chờ duyệt.
+    REVIEW_NEWCOMER_MAX_APPROVED(
+            "review_newcomer_max_approved",
+            "3",
+            ConfigGroup.MODERATION,
+            "Ngưỡng người đăng mới",
+            "Người đăng có số bài đã từng được duyệt không vượt quá số này được xem là người mới và xếp trước trong"
+                    + " hàng chờ duyệt (trong cùng số sao uy tín)."),
     ITEM_PHOTOS_MIN(
             "item_photos_min",
             "3",
