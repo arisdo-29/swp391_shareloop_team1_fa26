@@ -6,7 +6,14 @@ import { useWallet } from '../../app/useWallet';
 import { AiSearchNotices } from '../../components/ai/AiSearchNotices';
 import { Button, EmptyState, ProductCard, Spinner, TextArea } from '../../components/ui';
 import { aiApi, type AiQuotaResponse } from '../../services/aiApi';
-import { clearAiSearchSnapshot, readAiSearchSnapshot, saveAiSearchSnapshot } from '../../services/aiSearchSession';
+import {
+  clearAiSearchKeepMark,
+  clearAiSearchSnapshot,
+  markAiSearchForReturn,
+  readAiSearchSnapshot,
+  saveAiSearchSnapshot,
+  shouldKeepAiSearch,
+} from '../../services/aiSearchSession';
 import { catalogApi, type CategoryResponse, type AreaResponse } from '../../services/catalogApi';
 import { toAreaNameMap, toCategoryNameMap, toFeItem } from '../../services/mappers';
 import type { ApiError } from '../../services/http';
@@ -38,7 +45,12 @@ export function AI() {
 
   useEffect(() => {
     let active = true;
-    const snapshot = userId ? readAiSearchSnapshot(userId) : null;
+    // Chỉ giữ kết quả khi người dùng vừa mở một bài từ danh sách rồi quay lại; sang tab khác thì xoá.
+    const keepSnapshot = shouldKeepAiSearch();
+    if (!keepSnapshot) clearAiSearchSnapshot();
+    // Gỡ dấu sau một nhịp (không gỡ ngay) để React StrictMode ở môi trường dev chạy effect hai lần vẫn đọc đúng.
+    window.setTimeout(clearAiSearchKeepMark, 0);
+    const snapshot = userId && keepSnapshot ? readAiSearchSnapshot(userId) : null;
     setQuota(null);
     setQuotaError('');
     // Quay lại từ trang chi tiết thì giữ nguyên câu đã hỏi trong ô nhập.
@@ -223,7 +235,13 @@ export function AI() {
             {message}
           </p>
           {results.length ? (
-            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+            <div
+              className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4"
+              onClickCapture={(event) => {
+                // Bấm vào thẻ bài (liên kết) là sắp rời trang: đánh dấu để lúc quay lại còn kết quả.
+                if ((event.target as HTMLElement).closest('a')) markAiSearchForReturn();
+              }}
+            >
               {results.map((item) => <ProductCard key={item.id} item={item} from="ai" />)}
             </div>
           ) : null}
