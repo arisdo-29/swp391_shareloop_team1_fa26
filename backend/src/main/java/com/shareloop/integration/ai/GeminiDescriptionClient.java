@@ -26,16 +26,10 @@ public class GeminiDescriptionClient {
               "conditionHint":{"type":"string"},
               "accessories":{"type":"string"},
               "defects":{"type":"string"},
-              "itemCategory":{"type":"string","enum":["WATCH","JEWELRY","CLOTHING","FOOTWEAR","ELECTRONIC","CONTAINER","FURNITURE","BOOK","OTHER"]},
-              "detailsToConfirm":{"type":"array","items":{"type":"string","enum":[
-                "Kiểu dáng mặt","Kích cỡ mặt","Chất liệu dây","Tình trạng hoạt động",
-                "Kiểu dáng","Kích cỡ phù hợp","Chất liệu thực tế","Tình trạng bề mặt",
-                "Kích cỡ","Phom dáng","Tình trạng vải","Cỡ giày","Tình trạng đế",
-                "Mã sản phẩm","Thông số chính","Phụ kiện","Dung tích","Kích thước",
-                "Tình trạng sử dụng","Cách vận chuyển","Tác giả","Phiên bản",
-                "Tình trạng trang","Ghi chú trong sách","Kích thước hoặc thông số liên quan",
-                "Tình trạng thực tế","Thời gian đã dùng"]}}},
-             "required":["itemType","brand","color","material","conditionHint","accessories","defects","itemCategory","detailsToConfirm"],
+              "suggestions":{"type":"array","items":{"type":"object","properties":{
+                "name":{"type":"string"},"question":{"type":"string"}},
+                "required":["name","question"],"additionalProperties":false}}},
+             "required":["itemType","brand","color","material","conditionHint","accessories","defects","suggestions"],
              "additionalProperties":false}
             """;
     private static final String INSTRUCTION = """
@@ -44,14 +38,13 @@ public class GeminiDescriptionClient {
             Không có ảnh. Không được nói đã xem ảnh hoặc suy đoán tình trạng, thông số, thương hiệu, màu,
             chất liệu, phụ kiện hay lỗi nếu tên không nói rõ. Trường chưa biết trả chuỗi rỗng.
             itemType có thể là loại món rút ra từ tên. Các trường còn lại chỉ điền khi tên nêu rõ.
-            Chọn itemCategory theo món đồ trong tên: WATCH cho đồng hồ đeo tay, JEWELRY cho trang sức,
-            CLOTHING cho quần áo, FOOTWEAR cho giày dép, ELECTRONIC cho đồ điện/điện tử,
-            CONTAINER cho bình, chai, nồi, hộp đựng, FURNITURE cho nội thất, BOOK cho sách;
-            nếu không chắc chắn chọn OTHER. Danh mục này giúp hỏi người đăng đúng chi tiết cần bổ sung:
-            đồng hồ cần hỏi về mặt/dây và hoạt động, bình cần hỏi dung tích, sách cần hỏi tình trạng trang.
-            Không chọn thuộc tính không liên quan đến loại món.
-            detailsToConfirm: chọn 2–4 mục thực sự hữu ích cho đúng món trong tên, từ danh sách enum;
-            không chọn chi tiết đã nêu rõ trong tên. Không đưa giá trị phỏng đoán vào các mục này.
+            suggestions: tự viết 2–4 câu hỏi tiếng Việt NGẮN, riêng cho chính món đồ trong tên,
+            giúp người đăng bổ sung thông tin còn thiếu. Mỗi phần tử có name là nhãn ngắn cho
+            chi tiết cần điền và question là câu hỏi tự nhiên, cụ thể, kết thúc bằng dấu hỏi.
+            Không dùng danh sách câu hỏi chung. Không hỏi lại điều tên đã cho biết.
+            Ví dụ đồng hồ có thể hỏi về mặt, dây hoặc bộ máy; bình nước có thể hỏi dung tích
+            và khả năng giữ nhiệt; sách có thể hỏi tình trạng trang. Đồng hồ không có dung tích.
+            Chỉ hỏi về đặc điểm có ý nghĩa với món được nêu; không tự trả lời hoặc đoán giá trị.
             Không đưa số điện thoại, email, địa chỉ, URL hoặc lời mời liên hệ vào câu trả lời.
             """;
 

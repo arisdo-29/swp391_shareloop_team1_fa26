@@ -20,7 +20,9 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,7 @@ public class AiDescriptionService {
     private static final Logger LOGGER = LoggerFactory.getLogger(AiDescriptionService.class);
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final String FAILURE_MESSAGE = "Chưa gợi ý được, bạn tự viết mô tả nhé.";
+    private static final Pattern NUMBER = Pattern.compile("\\d+(?:[.,]\\d+)?");
 
     private final GeminiDescriptionClient client;
     private final AiQuotaAccountRepository accountRepository;
@@ -93,33 +96,14 @@ public class AiDescriptionService {
             JsonNode fields = mapper.readTree(client.describe(
                     normalizedTitle, Duration.ofSeconds(configService.getInt(ConfigKey.AI_DESCRIBE_TIMEOUT_SECONDS))));
             if (!fields.isObject()
-                    || !List.of(
-                                    "itemType",
-                                    "brand",
-                                    "color",
-                                    "material",
-                                    "conditionHint",
-                                    "accessories",
-                                    "defects",
-                                    "itemCategory")
+                    || !List.of("itemType", "brand", "color", "material", "conditionHint", "accessories", "defects")
                             .stream()
-                            .allMatch(name -> fields.path(name).isTextual())
-                    || !List.of(
-                                    "WATCH",
-                                    "JEWELRY",
-                                    "CLOTHING",
-                                    "FOOTWEAR",
-                                    "ELECTRONIC",
-                                    "CONTAINER",
-                                    "FURNITURE",
-                                    "BOOK",
-                                    "OTHER")
-                            .contains(fields.path("itemCategory").asText())) {
+                            .allMatch(name -> fields.path(name).isTextual())) {
                 throw new IllegalArgumentException("Description must match the expected JSON schema");
             }
-            JsonNode requestedDetails = fields.path("detailsToConfirm");
-            if (!requestedDetails.isArray() || requestedDetails.isEmpty() || requestedDetails.size() > 4) {
-                throw new IllegalArgumentException("Description details must be a non-empty list of up to four items");
+            JsonNode suggestions = fields.path("suggestions");
+            if (!suggestions.isArray() || suggestions.isEmpty() || suggestions.size() > 4) {
+                throw new IllegalArgumentException("Description suggestions must contain one to four items");
             }
             List<AttributeSuggestion> attributes = attributes(fields, normalizedTitle, postLexicon);
             if (attributes.stream().noneMatch(AttributeSuggestion::requiresUserInput)) {
@@ -181,14 +165,17 @@ public class AiDescriptionService {
         addIfKnown(result, "Tình trạng theo tên", fields.path("conditionHint").asText(""), title, lexicon);
         addIfKnown(result, "Phụ kiện", fields.path("accessories").asText(""), title, lexicon);
         addIfKnown(result, "Lỗi", fields.path("defects").asText(""), title, lexicon);
-        List<String> allowedDetails = detailsFor(fields.path("itemCategory").asText());
-        for (JsonNode detailNode : fields.path("detailsToConfirm")) {
-            if (!detailNode.isTextual()) continue;
-            String detail = detailNode.asText();
-            if (allowedDetails.contains(detail)
-                    && result.stream().noneMatch(attribute -> attribute.name().equals(detail))) {
-                result.add(new AttributeSuggestion(detail, "…", true));
-            }
+        for (JsonNode suggestion : fields.path("suggestions")) {
+            if (!suggestion.isObject()) continue;
+            String name = safe(suggestion.path("name").asText(""), lexicon, 40);
+            String question = safe(suggestion.path("question").asText(""), lexicon, 160);
+            if (name.isBlank()
+                    || question.isBlank()
+                    || !question.endsWith("?")
+                    || unrelatedCapacity(title, name + " " + question)
+                    || NUMBER.matcher(name + " " + question).results().anyMatch(match -> !title.contains(match.group()))
+                    || result.stream().anyMatch(attribute -> attribute.name().equalsIgnoreCase(name))) continue;
+            result.add(new AttributeSuggestion(name, "…", true, question));
         }
         return List.copyOf(result);
     }
@@ -196,21 +183,14 @@ public class AiDescriptionService {
     private void addIfKnown(
             List<AttributeSuggestion> result, String name, String value, String title, List<LexiconEntry> lexicon) {
         String known = grounded(value, title, lexicon);
-        if (!known.isBlank()) result.add(new AttributeSuggestion(name, known, false));
+        if (!known.isBlank()) result.add(new AttributeSuggestion(name, known, false, null));
     }
 
-    private List<String> detailsFor(String category) {
-        return switch (category) {
-            case "WATCH" -> List.of("Kiểu dáng mặt", "Kích cỡ mặt", "Chất liệu dây", "Tình trạng hoạt động");
-            case "JEWELRY" -> List.of("Kiểu dáng", "Kích cỡ phù hợp", "Chất liệu thực tế", "Tình trạng bề mặt");
-            case "CLOTHING" -> List.of("Kích cỡ", "Phom dáng", "Chất liệu thực tế", "Tình trạng vải");
-            case "FOOTWEAR" -> List.of("Cỡ giày", "Kiểu dáng", "Tình trạng đế", "Tình trạng bề mặt");
-            case "ELECTRONIC" -> List.of("Mã sản phẩm", "Thông số chính", "Tình trạng hoạt động", "Phụ kiện");
-            case "CONTAINER" -> List.of("Dung tích", "Kích thước", "Chất liệu thực tế", "Tình trạng sử dụng");
-            case "FURNITURE" -> List.of("Kích thước", "Chất liệu thực tế", "Tình trạng bề mặt", "Cách vận chuyển");
-            case "BOOK" -> List.of("Tác giả", "Phiên bản", "Tình trạng trang", "Ghi chú trong sách");
-            default -> List.of("Kích thước hoặc thông số liên quan", "Tình trạng thực tế", "Thời gian đã dùng");
-        };
+    private boolean unrelatedCapacity(String title, String suggestion) {
+        String subject = title.toLowerCase(Locale.ROOT);
+        String prompt = suggestion.toLowerCase(Locale.ROOT);
+        return prompt.contains("dung tích")
+                && (subject.contains("đồng hồ") || subject.contains("trang sức") || subject.contains("nhẫn"));
     }
 
     private String grounded(String value, String title, List<LexiconEntry> lexicon) {

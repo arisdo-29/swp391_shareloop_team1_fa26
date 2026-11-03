@@ -19,7 +19,7 @@ describe('DescribeItemSuggestion', () => {
     const onUse = vi.fn();
     vi.mocked(aiApi.describeItem).mockResolvedValue({
       description: 'Loại: Đồng hồ\nKích cỡ mặt: …',
-      attributes: [{ name: 'Kích cỡ mặt', value: '…', requiresUserInput: true }],
+      attributes: [{ name: 'Kích cỡ mặt', value: '…', requiresUserInput: true, prompt: 'Mặt chiếc đồng hồ này rộng bao nhiêu?' }],
       remainingUses: 4,
       message: 'Bạn kiểm tra bản nháp nhé.',
     });
@@ -30,6 +30,7 @@ describe('DescribeItemSuggestion', () => {
     await user.click(screen.getByRole('button', { name: 'Gợi ý mô tả bằng AI' }));
     expect(aiApi.describeItem).toHaveBeenCalledWith('Đồng hồ');
     expect(await screen.findByText(/Kích cỡ mặt: …/)).toBeTruthy();
+    expect(screen.getByText('Mặt chiếc đồng hồ này rộng bao nhiêu?')).toBeTruthy();
     expect(onUse).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Dùng gợi ý' }));
     expect(onUse).toHaveBeenCalledWith('Loại: Đồng hồ\nKích cỡ mặt: …');
