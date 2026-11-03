@@ -103,7 +103,7 @@ function TransactionProgressView({
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className="page-shell py-6 sm:py-8">
       <Button variant="ghost" onClick={() => navigate(requestConversationPath(request.id))}>
         Quay lại tin nhắn
       </Button>

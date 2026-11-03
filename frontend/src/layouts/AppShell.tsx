@@ -207,7 +207,7 @@ function AppShellContent() {
             : 'sticky'
         }`}
       >
-        <div className="mx-auto flex min-h-[68px] w-full max-w-[1440px] items-center gap-5 px-4 py-2 sm:px-6">
+        <div className="wide-shell flex min-h-[68px] items-center gap-5 py-2">
           <Link
             to={isAdmin ? '/admin' : '/'}
             onClick={closeMenus}
@@ -422,8 +422,8 @@ function AppShellContent() {
       {/* Quản trị viên và các trang tài khoản không hiện chân trang dành cho người dùng. */}
       {!isAdmin && !authPaths.has(pathname) ? (
         <footer className="site-footer mt-auto border-t">
-          <div className="mx-auto w-full max-w-[1440px] px-4 pb-8 pt-12 sm:px-6 sm:pt-14">
-            <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
+          <div className="wide-shell pb-8 pt-12 sm:pt-14">
+            <div className="grid gap-[clamp(1.5rem,3vw,2.5rem)] sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
               <div className="max-w-sm">
                 <Link to="/" className="inline-flex items-center gap-2.5">
                   <span className="grid size-9 place-items-center rounded-md bg-primary text-white">

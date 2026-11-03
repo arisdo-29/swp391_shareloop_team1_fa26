@@ -18,8 +18,8 @@ describe('DescribeItemSuggestion', () => {
     const user = userEvent.setup();
     const onUse = vi.fn();
     vi.mocked(aiApi.describeItem).mockResolvedValue({
-      description: 'Loại: Đồng hồ\nKích thước: … x … x … cm',
-      attributes: [{ name: 'Kích thước', value: '… x … x … cm', requiresUserInput: true }],
+      description: 'Loại: Đồng hồ\nKích cỡ mặt: …',
+      attributes: [{ name: 'Kích cỡ mặt', value: '…', requiresUserInput: true, prompt: 'Mặt chiếc đồng hồ này rộng bao nhiêu?' }],
       remainingUses: 4,
       message: 'Bạn kiểm tra bản nháp nhé.',
     });
@@ -29,10 +29,11 @@ describe('DescribeItemSuggestion', () => {
     rerender(<DescribeItemSuggestion title="Đồng hồ" onUse={onUse} />);
     await user.click(screen.getByRole('button', { name: 'Gợi ý mô tả bằng AI' }));
     expect(aiApi.describeItem).toHaveBeenCalledWith('Đồng hồ');
-    expect(await screen.findByText(/Kích thước: … x … x … cm/)).toBeTruthy();
+    expect(await screen.findByText(/Kích cỡ mặt: …/)).toBeTruthy();
+    expect(screen.getByText('Mặt chiếc đồng hồ này rộng bao nhiêu?')).toBeTruthy();
     expect(onUse).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Dùng gợi ý' }));
-    expect(onUse).toHaveBeenCalledWith('Loại: Đồng hồ\nKích thước: … x … x … cm');
+    expect(onUse).toHaveBeenCalledWith('Loại: Đồng hồ\nKích cỡ mặt: …');
   });
 
   it('lỗi AI không cản người đăng tự viết mô tả', async () => {
