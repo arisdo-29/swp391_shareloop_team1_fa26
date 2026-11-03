@@ -55,14 +55,14 @@ Response thành công:
 
 ```json
 {
-  "description": "Đồng hồ Casio màu đen.\nLoại: Đồng hồ\nThương hiệu: Casio\nMàu: đen\nKích thước: … x … x … cm",
+  "description": "Món đồ: Đồng hồ Casio màu đen.\nLoại: Đồng hồ\nThương hiệu: Casio\nMàu: đen\nKiểu dáng mặt: …\nKích cỡ mặt: …\nChất liệu dây: …\nTình trạng hoạt động: …",
   "attributes": [
     { "name": "Thương hiệu", "value": "Casio", "requiresUserInput": false },
-    { "name": "Kích thước", "value": "… x … x … cm", "requiresUserInput": true }
+    { "name": "Kích cỡ mặt", "value": "…", "requiresUserInput": true }
   ],
   "remainingUses": 4,
   "message": "Đây là bản nháp từ tên món đồ. Bạn hãy kiểm tra và sửa lại trước khi đăng nhé."
 }
 ```
 
-Danh sách thực tế còn các mục Loại, Chất liệu, Tình trạng gợi ý, Khối lượng, Dung tích, Thời gian đã dùng, Tình trạng hoạt động, Phụ kiện và Lỗi. AI chỉ điền thông tin nêu rõ trong tên; những thông tin chưa biết để dấu `…`, người đăng tự xác nhận. Server loại phần có thông tin liên hệ hoặc từ thuộc lexicon kiểm duyệt trước khi trả. Nút “Dùng gợi ý” ở form chỉ chép bản nháp vào ô Mô tả để người đăng sửa; không tự chọn ô Tình trạng hay tự gửi bài. Nếu Gemini lỗi hoặc quá giờ, trả `description: ""`, `attributes: []`, thông báo tự viết mô tả và không tính lượt. Bài đăng vẫn qua kiểm duyệt nội dung và Admin như bình thường.
+Gemini xác định loại món và chọn tối đa bốn chi tiết cần bổ sung từ tên. Backend chỉ đưa vào bản nháp những thông tin AI trích ra được nguyên văn từ tên và các chi tiết được phép cho loại món đó. Ví dụ đồng hồ hỏi về mặt, dây và hoạt động; bình chứa hỏi dung tích; sách hỏi tình trạng trang. Các mục không liên quan sẽ bị loại. Giá trị chưa biết để dấu `…`, người đăng tự xác nhận. Server loại phần có thông tin liên hệ hoặc từ thuộc lexicon kiểm duyệt trước khi trả. Nút “Dùng gợi ý” ở form chỉ chép bản nháp vào ô Mô tả để người đăng sửa; không tự chọn ô Tình trạng hay tự gửi bài. Nếu Gemini lỗi hoặc quá giờ, trả `description: ""`, `attributes: []`, thông báo tự viết mô tả và không tính lượt. Bài đăng vẫn qua kiểm duyệt nội dung và Admin như bình thường.

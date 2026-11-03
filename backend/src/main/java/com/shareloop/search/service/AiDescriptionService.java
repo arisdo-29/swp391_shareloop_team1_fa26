@@ -93,12 +93,38 @@ public class AiDescriptionService {
             JsonNode fields = mapper.readTree(client.describe(
                     normalizedTitle, Duration.ofSeconds(configService.getInt(ConfigKey.AI_DESCRIBE_TIMEOUT_SECONDS))));
             if (!fields.isObject()
-                    || !List.of("itemType", "brand", "color", "material", "conditionHint", "accessories", "defects")
+                    || !List.of(
+                                    "itemType",
+                                    "brand",
+                                    "color",
+                                    "material",
+                                    "conditionHint",
+                                    "accessories",
+                                    "defects",
+                                    "itemCategory")
                             .stream()
-                            .allMatch(name -> fields.path(name).isTextual())) {
+                            .allMatch(name -> fields.path(name).isTextual())
+                    || !List.of(
+                                    "WATCH",
+                                    "JEWELRY",
+                                    "CLOTHING",
+                                    "FOOTWEAR",
+                                    "ELECTRONIC",
+                                    "CONTAINER",
+                                    "FURNITURE",
+                                    "BOOK",
+                                    "OTHER")
+                            .contains(fields.path("itemCategory").asText())) {
                 throw new IllegalArgumentException("Description must match the expected JSON schema");
             }
+            JsonNode requestedDetails = fields.path("detailsToConfirm");
+            if (!requestedDetails.isArray() || requestedDetails.isEmpty() || requestedDetails.size() > 4) {
+                throw new IllegalArgumentException("Description details must be a non-empty list of up to four items");
+            }
             List<AttributeSuggestion> attributes = attributes(fields, normalizedTitle, postLexicon);
+            if (attributes.stream().noneMatch(AttributeSuggestion::requiresUserInput)) {
+                throw new IllegalArgumentException("Description has no relevant details to confirm");
+            }
             StringBuilder description =
                     new StringBuilder("Món đồ: ").append(normalizedTitle).append('.');
             for (AttributeSuggestion attribute : attributes) {
@@ -148,25 +174,43 @@ public class AiDescriptionService {
 
     private List<AttributeSuggestion> attributes(JsonNode fields, String title, List<LexiconEntry> lexicon) {
         List<AttributeSuggestion> result = new ArrayList<>();
-        result.add(suggest("Loại", grounded(fields.path("itemType").asText(""), title, lexicon), "…", false));
-        result.add(suggest("Thương hiệu", grounded(fields.path("brand").asText(""), title, lexicon), "…", false));
-        result.add(suggest("Màu", grounded(fields.path("color").asText(""), title, lexicon), "…", false));
-        result.add(suggest("Chất liệu", grounded(fields.path("material").asText(""), title, lexicon), "…", false));
-        result.add(suggest(
-                "Tình trạng gợi ý", grounded(fields.path("conditionHint").asText(""), title, lexicon), "…", true));
-        result.add(new AttributeSuggestion("Kích thước", "… x … x … cm", true));
-        result.add(new AttributeSuggestion("Khối lượng", "…", true));
-        result.add(new AttributeSuggestion("Dung tích", "…", true));
-        result.add(new AttributeSuggestion("Thời gian đã dùng", "…", true));
-        result.add(new AttributeSuggestion("Tình trạng hoạt động", "…", true));
-        result.add(suggest("Phụ kiện", grounded(fields.path("accessories").asText(""), title, lexicon), "…", false));
-        result.add(suggest("Lỗi", grounded(fields.path("defects").asText(""), title, lexicon), "…", false));
+        addIfKnown(result, "Loại", fields.path("itemType").asText(""), title, lexicon);
+        addIfKnown(result, "Thương hiệu", fields.path("brand").asText(""), title, lexicon);
+        addIfKnown(result, "Màu", fields.path("color").asText(""), title, lexicon);
+        addIfKnown(result, "Chất liệu", fields.path("material").asText(""), title, lexicon);
+        addIfKnown(result, "Tình trạng theo tên", fields.path("conditionHint").asText(""), title, lexicon);
+        addIfKnown(result, "Phụ kiện", fields.path("accessories").asText(""), title, lexicon);
+        addIfKnown(result, "Lỗi", fields.path("defects").asText(""), title, lexicon);
+        List<String> allowedDetails = detailsFor(fields.path("itemCategory").asText());
+        for (JsonNode detailNode : fields.path("detailsToConfirm")) {
+            if (!detailNode.isTextual()) continue;
+            String detail = detailNode.asText();
+            if (allowedDetails.contains(detail)
+                    && result.stream().noneMatch(attribute -> attribute.name().equals(detail))) {
+                result.add(new AttributeSuggestion(detail, "…", true));
+            }
+        }
         return List.copyOf(result);
     }
 
-    private AttributeSuggestion suggest(String name, String value, String placeholder, boolean alwaysUserInput) {
-        boolean missing = value.isBlank();
-        return new AttributeSuggestion(name, missing ? placeholder : value, alwaysUserInput || missing);
+    private void addIfKnown(
+            List<AttributeSuggestion> result, String name, String value, String title, List<LexiconEntry> lexicon) {
+        String known = grounded(value, title, lexicon);
+        if (!known.isBlank()) result.add(new AttributeSuggestion(name, known, false));
+    }
+
+    private List<String> detailsFor(String category) {
+        return switch (category) {
+            case "WATCH" -> List.of("Kiểu dáng mặt", "Kích cỡ mặt", "Chất liệu dây", "Tình trạng hoạt động");
+            case "JEWELRY" -> List.of("Kiểu dáng", "Kích cỡ phù hợp", "Chất liệu thực tế", "Tình trạng bề mặt");
+            case "CLOTHING" -> List.of("Kích cỡ", "Phom dáng", "Chất liệu thực tế", "Tình trạng vải");
+            case "FOOTWEAR" -> List.of("Cỡ giày", "Kiểu dáng", "Tình trạng đế", "Tình trạng bề mặt");
+            case "ELECTRONIC" -> List.of("Mã sản phẩm", "Thông số chính", "Tình trạng hoạt động", "Phụ kiện");
+            case "CONTAINER" -> List.of("Dung tích", "Kích thước", "Chất liệu thực tế", "Tình trạng sử dụng");
+            case "FURNITURE" -> List.of("Kích thước", "Chất liệu thực tế", "Tình trạng bề mặt", "Cách vận chuyển");
+            case "BOOK" -> List.of("Tác giả", "Phiên bản", "Tình trạng trang", "Ghi chú trong sách");
+            default -> List.of("Kích thước hoặc thông số liên quan", "Tình trạng thực tế", "Thời gian đã dùng");
+        };
     }
 
     private String grounded(String value, String title, List<LexiconEntry> lexicon) {
