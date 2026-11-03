@@ -24,7 +24,7 @@ export interface AiQuotaResponse {
 
 export interface AiDescriptionResponse {
   description: string;
-  attributes: Array<{ name: string; value: string; requiresUserInput: boolean }>;
+  attributes: Array<{ name: string; value: string; requiresUserInput: boolean; prompt?: string | null }>;
   remainingUses: number;
   message: string;
 }

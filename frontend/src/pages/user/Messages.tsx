@@ -590,8 +590,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
-      <div className="grid gap-4 lg:h-[calc(100vh-9rem)] lg:min-h-[640px] lg:grid-cols-[minmax(300px,440px)_minmax(0,1fr)]">
+    <div className="wide-shell py-5 sm:py-7">
+      <div className="grid gap-[clamp(0.75rem,1.5vw,1.25rem)] lg:h-[calc(100vh-9rem)] lg:min-h-[640px] lg:grid-cols-[minmax(280px,400px)_minmax(0,1fr)]">
         <ConversationList
           className={mobileChat ? 'hidden lg:flex' : 'flex'}
           conversations={conversations}
@@ -649,7 +649,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   </div>
                 ) : null}
                 {!pinnedItemsLoading && extraPinnedItems.length ? (
-                  <div className="flex gap-2 overflow-x-auto pb-1">
+                  <div className="flex max-w-full gap-2 overflow-x-auto pb-1">
                     {extraPinnedItems.map((pinnedItem) => (
                       <button
                         key={pinnedItem.id}
