@@ -7,8 +7,8 @@
   --browse-copy: #374151;
   --browse-muted: #6b7280;
   min-height: calc(100vh - 68px);
-  max-width: 1440px;
-  padding-inline: 24px;
+  max-width: var(--layout-wide-max);
+  padding-inline: var(--layout-gutter);
   background: var(--browse-background);
   box-shadow: 0 0 0 100vmax var(--browse-background);
   clip-path: inset(0 -100vmax);
@@ -38,7 +38,7 @@
 .browse-layout {
   display: grid;
   align-items: start;
-  gap: 22px;
+  gap: clamp(16px, 2vw, 22px);
 }
 
 .browse-filter-card {
@@ -333,10 +333,6 @@
 }
 
 @media (max-width: 767px) {
-  .browse-page {
-    padding-inline: 16px;
-  }
-
   .browse-results-toolbar {
     align-items: stretch;
     flex-direction: column;

@@ -41,7 +41,7 @@ export function DialogFrame({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-end bg-black/45 sm:place-items-center sm:p-4"
+      className="fixed inset-0 z-50 grid place-items-end overflow-hidden bg-black/45 sm:place-items-center sm:p-[clamp(1rem,2vw,2rem)]"
       onMouseDown={() => {
         if (onClose && !busy) onClose();
       }}
@@ -50,7 +50,7 @@ export function DialogFrame({
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
-        className={`max-h-[92dvh] w-full overflow-y-auto rounded-t-xl border border-border bg-white p-5 shadow-lg sm:rounded-xl sm:p-6 ${sizeClass[size]} ${className}`}
+        className={`max-h-[92dvh] w-full min-w-0 overscroll-contain overflow-y-auto rounded-t-xl border border-border bg-white p-5 shadow-lg sm:max-h-[calc(100dvh-2rem)] sm:rounded-xl sm:p-6 ${sizeClass[size]} ${className}`}
         onMouseDown={(event) => event.stopPropagation()}
       >
         {children}
