@@ -143,10 +143,10 @@ describe('ChatHeader', () => {
     expect(screen.getByText('Món đồ của bạn')).toBeTruthy();
     expect(screen.getByText('Món đồ bạn sẽ nhận')).toBeTruthy();
     expect(screen.getByText('Mũ bảo hiểm 3/4')).toBeTruthy();
-    expect(screen.getByText('Ít sử dụng')).toBeTruthy();
+    expect(screen.getByText(/^Ít sử dụng · /)).toBeTruthy();
     expect(screen.queryByText('Mũ ít sử dụng, kính còn trong.')).toBeNull();
     expect(screen.queryByText('Xe còn tốt, phanh hoạt động bình thường.')).toBeNull();
-    expect(screen.getByText('Chủ sở hữu: Bình Người Nhận')).toBeTruthy();
+    expect(screen.getByText(/^Ít sử dụng · Bình Người Nhận$/)).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Mũ bảo hiểm 3/4' }).getAttribute('src'))
       .toContain('/api/v1/media/77');
     expect(screen.getAllByRole('button', { name: 'Xem chi tiết' })).toHaveLength(2);
@@ -200,6 +200,25 @@ describe('ChatHeader', () => {
 
     // then
     expect(screen.getByTestId('location').textContent).toBe('/messages/101/progress');
+  });
+
+  it('bấm Ẩn món đồ thì ẩn khung món đồ nhưng vẫn giữ tiến trình, bấm Hiện món đồ thì hiện lại', async () => {
+    // given
+    const user = userEvent.setup();
+    renderHeader(RECEIVER_ID, conversation());
+
+    // when
+    await user.click(screen.getByRole('button', { name: 'Ẩn món đồ' }));
+
+    // then
+    expect(screen.queryByRole('button', { name: /Xe đạp cũ/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Xem tiến trình' })).toBeTruthy();
+
+    // when
+    await user.click(screen.getByRole('button', { name: 'Hiện món đồ' }));
+
+    // then
+    expect(screen.getByRole('button', { name: /Xe đạp cũ/ })).toBeTruthy();
   });
 
   it('chỉ có một thẻ món, kèm nhãn loại, nhãn trạng thái và thanh 4 đoạn', () => {
@@ -264,7 +283,7 @@ describe('ChatHeader', () => {
     const offeredImage = screen.getByRole('img', { name: 'Dong ho treo tuong doi chim cong' });
     expect(mainImage.getAttribute('src')).toContain('/api/v1/media/main-valid');
     expect(offeredImage.getAttribute('src')).toContain('/api/v1/media/clock');
-    expect(offeredImage.className).toContain('size-20');
+    expect(offeredImage.className).toContain('size-12');
     expect(offeredImage.className).toContain('object-cover');
     expect(screen.queryByText('Chưa có ảnh')).toBeNull();
 
