@@ -50,7 +50,8 @@ export function ModerationChecklistContent({
       </div>
 
       {checklist.length ? (
-        <div className="max-h-[50dvh] space-y-2 overflow-y-auto overscroll-contain pr-1">
+        // Từ màn lg chiều cao danh sách co theo màn hình (trừ phần tiêu đề và các nút) để nút Từ chối luôn nằm trong màn hình.
+        <div className="max-h-[50dvh] space-y-2 overflow-y-auto overscroll-contain pr-1 lg:max-h-[calc(100dvh-440px)] lg:min-h-40">
           {checklist.map((entry, index) => (
             <label
               key={entry.id}
