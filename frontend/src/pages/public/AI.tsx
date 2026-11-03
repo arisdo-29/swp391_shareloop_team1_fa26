@@ -41,6 +41,9 @@ export function AI() {
     const snapshot = userId ? readAiSearchSnapshot(userId) : null;
     setQuota(null);
     setQuotaError('');
+    // Quay lại từ trang chi tiết thì giữ nguyên câu đã hỏi trong ô nhập.
+    setQuery(snapshot?.query ?? '');
+    setSubmittedQuery(snapshot?.query ?? '');
     setStatus(snapshot ? 'success' : 'idle');
     setResults(snapshot?.items ?? []);
     setMessage(snapshot?.message ?? '');
@@ -82,7 +85,7 @@ export function AI() {
       const items = response.results.items.map((item) => toFeItem(item, categoryNames, areaNames));
       setMessage(response.message);
       setResults(items);
-      saveAiSearchSnapshot({ userId: user.id, message: response.message, items, chargedCredits: response.chargedCredits });
+      saveAiSearchSnapshot({ userId: user.id, query: normalizedQuery, message: response.message, items, chargedCredits: response.chargedCredits });
       setQuota(response.quota);
       setChargedCredits(response.chargedCredits);
       setStatus('success');

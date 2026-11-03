@@ -378,7 +378,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   }, [currentUserId, selectedRequestId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Chỉ cuộn khung chat; scrollIntoView sẽ cuộn cả trang xuống footer.
+    const container = messagesEndRef.current?.parentElement;
+    if (container) container.scrollTop = container.scrollHeight;
   }, [messages.length, selectedRequestId]);
 
   const selectedDonorId = selected ? donorIdOf(selected) : undefined;

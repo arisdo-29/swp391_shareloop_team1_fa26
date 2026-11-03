@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Avatar, Button, ItemImage, StatusBadge, TypeBadge } from '../ui';
 import { ReputationBadge } from '../ReputationBadge';
@@ -55,10 +56,10 @@ function SwapItemCard({
   };
 
   return (
-    <article className="flex min-w-0 flex-1 flex-col rounded-md bg-white p-3 ring-1 ring-border/80">
+    <article className="flex min-w-0 flex-1 flex-col rounded-md bg-white p-2 ring-1 ring-border/80">
       <p className="text-xs font-semibold text-primary">{label}</p>
       {title ? (
-        <div className="mt-2 flex min-w-0 flex-1 items-start gap-3">
+        <div className="mt-1 flex min-w-0 flex-1 items-start gap-2.5">
           <button
             type="button"
             className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -69,28 +70,24 @@ function SwapItemCard({
             <ItemImage
               src={itemPrimaryImage(item, fallbackImage)}
               alt={title}
-              className="size-20 rounded-md object-cover"
+              className="size-12 rounded-md object-cover"
             />
           </button>
           <div className="flex min-w-0 flex-1 flex-col self-stretch">
             <button
               type="button"
-              className="line-clamp-2 text-left text-sm font-bold text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="line-clamp-1 text-left text-xs font-bold text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               disabled={!detailPath}
               onClick={openDetail}
             >
               {title}
             </button>
-            {item ? (
-              <p className="mt-1 text-xs font-medium text-text-secondary">
-                {conditionLabel[item.condition]}
-              </p>
-            ) : null}
-            <p className="mt-1 truncate text-xs text-text-secondary">
-              Chủ sở hữu: {item?.donorName?.trim() || ownerFallback}
+            <p className="truncate text-xs text-text-secondary">
+              {item ? `${conditionLabel[item.condition]} · ` : ''}
+              {item?.donorName?.trim() || ownerFallback}
             </p>
             {detailPath ? (
-              <Button className="mt-auto self-start" size="sm" onClick={openDetail}>
+              <Button className="mt-1 self-start !min-h-7 !px-2 !py-0.5" size="sm" onClick={openDetail}>
                 Xem chi tiết
               </Button>
             ) : null}
@@ -115,6 +112,8 @@ export function ChatHeader({
   onReport,
 }: ChatHeaderProps) {
   const navigate = useNavigate();
+  // Ẩn khung món đồ + tiến trình để vùng tin nhắn bên dưới rộng hơn.
+  const [detailsHidden, setDetailsHidden] = useState(false);
   const { request } = conversation;
   const participantName = requestParticipantName(conversation, currentUserId);
   const partnerId = partnerIdOf(conversation, currentUserId);
@@ -163,6 +162,14 @@ export function ChatHeader({
               Xem hồ sơ
             </Button>
           ) : null}
+          <Button
+            variant="outline"
+            size="sm"
+            aria-expanded={!detailsHidden}
+            onClick={() => setDetailsHidden((hidden) => !hidden)}
+          >
+            {detailsHidden ? 'Hiện món đồ' : 'Ẩn món đồ'}
+          </Button>
           {canReport ? (
             <Button variant="ghost" size="sm" onClick={onReport}>
               Báo cáo
@@ -171,9 +178,12 @@ export function ChatHeader({
         </div>
       </header>
 
-      <div className="mx-4 mb-3 rounded-md p-2.5 ring-1 ring-border/80">
+      <div
+        hidden={detailsHidden}
+        className="mx-4 mb-2 rounded-md p-2 ring-1 ring-border/80"
+      >
         {isSwap ? (
-          <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-stretch">
+          <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-stretch">
             <SwapItemCard
               label={viewerIsDonor ? 'Món đồ của bạn' : 'Món đồ của chủ bài'}
               item={conversation.item}
@@ -185,7 +195,7 @@ export function ChatHeader({
             />
             <div
               aria-label="Trao đổi hai món đồ"
-              className="mx-auto grid size-9 place-items-center self-center rounded-full bg-primary-faint text-lg font-bold text-primary"
+              className="mx-auto grid size-7 place-items-center self-center rounded-full bg-primary-faint text-sm font-bold text-primary"
             >
               ↔
             </div>
@@ -219,12 +229,18 @@ export function ChatHeader({
             </span>
           </button>
         )}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border/70 pt-3">
-          <CompactProgress status={request.status} />
-          <Button size="sm" onClick={() => navigate(transactionProgressPath(request.id))}>
-            Xem tiến trình
-          </Button>
-        </div>
+      </div>
+
+      {/* Tiến trình tách riêng khỏi khung món đồ: ẩn món đồ vẫn thấy tiến trình. */}
+      <div className="mx-4 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md p-2 ring-1 ring-border/80">
+        <CompactProgress status={request.status} />
+        <Button
+          size="sm"
+          className="!min-h-7 !px-2.5 !py-0.5"
+          onClick={() => navigate(transactionProgressPath(request.id))}
+        >
+          Xem tiến trình
+        </Button>
       </div>
     </div>
   );

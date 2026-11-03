@@ -4,6 +4,7 @@ const STORAGE_KEY = 'shareloop:ai-search-result';
 
 export interface AiSearchSnapshot {
   userId: string;
+  query: string;
   message: string;
   items: Item[];
   chargedCredits: number;
@@ -22,7 +23,9 @@ export function readAiSearchSnapshot(userId: string): AiSearchSnapshot | null {
       item && typeof item.id === 'string' && typeof item.title === 'string'
       && typeof item.description === 'string' && Array.isArray(item.images))) return null;
     if (typeof snapshot.chargedCredits !== 'number') return null;
-    return snapshot as AiSearchSnapshot;
+    // Bản lưu cũ chưa có câu hỏi thì coi như rỗng.
+    const query = typeof snapshot.query === 'string' ? snapshot.query : '';
+    return { ...snapshot, query } as AiSearchSnapshot;
   } catch {
     return null;
   }
