@@ -266,7 +266,7 @@ export function AdminFinanceReport() {
               rows={group.rows.map((row) => ({
                 label: transactionLabels[row.type] ?? 'Khác',
                 value: row.amount,
-                detail: `${row.entryCount} bút toán`,
+                detail: `${row.entryCount} lượt`,
               }))}
             />
           </Suspense>

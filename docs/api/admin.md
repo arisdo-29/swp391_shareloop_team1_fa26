@@ -230,38 +230,40 @@ Xuất báo cáo tài chính ra file CSV (FR-111, Issue #149). Cùng số liệu
 **Định dạng file:**
 
 - Mã hoá UTF-8 **có BOM** (3 byte đầu `EF BB BF`) để Excel hiển thị đúng tiếng Việt; phân cách bằng dấu phẩy, xuống dòng CRLF.
-- File chia thành các phần cách nhau một dòng trống. Mỗi phần gồm dòng tiêu đề tiếng Việt, dòng header trùng tên trường của `FinanceSummaryResponse`, rồi các dòng dữ liệu.
-- `Từ ngày` / `Đến ngày` là ngày Admin truyền vào (theo giờ Việt Nam); không truyền thì ghi `không giới hạn`.
-- Phần Credit liệt kê từng `type` có dữ liệu (sắp theo tên type), số luôn dương; dòng `Tổng` có `amount` = `creditInTotal` / `creditOutTotal` và `entryCount` = tổng `entryCount` các dòng phía trên.
+- File chia thành các phần cách nhau một dòng trống. Mỗi phần gồm dòng tiêu đề tiếng Việt, dòng header tiếng Việt, rồi các dòng dữ liệu. Số ghi ở dạng số thuần, không có dấu phân cách hàng nghìn.
+- `Từ ngày` / `Đến ngày` là ngày Admin truyền vào (theo giờ Việt Nam), ghi dạng `dd/MM/yyyy`; không truyền thì ghi `không giới hạn`.
+- Phần Credit liệt kê từng loại giao dịch có dữ liệu (sắp theo tên type), ghi bằng nhãn tiếng Việt, số luôn dương; dòng `Tổng` có `Số Credit` = `creditInTotal` / `creditOutTotal` và `Số lượt` = tổng `entryCount` các dòng phía trên.
+- Nhãn loại giao dịch: `TOP_UP` = Nạp Credit, `POST_FEE` = Phí đăng bài, `EDIT_FEE` = Phí sửa bài, `RENEW_FEE` = Phí gia hạn, `BOOST_FEE` = Phí đẩy bài, `AI_SEARCH_FEE` = Phí tìm bằng AI, `ADMIN_ADJUST` = Admin điều chỉnh.
+- Phần đối chiếu: cột `Kết quả` là `Khớp` khi `matched = true`, ngược lại là `Lệch`.
 
 Ví dụ với cùng dữ liệu của mục 2 (`from=2026-10-01&to=2026-10-31`):
 
 ```csv
 Báo cáo tài chính ShareLoop
-Từ ngày,2026-10-01
-Đến ngày,2026-10-31
+Từ ngày,01/10/2026
+Đến ngày,31/10/2026
 
 Tiền mặt thu
-cashOrderCount,cashAmountVnd
+Số đơn nạp thành công,Số tiền thu (VND)
 3,100000
 
 Credit cộng vào
-type,amount,entryCount
-ADMIN_ADJUST,7,1
-TOP_UP,100,3
+Loại giao dịch,Số Credit,Số lượt
+Admin điều chỉnh,7,1
+Nạp Credit,100,3
 Tổng,107,4
 
 Credit trừ ra
-type,amount,entryCount
-AI_SEARCH_FEE,2,2
-EDIT_FEE,5,1
-POST_FEE,10,2
-RENEW_FEE,5,1
+Loại giao dịch,Số Credit,Số lượt
+Phí tìm bằng AI,2,2
+Phí sửa bài,5,1
+Phí đăng bài,10,2
+Phí gia hạn,5,1
 Tổng,22,6
 
-Đối chiếu TopUp
-cashCredits,topUpCredits,difference,matched
-100,100,0,true
+Đối chiếu nạp Credit
+Credit quy đổi từ tiền mặt,Credit nạp ghi sổ,Chênh lệch,Kết quả
+100,100,0,Khớp
 ```
 
 - **Mã lỗi:** trả JSON theo định dạng lỗi chung (không phải CSV), không có `Content-Disposition`.

@@ -3,6 +3,7 @@ package com.shareloop.review.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -29,6 +30,7 @@ import com.shareloop.review.dto.ChecklistAnswer;
 import com.shareloop.review.entity.ReviewItem;
 import com.shareloop.review.repository.ReviewItemRepository;
 import com.shareloop.review.repository.ReviewQueueRepository;
+import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.dto.ChecklistItem;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.dto.UserBrief;
@@ -82,7 +84,7 @@ class ReviewServiceTest {
 
     @Test
     void pendingResponseIncludesChecklist() {
-        when(queueRepository.findPendingReviewQueue(any())).thenReturn(List.of());
+        when(queueRepository.findPendingReviewQueue(any(), anyInt())).thenReturn(List.of());
 
         var result = service.listPendingWithChecklist(0, 20);
 
@@ -91,6 +93,19 @@ class ReviewServiceTest {
                 .containsExactly(
                         new ChecklistItem(11L, "photos", "Ảnh đúng món"),
                         new ChecklistItem(12L, "description", "Mô tả trung thực"));
+    }
+
+    @Test
+    void listPending_passesConfiguredNewcomerThresholdToQueueQuery() {
+        // given: Admin đã chỉnh ngưỡng người mới thành 5 bài
+        when(configService.getInt(ConfigKey.REVIEW_NEWCOMER_MAX_APPROVED)).thenReturn(5);
+        when(queueRepository.findPendingReviewQueue(any(), anyInt())).thenReturn(List.of());
+
+        // when
+        service.listPending(0, 20);
+
+        // then
+        verify(queueRepository).findPendingReviewQueue(any(), eq(5));
     }
 
     @Test
@@ -197,7 +212,8 @@ class ReviewServiceTest {
         Object[] row = {
             8L, 99L, "Áo", "LOW", "REVIEW", "LEXICON_REVIEW", (short) 3, Instant.parse("2026-10-19T00:00:00Z"), "null"
         };
-        when(queueRepository.findPendingReviewQueue(any())).thenReturn(java.util.Collections.singletonList(row));
+        when(queueRepository.findPendingReviewQueue(any(), anyInt()))
+                .thenReturn(java.util.Collections.singletonList(row));
 
         var item = service.listPending(0, 20).getFirst();
 
@@ -226,7 +242,8 @@ class ReviewServiceTest {
             Instant.parse("2026-10-19T00:00:00Z"),
             "[\"zalo\",\"liên hệ\"]"
         };
-        when(queueRepository.findPendingReviewQueue(any())).thenReturn(java.util.Collections.singletonList(row));
+        when(queueRepository.findPendingReviewQueue(any(), anyInt()))
+                .thenReturn(java.util.Collections.singletonList(row));
 
         var item = service.listPending(0, 20).getFirst();
 
@@ -239,7 +256,8 @@ class ReviewServiceTest {
     void pendingQueue_includesDonorNameFromUserService() {
         // given
         Object[] row = {8L, 99L, "Áo", "LOW", "NONE", null, (short) 3, Instant.parse("2026-10-19T00:00:00Z"), null};
-        when(queueRepository.findPendingReviewQueue(any())).thenReturn(java.util.Collections.singletonList(row));
+        when(queueRepository.findPendingReviewQueue(any(), anyInt()))
+                .thenReturn(java.util.Collections.singletonList(row));
         when(userService.findBriefs(java.util.Set.of(99L)))
                 .thenReturn(Map.of(99L, new UserBrief(99L, "Nguyễn Văn A", "a@test.local")));
 
@@ -255,7 +273,8 @@ class ReviewServiceTest {
     void pendingQueue_whenDonorHasNoBrief_leavesDonorNameNull() {
         // given: người đăng đã bị xoá mềm nên findBriefs không trả về họ
         Object[] row = {8L, 99L, "Áo", "LOW", "NONE", null, (short) 3, Instant.parse("2026-10-19T00:00:00Z"), null};
-        when(queueRepository.findPendingReviewQueue(any())).thenReturn(java.util.Collections.singletonList(row));
+        when(queueRepository.findPendingReviewQueue(any(), anyInt()))
+                .thenReturn(java.util.Collections.singletonList(row));
         when(userService.findBriefs(java.util.Set.of(99L))).thenReturn(Map.of());
 
         // when
@@ -270,7 +289,8 @@ class ReviewServiceTest {
         Object[] row = {
             8L, 99L, "Áo", "LOW", "REVIEW", "Ảnh cần kiểm tra", (short) 3, Instant.parse("2026-10-19T00:00:00Z"), null
         };
-        when(queueRepository.findPendingReviewQueue(any())).thenReturn(java.util.Collections.singletonList(row));
+        when(queueRepository.findPendingReviewQueue(any(), anyInt()))
+                .thenReturn(java.util.Collections.singletonList(row));
 
         var item = service.listPending(0, 20).getFirst();
 
