@@ -39,6 +39,33 @@ export function saveAiSearchSnapshot(snapshot: AiSearchSnapshot): void {
   }
 }
 
+const KEEP_KEY = 'shareloop:ai-search-keep';
+
+/** Đánh dấu "sắp mở bài từ kết quả AI": lần mở trang AI kế tiếp được giữ lại kết quả và câu hỏi. */
+export function markAiSearchForReturn(): void {
+  try {
+    sessionStorage.setItem(KEEP_KEY, '1');
+  } catch {
+    // Không lưu được thì lần quay lại chỉ mất kết quả, không ảnh hưởng chức năng khác.
+  }
+}
+
+export function shouldKeepAiSearch(): boolean {
+  try {
+    return sessionStorage.getItem(KEEP_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function clearAiSearchKeepMark(): void {
+  try {
+    sessionStorage.removeItem(KEEP_KEY);
+  } catch {
+    // Bỏ qua: dấu này chỉ là gợi ý cho lần mở trang tiếp theo.
+  }
+}
+
 export function clearAiSearchSnapshot(): void {
   try {
     sessionStorage.removeItem(STORAGE_KEY);
