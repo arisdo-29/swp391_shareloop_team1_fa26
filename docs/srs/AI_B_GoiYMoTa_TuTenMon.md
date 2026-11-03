@@ -8,7 +8,7 @@ Phụ lục này bổ sung luồng gợi ý mô tả cho form đăng và sửa b
 
 - Thành viên có thể bấm **Gợi ý mô tả bằng AI** khi đã nhập tên món đồ. Nút không phụ thuộc số ảnh đã tải lên.
 - Server chỉ gửi tên món đồ đến Gemini. Tên được xử lý như dữ liệu không đáng tin. Không gửi ảnh, dữ liệu ví, thông tin liên hệ hoặc lịch sử các lượt tìm kiếm.
-- Kết quả gồm bản nháp mô tả tiếng Việt và các thuộc tính có `name`, `value`, `requiresUserInput`. Những chi tiết không xuất hiện trong tên món phải để trống bằng dấu `…`; kích thước, khối lượng, dung tích, thời gian đã dùng và tình trạng hoạt động luôn để người đăng tự điền. Gợi ý tình trạng không tự chọn ô **Tình trạng**.
+- Kết quả gồm bản nháp mô tả tiếng Việt và các thuộc tính có `name`, `value`, `requiresUserInput`. Gemini phân loại món và chọn tối đa bốn chi tiết cần bổ sung từ tên; server chỉ giữ các mục hợp lệ cho loại món, không thêm mục không liên quan (ví dụ đồng hồ không có dung tích). Chỉ thông tin có trong tên mới được điền giá trị; các chi tiết cần người đăng kiểm tra để dấu `…`. Gợi ý tình trạng không tự chọn ô **Tình trạng**.
 - Server lọc thông tin liên hệ và từ thuộc lexicon kiểm duyệt khỏi từng giá trị trước khi trả về. Người đăng xem trước, bấm **Dùng gợi ý** mới chép bản nháp vào ô mô tả, có thể sửa tiếp và tự gửi bài. Bài vẫn qua kiểm tra nội dung tự động và Admin duyệt.
 - Gemini lỗi, trả sai cấu trúc hoặc quá thời gian chờ thì trả lời “Chưa gợi ý được, bạn tự viết mô tả nhé.”, không chặn đăng hoặc sửa bài.
 
