@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type Dispatch } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
+import { Dialog } from '../../components/Dialog';
 import { Alert, Button, Field, PageHeader, StatusBadge } from '../../components/ui';
 import {
   CreditHistorySection,
@@ -531,8 +532,14 @@ function ApiTopupSelection({
   submitting: boolean;
   processing: boolean;
 }) {
+  // Hộp cảnh báo không hoàn tiền: chỉ tạo đơn nạp sau khi người dùng xác nhận.
+  const [warningOpen, setWarningOpen] = useState(false);
   const parsedAmount = Number(amountVnd);
   const validAmount = Number.isSafeInteger(parsedAmount) && parsedAmount > 0;
+  const confirmTopUp = () => {
+    setWarningOpen(false);
+    onContinue();
+  };
   return (
     <div className="flex h-full flex-col gap-4 rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
       <div>
@@ -566,13 +573,30 @@ function ApiTopupSelection({
             placeholder="Nhập số tiền"
           />
         </div>
-        <Button size="lg" onClick={onContinue} disabled={!validAmount || submitting}>
+        <Button size="lg" onClick={() => setWarningOpen(true)} disabled={!validAmount || submitting}>
           {processing ? 'Đang xử lý thanh toán...' : submitting ? 'Đang tạo đơn...' : 'Tạo đơn nạp'}
         </Button>
       </div>
       <p className="text-xs leading-5 text-text-muted">
         Credit chỉ được cộng sau khi thanh toán được xác nhận. Mức tối thiểu theo quy định hiện hành.
       </p>
+      {warningOpen ? (
+        <Dialog title="Lưu ý trước khi nạp Credit" onClose={() => setWarningOpen(false)}>
+          <p className="text-sm leading-6 text-text-secondary">
+            Hệ thống <strong className="text-text-primary">không hoàn tiền</strong> sau khi nạp
+            thành công. Bạn nên nạp một mức vừa đủ dùng, không nạp dư.
+          </p>
+          <p className="mt-2 text-sm font-semibold text-text-primary">
+            Số tiền nạp: {formatVnd(parsedAmount)}
+          </p>
+          <div className="mt-5 flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={() => setWarningOpen(false)}>
+              Xem lại số tiền
+            </Button>
+            <Button onClick={confirmTopUp}>Tôi hiểu, tiếp tục nạp</Button>
+          </div>
+        </Dialog>
+      ) : null}
     </div>
   );
 }
