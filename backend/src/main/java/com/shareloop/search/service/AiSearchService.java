@@ -22,8 +22,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,13 +36,17 @@ public class AiSearchService {
     private static final int DATABASE_PAGE_SIZE = 100;
     private static final int MODEL_BATCH_SIZE = 100;
     private static final int MAX_RECOMMENDATIONS = 6;
-    private static final Pattern SHIRT_REQUEST = Pattern.compile(
-            "\\b(?:tim|kiem|can|muon|mua|xin)\\b(?:\\s+(?:cho|minh|toi|em|mot|cai|chiec|vai|bo))*\\s+ao\\b");
-    private static final Pattern SHOE_REQUEST = Pattern.compile(
-            "\\b(?:tim|kiem|can|muon|mua|xin)\\b(?:\\s+(?:cho|minh|toi|em|mot|doi|cai|chiec|vai|bo))*\\s+giay\\b");
-    private static final Pattern SHIRT_TITLE = Pattern.compile(
-            "(?<![a-z])(?:ao|so mi|t[ -]?shirt|hoodie|sweater|sweatshirt|cardigan|polo|blouse)(?![a-z])");
-    private static final Pattern SHOE_TITLE = Pattern.compile("(?<![a-z])(?:giay|sneaker|loafer|boot|boots)(?![a-z])");
+    private static final Set<String> BROAD_ITEM_TERMS = Set.of(
+            "mon",
+            "do",
+            "mon do",
+            "san pham",
+            "phu kien",
+            "trang suc",
+            "thoi trang",
+            "quan ao",
+            "giay dep",
+            "phong cach");
     private static final String FOUND_MESSAGE =
             "Mình đã xem nhu cầu của bạn và tìm được vài món đồ đang có trên ShareLoop có thể phù hợp. Bạn nhấn vào từng bài đăng để xem chi tiết nhé!";
     private static final String EMPTY_MESSAGE =
@@ -101,6 +104,7 @@ public class AiSearchService {
                         java.util.stream.Stream.concat(java.util.stream.Stream.of(area), area.children().stream()))
                 .collect(Collectors.toMap(AreaResponse::id, AreaResponse::name));
         LinkedHashMap<Long, ItemResponse> shortlist = new LinkedHashMap<>();
+        String requestedItem = "";
         String reply = FOUND_MESSAGE;
         List<ItemResponse> pending = new ArrayList<>(MODEL_BATCH_SIZE);
         boolean called = false;
@@ -115,12 +119,14 @@ public class AiSearchService {
                     pending.add(item);
                     if (pending.size() == MODEL_BATCH_SIZE) {
                         called = true;
-                        Selection selection = select(query, pending, shortlist, categoryNames, areaNames, timeout);
+                        Selection selection =
+                                select(query, pending, shortlist, requestedItem, categoryNames, areaNames, timeout);
                         if (!selection.inScope()) {
                             logCall(userId, "OUT_OF_SCOPE", started, false);
                             return empty(userId, OUT_OF_SCOPE_MESSAGE, false, true);
                         }
                         shortlist = selection.items();
+                        requestedItem = selection.requestedItem();
                         reply = selection.message();
                         pending.clear();
                     }
@@ -130,12 +136,14 @@ public class AiSearchService {
                 }
             }
             if (!pending.isEmpty() || !called) {
-                Selection selection = select(query, pending, shortlist, categoryNames, areaNames, timeout);
+                Selection selection =
+                        select(query, pending, shortlist, requestedItem, categoryNames, areaNames, timeout);
                 if (!selection.inScope()) {
                     logCall(userId, "OUT_OF_SCOPE", started, false);
                     return empty(userId, OUT_OF_SCOPE_MESSAGE, false, true);
                 }
                 shortlist = selection.items();
+                requestedItem = selection.requestedItem();
                 reply = selection.message();
             }
         } catch (Exception exception) {
@@ -154,7 +162,7 @@ public class AiSearchService {
             try {
                 ItemResponse current = itemService.getItem(id, null);
                 if ((current.expireAt() == null || current.expireAt().isAfter(Instant.now()))
-                        && matchesExplicitRequest(query, current)) {
+                        && matchesRequestedItem(requestedItem, current)) {
                     verified.add(current);
                 }
             } catch (BusinessException exception) {
@@ -176,6 +184,7 @@ public class AiSearchService {
             String query,
             List<ItemResponse> batch,
             LinkedHashMap<Long, ItemResponse> previous,
+            String previousRequestedItem,
             Map<Long, String> categoryNames,
             Map<Long, String> areaNames,
             Duration timeout)
@@ -192,12 +201,27 @@ public class AiSearchService {
         if (!root.isObject()
                 || !root.path("inScope").isBoolean()
                 || !root.path("itemIds").isArray()
+                || !root.path("requestedItem").isTextual()
                 || !root.path("message").isTextual()) {
             throw new IllegalArgumentException("Invalid AI recommendation response");
         }
         if (!root.path("inScope").asBoolean()) {
-            return new Selection(false, new LinkedHashMap<>(), OUT_OF_SCOPE_MESSAGE);
+            return new Selection(false, new LinkedHashMap<>(), "", OUT_OF_SCOPE_MESSAGE);
         }
+        String extractedItem = normalizeWords(root.path("requestedItem").asText());
+        if (BROAD_ITEM_TERMS.contains(extractedItem)) extractedItem = "";
+        String queryWords = normalizeWords(query);
+        String directPhrase = withoutRequestLead(queryWords);
+        if (extractedItem.isBlank()) extractedItem = simpleRequestedItem(queryWords);
+        if (extractedItem.length() > 60
+                || (!extractedItem.isBlank() && !(" " + queryWords + " ").contains(" " + extractedItem + " "))
+                || (!extractedItem.isBlank()
+                        && !directPhrase.equals(queryWords)
+                        && !directPhrase.equals(extractedItem)
+                        && !directPhrase.startsWith(extractedItem + " "))) {
+            throw new IllegalArgumentException("AI returned an invalid requested item");
+        }
+        String requestedItem = previousRequestedItem.isBlank() ? extractedItem : previousRequestedItem;
         LinkedHashMap<Long, ItemResponse> selected = new LinkedHashMap<>();
         JsonNode ids = root.path("itemIds");
         if (ids.size() > MAX_RECOMMENDATIONS) {
@@ -208,7 +232,7 @@ public class AiSearchService {
                 throw new IllegalArgumentException("AI referenced an unavailable item");
             }
             ItemResponse candidate = offered.get(node.longValue());
-            if (matchesExplicitRequest(query, candidate)) {
+            if (matchesRequestedItem(requestedItem, candidate)) {
                 selected.putIfAbsent(node.longValue(), candidate);
             }
         }
@@ -218,7 +242,7 @@ public class AiSearchService {
                 || !ContactInfoDetector.detect(message).isEmpty()) {
             message = FOUND_MESSAGE;
         }
-        return new Selection(true, selected, message);
+        return new Selection(true, selected, requestedItem, message);
     }
 
     private AiSearchResponse empty(long userId, String message, boolean fallback, boolean outOfScope) {
@@ -231,23 +255,49 @@ public class AiSearchService {
                 outOfScope);
     }
 
-    private boolean matchesExplicitRequest(String query, ItemResponse item) {
-        String normalizedQuery = ContactInfoDetector.normalize(query).trim();
-        boolean shirtOnly = (normalizedQuery.equals("ao")
-                        || normalizedQuery.startsWith("ao ")
-                        || SHIRT_REQUEST.matcher(normalizedQuery).find())
-                && !normalizedQuery.matches(".*\\bquan ao\\b.*")
-                && !normalizedQuery.matches(".*\\bgiay\\b.*");
-        boolean shoeOnly = (normalizedQuery.equals("giay")
-                        || normalizedQuery.startsWith("giay ")
-                        || SHOE_REQUEST.matcher(normalizedQuery).find())
-                && !normalizedQuery.matches(".*\\bao\\b.*");
-        String normalizedTitle = ContactInfoDetector.normalize(item.title());
-        Matcher shirt = SHIRT_TITLE.matcher(normalizedTitle);
-        Matcher shoe = SHOE_TITLE.matcher(normalizedTitle);
-        int shirtPosition = shirt.find() ? shirt.start() : Integer.MAX_VALUE;
-        int shoePosition = shoe.find() ? shoe.start() : Integer.MAX_VALUE;
-        return (!shirtOnly || shirtPosition < shoePosition) && (!shoeOnly || shoePosition < shirtPosition);
+    private boolean matchesRequestedItem(String requestedItem, ItemResponse item) {
+        if (requestedItem.isBlank()) return true;
+        String[] titleWords = normalizeWords(item.title()).split(" ");
+        String[] requestedWords = requestedItem.split(" ");
+        for (int start = 0; start <= Math.min(2, titleWords.length - requestedWords.length); start++) {
+            boolean matches = true;
+            for (int offset = 0; offset < requestedWords.length; offset++) {
+                if (!titleWords[start + offset].equals(requestedWords[offset])) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches) return true;
+        }
+        return false;
+    }
+
+    private String normalizeWords(String value) {
+        return ContactInfoDetector.normalize(value)
+                .replaceAll("[^a-z0-9]+", " ")
+                .trim()
+                .replaceAll(" +", " ");
+    }
+
+    private String simpleRequestedItem(String queryWords) {
+        String candidate = withoutRequestLead(queryWords);
+        String[] words = candidate.split(" ");
+        if (words.length == 0
+                || words.length > 3
+                || candidate.equals(queryWords) && queryWords.matches("^(?:minh|toi|em|ban|hay|lam|cho)\\b.*")
+                || BROAD_ITEM_TERMS.stream()
+                        .anyMatch(term -> candidate.equals(term) || candidate.startsWith(term + " "))
+                || candidate.matches("^(?:do|mon|san pham|phong cach|giup|de)\\b.*")) {
+            return "";
+        }
+        return candidate;
+    }
+
+    private String withoutRequestLead(String queryWords) {
+        return queryWords.replaceFirst(
+                "^(?:(?:toi|minh|em) )?(?:(?:dang|tim|kiem|mua|muon|can|xin) )+"
+                        + "(?:cho |minh |toi |em |mot |cai |chiec |doi |bo |mon )*",
+                "");
     }
 
     private void logCall(long userId, String outcome, long started, boolean paid) {
@@ -270,7 +320,8 @@ public class AiSearchService {
                 null);
     }
 
-    private record Selection(boolean inScope, LinkedHashMap<Long, ItemResponse> items, String message) {}
+    private record Selection(
+            boolean inScope, LinkedHashMap<Long, ItemResponse> items, String requestedItem, String message) {}
 
     private record CatalogItem(
             Long id,

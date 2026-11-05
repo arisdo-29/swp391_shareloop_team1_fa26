@@ -23,6 +23,11 @@ class GeminiSearchClientTest {
         assertThat(body.path("store").asBoolean()).isFalse();
         assertThat(body.has("previous_interaction_id")).isFalse();
         assertThat(body.path("response_format").path("mime_type").asText()).isEqualTo("application/json");
+        assertThat(body.path("response_format")
+                        .path("schema")
+                        .path("properties")
+                        .has("requestedItem"))
+                .isTrue();
         JsonNode input = mapper.readTree(body.path("input").asText());
         assertThat(input.path("query").asText()).isEqualTo("Tìm món làm mình nổi bật");
         assertThat(input.path("availableItems").path(0).path("id").longValue()).isEqualTo(7);
