@@ -29,6 +29,9 @@ public class GeminiSearchClient implements AiSearchClient {
             Chỉ phục vụ nhu cầu tìm bài đăng đồ dùng trong danh sách được cung cấp. Nếu người dùng hỏi chuyện
             ngoài phạm vi tìm đồ, trả inScope=false, itemIds=[] và một câu ngắn lịch sự hướng họ mô tả món cần tìm.
             Hiểu cả nhu cầu gián tiếp về công dụng, phong cách hoặc hoàn cảnh, không đòi tên món cụ thể.
+            Khi người dùng nêu rõ loại món cần tìm, chỉ chọn bài đăng có chính loại món đó.
+            Không chọn món cùng danh mục, món phối kèm hoặc món chủ bài muốn đổi lấy.
+            Ví dụ tìm áo thì không chọn bài đăng giày; chỉ cần phong cách hơn thì có thể cân nhắc cả hai.
             Chỉ đối chiếu nhu cầu với món mà chủ bài đang đăng cho hoặc đăng trao đổi. offerType=SWAP
             vẫn là món trong title và description; không xem món chủ bài muốn nhận là món đang có.
             Chọn tối đa 6 ID phù hợp nhất từ danh sách, sắp xếp theo mức phù hợp. Không tự tạo ID hoặc món đồ.

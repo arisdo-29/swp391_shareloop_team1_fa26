@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +37,13 @@ public class AiSearchService {
     private static final int DATABASE_PAGE_SIZE = 100;
     private static final int MODEL_BATCH_SIZE = 100;
     private static final int MAX_RECOMMENDATIONS = 6;
+    private static final Pattern SHIRT_REQUEST = Pattern.compile(
+            "\\b(?:tim|kiem|can|muon|mua|xin)\\b(?:\\s+(?:cho|minh|toi|em|mot|cai|chiec|vai|bo))*\\s+ao\\b");
+    private static final Pattern SHOE_REQUEST = Pattern.compile(
+            "\\b(?:tim|kiem|can|muon|mua|xin)\\b(?:\\s+(?:cho|minh|toi|em|mot|doi|cai|chiec|vai|bo))*\\s+giay\\b");
+    private static final Pattern SHIRT_TITLE = Pattern.compile(
+            "(?<![a-z])(?:ao|so mi|t[ -]?shirt|hoodie|sweater|sweatshirt|cardigan|polo|blouse)(?![a-z])");
+    private static final Pattern SHOE_TITLE = Pattern.compile("(?<![a-z])(?:giay|sneaker|loafer|boot|boots)(?![a-z])");
     private static final String FOUND_MESSAGE =
             "Mình đã xem nhu cầu của bạn và tìm được vài món đồ đang có trên ShareLoop có thể phù hợp. Bạn nhấn vào từng bài đăng để xem chi tiết nhé!";
     private static final String EMPTY_MESSAGE =
@@ -144,7 +153,8 @@ public class AiSearchService {
         for (Long id : shortlist.keySet()) {
             try {
                 ItemResponse current = itemService.getItem(id, null);
-                if (current.expireAt() == null || current.expireAt().isAfter(Instant.now())) {
+                if ((current.expireAt() == null || current.expireAt().isAfter(Instant.now()))
+                        && matchesExplicitRequest(query, current)) {
                     verified.add(current);
                 }
             } catch (BusinessException exception) {
@@ -197,7 +207,10 @@ public class AiSearchService {
             if (!node.isIntegralNumber() || !offered.containsKey(node.longValue())) {
                 throw new IllegalArgumentException("AI referenced an unavailable item");
             }
-            selected.putIfAbsent(node.longValue(), offered.get(node.longValue()));
+            ItemResponse candidate = offered.get(node.longValue());
+            if (matchesExplicitRequest(query, candidate)) {
+                selected.putIfAbsent(node.longValue(), candidate);
+            }
         }
         String message = root.path("message").asText().trim().replaceAll("\\s+", " ");
         if (message.isBlank()
@@ -216,6 +229,25 @@ public class AiSearchService {
                 0,
                 fallback,
                 outOfScope);
+    }
+
+    private boolean matchesExplicitRequest(String query, ItemResponse item) {
+        String normalizedQuery = ContactInfoDetector.normalize(query).trim();
+        boolean shirtOnly = (normalizedQuery.equals("ao")
+                        || normalizedQuery.startsWith("ao ")
+                        || SHIRT_REQUEST.matcher(normalizedQuery).find())
+                && !normalizedQuery.matches(".*\\bquan ao\\b.*")
+                && !normalizedQuery.matches(".*\\bgiay\\b.*");
+        boolean shoeOnly = (normalizedQuery.equals("giay")
+                        || normalizedQuery.startsWith("giay ")
+                        || SHOE_REQUEST.matcher(normalizedQuery).find())
+                && !normalizedQuery.matches(".*\\bao\\b.*");
+        String normalizedTitle = ContactInfoDetector.normalize(item.title());
+        Matcher shirt = SHIRT_TITLE.matcher(normalizedTitle);
+        Matcher shoe = SHOE_TITLE.matcher(normalizedTitle);
+        int shirtPosition = shirt.find() ? shirt.start() : Integer.MAX_VALUE;
+        int shoePosition = shoe.find() ? shoe.start() : Integer.MAX_VALUE;
+        return (!shirtOnly || shirtPosition < shoePosition) && (!shoeOnly || shoePosition < shirtPosition);
     }
 
     private void logCall(long userId, String outcome, long started, boolean paid) {
