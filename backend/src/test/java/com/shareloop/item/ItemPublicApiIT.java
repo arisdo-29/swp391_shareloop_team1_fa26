@@ -331,19 +331,22 @@ class ItemPublicApiIT extends IntegrationTest {
         Item titleMatch = item(userId, categoryId, areaId, "Áo khoác mùa đông");
         titleMatch.approve();
         items.saveAndFlush(titleMatch);
-        Item descriptionMatch = new Item(
+        Item descriptionOnlyMatch = new Item(
                 userId,
                 otherCategoryId,
                 areaId,
                 OfferType.GIVE,
-                "Áo len",
+                "Giày thể thao",
                 "Có áo khoác",
                 null,
                 ItemCondition.GOOD,
                 null,
                 null);
-        descriptionMatch.approve();
-        items.saveAndFlush(descriptionMatch);
+        descriptionOnlyMatch.approve();
+        items.saveAndFlush(descriptionOnlyMatch);
+        Item substringOnlyMatch = item(userId, otherCategoryId, areaId, "Bao đựng đồ");
+        substringOnlyMatch.approve();
+        items.saveAndFlush(substringOnlyMatch);
         Item otherArea = item(userId, categoryId, otherAreaId, "Áo khoác nơi khác");
         otherArea.approve();
         items.saveAndFlush(otherArea);
@@ -366,6 +369,10 @@ class ItemPublicApiIT extends IntegrationTest {
 
         mvc.perform(get("/api/v1/items").param("q", "ÁO KHOÁC").param("areaId", String.valueOf(areaId)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1));
+
+        mvc.perform(get("/api/v1/items").param("q", "áo").param("areaId", String.valueOf(areaId)))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(2));
 
         mvc.perform(get("/api/v1/items").param("q", "mua dong"))
@@ -379,8 +386,8 @@ class ItemPublicApiIT extends IntegrationTest {
                         .param("page", "1")
                         .param("size", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(2))
-                .andExpect(jsonPath("$.items[0].id").value(titleMatch.getId()));
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.items.length()").value(0));
 
         mvc.perform(get("/api/v1/items").param("q", "%"))
                 .andExpect(status().isOk())
@@ -389,7 +396,7 @@ class ItemPublicApiIT extends IntegrationTest {
 
         mvc.perform(get("/api/v1/items").param("q", "  ").param("areaId", String.valueOf(areaId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(3));
+                .andExpect(jsonPath("$.totalElements").value(4));
     }
 
     @Test

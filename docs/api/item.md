@@ -172,7 +172,7 @@ Hạn mức và phí bài kế tiếp cho trang Đăng tin (cần đăng nhập)
 
 Danh sách bài `APPROVED` còn hiển thị (`is_active = true`, chưa xoá mềm, `expire_at` rỗng hoặc lớn hơn thời điểm hiện tại). Trong cùng bộ lọc, tất cả bài đang được đẩy xếp trước bài thường. Không cần đăng nhập.
 
-Tham số tùy chọn: `q` (tìm trong tiêu đề và mô tả, không phân biệt dấu/hoa thường),
+Tham số tùy chọn: `q` (tìm theo cụm từ trong tiêu đề món đồ, không phân biệt dấu/hoa thường; không tìm trong mô tả hoặc khớp một phần của từ khác),
 `categoryId`, `areaId` (lọc đúng id, kết hợp được với `q`),
 `condition` (`NEW`, `LIKE_NEW`, `GOOD`, `DEFECTIVE`), `offerType` (`GIVE`, `SWAP`),
 `page` (từ 0, mặc định 0), `size` (1–100, mặc định 24), `boosted` (mặc định `false`; `true` chỉ lấy bài đang được đẩy), `sort` (`newest` hoặc `expiring`, mặc định `newest`). Tất cả bộ lọc đều không bắt buộc và kết hợp được với nhau;
