@@ -21,8 +21,9 @@ public class GeminiSearchClient implements AiSearchClient {
             {"type":"object","properties":{
               "inScope":{"type":"boolean"},
               "itemIds":{"type":"array","items":{"type":"integer"},"maxItems":6},
+              "requestedItem":{"type":"string"},
               "message":{"type":"string"}},
-             "required":["inScope","itemIds","message"],"additionalProperties":false}
+             "required":["inScope","itemIds","requestedItem","message"],"additionalProperties":false}
             """;
     private static final String INSTRUCTION = """
             Bạn là trợ lý tìm đồ của ShareLoop. Mỗi yêu cầu là một cuộc tìm mới, không có hội thoại trước đó.
@@ -32,6 +33,9 @@ public class GeminiSearchClient implements AiSearchClient {
             Khi người dùng nêu rõ loại món cần tìm, chỉ chọn bài đăng có chính loại món đó.
             Không chọn món cùng danh mục, món phối kèm hoặc món chủ bài muốn đổi lấy.
             Ví dụ tìm áo thì không chọn bài đăng giày; chỉ cần phong cách hơn thì có thể cân nhắc cả hai.
+            requestedItem là tên loại món được người dùng nêu rõ, chép đúng một cụm từ có trong yêu cầu.
+            Ví dụ "tìm áo" → "áo", "cần đồng hồ" → "đồng hồ", "tìm nồi cơm điện" → "nồi cơm điện".
+            Khi người dùng chỉ mô tả công dụng, hoàn cảnh hoặc nhóm món rộng, để requestedItem rỗng.
             Chỉ đối chiếu nhu cầu với món mà chủ bài đang đăng cho hoặc đăng trao đổi. offerType=SWAP
             vẫn là món trong title và description; không xem món chủ bài muốn nhận là món đang có.
             Chọn tối đa 6 ID phù hợp nhất từ danh sách, sắp xếp theo mức phù hợp. Không tự tạo ID hoặc món đồ.

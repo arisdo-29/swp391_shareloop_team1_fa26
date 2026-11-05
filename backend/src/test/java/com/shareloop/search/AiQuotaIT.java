@@ -110,16 +110,18 @@ class AiQuotaIT extends IntegrationTest {
         when(aiClient.recommend(eq("sách"), any(), eq(Duration.ofSeconds(15))))
                 .thenReturn(
                         new AiResponse(
-                                "gemini-3.5-flash-lite", "{\"inScope\":true,\"itemIds\":[],\"message\":\"Chưa có\"}"),
+                                "gemini-3.5-flash-lite",
+                                "{\"inScope\":true,\"itemIds\":[],\"requestedItem\":\"sách\",\"message\":\"Chưa có\"}"),
                         new AiResponse(
                                 "gemini-3.5-flash-lite",
-                                "{\"inScope\":true,\"itemIds\":[1],\"message\":\"Đã tìm thấy\"}"));
+                                "{\"inScope\":true,\"itemIds\":[1],\"requestedItem\":\"sách\",\"message\":\"Đã tìm thấy\"}"));
         when(configService.getInt(ConfigKey.AI_SEARCH_TIMEOUT_SECONDS)).thenReturn(15);
         when(configService.getInt(ConfigKey.AI_SEARCH_FEE)).thenReturn(2);
         when(categoryService.listActive()).thenReturn(List.of());
         when(areaService.listTree()).thenReturn(List.of());
         ItemResponse item = mock(ItemResponse.class);
         when(item.id()).thenReturn(1L);
+        when(item.title()).thenReturn("Sách giáo khoa");
         when(itemService.getItem(1L, null)).thenReturn(item);
         when(itemService.searchApprovedForAi(null, null, "", null, null, 0, 100))
                 .thenReturn(new PageResponse<>(List.of(), 0, 100, 0), new PageResponse<>(List.of(item), 0, 100, 1));
