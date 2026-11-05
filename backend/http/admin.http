@@ -1,12 +1,25 @@
 @host = http://localhost:8080
 # Người sở hữu: BE4 @kopslngbtram2110
 
-### Liệt kê cấu hình (thay access token bằng JWT của Admin)
+### 1. Đăng nhập tài khoản Admin (dev seed) để tự động lấy token
+# @name loginAdmin
+POST {{host}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@shareloop.local",
+  "password": "Dev@12345"
+}
+
+### Lưu token từ request login ở trên
+@adminToken = {{loginAdmin.response.body.accessToken}}
+
+### 2. Liệt kê cấu hình (FR-113)
 GET {{host}}/api/v1/admin/configs
 Authorization: Bearer {{adminToken}}
 Accept: application/json
 
-### Cảnh báo bất thường: Cặp giao dịch lặp (FR-113, BR-U08)
+### 3. Cảnh báo bất thường: Cặp giao dịch lặp (FR-113, BR-U08)
 GET {{host}}/api/v1/admin/anomalies
 Authorization: Bearer {{adminToken}}
 Accept: application/json
