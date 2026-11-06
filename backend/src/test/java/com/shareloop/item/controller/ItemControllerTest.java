@@ -2,6 +2,8 @@ package com.shareloop.item.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -16,6 +18,7 @@ import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
 import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.dto.CreateItemRequest;
+import com.shareloop.item.dto.FeaturedItemsResponse;
 import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
@@ -214,6 +217,31 @@ class ItemControllerTest {
                 .andExpect(jsonPath("$[0].boostStartedAt").value("2026-11-06T08:00:00Z"))
                 .andExpect(jsonPath("$[0].boostChainEndsAt").value("2026-11-12T08:00:00Z"))
                 .andExpect(jsonPath("$[0].boostCooldownUntil").value("2026-11-12T08:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("GET /items/featured gọi banner bài đẩy, không bị hiểu nhầm là chi tiết bài /items/{id}")
+    void featured_withoutToken_routesToFeaturedNotItemDetail() throws Exception {
+        // given: khách chưa đăng nhập, viewerKey = 7, mặc định 5 bài
+        FeaturedItemsResponse featured = new FeaturedItemsResponse(
+                List.of(), Instant.parse("2026-11-06T08:00:00Z"), Instant.parse("2026-11-06T08:03:00Z"));
+        when(itemService.listFeaturedItems(5, null, 7L)).thenReturn(featured);
+
+        // when + then: 200 công khai, trả dữ liệu banner; getItem không được gọi
+        mockMvc.perform(get("/api/v1/items/featured").param("viewerKey", "7"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rotatedAt").value("2026-11-06T08:00:00Z"))
+                .andExpect(jsonPath("$.nextRotateAt").value("2026-11-06T08:03:00Z"));
+        verify(itemService, never()).getItem(any(), any());
+    }
+
+    @Test
+    @DisplayName("GET /items/featured với limit ngoài 1..10 hoặc viewerKey âm trả 400")
+    void featured_whenLimitOrViewerKeyOutOfRange_returns400() throws Exception {
+        // when + then
+        mockMvc.perform(get("/api/v1/items/featured").param("limit", "11")).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/items/featured").param("limit", "0")).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/items/featured").param("viewerKey", "-1")).andExpect(status().isBadRequest());
     }
 
     @Test

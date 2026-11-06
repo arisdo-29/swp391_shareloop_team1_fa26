@@ -2,6 +2,7 @@ package com.shareloop.item.controller;
 
 import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.item.dto.CreateItemRequest;
+import com.shareloop.item.dto.FeaturedItemsResponse;
 import com.shareloop.item.dto.ItemListPageResponse;
 import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.dto.PostingQuotaResponse;
@@ -137,6 +138,18 @@ public class ItemController {
                 rotationSeed,
                 parseUserId(jwt),
                 viewerKey);
+    }
+
+    // Đường dẫn chuỗi cố định "featured" được Spring ưu tiên hơn mẫu /items/{id}, nên không bị hiểu nhầm là id bài.
+    // Đã nằm trong PUBLIC_GET ("/api/v1/items/*") nên khách xem được, không cần sửa SecurityConfig.
+    @Operation(summary = "Banner bài đẩy trang chủ, đổi nhóm theo vòng xoay")
+    @GetMapping("/api/v1/items/featured")
+    public FeaturedItemsResponse listFeatured(
+            @RequestParam(defaultValue = "5") @Min(1) @Max(10) int limit,
+            // Số riêng của khách chưa đăng nhập để mỗi người thấy một nhóm khác; đã đăng nhập thì bỏ qua.
+            @RequestParam(required = false) @Min(0) Long viewerKey,
+            @io.swagger.v3.oas.annotations.Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+        return itemService.listFeaturedItems(limit, parseUserId(jwt), viewerKey);
     }
 
     /**

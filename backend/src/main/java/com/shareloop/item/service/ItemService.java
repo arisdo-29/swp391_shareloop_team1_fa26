@@ -9,6 +9,7 @@ import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.PostLimitProperties;
 import com.shareloop.item.dto.AdminItemDetail;
 import com.shareloop.item.dto.CreateItemRequest;
+import com.shareloop.item.dto.FeaturedItemsResponse;
 import com.shareloop.item.dto.ItemAttributeValue;
 import com.shareloop.item.dto.ItemListPageResponse;
 import com.shareloop.item.dto.ItemResponse;
@@ -518,6 +519,36 @@ public class ItemService {
         return new ItemListPageResponse(responses, page, size, total, totalPages, round);
     }
 
+    /**
+     * Banner bài đẩy ở trang chủ (C15): tối đa {@code limit} bài đang đẩy (không lọc) theo vòng xoay của lượt hiện tại;
+     * mỗi boost_rotate_seconds giây đổi sang nhóm kế tiếp, mỗi người xem bắt đầu ở một chỗ khác nhau. Có ít bài hơn
+     * limit thì trả hết. Không trả các mốc đợt đẩy của chủ bài.
+     *
+     * @param limit số bài tối đa của banner (controller giới hạn 1..10)
+     * @param currentUserId người xem đã đăng nhập (null nếu là khách)
+     * @param viewerKey số không âm khách gửi lên; bỏ qua khi đã đăng nhập
+     */
+    @Transactional(readOnly = true)
+    public FeaturedItemsResponse listFeaturedItems(int limit, Long currentUserId, Long viewerKey) {
+        Instant now = Instant.now();
+        List<Long> ring = itemRepository.findPublicBoostedIds(null, null, null, null, "", now);
+        int rotateSeconds = rotateSeconds();
+        long round = now.getEpochSecond() / rotateSeconds;
+        List<Long> featuredIds =
+                BoostRotation.pick(ring, round, resolveViewerKey(currentUserId, viewerKey), limit, limit);
+
+        List<Item> featured = findItemsInOrder(featuredIds);
+        Map<Long, DisplayWindow> windows = findDisplayWindows(featured);
+        List<ItemResponse> responses = new ArrayList<>();
+        for (Item item : featured) {
+            responses.add(toResponse(item, windows.get(item.getId())).withoutBoostTimeline());
+        }
+        return new FeaturedItemsResponse(
+                responses,
+                Instant.ofEpochSecond(round * rotateSeconds),
+                Instant.ofEpochSecond((round + 1) * rotateSeconds));
+    }
+
     /** Bộ lọc của trang Tìm đồ, gom lại để khỏi truyền sáu tham số qua từng hàm. */
     private record BrowseFilter(
             Long categoryId, Long areaId, String condition, String offerType, String q, Instant now) {}
@@ -604,10 +635,13 @@ public class ItemService {
     }
 
     // Lượt xoay = số giây epoch chia boost_rotate_seconds, nên mọi người cùng đổi nhóm bài đẩy vào một thời điểm.
-    // Cấu hình ≤ 0 thì coi như 1 giây để không chia cho 0.
     private long currentRotationRound(Instant now) {
-        int rotateSeconds = Math.max(1, configService.getInt(ConfigKey.BOOST_ROTATE_SECONDS));
-        return now.getEpochSecond() / rotateSeconds;
+        return now.getEpochSecond() / rotateSeconds();
+    }
+
+    // Cấu hình ≤ 0 thì coi như 1 giây để không chia cho 0.
+    private int rotateSeconds() {
+        return Math.max(1, configService.getInt(ConfigKey.BOOST_ROTATE_SECONDS));
     }
 
     // Đã đăng nhập thì dùng id người dùng (mỗi người một nhóm ổn định); khách thì dùng số FE gửi, không có thì 0.
