@@ -83,9 +83,10 @@ export function AdminLayout() {
       ))}
     </>
   );
+  // Từ màn lg bỏ lề trái để sidebar sát mép trái màn hình; phần nội dung vẫn giữ lề phải.
   return (
     <div
-      className={`wide-shell py-6 lg:grid lg:items-start lg:gap-[clamp(1.25rem,2vw,2rem)] ${collapsed ? 'lg:grid-cols-[72px_minmax(0,1fr)]' : 'lg:grid-cols-[250px_minmax(0,1fr)]'}`}
+      className={`w-full px-[var(--layout-gutter)] py-6 lg:grid lg:pl-0 lg:items-start lg:gap-[clamp(1.25rem,2vw,2rem)] ${collapsed ? 'lg:grid-cols-[72px_minmax(0,1fr)]' : 'lg:grid-cols-[250px_minmax(0,1fr)]'}`}
     >
       <div className="mb-5 flex items-center justify-between lg:hidden">
         <div>
@@ -101,7 +102,7 @@ export function AdminLayout() {
         </button>
       </div>
       <aside
-        className={`${open ? 'block' : 'hidden'} h-fit rounded-lg bg-admin-sidebar p-3 shadow-admin [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:sticky lg:top-24 lg:block lg:max-h-[calc(100dvh-120px)] lg:overflow-y-auto ${collapsed ? 'lg:px-2' : ''}`}
+        className={`${open ? 'block' : 'hidden'} h-fit rounded-lg bg-admin-sidebar p-3 shadow-admin [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:sticky lg:top-24 lg:block lg:rounded-l-none lg:max-h-[calc(100dvh-120px)] lg:overflow-y-auto ${collapsed ? 'lg:px-2' : ''}`}
       >
         <div
           className={`mb-3 hidden items-center border-b border-admin-divider/20 pb-3 lg:flex ${collapsed ? 'justify-center' : 'justify-between pl-2'}`}

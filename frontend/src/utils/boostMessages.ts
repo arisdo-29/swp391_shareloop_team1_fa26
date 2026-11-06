@@ -5,36 +5,35 @@ import type { BoostQuote } from '../services/itemApi';
 
 export const WALLET_INSUFFICIENT_BALANCE = 'WALLET_INSUFFICIENT_BALANCE';
 
-/** Đoạn giải thích quyền lợi cố định trong hộp xác nhận đẩy bài. */
-export const BOOST_BENEFITS_TEXT =
-  'Bài của bạn được ưu tiên xuất hiện ở banner trang chủ và đầu trang Tìm đồ. Các bài đẩy được xoay vòng đều, mỗi nhóm hiển thị 3 phút, nên bài không luôn nằm trên cùng. Người mua sau không được xếp trên bạn. Bài bị gỡ, bị ẩn hoặc hết hạn hiển thị thì mất thời gian đẩy còn lại và không hoàn phí.';
+/** Các quyền lợi cố định trong hộp xác nhận đẩy bài, mỗi mục một dòng có nhãn in đậm. */
+export const BOOST_BENEFITS = [
+  {
+    label: 'Vị trí ưu tiên',
+    text: 'Bài được ưu tiên xuất hiện ở banner trang chủ và đầu trang Tìm đồ.',
+  },
+  {
+    label: 'Xoay vòng công bằng',
+    text: 'Các bài đẩy được xoay vòng đều, mỗi nhóm hiển thị 3 phút, nên bài không luôn nằm trên cùng. Người mua sau không được xếp trên bạn.',
+  },
+] as const;
+
+/** Lưu ý hoàn phí, tách riêng để hiển thị như một cảnh báo. */
+export const BOOST_REFUND_POLICY =
+  'Bài bị gỡ, bị ẩn hoặc hết hạn hiển thị thì mất thời gian đẩy còn lại và không hoàn phí.';
 
 /** Định dạng ngày giờ như phần còn lại của ứng dụng. */
 export function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('vi-VN');
 }
 
-/**
- * Các dòng của hộp xác nhận đẩy bài (quote.allowed = true). boostDays lấy từ GET /listing-fees; null khi chưa tải được
- * thì nói "một gói" thay vì viết cứng số ngày.
- */
-export function boostConfirmLines(quote: BoostQuote, boostDays: number | null): string[] {
-  const duration = boostDays !== null ? `${boostDays} ngày` : 'một gói';
-  const lines = [
-    quote.extending
-      ? `Gia hạn đẩy thêm ${duration} với ${quote.fee} Credit, kết thúc lúc ${formatDateTime(quote.newBoostedUntil)}.`
-      : `Đẩy bài ${duration} với ${quote.fee} Credit, đến ${formatDateTime(quote.newBoostedUntil)}.`,
-    `Đợt đẩy này kéo dài tối đa tới ${formatDateTime(quote.chainEndsAt)} nếu bạn mua thêm gói.`,
-  ];
-  // cooldownUntil (backend tính): mốc được đẩy lại nếu mua gói này rồi không mua thêm.
-  if (quote.cooldownUntil) {
-    lines.push(
-      `Nếu không mua thêm, sau khi hết đẩy bài nghỉ và được đẩy lại từ ${formatDateTime(quote.cooldownUntil)}.`,
-    );
-  }
-  // Mua thêm cho bài đang đẩy không chiếm suất mới nên không cần nói số suất.
-  if (!quote.extending) lines.push(`Còn ${quote.slotsLeft} suất đẩy trống.`);
-  return lines;
+/** Chỉ phần ngày, ví dụ 9/11/2026. */
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('vi-VN');
+}
+
+/** Chỉ phần giờ, ví dụ 11:17:17. */
+export function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('vi-VN');
 }
 
 export type BoostRejectionAction = 'renew' | 'topUp' | null;

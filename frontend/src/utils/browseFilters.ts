@@ -1,4 +1,4 @@
-export const browseFilterKeys = ['q', 'type', 'categoryId', 'condition', 'areaId', 'sort'] as const;
+export const browseFilterKeys = ['q', 'type', 'categoryId', 'condition', 'areaId', 'sort', 'boosted'] as const;
 export const BROWSE_PAGE_SIZE = 24;
 
 export type BrowseFilterKey = (typeof browseFilterKeys)[number];
