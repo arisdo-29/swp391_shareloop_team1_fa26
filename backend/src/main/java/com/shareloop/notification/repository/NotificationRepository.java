@@ -1,6 +1,7 @@
 package com.shareloop.notification.repository;
 
 import com.shareloop.notification.entity.Notification;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -13,4 +14,7 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     long countByUserIdAndIsReadFalse(Long userId);
 
     Optional<Notification> findByIdAndUserId(Long id, Long userId);
+
+    boolean existsByUserIdAndTypeAndLinkAndCreatedAtGreaterThanEqual(
+            Long userId, String type, String link, Instant since);
 }

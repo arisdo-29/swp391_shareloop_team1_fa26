@@ -8,6 +8,7 @@ import com.shareloop.notification.entity.Notification;
 import com.shareloop.notification.event.NotificationEmailEvent;
 import com.shareloop.notification.mapper.NotificationMapper;
 import com.shareloop.notification.repository.NotificationRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.springframework.context.ApplicationEventPublisher;
@@ -58,6 +59,21 @@ public class NotificationService {
     public void notify(long userId, String type, String title, String body, String link) {
         Notification notification = new Notification(userId, type, title, body, link);
         notificationRepository.save(notification);
+    }
+
+    /**
+     * Người dùng đã có thông báo cùng loại, cùng link được tạo từ mốc {@code since} trở đi chưa. Dùng cho job gửi
+     * định kỳ để không gửi trùng mà không cần thêm cột đánh dấu.
+     *
+     * @param userId người nhận
+     * @param type loại thông báo
+     * @param link link của thông báo (vd /items/12), dùng như khoá của đối tượng được báo
+     * @param since chỉ tính thông báo có created_at từ mốc này trở đi
+     */
+    @Transactional(readOnly = true)
+    public boolean hasNotificationSince(long userId, String type, String link, Instant since) {
+        return notificationRepository.existsByUserIdAndTypeAndLinkAndCreatedAtGreaterThanEqual(
+                userId, type, link, since);
     }
 
     /**

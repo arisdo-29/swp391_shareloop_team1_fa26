@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -77,7 +78,8 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
 
     /**
      * Điều kiện "bài đang đẩy" dùng chung cho các query đếm suất: còn hạn đẩy, đã duyệt, đang hiển thị, chưa xoá và
-     * chưa quá hạn hiển thị. Bài bị ẩn hay hết hạn thì trả suất ngay, không chờ tới boosted_until.
+     * chưa quá hạn hiển thị. Bài bị ẩn (is_active = false) KHÔNG được tính là đang đẩy nên trả suất ngay, không chờ
+     * tới boosted_until; job thông báo còn cắt boosted_until của bài bị ẩn về lúc dừng (xem endHiddenBoost).
      */
     String ACTIVE_BOOST_CONDITION = " boosted_until > :now AND status = 'APPROVED' AND is_active AND NOT is_deleted"
             + " AND (expire_at IS NULL OR expire_at > :now)";
@@ -111,6 +113,55 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
      */
     @Query(value = "SELECT 1 FROM pg_advisory_xact_lock(" + BOOST_SLOT_LOCK_KEY + ")", nativeQuery = true)
     Integer lockBoostSlots();
+
+    /**
+     * Phần SELECT dùng chung cho các query tìm bài cần thông báo về đợt đẩy. Native query vì donor_id và title do
+     * entity Item map, ItemFee không map lại.
+     */
+    String BOOST_NOTICE_SELECT = "SELECT id AS \"id\", donor_id AS \"donorId\", title AS \"title\","
+            + " boosted_until AS \"boostedUntil\", COALESCE(boost_started_at, last_boosted_at) AS \"boostStartedAt\","
+            + " last_boosted_at AS \"lastBoostedAt\" FROM items WHERE";
+
+    /**
+     * Bài đang đẩy sẽ hết đẩy trước mốc {@code endsBefore} (để báo sắp hết đẩy). Số bài đang đẩy bị chặn bởi
+     * boost_max_active nên danh sách luôn nhỏ, không cần phân trang.
+     */
+    @Query(
+            value = BOOST_NOTICE_SELECT + ACTIVE_BOOST_CONDITION + " AND boosted_until <= :endsBefore ORDER BY id",
+            nativeQuery = true)
+    List<BoostNoticeRow> findBoostsEndingBefore(@Param("now") Instant now, @Param("endsBefore") Instant endsBefore);
+
+    /**
+     * Bài đang hiển thị đã hết đẩy trong khoảng (endedAfter, now] (để báo đã hết đẩy). Người gọi truyền endedAfter =
+     * now - boost_cooldown_days: quá thời gian nghỉ thì thông báo không còn ý nghĩa, nên không quét các đợt cũ hơn.
+     */
+    @Query(
+            value = BOOST_NOTICE_SELECT
+                    + " boosted_until <= :now AND boosted_until > :endedAfter AND status = 'APPROVED' AND is_active"
+                    + " AND NOT is_deleted AND (expire_at IS NULL OR expire_at > :now) ORDER BY id",
+            nativeQuery = true)
+    List<BoostNoticeRow> findBoostsEndedAfter(@Param("now") Instant now, @Param("endedAfter") Instant endedAfter);
+
+    /** Bài còn hạn đẩy nhưng đang bị ẩn (is_active = false) và chưa xoá mềm: cần dừng đẩy. */
+    @Query(
+            value = BOOST_NOTICE_SELECT + " boosted_until > :now AND NOT is_active AND NOT is_deleted ORDER BY id",
+            nativeQuery = true)
+    List<BoostNoticeRow> findHiddenActiveBoosts(@Param("now") Instant now);
+
+    /**
+     * Kết thúc đợt đẩy của một bài đang bị ẩn: gán boosted_until = now (SRS 4.6: bài bị ẩn mất thời gian đẩy còn lại).
+     * Dùng UPDATE native có điều kiện thay vì khoá rồi sửa entity: câu lệnh tự kiểm lại "còn đẩy, đang ẩn, chưa xoá"
+     * ngay lúc ghi, nên bài vừa được Admin bỏ ẩn sau khi job đọc danh sách sẽ không bị cắt nhầm.
+     *
+     * @return 1 nếu đã cắt, 0 nếu bài không còn thoả điều kiện
+     */
+    // @Modifying: báo Spring Data đây là câu lệnh ghi (UPDATE), chạy bằng executeUpdate và trả số dòng bị đổi.
+    @Modifying
+    @Query(
+            value = "UPDATE items SET boosted_until = :now"
+                    + " WHERE id = :itemId AND boosted_until > :now AND NOT is_active AND NOT is_deleted",
+            nativeQuery = true)
+    int endHiddenBoost(@Param("itemId") Long itemId, @Param("now") Instant now);
 
     /**
      * Các bài của một người đang giữ phí (fee_state = HELD, pending_fee > 0), bài mới cập nhật xếp trước. Native query
