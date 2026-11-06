@@ -40,8 +40,19 @@ vi.mock('../../services/catalogApi', () => ({
 vi.mock('../../services/itemApi', () => ({
   itemApi: {
     list: vi.fn(),
+    featured: vi.fn(),
   },
 }));
+
+// Nhóm banner do backend trả; mốc đổi nhóm 3 phút sau để timer không chạy trong các test này.
+function featuredResponse(items: ItemResponse[]) {
+  const now = Date.now();
+  return {
+    items,
+    rotatedAt: new Date(now).toISOString(),
+    nextRotateAt: new Date(now + 180_000).toISOString(),
+  };
+}
 
 const categories: CategoryResponse[] = [
   { id: 7, name: 'Sách', parentId: null, restricted: false, boostable: true, sortOrder: 1, activeItemCount: 3 },
@@ -119,6 +130,7 @@ beforeEach(() => {
   vi.mocked(catalogApi.categoriesWithCounts).mockResolvedValue(categories);
   vi.mocked(catalogApi.areas).mockResolvedValue(areas);
   vi.mocked(itemApi.list).mockResolvedValue(itemPage);
+  vi.mocked(itemApi.featured).mockResolvedValue(featuredResponse([]));
 });
 
 afterEach(() => {
@@ -247,127 +259,75 @@ describe('trạng thái tải bài đăng trên Home', () => {
     expect(within(section!).queryByText(expiredItem.title)).toBeNull();
   });
 
-  it('chỉ hiển thị bài đang được đẩy trong Tin nổi bật và xếp thời gian đẩy mới nhất trước', async () => {
-    const earlierBoostedItem: ItemResponse = {
-      ...item,
-      id: 506,
-      title: 'Bài đẩy trước',
-      boostedUntil: '2099-10-20T08:00:00Z',
-    };
-    const latestBoostedItem: ItemResponse = {
-      ...item,
-      id: 507,
-      title: 'Bài đẩy mới nhất',
-      boostedUntil: '2099-11-20T08:00:00Z',
-    };
-    const expiredBoostItem: ItemResponse = {
-      ...item,
-      id: 508,
-      title: 'Bài hết hiệu lực đẩy',
-      boostedUntil: '2020-10-20T08:00:00Z',
-    };
-    const unboostedItem: ItemResponse = {
-      ...item,
-      id: 509,
-      title: 'Bài chưa đẩy',
-    };
-    vi.mocked(itemApi.list).mockResolvedValue({
-      items: [earlierBoostedItem, expiredBoostItem, unboostedItem, latestBoostedItem],
-      page: 0,
-      size: 100,
-      totalElements: 4,
-    });
+  it('Tin nổi bật hiện đúng nhóm bài do /items/featured trả, giữ thứ tự backend và không có nhãn Được đẩy', async () => {
+    // given: backend trả nhóm 2 bài theo thứ tự xoay
+    const firstInRotation: ItemResponse = { ...item, id: 507, title: 'Bài đầu vòng', boostedUntil: '2099-11-20T08:00:00Z' };
+    const secondInRotation: ItemResponse = { ...item, id: 506, title: 'Bài thứ hai', boostedUntil: '2099-10-20T08:00:00Z' };
+    vi.mocked(itemApi.featured).mockResolvedValue(featuredResponse([firstInRotation, secondInRotation]));
 
+    // when
     renderHome();
 
+    // then: gọi banner 5 bài kèm viewerKey của khách; không sắp lại theo boostedUntil
     const heading = await screen.findByRole('heading', { name: 'Tin nổi bật' });
     const section = heading.closest('section');
     expect(section).toBeTruthy();
+    await waitFor(() =>
+      expect(within(section!).getAllByRole('heading', { level: 3 }).map((entry) => entry.textContent)).toEqual([
+        firstInRotation.title,
+        secondInRotation.title,
+      ]),
+    );
+    expect(itemApi.featured).toHaveBeenCalledWith({ limit: 5, viewerKey: expect.any(Number) });
     expect(within(section!).getByRole('link', { name: 'Xem tất cả' }).getAttribute('href')).toBe(
       '/browse?boosted=true',
     );
     const newItemsSection = screen.getByRole('heading', { name: 'Món đồ mới' }).closest('section');
-    expect(section!.querySelector('.home-product-grid')?.className).toBe(
+    expect(section!.querySelector('.home-product-grid')?.className).toContain(
       newItemsSection!.querySelector('.home-product-grid')?.className,
     );
-    expect(within(section!).getAllByRole('heading', { level: 3 }).map((entry) => entry.textContent)).toEqual([
-      latestBoostedItem.title,
-      earlierBoostedItem.title,
-    ]);
-    expect(within(section!).queryByText(expiredBoostItem.title)).toBeNull();
-    expect(within(section!).queryByText(unboostedItem.title)).toBeNull();
     expect(within(section!).queryByText('Được đẩy')).toBeNull();
-    expect(within(section!).getAllByText('Cho tặng')).toHaveLength(2);
   });
 
-  it('tải các trang API để Tin nổi bật hiển thị đủ 5 bài đẩy gần nhất', async () => {
-    const boostedItems = Array.from({ length: 6 }, (_, index): ItemResponse => ({
-      ...item,
-      id: 520 + index,
-      title: `Bài đẩy số ${index + 1}`,
-      createdAt: new Date(Date.UTC(2026, 9, 26 - index, 8)).toISOString(),
-      boostedUntil: new Date(Date.UTC(2099, 0, index + 1, 8)).toISOString(),
-    }));
-    vi.mocked(itemApi.list).mockImplementation(async ({ page = 0 } = {}) => ({
-      items: page === 0 ? boostedItems.slice(0, 3) : boostedItems.slice(3),
-      page,
-      size: 100,
-      totalElements: boostedItems.length,
-      totalPages: 2,
-    }));
-
+  it('không tải nhiều trang 100 bài để lọc bài đẩy ở trình duyệt', async () => {
+    // when
     renderHome();
+    await screen.findByRole('heading', { name: 'Tin nổi bật' });
 
-    const heading = await screen.findByRole('heading', { name: 'Tin nổi bật' });
-    const section = heading.closest('section');
-    expect(section).toBeTruthy();
-    await waitFor(() => expect(itemApi.list).toHaveBeenCalledWith({ page: 1, size: 100 }));
-    expect(within(section!).getAllByRole('heading', { level: 3 }).map((entry) => entry.textContent)).toEqual([
-      boostedItems[5].title,
-      boostedItems[4].title,
-      boostedItems[3].title,
-      boostedItems[2].title,
-      boostedItems[1].title,
-    ]);
-    expect(within(section!).queryByText(boostedItems[0].title)).toBeNull();
+    // then: danh sách thường chỉ tải một trang; bài đẩy lấy từ featured
+    await waitFor(() => expect(itemApi.featured).toHaveBeenCalled());
+    expect(itemApi.list).not.toHaveBeenCalledWith({ page: 1, size: 100 });
   });
 
-  it('banner dùng 8 bài đẩy gần nhất và đổi đúng sản phẩm khi chọn thumbnail', async () => {
-    const carouselItems = Array.from({ length: 9 }, (_, index): ItemResponse => ({
+  it('banner dùng nhóm bài featured theo thứ tự backend và đổi đúng sản phẩm khi chọn thumbnail', async () => {
+    // given: nhóm 5 bài có ảnh
+    const carouselItems = Array.from({ length: 5 }, (_, index): ItemResponse => ({
       ...item,
       id: 540 + index,
       title: `Bài banner ${index + 1}`,
       images: [`/api/v1/media/${540 + index}`],
-      createdAt: new Date(Date.UTC(2026, 9, 10 - index, 8)).toISOString(),
-      boostedUntil: new Date(Date.UTC(2099, 0, index + 1, 8)).toISOString(),
+      boostedUntil: new Date(Date.UTC(2099, 0, 5 - index, 8)).toISOString(),
     }));
-    vi.mocked(itemApi.list).mockImplementation(async ({ page = 0 } = {}) => ({
-      items: page === 0 ? carouselItems.slice(0, 3) : carouselItems.slice(3),
-      page,
-      size: 100,
-      totalElements: carouselItems.length,
-      totalPages: 2,
-    }));
+    vi.mocked(itemApi.featured).mockResolvedValue(featuredResponse(carouselItems));
 
+    // when
     renderHome();
 
-    const expectedSlides = carouselItems.slice(1).reverse();
+    // then
     const thumbnails = await screen.findAllByRole('button', { name: /Hiển thị ảnh Bài banner/ });
-    expect(thumbnails).toHaveLength(8);
     expect(thumbnails.map((entry) => entry.getAttribute('aria-label'))).toEqual(
-      expectedSlides.map((entry) => `Hiển thị ảnh ${entry.title}`),
+      carouselItems.map((entry) => `Hiển thị ảnh ${entry.title}`),
     );
-    expect(screen.getByRole('link', { name: `Xem chi tiết ${expectedSlides[0].title}` })).toBeTruthy();
+    expect(screen.getByRole('link', { name: `Xem chi tiết ${carouselItems[0].title}` })).toBeTruthy();
 
-    const selectedItem = expectedSlides[4];
+    const selectedItem = carouselItems[3];
     fireEvent.click(screen.getByRole('button', { name: `Hiển thị ảnh ${selectedItem.title}` }));
 
     expect(screen.getByRole('link', { name: `Xem chi tiết ${selectedItem.title}` })).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2, name: selectedItem.title })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: `Hiển thị ảnh ${carouselItems[0].title}` })).toBeNull();
   });
 
-  it('LoopAI giữ 3 bài boost gần nhất, 3 gợi ý tương tác và ảnh minh họa riêng', async () => {
+  it('LoopAI dùng 3 bài đầu của nhóm featured, 3 gợi ý tương tác và ảnh minh họa riêng', async () => {
     const boostedItems = Array.from({ length: 4 }, (_, index): ItemResponse => ({
       ...item,
       id: 580 + index,
@@ -375,13 +335,7 @@ describe('trạng thái tải bài đăng trên Home', () => {
       images: [`https://example.com/loop-ai-${index + 1}.jpg`],
       boostedUntil: new Date(Date.UTC(2099, 0, index + 1, 8)).toISOString(),
     }));
-    vi.mocked(itemApi.list).mockResolvedValue({
-      items: boostedItems,
-      page: 0,
-      size: 100,
-      totalElements: boostedItems.length,
-      totalPages: 1,
-    });
+    vi.mocked(itemApi.featured).mockResolvedValue(featuredResponse(boostedItems));
 
     renderHome();
 
@@ -398,7 +352,7 @@ describe('trạng thái tải bài đăng trên Home', () => {
       .toBe(browseSuggestionBox);
     expect(section!.querySelectorAll('.home-ai-suggestions svg')).toHaveLength(0);
     expect(screen.getByTestId('home-lifecycle-items').textContent).toBe(
-      [boostedItems[3].title, boostedItems[2].title, boostedItems[1].title].join('|'),
+      [boostedItems[0].title, boostedItems[1].title, boostedItems[2].title].join('|'),
     );
   });
 
