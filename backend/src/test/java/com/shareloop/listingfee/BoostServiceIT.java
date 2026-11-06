@@ -174,12 +174,14 @@ class BoostServiceIT extends IntegrationTest {
     void quoteBoost_whenNewBoostedUntilExceedsChainLimit_returnsNotAllowedWithReason() {
         // given: đợt đẩy bắt đầu từ now, cộng thêm một gói sẽ vượt boost_started_at + boost_max_days
         long ownerId = insertUser(START_BALANCE);
+        // Lưu mốc vào biến để so lại đúng giá trị đã ghi; gọi daysFromNow lần nữa có thể lệch sang giây sau.
+        Instant expireAt = daysFromNow(60);
         long itemId = insertItem(
                 ownerId,
                 "APPROVED",
                 true,
                 boostableCategory(),
-                daysFromNow(60),
+                expireAt,
                 daysFromNow(boostMaxDays() - boostDays() + 1));
         Instant chainStartedAt = daysFromNow(0);
         setBoostStartedAt(itemId, chainStartedAt);
@@ -195,15 +197,17 @@ class BoostServiceIT extends IntegrationTest {
         assertThat(quote.boostStartedAt()).isEqualTo(chainStartedAt);
         assertThat(quote.chainEndsAt()).isEqualTo(chainStartedAt.plus(boostMaxDays(), ChronoUnit.DAYS));
         assertThat(quote.cooldownUntil()).isEqualTo(boostedUntilOf(itemId).plus(boostCooldownDays(), ChronoUnit.DAYS));
-        assertThat(quote.expireAt()).isEqualTo(daysFromNow(60));
+        assertThat(quote.expireAt()).isEqualTo(expireAt);
     }
 
     @Test
     void quoteBoost_whenOwnerAtUserLimit_returnsUserLimitWithEarliestOwnBoostEnd() {
         // given: chủ bài đã có đủ boost_max_per_user bài đang đẩy, bài hết đẩy sớm nhất là sau 1 ngày
         long ownerId = insertUser(START_BALANCE);
+        Instant earliestBoostEnd = daysFromNow(1);
         for (int day = 1; day <= boostMaxPerUser(); day++) {
-            insertItem(ownerId, "APPROVED", true, boostableCategory(), daysFromNow(30), daysFromNow(day));
+            Instant boostedUntil = earliestBoostEnd.plus(day - 1, ChronoUnit.DAYS);
+            insertItem(ownerId, "APPROVED", true, boostableCategory(), daysFromNow(30), boostedUntil);
         }
         long itemId = insertItem(ownerId, "APPROVED", true, boostableCategory(), daysFromNow(30), null);
 
@@ -215,7 +219,7 @@ class BoostServiceIT extends IntegrationTest {
         assertThat(quote.reasonCode()).isEqualTo(ListingFeeErrorCode.LISTINGFEE_BOOST_USER_LIMIT.code());
         assertThat(quote.extending()).isFalse();
         assertThat(quote.userActiveBoosts()).isEqualTo(boostMaxPerUser());
-        assertThat(quote.userEarliestBoostEndAt()).isEqualTo(daysFromNow(1));
+        assertThat(quote.userEarliestBoostEndAt()).isEqualTo(earliestBoostEnd);
         assertThat(quote.cooldownUntil()).isNull();
     }
 
