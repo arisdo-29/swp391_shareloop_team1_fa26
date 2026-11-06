@@ -5,6 +5,7 @@ import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,18 +17,31 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ItemRepository extends JpaRepository<Item, Long> {
 
+    /**
+     * Điều kiện chung của trang Tìm đồ: bài APPROVED, không ẩn, chưa xoá, còn hạn hiển thị, và khớp các bộ lọc tuỳ chọn
+     * (danh mục, khu vực, tình trạng, hình thức, từ khoá không dấu theo tên bài). Bộ lọc null thì bỏ qua. Viết một lần
+     * để các query đếm, lấy bài đẩy và lấy bài thường luôn lọc giống hệt nhau.
+     */
+    String PUBLIC_BROWSE_FILTER = " i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+            + "AND (i.expire_at IS NULL OR i.expire_at > :now) "
+            + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
+            + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
+            + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
+            + "AND (CAST(:offerType AS varchar) IS NULL OR i.offer_type = :offerType) "
+            + "AND (CASE WHEN f_unaccent(lower(:q)) ~ '^[a-z0-9 ]+$' THEN "
+            + "(' ' || regexp_replace(f_unaccent(lower(i.title)), '[^a-z0-9]+', ' ', 'g') || ' ') LIKE "
+            + "'% ' || trim(regexp_replace(f_unaccent(lower(:q)), '[^a-z0-9]+', ' ', 'g')) || ' %' "
+            + "ELSE f_unaccent(lower(i.title)) LIKE "
+            + "'%' || replace(replace(replace(f_unaccent(lower(:q)), '!', '!!'), '%', '!%'), '_', '!_') || '%' ESCAPE '!' END) ";
+
+    /**
+     * Id giả truyền vào {@link #findPublicBrowseItemsExcluding} khi không cần loại bài nào: PostgreSQL báo lỗi cú pháp
+     * với "NOT IN ()" rỗng, còn id -1 không bao giờ trùng bài thật (id sinh từ 1) nên không loại nhầm.
+     */
+    long NO_ITEM_ID = -1L;
+
     @Query(
-            value = "SELECT count(*) FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
-                    + "AND (i.expire_at IS NULL OR i.expire_at > :now) "
-                    + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
-                    + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
-                    + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
-                    + "AND (CAST(:offerType AS varchar) IS NULL OR i.offer_type = :offerType) "
-                    + "AND (CASE WHEN f_unaccent(lower(:q)) ~ '^[a-z0-9 ]+$' THEN "
-                    + "(' ' || regexp_replace(f_unaccent(lower(i.title)), '[^a-z0-9]+', ' ', 'g') || ' ') LIKE "
-                    + "'% ' || trim(regexp_replace(f_unaccent(lower(:q)), '[^a-z0-9]+', ' ', 'g')) || ' %' "
-                    + "ELSE f_unaccent(lower(i.title)) LIKE "
-                    + "'%' || replace(replace(replace(f_unaccent(lower(:q)), '!', '!!'), '%', '!%'), '_', '!_') || '%' ESCAPE '!' END) "
+            value = "SELECT count(*) FROM items i WHERE" + PUBLIC_BROWSE_FILTER
                     + "AND (:mode = 0 OR (:mode = 1 AND i.boosted_until > :now) "
                     + "OR (:mode = 2 AND (i.boosted_until IS NULL OR i.boosted_until <= :now)))",
             nativeQuery = true)
@@ -68,6 +82,43 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             String q,
             int mode,
             Instant now,
+            String sort,
+            int limit,
+            long offset);
+
+    /**
+     * Vòng xoay bài đẩy của trang Tìm đồ: id các bài đang đẩy (boosted_until > now) khớp bộ lọc, sắp theo id tăng dần.
+     * Thứ tự cố định theo id (không theo lúc mua) để vòng xoay chia lượt đều, người đẩy sau không đè người đẩy trước.
+     */
+    @Query(
+            value = "SELECT i.id FROM items i WHERE" + PUBLIC_BROWSE_FILTER
+                    + "AND i.boosted_until > :now ORDER BY i.id ASC",
+            nativeQuery = true)
+    List<Long> findPublicBoostedIds(
+            Long categoryId, Long areaId, String condition, String offerType, String q, Instant now);
+
+    /**
+     * Phần danh sách thường của trang Tìm đồ: mọi bài khớp bộ lọc (kể cả bài đang đẩy) trừ các id trong
+     * {@code excludedIds}, sắp theo {@code sort} ("expiring": sắp hết hạn trước; còn lại: mới đăng trước). Bài đẩy
+     * không được xếp lên đầu trang vẫn nằm ở đây theo thứ tự bình thường nên không biến mất khỏi kết quả.
+     *
+     * <p>{@code excludedIds} không được rỗng; không loại bài nào thì truyền {@code List.of(NO_ITEM_ID)}.
+     */
+    @Query(
+            value = "SELECT i.* FROM items i WHERE" + PUBLIC_BROWSE_FILTER
+                    + "AND i.id NOT IN (:excludedIds) "
+                    + "ORDER BY CASE WHEN :sort = 'expiring' THEN i.expire_at END ASC NULLS LAST, "
+                    + "i.created_at DESC, i.id DESC "
+                    + "LIMIT :limit OFFSET :offset",
+            nativeQuery = true)
+    List<Item> findPublicBrowseItemsExcluding(
+            Long categoryId,
+            Long areaId,
+            String condition,
+            String offerType,
+            String q,
+            Instant now,
+            Collection<Long> excludedIds,
             String sort,
             int limit,
             long offset);
