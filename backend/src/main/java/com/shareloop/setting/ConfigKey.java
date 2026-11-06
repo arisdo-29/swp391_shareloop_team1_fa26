@@ -130,6 +130,12 @@ public enum ConfigKey {
             ConfigGroup.POSTING,
             "Số bài đẩy mỗi trang",
             "Số bài đẩy tối đa hiển thị ở đầu mỗi trang danh sách."),
+    BOOST_ENDING_NOTICE_HOURS(
+            "boost_ending_notice_hours",
+            "24",
+            ConfigGroup.POSTING,
+            "Báo trước khi hết đẩy",
+            "Số giờ trước lúc bài hết đẩy thì gửi thông báo nhắc chủ bài, kèm mốc còn mua thêm gói được."),
     AI_SEARCH_FEE(
             "ai_search_fee",
             "2",

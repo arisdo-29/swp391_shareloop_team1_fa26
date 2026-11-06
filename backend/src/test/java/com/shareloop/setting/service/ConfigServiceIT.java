@@ -137,12 +137,21 @@ class ConfigServiceIT extends IntegrationTest {
         assertThat(jdbc.queryForObject(
                         "SELECT COUNT(*) FROM website_attributes WHERE attr_group = 'CONFIG' AND is_active = TRUE"
                                 + " AND is_deleted = FALSE AND attr_key IN ('boost_cooldown_days',"
-                                + " 'boost_max_per_user', 'boost_max_active', 'boost_rotate_seconds')",
+                                + " 'boost_max_per_user', 'boost_max_active', 'boost_rotate_seconds',"
+                                + " 'boost_ending_notice_hours')",
                         Integer.class))
-                .isEqualTo(4);
+                .isEqualTo(5);
+        // boost_ending_notice_hours do V202611061300 thêm
+        assertThat(configService.getInt(com.shareloop.setting.ConfigKey.BOOST_ENDING_NOTICE_HOURS))
+                .isEqualTo(24);
         assertThat(configService.listConfigs())
                 .extracting(config -> config.key())
-                .contains("boost_cooldown_days", "boost_max_per_user", "boost_max_active", "boost_rotate_seconds");
+                .contains(
+                        "boost_cooldown_days",
+                        "boost_max_per_user",
+                        "boost_max_active",
+                        "boost_rotate_seconds",
+                        "boost_ending_notice_hours");
     }
 
     @Test

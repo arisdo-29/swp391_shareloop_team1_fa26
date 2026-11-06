@@ -34,9 +34,6 @@ public class BoostNotificationService {
 
     private static final Logger log = LoggerFactory.getLogger(BoostNotificationService.class);
 
-    // Báo trước khi hết đẩy bao nhiêu giờ (luật đã chốt: còn ≤ 24 giờ). Chưa có khoá cấu hình cho số này.
-    private static final long ENDING_SOON_HOURS = 24;
-
     // Cùng định dạng giờ với các thông báo khác (ReportService), theo giờ Việt Nam.
     private static final DateTimeFormatter TIME_FORMAT =
             DateTimeFormatter.ofPattern("HH:mm dd/MM").withZone(ZoneId.of("Asia/Ho_Chi_Minh"));
@@ -58,18 +55,20 @@ public class BoostNotificationService {
     }
 
     /**
-     * Báo chủ bài khi bài đang đẩy còn tối đa 24 giờ là hết đẩy. Nếu còn mua thêm được một gói trong đợt (chưa chạm
-     * boost_started_at + boost_max_days) thì nhắc kèm mốc mua thêm muộn nhất. Mỗi bài, mỗi mốc boosted_until chỉ báo
-     * một lần. Không ném lỗi nghiệp vụ.
+     * Báo chủ bài khi bài đang đẩy còn tối đa boost_ending_notice_hours giờ là hết đẩy. Nếu còn mua thêm được một gói
+     * trong đợt (chưa chạm boost_started_at + boost_max_days) thì nhắc kèm mốc mua thêm muộn nhất. Mỗi bài, mỗi mốc
+     * boosted_until chỉ báo một lần. Không ném lỗi nghiệp vụ.
      *
      * @param now mốc hiện tại (job truyền giờ hiện tại, test truyền mốc tự chọn)
      * @return số thông báo đã gửi
      */
     public int notifyEndingSoon(Instant now) {
-        Instant endsBefore = now.plus(ENDING_SOON_HOURS, ChronoUnit.HOURS);
+        // Đọc một lần cho cả lượt: tìm bài và kiểm trùng phải dùng cùng một con số.
+        int noticeHours = configService.getInt(ConfigKey.BOOST_ENDING_NOTICE_HOURS);
+        Instant endsBefore = now.plus(noticeHours, ChronoUnit.HOURS);
         int sentCount = 0;
         for (BoostNoticeRow row : itemFeeRepository.findBoostsEndingBefore(now, endsBefore)) {
-            if (runInOwnTransaction(row.getId(), () -> sendEndingSoon(row))) {
+            if (runInOwnTransaction(row.getId(), () -> sendEndingSoon(row, noticeHours))) {
                 sentCount++;
             }
         }
@@ -113,8 +112,9 @@ public class BoostNotificationService {
         return stoppedCount;
     }
 
-    private boolean sendEndingSoon(BoostNoticeRow row) {
-        Instant since = row.getBoostedUntil().minus(ENDING_SOON_HOURS, ChronoUnit.HOURS);
+    // Khoá chống trùng: đã có BOOST_ENDING_SOON của bài từ lúc mở cửa sổ báo (boosted_until - noticeHours).
+    private boolean sendEndingSoon(BoostNoticeRow row, int noticeHours) {
+        Instant since = row.getBoostedUntil().minus(noticeHours, ChronoUnit.HOURS);
         if (alreadyNotified(row, BOOST_ENDING_SOON, since)) {
             return false;
         }
