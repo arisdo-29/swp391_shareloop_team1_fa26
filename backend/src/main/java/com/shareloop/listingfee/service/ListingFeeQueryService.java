@@ -9,6 +9,7 @@ import com.shareloop.listingfee.repository.ItemFeeRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -39,18 +40,35 @@ public class ListingFeeQueryService {
     }
 
     /**
-     * Đọc hạn hiển thị (expire_at) và hạn đẩy (boosted_until) của nhiều bài bằng một query. Danh sách rỗng thì trả
-     * map rỗng, không query. Bài không tìm thấy thì không có trong map.
+     * Đọc hạn hiển thị (expire_at), hạn đẩy (boosted_until) và các mốc của đợt đẩy của nhiều bài bằng một query.
+     * Mốc kết thúc đợt và mốc hết nghỉ tính sẵn từ boost_max_days, boost_cooldown_days để FE không tự tính. Danh sách
+     * rỗng thì trả map rỗng, không query. Bài không tìm thấy thì không có trong map.
      */
     public Map<Long, DisplayWindow> findDisplayWindows(Collection<Long> itemIds) {
         Map<Long, DisplayWindow> displayWindows = new HashMap<>();
         if (itemIds == null || itemIds.isEmpty()) {
             return displayWindows;
         }
+        // Đọc cấu hình một lần cho cả trang, không đọc lại cho từng bài.
+        int maxDays = configService.getInt(ConfigKey.BOOST_MAX_DAYS);
+        int cooldownDays = configService.getInt(ConfigKey.BOOST_COOLDOWN_DAYS);
         for (ItemDisplayWindowRow row : itemFeeRepository.findDisplayWindowRows(itemIds)) {
-            displayWindows.put(row.getId(), new DisplayWindow(row.getExpireAt(), row.getBoostedUntil()));
+            displayWindows.put(row.getId(), toDisplayWindow(row, maxDays, cooldownDays));
         }
         return displayWindows;
+    }
+
+    private DisplayWindow toDisplayWindow(ItemDisplayWindowRow row, int maxDays, int cooldownDays) {
+        return new DisplayWindow(
+                row.getExpireAt(),
+                row.getBoostedUntil(),
+                row.getBoostStartedAt(),
+                plusDays(row.getBoostStartedAt(), maxDays),
+                plusDays(row.getBoostedUntil(), cooldownDays));
+    }
+
+    private static Instant plusDays(Instant instant, int days) {
+        return instant == null ? null : instant.plus(days, ChronoUnit.DAYS);
     }
 
     /** Id bài còn hạn đẩy; module item tự áp dụng bộ lọc và phân trang công khai. */

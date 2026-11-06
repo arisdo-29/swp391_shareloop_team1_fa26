@@ -15,4 +15,7 @@ public interface ItemDisplayWindowRow {
 
     // null khi bài chưa từng được đẩy.
     Instant getBoostedUntil();
+
+    // null khi bài chưa từng được đẩy.
+    Instant getBoostStartedAt();
 }

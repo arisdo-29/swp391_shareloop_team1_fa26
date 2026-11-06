@@ -56,10 +56,12 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
     /**
      * Hạn hiển thị và hạn đẩy của nhiều bài trong một lần đọc, không khoá. Dùng khi module item trả chi tiết hoặc
      * danh sách bài: một query cho cả trang thay vì một query mỗi bài. Không lọc is_deleted vì người gọi đã lọc bài
-     * khi đọc danh sách. Bài không có trong kết quả thì người gọi coi như cả hai cột null.
+     * khi đọc danh sách. Bài không có trong kết quả thì người gọi coi như cả hai cột null. Bài đẩy trước khi có cột
+     * boost_started_at thì lấy last_boosted_at, giống cách BoostService xử lý dữ liệu cũ.
      */
     @Query(
-            value = "SELECT id AS \"id\", expire_at AS \"expireAt\", boosted_until AS \"boostedUntil\""
+            value = "SELECT id AS \"id\", expire_at AS \"expireAt\", boosted_until AS \"boostedUntil\","
+                    + " COALESCE(boost_started_at, last_boosted_at) AS \"boostStartedAt\""
                     + " FROM items WHERE id IN (:ids)",
             nativeQuery = true)
     List<ItemDisplayWindowRow> findDisplayWindowRows(@Param("ids") Collection<Long> ids);

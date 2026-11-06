@@ -181,14 +181,42 @@ class BoostServiceIT extends IntegrationTest {
                 boostableCategory(),
                 daysFromNow(60),
                 daysFromNow(boostMaxDays() - boostDays() + 1));
-        setBoostStartedAt(itemId, daysFromNow(0));
+        Instant chainStartedAt = daysFromNow(0);
+        setBoostStartedAt(itemId, chainStartedAt);
+
+        // when
+        BoostQuote quote = boostService.quoteBoost(itemId, ownerId);
+
+        // then: lý do kèm mã lỗi; các mốc lấy theo đợt đang chạy, nghỉ tính từ boosted_until hiện tại
+        assertThat(quote.allowed()).isFalse();
+        assertThat(quote.reason()).isEqualTo(ListingFeeErrorCode.LISTINGFEE_BOOST_CHAIN_LIMIT.defaultMessage());
+        assertThat(quote.reasonCode()).isEqualTo(ListingFeeErrorCode.LISTINGFEE_BOOST_CHAIN_LIMIT.code());
+        assertThat(quote.extending()).isTrue();
+        assertThat(quote.boostStartedAt()).isEqualTo(chainStartedAt);
+        assertThat(quote.chainEndsAt()).isEqualTo(chainStartedAt.plus(boostMaxDays(), ChronoUnit.DAYS));
+        assertThat(quote.cooldownUntil()).isEqualTo(boostedUntilOf(itemId).plus(boostCooldownDays(), ChronoUnit.DAYS));
+        assertThat(quote.expireAt()).isEqualTo(daysFromNow(60));
+    }
+
+    @Test
+    void quoteBoost_whenOwnerAtUserLimit_returnsUserLimitWithEarliestOwnBoostEnd() {
+        // given: chủ bài đã có đủ boost_max_per_user bài đang đẩy, bài hết đẩy sớm nhất là sau 1 ngày
+        long ownerId = insertUser(START_BALANCE);
+        for (int day = 1; day <= boostMaxPerUser(); day++) {
+            insertItem(ownerId, "APPROVED", true, boostableCategory(), daysFromNow(30), daysFromNow(day));
+        }
+        long itemId = insertItem(ownerId, "APPROVED", true, boostableCategory(), daysFromNow(30), null);
 
         // when
         BoostQuote quote = boostService.quoteBoost(itemId, ownerId);
 
         // then
         assertThat(quote.allowed()).isFalse();
-        assertThat(quote.reason()).isEqualTo(ListingFeeErrorCode.LISTINGFEE_BOOST_CHAIN_LIMIT.defaultMessage());
+        assertThat(quote.reasonCode()).isEqualTo(ListingFeeErrorCode.LISTINGFEE_BOOST_USER_LIMIT.code());
+        assertThat(quote.extending()).isFalse();
+        assertThat(quote.userActiveBoosts()).isEqualTo(boostMaxPerUser());
+        assertThat(quote.userEarliestBoostEndAt()).isEqualTo(daysFromNow(1));
+        assertThat(quote.cooldownUntil()).isNull();
     }
 
     @Test
@@ -308,6 +336,14 @@ class BoostServiceIT extends IntegrationTest {
 
     private int boostMaxDays() {
         return configService.getInt(ConfigKey.BOOST_MAX_DAYS);
+    }
+
+    private int boostCooldownDays() {
+        return configService.getInt(ConfigKey.BOOST_COOLDOWN_DAYS);
+    }
+
+    private int boostMaxPerUser() {
+        return configService.getInt(ConfigKey.BOOST_MAX_PER_USER);
     }
 
     // Cắt tới giây để so bằng được với giá trị đọc lại từ DB (TIMESTAMPTZ lưu tới micro giây).

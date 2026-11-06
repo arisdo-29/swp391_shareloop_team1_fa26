@@ -101,11 +101,12 @@ public class BoostService {
      *
      * <p>Dùng chung với {@link #boost} cùng hàm tính mốc mới, cùng các hàm kiểm điều kiện và cùng cách đọc phí, nên
      * số báo giá khớp số thật. Chỉ đọc: không khoá, không trừ tiền. Không được đẩy thì trả allowed = false kèm lý
-     * do (thông điệp của mã lỗi mà {@link #boost} sẽ ném), không ném lỗi nghiệp vụ.
+     * do và mã lỗi mà {@link #boost} sẽ ném, không ném lỗi nghiệp vụ. Luôn trả kèm các mốc của đợt đẩy, số suất còn
+     * trống và hạn hiển thị để FE dựng popup mà không tự tính.
      *
      * @param itemId bài định đẩy
      * @param userId người gọi, phải là chủ bài
-     * @return phí, mốc hết đẩy mới, allowed và reason
+     * @return phí, mốc hết đẩy mới, allowed, reason, reasonCode và các mốc, số suất liên quan
      * @throws BusinessException LISTINGFEE_ITEM_NOT_FOUND, LISTINGFEE_NOT_OWNER
      */
     // NOT_SUPPORTED: không chạy trong transaction. Khi CategoryService ném lỗi (danh mục ẩn) mà ta bắt lại để báo
@@ -121,15 +122,72 @@ public class BoostService {
         Instant now = clock.instant();
         Instant newBoostedUntil = calculateNewBoostedUntil(itemFee.getBoostedUntil(), now);
         Instant chainStartedAt = calculateChainStartedAt(itemFee, now);
-        int fee = configService.getInt(ConfigKey.BOOST_FEE);
+        BusinessException rejection = null;
         try {
             requireVisibleApproved(snapshot);
             requireCategoryBoostable(snapshot.getCategoryId());
             requireBoostRules(itemFee, userId, newBoostedUntil, chainStartedAt, now);
         } catch (BusinessException notAllowed) {
-            return new BoostQuote(fee, newBoostedUntil, false, notAllowed.getMessage());
+            rejection = notAllowed;
         }
-        return new BoostQuote(fee, newBoostedUntil, true, null);
+        return buildQuote(itemFee, userId, rejection, newBoostedUntil, chainStartedAt, now);
+    }
+
+    // rejection null nghĩa là được đẩy. Đếm suất bằng đúng query mà boost dùng để kiểm, nên số FE thấy khớp lúc mua.
+    private BoostQuote buildQuote(
+            ItemFee itemFee,
+            long userId,
+            BusinessException rejection,
+            Instant newBoostedUntil,
+            Instant chainStartedAt,
+            Instant now) {
+        boolean allowed = rejection == null;
+        int maxDays = configService.getInt(ConfigKey.BOOST_MAX_DAYS);
+        int maxActive = configService.getInt(ConfigKey.BOOST_MAX_ACTIVE);
+        long slotsLeft = Math.max(0, maxActive - itemFeeRepository.countActiveBoosts(now));
+        long userActiveBoosts = itemFeeRepository.countActiveBoostsByDonor(userId, now);
+        boolean userAtLimit = userActiveBoosts >= configService.getInt(ConfigKey.BOOST_MAX_PER_USER);
+        // Hai mốc "sớm nhất" chỉ cần khi đã hết suất, nên chỉ query khi đó.
+        Instant earliestSlotAt = slotsLeft == 0
+                ? itemFeeRepository.findEarliestActiveBoostEnd(now).orElse(null)
+                : null;
+        Instant userEarliestBoostEndAt = userAtLimit
+                ? itemFeeRepository
+                        .findEarliestActiveBoostEndByDonor(userId, now)
+                        .orElse(null)
+                : null;
+        return new BoostQuote(
+                configService.getInt(ConfigKey.BOOST_FEE),
+                newBoostedUntil,
+                allowed,
+                allowed ? null : rejection.getMessage(),
+                allowed ? null : rejection.getErrorCode().code(),
+                chainStartedAt,
+                chainStartedAt.plus(maxDays, ChronoUnit.DAYS),
+                calculateCooldownUntil(itemFee.getBoostedUntil(), newBoostedUntil, allowed, now),
+                isBoosting(itemFee.getBoostedUntil(), now),
+                slotsLeft,
+                earliestSlotAt,
+                userActiveBoosts,
+                userEarliestBoostEndAt,
+                itemFee.getExpireAt());
+    }
+
+    /**
+     * Mốc được mở đợt đẩy mới. Được đẩy: tính từ mốc hết đẩy mới (nếu mua gói này rồi không mua thêm). Không được đẩy
+     * mà bài đang đẩy hoặc đang nghỉ: tính từ boosted_until hiện tại. Còn lại (chưa từng đẩy, đã nghỉ đủ) thì null.
+     */
+    private Instant calculateCooldownUntil(
+            Instant currentBoostedUntil, Instant newBoostedUntil, boolean allowed, Instant now) {
+        int cooldownDays = configService.getInt(ConfigKey.BOOST_COOLDOWN_DAYS);
+        if (allowed) {
+            return newBoostedUntil.plus(cooldownDays, ChronoUnit.DAYS);
+        }
+        if (currentBoostedUntil == null) {
+            return null;
+        }
+        Instant cooldownUntil = currentBoostedUntil.plus(cooldownDays, ChronoUnit.DAYS);
+        return cooldownUntil.isAfter(now) ? cooldownUntil : null;
     }
 
     // Đang được đẩy thì cộng nối tiếp từ mốc cũ (mua thêm gói, SRS 4.6); chưa đẩy hoặc đã hết đẩy thì tính từ now.
