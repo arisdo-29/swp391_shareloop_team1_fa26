@@ -10,7 +10,7 @@
 POST {{host}}/api/v1/items/{{itemId}}/boost
 Authorization: Bearer {{token}}
 
-### Gọi lặp lại để cộng dồn; quá boost_max_days ngày (409 LISTINGFEE_BOOST_LIMIT_EXCEEDED)
+### Gọi lặp lại để cộng dồn; đợt đẩy quá boost_max_days ngày (409 LISTINGFEE_BOOST_CHAIN_LIMIT)
 POST {{host}}/api/v1/items/{{itemId}}/boost
 Authorization: Bearer {{token}}
 

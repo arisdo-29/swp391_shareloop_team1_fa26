@@ -68,6 +68,49 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
     List<Long> findActiveBoostedIds(@Param("now") Instant now);
 
     /**
+     * Khoá tư vấn (advisory lock) dùng cho suất đẩy bài toàn hệ thống. Số rất lớn để không trùng khoá
+     * pg_advisory_xact_lock(ownerId) mà ItemService đang dùng theo id người dùng.
+     */
+    long BOOST_SLOT_LOCK_KEY = 8_315_026_110_600_001L;
+
+    /**
+     * Điều kiện "bài đang đẩy" dùng chung cho các query đếm suất: còn hạn đẩy, đã duyệt, đang hiển thị, chưa xoá và
+     * chưa quá hạn hiển thị. Bài bị ẩn hay hết hạn thì trả suất ngay, không chờ tới boosted_until.
+     */
+    String ACTIVE_BOOST_CONDITION = " boosted_until > :now AND status = 'APPROVED' AND is_active AND NOT is_deleted"
+            + " AND (expire_at IS NULL OR expire_at > :now)";
+
+    /** Số bài đang đẩy trên toàn hệ thống (so với boost_max_active). */
+    @Query(value = "SELECT COUNT(*) FROM items WHERE" + ACTIVE_BOOST_CONDITION, nativeQuery = true)
+    long countActiveBoosts(@Param("now") Instant now);
+
+    /**
+     * Số bài đang đẩy của một người (so với boost_max_per_user). Native query vì donor_id do entity Item map, ItemFee
+     * không map lại cột này.
+     */
+    @Query(
+            value = "SELECT COUNT(*) FROM items WHERE donor_id = :donorId AND" + ACTIVE_BOOST_CONDITION,
+            nativeQuery = true)
+    long countActiveBoostsByDonor(@Param("donorId") Long donorId, @Param("now") Instant now);
+
+    /** Mốc hết đẩy sớm nhất trong các bài đang đẩy: lúc đó có thêm một suất trống. Rỗng khi không bài nào đang đẩy. */
+    @Query(value = "SELECT MIN(boosted_until) FROM items WHERE" + ACTIVE_BOOST_CONDITION, nativeQuery = true)
+    Optional<Instant> findEarliestActiveBoostEnd(@Param("now") Instant now);
+
+    /** Như {@link #findEarliestActiveBoostEnd} nhưng chỉ trong các bài của một người. */
+    @Query(
+            value = "SELECT MIN(boosted_until) FROM items WHERE donor_id = :donorId AND" + ACTIVE_BOOST_CONDITION,
+            nativeQuery = true)
+    Optional<Instant> findEarliestActiveBoostEndByDonor(@Param("donorId") Long donorId, @Param("now") Instant now);
+
+    /**
+     * Khoá suất đẩy toàn hệ thống đến hết transaction: hai người cùng mua suất cuối thì chạy lần lượt, người sau đếm
+     * lại sẽ thấy đã hết suất. pg_advisory_xact_lock trả void nên gọi trong FROM để query có một dòng kết quả.
+     */
+    @Query(value = "SELECT 1 FROM pg_advisory_xact_lock(" + BOOST_SLOT_LOCK_KEY + ")", nativeQuery = true)
+    Integer lockBoostSlots();
+
+    /**
      * Các bài của một người đang giữ phí (fee_state = HELD, pending_fee > 0), bài mới cập nhật xếp trước. Native query
      * vì title, status, offer_type thuộc module item, ItemFee không map các cột này. Tổng pending_fee của các dòng này
      * bằng users.held_credit.

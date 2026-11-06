@@ -115,17 +115,18 @@ class BoostServiceIT extends IntegrationTest {
     // ---------- vượt giới hạn ----------
 
     @Test
-    void boost_whenTotalExceedsMaxDays_throwsLimitExceededAndChargesNothing() {
-        // given: đang đẩy tới mức mà cộng thêm một gói sẽ vượt boost_max_days đúng 1 ngày
+    void boost_whenNewBoostedUntilExceedsChainLimit_throwsChainLimitAndChargesNothing() {
+        // given: đợt đẩy bắt đầu từ now, cộng thêm một gói sẽ vượt boost_started_at + boost_max_days đúng 1 ngày
         Instant currentBoostedUntil = daysFromNow(boostMaxDays() - boostDays() + 1);
         long ownerId = insertUser(START_BALANCE);
         long itemId = insertItem(ownerId, "APPROVED", true, boostableCategory(), daysFromNow(60), currentBoostedUntil);
+        setBoostStartedAt(itemId, daysFromNow(0));
 
         // when
         Throwable thrown = catchThrowable(() -> boostService.boost(itemId, ownerId));
 
         // then
-        assertBusinessError(thrown, ListingFeeErrorCode.LISTINGFEE_BOOST_LIMIT_EXCEEDED);
+        assertBusinessError(thrown, ListingFeeErrorCode.LISTINGFEE_BOOST_CHAIN_LIMIT);
         assertThat(balanceOf(ownerId)).isEqualTo(START_BALANCE);
         assertThat(boostedUntilOf(itemId)).isEqualTo(currentBoostedUntil);
         assertThat(ledgerCountOfItem(itemId)).isZero();
@@ -170,8 +171,8 @@ class BoostServiceIT extends IntegrationTest {
     }
 
     @Test
-    void quoteBoost_whenTotalExceedsMaxDays_returnsNotAllowedWithReason() {
-        // given: cộng thêm một gói sẽ vượt boost_max_days
+    void quoteBoost_whenNewBoostedUntilExceedsChainLimit_returnsNotAllowedWithReason() {
+        // given: đợt đẩy bắt đầu từ now, cộng thêm một gói sẽ vượt boost_started_at + boost_max_days
         long ownerId = insertUser(START_BALANCE);
         long itemId = insertItem(
                 ownerId,
@@ -180,13 +181,14 @@ class BoostServiceIT extends IntegrationTest {
                 boostableCategory(),
                 daysFromNow(60),
                 daysFromNow(boostMaxDays() - boostDays() + 1));
+        setBoostStartedAt(itemId, daysFromNow(0));
 
         // when
         BoostQuote quote = boostService.quoteBoost(itemId, ownerId);
 
         // then
         assertThat(quote.allowed()).isFalse();
-        assertThat(quote.reason()).isEqualTo(ListingFeeErrorCode.LISTINGFEE_BOOST_LIMIT_EXCEEDED.defaultMessage());
+        assertThat(quote.reason()).isEqualTo(ListingFeeErrorCode.LISTINGFEE_BOOST_CHAIN_LIMIT.defaultMessage());
     }
 
     @Test
@@ -367,6 +369,10 @@ class BoostServiceIT extends IntegrationTest {
                 active,
                 toTimestamp(expireAt),
                 toTimestamp(boostedUntil));
+    }
+
+    private void setBoostStartedAt(long itemId, Instant boostStartedAt) {
+        jdbc.update("UPDATE items SET boost_started_at = ? WHERE id = ?", toTimestamp(boostStartedAt), itemId);
     }
 
     private Timestamp toTimestamp(Instant instant) {

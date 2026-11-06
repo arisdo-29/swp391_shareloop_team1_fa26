@@ -21,8 +21,9 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Đẩy bài (C15, FR-36, BR-P08; SRS 4.6, UC-16): trừ phí đẩy bài ngay và kéo dài boosted_until. Chỉ ghi cột
- * boosted_until qua entity lát cắt ItemFee; đổi tiền chỉ qua {@code wallet.CreditService}. Việc xếp bài đang đẩy lên
+ * Đẩy bài (C15, FR-36, BR-P08; SRS 4.6, UC-16): trừ phí đẩy bài ngay và kéo dài boosted_until. Chỉ ghi các cột đẩy
+ * bài (boosted_until, boost_started_at, last_boosted_at) qua entity lát cắt ItemFee; đổi tiền chỉ qua
+ * {@code wallet.CreditService}. Việc xếp bài đang đẩy lên
  * đầu kết quả tìm kiếm thuộc module item/search, không làm ở đây.
  */
 @Service
@@ -53,17 +54,20 @@ public class BoostService {
      * Đẩy bài của chính mình thêm một gói (POST /items/{id}/boost).
      *
      * <p>Quy tắc: chỉ chủ bài; bài APPROVED và không bị ẩn; danh mục có is_boostable. boosted_until mới = max(now,
-     * boosted_until cũ) + boost_days ngày, không được vượt now + boost_max_days và không vượt expire_at (SRS 4.6). Phí
-     * boost_fee trừ ngay qua {@code CreditService.spend} (BOOST_FEE, gắn itemId); phí 0 thì không đụng ví.
+     * boosted_until cũ) + boost_days ngày. Một đợt đẩy liên tục không vượt boost_started_at + boost_max_days; hết đợt
+     * phải nghỉ boost_cooldown_days ngày; không vượt expire_at (SRS 4.6). Bài mở đợt mới còn phải còn suất: mỗi người
+     * tối đa boost_max_per_user bài và toàn hệ thống tối đa boost_max_active bài đang đẩy. Mọi kiểm tra chạy trước khi
+     * trừ boost_fee qua {@code CreditService.spend} (BOOST_FEE, gắn itemId); phí 0 thì không đụng ví.
      *
-     * <p>Transaction: REQUIRED. Khoá dòng users của chủ bài rồi dòng items (cùng thứ tự với RenewService), nên hai lần
-     * đẩy cùng lúc chạy lần lượt và lần sau cộng tiếp từ mốc lần trước vừa ghi.
+     * <p>Transaction: REQUIRED. Khoá dòng users của chủ bài, rồi dòng items (cùng thứ tự với RenewService), rồi khoá
+     * suất đẩy toàn hệ thống; nhờ vậy hai lần đẩy cùng lúc chạy lần lượt và không vượt số suất.
      *
      * @param itemId bài cần đẩy
      * @param userId người gọi, lấy từ token
      * @return id bài, thời điểm hết đẩy mới và số dư Credit sau khi trừ phí
      * @throws BusinessException LISTINGFEE_ITEM_NOT_FOUND, LISTINGFEE_NOT_OWNER, LISTINGFEE_BOOST_NOT_ALLOWED,
-     *     LISTINGFEE_CATEGORY_NOT_BOOSTABLE, LISTINGFEE_BOOST_LIMIT_EXCEEDED, LISTINGFEE_BOOST_EXCEEDS_EXPIRY,
+     *     LISTINGFEE_CATEGORY_NOT_BOOSTABLE, LISTINGFEE_BOOST_COOLDOWN, LISTINGFEE_BOOST_CHAIN_LIMIT,
+     *     LISTINGFEE_BOOST_EXCEEDS_EXPIRY, LISTINGFEE_BOOST_USER_LIMIT, LISTINGFEE_BOOST_SOLD_OUT,
      *     WALLET_INSUFFICIENT_BALANCE
      */
     public BoostResponse boost(long itemId, long userId) {
@@ -75,17 +79,19 @@ public class BoostService {
 
         creditService.lockWalletRow(userId);
         ItemFee itemFee = lockItemFee(itemId);
+        // Khoá suất SAU ví và dòng items (mọi luồng cùng thứ tự nên không chờ vòng): ai vào sau đếm lại số suất.
+        itemFeeRepository.lockBoostSlots();
         // Đọc lại sau khi khoá: trong lúc chờ khoá, bài có thể đã bị đổi trạng thái hoặc bị ẩn.
         requireVisibleApproved(readSnapshot(itemId));
 
-        // Kiểm giới hạn ngày TRƯỚC khi trừ tiền, để bị từ chối thì không mất Credit.
+        // Mọi kiểm tra chạy TRƯỚC khi trừ tiền, để bị từ chối thì không mất Credit.
         Instant now = clock.instant();
         Instant newBoostedUntil = calculateNewBoostedUntil(itemFee.getBoostedUntil(), now);
-        requireWithinMaxDays(newBoostedUntil, now);
-        requireWithinExpireAt(newBoostedUntil, itemFee.getExpireAt());
+        Instant chainStartedAt = calculateChainStartedAt(itemFee, now);
+        requireBoostRules(itemFee, userId, newBoostedUntil, chainStartedAt, now);
 
         chargeBoostFee(userId, itemId);
-        itemFee.extendBoostedUntil(newBoostedUntil, now);
+        itemFee.extendBoostedUntil(newBoostedUntil, chainStartedAt, now);
         long creditBalance = creditService.getWallet(userId).creditBalance();
         return new BoostResponse(itemId, newBoostedUntil, creditBalance);
     }
@@ -114,12 +120,12 @@ public class BoostService {
 
         Instant now = clock.instant();
         Instant newBoostedUntil = calculateNewBoostedUntil(itemFee.getBoostedUntil(), now);
+        Instant chainStartedAt = calculateChainStartedAt(itemFee, now);
         int fee = configService.getInt(ConfigKey.BOOST_FEE);
         try {
             requireVisibleApproved(snapshot);
             requireCategoryBoostable(snapshot.getCategoryId());
-            requireWithinMaxDays(newBoostedUntil, now);
-            requireWithinExpireAt(newBoostedUntil, itemFee.getExpireAt());
+            requireBoostRules(itemFee, userId, newBoostedUntil, chainStartedAt, now);
         } catch (BusinessException notAllowed) {
             return new BoostQuote(fee, newBoostedUntil, false, notAllowed.getMessage());
         }
@@ -129,17 +135,74 @@ public class BoostService {
     // Đang được đẩy thì cộng nối tiếp từ mốc cũ (mua thêm gói, SRS 4.6); chưa đẩy hoặc đã hết đẩy thì tính từ now.
     private Instant calculateNewBoostedUntil(Instant currentBoostedUntil, Instant now) {
         Instant start = now;
-        if (currentBoostedUntil != null && currentBoostedUntil.isAfter(now)) {
+        if (isBoosting(currentBoostedUntil, now)) {
             start = currentBoostedUntil;
         }
         int boostDays = configService.getInt(ConfigKey.BOOST_DAYS);
         return start.plus(boostDays, ChronoUnit.DAYS);
     }
 
-    private void requireWithinMaxDays(Instant newBoostedUntil, Instant now) {
+    /**
+     * Mốc bắt đầu đợt đẩy mà lần mua này thuộc về. Đang đẩy thì giữ mốc của đợt hiện tại (mua thêm không mở đợt mới);
+     * chưa đẩy hoặc đã hết đẩy thì đợt mới bắt đầu từ now. Dữ liệu cũ đang đẩy mà chưa có boost_started_at thì lấy
+     * lần mua gần nhất, giống cách migration V202611061200 điền.
+     */
+    private Instant calculateChainStartedAt(ItemFee itemFee, Instant now) {
+        if (!isBoosting(itemFee.getBoostedUntil(), now)) {
+            return now;
+        }
+        if (itemFee.getBoostStartedAt() != null) {
+            return itemFee.getBoostStartedAt();
+        }
+        if (itemFee.getLastBoostedAt() != null) {
+            return itemFee.getLastBoostedAt();
+        }
+        return now;
+    }
+
+    private boolean isBoosting(Instant boostedUntil, Instant now) {
+        return boostedUntil != null && boostedUntil.isAfter(now);
+    }
+
+    // Thứ tự kiểm giống hệt ở boost và quoteBoost, nên lý do báo giá luôn trùng lỗi khi đẩy thật.
+    private void requireBoostRules(
+            ItemFee itemFee, long donorId, Instant newBoostedUntil, Instant chainStartedAt, Instant now) {
+        requireNotInCooldown(itemFee.getBoostedUntil(), now);
+        requireWithinChainLimit(newBoostedUntil, chainStartedAt);
+        requireWithinExpireAt(newBoostedUntil, itemFee.getExpireAt());
+        // Mua thêm cho bài đang đẩy không chiếm suất mới: bài đó đã nằm trong số đếm.
+        if (!isBoosting(itemFee.getBoostedUntil(), now)) {
+            requireFreeBoostSlot(donorId, now);
+        }
+    }
+
+    // Hết đợt đẩy phải nghỉ boost_cooldown_days ngày, tính từ boosted_until cũ, mới mở được đợt mới.
+    private void requireNotInCooldown(Instant boostedUntil, Instant now) {
+        if (boostedUntil == null || isBoosting(boostedUntil, now)) {
+            return;
+        }
+        int cooldownDays = configService.getInt(ConfigKey.BOOST_COOLDOWN_DAYS);
+        if (now.isBefore(boostedUntil.plus(cooldownDays, ChronoUnit.DAYS))) {
+            throw new BusinessException(ListingFeeErrorCode.LISTINGFEE_BOOST_COOLDOWN);
+        }
+    }
+
+    // Tính từ lúc BẮT ĐẦU đợt chứ không từ now: nếu tính từ now thì cứ mua nối vài ngày một lần là đẩy mãi được.
+    private void requireWithinChainLimit(Instant newBoostedUntil, Instant chainStartedAt) {
         int maxDays = configService.getInt(ConfigKey.BOOST_MAX_DAYS);
-        if (newBoostedUntil.isAfter(now.plus(maxDays, ChronoUnit.DAYS))) {
-            throw new BusinessException(ListingFeeErrorCode.LISTINGFEE_BOOST_LIMIT_EXCEEDED);
+        if (newBoostedUntil.isAfter(chainStartedAt.plus(maxDays, ChronoUnit.DAYS))) {
+            throw new BusinessException(ListingFeeErrorCode.LISTINGFEE_BOOST_CHAIN_LIMIT);
+        }
+    }
+
+    private void requireFreeBoostSlot(long donorId, Instant now) {
+        int maxPerUser = configService.getInt(ConfigKey.BOOST_MAX_PER_USER);
+        if (itemFeeRepository.countActiveBoostsByDonor(donorId, now) >= maxPerUser) {
+            throw new BusinessException(ListingFeeErrorCode.LISTINGFEE_BOOST_USER_LIMIT);
+        }
+        int maxActive = configService.getInt(ConfigKey.BOOST_MAX_ACTIVE);
+        if (itemFeeRepository.countActiveBoosts(now) >= maxActive) {
+            throw new BusinessException(ListingFeeErrorCode.LISTINGFEE_BOOST_SOLD_OUT);
         }
     }
 

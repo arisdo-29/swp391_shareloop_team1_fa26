@@ -13,8 +13,12 @@ public enum ListingFeeErrorCode implements ErrorCode {
     LISTINGFEE_RENEW_NOT_ALLOWED(HttpStatus.CONFLICT, "Chỉ gia hạn được bài đang hiển thị."),
     LISTINGFEE_BOOST_NOT_ALLOWED(HttpStatus.CONFLICT, "Chỉ đẩy được bài đã duyệt và đang hiển thị."),
     LISTINGFEE_CATEGORY_NOT_BOOSTABLE(HttpStatus.CONFLICT, "Danh mục của bài đăng không cho phép đẩy bài."),
-    LISTINGFEE_BOOST_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "Tổng thời gian đẩy vượt quá số ngày tối đa cho phép."),
-    LISTINGFEE_BOOST_EXCEEDS_EXPIRY(HttpStatus.CONFLICT, "Thời gian đẩy không được vượt quá hạn hiển thị của bài.");
+    LISTINGFEE_BOOST_EXCEEDS_EXPIRY(HttpStatus.CONFLICT, "Thời gian đẩy không được vượt quá hạn hiển thị của bài."),
+    // Bốn mã dưới không ghi ngày giờ: mốc cụ thể trả qua boost-quote để giao diện tự hiển thị.
+    LISTINGFEE_BOOST_COOLDOWN(HttpStatus.CONFLICT, "Bài vừa hết đợt đẩy, cần chờ hết thời gian nghỉ mới đẩy lại được."),
+    LISTINGFEE_BOOST_CHAIN_LIMIT(HttpStatus.CONFLICT, "Đợt đẩy này đã đạt số ngày đẩy liên tục tối đa."),
+    LISTINGFEE_BOOST_USER_LIMIT(HttpStatus.CONFLICT, "Bạn đã có đủ số bài đang đẩy cùng lúc cho phép."),
+    LISTINGFEE_BOOST_SOLD_OUT(HttpStatus.CONFLICT, "Đã hết suất đẩy bài, vui lòng thử lại sau.");
 
     private final HttpStatus status;
     private final String defaultMessage;

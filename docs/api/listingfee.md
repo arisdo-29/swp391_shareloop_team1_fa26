@@ -197,7 +197,7 @@ Gia hạn bài của chính mình (F08 bước 1, FR-28, BR-D03, BR-P12). Trừ 
 - Thành công: `200`, một `BoostResponse`.
 - Lỗi: `401 UNAUTHORIZED`; `402 WALLET_INSUFFICIENT_BALANCE`; `403 LISTINGFEE_NOT_OWNER`; `404 LISTINGFEE_ITEM_NOT_FOUND`;
   `404 CATALOG_CATEGORY_NOT_FOUND` khi danh mục của bài đã bị ẩn; `409 LISTINGFEE_BOOST_NOT_ALLOWED`,
-  `409 LISTINGFEE_CATEGORY_NOT_BOOSTABLE`, `409 LISTINGFEE_BOOST_LIMIT_EXCEEDED`, `409 LISTINGFEE_BOOST_EXCEEDS_EXPIRY`.
+  `409 LISTINGFEE_CATEGORY_NOT_BOOSTABLE`, `409 LISTINGFEE_BOOST_CHAIN_LIMIT`, `409 LISTINGFEE_BOOST_EXCEEDS_EXPIRY`.
 - Xếp bài đang đẩy lên đầu kết quả tìm kiếm thuộc module item/search, chưa làm ở endpoint này.
 
 ```json
@@ -284,7 +284,7 @@ hạn mới với `POST /items/{id}/renew`.
 | `LISTINGFEE_RENEW_NOT_ALLOWED`| 409  | Gia hạn bài không ở trạng thái `APPROVED`                    | `POST /items/{id}/renew`      |
 | `LISTINGFEE_BOOST_NOT_ALLOWED`| 409  | Đẩy bài không `APPROVED` hoặc đang bị ẩn                     | `POST /items/{id}/boost`      |
 | `LISTINGFEE_CATEGORY_NOT_BOOSTABLE` | 409 | Danh mục của bài có `boostable = false`                | `POST /items/{id}/boost`      |
-| `LISTINGFEE_BOOST_LIMIT_EXCEEDED`   | 409 | `boosted_until` mới vượt `now + boost_max_days`        | `POST /items/{id}/boost`      |
+| `LISTINGFEE_BOOST_CHAIN_LIMIT`      | 409 | `boosted_until` mới vượt `boost_started_at + boost_max_days` | `POST /items/{id}/boost` |
 | `LISTINGFEE_BOOST_EXCEEDS_EXPIRY`   | 409 | `boosted_until` mới vượt `expire_at` của bài           | `POST /items/{id}/boost`      |
 | `LISTINGFEE_ALREADY_HELD`     | 409  | Tạo bài mà bài đã có khoản phí đang giữ                      | qua API của module gọi        |
 | `LISTINGFEE_NOTHING_HELD`     | 409  | Duyệt / từ chối / xoá mà bài không có khoản phí đang giữ     | qua API của module gọi        |
