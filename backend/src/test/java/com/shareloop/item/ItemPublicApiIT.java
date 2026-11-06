@@ -11,12 +11,19 @@ import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.repository.ItemRepository;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
 import com.shareloop.support.IntegrationTest;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
 
 @AutoConfigureMockMvc
@@ -33,6 +40,9 @@ class ItemPublicApiIT extends IntegrationTest {
 
     @Autowired
     JwtService jwtService;
+
+    @Autowired
+    ConfigService configService;
 
     @Test
     void anonymousListFiltersOutPendingAndHiddenItems() throws Exception {
@@ -520,6 +530,198 @@ class ItemPublicApiIT extends IntegrationTest {
                 .andExpect(jsonPath("$.boostStartedAt").isNotEmpty())
                 .andExpect(jsonPath("$.boostChainEndsAt").isNotEmpty())
                 .andExpect(jsonPath("$.boostCooldownUntil").isNotEmpty());
+    }
+
+    // ---------- xoay vòng bài đẩy ----------
+
+    @Test
+    void fortyItemsThirtyBoosts_eachPageLeadsWithThreeBoostsAndPagesCoverEveryItemOnce() throws Exception {
+        // given: 40 bài, 30 bài đầu đang đẩy, cỡ trang 20
+        long ownerId = insertUser("rotation-forty-test@shareloop.local", "0900000741");
+        List<Long> allIds = createItems(ownerId, firstCategoryId(), "Bài rotation-forty-unique", 40, 30);
+        List<Long> boostedIds = allIds.subList(0, 30);
+
+        // when: trang 1 theo giờ hiện tại, trang 2 gửi lại rotationSeed mà trang 1 trả về
+        String firstPage =
+                getBody(get("/api/v1/items").param("q", "rotation-forty-unique").param("size", "20"));
+        Number seed = JsonPath.read(firstPage, "$.rotationSeed");
+        String secondPage = getBody(get("/api/v1/items")
+                .param("q", "rotation-forty-unique")
+                .param("size", "20")
+                .param("page", "1")
+                .param("rotationSeed", String.valueOf(seed)));
+
+        // then: 2 trang, mỗi trang mở đầu bằng đúng 3 bài đẩy, ghép lại đủ 40 bài không trùng (gồm cả 30 bài đẩy)
+        Number totalPages = JsonPath.read(firstPage, "$.totalPages");
+        assertThat(totalPages.intValue()).isEqualTo(2);
+        List<Long> firstIds = idsOf(firstPage);
+        List<Long> secondIds = idsOf(secondPage);
+        assertThat(boostedIds).containsAll(firstIds.subList(0, 3));
+        assertThat(boostedIds).containsAll(secondIds.subList(0, 3));
+        // bài thứ 4 của trang 1 là bài thường mới nhất, nên khối bài đẩy đầu trang đúng 3 bài
+        assertThat(boostedIds).doesNotContain(firstIds.get(3));
+        List<Long> bothPages = new ArrayList<>(firstIds);
+        bothPages.addAll(secondIds);
+        assertThat(bothPages).hasSize(40).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(allIds);
+    }
+
+    @Test
+    void sameRotationSeed_returnsSamePageTwice() throws Exception {
+        // given: 10 bài, 6 bài đẩy, cỡ trang 4 nên vòng xoay quyết định bài nào lên đầu
+        long ownerId = insertUser("rotation-seed-test@shareloop.local", "0900000742");
+        createItems(ownerId, firstCategoryId(), "Bài rotation-seed-unique", 10, 6);
+
+        // when: gọi hai lần cùng một rotationSeed
+        String first = getBody(get("/api/v1/items")
+                .param("q", "rotation-seed-unique")
+                .param("size", "4")
+                .param("rotationSeed", "12345"));
+        String second = getBody(get("/api/v1/items")
+                .param("q", "rotation-seed-unique")
+                .param("size", "4")
+                .param("rotationSeed", "12345"));
+
+        // then
+        assertThat(idsOf(second)).isEqualTo(idsOf(first));
+    }
+
+    @Test
+    void categoryFilter_onlyRotatesBoostsOfThatCategory() throws Exception {
+        // given: mỗi danh mục 4 bài đẩy
+        long ownerId = insertUser("rotation-category-test@shareloop.local", "0900000743");
+        long categoryId = firstCategoryId();
+        List<Long> boostedInCategory = createItems(ownerId, categoryId, "Bài rotation-category-unique a", 4, 4);
+        createItems(ownerId, secondCategoryId(), "Bài rotation-category-unique b", 4, 4);
+
+        // when
+        String boostedOnly = getBody(get("/api/v1/items")
+                .param("q", "rotation-category-unique")
+                .param("categoryId", String.valueOf(categoryId))
+                .param("boosted", "true"));
+        String browse = getBody(get("/api/v1/items")
+                .param("q", "rotation-category-unique")
+                .param("categoryId", String.valueOf(categoryId))
+                .param("size", "4"));
+
+        // then: vòng xoay chỉ gồm bài đẩy của danh mục đã lọc
+        assertThat(idsOf(boostedOnly)).containsExactlyInAnyOrderElementsOf(boostedInCategory);
+        assertThat(boostedInCategory).containsAll(idsOf(browse).subList(0, 3));
+    }
+
+    @Test
+    void boostedOnly_returnsEveryActiveBoostAndNothingElse() throws Exception {
+        // given: 7 bài đang đẩy, 3 bài thường, 1 bài đang đẩy nhưng bị ẩn, 1 bài đã hết đẩy
+        long ownerId = insertUser("rotation-only-test@shareloop.local", "0900000744");
+        long categoryId = firstCategoryId();
+        List<Long> boostedIds = createItems(ownerId, categoryId, "Bài rotation-only-unique", 10, 7)
+                .subList(0, 7);
+        long hiddenId = createItems(ownerId, categoryId, "Bài rotation-only-unique hidden", 1, 1)
+                .get(0);
+        jdbc.sql("UPDATE items SET is_active = false WHERE id = :id")
+                .param("id", hiddenId)
+                .update();
+        long endedId = createItems(ownerId, categoryId, "Bài rotation-only-unique ended", 1, 0)
+                .get(0);
+        jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP - INTERVAL '1 hour' WHERE id = :id")
+                .param("id", endedId)
+                .update();
+
+        // when
+        String body = getBody(get("/api/v1/items")
+                .param("q", "rotation-only-unique")
+                .param("boosted", "true")
+                .param("size", "50"));
+
+        // then
+        Number totalElements = JsonPath.read(body, "$.totalElements");
+        assertThat(totalElements.longValue()).isEqualTo(7);
+        assertThat(idsOf(body)).containsExactlyInAnyOrderElementsOf(boostedIds);
+    }
+
+    // ---------- banner trang chủ ----------
+
+    @Test
+    void featured_returnsAtMostFiveItemsAndOneRotationWindow() throws Exception {
+        // given: 8 bài đang đẩy (DB có thể còn bài đẩy khác, banner không lọc)
+        long ownerId = insertUser("featured-limit-test@shareloop.local", "0900000745");
+        createItems(ownerId, firstCategoryId(), "Bài featured-limit-unique", 8, 8);
+
+        // when
+        String body = getBody(get("/api/v1/items/featured"));
+
+        // then: mặc định 5 bài; khoảng giữa hai lần đổi nhóm đúng boost_rotate_seconds
+        assertThat(idsOf(body)).hasSize(5);
+        Instant rotatedAt = Instant.parse(JsonPath.read(body, "$.rotatedAt"));
+        Instant nextRotateAt = Instant.parse(JsonPath.read(body, "$.nextRotateAt"));
+        assertThat(Duration.between(rotatedAt, nextRotateAt).getSeconds())
+                .isEqualTo(configService.getInt(ConfigKey.BOOST_ROTATE_SECONDS));
+    }
+
+    @Test
+    void featured_whenMoreThanFiveBoosts_differentViewerKeysSeeDifferentGroups() throws Exception {
+        // given: 8 bài đang đẩy
+        long ownerId = insertUser("featured-viewer-test@shareloop.local", "0900000746");
+        createItems(ownerId, firstCategoryId(), "Bài featured-viewer-unique", 8, 8);
+
+        // when: hai khách khác viewerKey
+        String firstViewer = getBody(get("/api/v1/items/featured").param("viewerKey", "0"));
+        String secondViewer = getBody(get("/api/v1/items/featured").param("viewerKey", "1"));
+
+        // then
+        assertThat(idsOf(secondViewer)).isNotEqualTo(idsOf(firstViewer));
+    }
+
+    /**
+     * Tạo {@code count} bài APPROVED tên "{prefix} {số}" (id tăng dần theo số); {@code boostedCount} bài đầu đang đẩy
+     * thêm 1 ngày. Trả id theo thứ tự tạo.
+     */
+    private List<Long> createItems(long ownerId, long categoryId, String prefix, int count, int boostedCount) {
+        long areaId = jdbc.sql("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        List<Long> ids = new ArrayList<>();
+        for (int number = 0; number < count; number++) {
+            Item entry = item(ownerId, categoryId, areaId, prefix + " " + number);
+            entry.approve();
+            items.saveAndFlush(entry);
+            if (number < boostedCount) {
+                jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP + INTERVAL '1 day' WHERE id = :id")
+                        .param("id", entry.getId())
+                        .update();
+            }
+            ids.add(entry.getId());
+        }
+        return ids;
+    }
+
+    private long firstCategoryId() {
+        return jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+    }
+
+    private long secondCategoryId() {
+        return jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id OFFSET 1 LIMIT 1")
+                .query(Long.class)
+                .single();
+    }
+
+    private String getBody(MockHttpServletRequestBuilder request) throws Exception {
+        return mvc.perform(request)
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+    }
+
+    // JsonPath đọc số nhỏ thành Integer, số lớn thành Long, nên đổi qua Number cho chắc.
+    private List<Long> idsOf(String body) {
+        List<Number> ids = JsonPath.read(body, "$.items[*].id");
+        List<Long> result = new ArrayList<>();
+        for (Number id : ids) {
+            result.add(id.longValue());
+        }
+        return result;
     }
 
     private long insertUser(String email, String phone) {
