@@ -2,6 +2,7 @@ import { http, type ApiError } from './http';
 
 export const itemApiEndpoints = {
   list: '/api/v1/items',
+  featured: '/api/v1/items/featured',
   detail: (id: number) => `/api/v1/items/${id}`,
   create: '/api/v1/items',
   update: (id: number) => `/api/v1/items/${id}`,
@@ -25,6 +26,10 @@ export interface ItemListParams {
   size?: number;
   boosted?: boolean;
   sort?: 'newest' | 'expiring';
+  // Lượt xoay bài đẩy backend trả ở trang trước; gửi lại khi chuyển trang trong cùng bộ lọc (docs/api/item.md mục 4).
+  rotationSeed?: number;
+  // Khoá xoay của khách chưa đăng nhập (getViewerKey); đã đăng nhập thì không gửi, backend dùng id người dùng.
+  viewerKey?: number;
 }
 
 export interface PageResponse<T> {
@@ -33,6 +38,23 @@ export interface PageResponse<T> {
   size: number;
   totalElements: number;
   totalPages?: number;
+}
+
+// GET /api/v1/items trả thêm lượt xoay bài đẩy đã dùng cho trang này.
+export interface ItemListPage extends PageResponse<ItemResponse> {
+  rotationSeed?: number | null;
+}
+
+// Contract: docs/api/item.md mục 4b (GET /api/v1/items/featured)
+export interface FeaturedItemsParams {
+  limit?: number;
+  viewerKey?: number;
+}
+
+export interface FeaturedItemsResponse {
+  items: ItemResponse[];
+  rotatedAt: string; // lúc bắt đầu nhóm hiện tại, ISO-8601 UTC
+  nextRotateAt: string; // lúc đổi sang nhóm kế tiếp; FE hẹn giờ tải lại tới mốc này
 }
 
 export type OfferType = 'GIVE' | 'SWAP';
@@ -88,6 +110,10 @@ export interface ItemResponse extends CreateItemRequest {
   completedAt?: string | null;
   // Bài còn nhận yêu cầu không, backend tính. false thì ẩn nút gửi yêu cầu. null ở các danh sách khác.
   requestable?: boolean | null;
+  // Ba mốc đợt đẩy do backend tính sẵn; chỉ có ở "Bài của tôi" và chi tiết bài khi chủ bài xem, nơi khác null.
+  boostStartedAt?: string | null;
+  boostChainEndsAt?: string | null; // mốc đẩy muộn nhất của đợt (mua thêm được tới đây)
+  boostCooldownUntil?: string | null; // mốc được mở đợt đẩy mới
 }
 
 // Contract: docs/api/listingfee.md (GET /api/v1/items/{id}/edit-quote)
@@ -126,11 +152,33 @@ export interface RenewQuote {
   reason: string | null;
 }
 
+// Mã lý do không đẩy được (docs/api/listingfee.md, bảng reasonCode của boost-quote). Mã khác thì hiện reason.
+export type BoostReasonCode =
+  | 'LISTINGFEE_BOOST_NOT_ALLOWED'
+  | 'LISTINGFEE_CATEGORY_NOT_BOOSTABLE'
+  | 'CATALOG_CATEGORY_NOT_FOUND'
+  | 'LISTINGFEE_BOOST_COOLDOWN'
+  | 'LISTINGFEE_BOOST_CHAIN_LIMIT'
+  | 'LISTINGFEE_BOOST_EXCEEDS_EXPIRY'
+  | 'LISTINGFEE_BOOST_USER_LIMIT'
+  | 'LISTINGFEE_BOOST_SOLD_OUT';
+
+// Contract: docs/api/listingfee.md (GET /api/v1/items/{id}/boost-quote). Mọi mốc do backend tính, FE chỉ định dạng.
 export interface BoostQuote {
   fee: number;
   newBoostedUntil: string;
   allowed: boolean;
   reason: string | null;
+  reasonCode: BoostReasonCode | string | null; // null khi allowed = true
+  boostStartedAt: string; // đợt đang chạy, hoặc now nếu là đợt mới
+  chainEndsAt: string; // mốc đẩy muộn nhất của đợt
+  cooldownUntil: string | null; // mốc được đẩy lại (xem bảng cooldownUntil trong listingfee.md)
+  extending: boolean; // bài đang được đẩy: mua thêm, không chiếm suất mới
+  slotsLeft: number; // suất còn trống toàn hệ thống
+  earliestSlotAt: string | null; // chỉ có khi slotsLeft = 0
+  userActiveBoosts: number;
+  userEarliestBoostEndAt: string | null; // chỉ có khi đã đủ số bài đang đẩy tối đa
+  expireAt: string | null;
 }
 
 export interface ListingFeeConfigResponse {
@@ -158,10 +206,12 @@ export function itemListUrl(params: ItemListParams = {}): string {
   if (params.sort !== undefined) query.set('sort', params.sort);
   if (params.page !== undefined) query.set('page', String(params.page));
   if (params.size !== undefined) query.set('size', String(params.size));
+  if (params.rotationSeed !== undefined) query.set('rotationSeed', String(params.rotationSeed));
+  if (params.viewerKey !== undefined) query.set('viewerKey', String(params.viewerKey));
   return query.size ? `${itemApiEndpoints.list}?${query}` : itemApiEndpoints.list;
 }
 
-export async function listItems(params: ItemListParams = {}): Promise<PageResponse<ItemResponse>> {
+export async function listItems(params: ItemListParams = {}): Promise<ItemListPage> {
   return itemApi.list(params);
 }
 
@@ -183,8 +233,13 @@ export const itemApi = {
     const { data } = await http.get<ListingFeeConfigResponse>(itemApiEndpoints.listingFees);
     return data;
   },
-  async list(params: ItemListParams = {}): Promise<PageResponse<ItemResponse>> {
-    const { data } = await http.get<PageResponse<ItemResponse>>(itemApiEndpoints.list, { params });
+  async list(params: ItemListParams = {}): Promise<ItemListPage> {
+    const { data } = await http.get<ItemListPage>(itemApiEndpoints.list, { params });
+    return data;
+  },
+  // Banner trang chủ: một nhóm bài đẩy theo vòng xoay; backend quyết định nhóm và mốc đổi nhóm.
+  async featured(params: FeaturedItemsParams = {}): Promise<FeaturedItemsResponse> {
+    const { data } = await http.get<FeaturedItemsResponse>(itemApiEndpoints.featured, { params });
     return data;
   },
   async postingQuota(): Promise<PostingQuota> {
