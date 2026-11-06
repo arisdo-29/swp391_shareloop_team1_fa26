@@ -111,6 +111,8 @@ Xem chi tiết một bài đăng theo ID.
 - `requestable`: `true` khi bài `APPROVED`, đang hiển thị, chủ bài không bị khoá. Frontend ẩn nút "Gửi yêu cầu" khi
   `false`. Cờ này không xét người xem (chủ bài xem bài của mình vẫn thấy `true`); các luật theo người gửi (bài của mình,
   0 sao, Admin) vẫn do `POST /items/{id}/requests` kiểm.
+- Ba mốc đợt đẩy (`boostStartedAt`, `boostChainEndsAt`, `boostCooldownUntil`) chỉ có khi chủ bài xem; người khác nhận
+  `null`. `boostedUntil` có với mọi người xem.
 - **Thành công:** `200 OK`, trả về `ItemResponse`.
 - **Lỗi:**
   - `404 ITEM_NOT_FOUND`: Không tìm thấy bài đăng hoặc không có quyền xem.
@@ -140,7 +142,8 @@ Xem chi tiết một bài đăng theo ID.
 Xem danh sách tất cả các bài đăng do chính mình tạo (sắp xếp mới nhất lên trước).
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT).
-- **Thành công:** `200 OK`, mảng `ItemResponse` (mảng rỗng nếu chưa đăng bài nào).
+- **Thành công:** `200 OK`, mảng `ItemResponse` (mảng rỗng nếu chưa đăng bài nào). Bài đã từng đẩy có đủ ba mốc
+  `boostStartedAt`, `boostChainEndsAt`, `boostCooldownUntil` để hiện thông tin đợt đẩy.
 - **Lỗi:**
   - `401 UNAUTHORIZED`: Chưa đăng nhập.
 
@@ -170,28 +173,98 @@ Hạn mức và phí bài kế tiếp cho trang Đăng tin (cần đăng nhập)
 
 ## 4. GET /api/v1/items
 
-Danh sách bài `APPROVED` còn hiển thị (`is_active = true`, chưa xoá mềm, `expire_at` rỗng hoặc lớn hơn thời điểm hiện tại). Trong cùng bộ lọc, tất cả bài đang được đẩy xếp trước bài thường. Không cần đăng nhập.
+Danh sách bài `APPROVED` còn hiển thị (`is_active = true`, chưa xoá mềm, `expire_at` rỗng hoặc lớn hơn thời điểm hiện tại). Mỗi trang có tối đa `boost_max_per_page` (mặc định 3) bài đang đẩy ở đầu, chọn theo **vòng xoay** (mục dưới); phần còn lại là bài thường. Không cần đăng nhập; có token thì backend dùng id người dùng làm khoá xoay.
 
 Tham số tùy chọn: `q` (tìm theo cụm từ trong tiêu đề món đồ, không phân biệt dấu/hoa thường; không tìm trong mô tả hoặc khớp một phần của từ khác),
 `categoryId`, `areaId` (lọc đúng id, kết hợp được với `q`),
 `condition` (`NEW`, `LIKE_NEW`, `GOOD`, `DEFECTIVE`), `offerType` (`GIVE`, `SWAP`),
-`page` (từ 0, mặc định 0), `size` (1–100, mặc định 24), `boosted` (mặc định `false`; `true` chỉ lấy bài đang được đẩy), `sort` (`newest` hoặc `expiring`, mặc định `newest`). Tất cả bộ lọc đều không bắt buộc và kết hợp được với nhau;
-lọc ở server nên `totalElements` và phân trang tính trên kết quả đã lọc (FR-50). Kết quả là `PageResponse<ItemResponse>`:
+`page` (từ 0, mặc định 0), `size` (1–100, mặc định 24), `boosted` (mặc định `false`; `true` chỉ lấy bài đang được đẩy), `sort` (`newest` hoặc `expiring`, mặc định `newest`),
+`rotationSeed` (số nguyên ≥ 0; lượt xoay lấy từ response trang trước, gửi lại khi chuyển trang),
+`viewerKey` (số nguyên ≥ 0; khoá xoay của khách chưa đăng nhập, FE tự sinh một lần và giữ lại; bỏ qua khi có token). Tất cả bộ lọc đều không bắt buộc và kết hợp được với nhau;
+lọc ở server nên `totalElements` và phân trang tính trên kết quả đã lọc (FR-50). Kết quả là `ItemListPageResponse`:
 
 Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&offerType=GIVE`. `q` rỗng hoặc chỉ có khoảng trắng tương đương không tìm kiếm; `%` và `_` được xem là ký tự thường.
 
 ```json
-{ "items": [], "page": 0, "size": 24, "totalElements": 0, "totalPages": 0 }
+{ "items": [], "page": 0, "size": 24, "totalElements": 0, "totalPages": 0, "rotationSeed": 9842213 }
 ```
 
-`totalPages` là số trang thực tế. Backend lọc, sắp xếp, đếm và phân trang trong database; mỗi trang trừ trang cuối có đủ `size` bài nếu dữ liệu không đổi giữa các request. Ví dụ có 30 bài đẩy và 18 bài thường, `size=24`: trang 1 gồm 24 bài đẩy; trang 2 gồm 6 bài đẩy và 18 bài thường. Chế độ `boosted=true` phân trang riêng các bài đang được đẩy, tối đa `size` bài mỗi trang.
+`rotationSeed` là lượt xoay đã dùng cho trang này. FE gửi lại đúng số này khi sang trang khác (cùng bộ lọc) để các trang
+thuộc cùng một lượt: không trùng bài, không sót bài. Không gửi thì backend tính theo giờ hiện tại, nên trang 2 gọi sau
+khi đã đổi lượt có thể lệch với trang 1.
 
-- `sort=newest`: bài đẩy xếp theo lần kích hoạt hoặc gia hạn đẩy gần nhất; sau đó bài thường xếp theo thời điểm tạo mới nhất.
-- `sort=expiring`: bài đẩy xếp theo `expire_at` tăng dần; sau đó bài thường cũng xếp theo `expire_at` tăng dần. Bài có `expire_at` rỗng đứng cuối trong từng nhóm. Nếu trùng hạn, ưu tiên bài tạo mới hơn rồi đến ID lớn hơn.
+### Cách xếp bài đẩy (vòng xoay)
 
-`400` khi `sort` không thuộc hai giá trị trên.
+- **Vòng**: id các bài đang đẩy (`boosted_until > now`) khớp bộ lọc, sắp theo id **tăng dần**. Thứ tự cố định, không
+  phụ thuộc lúc mua gói, nên người đẩy sau không đè người đẩy trước.
+- **Lượt**: `round = epochSeconds / boost_rotate_seconds` (mặc định 180 giây, tức 3 phút đổi nhóm một lần), hoặc
+  `rotationSeed` nếu request có gửi.
+- **Người xem**: `viewerKey` = id người dùng nếu đã đăng nhập; khách thì lấy tham số `viewerKey`; không có thì `0`. Mỗi
+  người bắt đầu ở một vị trí khác trên vòng.
+- **Chọn bài**: vị trí bắt đầu `(round * perPage + viewerKey) mod n`, lấy liên tiếp, hết vòng thì quay lại đầu, với
+  `perPage = min(boost_max_per_page, size)`.
+- **Trang Tìm đồ** (`boosted=false`): chỉ `min(n, perPage * totalPages)` bài đầu của vòng (gọi là `slotIds`) được xếp
+  lên đầu trang; trang `p` lấy `slotIds` từ vị trí `p * perPage`, tối đa `perPage` bài, theo đúng thứ tự xoay. Phần
+  còn lại của trang là **mọi bài khớp bộ lọc trừ `slotIds`** (kể cả bài đẩy không được lên đầu), sắp theo `sort`. Nhờ
+  vậy bài đẩy không bao giờ biến mất khỏi kết quả, và ghép các trang của cùng một lượt thì đủ mọi bài, không trùng.
+- **Trang "Tin nổi bật"** (`boosted=true`): mọi bài đang đẩy khớp bộ lọc, theo thứ tự xoay (cả vòng), phân trang bình
+  thường `size` bài mỗi trang. `totalElements` là số bài đang đẩy.
+- `sort` chỉ áp dụng cho phần bài thường: `newest` là mới tạo trước; `expiring` là `expire_at` tăng dần, `expire_at`
+  rỗng đứng cuối, trùng hạn thì bài tạo mới hơn rồi ID lớn hơn. Bài đẩy ở đầu trang và trang `boosted=true` luôn theo
+  thứ tự xoay.
+- Không có trường nào để hiện nhãn "Được đẩy"; FE không cần phân biệt bài đẩy với bài thường.
 
-`400 VALIDATION_FAILED` khi tham số phân trang sai. `400` khi `condition` hoặc `offerType` không thuộc các giá trị trên.
+Ví dụ 48 bài, 30 bài đẩy, `size=24`, `boost_max_per_page=3`: có 2 trang và `slotIds` là 6 bài đầu vòng. Trang 1 gồm 3
+bài đẩy rồi 21 bài thường mới nhất; trang 2 gồm 3 bài đẩy kế tiếp rồi 21 bài thường còn lại. 24 bài đẩy không lên đầu
+trang vẫn nằm trong phần bài thường. Lượt sau (3 phút) nhóm 6 bài đầu trang trượt sang 6 bài khác của vòng.
+
+`400 VALIDATION_FAILED` khi `sort` không thuộc hai giá trị trên, tham số phân trang sai, hoặc `rotationSeed` /
+`viewerKey` âm. `400` khi `condition` hoặc `offerType` không thuộc các giá trị trên.
+
+---
+
+## 4b. GET /api/v1/items/featured
+
+Banner bài đẩy ở trang chủ: một nhóm bài đang đẩy, đổi nhóm mỗi `boost_rotate_seconds` giây (mặc định 3 phút). Không
+cần đăng nhập. Đường dẫn chuỗi cố định nên không bị hiểu là `GET /items/{id}`.
+
+- **Tham số:** `limit` (1–10, mặc định 5), `viewerKey` (số nguyên ≥ 0, như ở `GET /items`; bỏ qua khi có token).
+- **Chọn bài:** vòng là **mọi** bài đang đẩy (không lọc), sắp id tăng dần; `round = epochSeconds / boost_rotate_seconds`;
+  lấy `limit` bài liên tiếp bắt đầu từ `(round * limit + viewerKey) mod n`. Có ít hơn `limit` bài thì trả hết.
+- **Thành công:** `200 OK`, `FeaturedItemsResponse`. `items` cùng dạng `ItemResponse` với trang Tìm đồ.
+- **Lỗi:** `400 VALIDATION_FAILED` khi `limit` ngoài 1–10 hoặc `viewerKey` âm.
+
+```json
+{
+  "items": [
+    {
+      "id": 31,
+      "donorId": 7,
+      "categoryId": 2,
+      "areaId": 5,
+      "offerType": "GIVE",
+      "title": "Áo khoác gió",
+      "status": "APPROVED",
+      "images": ["/api/v1/media/120"],
+      "expireAt": "2026-12-06T08:00:00Z",
+      "boostedUntil": "2026-11-09T08:00:00Z",
+      "boostStartedAt": null,
+      "boostChainEndsAt": null,
+      "boostCooldownUntil": null
+    }
+  ],
+  "rotatedAt": "2026-11-06T08:00:00Z",
+  "nextRotateAt": "2026-11-06T08:03:00Z"
+}
+```
+
+(Ví dụ lược bớt các trường khác của `ItemResponse`.)
+
+| Trường | Kiểu | Ý nghĩa |
+|---|---|---|
+| `items` | array[ItemResponse] | Tối đa `limit` bài của nhóm hiện tại, theo thứ tự xoay |
+| `rotatedAt` | string | Lúc bắt đầu lượt hiện tại = `round * boost_rotate_seconds`, ISO-8601 UTC |
+| `nextRotateAt` | string | Lúc đổi sang nhóm kế tiếp = `(round + 1) * boost_rotate_seconds`; FE hẹn giờ tải lại banner tới mốc này |
 
 ---
 
@@ -201,7 +274,8 @@ Bài của một người cho trang hồ sơ công khai (xem `docs/api/user.md`,
 
 - **Xác thực:** bắt buộc (`401 UNAUTHORIZED` khi thiếu token).
 - **Tham số:** `tab` (`ACTIVE` hoặc `DONE`, mặc định `ACTIVE`), `page` (từ 0, mặc định 0), `size` (1–50, mặc định 12).
-- **Thành công:** `200 OK`, trang `{ items, page, size, totalElements, totalPages }`, mỗi dòng là `ItemResponse`
+- **Thành công:** `200 OK`, trang `{ items, page, size, totalElements, totalPages, rotationSeed }` (`rotationSeed` luôn
+  `null` vì danh sách này không xoay bài đẩy), mỗi dòng là `ItemResponse`
   (cùng kiểu thẻ bài của `GET /api/v1/items`).
 - **Lỗi:** `404 USER_NOT_FOUND` khi người dùng không tồn tại, chưa xác thực, bị khoá, bị cấm hoặc là Admin (cùng luật với hồ sơ);
   `400` khi `tab` sai giá trị hoặc phân trang sai.
@@ -281,8 +355,15 @@ Quy tắc:
 | `hiddenReason` | string? | Lý do ẩn. Hiện luôn `null` vì chưa lưu lý do ẩn (C06); FE hiện câu mặc định |
 | `completedAt` | string? | Thời điểm giao dịch hoàn tất ISO-8601 UTC. Chỉ có khi bài `TRADED`, ở API chi tiết và `GET /users/{id}/items?tab=DONE`; nơi khác `null` |
 | `requestable` | boolean? | Bài còn nhận yêu cầu không (`APPROVED`, đang hiển thị, chủ bài không bị khoá). Có ở API chi tiết và `GET /users/{id}/items`; các danh sách khác `null` |
+| `boostStartedAt` | string? | Mốc bắt đầu đợt đẩy gần nhất (module listingfee). Chỉ có ở "Bài của tôi" và chi tiết bài khi **chủ bài** xem; nơi khác `null` |
+| `boostChainEndsAt` | string? | Mốc đẩy muộn nhất của đợt = `boostStartedAt + boost_max_days`. Cùng phạm vi với `boostStartedAt` |
+| `boostCooldownUntil` | string? | Mốc được mở đợt đẩy mới = `boostedUntil + boost_cooldown_days`. Cùng phạm vi với `boostStartedAt` |
 
 `expireAt` và `boostedUntil` có trong mọi API trả `ItemResponse` (tạo, sửa, chi tiết, bài của tôi, danh sách công khai).
+Ba mốc đợt đẩy (`boostStartedAt`, `boostChainEndsAt`, `boostCooldownUntil`) là thông tin mua gói của chủ bài: backend
+tính sẵn để FE "Bài của tôi" chỉ hiển thị; mọi API trả bài cho người khác (danh sách Tìm đồ, Tin nổi bật, banner
+`/items/featured`, chi tiết bài khi không phải chủ, hồ sơ công khai, tìm kiếm AI) đều trả `null`. Bài chưa từng đẩy thì
+cả ba là `null`.
 Với danh sách, hai trường này được đọc bằng một query cho cả trang qua `ListingFeeQueryService.findDisplayWindows`.
 
 ---
