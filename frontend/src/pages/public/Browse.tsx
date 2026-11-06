@@ -34,6 +34,9 @@ import {
   type BrowseFilterKey,
 } from '../../utils/browseFilters';
 import { useDebouncedValue } from '../../utils/useDebouncedValue';
+import { viewerKeyFor } from '../../utils/viewerKey';
+import { useAppSelector } from '../../app/hooks';
+import { selectCurrentUser } from '../../app/store';
 import './browse.css';
 
 // Giá trị hình thức ở thanh địa chỉ (gift, trade) khác tên của API
@@ -55,8 +58,19 @@ function loadBrowseItems(params: Parameters<typeof itemApi.list>[0]) {
   return request;
 }
 
+// Lượt xoay bài đẩy backend trả cho một bộ lọc (filterKey). Chỉ dùng lại khi chuyển trang trong đúng bộ lọc đó.
+interface SavedRotation {
+  filterKey: string;
+  seed: number;
+}
+
 export function Browse() {
   const [params, setParams] = useSearchParams();
+  const currentUser = useAppSelector(selectCurrentUser);
+  // Chỉ gửi viewerKey khi chưa đăng nhập; đã đăng nhập thì backend dùng id người dùng.
+  const viewerKey = useMemo(() => viewerKeyFor(Boolean(currentUser)), [currentUser]);
+  // Ref thay vì state: đổi seed không cần vẽ lại trang, và không được làm effect tải lại danh sách.
+  const savedRotationRef = useRef<SavedRotation | null>(null);
   const [itemResponses, setItemResponses] = useState<ItemResponse[]>([]);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [districts, setDistricts] = useState<AreaOption[]>([]);
@@ -147,16 +161,28 @@ export function Browse() {
       condition: condition || undefined,
       offerType: type ? OFFER_TYPE_BY_TYPE[type] : undefined,
     };
+    // Mọi thứ quyết định tập kết quả, trừ số trang. Đổi bất kỳ phần nào thì là bộ lọc mới.
+    const filterKey = JSON.stringify({ ...requestParams, boostedOnly, sortMode });
+    const savedRotation = savedRotationRef.current;
+    // Trang đầu hoặc vừa đổi bộ lọc/sắp xếp: không gửi seed để backend tính lượt theo giờ hiện tại.
+    // Chuyển trang trong cùng bộ lọc: gửi lại seed để các trang cùng một lượt, không trùng và không sót bài.
+    const rotationSeed =
+      page > 0 && savedRotation?.filterKey === filterKey ? savedRotation.seed : undefined;
     const request = loadBrowseItems({
       ...requestParams,
       boosted: boostedOnly || undefined,
       ...(sortMode === 'expiring' ? { sort: sortMode } : {}),
       page,
       size: BROWSE_RESULTS_PAGE_SIZE,
+      ...(rotationSeed !== undefined ? { rotationSeed } : {}),
+      ...(viewerKey !== undefined ? { viewerKey } : {}),
     });
     request
       .then((response) => {
         if (!active) return;
+        if (response.rotationSeed !== undefined && response.rotationSeed !== null) {
+          savedRotationRef.current = { filterKey, seed: response.rotationSeed };
+        }
         setItemResponses(response.items);
         setPage(response.page);
         setTotalElements(response.totalElements);
@@ -178,7 +204,7 @@ export function Browse() {
     return () => {
       active = false;
     };
-  }, [areaId, boostedOnly, categoryId, condition, itemsReloadKey, page, q, sortMode, type]);
+  }, [areaId, boostedOnly, categoryId, condition, itemsReloadKey, page, q, sortMode, type, viewerKey]);
 
   useEffect(() => {
     if (!legacyDistrict || params.has('areaId')) return;

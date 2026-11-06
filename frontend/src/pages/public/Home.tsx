@@ -25,6 +25,8 @@ import { HomeLifecycle, HomeProcess } from './HomeCommunity';
 import { HomeDiscoveryRail, HomeMotion } from './HomeMotion';
 import browseSuggestionBox from '../../assets/browse-suggestion-box.png';
 import { loginPath } from '../../utils/authRedirect';
+import { viewerKeyFor } from '../../utils/viewerKey';
+import { useFeaturedItems } from './useFeaturedItems';
 import './home-content.css';
 const aiSuggestions = [
   {
@@ -46,8 +48,10 @@ const newItemFilters: Array<{ value: 'all' | ItemType; label: string }> = [
   { value: 'trade', label: 'Trao đổi' },
 ];
 
+// Số bài của banner và mục "Tin nổi bật"; backend chọn nhóm bài theo vòng xoay (GET /items/featured).
+const FEATURED_LIMIT = 5;
+
 let pendingHomeItemsRequest: Promise<PageResponse<ItemResponse>> | null = null;
-let pendingHomeFeaturedItemsRequest: Promise<ItemResponse[]> | null = null;
 let pendingHomeCategoriesRequest: Promise<CategoryResponse[]> | null = null;
 
 function loadHomeCategories() {
@@ -86,27 +90,6 @@ function loadHomeItems() {
     if (pendingHomeItemsRequest === request) pendingHomeItemsRequest = null;
   });
   pendingHomeItemsRequest = request;
-  return request;
-}
-
-function loadHomeFeaturedItems() {
-  if (pendingHomeFeaturedItemsRequest) return pendingHomeFeaturedItemsRequest;
-
-  const request = loadHomeItems()
-    .then(async (firstPage) => {
-      const totalPages =
-        firstPage.totalPages ?? Math.ceil(firstPage.totalElements / (firstPage.size || 100));
-      const remainingPages = await Promise.all(
-        Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) =>
-          itemApi.list({ page: index + 1, size: 100 }),
-        ),
-      );
-      return [firstPage.items, ...remainingPages.map((response) => response.items)].flat();
-    })
-    .finally(() => {
-      if (pendingHomeFeaturedItemsRequest === request) pendingHomeFeaturedItemsRequest = null;
-    });
-  pendingHomeFeaturedItemsRequest = request;
   return request;
 }
 
@@ -330,7 +313,9 @@ export function Home() {
   const currentUser = useAppSelector(selectCurrentUser);
   const navigate = useNavigate();
   const [itemResponses, setItemResponses] = useState<ItemResponse[]>([]);
-  const [featuredItemResponses, setFeaturedItemResponses] = useState<ItemResponse[]>([]);
+  // Chỉ gửi viewerKey khi chưa đăng nhập; đã đăng nhập thì backend dùng id người dùng.
+  const viewerKey = useMemo(() => viewerKeyFor(Boolean(currentUser)), [currentUser]);
+  const featuredRotation = useFeaturedItems(FEATURED_LIMIT, viewerKey);
   const [categoryResponses, setCategoryResponses] = useState<CategoryResponse[]>([]);
   const [areaResponses, setAreaResponses] = useState<AreaResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -353,16 +338,14 @@ export function Home() {
       if (active) setAreaResponses(areaData);
     }).catch(() => undefined);
 
-    void Promise.all([loadHomeItems(), loadHomeFeaturedItems()])
-      .then(([response, featuredResponses]) => {
+    void loadHomeItems()
+      .then((response) => {
         if (!active) return;
         setItemResponses(response.items);
-        setFeaturedItemResponses(featuredResponses);
       })
       .catch((caught: { message?: string }) => {
         if (!active) return;
         setItemResponses([]);
-        setFeaturedItemResponses([]);
         setLoadError(caught.message || 'Không tải được bài đăng.');
       })
       .finally(() => {
@@ -385,39 +368,30 @@ export function Home() {
     () => itemResponses.map((entry) => toFeItem(entry, categoryNameMap, areaNameMap)),
     [areaNameMap, categoryNameMap, itemResponses],
   );
-  const featuredItems = useMemo(
-    () => featuredItemResponses.map((entry) => toFeItem(entry, categoryNameMap, areaNameMap)),
-    [areaNameMap, categoryNameMap, featuredItemResponses],
+  // Nhóm bài đẩy do backend chọn và xếp sẵn theo vòng xoay; FE giữ nguyên thứ tự, không lọc hay sắp lại.
+  const featured = useMemo(
+    () => featuredRotation.items.map((entry) => toFeItem(entry, categoryNameMap, areaNameMap)),
+    [areaNameMap, categoryNameMap, featuredRotation.items],
   );
 
+  // Các danh sách khác trên trang chủ không ưu tiên bài đẩy: chỉ xếp mới nhất trước.
   const approved = useMemo(
     () =>
       items
         .filter((item) => item.status === 'approved' || item.status === 'APPROVED')
         .filter((item) => !item.expiresAt || new Date(item.expiresAt).getTime() >= Date.now())
-        .sort((a, b) => {
-          const aBoosted = Boolean(a.boostedUntil && new Date(a.boostedUntil).getTime() > Date.now());
-          const bBoosted = Boolean(b.boostedUntil && new Date(b.boostedUntil).getTime() > Date.now());
-          return Number(bBoosted) - Number(aBoosted) || b.postedAt.localeCompare(a.postedAt);
-        }),
+        .sort((a, b) => b.postedAt.localeCompare(a.postedAt)),
     [items],
   );
   const gifts = approved.filter((item) => item.type === 'gift');
-  const newestApproved = [...approved].sort((a, b) => b.postedAt.localeCompare(a.postedAt));
-  const trades = newestApproved.filter((item) => item.type === 'trade');
+  const trades = approved.filter((item) => item.type === 'trade');
   const newItems = (
     newItemFilter === 'all'
-      ? newestApproved
-      : newestApproved.filter((item) => item.type === newItemFilter)
+      ? approved
+      : approved.filter((item) => item.type === newItemFilter)
   ).slice(0, 5);
-  const boostedItems = featuredItems
-    .filter((item) => item.status === 'approved' || item.status === 'APPROVED')
-    .filter((item) => !item.expiresAt || new Date(item.expiresAt).getTime() >= Date.now())
-    .filter((item) => item.boostedUntil && new Date(item.boostedUntil).getTime() > Date.now())
-    .sort((a, b) => b.boostedUntil!.localeCompare(a.boostedUntil!));
-  const heroItems = boostedItems.filter((item) => item.images.length > 0).slice(0, 8);
-  const featured = boostedItems.slice(0, 5);
-  const aiPreviewItems = boostedItems.filter((item) => item.images.length > 0).slice(0, 3);
+  const heroItems = featured.filter((item) => item.images.length > 0);
+  const aiPreviewItems = heroItems.slice(0, 3);
   const districtLinks = districtOptions.slice(0, 6).map((area) => ({
     name: area.label,
     id: area.id,
@@ -555,7 +529,11 @@ export function Home() {
 
         <HomeSection className="home-band">
           <SectionHeading title="Tin nổi bật" description="Những món đồ nổi bật đang sẵn sàng cho một kết nối mới." href="/browse?boosted=true" />
-          <div className="home-product-grid home-new-items-grid home-featured-items-grid">
+          {/* key đổi theo nhóm để chạy hiệu ứng mờ dần khi backend sang nhóm mới; khung lưới giữ nguyên. */}
+          <div
+            key={featuredRotation.rotatedAt ?? 'initial'}
+            className="home-product-grid home-new-items-grid home-featured-items-grid home-featured-rotate"
+          >
             {featured.map((item) => (
               <ProductCard key={item.id} item={item} />
             ))}

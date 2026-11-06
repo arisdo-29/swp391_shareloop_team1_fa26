@@ -3719,3 +3719,20 @@
     display: none;
   }
 }
+
+/* Banner bài đẩy đổi nhóm theo vòng xoay: chỉ mờ dần (không đổi kích thước) nên không giật layout. */
+@media (prefers-reduced-motion: no-preference) {
+  .home-featured-rotate {
+    animation: home-featured-rotate-in 0.6s ease-out both;
+  }
+}
+
+@keyframes home-featured-rotate-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}

@@ -89,9 +89,8 @@ export function mutationToastDefinition(
   if (matches(path, /\/api\/v1\/items\/\d+\/renew$/)) {
     return { success: 'Gia hạn bài đăng thành công.', failure: 'Không gia hạn được bài đăng.' };
   }
-  if (matches(path, /\/api\/v1\/items\/\d+\/boost$/)) {
-    return { success: 'Đẩy bài thành công.', failure: 'Không đẩy được bài đăng.' };
-  }
+  // Đẩy bài: "Bài của tôi" tự báo kèm hạn đẩy và số dư, lỗi thì hiện popup lý do; không thêm toast chung trùng lặp.
+  if (matches(path, /\/api\/v1\/items\/\d+\/boost$/)) return null;
   if (matches(path, /\/api\/v1\/items\/\d+$/)) {
     if (verb === 'delete') {
       return { success: 'Đã gỡ bài đăng.', failure: 'Không gỡ được bài đăng.', tone: 'warning' };

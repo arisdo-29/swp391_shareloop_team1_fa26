@@ -177,6 +177,21 @@ await test('phí gia hạn và đẩy bài đọc từ endpoint bảng phí đan
   assert.equal(requests[0].url, '/api/v1/listing-fees');
 });
 
+await test('danh sách Tìm đồ gửi rotationSeed, viewerKey và banner gọi /items/featured', async () => {
+  requests = [];
+  nextResponse = { items: [], page: 1, size: 24, totalElements: 0, totalPages: 0, rotationSeed: 9842213 };
+  const page = await api.itemApi.list({ page: 1, size: 24, rotationSeed: 9842213, viewerKey: 7 });
+  assert.equal(page.rotationSeed, 9842213);
+  assert.equal(requests[0].url, '/api/v1/items');
+  assert.deepEqual(requests[0].params, { page: 1, size: 24, rotationSeed: 9842213, viewerKey: 7 });
+
+  nextResponse = { items: [], rotatedAt: '2026-11-06T08:00:00Z', nextRotateAt: '2026-11-06T08:03:00Z' };
+  assert.deepEqual(await api.itemApi.featured({ limit: 5, viewerKey: 7 }), nextResponse);
+  assert.equal(requests[1].method, 'get');
+  assert.equal(requests[1].url, '/api/v1/items/featured');
+  assert.deepEqual(requests[1].params, { limit: 5, viewerKey: 7 });
+});
+
 await test('duyệt gửi ID điều kiện cùng đáp án, không ghép lại theo vị trí', async () => {
   requests = [];
   const answers = [

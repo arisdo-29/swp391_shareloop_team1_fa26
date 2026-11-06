@@ -7,7 +7,6 @@ describe('mutationToastDefinition', () => {
     ['/api/v1/items', 'post', 'Đăng bài thành công.'],
     ['/api/v1/items/12', 'delete', 'Đã gỡ bài đăng.'],
     ['/api/v1/items/12/renew', 'post', 'Gia hạn bài đăng thành công.'],
-    ['/api/v1/items/12/boost', 'post', 'Đẩy bài thành công.'],
     ['/api/v1/items/12/requests', 'post', 'Gửi yêu cầu thành công.'],
     ['/api/v1/requests/7/select', 'post', 'Chọn người giao dịch thành công.'],
     ['/api/v1/requests/7/schedule', 'post', 'Gửi lịch giao nhận thành công.'],
@@ -28,6 +27,8 @@ describe('mutationToastDefinition', () => {
     expect(mutationToastDefinition('/api/v1/items', 'get')).toBeNull();
     expect(mutationToastDefinition('/api/v1/notifications/3/read', 'post')).toBeNull();
     expect(mutationToastDefinition('/api/v1/ai/search', 'post')).toBeNull();
+    // Đẩy bài tự báo kèm hạn đẩy và số dư ở "Bài của tôi"
+    expect(mutationToastDefinition('/api/v1/items/12/boost', 'post')).toBeNull();
   });
 });
 

@@ -255,6 +255,55 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     expect(await screen.findByText(book.title)).toBeTruthy();
   });
 
+  it('lần tải đầu không gửi rotationSeed, chuyển trang thì gửi lại seed backend đã trả', async () => {
+    // given: 40 bài, backend trả lượt xoay 777 cho bộ lọc này
+    const user = userEvent.setup();
+    vi.mocked(itemApi.list).mockImplementation(async ({ page = 0, size = 20 } = {}) => ({
+      items: Array.from({ length: size }, (_, index) => ({ ...book, id: 700 + page * size + index, title: `Bài ${page}-${index}` })),
+      page,
+      size,
+      totalElements: 40,
+      totalPages: 2,
+      rotationSeed: 777,
+    }));
+    renderBrowse();
+    await screen.findByText('Bài 0-0');
+
+    // when
+    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await screen.findByText('Bài 1-0');
+
+    // then
+    expect(vi.mocked(itemApi.list).mock.calls[0][0]).not.toHaveProperty('rotationSeed');
+    expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, rotationSeed: 777 }));
+  });
+
+  it('đổi bộ lọc hoặc sắp xếp thì không gửi rotationSeed cũ', async () => {
+    // given: đang ở trang 2 với seed 777
+    const user = userEvent.setup();
+    vi.mocked(itemApi.list).mockImplementation(async ({ page = 0, size = 20 } = {}) => ({
+      items: Array.from({ length: size }, (_, index) => ({ ...book, id: 800 + page * size + index, title: `Món ${page}-${index}` })),
+      page,
+      size,
+      totalElements: 40,
+      totalPages: 2,
+      rotationSeed: 777,
+    }));
+    renderBrowse();
+    await screen.findByText('Món 0-0');
+    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await screen.findByText('Món 1-0');
+
+    // when: đổi cách sắp xếp
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'expiring');
+
+    // then: về trang đầu, không mang seed của bộ lọc cũ
+    await waitFor(() =>
+      expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'expiring', page: 0 })),
+    );
+    expect(vi.mocked(itemApi.list).mock.lastCall?.[0]).not.toHaveProperty('rotationSeed');
+  });
+
   it('đổi cách sắp xếp thì gửi sort lên API và lưu vào URL', async () => {
     const user = userEvent.setup();
     renderBrowse();
@@ -654,6 +703,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
         q: undefined,
         page: 0,
         size: 20,
+        viewerKey: expect.any(Number),
       }),
     );
     expect(await screen.findByText('Bộ giáo trình đại học')).toBeTruthy();
@@ -672,6 +722,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
         offerType: 'GIVE',
         page: 0,
         size: 20,
+        viewerKey: expect.any(Number),
       }),
     );
     expect(await screen.findByText(book.title)).toBeTruthy();
