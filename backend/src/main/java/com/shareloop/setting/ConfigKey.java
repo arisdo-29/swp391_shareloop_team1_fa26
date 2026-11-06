@@ -95,10 +95,47 @@ public enum ConfigKey {
             "Số ngày bài được đẩy lên đầu cho mỗi gói."),
     BOOST_MAX_DAYS(
             "boost_max_days",
-            "14",
+            "6",
             ConfigGroup.POSTING,
             "Số ngày đẩy tối đa",
-            "Tổng thời gian đẩy bài cộng dồn tối đa, tính từ thời điểm hiện tại."),
+            "Tối đa số ngày đẩy liên tục trong một đợt, tính từ lúc bắt đầu đợt. Mua thêm gói khi đang đẩy không được"
+                    + " vượt mốc này."),
+    BOOST_COOLDOWN_DAYS(
+            "boost_cooldown_days",
+            "3",
+            ConfigGroup.POSTING,
+            "Số ngày nghỉ giữa hai đợt đẩy",
+            "Hết một đợt đẩy, bài phải chờ số ngày này mới được đẩy lại."),
+    BOOST_MAX_PER_USER(
+            "boost_max_per_user",
+            "3",
+            ConfigGroup.POSTING,
+            "Số bài đang đẩy tối đa mỗi người",
+            "Số bài của một người được đẩy cùng lúc. Mua thêm gói cho bài đang đẩy không tính là bài mới."),
+    BOOST_MAX_ACTIVE(
+            "boost_max_active",
+            "30",
+            ConfigGroup.POSTING,
+            "Số suất đẩy toàn hệ thống",
+            "Số bài được đẩy cùng lúc trên toàn hệ thống. Hết suất thì bài mới phải chờ có bài hết đẩy."),
+    BOOST_ROTATE_SECONDS(
+            "boost_rotate_seconds",
+            "180",
+            ConfigGroup.POSTING,
+            "Chu kỳ xoay vòng bài đẩy",
+            "Số giây giữa hai lần đổi nhóm bài đẩy hiển thị ở đầu trang danh sách."),
+    BOOST_MAX_PER_PAGE(
+            "boost_max_per_page",
+            "3",
+            ConfigGroup.POSTING,
+            "Số bài đẩy mỗi trang",
+            "Số bài đẩy tối đa hiển thị ở đầu mỗi trang danh sách."),
+    BOOST_ENDING_NOTICE_HOURS(
+            "boost_ending_notice_hours",
+            "24",
+            ConfigGroup.POSTING,
+            "Báo trước khi hết đẩy",
+            "Số giờ trước lúc bài hết đẩy thì gửi thông báo nhắc chủ bài, kèm mốc còn mua thêm gói được."),
     AI_SEARCH_FEE(
             "ai_search_fee",
             "2",

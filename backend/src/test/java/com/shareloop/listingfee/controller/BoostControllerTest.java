@@ -78,19 +78,42 @@ class BoostControllerTest {
     }
 
     @Test
-    void boostQuote_whenNotAllowed_returnsReason() throws Exception {
-        // given: token của user 10, service báo không được đẩy
+    void boostQuote_whenSoldOut_returnsReasonCodeAndTimeline() throws Exception {
+        // given: token của user 10, service báo hết suất đẩy
         String token = jwtService.issue(10L, false);
         when(boostService.quoteBoost(31L, 10L))
-                .thenReturn(new BoostQuote(5, Instant.parse("2026-11-02T08:00:00Z"), false, "Vượt hạn của bài."));
+                .thenReturn(new BoostQuote(
+                        5,
+                        Instant.parse("2026-11-09T08:00:00Z"),
+                        false,
+                        "Đã hết suất đẩy bài, vui lòng thử lại sau.",
+                        "LISTINGFEE_BOOST_SOLD_OUT",
+                        Instant.parse("2026-11-06T08:00:00Z"),
+                        Instant.parse("2026-11-12T08:00:00Z"),
+                        null,
+                        false,
+                        0,
+                        Instant.parse("2026-11-07T10:00:00Z"),
+                        1,
+                        null,
+                        Instant.parse("2026-12-06T08:00:00Z")));
 
         // when + then
         mockMvc.perform(get(QUOTE_URL).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fee").value(5))
-                .andExpect(jsonPath("$.newBoostedUntil").value("2026-11-02T08:00:00Z"))
+                .andExpect(jsonPath("$.newBoostedUntil").value("2026-11-09T08:00:00Z"))
                 .andExpect(jsonPath("$.allowed").value(false))
-                .andExpect(jsonPath("$.reason").value("Vượt hạn của bài."));
+                .andExpect(jsonPath("$.reason").value("Đã hết suất đẩy bài, vui lòng thử lại sau."))
+                .andExpect(jsonPath("$.reasonCode").value("LISTINGFEE_BOOST_SOLD_OUT"))
+                .andExpect(jsonPath("$.boostStartedAt").value("2026-11-06T08:00:00Z"))
+                .andExpect(jsonPath("$.chainEndsAt").value("2026-11-12T08:00:00Z"))
+                .andExpect(jsonPath("$.cooldownUntil").doesNotExist())
+                .andExpect(jsonPath("$.extending").value(false))
+                .andExpect(jsonPath("$.slotsLeft").value(0))
+                .andExpect(jsonPath("$.earliestSlotAt").value("2026-11-07T10:00:00Z"))
+                .andExpect(jsonPath("$.userActiveBoosts").value(1))
+                .andExpect(jsonPath("$.expireAt").value("2026-12-06T08:00:00Z"));
     }
 
     @Test

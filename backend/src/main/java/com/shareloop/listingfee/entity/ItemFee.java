@@ -60,6 +60,10 @@ public class ItemFee extends SliceAudit {
     @Column(name = "last_boosted_at")
     private Instant lastBoostedAt;
 
+    // Mốc bắt đầu đợt đẩy hiện tại: giới hạn boost_max_days tính từ mốc này, không tính từ lúc mua thêm.
+    @Column(name = "boost_started_at")
+    private Instant boostStartedAt;
+
     protected ItemFee() {}
 
     public Long getId() {
@@ -100,6 +104,10 @@ public class ItemFee extends SliceAudit {
 
     public Instant getLastBoostedAt() {
         return lastBoostedAt;
+    }
+
+    public Instant getBoostStartedAt() {
+        return boostStartedAt;
     }
 
     /** Ghi nhận đang giữ phí; từ CHARGED hoặc RELEASED vẫn giữ lại được (lượt sửa sau). */
@@ -145,9 +153,13 @@ public class ItemFee extends SliceAudit {
         this.expireAt = newExpireAt;
     }
 
-    /** Kéo dài thời gian đẩy bài (C15, FR-36); người gọi đã tính mốc mới, đã kiểm giới hạn và đã thu phí. */
-    public void extendBoostedUntil(Instant newBoostedUntil, Instant boostedAt) {
+    /**
+     * Kéo dài thời gian đẩy bài (C15, FR-36); người gọi đã tính mốc mới, đã kiểm giới hạn và đã thu phí. Mở đợt mới
+     * thì boostStartedAt là lúc mua; mua thêm khi đang đẩy thì người gọi truyền lại mốc bắt đầu đợt cũ.
+     */
+    public void extendBoostedUntil(Instant newBoostedUntil, Instant boostStartedAt, Instant boostedAt) {
         this.boostedUntil = newBoostedUntil;
+        this.boostStartedAt = boostStartedAt;
         this.lastBoostedAt = boostedAt;
     }
 

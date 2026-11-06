@@ -101,7 +101,7 @@ class ConfigServiceIT extends IntegrationTest {
         assertThat(jdbc.queryForObject(
                         "SELECT COUNT(*) FROM website_attributes WHERE attr_group = 'CONFIG' AND is_deleted = FALSE AND"
                                 + " attr_key IN ('renew_expired_window_days', 'media_orphan_hours',"
-                                + " 'boost_max_per_page', 'dispute_window_days', 'dispute_response_days',"
+                                + " 'dispute_window_days', 'dispute_response_days',"
                                 + " 'REPUTATION_SILVER_MIN', 'REPUTATION_GOLD_MIN', 'REPUTATION_DIAMOND_MIN',"
                                 + " 'REPUTATION_GIVE_DONOR', 'REPUTATION_GIVE_RECEIVER', 'REPUTATION_SWAP_EACH',"
                                 + " 'REPORT_SERIOUS_REASONS')",
@@ -116,6 +116,42 @@ class ConfigServiceIT extends IntegrationTest {
                 .extracting(config -> config.key())
                 .contains("report_serious_reasons")
                 .doesNotContain("renew_expired_window_days", "media_orphan_hours");
+    }
+
+    @Test
+    void boostRotationMigration_seedsNewKeysShortensMaxDaysAndRevivesMaxPerPage() {
+        // given: migration V202611061200 đã chạy khi dựng DB test
+
+        // when: đọc các khoá đẩy bài qua ConfigService (đọc dòng DB, không phải mặc định trong ConfigKey)
+        int maxDays = configService.getInt(com.shareloop.setting.ConfigKey.BOOST_MAX_DAYS);
+        Integer liveMaxPerPageRows = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM website_attributes WHERE attr_group = 'CONFIG'"
+                        + " AND attr_key = 'boost_max_per_page' AND is_active = TRUE AND is_deleted = FALSE",
+                Integer.class);
+
+        // then: khoá mới có dòng để Admin sửa, boost_max_days còn 6, boost_max_per_page được bật lại đúng một dòng
+        assertThat(maxDays).isEqualTo(6);
+        assertThat(liveMaxPerPageRows).isEqualTo(1);
+        assertThat(configService.getInt(com.shareloop.setting.ConfigKey.BOOST_MAX_PER_PAGE))
+                .isEqualTo(3);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM website_attributes WHERE attr_group = 'CONFIG' AND is_active = TRUE"
+                                + " AND is_deleted = FALSE AND attr_key IN ('boost_cooldown_days',"
+                                + " 'boost_max_per_user', 'boost_max_active', 'boost_rotate_seconds',"
+                                + " 'boost_ending_notice_hours')",
+                        Integer.class))
+                .isEqualTo(5);
+        // boost_ending_notice_hours do V202611061300 thêm
+        assertThat(configService.getInt(com.shareloop.setting.ConfigKey.BOOST_ENDING_NOTICE_HOURS))
+                .isEqualTo(24);
+        assertThat(configService.listConfigs())
+                .extracting(config -> config.key())
+                .contains(
+                        "boost_cooldown_days",
+                        "boost_max_per_user",
+                        "boost_max_active",
+                        "boost_rotate_seconds",
+                        "boost_ending_notice_hours");
     }
 
     @Test
