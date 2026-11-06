@@ -101,6 +101,10 @@ async function renderProgress(viewerId: number, current: RequestResponse) {
 
 beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn());
+  // jsdom chưa có object URL; ảnh chờ gửi cần URL khác nhau cho mỗi tệp.
+  let objectUrlCount = 0;
+  URL.createObjectURL = vi.fn(() => `blob:preview-${(objectUrlCount += 1)}`);
+  URL.revokeObjectURL = vi.fn();
 });
 
 afterEach(() => {
@@ -397,18 +401,19 @@ describe('Ảnh giao nhận', () => {
     expect(requestApi.attachMedia).not.toHaveBeenCalled();
   });
 
-  it('chưa có ảnh thì hiện trạng thái rỗng và Thêm ảnh bị khoá', async () => {
+  it('chưa có ảnh thì hiện trạng thái rỗng và Gửi ảnh bị khoá', async () => {
     // when
     await renderProgress(RECEIVER_ID, request());
 
     // then
     expect(screen.getByText('Chưa có ảnh giao nhận')).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Thêm ảnh' }) as HTMLButtonElement).disabled).toBe(
+    expect((screen.getByRole('button', { name: 'Gửi ảnh' }) as HTMLButtonElement).disabled).toBe(
       true,
     );
   });
 
-  it('khóa thao tác và hiện trạng thái đang tải trong lúc thêm ảnh', async () => {
+  it('khóa thao tác và hiện trạng thái đang tải trong lúc gửi ảnh', async () => {
+    // given
     const userEvents = userEvent.setup();
     let resolveUpload!: (value: { mediaId: number; url: string }) => void;
     vi.mocked(mediaApi.upload).mockReturnValue(
@@ -418,22 +423,67 @@ describe('Ảnh giao nhận', () => {
     );
     vi.mocked(requestApi.attachMedia).mockResolvedValue([]);
     await renderProgress(RECEIVER_ID, request());
-    const input = screen.getByLabelText('Chọn ảnh') as HTMLInputElement;
+    await userEvents.upload(
+      screen.getByLabelText('Chọn ảnh giao nhận'),
+      new File(['image'], 'handover.png', { type: 'image/png' }),
+    );
 
-    await userEvents.upload(input, new File(['image'], 'handover.png', { type: 'image/png' }));
-    await userEvents.click(screen.getByRole('button', { name: 'Thêm 1 ảnh' }));
+    // when
+    await userEvents.click(screen.getByRole('button', { name: 'Gửi 1 ảnh' }));
+    await userEvents.click(screen.getByRole('button', { name: 'Gửi ảnh' }));
 
-    expect(screen.getByRole('button', { name: 'Đang tải...' })).toBeTruthy();
-    expect(input.disabled).toBe(true);
+    // then
+    expect(screen.getAllByRole('button', { name: 'Đang tải...' }).length).toBeGreaterThan(0);
+    expect((screen.getByLabelText('Chọn ảnh giao nhận') as HTMLInputElement).disabled).toBe(true);
     resolveUpload({ mediaId: 9, url: '/api/v1/media/9' });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Thêm ảnh' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Gửi ảnh' })).toBeTruthy();
     });
     expect(mediaApi.upload).toHaveBeenCalledTimes(1);
     expect(requestApi.attachMedia).toHaveBeenCalledWith(101, {
       mediaIds: [9],
       stage: 'HANDOVER',
     });
+  });
+
+  it('ảnh chờ gửi hiện để xem lại và bỏ được trước khi gửi', async () => {
+    // given
+    const userEvents = userEvent.setup();
+    await renderProgress(RECEIVER_ID, request());
+    await userEvents.upload(screen.getByLabelText('Chọn ảnh giao nhận'), [
+      new File(['a'], 'mat-truoc.png', { type: 'image/png' }),
+      new File(['b'], 'mat-sau.png', { type: 'image/png' }),
+    ]);
+    expect(screen.getByRole('img', { name: 'Ảnh chờ gửi mat-truoc.png' })).toBeTruthy();
+
+    // when
+    await userEvents.click(screen.getByRole('button', { name: 'Bỏ ảnh mat-truoc.png' }));
+
+    // then
+    expect(screen.queryByRole('img', { name: 'Ảnh chờ gửi mat-truoc.png' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Gửi 1 ảnh' })).toBeTruthy();
+    expect(mediaApi.upload).not.toHaveBeenCalled();
+  });
+
+  it('bấm Gửi hiện cảnh báo không thu hồi được; Xem lại thì không gọi API', async () => {
+    // given
+    const userEvents = userEvent.setup();
+    await renderProgress(RECEIVER_ID, request());
+    await userEvents.upload(
+      screen.getByLabelText('Chọn ảnh giao nhận'),
+      new File(['a'], 'handover.png', { type: 'image/png' }),
+    );
+
+    // when
+    await userEvents.click(screen.getByRole('button', { name: 'Gửi 1 ảnh' }));
+    const dialog = screen.getByRole('dialog', { name: 'Gửi 1 ảnh giao nhận?' });
+    expect(within(dialog).getByText(/không thể xoá hoặc thu hồi/)).toBeTruthy();
+    await userEvents.click(within(dialog).getByRole('button', { name: 'Xem lại' }));
+
+    // then
+    expect(screen.queryByRole('dialog', { name: 'Gửi 1 ảnh giao nhận?' })).toBeNull();
+    expect(screen.getByRole('img', { name: 'Ảnh chờ gửi handover.png' })).toBeTruthy();
+    expect(mediaApi.upload).not.toHaveBeenCalled();
   });
 
   it('chưa chốt lịch thì không có khối ảnh', async () => {
@@ -445,6 +495,72 @@ describe('Ảnh giao nhận', () => {
 
     // then
     expect(screen.queryByRole('heading', { name: 'Ảnh giao nhận' })).toBeNull();
+  });
+});
+
+describe('Ảnh khiếu nại', () => {
+  const disputePhoto = {
+    mediaId: 12,
+    url: '/api/v1/media/12',
+    stage: 'DISPUTE' as const,
+    uploadedBy: RECEIVER_ID,
+    createdAt: '2026-10-31T11:40:00Z',
+  };
+
+  it('chưa hoàn tất thì chưa có mục ảnh khiếu nại', async () => {
+    // when
+    await renderProgress(RECEIVER_ID, request());
+
+    // then
+    expect(screen.queryByRole('heading', { name: 'Ảnh khiếu nại' })).toBeNull();
+  });
+
+  it('hoàn tất còn hạn: mục riêng ghi hạn chót và cho gửi ảnh khiếu nại', async () => {
+    // when
+    await renderProgress(
+      RECEIVER_ID,
+      request({
+        status: 'COMPLETED',
+        completedAt: '2026-10-30T03:36:00Z',
+        complaintDeadline: '2026-10-31T03:36:00Z',
+        disputeExpired: false,
+      }),
+    );
+
+    // then
+    expect(screen.getByRole('heading', { name: 'Ảnh khiếu nại' })).toBeTruthy();
+    expect(screen.getByText(/Chỉ gửi được trước 10:36 31\/10\/2026/)).toBeTruthy();
+    expect(screen.getByLabelText('Chọn ảnh khiếu nại')).toBeTruthy();
+  });
+
+  it('hết hạn mà chưa gửi ảnh khiếu nại thì ẩn hẳn mục', async () => {
+    // when
+    await renderProgress(
+      RECEIVER_ID,
+      request({ status: 'COMPLETED', completedAt: '2026-10-30T03:36:00Z', disputeExpired: true }),
+    );
+
+    // then
+    expect(screen.queryByRole('heading', { name: 'Ảnh khiếu nại' })).toBeNull();
+  });
+
+  it('hết hạn nhưng đã có ảnh khiếu nại thì vẫn xem được, không thêm được nữa', async () => {
+    // when
+    await renderProgress(
+      RECEIVER_ID,
+      request({
+        status: 'COMPLETED',
+        completedAt: '2026-10-30T03:36:00Z',
+        disputeExpired: true,
+        handoverMedia: [disputePhoto],
+      }),
+    );
+
+    // then
+    expect(screen.getByRole('heading', { name: 'Ảnh khiếu nại' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Ảnh khiếu nại' })).toBeTruthy();
+    expect(screen.getByText('Đã hết hạn khiếu nại, không thêm ảnh khiếu nại được nữa.')).toBeTruthy();
+    expect(screen.queryByLabelText('Chọn ảnh khiếu nại')).toBeNull();
   });
 });
 

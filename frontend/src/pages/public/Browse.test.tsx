@@ -295,29 +295,30 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     await screen.findByText('Món 1-0');
 
     // when: đổi cách sắp xếp
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'expiring');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'featured');
 
     // then: về trang đầu, không mang seed của bộ lọc cũ
     await waitFor(() =>
-      expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'expiring', page: 0 })),
+      expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ boosted: true, page: 0 })),
     );
     expect(vi.mocked(itemApi.list).mock.lastCall?.[0]).not.toHaveProperty('rotationSeed');
   });
 
-  it('đổi cách sắp xếp thì gửi sort lên API và lưu vào URL', async () => {
+  it('chọn sắp xếp Tin nổi bật thì gửi boosted lên API và lưu vào URL', async () => {
     const user = userEvent.setup();
     renderBrowse();
 
     expect(await screen.findByText(book.title)).toBeTruthy();
     await waitFor(() => expect(itemApi.list).toHaveBeenCalledTimes(1));
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'expiring');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'featured');
 
     await waitFor(() => expect(itemApi.list).toHaveBeenCalledTimes(2));
     expect(itemApi.list).toHaveBeenLastCalledWith(
-      expect.objectContaining({ sort: 'expiring', page: 0, size: 20 }),
+      expect.objectContaining({ boosted: true, page: 0, size: 20 }),
     );
-    expect(screen.getByTestId('location').textContent).toBe('/browse?sort=expiring');
+    expect(vi.mocked(itemApi.list).mock.lastCall?.[0]).not.toHaveProperty('sort');
+    expect(screen.getByTestId('location').textContent).toBe('/browse?boosted=true');
     expect(screen.getByText(book.description)).toBeTruthy();
   });
 
@@ -445,8 +446,8 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
   });
 
   it('hiển thị đúng thứ tự toàn cục do API trả về và F5 giữ chế độ sắp xếp', async () => {
-    vi.mocked(itemApi.list).mockImplementation(async ({ sort } = {}) => ({
-      items: sort === 'expiring' ? [expiringBook, book] : [book, expiringBook],
+    vi.mocked(itemApi.list).mockImplementation(async ({ boosted } = {}) => ({
+      items: boosted ? [expiringBook, book] : [book, expiringBook],
       page: 0,
       size: 20,
       totalElements: 2,
@@ -462,18 +463,18 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
       );
     expect(titles()).toEqual([book.title, expiringBook.title]);
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'expiring');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'featured');
     await waitFor(() => expect(titles()).toEqual([expiringBook.title, book.title]));
-    expect(screen.getByTestId('location').textContent).toBe('/browse?sort=expiring');
+    expect(screen.getByTestId('location').textContent).toBe('/browse?boosted=true');
 
     view.unmount();
-    renderBrowse(['/browse?sort=expiring']);
+    renderBrowse(['/browse?boosted=true']);
     expect((screen.getByRole('combobox', { name: 'Sắp xếp' }) as HTMLSelectElement).value).toBe(
-      'expiring',
+      'featured',
     );
     await waitFor(() => expect(itemApi.list).toHaveBeenCalledTimes(3));
     await waitFor(() =>
-      expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'expiring' })),
+      expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ boosted: true })),
     );
   });
 

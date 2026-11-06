@@ -51,11 +51,12 @@ export function ModerationChecklistContent({
 
       {checklist.length ? (
         // Từ màn lg chiều cao danh sách co theo màn hình (trừ phần tiêu đề và các nút) để nút Từ chối luôn nằm trong màn hình.
-        <div className="max-h-[50dvh] space-y-2 overflow-y-auto overscroll-contain pr-1 lg:max-h-[calc(100dvh-440px)] lg:min-h-40">
+        // Mỗi tiêu chí hiển thị gọn (chữ nhỏ, padding ít) để thấy khoảng 5 tiêu chí mà không phải cuộn.
+        <div className="max-h-[50dvh] space-y-1.5 overflow-y-auto overscroll-contain pr-1 lg:max-h-[calc(100dvh-400px)] lg:min-h-40">
           {checklist.map((entry, index) => (
             <label
               key={entry.id}
-              className="flex cursor-pointer items-start gap-3 rounded-md border border-border/80 p-3 text-sm leading-6 transition hover:bg-surface-low"
+              className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border/80 px-3 py-2 text-[13px] leading-5 transition hover:bg-surface-low"
             >
               <input
                 type="checkbox"
@@ -64,12 +65,12 @@ export function ModerationChecklistContent({
                 disabled={disabled}
                 autoFocus={index === 0}
                 onChange={(event) => onToggle(index, event.target.checked)}
-                className="mt-1 size-4 shrink-0 accent-primary"
+                className="mt-0.5 size-4 shrink-0 accent-primary"
               />
               <span className="min-w-0">
                 <span className="block font-medium text-text-primary">{entry.statement}</span>
                 {entry.description ? (
-                  <span className="mt-1 block text-xs leading-5 text-text-secondary">{entry.description}</span>
+                  <span className="mt-0.5 block text-xs leading-4 text-text-secondary">{entry.description}</span>
                 ) : null}
               </span>
             </label>

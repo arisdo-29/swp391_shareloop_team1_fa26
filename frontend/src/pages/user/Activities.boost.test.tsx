@@ -119,6 +119,26 @@ describe('trạng thái đẩy ở Bài của tôi', () => {
     expect(screen.getByText(`Mua thêm được tới ${formatDateTime(chainEndsAt)}`)).toBeTruthy();
   });
 
+  it('bài đang đẩy không hiện gợi ý "Đẩy bài để nhiều người thấy hơn"', async () => {
+    // given
+    renderActivities([myItem({ boostedUntil: hoursFromNow(30) })]);
+
+    // when
+    await screen.findByText(/Đang đẩy ·/);
+
+    // then
+    expect(screen.getByText('Chưa có ai gửi yêu cầu.')).toBeTruthy();
+    expect(screen.queryByText('Đẩy bài để nhiều người thấy hơn.')).toBeNull();
+  });
+
+  it('bài đã hết đẩy vẫn hiện gợi ý "Đẩy bài để nhiều người thấy hơn"', async () => {
+    // given
+    renderActivities([myItem({ boostedUntil: hoursFromNow(-2) })]);
+
+    // then
+    expect(await screen.findByText('Đẩy bài để nhiều người thấy hơn.')).toBeTruthy();
+  });
+
   it('bài đang nghỉ hiện "Được đẩy lại từ"', async () => {
     // given
     const cooldownUntil = hoursFromNow(40);
@@ -198,8 +218,8 @@ describe('đẩy bài từ Bài của tôi', () => {
     // when
     fireEvent.click(await screen.findByRole('button', { name: 'Đẩy bài' }));
     const dialog = await screen.findByRole('dialog');
-    await within(dialog).findByText(`Đẩy bài 3 ngày với 5 Credit, đến ${formatDateTime(quote.newBoostedUntil)}.`);
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận' }));
+    await within(dialog).findByText('3 ngày');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận đẩy 5 Credit' }));
 
     // then
     await vi.waitFor(() =>

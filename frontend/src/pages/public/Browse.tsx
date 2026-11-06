@@ -103,7 +103,8 @@ export function Browse() {
   const [page, setPage] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  const sortMode = params.get('sort') === 'expiring' ? 'expiring' : 'newest';
+  // Sắp xếp chỉ còn "Mới nhất" và "Tin nổi bật"; "Tin nổi bật" chính là lọc bài đang đẩy (?boosted=true).
+  const sortMode = boostedOnly ? 'featured' : 'newest';
 
   useEffect(() => {
     if (debouncedQuery === lastAppliedQueryRef.current) return;
@@ -162,7 +163,7 @@ export function Browse() {
       offerType: type ? OFFER_TYPE_BY_TYPE[type] : undefined,
     };
     // Mọi thứ quyết định tập kết quả, trừ số trang. Đổi bất kỳ phần nào thì là bộ lọc mới.
-    const filterKey = JSON.stringify({ ...requestParams, boostedOnly, sortMode });
+    const filterKey = JSON.stringify({ ...requestParams, boostedOnly });
     const savedRotation = savedRotationRef.current;
     // Trang đầu hoặc vừa đổi bộ lọc/sắp xếp: không gửi seed để backend tính lượt theo giờ hiện tại.
     // Chuyển trang trong cùng bộ lọc: gửi lại seed để các trang cùng một lượt, không trùng và không sót bài.
@@ -171,7 +172,6 @@ export function Browse() {
     const request = loadBrowseItems({
       ...requestParams,
       boosted: boostedOnly || undefined,
-      ...(sortMode === 'expiring' ? { sort: sortMode } : {}),
       page,
       size: BROWSE_RESULTS_PAGE_SIZE,
       ...(rotationSeed !== undefined ? { rotationSeed } : {}),
@@ -204,7 +204,7 @@ export function Browse() {
     return () => {
       active = false;
     };
-  }, [areaId, boostedOnly, categoryId, condition, itemsReloadKey, page, q, sortMode, type, viewerKey]);
+  }, [areaId, boostedOnly, categoryId, condition, itemsReloadKey, page, q, type, viewerKey]);
 
   useEffect(() => {
     if (!legacyDistrict || params.has('areaId')) return;
@@ -220,6 +220,14 @@ export function Browse() {
 
   const setFilter = (key: BrowseFilterKey, value: string) => {
     setParams(updateBrowseSearchParams(params, { [key]: value }));
+    setPage(0);
+  };
+
+  // Xoá luôn ?sort cũ (link "Sắp hết hạn" lưu từ trước) để URL chỉ còn boosted.
+  const changeSortMode = (value: string) => {
+    setParams(
+      updateBrowseSearchParams(params, { boosted: value === 'featured' ? 'true' : '', sort: '' }),
+    );
     setPage(0);
   };
 
@@ -403,12 +411,10 @@ export function Browse() {
                 aria-label="Sắp xếp"
                 className="input"
                 value={sortMode}
-                onChange={(event) =>
-                  setFilter('sort', event.target.value === 'newest' ? '' : 'expiring')
-                }
+                onChange={(event) => changeSortMode(event.target.value)}
               >
                 <option value="newest">Mới nhất</option>
-                <option value="expiring">Sắp hết hạn</option>
+                <option value="featured">Tin nổi bật</option>
               </select>
             </label>
           </div>

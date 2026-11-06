@@ -20,6 +20,7 @@ import {
 import { DialogFrame } from '../../components/Dialog';
 import { toast } from '../../components/toast';
 import { boostStatusLines, formatDateTime } from '../../utils/boostMessages';
+import { userProfilePath } from '../../utils/chatMessages';
 import { BoostDialogBody, type BoostFailure } from './BoostDialogBody';
 import { DescribeItemSuggestion } from '../../components/ai/DescribeItemSuggestion';
 import { CONDITIONS, ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
@@ -921,7 +922,9 @@ export function Activities() {
       ) : null}
 
       {listingFeeAction?.type === 'boost' ? (
+        // Hộp đẩy bài rộng (xl) để chia hai cột, cả nội dung nằm gọn một màn hình không phải cuộn.
         <DialogFrame
+          size="xl"
           labelledBy="listing-fee-confirm-title"
           busy={Boolean(boostingItemId)}
           onClose={() => setListingFeeAction(null)}
@@ -1647,8 +1650,14 @@ function itemSummary(item: Item, pendingCount: number, chosenRequest?: ItemReque
       detail: 'Chọn 1 người để mở chat và hẹn lịch.',
     };
   }
-  if (status === 'APPROVED')
-    return { headline: 'Chưa có ai gửi yêu cầu.', detail: 'Đẩy bài để nhiều người thấy hơn.' };
+  if (status === 'APPROVED') {
+    // Bài đang được đẩy thì không gợi ý đẩy nữa; dòng trạng thái đẩy bên dưới đã nói rõ.
+    const isBoosting = Boolean(item.boostedUntil && Date.parse(item.boostedUntil) > Date.now());
+    return {
+      headline: 'Chưa có ai gửi yêu cầu.',
+      detail: isBoosting ? '' : 'Đẩy bài để nhiều người thấy hơn.',
+    };
+  }
   return { headline: '', detail: '' };
 }
 
@@ -1813,15 +1822,36 @@ function RequestPanel({
       <div className="space-y-2">
         {itemRequests.map((request) => {
           const requesterName = requesterDisplayName(request);
+          // requesterId dạng "api_12"; đổi về id số của backend để mở hồ sơ. Không đổi được thì không gắn link.
+          const requesterUserId = toBackendUserId(request.requesterId);
+          const profilePath = requesterUserId !== null ? userProfilePath(requesterUserId) : null;
+          const avatar = <Avatar user={{ name: requesterName, avatarInitials: nameInitials(requesterName) }} />;
           return (
             <div
               key={request.id}
               className="grid grid-cols-[40px_minmax(0,1fr)] items-center gap-3 rounded-md bg-white p-3 ring-1 ring-border/80 sm:grid-cols-[40px_minmax(0,1fr)_auto]"
             >
-              <Avatar user={{ name: requesterName, avatarInitials: nameInitials(requesterName) }} />
+              {/* Ảnh và tên dẫn tới hồ sơ công khai để chủ bài xem uy tín trước khi chọn người. */}
+              {profilePath ? (
+                <Link
+                  to={profilePath}
+                  aria-label={`Xem hồ sơ của ${requesterName}`}
+                  className="rounded-full transition hover:opacity-80"
+                >
+                  {avatar}
+                </Link>
+              ) : (
+                avatar
+              )}
               <div className="min-w-0 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <strong className="text-sm">{requesterName}</strong>
+                  {profilePath ? (
+                    <Link to={profilePath} className="text-sm font-bold hover:text-link hover:underline">
+                      {requesterName}
+                    </Link>
+                  ) : (
+                    <strong className="text-sm">{requesterName}</strong>
+                  )}
                   <ReputationBadge
                     trustStars={request.requesterTrustStars}
                     rank={request.requesterRank}

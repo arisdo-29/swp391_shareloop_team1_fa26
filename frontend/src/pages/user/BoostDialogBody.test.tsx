@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BoostQuote } from '../../services/itemApi';
-import { formatDateTime } from '../../utils/boostMessages';
+import { formatDate, formatDateTime, formatTime } from '../../utils/boostMessages';
 import { BoostDialogBody, type BoostFailure } from './BoostDialogBody';
 
 const allowedQuote: BoostQuote = {
@@ -53,25 +53,47 @@ afterEach(() => {
 
 describe('hộp xác nhận đẩy bài', () => {
   it('đợt mới hiển thị phí, các mốc từ quote, số suất và đoạn quyền lợi; không có số dư ví', () => {
+    // given: mốc nghỉ khác mốc kéo dài tối đa để kiểm từng mốc hiện đúng chỗ
+    const quote = { ...allowedQuote, cooldownUntil: '2026-11-13T08:00:00Z' };
+
     // when
-    const { onConfirm } = renderBody(allowedQuote);
+    const { onConfirm } = renderBody(quote);
 
     // then
     expect(screen.getByRole('heading', { name: 'Xác nhận đẩy bài' })).toBeTruthy();
-    expect(screen.getByText(`Đẩy bài 3 ngày với 5 Credit, đến ${formatDateTime(allowedQuote.newBoostedUntil)}.`)).toBeTruthy();
-    expect(
-      screen.getByText(`Đợt đẩy này kéo dài tối đa tới ${formatDateTime(allowedQuote.chainEndsAt)} nếu bạn mua thêm gói.`),
-    ).toBeTruthy();
-    expect(
-      screen.getByText(
-        `Nếu không mua thêm, sau khi hết đẩy bài nghỉ và được đẩy lại từ ${formatDateTime(allowedQuote.cooldownUntil!)}.`,
-      ),
-    ).toBeTruthy();
-    expect(screen.getByText('Còn 12 suất đẩy trống.')).toBeTruthy();
+    expect(screen.getByText('Áo khoác gió')).toBeTruthy();
+    expect(screen.getByText('3 ngày')).toBeTruthy();
+    // ô Chi phí đẩy và nhãn trên nút xác nhận
+    expect(screen.getAllByText('5 Credit')).toHaveLength(2);
+    expect(screen.getByText(formatDate(quote.newBoostedUntil))).toBeTruthy();
+    expect(screen.getByText(`Lúc ${formatTime(quote.newBoostedUntil)}`)).toBeTruthy();
+    expect(screen.getByText(formatDateTime(quote.chainEndsAt))).toBeTruthy();
+    expect(screen.getByText(formatDateTime(quote.cooldownUntil))).toBeTruthy();
+    expect(screen.getByText('Còn 12 suất đẩy trống')).toBeTruthy();
     expect(screen.getByText(/Người mua sau không được xếp trên bạn/)).toBeTruthy();
+    expect(screen.getByText(/không hoàn phí/)).toBeTruthy();
     expect(screen.queryByText(/Số dư/)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận đẩy 5 Credit' }));
     expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('không có cooldownUntil thì chỉ hiện trường hợp mua thêm gói', () => {
+    // when
+    renderBody({ ...allowedQuote, cooldownUntil: null });
+
+    // then
+    expect(screen.getByText('Nếu mua thêm gói:')).toBeTruthy();
+    expect(screen.queryByText('Nếu không mua thêm:')).toBeNull();
+  });
+
+  it('nút Hủy và nút đóng X đều gọi onCancel', () => {
+    // when
+    const { onCancel } = renderBody(allowedQuote);
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+
+    // then
+    expect(onCancel).toHaveBeenCalledTimes(2);
   });
 
   it('gia hạn khi đang đẩy dùng câu gia hạn và không nói số suất', () => {
@@ -82,9 +104,10 @@ describe('hộp xác nhận đẩy bài', () => {
     renderBody(extendingQuote, { boostDays: 4 });
 
     // then
-    expect(
-      screen.getByText(`Gia hạn đẩy thêm 4 ngày với 7 Credit, kết thúc lúc ${formatDateTime(extendingQuote.newBoostedUntil)}.`),
-    ).toBeTruthy();
+    expect(screen.getByText('Gia hạn thêm')).toBeTruthy();
+    expect(screen.getByText('4 ngày')).toBeTruthy();
+    expect(screen.getAllByText('7 Credit')).toHaveLength(2);
+    expect(screen.getByText('Kết thúc lúc')).toBeTruthy();
     expect(screen.queryByText(/suất đẩy trống/)).toBeNull();
   });
 });
@@ -118,7 +141,7 @@ describe('popup không đẩy được theo reasonCode', () => {
     // then
     expect(screen.getByRole('heading', { name: 'Chưa đẩy được bài' })).toBeTruthy();
     expect(screen.getByText(expected)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Xác nhận' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Xác nhận đẩy/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Gia hạn bài' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Nạp Credit' })).toBeNull();
   });
