@@ -135,6 +135,8 @@ export function toFeItem(
     postedAt: item.createdAt,
     expiresAt: item.expireAt ?? undefined,
     boostedUntil: item.boostedUntil ?? undefined,
+    boostChainEndsAt: item.boostChainEndsAt ?? undefined,
+    boostCooldownUntil: item.boostCooldownUntil ?? undefined,
     donorName: item.donorName ?? undefined,
     donorTrustStars: item.donorTrustStars ?? undefined,
     donorRank: item.donorRank ?? undefined,

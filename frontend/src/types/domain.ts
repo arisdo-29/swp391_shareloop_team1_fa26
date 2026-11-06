@@ -110,6 +110,9 @@ export interface Item {
   postedAt: string;
   expiresAt?: string;
   boostedUntil?: string;
+  // Mốc đợt đẩy do backend tính; chỉ có ở "Bài của tôi" (chủ bài xem).
+  boostChainEndsAt?: string;
+  boostCooldownUntil?: string;
   // Bài đang tạm ẩn (is_active = false), chỉ chủ bài và Admin thấy.
   hidden?: boolean;
   hiddenReason?: string;

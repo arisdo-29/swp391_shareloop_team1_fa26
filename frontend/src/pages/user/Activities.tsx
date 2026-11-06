@@ -18,6 +18,9 @@ import {
   TypeBadge,
 } from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
+import { toast } from '../../components/toast';
+import { boostStatusLines, formatDateTime } from '../../utils/boostMessages';
+import { BoostDialogBody, type BoostFailure } from './BoostDialogBody';
 import { DescribeItemSuggestion } from '../../components/ai/DescribeItemSuggestion';
 import { CONDITIONS, ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
@@ -32,6 +35,7 @@ import {
   type ApiCondition,
   type EditQuote,
   type EditQuoteReason,
+  type BoostQuote,
   type ItemResponse,
   type OperatingStatus,
   type UpdateItemRequest,
@@ -138,6 +142,11 @@ export function Activities() {
   const [listingFeeAction, setListingFeeAction] = useState<ListingFeeAction | null>(null);
   const [feeQuote, setFeeQuote] = useState<ListingFeeQuote | null>(null);
   const [feeQuoteLoading, setFeeQuoteLoading] = useState(false);
+  // Đẩy bài cần đủ báo giá (các mốc, suất, lý do) chứ không chỉ phí và hạn mới như gia hạn.
+  const [boostQuote, setBoostQuote] = useState<BoostQuote | null>(null);
+  // Số ngày mỗi gói từ GET /listing-fees để ghi trong câu xác nhận; null khi chưa tải được.
+  const [boostDays, setBoostDays] = useState<number | null>(null);
+  const [boostFailure, setBoostFailure] = useState<BoostFailure | null>(null);
   const [listingFeeError, setListingFeeError] = useState('');
   const [listingFeeNeedsTopUp, setListingFeeNeedsTopUp] = useState(false);
   const [listingFeeNotice, setListingFeeNotice] = useState('');
@@ -157,21 +166,36 @@ export function Activities() {
     if (!Number.isSafeInteger(itemId)) return;
     let active = true;
     setFeeQuote(null);
+    setBoostQuote(null);
+    setBoostFailure(null);
     setFeeQuoteLoading(true);
-    const quoteRequest =
-      listingFeeAction.type === 'renew'
-        ? itemApi.getRenewQuote(itemId).then((quote): ListingFeeQuote => ({
-            fee: quote.fee,
-            newDeadline: quote.newExpireAt,
-            allowed: quote.allowed,
-            reason: quote.reason,
-          }))
-        : itemApi.getBoostQuote(itemId).then((quote): ListingFeeQuote => ({
-            fee: quote.fee,
-            newDeadline: quote.newBoostedUntil,
-            allowed: quote.allowed,
-            reason: quote.reason,
-          }));
+    if (listingFeeAction.type === 'boost') {
+      // Bảng phí lỗi thì vẫn hiện hộp xác nhận, chỉ không ghi số ngày mỗi gói.
+      Promise.all([
+        itemApi.getBoostQuote(itemId),
+        itemApi.getListingFees().then((fees) => fees.boostDays).catch(() => null),
+      ])
+        .then(([quote, days]) => {
+          if (!active) return;
+          setBoostQuote(quote);
+          setBoostDays(days);
+        })
+        .catch(() => {
+          if (active) setBoostQuote(null);
+        })
+        .finally(() => {
+          if (active) setFeeQuoteLoading(false);
+        });
+      return () => {
+        active = false;
+      };
+    }
+    const quoteRequest = itemApi.getRenewQuote(itemId).then((quote): ListingFeeQuote => ({
+      fee: quote.fee,
+      newDeadline: quote.newExpireAt,
+      allowed: quote.allowed,
+      reason: quote.reason,
+    }));
     quoteRequest
       .then((quote) => {
         if (active) setFeeQuote(quote);
@@ -361,9 +385,33 @@ export function Activities() {
     }
   };
 
+  // Hạn đẩy của bài đang chờ xác nhận gỡ, chỉ khi còn đang đẩy (so với giờ hiện tại để hiển thị cảnh báo).
+  const removeConfirmItem = myItems.find((entry) => entry.id === removeConfirmId);
+  const removeConfirmBoostedUntil =
+    removeConfirmItem?.boostedUntil && Date.parse(removeConfirmItem.boostedUntil) > Date.now()
+      ? removeConfirmItem.boostedUntil
+      : null;
+
   // Số Credit còn thiếu so với phí BE báo; chỉ để hiển thị, việc trừ tiền và kiểm số dư thật vẫn ở BE.
   const creditShortage =
     feeQuote && wallet && feeQuote.fee > wallet.available ? feeQuote.fee - wallet.available : 0;
+
+  // POST /boost bị từ chối: thiếu Credit thì báo theo phí; lý do khác thì tải lại báo giá để popup có đủ mốc mới nhất
+  // (vd suất sớm nhất trống lúc nào). Báo giá mới lại cho phép (vừa có suất) thì hiện nguyên thông điệp backend.
+  const showBoostRejection = async (itemId: number, apiError: ApiError) => {
+    const fallback = { code: apiError.code ?? null, message: apiError.message || 'Không đẩy được bài đăng.' };
+    if (apiError.code === WALLET_INSUFFICIENT_BALANCE) {
+      setBoostFailure(fallback);
+      return;
+    }
+    try {
+      const latestQuote = await itemApi.getBoostQuote(itemId);
+      setBoostQuote(latestQuote);
+      setBoostFailure(latestQuote.allowed ? fallback : null);
+    } catch {
+      setBoostFailure(fallback);
+    }
+  };
 
   const confirmListingFeeAction = async () => {
     if (!listingFeeAction || listingFeeInFlight.current) return;
@@ -391,17 +439,31 @@ export function Activities() {
         );
       } else {
         const boosted = await itemApi.boostItem(itemId);
+        // Mốc cuối đợt và mốc được đẩy lại lấy từ báo giá vừa xác nhận (backend tính cùng công thức với lần đẩy).
         setMyItems((current) =>
           current.map((entry) =>
-            entry.id === item.id ? { ...entry, boostedUntil: boosted.boostedUntil } : entry,
+            entry.id === item.id
+              ? {
+                  ...entry,
+                  boostedUntil: boosted.boostedUntil,
+                  boostChainEndsAt: boostQuote?.chainEndsAt ?? entry.boostChainEndsAt,
+                  boostCooldownUntil: boostQuote?.cooldownUntil ?? entry.boostCooldownUntil,
+                }
+              : entry,
           ),
         );
-        setListingFeeNotice('Đã đẩy bài thành công.');
+        toast.success(
+          `Đã đẩy bài đến ${formatDateTime(boosted.boostedUntil)}. Số dư: ${boosted.creditBalance} Credit.`,
+        );
       }
       refreshWallet();
       setListingFeeAction(null);
     } catch (error) {
       const apiError = error as ApiError;
+      if (type === 'boost') {
+        await showBoostRejection(itemId, apiError);
+        return;
+      }
       const insufficientCredit = apiError.code === WALLET_INSUFFICIENT_BALANCE;
       setListingFeeNeedsTopUp(insufficientCredit);
       setListingFeeError(
@@ -645,6 +707,8 @@ export function Activities() {
                 (request) => request.status === 'RESERVED',
               );
               const summary = itemSummary(item, pendingRequests.length, chosenRequest);
+              // "Đang đẩy · còn ..." hoặc "Được đẩy lại từ ..."; các mốc lấy từ API, chỉ đếm ngược để hiển thị.
+              const boostStatus = boostStatusLines(item, Date.now());
               const open = requestsItemId === item.id;
               return (
                 <article
@@ -695,10 +759,13 @@ export function Activities() {
                         <strong>{summary.headline}</strong>{' '}
                         <span className="text-text-secondary">{summary.detail}</span>
                       </p>
-                      {item.boostedUntil && new Date(item.boostedUntil).getTime() > Date.now() ? (
-                        <p className="text-xs font-semibold text-primary">
-                          Đang được đẩy đến {new Date(item.boostedUntil).toLocaleString('vi-VN')}
-                        </p>
+                      {boostStatus ? (
+                        <div className="text-xs leading-5">
+                          <p className="font-semibold text-primary">{boostStatus.main}</p>
+                          {boostStatus.extra ? (
+                            <p className="text-text-muted">{boostStatus.extra}</p>
+                          ) : null}
+                        </div>
                       ) : null}
                       <div className="flex flex-wrap items-center gap-2">
                         {itemRequests.length ? (
@@ -853,7 +920,30 @@ export function Activities() {
         </div>
       ) : null}
 
-      {listingFeeAction ? (
+      {listingFeeAction?.type === 'boost' ? (
+        <DialogFrame
+          labelledBy="listing-fee-confirm-title"
+          busy={Boolean(boostingItemId)}
+          onClose={() => setListingFeeAction(null)}
+        >
+          <BoostDialogBody
+            titleId="listing-fee-confirm-title"
+            itemTitle={listingFeeAction.item.title}
+            loading={feeQuoteLoading}
+            quote={boostQuote}
+            boostDays={boostDays}
+            failure={boostFailure}
+            busy={Boolean(boostingItemId)}
+            onConfirm={() => void confirmListingFeeAction()}
+            onCancel={() => setListingFeeAction(null)}
+            onRenew={() => {
+              setListingFeeError('');
+              setListingFeeNeedsTopUp(false);
+              setListingFeeAction({ type: 'renew', item: listingFeeAction.item });
+            }}
+          />
+        </DialogFrame>
+      ) : listingFeeAction ? (
         <DialogFrame
           labelledBy="listing-fee-confirm-title"
           busy={Boolean(renewingItemId || boostingItemId)}
@@ -937,6 +1027,14 @@ export function Activities() {
           <p className="mt-2 text-sm leading-6 text-text-muted">
             Bài đăng sẽ không còn hiển thị với người dùng khác.
           </p>
+          {/* Chủ bài tự gỡ thì backend không gửi thông báo dừng đẩy, nên đây là nơi duy nhất người dùng được biết. */}
+          {removeConfirmBoostedUntil ? (
+            <div className="mt-4">
+              <Alert tone="warning">
+                {`Bài đang được đẩy tới ${formatDateTime(removeConfirmBoostedUntil)}. Gỡ bài sẽ mất thời gian đẩy còn lại và không được hoàn phí.`}
+              </Alert>
+            </div>
+          ) : null}
           <div className="mt-6 flex justify-end gap-2">
             <Button
               variant="ghost"
