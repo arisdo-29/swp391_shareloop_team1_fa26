@@ -9,6 +9,7 @@ import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.PostLimitProperties;
 import com.shareloop.item.dto.AdminItemDetail;
 import com.shareloop.item.dto.CreateItemRequest;
+import com.shareloop.item.dto.FeaturedItemsResponse;
 import com.shareloop.item.dto.ItemAttributeValue;
 import com.shareloop.item.dto.ItemListPageResponse;
 import com.shareloop.item.dto.ItemResponse;
@@ -327,8 +328,8 @@ public class ItemService {
                         reputation.asDescribedRate(),
                         donorLocked)
                 .withTradeInfo(findCompletedAt(item), requestable);
-        // U04: chỉ chủ bài biết bài đang tạm ẩn; người khác nhận hidden = null.
-        return isOwner ? withHiddenState(response, item) : response;
+        // U04: chỉ chủ bài biết bài đang tạm ẩn; người khác nhận hidden = null và không thấy các mốc đợt đẩy.
+        return isOwner ? withHiddenState(response, item) : response.withoutBoostTimeline();
     }
 
     // Trạng thái người ngoài được xem chi tiết: đang hiển thị, hoặc đã giao dịch xong (xem từ hồ sơ công khai).
@@ -369,8 +370,10 @@ public class ItemService {
         for (Item item : items.getContent()) {
             // Bài ở tab ACTIVE đều APPROVED và chủ bài không bị khoá nên còn nhận yêu cầu; bài DONE thì không.
             boolean requestable = tab == UserItemTab.ACTIVE;
+            // Hồ sơ công khai do người khác xem: không trả các mốc đợt đẩy.
             rows.add(toResponse(item, displayWindows.get(item.getId()))
-                    .withTradeInfo(completedAtByItemId.get(item.getId()), requestable));
+                    .withTradeInfo(completedAtByItemId.get(item.getId()), requestable)
+                    .withoutBoostTimeline());
         }
         return new ItemListPageResponse(rows, page, size, items.getTotalElements(), items.getTotalPages());
     }
@@ -460,71 +463,193 @@ public class ItemService {
             int size,
             boolean boostedOnly,
             String sort) {
-        Instant now = Instant.now();
-        String keywords = q == null ? "" : q.trim();
-        String conditionName = condition == null ? null : condition.name();
-        String offerTypeName = offerType == null ? null : offerType.name();
-        long boostedCount = itemRepository.countPublicBrowseItems(
-                categoryId, areaId, conditionName, offerTypeName, keywords, 1, now);
-        long regularCount = boostedOnly
-                ? 0
-                : itemRepository.countPublicBrowseItems(
-                        categoryId, areaId, conditionName, offerTypeName, keywords, 2, now);
-        long total = boostedCount + regularCount;
+        return listPublicItems(
+                categoryId, areaId, q, condition, offerType, page, size, boostedOnly, sort, null, null, null);
+    }
+
+    /**
+     * Danh sách Tìm đồ có xoay vòng bài đẩy (FR-50, C15). Bài đang đẩy khớp bộ lọc xếp thành vòng theo id tăng dần;
+     * mỗi trang tối đa boost_max_per_page bài đẩy ở đầu, chọn bằng {@link BoostRotation} theo lượt và người xem. Bài đẩy
+     * không lên đầu trang vẫn nằm trong phần bài thường theo thứ tự bình thường, nên không bài nào biến mất hay lặp lại
+     * giữa các trang của cùng một lượt. boostedOnly = true ("Tin nổi bật") trả mọi bài đang đẩy theo thứ tự xoay.
+     *
+     * @param rotationSeed lượt xoay FE gửi lại khi chuyển trang; null thì tính từ giờ hiện tại
+     * @param currentUserId người xem đã đăng nhập (null nếu là khách)
+     * @param viewerKey số không âm khách gửi lên; bỏ qua khi đã đăng nhập
+     */
+    @Transactional(readOnly = true)
+    public ItemListPageResponse listPublicItems(
+            Long categoryId,
+            Long areaId,
+            String q,
+            ItemCondition condition,
+            OfferType offerType,
+            int page,
+            int size,
+            boolean boostedOnly,
+            String sort,
+            Long rotationSeed,
+            Long currentUserId,
+            Long viewerKey) {
+        BrowseFilter filter = new BrowseFilter(
+                categoryId,
+                areaId,
+                condition == null ? null : condition.name(),
+                offerType == null ? null : offerType.name(),
+                q == null ? "" : q.trim(),
+                Instant.now());
+        List<Long> ring = itemRepository.findPublicBoostedIds(
+                filter.categoryId(), filter.areaId(), filter.condition(), filter.offerType(), filter.q(), filter.now());
+        long round = rotationSeed != null ? rotationSeed : currentRotationRound(filter.now());
+        long viewer = resolveViewerKey(currentUserId, viewerKey);
+        // Số bài đẩy trên một trang nằm trong [0, size]: không vượt cỡ trang, cấu hình âm coi như 0.
+        int boostPerPage = Math.max(0, Math.min(configService.getInt(ConfigKey.BOOST_MAX_PER_PAGE), size));
+
+        long total = boostedOnly ? ring.size() : countPublicBrowse(filter);
         int totalPages = (int) ((total + size - 1) / size);
-        List<Item> selected = new ArrayList<>();
-        if (boostedOnly) {
-            selected.addAll(itemRepository.findPublicBrowseItems(
-                    categoryId,
-                    areaId,
-                    conditionName,
-                    offerTypeName,
-                    keywords,
-                    1,
-                    now,
-                    sort,
-                    size,
-                    (long) page * size));
-        } else {
-            int boostCountOnPage = (int) Math.min(size, Math.max(0L, boostedCount - (long) page * size));
-            if (boostCountOnPage > 0) {
-                selected.addAll(itemRepository.findPublicBrowseItems(
-                        categoryId,
-                        areaId,
-                        conditionName,
-                        offerTypeName,
-                        keywords,
-                        1,
-                        now,
-                        sort,
-                        boostCountOnPage,
-                        (long) page * size));
-            }
-            int regularSlots = size - boostCountOnPage;
-            long regularOffset = Math.max(0L, (long) page * size - boostedCount);
-            if (regularSlots > 0 && regularOffset < regularCount) {
-                selected.addAll(itemRepository.findPublicBrowseItems(
-                        categoryId,
-                        areaId,
-                        conditionName,
-                        offerTypeName,
-                        keywords,
-                        2,
-                        now,
-                        sort,
-                        regularSlots,
-                        regularOffset));
+        List<Item> selected = boostedOnly
+                ? boostedOnlyPage(ring, round, viewer, boostPerPage, page, size)
+                : browsePage(filter, ring, round, viewer, boostPerPage, page, size, sort, totalPages);
+        Map<Long, DisplayWindow> windows = findDisplayWindows(selected);
+        List<ItemResponse> responses = new ArrayList<>();
+        for (Item item : selected) {
+            // Danh sách công khai: không trả các mốc đợt đẩy của chủ bài.
+            responses.add(toResponse(item, windows.get(item.getId())).withoutBoostTimeline());
+        }
+        return new ItemListPageResponse(responses, page, size, total, totalPages, round);
+    }
+
+    /**
+     * Banner bài đẩy ở trang chủ (C15): tối đa {@code limit} bài đang đẩy (không lọc) theo vòng xoay của lượt hiện tại;
+     * mỗi boost_rotate_seconds giây đổi sang nhóm kế tiếp, mỗi người xem bắt đầu ở một chỗ khác nhau. Có ít bài hơn
+     * limit thì trả hết. Không trả các mốc đợt đẩy của chủ bài.
+     *
+     * @param limit số bài tối đa của banner (controller giới hạn 1..10)
+     * @param currentUserId người xem đã đăng nhập (null nếu là khách)
+     * @param viewerKey số không âm khách gửi lên; bỏ qua khi đã đăng nhập
+     */
+    @Transactional(readOnly = true)
+    public FeaturedItemsResponse listFeaturedItems(int limit, Long currentUserId, Long viewerKey) {
+        Instant now = Instant.now();
+        List<Long> ring = itemRepository.findPublicBoostedIds(null, null, null, null, "", now);
+        int rotateSeconds = rotateSeconds();
+        long round = now.getEpochSecond() / rotateSeconds;
+        List<Long> featuredIds =
+                BoostRotation.pick(ring, round, resolveViewerKey(currentUserId, viewerKey), limit, limit);
+
+        List<Item> featured = findItemsInOrder(featuredIds);
+        Map<Long, DisplayWindow> windows = findDisplayWindows(featured);
+        List<ItemResponse> responses = new ArrayList<>();
+        for (Item item : featured) {
+            responses.add(toResponse(item, windows.get(item.getId())).withoutBoostTimeline());
+        }
+        return new FeaturedItemsResponse(
+                responses,
+                Instant.ofEpochSecond(round * rotateSeconds),
+                Instant.ofEpochSecond((round + 1) * rotateSeconds));
+    }
+
+    /** Bộ lọc của trang Tìm đồ, gom lại để khỏi truyền sáu tham số qua từng hàm. */
+    private record BrowseFilter(
+            Long categoryId, Long areaId, String condition, String offerType, String q, Instant now) {}
+
+    private long countPublicBrowse(BrowseFilter filter) {
+        return itemRepository.countPublicBrowseItems(
+                filter.categoryId(), filter.areaId(), filter.condition(), filter.offerType(), filter.q(), filter.now());
+    }
+
+    /**
+     * Một trang Tìm đồ. Chỉ {@code boostPerPage * totalPages} bài đầu của vòng xoay (slotIds) được lên đầu trang; trang p
+     * lấy slotIds từ vị trí p * boostPerPage. Phần còn lại lấy từ "mọi bài trừ slotIds", lùi offset đúng số bài đẩy đã
+     * đứng đầu các trang trước, nên ghép các trang lại thì đủ mọi bài, không trùng.
+     */
+    private List<Item> browsePage(
+            BrowseFilter filter,
+            List<Long> ring,
+            long round,
+            long viewer,
+            int boostPerPage,
+            int page,
+            int size,
+            String sort,
+            int totalPages) {
+        int slotCount = (int) Math.min(ring.size(), (long) boostPerPage * totalPages);
+        List<Long> slotIds = BoostRotation.pick(ring, round, viewer, boostPerPage, slotCount);
+        List<Long> boostIdsOnPage = sliceIds(slotIds, (long) page * boostPerPage, boostPerPage);
+        long boostedBefore = Math.min(slotCount, (long) page * boostPerPage);
+
+        List<Item> selected = new ArrayList<>(findItemsInOrder(boostIdsOnPage));
+        int regularLimit = size - boostIdsOnPage.size();
+        long regularOffset = (long) page * size - boostedBefore;
+        if (regularLimit > 0) {
+            selected.addAll(findRegularItems(filter, slotIds, sort, regularLimit, regularOffset));
+        }
+        return selected;
+    }
+
+    // Trang "Tin nổi bật": chỉ bài đang đẩy, cả vòng theo thứ tự đã xoay, rồi phân trang bình thường.
+    private List<Item> boostedOnlyPage(List<Long> ring, long round, long viewer, int boostPerPage, int page, int size) {
+        List<Long> rotatedIds = BoostRotation.pick(ring, round, viewer, boostPerPage, ring.size());
+        return findItemsInOrder(sliceIds(rotatedIds, (long) page * size, size));
+    }
+
+    private List<Item> findRegularItems(
+            BrowseFilter filter, List<Long> excludedIds, String sort, int limit, long offset) {
+        // NOT IN () rỗng là lỗi cú pháp ở PostgreSQL nên truyền id giả khi không loại bài nào.
+        List<Long> excluded = excludedIds.isEmpty() ? List.of(ItemRepository.NO_ITEM_ID) : excludedIds;
+        return itemRepository.findPublicBrowseItemsExcluding(
+                filter.categoryId(),
+                filter.areaId(),
+                filter.condition(),
+                filter.offerType(),
+                filter.q(),
+                filter.now(),
+                excluded,
+                sort,
+                limit,
+                offset);
+    }
+
+    // findAllById không giữ thứ tự id truyền vào, nên sắp lại theo đúng thứ tự xoay. Bài vừa bị gỡ thì bỏ qua.
+    private List<Item> findItemsInOrder(List<Long> itemIds) {
+        Map<Long, Item> itemsById = new HashMap<>();
+        for (Item item : itemRepository.findAllById(itemIds)) {
+            itemsById.put(item.getId(), item);
+        }
+        List<Item> ordered = new ArrayList<>();
+        for (Long itemId : itemIds) {
+            Item item = itemsById.get(itemId);
+            if (item != null) {
+                ordered.add(item);
             }
         }
-        Map<Long, DisplayWindow> windows = findDisplayWindows(selected);
-        return new ItemListPageResponse(
-                selected.stream()
-                        .map(item -> toResponse(item, windows.get(item.getId())))
-                        .toList(),
-                page,
-                size,
-                total,
-                totalPages);
+        return ordered;
+    }
+
+    private static List<Long> sliceIds(List<Long> ids, long fromIndex, int maxCount) {
+        if (fromIndex >= ids.size() || maxCount <= 0) {
+            return List.of();
+        }
+        int from = (int) fromIndex;
+        return ids.subList(from, Math.min(ids.size(), from + maxCount));
+    }
+
+    // Lượt xoay = số giây epoch chia boost_rotate_seconds, nên mọi người cùng đổi nhóm bài đẩy vào một thời điểm.
+    private long currentRotationRound(Instant now) {
+        return now.getEpochSecond() / rotateSeconds();
+    }
+
+    // Cấu hình ≤ 0 thì coi như 1 giây để không chia cho 0.
+    private int rotateSeconds() {
+        return Math.max(1, configService.getInt(ConfigKey.BOOST_ROTATE_SECONDS));
+    }
+
+    // Đã đăng nhập thì dùng id người dùng (mỗi người một nhóm ổn định); khách thì dùng số FE gửi, không có thì 0.
+    private static long resolveViewerKey(Long currentUserId, Long viewerKey) {
+        if (currentUserId != null) {
+            return currentUserId;
+        }
+        return viewerKey != null ? viewerKey : 0L;
     }
 
     /** Search gateway for the AI assistant; the database remains the source of every returned item. */
@@ -996,10 +1121,12 @@ public class ItemService {
                 displayWindow);
     }
 
-    // Đọc một trang bằng một query hạn hiển thị cho cả trang, thay vì một query mỗi bài.
+    // Đọc một trang bằng một query hạn hiển thị cho cả trang, thay vì một query mỗi bài. Chỉ tìm kiếm AI dùng (kết quả
+    // công khai) nên bỏ các mốc đợt đẩy.
     private PageResponse<ItemResponse> toPageResponse(Page<Item> items) {
         Map<Long, DisplayWindow> displayWindows = findDisplayWindows(items.getContent());
-        return PageResponse.from(items.map(item -> toResponse(item, displayWindows.get(item.getId()))));
+        return PageResponse.from(items.map(
+                item -> toResponse(item, displayWindows.get(item.getId())).withoutBoostTimeline()));
     }
 
     // expire_at, boosted_until thuộc module listingfee nên đọc qua ListingFeeQueryService, không map lại ở Item.

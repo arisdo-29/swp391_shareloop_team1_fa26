@@ -48,6 +48,7 @@ import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.service.UserService;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -1109,54 +1110,66 @@ class ItemServiceTest {
     }
 
     @Test
-    void listPublicItemsPlacesAllBoostsBeforeRegularItemsAcrossPages() {
-        List<Item> items = new java.util.ArrayList<>();
-        for (long id = 7; id >= 1; id--) {
-            Item item = new Item(
-                    10L, 1L, 1L, OfferType.GIVE, "Item " + id, "Description", null, ItemCondition.NEW, null, null);
-            item.approve();
-            ReflectionTestUtils.setField(item, "id", id);
-            items.add(item);
+    void listPublicItems_putsRotatedBoostsFirstAndKeepsOtherItemsInRegularOrder() {
+        // given: 7 bài (id 1..7), bài 1..4 đang đẩy; cỡ trang 4, tối đa 3 bài đẩy mỗi trang, lượt xoay cố định 0
+        Map<Long, Item> items = new HashMap<>();
+        for (long id = 1; id <= 7; id++) {
+            items.put(id, approvedItem(id));
         }
-        when(itemRepository.countPublicBrowseItems(
-                        eq(null), eq(null), eq(null), eq(null), eq(""), eq(1), any(Instant.class)))
-                .thenReturn(4L);
-        when(itemRepository.countPublicBrowseItems(
-                        eq(null), eq(null), eq(null), eq(null), eq(""), eq(2), any(Instant.class)))
-                .thenReturn(3L);
-        when(itemRepository.findPublicBrowseItems(
+        when(configService.getInt(ConfigKey.BOOST_MAX_PER_PAGE)).thenReturn(3);
+        when(itemRepository.findPublicBoostedIds(eq(null), eq(null), eq(null), eq(null), eq(""), any(Instant.class)))
+                .thenReturn(List.of(1L, 2L, 3L, 4L));
+        when(itemRepository.countPublicBrowseItems(eq(null), eq(null), eq(null), eq(null), eq(""), any(Instant.class)))
+                .thenReturn(7L);
+        // findAllById không giữ thứ tự: trả lộn xộn để kiểm service tự sắp lại theo vòng xoay
+        when(itemRepository.findAllById(List.of(1L, 2L, 3L)))
+                .thenReturn(List.of(items.get(3L), items.get(1L), items.get(2L)));
+        when(itemRepository.findAllById(List.of(4L))).thenReturn(List.of(items.get(4L)));
+        // phần bài thường loại 4 bài đã lên đầu trang (slotIds), mới nhất trước: 7, 6, 5
+        when(itemRepository.findPublicBrowseItemsExcluding(
                         eq(null),
                         eq(null),
                         eq(null),
                         eq(null),
                         eq(""),
+                        any(Instant.class),
+                        eq(List.of(1L, 2L, 3L, 4L)),
+                        eq("newest"),
                         eq(1),
-                        any(Instant.class),
-                        eq("newest"),
-                        eq(4),
                         eq(0L)))
-                .thenReturn(List.of(items.get(3), items.get(4), items.get(5), items.get(6)));
-        when(itemRepository.findPublicBrowseItems(
+                .thenReturn(List.of(items.get(7L)));
+        when(itemRepository.findPublicBrowseItemsExcluding(
                         eq(null),
                         eq(null),
                         eq(null),
                         eq(null),
                         eq(""),
-                        eq(2),
                         any(Instant.class),
+                        eq(List.of(1L, 2L, 3L, 4L)),
                         eq("newest"),
-                        eq(4),
-                        eq(0L)))
-                .thenReturn(List.of(items.get(0), items.get(1), items.get(2)));
+                        eq(3),
+                        eq(1L)))
+                .thenReturn(List.of(items.get(6L), items.get(5L)));
         when(listingFeeQueryService.findDisplayWindows(any())).thenReturn(Map.of());
 
-        var first = itemService.listPublicItems(null, null, null, null, null, 0, 4);
-        var second = itemService.listPublicItems(null, null, null, null, null, 1, 4);
+        // when
+        var first = itemService.listPublicItems(null, null, null, null, null, 0, 4, false, "newest", 0L, null, null);
+        var second = itemService.listPublicItems(null, null, null, null, null, 1, 4, false, "newest", 0L, null, null);
 
-        assertThat(first.items()).extracting(ItemResponse::id).containsExactly(4L, 3L, 2L, 1L);
-        assertThat(second.items()).extracting(ItemResponse::id).containsExactly(7L, 6L, 5L);
+        // then: mỗi trang tối đa 3 bài đẩy ở đầu, phần còn lại nối tiếp không trùng, đủ 7 bài
+        assertThat(first.items()).extracting(ItemResponse::id).containsExactly(1L, 2L, 3L, 7L);
+        assertThat(second.items()).extracting(ItemResponse::id).containsExactly(4L, 6L, 5L);
         assertThat(first.totalElements()).isEqualTo(7);
         assertThat(first.totalPages()).isEqualTo(2);
+        assertThat(first.rotationSeed()).isZero();
+    }
+
+    private Item approvedItem(long id) {
+        Item item =
+                new Item(10L, 1L, 1L, OfferType.GIVE, "Item " + id, "Description", null, ItemCondition.NEW, null, null);
+        item.approve();
+        ReflectionTestUtils.setField(item, "id", id);
+        return item;
     }
 
     @Test

@@ -55,7 +55,8 @@ Hạn hiển thị (`expireAt`) và hạn đẩy (`boostedUntil`) của từng b
 `ListingFeeQueryService.findDisplayWindows` (hàm nội bộ cho module item) còn trả sẵn ba mốc của đợt đẩy để FE chỉ
 hiển thị, không tự tính: `boostStartedAt` (mốc bắt đầu đợt gần nhất), `boostChainEndsAt` (`boostStartedAt +
 boost_max_days`) và `boostCooldownUntil` (`boostedUntil + boost_cooldown_days`); bài chưa từng đẩy thì cả ba là `null`.
-Ba trường này **chưa** có trong `ItemResponse`; nhánh xoay vòng bài đẩy (module item) sẽ map vào.
+Module item map ba trường này vào `ItemResponse`, nhưng chỉ trả ở "Bài của tôi" và chi tiết bài khi chủ bài xem; các
+API công khai trả `null` (xem `item.md`, mục `ItemResponse`).
 
 ## GET /api/v1/listing-fees/held
 

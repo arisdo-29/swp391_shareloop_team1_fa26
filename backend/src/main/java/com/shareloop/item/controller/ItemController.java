@@ -2,6 +2,7 @@ package com.shareloop.item.controller;
 
 import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.item.dto.CreateItemRequest;
+import com.shareloop.item.dto.FeaturedItemsResponse;
 import com.shareloop.item.dto.ItemListPageResponse;
 import com.shareloop.item.dto.ItemResponse;
 import com.shareloop.item.dto.PostingQuotaResponse;
@@ -118,8 +119,37 @@ public class ItemController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "24") @Min(1) @Max(100) int size,
             @RequestParam(defaultValue = "false") boolean boosted,
-            @RequestParam(defaultValue = "newest") @Pattern(regexp = "newest|expiring") String sort) {
-        return itemService.listPublicItems(categoryId, areaId, q, condition, offerType, page, size, boosted, sort);
+            @RequestParam(defaultValue = "newest") @Pattern(regexp = "newest|expiring") String sort,
+            // Lượt xoay bài đẩy lấy từ response trang trước; gửi lại khi chuyển trang để các trang khớp nhau.
+            @RequestParam(required = false) @Min(0) Long rotationSeed,
+            // Số riêng của khách chưa đăng nhập để mỗi người thấy một nhóm bài đẩy khác; đã đăng nhập thì bỏ qua.
+            @RequestParam(required = false) @Min(0) Long viewerKey,
+            @io.swagger.v3.oas.annotations.Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+        return itemService.listPublicItems(
+                categoryId,
+                areaId,
+                q,
+                condition,
+                offerType,
+                page,
+                size,
+                boosted,
+                sort,
+                rotationSeed,
+                parseUserId(jwt),
+                viewerKey);
+    }
+
+    // Đường dẫn chuỗi cố định "featured" được Spring ưu tiên hơn mẫu /items/{id}, nên không bị hiểu nhầm là id bài.
+    // Đã nằm trong PUBLIC_GET ("/api/v1/items/*") nên khách xem được, không cần sửa SecurityConfig.
+    @Operation(summary = "Banner bài đẩy trang chủ, đổi nhóm theo vòng xoay")
+    @GetMapping("/api/v1/items/featured")
+    public FeaturedItemsResponse listFeatured(
+            @RequestParam(defaultValue = "5") @Min(1) @Max(10) int limit,
+            // Số riêng của khách chưa đăng nhập để mỗi người thấy một nhóm khác; đã đăng nhập thì bỏ qua.
+            @RequestParam(required = false) @Min(0) Long viewerKey,
+            @io.swagger.v3.oas.annotations.Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+        return itemService.listFeaturedItems(limit, parseUserId(jwt), viewerKey);
     }
 
     /**

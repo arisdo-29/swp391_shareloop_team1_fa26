@@ -83,3 +83,19 @@ Authorization: Bearer {{token_an}}
 ### 7. Xem danh sách bài đăng của tôi
 GET {{host}}/api/v1/me/items
 Authorization: Bearer {{token_an}}
+
+### 8. Tìm đồ trang 1 (khách): tối đa 3 bài đẩy ở đầu theo vòng xoay; response có rotationSeed
+GET {{host}}/api/v1/items?page=0&size=24&viewerKey=12345
+
+### 9. Tìm đồ trang 2: gửi lại rotationSeed của trang 1 để hai trang cùng một lượt (không trùng, không sót bài)
+# Thay 9842213 bằng rotationSeed thật lấy từ response của request 8
+GET {{host}}/api/v1/items?page=1&size=24&viewerKey=12345&rotationSeed=9842213
+
+### 10. Tin nổi bật: mọi bài đang đẩy theo thứ tự xoay
+GET {{host}}/api/v1/items?boosted=true&page=0&size=24&viewerKey=12345
+
+### 11. Banner trang chủ: 5 bài đẩy, đổi nhóm mỗi boost_rotate_seconds (rotatedAt, nextRotateAt)
+GET {{host}}/api/v1/items/featured?limit=5&viewerKey=12345
+
+### 12. Banner với limit ngoài 1..10 -> Lỗi 400
+GET {{host}}/api/v1/items/featured?limit=11
