@@ -6,13 +6,24 @@
 # Id một bài APPROVED của chính mình, còn hạn, danh mục cho phép đẩy
 @itemId = 1
 
-### Đẩy bài thêm một gói (200: itemId, boostedUntil, creditBalance)
+### Báo giá đẩy bài (200: allowed, reasonCode, boostStartedAt, chainEndsAt, cooldownUntil, slotsLeft, ...)
+GET {{host}}/api/v1/items/{{itemId}}/boost-quote
+Authorization: Bearer {{token}}
+
+### Đẩy bài thêm một gói, mở đợt mới (200: itemId, boostedUntil, creditBalance)
 POST {{host}}/api/v1/items/{{itemId}}/boost
 Authorization: Bearer {{token}}
 
-### Gọi lặp lại để cộng dồn; đợt đẩy quá boost_max_days ngày (409 LISTINGFEE_BOOST_CHAIN_LIMIT)
+### Mua thêm gói thứ hai khi đang đẩy: cộng nối 3 ngày, đợt đủ boost_max_days = 6 ngày (200)
 POST {{host}}/api/v1/items/{{itemId}}/boost
 Authorization: Bearer {{token}}
+
+### Gói thứ ba trong cùng đợt vượt boost_started_at + boost_max_days (409 LISTINGFEE_BOOST_CHAIN_LIMIT, không trừ tiền)
+POST {{host}}/api/v1/items/{{itemId}}/boost
+Authorization: Bearer {{token}}
+
+# Các lỗi khác cần dữ liệu riêng: hết đợt chưa quá 3 ngày (409 LISTINGFEE_BOOST_COOLDOWN), đã có 3 bài đang đẩy
+# (409 LISTINGFEE_BOOST_USER_LIMIT), toàn hệ thống đã có 30 bài đang đẩy (409 LISTINGFEE_BOOST_SOLD_OUT).
 
 ### Không có token (401 UNAUTHORIZED)
 POST {{host}}/api/v1/items/{{itemId}}/boost
