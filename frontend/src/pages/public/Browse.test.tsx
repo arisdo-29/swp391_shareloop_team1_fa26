@@ -654,6 +654,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
         q: undefined,
         page: 0,
         size: 20,
+        viewerKey: expect.any(Number),
       }),
     );
     expect(await screen.findByText('Bộ giáo trình đại học')).toBeTruthy();
@@ -672,6 +673,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
         offerType: 'GIVE',
         page: 0,
         size: 20,
+        viewerKey: expect.any(Number),
       }),
     );
     expect(await screen.findByText(book.title)).toBeTruthy();
