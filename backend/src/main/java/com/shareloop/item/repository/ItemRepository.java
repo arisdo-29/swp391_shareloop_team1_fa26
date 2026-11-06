@@ -40,13 +40,10 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
      */
     long NO_ITEM_ID = -1L;
 
-    @Query(
-            value = "SELECT count(*) FROM items i WHERE" + PUBLIC_BROWSE_FILTER
-                    + "AND (:mode = 0 OR (:mode = 1 AND i.boosted_until > :now) "
-                    + "OR (:mode = 2 AND (i.boosted_until IS NULL OR i.boosted_until <= :now)))",
-            nativeQuery = true)
+    /** Tổng số bài khớp bộ lọc của trang Tìm đồ, gồm cả bài đang đẩy và bài thường. */
+    @Query(value = "SELECT count(*) FROM items i WHERE" + PUBLIC_BROWSE_FILTER, nativeQuery = true)
     long countPublicBrowseItems(
-            Long categoryId, Long areaId, String condition, String offerType, String q, int mode, Instant now);
+            Long categoryId, Long areaId, String condition, String offerType, String q, Instant now);
 
     @Query(
             value = "SELECT i.category_id, count(*) FROM items i "
@@ -54,37 +51,6 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
                     + "AND (i.expire_at IS NULL OR i.expire_at > :now) GROUP BY i.category_id",
             nativeQuery = true)
     List<Object[]> countPublicItemsByCategory(Instant now);
-
-    @Query(
-            value = "SELECT i.* FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
-                    + "AND (i.expire_at IS NULL OR i.expire_at > :now) "
-                    + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
-                    + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
-                    + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
-                    + "AND (CAST(:offerType AS varchar) IS NULL OR i.offer_type = :offerType) "
-                    + "AND (CASE WHEN f_unaccent(lower(:q)) ~ '^[a-z0-9 ]+$' THEN "
-                    + "(' ' || regexp_replace(f_unaccent(lower(i.title)), '[^a-z0-9]+', ' ', 'g') || ' ') LIKE "
-                    + "'% ' || trim(regexp_replace(f_unaccent(lower(:q)), '[^a-z0-9]+', ' ', 'g')) || ' %' "
-                    + "ELSE f_unaccent(lower(i.title)) LIKE "
-                    + "'%' || replace(replace(replace(f_unaccent(lower(:q)), '!', '!!'), '%', '!%'), '_', '!_') || '%' ESCAPE '!' END) "
-                    + "AND (:mode = 0 OR (:mode = 1 AND i.boosted_until > :now) "
-                    + "OR (:mode = 2 AND (i.boosted_until IS NULL OR i.boosted_until <= :now))) "
-                    + "ORDER BY CASE WHEN :sort = 'expiring' THEN i.expire_at END ASC NULLS LAST, "
-                    + "CASE WHEN :sort = 'newest' AND :mode = 1 THEN i.last_boosted_at END DESC NULLS LAST, "
-                    + "i.created_at DESC, i.id DESC "
-                    + "LIMIT :limit OFFSET :offset",
-            nativeQuery = true)
-    List<Item> findPublicBrowseItems(
-            Long categoryId,
-            Long areaId,
-            String condition,
-            String offerType,
-            String q,
-            int mode,
-            Instant now,
-            String sort,
-            int limit,
-            long offset);
 
     /**
      * Vòng xoay bài đẩy của trang Tìm đồ: id các bài đang đẩy (boosted_until > now) khớp bộ lọc, sắp theo id tăng dần.

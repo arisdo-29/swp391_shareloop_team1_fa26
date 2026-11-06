@@ -17,10 +17,13 @@ import com.shareloop.config.WebConfig;
 import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.dto.CreateItemRequest;
 import com.shareloop.item.dto.ItemResponse;
+import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
+import com.shareloop.item.mapper.ItemMapper;
 import com.shareloop.item.service.ItemService;
+import com.shareloop.listingfee.dto.DisplayWindow;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -31,6 +34,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(ItemController.class)
@@ -185,6 +189,31 @@ class ItemControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(1))
                 .andExpect(jsonPath("$[0].title").value("Sách của tôi"));
+    }
+
+    @Test
+    @DisplayName("Bài của tôi trả kèm ba mốc đợt đẩy lấy từ DisplayWindow")
+    void listMyItems_whenItemBoosted_returnsBoostTimeline() throws Exception {
+        // given: bài đang đẩy, mapper nhận đủ các mốc từ listingfee
+        String token = jwtService.issue(10L, false);
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        ReflectionTestUtils.setField(item, "id", 1L);
+        DisplayWindow displayWindow = new DisplayWindow(
+                Instant.parse("2026-12-06T08:00:00Z"),
+                Instant.parse("2026-11-09T08:00:00Z"),
+                Instant.parse("2026-11-06T08:00:00Z"),
+                Instant.parse("2026-11-12T08:00:00Z"),
+                Instant.parse("2026-11-12T08:00:00Z"));
+        ItemResponse response = ItemMapper.toResponse(item, List.of(), List.of(), null, displayWindow);
+        when(itemService.listMyItems(10L)).thenReturn(List.of(response));
+
+        // when + then
+        mockMvc.perform(get("/api/v1/me/items").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].boostedUntil").value("2026-11-09T08:00:00Z"))
+                .andExpect(jsonPath("$[0].boostStartedAt").value("2026-11-06T08:00:00Z"))
+                .andExpect(jsonPath("$[0].boostChainEndsAt").value("2026-11-12T08:00:00Z"))
+                .andExpect(jsonPath("$[0].boostCooldownUntil").value("2026-11-12T08:00:00Z"));
     }
 
     @Test

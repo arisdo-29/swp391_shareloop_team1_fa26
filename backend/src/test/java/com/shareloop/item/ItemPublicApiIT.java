@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import com.shareloop.auth.service.JwtService;
 import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.OfferType;
@@ -29,6 +30,9 @@ class ItemPublicApiIT extends IntegrationTest {
 
     @Autowired
     ItemRepository items;
+
+    @Autowired
+    JwtService jwtService;
 
     @Test
     void anonymousListFiltersOutPendingAndHiddenItems() throws Exception {
@@ -129,7 +133,7 @@ class ItemPublicApiIT extends IntegrationTest {
     }
 
     @Test
-    void expiringSortOrdersBothGroupsAcrossPagesBeforePagination() throws Exception {
+    void expiringSort_keepsRotatedBoostsFirstAndOrdersRegularItemsByExpiry() throws Exception {
         long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
                 .query(Long.class)
                 .single();
@@ -153,27 +157,30 @@ class ItemPublicApiIT extends IntegrationTest {
                         .update();
             }
             if (number < 2) {
-                jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP + INTERVAL '10 days', "
-                                + "last_boosted_at = CURRENT_TIMESTAMP - (:age * INTERVAL '1 minute') WHERE id = :id")
+                jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP + INTERVAL '10 days' WHERE id = :id")
                         .param("id", entry.getId())
-                        .param("age", number)
                         .update();
             }
         }
 
-        mvc.perform(get("/api/v1/items")
-                        .param("q", "expiring-sort-unique")
-                        .param("sort", "expiring")
-                        .param("size", "2"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalPages").value(3))
-                .andExpect(jsonPath("$.items[0].title").value("Bài expiring-sort-unique 1"))
-                .andExpect(jsonPath("$.items[1].title").value("Bài expiring-sort-unique 0"));
+        // rotationSeed = 0: vòng xoay bắt đầu ở bài đẩy có id nhỏ nhất, nên kết quả cố định.
+        // Trang 0: hai bài đẩy theo thứ tự vòng (0, 1); các trang sau: bài thường sắp hết hạn trước (3, 2, rồi 4 không
+        // hạn).
         mvc.perform(get("/api/v1/items")
                         .param("q", "expiring-sort-unique")
                         .param("sort", "expiring")
                         .param("size", "2")
-                        .param("page", "1"))
+                        .param("rotationSeed", "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalPages").value(3))
+                .andExpect(jsonPath("$.items[0].title").value("Bài expiring-sort-unique 0"))
+                .andExpect(jsonPath("$.items[1].title").value("Bài expiring-sort-unique 1"));
+        mvc.perform(get("/api/v1/items")
+                        .param("q", "expiring-sort-unique")
+                        .param("sort", "expiring")
+                        .param("size", "2")
+                        .param("page", "1")
+                        .param("rotationSeed", "0"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].title").value("Bài expiring-sort-unique 3"))
                 .andExpect(jsonPath("$.items[1].title").value("Bài expiring-sort-unique 2"));
@@ -181,13 +188,14 @@ class ItemPublicApiIT extends IntegrationTest {
                         .param("q", "expiring-sort-unique")
                         .param("sort", "expiring")
                         .param("size", "2")
-                        .param("page", "2"))
+                        .param("page", "2")
+                        .param("rotationSeed", "0"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].title").value("Bài expiring-sort-unique 4"));
     }
 
     @Test
-    void boostedItemsLeadEachFilteredPageWithoutDuplicates() throws Exception {
+    void boostedItemsLeadEachFilteredPageInRotationOrderWithoutDuplicates() throws Exception {
         long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
                 .query(Long.class)
                 .single();
@@ -204,36 +212,38 @@ class ItemPublicApiIT extends IntegrationTest {
             item.approve();
             items.saveAndFlush(item);
             if (number < 4) {
-                jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP + INTERVAL '1 day', "
-                                + "last_boosted_at = CURRENT_TIMESTAMP - (:age * INTERVAL '1 minute') WHERE id = :id")
+                jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP + INTERVAL '1 day' WHERE id = :id")
                         .param("id", item.getId())
-                        .param("age", 3 - number)
                         .update();
             }
         }
 
+        // 4 bài đẩy (0..3), cỡ trang 4, tối đa 3 bài đẩy mỗi trang, rotationSeed = 0 (vòng bắt đầu ở bài 0).
+        // Trang 0: bài đẩy 0, 1, 2 rồi bài thường mới nhất (6); trang 1: bài đẩy 3 rồi bài thường còn lại (5, 4).
         mvc.perform(get("/api/v1/items")
                         .param("q", "boost-filter-unique")
                         .param("page", "0")
-                        .param("size", "4"))
+                        .param("size", "4")
+                        .param("rotationSeed", "0"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(7))
                 .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.rotationSeed").value(0))
                 .andExpect(jsonPath("$.items.length()").value(4))
-                .andExpect(jsonPath("$.items[0].title").value("Bài boost-filter-unique 3"))
-                .andExpect(jsonPath("$.items[1].title").value("Bài boost-filter-unique 2"))
-                .andExpect(jsonPath("$.items[2].title").value("Bài boost-filter-unique 1"))
-                .andExpect(jsonPath("$.items[3].title").value("Bài boost-filter-unique 0"))
-                .andExpect(jsonPath("$.items[0].boostedUntil").isNotEmpty())
-                .andExpect(jsonPath("$.items[1].boostedUntil").isNotEmpty())
-                .andExpect(jsonPath("$.items[2].boostedUntil").isNotEmpty());
+                .andExpect(jsonPath("$.items[0].title").value("Bài boost-filter-unique 0"))
+                .andExpect(jsonPath("$.items[1].title").value("Bài boost-filter-unique 1"))
+                .andExpect(jsonPath("$.items[2].title").value("Bài boost-filter-unique 2"))
+                .andExpect(jsonPath("$.items[3].title").value("Bài boost-filter-unique 6"));
         mvc.perform(get("/api/v1/items")
                         .param("q", "boost-filter-unique")
                         .param("page", "1")
-                        .param("size", "4"))
+                        .param("size", "4")
+                        .param("rotationSeed", "0"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(3))
-                .andExpect(jsonPath("$.items[0].title").value("Bài boost-filter-unique 6"));
+                .andExpect(jsonPath("$.items[0].title").value("Bài boost-filter-unique 3"))
+                .andExpect(jsonPath("$.items[1].title").value("Bài boost-filter-unique 5"))
+                .andExpect(jsonPath("$.items[2].title").value("Bài boost-filter-unique 4"));
         mvc.perform(get("/api/v1/items").param("q", "boost-filter-unique").param("boosted", "true"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(4))
@@ -269,7 +279,7 @@ class ItemPublicApiIT extends IntegrationTest {
     }
 
     @Test
-    void thirtyBoostsFillFirstPageAndMixWithRegularItemsOnSecondPage() throws Exception {
+    void thirtyBoosts_eachPageLeadsWithThreeRotatedBoostsAndOtherBoostsStayInRegularOrder() throws Exception {
         long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
                 .query(Long.class)
                 .single();
@@ -286,25 +296,32 @@ class ItemPublicApiIT extends IntegrationTest {
             entry.approve();
             items.saveAndFlush(entry);
             if (number < 30) {
-                jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP + INTERVAL '1 day', "
-                                + "last_boosted_at = CURRENT_TIMESTAMP - (:age * INTERVAL '1 minute') WHERE id = :id")
+                jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP + INTERVAL '1 day' WHERE id = :id")
                         .param("id", entry.getId())
-                        .param("age", 29 - number)
                         .update();
             }
         }
-        mvc.perform(get("/api/v1/items").param("q", "boost-priority-unique"))
+        // 48 bài, 30 bài đẩy (0..29), cỡ trang mặc định 24 nên 2 trang; rotationSeed = 0.
+        // Chỉ 6 bài đẩy đầu vòng (0..5) lên đầu trang, 3 bài mỗi trang. 24 bài đẩy còn lại nằm trong phần bài thường
+        // theo thứ tự mới nhất (47 xuống 6), không biến mất.
+        mvc.perform(get("/api/v1/items").param("q", "boost-priority-unique").param("rotationSeed", "0"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalPages").value(2))
                 .andExpect(jsonPath("$.items.length()").value(24))
-                .andExpect(jsonPath("$.items[0].title").value("Bài boost-priority-unique 29"))
-                .andExpect(jsonPath("$.items[23].title").value("Bài boost-priority-unique 6"));
-        mvc.perform(get("/api/v1/items").param("q", "boost-priority-unique").param("page", "1"))
+                .andExpect(jsonPath("$.items[0].title").value("Bài boost-priority-unique 0"))
+                .andExpect(jsonPath("$.items[2].title").value("Bài boost-priority-unique 2"))
+                .andExpect(jsonPath("$.items[3].title").value("Bài boost-priority-unique 47"))
+                .andExpect(jsonPath("$.items[23].title").value("Bài boost-priority-unique 27"));
+        mvc.perform(get("/api/v1/items")
+                        .param("q", "boost-priority-unique")
+                        .param("page", "1")
+                        .param("rotationSeed", "0"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(24))
-                .andExpect(jsonPath("$.items[0].title").value("Bài boost-priority-unique 5"))
-                .andExpect(jsonPath("$.items[5].title").value("Bài boost-priority-unique 0"))
-                .andExpect(jsonPath("$.items[6].title").value("Bài boost-priority-unique 47"));
+                .andExpect(jsonPath("$.items[0].title").value("Bài boost-priority-unique 3"))
+                .andExpect(jsonPath("$.items[2].title").value("Bài boost-priority-unique 5"))
+                .andExpect(jsonPath("$.items[3].title").value("Bài boost-priority-unique 26"))
+                .andExpect(jsonPath("$.items[23].title").value("Bài boost-priority-unique 6"));
     }
 
     @Test
@@ -462,6 +479,74 @@ class ItemPublicApiIT extends IntegrationTest {
         Item item = new Item(userId, categoryId, areaId, offerType, title, "Mô tả", desiredItem, condition, null, null);
         item.approve();
         return items.saveAndFlush(item);
+    }
+
+    @Test
+    void publicListAndDetailForOthers_hideBoostTimeline() throws Exception {
+        // given: một bài đang đẩy có đủ mốc đợt đẩy
+        long ownerId = insertUser("timeline-public-test@shareloop.local", "0900000771");
+        long itemId = insertBoostedItem(ownerId, "Bài timeline-public-unique");
+
+        // when + then: danh sách công khai và chi tiết bài (khách xem) chỉ có boostedUntil, không có ba mốc đợt đẩy
+        mvc.perform(get("/api/v1/items").param("q", "timeline-public-unique"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].boostedUntil").isNotEmpty())
+                .andExpect(jsonPath("$.items[0].boostStartedAt").doesNotExist())
+                .andExpect(jsonPath("$.items[0].boostChainEndsAt").doesNotExist())
+                .andExpect(jsonPath("$.items[0].boostCooldownUntil").doesNotExist());
+        mvc.perform(get("/api/v1/items/{id}", itemId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.boostedUntil").isNotEmpty())
+                .andExpect(jsonPath("$.boostStartedAt").doesNotExist())
+                .andExpect(jsonPath("$.boostChainEndsAt").doesNotExist())
+                .andExpect(jsonPath("$.boostCooldownUntil").doesNotExist());
+    }
+
+    @Test
+    void myItemsAndOwnDetail_showBoostTimeline() throws Exception {
+        // given: chủ bài đăng nhập, bài đang đẩy có đủ mốc đợt đẩy
+        long ownerId = insertUser("timeline-owner-test@shareloop.local", "0900000772");
+        long itemId = insertBoostedItem(ownerId, "Bài timeline-owner-unique");
+        String token = jwtService.issue(ownerId, false);
+
+        // when + then: "Bài của tôi" và chi tiết bài của chính mình trả đủ ba mốc
+        mvc.perform(get("/api/v1/me/items").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].boostStartedAt").isNotEmpty())
+                .andExpect(jsonPath("$[0].boostChainEndsAt").isNotEmpty())
+                .andExpect(jsonPath("$[0].boostCooldownUntil").isNotEmpty());
+        mvc.perform(get("/api/v1/items/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.boostStartedAt").isNotEmpty())
+                .andExpect(jsonPath("$.boostChainEndsAt").isNotEmpty())
+                .andExpect(jsonPath("$.boostCooldownUntil").isNotEmpty());
+    }
+
+    private long insertUser(String email, String phone) {
+        return jdbc.sql("INSERT INTO users (email, password_hash, full_name, phone, status) "
+                        + "VALUES (:email, 'unused', 'Test', :phone, 'ACTIVE') RETURNING id")
+                .param("email", email)
+                .param("phone", phone)
+                .query(Long.class)
+                .single();
+    }
+
+    // Bài APPROVED đang đẩy 1 ngày nữa, đợt bắt đầu từ hôm qua.
+    private long insertBoostedItem(long ownerId, String title) {
+        long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long areaId = jdbc.sql("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        Item entry = item(ownerId, categoryId, areaId, title);
+        entry.approve();
+        items.saveAndFlush(entry);
+        jdbc.sql("UPDATE items SET boosted_until = CURRENT_TIMESTAMP + INTERVAL '1 day', "
+                        + "boost_started_at = CURRENT_TIMESTAMP - INTERVAL '1 day' WHERE id = :id")
+                .param("id", entry.getId())
+                .update();
+        return entry.getId();
     }
 
     private Item item(long userId, long categoryId, long areaId, String title) {

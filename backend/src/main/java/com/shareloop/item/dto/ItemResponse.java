@@ -48,7 +48,76 @@ public record ItemResponse(
         Instant completedAt,
         // Bài còn nhận yêu cầu không (APPROVED, đang hiển thị, chủ bài không bị khoá). false thì frontend ẩn nút
         // "Gửi yêu cầu". null ở các danh sách chưa tính cờ này.
-        Boolean requestable) {
+        Boolean requestable,
+        // Ba mốc của đợt đẩy, module listingfee tính sẵn (DisplayWindow) để FE "Bài của tôi" chỉ hiển thị: bắt đầu đợt,
+        // mốc đẩy muộn nhất của đợt, mốc được đẩy lại. null khi bài chưa từng được đẩy.
+        Instant boostStartedAt,
+        Instant boostChainEndsAt,
+        Instant boostCooldownUntil) {
+
+    /** Constructor 28 tham số trước khi có ba mốc đợt đẩy; ba trường mới để null. */
+    public ItemResponse(
+            Long id,
+            Long donorId,
+            Long categoryId,
+            Long areaId,
+            OfferType offerType,
+            String title,
+            String description,
+            String desiredItem,
+            ItemCondition condition,
+            String defectNote,
+            String brand,
+            List<String> images,
+            ItemStatus status,
+            Instant createdAt,
+            Instant updatedAt,
+            List<String> defectImages,
+            OperatingStatus operatingStatus,
+            Instant expireAt,
+            Instant boostedUntil,
+            String donorName,
+            Integer donorTrustStars,
+            String donorRank,
+            Double donorAsDescribedRate,
+            Boolean donorLocked,
+            Boolean hidden,
+            String hiddenReason,
+            Instant completedAt,
+            Boolean requestable) {
+        this(
+                id,
+                donorId,
+                categoryId,
+                areaId,
+                offerType,
+                title,
+                description,
+                desiredItem,
+                condition,
+                defectNote,
+                brand,
+                images,
+                status,
+                createdAt,
+                updatedAt,
+                defectImages,
+                operatingStatus,
+                expireAt,
+                boostedUntil,
+                donorName,
+                donorTrustStars,
+                donorRank,
+                donorAsDescribedRate,
+                donorLocked,
+                hidden,
+                hiddenReason,
+                completedAt,
+                requestable,
+                null,
+                null,
+                null);
+    }
 
     /** Constructor 26 tham số trước khi có completedAt, requestable; hai trường mới để null. */
     public ItemResponse(
@@ -139,7 +208,10 @@ public record ItemResponse(
                 hidden,
                 hiddenReason,
                 tradeCompletedAt,
-                isRequestable);
+                isRequestable,
+                boostStartedAt,
+                boostChainEndsAt,
+                boostCooldownUntil);
     }
 
     /** Gắn trạng thái tạm ẩn cho chủ bài hoặc Admin (U04). */
@@ -172,7 +244,10 @@ public record ItemResponse(
                 isHidden,
                 isHidden ? reason : null,
                 completedAt,
-                requestable);
+                requestable,
+                boostStartedAt,
+                boostChainEndsAt,
+                boostCooldownUntil);
     }
 
     public ItemResponse withDonor(
@@ -205,7 +280,49 @@ public record ItemResponse(
                 hidden,
                 hiddenReason,
                 completedAt,
-                requestable);
+                requestable,
+                boostStartedAt,
+                boostChainEndsAt,
+                boostCooldownUntil);
+    }
+
+    /**
+     * Bỏ ba mốc đợt đẩy (boostStartedAt, boostChainEndsAt, boostCooldownUntil) khi người xem không phải chủ bài: đây là
+     * thông tin mua gói của chủ bài, chỉ "Bài của tôi" và chi tiết bài của chính mình mới trả. boostedUntil giữ nguyên.
+     */
+    public ItemResponse withoutBoostTimeline() {
+        return new ItemResponse(
+                id,
+                donorId,
+                categoryId,
+                areaId,
+                offerType,
+                title,
+                description,
+                desiredItem,
+                condition,
+                defectNote,
+                brand,
+                images,
+                status,
+                createdAt,
+                updatedAt,
+                defectImages,
+                operatingStatus,
+                expireAt,
+                boostedUntil,
+                donorName,
+                donorTrustStars,
+                donorRank,
+                donorAsDescribedRate,
+                donorLocked,
+                hidden,
+                hiddenReason,
+                completedAt,
+                requestable,
+                null,
+                null,
+                null);
     }
 
     public ItemResponse withDonor(String name, Integer trustStars, String rank, Double asDescribedRate) {

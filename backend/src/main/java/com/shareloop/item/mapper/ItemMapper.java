@@ -18,7 +18,7 @@ public final class ItemMapper {
         return toResponse(item, images, List.of(), null, null);
     }
 
-    /** displayWindow null (bài chưa có dữ liệu hạn) thì expireAt và boostedUntil đều null. */
+    /** displayWindow null (bài chưa có dữ liệu hạn) thì expireAt, boostedUntil và ba mốc đợt đẩy đều null. */
     public static ItemResponse toResponse(
             Item item,
             List<String> images,
@@ -54,6 +54,11 @@ public final class ItemMapper {
                 null,
                 null,
                 null,
-                null);
+                null,
+                null,
+                null,
+                displayWindow != null ? displayWindow.boostStartedAt() : null,
+                displayWindow != null ? displayWindow.boostChainEndsAt() : null,
+                displayWindow != null ? displayWindow.boostCooldownUntil() : null);
     }
 }
