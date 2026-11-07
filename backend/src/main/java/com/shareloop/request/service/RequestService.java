@@ -32,6 +32,7 @@ import com.shareloop.request.entity.RequestMediaMapping;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.event.HandoverIssueReportedEvent;
 import com.shareloop.request.event.NotAsDescribedReportedEvent;
+import com.shareloop.request.event.RequestNegotiationEndedEvent;
 import com.shareloop.request.mapper.RequestMapper;
 import com.shareloop.request.repository.RequestMediaRepository;
 import com.shareloop.request.repository.RequestRepository;
@@ -601,6 +602,15 @@ public class RequestService {
         request.convertType("SWAP");
     }
 
+    // Báo cho module chat tự huỷ đề nghị đổi món còn PENDING khi giao dịch đã chốt lịch hoặc bị huỷ. Gọi cả khi giao
+    // dịch đã qua giai đoạn thương lượng từ trước cũng không sao: lúc đó không còn đề nghị PENDING nào để huỷ.
+    // eventPublisher null hoặc id null chỉ gặp ở unit test dựng service rút gọn hoặc entity chưa lưu.
+    private void publishNegotiationEnded(Request request) {
+        if (eventPublisher != null && request.getId() != null) {
+            eventPublisher.publishEvent(new RequestNegotiationEndedEvent(request.getId()));
+        }
+    }
+
     // Món đem đổi đã được giữ cho giao dịch này nên các yêu cầu PENDING khác dùng cùng món phải huỷ (FR-66, BR-S03).
     private void cancelOtherPendingUsingOfferedItem(Request request) {
         if (request.getOfferedItemId() == null) {
@@ -658,6 +668,7 @@ public class RequestService {
         String prefix = isDonor ? Request.CANCEL_BY_DONOR : Request.CANCEL_BY_RECEIVER;
         request.cancel(prefix + reason);
         Request saved = requestRepository.save(request);
+        publishNegotiationEnded(saved);
 
         releaseReservedItems(saved);
 
@@ -817,12 +828,13 @@ public class RequestService {
         request.cancel(Request.CANCEL_BY_SYSTEM + LOCKED_ACCOUNT_REASON);
         requestRepository.save(request);
 
-        // Yêu cầu PENDING chưa giữ chỗ món nào nên không có gì để nhả
+        // Yêu cầu PENDING chưa giữ chỗ món nào và chưa mở chat nên không có gì để nhả hay huỷ đề nghị
         if (!wasPending) {
             itemService.releaseIfReserved(request.getItemId());
             if (request.getOfferedItemId() != null) {
                 itemService.releaseIfReserved(request.getOfferedItemId());
             }
+            publishNegotiationEnded(request);
         }
 
         long donorId =
@@ -862,6 +874,7 @@ public class RequestService {
         request.cancel(Request.CANCEL_BY_ADMIN + reason);
         Request saved = requestRepository.save(request);
         releaseReservedItems(saved);
+        publishNegotiationEnded(saved);
 
         notifyBothParties(saved, "TRANSACTION_CANCELLED", "Admin đã huỷ giao dịch. Lý do: " + reason);
         if (activityLogService != null) {
@@ -1013,6 +1026,7 @@ public class RequestService {
 
         // Nếu cả hai đã xác nhận và sang LOGISTICS_CONFIRMED, thông báo cho bên còn lại
         if (saved.getStatus() == RequestStatus.LOGISTICS_CONFIRMED) {
+            publishNegotiationEnded(saved);
             long otherUserId = isDonor ? request.getReceiverId() : item.donorId();
             notificationService.notify(
                     otherUserId,

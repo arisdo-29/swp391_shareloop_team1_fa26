@@ -293,7 +293,7 @@ public class ChatService {
             rejectIfContentViolates(context, currentUserId, content);
         }
 
-        declinePendingOfferChanges(requestId);
+        declinePendingOffers(requestId);
         Message saved =
                 messageRepository.save(Message.offerChange(requestId, currentUserId, request.offeredItemId(), content));
 
@@ -358,14 +358,30 @@ public class ChatService {
         return MessageMapper.toResponse(saved, findItemCardSafely(saved.getRefItemId()));
     }
 
-    // Mỗi giao dịch chỉ giữ tối đa một đề nghị đổi món PENDING; đề nghị cũ chuyển DECLINED khi có đề nghị mới.
-    private void declinePendingOfferChanges(long requestId) {
+    /**
+     * Tự huỷ mọi đề nghị đổi món còn PENDING khi giao dịch rời giai đoạn thương lượng (đã chốt lịch hoặc bị huỷ). Có đề
+     * nghị bị huỷ thì thêm một tin hệ thống ngắn; không gửi thông báo vì hai bên đã nhận thông báo chốt lịch hoặc huỷ.
+     */
+    @Transactional
+    public void declinePendingOfferChanges(long requestId) {
+        int declinedCount = declinePendingOffers(requestId);
+        if (declinedCount > 0) {
+            messageRepository.save(Message.system(
+                    requestId,
+                    "Đề nghị đổi món chưa được trả lời đã tự huỷ vì giao dịch đã chốt lịch hoặc đã bị huỷ."));
+        }
+    }
+
+    // Chuyển mọi đề nghị đổi món PENDING của giao dịch sang DECLINED, trả về số đề nghị đã huỷ. Dùng khi có đề nghị mới
+    // (mỗi giao dịch chỉ giữ tối đa một đề nghị PENDING) và khi giao dịch rời giai đoạn thương lượng.
+    private int declinePendingOffers(long requestId) {
         List<Message> pendingOffers = messageRepository.findByRequestIdAndKindAndOfferStatus(
                 requestId, MessageKind.OFFER_CHANGE, Message.OFFER_PENDING);
         for (Message pendingOffer : pendingOffers) {
             pendingOffer.decline();
             messageRepository.save(pendingOffer);
         }
+        return pendingOffers.size();
     }
 
     // Khoá dòng tin đề nghị để hai lần bấm Đồng ý/Từ chối cùng lúc không cùng xử lý một đề nghị (tránh trừ phí hai

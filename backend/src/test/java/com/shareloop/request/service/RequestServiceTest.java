@@ -27,6 +27,7 @@ import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.RequestErrorCode;
+import com.shareloop.request.dto.CancelTransactionRequest;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.HandoverConfirmRequest;
@@ -36,6 +37,7 @@ import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.event.NotAsDescribedReportedEvent;
+import com.shareloop.request.event.RequestNegotiationEndedEvent;
 import com.shareloop.request.repository.RequestMediaRepository;
 import com.shareloop.request.repository.RequestRepository;
 import com.shareloop.setting.ConfigKey;
@@ -1084,6 +1086,48 @@ class RequestServiceTest {
         assertThat(response.donorScheduleOkAt()).isNotNull();
         assertThat(response.contactRevealedAt()).isNotNull();
         verify(notificationService).notify(eq(20L), eq("LOGISTICS_CONFIRMED"), any(), any(), eq("/requests/101"));
+    }
+
+    @Test
+    @DisplayName("confirmLogistics: Sang LOGISTICS_CONFIRMED thì phát RequestNegotiationEndedEvent để chat huỷ đề nghị")
+    void confirmLogistics_whenBothConfirm_publishesNegotiationEndedEvent() {
+        // given: chủ bài đã đề xuất lịch, người nhận xác nhận nốt
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
+        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, true, false, Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(null));
+
+        // then
+        verify(eventPublisher).publishEvent(new RequestNegotiationEndedEvent(101L));
+    }
+
+    @Test
+    @DisplayName("cancelTransaction: Huỷ giao dịch đã chọn người thì phát RequestNegotiationEndedEvent")
+    void cancelTransaction_whenReserved_publishesNegotiationEndedEvent() {
+        // given
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "RESERVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        requestService.cancelTransaction(101L, 20L, new CancelTransactionRequest("Bận đột xuất"));
+
+        // then
+        verify(eventPublisher).publishEvent(new RequestNegotiationEndedEvent(101L));
     }
 
     @Test

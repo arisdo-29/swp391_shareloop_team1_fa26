@@ -839,6 +839,40 @@ class ChatServiceTest {
         }
 
         @Test
+        @DisplayName(
+                "Giao dịch rời giai đoạn thương lượng: đề nghị PENDING thành DECLINED, có tin SYSTEM, không thông báo")
+        void declinePendingOfferChanges_whenPendingOfferExists_declinesAndAddsSystemMessage() {
+            // given
+            Message pendingOffer = Message.offerChange(REQUEST_ID, RECEIVER_ID, OFFERED_ITEM_ID, null);
+            when(messageRepository.findByRequestIdAndKindAndOfferStatus(
+                            REQUEST_ID, MessageKind.OFFER_CHANGE, Message.OFFER_PENDING))
+                    .thenReturn(List.of(pendingOffer));
+
+            // when
+            chatService.declinePendingOfferChanges(REQUEST_ID);
+
+            // then
+            assertThat(pendingOffer.getOfferStatus()).isEqualTo(Message.OFFER_DECLINED);
+            verify(messageRepository).save(argThat(m -> m.getKind() == MessageKind.SYSTEM));
+            org.mockito.Mockito.verifyNoInteractions(notificationService);
+        }
+
+        @Test
+        @DisplayName("Giao dịch rời giai đoạn thương lượng mà không có đề nghị PENDING thì không thêm tin nào")
+        void declinePendingOfferChanges_whenNoPendingOffer_savesNothing() {
+            // given
+            when(messageRepository.findByRequestIdAndKindAndOfferStatus(
+                            REQUEST_ID, MessageKind.OFFER_CHANGE, Message.OFFER_PENDING))
+                    .thenReturn(List.of());
+
+            // when
+            chatService.declinePendingOfferChanges(REQUEST_ID);
+
+            // then
+            verify(messageRepository, never()).save(any(Message.class));
+        }
+
+        @Test
         @DisplayName("Chủ bài từ chối: đề nghị DECLINED, có tin SYSTEM, báo người nhận và không chuyển giao dịch")
         void declineOfferChange_byDonor_declinesAndNotifiesReceiver() {
             // given

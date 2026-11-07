@@ -8,6 +8,7 @@ import com.shareloop.report.service.ReportService;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
+import com.shareloop.request.event.RequestNegotiationEndedEvent;
 import com.shareloop.request.repository.RequestRepository;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
@@ -17,6 +18,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -48,6 +50,31 @@ public class RequestJobService {
     private final JdbcClient jdbcClient;
     private final TransactionTemplate transactionTemplate;
     private final ReportService reportService;
+    private final ApplicationEventPublisher eventPublisher;
+
+    // Dạng 9 tham số (chưa có ApplicationEventPublisher) để test đang gọi vẫn compile.
+    public RequestJobService(
+            RequestRepository requestRepository,
+            ItemService itemService,
+            NotificationService notificationService,
+            ConfigService configService,
+            ReputationService reputationService,
+            ItemQueryService itemQueryService,
+            JdbcClient jdbcClient,
+            TransactionTemplate transactionTemplate,
+            ReportService reportService) {
+        this(
+                requestRepository,
+                itemService,
+                notificationService,
+                configService,
+                reputationService,
+                itemQueryService,
+                jdbcClient,
+                transactionTemplate,
+                reportService,
+                null);
+    }
 
     @Autowired
     public RequestJobService(
@@ -59,7 +86,8 @@ public class RequestJobService {
             @Autowired(required = false) ItemQueryService itemQueryService,
             @Autowired(required = false) JdbcClient jdbcClient,
             TransactionTemplate transactionTemplate,
-            @Autowired(required = false) ReportService reportService) {
+            @Autowired(required = false) ReportService reportService,
+            @Autowired(required = false) ApplicationEventPublisher eventPublisher) {
         this.requestRepository = requestRepository;
         this.itemService = itemService;
         this.notificationService = notificationService;
@@ -69,6 +97,7 @@ public class RequestJobService {
         this.jdbcClient = jdbcClient;
         this.transactionTemplate = transactionTemplate;
         this.reportService = reportService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -192,6 +221,11 @@ public class RequestJobService {
 
         request.cancel(Request.CANCEL_BY_SYSTEM + "Huỷ tự động do quá hạn 10 ngày không chốt lịch");
         requestRepository.save(request);
+
+        // Module chat tự huỷ đề nghị đổi món còn PENDING, chạy trong cùng transaction của lần huỷ này.
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new RequestNegotiationEndedEvent(request.getId()));
+        }
 
         // Nhả giữ chỗ bài đăng về APPROVED (BR-T10)
         itemService.release(request.getItemId());
