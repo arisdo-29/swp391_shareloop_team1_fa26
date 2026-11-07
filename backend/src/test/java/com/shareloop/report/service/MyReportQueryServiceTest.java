@@ -1,14 +1,18 @@
 package com.shareloop.report.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemQueryService;
+import com.shareloop.report.ReportErrorCode;
+import com.shareloop.report.dto.AdminReportDetail.Evidence;
 import com.shareloop.report.dto.MyReportSummary;
 import com.shareloop.report.dto.ReportDecision;
+import com.shareloop.report.dto.RespondentReportDetail;
 import com.shareloop.report.entity.Report;
 import com.shareloop.report.entity.ReportReason;
 import com.shareloop.report.entity.ReportStage;
@@ -27,6 +31,7 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -39,8 +44,14 @@ class MyReportQueryServiceTest {
     private final UserService userService = mock(UserService.class);
     private final ItemQueryService itemQueryService = mock(ItemQueryService.class);
     private final RequestService requestService = mock(RequestService.class);
+    private final ReportEvidenceService reportEvidenceService = mock(ReportEvidenceService.class);
     private final MyReportQueryService service = new MyReportQueryService(
-            reportRepository, userService, itemQueryService, requestService, Clock.fixed(NOW, ZoneOffset.UTC));
+            reportRepository,
+            userService,
+            itemQueryService,
+            requestService,
+            reportEvidenceService,
+            Clock.fixed(NOW, ZoneOffset.UTC));
 
     @BeforeEach
     void setUp() {
@@ -132,5 +143,49 @@ class MyReportQueryServiceTest {
 
         // then
         assertThat(result.get(0).responseWindowOpen()).isFalse();
+    }
+
+    @Test
+    void detailForRespondent_respondentWithDeadline_returnsDescriptionAndEvidence() {
+        // given
+        Report report = report(6L, TargetType.ITEM, 5L, ME, null);
+        report.setEvidence("[12]");
+        report.awaitResponse(NOW.plusSeconds(3600));
+        when(reportRepository.findById(6L)).thenReturn(Optional.of(report));
+        List<Evidence> evidence = List.of(new Evidence(12L, "/api/v1/reports/6/evidence/12", true));
+        when(reportEvidenceService.describeForRespondent(6L, "[12]")).thenReturn(evidence);
+
+        // when
+        RespondentReportDetail result = service.detailForRespondent(ME, 6L);
+
+        // then
+        assertThat(result.description()).isEqualTo("Mô tả riêng");
+        assertThat(result.evidence()).isEqualTo(evidence);
+        assertThat(result.responseDueAt()).isEqualTo(NOW.plusSeconds(3600));
+        assertThat(result.responseWindowOpen()).isTrue();
+        assertThat(result.targetName()).isEqualTo("Giáo trình Toán rời rạc");
+    }
+
+    @Test
+    void detailForRespondent_notRespondent_throwsReportNotFound() {
+        // given
+        Report report = report(7L, TargetType.USER, null, 20L, null);
+        report.awaitResponse(NOW.plusSeconds(3600));
+        when(reportRepository.findById(7L)).thenReturn(Optional.of(report));
+
+        // when, then
+        assertThatThrownBy(() -> service.detailForRespondent(ME, 7L))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.REPORT_NOT_FOUND);
+    }
+
+    @Test
+    void detailForRespondent_noDeadlineYet_throwsReportNotFound() {
+        // given: Admin chưa yêu cầu giải trình nên hồ sơ chưa có hạn
+        Report report = report(8L, TargetType.ITEM, 5L, ME, null);
+        when(reportRepository.findById(8L)).thenReturn(Optional.of(report));
+
+        // when, then
+        assertThatThrownBy(() -> service.detailForRespondent(ME, 8L))
+                .hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.REPORT_NOT_FOUND);
     }
 }

@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Icon, IconButton } from './ui';
 
 export function ReportEvidenceField({
@@ -56,25 +56,62 @@ export function ReportEvidenceField({
         />
       </label>
       {files.length > 0 && (
-        <ul aria-label="Ảnh đã chọn" className="space-y-2">
+        <ul aria-label="Ảnh đã chọn" className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {files.map((file, index) => (
-            <li
+            <EvidencePreview
               key={`${file.name}-${file.size}-${file.lastModified}`}
-              className="flex min-w-0 items-center gap-2 rounded-md bg-surface-container/50 px-3 py-1"
-            >
-              <Icon name="image" className="size-4 shrink-0 text-primary" />
-              <span className="min-w-0 flex-1 break-all text-sm">{file.name}</span>
-              <IconButton
-                type="button"
-                icon="close"
-                label={`Bỏ ảnh ${file.name}`}
-                disabled={disabled}
-                onClick={() => onChange(files.filter((_, fileIndex) => fileIndex !== index))}
-              />
-            </li>
+              file={file}
+              disabled={disabled}
+              onRemove={() => onChange(files.filter((_, fileIndex) => fileIndex !== index))}
+            />
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+/** Ảnh thu nhỏ của file vừa chọn để người dùng kiểm tra và bỏ ảnh chọn nhầm trước khi gửi. */
+function EvidencePreview({
+  file,
+  disabled,
+  onRemove,
+}: {
+  file: File;
+  disabled: boolean;
+  onRemove: () => void;
+}) {
+  const [previewUrl, setPreviewUrl] = useState('');
+
+  useEffect(() => {
+    // Môi trường không hỗ trợ object URL (vd. jsdom khi chạy test) thì hiện biểu tượng thay ảnh.
+    if (typeof URL.createObjectURL !== 'function') return;
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    // Thu hồi URL khi bỏ ảnh hoặc rời trang để không giữ file trong bộ nhớ.
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  return (
+    <li className="relative overflow-hidden rounded-md border border-border bg-surface-container/50">
+      {previewUrl ? (
+        <img src={previewUrl} alt={file.name} className="aspect-square w-full object-cover" />
+      ) : (
+        <div className="grid aspect-square w-full place-items-center text-primary">
+          <Icon name="image" className="size-8" />
+        </div>
+      )}
+      <p className="truncate px-2 py-1 text-xs text-text-secondary" title={file.name}>
+        {file.name}
+      </p>
+      <IconButton
+        type="button"
+        icon="close"
+        label={`Bỏ ảnh ${file.name}`}
+        disabled={disabled}
+        onClick={onRemove}
+        className="absolute right-1.5 top-1.5 size-9 shadow-sm"
+      />
+    </li>
   );
 }

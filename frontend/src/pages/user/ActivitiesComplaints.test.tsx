@@ -57,6 +57,9 @@ describe('ActivitiesComplaints', () => {
     const link = (await screen.findByRole('button', { name: 'Gửi giải trình' })).closest('a');
     expect(link?.getAttribute('href')).toBe('/me/disputes/81');
     expect(screen.getByText('Cần giải trình')).toBeTruthy();
+    const chatLink = screen.getByRole('button', { name: 'Nhắn tin' }).closest('a');
+    expect(chatLink?.getAttribute('href')).toBe('/requests/7');
+    expect(screen.queryByText(/Hồ sơ #/)).toBeNull();
   });
 
   it('hồ sơ đã quá hạn thì không còn nút giải trình', async () => {
@@ -70,6 +73,7 @@ describe('ActivitiesComplaints', () => {
     // then
     expect(await screen.findByText('Quá hạn giải trình, chờ kết luận')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Gửi giải trình' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Xem hồ sơ' })).toBeTruthy();
   });
 
   it('báo cáo đã gửi được kết luận thì hiện ghi chú của quản trị viên', async () => {

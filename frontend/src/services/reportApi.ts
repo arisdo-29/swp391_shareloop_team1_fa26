@@ -127,6 +127,27 @@ export interface MyReportSummary {
   resolvedAt: string | null;
 }
 
+/** Chi tiết hồ sơ cho bên bị phản ánh. Không có người gửi; url ảnh trỏ tới API của Member. */
+export interface RespondentReportDetail {
+  id: number;
+  targetType: ReportTargetType;
+  itemId: number | null;
+  requestId: number | null;
+  reason: ReportReason;
+  description: string;
+  targetName: string | null;
+  status: ReportStatus;
+  createdAt: string;
+  responseDueAt: string;
+  responseWindowOpen: boolean;
+  evidence: ReportEvidence[];
+  response: string | null;
+  respondedAt: string | null;
+  responseEvidence: ReportEvidence[];
+  resolution: string | null;
+  resolvedAt: string | null;
+}
+
 export function openDispute(requestId: number, body: CreateDisputeRequest): Promise<DisputeResponse> {
   return http.post<DisputeResponse>(`/api/v1/requests/${requestId}/disputes`, body).then(res => res.data);
 }
@@ -179,6 +200,21 @@ export const reportApi = {
   /** Báo cáo và khiếu nại tôi đã gửi, mới nhất lên trước. */
   async listMine(signal?: AbortSignal) {
     const { data } = await http.get<MyReportSummary[]>('/api/v1/reports/mine', { signal });
+    return data;
+  },
+  /** Chi tiết hồ sơ cho bên bị phản ánh trên trang giải trình (docs/api/report.md mục 8). */
+  async respondentView(reportId: number, signal?: AbortSignal) {
+    const { data } = await http.get<RespondentReportDetail>(`/api/v1/reports/${reportId}/respondent-view`, {
+      signal,
+    });
+    return data;
+  },
+  /** Ảnh của hồ sơ cần giải trình; ảnh riêng tư nên tải bằng token rồi hiện qua object URL. */
+  async respondentEvidence(reportId: number, mediaId: number, signal?: AbortSignal) {
+    const { data } = await http.get<Blob>(`/api/v1/reports/${reportId}/evidence/${mediaId}`, {
+      responseType: 'blob',
+      signal,
+    });
     return data;
   },
   /** Hồ sơ nhắm vào tôi đã có hạn giải trình, mới nhất lên trước. */

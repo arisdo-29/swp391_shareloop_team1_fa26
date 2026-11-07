@@ -5,14 +5,19 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.shareloop.auth.service.JwtService;
+import com.shareloop.common.exception.BusinessException;
 import com.shareloop.config.ClockConfig;
 import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
+import com.shareloop.media.service.MediaService;
+import com.shareloop.report.ReportErrorCode;
 import com.shareloop.report.dto.CreateReportRequest;
 import com.shareloop.report.dto.MyReportSummary;
 import com.shareloop.report.dto.ReportResponse;
@@ -21,6 +26,7 @@ import com.shareloop.report.entity.ReportStage;
 import com.shareloop.report.entity.ReportStatus;
 import com.shareloop.report.entity.TargetType;
 import com.shareloop.report.service.MyReportQueryService;
+import com.shareloop.report.service.ReportEvidenceService;
 import com.shareloop.report.service.ReportService;
 import java.time.Instant;
 import java.util.List;
@@ -53,6 +59,9 @@ class ReportControllerTest {
 
     @MockitoBean
     MyReportQueryService myReportQueryService;
+
+    @MockitoBean
+    ReportEvidenceService reportEvidenceService;
 
     @Test
     @DisplayName("Gửi báo cáo khi chưa đăng nhập trả về 401 Unauthorized")
@@ -153,5 +162,36 @@ class ReportControllerTest {
                 .andExpect(jsonPath("$[0].requestId").value(7))
                 .andExpect(jsonPath("$[0].responseWindowOpen").value(true))
                 .andExpect(jsonPath("$[0].reporterId").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("Xem chi tiết hồ sơ không phải của mình trả về 404 REPORT_NOT_FOUND")
+    void respondentView_notRespondent_returns404() throws Exception {
+        // given
+        String token = jwtService.issue(USER_ID, false);
+        when(myReportQueryService.detailForRespondent(USER_ID, 7L))
+                .thenThrow(new BusinessException(ReportErrorCode.REPORT_NOT_FOUND));
+
+        // when, then
+        mockMvc.perform(get(URL + "/7/respondent-view").header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("REPORT_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("Bên bị phản ánh xem ảnh của hồ sơ nhận nội dung ảnh và không cho lưu bộ nhớ đệm")
+    void respondentEvidence_respondent_returnsImageWithNoStore() throws Exception {
+        // given
+        String token = jwtService.issue(USER_ID, false);
+        byte[] bytes = {1, 2, 3};
+        when(reportEvidenceService.readForRespondent(USER_ID, 7L, 12L))
+                .thenReturn(new MediaService.MediaContent(bytes, "image/jpeg"));
+
+        // when, then
+        mockMvc.perform(get(URL + "/7/evidence/12").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "image/jpeg"))
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(content().bytes(bytes));
     }
 }

@@ -473,6 +473,37 @@ FE (`/activities?tab=complaints`): nút giải trình dẫn tới `/me/disputes/
 ]
 ```
 
+## 8. GET /api/v1/reports/{reportId}/respondent-view
+
+Bên bị phản ánh xem chi tiết hồ sơ trên trang giải trình (`/me/reports/{id}`, `/me/disputes/{id}`).
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT).
+- **Quyền:** người gọi là `target_user_id` của hồ sơ **và** hồ sơ đã có `responseDueAt`. Sai một trong hai thì trả `404 REPORT_NOT_FOUND` (không phân biệt, để người ngoài không dò được hồ sơ).
+- **Thành công:** `200 OK`, `RespondentReportDetail`.
+- **Lỗi:** `401`; `404 REPORT_NOT_FOUND`.
+
+## 9. GET /api/v1/reports/{reportId}/evidence/{mediaId}
+
+Bên bị phản ánh xem một ảnh của hồ sơ (ảnh của bên báo cáo hoặc ảnh giải trình của mình).
+
+- **Quyền:** như mục 8. Ảnh không thuộc hồ sơ trả `404 MEDIA_NOT_FOUND`.
+- **Thành công:** `200 OK`, nội dung ảnh, `Cache-Control: no-store`.
+
+### RespondentReportDetail
+
+Không có id hay tên người gửi báo cáo. `evidence[].url` và `responseEvidence[].url` trỏ tới mục 9 (`null` khi ảnh không còn).
+
+| Trường | Kiểu | Ý nghĩa |
+|---|---|---|
+| `id`, `targetType`, `itemId`, `requestId`, `reason`, `status`, `targetName`, `createdAt` | | Như `MyReportSummary` |
+| `description` | string | Nội dung bên báo cáo viết |
+| `responseDueAt` | string | Hạn giải trình |
+| `responseWindowOpen` | boolean | Còn nhận giải trình |
+| `evidence` | `Evidence[]` | Ảnh của bên báo cáo (`id`, `url`, `available`) |
+| `response`, `respondedAt` | string? | Giải trình tôi đã gửi |
+| `responseEvidence` | `Evidence[]` | Ảnh tôi gửi kèm giải trình |
+| `resolution`, `resolvedAt` | string? | Kết luận của Admin |
+
 ### MyReportSummary
 
 Không có `reporterId` và `description` để bên bị phản ánh không biết ai đã báo cáo.

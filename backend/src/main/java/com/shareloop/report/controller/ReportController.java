@@ -5,7 +5,9 @@ import com.shareloop.report.dto.CreateReportRequest;
 import com.shareloop.report.dto.MyReportSummary;
 import com.shareloop.report.dto.ReportResponse;
 import com.shareloop.report.dto.RespondReportRequest;
+import com.shareloop.report.dto.RespondentReportDetail;
 import com.shareloop.report.service.MyReportQueryService;
+import com.shareloop.report.service.ReportEvidenceService;
 import com.shareloop.report.service.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -14,7 +16,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import java.util.List;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,10 +40,15 @@ public class ReportController {
 
     private final ReportService reportService;
     private final MyReportQueryService myReportQueryService;
+    private final ReportEvidenceService reportEvidenceService;
 
-    public ReportController(ReportService reportService, MyReportQueryService myReportQueryService) {
+    public ReportController(
+            ReportService reportService,
+            MyReportQueryService myReportQueryService,
+            ReportEvidenceService reportEvidenceService) {
         this.reportService = reportService;
         this.myReportQueryService = myReportQueryService;
+        this.reportEvidenceService = reportEvidenceService;
     }
 
     @Operation(
@@ -62,6 +72,38 @@ public class ReportController {
     @GetMapping("/against-me")
     public List<MyReportSummary> listAgainstMe(@Parameter(hidden = true) @CurrentUserId Long currentUserId) {
         return myReportQueryService.listAgainstMe(currentUserId);
+    }
+
+    @Operation(
+            summary = "Xem chi tiết hồ sơ để giải trình",
+            description = "Yêu cầu đăng nhập và là bên bị phản ánh của hồ sơ đã có hạn giải trình. Trả lý do, mô tả, "
+                    + "ảnh của bên báo cáo, hạn giải trình và giải trình đã gửi; không kèm người gửi.")
+    @ApiResponse(responseCode = "200", description = "Chi tiết hồ sơ")
+    @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Không có hồ sơ, không phải bên bị phản ánh hoặc hồ sơ chưa có hạn giải trình")
+    @GetMapping("/{reportId}/respondent-view")
+    public RespondentReportDetail respondentView(
+            @Parameter(hidden = true) @CurrentUserId Long currentUserId, @PathVariable @Min(1) long reportId) {
+        return myReportQueryService.detailForRespondent(currentUserId, reportId);
+    }
+
+    @Operation(
+            summary = "Xem ảnh của hồ sơ cần giải trình",
+            description = "Cùng quyền với respondent-view. Ảnh phải thuộc hồ sơ; trả nội dung ảnh riêng tư và không "
+                    + "cho lưu bộ nhớ đệm.")
+    @GetMapping("/{reportId}/evidence/{mediaId}")
+    public ResponseEntity<byte[]> respondentEvidence(
+            @Parameter(hidden = true) @CurrentUserId Long currentUserId,
+            @PathVariable @Min(1) long reportId,
+            @PathVariable @Min(1) long mediaId) {
+        var content = reportEvidenceService.readForRespondent(currentUserId, reportId, mediaId);
+        // no-store: ảnh bằng chứng riêng tư, không để trình duyệt hay proxy giữ lại bản sao.
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .contentType(MediaType.parseMediaType(content.mimeType()))
+                .body(content.bytes());
     }
 
     /**
