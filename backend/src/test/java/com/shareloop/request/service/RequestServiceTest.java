@@ -767,6 +767,46 @@ class RequestServiceTest {
     }
 
     @Test
+    @DisplayName("getDetail: Bài đang GIVE thì itemOfferType = GIVE và conversionFee = POST_FEE (CD-02)")
+    void getDetail_whenItemIsGive_returnsPostFeeAsConversionFee() {
+        // given: yêu cầu kèm món gửi tới bài GIVE (gửi chéo loại, CD-01), POST_FEE = 5 ở setUp
+        Request request = new Request(1L, 10L, 2L, "GIVE");
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(itemQueryService.getItemCard(1L))
+                .thenReturn(new ItemCardDto(1L, "Xe đạp mini", OfferType.GIVE, ItemStatus.APPROVED, null, 20L));
+
+        // when
+        RequestResponse response = requestService.getDetail(101L, 10L);
+
+        // then
+        assertThat(response.itemOfferType()).isEqualTo("GIVE");
+        assertThat(response.conversionFee()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("getDetail: Bài đang SWAP thì itemOfferType = SWAP và conversionFee = 0")
+    void getDetail_whenItemIsSwap_returnsZeroConversionFee() {
+        // given: yêu cầu không kèm món gửi tới bài SWAP (xin cho không, CD-01)
+        Request request = new Request(1L, 10L, null, "SWAP");
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(itemQueryService.getItemCard(1L))
+                .thenReturn(new ItemCardDto(1L, "Xe đạp mini", OfferType.SWAP, ItemStatus.APPROVED, null, 20L));
+
+        // when
+        RequestResponse response = requestService.getDetail(101L, 10L);
+
+        // then
+        assertThat(response.itemOfferType()).isEqualTo("SWAP");
+        assertThat(response.conversionFee()).isZero();
+    }
+
+    @Test
     @DisplayName("getDetail: Không tra được thẻ bài đăng thì các trường tên để null, API vẫn trả bình thường")
     void getDetail_whenItemCardMissing_leavesNamesNull() {
         // given
@@ -784,6 +824,8 @@ class RequestServiceTest {
         assertThat(response.itemTitle()).isNull();
         assertThat(response.donorName()).isNull();
         assertThat(response.offeredItemTitle()).isNull();
+        assertThat(response.itemOfferType()).isNull();
+        assertThat(response.conversionFee()).isNull();
         assertThat(response.itemId()).isEqualTo(1L);
     }
 

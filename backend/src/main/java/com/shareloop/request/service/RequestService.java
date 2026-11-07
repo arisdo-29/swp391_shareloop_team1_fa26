@@ -1283,7 +1283,8 @@ public class RequestService {
         return addExtraInfo(response, null);
     }
 
-    // Gắn ảnh đại diện hai bên và cờ hết hạn khiếu nại; handoverMedia chỉ truyền ở chi tiết, danh sách để null.
+    // Gắn ảnh đại diện hai bên, cờ hết hạn khiếu nại và phí chuyển sang Trao đổi; handoverMedia chỉ truyền ở chi tiết,
+    // danh sách để null.
     private RequestResponse addExtraInfo(RequestResponse response, List<RequestMediaResponse> handoverMedia) {
         if (response == null) {
             return null;
@@ -1291,7 +1292,20 @@ public class RequestService {
         String donorAvatarUrl = findAvatarUrl(response.donorId());
         String receiverAvatarUrl = findAvatarUrl(response.receiverId());
         boolean disputeExpired = isComplaintWindowClosed(response.complaintDeadline());
-        return response.withExtraInfo(donorAvatarUrl, receiverAvatarUrl, disputeExpired, handoverMedia);
+        Integer conversionFee = conversionFeeOf(response.itemOfferType());
+        return response.withExtraInfo(donorAvatarUrl, receiverAvatarUrl, disputeExpired, handoverMedia, conversionFee);
+    }
+
+    // Phí chủ bài trả nếu giao dịch chuyển sang Trao đổi (CD-02): bài đang GIVE thì trả POST_FEE như khi đăng bài
+    // Trao đổi, bài đã là SWAP thì không trả thêm. Không tra được loại bài thì trả null để frontend không hiện sai số.
+    private Integer conversionFeeOf(String itemOfferType) {
+        if (OfferType.GIVE.name().equals(itemOfferType)) {
+            return configService.getInt(ConfigKey.POST_FEE);
+        }
+        if (OfferType.SWAP.name().equals(itemOfferType)) {
+            return 0;
+        }
+        return null;
     }
 
     // Hết hạn khiếu nại khi đã có hạn (giao dịch đã hoàn tất) và hiện tại không còn trước hạn đó (U08).
@@ -1331,10 +1345,16 @@ public class RequestService {
         ItemCardDto card = findItemCard(request.getItemId(), itemCards);
         String offeredItemTitle = findItemTitle(request.getOfferedItemId());
         if (card == null) {
-            return new RequestItemInfo(null, null, null, null, offeredItemTitle);
+            return new RequestItemInfo(null, null, null, null, offeredItemTitle, null);
         }
+        String itemOfferType = card.offerType() != null ? card.offerType().name() : null;
         return new RequestItemInfo(
-                card.title(), card.imageUrl(), card.donorId(), findUserName(card.donorId()), offeredItemTitle);
+                card.title(),
+                card.imageUrl(),
+                card.donorId(),
+                findUserName(card.donorId()),
+                offeredItemTitle,
+                itemOfferType);
     }
 
     // Bài đã xoá hoặc service chưa sẵn sàng thì trả null để API vẫn trả được phần còn lại.
