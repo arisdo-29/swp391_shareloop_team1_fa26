@@ -35,3 +35,30 @@ Authorization: Bearer {{token}}
 ### 6. Chủ bài chọn người nhận (các yêu cầu khác tự Reject, giữ chỗ bài đăng)
 POST {{host}}/api/v1/requests/1/select
 Authorization: Bearer {{token}}
+
+### 7. Gửi chéo loại: xin bài GIVE có kèm món đổi (CD-01). Phản hồi có itemOfferType và conversionFee
+POST {{host}}/api/v1/items/1/requests
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "offeredItemId": 3
+}
+
+### 8. Người nhận đề nghị đưa món vào đổi trong chat (giao dịch GIVE đang RESERVED / AWAITING_LOGISTICS)
+POST {{host}}/api/v1/requests/1/offer-changes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "offeredItemId": 3,
+  "content": "Mình gửi thêm món này để đổi nhé"
+}
+
+### 9. Chủ bài đồng ý đề nghị (messageId = id tin OFFER_CHANGE); trừ post_fee, giao dịch thành SWAP
+POST {{host}}/api/v1/requests/1/offer-changes/10/accept
+Authorization: Bearer {{token}}
+
+### 10. Chủ bài từ chối đề nghị (không tốn phí)
+POST {{host}}/api/v1/requests/1/offer-changes/10/decline
+Authorization: Bearer {{token}}

@@ -32,6 +32,7 @@ import com.shareloop.request.entity.RequestMediaMapping;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.event.HandoverIssueReportedEvent;
 import com.shareloop.request.event.NotAsDescribedReportedEvent;
+import com.shareloop.request.event.RequestNegotiationEndedEvent;
 import com.shareloop.request.mapper.RequestMapper;
 import com.shareloop.request.repository.RequestMediaRepository;
 import com.shareloop.request.repository.RequestRepository;
@@ -266,18 +267,7 @@ public class RequestService {
         // CD-01: Cho phép gửi kèm món đổi khi xin bài Cho (đề nghị trao đổi),
         // và cho phép không kèm món đổi khi xin bài Trao đổi (xin cho không).
         if (offeredItemId != null) {
-            if (offeredItemId.equals(itemId)) {
-                throw new BusinessException(RequestErrorCode.REQUEST_SELF_OFFER_NOT_ALLOWED);
-            }
-            ItemSnapshot offeredItem = findItemSnapshot(offeredItemId)
-                    .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
-
-            // Món đề nghị phải là của chính người gửi, đang APPROVED và đang hoạt động (BR-S01, BR-S03, CD-01)
-            if (offeredItem.donorId() != receiverId
-                    || !"APPROVED".equals(offeredItem.status())
-                    || !offeredItem.isActive()) {
-                throw new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
-            }
+            requireValidOfferedItem(offeredItemId, receiverId, itemId);
         }
 
         // 4. Lưu Request mới ở trạng thái PENDING
@@ -466,13 +456,7 @@ public class RequestService {
         boolean isSwapToGive = "SWAP".equals(item.offerType()) && selectedRequest.getOfferedItemId() == null;
 
         if (isGiveToSwap) {
-            // CD-02, CD-06: Trừ phí đăng bài (POST_FEE) từ chủ bài. Ném WALLET_INSUFFICIENT_BALANCE nếu không đủ.
-            if (creditService != null) {
-                int postFee = configService.getInt(ConfigKey.POST_FEE);
-                creditService.spend(currentUserId, postFee, CreditTxType.POST_FEE, selectedRequest.getItemId());
-            }
-            itemService.convertOfferType(selectedRequest.getItemId(), OfferType.SWAP);
-            selectedRequest.convertType("SWAP");
+            convertGiveToSwap(selectedRequest, currentUserId);
         } else if (isSwapToGive) {
             // CD-04: Chuyển sang GIVE, không hoàn lại phí đăng bài đã nộp trước đó.
             itemService.convertOfferType(selectedRequest.getItemId(), OfferType.GIVE);
@@ -500,23 +484,7 @@ public class RequestService {
         }
 
         // 2b. Huỷ các yêu cầu PENDING khác ở bài khác đang dùng cùng món đề nghị (FR-66, BR-S03)
-        if (selectedRequest.getOfferedItemId() != null) {
-            List<Request> otherSwapRequests = requestRepository.findByOfferedItemIdAndStatus(
-                    selectedRequest.getOfferedItemId(), RequestStatus.PENDING);
-            for (Request otherSwap : otherSwapRequests) {
-                if (!otherSwap.getId().equals(selectedRequest.getId())) {
-                    otherSwap.cancel(Request.CANCEL_BY_SYSTEM
-                            + "Món đồ bạn đề nghị đã được đem trao đổi trong một giao dịch khác.");
-                    requestRepository.save(otherSwap);
-                    notificationService.notify(
-                            otherSwap.getReceiverId(),
-                            "REQUEST_CANCELLED",
-                            "Yêu cầu trao đổi bị huỷ",
-                            "Món đồ bạn đề nghị đã được chọn trong một giao dịch khác.",
-                            "/requests/" + otherSwap.getId());
-                }
-            }
-        }
+        cancelOtherPendingUsingOfferedItem(selectedRequest);
 
         // 3. Giữ chỗ bài đăng qua ItemService.reserve. Món mang đổi cũng bị giữ trong cùng transaction: nếu nó không
         // còn APPROVED thì reserve ném lỗi và cả lần chọn người nhận được hoàn tác.
@@ -534,6 +502,136 @@ public class RequestService {
                 "/requests/" + selectedRequest.getId());
 
         return toResponse(saved);
+    }
+
+    /**
+     * Chủ bài đồng ý đề nghị đưa món của người nhận vào đổi trong chat: giao dịch Cho chuyển thành Trao đổi (CD-02,
+     * CD-06). Chủ bài trả POST_FEE, bài chính chuyển SWAP, món đề nghị được giữ chỗ; mọi bước nằm trong một transaction
+     * nên lỗi ở bước nào (kể cả giữ chỗ món) cũng hoàn tác cả tiền đã trừ. Không kiểm hạn mức bài theo hạng, giống
+     * selectReceiver. Trạng thái đề nghị và tin nhắn hệ thống do module chat ghi.
+     *
+     * @throws BusinessException REQUEST_FORBIDDEN nếu không phải chủ bài, REQUEST_OFFER_CHANGE_NOT_ALLOWED nếu giao
+     *     dịch không còn là Cho hoặc đã qua giai đoạn chốt lịch, REQUEST_ITEM_NOT_AVAILABLE nếu món đề nghị không còn
+     *     hợp lệ, WALLET_INSUFFICIENT_BALANCE nếu chủ bài thiếu Credit
+     */
+    @Transactional
+    public RequestResponse acceptOfferedItemInChat(long requestId, long donorId, long offeredItemId) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+        ItemSnapshot item = findItemSnapshot(request.getItemId())
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+        if (item.donorId() != donorId) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+
+        // Kiểm lại lúc đồng ý vì từ lúc gửi đề nghị tới giờ giao dịch hoặc món đề nghị có thể đã đổi.
+        requireOfferChangeAllowed(request);
+        requireValidOfferedItem(offeredItemId, request.getReceiverId(), request.getItemId());
+
+        convertGiveToSwap(request, donorId);
+        request.attachOfferedItem(offeredItemId);
+        Request saved = requestRepository.save(request);
+
+        // Món đã giữ ở giao dịch khác thì reserve ném lỗi và cả transaction hoàn tác, kể cả phí vừa trừ.
+        itemService.reserve(offeredItemId);
+        cancelOtherPendingUsingOfferedItem(saved);
+
+        notificationService.notify(
+                saved.getReceiverId(),
+                "OFFER_CHANGE_ACCEPTED",
+                "Chủ bài đã đồng ý trao đổi",
+                "Giao dịch của bạn đã chuyển sang Trao đổi với món bạn đề nghị.",
+                "/requests/" + saved.getId());
+
+        return toResponse(saved);
+    }
+
+    /**
+     * Kiểm giao dịch và món trước khi người nhận gửi đề nghị đưa món vào đổi trong chat: giao dịch phải là Cho, đang
+     * RESERVED hoặc AWAITING_LOGISTICS, và món đề nghị hợp lệ như CD-01. Quyền người gửi do module chat kiểm.
+     *
+     * @throws BusinessException REQUEST_OFFER_CHANGE_NOT_ALLOWED, REQUEST_ITEM_NOT_FOUND, REQUEST_ITEM_NOT_AVAILABLE
+     *     hoặc REQUEST_SELF_OFFER_NOT_ALLOWED
+     */
+    @Transactional(readOnly = true)
+    public void validateOfferChangeProposal(long requestId, long offeredItemId) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+        requireOfferChangeAllowed(request);
+        requireValidOfferedItem(offeredItemId, request.getReceiverId(), request.getItemId());
+    }
+
+    // Chỉ giao dịch Cho đang ở RESERVED hoặc AWAITING_LOGISTICS mới chuyển được: sau khi chốt lịch thì hai bên đã thống
+    // nhất món giao nhận, đổi nữa sẽ lệch với lịch hẹn.
+    private void requireOfferChangeAllowed(Request request) {
+        boolean isGive = "GIVE".equals(request.getType());
+        boolean isNegotiating = request.getStatus() == RequestStatus.RESERVED
+                || request.getStatus() == RequestStatus.AWAITING_LOGISTICS;
+        if (!isGive || !isNegotiating) {
+            throw new BusinessException(RequestErrorCode.REQUEST_OFFER_CHANGE_NOT_ALLOWED);
+        }
+    }
+
+    // Món đề nghị đổi phải khác bài chính, là của chính người nhận, đang APPROVED và đang hoạt động (BR-S01, BR-S03,
+    // CD-01). Bài đã xoá mềm thì findItemSnapshot không thấy nên ném REQUEST_ITEM_NOT_FOUND.
+    // Dùng chung cho createRequest và đề nghị trong chat để hai nơi không lệch điều kiện.
+    void requireValidOfferedItem(long offeredItemId, long receiverId, long itemId) {
+        if (offeredItemId == itemId) {
+            throw new BusinessException(RequestErrorCode.REQUEST_SELF_OFFER_NOT_ALLOWED);
+        }
+        ItemSnapshot offeredItem = findItemSnapshot(offeredItemId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+        if (offeredItem.donorId() != receiverId
+                || !"APPROVED".equals(offeredItem.status())
+                || !offeredItem.isActive()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
+        }
+    }
+
+    // Cho → Trao đổi (CD-02, CD-06): chủ bài trả POST_FEE như khi đăng bài Trao đổi, rồi đổi loại bài và loại giao
+    // dịch.
+    // Trừ tiền trước để thiếu Credit thì ném WALLET_INSUFFICIENT_BALANCE khi chưa đổi gì.
+    private void convertGiveToSwap(Request request, long donorId) {
+        if (creditService != null) {
+            int postFee = configService.getInt(ConfigKey.POST_FEE);
+            creditService.spend(donorId, postFee, CreditTxType.POST_FEE, request.getItemId());
+        }
+        itemService.convertOfferType(request.getItemId(), OfferType.SWAP);
+        request.convertType("SWAP");
+    }
+
+    // Báo cho module chat tự huỷ đề nghị đổi món còn PENDING khi giao dịch đã chốt lịch hoặc bị huỷ. Gọi cả khi giao
+    // dịch đã qua giai đoạn thương lượng từ trước cũng không sao: lúc đó không còn đề nghị PENDING nào để huỷ.
+    // eventPublisher null hoặc id null chỉ gặp ở unit test dựng service rút gọn hoặc entity chưa lưu.
+    private void publishNegotiationEnded(Request request) {
+        if (eventPublisher != null && request.getId() != null) {
+            eventPublisher.publishEvent(new RequestNegotiationEndedEvent(request.getId()));
+        }
+    }
+
+    // Món đem đổi đã được giữ cho giao dịch này nên các yêu cầu PENDING khác dùng cùng món phải huỷ (FR-66, BR-S03).
+    private void cancelOtherPendingUsingOfferedItem(Request request) {
+        if (request.getOfferedItemId() == null) {
+            return;
+        }
+        List<Request> otherSwapRequests =
+                requestRepository.findByOfferedItemIdAndStatus(request.getOfferedItemId(), RequestStatus.PENDING);
+        for (Request otherSwap : otherSwapRequests) {
+            if (otherSwap.getId().equals(request.getId())) {
+                continue;
+            }
+            otherSwap.cancel(
+                    Request.CANCEL_BY_SYSTEM + "Món đồ bạn đề nghị đã được đem trao đổi trong một giao dịch khác.");
+            requestRepository.save(otherSwap);
+            notificationService.notify(
+                    otherSwap.getReceiverId(),
+                    "REQUEST_CANCELLED",
+                    "Yêu cầu trao đổi bị huỷ",
+                    "Món đồ bạn đề nghị đã được chọn trong một giao dịch khác.",
+                    "/requests/" + otherSwap.getId());
+        }
     }
 
     /**
@@ -570,6 +668,7 @@ public class RequestService {
         String prefix = isDonor ? Request.CANCEL_BY_DONOR : Request.CANCEL_BY_RECEIVER;
         request.cancel(prefix + reason);
         Request saved = requestRepository.save(request);
+        publishNegotiationEnded(saved);
 
         releaseReservedItems(saved);
 
@@ -729,12 +828,13 @@ public class RequestService {
         request.cancel(Request.CANCEL_BY_SYSTEM + LOCKED_ACCOUNT_REASON);
         requestRepository.save(request);
 
-        // Yêu cầu PENDING chưa giữ chỗ món nào nên không có gì để nhả
+        // Yêu cầu PENDING chưa giữ chỗ món nào và chưa mở chat nên không có gì để nhả hay huỷ đề nghị
         if (!wasPending) {
             itemService.releaseIfReserved(request.getItemId());
             if (request.getOfferedItemId() != null) {
                 itemService.releaseIfReserved(request.getOfferedItemId());
             }
+            publishNegotiationEnded(request);
         }
 
         long donorId =
@@ -774,6 +874,7 @@ public class RequestService {
         request.cancel(Request.CANCEL_BY_ADMIN + reason);
         Request saved = requestRepository.save(request);
         releaseReservedItems(saved);
+        publishNegotiationEnded(saved);
 
         notifyBothParties(saved, "TRANSACTION_CANCELLED", "Admin đã huỷ giao dịch. Lý do: " + reason);
         if (activityLogService != null) {
@@ -925,6 +1026,7 @@ public class RequestService {
 
         // Nếu cả hai đã xác nhận và sang LOGISTICS_CONFIRMED, thông báo cho bên còn lại
         if (saved.getStatus() == RequestStatus.LOGISTICS_CONFIRMED) {
+            publishNegotiationEnded(saved);
             long otherUserId = isDonor ? request.getReceiverId() : item.donorId();
             notificationService.notify(
                     otherUserId,
@@ -1283,7 +1385,8 @@ public class RequestService {
         return addExtraInfo(response, null);
     }
 
-    // Gắn ảnh đại diện hai bên và cờ hết hạn khiếu nại; handoverMedia chỉ truyền ở chi tiết, danh sách để null.
+    // Gắn ảnh đại diện hai bên, cờ hết hạn khiếu nại và phí chuyển sang Trao đổi; handoverMedia chỉ truyền ở chi tiết,
+    // danh sách để null.
     private RequestResponse addExtraInfo(RequestResponse response, List<RequestMediaResponse> handoverMedia) {
         if (response == null) {
             return null;
@@ -1291,7 +1394,20 @@ public class RequestService {
         String donorAvatarUrl = findAvatarUrl(response.donorId());
         String receiverAvatarUrl = findAvatarUrl(response.receiverId());
         boolean disputeExpired = isComplaintWindowClosed(response.complaintDeadline());
-        return response.withExtraInfo(donorAvatarUrl, receiverAvatarUrl, disputeExpired, handoverMedia);
+        Integer conversionFee = conversionFeeOf(response.itemOfferType());
+        return response.withExtraInfo(donorAvatarUrl, receiverAvatarUrl, disputeExpired, handoverMedia, conversionFee);
+    }
+
+    // Phí chủ bài trả nếu giao dịch chuyển sang Trao đổi (CD-02): bài đang GIVE thì trả POST_FEE như khi đăng bài
+    // Trao đổi, bài đã là SWAP thì không trả thêm. Không tra được loại bài thì trả null để frontend không hiện sai số.
+    private Integer conversionFeeOf(String itemOfferType) {
+        if (OfferType.GIVE.name().equals(itemOfferType)) {
+            return configService.getInt(ConfigKey.POST_FEE);
+        }
+        if (OfferType.SWAP.name().equals(itemOfferType)) {
+            return 0;
+        }
+        return null;
     }
 
     // Hết hạn khiếu nại khi đã có hạn (giao dịch đã hoàn tất) và hiện tại không còn trước hạn đó (U08).
@@ -1331,10 +1447,16 @@ public class RequestService {
         ItemCardDto card = findItemCard(request.getItemId(), itemCards);
         String offeredItemTitle = findItemTitle(request.getOfferedItemId());
         if (card == null) {
-            return new RequestItemInfo(null, null, null, null, offeredItemTitle);
+            return new RequestItemInfo(null, null, null, null, offeredItemTitle, null);
         }
+        String itemOfferType = card.offerType() != null ? card.offerType().name() : null;
         return new RequestItemInfo(
-                card.title(), card.imageUrl(), card.donorId(), findUserName(card.donorId()), offeredItemTitle);
+                card.title(),
+                card.imageUrl(),
+                card.donorId(),
+                findUserName(card.donorId()),
+                offeredItemTitle,
+                itemOfferType);
     }
 
     // Bài đã xoá hoặc service chưa sẵn sàng thì trả null để API vẫn trả được phần còn lại.

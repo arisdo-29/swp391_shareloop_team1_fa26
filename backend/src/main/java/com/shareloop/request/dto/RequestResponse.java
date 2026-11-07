@@ -50,7 +50,13 @@ public record RequestResponse(
         Boolean disputeExpired,
         // Ảnh giao nhận và ảnh khiếu nại (stage HANDOVER, DISPUTE), cũ trước. Chỉ có ở GET /requests/{id};
         // các danh sách để null, xem đủ qua GET /requests/{id}/media.
-        List<RequestMediaResponse> handoverMedia) {
+        List<RequestMediaResponse> handoverMedia,
+        // Hình thức HIỆN TẠI của bài chính ("GIVE" | "SWAP"); khác type (loại giao dịch) khi người xin gửi chéo loại
+        // (CD-01). Null khi không tra được bài.
+        String itemOfferType,
+        // Số Credit chủ bài sẽ trả nếu giao dịch chuyển sang Trao đổi: POST_FEE khi bài đang GIVE, 0 khi đang SWAP
+        // (CD-02). Backend tính để frontend không viết cứng phí. Null khi không biết loại bài.
+        Integer conversionFee) {
 
     // Dạng 32 tham số (chưa có ảnh đại diện, disputeExpired, handoverMedia) để code và test đang gọi vẫn compile.
     public RequestResponse(
@@ -122,15 +128,21 @@ public record RequestResponse(
                 null,
                 null,
                 null,
+                null,
+                null,
                 null);
     }
 
-    /** Gắn ảnh đại diện hai bên, cờ hết hạn khiếu nại và ảnh giao nhận (null ở danh sách). */
+    /**
+     * Gắn ảnh đại diện hai bên, cờ hết hạn khiếu nại, ảnh giao nhận (null ở danh sách) và phí chuyển sang Trao đổi.
+     * itemOfferType giữ nguyên giá trị mapper đã điền.
+     */
     public RequestResponse withExtraInfo(
             String newDonorAvatarUrl,
             String newReceiverAvatarUrl,
             boolean isDisputeExpired,
-            List<RequestMediaResponse> media) {
+            List<RequestMediaResponse> media,
+            Integer newConversionFee) {
         return new RequestResponse(
                 id,
                 itemId,
@@ -167,7 +179,9 @@ public record RequestResponse(
                 newDonorAvatarUrl,
                 newReceiverAvatarUrl,
                 isDisputeExpired,
-                media);
+                media,
+                itemOfferType,
+                newConversionFee);
     }
 
     // Dạng 30 tham số (chưa có disputeResponseDueAt) để code và test đang gọi vẫn compile.

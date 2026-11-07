@@ -3,12 +3,17 @@ package com.shareloop.chat.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.shareloop.chat.ChatErrorCode;
 import com.shareloop.chat.dto.MessageResponse;
+import com.shareloop.chat.dto.ProposeOfferChangeRequest;
 import com.shareloop.chat.dto.SendMessageRequest;
 import com.shareloop.chat.entity.Message;
 import com.shareloop.chat.entity.MessageKind;
@@ -19,11 +24,13 @@ import com.shareloop.item.dto.ItemCardDto;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.service.ItemQueryService;
+import com.shareloop.notification.service.NotificationService;
 import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.service.RequestService;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -52,6 +59,9 @@ class ChatServiceTest {
 
     @Mock
     ChatViolationRecorder chatViolationRecorder;
+
+    @Mock
+    NotificationService notificationService;
 
     @InjectMocks
     ChatService chatService;
@@ -689,6 +699,202 @@ class ChatServiceTest {
                     .isInstanceOf(BusinessException.class)
                     .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                             .isEqualTo(ChatErrorCode.CHAT_REQUEST_NOT_RESERVED));
+        }
+    }
+
+    @Nested
+    @DisplayName("Đề nghị đưa món vào đổi (offer-changes)")
+    class OfferChangeTest {
+
+        private static final long OFFERED_ITEM_ID = 50L;
+        private static final long MESSAGE_ID = 7L;
+
+        // Giao dịch Cho đã chọn người nhận, chưa có món đem đổi.
+        private RequestChatContext reservedGiveContext() {
+            return new RequestChatContext(REQUEST_ID, RequestStatus.RESERVED, RECEIVER_ID, DONOR_ID, 1L, null, "GIVE");
+        }
+
+        @Test
+        @DisplayName("Người nhận đề nghị: đề nghị cũ chuyển DECLINED, lưu tin OFFER_CHANGE PENDING và báo chủ bài")
+        void proposeOfferChange_byReceiver_declinesOldOfferAndNotifiesDonor() {
+            // given
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+            Message oldOffer = Message.offerChange(REQUEST_ID, RECEIVER_ID, 49L, null);
+            when(messageRepository.findByRequestIdAndKindAndOfferStatus(
+                            REQUEST_ID, MessageKind.OFFER_CHANGE, Message.OFFER_PENDING))
+                    .thenReturn(List.of(oldOffer));
+            when(messageRepository.save(any(Message.class))).thenAnswer(i -> i.getArgument(0));
+
+            // when
+            MessageResponse response = chatService.proposeOfferChange(
+                    REQUEST_ID, RECEIVER_ID, new ProposeOfferChangeRequest(OFFERED_ITEM_ID, "Mình đổi món này nhé"));
+
+            // then
+            verify(requestService).validateOfferChangeProposal(REQUEST_ID, OFFERED_ITEM_ID);
+            assertThat(oldOffer.getOfferStatus()).isEqualTo(Message.OFFER_DECLINED);
+            assertThat(response.kind()).isEqualTo(MessageKind.OFFER_CHANGE.name());
+            assertThat(response.offerStatus()).isEqualTo(Message.OFFER_PENDING);
+            assertThat(response.refItemId()).isEqualTo(OFFERED_ITEM_ID);
+            verify(notificationService)
+                    .notify(eq(DONOR_ID), eq("OFFER_CHANGE_PROPOSED"), anyString(), anyString(), eq("/requests/100"));
+        }
+
+        @Test
+        @DisplayName("Chủ bài gửi đề nghị thì ném CHAT_FORBIDDEN")
+        void proposeOfferChange_byDonor_throwsForbidden() {
+            // given
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+
+            // when & then
+            assertThatThrownBy(() -> chatService.proposeOfferChange(
+                            REQUEST_ID, DONOR_ID, new ProposeOfferChangeRequest(OFFERED_ITEM_ID, null)))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e ->
+                            assertThat(((BusinessException) e).getErrorCode()).isEqualTo(ChatErrorCode.CHAT_FORBIDDEN));
+            verify(messageRepository, never()).save(any(Message.class));
+        }
+
+        @Test
+        @DisplayName("Chủ bài đồng ý: gọi RequestService chuyển Trao đổi, đề nghị ACCEPTED và có tin SYSTEM")
+        void acceptOfferChange_byDonor_convertsRequestAndAddsSystemMessage() {
+            // given
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+            Message offer = Message.offerChange(REQUEST_ID, RECEIVER_ID, OFFERED_ITEM_ID, null);
+            when(messageRepository.findByIdForUpdate(MESSAGE_ID)).thenReturn(Optional.of(offer));
+            when(itemQueryService.getItemCard(OFFERED_ITEM_ID))
+                    .thenReturn(new ItemCardDto(
+                            OFFERED_ITEM_ID, "Giày thể thao", OfferType.SWAP, ItemStatus.RESERVED, null, RECEIVER_ID));
+
+            // when
+            chatService.acceptOfferChange(REQUEST_ID, MESSAGE_ID, DONOR_ID);
+
+            // then
+            verify(requestService).acceptOfferedItemInChat(REQUEST_ID, DONOR_ID, OFFERED_ITEM_ID);
+            assertThat(offer.getOfferStatus()).isEqualTo(Message.OFFER_ACCEPTED);
+            verify(messageRepository)
+                    .save(argThat(m ->
+                            m.getKind() == MessageKind.SYSTEM && m.getContent().contains("Giày thể thao")));
+        }
+
+        @Test
+        @DisplayName("Đồng ý thất bại ở RequestService (vd thiếu Credit) thì đề nghị vẫn PENDING")
+        void acceptOfferChange_whenRequestServiceFails_keepsOfferPending() {
+            // given
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+            Message offer = Message.offerChange(REQUEST_ID, RECEIVER_ID, OFFERED_ITEM_ID, null);
+            when(messageRepository.findByIdForUpdate(MESSAGE_ID)).thenReturn(Optional.of(offer));
+            when(requestService.acceptOfferedItemInChat(REQUEST_ID, DONOR_ID, OFFERED_ITEM_ID))
+                    .thenThrow(new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE));
+
+            // when & then
+            assertThatThrownBy(() -> chatService.acceptOfferChange(REQUEST_ID, MESSAGE_ID, DONOR_ID))
+                    .isInstanceOf(BusinessException.class);
+            assertThat(offer.getOfferStatus()).isEqualTo(Message.OFFER_PENDING);
+            verify(messageRepository, never()).save(any(Message.class));
+        }
+
+        @Test
+        @DisplayName("Người nhận tự đồng ý đề nghị của mình thì ném CHAT_FORBIDDEN")
+        void acceptOfferChange_byReceiver_throwsForbidden() {
+            // given
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+
+            // when & then
+            assertThatThrownBy(() -> chatService.acceptOfferChange(REQUEST_ID, MESSAGE_ID, RECEIVER_ID))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e ->
+                            assertThat(((BusinessException) e).getErrorCode()).isEqualTo(ChatErrorCode.CHAT_FORBIDDEN));
+            verify(requestService, never()).acceptOfferedItemInChat(anyLong(), anyLong(), anyLong());
+        }
+
+        @Test
+        @DisplayName("Tin thuộc giao dịch khác thì ném CHAT_OFFER_CHANGE_NOT_FOUND")
+        void acceptOfferChange_whenMessageOfOtherRequest_throwsNotFound() {
+            // given
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+            Message offerOfOtherRequest = Message.offerChange(999L, RECEIVER_ID, OFFERED_ITEM_ID, null);
+            when(messageRepository.findByIdForUpdate(MESSAGE_ID)).thenReturn(Optional.of(offerOfOtherRequest));
+
+            // when & then
+            assertThatThrownBy(() -> chatService.acceptOfferChange(REQUEST_ID, MESSAGE_ID, DONOR_ID))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                            .isEqualTo(ChatErrorCode.CHAT_OFFER_CHANGE_NOT_FOUND));
+        }
+
+        @Test
+        @DisplayName("Đề nghị đã DECLINED thì ném CHAT_OFFER_CHANGE_NOT_PENDING")
+        void acceptOfferChange_whenOfferAlreadyDeclined_throwsNotPending() {
+            // given
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+            Message offer = Message.offerChange(REQUEST_ID, RECEIVER_ID, OFFERED_ITEM_ID, null);
+            offer.decline();
+            when(messageRepository.findByIdForUpdate(MESSAGE_ID)).thenReturn(Optional.of(offer));
+
+            // when & then
+            assertThatThrownBy(() -> chatService.acceptOfferChange(REQUEST_ID, MESSAGE_ID, DONOR_ID))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                            .isEqualTo(ChatErrorCode.CHAT_OFFER_CHANGE_NOT_PENDING));
+        }
+
+        @Test
+        @DisplayName(
+                "Giao dịch rời giai đoạn thương lượng: đề nghị PENDING thành DECLINED, có tin SYSTEM, không thông báo")
+        void declinePendingOfferChanges_whenPendingOfferExists_declinesAndAddsSystemMessage() {
+            // given
+            Message pendingOffer = Message.offerChange(REQUEST_ID, RECEIVER_ID, OFFERED_ITEM_ID, null);
+            when(messageRepository.findByRequestIdAndKindAndOfferStatus(
+                            REQUEST_ID, MessageKind.OFFER_CHANGE, Message.OFFER_PENDING))
+                    .thenReturn(List.of(pendingOffer));
+
+            // when
+            chatService.declinePendingOfferChanges(REQUEST_ID);
+
+            // then
+            assertThat(pendingOffer.getOfferStatus()).isEqualTo(Message.OFFER_DECLINED);
+            verify(messageRepository).save(argThat(m -> m.getKind() == MessageKind.SYSTEM));
+            org.mockito.Mockito.verifyNoInteractions(notificationService);
+        }
+
+        @Test
+        @DisplayName("Giao dịch rời giai đoạn thương lượng mà không có đề nghị PENDING thì không thêm tin nào")
+        void declinePendingOfferChanges_whenNoPendingOffer_savesNothing() {
+            // given
+            when(messageRepository.findByRequestIdAndKindAndOfferStatus(
+                            REQUEST_ID, MessageKind.OFFER_CHANGE, Message.OFFER_PENDING))
+                    .thenReturn(List.of());
+
+            // when
+            chatService.declinePendingOfferChanges(REQUEST_ID);
+
+            // then
+            verify(messageRepository, never()).save(any(Message.class));
+        }
+
+        @Test
+        @DisplayName("Chủ bài từ chối: đề nghị DECLINED, có tin SYSTEM, báo người nhận và không chuyển giao dịch")
+        void declineOfferChange_byDonor_declinesAndNotifiesReceiver() {
+            // given
+            when(requestService.getChatContext(REQUEST_ID)).thenReturn(reservedGiveContext());
+            Message offer = Message.offerChange(REQUEST_ID, RECEIVER_ID, OFFERED_ITEM_ID, null);
+            when(messageRepository.findByIdForUpdate(MESSAGE_ID)).thenReturn(Optional.of(offer));
+            when(messageRepository.save(any(Message.class))).thenAnswer(i -> i.getArgument(0));
+
+            // when
+            MessageResponse response = chatService.declineOfferChange(REQUEST_ID, MESSAGE_ID, DONOR_ID);
+
+            // then
+            assertThat(response.offerStatus()).isEqualTo(Message.OFFER_DECLINED);
+            verify(messageRepository).save(argThat(m -> m.getKind() == MessageKind.SYSTEM));
+            verify(notificationService)
+                    .notify(
+                            eq(RECEIVER_ID),
+                            eq("OFFER_CHANGE_DECLINED"),
+                            anyString(),
+                            anyString(),
+                            eq("/requests/100"));
+            verify(requestService, never()).acceptOfferedItemInChat(anyLong(), anyLong(), anyLong());
         }
     }
 }

@@ -2,6 +2,7 @@ package com.shareloop.chat.service;
 
 import com.shareloop.chat.ChatErrorCode;
 import com.shareloop.chat.dto.MessageResponse;
+import com.shareloop.chat.dto.ProposeOfferChangeRequest;
 import com.shareloop.chat.dto.SendMessageRequest;
 import com.shareloop.chat.entity.Message;
 import com.shareloop.chat.entity.MessageKind;
@@ -14,8 +15,10 @@ import com.shareloop.item.dto.ItemCardDto;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.media.service.MediaService;
+import com.shareloop.notification.service.NotificationService;
 import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.RequestChatContext;
+import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.service.RequestService;
 import java.util.ArrayList;
@@ -55,13 +58,14 @@ public class ChatService {
     private final MediaService mediaService;
     private final ItemQueryService itemQueryService;
     private final ChatViolationRecorder chatViolationRecorder;
+    private final NotificationService notificationService;
 
     public ChatService(
             MessageRepository messageRepository,
             RequestService requestService,
             ChatContactFilter chatContactFilter,
             MediaService mediaService) {
-        this(messageRepository, requestService, chatContactFilter, mediaService, null, null);
+        this(messageRepository, requestService, chatContactFilter, mediaService, null, null, null);
     }
 
     public ChatService(
@@ -70,7 +74,25 @@ public class ChatService {
             ChatContactFilter chatContactFilter,
             MediaService mediaService,
             ItemQueryService itemQueryService) {
-        this(messageRepository, requestService, chatContactFilter, mediaService, itemQueryService, null);
+        this(messageRepository, requestService, chatContactFilter, mediaService, itemQueryService, null, null);
+    }
+
+    // Dạng 6 tham số (chưa có NotificationService) để code và test đang gọi vẫn compile.
+    public ChatService(
+            MessageRepository messageRepository,
+            RequestService requestService,
+            ChatContactFilter chatContactFilter,
+            MediaService mediaService,
+            ItemQueryService itemQueryService,
+            ChatViolationRecorder chatViolationRecorder) {
+        this(
+                messageRepository,
+                requestService,
+                chatContactFilter,
+                mediaService,
+                itemQueryService,
+                chatViolationRecorder,
+                null);
     }
 
     @Autowired
@@ -80,13 +102,15 @@ public class ChatService {
             ChatContactFilter chatContactFilter,
             MediaService mediaService,
             @Autowired(required = false) ItemQueryService itemQueryService,
-            @Autowired(required = false) ChatViolationRecorder chatViolationRecorder) {
+            @Autowired(required = false) ChatViolationRecorder chatViolationRecorder,
+            @Autowired(required = false) NotificationService notificationService) {
         this.messageRepository = messageRepository;
         this.requestService = requestService;
         this.chatContactFilter = chatContactFilter;
         this.mediaService = mediaService;
         this.itemQueryService = itemQueryService;
         this.chatViolationRecorder = chatViolationRecorder;
+        this.notificationService = notificationService;
     }
 
     /**
@@ -152,37 +176,8 @@ public class ChatService {
             }
         }
 
-        // Lọc thông tin liên hệ và từ khoá cấm mức BLOCK (FR-72, FR-74, FR-78; BR-C01, BR-A10, BR-C06)
         if (hasContent) {
-            boolean isBeforeLogistics =
-                    context.status() == RequestStatus.RESERVED || context.status() == RequestStatus.AWAITING_LOGISTICS;
-            Optional<String> violation = chatContactFilter.checkViolation(request.content(), isBeforeLogistics);
-            if (violation.isPresent()) {
-                String reason = violation.get();
-                if (chatViolationRecorder != null) {
-                    chatViolationRecorder.recordViolationAndAlertAdmin(
-                            context.requestId(),
-                            currentUserId,
-                            request.content().trim(),
-                            reason);
-                }
-                throw new BusinessException(
-                        ChatErrorCode.CHAT_MESSAGE_BLOCKED, "Tin nhắn bị chặn do chứa " + reason + ".");
-            }
-            if (isBeforeLogistics) {
-                try {
-                    chatContactFilter.validateMessage(request.content());
-                } catch (BusinessException e) {
-                    if (e.getErrorCode() == ChatErrorCode.CHAT_MESSAGE_BLOCKED && chatViolationRecorder != null) {
-                        chatViolationRecorder.recordViolationAndAlertAdmin(
-                                context.requestId(),
-                                currentUserId,
-                                request.content().trim(),
-                                e.getMessage());
-                    }
-                    throw e;
-                }
-            }
+            rejectIfContentViolates(context, currentUserId, request.content());
         }
 
         Message message;
@@ -274,6 +269,193 @@ public class ChatService {
             }
         }
         return pinned;
+    }
+
+    /**
+     * Người nhận đề nghị đưa một món của mình vào đổi trong giao dịch Cho đã chọn người (Cho → Trao đổi). Đề nghị cũ
+     * còn PENDING tự chuyển DECLINED vì mỗi giao dịch chỉ có một đề nghị chờ trả lời; chủ bài được thông báo.
+     *
+     * @throws BusinessException CHAT_FORBIDDEN nếu người gửi không phải người nhận, CHAT_MESSAGE_BLOCKED nếu lời nhắn
+     *     vi phạm, các mã REQUEST_* nếu giao dịch hoặc món không hợp lệ (xem RequestService.validateOfferChangeProposal)
+     */
+    @Transactional
+    public MessageResponse proposeOfferChange(long requestId, Long currentUserId, ProposeOfferChangeRequest request) {
+        RequestChatContext context = requireChatParty(requestId, currentUserId);
+        if (!currentUserId.equals(context.receiverId())) {
+            throw new BusinessException(ChatErrorCode.CHAT_FORBIDDEN);
+        }
+        requestService.validateOfferChangeProposal(requestId, request.offeredItemId());
+
+        String content = request.content() != null && !request.content().isBlank()
+                ? request.content().trim()
+                : null;
+        if (content != null) {
+            rejectIfContentViolates(context, currentUserId, content);
+        }
+
+        declinePendingOffers(requestId);
+        Message saved =
+                messageRepository.save(Message.offerChange(requestId, currentUserId, request.offeredItemId(), content));
+
+        notify(
+                context.donorId(),
+                "OFFER_CHANGE_PROPOSED",
+                "Có đề nghị đổi món",
+                "Người nhận muốn đưa một món của mình vào trao đổi. Mở cuộc trò chuyện để xem và trả lời.",
+                requestId);
+        return MessageMapper.toResponse(saved, findItemCardSafely(saved.getRefItemId()));
+    }
+
+    /**
+     * Chủ bài đồng ý đề nghị đổi món: giao dịch chuyển sang Trao đổi qua RequestService.acceptOfferedItemInChat (trừ
+     * POST_FEE, giữ chỗ món), đề nghị thành ACCEPTED và thêm tin hệ thống. Cùng một transaction nên lỗi ở bước nào
+     * (thiếu Credit, món đã bị giữ) thì đề nghị vẫn PENDING và tiền không bị trừ.
+     *
+     * @throws BusinessException CHAT_FORBIDDEN nếu không phải chủ bài, CHAT_OFFER_CHANGE_NOT_FOUND hoặc
+     *     CHAT_OFFER_CHANGE_NOT_PENDING nếu tin không hợp lệ, các lỗi của acceptOfferedItemInChat
+     */
+    @Transactional
+    public RequestResponse acceptOfferChange(long requestId, long messageId, Long currentUserId) {
+        RequestChatContext context = requireChatParty(requestId, currentUserId);
+        requireDonor(context, currentUserId);
+        Message offer = findPendingOfferChange(requestId, messageId);
+
+        RequestResponse response =
+                requestService.acceptOfferedItemInChat(requestId, currentUserId, offer.getRefItemId());
+
+        offer.accept();
+        messageRepository.save(offer);
+        messageRepository.save(Message.system(
+                requestId,
+                "Chủ bài đã đồng ý trao đổi với " + itemTitleOf(offer.getRefItemId())
+                        + ". Giao dịch chuyển sang Trao đổi."));
+        return response;
+    }
+
+    /**
+     * Chủ bài từ chối đề nghị đổi món: đề nghị thành DECLINED, thêm tin hệ thống và báo người nhận. Không tốn phí.
+     *
+     * @throws BusinessException CHAT_FORBIDDEN nếu không phải chủ bài, CHAT_OFFER_CHANGE_NOT_FOUND hoặc
+     *     CHAT_OFFER_CHANGE_NOT_PENDING nếu tin không hợp lệ
+     */
+    @Transactional
+    public MessageResponse declineOfferChange(long requestId, long messageId, Long currentUserId) {
+        RequestChatContext context = requireChatParty(requestId, currentUserId);
+        requireDonor(context, currentUserId);
+        Message offer = findPendingOfferChange(requestId, messageId);
+
+        offer.decline();
+        Message saved = messageRepository.save(offer);
+        String itemTitle = itemTitleOf(offer.getRefItemId());
+        messageRepository.save(Message.system(requestId, "Chủ bài chưa đồng ý đưa " + itemTitle + " vào trao đổi."));
+
+        notify(
+                context.receiverId(),
+                "OFFER_CHANGE_DECLINED",
+                "Đề nghị đổi món chưa được đồng ý",
+                "Chủ bài chưa đồng ý đưa " + itemTitle + " vào trao đổi. Giao dịch vẫn là Cho.",
+                requestId);
+        return MessageMapper.toResponse(saved, findItemCardSafely(saved.getRefItemId()));
+    }
+
+    /**
+     * Tự huỷ mọi đề nghị đổi món còn PENDING khi giao dịch rời giai đoạn thương lượng (đã chốt lịch hoặc bị huỷ). Có đề
+     * nghị bị huỷ thì thêm một tin hệ thống ngắn; không gửi thông báo vì hai bên đã nhận thông báo chốt lịch hoặc huỷ.
+     */
+    @Transactional
+    public void declinePendingOfferChanges(long requestId) {
+        int declinedCount = declinePendingOffers(requestId);
+        if (declinedCount > 0) {
+            messageRepository.save(Message.system(
+                    requestId,
+                    "Đề nghị đổi món chưa được trả lời đã tự huỷ vì giao dịch đã chốt lịch hoặc đã bị huỷ."));
+        }
+    }
+
+    // Chuyển mọi đề nghị đổi món PENDING của giao dịch sang DECLINED, trả về số đề nghị đã huỷ. Dùng khi có đề nghị mới
+    // (mỗi giao dịch chỉ giữ tối đa một đề nghị PENDING) và khi giao dịch rời giai đoạn thương lượng.
+    private int declinePendingOffers(long requestId) {
+        List<Message> pendingOffers = messageRepository.findByRequestIdAndKindAndOfferStatus(
+                requestId, MessageKind.OFFER_CHANGE, Message.OFFER_PENDING);
+        for (Message pendingOffer : pendingOffers) {
+            pendingOffer.decline();
+            messageRepository.save(pendingOffer);
+        }
+        return pendingOffers.size();
+    }
+
+    // Khoá dòng tin đề nghị để hai lần bấm Đồng ý/Từ chối cùng lúc không cùng xử lý một đề nghị (tránh trừ phí hai
+    // lần).
+    private Message findPendingOfferChange(long requestId, long messageId) {
+        Message offer = messageRepository
+                .findByIdForUpdate(messageId)
+                .orElseThrow(() -> new BusinessException(ChatErrorCode.CHAT_OFFER_CHANGE_NOT_FOUND));
+        boolean belongsToRequest = offer.getRequestId() != null && offer.getRequestId() == requestId;
+        if (!belongsToRequest || offer.getKind() != MessageKind.OFFER_CHANGE) {
+            throw new BusinessException(ChatErrorCode.CHAT_OFFER_CHANGE_NOT_FOUND);
+        }
+        if (!offer.isPendingOfferChange()) {
+            throw new BusinessException(ChatErrorCode.CHAT_OFFER_CHANGE_NOT_PENDING);
+        }
+        return offer;
+    }
+
+    // Chỉ chủ bài trả lời đề nghị đổi món vì chủ bài là người trả phí chuyển sang Trao đổi.
+    private static void requireDonor(RequestChatContext context, Long currentUserId) {
+        if (!currentUserId.equals(context.donorId())) {
+            throw new BusinessException(ChatErrorCode.CHAT_FORBIDDEN);
+        }
+    }
+
+    private RequestChatContext requireChatParty(long requestId, Long currentUserId) {
+        if (currentUserId == null) {
+            throw new BusinessException(ChatErrorCode.CHAT_FORBIDDEN);
+        }
+        return validateAndGetChatContext(requestId, currentUserId);
+    }
+
+    // Tên món để ghép vào tin hệ thống; không tra được thì dùng chữ chung để tin nhắn vẫn đọc được.
+    private String itemTitleOf(Long itemId) {
+        ItemCardDto card = findItemCardSafely(itemId);
+        return card != null && card.title() != null ? card.title() : "món đề nghị";
+    }
+
+    // Link /requests/{id} mở đúng cuộc trò chuyện của giao dịch ở frontend.
+    private void notify(Long userId, String type, String title, String body, long requestId) {
+        if (notificationService == null || userId == null) {
+            return;
+        }
+        notificationService.notify(userId, type, title, body, "/requests/" + requestId);
+    }
+
+    // Lọc thông tin liên hệ và từ khoá cấm mức BLOCK (FR-72, FR-74, FR-78; BR-C01, BR-A10, BR-C06). Dùng chung cho tin
+    // văn bản và lời nhắn kèm đề nghị đổi món để hai nơi không lệch luật lọc.
+    private void rejectIfContentViolates(RequestChatContext context, Long senderId, String content) {
+        boolean isBeforeLogistics =
+                context.status() == RequestStatus.RESERVED || context.status() == RequestStatus.AWAITING_LOGISTICS;
+        Optional<String> violation = chatContactFilter.checkViolation(content, isBeforeLogistics);
+        if (violation.isPresent()) {
+            String reason = violation.get();
+            recordViolation(context, senderId, content, reason);
+            throw new BusinessException(ChatErrorCode.CHAT_MESSAGE_BLOCKED, "Tin nhắn bị chặn do chứa " + reason + ".");
+        }
+        if (!isBeforeLogistics) {
+            return;
+        }
+        try {
+            chatContactFilter.validateMessage(content);
+        } catch (BusinessException e) {
+            if (e.getErrorCode() == ChatErrorCode.CHAT_MESSAGE_BLOCKED) {
+                recordViolation(context, senderId, content, e.getMessage());
+            }
+            throw e;
+        }
+    }
+
+    private void recordViolation(RequestChatContext context, Long senderId, String content, String reason) {
+        if (chatViolationRecorder != null) {
+            chatViolationRecorder.recordViolationAndAlertAdmin(context.requestId(), senderId, content.trim(), reason);
+        }
     }
 
     private ItemCardDto findItemCardSafely(Long itemId) {

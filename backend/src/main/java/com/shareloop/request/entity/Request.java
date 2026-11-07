@@ -150,6 +150,23 @@ public class Request extends BaseEntity {
     }
 
     /**
+     * Gán món người nhận đem đổi khi chủ bài đồng ý đề nghị trong chat (Cho → Trao đổi).
+     *
+     * @param newOfferedItemId id món đem đổi, không được null
+     * @throws BusinessException REQUEST_OFFER_CHANGE_NOT_ALLOWED nếu giao dịch đã có món đem đổi
+     */
+    public void attachOfferedItem(Long newOfferedItemId) {
+        if (newOfferedItemId == null) {
+            throw new IllegalArgumentException("Offered item id must not be null");
+        }
+        // Mỗi giao dịch chỉ giữ một món đem đổi; thay món cũ sẽ bỏ sót việc nhả giữ chỗ món đó.
+        if (this.offeredItemId != null) {
+            throw new BusinessException(RequestErrorCode.REQUEST_OFFER_CHANGE_NOT_ALLOWED);
+        }
+        this.offeredItemId = newOfferedItemId;
+    }
+
+    /**
      * Đề xuất hoặc cập nhật lịch hẹn giao nhận (FR-79, FR-80, BR-T01, BR-T02).
      *
      * <p>Chuyển sang AWAITING_LOGISTICS nếu đang là RESERVED.

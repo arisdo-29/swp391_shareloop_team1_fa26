@@ -27,6 +27,7 @@ import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.RequestErrorCode;
+import com.shareloop.request.dto.CancelTransactionRequest;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.HandoverConfirmRequest;
@@ -36,6 +37,7 @@ import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.event.NotAsDescribedReportedEvent;
+import com.shareloop.request.event.RequestNegotiationEndedEvent;
 import com.shareloop.request.repository.RequestMediaRepository;
 import com.shareloop.request.repository.RequestRepository;
 import com.shareloop.setting.ConfigKey;
@@ -604,6 +606,112 @@ class RequestServiceTest {
         org.mockito.Mockito.verify(itemService, org.mockito.Mockito.never()).reserve(anyLong());
     }
 
+    // Giao dịch Cho đã chọn người nhận (RESERVED): bài 1 của chủ bài 20, người nhận 10, chưa có món đem đổi.
+    private Request givenReservedGiveRequest() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "RESERVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        return request;
+    }
+
+    @Test
+    @DisplayName("acceptOfferedItemInChat: Chủ bài đồng ý thì trừ POST_FEE, chuyển SWAP, gán và giữ chỗ món đề nghị")
+    void acceptOfferedItemInChat_whenValid_chargesFeeConvertsAndReservesOfferedItem() {
+        // given: món 50 của người nhận 10 đang APPROVED
+        Request request = givenReservedGiveRequest();
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(50L);
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+
+        // when
+        RequestResponse response = requestService.acceptOfferedItemInChat(101L, 20L, 50L);
+
+        // then
+        verify(creditService).spend(20L, 5, CreditTxType.POST_FEE, 1L);
+        verify(itemService).convertOfferType(1L, OfferType.SWAP);
+        verify(itemService).reserve(50L);
+        assertThat(request.getType()).isEqualTo("SWAP");
+        assertThat(request.getOfferedItemId()).isEqualTo(50L);
+        assertThat(response.offeredItemId()).isEqualTo(50L);
+        verify(notificationService)
+                .notify(eq(10L), eq("OFFER_CHANGE_ACCEPTED"), anyString(), anyString(), eq("/requests/101"));
+    }
+
+    @Test
+    @DisplayName("acceptOfferedItemInChat: Người không phải chủ bài thì ném REQUEST_FORBIDDEN, không trừ tiền")
+    void acceptOfferedItemInChat_whenNotDonor_throwsForbidden() {
+        // given
+        givenReservedGiveRequest();
+
+        // when & then
+        assertThatThrownBy(() -> requestService.acceptOfferedItemInChat(101L, 10L, 50L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_FORBIDDEN));
+        verify(creditService, never()).spend(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any(), anyLong());
+    }
+
+    @Test
+    @DisplayName("acceptOfferedItemInChat: Giao dịch đã là SWAP thì ném REQUEST_OFFER_CHANGE_NOT_ALLOWED")
+    void acceptOfferedItemInChat_whenRequestIsSwap_throwsOfferChangeNotAllowed() {
+        // given
+        Request request = givenReservedGiveRequest();
+        request.convertType("SWAP");
+
+        // when & then
+        assertThatThrownBy(() -> requestService.acceptOfferedItemInChat(101L, 20L, 50L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode())
+                                .isEqualTo(RequestErrorCode.REQUEST_OFFER_CHANGE_NOT_ALLOWED));
+        verify(itemService, never()).convertOfferType(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("acceptOfferedItemInChat: Món đề nghị không phải của người nhận thì ném REQUEST_ITEM_NOT_AVAILABLE")
+    void acceptOfferedItemInChat_whenOfferedItemNotOwnedByReceiver_throwsItemNotAvailable() {
+        // given: món 50 thuộc người khác (30)
+        givenReservedGiveRequest();
+        doReturn(Optional.of(new RequestService.ItemSnapshot(30L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(50L);
+
+        // when & then
+        assertThatThrownBy(() -> requestService.acceptOfferedItemInChat(101L, 20L, 50L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE));
+        verify(creditService, never()).spend(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any(), anyLong());
+    }
+
+    @Test
+    @DisplayName("acceptOfferedItemInChat: Chủ bài thiếu Credit thì ném lỗi ví và không đổi bài, không giữ chỗ món")
+    void acceptOfferedItemInChat_whenInsufficientBalance_throwsAndChangesNothing() {
+        // given
+        Request request = givenReservedGiveRequest();
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(50L);
+        org.mockito.Mockito.doThrow(new BusinessException(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE))
+                .when(creditService)
+                .spend(20L, 5, CreditTxType.POST_FEE, 1L);
+
+        // when & then
+        assertThatThrownBy(() -> requestService.acceptOfferedItemInChat(101L, 20L, 50L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE));
+        verify(itemService, never()).convertOfferType(anyLong(), any());
+        verify(itemService, never()).reserve(anyLong());
+        assertThat(request.getType()).isEqualTo("GIVE");
+        assertThat(request.getOfferedItemId()).isNull();
+    }
+
     @Test
     @DisplayName(
             "Chủ bài Trao đổi chọn yêu cầu không kèm món: không hoàn phí, đổi sang GIVE và chỉ giữ chỗ 1 món (CD-04)")
@@ -767,6 +875,46 @@ class RequestServiceTest {
     }
 
     @Test
+    @DisplayName("getDetail: Bài đang GIVE thì itemOfferType = GIVE và conversionFee = POST_FEE (CD-02)")
+    void getDetail_whenItemIsGive_returnsPostFeeAsConversionFee() {
+        // given: yêu cầu kèm món gửi tới bài GIVE (gửi chéo loại, CD-01), POST_FEE = 5 ở setUp
+        Request request = new Request(1L, 10L, 2L, "GIVE");
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(itemQueryService.getItemCard(1L))
+                .thenReturn(new ItemCardDto(1L, "Xe đạp mini", OfferType.GIVE, ItemStatus.APPROVED, null, 20L));
+
+        // when
+        RequestResponse response = requestService.getDetail(101L, 10L);
+
+        // then
+        assertThat(response.itemOfferType()).isEqualTo("GIVE");
+        assertThat(response.conversionFee()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("getDetail: Bài đang SWAP thì itemOfferType = SWAP và conversionFee = 0")
+    void getDetail_whenItemIsSwap_returnsZeroConversionFee() {
+        // given: yêu cầu không kèm món gửi tới bài SWAP (xin cho không, CD-01)
+        Request request = new Request(1L, 10L, null, "SWAP");
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(itemQueryService.getItemCard(1L))
+                .thenReturn(new ItemCardDto(1L, "Xe đạp mini", OfferType.SWAP, ItemStatus.APPROVED, null, 20L));
+
+        // when
+        RequestResponse response = requestService.getDetail(101L, 10L);
+
+        // then
+        assertThat(response.itemOfferType()).isEqualTo("SWAP");
+        assertThat(response.conversionFee()).isZero();
+    }
+
+    @Test
     @DisplayName("getDetail: Không tra được thẻ bài đăng thì các trường tên để null, API vẫn trả bình thường")
     void getDetail_whenItemCardMissing_leavesNamesNull() {
         // given
@@ -784,6 +932,8 @@ class RequestServiceTest {
         assertThat(response.itemTitle()).isNull();
         assertThat(response.donorName()).isNull();
         assertThat(response.offeredItemTitle()).isNull();
+        assertThat(response.itemOfferType()).isNull();
+        assertThat(response.conversionFee()).isNull();
         assertThat(response.itemId()).isEqualTo(1L);
     }
 
@@ -936,6 +1086,48 @@ class RequestServiceTest {
         assertThat(response.donorScheduleOkAt()).isNotNull();
         assertThat(response.contactRevealedAt()).isNotNull();
         verify(notificationService).notify(eq(20L), eq("LOGISTICS_CONFIRMED"), any(), any(), eq("/requests/101"));
+    }
+
+    @Test
+    @DisplayName("confirmLogistics: Sang LOGISTICS_CONFIRMED thì phát RequestNegotiationEndedEvent để chat huỷ đề nghị")
+    void confirmLogistics_whenBothConfirm_publishesNegotiationEndedEvent() {
+        // given: chủ bài đã đề xuất lịch, người nhận xác nhận nốt
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
+        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, true, false, Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(null));
+
+        // then
+        verify(eventPublisher).publishEvent(new RequestNegotiationEndedEvent(101L));
+    }
+
+    @Test
+    @DisplayName("cancelTransaction: Huỷ giao dịch đã chọn người thì phát RequestNegotiationEndedEvent")
+    void cancelTransaction_whenReserved_publishesNegotiationEndedEvent() {
+        // given
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "RESERVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        requestService.cancelTransaction(101L, 20L, new CancelTransactionRequest("Bận đột xuất"));
+
+        // then
+        verify(eventPublisher).publishEvent(new RequestNegotiationEndedEvent(101L));
     }
 
     @Test

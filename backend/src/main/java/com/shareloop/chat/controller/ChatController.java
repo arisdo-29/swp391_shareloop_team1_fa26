@@ -1,10 +1,12 @@
 package com.shareloop.chat.controller;
 
 import com.shareloop.chat.dto.MessageResponse;
+import com.shareloop.chat.dto.ProposeOfferChangeRequest;
 import com.shareloop.chat.dto.SendMessageRequest;
 import com.shareloop.chat.service.ChatService;
 import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.item.dto.ItemCardDto;
+import com.shareloop.request.dto.RequestResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -65,5 +67,38 @@ public class ChatController {
     @GetMapping({"/pinned-items", "/messages/pinned-items"})
     public List<ItemCardDto> getPinnedItems(@PathVariable Long requestId, @CurrentUserId Long currentUserId) {
         return chatService.getPinnedItems(requestId, currentUserId);
+    }
+
+    /**
+     * Người nhận đề nghị đưa một món của mình vào đổi (giao dịch Cho → Trao đổi).
+     */
+    @Operation(summary = "Người nhận đề nghị đưa món của mình vào trao đổi")
+    @PostMapping("/offer-changes")
+    @ResponseStatus(HttpStatus.CREATED)
+    public MessageResponse proposeOfferChange(
+            @PathVariable Long requestId,
+            @CurrentUserId Long currentUserId,
+            @Valid @RequestBody ProposeOfferChangeRequest request) {
+        return chatService.proposeOfferChange(requestId, currentUserId, request);
+    }
+
+    /**
+     * Chủ bài đồng ý đề nghị đổi món; trả về giao dịch sau khi đã chuyển sang Trao đổi.
+     */
+    @Operation(summary = "Chủ bài đồng ý đề nghị đổi món, giao dịch chuyển sang Trao đổi")
+    @PostMapping("/offer-changes/{messageId}/accept")
+    public RequestResponse acceptOfferChange(
+            @PathVariable Long requestId, @PathVariable Long messageId, @CurrentUserId Long currentUserId) {
+        return chatService.acceptOfferChange(requestId, messageId, currentUserId);
+    }
+
+    /**
+     * Chủ bài từ chối đề nghị đổi món.
+     */
+    @Operation(summary = "Chủ bài từ chối đề nghị đổi món")
+    @PostMapping("/offer-changes/{messageId}/decline")
+    public MessageResponse declineOfferChange(
+            @PathVariable Long requestId, @PathVariable Long messageId, @CurrentUserId Long currentUserId) {
+        return chatService.declineOfferChange(requestId, messageId, currentUserId);
     }
 }

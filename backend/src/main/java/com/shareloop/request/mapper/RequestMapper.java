@@ -119,6 +119,14 @@ public final class RequestMapper {
                 request.getCancelReason(),
                 complaintDeadline,
                 lastMessageAt,
-                disputeResponseDueAt);
+                disputeResponseDueAt,
+                // Ảnh đại diện, cờ hết hạn khiếu nại và ảnh giao nhận do RequestService.addExtraInfo gắn sau.
+                null,
+                null,
+                null,
+                null,
+                itemInfo.itemOfferType(),
+                // Phí đọc ConfigService nên mapper (static) không tính được; RequestService.addExtraInfo điền.
+                null);
     }
 }

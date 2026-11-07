@@ -9,9 +9,15 @@ package com.shareloop.request.dto;
  * @param donorId id chủ bài đăng
  * @param donorName họ tên chủ bài đăng
  * @param offeredItemTitle tiêu đề món người xin đề nghị đổi (chỉ yêu cầu Trao đổi)
+ * @param itemOfferType hình thức hiện tại của bài đăng ("GIVE" | "SWAP")
  */
 public record RequestItemInfo(
-        String itemTitle, String itemImage, Long donorId, String donorName, String offeredItemTitle) {
+        String itemTitle,
+        String itemImage,
+        Long donorId,
+        String donorName,
+        String offeredItemTitle,
+        String itemOfferType) {
 
-    public static final RequestItemInfo EMPTY = new RequestItemInfo(null, null, null, null, null);
+    public static final RequestItemInfo EMPTY = new RequestItemInfo(null, null, null, null, null, null);
 }

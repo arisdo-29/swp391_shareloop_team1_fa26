@@ -194,7 +194,149 @@ Lấy danh sách thẻ sản phẩm ghim ở đầu khung chat (FR-69, BR-C02).
 
 ---
 
+## Đề nghị đưa món vào đổi (Cho → Trao đổi trong chat)
+
+Giao dịch Cho đã chọn người (chat đã mở), người nhận muốn đưa một món của mình vào đổi. Chủ bài nhận đề nghị ngay
+trong chat; đồng ý thì trả phí đăng Trao đổi (`post_fee`) và giao dịch chuyển thành Trao đổi. Quy tắc chuyển đổi chung
+xem `docs/api/request.md`, mục "Chuyển đổi hình thức Cho ↔ Trao đổi".
+
+Đề nghị là một tin nhắn `kind = OFFER_CHANGE`, `refItemId` = món đề nghị, `offerStatus` đi theo vòng:
+
+| Từ | Sang | Khi nào |
+|---|---|---|
+| (mới) | `PENDING` | Người nhận gửi đề nghị |
+| `PENDING` | `ACCEPTED` | Chủ bài đồng ý (giao dịch chuyển thành Trao đổi) |
+| `PENDING` | `DECLINED` | Chủ bài từ chối; người nhận gửi đề nghị mới (đề nghị cũ tự huỷ); giao dịch rời giai đoạn thương lượng |
+
+- Mỗi giao dịch có **tối đa một** đề nghị `PENDING`.
+- **Tự huỷ:** khi giao dịch sang `LOGISTICS_CONFIRMED` hoặc bị `CANCELLED` (người dùng huỷ, Admin huỷ, khoá tài khoản,
+  job quá hạn chưa chốt lịch), mọi đề nghị `PENDING` thành `DECLINED` và chat có thêm một tin `SYSTEM` ngắn. Không gửi
+  thông báo cho trường hợp này.
+- Frontend tìm đề nghị đang chờ trong `GET /messages`: tin `kind = OFFER_CHANGE` và `offerStatus = PENDING`. Phí hiển
+  thị cho chủ bài đọc từ `RequestResponse.conversionFee`, không viết cứng.
+
+## 4. POST /api/v1/requests/{requestId}/offer-changes
+
+Người nhận đề nghị đưa một món của mình vào đổi.
+
+- **Xác thực:** Bắt buộc JWT. **Chỉ người nhận** (`receiverId`) của giao dịch.
+- **Điều kiện:**
+  - Giao dịch `type = GIVE` và `status` là `RESERVED` hoặc `AWAITING_LOGISTICS`.
+  - Món đề nghị: của chính người nhận, `APPROVED`, `is_active`, chưa xoá, khác `itemId` của giao dịch (cùng điều kiện
+    CD-01 khi gửi yêu cầu).
+  - `content` (nếu có) qua cùng bộ lọc thông tin liên hệ và từ khoá cấm như tin văn bản.
+- **Request body:** `ProposeOfferChangeRequest`
+
+```json
+{
+  "offeredItemId": 60,
+  "content": "Mình gửi thêm cái ghế này để đổi nhé"
+}
+```
+
+- **Hành vi:** Đề nghị `PENDING` cũ (nếu có) chuyển `DECLINED`. Chủ bài nhận thông báo `OFFER_CHANGE_PROPOSED`.
+- **Thành công:** `201 Created`, trả về `MessageResponse` (có `itemCard` của món đề nghị).
+
+```json
+{
+  "id": 31,
+  "requestId": 100,
+  "senderId": 20,
+  "kind": "OFFER_CHANGE",
+  "content": "Mình gửi thêm cái ghế này để đổi nhé",
+  "mediaId": null,
+  "refItemId": 60,
+  "itemCard": {
+    "id": 60,
+    "title": "Ghế xoay văn phòng",
+    "offerType": "GIVE",
+    "status": "APPROVED",
+    "imageUrl": "/api/v1/media/15",
+    "donorId": 20
+  },
+  "offerStatus": "PENDING",
+  "moderation": "PASS",
+  "blockedReason": null,
+  "createdAt": "2026-10-14T15:00:00Z"
+}
+```
+
+- **Lỗi:**
+  - `400 VALIDATION_FAILED`: Thiếu `offeredItemId` hoặc `content` dài quá 500 ký tự.
+  - `400 CHAT_MESSAGE_BLOCKED`: Lời nhắn chứa thông tin liên hệ hoặc từ khoá cấm.
+  - `400 REQUEST_SELF_OFFER_NOT_ALLOWED`: Món đề nghị chính là bài của giao dịch.
+  - `403 CHAT_FORBIDDEN`: Người gọi không phải người nhận (kể cả chủ bài và người ngoài).
+  - `404 CHAT_REQUEST_NOT_FOUND`: Giao dịch không tồn tại.
+  - `404 REQUEST_ITEM_NOT_FOUND`: Món đề nghị không tồn tại hoặc đã xoá.
+  - `409 CHAT_REQUEST_NOT_RESERVED`: Giao dịch chưa mở chat (còn `PENDING`, `REJECTED`).
+  - `409 REQUEST_OFFER_CHANGE_NOT_ALLOWED`: Giao dịch đã là `SWAP` hoặc không còn `RESERVED` / `AWAITING_LOGISTICS`.
+  - `409 REQUEST_ITEM_NOT_AVAILABLE`: Món đề nghị không phải của người nhận, chưa `APPROVED` hoặc đang bị ẩn.
+
+---
+
+## 5. POST /api/v1/requests/{requestId}/offer-changes/{messageId}/accept
+
+Chủ bài đồng ý đề nghị; giao dịch Cho chuyển thành Trao đổi.
+
+- **Xác thực:** Bắt buộc JWT. **Chỉ chủ bài** (`donorId`).
+- **Hành vi** (một transaction, theo thứ tự):
+  1. Kiểm lại giao dịch (vẫn `GIVE`, vẫn `RESERVED` / `AWAITING_LOGISTICS`) và món đề nghị (vẫn hợp lệ).
+  2. Trừ `post_fee` Credit của chủ bài (`credit_ledger` loại `POST_FEE`). Thiếu tiền thì trả `402` và **không đổi gì**,
+     đề nghị vẫn `PENDING`.
+  3. Bài chính chuyển `offer_type = SWAP`; giao dịch `type = SWAP`, `offeredItemId` = món đề nghị.
+  4. Món đề nghị chuyển `RESERVED`. Lỗi ở bước này thì cả transaction hoàn tác, kể cả tiền.
+  5. Các yêu cầu `PENDING` khác dùng cùng món đề nghị bị `CANCELLED` (thông báo `REQUEST_CANCELLED`).
+  6. Đề nghị thành `ACCEPTED`; chat có tin `SYSTEM` "Chủ bài đã đồng ý trao đổi với [tên món]. Giao dịch chuyển sang
+     Trao đổi."; người nhận nhận thông báo `OFFER_CHANGE_ACCEPTED`.
+  - Không kiểm hạn mức bài theo hạng (giống chọn người nhận). Sau khi đồng ý, `GET /pinned-items` ghim đủ 2 món; điểm uy
+    tín khi hoàn tất tính theo `SWAP` (CD-07).
+- **Thành công:** `200 OK`, trả về `RequestResponse` mới (`type = SWAP`, có `offeredItemId`, `itemOfferType = SWAP`,
+  `conversionFee = 0`).
+- **Lỗi:**
+  - `402 WALLET_INSUFFICIENT_BALANCE`: Chủ bài không đủ Credit khả dụng để trả `post_fee`.
+  - `403 CHAT_FORBIDDEN`: Người gọi không phải chủ bài.
+  - `404 CHAT_REQUEST_NOT_FOUND`: Giao dịch không tồn tại.
+  - `409 CHAT_OFFER_CHANGE_NOT_FOUND`: `messageId` không thuộc giao dịch này hoặc không phải tin `OFFER_CHANGE`.
+  - `409 CHAT_OFFER_CHANGE_NOT_PENDING`: Đề nghị đã được trả lời hoặc đã tự huỷ.
+  - `409 REQUEST_OFFER_CHANGE_NOT_ALLOWED`: Giao dịch không còn là `GIVE` hoặc đã qua giai đoạn chốt lịch.
+  - `404 REQUEST_ITEM_NOT_FOUND`: Món đề nghị đã bị xoá sau khi gửi đề nghị.
+  - `409 REQUEST_ITEM_NOT_AVAILABLE` / `409 ITEM_INVALID_STATUS_TRANSITION`: Món đề nghị không còn sẵn sàng (đã bị
+    giữ ở giao dịch khác, bị ẩn...).
+
+---
+
+## 6. POST /api/v1/requests/{requestId}/offer-changes/{messageId}/decline
+
+Chủ bài từ chối đề nghị. Không tốn phí, giao dịch vẫn là Cho.
+
+- **Xác thực:** Bắt buộc JWT. **Chỉ chủ bài** (`donorId`).
+- **Hành vi:** Đề nghị thành `DECLINED`; chat có tin `SYSTEM` "Chủ bài chưa đồng ý đưa [tên món] vào trao đổi.";
+  người nhận nhận thông báo `OFFER_CHANGE_DECLINED`.
+- **Thành công:** `200 OK`, trả về `MessageResponse` của đề nghị (`offerStatus = DECLINED`).
+- **Lỗi:** `403 CHAT_FORBIDDEN`, `404 CHAT_REQUEST_NOT_FOUND`, `409 CHAT_OFFER_CHANGE_NOT_FOUND`,
+  `409 CHAT_OFFER_CHANGE_NOT_PENDING` (cùng ý nghĩa như mục 5).
+
+### Thông báo mới
+
+Theo cách module notification đang dùng (`type` là chuỗi, xem `docs/api/notification.md`); `link` mở thẳng cuộc trò
+chuyện của giao dịch.
+
+| `type` | Người nhận | Khi nào | `link` |
+|---|---|---|---|
+| `OFFER_CHANGE_PROPOSED` | Chủ bài | Người nhận gửi đề nghị đổi món | `/requests/{requestId}` |
+| `OFFER_CHANGE_ACCEPTED` | Người nhận | Chủ bài đồng ý, giao dịch chuyển sang Trao đổi | `/requests/{requestId}` |
+| `OFFER_CHANGE_DECLINED` | Người nhận | Chủ bài từ chối | `/requests/{requestId}` |
+
+---
+
 ## DTO Schemas
+
+### ProposeOfferChangeRequest
+
+| Trường | Kiểu | Bắt buộc | Ràng buộc / Ý nghĩa |
+|---|---|---|---|
+| `offeredItemId` | number | Có | ID món của người nhận muốn đưa vào đổi |
+| `content` | string? | Không | Lời nhắn kèm theo, tối đa 500 ký tự, qua bộ lọc liên hệ và từ khoá cấm |
 
 ### SendMessageRequest
 
@@ -221,13 +363,13 @@ Lấy danh sách thẻ sản phẩm ghim ở đầu khung chat (FR-69, BR-C02).
 |---|---|---|
 | `id` | number | ID tin nhắn |
 | `requestId` | number | ID yêu cầu giao dịch |
-| `senderId` | number | ID người gửi tin |
+| `senderId` | number? | ID người gửi tin; `null` với tin `SYSTEM` |
 | `kind` | string | `TEXT`, `IMAGE`, `ITEM_CARD`, `OFFER_CHANGE`, `SYSTEM` |
 | `content` | string? | Nội dung văn bản |
 | `mediaId` | number? | ID ảnh đính kèm (nếu `kind == IMAGE`) |
-| `refItemId` | number? | ID bài đăng đính kèm (nếu `kind == ITEM_CARD`) |
-| `itemCard` | ItemCardResponse? | Dữ liệu thẻ bài hiện tại được backend ghép tự động |
-| `offerStatus` | string? | Trạng thái đề xuất đổi món (`PENDING`, `ACCEPTED`, `DECLINED`) |
+| `refItemId` | number? | ID bài đăng đính kèm (`ITEM_CARD`) hoặc món đề nghị đổi (`OFFER_CHANGE`) |
+| `itemCard` | ItemCardResponse? | Dữ liệu thẻ bài hiện tại được backend ghép tự động (cả `ITEM_CARD` và `OFFER_CHANGE`) |
+| `offerStatus` | string? | Chỉ có ở `OFFER_CHANGE`: `PENDING`, `ACCEPTED`, `DECLINED`; các loại khác là `null` |
 | `moderation` | string | `PASS` hoặc `BLOCKED` |
 | `blockedReason` | string? | Lý do nếu tin bị chặn |
 | `createdAt` | string | Thời điểm tạo ISO-8601 UTC |
