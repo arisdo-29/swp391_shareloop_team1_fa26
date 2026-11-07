@@ -3,6 +3,7 @@ package com.shareloop.report.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -13,13 +14,16 @@ import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
 import com.shareloop.report.dto.CreateReportRequest;
+import com.shareloop.report.dto.MyReportSummary;
 import com.shareloop.report.dto.ReportResponse;
 import com.shareloop.report.entity.ReportReason;
 import com.shareloop.report.entity.ReportStage;
 import com.shareloop.report.entity.ReportStatus;
 import com.shareloop.report.entity.TargetType;
+import com.shareloop.report.service.MyReportQueryService;
 import com.shareloop.report.service.ReportService;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +50,9 @@ class ReportControllerTest {
 
     @MockitoBean
     ReportService reportService;
+
+    @MockitoBean
+    MyReportQueryService myReportQueryService;
 
     @Test
     @DisplayName("Gửi báo cáo khi chưa đăng nhập trả về 401 Unauthorized")
@@ -108,5 +115,43 @@ class ReportControllerTest {
                 .andExpect(jsonPath("$.reason").value("NOT_AS_DESCRIBED"))
                 .andExpect(jsonPath("$.description").value("Không đúng mô tả"))
                 .andExpect(jsonPath("$.status").value("OPEN"));
+    }
+
+    @Test
+    @DisplayName("Xem hồ sơ đã gửi khi chưa đăng nhập trả về 401 Unauthorized")
+    void listMine_withoutToken_returns401() throws Exception {
+        // when, then
+        mockMvc.perform(get(URL + "/mine")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Xem hồ sơ cần giải trình trả về danh sách của người đang đăng nhập")
+    void listAgainstMe_withToken_returnsMyReports() throws Exception {
+        // given
+        String token = jwtService.issue(USER_ID, false);
+        Instant dueAt = Instant.parse("2026-11-09T03:00:00Z");
+        MyReportSummary summary = new MyReportSummary(
+                4L,
+                TargetType.REQUEST,
+                null,
+                7L,
+                ReportReason.NO_SHOW,
+                ReportStatus.AWAITING_RESPONSE,
+                "Giáo trình Toán rời rạc",
+                Instant.parse("2026-11-06T03:00:00Z"),
+                dueAt,
+                null,
+                true,
+                null,
+                null);
+        when(myReportQueryService.listAgainstMe(USER_ID)).thenReturn(List.of(summary));
+
+        // when, then
+        mockMvc.perform(get(URL + "/against-me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(4))
+                .andExpect(jsonPath("$[0].requestId").value(7))
+                .andExpect(jsonPath("$[0].responseWindowOpen").value(true))
+                .andExpect(jsonPath("$[0].reporterId").doesNotExist());
     }
 }

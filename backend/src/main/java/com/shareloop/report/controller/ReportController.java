@@ -2,8 +2,10 @@ package com.shareloop.report.controller;
 
 import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.report.dto.CreateReportRequest;
+import com.shareloop.report.dto.MyReportSummary;
 import com.shareloop.report.dto.ReportResponse;
 import com.shareloop.report.dto.RespondReportRequest;
+import com.shareloop.report.service.MyReportQueryService;
 import com.shareloop.report.service.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -11,8 +13,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -30,9 +34,34 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReportController {
 
     private final ReportService reportService;
+    private final MyReportQueryService myReportQueryService;
 
-    public ReportController(ReportService reportService) {
+    public ReportController(ReportService reportService, MyReportQueryService myReportQueryService) {
         this.reportService = reportService;
+        this.myReportQueryService = myReportQueryService;
+    }
+
+    @Operation(
+            summary = "Xem báo cáo và khiếu nại tôi đã gửi",
+            description =
+                    "Yêu cầu đăng nhập. Trả mọi báo cáo bài đăng, người dùng và khiếu nại giao dịch người dùng đã "
+                            + "gửi, mới nhất lên trước, kèm trạng thái xử lý và ghi chú kết luận của Admin.")
+    @ApiResponse(responseCode = "200", description = "Danh sách hồ sơ đã gửi")
+    @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
+    @GetMapping("/mine")
+    public List<MyReportSummary> listMine(@Parameter(hidden = true) @CurrentUserId Long currentUserId) {
+        return myReportQueryService.listSent(currentUserId);
+    }
+
+    @Operation(
+            summary = "Xem hồ sơ cần tôi giải trình",
+            description = "Yêu cầu đăng nhập. Trả các báo cáo và khiếu nại nhắm vào người dùng đã có hạn giải trình, "
+                    + "mới nhất lên trước. Không kèm người gửi và mô tả để giữ kín bên báo cáo.")
+    @ApiResponse(responseCode = "200", description = "Danh sách hồ sơ cần giải trình")
+    @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
+    @GetMapping("/against-me")
+    public List<MyReportSummary> listAgainstMe(@Parameter(hidden = true) @CurrentUserId Long currentUserId) {
+        return myReportQueryService.listAgainstMe(currentUserId);
     }
 
     /**

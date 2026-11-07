@@ -434,6 +434,67 @@ FE (`/admin/complaints`): nút "Yêu cầu giải trình" hiện khi hồ sơ `O
 
 ---
 
+## 6. GET /api/v1/reports/mine
+
+Member xem các báo cáo bài đăng, người dùng và khiếu nại giao dịch mình đã gửi (FR-88, FR-89).
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT).
+- **Thành công:** `200 OK`, mảng `MyReportSummary`, mới nhất lên trước. Không phân trang.
+- **Lỗi:** `401 UNAUTHORIZED`.
+
+## 7. GET /api/v1/reports/against-me
+
+Member xem các hồ sơ nhắm vào mình **đã có hạn giải trình**: báo cáo bài/người dùng mà Admin đã yêu cầu giải trình (mục 5) và mọi khiếu nại giao dịch. Báo cáo còn `OPEN` chưa có hạn không trả về.
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT).
+- **Quy tắc:** bên bị phản ánh là `target_user_id` (chủ bài với báo cáo `ITEM`, đối tác với khiếu nại `REQUEST`).
+- **Thành công:** `200 OK`, mảng `MyReportSummary`, mới nhất lên trước. Không phân trang.
+- **Lỗi:** `401 UNAUTHORIZED`.
+
+FE (`/activities?tab=complaints`): nút giải trình dẫn tới `/me/disputes/{id}` với `REQUEST`, `/me/reports/{id}` với loại khác; chỉ bật khi `responseWindowOpen`.
+
+```json
+[
+  {
+    "id": 81,
+    "targetType": "REQUEST",
+    "itemId": null,
+    "requestId": 7,
+    "reason": "NO_SHOW",
+    "status": "AWAITING_RESPONSE",
+    "targetName": "Giáo trình Toán rời rạc",
+    "createdAt": "2026-11-06T03:00:00Z",
+    "responseDueAt": "2026-11-09T03:00:00Z",
+    "respondedAt": null,
+    "responseWindowOpen": true,
+    "resolution": null,
+    "resolvedAt": null
+  }
+]
+```
+
+### MyReportSummary
+
+Không có `reporterId` và `description` để bên bị phản ánh không biết ai đã báo cáo.
+
+| Trường | Kiểu | Ý nghĩa |
+|---|---|---|
+| `id` | number | ID hồ sơ |
+| `targetType` | string | `ITEM`, `USER`, `REQUEST` |
+| `itemId` | number? | Bài bị báo cáo (chỉ `ITEM`) |
+| `requestId` | number? | Giao dịch bị khiếu nại (chỉ `REQUEST`) |
+| `reason` | string | Lý do (`ReportReason`) |
+| `status` | string | `OPEN`, `AWAITING_RESPONSE`, `RESOLVED`, `DISMISSED` |
+| `targetName` | string? | Tiêu đề bài (`ITEM`/`REQUEST`) hoặc họ tên người bị báo cáo (`USER`); null khi đã bị xoá |
+| `createdAt` | string | Thời điểm gửi |
+| `responseDueAt` | string? | Hạn giải trình |
+| `respondedAt` | string? | Thời điểm đã giải trình |
+| `responseWindowOpen` | boolean | Còn chờ giải trình, chưa giải trình và chưa tới hạn |
+| `resolution` | string? | Ghi chú kết luận của Admin |
+| `resolvedAt` | string? | Thời điểm kết luận |
+
+---
+
 ## DTO & Enums
 
 ### ReportDecision
