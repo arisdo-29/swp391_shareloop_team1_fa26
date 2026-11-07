@@ -25,6 +25,7 @@ import {
   requestParticipantName,
   type ApiConversation,
 } from '../../components/messages/conversation';
+import type { DisputeResponse } from '../../services/reportApi';
 import { toBackendUserId, type RequestResponse } from '../../services/requestApi';
 import { canCancelTransaction, requestStatusLabel } from '../../utils/request';
 import { requestConversationPath } from '../../utils/chatMessages';
@@ -44,7 +45,13 @@ export function TransactionProgress() {
       </div>
     );
   }
-  return <TransactionProgressView requestId={Number(conversationId)} currentUserId={currentUserId} />;
+  return (
+    <TransactionProgressView
+      key={conversationId}
+      requestId={Number(conversationId)}
+      currentUserId={currentUserId}
+    />
+  );
 }
 
 function TransactionProgressView({
@@ -61,6 +68,7 @@ function TransactionProgressView({
   );
   const [openDialog, setOpenDialog] = useState<OpenDialog>(null);
   const [notice, setNotice] = useState('');
+  const [disputeReceipt, setDisputeReceipt] = useState<DisputeResponse | null>(null);
 
   if (loading && !request) {
     return (
@@ -122,7 +130,11 @@ function TransactionProgressView({
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-5">
-          <StepsCard request={request} onOpenDispute={() => setOpenDialog('dispute')} />
+          <StepsCard
+            request={request}
+            disputeReceipt={disputeReceipt}
+            onOpenDispute={() => setOpenDialog('dispute')}
+          />
           <PendingCard
             request={request}
             conversation={conversation}
@@ -199,9 +211,7 @@ function TransactionProgressView({
           viewerIsDonor={viewerIsDonor}
           onClose={() => setOpenDialog(null)}
           onStale={reload}
-          onReported={(updated) =>
-            finishAction(updated, 'Đã gửi báo cáo. Admin sẽ xem xét và báo kết quả cho hai bên.')
-          }
+          onReported={(updated) => finishAction(updated, 'Đã gửi báo cáo sự cố giao nhận.')}
         />
       ) : null}
       {openDialog === 'dispute' ? (
@@ -209,9 +219,10 @@ function TransactionProgressView({
           request={request}
           itemTitle={title}
           onClose={() => setOpenDialog(null)}
-          onSubmitted={(message) => {
+          onSubmitted={(receipt) => {
             setOpenDialog(null);
-            setNotice(message);
+            setNotice('');
+            setDisputeReceipt(receipt);
             reload();
           }}
         />

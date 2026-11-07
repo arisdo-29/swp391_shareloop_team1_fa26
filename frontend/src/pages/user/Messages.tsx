@@ -5,13 +5,10 @@ import { selectCurrentUser } from '../../app/store';
 import {
   Button,
   EmptyState,
-  Field,
   ItemImage,
   StatusBadge,
-  TextArea,
   TypeBadge,
 } from '../../components/ui';
-import { DialogFrame } from '../../components/Dialog';
 import {
   classifyAmbiguousContact,
   contactSafetyLayer1,
@@ -30,7 +27,6 @@ import {
 } from '../../utils/request';
 import { chatImageForbiddenMessage } from '../../utils/apiErrorMessages';
 import { mediaApi } from '../../services/mediaApi';
-import { respondDispute } from '../../services/reportApi';
 import {
   CHAT_POLL_INTERVAL_MS,
   mergeChatMessages,
@@ -42,7 +38,6 @@ import { ConversationList } from '../../components/messages/ConversationList';
 import { ChatHeader } from '../../components/messages/ChatHeader';
 import { ChatMessage } from '../../components/messages/ChatMessage';
 import { SelectRequestDialog } from '../../components/messages/SelectRequestDialog';
-import { disputeErrorMessage } from '../../utils/disputeErrors';
 import { productDetailFromRequestPath } from '../../utils/productDetailNavigation';
 import {
   donorIdOf,
@@ -98,9 +93,8 @@ function mergeConversationRequests(
 function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { requestId, disputeId } = useParams();
+  const { requestId } = useParams();
   const requestedId = requestId ? Number(requestId) : null;
-  const responseDisputeId = disputeId ? Number(disputeId) : null;
   const selectRequestParam = new URLSearchParams(location.search).get('selectRequest');
   const selectRequestFromUrl =
     selectRequestParam && /^[1-9]\d*$/.test(selectRequestParam) ? Number(selectRequestParam) : null;
@@ -128,11 +122,6 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [pinnedItemsReloadKey, setPinnedItemsReloadKey] = useState(0);
   const [shareItemId, setShareItemId] = useState('');
   const [shareableItems, setShareableItems] = useState<ItemResponse[]>([]);
-  const [responseNote, setResponseNote] = useState('');
-  const [responseEvidence, setResponseEvidence] = useState<File[]>([]);
-  const [responseSubmitting, setResponseSubmitting] = useState(false);
-  const [responseError, setResponseError] = useState('');
-  const [responseNotice, setResponseNotice] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatImageInputRef = useRef<HTMLInputElement>(null);
   const activeRequestId = useRef<number | null>(null);
@@ -543,37 +532,6 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     }
   };
 
-  const uploadEvidence = async (files: File[]) => {
-    const uploaded = await Promise.all(files.map((file) => mediaApi.upload(file)));
-    return uploaded.map((entry) => entry.mediaId);
-  };
-
-  const submitDisputeResponse = async () => {
-    if (
-      !responseDisputeId ||
-      !Number.isSafeInteger(responseDisputeId) ||
-      responseDisputeId <= 0 ||
-      !responseNote.trim() ||
-      responseSubmitting
-    )
-      return;
-    setResponseSubmitting(true);
-    setResponseError('');
-    try {
-      const evidenceMediaIds = responseEvidence.length
-        ? await uploadEvidence(responseEvidence)
-        : undefined;
-      await respondDispute(responseDisputeId, { note: responseNote.trim(), evidenceMediaIds });
-      setResponseNote('');
-      setResponseEvidence([]);
-      setResponseNotice('Giải trình đã được gửi đến quản trị viên.');
-    } catch (error) {
-      setResponseError(disputeErrorMessage(error));
-    } finally {
-      setResponseSubmitting(false);
-    }
-  };
-
   useEffect(() => {
     if (selectedRequestId) {
       markRequestChatSeen(selectedRequestId);
@@ -857,80 +815,6 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
             setReportNotice('Báo cáo đã được gửi đến quản trị viên để xem xét.');
           }}
         />
-      ) : null}
-      {responseDisputeId !== null ? (
-        <DialogFrame>
-          <h2 className="text-xl font-bold">Giải trình khiếu nại</h2>
-          <p className="mt-1 text-sm text-text-secondary">
-            Bạn có 48 giờ kể từ lúc nhận thông báo để gửi giải trình. Giờ hết hạn ghi trong thông
-            báo khiếu nại.
-          </p>
-          {responseNotice ? (
-            <div className="mt-5 space-y-4">
-              <div className="rounded-md bg-success-soft p-3 text-sm text-success">
-                {responseNotice}
-              </div>
-              <div className="flex justify-end">
-                <Button onClick={() => navigate('/messages')}>Về trang Tin nhắn</Button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <TextArea
-                className="mt-5"
-                label="Nội dung giải trình"
-                value={responseNote}
-                maxLength={1000}
-                disabled={responseSubmitting}
-                onChange={(event) => setResponseNote(event.target.value)}
-              />
-              <p className="mt-1 text-right text-xs text-text-muted">{responseNote.length}/1000</p>
-              <Field
-                className="mt-4"
-                label="Minh chứng"
-                type="file"
-                accept="image/*"
-                multiple
-                disabled={responseSubmitting}
-                onChange={(event) => setResponseEvidence(Array.from(event.target.files ?? []))}
-              />
-              {responseEvidence.length ? (
-                <p className="mt-2 text-xs text-text-muted">
-                  Đã chọn {responseEvidence.length} ảnh.
-                </p>
-              ) : null}
-              {!Number.isSafeInteger(responseDisputeId) || responseDisputeId <= 0 ? (
-                <div className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">
-                  Đường dẫn khiếu nại không hợp lệ.
-                </div>
-              ) : responseError ? (
-                <div className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">
-                  {responseError}
-                </div>
-              ) : null}
-              <div className="mt-6 flex justify-end gap-2">
-                <Button
-                  variant="ghost"
-                  disabled={responseSubmitting}
-                  onClick={() => navigate('/messages')}
-                >
-                  Hủy
-                </Button>
-                <Button
-                  disabled={
-                    responseSubmitting ||
-                    !responseNote.trim() ||
-                    !Number.isSafeInteger(responseDisputeId) ||
-                    responseDisputeId <= 0
-                  }
-                  onClick={() => void submitDisputeResponse()}
-                >
-                  {responseSubmitting ? 'Đang gửi...' : 'Gửi giải trình'}
-                </Button>
-              </div>
-            </>
-          )}
-        </DialogFrame>
       ) : null}
     </div>
   );

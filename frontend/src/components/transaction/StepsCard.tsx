@@ -1,5 +1,6 @@
 import { Alert, Button, Icon } from '../ui';
 import type { RequestResponse } from '../../services/requestApi';
+import type { DisputeResponse } from '../../services/reportApi';
 import { formatDateTime, formatDeadline } from '../../utils/request';
 import { completedStepCount, transactionSteps } from '../../utils/transactionSteps';
 
@@ -21,16 +22,6 @@ function StatusResult({ request }: { request: RequestResponse }) {
       <Alert tone="success">
         Giao dịch đã hoàn tất
         {request.completedAt ? ` lúc ${formatDateTime(request.completedAt)}` : ''}.
-      </Alert>
-    );
-  }
-  if (request.status === 'DISPUTED') {
-    return (
-      <Alert tone="warning">
-        Giao dịch đang có khiếu nại. Admin sẽ xem xét và báo kết quả cho hai bên.
-        {request.disputeResponseDueAt ? (
-          <> chờ chủ bài giải trình trước {formatDeadline(request.disputeResponseDueAt)}</>
-        ) : null}
       </Alert>
     );
   }
@@ -56,9 +47,11 @@ function StatusResult({ request }: { request: RequestResponse }) {
 export function StepsCard({
   request,
   onOpenDispute,
+  disputeReceipt,
 }: {
   request: RequestResponse;
   onOpenDispute: () => void;
+  disputeReceipt: DisputeResponse | null;
 }) {
   const done = completedStepCount(request.status);
   const canDispute = request.status === 'COMPLETED' && !request.disputeExpired;
@@ -109,28 +102,52 @@ export function StepsCard({
 
       <StatusResult request={request} />
 
-      {request.status === 'COMPLETED' ? (
-        <div className="space-y-2 text-sm">
-          <p>
-            <span className="label inline">Khiếu nại: </span>
-            {request.disputeExpired
-              ? 'Đã hết hạn khiếu nại'
-              : request.complaintDeadline
-                ? `Còn khiếu nại được đến ${formatDeadline(request.complaintDeadline)}`
-                : 'Còn trong hạn khiếu nại'}
-          </p>
-          {canDispute ? (
-            <>
-              <p className="text-xs text-text-secondary">
-                Chỉ khiếu nại khi món đồ có vấn đề. Đối tác sẽ có 48 giờ để giải trình.
+      {(request.status === 'COMPLETED' || request.status === 'DISPUTED') && (
+        <section
+          className="space-y-3 rounded-lg border border-border bg-surface-container/40 p-4"
+          aria-labelledby="transaction-help-title"
+        >
+          <h3 id="transaction-help-title" className="flex items-center gap-2 text-sm font-semibold">
+            <Icon name="complaints" className="size-4 text-primary" />
+            Hỗ trợ giao dịch
+          </h3>
+          {disputeReceipt ? (
+            <div role="status" className="space-y-2">
+              <Alert tone="success">Đã gửi khiếu nại #{disputeReceipt.id}</Alert>
+              <p className="text-sm leading-6 text-text-secondary">
+                Hạn giải trình của bên còn lại: {formatDeadline(disputeReceipt.responseDueAt)}. Quản
+                trị viên sẽ xem xét và gửi kết quả qua Thông báo.
               </p>
-              <Button variant="outline" onClick={onOpenDispute}>
-                Khiếu nại giao dịch
-              </Button>
-            </>
-          ) : null}
-        </div>
-      ) : null}
+            </div>
+          ) : request.status === 'DISPUTED' ? (
+            <div className="space-y-2 text-sm leading-6 text-text-secondary">
+              <p className="font-semibold text-warning">Giao dịch đang có khiếu nại</p>
+              {request.disputeResponseDueAt && (
+                <p>Hạn giải trình ghi nhận: {formatDeadline(request.disputeResponseDueAt)}.</p>
+              )}
+              <p>Xem yêu cầu giải trình và cập nhật xử lý trong Thông báo.</p>
+            </div>
+          ) : (
+            <div className="space-y-2 text-sm leading-6 text-text-secondary">
+              <p className="font-semibold">
+                {request.disputeExpired
+                  ? 'Đã hết hạn khiếu nại'
+                  : request.complaintDeadline
+                    ? `Hạn gửi khiếu nại: ${formatDeadline(request.complaintDeadline)}`
+                    : 'Còn trong hạn khiếu nại'}
+              </p>
+              {canDispute && (
+                <>
+                  <p>Gửi khiếu nại nếu có vấn đề với món đồ hoặc việc giao nhận.</p>
+                  <Button variant="outline" onClick={onOpenDispute}>
+                    Khiếu nại giao dịch
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+        </section>
+      )}
     </section>
   );
 }

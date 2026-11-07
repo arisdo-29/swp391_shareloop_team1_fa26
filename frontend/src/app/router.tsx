@@ -87,7 +87,7 @@ export const router = createBrowserRouter([
           { path: '/messages/:conversationId/progress', element: <TransactionProgress /> },
           // Giữ chỗ: Hồ sơ công khai dựng đầy đủ ở đợt sau.
           { path: '/users/:userId', element: <UserProfile /> },
-          { path: '/me/disputes/:disputeId', element: <Messages /> },
+          { path: '/me/disputes/:reportId', element: <ReportResponse kind="dispute" /> },
           { path: '/me/reports/:reportId', element: <ReportResponse /> },
           { path: '/credit', element: <Credit /> },
           { path: '/wallet', element: <Credit /> },

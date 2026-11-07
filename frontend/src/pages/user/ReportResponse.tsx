@@ -1,33 +1,21 @@
-import { useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Button, Field, PageHeader, TextArea } from '../../components/ui';
-import type { ApiError } from '../../services/http';
+import { useRef, useState, type FormEvent } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { ReportEvidenceField } from '../../components/ReportEvidenceField';
+import { Alert, Button, Icon, TextArea } from '../../components/ui';
 import { mediaApi } from '../../services/mediaApi';
-import { reportApi } from '../../services/reportApi';
+import { reportApi, respondDispute } from '../../services/reportApi';
+import { disputeErrorMessage } from '../../utils/disputeErrors';
 
-function responseErrorMessage(error: unknown) {
-  const apiError = error as Partial<ApiError>;
-  const messages: Record<string, string> = {
-    VALIDATION_FAILED: 'Nội dung giải trình chưa hợp lệ hoặc vượt quá 2.000 ký tự.',
-    REPORT_NOT_PARTICIPANT: 'Bạn không phải là người cần giải trình cho báo cáo này.',
-    REPORT_RESPONSE_NOT_ALLOWED: 'Báo cáo này không còn nhận giải trình.',
-    REPORT_NOT_FOUND: 'Không tìm thấy báo cáo cần giải trình.',
-    MEDIA_NOT_OWNER: 'Có ảnh minh chứng không thuộc quyền sở hữu của bạn.',
-    MEDIA_NOT_FOUND: 'Không tìm thấy một hoặc nhiều ảnh minh chứng.',
-    MEDIA_NOT_UPLOADED: 'Ảnh minh chứng đã được sử dụng hoặc không còn hợp lệ.',
-    MEDIA_INVALID_FILE: 'Danh sách ảnh minh chứng không hợp lệ hoặc bị trùng.',
-  };
-  if (apiError.code && messages[apiError.code]) return messages[apiError.code];
-  if (apiError.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
-  if (apiError.status === 0) return 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
-  return 'Không gửi được giải trình. Vui lòng thử lại.';
+export function ReportResponse({ kind = 'report' }: { kind?: 'report' | 'dispute' }) {
+  const { reportId } = useParams();
+  return <ResponseForm key={`${kind}-${reportId}`} reportId={Number(reportId)} kind={kind} />;
 }
 
-export function ReportResponse() {
-  const navigate = useNavigate();
-  const { reportId } = useParams();
-  const numericReportId = Number(reportId);
-  const validReportId = Number.isSafeInteger(numericReportId) && numericReportId > 0;
+function ResponseForm({ reportId, kind }: { reportId: number; kind: 'report' | 'dispute' }) {
+  const isDispute = kind === 'dispute';
+  const title = isDispute ? 'Giải trình khiếu nại giao dịch' : 'Giải trình báo cáo';
+  const maxLength = isDispute ? 1000 : 2000;
+  const validReportId = Number.isSafeInteger(reportId) && reportId > 0;
   const [response, setResponse] = useState('');
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -35,78 +23,108 @@ export function ReportResponse() {
   const [success, setSuccess] = useState(false);
   const inFlight = useRef(false);
 
-  const submit = async () => {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     const content = response.trim();
-    if (!validReportId || !content || content.length > 2000 || inFlight.current) return;
+    if (!validReportId || !content || content.length > maxLength || inFlight.current) return;
     inFlight.current = true;
     setSubmitting(true);
     setError('');
     try {
-      const uploads = evidenceFiles.length
-        ? await Promise.all(evidenceFiles.map((file) => mediaApi.upload(file)))
-        : [];
-      await reportApi.respond(numericReportId, {
-        response: content,
-        evidenceMediaIds: uploads.length ? uploads.map((entry) => entry.mediaId) : undefined,
-      });
+      const uploads = await Promise.all(evidenceFiles.map((file) => mediaApi.upload(file)));
+      const evidenceMediaIds = uploads.length ? uploads.map((entry) => entry.mediaId) : undefined;
+      if (isDispute) {
+        await respondDispute(reportId, { note: content, evidenceMediaIds });
+      } else {
+        await reportApi.respond(reportId, { response: content, evidenceMediaIds });
+      }
       setSuccess(true);
-      setResponse('');
-      setEvidenceFiles([]);
     } catch (caught) {
-      setError(responseErrorMessage(caught));
+      setError(disputeErrorMessage(caught));
     } finally {
       inFlight.current = false;
       setSubmitting(false);
     }
-  };
+  }
 
   return (
-    <div className="page-shell">
-      <PageHeader
-        title="Giải trình báo cáo"
-        description={validReportId ? 'Gửi nội dung giải trình cho báo cáo liên quan đến bạn.' : 'Đường dẫn báo cáo không hợp lệ'}
-      />
-      <section className="mx-auto max-w-2xl space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-border/80 sm:p-6">
-        {!validReportId ? <Alert tone="error">Đường dẫn báo cáo không hợp lệ.</Alert> : success ? (
-          <>
-            <Alert tone="success">Giải trình đã được gửi đến quản trị viên.</Alert>
-            <Button onClick={() => navigate('/messages')}>Về trang Tin nhắn</Button>
-          </>
-        ) : (
-          <>
-            <Alert tone="info">
-              Bạn có 48 giờ kể từ lúc nhận thông báo để gửi giải trình. Giờ hết hạn ghi trong thông báo, quá hạn thì báo
-              cáo không còn nhận giải trình.
-            </Alert>
-            <TextArea
-              label="Nội dung giải trình"
-              value={response}
-              maxLength={2000}
-              disabled={submitting}
-              onChange={(event) => setResponse(event.target.value)}
-            />
-            <p className="text-right text-xs text-text-muted">{response.length}/2000</p>
-            <Field
-              label="Ảnh minh chứng (không bắt buộc)"
-              type="file"
-              accept="image/*"
-              multiple
-              disabled={submitting}
-              onChange={(event) => setEvidenceFiles(Array.from(event.target.files ?? []))}
-            />
-            {evidenceFiles.length ? (
-              <p className="text-xs text-text-muted">Đã chọn {evidenceFiles.length} ảnh minh chứng.</p>
-            ) : null}
-            {error ? <Alert tone="error">{error}</Alert> : null}
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button variant="ghost" disabled={submitting} onClick={() => navigate('/messages')}>Hủy</Button>
-              <Button disabled={submitting || !response.trim()} onClick={() => void submit()}>
-                {submitting ? 'Đang gửi...' : 'Gửi giải trình'}
-              </Button>
+    <div className="page-shell py-6 sm:py-10">
+      <div className="mx-auto max-w-2xl">
+        <Link
+          to="/activities"
+          className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary hover:underline"
+        >
+          <Icon name="caretLeft" className="size-4" />
+          Về Hoạt động
+        </Link>
+        <section className="card mt-3 overflow-hidden" aria-labelledby="response-title">
+          <header className="border-b border-border bg-surface-container/50 p-5 sm:p-7">
+            <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
+              <Icon name="complaints" className="size-4" />
+              Hồ sơ {validReportId ? `#${reportId}` : ''}
+            </p>
+            <h1 id="response-title" className="page-title">
+              {title}
+            </h1>
+            <p className="mt-2 text-sm text-text-secondary">
+              Trình bày sự việc từ phía bạn để quản trị viên xem xét.
+            </p>
+          </header>
+          {!validReportId ? (
+            <div className="p-5 sm:p-7">
+              <Alert tone="error">Đường dẫn hồ sơ không hợp lệ. Hãy mở lại từ thông báo.</Alert>
             </div>
-          </>
-        )}
-      </section>
+          ) : success ? (
+            <div className="space-y-4 p-5 sm:p-7" role="status">
+              <Alert tone="success">Giải trình đã được gửi đến quản trị viên.</Alert>
+              <p className="text-sm text-text-secondary">
+                Quản trị viên sẽ xem nội dung và minh chứng trước khi kết luận.
+              </p>
+            </div>
+          ) : (
+            <form onSubmit={submit} className="space-y-5 p-5 sm:p-7">
+              <Alert tone="info">
+                Xem hạn giải trình trong thông báo dẫn đến trang này. Hồ sơ chỉ nhận giải trình
+                trong thời hạn đó.
+              </Alert>
+              <div>
+                <TextArea
+                  label="Nội dung giải trình (bắt buộc)"
+                  hint="Nêu thời điểm, việc đã xảy ra và ảnh nào giúp làm rõ."
+                  placeholder="Ví dụ: Tôi đã giao món đồ vào..."
+                  value={response}
+                  maxLength={maxLength}
+                  disabled={submitting}
+                  required
+                  onChange={(event) => setResponse(event.target.value)}
+                />
+                <p className="mt-1 text-right text-xs text-text-secondary">
+                  {response.length}/{maxLength}
+                </p>
+              </div>
+              <ReportEvidenceField
+                files={evidenceFiles}
+                onChange={setEvidenceFiles}
+                disabled={submitting}
+              />
+              {error && (
+                <div role="alert">
+                  <Alert tone="error">{error}</Alert>
+                </div>
+              )}
+              <div className="flex justify-end border-t border-border pt-4">
+                <Button
+                  type="submit"
+                  className="w-full sm:w-auto"
+                  disabled={submitting || !response.trim()}
+                >
+                  {submitting ? 'Đang gửi…' : 'Gửi giải trình'}
+                </Button>
+              </div>
+            </form>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

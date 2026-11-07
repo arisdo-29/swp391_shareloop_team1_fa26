@@ -529,7 +529,7 @@ describe('Ảnh khiếu nại', () => {
 
     // then
     expect(screen.getByRole('heading', { name: 'Ảnh khiếu nại' })).toBeTruthy();
-    expect(screen.getByText(/Chỉ gửi được trước 10:36 31\/10\/2026/)).toBeTruthy();
+    expect(screen.getByText(/Có thể bổ sung ảnh vào giao dịch trước 10:36 31\/10\/2026/)).toBeTruthy();
     expect(screen.getByLabelText('Chọn ảnh khiếu nại')).toBeTruthy();
   });
 
@@ -627,14 +627,14 @@ describe('Hạn giải trình khi giao dịch đang khiếu nại', () => {
       request({ status: 'DISPUTED', disputeResponseDueAt: '2026-10-31T07:30:00Z' }),
     );
 
-    expect(screen.getByText(/chờ chủ bài giải trình trước 14:30 31\/10/)).toBeTruthy();
+    expect(screen.getByText(/Hạn giải trình ghi nhận: 14:30 31\/10/)).toBeTruthy();
   });
 
   it('không hiện câu chờ giải trình khi deadline là null', async () => {
     await renderProgress(RECEIVER_ID, request({ status: 'DISPUTED', disputeResponseDueAt: null }));
 
     expect(screen.getByText(/Giao dịch đang có khiếu nại/)).toBeTruthy();
-    expect(screen.queryByText(/chờ chủ bài giải trình trước/)).toBeNull();
+    expect(screen.queryByText(/Hạn giải trình ghi nhận/)).toBeNull();
   });
 });
 

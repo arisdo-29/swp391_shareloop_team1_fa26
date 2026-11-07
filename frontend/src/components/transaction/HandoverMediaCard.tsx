@@ -66,7 +66,7 @@ export function HandoverMediaCard({ request }: { request: RequestResponse }) {
     <>
       <MediaSection
         stage="HANDOVER"
-        description="Chụp món đồ lúc giao. Admin xem khi có khiếu nại."
+        description="Lưu lại tình trạng món đồ lúc bàn giao."
         media={handoverMedia}
         onPreview={setPreview}
       >
@@ -106,10 +106,13 @@ export function HandoverMediaCard({ request }: { request: RequestResponse }) {
 /** Câu mô tả mục khiếu nại: còn hạn thì nói hạn chót, hết hạn thì nói không thêm được nữa. */
 function disputeDescription(request: RequestResponse, disputeOpen: boolean) {
   if (!disputeOpen) return 'Đã hết hạn khiếu nại, không thêm ảnh khiếu nại được nữa.';
-  if (request.status === 'COMPLETED' && request.complaintDeadline) {
-    return `Chỉ gửi được trước ${formatDateTime(request.complaintDeadline)}. Sau hạn này mục thêm ảnh khiếu nại sẽ đóng.`;
+  if (request.status === 'COMPLETED') {
+    const deadline = request.complaintDeadline
+      ? `Có thể bổ sung ảnh vào giao dịch trước ${formatDateTime(request.complaintDeadline)}. `
+      : '';
+    return `${deadline}Để gửi hồ sơ cho quản trị viên, dùng nút “Khiếu nại giao dịch” ở mục Hỗ trợ giao dịch.`;
   }
-  return 'Gửi ảnh cho thấy vấn đề của món đồ để Admin xem xét khiếu nại.';
+  return 'Ảnh bổ sung được lưu vào giao dịch. Nếu nhận được yêu cầu giải trình, hãy mở thông báo để gửi nội dung và ảnh giải trình.';
 }
 
 /** Một khối ảnh theo giai đoạn: tiêu đề, số ảnh, lưới ảnh đã gửi và phần thêm ảnh (children). */

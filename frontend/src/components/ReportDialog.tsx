@@ -1,27 +1,21 @@
 import { useRef, useState } from 'react';
 import type { ApiError } from '../services/http';
 import { reportApi, type ReportReason, type ReportTarget } from '../services/reportApi';
-import { Button, IconButton, Select, TextArea } from './ui';
+import { Alert, Button, IconButton, Select, TextArea } from './ui';
+import { ReportEvidenceField } from './ReportEvidenceField';
 import { DialogFrame } from './Dialog';
 import { mediaApi } from '../services/mediaApi';
-
-const reportReasonLabels: Record<ReportReason, string> = {
-  NOT_AS_DESCRIBED: 'Không đúng mô tả',
-  COUNTERFEIT: 'Hàng giả hoặc hàng nhái',
-  PROHIBITED_ITEM: 'Mặt hàng bị cấm',
-  NO_SHOW: 'Không đến theo lịch hẹn',
-  WRONG_CONTACT_INFO: 'Thông tin liên hệ không đúng',
-  HARASSMENT: 'Quấy rối',
-  OTHER: 'Lý do khác',
-};
+import { disputeReasonLabels } from '../utils/disputeErrors';
 
 const REPORT_DESCRIPTION_MAX_LENGTH = 2000;
 
 function reportErrorMessage(error: ApiError) {
   if (error.status === 400) return 'Thông tin báo cáo chưa hợp lệ. Vui lòng kiểm tra lại.';
   if (error.status === 404) return 'Không tìm thấy đối tượng cần báo cáo.';
-  if (error.status === 409) return 'Bạn không thể tự báo cáo mình hoặc đã báo cáo đối tượng này trước đó.';
-  if (error.status === 401 || error.status === 403) return 'Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.';
+  if (error.status === 409)
+    return 'Bạn không thể tự báo cáo mình hoặc đã báo cáo đối tượng này trước đó.';
+  if (error.status === 401 || error.status === 403)
+    return 'Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.';
   if (error.status === 0) return 'Không kết nối được máy chủ. Vui lòng thử lại.';
   return 'Không gửi được báo cáo. Vui lòng thử lại.';
 }
@@ -42,7 +36,7 @@ export function ReportDialog({ target, contextLabel, onClose, onSuccess }: Repor
   const submitInFlight = useRef(false);
 
   const submit = async () => {
-    if (!reason || submitInFlight.current) return;
+    if (!reason || !description.trim() || submitInFlight.current) return;
     submitInFlight.current = true;
     setSubmitting(true);
     setError('');
@@ -66,13 +60,18 @@ export function ReportDialog({ target, contextLabel, onClose, onSuccess }: Repor
   };
 
   return (
-    <DialogFrame>
+    <DialogFrame labelledBy="report-dialog-title" busy={submitting} onClose={onClose}>
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold">Gửi báo cáo vi phạm</h2>
-          <p className="mt-1 text-sm text-text-muted">{contextLabel} sẽ được chuyển đến quản trị viên xem xét.</p>
+          <h2 id="report-dialog-title" className="text-xl font-bold">
+            Gửi báo cáo vi phạm
+          </h2>
+          <p className="mt-1 text-sm text-text-muted">{contextLabel}</p>
         </div>
         <IconButton icon="close" label="Đóng" onClick={onClose} disabled={submitting} />
+      </div>
+      <div className="mt-4">
+        <Alert tone="info">Quản trị viên sẽ xem nội dung và ảnh đính kèm.</Alert>
       </div>
       <Select
         className="mt-5"
@@ -82,37 +81,43 @@ export function ReportDialog({ target, contextLabel, onClose, onSuccess }: Repor
         disabled={submitting}
       >
         <option value="">Chọn lý do báo cáo</option>
-        {Object.entries(reportReasonLabels).map(([value, label]) => (
-          <option key={value} value={value}>{label}</option>
+        {Object.entries(disputeReasonLabels).map(([value, label]) => (
+          <option key={value} value={value}>
+            {label}
+          </option>
         ))}
       </Select>
       <TextArea
         className="mt-4"
-        label="Mô tả chi tiết (không bắt buộc)"
+        label="Mô tả chi tiết (bắt buộc)"
+        hint="Cho biết nội dung nào vi phạm và vì sao bạn báo cáo."
+        required
         value={description}
         maxLength={REPORT_DESCRIPTION_MAX_LENGTH}
         onChange={(event) => setDescription(event.target.value)}
         disabled={submitting}
       />
-      <p className="mt-1 text-right text-xs text-text-muted">{description.length}/{REPORT_DESCRIPTION_MAX_LENGTH}</p>
-      <label className="mt-4 block">
-        <span className="label">Ảnh minh chứng (không bắt buộc)</span>
-        <input
-          className="input"
-          type="file"
-          accept="image/*"
-          multiple
+      <p className="mt-1 text-right text-xs text-text-muted">
+        {description.length}/{REPORT_DESCRIPTION_MAX_LENGTH}
+      </p>
+      <div className="mt-4">
+        <ReportEvidenceField
+          files={evidenceFiles}
+          onChange={setEvidenceFiles}
           disabled={submitting}
-          onChange={(event) => setEvidenceFiles(Array.from(event.target.files ?? []))}
         />
-      </label>
-      {evidenceFiles.length ? (
-        <p className="mt-2 text-xs text-text-muted">Đã chọn {evidenceFiles.length} ảnh minh chứng.</p>
+      </div>
+      {error ? (
+        <div className="mt-3 rounded-md bg-error-soft p-3 text-xs text-error">{error}</div>
       ) : null}
-      {error ? <div className="mt-3 rounded-md bg-error-soft p-3 text-xs text-error">{error}</div> : null}
       <div className="mt-6 flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose} disabled={submitting}>Hủy</Button>
-        <Button onClick={() => void submit()} disabled={submitting || !reason}>
+        <Button variant="ghost" onClick={onClose} disabled={submitting}>
+          Hủy
+        </Button>
+        <Button
+          onClick={() => void submit()}
+          disabled={submitting || !reason || !description.trim()}
+        >
           {submitting ? 'Đang gửi...' : 'Gửi báo cáo'}
         </Button>
       </div>
