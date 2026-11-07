@@ -45,7 +45,10 @@ function report(overrides: Partial<ReportResponse> = {}): ReportResponse {
   };
 }
 
-function detail(reportOverrides: Partial<ReportResponse>, overrides: Partial<AdminReportDetail> = {}) {
+function detail(
+  reportOverrides: Partial<ReportResponse>,
+  overrides: Partial<AdminReportDetail> = {},
+) {
   return {
     report: report(reportOverrides),
     reporter: { id: 2, fullName: 'Nguyễn Văn An' },
@@ -111,8 +114,30 @@ function rowValue(container: HTMLElement, label: string) {
 }
 
 describe('AdminComplaints', () => {
+  it('lọc được riêng khiếu nại giao dịch đang chờ giải trình', async () => {
+    const user = userEvent.setup();
+    vi.mocked(reportApi.list).mockResolvedValue({
+      items: [],
+      page: 0,
+      size: 20,
+      totalElements: 0,
+      totalPages: 0,
+    });
+    render(<AdminComplaints />);
+
+    await user.selectOptions(screen.getByLabelText('Loại hồ sơ'), 'REQUEST');
+    await user.click(screen.getByRole('button', { name: 'Chờ giải trình' }));
+
+    expect(reportApi.list).toHaveBeenLastCalledWith(
+      { targetType: 'REQUEST', status: 'AWAITING_RESPONSE', page: 0, size: 20 },
+      expect.any(AbortSignal),
+    );
+  });
+
   it('hồ sơ bác bỏ không trừ sao: ghi "Không trừ sao", không còn "trừ 0 sao"', async () => {
-    const { dialog, result } = await openDetail(detail({ status: 'DISMISSED' }, { starsDeducted: 0 }));
+    const { dialog, result } = await openDetail(
+      detail({ status: 'DISMISSED' }, { starsDeducted: 0 }),
+    );
 
     expect(rowValue(result, 'Kết luận')).toBe('Không có cơ sở');
     expect(rowValue(result, 'Người bị báo cáo')).toBe('Trần Thị Bình');
@@ -172,6 +197,13 @@ describe('AdminComplaints', () => {
     });
 
     await user.click(concludeButton);
+    const reviewButton = within(dialog).getByRole<HTMLButtonElement>('button', {
+      name: 'Kiểm tra kết luận',
+    });
+    expect(reviewButton.disabled).toBe(true);
+    await user.click(within(dialog).getByRole('radio', { name: /Chấp thuận/ }));
+    await user.click(reviewButton);
+    expect(reportApi.conclude).not.toHaveBeenCalled();
     await user.click(within(dialog).getByRole('button', { name: 'Xác nhận gửi' }));
 
     expect(
@@ -190,7 +222,7 @@ describe('AdminComplaints', () => {
 
     expect(reportApi.requestResponse).toHaveBeenCalledWith(7);
     expect(
-      await screen.findByText('Đã yêu cầu giải trình. Bên bị báo cáo có 48 giờ để gửi giải trình.'),
+      await screen.findByText('Đã gửi yêu cầu giải trình. Xem hạn phản hồi trong hồ sơ.'),
     ).toBeTruthy();
     expect(reportApi.detail).toHaveBeenCalledTimes(2);
   });

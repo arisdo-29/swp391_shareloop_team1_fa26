@@ -45,7 +45,7 @@ describe('DisputeDialog', () => {
     const user = userEvent.setup();
     const onSubmitted = renderDialog();
     await user.selectOptions(screen.getByLabelText('Lý do'), 'OTHER');
-    const noteInput = screen.getByLabelText('Nội dung (không bắt buộc)');
+    const noteInput = screen.getByLabelText(/Nội dung \(bắt buộc\)/);
     fireEvent.change(noteInput, {
       target: { value: '   ' },
     });

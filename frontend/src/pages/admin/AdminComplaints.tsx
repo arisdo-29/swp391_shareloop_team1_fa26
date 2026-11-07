@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Alert, Button, EmptyState, PageHeader, Select, TextArea, SkeletonRows } from '../../components/ui';
+import {
+  Alert,
+  Button,
+  EmptyState,
+  Icon,
+  PageHeader,
+  Select,
+  SkeletonRows,
+  TextArea,
+} from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
 import {
   reportApi,
@@ -9,14 +18,16 @@ import {
   type ReportStatus,
   type ReportTargetType,
   type ReportEvidence,
+  type ReportResponse,
 } from '../../services/reportApi';
 import type { ApiError } from '../../services/http';
 import { formatDeadline } from '../../utils/request';
+import { disputeReasonLabels } from '../../utils/disputeErrors';
 
 const statusLabels: Record<ReportStatus, string> = {
   OPEN: 'Chờ xử lý',
   AWAITING_RESPONSE: 'Chờ giải trình',
-  RESOLVED: 'Có cơ sở',
+  RESOLVED: 'Đã chấp thuận',
   DISMISSED: 'Đã bác bỏ',
 };
 const targetLabels: Record<ReportTargetType, string> = {
@@ -24,26 +35,29 @@ const targetLabels: Record<ReportTargetType, string> = {
   USER: 'Người dùng',
   REQUEST: 'Giao dịch',
 };
-const targetFilterOptions = [
-  { value: 'ITEM', label: 'Báo cáo bài đăng' },
-  { value: 'USER', label: 'Báo cáo người dùng' },
-] satisfies { value: ReportTargetType; label: string }[];
-const reasonLabels: Record<string, string> = {
-  NOT_AS_DESCRIBED: 'Không đúng mô tả',
-  COUNTERFEIT: 'Hàng giả',
-  PROHIBITED_ITEM: 'Hàng cấm',
-  NO_SHOW: 'Không đến hẹn',
-  WRONG_CONTACT_INFO: 'Sai thông tin liên hệ',
-  HARASSMENT: 'Quấy rối',
-  OTHER: 'Khác',
+const filters: { value: ReportStatus | ''; label: string }[] = [
+  { value: '', label: 'Tất cả' },
+  { value: 'OPEN', label: 'Chờ xử lý' },
+  { value: 'AWAITING_RESPONSE', label: 'Chờ giải trình' },
+  { value: 'RESOLVED', label: 'Đã chấp thuận' },
+  { value: 'DISMISSED', label: 'Đã bác bỏ' },
+];
+const decisionLabels: Record<ReportDecision, string> = {
+  UPHOLD: 'Chấp thuận · Có cơ sở',
+  DISMISS: 'Bác bỏ · Không có cơ sở',
 };
+function reportReasonLabel(report: ReportResponse) {
+  if (report.targetType === 'REQUEST' && report.reason === 'NO_SHOW') return 'Sự cố giao nhận';
+  return disputeReasonLabels[report.reason] ?? report.reason;
+}
+
 const date = (value: string | null) =>
   value ? new Date(value).toLocaleString('vi-VN') : 'Chưa có';
 const concluded = (status: ReportStatus) => status === 'RESOLVED' || status === 'DISMISSED';
 const statusTones: Record<ReportStatus, string> = {
   OPEN: 'bg-warning-soft text-warning',
   AWAITING_RESPONSE: 'bg-info-soft text-info',
-  RESOLVED: 'bg-error-soft text-error',
+  RESOLVED: 'bg-success-soft text-success',
   DISMISSED: 'bg-surface-container text-text-secondary',
 };
 
@@ -51,7 +65,7 @@ const statusTones: Record<ReportStatus, string> = {
 function ReportStatusBadge({ status }: { status: ReportStatus }) {
   return (
     <span
-      className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-2xs font-semibold ${statusTones[status]}`}
+      className={`inline-flex whitespace-nowrap rounded-sm px-2 py-1 text-xs font-semibold ${statusTones[status]}`}
     >
       {statusLabels[status]}
     </span>
@@ -68,13 +82,17 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
 }
 
 function reportedUserName(detail: AdminReportDetail) {
-  return detail.reportedUser ? (detail.reportedUser.fullName ?? 'Người dùng') : 'Không còn xác định được';
+  return detail.reportedUser
+    ? (detail.reportedUser.fullName ?? 'Người dùng')
+    : 'Không còn xác định được';
 }
 
 // Hệ quả của kết luận đã lưu, khớp với xử lý ở backend (ReportService.conclude).
 function consequences(detail: AdminReportDetail) {
   const upheld = detail.report.status === 'RESOLVED';
-  const parts = [detail.starsDeducted > 0 ? `Trừ ${detail.starsDeducted} sao uy tín` : 'Không trừ sao'];
+  const parts = [
+    detail.starsDeducted > 0 ? `Trừ ${detail.starsDeducted} sao uy tín` : 'Không trừ sao',
+  ];
   if (detail.report.targetType === 'ITEM') parts.push(upheld ? 'Ẩn bài đăng' : 'Không ẩn bài');
   if (detail.report.targetType === 'REQUEST') {
     parts.push(
@@ -148,6 +166,9 @@ function EvidenceGallery({
       <p className="mb-2 font-semibold text-text-secondary">
         {title} ({evidence.length})
       </p>
+      {evidence.length === 0 && (
+        <p className="text-sm text-text-secondary">Không có ảnh đính kèm.</p>
+      )}
       <div className="grid grid-cols-2 gap-2">
         {evidence.map((entry) => (
           <EvidenceImage
@@ -170,12 +191,14 @@ export function AdminComplaints() {
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const opener = useRef<HTMLButtonElement>(null);
   const [detail, setDetail] = useState<AdminReportDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
-  const [decision, setDecision] = useState<ReportDecision>('UPHOLD');
+  const [decision, setDecision] = useState<ReportDecision | ''>('');
   const [note, setNote] = useState('');
-  const [confirming, setConfirming] = useState(false);
+  const [decisionStep, setDecisionStep] = useState<'review' | 'choose' | 'confirm'>('review');
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const [notice, setNotice] = useState('');
@@ -213,9 +236,9 @@ export function AdminComplaints() {
     setDetail(null);
     setDetailLoading(true);
     setDetailError('');
-    setConfirming(false);
+    setDecisionStep('review');
     setNote('');
-    setDecision('UPHOLD');
+    setDecision('');
     reportApi
       .detail(selectedId, controller.signal)
       .then((result) => {
@@ -230,13 +253,19 @@ export function AdminComplaints() {
     return () => controller.abort();
   }, [selectedId, reload]);
 
+  useEffect(() => {
+    if (selectedId === null) opener.current?.focus();
+    else closeButton.current?.focus();
+  }, [selectedId]);
+
   async function submit() {
     if (
       !detail ||
       concluded(detail.report.status) ||
       detail.responseWindowOpen ||
       submittingRef.current ||
-      !confirming ||
+      decisionStep !== 'confirm' ||
+      !decision ||
       note.length > 500
     )
       return;
@@ -255,7 +284,6 @@ export function AdminComplaints() {
         // Dữ liệu trên trang đã cũ (mở hồ sơ trước khi nó chuyển sang chờ giải trình): tải lại để thấy hạn giải trình
         setNoticeTone('warning');
         setNotice('Bên bị báo cáo vẫn đang trong hạn giải trình, chưa thể kết luận.');
-        setConfirming(false);
         setDetail(null);
         setReload((value) => value + 1);
       } else if (failure.status === 409) {
@@ -271,7 +299,6 @@ export function AdminComplaints() {
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
-      setConfirming(false);
     }
   }
 
@@ -291,7 +318,7 @@ export function AdminComplaints() {
     try {
       await reportApi.requestResponse(detail.report.id);
       setNoticeTone('success');
-      setNotice('Đã yêu cầu giải trình. Bên bị báo cáo có 48 giờ để gửi giải trình.');
+      setNotice('Đã gửi yêu cầu giải trình. Xem hạn phản hồi trong hồ sơ.');
       setDetail(null);
       setReload((value) => value + 1);
     } catch (error) {
@@ -312,49 +339,65 @@ export function AdminComplaints() {
     }
   }
 
+  const closeDetail = () => setSelectedId(null);
+  const title = detail?.report.targetName;
+  const detailIsConcluded = detail && concluded(detail.report.status);
+
   return (
     <section>
-      <PageHeader title="Khiếu nại" description="Hồ sơ cần quản trị viên xem xét và kết luận." />
-      {notice && (
+      <PageHeader
+        title="Khiếu nại và báo cáo"
+        description="Xem xét sự việc, đối chiếu minh chứng và kết luận từng hồ sơ."
+      />
+      {notice && selectedId === null && (
         <div className="mb-4" role="status">
           <Alert tone={noticeTone}>{notice}</Alert>
         </div>
       )}
-      <div className="mb-5 flex flex-wrap gap-3 rounded-lg bg-white p-3 ring-1 ring-border/80">
-        <Select
-          aria-label="Lọc trạng thái"
-          value={status}
-          disabled={submitting}
-          onChange={(event) => {
-            setStatus(event.target.value as ReportStatus | '');
-            setPage(0);
-            setSelectedId(null);
-          }}
-        >
-          <option value="">Tất cả trạng thái</option>
-          {Object.entries(statusLabels).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </Select>
-        <Select
-          aria-label="Lọc đối tượng"
-          value={targetType}
-          disabled={submitting}
-          onChange={(event) => {
-            setTargetType(event.target.value as ReportTargetType | '');
-            setPage(0);
-            setSelectedId(null);
-          }}
-        >
-          <option value="">Nội dung báo cáo</option>
-          {targetFilterOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </Select>
+      <div className="mb-4 space-y-3 rounded-lg border border-border bg-surface p-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="label">Trạng thái</p>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Lọc trạng thái">
+              {filters.map(({ value, label }) => (
+                <Button
+                  key={value}
+                  size="sm"
+                  variant={status === value ? 'primary' : 'outline'}
+                  aria-pressed={status === value}
+                  disabled={submitting}
+                  onClick={() => {
+                    setStatus(value);
+                    setPage(0);
+                    closeDetail();
+                  }}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <Select
+            label="Loại hồ sơ"
+            value={targetType}
+            disabled={submitting}
+            onChange={(event) => {
+              setTargetType(event.target.value as ReportTargetType | '');
+              setPage(0);
+              closeDetail();
+            }}
+          >
+            <option value="">Tất cả loại hồ sơ</option>
+            <option value="REQUEST">Khiếu nại giao dịch</option>
+            <option value="ITEM">Báo cáo bài đăng</option>
+            <option value="USER">Báo cáo người dùng</option>
+          </Select>
+        </div>
+        {status === 'AWAITING_RESPONSE' && (
+          <p className="text-sm text-text-secondary">
+            Mở hồ sơ để xem hạn giải trình. Hồ sơ đã quá hạn có thể được kết luận.
+          </p>
+        )}
       </div>
       {listLoading ? (
         <SkeletonRows label="Đang tải khiếu nại" />
@@ -365,162 +408,207 @@ export function AdminComplaints() {
         </div>
       ) : list?.items.length ? (
         <>
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Người gửi</th>
-                  <th>Nội dung bị khiếu nại</th>
-                  <th>Lý do</th>
-                  <th>Ngày gửi</th>
-                  <th>Trạng thái</th>
-                  <th>Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.items.map((report) => (
-                  <tr key={report.id}>
-                    <td>{report.reporterName || 'Người dùng đã xóa'}</td>
-                    <td>
-                      <span className="text-xs text-text-muted">{targetLabels[report.targetType]}</span>
-                      <p className="font-semibold">{report.targetName || 'Không còn xác định được'}</p>
-                    </td>
-                    <td>{reasonLabels[report.reason] ?? report.reason}</td>
-                    <td>{date(report.createdAt)}</td>
-                    <td>
-                      <ReportStatusBadge status={report.status} />
-                    </td>
-                    <td>
-                      <Button
-                        variant="outline"
-                        disabled={submitting}
-                        onClick={() => {
-                          setDetail(null);
-                          setDetailError('');
-                          setSelectedId(report.id);
-                        }}
-                      >
-                        Xem chi tiết
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-4 flex items-center justify-end gap-3">
-            <span className="text-sm">
-              Trang {page + 1}/{list.totalPages} · {list.totalElements} hồ sơ
+          <ul
+            aria-label="Danh sách hồ sơ"
+            className="divide-y divide-border rounded-lg border border-border bg-surface"
+          >
+            {list.items.map((report) => (
+              <li
+                key={report.id}
+                className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+              >
+                <div className="min-w-0 space-y-1">
+                  <p className="flex flex-wrap items-center gap-x-2 text-xs font-semibold text-text-secondary">
+                    <span>#{report.id}</span>
+                    <span aria-hidden>·</span>
+                    <span>{targetLabels[report.targetType]}</span>
+                  </p>
+                  <h2
+                    id={`report-row-${report.id}`}
+                    className="break-words text-base font-semibold"
+                  >
+                    {report.targetName || 'Đối tượng không còn khả dụng'}
+                  </h2>
+                  <p className="break-words text-sm text-text-secondary">
+                    {reportReasonLabel(report)}
+                  </p>
+                  <p className="break-words text-xs leading-5 text-text-secondary">
+                    {report.reporterName || 'Người dùng đã xóa'} · {date(report.createdAt)}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
+                  <ReportStatusBadge status={report.status} />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={submitting}
+                    aria-describedby={`report-row-${report.id}`}
+                    onClick={(event) => {
+                      opener.current = event.currentTarget;
+                      setNotice('');
+                      setDetail(null);
+                      setDetailError('');
+                      setSelectedId(report.id);
+                    }}
+                  >
+                    Xem chi tiết
+                    <Icon name="caretRight" className="size-4" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-sm text-text-secondary">
+              {list.totalElements} hồ sơ · Trang {page + 1}/{list.totalPages}
             </span>
-            <Button
-              variant="outline"
-              disabled={page === 0 || submitting}
-              onClick={() => setPage((value) => value - 1)}
-            >
-              Trước
-            </Button>
-            <Button
-              variant="outline"
-              disabled={page + 1 >= list.totalPages || submitting}
-              onClick={() => setPage((value) => value + 1)}
-            >
-              Sau
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                disabled={page === 0 || submitting}
+                onClick={() => setPage((value) => value - 1)}
+              >
+                Trước
+              </Button>
+              <Button
+                variant="outline"
+                disabled={page + 1 >= list.totalPages || submitting}
+                onClick={() => setPage((value) => value + 1)}
+              >
+                Sau
+              </Button>
+            </div>
           </div>
         </>
       ) : (
-        <EmptyState title="Không có khiếu nại" text="Không có hồ sơ phù hợp bộ lọc hiện tại." />
+        <EmptyState title="Không có hồ sơ" text="Không có hồ sơ phù hợp với bộ lọc hiện tại." />
       )}
       {selectedId !== null && (
-        <DialogFrame labelledBy="report-detail-title" size="xl">
-          <div className="mb-4">
+        <DialogFrame
+          labelledBy="report-detail-title"
+          size="xl"
+          className="md:max-w-5xl"
+          busy={submitting}
+          onClose={closeDetail}
+        >
+          <header className="mb-5 flex items-start justify-between gap-3 border-b border-border pb-4">
             <div className="min-w-0">
+              <p className="mb-1 text-xs font-semibold text-text-secondary">
+                Hồ sơ #{selectedId}
+                {detail ? ` · ${targetLabels[detail.report.targetType]}` : ''}
+              </p>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 id="report-detail-title" className="section-title">
-                  Hồ sơ khiếu nại
+                <h2 id="report-detail-title" className="section-title break-words">
+                  {title || 'Hồ sơ khiếu nại'}
                 </h2>
                 {detail && <ReportStatusBadge status={detail.report.status} />}
               </div>
               {detail && (
-                <p className="mt-1 text-sm text-text-secondary">Gửi lúc {date(detail.report.createdAt)}</p>
+                <p className="mt-1 text-sm text-text-secondary">
+                  Gửi lúc {date(detail.report.createdAt)}
+                </p>
               )}
             </div>
-          </div>
-          {detailLoading && <p role="status">Đang tải hồ sơ…</p>}
+            <button
+              ref={closeButton}
+              type="button"
+              aria-label="Đóng hồ sơ"
+              disabled={submitting}
+              onClick={closeDetail}
+              className="grid size-11 shrink-0 place-items-center rounded-md border border-border text-text-primary hover:bg-primary-faint disabled:opacity-40"
+            >
+              <Icon name="close" className="size-5" />
+            </button>
+          </header>
+          {notice && (
+            <div className="mb-4" role="status">
+              <Alert tone={noticeTone}>{notice}</Alert>
+            </div>
+          )}
+          {detailLoading && <SkeletonRows label="Đang tải hồ sơ" />}
           {detailError && (
             <div role="alert" className="mb-4 space-y-2">
               <Alert tone="warning">{detailError}</Alert>
-              <Button disabled={submitting} onClick={() => setReload((value) => value + 1)}>
-                Thử tải lại
-              </Button>
+              {!detail && (
+                <Button onClick={() => setReload((value) => value + 1)}>Thử tải lại</Button>
+              )}
             </div>
           )}
           {detail && (
             <div className="space-y-4 text-sm">
-              <dl className="space-y-2">
-                <DetailRow label="Người gửi">{detail.reporter.fullName ?? 'Người dùng'}</DetailRow>
-                <DetailRow label="Người bị báo cáo">{reportedUserName(detail)}</DetailRow>
-                {detail.relatedItemId !== null && (
-                  <DetailRow label="Bài đăng liên quan">
-                    {detail.relatedItemTitle ?? 'Bài đăng đã bị xóa'}
-                  </DetailRow>
-                )}
-                <DetailRow label="Giai đoạn">
-                  {detail.report.stage === 'BEFORE' ? 'Trước giao dịch' : 'Sau giao dịch'}
-                </DetailRow>
-              </dl>
-              <section className="space-y-3 border-t border-border pt-4">
-                <h3 className="font-semibold text-text-primary">Nội dung khiếu nại</h3>
-                <div className="rounded-md bg-surface-low p-3">
-                  <strong>{reasonLabels[detail.report.reason] ?? detail.report.reason}</strong>
-                  <p className="mt-2 whitespace-pre-wrap">{detail.report.description}</p>
+              {detail.responseWindowOpen && (
+                <Alert tone="info">
+                  {detail.responseDueAt
+                    ? `Hạn giải trình: ${formatDeadline(detail.responseDueAt)}. `
+                    : ''}
+                  Chỉ kết luận được khi bên bị báo cáo đã giải trình hoặc đã hết hạn.
+                </Alert>
+              )}
+              <dl className="grid gap-3 rounded-lg bg-surface-container/50 p-4 sm:grid-cols-2">
+                <div className="min-w-0">
+                  <dt className="label">Người gửi</dt>
+                  <dd className="break-words font-semibold">
+                    {detail.reporter.fullName ?? 'Người dùng'}
+                  </dd>
                 </div>
-                {detail.evidence.length ? (
+                <div className="min-w-0">
+                  <dt className="label">Người bị báo cáo</dt>
+                  <dd className="break-words font-semibold">{reportedUserName(detail)}</dd>
+                </div>
+                {detail.relatedItemId !== null && (
+                  <div className="min-w-0">
+                    <dt className="label">Bài đăng liên quan</dt>
+                    <dd className="break-words">
+                      {detail.relatedItemTitle ?? 'Bài đăng đã bị xóa'}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+              <div className="grid gap-4 md:grid-cols-2">
+                <section className="min-w-0 space-y-3 rounded-lg border border-border p-4">
+                  <h3 className="font-semibold">Nội dung người gửi</h3>
+                  <p className="font-semibold text-primary">{reportReasonLabel(detail.report)}</p>
+                  <p className="whitespace-pre-wrap break-words leading-6">
+                    {detail.report.description}
+                  </p>
                   <EvidenceGallery
                     reportId={detail.report.id}
-                    title="Ảnh bằng chứng của người gửi"
+                    title="Ảnh người gửi"
                     evidence={detail.evidence}
                   />
-                ) : (
-                  <p className="text-text-secondary">Không kèm ảnh bằng chứng.</p>
-                )}
-              </section>
-              <section className="space-y-3 border-t border-border pt-4">
-                <h3 className="font-semibold text-text-primary">Giải trình</h3>
-                {detail.response ? (
-                  <>
-                    <div className="rounded-md bg-surface-low p-3">
-                      <p className="whitespace-pre-wrap">{detail.response}</p>
-                    </div>
-                    {detail.respondedAt && (
-                      <p className="text-text-secondary">Giải trình lúc {date(detail.respondedAt)}</p>
-                    )}
-                    {detail.responseEvidence.length > 0 && (
+                </section>
+                <section className="min-w-0 space-y-3 rounded-lg border border-border p-4">
+                  <h3 className="font-semibold">Giải trình của bên bị báo cáo</h3>
+                  {detail.response ? (
+                    <>
+                      <p className="whitespace-pre-wrap break-words leading-6">{detail.response}</p>
+                      {detail.respondedAt && (
+                        <p className="text-xs text-text-secondary">
+                          Gửi lúc {date(detail.respondedAt)}
+                        </p>
+                      )}
                       <EvidenceGallery
                         reportId={detail.report.id}
-                        title="Ảnh bằng chứng của người giải trình"
+                        title="Ảnh giải trình"
                         evidence={detail.responseEvidence}
                       />
-                    )}
-                  </>
-                ) : (
-                  <p className="text-text-secondary">
-                    Chưa có giải trình.
-                    {detail.responseDueAt
-                      ? ` Hạn giải trình: ${formatDeadline(detail.responseDueAt)}.`
-                      : ''}
-                  </p>
-                )}
-              </section>
-              {concluded(detail.report.status) ? (
-                <section className="rounded-md bg-surface-low p-4">
-                  <h3 className="mb-3 font-semibold text-text-primary">Kết quả xử lý</h3>
+                    </>
+                  ) : (
+                    <p className="text-text-secondary">Chưa có giải trình.</p>
+                  )}
+                </section>
+              </div>
+              {detailIsConcluded ? (
+                <section className="rounded-lg border border-border bg-surface-container/50 p-4">
+                  <h3 className="mb-3 font-semibold">Kết quả xử lý</h3>
                   <dl className="space-y-2">
                     <DetailRow label="Kết luận">
                       {detail.report.status === 'RESOLVED' ? 'Có cơ sở' : 'Không có cơ sở'}
                     </DetailRow>
                     <DetailRow
-                      label={detail.report.status === 'RESOLVED' ? 'Người bị xử lý' : 'Người bị báo cáo'}
+                      label={
+                        detail.report.status === 'RESOLVED' ? 'Người bị xử lý' : 'Người bị báo cáo'
+                      }
                     >
                       {reportedUserName(detail)}
                     </DetailRow>
@@ -532,87 +620,120 @@ export function AdminComplaints() {
                     )}
                   </dl>
                   <p className="mt-3 border-t border-border pt-3 text-text-secondary">
-                    {detail.resolvedByName ?? 'Quản trị viên'} kết luận lúc {date(detail.resolvedAt)}
+                    {detail.resolvedByName ?? 'Quản trị viên'} kết luận lúc{' '}
+                    {date(detail.resolvedAt)}
                   </p>
                 </section>
               ) : (
-                <section className="space-y-4 border-t border-border pt-4">
-                  {detail.responseWindowOpen && detail.responseDueAt ? (
-                    <Alert tone="info">
-                      Hạn giải trình: {formatDeadline(detail.responseDueAt)}. Chỉ kết luận được khi
-                      bên bị báo cáo đã giải trình hoặc đã hết hạn.
+                <section className="space-y-4 rounded-lg border border-border bg-surface-container/50 p-4">
+                  <h3 className="font-semibold">Bước tiếp theo</h3>
+                  {detail.responseWindowOpen ? (
+                    <p className="text-text-secondary">
+                      Cập nhật hồ sơ để kiểm tra xem bên bị báo cáo đã gửi giải trình chưa.
+                    </p>
+                  ) : detail.report.status === 'AWAITING_RESPONSE' ? (
+                    <Alert tone="warning">
+                      {detail.responseDueAt && detail.responseWindowOpen === false
+                        ? `Đã hết hạn giải trình lúc ${formatDeadline(detail.responseDueAt)}.`
+                        : 'Hồ sơ đang chờ giải trình. Kiểm tra lại trạng thái trước khi kết luận.'}
                     </Alert>
-                  ) : null}
-                  <Select
-                    label="Kết luận"
-                    value={decision}
-                    disabled={submitting || confirming || detail.responseWindowOpen}
-                    onChange={(event) => setDecision(event.target.value as ReportDecision)}
-                  >
-                    <option value="UPHOLD">Có cơ sở</option>
-                    <option value="DISMISS">Không có cơ sở (bác bỏ)</option>
-                  </Select>
-                  <TextArea
-                    label="Ghi chú kết luận (tối đa 500 ký tự, không bắt buộc)"
-                    value={note}
-                    maxLength={500}
-                    disabled={submitting || confirming || detail.responseWindowOpen}
-                    onChange={(event) => setNote(event.target.value)}
-                  />
-                  {confirming ? (
-                    <div className="space-y-3 rounded-md bg-background p-3">
-                      <p>
-                        Xác nhận{' '}
-                        {decision === 'UPHOLD'
-                          ? 'khiếu nại có cơ sở và áp dụng chế tài'
-                          : 'bác bỏ khiếu nại'}
-                        ? Kết luận được lưu ngay sau khi gửi.
-                      </p>
-                      <div className="flex gap-2">
-                        <Button disabled={submitting} onClick={() => void submit()}>
-                          {submitting ? 'Đang gửi…' : 'Xác nhận gửi'}
+                  ) : (
+                    <p className="text-text-secondary">
+                      {canRequestResponse
+                        ? 'Yêu cầu bên bị báo cáo giải trình nếu cần thêm thông tin.'
+                        : 'Đối chiếu thông tin từ hai bên trước khi đưa ra kết luận.'}
+                    </p>
+                  )}
+                  {decisionStep === 'review' && (
+                    <div className="flex flex-wrap gap-2">
+                      {canRequestResponse && (
+                        <Button disabled={submitting} onClick={() => void requestResponse()}>
+                          Yêu cầu giải trình
                         </Button>
+                      )}
+                      <Button
+                        variant={canRequestResponse ? 'outline' : 'primary'}
+                        disabled={submitting || detail.responseWindowOpen}
+                        onClick={() => setDecisionStep('choose')}
+                      >
+                        Kết luận
+                      </Button>
+                      {detail.responseWindowOpen && (
+                        <Button variant="outline" onClick={() => setReload((value) => value + 1)}>
+                          Cập nhật hồ sơ
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {decisionStep === 'choose' && (
+                    <>
+                      <fieldset className="grid gap-2 sm:grid-cols-2">
+                        <legend className="label">Chọn kết luận</legend>
+                        {(Object.keys(decisionLabels) as ReportDecision[]).map((value) => (
+                          <label
+                            key={value}
+                            className={`flex cursor-pointer items-center gap-2 rounded-md border p-3 font-semibold ${decision === value ? 'border-primary bg-primary-faint' : 'border-border bg-surface'}`}
+                          >
+                            <input
+                              type="radio"
+                              name="report-decision"
+                              value={value}
+                              checked={decision === value}
+                              onChange={() => setDecision(value)}
+                              className="accent-primary"
+                            />
+                            {decisionLabels[value]}
+                          </label>
+                        ))}
+                      </fieldset>
+                      <TextArea
+                        label="Ghi chú kết luận (không bắt buộc)"
+                        hint="Tối đa 500 ký tự."
+                        value={note}
+                        maxLength={500}
+                        onChange={(event) => setNote(event.target.value)}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" onClick={() => setDecisionStep('review')}>
+                          Quay lại
+                        </Button>
+                        <Button disabled={!decision} onClick={() => setDecisionStep('confirm')}>
+                          Kiểm tra kết luận
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                  {decisionStep === 'confirm' && decision && (
+                    <div className="space-y-3 rounded-md border border-border bg-surface p-4">
+                      <p className="font-semibold">{decisionLabels[decision]}</p>
+                      <p>
+                        {decision === 'UPHOLD'
+                          ? 'Hệ thống áp dụng chế tài theo loại hồ sơ và quy định hiện hành.'
+                          : 'Hệ thống đóng hồ sơ và giữ nguyên sao uy tín.'}
+                      </p>
+                      {note.trim() && (
+                        <p className="whitespace-pre-wrap break-words text-text-secondary">
+                          {note.trim()}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           disabled={submitting}
-                          onClick={() => setConfirming(false)}
+                          onClick={() => setDecisionStep('choose')}
                         >
                           Quay lại
                         </Button>
+                        <Button disabled={submitting} onClick={() => void submit()}>
+                          {submitting ? 'Đang gửi…' : 'Xác nhận gửi'}
+                        </Button>
                       </div>
                     </div>
-                  ) : null}
+                  )}
                 </section>
               )}
             </div>
           )}
-          <div className="mt-6 flex items-center justify-between gap-3 border-t border-border pt-4">
-            {detail && !concluded(detail.report.status) && !confirming && (
-              <Button
-                disabled={submitting || note.length > 500 || detail.responseWindowOpen}
-                onClick={() => setConfirming(true)}
-              >
-                Kết luận
-              </Button>
-            )}
-            {canRequestResponse && !confirming && (
-              <Button
-                variant="outline"
-                disabled={submitting}
-                onClick={() => void requestResponse()}
-              >
-                Yêu cầu giải trình
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              className="ml-auto"
-              disabled={submitting}
-              onClick={() => setSelectedId(null)}
-            >
-              Đóng
-            </Button>
-          </div>
         </DialogFrame>
       )}
     </section>

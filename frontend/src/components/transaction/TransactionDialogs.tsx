@@ -1,12 +1,13 @@
-import { useState } from 'react';
-import { Button, Field, Select, TextArea } from '../ui';
+import { useRef, useState } from 'react';
+import { Alert, Button, Select, TextArea } from '../ui';
+import { ReportEvidenceField } from '../ReportEvidenceField';
 import { DialogFrame } from '../Dialog';
 import { requestApi, type RequestResponse } from '../../services/requestApi';
 import { mediaApi } from '../../services/mediaApi';
-import { openDispute, type ReportReason } from '../../services/reportApi';
+import { openDispute, type DisputeResponse, type ReportReason } from '../../services/reportApi';
 import type { ApiError } from '../../services/http';
 import { disputeErrorMessage, disputeReasonLabels } from '../../utils/disputeErrors';
-import { formatDateTime } from '../../utils/request';
+import { formatDeadline } from '../../utils/request';
 
 // Ba hộp thoại của trang Tiến trình giao dịch, chuyển từ bảng tiến trình cũ ở trang Tin nhắn.
 // Mỗi hộp thoại tự giữ ô nhập và tự gọi API; xong thì báo Request mới (hoặc lời nhắn) về trang.
@@ -118,12 +119,14 @@ export function HandoverIssueDialog({
 }) {
   const [note, setNote] = useState('');
   const [evidence, setEvidence] = useState<File[]>([]);
+  const inFlight = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   const submit = async () => {
     const trimmed = note.trim();
-    if (submitting || trimmed.length < 5) return;
+    if (inFlight.current || trimmed.length < 5) return;
+    inFlight.current = true;
     setSubmitting(true);
     setError('');
     try {
@@ -143,6 +146,7 @@ export function HandoverIssueDialog({
       );
       if (apiError.status === 409) onStale();
     } finally {
+      inFlight.current = false;
       setSubmitting(false);
     }
   };
@@ -155,30 +159,22 @@ export function HandoverIssueDialog({
       </h2>
       <p className="mt-1 text-sm text-text-muted">{itemTitle}</p>
       <p className="mt-3 text-sm leading-6 text-text-secondary">
-        {partnerName} đã xác nhận bàn giao nhưng phía bạn thì chưa xong. Giao dịch sẽ chuyển sang
-        khiếu nại để Admin xem xét.
+        {partnerName} đã xác nhận bàn giao. Nếu bạn gửi báo cáo, giao dịch sẽ chuyển sang khiếu nại
+        để quản trị viên xem xét.
       </p>
       <TextArea
         className="mt-4"
         label="Mô tả sự cố (bắt buộc)"
+        hint="Nhập ít nhất 5 ký tự. Hãy nêu thời điểm và điều đã xảy ra."
         value={note}
         maxLength={1000}
         disabled={submitting}
         onChange={(event) => setNote(event.target.value)}
       />
       <p className="mt-1 text-right text-xs text-text-muted">{note.length}/1000</p>
-      <Field
-        className="mt-4"
-        label="Ảnh minh chứng"
-        type="file"
-        accept="image/*"
-        multiple
-        disabled={submitting}
-        onChange={(event) => setEvidence(Array.from(event.target.files ?? []))}
-      />
-      {evidence.length ? (
-        <p className="mt-2 text-xs text-text-muted">Đã chọn {evidence.length} ảnh.</p>
-      ) : null}
+      <div className="mt-4">
+        <ReportEvidenceField files={evidence} onChange={setEvidence} disabled={submitting} />
+      </div>
       {error ? (
         <div role="alert" className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">
           {error}
@@ -201,21 +197,24 @@ export function DisputeDialog({
   itemTitle,
   onClose,
   onSubmitted,
-}: Omit<DialogBaseProps, 'currentUserId'> & { onSubmitted: (notice: string) => void }) {
+}: Omit<DialogBaseProps, 'currentUserId'> & { onSubmitted: (receipt: DisputeResponse) => void }) {
   const [reason, setReason] = useState<ReportReason | ''>('');
   const [note, setNote] = useState('');
   const [evidence, setEvidence] = useState<File[]>([]);
+  const inFlight = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [noteError, setNoteError] = useState('');
 
   const submit = async () => {
-    if (!reason || submitting || request.status !== 'COMPLETED') return;
+    if (!reason || inFlight.current || request.status !== 'COMPLETED' || request.disputeExpired)
+      return;
     const trimmedNote = note.trim();
     if (reason === 'OTHER' && !trimmedNote) {
       setNoteError('Vui lòng nhập lý do khiếu nại.');
       return;
     }
+    inFlight.current = true;
     setSubmitting(true);
     setError('');
     try {
@@ -225,12 +224,11 @@ export function DisputeDialog({
         note: trimmedNote || undefined,
         evidenceMediaIds,
       });
-      onSubmitted(
-        `Khiếu nại của bạn đã được gửi. Đối tác có 48 giờ để giải trình (hạn: ${formatDateTime(response.responseDueAt)}).`,
-      );
+      onSubmitted(response);
     } catch (caught) {
       setError(disputeErrorMessage(caught));
     } finally {
+      inFlight.current = false;
       setSubmitting(false);
     }
   };
@@ -241,9 +239,13 @@ export function DisputeDialog({
         Gửi khiếu nại giao dịch
       </h2>
       <p className="mt-1 text-sm text-text-muted">{itemTitle}</p>
-      <div className="mt-3 rounded-md bg-warning-soft p-3 text-xs text-warning">
-        Lưu ý: Thời hạn gửi khiếu nại là 24 giờ kể từ lúc hoàn tất giao dịch. Sau khi bạn gửi khiếu
-        nại, đối tác sẽ có 48 giờ để gửi giải trình kèm minh chứng đối chất.
+      <div className="mt-4">
+        <Alert tone="info">
+          {request.complaintDeadline && (
+            <strong className="block">Hạn gửi {formatDeadline(request.complaintDeadline)}</strong>
+          )}
+          Sau khi gửi, bên còn lại có thể giải trình để quản trị viên xem xét thông tin từ hai bên.
+        </Alert>
       </div>
       <Select
         className="mt-5"
@@ -265,7 +267,9 @@ export function DisputeDialog({
       </Select>
       <TextArea
         className="mt-4"
-        label="Nội dung (không bắt buộc)"
+        label={reason === 'OTHER' ? 'Nội dung (bắt buộc)' : 'Nội dung (không bắt buộc)'}
+        hint="Mô tả điều đã xảy ra và thời điểm để quản trị viên dễ xác minh."
+        required={reason === 'OTHER'}
         value={note}
         maxLength={500}
         disabled={submitting}
@@ -277,18 +281,9 @@ export function DisputeDialog({
         }}
       />
       <p className="mt-1 text-right text-xs text-text-muted">{note.length}/500</p>
-      <Field
-        className="mt-4"
-        label="Minh chứng"
-        type="file"
-        accept="image/*"
-        multiple
-        disabled={submitting}
-        onChange={(event) => setEvidence(Array.from(event.target.files ?? []))}
-      />
-      {evidence.length ? (
-        <p className="mt-2 text-xs text-text-muted">Đã chọn {evidence.length} ảnh.</p>
-      ) : null}
+      <div className="mt-4">
+        <ReportEvidenceField files={evidence} onChange={setEvidence} disabled={submitting} />
+      </div>
       {error ? (
         <div role="alert" className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">
           {error}
