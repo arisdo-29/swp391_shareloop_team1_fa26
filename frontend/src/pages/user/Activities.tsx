@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import {
@@ -21,6 +21,7 @@ import { DialogFrame } from '../../components/Dialog';
 import { toast } from '../../components/toast';
 import { boostStatusLines, formatDateTime } from '../../utils/boostMessages';
 import { userProfilePath } from '../../utils/chatMessages';
+import { ActivitiesComplaints } from './ActivitiesComplaints';
 import { BoostDialogBody, type BoostFailure } from './BoostDialogBody';
 import { DescribeItemSuggestion } from '../../components/ai/DescribeItemSuggestion';
 import { CONDITIONS, ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
@@ -111,11 +112,32 @@ type EditFormErrors = Partial<
   >
 >;
 
+type ActivitiesTab = 'items' | 'sent' | 'complaints';
+
+// Giá trị lạ trong ?tab= thì về tab mặc định, không để trang trống.
+function parseActivitiesTab(value: string | null): ActivitiesTab {
+  return value === 'sent' || value === 'complaints' ? value : 'items';
+}
+
 export function Activities() {
   const location = useLocation();
   const user = useAppSelector(selectCurrentUser)!;
   const { wallet, refresh: refreshWallet } = useWallet();
-  const [tab, setTab] = useState<'items' | 'sent'>('items');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = parseActivitiesTab(searchParams.get('tab'));
+  const [tab, setTabState] = useState<ActivitiesTab>(tabFromUrl);
+  // Đang ở trang này mà bấm link /activities?tab=complaints (vd. từ thông báo) thì cũng chuyển tab theo URL.
+  useEffect(() => {
+    setTabState(tabFromUrl);
+  }, [tabFromUrl]);
+  const setTab = (next: ActivitiesTab) => {
+    setTabState(next);
+    const params = new URLSearchParams(searchParams);
+    if (next === 'items') params.delete('tab');
+    else params.set('tab', next);
+    // replace: đổi tab không tạo thêm mục lịch sử; giữ state để thông báo đầu trang không mất.
+    setSearchParams(params, { replace: true, state: location.state });
+  };
   const [itemStatusFilter, setItemStatusFilter] = useState<ActivityStatusFilter>('all');
   const [sentStatusFilter, setSentStatusFilter] = useState<ActivityStatusFilter>('all');
   const [editingId, setEditingId] = useState('');
@@ -637,6 +659,7 @@ export function Activities() {
             [
               ['items', `Bài của tôi (${filteredItems.length})`],
               ['sent', `Yêu cầu tôi đã gửi (${filteredSentRequests.length})`],
+              ['complaints', 'Khiếu nại & Báo cáo'],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -651,6 +674,8 @@ export function Activities() {
             </button>
           ))}
         </div>
+        {/* Tab Khiếu nại & Báo cáo có hai danh sách riêng, không dùng chung bộ lọc trạng thái bài/yêu cầu. */}
+        {tab === 'complaints' ? null : (
         <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
           <span className="shrink-0 text-xs text-text-muted">{activeResultCount} kết quả</span>
           <div className="w-full sm:w-auto">
@@ -672,9 +697,12 @@ export function Activities() {
             </Select>
           </div>
         </div>
+        )}
       </div>
 
-      {myItemsLoading ? (
+      {tab === 'complaints' ? (
+        <ActivitiesComplaints />
+      ) : myItemsLoading ? (
         <SkeletonRows rows={4} label="Đang tải hoạt động" />
       ) : myItemsError ? (
         <EmptyState

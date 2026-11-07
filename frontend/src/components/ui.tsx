@@ -35,6 +35,7 @@ import { Scroll } from '@phosphor-icons/react/dist/csr/Scroll';
 import { Warning } from '@phosphor-icons/react/dist/csr/Warning';
 import { CaretLeft } from '@phosphor-icons/react/dist/csr/CaretLeft';
 import { CaretRight } from '@phosphor-icons/react/dist/csr/CaretRight';
+import { Trash } from '@phosphor-icons/react/dist/csr/Trash';
 import { Link } from 'react-router-dom';
 import type {
   Item,
@@ -80,6 +81,8 @@ const iconMap = {
   alert: Warning,
   caretLeft: CaretLeft,
   caretRight: CaretRight,
+  // Nút xoá (ẩn) thông báo.
+  trash: Trash,
 } as const;
 
 export type IconName = keyof typeof iconMap;

@@ -109,6 +109,24 @@ export interface DisputeResponse {
   responseDueAt: string;
 }
 
+/** Hồ sơ trong tab Khiếu nại & Báo cáo của Member (docs/api/report.md mục 6, 7). Không có người gửi và mô tả. */
+export interface MyReportSummary {
+  id: number;
+  targetType: ReportTargetType;
+  itemId: number | null;
+  requestId: number | null;
+  reason: ReportReason;
+  status: ReportStatus;
+  targetName: string | null;
+  createdAt: string;
+  responseDueAt: string | null;
+  respondedAt: string | null;
+  /** Backend tính: còn chờ giải trình, chưa giải trình và chưa tới hạn. */
+  responseWindowOpen: boolean;
+  resolution: string | null;
+  resolvedAt: string | null;
+}
+
 export function openDispute(requestId: number, body: CreateDisputeRequest): Promise<DisputeResponse> {
   return http.post<DisputeResponse>(`/api/v1/requests/${requestId}/disputes`, body).then(res => res.data);
 }
@@ -156,6 +174,16 @@ export const reportApi = {
   },
   async create(input: CreateReportRequest): Promise<ReportResponse> {
     const { data } = await http.post<ReportResponse>('/api/v1/reports', input);
+    return data;
+  },
+  /** Báo cáo và khiếu nại tôi đã gửi, mới nhất lên trước. */
+  async listMine(signal?: AbortSignal) {
+    const { data } = await http.get<MyReportSummary[]>('/api/v1/reports/mine', { signal });
+    return data;
+  },
+  /** Hồ sơ nhắm vào tôi đã có hạn giải trình, mới nhất lên trước. */
+  async listAgainstMe(signal?: AbortSignal) {
+    const { data } = await http.get<MyReportSummary[]>('/api/v1/reports/against-me', { signal });
     return data;
   },
   openDispute,

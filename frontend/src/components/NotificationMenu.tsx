@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { notificationApi, type NotificationResponse } from '../services/notificationApi';
+import { Link, useLocation } from 'react-router-dom';
+import { notificationApi, withoutHidden, type NotificationResponse } from '../services/notificationApi';
 import { toBackendUserId } from '../services/requestApi';
-import { Button, IconButton } from './ui';
+import { Button, Icon, IconButton } from './ui';
 
 const PAGE_SIZE = 20;
 
@@ -20,6 +20,9 @@ export function NotificationMenu({
   onOpen: () => void;
 }) {
   const backendUserId = toBackendUserId(userId);
+  const location = useLocation();
+  // Admin xem trang thông báo trong khung quản trị, Member xem trong AppShell.
+  const allNotificationsPath = location.pathname.startsWith('/admin') ? '/admin/notifications' : '/notifications';
   const activeUserId = useRef(backendUserId);
   const listLoadingRef = useRef(false);
   const markingIdRef = useRef<number | null>(null);
@@ -32,6 +35,8 @@ export function NotificationMenu({
   const [listError, setListError] = useState('');
   const [countError, setCountError] = useState('');
   const [markingId, setMarkingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
   useEffect(() => {
     activeUserId.current = backendUserId;
@@ -44,6 +49,8 @@ export function NotificationMenu({
     setListError('');
     setCountError('');
     setMarkingId(null);
+    setDeletingId(null);
+    setFilter('all');
     listLoadingRef.current = false;
     markingIdRef.current = null;
     if (!backendUserId) return;
@@ -71,15 +78,16 @@ export function NotificationMenu({
     setListLoading(true);
     setListError('');
     try {
-      const response = await notificationApi.list({ page: nextPage, size: PAGE_SIZE });
+      const batch = await notificationApi.list({ page: nextPage, size: PAGE_SIZE });
       if (activeUserId.current !== requestedUserId) return;
+      const response = withoutHidden(batch);
       setNotifications((current) => {
         if (replace) return response;
         const existingIds = new Set(current.map((notification) => notification.id));
         return [...current, ...response.filter((notification) => !existingIds.has(notification.id))];
       });
       setPage(nextPage);
-      setHasMore(response.length === PAGE_SIZE);
+      setHasMore(batch.length === PAGE_SIZE);
       setListLoaded(true);
     } catch {
       if (activeUserId.current === requestedUserId) {
@@ -127,6 +135,35 @@ export function NotificationMenu({
     }
   };
 
+  // Dùng chung khoá markingIdRef với markAsRead để hai thao tác không chạy chồng lên nhau.
+  const removeNotification = async (notification: NotificationResponse) => {
+    if (!backendUserId || markingIdRef.current !== null) return;
+    markingIdRef.current = notification.id;
+    setDeletingId(notification.id);
+    setListError('');
+    try {
+      await notificationApi.deleteNotification(notification.id);
+      if (activeUserId.current !== backendUserId) return;
+      setNotifications((current) => current.filter((entry) => entry.id !== notification.id));
+      if (!notification.isRead) {
+        setUnreadCount((count) => (count === null ? count : Math.max(0, count - 1)));
+      }
+    } catch {
+      if (activeUserId.current === backendUserId) {
+        setListError('Không thể xoá thông báo.');
+      }
+    } finally {
+      if (activeUserId.current === backendUserId) {
+        markingIdRef.current = null;
+        setDeletingId(null);
+      }
+    }
+  };
+
+  const visibleNotifications =
+    filter === 'unread' ? notifications.filter((notification) => !notification.isRead) : notifications;
+  const busy = markingId !== null || deletingId !== null;
+
   const toggle = () => {
     const nextOpen = !open;
     onOpenChange(nextOpen);
@@ -159,6 +196,24 @@ export function NotificationMenu({
               {unreadCount ? <span className="ml-2 text-xs font-semibold text-error">{unreadCount} mới</span> : null}
             </h2>
             {countError ? <p className="mt-1 text-xs leading-5 text-error">{countError}</p> : null}
+            <div role="group" aria-label="Lọc thông báo" className="mt-2 flex gap-1 rounded-md bg-surface-container p-1">
+              {(
+                [
+                  ['all', 'Tất cả'],
+                  ['unread', 'Chưa đọc'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={filter === value}
+                  onClick={() => setFilter(value)}
+                  className={`min-h-9 flex-1 rounded-sm px-3 text-xs font-semibold transition ${filter === value ? 'bg-white text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
           {!backendUserId ? (
             <p className="px-4 py-10 text-center text-sm text-text-muted">Chưa có thông báo.</p>
@@ -177,10 +232,12 @@ export function NotificationMenu({
                   ) : null}
                 </div>
               ) : null}
-              {listLoaded && !notifications.length ? (
-                <p className="px-4 py-10 text-center text-sm text-text-muted">Chưa có thông báo.</p>
+              {listLoaded && !visibleNotifications.length ? (
+                <p className="px-4 py-10 text-center text-sm text-text-muted">
+                  {filter === 'unread' && notifications.length ? 'Không có thông báo chưa đọc.' : 'Chưa có thông báo.'}
+                </p>
               ) : null}
-              {notifications.map((notification) => {
+              {visibleNotifications.map((notification) => {
                 return (
                   <article
                     key={notification.id}
@@ -189,7 +246,19 @@ export function NotificationMenu({
                     <div className="flex items-start gap-3">
                       <span className={`mt-1 size-2 shrink-0 rounded-full ${notification.isRead ? 'bg-border' : 'bg-primary'}`} />
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold">{notification.title}</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-bold">{notification.title}</p>
+                          <button
+                            type="button"
+                            aria-label={`Xoá thông báo ${notification.title}`}
+                            title="Xoá thông báo"
+                            disabled={busy}
+                            onClick={() => void removeNotification(notification)}
+                            className="-mr-2 -mt-1 grid size-8 shrink-0 place-items-center rounded-md text-text-muted transition hover:bg-error-soft hover:text-error disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <Icon name="trash" className="size-4" />
+                          </button>
+                        </div>
                         <p className="mt-1 text-xs leading-5 text-text-muted">{notification.body}</p>
                         <p className="mt-1 text-[11px] text-text-muted">
                           {new Date(notification.createdAt).toLocaleString('vi-VN')}
@@ -210,7 +279,7 @@ export function NotificationMenu({
                           {!notification.isRead ? (
                             <button
                               type="button"
-                              disabled={markingId !== null}
+                              disabled={busy}
                               onClick={() => void markAsRead(notification)}
                               className="text-text-secondary hover:text-link disabled:cursor-not-allowed disabled:opacity-40"
                             >
@@ -237,6 +306,15 @@ export function NotificationMenu({
               ) : null}
             </div>
           )}
+          {backendUserId ? (
+            <Link
+              to={allNotificationsPath}
+              onClick={() => onOpenChange(false)}
+              className="flex min-h-11 items-center justify-center border-t border-border text-sm font-semibold text-link hover:bg-primary-faint"
+            >
+              Xem tất cả thông báo
+            </Link>
+          ) : null}
         </div>
       ) : null}
     </div>
