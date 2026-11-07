@@ -44,4 +44,47 @@ class ReportEvidenceServiceTest {
         verify(media).readEvidenceForAdmin(12L);
         verify(media).readEvidenceForAdmin(15L);
     }
+
+    @Test
+    void readForRespondent_respondentOfReportWithDeadline_readsReporterEvidence() {
+        // given
+        var report =
+                new Report(1L, TargetType.USER, null, 2L, null, ReportReason.OTHER, "Nội dung", ReportStage.BEFORE);
+        report.setEvidence("[12]");
+        report.awaitResponse(java.time.Instant.now().plusSeconds(3600));
+        when(reports.findById(7L)).thenReturn(Optional.of(report));
+
+        // when
+        service.readForRespondent(2L, 7L, 12L);
+
+        // then
+        verify(media).readEvidenceForAdmin(12L);
+    }
+
+    @Test
+    void readForRespondent_otherUser_throwsReportNotFoundWithoutReadingMedia() {
+        // given
+        var report =
+                new Report(1L, TargetType.USER, null, 2L, null, ReportReason.OTHER, "Nội dung", ReportStage.BEFORE);
+        report.setEvidence("[12]");
+        report.awaitResponse(java.time.Instant.now().plusSeconds(3600));
+        when(reports.findById(7L)).thenReturn(Optional.of(report));
+
+        // when, then
+        assertThatThrownBy(() -> service.readForRespondent(3L, 7L, 12L))
+                .hasFieldOrPropertyWithValue("errorCode", com.shareloop.report.ReportErrorCode.REPORT_NOT_FOUND);
+        verifyNoInteractions(media);
+    }
+
+    @Test
+    void describeForRespondent_buildsMemberEvidenceUrl() {
+        // given
+        when(media.findAvailableEvidence(List.of(12L))).thenReturn(List.of(12L));
+
+        // when
+        var result = service.describeForRespondent(7L, "[12]");
+
+        // then
+        assertThat(result.getFirst().url()).isEqualTo("/api/v1/reports/7/evidence/12");
+    }
 }

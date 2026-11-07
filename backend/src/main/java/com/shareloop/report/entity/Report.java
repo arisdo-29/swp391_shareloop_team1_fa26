@@ -201,6 +201,14 @@ public class Report extends BaseEntity {
         return status == ReportStatus.AWAITING_RESPONSE && responseDueAt != null && !now.isAfter(responseDueAt);
     }
 
+    /**
+     * Người dùng có được xem hồ sơ với tư cách bên bị phản ánh không: phải là target_user_id và hồ sơ đã có hạn giải
+     * trình (Admin đã yêu cầu, hoặc là khiếu nại giao dịch). Hồ sơ chưa có hạn thì bên bị phản ánh chưa được biết.
+     */
+    public boolean isVisibleToRespondent(Long userId) {
+        return userId != null && userId.equals(targetUserId) && responseDueAt != null;
+    }
+
     public void awaitResponse(Instant dueAt) {
         this.responseDueAt = dueAt;
         this.status = ReportStatus.AWAITING_RESPONSE;

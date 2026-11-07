@@ -2,7 +2,9 @@ package com.shareloop.report.service;
 
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.service.ItemQueryService;
+import com.shareloop.report.ReportErrorCode;
 import com.shareloop.report.dto.MyReportSummary;
+import com.shareloop.report.dto.RespondentReportDetail;
 import com.shareloop.report.entity.Report;
 import com.shareloop.report.entity.TargetType;
 import com.shareloop.report.repository.ReportRepository;
@@ -27,6 +29,7 @@ public class MyReportQueryService {
     private final UserService userService;
     private final ItemQueryService itemQueryService;
     private final RequestService requestService;
+    private final ReportEvidenceService reportEvidenceService;
     private final Clock clock;
 
     public MyReportQueryService(
@@ -34,11 +37,13 @@ public class MyReportQueryService {
             UserService userService,
             ItemQueryService itemQueryService,
             RequestService requestService,
+            ReportEvidenceService reportEvidenceService,
             Clock clock) {
         this.reportRepository = reportRepository;
         this.userService = userService;
         this.itemQueryService = itemQueryService;
         this.requestService = requestService;
+        this.reportEvidenceService = reportEvidenceService;
         this.clock = clock;
     }
 
@@ -60,6 +65,41 @@ public class MyReportQueryService {
     public List<MyReportSummary> listAgainstMe(Long userId) {
         return toSummaries(
                 reportRepository.findByTargetUserIdAndResponseDueAtIsNotNullOrderByCreatedAtDescIdDesc(userId));
+    }
+
+    /**
+     * Chi tiết một hồ sơ cho bên bị phản ánh trên trang giải trình: lý do, mô tả, ảnh của bên báo cáo và hạn giải trình
+     * (D-07, BC-03). Không trả người gửi.
+     *
+     * @throws BusinessException REPORT_NOT_FOUND khi hồ sơ không tồn tại, không nhắm vào tôi hoặc chưa có hạn giải
+     *     trình (không phân biệt để người ngoài không dò được hồ sơ)
+     */
+    @Transactional(readOnly = true)
+    public RespondentReportDetail detailForRespondent(Long userId, long reportId) {
+        Report report = reportRepository
+                .findById(reportId)
+                .filter(found -> found.isVisibleToRespondent(userId))
+                .orElseThrow(() -> new BusinessException(ReportErrorCode.REPORT_NOT_FOUND));
+        // Dùng lại cách tính tên đối tượng và trạng thái hạn của danh sách để hai màn hình luôn khớp nhau.
+        MyReportSummary summary = toSummaries(List.of(report)).getFirst();
+        return new RespondentReportDetail(
+                report.getId(),
+                report.getTargetType(),
+                report.getItemId(),
+                report.getRequestId(),
+                report.getReason(),
+                report.getDescription(),
+                summary.targetName(),
+                report.getStatus(),
+                report.getCreatedAt(),
+                report.getResponseDueAt(),
+                summary.responseWindowOpen(),
+                reportEvidenceService.describeForRespondent(reportId, report.getEvidence()),
+                report.getResponse(),
+                report.getRespondedAt(),
+                reportEvidenceService.describeForRespondent(reportId, report.getResponseEvidence()),
+                report.getResolution(),
+                report.getResolvedAt());
     }
 
     // Tra tên cho cả danh sách một lần thay vì từng dòng, tránh gọi module khác lặp lại nhiều lần.

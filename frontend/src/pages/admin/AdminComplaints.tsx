@@ -419,8 +419,6 @@ export function AdminComplaints() {
               >
                 <div className="min-w-0 space-y-1">
                   <p className="flex flex-wrap items-center gap-x-2 text-xs font-semibold text-text-secondary">
-                    <span>#{report.id}</span>
-                    <span aria-hidden>·</span>
                     <span>{targetLabels[report.targetType]}</span>
                   </p>
                   <h2
@@ -494,7 +492,7 @@ export function AdminComplaints() {
           <header className="mb-5 flex items-start justify-between gap-3 border-b border-border pb-4">
             <div className="min-w-0">
               <p className="mb-1 text-xs font-semibold text-text-secondary">
-                Hồ sơ #{selectedId}
+                Chi tiết hồ sơ
                 {detail ? ` · ${targetLabels[detail.report.targetType]}` : ''}
               </p>
               <div className="flex flex-wrap items-center gap-2">

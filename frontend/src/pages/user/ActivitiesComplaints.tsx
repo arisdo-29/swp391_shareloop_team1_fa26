@@ -83,10 +83,7 @@ function AgainstMeCard({ report }: { report: MyReportSummary }) {
     <li className="card p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusChip status={againstMeStatus(report)} />
-            <span className="text-xs text-text-muted">Hồ sơ #{report.id}</span>
-          </div>
+          <StatusChip status={againstMeStatus(report)} />
           <p className="mt-2 font-bold">{targetTitle(report)}</p>
           <p className="mt-1 text-sm text-text-secondary">Lý do: {reasonLabel(report)}</p>
           {report.responseDueAt ? (
@@ -96,13 +93,26 @@ function AgainstMeCard({ report }: { report: MyReportSummary }) {
             </p>
           ) : null}
         </div>
-        {report.responseWindowOpen ? (
-          <Link to={responsePath(report)} className="shrink-0">
-            <Button size="sm" className="w-full sm:w-auto">
-              Gửi giải trình
+        <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+          {/* Hết hạn vẫn mở được trang để xem lại ảnh, giải trình đã gửi và kết luận. */}
+          <Link to={responsePath(report)}>
+            <Button
+              size="sm"
+              variant={report.responseWindowOpen ? 'primary' : 'outline'}
+              className="w-full sm:w-auto"
+            >
+              {report.responseWindowOpen ? 'Gửi giải trình' : 'Xem hồ sơ'}
             </Button>
           </Link>
-        ) : null}
+          {/* Chỉ khiếu nại giao dịch mới có cuộc trò chuyện chung với đối phương để thương lượng. */}
+          {report.requestId ? (
+            <Link to={`/requests/${report.requestId}`}>
+              <Button size="sm" variant="ghost" className="w-full sm:w-auto">
+                Nhắn tin
+              </Button>
+            </Link>
+          ) : null}
+        </div>
       </div>
       <ResolutionNote report={report} />
     </li>
