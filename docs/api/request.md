@@ -30,13 +30,31 @@ Mọi đổi trạng thái đi qua `RequestStatus.canTransition`; cạnh không 
 
 `COMPLETED`, `REJECTED`, `CANCELLED` là trạng thái cuối. Không có cạnh `LOGISTICS_CONFIRMED -> DISPUTED`.
 
-Chuyển đổi hình thức Cho ↔ Trao đổi diễn ra linh hoạt tại thời điểm chủ bài chọn người nhận (CD-01 … CD-07, D-02). Khi chọn người, bài đăng và yêu cầu sẽ tự động đổi sang SWAP (nếu có món trao đổi kèm) hoặc GIVE (nếu không có món trao đổi), không thực hiện đổi hình thức qua API sửa bài đăng.
+### Chuyển đổi hình thức Cho ↔ Trao đổi (CD-01 … CD-07, D-02)
+
+Không đổi hình thức qua API sửa bài đăng. Hình thức chỉ đổi theo hai đường:
+
+1. **Khi chủ bài chọn người nhận** (`POST /requests/{id}/select`, mục 5): bài và yêu cầu tự đổi sang `SWAP` nếu yêu
+   cầu được chọn có kèm món, sang `GIVE` nếu không kèm món.
+2. **Cho → Trao đổi trong chat** (sau khi đã chọn người): người nhận của giao dịch `GIVE` đang `RESERVED` hoặc
+   `AWAITING_LOGISTICS` đề nghị đưa một món của mình vào đổi; chủ bài đồng ý thì trả `POST_FEE` và giao dịch chuyển
+   thành `SWAP`. Endpoint nằm ở module chat: `POST /requests/{requestId}/offer-changes` và
+   `.../offer-changes/{messageId}/accept|decline`, xem `docs/api/chat.md` mục 4–6. Kết quả giống hệt nhánh Cho →
+   Trao đổi của `select`: trừ `POST_FEE` của chủ bài, bài và yêu cầu thành `SWAP`, `offeredItemId` được gán, món đề
+   nghị `RESERVED`, các yêu cầu `PENDING` khác dùng cùng món bị `CANCELLED`. Không kiểm hạn mức bài theo hạng.
+
+Người gửi yêu cầu được "gửi chéo loại" (CD-01): kèm món khi xin bài `GIVE`, hoặc không kèm món khi xin bài `SWAP`.
+`requests.type` là **loại giao dịch**: lúc tạo bằng loại bài, rồi đổi theo hai đường trên. Hình thức hiện tại của bài
+xem ở `RequestResponse.itemOfferType`; phí chủ bài phải trả nếu chuyển sang Trao đổi xem ở `conversionFee` (frontend
+không tự viết cứng phí).
 
 ---
 
 ## 1. POST /api/v1/items/{itemId}/requests
 
-Gửi yêu cầu xin đồ (với bài Give) hoặc đề nghị trao đổi đồ (với bài Swap) (F10 bước 1, UC-20, CD-01).
+Gửi yêu cầu xin đồ hoặc đề nghị trao đổi đồ (F10 bước 1, UC-20, CD-01). Được gửi chéo loại: kèm món tới bài `GIVE`
+(đề nghị trao đổi) hoặc không kèm món tới bài `SWAP` (xin cho không). Yêu cầu mới luôn có `type` = loại bài lúc gửi;
+hình thức chỉ đổi khi chủ bài chọn người (mục 5) hoặc đồng ý đề nghị trong chat.
 
 - **Xác thực:** Bắt buộc JWT (`Member`).
 - **Path variable:** `itemId` (id của bài đăng muốn xin/đổi).
@@ -50,18 +68,23 @@ Gửi yêu cầu xin đồ (với bài Give) hoặc đề nghị trao đổi đ�
 
 - **Thành công:** `201 Created`, trả về `RequestResponse`.
 
+Ví dụ: xin bài `GIVE` có kèm món 12 (gửi chéo loại). `type` vẫn là `GIVE`; `conversionFee` là số Credit chủ bài sẽ trả
+nếu chọn yêu cầu này (giao dịch chuyển sang Trao đổi).
+
 ```json
 {
   "id": 101,
   "itemId": 45,
   "receiverId": 12,
-  "offeredItemId": null,
+  "offeredItemId": 12,
   "type": "GIVE",
   "status": "PENDING",
   "deliveryMethod": null,
   "meetingPlace": null,
   "meetingTime": null,
-  "createdAt": "2026-10-02T14:00:00Z"
+  "createdAt": "2026-10-02T14:00:00Z",
+  "itemOfferType": "GIVE",
+  "conversionFee": 5
 }
 ```
 
@@ -448,7 +471,9 @@ thì chưa.
 | `itemId` | number | Id bài đăng được xin / đề nghị đổi |
 | `receiverId` | number | Id người gửi yêu cầu |
 | `offeredItemId` | number? | Id bài đăng đề nghị đem đổi (SWAP) |
-| `type` | string | `GIVE` hoặc `SWAP` |
+| `type` | string | Loại **giao dịch**, `GIVE` hoặc `SWAP`. Lúc tạo bằng loại bài; đổi khi chủ bài chọn người hoặc đồng ý đề nghị đổi món trong chat |
+| `itemOfferType` | string? | Hình thức **hiện tại** của bài chính, `GIVE` hoặc `SWAP`. Khác `type` khi người xin gửi chéo loại (CD-01) và chưa được chọn. `null` khi không tra được bài |
+| `conversionFee` | number? | Số Credit chủ bài sẽ trả nếu giao dịch chuyển sang Trao đổi: bằng `post_fee` khi `itemOfferType = GIVE`, bằng `0` khi `SWAP`. Đọc từ cấu hình, frontend không tự viết cứng. Không phải số dư ví. `null` khi `itemOfferType = null` |
 | `status` | string | Trạng thái (`PENDING`, `RESERVED`, `AWAITING_LOGISTICS`, `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER`, `COMPLETED`, ...) |
 | `deliveryMethod` | string? | `IN_PERSON` hoặc `SHIPPING` |
 | `meetingPlace` | string? | Địa điểm hẹn giao nhận |
@@ -544,7 +569,7 @@ Các trường đã có từ trước và dùng cho màn Tiến trình giao dị
 |---|---|---|
 | `REQUEST_NOT_FOUND` | 404 | Không tìm thấy yêu cầu |
 | `REQUEST_ITEM_NOT_FOUND` | 404 | Không tìm thấy bài đăng liên quan |
-| `REQUEST_SELF_OFFER_NOT_ALLOWED` | 400 | Tự gửi yêu cầu cho bài của chính mình (BR-R01) |
+| `REQUEST_SELF_OFFER_NOT_ALLOWED` | 400 | Tự gửi yêu cầu cho bài của chính mình (BR-R01), hoặc chọn chính bài đang xin làm món đề nghị (CD-01) |
 | `REQUEST_LIMIT_EXCEEDED` | 400 | Vượt quá 5 yêu cầu đang chờ xử lý (BR-U02) |
 | `REQUEST_SWAP_OFFERED_ITEM_REQUIRED` | 400 | Thiếu món đề nghị khi gửi yêu cầu đổi đồ (BR-S02) |
 | `REQUEST_SCHEDULE_PAST_TIME` | 400 | Thời gian hẹn ở trong quá khứ |
@@ -560,6 +585,7 @@ Các trường đã có từ trước và dùng cho màn Tiến trình giao dị
 | `REQUEST_CONTACT_NOT_REVEALED` | 409 | Chưa chốt lịch hẹn để xem thông tin liên lạc (FR-82, BR-T11) |
 | `REQUEST_HANDOVER_ALREADY_CONFIRMED` | 409 | Bạn đã xác nhận giao nhận cho yêu cầu này rồi |
 | `REQUEST_INVALID_STATE_TRANSITION` | 409 | Chuyển đổi trạng thái không hợp lệ theo sơ đồ |
+| `REQUEST_OFFER_CHANGE_NOT_ALLOWED` | 409 | Đề nghị hoặc đồng ý đổi món trong chat khi giao dịch không còn là `GIVE` hoặc không ở `RESERVED` / `AWAITING_LOGISTICS` (xem `docs/api/chat.md`) |
 | `REQUEST_FORBIDDEN` | 403 | Không có quyền thao tác trên yêu cầu này (hoặc người ngoài xem minh chứng) |
 
 
