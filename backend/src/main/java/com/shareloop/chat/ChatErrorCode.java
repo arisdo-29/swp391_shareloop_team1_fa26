@@ -18,7 +18,10 @@ public enum ChatErrorCode implements ErrorCode {
     CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN(
             HttpStatus.FORBIDDEN, "Người nhận trong giao dịch Cho tặng không được gửi ảnh trong cuộc trò chuyện."),
     CHAT_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy bài đăng để chia sẻ thẻ."),
-    CHAT_ITEM_NOT_APPROVED(HttpStatus.BAD_REQUEST, "Chỉ được chia sẻ thẻ của bài đăng đã được duyệt (APPROVED).");
+    CHAT_ITEM_NOT_APPROVED(HttpStatus.BAD_REQUEST, "Chỉ được chia sẻ thẻ của bài đăng đã được duyệt (APPROVED)."),
+    CHAT_OFFER_CHANGE_NOT_FOUND(
+            HttpStatus.CONFLICT, "Tin nhắn này không phải đề nghị đổi món của cuộc trò chuyện hiện tại."),
+    CHAT_OFFER_CHANGE_NOT_PENDING(HttpStatus.CONFLICT, "Đề nghị đổi món này đã được trả lời hoặc đã bị huỷ.");
 
     private final HttpStatus status;
     private final String defaultMessage;

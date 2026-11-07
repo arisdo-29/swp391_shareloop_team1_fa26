@@ -546,6 +546,22 @@ public class RequestService {
         return toResponse(saved);
     }
 
+    /**
+     * Kiểm giao dịch và món trước khi người nhận gửi đề nghị đưa món vào đổi trong chat: giao dịch phải là Cho, đang
+     * RESERVED hoặc AWAITING_LOGISTICS, và món đề nghị hợp lệ như CD-01. Quyền người gửi do module chat kiểm.
+     *
+     * @throws BusinessException REQUEST_OFFER_CHANGE_NOT_ALLOWED, REQUEST_ITEM_NOT_FOUND, REQUEST_ITEM_NOT_AVAILABLE
+     *     hoặc REQUEST_SELF_OFFER_NOT_ALLOWED
+     */
+    @Transactional(readOnly = true)
+    public void validateOfferChangeProposal(long requestId, long offeredItemId) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+        requireOfferChangeAllowed(request);
+        requireValidOfferedItem(offeredItemId, request.getReceiverId(), request.getItemId());
+    }
+
     // Chỉ giao dịch Cho đang ở RESERVED hoặc AWAITING_LOGISTICS mới chuyển được: sau khi chốt lịch thì hai bên đã thống
     // nhất món giao nhận, đổi nữa sẽ lệch với lịch hẹn.
     private void requireOfferChangeAllowed(Request request) {

@@ -18,6 +18,11 @@ import java.time.Instant;
 @Table(name = "messages")
 public class Message {
 
+    // Giá trị cột offer_status (CHECK trong V1__init.sql), chỉ dùng cho tin OFFER_CHANGE.
+    public static final String OFFER_PENDING = "PENDING";
+    public static final String OFFER_ACCEPTED = "ACCEPTED";
+    public static final String OFFER_DECLINED = "DECLINED";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -88,6 +93,46 @@ public class Message {
         this.refItemId = refItemId;
         this.moderation = MessageModeration.PASS;
         this.createdAt = Instant.now();
+    }
+
+    /**
+     * Tạo tin đề nghị đưa món của người nhận vào đổi (Cho → Trao đổi), ở trạng thái PENDING chờ chủ bài trả lời.
+     *
+     * @param offeredItemId id món người nhận đề nghị đem đổi, lưu ở ref_item_id để ghép thẻ món như ITEM_CARD
+     * @param content lời nhắn kèm theo, có thể null
+     */
+    public static Message offerChange(Long requestId, Long receiverId, Long offeredItemId, String content) {
+        Message message = new Message(requestId, receiverId, MessageKind.OFFER_CHANGE, content, null, offeredItemId);
+        message.offerStatus = OFFER_PENDING;
+        return message;
+    }
+
+    /** Tin hệ thống trong khung chat, không có người gửi. */
+    public static Message system(Long requestId, String content) {
+        return new Message(requestId, null, MessageKind.SYSTEM, content);
+    }
+
+    /** Đề nghị đổi món đang chờ chủ bài trả lời. */
+    public boolean isPendingOfferChange() {
+        return kind == MessageKind.OFFER_CHANGE && OFFER_PENDING.equals(offerStatus);
+    }
+
+    /** Chủ bài đồng ý đề nghị đổi món. Chỉ đề nghị đang PENDING mới được trả lời. */
+    public void accept() {
+        requirePendingOfferChange();
+        this.offerStatus = OFFER_ACCEPTED;
+    }
+
+    /** Chủ bài từ chối, hoặc hệ thống tự huỷ đề nghị đổi món. Chỉ đề nghị đang PENDING mới được trả lời. */
+    public void decline() {
+        requirePendingOfferChange();
+        this.offerStatus = OFFER_DECLINED;
+    }
+
+    private void requirePendingOfferChange() {
+        if (!isPendingOfferChange()) {
+            throw new IllegalStateException("Message " + id + " is not a pending offer change");
+        }
     }
 
     public Long getId() {
