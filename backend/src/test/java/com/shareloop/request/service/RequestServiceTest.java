@@ -604,6 +604,112 @@ class RequestServiceTest {
         org.mockito.Mockito.verify(itemService, org.mockito.Mockito.never()).reserve(anyLong());
     }
 
+    // Giao dịch Cho đã chọn người nhận (RESERVED): bài 1 của chủ bài 20, người nhận 10, chưa có món đem đổi.
+    private Request givenReservedGiveRequest() {
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "RESERVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        return request;
+    }
+
+    @Test
+    @DisplayName("acceptOfferedItemInChat: Chủ bài đồng ý thì trừ POST_FEE, chuyển SWAP, gán và giữ chỗ món đề nghị")
+    void acceptOfferedItemInChat_whenValid_chargesFeeConvertsAndReservesOfferedItem() {
+        // given: món 50 của người nhận 10 đang APPROVED
+        Request request = givenReservedGiveRequest();
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(50L);
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+
+        // when
+        RequestResponse response = requestService.acceptOfferedItemInChat(101L, 20L, 50L);
+
+        // then
+        verify(creditService).spend(20L, 5, CreditTxType.POST_FEE, 1L);
+        verify(itemService).convertOfferType(1L, OfferType.SWAP);
+        verify(itemService).reserve(50L);
+        assertThat(request.getType()).isEqualTo("SWAP");
+        assertThat(request.getOfferedItemId()).isEqualTo(50L);
+        assertThat(response.offeredItemId()).isEqualTo(50L);
+        verify(notificationService)
+                .notify(eq(10L), eq("OFFER_CHANGE_ACCEPTED"), anyString(), anyString(), eq("/requests/101"));
+    }
+
+    @Test
+    @DisplayName("acceptOfferedItemInChat: Người không phải chủ bài thì ném REQUEST_FORBIDDEN, không trừ tiền")
+    void acceptOfferedItemInChat_whenNotDonor_throwsForbidden() {
+        // given
+        givenReservedGiveRequest();
+
+        // when & then
+        assertThatThrownBy(() -> requestService.acceptOfferedItemInChat(101L, 10L, 50L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_FORBIDDEN));
+        verify(creditService, never()).spend(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any(), anyLong());
+    }
+
+    @Test
+    @DisplayName("acceptOfferedItemInChat: Giao dịch đã là SWAP thì ném REQUEST_OFFER_CHANGE_NOT_ALLOWED")
+    void acceptOfferedItemInChat_whenRequestIsSwap_throwsOfferChangeNotAllowed() {
+        // given
+        Request request = givenReservedGiveRequest();
+        request.convertType("SWAP");
+
+        // when & then
+        assertThatThrownBy(() -> requestService.acceptOfferedItemInChat(101L, 20L, 50L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode())
+                                .isEqualTo(RequestErrorCode.REQUEST_OFFER_CHANGE_NOT_ALLOWED));
+        verify(itemService, never()).convertOfferType(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("acceptOfferedItemInChat: Món đề nghị không phải của người nhận thì ném REQUEST_ITEM_NOT_AVAILABLE")
+    void acceptOfferedItemInChat_whenOfferedItemNotOwnedByReceiver_throwsItemNotAvailable() {
+        // given: món 50 thuộc người khác (30)
+        givenReservedGiveRequest();
+        doReturn(Optional.of(new RequestService.ItemSnapshot(30L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(50L);
+
+        // when & then
+        assertThatThrownBy(() -> requestService.acceptOfferedItemInChat(101L, 20L, 50L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE));
+        verify(creditService, never()).spend(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any(), anyLong());
+    }
+
+    @Test
+    @DisplayName("acceptOfferedItemInChat: Chủ bài thiếu Credit thì ném lỗi ví và không đổi bài, không giữ chỗ món")
+    void acceptOfferedItemInChat_whenInsufficientBalance_throwsAndChangesNothing() {
+        // given
+        Request request = givenReservedGiveRequest();
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(50L);
+        org.mockito.Mockito.doThrow(new BusinessException(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE))
+                .when(creditService)
+                .spend(20L, 5, CreditTxType.POST_FEE, 1L);
+
+        // when & then
+        assertThatThrownBy(() -> requestService.acceptOfferedItemInChat(101L, 20L, 50L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE));
+        verify(itemService, never()).convertOfferType(anyLong(), any());
+        verify(itemService, never()).reserve(anyLong());
+        assertThat(request.getType()).isEqualTo("GIVE");
+        assertThat(request.getOfferedItemId()).isNull();
+    }
+
     @Test
     @DisplayName(
             "Chủ bài Trao đổi chọn yêu cầu không kèm món: không hoàn phí, đổi sang GIVE và chỉ giữ chỗ 1 món (CD-04)")

@@ -31,7 +31,10 @@ public enum RequestErrorCode implements ErrorCode {
     REQUEST_MEDIA_STAGE_INVALID(HttpStatus.BAD_REQUEST, "Giai đoạn đính kèm minh chứng không hợp lệ."),
     REQUEST_FORBIDDEN(HttpStatus.FORBIDDEN, "Bạn không có quyền thao tác trên yêu cầu này."),
     REQUEST_REPUTATION_BLOCKED(HttpStatus.FORBIDDEN, "Tài khoản có 0 sao uy tín, không thể gửi yêu cầu giao dịch."),
-    REQUEST_ADMIN_BLOCKED(HttpStatus.FORBIDDEN, "Quản trị viên không được gửi yêu cầu giao dịch.");
+    REQUEST_ADMIN_BLOCKED(HttpStatus.FORBIDDEN, "Quản trị viên không được gửi yêu cầu giao dịch."),
+    REQUEST_OFFER_CHANGE_NOT_ALLOWED(
+            HttpStatus.CONFLICT,
+            "Chỉ giao dịch Cho đang chờ chốt lịch mới được chuyển sang Trao đổi bằng món đề nghị.");
 
     private final HttpStatus status;
     private final String defaultMessage;
