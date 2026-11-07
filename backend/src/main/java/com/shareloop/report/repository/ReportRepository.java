@@ -54,4 +54,14 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
 
     /** Bài đã có report được chấp thuận chưa; có thì bác bỏ report khác không mở lại bài (D-07). */
     boolean existsByTargetTypeAndItemIdAndStatus(TargetType targetType, Long itemId, ReportStatus status);
+
+    /** Các report một người đã gửi, mới nhất lên trước; dùng cho tab Khiếu nại & Báo cáo của Member. */
+    List<Report> findByReporterIdOrderByCreatedAtDescIdDesc(Long reporterId);
+
+    /**
+     * Các report nhắm vào một người và đã có hạn giải trình, mới nhất lên trước. target_user_id luôn là bên bị
+     * phản ánh (chủ bài với report bài đăng, đối tác với khiếu nại giao dịch). Report chưa có hạn là Admin chưa yêu
+     * cầu giải trình nên chưa cho bên bị phản ánh thấy.
+     */
+    List<Report> findByTargetUserIdAndResponseDueAtIsNotNullOrderByCreatedAtDescIdDesc(Long targetUserId);
 }

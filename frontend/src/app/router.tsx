@@ -29,6 +29,7 @@ const TransactionProgress = lazy(() => import('../pages/user/TransactionProgress
 const UserProfile = lazy(() => import('../pages/user/UserProfile').then((module) => ({ default: module.UserProfile })));
 const Credit = lazy(() => import('../pages/user/Credit').then((module) => ({ default: module.Credit })));
 const DemoPaymentCheckout = lazy(() => import('../pages/user/DemoPaymentCheckout').then((module) => ({ default: module.DemoPaymentCheckout })));
+const Notifications = lazy(() => import('../pages/user/Notifications').then((module) => ({ default: module.Notifications })));
 const ReportResponse = lazy(() => import('../pages/user/ReportResponse').then((module) => ({ default: module.ReportResponse })));
 const AdminLayout = lazy(() => import('../pages/admin/AdminLayout').then((module) => ({ default: module.AdminLayout })));
 const AdminAnomalies = lazy(() => import('../pages/admin/AdminAnomalies').then((module) => ({ default: module.AdminAnomalies })));
@@ -89,6 +90,7 @@ export const router = createBrowserRouter([
           { path: '/users/:userId', element: <UserProfile /> },
           { path: '/me/disputes/:reportId', element: <ReportResponse kind="dispute" /> },
           { path: '/me/reports/:reportId', element: <ReportResponse /> },
+          { path: '/notifications', element: <Notifications /> },
           { path: '/credit', element: <Credit /> },
           { path: '/wallet', element: <Credit /> },
           {
@@ -139,6 +141,7 @@ export const router = createBrowserRouter([
               // Hạng và điểm uy tín nay cấu hình chung ở trang Uy tín & Hạng.
               { path: 'settings/ranks', element: <Navigate to="/admin/reputation" replace /> },
               { path: 'audit-logs', element: <AdminAuditLogs /> },
+              { path: 'notifications', element: <Notifications inAdmin /> },
             ],
           },
         ],

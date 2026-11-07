@@ -60,11 +60,11 @@ describe('Từ khóa kiểm duyệt', () => {
 
     await user.click(screen.getByRole('button', { name: 'Trang sau' }));
     expect(await screen.findByText('Từ khóa 21')).toBeTruthy();
-    expect(screen.getByText('21 kết quả, trang 2/2')).toBeTruthy();
+    expect(screen.getByText('Hiển thị 21–21 trên 21 kết quả')).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: 'Tạm ngưng' }));
     expect(await screen.findByText('Đang ẩn')).toBeTruthy();
-    expect(screen.getByText('21 kết quả, trang 2/2')).toBeTruthy();
+    expect(screen.getByText('Hiển thị 21–21 trên 21 kết quả')).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: 'Sửa' }));
     const keywordInput = screen.getByLabelText('Từ khóa');
@@ -74,6 +74,6 @@ describe('Từ khóa kiểm duyệt', () => {
 
     await waitFor(() => expect(adminLexiconApi.update).toHaveBeenCalled());
     expect(await screen.findByText('Từ khóa đã sửa')).toBeTruthy();
-    expect(screen.getByText('21 kết quả, trang 2/2')).toBeTruthy();
+    expect(screen.getByText('Hiển thị 21–21 trên 21 kết quả')).toBeTruthy();
   });
 });
