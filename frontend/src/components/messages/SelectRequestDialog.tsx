@@ -5,12 +5,16 @@ import { DialogFrame } from '../Dialog';
 import { ReputationBadge } from '../ReputationBadge';
 import { avatarInitials, requestFallbackTitle, type ApiConversation } from './conversation';
 import { conditionLabel } from '../../utils/formatting';
+import { toFeItemRequest } from '../../services/requestApi';
+import { offerConversion, requestOfferLabel } from '../../utils/requestOffer';
+import { ConversionTopUpNotice, OfferConversionWarning } from '../OfferConversionNotice';
 
 export function SelectRequestDialog({
   conversation,
   participantName,
   submitting,
   error,
+  needsTopUp = false,
   onCancel,
   onConfirm,
   onViewItem,
@@ -19,6 +23,8 @@ export function SelectRequestDialog({
   participantName: string;
   submitting: boolean;
   error: string;
+  // Backend trả 402 khi chủ bài thiếu Credit để chuyển bài sang Trao đổi.
+  needsTopUp?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
   onViewItem?: (itemId: number) => void;
@@ -35,6 +41,11 @@ export function SelectRequestDialog({
   const itemTitle = conversation.item?.title ?? request.itemTitle?.trim() ?? 'Không xác định';
   const offeredTitle =
     conversation.offeredItem?.title ?? request.offeredItemTitle?.trim() ?? 'Không xác định';
+  // Đổi sang ItemRequest để dùng chung luật chú thích và cảnh báo với trang Hoạt động.
+  const feRequest = toFeItemRequest(request);
+  const conversion = offerConversion(feRequest);
+  // Yêu cầu có kèm món thì hiện 2 thẻ. Giao dịch SWAP luôn có món; nếu dữ liệu thiếu id vẫn hiện thẻ chờ.
+  const showsTwoItems = requestOfferLabel(feRequest) === 'Trao đổi' || request.type === 'SWAP';
 
   return (
     <DialogFrame labelledBy="select-request-title">
@@ -69,7 +80,7 @@ export function SelectRequestDialog({
       </div>
       <div className="mt-4 text-sm leading-6 text-text-secondary">
         <p>Gửi lúc: {new Date(request.createdAt).toLocaleString('vi-VN')}</p>
-        {request.type === 'SWAP' ? (
+        {showsTwoItems ? (
           <div className="mt-3 grid items-stretch gap-3 sm:grid-cols-2">
             <SelectionItemCard
               label="Bài đăng"
@@ -98,6 +109,10 @@ export function SelectRequestDialog({
         Khi bạn xác nhận chọn người này để giao dịch, yêu cầu sẽ được chấp nhận và các yêu cầu đang
         chờ khác của cùng bài đăng sẽ tự động bị từ chối.
       </p>
+      <OfferConversionWarning conversion={conversion} />
+      {needsTopUp ? (
+        <ConversionTopUpNotice fee={conversion?.to === 'SWAP' ? conversion.fee : null} />
+      ) : null}
       {error ? (
         <p role="alert" className="mt-4 rounded-md bg-error-soft p-3 text-sm text-error">
           {error}

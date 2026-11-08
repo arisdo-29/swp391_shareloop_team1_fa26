@@ -266,6 +266,16 @@ export function TypeBadge({ type }: { type: ItemType }) {
     </span>
   );
 }
+// Nhãn của một yêu cầu ("Xin nhận" / "Trao đổi"); cùng màu với TypeBadge để người dùng nhận ra ngay.
+export function RequestOfferBadge({ label }: { label: 'Xin nhận' | 'Trao đổi' }) {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-sm px-2 py-1 text-2xs font-bold ${label === 'Xin nhận' ? 'bg-primary-soft text-primary' : 'bg-secondary-soft text-secondary-hover'}`}
+    >
+      {label}
+    </span>
+  );
+}
 export function ConditionBadge({ condition }: { condition: ItemCondition }) {
   return (
     <span className="inline-flex shrink-0 whitespace-nowrap rounded-sm bg-surface-low px-2 py-1 text-2xs font-medium text-text-secondary">

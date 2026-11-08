@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
+import { useWallet } from '../../app/useWallet';
 import { selectCurrentUser } from '../../app/store';
 import {
   Button,
@@ -93,6 +94,7 @@ function mergeConversationRequests(
 function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { refresh: refreshWallet } = useWallet();
   const { requestId } = useParams();
   const requestedId = requestId ? Number(requestId) : null;
   const selectRequestParam = new URLSearchParams(location.search).get('selectRequest');
@@ -113,6 +115,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [selectCandidateId, setSelectCandidateId] = useState<number | null>(null);
   const [selectSubmitting, setSelectSubmitting] = useState(false);
   const [selectError, setSelectError] = useState('');
+  // 402 khi chủ bài thiếu Credit để chuyển bài sang Trao đổi; hộp chọn người vẫn mở.
+  const [selectNeedsTopUp, setSelectNeedsTopUp] = useState(false);
   const [mobileChat, setMobileChat] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportNotice, setReportNotice] = useState('');
@@ -398,6 +402,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     selectInFlight.current = true;
     setSelectSubmitting(true);
     setSelectError('');
+    setSelectNeedsTopUp(false);
     try {
       const refreshedRequests = await requestApi.forItem(
         selectCandidate.request.itemId,
@@ -424,6 +429,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       }
 
       const updated = await requestApi.select(selectCandidate.request.id, currentUserId);
+      // Chọn người có thể làm backend trừ phí chuyển sang Trao đổi, nên tải lại số dư ví.
+      refreshWallet();
       updateSelectedRequest({ ...selectCandidate.request, ...updated });
       setSelectedRequestId(updated.id);
       setMobileChat(true);
@@ -432,6 +439,10 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       setConversationReloadKey((key) => key + 1);
     } catch (error) {
       const apiError = error as ApiError;
+      if (apiError.code === 'WALLET_INSUFFICIENT_BALANCE') {
+        setSelectNeedsTopUp(true);
+        return;
+      }
       const errorMessages: Record<string, string> = {
         REQUEST_FORBIDDEN: 'Bạn không có quyền chọn người cho bài đăng này.',
         REQUEST_NOT_FOUND: 'Không tìm thấy yêu cầu này.',
@@ -563,6 +574,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
           selectSubmitting={selectSubmitting}
           onSelectCandidate={(id) => {
             setSelectError('');
+            setSelectNeedsTopUp(false);
             setSelectCandidateId(id);
             setSelectedRequestId(id);
             navigate(`${requestConversationPath(id)}?selectRequest=${id}`, { replace: true });
@@ -789,10 +801,12 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
           participantName={requestParticipantName(selectCandidate, currentUserId)}
           submitting={selectSubmitting}
           error={selectError}
+          needsTopUp={selectNeedsTopUp}
           onCancel={() => {
             if (selectSubmitting) return;
             setSelectCandidateId(null);
             setSelectError('');
+            setSelectNeedsTopUp(false);
             navigate(requestConversationPath(selectCandidate.request.id), { replace: true });
           }}
           onViewItem={(itemId) => {

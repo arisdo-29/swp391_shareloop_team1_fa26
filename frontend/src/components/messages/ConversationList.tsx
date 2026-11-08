@@ -1,6 +1,16 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, EmptyState, ItemImage, SearchField, SkeletonRows, StatusBadge } from '../ui';
+import {
+  Button,
+  EmptyState,
+  ItemImage,
+  RequestOfferBadge,
+  SearchField,
+  SkeletonRows,
+  StatusBadge,
+} from '../ui';
+import { toFeItemRequest } from '../../services/requestApi';
+import { requestOfferLabel } from '../../utils/requestOffer';
 import { isRequestUnread, requestStatusLabel } from '../../utils/request';
 import { productDetailFromRequestPath } from '../../utils/productDetailNavigation';
 import {
@@ -209,6 +219,7 @@ function ConversationRow({
           </div>
           <p className="mt-0.5 truncate text-xs leading-4 text-text-secondary">{itemTitle}</p>
           <div className="mt-1 flex min-w-0 items-center gap-1.5">
+            <RequestOfferBadge label={requestOfferLabel(toFeItemRequest(request))} />
             <StatusBadge status={request.status} label={requestStatusLabel[request.status]} />
             {canSelect ? (
               <button

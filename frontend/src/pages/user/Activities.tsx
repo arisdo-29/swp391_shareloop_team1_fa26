@@ -14,9 +14,12 @@ import {
   Select,
   SkeletonRows,
   StatusBadge,
+  RequestOfferBadge,
   TextArea,
   TypeBadge,
 } from '../../components/ui';
+import { ConversionTopUpNotice, OfferConversionWarning } from '../../components/OfferConversionNotice';
+import { offerConversion, requestOfferLabel, selectionQuestion } from '../../utils/requestOffer';
 import { DialogFrame } from '../../components/Dialog';
 import { toast } from '../../components/toast';
 import { boostStatusLines, formatDateTime } from '../../utils/boostMessages';
@@ -145,6 +148,8 @@ export function Activities() {
   const [requestsItemId, setRequestsItemId] = useState('');
   const [acceptConfirmId, setAcceptConfirmId] = useState('');
   const [acceptError, setAcceptError] = useState('');
+  // Backend báo 402 khi chủ bài thiếu Credit để chuyển bài sang Trao đổi; hộp xác nhận vẫn mở để nạp rồi thử lại.
+  const [acceptNeedsTopUp, setAcceptNeedsTopUp] = useState(false);
   const [selectNotice, setSelectNotice] = useState('');
   const [selectingRequestId, setSelectingRequestId] = useState('');
   const [editNotice, setEditNotice] = useState('');
@@ -389,6 +394,7 @@ export function Activities() {
   const acceptRequest = acceptApiRequest;
   const acceptItem = myItems.find((item) => item.id === acceptRequest?.itemId);
   const acceptRequesterName = acceptRequest ? requesterDisplayName(acceptRequest) : undefined;
+  const acceptConversion = acceptRequest ? offerConversion(acceptRequest) : null;
   const cancelApiRequest = async (requestId: string) => {
     if (!currentUserId || cancelingRequestId) return;
     const numericRequestId = Number(requestId.replace(/^api_req_/, ''));
@@ -514,6 +520,7 @@ export function Activities() {
     selectInFlight.current = true;
     setSelectingRequestId(request.id);
     setAcceptError('');
+    setAcceptNeedsTopUp(false);
     setSelectNotice('');
     try {
       const selected = await requestApi.select(numericRequestId, currentUserId);
@@ -523,6 +530,8 @@ export function Activities() {
           entry.id === request.id ? toFeItemRequest(selected) : entry,
         ),
       }));
+      // Chọn người có thể làm backend trừ phí chuyển sang Trao đổi, nên tải lại số dư ví.
+      refreshWallet();
 
       try {
         const [categories, areas, requests, item] = await Promise.all([
@@ -543,7 +552,12 @@ export function Activities() {
         setSelectNotice('Đã chọn người nhận, nhưng chưa thể cập nhật đầy đủ trạng thái mới nhất.');
       }
       setAcceptConfirmId('');
-    } catch {
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError.code === WALLET_INSUFFICIENT_BALANCE) {
+        setAcceptNeedsTopUp(true);
+        return;
+      }
       setAcceptError('Không chọn được người nhận. Vui lòng làm mới dữ liệu và thử lại.');
     } finally {
       selectInFlight.current = false;
@@ -870,6 +884,7 @@ export function Activities() {
                       allowAccept={Boolean(currentUserId)}
                       onAccept={(requestId) => {
                         setAcceptError('');
+                        setAcceptNeedsTopUp(false);
                         setAcceptConfirmId(requestId);
                       }}
                     />
@@ -1089,10 +1104,14 @@ export function Activities() {
         <DialogFrame>
           <h2 className="text-xl font-bold">Xác nhận chọn người</h2>
           <p className="mt-2 text-sm leading-6 text-text-muted">
-            {acceptRequest.type === 'gift'
-              ? `Bạn muốn chọn ${acceptRequesterName} để nhận ${acceptItem.title}?`
-              : `Bạn muốn trao đổi ${acceptItem.title} với ${acceptRequest.offeredItemTitle ?? 'món được đề nghị'}?`}
+            {selectionQuestion(
+              requestOfferLabel(acceptRequest),
+              acceptRequesterName,
+              acceptItem.title,
+              acceptRequest.offeredItemTitle ?? 'món được đề nghị',
+            )}
           </p>
+          <OfferConversionWarning conversion={acceptConversion} />
           <div className="mt-3 rounded-md bg-surface-low p-3">
             <p className="text-xs font-semibold text-text-muted">Thông tin người nhận:</p>
             <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
@@ -1109,12 +1128,16 @@ export function Activities() {
               {acceptError}
             </div>
           ) : null}
+          {acceptNeedsTopUp ? (
+            <ConversionTopUpNotice fee={acceptConversion?.to === 'SWAP' ? acceptConversion.fee : null} />
+          ) : null}
           <div className="mt-6 flex justify-end gap-2">
             <Button
               variant="ghost"
               disabled={selectingRequestId === acceptRequest.id}
               onClick={() => {
                 setAcceptError('');
+                setAcceptNeedsTopUp(false);
                 setAcceptConfirmId('');
               }}
             >
@@ -1776,7 +1799,7 @@ function SentRequestList({
             </Link>
             <div className="min-w-0 space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">
-                <TypeBadge type={request.type} />
+                <RequestOfferBadge label={requestOfferLabel(request)} />
                 <span
                   className={`rounded-sm px-2 py-1 text-2xs font-bold ${requestChipClass(request.status)}`}
                 >
@@ -1873,6 +1896,7 @@ function RequestPanel({
               )}
               <div className="min-w-0 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
+                  <RequestOfferBadge label={requestOfferLabel(request)} />
                   {profilePath ? (
                     <Link to={profilePath} className="text-sm font-bold hover:text-link hover:underline">
                       {requesterName}
@@ -1893,19 +1917,15 @@ function RequestPanel({
                 {request.message ? (
                   <p className="truncate text-xs text-text-secondary">{request.message}</p>
                 ) : null}
-                {request.type === 'trade' && request.offeredItemTitle ? (
+                {request.offeredItemId ? (
                   <p className="text-xs text-text-secondary">
                     Mang đổi:{' '}
-                    {request.offeredItemId ? (
-                      <Link
-                        to={`/items/${request.offeredItemId}`}
-                        className="font-semibold text-link hover:underline"
-                      >
-                        {request.offeredItemTitle}
-                      </Link>
-                    ) : (
-                      <strong>{request.offeredItemTitle}</strong>
-                    )}
+                    <Link
+                      to={`/items/${request.offeredItemId}`}
+                      className="font-semibold text-link hover:underline"
+                    >
+                      {request.offeredItemTitle ?? 'Xem chi tiết'}
+                    </Link>
                   </p>
                 ) : null}
                 {request.status !== 'PENDING' ? (

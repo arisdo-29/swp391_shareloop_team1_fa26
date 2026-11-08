@@ -13,6 +13,19 @@ export function requestOfferLabel(request: Pick<ItemRequest, 'offeredItemId'>): 
   return request.offeredItemId ? 'Trao đổi' : 'Xin nhận';
 }
 
+// Câu hỏi trong hộp xác nhận chọn người, dựng theo chú thích của yêu cầu.
+export function selectionQuestion(
+  label: RequestOfferLabel,
+  requesterName: string,
+  itemTitle: string,
+  offeredItemTitle: string,
+): string {
+  if (label === 'Trao đổi') {
+    return `Bạn muốn trao đổi ${itemTitle} lấy ${offeredItemTitle} với ${requesterName}?`;
+  }
+  return `Bạn muốn chọn ${requesterName} để nhận ${itemTitle}?`;
+}
+
 // Cho biết chọn yêu cầu này có làm bài đổi hình thức không (CD-02, CD-04 trong docs/api/request.md).
 // Chỉ so sánh để hiển thị cảnh báo; việc đổi hình thức và trừ Credit do backend làm.
 export function offerConversion(request: OfferFields): OfferConversion | null {

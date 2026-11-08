@@ -59,8 +59,9 @@ export function avatarInitials(name: string) {
 }
 
 // Khi chưa có tiêu đề món đồ thì gọi theo loại yêu cầu, không in id kỹ thuật ra màn hình.
+// Dựa vào việc có kèm món (như requestOfferLabel), vì type của yêu cầu PENDING gửi chéo loại chưa đổi.
 export function requestFallbackTitle(request: RequestResponse) {
-  return request.type === 'SWAP' ? 'Yêu cầu trao đổi' : 'Yêu cầu nhận đồ';
+  return request.offeredItemId ? 'Yêu cầu trao đổi' : 'Yêu cầu nhận đồ';
 }
 
 export function conversationTitle(conversation: ApiConversation) {
