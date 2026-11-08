@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ItemImage, StatusBadge, TypeBadge } from '../ui';
+import { Button, ItemImage, StatusBadge, TypeBadge } from '../ui';
 import type { MessageResponse } from '../../services/chatApi';
 import { resolveMediaUrl } from '../../services/mediaUrl';
 import { messageOfferStatusLabel } from '../../utils/chatMessages';
@@ -13,11 +13,14 @@ export function ChatMessage({
   mine,
   progressPath,
   onOpenItem,
+  offerActions,
 }: {
   entry: MessageResponse;
   mine: boolean;
   progressPath: string;
   onOpenItem: (itemId: number) => void;
+  // Chỉ trang Tin nhắn truyền vào, cho chủ bài ở đề nghị đổi món đang chờ khi giao dịch còn thương lượng.
+  offerActions?: { submitting: boolean; onAccept: () => void; onDecline: () => void };
 }) {
   if (entry.moderation && entry.moderation !== 'PASS') {
     return (
@@ -88,6 +91,21 @@ export function ChatMessage({
           >
             {offerLabel}
           </span>
+        ) : null}
+        {offerActions && entry.offerStatus === 'PENDING' ? (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button size="sm" disabled={offerActions.submitting} onClick={offerActions.onAccept}>
+              Đồng ý
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={offerActions.submitting}
+              onClick={offerActions.onDecline}
+            >
+              Từ chối
+            </Button>
+          </div>
         ) : null}
         <span className={`mt-1 block text-2xs ${mine ? 'text-white/70' : 'text-text-muted'}`}>
           {new Date(entry.createdAt).toLocaleString('vi-VN', {

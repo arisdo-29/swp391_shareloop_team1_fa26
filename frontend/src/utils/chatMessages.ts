@@ -1,9 +1,9 @@
 import type { MessageResponse } from '../services/chatApi';
 
 const offerStatusLabels: Record<string, string> = {
-  PENDING: 'Đề xuất đang chờ',
-  ACCEPTED: 'Đề xuất đã được chấp nhận',
-  DECLINED: 'Đề xuất đã bị từ chối',
+  PENDING: 'Đang chờ',
+  ACCEPTED: 'Đã đồng ý',
+  DECLINED: 'Đã từ chối',
 };
 
 export const CHAT_DETAIL_REFRESH_EVERY = 6;

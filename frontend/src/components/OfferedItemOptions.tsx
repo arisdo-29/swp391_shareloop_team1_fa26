@@ -2,7 +2,8 @@ import type { Item } from '../types/domain';
 import { ItemImage } from './ui';
 
 interface OfferedItemOptionsProps {
-  items: Item[];
+  // Chỉ cần vài trường để vẽ thẻ, nên trang chat có thể truyền món dựng từ ItemResponse.
+  items: Array<Pick<Item, 'id' | 'title' | 'images' | 'district'>>;
   selectedItemId: string;
   onSelect: (itemId: string) => void;
 }

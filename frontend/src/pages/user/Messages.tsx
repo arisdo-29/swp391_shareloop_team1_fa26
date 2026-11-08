@@ -39,8 +39,19 @@ import { ConversationList } from '../../components/messages/ConversationList';
 import { ChatHeader } from '../../components/messages/ChatHeader';
 import { ChatMessage } from '../../components/messages/ChatMessage';
 import { SelectRequestDialog } from '../../components/messages/SelectRequestDialog';
+import {
+  AcceptOfferChangeDialog,
+  ProposeOfferChangeDialog,
+} from '../../components/messages/OfferChangeDialogs';
+import {
+  isOfferChangeOpen,
+  latestPendingOfferChange,
+  offerChangeErrorMessage,
+  offerChangeOptions,
+} from '../../utils/offerChange';
 import { productDetailFromRequestPath } from '../../utils/productDetailNavigation';
 import {
+  conversationTitle,
   donorIdOf,
   requestParticipantName,
   type ApiConversation,
@@ -126,11 +137,18 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [pinnedItemsReloadKey, setPinnedItemsReloadKey] = useState(0);
   const [shareItemId, setShareItemId] = useState('');
   const [shareableItems, setShareableItems] = useState<ItemResponse[]>([]);
+  // Đề nghị đưa món vào đổi trong giao dịch Cho tặng (docs/api/chat.md mục 4–6).
+  const [proposeOfferOpen, setProposeOfferOpen] = useState(false);
+  const [offerAcceptTarget, setOfferAcceptTarget] = useState<MessageResponse | null>(null);
+  const [offerActionSubmitting, setOfferActionSubmitting] = useState(false);
+  const [offerActionError, setOfferActionError] = useState('');
+  const [offerAcceptNeedsTopUp, setOfferAcceptNeedsTopUp] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatImageInputRef = useRef<HTMLInputElement>(null);
   const activeRequestId = useRef<number | null>(null);
   const selectInFlight = useRef(false);
   const sendInFlight = useRef(false);
+  const offerActionInFlight = useRef(false);
   const requestGroupsLoadedAt = useRef(new Map<number, number>());
 
   useEffect(() => {
@@ -389,6 +407,105 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     setConversations((current) =>
       current.map((entry) => (entry.request.id === request.id ? { ...entry, request } : entry)),
     );
+  };
+
+  // Nút đề nghị/đồng ý/từ chối chỉ hiện khi giao dịch Cho tặng còn RESERVED hoặc AWAITING_LOGISTICS.
+  const offerChangeOpen = selected ? isOfferChangeOpen(selected.request) : false;
+  const canProposeOfferChange =
+    offerChangeOpen && !selectedAsDonor && selected?.request.receiverId === currentUserId;
+  const pendingOfferChange = latestPendingOfferChange(messages);
+
+  const openProposeOfferChange = () => {
+    setOfferActionError('');
+    setProposeOfferOpen(true);
+  };
+
+  const openAcceptOfferChange = (offerMessage: MessageResponse) => {
+    setOfferActionError('');
+    setOfferAcceptNeedsTopUp(false);
+    setOfferAcceptTarget(offerMessage);
+  };
+
+  // Sau khi đồng ý, tải chi tiết món đề nghị để đầu khung chat hiện đủ 2 món của giao dịch Trao đổi.
+  const attachOfferedItem = (request: RequestResponse) => {
+    if (!request.offeredItemId) return;
+    itemApi
+      .detail(request.offeredItemId)
+      .then((offeredItem) => {
+        setConversations((current) =>
+          current.map((entry) => (entry.request.id === request.id ? { ...entry, offeredItem } : entry)),
+        );
+      })
+      .catch(() => {
+        // Không tải được thì đầu khung chat dùng tiêu đề và ảnh ghim dự phòng.
+      });
+  };
+
+  const proposeOfferChange = async (offeredItemId: number, content: string) => {
+    if (!selected || offerActionInFlight.current) return;
+    offerActionInFlight.current = true;
+    setOfferActionSubmitting(true);
+    setOfferActionError('');
+    try {
+      await chatApi.proposeOfferChange(selected.request.id, offeredItemId, content || undefined);
+      setProposeOfferOpen(false);
+      // Tải lại tin nhắn để đề nghị cũ (nếu có) hiện đúng trạng thái DECLINED backend vừa đổi.
+      setMessageReloadKey((key) => key + 1);
+    } catch (error) {
+      setOfferActionError(offerChangeErrorMessage(error as ApiError));
+    } finally {
+      offerActionInFlight.current = false;
+      setOfferActionSubmitting(false);
+    }
+  };
+
+  const acceptOfferChange = async () => {
+    if (!selected || !offerAcceptTarget || offerActionInFlight.current) return;
+    offerActionInFlight.current = true;
+    setOfferActionSubmitting(true);
+    setOfferActionError('');
+    setOfferAcceptNeedsTopUp(false);
+    try {
+      const updated = await chatApi.acceptOfferChange(selected.request.id, offerAcceptTarget.id);
+      updateSelectedRequest({ ...selected.request, ...updated });
+      setOfferAcceptTarget(null);
+      attachOfferedItem(updated);
+      // Backend đã ghim thêm món đề nghị, đổi trạng thái đề nghị và trừ phí: tải lại cả ba nơi.
+      setPinnedItemsReloadKey((key) => key + 1);
+      setMessageReloadKey((key) => key + 1);
+      refreshWallet();
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError.code === 'WALLET_INSUFFICIENT_BALANCE') {
+        // Backend không đổi gì; đề nghị vẫn chờ, hộp xác nhận vẫn mở để nạp Credit.
+        setOfferAcceptNeedsTopUp(true);
+        return;
+      }
+      setOfferActionError(offerChangeErrorMessage(apiError));
+      if (apiError.status === 409) setMessageReloadKey((key) => key + 1);
+    } finally {
+      offerActionInFlight.current = false;
+      setOfferActionSubmitting(false);
+    }
+  };
+
+  const declineOfferChange = async (offerMessage: MessageResponse) => {
+    if (!selected || offerActionInFlight.current) return;
+    offerActionInFlight.current = true;
+    setOfferActionSubmitting(true);
+    setMessageError('');
+    try {
+      const declined = await chatApi.declineOfferChange(selected.request.id, offerMessage.id);
+      // Thay tin đề nghị bằng bản backend trả (offerStatus DECLINED); tin SYSTEM đến ở lần thăm dò sau.
+      setMessages((current) => mergeChatMessages(current, [declined]));
+    } catch (error) {
+      const apiError = error as ApiError;
+      setMessageError(offerChangeErrorMessage(apiError));
+      if (apiError.status === 409) setMessageReloadKey((key) => key + 1);
+    } finally {
+      offerActionInFlight.current = false;
+      setOfferActionSubmitting(false);
+    }
   };
 
   const confirmRequestSelection = async () => {
@@ -653,6 +770,15 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       mine={entry.senderId === currentUserId}
                       progressPath={transactionProgressPath(selected.request.id)}
                       onOpenItem={(itemId) => navigate(`/items/${itemId}`)}
+                      offerActions={
+                        offerChangeOpen && selectedAsDonor && entry.id === pendingOfferChange?.id
+                          ? {
+                              submitting: offerActionSubmitting,
+                              onAccept: () => openAcceptOfferChange(entry),
+                              onDecline: () => void declineOfferChange(entry),
+                            }
+                          : undefined
+                      }
                     />
                   ))
                 ) : (
@@ -706,6 +832,18 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       Bỏ ảnh
                     </button>
                   </p>
+                ) : null}
+                {canProposeOfferChange ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-surface-low px-3 py-2 text-xs leading-5 text-text-secondary">
+                    <p className="min-w-0 flex-1">
+                      {pendingOfferChange
+                        ? 'Đề nghị kèm món của bạn đang chờ chủ bài trả lời.'
+                        : 'Muốn đổi món thay vì nhận tặng? Đề nghị kèm một món của bạn.'}
+                    </p>
+                    <Button size="sm" variant="outline" onClick={openProposeOfferChange}>
+                      {pendingOfferChange ? 'Đổi món đề nghị' : 'Đề nghị kèm món đổi'}
+                    </Button>
+                  </div>
                 ) : null}
                 {shareableItems.length && !isGiftReceiver ? (
                   <select
@@ -813,6 +951,34 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
             navigate(productDetailFromRequestPath(itemId, selectCandidate.request.id, true));
           }}
           onConfirm={() => void confirmRequestSelection()}
+        />
+      ) : null}
+      {proposeOfferOpen && canProposeOfferChange ? (
+        <ProposeOfferChangeDialog
+          items={offerChangeOptions(shareableItems)}
+          hasPendingOffer={Boolean(pendingOfferChange)}
+          submitting={offerActionSubmitting}
+          error={offerActionError}
+          onCancel={() => {
+            if (offerActionSubmitting) return;
+            setProposeOfferOpen(false);
+          }}
+          onSubmit={(offeredItemId, content) => void proposeOfferChange(offeredItemId, content)}
+        />
+      ) : null}
+      {offerAcceptTarget && selected && offerChangeOpen ? (
+        <AcceptOfferChangeDialog
+          itemTitle={conversationTitle(selected)}
+          offeredItemTitle={offerAcceptTarget.itemCard?.title ?? 'món được đề nghị'}
+          conversionFee={selected.request.conversionFee ?? null}
+          submitting={offerActionSubmitting}
+          error={offerActionError}
+          needsTopUp={offerAcceptNeedsTopUp}
+          onCancel={() => {
+            if (offerActionSubmitting) return;
+            setOfferAcceptTarget(null);
+          }}
+          onConfirm={() => void acceptOfferChange()}
         />
       ) : null}
       {reportOpen && selected && reportTargetUserId && reportTargetUserId !== currentUserId ? (
