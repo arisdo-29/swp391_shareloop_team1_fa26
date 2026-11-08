@@ -182,6 +182,10 @@ export interface ItemRequest {
   status: ItemRequestStatus;
   message: string;
   createdAt: string;
+  // Hình thức hiện tại của bài được xin (khác `type` khi gửi chéo loại và chưa chọn người).
+  itemOfferType?: ItemType;
+  // Credit chủ bài trả nếu chuyển bài sang Trao đổi; backend trả, frontend chỉ hiển thị.
+  conversionFee?: number;
 }
 
 export interface CreditHistory {
