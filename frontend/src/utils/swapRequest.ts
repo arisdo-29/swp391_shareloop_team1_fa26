@@ -18,9 +18,10 @@ export function findActiveSwapPair(
   firstItemId: string,
   secondItemId: string,
 ) {
+  // Không lọc theo request.type: yêu cầu kèm món gửi vào bài Cho vẫn mang type gift cho tới khi được chọn.
+  // So khớp offeredItemId đã đủ để biết đây là một cặp trao đổi.
   return requests.find(
     (request) =>
-      request.type === 'trade' &&
       isActiveRequestStatus(request.status) &&
       ((request.itemId === firstItemId && request.offeredItemId === secondItemId) ||
         (request.itemId === secondItemId && request.offeredItemId === firstItemId)),

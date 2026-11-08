@@ -42,6 +42,18 @@ describe('findActiveSwapPair', () => {
     },
   );
 
+  it('phát hiện yêu cầu kèm món gửi vào bài Cho dù type còn là gift', () => {
+    const crossRequest = { ...swapRequest('10', '20'), type: 'gift' } as ItemRequest;
+
+    expect(findActiveSwapPair([crossRequest], '10', '20')).toBe(crossRequest);
+  });
+
+  it('không coi yêu cầu không kèm món là cặp trao đổi', () => {
+    const receiveOnly = { ...swapRequest('10', '20'), offeredItemId: undefined } as ItemRequest;
+
+    expect(findActiveSwapPair([receiveOnly], '10', '20')).toBeUndefined();
+  });
+
   it('không ghép nhầm yêu cầu của cặp sản phẩm khác', () => {
     expect(findActiveSwapPair([swapRequest('20', '30')], '10', '20')).toBeUndefined();
   });

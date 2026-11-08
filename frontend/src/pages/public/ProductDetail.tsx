@@ -27,6 +27,8 @@ import { reputationBlockedMessage } from '../../utils/apiErrorMessages';
 import { loginPath } from '../../utils/authRedirect';
 import { productDetailBackLink } from '../../utils/productDetailNavigation';
 import { findActiveSwapPair, isActiveRequestStatus } from '../../utils/swapRequest';
+import { requestOfferLabel } from '../../utils/requestOffer';
+import { OfferedItemOptions } from '../../components/OfferedItemOptions';
 
 const DUPLICATE_SWAP_MESSAGE =
   'Hai món đồ này đã có yêu cầu trao đổi. Xem yêu cầu hiện có trước khi tiếp tục.';
@@ -40,6 +42,8 @@ export function ProductDetail() {
   const [requestError, setRequestError] = useState('');
   const [requestSuccess, setRequestSuccess] = useState('');
   const [offeredItemId, setOfferedItemId] = useState('');
+  // Bài Trao đổi: người dùng đã chủ động chọn "Chỉ xin nhận, không kèm món".
+  const [receiveOnlyChosen, setReceiveOnlyChosen] = useState(false);
   const [apiItem, setApiItem] = useState<Item | null>(null);
   const [apiOfferedItems, setApiOfferedItems] = useState<Item[]>([]);
   const [apiSentRequests, setApiSentRequests] = useState<ItemRequest[]>([]);
@@ -186,6 +190,25 @@ export function ProductDetail() {
       )
     : [];
 
+  // Bài Cho: bấm lại món đang chọn để bỏ kèm món. Bài Trao đổi: chọn món thì bỏ lựa chọn "Chỉ xin nhận".
+  const chooseOfferedItem = (itemId: string) => {
+    const isUnselectingGiftItem = item.type === 'gift' && offeredItemId === itemId;
+    setOfferedItemId(isUnselectingGiftItem ? '' : itemId);
+    setReceiveOnlyChosen(false);
+    setDuplicateSwapRequest(null);
+    setRequestError('');
+  };
+
+  const chooseReceiveOnly = () => {
+    setOfferedItemId('');
+    setReceiveOnlyChosen(true);
+    setDuplicateSwapRequest(null);
+    setRequestError('');
+  };
+
+  const submitButtonLabel =
+    item.type === 'gift' || receiveOnlyChosen ? 'Gửi yêu cầu, miễn phí' : 'Gửi đề nghị, miễn phí';
+
   // Kiểm tra giống backend trước khi gửi để báo lỗi sớm; backend vẫn là nơi quyết định cuối cùng.
   const submitRequest = async () => {
     setRequestError('');
@@ -204,14 +227,14 @@ export function ProductDetail() {
       setRequestError('Uy tín của bạn đang ở mức 0 nên hiện không thể gửi yêu cầu.');
       return;
     }
-    if (item.type === 'trade' && !offeredItemId) {
-      setRequestError('Vui lòng chọn món bạn muốn dùng để trao đổi.');
+    // Bài Trao đổi bắt chọn rõ một món hoặc "Chỉ xin nhận" để người dùng không gửi nhầm loại yêu cầu.
+    if (item.type === 'trade' && !offeredItemId && !receiveOnlyChosen) {
+      setRequestError('Vui lòng chọn một món để trao đổi hoặc chọn "Chỉ xin nhận, không kèm món".');
       return;
     }
-    const directSwapRequest =
-      item.type === 'trade'
-        ? findActiveSwapPair(apiSentRequests, item.id, offeredItemId)
-        : undefined;
+    const directSwapRequest = offeredItemId
+      ? findActiveSwapPair(apiSentRequests, item.id, offeredItemId)
+      : undefined;
     if (directSwapRequest) {
       setDuplicateSwapRequest(directSwapRequest);
       setRequestError(DUPLICATE_SWAP_MESSAGE);
@@ -223,7 +246,7 @@ export function ProductDetail() {
     }
     setRequestSubmitting(true);
     try {
-      if (item.type === 'trade') {
+      if (offeredItemId) {
         let incomingRequests: ItemRequest[] = [];
         try {
           const response = await requestApi.forItem(Number(offeredItemId), currentUserId);
@@ -245,11 +268,16 @@ export function ProductDetail() {
       const request = await requestApi.create(
         Number(item.id),
         currentUserId,
-        item.type === 'trade' ? Number(offeredItemId) : undefined,
+        offeredItemId ? Number(offeredItemId) : undefined,
       );
-      setApiSentRequests((current) => [toFeItemRequest(request, user.id), ...current]);
+      const sentRequest = toFeItemRequest(request, user.id);
+      setApiSentRequests((current) => [sentRequest, ...current]);
       setOfferedItemId('');
-      setRequestSuccess(item.type === 'gift' ? 'Đã gửi yêu cầu nhận.' : 'Đã gửi đề nghị trao đổi.');
+      setReceiveOnlyChosen(false);
+      // Thông báo theo chú thích thật của yêu cầu (có kèm món hay không), không theo loại bài.
+      setRequestSuccess(
+        requestOfferLabel(sentRequest) === 'Trao đổi' ? 'Đã gửi đề nghị trao đổi.' : 'Đã gửi yêu cầu xin nhận.',
+      );
     } catch (caught) {
       const apiError = caught as ApiError;
       setRequestError(
@@ -414,7 +442,7 @@ export function ProductDetail() {
               <p className="text-sm leading-6 text-text-secondary">
                 Trạng thái: <strong className="text-text-primary">{requestStatusLabel[existingRequest.status]}</strong>
               </p>
-              {item.type === 'trade' && existingRequest.type === 'trade' ? (
+              {requestOfferLabel(existingRequest) === 'Trao đổi' ? (
                 <>
                   <Alert tone="warning">{DUPLICATE_SWAP_MESSAGE}</Alert>
                   <Link to={`/requests/${existingRequest.id.replace(/^api_req_/, '')}`}>
@@ -454,28 +482,45 @@ export function ProductDetail() {
           ) : (
             <>
               <h2 className="text-lg font-bold">{item.type === 'gift' ? 'Xin món này' : 'Đề nghị trao đổi'}</h2>
+              {item.type === 'gift' && user && eligibleOfferedItems.length ? (
+                <fieldset className="min-w-0 w-full max-w-full space-y-2">
+                  <legend className="label">Kèm món của bạn để đề nghị trao đổi</legend>
+                  <p className="text-xs leading-5 text-text-secondary">
+                    Không bắt buộc. Nếu chủ bài chọn bạn, món đồ sẽ được trao đổi thay vì cho tặng.
+                  </p>
+                  <OfferedItemOptions
+                    items={eligibleOfferedItems}
+                    selectedItemId={offeredItemId}
+                    onSelect={chooseOfferedItem}
+                  />
+                  {offeredItemId ? (
+                    <button
+                      type="button"
+                      onClick={() => chooseOfferedItem(offeredItemId)}
+                      className="inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary"
+                    >
+                      Không kèm món
+                    </button>
+                  ) : null}
+                </fieldset>
+              ) : null}
               {item.type === 'trade' && user ? (
                 <fieldset className="min-w-0 w-full max-w-full space-y-2">
                   <legend className="label">Chọn món bạn mang đổi</legend>
-                  {eligibleOfferedItems.map((entry) => (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      aria-pressed={offeredItemId === entry.id}
-                      onClick={() => {
-                        setOfferedItemId(entry.id);
-                        setDuplicateSwapRequest(null);
-                        setRequestError('');
-                      }}
-                      className={`box-border flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-md border p-2.5 text-left transition ${offeredItemId === entry.id ? 'border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
-                    >
-                      <ItemImage src={entry.images[0]} alt={entry.title} className="h-11 w-14 shrink-0 rounded-md object-cover" />
-                      <span className="min-w-0 max-w-full flex-1 overflow-hidden">
-                        <strong className="block whitespace-normal break-words text-sm leading-5">{entry.title}</strong>
-                        <span className="block break-words text-xs text-text-muted">{entry.district}</span>
-                      </span>
-                    </button>
-                  ))}
+                  <OfferedItemOptions
+                    items={eligibleOfferedItems}
+                    selectedItemId={offeredItemId}
+                    onSelect={chooseOfferedItem}
+                  />
+                  <button
+                    type="button"
+                    aria-pressed={receiveOnlyChosen}
+                    onClick={chooseReceiveOnly}
+                    className={`box-border flex min-h-11 w-full items-center rounded-md border p-2.5 text-left text-sm font-semibold transition ${receiveOnlyChosen ? 'border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
+                  >
+                    Chỉ xin nhận, không kèm món
+                  </button>
+                  <p className="text-xs leading-5 text-text-secondary">Chủ bài có thể đồng ý cho tặng thay vì trao đổi.</p>
                   {!eligibleOfferedItems.length ? (
                     <p className="rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
                       Bạn chưa có món đã duyệt, còn hoạt động và chưa nằm trong giao dịch khác để trao đổi.
@@ -489,16 +534,14 @@ export function ProductDetail() {
               <Button
                 size="lg"
                 className="w-full"
-                disabled={requestSubmitting || (Boolean(user) && item.type === 'trade' && !eligibleOfferedItems.length)}
+                disabled={requestSubmitting}
                 onClick={() => void submitRequest()}
               >
                 {requestSubmitting
                   ? 'Đang gửi...'
                   : !user
                     ? 'Đăng nhập để gửi yêu cầu'
-                    : item.type === 'gift'
-                      ? 'Gửi yêu cầu, miễn phí'
-                      : 'Gửi đề nghị, miễn phí'}
+                    : submitButtonLabel}
               </Button>
               <ul className="list-disc space-y-1 pl-5 text-xs leading-5 text-text-secondary">
                 <li>Chat mở khi chủ bài chọn bạn. Bạn có thể hủy yêu cầu tới lúc đó.</li>
