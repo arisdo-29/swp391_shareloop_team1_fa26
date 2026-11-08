@@ -1,5 +1,5 @@
 import { http } from './http';
-import type { ItemRequest, ItemRequestStatus } from '../types/domain';
+import type { ItemRequest, ItemRequestStatus, ItemType } from '../types/domain';
 import { apiUserId } from './mappers';
 
 // Theo docs/api/request.md
@@ -48,6 +48,10 @@ export interface RequestResponse {
   disputeExpired?: boolean;
   // Chỉ có ở GET /requests/{id}; các danh sách trả null.
   handoverMedia?: RequestMediaResponse[] | null;
+  // Hình thức hiện tại của bài chính; khác `type` khi người xin gửi chéo loại và chưa được chọn.
+  itemOfferType?: 'GIVE' | 'SWAP' | null;
+  // Số Credit chủ bài trả nếu giao dịch chuyển sang Trao đổi; backend đọc từ cấu hình, không tự tính.
+  conversionFee?: number | null;
 }
 
 export interface CreateRequestBody {
@@ -128,7 +132,15 @@ export function toFeItemRequest(
     status: request.status,
     message: '',
     createdAt: request.createdAt,
+    itemOfferType: toFeOfferType(request.itemOfferType),
+    conversionFee: typeof request.conversionFee === 'number' ? request.conversionFee : undefined,
   };
+}
+
+function toFeOfferType(offerType: RequestResponse['itemOfferType']): ItemType | undefined {
+  if (offerType === 'SWAP') return 'trade';
+  if (offerType === 'GIVE') return 'gift';
+  return undefined;
 }
 
 export const requestApi = {

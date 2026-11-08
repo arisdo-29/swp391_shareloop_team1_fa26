@@ -37,6 +37,8 @@ vi.mock('../../services/chatApi', () => ({
   chatApi: { list: vi.fn(), send: vi.fn(), pinnedItems: vi.fn() },
 }));
 vi.mock('../../services/mediaApi', () => ({ mediaApi: { upload: vi.fn() } }));
+// Trang Tin nhắn tải lại ví sau khi chọn người; test không bọc WalletProvider nên mock hook.
+vi.mock('../../app/useWallet', () => ({ useWallet: () => ({ refresh: vi.fn() }) }));
 
 const DONOR_ID = 9;
 const RECEIVER_ID = 12;

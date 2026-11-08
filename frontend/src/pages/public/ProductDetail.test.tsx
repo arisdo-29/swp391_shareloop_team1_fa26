@@ -22,7 +22,7 @@ vi.mock('../../services/catalogApi', async (importOriginal) => ({
 }));
 vi.mock('../../services/requestApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../services/requestApi')>()),
-  requestApi: { mine: vi.fn(), create: vi.fn(), cancel: vi.fn() },
+  requestApi: { mine: vi.fn(), create: vi.fn(), cancel: vi.fn(), forItem: vi.fn() },
 }));
 
 const DONOR_ID = 9;
@@ -79,10 +79,10 @@ function LocationProbe() {
   return <span data-testid="location">{location.pathname}</span>;
 }
 
-async function renderDetail(item: ItemResponse) {
+async function renderDetail(item: ItemResponse, ownedItems: ItemResponse[] = []) {
   store.dispatch(actions.loginFromApi(viewer));
   vi.mocked(itemApi.detail).mockResolvedValue(item);
-  vi.mocked(itemApi.mine).mockResolvedValue([]);
+  vi.mocked(itemApi.mine).mockResolvedValue(ownedItems);
   vi.mocked(requestApi.mine).mockResolvedValue([]);
   vi.mocked(catalogApi.category).mockResolvedValue({ id: 1, name: 'Xe cộ' } as never);
   vi.mocked(catalogApi.categories).mockResolvedValue([]);
@@ -145,5 +145,83 @@ describe('Liên kết hồ sơ ở khối chủ bài', () => {
 
     // then
     expect(screen.getByTestId('location').textContent).toBe(`/users/${DONOR_ID}`);
+  });
+});
+
+describe('Gửi yêu cầu có hoặc không kèm món', () => {
+  // Món của người xem, đủ điều kiện mang đi đổi.
+  const myChair = detail({ id: 60, donorId: VIEWER_ID, title: 'Ghế xoay', offerType: 'GIVE' });
+
+  const createdRequest = (offeredItemId?: number) => ({
+    id: 101,
+    itemId: 45,
+    receiverId: VIEWER_ID,
+    offeredItemId,
+    type: 'GIVE' as const,
+    status: 'PENDING' as const,
+    createdAt: '2026-11-08T08:00:00Z',
+  });
+
+  it('bài Cho gửi được yêu cầu không kèm món và báo xin nhận', async () => {
+    // given
+    const user = userEvent.setup();
+    vi.mocked(requestApi.create).mockResolvedValue(createdRequest());
+    await renderDetail(detail(), [myChair]);
+
+    // when
+    await user.click(screen.getByRole('button', { name: 'Gửi yêu cầu, miễn phí' }));
+
+    // then
+    expect(requestApi.create).toHaveBeenCalledWith(45, VIEWER_ID, undefined);
+    expect(requestApi.forItem).not.toHaveBeenCalled();
+    expect(await screen.findByText('Đã gửi yêu cầu xin nhận.')).toBeTruthy();
+  });
+
+  it('bài Cho gửi được yêu cầu kèm món và báo đề nghị trao đổi', async () => {
+    // given
+    const user = userEvent.setup();
+    vi.mocked(requestApi.forItem).mockResolvedValue([]);
+    vi.mocked(requestApi.create).mockResolvedValue(createdRequest(60));
+    await renderDetail(detail(), [myChair]);
+
+    // when
+    await user.click(await screen.findByRole('button', { name: /Ghế xoay/ }));
+    await user.click(screen.getByRole('button', { name: 'Gửi yêu cầu, miễn phí' }));
+
+    // then
+    expect(requestApi.forItem).toHaveBeenCalledWith(60, VIEWER_ID);
+    expect(requestApi.create).toHaveBeenCalledWith(45, VIEWER_ID, 60);
+    expect(await screen.findByText('Đã gửi đề nghị trao đổi.')).toBeTruthy();
+  });
+
+  it('bài Trao đổi gửi được "Chỉ xin nhận" dù không có món nào để đổi', async () => {
+    // given
+    const user = userEvent.setup();
+    vi.mocked(requestApi.create).mockResolvedValue(createdRequest());
+    await renderDetail(detail({ offerType: 'SWAP' }));
+
+    // when
+    await user.click(screen.getByRole('button', { name: 'Chỉ xin nhận, không kèm món' }));
+    await user.click(screen.getByRole('button', { name: 'Gửi yêu cầu, miễn phí' }));
+
+    // then
+    expect(requestApi.create).toHaveBeenCalledWith(45, VIEWER_ID, undefined);
+    expect(requestApi.forItem).not.toHaveBeenCalled();
+    expect(await screen.findByText('Đã gửi yêu cầu xin nhận.')).toBeTruthy();
+  });
+
+  it('bài Trao đổi chưa chọn món hay "Chỉ xin nhận" thì không gửi', async () => {
+    // given
+    const user = userEvent.setup();
+    await renderDetail(detail({ offerType: 'SWAP' }), [myChair]);
+
+    // when
+    await user.click(screen.getByRole('button', { name: 'Gửi đề nghị, miễn phí' }));
+
+    // then
+    expect(requestApi.create).not.toHaveBeenCalled();
+    expect(
+      screen.getByText('Vui lòng chọn một món để trao đổi hoặc chọn "Chỉ xin nhận, không kèm món".'),
+    ).toBeTruthy();
   });
 });

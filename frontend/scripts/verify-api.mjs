@@ -150,6 +150,25 @@ await test('polling truyền afterId, pinned items dùng path canonical và tin 
   assert.deepEqual(requests[2].body, { content: '', refItemId: 42 });
 });
 
+await test('đề nghị, đồng ý và từ chối đổi món trong chat dùng đúng path và body', async () => {
+  requests = [];
+  nextResponse = {};
+  await api.chatApi.proposeOfferChange(101, 60, 'Đổi ghế nhé');
+  assert.equal(requests[0].method, 'post');
+  assert.equal(requests[0].url, '/api/v1/requests/101/offer-changes');
+  assert.deepEqual(requests[0].body, { offeredItemId: 60, content: 'Đổi ghế nhé' });
+  await api.chatApi.proposeOfferChange(101, 60);
+  assert.deepEqual(requests[1].body, { offeredItemId: 60 });
+  await api.chatApi.acceptOfferChange(101, 31);
+  assert.equal(requests[2].method, 'post');
+  assert.equal(requests[2].url, '/api/v1/requests/101/offer-changes/31/accept');
+  assert.equal(requests[2].body, undefined);
+  await api.chatApi.declineOfferChange(101, 31);
+  assert.equal(requests[3].method, 'post');
+  assert.equal(requests[3].url, '/api/v1/requests/101/offer-changes/31/decline');
+  assert.equal(requests[3].body, undefined);
+});
+
 await test('thuộc tính danh mục gọi đúng path và không tự thêm query', async () => {
   requests = [];
   nextResponse = [
@@ -435,6 +454,33 @@ await test('chỉ mở xác nhận giao nhận ở LOGISTICS_CONFIRMED hoặc AW
       .status,
     'COMPLETED',
   );
+});
+
+await test('yêu cầu giữ hình thức hiện tại của bài và phí chuyển đổi do Backend trả', () => {
+  const crossRequest = api.toFeItemRequest({
+    id: 9,
+    receiverId: 2,
+    itemId: 3,
+    offeredItemId: 12,
+    type: 'GIVE',
+    status: 'PENDING',
+    itemOfferType: 'GIVE',
+    conversionFee: 5,
+  });
+  assert.equal(crossRequest.type, 'gift');
+  assert.equal(crossRequest.itemOfferType, 'gift');
+  assert.equal(crossRequest.conversionFee, 5);
+  const unknownItem = api.toFeItemRequest({
+    id: 10,
+    receiverId: 2,
+    itemId: 3,
+    type: 'SWAP',
+    status: 'PENDING',
+    itemOfferType: null,
+    conversionFee: null,
+  });
+  assert.equal(unknownItem.itemOfferType, undefined);
+  assert.equal(unknownItem.conversionFee, undefined);
 });
 
 await test('danh sách, chi tiết và chọn yêu cầu dùng đúng contract Backend', async () => {

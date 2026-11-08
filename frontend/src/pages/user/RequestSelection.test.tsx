@@ -281,9 +281,9 @@ describe('tích hợp tin nhắn API', () => {
 
   it('tạo URL ổn định khi đổi cuộc trò chuyện và hiển thị trạng thái đề xuất', () => {
     expect(requestConversationPath(101)).toBe('/requests/101');
-    expect(messageOfferStatusLabel('PENDING')).toBe('Đề xuất đang chờ');
-    expect(messageOfferStatusLabel('ACCEPTED')).toBe('Đề xuất đã được chấp nhận');
-    expect(messageOfferStatusLabel('DECLINED')).toBe('Đề xuất đã bị từ chối');
+    expect(messageOfferStatusLabel('PENDING')).toBe('Đang chờ');
+    expect(messageOfferStatusLabel('ACCEPTED')).toBe('Đã đồng ý');
+    expect(messageOfferStatusLabel('DECLINED')).toBe('Đã từ chối');
     expect(messageOfferStatusLabel(null)).toBeNull();
   });
 });
