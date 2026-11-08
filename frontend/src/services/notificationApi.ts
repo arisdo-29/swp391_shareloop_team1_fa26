@@ -47,6 +47,8 @@ export function notificationCategory(type: string): NotificationCategory {
     type.startsWith('REQUEST_') ||
     type.startsWith('TRANSACTION_') ||
     type.startsWith('CHAT_') ||
+    // Đề nghị đổi món trong chat (docs/api/chat.md): backend đặt tên OFFER_CHANGE_*, không có tiền tố REQUEST_.
+    type.startsWith('OFFER_CHANGE_') ||
     [
       'NEW_REQUEST',
       'SELECTED',
