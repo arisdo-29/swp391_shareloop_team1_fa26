@@ -119,7 +119,7 @@ public class ItemService {
 
     /**
      * Tạo bài đăng mới ở trạng thái PENDING_REVIEW (F07 bước 1).
-     * Người có 0 sao uy tín không được đăng bài (FR-92, BR-U05): ném ITEM_REPUTATION_BLOCKED.
+     * Người có 0 sao uy tín không được đăng bài (UT-04, BD-07): ném ITEM_REPUTATION_BLOCKED.
      */
     @Transactional
     public ItemResponse createItem(Long donorId, CreateItemRequest request) {
@@ -128,7 +128,7 @@ public class ItemService {
         categoryService.getById(request.categoryId());
         areaService.getDistrict(request.areaId());
 
-        // SWAP bắt buộc phải có món mong muốn (BR-S02, ck_items_swap_desired)
+        // SWAP bắt buộc phải có món mong muốn (BD-02, ck_items_swap_desired)
         if (request.offerType() == OfferType.SWAP
                 && (request.desiredItem() == null || request.desiredItem().isBlank())) {
             throw new BusinessException(ItemErrorCode.ITEM_SWAP_DESIRED_ITEM_REQUIRED);
@@ -212,7 +212,7 @@ public class ItemService {
         if (item.getDonorId() != userId) {
             throw new BusinessException(ItemErrorCode.ITEM_NOT_OWNER);
         }
-        // Bài của người 0 sao đã bị ẩn, sửa sẽ tốn phí sửa cho bài không hiển thị được (BR-U05)
+        // Bài của người 0 sao đã bị ẩn, sửa sẽ tốn phí sửa cho bài không hiển thị được (UT-04)
         requireCanPost(userId);
         if (item.getStatus() == ItemStatus.RESERVED
                 || item.getStatus() == ItemStatus.TRADED
@@ -420,7 +420,7 @@ public class ItemService {
     }
 
     /**
-     * Danh sách công khai bài APPROVED còn hiển thị (FR-50). Mọi bộ lọc đều không bắt buộc và kết hợp được với nhau;
+     * Danh sách công khai bài APPROVED còn hiển thị (TT-01). Mọi bộ lọc đều không bắt buộc và kết hợp được với nhau;
      * lọc ở database trước khi phân trang để tổng số luôn đúng.
      */
     @Transactional(readOnly = true)
@@ -468,7 +468,7 @@ public class ItemService {
     }
 
     /**
-     * Danh sách Tìm đồ có xoay vòng bài đẩy (FR-50, C15). Bài đang đẩy khớp bộ lọc xếp thành vòng theo id tăng dần;
+     * Danh sách Tìm đồ có xoay vòng bài đẩy (TT-01, C15). Bài đang đẩy khớp bộ lọc xếp thành vòng theo id tăng dần;
      * mỗi trang tối đa boost_max_per_page bài đẩy ở đầu, chọn bằng {@link BoostRotation} theo lượt và người xem. Bài đẩy
      * không lên đầu trang vẫn nằm trong phần bài thường theo thứ tự bình thường, nên không bài nào biến mất hay lặp lại
      * giữa các trang của cùng một lượt. boostedOnly = true ("Tin nổi bật") trả mọi bài đang đẩy theo thứ tự xoay.
@@ -667,7 +667,7 @@ public class ItemService {
     }
 
     /**
-     * Giữ chỗ bài đăng khi chủ bài chọn người nhận (BR-D01, Issue #38).
+     * Giữ chỗ bài đăng khi chủ bài chọn người nhận (YC-07, Issue #38).
      */
     @Transactional
     public void reserve(Long itemId) {

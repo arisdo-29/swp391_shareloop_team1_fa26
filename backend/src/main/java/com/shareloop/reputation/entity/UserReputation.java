@@ -110,7 +110,7 @@ public class UserReputation extends SliceAudit {
     }
 
     /**
-     * Lấy phần điểm còn được cộng trong ngày (BR-U11). Sang ngày mới thì points_today đếm lại từ 0.
+     * Lấy phần điểm còn được cộng trong ngày (UT-07). Sang ngày mới thì points_today đếm lại từ 0.
      *
      * @param points số điểm muốn cộng
      * @param dailyCap trần điểm mỗi ngày
@@ -128,7 +128,7 @@ public class UserReputation extends SliceAudit {
     }
 
     /**
-     * Ghi thêm một giao dịch sạch (BR-U09). Chuỗi đủ ngưỡng mà chưa đủ 5 sao thì hồi 1 sao và đếm lại từ 0.
+     * Ghi thêm một giao dịch sạch (UT-05). Chuỗi đủ ngưỡng mà chưa đủ 5 sao thì hồi 1 sao và đếm lại từ 0.
      *
      * @param streakForStar số giao dịch sạch liên tiếp để hồi 1 sao
      * @return true nếu vừa hồi sao
@@ -143,7 +143,7 @@ public class UserReputation extends SliceAudit {
         return false;
     }
 
-    /** Vi phạm làm mất chuỗi giao dịch sạch (BR-U09). */
+    /** Vi phạm làm mất chuỗi giao dịch sạch (UT-05). */
     public void resetCleanStreak() {
         this.cleanStreak = 0;
     }

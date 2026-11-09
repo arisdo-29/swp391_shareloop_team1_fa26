@@ -9,7 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Job xoá mềm tài khoản chưa xác thực quá hạn (FR-117, BR-U06), chạy mỗi giờ. Chỉ gọi
+ * Job xoá mềm tài khoản chưa xác thực quá hạn (TK-07), chạy mỗi giờ. Chỉ gọi
  * {@link PendingAccountCleanupService} và ghi log; mọi luật nằm ở service.
  */
 @Component

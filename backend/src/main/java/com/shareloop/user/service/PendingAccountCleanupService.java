@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Dọn tài khoản chưa xác thực (FR-117, BR-U06): tài khoản PENDING_VERIFICATION tạo quá
+ * Dọn tài khoản chưa xác thực (TK-07): tài khoản PENDING_VERIFICATION tạo quá
  * pending_account_ttl_hours giờ thì xoá mềm ({@code markDeleted()}, không xoá cứng). Index ux_users_email chỉ tính
  * dòng chưa xoá nên email đó đăng ký lại được ngay.
  *
@@ -42,8 +42,8 @@ public class PendingAccountCleanupService {
     }
 
     /**
-     * Xoá mềm mọi tài khoản PENDING_VERIFICATION có created_at trước {@code now} − pending_account_ttl_hours (FR-117,
-     * BR-U06). Tài khoản đang có OTP còn hạn được để lại tới lượt sau (người dùng có thể vừa gửi lại mã); tài khoản đã
+     * Xoá mềm mọi tài khoản PENDING_VERIFICATION có created_at trước {@code now} − pending_account_ttl_hours (TK-07).
+     * Tài khoản đang có OTP còn hạn được để lại tới lượt sau (người dùng có thể vừa gửi lại mã); tài khoản đã
      * xác thực không bao giờ bị đụng. Chạy lại nhiều lần không có tác dụng kép.
      *
      * <p>Transaction: hàm này không mở transaction; mỗi tài khoản một transaction riêng, một dòng lỗi (ghi log WARN)

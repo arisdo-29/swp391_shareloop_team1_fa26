@@ -1,7 +1,7 @@
 package com.shareloop.wallet.dto;
 
 /**
- * Dòng đối chiếu tiền mặt với Credit TopUp (FR-110, BR-P09).
+ * Dòng đối chiếu tiền mặt với Credit TopUp (VI-09).
  *
  * @param cashCredits tổng Credit của các đơn nạp SUCCESS (tiền mặt thực thu quy ra Credit)
  * @param topUpCredits tổng Credit đã cộng vào sổ cái với type TOP_UP

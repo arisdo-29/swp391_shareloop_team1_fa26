@@ -178,7 +178,7 @@ public enum ConfigKey {
             ConfigGroup.MODERATION,
             "Ngưỡng cảnh báo vi phạm chat",
             "Số tin nhắn vi phạm trong một giao dịch thì cảnh báo Admin."),
-    // BR-A08: người đăng có số bài đã từng được duyệt không vượt ngưỡng này được xếp trước trong hàng chờ duyệt.
+    // KD-06: người đăng có số bài đã từng được duyệt không vượt ngưỡng này được xếp trước trong hàng chờ duyệt.
     REVIEW_NEWCOMER_MAX_APPROVED(
             "review_newcomer_max_approved",
             "3",

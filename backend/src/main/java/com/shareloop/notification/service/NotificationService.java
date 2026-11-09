@@ -77,7 +77,7 @@ public class NotificationService {
     }
 
     /**
-     * Gửi thông báo cảnh báo tới tất cả các Admin đang hoạt động trong hệ thống (FR-76, BR-C04).
+     * Gửi thông báo cảnh báo tới tất cả các Admin đang hoạt động trong hệ thống (CH-05).
      *
      * @param type loại thông báo (ví dụ CHAT_VIOLATION_ALERT)
      * @param title tiêu đề cảnh báo

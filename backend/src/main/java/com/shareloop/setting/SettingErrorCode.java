@@ -15,8 +15,7 @@ public enum SettingErrorCode implements ErrorCode {
     SETTING_LEXICON_DUPLICATE(HttpStatus.CONFLICT, "Từ khóa đã tồn tại trong nhóm và phạm vi này."),
     SETTING_CHECKLIST_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy mục checklist."),
     SETTING_CHECKLIST_INVALID_VALUE(HttpStatus.BAD_REQUEST, "Thông tin mục checklist không hợp lệ."),
-    SETTING_CHECKLIST_AT_LEAST_ONE_REQUIRED(
-            HttpStatus.BAD_REQUEST, "Phải luôn có ít nhất 1 mục checklist đang dùng (BR-A06).");
+    SETTING_CHECKLIST_AT_LEAST_ONE_REQUIRED(HttpStatus.BAD_REQUEST, "Phải luôn có ít nhất 1 mục checklist đang dùng.");
 
     private final HttpStatus status;
     private final String defaultMessage;

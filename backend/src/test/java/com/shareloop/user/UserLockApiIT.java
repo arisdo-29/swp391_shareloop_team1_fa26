@@ -22,7 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Integration test khoá / mở khoá tài khoản (FR-107): DB PostgreSQL thật (Testcontainers), gọi API thật qua MockMvc
+ * Integration test khoá / mở khoá tài khoản (KC-01): DB PostgreSQL thật (Testcontainers), gọi API thật qua MockMvc
  * để kiểm cả đăng nhập lẫn token đã cấp trước khi khoá (LockedAccountFilter).
  */
 @AutoConfigureMockMvc

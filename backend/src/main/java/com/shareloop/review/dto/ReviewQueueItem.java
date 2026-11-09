@@ -45,7 +45,7 @@ public record ReviewQueueItem(
         @Schema(description = "Thời điểm bài đăng được tạo", example = "2026-10-14T10:00:00Z")
         Instant createdAt) {
 
-    // BR-A08: cờ AI không còn ưu tiên. Cùng thứ tự với ReviewQueueRepository, trừ bước "người đăng mới" (số bài đã
+    // KD-06: cờ AI không còn ưu tiên. Cùng thứ tự với ReviewQueueRepository, trừ bước "người đăng mới" (số bài đã
     // từng được duyệt không quá ngưỡng review_newcomer_max_approved) vì DTO không mang số bài đã duyệt.
     public static final Comparator<ReviewQueueItem> QUEUE_ORDER = Comparator.comparingInt(
                     ReviewQueueItem::donorTrustStars)

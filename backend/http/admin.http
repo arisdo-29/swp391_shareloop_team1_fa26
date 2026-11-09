@@ -14,12 +14,12 @@ Content-Type: application/json
 ### Lưu token từ request login ở trên
 @adminToken = {{loginAdmin.response.body.accessToken}}
 
-### 2. Liệt kê cấu hình (FR-113)
+### 2. Liệt kê cấu hình (AD-04)
 GET {{host}}/api/v1/admin/configs
 Authorization: Bearer {{adminToken}}
 Accept: application/json
 
-### 3. Cảnh báo bất thường: Cặp giao dịch lặp (FR-113, BR-U08)
+### 3. Cảnh báo bất thường: Cặp giao dịch lặp (AD-04, UT-08)
 GET {{host}}/api/v1/admin/anomalies
 Authorization: Bearer {{adminToken}}
 Accept: application/json

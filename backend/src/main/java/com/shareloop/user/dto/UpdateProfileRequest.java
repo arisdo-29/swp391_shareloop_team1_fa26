@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 
 /**
  * Body của PUT /api/v1/me. Gửi đủ cả ba trường mỗi lần: areaId hoặc avatarMediaId là null nghĩa là bỏ giá trị đó.
- * Không có email và số điện thoại: hai trường này không đổi ở endpoint này (FR-06, FR-07).
+ * Không có email và số điện thoại: hai trường này không đổi ở endpoint này (TK-12, TK-11).
  */
 public record UpdateProfileRequest(
         @NotBlank @Size(max = 100) String fullName,

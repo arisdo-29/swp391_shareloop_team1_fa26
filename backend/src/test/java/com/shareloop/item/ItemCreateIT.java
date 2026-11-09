@@ -381,7 +381,7 @@ class ItemCreateIT extends IntegrationTest {
         return body("GIVE", title, description, images);
     }
 
-    // Bài SWAP bắt buộc có desiredItem (BR-S02), nên chỉ thêm trường này khi offerType là SWAP.
+    // Bài SWAP bắt buộc có desiredItem (BD-02), nên chỉ thêm trường này khi offerType là SWAP.
     private String body(String offerType, String title, String description, long[] images) {
         long category = jdbc.sql(
                         "SELECT id FROM item_categories WHERE is_active AND NOT is_restricted ORDER BY id LIMIT 1")

@@ -1,4 +1,4 @@
--- Script seed dữ liệu demo cho cảnh báo bất thường: cặp người dùng giao dịch lặp (FR-113, BR-U08, Q04)
+-- Script seed dữ liệu demo cho cảnh báo bất thường: cặp người dùng giao dịch lặp (AD-04, UT-08, Q04)
 -- Ngưỡng cảnh báo mặc định: hơn 5 giao dịch COMPLETED trong vòng 90 ngày (ConfigKey: reputation_pair_alert_threshold = 5, reputation_pair_window_days = 90).
 -- Script này tạo 6 giao dịch COMPLETED giữa Nguyễn Văn An (an@shareloop.local) và Trần Thị Bình (binh@shareloop.local)
 -- trong vòng 30 ngày qua (3 lần An -> Bình, 3 lần Bình -> An).

@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller tiếp nhận báo cáo vi phạm (FR-88, BR-A03).
+ * Controller tiếp nhận báo cáo vi phạm (BC-01, BC-02).
  */
 @Tag(name = "Report", description = "Quản lý báo cáo vi phạm đối với bài đăng và người dùng")
 @RestController
@@ -114,7 +114,7 @@ public class ReportController {
             description = "Gửi báo cáo vi phạm cho bài đăng (ITEM) hoặc người dùng (USER). "
                     + "Yêu cầu đăng nhập. Không được tự báo cáo chính mình hoặc bài của chính mình. "
                     + "Mỗi người chỉ được báo cáo một đối tượng một lần. "
-                    + "Khi một bài đăng đạt từ 3 báo cáo (BR-A03), hệ thống sẽ tự động ẩn bài.")
+                    + "Khi một bài đăng đạt từ 3 báo cáo (BC-02), hệ thống sẽ tự động ẩn bài.")
     @ApiResponse(responseCode = "201", description = "Gửi báo cáo thành công")
     @ApiResponse(responseCode = "400", description = "Dữ liệu không hợp lệ (thiếu id đối tượng, lý do vi phạm...)")
     @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")

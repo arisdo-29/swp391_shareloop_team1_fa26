@@ -173,14 +173,14 @@ public class User extends BaseEntity {
         this.registrationIp = registrationIp;
     }
 
-    /** Cập nhật phần hồ sơ người dùng được tự sửa (FR-06). Email và số điện thoại cố ý không có ở đây. */
+    /** Cập nhật phần hồ sơ người dùng được tự sửa (TK-12). Email và số điện thoại cố ý không có ở đây. */
     public void updateProfile(String fullName, Long areaId, Long avatarMediaId) {
         this.fullName = fullName;
         this.areaId = areaId;
         this.avatarMediaId = avatarMediaId;
     }
 
-    /** Đổi mật khẩu (FR-08). Chỉ nhận bản băm BCrypt, không bao giờ nhận mật khẩu gốc. */
+    /** Đổi mật khẩu (TK-10). Chỉ nhận bản băm BCrypt, không bao giờ nhận mật khẩu gốc. */
     public void changePasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
     }
@@ -210,7 +210,7 @@ public class User extends BaseEntity {
         return isActive() && status == UserStatus.ACTIVE && !admin;
     }
 
-    /** Đổi số điện thoại (FR-07, BR-U10). Cập nhật số mới, lưu mốc đổi và xoá pending_phone. */
+    /** Đổi số điện thoại (TK-11). Cập nhật số mới, lưu mốc đổi và xoá pending_phone. */
     public void changePhone(String newPhone, Instant changedAt) {
         this.phone = newPhone;
         this.phoneChangedAt = changedAt;

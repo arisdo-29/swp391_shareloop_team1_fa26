@@ -325,7 +325,7 @@ class UserServiceTest {
 
     @Test
     void findContact_whenUserLocked_stillReturnsContact() {
-        // given: BR-T12 đã trao thì không ẩn lại, kể cả khi đối tác bị khoá sau đó
+        // given: GN-04 đã trao thì không ẩn lại, kể cả khi đối tác bị khoá sau đó
         User user = givenUser();
         user.deactivate();
 
@@ -383,7 +383,7 @@ class UserServiceTest {
         assertThat(service.isLocked(USER_ID)).isFalse();
     }
 
-    // ==================== sendChangePhoneOtp (FR-07, BR-U10) ====================
+    // ==================== sendChangePhoneOtp (TK-11) ====================
 
     @Test
     void sendChangePhoneOtp_whenValid_issuesOtpAndReturnsResponse() {
@@ -459,7 +459,7 @@ class UserServiceTest {
         verify(otpService, never()).issue(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
-    // ==================== changePhone (FR-07, BR-U10) ====================
+    // ==================== changePhone (TK-11) ====================
 
     @Test
     void changePhone_whenValid_verifiesOtpAndUpdatesPhoneAndRecordsTimestamp() {

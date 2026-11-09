@@ -4,7 +4,7 @@ import com.shareloop.item.dto.ItemCardDto;
 import java.time.Instant;
 
 /**
- * DTO phản hồi thông tin của một tin nhắn trong khung chat (FR-68, FR-70).
+ * DTO phản hồi thông tin của một tin nhắn trong khung chat (CH-01, CH-06).
  */
 public record MessageResponse(
         Long id,

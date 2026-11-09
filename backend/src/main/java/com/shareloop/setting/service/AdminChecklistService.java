@@ -42,7 +42,7 @@ public class AdminChecklistService {
     }
 
     /**
-     * Thêm câu hỏi kiểm duyệt vào cuối danh sách và ghi nhật ký CHECKLIST_CREATE (FR-115).
+     * Thêm câu hỏi kiểm duyệt vào cuối danh sách và ghi nhật ký CHECKLIST_CREATE (AD-05, TB-03).
      *
      * @throws BusinessException SETTING_CHECKLIST_INVALID_VALUE khi câu hỏi rỗng
      */
@@ -63,7 +63,7 @@ public class AdminChecklistService {
     }
 
     /**
-     * Sửa nội dung câu hỏi kiểm duyệt và ghi nhật ký CHECKLIST_UPDATE (FR-115).
+     * Sửa nội dung câu hỏi kiểm duyệt và ghi nhật ký CHECKLIST_UPDATE (AD-05, TB-03).
      *
      * @throws BusinessException SETTING_CHECKLIST_NOT_FOUND, SETTING_CHECKLIST_INVALID_VALUE
      */
@@ -82,7 +82,7 @@ public class AdminChecklistService {
     }
 
     /**
-     * Bật/tắt câu hỏi kiểm duyệt (BR-A06: luôn còn ít nhất 1 mục đang dùng) và ghi nhật ký CHECKLIST_TOGGLE.
+     * Bật/tắt câu hỏi kiểm duyệt (KD-04: luôn còn ít nhất 1 mục đang dùng) và ghi nhật ký CHECKLIST_TOGGLE.
      *
      * @throws BusinessException SETTING_CHECKLIST_NOT_FOUND, SETTING_CHECKLIST_AT_LEAST_ONE_REQUIRED
      */
@@ -92,7 +92,7 @@ public class AdminChecklistService {
         if (active) {
             attribute.activate();
         } else {
-            // BR-A06: luôn có ít nhất 1 mục đang dùng (is_active = true)
+            // KD-04: luôn có ít nhất 1 mục đang dùng (is_active = true)
             long activeCount = repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc(ATTR_GROUP).stream()
                     .filter(item -> !item.getId().equals(id))
                     .count();
@@ -107,7 +107,7 @@ public class AdminChecklistService {
     }
 
     /**
-     * Sắp xếp lại toàn bộ câu hỏi kiểm duyệt theo danh sách id và ghi nhật ký CHECKLIST_REORDER (FR-115).
+     * Sắp xếp lại toàn bộ câu hỏi kiểm duyệt theo danh sách id và ghi nhật ký CHECKLIST_REORDER (AD-05, TB-03).
      *
      * @throws BusinessException SETTING_CHECKLIST_INVALID_VALUE, SETTING_CHECKLIST_NOT_FOUND
      */

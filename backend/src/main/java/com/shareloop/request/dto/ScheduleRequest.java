@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 
 /**
- * DTO đề xuất / cập nhật lịch hẹn giao nhận (FR-79, FR-80, UC-26).
+ * DTO đề xuất / cập nhật lịch hẹn giao nhận (GN-01, GN-02, UC-26).
  */
 public record ScheduleRequest(
         @NotBlank(message = "Hình thức giao nhận không được để trống")

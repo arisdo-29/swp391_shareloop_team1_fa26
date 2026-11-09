@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller dành cho Admin để khoá và mở khoá tài khoản người dùng (FR-107, Issue #116).
+ * Controller dành cho Admin để khoá và mở khoá tài khoản người dùng (KC-01, Issue #116).
  * Được bảo vệ tập trung bởi SecurityConfig (/api/v1/admin/** có role ADMIN).
  */
 @Tag(name = "admin-user-controller", description = "Admin khoá và mở khoá tài khoản người dùng")

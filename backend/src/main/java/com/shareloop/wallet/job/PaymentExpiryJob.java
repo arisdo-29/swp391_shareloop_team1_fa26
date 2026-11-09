@@ -9,7 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Job hết hạn đơn nạp (FR-18), chạy mỗi 5 phút. Chỉ gọi {@link PaymentExpiryService} và ghi log; mọi luật nằm ở
+ * Job hết hạn đơn nạp (VI-06, TD-05), chạy mỗi 5 phút. Chỉ gọi {@link PaymentExpiryService} và ghi log; mọi luật nằm ở
  * service.
  */
 @Component

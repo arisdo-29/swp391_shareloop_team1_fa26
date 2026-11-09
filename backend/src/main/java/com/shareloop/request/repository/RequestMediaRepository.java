@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 /**
- * Repository thao tác bảng request_media_mappings (FR-86, BR-T09).
+ * Repository thao tác bảng request_media_mappings (GN-10).
  */
 @Repository
 public interface RequestMediaRepository extends JpaRepository<RequestMediaMapping, RequestMediaMapping.RequestMediaId> {

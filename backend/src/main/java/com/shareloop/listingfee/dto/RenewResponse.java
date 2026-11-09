@@ -3,7 +3,7 @@ package com.shareloop.listingfee.dto;
 import java.time.Instant;
 
 /**
- * Kết quả một lần gia hạn bài (F08 bước 1, FR-28).
+ * Kết quả một lần gia hạn bài (F08 bước 1, HT-01).
  *
  * @param itemId bài vừa gia hạn
  * @param fee số Credit vừa trừ (renew_fee lúc gia hạn); 0 khi Admin cấu hình miễn phí

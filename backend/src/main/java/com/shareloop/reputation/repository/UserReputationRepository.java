@@ -39,7 +39,7 @@ public interface UserReputationRepository extends JpaRepository<UserReputation, 
 
     /**
      * Đếm giao dịch COMPLETED giữa hai người dùng, tính cả hai chiều cho và nhận, hoàn tất từ mốc {@code since}
-     * (BR-U08). Bỏ qua request đang xét để kết quả không phụ thuộc việc trạng thái của nó đã ghi xuống DB hay chưa.
+     * (UT-08). Bỏ qua request đang xét để kết quả không phụ thuộc việc trạng thái của nó đã ghi xuống DB hay chưa.
      *
      * @param userA một bên của cặp
      * @param userB bên còn lại
@@ -66,7 +66,7 @@ public interface UserReputationRepository extends JpaRepository<UserReputation, 
 
     /**
      * Các cặp người dùng có hơn {@code threshold} giao dịch COMPLETED với nhau, tính cả hai chiều cho và nhận, hoàn tất
-     * từ mốc {@code since} (FR-113, BR-U08). Cùng cách đếm cặp với {@link #countCompletedBetween}.
+     * từ mốc {@code since} (AD-04, UT-08). Cùng cách đếm cặp với {@link #countCompletedBetween}.
      *
      * @param since mốc bắt đầu cửa sổ tính cặp (gồm)
      * @param threshold chỉ lấy cặp có số giao dịch lớn hơn số này

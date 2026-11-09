@@ -37,7 +37,7 @@ public class AdminCategoryService {
     }
 
     /**
-     * Thêm danh mục và ghi nhật ký CATEGORY_CREATE (FR-115). Không gửi sortOrder thì danh mục được đặt xuống cuối.
+     * Thêm danh mục và ghi nhật ký CATEGORY_CREATE (AD-05, TB-03). Không gửi sortOrder thì danh mục được đặt xuống cuối.
      *
      * @throws BusinessException CATALOG_INVALID_PARENT khi danh mục cha không hợp lệ
      */
@@ -53,7 +53,7 @@ public class AdminCategoryService {
     }
 
     /**
-     * Sửa danh mục và ghi nhật ký CATEGORY_UPDATE (FR-115). Không gửi sortOrder thì giữ thứ tự hiện tại.
+     * Sửa danh mục và ghi nhật ký CATEGORY_UPDATE (AD-05, TB-03). Không gửi sortOrder thì giữ thứ tự hiện tại.
      *
      * @throws BusinessException CATALOG_CATEGORY_NOT_FOUND, CATALOG_INVALID_PARENT
      */
@@ -70,7 +70,7 @@ public class AdminCategoryService {
     }
 
     /**
-     * Bật/tắt danh mục (tắt thì ẩn luôn danh mục con) và ghi nhật ký CATEGORY_TOGGLE (FR-115).
+     * Bật/tắt danh mục (tắt thì ẩn luôn danh mục con) và ghi nhật ký CATEGORY_TOGGLE (AD-05, TB-03).
      *
      * @throws BusinessException CATALOG_CATEGORY_NOT_FOUND, CATALOG_INVALID_PARENT khi bật lại mà cha đang ẩn
      */
@@ -90,7 +90,7 @@ public class AdminCategoryService {
     }
 
     /**
-     * Sắp xếp lại toàn bộ danh mục theo danh sách id và ghi nhật ký CATEGORY_REORDER (FR-115). Thứ tự mới là vị trí
+     * Sắp xếp lại toàn bộ danh mục theo danh sách id và ghi nhật ký CATEGORY_REORDER (AD-05, TB-03). Thứ tự mới là vị trí
      * trong danh sách, bắt đầu từ 1. Danh sách phải gồm đủ mọi danh mục, mỗi danh mục đúng một lần.
      *
      * @throws BusinessException CATALOG_INVALID_SORT_ORDER khi danh sách trùng id, thiếu danh mục hoặc có id lạ

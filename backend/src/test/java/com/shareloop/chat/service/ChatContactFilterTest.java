@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit test cho bộ lọc thông tin liên hệ tầng 1 của module chat (FR-72, FR-74; BR-C01).
+ * Unit test cho bộ lọc thông tin liên hệ tầng 1 của module chat (CH-02, CH-05).
  */
 class ChatContactFilterTest {
 
@@ -117,7 +117,7 @@ class ChatContactFilterTest {
         }
 
         @Test
-        @DisplayName("validateMessage ném BusinessException kèm lý do rõ ràng khi vi phạm (FR-74)")
+        @DisplayName("validateMessage ném BusinessException kèm lý do rõ ràng khi vi phạm (CH-05)")
         void validateMessage_throwsWithClearReason() {
             String text = "Số mình: không chín một hai ba bốn năm sáu bảy tám";
 
@@ -189,7 +189,7 @@ class ChatContactFilterTest {
     }
 
     @Nested
-    @DisplayName("Kiểm tra từ khoá cấm mức BLOCK trong Lexicon (FR-78, BR-A10)")
+    @DisplayName("Kiểm tra từ khoá cấm mức BLOCK trong Lexicon (CH-03, KD-03)")
     class LexiconBlockTest {
 
         private final com.shareloop.setting.service.ConfigService configService =
@@ -247,7 +247,7 @@ class ChatContactFilterTest {
         }
 
         @Test
-        @DisplayName("Không chặn từ khoá mức REVIEW (chỉ chặn mức BLOCK theo FR-78)")
+        @DisplayName("Không chặn từ khoá mức REVIEW (chỉ chặn mức BLOCK theo CH-03)")
         void ignore_reviewLevelKeyword() {
             java.util.Optional<String> result = lexiconFilter.checkViolation("Trao đổi qua zalo nhé bạn", false);
 

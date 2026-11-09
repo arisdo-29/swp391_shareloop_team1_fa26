@@ -1,7 +1,7 @@
 package com.shareloop.request.event;
 
 /**
- * Phát ra khi bên nhận chọn "Không đúng mô tả" lúc xác nhận giao nhận (FR-85, BR-R05).
+ * Phát ra khi bên nhận chọn "Không đúng mô tả" lúc xác nhận giao nhận (GN-07).
  * Module report lắng nghe để mở report; request không gọi thẳng ReportService vì ReportService đã phụ thuộc
  * RequestService (sẽ thành vòng phụ thuộc).
  *

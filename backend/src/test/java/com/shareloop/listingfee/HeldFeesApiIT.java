@@ -19,7 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * GET /listing-fees/held (FR-15) trên PostgreSQL thật: dữ liệu được chèn thẳng bằng SQL ở trạng thái "đang giữ phí"
+ * GET /listing-fees/held (VI-02) trên PostgreSQL thật: dữ liệu được chèn thẳng bằng SQL ở trạng thái "đang giữ phí"
  * rồi gọi API qua MockMvc. Dữ liệu do test tạo được dọn trong @AfterEach.
  */
 @AutoConfigureMockMvc

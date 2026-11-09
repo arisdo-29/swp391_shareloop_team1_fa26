@@ -11,12 +11,12 @@ import org.springframework.data.repository.query.Param;
 public interface RequestRepository extends JpaRepository<Request, Long> {
 
     /**
-     * Đếm số lượng yêu cầu đang ở trạng thái PENDING của một người (BR-U02: tối đa 5).
+     * Đếm số lượng yêu cầu đang ở trạng thái PENDING của một người (YC-03: tối đa 5).
      */
     long countByReceiverIdAndStatus(Long receiverId, RequestStatus status);
 
     /**
-     * Kiểm tra người dùng đã có yêu cầu đang hoạt động cho bài này chưa (BR-R02, ux_requests_active).
+     * Kiểm tra người dùng đã có yêu cầu đang hoạt động cho bài này chưa (YC-03, ux_requests_active).
      */
     boolean existsByItemIdAndReceiverIdAndStatusIn(Long itemId, Long receiverId, Collection<RequestStatus> statuses);
 
@@ -31,7 +31,7 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
     List<Request> findByItemIdAndStatus(Long itemId, RequestStatus status);
 
     /**
-     * Danh sách yêu cầu đang dùng một món đề nghị theo trạng thái cụ thể (FR-66).
+     * Danh sách yêu cầu đang dùng một món đề nghị theo trạng thái cụ thể (YC-07).
      */
     List<Request> findByOfferedItemIdAndStatus(Long offeredItemId, RequestStatus status);
 
@@ -61,7 +61,7 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
     List<Request> findByStatusOrderByCreatedAtDesc(RequestStatus status);
 
     /**
-     * Kiểm tra bài đăng đã có yêu cầu ở trạng thái RESERVED trở lên hay chưa (F07 bước 1, BR-D04).
+     * Kiểm tra bài đăng đã có yêu cầu ở trạng thái RESERVED trở lên hay chưa (F07 bước 1, BD-10).
      */
     @Query("""
         SELECT COUNT(r) > 0 FROM Request r
@@ -77,7 +77,7 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
     boolean hasReservedOrHigherRequest(@Param("itemId") long itemId);
 
     /**
-     * Kiểm tra người dùng (vai donor hoặc receiver) có đang có giao dịch trong giai đoạn giao nhận hay không (F03, BR-U10).
+     * Kiểm tra người dùng (vai donor hoặc receiver) có đang có giao dịch trong giai đoạn giao nhận hay không (F03, TK-11).
      */
     @Query(value = """
         SELECT EXISTS (
@@ -92,7 +92,7 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
     boolean hasActiveDelivery(@Param("userId") long userId);
 
     /**
-     * Tìm các yêu cầu ở trạng thái cụ thể được tạo trước một mốc thời gian (FR-119, BR-R06).
+     * Tìm các yêu cầu ở trạng thái cụ thể được tạo trước một mốc thời gian (YC-05, TD-02).
      * Phân trang kiểu keyset theo id > afterId, tối đa limit bản ghi (Mục Q).
      */
     @Query("""
@@ -109,7 +109,7 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
             org.springframework.data.domain.Pageable pageable);
 
     /**
-     * Tìm các yêu cầu RESERVED hoặc AWAITING_LOGISTICS quá hạn chưa chốt lịch (FR-120, BR-T10, FR-77, BR-C03).
+     * Tìm các yêu cầu RESERVED hoặc AWAITING_LOGISTICS quá hạn chưa chốt lịch (GN-05, TD-02, CH-01).
      * Phân trang kiểu keyset theo id > afterId, tối đa limit bản ghi (Mục Q).
      */
     @Query("""
@@ -129,7 +129,7 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
             org.springframework.data.domain.Pageable pageable);
 
     /**
-     * Tìm các yêu cầu AWAITING_HANDOVER có đúng một bên xác nhận quá hạn im lặng (FR-87, BR-T06).
+     * Tìm các yêu cầu AWAITING_HANDOVER có đúng một bên xác nhận quá hạn im lặng (GN-09).
      * Phân trang kiểu keyset theo id > afterId, tối đa limit bản ghi (Mục Q).
      */
     @Query("""

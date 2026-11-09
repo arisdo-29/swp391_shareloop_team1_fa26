@@ -50,7 +50,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Service cửa ngõ của module user. Module khác muốn khoá tài khoản hoặc lấy thông tin liên lạc
  * phải gọi qua đây, không inject repository của user.
  *
- * <p>Khoá tài khoản là {@code is_active = false}; cột {@code status} không đổi (SRS FR-107).
+ * <p>Khoá tài khoản là {@code is_active = false}; cột {@code status} không đổi (SRS KC-01).
  *
  * <p>Người gọi: admin (AdminUserService: khoá, mở khoá), reputation (khoá khi vi phạm nặng), request (lấy thông tin
  * liên lạc khi hai bên chốt lịch).
@@ -117,7 +117,7 @@ public class UserService {
     }
 
     /**
-     * Hồ sơ người dùng đang đăng nhập (GET /api/v1/me, FR-06).
+     * Hồ sơ người dùng đang đăng nhập (GET /api/v1/me, TK-12).
      *
      * <p>Transaction: read-only.
      *
@@ -129,7 +129,7 @@ public class UserService {
     }
 
     /**
-     * Cập nhật họ tên, khu vực mặc định, ảnh đại diện của chính mình (PUT /api/v1/me, FR-06, BR-U03). Không đổi
+     * Cập nhật họ tên, khu vực mặc định, ảnh đại diện của chính mình (PUT /api/v1/me, TK-12). Không đổi
      * email và số điện thoại. Khu vực phải đang hoạt động; ảnh mới phải do chính người này upload và chưa gắn ở đâu.
      *
      * @throws com.shareloop.common.exception.BusinessException USER_NOT_FOUND, USER_AREA_INVALID; MEDIA_NOT_FOUND,
@@ -169,10 +169,10 @@ public class UserService {
     }
 
     /**
-     * Khoá tài khoản (FR-107, UC-50).
+     * Khoá tài khoản (KC-01, UC-50).
      *
      * <p>Quy tắc: đặt {@code is_active = false}, không đổi {@code status}; tài khoản bị khoá không đăng nhập và
-     * không giao dịch được. SRS FR-107 không bắt buộc lý do; người gọi ghi nhật ký qua ActivityLogService.
+     * không giao dịch được. Lý do khoá (KC-01) không lưu ở đây; người gọi ghi nhật ký qua ActivityLogService.
      *
      * <p>Transaction: REQUIRED, tham gia transaction của người gọi. Người gọi: admin, reputation.
      *
@@ -220,7 +220,7 @@ public class UserService {
     }
 
     /**
-     * Mở khoá tài khoản (FR-107, UC-50).
+     * Mở khoá tài khoản (KC-01, UC-50).
      *
      * <p>Quy tắc: đặt {@code is_active = true}, không đổi {@code status}.
      *
@@ -242,7 +242,7 @@ public class UserService {
     /**
      * Lấy thông tin liên lạc để trao cho đối tác khi hai bên xác nhận lịch (UC-26, UC-62).
      *
-     * <p>Quy tắc: BR-T11 hai bên xác nhận lịch thì trao email và số điện thoại cho nhau; BR-T12 đã trao thì không
+     * <p>Quy tắc: GN-04 hai bên xác nhận lịch thì trao email và số điện thoại cho nhau; GN-04 đã trao thì không
      * ẩn lại. Chỉ trả họ tên, email, số điện thoại; email luôn có, không trả dữ liệu nhạy cảm khác. Người gọi
      * (request) chỉ gọi sau khi Request đã sang LogisticsConfirmed.
      *
@@ -252,7 +252,7 @@ public class UserService {
      * @return userId, fullName, email, phone
      * @throws com.shareloop.common.exception.BusinessException USER_NOT_FOUND khi không có user
      */
-    // Không lọc tài khoản bị khoá: BR-T12 đã trao thì không ẩn lại, kể cả khi đối tác bị khoá sau đó.
+    // Không lọc tài khoản bị khoá: GN-04 đã trao thì không ẩn lại, kể cả khi đối tác bị khoá sau đó.
     @Transactional(readOnly = true)
     public ContactInfo findContact(long userId) {
         return userMapper.toContactInfo(findUser(userId));
@@ -342,7 +342,7 @@ public class UserService {
     }
 
     /**
-     * Tên và email của nhiều người dùng trong một lần truy vấn, dùng cho trang nhật ký Admin (FR-115). User đã xoá
+     * Tên và email của nhiều người dùng trong một lần truy vấn, dùng cho trang nhật ký Admin (AD-05, TB-03). User đã xoá
      * mềm bị @SQLRestriction loại nên không có trong map; người gọi tự xử lý id thiếu.
      */
     @Transactional(readOnly = true)
@@ -358,7 +358,7 @@ public class UserService {
     }
 
     /**
-     * Danh sách tài khoản cho trang quản lý của Admin (FR-107), tài khoản mới nhất trước. Mọi bộ lọc đều tuỳ chọn:
+     * Danh sách tài khoản cho trang quản lý của Admin (KC-01), tài khoản mới nhất trước. Mọi bộ lọc đều tuỳ chọn:
      * keyword khớp một phần họ tên, email hoặc số điện thoại (không phân biệt hoa thường); state lọc theo trạng thái
      * hiển thị (LOCKED nghĩa là is_active = false); role lọc Admin hoặc người dùng thường.
      */
@@ -411,7 +411,7 @@ public class UserService {
     }
 
     /**
-     * Yêu cầu gửi mã OTP về email để đổi số điện thoại (FR-07, BR-U10).
+     * Yêu cầu gửi mã OTP về email để đổi số điện thoại (TK-11).
      */
     @Transactional
     public ChangePhoneOtpResponse sendChangePhoneOtp(long userId, SendChangePhoneOtpRequest request) {
@@ -428,10 +428,10 @@ public class UserService {
             throw new BusinessException(UserErrorCode.USER_PHONE_ALREADY_USED, null, "newPhone", null);
         }
 
-        // 3. Giới hạn tối đa 1 lần trong 30 ngày (BR-U10)
+        // 3. Giới hạn tối đa 1 lần trong 30 ngày (TK-11)
         checkPhoneChangeCooldown(user);
 
-        // 4. Không được đổi khi đang có giao dịch đã trao liên lạc mà chưa hoàn tất (BR-U10)
+        // 4. Không được đổi khi đang có giao dịch đã trao liên lạc mà chưa hoàn tất (TK-11)
         checkNoActiveDelivery(userId);
 
         // 5. Cấp OTP qua email
@@ -444,7 +444,7 @@ public class UserService {
     }
 
     /**
-     * Xác nhận OTP và đổi số điện thoại (FR-07, BR-U10).
+     * Xác nhận OTP và đổi số điện thoại (TK-11).
      */
     @Transactional(noRollbackFor = BusinessException.class)
     public MeResponse changePhone(long userId, ChangePhoneRequest request) {
@@ -521,7 +521,7 @@ public class UserService {
     }
 
     /**
-     * Tìm các nhóm tài khoản đăng ký cùng địa chỉ IP cho màn Giám sát bất thường của Admin (FR-113).
+     * Tìm các nhóm tài khoản đăng ký cùng địa chỉ IP cho màn Giám sát bất thường của Admin (AD-04).
      *
      * @param since mốc thời gian bắt đầu cửa sổ ngày
      * @param minAccounts số tài khoản tối thiểu để đưa vào cảnh báo

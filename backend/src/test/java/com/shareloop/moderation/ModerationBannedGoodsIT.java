@@ -14,7 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Kiểm tra lexicon seed cho vật phẩm cấm (FR-42, BR-A04, BR-A05) bằng database thật. */
+/** Kiểm tra lexicon seed cho vật phẩm cấm (KD-09, KD-07) bằng database thật. */
 @Transactional
 class ModerationBannedGoodsIT extends IntegrationTest {
     private static final String CLEAN_DESCRIPTION = "Món còn tốt và dùng ổn định";

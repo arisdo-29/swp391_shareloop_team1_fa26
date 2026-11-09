@@ -23,7 +23,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
- * Test chống tạo nhiều tài khoản khi đăng ký (FR-04, FR-10) trên PostgreSQL thật. Gọi thẳng AuthService với IP tự
+ * Test chống tạo nhiều tài khoản khi đăng ký (TK-02, TK-05) trên PostgreSQL thật. Gọi thẳng AuthService với IP tự
  * chọn trong dải 203.0.113.0/24 (dải dành cho tài liệu, không phải IP thật) để không đụng dữ liệu của test khác.
  */
 class AuthRegisterGuardIT extends IntegrationTest {

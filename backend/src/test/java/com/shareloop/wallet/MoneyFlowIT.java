@@ -10,7 +10,7 @@ import com.shareloop.wallet.dto.WalletResponse;
 import org.junit.jupiter.api.Test;
 
 /**
- * Đi qua mọi nhánh tiền theo từng bước (Issue #136, BR-P03, BR-P09): nạp, giữ phí, trừ khi duyệt, nhả khi từ chối
+ * Đi qua mọi nhánh tiền theo từng bước (Issue #136, PH-02, PH-03, VI-09): nạp, giữ phí, trừ khi duyệt, nhả khi từ chối
  * hoặc gỡ, sửa bài, gia hạn, đẩy bài, phí AI và hoàn phí AI. Sau MỖI ca gọi {@code assertWalletConsistent} để số dư,
  * sổ cái và khoản đang giữ luôn khớp nhau. Mỗi ca dùng user và bài riêng nên chạy độc lập, không phụ thuộc thứ tự.
  *

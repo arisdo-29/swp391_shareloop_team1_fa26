@@ -27,7 +27,7 @@ public class MailTemplateRenderer {
             + " bạn, hãy bỏ qua email này; số điện thoại hiện tại vẫn giữ nguyên.";
 
     /**
-     * Nội dung email OTP đăng ký (FR-02) từ mẫu otp.html.
+     * Nội dung email OTP đăng ký (TK-06) từ mẫu otp.html.
      *
      * @param code mã OTP thô 6 chữ số
      * @param ttlMinutes số phút mã còn hiệu lực, lấy từ ConfigKey.OTP_TTL_MINUTES ở nơi phát sự kiện
@@ -36,12 +36,12 @@ public class MailTemplateRenderer {
         return renderOtpWithNote(code, ttlMinutes, REGISTER_NOTE);
     }
 
-    /** Nội dung email OTP đặt lại mật khẩu (FR-09): cùng mẫu otp.html, chỉ khác dòng ghi chú cuối. */
+    /** Nội dung email OTP đặt lại mật khẩu (TK-09): cùng mẫu otp.html, chỉ khác dòng ghi chú cuối. */
     public String renderPasswordResetOtp(String code, int ttlMinutes) {
         return renderOtpWithNote(code, ttlMinutes, PASSWORD_RESET_NOTE);
     }
 
-    /** Nội dung email OTP đổi số điện thoại (FR-07) từ mẫu riêng otp-change-phone.html. */
+    /** Nội dung email OTP đổi số điện thoại (TK-11) từ mẫu riêng otp-change-phone.html. */
     public String renderChangePhoneOtp(String code, int ttlMinutes) {
         return render(
                 "otp-change-phone",
@@ -49,7 +49,7 @@ public class MailTemplateRenderer {
     }
 
     /**
-     * Nội dung email thông báo chung (FR-118) từ mẫu notification.html.
+     * Nội dung email thông báo chung (TB-02) từ mẫu notification.html.
      *
      * @throws IllegalArgumentException khi link không bắt đầu bằng http:// hoặc https://
      */

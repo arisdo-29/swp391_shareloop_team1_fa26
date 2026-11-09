@@ -223,7 +223,7 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_ADMIN_BLOCKED);
         }
 
-        // 0. Vô hiệu quyền gửi yêu cầu khi TrustStars về 0 (FR-92, BR-U05) hoặc tài khoản bị khoá
+        // 0. Vô hiệu quyền gửi yêu cầu khi TrustStars về 0 (YC-02, UT-04, KC-05) hoặc tài khoản bị khoá
         if (reputationService != null && !reputationService.canRequest(receiverId)) {
             throw new BusinessException(RequestErrorCode.REQUEST_REPUTATION_BLOCKED);
         }
@@ -231,14 +231,14 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_REPUTATION_BLOCKED);
         }
 
-        // 1. Kiểm tra giới hạn số request PENDING cùng lúc (BR-U02, đọc từ ConfigService)
+        // 1. Kiểm tra giới hạn số request PENDING cùng lúc (YC-03, đọc từ ConfigService)
         int maxPending = configService.getInt(ConfigKey.MAX_PENDING_REQUESTS);
         long pendingCount = requestRepository.countByReceiverIdAndStatus(receiverId, RequestStatus.PENDING);
         if (pendingCount >= maxPending) {
             throw new BusinessException(RequestErrorCode.REQUEST_LIMIT_EXCEEDED);
         }
 
-        // 2. Kiểm tra không gửi trùng yêu cầu đang hoạt động cho cùng bài (BR-R02)
+        // 2. Kiểm tra không gửi trùng yêu cầu đang hoạt động cho cùng bài (YC-03)
         if (requestRepository.existsByItemIdAndReceiverIdAndStatusIn(itemId, receiverId, ACTIVE_STATUSES)) {
             throw new BusinessException(RequestErrorCode.REQUEST_ALREADY_EXISTS);
         }
@@ -247,7 +247,7 @@ public class RequestService {
         ItemSnapshot targetItem = findItemSnapshot(itemId)
                 .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
 
-        // Không gửi cho bài của chính mình (BR-R01)
+        // Không gửi cho bài của chính mình (YC-01)
         if (targetItem.donorId() == receiverId) {
             throw new BusinessException(RequestErrorCode.REQUEST_SELF_OFFER_NOT_ALLOWED);
         }
@@ -380,7 +380,7 @@ public class RequestService {
     }
 
     /**
-     * Người gửi tự huỷ yêu cầu khi còn ở trạng thái PENDING (F10, BR-R04, UC-21).
+     * Người gửi tự huỷ yêu cầu khi còn ở trạng thái PENDING (F10, YC-05, UC-21).
      */
     @Transactional
     public RequestResponse cancelRequest(long requestId, long currentUserId) {
@@ -414,7 +414,7 @@ public class RequestService {
     }
 
     /**
-     * Chủ bài đăng chọn đúng một người nhận (FR-66, BR-D01).
+     * Chủ bài đăng chọn đúng một người nhận (YC-07).
      *
      * <p>Các yêu cầu PENDING khác tự động REJECTED; bài đăng chuyển sang RESERVED qua ItemService.reserve.
      *
@@ -483,7 +483,7 @@ public class RequestService {
             }
         }
 
-        // 2b. Huỷ các yêu cầu PENDING khác ở bài khác đang dùng cùng món đề nghị (FR-66, BR-S03)
+        // 2b. Huỷ các yêu cầu PENDING khác ở bài khác đang dùng cùng món đề nghị (YC-07, YC-04)
         cancelOtherPendingUsingOfferedItem(selectedRequest);
 
         // 3. Giữ chỗ bài đăng qua ItemService.reserve. Món mang đổi cũng bị giữ trong cùng transaction: nếu nó không
@@ -574,7 +574,7 @@ public class RequestService {
         }
     }
 
-    // Món đề nghị đổi phải khác bài chính, là của chính người nhận, đang APPROVED và đang hoạt động (BR-S01, BR-S03,
+    // Món đề nghị đổi phải khác bài chính, là của chính người nhận, đang APPROVED và đang hoạt động (YC-04,
     // CD-01). Bài đã xoá mềm thì findItemSnapshot không thấy nên ném REQUEST_ITEM_NOT_FOUND.
     // Dùng chung cho createRequest và đề nghị trong chat để hai nơi không lệch điều kiện.
     void requireValidOfferedItem(long offeredItemId, long receiverId, long itemId) {
@@ -611,7 +611,7 @@ public class RequestService {
         }
     }
 
-    // Món đem đổi đã được giữ cho giao dịch này nên các yêu cầu PENDING khác dùng cùng món phải huỷ (FR-66, BR-S03).
+    // Món đem đổi đã được giữ cho giao dịch này nên các yêu cầu PENDING khác dùng cùng món phải huỷ (YC-07, YC-04).
     private void cancelOtherPendingUsingOfferedItem(Request request) {
         if (request.getOfferedItemId() == null) {
             return;
@@ -954,7 +954,7 @@ public class RequestService {
     }
 
     /**
-     * Đề xuất hoặc cập nhật lịch hẹn giao nhận (FR-79, FR-80, BR-T01, BR-T02).
+     * Đề xuất hoặc cập nhật lịch hẹn giao nhận (GN-01, GN-02).
      *
      * <p>Chỉ bên tham gia giao dịch mới được đề xuất; chuyển sang AWAITING_LOGISTICS nếu đang RESERVED.
      */
@@ -1001,7 +1001,7 @@ public class RequestService {
     }
 
     /**
-     * Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (FR-80, FR-81, BR-T03, BR-T05).
+     * Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (GN-02, GN-03).
      *
      * <p>Khi cả hai bên đều đã đồng ý, Request chuyển sang LOGISTICS_CONFIRMED và khoá lịch.
      */
@@ -1040,7 +1040,7 @@ public class RequestService {
     }
 
     /**
-     * Lấy thông tin liên lạc của đối tác khi giao dịch đã chốt lịch (FR-82, BR-T11, BR-T12).
+     * Lấy thông tin liên lạc của đối tác khi giao dịch đã chốt lịch (GN-04).
      *
      * <p>Chỉ thành viên trong giao dịch mới được gọi và chỉ trả về khi giao dịch đã ở trạng thái
      * chốt lịch hẹn (contactRevealedAt != null, tức từ LOGISTICS_CONFIRMED trở lên).
@@ -1073,10 +1073,10 @@ public class RequestService {
     }
 
     /**
-     * Xác nhận đã giao hoặc đã nhận đồ và trả lời đúng mô tả (FR-84, FR-85, BR-D02, BR-R05, UC-27).
+     * Xác nhận đã giao hoặc đã nhận đồ và trả lời đúng mô tả (GN-06, GN-08, GN-07, UC-27).
      *
      * <p>Chỉ chủ bài đăng (donor) hoặc người nhận (receiver) mới có quyền xác nhận.
-     * Khi một bên bấm, Request chuyển sang AWAITING_HANDOVER và tiếp tục chờ bên còn lại (BR-D02).
+     * Khi một bên bấm, Request chuyển sang AWAITING_HANDOVER và tiếp tục chờ bên còn lại (GN-08).
      * Khi cả hai bên đều đã bấm xác nhận:
      * <ul>
      *   <li>Request chuyển sang COMPLETED (ghi nhận completedAt).</li>
@@ -1119,7 +1119,7 @@ public class RequestService {
             asDescribed = requestDto.asDescribed();
         }
 
-        // Đính kèm ảnh hoặc video minh chứng khi giao nhận nếu có (FR-86, BR-T09)
+        // Đính kèm ảnh hoặc video minh chứng khi giao nhận nếu có (GN-10)
         if (requestDto != null
                 && requestDto.mediaIds() != null
                 && !requestDto.mediaIds().isEmpty()) {
@@ -1129,7 +1129,7 @@ public class RequestService {
         request.confirmHandover(isDonor, asDescribed, Instant.now());
         Request saved = requestRepository.save(request);
 
-        // Chọn "Không đúng mô tả" thì báo cho module report mở report (BR-R05). Event chỉ được xử lý sau khi
+        // Chọn "Không đúng mô tả" thì báo cho module report mở report (GN-07). Event chỉ được xử lý sau khi
         // giao dịch này commit, nên lỗi mở report không làm mất câu trả lời của người nhận.
         if (Boolean.FALSE.equals(asDescribed) && eventPublisher != null) {
             eventPublisher.publishEvent(new NotAsDescribedReportedEvent(
@@ -1139,7 +1139,7 @@ public class RequestService {
         long otherUserId = isDonor ? request.getReceiverId() : item.donorId();
 
         if (saved.getStatus() == RequestStatus.COMPLETED) {
-            // 1. Chuyển bài đăng sang TRADED (FR-84, #94)
+            // 1. Chuyển bài đăng sang TRADED (GN-06, GN-08, #94)
             itemService.markTraded(saved.getItemId());
             if ("SWAP".equalsIgnoreCase(saved.getType()) && saved.getOfferedItemId() != null) {
                 itemService.markTraded(saved.getOfferedItemId());
@@ -1147,7 +1147,7 @@ public class RequestService {
 
             long targetRequestId = saved.getId() != null ? saved.getId() : requestId;
 
-            // 2. Chữ ký thông báo sang ReputationService (FR-91, FR-94, #94)
+            // 2. Chữ ký thông báo sang ReputationService (BC-12, UT-02, UT-05, #94)
             if (reputationService != null) {
                 reputationService.onCompleted(targetRequestId);
             }
@@ -1183,7 +1183,7 @@ public class RequestService {
     }
 
     /**
-     * Đính kèm ảnh hoặc video minh chứng vào yêu cầu giao dịch (FR-86, BR-T09, UC-28).
+     * Đính kèm ảnh hoặc video minh chứng vào yêu cầu giao dịch (GN-10, UC-28).
      *
      * <p>Chỉ chủ bài đăng hoặc người nhận mới có quyền đính kèm.
      * Sử dụng MediaService.attach để chuyển trạng thái media sang ATTACHED.
@@ -1208,7 +1208,7 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
         }
 
-        // Minh chứng giao nhận chỉ được đính kèm ở giai đoạn giao nhận trở đi (FR-86, BR-T09)
+        // Minh chứng giao nhận chỉ được đính kèm ở giai đoạn giao nhận trở đi (GN-10)
         boolean canAttachMedia = request.getStatus() == RequestStatus.LOGISTICS_CONFIRMED
                 || request.getStatus() == RequestStatus.AWAITING_HANDOVER
                 || request.getStatus() == RequestStatus.COMPLETED
@@ -1232,7 +1232,7 @@ public class RequestService {
     }
 
     /**
-     * Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (FR-86, BR-T09).
+     * Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (GN-10).
      *
      * <p>Chỉ hai bên tham gia giao dịch (donor hoặc receiver) mới có quyền xem minh chứng.
      *
@@ -1249,7 +1249,7 @@ public class RequestService {
         ItemSnapshot item = findItemSnapshot(request.getItemId())
                 .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
 
-        // Chỉ hai bên tham gia giao dịch mới có quyền xem minh chứng (BR-T09)
+        // Chỉ hai bên tham gia giao dịch mới có quyền xem minh chứng (GN-10)
         if (request.getReceiverId() != currentUserId && item.donorId() != currentUserId) {
             throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
         }
@@ -1322,7 +1322,7 @@ public class RequestService {
     }
 
     /**
-     * Kiểm tra người dùng có đang trong giai đoạn giao nhận hay không (F03, BR-U10).
+     * Kiểm tra người dùng có đang trong giai đoạn giao nhận hay không (F03, TK-11).
      */
     @Transactional(readOnly = true)
     public boolean hasActiveDelivery(long userId) {
@@ -1330,7 +1330,7 @@ public class RequestService {
     }
 
     /**
-     * Kiểm tra bài đăng đã có yêu cầu ở trạng thái RESERVED trở lên hay chưa (F07 bước 1, BR-D04).
+     * Kiểm tra bài đăng đã có yêu cầu ở trạng thái RESERVED trở lên hay chưa (F07 bước 1, BD-10).
      */
     @Transactional(readOnly = true)
     public boolean hasReservedOrHigherRequest(long itemId) {
@@ -1338,7 +1338,7 @@ public class RequestService {
     }
 
     /**
-     * Lấy thông tin ngữ cảnh yêu cầu giao dịch dùng cho xác thực truy cập và trạng thái chat (FR-68, BR-C03).
+     * Lấy thông tin ngữ cảnh yêu cầu giao dịch dùng cho xác thực truy cập và trạng thái chat (CH-01, GN-05).
      */
     @Transactional(readOnly = true)
     public RequestChatContext getChatContext(long requestId) {
@@ -1484,7 +1484,7 @@ public class RequestService {
         return itemQueryService.findTitles(List.of(itemId)).get(itemId);
     }
 
-    // Chỉ lấy họ tên để hiển thị; email, số điện thoại chỉ trao qua getContactInfo khi đã chốt lịch (BR-T11).
+    // Chỉ lấy họ tên để hiển thị; email, số điện thoại chỉ trao qua getContactInfo khi đã chốt lịch (GN-04).
     // Tra tên lỗi thì trả null để danh sách yêu cầu vẫn hiện được, không làm hỏng cả API.
     private String findUserName(long userId) {
         if (userService == null) {
@@ -1501,7 +1501,7 @@ public class RequestService {
         }
     }
 
-    // Lấy thông tin uy tín (TrustStars, hạng, tỉ lệ đúng mô tả) qua ReputationService (FR-65, Issue #110).
+    // Lấy thông tin uy tín (TrustStars, hạng, tỉ lệ đúng mô tả) qua ReputationService (YC-06, Issue #110).
     // Tra lỗi hoặc service chưa sẵn sàng thì trả null để danh sách yêu cầu vẫn hiển thị an toàn.
     private ReputationSummary findReceiverReputation(long receiverId) {
         if (reputationService == null) {

@@ -16,7 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Test job hết hạn bài (FR-29, BR-D03) trên PostgreSQL thật. Gọi thẳng service với mốc {@code now} tự chọn (profile
+ * Test job hết hạn bài (BD-12, TD-01) trên PostgreSQL thật. Gọi thẳng service với mốc {@code now} tự chọn (profile
  * test tắt app.jobs.enabled nên job không tự chạy). DB dùng chung với test khác nên chỉ kiểm các bài do test này tạo,
  * không kiểm tổng số bài của cả lượt.
  */

@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Gia hạn bài (C16, FR-28, BR-D03, BR-P12): trừ phí gia hạn ngay và kéo dài expire_at. Nội dung bài không đổi nên
+ * Gia hạn bài (C16, HT-01, BD-12, PH-05): trừ phí gia hạn ngay và kéo dài expire_at. Nội dung bài không đổi nên
  * không qua kiểm duyệt lại và không đổi status. Chỉ ghi cột expire_at qua entity lát cắt ItemFee; đổi tiền chỉ qua
  * {@code wallet.CreditService}.
  *

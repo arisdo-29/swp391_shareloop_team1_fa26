@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller báo cáo tài chính, xuất CSV và tra cứu lịch sử tài chính cho Admin (FR-109, FR-110, FR-111, FR-112).
+ * Controller báo cáo tài chính, xuất CSV và tra cứu lịch sử tài chính cho Admin (VI-09, AD-03).
  * Chỉ Admin mới có quyền truy cập (/api/v1/admin/** được bảo vệ bởi SecurityConfig).
  */
 @Tag(name = "admin-finance-controller", description = "Báo cáo tài chính, xuất CSV và tra cứu lịch sử giao dịch")
@@ -73,7 +73,7 @@ public class AdminFinanceController {
     }
 
     /**
-     * Xuất báo cáo tài chính ra file CSV, cùng số liệu với {@code /report} (FR-111).
+     * Xuất báo cáo tài chính ra file CSV, cùng số liệu với {@code /report} (AD-03).
      *
      * <p>Không khai báo {@code produces} để lỗi nghiệp vụ (vd: INVALID_DATE_RANGE) vẫn trả JSON như mọi API khác.
      */

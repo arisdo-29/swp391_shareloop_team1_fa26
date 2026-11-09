@@ -17,7 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * GET /api/v1/admin/finance/users và /users/{id}/wallet (FR-112) trên PostgreSQL thật. Tài khoản của test có email
+ * GET /api/v1/admin/finance/users và /users/{id}/wallet (AD-03) trên PostgreSQL thật. Tài khoản của test có email
  * đuôi @zzfin.test nên dùng keyword "zzfin" để không lẫn với dữ liệu khác.
  */
 @AutoConfigureMockMvc

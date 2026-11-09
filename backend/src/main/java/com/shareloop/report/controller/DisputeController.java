@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller xử lý khiếu nại giao dịch sau hoàn thành và giải trình (FR-89, FR-90, BR-T08, Issue #112).
+ * Controller xử lý khiếu nại giao dịch sau hoàn thành và giải trình (BC-07, BC-08, Issue #112).
  */
 @Tag(name = "dispute-controller", description = "Khiếu nại giao dịch sau khi hoàn thành và tiếp nhận giải trình")
 @RestController

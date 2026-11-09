@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Danh sách cảnh báo bất thường cho Admin (FR-113, UC-52), tính trực tiếp lúc gọi.
+ * Danh sách cảnh báo bất thường cho Admin (AD-04, UC-52), tính trực tiếp lúc gọi.
  *
  * @param generatedAt thời điểm tính
  * @param pairWindowDays số ngày của cửa sổ tính cặp giao dịch

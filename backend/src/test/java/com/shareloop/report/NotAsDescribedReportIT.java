@@ -29,7 +29,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Chạy thật luồng xác nhận giao nhận trên PostgreSQL: bên nhận chọn "Không đúng mô tả" thì module report tự mở report
- * sau khi giao dịch commit (FR-85, BR-R05), và job tự hoàn tất bỏ qua giao dịch đó (FR-87, BR-T06).
+ * sau khi giao dịch commit (GN-07), và job tự hoàn tất bỏ qua giao dịch đó (GN-09).
  * Không dùng @Transactional ở lớp test vì listener AFTER_COMMIT chỉ chạy khi giao dịch thật sự commit.
  */
 @AutoConfigureMockMvc

@@ -93,7 +93,7 @@ public class ReviewService {
      * flagReasonCode; với LEXICON_REVIEW câu hiển thị kèm danh sách từ khoá đã khớp.
      */
     public List<ReviewQueueItem> listPending(int page, int size) {
-        // Ngưỡng "người mới" đọc từ config để Admin đổi được (BR-A08); repository dùng nó để xếp người mới trước.
+        // Ngưỡng "người mới" đọc từ config để Admin đổi được (KD-06); repository dùng nó để xếp người mới trước.
         int newcomerMaxApproved = configService.getInt(ConfigKey.REVIEW_NEWCOMER_MAX_APPROVED);
         List<Object[]> rows = repository.findPendingReviewQueue(PageRequest.of(page, size), newcomerMaxApproved);
         Map<Long, UserBrief> donors = findDonors(rows);

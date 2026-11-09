@@ -35,7 +35,7 @@ import java.util.regex.Pattern;
  * <p><b>Chú ý false-positive đã xử lý:</b> mã sản phẩm (SL-12345), số tiền (1.000.000),
  * năm (2024), mã đơn hàng, không bị nhận nhầm là số điện thoại hay URL.
  *
- * <p>Người sở hữu: BE3 (@dwargon73-sketch). FR-41, FR-72; BR-C01.
+ * <p>Người sở hữu: BE3 (@dwargon73-sketch). KD-02, KD-03, CH-02.
  */
 public final class ContactInfoDetector {
 

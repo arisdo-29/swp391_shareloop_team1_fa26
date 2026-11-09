@@ -3,7 +3,7 @@ package com.shareloop.wallet.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * Một người dùng cùng số liệu Credit cơ bản, dùng cho màn hình tra cứu tài chính của Admin (FR-112).
+ * Một người dùng cùng số liệu Credit cơ bản, dùng cho màn hình tra cứu tài chính của Admin (AD-03).
  *
  * @param userId id người dùng
  * @param fullName họ tên

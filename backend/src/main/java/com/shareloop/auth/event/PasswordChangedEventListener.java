@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-/** Gửi email báo "mật khẩu vừa được đổi" sau khi transaction đổi mật khẩu đã commit (FR-08). */
+/** Gửi email báo "mật khẩu vừa được đổi" sau khi transaction đổi mật khẩu đã commit (TK-10). */
 @Component
 public class PasswordChangedEventListener {
 

@@ -218,7 +218,7 @@ class ReportServiceTest {
     }
 
     @Test
-    @DisplayName("BR-A03: Khi số lượng report bài đăng >= 3 thì tự động ẩn bài")
+    @DisplayName("BC-02: Khi số lượng report bài đăng >= 3 thì tự động ẩn bài")
     void reportItem_countReached3_callsItemServiceHide() {
         Long reporterId = 1L;
         Long itemId = 10L;
@@ -268,7 +268,7 @@ class ReportServiceTest {
     }
 
     @Test
-    @DisplayName("BR-A03: ngưỡng đọc từ ConfigService, chưa đủ ngưỡng cấu hình (5) thì chưa ẩn bài")
+    @DisplayName("BC-02: ngưỡng đọc từ ConfigService, chưa đủ ngưỡng cấu hình (5) thì chưa ẩn bài")
     void reportItem_belowConfiguredThreshold_doesNotHide() {
         givenItemCanBeReported(1L, 10L, 2L);
         when(configService.getInt(ConfigKey.REPORT_HIDE_THRESHOLD)).thenReturn(5);
@@ -282,7 +282,7 @@ class ReportServiceTest {
     }
 
     @Test
-    @DisplayName("BR-A03: vừa đủ ngưỡng report đang chờ xử lý thì ẩn bài và báo Admin về hàng chờ khiếu nại")
+    @DisplayName("BC-02: vừa đủ ngưỡng report đang chờ xử lý thì ẩn bài và báo Admin về hàng chờ khiếu nại")
     void reportItem_reachesThreshold_hidesAndNotifiesAdmins() {
         givenItemCanBeReported(1L, 10L, 2L);
         when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, 10L, PENDING))
@@ -319,7 +319,7 @@ class ReportServiceTest {
     }
 
     @Test
-    @DisplayName("BR-A03: report thứ 4 vào bài đã ẩn: vẫn giữ ẩn nhưng không báo Admin lần nữa")
+    @DisplayName("BC-02: report thứ 4 vào bài đã ẩn: vẫn giữ ẩn nhưng không báo Admin lần nữa")
     void reportItem_aboveThreshold_doesNotNotifyAdminsAgain() {
         givenItemCanBeReported(1L, 10L, 2L);
         when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, 10L, PENDING))
@@ -345,7 +345,7 @@ class ReportServiceTest {
                 TargetType.ITEM, itemId, null, null, null, ReportReason.PROHIBITED_ITEM, "Bài đăng hàng cấm");
     }
 
-    // ==================== NOT_AS_DESCRIBED TỰ ĐỘNG (FR-85, BR-R05) ====================
+    // ==================== NOT_AS_DESCRIBED TỰ ĐỘNG (GN-07) ====================
 
     // ==================== BÁO CHƯA NHẬN / CHƯA GIAO ĐƯỢC ĐỒ ====================
 
@@ -950,7 +950,7 @@ class ReportServiceTest {
 
     @Test
     @DisplayName(
-            "Admin kết luận UPHOLD với lý do nghiêm trọng (PROHIBITED_ITEM): trừ 1 sao và ẩn TOÀN BỘ bài khác của người vi phạm (BR-A07)")
+            "Admin kết luận UPHOLD với lý do nghiêm trọng (PROHIBITED_ITEM): trừ 1 sao và ẩn TOÀN BỘ bài khác của người vi phạm (BC-06)")
     void conclude_uphold_seriousReason_hidesAllOfUser() {
         Long adminId = 1L;
         Long reportId = 12L;
@@ -1445,7 +1445,7 @@ class ReportServiceTest {
     }
 
     @Test
-    @DisplayName("BR-A03: Khi số lượng báo cáo bài đăng đạt ngưỡng >= 3 thì tự động ẩn bài")
+    @DisplayName("BC-02: Khi số lượng báo cáo bài đăng đạt ngưỡng >= 3 thì tự động ẩn bài")
     void createReport_reachesThreshold_hidesItem() {
         Long reporterId = 10L;
         Long itemId = 100L;

@@ -1,7 +1,7 @@
 package com.shareloop.audit;
 
 /**
- * Danh sách loại hành động ghi vào activity_logs (FR-115). Cột type lưu đúng tên hằng (name()); nhãn tiếng Việt
+ * Danh sách loại hành động ghi vào activity_logs (AD-05, TB-03). Cột type lưu đúng tên hằng (name()); nhãn tiếng Việt
  * dùng để hiển thị trên trang nhật ký và bộ lọc của Admin.
  */
 public enum ActivityType {

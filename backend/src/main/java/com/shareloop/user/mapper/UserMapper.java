@@ -35,7 +35,7 @@ public class UserMapper {
                 buildAvatarUrl(user.getAvatarMediaId()));
     }
 
-    // Chỉ 4 trường này được trao cho đối tác (BR-T11); không thêm trường khác vào ContactInfo.
+    // Chỉ 4 trường này được trao cho đối tác (GN-04); không thêm trường khác vào ContactInfo.
     public ContactInfo toContactInfo(User user) {
         return new ContactInfo(user.getId(), user.getFullName(), user.getEmail(), user.getPhone());
     }

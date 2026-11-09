@@ -16,12 +16,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Bộ lọc thông tin liên hệ và từ khoá cấm mức BLOCK tầng 1 cho module chat (FR-72, FR-74, FR-78; BR-C01, BR-A10).
+ * Bộ lọc thông tin liên hệ và từ khoá cấm mức BLOCK tầng 1 cho module chat (CH-02, CH-05, CH-03, KD-03).
  *
  * <p>Tái sử dụng {@link ContactInfoDetector} và bổ sung phần riêng của chat:
  * nhận diện các chữ số viết bằng chữ tiếng Việt ("không", "một", "hai"...) kể cả viết
  * cách quãng hoặc lẫn lộn chữ số, sau đó áp bộ phát hiện của {@link ContactInfoDetector}.
- * Đồng thời tích hợp kiểm tra từ khoá cấm mức BLOCK từ {@link LexiconMatcher} (FR-78, BR-A10).
+ * Đồng thời tích hợp kiểm tra từ khoá cấm mức BLOCK từ {@link LexiconMatcher} (CH-03, KD-03).
  */
 @Component
 public class ChatContactFilter {
@@ -70,7 +70,7 @@ public class ChatContactFilter {
     }
 
     /**
-     * Kiểm tra nội dung tin nhắn có vi phạm từ khoá cấm mức BLOCK (FR-78) hoặc thông tin liên hệ (FR-72) hay không.
+     * Kiểm tra nội dung tin nhắn có vi phạm từ khoá cấm mức BLOCK (CH-03) hoặc thông tin liên hệ (CH-02) hay không.
      *
      * @param content          nội dung tin nhắn
      * @param checkContactInfo có kích hoạt kiểm tra thông tin liên hệ không (chỉ áp dụng trước LogisticsConfirmed)
@@ -81,7 +81,7 @@ public class ChatContactFilter {
             return Optional.empty();
         }
 
-        // 1. Kiểm tra từ khoá cấm mức BLOCK (FR-78, BR-A10)
+        // 1. Kiểm tra từ khoá cấm mức BLOCK (CH-03, KD-03)
         if (configService != null) {
             List<LexiconEntry> lexicon = configService.lexicon();
             if (lexicon != null && !lexicon.isEmpty()) {
@@ -101,7 +101,7 @@ public class ChatContactFilter {
             }
         }
 
-        // 2. Kiểm tra thông tin liên hệ nếu trước LogisticsConfirmed (FR-72, BR-C01)
+        // 2. Kiểm tra thông tin liên hệ nếu trước LogisticsConfirmed (CH-02)
         if (checkContactInfo) {
             List<Match> contactMatches = detectContactInfo(content);
             if (!contactMatches.isEmpty()) {
@@ -121,7 +121,7 @@ public class ChatContactFilter {
 
     /**
      * Kiểm tra nội dung tin nhắn. Nếu phát hiện vi phạm thì ném {@link BusinessException}
-     * kèm lý do chi tiết theo FR-74.
+     * kèm lý do chi tiết theo CH-05.
      *
      * @param content nội dung tin nhắn
      * @throws BusinessException nếu phát hiện số điện thoại, email, URL hoặc từ khoá cấm mức BLOCK

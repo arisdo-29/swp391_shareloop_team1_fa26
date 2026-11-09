@@ -18,7 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * GET /api/v1/admin/users (FR-107) chạy trên PostgreSQL thật để kiểm cả câu JPQL lọc có tham số null. Mọi tài khoản
+ * GET /api/v1/admin/users (KC-01) chạy trên PostgreSQL thật để kiểm cả câu JPQL lọc có tham số null. Mọi tài khoản
  * của test có email đuôi @zzlist.test nên dùng keyword "zzlist" để không lẫn với dữ liệu seed.
  */
 @AutoConfigureMockMvc

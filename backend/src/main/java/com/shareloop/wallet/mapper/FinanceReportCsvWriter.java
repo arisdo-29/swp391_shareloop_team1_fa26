@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 /**
- * Dựng file CSV từ báo cáo tài chính (FR-111). UTF-8 có BOM để Excel hiển thị đúng tiếng Việt, xuống dòng CRLF
+ * Dựng file CSV từ báo cáo tài chính (AD-03). UTF-8 có BOM để Excel hiển thị đúng tiếng Việt, xuống dòng CRLF
  * theo RFC 4180.
  *
  * <p>File chia thành từng phần: dòng tiêu đề tiếng Việt, dòng header tiếng Việt, rồi các dòng dữ liệu; hai phần

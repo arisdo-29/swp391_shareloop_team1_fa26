@@ -38,7 +38,7 @@ public class ListingFeeController {
     }
 
     @Operation(
-            summary = "Danh sách bài của tôi đang giữ phí (FR-15)",
+            summary = "Danh sách bài của tôi đang giữ phí (VI-02)",
             description = "Gồm bài chờ duyệt đang giữ phí đăng và bài chờ duyệt bản sửa đang giữ phí sửa."
                     + " Tổng pendingFee bằng số Credit đang giữ của ví.")
     @ApiResponse(responseCode = "200", description = "Thành công, danh sách rỗng nếu không giữ phí nào")

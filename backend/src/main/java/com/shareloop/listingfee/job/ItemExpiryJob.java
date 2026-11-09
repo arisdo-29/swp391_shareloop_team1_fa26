@@ -9,7 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Job hết hạn bài (FR-29, BR-D03), chạy mỗi giờ. Chỉ gọi {@link ItemExpiryService} và ghi log; mọi luật nằm ở service.
+ * Job hết hạn bài (BD-12, TD-01), chạy mỗi giờ. Chỉ gọi {@link ItemExpiryService} và ghi log; mọi luật nằm ở service.
  */
 @Component
 // Bean chỉ được tạo khi app.jobs.enabled=true (dev, prod); profile test đặt false để job không tự chạy giữa các test.

@@ -34,7 +34,7 @@ public class AdminAreaService {
     }
 
     /**
-     * Thêm khu vực và ghi nhật ký AREA_CREATE (FR-115).
+     * Thêm khu vực và ghi nhật ký AREA_CREATE (AD-05, TB-03).
      *
      * @throws BusinessException CATALOG_INVALID_AREA_PARENT khi khu vực cha không hợp lệ
      */
@@ -47,7 +47,7 @@ public class AdminAreaService {
     }
 
     /**
-     * Sửa khu vực và ghi nhật ký AREA_UPDATE (FR-115).
+     * Sửa khu vực và ghi nhật ký AREA_UPDATE (AD-05, TB-03).
      *
      * @throws BusinessException CATALOG_AREA_NOT_FOUND, CATALOG_INVALID_AREA_PARENT, CATALOG_AREA_HAS_CHILDREN
      */
@@ -65,7 +65,7 @@ public class AdminAreaService {
     }
 
     /**
-     * Bật/tắt khu vực (tắt thì ẩn luôn khu vực con) và ghi nhật ký AREA_TOGGLE (FR-115).
+     * Bật/tắt khu vực (tắt thì ẩn luôn khu vực con) và ghi nhật ký AREA_TOGGLE (AD-05, TB-03).
      *
      * @throws BusinessException CATALOG_AREA_NOT_FOUND, CATALOG_INVALID_AREA_PARENT khi bật lại mà cha đang ẩn
      */

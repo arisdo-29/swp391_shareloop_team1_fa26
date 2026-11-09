@@ -28,7 +28,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
-/** Integration test quên / đặt lại mật khẩu (FR-09): DB PostgreSQL thật (Testcontainers), email thay bằng mock. */
+/** Integration test quên / đặt lại mật khẩu (TK-09): DB PostgreSQL thật (Testcontainers), email thay bằng mock. */
 @AutoConfigureMockMvc
 class AuthPasswordResetIT extends IntegrationTest {
 

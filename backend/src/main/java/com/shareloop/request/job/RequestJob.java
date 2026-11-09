@@ -12,9 +12,9 @@ import org.springframework.stereotype.Component;
 /**
  * Job định kỳ xử lý tự động vòng đời Request (Milestone R4, Issue #109):
  * <ul>
- *   <li>Huỷ tự động các yêu cầu PENDING quá hạn (FR-119, BR-R06).</li>
- *   <li>Huỷ tự động các yêu cầu RESERVED/AWAITING_LOGISTICS quá 10 ngày chưa chốt lịch và đóng chat (FR-120, BR-T10, FR-77, BR-C03).</li>
- *   <li>Tự động hoàn tất (COMPLETED) khi một bên đã xác nhận giao nhận mà bên kia im lặng quá hạn (FR-87, BR-T06).</li>
+ *   <li>Huỷ tự động các yêu cầu PENDING quá hạn (YC-05, TD-02).</li>
+ *   <li>Huỷ tự động các yêu cầu RESERVED/AWAITING_LOGISTICS quá 10 ngày chưa chốt lịch và đóng chat (GN-05, TD-02, CH-01).</li>
+ *   <li>Tự động hoàn tất (COMPLETED) khi một bên đã xác nhận giao nhận mà bên kia im lặng quá hạn (GN-09).</li>
  * </ul>
  */
 @Component

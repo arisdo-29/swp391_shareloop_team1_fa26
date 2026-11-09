@@ -42,7 +42,7 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
     Optional<ItemFeeSnapshot> findFeeSnapshotById(@Param("itemId") Long itemId);
 
     /**
-     * Id các bài APPROVED đã quá expire_at (job hết hạn bài, FR-29, BR-D03), không khoá. Native query vì cột status
+     * Id các bài APPROVED đã quá expire_at (job hết hạn bài, BD-12, TD-01), không khoá. Native query vì cột status
      * do entity Item (module item) map, ItemFee không map lại được. Phân trang kiểu keyset (id > afterId, tăng dần):
      * người gọi truyền id cuối của lô trước, nên một bài xử lý lỗi không bị lấy lại mãi trong cùng một lượt.
      */

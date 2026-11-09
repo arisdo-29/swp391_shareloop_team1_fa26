@@ -1,7 +1,7 @@
 package com.shareloop.listingfee.dto;
 
 /**
- * Một bài đang giữ phí của người dùng (FR-15), hiện ở màn Ví.
+ * Một bài đang giữ phí của người dùng (VI-02), hiện ở màn Ví.
  *
  * @param itemId id bài
  * @param title tên bài

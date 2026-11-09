@@ -38,7 +38,7 @@ public class MeController {
         return userService.getMe(userId);
     }
 
-    // Chỉ sửa hồ sơ của chính mình (BR-U03): id lấy từ token nên không thể sửa người khác.
+    // Chỉ sửa hồ sơ của chính mình (TK-12): id lấy từ token nên không thể sửa người khác.
     @Operation(summary = "Cập nhật hồ sơ của tôi (họ tên, khu vực mặc định, ảnh đại diện)")
     @PutMapping
     public MeResponse updateMe(
@@ -46,7 +46,7 @@ public class MeController {
         return userService.updateProfile(userId, request);
     }
 
-    @Operation(summary = "Gửi mã OTP qua email để đổi số điện thoại (FR-07, BR-U10)")
+    @Operation(summary = "Gửi mã OTP qua email để đổi số điện thoại (TK-11)")
     @PostMapping("/phone/otp")
     public ChangePhoneOtpResponse sendChangePhoneOtp(
             @Parameter(hidden = true) @CurrentUserId long userId,
@@ -54,7 +54,7 @@ public class MeController {
         return userService.sendChangePhoneOtp(userId, request);
     }
 
-    @Operation(summary = "Xác nhận OTP và đổi số điện thoại (FR-07, BR-U10)")
+    @Operation(summary = "Xác nhận OTP và đổi số điện thoại (TK-11)")
     @PutMapping("/phone")
     public MeResponse changePhone(
             @Parameter(hidden = true) @CurrentUserId long userId, @Valid @RequestBody ChangePhoneRequest request) {
