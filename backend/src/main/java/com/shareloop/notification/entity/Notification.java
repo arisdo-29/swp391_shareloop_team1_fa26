@@ -9,7 +9,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 /**
- * Entity bảng notifications (FR-118).
+ * Entity bảng notifications (TB-02).
  */
 @Entity
 @Table(name = "notifications")

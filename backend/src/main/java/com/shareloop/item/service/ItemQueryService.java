@@ -63,7 +63,7 @@ public class ItemQueryService {
     }
 
     /**
-     * Tên bài đăng theo id, dùng cho trang nhật ký Admin (FR-115). Cố ý không lọc is_deleted để bài đã xoá vẫn hiện
+     * Tên bài đăng theo id, dùng cho trang nhật ký Admin (AD-05, TB-03). Cố ý không lọc is_deleted để bài đã xoá vẫn hiện
      * tên trong nhật ký. Id không tồn tại sẽ không có trong map.
      */
     public Map<Long, String> findTitles(Collection<Long> ids) {

@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Hết hạn đơn nạp (FR-18): đơn PENDING quá payment_order_expire_minutes mà cổng không phản hồi thì chuyển EXPIRED. Đơn
+ * Hết hạn đơn nạp (VI-06, TD-05): đơn PENDING quá payment_order_expire_minutes mà cổng không phản hồi thì chuyển EXPIRED. Đơn
  * EXPIRED không còn được cộng Credit (CreditService.topUp từ chối với WALLET_PAYMENT_ORDER_NOT_PAYABLE).
  *
  * <p>Người gọi: {@code PaymentExpiryJob} (mỗi 5 phút) và test.
@@ -27,7 +27,7 @@ public class PaymentExpiryService {
     }
 
     /**
-     * Chuyển mọi đơn PENDING có created_at trước {@code now - payment_order_expire_minutes} sang EXPIRED (FR-18). Đơn
+     * Chuyển mọi đơn PENDING có created_at trước {@code now - payment_order_expire_minutes} sang EXPIRED (VI-06, TD-05). Đơn
      * SUCCESS, FAILED hay đã EXPIRED không bị đụng tới; chạy lại nhiều lần không có tác dụng kép. Không ném lỗi nghiệp
      * vụ.
      *

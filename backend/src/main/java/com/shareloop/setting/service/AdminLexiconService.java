@@ -47,7 +47,7 @@ public class AdminLexiconService {
     }
 
     /**
-     * Thêm từ khoá cấm vào cuối danh sách và ghi nhật ký LEXICON_CREATE (FR-115).
+     * Thêm từ khoá cấm vào cuối danh sách và ghi nhật ký LEXICON_CREATE (AD-05, TB-03).
      *
      * @throws BusinessException SETTING_LEXICON_INVALID_VALUE, SETTING_LEXICON_DUPLICATE
      */
@@ -67,7 +67,7 @@ public class AdminLexiconService {
     }
 
     /**
-     * Sửa từ khoá cấm và ghi nhật ký LEXICON_UPDATE (FR-115).
+     * Sửa từ khoá cấm và ghi nhật ký LEXICON_UPDATE (AD-05, TB-03).
      *
      * @throws BusinessException SETTING_LEXICON_NOT_FOUND, SETTING_LEXICON_INVALID_VALUE, SETTING_LEXICON_DUPLICATE
      */
@@ -83,7 +83,7 @@ public class AdminLexiconService {
     }
 
     /**
-     * Bật/tắt từ khoá cấm (không xoá cứng) và ghi nhật ký LEXICON_TOGGLE (FR-115).
+     * Bật/tắt từ khoá cấm (không xoá cứng) và ghi nhật ký LEXICON_TOGGLE (AD-05, TB-03).
      *
      * @throws BusinessException SETTING_LEXICON_NOT_FOUND, SETTING_LEXICON_DUPLICATE khi bật lại bị trùng
      */

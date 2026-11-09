@@ -31,7 +31,7 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     List<Message> findTop3ByRequestIdAndModerationOrderByIdDesc(Long requestId, MessageModeration moderation);
 
     /**
-     * Đếm số lượng tin nhắn theo requestId và trạng thái kiểm duyệt (FR-76, BR-C04).
+     * Đếm số lượng tin nhắn theo requestId và trạng thái kiểm duyệt (CH-05).
      */
     long countByRequestIdAndModeration(Long requestId, MessageModeration moderation);
 

@@ -8,7 +8,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface ReviewQueueRepository extends Repository<com.shareloop.item.entity.Item, Long> {
 
-    // BR-A08: không xét cờ AI. Ít sao uy tín trước; cùng số sao thì người mới (số bài đã từng được duyệt, tức
+    // KD-06: không xét cờ AI. Ít sao uy tín trước; cùng số sao thì người mới (số bài đã từng được duyệt, tức
     // approved_at khác rỗng, không quá :newcomerMaxApproved) trước; rồi bài chờ lâu trước.
     @Query(value = """
             SELECT i.id AS id,

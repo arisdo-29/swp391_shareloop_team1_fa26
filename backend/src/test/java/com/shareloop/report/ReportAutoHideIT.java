@@ -19,7 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Test tự ẩn bài khi đạt ngưỡng report (BR-A03, FR-49, Issue #151) với PostgreSQL thật: chỉ report đang chờ xử lý mới
+ * Test tự ẩn bài khi đạt ngưỡng report (BC-02, Issue #151) với PostgreSQL thật: chỉ report đang chờ xử lý mới
  * được đếm, ngưỡng lấy từ cấu hình đã seed (3), bài bị ẩn giữ nguyên status và Admin nhận một thông báo.
  */
 class ReportAutoHideIT extends IntegrationTest {

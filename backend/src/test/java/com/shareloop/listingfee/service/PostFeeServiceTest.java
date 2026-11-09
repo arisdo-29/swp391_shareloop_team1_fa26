@@ -18,7 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/** Unit test số ngày hiển thị theo hạng (BR-D03, FR-29). Cùng package để gọi được hàm package-private. */
+/** Unit test số ngày hiển thị theo hạng (BD-12, TD-01). Cùng package để gọi được hàm package-private. */
 @ExtendWith(MockitoExtension.class)
 class PostFeeServiceTest {
 

@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller quản lý thông báo trong app (FR-118, UC-20).
+ * Controller quản lý thông báo trong app (TB-02, UC-33).
  */
 @Tag(name = "Notification", description = "Quản lý thông báo trong ứng dụng")
 @RestController

@@ -14,7 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
-/** BR-A08: kiểm câu SQL xếp hàng chờ duyệt với người đăng mới (số bài đã từng được duyệt không quá ngưỡng). */
+/** KD-06: kiểm câu SQL xếp hàng chờ duyệt với người đăng mới (số bài đã từng được duyệt không quá ngưỡng). */
 @Transactional
 class ReviewQueueNewcomerOrderIT extends IntegrationTest {
 

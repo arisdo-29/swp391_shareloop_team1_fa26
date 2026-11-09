@@ -45,7 +45,7 @@ public class AdminCategoryAttributeService {
     }
 
     /**
-     * Thêm thuộc tính cho danh mục đang hoạt động và ghi nhật ký CATEGORY_ATTRIBUTE_CREATE (FR-115).
+     * Thêm thuộc tính cho danh mục đang hoạt động và ghi nhật ký CATEGORY_ATTRIBUTE_CREATE (AD-05, TB-03).
      *
      * @throws BusinessException CATALOG_CATEGORY_NOT_FOUND, CATALOG_INVALID_ATTRIBUTE_OPTIONS
      */
@@ -66,7 +66,7 @@ public class AdminCategoryAttributeService {
     }
 
     /**
-     * Sửa thuộc tính và ghi nhật ký CATEGORY_ATTRIBUTE_UPDATE (FR-115). Thuộc tính "Trạng thái hoạt động" bắt buộc
+     * Sửa thuộc tính và ghi nhật ký CATEGORY_ATTRIBUTE_UPDATE (AD-05, TB-03). Thuộc tính "Trạng thái hoạt động" bắt buộc
      * không được đổi tên, kiểu hay lựa chọn.
      *
      * @throws BusinessException CATALOG_CATEGORY_NOT_FOUND, CATALOG_ATTRIBUTE_NOT_FOUND, CATALOG_REQUIRED_ATTRIBUTE,
@@ -92,7 +92,7 @@ public class AdminCategoryAttributeService {
     }
 
     /**
-     * Bật/tắt thuộc tính và ghi nhật ký CATEGORY_ATTRIBUTE_TOGGLE (FR-115). Không được tắt thuộc tính bắt buộc.
+     * Bật/tắt thuộc tính và ghi nhật ký CATEGORY_ATTRIBUTE_TOGGLE (AD-05, TB-03). Không được tắt thuộc tính bắt buộc.
      *
      * @throws BusinessException CATALOG_CATEGORY_NOT_FOUND, CATALOG_ATTRIBUTE_NOT_FOUND, CATALOG_REQUIRED_ATTRIBUTE
      */

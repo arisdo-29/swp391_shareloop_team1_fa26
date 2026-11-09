@@ -1,7 +1,7 @@
 package com.shareloop.reputation.entity;
 
 /**
- * Hạng tín nhiệm của người dùng theo SRS (BR-U11).
+ * Hạng tín nhiệm của người dùng theo SRS (UT-07).
  */
 public enum Rank {
     BRONZE,

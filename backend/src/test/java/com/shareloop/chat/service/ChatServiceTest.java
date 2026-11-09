@@ -189,7 +189,7 @@ class ChatServiceTest {
         }
 
         @Test
-        @DisplayName("Gửi ảnh thành công khi Request ở trạng thái LOGISTICS_CONFIRMED (FR-75, BR-C05)")
+        @DisplayName("Gửi ảnh thành công khi Request ở trạng thái LOGISTICS_CONFIRMED (CH-07)")
         void sendMessage_image_success_whenLogisticsConfirmed() {
             RequestChatContext context =
                     new RequestChatContext(REQUEST_ID, RequestStatus.LOGISTICS_CONFIRMED, RECEIVER_ID, DONOR_ID);
@@ -234,7 +234,7 @@ class ChatServiceTest {
         }
 
         @Test
-        @DisplayName("Ném lỗi CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN khi gửi ảnh ở trạng thái RESERVED (FR-75, BR-C05)")
+        @DisplayName("Ném lỗi CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN khi gửi ảnh ở trạng thái RESERVED (CH-07)")
         void sendMessage_image_throwsWhenReserved() {
             RequestChatContext context =
                     new RequestChatContext(REQUEST_ID, RequestStatus.RESERVED, RECEIVER_ID, DONOR_ID);
@@ -322,7 +322,7 @@ class ChatServiceTest {
 
         @Test
         @DisplayName(
-                "Ném lỗi CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN khi gửi ảnh ở trạng thái AWAITING_LOGISTICS (FR-75, BR-C05)")
+                "Ném lỗi CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN khi gửi ảnh ở trạng thái AWAITING_LOGISTICS (CH-07)")
         void sendMessage_image_throwsWhenAwaitingLogistics() {
             RequestChatContext context =
                     new RequestChatContext(REQUEST_ID, RequestStatus.AWAITING_LOGISTICS, RECEIVER_ID, DONOR_ID);
@@ -359,7 +359,7 @@ class ChatServiceTest {
         }
 
         @Test
-        @DisplayName("Gửi thẻ bài đăng APPROVED thành công (FR-70, BR-C07)")
+        @DisplayName("Gửi thẻ bài đăng APPROVED thành công (CH-06)")
         void sendMessage_itemCard_success() {
             RequestChatContext context =
                     new RequestChatContext(REQUEST_ID, RequestStatus.RESERVED, RECEIVER_ID, DONOR_ID);
@@ -399,7 +399,7 @@ class ChatServiceTest {
         }
 
         @Test
-        @DisplayName("Ném lỗi CHAT_ITEM_NOT_APPROVED khi chia sẻ bài chưa APPROVED (FR-70, BR-C07)")
+        @DisplayName("Ném lỗi CHAT_ITEM_NOT_APPROVED khi chia sẻ bài chưa APPROVED (CH-06)")
         void sendMessage_itemCard_throwsWhenNotApproved() {
             RequestChatContext context =
                     new RequestChatContext(REQUEST_ID, RequestStatus.RESERVED, RECEIVER_ID, DONOR_ID);
@@ -436,7 +436,7 @@ class ChatServiceTest {
         }
 
         @Test
-        @DisplayName("Ném lỗi CHAT_MESSAGE_BLOCKED và ghi nhận vi phạm khi phát hiện thông tin liên hệ (FR-72, FR-76)")
+        @DisplayName("Ném lỗi CHAT_MESSAGE_BLOCKED và ghi nhận vi phạm khi phát hiện thông tin liên hệ (CH-02, CH-05)")
         void sendMessage_blocked_whenContactInfoDetected() {
             RequestChatContext context =
                     new RequestChatContext(REQUEST_ID, RequestStatus.RESERVED, RECEIVER_ID, DONOR_ID);
@@ -463,7 +463,7 @@ class ChatServiceTest {
 
         @Test
         @DisplayName(
-                "Ném lỗi CHAT_MESSAGE_BLOCKED và ghi nhận vi phạm khi phát hiện từ khoá cấm mức BLOCK (FR-78, FR-76)")
+                "Ném lỗi CHAT_MESSAGE_BLOCKED và ghi nhận vi phạm khi phát hiện từ khoá cấm mức BLOCK (CH-03, CH-05)")
         void sendMessage_blocked_whenBlockKeywordDetected() {
             RequestChatContext context =
                     new RequestChatContext(REQUEST_ID, RequestStatus.LOGISTICS_CONFIRMED, RECEIVER_ID, DONOR_ID);
@@ -638,7 +638,7 @@ class ChatServiceTest {
         }
 
         @Test
-        @DisplayName("Ghim cả hai thẻ sản phẩm khi yêu cầu là bài Trao Đổi (SWAP) (FR-69, BR-C02)")
+        @DisplayName("Ghim cả hai thẻ sản phẩm khi yêu cầu là bài Trao Đổi (SWAP) (CH-06)")
         void getPinnedItems_success_swapBothItems() {
             RequestChatContext context =
                     new RequestChatContext(REQUEST_ID, RequestStatus.RESERVED, RECEIVER_ID, DONOR_ID, 50L, 60L);

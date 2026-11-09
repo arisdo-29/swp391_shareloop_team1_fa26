@@ -3,7 +3,7 @@ package com.shareloop.admin.dto;
 import java.time.Instant;
 
 /**
- * Cặp người dùng giao dịch với nhau nhiều bất thường (FR-113, BR-U08).
+ * Cặp người dùng giao dịch với nhau nhiều bất thường (AD-04, UT-08).
  *
  * @param userA người có id nhỏ hơn trong cặp
  * @param userB người có id lớn hơn trong cặp

@@ -96,7 +96,7 @@ public class Report extends BaseEntity {
     }
 
     /**
-     * Tạo khiếu nại giao dịch đã hoàn thành (FR-89, FR-90, BR-T08, Issue #112).
+     * Tạo khiếu nại giao dịch đã hoàn thành (BC-07, BC-08, Issue #112).
      */
     public static Report createDispute(
             Long reporterId,
@@ -123,7 +123,7 @@ public class Report extends BaseEntity {
     }
 
     /**
-     * Bên bị khiếu nại gửi giải trình kèm bằng chứng (FR-90, BR-T08, Issue #112).
+     * Bên bị khiếu nại gửi giải trình kèm bằng chứng (BC-08, BC-07, Issue #112).
      */
     public void respond(String note, String responseEvidence, Instant now) {
         this.response = note != null ? note.trim() : null;
@@ -231,7 +231,7 @@ public class Report extends BaseEntity {
     }
 
     /**
-     * Ghi nhận kết luận của Admin đối với báo cáo vi phạm (FR-91, FR-93, Issue #113).
+     * Ghi nhận kết luận của Admin đối với báo cáo vi phạm (BC-12, UT-02, BC-06, Issue #113).
      *
      * @param decision quyết định UPHOLD hoặc DISMISS
      * @param adminId ID của Admin thực hiện

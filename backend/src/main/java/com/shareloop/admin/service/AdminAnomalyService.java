@@ -20,10 +20,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Cảnh báo bất thường cho Admin (FR-113, UC-52, Issue #148). Tính trực tiếp mỗi lần gọi, không lưu bảng (17 bảng
+ * Cảnh báo bất thường cho Admin (AD-04, UC-52, Issue #148). Tính trực tiếp mỗi lần gọi, không lưu bảng (17 bảng
  * đã chốt).
  *
- * <p>Bao gồm cảnh báo cặp giao dịch lặp (BR-U08) và cảnh báo nhiều tài khoản đăng ký cùng một địa chỉ IP (FR-113).
+ * <p>Bao gồm cảnh báo cặp giao dịch lặp (UT-08) và cảnh báo nhiều tài khoản đăng ký cùng một địa chỉ IP (AD-04).
  */
 @Service
 public class AdminAnomalyService {

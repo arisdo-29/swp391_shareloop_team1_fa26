@@ -22,7 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 /**
- * FR-03 (số điện thoại khi đăng ký) và FR-05 (đăng xuất) qua API thật trên PostgreSQL (Testcontainers). Mọi dữ liệu
+ * TK-03, TK-04 (số điện thoại khi đăng ký) và TK-08 (đăng xuất) qua API thật trên PostgreSQL (Testcontainers). Mọi dữ liệu
  * test dùng email có tiền tố {@code phone-logout-it-} nên dọn được bằng một câu lệnh.
  */
 @AutoConfigureMockMvc
@@ -52,7 +52,7 @@ class AuthPhoneAndLogoutIT extends IntegrationTest {
         jdbc.update("DELETE FROM users WHERE email LIKE ?", EMAIL_PREFIX + "%");
     }
 
-    // ---------- FR-03: số điện thoại ----------
+    // ---------- TK-03, TK-04: số điện thoại ----------
 
     // 0123: quá ngắn; 091234567a: có chữ; +11234567890: số nước ngoài; 0281234567: số cố định (đầu 02).
     @ParameterizedTest
@@ -109,7 +109,7 @@ class AuthPhoneAndLogoutIT extends IntegrationTest {
         assertThat(countUsersByEmail(NEW_EMAIL)).isEqualTo(1);
     }
 
-    // ---------- FR-05: đăng xuất ----------
+    // ---------- TK-08: đăng xuất ----------
 
     @Test
     void logout_withToken_returns204() throws Exception {

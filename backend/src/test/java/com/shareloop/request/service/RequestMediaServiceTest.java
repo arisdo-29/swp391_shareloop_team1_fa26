@@ -38,7 +38,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * Unit test kiểm thử tính năng đính kèm và xem ảnh/video minh chứng giao nhận (FR-86, BR-T09, Issue #145).
+ * Unit test kiểm thử tính năng đính kèm và xem ảnh/video minh chứng giao nhận (GN-10, Issue #145).
  */
 @ExtendWith(MockitoExtension.class)
 class RequestMediaServiceTest {
@@ -252,7 +252,7 @@ class RequestMediaServiceTest {
     }
 
     @Test
-    @DisplayName("Chỉ hai bên xem được (BR-T09): Ném REQUEST_FORBIDDEN (403) khi người lạ xem minh chứng")
+    @DisplayName("Chỉ hai bên xem được (GN-10): Ném REQUEST_FORBIDDEN (403) khi người lạ xem minh chứng")
     void getMediaList_strangerBlocked_throwsForbidden() {
         when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request));
 

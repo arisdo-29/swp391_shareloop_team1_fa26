@@ -25,7 +25,7 @@ import org.springframework.test.util.ReflectionTestUtils;
  * Kiểm tra:
  * 1. Từng mũi tên hợp lệ (14 test độc lập với các domain methods tương ứng).
  * 2. Mọi chuyển trạng thái không hợp lệ trong ma trận đều ném BusinessException(REQUEST_INVALID_STATE_TRANSITION).
- * 3. Các quy tắc nghiệp vụ ràng buộc trạng thái: BR-T05 (khoá lịch sau khi đã chốt), BR-R01, waiver khi shipping, v.v.
+ * 3. Các quy tắc nghiệp vụ ràng buộc trạng thái: GN-03 (khoá lịch sau khi đã chốt), YC-01, waiver khi shipping, v.v.
  * 4. Các kịch bản vòng đời hoàn chỉnh (End-to-End Lifecycle Flows).
  */
 class RequestStateMachineTest {
@@ -467,7 +467,7 @@ class RequestStateMachineTest {
         }
 
         @Test
-        @DisplayName("BR-T05: proposeSchedule() bị khoá khi đã LOGISTICS_CONFIRMED trở lên (FR-83)")
+        @DisplayName("GN-03: proposeSchedule() bị khoá khi đã LOGISTICS_CONFIRMED trở lên")
         void proposeSchedule_whenLogisticsConfirmedOrLater_throwsScheduleLocked() {
             List<RequestStatus> lockedStatuses = List.of(
                     RequestStatus.LOGISTICS_CONFIRMED,
@@ -517,7 +517,7 @@ class RequestStateMachineTest {
         }
 
         @Test
-        @DisplayName("confirmLogistics() khi SHIPPING bắt buộc phải agreeToWaiver nếu chưa waiver (FR-80, BR-T03)")
+        @DisplayName("confirmLogistics() khi SHIPPING bắt buộc phải agreeToWaiver nếu chưa waiver (GN-02)")
         void confirmLogistics_shippingWithoutWaiver_throwsException() {
             Request request = createRequest(RequestStatus.AWAITING_LOGISTICS);
             Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
@@ -623,7 +623,7 @@ class RequestStateMachineTest {
             request.proposeSchedule("IN_PERSON", "Cổng FPT", meetingTime, false, false, t2);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_LOGISTICS);
 
-            // 3. Chủ bài đồng ý chốt lịch -> chuyển sang LOGISTICS_CONFIRMED (BR-T05)
+            // 3. Chủ bài đồng ý chốt lịch -> chuyển sang LOGISTICS_CONFIRMED (GN-03)
             Instant t3 = t2.plus(30, ChronoUnit.MINUTES);
             request.confirmLogistics(true, false, t3);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
@@ -674,7 +674,7 @@ class RequestStateMachineTest {
         }
 
         @Test
-        @DisplayName("Vòng đời 3: Tự động hoàn tất (autoConfirm) khi một bên im lặng quá 3 ngày (FR-87, BR-T06)")
+        @DisplayName("Vòng đời 3: Tự động hoàn tất (autoConfirm) khi một bên im lặng quá 3 ngày (GN-09)")
         void lifecycle_autoConfirmAfterSilence() {
             Request request = new Request(3L, 30L, null, "GIVE");
             request.select(Instant.now());

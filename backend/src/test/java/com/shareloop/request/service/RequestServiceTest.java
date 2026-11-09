@@ -128,7 +128,7 @@ class RequestServiceTest {
     }
 
     @Test
-    @DisplayName("Ném lỗi khi người gửi yêu cầu có 0 sao uy tín (BR-U05, FR-92)")
+    @DisplayName("Ném lỗi khi người gửi yêu cầu có 0 sao uy tín (YC-02, UT-04, KC-05)")
     void createRequest_whenTrustStarsZero_throwsBusinessException() {
         when(reputationService.canRequest(10L)).thenReturn(false);
 
@@ -139,7 +139,7 @@ class RequestServiceTest {
     }
 
     @Test
-    @DisplayName("Ném lỗi khi đã có 5 request PENDING cùng lúc (BR-U02)")
+    @DisplayName("Ném lỗi khi đã có 5 request PENDING cùng lúc (YC-03)")
     void createRequest_whenPendingLimitExceeded_throwsBusinessException() {
         when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
                 .thenReturn(5L);
@@ -151,7 +151,7 @@ class RequestServiceTest {
     }
 
     @Test
-    @DisplayName("Ném lỗi khi đã có request active cho cùng bài (BR-R02)")
+    @DisplayName("Ném lỗi khi đã có request active cho cùng bài (YC-03)")
     void createRequest_whenAlreadyExistsActiveRequest_throwsBusinessException() {
         when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
                 .thenReturn(1L);
@@ -165,7 +165,7 @@ class RequestServiceTest {
     }
 
     @Test
-    @DisplayName("Ném lỗi khi tự gửi yêu cầu cho bài của chính mình (BR-R01)")
+    @DisplayName("Ném lỗi khi tự gửi yêu cầu cho bài của chính mình (YC-01)")
     void createRequest_whenSelfOffer_throwsBusinessException() {
         when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
                 .thenReturn(0L);
@@ -414,7 +414,7 @@ class RequestServiceTest {
     }
 
     @Test
-    @DisplayName("Người gửi tự huỷ yêu cầu thành công khi còn PENDING (BR-R04)")
+    @DisplayName("Người gửi tự huỷ yêu cầu thành công khi còn PENDING (YC-05)")
     void cancelRequest_whenSuccess_cancelsAndReturnsResponse() {
         Request request = new Request(1L, 10L, null, "GIVE");
 
@@ -443,7 +443,7 @@ class RequestServiceTest {
     }
 
     @Test
-    @DisplayName("Ném lỗi REQUEST_INVALID_STATE_TRANSITION khi huỷ yêu cầu không còn ở trạng thái PENDING (BR-R04)")
+    @DisplayName("Ném lỗi REQUEST_INVALID_STATE_TRANSITION khi huỷ yêu cầu không còn ở trạng thái PENDING (YC-05)")
     void cancelRequest_whenNotPending_throwsInvalidStateTransition() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.transitionTo(com.shareloop.request.entity.RequestStatus.RESERVED);
@@ -456,8 +456,7 @@ class RequestServiceTest {
     }
 
     @Test
-    @DisplayName(
-            "Chủ bài chọn người nhận thành công: chuyển RESERVED, reject các request khác và giữ chỗ bài (FR-66, BR-D01)")
+    @DisplayName("Chủ bài chọn người nhận thành công: chuyển RESERVED, reject các request khác và giữ chỗ bài (YC-07)")
     void selectReceiver_whenSuccess_reservesRequestAndItemAndRejectsOthers() {
         Request selectedRequest = new Request(1L, 10L, null, "GIVE");
         org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
@@ -562,7 +561,7 @@ class RequestServiceTest {
     }
 
     @Test
-    @DisplayName("Chủ bài chọn người nhận: tự huỷ Request khác dùng cùng món đề nghị (FR-66, BR-S03)")
+    @DisplayName("Chủ bài chọn người nhận: tự huỷ Request khác dùng cùng món đề nghị (YC-07, YC-04)")
     void selectReceiver_whenSwapRequest_cancelsOtherRequestsWithSameOfferedItem() {
         Request selectedRequest = new Request(1L, 10L, 50L, "SWAP");
         org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
@@ -1698,7 +1697,7 @@ class RequestServiceTest {
 
     @Test
     @DisplayName(
-            "listByItem: Trả kèm TrustStars, hạng và tỉ lệ đúng mô tả lấy từ ReputationService (FR-65, Issue #110)")
+            "listByItem: Trả kèm TrustStars, hạng và tỉ lệ đúng mô tả lấy từ ReputationService (YC-06, Issue #110)")
     void listByItem_whenDonorCalls_returnsReceiverReputationInfo() {
         // given
         Request request = new Request(1L, 10L, null, "GIVE");

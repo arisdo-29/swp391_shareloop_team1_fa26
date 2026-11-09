@@ -116,7 +116,7 @@ public class RequestController {
     }
 
     /**
-     * Đề xuất hoặc cập nhật lịch hẹn giao nhận (FR-79, FR-80, BR-T01, BR-T02).
+     * Đề xuất hoặc cập nhật lịch hẹn giao nhận (GN-01, GN-02).
      */
     @Operation(summary = "Đề xuất hoặc cập nhật lịch hẹn giao nhận")
     @PostMapping("/api/v1/requests/{id}/schedule")
@@ -126,7 +126,7 @@ public class RequestController {
     }
 
     /**
-     * Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (FR-80, FR-81, BR-T03, BR-T05).
+     * Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (GN-02, GN-03).
      */
     @Operation(summary = "Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm")
     @PostMapping("/api/v1/requests/{id}/confirm-logistics")
@@ -138,7 +138,7 @@ public class RequestController {
     }
 
     /**
-     * Lấy thông tin liên lạc của đối tác khi giao dịch đã chốt lịch (FR-82, BR-T11).
+     * Lấy thông tin liên lạc của đối tác khi giao dịch đã chốt lịch (GN-04).
      */
     @Operation(summary = "Lấy thông tin liên lạc của đối tác khi giao dịch đã chốt lịch")
     @GetMapping("/api/v1/requests/{id}/contact")
@@ -147,7 +147,7 @@ public class RequestController {
     }
 
     /**
-     * Xác nhận đã giao / đã nhận đồ và trả lời đúng mô tả (FR-84, FR-85, BR-D02, BR-R05, UC-27).
+     * Xác nhận đã giao / đã nhận đồ và trả lời đúng mô tả (GN-06, GN-08, GN-07, UC-27).
      */
     @Operation(summary = "Xác nhận đã giao hoặc đã nhận đồ và trả lời đúng mô tả")
     @PostMapping("/api/v1/requests/{id}/confirm-handover")
@@ -171,7 +171,7 @@ public class RequestController {
     }
 
     /**
-     * Đính kèm ảnh hoặc video minh chứng vào yêu cầu giao dịch (FR-86, BR-T09, UC-28).
+     * Đính kèm ảnh hoặc video minh chứng vào yêu cầu giao dịch (GN-10, UC-28).
      */
     @Operation(summary = "Đính kèm ảnh hoặc video minh chứng giao nhận")
     @PostMapping("/api/v1/requests/{id}/media")
@@ -183,7 +183,7 @@ public class RequestController {
     }
 
     /**
-     * Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (FR-86, BR-T09).
+     * Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (GN-10).
      * Chỉ hai bên tham gia giao dịch mới có quyền xem.
      */
     @Operation(summary = "Lấy danh sách ảnh hoặc video minh chứng giao nhận (chỉ 2 bên tham gia)")

@@ -77,7 +77,7 @@ public class ListingFeeQueryService {
     }
 
     /**
-     * Danh sách bài đang giữ phí của một người (FR-15): bài SWAP chờ duyệt giữ phí đăng, bài đã duyệt chờ duyệt bản
+     * Danh sách bài đang giữ phí của một người (VI-02): bài SWAP chờ duyệt giữ phí đăng, bài đã duyệt chờ duyệt bản
      * sửa giữ phí sửa. Bài GIVE (giữ 0), bài đã duyệt xong hoặc bị từ chối không có trong danh sách.
      */
     public List<HeldFeeItem> findHeldFees(long userId) {

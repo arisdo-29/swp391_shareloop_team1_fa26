@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service phục vụ báo cáo tài chính và tra cứu lịch sử giao dịch người dùng cho Admin (FR-109, FR-110, FR-112).
+ * Service phục vụ báo cáo tài chính và tra cứu lịch sử giao dịch người dùng cho Admin (VI-09, AD-03).
  * Mọi số liệu và biến động Credit được ủy thác qua CreditService.
  */
 @Service
@@ -38,7 +38,7 @@ public class AdminFinanceService {
     }
 
     /**
-     * Danh sách người dùng thường (không gồm Admin) kèm số liệu Credit cơ bản để Admin tra cứu (FR-112). Tìm theo họ
+     * Danh sách người dùng thường (không gồm Admin) kèm số liệu Credit cơ bản để Admin tra cứu (AD-03). Tìm theo họ
      * tên, email hoặc số điện thoại. Danh sách người dùng do module user cung cấp, số dư và tổng đã nạp do wallet
      * ghép vào.
      */
@@ -68,7 +68,7 @@ public class AdminFinanceService {
     }
 
     /**
-     * Thông tin và số liệu Credit của một người dùng, cho màn hình chi tiết của Admin (FR-112).
+     * Thông tin và số liệu Credit của một người dùng, cho màn hình chi tiết của Admin (AD-03).
      *
      * @throws com.shareloop.common.exception.BusinessException USER_NOT_FOUND khi không có người dùng,
      *     WALLET_NOT_FOUND khi người dùng không có ví
@@ -91,7 +91,7 @@ public class AdminFinanceService {
     }
 
     /**
-     * Báo cáo tài chính ba sổ và đối chiếu TopUp (FR-109, FR-110, BR-P09).
+     * Báo cáo tài chính ba sổ và đối chiếu TopUp (VI-09).
      */
     @Transactional(readOnly = true)
     public FinanceSummaryResponse getReport(LocalDate from, LocalDate to) {
@@ -107,7 +107,7 @@ public class AdminFinanceService {
     }
 
     /**
-     * Tra cứu lịch sử ví Credit của một người dùng (FR-112).
+     * Tra cứu lịch sử ví Credit của một người dùng (AD-03).
      */
     @Transactional(readOnly = true)
     public PageResponse<WalletTransactionResponse> getUserHistory(

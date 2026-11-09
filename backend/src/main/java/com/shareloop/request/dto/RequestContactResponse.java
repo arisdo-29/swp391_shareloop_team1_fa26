@@ -1,7 +1,7 @@
 package com.shareloop.request.dto;
 
 /**
- * DTO phản hồi thông tin liên lạc của đối tác khi giao dịch đã chốt lịch (FR-82, BR-T11).
+ * DTO phản hồi thông tin liên lạc của đối tác khi giao dịch đã chốt lịch (GN-04).
  *
  * @param userId id người dùng đối tác
  * @param fullName họ tên hiển thị

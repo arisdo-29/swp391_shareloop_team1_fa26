@@ -1,7 +1,7 @@
 package com.shareloop.reputation.dto;
 
 /**
- * Interface projection hứng thông tin giao dịch cần thiết từ requests và items để xử lý uy tín (FR-97).
+ * Interface projection hứng thông tin giao dịch cần thiết từ requests và items để xử lý uy tín (UT-06).
  */
 public interface RequestParticipantProjection {
 

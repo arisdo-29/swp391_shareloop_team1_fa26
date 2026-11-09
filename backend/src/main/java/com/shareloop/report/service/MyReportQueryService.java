@@ -49,7 +49,7 @@ public class MyReportQueryService {
 
     /**
      * Các báo cáo bài đăng, người dùng và khiếu nại giao dịch tôi đã gửi, mới nhất lên trước, kèm trạng thái xử lý
-     * và ghi chú kết luận của Admin (FR-88, FR-89).
+     * và ghi chú kết luận của Admin (BC-01, BC-07).
      */
     // readOnly: chỉ đọc nên Hibernate không phải theo dõi thay đổi của các entity đã tải.
     @Transactional(readOnly = true)

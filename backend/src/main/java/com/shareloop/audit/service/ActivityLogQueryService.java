@@ -28,7 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Phần đọc nhật ký hành động cho Admin (FR-115, Issue #117). Tách khỏi ActivityLogService để tránh vòng phụ thuộc
+ * Phần đọc nhật ký hành động cho Admin (AD-05, TB-03, Issue #117). Tách khỏi ActivityLogService để tránh vòng phụ thuộc
  * ActivityLogService → UserService → ConfigService → ActivityLogService.
  */
 @Service

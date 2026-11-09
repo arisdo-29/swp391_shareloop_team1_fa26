@@ -25,7 +25,7 @@ public class ActivityLogService {
     }
 
     /**
-     * Chữ ký chính theo SRS FR-115 / Issue #99: type, actorId, targetType, targetId, data, reason.
+     * Chữ ký chính theo SRS AD-05, TB-03 / Issue #99: type, actorId, targetType, targetId, data, reason.
      */
     @Transactional(propagation = Propagation.REQUIRED)
     public void log(String type, Long actorId, String targetType, Long targetId, String data, String reason) {

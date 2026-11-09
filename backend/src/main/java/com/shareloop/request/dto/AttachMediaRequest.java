@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
 
 /**
- * DTO yêu cầu đính kèm ảnh/video minh chứng vào Request (FR-86, BR-T09, UC-28).
+ * DTO yêu cầu đính kèm ảnh/video minh chứng vào Request (GN-10, UC-28).
  *
  * @param mediaIds danh sách ID của các tệp media đã upload
  * @param stage giai đoạn đính kèm ('HANDOVER' hoặc 'DISPUTE', mặc định là 'HANDOVER')

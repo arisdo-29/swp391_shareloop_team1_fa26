@@ -4,7 +4,7 @@ import com.shareloop.user.entity.UserStatus;
 import java.time.Instant;
 
 /**
- * Thông tin một tài khoản trong nhóm cảnh báo cùng địa chỉ IP (FR-113).
+ * Thông tin một tài khoản trong nhóm cảnh báo cùng địa chỉ IP (AD-04).
  *
  * @param id id người dùng
  * @param fullName họ tên

@@ -76,7 +76,7 @@ public class PostFeeService {
     /**
      * Báo trước lượt sửa tới là miễn phí hay có phí (F07 bước 2; GET /items/{id}/edit-quote).
      *
-     * <p>Quy tắc (C14, C14b, BR-D07, R36), xét theo thứ tự: chưa từng duyệt (approved_at null) và đang giữ phí đăng
+     * <p>Quy tắc (C14, C14b, PH-04, BD-08, R36), xét theo thứ tự: chưa từng duyệt (approved_at null) và đang giữ phí đăng
      * thì miễn phí (NOT_YET_APPROVED); chưa từng duyệt và phí đăng đã nhả thì giữ lại phí đăng (REPOST_FEE): post_fee
      * với bài SWAP, 0 với bài GIVE; đã duyệt và đang có bản sửa chờ duyệt thì sửa đè miễn phí (PENDING_REVIEW_OVERWRITE); đã duyệt và
      * free_edit_used = false thì miễn phí một lần (FIRST_FREE_EDIT); còn lại có phí edit_fee (PAID_EDIT).
@@ -146,7 +146,7 @@ public class PostFeeService {
      * <p>Quy tắc: đang HELD thì sửa đè, không giữ thêm. Còn lại giữ {@code amount} của
      * báo giá: REPOST_FEE giữ loại POST; FIRST_FREE_EDIT và PAID_EDIT giữ loại EDIT (lượt miễn phí giữ 0 Credit, chỉ
      * để lúc duyệt biết mà bật free_edit_used). Phí 0 thì không đụng ví. Không bật free_edit_used ở đây: lượt chỉ tính
-     * khi bản sửa được duyệt (BR-D07), xem {@link #chargeHeldFee}.
+     * khi bản sửa được duyệt (PH-04, BD-08), xem {@link #chargeHeldFee}.
      *
      * <p>Transaction: REQUIRED, tham gia transaction sửa bài của ItemService. Khoá: dòng users của chủ bài TRƯỚC khi
      * đọc dữ liệu để tính báo giá, rồi dòng items. Hai lần gọi cùng lúc cho một bài xếp hàng ở dòng users; lần sau
@@ -196,7 +196,7 @@ public class PostFeeService {
      * <p>Quy tắc: đọc pending_fee và pending_fee_type của bài; pending_fee lớn hơn 0 thì gọi
      * {@code CreditService.chargeHeld} (bằng 0 thì không đụng ví, không ghi credit_ledger); fee_state = CHARGED. Loại
      * POST thì post_fee_paid = true khi có khoản phí đăng thực trả; chỉ lần duyệt đầu mới đặt expire_at = lúc duyệt + post_display_days ngày, hoặc
-     * post_display_days_gold ngày khi chủ bài từ hạng Vàng trở lên (BR-D03, FR-29, UC-40). Loại EDIT thì free_edit_used = true (lượt sửa chỉ tính khi được duyệt) và không đổi expire_at.
+     * post_display_days_gold ngày khi chủ bài từ hạng Vàng trở lên (BD-12, TD-01, UC-40). Loại EDIT thì free_edit_used = true (lượt sửa chỉ tính khi được duyệt) và không đổi expire_at.
      * pending_fee và pending_fee_type giữ nguyên sau khi trừ (lý do ở Javadoc lớp).
      *
      * <p>Transaction: REQUIRED, cùng transaction với ReviewService.approve. Khoá: dòng users của chủ bài (trong
@@ -294,7 +294,7 @@ public class PostFeeService {
         return new EditQuote(amount == 0, amount, reason);
     }
 
-    // BR-D03: từ hạng Vàng trở lên (GOLD, DIAMOND) hiển thị lâu hơn. Xét hạng lúc duyệt; hạng đổi sau đó không tính
+    // BD-12: từ hạng Vàng trở lên (GOLD, DIAMOND) hiển thị lâu hơn. Xét hạng lúc duyệt; hạng đổi sau đó không tính
     // lại expire_at. Package-private để unit test gọi thẳng, không phải dựng cả luồng trừ phí.
     int displayDaysAfterApproval(long donorId) {
         Rank rank = reputationService.getRank(donorId);

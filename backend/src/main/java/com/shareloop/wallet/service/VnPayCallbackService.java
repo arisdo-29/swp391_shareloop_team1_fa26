@@ -103,7 +103,7 @@ public class VnPayCallbackService {
     }
 
     // PaymentExpiryJob chỉ chạy mỗi 5 phút nên đơn quá hạn vẫn có thể còn PENDING; kiểm lại ở đây để không cộng nhầm
-    // (FR-18).
+    // (VI-06, TD-05).
     // Grace bù độ lệch đồng hồ giữa server và VNPAY.
     private boolean isPastDeadline(PaymentOrder order) {
         long expireMinutes = configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES);

@@ -23,7 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Test cảnh báo cặp giao dịch lặp (FR-113, BR-U08, Issue #148) với PostgreSQL thật: câu gom nhóm theo cặp, cửa sổ và
+ * Test cảnh báo cặp giao dịch lặp (AD-04, UT-08, Issue #148) với PostgreSQL thật: câu gom nhóm theo cặp, cửa sổ và
  * ngưỡng lấy từ cấu hình đã seed (hơn 5 giao dịch trong 90 ngày). Dữ liệu khác trong DB có thể sinh thêm cặp, nên
  * test chỉ xét các cặp của người dùng do chính test tạo.
  */

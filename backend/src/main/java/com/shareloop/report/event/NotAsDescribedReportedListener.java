@@ -5,7 +5,7 @@ import com.shareloop.request.event.NotAsDescribedReportedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-/** Mở report NOT_AS_DESCRIBED khi bên nhận báo không đúng mô tả (FR-85, BR-R05, D-04). */
+/** Mở report NOT_AS_DESCRIBED khi bên nhận báo không đúng mô tả (GN-07, D-04). */
 @Component
 public class NotAsDescribedReportedListener {
     private final ReportService reportService;

@@ -38,7 +38,7 @@ function accountStatusBadge(account: SharedIpAccount) {
   return <span className="inline-flex rounded-sm bg-success-soft px-2 py-0.5 text-2xs font-semibold text-success">Đang hoạt động</span>;
 }
 
-/** Cảnh báo bất thường cho Admin: các cặp người dùng giao dịch lặp và nhiều tài khoản cùng IP (FR-113, BR-U08). */
+/** Cảnh báo bất thường cho Admin: các cặp người dùng giao dịch lặp và nhiều tài khoản cùng IP (AD-04, UT-08). */
 export function AdminAnomalies() {
   const [report, setReport] = useState<AnomalyReportResponse | null>(null);
   const [loading, setLoading] = useState(true);

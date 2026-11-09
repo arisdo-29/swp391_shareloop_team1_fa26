@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller xử lý gửi, nhận tin nhắn và lấy thẻ sản phẩm ghim trong giao dịch (FR-68, FR-69, FR-70, BR-C02, BR-C03).
+ * Controller xử lý gửi, nhận tin nhắn và lấy thẻ sản phẩm ghim trong giao dịch (CH-01, CH-06, GN-05).
  */
 @Tag(name = "Chat", description = "Quản lý tin nhắn trao đổi trong giao dịch")
 @RestController
@@ -61,7 +61,7 @@ public class ChatController {
     }
 
     /**
-     * Lấy danh sách thẻ sản phẩm ghim ở đầu khung chat (FR-69, BR-C02).
+     * Lấy danh sách thẻ sản phẩm ghim ở đầu khung chat (CH-06).
      */
     @Operation(summary = "Lấy danh sách thẻ sản phẩm ghim ở đầu khung chat")
     @GetMapping({"/pinned-items", "/messages/pinned-items"})

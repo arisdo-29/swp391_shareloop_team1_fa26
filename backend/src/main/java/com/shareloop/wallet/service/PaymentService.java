@@ -75,7 +75,7 @@ public class PaymentService {
     }
 
     /**
-     * Tạo đơn nạp PENDING và trả địa chỉ thanh toán (FR-11, FR-12, BR-P02).
+     * Tạo đơn nạp PENDING và trả địa chỉ thanh toán (VI-03).
      *
      * <p>Quy tắc: số tiền phải là bội số của vnd_per_credit và quy ra ít nhất topup_min_credits Credit. Đơn lưu
      * lại vnd_per_credit tại thời điểm nạp để đối soát.
@@ -101,7 +101,7 @@ public class PaymentService {
     }
 
     /**
-     * Xác nhận thanh toán giả lập cho một đơn của chính mình rồi cộng Credit (FR-13, FR-14).
+     * Xác nhận thanh toán giả lập cho một đơn của chính mình rồi cộng Credit (VI-04, VI-07).
      *
      * <p>Quy tắc: đơn đã SUCCESS thì không cộng lại, vẫn trả SUCCESS cùng ví hiện tại (CreditService.topUp kiểm lại
      * sau khi khoá nên hai lời gọi cùng lúc cũng chỉ cộng một lần).

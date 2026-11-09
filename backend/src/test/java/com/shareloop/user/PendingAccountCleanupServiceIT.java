@@ -16,7 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Test job dọn tài khoản chưa xác thực (FR-117, BR-U06) trên PostgreSQL thật, với pending_account_ttl_hours = 24 seed
+ * Test job dọn tài khoản chưa xác thực (TK-07) trên PostgreSQL thật, với pending_account_ttl_hours = 24 seed
  * sẵn. Gọi thẳng service với mốc {@code now} tự chọn (profile test tắt app.jobs.enabled). DB dùng chung với test khác
  * nên chỉ kiểm các tài khoản do test này tạo.
  */

@@ -3,7 +3,7 @@ package com.shareloop.listingfee.dto;
 import java.time.Instant;
 
 /**
- * Kết quả một lần đẩy bài (C15, FR-36).
+ * Kết quả một lần đẩy bài (C15, HT-04).
  *
  * @param itemId bài vừa đẩy
  * @param boostedUntil thời điểm hết đẩy mới của bài

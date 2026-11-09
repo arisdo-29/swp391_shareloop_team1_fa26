@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Báo cáo ba sổ tài chính trong khoảng [from, to) (FR-109, FR-110, BR-P09; SRS mục 4.7).
+ * Báo cáo ba sổ tài chính trong khoảng [from, to) (VI-09; SRS mục 4.7).
  *
  * @param from mốc bắt đầu (gồm) đúng như người gọi truyền, null là không giới hạn
  * @param to mốc kết thúc (không gồm) đúng như người gọi truyền, null là không giới hạn

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller xem nhật ký hành động của Admin (FR-115, Issue #117).
+ * Controller xem nhật ký hành động của Admin (AD-05, TB-03, Issue #117).
  */
 @Tag(name = "admin-audit-controller", description = "Nhật ký hành động của Admin")
 @RestController

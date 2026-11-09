@@ -270,7 +270,7 @@ public class CreditService {
     }
 
     /**
-     * Chốt đơn nạp đã được cổng xác nhận và cộng Credit (F04 bước 3; FR-14, BR-P10).
+     * Chốt đơn nạp đã được cổng xác nhận và cộng Credit (F04 bước 3; VI-07, VI-04).
      *
      * <p>Quy tắc: đơn PENDING thì chuyển SUCCESS, {@code credit_balance += credits} của đơn,
      * {@code has_topped_up = true}, ghi credit_ledger TOP_UP với payment_order_id và balance_after. Đơn đã SUCCESS
@@ -325,7 +325,7 @@ public class CreditService {
     }
 
     /**
-     * Lịch sử ví của chính người dùng, mới nhất trước (UC-11, FR-16, BR-P09).
+     * Lịch sử ví của chính người dùng, mới nhất trước (UC-11, VI-09).
      *
      * <p>Quy tắc: chỉ các dòng credit_ledger (giao dịch làm đổi số dư thật); giữ chỗ và nhả giữ không ghi sổ cái
      * nên không có ở đây. Lọc theo khoảng [from, to); bỏ trống đầu nào thì không giới hạn đầu đó.
@@ -386,7 +386,7 @@ public class CreditService {
     }
 
     /**
-     * Báo cáo ba sổ tài chính toàn hệ thống trong khoảng [from, to) cho Admin (FR-109, FR-110, BR-P09): tiền mặt thực
+     * Báo cáo ba sổ tài chính toàn hệ thống trong khoảng [from, to) cho Admin (VI-09): tiền mặt thực
      * thu (đơn nạp SUCCESS theo paid_at), Credit cộng vào và Credit trừ ra tách theo type, và dòng đối chiếu tiền mặt
      * quy ra Credit với tổng TOP_UP. Giữ chỗ và nhả giữ không ghi sổ cái nên không có trong báo cáo.
      *
@@ -447,7 +447,7 @@ public class CreditService {
     }
 
     /**
-     * Ví của nhiều người dùng trong một lần truy vấn, dùng cho danh sách tra cứu của Admin (FR-112). Người dùng không
+     * Ví của nhiều người dùng trong một lần truy vấn, dùng cho danh sách tra cứu của Admin (AD-03). Người dùng không
      * có ví (không tồn tại hoặc đã xoá mềm) không có trong kết quả.
      *
      * <p>Transaction: read-only, không khoá dòng.
@@ -567,7 +567,7 @@ public class CreditService {
         return result;
     }
 
-    // BR-P09: tiền mặt thực thu quy ra Credit phải bằng tổng Credit TOP_UP; lệch là dấu hiệu cộng thiếu hoặc cộng thừa.
+    // VI-09: tiền mặt thực thu quy ra Credit phải bằng tổng Credit TOP_UP; lệch là dấu hiệu cộng thiếu hoặc cộng thừa.
     private TopUpReconciliation reconcileTopUp(long cashCredits, long topUpCredits) {
         long difference = cashCredits - topUpCredits;
         return new TopUpReconciliation(cashCredits, topUpCredits, difference, difference == 0);

@@ -3,7 +3,7 @@ package com.shareloop.reputation.dto;
 import java.time.Instant;
 
 /**
- * Một cặp người dùng giao dịch với nhau nhiều bất thường (FR-113, BR-U08).
+ * Một cặp người dùng giao dịch với nhau nhiều bất thường (AD-04, UT-08).
  *
  * @param userAId id nhỏ hơn trong cặp
  * @param userBId id lớn hơn trong cặp

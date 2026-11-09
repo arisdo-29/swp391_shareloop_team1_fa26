@@ -41,7 +41,7 @@ public class AuthService {
     private static final String TOKEN_TYPE = "Bearer";
     private static final long SECONDS_PER_MINUTE = 60;
     private static final String VIETNAM_COUNTRY_PREFIX = "+84";
-    // FR-10, C30: cửa sổ đếm tài khoản theo IP là 24 giờ, đã nằm trong chính tên khoá accounts_per_ip_24h.
+    // TK-05, C30: cửa sổ đếm tài khoản theo IP là 24 giờ, đã nằm trong chính tên khoá accounts_per_ip_24h.
     private static final long IP_LIMIT_WINDOW_HOURS = 24;
 
     private final UserRepository userRepository;
@@ -82,7 +82,7 @@ public class AuthService {
     }
 
     /**
-     * Đăng nhập bằng email và mật khẩu (FR-03, UC-02).
+     * Đăng nhập bằng email và mật khẩu (TK-03, TK-04, UC-02).
      *
      * <p>Quy tắc: sai email và sai mật khẩu cùng trả một lỗi để không dò được email; chỉ khi mật khẩu đúng mới
      * kiểm trạng thái tài khoản.
@@ -96,11 +96,11 @@ public class AuthService {
     }
 
     /**
-     * Đăng ký tài khoản và gửi OTP về email (FR-01, FR-02). Email còn PENDING_VERIFICATION thì cập nhật thông tin
+     * Đăng ký tài khoản và gửi OTP về email (TK-02, TK-06). Email còn PENDING_VERIFICATION thì cập nhật thông tin
      * rồi cấp OTP mới (vẫn theo cooldown).
      *
-     * <p>Chống tạo nhiều tài khoản (SRS 5.3): email dùng một lần bị chặn (FR-04); tạo tài khoản MỚI thì IP đăng ký
-     * phải có ít hơn accounts_per_ip_24h tài khoản trong 24 giờ qua (FR-10). Đăng ký lại email đang PENDING không tạo
+     * <p>Chống tạo nhiều tài khoản (SRS 5.3): email dùng một lần bị chặn (TK-02); tạo tài khoản MỚI thì IP đăng ký
+     * phải có ít hơn accounts_per_ip_24h tài khoản trong 24 giờ qua (TK-05). Đăng ký lại email đang PENDING không tạo
      * tài khoản mới nên không xét IP.
      *
      * @throws BusinessException AUTH_EMAIL_DOMAIN_NOT_ALLOWED, AUTH_TOO_MANY_ACCOUNTS_FROM_IP,
@@ -135,7 +135,7 @@ public class AuthService {
     }
 
     /**
-     * Xác thực OTP, kích hoạt tài khoản và trả JWT như đăng nhập (FR-02).
+     * Xác thực OTP, kích hoạt tài khoản và trả JWT như đăng nhập (TK-06).
      *
      * @throws BusinessException AUTH_OTP_INVALID, AUTH_OTP_EXPIRED, AUTH_OTP_TOO_MANY_ATTEMPTS,
      *     AUTH_PHONE_ALREADY_USED
@@ -154,7 +154,7 @@ public class AuthService {
     }
 
     /**
-     * Gửi lại OTP cho tài khoản đang chờ xác thực (FR-02). Email không có hoặc đã ACTIVE vẫn trả cùng nội dung nhưng
+     * Gửi lại OTP cho tài khoản đang chờ xác thực (TK-06). Email không có hoặc đã ACTIVE vẫn trả cùng nội dung nhưng
      * không gửi email, để không dò được danh sách email.
      *
      * @throws BusinessException AUTH_OTP_RESEND_TOO_SOON
@@ -170,7 +170,7 @@ public class AuthService {
     }
 
     /**
-     * Đổi mật khẩu cho người đang đăng nhập (FR-08, UC-04). Phải nhập đúng mật khẩu hiện tại; mật khẩu mới theo luật
+     * Đổi mật khẩu cho người đang đăng nhập (TK-10, UC-04). Phải nhập đúng mật khẩu hiện tại; mật khẩu mới theo luật
      * của đăng ký (kiểm ở DTO), khác mật khẩu cũ và được lưu dạng BCrypt.
      *
      * @throws BusinessException USER_NOT_FOUND, AUTH_CURRENT_PASSWORD_INCORRECT, AUTH_NEW_PASSWORD_SAME_AS_CURRENT
@@ -192,7 +192,7 @@ public class AuthService {
     }
 
     /**
-     * Quên mật khẩu: gửi OTP đặt lại mật khẩu về email (FR-09, UC-04). Luôn trả cùng một nội dung; chỉ tài khoản ACTIVE
+     * Quên mật khẩu: gửi OTP đặt lại mật khẩu về email (TK-09, UC-04). Luôn trả cùng một nội dung; chỉ tài khoản ACTIVE
      * và chưa bị khoá mới được gửi mã. Email không có, chưa xác thực, bị khoá hoặc còn trong cooldown thì không gửi mail
      * và không báo lỗi, để không dò được email nào đã đăng ký.
      */
@@ -207,7 +207,7 @@ public class AuthService {
     }
 
     /**
-     * Đặt lại mật khẩu bằng OTP đã gửi qua email (FR-09). Kiểm OTP trước, rồi mới kiểm mật khẩu mới khác mật khẩu cũ;
+     * Đặt lại mật khẩu bằng OTP đã gửi qua email (TK-09). Kiểm OTP trước, rồi mới kiểm mật khẩu mới khác mật khẩu cũ;
      * mật khẩu mới lưu dạng BCrypt và OTP bị xoá sau khi dùng. Email không có tài khoản hợp lệ báo như chưa có mã.
      *
      * @throws BusinessException AUTH_OTP_EXPIRED, AUTH_OTP_INVALID, AUTH_OTP_TOO_MANY_ATTEMPTS,

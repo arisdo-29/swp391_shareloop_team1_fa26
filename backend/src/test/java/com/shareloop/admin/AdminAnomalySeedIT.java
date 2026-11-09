@@ -17,7 +17,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 
 /**
- * Kiểm thử script seed dữ liệu demo cảnh báo bất thường: cặp giao dịch lặp (Q04, FR-113, BR-U08).
+ * Kiểm thử script seed dữ liệu demo cảnh báo bất thường: cặp giao dịch lặp (Q04, AD-04, UT-08).
  * Đảm bảo script db/dev-data/seed_anomaly_pairs.sql chạy thành công trên PostgreSQL thật
  * và sinh ra cảnh báo cặp giao dịch lặp với số giao dịch hoàn tất >= 6.
  */

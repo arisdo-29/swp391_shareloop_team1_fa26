@@ -1,4 +1,4 @@
-# Tên miền email dùng một lần bị chặn khi đăng ký (FR-04, issue #138).
+# Tên miền email dùng một lần bị chặn khi đăng ký (TK-02, issue #138).
 # Mỗi dòng một tên miền, viết thường; dòng trống và dòng bắt đầu bằng # bị bỏ qua.
 # Chỉ so khớp đúng tên miền sau @, không khớp tên miền con.
 # Sửa file này cần build lại ứng dụng; SRS dự kiến chuyển sang website_attributes nhóm DISPOSABLE_DOMAIN.

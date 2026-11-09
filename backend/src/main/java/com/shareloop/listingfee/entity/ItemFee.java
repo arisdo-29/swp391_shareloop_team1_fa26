@@ -130,7 +130,7 @@ public class ItemFee extends SliceAudit {
         if (pendingFeeType == ItemFeeType.POST && pendingFee > 0) {
             this.postFeePaid = true;
         }
-        // Lượt chỉ tính khi bản sửa được duyệt (BR-D07 (4)), nên bật ở đây chứ không bật lúc giữ phí;
+        // Lượt chỉ tính khi bản sửa được duyệt (PH-04, BD-08 (4)), nên bật ở đây chứ không bật lúc giữ phí;
         // bản sửa bị từ chối đi qua markReleased, không đụng cột này (R36).
         if (pendingFeeType == ItemFeeType.EDIT) {
             this.freeEditUsed = true;
@@ -148,13 +148,13 @@ public class ItemFee extends SliceAudit {
         this.expireAt = expireAt;
     }
 
-    /** Kéo dài thời hạn hiển thị khi chủ bài gia hạn (FR-28); người gọi đã tính mốc mới và đã thu phí. */
+    /** Kéo dài thời hạn hiển thị khi chủ bài gia hạn (HT-01); người gọi đã tính mốc mới và đã thu phí. */
     public void extendExpireAt(Instant newExpireAt) {
         this.expireAt = newExpireAt;
     }
 
     /**
-     * Kéo dài thời gian đẩy bài (C15, FR-36); người gọi đã tính mốc mới, đã kiểm giới hạn và đã thu phí. Mở đợt mới
+     * Kéo dài thời gian đẩy bài (C15, HT-04); người gọi đã tính mốc mới, đã kiểm giới hạn và đã thu phí. Mở đợt mới
      * thì boostStartedAt là lúc mua; mua thêm khi đang đẩy thì người gọi truyền lại mốc bắt đầu đợt cũ.
      */
     public void extendBoostedUntil(Instant newBoostedUntil, Instant boostStartedAt, Instant boostedAt) {

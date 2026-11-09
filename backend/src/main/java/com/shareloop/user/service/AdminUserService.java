@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service quản lý khoá và mở khoá tài khoản người dùng cho Admin (FR-107, Issue #116).
+ * Service quản lý khoá và mở khoá tài khoản người dùng cho Admin (KC-01, Issue #116).
  * Đảm bảo thực thi cập nhật trạng thái người dùng và ghi nhật ký hoạt động trong cùng một transaction.
  */
 @Service
@@ -47,7 +47,7 @@ public class AdminUserService {
     }
 
     /**
-     * Danh sách tài khoản cho Admin, có tìm kiếm và lọc theo trạng thái, vai trò (FR-107). Chỉ đọc nên không ghi
+     * Danh sách tài khoản cho Admin, có tìm kiếm và lọc theo trạng thái, vai trò (KC-01). Chỉ đọc nên không ghi
      * nhật ký.
      */
     public PageResponse<AdminUserSummary> list(
@@ -56,7 +56,7 @@ public class AdminUserService {
     }
 
     /**
-     * Khoá tài khoản người dùng và ghi nhận vào nhật ký hành động (FR-107).
+     * Khoá tài khoản người dùng và ghi nhận vào nhật ký hành động (KC-01).
      *
      * @param adminId ID quản trị viên thực hiện
      * @param userId ID người dùng cần khoá
@@ -83,7 +83,7 @@ public class AdminUserService {
     }
 
     /**
-     * Mở khoá tài khoản người dùng và ghi nhận vào nhật ký hành động (FR-107).
+     * Mở khoá tài khoản người dùng và ghi nhận vào nhật ký hành động (KC-01).
      *
      * @param adminId ID quản trị viên thực hiện
      * @param userId ID người dùng cần mở khoá

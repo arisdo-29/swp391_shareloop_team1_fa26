@@ -21,14 +21,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // Số điện thoại chỉ tính trùng với tài khoản ACTIVE (khớp unique index ux_users_phone_active).
     boolean existsByPhoneAndStatus(String phone, UserStatus status);
 
-    // Số tài khoản tạo từ một IP sau mốc since (FR-10). Tài khoản đã xoá mềm (ví dụ bị job dọn PENDING) không tính.
+    // Số tài khoản tạo từ một IP sau mốc since (TK-05). Tài khoản đã xoá mềm (ví dụ bị job dọn PENDING) không tính.
     long countByRegistrationIpAndCreatedAtAfter(String registrationIp, Instant since);
 
     // Kiểm tra tài khoản có cờ is_admin = true. Tài khoản xoá mềm bị @SQLRestriction loại sẵn.
     boolean existsByIdAndAdminTrue(Long id);
 
     /**
-     * Id các tài khoản đủ điều kiện để job dọn tài khoản chưa xác thực xoá mềm (FR-117, BR-U06): đúng status, tạo
+     * Id các tài khoản đủ điều kiện để job dọn tài khoản chưa xác thực xoá mềm (TK-07): đúng status, tạo
      * trước createdBefore, và không có OTP còn hạn tại now. Tài khoản đã xoá mềm bị @SQLRestriction loại sẵn.
      * Phân trang keyset (id > afterId, tăng dần) để một dòng lỗi không bị lấy lại mãi trong cùng một lượt.
      */
@@ -71,7 +71,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<Long> findAdminIds();
 
     /**
-     * Tìm các địa chỉ IP có từ minAccounts tài khoản trở lên đăng ký từ mốc since (FR-113).
+     * Tìm các địa chỉ IP có từ minAccounts tài khoản trở lên đăng ký từ mốc since (AD-04).
      * Chỉ tính tài khoản đã xác thực email (ACTIVE hoặc BANNED), bỏ qua PENDING_VERIFICATION và tài khoản đã xoá mềm.
      */
     @Query("select trim(u.registrationIp) from User u"

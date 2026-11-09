@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller xử lý kết luận khiếu nại, báo cáo vi phạm dành cho Admin (FR-91, FR-93, BR-A07, Issue #113).
+ * Controller xử lý kết luận khiếu nại, báo cáo vi phạm dành cho Admin (BC-12, UT-02, BC-06, Issue #113).
  */
 @Tag(name = "Admin Report", description = "Quản lý và giải quyết khiếu nại, báo cáo vi phạm")
 @RestController

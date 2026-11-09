@@ -21,7 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration test cho nghiệp vụ khoá và gửi ảnh trong chat (FR-75, BR-C05; Issue #111).
+ * Integration test cho nghiệp vụ khoá và gửi ảnh trong chat (CH-07; Issue #111).
  */
 class ChatServiceIT extends IntegrationTest {
 
@@ -70,7 +70,7 @@ class ChatServiceIT extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("Gửi ảnh trước LogisticsConfirmed bị ném lỗi CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN (FR-75, BR-C05)")
+    @DisplayName("Gửi ảnh trước LogisticsConfirmed bị ném lỗi CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN (CH-07)")
     void sendMessage_image_beforeLogisticsConfirmed_throwsException() {
         long donorId = insertUser();
         long receiverId = insertUser();
@@ -134,8 +134,7 @@ class ChatServiceIT extends IntegrationTest {
     }
 
     @Test
-    @DisplayName(
-            "Gửi thẻ bài APPROVED vào chat và lấy thẻ sản phẩm ghim đầu chat thành công (FR-69, FR-70, BR-C02, BR-C07)")
+    @DisplayName("Gửi thẻ bài APPROVED vào chat và lấy thẻ sản phẩm ghim đầu chat thành công (CH-06)")
     void sendMessage_itemCard_and_getPinnedItems_success() {
         long donorId = insertUser();
         long receiverId = insertUser();

@@ -26,7 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * Unit test cho việc ghi nhận vi phạm chat và ngưỡng cảnh báo Admin (FR-76, FR-78; BR-C04).
+ * Unit test cho việc ghi nhận vi phạm chat và ngưỡng cảnh báo Admin (CH-05, CH-03).
  */
 @ExtendWith(MockitoExtension.class)
 class ChatViolationRecorderTest {
@@ -106,7 +106,7 @@ class ChatViolationRecorderTest {
     }
 
     @Test
-    @DisplayName("Khi số vi phạm đạt ngưỡng (3 lần) thì gửi cảnh báo tới Admin qua NotificationService (BR-C04, FR-76)")
+    @DisplayName("Khi số vi phạm đạt ngưỡng (3 lần) thì gửi cảnh báo tới Admin qua NotificationService (CH-05)")
     void recordViolation_reachesThreshold_alertsAdmin() {
         mockSenderAndItem();
         when(configService.getInt(ConfigKey.CHAT_VIOLATION_ALERT)).thenReturn(3);

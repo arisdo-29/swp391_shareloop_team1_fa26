@@ -46,7 +46,7 @@ public class OtpService {
     }
 
     /**
-     * Cấp OTP mới cho user (FR-02, FR-09, BR-U06): lưu bản băm kèm mục đích, đặt hạn, phát sự kiện để gửi email sau
+     * Cấp OTP mới cho user (TK-06, TK-09): lưu bản băm kèm mục đích, đặt hạn, phát sự kiện để gửi email sau
      * commit. Mã mới thay mã cũ, kể cả mã của mục đích khác.
      *
      * @return mã thô 6 chữ số
@@ -67,7 +67,7 @@ public class OtpService {
     }
 
     /**
-     * Kiểm tra mã người dùng nhập (FR-02, FR-09). Đúng thì xoá các cột otp_*. Mã đang lưu thuộc mục đích khác thì coi
+     * Kiểm tra mã người dùng nhập (TK-06, TK-09). Đúng thì xoá các cột otp_*. Mã đang lưu thuộc mục đích khác thì coi
      * như không có mã, để mã đăng ký không dùng được cho đặt lại mật khẩu và ngược lại.
      *
      * @throws BusinessException AUTH_OTP_EXPIRED, AUTH_OTP_INVALID (kèm details.remainingAttempts),

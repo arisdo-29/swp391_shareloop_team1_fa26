@@ -115,7 +115,7 @@ public class Request extends BaseEntity {
     }
 
     /**
-     * Huỷ yêu cầu khi còn PENDING (BR-R04).
+     * Huỷ yêu cầu khi còn PENDING (YC-05).
      */
     public void cancel(String reason) {
         transitionTo(RequestStatus.CANCELLED);
@@ -123,7 +123,7 @@ public class Request extends BaseEntity {
     }
 
     /**
-     * Chủ bài chọn người nhận (FR-66, BR-D01). Chuyển sang RESERVED và ghi nhận reserved_at.
+     * Chủ bài chọn người nhận (YC-07). Chuyển sang RESERVED và ghi nhận reserved_at.
      */
     public void select(Instant now) {
         transitionTo(RequestStatus.RESERVED);
@@ -131,7 +131,7 @@ public class Request extends BaseEntity {
     }
 
     /**
-     * Tự động từ chối yêu cầu (BR-D01). Chuyển sang REJECTED.
+     * Tự động từ chối yêu cầu (YC-07). Chuyển sang REJECTED.
      */
     public void reject() {
         transitionTo(RequestStatus.REJECTED);
@@ -183,7 +183,7 @@ public class Request extends BaseEntity {
     }
 
     /**
-     * Đề xuất hoặc cập nhật lịch hẹn giao nhận (FR-79, FR-80, BR-T01, BR-T02).
+     * Đề xuất hoặc cập nhật lịch hẹn giao nhận (GN-01, GN-02).
      *
      * <p>Chuyển sang AWAITING_LOGISTICS nếu đang là RESERVED.
      * Bên đề xuất tự động được ghi nhận đồng ý lịch mới, bên còn lại phải xác nhận lại.
@@ -222,7 +222,7 @@ public class Request extends BaseEntity {
     }
 
     /**
-     * Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (FR-80, FR-81, BR-T03, BR-T05).
+     * Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (GN-02, GN-03).
      *
      * <p>Khi cả hai bên đều đã đồng ý lịch (và cam kết trách nhiệm nếu là SHIPPING),
      * Request chuyển sang LOGISTICS_CONFIRMED và ghi nhận contactRevealedAt.
@@ -266,10 +266,10 @@ public class Request extends BaseEntity {
     }
 
     /**
-     * Xác nhận giao nhận từ một bên (FR-84, FR-85, BR-D02, BR-R05, UC-27).
+     * Xác nhận giao nhận từ một bên (GN-06, GN-08, GN-07, UC-27).
      *
      * <p>Chỉ được gọi khi Request đang ở LOGISTICS_CONFIRMED hoặc AWAITING_HANDOVER.
-     * Khi 1 bên bấm, Request chuyển sang AWAITING_HANDOVER và tiếp tục chờ bên kia (BR-D02).
+     * Khi 1 bên bấm, Request chuyển sang AWAITING_HANDOVER và tiếp tục chờ bên kia (GN-08).
      * Khi cả 2 bên đều đã xác nhận, Request chuyển sang COMPLETED và ghi nhận completedAt.
      *
      * @param isDonor true nếu người xác nhận là chủ bài đăng (người giao), false nếu là người nhận
@@ -341,7 +341,7 @@ public class Request extends BaseEntity {
     }
 
     /**
-     * Tự động xác nhận giao nhận khi một bên im lặng quá hạn (FR-87, BR-T06).
+     * Tự động xác nhận giao nhận khi một bên im lặng quá hạn (GN-09).
      * Chuyển trạng thái từ AWAITING_HANDOVER sang COMPLETED.
      */
     public void autoConfirm(Instant now) {

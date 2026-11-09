@@ -36,8 +36,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service cửa ngõ của module reputation (SRS FR-91, FR-92, FR-94, FR-95, FR-97, FR-98, FR-99,
- * FR-100, BR-U01, BR-U05, BR-U08, BR-U09, BR-U11). Module khác thông báo sự kiện liên quan đến uy tín người dùng qua
+ * Service cửa ngõ của module reputation (SRS BC-12, UT-02, UT-04, KC-05, UT-05, UT-06, UT-08, UT-07,
+ * UT-06, UT-04, UT-08, UT-05, UT-07). Module khác thông báo sự kiện liên quan đến uy tín người dùng qua
  * service này.
  */
 @Service
@@ -167,7 +167,7 @@ public class ReputationService {
     }
 
     /**
-     * Tính hạng tín nhiệm theo tổng điểm dựa trên ngưỡng cấu hình từ ConfigService (FR-100, BR-U01, Issue #96).
+     * Tính hạng tín nhiệm theo tổng điểm dựa trên ngưỡng cấu hình từ ConfigService (UT-06, Issue #96).
      *
      * @param totalPoints tổng điểm tích luỹ
      * @return hạng tín nhiệm tương ứng (BRONZE, SILVER, GOLD, DIAMOND)
@@ -212,7 +212,7 @@ public class ReputationService {
     }
 
     /**
-     * Lấy thông tin uy tín tổng quan của người dùng (FR-65, Issue #110).
+     * Lấy thông tin uy tín tổng quan của người dùng (YC-06, Issue #110).
      * Bao gồm TrustStars (mặc định 5), hạng (mặc định BRONZE) và tỉ lệ đúng mô tả thang 0–1 (null khi dưới 3 giao
      * dịch đã được đánh giá).
      *
@@ -240,7 +240,7 @@ public class ReputationService {
     }
 
     /**
-     * Xem thông tin điểm, hạng, TrustStars, tỉ lệ đúng mô tả và lịch sử biến động điểm của chính người dùng (FR-101, Issue #128).
+     * Xem thông tin điểm, hạng, TrustStars, tỉ lệ đúng mô tả và lịch sử biến động điểm của chính người dùng (UC-05, Issue #128).
      *
      * @param userId ID người dùng đang đăng nhập
      * @param page số trang (bắt đầu từ 0)
@@ -286,7 +286,7 @@ public class ReputationService {
     }
 
     /**
-     * Tiếp nhận sự kiện giao dịch chuyển sang trạng thái COMPLETED (FR-97, FR-100, Issue #114).
+     * Tiếp nhận sự kiện giao dịch chuyển sang trạng thái COMPLETED (UT-06, Issue #114).
      *
      * <p>Cộng điểm cho hai bên theo cấu hình:
      * <ul>
@@ -297,10 +297,10 @@ public class ReputationService {
      *
      * <p>Chống cày điểm và hồi sao (Issue #150), ngưỡng đọc từ ConfigService:
      * <ul>
-     *   <li>BR-U08, FR-98: từ giao dịch hoàn tất thứ 3 giữa cùng một cặp (tính cả hai chiều) trong 90 ngày thì cộng 0
+     *   <li>UT-08: từ giao dịch hoàn tất thứ 3 giữa cùng một cặp (tính cả hai chiều) trong 90 ngày thì cộng 0
      *   điểm, vẫn ghi nhật ký POINTS kèm lý do.</li>
-     *   <li>BR-U11, FR-99: mỗi người tối đa 30 điểm mỗi ngày theo giờ Việt Nam; chạm trần thì chỉ cộng phần còn lại.</li>
-     *   <li>BR-U09, FR-94: mỗi giao dịch hoàn tất là một giao dịch sạch; đủ 10 giao dịch sạch liên tiếp mà chưa đủ 5 sao
+     *   <li>UT-07: mỗi người tối đa 30 điểm mỗi ngày theo giờ Việt Nam; chạm trần thì chỉ cộng phần còn lại.</li>
+     *   <li>UT-05: mỗi giao dịch hoàn tất là một giao dịch sạch; đủ 10 giao dịch sạch liên tiếp mà chưa đủ 5 sao
      *   thì hồi 1 sao và ghi nhật ký STAR_RESTORED.</li>
      * </ul>
      *
@@ -355,7 +355,7 @@ public class ReputationService {
         UserReputation donor = donorId.equals(firstId) ? firstUser : secondUser;
         UserReputation receiver = receiverId.equals(firstId) ? firstUser : secondUser;
 
-        // 5. BR-U08: đếm sau khi đã khoá hai người để giao dịch cùng cặp hoàn tất song song không cùng lọt điểm
+        // 5. UT-08: đếm sau khi đã khoá hai người để giao dịch cùng cặp hoàn tất song song không cùng lọt điểm
         int pairWindowDays = configInt(ConfigKey.REPUTATION_PAIR_WINDOW_DAYS);
         Instant now = clock.instant();
         long pairTransactionNo = userReputationRepository.countCompletedBetween(
@@ -453,12 +453,12 @@ public class ReputationService {
     }
 
     /**
-     * Trừ sao uy tín (TrustStars) của người dùng khi vi phạm (FR-91, FR-92, BR-U04, BR-U05, Issue #114).
+     * Trừ sao uy tín (TrustStars) của người dùng khi vi phạm (BC-12, UT-02, UT-04, KC-05, Issue #114).
      *
      * <p>Quy tắc:
      * <ul>
      *   <li>Trừ số lượng sao chỉ định, không để âm (tối thiểu 0 sao).</li>
-     *   <li>Vi phạm làm mất chuỗi giao dịch sạch: clean_streak về 0 (BR-U09, Issue #150).</li>
+     *   <li>Vi phạm làm mất chuỗi giao dịch sạch: clean_streak về 0 (UT-05, Issue #150).</li>
      *   <li>Ghi nhật ký hành động (activity_logs STARS).</li>
      *   <li>Trừ xong mà vẫn còn sao: báo người dùng số sao còn lại trước khi bị cấm (UT-03).</li>
      *   <li>Nếu số sao trước đó > 0 và sau khi trừ về đúng 0 sao: cấm tài khoản (users.status = BANNED, D-09) qua
@@ -556,7 +556,7 @@ public class ReputationService {
     }
 
     /**
-     * Kiểm tra người dùng có quyền đăng bài mới hay không (BR-U05).
+     * Kiểm tra người dùng có quyền đăng bài mới hay không (BD-07).
      * Bị vô hiệu hoá khi TrustStars = 0.
      *
      * @param userId ID người dùng
@@ -574,7 +574,7 @@ public class ReputationService {
     }
 
     /**
-     * Kiểm tra người dùng có quyền gửi yêu cầu giao dịch hay không (BR-U05).
+     * Kiểm tra người dùng có quyền gửi yêu cầu giao dịch hay không (YC-02).
      * Bị vô hiệu hoá khi TrustStars = 0.
      *
      * @param userId ID người dùng
@@ -592,7 +592,7 @@ public class ReputationService {
     }
 
     /**
-     * Cặp người dùng giao dịch với nhau nhiều bất thường, dùng cho trang cảnh báo của Admin (FR-113, BR-U08, Issue
+     * Cặp người dùng giao dịch với nhau nhiều bất thường, dùng cho trang cảnh báo của Admin (AD-04, UT-08, Issue
      * #148). Cùng cách đếm cặp với luật không cộng điểm ở {@link #onCompleted}: tính cả hai chiều, chỉ giao dịch
      * COMPLETED.
      *

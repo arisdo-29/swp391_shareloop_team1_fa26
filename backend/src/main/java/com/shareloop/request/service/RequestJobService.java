@@ -28,9 +28,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Service xử lý các tác vụ nền tự động theo vòng đời Request (Milestone R4, Issue #109):
  * <ul>
- *   <li>Huỷ tự động các yêu cầu PENDING quá hạn (FR-119, BR-R06).</li>
- *   <li>Huỷ tự động các yêu cầu RESERVED/AWAITING_LOGISTICS quá hạn chưa chốt lịch và đóng chat (FR-120, BR-T10, FR-77, BR-C03).</li>
- *   <li>Tự động hoàn tất (COMPLETED) khi một bên đã xác nhận giao nhận mà bên kia im lặng quá hạn (FR-87, BR-T06).</li>
+ *   <li>Huỷ tự động các yêu cầu PENDING quá hạn (YC-05, TD-02).</li>
+ *   <li>Huỷ tự động các yêu cầu RESERVED/AWAITING_LOGISTICS quá hạn chưa chốt lịch và đóng chat (GN-05, TD-02, CH-01).</li>
+ *   <li>Tự động hoàn tất (COMPLETED) khi một bên đã xác nhận giao nhận mà bên kia im lặng quá hạn (GN-09).</li>
  * </ul>
  */
 @Service
@@ -101,7 +101,7 @@ public class RequestJobService {
     }
 
     /**
-     * Tự động huỷ các yêu cầu PENDING quá hạn do chủ bài chưa chọn (FR-119, BR-R06).
+     * Tự động huỷ các yêu cầu PENDING quá hạn do chủ bài chưa chọn (YC-05, TD-02).
      *
      * @param now thời điểm hiện tại
      * @return số lượng yêu cầu đã huỷ
@@ -129,7 +129,7 @@ public class RequestJobService {
     }
 
     /**
-     * Tự động huỷ các yêu cầu RESERVED hoặc AWAITING_LOGISTICS quá 10 ngày chưa chốt lịch (FR-120, BR-T10, FR-77, BR-C03).
+     * Tự động huỷ các yêu cầu RESERVED hoặc AWAITING_LOGISTICS quá 10 ngày chưa chốt lịch (GN-05, TD-02, CH-01).
      * Đóng khung chat (do Request sang CANCELLED) và nhả bài đăng về APPROVED qua ItemService.release.
      *
      * @param now thời điểm hiện tại
@@ -156,7 +156,7 @@ public class RequestJobService {
     }
 
     /**
-     * Tự động xác nhận hoàn tất giao dịch (COMPLETED) khi một bên đã xác nhận mà bên kia im lặng quá 3 ngày (FR-87, BR-T06).
+     * Tự động xác nhận hoàn tất giao dịch (COMPLETED) khi một bên đã xác nhận mà bên kia im lặng quá 3 ngày (GN-09).
      *
      * @param now thời điểm hiện tại
      * @return số lượng yêu cầu đã tự động hoàn tất
@@ -227,7 +227,7 @@ public class RequestJobService {
             eventPublisher.publishEvent(new RequestNegotiationEndedEvent(request.getId()));
         }
 
-        // Nhả giữ chỗ bài đăng về APPROVED (BR-T10)
+        // Nhả giữ chỗ bài đăng về APPROVED (GN-05, TD-02)
         itemService.release(request.getItemId());
         if (request.getOfferedItemId() != null) {
             itemService.releaseIfReserved(request.getOfferedItemId());
@@ -273,7 +273,7 @@ public class RequestJobService {
             return false;
         }
 
-        // Chỉ tự hoàn tất khi giao dịch không có report (FR-87, BR-T06), ví dụ bên nhận đã báo không đúng mô tả
+        // Chỉ tự hoàn tất khi giao dịch không có report (GN-09), ví dụ bên nhận đã báo không đúng mô tả
         if (reportService != null && reportService.hasReportForRequest(request.getId())) {
             return false;
         }
@@ -281,13 +281,13 @@ public class RequestJobService {
         request.autoConfirm(now);
         requestRepository.save(request);
 
-        // Chuyển bài đăng sang TRADED (FR-87, #94)
+        // Chuyển bài đăng sang TRADED (GN-09, #94)
         itemService.markTraded(request.getItemId());
         if ("SWAP".equalsIgnoreCase(request.getType()) && request.getOfferedItemId() != null) {
             itemService.markTraded(request.getOfferedItemId());
         }
 
-        // Tích luỹ điểm uy tín nếu có module Reputation (FR-91, FR-94)
+        // Tích luỹ điểm uy tín nếu có module Reputation (BC-12, UT-02, UT-05)
         if (reputationService != null) {
             reputationService.onCompleted(request.getId());
         }

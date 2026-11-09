@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Hết hạn bài đăng (FR-29, BR-D03; TD-01): bài APPROVED có expire_at đã qua thì chuyển EXPIRED. Chỉ
+ * Hết hạn bài đăng (BD-12, TD-01; TD-01): bài APPROVED có expire_at đã qua thì chuyển EXPIRED. Chỉ
  * đọc cột expire_at của listingfee; đổi status bắt buộc qua {@code ItemService.markExpired}.
  *
  * <p>Người gọi: {@code ItemExpiryJob} (mỗi giờ) và test.
@@ -40,7 +40,7 @@ public class ItemExpiryService {
     }
 
     /**
-     * Chuyển mọi bài APPROVED có expire_at trước {@code now} sang EXPIRED (FR-29, BR-D03). Bài RESERVED,
+     * Chuyển mọi bài APPROVED có expire_at trước {@code now} sang EXPIRED (BD-12, TD-01). Bài RESERVED,
      * PENDING_REVIEW hay đã EXPIRED không được chọn; chạy lại nhiều lần không có tác dụng kép.
      *
      * <p>Transaction: hàm này không mở transaction; mỗi bài chạy trong một transaction riêng, nên một bài lỗi (ghi log

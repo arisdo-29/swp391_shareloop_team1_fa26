@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Đẩy bài (C15, FR-36, BR-P08; SRS 4.6, UC-16): trừ phí đẩy bài ngay và kéo dài boosted_until. Chỉ ghi các cột đẩy
+ * Đẩy bài (C15, HT-04; SRS 4.6, UC-16): trừ phí đẩy bài ngay và kéo dài boosted_until. Chỉ ghi các cột đẩy
  * bài (boosted_until, boost_started_at, last_boosted_at) qua entity lát cắt ItemFee; đổi tiền chỉ qua
  * {@code wallet.CreditService}. Việc xếp bài đang đẩy lên
  * đầu kết quả tìm kiếm thuộc module item/search, không làm ở đây.

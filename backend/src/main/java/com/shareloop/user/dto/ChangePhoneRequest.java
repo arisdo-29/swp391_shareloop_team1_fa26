@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 
 /**
- * Yêu cầu xác nhận OTP và đổi số điện thoại (FR-07, BR-U10).
+ * Yêu cầu xác nhận OTP và đổi số điện thoại (TK-11).
  *
  * @param newPhone số điện thoại mới, bắt buộc 10 chữ số
  * @param otp mã OTP 6 chữ số đã gửi về email

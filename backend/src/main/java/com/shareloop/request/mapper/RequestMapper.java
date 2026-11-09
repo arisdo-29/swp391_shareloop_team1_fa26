@@ -19,7 +19,7 @@ public final class RequestMapper {
         return toResponse(request, receiverName, null, null, null);
     }
 
-    // Map họ tên và thông tin uy tín (TrustStars, hạng, tỉ lệ đúng mô tả) (FR-65, Issue #110), chưa có tên món đồ.
+    // Map họ tên và thông tin uy tín (TrustStars, hạng, tỉ lệ đúng mô tả) (YC-06, Issue #110), chưa có tên món đồ.
     public static RequestResponse toResponse(
             Request request,
             String receiverName,

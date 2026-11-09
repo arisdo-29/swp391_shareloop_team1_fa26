@@ -204,7 +204,7 @@ public class ConfigService {
     }
 
     /**
-     * Điểm tối thiểu của ba hạng phải tăng dần: Bạc nhỏ hơn Vàng, Vàng nhỏ hơn Kim cương (BR-U01). Nếu không, một người
+     * Điểm tối thiểu của ba hạng phải tăng dần: Bạc nhỏ hơn Vàng, Vàng nhỏ hơn Kim cương (UT-06). Nếu không, một người
      * có thể được xếp hạng cao hơn trong khi điểm lại thấp hơn. Khoá khác thì bỏ qua.
      *
      * @throws BusinessException SETTING_RANK_THRESHOLD_ORDER khi giá trị mới làm thứ tự bị đảo hoặc bằng nhau

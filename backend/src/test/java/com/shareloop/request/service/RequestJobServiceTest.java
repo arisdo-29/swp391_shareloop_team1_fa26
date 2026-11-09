@@ -90,7 +90,7 @@ class RequestJobServiceTest {
     }
 
     @Nested
-    @DisplayName("expirePendingRequests (FR-119, BR-R06)")
+    @DisplayName("expirePendingRequests (YC-05, TD-02)")
     class ExpirePendingRequestsTests {
 
         @Test
@@ -170,7 +170,7 @@ class RequestJobServiceTest {
     }
 
     @Nested
-    @DisplayName("expireSilentReservedRequests (FR-120, BR-T10, FR-77, BR-C03)")
+    @DisplayName("expireSilentReservedRequests (GN-05, TD-02, CH-01)")
     class ExpireSilentReservedRequestsTests {
 
         @Test
@@ -275,7 +275,7 @@ class RequestJobServiceTest {
     }
 
     @Nested
-    @DisplayName("autoConfirmHandoverRequests (FR-87, BR-T06)")
+    @DisplayName("autoConfirmHandoverRequests (GN-09)")
     class AutoConfirmHandoverRequestsTests {
 
         @Test

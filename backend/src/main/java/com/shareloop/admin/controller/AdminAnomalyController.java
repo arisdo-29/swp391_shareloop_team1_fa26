@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller cảnh báo bất thường cho Admin (FR-113, UC-52, Issue #148).
+ * Controller cảnh báo bất thường cho Admin (AD-04, UC-52, Issue #148).
  * Chỉ Admin mới có quyền truy cập (/api/v1/admin/** được bảo vệ bởi SecurityConfig).
  */
 @Tag(

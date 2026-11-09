@@ -9,7 +9,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 /**
- * Danh sách tên miền email dùng một lần (FR-04), đọc một lần từ {@code disposable-email-domains.txt} khi ứng dụng khởi
+ * Danh sách tên miền email dùng một lần (TK-02), đọc một lần từ {@code disposable-email-domains.txt} khi ứng dụng khởi
  * động rồi giữ trong bộ nhớ. Bean Spring mặc định là singleton nên constructor chỉ chạy một lần.
  */
 @Component

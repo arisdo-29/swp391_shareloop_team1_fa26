@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Ghi nhận vi phạm chat và cảnh báo Admin khi số vi phạm trong một Request đạt ngưỡng (FR-76, FR-78; BR-C04).
+ * Ghi nhận vi phạm chat và cảnh báo Admin khi số vi phạm trong một Request đạt ngưỡng (CH-05, CH-03).
  *
  * <p>Chạy trong transaction {@link Propagation#REQUIRES_NEW} độc lập để đảm bảo dòng tin nhắn bị chặn
  * và thông báo tới Admin được lưu xuống cơ sở dữ liệu ngay cả khi luồng chính ném lỗi nghiệp vụ CHAT_MESSAGE_BLOCKED.
@@ -51,7 +51,7 @@ public class ChatViolationRecorder {
 
     /**
      * Ghi nhận một tin nhắn bị chặn vào cơ sở dữ liệu và gửi cảnh báo tới Admin nếu số vi phạm trong giao dịch
-     * đạt hoặc vượt ngưỡng cấu hình (FR-76, BR-C04).
+     * đạt hoặc vượt ngưỡng cấu hình (CH-05).
      *
      * @param requestId id của yêu cầu giao dịch
      * @param senderId  id người gửi vi phạm

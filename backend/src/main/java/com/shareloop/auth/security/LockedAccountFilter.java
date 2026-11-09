@@ -21,7 +21,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Chặn token đã cấp của tài khoản bị khoá (FR-107). JWT không lưu trạng thái nên token cấp trước khi khoá vẫn hợp lệ
+ * Chặn token đã cấp của tài khoản bị khoá (KC-01). JWT không lưu trạng thái nên token cấp trước khi khoá vẫn hợp lệ
  * tới lúc hết hạn; filter này kiểm lại tài khoản ở mỗi request có token và trả 403 AUTH_ACCOUNT_LOCKED (bị khoá)
  * hoặc AUTH_ACCOUNT_BANNED (bị cấm khi hết sao).
  *

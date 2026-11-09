@@ -181,7 +181,7 @@ public class ReportService {
     }
 
     /**
-     * BR-A03, FR-49: bài có đủ ngưỡng report đang chờ xử lý thì tự ẩn (is_active = false, giữ nguyên status). Hàng
+     * BC-02: bài có đủ ngưỡng report đang chờ xử lý thì tự ẩn (is_active = false, giữ nguyên status). Hàng
      * chờ là trang khiếu nại của Admin, nơi các report OPEN đã nằm sẵn, nên chỉ báo Admin một lần lúc bài vừa chạm
      * ngưỡng; report sau đó vào bài đã ẩn không báo lại.
      */
@@ -208,7 +208,7 @@ public class ReportService {
 
     /**
      * Bài có phải tiếp tục ẩn vì báo cáo không (L6): đã có báo cáo được chấp thuận (RESOLVED, ẩn vĩnh viễn) hoặc số báo
-     * cáo đang chờ vẫn đạt ngưỡng report_hide_threshold (BR-A03). Mở khoá tài khoản hỏi hàm này để không hiện lại bài
+     * cáo đang chờ vẫn đạt ngưỡng report_hide_threshold (BC-02). Mở khoá tài khoản hỏi hàm này để không hiện lại bài
      * vi phạm.
      */
     @Transactional(readOnly = true)
@@ -283,7 +283,7 @@ public class ReportService {
     }
 
     /**
-     * Mở khiếu nại giao dịch đã hoàn tất trong vòng 7 ngày (FR-89, BR-T08, Issue #112).
+     * Mở khiếu nại giao dịch đã hoàn tất trong vòng 24 giờ (BC-07, Issue #112).
      */
     @Transactional
     public DisputeResponse openDispute(Long userId, Long requestId, CreateDisputeRequest request) {
@@ -378,7 +378,7 @@ public class ReportService {
     }
 
     /**
-     * Tự mở report NOT_AS_DESCRIBED khi bên nhận chọn "Không đúng mô tả" lúc xác nhận giao nhận (FR-85, BR-R05).
+     * Tự mở report NOT_AS_DESCRIBED khi bên nhận chọn "Không đúng mô tả" lúc xác nhận giao nhận (GN-07).
      * Khác openDisputeReport ở chỗ không đòi giao dịch đã COMPLETED, vì bên nhận có thể trả lời trước khi bên cho xác
      * nhận. Mỗi bên nhận chỉ có một report cho mỗi giao dịch: gọi lại thì bỏ qua, không lỗi.
      *
@@ -405,7 +405,7 @@ public class ReportService {
                     ReportErrorCode.REPORT_TARGET_NOT_FOUND, "Không tìm thấy bài đăng của giao dịch.");
         }
 
-        // Bên cho là bên bị báo cáo và có thời hạn giải trình như khiếu nại thường (FR-90)
+        // Bên cho là bên bị báo cáo và có thời hạn giải trình như khiếu nại thường (BC-08)
         int responseHours = windowHours(ConfigKey.RESPONSE_WINDOW_HOURS);
         Instant responseDueAt = Instant.now(clock).plus(Duration.ofHours(responseHours));
         Report report = Report.createDispute(
@@ -431,7 +431,7 @@ public class ReportService {
 
     /**
      * Mở khiếu nại NO_SHOW khi một bên báo chưa nhận được hoặc chưa giao được đồ lúc giao dịch đã sang DISPUTED.
-     * Bên còn lại là bên bị báo cáo và có thời hạn giải trình như khiếu nại thường (FR-90). Mỗi người chỉ có một
+     * Bên còn lại là bên bị báo cáo và có thời hạn giải trình như khiếu nại thường (BC-08). Mỗi người chỉ có một
      * report cho mỗi giao dịch: gọi lại thì bỏ qua, không lỗi.
      *
      * @param reporterId bên báo sự cố, phải là chủ bài hoặc người nhận của giao dịch
@@ -487,7 +487,7 @@ public class ReportService {
         }
     }
 
-    /** Giao dịch đã có report nào chưa (FR-87: job tự hoàn tất chỉ xử lý giao dịch không có report). */
+    /** Giao dịch đã có report nào chưa (GN-09: job tự hoàn tất chỉ xử lý giao dịch không có report). */
     @Transactional(readOnly = true)
     public boolean hasReportForRequest(Long requestId) {
         return reportRepository.existsByRequestId(requestId);
@@ -529,7 +529,7 @@ public class ReportService {
     }
 
     /**
-     * Bên bị khiếu nại gửi giải trình kèm bằng chứng trong vòng 3 ngày (FR-90, BR-T08, Issue #112).
+     * Bên bị khiếu nại gửi giải trình kèm bằng chứng trong vòng 48 giờ (BC-08, Issue #112).
      */
     @Transactional
     public void respondDispute(Long userId, Long disputeId, DisputeResponseRequest request) {
@@ -562,7 +562,7 @@ public class ReportService {
             throw new BusinessException(ReportErrorCode.DISPUTE_ALREADY_RESPONDED);
         }
 
-        // Quá hạn giải trình 3 ngày
+        // Quá hạn giải trình 48 giờ
         if (dispute.getResponseDueAt() != null && Instant.now(clock).isAfter(dispute.getResponseDueAt())) {
             throw new BusinessException(ReportErrorCode.DISPUTE_RESPONSE_WINDOW_EXPIRED);
         }
@@ -662,7 +662,7 @@ public class ReportService {
     }
 
     /**
-     * Admin kết luận khiếu nại (FR-91, FR-93, BR-U04, BR-A07, Issue #113).
+     * Admin kết luận khiếu nại (BC-12, UT-02, BC-06, Issue #113).
      *
      * <p>Báo cáo bài (D-07): bác bỏ thì mở lại bài đang tạm ẩn nếu không còn báo cáo nào chờ (BC-04); chấp thuận thì đóng
      * các báo cáo đang chờ khác của bài, chỉ trừ 1 sao (BC-05).
@@ -729,13 +729,13 @@ public class ReportService {
         } else if (decision == ReportDecision.UPHOLD) {
             Long violatorId = resolveViolator(report);
 
-            // BR-U04: Trừ 1 sao uy tín
+            // UT-02: Trừ 1 sao uy tín
             if (violatorId != null && reputationService != null) {
                 reputationService.deductStar(
                         violatorId, 1, note != null ? note : "Bị kết luận vi phạm theo báo cáo" + about);
             }
 
-            // BR-A07: Nếu lý do thuộc nhóm nghiêm trọng, rà soát ẩn toàn bộ bài đăng khác của người vi phạm
+            // BC-06: Nếu lý do thuộc nhóm nghiêm trọng, rà soát ẩn toàn bộ bài đăng khác của người vi phạm
             boolean serious = isSeriousReason(report.getReason());
             if (serious && violatorId != null && itemService != null) {
                 itemService.hideAllOfUser(violatorId);

@@ -46,32 +46,32 @@ class RequestStatusTest {
 
     static Stream<Arguments> provideValidTransitions() {
         return Stream.of(
-                Arguments.of(RequestStatus.PENDING, RequestStatus.RESERVED, "Chủ bài chọn người nhận (FR-66, BR-D01)"),
-                Arguments.of(RequestStatus.PENDING, RequestStatus.REJECTED, "Chủ bài từ chối/chọn người khác (BR-D01)"),
+                Arguments.of(RequestStatus.PENDING, RequestStatus.RESERVED, "Chủ bài chọn người nhận (YC-07)"),
+                Arguments.of(RequestStatus.PENDING, RequestStatus.REJECTED, "Chủ bài từ chối/chọn người khác (YC-07)"),
                 Arguments.of(
                         RequestStatus.PENDING,
                         RequestStatus.CANCELLED,
-                        "Người gửi tự huỷ hoặc job huỷ treo sau 3 ngày (BR-R04, FR-119, BR-R06)"),
+                        "Người gửi tự huỷ hoặc job huỷ treo sau 3 ngày (YC-05, TD-02)"),
                 Arguments.of(
                         RequestStatus.RESERVED,
                         RequestStatus.AWAITING_LOGISTICS,
-                        "Đề xuất lịch hẹn giao nhận (FR-79, FR-80, BR-T01, BR-T02)"),
+                        "Đề xuất lịch hẹn giao nhận (GN-01, GN-02)"),
                 Arguments.of(
                         RequestStatus.RESERVED,
                         RequestStatus.CANCELLED,
-                        "Quá 10 ngày không chốt lịch (FR-120, BR-T10) hoặc huỷ giao dịch"),
+                        "Quá 10 ngày không chốt lịch (GN-05, TD-02) hoặc huỷ giao dịch"),
                 Arguments.of(
                         RequestStatus.AWAITING_LOGISTICS,
                         RequestStatus.LOGISTICS_CONFIRMED,
-                        "Cả hai bên chốt lịch hẹn (FR-80, FR-81, BR-T03, BR-T05)"),
+                        "Cả hai bên chốt lịch hẹn (GN-02, GN-03)"),
                 Arguments.of(
                         RequestStatus.AWAITING_LOGISTICS,
                         RequestStatus.CANCELLED,
-                        "Quá 10 ngày không chốt lịch (FR-120, BR-T10) hoặc huỷ giao dịch"),
+                        "Quá 10 ngày không chốt lịch (GN-05, TD-02) hoặc huỷ giao dịch"),
                 Arguments.of(
                         RequestStatus.LOGISTICS_CONFIRMED,
                         RequestStatus.AWAITING_HANDOVER,
-                        "Một bên xác nhận đã giao/nhận (FR-84, FR-85, BR-D02, UC-27)"),
+                        "Một bên xác nhận đã giao/nhận (GN-06, GN-08, GN-07, UC-27)"),
                 Arguments.of(
                         RequestStatus.LOGISTICS_CONFIRMED,
                         RequestStatus.CANCELLED,
@@ -79,11 +79,11 @@ class RequestStatusTest {
                 Arguments.of(
                         RequestStatus.AWAITING_HANDOVER,
                         RequestStatus.COMPLETED,
-                        "Cả hai bên xác nhận hoặc tự hoàn tất sau 3 ngày (FR-84, FR-87, BR-T06, BR-R03)"),
+                        "Cả hai bên xác nhận hoặc tự hoàn tất sau 3 ngày (GN-06, GN-08, GN-09)"),
                 Arguments.of(
                         RequestStatus.AWAITING_HANDOVER,
                         RequestStatus.DISPUTED,
-                        "Không đúng mô tả hoặc phát sinh tranh chấp giao nhận (FR-88, BR-T07, UC-28, F16)"),
+                        "Không đúng mô tả hoặc phát sinh tranh chấp giao nhận (GN-07, BC-09, UC-28, F16)"),
                 Arguments.of(
                         RequestStatus.AWAITING_HANDOVER,
                         RequestStatus.CANCELLED,
@@ -115,41 +115,39 @@ class RequestStatusTest {
     class ValidTransitionTests {
 
         @Test
-        @DisplayName("Mũi tên 1: PENDING -> RESERVED khi chủ bài chọn người nhận (FR-66, BR-D01)")
+        @DisplayName("Mũi tên 1: PENDING -> RESERVED khi chủ bài chọn người nhận (YC-07)")
         void transition_Pending_To_Reserved() {
             assertTrue(RequestStatus.canTransition(RequestStatus.PENDING, RequestStatus.RESERVED));
         }
 
         @Test
-        @DisplayName("Mũi tên 2: PENDING -> REJECTED khi chủ bài từ chối hoặc chọn người khác (BR-D01)")
+        @DisplayName("Mũi tên 2: PENDING -> REJECTED khi chủ bài từ chối hoặc chọn người khác (YC-07)")
         void transition_Pending_To_Rejected() {
             assertTrue(RequestStatus.canTransition(RequestStatus.PENDING, RequestStatus.REJECTED));
         }
 
         @Test
-        @DisplayName(
-                "Mũi tên 3: PENDING -> CANCELLED khi người gửi tự huỷ hoặc job huỷ treo quá 3 ngày (BR-R04, FR-119, BR-R06)")
+        @DisplayName("Mũi tên 3: PENDING -> CANCELLED khi người gửi tự huỷ hoặc job huỷ treo quá 3 ngày (YC-05, TD-02)")
         void transition_Pending_To_Cancelled() {
             assertTrue(RequestStatus.canTransition(RequestStatus.PENDING, RequestStatus.CANCELLED));
         }
 
         @Test
-        @DisplayName(
-                "Mũi tên 4: RESERVED -> AWAITING_LOGISTICS khi đề xuất lịch hẹn giao nhận (FR-79, FR-80, BR-T01, BR-T02)")
+        @DisplayName("Mũi tên 4: RESERVED -> AWAITING_LOGISTICS khi đề xuất lịch hẹn giao nhận (GN-01, GN-02)")
         void transition_Reserved_To_AwaitingLogistics() {
             assertTrue(RequestStatus.canTransition(RequestStatus.RESERVED, RequestStatus.AWAITING_LOGISTICS));
         }
 
         @Test
         @DisplayName(
-                "Mũi tên 5: RESERVED -> CANCELLED khi quá 10 ngày không chốt lịch (FR-120, BR-T10) hoặc huỷ giao dịch")
+                "Mũi tên 5: RESERVED -> CANCELLED khi quá 10 ngày không chốt lịch (GN-05, TD-02) hoặc huỷ giao dịch")
         void transition_Reserved_To_Cancelled() {
             assertTrue(RequestStatus.canTransition(RequestStatus.RESERVED, RequestStatus.CANCELLED));
         }
 
         @Test
         @DisplayName(
-                "Mũi tên 6: AWAITING_LOGISTICS -> LOGISTICS_CONFIRMED khi hai bên xác nhận lịch và cam kết (FR-80, FR-81, BR-T03, BR-T05)")
+                "Mũi tên 6: AWAITING_LOGISTICS -> LOGISTICS_CONFIRMED khi hai bên xác nhận lịch và cam kết (GN-02, GN-03)")
         void transition_AwaitingLogistics_To_LogisticsConfirmed() {
             assertTrue(
                     RequestStatus.canTransition(RequestStatus.AWAITING_LOGISTICS, RequestStatus.LOGISTICS_CONFIRMED));
@@ -157,14 +155,14 @@ class RequestStatusTest {
 
         @Test
         @DisplayName(
-                "Mũi tên 7: AWAITING_LOGISTICS -> CANCELLED khi quá 10 ngày không chốt lịch (FR-120, BR-T10) hoặc huỷ giao dịch")
+                "Mũi tên 7: AWAITING_LOGISTICS -> CANCELLED khi quá 10 ngày không chốt lịch (GN-05, TD-02) hoặc huỷ giao dịch")
         void transition_AwaitingLogistics_To_Cancelled() {
             assertTrue(RequestStatus.canTransition(RequestStatus.AWAITING_LOGISTICS, RequestStatus.CANCELLED));
         }
 
         @Test
         @DisplayName(
-                "Mũi tên 8: LOGISTICS_CONFIRMED -> AWAITING_HANDOVER khi một bên xác nhận đã giao/nhận (FR-84, FR-85, BR-D02, UC-27)")
+                "Mũi tên 8: LOGISTICS_CONFIRMED -> AWAITING_HANDOVER khi một bên xác nhận đã giao/nhận (GN-06, GN-08, GN-07, UC-27)")
         void transition_LogisticsConfirmed_To_AwaitingHandover() {
             assertTrue(RequestStatus.canTransition(RequestStatus.LOGISTICS_CONFIRMED, RequestStatus.AWAITING_HANDOVER));
         }
@@ -178,14 +176,14 @@ class RequestStatusTest {
 
         @Test
         @DisplayName(
-                "Mũi tên 10: AWAITING_HANDOVER -> COMPLETED khi cả 2 bên xác nhận hoặc tự hoàn tất sau 3 ngày (FR-84, FR-87, BR-T06, BR-R03)")
+                "Mũi tên 10: AWAITING_HANDOVER -> COMPLETED khi cả 2 bên xác nhận hoặc tự hoàn tất sau 3 ngày (GN-06, GN-08, GN-09)")
         void transition_AwaitingHandover_To_Completed() {
             assertTrue(RequestStatus.canTransition(RequestStatus.AWAITING_HANDOVER, RequestStatus.COMPLETED));
         }
 
         @Test
         @DisplayName(
-                "Mũi tên 11: AWAITING_HANDOVER -> DISPUTED khi đồ không đúng mô tả hoặc có khiếu nại giao nhận (FR-88, BR-T07, UC-28, F16)")
+                "Mũi tên 11: AWAITING_HANDOVER -> DISPUTED khi đồ không đúng mô tả hoặc có khiếu nại giao nhận (GN-07, BC-09, UC-28, F16)")
         void transition_AwaitingHandover_To_Disputed() {
             assertTrue(RequestStatus.canTransition(RequestStatus.AWAITING_HANDOVER, RequestStatus.DISPUTED));
         }

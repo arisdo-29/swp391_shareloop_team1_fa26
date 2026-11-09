@@ -29,7 +29,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Integration test đổi số điện thoại bằng OTP email (FR-07, BR-U10):
+ * Integration test đổi số điện thoại bằng OTP email (TK-11):
  * DB PostgreSQL thật (Testcontainers), email mock qua EmailSender, kiểm tra đầy đủ các ràng buộc:
  * OTP email, giãn cách 30 ngày, trùng số, giao dịch đang diễn ra.
  */

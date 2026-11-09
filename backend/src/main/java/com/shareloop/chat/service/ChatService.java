@@ -30,7 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service xử lý logic gửi tin nhắn, chia sẻ thẻ bài và lấy thẻ ghim ở đầu chat (FR-68, FR-69, FR-70, FR-72, FR-75, FR-76, FR-78).
+ * Service xử lý logic gửi tin nhắn, chia sẻ thẻ bài và lấy thẻ ghim ở đầu chat (CH-01, CH-06, CH-02, CH-07, CH-05, CH-03).
  */
 @Service
 public class ChatService {
@@ -114,7 +114,7 @@ public class ChatService {
     }
 
     /**
-     * Gửi tin nhắn mới (văn bản, ảnh hoặc thẻ bài đăng) trong khung chat (FR-68, FR-70, FR-72, FR-75, FR-76, FR-78).
+     * Gửi tin nhắn mới (văn bản, ảnh hoặc thẻ bài đăng) trong khung chat (CH-01, CH-06, CH-02, CH-07, CH-05, CH-03).
      *
      * @param requestId     id của yêu cầu giao dịch
      * @param currentUserId id người gửi hiện tại
@@ -149,7 +149,7 @@ public class ChatService {
             throw new BusinessException(ChatErrorCode.CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN);
         }
 
-        // Chặn gửi ảnh trước khi hai bên chốt lịch (FR-75, BR-C05)
+        // Chặn gửi ảnh trước khi hai bên chốt lịch (CH-07)
         if (hasMedia) {
             if (context.status() == RequestStatus.RESERVED || context.status() == RequestStatus.AWAITING_LOGISTICS) {
                 throw new BusinessException(ChatErrorCode.CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN);
@@ -158,7 +158,7 @@ public class ChatService {
             mediaService.attach(List.of(request.mediaId()), currentUserId);
         }
 
-        // Kiểm tra bài đăng khi chia sẻ thẻ bài (FR-70, BR-C07)
+        // Kiểm tra bài đăng khi chia sẻ thẻ bài (CH-06)
         ItemCardDto sharedCard = null;
         if (hasRefItem) {
             if (itemQueryService != null) {
@@ -201,7 +201,7 @@ public class ChatService {
     }
 
     /**
-     * Lấy danh sách tin nhắn theo chu kỳ (polling), hỗ trợ lọc tin mới hơn afterId (FR-68).
+     * Lấy danh sách tin nhắn theo chu kỳ (polling), hỗ trợ lọc tin mới hơn afterId (CH-01).
      * Tự động ghép thẻ bài đăng cho các tin nhắn dạng ITEM_CARD.
      * Chỉ trả về các tin nhắn hợp lệ (moderation = PASS).
      *
@@ -238,7 +238,7 @@ public class ChatService {
     }
 
     /**
-     * Lấy danh sách thẻ sản phẩm ghim ở đầu cuộc trò chuyện (FR-69, BR-C02).
+     * Lấy danh sách thẻ sản phẩm ghim ở đầu cuộc trò chuyện (CH-06).
      * Nếu là bài Trao đổi thì ghim cả hai món (bài chính và món đề nghị).
      *
      * @param requestId     id của yêu cầu giao dịch
@@ -428,7 +428,7 @@ public class ChatService {
         notificationService.notify(userId, type, title, body, "/requests/" + requestId);
     }
 
-    // Lọc thông tin liên hệ và từ khoá cấm mức BLOCK (FR-72, FR-74, FR-78; BR-C01, BR-A10, BR-C06). Dùng chung cho tin
+    // Lọc thông tin liên hệ và từ khoá cấm mức BLOCK (CH-02, CH-05, CH-03, KD-03). Dùng chung cho tin
     // văn bản và lời nhắn kèm đề nghị đổi món để hai nơi không lệch luật lọc.
     private void rejectIfContentViolates(RequestChatContext context, Long senderId, String content) {
         boolean isBeforeLogistics =

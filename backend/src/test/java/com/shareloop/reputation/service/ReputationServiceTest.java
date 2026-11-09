@@ -255,7 +255,7 @@ class ReputationServiceTest {
     }
 
     @Nested
-    @DisplayName("3. Hoàn tất giao dịch cộng điểm (onCompleted - FR-97, FR-100, Issue #114)")
+    @DisplayName("3. Hoàn tất giao dịch cộng điểm (onCompleted - UT-06, Issue #114)")
     class OnCompletedTests {
 
         @Test
@@ -408,7 +408,7 @@ class ReputationServiceTest {
     }
 
     @Nested
-    @DisplayName("4. Trừ sao và vô hiệu quyền đăng bài (deductStar - FR-91, FR-92, BR-U05)")
+    @DisplayName("4. Trừ sao và vô hiệu quyền đăng bài (deductStar - BC-12, UT-02, UT-04, KC-05)")
     class DeductStarTests {
 
         @Test
@@ -530,7 +530,7 @@ class ReputationServiceTest {
     }
 
     @Nested
-    @DisplayName("Tests cho getMyReputation (FR-101, Issue #128)")
+    @DisplayName("Tests cho getMyReputation (UC-05, Issue #128)")
     class GetMyReputationTests {
 
         @Test
@@ -608,7 +608,7 @@ class ReputationServiceTest {
     }
 
     @Nested
-    @DisplayName("5. Chống cày điểm, trần điểm mỗi ngày và hồi sao (FR-94, FR-98, FR-99, Issue #150)")
+    @DisplayName("5. Chống cày điểm, trần điểm mỗi ngày và hồi sao (UT-05, UT-08, UT-07, Issue #150)")
     class AntiFarmingTests {
 
         private static final long REQUEST_ID = 601L;
@@ -764,7 +764,7 @@ class ReputationServiceTest {
     }
 
     @Nested
-    @DisplayName("6. Cặp giao dịch lặp cho cảnh báo Admin (findRepeatedPairs - FR-113, Issue #148)")
+    @DisplayName("6. Cặp giao dịch lặp cho cảnh báo Admin (findRepeatedPairs - AD-04, Issue #148)")
     class RepeatedPairsTests {
 
         @Test
