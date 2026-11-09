@@ -1,4 +1,4 @@
--- Seed reputation points configuration from SRS Final Report 09/11 (UT-06).
+-- Seed reputation points configuration from SRS v10 FR-97.
 -- Give: donor +10, receiver +2. Swap: each +6.
 INSERT INTO website_attributes (attr_group, attr_key, attr_value)
 VALUES
