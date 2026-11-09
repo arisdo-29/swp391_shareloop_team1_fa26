@@ -23,6 +23,7 @@ import {
 import type { ApiError } from '../../services/http';
 import { formatDeadline } from '../../utils/request';
 import { disputeReasonLabels } from '../../utils/disputeErrors';
+import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
 const statusLabels: Record<ReportStatus, string> = {
   OPEN: 'Chờ xử lý',
@@ -187,6 +188,7 @@ export function AdminComplaints() {
   const [targetType, setTargetType] = useState<ReportTargetType | ''>('');
   const [page, setPage] = useState(0);
   const [reload, setReload] = useState(0);
+  useRealtimeRefresh(['NOTIFICATION'], () => setReload((value) => value + 1));
   const [list, setList] = useState<AdminReportPage | null>(null);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');

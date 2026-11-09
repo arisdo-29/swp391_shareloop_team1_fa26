@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type Dispatch } from 'react';
+import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 import { Link, useLocation } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
@@ -113,6 +114,10 @@ export function Credit() {
   const [heldFeesLoading, setHeldFeesLoading] = useState(true);
   const [heldFeesError, setHeldFeesError] = useState('');
   const [heldFeesReloadKey, setHeldFeesReloadKey] = useState(0);
+  useRealtimeRefresh(['WALLET'], () => {
+    setHistoryReloadKey((value) => value + 1);
+    setHeldFeesReloadKey((value) => value + 1);
+  });
   const [apiTopUpOrder, setApiTopUpOrder] = useState<TopUpOrderResponse | null>(null);
   const [topUpSubmitting, setTopUpSubmitting] = useState(false);
   const [topUpProcessing, setTopUpProcessing] = useState(false);

@@ -67,6 +67,16 @@ Lấy số lượng thông báo chưa đọc của tôi (dùng cho icon quả ch
 
 ---
 
+## Luồng cập nhật thời gian thực
+
+- `GET /api/v1/notifications/events`: SSE cần Bearer JWT, chỉ gửi tín hiệu của tài khoản hiện tại.
+- `GET /api/v1/items/events`: SSE công khai cho trang chủ và trang tìm đồ.
+- Sự kiện `update` có dạng `{"userId":12,"kind":"REQUEST","resourceId":101}`. `kind` gồm `READY`, `NOTIFICATION`, `REQUEST`, `MESSAGE`, `ITEM`, `MODERATION`, `CATALOG`, `WALLET`. `READY` báo đã kết nối; client đọc lại dữ liệu đang xem để bù sự kiện bị lỡ lúc ngắt kết nối.
+- SSE không trả dữ liệu nghiệp vụ. Client dùng API hiện có để đọc lại đúng đối tượng; quyền truy cập vẫn do API kiểm tra.
+- Backend phát sự kiện sau khi transaction thành công; PostgreSQL `LISTEN/NOTIFY` chuyển tín hiệu giữa các instance. Client tự kết nối lại khi luồng hết hạn hoặc ngắt.
+
+---
+
 ## DTO Models
 
 ### NotificationResponse

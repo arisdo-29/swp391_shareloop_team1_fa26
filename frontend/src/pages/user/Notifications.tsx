@@ -19,6 +19,7 @@ import {
   type NotificationCategory,
   type NotificationResponse,
 } from '../../services/notificationApi';
+import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
 type CategoryFilter = 'all' | Exclude<NotificationCategory, 'other'>;
 type ReadFilter = 'all' | 'unread' | 'read';
@@ -59,6 +60,7 @@ export function Notifications({ inAdmin = false }: { inAdmin?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  useRealtimeRefresh(['NOTIFICATION'], () => setReloadKey((value) => value + 1));
   const [busy, setBusy] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [category, setCategory] = useState<CategoryFilter>('all');

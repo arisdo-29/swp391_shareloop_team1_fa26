@@ -32,6 +32,7 @@ import com.shareloop.media.service.MediaService;
 import com.shareloop.moderation.ModerationResult;
 import com.shareloop.moderation.ModerationStatus;
 import com.shareloop.moderation.service.ContentModerationService;
+import com.shareloop.notification.service.NotificationService;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
@@ -81,6 +82,12 @@ public class ItemService {
     private final PostLimitProperties postLimitProperties;
     private final CategoryService categoryService;
     private final AreaService areaService;
+    private NotificationService notificationService;
+
+    @Autowired
+    void setNotificationService(NotificationService notificationService) {
+        this.notificationService = notificationService;
+    }
 
     public ItemService(
             ItemRepository itemRepository,
@@ -194,6 +201,7 @@ public class ItemService {
         if (moderation.status() == ModerationStatus.REVIEW) {
             saveReviewFlag(saved.getId(), moderation);
         }
+        publishItemUpdate(saved.getId(), donorId);
         return ItemMapper.toResponse(
                 saved,
                 mediaUrls(mediaIds),
@@ -295,6 +303,7 @@ public class ItemService {
         if (moderation.status() == ModerationStatus.REVIEW) {
             saveReviewFlag(itemId, moderation);
         }
+        publishItemUpdate(itemId, userId);
         return withHiddenState(toResponse(item, findDisplayWindow(itemId)), item);
     }
 
@@ -684,6 +693,7 @@ public class ItemService {
             throw new BusinessException(ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
         }
         item.markTraded();
+        publishItemUpdate(itemId, item.getDonorId());
     }
 
     /** Nhả giữ chỗ sau khi Request bị huỷ. */
@@ -714,16 +724,21 @@ public class ItemService {
         Item item = requireItem(itemId);
         item.convertOfferType(newOfferType);
         itemRepository.save(item);
+        publishItemUpdate(itemId, item.getDonorId());
     }
 
     @Transactional
     public void hide(long itemId) {
-        requireItem(itemId).deactivate();
+        Item item = requireItem(itemId);
+        item.deactivate();
+        publishItemUpdate(itemId, item.getDonorId());
     }
 
     @Transactional
     public void unhide(long itemId) {
-        requireItem(itemId).activate();
+        Item item = requireItem(itemId);
+        item.activate();
+        publishItemUpdate(itemId, item.getDonorId());
     }
 
     @Transactional
@@ -753,6 +768,7 @@ public class ItemService {
         }
         item.markDeleted();
         eventPublisher.publishEvent(new ItemRemovedEvent(itemId, item.getDonorId()));
+        publishItemUpdate(itemId, item.getDonorId());
     }
 
     /**
@@ -767,6 +783,7 @@ public class ItemService {
         for (Item item : items) {
             item.deactivate();
             hiddenIds.add(item.getId());
+            if (item.getId() != null) publishItemUpdate(item.getId(), userId);
         }
         return hiddenIds;
     }
@@ -776,12 +793,16 @@ public class ItemService {
     public void unhideItems(List<Long> itemIds) {
         for (Item item : itemRepository.findAllById(itemIds)) {
             item.activate();
+            if (item.getId() != null) publishItemUpdate(item.getId(), item.getDonorId());
         }
     }
 
     @Transactional
     public void hideAllOfUser(long userId) {
-        itemRepository.findByDonorIdAndIsActiveTrue(userId).forEach(Item::deactivate);
+        itemRepository.findByDonorIdAndIsActiveTrue(userId).forEach(item -> {
+            item.deactivate();
+            if (item.getId() != null) publishItemUpdate(item.getId(), userId);
+        });
     }
 
     @Transactional
@@ -805,6 +826,14 @@ public class ItemService {
             throw new BusinessException(ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
         }
         item.transitionTo(target);
+        publishItemUpdate(itemId, item.getDonorId());
+    }
+
+    private void publishItemUpdate(long itemId, long donorId) {
+        if (notificationService == null) return;
+        notificationService.publishRealtimeUpdate(donorId, "ITEM", itemId);
+        notificationService.publishCatalogUpdate(itemId);
+        notificationService.publishAdminUpdate("MODERATION", itemId);
     }
 
     private Item requireItem(long itemId) {

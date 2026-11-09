@@ -31,6 +31,7 @@ import { toBackendUserId, type RequestResponse } from '../../services/requestApi
 import { canCancelTransaction, requestStatusLabel } from '../../utils/request';
 import { requestConversationPath } from '../../utils/chatMessages';
 import { useTransactionDetail } from './useTransactionDetail';
+import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
 type OpenDialog = 'cancel' | 'issue' | 'dispute' | 'report' | null;
 
@@ -67,6 +68,9 @@ function TransactionProgressView({
     requestId,
     currentUserId,
   );
+  useRealtimeRefresh(['REQUEST', 'ITEM'], (update) => {
+    if (update.kind === 'READY' || update.resourceId === requestId || update.resourceId === request?.itemId || update.resourceId === request?.offeredItemId) reload();
+  });
   const [openDialog, setOpenDialog] = useState<OpenDialog>(null);
   const [notice, setNotice] = useState('');
   const [disputeReceipt, setDisputeReceipt] = useState<DisputeResponse | null>(null);

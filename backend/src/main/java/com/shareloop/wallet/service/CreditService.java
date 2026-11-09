@@ -2,6 +2,7 @@ package com.shareloop.wallet.service;
 
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
+import com.shareloop.notification.service.NotificationService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.wallet.WalletErrorCode;
@@ -39,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -81,6 +83,16 @@ public class CreditService {
     private final WalletMapper walletMapper;
     private final ConfigService configService;
     private final Clock clock;
+    private NotificationService notificationService;
+
+    @Autowired
+    void setNotificationService(NotificationService notificationService) {
+        this.notificationService = notificationService;
+    }
+
+    private void publishWalletUpdate(long userId) {
+        if (notificationService != null) notificationService.publishRealtimeUpdate(userId, "WALLET", null);
+    }
 
     public CreditService(
             WalletAccountRepository walletAccountRepository,
@@ -121,6 +133,7 @@ public class CreditService {
         WalletAccount wallet = lockWallet(userId);
         // Không gọi save: entity đang được quản lý trong transaction, Hibernate tự UPDATE khi commit (dirty checking).
         wallet.hold(amount);
+        publishWalletUpdate(userId);
     }
 
     /**
@@ -144,6 +157,7 @@ public class CreditService {
 
         WalletAccount wallet = lockWallet(userId);
         wallet.release(amount);
+        publishWalletUpdate(userId);
     }
 
     /**
@@ -170,6 +184,7 @@ public class CreditService {
         WalletAccount wallet = lockWallet(userId);
         wallet.chargeHeld(amount);
         writeDebitLedger(userId, amount, type, wallet.getCreditBalance(), itemId);
+        publishWalletUpdate(userId);
     }
 
     /**
@@ -197,6 +212,7 @@ public class CreditService {
         WalletAccount wallet = lockWallet(userId);
         wallet.spend(amount);
         writeDebitLedger(userId, amount, type, wallet.getCreditBalance(), itemId);
+        publishWalletUpdate(userId);
     }
 
     /**
@@ -219,6 +235,7 @@ public class CreditService {
 
         WalletAccount wallet = lockWallet(userId);
         wallet.spend(fee);
+        publishWalletUpdate(userId);
         return writeDebitLedger(userId, fee, CreditTxType.AI_SEARCH_FEE, wallet.getCreditBalance(), null);
     }
 
@@ -251,6 +268,7 @@ public class CreditService {
         wallet.refund(refundAmount);
         creditLedgerRepository.save(CreditLedgerEntry.refund(
                 userId, refundAmount, CreditTxType.AI_SEARCH_FEE, wallet.getCreditBalance(), note));
+        publishWalletUpdate(userId);
     }
 
     /**
@@ -321,6 +339,7 @@ public class CreditService {
         wallet.topUp(order.getCredits());
         creditLedgerRepository.save(
                 CreditLedgerEntry.topUp(userId, order.getCredits(), wallet.getCreditBalance(), order.getId()));
+        publishWalletUpdate(userId);
         return walletMapper.toResponse(wallet);
     }
 

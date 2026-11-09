@@ -5,6 +5,7 @@ import { toBackendUserId } from '../services/requestApi';
 import { walletApi, type WalletResponse } from '../services/walletApi';
 import type { ApiError } from '../services/http';
 import { WalletContext, type WalletContextValue } from './useWallet';
+import { useRealtimeRefresh } from '../utils/useRealtimeRefresh';
 
 interface WalletState {
   userId: number | null;
@@ -28,6 +29,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     requestRef.current = null;
     setReloadKey((key) => key + 1);
   }, []);
+  useRealtimeRefresh(['WALLET'], () => {
+    if (backendUserId) refresh();
+  });
   const replaceWallet = useCallback((wallet: WalletResponse) => {
     if (!backendUserId) return;
     requestRef.current = null;

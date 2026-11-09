@@ -197,6 +197,11 @@ public class ChatService {
         }
         Message saved = messageRepository.save(message);
 
+        if (notificationService != null) {
+            notificationService.publishRealtimeUpdate(context.donorId(), "MESSAGE", requestId);
+            notificationService.publishRealtimeUpdate(context.receiverId(), "MESSAGE", requestId);
+        }
+
         return MessageMapper.toResponse(saved, sharedCard);
     }
 
@@ -329,6 +334,10 @@ public class ChatService {
                 requestId,
                 "Chủ bài đã đồng ý trao đổi với " + itemTitleOf(offer.getRefItemId())
                         + ". Giao dịch chuyển sang Trao đổi."));
+        if (notificationService != null) {
+            notificationService.publishRealtimeUpdate(context.receiverId(), "MESSAGE", requestId);
+            notificationService.publishRealtimeUpdate(context.donorId(), "MESSAGE", requestId);
+        }
         return response;
     }
 
@@ -348,6 +357,10 @@ public class ChatService {
         Message saved = messageRepository.save(offer);
         String itemTitle = itemTitleOf(offer.getRefItemId());
         messageRepository.save(Message.system(requestId, "Chủ bài chưa đồng ý đưa " + itemTitle + " vào trao đổi."));
+        if (notificationService != null) {
+            notificationService.publishRealtimeUpdate(context.receiverId(), "MESSAGE", requestId);
+            notificationService.publishRealtimeUpdate(context.donorId(), "MESSAGE", requestId);
+        }
 
         notify(
                 context.receiverId(),

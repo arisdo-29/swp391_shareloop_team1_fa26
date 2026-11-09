@@ -11,6 +11,9 @@ import { useWallet } from '../app/useWallet';
 import { requestApi, toBackendUserId } from '../services/requestApi';
 import { isRequestUnread } from '../utils/request';
 import { loginPath } from '../utils/authRedirect';
+import { connectRealtime } from '../services/realtime';
+import { useRealtimeRefresh } from '../utils/useRealtimeRefresh';
+import { tokenStorage } from '../services/http';
 
 // Trang tài khoản dùng khung riêng (AuthLayout) nên không cần chân trang.
 const authPaths = new Set([
@@ -45,6 +48,7 @@ function AppShellContent() {
   const { pathname } = location;
   const navigate = useNavigate();
   const user = useAppSelector(selectCurrentUser);
+  const authenticatedUserId = user?.id;
   const { wallet } = useWallet();
   const isAdmin = user?.role === 'admin';
   const isHome = pathname === '/' && !isAdmin;
@@ -53,8 +57,20 @@ function AppShellContent() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
+  const [unreadReloadKey, setUnreadReloadKey] = useState(0);
   const [homeHeaderSolid, setHomeHeaderSolid] = useState(false);
   const headerActionsRef = useRef<HTMLDivElement>(null);
+  useRealtimeRefresh(['MESSAGE', 'REQUEST'], () => setUnreadReloadKey((value) => value + 1));
+
+  useEffect(() => {
+    if (!authenticatedUserId || !tokenStorage.get()) return;
+    return connectRealtime('/api/v1/notifications/events', true);
+  }, [authenticatedUserId]);
+
+  useEffect(() => {
+    if (authenticatedUserId || (pathname !== '/' && pathname !== '/browse' && !pathname.startsWith('/items/') && !pathname.startsWith('/product/'))) return;
+    return connectRealtime('/api/v1/items/events', false);
+  }, [authenticatedUserId, pathname]);
 
   useEffect(() => {
     if (!isHome) {
@@ -129,7 +145,7 @@ function AppShellContent() {
         window.clearInterval(intervalId);
       }
     };
-  }, [user, isAdmin, pathname]);
+  }, [user, isAdmin, pathname, unreadReloadKey]);
 
   useEffect(() => {
     setMobileOpen(false);
