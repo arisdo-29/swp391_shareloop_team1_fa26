@@ -21,6 +21,7 @@ import {
 import { ConversionTopUpNotice, OfferConversionWarning } from '../../components/OfferConversionNotice';
 import { offerConversion, requestOfferLabel, selectionQuestion } from '../../utils/requestOffer';
 import { DialogFrame } from '../../components/Dialog';
+import { ChangeOfferedItem } from '../../components/transaction/ChangeOfferedItem';
 import { toast } from '../../components/toast';
 import { boostStatusLines, formatDateTime } from '../../utils/boostMessages';
 import { userProfilePath } from '../../utils/chatMessages';
@@ -915,6 +916,13 @@ export function Activities() {
           itemRequests={filteredSentRequests}
           totalCount={apiSentRequests.length}
           items={myItems}
+          onOfferedItemUpdated={(updated) =>
+            setApiSentRequests((current) =>
+              current.map((entry) =>
+                entry.id === `api_req_${updated.id}` ? toFeItemRequest(updated, user.id) : entry,
+              ),
+            )
+          }
           cancelingRequestId={cancelingRequestId}
           onCancel={(requestId) => void cancelApiRequest(requestId)}
         />
@@ -1745,12 +1753,14 @@ function SentRequestList({
   items,
   cancelingRequestId,
   onCancel,
+  onOfferedItemUpdated,
 }: {
   itemRequests: ItemRequest[];
   totalCount: number;
   items: Item[];
   cancelingRequestId: string;
   onCancel: (requestId: string) => void;
+  onOfferedItemUpdated: (request: import('../../services/requestApi').RequestResponse) => void;
 }) {
   const currentUser = useAppSelector(selectCurrentUser);
   if (!itemRequests.length) {
@@ -1817,6 +1827,14 @@ function SentRequestList({
               </p>
               {offeredTitle ? (
                 <p className="text-xs text-text-muted">Món mang đổi: {offeredTitle}</p>
+              ) : null}
+              {request.status === 'PENDING' && request.offeredItemId && currentUser?.id === request.requesterId ? (
+                <ChangeOfferedItem
+                  requestId={Number(request.id.replace(/^api_req_/, ''))}
+                  currentUserId={toBackendUserId(currentUser.id)!}
+                  currentItemId={Number(request.offeredItemId)}
+                  onUpdated={onOfferedItemUpdated}
+                />
               ) : null}
             </div>
             <div className="col-span-2 flex flex-wrap gap-2 sm:col-span-1 sm:justify-end">

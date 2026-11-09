@@ -189,6 +189,14 @@ export const requestApi = {
     });
     return data;
   },
+  async changeOfferedItem(id: number, currentUserId: number, offeredItemId: number) {
+    const { data } = await http.post<RequestResponse>(
+      `/api/v1/requests/${id}/offered-item`,
+      { offeredItemId },
+      { params: { currentUserId } },
+    );
+    return data;
+  },
   async updateSchedule(id: number, currentUserId: number, body: ScheduleRequestBody) {
     const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/schedule`, body, {
       params: { currentUserId },

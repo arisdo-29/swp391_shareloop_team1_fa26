@@ -2,6 +2,7 @@ package com.shareloop.request.controller;
 
 import com.shareloop.common.security.CurrentUserId;
 import com.shareloop.request.dto.CancelTransactionRequest;
+import com.shareloop.request.dto.ChangeOfferedItemRequest;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.HandoverConfirmRequest;
@@ -94,6 +95,15 @@ public class RequestController {
     @PostMapping("/api/v1/requests/{id}/select")
     public RequestResponse select(@PathVariable long id, @CurrentUserId Long currentUserId) {
         return requestService.selectReceiver(id, currentUserId);
+    }
+
+    @Operation(summary = "Người gửi yêu cầu thay món đề nghị trước khi chốt lịch")
+    @PostMapping("/api/v1/requests/{id}/offered-item")
+    public RequestResponse changeOfferedItem(
+            @PathVariable long id,
+            @CurrentUserId Long currentUserId,
+            @Valid @RequestBody ChangeOfferedItemRequest request) {
+        return requestService.changeOfferedItem(id, currentUserId, request.offeredItemId());
     }
 
     /**
