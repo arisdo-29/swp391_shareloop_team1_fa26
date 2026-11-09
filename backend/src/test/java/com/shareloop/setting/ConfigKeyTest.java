@@ -45,5 +45,7 @@ class ConfigKeyTest {
         assertThat(ConfigKey.DAILY_POINTS_CAP.group()).isEqualTo(ConfigGroup.REPUTATION);
         assertThat(ConfigKey.REPUTATION_SILVER_MIN.group()).isEqualTo(ConfigGroup.REPUTATION);
         assertThat(ConfigKey.REPUTATION_PAIR_ALERT_THRESHOLD.group()).isEqualTo(ConfigGroup.REPUTATION);
+        assertThat(ConfigKey.IP_ALERT_WINDOW_DAYS.group()).isEqualTo(ConfigGroup.REPUTATION);
+        assertThat(ConfigKey.IP_ALERT_MIN_ACCOUNTS.group()).isEqualTo(ConfigGroup.REPUTATION);
     }
 }

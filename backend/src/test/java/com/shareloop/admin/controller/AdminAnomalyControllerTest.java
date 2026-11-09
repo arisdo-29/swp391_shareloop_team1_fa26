@@ -15,6 +15,9 @@ import com.shareloop.config.ClockConfig;
 import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
+import com.shareloop.user.dto.SharedIpAccount;
+import com.shareloop.user.dto.SharedIpGroup;
+import com.shareloop.user.entity.UserStatus;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -102,5 +105,37 @@ class AdminAnomalyControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.repeatedPairs").isArray())
                 .andExpect(jsonPath("$.repeatedPairs.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("GET /admin/anomalies: Admin xem được danh sách nhóm IP cảnh báo")
+    void anomalies_admin_returnsSharedIpGroups() throws Exception {
+        String adminToken = jwtService.issue(1L, true);
+        SharedIpAccount account = new SharedIpAccount(
+                10L,
+                "Trần Văn B",
+                "b@shareloop.local",
+                Instant.parse("2026-10-15T10:00:00Z"),
+                5,
+                UserStatus.ACTIVE,
+                false);
+        SharedIpGroup group = new SharedIpGroup("192.168.1.1", 1, List.of(account));
+
+        when(adminAnomalyService.getAnomalies())
+                .thenReturn(new AnomalyReportResponse(GENERATED_AT, 90, 5, List.of(), 30, 3, List.of(group)));
+
+        mockMvc.perform(get(URL).header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ipWindowDays").value(30))
+                .andExpect(jsonPath("$.ipMinAccounts").value(3))
+                .andExpect(jsonPath("$.sharedIpGroups.length()").value(1))
+                .andExpect(jsonPath("$.sharedIpGroups[0].ipAddress").value("192.168.1.1"))
+                .andExpect(jsonPath("$.sharedIpGroups[0].accountCount").value(1))
+                .andExpect(jsonPath("$.sharedIpGroups[0].accounts[0].id").value(10))
+                .andExpect(jsonPath("$.sharedIpGroups[0].accounts[0].fullName").value("Trần Văn B"))
+                .andExpect(
+                        jsonPath("$.sharedIpGroups[0].accounts[0].trustStars").value(5))
+                .andExpect(jsonPath("$.sharedIpGroups[0].accounts[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.sharedIpGroups[0].accounts[0].locked").value(false));
     }
 }

@@ -14,7 +14,10 @@ import com.shareloop.reputation.dto.RepeatedPair;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.dto.SharedIpAccount;
+import com.shareloop.user.dto.SharedIpGroup;
 import com.shareloop.user.dto.UserBrief;
+import com.shareloop.user.entity.UserStatus;
 import com.shareloop.user.service.UserService;
 import java.time.Clock;
 import java.time.Duration;
@@ -52,6 +55,8 @@ class AdminAnomalyServiceTest {
                 reputationService, userService, configService, Clock.fixed(NOW, ZoneOffset.UTC));
         when(configService.getInt(ConfigKey.REPUTATION_PAIR_WINDOW_DAYS)).thenReturn(90);
         when(configService.getInt(ConfigKey.REPUTATION_PAIR_ALERT_THRESHOLD)).thenReturn(5);
+        when(configService.getInt(ConfigKey.IP_ALERT_WINDOW_DAYS)).thenReturn(30);
+        when(configService.getInt(ConfigKey.IP_ALERT_MIN_ACCOUNTS)).thenReturn(3);
     }
 
     @Test
@@ -100,5 +105,27 @@ class AdminAnomalyServiceTest {
         assertThat(response.repeatedPairs()).isEmpty();
         assertThat(response.pairThreshold()).isEqualTo(5);
         verify(userService, never()).findBriefs(any());
+    }
+
+    @Test
+    @DisplayName("Cửa sổ IP và ngưỡng đọc từ ConfigService; trả danh sách nhóm IP cảnh báo")
+    void getAnomalies_sharedIpGroup_returnsIpGroups() {
+        when(reputationService.findRepeatedPairs(any(), anyInt())).thenReturn(List.of());
+
+        SharedIpAccount account1 = new SharedIpAccount(
+                1L, "Nguyễn Văn A", "a@test.com", NOW.minus(Duration.ofDays(2)), 5, UserStatus.ACTIVE, false);
+        SharedIpAccount account2 = new SharedIpAccount(
+                2L, "Trần Văn B", "b@test.com", NOW.minus(Duration.ofDays(3)), 4, UserStatus.ACTIVE, true);
+        SharedIpAccount account3 = new SharedIpAccount(
+                3L, "Lê Văn C", "c@test.com", NOW.minus(Duration.ofDays(4)), 5, UserStatus.BANNED, false);
+        SharedIpGroup group = new SharedIpGroup("192.168.1.100", 3, List.of(account1, account2, account3));
+
+        when(userService.findSharedIpGroups(NOW.minus(Duration.ofDays(30)), 3)).thenReturn(List.of(group));
+
+        AnomalyReportResponse response = service.getAnomalies();
+
+        assertThat(response.ipWindowDays()).isEqualTo(30);
+        assertThat(response.ipMinAccounts()).isEqualTo(3);
+        assertThat(response.sharedIpGroups()).containsExactly(group);
     }
 }

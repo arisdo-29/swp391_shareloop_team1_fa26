@@ -3,6 +3,7 @@ package com.shareloop.user.repository;
 import com.shareloop.user.entity.User;
 import com.shareloop.user.entity.UserStatus;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
@@ -68,4 +69,27 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     @Query("select u.id from User u where u.admin = true and u.isActive = true")
     List<Long> findAdminIds();
+
+    /**
+     * Tìm các địa chỉ IP có từ minAccounts tài khoản trở lên đăng ký từ mốc since (FR-113).
+     * Chỉ tính tài khoản đã xác thực email (ACTIVE hoặc BANNED), bỏ qua PENDING_VERIFICATION và tài khoản đã xoá mềm.
+     */
+    @Query("select trim(u.registrationIp) from User u"
+            + " where u.registrationIp is not null and trim(u.registrationIp) <> ''"
+            + " and u.status in (com.shareloop.user.entity.UserStatus.ACTIVE, com.shareloop.user.entity.UserStatus.BANNED)"
+            + " and u.createdAt >= :since"
+            + " group by trim(u.registrationIp)"
+            + " having count(u.id) >= :minAccounts"
+            + " order by count(u.id) desc, max(u.createdAt) desc")
+    List<String> findSharedRegistrationIps(@Param("since") Instant since, @Param("minAccounts") long minAccounts);
+
+    /**
+     * Lấy các tài khoản thuộc danh sách IP đăng ký từ mốc since, chỉ tính ACTIVE hoặc BANNED.
+     */
+    @Query("select u from User u"
+            + " where trim(u.registrationIp) in :ips"
+            + " and u.status in (com.shareloop.user.entity.UserStatus.ACTIVE, com.shareloop.user.entity.UserStatus.BANNED)"
+            + " and u.createdAt >= :since"
+            + " order by u.createdAt desc, u.id desc")
+    List<User> findUsersByRegistrationIps(@Param("ips") Collection<String> ips, @Param("since") Instant since);
 }

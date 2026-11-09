@@ -15,11 +15,30 @@ export interface RepeatedPair {
   lastCompletedAt: string;
 }
 
+export interface SharedIpAccount {
+  id: number;
+  fullName: string;
+  email: string;
+  registeredAt: string;
+  trustStars: number;
+  status: 'ACTIVE' | 'BANNED' | string;
+  locked: boolean;
+}
+
+export interface SharedIpGroup {
+  ipAddress: string;
+  accountCount: number;
+  accounts: SharedIpAccount[];
+}
+
 export interface AnomalyReportResponse {
   generatedAt: string;
   pairWindowDays: number;
   pairThreshold: number;
   repeatedPairs: RepeatedPair[];
+  ipWindowDays: number;
+  ipMinAccounts: number;
+  sharedIpGroups: SharedIpGroup[];
 }
 
 export const adminAnomalyApi = {

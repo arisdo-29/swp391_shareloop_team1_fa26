@@ -530,10 +530,9 @@ theo D-09 (xem `reputation.md` mục 1.5).
 Cảnh báo bất thường cho Admin (FR-113, UC-52, BR-U08, Issue #148). Kết quả tính trực tiếp mỗi lần gọi, không lưu bảng.
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
-- **Cặp giao dịch lặp:** hai người có **hơn** `reputation_pair_alert_threshold` (mặc định `5`) giao dịch `COMPLETED` với nhau trong `reputation_pair_window_days` ngày gần nhất (mặc định `90`), tính cả hai chiều cho/nhận. Giao dịch đã huỷ hoặc hoàn tất ngoài cửa sổ không tính. Cách đếm cặp giống luật không cộng điểm khi giao dịch hoàn tất (BR-U08, [reputation.md mục 1.4](reputation.md#14-void-oncompletedlong-requestid)).
-- **Sắp xếp:** nhiều giao dịch nhất lên trước, cùng số thì cặp có giao dịch gần nhất lên trước. `userA` là người có id nhỏ hơn.
-- **Chưa làm:** cảnh báo nhiều tài khoản cùng IP, đang chờ BE1 đồng ý thêm method vào `UserService` (module user). Khi làm sẽ thêm một mảng mới vào response (ngưỡng `accounts_per_ip_24h`, không giới hạn thời gian); các trường hiện có giữ nguyên.
-- **Thành công:** `200 OK`, trả về `AnomalyReportResponse`. Không có cảnh báo nào thì `repeatedPairs` là mảng rỗng.
+- **Cặp giao dịch lặp:** hai người có **hơn** `reputation_pair_alert_threshold` (mặc định `5`) giao dịch `COMPLETED` với nhau trong `reputation_pair_window_days` ngày gần nhất (mặc định `90`), tính cả hai chiều cho/nhận. Giao dịch đã huỷ hoặc hoàn tất ngoài cửa sổ không tính. Cách đếm cặp giống luật không cộng điểm khi giao dịch hoàn tất (BR-U08, [reputation.md mục 1.4](reputation.md#14-void-oncompletedlong-requestid)). Sắp xếp: nhiều giao dịch nhất lên trước, cùng số thì cặp có giao dịch gần nhất lên trước. `userA` là người có id nhỏ hơn.
+- **Nhiều tài khoản cùng IP:** địa chỉ IP có từ `ip_alert_min_accounts` tài khoản đăng ký trở lên (mặc định `3`) trong `ip_alert_window_days` ngày gần nhất (mặc định `30`). Chỉ xét tài khoản có trạng thái `ACTIVE` hoặc `BANNED`, chưa xoá mềm. Sắp xếp: IP có nhiều tài khoản nhất lên trước, cùng số tài khoản thì IP nào có tài khoản đăng ký gần nhất lên trước; trong mỗi IP sắp tài khoản mới đăng ký nhất lên trước.
+- **Thành công:** `200 OK`, trả về `AnomalyReportResponse`. Nếu không có cảnh báo nào thì `repeatedPairs` và `sharedIpGroups` là mảng rỗng.
 
 ```json
 {
@@ -547,6 +546,25 @@ Cảnh báo bất thường cho Admin (FR-113, UC-52, BR-U08, Issue #148). Kết
       "completedCount": 6,
       "lastCompletedAt": "2026-10-20T08:00:00Z"
     }
+  ],
+  "ipWindowDays": 30,
+  "ipMinAccounts": 3,
+  "sharedIpGroups": [
+    {
+      "ipAddress": "192.168.1.100",
+      "accountCount": 3,
+      "accounts": [
+        {
+          "id": 10,
+          "fullName": "Lê Văn Cường",
+          "email": "cuong@fpt.edu.vn",
+          "registeredAt": "2026-10-21T08:00:00Z",
+          "trustStars": 5,
+          "status": "ACTIVE",
+          "locked": false
+        }
+      ]
+    }
   ]
 }
 ```
@@ -559,6 +577,18 @@ Cảnh báo bất thường cho Admin (FR-113, UC-52, BR-U08, Issue #148). Kết
 | `repeatedPairs[].userA`, `userB` | object | `id`, `fullName`, `email` của hai người. Người dùng đã xoá mềm: `fullName = "Tài khoản đã xoá"`, `email = null` |
 | `repeatedPairs[].completedCount` | number | Số giao dịch `COMPLETED` giữa hai người trong cửa sổ |
 | `repeatedPairs[].lastCompletedAt` | string (ISO-8601) | Thời điểm hoàn tất gần nhất của cặp |
+| `ipWindowDays` | number | Số ngày của cửa sổ xét IP (`ip_alert_window_days`) |
+| `ipMinAccounts` | number | Ngưỡng số tài khoản tối thiểu trên cùng một IP (`ip_alert_min_accounts`) |
+| `sharedIpGroups[].ipAddress` | string | Địa chỉ IP đăng ký bị trùng lặp |
+| `sharedIpGroups[].accountCount` | number | Số tài khoản đăng ký từ IP này trong cửa sổ |
+| `sharedIpGroups[].accounts` | array | Danh sách các tài khoản thuộc IP này |
+| `sharedIpGroups[].accounts[].id` | number | ID người dùng |
+| `sharedIpGroups[].accounts[].fullName` | string | Họ tên người dùng |
+| `sharedIpGroups[].accounts[].email` | string \| null | Email người dùng |
+| `sharedIpGroups[].accounts[].registeredAt` | string (ISO-8601) | Thời điểm đăng ký tài khoản |
+| `sharedIpGroups[].accounts[].trustStars` | number | Số sao uy tín (1 đến 5 sao) |
+| `sharedIpGroups[].accounts[].status` | string | Trạng thái tài khoản (`ACTIVE`, `BANNED`) |
+| `sharedIpGroups[].accounts[].locked` | boolean | `true` nếu tài khoản đang bị khóa tạm thời (`is_active = false`) |
 
 - **Mã lỗi:**
 
