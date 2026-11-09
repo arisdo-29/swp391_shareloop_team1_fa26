@@ -145,14 +145,15 @@ class MediaServiceTest {
     }
 
     @Test
-    void temporaryGatewaysFailBeforeChangingMedia() {
-        assertThatThrownBy(() -> service.deactivate(1L))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("deactivate");
-        assertThatThrownBy(() -> service.remove(1L))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("remove");
-        verifyNoInteractions(repository, storage);
+    void detachReturnsAttachedMediaToUploaded() {
+        MediaFile owned = media(1L, 4L);
+        owned.attach();
+        when(repository.findForUpdate(1L)).thenReturn(Optional.of(owned));
+
+        service.detach(List.of(1L), 4L);
+
+        assertThat(owned.getStatus()).isEqualTo(MediaStatus.UPLOADED);
+        verifyNoInteractions(storage);
     }
 
     /** Mảng byte có chữ ký PNG ở đầu để qua bước nhận dạng định dạng, phần còn lại là số 0. */
