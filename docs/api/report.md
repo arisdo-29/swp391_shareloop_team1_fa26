@@ -118,7 +118,7 @@ Cả hai luồng dùng Clock được inject. Báo cáo `ITEM` lưu thêm ID ch�
 {"response": "Nội dung giải trình", "evidenceMediaIds": [15]}
 ```
 
-`response` bắt buộc, không toàn khoảng trắng, tối đa 2000 ký tự; `evidenceMediaIds`
+`response` bắt buộc, không toàn khoảng trắng, tối đa 2000 ký tự (khoảng 300–400 chữ, đủ để kể lại sự việc, mốc thời gian và giải thích ảnh bằng chứng, nhưng vẫn đủ ngắn để Admin đọc nhanh); `evidenceMediaIds`
 giống quy tắc bên gửi. Thành công `204 No Content`, lưu nội dung đã trim, ảnh và
 `respondedAt`, chuyển hồ sơ về `OPEN`. Khoá dòng cùng cơ chế kết luận, không nhận
 giải trình lần hai, sau hạn, hoặc khi hồ sơ không còn `AWAITING_RESPONSE`.
@@ -306,6 +306,7 @@ Bên bị khiếu nại gửi văn bản giải trình kèm bằng chứng đố
   - Bên bị khiếu nại chỉ được gửi giải trình đúng 1 lần (`409 DISPUTE_ALREADY_RESPONDED`).
   - Giải trình phải được gửi trong vòng 48 giờ (2 ngày) kể từ lúc khiếu nại được mở (`now <= responseDueAt`). Quá 48 giờ sẽ bị từ chối (`422 DISPUTE_RESPONSE_WINDOW_EXPIRED`).
   - Có thể đính kèm danh sách ID media làm bằng chứng. Các media file phải tồn tại và thuộc quyền sở hữu của người giải trình.
+  - Nội dung giải trình tối đa 2000 ký tự (khoảng 300–400 chữ, đủ để kể lại sự việc, mốc thời gian và giải thích ảnh bằng chứng, nhưng vẫn đủ ngắn để Admin đọc nhanh).
 
 - **Request Body:**
 
@@ -320,7 +321,7 @@ Bên bị khiếu nại gửi văn bản giải trình kèm bằng chứng đố
 
 - **Mã lỗi:**
   - `400 BAD_REQUEST`:
-    - `VALIDATION_FAILED`: `note` trống hoặc vượt quá 1000 ký tự.
+    - `VALIDATION_FAILED`: `note` trống hoặc vượt quá 2000 ký tự.
   - `401 UNAUTHORIZED`: Chưa đăng nhập.
   - `403 FORBIDDEN`:
     - `DISPUTE_NOT_RESPONDENT`: Người gọi không phải là bên bị khiếu nại.

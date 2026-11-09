@@ -200,4 +200,32 @@ class DisputeControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("DISPUTE_NOT_FOUND"));
     }
+
+    @Test
+    @DisplayName("Bên bị khiếu nại gửi giải trình 1500 ký tự hợp lệ trả về 200 OK")
+    void respondDispute_length1500_returns200() throws Exception {
+        String token = jwtService.issue(USER_ID, false);
+
+        doNothing().when(reportService).respondDispute(eq(USER_ID), eq(1L), any(DisputeResponseRequest.class));
+
+        String body = "{\"note\":\"" + "A".repeat(1500) + "\"}";
+        mockMvc.perform(post(DISPUTE_RESPONSE_URL)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Bên bị khiếu nại gửi giải trình 2001 ký tự vượt giới hạn trả về 400 Bad Request")
+    void respondDispute_length2001_returns400() throws Exception {
+        String token = jwtService.issue(USER_ID, false);
+
+        String body = "{\"note\":\"" + "A".repeat(2001) + "\"}";
+        mockMvc.perform(post(DISPUTE_RESPONSE_URL)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+    }
 }

@@ -79,7 +79,7 @@ describe('ReportResponse', () => {
 
     // then
     expect(screen.getByRole('heading', { name: 'Giải trình khiếu nại giao dịch' })).toBeTruthy();
-    expect(textbox.maxLength).toBe(1000);
+    expect(textbox.maxLength).toBe(2000);
     expect(await screen.findByText('Giải trình đã được gửi đến quản trị viên.')).toBeTruthy();
     expect(mediaApi.upload).toHaveBeenCalledExactlyOnceWith(kept);
     expect(respondDispute).toHaveBeenCalledExactlyOnceWith(81, {

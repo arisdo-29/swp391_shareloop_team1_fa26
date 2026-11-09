@@ -194,4 +194,30 @@ class ReportControllerTest {
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(content().bytes(bytes));
     }
+
+    @Test
+    @DisplayName("Gửi giải trình báo cáo 1500 ký tự hợp lệ trả về 204 No Content")
+    void respondReport_length1500_returns204() throws Exception {
+        String token = jwtService.issue(USER_ID, false);
+
+        String body = "{\"response\":\"" + "B".repeat(1500) + "\"}";
+        mockMvc.perform(post(URL + "/1/response")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("Gửi giải trình báo cáo 2001 ký tự vượt giới hạn trả về 400 Bad Request")
+    void respondReport_length2001_returns400() throws Exception {
+        String token = jwtService.issue(USER_ID, false);
+
+        String body = "{\"response\":\"" + "B".repeat(2001) + "\"}";
+        mockMvc.perform(post(URL + "/1/response")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+    }
 }

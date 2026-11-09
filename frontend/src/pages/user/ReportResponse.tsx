@@ -310,7 +310,7 @@ function ResponseForm({
   onSubmitted: () => void;
 }) {
   const isDispute = kind === 'dispute';
-  const maxLength = isDispute ? 1000 : 2000;
+  const maxLength = 2000;
   const [response, setResponse] = useState('');
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
