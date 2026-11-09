@@ -1,12 +1,12 @@
 # API module admin
 
-Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc), lỗi theo định dạng thống nhất của hệ thống.
+Quy ước chung: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc), lỗi theo định dạng thống nhất của hệ thống.
 
 ---
 
 ## 1. GET /api/v1/admin/activity-logs
 
-Xem nhật ký hành động trong hệ thống (FR-115, Issue #117). Chỉ dành cho quản trị viên (Admin). Sắp xếp mới nhất lên trước (`createdAt DESC`), hỗ trợ phân trang và lọc đa tiêu chí.
+Xem nhật ký hành động trong hệ thống (AD-05, Issue #117). Chỉ dành cho quản trị viên (Admin). Sắp xếp mới nhất lên trước (`createdAt DESC`), hỗ trợ phân trang và lọc đa tiêu chí.
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
 - **Query Parameters:**
@@ -158,7 +158,7 @@ Danh sách loại hành động kèm nhãn tiếng Việt, dùng để dựng b�
 
 ## 2. GET /api/v1/admin/finance/report
 
-Báo cáo tài chính ba sổ và đối chiếu TopUp (FR-109, FR-110, BR-P09, Issue #115). Chỉ dành cho Admin. Số liệu lấy trực tiếp qua `CreditService` (tiền mặt thu, Credit cộng vào, Credit trừ ra, đối chiếu với đơn nạp TopUp).
+Báo cáo tài chính ba sổ và đối chiếu TopUp (VI-09, Issue #115). Chỉ dành cho Admin. Số liệu lấy trực tiếp qua `CreditService` (tiền mặt thu, Credit cộng vào, Credit trừ ra, đối chiếu với đơn nạp TopUp).
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
 - **Query Parameters:**
@@ -216,7 +216,7 @@ Báo cáo tài chính ba sổ và đối chiếu TopUp (FR-109, FR-110, BR-P09, 
 
 ## 2.1. GET /api/v1/admin/finance/report.csv
 
-Xuất báo cáo tài chính ra file CSV (FR-111, Issue #149). Cùng số liệu và cùng cách hiểu `from`/`to` với [mục 2](#2-get-apiv1adminfinancereport); chỉ khác định dạng trả về. Chỉ dành cho Admin.
+Xuất báo cáo tài chính ra file CSV (AD-03, Issue #149). Cùng số liệu và cùng cách hiểu `from`/`to` với [mục 2](#2-get-apiv1adminfinancereport); chỉ khác định dạng trả về. Chỉ dành cho Admin.
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
 - **Query Parameters:** `from`, `to` giống [mục 2](#2-get-apiv1adminfinancereport).
@@ -281,7 +281,7 @@ Credit quy đổi từ tiền mặt,Credit nạp ghi sổ,Chênh lệch,Kết qu
 
 ## 3. GET /api/v1/admin/finance/users/{userId}/history
 
-Tra cứu lịch sử tài chính và biến động số dư Credit của một người dùng (FR-112, Issue #115). Chỉ dành cho Admin. Phân trang và sắp xếp mới nhất lên trước (`createdAt DESC, id DESC`).
+Tra cứu lịch sử tài chính và biến động số dư Credit của một người dùng (AD-03, Issue #115). Chỉ dành cho Admin. Phân trang và sắp xếp mới nhất lên trước (`createdAt DESC, id DESC`).
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
 - **Path Variable:** `userId` (ID người dùng cần tra cứu).
@@ -340,7 +340,7 @@ Tra cứu lịch sử tài chính và biến động số dư Credit của một
 
 ## 3.1. GET /api/v1/admin/finance/users
 
-Danh sách người dùng thường kèm số liệu Credit cơ bản để Admin tra cứu (FR-112). Không gồm tài khoản Admin. Người dùng mới nhất đứng trước.
+Danh sách người dùng thường kèm số liệu Credit cơ bản để Admin tra cứu (AD-03). Không gồm tài khoản Admin. Người dùng mới nhất đứng trước.
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin.
 - **Query Parameters:**
@@ -386,7 +386,7 @@ Danh sách người dùng thường kèm số liệu Credit cơ bản để Admi
 
 ## 3.2. GET /api/v1/admin/finance/users/{userId}/wallet
 
-Họ tên, email, số điện thoại và số liệu Credit của một người dùng, cho màn hình chi tiết của Admin (FR-112). Lịch sử giao dịch của người đó lấy ở [mục 3](#3-get-apiv1adminfinanceusersuseridhistory).
+Họ tên, email, số điện thoại và số liệu Credit của một người dùng, cho màn hình chi tiết của Admin (AD-03). Lịch sử giao dịch của người đó lấy ở [mục 3](#3-get-apiv1adminfinanceusersuseridhistory).
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin.
 - **Thành công:** `200 OK`, cùng dạng `AdminFinanceUserSummary` như [mục 3.1](#31-get-apiv1adminfinanceusers).
@@ -402,7 +402,7 @@ Họ tên, email, số điện thoại và số liệu Credit của một ngư�
 
 ## 3.3. GET /api/v1/admin/users
 
-Danh sách tài khoản cho trang Quản lý tài khoản của Admin (FR-107), có tìm kiếm, lọc và phân trang. Tài khoản mới nhất đứng trước. Dùng cùng với [khoá](#4-post-apiv1adminusersuseridlock) và [mở khoá](#5-post-apiv1adminusersuseridunlock).
+Danh sách tài khoản cho trang Quản lý tài khoản của Admin (KC-01), có tìm kiếm, lọc và phân trang. Tài khoản mới nhất đứng trước. Dùng cùng với [khoá](#4-post-apiv1adminusersuseridlock) và [mở khoá](#5-post-apiv1adminusersuseridunlock).
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin.
 - **Query Parameters:**
@@ -415,7 +415,7 @@ Danh sách tài khoản cho trang Quản lý tài khoản của Admin (FR-107), 
 | `page` | int | Không | `0` | Số trang, từ 0 |
 | `size` | int | Không | `20` | 1 đến 100 |
 
-`status` là trạng thái hiển thị. Cột `users.status` chỉ có `PENDING_VERIFICATION`, `ACTIVE`, `BANNED`, còn khoá tài khoản là `is_active = false` (ERD 7.11), nên `LOCKED` được suy ra. Khi một tài khoản thuộc nhiều nhóm thì ưu tiên theo thứ tự `BANNED`, `LOCKED`, `PENDING_VERIFICATION`, `ACTIVE`. Lọc `ACTIVE` hoặc `PENDING_VERIFICATION` chỉ lấy tài khoản chưa bị khoá.
+`status` là trạng thái hiển thị. Cột `users.status` chỉ có `PENDING_VERIFICATION`, `ACTIVE`, `BANNED`, còn khoá tài khoản là `is_active = false`, nên `LOCKED` được suy ra. Khi một tài khoản thuộc nhiều nhóm thì ưu tiên theo thứ tự `BANNED`, `LOCKED`, `PENDING_VERIFICATION`, `ACTIVE`. Lọc `ACTIVE` hoặc `PENDING_VERIFICATION` chỉ lấy tài khoản chưa bị khoá.
 
 - **Thành công:** `200 OK`, `PageResponse<AdminUserSummary>`.
 
@@ -450,7 +450,7 @@ Danh sách tài khoản cho trang Quản lý tài khoản của Admin (FR-107), 
 
 ## 4. POST /api/v1/admin/users/{userId}/lock
 
-Khoá tài khoản người dùng và ghi nhật ký hoạt động (FR-107, Issue #116). Chỉ dành cho quản trị viên (Admin). Bắt buộc cung cấp lý do khoá.
+Khoá tài khoản người dùng và ghi nhật ký hoạt động (KC-01, Issue #116). Chỉ dành cho quản trị viên (Admin). Bắt buộc cung cấp lý do khoá.
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
 - **Path Variable:** `userId` (ID người dùng cần khoá).
@@ -490,7 +490,7 @@ Khoá tài khoản người dùng và ghi nhật ký hoạt động (FR-107, Iss
 
 ## 5. POST /api/v1/admin/users/{userId}/unlock
 
-Mở khoá tài khoản người dùng và ghi nhật ký hoạt động (FR-107, Issue #116). Chỉ dành cho quản trị viên (Admin). Bắt buộc cung cấp lý do mở khoá.
+Mở khoá tài khoản người dùng và ghi nhật ký hoạt động (KC-01, Issue #116). Chỉ dành cho quản trị viên (Admin). Bắt buộc cung cấp lý do mở khoá.
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
 - **Path Variable:** `userId` (ID người dùng cần mở khoá).
@@ -527,10 +527,10 @@ theo D-09 (xem `reputation.md` mục 1.5).
 
 ## 7. GET /api/v1/admin/anomalies
 
-Cảnh báo bất thường cho Admin (FR-113, UC-52, BR-U08, Issue #148). Kết quả tính trực tiếp mỗi lần gọi, không lưu bảng.
+Cảnh báo bất thường cho Admin (AD-04, UC-52, UT-08, Issue #148). Kết quả tính trực tiếp mỗi lần gọi, không lưu bảng.
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
-- **Cặp giao dịch lặp:** hai người có **hơn** `reputation_pair_alert_threshold` (mặc định `5`) giao dịch `COMPLETED` với nhau trong `reputation_pair_window_days` ngày gần nhất (mặc định `90`), tính cả hai chiều cho/nhận. Giao dịch đã huỷ hoặc hoàn tất ngoài cửa sổ không tính. Cách đếm cặp giống luật không cộng điểm khi giao dịch hoàn tất (BR-U08, [reputation.md mục 1.4](reputation.md#14-void-oncompletedlong-requestid)). Sắp xếp: nhiều giao dịch nhất lên trước, cùng số thì cặp có giao dịch gần nhất lên trước. `userA` là người có id nhỏ hơn.
+- **Cặp giao dịch lặp:** hai người có **hơn** `reputation_pair_alert_threshold` (mặc định `5`) giao dịch `COMPLETED` với nhau trong `reputation_pair_window_days` ngày gần nhất (mặc định `90`), tính cả hai chiều cho/nhận. Giao dịch đã huỷ hoặc hoàn tất ngoài cửa sổ không tính. Cách đếm cặp giống luật không cộng điểm khi giao dịch hoàn tất (UT-08, [reputation.md mục 1.4](reputation.md#14-void-oncompletedlong-requestid)). Sắp xếp: nhiều giao dịch nhất lên trước, cùng số thì cặp có giao dịch gần nhất lên trước. `userA` là người có id nhỏ hơn.
 - **Nhiều tài khoản cùng IP:** địa chỉ IP có từ `ip_alert_min_accounts` tài khoản đăng ký trở lên (mặc định `3`) trong `ip_alert_window_days` ngày gần nhất (mặc định `30`). Chỉ xét tài khoản có trạng thái `ACTIVE` hoặc `BANNED`, chưa xoá mềm. Sắp xếp: IP có nhiều tài khoản nhất lên trước, cùng số tài khoản thì IP nào có tài khoản đăng ký gần nhất lên trước; trong mỗi IP sắp tài khoản mới đăng ký nhất lên trước.
 - **Thành công:** `200 OK`, trả về `AnomalyReportResponse`. Nếu không có cảnh báo nào thì `repeatedPairs` và `sharedIpGroups` là mảng rỗng.
 

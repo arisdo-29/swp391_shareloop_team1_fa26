@@ -1,6 +1,6 @@
 # API nạp Credit (module wallet, integration/payment)
 
-Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
+Quy ước chung: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất (xem `docs/api/wallet.md`).
 
 Người sở hữu: BE1. Chọn cổng qua `app.payment.provider=mock|vnpay|manual`. Mặc định `mock` ở dev/test, **`vnpay` ở profile prod** (deploy).
@@ -132,11 +132,11 @@ MOCK là cơ chế kiểm thử riêng; không dùng mock-confirm để xác nh�
 
 Quy đổi: `credits = amountVnd / vnd_per_credit` (mặc định 1.000đ = 1 Credit). Số tiền phải là bội số của
 `vnd_per_credit` và đạt tối thiểu `topup_min_credits` Credit (mặc định 10 Credit = 10.000đ). Cả hai đọc từ cấu hình
-Admin, FE không nên viết cứng (BR-P02).
+Admin, FE không nên viết cứng (VI-03).
 
 ## POST /api/v1/wallet/topup-orders
 
-Tạo đơn nạp PENDING (FR-11, FR-12).
+Tạo đơn nạp PENDING (VI-03).
 
 - Xác thực: **bắt buộc** Bearer Token. Chủ đơn lấy từ token.
 - Thành công: `201`, một `TopUpOrderResponse`.
@@ -160,7 +160,7 @@ Tạo đơn nạp PENDING (FR-11, FR-12).
 
 ## POST /api/v1/wallet/topup-orders/{orderCode}/mock-confirm
 
-Xác nhận thanh toán giả lập và cộng Credit (FR-13, FR-14) trong một transaction: đơn → `SUCCESS`, cộng
+Xác nhận thanh toán giả lập và cộng Credit (VI-04, VI-07) trong một transaction: đơn → `SUCCESS`, cộng
 `credit_balance`, đặt `hasToppedUp = true`, ghi `credit_ledger` loại `TOP_UP`.
 
 > **Chỉ bật khi `app.payment.mock.enabled=true`** — bật ở dev và staging (biến môi trường `PAYMENT_MOCK_ENABLED=true`),

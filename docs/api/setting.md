@@ -69,7 +69,7 @@ Có thể gửi thêm `reason` để ghi lý do vào `activity_logs`. Thành cô
 - `400 VALIDATION_FAILED`: thiếu key/value.
 - `400 SETTING_CONFIG_INVALID_TYPE`: value sai kiểu theo key.
 - `400 SETTING_CONFIG_OUT_OF_RANGE`: value ngoài khoảng cho phép.
-- `400 SETTING_RANK_THRESHOLD_ORDER`: sửa `reputation_silver_min`, `reputation_gold_min` hoặc `reputation_diamond_min` làm điểm tối thiểu các hạng không còn tăng dần. Phải thoả Bạc < Vàng < Kim cương (BR-U01), so với giá trị đang lưu của hai khoá còn lại. Muốn nâng cả ba mốc thì sửa từ mốc cao nhất xuống mốc thấp nhất.
+- `400 SETTING_RANK_THRESHOLD_ORDER`: sửa `reputation_silver_min`, `reputation_gold_min` hoặc `reputation_diamond_min` làm điểm tối thiểu các hạng không còn tăng dần. Phải thoả Bạc < Vàng < Kim cương (UT-06), so với giá trị đang lưu của hai khoá còn lại. Muốn nâng cả ba mốc thì sửa từ mốc cao nhất xuống mốc thấp nhất.
 - `401 UNAUTHORIZED`: chưa đăng nhập.
 - `403 FORBIDDEN`: tài khoản không phải Admin.
 - `404 SETTING_CONFIG_NOT_FOUND`: key không tồn tại hoặc cấu hình chưa được seed.
@@ -195,7 +195,7 @@ Thành công trả `200 OK` cùng mục đã cập nhật.
 ```
 
 > [!IMPORTANT]
-> **BR-A06**: Hệ thống bắt buộc luôn có ít nhất 1 mục checklist đang dùng (`active = true`). Nếu thao tác ẩn mục cuối cùng đang active, hệ thống sẽ từ chối và trả về `400 SETTING_CHECKLIST_AT_LEAST_ONE_REQUIRED`.
+> **KD-04**: Hệ thống bắt buộc luôn có ít nhất 1 mục checklist đang dùng (`active = true`). Nếu thao tác ẩn mục cuối cùng đang active, hệ thống sẽ từ chối và trả về `400 SETTING_CHECKLIST_AT_LEAST_ONE_REQUIRED`.
 
 ### PUT /api/v1/admin/checklist/reorder
 
@@ -211,6 +211,6 @@ Thành công trả về danh sách toàn bộ mục sau khi đã cập nhật l�
 
 ### Mã lỗi
 - `400 VALIDATION_FAILED`: body rỗng hoặc dữ liệu không hợp lệ.
-- `400 SETTING_CHECKLIST_AT_LEAST_ONE_REQUIRED`: vi phạm BR-A06 khi cố ẩn mục active duy nhất.
+- `400 SETTING_CHECKLIST_AT_LEAST_ONE_REQUIRED`: vi phạm KD-04 khi cố ẩn mục active duy nhất.
 - `403 FORBIDDEN`: tài khoản không phải Admin.
 - `404 SETTING_CHECKLIST_NOT_FOUND`: id câu hỏi không tồn tại.

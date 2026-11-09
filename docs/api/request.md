@@ -1,6 +1,6 @@
 # API module request
 
-Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
+Quy ước chung: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất bên dưới.
 
 Người sở hữu: BE3 (@dwargon73-sketch).
@@ -89,19 +89,19 @@ nếu chọn yêu cầu này (giao dịch chuyển sang Trao đổi).
 ```
 
 - **Lỗi:**
-  - `400 REQUEST_SELF_OFFER_NOT_ALLOWED`: Gửi yêu cầu tới bài của chính mình (BR-R01) hoặc chọn chính món đang xin làm món đề nghị (CD-01).
-  - `400 REQUEST_LIMIT_EXCEEDED`: Đã có 5 yêu cầu đang ở trạng thái PENDING (BR-U02).
+  - `400 REQUEST_SELF_OFFER_NOT_ALLOWED`: Gửi yêu cầu tới bài của chính mình (YC-01) hoặc chọn chính món đang xin làm món đề nghị (CD-01).
+  - `400 REQUEST_LIMIT_EXCEEDED`: Đã có 5 yêu cầu đang ở trạng thái PENDING (YC-03).
   - `403 REQUEST_ADMIN_BLOCKED`: Quản trị viên không được gửi yêu cầu giao dịch (TK-13).
-  - `403 REQUEST_REPUTATION_BLOCKED`: Tài khoản có 0 sao uy tín, bị vô hiệu hoá quyền gửi yêu cầu giao dịch (BR-U05, FR-92).
+  - `403 REQUEST_REPUTATION_BLOCKED`: Tài khoản có 0 sao uy tín, bị vô hiệu hoá quyền gửi yêu cầu giao dịch (YC-02).
   - `404 REQUEST_ITEM_NOT_FOUND`: Không tìm thấy bài đăng hoặc món đề nghị không tồn tại.
   - `409 REQUEST_ITEM_NOT_AVAILABLE`: Bài đăng hoặc món đề nghị không ở trạng thái sẵn sàng (không phải APPROVED, bị ẩn, hoặc không thuộc sở hữu người gửi).
-  - `409 REQUEST_ALREADY_EXISTS`: Đã có yêu cầu đang hoạt động cho bài này (BR-R02).
+  - `409 REQUEST_ALREADY_EXISTS`: Đã có yêu cầu đang hoạt động cho bài này (YC-03).
 
 ---
 
 ## 2. GET /api/v1/items/{itemId}/requests
 
-Chủ bài xem danh sách các yêu cầu gửi tới bài đăng của mình (F10 bước 2, FR-65, UC-22).
+Chủ bài xem danh sách các yêu cầu gửi tới bài đăng của mình (F10 bước 2, YC-06, UC-22).
 
 - **Xác thực:** Bắt buộc JWT (phải là chủ bài đăng).
 - **Path variable:** `itemId` (id bài đăng).
@@ -149,7 +149,7 @@ Xem danh sách tất cả các yêu cầu do chính mình gửi đi (UC-20).
 
 ## 4. POST /api/v1/requests/{id}/cancel
 
-Người gửi tự huỷ yêu cầu khi yêu cầu còn ở trạng thái `PENDING` (F10, BR-R04, UC-21).
+Người gửi tự huỷ yêu cầu khi yêu cầu còn ở trạng thái `PENDING` (F10, YC-05, UC-21).
 
 - **Xác thực:** Bắt buộc JWT (phải là người tạo yêu cầu `receiverId`).
 - **Path variable:** `id` (id của request).
@@ -163,7 +163,7 @@ Người gửi tự huỷ yêu cầu khi yêu cầu còn ở trạng thái `PEND
 
 ## 5. POST /api/v1/requests/{id}/select
 
-Chủ bài đăng chọn đúng một người nhận cho bài đăng (F10 bước 2, FR-66, BR-D01).
+Chủ bài đăng chọn đúng một người nhận cho bài đăng (F10 bước 2, YC-07).
 
 - **Xác thực:** Bắt buộc JWT (phải là chủ bài đăng `donorId`).
 - **Path variable:** `id` (id của request được chọn).
@@ -182,7 +182,7 @@ Chủ bài đăng chọn đúng một người nhận cho bài đăng (F10 bư�
     - **Giữ nguyên hình thức (CD-03, CD-05):** Cho chọn Cho (giữ `GIVE`, chỉ giữ chỗ 1 món); Trao đổi chọn Trao đổi (giữ `SWAP`, giữ chỗ cả 2 món).
   - Request được chọn chuyển sang trạng thái `RESERVED` (`reservedAt` được ghi nhận).
   - Tất cả các Request khác gửi tới cùng bài đăng đang ở trạng thái `PENDING` sẽ tự động chuyển sang `REJECTED`.
-  - Các yêu cầu PENDING khác ở các bài khác đang dùng cùng món đề nghị `offeredItemId` tự động bị `CANCELLED` (FR-66, BR-S03).
+  - Các yêu cầu PENDING khác ở các bài khác đang dùng cùng món đề nghị `offeredItemId` tự động bị `CANCELLED` (YC-04, YC-07).
   - Điểm uy tín khi hoàn tất (`COMPLETED`): tự động tính theo `requests.type` sau chuyển đổi (CD-07).
   - Khi giao dịch bị huỷ (người dùng, job hết hạn), các món đã giữ chỗ được nhả về `APPROVED`.
   - Người nhận được chọn nhận thông báo `REQUEST_ACCEPTED`.
@@ -214,7 +214,7 @@ Xem chi tiết thông tin của một yêu cầu giao dịch (F10, UC-26).
 
 ## 7. POST /api/v1/requests/{id}/schedule
 
-Đề xuất hoặc cập nhật lịch hẹn giao nhận (FR-79, FR-80, BR-T01, BR-T02, UC-26).
+Đề xuất hoặc cập nhật lịch hẹn giao nhận (GN-01, GN-02, UC-26).
 
 - **Xác thực:** Bắt buộc JWT (chủ bài đăng hoặc người nhận).
 - **Path variable:** `id` (id của request).
@@ -231,7 +231,7 @@ Xem chi tiết thông tin của một yêu cầu giao dịch (F10, UC-26).
 
 - **Hành vi nghiệp vụ:**
   - Request nếu đang `RESERVED` sẽ tự động chuyển sang `AWAITING_LOGISTICS`.
-  - Nếu Request đã ở `LOGISTICS_CONFIRMED` trở lên thì bị khoá không cho sửa lịch (FR-83, BR-T05).
+  - Nếu Request đã ở `LOGISTICS_CONFIRMED` trở lên thì bị khoá không cho sửa lịch (GN-03).
   - Thời gian hẹn phải ở tương lai.
   - Bên gửi đề xuất tự động được ghi nhận đồng ý lịch mới (`donorScheduleOkAt` hoặc `receiverScheduleOkAt`), bên còn lại bị reset để xác nhận lại.
   - Gửi thông báo `SCHEDULE_UPDATED` cho bên còn lại.
@@ -246,7 +246,7 @@ Xem chi tiết thông tin của một yêu cầu giao dịch (F10, UC-26).
 
 ## 8. POST /api/v1/requests/{id}/confirm-logistics
 
-Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (FR-80, FR-81, BR-T03, BR-T05, UC-26).
+Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (GN-02, GN-03, UC-26).
 
 - **Xác thực:** Bắt buộc JWT (chủ bài đăng hoặc người nhận).
 - **Path variable:** `id` (id của request).
@@ -260,7 +260,7 @@ Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (FR-80, FR-81,
 
 - **Hành vi nghiệp vụ:**
   - Ghi nhận bên gọi đã đồng ý lịch hẹn.
-  - Với hình thức `SHIPPING`, bắt buộc phải đồng ý cam kết trách nhiệm (BR-T03, BR-T04: hệ thống không can thiệp hay bồi thường hàng hoá và phí vận chuyển).
+  - Với hình thức `SHIPPING`, bắt buộc phải đồng ý cam kết trách nhiệm (GN-02, GN-11: hệ thống không can thiệp hay bồi thường hàng hoá và phí vận chuyển).
   - Khi cả hai bên đều đã đồng ý lịch (và cam kết trách nhiệm nếu là `SHIPPING`), Request tự động chuyển sang `LOGISTICS_CONFIRMED` và ghi nhận `contactRevealedAt`.
   - Gửi thông báo `LOGISTICS_CONFIRMED` cho đối phương.
 - **Thành công:** `200 OK`, trả về `RequestResponse`.
@@ -275,7 +275,7 @@ Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (FR-80, FR-81,
 
 ## 9. GET /api/v1/requests/{id}/contact
 
-Lấy thông tin liên lạc (họ tên, email, số điện thoại) của đối tác khi giao dịch đã chốt lịch hẹn (FR-82, BR-T11, BR-T12, UC-26, UC-62).
+Lấy thông tin liên lạc (họ tên, email, số điện thoại) của đối tác khi giao dịch đã chốt lịch hẹn (GN-04, UC-26, UC-62).
 
 - **Xác thực:** Bắt buộc JWT (chủ bài đăng hoặc người nhận).
 - **Path variable:** `id` (id của request).
@@ -283,7 +283,7 @@ Lấy thông tin liên lạc (họ tên, email, số điện thoại) của đ�
   - Chỉ thành viên trong giao dịch mới có quyền xem thông tin của đối phương.
   - Chỉ trả về khi Request đã chốt lịch hẹn (tức `contactRevealedAt != null`, từ `LOGISTICS_CONFIRMED` trở lên).
   - Lấy thông tin qua `UserService.findContact(partnerId)`.
-  - Một khi đã chốt lịch và trao thông tin, thông tin này không bị ẩn lại (BR-T12).
+  - Một khi đã chốt lịch và trao thông tin, thông tin này không bị ẩn lại (GN-04).
 - **Thành công:** `200 OK`, trả về `RequestContactResponse`:
 
 ```json
@@ -304,7 +304,7 @@ Lấy thông tin liên lạc (họ tên, email, số điện thoại) của đ�
 
 ## 10. POST /api/v1/requests/{id}/confirm-handover
 
-Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-84, FR-85, BR-D02, BR-R05, UC-27).
+Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (GN-06, GN-07, GN-08, UC-27).
 
 - **Xác thực:** Bắt buộc JWT (chủ bài đăng `donorId` hoặc người nhận `receiverId`).
 - **Path variable:** `id` (id của request).
@@ -314,18 +314,18 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
 {
   "asDescribed": true,
   "notAsDescribedReason": "Món đồ bị vỡ một góc không giống trong ảnh", // Bắt buộc nếu người nhận chọn asDescribed = false, tối đa 1000 ký tự (BC-01)
-  "mediaIds": [1, 2] // Tuỳ chọn: danh sách ID ảnh/video minh chứng khi giao nhận (FR-86, BR-T09)
+  "mediaIds": [1, 2] // Tuỳ chọn: danh sách ID ảnh/video minh chứng khi giao nhận (GN-10)
 }
 ```
 
 - **Hành vi nghiệp vụ:**
   - Chỉ áp dụng khi Request đang ở trạng thái `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER`.
-  - Nếu có truyền `mediaIds`: gọi `MediaService.attach(mediaIds, currentUserId)` và lưu vào `request_media_mappings` với stage `HANDOVER` (FR-86, BR-T09).
+  - Nếu có truyền `mediaIds`: gọi `MediaService.attach(mediaIds, currentUserId)` và lưu vào `request_media_mappings` với stage `HANDOVER` (GN-10).
   - Bên cho xác nhận -> ghi nhận `donorHandoverAt`.
   - Bên nhận xác nhận -> bắt buộc trả lời `asDescribed` (nếu chọn `false` bắt buộc có lý do); ghi nhận `receiverHandoverAt` và `asDescribed`.
-  - Bên nhận chọn `asDescribed = false`: sau khi giao dịch commit, `RequestService` phát event `NotAsDescribedReportedEvent` (`requestId`, `receiverId`, `reason`) và module report tự mở một report `NOT_AS_DESCRIBED`, mô tả là `notAsDescribedReason` (FR-85, BR-R05, xem [report.md](report.md)). Request không gọi thẳng `ReportService` để tránh vòng phụ thuộc. Lỗi mở report không làm mất câu trả lời của bên nhận, chỉ được ghi log.
-  - Giao dịch đã có report thì job tự hoàn tất sau `auto_confirm_days` ngày bỏ qua, không tự `COMPLETED` (FR-87, BR-T06). Giao dịch ở lại `AWAITING_HANDOVER` cho đến khi bên còn lại tự xác nhận.
-  - Một bên xác nhận: Request chuyển sang trạng thái `AWAITING_HANDOVER` (BR-D02).
+  - Bên nhận chọn `asDescribed = false`: sau khi giao dịch commit, `RequestService` phát event `NotAsDescribedReportedEvent` (`requestId`, `receiverId`, `reason`) và module report tự mở một report `NOT_AS_DESCRIBED`, mô tả là `notAsDescribedReason` (GN-07, xem [report.md](report.md)). Request không gọi thẳng `ReportService` để tránh vòng phụ thuộc. Lỗi mở report không làm mất câu trả lời của bên nhận, chỉ được ghi log.
+  - Giao dịch đã có report thì job tự hoàn tất sau `auto_confirm_days` ngày bỏ qua, không tự `COMPLETED` (GN-09). Giao dịch ở lại `AWAITING_HANDOVER` cho đến khi bên còn lại tự xác nhận.
+  - Một bên xác nhận: Request chuyển sang trạng thái `AWAITING_HANDOVER` (GN-08).
   - Cả hai bên đều đã xác nhận:
     - Request chuyển sang trạng thái `COMPLETED` và ghi nhận `completedAt`.
     - Bài đăng chuyển sang trạng thái `TRADED` qua `ItemService.markTraded(itemId)` (nếu là SWAP thì cả 2 bài đều chuyển sang TRADED).
@@ -345,7 +345,7 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
 
 ## 11. POST /api/v1/requests/{id}/media
 
-Đính kèm ảnh hoặc video minh chứng vào yêu cầu giao dịch (FR-86, BR-T09, UC-28).
+Đính kèm ảnh hoặc video minh chứng vào yêu cầu giao dịch (GN-10, UC-28).
 
 - **Xác thực:** Bắt buộc JWT (chủ bài đăng `donorId` hoặc người nhận `receiverId`).
 - **Path variable:** `id` (id của request).
@@ -375,12 +375,12 @@ Xác nhận đã giao / đã nhận đồ và câu hỏi "đúng mô tả?" (FR-
 
 ## 12. GET /api/v1/requests/{id}/media
 
-Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (FR-86, BR-T09).
+Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (GN-10).
 
 - **Xác thực:** Bắt buộc JWT (chỉ chủ bài đăng hoặc người nhận).
 - **Path variable:** `id` (id của request).
 - **Hành vi nghiệp vụ:**
-  - **Chỉ hai bên tham gia giao dịch** mới có quyền xem minh chứng (BR-T09). Người dùng khác bị chặn `403 Forbidden`.
+  - **Chỉ hai bên tham gia giao dịch** mới có quyền xem minh chứng (GN-10). Người dùng khác bị chặn `403 Forbidden`.
   - Trả về danh sách minh chứng đã đính kèm theo thứ tự thời gian tạo tăng dần.
 - **Thành công:** `200 OK`, trả về danh sách `RequestMediaResponse`:
 
@@ -397,7 +397,7 @@ Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (F
 ```
 
 - **Lỗi:**
-  - `403 REQUEST_FORBIDDEN`: Người gọi không phải thành viên tham gia giao dịch (BR-T09).
+  - `403 REQUEST_FORBIDDEN`: Người gọi không phải thành viên tham gia giao dịch (GN-10).
   - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
 
 ---
@@ -490,15 +490,15 @@ thì chưa.
 | `complaintDeadline` | string? | Hạn khiếu nại = `completedAt` + `complaint_window_hours` (24 giờ, U08); `null` khi chưa hoàn tất. Thông báo `TRANSACTION_COMPLETED` gửi hai bên ghi `Bạn có 24 giờ, đến HH:mm dd/MM, để khiếu nại nếu có vấn đề.` |
 | `cancelReason` | string? | Lý do huỷ, có tiền tố người huỷ `[Chủ bài] `, `[Người nhận] ` hoặc `[Hệ thống] `. Có khi `status = CANCELLED` |
 | `createdAt` | string | Thời điểm tạo ISO-8601 UTC |
-| `receiverName` | string? | Họ tên người gửi yêu cầu (có trong danh sách theo bài, danh sách của tôi và chi tiết). Có thể `null`. Không kèm email/số điện thoại (BR-T11) |
+| `receiverName` | string? | Họ tên người gửi yêu cầu (có trong danh sách theo bài, danh sách của tôi và chi tiết). Có thể `null`. Không kèm email/số điện thoại (GN-04) |
 | `itemTitle` | string? | Tiêu đề bài đăng được yêu cầu, có ở mọi API trả `RequestResponse` (kể cả khi bài đã `RESERVED` trở lên, lúc `GET /items/{id}` không còn cho người xin xem). `null` khi bài đã bị xoá |
 | `itemImage` | string? | Ảnh đầu tiên của bài đăng, dạng `/api/v1/media/{id}`. `null` khi bài không có ảnh |
 | `donorId` | number? | Id chủ bài đăng |
-| `donorName` | string? | Họ tên chủ bài đăng. `null` khi tài khoản đã bị xoá. Không kèm email/số điện thoại (BR-T11) |
+| `donorName` | string? | Họ tên chủ bài đăng. `null` khi tài khoản đã bị xoá. Không kèm email/số điện thoại (GN-04) |
 | `offeredItemTitle` | string? | Tiêu đề món người xin đề nghị đổi (chỉ yêu cầu `SWAP`) |
-| `receiverTrustStars` | number? | Số sao uy tín của người gửi yêu cầu (TrustStars: 1-5). Alias: `trustStars` (FR-65) |
-| `receiverRank` | string? | Hạng uy tín của người gửi yêu cầu (`BRONZE`, `SILVER`, `GOLD`, `DIAMOND`). Alias: `rank` (FR-65) |
-| `receiverAsDescribedRate` | number? | Tỉ lệ giao dịch đúng mô tả của người gửi yêu cầu, thang 0.00 - 1.00 (vd `0.92` là 92%). `null` khi có dưới 3 giao dịch hoàn tất đã được đánh giá "đúng mô tả?" (SRS 6.12). Alias: `asDescribedRate` (FR-65) |
+| `receiverTrustStars` | number? | Số sao uy tín của người gửi yêu cầu (TrustStars: 1-5). Alias: `trustStars` (YC-06) |
+| `receiverRank` | string? | Hạng uy tín của người gửi yêu cầu (`BRONZE`, `SILVER`, `GOLD`, `DIAMOND`). Alias: `rank` (YC-06) |
+| `receiverAsDescribedRate` | number? | Tỉ lệ giao dịch đúng mô tả của người gửi yêu cầu, thang 0.00 - 1.00 (vd `0.92` là 92%). `null` khi có dưới 3 giao dịch hoàn tất đã được đánh giá "đúng mô tả?". Alias: `asDescribedRate` (YC-06) |
 | `lastMessageAt` | string? | Thời điểm tin nhắn mới nhất trong hội thoại của giao dịch ISO-8601 UTC (U03). `null` khi chưa có tin nhắn nào |
 | `disputeResponseDueAt` | string? | Hạn giải trình của khiếu nại đang mở thuộc giao dịch ISO-8601 UTC (U5-BE, D-04, GN-07). Chỉ có giá trị khi `status = DISPUTED`, các trạng thái khác luôn là `null`. FE dùng để hiển thị thời hạn giải trình |
 | `donorAvatarUrl` | string? | Ảnh đại diện chủ bài, dạng `/api/v1/media/{id}`; `null` khi chưa có ảnh. Có ở mọi API trả `RequestResponse` |
@@ -543,7 +543,7 @@ Các trường đã có từ trước và dùng cho màn Tiến trình giao dị
 |---|---|---|---|
 | `asDescribed` | boolean | Bên nhận: Có | Bắt buộc với bên nhận |
 | `notAsDescribedReason` | string | Không | Bắt buộc nếu `asDescribed = false`, tối đa 1000 ký tự |
-| `mediaIds` | number[] | Không | Danh sách ID ảnh/video minh chứng khi giao nhận (FR-86, BR-T09) |
+| `mediaIds` | number[] | Không | Danh sách ID ảnh/video minh chứng khi giao nhận (GN-10) |
 
 ### AttachMediaRequest
 
@@ -569,20 +569,20 @@ Các trường đã có từ trước và dùng cho màn Tiến trình giao dị
 |---|---|---|
 | `REQUEST_NOT_FOUND` | 404 | Không tìm thấy yêu cầu |
 | `REQUEST_ITEM_NOT_FOUND` | 404 | Không tìm thấy bài đăng liên quan |
-| `REQUEST_SELF_OFFER_NOT_ALLOWED` | 400 | Tự gửi yêu cầu cho bài của chính mình (BR-R01), hoặc chọn chính bài đang xin làm món đề nghị (CD-01) |
-| `REQUEST_LIMIT_EXCEEDED` | 400 | Vượt quá 5 yêu cầu đang chờ xử lý (BR-U02) |
-| `REQUEST_SWAP_OFFERED_ITEM_REQUIRED` | 400 | Thiếu món đề nghị khi gửi yêu cầu đổi đồ (BR-S02) |
+| `REQUEST_SELF_OFFER_NOT_ALLOWED` | 400 | Tự gửi yêu cầu cho bài của chính mình (YC-01), hoặc chọn chính bài đang xin làm món đề nghị (CD-01) |
+| `REQUEST_LIMIT_EXCEEDED` | 400 | Vượt quá 5 yêu cầu đang chờ xử lý (YC-03) |
+| `REQUEST_SWAP_OFFERED_ITEM_REQUIRED` | 400 | Thiếu món đề nghị khi gửi yêu cầu đổi đồ (BD-02) |
 | `REQUEST_SCHEDULE_PAST_TIME` | 400 | Thời gian hẹn ở trong quá khứ |
-| `REQUEST_WAIVER_REQUIRED` | 400 | Chưa đồng ý cam kết miễn trừ trách nhiệm khi chọn Ship (BR-T03) |
+| `REQUEST_WAIVER_REQUIRED` | 400 | Chưa đồng ý cam kết miễn trừ trách nhiệm khi chọn Ship (GN-02) |
 | `REQUEST_SCHEDULE_NOT_SET` | 400 | Chưa có thông tin lịch hẹn để xác nhận |
-| `REQUEST_AS_DESCRIBED_REQUIRED` | 400 | Bên nhận chưa trả lời câu hỏi món đồ có đúng mô tả hay không (BR-R05) |
-| `REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED` | 400 | Thiếu lý do khi bên nhận chọn không đúng mô tả (BR-R05) |
-| `REQUEST_MEDIA_REQUIRED` | 400 | Danh sách ảnh/video minh chứng không được rỗng (FR-86) |
+| `REQUEST_AS_DESCRIBED_REQUIRED` | 400 | Bên nhận chưa trả lời câu hỏi món đồ có đúng mô tả hay không (GN-07) |
+| `REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED` | 400 | Thiếu lý do khi bên nhận chọn không đúng mô tả (GN-07) |
+| `REQUEST_MEDIA_REQUIRED` | 400 | Danh sách ảnh/video minh chứng không được rỗng (GN-10) |
 | `REQUEST_MEDIA_STAGE_INVALID` | 400 | Giai đoạn đính kèm minh chứng không hợp lệ |
 | `REQUEST_ITEM_NOT_AVAILABLE` | 409 | Bài đăng không ở trạng thái sẵn sàng (chưa duyệt, đã trao đổi...) |
-| `REQUEST_ALREADY_EXISTS` | 409 | Đã có một yêu cầu đang hoạt động cho bài này (BR-R02) |
-| `REQUEST_SCHEDULE_LOCKED` | 409 | Lịch hẹn đã chốt và bị khoá (FR-83, BR-T05) |
-| `REQUEST_CONTACT_NOT_REVEALED` | 409 | Chưa chốt lịch hẹn để xem thông tin liên lạc (FR-82, BR-T11) |
+| `REQUEST_ALREADY_EXISTS` | 409 | Đã có một yêu cầu đang hoạt động cho bài này (YC-03) |
+| `REQUEST_SCHEDULE_LOCKED` | 409 | Lịch hẹn đã chốt và bị khoá (GN-03) |
+| `REQUEST_CONTACT_NOT_REVEALED` | 409 | Chưa chốt lịch hẹn để xem thông tin liên lạc (GN-04) |
 | `REQUEST_HANDOVER_ALREADY_CONFIRMED` | 409 | Bạn đã xác nhận giao nhận cho yêu cầu này rồi |
 | `REQUEST_INVALID_STATE_TRANSITION` | 409 | Chuyển đổi trạng thái không hợp lệ theo sơ đồ |
 | `REQUEST_OFFER_CHANGE_NOT_ALLOWED` | 409 | Đề nghị hoặc đồng ý đổi món trong chat khi giao dịch không còn là `GIVE` hoặc không ở `RESERVED` / `AWAITING_LOGISTICS` (xem `docs/api/chat.md`) |
@@ -597,6 +597,6 @@ Không phải endpoint HTTP. Module khác đọc dữ kiện về Request qua `c
 | Hàm | Người gọi | Ý nghĩa |
 |-----|-----------|---------|
 | `boolean hasReservedOrHigherRequest(long itemId)` | item | Bài đã có Request từ `RESERVED` trở lên |
-| `boolean hasActiveDelivery(long userId)` | user | Người dùng đang có giao dịch `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER` (BR-U10) |
+| `boolean hasActiveDelivery(long userId)` | user | Người dùng đang có giao dịch `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER` (TK-11) |
 | `long countCompletedByUser(long userId)` | user (hồ sơ công khai) | Số Request `COMPLETED` người dùng tham gia, tính cả vai người nhận và chủ bài |
 | `Map<Long, Instant> findCompletedAtByItemIds(Collection<Long> itemIds)` | item (bài `TRADED`) | `completed_at` theo id bài; bài là bài chính (`item_id`) hoặc món đề nghị (`offered_item_id`) đều tính. Bài chưa có Request `COMPLETED` không có trong map |

@@ -8,7 +8,7 @@ Tất cả các endpoint trong module này yêu cầu quyền **ADMIN** (Bearer 
 
 Lấy trang bài đăng đang chờ duyệt (`PENDING_REVIEW`) kèm danh sách điều kiện đạt `checklist` hiện hành, chỉ gồm mục active theo `sort_order`, rồi `id`.
 
-### Thứ tự ưu tiên sắp xếp (BR-A08, SRS v11 — không còn xét cờ AI):
+### Thứ tự ưu tiên sắp xếp (KD-06, không còn xét cờ AI):
 1. Người đăng có uy tín (`trust_stars`) thấp hơn đứng trước (ưu tiên soát tài khoản rủi ro cao).
 2. Cùng số sao: người đăng mới đứng trước. Người mới là người có số bài đã từng được duyệt (`items.approved_at` khác rỗng, tính cả bài đã hết hạn hoặc đã trao) không quá `review_newcomer_max_approved` (mặc định 3, Admin chỉnh được ở mục cấu hình).
 3. Bài đăng chờ lâu hơn đứng trước; trường `id` dùng để phá hòa ổn định.

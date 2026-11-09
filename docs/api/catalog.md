@@ -1,6 +1,6 @@
 # API module catalog
 
-Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
+Quy ước chung: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất bên dưới. File này làm mẫu contract cho các module khác.
 
 Người sở hữu: BE2. API công khai chỉ đọc; API Admin quản lý danh mục ở `/api/v1/admin/categories`.

@@ -1,8 +1,7 @@
 # API module auth
 
-Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
-lỗi theo định dạng thống nhất ở cuối file. Nguồn: SRS v10 (FR-01..FR-05, FR-08, FR-09, BR-U06, UC-01, UC-02, UC-04),
-Luồng F01, F02.
+Quy ước chung: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
+lỗi theo định dạng thống nhất ở cuối file. Nguồn: SRS Final Report 09/11, mục 3.2.1 đến 3.2.3; luật TK-02 đến TK-10; UC-01, UC-02, UC-04.
 
 Người sở hữu: BE1. File này gồm 8 endpoint: đăng ký, xác thực OTP, gửi lại OTP, đăng nhập, đăng xuất, đổi mật khẩu,
 quên mật khẩu, đặt lại mật khẩu. Hồ sơ (`GET`/`PUT /api/v1/me`) xem `docs/api/user.md`.
@@ -49,13 +48,13 @@ Quy tắc:
   `429 AUTH_OTP_RESEND_TOO_SOON`.
 - Email đã thuộc tài khoản `ACTIVE` hoặc `BANNED` (chưa xoá mềm) → `409 AUTH_EMAIL_ALREADY_REGISTERED`.
 - Số điện thoại chỉ tính trùng với tài khoản `ACTIVE`; tài khoản `PENDING_VERIFICATION` không giữ số.
-- **Email dùng một lần (FR-04)**: tên miền sau `@` nằm trong `src/main/resources/disposable-email-domains.txt` thì
+- **Email dùng một lần (TK-02)**: tên miền sau `@` nằm trong `src/main/resources/disposable-email-domains.txt` thì
   trả `400 AUTH_EMAIL_DOMAIN_NOT_ALLOWED`, không tạo tài khoản, không gửi OTP. So khớp không phân biệt hoa thường, chỉ
   đúng tên miền (không khớp tên miền con). Danh sách đọc một lần lúc khởi động; sửa file phải build lại. Lệch SRS: ERD
   để danh sách ở `website_attributes` nhóm `DISPOSABLE_DOMAIN` cho Admin sửa, sẽ chuyển khi module setting hỗ trợ.
-- **Giới hạn theo IP (FR-10, C30)**: chỉ xét khi tạo tài khoản **mới** (đăng ký lại email `PENDING_VERIFICATION` không
+- **Giới hạn theo IP (TK-05, C30)**: chỉ xét khi tạo tài khoản **mới** (đăng ký lại email `PENDING_VERIFICATION` không
   xét). Nếu IP đã có từ `accounts_per_ip_24h` tài khoản trở lên tạo trong 24 giờ qua (không tính tài khoản đã xoá mềm)
-  thì trả `429 AUTH_TOO_MANY_ACCOUNTS_FROM_IP`. Lệch SRS: FR-10 ghi "đánh dấu chờ Admin xem xét" nhưng ERD không có cột
+  thì trả `429 AUTH_TOO_MANY_ACCOUNTS_FROM_IP`. Lệch SRS cũ (v10): FR-10 ghi "đánh dấu chờ Admin xem xét" nhưng ERD không có cột
   đánh dấu, nên chặn luôn theo SRS 5.3. IP lấy từ `remoteAddr`; prod bật `forward-headers-strategy: framework` nên
   sau proxy vẫn là IP thật của client.
 
@@ -171,7 +170,7 @@ gọi thống nhất; FE phải xoá token dù gọi thành công hay không.
 
 ## POST /api/v1/auth/change-password
 
-Đổi mật khẩu cho người đang đăng nhập (FR-08), phải nhập mật khẩu hiện tại.
+Đổi mật khẩu cho người đang đăng nhập (TK-10), phải nhập mật khẩu hiện tại.
 
 - Xác thực: **bắt buộc** Bearer Token, dù đường dẫn nằm dưới `/api/v1/auth`. Id người dùng lấy từ token.
 - Request: `ChangePasswordRequest`.
@@ -202,7 +201,7 @@ Quy tắc:
 
 ## POST /api/v1/auth/forgot-password
 
-Quên mật khẩu (FR-09): gửi OTP đặt lại mật khẩu về email. Luồng 2 bước: `/forgot-password` → `/reset-password`
+Quên mật khẩu (TK-09): gửi OTP đặt lại mật khẩu về email. Luồng 2 bước: `/forgot-password` → `/reset-password`
 (không có bước xác nhận OTP riêng; FE giữ mã ở màn nhập OTP rồi gửi kèm mật khẩu mới).
 
 - Xác thực: **không cần**.
@@ -230,7 +229,7 @@ Quy tắc:
 
 ## POST /api/v1/auth/reset-password
 
-Đặt lại mật khẩu bằng OTP đã gửi qua email (FR-09).
+Đặt lại mật khẩu bằng OTP đã gửi qua email (TK-09).
 
 - Xác thực: **không cần**.
 - Request: `ResetPasswordRequest`.
@@ -353,8 +352,8 @@ Trả về từ `/verify-otp` và `/login`.
 | `AUTH_EMAIL_ALREADY_REGISTERED` | 409  | Email đã thuộc tài khoản `ACTIVE` hoặc `BANNED`                                     |
 | `AUTH_PHONE_ALREADY_USED`       | 409  | Số điện thoại đang gắn với tài khoản `ACTIVE` khác                                  |
 | `AUTH_PHONE_INVALID`            | 400  | Số điện thoại không đúng định dạng di động VN (`field` = `phone`)                   |
-| `AUTH_EMAIL_DOMAIN_NOT_ALLOWED` | 400  | `/register`: email thuộc danh sách tên miền dùng một lần (FR-04; `field` = `email`) |
-| `AUTH_TOO_MANY_ACCOUNTS_FROM_IP` | 429 | `/register` tạo tài khoản mới khi IP đã có đủ `accounts_per_ip_24h` tài khoản trong 24 giờ (FR-10) |
+| `AUTH_EMAIL_DOMAIN_NOT_ALLOWED` | 400  | `/register`: email thuộc danh sách tên miền dùng một lần (TK-02; `field` = `email`) |
+| `AUTH_TOO_MANY_ACCOUNTS_FROM_IP` | 429 | `/register` tạo tài khoản mới khi IP đã có đủ `accounts_per_ip_24h` tài khoản trong 24 giờ (TK-05) |
 | `AUTH_OTP_INVALID`              | 400  | OTP sai, hoặc (`/verify-otp`) email không có tài khoản chờ xác thực; `details.remainingAttempts` |
 | `AUTH_OTP_EXPIRED`              | 400  | OTP quá `otp_ttl_minutes`, không còn mã, mã khác mục đích; `/reset-password` với email không có tài khoản hợp lệ |
 | `AUTH_OTP_TOO_MANY_ATTEMPTS`    | 422  | Sai đủ `otp_max_failed` lần, mã đã bị xoá; phải gửi lại OTP                         |

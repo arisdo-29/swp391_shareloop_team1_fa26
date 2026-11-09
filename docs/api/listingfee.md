@@ -1,6 +1,6 @@
 # API module listingfee
 
-Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
+Quy ước chung: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất (xem `wallet.md`).
 
 Người sở hữu: BE1. Module giữ, trừ, nhả phí đăng bài và phí sửa bài (C01, C02, C14, C14b), đặt thời hạn hiển thị
@@ -60,7 +60,7 @@ API công khai trả `null` (xem `item.md`, mục `ItemResponse`).
 
 ## GET /api/v1/listing-fees/held
 
-Danh sách bài của người đang đăng nhập đang giữ phí (FR-15), để màn Ví hiện cạnh số "đang giữ". Gồm bài chờ duyệt
+Danh sách bài của người đang đăng nhập đang giữ phí (VI-02), để màn Ví hiện cạnh số "đang giữ". Gồm bài chờ duyệt
 đang giữ phí đăng (`POST`) và bài đã duyệt đang chờ duyệt bản sửa giữ phí sửa (`EDIT`). Bài GIVE (không giữ gì), bài
 đã được duyệt xong (phí đã trừ) và bài bị từ chối hoặc bị gỡ (phí đã nhả) không có trong danh sách. Tổng `pendingFee`
 của các dòng bằng `heldCredit` trong `GET /api/v1/wallet`. Xếp bài mới cập nhật trước.
@@ -103,7 +103,7 @@ của các dòng bằng `heldCredit` trong `GET /api/v1/wallet`. Xếp bài mớ
 
 ## GET /api/v1/items/{id}/edit-quote
 
-Báo trước lượt sửa tới của bài là miễn phí hay phải giữ bao nhiêu Credit (F07 bước 2, FR-26). Chỉ đọc, không giữ
+Báo trước lượt sửa tới của bài là miễn phí hay phải giữ bao nhiêu Credit (F07 bước 2, PH-04). Chỉ đọc, không giữ
 tiền, không đổi dữ liệu. Số `amount` trả về đúng bằng số `PUT /items/{id}` sẽ giữ khi gửi bản sửa.
 
 - Xác thực: **bắt buộc** Bearer Token. Id người dùng lấy từ token, không nhận từ client.
@@ -155,7 +155,7 @@ Khi Admin cấu hình `post_fee` hoặc `edit_fee` bằng 0 thì `REPOST_FEE` / 
 
 ## POST /api/v1/items/{id}/renew
 
-Gia hạn bài của chính mình (F08 bước 1, FR-28, BR-D03, BR-P12). Trừ phí gia hạn ngay (không giữ chỗ), kéo dài
+Gia hạn bài của chính mình (F08 bước 1, HT-01, BD-12). Trừ phí gia hạn ngay (không giữ chỗ), kéo dài
 `expire_at`. Nội dung không đổi nên **không** qua kiểm duyệt lại và **không** đổi status.
 
 - Xác thực: **bắt buộc** Bearer Token. Id người dùng lấy từ token, không nhận từ client.
@@ -191,7 +191,7 @@ Gia hạn bài của chính mình (F08 bước 1, FR-28, BR-D03, BR-P12). Trừ 
 
 ## POST /api/v1/items/{id}/boost
 
-Đẩy bài của chính mình thêm một gói (C15, FR-36, BR-P08; SRS 4.6, UC-16). Trừ phí ngay (không giữ chỗ), kéo dài
+Đẩy bài của chính mình thêm một gói (C15, HT-04; UC-16). Trừ phí ngay (không giữ chỗ), kéo dài
 `boosted_until`. Không đổi status, không qua kiểm duyệt lại.
 
 - Xác thực: **bắt buộc** Bearer Token. Id người dùng lấy từ token, không nhận từ client.
@@ -200,7 +200,7 @@ Gia hạn bài của chính mình (F08 bước 1, FR-28, BR-D03, BR-P12). Trừ 
 - Thời gian: `boosted_until = max(now, boosted_until cũ) + boost_days` ngày (mặc định 3). Bài đang đẩy thì cộng nối
   từ mốc cũ (mua thêm); chưa đẩy hoặc đã hết đẩy thì tính từ `now` và mở **đợt mới**.
 - Phí: `boost_fee` (mặc định 5 Credit), trừ từ số dư khả dụng và ghi `credit_ledger` loại `BOOST_FEE` gắn `item_id`.
-  Phí cấu hình bằng 0 thì không đụng ví. Không hoàn phí khi bài bị gỡ, bị ẩn hay hết hạn (SRS 4.6).
+  Phí cấu hình bằng 0 thì không đụng ví. Không hoàn phí khi bài bị gỡ, bị ẩn hay hết hạn (PH-06).
 - Thành công: `200`, một `BoostResponse`.
 - Lỗi: `401 UNAUTHORIZED`; `402 WALLET_INSUFFICIENT_BALANCE`; `403 LISTINGFEE_NOT_OWNER`; `404 LISTINGFEE_ITEM_NOT_FOUND`;
   `404 CATALOG_CATEGORY_NOT_FOUND` khi danh mục của bài đã bị ẩn; `409 LISTINGFEE_BOOST_NOT_ALLOWED`,
@@ -435,15 +435,15 @@ Ghi chú cho người gọi:
 - **ReviewService**: mọi bài đang chờ duyệt đều ở `fee_state = HELD`, nên luôn gọi được `chargeHeldFee` /
   `releaseHeldFee`. Khoản giữ bằng 0 thì không đụng ví và không ghi `credit_ledger`.
 - **Lượt sửa miễn phí** chỉ bị tính (`free_edit_used = true`) khi Admin **duyệt** một bản sửa loại EDIT. Từ chối thì
-  nhả phí và không tính lượt (BR-D07 (4), R36).
+  nhả phí và không tính lượt (PH-04, R36).
 - Phí 0 (bài `GIVE` khi đăng hoặc gửi lại sau từ chối, hoặc Admin cấu hình `post_fee` / `edit_fee` = 0): vẫn ghi
   `fee_state = HELD` với `pending_fee = 0`, không gọi ví. Nhờ vậy bài `GIVE` vẫn qua `chargeHeldFee` lúc duyệt: được
   đặt `expire_at`, `post_fee_paid = true`, không có dòng `credit_ledger`.
 - **Thời hạn hiển thị**: khi duyệt khoản giữ loại POST (chỉ có ở lần duyệt đầu, kể cả bài gửi lại sau khi bị từ chối
   lần đầu), `chargeHeldFee` đặt `expire_at = lúc duyệt + N` ngày, với N = `post_display_days_gold` (45) khi
-  `ReputationService.getRank(donorId)` là `GOLD` hoặc `DIAMOND`, còn lại `post_display_days` (30) (BR-D03, FR-29).
+  `ReputationService.getRank(donorId)` là `GOLD` hoặc `DIAMOND`, còn lại `post_display_days` (30) (BD-12).
   Hạng xét tại lúc duyệt; hạng đổi sau đó không tính lại `expire_at`. Duyệt bản sửa (loại EDIT) không đổi `expire_at`.
-  Gia hạn (`renew`) luôn cộng `post_display_days`, không phụ thuộc hạng (BR-P12).
+  Gia hạn (`renew`) luôn cộng `post_display_days`, không phụ thuộc hạng (HT-01).
 
 ## Job nền
 
@@ -454,7 +454,7 @@ Không phải endpoint. Profile `test` đặt `app.jobs.enabled=false` nên bean
 | `ItemExpiryJob` (#89) | `0 0 * * * *` (phút 0 mỗi giờ) | `ItemExpiryService.expireOverdueItems(now)` | Bài hết hạn → `EXPIRED` |
 | `BoostNotificationJob` | `0 0 * * * *` (phút 0 mỗi giờ) | `BoostNotificationService.stopHiddenBoosts`, `notifyEndingSoon`, `notifyEnded` (theo thứ tự này) | Dừng đẩy bài bị ẩn; báo chủ bài sắp hết đẩy, đã hết đẩy |
 
-### Hết hạn bài (FR-29, BR-D03)
+### Hết hạn bài (BD-12, TD-01)
 
 - **Chọn**: `status = APPROVED`, `expire_at < now`, `is_deleted = false` (bài đang ẩn `is_active = false` vẫn hết hạn).
   Đọc theo lô 100 id, phân trang keyset (`id > id cuối lô trước`).
@@ -469,7 +469,7 @@ Không phải endpoint. Profile `test` đặt `app.jobs.enabled=false` nên bean
 - **Idempotent**: điều kiện chọn gồm trạng thái hiện tại, chạy lại không có tác dụng kép.
 - Không xoá `boosted_until`: luật đẩy bài bảo đảm `boosted_until ≤ expire_at`, nên lúc hết hạn mốc đẩy đã qua.
 
-### Thông báo đợt đẩy (C15, SRS 4.6)
+### Thông báo đợt đẩy (C15, HT-09)
 
 Gửi qua `NotificationService.notify` tới chủ bài, `link = /items/{id}`. Không thêm bảng hay cột.
 
