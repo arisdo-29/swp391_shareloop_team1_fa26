@@ -46,7 +46,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Nơi duy nhất được đổi tiền trong hệ thống (Lộ trình 4.7, 4.8). Mọi hàm đổi số dư khoá dòng {@code users} của
+ * Nơi duy nhất được đổi tiền trong hệ thống. Mọi hàm đổi số dư khoá dòng {@code users} của
  * người dùng bằng {@code WalletAccountRepository.lockById} (SELECT ... FOR UPDATE) và chạy trong transaction của
  * người gọi (REQUIRED); khi không có transaction ngoài thì tự mở transaction mới.
  *

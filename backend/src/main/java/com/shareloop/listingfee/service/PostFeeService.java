@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Mọi mức phí và số ngày hiển thị đọc từ ConfigService (ConfigKey post_fee, edit_fee, post_display_days,
  * post_display_days_gold), không viết cứng; hạng của chủ bài đọc qua ReputationService.getRank. Lần duyệt đầu (khoản giữ loại POST) cũng đặt expire_at qua ItemFee, vì cột này thuộc nhóm cột của
- * listingfee (Lộ trình 4.8).
+ * listingfee.
  *
  * <p>Phí đăng (post_fee) chỉ áp dụng cho bài Trao đổi (SWAP); bài Cho tặng (GIVE) miễn phí đăng, kể cả khi gửi lại
  * bài bị từ chối. Phí sửa bài sau duyệt (edit_fee) áp dụng cho cả hai loại. ItemService chặn đổi GIVE sang SWAP để

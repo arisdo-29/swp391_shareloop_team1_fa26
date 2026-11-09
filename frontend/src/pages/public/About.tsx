@@ -14,7 +14,7 @@ import { ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
 import { itemApi, type ListingFeeConfigResponse } from '../../services/itemApi';
 import './about.css';
 
-/** Các con số là luật cố định (Business Rule v11.2) nên ghi thẳng trong text. Gom một chỗ để dễ rà soát. */
+/** Các con số là luật cố định (Business Rule v12 / SRS Final Report 09/11) nên ghi thẳng trong text. Gom một chỗ để dễ rà soát. */
 const RULES = {
   giveLimit: 5,
   pendingRequests: 5,
@@ -27,6 +27,11 @@ const RULES = {
   cleanStreakForStar: 10,
   aiFreePerDay: 5,
   aiFeePerUse: 2,
+  boostCooldownDays: 3,
+  boostMaxPerUser: 3,
+  boostMaxActive: 30,
+  boostMaxPerPage: 3,
+  boostRotateMinutes: 3,
 } as const;
 
 const reasons = [
@@ -437,8 +442,13 @@ function FeeList({ fees }: { fees: ListingFeeConfigResponse }) {
         Đẩy bài lên đầu {fees.boostDays} ngày: {fees.boostFee} Credit
       </li>
       <li>
-        Đẩy cộng dồn được, nhưng không quá {fees.boostMaxDays} ngày và không quá hạn hiển thị của
-        bài
+        Một đợt đẩy liên tục tối đa {fees.boostMaxDays} ngày và không quá hạn hiển thị của bài. Hết
+        đợt phải nghỉ {RULES.boostCooldownDays} ngày mới đẩy lại
+      </li>
+      <li>
+        Mỗi người đẩy tối đa {RULES.boostMaxPerUser} bài cùng lúc, toàn hệ thống tối đa{' '}
+        {RULES.boostMaxActive} bài. Mỗi trang chỉ có tối đa {RULES.boostMaxPerPage} bài đẩy ở đầu,
+        nhóm bài đổi luân phiên mỗi {RULES.boostRotateMinutes} phút
       </li>
       <li>
         Bài hiển thị {fees.postDisplayDays} ngày từ lần duyệt đầu, hạng Vàng trở lên{' '}
@@ -456,7 +466,7 @@ function GenericFeeList() {
       <li>Chuyển bài Cho tặng sang Trao đổi</li>
       <li>Sửa bài từ lần thứ hai</li>
       <li>Gia hạn bài đang hiển thị. Bài đã hết hạn thì không gia hạn được</li>
-      <li>Đẩy bài lên đầu kết quả tìm kiếm</li>
+      <li>Đẩy bài để được ưu tiên ở đầu kết quả tìm kiếm, các bài đẩy luân phiên nhau</li>
       <li>Trợ lý AI khi hết lượt miễn phí: {RULES.aiFeePerUse} Credit mỗi lượt</li>
     </ul>
   );

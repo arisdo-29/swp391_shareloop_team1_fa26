@@ -13,7 +13,7 @@ import java.time.Instant;
 import org.hibernate.annotations.SQLRestriction;
 
 /**
- * Entity "lát cắt" của bảng items: chỉ map nhóm cột phí của module listingfee (Lộ trình 4.8). Không tạo bản ghi ở đây
+ * Entity "lát cắt" của bảng items: chỉ map nhóm cột phí của module listingfee. Không tạo bản ghi ở đây
  * (bài do module item tạo), chỉ đọc và sửa cột phí. donor_id không map ở đây vì Item đã map cột đó.
  *
  * <p>Các hàm đổi trạng thái chỉ do {@code PostFeeService} gọi, sau khi đã khoá dòng bằng

@@ -6,7 +6,7 @@
 - `markTraded` và `markExpired` chuyển trạng thái qua `canTransition()`; `hide/unhide/hideAllOfUser` chỉ đổi `is_active`.
 - `remove(itemId, userId)` phục vụ DELETE của chủ bài; `remove(itemId)` là cửa ngõ nội bộ. Các hàm vòng đời khác chưa có endpoint HTTP riêng.
 
-Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
+Quy ước chung: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất bên dưới.
 
 POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và gắn ảnh trong một transaction.
@@ -19,7 +19,7 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
 
 ## 1. POST /api/v1/items
 
-Đăng bài viết mới cho tặng (GIVE) hoặc trao đổi (SWAP) (UC-20, F07 bước 1).
+Đăng bài viết mới cho tặng (GIVE) hoặc trao đổi (SWAP) (UC-12, F07 bước 1).
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT).
 - **Request body:**
@@ -76,7 +76,7 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
 
 - **Lỗi:**
   - `403 ITEM_ADMIN_BLOCKED`: Quản trị viên không được đăng bài giao dịch (TK-13).
-  - `403 ITEM_REPUTATION_BLOCKED`: Người đăng có 0 sao uy tín (FR-92, BR-U05). Được kiểm tra đầu tiên, trước hạn mức bài, kiểm duyệt và giữ phí; không tạo bài, không giữ phí.
+  - `403 ITEM_REPUTATION_BLOCKED`: Người đăng có 0 sao uy tín (BD-07). Được kiểm tra đầu tiên, trước hạn mức bài, kiểm duyệt và giữ phí; không tạo bài, không giữ phí.
   - `400 VALIDATION_FAILED`: Dữ liệu đầu vào không hợp lệ (thiếu trường bắt buộc, vượt độ dài).
   - `400 ITEM_SWAP_DESIRED_ITEM_REQUIRED`: Đăng bài SWAP nhưng thiếu món mong muốn.
   - `400 ITEM_DEFECT_NOTE_REQUIRED`: Đồ DEFECTIVE nhưng thiếu mô tả lỗi.
@@ -181,7 +181,7 @@ Tham số tùy chọn: `q` (tìm theo cụm từ trong tiêu đề món đồ, k
 `page` (từ 0, mặc định 0), `size` (1–100, mặc định 24), `boosted` (mặc định `false`; `true` chỉ lấy bài đang được đẩy), `sort` (`newest` hoặc `expiring`, mặc định `newest`),
 `rotationSeed` (số nguyên ≥ 0; lượt xoay lấy từ response trang trước, gửi lại khi chuyển trang),
 `viewerKey` (số nguyên ≥ 0; khoá xoay của khách chưa đăng nhập, FE tự sinh một lần và giữ lại; bỏ qua khi có token). Tất cả bộ lọc đều không bắt buộc và kết hợp được với nhau;
-lọc ở server nên `totalElements` và phân trang tính trên kết quả đã lọc (FR-50). Kết quả là `ItemListPageResponse`:
+lọc ở server nên `totalElements` và phân trang tính trên kết quả đã lọc (TT-01). Kết quả là `ItemListPageResponse`:
 
 Ví dụ: `GET /api/v1/items?q=ao%20khoac&categoryId=1&areaId=2&condition=GOOD&offerType=GIVE`. `q` rỗng hoặc chỉ có khoảng trắng tương đương không tìm kiếm; `%` và `_` được xem là ký tự thường.
 
@@ -386,7 +386,7 @@ Với danh sách, hai trường này được đọc bằng một query cho cả
 | `ITEM_NOT_OWNER` | 403 | Sửa bài không phải của mình |
 | `ITEM_EDIT_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được sửa |
 | `ITEM_REMOVE_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được gỡ |
-| `ITEM_REPUTATION_BLOCKED` | 403 | Người đăng hoặc sửa bài có 0 sao uy tín (FR-92, BR-U05) |
+| `ITEM_REPUTATION_BLOCKED` | 403 | Người đăng hoặc sửa bài có 0 sao uy tín (BD-07) |
 | `ITEM_MODERATION_BLOCKED` | 422 | Nội dung tạo hoặc sửa bị kiểm duyệt tầng 1 chặn |
 | `VALIDATION_FAILED` | 400 | Sai định dạng hoặc thiếu trường bắt buộc |
 | `UNAUTHORIZED` | 401 | Thiếu token hoặc token không hợp lệ |

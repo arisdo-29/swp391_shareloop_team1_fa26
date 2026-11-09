@@ -1,6 +1,6 @@
 # API module wallet
 
-Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
+Quy ước chung: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất bên dưới.
 
 Người sở hữu: BE1. File này gồm endpoint đọc ví và lịch sử ví. Nạp Credit (QR minh họa/admin duyệt, MOCK, VNPAY) xem
@@ -21,7 +21,7 @@ Ví Credit của người đang đăng nhập (F04). Id người dùng lấy t�
 
 ## GET /api/v1/wallet/transactions
 
-Lịch sử ví của người đang đăng nhập (FR-16), mới nhất trước, có phân trang. Chỉ gồm các dòng `credit_ledger` (giao
+Lịch sử ví của người đang đăng nhập (UC-11), mới nhất trước, có phân trang. Chỉ gồm các dòng `credit_ledger` (giao
 dịch làm đổi số dư thật: nạp, phí đăng/sửa/gia hạn/đẩy bài, phí AI, Admin điều chỉnh). Giữ chỗ và nhả giữ không làm
 đổi số dư nên không có ở đây; số đang giữ xem ở `GET /wallet`.
 
@@ -148,13 +148,13 @@ Phí AI (#121, người gọi: search): gọi `chargeAiSearch` trước khi gọ
 
 Truyền `type` ngoài danh sách của hàm là lỗi lập trình: ném `IllegalArgumentException`, không phải mã lỗi trên.
 
-### Báo cáo tài chính cho Admin: `getFinanceSummary(from, to)` (FR-109, FR-110, BR-P09)
+### Báo cáo tài chính cho Admin: `getFinanceSummary(from, to)` (VI-09)
 
 ```java
 FinanceSummaryResponse getFinanceSummary(Instant from, Instant to)
 ```
 
-Báo cáo ba sổ (SRS mục 4.7) của **toàn hệ thống** trong khoảng `[from, to)`. Người gọi: admin (#115) gọi qua
+Báo cáo ba sổ (VI-09) của **toàn hệ thống** trong khoảng `[from, to)`. Người gọi: admin (#115) gọi qua
 `CreditService`, không inject repository của wallet. Hàm không kiểm quyền; controller của admin tự giới hạn cho Admin.
 
 - `from`, `to` có thể `null` (không giới hạn đầu đó), giống `getTransactions`. `from` không trước `to` thì ném
@@ -170,7 +170,7 @@ Báo cáo ba sổ (SRS mục 4.7) của **toàn hệ thống** trong khoảng `[
 | `creditInByType`  | Như trên, tách theo `type` (thực tế: `TOP_UP`, `ADMIN_ADJUST` dương)                          |
 | `creditOutTotal`  | Tổng của các dòng có `amount < 0`, **trả số dương** (doanh thu đã thực hiện)                   |
 | `creditOutByType` | Như trên, tách theo `type` (`POST_FEE`, `EDIT_FEE`, `RENEW_FEE`, `BOOST_FEE`, `AI_SEARCH_FEE`; `ADMIN_ADJUST` âm nếu có nằm dòng riêng) |
-| `reconciliation`  | Dòng đối chiếu BR-P09, xem dưới                                                               |
+| `reconciliation`  | Dòng đối chiếu VI-09, xem dưới                                                               |
 | `cashByDay`       | Tiền mặt thực thu theo ngày giờ Việt Nam (`Asia/Ho_Chi_Minh`) từ `paid_at`: `{ date, amountVnd, orderCount }`, ngày cũ trước, chỉ gồm ngày có đơn. Gom ở Java vì `paid_at` lưu UTC |
 
 - Mỗi phần tử `...ByType` là `{ type, amount, entryCount }`; `amount` luôn không âm, `entryCount` là số dòng sổ cái.
@@ -211,7 +211,7 @@ cùng một transaction nên chỉ chênh rất nhỏ; chỉ có thể lệch gi
 }
 ```
 
-### Tra cứu lịch sử tài chính của một người (FR-112)
+### Tra cứu lịch sử tài chính của một người (AD-03)
 
 Admin dùng lại hai hàm có sẵn, truyền `userId` của người cần tra (hàm không ràng buộc người gọi phải là chủ ví):
 

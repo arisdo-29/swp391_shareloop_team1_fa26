@@ -1,5 +1,5 @@
--- V1__init.sql: 17 bảng theo ERD v10 (chương 7), extension, hàm dùng chung, ràng buộc và index mục 7.7.
--- Quy ước (Lộ trình mục 3.3, ERD mục 7.11): snake_case; id BIGINT identity; enum = VARCHAR + CHECK;
+-- V1__init.sql: 17 bảng, extension, hàm dùng chung, ràng buộc và index.
+-- Quy ước: snake_case; id BIGINT identity; enum = VARCHAR + CHECK;
 -- created_by / updated_by không đặt khoá ngoại; duy nhất chỉ tính bản ghi chưa xoá mềm.
 
 CREATE EXTENSION IF NOT EXISTS unaccent;

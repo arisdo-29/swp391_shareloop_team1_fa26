@@ -1,6 +1,6 @@
 # API module notification
 
-Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
+Quy ước chung: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất bên dưới.
 
 Người sở hữu: BE3 (@dwargon73-sketch).
@@ -9,7 +9,7 @@ Người sở hữu: BE3 (@dwargon73-sketch).
 
 ## 1. GET /api/v1/notifications
 
-Xem danh sách thông báo của tôi (phân trang, sắp xếp mới nhất lên trước) (FR-118, UC-20).
+Xem danh sách thông báo của tôi (phân trang, sắp xếp mới nhất lên trước) (TB-02, UC-33).
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT).
 - **Query parameters:**

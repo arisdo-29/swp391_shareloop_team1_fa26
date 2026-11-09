@@ -1,7 +1,7 @@
 # API module user
 
-Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
-lỗi theo định dạng thống nhất ở cuối file. Nguồn: SRS v10 (FR-06, BR-U03, UC-03).
+Quy ước chung: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
+lỗi theo định dạng thống nhất ở cuối file. Nguồn: SRS Final Report 09/11, mục 3.2.4; luật TK-11, TK-12; UC-03.
 
 Người sở hữu: BE1 (review: BE3 @dwargon73-sketch theo Issue #147). File này gồm các endpoint hồ sơ của người đang đăng nhập (xem, cập nhật, đổi số điện thoại qua OTP email) và các hàm của
 `UserService` dành cho module khác gọi (khoá, mở khoá, lấy thông tin liên lạc), cùng job nền dọn tài khoản chưa xác thực (mục "Job nền"). Đổi mật khẩu xem `docs/api/auth.md`.
@@ -9,11 +9,11 @@ Người sở hữu: BE1 (review: BE3 @dwargon73-sketch theo Issue #147). File n
 ## Quy tắc chung
 
 - Các endpoint **bắt buộc** `Authorization: Bearer <accessToken>`. Id người dùng lấy từ token (claim `sub`),
-  không nhận từ client, nên chỉ xem và sửa được hồ sơ của chính mình (BR-U03).
-- Tài khoản bị khoá (FR-107) hoặc `BANNED`: **mọi** endpoint cần token trả `403 AUTH_ACCOUNT_LOCKED` (bị khoá) hoặc
+  không nhận từ client, nên chỉ xem và sửa được hồ sơ của chính mình (TK-12).
+- Tài khoản bị khoá (KC-01) hoặc `BANNED`: **mọi** endpoint cần token trả `403 AUTH_ACCOUNT_LOCKED` (bị khoá) hoặc
   `403 AUTH_ACCOUNT_BANNED` (bị cấm khi hết sao), kể cả với token
   cấp trước lúc khoá (server kiểm lại tài khoản ở mỗi request). FE gặp mã này thì xoá phiên và về màn đăng nhập.
-- Email **không đổi** ở đây. Body có gửi kèm `email` thì server bỏ qua. Đổi số điện thoại qua luồng riêng (FR-07, OTP email).
+- Email **không đổi** ở đây. Body có gửi kèm `email` thì server bỏ qua. Đổi số điện thoại qua luồng riêng (TK-11, OTP email).
 - Khu vực lấy từ `GET /api/v1/areas` (`docs/api/catalog.md`). Ảnh đại diện upload trước qua `POST /api/v1/media`
   (`docs/api/media.md`), lấy `mediaId` gửi vào `avatarMediaId`.
 
@@ -77,7 +77,7 @@ Response giống `GET /api/v1/me`.
 
 ## POST /api/v1/me/phone/otp
 
-Yêu cầu gửi mã OTP về email để chuẩn bị đổi số điện thoại (FR-07, BR-U10).
+Yêu cầu gửi mã OTP về email để chuẩn bị đổi số điện thoại (TK-11).
 
 - Xác thực: **bắt buộc**.
 - Request: `SendChangePhoneOtpRequest` (`newPhone`).
@@ -111,7 +111,7 @@ Response:
 
 ## PUT /api/v1/me/phone
 
-Xác nhận mã OTP và hoàn tất đổi số điện thoại (FR-07, BR-U10).
+Xác nhận mã OTP và hoàn tất đổi số điện thoại (TK-11).
 
 - Xác thực: **bắt buộc**.
 - Request: `ChangePhoneRequest` (`newPhone`, `otp`).
@@ -263,7 +263,7 @@ Lỗi là `BusinessException` với mã của `UserErrorCode`; nếu để lọt
 
 `searchAccounts` là hàm sau `GET /api/v1/admin/users` (xem `admin.md` mục 3.3): lọc tuỳ chọn theo từ khoá (họ tên, email, số điện thoại), trạng thái hiển thị (`ACTIVE`, `LOCKED`, `PENDING_VERIFICATION`, `BANNED`) và vai trò (`ADMIN`, `USER`), tài khoản mới nhất trước. Module wallet gọi với `role = USER` để dựng danh sách tra cứu tài chính.
 
-### lock / unlock (FR-107, UC-50)
+### lock / unlock (KC-01, UC-50)
 
 - Khoá: `is_active = false`; mở khoá: `is_active = true`. Cột `status` **không đổi**.
 - `reason` **không được lưu** ở users (bảng không có cột lý do). Người gọi tự ghi lý do vào nhật ký qua
@@ -280,12 +280,12 @@ Lỗi là `BusinessException` với mã của `UserErrorCode`; nếu để lọt
 - Có hiệu lực ngay: đăng nhập trả `403 AUTH_ACCOUNT_BANNED`, token đã cấp cũng bị chặn với cùng mã.
 - REQUIRED, các listener chạy cùng transaction: một bước lỗi thì cả việc cấm cũng rollback.
 
-### findContact (FR-82, BR-T11, BR-T12)
+### findContact (GN-04)
 
 - Trả `ContactInfo` gồm **đúng 4 trường**: `userId`, `fullName`, `email`, `phone`. Không trả gì khác.
 - **Không** kiểm Request: người gọi (module request) phải tự bảo đảm Request đã `LogisticsConfirmed` và người xem là
   một trong hai bên, rồi mới gọi để lấy liên lạc của bên còn lại.
-- Vẫn trả khi tài khoản kia đã bị khoá (BR-T12: đã trao thì không ẩn lại).
+- Vẫn trả khi tài khoản kia đã bị khoá (GN-04: đã trao thì không ẩn lại).
 
 ## Job nền
 
@@ -295,7 +295,7 @@ Không phải endpoint. Profile `test` đặt `app.jobs.enabled=false` nên bean
 |-----|------|---------|----------|
 | `PendingAccountCleanupJob` (#106) | `0 30 * * * *` (phút 30 mỗi giờ) | `PendingAccountCleanupService.deleteExpiredPendingAccounts(now)` | Xoá mềm tài khoản chưa xác thực quá hạn |
 
-### Xoá tài khoản chưa xác thực (FR-117, BR-U06)
+### Xoá tài khoản chưa xác thực (TK-07)
 
 - **Chọn**: `status = PENDING_VERIFICATION`, `created_at < now − pending_account_ttl_hours` (mặc định 24 giờ, đọc từ
   ConfigService), `is_deleted = false`, và **không** có OTP còn hạn (`otp_expires_at` null hoặc `≤ now`). Đọc theo lô
@@ -314,7 +314,7 @@ Không phải endpoint. Profile `test` đặt `app.jobs.enabled=false` nên bean
 ## Ghi chú cho frontend
 
 - Dùng `frontend/src/services/userApi.ts`: `userApi.getMe()`, `userApi.updateMe(input)`.
-- Đổi số điện thoại (FR-07): gọi `userApi.sendChangePhoneOtp({ newPhone })` (`POST /api/v1/me/phone/otp`) để gửi mã OTP về email, sau đó gọi `userApi.changePhone({ newPhone, otp })` (`PUT /api/v1/me/phone`) để xác thực và cập nhật.
+- Đổi số điện thoại (TK-11): gọi `userApi.sendChangePhoneOtp({ newPhone })` (`POST /api/v1/me/phone/otp`) để gửi mã OTP về email, sau đó gọi `userApi.changePhone({ newPhone, otp })` (`PUT /api/v1/me/phone`) để xác thực và cập nhật.
 - `authApi.me(userId)` (đang dùng trong `session.ts`) vẫn chạy: server bỏ qua tham số `userId` và trả `MeResponse`, có đủ các trường cũ. Khi tiện có thể đổi sang `userApi.getMe()`.
 - Màn hồ sơ hiện cho sửa email và số điện thoại: hai trường này phải chỉ đọc trên form thông thường; đổi số điện thoại là nút/hành động riêng mở modal OTP.
 

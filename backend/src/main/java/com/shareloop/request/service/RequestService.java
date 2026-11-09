@@ -57,7 +57,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service quản lý yêu cầu giao dịch (Request) và state machine (Lộ trình 4.6, 4.7).
+ * Service quản lý yêu cầu giao dịch (Request) và state machine.
  */
 @Service
 public class RequestService {

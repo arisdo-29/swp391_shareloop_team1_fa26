@@ -124,7 +124,7 @@ giống quy tắc bên gửi. Thành công `204 No Content`, lưu nội dung đ�
 giải trình lần hai, sau hạn, hoặc khi hồ sơ không còn `AWAITING_RESPONSE`.
 Endpoint `POST /disputes/{disputeId}/response` hiện có vẫn nhận `{note, evidenceMediaIds}`,
 trả `200` và giữ các mã lỗi `DISPUTE_*` riêng. Cả hai endpoint đều gắn bằng chứng riêng tư
-qua cùng gateway và chuyển `AWAITING_RESPONSE` về `OPEN` sau khi giải trình, đúng mục 5 (Sơ đồ trạng thái) trong Luồng hoạt động & ERD.
+qua cùng gateway và chuyển `AWAITING_RESPONSE` về `OPEN` sau khi giải trình, đúng mục 3.9 (Sơ đồ trạng thái) của SRS Final Report 09/11.
 
 ### Report tự mở khi báo "chưa nhận được" / "chưa giao được" đồ
 
@@ -140,7 +140,7 @@ transaction** với bước chuyển `DISPUTED`, lỗi thì cả hai rollback) g
 - Gửi thông báo `DISPUTE_OPENED` cho bên còn lại, dẫn tới `/me/disputes/{reportId}` để giải trình.
 - Chủ bài, người nhận và Admin xử lý như khiếu nại thường (`POST /disputes/{disputeId}/response`, `.../conclude`).
 
-### Report tự mở khi bên nhận chọn "Không đúng mô tả" (FR-85, BR-R05)
+### Report tự mở khi bên nhận chọn "Không đúng mô tả" (GN-07, BC-09)
 
 Không có endpoint mới. Khi bên nhận gọi `POST /api/v1/requests/{id}/confirm-handover` với `asDescribed = false`,
 module request phát event `NotAsDescribedReportedEvent`. Listener trong module report
@@ -151,11 +151,11 @@ module request phát event `NotAsDescribedReportedEvent`. Listener trong module 
   `description` là lý do bên nhận nhập, `targetUserId` là chủ bài, `responseDueAt` theo `response_window_hours` (48 giờ).
   Không thêm bảng hay cột.
 - Khác `POST /requests/{requestId}/disputes`: không đòi giao dịch đã `COMPLETED` và không xét cửa sổ khiếu nại
-  7 ngày, vì bên nhận có thể trả lời khi giao dịch còn `AWAITING_HANDOVER`.
+  24 giờ (`complaint_window_hours`, BC-07), vì bên nhận có thể trả lời khi giao dịch còn `AWAITING_HANDOVER`.
 - Chống trùng: bên nhận đã có report `REQUEST` cho giao dịch này thì bỏ qua, không lỗi.
 - Gửi thông báo `DISPUTE_OPENED` cho chủ bài, dẫn tới `/me/disputes/{reportId}` để giải trình.
 - Chủ bài và Admin xử lý như khiếu nại thường (`POST /disputes/{disputeId}/response`, `.../conclude`).
-- `ReportService.hasReportForRequest(requestId)` cho job tự hoàn tất ở module request bỏ qua giao dịch đã có report (FR-87).
+- `ReportService.hasReportForRequest(requestId)` cho job tự hoàn tất ở module request bỏ qua giao dịch đã có report (GN-09).
 
 Lỗi ghi bổ sung: `400 VALIDATION_FAILED`; `403 REPORT_NOT_PARTICIPANT` (giải trình qua `/reports`)
 hoặc `DISPUTE_NOT_A_PARTY` (tạo báo cáo `REQUEST`);
@@ -183,9 +183,9 @@ Báo cáo một bài đăng hoặc một người dùng vi phạm quy tắc cộ
   - Không thể tự báo cáo chính mình hoặc bài đăng của chính mình (`400 REPORT_CANNOT_REPORT_SELF`).
   - Mỗi người dùng chỉ được báo cáo một đối tượng tối đa 1 lần (`409 REPORT_ALREADY_REPORTED`).
   - Đối tượng báo cáo phải tồn tại trong hệ thống (`404 REPORT_TARGET_NOT_FOUND`).
-  - Cơ chế tự động bảo vệ (BR-A03, FR-49, Issue #151): Khi một bài đăng có đủ `report_hide_threshold` báo cáo (mặc định **3**, Admin sửa được qua cấu hình) **đang chờ xử lý**, hệ thống tự ẩn bài (`itemService.hide(itemId)`).
+  - Cơ chế tự động bảo vệ (BC-02, Issue #151): Khi một bài đăng có đủ `report_hide_threshold` báo cáo (mặc định **3**, Admin sửa được qua cấu hình) **đang chờ xử lý**, hệ thống tự ẩn bài (`itemService.hide(itemId)`).
     - Chỉ đếm báo cáo `targetType = ITEM` ở trạng thái `OPEN` hoặc `AWAITING_RESPONSE`; báo cáo đã `DISMISSED` hoặc `RESOLVED` không tính.
-    - Ẩn bài nghĩa là `is_active = false`, **giữ nguyên `status`** (ERD mục F16). Hàng chờ xử lý là trang khiếu nại của Admin (`GET /api/v1/admin/reports`), nơi các báo cáo `OPEN` đã nằm sẵn.
+    - Ẩn bài nghĩa là `is_active = false`, **giữ nguyên `status`**. Hàng chờ xử lý là trang khiếu nại của Admin (`GET /api/v1/admin/reports`), nơi các báo cáo `OPEN` đã nằm sẵn.
     - Đúng lúc bài vừa chạm ngưỡng, mọi Admin nhận một thông báo `type = ITEM_AUTO_HIDDEN`, `link = /admin/complaints`. Chủ bài cũng nhận một thông báo `type = ITEM_AUTO_HIDDEN`, nội dung `Bài «{tên bài}» đang tạm ẩn do có nhiều báo cáo. Admin sẽ xem xét và báo kết quả.`, `link = /activities` (U04). Báo cáo sau đó vào bài đã ẩn không gửi lại thông báo.
 
 - **Request Body:**
@@ -243,7 +243,7 @@ Báo cáo một bài đăng hoặc một người dùng vi phạm quy tắc cộ
 
 ## 2. POST /api/v1/requests/{requestId}/disputes
 
-Một trong hai bên tham gia giao dịch (người cho hoặc người nhận) gửi khiếu nại sau khi giao dịch đã hoàn tất (FR-89, BR-T08, Issue #112).
+Một trong hai bên tham gia giao dịch (người cho hoặc người nhận) gửi khiếu nại sau khi giao dịch đã hoàn tất (BC-07, Issue #112).
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT). ID người khiếu nại được trích xuất từ phiên đăng nhập hiện tại (`@CurrentUserId`).
 - **Quy tắc nghiệp vụ:**
@@ -296,7 +296,7 @@ Một trong hai bên tham gia giao dịch (người cho hoặc người nhận) 
 
 ## 3. POST /api/v1/disputes/{disputeId}/response
 
-Bên bị khiếu nại gửi văn bản giải trình kèm bằng chứng đối chất (FR-90, BR-T08, Issue #112).
+Bên bị khiếu nại gửi văn bản giải trình kèm bằng chứng đối chất (BC-08, Issue #112).
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT). ID người giải trình được trích xuất từ phiên đăng nhập hiện tại (`@CurrentUserId`).
 - **Quy tắc nghiệp vụ:**
@@ -338,7 +338,7 @@ Bên bị khiếu nại gửi văn bản giải trình kèm bằng chứng đố
 
 ## 4. POST /api/v1/admin/reports/{reportId}/conclude
 
-Admin đưa ra kết luận xử lý đối với báo cáo hoặc khiếu nại vi phạm (FR-91, FR-93, BR-U04, BR-A07, Issue #113).
+Admin đưa ra kết luận xử lý đối với báo cáo hoặc khiếu nại vi phạm (BC-11, BC-12, BC-06, UT-02, Issue #113).
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền `ROLE_ADMIN`. ID của Admin được trích xuất từ phiên đăng nhập (`@CurrentUserId`).
 - **Quy tắc nghiệp vụ:**
@@ -357,9 +357,9 @@ Admin đưa ra kết luận xử lý đối với báo cáo hoặc khiếu nại
       - Đối tượng là `ITEM`: Chủ bài đăng (`donorId`).
       - Đối tượng là `USER`: Người dùng bị báo cáo (`targetUserId`).
       - Đối tượng là `REQUEST`: Bên bị khiếu nại trong giao dịch.
-    - Trừ 1 sao uy tín của người vi phạm qua `ReputationService.deductStar(violatorId, 1, note)` (BR-U04).
+    - Trừ 1 sao uy tín của người vi phạm qua `ReputationService.deductStar(violatorId, 1, note)` (UT-02).
     - Nếu lý do vi phạm thuộc nhóm nghiêm trọng cấu hình qua `report_serious_reasons` (`ConfigKey.REPORT_SERIOUS_REASONS`, Admin sửa ở trang Cấu hình; mặc định `PROHIBITED_ITEM`, `COUNTERFEIT`; khoá chữ hoa trùng đã xoá mềm ở L13):
-      - Hệ thống tự động ẩn toàn bộ các bài đăng đang hoạt động khác của người vi phạm để rà soát (`itemService.hideAllOfUser(violatorId)`, BR-A07).
+      - Hệ thống tự động ẩn toàn bộ các bài đăng đang hoạt động khác của người vi phạm để rà soát (`itemService.hideAllOfUser(violatorId)`, BC-06).
     - Nếu đối tượng báo cáo là bài đăng cụ thể (`ITEM`), tự động ẩn bài đăng đó (`itemService.hide(itemId)`).
     - **Báo cáo bài (D-07, BC-05):** các báo cáo khác của cùng bài đang `OPEN`/`AWAITING_RESPONSE` đóng theo: `RESOLVED`, `starsDeducted = 0`, `resolution = "Đóng theo kết luận báo cáo #<id>"`. Chủ bài chỉ bị trừ 1 sao cho lần chấp thuận này.
     - Ghi nhận nhật ký hành động Admin (`activity_logs` loại `REPORT_UPHELD`; có `closedReportIds` khi đóng theo báo cáo khác).
@@ -437,7 +437,7 @@ FE (`/admin/complaints`): nút "Yêu cầu giải trình" hiện khi hồ sơ `O
 
 ## 6. GET /api/v1/reports/mine
 
-Member xem các báo cáo bài đăng, người dùng và khiếu nại giao dịch mình đã gửi (FR-88, FR-89).
+Member xem các báo cáo bài đăng, người dùng và khiếu nại giao dịch mình đã gửi (BC-01, BC-07).
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT).
 - **Thành công:** `200 OK`, mảng `MyReportSummary`, mới nhất lên trước. Không phân trang.

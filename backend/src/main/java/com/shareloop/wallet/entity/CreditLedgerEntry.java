@@ -15,7 +15,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
- * Một dòng sổ cái Credit (bảng credit_ledger, ERD mục 7.6). Sổ cái chỉ thêm dòng mới, không sửa, không xoá nên entity
+ * Một dòng sổ cái Credit (bảng credit_ledger). Sổ cái chỉ thêm dòng mới, không sửa, không xoá nên entity
  * này không kế thừa BaseEntity (không is_active, is_deleted, updated_*) và không có hàm sửa.
  *
  * <p>amount âm là trừ, dương là cộng; balance_after là số dư credit_balance ngay sau giao dịch.

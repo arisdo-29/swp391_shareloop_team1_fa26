@@ -11,7 +11,7 @@ import java.time.LocalDate;
 import org.hibernate.annotations.SQLRestriction;
 
 /**
- * Entity lát cắt của bảng users: chỉ map nhóm cột uy tín của module reputation (Lộ trình 4.7).
+ * Entity lát cắt của bảng users: chỉ map nhóm cột uy tín của module reputation.
  * Không tạo bản ghi ở đây (user do module user tạo), chỉ đọc và sửa điểm, sao, hạng.
  */
 @Entity
@@ -43,7 +43,7 @@ public class UserReputation extends SliceAudit {
     @Column(name = "clean_streak", nullable = false)
     private int cleanStreak;
 
-    // Cột grace_star_used vẫn còn trong bảng (ERD đã chốt) nhưng không map: nhóm đã bỏ sao ân hạn (UT-09).
+    // Cột grace_star_used vẫn còn trong bảng (17 bảng đã chốt) nhưng không map: nhóm đã bỏ sao ân hạn (UT-09).
 
     protected UserReputation() {}
 

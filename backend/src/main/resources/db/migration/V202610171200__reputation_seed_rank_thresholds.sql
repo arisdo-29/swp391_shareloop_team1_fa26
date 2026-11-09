@@ -1,4 +1,4 @@
--- Seed reputation rank thresholds from SRS v10 section 6.15 (FR-100, BR-U01).
+-- Seed reputation rank thresholds from SRS Final Report 09/11, section 5.2 (reputation_silver_min, reputation_gold_min, reputation_diamond_min).
 -- Bronze: 0-49, Silver: 50-149, Gold: 150-399, Diamond: >= 400.
 INSERT INTO website_attributes (attr_group, attr_key, attr_value)
 VALUES

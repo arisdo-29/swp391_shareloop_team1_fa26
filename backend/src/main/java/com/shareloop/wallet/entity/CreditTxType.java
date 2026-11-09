@@ -1,7 +1,7 @@
 package com.shareloop.wallet.entity;
 
 /**
- * Loại giao dịch của {@code credit_ledger.type} (V1__init.sql, ERD mục 7.6). Đúng 7 giá trị của CHECK trong DB.
+ * Loại giao dịch của {@code credit_ledger.type} (V1__init.sql). Đúng 7 giá trị của CHECK trong DB.
  *
  * <p>Chỉ giao dịch làm đổi {@code credit_balance} mới ghi ledger. Giữ chỗ ({@code hold}) và nhả ({@code release})
  * chỉ đổi {@code users.held_credit} nên không có loại riêng.

@@ -1,9 +1,9 @@
 # API module chat
 
-Quy ước chung theo Lộ trình mục 3.4: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
+Quy ước chung: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất bên dưới.
 
-Người sở hữu: BE3 (@dwargon73-sketch). FR-68, FR-69, FR-70, FR-72, FR-75, FR-76, FR-78; BR-C01, BR-C02, BR-C03, BR-C04, BR-C05, BR-C07, BR-A10.
+Người sở hữu: BE3 (@dwargon73-sketch). Luật liên quan: CH-01 đến CH-07, GN-05.
 
 ## Danh sách cuộc trò chuyện
 
@@ -28,10 +28,10 @@ Mỗi `RequestResponse` đã có đủ dữ liệu cho một dòng:
 
 ## 1. POST /api/v1/requests/{requestId}/messages
 
-Gửi tin nhắn mới (văn bản, ảnh hoặc chia sẻ thẻ bài đăng) trong khung chat của yêu cầu giao dịch (FR-68, FR-70, UC-24, UC-25).
+Gửi tin nhắn mới (văn bản, ảnh hoặc chia sẻ thẻ bài đăng) trong khung chat của yêu cầu giao dịch (CH-01, CH-06, UC-24, UC-25).
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT). Chỉ 2 bên của yêu cầu giao dịch (chủ bài đăng hoặc người nhận được chọn).
-- **Điều kiện:** Yêu cầu giao dịch phải ở trạng thái từ `RESERVED` trở lên (BR-C03).
+- **Điều kiện:** Yêu cầu giao dịch phải ở trạng thái từ `RESERVED` trở lên (CH-01).
 - **Path variable:**
   - `requestId`: ID của yêu cầu giao dịch.
 - **Request body:**
@@ -47,11 +47,11 @@ Gửi tin nhắn mới (văn bản, ảnh hoặc chia sẻ thẻ bài đăng) tr
 *Ghi chú:*
 - Gửi tin nhắn văn bản: truyền `content`, `mediaId = null`, `refItemId = null`.
 - Gửi ảnh: truyền `mediaId` (nhận được từ API tải ảnh `POST /api/v1/media`), `content` là ghi chú/caption tuỳ chọn.
-  - **Quy tắc gửi ảnh (FR-75, BR-C05):** Ảnh chỉ được phép gửi sau khi hai bên đã xác nhận lịch hẹn (từ trạng thái `LOGISTICS_CONFIRMED` trở lên). Gửi trước thời điểm này sẽ bị chặn với lỗi `CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN`.
+  - **Quy tắc gửi ảnh (CH-07):** Ảnh chỉ được phép gửi sau khi hai bên đã xác nhận lịch hẹn (từ trạng thái `LOGISTICS_CONFIRMED` trở lên). Gửi trước thời điểm này sẽ bị chặn với lỗi `CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN`.
   - **Người nhận trong giao dịch Cho tặng không gửi ảnh:** Khi `Request.type = GIVE` và người gửi là người nhận (`receiverId`), tin nhắn có `mediaId` bị chặn với `403 CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN`. Chủ bài vẫn gửi ảnh được sau khi chốt lịch. Tin chữ và thẻ bài (`refItemId`) không bị ảnh hưởng. Giao dịch Trao đổi (`SWAP`) giữ nguyên như cũ cho cả hai phía.
-- Gửi thẻ bài đăng (FR-70, BR-C07): truyền `refItemId` (id bài đăng muốn chia sẻ), `content` là lời nhắn kèm theo (tuỳ chọn).
-  - **Quy tắc chia sẻ thẻ bài (BR-C07):** Chỉ chia sẻ được thẻ của bài đăng ở trạng thái đã được duyệt (`APPROVED`). Nếu chia sẻ bài chưa duyệt hoặc không tồn tại sẽ bị từ chối với lỗi tương ứng.
-- Trước khi chốt lịch, nội dung chứa thông tin liên hệ (số điện thoại, mạng xã hội, link ngoài) hoặc từ khoá cấm sẽ bị chặn ngay và ghi nhận vi phạm (`CHAT_MESSAGE_BLOCKED`). Theo BR v11.2 (D-17, CH-04), hệ thống chỉ dùng bộ lọc regex và từ khoá tĩnh tầng 1, không dùng AI kiểm tra tin nhắn.
+- Gửi thẻ bài đăng (CH-06): truyền `refItemId` (id bài đăng muốn chia sẻ), `content` là lời nhắn kèm theo (tuỳ chọn).
+  - **Quy tắc chia sẻ thẻ bài (CH-06):** Chỉ chia sẻ được thẻ của bài đăng ở trạng thái đã được duyệt (`APPROVED`). Nếu chia sẻ bài chưa duyệt hoặc không tồn tại sẽ bị từ chối với lỗi tương ứng.
+- Trước khi chốt lịch, nội dung chứa thông tin liên hệ (số điện thoại, mạng xã hội, link ngoài) hoặc từ khoá cấm sẽ bị chặn ngay và ghi nhận vi phạm (`CHAT_MESSAGE_BLOCKED`). Theo Business Rule v12 (D-17, CH-04), hệ thống chỉ dùng bộ lọc regex và từ khoá tĩnh tầng 1, không dùng AI kiểm tra tin nhắn.
 
 - **Thành công:** `201 Created`, trả về `MessageResponse`.
 
@@ -81,21 +81,21 @@ Gửi tin nhắn mới (văn bản, ảnh hoặc chia sẻ thẻ bài đăng) tr
 
 - **Lỗi:**
   - `400 BAD_REQUEST` (`CHAT_MESSAGE_EMPTY`): Cả nội dung tin nhắn, ảnh và mã thẻ bài đều rỗng.
-  - `400 BAD_REQUEST` (`CHAT_ITEM_NOT_APPROVED`): Chia sẻ thẻ của bài đăng chưa được duyệt (`APPROVED`) (FR-70, BR-C07).
-  - `400 BAD_REQUEST` (`CHAT_MESSAGE_BLOCKED`): Tin nhắn bị chặn do chứa thông tin liên hệ (trước `LOGISTICS_CONFIRMED`) hoặc chứa từ khoá cấm mức `BLOCK` (FR-72, FR-74, FR-78; BR-C01, BR-A10). Nếu một giao dịch có từ 3 lần vi phạm trở lên sẽ tự động gửi cảnh báo tới Admin (FR-76, BR-C04).
+  - `400 BAD_REQUEST` (`CHAT_ITEM_NOT_APPROVED`): Chia sẻ thẻ của bài đăng chưa được duyệt (`APPROVED`) (CH-06).
+  - `400 BAD_REQUEST` (`CHAT_MESSAGE_BLOCKED`): Tin nhắn bị chặn do chứa thông tin liên hệ (trước `LOGISTICS_CONFIRMED`) hoặc chứa từ khoá cấm mức `BLOCK` (CH-02, CH-03, CH-05). Nếu một giao dịch có từ 3 lần vi phạm trở lên sẽ tự động gửi cảnh báo tới Admin (CH-05).
   - `401 UNAUTHORIZED`: Chưa đăng nhập.
   - `403 FORBIDDEN` (`CHAT_FORBIDDEN`): Người dùng không thuộc hai bên của giao dịch.
   - `404 NOT_FOUND` (`CHAT_REQUEST_NOT_FOUND`): Yêu cầu giao dịch không tồn tại.
   - `404 NOT_FOUND` (`CHAT_ITEM_NOT_FOUND`): Không tìm thấy bài đăng để chia sẻ thẻ.
   - `409 CONFLICT` (`CHAT_REQUEST_NOT_RESERVED`): Yêu cầu chưa ở trạng thái `RESERVED`.
-  - `409 CONFLICT` (`CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN`): Gửi ảnh trước khi hai bên xác nhận lịch hẹn (`LOGISTICS_CONFIRMED`) (FR-75, BR-C05).
+  - `409 CONFLICT` (`CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN`): Gửi ảnh trước khi hai bên xác nhận lịch hẹn (`LOGISTICS_CONFIRMED`) (CH-07).
   - `403 FORBIDDEN` (`CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN`): Người nhận trong giao dịch Cho tặng gửi tin có ảnh.
 
 ---
 
 ## 2. GET /api/v1/requests/{requestId}/messages
 
-Lấy danh sách tin nhắn trong khung chat (hỗ trợ hỏi tin mới theo chu kỳ - polling) (FR-68, UC-24). Các tin nhắn có `refItemId` sẽ được backend tự động ghép thông tin thẻ bài hiện tại qua trường `itemCard`. Chỉ trả về các tin nhắn hợp lệ (`moderation = PASS`), các tin nhắn bị chặn được lưu để kiểm duyệt và cảnh báo Admin, không trả về trong khung chat.
+Lấy danh sách tin nhắn trong khung chat (hỗ trợ hỏi tin mới theo chu kỳ - polling) (CH-01, UC-24). Các tin nhắn có `refItemId` sẽ được backend tự động ghép thông tin thẻ bài hiện tại qua trường `itemCard`. Chỉ trả về các tin nhắn hợp lệ (`moderation = PASS`), các tin nhắn bị chặn được lưu để kiểm duyệt và cảnh báo Admin, không trả về trong khung chat.
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT). Chỉ 2 bên của yêu cầu giao dịch.
 - **Điều kiện:** Yêu cầu giao dịch phải ở trạng thái từ `RESERVED` trở lên.
@@ -155,7 +155,7 @@ Lấy danh sách tin nhắn trong khung chat (hỗ trợ hỏi tin mới theo ch
 
 ## 3. GET /api/v1/requests/{requestId}/pinned-items
 
-Lấy danh sách thẻ sản phẩm ghim ở đầu khung chat (FR-69, BR-C02).
+Lấy danh sách thẻ sản phẩm ghim ở đầu khung chat (CH-06).
 - Nếu yêu cầu là bài Cho Tặng (`GIVE`): ghim 1 thẻ sản phẩm của bài đăng chính.
 - Nếu yêu cầu là bài Trao Đổi (`SWAP`): ghim cả 2 thẻ sản phẩm (bài chính của chủ bài và món đề nghị của người nhận).
 

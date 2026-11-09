@@ -9,7 +9,7 @@ import jakarta.persistence.Table;
 import org.hibernate.annotations.SQLRestriction;
 
 /**
- * Entity bảng items - lát cắt nội dung và trạng thái cơ bản (Lộ trình 4.4, SRS v10).
+ * Entity bảng items - lát cắt nội dung và trạng thái cơ bản (SRS Final Report 09/11, mục 3.1.5).
  * Cột phí, AI, review thuộc module khác nên không map ở đây.
  */
 @Entity

@@ -98,7 +98,7 @@ class ItemExpiryServiceIT extends IntegrationTest {
         // when
         itemExpiryService.expireOverdueItems(now);
 
-        // then: chỉ bài APPROVED mới hết hạn (ERD mục 6); hai bài này xử lý khi quay về APPROVED
+        // then: chỉ bài APPROVED mới hết hạn; hai bài này xử lý khi quay về APPROVED
         assertThat(statusOf(reservedItemId)).isEqualTo("RESERVED");
         assertThat(statusOf(pendingReviewItemId)).isEqualTo("PENDING_REVIEW");
     }

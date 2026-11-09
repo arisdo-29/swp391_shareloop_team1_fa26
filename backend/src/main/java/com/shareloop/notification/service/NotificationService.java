@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service cửa ngõ cho thông báo trong ứng dụng và gửi email giao dịch (Lộ trình 4.7, SRS mục 9.15).
+ * Service cửa ngõ cho thông báo trong ứng dụng và gửi email giao dịch (TB-01, TB-02).
  *
  * <p>Mọi module khác gọi gửi thông báo (chuông) hoặc gửi email thông báo qua service này.
  *

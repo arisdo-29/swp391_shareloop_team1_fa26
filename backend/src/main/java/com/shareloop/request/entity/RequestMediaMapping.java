@@ -10,7 +10,7 @@ import java.time.Instant;
 import java.util.Objects;
 
 /**
- * Entity ánh xạ bảng request_media_mappings (ERD 7.5; FR-86, BR-T09).
+ * Entity ánh xạ bảng request_media_mappings (FR-86, BR-T09).
  * Quản lý ảnh/video minh chứng đính kèm khi giao nhận hoặc khiếu nại.
  */
 @Entity

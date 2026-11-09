@@ -21,7 +21,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * Unit test kiểm thử toàn diện máy trạng thái Request entity (ERD 5.1, Hình 21; Spike S8; Issue #127).
+ * Unit test kiểm thử toàn diện máy trạng thái Request entity (SRS mục 3.9; Spike S8; Issue #127).
  * Kiểm tra:
  * 1. Từng mũi tên hợp lệ (14 test độc lập với các domain methods tương ứng).
  * 2. Mọi chuyển trạng thái không hợp lệ trong ma trận đều ném BusinessException(REQUEST_INVALID_STATE_TRANSITION).

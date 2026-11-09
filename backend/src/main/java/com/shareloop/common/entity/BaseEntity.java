@@ -14,7 +14,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
- * Lớp nền cho entity bảng chính và bảng danh mục: id và 6 cột chuẩn (ERD mục 7.11).
+ * Lớp nền cho entity bảng chính và bảng danh mục: id và 6 cột chuẩn.
  *
  * <p>Mỗi entity con phải gắn {@code @SQLRestriction("is_deleted = false")}; cột status (nếu có) khai báo là enum riêng
  * ở entity con. Không xoá cứng: gọi {@link #markDeleted()}. Ẩn / khoá: {@link #deactivate()}, không đổi status.

@@ -1,6 +1,6 @@
--- Seed reputation anti-farming and star recovery configuration from SRS v10 (FR-94, FR-98, BR-U08, BR-U09).
+-- Seed reputation anti-farming and star recovery configuration from SRS Final Report 09/11 (UT-05, UT-08).
 -- Restore 1 star after 10 consecutive clean transactions; no points from the 3rd completed transaction between
--- the same pair within 90 days; more than 5 transactions between a pair raises an Admin alert (FR-113, issue #148).
+-- the same pair within 90 days; more than 5 transactions between a pair raises an Admin alert (AD-04, issue #148).
 INSERT INTO website_attributes (attr_group, attr_key, attr_value)
 VALUES
   ('CONFIG', 'reputation_clean_streak_for_star', '10'),
