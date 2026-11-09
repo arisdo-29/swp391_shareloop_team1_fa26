@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * DTO phản hồi thông tin của một yêu cầu giao dịch (F10, UC-26, UC-27).
+ * DTO phản hồi thông tin của một yêu cầu giao dịch (F10; dùng chung cho UC-20 … UC-30).
  *
  * <p>receiverName chỉ là họ tên người xin, có thể null; email và số điện thoại chỉ trao khi chốt lịch
  * (GN-04) nên không nằm ở đây.

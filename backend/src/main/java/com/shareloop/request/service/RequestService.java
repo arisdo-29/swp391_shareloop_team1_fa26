@@ -898,7 +898,7 @@ public class RequestService {
     }
 
     /**
-     * Xem thông tin chi tiết của một yêu cầu giao dịch (F10, UC-26).
+     * Xem thông tin chi tiết của một yêu cầu giao dịch (F10; dùng chung cho các use case giao dịch UC-22 … UC-30).
      *
      * <p>Chỉ chủ bài đăng (donor) hoặc người nhận (receiver) mới có quyền xem.
      */

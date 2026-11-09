@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller quản lý bài đăng: đăng bài, xem chi tiết, xem bài của tôi (UC-20, UC-22).
+ * Controller quản lý bài đăng: đăng bài, xem chi tiết, xem bài của tôi (UC-12, UC-07).
  */
 @Tag(name = "Item", description = "Quản lý bài đăng cho tặng và trao đổi đồ")
 @RestController
