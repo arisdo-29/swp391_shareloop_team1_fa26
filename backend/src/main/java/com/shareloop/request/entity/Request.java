@@ -166,6 +166,22 @@ public class Request extends BaseEntity {
         this.offeredItemId = newOfferedItemId;
     }
 
+    /** Thay món đề nghị trước khi chốt lịch; hai bên cần xác nhận lại lịch đã đề xuất. */
+    public void changeOfferedItem(Long newOfferedItemId) {
+        if (newOfferedItemId == null) {
+            throw new IllegalArgumentException("Offered item id must not be null");
+        }
+        if (this.offeredItemId == null
+                || (this.status != RequestStatus.PENDING
+                        && this.status != RequestStatus.RESERVED
+                        && this.status != RequestStatus.AWAITING_LOGISTICS)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_OFFERED_ITEM_CHANGE_LOCKED);
+        }
+        this.offeredItemId = newOfferedItemId;
+        this.donorScheduleOkAt = null;
+        this.receiverScheduleOkAt = null;
+    }
+
     /**
      * Đề xuất hoặc cập nhật lịch hẹn giao nhận (FR-79, FR-80, BR-T01, BR-T02).
      *
