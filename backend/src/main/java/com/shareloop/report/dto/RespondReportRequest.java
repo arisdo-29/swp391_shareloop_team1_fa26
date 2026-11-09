@@ -7,4 +7,8 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 public record RespondReportRequest(
-        @NotBlank @Size(max = 2000) String response, List<@NotNull @Positive Long> evidenceMediaIds) {}
+        @NotBlank(message = "Nội dung giải trình không được để trống.")
+        @Size(max = 2000, message = "Nội dung giải trình không được vượt quá 2000 ký tự.")
+        String response,
+
+        List<@NotNull @Positive Long> evidenceMediaIds) {}
