@@ -17,8 +17,9 @@ Trả lời và giải thích bằng tiếng Việt. Tên class, biến, commit 
 - Spring Boot khoá ở 4.1.1, không tự đổi phiên bản. Viết theo Spring Boot 4:
   spring-boot-starter-webmvc, spring-boot-starter-flyway, Jackson 3 (tools.jackson),
   @MockitoBean. Không dùng starter "classic".
-- Đặc tả: docs/srs/ (SRS v10; Luồng hoạt động & ERD — 17 bảng ĐÃ CHỐT;
-  Lộ trình triển khai Backend). Không tự thêm bảng.
+- Đặc tả: docs/srs/ (SRS Final Report 09/11 — nguồn chính; luật ở mục 5.1, cấu hình 5.2,
+  quyết định 5.5; Business Rule v12 giải thích mục A–H). Dữ liệu 17 bảng ĐÃ CHỐT,
+  không tự thêm bảng.
 - Contract API: docs/api/<module>.md. Đọc file của module trước khi viết controller.
 
 ## Lệnh (chạy trong backend/)
@@ -26,7 +27,7 @@ Trả lời và giải thích bằng tiếng Việt. Tên class, biến, commit 
 - Định dạng: ./mvnw spotless:apply
 - Build + test: ./mvnw verify
 
-## Cấu trúc (Lộ trình, chương 4)
+## Cấu trúc package
 - Package theo module: com.shareloop.<module>/
   {controller, service, repository, entity, dto, mapper, event, job}
 - Chỉ sửa trong module của task. Gọi module khác qua <Tên>Service;
@@ -35,7 +36,7 @@ Trả lời và giải thích bằng tiếng Việt. Tên class, biến, commit 
 - Bảng users/items: mỗi module map nhóm cột của mình bằng entity lát cắt;
   không map một cột ở hai entity (trừ updated_at, updated_by qua SliceAudit).
 
-## Cột chuẩn và xoá mềm (ERD mục 7.11)
+## Cột chuẩn và xoá mềm
 - Entity bảng chính và bảng danh mục kế thừa common.entity.BaseEntity
   (created_at, updated_at, created_by, updated_by, is_active, is_deleted),
   gắn @SQLRestriction("is_deleted = false"); status là enum riêng từng entity.
