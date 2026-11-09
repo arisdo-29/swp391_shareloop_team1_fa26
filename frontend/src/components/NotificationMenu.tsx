@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { notificationApi, withoutHidden, type NotificationResponse } from '../services/notificationApi';
 import { toBackendUserId } from '../services/requestApi';
 import { Button, Icon, IconButton } from './ui';
+import { useRealtimeRefresh } from '../utils/useRealtimeRefresh';
 
 const PAGE_SIZE = 20;
 
@@ -100,6 +101,12 @@ export function NotificationMenu({
       }
     }
   };
+
+  useRealtimeRefresh(['NOTIFICATION'], () => {
+    if (!backendUserId) return;
+    void notificationApi.unreadCount().then((response) => setUnreadCount(response.unreadCount)).catch(() => undefined);
+    if (open || listLoaded) void loadNotifications(0, true);
+  });
 
   const markAsRead = async (notification: NotificationResponse) => {
     if (!backendUserId || notification.isRead || markingIdRef.current !== null) return;

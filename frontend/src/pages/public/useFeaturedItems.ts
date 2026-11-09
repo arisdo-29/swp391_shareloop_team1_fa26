@@ -18,7 +18,7 @@ export interface FeaturedRotation {
  * Nhóm bài đẩy của banner trang chủ (GET /items/featured). Backend quyết định nhóm và mốc đổi nhóm; hook chỉ hẹn giờ
  * tải lại tới nextRotateAt. Lỗi mạng thì giữ nhóm cũ và thử lại ở mốc kế tiếp.
  */
-export function useFeaturedItems(limit: number, viewerKey: number | undefined): FeaturedRotation {
+export function useFeaturedItems(limit: number, viewerKey: number | undefined, reloadKey = 0): FeaturedRotation {
   const [rotation, setRotation] = useState<FeaturedRotation>({ items: [], rotatedAt: null });
 
   useEffect(() => {
@@ -81,7 +81,7 @@ export function useFeaturedItems(limit: number, viewerKey: number | undefined): 
       window.clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [limit, viewerKey]);
+  }, [limit, viewerKey, reloadKey]);
 
   return rotation;
 }

@@ -38,6 +38,7 @@ import { viewerKeyFor } from '../../utils/viewerKey';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import './browse.css';
+import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
 // Giá trị hình thức ở thanh địa chỉ (gift, trade) khác tên của API
 const OFFER_TYPE_BY_TYPE: Record<ItemType, OfferType> = { gift: 'GIVE', trade: 'SWAP' };
@@ -80,6 +81,7 @@ export function Browse() {
   const [itemsError, setItemsError] = useState('');
   const [catalogReloadKey, setCatalogReloadKey] = useState(0);
   const [itemsReloadKey, setItemsReloadKey] = useState(0);
+  useRealtimeRefresh(['CATALOG'], () => setItemsReloadKey((value) => value + 1));
   const q = params.get('q') ?? '';
   const [queryInput, setQueryInput] = useState(q);
   const debouncedQuery = useDebouncedValue(queryInput);

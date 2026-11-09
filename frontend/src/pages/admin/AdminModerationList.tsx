@@ -4,6 +4,7 @@ import { Alert, Button, EmptyState, ItemImage, PageHeader, SearchField, Skeleton
 import { adminModerationApi, type ReviewQueueItem } from '../../services/adminModerationApi';
 import { adminErrorMessage } from './adminErrors';
 import { displayModerationNote, displayRuleFlag } from './moderationDisplay';
+import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
 // Hàng chờ có thứ tự ưu tiên từ Backend nên lấy một lượt đủ lớn và tìm kiếm ngay trên danh sách này.
 const QUEUE_SIZE = 100;
@@ -47,6 +48,7 @@ export function AdminModerationList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  useRealtimeRefresh(['MODERATION'], () => setReloadKey((value) => value + 1));
 
   useEffect(() => {
     let active = true;

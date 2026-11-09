@@ -9,6 +9,11 @@
 Quy ước chung: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
 lỗi theo định dạng thống nhất bên dưới.
 
+`GET /api/v1/items/events` mở luồng SSE công khai (`text/event-stream`). Sự kiện `update` chứa
+`{ "userId": null, "kind": "CATALOG", "resourceId": <itemId> }` khi bài đăng thay đổi.
+Client gọi lại API danh sách hoặc chi tiết để lấy trạng thái mới; sau khi kết nối hoặc kết nối lại,
+`kind: "READY"` yêu cầu tải lại dữ liệu hiện tại.
+
 POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và gắn ảnh trong một transaction.
 
 ## Kiểm duyệt khi gửi bài

@@ -27,6 +27,7 @@ import browseSuggestionBox from '../../assets/browse-suggestion-box.png';
 import { loginPath } from '../../utils/authRedirect';
 import { viewerKeyFor } from '../../utils/viewerKey';
 import { useFeaturedItems } from './useFeaturedItems';
+import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 import './home-content.css';
 const aiSuggestions = [
   {
@@ -315,12 +316,13 @@ export function Home() {
   const [itemResponses, setItemResponses] = useState<ItemResponse[]>([]);
   // Chỉ gửi viewerKey khi chưa đăng nhập; đã đăng nhập thì backend dùng id người dùng.
   const viewerKey = useMemo(() => viewerKeyFor(Boolean(currentUser)), [currentUser]);
-  const featuredRotation = useFeaturedItems(FEATURED_LIMIT, viewerKey);
+  const [reloadKey, setReloadKey] = useState(0);
+  useRealtimeRefresh(['CATALOG'], () => setReloadKey((value) => value + 1));
+  const featuredRotation = useFeaturedItems(FEATURED_LIMIT, viewerKey, reloadKey);
   const [categoryResponses, setCategoryResponses] = useState<CategoryResponse[]>([]);
   const [areaResponses, setAreaResponses] = useState<AreaResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [reloadKey, setReloadKey] = useState(0);
   const [q, setQ] = useState('');
   const [district, setDistrict] = useState('');
   const [newItemFilter, setNewItemFilter] = useState<'all' | ItemType>('all');

@@ -68,6 +68,7 @@ import {
 } from '../../utils/activityStatusFilter';
 import { reputationBlockedMessage } from '../../utils/apiErrorMessages';
 import { ReputationBadge } from '../../components/ReputationBadge';
+import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
 const editQuoteReasonLabel: Record<EditQuoteReason, string> = {
   NOT_YET_APPROVED: 'Bài chưa được duyệt lần đầu',
@@ -181,6 +182,11 @@ export function Activities() {
   const [listingFeeNotice, setListingFeeNotice] = useState('');
   const [removingItemId, setRemovingItemId] = useState('');
   const [itemsReloadKey, setItemsReloadKey] = useState(0);
+  useRealtimeRefresh(['REQUEST', 'ITEM', 'NOTIFICATION'], (update) => {
+    if (update.kind !== 'NOTIFICATION' || tab === 'complaints') {
+      setItemsReloadKey((value) => value + 1);
+    }
+  });
   const [editCategories, setEditCategories] = useState<CategoryResponse[]>([]);
   const [boostableCategoryIds, setBoostableCategoryIds] = useState<number[]>([]);
   const [editAreas, setEditAreas] = useState<AreaOption[]>([]);

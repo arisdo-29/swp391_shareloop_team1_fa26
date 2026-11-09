@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { useWallet } from '../../app/useWallet';
+import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
+import { isRealtimeConnected } from '../../services/realtime';
 import { selectCurrentUser } from '../../app/store';
 import {
   Button,
@@ -150,6 +152,17 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const sendInFlight = useRef(false);
   const offerActionInFlight = useRef(false);
   const requestGroupsLoadedAt = useRef(new Map<number, number>());
+  useRealtimeRefresh(['MESSAGE', 'REQUEST', 'ITEM'], (update) => {
+    if (update.kind === 'MESSAGE') {
+      if (update.resourceId === selectedRequestId) setMessageReloadKey((value) => value + 1);
+      else setConversationReloadKey((value) => value + 1);
+    } else {
+      setConversationReloadKey((value) => value + 1);
+      if (update.kind === 'READY' || update.resourceId === selectedRequestId) {
+        setMessageReloadKey((value) => value + 1);
+      }
+    }
+  });
 
   useEffect(() => {
     let active = true;
@@ -276,12 +289,14 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   }, [currentUserId, selectedItemDonorId, selectedItemId, selectedRequestId]);
 
   useEffect(() => {
-    activeRequestId.current = selectedRequestId;
-    setMessages([]);
-    setMessage('');
-    setChatImage(null);
-    if (chatImageInputRef.current) chatImageInputRef.current.value = '';
-    setShareItemId('');
+    if (activeRequestId.current !== selectedRequestId) {
+      activeRequestId.current = selectedRequestId;
+      setMessages([]);
+      setMessage('');
+      setChatImage(null);
+      if (chatImageInputRef.current) chatImageInputRef.current.value = '';
+      setShareItemId('');
+    }
     if (selectedRequestId === null || !chatViewable) {
       setMessages([]);
       setMessageError('');
@@ -296,7 +311,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
     let pollCount = 1;
     const loadMessages = async () => {
       if (document.visibilityState === 'hidden') {
-        pollingId = window.setTimeout(loadMessages, CHAT_POLL_INTERVAL_MS);
+        pollingId = window.setTimeout(loadMessages, isRealtimeConnected() ? 60_000 : CHAT_POLL_INTERVAL_MS);
         return;
       }
       if (firstLoad) setLoadingMessages(true);
@@ -325,7 +340,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       } finally {
         if (active && firstLoad) setLoadingMessages(false);
         firstLoad = false;
-        if (active) pollingId = window.setTimeout(loadMessages, CHAT_POLL_INTERVAL_MS);
+        if (active) pollingId = window.setTimeout(loadMessages, isRealtimeConnected() ? 60_000 : CHAT_POLL_INTERVAL_MS);
       }
     };
 

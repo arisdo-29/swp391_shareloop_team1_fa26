@@ -29,6 +29,7 @@ import { productDetailBackLink } from '../../utils/productDetailNavigation';
 import { findActiveSwapPair, isActiveRequestStatus } from '../../utils/swapRequest';
 import { requestOfferLabel } from '../../utils/requestOffer';
 import { OfferedItemOptions } from '../../components/OfferedItemOptions';
+import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
 const DUPLICATE_SWAP_MESSAGE =
   'Hai món đồ này đã có yêu cầu trao đổi. Xem yêu cầu hiện có trước khi tiếp tục.';
@@ -50,6 +51,11 @@ export function ProductDetail() {
   const [loadingItem, setLoadingItem] = useState(false);
   const [itemError, setItemError] = useState('');
   const [itemReloadKey, setItemReloadKey] = useState(0);
+  useRealtimeRefresh(['ITEM', 'CATALOG', 'REQUEST'], (update) => {
+    if (update.kind === 'READY' || update.resourceId === Number(id)) {
+      setItemReloadKey((value) => value + 1);
+    }
+  });
   const [requestSubmitting, setRequestSubmitting] = useState(false);
   const [duplicateSwapRequest, setDuplicateSwapRequest] = useState<ItemRequest | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);

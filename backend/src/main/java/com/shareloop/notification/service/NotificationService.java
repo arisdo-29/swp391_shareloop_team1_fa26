@@ -6,6 +6,7 @@ import com.shareloop.notification.dto.NotificationResponse;
 import com.shareloop.notification.dto.UnreadCountResponse;
 import com.shareloop.notification.entity.Notification;
 import com.shareloop.notification.event.NotificationEmailEvent;
+import com.shareloop.notification.event.RealtimeUpdateEvent;
 import com.shareloop.notification.mapper.NotificationMapper;
 import com.shareloop.notification.repository.NotificationRepository;
 import java.time.Instant;
@@ -15,6 +16,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * Service cửa ngõ cho thông báo trong ứng dụng và gửi email giao dịch (TB-01, TB-02).
@@ -29,6 +31,7 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final com.shareloop.user.service.UserService userService;
+    private RealtimeService realtimeService;
 
     public NotificationService(
             NotificationRepository notificationRepository, ApplicationEventPublisher eventPublisher) {
@@ -46,6 +49,11 @@ public class NotificationService {
         this.userService = userService;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    void setRealtimeService(RealtimeService realtimeService) {
+        this.realtimeService = realtimeService;
+    }
+
     /**
      * Tạo thông báo trong app (hiển thị ở icon chuông thông báo).
      *
@@ -59,6 +67,45 @@ public class NotificationService {
     public void notify(long userId, String type, String title, String body, String link) {
         Notification notification = new Notification(userId, type, title, body, link);
         notificationRepository.save(notification);
+        publishRealtimeUpdate(userId, "NOTIFICATION", null);
+        if (link != null && link.startsWith("/requests/")) {
+            publishRealtimeUpdate(userId, "REQUEST", parseResourceId(link));
+        } else if (link != null && link.startsWith("/items/")) {
+            publishRealtimeUpdate(userId, "ITEM", parseResourceId(link));
+        }
+    }
+
+    public void publishRealtimeUpdate(long userId, String kind, Long resourceId) {
+        eventPublisher.publishEvent(new RealtimeUpdateEvent(userId, kind, resourceId));
+    }
+
+    public void publishCatalogUpdate(long itemId) {
+        eventPublisher.publishEvent(new RealtimeUpdateEvent(null, "CATALOG", itemId));
+    }
+
+    public void publishAdminUpdate(String kind, long resourceId) {
+        if (userService == null) return;
+        List<Long> adminIds = userService.findAdminIds();
+        if (adminIds == null) return;
+        for (Long adminId : adminIds) {
+            publishRealtimeUpdate(adminId, kind, resourceId);
+        }
+    }
+
+    public SseEmitter subscribe(long userId) {
+        return realtimeService.subscribeUser(userId);
+    }
+
+    public SseEmitter subscribeCatalog() {
+        return realtimeService.subscribeCatalog();
+    }
+
+    private Long parseResourceId(String link) {
+        try {
+            return Long.parseLong(link.substring(link.lastIndexOf('/') + 1));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     /**
@@ -134,6 +181,7 @@ public class NotificationService {
 
         notification.markAsRead();
         Notification saved = notificationRepository.save(notification);
+        publishRealtimeUpdate(userId, "NOTIFICATION", null);
         return NotificationMapper.toResponse(saved);
     }
 
