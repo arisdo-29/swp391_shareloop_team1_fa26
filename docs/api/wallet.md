@@ -113,7 +113,6 @@ dịch làm đổi số dư thật: nạp, phí đăng/sửa/gia hạn/đẩy b�
 | `WALLET_TOPUP_AMOUNT_INVALID`      | 422  | Số tiền nạp dưới mức tối thiểu hoặc không phải bội số             | xem `payment.md`    |
 | `WALLET_PAYMENT_ORDER_NOT_FOUND`   | 404  | Không có đơn nạp hoặc đơn của người khác                          | xem `payment.md`    |
 | `WALLET_PAYMENT_ORDER_NOT_PAYABLE` | 409  | Đơn nạp `FAILED` hoặc `EXPIRED`                                   | xem `payment.md`    |
-| `WALLET_MANUAL_TOPUP_DISABLED`     | 409  | Gọi mark-paid/approve/reject khi `PAYMENT_PROVIDER` khác `manual` | xem `payment.md`    |
 
 Định dạng lỗi (`field` và `details` chỉ có khi liên quan):
 
@@ -136,15 +135,12 @@ ConfigService, `CreditService` không tự quyết mức phí.
 | `refundAiSearch(userId, ledgerId)`           | `credit_balance` tăng lại đúng số đã trừ ở dòng `ledgerId` | Có, amount dương, note `Hoàn phí AI #<ledgerId>` | `AI_SEARCH_FEE` |
 | `lockWalletRow(userId)`                      | Không đổi, chỉ khoá dòng `users` tới hết transaction của người gọi | Không | -                       |
 | `getWallet(userId)`                          | Không đổi, đọc không khoá                      | Không               | -                                     |
-| `topUp(userId, paymentOrderId)`              | Đơn cổng thanh toán PENDING → SUCCESS, `credit_balance` tăng, `has_topped_up = true`; SUCCESS không đổi; từ chối MANUAL | Có, amount dương, kèm `payment_order_id` | `TOP_UP` |
-| `topUpManual(userId, paymentOrderId)` | Chỉ đơn MANUAL đã mark-paid; cộng snapshot Credit khi admin duyệt, SUCCESS không cộng lại | Có, amount dương, kèm `payment_order_id` | `TOP_UP` |
+| `topUp(userId, paymentOrderId)`              | Đơn cổng thanh toán PENDING → SUCCESS, `credit_balance` tăng, `has_topped_up = true`; SUCCESS không đổi | Có, amount dương, kèm `payment_order_id` | `TOP_UP` |
 | `getTransactions(userId, from, to, page, size)` | Không đổi, đọc không khoá                   | Không               | -                                     |
 | `getFinanceSummary(from, to)`                | Không đổi, đọc không khoá; tổng hợp toàn hệ thống | Không          | -                                     |
 
 `topUp` khoá dòng `users` rồi mới khoá dòng `payment_orders` (thứ tự cố định để tránh deadlock) và trả `WalletResponse`.
-Người gọi: `PaymentService` (MOCK), VNPay IPN qua `topUpFromGateway`, `ManualTopUpService` qua `topUpManual`.
-Luồng MANUAL khóa ví rồi đơn, duyệt và ghi ActivityLogService trong cùng transaction; mark-paid/từ chối
-không đổi số dư. Snapshot Credit được giữ dù cấu hình tỷ lệ thay đổi. MANUAL không đánh dấu xác minh chữ ký.
+Người gọi: `PaymentService` (MOCK), VNPay IPN qua `topUpFromGateway`.
 
 Phí AI (#121, người gọi: search): gọi `chargeAiSearch` trước khi gọi AI và giữ `ledgerId` trả về; AI lỗi thì gọi
 `refundAiSearch(userId, ledgerId)`. Dòng gốc không có, của người khác hoặc không phải dòng trừ phí AI → `WALLET_AI_FEE_NOT_FOUND`
@@ -229,9 +225,4 @@ Hai hàm đọc theo lô cho danh sách tra cứu của Admin (read-only, không
 
 `AdminFinanceService.listUsers` lấy danh sách người dùng thường qua `UserService.searchAccounts` rồi ghép hai hàm trên. Endpoint: `GET /api/v1/admin/finance/users` và `GET /api/v1/admin/finance/users/{userId}/wallet`, xem `admin.md` mục 3.1 và 3.2.
 
-Danh sách đơn nạp và thao tác admin duyệt/từ chối: xem `GET /admin/finance/topup-orders` cùng các API
-trong `payment.md`. Bộ lọc userId cho danh sách đơn chưa được cung cấp.
-
-> **Thay đổi cho FE (U3):** `GET /admin/finance/topup-orders` nay trả đơn của **mọi provider** (trước chỉ MANUAL) và có
-> tham số tuỳ chọn `provider=VNPAY|MOCK|MANUAL`. `mark-paid`, `approve`, `reject` chỉ chạy khi `PAYMENT_PROVIDER=manual`,
-> ngược lại trả `409 WALLET_MANUAL_TOPUP_DISABLED` (bảng lỗi bên dưới).
+Danh sách đơn nạp: xem `GET /admin/finance/topup-orders` trong `payment.md`. Endpoint trả đơn của mọi provider (VNPAY, MOCK, và các đơn cũ nếu có).

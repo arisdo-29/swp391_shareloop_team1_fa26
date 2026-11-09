@@ -1,11 +1,15 @@
 package com.shareloop.wallet.service;
 
+import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.integration.payment.PaymentGatewayClient;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.dto.UserBrief;
+import com.shareloop.user.service.UserService;
 import com.shareloop.wallet.WalletErrorCode;
 import com.shareloop.wallet.dto.TopUpConfirmResponse;
+import com.shareloop.wallet.dto.TopUpOrderDetailResponse;
 import com.shareloop.wallet.dto.TopUpOrderResponse;
 import com.shareloop.wallet.dto.WalletResponse;
 import com.shareloop.wallet.entity.PaymentOrder;
@@ -14,7 +18,17 @@ import com.shareloop.wallet.entity.PaymentProvider;
 import com.shareloop.wallet.mapper.WalletMapper;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
 import com.shareloop.wallet.repository.PaymentOrderSnapshot;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +47,23 @@ public class PaymentService {
     private final ConfigService configService;
     private final PaymentGatewayClient paymentGatewayClient;
     private final WalletMapper walletMapper;
+    private final UserService userService;
+
+    @Autowired
+    public PaymentService(
+            PaymentOrderRepository paymentOrderRepository,
+            CreditService creditService,
+            ConfigService configService,
+            PaymentGatewayClient paymentGatewayClient,
+            WalletMapper walletMapper,
+            UserService userService) {
+        this.paymentOrderRepository = paymentOrderRepository;
+        this.creditService = creditService;
+        this.configService = configService;
+        this.paymentGatewayClient = paymentGatewayClient;
+        this.walletMapper = walletMapper;
+        this.userService = userService;
+    }
 
     public PaymentService(
             PaymentOrderRepository paymentOrderRepository,
@@ -40,11 +71,7 @@ public class PaymentService {
             ConfigService configService,
             PaymentGatewayClient paymentGatewayClient,
             WalletMapper walletMapper) {
-        this.paymentOrderRepository = paymentOrderRepository;
-        this.creditService = creditService;
-        this.configService = configService;
-        this.paymentGatewayClient = paymentGatewayClient;
-        this.walletMapper = walletMapper;
+        this(paymentOrderRepository, creditService, configService, paymentGatewayClient, walletMapper, null);
     }
 
     /**
@@ -86,9 +113,6 @@ public class PaymentService {
      *     đơn của người khác; WALLET_PAYMENT_ORDER_NOT_PAYABLE khi đơn FAILED hoặc EXPIRED
      */
     public TopUpConfirmResponse confirmMockPayment(long userId, String orderCode) {
-        if (paymentGatewayClient.provider() == PaymentProvider.MANUAL) {
-            throw new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE);
-        }
         // Đọc bằng projection (không tạo entity) để lần khoá đơn trong topUp đọc dữ liệu mới từ DB.
         PaymentOrderSnapshot snapshot = paymentOrderRepository
                 .findSnapshotByOrderCode(orderCode)
@@ -102,6 +126,62 @@ public class PaymentService {
         }
         WalletResponse wallet = creditService.topUp(userId, snapshot.getId());
         return new TopUpConfirmResponse(orderCode, PaymentOrderStatus.SUCCESS, snapshot.getCredits(), wallet);
+    }
+
+    /**
+     * Danh sách đơn nạp cho Admin, đơn mới tạo nằm trên cùng. provider null nghĩa là mọi cổng thanh toán (VNPAY, MOCK,
+     * MANUAL), nên Admin xem được cả đơn VNPay; status null nghĩa là mọi trạng thái.
+     * Kèm tên chủ đơn và tên Admin duyệt (nếu có).
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<TopUpOrderDetailResponse> listOrders(
+            PaymentProvider provider, PaymentOrderStatus status, boolean submittedOnly, int page, int size) {
+        Sort newestFirst = Sort.by(Sort.Direction.DESC, "createdAt", "id");
+        Page<PaymentOrder> orderPage = paymentOrderRepository.findOrders(
+                provider, status, submittedOnly, PageRequest.of(page, size, newestFirst));
+        Map<Long, UserBrief> briefs = findBriefs(orderPage.getContent());
+        return PageResponse.from(orderPage.map(order -> detail(order, briefs)));
+    }
+
+    private Instant expiresAt(PaymentOrder order) {
+        return order.getCreatedAt()
+                .plus(configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES), ChronoUnit.MINUTES);
+    }
+
+    private Map<Long, UserBrief> findBriefs(List<PaymentOrder> orderList) {
+        if (userService == null) {
+            return Map.of();
+        }
+        Set<Long> userIds = new HashSet<>();
+        for (PaymentOrder order : orderList) {
+            userIds.add(order.getUserId());
+            if (order.getReviewedBy() != null) {
+                userIds.add(order.getReviewedBy());
+            }
+        }
+        return userService.findBriefs(userIds);
+    }
+
+    private TopUpOrderDetailResponse detail(PaymentOrder order, Map<Long, UserBrief> briefs) {
+        UserBrief owner = briefs.get(order.getUserId());
+        UserBrief reviewer = order.getReviewedBy() == null ? null : briefs.get(order.getReviewedBy());
+        return new TopUpOrderDetailResponse(
+                order.getOrderCode(),
+                order.getUserId(),
+                order.getAmountVnd(),
+                order.getCredits(),
+                order.getVndPerCredit(),
+                order.getStatus(),
+                order.getProvider(),
+                order.getCreatedAt(),
+                expiresAt(order),
+                order.getSubmittedAt(),
+                order.getReviewedBy(),
+                order.getReviewedAt(),
+                order.getReviewNote(),
+                owner == null ? null : owner.fullName(),
+                owner == null ? null : owner.email(),
+                reviewer == null ? null : reviewer.fullName());
     }
 
     private void requireValidTopUpAmount(long amountVnd, int vndPerCredit, int minCredits) {

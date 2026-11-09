@@ -81,18 +81,21 @@ class MoneyFlowConcurrencyIT extends MoneyFlowTestBase {
 
     @Test
     @Timeout(30)
-    void sameManualTopUpApprovedFromTwoThreads_creditsOnlyOnce() throws Exception {
-        // given: một đơn nạp MANUAL đã báo chuyển khoản
+    void sameTopUpConfirmedFromTwoThreads_creditsOnlyOnce() throws Exception {
+        // given: một đơn nạp
         long userId = createUser();
         int credits = minTopUpCredits();
-        String orderCode = createSubmittedOrder(userId, credits);
+        int vndPerCredit = configService.getInt(ConfigKey.VND_PER_CREDIT);
+        String orderCode = paymentService
+                .createTopUpOrder(userId, (long) credits * vndPerCredit)
+                .orderCode();
 
-        // when: hai Admin cùng bấm duyệt
+        // when: hai luồng cùng xác nhận thanh toán
         List<Outcome> outcomes = runConcurrently(List.of(
-                () -> manualTopUpService.approve(adminId(), orderCode, "admin một"),
-                () -> manualTopUpService.approve(adminId(), orderCode, "admin hai")));
+                () -> paymentService.confirmMockPayment(userId, orderCode),
+                () -> paymentService.confirmMockPayment(userId, orderCode)));
 
-        // then: không luồng nào hỏng (duyệt lần hai là idempotent) và chỉ cộng một lần
+        // then: không luồng nào hỏng (xác nhận lần hai là idempotent) và chỉ cộng một lần
         assertThat(outcomes).allMatch(Outcome::succeeded);
         assertThat(balanceOf(userId)).isEqualTo(credits);
         assertThat(ledgerCount(userId, "TOP_UP")).isEqualTo(1);

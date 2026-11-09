@@ -16,7 +16,6 @@ import com.shareloop.wallet.entity.PaymentOrder;
 import com.shareloop.wallet.entity.PaymentProvider;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
 import com.shareloop.wallet.service.CreditService;
-import com.shareloop.wallet.service.ManualTopUpService;
 import com.shareloop.wallet.service.PaymentService;
 import java.util.Map;
 import java.util.TreeMap;
@@ -50,9 +49,6 @@ class VnPayCallbackIT extends IntegrationTest {
 
     @Autowired
     PaymentService payment;
-
-    @Autowired
-    ManualTopUpService manual;
 
     @Autowired
     ConfigService configService;
@@ -253,13 +249,8 @@ class VnPayCallbackIT extends IntegrationTest {
     }
 
     @Test
-    void mockAndManualOperations_cannotConfirmVnpayOrder() {
+    void mockOperations_cannotConfirmVnpayOrder() {
         assertNotPayable(() -> payment.confirmMockPayment(userId, orderCode));
-        // Provider hiện tại không phải manual nên thao tác thủ công bị chặn ngay từ đầu (K2).
-        assertBlocked(() -> manual.markPaid(userId, orderCode), WalletErrorCode.WALLET_MANUAL_TOPUP_DISABLED);
-        assertBlocked(() -> manual.approve(userId, orderCode, null), WalletErrorCode.WALLET_MANUAL_TOPUP_DISABLED);
-        assertBlocked(
-                () -> manual.reject(userId, orderCode, "wrong provider"), WalletErrorCode.WALLET_MANUAL_TOPUP_DISABLED);
         assertPristineOrder();
         assertNoCredits();
     }
