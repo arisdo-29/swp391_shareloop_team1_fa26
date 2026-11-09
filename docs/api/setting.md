@@ -36,7 +36,7 @@ Trả danh sách cấu hình nghiệp vụ cho Admin. Endpoint đọc giá trị
 | `MODERATION` | Kiểm duyệt và báo cáo | `chat_violation_alert`, `report_hide_threshold`, `review_newcomer_max_approved` (số bài đã từng được duyệt tối đa để người đăng được xem là người mới, mặc định 3), `report_serious_reasons` (kiểu danh sách mã lý do cách nhau dấu phẩy, mỗi mã phải là một `ReportReason`, sai thì `SETTING_CONFIG_INVALID_TYPE`) (`review_sla_hours` đã bỏ, KD-06) |
 | `ACCOUNT` | Tài khoản và OTP | `otp_ttl_minutes`, `otp_max_failed`, `otp_resend_cooldown_seconds`, `pending_account_ttl_hours`, `accounts_per_ip_24h`, `phone_change_interval_days` |
 | `TRANSACTION` | Yêu cầu và giao dịch | `max_pending_requests`, `request_pending_days`, `chat_open_days`, `auto_confirm_days`, `stuck_request_hours` |
-| `REPUTATION` | Uy tín và hạng | `post_display_days_gold`, `max_active_items_*` (ngưỡng phí thường Trao đổi: Đồng 5, Bạc 8, Vàng 15, Kim cương -1), `max_active_give_items` (Cho tặng, mặc định 5), `daily_points_cap`, `reputation_*` |
+| `REPUTATION` | Uy tín và hạng | `post_display_days_gold`, `max_active_items_*` (ngưỡng phí thường Trao đổi: Đồng 5, Bạc 8, Vàng 15, Kim cương -1), `max_active_give_items` (Cho tặng, mặc định 5), `daily_points_cap`, `reputation_*`, `ip_alert_window_days`, `ip_alert_min_accounts` |
 
 Trang Cấu hình hệ thống bỏ nhóm `REPUTATION`; nhóm này hiện ở trang Uy tín và Hạng.
 

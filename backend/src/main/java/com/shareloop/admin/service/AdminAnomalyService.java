@@ -7,6 +7,7 @@ import com.shareloop.reputation.dto.RepeatedPair;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
+import com.shareloop.user.dto.SharedIpGroup;
 import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.service.UserService;
 import java.time.Clock;
@@ -22,8 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Cảnh báo bất thường cho Admin (FR-113, UC-52, Issue #148). Tính trực tiếp mỗi lần gọi, không lưu bảng (ERD 17 bảng
  * đã chốt).
  *
- * <p>Hiện có cặp giao dịch lặp (BR-U08). Cảnh báo nhiều tài khoản cùng IP chưa làm: cần thêm method vào UserService
- * (module user), đang chờ BE1 đồng ý.
+ * <p>Bao gồm cảnh báo cặp giao dịch lặp (BR-U08) và cảnh báo nhiều tài khoản đăng ký cùng một địa chỉ IP (FR-113).
  */
 @Service
 public class AdminAnomalyService {
@@ -43,7 +43,8 @@ public class AdminAnomalyService {
 
     /**
      * Cặp người dùng có hơn reputation_pair_alert_threshold giao dịch COMPLETED với nhau trong
-     * reputation_pair_window_days ngày gần nhất, kèm họ tên và email để Admin đối chiếu.
+     * reputation_pair_window_days ngày gần nhất, và các nhóm địa chỉ IP có từ ip_alert_min_accounts
+     * tài khoản đăng ký trong ip_alert_window_days ngày gần nhất.
      */
     @Transactional(readOnly = true)
     public AnomalyReportResponse getAnomalies() {
@@ -67,7 +68,14 @@ public class AdminAnomalyService {
                         pair.completedCount(),
                         pair.lastCompletedAt()))
                 .toList();
-        return new AnomalyReportResponse(now, windowDays, threshold, repeatedPairs);
+
+        int ipWindowDays = configService.getInt(ConfigKey.IP_ALERT_WINDOW_DAYS);
+        int ipMinAccounts = configService.getInt(ConfigKey.IP_ALERT_MIN_ACCOUNTS);
+        Instant ipSince = now.minus(Duration.ofDays(ipWindowDays));
+        List<SharedIpGroup> sharedIpGroups = userService.findSharedIpGroups(ipSince, ipMinAccounts);
+
+        return new AnomalyReportResponse(
+                now, windowDays, threshold, repeatedPairs, ipWindowDays, ipMinAccounts, sharedIpGroups);
     }
 
     // Người dùng đã xoá mềm không có trong map; hiển thị giống trang nhật ký của Admin.

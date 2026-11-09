@@ -31,6 +31,7 @@ import com.shareloop.user.dto.ChangePhoneRequest;
 import com.shareloop.user.dto.ContactInfo;
 import com.shareloop.user.dto.MeResponse;
 import com.shareloop.user.dto.SendChangePhoneOtpRequest;
+import com.shareloop.user.dto.SharedIpGroup;
 import com.shareloop.user.dto.UpdateProfileRequest;
 import com.shareloop.user.entity.OtpPurpose;
 import com.shareloop.user.entity.User;
@@ -626,6 +627,70 @@ class UserServiceTest {
         when(userRepository.existsByIdAndAdminTrue(20L)).thenReturn(false);
 
         assertThat(service.isAdmin(20L)).isFalse();
+    }
+
+    @Test
+    void findSharedIpGroups_whenMinAccountsZeroOrNegative_returnsEmptyList() {
+        assertThat(service.findSharedIpGroups(Instant.now(), 0)).isEmpty();
+        assertThat(service.findSharedIpGroups(Instant.now(), -1)).isEmpty();
+        verify(userRepository, never()).findSharedRegistrationIps(any(), anyLong());
+    }
+
+    @Test
+    void findSharedIpGroups_whenNoIpsFound_returnsEmptyList() {
+        Instant since = Instant.now().minus(30, ChronoUnit.DAYS);
+        when(userRepository.findSharedRegistrationIps(since, 3)).thenReturn(List.of());
+
+        List<SharedIpGroup> groups = service.findSharedIpGroups(since, 3);
+
+        assertThat(groups).isEmpty();
+        verify(userRepository, never()).findUsersByRegistrationIps(any(), any());
+    }
+
+    @Test
+    void findSharedIpGroups_groupsUsersByIp_ordersAndMapsAccounts() {
+        Instant since = Instant.now().minus(30, ChronoUnit.DAYS);
+        String ip1 = "10.0.0.1";
+        String ip2 = "10.0.0.2";
+        when(userRepository.findSharedRegistrationIps(since, 2)).thenReturn(List.of(ip1, ip2));
+
+        User user1 = new User("u1@test.com", "hash", "User One", "0900000001", false, UserStatus.ACTIVE);
+        ReflectionTestUtils.setField(user1, "id", 1L);
+        ReflectionTestUtils.setField(user1, "registrationIp", ip1);
+        ReflectionTestUtils.setField(user1, "createdAt", since.plus(1, ChronoUnit.DAYS));
+
+        User user2 = new User("u2@test.com", "hash", "User Two", "0900000002", false, UserStatus.ACTIVE);
+        ReflectionTestUtils.setField(user2, "id", 2L);
+        ReflectionTestUtils.setField(user2, "registrationIp", ip1);
+        ReflectionTestUtils.setField(user2, "createdAt", since.plus(2, ChronoUnit.DAYS));
+        user2.deactivate();
+
+        User user3 = new User("u3@test.com", "hash", "User Three", "0900000003", false, UserStatus.BANNED);
+        ReflectionTestUtils.setField(user3, "id", 3L);
+        ReflectionTestUtils.setField(user3, "registrationIp", ip2);
+        ReflectionTestUtils.setField(user3, "createdAt", since.plus(3, ChronoUnit.DAYS));
+
+        User user4 = new User("u4@test.com", "hash", "User Four", "0900000004", false, UserStatus.ACTIVE);
+        ReflectionTestUtils.setField(user4, "id", 4L);
+        ReflectionTestUtils.setField(user4, "registrationIp", ip2);
+        ReflectionTestUtils.setField(user4, "createdAt", since.plus(4, ChronoUnit.DAYS));
+
+        when(userRepository.findUsersByRegistrationIps(List.of(ip1, ip2), since))
+                .thenReturn(List.of(user2, user1, user4, user3));
+
+        List<SharedIpGroup> groups = service.findSharedIpGroups(since, 2);
+
+        assertThat(groups).hasSize(2);
+        assertThat(groups.get(0).ipAddress()).isEqualTo(ip1);
+        assertThat(groups.get(0).accountCount()).isEqualTo(2);
+        assertThat(groups.get(0).accounts().get(0).id()).isEqualTo(2L);
+        assertThat(groups.get(0).accounts().get(0).locked()).isTrue();
+        assertThat(groups.get(0).accounts().get(1).id()).isEqualTo(1L);
+        assertThat(groups.get(0).accounts().get(1).locked()).isFalse();
+
+        assertThat(groups.get(1).ipAddress()).isEqualTo(ip2);
+        assertThat(groups.get(1).accountCount()).isEqualTo(2);
+        assertThat(groups.get(1).accounts().get(1).status()).isEqualTo(UserStatus.BANNED);
     }
 
     private User givenUser() {

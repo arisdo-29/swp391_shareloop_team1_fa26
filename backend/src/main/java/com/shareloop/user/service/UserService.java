@@ -5,6 +5,7 @@ import com.shareloop.catalog.service.AreaService;
 import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.media.service.MediaService;
+import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
@@ -17,6 +18,8 @@ import com.shareloop.user.dto.ChangePhoneRequest;
 import com.shareloop.user.dto.ContactInfo;
 import com.shareloop.user.dto.MeResponse;
 import com.shareloop.user.dto.SendChangePhoneOtpRequest;
+import com.shareloop.user.dto.SharedIpAccount;
+import com.shareloop.user.dto.SharedIpGroup;
 import com.shareloop.user.dto.UpdateProfileRequest;
 import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.entity.OtpPurpose;
@@ -28,10 +31,13 @@ import com.shareloop.user.mapper.UserMapper;
 import com.shareloop.user.repository.UserRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -60,6 +66,7 @@ public class UserService {
     private final ConfigService configService;
     private final RequestQueryService requestQueryService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ObjectProvider<ReputationService> reputationServiceProvider;
 
     @Autowired
     public UserService(
@@ -70,7 +77,8 @@ public class UserService {
             OtpService otpService,
             ConfigService configService,
             @Autowired(required = false) RequestQueryService requestQueryService,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            @Autowired(required = false) ObjectProvider<ReputationService> reputationServiceProvider) {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
         this.areaService = areaService;
@@ -79,11 +87,33 @@ public class UserService {
         this.configService = configService;
         this.requestQueryService = requestQueryService;
         this.eventPublisher = eventPublisher;
+        this.reputationServiceProvider = reputationServiceProvider;
+    }
+
+    public UserService(
+            UserRepository userRepository,
+            UserMapper userMapper,
+            AreaService areaService,
+            MediaService mediaService,
+            OtpService otpService,
+            ConfigService configService,
+            RequestQueryService requestQueryService,
+            ApplicationEventPublisher eventPublisher) {
+        this(
+                userRepository,
+                userMapper,
+                areaService,
+                mediaService,
+                otpService,
+                configService,
+                requestQueryService,
+                eventPublisher,
+                null);
     }
 
     public UserService(
             UserRepository userRepository, UserMapper userMapper, AreaService areaService, MediaService mediaService) {
-        this(userRepository, userMapper, areaService, mediaService, null, null, null, null);
+        this(userRepository, userMapper, areaService, mediaService, null, null, null, null, null);
     }
 
     /**
@@ -488,5 +518,60 @@ public class UserService {
     @Transactional(readOnly = true)
     public boolean isAdmin(long userId) {
         return userRepository.existsByIdAndAdminTrue(userId);
+    }
+
+    /**
+     * Tìm các nhóm tài khoản đăng ký cùng địa chỉ IP cho màn Giám sát bất thường của Admin (FR-113).
+     *
+     * @param since mốc thời gian bắt đầu cửa sổ ngày
+     * @param minAccounts số tài khoản tối thiểu để đưa vào cảnh báo
+     * @return danh sách các nhóm IP kèm danh sách tài khoản, nhóm nhiều tài khoản nhất lên trước
+     */
+    @Transactional(readOnly = true)
+    public List<SharedIpGroup> findSharedIpGroups(Instant since, int minAccounts) {
+        if (minAccounts <= 0) {
+            return List.of();
+        }
+        List<String> ips = userRepository.findSharedRegistrationIps(since, minAccounts);
+        if (ips.isEmpty()) {
+            return List.of();
+        }
+        List<User> users = userRepository.findUsersByRegistrationIps(ips, since);
+        Map<String, List<User>> usersByIp = users.stream()
+                .filter(u -> u.getRegistrationIp() != null)
+                .collect(Collectors.groupingBy(u -> u.getRegistrationIp().trim()));
+
+        ReputationService reputationService =
+                reputationServiceProvider != null ? reputationServiceProvider.getIfAvailable() : null;
+
+        List<SharedIpGroup> groups = new ArrayList<>(ips.size());
+        for (String ip : ips) {
+            String trimmedIp = ip.trim();
+            List<User> ipUsers = usersByIp.getOrDefault(trimmedIp, List.of());
+            List<SharedIpAccount> accounts = ipUsers.stream()
+                    .map(u -> new SharedIpAccount(
+                            u.getId(),
+                            u.getFullName(),
+                            u.getEmail(),
+                            u.getCreatedAt(),
+                            getTrustStars(reputationService, u.getId()),
+                            u.getStatus(),
+                            !u.isActive()))
+                    .toList();
+            groups.add(new SharedIpGroup(trimmedIp, accounts.size(), accounts));
+        }
+        return groups;
+    }
+
+    private static int getTrustStars(ReputationService reputationService, Long userId) {
+        if (reputationService == null) {
+            return 5;
+        }
+        try {
+            var summary = reputationService.getReputationSummary(userId);
+            return summary != null && summary.trustStars() != null ? summary.trustStars() : 5;
+        } catch (Exception ex) {
+            return 5;
+        }
     }
 }

@@ -368,7 +368,19 @@ public enum ConfigKey {
             "5",
             ConfigGroup.REPUTATION,
             "Ngưỡng cảnh báo lặp cặp",
-            "Số giao dịch giữa cùng hai người vượt mức này thì cảnh báo Admin.");
+            "Số giao dịch giữa cùng hai người vượt mức này thì cảnh báo Admin."),
+    IP_ALERT_WINDOW_DAYS(
+            "ip_alert_window_days",
+            "30",
+            ConfigGroup.REPUTATION,
+            "Số ngày theo dõi cảnh báo IP",
+            "Số ngày gần nhất dùng để phát hiện các tài khoản đăng ký cùng địa chỉ IP."),
+    IP_ALERT_MIN_ACCOUNTS(
+            "ip_alert_min_accounts",
+            "3",
+            ConfigGroup.REPUTATION,
+            "Ngưỡng tài khoản cảnh báo IP",
+            "Số tài khoản đăng ký cùng một địa chỉ IP đạt mức này trở lên thì cảnh báo Admin.");
 
     private final String key;
     private final String defaultValue;
