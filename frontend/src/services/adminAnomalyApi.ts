@@ -18,7 +18,7 @@ export interface RepeatedPair {
 export interface SharedIpAccount {
   id: number;
   fullName: string;
-  email: string;
+  email: string | null;
   registeredAt: string;
   trustStars: number;
   status: 'ACTIVE' | 'BANNED' | string;
@@ -36,9 +36,9 @@ export interface AnomalyReportResponse {
   pairWindowDays: number;
   pairThreshold: number;
   repeatedPairs: RepeatedPair[];
-  ipWindowDays: number;
-  ipMinAccounts: number;
-  sharedIpGroups: SharedIpGroup[];
+  ipWindowDays?: number;
+  ipMinAccounts?: number;
+  sharedIpGroups?: SharedIpGroup[];
 }
 
 export const adminAnomalyApi = {
