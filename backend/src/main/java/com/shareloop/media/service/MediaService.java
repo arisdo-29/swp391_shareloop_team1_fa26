@@ -129,16 +129,6 @@ public class MediaService {
         });
     }
 
-    /** Temporary gateway for hiding media without changing its status. */
-    public void deactivate(long mediaId) {
-        throw unsupported("deactivate");
-    }
-
-    /** Temporary gateway for soft deletion. */
-    public void remove(long mediaId) {
-        throw unsupported("remove");
-    }
-
     /**
      * Đọc bytes của ảnh PUBLIC đang dùng. Ném MEDIA_NOT_FOUND nếu không có bản ghi hoặc ảnh bị ẩn,
      * MEDIA_FILE_MISSING nếu bản ghi còn nhưng tệp không còn trong storage, MEDIA_STORAGE_ERROR khi storage lỗi.
@@ -182,10 +172,6 @@ public class MediaService {
         if (media.getCreatedBy() == null || media.getCreatedBy() != userId) {
             throw new BusinessException(MediaErrorCode.MEDIA_NOT_OWNER);
         }
-    }
-
-    private UnsupportedOperationException unsupported(String operation) {
-        return new UnsupportedOperationException("MediaService." + operation + " is not implemented yet");
     }
 
     public record MediaContent(byte[] bytes, String mimeType) {}
