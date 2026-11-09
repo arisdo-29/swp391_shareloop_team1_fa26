@@ -38,7 +38,7 @@ class PaymentProviderConfigurationTest {
                 })
                 .withBean(ConfigService.class, () -> mock(ConfigService.class))
                 .withBean(Clock.class, Clock::systemUTC)
-                .withUserConfiguration(MockPaymentClient.class, ManualPaymentClient.class, VnPayClient.class);
+                .withUserConfiguration(MockPaymentClient.class, VnPayClient.class);
     }
 
     private Map<String, Object> vnpayEnvironment() {
@@ -60,7 +60,7 @@ class PaymentProviderConfigurationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"mock", "manual", "vnpay"})
+    @ValueSource(strings = {"mock", "vnpay"})
     void configuredProviderCreatesExactlyOneClient(String provider) {
         Map<String, Object> environment = provider.equals("vnpay") ? vnpayEnvironment() : new HashMap<>();
         environment.put("PAYMENT_PROVIDER", provider);

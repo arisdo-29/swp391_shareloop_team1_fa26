@@ -18,18 +18,21 @@ import org.junit.jupiter.api.Test;
  */
 class MoneyFlowIT extends MoneyFlowTestBase {
 
-    // ---------- nạp MANUAL ----------
+    // ---------- nạp Credit (MOCK) ----------
 
     @Test
-    void manualTopUp_whenAdminApproves_addsExactlyOneTopUpLedgerRow() {
+    void mockTopUp_whenConfirmed_addsExactlyOneTopUpLedgerRow() {
         // given
         long userId = createUser();
         int credits = minTopUpCredits();
-        String orderCode = createSubmittedOrder(userId, credits);
+        int vndPerCredit = configService.getInt(ConfigKey.VND_PER_CREDIT);
+        String orderCode = paymentService
+                .createTopUpOrder(userId, (long) credits * vndPerCredit)
+                .orderCode();
         assertThat(balanceOf(userId)).isZero();
 
         // when
-        manualTopUpService.approve(adminId(), orderCode, "Đã nhận tiền");
+        paymentService.confirmMockPayment(userId, orderCode);
 
         // then
         assertThat(balanceOf(userId)).isEqualTo(credits);
@@ -40,36 +43,22 @@ class MoneyFlowIT extends MoneyFlowTestBase {
     }
 
     @Test
-    void manualTopUp_whenApprovedTwice_doesNotCreditAgainAndRejectAfterApproveIsRefused() {
-        // given: đơn đã được duyệt một lần
+    void mockTopUp_whenConfirmedTwice_doesNotCreditAgain() {
+        // given: đơn đã được xác nhận một lần
         long userId = createUser();
         int credits = minTopUpCredits();
-        String orderCode = createSubmittedOrder(userId, credits);
-        manualTopUpService.approve(adminId(), orderCode, "lần một");
+        int vndPerCredit = configService.getInt(ConfigKey.VND_PER_CREDIT);
+        String orderCode = paymentService
+                .createTopUpOrder(userId, (long) credits * vndPerCredit)
+                .orderCode();
+        paymentService.confirmMockPayment(userId, orderCode);
 
-        // when: duyệt lần hai (idempotent) và thử từ chối đơn đã SUCCESS
-        manualTopUpService.approve(adminId(), orderCode, "lần hai");
-        Throwable rejectError = catchThrowable(() -> manualTopUpService.reject(adminId(), orderCode, "nhầm"));
+        // when: xác nhận lần hai (idempotent)
+        paymentService.confirmMockPayment(userId, orderCode);
 
         // then: ví không đổi, vẫn đúng một dòng TOP_UP
-        assertBusinessError(rejectError, WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE);
         assertThat(balanceOf(userId)).isEqualTo(credits);
         assertThat(ledgerCount(userId, "TOP_UP")).isEqualTo(1);
-        assertWalletConsistent(userId);
-    }
-
-    @Test
-    void manualTopUp_whenAdminRejects_leavesWalletAndLedgerUntouched() {
-        // given
-        long userId = createUser();
-        String orderCode = createSubmittedOrder(userId, minTopUpCredits());
-
-        // when
-        manualTopUpService.reject(adminId(), orderCode, "Không thấy tiền về");
-
-        // then
-        assertThat(balanceOf(userId)).isZero();
-        assertThat(ledgerCount(userId)).isZero();
         assertWalletConsistent(userId);
     }
 

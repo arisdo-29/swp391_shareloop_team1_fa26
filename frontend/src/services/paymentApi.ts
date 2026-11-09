@@ -9,7 +9,7 @@ export const paymentApiEndpoints = {
 } as const;
 
 export type PaymentOrderStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'EXPIRED';
-export type PaymentProvider = 'MOCK' | 'VNPAY' | 'MANUAL';
+export type PaymentProvider = 'MOCK' | 'VNPAY';
 
 export interface TopUpOrderDetailResponse extends Omit<TopUpOrderResponse, 'redirectUrl'> {
   userId: number;

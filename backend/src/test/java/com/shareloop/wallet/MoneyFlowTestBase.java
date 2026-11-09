@@ -20,7 +20,6 @@ import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.support.IntegrationTest;
 import com.shareloop.wallet.service.CreditService;
-import com.shareloop.wallet.service.ManualTopUpService;
 import com.shareloop.wallet.service.PaymentService;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,8 +43,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
  * <p>Không @Transactional ở lớp test: mỗi lời gọi service tự commit thật, nên ca đồng thời mới có hiệu lực. Dữ liệu do
  * test tạo ra được dọn trong {@link #cleanUp()}.
  */
-// provider=manual để PaymentService tạo đơn nạp MANUAL (cùng cấu hình với ManualTopUpIT).
-@TestPropertySource(properties = {"app.payment.provider=manual", "app.payment.mock.enabled=true"})
+@TestPropertySource(properties = {"app.payment.provider=mock", "app.payment.mock.enabled=true"})
 abstract class MoneyFlowTestBase extends IntegrationTest {
 
     private static final AtomicInteger PHONE_SEQUENCE = new AtomicInteger();
@@ -66,9 +64,6 @@ abstract class MoneyFlowTestBase extends IntegrationTest {
 
     @Autowired
     PaymentService paymentService;
-
-    @Autowired
-    ManualTopUpService manualTopUpService;
 
     @Autowired
     ItemService itemService;
@@ -231,25 +226,14 @@ abstract class MoneyFlowTestBase extends IntegrationTest {
                 .update();
     }
 
-    /** Nạp Credit đúng đường MANUAL: tạo đơn, user báo đã chuyển khoản, Admin duyệt. Trả số Credit được cộng. */
+    /** Nạp Credit: tạo đơn, xác nhận mock. Trả số Credit được cộng. */
     protected int topUpManually(long userId, int credits) {
         int vndPerCredit = configService.getInt(ConfigKey.VND_PER_CREDIT);
         String orderCode = paymentService
                 .createTopUpOrder(userId, (long) credits * vndPerCredit)
                 .orderCode();
-        manualTopUpService.markPaid(userId, orderCode);
-        manualTopUpService.approve(adminId(), orderCode, "Đã nhận tiền");
+        paymentService.confirmMockPayment(userId, orderCode);
         return credits;
-    }
-
-    /** Tạo đơn nạp MANUAL và đã bấm "đã chuyển khoản", chưa duyệt. Trả mã đơn. */
-    protected String createSubmittedOrder(long userId, int credits) {
-        int vndPerCredit = configService.getInt(ConfigKey.VND_PER_CREDIT);
-        String orderCode = paymentService
-                .createTopUpOrder(userId, (long) credits * vndPerCredit)
-                .orderCode();
-        manualTopUpService.markPaid(userId, orderCode);
-        return orderCode;
     }
 
     protected int minTopUpCredits() {
