@@ -60,7 +60,7 @@ export function HandoverCard({
             },
       );
       onUpdated(updated);
-      // Backend tự mở báo cáo khi bên nhận chọn Không đúng mô tả (FR-85).
+      // Backend tự mở báo cáo khi bên nhận chọn Không đúng mô tả (GN-07).
       if (reportsNotAsDescribed) onNotice(NOT_AS_DESCRIBED_REPORTED_NOTICE);
     } catch (caught) {
       setError((caught as ApiError).message || 'Không xác nhận được việc bàn giao.');

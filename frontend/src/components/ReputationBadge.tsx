@@ -17,7 +17,7 @@ function rankBadgeColor(rank?: string | null) {
 }
 
 /**
- * Component hiển thị thông tin uy tín người dùng: Hạng, Sao uy tín và Tỉ lệ đúng mô tả (FR-65).
+ * Component hiển thị thông tin uy tín người dùng: Hạng, Sao uy tín và Tỉ lệ đúng mô tả (YC-06).
  */
 export function ReputationBadge({
   trustStars,

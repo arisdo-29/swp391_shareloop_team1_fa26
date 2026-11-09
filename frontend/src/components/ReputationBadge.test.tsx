@@ -9,7 +9,7 @@ import {
 } from '../utils/reputation';
 import { ReputationBadge } from './ReputationBadge';
 
-describe('ReputationBadge helpers (FR-65)', () => {
+describe('ReputationBadge helpers (YC-06)', () => {
   it('chuyển mã hạng thành nhãn tiếng Việt tương ứng', () => {
     expect(getRankLabel('BRONZE')).toBe('Đồng');
     expect(getRankLabel('SILVER')).toBe('Bạc');

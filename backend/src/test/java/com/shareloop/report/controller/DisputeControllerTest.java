@@ -116,7 +116,7 @@ class DisputeControllerTest {
     }
 
     @Test
-    @DisplayName("Quá 7 ngày kể từ khi Completed trả về 422 Unprocessable Entity")
+    @DisplayName("Quá 24 giờ kể từ khi Hoàn tất (hết hạn khiếu nại) trả về 422 Unprocessable Entity")
     void openDispute_windowExpired_returns422() throws Exception {
         String token = jwtService.issue(USER_ID, false);
 
@@ -168,7 +168,7 @@ class DisputeControllerTest {
     }
 
     @Test
-    @DisplayName("Giải trình sau 3 ngày hết hạn trả về 422 Unprocessable Entity")
+    @DisplayName("Giải trình sau 48 giờ hết hạn trả về 422 Unprocessable Entity")
     void respondDispute_windowExpired_returns422() throws Exception {
         String token = jwtService.issue(USER_ID, false);
 
