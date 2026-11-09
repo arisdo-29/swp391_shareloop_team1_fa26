@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Dọn tài khoản chưa xác thực (FR-117, BR-U06; ERD mục 6): tài khoản PENDING_VERIFICATION tạo quá
+ * Dọn tài khoản chưa xác thực (FR-117, BR-U06): tài khoản PENDING_VERIFICATION tạo quá
  * pending_account_ttl_hours giờ thì xoá mềm ({@code markDeleted()}, không xoá cứng). Index ux_users_email chỉ tính
  * dòng chưa xoá nên email đó đăng ký lại được ngay.
  *
@@ -27,7 +27,7 @@ public class PendingAccountCleanupService {
 
     private static final Logger log = LoggerFactory.getLogger(PendingAccountCleanupService.class);
 
-    // ERD mục 6: xử lý theo lô nhỏ. Tham số kỹ thuật, không phải con số nghiệp vụ, nên không đặt trong ConfigService.
+    // Xử lý theo lô nhỏ. Tham số kỹ thuật, không phải con số nghiệp vụ, nên không đặt trong ConfigService.
     private static final int BATCH_SIZE = 100;
 
     private final UserRepository userRepository;

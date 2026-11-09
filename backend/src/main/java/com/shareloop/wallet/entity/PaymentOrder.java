@@ -18,7 +18,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
- * Một đơn nạp Credit (bảng payment_orders, ERD mục 7.6). Bảng này không có is_active, is_deleted, created_by,
+ * Một đơn nạp Credit (bảng payment_orders). Bảng này không có is_active, is_deleted, created_by,
  * updated_by nên entity không kế thừa BaseEntity (giống {@link CreditLedgerEntry}).
  *
  * <p>Cột updated_at do trigger trg_payment_orders_updated_at của DB tự cập nhật nên không map ở đây.

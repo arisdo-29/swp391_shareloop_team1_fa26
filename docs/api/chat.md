@@ -51,7 +51,7 @@ Gửi tin nhắn mới (văn bản, ảnh hoặc chia sẻ thẻ bài đăng) tr
   - **Người nhận trong giao dịch Cho tặng không gửi ảnh:** Khi `Request.type = GIVE` và người gửi là người nhận (`receiverId`), tin nhắn có `mediaId` bị chặn với `403 CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN`. Chủ bài vẫn gửi ảnh được sau khi chốt lịch. Tin chữ và thẻ bài (`refItemId`) không bị ảnh hưởng. Giao dịch Trao đổi (`SWAP`) giữ nguyên như cũ cho cả hai phía.
 - Gửi thẻ bài đăng (CH-06): truyền `refItemId` (id bài đăng muốn chia sẻ), `content` là lời nhắn kèm theo (tuỳ chọn).
   - **Quy tắc chia sẻ thẻ bài (CH-06):** Chỉ chia sẻ được thẻ của bài đăng ở trạng thái đã được duyệt (`APPROVED`). Nếu chia sẻ bài chưa duyệt hoặc không tồn tại sẽ bị từ chối với lỗi tương ứng.
-- Trước khi chốt lịch, nội dung chứa thông tin liên hệ (số điện thoại, mạng xã hội, link ngoài) hoặc từ khoá cấm sẽ bị chặn ngay và ghi nhận vi phạm (`CHAT_MESSAGE_BLOCKED`). Theo BR v11.2 (D-17, CH-04), hệ thống chỉ dùng bộ lọc regex và từ khoá tĩnh tầng 1, không dùng AI kiểm tra tin nhắn.
+- Trước khi chốt lịch, nội dung chứa thông tin liên hệ (số điện thoại, mạng xã hội, link ngoài) hoặc từ khoá cấm sẽ bị chặn ngay và ghi nhận vi phạm (`CHAT_MESSAGE_BLOCKED`). Theo Business Rule v12 (D-17, CH-04), hệ thống chỉ dùng bộ lọc regex và từ khoá tĩnh tầng 1, không dùng AI kiểm tra tin nhắn.
 
 - **Thành công:** `201 Created`, trả về `MessageResponse`.
 

@@ -1,6 +1,6 @@
 package com.shareloop.wallet.entity;
 
-/** Cổng thanh toán của một đơn nạp ({@code payment_orders.provider}, ERD mục 7.6). */
+/** Cổng thanh toán của một đơn nạp ({@code payment_orders.provider}). */
 public enum PaymentProvider {
     /** Cổng VNPAY, mặc định dùng sandbox. */
     VNPAY,

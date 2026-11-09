@@ -65,6 +65,19 @@ describe('trang Giới thiệu', () => {
     expect(screen.getByText('Đẩy bài lên đầu 3 ngày: 9 Credit')).toBeTruthy();
   });
 
+  it('người đã đăng nhập thấy giới hạn đợt đẩy, thời gian nghỉ và xoay vòng', async () => {
+    // given
+    vi.mocked(useAppSelector).mockReturnValue({ id: 'api_7' });
+    vi.mocked(itemApi.getListingFees).mockResolvedValue(feesWithoutOverQuota);
+
+    // when
+    renderAbout();
+
+    // then
+    expect(await screen.findByText(/Một đợt đẩy liên tục tối đa 14 ngày/)).toBeTruthy();
+    expect(screen.getByText(/nhóm bài đổi luân phiên mỗi 3 phút/)).toBeTruthy();
+  });
+
   it('hiện số phí vượt hạn mức khi backend trả về', async () => {
     vi.mocked(useAppSelector).mockReturnValue({ id: 'api_7' });
     vi.mocked(itemApi.getListingFees).mockResolvedValue({ ...feesWithoutOverQuota, postFeeSwapOverQuota: 12 });

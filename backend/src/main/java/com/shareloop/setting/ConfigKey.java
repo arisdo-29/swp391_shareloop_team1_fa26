@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.util.Set;
 
 /**
- * Các khoá cấu hình nghiệp vụ và giá trị mặc định theo SRS v10 (ERD mục 7.10). Mỗi khoá có nhóm, tên và mô tả tiếng
+ * Các khoá cấu hình nghiệp vụ và giá trị mặc định theo bảng cấu hình SRS Final Report 09/11, mục 5.2. Mỗi khoá có nhóm, tên và mô tả tiếng
  * Việt để trang Admin hiển thị cho người không biết tên khoá kỹ thuật.
  */
 public enum ConfigKey {

@@ -3,7 +3,7 @@ package com.shareloop.integration.payment;
 import com.shareloop.wallet.entity.PaymentProvider;
 
 /**
- * Điểm nối tới cổng thanh toán (Lộ trình C11). Chọn {@link MockPaymentClient} hoặc {@link VnPayClient}
+ * Điểm nối tới cổng thanh toán. Chọn {@link MockPaymentClient} hoặc {@link VnPayClient}
  * bằng cấu hình app.payment.provider.
  */
 public interface PaymentGatewayClient {

@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Hết hạn bài đăng (FR-29, BR-D03; ERD mục 6 "Hết hạn bài"): bài APPROVED có expire_at đã qua thì chuyển EXPIRED. Chỉ
+ * Hết hạn bài đăng (FR-29, BR-D03; TD-01): bài APPROVED có expire_at đã qua thì chuyển EXPIRED. Chỉ
  * đọc cột expire_at của listingfee; đổi status bắt buộc qua {@code ItemService.markExpired}.
  *
  * <p>Người gọi: {@code ItemExpiryJob} (mỗi giờ) và test.
@@ -24,7 +24,7 @@ public class ItemExpiryService {
 
     private static final Logger log = LoggerFactory.getLogger(ItemExpiryService.class);
 
-    // ERD mục 6: xử lý theo lô nhỏ. Đây là tham số kỹ thuật (bao nhiêu id mỗi lần đọc), không phải con số nghiệp vụ,
+    // Xử lý theo lô nhỏ. Đây là tham số kỹ thuật (bao nhiêu id mỗi lần đọc), không phải con số nghiệp vụ,
     // nên không đặt trong ConfigService.
     private static final int BATCH_SIZE = 100;
 

@@ -18,12 +18,12 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * Unit test kiểm thử toàn diện máy trạng thái RequestStatus (ERD 5.1, Hình 21; Spike S8; Issue #127).
+ * Unit test kiểm thử toàn diện máy trạng thái RequestStatus (SRS mục 3.9; Spike S8; Issue #127).
  * Kiểm tra đầy đủ 14 mũi tên hợp lệ và toàn bộ các chuyển trạng thái không hợp lệ trong ma trận 81 ô.
  */
 class RequestStatusTest {
 
-    // Tập hợp 14 mũi tên hợp lệ theo sơ đồ vòng đời Request (ERD 5.1)
+    // Tập hợp 14 mũi tên hợp lệ theo sơ đồ vòng đời Request (SRS mục 3.9)
     private static final Set<String> VALID_TRANSITION_KEYS = Set.of(
             "PENDING->RESERVED",
             "PENDING->REJECTED",

@@ -36,7 +36,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service cửa ngõ của module reputation (Lộ trình 4.7, SRS FR-91, FR-92, FR-94, FR-95, FR-97, FR-98, FR-99,
+ * Service cửa ngõ của module reputation (SRS FR-91, FR-92, FR-94, FR-95, FR-97, FR-98, FR-99,
  * FR-100, BR-U01, BR-U05, BR-U08, BR-U09, BR-U11). Module khác thông báo sự kiện liên quan đến uy tín người dùng qua
  * service này.
  */

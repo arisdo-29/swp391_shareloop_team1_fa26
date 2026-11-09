@@ -13,7 +13,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /**
- * Repository thao tác với bảng messages (ERD mục 7.4).
+ * Repository thao tác với bảng messages.
  */
 @Repository
 public interface MessageRepository extends JpaRepository<Message, Long> {

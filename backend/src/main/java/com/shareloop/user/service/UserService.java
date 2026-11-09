@@ -47,10 +47,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service cửa ngõ của module user (Lộ trình 4.7, 4.8). Module khác muốn khoá tài khoản hoặc lấy thông tin liên lạc
+ * Service cửa ngõ của module user. Module khác muốn khoá tài khoản hoặc lấy thông tin liên lạc
  * phải gọi qua đây, không inject repository của user.
  *
- * <p>Khoá tài khoản là {@code is_active = false}; cột {@code status} không đổi (ERD 7.11, SRS FR-107).
+ * <p>Khoá tài khoản là {@code is_active = false}; cột {@code status} không đổi (SRS FR-107).
  *
  * <p>Người gọi: admin (AdminUserService: khoá, mở khoá), reputation (khoá khi vi phạm nặng), request (lấy thông tin
  * liên lạc khi hai bên chốt lịch).
@@ -187,7 +187,7 @@ public class UserService {
         if (!user.isActive()) {
             throw new BusinessException(UserErrorCode.USER_ALREADY_LOCKED);
         }
-        // reason không lưu ở đây: bảng users không có cột lý do (ERD đã chốt); người gọi ghi vào ActivityLog.
+        // reason không lưu ở đây: bảng users không có cột lý do (17 bảng đã chốt); người gọi ghi vào ActivityLog.
         // Không cần save(): user đang được JPA theo dõi, đổi is_active tự ghi xuống DB khi transaction commit.
         user.deactivate();
     }

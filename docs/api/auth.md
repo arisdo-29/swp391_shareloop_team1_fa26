@@ -54,8 +54,8 @@ Quy tắc:
   để danh sách ở `website_attributes` nhóm `DISPOSABLE_DOMAIN` cho Admin sửa, sẽ chuyển khi module setting hỗ trợ.
 - **Giới hạn theo IP (TK-05, C30)**: chỉ xét khi tạo tài khoản **mới** (đăng ký lại email `PENDING_VERIFICATION` không
   xét). Nếu IP đã có từ `accounts_per_ip_24h` tài khoản trở lên tạo trong 24 giờ qua (không tính tài khoản đã xoá mềm)
-  thì trả `429 AUTH_TOO_MANY_ACCOUNTS_FROM_IP`. Lệch SRS cũ (v10): FR-10 ghi "đánh dấu chờ Admin xem xét" nhưng ERD không có cột
-  đánh dấu, nên chặn luôn theo SRS 5.3. IP lấy từ `remoteAddr`; prod bật `forward-headers-strategy: framework` nên
+  thì trả `429 AUTH_TOO_MANY_ACCOUNTS_FROM_IP` (TK-05). Bản SRS cũ (v10) từng ghi FR-10 là "đánh dấu chờ Admin xem xét"; SRS Final Report đã đổi
+  thành báo lỗi 429 như code. IP lấy từ `remoteAddr`; prod bật `forward-headers-strategy: framework` nên
   sau proxy vẫn là IP thật của client.
 
 ```json

@@ -12,7 +12,7 @@ import java.time.Instant;
 import org.hibernate.annotations.SQLRestriction;
 
 /**
- * Entity bảng requests (ERD mục 7.5, 7.11).
+ * Entity bảng requests.
  * Quản lý toàn bộ vòng đời giao dịch xin đồ / đổi đồ.
  */
 @Entity
@@ -102,7 +102,7 @@ public class Request extends BaseEntity {
     }
 
     /**
-     * Chuyển trạng thái yêu cầu theo sơ đồ vòng đời (ERD 5.1).
+     * Chuyển trạng thái yêu cầu theo sơ đồ vòng đời (SRS mục 3.9).
      *
      * @param nextStatus trạng thái đích
      * @throws BusinessException nếu bước chuyển không hợp lệ

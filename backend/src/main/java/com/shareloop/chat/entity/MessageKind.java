@@ -1,7 +1,7 @@
 package com.shareloop.chat.entity;
 
 /**
- * Loại tin nhắn trong khung chat (ERD mục 7.4).
+ * Loại tin nhắn trong khung chat.
  */
 public enum MessageKind {
     TEXT,

@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
- * Thực thể tin nhắn trong khung chat (ERD mục 7.4, bảng messages).
+ * Thực thể tin nhắn trong khung chat (bảng messages).
  */
 @Entity
 @Table(name = "messages")

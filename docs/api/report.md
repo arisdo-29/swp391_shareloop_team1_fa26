@@ -151,7 +151,7 @@ module request phát event `NotAsDescribedReportedEvent`. Listener trong module 
   `description` là lý do bên nhận nhập, `targetUserId` là chủ bài, `responseDueAt` theo `response_window_hours` (48 giờ).
   Không thêm bảng hay cột.
 - Khác `POST /requests/{requestId}/disputes`: không đòi giao dịch đã `COMPLETED` và không xét cửa sổ khiếu nại
-  7 ngày, vì bên nhận có thể trả lời khi giao dịch còn `AWAITING_HANDOVER`.
+  24 giờ (`complaint_window_hours`, BC-07), vì bên nhận có thể trả lời khi giao dịch còn `AWAITING_HANDOVER`.
 - Chống trùng: bên nhận đã có report `REQUEST` cho giao dịch này thì bỏ qua, không lỗi.
 - Gửi thông báo `DISPUTE_OPENED` cho chủ bài, dẫn tới `/me/disputes/{reportId}` để giải trình.
 - Chủ bài và Admin xử lý như khiếu nại thường (`POST /disputes/{disputeId}/response`, `.../conclude`).

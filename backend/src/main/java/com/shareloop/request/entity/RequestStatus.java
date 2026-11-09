@@ -1,7 +1,7 @@
 package com.shareloop.request.entity;
 
 /**
- * Trạng thái của một Request giao dịch (ERD 5.1, Hình 21; Spike S8).
+ * Trạng thái của một Request giao dịch (SRS mục 3.9; Spike S8).
  * Quản lý vòng đời yêu cầu xin/đổi đồ và kiểm tra chuyển trạng thái hợp lệ.
  */
 public enum RequestStatus {

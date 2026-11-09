@@ -10,7 +10,7 @@ import jakarta.persistence.Table;
 import org.hibernate.annotations.SQLRestriction;
 
 /**
- * Entity "lát cắt" của bảng users: chỉ map nhóm cột tiền của module wallet (Lộ trình 4.8). Không tạo bản ghi ở đây
+ * Entity "lát cắt" của bảng users: chỉ map nhóm cột tiền của module wallet. Không tạo bản ghi ở đây
  * (user do module user tạo), chỉ đọc và sửa số dư.
  *
  * <p>Các hàm đổi số dư ({@code hold}, {@code release}, {@code chargeHeld}, {@code spend}, {@code topUp}) chỉ do

@@ -1,6 +1,6 @@
 package com.shareloop.wallet.entity;
 
-/** Trạng thái của {@code payment_orders.status} (V1__init.sql, ERD mục 7.6). Đúng 4 giá trị của CHECK trong DB. */
+/** Trạng thái của {@code payment_orders.status} (V1__init.sql). Đúng 4 giá trị của CHECK trong DB. */
 public enum PaymentOrderStatus {
     /** Vừa tạo, chờ cổng thanh toán xác nhận. */
     PENDING,
