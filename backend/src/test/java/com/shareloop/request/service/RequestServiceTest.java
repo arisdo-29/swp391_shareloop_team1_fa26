@@ -489,6 +489,79 @@ class RequestServiceTest {
     }
 
     @Test
+    void changeOfferedItem_pending_updatesChoiceWithoutReserving() {
+        Request request = new Request(1L, 10L, 50L, "SWAP");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(60L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+
+        RequestResponse response = requestService.changeOfferedItem(101L, 10L, 60L);
+
+        assertThat(response.offeredItemId()).isEqualTo(60L);
+        verify(itemService, never()).reserve(anyLong());
+        verify(notificationService).notify(eq(20L), eq("OFFERED_ITEM_CHANGED"), any(), any(), eq("/requests/101"));
+    }
+
+    @Test
+    void changeOfferedItem_reserved_releasesOldAndReservesNew() {
+        Request request = new Request(1L, 10L, 50L, "SWAP");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(60L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "RESERVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+
+        requestService.changeOfferedItem(101L, 10L, 60L);
+
+        verify(itemService).reserve(60L);
+        verify(itemService).releaseIfReserved(50L);
+    }
+
+    @Test
+    void changeOfferedItem_awaitingLogistics_resetsScheduleApprovals() {
+        Request request = new Request(1L, 10L, 50L, "SWAP");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        request.proposeSchedule(
+                "IN_PERSON", "Điểm hẹn", Instant.now().plus(2, ChronoUnit.DAYS), true, false, Instant.now());
+        assertThat(request.getDonorScheduleOkAt()).isNotNull();
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(60L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "RESERVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+
+        requestService.changeOfferedItem(101L, 10L, 60L);
+
+        assertThat(request.getDonorScheduleOkAt()).isNull();
+        assertThat(request.getReceiverScheduleOkAt()).isNull();
+    }
+
+    @Test
+    void changeOfferedItem_rejectsOtherUser() {
+        Request request = new Request(1L, 10L, 50L, "SWAP");
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        assertThatThrownBy(() -> requestService.changeOfferedItem(101L, 20L, 60L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_FORBIDDEN));
+    }
+
+    @Test
     @DisplayName("Chủ bài chọn người nhận: tự huỷ Request khác dùng cùng món đề nghị (FR-66, BR-S03)")
     void selectReceiver_whenSwapRequest_cancelsOtherRequestsWithSameOfferedItem() {
         Request selectedRequest = new Request(1L, 10L, 50L, "SWAP");

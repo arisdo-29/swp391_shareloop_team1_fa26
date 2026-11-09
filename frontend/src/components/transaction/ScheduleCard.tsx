@@ -219,6 +219,13 @@ function ScheduleForm({
           >
             <strong className="text-sm">{label}</strong>
             <span className="text-2xs text-text-secondary">{hint}</span>
+            {deliveryMethod === value ? (
+              <span className="mt-1 text-xs leading-5 text-text-secondary">
+                {value === 'IN_PERSON'
+                  ? 'Nên quay video kiểm tra tình trạng món đồ ngay tại điểm hẹn, trước khi xác nhận đã nhận. Giữ lại video để đối chiếu nếu cần báo cáo sự cố.'
+                  : 'Nên quay video lúc mở kiện và kiểm tra món đồ trước khi xác nhận đã nhận. Giữ lại video, mã vận đơn và trao đổi giao nhận để hỗ trợ khiếu nại hoặc giải trình.'}
+              </span>
+            ) : null}
           </button>
         ))}
       </fieldset>

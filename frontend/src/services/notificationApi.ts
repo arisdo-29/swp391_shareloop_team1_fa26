@@ -54,6 +54,7 @@ export function notificationCategory(type: string): NotificationCategory {
       'SELECTED',
       'LOGISTICS_CONFIRMED',
       'SCHEDULE_UPDATED',
+      'OFFERED_ITEM_CHANGED',
       'HANDOVER_CONFIRMED',
     ].includes(type)
   ) {

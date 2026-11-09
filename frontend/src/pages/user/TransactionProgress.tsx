@@ -6,6 +6,7 @@ import { Alert, Button, EmptyState, LoadingState, StatusBadge } from '../../comp
 import { ReportDialog } from '../../components/ReportDialog';
 import { StepsCard } from '../../components/transaction/StepsCard';
 import { ScheduleCard } from '../../components/transaction/ScheduleCard';
+import { ChangeOfferedItem } from '../../components/transaction/ChangeOfferedItem';
 import { HandoverCard } from '../../components/transaction/HandoverCard';
 import { HandoverMediaCard } from '../../components/transaction/HandoverMediaCard';
 import { ItemSideCard, PartnerCard } from '../../components/transaction/SideCards';
@@ -143,6 +144,19 @@ function TransactionProgressView({
             partnerName={partnerName}
             onUpdated={applyUpdate}
           />
+          {!viewerIsDonor && request.offeredItemId &&
+          (request.status === 'RESERVED' || request.status === 'AWAITING_LOGISTICS') ? (
+            <section className="card space-y-2 p-5 sm:p-6">
+              <h2 className="section-title">Món đề nghị trao đổi</h2>
+              <p className="text-sm text-text-secondary">{request.offeredItemTitle ?? 'Món bạn đã chọn'}</p>
+              <ChangeOfferedItem
+                requestId={request.id}
+                currentUserId={currentUserId}
+                currentItemId={request.offeredItemId}
+                onUpdated={applyUpdate}
+              />
+            </section>
+          ) : null}
           <ScheduleCard
             request={request}
             currentUserId={currentUserId}

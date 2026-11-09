@@ -212,6 +212,12 @@ Xem chi tiết thông tin của một yêu cầu giao dịch (F10, UC-26).
 
 ---
 
+## 6a. POST /api/v1/requests/{id}/offered-item
+
+`POST /api/v1/requests/{id}/offered-item` với body `{ "offeredItemId": 60 }` cho phép người gửi yêu cầu thay món đã đề nghị. Chỉ áp dụng khi yêu cầu đã có món đề nghị và đang `PENDING`, `RESERVED` hoặc `AWAITING_LOGISTICS`. Món mới phải thuộc người gửi, đã duyệt, đang hoạt động và khác bài chính. Nếu yêu cầu đã được chọn, hệ thống giữ chỗ món mới và nhả món cũ trong cùng giao dịch; các yêu cầu đang chờ khác dùng món mới bị huỷ. Nếu lịch đã được đề xuất, xác nhận lịch của cả hai bên được xoá để hai bên xem lại món và xác nhận lại. Chủ bài nhận thông báo `OFFERED_ITEM_CHANGED`. Sau khi chốt lịch, API trả `409 REQUEST_OFFERED_ITEM_CHANGE_LOCKED`; người không phải người gửi nhận `403 REQUEST_FORBIDDEN`.
+
+---
+
 ## 7. POST /api/v1/requests/{id}/schedule
 
 Đề xuất hoặc cập nhật lịch hẹn giao nhận (GN-01, GN-02, UC-26).

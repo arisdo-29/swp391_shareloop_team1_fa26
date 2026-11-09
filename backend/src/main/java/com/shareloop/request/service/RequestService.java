@@ -504,6 +504,45 @@ public class RequestService {
         return toResponse(saved);
     }
 
+    /** Người gửi yêu cầu thay món đem đổi trước khi hai bên chốt lịch. */
+    @Transactional
+    public RequestResponse changeOfferedItem(long requestId, long currentUserId, long offeredItemId) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+        if (request.getReceiverId() != currentUserId) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+        if (request.getOfferedItemId() == null
+                || (request.getStatus() != RequestStatus.PENDING
+                        && request.getStatus() != RequestStatus.RESERVED
+                        && request.getStatus() != RequestStatus.AWAITING_LOGISTICS)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_OFFERED_ITEM_CHANGE_LOCKED);
+        }
+        if (request.getOfferedItemId() == offeredItemId) {
+            return toResponse(request);
+        }
+        requireValidOfferedItem(offeredItemId, currentUserId, request.getItemId());
+        if (request.getStatus() != RequestStatus.PENDING) {
+            itemService.reserve(offeredItemId);
+            itemService.releaseIfReserved(request.getOfferedItemId());
+        }
+        request.changeOfferedItem(offeredItemId);
+        Request saved = requestRepository.save(request);
+        if (request.getStatus() != RequestStatus.PENDING) {
+            cancelOtherPendingUsingOfferedItem(saved);
+        }
+        ItemSnapshot item = findItemSnapshot(request.getItemId())
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+        notificationService.notify(
+                item.donorId(),
+                "OFFERED_ITEM_CHANGED",
+                "Món đề nghị đã thay đổi",
+                "Người gửi yêu cầu đã chọn món khác để trao đổi. Vui lòng xem lại trước khi chốt lịch.",
+                "/requests/" + saved.getId());
+        return toResponse(saved);
+    }
+
     /**
      * Chủ bài đồng ý đề nghị đưa món của người nhận vào đổi trong chat: giao dịch Cho chuyển thành Trao đổi (CD-02,
      * CD-06). Chủ bài trả POST_FEE, bài chính chuyển SWAP, món đề nghị được giữ chỗ; mọi bước nằm trong một transaction
