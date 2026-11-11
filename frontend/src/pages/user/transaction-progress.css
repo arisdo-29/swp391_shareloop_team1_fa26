@@ -1,0 +1,160 @@
+.transaction-page {
+  max-width: 1360px;
+}
+.transaction-page > button:first-child {
+  margin-bottom: 14px;
+}
+.transaction-page .page-title {
+  letter-spacing: -0.04em;
+}
+.transaction-item-title {
+  max-width: 760px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+}
+.transaction-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  align-items: start;
+  gap: 28px;
+}
+.transaction-sidebar {
+  position: sticky;
+  top: 96px;
+}
+.transaction-page .card {
+  padding: 28px;
+  border-radius: 22px;
+  box-shadow: none;
+  border: 1px solid var(--color-border);
+}
+.transaction-page .section-title {
+  font-size: 20px;
+  letter-spacing: -0.025em;
+}
+.transaction-page .card > h2 {
+  margin-bottom: 18px;
+}
+.transaction-status-caption {
+  margin-top: -8px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--color-text-muted);
+}
+.transaction-page [aria-labelledby='steps-title'] > ol {
+  gap: 18px;
+  padding-block: 4px;
+}
+.transaction-page [aria-labelledby='steps-title'] > ol > li {
+  gap: 18px;
+}
+.transaction-page [aria-labelledby='steps-title'] li > span:last-child > span:last-child {
+  line-height: 1.7;
+}
+.transaction-page [aria-labelledby='meeting-title'] fieldset {
+  gap: 14px;
+}
+.transaction-page [aria-labelledby='meeting-title'] fieldset > button {
+  border-radius: 14px;
+  padding: 16px;
+  gap: 6px;
+}
+.transaction-page [aria-labelledby='meeting-title'] fieldset > button > span {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.transaction-page [aria-labelledby='meeting-title'] .input {
+  min-height: 48px;
+  background: var(--color-surface-low);
+}
+.transaction-page [aria-labelledby='meeting-title'] dd {
+  font-size: 14px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.transaction-page [aria-labelledby='handover-title'] > .flex {
+  padding-top: 10px;
+}
+.transaction-page [aria-labelledby='handover-title'] button {
+  min-height: 48px;
+}
+.transaction-page [aria-labelledby='item-title'] img {
+  width: 88px;
+  height: 88px;
+  border-radius: 14px;
+}
+.transaction-page [aria-labelledby='item-title'] .line-clamp-2 {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.transaction-page [aria-labelledby='item-title'] .truncate,
+.transaction-page [aria-labelledby='partner-title'] .truncate {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.transaction-main > section:last-child:not(.card) {
+  padding: 22px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+}
+.transaction-dialog {
+  padding: 28px;
+  border-radius: 24px;
+}
+.transaction-dialog h2 {
+  letter-spacing: -0.03em;
+}
+.transaction-dialog textarea {
+  min-height: 130px;
+}
+.transaction-dialog > p {
+  line-height: 1.8;
+}
+.transaction-page [type='file'] {
+  max-width: 100%;
+}
+@media (max-width: 1023px) {
+  .transaction-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .transaction-sidebar {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 22px;
+  }
+  .transaction-sidebar > section {
+    margin-top: 0;
+  }
+}
+@media (max-width: 767px) {
+  .transaction-page .card {
+    padding: 22px;
+  }
+  .transaction-layout {
+    gap: 20px;
+  }
+  .transaction-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .transaction-page [aria-labelledby='meeting-title'] fieldset {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .transaction-page [aria-labelledby='steps-title'] > ol {
+    gap: 24px 16px;
+  }
+  .transaction-page [aria-labelledby='steps-title'] li > span:last-child {
+    flex-direction: column;
+  }
+  .transaction-dialog {
+    padding: 24px;
+  }
+}

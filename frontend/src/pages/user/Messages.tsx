@@ -1,3 +1,4 @@
+import './messaging.css';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
@@ -691,8 +692,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   };
 
   return (
-    <div className="wide-shell py-5 sm:py-7">
-      <div className="grid gap-[clamp(0.75rem,1.5vw,1.25rem)] lg:h-[calc(100vh-9rem)] lg:min-h-[640px] lg:grid-cols-[minmax(280px,400px)_minmax(0,1fr)]">
+    <div className="messages-page wide-shell">
+      <div className="messages-workspace">
         <ConversationList
           className={mobileChat ? 'hidden lg:flex' : 'flex'}
           conversations={conversations}
@@ -717,7 +718,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
           <>
             <section
               aria-label={`Cuộc trò chuyện với ${selectedParticipantName}`}
-              className={`${mobileChat ? 'flex' : 'hidden lg:flex'} min-h-[640px] min-w-0 flex-col overflow-hidden rounded-lg bg-white ring-1 ring-border/80 lg:min-h-0`}
+              className={`${mobileChat ? 'flex' : 'hidden lg:flex'} chat-room min-w-0 flex-col overflow-hidden bg-surface`}
             >
               <ChatHeader
                 conversation={selected}
@@ -731,13 +732,13 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
               {reportNotice ? (
                 <div
                   role="status"
-                  className="mx-4 mt-3 rounded-md bg-success-soft px-3 py-2 text-xs text-success"
+                  className="chat-report-notice mx-4 mt-3 rounded-md bg-success-soft px-3 py-2 text-xs text-success"
                 >
                   <p>{reportNotice}</p>
                 </div>
               ) : null}
 
-              <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 py-4">
+              <div className="chat-stream min-h-0 flex-1 space-y-3 overflow-y-auto">
                 {pinnedItemsError ? (
                   <div className="flex items-center justify-center gap-3 text-xs text-error">
                     <p>{pinnedItemsError}</p>
@@ -808,7 +809,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 <div ref={messagesEndRef} aria-hidden="true" />
               </div>
 
-              <div className="shrink-0 space-y-2 border-t border-border px-4 py-3">
+              <div className="chat-composer shrink-0 space-y-3 border-t border-border">
                 {isCancelled ? (
                   <div
                     role="status"
@@ -940,7 +941,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
             </section>
           </>
         ) : (
-          <section className="hidden place-items-center rounded-lg bg-white ring-1 ring-border/80 lg:grid">
+          <section className="chat-empty hidden place-items-center bg-surface lg:grid">
             <EmptyState
               title="Chọn cuộc trò chuyện"
               text="Chọn một yêu cầu ở cột bên trái để xem tin nhắn."
