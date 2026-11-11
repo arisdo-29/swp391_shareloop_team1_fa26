@@ -1,3 +1,4 @@
+import './admin-finance.css';
 import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Button, EmptyState, Field, PageHeader, Stat } from '../../components/ui';
@@ -219,9 +220,9 @@ export function AdminFinanceReport() {
     }
   };
 
-  return <>
+  return <div className="admin-finance-report admin-finance-page">
     <PageHeader title="Báo cáo tài chính" description="Tiền thu, Credit cộng và Credit trừ theo sổ hệ thống." action={<div className="flex flex-wrap gap-2"><Button variant="outline" disabled={exporting} onClick={() => void exportCsv()}>{exporting ? 'Đang xuất...' : 'Xuất báo cáo CSV'}</Button><Link to="/admin/finance/users"><Button variant="outline">Tra cứu người dùng</Button></Link></div>} />
-    <form className="mb-5 flex flex-wrap items-end gap-3" onSubmit={submit}>
+    <form className="finance-filters mb-5 flex flex-wrap items-end gap-3" onSubmit={submit}>
       <Field label="Từ ngày" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
       <Field label="Đến ngày" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
       <Button type="submit" disabled={loading}>Lọc</Button>
@@ -231,12 +232,13 @@ export function AdminFinanceReport() {
     {exportNotice ? <div className="mb-4" role="status"><Alert tone="success">{exportNotice}</Alert></div> : null}
     {error ? <Alert tone="error">{error} <button type="button" className="underline" onClick={() => setReload((value) => value + 1)}>Thử lại</button></Alert> : null}
     {loading ? <EmptyState title="Đang tải báo cáo" text="Vui lòng chờ trong giây lát." /> : report ? <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <p className="finance-period">Phạm vi báo cáo: từ {report.from ? new Date(report.from).toLocaleDateString('vi-VN') : 'không giới hạn'} đến {report.to ? new Date(report.to).toLocaleDateString('vi-VN') : 'không giới hạn'}.</p>
+      <div className="finance-stat-grid grid gap-4 sm:grid-cols-3">
         <Stat label="Tiền thu" value={formatVnd(report.cashAmountVnd)} detail={`${report.cashOrderCount} đơn nạp`} />
-        <Stat label="Credit cộng" value={report.creditInTotal} />
-        <Stat label="Credit trừ" value={report.creditOutTotal} />
+        <Stat label="Credit cộng" value={report.creditInTotal} detail="Đơn vị: Credit" />
+        <Stat label="Credit trừ" value={report.creditOutTotal} detail="Đơn vị: Credit" />
       </div>
-      <section className="rounded-lg bg-white p-5 ring-1 ring-border">
+      <section className="finance-section rounded-lg bg-white p-5 ring-1 ring-border">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="section-title">Đối chiếu tiền thu và Credit nạp</h2>
           <span className={`rounded-sm px-2 py-1 text-xs font-semibold ${report.reconciliation.matched ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}>
@@ -246,10 +248,10 @@ export function AdminFinanceReport() {
         <div className="grid gap-4 sm:grid-cols-3">
           <Stat label="Credit quy đổi từ tiền thu" value={report.reconciliation.cashCredits} />
           <Stat label="Credit đã nạp" value={report.reconciliation.topUpCredits} />
-          <Stat label="Chênh lệch" value={report.reconciliation.difference} />
+          <Stat label="Chênh lệch" value={report.reconciliation.difference} detail="Đơn vị: Credit" />
         </div>
       </section>
-      <section className="rounded-lg bg-white p-5 ring-1 ring-border">
+      <section className="finance-section rounded-lg bg-white p-5 ring-1 ring-border">
         <h2 className="mb-1 section-title">Tiền thu theo ngày</h2>
         <p className="mb-4 text-sm text-text-muted">Tổng tiền các đơn nạp đã thanh toán trong khoảng ngày đã chọn.</p>
         <Suspense fallback={null}>
@@ -260,7 +262,7 @@ export function AdminFinanceReport() {
         {([
           { title: 'Credit cộng theo loại', rows: report.creditInByType, tone: 'credit' },
           { title: 'Credit trừ theo loại', rows: report.creditOutByType, tone: 'debit' },
-        ] as const).map((group) => <section key={group.title} className="min-w-0 rounded-lg bg-white p-5 ring-1 ring-border">
+        ] as const).map((group) => <section key={group.title} className="finance-section min-w-0 rounded-lg bg-white p-5 ring-1 ring-border">
           <h2 className="mb-4 section-title">{group.title}</h2>
           <Suspense fallback={null}>
             <CreditByTypeChart
@@ -276,5 +278,5 @@ export function AdminFinanceReport() {
         </section>)}
       </div>
     </div> : null}
-  </>;
+  </div>;
 }
