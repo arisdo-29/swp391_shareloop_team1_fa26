@@ -1,0 +1,270 @@
+.admin-records-page .admin-records-filters {
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: none;
+  --tw-ring-shadow: 0 0 transparent;
+}
+.admin-records-filters :is(input, select) {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  background: var(--color-surface-low);
+}
+.admin-transactions .admin-records-filters > label:nth-child(2) {
+  flex: 1;
+  min-width: min(260px, 100%);
+}
+.admin-records-filters button {
+  border-radius: 8px;
+  white-space: normal;
+}
+.admin-records-table {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: none;
+  --tw-ring-shadow: 0 0 transparent;
+}
+.admin-records-table .data-table {
+  table-layout: fixed;
+}
+.admin-accounts-table .data-table {
+  min-width: 1040px;
+}
+.admin-transactions-table .data-table {
+  min-width: 980px;
+}
+.admin-records-table th {
+  padding: 14px 16px;
+  background: var(--color-surface-low);
+  font-size: 12px;
+}
+.admin-records-table td {
+  padding: 18px 16px;
+  vertical-align: top;
+  font-size: 13px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.admin-accounts-table th:nth-child(1) {
+  width: 19%;
+}
+.admin-accounts-table th:nth-child(2) {
+  width: 19%;
+}
+.admin-accounts-table th:nth-child(3) {
+  width: 12%;
+}
+.admin-accounts-table th:nth-child(4) {
+  width: 11%;
+}
+.admin-accounts-table th:nth-child(5) {
+  width: 12%;
+}
+.admin-accounts-table th:nth-child(6) {
+  width: 11%;
+}
+.admin-accounts-table th:nth-child(7) {
+  width: 16%;
+}
+.admin-account-name {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 10px;
+}
+.admin-account-symbol {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-container);
+  color: var(--color-text-secondary);
+}
+.admin-transactions-table th:first-child {
+  width: 25%;
+}
+.admin-transactions-table th:nth-child(2),
+.admin-transactions-table th:nth-child(3) {
+  width: 14%;
+}
+.admin-transactions-table th:nth-child(4) {
+  width: 20%;
+}
+.admin-transactions-table th:nth-child(5) {
+  width: 13%;
+}
+.admin-transactions-table th:nth-child(6) {
+  width: 14%;
+}
+.admin-records-table td button {
+  border-radius: 8px;
+  white-space: normal;
+}
+.admin-records-table td > span.whitespace-nowrap {
+  white-space: normal;
+}
+.admin-record-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.admin-records-page nav[aria-label='Phân trang'] {
+  margin-top: 20px;
+}
+.admin-record-dialog {
+  padding: 28px;
+  border-radius: 16px;
+  line-height: 1.7;
+}
+.admin-record-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+.admin-record-dialog-header h2 {
+  min-width: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.6;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+.admin-record-dialog-header button {
+  border-radius: 8px;
+}
+.admin-record-dialog-body {
+  display: grid;
+  gap: 24px;
+  padding-top: 24px;
+}
+.admin-record-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.admin-record-summary > div {
+  min-width: 0;
+  flex: 1;
+}
+.admin-record-summary h3 {
+  font-size: 18px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.admin-record-summary p {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+.admin-record-identity-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-low);
+  color: var(--color-primary);
+}
+.admin-record-state {
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.admin-record-section {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-low);
+}
+.admin-record-section h3 {
+  margin-bottom: 20px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.admin-record-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 24px;
+}
+.admin-record-facts > div {
+  min-width: 0;
+}
+.admin-record-facts dt {
+  margin-bottom: 6px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.admin-record-facts dd,
+.admin-record-section p {
+  min-width: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.admin-record-notice {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+.admin-account-action-context,
+.admin-transaction-action-context {
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-low);
+  overflow-wrap: anywhere;
+}
+.admin-record-dialog :is(button, a):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+@media (max-width: 639px) {
+  .admin-records-page .admin-records-filters {
+    padding: 16px;
+    align-items: stretch;
+  }
+  .admin-transactions .admin-records-filters > label {
+    width: 100%;
+  }
+  .admin-record-dialog {
+    padding: 22px;
+    border-radius: 18px 18px 0 0;
+  }
+  .admin-record-dialog-header {
+    gap: 12px;
+  }
+  .admin-record-dialog-header h2 {
+    font-size: 18px;
+  }
+  .admin-record-dialog-header button > span {
+    display: none;
+  }
+  .admin-record-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-record-section {
+    padding: 18px;
+  }
+  .admin-record-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+  }
+  .admin-record-summary .admin-record-state {
+    justify-self: start;
+  }
+}

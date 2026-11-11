@@ -79,8 +79,24 @@ describe('AdminAccounts', () => {
 
     expect(within(rowOf('Lan An')).getByRole('button', { name: 'Khóa' })).toBeTruthy();
     expect(within(rowOf('Bình Trần')).getByRole('button', { name: 'Mở khóa' })).toBeTruthy();
-    expect(within(rowOf('Quản trị Minh')).queryByRole('button')).toBeNull();
+    expect(within(rowOf('Quản trị Minh')).queryByRole('button', { name: /^(Khóa|Mở khóa)$/ })).toBeNull();
     expect(within(rowOf('Chi Bị Cấm')).queryByRole('button', { name: /khóa/i })).toBeNull();
+  });
+
+  it('xem đúng hồ sơ từ hàng đang chọn mà không tải thêm hoặc xử lý tài khoản', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Quản trị Minh');
+    const trigger = within(rowOf('Quản trị Minh')).getByRole('button', { name: 'Xem Hồ sơ thành viên Quản trị Minh' });
+    const callsBefore = vi.mocked(adminUserApi.list).mock.calls.length;
+    await user.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: 'Hồ sơ thành viên Quản trị Minh' });
+    expect(within(dialog).getByText('admin@example.com')).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: /^(Khóa|Mở khóa)$/ })).toBeNull();
+    expect(adminUserApi.list).toHaveBeenCalledTimes(callsBefore);
+    expect(adminFinanceApi.setLocked).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Đóng chi tiết' }));
+    expect(document.activeElement).toBe(trigger);
   });
 
   it('khóa tài khoản phải nhập lý do rồi gọi API và tải lại danh sách', async () => {
