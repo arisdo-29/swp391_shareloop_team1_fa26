@@ -1,3 +1,4 @@
+import { ThemeSelect } from '../components/ThemeSelect';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
@@ -68,7 +69,14 @@ function AppShellContent() {
   }, [authenticatedUserId]);
 
   useEffect(() => {
-    if (authenticatedUserId || (pathname !== '/' && pathname !== '/browse' && !pathname.startsWith('/items/') && !pathname.startsWith('/product/'))) return;
+    if (
+      authenticatedUserId ||
+      (pathname !== '/' &&
+        pathname !== '/browse' &&
+        !pathname.startsWith('/items/') &&
+        !pathname.startsWith('/product/'))
+    )
+      return;
     return connectRealtime('/api/v1/items/events', false);
   }, [authenticatedUserId, pathname]);
 
@@ -208,7 +216,7 @@ function AppShellContent() {
     navigate('/login', { replace: true });
   };
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="member-layout flex min-h-screen flex-col bg-background">
       <ScrollToTop />
       <a
         href="#main-content"
@@ -280,6 +288,7 @@ function AppShellContent() {
               }
             }}
           >
+            <ThemeSelect />
             {user ? (
               <>
                 {!isAdmin ? (
@@ -292,11 +301,7 @@ function AppShellContent() {
                       {wallet ? wallet.available : '--'} Credit
                     </Link>
                     <Link to="/post" className="hidden shrink-0 sm:block">
-                      <Button
-                        className="bronze-action"
-                      >
-                        Đăng đồ
-                      </Button>
+                      <Button className="bronze-action">Đăng đồ</Button>
                     </Link>
                   </>
                 ) : null}
@@ -327,7 +332,7 @@ function AppShellContent() {
                     <Icon name="chevronDown" className="size-4 shrink-0 text-white/75" />
                   </button>
                   {profileOpen ? (
-                    <div className="absolute right-0 top-12 w-60 rounded-lg bg-white p-2 text-text-primary shadow-lg ring-1 ring-border">
+                    <div className="absolute right-0 top-12 w-60 rounded-lg bg-surface p-2 text-text-primary shadow-lg ring-1 ring-border">
                       <div className="border-b border-border/70 px-3 py-2.5">
                         <p className="break-words text-sm font-bold">
                           {isAdmin ? 'Quản trị viên' : user.name}
@@ -378,11 +383,7 @@ function AppShellContent() {
                   Đăng nhập
                 </Link>
                 <Link to="/register">
-                  <Button
-                    className="bronze-action"
-                  >
-                    Đăng ký
-                  </Button>
+                  <Button className="bronze-action">Đăng ký</Button>
                 </Link>
               </>
             )}
@@ -397,7 +398,9 @@ function AppShellContent() {
           </div>
         </div>
         {mobileOpen && !isAdmin ? (
-          <nav className={`site-header-mobile border-t px-4 py-3 xl:hidden ${isHome ? 'site-header-home-mobile' : ''}`}>
+          <nav
+            className={`site-header-mobile border-t px-4 py-3 xl:hidden ${isHome ? 'site-header-home-mobile' : ''}`}
+          >
             {nav.map(([to, label]) => (
               <NavLink
                 end={to === '/'}
@@ -408,7 +411,9 @@ function AppShellContent() {
                   `flex items-center justify-between rounded-md px-3 py-3 text-sm font-semibold focus-visible:bg-white/[0.14] focus-visible:outline-none ${
                     isActive
                       ? `${isHome ? 'bg-white/[0.16]' : 'bg-white/[0.14]'} text-white`
-                      : isHome ? 'text-white' : 'text-white/80'
+                      : isHome
+                        ? 'text-white'
+                        : 'text-white/80'
                   }`
                 }
               >

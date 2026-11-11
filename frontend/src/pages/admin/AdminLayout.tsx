@@ -72,7 +72,7 @@ export function AdminLayout() {
               title={collapsed ? label : undefined}
               onClick={() => setOpen(false)}
               className={({ isActive }) =>
-                `mb-0.5 flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${collapsed ? 'lg:justify-center lg:px-0' : ''} ${isActive ? 'bg-admin-group font-bold text-white' : 'font-medium text-admin-text hover:bg-admin-group/40'}`
+                `mb-0.5 flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${collapsed ? 'lg:justify-center lg:px-0' : ''} ${isActive ? 'bg-highlight font-bold text-on-highlight' : 'font-medium text-admin-text hover:bg-admin-group/40'}`
               }
             >
               <Icon name={iconName as IconName} className="size-5 shrink-0" />
@@ -86,7 +86,7 @@ export function AdminLayout() {
   // Từ màn lg bỏ lề trái để sidebar sát mép trái màn hình; phần nội dung vẫn giữ lề phải.
   return (
     <div
-      className={`w-full px-[var(--layout-gutter)] py-6 lg:grid lg:pl-0 lg:items-start lg:gap-[clamp(1.25rem,2vw,2rem)] ${collapsed ? 'lg:grid-cols-[72px_minmax(0,1fr)]' : 'lg:grid-cols-[250px_minmax(0,1fr)]'}`}
+      className={`admin-layout w-full px-[var(--layout-gutter)] py-6 lg:grid lg:pl-0 lg:items-start lg:gap-[clamp(1.25rem,2vw,2rem)] ${collapsed ? 'lg:grid-cols-[72px_minmax(0,1fr)]' : 'lg:grid-cols-[250px_minmax(0,1fr)]'}`}
     >
       <div className="mb-5 flex items-center justify-between lg:hidden">
         <div>

@@ -6,6 +6,8 @@ Giao diện React + TypeScript kết nối backend ShareLoop qua các service tr
 
 React, TypeScript, Vite, Tailwind CSS, Redux Toolkit, React Redux, React Router DOM, Be Vietnam Pro, and Material Symbols Outlined.
 
+H??ng d?n n?n t?ng giao di?n, theme v? c?u h?nh backend local: [ui-foundation.md](docs/ui-foundation.md).
+
 ## Run
 
 ```bash

@@ -49,10 +49,15 @@ const AdminAuditLogs = lazy(() => import('../pages/admin/AdminPages').then((modu
 const AdminSettings = lazy(() => import('../pages/admin/AdminPages').then((module) => ({ default: module.AdminSettings })));
 const AdminContentPage = lazy(() => import('../pages/admin/AdminPages').then((module) => ({ default: module.AdminContentPage })));
 
+const UiFoundation = import.meta.env.DEV
+  ? lazy(() => import('../pages/UiFoundation').then((module) => ({ default: module.UiFoundation })))
+  : () => null;
+
 export const router = createBrowserRouter([
   {
     element: <AppShell />,
     children: [
+      ...(import.meta.env.DEV ? [{ path: '/ui-foundation', element: <UiFoundation /> }] : []),
       { path: '/about', element: <About /> },
       {
         element: <PublicRoute />,
