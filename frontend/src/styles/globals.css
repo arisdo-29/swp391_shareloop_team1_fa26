@@ -149,6 +149,25 @@ a {
   color: white !important;
 }
 
+.site-header-account-name {
+  max-width: clamp(7rem, 12vw, 11rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 639px) {
+  .site-header-account-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
 .bronze-action {
   border-color: var(--color-gold) !important;
   background-color: var(--color-gold) !important;

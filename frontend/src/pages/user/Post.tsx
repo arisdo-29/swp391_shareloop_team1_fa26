@@ -1,3 +1,4 @@
+import './member-post.css';
 import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
@@ -450,7 +451,8 @@ export function Post() {
   const feeLabel = type === 'gift' ? 'Miễn phí' : type === 'trade' ? (postFee === null ? '--' : `${postFee} Credit`) : 'Chọn hình thức';
 
   return (
-    <div className="page-shell">
+    <div className="member-post-page page-shell">
+      <p className="member-eyebrow">Chia sẻ cùng cộng đồng</p>
       <PageHeader
         title="Đăng tin"
         description="Admin duyệt bài trước khi bài hiện ra. Phí đăng chỉ trừ khi bài được duyệt, bị từ chối thì hoàn lại."
@@ -476,7 +478,7 @@ export function Post() {
           </Alert>
         </div>
       ) : null}
-      <form onSubmit={submit} className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <form onSubmit={submit} className="member-post-layout">
         <div className="min-w-0 space-y-4">
           <PostStep number={1} title="Bạn muốn cho hay đổi?">
             <div className="grid grid-cols-2 gap-2.5">
@@ -513,29 +515,29 @@ export function Post() {
           </PostStep>
 
           <PostStep number={2} title="Ảnh món đồ">
-            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5">
+            <div className="member-image-picker">
               {images.map((image, index) => (
                 <div key={image.slice(-16) + index} className="relative">
                   <ItemImage src={image} alt={`Ảnh món đồ ${index + 1}`} className="aspect-square w-full rounded-md object-cover" />
                   {index === 0 ? (
-                    <span className="absolute left-1.5 top-1.5 rounded-sm bg-primary px-1.5 py-0.5 text-2xs font-bold text-white">Ảnh bìa</span>
+                    <span className="absolute left-1.5 top-1.5 rounded-sm bg-primary px-1.5 py-0.5 text-2xs font-bold text-on-primary">Ảnh bìa</span>
                   ) : null}
                   <button
                     type="button"
                     aria-label="Xóa ảnh"
                     disabled={submitting || mediaUploading}
                     onClick={() => removeImage(index)}
-                    className="absolute right-1 top-1 grid size-8 place-items-center rounded-full bg-white text-error shadow-sm transition hover:bg-error-soft"
+                    className="absolute right-1 top-1 grid size-8 place-items-center rounded-full bg-surface text-error shadow-sm transition hover:bg-error-soft"
                   >
                     <Icon name="close" className="size-3" />
                   </button>
                   <div className="absolute bottom-1 left-1 right-1 flex justify-between gap-1">
-                    <button type="button" className="min-h-8 rounded-md bg-white px-2 text-2xs font-semibold shadow-sm transition hover:bg-primary-faint disabled:opacity-40" aria-label={`Đưa ảnh ${index + 1} về trước`} disabled={index === 0 || submitting || mediaUploading} onClick={() => moveImage(index, -1)}>Trước</button>
-                    <button type="button" className="min-h-8 rounded-md bg-white px-2 text-2xs font-semibold shadow-sm transition hover:bg-primary-faint disabled:opacity-40" aria-label={`Đưa ảnh ${index + 1} ra sau`} disabled={index === images.length - 1 || submitting || mediaUploading} onClick={() => moveImage(index, 1)}>Sau</button>
+                    <button type="button" className="min-h-8 rounded-md bg-surface px-2 text-2xs font-semibold shadow-sm transition hover:bg-primary-faint disabled:opacity-40" aria-label={`Đưa ảnh ${index + 1} về trước`} disabled={index === 0 || submitting || mediaUploading} onClick={() => moveImage(index, -1)}>Trước</button>
+                    <button type="button" className="min-h-8 rounded-md bg-surface px-2 text-2xs font-semibold shadow-sm transition hover:bg-primary-faint disabled:opacity-40" aria-label={`Đưa ảnh ${index + 1} ra sau`} disabled={index === images.length - 1 || submitting || mediaUploading} onClick={() => moveImage(index, 1)}>Sau</button>
                   </div>
                 </div>
               ))}
-              <label className={`flex aspect-square cursor-pointer flex-col items-center justify-center rounded-md border border-dashed text-center text-sm font-semibold text-primary transition hover:bg-primary-faint ${errors.images ? 'border-error' : 'border-text-muted'}`}>
+              <label className={`member-image-upload focus-within:ring-2 focus-within:ring-primary flex aspect-square cursor-pointer flex-col items-center justify-center rounded-md border border-dashed text-center text-sm font-semibold text-primary transition hover:bg-primary-faint ${errors.images ? 'border-error' : 'border-text-muted'}`}>
                 Thêm ảnh
                 <input
                   className="sr-only"
@@ -589,7 +591,7 @@ export function Post() {
                 {!attributesLoading && !attributesError && categoryAttributes.length ? (
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {sortedCategoryAttributes.map((attribute) => (
-                      <span key={attribute.id} className="rounded-full bg-white px-2.5 py-1 text-xs ring-1 ring-border">
+                      <span key={attribute.id} className="rounded-full bg-surface px-2.5 py-1 text-xs ring-1 ring-border">
                         {attribute.name}
                         {attribute.required ? ' · bắt buộc' : ''}
                         {attribute.options.length ? ` · ${attribute.options.join(', ')}` : ''}
@@ -632,7 +634,7 @@ export function Post() {
                 <div>
                   <span className="label">Ảnh chụp rõ chỗ lỗi</span>
                   <input
-                    className="block w-full text-xs"
+                    className="member-file-input block w-full text-xs"
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
                     multiple
@@ -698,7 +700,13 @@ export function Post() {
           </PostStep>
         </div>
 
-        <aside aria-label="Tóm tắt" className="space-y-4 rounded-lg bg-white p-5 ring-1 ring-border/80 lg:sticky lg:top-24">
+        <aside aria-label="Tóm tắt" className="member-post-summary space-y-4">
+          <div className="member-post-preview">
+            {images[0] ? <ItemImage src={images[0]} alt="Ảnh bìa xem trước" className="member-post-preview-image" /> : <div className="member-post-preview-placeholder"><Icon name="image" className="size-8" /><span>Ảnh bìa món đồ</span></div>}
+            <p className="member-eyebrow">Xem trước nội dung</p>
+            <h2>{title.trim() || 'Tên món đồ của bạn'}</h2>
+            <p>{type === 'gift' ? 'Cho tặng' : type === 'trade' ? 'Trao đổi' : 'Chưa chọn hình thức'}</p>
+          </div>
           <h2 className="text-base font-bold">Tóm tắt</h2>
           <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2.5 text-sm">
             <dt className="text-text-secondary">Hình thức</dt>
@@ -729,12 +737,12 @@ export function Post() {
             <li className={district ? 'text-success' : 'text-warning'}>{district ? 'Đã chọn quận' : 'Chưa chọn quận'}</li>
           </ul>
           <Button className="w-full" size="lg" disabled={submitting || mediaUploading || catalogLoading}>
-            Gửi duyệt bài
+            {submitting || mediaUploading ? 'Đang xử lý bài đăng...' : 'Gửi duyệt bài'}
           </Button>
         </aside>
       </form>
       {confirmOpen ? (
-        <DialogFrame labelledBy="post-fee-title">
+        <DialogFrame labelledBy="post-fee-title" className="member-post-confirm">
           <h2 id="post-fee-title" className="text-xl font-bold text-text-primary">
             Xác nhận đăng bài
           </h2>
@@ -782,11 +790,12 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 
 function PostStep({ number, title, children }: { number: number; title: string; children: ReactNode }) {
   return (
-    <section aria-labelledby={`post-step-${number}`} className="space-y-4 rounded-lg bg-white p-5 ring-1 ring-border/80 sm:p-6">
+    <section aria-labelledby={`post-step-${number}`} className="member-form-section space-y-5">
       <h2 id={`post-step-${number}`} className="flex items-center gap-2.5 text-base font-bold">
         <span className="grid size-7 place-items-center rounded-full bg-primary-soft text-sm text-primary">{number}</span>
         {title}
       </h2>
+      <p className="member-form-hint">{number === 1 ? 'Chọn hình thức phù hợp với món đồ và mong muốn của bạn.' : number === 2 ? 'Ảnh rõ ràng giúp người nhận hiểu đúng tình trạng món đồ.' : number === 3 ? 'Mô tả đầy đủ và trung thực để hai bên dễ thống nhất.' : 'Chọn khu vực thuận tiện để trao hoặc nhận món đồ.'}</p>
       {children}
     </section>
   );

@@ -1,3 +1,4 @@
+import './member-profile.css';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
@@ -439,11 +440,10 @@ export function Profile() {
   };
 
   return (
-    <div className="page-shell">
-      <PageHeader title="Tài khoản" />
-      <div className="grid items-start gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="rounded-lg bg-white p-3 ring-1 ring-border/80">
-          <div className="flex items-center gap-3 px-2 pb-4 pt-2">
+    <div className="account-page page-shell">
+      <p className="member-eyebrow">Không gian của bạn</p>
+      <PageHeader title="Tài khoản" description="Quản lý thông tin cá nhân và theo dõi uy tín của bạn trong cộng đồng." />
+          <div className="account-identity">
             <Avatar
               user={{
                 ...user,
@@ -452,9 +452,10 @@ export function Profile() {
                 avatarUrl,
               }}
             />
-            <div className="min-w-0">
-              <h2 className="truncate text-sm font-bold">{name}</h2>
-              <p className="truncate text-xs text-text-muted">{email}</p>
+            <div className="account-content min-w-0">
+              <h2 className="account-name">{name}</h2>
+              <p className="account-email">{email}</p>
+              {user.district ? <p className="account-area">{user.district}</p> : null}
               <div className="mt-1">
                 {isAdmin ? <RankBadge rank="Quản trị hệ thống" /> : null}
                 {!isAdmin && reputation ? (
@@ -463,6 +464,9 @@ export function Profile() {
               </div>
             </div>
           </div>
+      <div className="account-layout">
+        <aside className="account-navigation">
+          <p className="account-nav-heading">Quản lý tài khoản</p>
           <nav aria-label="Mục tài khoản" className="space-y-1 border-t border-border pt-2">
             {(
               [
@@ -496,7 +500,7 @@ export function Profile() {
         </aside>
         <main className="min-w-0">
           {tab === 'profile' ? (
-            <section className="rounded-lg bg-white p-5 ring-1 ring-border/80 sm:p-6">
+            <section className="account-details-panel">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="section-title">Thông tin cá nhân</h2>
@@ -504,10 +508,10 @@ export function Profile() {
                     Thông tin dùng để liên hệ trong giao dịch.
                   </p>
                 </div>
-                <label className="inline-flex min-h-11 cursor-pointer items-center rounded-md border border-border bg-white px-3 text-sm font-semibold text-text-secondary transition hover:border-primary/50 hover:bg-primary-faint hover:text-primary">
+                <label className="account-avatar-upload focus-within:ring-2 focus-within:ring-primary inline-flex min-h-11 cursor-pointer items-center rounded-md border border-border bg-surface px-3 text-sm font-semibold text-text-secondary transition hover:border-primary/50 hover:bg-primary-faint hover:text-primary">
                   Đổi ảnh đại diện
                   <input
-                    className="hidden"
+                    className="sr-only"
                     type="file"
                     accept="image/*"
                     onChange={async (event) => {
@@ -520,7 +524,7 @@ export function Profile() {
                   />
                 </label>
               </div>
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="account-field-grid mt-6 grid gap-5 sm:grid-cols-2">
                 <Field label="Họ và tên" value={name} onChange={(e) => setName(e.target.value)} />
                 {user.username.trim().toLowerCase() !== email.trim().toLowerCase() ? (
                   <Field label="Tên đăng nhập" value={user.username} readOnly className="bg-surface-low" />
@@ -602,7 +606,7 @@ export function Profile() {
                         setPhoneChangeError('');
                       }}
                       readOnly={Boolean(phoneOtpEmail)}
-                      className={phoneOtpEmail ? 'bg-white' : undefined}
+                      className={phoneOtpEmail ? 'bg-surface' : undefined}
                     />
                     {!phoneOtpEmail ? (
                       <Button
@@ -690,7 +694,7 @@ export function Profile() {
               {reputation ? (
                 <>
                   <section aria-label="Tóm tắt uy tín" className="grid gap-3 md:grid-cols-[2fr_1fr_1fr]">
-                    <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
+                    <div className="rounded-lg bg-surface p-5 ring-1 ring-border/80">
                       <p className="text-xs font-semibold text-text-secondary">Hạng thành viên</p>
                       <p className="mt-2 flex items-baseline gap-2.5">
                         <strong className="text-2xl">{getRankLabel(reputation.rank)}</strong>
@@ -698,12 +702,12 @@ export function Profile() {
                       </p>
                       <p className="mt-2 text-sm leading-6 text-text-secondary">Điểm tăng khi bạn hoàn tất giao dịch và quyết định hạng.</p>
                     </div>
-                    <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
+                    <div className="rounded-lg bg-surface p-5 ring-1 ring-border/80">
                       <p className="text-xs font-semibold text-text-secondary">Sao uy tín</p>
                       <p className="mt-2 text-xl font-bold">{reputation.trustStars} / 5</p>
                       <p className="mt-1 text-xs leading-5 text-text-muted">Giảm khi bị báo cáo đúng.</p>
                     </div>
-                    <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
+                    <div className="rounded-lg bg-surface p-5 ring-1 ring-border/80">
                       <p className="text-xs font-semibold text-text-secondary">Đúng mô tả</p>
                       <p className="mt-2 text-xl font-bold">
                         {reputation.accuracyRate === null ? (
@@ -715,7 +719,7 @@ export function Profile() {
                       <p className="mt-1 text-xs leading-5 text-text-muted">Từ đánh giá của người nhận.</p>
                     </div>
                   </section>
-                  <section className="overflow-hidden rounded-lg bg-white ring-1 ring-border/80">
+                  <section className="overflow-hidden rounded-lg bg-surface ring-1 ring-border/80">
                     <div className="border-b border-border px-5 py-4">
                       <h2 className="section-title">Lịch sử uy tín</h2>
                       <p className="mt-1 text-xs text-text-muted">{reputation.history.totalElements} lần thay đổi điểm</p>

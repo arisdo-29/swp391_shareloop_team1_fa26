@@ -320,16 +320,17 @@ function AppShellContent() {
                       setProfileOpen(!profileOpen);
                       setNotificationOpen(false);
                     }}
-                    className="flex min-h-11 min-w-0 max-w-full items-center gap-1 rounded-md px-2 transition hover:bg-white/10"
+                    className="flex min-h-11 min-w-11 max-w-full items-center gap-1 rounded-md px-2 transition hover:bg-white/10"
                     aria-expanded={profileOpen}
                   >
+                    <Icon name="user" className="size-5 shrink-0 sm:hidden" />
                     <span
                       title={user.name}
-                      className="min-w-0 whitespace-normal break-words text-right text-sm font-semibold leading-tight"
+                      className="site-header-account-name min-w-0 text-right text-sm font-semibold leading-tight"
                     >
                       {user.name}
                     </span>
-                    <Icon name="chevronDown" className="size-4 shrink-0 text-white/75" />
+                    <Icon name="chevronDown" className="hidden size-4 shrink-0 text-white/75 sm:block" />
                   </button>
                   {profileOpen ? (
                     <div className="absolute right-0 top-12 w-60 rounded-lg bg-surface p-2 text-text-primary shadow-lg ring-1 ring-border">
