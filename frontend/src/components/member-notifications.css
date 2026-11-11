@@ -1,0 +1,156 @@
+.member-notifications {
+  max-width: 1180px;
+}
+.notification-eyebrow {
+  margin-bottom: 12px;
+  color: var(--color-link);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+.member-notifications .page-title {
+  letter-spacing: -0.04em;
+}
+.member-notifications .notification-filters {
+  gap: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-surface);
+}
+.member-notifications .notification-filters :is(input, select) {
+  min-height: 48px;
+  background: var(--color-surface-low);
+}
+.member-notifications [aria-label='Lọc theo trạng thái'] button {
+  min-height: 44px;
+}
+.member-notifications .notification-bulk-actions {
+  gap: 8px 12px;
+  margin-bottom: 16px;
+}
+.member-notifications .notification-bulk-actions button {
+  min-height: 44px;
+}
+.member-notifications ul.card {
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  box-shadow: none;
+  --tw-ring-shadow: 0 0 transparent;
+}
+.member-notifications .bg-white {
+  background: var(--color-surface);
+}
+.member-notifications .notification-row {
+  padding: 24px;
+  gap: 16px;
+}
+.member-notifications .notification-row > div {
+  padding-left: 4px;
+}
+.member-notifications .notification-row p,
+.member-notification-menu .notification-row p {
+  overflow-wrap: anywhere;
+}
+.member-notifications .notification-row p:first-child {
+  font-size: 15px;
+  line-height: 1.7;
+}
+.member-notifications .notification-row time {
+  line-height: 2;
+}
+.member-notifications .notification-row a {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+}
+.member-notification-menu .notification-dropdown {
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 90px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+}
+.member-notification-menu .notification-dropdown > div:first-child {
+  padding: 20px;
+  flex-shrink: 0;
+}
+.member-notification-menu .notification-dropdown > div.max-h-96 {
+  min-height: 0;
+  max-height: min(480px, calc(100dvh - 290px));
+  overscroll-behavior: contain;
+}
+.member-notification-menu .notification-dropdown > a:last-child {
+  min-height: 52px;
+  flex-shrink: 0;
+  background: var(--color-surface-low);
+}
+.member-notification-menu .notification-dropdown h2 {
+  letter-spacing: -0.025em;
+  font-size: 18px;
+}
+.member-notification-menu .notification-dropdown [role='group'] {
+  margin-top: 16px;
+}
+.member-notification-menu .notification-dropdown [role='group'] button {
+  min-height: 44px;
+  font-size: 13px;
+}
+.member-notification-menu .notification-row {
+  padding: 18px 20px;
+}
+.member-notification-menu .notification-row button[title] {
+  min-width: 40px;
+  min-height: 40px;
+}
+.member-notification-menu .notification-row p:nth-child(2) {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.member-notification-menu .notification-row p:nth-child(3) {
+  font-size: 12px;
+}
+.member-notification-menu .notification-row div:has(> a) {
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.member-notification-menu .notification-row :is(a, button:not([title])) {
+  min-height: 36px;
+}
+.member-notifications :is(a, button, input, select):focus-visible,
+.member-notification-menu :is(a, button):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+@media (max-width: 1023px) {
+  .member-notifications .notification-filters {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .member-notifications .notification-filters > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 639px) {
+  .member-notifications .notification-filters {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+  .member-notifications .notification-row {
+    padding: 20px 16px;
+    gap: 10px;
+  }
+  .member-notifications .notification-bulk-actions > label {
+    flex-basis: 100%;
+  }
+  .member-notifications .notification-bulk-actions button:last-child {
+    justify-content: flex-start;
+    padding-inline: 0;
+  }
+  .member-notification-menu .notification-dropdown {
+    position: fixed;
+    inset: 76px 16px auto;
+    width: auto;
+  }
+}
