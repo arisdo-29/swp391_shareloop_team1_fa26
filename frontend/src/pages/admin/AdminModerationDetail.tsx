@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Alert, Button, EmptyState, PageHeader } from '../../components/ui';
+import { Alert, Button, EmptyState, PageHeader, StatusBadge } from '../../components/ui';
 import { adminModerationApi, type ReviewItemDetail } from '../../services/adminModerationApi';
 import {
   adminChecklistApi,
@@ -58,7 +58,7 @@ function Fact({ label, value }: { label: string; value: ReactNode }) {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-lg bg-white p-5 ring-1 ring-border/80">
+    <section className="moderation-detail-section rounded-lg bg-white p-5 ring-1 ring-border/80">
       <h2 className="mb-4 text-base font-bold text-text-primary">{title}</h2>
       {children}
     </section>
@@ -196,7 +196,8 @@ export function AdminModerationDetail() {
 
   const reviewable = detail.status === 'PENDING_REVIEW';
   return (
-    <>
+    <div className="admin-moderation-detail">
+      <div className="moderation-detail-status"><StatusBadge status={detail.status} /></div>
       <PageHeader
         title={detail.title}
         description={`Đăng lúc ${new Date(detail.createdAt).toLocaleString('vi-VN')}`}
@@ -207,7 +208,7 @@ export function AdminModerationDetail() {
           <Alert tone="warning">{notice}</Alert>
         </div>
       ) : null}
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
+      <div className="moderation-detail-grid grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
         <div className="min-w-0 space-y-5">
           <Section title="Hình ảnh">
             <ModerationImageGallery images={detail.images} defectImages={detail.defectImages} />
@@ -216,7 +217,7 @@ export function AdminModerationDetail() {
           <DonorAndModeration detail={detail} />
         </div>
 
-        <aside className="rounded-lg bg-white p-5 ring-1 ring-border/80 lg:sticky lg:top-24">
+        <aside className="moderation-review-panel rounded-lg bg-white p-5 ring-1 ring-border/80 lg:sticky lg:top-24">
           {reviewable ? (
             <ReviewPanel
               detail={detail}
@@ -243,7 +244,7 @@ export function AdminModerationDetail() {
           )}
         </aside>
       </div>
-    </>
+    </div>
   );
 }
 

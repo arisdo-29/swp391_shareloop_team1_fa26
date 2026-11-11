@@ -80,13 +80,11 @@ export function AdminOperationsDashboard() {
     { label: 'Credit trừ', value: report.creditOutTotal.toLocaleString('vi-VN'), tone: 'border-l-secondary' },
   ] : [];
 
-  return <>
+  return <div className="admin-dashboard">
     <PageHeader
       title="Tổng quan"
+      description="Số liệu vận hành, việc cần làm và các hoạt động được ghi nhận."
     />
-    <div className="mb-6">
-      <AdminTodoCards />
-    </div>
     <div className="grid min-w-0 gap-6">
       <div className="min-w-0 space-y-6">
         {reportError ? (
@@ -95,19 +93,24 @@ export function AdminOperationsDashboard() {
             <button type="button" className="font-semibold underline" onClick={() => setReload((value) => value + 1)}>Thử lại</button>
           </Alert>
         ) : report ? (
+          <section className="admin-dashboard-metrics">
+          <div className="admin-section-heading"><h2 className="section-title">Thống kê tổng hợp</h2><p>Từ {report.from ? new Date(report.from).toLocaleDateString('vi-VN') : 'không giới hạn'} đến {report.to ? new Date(report.to).toLocaleDateString('vi-VN') : 'không giới hạn'}</p></div>
           <div className="grid gap-4 sm:grid-cols-3">
             {metrics.map((metric) => (
-              <section key={metric.label} className={`rounded-xl border border-l-4 border-border/80 bg-white p-5 shadow-sm ${metric.tone}`}>
+              <section key={metric.label} className={`admin-metric-card rounded-xl border border-l-4 border-border/80 bg-white p-5 shadow-sm ${metric.tone}`}>
                 <p className="text-sm font-medium text-text-muted">{metric.label}</p>
                 <p className="mt-1 break-words text-2xl font-bold tabular-nums text-text-primary">{metric.value}</p>
+                <p className="mt-2 text-xs text-text-muted">{metric.label === 'Tiền thu' ? 'Tiền thanh toán (VND)' : 'Đơn vị: Credit'}</p>
               </section>
             ))}
           </div>
+          </section>
         ) : (
           reportLoading ? <EmptyState title="Đang tải tổng quan" text="Vui lòng chờ trong giây lát." /> : null
         )}
 
-        <section className="overflow-hidden rounded-xl border border-border/80 bg-white shadow-sm">
+        <AdminTodoCards />
+        <section className="admin-dashboard-activity overflow-hidden rounded-xl border border-border/80 bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-5 py-4 sm:px-6">
             <div>
               <h2 className="section-title">Hoạt động gần đây</h2>
@@ -163,7 +166,7 @@ export function AdminOperationsDashboard() {
       </div>
 
     </div>
-  </>;
+  </div>;
 }
 
 export function AdminFinanceReport() {
