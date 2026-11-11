@@ -1,0 +1,372 @@
+.complaint-eyebrow {
+  margin-bottom: 10px;
+  color: var(--color-link);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1.7;
+}
+.complaint-create-dialog {
+  max-width: 620px;
+  padding: 28px;
+  border-radius: 24px;
+}
+.complaint-create-dialog h2 {
+  letter-spacing: -0.025em;
+  line-height: 1.45;
+}
+.complaint-create-dialog :is(p, h2),
+.complaint-response-page :is(p, h1, h2, dd),
+.member-complaints :is(p, h2),
+.admin-complaints :is(p, h2),
+.complaint-review-dialog :is(p, h2, dd) {
+  overflow-wrap: anywhere;
+}
+.complaint-create-dialog .input,
+.complaint-response-form .input {
+  background: var(--color-surface-low);
+  min-height: 48px;
+}
+.complaint-create-dialog textarea,
+.complaint-response-form textarea {
+  min-height: 150px;
+  line-height: 1.8;
+}
+.complaint-create-dialog > div:last-child {
+  flex-wrap: wrap;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border);
+}
+.complaint-evidence-field {
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--color-surface-low);
+}
+.complaint-evidence-field > label {
+  background: var(--color-surface);
+  border-radius: 10px;
+}
+.complaint-evidence-field [aria-label='Ảnh đã chọn'] {
+  margin-top: 16px;
+}
+.complaint-evidence-field [aria-label='Ảnh đã chọn'] li {
+  min-width: 0;
+  background: var(--color-surface);
+  border-radius: 12px;
+}
+.complaint-evidence-field [aria-label='Ảnh đã chọn'] img {
+  background: var(--color-surface-container);
+  object-fit: contain;
+}
+.complaint-evidence-field [aria-label='Ảnh đã chọn'] p {
+  padding: 10px;
+}
+.member-complaints .complaint-list-section > h2 {
+  margin-bottom: 8px;
+  font-size: 20px;
+  letter-spacing: -0.025em;
+}
+.member-complaints .complaint-list-section > p {
+  max-width: 760px;
+  margin-bottom: 20px;
+  line-height: 1.8;
+}
+.member-complaints .complaint-list-card {
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  box-shadow: none;
+  --tw-ring-shadow: 0 0 transparent;
+}
+.member-complaints .complaint-list-card[data-response-open='true'] {
+  border-left: 4px solid var(--color-primary);
+  background: var(--color-primary-faint);
+}
+.member-complaints .complaint-list-card[data-response-open='true'] > div > div:first-child > span {
+  background: var(--color-surface);
+}
+.member-complaints .complaint-list-card p.font-bold {
+  font-size: 16px;
+  line-height: 1.7;
+}
+.member-complaints .complaint-list-card a:has(button) {
+  display: block;
+}
+.complaint-response-page {
+  max-width: 1280px;
+}
+.complaint-response-shell {
+  max-width: 1180px;
+}
+.complaint-response-case {
+  border: 1px solid var(--color-border);
+  border-radius: 24px;
+  box-shadow: none;
+  --tw-ring-shadow: 0 0 transparent;
+}
+.complaint-response-header {
+  padding: 32px;
+  background: var(--color-surface);
+}
+.complaint-response-header .page-title {
+  letter-spacing: -0.04em;
+  font-size: clamp(24px, 2.6vw, 32px);
+}
+.complaint-case-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  margin-top: 16px;
+  border-radius: 999px;
+  background: var(--color-surface-container);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+.complaint-case-status[data-status='OPEN'] {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+.complaint-case-status[data-status='AWAITING_RESPONSE'] {
+  background: var(--color-info-soft);
+  color: var(--color-info);
+}
+.complaint-case-status[data-status='RESOLVED'] {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+.complaint-response-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 28px;
+  padding: 28px 32px 32px;
+  align-items: start;
+  background: var(--color-surface-low);
+}
+.complaint-response-body > * + * {
+  margin-top: 0;
+}
+.complaint-response-body
+  > :not(.complaint-original-content, .complaint-response-form, .complaint-submitted-response) {
+  grid-column: 1 / -1;
+}
+.complaint-original-content,
+.complaint-response-form,
+.complaint-submitted-response {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+}
+.complaint-original-content dl > div {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+.complaint-submitted-response:empty {
+  display: none;
+}
+.complaint-original-content dd {
+  margin-top: 8px;
+}
+.complaint-response-page :is(a, button, input, textarea):focus-visible,
+.member-complaints :is(a, button):focus-visible,
+.complaint-create-dialog :is(button, input, select, textarea):focus-visible,
+.admin-complaints :is(button, select):focus-visible,
+.complaint-review-dialog :is(a, button, input, textarea):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+.admin-complaints .complaint-eyebrow {
+  color: var(--color-text-muted);
+  letter-spacing: 0.1em;
+}
+.admin-complaints .page-title {
+  font-size: 26px;
+  letter-spacing: -0.035em;
+}
+.admin-complaints .complaint-admin-filters {
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+.admin-complaints [aria-label='Lọc trạng thái'] {
+  gap: 6px;
+}
+.admin-complaints [aria-label='Lọc trạng thái'] button {
+  border-radius: 8px;
+}
+.admin-complaints .input {
+  background: var(--color-surface-low);
+}
+.admin-complaints .complaint-list-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 14px 20px;
+  border: 1px solid var(--color-border);
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: var(--color-surface-container);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.admin-complaints [aria-label='Danh sách hồ sơ'] {
+  border-radius: 0 0 12px 12px;
+}
+.admin-complaints .admin-complaint-row {
+  padding: 20px;
+  transition: background 160ms;
+}
+.admin-complaints .admin-complaint-row:hover {
+  background: var(--color-surface-low);
+}
+.admin-complaints .admin-complaint-row h2 {
+  font-size: 14px;
+  line-height: 1.7;
+}
+.admin-complaints .admin-complaint-row button {
+  border-radius: 8px;
+}
+.complaint-review-dialog {
+  width: min(1120px, 100%);
+  max-width: 1120px;
+  padding: 24px;
+  border-radius: 16px;
+}
+.complaint-review-close-label {
+  display: none;
+}
+.complaint-review-header {
+  position: sticky;
+  top: -24px;
+  z-index: 5;
+  margin-top: -24px;
+  padding-block: 24px 20px;
+  background: var(--color-surface);
+}
+.complaint-review-header h2 {
+  font-size: 21px;
+  line-height: 1.6;
+  letter-spacing: -0.025em;
+}
+.complaint-review-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(300px, 0.9fr);
+  gap: 24px;
+  align-items: start;
+}
+.complaint-review-body > * + * {
+  margin-top: 0;
+}
+.complaint-review-body > :not(.complaint-statements, .complaint-decision-panel) {
+  grid-column: 1 / -1;
+}
+.complaint-participants {
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-low);
+}
+.complaint-participants dd {
+  margin-top: 6px;
+}
+.complaint-statements {
+  grid-template-columns: minmax(0, 1fr);
+}
+.complaint-statements > section {
+  padding: 20px;
+  border-radius: 12px;
+}
+.complaint-statements h3,
+.complaint-decision-panel h3 {
+  font-size: 15px;
+}
+.complaint-decision-panel {
+  min-width: 0;
+  padding: 24px;
+  border-radius: 12px;
+  background: var(--color-surface-low);
+}
+.complaint-decision-panel fieldset {
+  grid-template-columns: minmax(0, 1fr);
+}
+.complaint-decision-panel button {
+  border-radius: 8px;
+}
+.complaint-decision-panel textarea {
+  min-height: 140px;
+  background: var(--color-surface);
+}
+@media (max-width: 1023px) {
+  .complaint-response-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .complaint-review-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .complaint-decision-panel {
+    position: static;
+  }
+}
+@media (max-width: 639px) {
+  .complaint-review-close-label {
+    display: inline;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .complaint-review-header button[aria-label='Đóng hồ sơ'] {
+    display: flex;
+    width: auto;
+    gap: 6px;
+    padding-inline: 10px;
+  }
+  .complaint-response-header,
+  .complaint-response-body {
+    padding: 22px 18px;
+  }
+  .complaint-original-content,
+  .complaint-response-form,
+  .complaint-submitted-response {
+    padding: 18px;
+  }
+  .complaint-evidence-field {
+    padding: 16px;
+  }
+  .complaint-create-dialog {
+    padding: 24px;
+  }
+  .member-complaints .complaint-list-card {
+    padding: 20px;
+  }
+  .admin-complaints .complaint-list-heading {
+    display: none;
+  }
+  .admin-complaints [aria-label='Danh sách hồ sơ'] {
+    border-radius: 12px;
+  }
+  .admin-complaints .complaint-admin-filters {
+    padding: 16px;
+  }
+  .admin-complaints .admin-complaint-row > div:last-child {
+    align-items: flex-start;
+  }
+  .complaint-review-dialog {
+    padding: 20px;
+    border-radius: 18px 18px 0 0;
+  }
+  .complaint-review-header {
+    top: -20px;
+    margin-top: -20px;
+    padding-top: 20px;
+  }
+  .complaint-review-header h2 {
+    font-size: 18px;
+  }
+  .complaint-decision-panel,
+  .complaint-statements > section {
+    padding: 18px;
+  }
+}
