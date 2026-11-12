@@ -33,7 +33,7 @@ export function ChatMessage({
   }
   if (entry.kind.toUpperCase() === 'SYSTEM') {
     return (
-      <div className="chat-system-message flex flex-wrap items-center justify-center gap-x-1 text-center text-xs text-text-secondary">
+      <div className="flex flex-wrap items-center justify-center gap-x-1 text-center text-xs text-text-secondary">
         <span>{entry.content}</span>
         <Link
           to={progressPath}
@@ -48,12 +48,12 @@ export function ChatMessage({
   return (
     <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`chat-bubble max-w-[88%] rounded-lg px-4 py-3 text-sm leading-6 sm:max-w-[78%] ${mine ? 'chat-bubble-mine rounded-br-sm bg-primary text-on-primary' : 'chat-bubble-theirs rounded-bl-sm bg-surface text-text-primary'}`}
+        className={`max-w-[82%] rounded-lg px-3.5 py-2.5 text-sm leading-6 sm:max-w-[70%] ${mine ? 'rounded-br-sm bg-primary text-white' : 'rounded-bl-sm bg-surface-low text-text-primary'}`}
       >
         {entry.itemCard ? (
           <button
             type="button"
-            className="mb-2 flex w-full items-center gap-3 rounded-md bg-surface p-2.5 text-left text-text-primary"
+            className="mb-2 flex w-full items-center gap-3 rounded-md bg-white p-2.5 text-left text-text-primary"
             onClick={() => onOpenItem(entry.itemCard!.id)}
           >
             <ItemImage
@@ -87,7 +87,7 @@ export function ChatMessage({
         {entry.content ? <p className="whitespace-pre-wrap break-words">{entry.content}</p> : null}
         {offerLabel ? (
           <span
-            className={`mt-1.5 inline-flex rounded-sm px-2 py-0.5 text-2xs font-semibold ${mine ? 'bg-on-primary/10 text-on-primary' : 'bg-surface text-primary'}`}
+            className={`mt-1.5 inline-flex rounded-sm px-2 py-0.5 text-2xs font-semibold ${mine ? 'bg-white/15 text-white' : 'bg-white text-primary'}`}
           >
             {offerLabel}
           </span>
@@ -107,7 +107,7 @@ export function ChatMessage({
             </Button>
           </div>
         ) : null}
-        <span className={`mt-1 block text-2xs ${mine ? 'text-on-primary/80' : 'text-text-muted'}`}>
+        <span className={`mt-1 block text-2xs ${mine ? 'text-white/70' : 'text-text-muted'}`}>
           {new Date(entry.createdAt).toLocaleString('vi-VN', {
             hour: '2-digit',
             minute: '2-digit',

@@ -5,9 +5,9 @@ import { subscribeToasts, type ToastMessage, type ToastTone } from './toast';
 const AUTO_CLOSE_MS = 3_800;
 
 const toneClass: Record<ToastTone, string> = {
-  success: 'border-success/25 bg-surface text-text-primary',
-  error: 'border-error/25 bg-surface text-text-primary',
-  warning: 'border-warning/25 bg-surface text-text-primary',
+  success: 'border-success/25 bg-white text-text-primary',
+  error: 'border-error/25 bg-white text-text-primary',
+  warning: 'border-warning/25 bg-white text-text-primary',
 };
 
 const iconClass: Record<ToastTone, string> = {

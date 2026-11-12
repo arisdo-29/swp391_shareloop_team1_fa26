@@ -38,7 +38,6 @@ import { viewerKeyFor } from '../../utils/viewerKey';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import './browse.css';
-import '../../styles/marketplace.css';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
 // Giá trị hình thức ở thanh địa chỉ (gift, trade) khác tên của API
@@ -351,26 +350,15 @@ export function Browse() {
   return (
     <div className="browse-page page-shell">
       <div className="browse-heading">
-        <p className="marketplace-eyebrow">Khám phá cùng ShareLoop</p>
-        <PageHeader
-          title={boostedOnly ? 'Tin nổi bật' : 'Tìm món đồ cho vòng đời mới'}
-          description="Cho tặng và trao đổi những món đồ còn tốt. Tìm theo nhu cầu, chọn khu vực thuận tiện để kết nối."
-        />
+        <PageHeader title={boostedOnly ? 'Tin nổi bật' : 'Tìm đồ'} />
       </div>
       <div className="browse-mobile-filter lg:hidden">
-        <SearchField
-          aria-label="Tìm kiếm món đồ"
-          value={queryInput}
-          onChange={(event) => setQueryInput(event.target.value)}
-          placeholder="Bạn đang tìm món gì?"
-        />
         <Button
           variant="outline"
           onClick={() => setMobileFilters(!mobileFilters)}
           aria-expanded={mobileFilters}
           aria-controls="browse-filters"
         >
-          <Icon name="fees" className="size-4" />
           Bộ lọc
         </Button>
       </div>
@@ -392,18 +380,8 @@ export function Browse() {
 
         <section className="browse-results" aria-label="Danh sách món đồ">
           <div className="browse-results-toolbar">
-            <div className="browse-results-summary" aria-live="polite">
+            <div className="browse-results-summary">
               <strong>{totalElements} món</strong>
-              {q ? <span className="browse-query">Từ khóa: “{q}”</span> : null}
-              {boostedOnly ? (
-                <button
-                  type="button"
-                  onClick={() => changeSortMode('newest')}
-                  aria-label="Bỏ lọc tin nổi bật"
-                >
-                  Tin nổi bật <Icon name="close" className="size-3" />
-                </button>
-              ) : null}
               {activeFilters.length ? (
                 <span className="text-sm text-text-muted">đang lọc:</span>
               ) : null}
@@ -419,7 +397,7 @@ export function Browse() {
                   <Icon name="close" className="size-3 shrink-0" />
                 </button>
               ))}
-              {activeFilters.length > 0 || q || boostedOnly ? (
+              {activeFilters.length > 1 ? (
                 <button
                   type="button"
                   onClick={reset}
@@ -460,7 +438,7 @@ export function Browse() {
           ) : items.length ? (
             <div data-browse-results className="browse-product-grid">
               {items.map((item) => (
-                <ProductCard variant="marketplace" key={item.id} item={item} />
+                <ProductCard key={item.id} item={item} />
               ))}
             </div>
           ) : (

@@ -53,20 +53,6 @@ describe('AdminTransactions', () => {
     expect(screen.getAllByRole('button', { name: 'Huỷ giao dịch' })).toHaveLength(1);
   });
 
-  it('xem chi tiết hàng hiện tại mà không gọi API thêm hoặc hủy giao dịch', async () => {
-    const user = userEvent.setup();
-    render(<AdminTransactions />);
-    await screen.findByText('Xe đạp cũ');
-    const callsBefore = vi.mocked(adminRequestApi.list).mock.calls.length;
-    await user.click(screen.getByRole('button', { name: 'Xem Giao dịch mã 5' }));
-    const dialog = screen.getByRole('dialog', { name: 'Giao dịch mã 5' });
-    expect(within(dialog).getByText('An Chủ Bài')).toBeTruthy();
-    expect(within(dialog).getByText('Bình Người Nhận')).toBeTruthy();
-    expect(within(dialog).getByText('Giờ hẹn')).toBeTruthy();
-    expect(adminRequestApi.list).toHaveBeenCalledTimes(callsBefore);
-    expect(adminRequestApi.cancel).not.toHaveBeenCalled();
-  });
-
   it('bấm Bị kẹt thì gọi API với stuck=true', async () => {
     render(<AdminTransactions />);
     await screen.findByText('Xe đạp cũ');

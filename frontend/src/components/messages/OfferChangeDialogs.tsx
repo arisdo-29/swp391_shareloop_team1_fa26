@@ -28,7 +28,7 @@ export function ProposeOfferChangeDialog({
   const [content, setContent] = useState('');
 
   return (
-    <DialogFrame className="chat-action-dialog" labelledBy="propose-offer-change-title" busy={submitting} onClose={onCancel}>
+    <DialogFrame labelledBy="propose-offer-change-title" busy={submitting} onClose={onCancel}>
       <h2 id="propose-offer-change-title" className="text-xl font-bold">
         {hasPendingOffer ? 'Đổi món đề nghị' : 'Đề nghị kèm món đổi'}
       </h2>
@@ -101,7 +101,7 @@ export function AcceptOfferChangeDialog({
   // Không có phí từ backend thì không tự đoán số Credit.
   const feeText = conversionFee === null ? 'phí đăng Trao đổi' : `${conversionFee} Credit phí đăng Trao đổi`;
   return (
-    <DialogFrame className="chat-action-dialog" labelledBy="accept-offer-change-title" busy={submitting} onClose={onCancel}>
+    <DialogFrame labelledBy="accept-offer-change-title" busy={submitting} onClose={onCancel}>
       <h2 id="accept-offer-change-title" className="text-xl font-bold">
         Đồng ý trao đổi
       </h2>

@@ -1,4 +1,3 @@
-import '../../components/complaints.css';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Button, EmptyState, SkeletonRows } from '../../components/ui';
@@ -81,7 +80,7 @@ function ResolutionNote({ report }: { report: MyReportSummary }) {
 
 function AgainstMeCard({ report }: { report: MyReportSummary }) {
   return (
-    <li data-response-open={report.responseWindowOpen} className="complaint-list-card card p-4 sm:p-5">
+    <li className="card p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <StatusChip status={againstMeStatus(report)} />
@@ -122,7 +121,7 @@ function AgainstMeCard({ report }: { report: MyReportSummary }) {
 
 function SentCard({ report }: { report: MyReportSummary }) {
   return (
-    <li className="complaint-list-card card p-4 sm:p-5">
+    <li className="card p-4 sm:p-5">
       <div className="flex flex-wrap items-center gap-2">
         <StatusChip status={sentStatus(report)} />
         <span className="text-xs text-text-muted">Gửi lúc {formatDateTime(report.createdAt)}</span>
@@ -169,8 +168,8 @@ export function ActivitiesComplaints() {
   const needResponseCount = againstMe?.filter((report) => report.responseWindowOpen).length ?? 0;
 
   return (
-    <div className="member-complaints space-y-8">
-      <section className="complaint-list-section" aria-labelledby="against-me-title">
+    <div className="space-y-8">
+      <section aria-labelledby="against-me-title">
         <h2 id="against-me-title" className="mb-1 text-lg font-bold">
           Cần tôi giải trình
           {needResponseCount ? (
@@ -192,7 +191,7 @@ export function ActivitiesComplaints() {
           renderItem={(report) => <AgainstMeCard key={report.id} report={report} />}
         />
       </section>
-      <section className="complaint-list-section" aria-labelledby="sent-reports-title">
+      <section aria-labelledby="sent-reports-title">
         <h2 id="sent-reports-title" className="mb-1 text-lg font-bold">
           Báo cáo & Khiếu nại đã gửi
         </h2>

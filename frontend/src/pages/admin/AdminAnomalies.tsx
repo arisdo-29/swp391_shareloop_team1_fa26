@@ -1,4 +1,3 @@
-import './admin-settings.css';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, EmptyState, PageHeader, SkeletonRows } from '../../components/ui';
@@ -72,8 +71,8 @@ export function AdminAnomalies() {
   const sharedIpGroups = report?.sharedIpGroups ?? [];
 
   return (
-    <section className="admin-settings-page admin-alerts-page space-y-6">
-      <PageHeader title="Cảnh báo bất thường" description="Các tín hiệu cần kiểm tra từ hệ thống. Trang chỉ đọc, không tự xử lý tài khoản hoặc giao dịch." />
+    <section className="space-y-6">
+      <PageHeader title="Cảnh báo bất thường" />
 
       {error ? <Alert tone="error">{error}</Alert> : null}
 
@@ -82,15 +81,15 @@ export function AdminAnomalies() {
       ) : report ? (
         <div className="space-y-8">
           {/* Khối 1: Cặp giao dịch lặp */}
-          <div className="settings-alert-section">
-            <header className="settings-section-heading"><h2>Cặp giao dịch lặp lại</h2><p>Cảnh báo khi vượt {report.pairThreshold} giao dịch trong {report.pairWindowDays} ngày. Cần kiểm tra trước khi kết luận.</p></header>
+          <div className="space-y-3">
+            <h2 className="text-base font-bold text-text-primary">Cặp giao dịch lặp lại</h2>
             {report.repeatedPairs.length === 0 ? (
               <EmptyState
                 title="Chưa có cảnh báo nào"
                 text="Hiện không có cặp người dùng nào vượt ngưỡng giao dịch lặp."
               />
             ) : (
-              <div className="table-wrap settings-table">
+              <div className="table-wrap">
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -120,15 +119,13 @@ export function AdminAnomalies() {
           </div>
 
           {/* Khối 2: Nhiều tài khoản cùng địa chỉ IP */}
-          <div className="settings-alert-section">
-            <div className="settings-section-heading">
-              <h2>Nhiều tài khoản cùng địa chỉ IP</h2>
+          <div className="space-y-3">
+            <div>
+              <h2 className="text-base font-bold text-text-primary">Nhiều tài khoản cùng địa chỉ IP</h2>
               <p className="mt-0.5 text-xs text-text-muted">
                 IP có từ {ipMinAccounts} tài khoản đăng ký trong {ipWindowDays} ngày
               </p>
             </div>
-
-            <p className="settings-note">Dùng chung IP là tín hiệu cần kiểm tra, chưa đủ để kết luận gian lận.</p>
 
             {sharedIpGroups.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border bg-surface-low p-6 text-center text-sm text-text-muted">
@@ -137,16 +134,16 @@ export function AdminAnomalies() {
             ) : (
               <div className="space-y-4">
                 {sharedIpGroups.map((group) => (
-                  <div key={group.ipAddress} className="settings-ip-group">
-                    <div className="settings-ip-heading">
-                      <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <span className="settings-ip-address">IP: {group.ipAddress}</span>
+                  <div key={group.ipAddress} className="rounded-xl border border-border bg-white p-4 shadow-2xs space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-bold text-text-primary">IP: {group.ipAddress}</span>
                         <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning">
                           {group.accountCount} tài khoản
                         </span>
                       </div>
                     </div>
-                    <div className="table-wrap settings-table">
+                    <div className="table-wrap">
                       <table className="data-table">
                         <thead>
                           <tr>

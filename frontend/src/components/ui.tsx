@@ -1,6 +1,5 @@
 import type {
   ButtonHTMLAttributes,
-  HTMLAttributes,
   InputHTMLAttributes,
   ReactNode,
   SelectHTMLAttributes,
@@ -114,20 +113,20 @@ export function Button({
 }: ButtonProps) {
   const variants = {
     primary:
-      'border-primary bg-primary text-on-primary hover:border-primary-hover hover:bg-primary-hover',
+      'border-primary bg-primary text-white hover:border-primary-hover hover:bg-primary-hover',
     secondary:
-      'border-secondary bg-secondary text-on-primary hover:border-secondary-hover hover:bg-secondary-hover',
+      'border-secondary bg-secondary text-white hover:border-secondary-hover hover:bg-secondary-hover',
     outline:
-      'border-border bg-surface text-text-secondary hover:border-primary/50 hover:bg-primary-faint hover:text-primary',
+      'border-border bg-white text-text-secondary hover:border-primary/50 hover:bg-primary-faint hover:text-primary',
     ghost:
       'border-transparent bg-transparent text-text-secondary hover:bg-surface-low hover:text-text-primary',
     danger: 'border-error/20 bg-error-soft text-error hover:border-error/40 hover:bg-error/15',
   };
   // Cỡ sm vẫn cao 44px để đủ vùng bấm trên màn cảm ứng, chỉ khác ở chữ và đệm ngang.
   const sizes = {
-    sm: 'min-h-11 px-3 py-1.5 text-xs rounded-full',
-    md: 'min-h-11 px-4 py-2 text-sm rounded-full',
-    lg: 'min-h-12 px-5 py-3 text-sm rounded-full',
+    sm: 'min-h-11 px-3 py-1.5 text-xs rounded-md',
+    md: 'min-h-11 px-4 py-2 text-sm rounded-md',
+    lg: 'min-h-12 px-5 py-3 text-sm rounded-md',
   };
   return (
     <button
@@ -149,7 +148,7 @@ export function IconButton({
     <button
       aria-label={label}
       title={label}
-      className={`inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-text-secondary transition hover:border-primary/50 hover:bg-primary-faint hover:text-primary active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 ${className}`}
+      className={`inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-white text-text-secondary transition hover:border-primary/50 hover:bg-primary-faint hover:text-primary active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 ${className}`}
       {...props}
     >
       <Icon name={icon} className="size-5" />
@@ -249,7 +248,7 @@ export function Select(
 export function SearchField(props: InputHTMLAttributes<HTMLInputElement>) {
   // Ô tìm kiếm không có viền riêng; wrapper đổi sang một viền xanh khi focus.
   return (
-    <div className="flex min-h-11 items-center rounded-md border border-border bg-surface px-1 transition hover:border-text-muted focus-within:border-primary">
+    <div className="flex min-h-11 items-center rounded-md border border-border bg-white px-1 transition hover:border-text-muted focus-within:border-primary">
       <input
         className="w-full border-0 bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-text-muted"
         {...props}
@@ -305,15 +304,7 @@ const otherStatusLabel: Record<string, string> = {
   locked: 'Đã khóa',
   suspended: 'Tạm khóa',
 };
-const dangerStatuses = [
-  'rejected',
-  'REJECTED',
-  'VIOLATION',
-  'removed',
-  'locked',
-  'DISPUTED',
-  'CANCELLED',
-];
+const dangerStatuses = ['rejected', 'REJECTED', 'VIOLATION', 'removed', 'locked', 'DISPUTED', 'CANCELLED'];
 const okStatuses = ['approved', 'APPROVED', 'active', 'COMPLETED', 'TRADED'];
 
 function statusLabel(status: string): string {
@@ -363,7 +354,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-border bg-surface px-6 py-12 text-center">
+    <div className="rounded-lg border border-dashed border-border bg-white px-6 py-12 text-center">
       <h3 className="text-base font-bold">{title}</h3>
       <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-text-muted">{text}</p>
       {action ? <div className="mt-5">{action}</div> : null}
@@ -376,7 +367,7 @@ export function LoadingState() {
       {[0, 1, 2, 3].map((i) => (
         <div
           key={i}
-          className="animate-pulse overflow-hidden rounded-lg bg-surface ring-1 ring-border/70"
+          className="animate-pulse overflow-hidden rounded-lg bg-white ring-1 ring-border/70"
         >
           <div className="aspect-[4/3] bg-surface-container" />
           <div className="space-y-3 p-4">
@@ -401,19 +392,11 @@ export function Spinner({ className = 'size-5' }: { className?: string }) {
 
 /** Khối chờ một hình chữ nhật; đặt kích thước bằng className, ví dụ "h-4 w-2/3". */
 export function Skeleton({ className = '' }: { className?: string }) {
-  return (
-    <div aria-hidden className={`animate-pulse rounded-md bg-surface-container ${className}`} />
-  );
+  return <div aria-hidden className={`animate-pulse rounded-md bg-surface-container ${className}`} />;
 }
 
 /** Các hàng chờ cho bảng hoặc danh sách chat. Một vùng role="status" duy nhất để trình đọc báo "đang tải". */
-export function SkeletonRows({
-  rows = 5,
-  label = 'Đang tải dữ liệu',
-}: {
-  rows?: number;
-  label?: string;
-}) {
+export function SkeletonRows({ rows = 5, label = 'Đang tải dữ liệu' }: { rows?: number; label?: string }) {
   return (
     <div role="status" aria-label={label} className="space-y-3">
       {Array.from({ length: rows }, (_, index) => (
@@ -456,11 +439,7 @@ export function ItemImage({
       onError={() => setFailedSrc(imageSrc)}
     />
   ) : (
-    <div
-      role="img"
-      aria-label={alt}
-      className={`grid place-items-center bg-surface-container text-xs font-medium text-text-muted ${className}`}
-    >
+    <div role="img" aria-label={alt} className={`grid place-items-center bg-surface-container text-xs font-medium text-text-muted ${className}`}>
       Chưa có ảnh
     </div>
   );
@@ -493,9 +472,9 @@ function productCardConditionClass(condition: ItemCondition) {
     return 'bg-surface-low text-primary-hover';
   }
   if (condition === 'LIKE_NEW') {
-    return 'bg-warning-soft text-warning';
+    return 'bg-[#FEF3C7] text-[#92400E]';
   }
-  return 'bg-info-soft text-info';
+  return 'bg-[#FFEDD5] text-[#9A3412]';
 }
 
 // imageLabel: nhãn phụ trên ảnh (ví dụ "Tạm ẩn"); footer: thay dòng khu vực ở chân thẻ (ví dụ ngày giao dịch).
@@ -506,23 +485,21 @@ export function ProductCard({
   from,
   imageLabel,
   footer,
-  variant = 'default',
 }: {
   item: Item;
   tradeFor?: string;
   from?: 'ai';
   imageLabel?: string;
   footer?: ReactNode;
-  variant?: 'default' | 'marketplace';
 }) {
   const description = productCardDescription(item.description);
 
   return (
     <Link
       to={`/items/${item.id}${from === 'ai' ? '?from=ai' : ''}`}
-      className={`${variant === 'marketplace' ? 'marketplace-card ' : ''}group flex h-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-hover focus-visible:ring-offset-2`}
+      className="group flex h-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-[16px] border border-[#E5E7EB] bg-white shadow-[0_4px_14px_rgba(15,23,42,0.10)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_12px_28px_rgba(15,23,42,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-hover focus-visible:ring-offset-2"
     >
-      <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-surface-container">
+      <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden rounded-t-[15px] bg-[#F3F4F6]">
         <ItemImage
           src={item.images[0]}
           alt={item.title}
@@ -531,52 +508,49 @@ export function ProductCard({
         />
         <span
           className={`absolute left-3 top-3 inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium shadow-sm ${
-            item.type === 'gift' ? 'bg-primary text-on-primary' : 'bg-highlight text-on-highlight'
+            item.type === 'gift'
+              ? 'bg-[#0B3B2E] text-white'
+              : 'bg-[#E0B25A] text-[#3A2208]'
           }`}
         >
           {item.type === 'gift' ? 'Cho tặng' : 'Trao đổi'}
         </span>
         {imageLabel ? (
-          <span className="absolute right-3 top-3 inline-flex rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-text-secondary shadow-sm">
+          <span className="absolute right-3 top-3 inline-flex rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-text-secondary shadow-sm">
             {imageLabel}
           </span>
         ) : null}
       </div>
       <div className="flex min-w-0 flex-1 flex-col p-3.5 sm:p-4">
-        <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-text-primary sm:text-[15px]">
+        <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-[#111827] sm:text-[15px]">
           {item.title}
         </h3>
-        <p className="mt-1.5 line-clamp-2 text-xs leading-[1.55] text-text-muted sm:text-[13px]">
+        <p className="mt-1.5 line-clamp-2 text-xs leading-[1.55] text-[#6B7280] sm:text-[13px]">
           {description}
         </p>
         {tradeFor ? (
-          <p className="mt-1 truncate text-xs text-text-muted">
-            <span className="font-medium text-text-secondary">Đang tìm:</span> {tradeFor}
+          <p className="mt-1 truncate text-xs text-[#6B7280]">
+            <span className="font-medium text-[#374151]">Đang tìm:</span> {tradeFor}
           </p>
         ) : null}
         <div className="mt-2.5 flex min-w-0 flex-wrap items-center gap-1.5">
-          <span
-            className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${productCardConditionClass(item.condition)}`}
-          >
+          <span className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${productCardConditionClass(item.condition)}`}>
             {conditionLabel[item.condition]}
           </span>
           <span
             title={item.category}
-            className="inline-flex min-w-0 flex-1 truncate rounded-full bg-surface-container px-2.5 py-1 text-[11px] font-medium text-text-secondary"
+            className="inline-flex min-w-0 flex-1 truncate rounded-full bg-[#F3F4F6] px-2.5 py-1 text-[11px] font-medium text-[#374151]"
           >
             {item.category}
           </span>
         </div>
-        <div className="mt-auto flex min-w-0 items-center gap-1.5 border-t border-border pt-3 text-xs text-text-secondary">
+        <div className="mt-auto flex min-w-0 items-center gap-1.5 border-t border-[#F3F4F6] pt-3 text-xs text-[#374151]">
           {footer ?? (
             <>
               <MapPin aria-hidden className="size-3.5 shrink-0" weight="fill" />
               <span className="min-w-0 truncate">{item.district}</span>
             </>
           )}
-          {variant === 'marketplace' ? (
-            <Icon name="caretRight" className="ml-auto size-4 shrink-0 text-primary" />
-          ) : null}
         </div>
       </div>
     </Link>
@@ -609,7 +583,7 @@ export function HorizontalProductCard({ item, owner }: { item: Item; owner?: Use
 }
 export function OwnerCard({ owner }: { owner: User }) {
   return (
-    <div className="rounded-lg bg-surface p-5 ring-1 ring-border/80">
+    <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
       <div className="flex items-center gap-3">
         <Avatar user={owner} size="lg" />
         <div className="min-w-0">
@@ -622,9 +596,7 @@ export function OwnerCard({ owner }: { owner: User }) {
       <div className="mt-4 flex items-center justify-between">
         <RankBadge rank={owner.rank} />
         <span className="text-sm font-bold text-text-secondary">
-          {owner.reputationStars
-            ? `${owner.reputationStars.toLocaleString('vi-VN')} sao`
-            : 'Chưa có đánh giá'}
+          {owner.reputationStars ? `${owner.reputationStars.toLocaleString('vi-VN')} sao` : 'Chưa có đánh giá'}
         </span>
       </div>
     </div>
@@ -657,7 +629,7 @@ export function Avatar({
   ) : (
     <span
       aria-label={user.name}
-      className={`inline-flex shrink-0 items-center justify-center rounded-md bg-primary text-on-primary font-bold ${cls[size]}`}
+      className={`inline-flex shrink-0 items-center justify-center rounded-md bg-primary text-white font-bold ${cls[size]}`}
     >
       {user.avatarInitials.trim() ? user.avatarInitials : <Icon name="user" className="size-1/2" />}
     </span>
@@ -697,31 +669,5 @@ export function PageHeader({
       </div>
       {action}
     </div>
-  );
-}
-
-export function Card({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={`card ${className}`} {...props} />;
-}
-
-export function Badge({
-  tone = 'neutral',
-  className = '',
-  ...props
-}: HTMLAttributes<HTMLSpanElement> & {
-  tone?: 'neutral' | 'success' | 'warning' | 'error' | 'info';
-}) {
-  const tones = {
-    neutral: 'bg-surface-container text-text-secondary',
-    success: 'bg-success-soft text-success',
-    warning: 'bg-warning-soft text-warning',
-    error: 'bg-error-soft text-error',
-    info: 'bg-info-soft text-info',
-  };
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-2xs font-semibold ${tones[tone]} ${className}`}
-      {...props}
-    />
   );
 }

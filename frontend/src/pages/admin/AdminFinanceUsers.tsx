@@ -1,4 +1,3 @@
-import './admin-finance.css';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Alert, Button, PageHeader, SearchField, SkeletonRows } from '../../components/ui';
@@ -60,12 +59,12 @@ export function AdminFinanceUsers() {
   }, [debouncedKeyword, page, reloadKey]);
 
   return (
-    <div className="admin-finance-users admin-finance-page">
+    <>
       <PageHeader
         title="Tra cứu người dùng"
         description="Xem số dư Credit và lịch sử giao dịch của từng người dùng."
       />
-      <div className="finance-filters mb-5 rounded-lg bg-white p-3 ring-1 ring-border/80">
+      <div className="mb-5 rounded-lg bg-white p-3 ring-1 ring-border/80">
         <SearchField
           aria-label="Tìm người dùng"
           placeholder="Tìm theo tên, email hoặc số điện thoại..."
@@ -88,8 +87,7 @@ export function AdminFinanceUsers() {
         <SkeletonRows label="Đang tải danh sách" />
       ) : result ? (
         <>
-          <p className="finance-period mb-3">Các cột số dư và tổng đã nạp có đơn vị Credit.</p>
-          <div className="finance-users-table finance-table table-wrap">
+          <div className="table-wrap">
             <table className="data-table">
               <thead>
                 <tr>
@@ -142,16 +140,15 @@ export function AdminFinanceUsers() {
           />
         </>
       ) : null}
-    </div>
+    </>
   );
 }
 
 function BalanceCard({ label, value, hint }: { label: string; value: number; hint?: string }) {
   return (
-    <div className="finance-balance-card rounded-lg bg-white p-4 ring-1 ring-border/80">
+    <div className="rounded-lg bg-white p-4 ring-1 ring-border/80">
       <p className="text-xs font-medium text-text-muted">{label}</p>
       <p className="mt-1 text-2xl font-bold tabular-nums text-text-primary">{value}</p>
-      <p className="finance-unit">Credit</p>
       {hint ? <p className="mt-1 text-xs text-text-muted">{hint}</p> : null}
     </div>
   );
@@ -240,10 +237,10 @@ export function AdminFinanceUserDetail() {
   }
 
   return (
-    <div className="admin-finance-user-detail admin-finance-page">
+    <>
       <PageHeader
-        title={summary?.userId === userId ? summary.fullName : 'Chi tiết Credit người dùng'}
-        description={summary?.userId === userId ? [summary.email, summary.phone].filter(Boolean).join(' · ') : undefined}
+        title={summary ? summary.fullName : 'Chi tiết Credit người dùng'}
+        description={summary ? [summary.email, summary.phone].filter(Boolean).join(' · ') : undefined}
         action={
           <Link to="/admin/finance/users">
             <Button variant="outline">
@@ -260,9 +257,8 @@ export function AdminFinanceUserDetail() {
           </Button>
         </div>
       ) : null}
-      {summary?.userId !== userId && !summaryError ? <div className="mb-4" role="status"><Alert>Đang tải số dư Credit...</Alert></div> : null}
-      {summary?.userId === userId ? (
-        <div className="finance-balance-grid grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {summary ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <BalanceCard label="Khả dụng" value={summary.availableCredit} />
           <BalanceCard label="Đang giữ" value={summary.heldCredit} hint="Phí các bài chưa được duyệt" />
           <BalanceCard label="Tổng Credit" value={summary.totalCredit} />
@@ -282,8 +278,6 @@ export function AdminFinanceUserDetail() {
           <Alert>Đang tải lịch sử Credit...</Alert>
         </div>
       ) : null}
-      <div hidden={historyLoading || history.some((entry) => entry.userId !== String(userId))} className="finance-history">
-      <p className="finance-period mt-6">Các nhóm lịch sử áp dụng cho những dòng trên trang đang xem.</p>
       <CreditHistorySection
         itemTitles={noItemTitles}
         allHistory={history}
@@ -301,10 +295,9 @@ export function AdminFinanceUserDetail() {
         }
         pagination={<HistoryPagination page={page} total={historyTotal} onPageChange={setPage} />}
       />
-      </div>
-      {selected && selected.userId === String(userId) ? (
+      {selected ? (
         <CreditTransactionDetail entry={selected} onClose={() => setSelected(null)} />
       ) : null}
-    </div>
+    </>
   );
 }

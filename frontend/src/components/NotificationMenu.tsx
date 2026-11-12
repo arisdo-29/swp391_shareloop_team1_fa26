@@ -1,4 +1,3 @@
-import './member-notifications.css';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { notificationApi, withoutHidden, type NotificationResponse } from '../services/notificationApi';
@@ -183,17 +182,7 @@ export function NotificationMenu({
   };
 
   return (
-    <div
-      className={allNotificationsPath === '/notifications' ? 'member-notification-menu relative' : 'relative'}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape' && open && allNotificationsPath === '/notifications') {
-          event.preventDefault();
-          event.stopPropagation();
-          onOpenChange(false);
-          event.currentTarget.querySelector<HTMLButtonElement>('button[aria-expanded]')?.focus();
-        }
-      }}
-    >
+    <div className="relative">
       <IconButton
         icon="bell"
         label={unreadCount ? `Thông báo, ${unreadCount} chưa đọc` : 'Thông báo'}
@@ -207,7 +196,7 @@ export function NotificationMenu({
         </span>
       ) : null}
       {open ? (
-        <div role="region" aria-label="Danh sách thông báo" className="notification-dropdown absolute right-0 top-12 z-50 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-lg bg-surface text-text-primary shadow-lg ring-1 ring-border">
+        <div className="absolute right-0 top-12 z-50 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-lg bg-white text-text-primary shadow-lg ring-1 ring-border">
           <div className="border-b border-border px-4 py-3">
             <h2 className="text-base font-bold">
               Thông báo
@@ -226,7 +215,7 @@ export function NotificationMenu({
                   type="button"
                   aria-pressed={filter === value}
                   onClick={() => setFilter(value)}
-                  className={`min-h-9 flex-1 rounded-sm px-3 text-xs font-semibold transition ${filter === value ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
+                  className={`min-h-9 flex-1 rounded-sm px-3 text-xs font-semibold transition ${filter === value ? 'bg-white text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
                 >
                   {label}
                 </button>
@@ -259,7 +248,7 @@ export function NotificationMenu({
                 return (
                   <article
                     key={notification.id}
-                    className={`notification-row border-b border-border/70 px-4 py-3 ${notification.isRead ? 'bg-surface' : 'bg-primary-faint'}`}
+                    className={`border-b border-border/70 px-4 py-3 ${notification.isRead ? 'bg-white' : 'bg-primary-faint'}`}
                   >
                     <div className="flex items-start gap-3">
                       <span className={`mt-1 size-2 shrink-0 rounded-full ${notification.isRead ? 'bg-border' : 'bg-primary'}`} />

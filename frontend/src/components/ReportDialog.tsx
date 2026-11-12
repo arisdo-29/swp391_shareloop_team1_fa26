@@ -1,4 +1,3 @@
-import './complaints.css';
 import { useRef, useState } from 'react';
 import type { ApiError } from '../services/http';
 import { reportApi, type ReportReason, type ReportTarget } from '../services/reportApi';
@@ -61,10 +60,9 @@ export function ReportDialog({ target, contextLabel, onClose, onSuccess }: Repor
   };
 
   return (
-    <DialogFrame className="complaint-create-dialog" labelledBy="report-dialog-title" busy={submitting} onClose={onClose}>
+    <DialogFrame labelledBy="report-dialog-title" busy={submitting} onClose={onClose}>
       <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <p className="complaint-eyebrow">GỬI PHẢN ÁNH</p>
+        <div>
           <h2 id="report-dialog-title" className="text-xl font-bold">
             Gửi báo cáo vi phạm
           </h2>
