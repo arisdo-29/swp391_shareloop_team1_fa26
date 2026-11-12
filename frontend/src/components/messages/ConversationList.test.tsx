@@ -44,7 +44,7 @@ const conversations = [
   }),
 ];
 
-function renderList(selectedRequestId: number | null = null, onOpen = vi.fn()) {
+function renderList(selectedRequestId: number | null = null) {
   render(
     <MemoryRouter>
       <ConversationList
@@ -54,7 +54,7 @@ function renderList(selectedRequestId: number | null = null, onOpen = vi.fn()) {
         loading={false}
         error=""
         onRetry={vi.fn()}
-        onOpen={onOpen}
+        onOpen={vi.fn()}
         canSelect={() => false}
         selectSubmitting={false}
         onSelectCandidate={vi.fn()}
@@ -171,10 +171,9 @@ describe('ConversationList', () => {
     expect(screen.getByText('Đã hủy')).toBeTruthy();
   });
 
-  it('hiển thị thumbnail từ API, placeholder và liên kết đúng tới chi tiết món đồ', async () => {
+  it('hiển thị thumbnail từ API, placeholder và liên kết đúng tới chi tiết món đồ', () => {
     // when
-    const onOpen = vi.fn();
-    renderList(null, onOpen);
+    renderList();
 
     // then
     const itemLink = screen.getByRole('link', { name: 'Mở chi tiết Nồi cơm điện' });
@@ -185,9 +184,9 @@ describe('ConversationList', () => {
     expect(thumbnail.getAttribute('src')).toContain('/api/v1/media/101');
     expect(thumbnail.className).toContain('size-[52px]');
     expect(thumbnail.className).toContain('rounded-md');
-    await userEvent.click(screen.getByRole('button', { name: 'Mở cuộc trò chuyện với An' }));
-    expect(onOpen).toHaveBeenCalledOnce();
-    expect(onOpen).toHaveBeenCalledWith(1);
+    expect(
+      screen.getByRole('button', { name: 'Mở cuộc trò chuyện với An' }).parentElement?.className,
+    ).toContain('h-[84px]');
 
     expect(screen.getByRole('img', { name: 'Xe đạp cũ' }).tagName).toBe('DIV');
   });

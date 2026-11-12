@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminFinanceApi, type AdminFinanceUserSummary } from '../../services/adminFinanceApi';
 import type { WalletTransactionResponse } from '../../services/walletApi';
@@ -111,23 +111,6 @@ describe('AdminFinanceUserDetail', () => {
       size: 20,
       totalElements: 3,
     });
-  });
-
-  it('không hiển thị số dư và lịch sử người trước trong khi tải người mới', async () => {
-    const user = userEvent.setup();
-    vi.mocked(adminFinanceApi.userWallet).mockResolvedValueOnce(lanAn).mockImplementationOnce(() => new Promise(() => {}));
-    vi.mocked(adminFinanceApi.userHistory).mockResolvedValueOnce({ items: [entry(1, 'TOP_UP', 50)], page: 0, size: 20, totalElements: 1 }).mockImplementationOnce(() => new Promise(() => {}));
-    function SwitchUser() {
-      const navigate = useNavigate();
-      return <button onClick={() => navigate('/admin/finance/users/8')}>Chuyển hồ sơ</button>;
-    }
-    const view = render(<MemoryRouter initialEntries={['/admin/finance/users/7']}><SwitchUser /><Routes><Route path="/admin/finance/users/:userId" element={<AdminFinanceUserDetail />} /></Routes></MemoryRouter>);
-    await screen.findByRole('heading', { name: 'Lan An' });
-    await screen.findByText('Nạp Credit', { selector: 'p' });
-    await user.click(screen.getByRole('button', { name: 'Chuyển hồ sơ' }));
-    await screen.findByRole('heading', { name: 'Chi tiết Credit người dùng' });
-    expect(screen.queryByText('25')).toBeNull();
-    expect(view.container.querySelector('.finance-history')?.hasAttribute('hidden')).toBe(true);
   });
 
   function renderDetail() {

@@ -1,4 +1,3 @@
-import '../../components/complaints.css';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
@@ -347,8 +346,7 @@ export function AdminComplaints() {
   const detailIsConcluded = detail && concluded(detail.report.status);
 
   return (
-    <section className="admin-complaints">
-      <p className="complaint-eyebrow">QUẢN LÝ HỒ SƠ</p>
+    <section>
       <PageHeader
         title="Khiếu nại và báo cáo"
         description="Xem xét sự việc, đối chiếu minh chứng và kết luận từng hồ sơ."
@@ -358,7 +356,7 @@ export function AdminComplaints() {
           <Alert tone={noticeTone}>{notice}</Alert>
         </div>
       )}
-      <div className="complaint-admin-filters mb-4 space-y-3 rounded-lg border border-border bg-surface p-4">
+      <div className="mb-4 space-y-3 rounded-lg border border-border bg-surface p-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <p className="label">Trạng thái</p>
@@ -412,7 +410,6 @@ export function AdminComplaints() {
         </div>
       ) : list?.items.length ? (
         <>
-          <div className="complaint-list-heading" aria-hidden="true"><span>Hồ sơ / Người gửi</span><span>Trạng thái / Thao tác</span></div>
           <ul
             aria-label="Danh sách hồ sơ"
             className="divide-y divide-border rounded-lg border border-border bg-surface"
@@ -420,7 +417,7 @@ export function AdminComplaints() {
             {list.items.map((report) => (
               <li
                 key={report.id}
-                className="admin-complaint-row grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
               >
                 <div className="min-w-0 space-y-1">
                   <p className="flex flex-wrap items-center gap-x-2 text-xs font-semibold text-text-secondary">
@@ -490,11 +487,11 @@ export function AdminComplaints() {
         <DialogFrame
           labelledBy="report-detail-title"
           size="xl"
-          className="complaint-review-dialog md:max-w-5xl"
+          className="md:max-w-5xl"
           busy={submitting}
           onClose={closeDetail}
         >
-          <header className="complaint-review-header mb-5 flex items-start justify-between gap-3 border-b border-border pb-4">
+          <header className="mb-5 flex items-start justify-between gap-3 border-b border-border pb-4">
             <div className="min-w-0">
               <p className="mb-1 text-xs font-semibold text-text-secondary">
                 Chi tiết hồ sơ
@@ -521,7 +518,6 @@ export function AdminComplaints() {
               className="grid size-11 shrink-0 place-items-center rounded-md border border-border text-text-primary hover:bg-primary-faint disabled:opacity-40"
             >
               <Icon name="close" className="size-5" />
-              <span className="complaint-review-close-label">Danh sách</span>
             </button>
           </header>
           {notice && (
@@ -539,7 +535,7 @@ export function AdminComplaints() {
             </div>
           )}
           {detail && (
-            <div className="complaint-review-body space-y-4 text-sm">
+            <div className="space-y-4 text-sm">
               {detail.responseWindowOpen && (
                 <Alert tone="info">
                   {detail.responseDueAt
@@ -548,7 +544,7 @@ export function AdminComplaints() {
                   Chỉ kết luận được khi bên bị báo cáo đã giải trình hoặc đã hết hạn.
                 </Alert>
               )}
-              <dl className="complaint-participants grid gap-3 rounded-lg bg-surface-container/50 p-4 sm:grid-cols-2">
+              <dl className="grid gap-3 rounded-lg bg-surface-container/50 p-4 sm:grid-cols-2">
                 <div className="min-w-0">
                   <dt className="label">Người gửi</dt>
                   <dd className="break-words font-semibold">
@@ -568,7 +564,7 @@ export function AdminComplaints() {
                   </div>
                 )}
               </dl>
-              <div className="complaint-statements grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-2">
                 <section className="min-w-0 space-y-3 rounded-lg border border-border p-4">
                   <h3 className="font-semibold">Nội dung người gửi</h3>
                   <p className="font-semibold text-primary">{reportReasonLabel(detail.report)}</p>
@@ -603,7 +599,7 @@ export function AdminComplaints() {
                 </section>
               </div>
               {detailIsConcluded ? (
-                <section className="complaint-decision-panel rounded-lg border border-border bg-surface-container/50 p-4">
+                <section className="rounded-lg border border-border bg-surface-container/50 p-4">
                   <h3 className="mb-3 font-semibold">Kết quả xử lý</h3>
                   <dl className="space-y-2">
                     <DetailRow label="Kết luận">
@@ -629,7 +625,7 @@ export function AdminComplaints() {
                   </p>
                 </section>
               ) : (
-                <section className="complaint-decision-panel space-y-4 rounded-lg border border-border bg-surface-container/50 p-4">
+                <section className="space-y-4 rounded-lg border border-border bg-surface-container/50 p-4">
                   <h3 className="font-semibold">Bước tiếp theo</h3>
                   {detail.responseWindowOpen ? (
                     <p className="text-text-secondary">

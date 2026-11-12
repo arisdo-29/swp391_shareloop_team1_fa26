@@ -1,4 +1,3 @@
-import { applyTheme, readTheme } from './app/theme';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
@@ -7,8 +6,6 @@ import { AppBootstrap } from './app/AppBootstrap';
 import { router } from './app/router';
 import { setUnauthorizedHandler } from './services/http';
 import './styles/globals.css';
-
-applyTheme(readTheme());
 
 setUnauthorizedHandler(({ message }) => {
   store.dispatch(actions.logout());

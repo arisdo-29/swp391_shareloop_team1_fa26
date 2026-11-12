@@ -56,7 +56,7 @@ function SwapItemCard({
   };
 
   return (
-    <article className="chat-swap-item flex min-w-0 flex-1 flex-col bg-surface">
+    <article className="flex min-w-0 flex-1 flex-col rounded-md bg-white p-2 ring-1 ring-border/80">
       <p className="text-xs font-semibold text-primary">{label}</p>
       {title ? (
         <div className="mt-1 flex min-w-0 flex-1 items-start gap-2.5">
@@ -126,8 +126,8 @@ export function ChatHeader({
       : pinnedItems.find((pinnedItem) => pinnedItem.id === itemId)?.imageUrl;
 
   return (
-    <div className="chat-header shrink-0">
-      <header className="chat-participant-header flex flex-wrap items-center gap-x-3 gap-y-2">
+    <div className="shrink-0 border-b border-border">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
         <Button variant="outline" size="sm" className="lg:hidden" onClick={onBack}>
           Quay lại
         </Button>
@@ -178,26 +178,9 @@ export function ChatHeader({
         </div>
       </header>
 
-      <aside className="chat-context-panel" aria-label="Món đồ và giao dịch">
-      <div className="chat-context-heading">
-        <p>Giao dịch này</p>
-        <span>Thông tin món đồ và trạng thái hiện tại</span>
-      </div>
-      {/* Tiến trình tách riêng khỏi khung món đồ: ẩn món đồ vẫn thấy tiến trình. */}
-      <div className="chat-progress-panel flex flex-wrap items-center justify-between gap-3">
-        <CompactProgress status={request.status} />
-        <Button
-          size="sm"
-          className="!min-h-7 !px-2.5 !py-0.5"
-          onClick={() => navigate(transactionProgressPath(request.id))}
-        >
-          Xem tiến trình
-        </Button>
-      </div>
-      <p className="chat-context-help">Mở tiến trình để xem lịch hẹn và các thao tác giao nhận đang có.</p>
       <div
         hidden={detailsHidden}
-        className="chat-item-panel"
+        className="mx-4 mb-2 rounded-md p-2 ring-1 ring-border/80"
       >
         {isSwap ? (
           <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-stretch">
@@ -248,7 +231,17 @@ export function ChatHeader({
         )}
       </div>
 
-      </aside>
+      {/* Tiến trình tách riêng khỏi khung món đồ: ẩn món đồ vẫn thấy tiến trình. */}
+      <div className="mx-4 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md p-2 ring-1 ring-border/80">
+        <CompactProgress status={request.status} />
+        <Button
+          size="sm"
+          className="!min-h-7 !px-2.5 !py-0.5"
+          onClick={() => navigate(transactionProgressPath(request.id))}
+        >
+          Xem tiến trình
+        </Button>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,3 @@
-import './product-detail.css';
-import '../../styles/marketplace.css';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
@@ -131,7 +129,7 @@ export function ProductDetail() {
 
   if (loadingItem)
     return (
-      <div className="product-detail-page page-shell">
+      <div className="page-shell">
         {itemError ? (
           <Alert tone="warning">{itemError}</Alert>
         ) : (
@@ -154,7 +152,7 @@ export function ProductDetail() {
 
   if (isApiId && itemError)
     return (
-      <div className="product-detail-page page-shell space-y-4">
+      <div className="page-shell space-y-4">
         <Alert tone="error">{itemError}</Alert>
         <Button variant="outline" onClick={() => setItemReloadKey((key) => key + 1)}>
           Thử tải lại
@@ -321,18 +319,15 @@ export function ProductDetail() {
     : '';
 
   return (
-    <div className="product-detail-page page-shell pt-6">
-      <Link
-        to={backLink.target}
-        className="inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary"
-      >
+    <div className="page-shell pt-6">
+      <Link to={backLink.target} className="inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary">
         {backLink.label}
       </Link>
-      <div className="product-detail-layout">
-        <article className="product-detail-content min-w-0 space-y-6">
-          <div className="product-gallery">
+      <div className="mt-2 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <article className="min-w-0 space-y-6">
+          <div className="grid gap-3 md:grid-cols-[88px_minmax(0,1fr)]">
             {images.length > 1 ? (
-              <div className="product-gallery-thumbnails">
+              <div className="order-2 flex gap-2 overflow-x-auto md:order-1 md:flex-col md:overflow-visible">
                 {images.map((image, index) => (
                   <button
                     key={`${image}-${index}`}
@@ -342,127 +337,21 @@ export function ProductDetail() {
                     onClick={() => setSelectedImageIndex(index)}
                     className={`shrink-0 overflow-hidden rounded-md ${selectedImageIndex === index ? 'ring-2 ring-primary' : 'ring-1 ring-border'}`}
                   >
-                    <ItemImage
-                      src={image}
-                      alt={`${item.title} - ảnh ${index + 1}`}
-                      className="h-16 w-20 object-cover md:w-full"
-                    />
+                    <ItemImage src={image} alt={`${item.title} - ảnh ${index + 1}`} className="h-16 w-20 object-cover md:w-full" />
                   </button>
                 ))}
               </div>
             ) : null}
-            <div className="product-gallery-stage">
+            <div className={`order-1 overflow-hidden rounded-xl bg-surface-container md:order-2 ${images.length > 1 ? '' : 'md:col-span-2'}`}>
               <ItemImage
                 src={images[selectedImageIndex] ?? images[0]}
                 alt={item.title}
-                className="product-gallery-image"
+                className="aspect-[4/3] w-full object-cover md:aspect-auto md:h-[440px]"
               />
-              {item.images.length > 0 ? (
-                <span className="product-gallery-counter" aria-live="polite">
-                  Ảnh {selectedImageIndex + 1} / {images.length}
-                </span>
-              ) : null}
             </div>
           </div>
 
-          <div className="product-detail-facts">
-            <div>
-              <span>Khu vực giao nhận</span>
-              <strong>{item.district}</strong>
-            </div>
-            <div>
-              <span>Danh mục</span>
-              <strong>{item.category}</strong>
-            </div>
-            {item.brand ? (
-              <div>
-                <span>Thương hiệu</span>
-                <strong>{item.brand}</strong>
-              </div>
-            ) : null}
-          </div>
-
-          {item.tradeFor ? (
-            <div className="product-trade-panel rounded-lg border border-secondary-fixed bg-secondary-soft px-5 py-5">
-              <p className="text-xs font-bold uppercase tracking-wide text-secondary-hover">
-                Chủ bài muốn đổi lấy
-              </p>
-              <p className="mt-1 text-base font-bold">{item.tradeFor}</p>
-              <p className="mt-1 text-sm text-text-secondary">
-                Gợi ý: nếu bạn có món khác, hãy ghi vào đề nghị để chủ bài cân nhắc.
-              </p>
-            </div>
-          ) : null}
-
-          <section
-            aria-labelledby="item-description"
-            className="product-description-panel space-y-3"
-          >
-            <h2 id="item-description" className="section-title">
-              Mô tả
-            </h2>
-            <p className="max-w-3xl whitespace-pre-line text-[15px] leading-7">
-              {item.description}
-            </p>
-            {item.defectNote ? (
-              <p className="text-sm text-text-secondary">
-                <strong className="text-text-primary">Lưu ý tình trạng:</strong> {item.defectNote}
-              </p>
-            ) : null}
-            {operatingLabel ? (
-              <p className="text-sm text-text-secondary">
-                <strong className="text-text-primary">Trạng thái hoạt động:</strong>{' '}
-                {operatingLabel}
-              </p>
-            ) : null}
-            {item.defectImages?.length ? (
-              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-                {item.defectImages.map((image, index) => (
-                  <ItemImage
-                    key={`${image}-${index}`}
-                    src={image}
-                    alt={`Ảnh lỗi ${index + 1}`}
-                    className="aspect-square rounded-md object-cover"
-                  />
-                ))}
-              </div>
-            ) : null}
-          </section>
-
-          <section
-            aria-labelledby="item-owner"
-            className="product-owner-panel flex flex-wrap items-center gap-4"
-          >
-            <Avatar
-              size="lg"
-              user={{
-                name: item.donorName || 'Người đăng',
-                avatarInitials: initialsOf(item.donorName || ''),
-              }}
-            />
-            <div className="min-w-0 flex-1 space-y-1">
-              <h2 id="item-owner" className="text-base font-bold">
-                {item.donorName || 'Người đăng'}
-              </h2>
-              <ReputationBadge
-                trustStars={item.donorTrustStars}
-                rank={item.donorRank}
-                asDescribedRate={item.donorAsDescribedRate}
-              />
-            </div>
-            {ownerProfileId ? (
-              <Button variant="outline" onClick={() => navigate(userProfilePath(ownerProfileId))}>
-                Xem hồ sơ
-              </Button>
-            ) : null}
-          </section>
-        </article>
-
-        <aside
-          aria-label={item.type === 'gift' ? 'Xin món này' : 'Đề nghị trao đổi'}
-          className="product-detail-actions"
-        >
-          <div className="product-detail-summary">
+          <div className="space-y-2.5">
             <div className="flex flex-wrap gap-2">
               <TypeBadge type={item.type} />
               <ConditionBadge condition={item.condition} />
@@ -479,186 +368,215 @@ export function ProductDetail() {
               {item.brand ? <span>Thương hiệu {item.brand}</span> : null}
               <span>
                 Đăng {new Date(item.postedAt).toLocaleDateString('vi-VN')}
-                {item.expiresAt
-                  ? `, hiển thị đến ${new Date(item.expiresAt).toLocaleDateString('vi-VN')}`
-                  : ''}
+                {item.expiresAt ? `, hiển thị đến ${new Date(item.expiresAt).toLocaleDateString('vi-VN')}` : ''}
               </span>
             </p>
           </div>
-          <div className="product-detail-action-body">
-            {own ? (
-              <>
-                <h2 className="text-lg font-bold">Đây là bài của bạn</h2>
-                <p className="text-sm leading-6 text-text-secondary">
-                  Xem người xin và chọn người nhận ở trang Hoạt động.
-                </p>
-                <Link to="/activities">
-                  <Button className="w-full">Mở Hoạt động</Button>
-                </Link>
-              </>
-            ) : isTradedReadOnly ? (
-              <>
-                <h2 className="text-lg font-bold">Đã giao dịch</h2>
-                <p className="text-sm leading-6 text-text-secondary">
-                  Món này đã trao đổi xong nên không nhận yêu cầu mới. Bạn chỉ xem được chi tiết bài
-                  đăng.
-                </p>
-                <Link to="/browse">
-                  <Button variant="outline" className="w-full">
-                    Tìm món khác
-                  </Button>
-                </Link>
-              </>
-            ) : existingRequest ? (
-              <>
-                <h2 className="text-lg font-bold">Bạn đã gửi yêu cầu</h2>
-                <p className="text-sm leading-6 text-text-secondary">
-                  Trạng thái:{' '}
-                  <strong className="text-text-primary">
-                    {requestStatusLabel[existingRequest.status]}
-                  </strong>
-                </p>
-                {requestOfferLabel(existingRequest) === 'Trao đổi' ? (
-                  <>
-                    <Alert tone="warning">{DUPLICATE_SWAP_MESSAGE}</Alert>
-                    <Link to={`/requests/${existingRequest.id.replace(/^api_req_/, '')}`}>
-                      <Button className="w-full" variant="outline">
-                        Xem yêu cầu
-                      </Button>
-                    </Link>
-                  </>
-                ) : existingRequest.status === 'RESERVED' ? (
+
+          {item.tradeFor ? (
+            <div className="rounded-lg border border-secondary-fixed bg-secondary-soft px-4 py-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-secondary-hover">Chủ bài muốn đổi lấy</p>
+              <p className="mt-1 text-base font-bold">{item.tradeFor}</p>
+              <p className="mt-1 text-sm text-text-secondary">Gợi ý: nếu bạn có món khác, hãy ghi vào đề nghị để chủ bài cân nhắc.</p>
+            </div>
+          ) : null}
+
+          <section aria-labelledby="item-description" className="space-y-3">
+            <h2 id="item-description" className="section-title">Mô tả</h2>
+            <p className="max-w-3xl whitespace-pre-line text-[15px] leading-7">{item.description}</p>
+            {item.defectNote ? (
+              <p className="text-sm text-text-secondary">
+                <strong className="text-text-primary">Lưu ý tình trạng:</strong> {item.defectNote}
+              </p>
+            ) : null}
+            {operatingLabel ? (
+              <p className="text-sm text-text-secondary">
+                <strong className="text-text-primary">Trạng thái hoạt động:</strong> {operatingLabel}
+              </p>
+            ) : null}
+            {item.defectImages?.length ? (
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+                {item.defectImages.map((image, index) => (
+                  <ItemImage key={`${image}-${index}`} src={image} alt={`Ảnh lỗi ${index + 1}`} className="aspect-square rounded-md object-cover" />
+                ))}
+              </div>
+            ) : null}
+          </section>
+
+          <section aria-labelledby="item-owner" className="flex flex-wrap items-center gap-4 rounded-lg bg-white px-4 py-4 ring-1 ring-border/80">
+            <Avatar
+              size="lg"
+              user={{ name: item.donorName || 'Người đăng', avatarInitials: initialsOf(item.donorName || '') }}
+            />
+            <div className="min-w-0 flex-1 space-y-1">
+              <h2 id="item-owner" className="text-base font-bold">{item.donorName || 'Người đăng'}</h2>
+              <ReputationBadge trustStars={item.donorTrustStars} rank={item.donorRank} asDescribedRate={item.donorAsDescribedRate} />
+            </div>
+            {ownerProfileId ? (
+              <Button variant="outline" onClick={() => navigate(userProfilePath(ownerProfileId))}>
+                Xem hồ sơ
+              </Button>
+            ) : null}
+          </section>
+        </article>
+
+        <aside
+          aria-label={item.type === 'gift' ? 'Xin món này' : 'Đề nghị trao đổi'}
+          className="space-y-4 rounded-xl bg-white p-5 ring-1 ring-border/80 lg:sticky lg:top-24"
+        >
+          {own ? (
+            <>
+              <h2 className="text-lg font-bold">Đây là bài của bạn</h2>
+              <p className="text-sm leading-6 text-text-secondary">Xem người xin và chọn người nhận ở trang Hoạt động.</p>
+              <Link to="/activities">
+                <Button className="w-full">Mở Hoạt động</Button>
+              </Link>
+            </>
+          ) : isTradedReadOnly ? (
+            <>
+              <h2 className="text-lg font-bold">Đã giao dịch</h2>
+              <p className="text-sm leading-6 text-text-secondary">
+                Món này đã trao đổi xong nên không nhận yêu cầu mới. Bạn chỉ xem được chi tiết bài đăng.
+              </p>
+              <Link to="/browse">
+                <Button variant="outline" className="w-full">Tìm món khác</Button>
+              </Link>
+            </>
+          ) : existingRequest ? (
+            <>
+              <h2 className="text-lg font-bold">Bạn đã gửi yêu cầu</h2>
+              <p className="text-sm leading-6 text-text-secondary">
+                Trạng thái: <strong className="text-text-primary">{requestStatusLabel[existingRequest.status]}</strong>
+              </p>
+              {requestOfferLabel(existingRequest) === 'Trao đổi' ? (
+                <>
+                  <Alert tone="warning">{DUPLICATE_SWAP_MESSAGE}</Alert>
                   <Link to={`/requests/${existingRequest.id.replace(/^api_req_/, '')}`}>
-                    <Button className="w-full">Mở cuộc trò chuyện</Button>
+                    <Button className="w-full" variant="outline">
+                      Xem yêu cầu
+                    </Button>
                   </Link>
-                ) : null}
-                {existingRequest.status === 'PENDING' ? (
-                  <Button
-                    className="w-full"
-                    variant="outline"
-                    disabled={requestSubmitting}
-                    onClick={() => void cancelApiRequest(existingRequest.id)}
-                  >
-                    Hủy yêu cầu
-                  </Button>
-                ) : null}
-              </>
-            ) : !activeListing ? (
-              <>
-                <h2 className="text-lg font-bold">Bài không còn nhận yêu cầu</h2>
-                <p className="text-sm leading-6 text-text-secondary">
-                  {isDonorLocked
-                    ? 'Tài khoản người đăng hiện đang bị tạm khóa nên bài đăng không nhận yêu cầu mới.'
-                    : 'Món này đã có người nhận, hết hạn hoặc đang chờ duyệt.'}
-                </p>
-                <Link to="/browse">
-                  <Button variant="outline" className="w-full">
-                    Tìm món khác
-                  </Button>
+                </>
+              ) : existingRequest.status === 'RESERVED' ? (
+                <Link to={`/requests/${existingRequest.id.replace(/^api_req_/, '')}`}>
+                  <Button className="w-full">Mở cuộc trò chuyện</Button>
                 </Link>
-              </>
-            ) : (
-              <>
-                <h2 className="text-lg font-bold">
-                  {item.type === 'gift' ? 'Xin món này' : 'Đề nghị trao đổi'}
-                </h2>
-                {item.type === 'gift' && user && eligibleOfferedItems.length ? (
-                  <fieldset className="min-w-0 w-full max-w-full space-y-2">
-                    <legend className="label">Kèm món của bạn để đề nghị trao đổi</legend>
-                    <p className="text-xs leading-5 text-text-secondary">
-                      Không bắt buộc. Nếu chủ bài chọn bạn, món đồ sẽ được trao đổi thay vì cho
-                      tặng.
-                    </p>
-                    <OfferedItemOptions
-                      items={eligibleOfferedItems}
-                      selectedItemId={offeredItemId}
-                      onSelect={chooseOfferedItem}
-                    />
-                    {offeredItemId ? (
-                      <button
-                        type="button"
-                        onClick={() => chooseOfferedItem(offeredItemId)}
-                        className="inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary"
-                      >
-                        Không kèm món
-                      </button>
-                    ) : null}
-                  </fieldset>
-                ) : null}
-                {item.type === 'trade' && user ? (
-                  <fieldset className="min-w-0 w-full max-w-full space-y-2">
-                    <legend className="label">Chọn món bạn mang đổi</legend>
-                    <OfferedItemOptions
-                      items={eligibleOfferedItems}
-                      selectedItemId={offeredItemId}
-                      onSelect={chooseOfferedItem}
-                    />
+              ) : null}
+              {existingRequest.status === 'PENDING' ? (
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  disabled={requestSubmitting}
+                  onClick={() => void cancelApiRequest(existingRequest.id)}
+                >
+                  Hủy yêu cầu
+                </Button>
+              ) : null}
+            </>
+          ) : !activeListing ? (
+            <>
+              <h2 className="text-lg font-bold">Bài không còn nhận yêu cầu</h2>
+              <p className="text-sm leading-6 text-text-secondary">
+                {isDonorLocked
+                  ? 'Tài khoản người đăng hiện đang bị tạm khóa nên bài đăng không nhận yêu cầu mới.'
+                  : 'Món này đã có người nhận, hết hạn hoặc đang chờ duyệt.'}
+              </p>
+              <Link to="/browse">
+                <Button variant="outline" className="w-full">Tìm món khác</Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <h2 className="text-lg font-bold">{item.type === 'gift' ? 'Xin món này' : 'Đề nghị trao đổi'}</h2>
+              {item.type === 'gift' && user && eligibleOfferedItems.length ? (
+                <fieldset className="min-w-0 w-full max-w-full space-y-2">
+                  <legend className="label">Kèm món của bạn để đề nghị trao đổi</legend>
+                  <p className="text-xs leading-5 text-text-secondary">
+                    Không bắt buộc. Nếu chủ bài chọn bạn, món đồ sẽ được trao đổi thay vì cho tặng.
+                  </p>
+                  <OfferedItemOptions
+                    items={eligibleOfferedItems}
+                    selectedItemId={offeredItemId}
+                    onSelect={chooseOfferedItem}
+                  />
+                  {offeredItemId ? (
                     <button
                       type="button"
-                      aria-pressed={receiveOnlyChosen}
-                      onClick={chooseReceiveOnly}
-                      className={`box-border flex min-h-11 w-full items-center rounded-md border p-2.5 text-left text-sm font-semibold transition ${receiveOnlyChosen ? 'border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
-                    >
-                      Chỉ xin nhận, không kèm món
-                    </button>
-                    <p className="text-xs leading-5 text-text-secondary">
-                      Chủ bài có thể đồng ý cho tặng thay vì trao đổi.
-                    </p>
-                    {!eligibleOfferedItems.length ? (
-                      <p className="rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
-                        Bạn chưa có món đã duyệt, còn hoạt động và chưa nằm trong giao dịch khác để
-                        trao đổi.
-                      </p>
-                    ) : null}
-                    <Link
-                      to="/post"
+                      onClick={() => chooseOfferedItem(offeredItemId)}
                       className="inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary"
                     >
-                      Đăng món mới để đổi
-                    </Link>
-                  </fieldset>
-                ) : null}
-                <Button
-                  size="lg"
-                  className="w-full"
-                  disabled={requestSubmitting}
-                  onClick={() => void submitRequest()}
-                >
-                  {requestSubmitting
-                    ? 'Đang gửi...'
-                    : !user
-                      ? 'Đăng nhập để gửi yêu cầu'
-                      : submitButtonLabel}
-                </Button>
-                <ul className="list-disc space-y-1 pl-5 text-xs leading-5 text-text-secondary">
-                  <li>Chat mở khi chủ bài chọn bạn. Bạn có thể hủy yêu cầu tới lúc đó.</li>
-                  <li>Số điện thoại chỉ hiện khi hai bên đã chốt lịch hẹn.</li>
-                </ul>
-              </>
-            )}
-            {requestSuccess ? <Alert tone="success">{requestSuccess}</Alert> : null}
-            {requestError ? <Alert tone="warning">{requestError}</Alert> : null}
-            {duplicateSwapRequest ? (
-              <Link to={`/requests/${duplicateSwapRequest.id.replace(/^api_req_/, '')}`}>
-                <Button className="w-full" variant="outline">
-                  Xem yêu cầu
-                </Button>
-              </Link>
-            ) : null}
-            {reportNotice ? <Alert tone="success">{reportNotice}</Alert> : null}
-            {currentUserId && !own ? (
-              <button
-                type="button"
-                className="min-h-11 text-sm font-semibold text-text-secondary hover:text-error"
-                onClick={() => {
-                  setReportNotice('');
-                  setReportOpen(true);
-                }}
+                      Không kèm món
+                    </button>
+                  ) : null}
+                </fieldset>
+              ) : null}
+              {item.type === 'trade' && user ? (
+                <fieldset className="min-w-0 w-full max-w-full space-y-2">
+                  <legend className="label">Chọn món bạn mang đổi</legend>
+                  <OfferedItemOptions
+                    items={eligibleOfferedItems}
+                    selectedItemId={offeredItemId}
+                    onSelect={chooseOfferedItem}
+                  />
+                  <button
+                    type="button"
+                    aria-pressed={receiveOnlyChosen}
+                    onClick={chooseReceiveOnly}
+                    className={`box-border flex min-h-11 w-full items-center rounded-md border p-2.5 text-left text-sm font-semibold transition ${receiveOnlyChosen ? 'border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
+                  >
+                    Chỉ xin nhận, không kèm món
+                  </button>
+                  <p className="text-xs leading-5 text-text-secondary">Chủ bài có thể đồng ý cho tặng thay vì trao đổi.</p>
+                  {!eligibleOfferedItems.length ? (
+                    <p className="rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
+                      Bạn chưa có món đã duyệt, còn hoạt động và chưa nằm trong giao dịch khác để trao đổi.
+                    </p>
+                  ) : null}
+                  <Link to="/post" className="inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary">
+                    Đăng món mới để đổi
+                  </Link>
+                </fieldset>
+              ) : null}
+              <Button
+                size="lg"
+                className="w-full"
+                disabled={requestSubmitting}
+                onClick={() => void submitRequest()}
               >
-                Báo cáo bài đăng
-              </button>
-            ) : null}
-          </div>
+                {requestSubmitting
+                  ? 'Đang gửi...'
+                  : !user
+                    ? 'Đăng nhập để gửi yêu cầu'
+                    : submitButtonLabel}
+              </Button>
+              <ul className="list-disc space-y-1 pl-5 text-xs leading-5 text-text-secondary">
+                <li>Chat mở khi chủ bài chọn bạn. Bạn có thể hủy yêu cầu tới lúc đó.</li>
+                <li>Số điện thoại chỉ hiện khi hai bên đã chốt lịch hẹn.</li>
+              </ul>
+            </>
+          )}
+          {requestSuccess ? <Alert tone="success">{requestSuccess}</Alert> : null}
+          {requestError ? <Alert tone="warning">{requestError}</Alert> : null}
+          {duplicateSwapRequest ? (
+            <Link to={`/requests/${duplicateSwapRequest.id.replace(/^api_req_/, '')}`}>
+              <Button className="w-full" variant="outline">
+                Xem yêu cầu
+              </Button>
+            </Link>
+          ) : null}
+          {reportNotice ? <Alert tone="success">{reportNotice}</Alert> : null}
+          {currentUserId && !own ? (
+            <button
+              type="button"
+              className="min-h-11 text-sm font-semibold text-text-secondary hover:text-error"
+              onClick={() => {
+                setReportNotice('');
+                setReportOpen(true);
+              }}
+            >
+              Báo cáo bài đăng
+            </button>
+          ) : null}
         </aside>
       </div>
 

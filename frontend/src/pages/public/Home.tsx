@@ -28,7 +28,6 @@ import { loginPath } from '../../utils/authRedirect';
 import { viewerKeyFor } from '../../utils/viewerKey';
 import { useFeaturedItems } from './useFeaturedItems';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
-import '../../styles/marketplace.css';
 import './home-content.css';
 const aiSuggestions = [
   {
@@ -187,76 +186,123 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
 
   if (slides.length === 0) {
     return (
-      <section className="home-hero-shell" data-home-hero>
-        <div className="home-inner home-hero-inner">
-          <div className="home-hero-content">{children}</div>
-          <div className="home-hero-fallback" aria-hidden="true">
-            <img src={browseSuggestionBox} alt="" fetchPriority="high" />
-          </div>
+      <section className="home-hero-shell border-b" data-home-hero>
+        <div className="home-inner home-hero-inner home-hero-content">
+          {children}
         </div>
       </section>
     );
   }
 
   const activeItem = slides[activeIndex];
+
   return (
-    <section className="home-hero-shell" data-home-hero>
-      <div className="home-inner home-hero-inner">
-        <div className="home-hero-content">{children}</div>
-        <div className="home-hero-showcase">
-          <Link
-            to={`/items/${activeItem.id}`}
-            className="home-hero-featured group"
-            aria-label={`Xem chi tiết ${activeItem.title}`}
-          >
-            {slides.map((item, index) => (
-              <ItemImage
-                key={`main-${item.id}`}
-                src={item.images[0]}
-                alt={index === activeIndex ? item.title : ''}
-                loading={index === activeIndex ? 'eager' : 'lazy'}
-                fetchPriority={index === activeIndex ? 'high' : undefined}
-                className={`home-hero-featured-image ${index === activeIndex ? 'is-active' : ''}`}
-              />
-            ))}
-            <div className="home-hero-featured-caption">
-              <span className="home-hero-card-eyebrow">SHARELOOP</span>
-              <h2>{activeItem.title}</h2>
-              <p>
-                <MapPin aria-hidden className="size-4 shrink-0" weight="fill" />
-                <span>{activeItem.district}</span>
-              </p>
+    <section className="home-hero-shell relative isolate overflow-hidden border-b" data-home-hero>
+      <div className="absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
+        {slides.map((item, index) => (
+          <ItemImage
+            key={`background-${item.id}`}
+            src={item.images[0]}
+            alt=""
+            loading={index === activeIndex ? 'eager' : 'lazy'}
+            fetchPriority={index === activeIndex ? 'high' : undefined}
+            className={`absolute inset-0 size-full object-cover object-center transition-all duration-[900ms] ease-out ${
+              index === activeIndex
+                ? 'scale-[1.05] opacity-100 blur-[2px]'
+                : 'scale-[1.07] opacity-0 blur-[2px]'
+            }`}
+          />
+        ))}
+      </div>
+      <div className="home-hero-overlay absolute inset-0 z-0" aria-hidden="true" />
+      <div className="home-hero-bottom-fade absolute inset-0 z-0" aria-hidden="true" />
+
+      <div className="home-inner home-hero-inner home-hero-content relative z-10">
+        <div className="grid items-center gap-8 lg:grid-cols-[1.04fr_.96fr] lg:gap-10">
+          <div className="min-w-0">{children}</div>
+
+          <div className="min-w-0">
+            <Link
+              to={`/items/${activeItem.id}`}
+              className="group relative block h-[300px] overflow-hidden rounded-xl bg-black/20 shadow-lg ring-1 ring-white/20 sm:h-[380px] lg:h-[430px]"
+              aria-label={`Xem chi tiết ${activeItem.title}`}
+            >
+              {slides.map((item, index) => (
+                <ItemImage
+                  key={`main-${item.id}`}
+                  src={item.images[0]}
+                  alt={index === activeIndex ? item.title : ''}
+                  loading={index === activeIndex ? 'eager' : 'lazy'}
+                  fetchPriority={index === activeIndex ? 'high' : undefined}
+                  className={`absolute inset-0 size-full object-cover transition-all duration-700 ease-out ${
+                    index === activeIndex
+                      ? 'scale-100 opacity-100'
+                      : 'pointer-events-none scale-[1.025] opacity-0'
+                  }`}
+                />
+              ))}
+              <div className="home-hero-card-gradient absolute inset-0 flex flex-col justify-end px-5 pb-5 sm:px-6 sm:pb-6">
+                <p className="home-hero-card-eyebrow text-xs font-bold uppercase tracking-[0.12em]">
+                  SHARELOOP
+                </p>
+                <h2 className="mt-2 line-clamp-2 text-xl font-extrabold leading-tight text-white sm:text-[22px]">
+                  {activeItem.title}
+                </h2>
+                <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-white/80 sm:text-sm">
+                  <MapPin aria-hidden className="size-3.5 shrink-0" weight="fill" />
+                  <span>{activeItem.district}</span>
+                </p>
+              </div>
+            </Link>
+
+            <div
+              ref={thumbnailStripRef}
+              className="mt-4 overflow-x-auto px-1 pb-2 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mt-5"
+              aria-label="Chọn món đồ nổi bật"
+            >
+              <div className="mx-auto flex w-max min-w-full items-center justify-start gap-2.5 sm:justify-center sm:gap-3">
+                {slides.map((item, index) => {
+                  const isActive = index === activeIndex;
+
+                  return (
+                    <button
+                      key={item.id}
+                      ref={(element) => {
+                        thumbnailRefs.current[index] = element;
+                      }}
+                      type="button"
+                      aria-label={`Hiển thị ảnh ${item.title}`}
+                      aria-current={isActive ? 'true' : undefined}
+                      onClick={() => setActiveIndex(index)}
+                      className={`h-14 w-[72px] shrink-0 overflow-hidden rounded-md border bg-white/10 p-0 shadow-md transition duration-500 ease-out focus-visible:outline-white sm:h-16 sm:w-[84px] ${
+                        isActive
+                          ? '-translate-y-1 scale-105 border-2 border-[#E0B25A] opacity-100 shadow-lg'
+                          : 'scale-95 border-white/35 opacity-60 hover:scale-100 hover:border-white/70 hover:opacity-100'
+                      }`}
+                    >
+                      <ItemImage
+                        src={item.images[0]}
+                        alt={item.title}
+                        loading={isActive ? 'eager' : 'lazy'}
+                        fetchPriority={isActive ? 'high' : undefined}
+                        className="size-full object-cover"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </Link>
-          <div
-            ref={thumbnailStripRef}
-            className="home-hero-thumbnails"
-            aria-label="Chọn món đồ nổi bật"
-          >
-            {slides.map((item, index) => {
-              const isActive = index === activeIndex;
-              return (
-                <button
-                  key={item.id}
-                  ref={(element) => {
-                    thumbnailRefs.current[index] = element;
-                  }}
-                  type="button"
-                  aria-label={`Hiển thị ảnh ${item.title}`}
-                  aria-current={isActive ? 'true' : undefined}
-                  onClick={() => setActiveIndex(index)}
-                  className={isActive ? 'is-active' : ''}
-                >
-                  <ItemImage
-                    src={item.images[0]}
-                    alt={item.title}
-                    loading={isActive ? 'eager' : 'lazy'}
-                    fetchPriority={isActive ? 'high' : undefined}
-                    className="size-full object-cover"
-                  />
-                </button>
-              );
-            })}
+
+            <div className="flex justify-center gap-1.5" aria-hidden="true">
+              {slides.map((item, index) => (
+                <span
+                  key={`dot-${item.id}`}
+                  className={`size-1.5 rounded-full transition ${
+                    index === activeIndex ? 'bg-[#E0B25A]' : 'bg-white/35'
+                  }`}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -385,7 +431,10 @@ export function Home() {
             Tìm những món đồ còn tốt từ người trong cộng đồng, theo đúng quận bạn thuận tiện gặp gỡ.
           </p>
 
-          <form onSubmit={submit} className="home-hero-search-form">
+          <form
+            onSubmit={submit}
+            className="home-hero-search-form mt-6 grid gap-2 rounded-lg p-2 sm:grid-cols-[1fr_176px_auto]"
+          >
             <SearchField
               value={q}
               onChange={(event) => setQ(event.target.value)}
@@ -400,12 +449,13 @@ export function Home() {
             >
               <option value="">Tất cả khu vực</option>
               {districtOptions.map((area) => (
-                <option key={area.id} value={area.id}>
-                  {area.label}
-                </option>
+                <option key={area.id} value={area.id}>{area.label}</option>
               ))}
             </select>
-            <Button type="submit" className="home-hero-submit">
+            <Button
+              type="submit"
+              className="home-hero-submit"
+            >
               Tìm đồ
             </Button>
           </form>
@@ -426,20 +476,13 @@ export function Home() {
 
       {loading || loadError ? (
         <div className="home-inner py-5">
-          <div
-            role={loadError ? 'alert' : 'status'}
-            className={`rounded-lg p-4 text-sm ${loadError ? 'bg-error-soft text-error' : 'bg-primary-faint text-primary'}`}
-          >
+          <div role={loadError ? 'alert' : 'status'} className={`rounded-lg p-4 text-sm ${loadError ? 'bg-error-soft text-error' : 'bg-primary-faint text-primary'}`}>
             {loadError ? (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span>{loadError}</span>
-                <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
-                  Thử lại
-                </Button>
+                <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Thử lại</Button>
               </div>
-            ) : (
-              'Đang tải bài đăng mới nhất...'
-            )}
+            ) : 'Đang tải bài đăng mới nhất...'}
           </div>
         </div>
       ) : null}
@@ -447,30 +490,17 @@ export function Home() {
       <HomeMotion>
         {!loading && !loadError && approved.length === 0 ? (
           <HomeSection className="home-band">
-            <EmptyState
-              title="Chưa có bài đăng đã duyệt"
-              text="Các món đồ mới sẽ xuất hiện tại đây sau khi được duyệt."
-            />
+            <EmptyState title="Chưa có bài đăng đã duyệt" text="Các món đồ mới sẽ xuất hiện tại đây sau khi được duyệt." />
           </HomeSection>
         ) : null}
         <HomeSection className="home-band home-categories-band">
-          <SectionHeading
-            title="Khám phá theo danh mục"
-            description="Tìm nhanh những món đồ đang được chia sẻ trong cộng đồng."
-            href="/browse"
-          />
+          <SectionHeading title="Khám phá theo danh mục" description="Tìm nhanh những món đồ đang được chia sẻ trong cộng đồng." href="/browse" />
           <HomeDiscoveryRail label="Khám phá theo danh mục" variant="categories">
             {categories.map((category) => {
               return (
-                <Link
-                  key={category.id}
-                  to={categoryBrowsePath(category.id)}
-                  className="home-category group"
-                >
+                <Link key={category.id} to={categoryBrowsePath(category.id)} className="home-category group">
                   <span className="home-category-label">{category.name}</span>
-                  {category.activeItemCount != null ? (
-                    <span className="home-category-count">{category.activeItemCount} món đồ</span>
-                  ) : null}
+                  <span className="home-category-count">{category.activeItemCount} món đồ</span>
                 </Link>
               );
             })}
@@ -478,11 +508,7 @@ export function Home() {
         </HomeSection>
 
         <HomeSection className="home-band home-new-items-band">
-          <SectionHeading
-            title="Món đồ mới"
-            description="Những món đồ vừa được chia sẻ và đang chờ một vòng đời mới."
-            href="/browse"
-          />
+          <SectionHeading title="Món đồ mới" description="Những món đồ vừa được chia sẻ và đang chờ một vòng đời mới." href="/browse" />
           <div className="home-new-filters" role="tablist" aria-label="Lọc món đồ mới">
             {newItemFilters.map((filter) => (
               <button
@@ -498,70 +524,46 @@ export function Home() {
           </div>
           <div className="home-product-grid home-new-items-grid home-featured-items-grid">
             {newItems.map((item) => (
-              <ProductCard variant="marketplace" key={item.id} item={item} />
+              <ProductCard key={item.id} item={item} />
             ))}
           </div>
         </HomeSection>
 
         <HomeSection className="home-band">
-          <SectionHeading
-            title="Tin nổi bật"
-            description="Những món đồ nổi bật đang sẵn sàng cho một kết nối mới."
-            href="/browse?boosted=true"
-          />
+          <SectionHeading title="Tin nổi bật" description="Những món đồ nổi bật đang sẵn sàng cho một kết nối mới." href="/browse?boosted=true" />
           {/* key đổi theo nhóm để chạy hiệu ứng mờ dần khi backend sang nhóm mới; khung lưới giữ nguyên. */}
           <div
             key={featuredRotation.rotatedAt ?? 'initial'}
             className="home-product-grid home-new-items-grid home-featured-items-grid home-featured-rotate"
           >
             {featured.map((item) => (
-              <ProductCard variant="marketplace" key={item.id} item={item} />
+              <ProductCard key={item.id} item={item} />
             ))}
           </div>
         </HomeSection>
 
         <div className="home-gift-band">
           <HomeSection className="home-band">
-            <SectionHeading
-              title="Đồ đang được cho tặng"
-              description="Những món còn hữu ích, được gửi tiếp không kèm giá bán."
-              href="/browse?type=gift"
-              linkLabel="Xem đồ tặng"
-            />
+            <SectionHeading title="Đồ đang được cho tặng" description="Những món còn hữu ích, được gửi tiếp không kèm giá bán." href="/browse?type=gift" linkLabel="Xem đồ tặng" />
             <div className="home-product-grid">
               {gifts.slice(0, 5).map((item) => (
-                <ProductCard variant="marketplace" key={item.id} item={item} />
+                <ProductCard key={item.id} item={item} />
               ))}
             </div>
           </HomeSection>
         </div>
 
         <HomeSection className="home-band">
-          <SectionHeading
-            title="Đang tìm người trao đổi"
-            description="Xem món chủ sở hữu đang có và điều họ mong muốn nhận lại."
-            href="/browse?type=trade"
-            linkLabel="Xem đồ trao đổi"
-          />
+          <SectionHeading title="Đang tìm người trao đổi" description="Xem món chủ sở hữu đang có và điều họ mong muốn nhận lại." href="/browse?type=trade" linkLabel="Xem đồ trao đổi" />
           <div className="home-product-grid home-trade-grid">
             {trades.slice(0, 5).map((item) => (
-              <ProductCard
-                variant="marketplace"
-                key={item.id}
-                item={item}
-                tradeFor={item.tradeFor}
-              />
+              <ProductCard key={item.id} item={item} tradeFor={item.tradeFor} />
             ))}
           </div>
         </HomeSection>
 
         <HomeSection className="home-band">
-          <SectionHeading
-            title="Khám phá quanh quận của bạn"
-            description="Chọn khu vực thuận tiện để hẹn giao nhận trực tiếp."
-            href="/browse"
-            linkLabel="Xem mọi khu vực"
-          />
+          <SectionHeading title="Khám phá quanh quận của bạn" description="Chọn khu vực thuận tiện để hẹn giao nhận trực tiếp." href="/browse" linkLabel="Xem mọi khu vực" />
           <div className="home-district-panel" aria-label="Khám phá quanh quận của bạn">
             {districtLinks.map(({ name, id }) => (
               <Link key={id} to={districtBrowsePath(id)} className="home-district">
@@ -583,38 +585,23 @@ export function Home() {
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 {currentUser ? (
-                  <Link
-                    to="/post"
-                    className="home-final-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-primary transition"
-                  >
-                    Đăng món đồ
-                  </Link>
+                  <Link to="/post" className="home-final-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-primary transition">Đăng món đồ</Link>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => navigate(loginPath('/post'))}
-                    className="home-final-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-primary transition"
-                  >
-                    Đăng món đồ
-                  </button>
+                  <button type="button" onClick={() => navigate(loginPath('/post'))} className="home-final-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-bold text-primary transition">Đăng món đồ</button>
                 )}
-                <Link to="/browse" className="text-sm font-bold text-link">
-                  Tìm đồ
-                </Link>
+                <Link to="/browse" className="text-sm font-bold text-link">Tìm đồ</Link>
               </div>
             </div>
           </HomeSection>
           <HomeSection className="home-band home-ai-section">
-            <div
-              className="home-ai home-suggestion-feature"
-              aria-labelledby="home-suggestion-title"
-            >
+            <div className="home-ai home-suggestion-feature" aria-labelledby="home-suggestion-title">
               <div className="home-suggestion-copy">
-                <span className="home-suggestion-eyebrow">Gợi ý từ LoopAI</span>
+                <span className="home-suggestion-eyebrow">
+                  Gợi ý từ LoopAI
+                </span>
                 <h2 id="home-suggestion-title">Bạn đang tìm món gì?</h2>
                 <p>
-                  Mô tả món đồ bạn cần, LoopAI sẽ gợi ý những lựa chọn phù hợp từ cộng đồng
-                  ShareLoop.
+                  Mô tả món đồ bạn cần, LoopAI sẽ gợi ý những lựa chọn phù hợp từ cộng đồng ShareLoop.
                 </p>
                 <div className="home-ai-suggestions">
                   {aiPreviewItems.map((item, index) => {
@@ -645,6 +632,7 @@ export function Home() {
             </div>
           </HomeSection>
         </div>
+
       </HomeMotion>
     </div>
   );

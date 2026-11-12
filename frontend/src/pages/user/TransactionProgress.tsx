@@ -1,4 +1,3 @@
-import './transaction-progress.css';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
@@ -43,7 +42,7 @@ export function TransactionProgress() {
   const { conversationId } = useParams();
   if (!currentUserId) {
     return (
-      <div className="transaction-page page-shell">
+      <div className="page-shell">
         <EmptyState title="Chưa đăng nhập" text="Vui lòng đăng nhập lại để xem giao dịch." />
       </div>
     );
@@ -78,14 +77,14 @@ function TransactionProgressView({
 
   if (loading && !request) {
     return (
-      <div className="transaction-page page-shell">
+      <div className="page-shell">
         <LoadingState />
       </div>
     );
   }
   if (error === 'forbidden' || (!request && !error)) {
     return (
-      <div className="transaction-page page-shell">
+      <div className="page-shell">
         <EmptyState
           title="Không xem được giao dịch này"
           text="Chỉ hai bên của giao dịch mới xem được tiến trình. Giao dịch có thể không tồn tại."
@@ -96,7 +95,7 @@ function TransactionProgressView({
   }
   if (!request) {
     return (
-      <div className="transaction-page page-shell">
+      <div className="page-shell">
         <Alert tone="error">Không tải được giao dịch. Vui lòng thử lại.</Alert>
         <Button className="mt-4" variant="outline" onClick={reload}>
           Thử tải lại
@@ -117,14 +116,14 @@ function TransactionProgressView({
   };
 
   return (
-    <div className="transaction-page page-shell py-6 sm:py-8">
+    <div className="page-shell py-6 sm:py-8">
       <Button variant="ghost" onClick={() => navigate(requestConversationPath(request.id))}>
         Quay lại tin nhắn
       </Button>
       <div className="mb-6 mt-2 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="page-title">Tiến trình giao dịch</h1>
-          <p className="transaction-item-title mt-1 text-sm text-text-secondary">{title}</p>
+          <p className="mt-1 truncate text-sm text-text-secondary">{title}</p>
         </div>
         <StatusBadge status={request.status} label={requestStatusLabel[request.status]} />
       </div>
@@ -134,8 +133,8 @@ function TransactionProgressView({
         </div>
       ) : null}
 
-      <div className="transaction-layout">
-        <div className="transaction-main min-w-0 space-y-5">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-w-0 space-y-5">
           <StepsCard
             request={request}
             disputeReceipt={disputeReceipt}

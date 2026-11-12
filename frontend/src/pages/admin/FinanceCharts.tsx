@@ -27,7 +27,7 @@ function ChartTooltip({
   const row = payload?.[0]?.payload;
   if (!active || !row) return null;
   return (
-    <div className="finance-chart-tooltip rounded-md bg-surface px-3 py-2 text-xs shadow-md ring-1 ring-border">
+    <div className="rounded-md bg-white px-3 py-2 text-xs shadow-md ring-1 ring-border">
       <p className="font-semibold text-text-primary">{row.label}</p>
       <p className="mt-0.5 tabular-nums text-text-secondary">
         {row.value.toLocaleString('vi-VN')} {unit}
@@ -58,7 +58,6 @@ export function CreditByTypeChart({
   if (!rows.length) return <ChartEmpty />;
   return (
     <figure aria-label={title} className="m-0">
-      <figcaption className="finance-chart-unit">Đơn vị: Credit</figcaption>
       <ResponsiveContainer width="100%" height={Math.max(140, rows.length * 44 + 24)}>
         <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
           <CartesianGrid horizontal={false} stroke={GRID_LINE} strokeOpacity={0.7} />
@@ -113,7 +112,6 @@ export function CashByDayChart({ days }: { days: DailyCash[] }) {
   const chartData = days.map((day, index) => ({ ...rows[index], axisLabel: shortDate(day.date) }));
   return (
     <figure aria-label="Tiền thu theo ngày" className="m-0">
-      <figcaption className="finance-chart-unit">Đơn vị: VND</figcaption>
       <ResponsiveContainer width="100%" height={260}>
         <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
           <CartesianGrid vertical={false} stroke={GRID_LINE} strokeOpacity={0.7} />
@@ -172,7 +170,7 @@ function VndTooltip({
   const row = payload?.[0]?.payload;
   if (!active || !row) return null;
   return (
-    <div className="finance-chart-tooltip rounded-md bg-surface px-3 py-2 text-xs shadow-md ring-1 ring-border">
+    <div className="rounded-md bg-white px-3 py-2 text-xs shadow-md ring-1 ring-border">
       <p className="font-semibold text-text-primary">{row.label}</p>
       <p className="mt-0.5 tabular-nums text-text-secondary">{formatVnd(row.value)}</p>
       {row.detail ? <p className="mt-0.5 text-text-muted">{row.detail}</p> : null}

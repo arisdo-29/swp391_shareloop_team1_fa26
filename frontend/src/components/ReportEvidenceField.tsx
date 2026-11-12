@@ -1,4 +1,3 @@
-import './complaints.css';
 import { useEffect, useId, useState } from 'react';
 import { Icon, IconButton } from './ui';
 
@@ -15,7 +14,7 @@ export function ReportEvidenceField({
   const hintId = useId();
 
   return (
-    <div className="complaint-evidence-field space-y-3 rounded-lg border border-dashed border-border bg-surface p-4">
+    <div className="space-y-3 rounded-lg border border-dashed border-border bg-surface p-4">
       <div>
         <p id={labelId} className="label">
           Ảnh minh chứng (không bắt buộc)

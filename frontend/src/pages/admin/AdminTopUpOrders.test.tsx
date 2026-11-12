@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminFinanceApi } from '../../services/adminFinanceApi';
@@ -74,7 +74,7 @@ describe('AdminTopUpOrders', () => {
     expect((screen.getByLabelText('Trạng thái') as HTMLSelectElement).value).toBe('');
   });
 
-  it('hiện mã đơn công khai, người dùng và trạng thái, không hiện định danh kỹ thuật', async () => {
+  it('hiện thông tin người dùng và trạng thái, không hiện chi tiết kỹ thuật', async () => {
     render(<AdminTopUpOrders />);
     await screen.findByText('Lan An');
 
@@ -82,23 +82,9 @@ describe('AdminTopUpOrders', () => {
     expect(screen.getAllByText('Thành công').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Thất bại').length).toBeGreaterThan(0);
     const page = document.body.textContent ?? '';
-    expect(screen.getByText(orders[0].orderCode)).toBeTruthy();
-    expect(screen.getAllByText('VNPay').length).toBeGreaterThan(0);
-    for (const hidden of ['User #', 'Admin:', 'VNPAY', '/Credit', 'Nguồn']) {
+    for (const hidden of ['SL5F3A9C0D1E2B44A', 'User #', 'Admin:', 'VNPAY', '/Credit', 'Nguồn']) {
       expect(page).not.toContain(hidden);
     }
-  });
-
-  it('mở đúng đơn từ dữ liệu đã tải, không gọi API thêm và không có thao tác tài chính', async () => {
-    const user = userEvent.setup();
-    render(<AdminTopUpOrders />);
-    await screen.findByText('Lan An');
-    const callsBefore = vi.mocked(adminFinanceApi.topUpOrders).mock.calls.length;
-    await user.click(screen.getByRole('button', { name: `Xem Đơn nạp ${orders[0].orderCode}` }));
-    const dialog = screen.getByRole('dialog', { name: `Đơn nạp ${orders[0].orderCode}` });
-    expect(within(dialog).getByText('an@example.com')).toBeTruthy();
-    expect(within(dialog).queryByRole('button', { name: /xác nhận|cộng|đối soát/i })).toBeNull();
-    expect(adminFinanceApi.topUpOrders).toHaveBeenCalledTimes(callsBefore);
   });
 
   it('chỉ hiển thị danh sách theo dõi, không có thao tác duyệt thủ công', async () => {

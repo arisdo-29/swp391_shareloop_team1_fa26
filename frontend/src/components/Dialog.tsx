@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, type ReactNode } from 'react';
 import { Icon } from './ui';
 
 type DialogSize = 'sm' | 'md' | 'lg' | 'xl';
@@ -30,48 +30,6 @@ export function DialogFrame({
   className?: string;
   children: ReactNode;
 }) {
-  const frameRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const previousFocus = document.activeElement as HTMLElement | null;
-    const frame = frameRef.current;
-    frame?.focus();
-    const trapFocus = (event: KeyboardEvent) => {
-      if (event.key !== 'Tab' || !frame) return;
-      const dialogs = document.querySelectorAll('[role="dialog"]');
-      if (dialogs[dialogs.length - 1] !== frame) return;
-      const focusable = Array.from(
-        frame.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
-        ),
-      ).filter((element) => !element.hidden && element.getAttribute('aria-hidden') !== 'true');
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (!first) {
-        event.preventDefault();
-        frame.focus();
-        return;
-      }
-      if (
-        event.shiftKey &&
-        (document.activeElement === first || document.activeElement === frame)
-      ) {
-        event.preventDefault();
-        last.focus();
-      } else if (
-        !event.shiftKey &&
-        (document.activeElement === last || document.activeElement === frame)
-      ) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', trapFocus);
-    return () => {
-      document.removeEventListener('keydown', trapFocus);
-      if (previousFocus?.isConnected) previousFocus.focus();
-    };
-  }, []);
-
   useEffect(() => {
     if (!onClose) return;
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -89,12 +47,10 @@ export function DialogFrame({
       }}
     >
       <div
-        ref={frameRef}
-        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
-        className={`max-h-[92dvh] w-full min-w-0 overscroll-contain overflow-y-auto rounded-t-xl border border-border bg-surface p-5 shadow-lg sm:max-h-[calc(100dvh-2rem)] sm:rounded-xl sm:p-6 ${sizeClass[size]} ${className}`}
+        className={`max-h-[92dvh] w-full min-w-0 overscroll-contain overflow-y-auto rounded-t-xl border border-border bg-white p-5 shadow-lg sm:max-h-[calc(100dvh-2rem)] sm:rounded-xl sm:p-6 ${sizeClass[size]} ${className}`}
         onMouseDown={(event) => event.stopPropagation()}
       >
         {children}
