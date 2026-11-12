@@ -72,7 +72,8 @@ export function CreditHistorySection({
       {unavailable ? (
         <p className="py-10 text-center text-sm text-text-muted">Chưa thể tải lịch sử Credit.</p>
       ) : history.length ? (
-        <div className="space-y-4">
+        <div className="credit-history-groups space-y-4">
+          <div className="credit-ledger-heading hidden" aria-hidden="true"><span>Giao dịch / Thời gian</span><span>Biến động / Trạng thái</span></div>
           {days.map(([day, entries]) => (
             <div key={day}>
               <h3 className="mb-1.5 text-xs font-bold text-text-muted">{day}</h3>
@@ -253,7 +254,7 @@ function HistoryRow({
     <button
       type="button"
       onClick={onClick}
-      className="grid w-full cursor-pointer grid-cols-[1fr_auto] gap-4 border-b border-border/70 px-4 py-3 text-left transition hover:bg-surface-low last:border-0"
+      className="credit-history-row grid w-full cursor-pointer grid-cols-[1fr_auto] gap-4 border-b border-border/70 px-4 py-3 text-left transition hover:bg-surface-low last:border-0"
     >
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-text-primary">{subtitle ? `${title} - ${subtitle}` : title}</p>

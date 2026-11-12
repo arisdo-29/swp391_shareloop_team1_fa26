@@ -1,3 +1,5 @@
+import './admin-workspace.css';
+import { AdminBreadcrumb } from './AdminBreadcrumb';
 import { Suspense, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Icon } from '../../components/ui';
@@ -72,7 +74,7 @@ export function AdminLayout() {
               title={collapsed ? label : undefined}
               onClick={() => setOpen(false)}
               className={({ isActive }) =>
-                `mb-0.5 flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${collapsed ? 'lg:justify-center lg:px-0' : ''} ${isActive ? 'bg-admin-group font-bold text-white' : 'font-medium text-admin-text hover:bg-admin-group/40'}`
+                `mb-0.5 flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${collapsed ? 'lg:justify-center lg:px-0' : ''} ${isActive ? 'bg-highlight font-bold text-on-highlight' : 'font-medium text-admin-text hover:bg-admin-group/40'}`
               }
             >
               <Icon name={iconName as IconName} className="size-5 shrink-0" />
@@ -86,7 +88,15 @@ export function AdminLayout() {
   // Từ màn lg bỏ lề trái để sidebar sát mép trái màn hình; phần nội dung vẫn giữ lề phải.
   return (
     <div
-      className={`w-full px-[var(--layout-gutter)] py-6 lg:grid lg:pl-0 lg:items-start lg:gap-[clamp(1.25rem,2vw,2rem)] ${collapsed ? 'lg:grid-cols-[72px_minmax(0,1fr)]' : 'lg:grid-cols-[250px_minmax(0,1fr)]'}`}
+      className={`admin-workspace admin-layout w-full px-[var(--layout-gutter)] py-6 lg:grid lg:items-start ${collapsed ? 'lg:grid-cols-[72px_minmax(0,1fr)]' : 'lg:grid-cols-[220px_minmax(0,1fr)]'}`}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && open) {
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen(false);
+          event.currentTarget.querySelector<HTMLButtonElement>('[aria-controls="admin-navigation"]')?.focus();
+        }
+      }}
     >
       <div className="mb-5 flex items-center justify-between lg:hidden">
         <div>
@@ -96,13 +106,17 @@ export function AdminLayout() {
           onClick={() => setOpen(!open)}
           aria-label={open ? 'Đóng menu quản trị' : 'Mở menu quản trị'}
           aria-expanded={open}
-          className="grid size-11 place-items-center rounded-md border border-border bg-secondary text-white transition hover:border-primary-fixed hover:bg-primary-hover"
+          aria-controls="admin-navigation"
+          className="grid size-11 place-items-center rounded-md border border-border bg-primary text-on-primary transition hover:border-primary-fixed hover:bg-primary-hover"
         >
           <Icon name={open ? 'close' : 'menu'} className="size-5" />
         </button>
       </div>
+      {open ? <button type="button" tabIndex={-1} className="admin-navigation-backdrop lg:hidden" aria-label="Đóng điều hướng" onClick={(event) => { setOpen(false); event.currentTarget.parentElement?.querySelector<HTMLButtonElement>('[aria-controls="admin-navigation"]')?.focus(); }} /> : null}
       <aside
-        className={`${open ? 'block' : 'hidden'} h-fit rounded-lg bg-admin-sidebar p-3 shadow-admin [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:sticky lg:top-24 lg:block lg:rounded-l-none lg:max-h-[calc(100dvh-120px)] lg:overflow-y-auto ${collapsed ? 'lg:px-2' : ''}`}
+        id="admin-navigation"
+        aria-label="Điều hướng quản trị"
+        className={`admin-navigation ${open ? 'block' : 'hidden'} h-fit rounded-lg bg-admin-sidebar p-3 shadow-admin [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:sticky lg:top-24 lg:block lg:max-h-[calc(100dvh-120px)] lg:overflow-y-auto ${collapsed ? 'lg:px-2' : ''}`}
       >
         <div
           className={`mb-3 hidden items-center border-b border-admin-divider/20 pb-3 lg:flex ${collapsed ? 'justify-center' : 'justify-between pl-2'}`}
@@ -125,7 +139,8 @@ export function AdminLayout() {
         <nav aria-label="Quản trị">{nav}</nav>
       </aside>
       <main className="min-w-0 pt-2 lg:pt-0">
-        <div className="mx-auto w-full max-w-[1200px]">
+        <AdminBreadcrumb sections={sections} />
+        <div className="admin-workspace-content mx-auto w-full max-w-[1200px]">
           <Suspense fallback={<div className="min-h-[620px]" aria-hidden="true" />}>
             <Outlet />
           </Suspense>

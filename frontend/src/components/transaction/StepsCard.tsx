@@ -61,6 +61,7 @@ export function StepsCard({
       <h2 id="steps-title" className="section-title">
         Các bước
       </h2>
+      <p className="transaction-status-caption">Tiến trình theo trạng thái giao dịch hiện tại.</p>
       {done >= 0 ? (
         <ol
           className="grid grid-cols-2 gap-4 sm:grid-cols-4"
@@ -79,7 +80,7 @@ export function StepsCard({
                 />
                 <span className="flex min-w-0 items-start gap-2">
                   <span
-                    className={`grid size-8 shrink-0 place-items-center rounded-md ${state === 'done' ? 'bg-primary text-white' : 'bg-primary-faint text-text-secondary'}`}
+                    className={`grid size-8 shrink-0 place-items-center rounded-md ${state === 'done' ? 'bg-primary text-on-primary' : 'bg-primary-faint text-text-secondary'}`}
                   >
                     {state === 'done' ? (
                       <Icon name="check" className="size-4" weight="bold" />

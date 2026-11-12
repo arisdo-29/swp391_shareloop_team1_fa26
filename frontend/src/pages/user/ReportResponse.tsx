@@ -1,3 +1,5 @@
+import '../../components/complaints.css';
+import { ReportCaseStatus } from '../../components/ReportCaseStatus';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ReportEvidenceField } from '../../components/ReportEvidenceField';
@@ -59,8 +61,8 @@ function ResponsePage({ reportId, kind }: { reportId: number; kind: Kind }) {
   }, [reportId, validReportId, reloadKey]);
 
   return (
-    <div className="page-shell py-6 sm:py-10">
-      <div className="mx-auto max-w-2xl">
+    <div className="complaint-response-page page-shell py-6 sm:py-10">
+      <div className="complaint-response-shell mx-auto">
         <Link
           to="/activities?tab=complaints"
           className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary hover:underline"
@@ -68,8 +70,8 @@ function ResponsePage({ reportId, kind }: { reportId: number; kind: Kind }) {
           <Icon name="caretLeft" className="size-4" />
           Về Khiếu nại & Báo cáo
         </Link>
-        <section className="card mt-3 overflow-hidden" aria-labelledby="response-title">
-          <header className="border-b border-border bg-surface-container/50 p-5 sm:p-7">
+        <section className="complaint-response-case card mt-3 overflow-hidden" aria-labelledby="response-title">
+          <header className="complaint-response-header border-b border-border bg-surface-container/50 p-5 sm:p-7">
             <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
               <Icon name="complaints" className="size-4" />
               {isDispute ? 'Khiếu nại giao dịch' : 'Báo cáo vi phạm'}
@@ -77,11 +79,13 @@ function ResponsePage({ reportId, kind }: { reportId: number; kind: Kind }) {
             <h1 id="response-title" className="page-title">
               {isDispute ? 'Giải trình khiếu nại giao dịch' : 'Giải trình báo cáo'}
             </h1>
+            <ReportCaseStatus status={detail?.status} />
+            {detail ? <p className="mt-3 text-xs text-text-muted">Gửi lúc {formatDateTime(detail.createdAt)}</p> : null}
             {detail?.targetName ? (
               <p className="mt-2 text-sm font-semibold text-text-primary">{detail.targetName}</p>
             ) : null}
           </header>
-          <div className="space-y-6 p-5 sm:p-7">
+          <div className="complaint-response-body space-y-6 p-5 sm:p-7">
             {!validReportId ? (
               <Alert tone="error">Đường dẫn hồ sơ không hợp lệ. Hãy mở lại từ thông báo.</Alert>
             ) : loadError ? (
@@ -97,7 +101,7 @@ function ResponsePage({ reportId, kind }: { reportId: number; kind: Kind }) {
               <SkeletonRows rows={3} label="Đang tải hồ sơ" />
             ) : (
               <>
-                <DeadlineNotice detail={detail} submitted={submitted} />
+                <div className="complaint-deadline-notice"><DeadlineNotice detail={detail} submitted={submitted} /></div>
                 <ComplaintDetails detail={detail} />
                 {detail.responseWindowOpen && !submitted ? (
                   <ResponseForm
@@ -169,7 +173,7 @@ function DeadlineNotice({
 /** Nội dung bên kia phản ánh: lý do, mô tả và ảnh. Không có tên người báo cáo. */
 function ComplaintDetails({ detail }: { detail: RespondentReportDetail }) {
   return (
-    <section aria-labelledby="complaint-detail-title" className="space-y-3">
+    <section aria-labelledby="complaint-detail-title" className="complaint-original-content space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="complaint-detail-title" className="text-base font-bold">
           Nội dung bị phản ánh
@@ -205,7 +209,7 @@ function ComplaintDetails({ detail }: { detail: RespondentReportDetail }) {
 
 function SubmittedResponse({ detail }: { detail: RespondentReportDetail }) {
   return (
-    <div className="space-y-3">
+    <div className="complaint-submitted-response space-y-3">
       {detail.response ? (
         <section aria-labelledby="my-response-title" className="space-y-2">
           <h2 id="my-response-title" className="text-base font-bold">
@@ -342,7 +346,8 @@ function ResponseForm({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-5 border-t border-border pt-5">
+    <form onSubmit={submit} className="complaint-response-form space-y-5 border-t border-border pt-5">
+      <div><p className="complaint-eyebrow">PHẢN HỒI CỦA BẠN</p><h2 className="text-lg font-bold">Làm rõ sự việc</h2></div>
       <div>
         <TextArea
           label="Nội dung giải trình (bắt buộc)"

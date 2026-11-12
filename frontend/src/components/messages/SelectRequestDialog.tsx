@@ -48,7 +48,7 @@ export function SelectRequestDialog({
   const showsTwoItems = requestOfferLabel(feRequest) === 'Trao đổi' || request.type === 'SWAP';
 
   return (
-    <DialogFrame labelledBy="select-request-title">
+    <DialogFrame className="chat-action-dialog" labelledBy="select-request-title">
       <h2 id="select-request-title" className="text-xl font-bold">
         Xác nhận chọn người giao dịch
       </h2>
@@ -153,7 +153,7 @@ function SelectionItemCard({
   return (
     <article
       aria-label={label}
-      className="flex min-w-0 gap-3 rounded-md bg-white p-3 ring-1 ring-border"
+      className="flex min-w-0 gap-3 rounded-md bg-surface p-3 ring-1 ring-border"
     >
       <button
         type="button"

@@ -1,3 +1,5 @@
+import './member-activities.css';
+import './member-post.css';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
@@ -606,7 +608,8 @@ export function Activities() {
   const pageNotice = (location.state as { notice?: string } | null)?.notice;
 
   return (
-    <div className="page-shell">
+    <div className="member-activities-page page-shell">
+      <p className="member-eyebrow">Không gian của bạn</p>
       <PageHeader
         title="Hoạt động"
         description="Quản lý bài đăng và chọn người nhận ở đây. Sau khi chọn, hẹn lịch và bàn giao diễn ra trong Tin nhắn."
@@ -624,11 +627,11 @@ export function Activities() {
       </div>
 
       {!myItemsLoading && !myItemsError ? (
-        <section aria-label="Việc cần bạn xử lý" className="mb-7 grid gap-3 md:grid-cols-3">
+        <section aria-label="Việc cần bạn xử lý" className="member-activity-summary mb-7 grid gap-3 md:grid-cols-3">
           <button
             type="button"
             onClick={() => setTab('items')}
-            className="flex flex-col gap-1 rounded-lg border border-primary-fixed bg-white px-4 py-4 text-left transition hover:bg-primary-faint"
+            className="flex flex-col gap-1 rounded-lg border border-primary-fixed bg-surface px-4 py-4 text-left transition hover:bg-primary-faint"
           >
             <span className="text-xs font-semibold text-text-secondary">Chờ bạn chọn người</span>
             <span className="text-2xl font-bold tabular-nums text-primary">
@@ -642,7 +645,7 @@ export function Activities() {
           </button>
           <Link
             to="/messages"
-            className="flex flex-col gap-1 rounded-lg border border-secondary-fixed bg-white px-4 py-4 transition hover:bg-secondary-soft"
+            className="flex flex-col gap-1 rounded-lg border border-secondary-fixed bg-surface px-4 py-4 transition hover:bg-secondary-soft"
           >
             <span className="text-xs font-semibold text-text-secondary">
               Giao dịch chờ chốt lịch
@@ -657,7 +660,7 @@ export function Activities() {
           <button
             type="button"
             onClick={() => setTab('sent')}
-            className="flex flex-col gap-1 rounded-lg border border-border bg-white px-4 py-4 text-left transition hover:bg-surface-low"
+            className="flex flex-col gap-1 rounded-lg border border-border bg-surface px-4 py-4 text-left transition hover:bg-surface-low"
           >
             <span className="text-xs font-semibold text-text-secondary">Yêu cầu bạn đã gửi</span>
             <span className="text-2xl font-bold tabular-nums">
@@ -670,7 +673,7 @@ export function Activities() {
         </section>
       ) : null}
 
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="member-activities-toolbar mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div
           role="tablist"
           aria-label="Danh sách"
@@ -689,7 +692,7 @@ export function Activities() {
               role="tab"
               aria-selected={tab === value}
               onClick={() => setTab(value)}
-              className={`min-h-11 flex-1 rounded-md px-4 text-sm font-semibold transition sm:flex-none ${tab === value ? 'bg-white text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
+              className={`min-h-11 flex-1 rounded-md px-4 text-sm font-semibold transition sm:flex-none ${tab === value ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
             >
               {label}
             </button>
@@ -763,9 +766,9 @@ export function Activities() {
               return (
                 <article
                   key={item.id}
-                  className="overflow-hidden rounded-lg bg-white ring-1 ring-border/80"
+                  className="member-listing-card overflow-hidden rounded-lg bg-surface ring-1 ring-border/80"
                 >
-                  <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-4 p-4 sm:grid-cols-[140px_minmax(0,1fr)] sm:gap-5">
+                  <div className="member-listing-main">
                     <Link
                       to={`/items/${item.id}`}
                       className="block self-start overflow-hidden rounded-md bg-surface-container"
@@ -786,16 +789,17 @@ export function Activities() {
                         ) : (
                           <StatusBadge status={item.status} />
                         )}
-                        <span className="text-xs text-text-muted">
+                        <span className="member-listing-meta text-xs text-text-muted">
                           {item.district}
                           {item.expiresAt
                             ? ` · hết hạn ${new Date(item.expiresAt).toLocaleDateString('vi-VN')}`
                             : ''}
                         </span>
                       </div>
+                      <p className="member-listing-reference">Mã tin #{item.id} · Đăng {new Date(item.postedAt).toLocaleDateString('vi-VN')}</p>
                       <Link
                         to={`/items/${item.id}`}
-                        className="block truncate text-base font-bold transition hover:text-link"
+                        className="member-listing-title block text-base font-bold transition hover:text-link"
                       >
                         {item.title}
                       </Link>
@@ -805,7 +809,7 @@ export function Activities() {
                             'Bài đang tạm ẩn khỏi Tìm đồ. Admin sẽ xem xét và báo kết quả.'}
                         </p>
                       ) : null}
-                      <p className="text-sm leading-6">
+                      <p className={`text-sm leading-6 ${item.status === 'REJECTED' ? 'member-rejection-note' : ''}`}>
                         <strong>{summary.headline}</strong>{' '}
                         <span className="text-text-secondary">{summary.detail}</span>
                       </p>
@@ -935,9 +939,8 @@ export function Activities() {
       )}
 
       {editingId ? (
-        <div className="fixed inset-0 z-40 grid place-items-end bg-black/45 sm:place-items-center sm:p-4">
-          <div className="max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl sm:p-6">
-            <h2 className="text-xl font-bold">Chỉnh sửa bài đăng</h2>
+        <DialogFrame size="xl" labelledBy="edit-item-title" busy={editSaving} className="member-edit-dialog">
+            <h2 id="edit-item-title" className="text-xl font-bold">Chỉnh sửa bài đăng</h2>
             <p className="mt-1 text-sm text-text-muted">Bài sẽ chờ duyệt lại sau khi lưu.</p>
             {/^[0-9]+$/.test(editingId) ? (
               <div className="mt-4">
@@ -974,8 +977,7 @@ export function Activities() {
                 </Button>
               </div>
             )}
-          </div>
-        </div>
+        </DialogFrame>
       ) : null}
 
       {listingFeeAction?.type === 'boost' ? (
@@ -1360,12 +1362,14 @@ function EditItemForm({
 
   return (
     <form
-      className="mt-5 space-y-4"
+      className="member-edit-form mt-5 space-y-4"
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
       }}
     >
+      <section className="member-edit-section">
+      <h3>Thông tin cơ bản</h3>
       <div>
         <Select
           label="Hình thức"
@@ -1413,6 +1417,9 @@ function EditItemForm({
             </option>
           ))}
       </Select>
+      </section>
+      <section className="member-edit-section">
+      <h3>Tình trạng món đồ</h3>
       <Select
         label="Tình trạng"
         value={condition}
@@ -1463,6 +1470,9 @@ function EditItemForm({
           />
         </>
       ) : null}
+      </section>
+      <section className="member-edit-section">
+      <h3>Mô tả và giao nhận</h3>
       <Field
         label="Thương hiệu (không bắt buộc)"
         value={brand}
@@ -1533,6 +1543,9 @@ function EditItemForm({
           ) : null}
         </div>
       ) : null}
+      </section>
+      <section className="member-edit-section">
+      <h3>Hình ảnh món đồ</h3>
       <ImageEditor
         label="Ảnh"
         hint={`Từ ${ITEM_IMAGES_MIN} đến ${ITEM_IMAGES_MAX} ảnh.`}
@@ -1564,8 +1577,9 @@ function EditItemForm({
           }));
         }}
       />
+      </section>
       {uploadError ? <Alert tone="error">{uploadError}</Alert> : null}
-      <div className="flex justify-end gap-2 pt-2">
+      <div className="member-edit-actions flex justify-end gap-2 pt-2">
         <Button type="button" variant="ghost" disabled={formDisabled} onClick={onCancel}>
           Hủy
         </Button>
@@ -1606,7 +1620,7 @@ function ImageEditor({
         <span className="font-semibold">{label}</span>
         <span className="mt-1 block text-xs text-text-muted">{hint}</span>
         <input
-          className="mt-3 block w-full text-xs"
+          className="member-file-input mt-3 block w-full text-xs"
           type="file"
           accept="image/jpeg,image/png,image/webp"
           multiple
@@ -1620,7 +1634,8 @@ function ImageEditor({
       </label>
       {error ? <span className="mt-1.5 block text-xs text-error">{error}</span> : null}
       {images.length || newImages.length ? (
-        <div className="mt-3 grid grid-cols-4 gap-2">
+        <div className="member-existing-images mt-3 grid grid-cols-4 gap-2">
+          {images.length ? <p className="col-span-full text-xs font-semibold text-text-secondary">Ảnh đã có ({images.length})</p> : null}
           {images.map((image, index) => (
             <EditableImage
               key={`${image}-${index}`}
@@ -1630,6 +1645,7 @@ function ImageEditor({
               onRemove={() => onRemoveExisting(index)}
             />
           ))}
+          {newImages.length ? <p className="col-span-full text-xs font-semibold text-primary">Ảnh mới chọn ({newImages.length})</p> : null}
           {newImages.map(({ preview }, index) => (
             <EditableImage
               key={`${preview.slice(-16)}-${index}`}
@@ -1664,7 +1680,7 @@ function EditableImage({
         aria-label="Xóa ảnh"
         disabled={disabled}
         onClick={onRemove}
-        className="absolute right-1 top-1 grid size-8 place-items-center rounded-full bg-white text-error shadow-sm transition hover:bg-error-soft"
+        className="absolute right-1 top-1 grid size-8 place-items-center rounded-full bg-surface text-error shadow-sm transition hover:bg-error-soft"
       >
         <Icon name="close" className="size-3" />
       </button>
@@ -1801,7 +1817,7 @@ function SentRequestList({
         return (
           <article
             key={request.id}
-            className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-4 rounded-lg bg-white p-3 ring-1 ring-border/80 sm:grid-cols-[96px_minmax(0,1fr)_auto] sm:px-4"
+            className="member-sent-card"
           >
             <Link
               to={`/items/${request.itemId}`}
@@ -1824,10 +1840,11 @@ function SentRequestList({
               </div>
               <Link
                 to={`/items/${request.itemId}`}
-                className="block truncate text-sm font-bold transition hover:text-link sm:text-base"
+                className="member-listing-title block text-sm font-bold transition hover:text-link sm:text-base"
               >
                 {title}
               </Link>
+              <p className="member-listing-reference">Yêu cầu #{request.id.replace(/^api_req_/, '')}{request.donorName ? ` · Người đăng: ${request.donorName}` : ''}</p>
               <p className="text-xs leading-5 text-text-secondary sm:text-sm">
                 {sentRequestDetail(request)}
               </p>
@@ -1883,7 +1900,7 @@ function RequestPanel({
   const canChoose =
     allowAccept && !hasAcceptedRequest && !['IN_TRANSACTION', 'RESERVED'].includes(itemStatus);
   return (
-    <div className="border-t border-border bg-primary-faint px-4 pb-5 pt-4">
+    <div className="member-request-panel border-t border-border bg-primary-faint px-4 pb-5 pt-4">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-bold">
           {canChoose ? 'Chọn 1 người nhận' : 'Yêu cầu cho bài này'}
@@ -1904,7 +1921,7 @@ function RequestPanel({
           return (
             <div
               key={request.id}
-              className="grid grid-cols-[40px_minmax(0,1fr)] items-center gap-3 rounded-md bg-white p-3 ring-1 ring-border/80 sm:grid-cols-[40px_minmax(0,1fr)_auto]"
+              className="member-request-person grid grid-cols-[40px_minmax(0,1fr)] items-center gap-3 rounded-md bg-surface p-3 ring-1 ring-border/80 sm:grid-cols-[40px_minmax(0,1fr)_auto]"
             >
               {/* Ảnh và tên dẫn tới hồ sơ công khai để chủ bài xem uy tín trước khi chọn người. */}
               {profilePath ? (

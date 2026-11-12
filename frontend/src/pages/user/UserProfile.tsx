@@ -1,3 +1,4 @@
+import './member-profile.css';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
@@ -61,14 +62,14 @@ export function UserProfile() {
 
   if (loading) {
     return (
-      <div className="page-shell" role="status" aria-label="Đang tải hồ sơ">
+      <div className="public-member-page page-shell" role="status" aria-label="Đang tải hồ sơ">
         <LoadingState />
       </div>
     );
   }
   if (error === 'not-found') {
     return (
-      <div className="page-shell">
+      <div className="public-member-page page-shell">
         <EmptyState
           title="Không tìm thấy người dùng"
           text="Tài khoản này không tồn tại hoặc hiện không xem được."
@@ -79,7 +80,7 @@ export function UserProfile() {
   }
   if (error || !profile) {
     return (
-      <div className="page-shell space-y-4">
+      <div className="public-member-page page-shell space-y-4">
         <Alert tone="error">Không tải được hồ sơ. Vui lòng thử lại.</Alert>
         <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
           Thử tải lại
@@ -90,7 +91,7 @@ export function UserProfile() {
 
   const isOwnProfile = currentUserId === profile.id;
   return (
-    <div className="page-shell space-y-8">
+    <div className="public-member-page page-shell space-y-8">
       <Button variant="ghost" onClick={goBack}>
         Quay lại
       </Button>
@@ -133,10 +134,11 @@ function ProfileCard({
 }) {
   const rankLabel = getRankLabel(profile.rank);
   return (
-    <section aria-labelledby="profile-name" className="card space-y-6 p-5 sm:p-6">
-      <div className="flex flex-wrap items-start gap-4 sm:gap-5">
+    <section aria-labelledby="profile-name" className="public-profile-card">
+      <div className="public-profile-heading">
         <ProfileAvatar profile={profile} />
         <div className="min-w-0 flex-1 space-y-2">
+          <p className="public-profile-eyebrow">Thành viên ShareLoop</p>
           <h1 id="profile-name" className="page-title break-words">
             {profile.fullName}
           </h1>
@@ -160,7 +162,7 @@ function ProfileCard({
           <Alert tone="success">{notice}</Alert>
         </div>
       ) : null}
-      <div className="grid grid-cols-2 gap-4 border-t border-border pt-5 lg:grid-cols-4">
+      <div className="public-profile-stats">
         <Stat label="Hạng thành viên" value={rankLabel} />
         <Stat label="Mức uy tín" value={`${formatTrustStars(profile.trustStars)} / 5 sao`} />
         <Stat label="Giao dịch hoàn tất" value={profile.completedTransactions.toLocaleString('vi-VN')} />
@@ -189,7 +191,7 @@ function ProfileAvatar({ profile }: { profile: PublicProfileResponse }) {
   return (
     <span
       aria-hidden="true"
-      className="inline-flex size-24 shrink-0 items-center justify-center rounded-lg bg-primary text-2xl font-bold text-white"
+      className="inline-flex size-24 shrink-0 items-center justify-center rounded-lg bg-primary text-2xl font-bold text-on-primary"
     >
       {profile.avatarInitials || <Icon name="user" className="size-1/2" />}
     </span>

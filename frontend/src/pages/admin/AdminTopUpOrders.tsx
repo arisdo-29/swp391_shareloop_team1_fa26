@@ -1,3 +1,5 @@
+import './admin-finance.css';
+import { AdminRecordDetails, AdminRecordFact } from './AdminRecordDetails';
 import { useEffect, useState } from 'react';
 import { Pagination } from '../../components/Pagination';
 import { Alert, Button, PageHeader, SkeletonRows } from '../../components/ui';
@@ -76,7 +78,7 @@ export function AdminTopUpOrders() {
   }, [page, reloadKey, status]);
 
   return (
-    <section className="space-y-5">
+    <section className="admin-topup-orders admin-finance-page space-y-5">
       <PageHeader
         title="Đơn nạp Credit"
         description="Theo dõi trạng thái các đơn nạp Credit qua cổng thanh toán."
@@ -91,7 +93,7 @@ export function AdminTopUpOrders() {
         }
       />
 
-      <div className="flex flex-wrap items-end gap-4 rounded-lg bg-white p-4 ring-1 ring-border">
+      <div className="finance-filters flex flex-wrap items-end gap-4 rounded-lg bg-white p-4 ring-1 ring-border">
         <label className="grid gap-1.5 text-sm font-medium">
           Trạng thái
           <select
@@ -124,10 +126,11 @@ export function AdminTopUpOrders() {
         <SkeletonRows label="Đang tải đơn nạp" />
       ) : result ? (
         <div>
-          <div className="table-wrap">
+          <div className="finance-orders-table finance-table table-wrap">
             <table className="data-table">
               <thead>
                 <tr>
+                  <th>Đơn nạp</th>
                   <th>Người dùng</th>
                   <th>Giá trị</th>
                   <th>Trạng thái</th>
@@ -140,7 +143,7 @@ export function AdminTopUpOrders() {
                 ))}
                 {result.items.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center text-text-muted">
+                    <td colSpan={5} className="text-center text-text-muted">
                       Không có đơn nạp phù hợp bộ lọc hiện tại.
                     </td>
                   </tr>
@@ -164,6 +167,14 @@ export function AdminTopUpOrders() {
 function TopUpRow({ order }: { order: TopUpOrderDetailResponse }) {
   return (
     <tr>
+      <td><p className="finance-order-code">{order.orderCode}</p><p className="text-xs text-text-muted">{order.provider === 'VNPAY' ? 'VNPay' : 'Thanh toán thử nghiệm'}</p>
+        <AdminRecordDetails title={`Đơn nạp ${order.orderCode}`}>
+          <div className="finance-order-summary"><h3>{order.orderCode}</h3><span className={`finance-state ${statusClass(order.status)}`}>{statusLabels[order.status]}</span></div>
+          <section className="finance-section"><h3>Thành viên</h3><dl className="admin-record-facts"><AdminRecordFact label="Họ tên">{order.userName || 'Người dùng đã xóa'}</AdminRecordFact><AdminRecordFact label="Email">{order.userEmail || '—'}</AdminRecordFact></dl></section>
+          <section className="finance-section"><h3>Đơn và thanh toán</h3><dl className="admin-record-facts"><AdminRecordFact label="Mã đơn">{order.orderCode}</AdminRecordFact><AdminRecordFact label="Số tiền thanh toán">{formatVnd(order.amountVnd)}</AdminRecordFact><AdminRecordFact label="Credit theo đơn">{order.credits} Credit</AdminRecordFact><AdminRecordFact label="Phương thức">{order.provider === 'VNPAY' ? 'VNPay' : 'Thanh toán thử nghiệm'}</AdminRecordFact><AdminRecordFact label="Trạng thái">{statusLabels[order.status]}</AdminRecordFact><AdminRecordFact label="Tạo lúc">{formatDateTime(order.createdAt)}</AdminRecordFact><AdminRecordFact label="Hết hạn lúc">{formatDateTime(order.expiresAt)}</AdminRecordFact></dl></section>
+          {order.reviewedAt || order.reviewNote ? <section className="finance-section"><h3>Thông tin xử lý đã ghi nhận</h3><dl className="admin-record-facts"><AdminRecordFact label="Thời điểm">{formatDateTime(order.reviewedAt)}</AdminRecordFact><AdminRecordFact label="Người xử lý">{order.reviewedByName || '—'}</AdminRecordFact></dl>{order.reviewNote ? <p className="mt-4 text-sm">{order.reviewNote}</p> : null}</section> : null}
+        </AdminRecordDetails>
+      </td>
       <td>
         <p className="font-semibold text-text-primary">{order.userName || 'Người dùng đã xóa'}</p>
         {order.userEmail ? <p className="text-xs text-text-muted">{order.userEmail}</p> : null}

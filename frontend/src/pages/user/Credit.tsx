@@ -1,3 +1,4 @@
+import './credit.css';
 import { useEffect, useRef, useState, type Dispatch } from 'react';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 import { Link, useLocation } from 'react-router-dom';
@@ -309,7 +310,8 @@ export function Credit() {
   };
 
   return (
-    <div className="page-shell">
+    <div className="credit-page page-shell">
+      <p className="credit-eyebrow">TÍN DỤNG SHARELOOP</p>
       <PageHeader
         title="Ví Credit"
         description="Credit dùng để đăng bài Trao đổi, gia hạn, đẩy bài và tìm bằng trợ lý. Xin đồ và trao đổi luôn miễn phí."
@@ -373,21 +375,23 @@ export function Credit() {
         </div>
       ) : null}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <section aria-label="Số dư" className="flex flex-col gap-5 rounded-xl bg-primary p-6 text-white">
+      <div className="credit-overview-grid">
+        <section aria-label="Số dư" aria-busy={walletLoading} className="credit-balance-card">
+          <div className="credit-balance-heading"><span>Ví của bạn</span><span aria-hidden="true">Credit</span></div>
           <div>
             <p className="text-sm text-primary-fixed">Khả dụng</p>
-            <p className="mt-1 text-4xl font-extrabold tabular-nums">
+            <p className="credit-available-amount mt-1 font-extrabold tabular-nums">
               {wallet ? wallet.available : '--'} <span className="text-lg font-semibold">Credit</span>
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-3 border-t border-white/20 pt-4">
+          <div className="credit-balance-metrics grid grid-cols-2 gap-3 pt-4">
             <BalanceMetric label="Đang giữ" value={wallet?.heldCredit ?? null} note="Phí của bài đang chờ duyệt" />
             <BalanceMetric label="Tổng" value={wallet?.creditBalance ?? null} note="Khả dụng cộng đang giữ" />
           </div>
+          <a className="credit-topup-link" href="#topup">Nạp Credit <span aria-hidden="true">→</span></a>
         </section>
 
-        <section id="topup" aria-label="Nạp Credit" className="scroll-mt-24">
+        <section id="topup" aria-label="Nạp Credit" className="credit-topup-section scroll-mt-24">
           {loadPendingTopUp()?.orderCode ? (
             <Link
               className="mb-3 inline-flex min-h-11 items-center text-sm font-semibold text-link hover:underline"
@@ -546,14 +550,14 @@ function ApiTopupSelection({
     onContinue();
   };
   return (
-    <div className="flex h-full flex-col gap-4 rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
+    <div className="credit-topup-card flex h-full flex-col gap-4">
       <div>
         <h2 className="section-title">Nạp Credit</h2>
         <p className="mt-1 text-sm text-text-secondary">
           Chọn nhanh hoặc nhập số tiền. Số Credit nhận được hiện ngay khi tạo đơn.
         </p>
       </div>
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Chọn nhanh số tiền">
+      <div className="credit-quick-amounts grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Chọn nhanh số tiền">
         {QUICK_TOPUP_AMOUNTS.map((amount) => (
           <button
             key={amount}
@@ -616,7 +620,7 @@ function ApiTopUpOrder({
   const safeRedirectUrl = paymentRedirectUrl(order.redirectUrl);
   const paid = order.status === 'SUCCESS';
   return (
-    <div className="rounded-xl bg-white px-5 py-8 ring-1 ring-border/80 sm:px-8">
+    <div className="credit-order-card">
       <div className="mx-auto max-w-2xl text-center">
         <span
           className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${paid ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}
@@ -650,7 +654,7 @@ function ApiTopUpOrder({
           {order.provider === 'VNPAY' && !paid && safeRedirectUrl ? (
             <a
               href={safeRedirectUrl}
-              className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-bold text-white"
+              className="inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-bold text-on-primary"
             >
               Quay lại cổng thanh toán
             </a>
@@ -683,7 +687,7 @@ export function HeldFeesSection({
   onRetry: () => void;
 }) {
   return (
-    <section className="mt-5 rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
+    <section className="credit-held-fees mt-5">
       <h2 className="section-title">Bài đang giữ phí</h2>
       <p className="mt-1 text-xs text-text-muted">
         Được trừ khi bài được duyệt, nhả lại nếu bài bị từ chối hoặc bị gỡ.

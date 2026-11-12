@@ -1,3 +1,5 @@
+import './admin-records.css';
+import { AdminRecordDetails, AdminRecordFact } from './AdminRecordDetails';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Dialog } from '../../components/Dialog';
@@ -5,6 +7,7 @@ import { Pagination } from '../../components/Pagination';
 import {
   Alert,
   Button,
+  Icon,
   PageHeader,
   SearchField,
   Select,
@@ -102,12 +105,12 @@ export function AdminAccounts() {
   };
 
   return (
-    <>
+    <div className="admin-accounts admin-records-page">
       <PageHeader
         title="Quản lý tài khoản"
         description="Theo dõi tài khoản trong hệ thống, khóa hoặc mở khóa kèm lý do lưu vào nhật ký."
       />
-      <div className="mb-5 flex flex-col gap-3 rounded-lg bg-white p-3 ring-1 ring-border/80 lg:flex-row lg:items-end">
+      <div className="admin-records-filters mb-5 flex flex-col gap-3 rounded-lg bg-white p-3 ring-1 ring-border/80 lg:flex-row lg:items-end">
         <div className="min-w-0 flex-1">
           <SearchField
             aria-label="Tìm tài khoản"
@@ -169,7 +172,7 @@ export function AdminAccounts() {
         <SkeletonRows label="Đang tải danh sách tài khoản" />
       ) : result ? (
         <>
-          <div className="table-wrap">
+          <div className="admin-accounts-table admin-records-table table-wrap">
             <table className="data-table">
               <thead>
                 <tr>
@@ -187,7 +190,7 @@ export function AdminAccounts() {
                   const action = availableAction(account);
                   return (
                     <tr key={account.id}>
-                      <td className="font-semibold text-text-primary">{account.fullName}</td>
+                      <td className="font-semibold text-text-primary"><div className="admin-account-name"><span className="admin-account-symbol" aria-hidden="true"><Icon name="users" className="size-4" /></span><span>{account.fullName}</span></div></td>
                       <td className="break-all">{account.email}</td>
                       <td>{account.phone || '—'}</td>
                       <td>{roleLabels[account.role]}</td>
@@ -203,6 +206,17 @@ export function AdminAccounts() {
                       </td>
                       <td>
                         <div className="flex flex-wrap items-center gap-2">
+                          <AdminRecordDetails title={`Hồ sơ thành viên ${account.fullName}`}>
+                            <div className="admin-record-summary"><span className="admin-record-identity-icon" aria-hidden="true"><Icon name="users" className="size-6" /></span><div><h3>{account.fullName}</h3><p>{roleLabels[account.role]}</p></div><span className={`admin-record-state ${stateBadgeClass(account.status)}`}>{stateLabels[account.status]}</span></div>
+                            <section className="admin-record-section"><h3>Thông tin tài khoản</h3><dl className="admin-record-facts">
+                              <AdminRecordFact label="Họ tên">{account.fullName}</AdminRecordFact>
+                              <AdminRecordFact label="Email">{account.email}</AdminRecordFact>
+                              <AdminRecordFact label="Số điện thoại">{account.phone || '—'}</AdminRecordFact>
+                              <AdminRecordFact label="Vai trò">{roleLabels[account.role]}</AdminRecordFact>
+                              <AdminRecordFact label="Trạng thái">{stateLabels[account.status]}</AdminRecordFact>
+                              <AdminRecordFact label="Ngày tạo">{new Date(account.createdAt).toLocaleDateString('vi-VN')}</AdminRecordFact>
+                            </dl></section>
+                          </AdminRecordDetails>
                           {action ? (
                             <Button
                               variant={action === 'lock' ? 'danger' : 'outline'}
@@ -257,7 +271,7 @@ export function AdminAccounts() {
           onDone={onDone}
         />
       ) : null}
-    </>
+    </div>
   );
 }
 
@@ -297,7 +311,7 @@ function LockDialog({
 
   return (
     <Dialog title={locking ? 'Khóa tài khoản' : 'Mở khóa tài khoản'} busy={busy} onClose={onClose}>
-      <p className="text-sm leading-6 text-text-secondary">
+      <p className="admin-account-action-context text-sm leading-6 text-text-secondary">
         {locking ? 'Khóa' : 'Mở khóa'} tài khoản <strong>{account.fullName}</strong> ({account.email}).
         Lý do sẽ được lưu vào nhật ký hành động.
       </p>

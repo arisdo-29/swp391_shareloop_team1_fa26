@@ -1,3 +1,4 @@
+import '../complaints.css';
 import { useRef, useState } from 'react';
 import { Alert, Button, Select, TextArea } from '../ui';
 import { ReportEvidenceField } from '../ReportEvidenceField';
@@ -67,7 +68,7 @@ export function CancelTransactionDialog({
   };
 
   return (
-    <DialogFrame labelledBy="cancel-transaction-title" busy={submitting} onClose={onClose}>
+    <DialogFrame className="transaction-dialog" labelledBy="cancel-transaction-title" busy={submitting} onClose={onClose}>
       <h2 id="cancel-transaction-title" className="text-xl font-bold">
         Huỷ giao dịch
       </h2>
@@ -153,7 +154,7 @@ export function HandoverIssueDialog({
 
   const title = viewerIsDonor ? 'Tôi chưa giao được' : 'Tôi chưa nhận được';
   return (
-    <DialogFrame labelledBy="handover-issue-title" busy={submitting} onClose={onClose}>
+    <DialogFrame className="transaction-dialog complaint-create-dialog" labelledBy="handover-issue-title" busy={submitting} onClose={onClose}>
       <h2 id="handover-issue-title" className="text-xl font-bold">
         {title}
       </h2>
@@ -234,7 +235,7 @@ export function DisputeDialog({
   };
 
   return (
-    <DialogFrame labelledBy="dispute-title" busy={submitting} onClose={onClose}>
+    <DialogFrame className="transaction-dialog complaint-create-dialog" labelledBy="dispute-title" busy={submitting} onClose={onClose}>
       <h2 id="dispute-title" className="text-xl font-bold">
         Gửi khiếu nại giao dịch
       </h2>

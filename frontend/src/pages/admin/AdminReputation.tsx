@@ -1,3 +1,5 @@
+import './admin-settings.css';
+import { ConfigUnit } from './AdminSettingsParts';
 import { useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import {
@@ -68,11 +70,11 @@ function EditableValue({
 }) {
   if (!config) return <span className="text-text-muted">—</span>;
   return (
-    <span className="inline-flex items-center gap-2">
-      <span className="font-semibold tabular-nums">{formatConfigValue(config)}</span>
+    <span className="settings-editable-value">
+      <span><span className="font-semibold tabular-nums">{formatConfigValue(config)}</span><ConfigUnit configKey={config.key} /></span>
       <Button
         variant="ghost"
-        className="!min-h-7 !px-2"
+        className="!px-2"
         aria-label={`Sửa ${config.label}`}
         onClick={() => onEdit(config)}
       >
@@ -199,7 +201,7 @@ function RankEditDialog({
           <Alert tone="error">{error}</Alert>
         </div>
       ) : null}
-      <div className="mt-6 flex justify-end gap-2">
+      <div className="settings-form-actions">
         <Button variant="ghost" disabled={saving} onClick={onClose}>
           Hủy
         </Button>
@@ -286,10 +288,10 @@ export function AdminReputation() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="admin-settings-page admin-reputation-page space-y-8">
       <PageHeader
         title="Uy tín & Hạng"
-        description="Cấu hình hạng thành viên, quy tắc cộng điểm uy tín và hỗ trợ khôi phục uy tín cho tài khoản đủ điều kiện."
+        description="Cấu hình ngưỡng hạng, hạn mức bài đăng và quy tắc điểm uy tín của hệ thống."
       />
 
       {notice ? (
@@ -309,20 +311,20 @@ export function AdminReputation() {
         </div>
       ) : (
         <>
-          <section>
+          <section className="settings-config-section">
             <h2 className="mb-1 section-title">Hạng thành viên</h2>
             <p className="mb-3 text-sm text-text-muted">
               Điểm tối thiểu phải tăng dần: Bạc nhỏ hơn Vàng, Vàng nhỏ hơn Kim cương. Bài Trao đổi
               vượt ngưỡng phí thường vẫn được đăng với phí cao hơn.
             </p>
-            <div className="table-wrap">
+            <div className="table-wrap settings-table settings-rank-table">
               <table className="data-table">
                 <thead>
                   <tr>
                     <th>Hạng</th>
-                    <th>Điểm tối thiểu</th>
-                    <th>Số bài Trao đổi phí thường</th>
-                    <th>Số ngày hiển thị bài</th>
+                    <th>Điểm tối thiểu<span className="settings-column-unit" aria-hidden="true">Điểm uy tín</span></th>
+                    <th>Số bài Trao đổi phí thường<span className="settings-column-unit" aria-hidden="true">Bài đăng</span></th>
+                    <th>Số ngày hiển thị bài<span className="settings-column-unit" aria-hidden="true">Ngày</span></th>
                     <th className="whitespace-nowrap">Thao tác</th>
                   </tr>
                 </thead>
@@ -330,7 +332,7 @@ export function AdminReputation() {
                   {RANKS.map((rank) => {
                     return (
                       <tr key={rank.name}>
-                        <td className="font-semibold text-text-primary">{rank.name}</td>
+                        <td><span className="settings-rank-name">{rank.name}</span></td>
                         <td>
                           {rank.minPointsKey ? (
                             <ConfigValue config={byKey(rank.minPointsKey)} />
@@ -367,13 +369,13 @@ export function AdminReputation() {
             </div>
           </section>
 
-          <section>
+          <section className="settings-config-section">
             <h2 className="mb-1 section-title">Quy tắc cộng điểm</h2>
             <p className="mb-3 text-sm text-text-muted">
               Điểm uy tín quyết định hạng của người dùng.
             </p>
             {rules.length ? (
-              <div className="table-wrap">
+              <div className="table-wrap settings-table settings-rules-table">
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -394,7 +396,7 @@ export function AdminReputation() {
                         <td>
                           <EditableValue config={rule} onEdit={openEditor} />
                         </td>
-                        <td className="tabular-nums text-text-muted">{rule.defaultValue}</td>
+                        <td className="tabular-nums text-text-muted"><span>{rule.defaultValue}</span><ConfigUnit configKey={rule.key} /></td>
                       </tr>
                     ))}
                   </tbody>
