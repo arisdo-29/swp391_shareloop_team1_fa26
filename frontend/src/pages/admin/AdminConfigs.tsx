@@ -1,3 +1,5 @@
+import './admin-settings.css';
+import { ConfigUnit } from './AdminSettingsParts';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Button, EmptyState, PageHeader, SkeletonRows } from '../../components/ui';
@@ -45,12 +47,12 @@ export function AdminConfigs() {
   };
 
   return (
-    <>
+    <div className="admin-settings-page admin-configs-page">
       <PageHeader
         title="Cấu hình hệ thống"
         description="Xem và cập nhật các thiết lập vận hành. Mỗi thay đổi cần nhập lý do và được lưu vào nhật ký."
       />
-      <p className="mb-5 rounded-md bg-primary-faint p-4 text-sm leading-6 text-text-secondary">
+      <p className="settings-crosslink">
         Hạng thành viên và quy tắc điểm uy tín được cấu hình ở trang{' '}
         <Link className="font-semibold text-link underline" to="/admin/reputation">
           Uy tín & Hạng
@@ -76,16 +78,16 @@ export function AdminConfigs() {
       ) : sections.length ? (
         <div className="space-y-6">
           {sections.map((section) => (
-            <section key={section.group}>
-              <h2 className="mb-3 section-title">{section.label}</h2>
-              <div className="table-wrap">
+            <section key={section.group} className="settings-config-section">
+              <header className="settings-section-heading"><h2>{section.label}</h2><p>Xem giá trị hiện tại và chỉnh sửa từng cấu hình kèm lý do.</p></header>
+              <div className="table-wrap settings-table settings-config-table">
                 <table className="data-table">
                   <thead>
                     <tr>
                       <th>Tên cấu hình</th>
                       <th>Giá trị hiện tại</th>
                       <th>Mặc định</th>
-                      <th></th>
+                      <th>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -95,9 +97,9 @@ export function AdminConfigs() {
                           <p className="font-semibold text-text-primary">{config.label}</p>
                           <p className="mt-0.5 text-xs leading-5 text-text-muted">{config.description}</p>
                         </td>
-                        <td className="font-semibold tabular-nums">{formatConfigValue(config)}</td>
+                        <td><div className="settings-current-value"><span className="font-semibold tabular-nums">{formatConfigValue(config)}</span><ConfigUnit configKey={config.key} /></div></td>
                         <td className="tabular-nums text-text-muted">
-                          {formatConfigValue(config, config.defaultValue)}
+                          <span>{formatConfigValue(config, config.defaultValue)}</span><ConfigUnit configKey={config.key} />
                         </td>
                         <td className="text-right">
                           <Button
@@ -132,6 +134,6 @@ export function AdminConfigs() {
           onSave={(value, reason) => void save(value, reason)}
         />
       ) : null}
-    </>
+    </div>
   );
 }

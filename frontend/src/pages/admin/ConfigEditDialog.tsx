@@ -1,3 +1,5 @@
+import './admin-settings.css';
+import { ConfigUnit } from './AdminSettingsParts';
 import { useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { Alert, Button, Field, TextArea } from '../../components/ui';
@@ -25,11 +27,11 @@ export function ConfigEditDialog({
 
   return (
     <Dialog title={config.label} busy={saving} onClose={onClose}>
-      <p className="text-sm leading-6 text-text-secondary">{config.description}</p>
+      <div className="settings-config-context"><p className="text-sm leading-6 text-text-secondary">{config.description}</p><dl><div><dt>Giá trị hiện tại</dt><dd><span>{formatConfigValue(config)}</span><ConfigUnit configKey={config.key} /></dd></div></dl></div>
       <p className="mt-2 text-xs text-text-muted">
-        Giá trị mặc định: {formatConfigValue(config, config.defaultValue)}
+        Giá trị mặc định: {formatConfigValue(config, config.defaultValue)} <ConfigUnit configKey={config.key} />
       </p>
-      <div className="mt-4 space-y-4">
+      <div className="settings-dialog-content">
         <Field
           label="Giá trị mới"
           value={value}
@@ -51,7 +53,7 @@ export function ConfigEditDialog({
           <Alert tone="error">{error}</Alert>
         </div>
       ) : null}
-      <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <div className="settings-form-actions">
         <Button variant="outline" disabled={saving} onClick={onClose}>
           Hủy
         </Button>
