@@ -15,6 +15,15 @@ afterEach(() => {
 });
 
 describe('ToastHost', () => {
+  it('không hiển thị thông báo hết hạn phiên', () => {
+    render(<ToastHost />);
+
+    act(() => toast.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'));
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('hiển thị đúng tone và tự đóng sau 3,8 giây', () => {
     render(<ToastHost />);
 

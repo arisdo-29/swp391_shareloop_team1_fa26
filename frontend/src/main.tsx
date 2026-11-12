@@ -12,7 +12,7 @@ setUnauthorizedHandler(({ message }) => {
   if (router.state.location.pathname === '/login') return;
   void router.navigate('/login', {
     replace: true,
-    state: { sessionError: message },
+    state: message ? { sessionError: message } : undefined,
   });
 });
 

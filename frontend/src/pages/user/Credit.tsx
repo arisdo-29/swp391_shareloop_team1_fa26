@@ -38,7 +38,6 @@ import { backendMockProviderMessage, startPayment } from '../../services/payment
 import { toast } from '../../components/toast';
 import {
   clearPendingTopUp,
-  loadPendingTopUp,
   paymentRedirectUrl,
   resolveTopUpReturnResult,
   returnOrderCode,
@@ -237,6 +236,7 @@ export function Credit() {
     const code = returnOrderCode(params);
     const gatewayReturnStatus = vnpayReturnStatus(params);
     if (!code) {
+      setTopUpError('');
       if (gatewayReturnStatus === 'INVALID_SIGNATURE') {
         setReturnState('invalid');
         clearPendingTopUp();
@@ -267,7 +267,12 @@ export function Credit() {
       .catch((caught: ApiError) => {
         if (active) {
           setReturnState('idle');
-          setTopUpError(caught.message || 'Không tải được đơn nạp.');
+          if (caught.status === 404) {
+            clearPendingTopUp();
+            setTopUpError('');
+          } else {
+            setTopUpError(caught.message || 'Không tải được đơn nạp.');
+          }
         }
       });
     return () => {
@@ -388,14 +393,6 @@ export function Credit() {
         </section>
 
         <section id="topup" aria-label="Nạp Credit" className="scroll-mt-24">
-          {loadPendingTopUp()?.orderCode ? (
-            <Link
-              className="mb-3 inline-flex min-h-11 items-center text-sm font-semibold text-link hover:underline"
-              to={`/credit?orderCode=${encodeURIComponent(loadPendingTopUp()!.orderCode)}`}
-            >
-              Mở lại đơn nạp gần nhất
-            </Link>
-          ) : null}
           {topUpError ? (
             <div className="mb-3">
               <Alert tone="error">{topUpError}</Alert>

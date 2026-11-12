@@ -9,7 +9,7 @@ import type { ApiError } from '../../services/http';
 function anomalyErrorMessage(error: unknown) {
   const apiError = error as Partial<ApiError>;
   if (apiError.status === 400) return apiError.message || 'Yêu cầu tải cảnh báo không hợp lệ.';
-  if (apiError.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (apiError.status === 401) return '';
   if (apiError.status === 403) return 'Tài khoản hiện tại không có quyền xem cảnh báo bất thường.';
   if (apiError.status === 404) return 'Không tìm thấy dữ liệu cảnh báo bất thường.';
   if (apiError.status === 0) return 'Không thể kết nối máy chủ. Vui lòng thử lại.';

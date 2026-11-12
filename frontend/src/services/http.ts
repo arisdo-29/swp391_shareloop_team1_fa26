@@ -3,7 +3,8 @@ import { toast } from '../components/toast';
 import { mutationErrorMessage, mutationToastDefinition } from './mutationToast';
 
 // Địa chỉ backend: đặt trong .env.local (máy cá nhân) và Environment Variables trên Vercel.
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'https://shareloop-api-648813583458.asia-southeast1.run.app';
+export const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ?? 'https://shareloop-api-648813583458.asia-southeast1.run.app';
 const TOKEN_KEY = 'shareloop:accessToken';
 const TOKEN_TYPE_KEY = 'shareloop:tokenType';
 const TOKEN_EXPIRES_AT_KEY = 'shareloop:tokenExpiresAt';
@@ -22,12 +23,14 @@ export function userFacingErrorMessage(
 
 export interface SessionTermination {
   code: string;
-  message: string;
+  message?: string;
 }
 
 let unauthorizedHandler: ((termination: SessionTermination) => void) | null = null;
 
-export function setUnauthorizedHandler(handler: ((termination: SessionTermination) => void) | null) {
+export function setUnauthorizedHandler(
+  handler: ((termination: SessionTermination) => void) | null,
+) {
   unauthorizedHandler = handler;
 }
 
@@ -42,7 +45,10 @@ function blockedAccountMessage(body: Partial<ApiError>) {
   if (reason && !message?.includes(reason)) {
     return `${message || 'Tài khoản đã bị khoá.'} Lý do: ${reason}`;
   }
-  return message || (body.code === 'AUTH_ACCOUNT_BANNED' ? 'Tài khoản đã bị cấm.' : 'Tài khoản đã bị khoá.');
+  return (
+    message ||
+    (body.code === 'AUTH_ACCOUNT_BANNED' ? 'Tài khoản đã bị cấm.' : 'Tài khoản đã bị khoá.')
+  );
 }
 
 export const tokenStorage = {
@@ -103,7 +109,7 @@ http.interceptors.request.use((config) => {
 http.interceptors.response.use(
   (response) => {
     const definition = mutationToastDefinition(response.config.url, response.config.method);
-    if (definition) toast[definition.tone ?? 'success'](definition.success);
+    if (definition?.success) toast[definition.tone ?? 'success'](definition.success);
     return response;
   },
   (error: AxiosError<Partial<ApiError>>) => {
@@ -118,9 +124,7 @@ http.interceptors.response.use(
       if (hadApiToken) {
         unauthorizedHandler?.({
           code,
-          message: blockedAccount
-            ? blockedAccountMessage(body ?? { code })
-            : 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+          ...(blockedAccount ? { message: blockedAccountMessage(body ?? { code }) } : {}),
         });
       }
     }
@@ -146,7 +150,9 @@ http.interceptors.response.use(
       });
     }
     const definition = mutationToastDefinition(error.config?.url, error.config?.method);
-    if (definition) toast.error(mutationErrorMessage(apiError, definition.failure));
+    if (definition && !expiredSession) {
+      toast.error(mutationErrorMessage(apiError, definition.failure));
+    }
     return Promise.reject(apiError);
   },
 );

@@ -10,7 +10,7 @@ function configUpdateErrorMessage(error: unknown) {
   }
   if (apiError.status === 403) return 'Tài khoản hiện tại không có quyền sửa cấu hình.';
   if (apiError.status === 404) return 'Không tìm thấy cấu hình cần cập nhật.';
-  if (apiError.status === 401) return 'Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.';
+  if (apiError.status === 401) return '';
   if (apiError.status === 0) return 'Không kết nối được máy chủ. Vui lòng thử lại.';
   return 'Không cập nhật được cấu hình. Vui lòng thử lại.';
 }

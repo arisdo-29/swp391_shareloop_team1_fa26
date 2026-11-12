@@ -1,3 +1,5 @@
+import { isSilentSessionExpiryMessage } from '../utils/sessionMessages';
+
 export type ToastTone = 'success' | 'error' | 'warning';
 
 export interface ToastMessage {
@@ -14,7 +16,7 @@ let nextToastId = 1;
 
 function emitToast(tone: ToastTone, message: string) {
   const normalizedMessage = message.trim();
-  if (!normalizedMessage) return;
+  if (!normalizedMessage || isSilentSessionExpiryMessage(normalizedMessage)) return;
 
   const signature = `${tone}:${normalizedMessage}`;
   const now = Date.now();

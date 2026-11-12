@@ -56,6 +56,8 @@
   --color-bronze: #a8791c;
   --color-admin-group: var(--color-success-500);
   --color-admin-divider: var(--color-success-300);
+  --color-footer-background: #0b3f30;
+
   --color-shadow-subtle: rgb(11 59 46 / 8%);
   --color-shadow-strong: rgb(11 59 46 / 22%);
   color-scheme: light;
@@ -169,22 +171,34 @@ a {
 }
 
 .site-footer {
-  border-color: var(--color-border);
-  background-color: var(--color-surface-low);
+  border-color: rgb(255 255 255 / 20%);
+  background-color: var(--color-footer-background);
+  color: white;
 }
 
 .site-footer-brand,
 .site-footer-title {
-  color: var(--color-primary);
+  color: white;
 }
 
 .site-footer-copy,
 .site-footer-link {
-  color: var(--color-text-description);
+  color: white;
+}
+
+.site-footer .border-border {
+  border-color: rgb(255 255 255 / 20%);
+}
+
+.site-footer-link {
+  transition:
+    color 180ms ease,
+    transform 180ms ease;
 }
 
 .site-footer-link:hover {
-  color: var(--color-primary);
+  color: var(--color-highlight);
+  transform: translateX(0.125rem);
 }
 img {
   display: block;

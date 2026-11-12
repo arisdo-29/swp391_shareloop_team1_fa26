@@ -81,6 +81,15 @@ afterEach(() => {
 });
 
 describe('đăng nhập Admin', () => {
+  it('không hiển thị banner hết hạn phiên từ navigation state cũ', () => {
+    renderLogin({
+      pathname: '/login',
+      state: { sessionError: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.' },
+    });
+
+    expect(screen.queryByText('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')).toBeNull();
+  });
+
   it('hiện lý do khi phiên đang đăng nhập bị hệ thống khoá', () => {
     renderLogin({
       pathname: '/login',

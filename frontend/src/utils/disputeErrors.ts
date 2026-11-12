@@ -15,7 +15,7 @@ export const disputeReasonLabels: Record<ReportReason, string> = {
 const disputeErrorLabels: Record<string, string> = {
   VALIDATION_FAILED: 'Nội dung chưa hợp lệ. Hãy kiểm tra phần mô tả và ảnh minh chứng.',
   MEDIA_INVALID_FILE: 'Danh sách minh chứng có tệp không hợp lệ hoặc bị trùng.',
-  UNAUTHORIZED: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+  UNAUTHORIZED: '',
   DISPUTE_NOT_A_PARTY: 'Bạn không phải là một bên của giao dịch này.',
   DISPUTE_NOT_RESPONDENT: 'Chỉ người bị khiếu nại mới có thể gửi giải trình.',
   DISPUTE_REQUEST_NOT_COMPLETED: 'Giao dịch chưa hoàn tất nên chưa thể khiếu nại.',
