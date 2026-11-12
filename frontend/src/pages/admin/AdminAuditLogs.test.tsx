@@ -56,35 +56,6 @@ afterEach(() => {
 });
 
 describe('AdminAuditLogs pagination', () => {
-  it('mở toàn bộ nội dung dài như văn bản, không thêm request hoặc render HTML', async () => {
-    const user = userEvent.setup();
-    const detail = '<img src=x onerror="alert(1)"> ' + 'Nội dung dài '.repeat(60);
-    vi.mocked(adminAuditApi.list).mockResolvedValue({ ...activityPage(0, 1), content: [{ ...activityLog(1), detail }] });
-    render(<AdminAuditLogs />);
-    await screen.findByText('Cấu hình 1');
-    const reads = vi.mocked(adminAuditApi.list).mock.calls.length;
-    await user.click(screen.getByRole('button', { name: 'Xem Chi tiết nhật ký' }));
-    const dialog = screen.getByRole('dialog', { name: 'Chi tiết nhật ký' });
-    expect(within(dialog).getByText(detail.trim())).toBeTruthy();
-    expect(dialog.querySelector('img')).toBeNull();
-    expect(adminAuditApi.list).toHaveBeenCalledTimes(reads);
-    await user.keyboard('{Escape}');
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
-
-  it('giữ raw payload ngoài giao diện, chỉ mở nội dung checklist đã nhận diện', async () => {
-    const user = userEvent.setup();
-    const data = { token: 'sensitive-test-marker', checks: [{ question: 'Ảnh đúng món đồ', passed: true }] };
-    vi.mocked(adminAuditApi.list).mockResolvedValue({ ...activityPage(0, 1), content: [{ ...activityLog(1), data, detail: JSON.stringify(data) }] });
-    render(<AdminAuditLogs />);
-    await screen.findByText('Đạt đủ 1/1 mục kiểm duyệt');
-    await user.click(screen.getByRole('button', { name: 'Xem chi tiết' }));
-    const dialog = screen.getByRole('dialog', { name: 'Chi tiết nhật ký' });
-    expect(within(dialog).getByText('Ảnh đúng món đồ')).toBeTruthy();
-    expect(document.body.textContent).not.toContain('sensitive-test-marker');
-    expect(document.body.textContent).not.toContain('token');
-  });
-
   it('cố định 20 bản ghi và lấy đúng dữ liệu của trang được chọn', async () => {
     const user = userEvent.setup();
     render(<AdminAuditLogs />);

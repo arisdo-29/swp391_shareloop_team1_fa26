@@ -28,7 +28,7 @@ export function ModerationChecklistContent({
   const progress = checklist.length ? Math.round((completed / checklist.length) * 100) : 0;
 
   return (
-    <div className="moderation-checklist">
+    <div>
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-bold text-text-primary">Tiến độ kiểm duyệt</p>
@@ -130,7 +130,7 @@ export function RejectReasonsContent({
   };
 
   return (
-    <div className="moderation-reject-reasons">
+    <div>
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-bold text-text-primary">Lý do từ chối</p>
@@ -195,7 +195,7 @@ export function RejectReasonsContent({
       </div>
 
       {error ? <div className="mt-4"><Alert tone="error">{error}</Alert></div> : null}
-      <div className="sticky bottom-0 mt-5 flex flex-wrap justify-end gap-2 border-t border-border/70 bg-surface pt-4">
+      <div className="sticky bottom-0 mt-5 flex flex-wrap justify-end gap-2 border-t border-border/70 bg-white pt-4">
         <Button variant="ghost" onClick={onCancel} disabled={disabled}>Hủy</Button>
         <Button
           variant="danger"
@@ -231,7 +231,7 @@ export function ModerationImageGallery({
   }
 
   return (
-    <div className="moderation-image-gallery mt-4 space-y-3">
+    <div className="mt-4 space-y-3">
       {itemImages.length ? (
         <ModerationThumbnailGroup
           label="Ảnh món đồ"

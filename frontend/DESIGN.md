@@ -93,8 +93,6 @@ components:
     rounded: '{rounded.lg}'
 ---
 
-> C?p nh?t n?n t?ng ??t 1: xem [ui-foundation.md](docs/ui-foundation.md). Token m?u s?ng/t?i hi?n l?y t? `theme-tokens.js` qua `tailwind.config.js`; c?c b?ng gi? tr? b?n d??i m? t? giao di?n tr??c ??t n?y.
-
 # Design System: ShareLoop
 
 > Tài liệu mô tả hệ thống giao diện **đang có** của `frontend/`. Giá trị thật nằm ở `tailwind.config.js` và `src/styles/globals.css`; nếu lệch nhau thì file cấu hình là chuẩn và tài liệu này phải sửa theo.

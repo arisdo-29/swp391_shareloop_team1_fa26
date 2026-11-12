@@ -1,4 +1,3 @@
-import '../../styles/marketplace.css';
 import { useEffect, useState } from 'react';
 import { Alert, Button, EmptyState, LoadingState, ProductCard, StatusBadge } from '../ui';
 import { Pagination } from '../Pagination';
@@ -64,7 +63,7 @@ export function ProfileItemsSection({ userId, tab }: { userId: number; tab: User
   }, [page, reloadKey, tab, userId]);
 
   return (
-    <section aria-labelledby={titleId} className="profile-listing-section space-y-4">
+    <section aria-labelledby={titleId} className="space-y-4">
       <div>
         <h2 id={titleId} className="section-title">
           {text.title}
@@ -92,10 +91,10 @@ export function ProfileItemsSection({ userId, tab }: { userId: number; tab: User
         </div>
       ) : data && data.items.length ? (
         <>
-          <div className="profile-listing-grid">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {data.items.map((item) =>
               tab === 'DONE' ? <DoneItemCard key={item.id} item={item} /> : (
-                <ProductCard variant="marketplace" key={item.id} item={item} />
+                <ProductCard key={item.id} item={item} />
               ),
             )}
           </div>
@@ -121,7 +120,6 @@ function DoneItemCard({ item }: { item: Item }) {
   return (
     <div className="opacity-70 transition hover:opacity-100 focus-within:opacity-100">
       <ProductCard
-        variant="marketplace"
         item={item}
         imageLabel="Tạm ẩn"
         footer={

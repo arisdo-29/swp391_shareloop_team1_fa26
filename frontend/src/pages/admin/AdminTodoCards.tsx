@@ -54,9 +54,9 @@ export function AdminTodoCards() {
   ];
 
   return (
-    <section aria-labelledby="admin-todo" className="admin-todo space-y-3">
+    <section aria-labelledby="admin-todo" className="space-y-3">
       <h2 id="admin-todo" className="section-title">Việc cần làm</h2>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => {
           const urgent = typeof card.count === 'number' && card.count > 0;
           const value =
@@ -71,12 +71,12 @@ export function AdminTodoCards() {
             <Link
               key={card.to}
               to={card.to}
-              className={`admin-todo-card flex flex-col gap-1.5 rounded-lg border bg-white p-4 transition hover:bg-surface-low ${urgent ? 'border-error/40' : 'border-border'}`}
+              className={`flex flex-col gap-1.5 rounded-lg border bg-white p-4 transition hover:bg-surface-low ${urgent ? 'border-error/40' : 'border-border'}`}
             >
               <span className="text-sm font-semibold text-text-secondary">{card.label}</span>
               <strong className="text-3xl tabular-nums">{value}</strong>
               <span className={`text-xs ${urgent ? 'font-semibold text-error' : 'text-text-muted'}`}>
-                {card.count === null ? 'Đang tải số liệu...' : card.count === 'error' ? 'Chưa tải được số liệu.' : urgent ? card.note : 'Không có việc chờ.'}
+                {card.count === 'error' ? 'Chưa tải được số liệu.' : urgent ? card.note : 'Không có việc chờ.'}
               </span>
             </Link>
           );

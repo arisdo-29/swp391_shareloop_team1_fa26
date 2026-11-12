@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Avatar,
   Button,
   EmptyState,
   ItemImage,
@@ -21,10 +20,8 @@ import {
   type ConversationFilter,
 } from '../../utils/conversationFilter';
 import {
-  avatarInitials,
   conversationImage,
   conversationTitle,
-  partnerAvatarUrl,
   requestParticipantName,
   type ApiConversation,
 } from './conversation';
@@ -80,10 +77,9 @@ export function ConversationList({
   return (
     <aside
       aria-label="Cuộc trò chuyện"
-      className={`${className} conversation-sidebar min-h-0 flex-col overflow-hidden bg-surface`}
+      className={`${className} min-h-0 flex-col overflow-hidden rounded-lg bg-white ring-1 ring-border/80`}
     >
-      <div className="conversation-list-heading space-y-4">
-        <p className="conversation-eyebrow">Kết nối để sẻ chia</p>
+      <div className="space-y-3 px-4 pb-3 pt-4">
         <div className="flex items-baseline justify-between gap-3">
           <h1 className="text-xl font-bold">Tin nhắn</h1>
           <span className="text-xs text-text-secondary">{conversations.length} cuộc</span>
@@ -108,14 +104,14 @@ export function ConversationList({
               role="tab"
               aria-selected={filter === value}
               onClick={() => setFilter(value)}
-              className={`min-h-11 shrink-0 whitespace-nowrap rounded-md px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${filter === value ? 'bg-primary text-on-primary' : 'text-text-secondary ring-1 ring-border hover:bg-primary-faint'}`}
+              className={`min-h-11 shrink-0 whitespace-nowrap rounded-md px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${filter === value ? 'bg-primary text-white' : 'text-text-secondary ring-1 ring-border hover:bg-primary-faint'}`}
             >
               {conversationFilterLabels[value]}
             </button>
           ))}
         </div>
       </div>
-      <div className="conversation-list-scroll min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {loading ? (
           <SkeletonRows rows={5} label="Đang tải cuộc trò chuyện" />
         ) : error ? (
@@ -182,7 +178,7 @@ function ConversationRow({
 
   return (
     <div
-      className={`conversation-row relative mb-2 overflow-hidden last:mb-0 ${active ? 'bg-primary-faint' : 'bg-surface hover:bg-primary-faint'}`}
+      className={`relative mb-1 h-[84px] overflow-hidden rounded-md last:mb-0 ${active ? 'bg-primary-faint' : 'bg-white hover:bg-primary-faint'}`}
     >
       <button
         type="button"
@@ -203,9 +199,6 @@ function ConversationRow({
             loading="lazy"
             className="size-[52px] rounded-md object-cover"
           />
-          <span className="conversation-avatar" aria-hidden="true">
-            <Avatar size="sm" user={{ name: participantName, avatarInitials: avatarInitials(participantName), avatarUrl: partnerAvatarUrl(conversation, currentUserId) }} />
-          </span>
         </Link>
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
@@ -216,7 +209,6 @@ function ConversationRow({
               />
             ) : null}
             <strong
-              title={participantName}
               className={`min-w-0 flex-1 truncate text-sm ${unread ? 'font-bold' : 'font-semibold'}`}
             >
               {participantName}
@@ -234,7 +226,7 @@ function ConversationRow({
                 type="button"
                 disabled={selectSubmitting}
                 onClick={() => onSelectCandidate(request.id)}
-                className="pointer-events-auto relative z-10 ml-auto shrink-0 rounded-sm bg-primary px-2 py-1 text-2xs font-semibold text-on-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40"
+                className="pointer-events-auto relative z-10 ml-auto shrink-0 rounded-sm bg-primary px-2 py-1 text-2xs font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Chọn người này
               </button>

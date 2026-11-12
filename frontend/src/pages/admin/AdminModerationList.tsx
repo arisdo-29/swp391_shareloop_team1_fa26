@@ -76,18 +76,18 @@ export function AdminModerationList() {
   const rows = query.trim() ? items.filter((item) => matchesQuery(item, query)) : items;
 
   return (
-    <div className="admin-moderation-list">
+    <>
       <PageHeader title="Duyệt bài" description="Danh sách bài đăng đang chờ kiểm duyệt." />
-      <div className="moderation-toolbar mb-5 flex flex-col gap-3 rounded-lg bg-white p-3 ring-1 ring-border/80 sm:flex-row sm:items-center">
+      <div className="mb-5 flex flex-col gap-3 rounded-lg bg-white p-3 ring-1 ring-border/80 sm:flex-row sm:items-center">
         <div className="flex-1">
           <SearchField
             aria-label="Tìm bài chờ duyệt"
-            placeholder="Tìm trong lượt tải theo tiêu đề, người đăng hoặc cờ kiểm tra"
+            placeholder="Tìm theo tiêu đề, người đăng hoặc mức rủi ro..."
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
-        <span className="text-xs text-text-muted">{loading ? 'Đang tải hàng chờ...' : `${items.length} bài trong lượt tải`}</span>
+        <span className="text-xs text-text-muted">{items.length} bài đăng chờ</span>
       </div>
 
       {notice ? (
@@ -107,7 +107,7 @@ export function AdminModerationList() {
       {loading ? (
         <SkeletonRows label="Đang tải bài chờ duyệt" />
       ) : rows.length ? (
-        <div className="moderation-queue-table table-wrap">
+        <div className="table-wrap">
           <table className="data-table">
             <thead>
               <tr>
@@ -131,7 +131,7 @@ export function AdminModerationList() {
           text={query ? 'Hãy thử từ khóa khác.' : 'Hiện chưa có bài đăng nào trong hàng chờ.'}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -139,7 +139,7 @@ function QueueRow({ item }: { item: ReviewQueueItem }) {
   const flag = displayRuleFlag(item);
   const note = displayModerationNote(item);
   return (
-    <tr className="moderation-queue-row">
+    <tr>
       <td className="max-w-md">
         <div className="flex min-w-0 items-center gap-3">
           <ItemImage

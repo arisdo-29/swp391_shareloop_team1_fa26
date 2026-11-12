@@ -1,5 +1,3 @@
-import './admin-records.css';
-import { AdminRecordDetails, AdminRecordFact } from './AdminRecordDetails';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { Pagination } from '../../components/Pagination';
@@ -98,7 +96,7 @@ export function AdminTransactions() {
   };
 
   return (
-    <section className="admin-transactions admin-records-page space-y-5">
+    <section className="space-y-5">
       <PageHeader
         title="Giao dịch"
         description="Theo dõi mọi giao dịch và huỷ giao dịch bị kẹt: quá giờ hẹn mà chưa ai xác nhận bàn giao, hoặc một bên đang bị khoá tài khoản."
@@ -110,7 +108,7 @@ export function AdminTransactions() {
       />
 
       <form
-        className="admin-records-filters flex flex-wrap items-end gap-4 rounded-lg bg-white p-4 ring-1 ring-border"
+        className="flex flex-wrap items-end gap-4 rounded-lg bg-white p-4 ring-1 ring-border"
         onSubmit={(event) => {
           event.preventDefault();
           setQuery(queryInput.trim());
@@ -176,7 +174,7 @@ export function AdminTransactions() {
         <SkeletonRows label="Đang tải giao dịch" />
       ) : result ? (
         <div>
-          <div className="admin-transactions-table admin-records-table table-wrap">
+          <div className="table-wrap">
             <table className="data-table">
               <thead>
                 <tr>
@@ -226,7 +224,7 @@ export function AdminTransactions() {
 
 function TransactionRow({ row, onCancel }: { row: AdminRequestRow; onCancel: () => void }) {
   return (
-    <tr className="admin-transaction-row">
+    <tr>
       <td>
         <p className="font-semibold text-text-primary">{row.itemTitle || 'Bài đã xoá'}</p>
         <p className="text-xs text-text-muted">
@@ -245,13 +243,6 @@ function TransactionRow({ row, onCancel }: { row: AdminRequestRow; onCancel: () 
       </td>
       <td className="text-xs">{formatDateTime(row.meetingTime)}</td>
       <td>
-        <div className="admin-record-actions">
-        <AdminRecordDetails title={`Giao dịch mã ${row.id}`}>
-          <div className="admin-record-summary"><div><h3>{row.itemTitle || 'Bài đã xoá'}</h3><p>{row.type === 'SWAP' ? 'Trao đổi' : 'Cho tặng'} · mã {row.id}</p></div><span className={`admin-record-state ${statusClass(row.status)}`}>{requestStatusLabel[row.status]}</span></div>
-          <section className="admin-record-section"><h3>Các bên tham gia</h3><dl className="admin-record-facts"><AdminRecordFact label="Chủ bài">{row.donorName || '—'}</AdminRecordFact><AdminRecordFact label="Người nhận">{row.receiverName || '—'}</AdminRecordFact></dl></section>
-          <section className="admin-record-section"><h3>Thông tin giao dịch</h3><dl className="admin-record-facts"><AdminRecordFact label="Món đồ trong bài đăng">{row.itemTitle || 'Bài đã xoá'}</AdminRecordFact><AdminRecordFact label="Hình thức">{row.type === 'SWAP' ? 'Trao đổi' : 'Cho tặng'}</AdminRecordFact><AdminRecordFact label="Trạng thái">{requestStatusLabel[row.status]}</AdminRecordFact><AdminRecordFact label="Thời gian tạo">{formatDateTime(row.createdAt)}</AdminRecordFact><AdminRecordFact label="Giờ hẹn">{formatDateTime(row.meetingTime)}</AdminRecordFact></dl></section>
-          {row.flagReason ? <section className="admin-record-section admin-record-notice"><h3>Cần xem xét</h3><p>{row.flagReason}</p></section> : null}
-        </AdminRecordDetails>
         {cancellableStatuses.includes(row.status) ? (
           <Button variant="danger" size="sm" onClick={onCancel}>
             Huỷ giao dịch
@@ -259,7 +250,6 @@ function TransactionRow({ row, onCancel }: { row: AdminRequestRow; onCancel: () 
         ) : (
           <span className="text-text-muted">—</span>
         )}
-        </div>
       </td>
     </tr>
   );
@@ -302,7 +292,7 @@ function CancelDialog({
 
   return (
     <Dialog title="Huỷ giao dịch" busy={busy} onClose={onClose}>
-      <p className="admin-transaction-action-context mt-3 text-sm text-text-secondary">
+      <p className="mt-3 text-sm text-text-secondary">
         {row.itemTitle || 'Bài đã xoá'}: {row.donorName || '—'} và {row.receiverName || '—'}. Bài đăng được mở lại, cả
         hai bên nhận thông báo kèm lý do.
       </p>

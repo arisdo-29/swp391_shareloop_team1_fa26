@@ -1,4 +1,3 @@
-import '../../components/member-notifications.css';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Pagination } from '../../components/Pagination';
@@ -264,7 +263,7 @@ export function Notifications({ inAdmin = false }: { inAdmin?: boolean }) {
   );
 
   // Trong khung Admin đã có lề và độ rộng riêng, không bọc thêm page-shell.
-  return inAdmin ? content : <div className="member-notifications page-shell py-6 sm:py-10"><p className="notification-eyebrow">GÓC CẬP NHẬT CỦA BẠN</p>{content}</div>;
+  return inAdmin ? content : <div className="page-shell py-6 sm:py-10">{content}</div>;
 }
 
 function NotificationFilters({
@@ -283,7 +282,7 @@ function NotificationFilters({
   onReadFilterChange: (value: ReadFilter) => void;
 }) {
   return (
-    <div className="notification-filters mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-center">
+    <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-center">
       <SearchField
         type="search"
         aria-label="Tìm thông báo"
@@ -348,7 +347,7 @@ function BulkActionBar({
   onClearRead: () => void;
 }) {
   return (
-    <div className="notification-bulk-actions mb-3 flex flex-wrap items-center gap-2">
+    <div className="mb-3 flex flex-wrap items-center gap-2">
       <label className="mr-auto flex min-h-11 items-center gap-2 text-sm font-semibold text-text-secondary">
         <input
           type="checkbox"
@@ -395,7 +394,7 @@ function NotificationRow({
   const category = notificationCategory(notification.type);
   return (
     <li
-      className={`notification-row flex gap-3 px-4 py-3 sm:px-5 ${notification.isRead ? 'bg-white' : 'bg-primary-faint'}`}
+      className={`flex gap-3 px-4 py-3 sm:px-5 ${notification.isRead ? 'bg-white' : 'bg-primary-faint'}`}
     >
       <input
         type="checkbox"
