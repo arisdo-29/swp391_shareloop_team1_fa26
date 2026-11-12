@@ -11,8 +11,12 @@ import { categoryBrowsePath } from '../../utils/browseFilters';
 import { Browse } from './Browse';
 import { Home } from './Home';
 
+const authState = vi.hoisted(() => ({
+  currentUser: null as { id: number } | null,
+}));
+
 vi.mock('../../app/hooks', () => ({
-  useAppSelector: () => null,
+  useAppSelector: () => authState.currentUser,
 }));
 
 vi.mock('../../app/store', () => ({
@@ -134,6 +138,7 @@ function renderBrowseInStrictMode() {
 }
 
 beforeEach(() => {
+  authState.currentUser = null;
   vi.mocked(catalogApi.categories).mockResolvedValue(categories);
   vi.mocked(catalogApi.categoriesWithCounts).mockResolvedValue(categories);
   vi.mocked(catalogApi.areas).mockResolvedValue([]);
@@ -255,6 +260,23 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     expect(await screen.findByText(book.title)).toBeTruthy();
   });
 
+  it.each([
+    ['chưa đăng nhập', null, true],
+    ['đã đăng nhập', { id: 7 }, false],
+  ])('phân trang khi %s gửi viewerKey đúng contract', async (_label, currentUser, sendsViewerKey) => {
+    authState.currentUser = currentUser;
+
+    renderBrowse();
+
+    expect(await screen.findByText(book.title)).toBeTruthy();
+    const request = vi.mocked(itemApi.list).mock.calls[0][0];
+    if (sendsViewerKey) {
+      expect(request).toEqual(expect.objectContaining({ viewerKey: expect.any(Number) }));
+    } else {
+      expect(request).not.toHaveProperty('viewerKey');
+    }
+  });
+
   it('lần tải đầu không gửi rotationSeed, chuyển trang thì gửi lại seed backend đã trả', async () => {
     // given: 40 bài, backend trả lượt xoay 777 cho bộ lọc này
     const user = userEvent.setup();
@@ -271,7 +293,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
 
     // when
     await user.click(screen.getByRole('button', { name: 'Trang sau' }));
-    await screen.findByText('Bài 1-0');
+    await screen.findByText('Bài 1-1');
 
     // then
     expect(vi.mocked(itemApi.list).mock.calls[0][0]).not.toHaveProperty('rotationSeed');
@@ -292,16 +314,19 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     renderBrowse();
     await screen.findByText('Món 0-0');
     await user.click(screen.getByRole('button', { name: 'Trang sau' }));
-    await screen.findByText('Món 1-0');
+    await screen.findByText('Món 1-1');
 
     // when: đổi cách sắp xếp
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sắp xếp' }), 'featured');
 
     // then: về trang đầu, không mang seed của bộ lọc cũ
     await waitFor(() =>
-      expect(itemApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ boosted: true, page: 0 })),
+      expect(itemApi.list).toHaveBeenCalledWith(expect.objectContaining({ boosted: true, page: 0 })),
     );
-    expect(vi.mocked(itemApi.list).mock.lastCall?.[0]).not.toHaveProperty('rotationSeed');
+    const firstBoostedRequest = vi.mocked(itemApi.list).mock.calls.find(
+      ([request]) => request?.boosted === true && request.page === 0,
+    )?.[0];
+    expect(firstBoostedRequest).not.toHaveProperty('rotationSeed');
   });
 
   it('chọn sắp xếp Tin nổi bật thì gửi boosted lên API và lưu vào URL', async () => {
@@ -322,7 +347,7 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     expect(screen.getByText(book.description)).toBeTruthy();
   });
 
-  it('chế độ tin nổi bật chỉ tải trang hiện tại từ API', async () => {
+  it('chế độ tin nổi bật ghép API page 20 món thành UI page 21 món', async () => {
     const user = userEvent.setup();
     const boostedItems = Array.from({ length: 25 }, (_, index): ItemResponse => ({
       ...book,
@@ -340,19 +365,19 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
 
     const { container } = renderBrowse(['/browse?boosted=true']);
 
-    expect(await screen.findByText(boostedItems[19].title)).toBeTruthy();
-    expect(itemApi.list).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(boostedItems[20].title)).toBeTruthy();
+    expect(itemApi.list).toHaveBeenCalledTimes(2);
     expect(itemApi.list).toHaveBeenCalledWith(
       expect.objectContaining({ boosted: true, page: 0, size: 20 }),
     );
-    expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(20);
+    expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(21);
     expect(screen.getByText('Trang 1 / 2')).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: 'Trang sau' }));
 
     expect(await screen.findByText(boostedItems[24].title)).toBeTruthy();
     await waitFor(() =>
-      expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(5),
+      expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(4),
     );
     expect(screen.getByText('Trang 2 / 2')).toBeTruthy();
     expect(itemApi.list).toHaveBeenCalledTimes(2);
@@ -362,12 +387,13 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
   });
 
   it.each([
-    [19, 1, 19],
+    [17, 1, 17],
     [20, 1, 20],
-    [21, 2, 1],
-    [40, 2, 20],
-    [45, 3, 5],
-  ])('phân trang đúng 20 món với tổng %i sản phẩm', async (total, expectedPages, lastPageSize) => {
+    [21, 1, 21],
+    [22, 2, 1],
+    [42, 2, 21],
+    [43, 3, 1],
+  ])('phân trang đúng 21 món với tổng %i sản phẩm', async (total, expectedPages, lastPageSize) => {
     const user = userEvent.setup();
     const sourceItems = Array.from({ length: total }, (_, index): ItemResponse => ({
       ...book,
@@ -393,10 +419,9 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
     expect(await screen.findByText(sourceItems[0].title)).toBeTruthy();
     await waitFor(() =>
       expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(
-        Math.min(20, total),
+        Math.min(21, total),
       ),
     );
-    expect(itemApi.list).toHaveBeenCalledTimes(1);
     titlesAcrossPages.push(...visibleTitles());
 
     if (expectedPages === 1) {
@@ -405,8 +430,8 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
       expect(screen.getByText(`Trang 1 / ${expectedPages}`)).toBeTruthy();
       for (let pageIndex = 1; pageIndex < expectedPages; pageIndex += 1) {
         await user.click(screen.getByRole('button', { name: 'Trang sau' }));
-        expect(await screen.findByText(sourceItems[pageIndex * 20].title)).toBeTruthy();
-        const expectedSize = pageIndex === expectedPages - 1 ? lastPageSize : 20;
+        expect(await screen.findByText(sourceItems[pageIndex * 21].title)).toBeTruthy();
+        const expectedSize = pageIndex === expectedPages - 1 ? lastPageSize : 21;
         await waitFor(() =>
           expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(
             expectedSize,
@@ -419,12 +444,123 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
 
     expect(new Set(titlesAcrossPages)).toEqual(new Set(sourceItems.map((item) => item.title)));
     expect(titlesAcrossPages).toHaveLength(sourceItems.length);
-    expect(itemApi.list).toHaveBeenCalledTimes(expectedPages);
-    for (let pageIndex = 0; pageIndex < expectedPages; pageIndex += 1) {
+    const expectedApiPages = Math.ceil(total / 20);
+    expect(itemApi.list).toHaveBeenCalledTimes(expectedApiPages);
+    for (let pageIndex = 0; pageIndex < expectedApiPages; pageIndex += 1) {
       expect(itemApi.list).toHaveBeenCalledWith(
         expect.objectContaining({ page: pageIndex, size: 20 }),
       );
     }
+  });
+
+  it('lấp đầy trang hiện tại từ API page kế tiếp khi metadata cho biết vẫn còn dữ liệu', async () => {
+    const user = userEvent.setup();
+    const sourceItems = Array.from({ length: 22 }, (_, index): ItemResponse => ({
+      ...book,
+      id: 900 + index,
+      title: `Sparse pagination item ${index + 1}`,
+    }));
+    vi.mocked(itemApi.list).mockImplementation(async ({ page = 0, size = 20 } = {}) => ({
+      items: page === 0 ? sourceItems.slice(0, 17) : sourceItems.slice(17),
+      page,
+      size,
+      totalElements: sourceItems.length,
+      totalPages: 1,
+      rotationSeed: 123,
+    }));
+
+    const { container } = renderBrowse();
+
+    expect(await screen.findByText(sourceItems[20].title)).toBeTruthy();
+    expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(21);
+    expect(screen.getByText('Trang 1 / 2')).toBeTruthy();
+    expect(itemApi.list).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ page: 0, size: 20 }),
+    );
+    expect(itemApi.list).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ page: 1, size: 20, rotationSeed: 123 }),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+
+    expect(await screen.findByText(sourceItems[21].title)).toBeTruthy();
+    expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(1);
+    expect(screen.queryByText(sourceItems[20].title)).toBeNull();
+    expect(screen.getByText('Trang 2 / 2')).toBeTruthy();
+    expect(itemApi.list).toHaveBeenCalledTimes(2);
+  });
+
+  it('hiển thị số ID hợp lệ thực tế khi đã tải hết API page nhưng metadata báo dư', async () => {
+    const actualItems = Array.from({ length: 17 }, (_, index): ItemResponse => ({
+      ...book,
+      id: 950 + index,
+      title: `Actually available item ${index + 1}`,
+    }));
+    vi.mocked(itemApi.list).mockImplementation(async ({ page = 0, size = 20 } = {}) => ({
+      items: page === 0 ? actualItems : [],
+      page,
+      size,
+      totalElements: 22,
+      totalPages: 2,
+    }));
+
+    const { container } = renderBrowse();
+
+    expect(await screen.findByText(actualItems[16].title)).toBeTruthy();
+    expect(container.querySelectorAll('[data-browse-results] > a')).toHaveLength(17);
+    expect(screen.getByText('17 món')).toBeTruthy();
+    expect(screen.queryByRole('navigation', { name: 'Phân trang sản phẩm' })).toBeNull();
+    expect(itemApi.list).toHaveBeenCalledTimes(2);
+  });
+
+  it('giữ toàn bộ bộ lọc khi phân trang kết quả tìm kiếm', async () => {
+    const user = userEvent.setup();
+    const filteredItems = Array.from({ length: 22 }, (_, index): ItemResponse => ({
+      ...book,
+      id: 1_000 + index,
+      title: `Filtered pagination item ${index + 1}`,
+    }));
+    vi.mocked(itemApi.list).mockImplementation(async ({ page = 0, size = 20 } = {}) => ({
+      items: filteredItems.slice(page * size, (page + 1) * size),
+      page,
+      size,
+      totalElements: filteredItems.length,
+      totalPages: 2,
+    }));
+
+    renderBrowse([
+      '/browse?q=giao%20trinh&categoryId=42&areaId=3&type=gift&condition=GOOD',
+    ]);
+
+    expect(await screen.findByText(filteredItems[20].title)).toBeTruthy();
+    expect(itemApi.list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        q: 'giao trinh',
+        categoryId: 42,
+        areaId: 3,
+        offerType: 'GIVE',
+        condition: 'GOOD',
+        page: 0,
+        size: 20,
+      }),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+
+    expect(await screen.findByText(filteredItems[21].title)).toBeTruthy();
+    expect(itemApi.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        q: 'giao trinh',
+        categoryId: 42,
+        areaId: 3,
+        offerType: 'GIVE',
+        condition: 'GOOD',
+        page: 1,
+        size: 20,
+      }),
+    );
   });
 
   it('ẩn nhãn Được đẩy trên trang Browse thông thường', async () => {
@@ -777,6 +913,40 @@ describe('lọc danh mục trên trang Tìm đồ', () => {
       expect(itemApi.list).toHaveBeenLastCalledWith(
         expect.objectContaining({ categoryId: undefined }),
       ),
+    );
+  });
+
+  it('quay về trang 1 khi bộ lọc đổi qua lịch sử trình duyệt', async () => {
+    const user = userEvent.setup();
+    vi.mocked(itemApi.list).mockImplementation(async ({ categoryId, page = 0, size = 20 } = {}) => ({
+      items: Array.from({ length: size }, (_, index) => ({
+        ...book,
+        id: (categoryId ?? 0) * 1_000 + page * size + index,
+        categoryId: categoryId ?? book.categoryId,
+        title: `Category ${categoryId ?? 'all'} page ${page} item ${index + 1}`,
+      })),
+      page,
+      size,
+      totalElements: 40,
+      totalPages: 2,
+    }));
+    renderBrowse(['/browse?categoryId=42', '/browse?categoryId=7'], 1);
+
+    expect(await screen.findByText('Category 7 page 0 item 1')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+    expect(await screen.findByText('Category 7 page 1 item 2')).toBeTruthy();
+    vi.mocked(itemApi.list).mockClear();
+
+    await user.click(screen.getByRole('button', { name: 'Quay lại lịch sử' }));
+
+    expect(await screen.findByText('Category 42 page 0 item 1')).toBeTruthy();
+    expect(screen.getByText('Trang 1 / 2')).toBeTruthy();
+    expect(itemApi.list).toHaveBeenCalledWith(
+      expect.objectContaining({ categoryId: 42, page: 0, size: 20 }),
+    );
+    expect(itemApi.list).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ categoryId: 42, page: 1, size: 20 }),
     );
   });
 

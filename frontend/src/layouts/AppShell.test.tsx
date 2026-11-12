@@ -1,26 +1,40 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AppShell } from './AppShell';
+import { markRequestChatSeen } from '../utils/request';
 
-const { currentUser, dispatchMock, logoutMock, requestApiMineMock } = vi.hoisted(() => ({
-  currentUser: {
-    id: 'local-user',
-    name: 'Test User',
-    email: 'test@example.com',
-    role: 'user',
+const {
+  authState,
+  dispatchMock,
+  logoutMock,
+  requestApiMineMock,
+  requestApiForItemMock,
+  itemApiMineMock,
+  chatApiListMock,
+} = vi.hoisted(() => ({
+  authState: {
+    currentUser: {
+      id: 'local-user',
+      name: 'Test User',
+      email: 'test@example.com',
+      role: 'user',
+    } as { id: string; name: string; email: string; role: 'user' } | null,
   },
   dispatchMock: vi.fn(),
   logoutMock: vi.fn().mockResolvedValue(undefined),
   requestApiMineMock: vi.fn().mockResolvedValue([]),
+  requestApiForItemMock: vi.fn().mockResolvedValue([]),
+  itemApiMineMock: vi.fn().mockResolvedValue([]),
+  chatApiListMock: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('../app/hooks', () => ({
   useAppDispatch: () => dispatchMock,
-  useAppSelector: () => currentUser,
+  useAppSelector: () => authState.currentUser,
 }));
 
 vi.mock('../services/authApi', () => ({
@@ -34,9 +48,18 @@ vi.mock('../services/requestApi', async (importOriginal) => {
     requestApi: {
       ...actual.requestApi,
       mine: requestApiMineMock,
+      forItem: requestApiForItemMock,
     },
   };
 });
+
+vi.mock('../services/itemApi', () => ({
+  itemApi: { mine: itemApiMineMock },
+}));
+
+vi.mock('../services/chatApi', () => ({
+  chatApi: { list: chatApiListMock },
+}));
 
 vi.mock('../components/NotificationMenu', () => ({
   NotificationMenu: ({
@@ -97,9 +120,49 @@ function renderShell(width: number) {
   );
 }
 
+function requestWithLastMessage(id = 1) {
+  return {
+    id,
+    itemId: 45,
+    receiverId: 1,
+    type: 'GIVE' as const,
+    status: 'AWAITING_HANDOVER' as const,
+    createdAt: '2026-11-12T08:00:00Z',
+    lastMessageAt: '2026-11-12T09:00:00Z',
+  };
+}
+
+function messageFrom(senderId: number, requestId = 1) {
+  return {
+    id: 10,
+    requestId,
+    senderId,
+    kind: 'TEXT',
+    content: 'Tin nhắn mới',
+    mediaId: null,
+    refItemId: null,
+    itemCard: null,
+    offerStatus: null,
+    moderation: 'PASS',
+    blockedReason: null,
+    createdAt: '2026-11-12T09:00:00Z',
+  };
+}
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  localStorage.clear();
+  authState.currentUser = {
+    id: 'local-user',
+    name: 'Test User',
+    email: 'test@example.com',
+    role: 'user',
+  };
+  requestApiMineMock.mockResolvedValue([]);
+  requestApiForItemMock.mockResolvedValue([]);
+  itemApiMineMock.mockResolvedValue([]);
+  chatApiListMock.mockResolvedValue([]);
 });
 
 describe.each([
@@ -185,6 +248,78 @@ describe.each([
   });
 });
 
+describe.each([
+  ['desktop', 1280],
+  ['mobile', 375],
+])('AppShell unread message dot on %s', (_viewport, width) => {
+  it('hiện chấm đỏ 8px sát chữ Tin nhắn khi tin cuối do người khác gửi', async () => {
+    authState.currentUser!.id = 'api_1';
+    requestApiMineMock.mockResolvedValue([requestWithLastMessage()]);
+    chatApiListMock.mockResolvedValue([messageFrom(2)]);
+    renderShell(width);
+
+    if (width < 1280) {
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: 'Mở điều hướng' }));
+    }
+    const messageLinks = within(screen.getByRole('banner')).getAllByRole('link', {
+      name: 'Tin nhắn',
+    });
+    const messageLink = width < 1280 ? messageLinks[messageLinks.length - 1] : messageLinks[0];
+
+    await waitFor(() => expect(messageLink.querySelector('[data-message-unread-dot]')).toBeTruthy());
+    const dot = messageLink.querySelector('[data-message-unread-dot]')!;
+    expect(dot.classList.contains('size-2')).toBe(true);
+    expect(dot.classList.contains('bg-message-unread')).toBe(true);
+  });
+});
+
+describe('AppShell unread message state', () => {
+  it('không tính tin cuối do chính người dùng gửi', async () => {
+    authState.currentUser!.id = 'api_1';
+    requestApiMineMock.mockResolvedValue([requestWithLastMessage()]);
+    chatApiListMock.mockResolvedValue([messageFrom(1)]);
+
+    renderShell(1280);
+
+    await waitFor(() => expect(chatApiListMock).toHaveBeenCalledWith(1));
+    expect(document.querySelector('[data-message-unread-dot]')).toBeNull();
+  });
+
+  it('tự ẩn chấm khi hội thoại được đánh dấu đã xem', async () => {
+    authState.currentUser!.id = 'api_1';
+    requestApiMineMock.mockResolvedValue([requestWithLastMessage()]);
+    chatApiListMock.mockResolvedValue([messageFrom(2)]);
+    renderShell(1280);
+
+    await waitFor(() => expect(document.querySelector('[data-message-unread-dot]')).toBeTruthy());
+    markRequestChatSeen(1);
+    await waitFor(() => expect(document.querySelector('[data-message-unread-dot]')).toBeNull());
+  });
+
+  it('tính cả tin nhắn nhận trên bài do người dùng sở hữu', async () => {
+    authState.currentUser!.id = 'api_1';
+    itemApiMineMock.mockResolvedValue([{ id: 45 }]);
+    requestApiForItemMock.mockResolvedValue([requestWithLastMessage()]);
+    chatApiListMock.mockResolvedValue([messageFrom(2)]);
+
+    renderShell(1280);
+
+    await waitFor(() => expect(document.querySelector('[data-message-unread-dot]')).toBeTruthy());
+    expect(requestApiForItemMock).toHaveBeenCalledWith(45, 1);
+  });
+
+  it('không hiển thị hoặc tải unread khi chưa đăng nhập', () => {
+    authState.currentUser = null;
+
+    renderShell(1280);
+
+    expect(screen.queryByRole('link', { name: 'Tin nhắn' })).toBeNull();
+    expect(document.querySelector('[data-message-unread-dot]')).toBeNull();
+    expect(requestApiMineMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('AppShell footer support links', () => {
   it('trỏ tới ba trang hỗ trợ và địa chỉ email', () => {
     renderShell(1280);
@@ -200,7 +335,7 @@ describe('AppShell footer support links', () => {
 describe('AppShell unread chat polling visibility', () => {
   it('pauses polling when document is hidden and fetches immediately when visible', async () => {
     vi.useFakeTimers();
-    currentUser.id = 'api_1';
+    authState.currentUser!.id = 'api_1';
     requestApiMineMock.mockClear();
 
     let visibilityState = 'visible';
@@ -229,7 +364,7 @@ describe('AppShell unread chat polling visibility', () => {
     expect(requestApiMineMock).toHaveBeenCalledTimes(3);
 
     vi.useRealTimers();
-    currentUser.id = 'local-user';
+    authState.currentUser!.id = 'local-user';
   });
 });
 

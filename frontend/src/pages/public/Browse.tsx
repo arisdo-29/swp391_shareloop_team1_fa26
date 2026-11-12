@@ -42,8 +42,19 @@ import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
 // Giá trị hình thức ở thanh địa chỉ (gift, trade) khác tên của API
 const OFFER_TYPE_BY_TYPE: Record<ItemType, OfferType> = { gift: 'GIVE', trade: 'SWAP' };
-const BROWSE_RESULTS_PAGE_SIZE = 20;
+const BROWSE_API_PAGE_SIZE = 20;
+const BROWSE_UI_PAGE_SIZE = 21;
 const pendingBrowseItemRequests = new Map<string, ReturnType<typeof itemApi.list>>();
+
+interface BrowseResultCache {
+  key: string;
+  items: ItemResponse[];
+  itemIds: Set<number>;
+  nextApiPage: number;
+  apiTotalPages: number | null;
+  totalElements: number | null;
+  rotationSeed?: number;
+}
 
 function loadBrowseItems(params: Parameters<typeof itemApi.list>[0]) {
   const requestKey = JSON.stringify(params);
@@ -59,6 +70,49 @@ function loadBrowseItems(params: Parameters<typeof itemApi.list>[0]) {
   return request;
 }
 
+async function fillBrowseResultCache(
+  cache: BrowseResultCache,
+  params: Omit<Parameters<typeof itemApi.list>[0], 'page' | 'size' | 'rotationSeed'>,
+  targetCount: number,
+) {
+  while (
+    (cache.totalElements === null || cache.items.length < Math.min(targetCount, cache.totalElements)) &&
+    (cache.apiTotalPages === null || cache.nextApiPage < cache.apiTotalPages)
+  ) {
+    const apiPage = cache.nextApiPage;
+    const response = await loadBrowseItems({
+      ...params,
+      page: apiPage,
+      size: BROWSE_API_PAGE_SIZE,
+      ...(cache.rotationSeed !== undefined ? { rotationSeed: cache.rotationSeed } : {}),
+    });
+
+    if (response.rotationSeed !== undefined && response.rotationSeed !== null) {
+      cache.rotationSeed = response.rotationSeed;
+    }
+    cache.totalElements = Math.max(response.totalElements, 0);
+    const responseSize = response.size > 0 ? response.size : BROWSE_API_PAGE_SIZE;
+    const pagesFromTotal = Math.ceil(cache.totalElements / responseSize);
+    cache.apiTotalPages = Math.max(response.totalPages ?? 0, pagesFromTotal);
+    cache.nextApiPage = apiPage + 1;
+
+    response.items.forEach((item) => {
+      if (cache.itemIds.has(item.id)) return;
+      cache.itemIds.add(item.id);
+      cache.items.push(item);
+    });
+  }
+
+  if (
+    cache.totalElements !== null &&
+    cache.apiTotalPages !== null &&
+    cache.nextApiPage >= cache.apiTotalPages &&
+    cache.items.length < cache.totalElements
+  ) {
+    cache.totalElements = cache.items.length;
+  }
+}
+
 // Lượt xoay bài đẩy backend trả cho một bộ lọc (filterKey). Chỉ dùng lại khi chuyển trang trong đúng bộ lọc đó.
 interface SavedRotation {
   filterKey: string;
@@ -72,6 +126,8 @@ export function Browse() {
   const viewerKey = useMemo(() => viewerKeyFor(Boolean(currentUser)), [currentUser]);
   // Ref thay vì state: đổi seed không cần vẽ lại trang, và không được làm effect tải lại danh sách.
   const savedRotationRef = useRef<SavedRotation | null>(null);
+  const resultCacheRef = useRef<BrowseResultCache | null>(null);
+  const activeFilterKeyRef = useRef<string | null>(null);
   const [itemResponses, setItemResponses] = useState<ItemResponse[]>([]);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [districts, setDistricts] = useState<AreaOption[]>([]);
@@ -165,32 +221,55 @@ export function Browse() {
       offerType: type ? OFFER_TYPE_BY_TYPE[type] : undefined,
     };
     // Mọi thứ quyết định tập kết quả, trừ số trang. Đổi bất kỳ phần nào thì là bộ lọc mới.
-    const filterKey = JSON.stringify({ ...requestParams, boostedOnly });
+    const filterKey = JSON.stringify({ ...requestParams, boostedOnly, viewerKey });
+    if (activeFilterKeyRef.current !== null && activeFilterKeyRef.current !== filterKey && page !== 0) {
+      activeFilterKeyRef.current = filterKey;
+      resultCacheRef.current = null;
+      setPage(0);
+      return () => {
+        active = false;
+      };
+    }
+    activeFilterKeyRef.current = filterKey;
     const savedRotation = savedRotationRef.current;
-    // Trang đầu hoặc vừa đổi bộ lọc/sắp xếp: không gửi seed để backend tính lượt theo giờ hiện tại.
-    // Chuyển trang trong cùng bộ lọc: gửi lại seed để các trang cùng một lượt, không trùng và không sót bài.
-    const rotationSeed =
-      page > 0 && savedRotation?.filterKey === filterKey ? savedRotation.seed : undefined;
-    const request = loadBrowseItems({
+    const cacheKey = JSON.stringify({ filterKey, itemsReloadKey });
+    let cache = resultCacheRef.current;
+    if (!cache || cache.key !== cacheKey) {
+      cache = {
+        key: cacheKey,
+        items: [],
+        itemIds: new Set<number>(),
+        nextApiPage: 0,
+        apiTotalPages: null,
+        totalElements: null,
+        ...(savedRotation?.filterKey === filterKey ? { rotationSeed: savedRotation.seed } : {}),
+      };
+      resultCacheRef.current = cache;
+    }
+    const activeCache = cache;
+    const targetCount = (page + 1) * BROWSE_UI_PAGE_SIZE;
+    const requestParamsWithViewer = {
       ...requestParams,
       boosted: boostedOnly || undefined,
-      page,
-      size: BROWSE_RESULTS_PAGE_SIZE,
-      ...(rotationSeed !== undefined ? { rotationSeed } : {}),
       ...(viewerKey !== undefined ? { viewerKey } : {}),
-    });
-    request
-      .then((response) => {
+    };
+    fillBrowseResultCache(activeCache, requestParamsWithViewer, targetCount)
+      .then(() => {
         if (!active) return;
-        if (response.rotationSeed !== undefined && response.rotationSeed !== null) {
-          savedRotationRef.current = { filterKey, seed: response.rotationSeed };
+        if (activeCache.rotationSeed !== undefined) {
+          savedRotationRef.current = { filterKey, seed: activeCache.rotationSeed };
         }
-        setItemResponses(response.items);
-        setPage(response.page);
-        setTotalElements(response.totalElements);
-        setTotalPages(
-          response.totalPages ?? Math.ceil(response.totalElements / BROWSE_RESULTS_PAGE_SIZE),
-        );
+        const normalizedTotal = activeCache.totalElements ?? 0;
+        const normalizedTotalPages = Math.ceil(normalizedTotal / BROWSE_UI_PAGE_SIZE);
+        const lastPage = Math.max(normalizedTotalPages - 1, 0);
+        if (page > lastPage) {
+          setPage(lastPage);
+          return;
+        }
+        const pageStart = page * BROWSE_UI_PAGE_SIZE;
+        setItemResponses(activeCache.items.slice(pageStart, pageStart + BROWSE_UI_PAGE_SIZE));
+        setTotalElements(normalizedTotal);
+        setTotalPages(normalizedTotalPages);
       })
       .catch((caught) => {
         if (!active) return;

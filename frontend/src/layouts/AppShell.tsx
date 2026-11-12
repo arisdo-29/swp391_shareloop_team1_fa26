@@ -14,6 +14,8 @@ import { loginPath } from '../utils/authRedirect';
 import { connectRealtime } from '../services/realtime';
 import { useRealtimeRefresh } from '../utils/useRealtimeRefresh';
 import { tokenStorage } from '../services/http';
+import { itemApi } from '../services/itemApi';
+import { chatApi } from '../services/chatApi';
 
 // Trang tài khoản dùng khung riêng (AuthLayout) nên không cần chân trang.
 const authPaths = new Set([
@@ -60,6 +62,7 @@ function AppShellContent() {
   const [unreadReloadKey, setUnreadReloadKey] = useState(0);
   const [homeHeaderSolid, setHomeHeaderSolid] = useState(false);
   const headerActionsRef = useRef<HTMLDivElement>(null);
+  const lastMessageSenderCacheRef = useRef(new Map<string, number | null>());
   useRealtimeRefresh(['MESSAGE', 'REQUEST'], () => setUnreadReloadKey((value) => value + 1));
 
   useEffect(() => {
@@ -107,10 +110,41 @@ function AppShellContent() {
     const checkUnread = async () => {
       if (document.visibilityState === 'hidden') return;
       try {
-        const requests = await requestApi.mine(numericUserId);
+        const [sentRequests, ownedItems] = await Promise.all([
+          requestApi.mine(numericUserId),
+          itemApi.mine(),
+        ]);
+        const receivedGroups = await Promise.all(
+          ownedItems.map((item) => requestApi.forItem(item.id, numericUserId)),
+        );
+        const requestById = new Map(
+          [...sentRequests, ...receivedGroups.flat()].map((request) => [request.id, request]),
+        );
+        const unreadCandidates = [...requestById.values()].filter((request) =>
+          isRequestUnread(request.lastMessageAt, request.id),
+        );
+        const unreadChecks = await Promise.all(
+          unreadCandidates.map(async (request) => {
+            const cacheKey = `${numericUserId}:${request.id}:${request.lastMessageAt}`;
+            let lastSenderId = lastMessageSenderCacheRef.current.get(cacheKey);
+            if (lastSenderId === undefined) {
+              const messages = await chatApi.list(request.id);
+              const lastMessage = messages.reduce<(typeof messages)[number] | null>(
+                (latest, message) =>
+                  !latest || message.createdAt > latest.createdAt ||
+                  (message.createdAt === latest.createdAt && message.id > latest.id)
+                    ? message
+                    : latest,
+                null,
+              );
+              lastSenderId = lastMessage?.senderId ?? null;
+              lastMessageSenderCacheRef.current.set(cacheKey, lastSenderId);
+            }
+            return lastSenderId !== null && lastSenderId !== numericUserId;
+          }),
+        );
         if (!active) return;
-        const unreadExists = requests.some((req) => isRequestUnread(req.lastMessageAt, req.id));
-        setHasUnreadChat(unreadExists);
+        setHasUnreadChat(unreadChecks.some(Boolean));
       } catch {
         // Ignored
       }
@@ -261,10 +295,7 @@ function AppShellContent() {
                     }`
                   }
                 >
-                  <span>{label}</span>
-                  {to === '/messages' && hasUnreadChat ? (
-                    <span className="size-2 rounded-full bg-error" title="Có tin nhắn mới" />
-                  ) : null}
+                  <HeaderNavLabel label={label} showUnread={to === '/messages' && hasUnreadChat} />
                 </NavLink>
               ))}
             </nav>
@@ -412,10 +443,7 @@ function AppShellContent() {
                   }`
                 }
               >
-                <span>{label}</span>
-                {to === '/messages' && hasUnreadChat ? (
-                  <span className="size-2 rounded-full bg-error" title="Có tin nhắn mới" />
-                ) : null}
+                <HeaderNavLabel label={label} showUnread={to === '/messages' && hasUnreadChat} />
               </NavLink>
             ))}
             {user && !isAdmin ? (
@@ -498,6 +526,22 @@ function AppShellContent() {
         </footer>
       ) : null}
     </div>
+  );
+}
+
+function HeaderNavLabel({ label, showUnread }: { label: string; showUnread: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span>{label}</span>
+      {showUnread ? (
+        <span
+          aria-hidden="true"
+          data-message-unread-dot
+          className="size-2 shrink-0 rounded-full bg-message-unread"
+          title="Có tin nhắn mới"
+        />
+      ) : null}
+    </span>
   );
 }
 

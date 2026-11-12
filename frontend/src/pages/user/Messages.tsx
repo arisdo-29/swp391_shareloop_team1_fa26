@@ -154,8 +154,10 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const requestGroupsLoadedAt = useRef(new Map<number, number>());
   useRealtimeRefresh(['MESSAGE', 'REQUEST', 'ITEM'], (update) => {
     if (update.kind === 'MESSAGE') {
-      if (update.resourceId === selectedRequestId) setMessageReloadKey((value) => value + 1);
-      else setConversationReloadKey((value) => value + 1);
+      if (selectedRequestId !== null && update.resourceId === selectedRequestId) {
+        if (document.visibilityState === 'visible') markRequestChatSeen(selectedRequestId);
+        setMessageReloadKey((value) => value + 1);
+      } else setConversationReloadKey((value) => value + 1);
     } else {
       setConversationReloadKey((value) => value + 1);
       if (update.kind === 'READY' || update.resourceId === selectedRequestId) {
@@ -334,6 +336,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         }
         if (response.length) afterId = Math.max(afterId ?? 0, ...response.map((entry) => entry.id));
         setMessages((current) => mergeChatMessages(current, response));
+        if (response.length && document.visibilityState === 'visible') {
+          markRequestChatSeen(selectedRequestId);
+        }
         setMessageError('');
       } catch {
         if (active) setMessageError('Không tải được tin nhắn. Vui lòng thử lại.');
@@ -657,6 +662,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       setMessages((current) =>
         current.some((entry) => entry.id === sent.id) ? current : [...current, sent],
       );
+      markRequestChatSeen(selectedRequestId);
       setMessage('');
       setChatImage(null);
       if (chatImageInputRef.current) chatImageInputRef.current.value = '';
