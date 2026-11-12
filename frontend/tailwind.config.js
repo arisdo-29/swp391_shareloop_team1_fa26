@@ -67,6 +67,7 @@ export default {
         },
         warning: { DEFAULT: '#8A5B17', soft: '#F8F1DF' },
         error: { DEFAULT: '#B04444', soft: '#F8EAEA' },
+        'message-unread': '#EF4444',
         info: { DEFAULT: '#3F6475', soft: '#EAF0F1' },
       },
       fontSize: { '2xs': ['0.6875rem', { lineHeight: '1rem' }] },
