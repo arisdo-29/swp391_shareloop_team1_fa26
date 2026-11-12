@@ -51,6 +51,42 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+it('không render mục mở lại đơn cũ dù session còn lưu mã đơn', async () => {
+  sessionStorage.setItem('shareloop:pendingTopUp', JSON.stringify({ orderCode: 'SL-OLD' }));
+
+  render(
+    <MemoryRouter initialEntries={['/credit']}>
+      <Credit />
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByRole('heading', { name: 'Nạp Credit' })).toBeTruthy();
+  expect(screen.queryByText('Mở lại đơn nạp gần nhất')).toBeNull();
+  expect(screen.queryByText('Không tìm thấy dữ liệu.')).toBeNull();
+  expect(paymentApi.getOrder).not.toHaveBeenCalled();
+});
+
+it('không render lỗi không tìm thấy của mã đơn cũ trên form nạp Credit', async () => {
+  sessionStorage.setItem('shareloop:pendingTopUp', JSON.stringify({ orderCode: 'SL-OLD' }));
+  vi.mocked(paymentApi.getOrder).mockRejectedValue({
+    code: 'NOT_FOUND',
+    message: 'Không tìm thấy dữ liệu.',
+    status: 404,
+  });
+
+  render(
+    <MemoryRouter initialEntries={['/credit?orderCode=SL-OLD']}>
+      <Credit />
+    </MemoryRouter>,
+  );
+
+  await waitFor(() => expect(paymentApi.getOrder).toHaveBeenCalledWith('SL-OLD'));
+  expect(screen.getByRole('heading', { name: 'Nạp Credit' })).toBeTruthy();
+  expect(screen.queryByText('Mở lại đơn nạp gần nhất')).toBeNull();
+  expect(screen.queryByText('Không tìm thấy dữ liệu.')).toBeNull();
+  expect(sessionStorage.getItem('shareloop:pendingTopUp')).toBeNull();
+});
+
 it('giữ phiên và báo Toast khi người dùng quay lại sau khi hủy VNPay', async () => {
   vi.mocked(paymentApi.getOrder).mockResolvedValue({
     orderCode: 'SL-123',

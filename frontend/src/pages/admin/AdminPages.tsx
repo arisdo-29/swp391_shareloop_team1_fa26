@@ -412,7 +412,7 @@ function formatActivityLogTime(value: string) {
 }
 
 function activityLogErrorMessage(error: ApiError) {
-  if (error.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (error.status === 401) return '';
   if (error.status === 403) return 'Tài khoản hiện tại không có quyền xem nhật ký hành động.';
   if (error.status === 400) return 'Khoảng ngày không hợp lệ';
   if (error.status === 0) return 'Không thể kết nối máy chủ. Vui lòng kiểm tra kết nối và thử lại.';
@@ -673,7 +673,7 @@ function adminChecklistErrorMessage(error: unknown, fallback: string) {
     }
     return 'Dữ liệu checklist chưa hợp lệ. Vui lòng kiểm tra và thử lại.';
   }
-  if (apiError.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (apiError.status === 401) return '';
   if (apiError.status === 403) return 'Bạn không có quyền quản lý checklist.';
   if (apiError.status === 404) return 'Không tìm thấy tiêu chí checklist.';
   if (apiError.status === 0) return 'Không kết nối được máy chủ. Vui lòng thử lại.';

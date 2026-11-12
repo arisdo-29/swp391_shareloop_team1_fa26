@@ -11,6 +11,7 @@ import type { ApiError } from '../../services/http';
 import { fetchSessionUser } from '../../services/session';
 import { validEmail } from '../../utils/validation';
 import { safeInternalNextPath } from '../../utils/authRedirect';
+import { isSilentSessionExpiryMessage } from '../../utils/sessionMessages';
 import { AuthLayout } from './AuthLayout';
 
 function loginErrorMessage(error: ApiError) {
@@ -34,7 +35,9 @@ export function Login() {
   const location = useLocation();
   const locationState = location.state as { notice?: string; sessionError?: string } | null;
   const successNotice = locationState?.notice;
-  const sessionError = locationState?.sessionError;
+  const sessionError = isSilentSessionExpiryMessage(locationState?.sessionError)
+    ? undefined
+    : locationState?.sessionError;
   const nextPath = safeInternalNextPath(new URLSearchParams(location.search).get('next'));
 
   const login = async (inputEmail: string, pass: string) => {

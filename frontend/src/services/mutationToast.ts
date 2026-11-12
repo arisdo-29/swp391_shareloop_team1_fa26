@@ -2,7 +2,7 @@ import type { ApiError } from './http';
 import type { ToastTone } from '../components/toast';
 
 export interface MutationToastDefinition {
-  success: string;
+  success?: string;
   failure: string;
   tone?: Exclude<ToastTone, 'error'>;
 }
@@ -25,7 +25,6 @@ export function mutationToastDefinition(
 
   const exact: Record<string, MutationToastDefinition> = {
     '/api/v1/auth/login': {
-      success: 'Đăng nhập thành công.',
       failure: 'Không đăng nhập được. Vui lòng kiểm tra thông tin và thử lại.',
     },
     '/api/v1/auth/register': {
@@ -41,7 +40,6 @@ export function mutationToastDefinition(
       failure: 'Không gửi lại được mã xác thực.',
     },
     '/api/v1/auth/logout': {
-      success: 'Đăng xuất thành công.',
       failure: 'Không thể kết nối máy chủ khi đăng xuất.',
     },
     '/api/v1/auth/change-password': {
@@ -61,7 +59,6 @@ export function mutationToastDefinition(
       failure: verb === 'post' ? 'Không đăng được bài.' : 'Không cập nhật được bài đăng.',
     },
     '/api/v1/media': {
-      success: 'Tải ảnh lên thành công.',
       failure: 'Không tải được ảnh lên.',
     },
     '/api/v1/reports': {
@@ -147,48 +144,17 @@ export function mutationToastDefinition(
   if (matches(path, /\/api\/v1\/(disputes|reports)\/\d+\/response$/)) {
     return { success: 'Gửi giải trình thành công.', failure: 'Không gửi được giải trình.' };
   }
-  if (matches(path, /\/api\/v1\/admin\/reviews\/\d+\/approve$/)) {
-    return { success: 'Duyệt bài đăng thành công.', failure: 'Không duyệt được bài đăng.' };
-  }
-  if (matches(path, /\/api\/v1\/admin\/reviews\/\d+\/reject$/)) {
-    return {
-      success: 'Đã từ chối bài đăng.',
-      failure: 'Không từ chối được bài đăng.',
-      tone: 'warning',
-    };
-  }
-  if (matches(path, /\/api\/v1\/admin\/users\/\d+\/(lock|unlock)$/)) {
-    const locking = path.endsWith('/lock');
-    return {
-      success: locking ? 'Khóa tài khoản thành công.' : 'Mở khóa tài khoản thành công.',
-      failure: locking ? 'Không khóa được tài khoản.' : 'Không mở khóa được tài khoản.',
-      tone: locking ? 'warning' : 'success',
-    };
-  }
-  if (matches(path, /\/api\/v1\/admin\/requests\/\d+\/cancel$/)) {
-    return {
-      success: 'Admin đã hủy yêu cầu.',
-      failure: 'Không hủy được yêu cầu.',
-      tone: 'warning',
-    };
-  }
-  if (matches(path, /\/api\/v1\/admin\/reports\/\d+\/request-response$/)) {
-    return {
-      success: 'Đã yêu cầu người dùng giải trình.',
-      failure: 'Không gửi được yêu cầu giải trình.',
-    };
-  }
-  if (matches(path, /\/api\/v1\/admin\/reports\/\d+\/conclude$/)) {
-    return { success: 'Kết luận báo cáo thành công.', failure: 'Không thể kết luận báo cáo.' };
-  }
-  if (matches(path, /\/api\/v1\/admin\/checklist(?:\/\d+)?(?:\/active)?$/)) {
-    return { success: 'Cập nhật checklist thành công.', failure: 'Không cập nhật được checklist.' };
-  }
-  if (matches(path, /\/api\/v1\/admin\/(categories|areas|lexicon|configs)(?:\/.*)?$/)) {
-    return {
-      success: 'Cập nhật cấu hình quản trị thành công.',
-      failure: 'Không cập nhật được cấu hình quản trị.',
-    };
+  // Các trang Admin này tự hiển thị phản hồi cụ thể ngay tại nơi thao tác.
+  // Không phát Toast từ interceptor để tránh lặp cả thông báo thành công lẫn lỗi.
+  if (
+    matches(path, /\/api\/v1\/admin\/reviews\/\d+\/(approve|reject)$/) ||
+    matches(path, /\/api\/v1\/admin\/users\/\d+\/(lock|unlock)$/) ||
+    matches(path, /\/api\/v1\/admin\/requests\/\d+\/cancel$/) ||
+    matches(path, /\/api\/v1\/admin\/reports\/\d+\/(request-response|conclude)$/) ||
+    matches(path, /\/api\/v1\/admin\/checklist(?:\/.*)?$/) ||
+    matches(path, /\/api\/v1\/admin\/(configs|categories|areas|lexicon)(?:\/.*)?$/)
+  ) {
+    return null;
   }
   if (matches(path, /\/api\/v1\/payments\/topup/)) {
     return {
@@ -198,7 +164,6 @@ export function mutationToastDefinition(
   }
   if (path.startsWith('/api/v1/admin/')) {
     return {
-      success: 'Thao tác quản trị thành công.',
       failure: 'Không thực hiện được thao tác quản trị.',
     };
   }
@@ -207,7 +172,7 @@ export function mutationToastDefinition(
 
 export function mutationErrorMessage(error: ApiError, fallback: string) {
   if (error.status === 0) return 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
-  if (error.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (error.status === 401) return '';
   if (error.status === 403) return 'Bạn không có quyền thực hiện thao tác này.';
   if (error.status >= 500) return 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.';
   return error.message?.trim() || fallback;

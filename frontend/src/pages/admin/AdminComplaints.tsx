@@ -105,7 +105,7 @@ function consequences(detail: AdminReportDetail) {
   return parts.join(' · ');
 }
 function errorMessage(error: ApiError) {
-  if (error.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (error.status === 401) return '';
   if (error.status === 403) return 'Tài khoản hiện tại không có quyền xử lý khiếu nại.';
   if (error.status === 404) return 'Hồ sơ khiếu nại không còn tồn tại.';
   return error.message || 'Không tải được khiếu nại. Vui lòng thử lại.';

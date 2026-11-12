@@ -14,8 +14,8 @@ function reportErrorMessage(error: ApiError) {
   if (error.status === 404) return 'Không tìm thấy đối tượng cần báo cáo.';
   if (error.status === 409)
     return 'Bạn không thể tự báo cáo mình hoặc đã báo cáo đối tượng này trước đó.';
-  if (error.status === 401 || error.status === 403)
-    return 'Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.';
+  if (error.status === 401) return '';
+  if (error.status === 403) return 'Bạn không có quyền gửi báo cáo này.';
   if (error.status === 0) return 'Không kết nối được máy chủ. Vui lòng thử lại.';
   return 'Không gửi được báo cáo. Vui lòng thử lại.';
 }

@@ -344,7 +344,6 @@ export function Activities() {
       setMyItems([]);
       setApiRequestsByItem({});
       setApiSentRequests([]);
-      setMyItemsError('Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.');
       setMyItemsLoading(false);
       return () => {
         active = false;

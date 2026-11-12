@@ -41,7 +41,7 @@ function reputationErrorMessage(error: unknown) {
   if (apiError.code === 'USER_NOT_FOUND' || apiError.status === 404) {
     return 'Không tìm thấy thông tin uy tín của tài khoản.';
   }
-  if (apiError.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (apiError.status === 401) return '';
   if (apiError.status === 0) return 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
   return 'Không tải được thông tin uy tín. Vui lòng thử lại.';
 }
@@ -52,7 +52,7 @@ function profileLoadErrorMessage(error: unknown, source: 'profile' | 'areas') {
     return 'Tài khoản đã bị khoá. Vui lòng liên hệ quản trị viên.';
   }
   if (apiError.code === 'USER_NOT_FOUND') return 'Không tìm thấy hồ sơ tài khoản.';
-  if (apiError.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (apiError.status === 401) return '';
   if (apiError.status === 403) return 'Tài khoản không có quyền truy cập hồ sơ.';
   if (apiError.status === 404 && source === 'profile') return 'Không tìm thấy hồ sơ tài khoản.';
   if (apiError.status === 0) return 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
@@ -75,7 +75,7 @@ function profileSaveErrorMessage(error: unknown) {
     AUTH_ACCOUNT_LOCKED: 'Tài khoản đã bị khoá. Vui lòng liên hệ quản trị viên.',
   };
   if (apiError.code && messages[apiError.code]) return messages[apiError.code];
-  if (apiError.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (apiError.status === 401) return '';
   if (apiError.status === 0) return 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.';
   if (apiError.status && apiError.status >= 500) {
     return 'Máy chủ chưa thể cập nhật hồ sơ lúc này. Vui lòng thử lại sau.';
@@ -134,7 +134,7 @@ function phoneChangeErrorMessage(error: ApiError) {
       ? `Mã OTP không đúng. Bạn còn ${remainingAttempts} lần thử.`
       : 'Mã OTP không đúng. Vui lòng kiểm tra lại.';
   }
-  if (error.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (error.status === 401) return '';
   if (error.status === 403) return 'Tài khoản không được phép đổi số điện thoại.';
   if (error.status === 400 || error.status === 422) {
     return 'Thông tin đổi số điện thoại không hợp lệ. Vui lòng kiểm tra và thử lại.';
