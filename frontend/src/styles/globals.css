@@ -56,7 +56,10 @@
   --color-bronze: #a8791c;
   --color-admin-group: var(--color-success-500);
   --color-admin-divider: var(--color-success-300);
+ revert-pr-441
   --color-footer-background: #0b3f30;
+
+ develop
   --color-shadow-subtle: rgb(11 59 46 / 8%);
   --color-shadow-strong: rgb(11 59 46 / 22%);
   color-scheme: light;

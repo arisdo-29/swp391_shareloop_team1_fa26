@@ -393,6 +393,17 @@ export function Credit() {
         </section>
 
         <section id="topup" aria-label="Nạp Credit" className="scroll-mt-24">
+ revert-pr-441
+
+          {loadPendingTopUp()?.orderCode ? (
+            <Link
+              className="mb-3 inline-flex min-h-11 items-center text-sm font-semibold text-link hover:underline"
+              to={`/credit?orderCode=${encodeURIComponent(loadPendingTopUp()!.orderCode)}`}
+            >
+              Mở lại đơn nạp gần nhất
+            </Link>
+          ) : null}
+develop
           {topUpError ? (
             <div className="mb-3">
               <Alert tone="error">{topUpError}</Alert>
