@@ -56,7 +56,7 @@ class AiDescriptionServiceTest {
         when(configService.getInt(ConfigKey.AI_DESCRIBE_TIMEOUT_SECONDS)).thenReturn(20);
         when(accountRepository.lockByUserId(7L)).thenReturn(Optional.of(mock(AiQuotaAccount.class)));
         when(client.isAvailable()).thenReturn(true);
-        when(client.model()).thenReturn("gemini-3.5-flash-lite");
+        when(client.model()).thenReturn("gemini-4-hydrogen");
     }
 
     @Test

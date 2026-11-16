@@ -19,9 +19,11 @@ import com.shareloop.setting.service.ConfigService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -105,6 +107,7 @@ public class AiSearchService {
                 .collect(Collectors.toMap(AreaResponse::id, AreaResponse::name));
         LinkedHashMap<Long, ItemResponse> shortlist = new LinkedHashMap<>();
         String requestedItem = "";
+        Set<Long> equivalentItemIds = Set.of();
         String reply = FOUND_MESSAGE;
         List<ItemResponse> pending = new ArrayList<>(MODEL_BATCH_SIZE);
         boolean called = false;
@@ -127,6 +130,7 @@ public class AiSearchService {
                         }
                         shortlist = selection.items();
                         requestedItem = selection.requestedItem();
+                        equivalentItemIds = selection.equivalentItemIds();
                         reply = selection.message();
                         pending.clear();
                     }
@@ -144,6 +148,7 @@ public class AiSearchService {
                 }
                 shortlist = selection.items();
                 requestedItem = selection.requestedItem();
+                equivalentItemIds = selection.equivalentItemIds();
                 reply = selection.message();
             }
         } catch (Exception exception) {
@@ -162,11 +167,13 @@ public class AiSearchService {
             try {
                 ItemResponse current = itemService.getItem(id, null);
                 if ((current.expireAt() == null || current.expireAt().isAfter(Instant.now()))
-                        && matchesRequestedItem(requestedItem, current)) {
+                        && (matchesRequestedItem(requestedItem, current)
+                                || (equivalentItemIds.contains(id)
+                                        && Objects.equals(shortlist.get(id).title(), current.title())))) {
                     verified.add(current);
                 }
             } catch (BusinessException exception) {
-                // A selected item can be reserved, traded or hidden while Gemini is reading.
+                // A selected item can be reserved, traded or hidden while the model is reading.
             }
         }
         boolean paid = !verified.isEmpty() && quotaService.consume(userId);
@@ -201,12 +208,13 @@ public class AiSearchService {
         if (!root.isObject()
                 || !root.path("inScope").isBoolean()
                 || !root.path("itemIds").isArray()
+                || !root.path("equivalentItemIds").isArray()
                 || !root.path("requestedItem").isTextual()
                 || !root.path("message").isTextual()) {
             throw new IllegalArgumentException("Invalid AI recommendation response");
         }
         if (!root.path("inScope").asBoolean()) {
-            return new Selection(false, new LinkedHashMap<>(), "", OUT_OF_SCOPE_MESSAGE);
+            return new Selection(false, new LinkedHashMap<>(), "", Set.of(), OUT_OF_SCOPE_MESSAGE);
         }
         String extractedItem = normalizeWords(root.path("requestedItem").asText());
         if (BROAD_ITEM_TERMS.contains(extractedItem)) extractedItem = "";
@@ -227,14 +235,33 @@ public class AiSearchService {
         if (ids.size() > MAX_RECOMMENDATIONS) {
             throw new IllegalArgumentException("Too many AI item recommendations");
         }
+        Set<Long> equivalentIds = new HashSet<>();
+        JsonNode equivalentNodes = root.path("equivalentItemIds");
+        if (equivalentNodes.size() > MAX_RECOMMENDATIONS) {
+            throw new IllegalArgumentException("Too many equivalent item recommendations");
+        }
+        for (JsonNode node : equivalentNodes) {
+            if (!node.isIntegralNumber() || !offered.containsKey(node.longValue())) {
+                throw new IllegalArgumentException("AI referenced an unavailable equivalent item");
+            }
+            equivalentIds.add(node.longValue());
+        }
+        if (requestedItem.isBlank() && !equivalentIds.isEmpty()) {
+            throw new IllegalArgumentException("AI returned equivalent items without a requested item");
+        }
+        Set<Long> selectedIds = new HashSet<>();
         for (JsonNode node : ids) {
             if (!node.isIntegralNumber() || !offered.containsKey(node.longValue())) {
                 throw new IllegalArgumentException("AI referenced an unavailable item");
             }
+            selectedIds.add(node.longValue());
             ItemResponse candidate = offered.get(node.longValue());
-            if (matchesRequestedItem(requestedItem, candidate)) {
+            if (matchesRequestedItem(requestedItem, candidate) || equivalentIds.contains(node.longValue())) {
                 selected.putIfAbsent(node.longValue(), candidate);
             }
+        }
+        if (!selectedIds.containsAll(equivalentIds)) {
+            throw new IllegalArgumentException("AI returned an equivalent item outside its recommendations");
         }
         String message = root.path("message").asText().trim().replaceAll("\\s+", " ");
         if (message.isBlank()
@@ -242,7 +269,7 @@ public class AiSearchService {
                 || !ContactInfoDetector.detect(message).isEmpty()) {
             message = FOUND_MESSAGE;
         }
-        return new Selection(true, selected, requestedItem, message);
+        return new Selection(true, selected, requestedItem, equivalentIds, message);
     }
 
     private AiSearchResponse empty(long userId, String message, boolean fallback, boolean outOfScope) {
@@ -321,7 +348,11 @@ public class AiSearchService {
     }
 
     private record Selection(
-            boolean inScope, LinkedHashMap<Long, ItemResponse> items, String requestedItem, String message) {}
+            boolean inScope,
+            LinkedHashMap<Long, ItemResponse> items,
+            String requestedItem,
+            Set<Long> equivalentItemIds,
+            String message) {}
 
     private record CatalogItem(
             Long id,

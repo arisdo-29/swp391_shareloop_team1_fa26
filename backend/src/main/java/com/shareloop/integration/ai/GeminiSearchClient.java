@@ -15,27 +15,38 @@ import tools.jackson.databind.ObjectMapper;
 
 @Component
 public class GeminiSearchClient implements AiSearchClient {
-    static final String MODEL = "gemini-3.5-flash-lite";
+    static final String MODEL = "gemini-4-hydrogen";
     private static final URI ENDPOINT = URI.create("https://generativelanguage.googleapis.com/v1beta/interactions");
     private static final String SCHEMA = """
             {"type":"object","properties":{
               "inScope":{"type":"boolean"},
               "itemIds":{"type":"array","items":{"type":"integer"},"maxItems":6},
+              "equivalentItemIds":{"type":"array","items":{"type":"integer"},"maxItems":6},
               "requestedItem":{"type":"string"},
               "message":{"type":"string"}},
-             "required":["inScope","itemIds","requestedItem","message"],"additionalProperties":false}
+             "required":["inScope","itemIds","equivalentItemIds","requestedItem","message"],"additionalProperties":false}
             """;
     private static final String INSTRUCTION = """
             Bạn là trợ lý tìm đồ của ShareLoop. Mỗi yêu cầu là một cuộc tìm mới, không có hội thoại trước đó.
             Chỉ phục vụ nhu cầu tìm bài đăng đồ dùng trong danh sách được cung cấp. Nếu người dùng hỏi chuyện
             ngoài phạm vi tìm đồ, trả inScope=false, itemIds=[] và một câu ngắn lịch sự hướng họ mô tả món cần tìm.
             Hiểu cả nhu cầu gián tiếp về công dụng, phong cách hoặc hoàn cảnh, không đòi tên món cụ thể.
-            Khi người dùng nêu rõ loại món cần tìm, chỉ chọn bài đăng có chính loại món đó.
-            Không chọn món cùng danh mục, món phối kèm hoặc món chủ bài muốn đổi lấy.
+            Khi người dùng nêu rõ loại món cần tìm, chọn chính loại món đó kể cả khi tiêu đề dùng
+            tên đồng nghĩa hoặc tên bao quát hơn mà nội dung xác nhận là cùng loại món.
+            Ví dụ "truyện" có thể khớp sách truyện, nhưng không khớp sách giáo khoa;
+            "áo" không khớp giày dù mô tả giày có nhắc đến áo.
+            Không chọn món chỉ cùng danh mục, món phối kèm hoặc món chủ bài muốn đổi lấy.
             Ví dụ tìm áo thì không chọn bài đăng giày; chỉ cần phong cách hơn thì có thể cân nhắc cả hai.
             requestedItem là tên loại món được người dùng nêu rõ, chép đúng một cụm từ có trong yêu cầu.
             Ví dụ "tìm áo" → "áo", "cần đồng hồ" → "đồng hồ", "tìm nồi cơm điện" → "nồi cơm điện".
             Khi người dùng chỉ mô tả công dụng, hoàn cảnh hoặc nhóm món rộng, để requestedItem rỗng.
+            itemIds chỉ gồm bài thực sự đáp ứng nhu cầu và mọi chi tiết cụ thể trong câu hỏi.
+            equivalentItemIds là tập con của itemIds: chỉ ghi ID có món cùng loại với requestedItem
+            nhưng tên loại món dùng cách gọi khác nên không khớp nguyên cụm ở đầu title.
+            Chỉ đánh dấu khi title, description hoặc categoryName đủ căn cứ về loại món;
+            nếu title hoặc description cho thấy loại khác thì không dùng categoryName để suy diễn.
+            Không đánh dấu vì cùng danh mục, công dụng liên quan hoặc suy đoán thiếu dữ kiện.
+            Nếu requestedItem rỗng, equivalentItemIds phải rỗng.
             Chỉ đối chiếu nhu cầu với món mà chủ bài đang đăng cho hoặc đăng trao đổi. offerType=SWAP
             vẫn là món trong title và description; không xem món chủ bài muốn nhận là món đang có.
             Chọn tối đa 6 ID phù hợp nhất từ danh sách, sắp xếp theo mức phù hợp. Không tự tạo ID hoặc món đồ.
@@ -96,12 +107,18 @@ public class GeminiSearchClient implements AiSearchClient {
     String buildRequestBody(String query, String catalog) {
         String input = mapper.writeValueAsString(Map.of("query", query, "availableItems", mapper.readTree(catalog)));
         return mapper.writeValueAsString(Map.of(
-                "model", MODEL,
-                "store", false,
-                "system_instruction", INSTRUCTION,
-                "input", input,
+                "model",
+                MODEL,
+                "store",
+                false,
+                "generation_config",
+                Map.of("thinking_level", "low"),
+                "system_instruction",
+                INSTRUCTION,
+                "input",
+                input,
                 "response_format",
-                        Map.of("type", "text", "mime_type", "application/json", "schema", mapper.readTree(SCHEMA))));
+                Map.of("type", "text", "mime_type", "application/json", "schema", mapper.readTree(SCHEMA))));
     }
 
     AiResponse parseResponse(int statusCode, String body) throws IOException {
