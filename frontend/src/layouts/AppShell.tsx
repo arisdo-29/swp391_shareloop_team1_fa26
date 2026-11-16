@@ -16,6 +16,7 @@ import { useRealtimeRefresh } from '../utils/useRealtimeRefresh';
 import { tokenStorage } from '../services/http';
 import { itemApi } from '../services/itemApi';
 import { chatApi } from '../services/chatApi';
+import { usePointsToast } from '../utils/usePointsToast';
 
 // Trang tài khoản dùng khung riêng (AuthLayout) nên không cần chân trang.
 const authPaths = new Set([
@@ -64,6 +65,8 @@ function AppShellContent() {
   const headerActionsRef = useRef<HTMLDivElement>(null);
   const lastMessageSenderCacheRef = useRef(new Map<string, number | null>());
   useRealtimeRefresh(['MESSAGE', 'REQUEST'], () => setUnreadReloadKey((value) => value + 1));
+  // Toast "Bạn được cộng N điểm" khi giao dịch vừa hoàn tất (Admin không giao dịch nên không cần).
+  usePointsToast(authenticatedUserId && !isAdmin ? authenticatedUserId : null);
 
   useEffect(() => {
     if (!authenticatedUserId || !tokenStorage.get()) return;

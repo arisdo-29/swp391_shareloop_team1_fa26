@@ -84,7 +84,7 @@ Lấy số lượng thông báo chưa đọc của tôi (dùng cho icon quả ch
 | Trường | Kiểu | Ý nghĩa |
 |---|---|---|
 | `id` | number | ID của thông báo |
-| `type` | string | Loại thông báo (`POST_APPROVED`, `NEW_REQUEST`, `SELECTED`, `LOGISTICS_CONFIRMED`, ...) |
+| `type` | string | Loại thông báo (`POST_APPROVED`, `NEW_REQUEST`, `SELECTED`, `LOGISTICS_CONFIRMED`, `POINTS_AWARDED`, ...) |
 | `title` | string | Tiêu đề thông báo |
 | `body` | string | Nội dung chi tiết |
 | `link` | string? | Đường dẫn chuyển hướng trong frontend |

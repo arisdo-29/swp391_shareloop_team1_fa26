@@ -21,4 +21,17 @@ public record MyReputationResponse(
         Double accuracyRate,
 
         @Schema(description = "Lịch sử biến động điểm uy tín, sắp xếp mới nhất lên trước")
-        Page<PointHistoryDto> history) {}
+        Page<PointHistoryDto> history,
+
+        @Schema(description = "Hạng kế tiếp, null nếu đã ở hạng cao nhất", example = "DIAMOND")
+        Rank nextRank,
+
+        @Schema(description = "Số điểm còn thiếu để lên hạng kế tiếp, null nếu đã ở hạng cao nhất", example = "80")
+        Integer pointsToNextRank) {
+
+    /** Dùng khi không cần thông tin hạng kế tiếp (giữ tương thích các chỗ tạo cũ). */
+    public MyReputationResponse(
+            int totalPoints, Rank rank, int trustStars, Double accuracyRate, Page<PointHistoryDto> history) {
+        this(totalPoints, rank, trustStars, accuracyRate, history, null, null);
+    }
+}

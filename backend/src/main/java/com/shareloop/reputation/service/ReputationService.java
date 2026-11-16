@@ -282,7 +282,33 @@ public class ReputationService {
             });
         }
 
-        return new MyReputationResponse(totalPoints, rank, trustStars, accuracyRate, history);
+        Rank nextRank = nextRank(rank);
+        Integer pointsToNextRank = nextRank == null ? null : Math.max(rankMinPoints(nextRank) - totalPoints, 0);
+        return new MyReputationResponse(
+                totalPoints, rank, trustStars, accuracyRate, history, nextRank, pointsToNextRank);
+    }
+
+    // Hạng ngay trên hạng hiện tại; Kim cương là hạng cao nhất.
+    private static Rank nextRank(Rank rank) {
+        return switch (rank) {
+            case BRONZE -> Rank.SILVER;
+            case SILVER -> Rank.GOLD;
+            case GOLD -> Rank.DIAMOND;
+            case DIAMOND -> null;
+        };
+    }
+
+    // Điểm tối thiểu của một hạng, đọc cùng các khoá cấu hình mà getRank(int) dùng.
+    private int rankMinPoints(Rank rank) {
+        if (configService == null) {
+            return 0;
+        }
+        return switch (rank) {
+            case BRONZE -> 0;
+            case SILVER -> configInt(ConfigKey.REPUTATION_SILVER_MIN);
+            case GOLD -> configInt(ConfigKey.REPUTATION_GOLD_MIN);
+            case DIAMOND -> configInt(ConfigKey.REPUTATION_DIAMOND_MIN);
+        };
     }
 
     /**
@@ -386,12 +412,14 @@ public class ReputationService {
         int granted =
                 user.claimDailyPoints(context.repeatedPair() ? 0 : basePoints, context.dailyCap(), context.today());
         int newTotal = user.getTotalPoints() + granted;
+        Rank rankBefore = user.getRankLevel();
         Rank newRank = getRank(newTotal);
         user.addPoints(granted, newRank);
 
         int starsBefore = user.getTrustStars();
         boolean starRestored = user.recordCleanTransaction(context.streakForStar());
         userReputationRepository.save(user);
+        notifyPointsResult(user, basePoints, granted, newTotal, rankBefore, newRank, starRestored, context, roleLabel);
 
         if (activityLogService == null) {
             return;
@@ -430,6 +458,49 @@ public class ReputationService {
                             context.streakForStar()),
                     "Hồi 1 sao sau " + context.streakForStar() + " giao dịch sạch liên tiếp");
         }
+    }
+
+    /**
+     * Báo cho người dùng biết giao dịch vừa hoàn tất được cộng bao nhiêu điểm (TB-02, bổ sung 16/11/2026): số điểm,
+     * tổng điểm, lên hạng, hồi sao; không được cộng thì nói rõ vì sao (trần ngày, cặp lặp).
+     */
+    private void notifyPointsResult(
+            UserReputation user,
+            int basePoints,
+            int granted,
+            int newTotal,
+            Rank rankBefore,
+            Rank newRank,
+            boolean starRestored,
+            CompletionContext context,
+            String roleLabel) {
+        if (notificationService == null) {
+            return;
+        }
+        String title =
+                granted > 0 ? "Bạn được cộng " + granted + " điểm uy tín" : "Giao dịch hoàn tất, chưa được cộng điểm";
+        StringBuilder body = new StringBuilder(pointsReason(context, roleLabel, basePoints, granted));
+        body.append(". Tổng điểm hiện tại: ").append(newTotal).append(".");
+        if (rankBefore != null && newRank.ordinal() > rankBefore.ordinal()) {
+            body.append(" Chúc mừng, bạn đã lên hạng ")
+                    .append(rankLabel(newRank))
+                    .append("!");
+        }
+        if (starRestored) {
+            body.append(" Bạn được hồi 1 sao uy tín, hiện có ")
+                    .append(user.getTrustStars())
+                    .append(" sao.");
+        }
+        notificationService.notify(user.getId(), "POINTS_AWARDED", title, body.toString(), "/profile?tab=reputation");
+    }
+
+    private static String rankLabel(Rank rank) {
+        return switch (rank) {
+            case BRONZE -> "Đồng";
+            case SILVER -> "Bạc";
+            case GOLD -> "Vàng";
+            case DIAMOND -> "Kim cương";
+        };
     }
 
     private static String pointsReason(CompletionContext context, String roleLabel, int basePoints, int granted) {

@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppShell } from '../layouts/AppShell';
+import { RouteError } from '../pages/RouteError';
 import {
   AdminRoute,
   GuestOnlyRoute,
@@ -52,10 +53,12 @@ const AdminContentPage = lazy(() => import('../pages/admin/AdminPages').then((mo
 export const router = createBrowserRouter([
   {
     element: <AppShell />,
+    errorElement: <RouteError />,
     children: [
       { path: '/about', element: <About /> },
       {
         element: <PublicRoute />,
+        errorElement: <RouteError />,
         children: [
           { path: '/', element: <Home /> },
           { path: '/browse', element: <Browse /> },
@@ -67,6 +70,7 @@ export const router = createBrowserRouter([
       },
       {
         element: <GuestOnlyRoute />,
+        errorElement: <RouteError />,
         children: [
           { path: '/login', element: <Login /> },
           { path: '/register', element: <Register /> },
@@ -78,6 +82,7 @@ export const router = createBrowserRouter([
       },
       {
         element: <ProtectedRoute />,
+        errorElement: <RouteError />,
         children: [
           { path: '/post', element: <Post /> },
           { path: '/ai', element: <AI /> },
@@ -86,7 +91,7 @@ export const router = createBrowserRouter([
           { path: '/requests/:requestId', element: <Messages /> },
           // conversationId là id của Request; chỉ hai bên giao dịch xem được (backend trả 403 cho người ngoài).
           { path: '/messages/:conversationId/progress', element: <TransactionProgress /> },
-          // Giữ chỗ: Hồ sơ công khai dựng đầy đủ ở đợt sau.
+          // Hồ sơ công khai: chỉ xem được khi đã đăng nhập (D-23).
           { path: '/users/:userId', element: <UserProfile /> },
           { path: '/me/disputes/:reportId', element: <ReportResponse kind="dispute" /> },
           { path: '/me/reports/:reportId', element: <ReportResponse /> },
@@ -101,6 +106,7 @@ export const router = createBrowserRouter([
       },
       {
         element: <ProfileRoute />,
+        errorElement: <RouteError />,
         children: [
           { path: '/profile', element: <Profile /> },
           { path: '/change-password', element: <ChangePassword /> },
@@ -108,10 +114,12 @@ export const router = createBrowserRouter([
       },
       {
         element: <AdminRoute />,
+        errorElement: <RouteError />,
         children: [
           {
             path: '/admin',
             element: <AdminLayout />,
+            errorElement: <RouteError />,
             children: [
               { index: true, element: <AdminDashboard /> },
               { path: 'moderation', element: <AdminModerationList /> },
@@ -119,7 +127,7 @@ export const router = createBrowserRouter([
               // L16: đã gỡ trang và API Nhãn chính hãng; giữ đường dẫn cũ để link đã lưu quay về trang tổng quan.
               { path: 'authenticity', element: <Navigate to="/admin" replace /> },
               { path: 'checklist', element: <AdminContentPage kind="checklist" /> },
-              // Tạm ẩn Bài quá hạn và Giao dịch: backend chưa có API cho Admin, đưa về trang tổng quan.
+              // Bài hết hạn do tác vụ nền xử lý (TD-01), Admin không có màn riêng: đưa link cũ về trang tổng quan.
               { path: 'expired-posts', element: <Navigate to="/admin" replace /> },
               { path: 'categories', element: <AdminContentPage kind="categories" /> },
               { path: 'keywords', element: <AdminContentPage kind="keywords" /> },

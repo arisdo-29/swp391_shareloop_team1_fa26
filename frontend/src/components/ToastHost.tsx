@@ -45,7 +45,7 @@ export function ToastHost() {
     <div
       aria-live="polite"
       aria-label="Thông báo"
-      className="pointer-events-none fixed right-3 top-[76px] z-[60] flex w-[calc(100%-1.5rem)] max-w-sm flex-col gap-2 sm:right-4 sm:top-[84px] sm:w-full"
+      className="pointer-events-none fixed left-3 right-3 top-[76px] z-[60] flex flex-col gap-2 sm:left-auto sm:right-4 sm:top-[84px] sm:w-full sm:max-w-sm"
     >
       {toasts.map((entry) => (
         <div

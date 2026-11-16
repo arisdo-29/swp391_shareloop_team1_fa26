@@ -696,7 +696,13 @@ export function Profile() {
                         <strong className="text-2xl">{getRankLabel(reputation.rank)}</strong>
                         <span className="text-sm text-text-muted">{reputation.totalPoints} điểm uy tín</span>
                       </p>
-                      <p className="mt-2 text-sm leading-6 text-text-secondary">Điểm tăng khi bạn hoàn tất giao dịch và quyết định hạng.</p>
+                      <p className="mt-2 text-sm leading-6 text-text-secondary">
+                        {reputation.nextRank && typeof reputation.pointsToNextRank === 'number'
+                          ? `Còn ${reputation.pointsToNextRank} điểm nữa để lên hạng ${getRankLabel(reputation.nextRank)}.`
+                          : reputation.nextRank === null
+                            ? 'Bạn đang ở hạng cao nhất.'
+                            : 'Điểm tăng khi bạn hoàn tất giao dịch và quyết định hạng.'}
+                      </p>
                     </div>
                     <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
                       <p className="text-xs font-semibold text-text-secondary">Sao uy tín</p>

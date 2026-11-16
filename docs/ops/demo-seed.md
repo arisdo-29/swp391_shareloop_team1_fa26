@@ -37,9 +37,13 @@ có người dùng thật. Mật khẩu được băm bằng `PasswordEncoder` (
 | `binh.demo@shareloop.local` | Người dùng | 200 Credit; người nhận trong giao dịch đã chốt lịch |
 | `chi.demo@shareloop.local` | Người dùng | 200 Credit; còn **đúng 1 sao uy tín** (demo cấm tự động) |
 
-- Bài Cho và Trao đổi đang hiển thị (`APPROVED`): giáo trình Java, vợt cầu lông (Trao đổi), nồi cơm điện.
+- Credit của ba người dùng nạp qua một đơn nạp `SUCCESS` của cổng giả lập (`MOCK`, mã `DEMO-SEED-<id>`) và một dòng
+  sổ cái `TOP_UP`, để báo cáo tài chính khớp (tiền thu = Credit nạp × 1.000 đ). Dữ liệu seed cũ ghi `ADMIN_ADJUST` được
+  tự đổi sang `TOP_UP` khi chạy lại seed.
+- Bài Cho và Trao đổi đang hiển thị (`APPROVED`): giáo trình Java, vợt cầu lông (Trao đổi), nồi cơm điện. Mỗi bài
+  demo có 3 ảnh minh hoạ (`db/demo/images/`), lưu qua cùng kho ảnh với ảnh người dùng tải lên.
 - 1 giao dịch ở trạng thái `LOGISTICS_CONFIRMED` (đã chốt lịch): Bình nhận "Bộ ly thủy tinh" của An, hẹn gặp trực tiếp
-  (bài ở trạng thái `RESERVED`).
+  (bài ở trạng thái `RESERVED`), đã hiện thông tin liên lạc hai bên (`contact_revealed_at`).
 - Tiêu đề bài bắt đầu bằng `Demo - ` để dễ phân biệt.
 
 Seed chỉ tạo dữ liệu nền bằng schema hiện có, không phụ thuộc code chưa merge. Hành vi cấm tự động khi hết sao do module

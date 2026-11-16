@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Tin nhắn</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+:root{--primary:#145c4e;--primary-hover:#0f4a3f;--primary-fixed:#cde4dc;--primary-soft:#e7f1ed;--primary-faint:#f2f7f5;--secondary-hover:#984629;--secondary-soft:#f8ede8;--background:#f5f7f6;--surface:#ffffff;--surface-low:#f0f3f2;--surface-container:#e5eae8;--surface-high:#d8e0dd;--text-primary:#17211e;--text-secondary:#46534f;--text-muted:#5f6b66;--border:#d7dedb;--success:#277a55;--success-soft:#eaf4ee;--warning:#8c5410;--warning-soft:#fbf3e4;--error:#b44444;--error-soft:#f9ecec;--info:#356a8a;--info-soft:#e9f1f6;--shadow-sm:0 1px 2px rgba(20,45,38,.05);--shadow-md:0 10px 30px rgba(20,45,38,.08);--gold:#e3b45c}
+body{margin:0;background:var(--background);font-family:"Be Vietnam Pro",system-ui,sans-serif;color:var(--text-primary)}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.btn{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:44px;padding:0 16px;border-radius:10px;border:1px solid transparent;font:600 14px/20px "Be Vietnam Pro",system-ui,sans-serif;text-decoration:none;cursor:pointer;white-space:nowrap}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-hover)}
+.btn-outline{background:var(--surface);color:var(--text-secondary);border-color:var(--border)}
+.btn-outline:hover{background:var(--primary-faint)}
+.btn-ghost{background:transparent;color:var(--text-secondary)}
+.btn-ghost:hover{background:var(--surface-low)}
+.btn-gold{background:var(--gold);color:var(--text-primary)}
+.nav{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;color:rgba(255,255,255,.84);font:500 15px/20px "Be Vietnam Pro",system-ui,sans-serif;text-decoration:none;border-radius:10px}
+.nav:hover{background:rgba(255,255,255,.08);color:#fff}
+.nav-on{color:#fff;font-weight:600;box-shadow:inset 0 -2px 0 #fff;border-radius:0}
+.chip{display:inline-flex;align-items:center;height:24px;padding:0 8px;border-radius:6px;font-size:11px;font-weight:700;line-height:16px;white-space:nowrap}
+.chip-ok{background:var(--success-soft);color:var(--success)}
+.chip-bad{background:var(--error-soft);color:var(--error)}
+.chip-gift{background:var(--primary-soft);color:var(--primary)}
+.chip-new{background:var(--primary);color:#fff}
+.tab{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:44px;padding:0 12px;background:transparent;border:0;border-radius:10px;font:600 13px/20px "Be Vietnam Pro",system-ui,sans-serif;color:var(--text-secondary);cursor:pointer;white-space:nowrap}
+.tab:hover{background:var(--surface-low)}
+.tab-on{background:var(--primary-soft);color:var(--primary)}
+.row{display:flex;gap:12px;align-items:flex-start;box-sizing:border-box;margin:0 12px;padding:12px 8px;border-radius:10px;text-decoration:none;color:inherit}
+.row:hover{background:var(--primary-faint)}
+.row-on,.row-on:hover{background:var(--primary-soft)}
+.av{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:44px;height:44px;border-radius:10px;background:var(--primary);color:#fff;font-size:14px;font-weight:700}
+.nm{font-size:15px;font-weight:700;color:var(--text-primary);line-height:22px}
+.dt{font-size:12px;line-height:22px;color:var(--text-muted);white-space:nowrap}
+.tt{font-size:14px;line-height:20px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+</style>
+</helmet>
+<div style="min-height:1020px;background:var(--background);font-family:'Be Vietnam Pro',system-ui,sans-serif">
+
+<header style="background:var(--primary-hover);color:#fff">
+<div style="max-width:1500px;margin:0 auto;padding:14px 24px;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:12px 32px;min-height:72px">
+<a href="Main.dc.html" style="font-size:20px;font-weight:700;letter-spacing:.04em;color:#fff;text-decoration:none">SHARELOOP</a>
+<nav aria-label="Điều hướng chính" style="display:flex;flex-wrap:wrap;gap:4px;flex-grow:1">
+<a class="nav" href="#">Trang chủ</a>
+<a class="nav" href="#">Tìm đồ</a>
+<a class="nav" href="#">Hoạt động</a>
+<a class="nav" href="#">Trợ lý AI</a>
+<a class="nav" href="#">Giới thiệu</a>
+<a class="nav nav-on" href="Main.dc.html" aria-current="page">Tin nhắn</a>
+</nav>
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px">
+<span style="display:inline-flex;align-items:center;box-sizing:border-box;min-height:44px;padding:0 16px;border-radius:10px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);font-size:14px;font-weight:600">460 Credit</span>
+<a class="btn btn-gold" href="#">Đăng đồ</a>
+<button type="button" aria-label="Thông báo, 12 thông báo mới" style="position:relative;width:44px;height:44px;border-radius:10px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#fff;cursor:pointer;display:inline-flex;align-items:center;justify-content:center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9z"></path><path d="M10 19a2 2 0 0 0 4 0"></path></svg>
+<span style="position:absolute;top:-8px;right:-8px;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;border-radius:10px;background:var(--error);color:#fff;font-size:11px;font-weight:700;line-height:20px;text-align:center">12</span>
+</button>
+<button type="button" style="display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 8px;border:0;background:transparent;color:#fff;font:600 15px/20px 'Be Vietnam Pro',system-ui,sans-serif;cursor:pointer">Nguyễn Văn Mi...
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
+</div>
+</div>
+</header>
+
+<main style="max-width: 1500px; margin: 0 auto; padding: 24px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 24px; align-items: stretch">
+
+<!-- Danh sách cuộc trò chuyện -->
+<section aria-label="Danh sách cuộc trò chuyện" style="flex:1 1 340px;max-width:440px;height:900px;display:flex;flex-direction:column;overflow:hidden;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-sm)">
+<div style="display:flex;align-items:baseline;justify-content:space-between;padding:20px 20px 12px">
+<h1 style="margin:0;font-size:24px;line-height:30px;font-weight:700;color:var(--text-primary)">Tin nhắn</h1>
+<span style="font-size:14px;color:var(--text-muted)">8 cuộc</span>
+</div>
+<div style="padding:0 20px">
+<input type="search" aria-label="Tìm món hoặc người" placeholder="Tìm món hoặc người" style="width:100%;box-sizing:border-box;min-height:44px;padding:0 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);font:400 14px/20px 'Be Vietnam Pro',system-ui,sans-serif;color:var(--text-primary)">
+</div>
+<div role="tablist" aria-label="Lọc cuộc trò chuyện" style="display:flex;gap:4px;padding:12px 10px 8px;overflow-x:auto">
+<button class="tab tab-on" type="button" role="tab" aria-selected="true">Tất cả</button>
+<button class="tab" type="button" role="tab" aria-selected="false">Chưa đọc</button>
+<button class="tab" type="button" role="tab" aria-selected="false">Đang giao dịch</button>
+<button class="tab" type="button" role="tab" aria-selected="false">Đã đóng</button>
+</div>
+<div style="flex:1;min-height:0;overflow-y:auto;padding:4px 0 12px;border-top:1px solid var(--border)">
+
+<a class="row" href="Main.dc.html">
+<span class="av">T2</span>
+<span style="min-width:0;flex-grow:1;display:flex;flex-direction:column;gap:2px">
+<span style="display:flex;justify-content:space-between;gap:8px"><span class="nm">Tester 2</span><span class="dt">28/10/2026</span></span>
+<span class="tt">TÚI ĐEO CHÉO CEMMERY</span>
+<span style="margin-top:4px"><span class="chip chip-bad">Đã hủy</span></span>
+</span>
+</a>
+
+<a class="row" href="Main.dc.html">
+<span class="av">MM</span>
+<span style="min-width:0;flex-grow:1;display:flex;flex-direction:column;gap:2px">
+<span style="display:flex;justify-content:space-between;gap:8px"><span class="nm">Miu miu</span><span class="dt">28/10/2026</span></span>
+<span class="tt">TÚI ĐEO CHÉO CEMMERY</span>
+<span style="margin-top:4px"><span class="chip chip-bad">Đã hủy</span></span>
+</span>
+</a>
+
+<a class="row row-on" href="Main.dc.html" aria-current="true">
+<span class="av">T2</span>
+<span style="min-width:0;flex-grow:1;display:flex;flex-direction:column;gap:2px">
+<span style="display:flex;justify-content:space-between;gap:8px"><span class="nm">Tester 2</span><span class="dt">27/10/2026</span></span>
+<span class="tt">ĐỒNG HỒ THÔNG MINH SMARTWATCH KÈM ỐP DÂY LIỀN THỂ THAO</span>
+<span style="margin-top:4px"><span class="chip chip-ok">Hoàn tất</span></span>
+</span>
+</a>
+
+<a class="row" href="Main.dc.html">
+<span class="av">T2</span>
+<span style="min-width:0;flex-grow:1;display:flex;flex-direction:column;gap:2px">
+<span style="display:flex;justify-content:space-between;gap:8px"><span class="nm">Tester 2</span><span class="dt">27/10/2026</span></span>
+<span class="tt">NƯỚC HOA NAM CHARME</span>
+<span style="margin-top:4px"><span class="chip chip-bad">Đã hủy</span></span>
+</span>
+</a>
+
+<a class="row" href="Main.dc.html">
+<span class="av">VB</span>
+<span style="min-width:0;flex-grow:1;display:flex;flex-direction:column;gap:2px">
+<span style="display:flex;justify-content:space-between;gap:8px"><span class="nm">Nguyễn Văn B</span><span class="dt">27/10/2026</span></span>
+<span class="tt">ĐỒNG HỒ NAM ROLEX</span>
+<span style="margin-top:4px"><span class="chip chip-ok">Hoàn tất</span></span>
+</span>
+</a>
+
+<a class="row" href="Main.dc.html">
+<span style="position:relative;flex-shrink:0;width:44px;height:44px">
+<span class="av">KĐ</span>
+<span aria-label="Có tin chưa đọc" style="position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:6px;background:var(--error);border:2px solid var(--surface);box-sizing:border-box"></span>
+</span>
+<span style="min-width:0;flex-grow:1;display:flex;flex-direction:column;gap:2px">
+<span style="display:flex;justify-content:space-between;gap:8px"><span class="nm">Khuyên Đỗ</span><span class="dt">27/10/2026</span></span>
+<span class="tt" style="font-weight:700;color:var(--text-primary)">Bình Giữ Nhiệt LocknLock</span>
+<span style="margin-top:4px;display:flex;gap:8px;align-items:center"><span class="chip chip-bad">Đã hủy</span><span class="chip chip-new">Mới</span></span>
+</span>
+</a>
+
+<a class="row" href="Main.dc.html">
+<span class="av">N</span>
+<span style="min-width:0;flex-grow:1;display:flex;flex-direction:column;gap:2px">
+<span style="display:flex;justify-content:space-between;gap:8px"><span class="nm">Ngọc</span><span class="dt">20/10/2026</span></span>
+<span class="tt">Giày Nike Air Jordan 1 Low</span>
+<span style="margin-top:4px"><span class="chip chip-bad">Đã hủy</span></span>
+</span>
+</a>
+
+</div>
+</section>
+
+<!-- Khung chat -->
+<section aria-label="Cuộc trò chuyện với Tester 2" style="flex:999 1 560px;min-width:0;height:900px;display:flex;flex-direction:column;overflow:hidden;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-sm)">
+
+<div style="display:flex;align-items:center;gap:12px;padding:16px 24px;border-bottom:1px solid var(--border)">
+<span class="av">T2</span>
+<div style="flex-grow:1;min-width:0">
+<h2 style="margin:0;font-size:16px;line-height:24px;font-weight:700;color:var(--text-primary)">Tester 2</h2>
+<div style="font-size:12px;line-height:16px;color:var(--text-muted)">Người cho tặng</div>
+</div>
+<a class="btn btn-outline" href="Profile.dc.html">Xem hồ sơ</a>
+<button type="button" class="btn btn-ghost">Báo cáo</button>
+</div>
+
+<!-- Một thẻ món đồ duy nhất + tiến trình thu gọn -->
+<div style="margin:16px 24px 0;padding:12px;box-sizing:border-box;border:1px solid var(--border);border-radius:14px;background:var(--surface);display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px">
+<div role="img" aria-label="Ảnh món đồ" style="flex-shrink:0;width:56px;height:56px;border-radius:10px;background:var(--surface-container);display:flex;align-items:center;justify-content:center;color:var(--text-muted)">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><path d="M9.5 7l.6-4h3.8l.6 4M9.5 17l.6 4h3.8l.6-4M12 10v2l1.5 1"></path></svg>
+</div>
+<div style="flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:6px">
+<div style="font-size:14px;line-height:20px;font-weight:700;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">ĐỒNG HỒ THÔNG MINH SMARTWATCH KÈM ỐP DÂY LIỀN THỂ THAO</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip chip-gift">Cho tặng</span><span class="chip chip-ok">Đã trao đổi</span></div>
+</div>
+<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+<div style="display:flex;flex-direction:column;gap:6px">
+<div role="img" aria-label="Đã xong 4 trên 4 bước" style="display:flex;gap:4px"><span style="width:28px;height:4px;border-radius:2px;background:var(--primary)"></span><span style="width:28px;height:4px;border-radius:2px;background:var(--primary)"></span><span style="width:28px;height:4px;border-radius:2px;background:var(--primary)"></span><span style="width:28px;height:4px;border-radius:2px;background:var(--primary)"></span></div>
+<span style="font-size:12px;line-height:16px;font-weight:600;color:var(--success)">Hoàn tất</span>
+</div>
+<a class="btn btn-primary" href="Progress.dc.html">Xem tiến trình</a>
+</div>
+</div>
+
+<!-- Tin nhắn -->
+<div style="flex:1;min-height:0;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:16px">
+<div style="align-self:center;font-size:12px;line-height:16px;color:var(--text-muted)">27/10/2026</div>
+<div style="align-self:flex-start;max-width:70%;padding:12px 16px;border-radius:14px;background:var(--primary-faint);border:1px solid var(--border)">
+<div style="font-size:14px;line-height:24px;color:var(--text-primary)">Chào bạn, mình hẹn giao đồng hồ cuối tuần này nhé.</div>
+<div style="margin-top:4px;font-size:12px;line-height:16px;color:var(--text-muted)">16:38</div>
+</div>
+<div style="align-self:center;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px 8px;padding:8px 16px;border-radius:10px;background:var(--surface-low);font-size:13px;line-height:20px;color:var(--text-secondary)">
+<span>Giao dịch đã hoàn tất lúc 10:36 30/10/2026</span>
+<a href="Progress.dc.html" style="color:var(--primary);font-weight:600;text-decoration:underline">Xem chi tiết</a>
+</div>
+</div>
+
+<!-- Soạn tin -->
+<div style="display:flex;gap:12px;padding:16px 24px;border-top:1px solid var(--border)">
+<input type="text" aria-label="Nhập tin nhắn" placeholder="Nhập tin nhắn..." style="flex:1;min-width:0;box-sizing:border-box;min-height:44px;padding:0 16px;border:1px solid var(--border);border-radius:10px;background:var(--surface);font:400 14px/20px 'Be Vietnam Pro',system-ui,sans-serif;color:var(--text-primary)">
+<button type="button" class="btn btn-primary" disabled="" style="min-width:88px;opacity:.4;cursor:not-allowed">Gửi</button>
+</div>
+</section>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1020}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

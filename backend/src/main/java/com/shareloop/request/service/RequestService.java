@@ -534,12 +534,13 @@ public class RequestService {
         }
         ItemSnapshot item = findItemSnapshot(request.getItemId())
                 .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+        // Chủ bài chọn người một phần vì món đem đổi, nên khi món đổi sau lúc đã chọn phải nói rõ quyền huỷ (HG-01).
+        String body = request.getStatus() == RequestStatus.PENDING
+                ? "Người gửi yêu cầu đã chọn món khác để trao đổi. Xem lại món mới trước khi chọn người."
+                : "Người nhận đã thay món đem đổi. Lịch hẹn cần hai bên xác nhận lại. Nếu không đồng ý với món mới,"
+                        + " bạn có thể huỷ giao dịch trước khi chốt lịch mà không bị trừ sao.";
         notificationService.notify(
-                item.donorId(),
-                "OFFERED_ITEM_CHANGED",
-                "Món đề nghị đã thay đổi",
-                "Người gửi yêu cầu đã chọn món khác để trao đổi. Vui lòng xem lại trước khi chốt lịch.",
-                "/requests/" + saved.getId());
+                item.donorId(), "OFFERED_ITEM_CHANGED", "Món đề nghị đã thay đổi", body, "/requests/" + saved.getId());
         return toResponse(saved);
     }
 
@@ -770,8 +771,10 @@ public class RequestService {
      * Đưa giao dịch DISPUTED ra khỏi trạng thái tranh chấp khi Admin kết luận khiếu nại. Giao dịch không ở DISPUTED
      * (ví dụ khiếu nại mở sau khi đã COMPLETED) thì bỏ qua, không làm gì.
      *
-     * <p>Chấp nhận khiếu nại: CANCELLED, nhả cả hai món về APPROVED. Bác bỏ: COMPLETED như một lần hoàn tất bình
-     * thường (hai món sang TRADED, cộng điểm uy tín). Cả hai bên đều được thông báo kết quả.
+     * <p>Chấp nhận khiếu nại: CANCELLED, nhả cả hai món về APPROVED. Nếu bên vi phạm là chủ bài (ví dụ món không đúng
+     * mô tả) thì bài chính bị ẩn luôn (is_active = false, giống BC-05), để món mô tả sai không hiện lại cho người khác
+     * xin; món đổi của người nhận vẫn mở lại. Bác bỏ: COMPLETED như một lần hoàn tất bình thường (hai món sang TRADED,
+     * cộng điểm uy tín). Cả hai bên đều được thông báo kết quả.
      *
      * @param requestId giao dịch của khiếu nại
      * @param upheld true nếu Admin chấp nhận khiếu nại, false nếu bác bỏ
@@ -779,6 +782,16 @@ public class RequestService {
      */
     @Transactional
     public boolean resolveDisputedRequest(long requestId, boolean upheld) {
+        return resolveDisputedRequest(requestId, upheld, null);
+    }
+
+    /**
+     * Như {@link #resolveDisputedRequest(long, boolean)}, kèm người bị kết luận vi phạm (người bị khiếu nại).
+     *
+     * @param violatorUserId người bị khiếu nại; null nếu không rõ (khi đó bài chính được mở lại như cũ)
+     */
+    @Transactional
+    public boolean resolveDisputedRequest(long requestId, boolean upheld, Long violatorUserId) {
         Request request = requestRepository.findById(requestId).orElse(null);
         if (request == null || request.getStatus() != RequestStatus.DISPUTED) {
             return false;
@@ -788,11 +801,21 @@ public class RequestService {
         if (upheld) {
             request.cancel(Request.CANCEL_BY_SYSTEM + "Admin chấp nhận khiếu nại, giao dịch bị huỷ");
             requestRepository.save(request);
+            Long donorId = findItemSnapshot(request.getItemId())
+                    .map(ItemSnapshot::donorId)
+                    .orElse(null);
+            boolean donorViolated = violatorUserId != null && violatorUserId.equals(donorId);
             itemService.releaseIfReserved(request.getItemId());
+            if (donorViolated) {
+                itemService.hide(request.getItemId());
+            }
             if (request.getOfferedItemId() != null) {
                 itemService.releaseIfReserved(request.getOfferedItemId());
             }
-            message = "Admin đã chấp nhận khiếu nại: giao dịch bị huỷ và bài đăng được mở lại.";
+            message = donorViolated
+                    ? "Admin đã chấp nhận khiếu nại: giao dịch bị huỷ. Bài đăng của chủ bài bị ẩn vì chủ bài là bên"
+                            + " vi phạm; món đem đổi (nếu có) được mở lại."
+                    : "Admin đã chấp nhận khiếu nại: giao dịch bị huỷ và bài đăng được mở lại.";
         } else {
             request.completeAfterDispute(Instant.now());
             requestRepository.save(request);

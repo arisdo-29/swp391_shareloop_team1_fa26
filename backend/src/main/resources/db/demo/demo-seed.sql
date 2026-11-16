@@ -5,16 +5,36 @@
 UPDATE users SET area_id = (SELECT id FROM areas WHERE name = 'Quận 1')
 WHERE email LIKE '%.demo@shareloop.local' AND area_id IS NULL;
 
--- Credit: mỗi người dùng thường 200 Credit, ghi đúng một dòng sổ cái. Số dư chỉ đổi khi chưa có dòng 'Demo seed'.
+-- Credit: mỗi người dùng thường 200 Credit qua một đơn nạp Thành công của cổng giả lập (MOCK), để báo cáo tài chính
+-- khớp: tiền mặt thu = Credit nạp × 1.000 đ (VI-08, VI-09). Không dùng dòng ADMIN_ADJUST (hệ thống không có cộng tay).
 UPDATE users SET credit_balance = 200
 WHERE email IN ('an.demo@shareloop.local', 'binh.demo@shareloop.local', 'chi.demo@shareloop.local')
   AND NOT EXISTS (SELECT 1 FROM credit_ledger l WHERE l.user_id = users.id AND l.note = 'Demo seed');
 
-INSERT INTO credit_ledger (user_id, amount, type, balance_after, note)
-SELECT u.id, 200, 'ADMIN_ADJUST', 200, 'Demo seed'
+INSERT INTO payment_orders
+  (user_id, order_code, amount_vnd, credits, vnd_per_credit, provider, provider_txn_id, status,
+   signature_verified, paid_at)
+SELECT u.id, 'DEMO-SEED-' || u.id, 200000, 200, 1000, 'MOCK', 'DEMO-SEED-' || u.id, 'SUCCESS', TRUE, now()
 FROM users u
 WHERE u.email IN ('an.demo@shareloop.local', 'binh.demo@shareloop.local', 'chi.demo@shareloop.local')
+  AND NOT u.is_deleted
+  AND NOT EXISTS (SELECT 1 FROM payment_orders o WHERE o.order_code = 'DEMO-SEED-' || u.id);
+
+INSERT INTO credit_ledger (user_id, amount, type, balance_after, payment_order_id, note)
+SELECT u.id, 200, 'TOP_UP', 200, o.id, 'Demo seed'
+FROM users u
+JOIN payment_orders o ON o.order_code = 'DEMO-SEED-' || u.id
+WHERE u.email IN ('an.demo@shareloop.local', 'binh.demo@shareloop.local', 'chi.demo@shareloop.local')
   AND NOT EXISTS (SELECT 1 FROM credit_ledger l WHERE l.user_id = u.id AND l.note = 'Demo seed');
+
+-- Dữ liệu seed cũ (trước 16/11) ghi ADMIN_ADJUST: đổi thành dòng Nạp gắn với đơn nạp demo ở trên.
+UPDATE credit_ledger l
+SET type = 'TOP_UP', payment_order_id = o.id
+FROM payment_orders o
+WHERE o.order_code = 'DEMO-SEED-' || l.user_id
+  AND l.note = 'Demo seed'
+  AND l.type = 'ADMIN_ADJUST'
+  AND NOT EXISTS (SELECT 1 FROM credit_ledger x WHERE x.payment_order_id = o.id);
 
 -- Bài đăng: Cho và Trao đổi đang hiển thị (APPROVED), thêm một bài RESERVED thuộc giao dịch đã chốt lịch.
 INSERT INTO items
@@ -44,11 +64,20 @@ WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.donor_id = u.id AND i.title = v.
 -- Giao dịch đã chốt lịch (LOGISTICS_CONFIRMED): Bình nhận bộ ly của An, hẹn gặp trực tiếp.
 INSERT INTO requests
   (item_id, receiver_id, type, status, delivery_method, meeting_place, meeting_time,
-   donor_schedule_ok_at, receiver_schedule_ok_at, reserved_at)
+   donor_schedule_ok_at, receiver_schedule_ok_at, reserved_at, contact_revealed_at)
 SELECT i.id, r.id, 'GIVE', 'LOGISTICS_CONFIRMED', 'IN_PERSON', 'Cổng chính Đại học FPT',
-       now() + INTERVAL '2 days', now(), now(), now()
+       now() + INTERVAL '2 days', now(), now(), now(), now()
 FROM items i
 JOIN users d ON d.id = i.donor_id AND d.email = 'an.demo@shareloop.local'
 JOIN users r ON r.email = 'binh.demo@shareloop.local'
 WHERE i.title = 'Demo - Bộ ly thủy tinh (đã chốt lịch)'
   AND NOT EXISTS (SELECT 1 FROM requests q WHERE q.item_id = i.id AND q.receiver_id = r.id);
+
+-- Giao dịch demo tạo trước 16/11 thiếu mốc hiện liên lạc: đã chốt lịch thì phải hiện liên lạc (GN-04).
+UPDATE requests q
+SET contact_revealed_at = COALESCE(q.receiver_schedule_ok_at, now())
+FROM items i
+WHERE q.item_id = i.id
+  AND i.title = 'Demo - Bộ ly thủy tinh (đã chốt lịch)'
+  AND q.status = 'LOGISTICS_CONFIRMED'
+  AND q.contact_revealed_at IS NULL;

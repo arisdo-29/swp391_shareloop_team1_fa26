@@ -40,7 +40,7 @@ class ReputationRulesIT extends IntegrationTest {
     private final List<Long> itemIds = new ArrayList<>();
     private final List<Long> requestIds = new ArrayList<>();
 
-    // Thứ tự xoá: activity_logs tham chiếu users; requests tham chiếu items và users.
+    // Thứ tự xoá: activity_logs và notifications tham chiếu users; requests tham chiếu items và users.
     @AfterEach
     void cleanUp() {
         for (Long requestId : requestIds) {
@@ -59,6 +59,7 @@ class ReputationRulesIT extends IntegrationTest {
             jdbc.update("DELETE FROM items WHERE id = ?", itemId);
         }
         for (Long userId : userIds) {
+            jdbc.update("DELETE FROM notifications WHERE user_id = ?", userId);
             jdbc.update("DELETE FROM users WHERE id = ?", userId);
         }
         requestIds.clear();
