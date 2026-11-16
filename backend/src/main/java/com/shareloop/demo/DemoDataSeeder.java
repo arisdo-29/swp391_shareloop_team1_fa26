@@ -122,8 +122,7 @@ public class DemoDataSeeder implements ApplicationRunner {
                     "SELECT i.id FROM items i JOIN users u ON u.id = i.donor_id"
                             + " WHERE i.title = ? AND u.email LIKE '%.demo@shareloop.local' AND NOT i.is_deleted"
                             + " AND NOT EXISTS (SELECT 1 FROM item_media_mappings m WHERE m.item_id = i.id)",
-                    Long.class,
-                    demoItem[0]);
+                    Long.class, demoItem[0]);
             for (Long itemId : itemIds) {
                 for (int index = 1; index <= PHOTOS_PER_ITEM; index++) {
                     attachPhoto(itemId, demoItem[1] + "-" + index + ".jpg", index - 1);

@@ -3,6 +3,7 @@ package com.shareloop.demo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import com.shareloop.integration.storage.StorageService;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -17,6 +18,7 @@ class DemoDataSeederProfileTest {
                 .withBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class))
                 .withBean(DataSource.class, () -> mock(DataSource.class))
                 .withBean(PasswordEncoder.class, () -> mock(PasswordEncoder.class))
+                .withBean(StorageService.class, () -> mock(StorageService.class))
                 .withUserConfiguration(DemoDataSeeder.class);
     }
 

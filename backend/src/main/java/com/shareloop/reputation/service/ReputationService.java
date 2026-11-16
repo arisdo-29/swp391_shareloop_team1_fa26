@@ -482,10 +482,14 @@ public class ReputationService {
         StringBuilder body = new StringBuilder(pointsReason(context, roleLabel, basePoints, granted));
         body.append(". Tổng điểm hiện tại: ").append(newTotal).append(".");
         if (rankBefore != null && newRank.ordinal() > rankBefore.ordinal()) {
-            body.append(" Chúc mừng, bạn đã lên hạng ").append(rankLabel(newRank)).append("!");
+            body.append(" Chúc mừng, bạn đã lên hạng ")
+                    .append(rankLabel(newRank))
+                    .append("!");
         }
         if (starRestored) {
-            body.append(" Bạn được hồi 1 sao uy tín, hiện có ").append(user.getTrustStars()).append(" sao.");
+            body.append(" Bạn được hồi 1 sao uy tín, hiện có ")
+                    .append(user.getTrustStars())
+                    .append(" sao.");
         }
         notificationService.notify(user.getId(), "POINTS_AWARDED", title, body.toString(), "/profile?tab=reputation");
     }

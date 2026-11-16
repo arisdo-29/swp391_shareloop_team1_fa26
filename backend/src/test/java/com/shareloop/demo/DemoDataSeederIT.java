@@ -2,11 +2,15 @@ package com.shareloop.demo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.shareloop.integration.storage.LocalStorageService;
 import com.shareloop.support.IntegrationTest;
+import java.nio.file.Path;
+import java.util.List;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -29,17 +33,30 @@ class DemoDataSeederIT extends IntegrationTest {
     @Autowired
     PasswordEncoder passwordEncoder;
 
+    @TempDir
+    Path storageDirectory;
+
     DemoDataSeeder demoDataSeeder;
 
     @BeforeEach
     void seed() {
-        demoDataSeeder = new DemoDataSeeder(jdbc, dataSource, passwordEncoder, "Demo@12345");
+        demoDataSeeder = new DemoDataSeeder(
+                jdbc, dataSource, passwordEncoder, new LocalStorageService(storageDirectory.toString()), "Demo@12345");
         demoDataSeeder.run(null);
     }
 
     // Dọn sạch để không làm lệch số liệu của các IT khác dùng chung database.
     @AfterEach
     void cleanUp() {
+        List<Long> mediaIds = jdbc.queryForList(
+                "SELECT m.media_id FROM item_media_mappings m JOIN items i ON i.id = m.item_id"
+                        + " JOIN users u ON u.id = i.donor_id WHERE u.email LIKE ?",
+                Long.class,
+                DEMO_EMAIL_PATTERN);
+        jdbc.update(
+                "DELETE FROM item_media_mappings WHERE item_id IN (SELECT i.id FROM items i JOIN users u ON u.id = i.donor_id WHERE u.email LIKE ?)",
+                DEMO_EMAIL_PATTERN);
+        mediaIds.forEach(mediaId -> jdbc.update("DELETE FROM media_files WHERE id = ?", mediaId));
         jdbc.update(
                 "DELETE FROM requests WHERE item_id IN (SELECT i.id FROM items i JOIN users u ON u.id = i.donor_id WHERE u.email LIKE ?)",
                 DEMO_EMAIL_PATTERN);
@@ -47,6 +64,9 @@ class DemoDataSeederIT extends IntegrationTest {
                 "DELETE FROM items WHERE donor_id IN (SELECT id FROM users WHERE email LIKE ?)", DEMO_EMAIL_PATTERN);
         jdbc.update(
                 "DELETE FROM credit_ledger WHERE user_id IN (SELECT id FROM users WHERE email LIKE ?)",
+                DEMO_EMAIL_PATTERN);
+        jdbc.update(
+                "DELETE FROM payment_orders WHERE user_id IN (SELECT id FROM users WHERE email LIKE ?)",
                 DEMO_EMAIL_PATTERN);
         jdbc.update("DELETE FROM users WHERE email LIKE ?", DEMO_EMAIL_PATTERN);
     }
@@ -67,6 +87,12 @@ class DemoDataSeederIT extends IntegrationTest {
                 .isEqualTo(1);
         assertThat(count("SELECT count(*) FROM credit_ledger l JOIN users u ON u.id = l.user_id WHERE u.email LIKE ?"))
                 .isEqualTo(3);
+        assertThat(count("SELECT count(*) FROM payment_orders o JOIN users u ON u.id = o.user_id WHERE u.email LIKE ?"))
+                .isEqualTo(3);
+        assertThat(
+                        count(
+                                "SELECT count(*) FROM item_media_mappings m JOIN items i ON i.id = m.item_id JOIN users u ON u.id = i.donor_id WHERE u.email LIKE ?"))
+                .isEqualTo(12);
         assertThat(jdbc.queryForObject(
                         "SELECT credit_balance FROM users WHERE email = 'an.demo@shareloop.local'", Long.class))
                 .isEqualTo(200);
