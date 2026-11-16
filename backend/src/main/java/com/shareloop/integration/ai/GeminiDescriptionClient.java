@@ -15,7 +15,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Component
 public class GeminiDescriptionClient {
-    private static final String MODEL = "gemini-3.5-flash-lite";
+    private static final String MODEL = "gemini-4-hydrogen";
     private static final URI ENDPOINT = URI.create("https://generativelanguage.googleapis.com/v1beta/interactions");
     private static final String SCHEMA = """
             {"type":"object","properties":{
@@ -96,6 +96,8 @@ public class GeminiDescriptionClient {
                 MODEL,
                 "store",
                 false,
+                "generation_config",
+                Map.of("thinking_level", "low"),
                 "system_instruction",
                 INSTRUCTION,
                 "input",

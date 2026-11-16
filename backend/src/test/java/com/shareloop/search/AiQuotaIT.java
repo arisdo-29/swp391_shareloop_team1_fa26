@@ -106,15 +106,15 @@ class AiQuotaIT extends IntegrationTest {
         ItemService itemService = mock(ItemService.class);
         ConfigService configService = mock(ConfigService.class);
         when(aiClient.isAvailable()).thenReturn(true);
-        when(aiClient.model()).thenReturn("gemini-3.5-flash-lite");
+        when(aiClient.model()).thenReturn("gemini-4-hydrogen");
         when(aiClient.recommend(eq("sách"), any(), eq(Duration.ofSeconds(15))))
                 .thenReturn(
                         new AiResponse(
-                                "gemini-3.5-flash-lite",
-                                "{\"inScope\":true,\"itemIds\":[],\"requestedItem\":\"sách\",\"message\":\"Chưa có\"}"),
+                                "gemini-4-hydrogen",
+                                "{\"inScope\":true,\"itemIds\":[],\"equivalentItemIds\":[],\"requestedItem\":\"sách\",\"message\":\"Chưa có\"}"),
                         new AiResponse(
-                                "gemini-3.5-flash-lite",
-                                "{\"inScope\":true,\"itemIds\":[1],\"requestedItem\":\"sách\",\"message\":\"Đã tìm thấy\"}"));
+                                "gemini-4-hydrogen",
+                                "{\"inScope\":true,\"itemIds\":[1],\"equivalentItemIds\":[],\"requestedItem\":\"sách\",\"message\":\"Đã tìm thấy\"}"));
         when(configService.getInt(ConfigKey.AI_SEARCH_TIMEOUT_SECONDS)).thenReturn(15);
         when(configService.getInt(ConfigKey.AI_SEARCH_FEE)).thenReturn(2);
         when(categoryService.listActive()).thenReturn(List.of());
