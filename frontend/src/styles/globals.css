@@ -277,6 +277,14 @@ select[aria-invalid='true']:focus-visible {
   }
   .table-wrap {
     @apply overflow-x-auto rounded-lg bg-white ring-1 ring-border/80;
+    /* Bóng mờ ở mép khi bảng còn cột bị khuất (điện thoại): báo cho người dùng vuốt ngang để xem tiếp. */
+    background:
+      linear-gradient(to right, theme('colors.white') 30%, transparent) left center / 40px 100% no-repeat local,
+      linear-gradient(to left, theme('colors.white') 30%, transparent) right center / 40px 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.14), transparent) left center / 14px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.14), transparent) right center / 14px 100% no-repeat scroll,
+      theme('colors.white');
+    -webkit-overflow-scrolling: touch;
   }
   .data-table {
     @apply w-full min-w-[720px] border-collapse text-left text-sm;

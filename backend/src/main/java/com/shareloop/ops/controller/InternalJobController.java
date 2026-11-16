@@ -1,5 +1,6 @@
 package com.shareloop.ops.controller;
 
+import com.shareloop.listingfee.job.BoostNotificationJob;
 import com.shareloop.listingfee.job.ItemExpiryJob;
 import com.shareloop.request.job.RequestJob;
 import com.shareloop.user.job.PendingAccountCleanupJob;
@@ -34,6 +35,7 @@ public class InternalJobController {
     private final RequestJob requestJob;
     private final PendingAccountCleanupJob pendingAccountCleanupJob;
     private final PaymentExpiryJob paymentExpiryJob;
+    private final BoostNotificationJob boostNotificationJob;
 
     // ReviewSlaJob đã gỡ (KD-06, TD-04): nhóm bỏ thông báo nhắc Admin bài chờ duyệt quá 24 giờ.
     public InternalJobController(
@@ -41,12 +43,14 @@ public class InternalJobController {
             ItemExpiryJob itemExpiryJob,
             RequestJob requestJob,
             PendingAccountCleanupJob pendingAccountCleanupJob,
-            PaymentExpiryJob paymentExpiryJob) {
+            PaymentExpiryJob paymentExpiryJob,
+            BoostNotificationJob boostNotificationJob) {
         this.triggerToken = triggerToken;
         this.itemExpiryJob = itemExpiryJob;
         this.requestJob = requestJob;
         this.pendingAccountCleanupJob = pendingAccountCleanupJob;
         this.paymentExpiryJob = paymentExpiryJob;
+        this.boostNotificationJob = boostNotificationJob;
     }
 
     @PostMapping("/run")
@@ -66,6 +70,8 @@ public class InternalJobController {
         results.put("requestJob", executeJob(requestJob::run, "requestJob"));
         results.put("pendingAccountCleanupJob", executeJob(pendingAccountCleanupJob::run, "pendingAccountCleanupJob"));
         results.put("paymentExpiryJob", executeJob(paymentExpiryJob::run, "paymentExpiryJob"));
+        // HT-09: báo sắp hết đẩy / đã hết đẩy và dừng đẩy bài bị ẩn. Trên Cloud Run @Scheduled không tự chạy.
+        results.put("boostNotificationJob", executeJob(boostNotificationJob::run, "boostNotificationJob"));
 
         return ResponseEntity.ok(results);
     }

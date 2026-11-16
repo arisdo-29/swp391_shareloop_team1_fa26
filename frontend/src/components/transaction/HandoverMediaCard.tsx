@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Alert, Button, Field, Icon, ItemImage } from '../ui';
+import { Alert, Button, Icon, ItemImage } from '../ui';
 import { Dialog } from '../Dialog';
 import {
   requestApi,
@@ -230,15 +230,23 @@ function MediaUploader({
 
   return (
     <div className="space-y-3 border-t border-border pt-4">
-      <Field
-        key={inputKey}
-        label={`Chọn ảnh ${label}`}
-        type="file"
-        accept="image/*"
-        multiple
-        disabled={submitting}
-        onChange={(event) => addFiles(Array.from(event.target.files ?? []))}
-      />
+      {/* Ô chọn file gốc của trình duyệt hiện chữ tiếng Anh ("Choose Files"): ẩn đi, dùng nút tiếng Việt. */}
+      <label
+        className={`inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-3 text-sm font-semibold text-primary focus-within:ring-2 focus-within:ring-primary ${submitting ? 'opacity-40' : 'cursor-pointer hover:bg-primary-faint'}`}
+      >
+        <Icon name="image" className="size-4" />
+        <span>{pending.length ? 'Chọn thêm ảnh' : 'Chọn ảnh'}</span>
+        <input
+          key={inputKey}
+          className="sr-only"
+          aria-label={`Chọn ảnh ${label}`}
+          type="file"
+          accept="image/*"
+          multiple
+          disabled={submitting}
+          onChange={(event) => addFiles(Array.from(event.target.files ?? []))}
+        />
+      </label>
       {pending.length ? <PendingGrid pending={pending} disabled={submitting} onRemove={removePending} /> : null}
       <div className="flex justify-end">
         <Button disabled={submitting || !pending.length} onClick={() => setConfirming(true)}>

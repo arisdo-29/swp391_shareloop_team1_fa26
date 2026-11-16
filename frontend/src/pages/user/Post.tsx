@@ -630,9 +630,15 @@ export function Post() {
                   error={errors.defectNote}
                 />
                 <div>
-                  <span className="label">Ảnh chụp rõ chỗ lỗi</span>
+                  <span className="label" id="defect-images-label">Ảnh chụp rõ chỗ lỗi</span>
+                  <label
+                    className={`inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-white px-3 text-sm font-semibold text-primary focus-within:ring-2 focus-within:ring-primary ${submitting || mediaUploading ? 'opacity-40' : 'cursor-pointer hover:bg-primary-faint'}`}
+                  >
+                    <Icon name="image" className="size-4" />
+                    <span aria-hidden="true">{defectImagePreviews.length ? `Đã chọn ${defectImagePreviews.length} ảnh · chọn lại` : 'Chọn ảnh lỗi'}</span>
                   <input
-                    className="block w-full text-xs"
+                    aria-labelledby="defect-images-label"
+                    className="sr-only"
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
                     multiple
@@ -645,6 +651,7 @@ export function Post() {
                       setErrors((current) => ({ ...current, defectImages: files.length ? undefined : current.defectImages }));
                     }}
                   />
+                  </label>
                   {errors.defectImages ? <span className="mt-2 block text-xs text-error">{errors.defectImages}</span> : null}
                   {defectImagePreviews.length ? (
                     <div className="mt-3 grid grid-cols-4 gap-2">

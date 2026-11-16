@@ -355,6 +355,41 @@ class ReputationServiceTest {
         }
 
         @Test
+        void onCompleted_notifiesEachSideWithPointsAndRankUp() {
+            long requestId = 305L;
+            long donorId = 1L;
+            long receiverId = 2L;
+
+            RequestParticipantProjection participant = createParticipant(donorId, receiverId, "GIVE");
+            when(userReputationRepository.isReputationAppliedForRequest(requestId))
+                    .thenReturn(false);
+            when(userReputationRepository.findRequestParticipant(requestId)).thenReturn(participant);
+
+            // donor 95 điểm + 10 = 105 lên SILVER; receiver 0 + 2 vẫn BRONZE
+            UserReputation donor = new UserReputation(donorId, (short) 5, 95, Rank.BRONZE);
+            UserReputation receiver = new UserReputation(receiverId, (short) 5, 0, Rank.BRONZE);
+            when(userReputationRepository.findByIdForUpdate(donorId)).thenReturn(Optional.of(donor));
+            when(userReputationRepository.findByIdForUpdate(receiverId)).thenReturn(Optional.of(receiver));
+
+            service.onCompleted(requestId);
+
+            verify(notificationService)
+                    .notify(
+                            eq(donorId),
+                            eq("POINTS_AWARDED"),
+                            eq("Bạn được cộng 10 điểm uy tín"),
+                            org.mockito.ArgumentMatchers.contains("lên hạng Bạc"),
+                            eq("/profile?tab=reputation"));
+            verify(notificationService)
+                    .notify(
+                            eq(receiverId),
+                            eq("POINTS_AWARDED"),
+                            eq("Bạn được cộng 2 điểm uy tín"),
+                            org.mockito.ArgumentMatchers.contains("Tổng điểm hiện tại: 2"),
+                            eq("/profile?tab=reputation"));
+        }
+
+        @Test
         void onCompleted_calledTwice_idempotent_pointsOnlyAppliedOnce() {
             long requestId = 404L;
 
@@ -569,6 +604,9 @@ class ReputationServiceTest {
             assertThat(res.history().getContent().get(0).delta()).isEqualTo(10);
             assertThat(res.history().getContent().get(0).reason())
                     .isEqualTo("Cộng 10 điểm hoàn tất giao dịch món “Nồi cơm điện” (vai trò cho/tặng)");
+            // GOLD 320 điểm, ngưỡng DIAMOND 600 → còn thiếu 280 điểm
+            assertThat(res.nextRank()).isEqualTo(Rank.DIAMOND);
+            assertThat(res.pointsToNextRank()).isEqualTo(280);
         }
 
         @Test

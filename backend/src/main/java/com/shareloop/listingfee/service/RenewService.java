@@ -50,7 +50,8 @@ public class RenewService {
     /**
      * Gia hạn bài của chính mình (F08 bước 1, POST /items/{id}/renew).
      *
-     * <p>Quy tắc: chỉ chủ bài, bài phải đang APPROVED; gia hạn lúc nào cũng được. Mọi bài trừ ConfigKey renew_fee qua
+     * <p>Quy tắc: chỉ chủ bài, bài phải đang APPROVED và không bị ẩn (is_active); gia hạn lúc nào cũng được. Mọi bài
+     * trừ ConfigKey renew_fee qua
      * {@code CreditService.spend} và ghi credit_ledger khi phí lớn hơn 0. expire_at mới =
      * max(now, expire_at cũ) + post_display_days ngày, không phụ thuộc hạng.
      *
@@ -109,7 +110,7 @@ public class RenewService {
 
         int fee = calculateRenewFee();
         Instant newExpireAt = calculateNewExpireAt(itemFee.getExpireAt());
-        if (snapshot.getStatus() != ItemStatus.APPROVED) {
+        if (!isRenewable(snapshot)) {
             String reason = ListingFeeErrorCode.LISTINGFEE_RENEW_NOT_ALLOWED.defaultMessage();
             return new RenewQuote(fee, newExpireAt, false, reason);
         }
@@ -154,8 +155,14 @@ public class RenewService {
     }
 
     private void requireApproved(ItemFeeSnapshot snapshot) {
-        if (snapshot.getStatus() != ItemStatus.APPROVED) {
+        if (!isRenewable(snapshot)) {
             throw new BusinessException(ListingFeeErrorCode.LISTINGFEE_RENEW_NOT_ALLOWED);
         }
+    }
+
+    // HT-01: bài phải Đang hiển thị và không bị ẩn (đủ ngưỡng báo cáo, chủ bài bị khoá...). Bài bị ẩn thì không ai
+    // thấy, gia hạn chỉ làm người dùng mất Credit.
+    private boolean isRenewable(ItemFeeSnapshot snapshot) {
+        return snapshot.getStatus() == ItemStatus.APPROVED && snapshot.getActive();
     }
 }

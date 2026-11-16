@@ -26,7 +26,7 @@ Mọi đổi trạng thái đi qua `RequestStatus.canTransition`; cạnh không 
 | `AWAITING_HANDOVER` | `DISPUTED` | `POST /requests/{id}/handover-issue` hoặc bên nhận xác nhận không đúng mô tả |
 | `AWAITING_HANDOVER` | `CANCELLED` | Huỷ giao dịch, khoá tài khoản |
 | `DISPUTED` | `COMPLETED` | Admin bác bỏ khiếu nại (`DISMISS`) |
-| `DISPUTED` | `CANCELLED` | Admin chấp nhận khiếu nại (`UPHOLD`), hoặc Admin huỷ giao dịch kẹt |
+| `DISPUTED` | `CANCELLED` | Admin chấp nhận khiếu nại (`UPHOLD`), hoặc Admin huỷ giao dịch kẹt. Chấp nhận khiếu nại mà người bị khiếu nại là chủ bài thì bài chính bị ẩn (`is_active = false`), món đổi vẫn mở lại (16/11/2026) |
 
 `COMPLETED`, `REJECTED`, `CANCELLED` là trạng thái cuối. Không có cạnh `LOGISTICS_CONFIRMED -> DISPUTED`.
 

@@ -12,6 +12,7 @@ import com.shareloop.config.ClockConfig;
 import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
+import com.shareloop.listingfee.job.BoostNotificationJob;
 import com.shareloop.listingfee.job.ItemExpiryJob;
 import com.shareloop.request.job.RequestJob;
 import com.shareloop.user.job.PendingAccountCleanupJob;
@@ -50,12 +51,16 @@ class InternalJobControllerTest {
     @MockitoBean
     private PaymentExpiryJob paymentExpiryJob;
 
+    @MockitoBean
+    private BoostNotificationJob boostNotificationJob;
+
     @Test
     @DisplayName("Thiếu header X-Job-Token trả 403 và không job nào chạy")
     void runJobs_withoutToken_returns403() throws Exception {
         mockMvc.perform(post(URL)).andExpect(status().isForbidden());
 
-        verifyNoInteractions(itemExpiryJob, requestJob, pendingAccountCleanupJob, paymentExpiryJob);
+        verifyNoInteractions(
+                itemExpiryJob, requestJob, pendingAccountCleanupJob, paymentExpiryJob, boostNotificationJob);
     }
 
     @Test
@@ -63,11 +68,12 @@ class InternalJobControllerTest {
     void runJobs_withWrongToken_returns403() throws Exception {
         mockMvc.perform(post(URL).header("X-Job-Token", "wrong-token")).andExpect(status().isForbidden());
 
-        verifyNoInteractions(itemExpiryJob, requestJob, pendingAccountCleanupJob, paymentExpiryJob);
+        verifyNoInteractions(
+                itemExpiryJob, requestJob, pendingAccountCleanupJob, paymentExpiryJob, boostNotificationJob);
     }
 
     @Test
-    @DisplayName("Đúng token trả 200, đủ 4 job được gọi và trả về ok")
+    @DisplayName("Đúng token trả 200, đủ 5 job được gọi và trả về ok")
     void runJobs_withValidToken_runsAllJobsSuccessfully() throws Exception {
         mockMvc.perform(post(URL).header("X-Job-Token", VALID_TOKEN))
                 .andExpect(status().isOk())
@@ -75,12 +81,14 @@ class InternalJobControllerTest {
                 .andExpect(jsonPath("$.requestJob").value("ok"))
                 .andExpect(jsonPath("$.pendingAccountCleanupJob").value("ok"))
                 .andExpect(jsonPath("$.paymentExpiryJob").value("ok"))
+                .andExpect(jsonPath("$.boostNotificationJob").value("ok"))
                 .andExpect(jsonPath("$.reviewSlaJob").doesNotExist());
 
         verify(itemExpiryJob).run();
         verify(requestJob).run();
         verify(pendingAccountCleanupJob).run();
         verify(paymentExpiryJob).run();
+        verify(boostNotificationJob).run();
     }
 
     @Test
@@ -94,11 +102,13 @@ class InternalJobControllerTest {
                 .andExpect(jsonPath("$.requestJob").value("failed"))
                 .andExpect(jsonPath("$.pendingAccountCleanupJob").value("ok"))
                 .andExpect(jsonPath("$.paymentExpiryJob").value("ok"))
+                .andExpect(jsonPath("$.boostNotificationJob").value("ok"))
                 .andExpect(jsonPath("$.reviewSlaJob").doesNotExist());
 
         verify(itemExpiryJob).run();
         verify(requestJob).run();
         verify(pendingAccountCleanupJob).run();
         verify(paymentExpiryJob).run();
+        verify(boostNotificationJob).run();
     }
 }

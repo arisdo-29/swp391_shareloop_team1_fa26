@@ -136,9 +136,9 @@ export function AdminAnomalies() {
                 {sharedIpGroups.map((group) => (
                   <div key={group.ipAddress} className="rounded-xl border border-border bg-white p-4 shadow-2xs space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-bold text-text-primary">IP: {group.ipAddress}</span>
-                        <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="min-w-0 break-all font-mono text-sm font-bold text-text-primary">IP: {group.ipAddress}</span>
+                        <span className="shrink-0 rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-semibold text-warning">
                           {group.accountCount} tài khoản
                         </span>
                       </div>

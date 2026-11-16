@@ -1604,8 +1604,16 @@ function ImageEditor({
       >
         <span className="font-semibold">{label}</span>
         <span className="mt-1 block text-xs text-text-muted">{hint}</span>
+        {/* Nút tiếng Việt thay cho ô chọn file gốc ("Choose Files") của trình duyệt. */}
+        <span
+          aria-hidden="true"
+          className={`mt-3 inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-white px-3 font-semibold text-primary ${disabled ? 'opacity-40' : 'cursor-pointer hover:bg-primary-faint'}`}
+        >
+          <Icon name="image" className="size-4" />
+          Chọn ảnh
+        </span>
         <input
-          className="mt-3 block w-full text-xs"
+          className="sr-only"
           type="file"
           accept="image/jpeg,image/png,image/webp"
           multiple

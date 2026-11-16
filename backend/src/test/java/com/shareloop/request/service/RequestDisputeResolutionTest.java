@@ -108,6 +108,38 @@ class RequestDisputeResolutionTest {
     }
 
     @Test
+    @DisplayName("Chấp nhận khiếu nại mà chủ bài vi phạm: nhả rồi ẩn bài chính, món đổi vẫn mở lại")
+    void resolveDisputedRequest_whenUpheldAndDonorViolated_hidesMainItem() {
+        // given
+        Request request = disputedSwapRequest();
+
+        // when
+        boolean resolved = requestService.resolveDisputedRequest(REQUEST_ID, true, DONOR_ID);
+
+        // then
+        assertThat(resolved).isTrue();
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        verify(itemService).releaseIfReserved(ITEM_ID);
+        verify(itemService).hide(ITEM_ID);
+        verify(itemService).releaseIfReserved(OFFERED_ITEM_ID);
+        verify(itemService, never()).hide(OFFERED_ITEM_ID);
+    }
+
+    @Test
+    @DisplayName("Chấp nhận khiếu nại mà người nhận vi phạm: bài chính mở lại, không bị ẩn")
+    void resolveDisputedRequest_whenUpheldAndReceiverViolated_reopensMainItem() {
+        // given
+        disputedSwapRequest();
+
+        // when
+        requestService.resolveDisputedRequest(REQUEST_ID, true, RECEIVER_ID);
+
+        // then
+        verify(itemService).releaseIfReserved(ITEM_ID);
+        verify(itemService, never()).hide(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
     @DisplayName("Bác bỏ khiếu nại: Request COMPLETED, hai món TRADED, cộng điểm uy tín, thông báo cả hai bên")
     void resolveDisputedRequest_whenDismissed_completesMarksTradedAndAwardsPoints() {
         // given

@@ -142,9 +142,18 @@ Xem thông tin uy tín cá nhân của chính người dùng đang đăng nhập
       "totalElements": 2,
       "totalPages": 1
     }
-  }
+  },
+  "nextRank": "DIAMOND",
+  "pointsToNextRank": 80
 }
 ```
+
+`nextRank` là hạng ngay trên hạng hiện tại, `pointsToNextRank` là số điểm còn thiếu tính theo ngưỡng cấu hình
+(`reputation_silver_min`, `reputation_gold_min`, `reputation_diamond_min`); cả hai là `null` khi đã ở Kim cương.
+
+Mỗi lần hoàn tất giao dịch, mỗi bên nhận một thông báo `POINTS_AWARDED` (link `/profile?tab=reputation`): tiêu đề
+"Bạn được cộng N điểm uy tín" hoặc "Giao dịch hoàn tất, chưa được cộng điểm", nội dung là `reason` ở trên kèm tổng
+điểm, câu lên hạng và câu hồi sao nếu có. Frontend hiện thông báo này thành một toast nhỏ.
 
 Giao dịch hoàn tất nhưng không được cộng đủ điểm vẫn có một dòng lịch sử; `reason` giải thích lý do:
 - Lặp cặp (UT-08): `delta = 0`, `"Không cộng điểm giao dịch món “Bàn học gỗ” (vai trò cho/tặng): giao dịch thứ 3 giữa cùng hai người trong 90 ngày"`.

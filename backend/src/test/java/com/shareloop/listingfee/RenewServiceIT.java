@@ -234,6 +234,36 @@ class RenewServiceIT extends IntegrationTest {
     }
 
     @Test
+    void renew_whenItemHidden_throwsRenewNotAllowedAndChargesNothing() {
+        // given: bài đã duyệt nhưng đang bị ẩn (đủ ngưỡng báo cáo hoặc chủ bài bị khoá)
+        Instant oldExpireAt = Instant.now().plus(5, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        long ownerId = insertUser(START_BALANCE);
+        long itemId = insertItem(ownerId, "APPROVED", oldExpireAt);
+        jdbc.update("UPDATE items SET is_active = false WHERE id = ?", itemId);
+
+        // when
+        Throwable thrown = catchThrowable(() -> renewService.renew(itemId, ownerId));
+
+        // then: không trừ tiền, không đổi hạn
+        assertBusinessError(thrown, ListingFeeErrorCode.LISTINGFEE_RENEW_NOT_ALLOWED);
+        assertThat(balanceOf(ownerId)).isEqualTo(START_BALANCE);
+        assertThat(expireAtOf(itemId)).isEqualTo(oldExpireAt);
+    }
+
+    @Test
+    void quoteRenew_whenItemHidden_returnsNotAllowedWithReason() {
+        Instant oldExpireAt = Instant.now().plus(5, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        long ownerId = insertUser(START_BALANCE);
+        long itemId = insertItem(ownerId, "APPROVED", oldExpireAt);
+        jdbc.update("UPDATE items SET is_active = false WHERE id = ?", itemId);
+
+        RenewQuote quote = renewService.quoteRenew(itemId, ownerId);
+
+        assertThat(quote.allowed()).isFalse();
+        assertThat(quote.reason()).isEqualTo(ListingFeeErrorCode.LISTINGFEE_RENEW_NOT_ALLOWED.defaultMessage());
+    }
+
+    @Test
     void renew_whenItemExpired_throwsRenewNotAllowedAndChargesNothing() {
         // given: bài đã EXPIRED (gia hạn bài EXPIRED chưa hỗ trợ ở #88)
         Instant oldExpireAt = Instant.now().minus(1, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);

@@ -823,7 +823,7 @@ class ReportServiceTest {
         reportService.conclude(1L, 14L, new ConcludeReportRequest(ReportDecision.UPHOLD, null));
 
         // then
-        verify(requestService).resolveDisputedRequest(77L, true);
+        verify(requestService).resolveDisputedRequest(77L, true, 200L);
     }
 
     @Test
@@ -840,7 +840,7 @@ class ReportServiceTest {
         reportService.conclude(1L, 15L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
 
         // then
-        verify(requestService).resolveDisputedRequest(77L, false);
+        verify(requestService).resolveDisputedRequest(77L, false, 200L);
     }
 
     @Test
@@ -857,7 +857,8 @@ class ReportServiceTest {
         reportService.conclude(1L, 16L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
 
         // then
-        verify(requestService, never()).resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean());
+        verify(requestService, never())
+                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any());
     }
 
     @Test
