@@ -14,7 +14,7 @@ public record ScheduleRequest(
         @Pattern(regexp = "IN_PERSON|SHIPPING", message = "Hình thức giao nhận phải là IN_PERSON hoặc SHIPPING")
         String deliveryMethod,
 
-        @NotBlank(message = "Địa điểm không được để trống") @Size(max = 255, message = "Địa điểm tối đa 255 ký tự")
+        @NotBlank(message = "Địa điểm không được để trống") @Size(max = 255, message = "Địa điểm tối đa 255 ký tự.")
         String meetingPlace,
 
         @NotNull(message = "Thời gian hẹn không được để trống")
