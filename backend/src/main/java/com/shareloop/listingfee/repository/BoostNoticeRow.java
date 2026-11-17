@@ -21,4 +21,7 @@ public interface BoostNoticeRow {
 
     // null với bài đẩy rất cũ (trước khi có cột last_boosted_at).
     Instant getLastBoostedAt();
+
+    // Hạn hiển thị: gói đẩy mua thêm không được vượt mốc này (BoostService.requireWithinExpireAt). null với bài cũ.
+    Instant getExpireAt();
 }

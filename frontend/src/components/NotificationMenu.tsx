@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { notificationApi, withoutHidden, type NotificationResponse } from '../services/notificationApi';
+import { notificationActionLabel, notificationTarget } from '../utils/notificationDisplay';
 import { toBackendUserId } from '../services/requestApi';
 import { Button, Icon, IconButton } from './ui';
 import { useRealtimeRefresh } from '../utils/useRealtimeRefresh';
@@ -245,6 +246,7 @@ export function NotificationMenu({
                 </p>
               ) : null}
               {visibleNotifications.map((notification) => {
+                const target = notificationTarget(notification);
                 return (
                   <article
                     key={notification.id}
@@ -271,16 +273,16 @@ export function NotificationMenu({
                           {new Date(notification.createdAt).toLocaleString('vi-VN')}
                         </p>
                         <div className="mt-2 flex items-center gap-3 text-xs font-semibold">
-                          {notification.link?.startsWith('/') && !notification.link.startsWith('//') && !notification.link.includes('\\') ? (
+                          {target ? (
                             <Link
-                              to={notification.link}
+                              to={target}
                               className="text-link hover:underline"
                               onClick={() => {
                                 void markAsRead(notification);
                                 onOpenChange(false);
                               }}
                             >
-                              Xem chi tiết
+                              {notificationActionLabel(notification.type)}
                             </Link>
                           ) : null}
                           {!notification.isRead ? (

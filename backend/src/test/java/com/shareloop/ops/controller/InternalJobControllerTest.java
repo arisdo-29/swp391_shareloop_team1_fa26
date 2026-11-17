@@ -92,14 +92,14 @@ class InternalJobControllerTest {
     }
 
     @Test
-    @DisplayName("Một job ném exception thì vẫn trả 200, job đó failed và các job khác vẫn chạy bình thường")
+    @DisplayName("Một job ném exception thì vẫn trả 200, job đó báo error kèm lý do và các job khác vẫn chạy")
     void runJobs_whenOneJobFails_stillRunsRemainingJobs() throws Exception {
         doThrow(new RuntimeException("Simulated job error")).when(requestJob).run();
 
         mockMvc.perform(post(URL).header("X-Job-Token", VALID_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.itemExpiryJob").value("ok"))
-                .andExpect(jsonPath("$.requestJob").value("failed"))
+                .andExpect(jsonPath("$.requestJob").value("error: RuntimeException - Simulated job error"))
                 .andExpect(jsonPath("$.pendingAccountCleanupJob").value("ok"))
                 .andExpect(jsonPath("$.paymentExpiryJob").value("ok"))
                 .andExpect(jsonPath("$.boostNotificationJob").value("ok"))

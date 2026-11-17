@@ -43,6 +43,7 @@ vi.mock('../../services/itemApi', async (importOriginal) => ({
     boostItem: vi.fn(),
     remove: vi.fn(),
     getRenewQuote: vi.fn(),
+    renewItem: vi.fn(),
   },
 }));
 
@@ -85,10 +86,10 @@ function myItem(overrides: Partial<ItemResponse> = {}): ItemResponse {
   };
 }
 
-function renderActivities(items: ItemResponse[]) {
+function renderActivities(items: ItemResponse[], initialEntries: string[] = ['/activities']) {
   vi.mocked(itemApi.mine).mockResolvedValue(items);
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <Activities />
     </MemoryRouter>,
   );
@@ -228,6 +229,84 @@ describe('đẩy bài từ Bài của tôi', () => {
       ),
     );
     expect(itemApi.boostItem).toHaveBeenCalledWith(31);
+  });
+});
+
+describe('mở hộp Đẩy bài từ thông báo (B24)', () => {
+  it('URL ?boost=<id> mở sẵn hộp Đẩy bài của đúng bài, không cần bấm nút', async () => {
+    // given: thông báo BOOST_ENDING_SOON dẫn tới /activities?boost=31&until=...
+    vi.mocked(itemApi.getBoostQuote).mockResolvedValue({
+      fee: 5,
+      newBoostedUntil: hoursFromNow(72 + 10),
+      allowed: true,
+      reason: null,
+      reasonCode: null,
+      boostStartedAt: hoursFromNow(-48),
+      chainEndsAt: hoursFromNow(96),
+      cooldownUntil: hoursFromNow(154),
+      extending: true,
+      slotsLeft: 10,
+      earliestSlotAt: null,
+      userActiveBoosts: 1,
+      userEarliestBoostEndAt: null,
+      expireAt: hoursFromNow(24 * 30),
+    });
+    vi.mocked(itemApi.getListingFees).mockRejectedValue(new Error('offline'));
+
+    // when
+    renderActivities([myItem({ id: 30, title: 'Bài khác' }), myItem({ boostedUntil: hoursFromNow(10) })], [
+      '/activities?boost=31&until=1790000000',
+    ]);
+
+    // then
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Xác nhận đẩy bài')).toBeTruthy();
+    expect(itemApi.getBoostQuote).toHaveBeenCalledWith(31);
+    expect(itemApi.getBoostQuote).toHaveBeenCalledTimes(1);
+  });
+
+  it('bài trong thông báo không còn trong danh sách thì báo, không mở hộp', async () => {
+    // when
+    renderActivities([myItem()], ['/activities?boost=999']);
+
+    // then
+    expect(
+      await screen.findByText('Không tìm thấy bài trong thông báo. Bài có thể đã bị gỡ hoặc đã hết hạn.'),
+    ).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(itemApi.getBoostQuote).not.toHaveBeenCalled();
+  });
+});
+
+describe('gia hạn từ thông báo nhắc hết hạn (B19)', () => {
+  it('URL ?renew=<id> mở hộp Gia hạn ghi phí 5 Credit và hạn mới; thiếu Credit báo đúng câu', async () => {
+    // given: báo giá gia hạn của backend (phí 5 Credit, hạn mới = hạn cũ + 30 ngày), gia hạn thật bị từ chối vì thiếu Credit
+    const oldExpireAt = hoursFromNow(10);
+    const newExpireAt = new Date(Date.parse(oldExpireAt) + 30 * 24 * HOUR).toISOString();
+    vi.mocked(itemApi.getRenewQuote).mockResolvedValue({ fee: 5, newExpireAt, allowed: true, reason: null });
+    vi.mocked(itemApi.renewItem).mockRejectedValue({
+      code: 'WALLET_INSUFFICIENT_BALANCE',
+      message: 'Số dư Credit khả dụng không đủ.',
+      status: 402,
+    });
+
+    // when
+    renderActivities([myItem({ expireAt: oldExpireAt })], ['/activities?renew=31&until=1790000000']);
+
+    // then: hộp mở sẵn, ghi phí và hạn mới từ báo giá
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Xác nhận gia hạn bài')).toBeTruthy();
+    expect(await within(dialog).findByText('Phí: 5 Credit. Phí không hoàn lại.')).toBeTruthy();
+    expect(within(dialog).getByText(new Date(newExpireAt).toLocaleString('vi-VN'))).toBeTruthy();
+    expect(itemApi.getRenewQuote).toHaveBeenCalledWith(31);
+
+    // when: xác nhận gia hạn
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận' }));
+
+    // then
+    expect(
+      await within(dialog).findByText('Số dư Credit khả dụng không đủ. Vui lòng nạp thêm Credit.'),
+    ).toBeTruthy();
   });
 });
 

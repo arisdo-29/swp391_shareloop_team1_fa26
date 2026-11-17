@@ -76,13 +76,21 @@ public class InternalJobController {
         return ResponseEntity.ok(results);
     }
 
+    // B24: job lỗi thì vẫn chạy các job sau, nhưng trả "error: <lý do>" để người gọi thấy ngay lỗi gì, không chỉ
+    // "failed". Chỉ ghi tên lớp và message của exception, không ghi stack trace ra response.
     private String executeJob(Runnable job, String jobName) {
         try {
             job.run();
             return "ok";
         } catch (Exception e) {
             log.error("Execution of job {} failed via /internal/jobs/run", jobName, e);
-            return "failed";
+            return "error: " + describe(e);
         }
+    }
+
+    private static String describe(Exception exception) {
+        String message = exception.getMessage();
+        String type = exception.getClass().getSimpleName();
+        return message == null || message.isBlank() ? type : type + " - " + message;
     }
 }

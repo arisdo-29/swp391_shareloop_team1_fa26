@@ -451,7 +451,7 @@ Không phải endpoint. Profile `test` đặt `app.jobs.enabled=false` nên bean
 
 | Job | Lịch | Service | Việc làm |
 |-----|------|---------|----------|
-| `ItemExpiryJob` (#89) | `0 0 * * * *` (phút 0 mỗi giờ) | `ItemExpiryService.expireOverdueItems(now)` | Bài hết hạn → `EXPIRED` |
+| `ItemExpiryJob` (#89, B19) | `0 0 * * * *` (phút 0 mỗi giờ) | `ItemExpiryService.expireOverdueItems(now)`, rồi `ItemExpiryNotificationService.notifyExpiringSoon(now)` | Bài hết hạn → `EXPIRED`; nhắc gia hạn bài sắp hết hạn |
 | `BoostNotificationJob` | `0 0 * * * *` (phút 0 mỗi giờ) | `BoostNotificationService.stopHiddenBoosts`, `notifyEndingSoon`, `notifyEnded` (theo thứ tự này) | Dừng đẩy bài bị ẩn; báo chủ bài sắp hết đẩy, đã hết đẩy |
 
 ### Hết hạn bài (BD-12, TD-01)
@@ -469,19 +469,41 @@ Không phải endpoint. Profile `test` đặt `app.jobs.enabled=false` nên bean
 - **Idempotent**: điều kiện chọn gồm trạng thái hiện tại, chạy lại không có tác dụng kép.
 - Không xoá `boosted_until`: luật đẩy bài bảo đảm `boosted_until ≤ expire_at`, nên lúc hết hạn mốc đẩy đã qua.
 
+### Nhắc gia hạn bài sắp hết hạn (B19)
+
+Chạy trong `ItemExpiryJob`, sau bước chuyển `EXPIRED`. Gửi qua `NotificationService.notify` tới chủ bài, tiêu đề "Bài
+sắp hết hạn hiển thị", `link = /activities?renew={id}&until={epoch giây của expire_at}` (FE mở trang Hoạt động với sẵn
+hộp Gia hạn). Không thêm bảng, cột hay migration (`notifications.type` là `VARCHAR(40)` không có `CHECK`).
+
+| `type` | Chọn bài | Nội dung |
+|--------|----------|----------|
+| `ITEM_EXPIRING_48H` | `APPROVED`, `is_active`, chưa xoá, `now + 24h < expire_at ≤ now + 48h` | Bài «tên» sẽ hết hạn lúc HH:mm dd/MM. Gia hạn [post_display_days] ngày với [renew_fee] Credit. |
+| `ITEM_EXPIRING_24H` | như trên, `now < expire_at ≤ now + 24h` | như trên |
+
+- Phí và số ngày đọc `renew_fee`, `post_display_days` (cùng số với `POST /items/{id}/renew`); phí 0 thì ghi "Gia hạn
+  miễn phí thêm N ngày.". Mốc 48 giờ / 24 giờ gắn với tên loại nên là hằng số trong service.
+- Bài bị ẩn không được nhắc vì không gia hạn được. Job lỡ mốc 48 giờ thì bài chỉ nhận `ITEM_EXPIRING_24H`.
+- **Chống gửi trùng**: đã có thông báo cùng loại, cùng link (tức cùng bài + cùng `expire_at`) thì bỏ qua. Mỗi mốc chỉ
+  gửi một lần mỗi kỳ hạn; gia hạn xong `expire_at` đổi nên hạn mới lại được nhắc đủ hai mốc.
+- Đọc theo lô 100 dòng, phân trang keyset; mỗi bài một transaction, bài lỗi ghi log WARN, lượt sau thử lại.
+
 ### Thông báo đợt đẩy (C15, HT-09)
 
-Gửi qua `NotificationService.notify` tới chủ bài, `link = /items/{id}`. Không thêm bảng hay cột.
+Gửi qua `NotificationService.notify` tới chủ bài. `BOOST_STOPPED`, `BOOST_ENDED` dùng `link = /items/{id}`; `BOOST_ENDING_SOON` dùng `link = /activities?boost={id}&until={epoch giây của boosted_until}` (B24: FE mở trang Hoạt động với sẵn hộp Đẩy bài). Không thêm bảng hay cột.
 
 | `type` | Chọn bài | Tiêu đề | Nội dung |
 |--------|----------|---------|----------|
 | `BOOST_STOPPED` | Còn hạn đẩy (`boosted_until > now`), `is_active = false`, chưa xoá mềm | Bài đã dừng đẩy | Bài «tên» bị ẩn nên đã dừng đẩy; thời gian đẩy còn lại không được hoàn phí. |
-| `BOOST_ENDING_SOON` | Bài đang đẩy, hết đẩy trong `boost_ending_notice_hours` giờ tới (mặc định 24) | Bài sắp hết thời gian đẩy | Bài «tên» hết đẩy lúc HH:mm dd/MM. Bạn còn mua thêm được tới HH:mm dd/MM. |
+| `BOOST_ENDING_SOON` | Bài đang đẩy, hết đẩy trong `boost_ending_notice_hours` giờ tới (mặc định 24) | Bài sắp hết thời gian đẩy | Bài «tên» hết đẩy lúc HH:mm dd/MM. + một trong ba câu ở dưới |
 | `BOOST_ENDED` | Bài `APPROVED`, đang hiển thị, còn hạn hiển thị, hết đẩy trong `boost_cooldown_days` ngày qua | Bài đã hết thời gian đẩy | Bài «tên» đã hết thời gian đẩy. Có thể đẩy lại từ HH:mm dd/MM. |
 
 - Giờ theo `Asia/Ho_Chi_Minh`, định dạng `HH:mm dd/MM` như các thông báo khác. Bài không có tên thì ghi "Bài của bạn".
-- `BOOST_ENDING_SOON`: câu "Bạn còn mua thêm được tới [boost_started_at + boost_max_days]" chỉ có khi thêm một gói
-  (`boosted_until + boost_days`) vẫn không vượt mốc cuối đợt.
+- `BOOST_ENDING_SOON` luôn nói rõ còn mua thêm gói được không (cùng luật với `POST /items/{id}/boost`; gói mới kết thúc
+  ở `boosted_until + boost_days`):
+  - vượt `boost_started_at + boost_max_days`: "Đợt đẩy đã đủ tối đa N ngày nên không mua thêm gói được; bài được đẩy lại
+    từ [boosted_until + boost_cooldown_days]."
+  - vượt `expire_at`: "Bài sắp hết hạn hiển thị nên chưa mua thêm gói đẩy được; hãy gia hạn bài trước rồi đẩy tiếp."
+  - còn lại: "Bạn còn mua thêm được gói đẩy: mua trước lúc hết đẩy thì bài được đẩy tiếp tới [boosted_until + boost_days]."
 - `BOOST_ENDED`: mốc đẩy lại = `boosted_until + boost_cooldown_days`.
 - `BOOST_STOPPED`: trong cùng transaction, trước tiên gán `boosted_until = now` bằng một câu `UPDATE` có điều kiện (còn
   đẩy, đang ẩn, chưa xoá), rồi mới báo. Bài mất phần thời gian đẩy còn lại (Admin bỏ ẩn cũng không đẩy tiếp), thời
@@ -491,7 +513,7 @@ Gửi qua `NotificationService.notify` tới chủ bài, `link = /items/{id}`. K
 
   | `type` | `since` |
   |--------|---------|
-  | `BOOST_ENDING_SOON` | `boosted_until - boost_ending_notice_hours` |
+  | `BOOST_ENDING_SOON` | mọi lúc (`EPOCH`): link đã chứa mốc `boosted_until` nên khoá theo bài + kỳ đẩy (B24) |
   | `BOOST_ENDED` | `boosted_until` |
   | `BOOST_STOPPED` | `last_boosted_at` (lần mua gần nhất) |
 

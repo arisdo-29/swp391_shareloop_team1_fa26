@@ -394,6 +394,29 @@ export function Activities() {
       active = false;
     };
   }, [currentUserId, itemsReloadKey, user.id]);
+  // B24, B19: thông báo dẫn tới /activities?boost=<id> hoặc ?renew=<id> → mở sẵn hộp Đẩy bài / Gia hạn của bài đó.
+  // Chờ tải xong danh sách bài, xoá tham số khỏi URL (để tải lại trang không mở lại hộp) rồi mở hộp như khi bấm nút;
+  // bài không đủ điều kiện thì báo giá trong hộp tự nêu lý do.
+  const [deepLinkNotice, setDeepLinkNotice] = useState('');
+  useEffect(() => {
+    if (myItemsLoading || myItemsError) return;
+    const boostId = searchParams.get('boost');
+    const renewId = searchParams.get('renew');
+    const requestedId = boostId ?? renewId;
+    if (!requestedId) return;
+    const params = new URLSearchParams(searchParams);
+    for (const key of ['boost', 'renew', 'until']) params.delete(key);
+    setSearchParams(params, { replace: true, state: location.state });
+    const item = myItems.find((entry) => entry.id === requestedId);
+    if (!item) {
+      setDeepLinkNotice('Không tìm thấy bài trong thông báo. Bài có thể đã bị gỡ hoặc đã hết hạn.');
+      return;
+    }
+    setDeepLinkNotice('');
+    setListingFeeError('');
+    setListingFeeNeedsTopUp(false);
+    setListingFeeAction({ type: boostId ? 'boost' : 'renew', item });
+  }, [myItemsLoading, myItemsError, myItems, searchParams, setSearchParams, location.state]);
   const acceptApiRequest = Object.values(apiRequestsByItem)
     .flat()
     .find((request) => request.id === acceptConfirmId);
@@ -503,7 +526,8 @@ export function Activities() {
       setListingFeeNeedsTopUp(insufficientCredit);
       setListingFeeError(
         insufficientCredit
-          ? `Số dư khả dụng không đủ để ${type === 'renew' ? 'gia hạn' : 'đẩy'} bài. Vui lòng nạp thêm Credit.`
+          ? // B19: cùng câu với lỗi WALLET_INSUFFICIENT_BALANCE của backend.
+            'Số dư Credit khả dụng không đủ. Vui lòng nạp thêm Credit.'
           : apiError.message ||
               `Không ${type === 'renew' ? 'gia hạn' : 'đẩy'} được bài đăng. Vui lòng thử lại.`,
       );
@@ -619,6 +643,7 @@ export function Activities() {
         {pageNotice ? <Alert tone="success">{pageNotice}</Alert> : null}
         {editNotice ? <Alert tone="warning">{editNotice}</Alert> : null}
         {listingFeeNotice ? <Alert tone="success">{listingFeeNotice}</Alert> : null}
+        {deepLinkNotice ? <Alert tone="warning">{deepLinkNotice}</Alert> : null}
         {selectNotice ? <Alert tone="warning">{selectNotice}</Alert> : null}
       </div>
 
@@ -1040,7 +1065,7 @@ export function Activities() {
           ) : null}
           {creditShortage > 0 ? (
             <div className="mt-4">
-              <Alert tone="warning">{`Số dư khả dụng còn thiếu ${creditShortage} Credit.`}</Alert>
+              <Alert tone="warning">{`Số dư Credit khả dụng không đủ. Còn thiếu ${creditShortage} Credit.`}</Alert>
               <Link className="mt-3 inline-block" to="/credit">
                 <Button>Nạp Credit</Button>
               </Link>

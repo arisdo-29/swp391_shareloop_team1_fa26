@@ -64,6 +64,27 @@ afterEach(() => {
 });
 
 describe('Notifications', () => {
+  it('B24: thông báo sắp hết đẩy có nút "Đẩy tiếp bài" dẫn tới hộp Đẩy bài', async () => {
+    // given
+    vi.mocked(notificationApi.listAll).mockResolvedValue([
+      notification({
+        id: 9,
+        type: 'BOOST_ENDING_SOON',
+        title: 'Bài sắp hết thời gian đẩy',
+        body: 'Bài «Áo» hết đẩy lúc 10:00 20/11. Bạn còn mua thêm được gói đẩy: mua trước lúc hết đẩy thì bài được đẩy tiếp tới 10:00 23/11.',
+        link: '/activities?boost=31&until=1790000000',
+      }),
+    ]);
+
+    // when
+    renderPage();
+
+    // then
+    const action = await screen.findByRole('link', { name: 'Đẩy tiếp bài' });
+    expect(action.getAttribute('href')).toBe('/activities?boost=31&until=1790000000');
+    expect(screen.getByText(/Bạn còn mua thêm được gói đẩy/)).toBeTruthy();
+  });
+
   it('lọc theo loại Khiếu nại & Giải trình thì chỉ còn thông báo khiếu nại', async () => {
     // given
     const user = userEvent.setup();
