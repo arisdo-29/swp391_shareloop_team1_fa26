@@ -1,6 +1,6 @@
 export const passwordRules = {
   required: 'Vui lòng nhập mật khẩu.',
-  length: 'Mật khẩu phải có từ 8–64 ký tự.',
+  length: 'Mật khẩu phải có từ 8–64 ký tự, gồm chữ, số và ký tự đặc biệt.',
   different: 'Mật khẩu mới không được trùng với mật khẩu hiện tại.',
   mismatch: 'Mật khẩu xác nhận không khớp.',
 };
@@ -8,7 +8,7 @@ export const passwordRules = {
 export function validatePassword(password: string) {
   const errors: string[] = [];
   if (!password.trim()) errors.push(passwordRules.required);
-  else if (password.length < 8 || password.length > 64) errors.push(passwordRules.length);
+  else if (!/^(?=.*\p{L})(?=.*\d)(?=.*[^\p{L}\d\s]).{8,64}$/u.test(password)) errors.push(passwordRules.length);
   return errors;
 }
 

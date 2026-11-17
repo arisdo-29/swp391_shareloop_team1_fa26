@@ -16,6 +16,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -117,8 +119,30 @@ class AuthRegisterIT extends IntegrationTest {
         captureLatestOtp(2);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"MatKhau123", "MatKhau@abc", "12345678!", "Mat Khau1"})
+    void register_rejectsWeakPasswords(String password) throws Exception {
+        postRegister(password)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.field").value("password"))
+                .andExpect(
+                        jsonPath("$.message").value("Mật khẩu phải có từ 8–64 ký tự, gồm chữ, số và ký tự đặc biệt."));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM users WHERE email = ?", Long.class, EMAIL))
+                .isZero();
+    }
+
+    @Test
+    void register_acceptsVietnameseLettersInStrongPassword() throws Exception {
+        postRegister("Mậtkhẩu1!").andExpect(status().isCreated());
+    }
+
     private ResultActions postRegister() throws Exception {
-        String body = "{\"email\":\"" + EMAIL + "\",\"password\":\"" + PASSWORD
+        return postRegister(PASSWORD);
+    }
+
+    private ResultActions postRegister(String password) throws Exception {
+        String body = "{\"email\":\"" + EMAIL + "\",\"password\":\"" + password
                 + "\",\"fullName\":\"Người Dùng IT\",\"phone\":\"" + PHONE + "\"}";
         return mockMvc.perform(post("/api/v1/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)

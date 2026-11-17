@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { authApi } from '../../services/authApi';
 import type { ApiError } from '../../services/http';
 import { Register } from './Register';
+import { validatePassword } from '../../utils/validation';
 
 vi.mock('../../services/authApi', () => ({
   authApi: { register: vi.fn() },
@@ -106,6 +107,25 @@ describe('Register lỗi từ backend', () => {
 });
 
 describe('Register kiểm tra dữ liệu phía trình duyệt', () => {
+  it('coi chữ tiếng Việt là chữ cái trong mật khẩu mạnh', () => {
+    expect(validatePassword('Mậtkhẩu1!')).toEqual([]);
+  });
+
+  it('chặn mật khẩu thiếu chữ số hoặc ký tự đặc biệt', async () => {
+    renderRegister();
+    const user = userEvent.setup();
+    const passwordInput = screen.getByLabelText('Mật khẩu');
+    await user.type(passwordInput, 'MatKhau123');
+    await user.tab();
+    expect(screen.getByText('Mật khẩu phải có từ 8–64 ký tự, gồm chữ, số và ký tự đặc biệt.')).toBeTruthy();
+
+    await user.clear(passwordInput);
+    await user.type(passwordInput, 'MatKhau@abc');
+    await user.tab();
+    expect(screen.getByText('Mật khẩu phải có từ 8–64 ký tự, gồm chữ, số và ký tự đặc biệt.')).toBeTruthy();
+    expect(authApi.register).not.toHaveBeenCalled();
+  });
+
   it('hiện lỗi ngay khi rời từng ô không hợp lệ', async () => {
     renderRegister();
     const user = userEvent.setup();
@@ -131,7 +151,7 @@ describe('Register kiểm tra dữ liệu phía trình duyệt', () => {
     const passwordInput = screen.getByLabelText('Mật khẩu');
     await user.type(passwordInput, 'ngan');
     await user.tab();
-    expect(screen.getByText('Mật khẩu phải có từ 8–64 ký tự.')).toBeTruthy();
+    expect(screen.getByText('Mật khẩu phải có từ 8–64 ký tự, gồm chữ, số và ký tự đặc biệt.')).toBeTruthy();
   });
 
   it('chỉ kiểm tra lại và xóa lỗi sau khi người dùng rời ô', async () => {

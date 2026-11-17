@@ -180,7 +180,7 @@ gọi thống nhất; FE phải xoá token dù gọi thành công hay không.
 
 Quy tắc:
 
-- `newPassword` theo **đúng luật của đăng ký** (8–64 ký tự, cùng một annotation `@ValidPassword` với `RegisterRequest`).
+- `newPassword` theo **đúng luật của đăng ký** (8–64 ký tự, có chữ, số và ký tự đặc biệt; cùng annotation `@ValidPassword` với `RegisterRequest`).
 - Sai mật khẩu hiện tại → `AUTH_CURRENT_PASSWORD_INCORRECT` (`field` = `currentPassword`). Cố ý dùng `400`, không
   dùng `401`: FE gặp `401` sẽ coi là hết phiên và đăng xuất.
 - Mật khẩu mới trùng mật khẩu hiện tại → `AUTH_NEW_PASSWORD_SAME_AS_CURRENT` (`field` = `newPassword`).
@@ -245,7 +245,7 @@ Quy tắc:
 - Mã sai: tăng `otp_failed_count`, `AUTH_OTP_INVALID` kèm `details.remainingAttempts`. Lần sai thứ `otp_max_failed`:
   xoá mã, `AUTH_OTP_TOO_MANY_ATTEMPTS`; phải gọi lại `/forgot-password`.
 - Quá `otp_ttl_minutes`, không còn mã, hoặc mã đang lưu là mã đăng ký → `AUTH_OTP_EXPIRED`.
-- `newPassword` theo **đúng luật của đăng ký** (`@ValidPassword`, 8–64 ký tự), lưu BCrypt.
+- `newPassword` theo **đúng luật của đăng ký** (`@ValidPassword`, 8–64 ký tự, có chữ, số và ký tự đặc biệt), lưu BCrypt.
 - Mật khẩu mới trùng mật khẩu cũ → `AUTH_NEW_PASSWORD_SAME_AS_CURRENT` (`field` = `newPassword`). Lúc này OTP **đã được
   dùng**, FE báo lỗi và cho bấm "Gửi lại mã".
 - Thành công thì xoá các cột `otp_*`: mã không dùng lại được.
@@ -270,7 +270,7 @@ Tất cả là `record`, request có `@Valid`. Tên trường JSON là camelCase
 | Trường     | Kiểu   | Ràng buộc                                                                  |
 |------------|--------|----------------------------------------------------------------------------|
 | `email`    | string | Bắt buộc, đúng định dạng email, tối đa 255 ký tự                           |
-| `password` | string | Bắt buộc, 8–64 ký tự (BCrypt giới hạn 72 byte); sai thì message "Mật khẩu phải từ 8 đến 64 ký tự." |
+| `password` | string | Bắt buộc, 8–64 ký tự, có ít nhất một chữ cái, một chữ số và một ký tự đặc biệt; sai thì message "Mật khẩu phải có từ 8–64 ký tự, gồm chữ, số và ký tự đặc biệt." |
 | `fullName` | string | Bắt buộc, 1–100 ký tự sau khi `trim`                                       |
 | `phone`    | string | Bắt buộc, số di động VN: `0[35789]xxxxxxxx` hoặc `+84[35789]xxxxxxxx`      |
 
@@ -299,7 +299,7 @@ Tất cả là `record`, request có `@Valid`. Tên trường JSON là camelCase
 | Trường            | Kiểu   | Ràng buộc                                        |
 |-------------------|--------|--------------------------------------------------|
 | `currentPassword` | string | Bắt buộc, không rỗng                             |
-| `newPassword`     | string | Bắt buộc, 8–64 ký tự (cùng luật với `RegisterRequest.password`) |
+| `newPassword`     | string | Bắt buộc, cùng luật với `RegisterRequest.password` |
 
 ### ForgotPasswordRequest
 
@@ -313,7 +313,7 @@ Tất cả là `record`, request có `@Valid`. Tên trường JSON là camelCase
 |---------------|--------|-----------------------------------------------------------------|
 | `email`       | string | Bắt buộc, đúng định dạng email                                  |
 | `otp`         | string | Bắt buộc, đúng 6 chữ số `^\d{6}$`                               |
-| `newPassword` | string | Bắt buộc, 8–64 ký tự (cùng luật với `RegisterRequest.password`) |
+| `newPassword` | string | Bắt buộc, cùng luật với `RegisterRequest.password` |
 
 ### OtpSentResponse
 
