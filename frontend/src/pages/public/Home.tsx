@@ -27,6 +27,7 @@ import browseSuggestionBox from '../../assets/browse-suggestion-box.png';
 import { loginPath } from '../../utils/authRedirect';
 import { viewerKeyFor } from '../../utils/viewerKey';
 import { useFeaturedItems } from './useFeaturedItems';
+import { FoggedGlass } from '../../components/fx/FoggedGlass';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 import './home-content.css';
 const aiSuggestions = [
@@ -51,6 +52,9 @@ const newItemFilters: Array<{ value: 'all' | ItemType; label: string }> = [
 
 // Số bài của banner và mục "Tin nổi bật"; backend chọn nhóm bài theo vòng xoay (GET /items/featured).
 const FEATURED_LIMIT = 5;
+
+// Hiệu ứng kính sương ở hero (src/components/fx). Đổi thành false để tắt hẳn, hero hiện như cũ.
+const HERO_FOG_ENABLED = true;
 
 let pendingHomeItemsRequest: Promise<PageResponse<ItemResponse>> | null = null;
 let pendingHomeCategoriesRequest: Promise<CategoryResponse[]> | null = null;
@@ -141,6 +145,7 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
     [items],
   );
   const [activeIndex, setActiveIndex] = useState(0);
+  const heroRef = useRef<HTMLElement>(null);
   const thumbnailStripRef = useRef<HTMLDivElement>(null);
   const thumbnailRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -196,8 +201,13 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
 
   const activeItem = slides[activeIndex];
 
+  // select-none: giữ chuột để lau kính không bôi đen chữ; ô nhập liệu vẫn chọn và gõ được.
   return (
-    <section className="home-hero-shell relative isolate overflow-hidden border-b" data-home-hero>
+    <section
+      ref={heroRef}
+      className="home-hero-shell relative isolate select-none overflow-hidden border-b [&_input]:select-text [&_select]:select-text [&_textarea]:select-text"
+      data-home-hero
+    >
       <div className="absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
         {slides.map((item, index) => (
           <ItemImage
@@ -214,6 +224,8 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
           />
         ))}
       </div>
+      {/* Kính sương nằm giữa ảnh nền và lớp phủ xanh, để lớp phủ vẫn giữ tương phản cho chữ. */}
+      <FoggedGlass hostRef={heroRef} imageSrc={activeItem?.images[0]} enabled={HERO_FOG_ENABLED} />
       <div className="home-hero-overlay absolute inset-0 z-0" aria-hidden="true" />
       <div className="home-hero-bottom-fade absolute inset-0 z-0" aria-hidden="true" />
 

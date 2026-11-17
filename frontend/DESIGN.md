@@ -229,6 +229,15 @@ Lớp tiện ích trong `globals.css`: `.page-shell`, `.page-title`, `.page-intr
 
 - `.table-wrap` + `.data-table`: tiêu đề `surface-low`, hàng cách nhau bằng viền, hover `primary-faint`. Cột trạng thái dùng `StatusBadge`.
 
+## Hiệu ứng kính sương ở hero
+
+- **Làm gì:** ảnh nền hero trang chủ bị phủ một lớp kính sương xanh đậm có hạt li ti. Rê chuột hoặc kéo ngón tay để lau, sương phủ lại sau vài giây, thỉnh thoảng có giọt nước chảy. Lúc vào trang có một nét lau tự động (một lần mỗi phiên) và một dòng gợi ý tự ẩn. Đây chỉ là hiệu ứng thị giác, không đổi dữ liệu hay luồng nghiệp vụ.
+- **File:** `src/components/fx/fogEngine.ts` (Canvas 2D, mặt nạ, cross-fade khi đổi slide), `fogBeads.ts` (hạt sương), `fogDrips.ts` (giọt chảy), `FoggedGlass.tsx` (phần React: sự kiện, vòng lặp, gợi ý). Gắn vào `HomeHeroCarousel` trong `pages/public/Home.tsx`, nằm giữa ảnh nền và lớp phủ gradient.
+- **Màu:** biến `--fx-fog-tint` (đang trỏ `--color-primary`, để chữ trắng giữ tương phản AA khi kính còn sương) và `--fx-fog-shade` trong `globals.css`. Không viết hex trong các file trên.
+- **Chỉnh được:** hằng số ở đầu `fogEngine.ts` (bán kính lau 38/58/40, tốc độ phủ lại 0.13/giây, độ đậm sương 0.9, độ đậm màu 0.45, cross-fade 0.4 giây, nét lau tự động 1.2 giây), `fogDrips.ts` (tối đa 12 giọt, máy nhẹ 5) và `fogBeads.ts` (mật độ hạt).
+- **An toàn:** ảnh bài đăng khác origin nên tuyệt đối không gọi `getImageData`/`toDataURL`/`toBlob` trên canvas có vẽ ảnh. Canvas `aria-hidden`, không nhận sự kiện; không lau khi con trỏ ở trên nút, liên kết, ô nhập.
+- **Tắt:** người dùng bật giảm chuyển động thì không tạo canvas. Muốn tắt hẳn cho mọi người: đặt `HERO_FOG_ENABLED = false` trong `Home.tsx`.
+
 ## Do's and Don'ts
 
 ### Do:
