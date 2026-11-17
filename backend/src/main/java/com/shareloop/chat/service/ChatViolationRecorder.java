@@ -74,7 +74,8 @@ public class ChatViolationRecorder {
         }
         messageRepository.save(message);
 
-        long violationCount = messageRepository.countByRequestIdAndModeration(requestId, MessageModeration.BLOCKED);
+        long violationCount = messageRepository.countByRequestIdAndSenderIdAndModeration(
+                requestId, senderId, MessageModeration.BLOCKED);
 
         int threshold = 3;
         if (configService != null) {
@@ -87,7 +88,7 @@ public class ChatViolationRecorder {
             String title = "Cảnh báo vi phạm chat: " + senderName + " (" + itemTitle + ")";
             String body = senderName + " có " + violationCount
                     + " tin nhắn bị chặn do vi phạm quy định trong giao dịch món \"" + itemTitle + "\".";
-            String link = "/admin/users";
+            String link = "/admin/users/" + senderId;
             notificationService.notifyAdmins("CHAT_VIOLATION_ALERT", title, body, link);
         }
 

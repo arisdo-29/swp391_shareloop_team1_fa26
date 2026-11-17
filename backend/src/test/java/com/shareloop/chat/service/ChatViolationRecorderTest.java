@@ -71,7 +71,8 @@ class ChatViolationRecorderTest {
     @DisplayName("Lưu tin nhắn bị chặn vào database với trạng thái BLOCKED và tier 1")
     void recordViolation_savesBlockedMessage() {
         when(configService.getInt(ConfigKey.CHAT_VIOLATION_ALERT)).thenReturn(3);
-        when(messageRepository.countByRequestIdAndModeration(REQUEST_ID, MessageModeration.BLOCKED))
+        when(messageRepository.countByRequestIdAndSenderIdAndModeration(
+                        REQUEST_ID, SENDER_ID, MessageModeration.BLOCKED))
                 .thenReturn(1L);
 
         long count = violationRecorder.recordViolationAndAlertAdmin(
@@ -95,7 +96,8 @@ class ChatViolationRecorderTest {
     @DisplayName("Khi số vi phạm dưới ngưỡng (1 hoặc 2 < 3) thì KHÔNG cảnh báo Admin")
     void recordViolation_belowThreshold_doesNotAlertAdmin() {
         when(configService.getInt(ConfigKey.CHAT_VIOLATION_ALERT)).thenReturn(3);
-        when(messageRepository.countByRequestIdAndModeration(REQUEST_ID, MessageModeration.BLOCKED))
+        when(messageRepository.countByRequestIdAndSenderIdAndModeration(
+                        REQUEST_ID, SENDER_ID, MessageModeration.BLOCKED))
                 .thenReturn(2L);
 
         long count = violationRecorder.recordViolationAndAlertAdmin(
@@ -106,11 +108,13 @@ class ChatViolationRecorderTest {
     }
 
     @Test
-    @DisplayName("Khi số vi phạm đạt ngưỡng (3 lần) thì gửi cảnh báo tới Admin qua NotificationService (CH-05)")
+    @DisplayName(
+            "Khi số vi phạm đạt ngưỡng (3 lần) thì gửi cảnh báo tới Admin qua NotificationService kèm link chi tiết tài khoản (CH-05, G13)")
     void recordViolation_reachesThreshold_alertsAdmin() {
         mockSenderAndItem();
         when(configService.getInt(ConfigKey.CHAT_VIOLATION_ALERT)).thenReturn(3);
-        when(messageRepository.countByRequestIdAndModeration(REQUEST_ID, MessageModeration.BLOCKED))
+        when(messageRepository.countByRequestIdAndSenderIdAndModeration(
+                        REQUEST_ID, SENDER_ID, MessageModeration.BLOCKED))
                 .thenReturn(3L);
 
         long count = violationRecorder.recordViolationAndAlertAdmin(
@@ -123,15 +127,16 @@ class ChatViolationRecorderTest {
                         eq("Cảnh báo vi phạm chat: Nguyễn Văn A (Bàn phím cơ)"),
                         eq(
                                 "Nguyễn Văn A có 3 tin nhắn bị chặn do vi phạm quy định trong giao dịch món \"Bàn phím cơ\"."),
-                        eq("/admin/users"));
+                        eq("/admin/users/" + SENDER_ID));
     }
 
     @Test
-    @DisplayName("Khi số vi phạm vượt ngưỡng (4 lần > 3) thì tiếp tục gửi cảnh báo tới Admin")
+    @DisplayName("Khi số vi phạm vượt ngưỡng (4 lần > 3) thì tiếp tục gửi cảnh báo tới Admin kèm link chi tiết")
     void recordViolation_exceedsThreshold_alertsAdmin() {
         mockSenderAndItem();
         when(configService.getInt(ConfigKey.CHAT_VIOLATION_ALERT)).thenReturn(3);
-        when(messageRepository.countByRequestIdAndModeration(REQUEST_ID, MessageModeration.BLOCKED))
+        when(messageRepository.countByRequestIdAndSenderIdAndModeration(
+                        REQUEST_ID, SENDER_ID, MessageModeration.BLOCKED))
                 .thenReturn(4L);
 
         long count = violationRecorder.recordViolationAndAlertAdmin(
@@ -144,14 +149,15 @@ class ChatViolationRecorderTest {
                         eq("Cảnh báo vi phạm chat: Nguyễn Văn A (Bàn phím cơ)"),
                         eq(
                                 "Nguyễn Văn A có 4 tin nhắn bị chặn do vi phạm quy định trong giao dịch món \"Bàn phím cơ\"."),
-                        eq("/admin/users"));
+                        eq("/admin/users/" + SENDER_ID));
     }
 
     @Test
     @DisplayName("Ngưỡng đọc động từ ConfigService (ví dụ ngưỡng 5)")
     void recordViolation_customThresholdFromConfig() {
         when(configService.getInt(ConfigKey.CHAT_VIOLATION_ALERT)).thenReturn(5);
-        when(messageRepository.countByRequestIdAndModeration(REQUEST_ID, MessageModeration.BLOCKED))
+        when(messageRepository.countByRequestIdAndSenderIdAndModeration(
+                        REQUEST_ID, SENDER_ID, MessageModeration.BLOCKED))
                 .thenReturn(4L);
 
         long count = violationRecorder.recordViolationAndAlertAdmin(
@@ -160,5 +166,28 @@ class ChatViolationRecorderTest {
         assertThat(count).isEqualTo(4L);
         // Ngưỡng 5 mà mới có 4 lần -> chưa gửi cảnh báo
         verify(notificationService, never()).notifyAdmins(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName(
+            "G13: Chỉ đếm vi phạm của đúng người gửi (senderId), không gộp vi phạm của người khác trong cùng giao dịch")
+    void recordViolation_countsOnlySenderViolations_separatedByUser() {
+        long otherSenderId = 99L;
+        when(configService.getInt(ConfigKey.CHAT_VIOLATION_ALERT)).thenReturn(3);
+        // Người SENDER_ID mới có 2 vi phạm (dù trong request có thể người khác đã vi phạm thêm)
+        when(messageRepository.countByRequestIdAndSenderIdAndModeration(
+                        REQUEST_ID, SENDER_ID, MessageModeration.BLOCKED))
+                .thenReturn(2L);
+
+        long count = violationRecorder.recordViolationAndAlertAdmin(
+                REQUEST_ID, SENDER_ID, "tin nhắn bị chặn", "từ khoá cấm");
+
+        assertThat(count).isEqualTo(2L);
+        // Chưa đạt ngưỡng 3 cho SENDER_ID -> không cảnh báo
+        verify(notificationService, never()).notifyAdmins(any(), any(), any(), any());
+        verify(messageRepository)
+                .countByRequestIdAndSenderIdAndModeration(REQUEST_ID, SENDER_ID, MessageModeration.BLOCKED);
+        verify(messageRepository, never())
+                .countByRequestIdAndSenderIdAndModeration(eq(REQUEST_ID), eq(otherSenderId), any());
     }
 }
