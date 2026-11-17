@@ -62,6 +62,8 @@
   --color-shadow-strong: rgb(11 59 46 / 22%);
   /* Màu lớp kính sương ở hero (src/components/fx/fogEngine.ts đọc bằng getComputedStyle). */
   --fx-fog-tint: var(--color-surface-low);
+  /* Viền tối mỏng của hạt sương và giọt nước trên kính. */
+  --fx-fog-shade: var(--color-primary);
   color-scheme: light;
   font-synthesis: none;
 }

@@ -1,6 +1,8 @@
 import { type RefObject, useEffect, useRef, useState } from 'react';
 import { resolveMediaUrl } from '../../services/mediaUrl';
+import { maxDripsFor } from './fogDrips';
 import {
+  type FogColors,
   FogEngine,
   MAX_DEVICE_PIXEL_RATIO,
   WIPE_RADIUS_MOUSE_PRESSED_PX,
@@ -11,8 +13,9 @@ import {
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 // Rê hoặc chạm lên phần tử bấm được thì không lau, để bấm nút và gõ chữ không bị vệt lau đuổi theo.
 const CONTROL_SELECTOR = 'button, a, input, select, textarea, [role="button"]';
-// Dự phòng khi thiếu biến --fx-fog-tint trong globals.css.
+// Dự phòng khi thiếu biến --fx-fog-tint / --fx-fog-shade trong globals.css.
 const FALLBACK_FOG_TINT = 'white';
+const FALLBACK_FOG_SHADE = 'black';
 
 type FrameLoop = {
   wake: () => void;
@@ -40,9 +43,12 @@ function useMotionAllowed(): boolean {
   return motionAllowed;
 }
 
-function readFogTint(): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue('--fx-fog-tint').trim();
-  return value || FALLBACK_FOG_TINT;
+function readFogColors(): FogColors {
+  const style = getComputedStyle(document.documentElement);
+  return {
+    tint: style.getPropertyValue('--fx-fog-tint').trim() || FALLBACK_FOG_TINT,
+    shade: style.getPropertyValue('--fx-fog-shade').trim() || FALLBACK_FOG_SHADE,
+  };
 }
 
 function isOverControl(target: EventTarget | null): boolean {
@@ -83,6 +89,7 @@ function watchHost(host: HTMLElement, engine: FogEngine, loop: FrameLoop): () =>
   const resize = () => {
     const pixelRatio = Math.min(window.devicePixelRatio || 1, MAX_DEVICE_PIXEL_RATIO);
     engine.resize(host.clientWidth, host.clientHeight, pixelRatio);
+    engine.setMaxDrips(maxDripsFor(window.innerWidth, navigator.hardwareConcurrency));
     loop.wake();
   };
   resize();
@@ -201,7 +208,7 @@ export function FoggedGlass({ hostRef, imageSrc, enabled = true }: FoggedGlassPr
     const host = hostRef.current;
     const canvas = canvasRef.current;
     if (!active || !host || !canvas) return undefined;
-    const engine = FogEngine.create(canvas, readFogTint());
+    const engine = FogEngine.create(canvas, readFogColors());
     if (!engine) return undefined;
     const loop = createFrameLoop(engine);
     const stopWatching = watchHost(host, engine, loop);
