@@ -111,8 +111,9 @@ Xem chi tiết một bài đăng theo ID.
     "Đã giao dịch" của hồ sơ công khai. Response có `requestable = false` và `completedAt`; không có thông tin người
     nhận hay yêu cầu liên quan. Gọi thẳng `POST /api/v1/items/{id}/requests` vẫn bị chặn `409 REQUEST_ITEM_NOT_AVAILABLE`.
   - Với cả hai trường hợp trên, bài phải đang hiển thị (`is_active = true`) và chủ bài không bị khoá.
-  - Bài ở các trạng thái khác (`PENDING_REVIEW`, `REJECTED`, `RESERVED`, `EXPIRED`): Chỉ chính **chủ bài đăng** (`donorId`) mới xem được.
-  - Trường hợp bài không tồn tại, đã xoá mềm, hoặc người xem không phải chủ bài: Trả về `404 ITEM_NOT_FOUND`.
+  - Bài ở trạng thái `RESERVED` (đang trong giao dịch): Ngoài chủ bài đăng, các bên tham gia giao dịch đang hoạt động (người nhận được chọn hoặc người trao đổi món `offered_item_id`) cũng được xem ở chế độ chỉ xem (`requestable = false`).
+  - Bài ở các trạng thái khác (`PENDING_REVIEW`, `REJECTED`, `EXPIRED`): Chỉ chính **chủ bài đăng** (`donorId`) mới xem được.
+  - Trường hợp bài không tồn tại, đã xoá mềm, hoặc người xem không có quyền: Trả về `404 ITEM_NOT_FOUND`.
 - `requestable`: `true` khi bài `APPROVED`, đang hiển thị, chủ bài không bị khoá. Frontend ẩn nút "Gửi yêu cầu" khi
   `false`. Cờ này không xét người xem (chủ bài xem bài của mình vẫn thấy `true`); các luật theo người gửi (bài của mình,
   0 sao, Admin) vẫn do `POST /items/{id}/requests` kiểm.

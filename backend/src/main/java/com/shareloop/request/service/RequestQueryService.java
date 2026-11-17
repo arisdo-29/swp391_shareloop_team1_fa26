@@ -29,6 +29,15 @@ public class RequestQueryService {
     }
 
     /**
+     * Kiểm tra người dùng có phải là một bên tham gia trong giao dịch đang diễn ra của bài đăng hay không (G06).
+     * Bài chính hoặc món mang đổi trong giao dịch đã được chọn (RESERVED trở lên) thì cả hai bên đều xem được chi tiết.
+     */
+    @Transactional(readOnly = true)
+    public boolean isParticipantInActiveTransaction(long itemId, long userId) {
+        return repository.isParticipantInActiveRequest(itemId, userId);
+    }
+
+    /**
      * Số giao dịch COMPLETED mà người dùng tham gia, tính cả vai cho và vai nhận. Dùng cho ô "Giao dịch hoàn tất"
      * trên hồ sơ công khai. Người gọi: user.
      */

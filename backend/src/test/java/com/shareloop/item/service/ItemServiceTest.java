@@ -743,6 +743,38 @@ class ItemServiceTest {
     }
 
     @Test
+    @DisplayName("G06: người tham gia giao dịch đang diễn ra xem được bài RESERVED")
+    void getItem_reserved_participant_canViewItem() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        item.reserve();
+        ReflectionTestUtils.setField(item, "id", 1L);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(requestQueryService.isParticipantInActiveTransaction(1L, 20L)).thenReturn(true);
+
+        ItemResponse response = itemService.getItem(1L, 20L);
+
+        assertThat(response.id()).isEqualTo(1L);
+        assertThat(response.status()).isEqualTo(ItemStatus.RESERVED);
+        assertThat(response.requestable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("G06: người ngoài không xem được bài RESERVED, nhận lỗi ITEM_NOT_FOUND")
+    void getItem_reserved_thirdParty_throwsNotFound() {
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        item.reserve();
+        ReflectionTestUtils.setField(item, "id", 1L);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(requestQueryService.isParticipantInActiveTransaction(1L, 99L)).thenReturn(false);
+
+        assertThatThrownBy(() -> itemService.getItem(1L, 99L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
+    }
+
+    @Test
     @DisplayName("U04: danh sách bài của tôi đánh dấu bài đang tạm ẩn")
     void listMyItems_marksHiddenItems() {
         Item visible = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách 1", "Mô tả", null, ItemCondition.NEW, null, null);
