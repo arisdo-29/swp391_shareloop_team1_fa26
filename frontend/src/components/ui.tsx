@@ -15,6 +15,7 @@ import { CaretDown } from '@phosphor-icons/react/dist/csr/CaretDown';
 import { Bell } from '@phosphor-icons/react/dist/csr/Bell';
 import { UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
 import { Image } from '@phosphor-icons/react/dist/csr/Image';
+import { ShareNetwork } from '@phosphor-icons/react/dist/csr/ShareNetwork';
 import { MapPin } from '@phosphor-icons/react/dist/csr/MapPin';
 import { Check } from '@phosphor-icons/react/dist/csr/Check';
 import { WarningCircle } from '@phosphor-icons/react/dist/csr/WarningCircle';
@@ -62,6 +63,7 @@ const iconMap = {
   bell: Bell,
   user: UserCircle,
   image: Image,
+  share: ShareNetwork,
   check: Check,
   warning: WarningCircle,
   // Icon cho menu quản trị (AdminLayout).
