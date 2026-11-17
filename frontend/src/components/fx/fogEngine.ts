@@ -34,8 +34,11 @@ export const REFOG_PER_SECOND = 0.13;
 export const WIPE_STRENGTH = 1.35;
 /** Độ đậm tối đa của lớp sương (0-1). Để dưới 1 cho ảnh sắc nét vẫn lấp ló phía sau. */
 export const FOG_MAX_OPACITY = 0.9;
-/** Độ đậm của lớp màu sương (biến CSS --fx-fog-tint) phủ lên ảnh đã làm mờ. */
-export const FOG_TINT_OPACITY = 0.38;
+/**
+ * Độ đậm của lớp màu sương (biến CSS --fx-fog-tint, đang là xanh đậm) phủ lên ảnh đã làm mờ.
+ * Cao hơn thì chữ trắng dễ đọc hơn nhưng ảnh khó nhận ra hơn.
+ */
+export const FOG_TINT_OPACITY = 0.45;
 /** Độ mờ của ảnh dưới lớp sương (css px). */
 export const FOG_BLUR_PX = 16;
 /** Trần devicePixelRatio: màn hình 3x không cần vẽ đủ 3x cho một lớp sương đã mờ. */
