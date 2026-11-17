@@ -181,7 +181,9 @@ Báo cáo một bài đăng hoặc một người dùng vi phạm quy tắc cộ
 - **Xác thực:** Bắt buộc Bearer Token (JWT). ID người báo cáo được trích xuất từ phiên đăng nhập hiện tại (`@CurrentUserId`).
 - **Quy tắc nghiệp vụ:**
   - Không thể tự báo cáo chính mình hoặc bài đăng của chính mình (`400 REPORT_CANNOT_REPORT_SELF`).
-  - Mỗi người dùng chỉ được báo cáo một đối tượng tối đa 1 lần (`409 REPORT_ALREADY_REPORTED`).
+  - Mỗi người dùng chỉ được báo cáo một bài đăng tối đa 1 lần (`409 REPORT_ALREADY_REPORTED`).
+  - Cùng một chủ bài B: Người dùng A báo cáo tối đa `report_max_items_per_owner` bài (mặc định 3) của B trong `report_window_days` ngày (mặc định 30); vượt quá sẽ bị chặn với mã lỗi `409 REPORT_OWNER_LIMIT_REACHED` và thông báo `"Bạn đã báo cáo {N} bài của người này trong {M} ngày qua. Vui lòng thử lại sau."` (BC-01).
+  - Báo cáo người dùng B: Cho phép báo cáo lại sau `report_window_days` ngày (mặc định 30 ngày) thay vì chặn vĩnh viễn (nếu đã báo cáo trong vòng 30 ngày gần nhất thì báo `409 REPORT_ALREADY_REPORTED`) (BC-01).
   - Đối tượng báo cáo phải tồn tại trong hệ thống (`404 REPORT_TARGET_NOT_FOUND`).
   - Cơ chế tự động bảo vệ (BC-02, Issue #151): Khi một bài đăng có đủ `report_hide_threshold` báo cáo (mặc định **3**, Admin sửa được qua cấu hình) **đang chờ xử lý**, hệ thống tự ẩn bài (`itemService.hide(itemId)`).
     - Chỉ đếm báo cáo `targetType = ITEM` ở trạng thái `OPEN` hoặc `AWAITING_RESPONSE`; báo cáo đã `DISMISSED` hoặc `RESOLVED` không tính.

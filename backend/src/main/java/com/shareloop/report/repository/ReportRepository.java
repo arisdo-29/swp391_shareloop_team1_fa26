@@ -4,6 +4,7 @@ import com.shareloop.report.entity.Report;
 import com.shareloop.report.entity.ReportStatus;
 import com.shareloop.report.entity.TargetType;
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -30,6 +31,18 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     boolean existsByReporterIdAndTargetTypeAndItemId(Long reporterId, TargetType targetType, Long itemId);
 
     boolean existsByReporterIdAndTargetTypeAndTargetUserId(Long reporterId, TargetType targetType, Long targetUserId);
+
+    /**
+     * Đếm số lượng bài đăng của cùng một chủ bài mà reporter đã báo cáo từ mốc thời gian since (BC-01).
+     */
+    long countByReporterIdAndTargetTypeAndTargetUserIdAndCreatedAtGreaterThanEqual(
+            Long reporterId, TargetType targetType, Long targetUserId, Instant since);
+
+    /**
+     * Kiểm tra reporter đã báo cáo người dùng targetUserId từ mốc thời gian since hay chưa (BC-01).
+     */
+    boolean existsByReporterIdAndTargetTypeAndTargetUserIdAndCreatedAtGreaterThanEqual(
+            Long reporterId, TargetType targetType, Long targetUserId, Instant since);
 
     boolean existsByReporterIdAndTargetTypeAndRequestId(Long reporterId, TargetType targetType, Long requestId);
 

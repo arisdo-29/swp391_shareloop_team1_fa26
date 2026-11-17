@@ -118,6 +118,13 @@ class ReportServiceTest {
         org.mockito.Mockito.lenient()
                 .when(configService.getInt(ConfigKey.REPORT_HIDE_THRESHOLD))
                 .thenReturn(3);
+        // BC-01: Cấu hình giới hạn báo cáo bài và cửa sổ thời gian
+        org.mockito.Mockito.lenient()
+                .when(configService.getInt(ConfigKey.REPORT_MAX_ITEMS_PER_OWNER))
+                .thenReturn(3);
+        org.mockito.Mockito.lenient()
+                .when(configService.getInt(ConfigKey.REPORT_WINDOW_DAYS))
+                .thenReturn(30);
         // L13: lý do nghiêm trọng đọc qua ConfigKey report_serious_reasons, mặc định hàng cấm và hàng giả
         org.mockito.Mockito.lenient()
                 .when(configService.getCodes(ConfigKey.REPORT_SERIOUS_REASONS))
@@ -1324,7 +1331,8 @@ class ReportServiceTest {
         CreateReportRequest request = new CreateReportRequest(
                 TargetType.USER, targetUserId, null, null, null, ReportReason.HARASSMENT, "Quấy rối qua tin nhắn");
 
-        when(reportRepository.existsByReporterIdAndTargetTypeAndTargetUserId(reporterId, TargetType.USER, targetUserId))
+        when(reportRepository.existsByReporterIdAndTargetTypeAndTargetUserIdAndCreatedAtGreaterThanEqual(
+                        eq(reporterId), eq(TargetType.USER), eq(targetUserId), any(Instant.class)))
                 .thenReturn(false);
 
         when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> {
@@ -1892,5 +1900,92 @@ class ReportServiceTest {
         assertThat(map).hasSize(2).containsEntry(reqId1, due1).containsEntry(reqId2, due2);
         assertThat(reportService.findDisputeResponseDueAtMap(List.of())).isEmpty();
         assertThat(reportService.findDisputeResponseDueAtMap(null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("BC-01: Báo cáo user trong vòng 30 ngày bị ném REPORT_ALREADY_REPORTED")
+    void createReport_alreadyReportedUserWithin30Days_throwsException() {
+        Long reporterId = 10L;
+        Long targetUserId = 20L;
+
+        CreateReportRequest request = new CreateReportRequest(
+                TargetType.USER,
+                targetUserId,
+                null,
+                null,
+                null,
+                ReportReason.HARASSMENT,
+                "Báo cáo lần 2 trong 30 ngày");
+
+        when(reportRepository.existsByReporterIdAndTargetTypeAndTargetUserIdAndCreatedAtGreaterThanEqual(
+                        eq(reporterId), eq(TargetType.USER), eq(targetUserId), any(Instant.class)))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> reportService.createReport(reporterId, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(ReportErrorCode.REPORT_ALREADY_REPORTED));
+    }
+
+    @Test
+    @DisplayName("BC-01: Báo cáo bài thứ 4 của cùng một chủ trong 30 ngày bị chặn REPORT_OWNER_LIMIT_REACHED")
+    void createReport_item_ownerLimitReached_throwsException() {
+        Long reporterId = 10L;
+        Long itemId = 104L;
+        Long donorId = 20L;
+
+        CreateReportRequest request = new CreateReportRequest(
+                TargetType.ITEM, null, itemId, null, null, ReportReason.OTHER, "Bài thứ 4 của cùng chủ");
+
+        ItemSummary summary = new ItemSummary(itemId, donorId, OfferType.GIVE, ItemStatus.APPROVED);
+        when(itemQueryService.getSummary(itemId)).thenReturn(summary);
+        when(reportRepository.existsByReporterIdAndTargetTypeAndItemId(reporterId, TargetType.ITEM, itemId))
+                .thenReturn(false);
+        when(configService.getInt(ConfigKey.REPORT_MAX_ITEMS_PER_OWNER)).thenReturn(3);
+        when(configService.getInt(ConfigKey.REPORT_WINDOW_DAYS)).thenReturn(30);
+        when(reportRepository.countByReporterIdAndTargetTypeAndTargetUserIdAndCreatedAtGreaterThanEqual(
+                        eq(reporterId), eq(TargetType.ITEM), eq(donorId), any(Instant.class)))
+                .thenReturn(3L);
+
+        assertThatThrownBy(() -> reportService.createReport(reporterId, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> {
+                    BusinessException be = (BusinessException) ex;
+                    assertThat(be.getErrorCode()).isEqualTo(ReportErrorCode.REPORT_OWNER_LIMIT_REACHED);
+                    assertThat(be.getMessage())
+                            .isEqualTo("Bạn đã báo cáo 3 bài của người này trong 30 ngày qua. Vui lòng thử lại sau.");
+                });
+    }
+
+    @Test
+    @DisplayName("BC-01: Báo cáo bài thứ 3 của cùng một chủ trong 30 ngày được chấp nhận thành công")
+    void createReport_item_ownerLimitNotReached_success() {
+        Long reporterId = 10L;
+        Long itemId = 103L;
+        Long donorId = 20L;
+
+        CreateReportRequest request = new CreateReportRequest(
+                TargetType.ITEM, null, itemId, null, null, ReportReason.OTHER, "Bài thứ 3 của cùng chủ");
+
+        ItemSummary summary = new ItemSummary(itemId, donorId, OfferType.GIVE, ItemStatus.APPROVED);
+        when(itemQueryService.getSummary(itemId)).thenReturn(summary);
+        when(reportRepository.existsByReporterIdAndTargetTypeAndItemId(reporterId, TargetType.ITEM, itemId))
+                .thenReturn(false);
+        when(configService.getInt(ConfigKey.REPORT_MAX_ITEMS_PER_OWNER)).thenReturn(3);
+        when(configService.getInt(ConfigKey.REPORT_WINDOW_DAYS)).thenReturn(30);
+        // Mới có 2 bài đã báo cáo trước đó (< 3)
+        when(reportRepository.countByReporterIdAndTargetTypeAndTargetUserIdAndCreatedAtGreaterThanEqual(
+                        eq(reporterId), eq(TargetType.ITEM), eq(donorId), any(Instant.class)))
+                .thenReturn(2L);
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> {
+            Report r = inv.getArgument(0);
+            ReflectionTestUtils.setField(r, "id", 100L);
+            return r;
+        });
+
+        ReportResponse response = reportService.createReport(reporterId, request);
+        assertThat(response).isNotNull();
+        assertThat(response.id()).isEqualTo(100L);
+        assertThat(response.targetUserId()).isEqualTo(donorId);
     }
 }
