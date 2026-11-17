@@ -87,11 +87,15 @@ export function AdminAnomalyContent() {
                   <tr key={`${pair.userA.id}-${pair.userB.id}`}>
                     <td>
                       <p className="font-semibold text-text-primary">{pair.userA.fullName}</p>
-                      <p className="mt-0.5 text-xs text-text-muted">{pair.userA.email ?? 'Tài khoản đã xóa'}</p>
+                      <p className="cell-truncate mt-0.5 text-xs text-text-muted" title={pair.userA.email ?? undefined}>
+                        {pair.userA.email ?? 'Tài khoản đã xóa'}
+                      </p>
                     </td>
                     <td>
                       <p className="font-semibold text-text-primary">{pair.userB.fullName}</p>
-                      <p className="mt-0.5 text-xs text-text-muted">{pair.userB.email ?? 'Tài khoản đã xóa'}</p>
+                      <p className="cell-truncate mt-0.5 text-xs text-text-muted" title={pair.userB.email ?? undefined}>
+                        {pair.userB.email ?? 'Tài khoản đã xóa'}
+                      </p>
                     </td>
                     <td className="font-semibold tabular-nums">{pair.completedCount}</td>
                     <td className="whitespace-nowrap text-xs">{formatDateTime(pair.lastCompletedAt)}</td>

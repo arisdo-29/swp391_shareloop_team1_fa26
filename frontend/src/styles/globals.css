@@ -339,17 +339,24 @@ select[aria-invalid='true']:focus-visible {
       theme('colors.white');
     -webkit-overflow-scrolling: touch;
   }
+  /* M05: màn nhỏ dùng chữ text-xs, ô hẹp hơn và bảng tối thiểu 640px để vuốt ngang ít hơn mà vẫn tới cột Trạng thái;
+     từ sm trở lên giữ như cũ (text-sm, 720px). Dùng chung cho mọi bảng Admin có class data-table. */
   .data-table {
-    @apply w-full min-w-[720px] border-collapse text-left text-sm;
+    @apply w-full min-w-[640px] border-collapse text-left text-xs sm:min-w-[720px] sm:text-sm;
   }
   .data-table thead {
-    @apply bg-surface-low text-xs font-semibold text-text-muted;
+    @apply bg-surface-low text-2xs font-semibold text-text-muted sm:text-xs;
   }
   .data-table th {
-    @apply whitespace-nowrap px-4 py-3;
+    @apply whitespace-nowrap px-3 py-2.5 sm:px-4 sm:py-3;
   }
   .data-table td {
-    @apply px-4 py-3.5 align-middle;
+    @apply px-3 py-2.5 align-middle sm:px-4 sm:py-3.5;
+  }
+  /* Chữ dài trong ô (email, tên bài): một dòng, cắt bằng dấu …; đặt kèm title để rê chuột hoặc nhấn giữ xem đủ.
+     Gắn vào phần tử bên trong ô (span, p) vì trình duyệt bỏ qua max-width đặt thẳng lên td. */
+  .cell-truncate {
+    @apply block max-w-[10rem] truncate sm:max-w-[16rem];
   }
   .data-table tbody tr {
     @apply border-t border-border/70 transition hover:bg-primary-faint;
