@@ -146,4 +146,3 @@ class ReportRateLimitIT extends IntegrationTest {
         return id;
     }
 }
-
