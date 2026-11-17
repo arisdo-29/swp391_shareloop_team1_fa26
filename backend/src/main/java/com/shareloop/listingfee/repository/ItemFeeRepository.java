@@ -67,6 +67,22 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
             nativeQuery = true)
     List<ItemDisplayWindowRow> findDisplayWindowRows(@Param("ids") Collection<Long> ids);
 
+    /**
+     * Bài APPROVED đang hiển thị (không bị ẩn, chưa xoá) còn hạn và hết hạn trong khoảng (now, endsBefore] (B19, nhắc
+     * gia hạn). Bài bị ẩn không gia hạn được (RenewService.isRenewable) nên không nhắc. Phân trang keyset giống
+     * {@link #findExpiredApprovedItemIds}.
+     */
+    @Query(
+            value = "SELECT id AS \"id\", donor_id AS \"donorId\", title AS \"title\", expire_at AS \"expireAt\""
+                    + " FROM items WHERE status = 'APPROVED' AND is_active AND NOT is_deleted"
+                    + " AND expire_at > :now AND expire_at <= :endsBefore AND id > :afterId ORDER BY id LIMIT :limit",
+            nativeQuery = true)
+    List<ExpiryNoticeRow> findItemsExpiringBefore(
+            @Param("now") Instant now,
+            @Param("endsBefore") Instant endsBefore,
+            @Param("afterId") long afterId,
+            @Param("limit") int limit);
+
     @Query(value = "SELECT id FROM items WHERE boosted_until > :now AND is_deleted = false", nativeQuery = true)
     List<Long> findActiveBoostedIds(@Param("now") Instant now);
 
@@ -120,7 +136,7 @@ public interface ItemFeeRepository extends JpaRepository<ItemFee, Long> {
      */
     String BOOST_NOTICE_SELECT = "SELECT id AS \"id\", donor_id AS \"donorId\", title AS \"title\","
             + " boosted_until AS \"boostedUntil\", COALESCE(boost_started_at, last_boosted_at) AS \"boostStartedAt\","
-            + " last_boosted_at AS \"lastBoostedAt\" FROM items WHERE";
+            + " last_boosted_at AS \"lastBoostedAt\", expire_at AS \"expireAt\" FROM items WHERE";
 
     /**
      * Bài đang đẩy sẽ hết đẩy trước mốc {@code endsBefore} (để báo sắp hết đẩy). Số bài đang đẩy bị chặn bởi

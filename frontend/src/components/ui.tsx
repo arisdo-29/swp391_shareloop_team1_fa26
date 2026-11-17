@@ -36,6 +36,8 @@ import { Warning } from '@phosphor-icons/react/dist/csr/Warning';
 import { CaretLeft } from '@phosphor-icons/react/dist/csr/CaretLeft';
 import { CaretRight } from '@phosphor-icons/react/dist/csr/CaretRight';
 import { Trash } from '@phosphor-icons/react/dist/csr/Trash';
+import { RocketLaunch } from '@phosphor-icons/react/dist/csr/RocketLaunch';
+import { HourglassMedium } from '@phosphor-icons/react/dist/csr/HourglassMedium';
 import { Link } from 'react-router-dom';
 import type {
   Item,
@@ -83,6 +85,9 @@ const iconMap = {
   caretRight: CaretRight,
   // Nút xoá (ẩn) thông báo.
   trash: Trash,
+  // Thông báo đẩy bài (BOOST_*) và nhắc bài sắp hết hạn (ITEM_EXPIRING_*).
+  boost: RocketLaunch,
+  expiring: HourglassMedium,
 } as const;
 
 export type IconName = keyof typeof iconMap;

@@ -476,7 +476,7 @@ export function Post() {
           </Alert>
         </div>
       ) : null}
-      <form onSubmit={submit} className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <form onSubmit={submit} className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-4">
           <PostStep number={1} title="Bạn muốn cho hay đổi?">
             <div className="grid grid-cols-2 gap-2.5">

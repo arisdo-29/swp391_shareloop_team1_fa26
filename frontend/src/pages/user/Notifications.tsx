@@ -19,6 +19,11 @@ import {
   type NotificationCategory,
   type NotificationResponse,
 } from '../../services/notificationApi';
+import {
+  notificationActionLabel,
+  notificationIcon,
+  notificationTarget,
+} from '../../utils/notificationDisplay';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
 type CategoryFilter = 'all' | Exclude<NotificationCategory, 'other'>;
@@ -31,11 +36,6 @@ const readFilterOptions: Array<[ReadFilter, string]> = [
   ['unread', 'Chưa đọc'],
   ['read', 'Đã đọc'],
 ];
-
-/** Link trong thông báo chỉ được là đường dẫn nội bộ, không cho mở trang ngoài. */
-function isInternalLink(link: string | null): link is string {
-  return Boolean(link?.startsWith('/') && !link.startsWith('//') && !link.includes('\\'));
-}
 
 function matchesFilters(
   notification: NotificationResponse,
@@ -392,6 +392,8 @@ function NotificationRow({
   onOpen: () => void;
 }) {
   const category = notificationCategory(notification.type);
+  const target = notificationTarget(notification);
+  const icon = notificationIcon(notification.type);
   return (
     <li
       className={`flex gap-3 px-4 py-3 sm:px-5 ${notification.isRead ? 'bg-white' : 'bg-primary-faint'}`}
@@ -410,6 +412,7 @@ function NotificationRow({
       />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {icon ? <Icon name={icon} className="size-4 shrink-0 text-primary" /> : null}
           <p className="text-sm font-bold">{notification.title}</p>
           {category !== 'other' ? (
             <span className="rounded-sm bg-surface-container px-2 py-0.5 text-2xs font-semibold text-text-secondary">
@@ -423,13 +426,9 @@ function NotificationRow({
           <time dateTime={notification.createdAt} className="text-text-muted">
             {new Date(notification.createdAt).toLocaleString('vi-VN')}
           </time>
-          {isInternalLink(notification.link) ? (
-            <Link
-              to={notification.link}
-              onClick={onOpen}
-              className="font-semibold text-link hover:underline"
-            >
-              Xem chi tiết
+          {target ? (
+            <Link to={target} onClick={onOpen} className="font-semibold text-link hover:underline">
+              {notificationActionLabel(notification.type)}
             </Link>
           ) : null}
         </div>

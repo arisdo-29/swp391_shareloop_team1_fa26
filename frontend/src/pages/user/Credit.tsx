@@ -603,7 +603,7 @@ function ApiTopupSelection({
   );
 }
 
-function ApiTopUpOrder({
+export function ApiTopUpOrder({
   order,
   onNewTopup,
 }: {
@@ -612,14 +612,35 @@ function ApiTopUpOrder({
 }) {
   const safeRedirectUrl = paymentRedirectUrl(order.redirectUrl);
   const paid = order.status === 'SUCCESS';
+  const remainingMs = usePaymentCountdown(order.status === 'PENDING' ? order.expiresAt : null);
+  // B29: hết giờ chỉ đổi cách hiển thị; PaymentExpiryJob mới đổi trạng thái thật, Credit không được cộng.
+  const timedOut = remainingMs !== null && remainingMs <= 0;
+  const statusLabel = timedOut ? 'Hết hạn' : paymentStatusLabels[order.status];
   return (
     <div className="rounded-xl bg-white px-5 py-8 ring-1 ring-border/80 sm:px-8">
       <div className="mx-auto max-w-2xl text-center">
         <span
           className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${paid ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}
         >
-          {paymentStatusLabels[order.status]}
+          {statusLabel}
         </span>
+        {remainingMs !== null ? (
+          <p
+            className="mt-3 text-sm font-semibold text-text-secondary"
+            role="timer"
+            aria-live="off"
+          >
+            {timedOut ? (
+              'Đơn đã quá hạn thanh toán. Credit sẽ không được cộng cho đơn này.'
+            ) : (
+              <>
+                Còn <span className="tabular-nums text-text-primary">{formatRemaining(remainingMs)}</span>{' '}
+                để thanh toán
+                {order.expiresAt ? ` (hạn ${new Date(order.expiresAt).toLocaleTimeString('vi-VN')})` : ''}
+              </>
+            )}
+          </p>
+        ) : null}
         <h2 className="mt-4 text-2xl font-bold">
           {paid ? 'Nạp Credit thành công' : 'Đơn nạp Credit đã được tạo'}
         </h2>
@@ -633,7 +654,7 @@ function ApiTopUpOrder({
           <DetailRow label="Số tiền" value={formatVnd(order.amountVnd)} />
           <DetailRow label="Credit dự kiến" value={`${order.credits} Credit`} />
           <DetailRow label="Cổng thanh toán" value={paymentProviderLabel(order.provider)} />
-          <DetailRow label="Trạng thái" value={paymentStatusLabels[order.status]} />
+          <DetailRow label="Trạng thái" value={statusLabel} />
         </dl>
         {order.provider === 'MOCK' && !paid ? (
           <p className="mt-4 rounded-md bg-warning-soft p-3 text-sm text-warning">
@@ -644,18 +665,48 @@ function ApiTopUpOrder({
           <Button variant="outline" onClick={onNewTopup}>
             Tạo đơn nạp khác
           </Button>
-          {order.provider === 'VNPAY' && !paid && safeRedirectUrl ? (
+          {order.provider === 'VNPAY' &&
+          order.status === 'PENDING' &&
+          !timedOut &&
+          safeRedirectUrl ? (
             <a
               href={safeRedirectUrl}
               className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-bold text-white"
             >
-              Quay lại cổng thanh toán
+              Tiếp tục thanh toán
             </a>
           ) : null}
         </div>
       </div>
     </div>
   );
+}
+
+/**
+ * Số mili giây còn lại tới hạn thanh toán do Backend trả, cập nhật mỗi giây; null khi không có hạn để đếm. Chỉ để hiển
+ * thị: không đổi trạng thái đơn.
+ */
+function usePaymentCountdown(expiresAt: string | null | undefined): number | null {
+  const deadline = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+  const hasDeadline = Number.isFinite(deadline);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!hasDeadline) return;
+    const timer = window.setInterval(() => {
+      const current = Date.now();
+      setNow(current);
+      if (current >= deadline) window.clearInterval(timer);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [deadline, hasDeadline]);
+  return hasDeadline ? deadline - now : null;
+}
+
+function formatRemaining(ms: number) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 const heldFeeOfferTypeLabels: Record<HeldFeeItem['offerType'], string> = {

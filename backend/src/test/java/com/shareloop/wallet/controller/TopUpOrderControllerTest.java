@@ -1,6 +1,7 @@
 package com.shareloop.wallet.controller;
 
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,10 +13,12 @@ import com.shareloop.config.JwtConfig;
 import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
 import com.shareloop.wallet.WalletErrorCode;
+import com.shareloop.wallet.dto.TopUpOrderDetailResponse;
 import com.shareloop.wallet.dto.TopUpOrderResponse;
 import com.shareloop.wallet.entity.PaymentOrderStatus;
 import com.shareloop.wallet.entity.PaymentProvider;
 import com.shareloop.wallet.service.PaymentService;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -31,6 +34,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class TopUpOrderControllerTest {
 
     private static final String URL = "/api/v1/wallet/topup-orders";
+    private static final Instant EXPIRES_AT = Instant.parse("2026-11-17T08:15:00Z");
 
     @Autowired
     MockMvc mockMvc;
@@ -77,7 +81,8 @@ class TopUpOrderControllerTest {
                         20,
                         PaymentOrderStatus.PENDING,
                         PaymentProvider.MOCK,
-                        "/wallet/topup/mock-checkout?orderCode=abc123"));
+                        "/wallet/topup/mock-checkout?orderCode=abc123",
+                        EXPIRES_AT));
 
         // when + then
         mockMvc.perform(post(URL)
@@ -89,7 +94,8 @@ class TopUpOrderControllerTest {
                 .andExpect(jsonPath("$.credits").value(20))
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.provider").value("MOCK"))
-                .andExpect(jsonPath("$.redirectUrl").value("/wallet/topup/mock-checkout?orderCode=abc123"));
+                .andExpect(jsonPath("$.redirectUrl").value("/wallet/topup/mock-checkout?orderCode=abc123"))
+                .andExpect(jsonPath("$.expiresAt").value("2026-11-17T08:15:00Z"));
     }
 
     @Test
@@ -106,5 +112,54 @@ class TopUpOrderControllerTest {
                         .content("{\"amountVnd\": 5000}"))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.code").value("WALLET_TOPUP_AMOUNT_INVALID"));
+    }
+
+    @Test
+    void getOrder_whenOwnOrder_returnsStatusAndExpiresAt() throws Exception {
+        // given (B29): FE đếm ngược theo expiresAt do backend trả, không tự tính
+        String token = jwtService.issue(10L, false);
+        when(paymentService.getOwnOrder(10L, "abc123"))
+                .thenReturn(new TopUpOrderDetailResponse(
+                        "abc123",
+                        10L,
+                        20_000,
+                        20,
+                        1_000,
+                        PaymentOrderStatus.PENDING,
+                        PaymentProvider.VNPAY,
+                        Instant.parse("2026-11-17T08:00:00Z"),
+                        EXPIRES_AT,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
+
+        // when + then
+        mockMvc.perform(get(URL + "/abc123").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orderCode").value("abc123"))
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.expiresAt").value("2026-11-17T08:15:00Z"));
+    }
+
+    @Test
+    void getOrder_whenOrderOfOtherUserOrMissing_returns404() throws Exception {
+        // given
+        String token = jwtService.issue(10L, false);
+        when(paymentService.getOwnOrder(10L, "other"))
+                .thenThrow(new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND));
+
+        // when + then
+        mockMvc.perform(get(URL + "/other").header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("WALLET_PAYMENT_ORDER_NOT_FOUND"));
+    }
+
+    @Test
+    void getOrder_withoutToken_returns401() throws Exception {
+        mockMvc.perform(get(URL + "/abc123")).andExpect(status().isUnauthorized());
     }
 }

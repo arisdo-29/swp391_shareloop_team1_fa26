@@ -245,7 +245,9 @@ function AppShellContent() {
     navigate('/login', { replace: true });
   };
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    // M01: overflow-x-clip chặn mọi phần tử lỡ rộng hơn màn hình làm trang rộng ra (điện thoại sẽ thu nhỏ cả trang,
+    // chân trang trông bị tràn và dư khoảng trắng phía dưới). Dùng clip thay vì hidden để header sticky vẫn chạy.
+    <div className="flex min-h-screen flex-col overflow-x-clip bg-background">
       <ScrollToTop />
       <a
         href="#main-content"

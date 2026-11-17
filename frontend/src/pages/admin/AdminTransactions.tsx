@@ -226,7 +226,9 @@ function TransactionRow({ row, onCancel }: { row: AdminRequestRow; onCancel: () 
   return (
     <tr>
       <td>
-        <p className="font-semibold text-text-primary">{row.itemTitle || 'Bài đã xoá'}</p>
+        <p className="cell-truncate font-semibold text-text-primary" title={row.itemTitle || undefined}>
+          {row.itemTitle || 'Bài đã xoá'}
+        </p>
         <p className="text-xs text-text-muted">
           {row.type === 'SWAP' ? 'Trao đổi' : 'Cho tặng'} · mã {row.id}
         </p>

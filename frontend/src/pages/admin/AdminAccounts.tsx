@@ -187,8 +187,12 @@ export function AdminAccounts() {
                   const action = availableAction(account);
                   return (
                     <tr key={account.id}>
-                      <td className="font-semibold text-text-primary">{account.fullName}</td>
-                      <td className="break-all">{account.email}</td>
+                      <td className="w-36 font-semibold text-text-primary">{account.fullName}</td>
+                      <td>
+                        <span className="cell-truncate" title={account.email}>
+                          {account.email}
+                        </span>
+                      </td>
                       <td>{account.phone || '—'}</td>
                       <td>{roleLabels[account.role]}</td>
                       <td>

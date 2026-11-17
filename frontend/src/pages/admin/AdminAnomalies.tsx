@@ -23,7 +23,9 @@ function UserCell({ user }: { user: AnomalyUser }) {
   return (
     <div>
       <p className="font-semibold">{user.fullName}</p>
-      <p className="text-xs text-text-muted">{user.email ?? 'Không có email'}</p>
+      <p className="cell-truncate text-xs text-text-muted" title={user.email ?? undefined}>
+        {user.email ?? 'Không có email'}
+      </p>
     </div>
   );
 }
@@ -165,7 +167,11 @@ export function AdminAnomalies() {
                                   {acc.fullName}
                                 </Link>
                               </td>
-                              <td className="text-xs text-text-muted">{acc.email || '—'}</td>
+                              <td className="text-xs text-text-muted">
+                                <span className="cell-truncate" title={acc.email || undefined}>
+                                  {acc.email || '—'}
+                                </span>
+                              </td>
                               <td className="whitespace-nowrap text-xs">{formatDateTime(acc.registeredAt)}</td>
                               <td className="whitespace-nowrap text-xs font-medium">{acc.trustStars} ⭐</td>
                               <td>{accountStatusBadge(acc)}</td>

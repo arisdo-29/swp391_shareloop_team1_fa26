@@ -2,6 +2,7 @@ package com.shareloop.wallet;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.within;
 
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.ConfigKey;
@@ -141,6 +142,64 @@ class PaymentServiceIT extends IntegrationTest {
         assertThat(jdbc.queryForObject(
                         "SELECT status FROM payment_orders WHERE order_code = ?", String.class, orderCode))
                 .isEqualTo("EXPIRED");
+    }
+
+    // ---------- hạn thanh toán và xem đơn (B29) ----------
+
+    @Test
+    void createTopUpOrder_returnsExpiresAtFromCreatedAtPlusConfiguredMinutes() {
+        // given
+        long userId = insertUser();
+
+        // when
+        var response = paymentService.createTopUpOrder(userId, 20_000);
+
+        // then: expiresAt = created_at + payment_order_expire_minutes, cùng mốc job dùng để chuyển EXPIRED
+        Instant createdAt = jdbc.queryForObject(
+                        "SELECT created_at FROM payment_orders WHERE order_code = ?",
+                        Timestamp.class,
+                        response.orderCode())
+                .toInstant();
+        long expireMinutes = configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES);
+        assertThat(response.expiresAt())
+                .isCloseTo(createdAt.plus(expireMinutes, ChronoUnit.MINUTES), within(1, ChronoUnit.MILLIS));
+    }
+
+    @Test
+    void getOwnOrder_whenOwner_returnsPendingWithExpiresAtWithoutChangingStatus() {
+        // given: đơn đã quá hạn nhưng job chưa chạy
+        long userId = insertUser();
+        String orderCode = paymentService.createTopUpOrder(userId, 20_000).orderCode();
+        long expireMinutes = configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES);
+        Instant createdAt =
+                Instant.now().minus(expireMinutes + 1, ChronoUnit.MINUTES).truncatedTo(ChronoUnit.SECONDS);
+        jdbc.update(
+                "UPDATE payment_orders SET created_at = ? WHERE order_code = ?", Timestamp.from(createdAt), orderCode);
+
+        // when
+        var order = paymentService.getOwnOrder(userId, orderCode);
+
+        // then: vẫn PENDING (chỉ job đổi trạng thái), expiresAt đã qua để FE hiện "Hết hạn"
+        assertThat(order.status()).isEqualTo(PaymentOrderStatus.PENDING);
+        assertThat(order.expiresAt()).isEqualTo(createdAt.plus(expireMinutes, ChronoUnit.MINUTES));
+        assertThat(order.userName()).isNull();
+    }
+
+    @Test
+    void getOwnOrder_whenOrderOfOtherUser_throwsNotFound() {
+        // given
+        long ownerId = insertUser();
+        long otherUserId = insertUser();
+        String orderCode = paymentService.createTopUpOrder(ownerId, 20_000).orderCode();
+
+        // when
+        Throwable thrown = catchThrowable(() -> paymentService.getOwnOrder(otherUserId, orderCode));
+
+        // then
+        assertThat(thrown)
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND));
     }
 
     // ---------- hàm hỗ trợ ----------

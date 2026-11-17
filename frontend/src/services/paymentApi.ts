@@ -37,6 +37,8 @@ export interface TopUpOrderResponse {
   status: PaymentOrderStatus;
   provider: PaymentProvider;
   redirectUrl: string;
+  /** Hạn thanh toán do Backend tính (created_at + payment_order_expire_minutes); FE chỉ đếm ngược, không tự tính. */
+  expiresAt?: string | null;
 }
 
 export interface TopUpConfirmResponse {

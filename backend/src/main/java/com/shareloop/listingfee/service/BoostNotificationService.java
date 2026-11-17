@@ -19,9 +19,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Thông báo cho chủ bài về đợt đẩy (C15, SRS 4.6): sắp hết đẩy, đã hết đẩy, và dừng đẩy khi bài bị ẩn. Gửi qua
  * {@code NotificationService}, không đụng bảng notifications trực tiếp.
  *
- * <p>Chống gửi trùng mà không thêm cột: trước khi gửi, hỏi NotificationService đã có thông báo cùng loại, cùng bài
- * (link /items/{id}) kể từ mốc của đợt chưa. Mua thêm gói thì boosted_until lùi ra sau nên mốc mới cũng lùi theo, và
- * thông báo của đợt mới vẫn được gửi.
+ * <p>Chống gửi trùng mà không thêm cột: trước khi gửi, hỏi NotificationService đã có thông báo cùng loại, cùng link
+ * chưa. Sắp hết đẩy dùng link chứa cả mốc boosted_until (khoá theo bài + kỳ đẩy); đã hết đẩy và dừng đẩy dùng link
+ * /items/{id} kèm mốc của đợt. Mua thêm gói thì boosted_until lùi ra sau nên thông báo của kỳ mới vẫn được gửi.
  *
  * <p>Người gọi: {@code BoostNotificationJob} (mỗi giờ) và test.
  */
@@ -55,20 +55,19 @@ public class BoostNotificationService {
     }
 
     /**
-     * Báo chủ bài khi bài đang đẩy còn tối đa boost_ending_notice_hours giờ là hết đẩy. Nếu còn mua thêm được một gói
-     * trong đợt (chưa chạm boost_started_at + boost_max_days) thì nhắc kèm mốc mua thêm muộn nhất. Mỗi bài, mỗi mốc
-     * boosted_until chỉ báo một lần. Không ném lỗi nghiệp vụ.
+     * Báo chủ bài khi bài đang đẩy (ACTIVE_BOOST_CONDITION) còn tối đa boost_ending_notice_hours giờ là hết đẩy, kèm
+     * câu cho biết còn mua thêm gói được hay không (xem extendHint). Mỗi bài, mỗi mốc boosted_until chỉ báo một lần.
+     * Không ném lỗi nghiệp vụ.
      *
      * @param now mốc hiện tại (job truyền giờ hiện tại, test truyền mốc tự chọn)
      * @return số thông báo đã gửi
      */
     public int notifyEndingSoon(Instant now) {
-        // Đọc một lần cho cả lượt: tìm bài và kiểm trùng phải dùng cùng một con số.
         int noticeHours = configService.getInt(ConfigKey.BOOST_ENDING_NOTICE_HOURS);
         Instant endsBefore = now.plus(noticeHours, ChronoUnit.HOURS);
         int sentCount = 0;
         for (BoostNoticeRow row : itemFeeRepository.findBoostsEndingBefore(now, endsBefore)) {
-            if (runInOwnTransaction(row.getId(), () -> sendEndingSoon(row, noticeHours))) {
+            if (runInOwnTransaction(row.getId(), () -> sendEndingSoon(row))) {
                 sentCount++;
             }
         }
@@ -112,22 +111,49 @@ public class BoostNotificationService {
         return stoppedCount;
     }
 
-    // Khoá chống trùng: đã có BOOST_ENDING_SOON của bài từ lúc mở cửa sổ báo (boosted_until - noticeHours).
-    private boolean sendEndingSoon(BoostNoticeRow row, int noticeHours) {
-        Instant since = row.getBoostedUntil().minus(noticeHours, ChronoUnit.HOURS);
-        if (alreadyNotified(row, BOOST_ENDING_SOON, since)) {
+    // B24: khoá chống trùng theo bài + đúng mốc boosted_until (nằm trong link), không theo khoảng thời gian. Mua thêm
+    // gói hoặc mốc bị chỉnh lại thì link đổi nên kỳ mới vẫn được báo; cùng một mốc thì chỉ báo một lần.
+    // Không kiểm thêm thông báo kiểu cũ (link /items/{id}): khoá cũ theo khoảng thời gian chính là chỗ chặn nhầm khi
+    // boosted_until bị chỉnh lại; đổi khoá chỉ có thể gửi thêm tối đa một thông báo cho bài đang trong cửa sổ.
+    private boolean sendEndingSoon(BoostNoticeRow row) {
+        String link = endingSoonLink(row.getId(), row.getBoostedUntil());
+        if (notificationService.hasNotificationSince(row.getDonorId(), BOOST_ENDING_SOON, link, Instant.EPOCH)) {
             return false;
         }
-        String body = itemLabel(row) + " hết đẩy lúc " + format(row.getBoostedUntil()) + ".";
-        Instant chainEndsAt = calculateChainEndsAt(row);
-        // Chỉ nhắc mua thêm khi một gói nữa vẫn nằm trong đợt; mua nữa sẽ vượt mốc cuối đợt thì không nhắc.
-        int boostDays = configService.getInt(ConfigKey.BOOST_DAYS);
-        if (chainEndsAt != null
-                && !row.getBoostedUntil().plus(boostDays, ChronoUnit.DAYS).isAfter(chainEndsAt)) {
-            body += " Bạn còn mua thêm được tới " + format(chainEndsAt) + ".";
-        }
-        notifyOwner(row, BOOST_ENDING_SOON, "Bài sắp hết thời gian đẩy", body);
+        String body = itemLabel(row) + " hết đẩy lúc " + format(row.getBoostedUntil()) + ". " + extendHint(row);
+        notificationService.notify(row.getDonorId(), BOOST_ENDING_SOON, "Bài sắp hết thời gian đẩy", body, link);
         return true;
+    }
+
+    /**
+     * Câu cho biết còn mua thêm gói đẩy được không, theo cùng luật với BoostService: gói mới nối tiếp boosted_until,
+     * không vượt boost_started_at + boost_max_days và không vượt expire_at. Không xét số dư và suất đẩy vì mua thêm
+     * cho bài đang đẩy không chiếm suất mới, còn số dư có thể đổi trước lúc mua.
+     */
+    private String extendHint(BoostNoticeRow row) {
+        int boostDays = configService.getInt(ConfigKey.BOOST_DAYS);
+        Instant extendedUntil = row.getBoostedUntil().plus(boostDays, ChronoUnit.DAYS);
+        Instant chainEndsAt = calculateChainEndsAt(row);
+        if (chainEndsAt != null && extendedUntil.isAfter(chainEndsAt)) {
+            int maxDays = configService.getInt(ConfigKey.BOOST_MAX_DAYS);
+            int cooldownDays = configService.getInt(ConfigKey.BOOST_COOLDOWN_DAYS);
+            Instant boostAgainAt = row.getBoostedUntil().plus(cooldownDays, ChronoUnit.DAYS);
+            return "Đợt đẩy đã đủ tối đa " + maxDays + " ngày nên không mua thêm gói được; bài được đẩy lại từ "
+                    + format(boostAgainAt) + ".";
+        }
+        if (row.getExpireAt() != null && extendedUntil.isAfter(row.getExpireAt())) {
+            return "Bài sắp hết hạn hiển thị nên chưa mua thêm gói đẩy được; hãy gia hạn bài trước rồi đẩy tiếp.";
+        }
+        return "Bạn còn mua thêm được gói đẩy: mua trước lúc hết đẩy thì bài được đẩy tiếp tới " + format(extendedUntil)
+                + ".";
+    }
+
+    /**
+     * Link của thông báo sắp hết đẩy: mở trang Hoạt động với sẵn hộp Đẩy bài của bài đó. Tham số until (epoch giây của
+     * boosted_until) chỉ để khoá chống trùng theo từng kỳ đẩy; FE bỏ qua.
+     */
+    public static String endingSoonLink(long itemId, Instant boostedUntil) {
+        return "/activities?boost=" + itemId + "&until=" + boostedUntil.getEpochSecond();
     }
 
     private boolean sendEnded(BoostNoticeRow row) {

@@ -73,16 +73,85 @@ class BoostNotificationServiceIT extends IntegrationTest {
         // when
         boostNotificationService.notifyEndingSoon(now);
 
-        // then: báo giờ hết đẩy kèm mốc mua thêm muộn nhất của đợt
-        Instant chainEndsAt = chainStartedAt.plus(boostMaxDays(), ChronoUnit.DAYS);
+        // then: báo giờ hết đẩy, nói rõ còn mua thêm được và mốc đẩy tiếp tới; link mở hộp Đẩy bài của đúng bài
+        Instant extendedUntil = boostedUntil.plus(boostDays(), ChronoUnit.DAYS);
         assertThat(bodiesOf(ownerId, BoostNotificationService.BOOST_ENDING_SOON))
                 .containsExactly("Bài «" + ITEM_TITLE + "» hết đẩy lúc " + format(boostedUntil)
-                        + ". Bạn còn mua thêm được tới " + format(chainEndsAt) + ".");
-        assertThat(linksOf(ownerId)).containsExactly("/items/" + itemId);
+                        + ". Bạn còn mua thêm được gói đẩy: mua trước lúc hết đẩy thì bài được đẩy tiếp tới "
+                        + format(extendedUntil) + ".");
+        assertThat(linksOf(ownerId))
+                .containsExactly("/activities?boost=" + itemId + "&until=" + boostedUntil.getEpochSecond());
     }
 
     @Test
-    void notifyEndingSoon_whenChainIsFull_omitsExtendSentence() {
+    void notifyEndingSoon_whenAnotherPackageWouldPassExpireAt_asksToRenewFirst() {
+        // given: đợt còn dài nhưng bài hết hạn hiển thị trước khi gói mới kết thúc
+        Instant now = Instant.now();
+        Instant boostedUntil = now.plus(10, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
+        long ownerId = insertUser();
+        insertBoostedItem(
+                ownerId,
+                true,
+                boostedUntil,
+                now.truncatedTo(ChronoUnit.SECONDS),
+                boostedUntil.plus(1, ChronoUnit.DAYS));
+
+        // when
+        boostNotificationService.notifyEndingSoon(now);
+
+        // then
+        assertThat(bodiesOf(ownerId, BoostNotificationService.BOOST_ENDING_SOON))
+                .containsExactly("Bài «" + ITEM_TITLE + "» hết đẩy lúc " + format(boostedUntil)
+                        + ". Bài sắp hết hạn hiển thị nên chưa mua thêm gói đẩy được; hãy gia hạn bài trước rồi"
+                        + " đẩy tiếp.");
+    }
+
+    @Test
+    void notifyEndingSoon_whenBoostEndsAfterNoticeWindow_sendsNothing() {
+        // given: còn hơn boost_ending_notice_hours giờ mới hết đẩy
+        Instant now = Instant.now();
+        long ownerId = insertUser();
+        insertBoostedItem(
+                ownerId, true, now.plus(noticeHours() + 2L, ChronoUnit.HOURS), now.truncatedTo(ChronoUnit.SECONDS));
+
+        // when
+        boostNotificationService.notifyEndingSoon(now);
+
+        // then
+        assertThat(bodiesOf(ownerId, BoostNotificationService.BOOST_ENDING_SOON))
+                .isEmpty();
+    }
+
+    @Test
+    void notifyEndingSoon_whenBoostedUntilChangedInsideSameWindow_sendsForNewValue() {
+        // given (B24): đã báo cho mốc cũ ngay trong lượt trước; sau đó boosted_until bị chỉnh lại nhưng vẫn < 24 giờ.
+        // Khoá cũ theo khoảng thời gian chặn nhầm trường hợp này; khoá theo bài + mốc boosted_until thì không.
+        Instant now = Instant.now();
+        long ownerId = insertUser();
+        long itemId = insertBoostedItem(
+                ownerId,
+                true,
+                now.plus(5, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS),
+                now.truncatedTo(ChronoUnit.SECONDS));
+        boostNotificationService.notifyEndingSoon(now);
+        Instant newBoostedUntil = now.plus(20, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
+        jdbc.update("UPDATE items SET boosted_until = ? WHERE id = ?", Timestamp.from(newBoostedUntil), itemId);
+
+        // when
+        int sent = boostNotificationService.notifyEndingSoon(now);
+
+        // then: gửi thêm đúng một thông báo cho mốc mới, chạy lại không gửi nữa
+        assertThat(sent).isEqualTo(1);
+        assertThat(boostNotificationService.notifyEndingSoon(now)).isZero();
+        assertThat(bodiesOf(ownerId, BoostNotificationService.BOOST_ENDING_SOON))
+                .hasSize(2)
+                .last()
+                .asString()
+                .contains("hết đẩy lúc " + format(newBoostedUntil));
+    }
+
+    @Test
+    void notifyEndingSoon_whenChainIsFull_saysNoMorePackage() {
         // given: bài hết đẩy đúng lúc đợt kết thúc (boost_started_at + boost_max_days), không mua thêm được nữa
         Instant now = Instant.now();
         Instant boostedUntil = now.plus(10, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
@@ -93,9 +162,12 @@ class BoostNotificationServiceIT extends IntegrationTest {
         // when
         boostNotificationService.notifyEndingSoon(now);
 
-        // then
+        // then: nói rõ không mua thêm được và mốc được đẩy lại
+        Instant boostAgainAt = boostedUntil.plus(boostCooldownDays(), ChronoUnit.DAYS);
         assertThat(bodiesOf(ownerId, BoostNotificationService.BOOST_ENDING_SOON))
-                .containsExactly("Bài «" + ITEM_TITLE + "» hết đẩy lúc " + format(boostedUntil) + ".");
+                .containsExactly("Bài «" + ITEM_TITLE + "» hết đẩy lúc " + format(boostedUntil)
+                        + ". Đợt đẩy đã đủ tối đa " + boostMaxDays()
+                        + " ngày nên không mua thêm gói được; bài được đẩy lại từ " + format(boostAgainAt) + ".");
     }
 
     @Test
@@ -202,6 +274,10 @@ class BoostNotificationServiceIT extends IntegrationTest {
         boostNotificationService.notifyEnded(now);
     }
 
+    private int noticeHours() {
+        return configService.getInt(ConfigKey.BOOST_ENDING_NOTICE_HOURS);
+    }
+
     private int boostDays() {
         return configService.getInt(ConfigKey.BOOST_DAYS);
     }
@@ -245,6 +321,12 @@ class BoostNotificationServiceIT extends IntegrationTest {
 
     // Bài APPROVED còn hạn hiển thị 30 ngày; boost_started_at và last_boosted_at cùng là mốc bắt đầu đợt.
     private long insertBoostedItem(long donorId, boolean active, Instant boostedUntil, Instant boostStartedAt) {
+        return insertBoostedItem(
+                donorId, active, boostedUntil, boostStartedAt, Instant.now().plus(30, ChronoUnit.DAYS));
+    }
+
+    private long insertBoostedItem(
+            long donorId, boolean active, Instant boostedUntil, Instant boostStartedAt, Instant expireAt) {
         return jdbc.queryForObject(
                 "INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, condition,"
                         + " status, is_active, post_fee_paid, fee_state, pending_fee, pending_fee_type, expire_at,"
@@ -256,7 +338,7 @@ class BoostNotificationServiceIT extends IntegrationTest {
                 seedAreaId(),
                 ITEM_TITLE,
                 active,
-                Timestamp.from(Instant.now().plus(30, ChronoUnit.DAYS)),
+                Timestamp.from(expireAt),
                 Timestamp.from(boostedUntil),
                 Timestamp.from(boostStartedAt),
                 Timestamp.from(boostStartedAt));

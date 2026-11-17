@@ -97,7 +97,29 @@ public class PaymentService {
         paymentOrderRepository.save(order);
 
         String redirectUrl = paymentGatewayClient.buildRedirectUrl(order.getOrderCode(), amountVnd);
-        return walletMapper.toTopUpOrderResponse(order, redirectUrl);
+        return walletMapper.toTopUpOrderResponse(order, redirectUrl, expiresAt(order));
+    }
+
+    /**
+     * Xem một đơn nạp của chính mình (GET /api/v1/wallet/topup-orders/{orderCode}). FE gọi khi người dùng quay về từ
+     * cổng thanh toán hoặc tải lại trang Ví để biết đơn đã được cộng chưa và còn hạn thanh toán tới lúc nào.
+     *
+     * <p>Chỉ đọc, không đổi trạng thái: đơn quá expiresAt mà job chưa chạy vẫn trả PENDING, FE tự hiện "Hết hạn" theo
+     * expiresAt; PaymentExpiryJob mới là nơi đổi sang EXPIRED (VI-06). Không trả tên người dùng và Admin duyệt.
+     *
+     * @param userId người gọi, lấy từ token
+     * @param orderCode mã đơn
+     * @return chi tiết đơn kèm expiresAt
+     * @throws BusinessException WALLET_PAYMENT_ORDER_NOT_FOUND khi không có đơn hoặc đơn của người khác (không để lộ
+     *     đơn đó có tồn tại)
+     */
+    @Transactional(readOnly = true)
+    public TopUpOrderDetailResponse getOwnOrder(long userId, String orderCode) {
+        PaymentOrder order = paymentOrderRepository
+                .findByOrderCode(orderCode)
+                .filter(found -> found.getUserId() == userId)
+                .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND));
+        return detail(order, Map.of());
     }
 
     /**
@@ -143,7 +165,13 @@ public class PaymentService {
         return PageResponse.from(orderPage.map(order -> detail(order, briefs)));
     }
 
+    // Hạn thanh toán, cùng công thức với PaymentExpiryService (B29: trả sẵn để FE đếm ngược, không tự tính). created_at
+    // do
+    // JPA Auditing gán lúc persist nên luôn có sau save; chỉ null khi repository bị mock trong unit test.
     private Instant expiresAt(PaymentOrder order) {
+        if (order.getCreatedAt() == null) {
+            return null;
+        }
         return order.getCreatedAt()
                 .plus(configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES), ChronoUnit.MINUTES);
     }
