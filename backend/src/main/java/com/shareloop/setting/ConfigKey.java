@@ -222,6 +222,18 @@ public enum ConfigKey {
             ValueType.CODE_LIST,
             null,
             null),
+    REPORT_MAX_ITEMS_PER_OWNER(
+            "report_max_items_per_owner",
+            "3",
+            ConfigGroup.MODERATION,
+            "Số bài tối đa được báo cáo cùng một chủ bài",
+            "Số bài đăng tối đa của cùng một người dùng mà một người khác có thể báo cáo trong khoảng thời gian cửa sổ."),
+    REPORT_WINDOW_DAYS(
+            "report_window_days",
+            "30",
+            ConfigGroup.MODERATION,
+            "Khoảng thời gian giới hạn báo cáo",
+            "Số ngày làm cửa sổ giới hạn báo cáo nhiều bài cùng một chủ và thời gian chặn báo cáo lại cùng một người dùng."),
     OTP_TTL_MINUTES(
             "otp_ttl_minutes", "5", ConfigGroup.ACCOUNT, "Hạn mã OTP", "Số phút mã OTP gửi qua email còn hiệu lực."),
     OTP_MAX_FAILED(

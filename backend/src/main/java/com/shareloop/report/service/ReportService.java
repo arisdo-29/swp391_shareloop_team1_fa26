@@ -134,6 +134,25 @@ public class ReportService {
                     throw new BusinessException(ReportErrorCode.REPORT_ALREADY_REPORTED);
                 }
                 resolvedTargetUserId = summary.donorId();
+                int maxItemsPerOwner =
+                        configService != null ? configService.getInt(ConfigKey.REPORT_MAX_ITEMS_PER_OWNER) : 3;
+                if (maxItemsPerOwner <= 0) {
+                    maxItemsPerOwner = 3;
+                }
+                int itemWindowDays = configService != null ? configService.getInt(ConfigKey.REPORT_WINDOW_DAYS) : 30;
+                if (itemWindowDays <= 0) {
+                    itemWindowDays = 30;
+                }
+                Instant itemSince = Instant.now(clock).minus(Duration.ofDays(itemWindowDays));
+                long reportedCount =
+                        reportRepository.countByReporterIdAndTargetTypeAndTargetUserIdAndCreatedAtGreaterThanEqual(
+                                reporterId, TargetType.ITEM, resolvedTargetUserId, itemSince);
+                if (reportedCount >= maxItemsPerOwner) {
+                    throw new BusinessException(
+                            ReportErrorCode.REPORT_OWNER_LIMIT_REACHED,
+                            "Bạn đã báo cáo " + maxItemsPerOwner + " bài của người này trong " + itemWindowDays
+                                    + " ngày qua. Vui lòng thử lại sau.");
+                }
             }
             case USER -> {
                 if (resolvedTargetUserId == null) {
@@ -142,8 +161,13 @@ public class ReportService {
                 if (reporterId.equals(resolvedTargetUserId)) {
                     throw new BusinessException(ReportErrorCode.REPORT_CANNOT_REPORT_SELF);
                 }
-                if (reportRepository.existsByReporterIdAndTargetTypeAndTargetUserId(
-                        reporterId, targetType, resolvedTargetUserId)) {
+                int userWindowDays = configService != null ? configService.getInt(ConfigKey.REPORT_WINDOW_DAYS) : 30;
+                if (userWindowDays <= 0) {
+                    userWindowDays = 30;
+                }
+                Instant userSince = Instant.now(clock).minus(Duration.ofDays(userWindowDays));
+                if (reportRepository.existsByReporterIdAndTargetTypeAndTargetUserIdAndCreatedAtGreaterThanEqual(
+                        reporterId, targetType, resolvedTargetUserId, userSince)) {
                     throw new BusinessException(ReportErrorCode.REPORT_ALREADY_REPORTED);
                 }
             }
