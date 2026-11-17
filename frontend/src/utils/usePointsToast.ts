@@ -6,6 +6,8 @@ import { useRealtimeRefresh } from './useRealtimeRefresh';
 
 /** Loại thông báo backend gửi khi giao dịch hoàn tất và điểm uy tín đã được tính (ReputationService). */
 export const POINTS_NOTIFICATION_TYPE = 'POINTS_AWARDED';
+/** Loại thông báo backend gửi khi người dùng được lên hạng tín nhiệm (R13). */
+export const RANK_UP_NOTIFICATION_TYPE = 'RANK_UP';
 
 const SEEN_KEY_PREFIX = 'shareloop:pointsToastSeen:';
 // Chỉ bật toast cho thông báo mới; thông báo cũ hơn mốc này người dùng xem trong chuông.
@@ -40,13 +42,18 @@ export function pointsToastMessage(notification: NotificationResponse) {
 }
 
 export function isFreshPointsNotification(notification: NotificationResponse, now = Date.now()) {
-  if (notification.type !== POINTS_NOTIFICATION_TYPE || notification.isRead) return false;
+  if (
+    (notification.type !== POINTS_NOTIFICATION_TYPE && notification.type !== RANK_UP_NOTIFICATION_TYPE)
+    || notification.isRead
+  ) {
+    return false;
+  }
   const createdAt = Date.parse(notification.createdAt);
   return Number.isFinite(createdAt) ? now - createdAt <= MAX_AGE_MS : true;
 }
 
 /**
- * Hiện một thông báo nhỏ (toast) khi người dùng vừa được cộng điểm sau giao dịch hoàn tất.
+ * Hiện một thông báo nhỏ (toast) khi người dùng vừa được cộng điểm sau giao dịch hoàn tất hoặc lên hạng.
  * Nghe sự kiện thông báo realtime; nếu realtime chưa nối thì hỏi lại mỗi 30 giây.
  */
 export function usePointsToast(userId: string | null) {
@@ -64,9 +71,13 @@ export function usePointsToast(userId: string | null) {
       );
       for (const notification of fresh.reverse()) {
         seenRef.current.add(notification.id);
-        const message = pointsToastMessage(notification);
-        if (notification.title.startsWith('Bạn được cộng')) toast.success(message);
-        else toast.warning(message);
+        if (notification.type === RANK_UP_NOTIFICATION_TYPE) {
+          toast.success(notification.title);
+        } else {
+          const message = pointsToastMessage(notification);
+          if (notification.title.startsWith('Bạn được cộng')) toast.success(message);
+          else toast.warning(message);
+        }
       }
       if (fresh.length) writeSeen(userId, seenRef.current);
     } catch {

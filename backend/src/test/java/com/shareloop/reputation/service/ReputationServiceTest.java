@@ -382,6 +382,13 @@ class ReputationServiceTest {
                             eq("/profile?tab=reputation"));
             verify(notificationService)
                     .notify(
+                            eq(donorId),
+                            eq("RANK_UP"),
+                            eq("Bạn đã lên hạng Bạc!"),
+                            org.mockito.ArgumentMatchers.contains("Còn 195 điểm nữa để lên hạng Vàng"),
+                            eq("/profile?tab=reputation"));
+            verify(notificationService)
+                    .notify(
                             eq(receiverId),
                             eq("POINTS_AWARDED"),
                             eq("Bạn được cộng 2 điểm uy tín"),

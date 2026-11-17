@@ -35,6 +35,20 @@ describe('isFreshPointsNotification', () => {
     expect(isFreshPointsNotification(base, now)).toBe(true);
   });
 
+  it('nhận thông báo lên hạng RANK_UP chưa đọc trong 24 giờ (R13)', () => {
+    expect(
+      isFreshPointsNotification(
+        {
+          ...base,
+          type: 'RANK_UP',
+          title: 'Bạn đã lên hạng Bạc!',
+          body: 'Còn 100 điểm nữa để lên hạng Vàng.',
+        },
+        now,
+      ),
+    ).toBe(true);
+  });
+
   it('bỏ qua thông báo đã đọc, loại khác hoặc quá cũ', () => {
     expect(isFreshPointsNotification({ ...base, isRead: true }, now)).toBe(false);
     expect(isFreshPointsNotification({ ...base, type: 'NEW_REQUEST' }, now)).toBe(false);
