@@ -31,6 +31,9 @@ public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long
                     + " where o.orderCode = :orderCode")
     Optional<PaymentOrderSnapshot> findSnapshotByOrderCode(@Param("orderCode") String orderCode);
 
+    // Đọc đơn theo mã để người dùng xem đơn của mình (B29); không khoá.
+    Optional<PaymentOrder> findByOrderCode(String orderCode);
+
     @Query("select o.userId from PaymentOrder o where o.id = :id")
     Optional<Long> findUserIdById(@Param("id") Long id);
 

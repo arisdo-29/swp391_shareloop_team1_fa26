@@ -8,6 +8,7 @@ import com.shareloop.wallet.entity.CreditLedgerEntry;
 import com.shareloop.wallet.entity.PaymentOrder;
 import com.shareloop.wallet.entity.WalletAccount;
 import com.shareloop.wallet.repository.CreditTypeTotalView;
+import java.time.Instant;
 import org.springframework.stereotype.Component;
 
 /** Entity sang DTO, viết tay (không dùng MapStruct). */
@@ -36,14 +37,16 @@ public class WalletMapper {
         return new CreditTypeTotal(view.getType(), Math.abs(view.getTotal()), view.getEntryCount());
     }
 
-    // redirectUrl không lưu trong DB nên truyền vào từ PaymentGatewayClient.
-    public TopUpOrderResponse toTopUpOrderResponse(PaymentOrder order, String redirectUrl) {
+    // redirectUrl không lưu trong DB nên truyền vào từ PaymentGatewayClient; expiresAt do PaymentService tính từ cấu
+    // hình.
+    public TopUpOrderResponse toTopUpOrderResponse(PaymentOrder order, String redirectUrl, Instant expiresAt) {
         return new TopUpOrderResponse(
                 order.getOrderCode(),
                 order.getAmountVnd(),
                 order.getCredits(),
                 order.getStatus(),
                 order.getProvider(),
-                redirectUrl);
+                redirectUrl,
+                expiresAt);
     }
 }

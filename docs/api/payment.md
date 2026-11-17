@@ -53,7 +53,43 @@ Tạo đơn nạp PENDING (VI-03).
   "credits": 20,
   "status": "PENDING",
   "provider": "MOCK",
-  "redirectUrl": "/wallet/topup/mock-checkout?orderCode=3f9a1c2e4b5d6f708192a3b4c5d6e7f8"
+  "redirectUrl": "/wallet/topup/mock-checkout?orderCode=3f9a1c2e4b5d6f708192a3b4c5d6e7f8",
+  "expiresAt": "2026-11-17T08:15:00Z"
+}
+```
+
+## GET /api/v1/wallet/topup-orders/{orderCode}
+
+Xem một đơn nạp của chính mình (B29). Trang Ví gọi khi người dùng quay về từ cổng thanh toán (`?orderCode=`) để biết
+đơn đã được cộng chưa và còn hạn thanh toán tới lúc nào. Endpoint này từng bị gỡ cùng luồng nạp thủ công (#435) trong
+khi FE vẫn gọi; nay khôi phục, chỉ đọc.
+
+- Xác thực: **bắt buộc** Bearer Token; chỉ xem được đơn của chính mình.
+- Thành công: `200`, một `TopUpOrderDetailResponse` (cùng dạng với API Admin, `userName`, `userEmail`,
+  `reviewedByName` luôn `null`).
+- Không đổi trạng thái: đơn đã quá `expiresAt` mà `PaymentExpiryJob` chưa chạy vẫn trả `PENDING`; FE tự hiện "Hết hạn"
+  theo `expiresAt`, job mới là nơi đổi sang `EXPIRED`.
+- Lỗi: `404 WALLET_PAYMENT_ORDER_NOT_FOUND` khi không có đơn hoặc đơn của người khác; `401 UNAUTHORIZED`.
+
+```json
+// response 200
+{
+  "orderCode": "3f9a1c2e4b5d6f708192a3b4c5d6e7f8",
+  "userId": 10,
+  "amountVnd": 20000,
+  "credits": 20,
+  "vndPerCredit": 1000,
+  "status": "PENDING",
+  "provider": "VNPAY",
+  "createdAt": "2026-11-17T08:00:00Z",
+  "expiresAt": "2026-11-17T08:15:00Z",
+  "submittedAt": null,
+  "reviewedBy": null,
+  "reviewedAt": null,
+  "reviewNote": null,
+  "userName": null,
+  "userEmail": null,
+  "reviewedByName": null
 }
 ```
 
@@ -91,6 +127,7 @@ Xác nhận thanh toán giả lập và cộng Credit (VI-04, VI-07) trong một
 | `status`      | string | `PENDING` / `SUCCESS` / `FAILED` / `EXPIRED`          |
 | `provider`    | string | `MOCK` hoặc `VNPAY`                                   |
 | `redirectUrl` | string | Địa chỉ FE chuyển người dùng tới để thanh toán        |
+| `expiresAt`   | string | Hạn thanh toán (ISO-8601 UTC) = `created_at + payment_order_expire_minutes`. FE đếm ngược theo mốc này, không tự tính (B29) |
 
 ## TopUpConfirmResponse
 
