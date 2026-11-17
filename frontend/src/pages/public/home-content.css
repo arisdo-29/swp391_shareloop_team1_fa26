@@ -3453,6 +3453,13 @@
   border-color: rgb(224 178 90 / 35%);
   background: var(--color-primary);
   padding-top: 68px;
+  /* Hero phủ đúng một màn hình ở mọi thiết bị (svh: không tính thanh địa chỉ co giãn trên điện thoại).
+     Nội dung cao hơn màn hình thì hero tự cao theo; thấp hơn thì nội dung nằm giữa theo chiều dọc. */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100svh;
 }
 
 .home-hero-overlay {
