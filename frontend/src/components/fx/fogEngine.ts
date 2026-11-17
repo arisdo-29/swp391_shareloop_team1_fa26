@@ -1,0 +1,312 @@
+// Hiệu ứng "kính phủ sương, rê chuột lau sạch" cho hero trang chủ, vẽ bằng Canvas 2D.
+//
+// Mặt nạ là mảng Float32 riêng (0 = còn sương, >= 1 = đã lau sạch), lưu ở độ phân giải thấp.
+// KHÔNG đọc ngược pixel từ canvas (getImageData/toDataURL/toBlob): ảnh nền là ảnh bài đăng
+// khác origin nên canvas có vẽ ảnh đó bị "tainted", đọc ngược sẽ ném SecurityError.
+
+/* ------------------------------------------------------------------ hằng số chỉnh được */
+
+/** Kích thước một ô lưới mặt nạ (css px). Nhỏ hơn thì rìa vết lau mịn hơn nhưng tốn CPU hơn. */
+export const FOG_CELL_SIZE_PX = 5;
+/** Bán kính vết lau khi rê chuột. */
+export const WIPE_RADIUS_MOUSE_PX = 38;
+/** Bán kính vết lau khi đang giữ nút chuột. */
+export const WIPE_RADIUS_MOUSE_PRESSED_PX = 58;
+/** Bán kính vết lau bằng ngón tay. */
+export const WIPE_RADIUS_TOUCH_PX = 40;
+/** Tốc độ sương phủ lại: mỗi giây giá trị mặt nạ giảm chừng này. */
+export const REFOG_PER_SECOND = 0.13;
+/** Giá trị đóng dấu > 1 tạo khoảng "kính còn ướt": giữ sạch khoảng 2,7 giây rồi mới mờ lại. */
+export const WIPE_STRENGTH = 1.35;
+/** Độ đậm tối đa của lớp sương (0-1). Để dưới 1 cho ảnh sắc nét vẫn lấp ló phía sau. */
+export const FOG_MAX_OPACITY = 0.9;
+/** Độ đậm của lớp màu sương (biến CSS --fx-fog-tint) phủ lên ảnh đã làm mờ. */
+export const FOG_TINT_OPACITY = 0.38;
+/** Độ mờ của ảnh dưới lớp sương (css px). */
+export const FOG_BLUR_PX = 16;
+/** Trần devicePixelRatio: màn hình 3x không cần vẽ đủ 3x cho một lớp sương đã mờ. */
+export const MAX_DEVICE_PIXEL_RATIO = 1.5;
+/** Con trỏ nhảy xa hơn mức này thì chỉ đóng dấu điểm mới, không kẻ vệt nối từ chỗ cũ. */
+export const STROKE_JUMP_LIMIT_PX = 220;
+/** Khớp với class scale-[1.05] của ảnh nền hero để vùng đã lau không bị lệch hình. */
+export const BACKGROUND_IMAGE_SCALE = 1.05;
+
+/** Lớp sương dựng ở 1/4 kích thước: đã làm mờ mạnh nên phóng lên không thấy khác mà rẻ hơn nhiều. */
+const PLATE_DOWNSCALE = 4;
+/** Nhánh dự phòng (trình duyệt không có ctx.filter): thu ảnh còn 1/12 rồi phóng lên để làm mờ. */
+const FALLBACK_DOWNSCALE = 12;
+/** Một frame tính tối đa chừng này giây, tránh sương phủ "nhảy cóc" sau khi tab bị treo. */
+const MAX_STEP_SECONDS = 0.1;
+
+/* ------------------------------------------------------------------ mặt nạ (hàm thuần) */
+
+export type Point = { x: number; y: number };
+
+export type FogMask = {
+  columns: number;
+  rows: number;
+  cellSize: number;
+  values: Float32Array;
+};
+
+export type Rect = { x: number; y: number; width: number; height: number };
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function smoothstep01(value: number) {
+  const t = clamp(value, 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+/** Tạo mặt nạ phủ kín sương cho vùng rộng widthPx x heightPx (css px). */
+export function createMask(widthPx: number, heightPx: number, cellSize = FOG_CELL_SIZE_PX): FogMask {
+  const columns = Math.max(1, Math.ceil(widthPx / cellSize));
+  const rows = Math.max(1, Math.ceil(heightPx / cellSize));
+  return { columns, rows, cellSize, values: new Float32Array(columns * rows) };
+}
+
+/** Đọc giá trị mặt nạ tại một điểm (css px); ngoài lưới trả 0. */
+export function maskValueAt(mask: FogMask, x: number, y: number): number {
+  const column = Math.floor(x / mask.cellSize);
+  const row = Math.floor(y / mask.cellSize);
+  if (column < 0 || row < 0 || column >= mask.columns || row >= mask.rows) return 0;
+  return mask.values[row * mask.columns + column];
+}
+
+/** Đóng một dấu lau tròn tại (x, y). Chỉ tăng giá trị, không làm vùng đã sạch mờ đi. */
+export function stampMask(mask: FogMask, x: number, y: number, radius: number, strength = WIPE_STRENGTH) {
+  const centerColumn = x / mask.cellSize;
+  const centerRow = y / mask.cellSize;
+  const radiusInCells = radius / mask.cellSize;
+  const firstColumn = Math.max(0, Math.floor(centerColumn - radiusInCells));
+  const lastColumn = Math.min(mask.columns - 1, Math.ceil(centerColumn + radiusInCells));
+  const firstRow = Math.max(0, Math.floor(centerRow - radiusInCells));
+  const lastRow = Math.min(mask.rows - 1, Math.ceil(centerRow + radiusInCells));
+
+  for (let row = firstRow; row <= lastRow; row++) {
+    for (let column = firstColumn; column <= lastColumn; column++) {
+      const distance = Math.hypot(column + 0.5 - centerColumn, row + 0.5 - centerRow) / radiusInCells;
+      if (distance >= 1) continue;
+      // Nửa trong sạch hẳn, nửa ngoài mềm dần để rìa vết lau không bị gắt.
+      const edge = distance < 0.5 ? 1 : 1 - (distance - 0.5) / 0.5;
+      const value = smoothstep01(edge) * strength;
+      const index = row * mask.columns + column;
+      if (value > mask.values[index]) mask.values[index] = value;
+    }
+  }
+}
+
+/**
+ * Lau từ điểm trước (from) tới điểm mới (to). from = null nghĩa là nét mới (vừa nhấc tay/chuột),
+ * khi đó chỉ đóng dấu tại điểm mới để không kẻ vệt nối.
+ */
+export function wipeStroke(mask: FogMask, from: Point | null, to: Point, radius: number) {
+  if (!from) {
+    stampMask(mask, to.x, to.y, radius);
+    return;
+  }
+  const distance = Math.hypot(to.x - from.x, to.y - from.y);
+  // Con trỏ nhảy xa (ví dụ rời hero rồi vào ở chỗ khác): coi như nét mới.
+  if (distance > STROKE_JUMP_LIMIT_PX) {
+    stampMask(mask, to.x, to.y, radius);
+    return;
+  }
+  // Đóng dấu dày (mỗi 1/4 bán kính) để rê chuột nhanh vẫn không để hở giữa hai sự kiện.
+  const steps = Math.max(1, Math.ceil(distance / (radius * 0.25)));
+  for (let step = 1; step <= steps; step++) {
+    const progress = step / steps;
+    stampMask(mask, from.x + (to.x - from.x) * progress, from.y + (to.y - from.y) * progress, radius);
+  }
+}
+
+/** Cho sương phủ lại một lượng amount. Trả về true nếu có ô nào thay đổi (cần vẽ lại). */
+export function decayMask(mask: FogMask, amount: number): boolean {
+  const values = mask.values;
+  let changed = false;
+  for (let index = 0; index < values.length; index++) {
+    if (values[index] <= 0) continue;
+    values[index] = Math.max(0, values[index] - amount);
+    changed = true;
+  }
+  return changed;
+}
+
+/** Chuyển mặt nạ sang điểm ảnh RGBA trắng, alpha = độ sương còn lại (1 - đã lau). */
+export function fillMaskAlpha(mask: FogMask, pixels: Uint8ClampedArray) {
+  const values = mask.values;
+  for (let index = 0; index < values.length; index++) {
+    const pixel = index * 4;
+    pixels[pixel] = 255;
+    pixels[pixel + 1] = 255;
+    pixels[pixel + 2] = 255;
+    pixels[pixel + 3] = Math.round(255 * (1 - smoothstep01(values[index])));
+  }
+}
+
+/** Vị trí vẽ ảnh kiểu object-fit: cover, căn giữa, phóng thêm `scale` giống ảnh nền hero. */
+export function coverFit(imageWidth: number, imageHeight: number, boxWidth: number, boxHeight: number, scale = 1): Rect {
+  const ratio = Math.max(boxWidth / imageWidth, boxHeight / imageHeight) * scale;
+  const width = imageWidth * ratio;
+  const height = imageHeight * ratio;
+  return { x: (boxWidth - width) / 2, y: (boxHeight - height) / 2, width, height };
+}
+
+/** Safari cũ không có ctx.filter: khi đó phải làm mờ bằng cách thu nhỏ rồi phóng to. */
+export function supportsCanvasFilter(context: CanvasRenderingContext2D): boolean {
+  return typeof context.filter === 'string';
+}
+
+/* ------------------------------------------------------------------ engine vẽ */
+
+/**
+ * Giữ canvas sương của hero: dựng lớp sương từ ảnh, nhận nét lau, cho sương phủ lại và vẽ khi cần.
+ * Không biết gì về React; phần React gọi resize/setImage/wipe/step/dispose.
+ */
+export class FogEngine {
+  private mask: FogMask = createMask(1, 1);
+  private maskPixels: ImageData | null = null;
+  private image: HTMLImageElement | null = null;
+  private widthPx = 0;
+  private heightPx = 0;
+  private pixelRatio = 1;
+  private lastPoint: Point | null = null;
+  private plateReady = false;
+  private needsDraw = false;
+
+  private constructor(
+    private readonly canvas: HTMLCanvasElement,
+    private readonly context: CanvasRenderingContext2D,
+    private readonly plateCanvas: HTMLCanvasElement,
+    private readonly plateContext: CanvasRenderingContext2D,
+    private readonly maskCanvas: HTMLCanvasElement,
+    private readonly maskContext: CanvasRenderingContext2D,
+    private readonly tintColor: string,
+  ) {}
+
+  /** Tạo engine; trả null nếu trình duyệt (hoặc jsdom) không cho Canvas 2D. */
+  static create(canvas: HTMLCanvasElement, tintColor: string): FogEngine | null {
+    const context = canvas.getContext('2d');
+    const plateCanvas = document.createElement('canvas');
+    const plateContext = plateCanvas.getContext('2d');
+    const maskCanvas = document.createElement('canvas');
+    const maskContext = maskCanvas.getContext('2d');
+    if (!context || !plateContext || !maskContext) return null;
+    return new FogEngine(canvas, context, plateCanvas, plateContext, maskCanvas, maskContext, tintColor);
+  }
+
+  /** Đổi kích thước theo khối hero (css px). Lưới mặt nạ được tạo lại, sương phủ kín như ban đầu. */
+  resize(widthPx: number, heightPx: number, pixelRatio: number) {
+    const width = Math.max(1, Math.round(widthPx));
+    const height = Math.max(1, Math.round(heightPx));
+    if (width === this.widthPx && height === this.heightPx && pixelRatio === this.pixelRatio) return;
+    this.widthPx = width;
+    this.heightPx = height;
+    this.pixelRatio = pixelRatio;
+    this.canvas.width = Math.round(width * pixelRatio);
+    this.canvas.height = Math.round(height * pixelRatio);
+    this.mask = createMask(width, height);
+    this.maskCanvas.width = this.mask.columns;
+    this.maskCanvas.height = this.mask.rows;
+    this.maskPixels = this.maskContext.createImageData(this.mask.columns, this.mask.rows);
+    this.lastPoint = null;
+    this.rebuildPlate();
+  }
+
+  /** Đặt ảnh nền cần phủ sương; null (chưa tải hoặc lỗi) thì không vẽ sương. */
+  setImage(image: HTMLImageElement | null) {
+    this.image = image && image.naturalWidth > 0 ? image : null;
+    this.rebuildPlate();
+  }
+
+  /** Lau tại (x, y) css px tính từ góc trên trái khối hero. */
+  wipe(x: number, y: number, radius: number) {
+    wipeStroke(this.mask, this.lastPoint, { x, y }, radius);
+    this.lastPoint = { x, y };
+    this.needsDraw = true;
+  }
+
+  /** Nhấc nét: lần lau sau không nối với điểm cũ. */
+  lift() {
+    this.lastPoint = null;
+  }
+
+  /** Chạy một frame. Trả về true nếu còn vùng đang phủ sương lại (cần frame tiếp theo). */
+  step(deltaSeconds: number): boolean {
+    const seconds = clamp(deltaSeconds, 0, MAX_STEP_SECONDS);
+    const refogging = decayMask(this.mask, seconds * REFOG_PER_SECOND);
+    if (refogging || this.needsDraw) this.draw();
+    this.needsDraw = false;
+    return refogging;
+  }
+
+  dispose() {
+    this.image = null;
+    this.plateReady = false;
+    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    // Thu canvas phụ về 0 để trình duyệt giải phóng bộ nhớ ngay.
+    this.plateCanvas.width = 0;
+    this.maskCanvas.width = 0;
+  }
+
+  private rebuildPlate() {
+    this.needsDraw = true;
+    this.plateReady = false;
+    if (!this.image || this.widthPx === 0) return;
+    this.plateCanvas.width = Math.ceil(this.widthPx / PLATE_DOWNSCALE);
+    this.plateCanvas.height = Math.ceil(this.heightPx / PLATE_DOWNSCALE);
+    if (supportsCanvasFilter(this.plateContext)) this.drawBlurredWithFilter(this.image);
+    else this.drawBlurredByDownscale(this.image);
+    this.plateContext.globalAlpha = FOG_TINT_OPACITY;
+    this.plateContext.fillStyle = this.tintColor;
+    this.plateContext.fillRect(0, 0, this.plateCanvas.width, this.plateCanvas.height);
+    this.plateContext.globalAlpha = 1;
+    this.plateReady = true;
+  }
+
+  private drawBlurredWithFilter(image: HTMLImageElement) {
+    const target = this.plateContext;
+    const rect = coverFit(image.naturalWidth, image.naturalHeight, this.plateCanvas.width, this.plateCanvas.height, BACKGROUND_IMAGE_SCALE);
+    target.filter = `blur(${FOG_BLUR_PX / PLATE_DOWNSCALE}px)`;
+    target.drawImage(image, rect.x, rect.y, rect.width, rect.height);
+    target.filter = 'none';
+  }
+
+  private drawBlurredByDownscale(image: HTMLImageElement) {
+    const tinyCanvas = document.createElement('canvas');
+    tinyCanvas.width = Math.max(1, Math.ceil(this.widthPx / FALLBACK_DOWNSCALE));
+    tinyCanvas.height = Math.max(1, Math.ceil(this.heightPx / FALLBACK_DOWNSCALE));
+    const tinyContext = tinyCanvas.getContext('2d');
+    const source = tinyContext ? tinyCanvas : image;
+    if (tinyContext) {
+      const rect = coverFit(image.naturalWidth, image.naturalHeight, tinyCanvas.width, tinyCanvas.height, BACKGROUND_IMAGE_SCALE);
+      tinyContext.drawImage(image, rect.x, rect.y, rect.width, rect.height);
+    }
+    // Phóng canvas nhỏ lên với nội suy chất lượng cao: kết quả gần như một lớp blur.
+    this.plateContext.imageSmoothingEnabled = true;
+    this.plateContext.imageSmoothingQuality = 'high';
+    this.plateContext.drawImage(source, 0, 0, this.plateCanvas.width, this.plateCanvas.height);
+  }
+
+  private draw() {
+    const context = this.context;
+    context.globalCompositeOperation = 'source-over';
+    context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    if (!this.plateReady || !this.maskPixels) return;
+
+    // Mặt nạ → canvas nhỏ (canvas này không bao giờ vẽ ảnh ngoài, chỉ ghi bằng putImageData).
+    fillMaskAlpha(this.mask, this.maskPixels.data);
+    this.maskContext.putImageData(this.maskPixels, 0, 0);
+
+    context.imageSmoothingEnabled = true;
+    context.globalAlpha = FOG_MAX_OPACITY;
+    context.drawImage(this.plateCanvas, 0, 0, this.canvas.width, this.canvas.height);
+    context.globalAlpha = 1;
+    // destination-in: chỉ giữ lớp sương ở nơi mặt nạ còn alpha; phóng mặt nạ lên cho rìa mềm.
+    context.globalCompositeOperation = 'destination-in';
+    const scale = this.mask.cellSize * this.pixelRatio;
+    context.drawImage(this.maskCanvas, 0, 0, this.mask.columns * scale, this.mask.rows * scale);
+    context.globalCompositeOperation = 'source-over';
+  }
+}
