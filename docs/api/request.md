@@ -520,7 +520,7 @@ Các trường đã có từ trước và dùng cho màn Tiến trình giao dị
 | Trường | Kiểu | Bắt buộc | Ràng buộc |
 |---|---|---|---|
 | `deliveryMethod` | string | Có | `IN_PERSON` hoặc `SHIPPING` |
-| `meetingPlace` | string | Có | Tối đa 255 ký tự |
+| `meetingPlace` | string | Có | Tối đa 255 ký tự; quá giới hạn trả "Địa điểm tối đa 255 ký tự." |
 | `meetingTime` | string | Có | Thời gian hẹn ISO-8601 UTC ở tương lai |
 | `agreeToWaiver` | boolean | Không | Bắt buộc true nếu là SHIPPING |
 

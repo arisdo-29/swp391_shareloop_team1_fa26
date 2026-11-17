@@ -230,17 +230,20 @@ function ScheduleForm({
         ))}
       </fieldset>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field
-          label={deliveryMethod === 'SHIPPING' ? 'Địa chỉ nhận hàng' : 'Địa điểm gặp'}
-          value={meetingPlace}
-          maxLength={255}
-          error={meetingPlace ? (placeError ?? undefined) : undefined}
-          disabled={submitting}
-          onChange={(event) => {
-            setMeetingPlace(event.target.value);
-            setError('');
-          }}
-        />
+        <div>
+          <Field
+            label={deliveryMethod === 'SHIPPING' ? 'Địa chỉ nhận hàng' : 'Địa điểm gặp'}
+            value={meetingPlace}
+            maxLength={255}
+            error={meetingPlace.length >= 255 ? 'Địa điểm tối đa 255 ký tự.' : meetingPlace ? (placeError ?? undefined) : undefined}
+            disabled={submitting}
+            onChange={(event) => {
+              setMeetingPlace(event.target.value);
+              setError('');
+            }}
+          />
+          <p className="mt-1 text-xs text-text-muted">{meetingPlace.length}/255</p>
+        </div>
         <Field
           label="Thời gian"
           type="datetime-local"

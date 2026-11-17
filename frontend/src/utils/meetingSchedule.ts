@@ -44,7 +44,7 @@ export function minimumMeetingTimeValue(now: Date): string {
 export function validateMeetingPlace(value: string): string | null {
   const place = value.trim();
   if (!place) return 'Vui lòng nhập địa điểm giao nhận.';
-  if (place.length > 255) return 'Địa điểm giao nhận không được vượt quá 255 ký tự.';
+  if (place.length > 255) return 'Địa điểm tối đa 255 ký tự.';
   return null;
 }
 
