@@ -9,6 +9,7 @@ import {
   Button,
   EmptyState,
   ItemImage,
+  Icon,
   StatusBadge,
   TypeBadge,
 } from '../../components/ui';
@@ -138,6 +139,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [pinnedItemsError, setPinnedItemsError] = useState('');
   const [pinnedItemsReloadKey, setPinnedItemsReloadKey] = useState(0);
   const [shareItemId, setShareItemId] = useState('');
+  const [sharePickerOpen, setSharePickerOpen] = useState(false);
   const [shareableItems, setShareableItems] = useState<ItemResponse[]>([]);
   // Đề nghị đưa món vào đổi trong giao dịch Cho tặng (docs/api/chat.md mục 4–6).
   const [proposeOfferOpen, setProposeOfferOpen] = useState(false);
@@ -298,6 +300,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       setChatImage(null);
       if (chatImageInputRef.current) chatImageInputRef.current.value = '';
       setShareItemId('');
+      setSharePickerOpen(false);
     }
     if (selectedRequestId === null || !chatViewable) {
       setMessages([]);
@@ -418,6 +421,13 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const selectedAsDonor = selectedDonorId === currentUserId;
   // Người nhận trong giao dịch Cho tặng không gửi ảnh được (backend trả CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN)
   const isGiftReceiver = selected?.request.type === 'GIVE' && !selectedAsDonor;
+  const shareUnavailableReason = isGiftReceiver
+    ? 'Người nhận đồ Cho tặng không thể chia sẻ bài đăng.'
+    : shareableItems.length === 0
+      ? 'Bạn chưa có bài đã duyệt để chia sẻ.'
+      : !chatEnabled
+        ? 'Giao dịch đã kết thúc, không thể chia sẻ bài.'
+        : '';
   const reportTargetUserId = selectedDonorId
     ? selectedDonorId === currentUserId
       ? selected!.request.receiverId
@@ -667,14 +677,22 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
       setChatImage(null);
       if (chatImageInputRef.current) chatImageInputRef.current.value = '';
       setShareItemId('');
+      setSharePickerOpen(false);
     } catch (error) {
       const apiError = error as ApiError;
       if (activeRequestId.current !== selectedRequestId) return;
       setMessageError(
-        chatImageForbiddenMessage(apiError.code) ||
-          apiError.message ||
-          'Không gửi được tin nhắn. Vui lòng thử lại.',
+        apiError.code === 'CHAT_ITEM_NOT_APPROVED' || apiError.code === 'CHAT_ITEM_NOT_FOUND'
+          ? 'Bài đăng này không còn khả dụng để chia sẻ. Vui lòng chọn bài khác.'
+          : chatImageForbiddenMessage(apiError.code) ||
+              apiError.message ||
+              'Không gửi được tin nhắn. Vui lòng thử lại.',
       );
+      if (apiError.code === 'CHAT_ITEM_NOT_APPROVED' || apiError.code === 'CHAT_ITEM_NOT_FOUND') {
+        setShareItemId('');
+        itemApi.mine().then((items) => setShareableItems(items.filter((item) => item.status === 'APPROVED')))
+          .catch(() => undefined);
+      }
     } finally {
       sendInFlight.current = false;
       setSending(false);
@@ -866,7 +884,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     </Button>
                   </div>
                 ) : null}
-                {shareableItems.length && !isGiftReceiver ? (
+                {sharePickerOpen && !shareUnavailableReason ? (
                   <select
                     aria-label="Chia sẻ bài của bạn"
                     className="input min-h-10 py-2 text-xs"
@@ -874,7 +892,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     disabled={sending || !chatEnabled || !!chatImage}
                     onChange={(event) => setShareItemId(event.target.value)}
                   >
-                    <option value="">Không kèm bài đăng của bạn</option>
+                    <option value="">Chọn bài đăng để chia sẻ</option>
                     {shareableItems.map((item) => (
                       <option key={item.id} value={item.id}>
                         Kèm bài: {item.title}
@@ -909,6 +927,17 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       disabled={sending || !chatEnabled}
                     />
                   </label>
+                  <button
+                    type="button"
+                    aria-label="Chia sẻ bài"
+                    title={shareUnavailableReason || 'Chia sẻ bài của bạn'}
+                    disabled={sending || !!chatImage || Boolean(shareUnavailableReason)}
+                    onClick={() => setSharePickerOpen((open) => !open)}
+                    className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md border border-border px-3 text-xs font-semibold text-text-secondary hover:bg-surface-low disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Icon name="share" className="size-4" />
+                    <span>Chia sẻ bài</span>
+                  </button>
                   {isGiftReceiver ? null : (
                     <label
                       title={requestMediaEnabled ? 'Gửi một ảnh' : 'Mở sau khi chốt lịch hẹn'}
@@ -937,6 +966,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     {sending ? 'Đang gửi' : 'Gửi'}
                   </Button>
                 </form>
+                {shareUnavailableReason && chatEnabled ? (
+                  <p className="text-2xs text-text-muted">{shareUnavailableReason}</p>
+                ) : null}
                 {chatEnabled && !requestMediaEnabled && !isGiftReceiver ? (
                   <p className="text-2xs text-text-muted">
                     Gửi ảnh được sau khi hai bên chốt lịch hẹn.

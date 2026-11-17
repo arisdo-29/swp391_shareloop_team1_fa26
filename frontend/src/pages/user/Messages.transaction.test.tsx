@@ -112,9 +112,9 @@ async function renderMessages(
   viewerId: number,
   current: RequestResponse,
   media: RequestMediaResponse[] = [],
+  ownedItems: ItemResponse[] = viewerId === DONOR_ID ? [item()] : [],
 ) {
   store.dispatch(actions.loginFromApi(user(viewerId)));
-  const ownedItems = viewerId === DONOR_ID ? [item()] : [];
   vi.mocked(requestApi.mine).mockResolvedValue(viewerId === RECEIVER_ID ? [current] : []);
   vi.mocked(itemApi.mine).mockResolvedValue(ownedItems);
   vi.mocked(requestApi.forItem).mockResolvedValue([current]);
@@ -206,6 +206,60 @@ describe('Gửi ảnh trong giao dịch Cho tặng', () => {
     await screen.findByPlaceholderText('Nhập tin nhắn...');
 
     expect(screen.getByText('Gửi ảnh')).toBeTruthy();
+  });
+});
+
+describe('Chia sẻ bài trong tin nhắn', () => {
+  it('hiện nút mờ và lý do khi người nhận đồ Cho tặng không được chia sẻ', async () => {
+    await renderMessages(RECEIVER_ID, request({ status: 'RESERVED' }));
+    const share = screen.getByRole('button', { name: 'Chia sẻ bài' }) as HTMLButtonElement;
+    expect(share.disabled).toBe(true);
+    expect(screen.getByText('Người nhận đồ Cho tặng không thể chia sẻ bài đăng.')).toBeTruthy();
+  });
+
+  it('hiện nút mờ khi không có bài đã duyệt', async () => {
+    await renderMessages(DONOR_ID, request({ status: 'RESERVED' }));
+    const share = screen.getByRole('button', { name: 'Chia sẻ bài' }) as HTMLButtonElement;
+    expect(share.disabled).toBe(true);
+    expect(screen.getByText('Bạn chưa có bài đã duyệt để chia sẻ.')).toBeTruthy();
+  });
+
+  it('mở danh sách bài đã duyệt từ nút cạnh Gửi ảnh', async () => {
+    const events = userEvent.setup();
+    await renderMessages(
+      DONOR_ID,
+      request({ status: 'RESERVED' }),
+      [],
+      [item({ id: 46, status: 'APPROVED', title: 'Đèn bàn' })],
+    );
+    const share = screen.getByRole('button', { name: 'Chia sẻ bài' }) as HTMLButtonElement;
+    expect(share.disabled).toBe(false);
+    await events.click(share);
+    expect(screen.getByRole('combobox', { name: 'Chia sẻ bài của bạn' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Kèm bài: Đèn bàn' })).toBeTruthy();
+  });
+
+  it('báo bài đã gỡ khi backend từ chối thẻ chia sẻ', async () => {
+    const events = userEvent.setup();
+    vi.mocked(chatApi.send).mockRejectedValue({ code: 'CHAT_ITEM_NOT_APPROVED', status: 400, message: 'raw' });
+    await renderMessages(
+      DONOR_ID,
+      request({ status: 'RESERVED' }),
+      [],
+      [item({ id: 46, status: 'APPROVED', title: 'Đèn bàn' })],
+    );
+    await events.click(screen.getByRole('button', { name: 'Chia sẻ bài' }));
+    await events.selectOptions(screen.getByRole('combobox', { name: 'Chia sẻ bài của bạn' }), '46');
+    await events.click(screen.getByRole('button', { name: 'Gửi tin nhắn' }));
+
+    expect(await screen.findByText('Bài đăng này không còn khả dụng để chia sẻ. Vui lòng chọn bài khác.')).toBeTruthy();
+    expect(chatApi.send).toHaveBeenCalledWith(101, { content: null, mediaId: null, refItemId: 46 });
+  });
+
+  it('khóa ô nhập và nút chia sẻ khi giao dịch đã huỷ', async () => {
+    await renderMessages(DONOR_ID, request({ status: 'CANCELLED' }));
+    expect((screen.getByRole('textbox', { name: 'Tin nhắn' }) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Chia sẻ bài' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
