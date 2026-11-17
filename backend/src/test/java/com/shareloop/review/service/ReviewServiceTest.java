@@ -22,6 +22,9 @@ import com.shareloop.catalog.service.CategoryAttributeService;
 import com.shareloop.catalog.service.CategoryService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.ItemErrorCode;
+import com.shareloop.item.dto.AdminItemDetail;
+import com.shareloop.item.dto.ItemResponse;
+import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.notification.service.NotificationService;
@@ -464,5 +467,55 @@ class ReviewServiceTest {
         verify(postFeeService, never()).releaseHeldFee(eq(9L), anyString());
         verify(reviewItem).reject(eq("[Hệ thống] Tài khoản bị khoá"), any(), isNull());
         verify(legacyItem).reject(eq("[Hệ thống] Tài khoản bị khoá"), any(), isNull());
+    }
+
+    @Test
+    void listPending_mapsEditCountAndIsEditedCorrectly() {
+        // row 1: bài mới hoàn toàn (approvedEditCount = 0, isEdited = false)
+        Object[] newRow =
+                new Object[] {101L, 99L, "Bài mới", "https://img/1", "NONE", null, 5, Instant.now(), null, 0, false};
+        // row 2: bài đã sửa 2 lần trước đó, lần duyệt này là lần 3 (approvedEditCount = 2, isEdited = true)
+        Object[] editRow = new Object[] {
+            102L, 99L, "Bài sửa", "https://img/2", "REVIEW", "KEYWORD", 4, Instant.now(), null, 2, true
+        };
+
+        when(queueRepository.findPendingReviewQueue(any(), anyInt())).thenReturn(List.of(newRow, editRow));
+        when(userService.findBriefs(any())).thenReturn(Map.of(99L, new UserBrief(99L, "User A", "user@a.com")));
+
+        var items = service.listPending(0, 10);
+
+        assertThat(items).hasSize(2);
+        assertThat(items.get(0).id()).isEqualTo(101L);
+        assertThat(items.get(0).isEdited()).isFalse();
+        assertThat(items.get(0).editCount()).isEqualTo(0);
+
+        assertThat(items.get(1).id()).isEqualTo(102L);
+        assertThat(items.get(1).isEdited()).isTrue();
+        assertThat(items.get(1).editCount()).isEqualTo(3);
+    }
+
+    @Test
+    void getDetail_mapsEditCountAndIsEditedForEditedItem() {
+        ReviewItem item = mock(ReviewItem.class);
+        when(reviewItemRepository.findById(102L)).thenReturn(Optional.of(item));
+
+        ItemResponse itemResponse = mock(ItemResponse.class);
+        when(itemResponse.id()).thenReturn(102L);
+        when(itemResponse.donorId()).thenReturn(99L);
+        when(itemResponse.categoryId()).thenReturn(1L);
+        when(itemResponse.areaId()).thenReturn(1L);
+        when(itemResponse.status()).thenReturn(ItemStatus.PENDING_REVIEW);
+        AdminItemDetail detailDto = new AdminItemDetail(itemResponse, true, List.of());
+        when(itemService.getItemForAdmin(102L)).thenReturn(detailDto);
+
+        // moderation: [aiRisk, flag, flagReasonCode, matchedRule, matchedTerms, approvedEditCount, isEdited]
+        Object[] moderation = new Object[] {"LOW", "REVIEW", "LEXICON_REVIEW", 5, null, 1, true};
+        when(queueRepository.findModerationInfo(102L)).thenReturn(List.<Object[]>of(moderation));
+        when(userService.findBriefs(any())).thenReturn(Map.of(99L, new UserBrief(99L, "User A", "user@a.com")));
+
+        var detail = service.getDetail(102L);
+
+        assertThat(detail.isEdited()).isTrue();
+        assertThat(detail.editCount()).isEqualTo(2); // approvedEditCount 1 + 1 = 2
     }
 }

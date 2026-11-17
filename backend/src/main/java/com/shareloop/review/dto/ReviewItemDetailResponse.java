@@ -99,4 +99,77 @@ public record ReviewItemDetailResponse(
         Instant createdAt,
 
         @Schema(description = "Thời điểm cập nhật gần nhất", example = "2026-10-14T10:05:00Z")
-        Instant updatedAt) {}
+        Instant updatedAt,
+
+        @Schema(description = "Số lần bài đăng đã được chỉnh sửa; 0 nếu là bài mới", example = "1")
+        Integer editCount,
+
+        @Schema(description = "Bài đăng có phải là bản chỉnh sửa từ bài đã duyệt trước đó hay không", example = "true")
+        Boolean isEdited) {
+
+    public ReviewItemDetailResponse(
+            Long id,
+            String title,
+            String description,
+            String desiredItem,
+            OfferType offerType,
+            ItemCondition condition,
+            String defectNote,
+            String brand,
+            ItemStatus status,
+            boolean isActive,
+            OperatingStatus operatingStatus,
+            List<String> images,
+            List<String> defectImages,
+            Long categoryId,
+            String categoryName,
+            Long areaId,
+            String areaName,
+            Long donorId,
+            String donorName,
+            Short donorTrustStars,
+            List<ReviewItemAttribute> attributes,
+            String aiRisk,
+            String moderationFlag,
+            String flagReasonCode,
+            String flagReason,
+            List<String> matchedTerms,
+            String authStatus,
+            List<ChecklistItem> checklist,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(
+                id,
+                title,
+                description,
+                desiredItem,
+                offerType,
+                condition,
+                defectNote,
+                brand,
+                status,
+                isActive,
+                operatingStatus,
+                images,
+                defectImages,
+                categoryId,
+                categoryName,
+                areaId,
+                areaName,
+                donorId,
+                donorName,
+                donorTrustStars,
+                attributes,
+                aiRisk,
+                moderationFlag,
+                flagReasonCode,
+                flagReason,
+                matchedTerms,
+                authStatus,
+                checklist,
+                createdAt,
+                updatedAt,
+                0,
+                false);
+    }
+}

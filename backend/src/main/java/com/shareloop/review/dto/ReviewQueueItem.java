@@ -43,7 +43,41 @@ public record ReviewQueueItem(
         short donorTrustStars,
 
         @Schema(description = "Thời điểm bài đăng được tạo", example = "2026-10-14T10:00:00Z")
-        Instant createdAt) {
+        Instant createdAt,
+
+        @Schema(description = "Số lần bài đăng đã được chỉnh sửa; 0 nếu là bài mới", example = "1")
+        Integer editCount,
+
+        @Schema(description = "Bài đăng có phải là bản chỉnh sửa từ bài đã duyệt trước đó hay không", example = "true")
+        Boolean isEdited) {
+
+    public ReviewQueueItem(
+            Long id,
+            Long donorId,
+            String donorName,
+            String title,
+            String aiRisk,
+            String moderationFlag,
+            String flagReasonCode,
+            String flagReason,
+            List<String> matchedTerms,
+            short donorTrustStars,
+            Instant createdAt) {
+        this(
+                id,
+                donorId,
+                donorName,
+                title,
+                aiRisk,
+                moderationFlag,
+                flagReasonCode,
+                flagReason,
+                matchedTerms,
+                donorTrustStars,
+                createdAt,
+                0,
+                false);
+    }
 
     // KD-06: cờ AI không còn ưu tiên. Cùng thứ tự với ReviewQueueRepository, trừ bước "người đăng mới" (số bài đã
     // từng được duyệt không quá ngưỡng review_newcomer_max_approved) vì DTO không mang số bài đã duyệt.

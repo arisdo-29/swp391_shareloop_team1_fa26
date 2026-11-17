@@ -479,4 +479,45 @@ describe('AdminModerationDetail', () => {
     const alert = await screen.findByRole('alert');
     expect(within(alert).getByText(/Không tìm thấy bài đăng này/)).toBeTruthy();
   });
+
+  it('hàng chờ hiện nhãn Đã chỉnh sửa (lần N) và cho phép lọc bài mới / bài sửa', async () => {
+    const user = userEvent.setup();
+    vi.mocked(adminModerationApi.pendingReviews).mockResolvedValue({
+      items: [
+        { ...queueItems[0], id: 101, title: 'Bài viết mới tinh', isEdited: false, editCount: 0 },
+        { ...queueItems[1], id: 102, title: 'Bài viết đã sửa', isEdited: true, editCount: 2 },
+      ],
+      checklist,
+      page: 0,
+      size: 100,
+    });
+    render(
+      <MemoryRouter>
+        <AdminModerationList />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Bài viết mới tinh')).toBeTruthy();
+    expect(screen.getByText('Bài viết đã sửa')).toBeTruthy();
+    expect(screen.getByText('Đã chỉnh sửa (lần 2)')).toBeTruthy();
+
+    const select = screen.getByLabelText('Lọc theo loại bài');
+    await user.selectOptions(select, 'new');
+    expect(screen.getByText('Bài viết mới tinh')).toBeTruthy();
+    expect(screen.queryByText('Bài viết đã sửa')).toBeNull();
+
+    await user.selectOptions(select, 'edited');
+    expect(screen.queryByText('Bài viết mới tinh')).toBeNull();
+    expect(screen.getByText('Bài viết đã sửa')).toBeTruthy();
+  });
+
+  it('chi tiết bài hiện nhãn Đã chỉnh sửa (lần N) cạnh tiêu đề', async () => {
+    vi.mocked(adminModerationApi.detail).mockResolvedValue(
+      detail({ isEdited: true, editCount: 3 }),
+    );
+    renderDetail();
+
+    await screen.findByRole('heading', { name: /Áo khoác gió nam/ });
+    expect(screen.getByText('Đã chỉnh sửa (lần 3)')).toBeTruthy();
+  });
 });

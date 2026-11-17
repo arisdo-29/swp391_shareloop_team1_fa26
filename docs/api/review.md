@@ -36,7 +36,9 @@ Các trường `aiRisk`, `moderationFlag`, `flagReason` vẫn có trong response
       "flagReason": "Có từ khoá cần xem xét: zalo",
       "matchedTerms": ["zalo"],
       "donorTrustStars": 3,
-      "createdAt": "2026-10-14T10:00:00Z"
+      "createdAt": "2026-10-14T10:00:00Z",
+      "editCount": 2,
+      "isEdited": true
     }
   ],
   "checklist": [
@@ -104,7 +106,9 @@ Chi tiết một bài đăng cho Admin kiểm duyệt, ở **mọi trạng thái
     {"id": 12, "key": "category_match", "statement": "Danh mục và thẻ phân loại phản ánh đúng món đồ.", "description": null}
   ],
   "createdAt": "2026-10-14T10:00:00Z",
-  "updatedAt": "2026-10-14T10:05:00Z"
+  "updatedAt": "2026-10-14T10:05:00Z",
+  "editCount": 2,
+  "isEdited": true
 }
 ```
 
@@ -112,6 +116,8 @@ Chi tiết một bài đăng cho Admin kiểm duyệt, ở **mọi trạng thái
 - `categoryName`, `areaName`, `donorName` là `null` nếu bản ghi tương ứng đã bị xoá mềm.
 - `aiRisk` là `UNCHECKED` nếu AI chưa chấm xong hoặc không khả dụng; `moderationFlag` là `NONE` khi không có cờ.
 - `flagReasonCode`, `flagReason`, `matchedTerms` có cùng ý nghĩa như ở hàng chờ.
+- `isEdited`: `boolean`, `true` nếu bài đăng từng được duyệt trước đó (`approved_at` khác null) và được gửi lại do người dùng sửa nội dung; `false` nếu là bài mới hoàn toàn.
+- `editCount`: `int`, thứ tự lần chỉnh sửa của bài đăng đang chờ duyệt (`isEdited ? approvedEditCount + 1 : 0`). Dùng để hiển thị nhãn "Đã chỉnh sửa (lần N)" cho Admin dễ phân biệt bài sửa và bài mới.
 
 | Mã HTTP | Mã lỗi | Ý nghĩa |
 |---------|--------|---------|
