@@ -134,6 +134,7 @@ public class ItemFee extends SliceAudit {
         // bản sửa bị từ chối đi qua markReleased, không đụng cột này (R36).
         if (pendingFeeType == ItemFeeType.EDIT) {
             this.freeEditUsed = true;
+            this.approvedEditCount++;
         }
     }
 

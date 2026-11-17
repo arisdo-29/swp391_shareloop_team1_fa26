@@ -19,7 +19,9 @@ public interface ReviewQueueRepository extends Repository<com.shareloop.item.ent
                    COALESCE(i.ai_result ->> 'reason', i.ai_result ->> 'moderationReason') AS flagReason,
                    u.trust_stars AS donorTrustStars,
                    i.created_at AS createdAt,
-                   CAST(i.ai_result -> 'matchedTerms' AS TEXT) AS matchedTerms
+                   CAST(i.ai_result -> 'matchedTerms' AS TEXT) AS matchedTerms,
+                   COALESCE(i.approved_edit_count, 0) AS approvedEditCount,
+                   (i.approved_at IS NOT NULL) AS isEdited
             FROM items i
             JOIN users u ON u.id = i.donor_id
             WHERE i.status = 'PENDING_REVIEW'
@@ -42,7 +44,9 @@ public interface ReviewQueueRepository extends Repository<com.shareloop.item.ent
                    COALESCE(i.ai_result ->> 'flag', i.ai_result ->> 'moderation', 'NONE') AS moderationFlag,
                    COALESCE(i.ai_result ->> 'reason', i.ai_result ->> 'moderationReason') AS flagReason,
                    u.trust_stars AS donorTrustStars,
-                   CAST(i.ai_result -> 'matchedTerms' AS TEXT) AS matchedTerms
+                   CAST(i.ai_result -> 'matchedTerms' AS TEXT) AS matchedTerms,
+                   COALESCE(i.approved_edit_count, 0) AS approvedEditCount,
+                   (i.approved_at IS NOT NULL) AS isEdited
             FROM items i
             JOIN users u ON u.id = i.donor_id
             WHERE i.id = :itemId

@@ -288,6 +288,9 @@ public class ReviewService {
         UserBrief donor = donors.get(donorId);
         String flagReasonCode = (String) row[5];
         List<String> matchedTerms = parseMatchedTerms((String) row[8]);
+        int approvedEditCount = row.length > 9 && row[9] != null ? ((Number) row[9]).intValue() : 0;
+        boolean isEdited = row.length > 10 && row[10] != null && Boolean.TRUE.equals(row[10]);
+        int editCount = isEdited ? approvedEditCount + 1 : 0;
         return new ReviewQueueItem(
                 ((Number) row[0]).longValue(),
                 donorId,
@@ -299,7 +302,9 @@ public class ReviewService {
                 describeFlagReason(flagReasonCode, matchedTerms),
                 matchedTerms,
                 ((Number) row[6]).shortValue(),
-                toInstant(row[7]));
+                toInstant(row[7]),
+                editCount,
+                isEdited);
     }
 
     private ReviewItemDetailResponse toDetailResponse(
@@ -309,6 +314,13 @@ public class ReviewService {
         List<String> matchedTerms = parseMatchedTerms((String) moderation[4]);
         Optional<UserBrief> donor = Optional.ofNullable(
                 userService.findBriefs(List.of(item.donorId())).get(item.donorId()));
+        int approvedEditCount =
+                moderation.length > 5 && moderation[5] != null ? ((Number) moderation[5]).intValue() : 0;
+        boolean isEdited = moderation.length > 6 && moderation[6] != null && Boolean.TRUE.equals(moderation[6]);
+        if (!isEdited && reviewItem != null && reviewItem.getApprovedAt() != null) {
+            isEdited = true;
+        }
+        int editCount = isEdited ? approvedEditCount + 1 : 0;
 
         return new ReviewItemDetailResponse(
                 item.id(),
@@ -330,17 +342,19 @@ public class ReviewService {
                 areaService.findName(item.areaId()).orElse(null),
                 item.donorId(),
                 donor.map(UserBrief::fullName).orElse(null),
-                ((Number) moderation[3]).shortValue(),
+                moderation[3] != null ? ((Number) moderation[3]).shortValue() : null,
                 toAttributes(detail.attributes()),
                 (String) moderation[0],
                 (String) moderation[1],
                 flagReasonCode,
                 describeFlagReason(flagReasonCode, matchedTerms),
                 matchedTerms,
-                reviewItem.getAuthStatus().name(),
+                reviewItem.getAuthStatus() != null ? reviewItem.getAuthStatus().name() : null,
                 configService.checklistItems(),
                 item.createdAt(),
-                item.updatedAt());
+                item.updatedAt(),
+                editCount,
+                isEdited);
     }
 
     // Tên thuộc tính nằm ở module catalog nên hỏi một lần cho cả danh sách; thuộc tính đã xoá thì name = null.

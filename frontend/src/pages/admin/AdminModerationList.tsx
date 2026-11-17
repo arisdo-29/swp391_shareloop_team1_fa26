@@ -45,6 +45,7 @@ export function AdminModerationList() {
   }, [location.pathname, location.state, navigate]);
   const [items, setItems] = useState<ReviewQueueItem[]>([]);
   const [query, setQuery] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'new' | 'edited'>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -73,7 +74,12 @@ export function AdminModerationList() {
     };
   }, [reloadKey]);
 
-  const rows = query.trim() ? items.filter((item) => matchesQuery(item, query)) : items;
+  const filteredByStatus = items.filter((item) => {
+    if (filterType === 'new') return !item.isEdited;
+    if (filterType === 'edited') return !!item.isEdited;
+    return true;
+  });
+  const rows = query.trim() ? filteredByStatus.filter((item) => matchesQuery(item, query)) : filteredByStatus;
 
   return (
     <>
@@ -87,7 +93,17 @@ export function AdminModerationList() {
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
-        <span className="text-xs text-text-muted">{items.length} bài đăng chờ</span>
+        <select
+          aria-label="Lọc theo loại bài"
+          className="h-9 rounded-md border border-border bg-white px-2.5 text-xs text-text-primary focus:border-brand-primary focus:outline-none"
+          value={filterType}
+          onChange={(event) => setFilterType(event.target.value as 'all' | 'new' | 'edited')}
+        >
+          <option value="all">Tất cả ({items.length})</option>
+          <option value="new">Bài mới ({items.filter((item) => !item.isEdited).length})</option>
+          <option value="edited">Bài sửa ({items.filter((item) => !!item.isEdited).length})</option>
+        </select>
+        <span className="text-xs text-text-muted">{rows.length} bài đăng</span>
       </div>
 
       {notice ? (
@@ -127,8 +143,12 @@ export function AdminModerationList() {
         </div>
       ) : (
         <EmptyState
-          title={query ? 'Không tìm thấy bài phù hợp' : 'Không có bài chờ duyệt'}
-          text={query ? 'Hãy thử từ khóa khác.' : 'Hiện chưa có bài đăng nào trong hàng chờ.'}
+          title={query || filterType !== 'all' ? 'Không tìm thấy bài phù hợp' : 'Không có bài chờ duyệt'}
+          text={
+            query || filterType !== 'all'
+              ? 'Hãy thử thay đổi từ khóa hoặc bộ lọc.'
+              : 'Hiện chưa có bài đăng nào trong hàng chờ.'
+          }
         />
       )}
     </>
@@ -149,7 +169,14 @@ function QueueRow({ item }: { item: ReviewQueueItem }) {
             className="size-12 shrink-0 rounded-sm object-cover"
           />
           <div className="min-w-0">
-            <p className="font-semibold leading-6 text-text-primary">{item.title}</p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="font-semibold leading-6 text-text-primary">{item.title}</p>
+              {item.isEdited || (item.editCount != null && item.editCount > 0) ? (
+                <span className="rounded-sm bg-warning-soft px-1.5 py-0.5 text-2xs font-semibold text-warning">
+                  {item.editCount ? `Đã chỉnh sửa (lần ${item.editCount})` : 'Đã chỉnh sửa'}
+                </span>
+              ) : null}
+            </div>
             {flag || note ? (
               <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                 {flag ? (

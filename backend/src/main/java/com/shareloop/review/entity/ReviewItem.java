@@ -56,6 +56,10 @@ public class ReviewItem extends SliceAudit {
         return id;
     }
 
+    public Instant getApprovedAt() {
+        return approvedAt;
+    }
+
     // L16: đã gỡ cấp, từ chối, thu hồi nhãn chính hãng (chưa có luồng xác nhận và BR). Cột auth_status giữ lại theo mô
     // hình dữ liệu 17 bảng đã chốt
     // và chỉ còn đọc để trang chi tiết duyệt bài hiện trạng thái cũ.

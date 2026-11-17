@@ -15,6 +15,8 @@ export interface ReviewQueueItem {
   donorTrustStars?: number | null;
   createdAt: string;
   flagged?: boolean;
+  editCount?: number;
+  isEdited?: boolean;
 }
 
 export interface PendingItemsParams {
@@ -60,6 +62,8 @@ export interface ReviewItemDetail {
   matchedTerms: string[];
   authStatus: string | null;
   checklist: ReviewChecklistItem[];
+  editCount?: number;
+  isEdited?: boolean;
   createdAt: string;
   updatedAt: string;
 }

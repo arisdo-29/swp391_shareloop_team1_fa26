@@ -198,7 +198,16 @@ export function AdminModerationDetail() {
   return (
     <>
       <PageHeader
-        title={detail.title}
+        title={
+          <span className="flex flex-wrap items-center gap-2">
+            <span>{detail.title}</span>
+            {detail.isEdited || (detail.editCount != null && detail.editCount > 0) ? (
+              <span className="rounded-sm bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning">
+                {detail.editCount ? `Đã chỉnh sửa (lần ${detail.editCount})` : 'Đã chỉnh sửa'}
+              </span>
+            ) : null}
+          </span>
+        }
         description={`Đăng lúc ${new Date(detail.createdAt).toLocaleString('vi-VN')}`}
         action={backLink}
       />
