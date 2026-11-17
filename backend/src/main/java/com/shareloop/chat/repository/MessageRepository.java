@@ -36,6 +36,11 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     long countByRequestIdAndModeration(Long requestId, MessageModeration moderation);
 
     /**
+     * Đếm số lượng tin nhắn theo requestId, senderId và trạng thái kiểm duyệt (CH-05, G13).
+     */
+    long countByRequestIdAndSenderIdAndModeration(Long requestId, Long senderId, MessageModeration moderation);
+
+    /**
      * Các tin theo loại và trạng thái đề nghị của một giao dịch, dùng để tìm đề nghị đổi món đang PENDING.
      */
     List<Message> findByRequestIdAndKindAndOfferStatus(Long requestId, MessageKind kind, String offerStatus);
