@@ -492,6 +492,22 @@ public class ReputationService {
                     .append(" sao.");
         }
         notificationService.notify(user.getId(), "POINTS_AWARDED", title, body.toString(), "/profile?tab=reputation");
+        if (rankBefore != null && newRank.ordinal() > rankBefore.ordinal()) {
+            notifyRankUp(user.getId(), newTotal, newRank);
+        }
+    }
+
+    private void notifyRankUp(long userId, int currentPoints, Rank newRank) {
+        String title = "Bạn đã lên hạng " + rankLabel(newRank) + "!";
+        Rank next = nextRank(newRank);
+        String body;
+        if (next != null) {
+            int remaining = Math.max(rankMinPoints(next) - currentPoints, 0);
+            body = "Còn " + remaining + " điểm nữa để lên hạng " + rankLabel(next) + ".";
+        } else {
+            body = "Bạn đang ở hạng cao nhất.";
+        }
+        notificationService.notify(userId, "RANK_UP", title, body, "/profile?tab=reputation");
     }
 
     private static String rankLabel(Rank rank) {

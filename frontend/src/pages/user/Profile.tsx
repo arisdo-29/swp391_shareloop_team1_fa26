@@ -28,6 +28,7 @@ import {
 } from '../../services/reputationApi';
 import { createOtpValue } from '../../utils/otp';
 import { getRankLabel } from '../../utils/reputation';
+import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
 type ProfileTab = 'profile' | 'reputation';
 
@@ -278,6 +279,13 @@ export function Profile() {
       active = false;
     };
   }, [isAdmin, reputationPage, reputationReloadKey]);
+
+  // Lắng nghe tín hiệu realtime để tải lại khối Uy tín & Hạng ngay khi có thông báo (R13).
+  useRealtimeRefresh(['NOTIFICATION'], () => {
+    if (!isAdmin) {
+      setReputationReloadKey((key) => key + 1);
+    }
+  });
 
   const closePhoneChange = () => {
     setPhoneChangeOpen(false);
