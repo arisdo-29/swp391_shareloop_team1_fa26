@@ -441,8 +441,9 @@ export function Profile() {
   return (
     <div className="page-shell">
       <PageHeader title="Tài khoản" />
-      <div className="grid items-start gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="rounded-lg bg-white p-3 ring-1 ring-border/80">
+      {/* M01: grid-cols-1 (minmax(0,1fr)) và min-w-0 để tên, email dài bị cắt bằng truncate thay vì kéo trang rộng ra. */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <aside className="min-w-0 rounded-lg bg-white p-3 ring-1 ring-border/80">
           <div className="flex items-center gap-3 px-2 pb-4 pt-2">
             <Avatar
               user={{

@@ -136,7 +136,7 @@ export function ProductDetail() {
           <div
             role="status"
             aria-label="Đang tải chi tiết bài đăng"
-            className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]"
+            className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_360px]"
           >
             <div className="space-y-4">
               <Skeleton className="aspect-[4/3] w-full" />
@@ -323,7 +323,7 @@ export function ProductDetail() {
       <Link to={backLink.target} className="inline-flex min-h-11 items-center text-sm font-semibold text-link hover:text-secondary">
         {backLink.label}
       </Link>
-      <div className="mt-2 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="mt-2 grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
         <article className="min-w-0 space-y-6">
           <div className="grid gap-3 md:grid-cols-[88px_minmax(0,1fr)]">
             {images.length > 1 ? (

@@ -698,7 +698,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
 
   return (
     <div className="wide-shell py-5 sm:py-7">
-      <div className="grid gap-[clamp(0.75rem,1.5vw,1.25rem)] lg:h-[calc(100vh-9rem)] lg:min-h-[640px] lg:grid-cols-[minmax(280px,400px)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-[clamp(0.75rem,1.5vw,1.25rem)] lg:h-[calc(100vh-9rem)] lg:min-h-[640px] lg:grid-cols-[minmax(280px,400px)_minmax(0,1fr)]">
         <ConversationList
           className={mobileChat ? 'hidden lg:flex' : 'flex'}
           conversations={conversations}
