@@ -46,17 +46,31 @@ public class AiQuotaService {
     /** Check affordability before calling the provider without changing the wallet or free allowance. */
     @Transactional(readOnly = true)
     public void checkAvailable(long userId) {
+        checkAvailable(userId, true);
+    }
+
+    @Transactional(readOnly = true)
+    public void checkAvailable(long userId, boolean confirmCharge) {
         AiQuotaAccount account = requireAccount(userId);
         WalletResponse wallet = creditService.getWallet(userId);
-        if (remaining(account, wallet.hasToppedUp(), today()) == 0
-                && wallet.available() < configService.getInt(ConfigKey.AI_SEARCH_FEE)) {
-            throw new BusinessException(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE);
+        if (remaining(account, wallet.hasToppedUp(), today()) == 0) {
+            if (wallet.available() < configService.getInt(ConfigKey.AI_SEARCH_FEE)) {
+                throw new BusinessException(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE);
+            }
+            if (!confirmCharge) {
+                throw new BusinessException(SearchErrorCode.SEARCH_CHARGE_CONFIRMATION_REQUIRED);
+            }
         }
     }
 
     /** Consume only after at least one result exists; wallet and allowance updates share this transaction. */
     @Transactional
     public boolean consume(long userId) {
+        return consume(userId, true);
+    }
+
+    @Transactional
+    public boolean consume(long userId, boolean confirmCharge) {
         creditService.lockWalletRow(userId);
         AiQuotaAccount account = requireAccount(userId);
         boolean toppedUp = creditService.getWallet(userId).hasToppedUp();
@@ -64,6 +78,9 @@ public class AiQuotaService {
         if (remaining(account, toppedUp, today) > 0) {
             account.use(today, toppedUp);
             return false;
+        }
+        if (!confirmCharge) {
+            throw new BusinessException(SearchErrorCode.SEARCH_CHARGE_CONFIRMATION_REQUIRED);
         }
         creditService.chargeAiSearch(userId);
         return true;

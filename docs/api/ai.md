@@ -7,10 +7,12 @@ Cả tìm đồ và gợi ý mô tả dùng Gemini `gemini-4-hydrogen` qua Inter
 Cần JWT của Member. Mỗi request là một cuộc tìm độc lập; backend và Gemini không dùng lịch sử của lần trước. Body:
 
 ```json
-{ "query": "Mình muốn một món giúp vẻ ngoài có phong cách hơn" }
+{ "query": "Mình muốn một món giúp vẻ ngoài có phong cách hơn", "confirmCharge": false }
 ```
 
 `query` dài 1–500 ký tự và không được chứa số điện thoại, email hoặc URL. Trợ lý chỉ phục vụ nhu cầu tìm đồ trong ShareLoop, kể cả khi người dùng mô tả công dụng hoặc cảm giác mong muốn thay vì tên món. Sau khi qua kiểm tra hạn mức và số dư, yêu cầu ngoài phạm vi nhận một lời từ chối ngắn, không tiêu lượt và không trừ Credit.
+
+Khi hết lượt miễn phí, giao diện hiển thị phí từ `GET /api/v1/ai/quota` cùng Credit khả dụng và hỏi xác nhận trước khi gửi `confirmCharge: true`. Thiếu cờ xác nhận (hoặc `false`) thì API trả `409 SEARCH_CHARGE_CONFIRMATION_REQUIRED` trước khi gọi AI; không tiêu lượt và không trừ Credit. Nếu không đủ Credit, API trả `402 WALLET_INSUFFICIENT_BALANCE`.
 
 Response `200`:
 

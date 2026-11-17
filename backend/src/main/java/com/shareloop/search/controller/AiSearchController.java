@@ -44,7 +44,7 @@ public class AiSearchController {
     @PostMapping("/api/v1/ai/search")
     public AiSearchResponse search(
             @Parameter(hidden = true) @CurrentUserId Long currentUserId, @Valid @RequestBody AiSearchRequest request) {
-        return service.search(currentUserId, request.query());
+        return service.search(currentUserId, request.query(), request.confirmCharge());
     }
 
     @Operation(summary = "Gợi ý bản nháp mô tả từ tên món đồ, không đọc ảnh")

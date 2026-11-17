@@ -91,15 +91,15 @@ class AiSearchServiceTest {
                                 "gemini-4-hydrogen",
                                 "{\"inScope\":true,\"itemIds\":[11],\"equivalentItemIds\":[],\"requestedItem\":\"\",\"message\":\"Có món hợp với bạn\"}"));
         when(itemService.getItem(11L, null)).thenReturn(accessory);
-        when(quotaService.consume(7L)).thenReturn(true);
+        when(quotaService.consume(7L, true)).thenReturn(true);
         when(configService.getInt(ConfigKey.AI_SEARCH_FEE)).thenReturn(2);
 
-        AiSearchResponse result = service.search(7L, "Muốn trông có phong cách hơn");
+        AiSearchResponse result = service.search(7L, "Muốn trông có phong cách hơn", true);
 
         assertThat(result.results().items()).containsExactly(accessory);
         assertThat(result.message()).isEqualTo("Có món hợp với bạn");
         assertThat(result.chargedCredits()).isEqualTo(2);
-        verify(quotaService).consume(7L);
+        verify(quotaService).consume(7L, true);
         verify(activityLogService).log(eq("AI_USAGE"), eq(7L), eq("AI_SEARCH"), eq(null), anyMap(), eq(null));
     }
 
@@ -129,13 +129,13 @@ class AiSearchServiceTest {
                                 "gemini-4-hydrogen",
                                 "{\"inScope\":true,\"itemIds\":[],\"equivalentItemIds\":[],\"requestedItem\":\"đồng hồ\",\"message\":\"Chưa có món\"}"));
 
-        AiSearchResponse result = service.search(7L, "Tìm đồng hồ");
+        AiSearchResponse result = service.search(7L, "Tìm đồng hồ", true);
 
         ArgumentCaptor<String> catalog = ArgumentCaptor.forClass(String.class);
         verify(aiClient).recommend(eq("Tìm đồng hồ"), catalog.capture(), eq(Duration.ofSeconds(15)));
         assertThat(catalog.getValue()).contains("Bàn học", "SWAP").doesNotContain("desiredItem", "Đồng hồ");
         assertThat(result.results().items()).isEmpty();
-        verify(quotaService, never()).consume(7L);
+        verify(quotaService, never()).consume(7L, true);
     }
 
     @Test
@@ -152,7 +152,7 @@ class AiSearchServiceTest {
                                 "{\"inScope\":true,\"itemIds\":[11,12],\"equivalentItemIds\":[],\"requestedItem\":\"áo\",\"message\":\"Có món phù hợp\"}"));
         when(itemService.getItem(12L, null)).thenReturn(shirt);
 
-        AiSearchResponse result = service.search(7L, "Tìm áo");
+        AiSearchResponse result = service.search(7L, "Tìm áo", true);
 
         assertThat(result.results().items()).containsExactly(shirt);
         verify(itemService, never()).getItem(11L, null);
@@ -172,7 +172,7 @@ class AiSearchServiceTest {
                                 "{\"inScope\":true,\"itemIds\":[11],\"equivalentItemIds\":[11],\"requestedItem\":\"truyện\",\"message\":\"Có truyện phù hợp\"}"));
         when(itemService.getItem(11L, null)).thenReturn(story);
 
-        AiSearchResponse result = service.search(7L, "Tìm truyện");
+        AiSearchResponse result = service.search(7L, "Tìm truyện", true);
 
         assertThat(result.results().items()).containsExactly(story);
         verify(itemService, never()).getItem(12L, null);
@@ -191,7 +191,7 @@ class AiSearchServiceTest {
                                 "{\"inScope\":true,\"itemIds\":[11],\"equivalentItemIds\":[11],\"requestedItem\":\"máy tính xách tay\",\"message\":\"Có món phù hợp\"}"));
         when(itemService.getItem(11L, null)).thenReturn(laptop);
 
-        AiSearchResponse result = service.search(7L, "Tìm máy tính xách tay");
+        AiSearchResponse result = service.search(7L, "Tìm máy tính xách tay", true);
 
         assertThat(result.results().items()).containsExactly(laptop);
     }
@@ -208,10 +208,10 @@ class AiSearchServiceTest {
                                 "gemini-4-hydrogen",
                                 "{\"inScope\":true,\"itemIds\":[],\"equivalentItemIds\":[11],\"requestedItem\":\"truyện\",\"message\":\"Có truyện phù hợp\"}"));
 
-        AiSearchResponse result = service.search(7L, "Tìm truyện");
+        AiSearchResponse result = service.search(7L, "Tìm truyện", true);
 
         assertThat(result.fallback()).isTrue();
-        verify(quotaService, never()).consume(7L);
+        verify(quotaService, never()).consume(7L, true);
     }
 
     @Test
@@ -228,10 +228,10 @@ class AiSearchServiceTest {
                                 "{\"inScope\":true,\"itemIds\":[11],\"equivalentItemIds\":[11],\"requestedItem\":\"truyện\",\"message\":\"Có truyện phù hợp\"}"));
         when(itemService.getItem(11L, null)).thenReturn(changed);
 
-        AiSearchResponse result = service.search(7L, "Tìm truyện");
+        AiSearchResponse result = service.search(7L, "Tìm truyện", true);
 
         assertThat(result.results().items()).isEmpty();
-        verify(quotaService, never()).consume(7L);
+        verify(quotaService, never()).consume(7L, true);
     }
 
     @Test
@@ -246,10 +246,10 @@ class AiSearchServiceTest {
                                 "gemini-4-hydrogen",
                                 "{\"inScope\":true,\"itemIds\":[11],\"equivalentItemIds\":[],\"requestedItem\":\"\",\"message\":\"Có món phù hợp\"}"));
 
-        AiSearchResponse result = service.search(7L, "Tìm áo");
+        AiSearchResponse result = service.search(7L, "Tìm áo", true);
 
         assertThat(result.results().items()).isEmpty();
-        verify(quotaService, never()).consume(7L);
+        verify(quotaService, never()).consume(7L, true);
     }
 
     @Test
@@ -266,7 +266,7 @@ class AiSearchServiceTest {
                                 "{\"inScope\":true,\"itemIds\":[12,11],\"equivalentItemIds\":[],\"requestedItem\":\"nồi cơm điện\",\"message\":\"Có món phù hợp\"}"));
         when(itemService.getItem(11L, null)).thenReturn(riceCooker);
 
-        AiSearchResponse result = service.search(7L, "Tìm nồi cơm điện");
+        AiSearchResponse result = service.search(7L, "Tìm nồi cơm điện", true);
 
         assertThat(result.results().items()).containsExactly(riceCooker);
         verify(itemService, never()).getItem(12L, null);
@@ -284,11 +284,11 @@ class AiSearchServiceTest {
                                 "gemini-4-hydrogen",
                                 "{\"inScope\":true,\"itemIds\":[11],\"equivalentItemIds\":[],\"requestedItem\":\"giày\",\"message\":\"Có món phù hợp\"}"));
 
-        AiSearchResponse result = service.search(7L, "Tìm áo");
+        AiSearchResponse result = service.search(7L, "Tìm áo", true);
 
         assertThat(result.fallback()).isTrue();
         assertThat(result.results().items()).isEmpty();
-        verify(quotaService, never()).consume(7L);
+        verify(quotaService, never()).consume(7L, true);
     }
 
     @Test
@@ -303,10 +303,10 @@ class AiSearchServiceTest {
                                 "gemini-4-hydrogen",
                                 "{\"inScope\":true,\"itemIds\":[11],\"equivalentItemIds\":[],\"requestedItem\":\"màu đỏ\",\"message\":\"Có món phù hợp\"}"));
 
-        AiSearchResponse result = service.search(7L, "Tìm áo màu đỏ");
+        AiSearchResponse result = service.search(7L, "Tìm áo màu đỏ", true);
 
         assertThat(result.fallback()).isTrue();
-        verify(quotaService, never()).consume(7L);
+        verify(quotaService, never()).consume(7L, true);
     }
 
     @Test
@@ -322,7 +322,7 @@ class AiSearchServiceTest {
                                 "{\"inScope\":true,\"itemIds\":[11],\"equivalentItemIds\":[],\"requestedItem\":\"\",\"message\":\"Có món phù hợp\"}"));
         when(itemService.getItem(11L, null)).thenReturn(shoes);
 
-        AiSearchResponse result = service.search(7L, "Muốn phong cách hơn");
+        AiSearchResponse result = service.search(7L, "Muốn phong cách hơn", true);
 
         assertThat(result.results().items()).containsExactly(shoes);
     }
@@ -340,7 +340,7 @@ class AiSearchServiceTest {
                                 "{\"inScope\":true,\"itemIds\":[11],\"equivalentItemIds\":[],\"requestedItem\":\"\",\"message\":\"Có món phù hợp\"}"));
         when(itemService.getItem(11L, null)).thenReturn(bracelet);
 
-        AiSearchResponse result = service.search(7L, "Tìm phụ kiện thời trang");
+        AiSearchResponse result = service.search(7L, "Tìm phụ kiện thời trang", true);
 
         assertThat(result.results().items()).containsExactly(bracelet);
     }
@@ -357,11 +357,11 @@ class AiSearchServiceTest {
                                 "gemini-4-hydrogen",
                                 "{\"inScope\":true,\"itemIds\":[999],\"equivalentItemIds\":[],\"requestedItem\":\"đồng hồ\",\"message\":\"Có món\"}"));
 
-        AiSearchResponse result = service.search(7L, "Tìm đồng hồ");
+        AiSearchResponse result = service.search(7L, "Tìm đồng hồ", true);
 
         assertThat(result.fallback()).isTrue();
         assertThat(result.results().items()).isEmpty();
-        verify(quotaService, never()).consume(7L);
+        verify(quotaService, never()).consume(7L, true);
     }
 
     @Test
@@ -377,11 +377,11 @@ class AiSearchServiceTest {
                                 "{\"inScope\":true,\"itemIds\":[11],\"equivalentItemIds\":[],\"requestedItem\":\"đồng hồ\",\"message\":\"Có món\"}"));
         when(itemService.getItem(11L, null)).thenThrow(new BusinessException(SearchErrorCode.SEARCH_QUERY_INVALID));
 
-        AiSearchResponse result = service.search(7L, "Tìm đồng hồ");
+        AiSearchResponse result = service.search(7L, "Tìm đồng hồ", true);
 
         assertThat(result.results().items()).isEmpty();
         assertThat(result.chargedCredits()).isZero();
-        verify(quotaService, never()).consume(7L);
+        verify(quotaService, never()).consume(7L, true);
     }
 
     @Test
@@ -395,11 +395,11 @@ class AiSearchServiceTest {
                                 "gemini-4-hydrogen",
                                 "{\"inScope\":false,\"itemIds\":[],\"equivalentItemIds\":[],\"requestedItem\":\"\",\"message\":\"Ngoài phạm vi\"}"));
 
-        AiSearchResponse result = service.search(7L, "Thời tiết hôm nay?");
+        AiSearchResponse result = service.search(7L, "Thời tiết hôm nay?", true);
 
         assertThat(result.outOfScope()).isTrue();
         assertThat(result.results().items()).isEmpty();
-        verify(quotaService, never()).consume(7L);
+        verify(quotaService, never()).consume(7L, true);
     }
 
     @Test
@@ -425,16 +425,16 @@ class AiSearchServiceTest {
         when(itemService.getItem(101L, null)).thenReturn(lastItem);
         when(itemService.getItem(1L, null)).thenReturn(firstPage.get(0));
 
-        AiSearchResponse result = service.search(7L, "Tìm đồ trang sức");
+        AiSearchResponse result = service.search(7L, "Tìm đồ trang sức", true);
 
         assertThat(result.results().items()).containsExactly(lastItem, firstPage.get(0));
         verify(aiClient, org.mockito.Mockito.times(2)).recommend(any(), any(), any());
-        verify(quotaService).consume(7L);
+        verify(quotaService).consume(7L, true);
     }
 
     @Test
     void rejectsContactInfoBeforeProviderCall() throws Exception {
-        assertThatThrownBy(() -> service.search(7L, "Gọi 0901234567"))
+        assertThatThrownBy(() -> service.search(7L, "Gọi 0901234567", true))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(error -> assertThat(((BusinessException) error).getErrorCode())
                         .isEqualTo(SearchErrorCode.SEARCH_QUERY_INVALID));
@@ -446,15 +446,31 @@ class AiSearchServiceTest {
         when(aiClient.isAvailable()).thenReturn(true);
         doThrow(new BusinessException(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE))
                 .when(quotaService)
-                .checkAvailable(7L);
+                .checkAvailable(7L, true);
 
-        assertThatThrownBy(() -> service.search(7L, "Tìm đồng hồ"))
+        assertThatThrownBy(() -> service.search(7L, "Tìm đồng hồ", true))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(error -> assertThat(((BusinessException) error).getErrorCode())
                         .isEqualTo(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE));
         verify(itemService, never()).searchApprovedForAi(any(), any(), any(), any(), any(), anyInt(), anyInt());
         verify(aiClient, never()).recommend(any(), any(), any());
-        verify(quotaService, never()).consume(7L);
+        verify(quotaService, never()).consume(7L, true);
+    }
+
+    @Test
+    void missingChargeConfirmationStopsBeforeCallingGemini() throws Exception {
+        when(aiClient.isAvailable()).thenReturn(true);
+        doThrow(new BusinessException(SearchErrorCode.SEARCH_CHARGE_CONFIRMATION_REQUIRED))
+                .when(quotaService)
+                .checkAvailable(7L, false);
+
+        assertThatThrownBy(() -> service.search(7L, "Tìm đồng hồ", false))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(error -> assertThat(((BusinessException) error).getErrorCode())
+                        .isEqualTo(SearchErrorCode.SEARCH_CHARGE_CONFIRMATION_REQUIRED));
+        verify(itemService, never()).searchApprovedForAi(any(), any(), any(), any(), any(), anyInt(), anyInt());
+        verify(aiClient, never()).recommend(any(), any(), any());
+        verify(quotaService, never()).consume(7L, false);
     }
 
     private void ready() {

@@ -3,4 +3,4 @@ package com.shareloop.search.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-public record AiSearchRequest(@NotBlank @Size(max = 500) String query) {}
+public record AiSearchRequest(@NotBlank @Size(max = 500) String query, boolean confirmCharge) {}

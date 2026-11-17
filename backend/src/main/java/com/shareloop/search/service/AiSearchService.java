@@ -86,7 +86,7 @@ public class AiSearchService {
         this.mapper = mapper;
     }
 
-    public AiSearchResponse search(long userId, String query) {
+    public AiSearchResponse search(long userId, String query, boolean confirmCharge) {
         if (query == null
                 || query.isBlank()
                 || query.length() > 500
@@ -96,7 +96,7 @@ public class AiSearchService {
         if (!aiClient.isAvailable()) {
             return empty(userId, UNAVAILABLE_MESSAGE, true, false);
         }
-        quotaService.checkAvailable(userId);
+        quotaService.checkAvailable(userId, confirmCharge);
         long started = System.nanoTime();
         Duration timeout = Duration.ofSeconds(configService.getInt(ConfigKey.AI_SEARCH_TIMEOUT_SECONDS));
         Map<Long, String> categoryNames = categoryService.listActive().stream()
@@ -176,7 +176,7 @@ public class AiSearchService {
                 // A selected item can be reserved, traded or hidden while the model is reading.
             }
         }
-        boolean paid = !verified.isEmpty() && quotaService.consume(userId);
+        boolean paid = !verified.isEmpty() && quotaService.consume(userId, confirmCharge);
         logCall(userId, verified.isEmpty() ? "NO_RESULTS" : "SUCCESS", started, paid);
         return new AiSearchResponse(
                 verified.isEmpty() ? EMPTY_MESSAGE : reply,

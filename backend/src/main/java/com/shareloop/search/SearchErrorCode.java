@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 
 public enum SearchErrorCode implements ErrorCode {
     SEARCH_QUERY_INVALID(HttpStatus.BAD_REQUEST, "Nhu cầu tìm đồ không hợp lệ."),
+    SEARCH_CHARGE_CONFIRMATION_REQUIRED(HttpStatus.CONFLICT, "Vui lòng xác nhận phí Credit trước khi tìm tiếp."),
     SEARCH_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản tìm kiếm."),
     SEARCH_AI_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Trợ lý tìm đồ hiện chưa sẵn sàng."),
     SEARCH_AI_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "Trợ lý tìm đồ đã quá thời gian chờ."),

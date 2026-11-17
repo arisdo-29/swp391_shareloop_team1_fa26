@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { aiApi } from '../../services/aiApi';
+import { useWallet } from '../../app/useWallet';
 import type { ItemResponse } from '../../services/itemApi';
 import { AI } from './AI';
 
@@ -33,6 +34,13 @@ vi.mock('../../services/catalogApi', () => ({
 
 beforeEach(() => {
   sessionStorage.clear();
+  vi.mocked(useWallet).mockReturnValue({
+    wallet: { creditBalance: 4, heldCredit: 0, available: 4, hasToppedUp: true },
+    loading: false,
+    error: '',
+    refresh: vi.fn(),
+    replaceWallet: vi.fn(),
+  });
   vi.mocked(aiApi.quota)
     .mockResolvedValueOnce({ freeUsesRemaining: 5, feeCredits: 2, hasToppedUp: true })
     .mockResolvedValueOnce({ freeUsesRemaining: 4, feeCredits: 2, hasToppedUp: true });
@@ -52,6 +60,43 @@ afterEach(() => {
 });
 
 describe('AI search quota', () => {
+  it('hỏi xác nhận trước lượt tìm có phí', async () => {
+    const user = userEvent.setup();
+    vi.mocked(aiApi.quota).mockReset().mockResolvedValue({ freeUsesRemaining: 0, feeCredits: 2, hasToppedUp: true });
+    render(<MemoryRouter><AI /></MemoryRouter>);
+
+    await screen.findByText(/Lượt tiếp theo/);
+    await user.type(screen.getByRole('textbox', { name: 'Mô tả món đồ cần tìm' }), 'Tìm sách cũ');
+    await user.click(screen.getByRole('button', { name: 'Tìm giúp tôi' }));
+
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByText('Lượt này tính 2 Credit. Số dư hiện có 4 Credit. Tiếp tục?')).toBeTruthy();
+    expect(aiApi.search).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Tiếp tục' }));
+    await waitFor(() => expect(aiApi.search).toHaveBeenCalledWith('Tìm sách cũ', true));
+  });
+
+  it('không gọi API khi hết lượt và thiếu Credit', async () => {
+    const user = userEvent.setup();
+    vi.mocked(useWallet).mockReturnValue({
+      wallet: { creditBalance: 1, heldCredit: 0, available: 1, hasToppedUp: true },
+      loading: false,
+      error: '',
+      refresh: vi.fn(),
+      replaceWallet: vi.fn(),
+    });
+    vi.mocked(aiApi.quota).mockReset().mockResolvedValue({ freeUsesRemaining: 0, feeCredits: 2, hasToppedUp: true });
+    render(<MemoryRouter><AI /></MemoryRouter>);
+
+    await screen.findByText(/Lượt tiếp theo/);
+    await user.type(screen.getByRole('textbox', { name: 'Mô tả món đồ cần tìm' }), 'Tìm sách cũ');
+    await user.click(screen.getByRole('button', { name: 'Tìm giúp tôi' }));
+
+    expect(aiApi.search).not.toHaveBeenCalled();
+    expect(screen.getByText('Bạn đã hết lượt miễn phí và chưa đủ Credit cho lượt tìm tiếp theo.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Nạp Credit' })).toBeTruthy();
+  });
+
   it('tải lại quota từ Backend sau khi tìm kiếm thành công', async () => {
     const user = userEvent.setup();
     render(
@@ -64,7 +109,7 @@ describe('AI search quota', () => {
     await user.type(screen.getByRole('textbox', { name: 'Mô tả món đồ cần tìm' }), 'Tìm sách cũ');
     await user.click(screen.getByRole('button', { name: 'Tìm giúp tôi' }));
 
-    await waitFor(() => expect(aiApi.search).toHaveBeenCalledWith('Tìm sách cũ'));
+    await waitFor(() => expect(aiApi.search).toHaveBeenCalledWith('Tìm sách cũ', false));
     await waitFor(() => expect(aiApi.quota).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('Còn 4 lượt miễn phí')).toBeTruthy();
     expect(screen.getByText('Mình chưa tìm thấy món phù hợp.')).toBeTruthy();
