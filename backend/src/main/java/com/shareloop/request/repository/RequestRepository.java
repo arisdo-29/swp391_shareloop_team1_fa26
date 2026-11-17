@@ -92,6 +92,27 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
     boolean hasActiveDelivery(@Param("userId") long userId);
 
     /**
+     * Kiểm tra người dùng có phải là một bên tham gia trong yêu cầu đã được chọn của bài đăng hay không (G06).
+     * Áp dụng cho cả bài chính (item_id) và món đề nghị trao đổi (offered_item_id).
+     */
+    @Query(value = """
+        SELECT EXISTS (
+            SELECT 1 FROM requests r
+            WHERE (r.item_id = :itemId OR r.offered_item_id = :itemId)
+            AND (
+                r.receiver_id = :userId
+                OR EXISTS (
+                    SELECT 1 FROM items i
+                    WHERE i.id = r.item_id AND i.donor_id = :userId AND i.is_deleted = false
+                )
+            )
+            AND r.status IN ('RESERVED', 'AWAITING_LOGISTICS', 'LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER', 'DISPUTED')
+            AND r.is_deleted = false
+        )
+    """, nativeQuery = true)
+    boolean isParticipantInActiveRequest(@Param("itemId") long itemId, @Param("userId") long userId);
+
+    /**
      * Tìm các yêu cầu ở trạng thái cụ thể được tạo trước một mốc thời gian (YC-05, TD-02).
      * Phân trang kiểu keyset theo id > afterId, tối đa limit bản ghi (Mục Q).
      */

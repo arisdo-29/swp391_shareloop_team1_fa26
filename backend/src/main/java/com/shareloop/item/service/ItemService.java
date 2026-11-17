@@ -313,6 +313,7 @@ public class ItemService {
      * - Bài TRADED (đã giao dịch thành công): ai cũng xem được ở chế độ chỉ xem, requestable = false để frontend ẩn
      *   nút gửi yêu cầu. Không trả thông tin người nhận hay yêu cầu liên quan.
      * - Chủ bài đăng: xem được mọi trạng thái.
+     * - Người tham gia giao dịch (G06): bài đang giao dịch (RESERVED) thì các bên tham gia (người nhận/người đổi) vẫn xem được.
      * - Còn lại (chờ duyệt, bị từ chối, hết hạn, bị ẩn, chủ bài bị khoá): trả về ITEM_NOT_FOUND (404).
      */
     @Transactional(readOnly = true)
@@ -320,9 +321,12 @@ public class ItemService {
         Item item = itemRepository.findById(id).orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
 
         boolean isOwner = currentUserId != null && currentUserId.equals(item.getDonorId());
+        boolean isParticipant = currentUserId != null
+                && requestQueryService != null
+                && requestQueryService.isParticipantInActiveTransaction(item.getId(), currentUserId);
         boolean donorLocked = userService.isLocked(item.getDonorId());
         boolean publiclyVisible = item.isActive() && !donorLocked && isPublicDetailStatus(item.getStatus());
-        if (!publiclyVisible && !isOwner) {
+        if (!publiclyVisible && !isOwner && !isParticipant) {
             throw new BusinessException(ItemErrorCode.ITEM_NOT_FOUND);
         }
 
