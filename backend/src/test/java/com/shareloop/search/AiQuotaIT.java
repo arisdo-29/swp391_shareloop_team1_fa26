@@ -135,7 +135,7 @@ class AiQuotaIT extends IntegrationTest {
                 mock(ActivityLogService.class),
                 new JsonMapper());
 
-        AiSearchResponse empty = searchService.search(userId, "sách");
+        AiSearchResponse empty = searchService.search(userId, "sách", false);
         assertThat(empty.results().totalElements()).isZero();
         assertThat(empty.quota().freeUsesRemaining()).isEqualTo(5);
         assertThat(jdbc.sql("SELECT count(*) FROM credit_ledger WHERE user_id = :id")
@@ -145,12 +145,12 @@ class AiQuotaIT extends IntegrationTest {
                 .isZero();
 
         for (int remaining = 4; remaining >= 0; remaining--) {
-            AiSearchResponse response = searchService.search(userId, "sách");
+            AiSearchResponse response = searchService.search(userId, "sách", false);
             assertThat(response.fallback()).isFalse();
             assertThat(response.quota().freeUsesRemaining()).isEqualTo(remaining);
             assertThat(response.chargedCredits()).isZero();
         }
-        AiSearchResponse paid = searchService.search(userId, "sách");
+        AiSearchResponse paid = searchService.search(userId, "sách", true);
         assertThat(paid.fallback()).isFalse();
         assertThat(paid.chargedCredits()).isEqualTo(2);
         assertThat(jdbc.sql("SELECT credit_balance FROM users WHERE id = :id")

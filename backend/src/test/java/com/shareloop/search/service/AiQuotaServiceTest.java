@@ -60,4 +60,33 @@ class AiQuotaServiceTest {
         verify(account).use(LocalDate.of(2026, 11, 3), true);
         verify(creditService, never()).chargeAiSearch(USER_ID);
     }
+
+    @Test
+    void paidSearchRequiresConfirmationBeforeCharging() {
+        AiQuotaAccount account = mock(AiQuotaAccount.class);
+        when(account.getFreeAiUsed()).thenReturn(5);
+        when(account.getFreeAiDate()).thenReturn(LocalDate.of(2026, 11, 2));
+        AiQuotaAccountRepository repository = mock(AiQuotaAccountRepository.class);
+        when(repository.findById(USER_ID)).thenReturn(Optional.of(account));
+        CreditService creditService = mock(CreditService.class);
+        when(creditService.getWallet(USER_ID)).thenReturn(new WalletResponse(2, 0, 2, true));
+        ConfigService configService = mock(ConfigService.class);
+        when(configService.getInt(ConfigKey.AI_FREE_PER_DAY)).thenReturn(5);
+        when(configService.getInt(ConfigKey.AI_SEARCH_FEE)).thenReturn(2);
+        AiQuotaService service = new AiQuotaService(
+                repository,
+                creditService,
+                configService,
+                Clock.fixed(Instant.parse("2026-11-02T12:00:00Z"), ZoneOffset.UTC));
+
+        assertThatThrownBy(() -> service.checkAvailable(USER_ID, false))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(error -> assertThat(((BusinessException) error).getErrorCode())
+                        .isEqualTo(com.shareloop.search.SearchErrorCode.SEARCH_CHARGE_CONFIRMATION_REQUIRED));
+        assertThatThrownBy(() -> service.consume(USER_ID, false))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(error -> assertThat(((BusinessException) error).getErrorCode())
+                        .isEqualTo(com.shareloop.search.SearchErrorCode.SEARCH_CHARGE_CONFIRMATION_REQUIRED));
+        verify(creditService, never()).chargeAiSearch(USER_ID);
+    }
 }

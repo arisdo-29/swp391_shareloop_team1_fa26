@@ -4,6 +4,7 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import { useWallet } from '../../app/useWallet';
 import { AiSearchNotices } from '../../components/ai/AiSearchNotices';
+import { Dialog } from '../../components/Dialog';
 import { Button, EmptyState, ProductCard, Spinner, TextArea } from '../../components/ui';
 import { aiApi, type AiQuotaResponse } from '../../services/aiApi';
 import {
@@ -26,7 +27,7 @@ export function AI() {
   const navigate = useNavigate();
   const user = useAppSelector(selectCurrentUser);
   const userId = user?.id;
-  const { refresh: refreshWallet } = useWallet();
+  const { wallet, refresh: refreshWallet } = useWallet();
   const [query, setQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [queryError, setQueryError] = useState('');
@@ -38,6 +39,7 @@ export function AI() {
   const [searchError, setSearchError] = useState('');
   const [chargedCredits, setChargedCredits] = useState(0);
   const [needsTopUp, setNeedsTopUp] = useState(false);
+  const [pendingChargeQuery, setPendingChargeQuery] = useState<string | null>(null);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [areas, setAreas] = useState<AreaResponse[]>([]);
   const inFlight = useRef(false);
@@ -71,14 +73,29 @@ export function AI() {
     return () => { active = false; generation.current += 1; inFlight.current = false; };
   }, [userId]);
 
-  const search = async (value = query) => {
+  const search = async (value = query, confirmCharge = false) => {
     const normalizedQuery = value.trim();
     if (!normalizedQuery || normalizedQuery.length > MAX_QUERY_LENGTH) {
       setQueryError('Vui lòng nhập mô tả từ 1 đến 500 ký tự.');
       return;
     }
     if (!user || !quota || inFlight.current) return;
+    if (quota.freeUsesRemaining === 0 && !confirmCharge) {
+      setQueryError('');
+      setSubmittedQuery(normalizedQuery);
+      if (!wallet || wallet.available < quota.feeCredits) {
+        setNeedsTopUp(true);
+        setSearchError('Bạn đã hết lượt miễn phí và chưa đủ Credit cho lượt tìm tiếp theo.');
+        setStatus('error');
+        setResults([]);
+        setMessage('');
+        return;
+      }
+      setPendingChargeQuery(normalizedQuery);
+      return;
+    }
     inFlight.current = true;
+    setPendingChargeQuery(null);
     const currentGeneration = generation.current;
     clearAiSearchSnapshot();
     setQueryError('');
@@ -90,7 +107,7 @@ export function AI() {
     setSubmittedQuery(normalizedQuery);
     setStatus('loading');
     try {
-      const response = await aiApi.search(normalizedQuery);
+      const response = await aiApi.search(normalizedQuery, confirmCharge);
       if (currentGeneration !== generation.current) return;
       const categoryNames = toCategoryNameMap(categories);
       const areaNames = toAreaNameMap(areas);
@@ -112,11 +129,13 @@ export function AI() {
       if (currentGeneration !== generation.current) return;
       const apiError = error as ApiError;
       const insufficientCredit = apiError.code === 'WALLET_INSUFFICIENT_BALANCE';
+      const confirmationRequired = apiError.code === 'SEARCH_CHARGE_CONFIRMATION_REQUIRED';
       setNeedsTopUp(insufficientCredit);
       setSearchError(insufficientCredit ? 'Bạn đã hết lượt miễn phí và chưa đủ Credit cho lượt tìm tiếp theo.' : apiError.message || 'Không tìm được đồ. Vui lòng thử lại.');
       setStatus('error');
       setResults([]);
       setMessage('');
+      if (confirmationRequired) setPendingChargeQuery(normalizedQuery);
       try { const latest = await aiApi.quota(); if (currentGeneration === generation.current) setQuota(latest); } catch { /* Giữ hạn mức đã tải, lần tìm tiếp theo vẫn do backend kiểm tra. */ }
     } finally {
       if (currentGeneration === generation.current) inFlight.current = false;
@@ -130,6 +149,17 @@ export function AI() {
 
   return (
     <div className="page-shell space-y-6">
+      {pendingChargeQuery && quota ? (
+        <Dialog title="Xác nhận lượt tìm có phí" onClose={() => setPendingChargeQuery(null)} busy={status === 'loading'}>
+          <p className="text-sm leading-6 text-text-primary">
+            Lượt này tính {quota.feeCredits} Credit. Số dư hiện có {wallet?.available ?? 0} Credit. Tiếp tục?
+          </p>
+          <div className="mt-5 flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setPendingChargeQuery(null)}>Huỷ</Button>
+            <Button onClick={() => void search(pendingChargeQuery, true)}>Tiếp tục</Button>
+          </div>
+        </Dialog>
+      ) : null}
       <section aria-labelledby="ai-title" className="space-y-4 rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-7">
         <div>
           <h1 id="ai-title" className="page-title">Bạn cần món gì?</h1>

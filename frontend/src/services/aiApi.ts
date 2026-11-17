@@ -38,8 +38,8 @@ export const aiApi = {
     const { data } = await http.get<AiQuotaResponse>(aiApiEndpoints.quota);
     return data;
   },
-  search: async (query: string): Promise<AiSearchResponse> => {
-    const response = await http.post<AiSearchResponse>(aiApiEndpoints.search, { query });
+  search: async (query: string, confirmCharge = false): Promise<AiSearchResponse> => {
+    const response = await http.post<AiSearchResponse>(aiApiEndpoints.search, { query, confirmCharge });
     return response.data;
   },
 };
