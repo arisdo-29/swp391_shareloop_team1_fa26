@@ -16,6 +16,14 @@ const CONTROL_SELECTOR = 'button, a, input, select, textarea, [role="button"]';
 // Dự phòng khi thiếu biến --fx-fog-tint / --fx-fog-shade trong globals.css.
 const FALLBACK_FOG_TINT = 'white';
 const FALLBACK_FOG_SHADE = 'black';
+const COARSE_POINTER_QUERY = '(pointer: coarse)';
+// Gợi ý chỉ để trang trí (aria-hidden): máy có chuột và màn hình cảm ứng dùng câu khác nhau.
+const MOUSE_HINT = 'Rê chuột để lau kính. Nhấn giữ để lau rộng hơn.';
+const TOUCH_HINT = 'Kéo ngón tay trên kính để nhìn rõ hơn.';
+/** Gợi ý tự ẩn sau chừng này mili giây nếu người dùng chưa lau. */
+const HINT_VISIBLE_MS = 8000;
+/** Khoá sessionStorage đánh dấu phiên này đã chạy nét lau tự động. */
+const INTRO_SESSION_KEY = 'shareloop:hero-fog-intro';
 
 type FrameLoop = {
   wake: () => void;
@@ -49,6 +57,24 @@ function readFogColors(): FogColors {
     tint: style.getPropertyValue('--fx-fog-tint').trim() || FALLBACK_FOG_TINT,
     shade: style.getPropertyValue('--fx-fog-shade').trim() || FALLBACK_FOG_SHADE,
   };
+}
+
+function readHintText(): string {
+  const coarsePointer =
+    typeof window.matchMedia === 'function' && window.matchMedia(COARSE_POINTER_QUERY).matches;
+  return coarsePointer ? TOUCH_HINT : MOUSE_HINT;
+}
+
+/** true nếu phiên này chưa chạy nét lau tự động (đồng thời đánh dấu là đã chạy). */
+function claimIntroStroke(): boolean {
+  try {
+    if (window.sessionStorage.getItem(INTRO_SESSION_KEY)) return false;
+    window.sessionStorage.setItem(INTRO_SESSION_KEY, '1');
+    return true;
+  } catch {
+    // Chế độ riêng tư hoặc trình duyệt chặn storage: bỏ qua nét lau tự động.
+    return false;
+  }
 }
 
 function isOverControl(target: EventTarget | null): boolean {
@@ -168,11 +194,12 @@ function attachTouchWiping(host: HTMLElement, wipeAt: (x: number, y: number, rad
   };
 }
 
-function attachWiping(host: HTMLElement, engine: FogEngine, wake: () => void): () => void {
+/** Gắn lau bằng chuột và cảm ứng; onWipe chạy sau mỗi lần người dùng lau. Trả về hàm tháo. */
+function attachWiping(host: HTMLElement, engine: FogEngine, onWipe: () => void): () => void {
   const wipeAt = (clientX: number, clientY: number, radius: number) => {
     const rect = host.getBoundingClientRect();
     engine.wipe(clientX - rect.left, clientY - rect.top, radius);
-    wake();
+    onWipe();
   };
   const detachPointer = attachPointerWiping(host, wipeAt, engine);
   const detachTouch = attachTouchWiping(host, wipeAt, engine);
@@ -201,6 +228,12 @@ export function FoggedGlass({ hostRef, imageSrc, enabled = true }: FoggedGlassPr
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<FogEngine | null>(null);
   const wakeRef = useRef<() => void>(() => undefined);
+  const [hintText] = useState(readHintText);
+  const [fogShown, setFogShown] = useState(false);
+  const [hintDismissed, setHintDismissed] = useState(false);
+  // Ref đi kèm state: chặn setState lặp lại ở mỗi lần lau, để React không re-render theo từng nét.
+  const hintDismissedRef = useRef(false);
+  const introCheckedRef = useRef(false);
 
   // useEffect chạy sau khi DOM đã gắn, nên lúc này canvas và khối hero đã có thật.
   // Hàm return dọn sạch mọi thứ: StrictMode (dev) mount, unmount rồi mount lại vẫn không rò listener.
@@ -212,7 +245,13 @@ export function FoggedGlass({ hostRef, imageSrc, enabled = true }: FoggedGlassPr
     if (!engine) return undefined;
     const loop = createFrameLoop(engine);
     const stopWatching = watchHost(host, engine, loop);
-    const detachWiping = attachWiping(host, engine, loop.wake);
+    const handleUserWipe = () => {
+      loop.wake();
+      if (hintDismissedRef.current) return;
+      hintDismissedRef.current = true;
+      setHintDismissed(true);
+    };
+    const detachWiping = attachWiping(host, engine, handleUserWipe);
     engineRef.current = engine;
     wakeRef.current = loop.wake;
     return () => {
@@ -242,6 +281,12 @@ export function FoggedGlass({ hostRef, imageSrc, enabled = true }: FoggedGlassPr
     image.onload = () => {
       if (!alive) return;
       engine.setImage(image);
+      // Lần đầu sương hiện: lau tự động một nét nếu phiên này chưa lau (ref chặn StrictMode chạy hai lần).
+      if (!introCheckedRef.current) {
+        introCheckedRef.current = true;
+        if (claimIntroStroke()) engine.startIntroStroke();
+      }
+      setFogShown(true);
       wakeRef.current();
     };
     // Ảnh lỗi thì bỏ lớp sương, hero hiện như cũ. Không log vì thẻ <img> của hero đã tự xử lý.
@@ -258,13 +303,38 @@ export function FoggedGlass({ hostRef, imageSrc, enabled = true }: FoggedGlassPr
     };
   }, [active, imageSrc]);
 
+  // Gợi ý tự ẩn sau 8 giây kể cả khi người dùng chưa lau.
+  useEffect(() => {
+    if (!fogShown || hintDismissed) return undefined;
+    const timer = window.setTimeout(() => {
+      hintDismissedRef.current = true;
+      setHintDismissed(true);
+    }, HINT_VISIBLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [fogShown, hintDismissed]);
+
   if (!active) return null;
 
+  const hintVisible = fogShown && !hintDismissed;
+
   return (
-    <canvas
-      ref={canvasRef}
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-0 block size-full"
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-0 block size-full"
+      />
+      {/* Gợi ý nằm ở mép dưới hero (trong khoảng đệm dưới), không đè ô tìm kiếm hay carousel. */}
+      {fogShown ? (
+        <p
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-x-4 bottom-3 z-10 m-0 text-center text-xs font-medium text-white/90 transition-opacity duration-500 ${
+            hintVisible ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          {hintText}
+        </p>
+      ) : null}
+    </>
   );
 }

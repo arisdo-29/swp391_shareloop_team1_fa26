@@ -53,6 +53,9 @@ const newItemFilters: Array<{ value: 'all' | ItemType; label: string }> = [
 // Số bài của banner và mục "Tin nổi bật"; backend chọn nhóm bài theo vòng xoay (GET /items/featured).
 const FEATURED_LIMIT = 5;
 
+// Hiệu ứng kính sương ở hero (src/components/fx). Đổi thành false để tắt hẳn, hero hiện như cũ.
+const HERO_FOG_ENABLED = true;
+
 let pendingHomeItemsRequest: Promise<PageResponse<ItemResponse>> | null = null;
 let pendingHomeCategoriesRequest: Promise<CategoryResponse[]> | null = null;
 
@@ -222,7 +225,7 @@ function HomeHeroCarousel({ items, children }: { items: Item[]; children: ReactN
         ))}
       </div>
       {/* Kính sương nằm giữa ảnh nền và lớp phủ xanh, để lớp phủ vẫn giữ tương phản cho chữ. */}
-      <FoggedGlass hostRef={heroRef} imageSrc={activeItem?.images[0]} />
+      <FoggedGlass hostRef={heroRef} imageSrc={activeItem?.images[0]} enabled={HERO_FOG_ENABLED} />
       <div className="home-hero-overlay absolute inset-0 z-0" aria-hidden="true" />
       <div className="home-hero-bottom-fade absolute inset-0 z-0" aria-hidden="true" />
 

@@ -6,7 +6,9 @@ import {
   createMask,
   decayMask,
   fillMaskAlpha,
+  introStrokePoint,
   maskValueAt,
+  resizeMask,
   stampMask,
   wipeStroke,
 } from './fogEngine';
@@ -113,6 +115,34 @@ describe('mặt nạ kính sương', () => {
     // then: ô chưa lau đục hẳn, ô đã lau trong suốt
     expect(pixels[3]).toBe(255);
     expect(pixels[7]).toBe(0);
+  });
+
+  it('resizeMask_whenHeroGrowsTaller_keepsWipedArea', () => {
+    // given
+    const mask = createMask(400, 200);
+    stampMask(mask, 100, 100, 30);
+
+    // when: hero cao thêm vì chip tải xong
+    const resized = resizeMask(mask, 400, 260);
+
+    // then
+    expect(resized.rows).toBeGreaterThan(mask.rows);
+    expect(maskValueAt(resized, 100, 100)).toBe(maskValueAt(mask, 100, 100));
+    expect(maskValueAt(resized, 100, 240)).toBe(0);
+  });
+
+  it('introStrokePoint_fromStartToEnd_crossesLowerHeroLeftToRight', () => {
+    // when
+    const points = [0, 0.25, 0.5, 0.75, 1].map((progress) => introStrokePoint(progress, 1280, 730));
+
+    // then: đi từ trái sang phải, luôn nằm trong phần dưới hero
+    for (let index = 1; index < points.length; index++) expect(points[index].x).toBeGreaterThan(points[index - 1].x);
+    points.forEach((point) => {
+      expect(point.x).toBeGreaterThan(0);
+      expect(point.x).toBeLessThan(1280);
+      expect(point.y).toBeGreaterThan(730 * 0.8);
+      expect(point.y).toBeLessThan(730);
+    });
   });
 
   it('coverFit_wideBox_coversAndCentersImage', () => {

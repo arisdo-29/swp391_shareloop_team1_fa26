@@ -47,6 +47,14 @@ export const MAX_DEVICE_PIXEL_RATIO = 1.5;
 export const STROKE_JUMP_LIMIT_PX = 220;
 /** Khớp với class scale-[1.05] của ảnh nền hero để vùng đã lau không bị lệch hình. */
 export const BACKGROUND_IMAGE_SCALE = 1.05;
+/** Thời gian chuyển lớp sương cũ sang mới khi carousel đổi ảnh (giây). Vùng đã lau vẫn giữ nguyên. */
+export const FOG_CROSSFADE_SECONDS = 0.4;
+/** Nét lau tự động khi vào trang: chờ chừng này giây sau khi sương hiện rồi mới lau. */
+export const INTRO_STROKE_DELAY_SECONDS = 0.6;
+/** Thời gian vẽ hết nét lau tự động (giây). */
+export const INTRO_STROKE_SECONDS = 1.2;
+/** Bán kính nét lau tự động. */
+export const INTRO_STROKE_RADIUS_PX = 44;
 
 /** Lớp sương dựng ở 1/4 kích thước: đã làm mờ mạnh nên phóng lên không thấy khác mà rẻ hơn nhiều. */
 const PLATE_DOWNSCALE = 4;
@@ -82,6 +90,21 @@ export function createMask(widthPx: number, heightPx: number, cellSize = FOG_CEL
   const columns = Math.max(1, Math.ceil(widthPx / cellSize));
   const rows = Math.max(1, Math.ceil(heightPx / cellSize));
   return { columns, rows, cellSize, values: new Float32Array(columns * rows) };
+}
+
+/**
+ * Mặt nạ cho kích thước mới, giữ nguyên vùng đã lau ở đúng vị trí cũ (tính từ góc trên trái).
+ * Cần vì hero đổi chiều cao khi dữ liệu tải xong (thêm chip), không nên xoá mất vết người dùng vừa lau.
+ */
+export function resizeMask(previous: FogMask, widthPx: number, heightPx: number): FogMask {
+  const next = createMask(widthPx, heightPx, previous.cellSize);
+  const columns = Math.min(previous.columns, next.columns);
+  const rows = Math.min(previous.rows, next.rows);
+  for (let row = 0; row < rows; row++) {
+    const start = row * previous.columns;
+    next.values.set(previous.values.subarray(start, start + columns), row * next.columns);
+  }
+  return next;
 }
 
 /** Đọc giá trị mặt nạ tại một điểm (css px); ngoài lưới trả 0. */
@@ -176,6 +199,18 @@ export function coverFit(imageWidth: number, imageHeight: number, boxWidth: numb
   return { x: (boxWidth - width) / 2, y: (boxHeight - height) / 2, width, height };
 }
 
+/**
+ * Điểm trên nét lau tự động ứng với progress 0 → 1: một đường cong ngang phần dưới hero
+ * (dưới ô tìm kiếm và carousel), đi nhanh dần rồi chậm lại như một cái quẹt tay.
+ */
+export function introStrokePoint(progress: number, widthPx: number, heightPx: number): Point {
+  const eased = smoothstep01(progress);
+  return {
+    x: widthPx * (0.12 + 0.76 * eased),
+    y: heightPx * (0.88 - 0.05 * Math.sin(eased * Math.PI)),
+  };
+}
+
 /** Safari cũ không có ctx.filter: khi đó phải làm mờ bằng cách thu nhỏ rồi phóng to. */
 export function supportsCanvasFilter(context: CanvasRenderingContext2D): boolean {
   return typeof context.filter === 'string';
@@ -218,6 +253,11 @@ export class FogEngine {
   private lastPoint: Point | null = null;
   private fogReady = false;
   private needsDraw = false;
+  /** 0 → 1 trong lúc chuyển từ lớp sương cũ sang mới; 1 = không chuyển. */
+  private crossfadeProgress = 1;
+  /** Số giây đã trôi của nét lau tự động; null = không chạy. */
+  private introElapsedSeconds: number | null = null;
+  private introLastPoint: Point | null = null;
   // Vệt sạch phía sau giọt ghi thẳng vào mặt nạ, giống một nét lau mảnh.
   private readonly clearTrail: ClearTrail = (from, to, radius, strength) =>
     wipeStroke(this.mask, from, to, radius, strength);
@@ -231,6 +271,10 @@ export class FogEngine {
     private readonly fogLayer: Surface,
     /** Mặt nạ: mỗi ô lưới là một pixel. Canvas này không bao giờ vẽ ảnh ngoài. */
     private readonly maskSurface: Surface,
+    /** Bản chép lớp sương của ảnh trước, dùng khi chuyển ảnh. */
+    private readonly previousFog: Surface,
+    /** Nơi trộn lớp sương cũ và mới trong lúc chuyển ảnh. */
+    private readonly blendSurface: Surface,
     private readonly colors: FogColors,
     private readonly random: () => number,
   ) {}
@@ -241,11 +285,13 @@ export class FogEngine {
     const plate = createSurface();
     const fogLayer = createSurface();
     const maskSurface = createSurface();
-    if (!context || !plate || !fogLayer || !maskSurface) return null;
-    return new FogEngine(canvas, context, plate, fogLayer, maskSurface, colors, random);
+    const previousFog = createSurface();
+    const blendSurface = createSurface();
+    if (!context || !plate || !fogLayer || !maskSurface || !previousFog || !blendSurface) return null;
+    return new FogEngine(canvas, context, plate, fogLayer, maskSurface, previousFog, blendSurface, colors, random);
   }
 
-  /** Đổi kích thước theo khối hero (css px). Mặt nạ, hạt sương được tạo lại, sương phủ kín như ban đầu. */
+  /** Đổi kích thước theo khối hero (css px). Lớp sương, hạt sương dựng lại; vùng đã lau được giữ. */
   resize(widthPx: number, heightPx: number, pixelRatio: number) {
     const width = Math.max(1, Math.round(widthPx));
     const height = Math.max(1, Math.round(heightPx));
@@ -253,9 +299,14 @@ export class FogEngine {
     this.widthPx = width;
     this.heightPx = height;
     this.pixelRatio = pixelRatio;
-    this.canvas.width = this.fogLayer.canvas.width = Math.round(width * pixelRatio);
-    this.canvas.height = this.fogLayer.canvas.height = Math.round(height * pixelRatio);
-    this.mask = createMask(width, height);
+    const canvasWidth = Math.round(width * pixelRatio);
+    const canvasHeight = Math.round(height * pixelRatio);
+    for (const canvas of [this.canvas, this.fogLayer.canvas, this.previousFog.canvas, this.blendSurface.canvas]) {
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+    }
+    this.crossfadeProgress = 1;
+    this.mask = resizeMask(this.mask, width, height);
     this.maskSurface.canvas.width = this.mask.columns;
     this.maskSurface.canvas.height = this.mask.rows;
     this.maskPixels = this.maskSurface.context.createImageData(this.mask.columns, this.mask.rows);
@@ -265,10 +316,24 @@ export class FogEngine {
     this.rebuildFog();
   }
 
-  /** Đặt ảnh nền cần phủ sương; null (chưa tải hoặc lỗi) thì không vẽ sương. */
+  /**
+   * Đặt ảnh nền cần phủ sương; null (chưa tải hoặc lỗi) thì không vẽ sương.
+   * Đổi ảnh thì lớp sương cũ mờ dần sang lớp mới, mặt nạ giữ nguyên nên vùng đã lau vẫn sạch.
+   */
   setImage(image: HTMLImageElement | null) {
-    this.image = image && image.naturalWidth > 0 ? image : null;
+    const nextImage = image && image.naturalWidth > 0 ? image : null;
+    if (nextImage === this.image) return;
+    this.keepPreviousFog();
+    this.image = nextImage;
     this.rebuildFog();
+    // Lần đầu (chưa có lớp cũ) thì lớp sương hiện dần từ trong suốt, không "bật" đột ngột.
+    this.crossfadeProgress = nextImage ? 0 : 1;
+  }
+
+  /** Bắt đầu nét lau tự động (chỉ gọi một lần mỗi phiên, phía React quyết định). */
+  startIntroStroke() {
+    this.introElapsedSeconds = 0;
+    this.introLastPoint = null;
   }
 
   /** Số giọt chảy cùng lúc tối đa (React tính theo màn hình và số nhân CPU). */
@@ -294,28 +359,73 @@ export class FogEngine {
 
   /**
    * Chạy một frame. Trả về true nếu cần frame tiếp theo: đang phủ lại, có giọt đang chảy,
-   * hoặc đang hiện sương (để thỉnh thoảng còn sinh giọt tự nhiên).
+   * đang chuyển ảnh, đang lau tự động, hoặc đang hiện sương (để thỉnh thoảng còn sinh giọt).
    */
   step(deltaSeconds: number): boolean {
     const seconds = clamp(deltaSeconds, 0, MAX_STEP_SECONDS);
     const refogging = decayMask(this.mask, seconds * REFOG_PER_SECOND);
+    const crossfading = this.advanceCrossfade(seconds);
+    const introPlaying = this.advanceIntroStroke(seconds);
     if (this.fogReady) this.spawnAmbientDrip(seconds);
     const dripping = this.drips.length > 0;
     if (dripping) this.drips = updateDrips(this.drips, seconds, this.heightPx, this.random, this.clearTrail);
-    if (refogging || dripping || this.needsDraw) this.draw();
+    const busy = refogging || crossfading || introPlaying || dripping;
+    if (busy || this.needsDraw) this.draw();
     this.needsDraw = false;
-    return refogging || dripping || this.fogReady;
+    return busy || this.fogReady;
   }
 
   dispose() {
     this.image = null;
     this.fogReady = false;
     this.drips = [];
+    this.introElapsedSeconds = null;
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
     // Thu canvas phụ về 0 để trình duyệt giải phóng bộ nhớ ngay.
-    this.plate.canvas.width = 0;
-    this.fogLayer.canvas.width = 0;
-    this.maskSurface.canvas.width = 0;
+    for (const surface of [this.plate, this.fogLayer, this.maskSurface, this.previousFog, this.blendSurface]) {
+      surface.canvas.width = 0;
+    }
+  }
+
+  private advanceCrossfade(seconds: number): boolean {
+    if (this.crossfadeProgress >= 1) return false;
+    this.crossfadeProgress = Math.min(1, this.crossfadeProgress + seconds / FOG_CROSSFADE_SECONDS);
+    return true;
+  }
+
+  /** Nét lau tự động: chờ một chút rồi lau theo đường cong introStrokePoint. */
+  private advanceIntroStroke(seconds: number): boolean {
+    if (this.introElapsedSeconds === null || !this.fogReady) return false;
+    this.introElapsedSeconds += seconds;
+    const progress = (this.introElapsedSeconds - INTRO_STROKE_DELAY_SECONDS) / INTRO_STROKE_SECONDS;
+    if (progress < 0) return true;
+    const point = introStrokePoint(progress, this.widthPx, this.heightPx);
+    wipeStroke(this.mask, this.introLastPoint, point, INTRO_STROKE_RADIUS_PX);
+    this.introLastPoint = point;
+    if (progress >= 1) {
+      this.introElapsedSeconds = null;
+      this.introLastPoint = null;
+    }
+    return true;
+  }
+
+  /** Chép lớp sương đang hiện sang previousFog để lát nữa mờ dần sang ảnh mới. */
+  private keepPreviousFog() {
+    const { canvas, context } = this.previousFog;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    if (this.fogReady) context.drawImage(this.fogLayer.canvas, 0, 0);
+  }
+
+  /** Trộn lớp cũ (đậm hẳn) với lớp mới (đậm dần) để tổng độ đậm không bị hụt giữa chừng. */
+  private blendFogLayers(): HTMLCanvasElement {
+    const { canvas, context } = this.blendSurface;
+    context.globalAlpha = 1;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(this.previousFog.canvas, 0, 0);
+    context.globalAlpha = smoothstep01(this.crossfadeProgress);
+    context.drawImage(this.fogLayer.canvas, 0, 0);
+    context.globalAlpha = 1;
+    return canvas;
   }
 
   /** Lau nhanh đẩy nước dồn về cuối nét; dồn đủ thì thành một giọt chảy xuống. */
@@ -412,8 +522,9 @@ export class FogEngine {
     fillMaskAlpha(this.mask, this.maskPixels.data);
     this.maskSurface.context.putImageData(this.maskPixels, 0, 0);
 
+    const fogSource = this.crossfadeProgress < 1 ? this.blendFogLayers() : this.fogLayer.canvas;
     context.globalAlpha = FOG_MAX_OPACITY;
-    context.drawImage(this.fogLayer.canvas, 0, 0);
+    context.drawImage(fogSource, 0, 0);
     context.globalAlpha = 1;
     // destination-in: chỉ giữ lớp sương ở nơi mặt nạ còn alpha; phóng mặt nạ lên cho rìa mềm.
     context.imageSmoothingEnabled = true;
