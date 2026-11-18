@@ -67,6 +67,17 @@ Lấy số lượng thông báo chưa đọc của tôi (dùng cho icon quả ch
 
 ---
 
+## 4. POST /api/v1/notifications/read
+
+Đánh dấu nhiều thông báo của người dùng hiện tại là đã đọc trong một transaction.
+
+- **Xác thực:** Bắt buộc Bearer Token (JWT).
+- **Request body:** `{"ids":[1,2]}`. Gửi từ 1 đến 100 ID nguyên dương. ID trùng được xử lý một lần.
+- **Thành công:** `200 OK`, trả về mảng `NotificationResponse` với `isRead: true`. Phát một sự kiện `NOTIFICATION` nếu có thay đổi.
+- **Lỗi:** `400 VALIDATION_FAILED` nếu body không hợp lệ, `401 UNAUTHORIZED` nếu chưa đăng nhập, `404 NOTIFICATION_NOT_FOUND` nếu có ID không tồn tại hoặc thuộc tài khoản khác. Khi trả 404, toàn bộ lô giữ nguyên.
+
+---
+
 ## Luồng cập nhật thời gian thực
 
 - `GET /api/v1/notifications/events`: SSE cần Bearer JWT, chỉ gửi tín hiệu của tài khoản hiện tại.

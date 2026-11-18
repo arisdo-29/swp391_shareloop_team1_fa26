@@ -13,6 +13,7 @@ import com.shareloop.notification.dto.NotificationResponse;
 import com.shareloop.notification.dto.UnreadCountResponse;
 import com.shareloop.notification.entity.Notification;
 import com.shareloop.notification.event.NotificationEmailEvent;
+import com.shareloop.notification.event.RealtimeUpdateEvent;
 import com.shareloop.notification.repository.NotificationRepository;
 import java.util.List;
 import java.util.Map;
@@ -99,6 +100,32 @@ class NotificationServiceTest {
         assertThatThrownBy(() -> notificationService.markAsRead(100L, 10L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", NotificationErrorCode.NOTIFICATION_NOT_FOUND);
+    }
+
+    @Test
+    void markManyAsRead_updatesDistinctIdsAndPublishesOnce() {
+        var first = new Notification(10L, "NEW_REQUEST", "A", "Nội dung", null);
+        var second = new Notification(10L, "NEW_REQUEST", "B", "Nội dung", null);
+        ReflectionTestUtils.setField(first, "id", 1L);
+        ReflectionTestUtils.setField(second, "id", 2L);
+        when(notificationRepository.findByUserIdAndIdIn(10L, List.of(1L, 2L))).thenReturn(List.of(first, second));
+
+        var responses = notificationService.markManyAsRead(List.of(1L, 1L, 2L), 10L);
+        notificationService.markManyAsRead(List.of(1L, 2L), 10L);
+
+        assertThat(responses).hasSize(2).allMatch(NotificationResponse::isRead);
+        verify(eventPublisher).publishEvent(new RealtimeUpdateEvent(10L, "NOTIFICATION", null));
+    }
+
+    @Test
+    void markManyAsRead_missingIdLeavesEntireBatchUnread() {
+        var notification = new Notification(10L, "NEW_REQUEST", "A", "Nội dung", null);
+        when(notificationRepository.findByUserIdAndIdIn(10L, List.of(1L, 2L))).thenReturn(List.of(notification));
+
+        assertThatThrownBy(() -> notificationService.markManyAsRead(List.of(1L, 2L), 10L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", NotificationErrorCode.NOTIFICATION_NOT_FOUND);
+        assertThat(notification.isRead()).isFalse();
     }
 
     @Test

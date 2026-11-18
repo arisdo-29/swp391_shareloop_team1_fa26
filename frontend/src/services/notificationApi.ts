@@ -103,6 +103,19 @@ export function withoutHidden(notifications: NotificationResponse[]) {
   return notifications.filter((notification) => !hidden.has(notification.id));
 }
 
+const MAX_READ_BATCH_SIZE = 100;
+
+async function markIdsRead(ids: number[]) {
+  const updated: NotificationResponse[] = [];
+  for (let offset = 0; offset < ids.length; offset += MAX_READ_BATCH_SIZE) {
+    const { data } = await http.post<NotificationResponse[]>('/api/v1/notifications/read', {
+      ids: ids.slice(offset, offset + MAX_READ_BATCH_SIZE),
+    });
+    updated.push(...data);
+  }
+  return updated;
+}
+
 export const notificationApi = {
   async list(params: NotificationListParams = {}) {
     const { data } = await http.get<NotificationResponse[]>('/api/v1/notifications', { params });
@@ -126,17 +139,9 @@ export const notificationApi = {
     const { data } = await http.post<NotificationResponse>(`/api/v1/notifications/${id}/read`);
     return data;
   },
-  /**
-   * Đánh dấu đã đọc nhiều thông báo. Backend chưa có API "đọc tất cả" nên gọi từng cái một;
-   * trả về danh sách đã cập nhật thành công.
-   */
+  /** Đánh dấu đã đọc theo lô và trả về các thông báo được cập nhật. */
   async markManyRead(notifications: NotificationResponse[]) {
-    const updated: NotificationResponse[] = [];
-    for (const notification of notifications) {
-      if (notification.isRead) continue;
-      updated.push(await notificationApi.markRead(notification.id));
-    }
-    return updated;
+    return markIdsRead(notifications.filter((notification) => !notification.isRead).map(({ id }) => id));
   },
   /** Đánh dấu đã đọc mọi thông báo chưa đọc của tôi. */
   async markAllRead() {
@@ -152,7 +157,7 @@ export const notificationApi = {
    * lỗi giữa chừng thì chưa ẩn cái nào.
    */
   async deleteMultiple(ids: number[]) {
-    for (const id of ids) await notificationApi.markRead(id);
+    await markIdsRead(ids);
     hideNotificationIds(ids);
   },
   /** Ẩn mọi thông báo đã đọc của tôi; trả về số thông báo đã ẩn. */

@@ -185,6 +185,23 @@ public class NotificationService {
         return NotificationMapper.toResponse(saved);
     }
 
+    @Transactional
+    public List<NotificationResponse> markManyAsRead(List<Long> ids, long userId) {
+        var uniqueIds = ids.stream().distinct().toList();
+        var notifications = notificationRepository.findByUserIdAndIdIn(userId, uniqueIds);
+        if (notifications.size() != uniqueIds.size()) {
+            throw new BusinessException(NotificationErrorCode.NOTIFICATION_NOT_FOUND);
+        }
+        var unread = notifications.stream()
+                .filter(notification -> !notification.isRead())
+                .toList();
+        if (!unread.isEmpty()) {
+            unread.forEach(Notification::markAsRead);
+            publishRealtimeUpdate(userId, "NOTIFICATION", null);
+        }
+        return notifications.stream().map(NotificationMapper::toResponse).toList();
+    }
+
     /**
      * Đếm số lượng thông báo chưa đọc của người dùng.
      */
