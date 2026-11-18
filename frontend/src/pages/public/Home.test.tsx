@@ -327,6 +327,16 @@ describe('trạng thái tải bài đăng trên Home', () => {
     expect(screen.getByRole('heading', { level: 2, name: selectedItem.title })).toBeTruthy();
   });
 
+  it('K02: banner giữ phần giới thiệu và tìm kiếm khi không có bài đẩy', async () => {
+    const { container } = renderHome();
+    await waitFor(() => expect(itemApi.featured).toHaveBeenCalled());
+
+    const hero = within(container.querySelector<HTMLElement>('[data-home-hero]')!);
+    expect(hero.getByRole('heading', { level: 1, name: /Món đồ cũ/ })).toBeTruthy();
+    expect(hero.getByRole('button', { name: 'Tìm đồ' })).toBeTruthy();
+    expect(hero.queryByRole('button', { name: /Hiển thị ảnh/ })).toBeNull();
+  });
+
   it('LoopAI dùng 3 bài đầu của nhóm featured, 3 gợi ý tương tác và ảnh minh họa riêng', async () => {
     const boostedItems = Array.from({ length: 4 }, (_, index): ItemResponse => ({
       ...item,
