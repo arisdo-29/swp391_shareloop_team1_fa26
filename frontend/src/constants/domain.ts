@@ -44,6 +44,8 @@ export const DISTRICTS = [
 ] as const;
 
 export const CONDITIONS = ['NEW', 'LIKE_NEW', 'GOOD', 'DEFECTIVE'] as const;
+export const ELECTRONIC_DEFECT_HINT =
+  'Thiết bị không hoạt động bình thường cần mô tả lỗi và ít nhất một ảnh chụp chỗ lỗi.';
 
 export const ADMIN_ROUTES = [
   '/admin/moderation',

@@ -49,6 +49,7 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
 - Nếu `condition` là `DEFECTIVE`, bắt buộc trường `defectNote` không được rỗng.
 - Nếu `condition` là `DEFECTIVE`, `defectImages` phải có ít nhất một URL ảnh lỗi đã upload của chủ bài; ảnh này lưu với role `DEFECT`, tách khỏi `images` (3–8 ảnh chính).
 - Danh mục điện tử bắt buộc `operatingStatus`: `NORMAL`, `PARTIAL` hoặc `NOT_WORKING`; giá trị lưu trong `item_attribute_mappings`.
+- Khi tạo hoặc sửa đồ điện tử với `PARTIAL` hoặc `NOT_WORKING`, tình trạng phải là `DEFECTIVE`, có mô tả lỗi và ít nhất một ảnh lỗi. `NORMAL` vẫn cho phép `DEFECTIVE` để khai lỗi ngoại hình.
 - `images` bắt buộc có 3–8 URL ảnh đã upload của chính người đăng (giới hạn từ `ConfigKey.ITEM_PHOTOS_MIN/MAX`); thứ tự gửi là thứ tự hiển thị.
 - Bài đăng mới tạo có trạng thái mặc định là `PENDING_REVIEW`.
 - Bài Cho tặng có hạn mức riêng `max_active_give_items` (mặc định 5). Bài Trao đổi không bị chặn theo số lượng; `max_active_items_*` là ngưỡng phí thường theo hạng: Đồng 5, Bạc 8, Vàng 15, Kim cương không giới hạn. Chỉ đếm bài `PENDING_REVIEW` hoặc `APPROVED` đang hoạt động và chưa hết hạn.
@@ -90,6 +91,7 @@ POST /items đã tích hợp kiểm duyệt tầng 1, giữ phí đăng bài và
   - `409 ITEM_GIVE_LIMIT_REACHED` (`details.limit`, `details.activeCount`): Bài Cho tặng (`GIVE`) đã đạt hạn mức chung mọi hạng (`max_active_give_items`, mặc định 5); chỉ đếm bài `GIVE`. Tài khoản trong danh sách bỏ qua giới hạn của cấu hình test vẫn được bỏ qua cả hai hạn mức.
   - `422 ITEM_DEFECT_IMAGES_REQUIRED` (`field: defectImages`): Bài `DEFECTIVE` không có ảnh lỗi.
   - `422 ITEM_OPERATING_STATUS_REQUIRED` (`field: operatingStatus`): Đồ điện tử chưa khai trạng thái hoạt động.
+  - `422 ITEM_OPERATING_STATUS_REQUIRES_DEFECT` (`field: operatingStatus`): Đồ điện tử hoạt động một phần hoặc không hoạt động nhưng chưa chọn tình trạng Có lỗi.
   - `422 ITEM_DEFECT_IMAGES_NOT_ALLOWED` / `ITEM_OPERATING_STATUS_NOT_ALLOWED`: Gửi dữ liệu dành cho điều kiện hoặc danh mục khác.
   - `403 MEDIA_NOT_OWNER`: Ảnh không thuộc người đăng bài.
   - `404 MEDIA_NOT_FOUND`: Không tìm thấy ảnh đã upload.

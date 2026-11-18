@@ -148,7 +148,8 @@ public class ItemService {
         }
         List<Long> defectMediaIds = parseMediaIds(request.defectImages());
         validateDefectImages(request.condition(), defectMediaIds);
-        Optional<Long> operatingAttributeId = requireOperatingStatus(request.categoryId(), request.operatingStatus());
+        Optional<Long> operatingAttributeId =
+                requireOperatingStatus(request.categoryId(), request.operatingStatus(), request.condition());
         // Tài khoản test được bỏ qua giới hạn bài Cho và luôn dùng phí thường cho bài Trao đổi.
         if (request.offerType() == OfferType.GIVE && !canBypassPostLimit(donorId)) {
             checkActiveGiveLimit(donorId);
@@ -274,7 +275,8 @@ public class ItemService {
             newDefectMediaIds = List.of();
         }
         validateDefectImages(request.condition(), newDefectMediaIds);
-        Optional<Long> operatingAttributeId = requireOperatingStatus(request.categoryId(), request.operatingStatus());
+        Optional<Long> operatingAttributeId =
+                requireOperatingStatus(request.categoryId(), request.operatingStatus(), request.condition());
         postFeeService.quoteEdit(itemId, userId);
         postFeeService.holdEditFee(itemId, userId);
         if (requestQueryService.hasReservedOrHigherRequest(itemId)) {
@@ -1018,7 +1020,8 @@ public class ItemService {
         }
     }
 
-    private Optional<Long> requireOperatingStatus(Long categoryId, OperatingStatus operatingStatus) {
+    private Optional<Long> requireOperatingStatus(
+            Long categoryId, OperatingStatus operatingStatus, ItemCondition condition) {
         Optional<Long> attributeId = categoryAttributeService.operatingStatusAttributeId(categoryId);
         if (attributeId.isPresent() && operatingStatus == null) {
             throw new BusinessException(
@@ -1031,6 +1034,15 @@ public class ItemService {
             throw new BusinessException(
                     ItemErrorCode.ITEM_OPERATING_STATUS_NOT_ALLOWED,
                     ItemErrorCode.ITEM_OPERATING_STATUS_NOT_ALLOWED.defaultMessage(),
+                    "operatingStatus",
+                    null);
+        }
+        if (operatingStatus != null
+                && operatingStatus != OperatingStatus.NORMAL
+                && condition != ItemCondition.DEFECTIVE) {
+            throw new BusinessException(
+                    ItemErrorCode.ITEM_OPERATING_STATUS_REQUIRES_DEFECT,
+                    ItemErrorCode.ITEM_OPERATING_STATUS_REQUIRES_DEFECT.defaultMessage(),
                     "operatingStatus",
                     null);
         }

@@ -19,6 +19,9 @@ public enum ItemErrorCode implements ErrorCode {
     ITEM_OPERATING_STATUS_REQUIRED(HttpStatus.UNPROCESSABLE_CONTENT, "Đồ điện tử cần khai trạng thái hoạt động."),
     ITEM_OPERATING_STATUS_NOT_ALLOWED(
             HttpStatus.UNPROCESSABLE_CONTENT, "Danh mục này không dùng trạng thái hoạt động."),
+    ITEM_OPERATING_STATUS_REQUIRES_DEFECT(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "Thiết bị không hoạt động bình thường phải chọn tình trạng Có lỗi, mô tả lỗi và thêm ít nhất một ảnh chụp chỗ lỗi."),
     ITEM_NOT_OWNER(HttpStatus.FORBIDDEN, "Bạn không phải chủ bài đăng."),
     ITEM_EDIT_NOT_ALLOWED(HttpStatus.CONFLICT, "Bài đăng đã có yêu cầu được giữ chỗ hoặc không thể sửa."),
     ITEM_REMOVE_NOT_ALLOWED(HttpStatus.CONFLICT, "Bài đăng đã được giữ chỗ hoặc không thể gỡ."),
