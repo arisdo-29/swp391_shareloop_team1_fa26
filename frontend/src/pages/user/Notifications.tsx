@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Pagination } from '../../components/Pagination';
 import { toast } from '../../components/toast';
@@ -30,6 +30,7 @@ type CategoryFilter = 'all' | Exclude<NotificationCategory, 'other'>;
 type ReadFilter = 'all' | 'unread' | 'read';
 
 const DEFAULT_PAGE_SIZE = 20;
+const REALTIME_REFRESH_DELAY_MS = 500;
 
 const readFilterOptions: Array<[ReadFilter, string]> = [
   ['all', 'Tất cả'],
@@ -60,8 +61,17 @@ export function Notifications({ inAdmin = false }: { inAdmin?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
-  useRealtimeRefresh(['NOTIFICATION'], () => setReloadKey((value) => value + 1));
   const [busy, setBusy] = useState(false);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const hasLoaded = useRef(false);
+  useRealtimeRefresh(['NOTIFICATION'], () => {
+    if (busy) return;
+    clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => {
+      setReloadKey((value) => value + 1);
+    }, REALTIME_REFRESH_DELAY_MS);
+  });
+  useEffect(() => () => clearTimeout(refreshTimer.current), []);
   const [keyword, setKeyword] = useState('');
   const [category, setCategory] = useState<CategoryFilter>('all');
   const [readFilter, setReadFilter] = useState<ReadFilter>('all');
@@ -70,16 +80,21 @@ export function Notifications({ inAdmin = false }: { inAdmin?: boolean }) {
   const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
 
   useEffect(() => {
+    if (busy) return;
     let active = true;
-    setLoading(true);
-    setLoadError('');
+    if (!hasLoaded.current) {
+      setLoading(true);
+      setLoadError('');
+    }
     notificationApi
       .listAll()
       .then((response) => {
-        if (active) setNotifications(response);
+        if (!active) return;
+        hasLoaded.current = true;
+        setNotifications(response);
       })
       .catch(() => {
-        if (active) setLoadError('Không tải được danh sách thông báo.');
+        if (active && !hasLoaded.current) setLoadError('Không tải được danh sách thông báo.');
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -87,7 +102,7 @@ export function Notifications({ inAdmin = false }: { inAdmin?: boolean }) {
     return () => {
       active = false;
     };
-  }, [reloadKey]);
+  }, [reloadKey, busy]);
 
   const normalizedKeyword = keyword.trim().toLocaleLowerCase('vi-VN');
   const filtered = notifications.filter((notification) =>
@@ -132,6 +147,7 @@ export function Notifications({ inAdmin = false }: { inAdmin?: boolean }) {
   /** Chạy một thao tác hàng loạt: khoá nút, báo lỗi bằng toast, luôn mở khoá lại. */
   async function runBulkAction(action: () => Promise<void>, errorMessage: string) {
     if (busy) return;
+    clearTimeout(refreshTimer.current);
     setBusy(true);
     try {
       await action();

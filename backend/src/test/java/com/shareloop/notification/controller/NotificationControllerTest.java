@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -82,6 +83,29 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1L))
                 .andExpect(jsonPath("$.isRead").value(true));
+    }
+
+    @Test
+    void markManyAsRead_validIds_returnsUpdatedNotifications() throws Exception {
+        String token = jwtService.issue(10L, false);
+        var response = new NotificationResponse(1L, "NEW_REQUEST", "Tiêu đề", "Nội dung", null, true, Instant.now());
+        when(notificationService.markManyAsRead(List.of(1L), 10L)).thenReturn(List.of(response));
+
+        mockMvc.perform(post("/api/v1/notifications/read")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ids\":[1]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].isRead").value(true));
+    }
+
+    @Test
+    void markManyAsRead_invalidIds_returns400() throws Exception {
+        mockMvc.perform(post("/api/v1/notifications/read")
+                        .header("Authorization", "Bearer " + jwtService.issue(10L, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ids\":[0]}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

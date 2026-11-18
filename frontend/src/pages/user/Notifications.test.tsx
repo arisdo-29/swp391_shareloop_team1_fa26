@@ -118,6 +118,8 @@ describe('Notifications', () => {
     // given
     const user = userEvent.setup();
     vi.mocked(notificationApi.deleteMultiple).mockResolvedValue(undefined);
+    vi.mocked(notificationApi.listAll).mockResolvedValueOnce(entries)
+      .mockResolvedValue(entries.filter(({ id }) => id !== 2));
     renderPage();
     await user.click(await screen.findByLabelText('Chọn thông báo Giao dịch bị khiếu nại'));
 
@@ -129,10 +131,30 @@ describe('Notifications', () => {
     expect(notificationApi.deleteMultiple).toHaveBeenCalledWith([2]);
   });
 
+  it('K31: đánh dấu cả trang đã đọc bằng một thao tác và giữ danh sách khi tải ngầm', async () => {
+    const user = userEvent.setup();
+    const updated = entries.map((entry) => ({ ...entry, isRead: true }));
+    vi.mocked(notificationApi.listAll).mockResolvedValueOnce(entries)
+      .mockImplementation(() => new Promise(() => {}));
+    vi.mocked(notificationApi.markManyRead).mockResolvedValue(updated);
+    renderPage();
+    await screen.findByText('Bài đăng đã được duyệt');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Chọn cả trang' }));
+    await user.click(screen.getByRole('button', { name: 'Đánh dấu đã đọc' }));
+
+    expect(notificationApi.markManyRead).toHaveBeenCalledExactlyOnceWith(entries);
+    expect(screen.getByText('Giao dịch bị khiếu nại')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Chưa đọc' }));
+    expect(screen.queryByText('Giao dịch bị khiếu nại')).toBeNull();
+  });
+
   it('dọn sạch thông báo đã đọc thì chỉ giữ thông báo chưa đọc', async () => {
     // given
     const user = userEvent.setup();
     vi.mocked(notificationApi.clearRead).mockResolvedValue(2);
+    vi.mocked(notificationApi.listAll).mockResolvedValueOnce(entries)
+      .mockResolvedValue(entries.filter(({ isRead }) => !isRead));
     renderPage();
     await screen.findByText('Bài đăng đã được duyệt');
 
