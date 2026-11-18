@@ -14,7 +14,8 @@ WHERE email IN ('an.demo@shareloop.local', 'binh.demo@shareloop.local', 'chi.dem
 INSERT INTO payment_orders
   (user_id, order_code, amount_vnd, credits, vnd_per_credit, provider, provider_txn_id, status,
    signature_verified, paid_at)
-SELECT u.id, 'DEMO-SEED-' || u.id, 200000, 200, 1000, 'MOCK', 'DEMO-SEED-' || u.id, 'SUCCESS', TRUE, now()
+SELECT u.id, 'DEMO-SEED-' || u.id, 200000, 200, 1000, 'MOCK', 'DEMO-SEED-' || u.id, 'SUCCESS', TRUE,
+       COALESCE((SELECT min(l.created_at) FROM credit_ledger l WHERE l.user_id = u.id AND l.note = 'Demo seed'), now())
 FROM users u
 WHERE u.email IN ('an.demo@shareloop.local', 'binh.demo@shareloop.local', 'chi.demo@shareloop.local')
   AND NOT u.is_deleted
@@ -35,6 +36,15 @@ WHERE o.order_code = 'DEMO-SEED-' || l.user_id
   AND l.note = 'Demo seed'
   AND l.type = 'ADMIN_ADJUST'
   AND NOT EXISTS (SELECT 1 FROM credit_ledger x WHERE x.payment_order_id = o.id);
+
+-- Đồng bộ cả các đơn demo đã seed trước đây với mốc thời gian của dòng sổ được liên kết.
+UPDATE payment_orders o
+SET paid_at = l.created_at
+FROM credit_ledger l
+WHERE l.payment_order_id = o.id AND l.user_id = o.user_id
+  AND l.type = 'TOP_UP' AND l.note = 'Demo seed'
+  AND o.order_code = 'DEMO-SEED-' || l.user_id AND o.provider = 'MOCK' AND o.status = 'SUCCESS'
+  AND o.paid_at IS DISTINCT FROM l.created_at;
 
 -- Bài đăng: Cho và Trao đổi đang hiển thị (APPROVED), thêm một bài RESERVED thuộc giao dịch đã chốt lịch.
 INSERT INTO items

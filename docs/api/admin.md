@@ -192,7 +192,10 @@ Báo cáo tài chính ba sổ và đối chiếu TopUp (VI-09, Issue #115). Ch�
     "cashCredits": 100,
     "topUpCredits": 100,
     "difference": 0,
-    "matched": true
+    "matched": true,
+    "unlinkedEntryCount": 0,
+    "unlinkedCredits": 0,
+    "unlinkedEntries": []
   },
   "cashByDay": [
     { "date": "2026-10-03", "amountVnd": 20000, "orderCount": 1 },
@@ -200,6 +203,8 @@ Báo cáo tài chính ba sổ và đối chiếu TopUp (VI-09, Issue #115). Ch�
   ]
 }
 ```
+
+`reconciliation.topUpCredits` cộng các dòng `TOP_UP` gắn với đơn `SUCCESS` theo `paid_at` của đơn. Dòng thiếu đơn được thống kê riêng theo `created_at` trong `unlinkedEntryCount` và `unlinkedCredits`. `unlinkedEntries` chứa tối đa 5 dòng gần nhất với `id`, `userId`, `amount` và `createdAt`. `matched` chỉ bằng `true` khi chênh lệch bằng 0 và không có dòng thiếu đơn. Hai sổ Credit cộng/trừ vẫn lọc theo ngày ghi sổ.
 
 `cashByDay` là tiền mặt thực thu theo từng ngày để vẽ biểu đồ. Ngày tính theo giờ Việt Nam (`Asia/Ho_Chi_Minh`) từ thời điểm thanh toán `paid_at`, sắp ngày cũ trước, chỉ gồm ngày có ít nhất một đơn SUCCESS. Giao diện tự điền các ngày trống bằng 0 nếu cần. Tổng `amountVnd` của mảng này bằng `cashAmountVnd`.
 

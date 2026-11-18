@@ -122,3 +122,22 @@ describe('AdminFinanceReport CSV', { timeout: 20_000 }, () => {
     expect(adminFinanceApi.report).toHaveBeenCalledTimes(1);
   });
 });
+
+it('A11: hiển thị lý do còn lệch khi có dòng nạp thiếu đơn', async () => {
+  vi.mocked(adminFinanceApi.report).mockResolvedValue({
+    ...summary,
+    reconciliation: {
+      ...summary.reconciliation,
+      matched: false,
+      unlinkedEntryCount: 1,
+      unlinkedCredits: 20,
+      unlinkedEntries: [{ id: 42, userId: 1, amount: 20, createdAt: '2026-11-17T04:00:00Z' }],
+    },
+  });
+
+  render(<MemoryRouter><AdminFinanceReport /></MemoryRouter>);
+
+  expect(await screen.findByText('Có chênh lệch')).toBeTruthy();
+  expect(screen.getByText('Có 1 dòng nạp Credit không gắn với đơn thanh toán, tổng 20 Credit.')).toBeTruthy();
+  expect(screen.getByText(/Dòng #42/)).toBeTruthy();
+}, 20_000);

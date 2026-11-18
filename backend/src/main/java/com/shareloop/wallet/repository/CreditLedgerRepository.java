@@ -56,4 +56,29 @@ public interface CreditLedgerRepository extends JpaRepository<CreditLedgerEntry,
             + " where l.amount < 0 and l.createdAt >= :from and l.createdAt < :to"
             + " group by l.type order by l.type")
     List<CreditTypeTotalView> sumCreditOutByType(@Param("from") Instant from, @Param("to") Instant to);
+
+    @Query("""
+            select coalesce(sum(l.amount), 0) from CreditLedgerEntry l
+            join PaymentOrder o on o.id = l.paymentOrderId and o.userId = l.userId
+            where l.type = com.shareloop.wallet.entity.CreditTxType.TOP_UP
+              and o.status = com.shareloop.wallet.entity.PaymentOrderStatus.SUCCESS
+              and o.paidAt >= :from and o.paidAt < :to
+            """)
+    long sumTopUpsByPaymentDate(Instant from, Instant to);
+
+    @Query("""
+            select count(l) as entryCount, coalesce(sum(l.amount), 0) as total
+            from CreditLedgerEntry l
+            where l.type = com.shareloop.wallet.entity.CreditTxType.TOP_UP
+              and l.paymentOrderId is null and l.createdAt >= :from and l.createdAt < :to
+            """)
+    CreditTypeTotalView summarizeUnlinkedTopUps(Instant from, Instant to);
+
+    @Query("""
+            select l from CreditLedgerEntry l
+            where l.type = com.shareloop.wallet.entity.CreditTxType.TOP_UP
+              and l.paymentOrderId is null and l.createdAt >= :from and l.createdAt < :to
+            order by l.createdAt desc, l.id desc
+            """)
+    List<CreditLedgerEntry> findUnlinkedTopUps(Instant from, Instant to, Pageable pageable);
 }
