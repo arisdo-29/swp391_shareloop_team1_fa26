@@ -78,7 +78,7 @@ public class FinanceReportCsvWriter {
     }
 
     // Người đọc báo cáo là Admin nên ghi nhãn tiếng Việt thay cho mã enum.
-    private static String typeLabel(CreditTxType type) {
+    static String typeLabel(CreditTxType type) {
         return switch (type) {
             case TOP_UP -> "Nạp Credit";
             case POST_FEE -> "Phí đăng bài";

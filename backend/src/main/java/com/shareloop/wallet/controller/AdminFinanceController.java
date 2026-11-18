@@ -5,6 +5,7 @@ import com.shareloop.wallet.dto.AdminFinanceUserSummary;
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
 import com.shareloop.wallet.dto.WalletTransactionResponse;
 import com.shareloop.wallet.mapper.FinanceReportCsvWriter;
+import com.shareloop.wallet.mapper.FinanceReportExcelWriter;
 import com.shareloop.wallet.service.AdminFinanceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -38,14 +39,19 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminFinanceController {
 
     private static final MediaType TEXT_CSV_UTF8 = new MediaType("text", "csv", StandardCharsets.UTF_8);
+    private static final String XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     private final AdminFinanceService adminFinanceService;
     private final FinanceReportCsvWriter financeReportCsvWriter;
+    private final FinanceReportExcelWriter financeReportExcelWriter;
 
     public AdminFinanceController(
-            AdminFinanceService adminFinanceService, FinanceReportCsvWriter financeReportCsvWriter) {
+            AdminFinanceService adminFinanceService,
+            FinanceReportCsvWriter financeReportCsvWriter,
+            FinanceReportExcelWriter financeReportExcelWriter) {
         this.adminFinanceService = adminFinanceService;
         this.financeReportCsvWriter = financeReportCsvWriter;
+        this.financeReportExcelWriter = financeReportExcelWriter;
     }
 
     /**
@@ -103,6 +109,25 @@ public class AdminFinanceController {
                 .contentType(TEXT_CSV_UTF8)
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .body(financeReportCsvWriter.write(report, from, to));
+    }
+
+    @Operation(summary = "Xuất báo cáo tài chính Excel")
+    @ApiResponse(responseCode = "200", description = "File Excel", content = @Content(mediaType = XLSX_CONTENT_TYPE))
+    @ApiResponse(responseCode = "400", description = "Khoảng ngày không hợp lệ")
+    @ApiResponse(responseCode = "401", description = "Chưa đăng nhập")
+    @ApiResponse(responseCode = "403", description = "Không phải Admin")
+    @GetMapping("/report.xlsx")
+    public ResponseEntity<byte[]> reportExcel(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        FinanceSummaryResponse report = adminFinanceService.getReport(from, to);
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename(financeReportExcelWriter.fileName(from, to))
+                .build();
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(XLSX_CONTENT_TYPE))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(financeReportExcelWriter.write(report, from, to));
     }
 
     /**

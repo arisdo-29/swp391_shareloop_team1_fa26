@@ -10,7 +10,7 @@ import { AdminFinanceReport } from './AdminFinancePages';
 vi.mock('../../services/adminFinanceApi', () => ({
   adminFinanceApi: {
     report: vi.fn(),
-    reportCsv: vi.fn(),
+    reportExcel: vi.fn(),
   },
 }));
 
@@ -38,13 +38,13 @@ afterEach(() => {
 });
 
 // Trang tải biểu đồ bằng lazy import nên khi chạy chung cả bộ test có thể vượt 5 giây mặc định.
-describe('AdminFinanceReport CSV', { timeout: 20_000 }, () => {
+describe('AdminFinanceReport Excel', { timeout: 20_000 }, () => {
   it('xuất file bằng đúng bộ lọc đã áp dụng và thông báo thành công', async () => {
     const user = userEvent.setup();
-    const blob = new Blob(['csv'], { type: 'text/csv' });
-    vi.mocked(adminFinanceApi.reportCsv).mockResolvedValue({
+    const blob = new Blob(['xlsx'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    vi.mocked(adminFinanceApi.reportExcel).mockResolvedValue({
       blob,
-      fileName: 'finance-report.csv',
+      fileName: 'bao-cao-tai-chinh_01-10-2026_31-10-2026.xlsx',
     });
     const createObjectURL = vi.fn(() => 'blob:finance-report');
     const revokeObjectURL = vi.fn();
@@ -70,21 +70,21 @@ describe('AdminFinanceReport CSV', { timeout: 20_000 }, () => {
       }),
     );
 
-    await user.click(screen.getByRole('button', { name: 'Xuất báo cáo CSV' }));
+    await user.click(screen.getByRole('button', { name: 'Xuất báo cáo Excel' }));
     await waitFor(() =>
-      expect(adminFinanceApi.reportCsv).toHaveBeenCalledWith({
+      expect(adminFinanceApi.reportExcel).toHaveBeenCalledWith({
         from: '2026-10-01',
         to: '2026-10-31',
       }),
     );
     expect(createObjectURL).toHaveBeenCalledWith(blob);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:finance-report');
-    expect(await screen.findByText('Đã tải báo cáo CSV theo bộ lọc hiện tại.')).toBeTruthy();
+    expect(await screen.findByText('Đã tải báo cáo Excel theo bộ lọc hiện tại.')).toBeTruthy();
   });
 
-  it('hiển thị lỗi khi tải CSV thất bại', async () => {
+  it('hiển thị lỗi khi tải Excel thất bại', async () => {
     const user = userEvent.setup();
-    vi.mocked(adminFinanceApi.reportCsv).mockRejectedValue({
+    vi.mocked(adminFinanceApi.reportExcel).mockRejectedValue({
       status: 403,
       message: 'Forbidden',
     });
@@ -95,7 +95,7 @@ describe('AdminFinanceReport CSV', { timeout: 20_000 }, () => {
     );
     await screen.findByText('Đối chiếu tiền thu và Credit nạp');
 
-    await user.click(screen.getByRole('button', { name: 'Xuất báo cáo CSV' }));
+    await user.click(screen.getByRole('button', { name: 'Xuất báo cáo Excel' }));
     await waitFor(() =>
       expect(screen.getByRole('alert').textContent).toContain('không có quyền quản trị'),
     );
@@ -117,7 +117,7 @@ describe('AdminFinanceReport CSV', { timeout: 20_000 }, () => {
     await user.click(screen.getByRole('button', { name: 'Lọc' }));
 
     // then
-    expect(screen.getByText('Từ ngày phải trước hoặc bằng đến ngày.')).toBeTruthy();
+    expect(screen.getByText('Ngày bắt đầu đang sau ngày kết thúc. Hãy chọn Từ ngày sớm hơn hoặc trùng với Đến ngày.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Thử lại' })).toBeNull();
     expect(adminFinanceApi.report).toHaveBeenCalledTimes(1);
   });
