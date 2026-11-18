@@ -4,7 +4,9 @@ import com.shareloop.common.exception.ErrorCode;
 import org.springframework.http.HttpStatus;
 
 public enum FinanceErrorCode implements ErrorCode {
-    INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST, "Khoảng ngày không hợp lệ (từ ngày phải trước hoặc bằng đến ngày).");
+    INVALID_DATE_RANGE(
+            HttpStatus.BAD_REQUEST,
+            "Ngày bắt đầu đang sau ngày kết thúc. Hãy chọn Từ ngày sớm hơn hoặc trùng với Đến ngày.");
 
     private final HttpStatus status;
     private final String defaultMessage;

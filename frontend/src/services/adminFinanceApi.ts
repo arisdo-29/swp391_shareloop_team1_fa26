@@ -56,6 +56,10 @@ export interface FinanceCsvDownload {
 }
 
 export function financeCsvFileName(contentDisposition: string | undefined) {
+  return financeFileName(contentDisposition, 'finance-report.csv');
+}
+
+function financeFileName(contentDisposition: string | undefined, fallback: string) {
   const utf8Name = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
   if (utf8Name) {
     try {
@@ -64,7 +68,7 @@ export function financeCsvFileName(contentDisposition: string | undefined) {
       // Dùng tên filename thông thường hoặc tên mặc định nếu header mã hóa sai.
     }
   }
-  return contentDisposition?.match(/filename="?([^";]+)"?/i)?.[1] ?? 'finance-report.csv';
+  return contentDisposition?.match(/filename="?([^";]+)"?/i)?.[1] ?? fallback;
 }
 
 export const adminFinanceApi = {
@@ -92,6 +96,19 @@ export const adminFinanceApi = {
     return {
       blob: response.data,
       fileName: financeCsvFileName(response.headers['content-disposition']),
+    };
+  },
+  async reportExcel(params: AdminDateParams) {
+    const response = await http.get<Blob>('/api/v1/admin/finance/report.xlsx', {
+      params,
+      responseType: 'blob',
+    });
+    const format = (date: string | undefined, fallback: string) =>
+      date ? date.split('-').reverse().join('-') : fallback;
+    const fileName = `bao-cao-tai-chinh_${format(params.from, 'bat-dau')}_${format(params.to, 'hien-tai')}.xlsx`;
+    return {
+      blob: response.data,
+      fileName: financeFileName(response.headers['content-disposition'], fileName),
     };
   },
   async users(params: { keyword?: string; page: number; size: number }) {

@@ -30,12 +30,15 @@ import com.shareloop.wallet.dto.TopUpReconciliation;
 import com.shareloop.wallet.dto.WalletTransactionResponse;
 import com.shareloop.wallet.entity.CreditTxType;
 import com.shareloop.wallet.mapper.FinanceReportCsvWriter;
+import com.shareloop.wallet.mapper.FinanceReportExcelWriter;
 import com.shareloop.wallet.service.AdminFinanceService;
+import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,13 +56,15 @@ import org.springframework.test.web.servlet.MockMvc;
     JwtService.class,
     ClockConfig.class,
     WebConfig.class,
-    FinanceReportCsvWriter.class
+    FinanceReportCsvWriter.class,
+    FinanceReportExcelWriter.class
 })
 @ActiveProfiles("test")
 class AdminFinanceControllerTest {
 
     private static final String REPORT_URL = "/api/v1/admin/finance/report";
     private static final String REPORT_CSV_URL = "/api/v1/admin/finance/report.csv";
+    private static final String REPORT_EXCEL_URL = "/api/v1/admin/finance/report.xlsx";
     private static final String HISTORY_URL = "/api/v1/admin/finance/users/{userId}/history";
 
     @Autowired
@@ -70,6 +75,44 @@ class AdminFinanceControllerTest {
 
     @MockitoBean
     AdminFinanceService adminFinanceService;
+
+    @Test
+    void reportExcel_adminDownloadsWorkbook() throws Exception {
+        LocalDate from = LocalDate.of(2026, 11, 1);
+        LocalDate to = LocalDate.of(2026, 11, 17);
+        when(adminFinanceService.getReport(from, to)).thenReturn(sampleSummary());
+        byte[] bytes = mockMvc.perform(get(REPORT_EXCEL_URL)
+                        .header("Authorization", "Bearer " + jwtService.issue(10L, true))
+                        .param("from", from.toString())
+                        .param("to", to.toString()))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                                HttpHeaders.CONTENT_DISPOSITION,
+                                "attachment; filename=\"bao-cao-tai-chinh_01-11-2026_17-11-2026.xlsx\""))
+                .andExpect(content().contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+        try (var workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+            var summary = workbook.getSheet("Tổng hợp");
+            assertThat(summary.getRow(0).getCell(0).getStringCellValue()).isEqualTo("Báo cáo tài chính ShareLoop");
+            assertThat(summary.getRow(6).getCell(1).getNumericCellValue()).isEqualTo(100_000);
+            assertThat(summary.getRow(6).getCell(1).getCellStyle().getDataFormatString())
+                    .isEqualTo("#,##0");
+            var daily = workbook.getSheet("Tiền thu theo ngày");
+            assertThat(daily.getPaneInformation().isFreezePane()).isTrue();
+            assertThat(daily.getRow(0).getCell(1).getStringCellValue()).isEqualTo("Tiền thu (VND)");
+            assertThat(daily.getRow(1).getCell(0).getLocalDateTimeCellValue().toLocalDate())
+                    .isEqualTo(LocalDate.of(2026, 10, 1));
+            assertThat(daily.getRow(1).getCell(1).getNumericCellValue()).isEqualTo(100_000);
+        }
+    }
+
+    @Test
+    void reportExcel_nonAdminReturns403() throws Exception {
+        mockMvc.perform(get(REPORT_EXCEL_URL).header("Authorization", "Bearer " + jwtService.issue(10L, false)))
+                .andExpect(status().isForbidden());
+    }
 
     @Test
     @DisplayName("GET /admin/finance/report: chưa đăng nhập trả về 401")
@@ -383,6 +426,6 @@ class AdminFinanceControllerTest {
                         new CreditTypeTotal(CreditTxType.POST_FEE, 10L, 2L),
                         new CreditTypeTotal(CreditTxType.RENEW_FEE, 5L, 1L)),
                 new TopUpReconciliation(100L, 100L, 0L, true),
-                List.of());
+                List.of(new DailyCashTotal(LocalDate.of(2026, 10, 1), 100_000L, 3L)));
     }
 }

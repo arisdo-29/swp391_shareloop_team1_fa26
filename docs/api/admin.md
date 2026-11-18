@@ -279,6 +279,17 @@ Credit quy đổi từ tiền mặt,Credit nạp ghi sổ,Chênh lệch,Kết qu
 
 ---
 
+## 2.2. GET /api/v1/admin/finance/report.xlsx
+
+Xuất báo cáo Excel cho Admin, dùng cùng bộ lọc `from` và `to` theo ngày Việt Nam như `/report`.
+
+- **Thành công:** `200 OK` với `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+- **Tên file:** `bao-cao-tai-chinh_<from>_<to>.xlsx`, ngày theo `dd-MM-yyyy`; thiếu mốc thì dùng `bat-dau` hoặc `hien-tai`.
+- **Nội dung:** sheet **Tổng hợp** gồm tiền thu, Credit cộng, Credit trừ và đối chiếu; sheet **Tiền thu theo ngày** gồm `cashByDay`. Số tiền và Credit là ô số.
+- **Lỗi:** `400 INVALID_DATE_RANGE` khi Từ ngày sau Đến ngày, `400 VALIDATION_FAILED` cho định dạng ngày sai, `401` khi chưa đăng nhập, `403` khi thiếu quyền Admin.
+
+---
+
 ## 3. GET /api/v1/admin/finance/users/{userId}/history
 
 Tra cứu lịch sử tài chính và biến động số dư Credit của một người dùng (AD-03, Issue #115). Chỉ dành cho Admin. Phân trang và sắp xếp mới nhất lên trước (`createdAt DESC, id DESC`).

@@ -16,6 +16,8 @@ const CreditByTypeChart = lazy(() =>
 );
 
 const transactionLabels: Record<string, string> = walletTransactionLabels;
+const INVALID_DATE_RANGE =
+  'Ngày bắt đầu đang sau ngày kết thúc. Hãy chọn Từ ngày sớm hơn hoặc trùng với Đến ngày.';
 
 function errorMessage(error: unknown) {
   const apiError = error as ApiError;
@@ -192,23 +194,23 @@ export function AdminFinanceReport() {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (from && to && from > to) { setRangeError('Từ ngày phải trước hoặc bằng đến ngày.'); return; }
+    if (from && to && from > to) { setRangeError(INVALID_DATE_RANGE); return; }
     setRangeError('');
     setFilters({ from, to });
   };
 
-  const exportCsv = async () => {
+  const exportExcel = async () => {
     if (exporting) return;
     setExporting(true);
     setExportError('');
     setExportNotice('');
     try {
-      const download = await adminFinanceApi.reportCsv({
+      const download = await adminFinanceApi.reportExcel({
         from: filters.from || undefined,
         to: filters.to || undefined,
       });
       downloadBlob(download.blob, download.fileName);
-      setExportNotice('Đã tải báo cáo CSV theo bộ lọc hiện tại.');
+      setExportNotice('Đã tải báo cáo Excel theo bộ lọc hiện tại.');
     } catch (caught) {
       setExportError(errorMessage(caught));
     } finally {
@@ -217,14 +219,20 @@ export function AdminFinanceReport() {
   };
 
   return <>
-    <PageHeader title="Báo cáo tài chính" description="Tiền thu, Credit cộng và Credit trừ theo sổ hệ thống." action={<div className="flex flex-wrap gap-2"><Button variant="outline" disabled={exporting} onClick={() => void exportCsv()}>{exporting ? 'Đang xuất...' : 'Xuất báo cáo CSV'}</Button><Link to="/admin/finance/users"><Button variant="outline">Tra cứu người dùng</Button></Link></div>} />
-    <form className="mb-5 flex flex-wrap items-end gap-3" onSubmit={submit}>
-      <Field label="Từ ngày" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-      <Field label="Đến ngày" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
-      <Button type="submit" disabled={loading}>Lọc</Button>
+    <PageHeader title="Báo cáo tài chính" description="Tiền thu, Credit cộng và Credit trừ theo sổ hệ thống." action={<div className="flex flex-wrap gap-2"><Button variant="outline" disabled={exporting} onClick={() => void exportExcel()}>{exporting ? 'Đang xuất...' : 'Xuất báo cáo Excel'}</Button><Link to="/admin/finance/users"><Button variant="outline">Tra cứu người dùng</Button></Link></div>} />
+    <form className="mb-5" onSubmit={submit} noValidate>
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Từ ngày" type="date" value={from} max={to || undefined}
+          aria-invalid={!!rangeError} aria-describedby={rangeError ? 'finance-range-error' : undefined}
+          onChange={(event) => { setFrom(event.target.value); setRangeError(''); }} />
+        <Field label="Đến ngày" type="date" value={to} min={from || undefined}
+          aria-invalid={!!rangeError} aria-describedby={rangeError ? 'finance-range-error' : undefined}
+          onChange={(event) => { setTo(event.target.value); setRangeError(''); }} />
+        <Button type="submit" disabled={loading}>Lọc</Button>
+      </div>
+      {rangeError && <p id="finance-range-error" role="alert" className="mt-2 text-sm text-error">{rangeError}</p>}
     </form>
-    {rangeError ? <div className="mb-4" role="alert"><Alert tone="error">{rangeError}</Alert></div> : null}
-    {exportError ? <div className="mb-4" role="alert"><Alert tone="error">Không xuất được báo cáo CSV. {exportError}</Alert></div> : null}
+    {exportError ? <div className="mb-4" role="alert"><Alert tone="error">Không xuất được báo cáo Excel. {exportError}</Alert></div> : null}
     {exportNotice ? <div className="mb-4" role="status"><Alert tone="success">{exportNotice}</Alert></div> : null}
     {error ? <Alert tone="error">{error} <button type="button" className="underline" onClick={() => setReload((value) => value + 1)}>Thử lại</button></Alert> : null}
     {loading ? <EmptyState title="Đang tải báo cáo" text="Vui lòng chờ trong giây lát." /> : report ? <div className="space-y-6">
