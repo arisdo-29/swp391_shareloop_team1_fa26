@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Alert, Button, Select, TextArea } from '../ui';
 import { requestApi, type RequestResponse } from '../../services/requestApi';
 import type { ApiError } from '../../services/http';
-import { canConfirmHandover, canReportHandoverIssue } from '../../utils/request';
+import { canConfirmHandover } from '../../utils/request';
+import { handoverIssueLabel } from './TransactionDialogs';
 
 export const NOT_AS_DESCRIBED_REPORTED_NOTICE =
   'Đã gửi báo cáo món đồ không đúng mô tả. Admin sẽ xem xét.';
@@ -122,9 +123,9 @@ export function HandoverCard({
         >
           {confirmLabel}
         </Button>
-        {canReportHandoverIssue(request.status, otherHandoverAt, currentHandoverAt) ? (
+        {!currentHandoverAt ? (
           <Button variant="outline" disabled={submitting} onClick={onOpenIssue}>
-            {viewerIsDonor ? 'Tôi chưa giao được' : 'Tôi chưa nhận được'}
+            {handoverIssueLabel(viewerIsDonor)}
           </Button>
         ) : null}
       </div>

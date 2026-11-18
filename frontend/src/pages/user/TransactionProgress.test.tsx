@@ -639,30 +639,47 @@ describe('Hạn giải trình khi giao dịch đang khiếu nại', () => {
 });
 
 describe('Báo chưa nhận được / chưa giao được', () => {
-  it('người nhận thấy nút Tôi chưa nhận được khi chủ bài đã xác nhận còn mình chưa', async () => {
+  it('người nhận vẫn thấy nút không nhận được đồ khi chủ bài đã xác nhận', async () => {
     await renderProgress(
       RECEIVER_ID,
       request({ status: 'AWAITING_HANDOVER', donorHandoverAt: '2026-10-25T10:00:00Z' }),
     );
 
-    expect(screen.getByRole('button', { name: 'Tôi chưa nhận được' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tôi không nhận được đồ' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Tôi đã nhận được đồ' })).toBeTruthy();
   });
 
-  it('chủ bài thấy nút Tôi chưa giao được khi người nhận đã xác nhận còn mình chưa', async () => {
+  it('chủ bài vẫn thấy nút không giao được đồ khi người nhận đã xác nhận', async () => {
     await renderProgress(
       DONOR_ID,
       request({ status: 'AWAITING_HANDOVER', receiverHandoverAt: '2026-10-25T10:00:00Z' }),
     );
 
-    expect(screen.getByRole('button', { name: 'Tôi chưa giao được' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tôi không giao được đồ' })).toBeTruthy();
   });
 
-  it('không hiện nút khi bên kia chưa xác nhận hoặc mình đã xác nhận', async () => {
-    await renderProgress(RECEIVER_ID, request({ status: 'AWAITING_HANDOVER' }));
+  it.each([
+    [RECEIVER_ID, 'Tôi không nhận được đồ', 'Người giao không đến điểm hẹn'],
+    [DONOR_ID, 'Tôi không giao được đồ', 'Người nhận không đến điểm hẹn'],
+  ] as const)('cho vai trò %s chọn lý do và huỷ sau khi đã chốt lịch', async (role, label, reason) => {
+    const userEvents = userEvent.setup();
+    vi.mocked(requestApi.cancelTransaction).mockResolvedValue(request({ status: 'CANCELLED' }));
+    await renderProgress(role, request({ status: 'LOGISTICS_CONFIRMED' }));
+    await userEvents.click(screen.getByRole('button', { name: label }));
+    const dialog = within(screen.getByRole('dialog', { name: label }));
+    const submit = dialog.getByRole('button', { name: 'Huỷ giao dịch' }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    await userEvents.selectOptions(dialog.getByLabelText('Lý do giao nhận không thành công'), reason);
+    await userEvents.click(submit);
+    expect(requestApi.cancelTransaction).toHaveBeenCalledWith(101, role, reason);
+    expect(requestApi.reportHandoverIssue).not.toHaveBeenCalled();
+  });
 
-    expect(screen.getByRole('button', { name: 'Tôi đã nhận được đồ' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Tôi chưa nhận được' })).toBeNull();
+  it('ẩn nút khi mình đã xác nhận nhận đồ', async () => {
+    await renderProgress(RECEIVER_ID, request({
+      status: 'AWAITING_HANDOVER', receiverHandoverAt: '2026-10-25T10:00:00Z',
+    }));
+    expect(screen.queryByRole('button', { name: 'Tôi không nhận được đồ' })).toBeNull();
   });
 
   it('gửi ghi chú và cập nhật giao dịch sang khiếu nại', async () => {
@@ -675,8 +692,9 @@ describe('Báo chưa nhận được / chưa giao được', () => {
       request({ status: 'AWAITING_HANDOVER', donorHandoverAt: '2026-10-25T10:00:00Z' }),
     );
 
-    await userEvents.click(screen.getByRole('button', { name: 'Tôi chưa nhận được' }));
+    await userEvents.click(screen.getByRole('button', { name: 'Tôi không nhận được đồ' }));
     const dialog = await screen.findByRole('dialog');
+    await userEvents.selectOptions(within(dialog).getByLabelText('Lý do giao nhận không thành công'), 'other');
     await userEvents.type(within(dialog).getByLabelText(/Mô tả sự cố/), 'Chờ mãi không thấy ai giao');
     await userEvents.click(within(dialog).getByRole('button', { name: 'Gửi báo cáo' }));
 

@@ -7,7 +7,7 @@ import { mediaApi } from '../../services/mediaApi';
 import { openDispute, type DisputeResponse, type ReportReason } from '../../services/reportApi';
 import type { ApiError } from '../../services/http';
 import { disputeErrorMessage, disputeReasonLabels } from '../../utils/disputeErrors';
-import { formatDeadline } from '../../utils/request';
+import { canConfirmHandover, canReportHandoverIssue, formatDeadline } from '../../utils/request';
 
 // Ba hộp thoại của trang Tiến trình giao dịch, chuyển từ bảng tiến trình cũ ở trang Tin nhắn.
 // Mỗi hộp thoại tự giữ ô nhập và tự gọi API; xong thì báo Request mới (hoặc lời nhắn) về trang.
@@ -102,6 +102,10 @@ export function CancelTransactionDialog({
   );
 }
 
+export function handoverIssueLabel(viewerIsDonor: boolean) {
+  return viewerIsDonor ? 'Tôi không giao được đồ' : 'Tôi không nhận được đồ';
+}
+
 export function HandoverIssueDialog({
   request,
   currentUserId,
@@ -110,37 +114,53 @@ export function HandoverIssueDialog({
   viewerIsDonor,
   onClose,
   onReported,
+  onCancelled,
   onStale,
 }: DialogBaseProps & {
   partnerName: string;
   viewerIsDonor: boolean;
   onReported: (request: RequestResponse) => void;
+  onCancelled: (request: RequestResponse) => void;
   onStale: () => void;
 }) {
+  const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [evidence, setEvidence] = useState<File[]>([]);
   const inFlight = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const currentHandoverAt = viewerIsDonor ? request.donorHandoverAt : request.receiverHandoverAt;
+  const partnerHandoverAt = viewerIsDonor ? request.receiverHandoverAt : request.donorHandoverAt;
+  const reportIssue = canReportHandoverIssue(request.status, partnerHandoverAt, currentHandoverAt);
+  const notePrefix = reason && reason !== 'other' ? reason : '';
+  const message = [notePrefix, note.trim()].filter(Boolean).join(' — ');
+  const noteLimit = (reportIssue ? 1000 : 500) - (notePrefix ? notePrefix.length + 3 : 0);
+  const canSubmit = canConfirmHandover(request.status) && !currentHandoverAt &&
+    Boolean(reason) && message.length >= 5 && note.length <= noteLimit;
 
   const submit = async () => {
-    const trimmed = note.trim();
-    if (inFlight.current || trimmed.length < 5) return;
+    if (inFlight.current || !canSubmit) return;
     inFlight.current = true;
     setSubmitting(true);
     setError('');
     try {
+      if (!reportIssue) {
+        onCancelled(await requestApi.cancelTransaction(request.id, currentUserId, message));
+        return;
+      }
       const evidenceMediaIds = evidence.length ? await uploadEvidence(evidence) : undefined;
       onReported(
         await requestApi.reportHandoverIssue(request.id, currentUserId, {
-          note: trimmed,
+          note: message,
           evidenceMediaIds,
         }),
       );
     } catch (caught) {
       const apiError = caught as ApiError;
       setError(
-        apiError.code === 'REQUEST_INVALID_STATE_TRANSITION'
+        !reportIssue
+          ? cancelReasonError(caught)
+          : apiError.code === 'REQUEST_INVALID_STATE_TRANSITION'
           ? 'Chỉ báo được khi đối phương đã xác nhận bàn giao còn bạn thì chưa. Vui lòng tải lại.'
           : disputeErrorMessage(caught),
       );
@@ -151,7 +171,7 @@ export function HandoverIssueDialog({
     }
   };
 
-  const title = viewerIsDonor ? 'Tôi chưa giao được' : 'Tôi chưa nhận được';
+  const title = handoverIssueLabel(viewerIsDonor);
   return (
     <DialogFrame labelledBy="handover-issue-title" busy={submitting} onClose={onClose}>
       <h2 id="handover-issue-title" className="text-xl font-bold">
@@ -159,22 +179,31 @@ export function HandoverIssueDialog({
       </h2>
       <p className="mt-1 text-sm text-text-muted">{itemTitle}</p>
       <p className="mt-3 text-sm leading-6 text-text-secondary">
-        {partnerName} đã xác nhận bàn giao. Nếu bạn gửi báo cáo, giao dịch sẽ chuyển sang khiếu nại
-        để quản trị viên xem xét.
+        {reportIssue
+          ? `${partnerName} đã xác nhận bàn giao. Nếu bạn gửi báo cáo, giao dịch sẽ chuyển sang khiếu nại để quản trị viên xem xét.`
+          : 'Nếu bạn chọn Huỷ giao dịch, bên còn lại sẽ nhận được lý do và bài đăng sẽ được mở lại.'}
       </p>
+      <Select className="mt-1" label="Lý do giao nhận không thành công" value={reason}
+        disabled={submitting} onChange={(event) => setReason(event.target.value)}>
+        <option value="">Chọn lý do</option>
+        <option>{viewerIsDonor ? 'Người nhận không đến điểm hẹn' : 'Người giao không đến điểm hẹn'}</option>
+        <option>Không liên hệ được với bên còn lại</option>
+        <option>Gặp sự cố khi vận chuyển</option>
+        <option value="other">Lý do khác</option>
+      </Select>
       <TextArea
         className="mt-4"
-        label="Mô tả sự cố (bắt buộc)"
-        hint="Nhập ít nhất 5 ký tự. Hãy nêu thời điểm và điều đã xảy ra."
+        label={reason === 'other' ? 'Mô tả sự cố (bắt buộc)' : 'Mô tả thêm (không bắt buộc)'}
+        hint={reason === 'other' ? 'Nhập ít nhất 5 ký tự.' : undefined}
         value={note}
-        maxLength={1000}
+        maxLength={noteLimit}
         disabled={submitting}
         onChange={(event) => setNote(event.target.value)}
       />
-      <p className="mt-1 text-right text-xs text-text-muted">{note.length}/1000</p>
-      <div className="mt-4">
+      <p className="mt-1 text-right text-xs text-text-muted">{note.length}/{noteLimit}</p>
+      {reportIssue ? <div className="mt-4">
         <ReportEvidenceField files={evidence} onChange={setEvidence} disabled={submitting} />
-      </div>
+      </div> : null}
       {error ? (
         <div role="alert" className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">
           {error}
@@ -184,8 +213,8 @@ export function HandoverIssueDialog({
         <Button variant="ghost" disabled={submitting} onClick={onClose}>
           Đóng
         </Button>
-        <Button disabled={submitting || note.trim().length < 5} onClick={() => void submit()}>
-          {submitting ? 'Đang gửi...' : 'Gửi báo cáo'}
+        <Button disabled={submitting || !canSubmit} onClick={() => void submit()}>
+          {submitting ? 'Đang xử lý...' : reportIssue ? 'Gửi báo cáo' : 'Huỷ giao dịch'}
         </Button>
       </div>
     </DialogFrame>

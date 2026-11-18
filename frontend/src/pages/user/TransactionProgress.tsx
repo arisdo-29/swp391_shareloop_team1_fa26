@@ -230,6 +230,9 @@ function TransactionProgressView({
           onClose={() => setOpenDialog(null)}
           onStale={reload}
           onReported={(updated) => finishAction(updated, 'Đã gửi báo cáo sự cố giao nhận.')}
+          onCancelled={(updated) =>
+            finishAction(updated, 'Đã huỷ giao dịch. Bài đăng được mở lại cho người khác.')
+          }
         />
       ) : null}
       {openDialog === 'dispute' ? (
