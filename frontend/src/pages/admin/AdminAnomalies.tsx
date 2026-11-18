@@ -68,8 +68,6 @@ export function AdminAnomalies() {
     };
   }, []);
 
-  const ipWindowDays = report?.ipWindowDays ?? 30;
-  const ipMinAccounts = report?.ipMinAccounts ?? 3;
   const sharedIpGroups = report?.sharedIpGroups ?? [];
 
   return (
@@ -124,9 +122,19 @@ export function AdminAnomalies() {
           <div className="space-y-3">
             <div>
               <h2 className="text-base font-bold text-text-primary">Nhiều tài khoản cùng địa chỉ IP</h2>
-              <p className="mt-0.5 text-xs text-text-muted">
-                IP có từ {ipMinAccounts} tài khoản đăng ký trong {ipWindowDays} ngày
+              <p className="mt-1 text-sm text-text-secondary">
+                Có thể là người dùng chung mạng (chung cư, ký túc xá, trường học). Chỉ xử lý khi có thêm dấu hiệu khác như cặp lặp hoặc bị báo cáo.
               </p>
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-2 text-xs">
+                {report.ipMinAccounts !== undefined && report.ipWindowDays !== undefined && (
+                  <p className="text-text-muted">
+                    Đang cảnh báo từ {report.ipMinAccounts} tài khoản cùng IP trong {report.ipWindowDays} ngày
+                  </p>
+                )}
+                <Link to="/admin/reputation" className="font-semibold text-link hover:underline">
+                  Cấu hình cảnh báo IP
+                </Link>
+              </div>
             </div>
 
             {sharedIpGroups.length === 0 ? (

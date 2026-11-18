@@ -21,9 +21,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // Số điện thoại chỉ tính trùng với tài khoản ACTIVE (khớp unique index ux_users_phone_active).
     boolean existsByPhoneAndStatus(String phone, UserStatus status);
 
-    // Số tài khoản tạo từ một IP sau mốc since (TK-05). Tài khoản đã xoá mềm (ví dụ bị job dọn PENDING) không tính.
-    long countByRegistrationIpAndCreatedAtAfter(String registrationIp, Instant since);
-
     // Kiểm tra tài khoản có cờ is_admin = true. Tài khoản xoá mềm bị @SQLRestriction loại sẵn.
     boolean existsByIdAndAdminTrue(Long id);
 

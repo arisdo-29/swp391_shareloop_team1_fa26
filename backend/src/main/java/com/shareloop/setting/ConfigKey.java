@@ -254,12 +254,6 @@ public enum ConfigKey {
             ConfigGroup.ACCOUNT,
             "Hạn tài khoản chưa xác thực",
             "Số giờ giữ tài khoản chưa xác thực OTP. Quá mốc này tài khoản bị xoá."),
-    ACCOUNTS_PER_IP_24H(
-            "accounts_per_ip_24h",
-            "3",
-            ConfigGroup.ACCOUNT,
-            "Số tài khoản mới mỗi IP",
-            "Số tài khoản tối đa được đăng ký từ một địa chỉ IP trong 24 giờ. Vượt mức này thì chờ Admin xem xét."),
     PHONE_CHANGE_INTERVAL_DAYS(
             "phone_change_interval_days",
             "30",
@@ -389,10 +383,13 @@ public enum ConfigKey {
             "Số ngày gần nhất dùng để phát hiện các tài khoản đăng ký cùng địa chỉ IP."),
     IP_ALERT_MIN_ACCOUNTS(
             "ip_alert_min_accounts",
-            "3",
+            "5",
             ConfigGroup.REPUTATION,
             "Ngưỡng tài khoản cảnh báo IP",
-            "Số tài khoản đăng ký cùng một địa chỉ IP đạt mức này trở lên thì cảnh báo Admin.");
+            "Khi đủ số tài khoản đã xác thực đăng ký cùng IP trong số ngày theo dõi, nhóm xuất hiện trên trang Cảnh báo. Không chặn đăng ký.",
+            ValueType.INTEGER,
+            BigDecimal.valueOf(2),
+            null);
 
     private final String key;
     private final String defaultValue;

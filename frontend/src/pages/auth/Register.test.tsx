@@ -58,22 +58,6 @@ describe('Register lỗi từ backend', () => {
     expect(screen.queryByText('Thông báo thô từ máy chủ.')).toBeNull();
   });
 
-  it('báo quá nhiều tài khoản từ cùng mạng ở đầu form', async () => {
-    // given
-    vi.mocked(authApi.register).mockRejectedValue(apiError('AUTH_TOO_MANY_ACCOUNTS_FROM_IP', 429));
-    renderRegister();
-
-    // when
-    await submitValidForm();
-
-    // then
-    expect(
-      await screen.findByText(
-        'Mạng của bạn đã tạo quá nhiều tài khoản trong 24 giờ qua. Vui lòng thử lại sau.',
-      ),
-    ).toBeTruthy();
-  });
-
   it('báo trùng số điện thoại dù backend không gắn field', async () => {
     // given
     vi.mocked(authApi.register).mockRejectedValue(apiError('AUTH_PHONE_ALREADY_USED', 409));

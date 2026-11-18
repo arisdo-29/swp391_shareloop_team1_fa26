@@ -4,8 +4,6 @@ import type { ApiError } from './http';
 const knownAuthMessages: Record<string, string> = {
   AUTH_EMAIL_DOMAIN_NOT_ALLOWED:
     'Không thể đăng ký bằng email dùng một lần. Vui lòng dùng email cá nhân của bạn.',
-  AUTH_TOO_MANY_ACCOUNTS_FROM_IP:
-    'Mạng của bạn đã tạo quá nhiều tài khoản trong 24 giờ qua. Vui lòng thử lại sau.',
   AUTH_PHONE_ALREADY_USED: 'Số điện thoại đã được sử dụng. Vui lòng dùng số khác.',
 };
 

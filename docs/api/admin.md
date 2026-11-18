@@ -531,7 +531,7 @@ Cảnh báo bất thường cho Admin (AD-04, UC-52, UT-08, Issue #148). Kết q
 
 - **Xác thực:** Bắt buộc Bearer Token (JWT) có quyền Admin (`hasRole('ADMIN')`).
 - **Cặp giao dịch lặp:** hai người có **hơn** `reputation_pair_alert_threshold` (mặc định `5`) giao dịch `COMPLETED` với nhau trong `reputation_pair_window_days` ngày gần nhất (mặc định `90`), tính cả hai chiều cho/nhận. Giao dịch đã huỷ hoặc hoàn tất ngoài cửa sổ không tính. Cách đếm cặp giống luật không cộng điểm khi giao dịch hoàn tất (UT-08, [reputation.md mục 1.4](reputation.md#14-void-oncompletedlong-requestid)). Sắp xếp: nhiều giao dịch nhất lên trước, cùng số thì cặp có giao dịch gần nhất lên trước. `userA` là người có id nhỏ hơn.
-- **Nhiều tài khoản cùng IP:** địa chỉ IP có từ `ip_alert_min_accounts` tài khoản đăng ký trở lên (mặc định `3`) trong `ip_alert_window_days` ngày gần nhất (mặc định `30`). Chỉ xét tài khoản có trạng thái `ACTIVE` hoặc `BANNED`, chưa xoá mềm. Sắp xếp: IP có nhiều tài khoản nhất lên trước, cùng số tài khoản thì IP nào có tài khoản đăng ký gần nhất lên trước; trong mỗi IP sắp tài khoản mới đăng ký nhất lên trước.
+- **Nhiều tài khoản cùng IP:** địa chỉ IP có từ `ip_alert_min_accounts` tài khoản đăng ký trở lên (mặc định `5`, tối thiểu `2`) trong `ip_alert_window_days` ngày gần nhất (mặc định `30`). Chỉ xét tài khoản có trạng thái `ACTIVE` hoặc `BANNED`, chưa xoá mềm. Sắp xếp: IP có nhiều tài khoản nhất lên trước, cùng số tài khoản thì IP nào có tài khoản đăng ký gần nhất lên trước; trong mỗi IP sắp tài khoản mới đăng ký nhất lên trước.
 - **Thành công:** `200 OK`, trả về `AnomalyReportResponse`. Nếu không có cảnh báo nào thì `repeatedPairs` và `sharedIpGroups` là mảng rỗng.
 
 ```json
