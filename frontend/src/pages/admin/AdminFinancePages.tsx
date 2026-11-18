@@ -245,6 +245,22 @@ export function AdminFinanceReport() {
           <Stat label="Credit đã nạp" value={report.reconciliation.topUpCredits} />
           <Stat label="Chênh lệch" value={report.reconciliation.difference} />
         </div>
+        {!!report.reconciliation.unlinkedEntryCount && (
+          <div className="mt-3 text-sm text-text-secondary">
+            <p>
+              Có {report.reconciliation.unlinkedEntryCount} dòng nạp Credit không gắn với đơn thanh toán,
+              tổng {(report.reconciliation.unlinkedCredits ?? 0).toLocaleString('vi-VN')} Credit.
+            </p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {report.reconciliation.unlinkedEntries?.map((entry) => (
+                <li key={entry.id}>
+                  Dòng #{entry.id} · Người dùng #{entry.userId} · {entry.amount.toLocaleString('vi-VN')} Credit ·{' '}
+                  {new Date(entry.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
       <section className="rounded-lg bg-white p-5 ring-1 ring-border">
         <h2 className="mb-1 section-title">Tiền thu theo ngày</h2>

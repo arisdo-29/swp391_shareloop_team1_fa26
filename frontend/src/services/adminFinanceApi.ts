@@ -22,6 +22,9 @@ export interface FinanceSummary {
     topUpCredits: number;
     difference: number;
     matched: boolean;
+    unlinkedEntryCount?: number;
+    unlinkedCredits?: number;
+    unlinkedEntries?: Array<{ id: number; userId: number; amount: number; createdAt: string }>;
   };
   // Tiền thu theo ngày giờ Việt Nam, ngày cũ trước, chỉ gồm ngày có đơn thanh toán.
   cashByDay: DailyCash[];

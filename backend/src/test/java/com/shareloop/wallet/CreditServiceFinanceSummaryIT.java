@@ -155,6 +155,34 @@ class CreditServiceFinanceSummaryIT extends IntegrationTest {
     }
 
     @Test
+    void getFinanceSummary_reconcilesLinkedEntriesByPaymentDateAndReportsOrphansSeparately() {
+        long userId = insertUser();
+        long orderId = insertPaidOrder(userId, 20, "2001-07-14T00:00:00Z", "2001-07-14T00:01:00Z");
+        insertTopUpLedger(userId, 20, "2001-07-15T00:00:00Z", orderId);
+        insertLedger(userId, 10, "TOP_UP", "2001-07-15T01:00:00Z");
+
+        Instant paidDay = Instant.parse("2001-07-14T00:00:00Z");
+        Instant ledgerDay = Instant.parse("2001-07-15T00:00:00Z");
+        FinanceSummaryResponse paidReport = creditService.getFinanceSummary(paidDay, ledgerDay);
+        FinanceSummaryResponse ledgerReport =
+                creditService.getFinanceSummary(ledgerDay, Instant.parse("2001-07-16T00:00:00Z"));
+
+        assertThat(paidReport.creditInTotal()).isZero();
+        assertThat(paidReport.reconciliation()).isEqualTo(new TopUpReconciliation(20, 20, 0, true));
+        assertThat(ledgerReport.creditInTotal()).isEqualTo(30);
+        TopUpReconciliation reconciliation = ledgerReport.reconciliation();
+        assertThat(reconciliation.topUpCredits()).isZero();
+        assertThat(reconciliation.difference()).isZero();
+        assertThat(reconciliation.matched()).isFalse();
+        assertThat(reconciliation.unlinkedEntryCount()).isEqualTo(1);
+        assertThat(reconciliation.unlinkedCredits()).isEqualTo(10);
+        assertThat(reconciliation.unlinkedEntries()).singleElement().satisfies(entry -> {
+            assertThat(entry.userId()).isEqualTo(userId);
+            assertThat(entry.amount()).isEqualTo(10);
+        });
+    }
+
+    @Test
     void getFinanceSummary_whenNoDataInRange_returnsZerosAndMatched() {
         // given: khoảng năm 1999 không có dữ liệu nào
         Instant from = Instant.parse("1999-01-01T00:00:00Z");

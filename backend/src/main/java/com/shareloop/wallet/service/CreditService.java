@@ -10,6 +10,7 @@ import com.shareloop.wallet.dto.CreditTypeTotal;
 import com.shareloop.wallet.dto.DailyCashTotal;
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
 import com.shareloop.wallet.dto.TopUpReconciliation;
+import com.shareloop.wallet.dto.UnlinkedTopUp;
 import com.shareloop.wallet.dto.WalletHistoryCounts;
 import com.shareloop.wallet.dto.WalletResponse;
 import com.shareloop.wallet.dto.WalletTransactionPage;
@@ -429,8 +430,7 @@ public class CreditService {
                 toCreditTypeTotals(creditLedgerRepository.sumCreditInByType(rangeStart, rangeEnd));
         List<CreditTypeTotal> creditOut =
                 toCreditTypeTotals(creditLedgerRepository.sumCreditOutByType(rangeStart, rangeEnd));
-        TopUpReconciliation reconciliation =
-                reconcileTopUp(cash.getCredits(), amountOfType(creditIn, CreditTxType.TOP_UP));
+        TopUpReconciliation reconciliation = reconcileTopUp(cash.getCredits(), rangeStart, rangeEnd);
         List<DailyCashTotal> cashByDay =
                 groupCashByDay(paymentOrderRepository.findPaidOrders(PaymentOrderStatus.SUCCESS, rangeStart, rangeEnd));
 
@@ -558,16 +558,6 @@ public class CreditService {
         return sum;
     }
 
-    // Type không có dòng nào trong khoảng thì không xuất hiện trong kết quả GROUP BY, nghĩa là tổng bằng 0.
-    private long amountOfType(List<CreditTypeTotal> totals, CreditTxType type) {
-        for (CreditTypeTotal total : totals) {
-            if (total.type() == type) {
-                return total.amount();
-            }
-        }
-        return 0;
-    }
-
     // Gom các đơn đã thanh toán theo ngày lịch Việt Nam (paid_at lưu UTC nên 23h UTC đã là ngày hôm sau ở Việt Nam).
     // TreeMap giữ ngày cũ đứng trước; ngày không có đơn nào thì không xuất hiện.
     private List<DailyCashTotal> groupCashByDay(List<PaidOrderView> paidOrders) {
@@ -587,9 +577,24 @@ public class CreditService {
     }
 
     // VI-09: tiền mặt thực thu quy ra Credit phải bằng tổng Credit TOP_UP; lệch là dấu hiệu cộng thiếu hoặc cộng thừa.
-    private TopUpReconciliation reconcileTopUp(long cashCredits, long topUpCredits) {
+    private TopUpReconciliation reconcileTopUp(long cashCredits, Instant from, Instant to) {
+        long topUpCredits = creditLedgerRepository.sumTopUpsByPaymentDate(from, to);
+        CreditTypeTotalView unlinked = creditLedgerRepository.summarizeUnlinkedTopUps(from, to);
+        List<UnlinkedTopUp> sample = unlinked.getEntryCount() == 0
+                ? List.of()
+                : creditLedgerRepository.findUnlinkedTopUps(from, to, PageRequest.of(0, 5)).stream()
+                        .map(entry -> new UnlinkedTopUp(
+                                entry.getId(), entry.getUserId(), entry.getAmount(), entry.getCreatedAt()))
+                        .toList();
         long difference = cashCredits - topUpCredits;
-        return new TopUpReconciliation(cashCredits, topUpCredits, difference, difference == 0);
+        return new TopUpReconciliation(
+                cashCredits,
+                topUpCredits,
+                difference,
+                difference == 0 && unlinked.getEntryCount() == 0,
+                unlinked.getEntryCount(),
+                unlinked.getTotal(),
+                sample);
     }
 
     // Cột credit_ledger.amount là INT; toIntExact ném ArithmeticException (và rollback) thay vì cắt số âm thầm.
