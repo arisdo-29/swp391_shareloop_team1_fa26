@@ -97,7 +97,7 @@ export function formatDateTime(value: string) {
   return `${valueOf('hour')}:${valueOf('minute')} ${valueOf('day')}/${valueOf('month')}/${valueOf('year')}`;
 }
 
-// Chỉ hiện nút "chưa nhận được / chưa giao được" khi bên kia đã xác nhận bàn giao còn mình thì chưa (mục 14).
+// API báo sự cố chỉ nhận khi bên kia đã xác nhận bàn giao còn mình chưa (mục 14).
 export function canReportHandoverIssue(
   status: ItemRequestStatus,
   otherConfirmedAt?: string,
