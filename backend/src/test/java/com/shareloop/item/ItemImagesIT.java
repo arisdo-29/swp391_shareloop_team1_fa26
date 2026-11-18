@@ -167,6 +167,7 @@ class ItemImagesIT extends IntegrationTest {
         long second = createMedia(userId);
         long third = createMedia(userId);
         String body = body(categoryId, areaId, first, second, third);
+        String partialBody = body.strip().replaceFirst("}$", ",\"operatingStatus\":\"PARTIAL\"}");
 
         mvc.perform(post("/api/v1/items")
                         .header("Authorization", "Bearer " + jwtService.issue(userId, false))
@@ -179,9 +180,21 @@ class ItemImagesIT extends IntegrationTest {
         mvc.perform(post("/api/v1/items")
                         .header("Authorization", "Bearer " + jwtService.issue(userId, false))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body.strip().replaceFirst("}$", ",\"operatingStatus\":\"PARTIAL\"}")))
+                        .content(partialBody))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("ITEM_OPERATING_STATUS_REQUIRES_DEFECT"));
+
+        long defect = createMedia(userId);
+        String defectiveBody = partialBody
+                .replace("\"condition\":\"GOOD\"", "\"condition\":\"DEFECTIVE\",\"defectNote\":\"Công tắc bị lỗi\"")
+                .replaceFirst("}$", ",\"defectImages\":[\"/api/v1/media/" + defect + "\"]}");
+        mvc.perform(post("/api/v1/items")
+                        .header("Authorization", "Bearer " + jwtService.issue(userId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(defectiveBody))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.operatingStatus").value("PARTIAL"));
+                .andExpect(jsonPath("$.operatingStatus").value("PARTIAL"))
+                .andExpect(jsonPath("$.defectImages[0]").value("/api/v1/media/" + defect));
 
         long itemId = jdbc.sql("SELECT id FROM items WHERE donor_id = :userId ORDER BY id DESC LIMIT 1")
                 .param("userId", userId)

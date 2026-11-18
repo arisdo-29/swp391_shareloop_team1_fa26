@@ -28,7 +28,7 @@ import { userProfilePath } from '../../utils/chatMessages';
 import { ActivitiesComplaints } from './ActivitiesComplaints';
 import { BoostDialogBody, type BoostFailure } from './BoostDialogBody';
 import { DescribeItemSuggestion } from '../../components/ai/DescribeItemSuggestion';
-import { CONDITIONS, ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
+import { CONDITIONS, ELECTRONIC_DEFECT_HINT, ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import { fileToDataUrl } from '../../utils/files';
 import {
@@ -1215,7 +1215,7 @@ function EditItemForm({
   const [description, setDescription] = useState(item.description);
   const [desiredItem, setDesiredItem] = useState(item.desiredItem ?? '');
   const [categoryId, setCategoryId] = useState(item.categoryId);
-  const [condition, setCondition] = useState<ApiCondition>(item.condition);
+  const [selectedCondition, setCondition] = useState<ApiCondition>(item.condition);
   const [defectNote, setDefectNote] = useState(item.defectNote ?? '');
   const [brand, setBrand] = useState(item.brand ?? '');
   const [areaId, setAreaId] = useState(item.areaId);
@@ -1246,6 +1246,8 @@ function EditItemForm({
   );
   const operatingStatusRequired = operatingStatusAttribute?.required ?? false;
   const operatingStatusOptions = operatingStatusAttribute?.options.filter(isOperatingStatus) ?? [];
+  const requiresDefect = Boolean(operatingStatusAttribute && operatingStatus && operatingStatus !== 'NORMAL');
+  const condition = requiresDefect ? 'DEFECTIVE' : selectedCondition;
   const formDisabled = disabled || uploading;
 
   useEffect(() => {
@@ -1444,11 +1446,37 @@ function EditItemForm({
         onChange={(event) => setCondition(event.target.value as ApiCondition)}
       >
         {CONDITIONS.map((value) => (
-          <option key={value} value={value}>
+          <option key={value} value={value} disabled={requiresDefect && value !== 'DEFECTIVE'}>
             {conditionLabel[value]}
           </option>
         ))}
       </Select>
+      {operatingStatusAttribute ? (
+        <div>
+          <Select
+            label={`${operatingStatusAttribute.name}${operatingStatusRequired ? '' : ' (không bắt buộc)'}`}
+            value={operatingStatus}
+            disabled={formDisabled}
+            hint={requiresDefect ? ELECTRONIC_DEFECT_HINT : undefined}
+            onChange={(event) => {
+              const status = event.target.value as OperatingStatus | '';
+              setOperatingStatus(status);
+              if (status && status !== 'NORMAL') setCondition('DEFECTIVE');
+              setErrors((current) => ({ ...current, operatingStatus: undefined }));
+            }}
+          >
+            <option value="">Chọn trạng thái hoạt động</option>
+            {operatingStatusOptions.map((option) => (
+              <option key={option} value={option}>
+                {OPERATING_STATUS_LABELS[option]}
+              </option>
+            ))}
+          </Select>
+          {errors.operatingStatus ? (
+            <span className="mt-1 block text-xs text-error">{errors.operatingStatus}</span>
+          ) : null}
+        </div>
+      ) : null}
       {condition === 'DEFECTIVE' ? (
         <>
           <TextArea
@@ -1537,26 +1565,7 @@ function EditItemForm({
           ))}
         </div>
       ) : null}
-      {operatingStatusAttribute ? (
-        <div>
-          <Select
-            label={`${operatingStatusAttribute.name}${operatingStatusRequired ? '' : ' (không bắt buộc)'}`}
-            value={operatingStatus}
-            disabled={formDisabled}
-            onChange={(event) => setOperatingStatus(event.target.value as OperatingStatus | '')}
-          >
-            <option value="">Chọn trạng thái hoạt động</option>
-            {operatingStatusOptions.map((option) => (
-              <option key={option} value={option}>
-                {OPERATING_STATUS_LABELS[option]}
-              </option>
-            ))}
-          </Select>
-          {errors.operatingStatus ? (
-            <span className="mt-1 block text-xs text-error">{errors.operatingStatus}</span>
-          ) : null}
-        </div>
-      ) : null}
+
       <ImageEditor
         label="Ảnh"
         hint={`Từ ${ITEM_IMAGES_MIN} đến ${ITEM_IMAGES_MAX} ảnh.`}

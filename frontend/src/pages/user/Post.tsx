@@ -5,7 +5,7 @@ import { selectCurrentUser } from '../../app/store';
 import { Alert, Button, Field, Icon, ItemImage, PageHeader, Select, TextArea } from '../../components/ui';
 import { DialogFrame } from '../../components/Dialog';
 import { DescribeItemSuggestion } from '../../components/ai/DescribeItemSuggestion';
-import { CONDITIONS, ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
+import { CONDITIONS, ELECTRONIC_DEFECT_HINT, ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
 import { conditionDescription, conditionLabel } from '../../utils/formatting';
 import type { ItemCondition, ItemType } from '../../types/domain';
 import { fileToDataUrl } from '../../utils/files';
@@ -113,6 +113,7 @@ export function Post() {
   );
   const operatingStatusRequired = operatingStatusAttribute?.required ?? false;
   const operatingStatusOptions = operatingStatusAttribute?.options.filter(isOperatingStatus) ?? [];
+  const requiresDefect = Boolean(operatingStatusAttribute && operatingStatus && operatingStatus !== 'NORMAL');
 
   useEffect(() => {
     let active = true;
@@ -607,11 +608,12 @@ export function Post() {
                     key={value}
                     type="button"
                     aria-pressed={condition === value}
+                    disabled={requiresDefect && value !== 'DEFECTIVE'}
                     onClick={() => {
                       setCondition(value);
                       setErrors((current) => ({ ...current, condition: undefined }));
                     }}
-                    className={`flex flex-col gap-0.5 rounded-md border p-3 text-left transition ${condition === value ? 'border-2 border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
+                    className={`flex flex-col gap-0.5 rounded-md border p-3 text-left transition disabled:opacity-50 ${condition === value ? 'border-2 border-primary bg-primary-faint' : 'border-border hover:border-primary/40'}`}
                   >
                     <strong className="text-sm">{conditionLabel[value]}</strong>
                     <span className="text-2xs text-text-muted">{conditionDescription[value]}</span>
@@ -620,6 +622,25 @@ export function Post() {
               </div>
               {errors.condition ? <span className="mt-1.5 block text-xs text-error">{errors.condition}</span> : null}
             </fieldset>
+            {operatingStatusAttribute ? (
+              <Select
+                label={`${operatingStatusAttribute.name}${operatingStatusRequired ? '' : ' (không bắt buộc)'}`}
+                value={operatingStatus}
+                error={errors.operatingStatus}
+                hint={requiresDefect ? ELECTRONIC_DEFECT_HINT : undefined}
+                onChange={(event) => {
+                  const status = event.target.value as OperatingStatus | '';
+                  setOperatingStatus(status);
+                  if (status && status !== 'NORMAL') setCondition('DEFECTIVE');
+                  setErrors((current) => ({ ...current, operatingStatus: undefined, condition: undefined }));
+                }}
+              >
+                <option value="">Chọn trạng thái hoạt động</option>
+                {operatingStatusOptions.map((option) => (
+                  <option key={option} value={option}>{OPERATING_STATUS_LABELS[option]}</option>
+                ))}
+              </Select>
+            ) : null}
             {condition === 'DEFECTIVE' ? (
               <div className="space-y-3 rounded-md border border-secondary-fixed bg-secondary-soft p-4">
                 <TextArea
@@ -663,19 +684,7 @@ export function Post() {
                 </div>
               </div>
             ) : null}
-            {operatingStatusAttribute ? (
-              <Select
-                label={`${operatingStatusAttribute.name}${operatingStatusRequired ? '' : ' (không bắt buộc)'}`}
-                value={operatingStatus}
-                error={errors.operatingStatus}
-                onChange={(event) => setOperatingStatus(event.target.value as OperatingStatus | '')}
-              >
-                <option value="">Chọn trạng thái hoạt động</option>
-                {operatingStatusOptions.map((option) => (
-                  <option key={option} value={option}>{OPERATING_STATUS_LABELS[option]}</option>
-                ))}
-              </Select>
-            ) : null}
+
             <TextArea
               label="Mô tả"
               value={description}

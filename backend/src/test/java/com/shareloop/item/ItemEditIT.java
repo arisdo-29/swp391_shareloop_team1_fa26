@@ -307,6 +307,12 @@ class ItemEditIT extends IntegrationTest {
                         .content(electronicBody))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.field").value("operatingStatus"));
+        mvc.perform(put("/api/v1/items/{id}", itemId)
+                        .header("Authorization", "Bearer " + jwtService.issue(ownerId, false))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(electronicBody.strip().replaceFirst("}$", ",\"operatingStatus\":\"NOT_WORKING\"}")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("ITEM_OPERATING_STATUS_REQUIRES_DEFECT"));
         assertThat(jdbc.sql("SELECT held_credit FROM users WHERE id = :id")
                         .param("id", ownerId)
                         .query(Integer.class)
