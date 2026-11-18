@@ -34,11 +34,13 @@ Trả danh sách cấu hình nghiệp vụ cho Admin. Endpoint đọc giá trị
 | `POSTING` | Đăng bài và hiển thị | `post_display_days`, `boost_days`, `boost_max_days` (số ngày đẩy liên tục tối đa trong một đợt, mặc định 6), `boost_cooldown_days`, `boost_max_per_user`, `boost_max_active`, `boost_rotate_seconds`, `boost_max_per_page` (bật lại ở V202611061200), `boost_ending_notice_hours`, `item_photos_min`, `item_photos_max`, `image_max_mb` (`renew_expired_window_days`, `media_orphan_hours` đã xoá mềm ở L13) |
 | `AI` | AI tìm đồ và gợi ý mô tả | `ai_free_per_day`, `ai_trial_uses`, `ai_search_timeout_seconds`, `ai_describe_per_day`, `ai_describe_timeout_seconds` (`chat_ai_*` và cấu hình AI sàng lọc bài cũ đã bỏ) |
 | `MODERATION` | Kiểm duyệt và báo cáo | `chat_violation_alert`, `report_hide_threshold`, `report_max_items_per_owner`, `report_window_days`, `review_newcomer_max_approved` (số bài đã từng được duyệt tối đa để người đăng được xem là người mới, mặc định 3), `report_serious_reasons` (kiểu danh sách mã lý do cách nhau dấu phẩy, mỗi mã phải là một `ReportReason`, sai thì `SETTING_CONFIG_INVALID_TYPE`) (`review_sla_hours` đã bỏ, KD-06) |
-| `ACCOUNT` | Tài khoản và OTP | `otp_ttl_minutes`, `otp_max_failed`, `otp_resend_cooldown_seconds`, `pending_account_ttl_hours`, `accounts_per_ip_24h`, `phone_change_interval_days` |
+| `ACCOUNT` | Tài khoản và OTP | `otp_ttl_minutes`, `otp_max_failed`, `otp_resend_cooldown_seconds`, `pending_account_ttl_hours`, `phone_change_interval_days` |
 | `TRANSACTION` | Yêu cầu và giao dịch | `max_pending_requests`, `request_pending_days`, `chat_open_days`, `auto_confirm_days`, `stuck_request_hours` |
 | `REPUTATION` | Uy tín và hạng | `post_display_days_gold`, `max_active_items_*` (ngưỡng phí thường Trao đổi: Đồng 5, Bạc 8, Vàng 15, Kim cương -1), `max_active_give_items` (Cho tặng, mặc định 5), `daily_points_cap`, `reputation_*`, `ip_alert_window_days`, `ip_alert_min_accounts` |
 
 Trang Cấu hình hệ thống bỏ nhóm `REPUTATION`; nhóm này hiện ở trang Uy tín và Hạng.
+
+`ip_alert_min_accounts` mặc định là 5, tối thiểu 2. `ip_alert_window_days` mặc định là 30. Hai giá trị chỉ dùng để đưa các nhóm tài khoản đã xác thực cùng IP lên trang Cảnh báo.
 
 Hai khoá cố định `complaint_window_hours` (24) và `response_window_hours` (48) (U08) không có trong `GET /admin/configs`;
 `PUT` vào hai khoá này trả `400 SETTING_CONFIG_NOT_EDITABLE`. Backend vẫn đọc chúng qua `ConfigService`, chỉ đổi bằng migration.

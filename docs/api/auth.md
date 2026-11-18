@@ -21,7 +21,6 @@ quên mật khẩu, đặt lại mật khẩu. Hồ sơ (`GET`/`PUT /api/v1/me`)
 | `otp_ttl_minutes`             | 5        | OTP hết hạn sau số phút này                  |
 | `otp_max_failed`              | 5        | Số lần nhập sai tối đa trước khi mã bị xoá   |
 | `otp_resend_cooldown_seconds` | 60       | Khoảng cách tối thiểu giữa hai lần gửi OTP   |
-| `accounts_per_ip_24h`         | 3        | Số tài khoản mới tối đa mỗi IP trong 24 giờ  |
 
 - Hạn JWT lấy từ `app.jwt.ttl-minutes` (120 phút), nên `expiresIn` = `7200` (giây). JWT chứa `userId` (sub) và `roles`.
 - OTP: 6 chữ số, lưu bản băm kèm mục đích (`otp_purpose` = `REGISTER` hoặc `RESET_PASSWORD`), gửi qua email sau khi
@@ -38,7 +37,7 @@ quên mật khẩu, đặt lại mật khẩu. Hồ sơ (`GET`/`PUT /api/v1/me`)
 - Thành công: `201`, `OtpSentResponse`. Tài khoản được tạo ở trạng thái `PENDING_VERIFICATION`, chưa đăng nhập được.
 - Lỗi: `400 VALIDATION_FAILED` (thiếu trường, email/mật khẩu/họ tên sai định dạng, `field` = tên trường),
   `400 AUTH_PHONE_INVALID`, `400 AUTH_EMAIL_DOMAIN_NOT_ALLOWED`, `409 AUTH_EMAIL_ALREADY_REGISTERED`,
-  `409 AUTH_PHONE_ALREADY_USED`, `429 AUTH_TOO_MANY_ACCOUNTS_FROM_IP`, `429 AUTH_OTP_RESEND_TOO_SOON`.
+  `409 AUTH_PHONE_ALREADY_USED`, `429 AUTH_OTP_RESEND_TOO_SOON`.
 
 Quy tắc:
 
@@ -52,11 +51,8 @@ Quy tắc:
   trả `400 AUTH_EMAIL_DOMAIN_NOT_ALLOWED`, không tạo tài khoản, không gửi OTP. So khớp không phân biệt hoa thường, chỉ
   đúng tên miền (không khớp tên miền con). Danh sách đọc một lần lúc khởi động; sửa file phải build lại. Lệch SRS: ERD
   để danh sách ở `website_attributes` nhóm `DISPOSABLE_DOMAIN` cho Admin sửa, sẽ chuyển khi module setting hỗ trợ.
-- **Giới hạn theo IP (TK-05, C30)**: chỉ xét khi tạo tài khoản **mới** (đăng ký lại email `PENDING_VERIFICATION` không
-  xét). Nếu IP đã có từ `accounts_per_ip_24h` tài khoản trở lên tạo trong 24 giờ qua (không tính tài khoản đã xoá mềm)
-  thì trả `429 AUTH_TOO_MANY_ACCOUNTS_FROM_IP` (TK-05). Bản SRS cũ (v10) từng ghi là "đánh dấu chờ Admin xem xét"; SRS Final Report đã đổi
-  thành báo lỗi 429 như code. IP lấy từ `remoteAddr`; prod bật `forward-headers-strategy: framework` nên
-  sau proxy vẫn là IP thật của client.
+- **Cảnh báo cùng IP (TK-05)**: đăng ký dùng chung IP vẫn tiếp tục xác thực OTP. Backend lưu IP khi tạo tài khoản mới
+  từ `remoteAddr` để gom nhóm tài khoản đã xác thực trên trang Cảnh báo. Admin đặt ngưỡng trong cấu hình Uy tín và Hạng.
 
 ```json
 { "email": "an@example.com", "password": "MatKhau@123", "fullName": "Nguyễn Văn An", "phone": "0901234567" }
@@ -353,7 +349,6 @@ Trả về từ `/verify-otp` và `/login`.
 | `AUTH_PHONE_ALREADY_USED`       | 409  | Số điện thoại đang gắn với tài khoản `ACTIVE` khác                                  |
 | `AUTH_PHONE_INVALID`            | 400  | Số điện thoại không đúng định dạng di động VN (`field` = `phone`)                   |
 | `AUTH_EMAIL_DOMAIN_NOT_ALLOWED` | 400  | `/register`: email thuộc danh sách tên miền dùng một lần (TK-02; `field` = `email`) |
-| `AUTH_TOO_MANY_ACCOUNTS_FROM_IP` | 429 | `/register` tạo tài khoản mới khi IP đã có đủ `accounts_per_ip_24h` tài khoản trong 24 giờ (TK-05) |
 | `AUTH_OTP_INVALID`              | 400  | OTP sai, hoặc (`/verify-otp`) email không có tài khoản chờ xác thực; `details.remainingAttempts` |
 | `AUTH_OTP_EXPIRED`              | 400  | OTP quá `otp_ttl_minutes`, không còn mã, mã khác mục đích; `/reset-password` với email không có tài khoản hợp lệ |
 | `AUTH_OTP_TOO_MANY_ATTEMPTS`    | 422  | Sai đủ `otp_max_failed` lần, mã đã bị xoá; phải gửi lại OTP                         |

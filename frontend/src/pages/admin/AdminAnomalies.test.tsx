@@ -96,7 +96,9 @@ describe('AdminAnomalies', () => {
 
     expect(await screen.findByText('IP: 192.168.1.100')).toBeTruthy();
     expect(screen.getByText('3 tài khoản')).toBeTruthy();
-    expect(screen.getByText('IP có từ 3 tài khoản đăng ký trong 30 ngày')).toBeTruthy();
+    expect(screen.getByText('Đang cảnh báo từ 3 tài khoản cùng IP trong 30 ngày')).toBeTruthy();
+    expect(screen.getByText(/Có thể là người dùng chung mạng/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Cấu hình cảnh báo IP' }).getAttribute('href')).toBe('/admin/reputation');
 
     const cuongLink = screen.getByRole('link', { name: 'Lê Văn Cường' });
     expect(cuongLink.getAttribute('href')).toBe('/admin/finance/users/10');

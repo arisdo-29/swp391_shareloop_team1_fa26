@@ -23,8 +23,6 @@ import com.shareloop.user.entity.UserStatus;
 import com.shareloop.user.mapper.UserMapper;
 import com.shareloop.user.repository.UserRepository;
 import java.time.Clock;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -41,8 +39,6 @@ public class AuthService {
     private static final String TOKEN_TYPE = "Bearer";
     private static final long SECONDS_PER_MINUTE = 60;
     private static final String VIETNAM_COUNTRY_PREFIX = "+84";
-    // TK-05, C30: cửa sổ đếm tài khoản theo IP là 24 giờ, đã nằm trong chính tên khoá accounts_per_ip_24h.
-    private static final long IP_LIMIT_WINDOW_HOURS = 24;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -99,12 +95,10 @@ public class AuthService {
      * Đăng ký tài khoản và gửi OTP về email (TK-02, TK-06). Email còn PENDING_VERIFICATION thì cập nhật thông tin
      * rồi cấp OTP mới (vẫn theo cooldown).
      *
-     * <p>Chống tạo nhiều tài khoản (SRS 5.3): email dùng một lần bị chặn (TK-02); tạo tài khoản MỚI thì IP đăng ký
-     * phải có ít hơn accounts_per_ip_24h tài khoản trong 24 giờ qua (TK-05). Đăng ký lại email đang PENDING không tạo
-     * tài khoản mới nên không xét IP.
+     * <p>Email dùng một lần bị chặn (TK-02). IP được lưu khi tạo tài khoản để cảnh báo cho Admin.
      *
-     * @throws BusinessException AUTH_EMAIL_DOMAIN_NOT_ALLOWED, AUTH_TOO_MANY_ACCOUNTS_FROM_IP,
-     *     AUTH_EMAIL_ALREADY_REGISTERED, AUTH_PHONE_ALREADY_USED, AUTH_OTP_RESEND_TOO_SOON
+     * @throws BusinessException AUTH_EMAIL_DOMAIN_NOT_ALLOWED, AUTH_EMAIL_ALREADY_REGISTERED,
+     *     AUTH_PHONE_ALREADY_USED, AUTH_OTP_RESEND_TOO_SOON
      */
     @Transactional // mở transaction ghi: lưu user và OTP cùng lúc, lỗi giữa chừng thì hoàn tác hết
     public OtpSentResponse register(RegisterRequest request, String registrationIp) {
@@ -125,7 +119,6 @@ public class AuthService {
             user = existingUser.get();
             user.updatePendingRegistration(passwordHash, fullName, phone);
         } else {
-            checkIpUnderAccountLimit(registrationIp);
             user = new User(email, passwordHash, fullName, phone, false, UserStatus.PENDING_VERIFICATION);
             user.recordRegistrationIp(registrationIp);
             userRepository.save(user);
@@ -254,18 +247,6 @@ public class AuthService {
     private void checkEmailNotDisposable(String email) {
         if (disposableEmailDomains.isDisposable(email)) {
             throw new BusinessException(AuthErrorCode.AUTH_EMAIL_DOMAIN_NOT_ALLOWED, null, "email", null);
-        }
-    }
-
-    // Không lấy được IP (null, ví dụ khi gọi thẳng service) thì không có gì để đếm, bỏ qua kiểm tra.
-    private void checkIpUnderAccountLimit(String registrationIp) {
-        if (registrationIp == null || registrationIp.isBlank()) {
-            return;
-        }
-        Instant since = clock.instant().minus(IP_LIMIT_WINDOW_HOURS, ChronoUnit.HOURS);
-        long accountsFromIp = userRepository.countByRegistrationIpAndCreatedAtAfter(registrationIp, since);
-        if (accountsFromIp >= configService.getInt(ConfigKey.ACCOUNTS_PER_IP_24H)) {
-            throw new BusinessException(AuthErrorCode.AUTH_TOO_MANY_ACCOUNTS_FROM_IP);
         }
     }
 
