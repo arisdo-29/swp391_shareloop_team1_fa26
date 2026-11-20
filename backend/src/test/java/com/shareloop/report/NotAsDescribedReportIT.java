@@ -1,6 +1,7 @@
 package com.shareloop.report;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -59,6 +60,8 @@ class NotAsDescribedReportIT extends IntegrationTest {
     void cleanUp() {
         for (Long requestId : requestIds) {
             jdbc.update("DELETE FROM reports WHERE request_id = ?", requestId);
+            // Mở khiếu nại sinh tin nhắn hệ thống trong cuộc trò chuyện, phải xoá trước vì khoá ngoại.
+            jdbc.update("DELETE FROM messages WHERE request_id = ?", requestId);
             jdbc.update("DELETE FROM requests WHERE id = ?", requestId);
         }
         for (Long itemId : itemIds) {
@@ -148,6 +151,26 @@ class NotAsDescribedReportIT extends IntegrationTest {
         // then
         assertThat(reportsOf(requestId)).isEmpty();
         assertThat(statusOf(requestId)).isEqualTo("LOGISTICS_CONFIRMED");
+    }
+
+    @Test
+    void getDetail_afterRefusal_returnsDisputesByRole() throws Exception {
+        // given
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long requestId = createLogisticsConfirmedRequest(donorId, receiverId);
+        refuseAsReceiver(requestId, receiverId)
+                .andExpect(jsonPath("$.disputes[0].openedByMe").value(true))
+                .andExpect(jsonPath("$.disputes[0].canRespond").value(false));
+
+        // when, then: bên bị khiếu nại thấy được giải trình, còn hạn
+        mockMvc.perform(get("/api/v1/requests/{id}", requestId).header("Authorization", token(donorId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.disputes.length()").value(1))
+                .andExpect(jsonPath("$.disputes[0].reason").value("NOT_AS_DESCRIBED"))
+                .andExpect(jsonPath("$.disputes[0].openedByMe").value(false))
+                .andExpect(jsonPath("$.disputes[0].canRespond").value(true))
+                .andExpect(jsonPath("$.disputes[0].responseDueAt").isNotEmpty());
     }
 
     @Test

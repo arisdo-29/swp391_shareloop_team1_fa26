@@ -2106,7 +2106,7 @@ Mọi chế tài chỉ ở cấp tài khoản (trừ sao, ẩn bài, cấm); h�
 
 **Use case:** [UC-32](#UC_32) **· Tác nhân:** Member (bên bị báo cáo)
 
-**Kích hoạt:** Bên bị báo cáo bấm thông báo "Bạn có 48 giờ … để giải trình".
+**Kích hoạt:** Bên bị báo cáo bấm thông báo "Bạn có 48 giờ … để giải trình". Với khiếu nại giao dịch, bên bị khiếu nại còn bấm "Giải trình ngay" ở trang Tiến trình giao dịch hoặc trên banner trong khung chat (21/11/2026).
 
 **Mô tả:** Gửi nội dung giải trình kèm ảnh một lần, trước hạn. Một bài nhiều báo cáo chỉ cần giải trình một lần cho cả bài.
 

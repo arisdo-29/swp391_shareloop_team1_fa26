@@ -11,6 +11,7 @@ import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.media.service.MediaService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.report.dto.RequestDisputeSummary;
 import com.shareloop.report.service.ReportService;
 import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.entity.Rank;
@@ -308,6 +309,7 @@ public class RequestService {
         List<Request> requests = requestRepository.findByItemIdOrderByCreatedAtDesc(itemId);
         List<Long> requestIds = requests.stream().map(Request::getId).toList();
         Map<Long, Instant> lastMessageMap = findLastMessageAtMap(requestIds);
+        Map<Long, List<RequestDisputeSummary>> disputesMap = findDisputesMap(requestIds, currentUserId);
         List<Long> disputedRequestIds = requests.stream()
                 .filter(r -> r.getStatus() == RequestStatus.DISPUTED)
                 .map(Request::getId)
@@ -336,7 +338,7 @@ public class RequestService {
                             complaintDeadline,
                             lastMessageAt,
                             disputeResponseDueAt);
-                    return addExtraInfo(response, null);
+                    return addExtraInfo(response, null).withDisputes(disputesOf(disputesMap, request));
                 })
                 .toList();
     }
@@ -353,6 +355,7 @@ public class RequestService {
                 .filter(java.util.Objects::nonNull)
                 .toList();
         Map<Long, Instant> lastMessageMap = findLastMessageAtMap(requestIds);
+        Map<Long, List<RequestDisputeSummary>> disputesMap = findDisputesMap(requestIds, currentUserId);
         List<Long> disputedRequestIds = requests.stream()
                 .filter(r -> r.getStatus() == RequestStatus.DISPUTED)
                 .map(Request::getId)
@@ -377,7 +380,7 @@ public class RequestService {
                             complaintDeadline,
                             lastMessageAt,
                             disputeResponseDueAt);
-                    return addExtraInfo(response, null);
+                    return addExtraInfo(response, null).withDisputes(disputesOf(disputesMap, request));
                 })
                 .toList();
     }
@@ -735,7 +738,7 @@ public class RequestService {
         // rollback.
         eventPublisher.publishEvent(
                 new HandoverIssueReportedEvent(requestId, currentUserId, reason, requestDto.evidenceMediaIds()));
-        return toResponse(saved);
+        return toResponse(saved).withDisputes(findDisputes(requestId, currentUserId));
     }
 
     /**
@@ -763,7 +766,7 @@ public class RequestService {
         // rollback.
         eventPublisher.publishEvent(new NotAsDescribedReportedEvent(
                 requestId, currentUserId, requestDto.reason().trim(), requestDto.evidenceMediaIds()));
-        return toResponse(saved);
+        return toResponse(saved).withDisputes(findDisputes(requestId, currentUserId));
     }
 
     private Request loadRequest(long requestId) {
@@ -1091,12 +1094,12 @@ public class RequestService {
                     complaintDeadline,
                     lastMessageAt,
                     disputeResponseDueAt);
-            return addExtraInfo(response, handoverMedia);
+            return addExtraInfo(response, handoverMedia).withDisputes(findDisputes(request.getId(), currentUserId));
         }
 
         RequestResponse response = RequestMapper.toResponse(
                 request, receiverName, null, null, itemInfo, complaintDeadline, lastMessageAt, disputeResponseDueAt);
-        return addExtraInfo(response, handoverMedia);
+        return addExtraInfo(response, handoverMedia).withDisputes(findDisputes(request.getId(), currentUserId));
     }
 
     /**
@@ -1543,6 +1546,30 @@ public class RequestService {
             return null;
         }
         return reportService != null ? reportService.findDisputeResponseDueAt(request.getId()) : null;
+    }
+
+    // Khiếu nại theo vai của người xem (D-04). Không có module report (unit test rút gọn) thì trả danh sách rỗng.
+    private List<RequestDisputeSummary> findDisputes(Long requestId, long viewerId) {
+        if (reportService == null || requestId == null) {
+            return List.of();
+        }
+        return reportService.findDisputesForRequest(requestId, viewerId);
+    }
+
+    private Map<Long, List<RequestDisputeSummary>> findDisputesMap(List<Long> requestIds, long viewerId) {
+        if (reportService == null || requestIds == null || requestIds.isEmpty()) {
+            return Map.of();
+        }
+        return reportService.findDisputesForRequests(requestIds, viewerId);
+    }
+
+    private static List<RequestDisputeSummary> disputesOf(
+            Map<Long, List<RequestDisputeSummary>> disputesMap, Request request) {
+        // Map.of() ném lỗi khi tra khoá null, nên Request chưa có id thì trả rỗng luôn
+        if (request.getId() == null) {
+            return List.of();
+        }
+        return disputesMap.getOrDefault(request.getId(), List.of());
     }
 
     private Map<Long, Instant> findDisputeResponseDueAtMap(List<Long> disputedRequestIds) {

@@ -16,12 +16,14 @@ import com.shareloop.report.dto.DisputeResponseRequest;
 import com.shareloop.report.dto.ReportConclusionResponse;
 import com.shareloop.report.dto.ReportDecision;
 import com.shareloop.report.dto.ReportResponse;
+import com.shareloop.report.dto.RequestDisputeSummary;
 import com.shareloop.report.dto.RespondReportRequest;
 import com.shareloop.report.entity.Report;
 import com.shareloop.report.entity.ReportReason;
 import com.shareloop.report.entity.ReportStage;
 import com.shareloop.report.entity.ReportStatus;
 import com.shareloop.report.entity.TargetType;
+import com.shareloop.report.event.DisputeOpenedEvent;
 import com.shareloop.report.repository.ReportRepository;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.dto.RequestChatContext;
@@ -40,6 +42,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,6 +69,7 @@ public class ReportService {
     private final ReportEvidenceService evidenceService;
     private final JdbcClient jdbcClient;
     private final Clock clock;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Autowired
     public ReportService(
@@ -80,7 +84,8 @@ public class ReportService {
             @Autowired(required = false) RequestService requestService,
             @Autowired(required = false) UserService userService,
             @Autowired(required = false) JdbcClient jdbcClient,
-            @Autowired(required = false) Clock clock) {
+            @Autowired(required = false) Clock clock,
+            @Autowired(required = false) ApplicationEventPublisher eventPublisher) {
         this.reportRepository = reportRepository;
         this.itemQueryService = itemQueryService;
         this.itemService = itemService;
@@ -93,6 +98,7 @@ public class ReportService {
         this.userService = userService;
         this.jdbcClient = jdbcClient;
         this.clock = clock != null ? clock : Clock.systemUTC();
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -385,6 +391,7 @@ public class ReportService {
                 responseDueAt);
 
         Report saved = reportRepository.save(dispute);
+        publishDisputeOpened(saved, responseHours);
 
         // 8. Gửi thông báo cho bên bị khiếu nại
         if (notificationService != null) {
@@ -448,6 +455,7 @@ public class ReportService {
                 evidenceService.attach(evidenceMediaIds, reporterId),
                 responseDueAt);
         Report saved = reportRepository.save(report);
+        publishDisputeOpened(saved, responseHours);
 
         if (notificationService != null) {
             notificationService.notify(
@@ -505,6 +513,7 @@ public class ReportService {
                 evidenceService.attach(evidenceMediaIds, reporterId),
                 responseDueAt);
         Report saved = reportRepository.save(report);
+        publishDisputeOpened(saved, responseHours);
 
         if (notificationService != null) {
             String issue = reporterIsReceiver ? "chưa nhận được đồ" : "chưa giao được đồ";
@@ -515,6 +524,14 @@ public class ReportService {
                     "Đối phương báo " + issue + " dù bạn đã xác nhận bàn giao. "
                             + responseWindowSentence(responseHours, responseDueAt),
                     "/me/disputes/" + saved.getId());
+        }
+    }
+
+    // Báo module chat thêm dòng tin hệ thống "giao dịch đang có khiếu nại" (D-04). Không có publisher ở unit test rút
+    // gọn.
+    private void publishDisputeOpened(Report saved, int responseHours) {
+        if (eventPublisher != null && saved.getRequestId() != null) {
+            eventPublisher.publishEvent(new DisputeOpenedEvent(saved.getRequestId(), responseHours));
         }
     }
 
@@ -557,6 +574,51 @@ public class ReportService {
             }
         }
         return result;
+    }
+
+    /**
+     * Khiếu nại của một giao dịch nhìn từ phía người xem (D-04, BC-08): ai mở, trạng thái, hạn và còn giải trình được
+     * không. Mỗi bên khiếu nại tối đa một lần nên danh sách có tối đa hai phần tử, cũ trước.
+     */
+    @Transactional(readOnly = true)
+    public List<RequestDisputeSummary> findDisputesForRequest(Long requestId, Long viewerId) {
+        if (requestId == null) {
+            return List.of();
+        }
+        return findDisputesForRequests(List.of(requestId), viewerId).getOrDefault(requestId, List.of());
+    }
+
+    /** Như {@link #findDisputesForRequest} cho nhiều giao dịch một lần, tránh gọi lặp ở danh sách cuộc trò chuyện. */
+    @Transactional(readOnly = true)
+    public Map<Long, List<RequestDisputeSummary>> findDisputesForRequests(
+            java.util.Collection<Long> requestIds, Long viewerId) {
+        if (requestIds == null || requestIds.isEmpty()) {
+            return Map.of();
+        }
+        Instant now = Instant.now(clock);
+        Map<Long, List<RequestDisputeSummary>> result = new HashMap<>();
+        for (Report report :
+                reportRepository.findByTargetTypeAndRequestIdInOrderByCreatedAtAsc(TargetType.REQUEST, requestIds)) {
+            result.computeIfAbsent(report.getRequestId(), id -> new ArrayList<>())
+                    .add(toDisputeSummary(report, viewerId, now));
+        }
+        return result;
+    }
+
+    private RequestDisputeSummary toDisputeSummary(Report report, Long viewerId, Instant now) {
+        boolean openedByMe = viewerId != null && viewerId.equals(report.getReporterId());
+        boolean isRespondent = viewerId != null && viewerId.equals(report.getTargetUserId());
+        boolean concluded = report.getStatus() == ReportStatus.RESOLVED || report.getStatus() == ReportStatus.DISMISSED;
+        boolean withinWindow = report.getResponseDueAt() == null || !now.isAfter(report.getResponseDueAt());
+        boolean canRespond = isRespondent && !concluded && report.getRespondedAt() == null && withinWindow;
+        return new RequestDisputeSummary(
+                report.getId(),
+                report.getReason(),
+                openedByMe,
+                report.getStatus(),
+                report.getResponseDueAt(),
+                report.getRespondedAt(),
+                canRespond);
     }
 
     /**

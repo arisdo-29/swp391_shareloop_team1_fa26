@@ -1,5 +1,6 @@
 package com.shareloop.request.dto;
 
+import com.shareloop.report.dto.RequestDisputeSummary;
 import java.time.Instant;
 import java.util.List;
 
@@ -54,7 +55,10 @@ public record RequestResponse(
         String itemOfferType,
         // Số Credit chủ bài sẽ trả nếu giao dịch chuyển sang Trao đổi: POST_FEE khi bài đang GIVE, 0 khi đang SWAP
         // (CD-02). Backend tính để frontend không viết cứng phí. Null khi không biết loại bài.
-        Integer conversionFee) {
+        Integer conversionFee,
+        // Khiếu nại của giao dịch nhìn từ phía người xem (tối đa hai, mỗi bên một lần). Chỉ có ở GET /requests/{id},
+        // danh sách cuộc trò chuyện và kết quả của hai nút mở tranh chấp; nơi khác để null.
+        List<RequestDisputeSummary> disputes) {
 
     // Dạng 30 tham số (chưa có ảnh đại diện, disputeExpired, handoverMedia) để code và test đang gọi vẫn compile.
     public RequestResponse(
@@ -124,6 +128,7 @@ public record RequestResponse(
                 null,
                 null,
                 null,
+                null,
                 null);
     }
 
@@ -173,7 +178,50 @@ public record RequestResponse(
                 isDisputeExpired,
                 media,
                 itemOfferType,
-                newConversionFee);
+                newConversionFee,
+                disputes);
+    }
+
+    /** Gắn danh sách khiếu nại theo vai của người xem (D-04); các trường khác giữ nguyên. */
+    public RequestResponse withDisputes(List<RequestDisputeSummary> newDisputes) {
+        return new RequestResponse(
+                id,
+                itemId,
+                receiverId,
+                offeredItemId,
+                type,
+                status,
+                deliveryMethod,
+                meetingPlace,
+                meetingTime,
+                donorScheduleOkAt,
+                receiverScheduleOkAt,
+                donorWaiverAt,
+                receiverWaiverAt,
+                contactRevealedAt,
+                donorHandoverAt,
+                receiverHandoverAt,
+                completedAt,
+                createdAt,
+                receiverName,
+                receiverTrustStars,
+                receiverRank,
+                itemTitle,
+                itemImage,
+                donorId,
+                donorName,
+                offeredItemTitle,
+                cancelReason,
+                complaintDeadline,
+                lastMessageAt,
+                disputeResponseDueAt,
+                donorAvatarUrl,
+                receiverAvatarUrl,
+                disputeExpired,
+                handoverMedia,
+                itemOfferType,
+                conversionFee,
+                newDisputes);
     }
 
     // Dạng 28 tham số (chưa có disputeResponseDueAt) để code và test đang gọi vẫn compile.

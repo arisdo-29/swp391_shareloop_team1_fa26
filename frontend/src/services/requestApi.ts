@@ -1,6 +1,18 @@
 import { http } from './http';
 import type { ItemRequest, ItemRequestStatus, ItemType } from '../types/domain';
 import { apiUserId } from './mappers';
+import type { ReportReason } from './reportApi';
+
+// Backend tính openedByMe và canRespond theo người xem, frontend không tự so giờ (docs/api/request.md).
+export interface RequestDispute {
+  id: number;
+  reason: ReportReason;
+  openedByMe: boolean;
+  status: 'OPEN' | 'AWAITING_RESPONSE' | 'RESOLVED' | 'DISMISSED';
+  responseDueAt?: string | null;
+  respondedAt?: string | null;
+  canRespond: boolean;
+}
 
 // Theo docs/api/request.md
 export interface RequestResponse {
@@ -38,6 +50,9 @@ export interface RequestResponse {
   complaintDeadline?: string | null;
   lastMessageAt?: string | null;
   disputeResponseDueAt?: string | null;
+  // Khiếu nại nhìn từ phía người xem (tối đa hai). Chỉ có ở chi tiết, danh sách cuộc trò chuyện và kết quả của
+  // Từ chối giao nhận / Giao nhận không thành công; nơi khác null.
+  disputes?: RequestDispute[] | null;
   // Ảnh đại diện hai bên, dạng /api/v1/media/{id}; null khi chưa có ảnh.
   donorAvatarUrl?: string | null;
   receiverAvatarUrl?: string | null;

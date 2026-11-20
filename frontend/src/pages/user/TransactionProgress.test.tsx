@@ -8,8 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { actions, store } from '../../app/store';
 import { itemApi } from '../../services/itemApi';
 import { mediaApi } from '../../services/mediaApi';
-import { requestApi, type RequestResponse } from '../../services/requestApi';
+import { requestApi, type RequestDispute, type RequestResponse } from '../../services/requestApi';
 import type { ItemRequestStatus, User } from '../../types/domain';
+import { respondDispute } from '../../services/reportApi';
 import { TransactionProgress } from './TransactionProgress';
 
 vi.mock('../../services/requestApi', async (importOriginal) => ({
@@ -32,6 +33,10 @@ vi.mock('../../services/itemApi', async (importOriginal) => ({
   itemApi: { detail: vi.fn() },
 }));
 vi.mock('../../services/mediaApi', () => ({ mediaApi: { upload: vi.fn() } }));
+vi.mock('../../services/reportApi', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../services/reportApi')>()),
+  respondDispute: vi.fn(),
+}));
 
 const DONOR_ID = 9;
 const RECEIVER_ID = 12;
@@ -822,5 +827,102 @@ describe('Món mang đổi', () => {
 
     // then
     expect(itemApi.detail).not.toHaveBeenCalled();
+  });
+});
+
+describe('Khiếu nại theo vai', () => {
+  const dispute = (overrides: Partial<RequestDispute> = {}): RequestDispute => ({
+    id: 7,
+    reason: 'NO_SHOW',
+    openedByMe: false,
+    status: 'AWAITING_RESPONSE',
+    responseDueAt: '2026-10-31T07:30:00Z',
+    respondedAt: null,
+    canRespond: true,
+    ...overrides,
+  });
+
+  it('bên khiếu nại thấy thông báo đã gửi, hạn của đối phương và không có nút giải trình', async () => {
+    // when
+    await renderProgress(
+      RECEIVER_ID,
+      request({ status: 'DISPUTED', disputes: [dispute({ openedByMe: true, canRespond: false })] }),
+    );
+
+    // then
+    expect(
+      screen.getByText(
+        /Bạn đã gửi khiếu nại: Sự cố giao nhận\. An Chủ Bài có đến 14:30 31\/10 để giải trình, sau đó Admin kết luận\./,
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('Trạng thái: Chờ Admin')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Giải trình ngay' })).toBeNull();
+    expect(screen.queryByText(/Giao dịch đang có khiếu nại/)).toBeNull();
+  });
+
+  it('bên bị khiếu nại thấy cảnh báo và giải trình ngay tại chỗ', async () => {
+    // given
+    const userEvents = userEvent.setup();
+    vi.mocked(respondDispute).mockResolvedValue(undefined);
+    await renderProgress(DONOR_ID, request({ status: 'DISPUTED', disputes: [dispute()] }));
+    expect(
+      screen.getByText(/Bình Người Nhận đã khiếu nại giao dịch này: Sự cố giao nhận\./),
+    ).toBeTruthy();
+
+    // when
+    await userEvents.click(screen.getByRole('button', { name: 'Giải trình ngay' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    await userEvents.type(dialog.getByLabelText(/Nội dung giải trình/), 'Tôi đã đến đúng giờ hẹn');
+    await userEvents.click(dialog.getByRole('button', { name: 'Gửi giải trình' }));
+
+    // then
+    await waitFor(() =>
+      expect(respondDispute).toHaveBeenCalledWith(7, {
+        note: 'Tôi đã đến đúng giờ hẹn',
+        evidenceMediaIds: undefined,
+      }),
+    );
+    expect(await screen.findByText('Đã gửi giải trình. Admin sẽ xem xét và kết luận.')).toBeTruthy();
+    expect(requestApi.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('đã giải trình thì hiện giờ giải trình thay cho nút', async () => {
+    // when
+    await renderProgress(
+      DONOR_ID,
+      request({
+        status: 'DISPUTED',
+        disputes: [dispute({ canRespond: false, respondedAt: '2026-10-30T02:00:00Z', status: 'OPEN' })],
+      }),
+    );
+
+    // then
+    expect(screen.getByText(/Bạn đã giải trình lúc 09:00 30\/10\/2026/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Giải trình ngay' })).toBeNull();
+  });
+
+  it('quá hạn giải trình thì báo Admin kết luận theo thông tin hiện có', async () => {
+    // when
+    await renderProgress(DONOR_ID, request({ status: 'DISPUTED', disputes: [dispute({ canRespond: false })] }));
+
+    // then
+    expect(
+      screen.getByText('Đã quá hạn giải trình, Admin sẽ kết luận dựa trên thông tin hiện có.'),
+    ).toBeTruthy();
+  });
+
+  it('đã khiếu nại sau hoàn tất thì ẩn nút Khiếu nại giao dịch', async () => {
+    // when
+    await renderProgress(
+      RECEIVER_ID,
+      request({
+        status: 'COMPLETED',
+        completedAt: '2026-10-29T10:00:00Z',
+        disputes: [dispute({ openedByMe: true, canRespond: false, reason: 'NOT_AS_DESCRIBED' })],
+      }),
+    );
+
+    // then
+    expect(screen.queryByRole('button', { name: 'Khiếu nại giao dịch' })).toBeNull();
   });
 });

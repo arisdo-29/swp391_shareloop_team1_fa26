@@ -897,4 +897,18 @@ class ChatServiceTest {
             verify(requestService, never()).acceptOfferedItemInChat(anyLong(), anyLong(), anyLong());
         }
     }
+
+    @Test
+    @DisplayName("Khiếu nại được mở: thêm một tin SYSTEM ghi số giờ giải trình, không thông báo thêm")
+    void postDisputeOpenedNotice_savesSystemMessageWithResponseHours() {
+        // when
+        chatService.postDisputeOpenedNotice(REQUEST_ID, 48);
+
+        // then
+        verify(messageRepository)
+                .save(argThat(m -> m.getKind() == MessageKind.SYSTEM
+                        && m.getRequestId() == REQUEST_ID
+                        && m.getContent().contains("48 giờ để giải trình")));
+        org.mockito.Mockito.verifyNoInteractions(notificationService);
+    }
 }

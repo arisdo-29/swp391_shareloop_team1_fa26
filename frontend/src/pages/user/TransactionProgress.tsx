@@ -28,8 +28,14 @@ import {
   type ApiConversation,
 } from '../../components/messages/conversation';
 import type { DisputeResponse } from '../../services/reportApi';
-import { toBackendUserId, type RequestResponse } from '../../services/requestApi';
-import { canCancelTransaction, requestStatusLabel } from '../../utils/request';
+import {
+  toBackendUserId,
+  type RequestDispute,
+  type RequestResponse,
+} from '../../services/requestApi';
+import { canCancelTransaction, formatDeadline, requestStatusLabel } from '../../utils/request';
+import { transactionDisputeReasonLabel } from '../../utils/disputeView';
+import { DisputeResponseDialog } from '../../components/DisputeResponseDialog';
 import { requestConversationPath } from '../../utils/chatMessages';
 import { useTransactionDetail } from './useTransactionDetail';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
@@ -75,6 +81,7 @@ function TransactionProgressView({
   const [openDialog, setOpenDialog] = useState<OpenDialog>(null);
   const [notice, setNotice] = useState('');
   const [disputeReceipt, setDisputeReceipt] = useState<DisputeResponse | null>(null);
+  const [respondingDispute, setRespondingDispute] = useState<RequestDispute | null>(null);
 
   if (loading && !request) {
     return (
@@ -138,8 +145,10 @@ function TransactionProgressView({
         <div className="min-w-0 space-y-5">
           <StepsCard
             request={request}
+            partnerName={partnerName}
             disputeReceipt={disputeReceipt}
             onOpenDispute={() => setOpenDialog('dispute')}
+            onRespondDispute={setRespondingDispute}
           />
           <PendingCard
             request={request}
@@ -252,6 +261,23 @@ function TransactionProgressView({
           onDone={(updated) =>
             finishAction(updated, 'Đã gửi khiếu nại món đồ không đúng mô tả. Admin sẽ xem xét.')
           }
+        />
+      ) : null}
+      {respondingDispute ? (
+        <DisputeResponseDialog
+          disputeId={respondingDispute.id}
+          reasonLabel={transactionDisputeReasonLabel(respondingDispute.reason)}
+          deadlineText={
+            respondingDispute.responseDueAt
+              ? `Hạn giải trình: ${formatDeadline(respondingDispute.responseDueAt)}. Mỗi khiếu nại chỉ giải trình được một lần.`
+              : undefined
+          }
+          onClose={() => setRespondingDispute(null)}
+          onSubmitted={() => {
+            setRespondingDispute(null);
+            setNotice('Đã gửi giải trình. Admin sẽ xem xét và kết luận.');
+            reload();
+          }}
         />
       ) : null}
       {openDialog === 'dispute' ? (

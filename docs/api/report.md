@@ -300,6 +300,17 @@ Một trong hai bên tham gia giao dịch (người cho hoặc người nhận) 
 
 ---
 
+### Khiếu nại theo vai và dòng tin hệ thống trong chat (D-04, 21/11/2026)
+
+- `ReportService.findDisputesForRequest(requestId, viewerId)` và `findDisputesForRequests(requestIds, viewerId)` trả
+  `RequestDisputeSummary` cho module request gắn vào `RequestResponse.disputes` (xem `request.md`). `canRespond` dùng đúng
+  điều kiện của `POST /disputes/{disputeId}/response`: là bên bị khiếu nại, chưa giải trình, chưa kết luận, còn hạn.
+- Mỗi lần mở khiếu nại giao dịch (khiếu nại sau hoàn tất, từ chối giao nhận, giao nhận không thành công) report phát
+  `DisputeOpenedEvent(requestId, responseHours)`. Module chat nghe sau khi commit và thêm một tin `SYSTEM`: "Giao dịch
+  đang có khiếu nại. Bên bị khiếu nại có 48 giờ để giải trình, sau đó Admin kết luận." Lỗi ghi tin không làm hỏng khiếu nại.
+- Giải trình không phụ thuộc trạng thái giao dịch: `DISPUTED` hay `COMPLETED` đều giải trình được (D2). Luật 48 giờ,
+  một lần, tối đa 2000 ký tự giữ nguyên.
+
 ## 3. POST /api/v1/disputes/{disputeId}/response
 
 Bên bị khiếu nại gửi văn bản giải trình kèm bằng chứng đối chất (BC-08, Issue #112).

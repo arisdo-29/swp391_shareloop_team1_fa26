@@ -385,6 +385,22 @@ public class ChatService {
         }
     }
 
+    /**
+     * Thêm một dòng tin hệ thống vào khung chat khi giao dịch bị khiếu nại (D-04). Không ghi ai khiếu nại để tin giống
+     * nhau cho cả hai bên; banner trên ô soạn tin mới phân biệt bên khiếu nại và bên bị khiếu nại.
+     *
+     * @param requestId giao dịch bị khiếu nại
+     * @param responseHours số giờ bên bị khiếu nại được giải trình
+     */
+    // REQUIRES_NEW: listener gọi hàm này sau khi khiếu nại đã commit, nên cần một transaction riêng để lưu tin.
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void postDisputeOpenedNotice(long requestId, int responseHours) {
+        messageRepository.save(Message.system(
+                requestId,
+                "Giao dịch đang có khiếu nại. Bên bị khiếu nại có " + responseHours
+                        + " giờ để giải trình, sau đó Admin kết luận."));
+    }
+
     // Chuyển mọi đề nghị đổi món PENDING của giao dịch sang DECLINED, trả về số đề nghị đã huỷ. Dùng khi có đề nghị mới
     // (mỗi giao dịch chỉ giữ tối đa một đề nghị PENDING) và khi giao dịch rời giai đoạn thương lượng.
     private int declinePendingOffers(long requestId) {

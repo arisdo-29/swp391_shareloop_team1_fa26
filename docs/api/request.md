@@ -488,6 +488,20 @@ Nút "Từ chối giao nhận" của bên nhận món đồ (GN-07, BC-09).
 | `uploadedBy` | number | ID người tải lên |
 | `createdAt` | string | Thời điểm đính kèm ISO-8601 UTC |
 
+### RequestDisputeSummary
+
+Backend tính sẵn theo người đang gọi API, frontend không tự so giờ.
+
+| Trường | Kiểu | Ý nghĩa |
+|---|---|---|
+| `id` | number | Mã khiếu nại, dùng cho `POST /api/v1/disputes/{id}/response` |
+| `reason` | string | Mã lý do (`NOT_AS_DESCRIBED`, `NO_SHOW`...) |
+| `openedByMe` | boolean | Người xem là bên khiếu nại |
+| `status` | string | `OPEN`, `AWAITING_RESPONSE`, `RESOLVED`, `DISMISSED` |
+| `responseDueAt` | string? | Hạn giải trình ISO-8601 UTC |
+| `respondedAt` | string? | Thời điểm bên bị khiếu nại đã giải trình |
+| `canRespond` | boolean | `true` khi người xem là bên bị khiếu nại, chưa giải trình, khiếu nại chưa kết luận và còn trong hạn |
+
 ### RequestResponse
 
 | Trường | Kiểu | Ý nghĩa |
@@ -524,6 +538,7 @@ Nút "Từ chối giao nhận" của bên nhận món đồ (GN-07, BC-09).
 | `receiverRank` | string? | Hạng uy tín của người gửi yêu cầu (`BRONZE`, `SILVER`, `GOLD`, `DIAMOND`). Alias: `rank` (YC-06) |
 | `lastMessageAt` | string? | Thời điểm tin nhắn mới nhất trong hội thoại của giao dịch ISO-8601 UTC (U03). `null` khi chưa có tin nhắn nào |
 | `disputeResponseDueAt` | string? | Hạn giải trình của khiếu nại đang mở thuộc giao dịch ISO-8601 UTC (U5-BE, D-04, GN-07). Chỉ có giá trị khi `status = DISPUTED`, các trạng thái khác luôn là `null`. FE dùng để hiển thị thời hạn giải trình |
+| `disputes` | RequestDisputeSummary[]? | Khiếu nại của giao dịch nhìn từ phía người xem, cũ trước, tối đa hai phần tử (mỗi bên một lần). Có ở `GET /requests/{id}`, `GET /items/{itemId}/requests`, `GET /me/requests` và kết quả của `refuse-handover`, `handover-failed` (khi mở tranh chấp). Nơi khác là `null`. Xem bảng `RequestDisputeSummary` (21/11/2026) |
 | `donorAvatarUrl` | string? | Ảnh đại diện chủ bài, dạng `/api/v1/media/{id}`; `null` khi chưa có ảnh. Có ở mọi API trả `RequestResponse` |
 | `receiverAvatarUrl` | string? | Ảnh đại diện người nhận, cùng quy ước với `donorAvatarUrl` |
 | `disputeExpired` | boolean | `true` khi giao dịch đã hoàn tất và thời điểm hiện tại đã qua `complaintDeadline` (hết hạn khiếu nại); `false` trong mọi trường hợp khác, kể cả khi chưa hoàn tất. Backend tính từ `complaint_window_hours`, FE không tự so giờ |
