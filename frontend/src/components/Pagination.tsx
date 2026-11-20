@@ -46,7 +46,7 @@ export function Pagination({
             <span>Mỗi trang</span>
             <Select
               aria-label="Mỗi trang"
-              className="min-h-9 min-w-20 px-2 text-sm text-text-primary disabled:opacity-40"
+              inputClassName="min-h-9 min-w-20 px-2 text-sm text-text-primary disabled:opacity-40"
               value={safeSize}
               disabled={disabled}
               onChange={(event) => onSizeChange(Number(event.target.value))}

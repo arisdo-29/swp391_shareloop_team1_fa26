@@ -217,16 +217,17 @@ export function TextArea(
     label?: string;
     error?: string;
     hint?: string;
+    inputClassName?: string;
   },
 ) {
-  const { label, error, hint, className = '', ...rest } = props;
+  const { label, error, hint, className = '', inputClassName = '', ...rest } = props;
   const messageId = useId();
   const hasMessage = Boolean(error || hint);
   return (
-    <label className="block">
+    <label className={`block ${className}`}>
       {label ? <span className="label">{label}</span> : null}
       <textarea
-        className={`input min-h-28 resize-y ${error ? errorInputClass : ''} ${className}`}
+        className={`input min-h-28 resize-y ${error ? errorInputClass : ''} ${inputClassName}`}
         aria-invalid={error ? true : undefined}
         aria-describedby={hasMessage ? messageId : undefined}
         {...rest}
@@ -240,6 +241,7 @@ export function Select(
     label?: string;
     error?: string;
     hint?: string;
+    inputClassName?: string;
   },
 ) {
   const {
@@ -247,6 +249,7 @@ export function Select(
     error,
     hint,
     className = '',
+    inputClassName = '',
     children,
     value,
     defaultValue,
@@ -378,13 +381,13 @@ export function Select(
   }, [activeIndex, open]);
 
   return (
-    <label className="block" htmlFor={rest.id ?? selectId}>
+    <label className={`block ${className}`} htmlFor={rest.id ?? selectId}>
       {label ? <span className="label">{label}</span> : null}
       <span className="relative block">
         <select
           ref={selectRef}
           id={rest.id ?? selectId}
-          className={`input cursor-pointer appearance-none rounded-xl border-border bg-white pr-10 transition hover:border-[#A9C8BB] focus:border-primary disabled:cursor-not-allowed ${error ? errorInputClass : ''} ${className}`}
+          className={`input cursor-pointer appearance-none rounded-xl border-border bg-white pr-10 transition hover:border-[#A9C8BB] focus:border-primary disabled:cursor-not-allowed ${error ? errorInputClass : ''} ${inputClassName}`}
           aria-invalid={error ? true : undefined}
           aria-describedby={hasMessage ? messageId : undefined}
           aria-expanded={open}

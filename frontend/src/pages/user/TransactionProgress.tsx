@@ -181,7 +181,7 @@ function TransactionProgressView({
           {canCancelTransaction(request.status) ? (
             <section className="space-y-2">
               <Button variant="danger" onClick={() => setOpenDialog('cancel')}>
-                Huỷ giao dịch
+                Hủy giao dịch
               </Button>
               <p className="text-xs leading-5 text-text-secondary">
                 Cần nêu lý do. Bài đăng mở lại cho người khác, không mất phí đăng lần nữa.
@@ -216,7 +216,7 @@ function TransactionProgressView({
           onClose={() => setOpenDialog(null)}
           onStale={reload}
           onCancelled={(updated) =>
-            finishAction(updated, 'Đã huỷ giao dịch. Bài đăng được mở lại cho người khác.')
+            finishAction(updated, 'Đã hủy giao dịch. Bài đăng được mở lại cho người khác.')
           }
         />
       ) : null}
@@ -231,7 +231,7 @@ function TransactionProgressView({
           onStale={reload}
           onReported={(updated) => finishAction(updated, 'Đã gửi báo cáo sự cố giao nhận.')}
           onCancelled={(updated) =>
-            finishAction(updated, 'Đã huỷ giao dịch. Bài đăng được mở lại cho người khác.')
+            finishAction(updated, 'Đã hủy giao dịch. Bài đăng được mở lại cho người khác.')
           }
         />
       ) : null}

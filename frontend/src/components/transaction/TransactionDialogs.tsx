@@ -23,12 +23,12 @@ function cancelReasonError(error: unknown) {
     REQUEST_FORBIDDEN: 'Bạn không phải một bên của giao dịch này.',
     REQUEST_NOT_FOUND: 'Không tìm thấy giao dịch này.',
     REQUEST_INVALID_STATE_TRANSITION:
-      'Giao dịch ở trạng thái hiện tại không thể huỷ hoặc đã thay đổi. Vui lòng tải lại.',
-    VALIDATION_FAILED: 'Lý do huỷ phải từ 5 đến 500 ký tự.',
+      'Giao dịch ở trạng thái hiện tại không thể hủy hoặc đã thay đổi. Vui lòng tải lại.',
+    VALIDATION_FAILED: 'Lý do hủy phải từ 5 đến 500 ký tự.',
   };
   return (
     (apiError.code && messages[apiError.code]) ||
-    'Không huỷ được giao dịch lúc này. Vui lòng thử lại.'
+    'Không hủy được giao dịch lúc này. Vui lòng thử lại.'
   );
 }
 
@@ -69,7 +69,7 @@ export function CancelTransactionDialog({
   return (
     <DialogFrame labelledBy="cancel-transaction-title" busy={submitting} onClose={onClose}>
       <h2 id="cancel-transaction-title" className="text-xl font-bold">
-        Huỷ giao dịch
+        Hủy giao dịch
       </h2>
       <p className="mt-1 text-sm text-text-muted">{itemTitle}</p>
       <p className="mt-3 text-sm leading-6 text-text-secondary">
@@ -78,7 +78,7 @@ export function CancelTransactionDialog({
       </p>
       <TextArea
         className="mt-4"
-        label="Lý do huỷ (bắt buộc)"
+        label="Lý do hủy (bắt buộc)"
         value={reason}
         maxLength={500}
         disabled={submitting}
@@ -95,7 +95,7 @@ export function CancelTransactionDialog({
           Giữ giao dịch
         </Button>
         <Button disabled={submitting || reason.trim().length < 5} onClick={() => void submit()}>
-          {submitting ? 'Đang huỷ...' : 'Huỷ giao dịch'}
+          {submitting ? 'Đang hủy...' : 'Hủy giao dịch'}
         </Button>
       </div>
     </DialogFrame>
@@ -104,6 +104,21 @@ export function CancelTransactionDialog({
 
 export function handoverIssueLabel(viewerIsDonor: boolean) {
   return viewerIsDonor ? 'Tôi không giao được đồ' : 'Tôi không nhận được đồ';
+}
+
+function handoverIssueDescription(
+  viewerIsDonor: boolean,
+  partnerName: string,
+  reportIssue: boolean,
+) {
+  if (!reportIssue) {
+    const partnerRole = viewerIsDonor ? 'người nhận' : 'người cho';
+    return `Nếu bạn chọn Hủy giao dịch, ${partnerRole} sẽ nhận được lý do và bài đăng sẽ được mở lại cho người khác.`;
+  }
+
+  const partnerConfirmation = viewerIsDonor ? 'đã xác nhận nhận đồ' : 'đã xác nhận giao đồ';
+  const partnerRole = viewerIsDonor ? 'Người nhận' : 'Người cho';
+  return `${partnerName} ${partnerConfirmation}. Báo cáo sẽ chuyển giao dịch sang trạng thái Đang tranh chấp. ${partnerRole} sẽ nhận được thông báo và có 48 giờ để giải trình. Bài đăng chưa được mở lại cho đến khi Admin kết luận.`;
 }
 
 export function HandoverIssueDialog({
@@ -179,11 +194,9 @@ export function HandoverIssueDialog({
       </h2>
       <p className="mt-1 text-sm text-text-muted">{itemTitle}</p>
       <p className="mt-3 text-sm leading-6 text-text-secondary">
-        {reportIssue
-          ? `${partnerName} đã xác nhận bàn giao. Nếu bạn gửi báo cáo, giao dịch sẽ chuyển sang khiếu nại để quản trị viên xem xét.`
-          : 'Nếu bạn chọn Huỷ giao dịch, bên còn lại sẽ nhận được lý do và bài đăng sẽ được mở lại.'}
+        {handoverIssueDescription(viewerIsDonor, partnerName, reportIssue)}
       </p>
-      <Select className="mt-1" label="Lý do giao nhận không thành công" value={reason}
+      <Select className="mt-4" label="Lý do giao nhận không thành công" value={reason}
         disabled={submitting} onChange={(event) => setReason(event.target.value)}>
         <option value="">Chọn lý do</option>
         <option>{viewerIsDonor ? 'Người nhận không đến điểm hẹn' : 'Người giao không đến điểm hẹn'}</option>
@@ -214,7 +227,7 @@ export function HandoverIssueDialog({
           Đóng
         </Button>
         <Button disabled={submitting || !canSubmit} onClick={() => void submit()}>
-          {submitting ? 'Đang xử lý...' : reportIssue ? 'Gửi báo cáo' : 'Huỷ giao dịch'}
+          {submitting ? 'Đang xử lý...' : reportIssue ? 'Gửi báo cáo' : 'Hủy giao dịch'}
         </Button>
       </div>
     </DialogFrame>
