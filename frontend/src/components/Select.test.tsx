@@ -70,6 +70,7 @@ describe('Select', () => {
     expect(textarea.classList.contains('min-h-32')).toBe(true);
     expect(textarea.classList.contains('mt-4')).toBe(false);
   });
+fix/frontend-ui-l07-l08
 
   it('hiển thị đầy đủ tên danh mục dài và cho phép tự xuống dòng', async () => {
     const user = userEvent.setup();
@@ -93,4 +94,6 @@ describe('Select', () => {
     expect(label.classList.contains('text-ellipsis')).toBe(false);
     expect(Array.from(label.classList).some((className) => className.startsWith('line-clamp'))).toBe(false);
   });
+
+ develop
 });
