@@ -47,7 +47,9 @@ describe('ReputationBadge component', () => {
   it('hiển thị đầy đủ hạng, sao uy tín và tỉ lệ đúng mô tả', () => {
     render(<ReputationBadge trustStars={4.8} rank="GOLD" asDescribedRate={0.92} />);
     expect(screen.getByText('Hạng Vàng')).toBeTruthy();
-    expect(screen.getByText('4.8/5 sao')).toBeTruthy();
+    const stars = screen.getByRole('img', { name: '4,8 trên 5 sao' });
+    expect(stars.children).toHaveLength(5);
+    expect(stars.lastElementChild?.querySelector<HTMLElement>('span')?.style.width).toBe('80%');
     expect(screen.getByText('92% đúng mô tả')).toBeTruthy();
     cleanup();
   });
@@ -55,7 +57,7 @@ describe('ReputationBadge component', () => {
   it('hiển thị dạng compact gọn gàng khi compact=true', () => {
     render(<ReputationBadge trustStars={5} rank="DIAMOND" asDescribedRate={1} compact />);
     expect(screen.getByText('Kim cương')).toBeTruthy();
-    expect(screen.getByText('5/5')).toBeTruthy();
+    expect(screen.getByRole('img', { name: '5 trên 5 sao' })).toBeTruthy();
     expect(screen.getByText('(100% đúng mô tả)')).toBeTruthy();
     cleanup();
   });

@@ -103,7 +103,7 @@ describe('AdminAnomalies', () => {
     const cuongLink = screen.getByRole('link', { name: 'Lê Văn Cường' });
     expect(cuongLink.getAttribute('href')).toBe('/admin/finance/users/10');
     expect(screen.getByText('cuong@fpt.edu.vn')).toBeTruthy();
-    expect(screen.getByText('5 ⭐')).toBeTruthy();
+    expect(screen.getByRole('img', { name: '5 trên 5 sao' })).toBeTruthy();
     expect(screen.getByText('Đang hoạt động')).toBeTruthy();
 
     const dungLink = screen.getByRole('link', { name: 'Lê Văn Dũng' });

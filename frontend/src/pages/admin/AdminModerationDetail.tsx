@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Alert, Button, EmptyState, PageHeader } from '../../components/ui';
+import { StarRating } from '../../components/StarRating';
 import { adminModerationApi, type ReviewItemDetail } from '../../services/adminModerationApi';
 import {
   adminChecklistApi,
@@ -298,7 +299,7 @@ function DonorAndModeration({ detail }: { detail: ReviewItemDetail }) {
           <Fact label="Họ tên" value={detail.donorName || 'Tài khoản đã xóa'} />
           <Fact
             label="Uy tín"
-            value={detail.donorTrustStars == null ? NO_DATA : `${detail.donorTrustStars}/5 sao`}
+            value={detail.donorTrustStars == null ? NO_DATA : <StarRating value={detail.donorTrustStars} />}
           />
         </dl>
       </Section>

@@ -13,6 +13,7 @@ import {
 } from '../../components/ui';
 import { fileToDataUrl } from '../../utils/files';
 import { OtpInput } from '../../components/OtpInput';
+import { StarRating } from '../../components/StarRating';
 import { userApi } from '../../services/userApi';
 import { catalogApi } from '../../services/catalogApi';
 import { mediaApi } from '../../services/mediaApi';
@@ -715,7 +716,7 @@ export function Profile() {
                     </div>
                     <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
                       <p className="text-xs font-semibold text-text-secondary">Sao uy tín</p>
-                      <p className="mt-2 text-xl font-bold">{reputation.trustStars} / 5</p>
+                      <div className="mt-2 text-base"><StarRating value={reputation.trustStars} /></div>
                       <p className="mt-1 text-xs leading-5 text-text-muted">Giảm khi bị báo cáo đúng.</p>
                     </div>
                     <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
