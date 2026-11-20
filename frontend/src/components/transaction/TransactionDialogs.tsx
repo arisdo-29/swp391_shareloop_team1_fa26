@@ -91,7 +91,7 @@ export function CancelTransactionDialog({
         </div>
       ) : null}
       <div className="mt-6 flex justify-end gap-2">
-        <Button variant="ghost" disabled={submitting} onClick={onClose}>
+        <Button variant="outline" disabled={submitting} onClick={onClose}>
           Giữ giao dịch
         </Button>
         <Button disabled={submitting || reason.trim().length < 5} onClick={() => void submit()}>
@@ -210,7 +210,7 @@ export function HandoverIssueDialog({
         </div>
       ) : null}
       <div className="mt-6 flex justify-end gap-2">
-        <Button variant="ghost" disabled={submitting} onClick={onClose}>
+        <Button variant="outline" disabled={submitting} onClick={onClose}>
           Đóng
         </Button>
         <Button disabled={submitting || !canSubmit} onClick={() => void submit()}>
@@ -319,7 +319,7 @@ export function DisputeDialog({
         </div>
       ) : null}
       <div className="mt-6 flex justify-end gap-2">
-        <Button variant="ghost" disabled={submitting} onClick={onClose}>
+        <Button variant="outline" disabled={submitting} onClick={onClose}>
           Hủy
         </Button>
         <Button disabled={submitting || !reason} onClick={() => void submit()}>

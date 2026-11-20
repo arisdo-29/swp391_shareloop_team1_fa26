@@ -64,7 +64,7 @@ export function ProposeOfferChangeDialog({
         </p>
       ) : null}
       <div className="mt-6 flex justify-end gap-2">
-        <Button variant="ghost" disabled={submitting} onClick={onCancel}>
+        <Button variant="outline" disabled={submitting} onClick={onCancel}>
           Hủy
         </Button>
         <Button
@@ -115,7 +115,7 @@ export function AcceptOfferChangeDialog({
         </p>
       ) : null}
       <div className="mt-6 flex justify-end gap-2">
-        <Button variant="ghost" disabled={submitting} onClick={onCancel}>
+        <Button variant="outline" disabled={submitting} onClick={onCancel}>
           Hủy
         </Button>
         <Button disabled={submitting} onClick={onConfirm}>

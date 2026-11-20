@@ -91,7 +91,7 @@ export function UserProfile() {
   const isOwnProfile = currentUserId === profile.id;
   return (
     <div className="page-shell space-y-8">
-      <Button variant="ghost" onClick={goBack}>
+      <Button variant="outline" onClick={goBack}>
         Quay lại
       </Button>
       <ProfileCard
@@ -150,7 +150,7 @@ function ProfileCard({
         </div>
         {/* Không có Nhắn tin: chat chỉ mở trong một giao dịch, không có tin nhắn tự do giữa hai người. */}
         {!isOwnProfile ? (
-          <Button variant="ghost" onClick={onReport}>
+          <Button variant="warning" onClick={onReport}>
             Báo cáo
           </Button>
         ) : null}

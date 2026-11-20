@@ -171,7 +171,7 @@ export function ChatHeader({
             {detailsHidden ? 'Hiện món đồ' : 'Ẩn món đồ'}
           </Button>
           {canReport ? (
-            <Button variant="ghost" size="sm" onClick={onReport}>
+            <Button variant="warning" size="sm" onClick={onReport}>
               Báo cáo
             </Button>
           ) : null}

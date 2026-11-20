@@ -109,7 +109,7 @@ export function BoostDialogBody({
       </div>
 
       <div className="flex items-center justify-end gap-3 border-t border-border bg-surface-low px-5 py-4 sm:px-6">
-        <Button variant="ghost" disabled={busy} onClick={onCancel}>
+        <Button variant="outline" disabled={busy} onClick={onCancel}>
           {rejection ? 'Đóng' : 'Hủy'}
         </Button>
         {showConfirm ? (

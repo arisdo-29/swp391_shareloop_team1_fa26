@@ -260,7 +260,7 @@ function MediaUploader({
             Ảnh đã gửi sẽ không thể xoá hoặc thu hồi. Bên còn lại và Admin (khi có khiếu nại) sẽ xem được các ảnh này.
           </Alert>
           <div className="mt-5 flex justify-end gap-2">
-            <Button variant="ghost" disabled={submitting} onClick={() => setConfirming(false)}>
+            <Button variant="outline" disabled={submitting} onClick={() => setConfirming(false)}>
               Xem lại
             </Button>
             <Button disabled={submitting} onClick={() => void send()}>

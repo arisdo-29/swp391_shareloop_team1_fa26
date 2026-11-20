@@ -305,7 +305,7 @@ export function NotificationMenu({
                 <div className="p-3 text-center">
                   <Button
                     size="sm"
-                    variant="ghost"
+                    variant="outline"
                     disabled={listLoading}
                     onClick={() => void loadNotifications(page + 1, false)}
                   >

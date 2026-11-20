@@ -187,7 +187,7 @@ export function ForgotPassword() {
               ) : null}
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
                 className="w-full"
                 disabled={resendSeconds > 0 || processing}
                 onClick={() => void createOtpRequest(true)}

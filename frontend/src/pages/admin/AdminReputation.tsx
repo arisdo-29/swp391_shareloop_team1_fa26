@@ -71,7 +71,7 @@ function EditableValue({
     <span className="inline-flex items-center gap-2">
       <span className="font-semibold tabular-nums">{formatConfigValue(config)}</span>
       <Button
-        variant="ghost"
+        variant="outline"
         className="!min-h-7 !px-2"
         aria-label={`Sửa ${config.label}`}
         onClick={() => onEdit(config)}
@@ -200,7 +200,7 @@ function RankEditDialog({
         </div>
       ) : null}
       <div className="mt-6 flex justify-end gap-2">
-        <Button variant="ghost" disabled={saving} onClick={onClose}>
+        <Button variant="outline" disabled={saving} onClick={onClose}>
           Hủy
         </Button>
         <Button disabled={saving || !canSave} onClick={() => onSave(values, reason.trim())}>
