@@ -11,7 +11,10 @@ export const paymentApiEndpoints = {
     `/api/v1/wallet/topup-orders/${encodeURIComponent(orderCode)}/cancel`,
 } as const;
 
-export type PaymentOrderStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'EXPIRED';
+export type PaymentOrderStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
+
+/** Mã lỗi khi tạo đơn mà còn đơn đang chờ thanh toán; details có orderCode, amountVnd, credits, expiresAt. */
+export const TOPUP_PENDING_EXISTS = 'WALLET_TOPUP_PENDING_EXISTS';
 export type PaymentProvider = 'MOCK' | 'VNPAY';
 
 export interface TopUpOrderDetailResponse extends Omit<TopUpOrderResponse, 'redirectUrl'> {
@@ -27,12 +30,30 @@ export interface TopUpOrderDetailResponse extends Omit<TopUpOrderResponse, 'redi
   userName?: string | null;
   userEmail?: string | null;
   reviewedByName?: string | null;
-  /** Lý do đơn FAILED (tự hủy, hủy tại VNPay, mã lỗi VNPay); null với trạng thái khác. */
+  /** Lý do đơn FAILED / CANCELLED (tự hủy, hủy tại VNPay, mã lỗi VNPay); null với trạng thái khác. */
   failureReason?: string | null;
+  /** URL thanh toán đã dựng lúc tạo đơn; chỉ có khi đơn còn PENDING trong hạn. "Tiếp tục thanh toán" mở URL này. */
+  paymentUrl?: string | null;
 }
 
 export interface CreateTopUpOrderRequest {
   amountVnd: number;
+  /** true: còn đơn đang chờ thì Backend hủy đơn đó rồi tạo đơn mới ("Hủy đơn cũ & tạo đơn mới"). */
+  replacePending?: boolean;
+}
+
+export interface TopUpOrderListParams {
+  /** PENDING: chỉ đơn còn trong hạn thanh toán; bỏ trống: toàn bộ lịch sử. */
+  status?: PaymentOrderStatus;
+  page?: number;
+  size?: number;
+}
+
+export interface TopUpOrderPage {
+  items: TopUpOrderDetailResponse[];
+  page: number;
+  size: number;
+  totalElements: number;
 }
 
 export interface TopUpOrderResponse {
@@ -79,6 +100,11 @@ export const paymentApi = {
       paymentApiEndpoints.createTopUpOrder,
       input,
     );
+    return data;
+  },
+  /** Đơn nạp của chính mình, mới nhất trước (GET /api/v1/wallet/topup-orders). */
+  async listOrders(params: TopUpOrderListParams = {}): Promise<TopUpOrderPage> {
+    const { data } = await http.get<TopUpOrderPage>(paymentApiEndpoints.createTopUpOrder, { params });
     return data;
   },
   /** Hủy đơn đang chờ thanh toán; gọi lại không đổi gì. Luôn trả trạng thái hiện tại của đơn. */

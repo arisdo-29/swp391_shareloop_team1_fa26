@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.shareloop.auth.service.JwtService;
+import com.shareloop.common.api.PageResponse;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.config.ClockConfig;
 import com.shareloop.config.JwtConfig;
@@ -19,6 +20,8 @@ import com.shareloop.wallet.entity.PaymentOrderStatus;
 import com.shareloop.wallet.entity.PaymentProvider;
 import com.shareloop.wallet.service.PaymentService;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -75,7 +78,7 @@ class TopUpOrderControllerTest {
     void createTopUpOrder_whenValid_returns201WithOrderOfTokenUser() throws Exception {
         // given: token của user 10, service trả đơn vừa tạo
         String token = jwtService.issue(10L, false);
-        when(paymentService.createTopUpOrder(10L, 20_000L))
+        when(paymentService.createTopUpOrder(10L, 20_000L, false))
                 .thenReturn(new TopUpOrderResponse(
                         "abc123",
                         20_000,
@@ -105,7 +108,7 @@ class TopUpOrderControllerTest {
     void createTopUpOrder_whenBelowMinimum_returns422() throws Exception {
         // given
         String token = jwtService.issue(10L, false);
-        when(paymentService.createTopUpOrder(10L, 5_000L))
+        when(paymentService.createTopUpOrder(10L, 5_000L, false))
                 .thenThrow(new BusinessException(WalletErrorCode.WALLET_TOPUP_AMOUNT_INVALID));
 
         // when + then
@@ -140,7 +143,8 @@ class TopUpOrderControllerTest {
                         null,
                         null,
                         null,
-                        SERVER_TIME));
+                        SERVER_TIME,
+                        null));
 
         // when + then
         mockMvc.perform(get(URL + "/abc123").header("Authorization", "Bearer " + token))
@@ -180,7 +184,7 @@ class TopUpOrderControllerTest {
                         20_000,
                         20,
                         1_000,
-                        PaymentOrderStatus.FAILED,
+                        PaymentOrderStatus.CANCELLED,
                         PaymentProvider.VNPAY,
                         Instant.parse("2026-11-17T08:00:00Z"),
                         EXPIRES_AT,
@@ -192,17 +196,101 @@ class TopUpOrderControllerTest {
                         null,
                         null,
                         "Bạn đã hủy đơn nạp.",
-                        SERVER_TIME));
+                        SERVER_TIME,
+                        null));
 
         // when + then
         mockMvc.perform(post(URL + "/abc123/cancel").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.status").value("CANCELLED"))
                 .andExpect(jsonPath("$.failureReason").value("Bạn đã hủy đơn nạp."));
     }
 
     @Test
     void cancelOrder_withoutToken_returns401() throws Exception {
         mockMvc.perform(post(URL + "/abc123/cancel")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void listOrders_passesStatusAndPagingOfTokenUser() throws Exception {
+        // given: user 10 có một đơn đang chờ, kèm URL thanh toán để "Tiếp tục thanh toán"
+        String token = jwtService.issue(10L, false);
+        var pending = new TopUpOrderDetailResponse(
+                "abc123",
+                10L,
+                20_000,
+                20,
+                1_000,
+                PaymentOrderStatus.PENDING,
+                PaymentProvider.VNPAY,
+                Instant.parse("2026-11-17T08:00:00Z"),
+                EXPIRES_AT,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                SERVER_TIME,
+                "https://sandbox.vnpayment.vn/pay?vnp_TxnRef=abc123");
+        when(paymentService.listOwnOrders(10L, PaymentOrderStatus.PENDING, 0, 1))
+                .thenReturn(new PageResponse<>(List.of(pending), 0, 1, 1L));
+
+        // when + then
+        mockMvc.perform(get(URL).param("status", "PENDING")
+                        .param("page", "0")
+                        .param("size", "1")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].orderCode").value("abc123"))
+                .andExpect(
+                        jsonPath("$.items[0].paymentUrl").value("https://sandbox.vnpayment.vn/pay?vnp_TxnRef=abc123"))
+                .andExpect(jsonPath("$.items[0].expiresAt").value("2026-11-17T08:15:00Z"))
+                .andExpect(jsonPath("$.items[0].serverTime").value("2026-11-17T08:00:05Z"));
+    }
+
+    @Test
+    void createTopUpOrder_whenPendingExists_returns409WithPendingOrder() throws Exception {
+        // given: service báo còn đơn đang chờ
+        String token = jwtService.issue(10L, false);
+        when(paymentService.createTopUpOrder(10L, 20_000L, false))
+                .thenThrow(new BusinessException(
+                        WalletErrorCode.WALLET_TOPUP_PENDING_EXISTS,
+                        "Bạn còn một đơn nạp đang chờ thanh toán.",
+                        null,
+                        Map.of("orderCode", "old123", "amountVnd", 50_000L)));
+
+        // when + then
+        mockMvc.perform(post(URL)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amountVnd\": 20000}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("WALLET_TOPUP_PENDING_EXISTS"))
+                .andExpect(jsonPath("$.details.orderCode").value("old123"));
+    }
+
+    @Test
+    void createTopUpOrder_withReplacePending_passesFlagToService() throws Exception {
+        String token = jwtService.issue(10L, false);
+        when(paymentService.createTopUpOrder(10L, 20_000L, true))
+                .thenReturn(new TopUpOrderResponse(
+                        "new123",
+                        20_000,
+                        20,
+                        PaymentOrderStatus.PENDING,
+                        PaymentProvider.VNPAY,
+                        "https://x",
+                        EXPIRES_AT,
+                        SERVER_TIME));
+
+        mockMvc.perform(post(URL)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amountVnd\": 20000, \"replacePending\": true}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.orderCode").value("new123"));
     }
 }

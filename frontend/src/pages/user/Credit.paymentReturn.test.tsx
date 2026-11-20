@@ -35,7 +35,13 @@ vi.mock('../../services/walletApi', () => ({
   },
 }));
 vi.mock('../../services/paymentApi', () => ({
-  paymentApi: { getOrder: vi.fn(), createTopUpOrder: vi.fn(), cancelOrder: vi.fn() },
+  TOPUP_PENDING_EXISTS: 'WALLET_TOPUP_PENDING_EXISTS',
+  paymentApi: {
+    getOrder: vi.fn(),
+    createTopUpOrder: vi.fn(),
+    cancelOrder: vi.fn(),
+    listOrders: vi.fn().mockResolvedValue({ items: [], page: 0, size: 1, totalElements: 0 }),
+  },
 }));
 
 beforeEach(() => {
@@ -114,7 +120,7 @@ it('giữ phiên và báo Toast khi người dùng quay lại sau khi hủy VNPa
     amountVnd: 20_000,
     credits: 20,
     vndPerCredit: 1_000,
-    status: 'FAILED',
+    status: 'CANCELLED',
     provider: 'VNPAY',
     createdAt: '2026-11-03T00:00:00Z',
     expiresAt: '2026-11-03T00:15:00Z',
@@ -183,7 +189,7 @@ it('hiển thị thất bại riêng và không phát thông báo hủy khi Back
 
   expect(await screen.findByText('Thanh toán không thành công. Credit chưa được cộng vào ví.'))
     .toBeTruthy();
-  expect(screen.getByRole('heading', { name: 'Đơn nạp đã hủy' })).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Thanh toán không thành công' })).toBeTruthy();
   expect(screen.queryByRole('timer')).toBeNull();
   expect(
     received.some((message) => message.message === 'Bạn đã hủy yêu cầu thanh toán.'),
@@ -310,7 +316,7 @@ it('Xác nhận hủy: khoá nút khi đang gọi, cập nhật ngay theo respon
   // when: Backend trả đơn đã hủy
   resolveCancel({
     ...pendingVnpayOrder('SL-CANCEL'),
-    status: 'FAILED',
+    status: 'CANCELLED',
     reviewNote: 'Bạn đã hủy đơn nạp.',
     failureReason: 'Bạn đã hủy đơn nạp.',
   });

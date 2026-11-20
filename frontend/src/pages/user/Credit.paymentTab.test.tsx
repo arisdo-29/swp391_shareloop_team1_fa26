@@ -34,7 +34,13 @@ vi.mock('../../services/walletApi', () => ({
   },
 }));
 vi.mock('../../services/paymentApi', () => ({
-  paymentApi: { getOrder: vi.fn(), createTopUpOrder: vi.fn(), cancelOrder: vi.fn() },
+  TOPUP_PENDING_EXISTS: 'WALLET_TOPUP_PENDING_EXISTS',
+  paymentApi: {
+    getOrder: vi.fn(),
+    createTopUpOrder: vi.fn(),
+    cancelOrder: vi.fn(),
+    listOrders: vi.fn().mockResolvedValue({ items: [], page: 0, size: 1, totalElements: 0 }),
+  },
 }));
 
 const VNPAY_URL = 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_TxnRef=SL-NEW';

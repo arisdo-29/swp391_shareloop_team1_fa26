@@ -38,9 +38,18 @@ Admin, FE không nên viết cứng (VI-03).
 Tạo đơn nạp PENDING (VI-03).
 
 - Xác thực: **bắt buộc** Bearer Token. Chủ đơn lấy từ token.
+- **Mỗi người một đơn đang chờ thanh toán** (PENDING còn trong hạn). Còn đơn đang chờ thì:
+  - không gửi `replacePending` (hoặc `false`): `409 WALLET_TOPUP_PENDING_EXISTS`, `details` có `orderCode`, `amountVnd`,
+    `credits`, `expiresAt` của đơn đang chờ; không đổi dữ liệu.
+  - `"replacePending": true` ("Hủy đơn cũ & tạo đơn mới"): trong **một transaction**, hủy đơn cũ bằng
+    `UPDATE ... WHERE status = 'PENDING'` (thành `CANCELLED`, lý do "Bạn đã hủy đơn này để tạo đơn nạp mới.") rồi tạo đơn mới.
+  Khoá dòng `users` trước (cùng thứ tự với IPN) nên hai lần tạo đơn cùng lúc chạy lần lượt. Đơn PENDING đã quá hạn cộng
+  dung sai được chuyển `EXPIRED` trước khi kiểm; đơn đã qua `expiresAt` (còn trong dung sai) không chặn tạo đơn mới.
+- URL thanh toán (`redirectUrl`) được lưu vào cột `payment_url`; "Tiếp tục thanh toán" dùng lại đúng URL đó (cùng
+  `vnp_TxnRef`, `vnp_ExpireDate`), không tạo mã giao dịch mới.
 - Thành công: `201`, một `TopUpOrderResponse`.
 - Lỗi: `400 VALIDATION_FAILED` khi thiếu `amountVnd` hoặc không dương; `422 WALLET_TOPUP_AMOUNT_INVALID` khi dưới mức
-  tối thiểu hoặc không phải bội số; `401 UNAUTHORIZED`.
+  tối thiểu hoặc không phải bội số; `409 WALLET_TOPUP_PENDING_EXISTS`; `401 UNAUTHORIZED`.
 
 ```json
 // request
@@ -58,6 +67,17 @@ Tạo đơn nạp PENDING (VI-03).
   "serverTime": "2026-11-17T08:00:00Z"
 }
 ```
+
+## GET /api/v1/wallet/topup-orders
+
+Danh sách đơn nạp của **chính mình** (chủ đơn lấy từ token, không bao giờ trả đơn của người khác), mới nhất trước.
+
+- Query: `status` (tuỳ chọn), `page` (mặc định 0), `size` (mặc định 10, tối đa 50).
+  - `status=PENDING`: chỉ đơn còn trong hạn thanh toán, dùng cho mục "Đơn đang chờ thanh toán" (tối đa một đơn).
+  - Không có `status`: toàn bộ lịch sử nạp ("Lịch sử nạp").
+- Trước khi đọc, đơn PENDING đã qua `expiresAt + expiry-grace-minutes` của người gọi được chuyển `EXPIRED`.
+- Thành công: `200`, `{ items: TopUpOrderDetailResponse[], page, size, totalElements }`. Mỗi đơn có `expiresAt`,
+  `serverTime`, `failureReason` và `paymentUrl` (chỉ khi đơn còn PENDING và chưa qua `expiresAt`).
 
 ## GET /api/v1/wallet/topup-orders/{orderCode}
 
@@ -100,7 +120,7 @@ khi FE vẫn gọi; nay khôi phục, chỉ đọc.
 Người dùng tự hủy đơn nạp đang chờ thanh toán ("Xác nhận hủy" ở trang Ví).
 
 - Xác thực: **bắt buộc** Bearer Token; chỉ hủy được đơn của chính mình.
-- Đơn PENDING chuyển `FAILED` ngay bằng một câu `UPDATE ... WHERE status = 'PENDING'`, `review_note` = "Bạn đã hủy đơn nạp.".
+- Đơn PENDING chuyển `CANCELLED` ngay bằng một câu `UPDATE ... WHERE status = 'PENDING'`, `review_note` = "Bạn đã hủy đơn nạp.".
   Không đụng ví (đơn chưa thanh toán không giữ hay cộng Credit).
 - Idempotent: gọi lại khi đơn đã FAILED, hoặc đơn đã SUCCESS / EXPIRED, không đổi gì và vẫn trả `200`.
 - Thành công: `200`, một `TopUpOrderDetailResponse` (trạng thái hiện tại của đơn, kèm `expiresAt`, `failureReason`).
@@ -141,7 +161,7 @@ Xác nhận thanh toán giả lập và cộng Credit (VI-04, VI-07) trong một
 | `orderCode`   | string | Mã đơn (32 ký tự), dùng cho bước xác nhận             |
 | `amountVnd`   | number | Số tiền nạp (VNĐ)                                     |
 | `credits`     | number | Số Credit sẽ được cộng                                |
-| `status`      | string | `PENDING` / `SUCCESS` / `FAILED` / `EXPIRED`          |
+| `status`      | string | `PENDING` / `SUCCESS` / `FAILED` / `EXPIRED` / `CANCELLED` |
 | `provider`    | string | `MOCK` hoặc `VNPAY`                                   |
 | `redirectUrl` | string | Địa chỉ FE chuyển người dùng tới để thanh toán        |
 | `expiresAt`   | string | Hạn thanh toán (ISO-8601 UTC) = `created_at + payment_order_expire_minutes`, làm tròn xuống giây. Đúng bằng `vnp_ExpireDate` gửi VNPay. FE đếm ngược theo mốc này, không tự tính |
@@ -164,7 +184,20 @@ Xác nhận thanh toán giả lập và cộng Credit (VI-04, VI-07) trong một
 |------------------------------------|------|-----------------------------------------------------------|
 | `WALLET_TOPUP_AMOUNT_INVALID`      | 422  | Dưới mức nạp tối thiểu hoặc không phải bội số của giá 1 Credit |
 | `WALLET_PAYMENT_ORDER_NOT_FOUND`   | 404  | Không có đơn hoặc đơn của người khác                      |
-| `WALLET_PAYMENT_ORDER_NOT_PAYABLE` | 409  | Đơn `FAILED`, `EXPIRED` hoặc dùng mock-confirm cho đơn khác `MOCK` |
+| `WALLET_PAYMENT_ORDER_NOT_PAYABLE` | 409  | Đơn `FAILED`, `EXPIRED`, `CANCELLED` hoặc dùng mock-confirm cho đơn khác `MOCK` |
+| `WALLET_TOPUP_PENDING_EXISTS`      | 409  | Tạo đơn khi còn đơn đang chờ thanh toán mà không gửi `replacePending: true`; `details` là đơn đang chờ |
+
+### Trạng thái đơn
+
+| `status` | Khi nào |
+|----------|---------|
+| `PENDING` | Vừa tạo, chờ thanh toán |
+| `SUCCESS` | IPN thành công (hoặc mock-confirm), đã cộng Credit |
+| `CANCELLED` | Người dùng tự hủy, hủy để tạo đơn mới, hoặc khách hủy tại VNPay (`vnp_ResponseCode = 24`) |
+| `FAILED` | VNPay báo thanh toán lỗi (mã khác `00` và `24`) |
+| `EXPIRED` | Quá hạn thanh toán (job, xem đơn, liệt kê đơn, hoặc IPN tới sau hạn) |
+
+`CANCELLED` thêm ở migration `V202611211100`; đơn `FAILED` cũ do tự hủy hoặc mã 24 được chuyển sang `CANCELLED`.
 
 ## Luồng VNPAY
 
@@ -200,7 +233,7 @@ Ví dụ khi đã xử lý kết quả: `{"RspCode":"00","Message":"Confirm Succ
 ### GET /api/v1/payments/vnpay/return
 
 Không cần Bearer Token. Kiểm chữ ký rồi redirect 302; không bao giờ cộng Credit (chỉ IPN cộng tiền).
-Chữ ký hợp lệ mà `vnp_ResponseCode` khác `00` (vd `24` = khách hủy): đơn VNPAY còn PENDING, đúng số tiền chuyển **FAILED ngay**
+Chữ ký hợp lệ mà `vnp_ResponseCode` khác `00` (vd `24` = khách hủy): đơn VNPAY còn PENDING, đúng số tiền chuyển ngay sang **CANCELLED** (mã `24`) hoặc **FAILED** (mã khác)
 và lưu tham số vào `callback_data` (giữ mã lỗi), không chờ IPN hay job hết hạn. Lỗi ở bước này chỉ ghi log, không chặn redirect.
 Query gửi FE: `orderCode` và `status=SUCCESS|FAILED|INVALID_SIGNATURE`. Chữ ký sai trả `orderCode` rỗng.
 `SUCCESS` ở đây chỉ phản ánh dữ liệu return của cổng; IPN có thể đến sau. FE cần tải lại ví và không được suy ra đã cộng tiền từ query này.
