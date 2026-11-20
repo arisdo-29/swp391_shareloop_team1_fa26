@@ -808,7 +808,7 @@ Hai sơ đồ dưới được vẽ mới theo các đường dẫn trong fronte
 | 21     | Quản trị           | **Duyệt bài**                                             | Hàng chờ bài và màn chi tiết duyệt theo checklist.                                         |
 | 22     | Quản trị           | **Danh mục; Khu vực**                                     | Quản lý danh mục, thuộc tính động, cây khu vực.                                            |
 | 23     | Quản trị           | **Checklist duyệt bài; Từ khóa cấm**                      | Quản lý câu hỏi checklist, lý do từ chối mẫu, từ khoá cấm (thử nhanh).                     |
-| 24     | Quản trị           | **Tài khoản; Uy tín và hạng**                             | Khoá / mở khoá tài khoản; cấu hình điểm và ngưỡng hạng.                                    |
+| 24     | Quản trị           | **Tài khoản; Hạng và Uy tín**                             | Khoá / mở khoá tài khoản; cấu hình điểm và ngưỡng hạng.                                    |
 | 25     | Quản trị           | **Giao dịch; Khiếu nại và báo cáo**                       | Tra cứu, huỷ giao dịch kẹt; yêu cầu giải trình và kết luận hồ sơ.                          |
 | 26     | Quản trị           | **Báo cáo tài chính; Đơn nạp Credit; Tra cứu người dùng** | Ba sổ tài chính, xuất CSV; danh sách đơn nạp; ví và lịch sử Credit từng người.             |
 | 27     | Quản trị           | **Cấu hình phí; Nhật ký hoạt động; Cảnh báo bất thường**  | Sửa cấu hình nghiệp vụ; tra cứu nhật ký; xem cặp giao dịch lặp.                            |
@@ -1798,7 +1798,7 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 | [CD-03](#BR_CD_03) | Cho → Trao đổi trong chat: giao dịch bài Cho chưa chốt lịch, người nhận muốn đưa một bài của mình vào đổi → chủ bài được hỏi có chuyển sang Trao đổi (5 Credit) không; đồng ý và trả phí thì món đó thành món đổi và chuyển Đang giao dịch. |
 | [CD-04](#BR_CD_04) | Trao đổi → Cho: chủ bài chọn một người không kèm món đổi → hộp xác nhận "Chuyển bài sang Cho, không hoàn phí đã trả". Đồng ý thì bài thành Cho và mở chat.                                                                                  |
 | [CD-06](#BR_CD_06) | Phí chuyển ghi sổ cái loại Phí đăng (POST_FEE), trừ ngay; bài không phải duyệt lại vì nội dung không đổi. Không kiểm hạn mức bài Trao đổi khi chuyển.                                                                                       |
-| [CD-07](#BR_CD_07) | Điểm uy tín tính theo hình thức cuối cùng khi hoàn tất (Cho: +10 / +2; Trao đổi: +6 / +6).                                                                                                                                                  |
+| [CD-07](#BR_CD_07) | Điểm tích luỹ tính theo hình thức cuối cùng khi hoàn tất (Cho: +10 / +2; Trao đổi: +6 / +6).                                                                                                                                                  |
 
 <span id="FIG_sw21" class="anchor"></span>***Hình 16. Luồng xử lý F20 Chuyển Cho ↔ Trao đổi – file ShareLoop_Flows_Swimlane_v12_VI.drawio***
 
@@ -2392,7 +2392,7 @@ Các chức năng Admin. Admin là tài khoản tạo sẵn, không đăng bài 
 
 **Use case:** [UC-46](#UC_46) **· Tác nhân:** Admin
 
-**Kích hoạt:** Admin mở "Cấu hình phí" hoặc "Uy tín và hạng".
+**Kích hoạt:** Admin mở "Cấu hình phí" hoặc "Hạng và Uy tín".
 
 **Mô tả:** Sửa các con số nghiệp vụ lưu trong bảng cấu hình (phí, hạn mức, mốc thời gian, điểm, ngưỡng hạng).
 
@@ -2430,7 +2430,7 @@ Các chức năng Admin. Admin là tài khoản tạo sẵn, không đăng bài 
 
 > **\[Ảnh chụp màn hình cần chèn\]** *Trang Cấu hình phí (/admin/settings/fees).*
 >
-> **\[Ảnh chụp màn hình cần chèn\]** *Trang Uy tín và hạng (/admin/reputation).*
+> **\[Ảnh chụp màn hình cần chèn\]** *Trang Hạng và Uy tín (/admin/reputation).*
 
 ### 3.8.6 Xử lý báo cáo và khiếu nại
 
@@ -3611,7 +3611,7 @@ Người nhận gửi yêu cầu xin (bài Cho) hoặc đề nghị đổi (bài
 | <span id="BR_CD_04" class="anchor"></span>**CD-04** | Trao đổi → Cho: chủ bài chọn một người không kèm món đổi → hộp xác nhận "Chuyển bài sang Cho, không hoàn phí đã trả". Đồng ý thì bài thành Cho và mở chat.                                                                                  | —            | [Chọn người giao dịch và chuyển hình thức Cho ↔ Trao đổi](#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi) |
 | <span id="BR_CD_05" class="anchor"></span>**CD-05** | Trong giao dịch bài Cho, người nhận không gửi ảnh trong chat; chủ bài gửi ảnh từ khi Đã chốt lịch.                                                                                                                                          | —            | [Nhắn tin trong giao dịch](#nhắn-tin-trong-giao-dịch)                                                             |
 | <span id="BR_CD_06" class="anchor"></span>**CD-06** | Phí chuyển ghi sổ cái loại Phí đăng (POST_FEE), trừ ngay; bài không phải duyệt lại vì nội dung không đổi. Không kiểm hạn mức bài Trao đổi khi chuyển.                                                                                       | —            | [Chọn người giao dịch và chuyển hình thức Cho ↔ Trao đổi](#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi) |
-| <span id="BR_CD_07" class="anchor"></span>**CD-07** | Điểm uy tín tính theo hình thức cuối cùng khi hoàn tất (Cho: +10 / +2; Trao đổi: +6 / +6).                                                                                                                                                  | —            | [Chọn người giao dịch và chuyển hình thức Cho ↔ Trao đổi](#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi) |
+| <span id="BR_CD_07" class="anchor"></span>**CD-07** | Điểm tích luỹ tính theo hình thức cuối cùng khi hoàn tất (Cho: +10 / +2; Trao đổi: +6 / +6).                                                                                                                                                  | —            | [Chọn người giao dịch và chuyển hình thức Cho ↔ Trao đổi](#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi) |
 | **CD-08**                                           | Người nhận đổi được món đem đổi khi yêu cầu còn chờ hoặc đã được chọn nhưng chưa chốt lịch; lịch đã đề xuất phải hai bên xác nhận lại; chủ bài được báo và có thể huỷ giao dịch nếu không đồng ý. Sau khi chốt lịch không đổi được (cập nhật 16/11/2026).                                                                                                                                             | —            | —                                                                                                                 |
 
 ### 5.1.L Chat trong giao dịch
@@ -3886,7 +3886,7 @@ Giá trị mặc định lấy từ enum ConfigKey (backend/src/main/java/com/sh
 | stuck_request_hours              | 48                          | Ngưỡng giao dịch bị kẹt. Giao dịch quá giờ hẹn hơn số giờ này mà chưa bên nào xác nhận bàn giao thì Admin thấy ở bộ lọc Bị kẹt.                                                                                                                                            |
 | complaint_window_hours           | 24                          | Hạn khiếu nại. Số giờ được khiếu nại sau khi giao dịch hoàn tất.                                                                                                                                                                                                           |
 | response_window_hours            | 48                          | Hạn giải trình. Số giờ bên bị khiếu nại được giải trình, tính từ lúc nhận thông báo.                                                                                                                                                                                       |
-| daily_points_cap                 | 30                          | Trần điểm mỗi ngày. Số điểm uy tín tối đa một người được cộng trong một ngày.                                                                                                                                                                                              |
+| daily_points_cap                 | 30                          | Trần điểm mỗi ngày. Số điểm tích luỹ tối đa một người được cộng trong một ngày.                                                                                                                                                                                              |
 | payment_order_expire_minutes     | 30                          | Hạn đơn nạp. Số phút một đơn nạp được chờ thanh toán. Quá hạn thì đơn chuyển sang hết hạn.                                                                                                                                                                                 |
 | reputation_silver_min            | 50                          | Điểm tối thiểu hạng Bạc. Tổng điểm cần có để lên hạng Bạc. Phải nhỏ hơn điểm tối thiểu hạng Vàng.                                                                                                                                                                          |
 | reputation_gold_min              | 150                         | Điểm tối thiểu hạng Vàng. Tổng điểm cần có để lên hạng Vàng. Phải lớn hơn hạng Bạc và nhỏ hơn hạng Kim cương.                                                                                                                                                              |
@@ -4274,7 +4274,7 @@ Chụp trên bản staging (frontend Vercel, backend Cloud Run) bằng các tài
 | 46     | [Quản lý từ khoá cấm, checklist, lý do từ chối mẫu](#quản-lý-từ-khoá-cấm-checklist-lý-do-từ-chối-mẫu)             | Trang Từ khóa cấm (/admin/keywords) với ô thử nhanh.                                                         |
 | 47     | [Quản lý từ khoá cấm, checklist, lý do từ chối mẫu](#quản-lý-từ-khoá-cấm-checklist-lý-do-từ-chối-mẫu)             | Trang Checklist duyệt bài (/admin/checklist).                                                                |
 | 48     | [Cấu hình phí, hạn mức, uy tín và hạng](#cấu-hình-phí-hạn-mức-uy-tín-và-hạng)                                     | Trang Cấu hình phí (/admin/settings/fees).                                                                   |
-| 49     | [Cấu hình phí, hạn mức, uy tín và hạng](#cấu-hình-phí-hạn-mức-uy-tín-và-hạng)                                     | Trang Uy tín và hạng (/admin/reputation).                                                                    |
+| 49     | [Cấu hình phí, hạn mức, uy tín và hạng](#cấu-hình-phí-hạn-mức-uy-tín-và-hạng)                                     | Trang Hạng và Uy tín (/admin/reputation).                                                                    |
 | 50     | [Xử lý báo cáo và khiếu nại](#xử-lý-báo-cáo-và-khiếu-nại)                                                         | Trang Khiếu nại và báo cáo (/admin/complaints): chi tiết hồ sơ, nút Kết luận bị khoá khi còn hạn giải trình. |
 | 51     | [Quản lý tài khoản: khoá và mở khoá](#quản-lý-tài-khoản-khoá-và-mở-khoá)                                          | Trang Tài khoản (/admin/users) với hộp thoại Khoá tài khoản.                                                 |
 | 52     | [Quản lý giao dịch](#quản-lý-giao-dịch)                                                                           | Trang Giao dịch (/admin/transactions) với bộ lọc Bị kẹt.                                                     |

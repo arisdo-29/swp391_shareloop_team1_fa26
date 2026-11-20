@@ -22,14 +22,14 @@ const sections = [
     label: 'Quản lý người dùng',
     items: [
       ['Tài khoản', '/admin/users', 'users'],
-      ['Uy tín và hạng', '/admin/reputation', 'reputation'],
+      ['Hạng và Uy tín', '/admin/reputation', 'reputation'],
       ['Giao dịch', '/admin/transactions', 'transactions'],
       ['Khiếu nại và báo cáo', '/admin/complaints', 'complaints'],
       ['Tra cứu người dùng', '/admin/finance/users', 'lookup'],
     ],
   },
   {
-    label: 'Tài chính & Credit',
+    label: 'Tài chính và Credit',
     items: [
       ['Báo cáo tài chính', '/admin/finance', 'report'],
       ['Đơn nạp Credit', '/admin/finance/topup-orders', 'topup'],

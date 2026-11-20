@@ -314,7 +314,7 @@ class OfferChangeIT extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("Hoàn tất giao dịch sau khi chuyển: điểm uy tín tính theo SWAP cho cả hai bên (CD-07)")
+    @DisplayName("Hoàn tất giao dịch sau khi chuyển: điểm tích luỹ tính theo SWAP cho cả hai bên (CD-07)")
     void completeAfterConversion_awardsSwapPoints() throws Exception {
         // given
         givenReservedGiveTransaction(DONOR_BALANCE);

@@ -152,7 +152,7 @@ Hạng Đồng bắt đầu từ 0, các mốc còn lại lấy từ cấu hình
 Khi đã ở Kim cương, `nextRank`, `nextRankMinPoints` và `pointsToNextRank` đều là `null`.
 
 Mỗi lần hoàn tất giao dịch, mỗi bên nhận một thông báo `POINTS_AWARDED` (link `/profile?tab=reputation`): tiêu đề
-"Bạn được cộng N điểm uy tín" hoặc "Giao dịch hoàn tất, chưa được cộng điểm", nội dung là `reason` ở trên kèm tổng
+"Bạn được cộng N điểm tích luỹ" hoặc "Giao dịch hoàn tất, chưa được cộng điểm", nội dung là `reason` ở trên kèm tổng
 điểm, câu lên hạng và câu hồi sao nếu có. Frontend hiện thông báo này thành một toast nhỏ.
 
 Giao dịch hoàn tất nhưng không được cộng đủ điểm vẫn có một dòng lịch sử; `reason` giải thích lý do:

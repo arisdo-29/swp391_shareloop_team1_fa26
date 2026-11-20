@@ -85,7 +85,7 @@ describe('Notifications', () => {
     expect(screen.getByText(/Bạn còn mua thêm được gói đẩy/)).toBeTruthy();
   });
 
-  it('lọc theo loại Khiếu nại & Giải trình thì chỉ còn thông báo khiếu nại', async () => {
+  it('lọc theo loại Khiếu nại và Giải trình thì chỉ còn thông báo khiếu nại', async () => {
     // given
     const user = userEvent.setup();
     renderPage();

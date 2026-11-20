@@ -34,7 +34,7 @@ async function loadMissingThumbnails(items: ReviewQueueItem[]) {
   );
 }
 
-/** Hàng chờ duyệt bài: mỗi bài một hàng gọn, bấm "Xem chi tiết & duyệt" để sang trang duyệt riêng. */
+/** Hàng chờ duyệt bài: mỗi bài một hàng gọn, bấm "Xem chi tiết và duyệt" để sang trang duyệt riêng. */
 export function AdminModerationList() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -196,7 +196,7 @@ function QueueRow({ item }: { item: ReviewQueueItem }) {
       <td className="whitespace-nowrap text-xs">{new Date(item.createdAt).toLocaleString('vi-VN')}</td>
       <td className="text-right">
         <Link to={`/admin/moderation/${item.id}`}>
-          <Button>Xem chi tiết & duyệt</Button>
+          <Button>Xem chi tiết và duyệt</Button>
         </Link>
       </td>
     </tr>

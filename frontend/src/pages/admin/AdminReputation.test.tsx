@@ -23,7 +23,7 @@ function config(
     label,
     description: `Mô tả ${label}`,
     group,
-    groupLabel: group === 'REPUTATION' ? 'Uy tín và hạng' : 'Hiển thị bài',
+    groupLabel: group === 'REPUTATION' ? 'Hạng và Uy tín' : 'Hiển thị bài',
   };
 }
 

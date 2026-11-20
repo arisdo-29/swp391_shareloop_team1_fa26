@@ -65,7 +65,6 @@ export function Post() {
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState('');
   const [categoryAttributes, setCategoryAttributes] = useState<CategoryAttributeResponse[]>([]);
-  const [attributesLoading, setAttributesLoading] = useState(false);
   const [attributesError, setAttributesError] = useState('');
   const [type, setType] = useState<ItemType | ''>('');
   const [title, setTitle] = useState('');
@@ -165,11 +164,9 @@ export function Post() {
     if (!categoryId) {
       setCategoryAttributes([]);
       setAttributesError('');
-      setAttributesLoading(false);
       return;
     }
     let active = true;
-    setAttributesLoading(true);
     setAttributesError('');
     catalogApi.categoryAttributes(categoryId)
       .then((response) => { if (active) setCategoryAttributes(response); })
@@ -177,8 +174,7 @@ export function Post() {
         if (!active) return;
         setCategoryAttributes([]);
         setAttributesError('Không tải được thông tin bổ sung của danh mục.');
-      })
-      .finally(() => { if (active) setAttributesLoading(false); });
+      });
     return () => { active = false; };
   }, [category, categoryIds]);
 
@@ -576,24 +572,7 @@ export function Post() {
                 error={errors.brand}
               />
             </div>
-            {category && (attributesLoading || Boolean(attributesError) || categoryAttributes.length > 0) ? (
-              <div className="rounded-md bg-surface-low p-3 text-sm">
-                <p className="font-semibold">Nên nêu trong mô tả</p>
-                {attributesLoading ? <p className="mt-1 text-text-muted">Đang tải thuộc tính...</p> : null}
-                {attributesError ? <p className="mt-1 text-error">{attributesError}</p> : null}
-                {!attributesLoading && !attributesError && categoryAttributes.length ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {sortedCategoryAttributes.map((attribute) => (
-                      <span key={attribute.id} className="rounded-full bg-white px-2.5 py-1 text-xs ring-1 ring-border">
-                        {attribute.name}
-                        {attribute.required ? ' · bắt buộc' : ''}
-                        {attribute.options.length ? ` · ${attribute.options.join(', ')}` : ''}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+            {category && attributesError ? <p className="text-sm text-error">{attributesError}</p> : null}
             <fieldset>
               <legend className="label">Tình trạng</legend>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

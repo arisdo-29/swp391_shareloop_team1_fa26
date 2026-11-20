@@ -212,7 +212,7 @@ describe('AdminModerationList', () => {
     expect(adminModerationApi.detail).toHaveBeenCalledWith(42);
   });
 
-  it('nút Xem chi tiết & duyệt dẫn sang trang riêng của bài, không mở popup', async () => {
+  it('nút Xem chi tiết và duyệt dẫn sang trang riêng của bài, không mở popup', async () => {
     render(
       <MemoryRouter>
         <AdminModerationList />
@@ -220,7 +220,7 @@ describe('AdminModerationList', () => {
     );
 
     await screen.findByText('Áo khoác gió nam');
-    const links = screen.getAllByRole('link', { name: 'Xem chi tiết & duyệt' });
+    const links = screen.getAllByRole('link', { name: 'Xem chi tiết và duyệt' });
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/admin/moderation/42',
       '/admin/moderation/43',

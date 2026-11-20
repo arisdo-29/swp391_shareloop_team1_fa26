@@ -482,7 +482,7 @@ public class ReputationService {
             return;
         }
         String title =
-                granted > 0 ? "Bạn được cộng " + granted + " điểm uy tín" : "Giao dịch hoàn tất, chưa được cộng điểm";
+                granted > 0 ? "Bạn được cộng " + granted + " điểm tích luỹ" : "Giao dịch hoàn tất, chưa được cộng điểm";
         StringBuilder body = new StringBuilder(pointsReason(context, roleLabel, basePoints, granted));
         body.append(". Tổng điểm hiện tại: ").append(newTotal).append(".");
         if (rankBefore != null && newRank.ordinal() > rankBefore.ordinal()) {

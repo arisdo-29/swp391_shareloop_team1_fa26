@@ -288,8 +288,8 @@ export function AdminReputation() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Uy tín & Hạng"
-        description="Cấu hình hạng thành viên, quy tắc cộng điểm uy tín và hỗ trợ khôi phục uy tín cho tài khoản đủ điều kiện."
+        title="Hạng và Uy tín"
+        description="Cấu hình hạng thành viên, quy tắc cộng điểm tích luỹ và hỗ trợ khôi phục uy tín cho tài khoản đủ điều kiện."
       />
 
       {notice ? (
@@ -370,7 +370,7 @@ export function AdminReputation() {
           <section>
             <h2 className="mb-1 section-title">Quy tắc cộng điểm</h2>
             <p className="mb-3 text-sm text-text-muted">
-              Điểm uy tín quyết định hạng của người dùng.
+              Điểm tích luỹ quyết định hạng của người dùng.
             </p>
             {rules.length ? (
               <div className="table-wrap">

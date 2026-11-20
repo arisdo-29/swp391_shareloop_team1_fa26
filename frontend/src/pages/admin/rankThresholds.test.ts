@@ -10,7 +10,7 @@ function config(key: string, value: string): AdminConfigResponse {
     label: key,
     description: '',
     group: 'REPUTATION',
-    groupLabel: 'Uy tín và hạng',
+    groupLabel: 'Hạng và Uy tín',
   };
 }
 

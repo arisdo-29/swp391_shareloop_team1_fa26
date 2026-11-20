@@ -23,9 +23,9 @@ export type NotificationCategory = 'moderation' | 'transaction' | 'complaint' | 
 
 export const notificationCategoryLabels: Record<Exclude<NotificationCategory, 'other'>, string> = {
   moderation: 'Duyệt bài',
-  transaction: 'Giao dịch & Tin nhắn',
-  complaint: 'Khiếu nại & Giải trình',
-  credit: 'Credit & Uy tín',
+  transaction: 'Giao dịch và Tin nhắn',
+  complaint: 'Khiếu nại và Giải trình',
+  credit: 'Credit và Uy tín',
 };
 
 // Backend trả tối đa 100 dòng mỗi trang (docs/api/notification.md).

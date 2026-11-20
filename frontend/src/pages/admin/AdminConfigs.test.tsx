@@ -33,7 +33,7 @@ const configs = [
   config('post_fee', '5', 'Phí đăng bài', 'FEES', 'Phí và nạp Credit'),
   config('boost_fee', '8', 'Phí đẩy bài', 'FEES', 'Phí và nạp Credit'),
   config('ai_free_per_day', '3', 'Lượt AI miễn phí mỗi ngày', 'AI', 'Trợ lý AI'),
-  config('reputation_gold_min', '200', 'Điểm tối thiểu hạng Vàng', 'REPUTATION', 'Uy tín và hạng'),
+  config('reputation_gold_min', '200', 'Điểm tối thiểu hạng Vàng', 'REPUTATION', 'Hạng và Uy tín'),
 ];
 
 function renderPage() {
@@ -65,7 +65,7 @@ describe('AdminConfigs', () => {
     expect(screen.getAllByText('Mặc định').length).toBeGreaterThan(0);
     expect(screen.queryByText('post_fee')).toBeNull();
     expect(screen.queryByText('Điểm tối thiểu hạng Vàng')).toBeNull();
-    expect(screen.getByRole('link', { name: 'Uy tín & Hạng' }).getAttribute('href')).toBe('/admin/reputation');
+    expect(screen.getByRole('link', { name: 'Hạng và Uy tín' }).getAttribute('href')).toBe('/admin/reputation');
   });
 
   it('sửa một cấu hình cần giá trị mới và lý do rồi báo bằng tên cấu hình', async () => {

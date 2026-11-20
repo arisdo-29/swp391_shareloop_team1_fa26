@@ -5,7 +5,7 @@ import type { Item } from '../../types/domain';
 const values = [
   ['01', 'CHO ĐI', 'Món đồ bạn không còn dùng'],
   ['02', 'TÌM ĐỒ', 'Tìm món đồ bạn đang cần'],
-  ['03', 'GIAO NHẬN & TRAO ĐỔI', 'Gặp trực tiếp hoặc gửi vận chuyển, hoàn tất một vòng đời mới'],
+  ['03', 'GIAO NHẬN VÀ TRAO ĐỔI', 'Gặp trực tiếp hoặc gửi vận chuyển, hoàn tất một vòng đời mới'],
 ];
 const steps = [
   ['Đăng hoặc tìm món', 'Chia sẻ món bạn có, hoặc lọc theo nhu cầu và quận. Khách xem được, muốn gửi yêu cầu thì đăng nhập.'],

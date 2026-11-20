@@ -11,7 +11,7 @@ public enum ConfigGroup {
     MODERATION("Kiểm duyệt và báo cáo"),
     ACCOUNT("Tài khoản và OTP"),
     TRANSACTION("Yêu cầu và giao dịch"),
-    REPUTATION("Uy tín và hạng");
+    REPUTATION("Hạng và Uy tín");
 
     private final String label;
 

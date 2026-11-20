@@ -76,7 +76,7 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     boolean existsByTargetTypeAndItemIdAndReasonAndRequestIdIsNotNullAndStatusIn(
             TargetType targetType, Long itemId, ReportReason reason, Collection<ReportStatus> statuses);
 
-    /** Các report một người đã gửi, mới nhất lên trước; dùng cho tab Khiếu nại & Báo cáo của Member. */
+    /** Các report một người đã gửi, mới nhất lên trước; dùng cho tab Khiếu nại và Báo cáo của Member. */
     List<Report> findByReporterIdOrderByCreatedAtDescIdDesc(Long reporterId);
 
     /**

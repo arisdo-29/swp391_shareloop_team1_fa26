@@ -98,7 +98,7 @@ describe('Profile', () => {
     renderProfile('/profile?tab=reputation');
 
     // then
-    expect(await screen.findByText('Lịch sử uy tín')).toBeTruthy();
+    expect(await screen.findByText('Lịch sử điểm tích luỹ')).toBeTruthy();
     expect(reputationApi.getMyReputation).toHaveBeenCalledTimes(1);
   });
 
@@ -152,7 +152,7 @@ describe('Profile', () => {
 
     // then
     expect(await screen.findByText('Thông tin cá nhân')).toBeTruthy();
-    expect(screen.queryByText('Lịch sử uy tín')).toBeNull();
+    expect(screen.queryByText('Lịch sử điểm tích luỹ')).toBeNull();
   });
 
   it('bỏ liên kết Ví Credit khỏi hồ sơ và giữ chuyển hướng cho URL cũ', async () => {
@@ -176,7 +176,7 @@ describe('Profile', () => {
     await userEvent.click(screen.getByRole('button', { name: /Uy tín/ }));
 
     // then
-    expect(await screen.findByText('Lịch sử uy tín')).toBeTruthy();
+    expect(await screen.findByText('Lịch sử điểm tích luỹ')).toBeTruthy();
     expect(reputationApi.getMyReputation).toHaveBeenCalledTimes(1);
   });
 

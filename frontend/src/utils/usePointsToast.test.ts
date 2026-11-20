@@ -19,7 +19,7 @@ afterEach(() => {
 const base: NotificationResponse = {
   id: 1,
   type: 'POINTS_AWARDED',
-  title: 'Bạn được cộng 10 điểm uy tín',
+  title: 'Bạn được cộng 10 điểm tích luỹ',
   body: 'Cộng 10 điểm hoàn tất giao dịch món “Nồi cơm” (vai trò cho/tặng). Tổng điểm hiện tại: 60.',
   link: '/profile?tab=reputation',
   isRead: false,
@@ -32,12 +32,12 @@ describe('pointsToastMessage', () => {
       ...base,
       body: `${base.body} Chúc mừng, bạn đã lên hạng Bạc!`,
     });
-    expect(message).toBe('Bạn được cộng 10 điểm uy tín. Bạn đã lên hạng Bạc!');
+    expect(message).toBe('Bạn được cộng 10 điểm tích luỹ. Bạn đã lên hạng Bạc!');
   });
 
   it('chỉ dẫn tới trang uy tín khi không lên hạng', () => {
     expect(pointsToastMessage(base)).toBe(
-      'Bạn được cộng 10 điểm uy tín. Xem chi tiết ở Hồ sơ › Uy tín & Hạng.',
+      'Bạn được cộng 10 điểm tích luỹ. Xem chi tiết ở Hồ sơ › Hạng và Uy tín.',
     );
   });
 });
