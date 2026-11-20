@@ -134,7 +134,7 @@ describe('Bảo vệ trang Tiến trình', () => {
     // then
     expect(await screen.findByText('Không xem được giao dịch này')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Các bước' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Huỷ giao dịch' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Hủy giao dịch' })).toBeNull();
   });
 
   it('gọi API chi tiết đúng id trên đường dẫn và người đang đăng nhập', async () => {
@@ -186,7 +186,7 @@ describe('Các bước theo trạng thái', () => {
     expect(screen.getByText(/Giao dịch đã hoàn tất lúc 10:36 30\/10\/2026/)).toBeTruthy();
   });
 
-  it('không được chọn và đã huỷ hiện Alert kèm lý do', async () => {
+  it('không được chọn và đã hủy hiện Alert kèm lý do', async () => {
     // when
     await renderProgress(
       RECEIVER_ID,
@@ -565,13 +565,13 @@ describe('Ảnh khiếu nại', () => {
 });
 
 // Chuyển từ Messages.transaction.test.tsx: các chức năng này nay nằm ở trang Tiến trình.
-describe('Huỷ giao dịch', () => {
+describe('Hủy giao dịch', () => {
   it.each(['RESERVED', 'AWAITING_LOGISTICS', 'LOGISTICS_CONFIRMED', 'AWAITING_HANDOVER'] as const)(
-    'hiện khối Huỷ giao dịch và chú thích khi trạng thái %s',
+    'hiện khối Hủy giao dịch và chú thích khi trạng thái %s',
     async (status) => {
       await renderProgress(RECEIVER_ID, request({ status }));
 
-      expect(screen.getByRole('button', { name: 'Huỷ giao dịch' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Hủy giao dịch' })).toBeTruthy();
       expect(
         screen.getByText(
           'Cần nêu lý do. Bài đăng mở lại cho người khác, không mất phí đăng lần nữa.',
@@ -585,7 +585,7 @@ describe('Huỷ giao dịch', () => {
     async (status) => {
       await renderProgress(RECEIVER_ID, request({ status }));
 
-      expect(screen.queryByRole('button', { name: 'Huỷ giao dịch' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Hủy giao dịch' })).toBeNull();
     },
   );
 
@@ -596,14 +596,14 @@ describe('Huỷ giao dịch', () => {
     );
     await renderProgress(RECEIVER_ID, request());
 
-    await userEvents.click(screen.getByRole('button', { name: 'Huỷ giao dịch' }));
+    await userEvents.click(screen.getByRole('button', { name: 'Hủy giao dịch' }));
     const dialog = await screen.findByRole('dialog');
     const submit = within(dialog).getByRole('button', {
-      name: 'Huỷ giao dịch',
+      name: 'Hủy giao dịch',
     }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
 
-    const reasonBox = within(dialog).getByLabelText(/Lý do huỷ/);
+    const reasonBox = within(dialog).getByLabelText(/Lý do hủy/);
     expect(reasonBox.getAttribute('maxlength')).toBe('500');
     await userEvents.type(reasonBox, 'Tôi bận việc đột xuất');
     expect(within(dialog).getByText('21/500')).toBeTruthy();
@@ -658,18 +658,38 @@ describe('Báo chưa nhận được / chưa giao được', () => {
     expect(screen.getByRole('button', { name: 'Tôi không giao được đồ' })).toBeTruthy();
   });
 
+  it('giải thích đúng cho người cho khi người nhận đã xác nhận nhận đồ', async () => {
+    const userEvents = userEvent.setup();
+    await renderProgress(
+      DONOR_ID,
+      request({ status: 'AWAITING_HANDOVER', receiverHandoverAt: '2026-10-25T10:00:00Z' }),
+    );
+
+    await userEvents.click(screen.getByRole('button', { name: 'Tôi không giao được đồ' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    expect(dialog.getByText(/Người nhận sẽ nhận được thông báo và có 48 giờ để giải trình/)).toBeTruthy();
+    expect(dialog.getByText(/Bài đăng chưa được mở lại cho đến khi Admin kết luận/)).toBeTruthy();
+  });
+
   it.each([
-    [RECEIVER_ID, 'Tôi không nhận được đồ', 'Người giao không đến điểm hẹn'],
-    [DONOR_ID, 'Tôi không giao được đồ', 'Người nhận không đến điểm hẹn'],
-  ] as const)('cho vai trò %s chọn lý do và huỷ sau khi đã chốt lịch', async (role, label, reason) => {
+    [RECEIVER_ID, 'Tôi không nhận được đồ', 'Người giao không đến điểm hẹn', 'người cho'],
+    [DONOR_ID, 'Tôi không giao được đồ', 'Người nhận không đến điểm hẹn', 'người nhận'],
+  ] as const)('cho vai trò %s chọn lý do và hủy sau khi đã chốt lịch', async (role, label, reason, partnerRole) => {
     const userEvents = userEvent.setup();
     vi.mocked(requestApi.cancelTransaction).mockResolvedValue(request({ status: 'CANCELLED' }));
     await renderProgress(role, request({ status: 'LOGISTICS_CONFIRMED' }));
     await userEvents.click(screen.getByRole('button', { name: label }));
     const dialog = within(screen.getByRole('dialog', { name: label }));
-    const submit = dialog.getByRole('button', { name: 'Huỷ giao dịch' }) as HTMLButtonElement;
+    const submit = dialog.getByRole('button', { name: 'Hủy giao dịch' }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
-    await userEvents.selectOptions(dialog.getByLabelText('Lý do giao nhận không thành công'), reason);
+    expect(
+      dialog.getByText(
+        `Nếu bạn chọn Hủy giao dịch, ${partnerRole} sẽ nhận được lý do và bài đăng sẽ được mở lại cho người khác.`,
+      ),
+    ).toBeTruthy();
+    const reasonSelect = dialog.getByLabelText('Lý do giao nhận không thành công');
+    expect(reasonSelect.closest('label')?.classList.contains('mt-4')).toBe(true);
+    await userEvents.selectOptions(reasonSelect, reason);
     await userEvents.click(submit);
     expect(requestApi.cancelTransaction).toHaveBeenCalledWith(101, role, reason);
     expect(requestApi.reportHandoverIssue).not.toHaveBeenCalled();
@@ -694,8 +714,15 @@ describe('Báo chưa nhận được / chưa giao được', () => {
 
     await userEvents.click(screen.getByRole('button', { name: 'Tôi không nhận được đồ' }));
     const dialog = await screen.findByRole('dialog');
-    await userEvents.selectOptions(within(dialog).getByLabelText('Lý do giao nhận không thành công'), 'other');
-    await userEvents.type(within(dialog).getByLabelText(/Mô tả sự cố/), 'Chờ mãi không thấy ai giao');
+    expect(within(dialog).getByText(/Người cho sẽ nhận được thông báo và có 48 giờ để giải trình/)).toBeTruthy();
+    expect(within(dialog).getByText(/Bài đăng chưa được mở lại cho đến khi Admin kết luận/)).toBeTruthy();
+    expect(within(dialog).queryByText(/Giao dịch sẽ được hủy/)).toBeNull();
+    const reasonSelect = within(dialog).getByLabelText('Lý do giao nhận không thành công');
+    expect(reasonSelect.closest('label')?.classList.contains('mt-4')).toBe(true);
+    await userEvents.selectOptions(reasonSelect, 'other');
+    const noteInput = within(dialog).getByLabelText(/Mô tả sự cố/);
+    expect(noteInput.closest('label')?.classList.contains('mt-4')).toBe(true);
+    await userEvents.type(noteInput, 'Chờ mãi không thấy ai giao');
     await userEvents.click(within(dialog).getByRole('button', { name: 'Gửi báo cáo' }));
 
     await waitFor(() =>

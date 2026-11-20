@@ -3,7 +3,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Select } from './ui';
+import { Select, TextArea } from './ui';
 
 afterEach(cleanup);
 
@@ -49,5 +49,25 @@ describe('Select', () => {
 
     expect((select as HTMLSelectElement).value).toBe('used');
     expect(screen.queryByRole('listbox')).toBeNull();
+  });
+
+  it('tách class bố cục của wrapper khỏi class của ô nhập', () => {
+    render(
+      <>
+        <Select label="Danh mục" className="mt-5" inputClassName="min-h-10">
+          <option value="book">Sách</option>
+        </Select>
+        <TextArea label="Mô tả" className="mt-4" inputClassName="min-h-32" />
+      </>,
+    );
+
+    const select = screen.getByRole('combobox', { name: 'Danh mục' });
+    const textarea = screen.getByRole('textbox', { name: 'Mô tả' });
+    expect(select.closest('label')?.classList.contains('mt-5')).toBe(true);
+    expect(select.classList.contains('min-h-10')).toBe(true);
+    expect(select.classList.contains('mt-5')).toBe(false);
+    expect(textarea.closest('label')?.classList.contains('mt-4')).toBe(true);
+    expect(textarea.classList.contains('min-h-32')).toBe(true);
+    expect(textarea.classList.contains('mt-4')).toBe(false);
   });
 });

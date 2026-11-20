@@ -888,7 +888,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                 {sharePickerOpen && !shareUnavailableReason ? (
                   <Select
                     aria-label="Chia sẻ bài của bạn"
-                    className="min-h-10 py-2 text-xs"
+                    inputClassName="min-h-10 py-2 text-xs"
                     value={shareItemId}
                     disabled={sending || !chatEnabled || !!chatImage}
                     onChange={(event) => setShareItemId(event.target.value)}

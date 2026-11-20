@@ -96,7 +96,7 @@ export function AdminModerationList() {
         </div>
         <Select
           aria-label="Lọc theo loại bài"
-          className="h-9 px-2.5 text-xs text-text-primary"
+          inputClassName="h-9 px-2.5 text-xs text-text-primary"
           value={filterType}
           onChange={(event) => setFilterType(event.target.value as 'all' | 'new' | 'edited')}
         >
