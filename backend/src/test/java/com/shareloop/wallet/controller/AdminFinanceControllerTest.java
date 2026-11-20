@@ -105,6 +105,14 @@ class AdminFinanceControllerTest {
             assertThat(daily.getRow(1).getCell(0).getLocalDateTimeCellValue().toLocalDate())
                     .isEqualTo(LocalDate.of(2026, 10, 1));
             assertThat(daily.getRow(1).getCell(1).getNumericCellValue()).isEqualTo(100_000);
+            var topUpSheet = workbook.getSheet("Chi tiết nạp tiền");
+            assertThat(topUpSheet).isNotNull();
+            assertThat(topUpSheet.getRow(0).getCell(0).getStringCellValue()).isEqualTo("Thời gian");
+            assertThat(topUpSheet.getRow(0).getCell(1).getStringCellValue()).isEqualTo("Mã đơn");
+            var memberSheet = workbook.getSheet("Theo thành viên");
+            assertThat(memberSheet).isNotNull();
+            assertThat(memberSheet.getRow(0).getCell(0).getStringCellValue()).isEqualTo("Họ tên");
+            assertThat(memberSheet.getRow(0).getCell(2).getStringCellValue()).isEqualTo("Số tiền nạp (VND)");
         }
     }
 
@@ -331,9 +339,16 @@ class AdminFinanceControllerTest {
                         "Đối chiếu nạp Credit",
                         "Credit quy đổi từ tiền mặt,Credit nạp ghi sổ,Chênh lệch,Kết quả",
                         "100,100,0,Khớp",
+                        "",
+                        "Chi tiết nạp tiền",
+                        "Thời gian,Mã đơn,Họ tên,Email,Số tiền (VND),Credit nhận,Cổng thanh toán",
+                        "",
+                        "Theo thành viên",
+                        "Họ tên,Email,Tổng tiền (VND),Tổng Credit nhận,Số đơn nạp",
                         "");
 
         verify(adminFinanceService).getReport(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 17));
+        verify(adminFinanceService).getTopUpReportDetails(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 17));
     }
 
     @Test
