@@ -138,7 +138,7 @@ describe('AdminModerationList', () => {
     expect(screen.getByText('Nguyễn Văn A')).toBeTruthy();
     expect(screen.getByText('Cần xem kỹ')).toBeTruthy();
     expect(screen.getByText('Có từ khoá cần xem xét: zalo')).toBeTruthy();
-    expect(screen.getByText('3/5 sao')).toBeTruthy();
+    expect(screen.getByRole('img', { name: '3 trên 5 sao' })).toBeTruthy();
     const thumbnail = screen.getByRole('img', { name: 'Ảnh Áo khoác gió nam' });
     expect(thumbnail.getAttribute('src')).toContain('/api/v1/media/101');
     expect(screen.getByRole('img', { name: 'Ảnh Bàn học gỗ' }).tagName).toBe('DIV');
@@ -346,9 +346,9 @@ describe('AdminModerationDetail', () => {
 
     await screen.findByRole('heading', { name: 'Áo khoác gió nam' });
     expect(adminModerationApi.detail).toHaveBeenCalledWith(42);
+    expect(screen.getByRole('img', { name: '3 trên 5 sao' })).toBeTruthy();
     for (const text of [
       'Nguyễn Văn A',
-      '3/5 sao',
       'Quần áo',
       'Quận 1',
       'Đã dùng nhiều',

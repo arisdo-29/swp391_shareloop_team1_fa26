@@ -26,6 +26,7 @@ import { ListChecks } from '@phosphor-icons/react/dist/csr/ListChecks';
 import { Prohibit } from '@phosphor-icons/react/dist/csr/Prohibit';
 import { Users } from '@phosphor-icons/react/dist/csr/Users';
 import { Medal } from '@phosphor-icons/react/dist/csr/Medal';
+import { Star } from '@phosphor-icons/react/dist/csr/Star';
 import { ArrowsLeftRight } from '@phosphor-icons/react/dist/csr/ArrowsLeftRight';
 import { Flag } from '@phosphor-icons/react/dist/csr/Flag';
 import { MagnifyingGlass } from '@phosphor-icons/react/dist/csr/MagnifyingGlass';
@@ -75,6 +76,7 @@ const iconMap = {
   district: MapPin,
   users: Users,
   reputation: Medal,
+  star: Star,
   transactions: ArrowsLeftRight,
   complaints: Flag,
   lookup: MagnifyingGlass,

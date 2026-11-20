@@ -10,7 +10,8 @@ import { userApi, type PublicProfileResponse } from '../../services/userApi';
 import { toBackendUserId } from '../../services/requestApi';
 import { resolveMediaUrl } from '../../services/mediaUrl';
 import type { ApiError } from '../../services/http';
-import { formatAsDescribedRate, formatTrustStars, getRankLabel } from '../../utils/reputation';
+import { StarRating } from '../../components/StarRating';
+import { formatAsDescribedRate, getRankLabel } from '../../utils/reputation';
 
 type LoadError = 'not-found' | 'failed' | null;
 
@@ -162,7 +163,7 @@ function ProfileCard({
       ) : null}
       <div className="grid grid-cols-2 gap-4 border-t border-border pt-5 lg:grid-cols-4">
         <Stat label="Hạng thành viên" value={rankLabel} />
-        <Stat label="Mức uy tín" value={`${formatTrustStars(profile.trustStars)} / 5 sao`} />
+        <Stat label="Mức uy tín" value={<StarRating value={profile.trustStars} className="text-sm" />} />
         <Stat label="Giao dịch hoàn tất" value={profile.completedTransactions.toLocaleString('vi-VN')} />
         {profile.asDescribedRate !== null ? (
           <Stat label="Đúng mô tả" value={formatAsDescribedRate(profile.asDescribedRate)} />

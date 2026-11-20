@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Alert, Button, EmptyState, ItemImage, PageHeader, SearchField, SkeletonRows } from '../../components/ui';
+import { StarRating } from '../../components/StarRating';
 import { adminModerationApi, type ReviewQueueItem } from '../../services/adminModerationApi';
 import { adminErrorMessage } from './adminErrors';
 import { displayModerationNote, displayRuleFlag } from './moderationDisplay';
@@ -190,7 +191,7 @@ function QueueRow({ item }: { item: ReviewQueueItem }) {
       </td>
       <td>{item.donorName || 'Tài khoản đã xóa'}</td>
       <td className="whitespace-nowrap">
-        {item.donorTrustStars == null ? 'Chưa có dữ liệu' : `${item.donorTrustStars}/5 sao`}
+        {item.donorTrustStars == null ? 'Chưa có dữ liệu' : <StarRating value={item.donorTrustStars} />}
       </td>
       <td className="whitespace-nowrap text-xs">{new Date(item.createdAt).toLocaleString('vi-VN')}</td>
       <td className="text-right">
