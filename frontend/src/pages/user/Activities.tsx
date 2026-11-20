@@ -180,6 +180,7 @@ export function Activities() {
   const [listingFeeError, setListingFeeError] = useState('');
   const [listingFeeNeedsTopUp, setListingFeeNeedsTopUp] = useState(false);
   const [listingFeeNotice, setListingFeeNotice] = useState('');
+  const [removeNotice, setRemoveNotice] = useState('');
   const [removingItemId, setRemovingItemId] = useState('');
   const [itemsReloadKey, setItemsReloadKey] = useState(0);
   useRealtimeRefresh(['REQUEST', 'ITEM', 'NOTIFICATION'], (update) => {
@@ -322,15 +323,28 @@ export function Activities() {
   const removeApiItem = async (itemId: string) => {
     const id = Number(itemId);
     if (!Number.isSafeInteger(id) || removingItemId) return;
+    const withdrawingReviewRequest =
+      myItems.find((item) => item.id === itemId)?.status === 'PENDING_REVIEW';
     setRemovingItemId(itemId);
     setMyItemsError('');
+    setRemoveNotice('');
     try {
       await itemApi.remove(id);
       setMyItems((current) => current.filter((item) => item.id !== itemId));
       setRemoveConfirmId('');
+      const notice = withdrawingReviewRequest
+        ? 'Đã thu hồi yêu cầu đăng bài.'
+        : 'Đã gỡ bài đăng.';
+      setRemoveNotice(notice);
+      toast.warning(notice);
     } catch (error) {
       const apiError = error as ApiError;
-      setMyItemsError(apiError.message || 'Không gỡ được bài đăng.');
+      const fallback = withdrawingReviewRequest
+        ? 'Không thu hồi được yêu cầu đăng bài. Vui lòng thử lại.'
+        : 'Không gỡ được bài đăng. Vui lòng thử lại.';
+      const message = apiError.message || fallback;
+      setMyItemsError(message);
+      toast.error(message);
     } finally {
       setRemovingItemId('');
     }
@@ -449,6 +463,7 @@ export function Activities() {
     removeConfirmItem?.boostedUntil && Date.parse(removeConfirmItem.boostedUntil) > Date.now()
       ? removeConfirmItem.boostedUntil
       : null;
+  const withdrawingReviewRequest = removeConfirmItem?.status === 'PENDING_REVIEW';
 
   // Số Credit còn thiếu so với phí BE báo; chỉ để hiển thị, việc trừ tiền và kiểm số dư thật vẫn ở BE.
   const creditShortage =
@@ -643,6 +658,7 @@ export function Activities() {
         {pageNotice ? <Alert tone="success">{pageNotice}</Alert> : null}
         {editNotice ? <Alert tone="warning">{editNotice}</Alert> : null}
         {listingFeeNotice ? <Alert tone="success">{listingFeeNotice}</Alert> : null}
+        {removeNotice ? <Alert tone="warning">{removeNotice}</Alert> : null}
         {deepLinkNotice ? <Alert tone="warning">{deepLinkNotice}</Alert> : null}
         {selectNotice ? <Alert tone="warning">{selectNotice}</Alert> : null}
       </div>
@@ -902,7 +918,11 @@ export function Activities() {
                             disabled={!canRemove || removingItemId === item.id}
                             onClick={() => setRemoveConfirmId(item.id)}
                           >
-                            Gỡ bài
+                            {item.status === 'PENDING_REVIEW'
+                              ? 'Thu hồi yêu cầu đăng bài'
+                              : item.status === 'APPROVED'
+                                ? 'Gỡ bài đăng'
+                                : 'Gỡ bài'}
                           </Button>
                         </div>
                       </div>
@@ -1113,9 +1133,13 @@ export function Activities() {
 
       {removeConfirmId ? (
         <DialogFrame>
-          <h2 className="text-xl font-bold">Gỡ bài đăng?</h2>
+          <h2 className="text-xl font-bold">
+            {withdrawingReviewRequest ? 'Thu hồi yêu cầu đăng bài?' : 'Gỡ bài đăng?'}
+          </h2>
           <p className="mt-2 text-sm leading-6 text-text-muted">
-            Bài đăng sẽ không còn hiển thị với người dùng khác.
+            {withdrawingReviewRequest
+              ? 'Yêu cầu sẽ được thu hồi và bài bị gỡ khỏi hệ thống. Phí đang giữ sẽ được nhả; các yêu cầu đang chờ (nếu có) sẽ bị hủy.'
+              : 'Bài đăng sẽ không còn hiển thị với người dùng khác.'}
           </p>
           {/* Chủ bài tự gỡ thì backend không gửi thông báo dừng đẩy, nên đây là nơi duy nhất người dùng được biết. */}
           {removeConfirmBoostedUntil ? (
@@ -1138,7 +1162,13 @@ export function Activities() {
               disabled={Boolean(removingItemId)}
               onClick={() => void removeApiItem(removeConfirmId)}
             >
-              {removingItemId ? 'Đang gỡ...' : 'Xác nhận gỡ'}
+              {removingItemId
+                ? withdrawingReviewRequest
+                  ? 'Đang thu hồi...'
+                  : 'Đang gỡ...'
+                : withdrawingReviewRequest
+                  ? 'Xác nhận thu hồi'
+                  : 'Xác nhận gỡ'}
             </Button>
           </div>
         </DialogFrame>
@@ -1747,7 +1777,10 @@ function itemSummary(item: Item, pendingCount: number, chosenRequest?: ItemReque
     };
   }
   if (status === 'PENDING_REVIEW')
-    return { headline: 'Admin đang duyệt bài.', detail: 'Bài chưa hiện với người khác.' };
+    return {
+      headline: 'Yêu cầu đăng bài đang chờ quản trị viên xét duyệt.',
+      detail: 'Bài chưa hiển thị với người khác.',
+    };
   if (status === 'REJECTED' || status === 'VIOLATION') {
     return {
       headline: 'Bài chưa được duyệt.',

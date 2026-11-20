@@ -123,5 +123,46 @@ it('giữ phiên và báo Toast khi người dùng quay lại sau khi hủy VNPa
   expect(tokenStorage.get()).toBe('valid-token');
   expect(tokenStorage.getUserId()).toBe(7);
   expect(refreshWallet).not.toHaveBeenCalled();
+  expect(screen.getByRole('heading', { name: 'Thanh toán đã hủy' })).toBeTruthy();
+  expect(screen.getAllByText('Thanh toán đã hủy').length).toBeGreaterThan(1);
+  expect(screen.queryByRole('timer')).toBeNull();
+  expect(screen.getByText('20 Credit')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Tạo đơn nạp khác' })).toBeTruthy();
+  expect(screen.queryByText('Đơn nạp Credit đã được tạo')).toBeNull();
   unsubscribe();
+});
+
+it('không tự đánh dấu đã hủy khi callback thất bại nhưng Backend vẫn trả PENDING', async () => {
+  sessionStorage.setItem('shareloop:pendingTopUp', JSON.stringify({ orderCode: 'SL-123' }));
+  vi.mocked(paymentApi.getOrder).mockResolvedValue({
+    orderCode: 'SL-123',
+    userId: 7,
+    amountVnd: 20_000,
+    credits: 20,
+    vndPerCredit: 1_000,
+    status: 'PENDING',
+    provider: 'VNPAY',
+    createdAt: '2026-11-03T00:00:00Z',
+    expiresAt: '2099-11-03T00:15:00Z',
+    submittedAt: null,
+    reviewedBy: null,
+    reviewedAt: null,
+    reviewNote: null,
+  });
+
+  render(
+    <MemoryRouter initialEntries={['/credit?orderCode=SL-123&status=FAILED']}>
+      <Credit />
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByText(
+    'Thanh toán vừa thất bại tại VNPay, nhưng đơn vẫn đang chờ hệ thống xác nhận hủy. Credit chưa được cộng vào ví.',
+  )).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Đơn nạp đang chờ xác nhận' })).toBeTruthy();
+  expect(screen.getAllByText('Đang chờ thanh toán').length).toBeGreaterThan(0);
+  expect(screen.getByRole('timer')).toBeTruthy();
+  expect(screen.queryByText('Thanh toán đã hủy')).toBeNull();
+  expect(sessionStorage.getItem('shareloop:pendingTopUp')).not.toBeNull();
+  expect(refreshWallet).not.toHaveBeenCalled();
 });

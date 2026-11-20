@@ -6,7 +6,13 @@ export interface PendingTopUpSession {
 }
 
 export type VnPayReturnStatus = 'SUCCESS' | 'FAILED' | 'INVALID_SIGNATURE';
-export type TopUpReturnResult = 'success' | 'cancelled' | 'failed' | 'expired' | 'pending';
+export type TopUpReturnResult =
+  | 'success'
+  | 'cancelled'
+  | 'failed'
+  | 'expired'
+  | 'pending-after-failed-return'
+  | 'pending';
 
 export function savePendingTopUp(order: TopUpOrderResponse) {
   try {
@@ -68,7 +74,7 @@ export function resolveTopUpReturnResult(
 ): TopUpReturnResult {
   if (orderStatus === 'SUCCESS') return 'success';
   if (orderStatus === 'EXPIRED') return 'expired';
-  if (returnStatus === 'FAILED') return 'cancelled';
-  if (orderStatus === 'FAILED') return 'failed';
+  if (orderStatus === 'FAILED') return returnStatus === 'FAILED' ? 'cancelled' : 'failed';
+  if (returnStatus === 'FAILED') return 'pending-after-failed-return';
   return 'pending';
 }

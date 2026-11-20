@@ -3,8 +3,7 @@ import { mutationErrorMessage, mutationToastDefinition } from './mutationToast';
 
 describe('mutationToastDefinition', () => {
   it.each([
-    ['/api/v1/items', 'post', 'Đăng bài thành công.'],
-    ['/api/v1/items/12', 'delete', 'Đã gỡ bài đăng.'],
+    ['/api/v1/items', 'post', 'Đã gửi yêu cầu đăng bài thành công.'],
     ['/api/v1/items/12/renew', 'post', 'Gia hạn bài đăng thành công.'],
     ['/api/v1/items/12/requests', 'post', 'Gửi yêu cầu thành công.'],
     ['/api/v1/requests/7/select', 'post', 'Chọn người giao dịch thành công.'],
@@ -33,6 +32,10 @@ describe('mutationToastDefinition', () => {
 
     expect(mediaUpload?.success).toBeUndefined();
     expect(mediaUpload?.failure).toBe('Không tải được ảnh lên.');
+  });
+
+  it('để trang Hoạt động tự báo thao tác xóa bài theo trạng thái bài', () => {
+    expect(mutationToastDefinition('/api/v1/items/12', 'delete')).toBeNull();
   });
 
   it.each([

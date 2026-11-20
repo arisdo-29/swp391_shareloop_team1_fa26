@@ -21,7 +21,8 @@ describe('VNPay return', () => {
   });
 
   it('phân biệt hủy, thất bại và hết hạn mà không suy ra đã cộng Credit', () => {
-    expect(resolveTopUpReturnResult('PENDING', 'FAILED')).toBe('cancelled');
+    expect(resolveTopUpReturnResult('PENDING', 'FAILED')).toBe('pending-after-failed-return');
+    expect(resolveTopUpReturnResult('FAILED', 'FAILED')).toBe('cancelled');
     expect(resolveTopUpReturnResult('FAILED', null)).toBe('failed');
     expect(resolveTopUpReturnResult('EXPIRED', 'SUCCESS')).toBe('expired');
   });
