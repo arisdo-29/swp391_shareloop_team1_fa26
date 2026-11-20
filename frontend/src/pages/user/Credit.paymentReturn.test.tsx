@@ -254,10 +254,11 @@ it('tự kiểm tra lại đơn PENDING và tải lại ví khi Backend xác nh�
     </MemoryRouter>,
   );
 
-  await waitFor(() => expect(paymentApi.getOrder).toHaveBeenCalledTimes(2), { timeout: 4_000 });
+  // Vòng hỏi trạng thái chạy mỗi 4 giây.
+  await waitFor(() => expect(paymentApi.getOrder).toHaveBeenCalledTimes(2), { timeout: 6_000 });
   await waitFor(() => expect(refreshWallet).toHaveBeenCalledTimes(1));
   expect(screen.getByText('Nạp thành công +50 Credit')).toBeTruthy();
-});
+}, 10_000);
 
 function pendingVnpayOrder(orderCode: string) {
   return {

@@ -55,6 +55,9 @@ class PaymentServiceTest {
     @Spy
     WalletMapper walletMapper = new WalletMapper();
 
+    @Mock
+    PaymentDeadline paymentDeadline;
+
     @InjectMocks
     PaymentService paymentService;
 

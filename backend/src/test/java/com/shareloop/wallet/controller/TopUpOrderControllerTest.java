@@ -35,6 +35,7 @@ class TopUpOrderControllerTest {
 
     private static final String URL = "/api/v1/wallet/topup-orders";
     private static final Instant EXPIRES_AT = Instant.parse("2026-11-17T08:15:00Z");
+    private static final Instant SERVER_TIME = Instant.parse("2026-11-17T08:00:05Z");
 
     @Autowired
     MockMvc mockMvc;
@@ -82,7 +83,8 @@ class TopUpOrderControllerTest {
                         PaymentOrderStatus.PENDING,
                         PaymentProvider.MOCK,
                         "/wallet/topup/mock-checkout?orderCode=abc123",
-                        EXPIRES_AT));
+                        EXPIRES_AT,
+                        SERVER_TIME));
 
         // when + then
         mockMvc.perform(post(URL)
@@ -95,7 +97,8 @@ class TopUpOrderControllerTest {
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.provider").value("MOCK"))
                 .andExpect(jsonPath("$.redirectUrl").value("/wallet/topup/mock-checkout?orderCode=abc123"))
-                .andExpect(jsonPath("$.expiresAt").value("2026-11-17T08:15:00Z"));
+                .andExpect(jsonPath("$.expiresAt").value("2026-11-17T08:15:00Z"))
+                .andExpect(jsonPath("$.serverTime").value("2026-11-17T08:00:05Z"));
     }
 
     @Test
@@ -136,14 +139,16 @@ class TopUpOrderControllerTest {
                         null,
                         null,
                         null,
-                        null));
+                        null,
+                        SERVER_TIME));
 
         // when + then
         mockMvc.perform(get(URL + "/abc123").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderCode").value("abc123"))
                 .andExpect(jsonPath("$.status").value("PENDING"))
-                .andExpect(jsonPath("$.expiresAt").value("2026-11-17T08:15:00Z"));
+                .andExpect(jsonPath("$.expiresAt").value("2026-11-17T08:15:00Z"))
+                .andExpect(jsonPath("$.serverTime").value("2026-11-17T08:00:05Z"));
     }
 
     @Test
@@ -186,7 +191,8 @@ class TopUpOrderControllerTest {
                         null,
                         null,
                         null,
-                        "Bạn đã hủy đơn nạp."));
+                        "Bạn đã hủy đơn nạp.",
+                        SERVER_TIME));
 
         // when + then
         mockMvc.perform(post(URL + "/abc123/cancel").header("Authorization", "Bearer " + token))

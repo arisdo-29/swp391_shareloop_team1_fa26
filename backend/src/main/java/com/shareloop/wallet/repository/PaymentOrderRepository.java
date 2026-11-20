@@ -38,6 +38,18 @@ public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long
     Optional<Long> findUserIdById(@Param("id") Long id);
 
     /**
+     * Chuyển một đơn PENDING đã quá hạn sang EXPIRED khi người dùng xem đơn, không chờ PaymentExpiryJob. Người gọi đã
+     * kiểm mốc đóng hẳn (PaymentDeadline.closesAt); câu UPDATE có điều kiện status = PENDING nên IPN vừa cộng tiền xong
+     * (SUCCESS) hay đơn đã hủy thì không bị đổi.
+     *
+     * @return 1 nếu vừa chuyển EXPIRED, 0 nếu đơn không còn PENDING
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update PaymentOrder o set o.status = com.shareloop.wallet.entity.PaymentOrderStatus.EXPIRED"
+            + " where o.id = :id and o.status = com.shareloop.wallet.entity.PaymentOrderStatus.PENDING")
+    int expireIfPending(@Param("id") Long id);
+
+    /**
      * Người dùng tự hủy đơn nạp: chỉ đổi khi đơn còn PENDING và đúng chủ đơn, trong một câu UPDATE có điều kiện nên gọi
      * lại nhiều lần cũng chỉ đổi một lần (idempotent). IPN đang giữ khoá dòng thì câu này chờ; IPN cộng tiền xong (đơn
      * SUCCESS) thì câu này không đổi gì. Ghi lý do vào review_note (cột ghi chú xử lý đơn, không còn dùng cho duyệt tay).

@@ -54,7 +54,8 @@ Tạo đơn nạp PENDING (VI-03).
   "status": "PENDING",
   "provider": "MOCK",
   "redirectUrl": "/wallet/topup/mock-checkout?orderCode=3f9a1c2e4b5d6f708192a3b4c5d6e7f8",
-  "expiresAt": "2026-11-17T08:15:00Z"
+  "expiresAt": "2026-11-17T08:15:00Z",
+  "serverTime": "2026-11-17T08:00:00Z"
 }
 ```
 
@@ -67,8 +68,8 @@ khi FE vẫn gọi; nay khôi phục, chỉ đọc.
 - Xác thực: **bắt buộc** Bearer Token; chỉ xem được đơn của chính mình.
 - Thành công: `200`, một `TopUpOrderDetailResponse` (cùng dạng với API Admin, `userName`, `userEmail`,
   `reviewedByName` luôn `null`).
-- Không đổi trạng thái: đơn đã quá `expiresAt` mà `PaymentExpiryJob` chưa chạy vẫn trả `PENDING`; FE tự hiện "Hết hạn"
-  theo `expiresAt`, job mới là nơi đổi sang `EXPIRED`.
+- Đơn PENDING đã qua `expiresAt + expiry-grace-minutes` (mặc định 2 phút) thì chuyển `EXPIRED` ngay khi xem. Trong khoảng
+  dung sai vẫn trả `PENDING` (chờ IPN tới muộn); FE hiện "Đơn đã hết hạn" theo `expiresAt` và tiếp tục hỏi tới khi có kết quả cuối.
 - Lỗi: `404 WALLET_PAYMENT_ORDER_NOT_FOUND` khi không có đơn hoặc đơn của người khác; `401 UNAUTHORIZED`.
 
 ```json
@@ -143,7 +144,10 @@ Xác nhận thanh toán giả lập và cộng Credit (VI-04, VI-07) trong một
 | `status`      | string | `PENDING` / `SUCCESS` / `FAILED` / `EXPIRED`          |
 | `provider`    | string | `MOCK` hoặc `VNPAY`                                   |
 | `redirectUrl` | string | Địa chỉ FE chuyển người dùng tới để thanh toán        |
-| `expiresAt`   | string | Hạn thanh toán (ISO-8601 UTC) = `created_at + payment_order_expire_minutes`. FE đếm ngược theo mốc này, không tự tính (B29) |
+| `expiresAt`   | string | Hạn thanh toán (ISO-8601 UTC) = `created_at + payment_order_expire_minutes`, làm tròn xuống giây. Đúng bằng `vnp_ExpireDate` gửi VNPay. FE đếm ngược theo mốc này, không tự tính |
+| `serverTime`  | string | Giờ server lúc trả response (ISO-8601 UTC). FE lấy `serverTime - giờ máy` để bù lệch đồng hồ: còn lại = `expiresAt - (giờ máy + độ lệch)` |
+
+`TopUpOrderDetailResponse` (GET đơn, hủy đơn, danh sách Admin) cũng có `expiresAt` và `serverTime` cùng nghĩa.
 
 ## TopUpConfirmResponse
 
@@ -213,7 +217,14 @@ và không có mặc định localhost cho bất kỳ URL nào.
 IPN muộn: đơn còn PENDING nhưng đã quá `payment_order_expire_minutes` cộng dung sai `app.payment.vnpay.expiry-grace-minutes`
 (mặc định 2 phút, bù lệch đồng hồ với VNPAY) thì IPN hợp lệ, thành công **không** cộng Credit: đơn chuyển EXPIRED, trả `RspCode=02`
 (`Order expired`) và ghi log WARN gồm `orderCode`, số tiền, `vnp_TransactionNo` để đối soát tay. URL thanh toán luôn gửi
-`vnp_ExpireDate` = thời điểm tạo + `payment_order_expire_minutes`.
+`vnp_ExpireDate` = `expiresAt` của đơn (cùng mốc trả FE), `vnp_CreateDate` = `created_at` của đơn; cả hai định dạng
+`yyyyMMddHHmmss` theo giờ `Asia/Ho_Chi_Minh` và nằm trong tập tham số được sort, ký `vnp_SecureHash`. Thời lượng chỉ đọc từ
+ConfigKey `payment_order_expire_minutes` (mặc định 30, Admin chỉnh ở trang Cấu hình), tính ở một chỗ duy nhất
+(`wallet.service.PaymentDeadline`).
+
+Hết hạn phía server: `PaymentExpiryJob` (5 phút một lần) chuyển PENDING quá `expiresAt` sang EXPIRED; ngoài ra
+`GET /api/v1/wallet/topup-orders/{orderCode}` tự chuyển EXPIRED khi đơn PENDING đã qua `expiresAt + expiry-grace-minutes`
+(câu UPDATE có điều kiện status = PENDING). Trong khoảng dung sai đơn vẫn PENDING để IPN hợp lệ tới muộn còn được cộng.
 
 IPN thành công tới khi đơn đã đóng mà chưa cộng (FAILED do hủy, hoặc EXPIRED): theo cùng cách với IPN muộn ở trên,
 **không** cộng Credit, giữ trạng thái, trả `RspCode=02`; ghi log WARN và ghi `review_note` "VNPay báo đã thu tiền sau khi đơn

@@ -4,8 +4,10 @@ import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.wallet.entity.PaymentProvider;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +24,10 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @Lazy(false)
 @ConditionalOnProperty(name = "app.payment.provider", havingValue = "vnpay")
 public class VnPayClient implements PaymentGatewayClient {
+    static final ZoneId VNPAY_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final DateTimeFormatter VNPAY_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(VNPAY_ZONE);
+
     private final ConfigService configService;
     private final Clock clock;
     private final String payUrl;
@@ -67,9 +73,15 @@ public class VnPayClient implements PaymentGatewayClient {
     }
 
     @Override
-    public String buildRedirectUrl(String orderCode, long amountVnd) {
-        var now = clock.instant().atZone(ZoneId.of("Asia/Ho_Chi_Minh"));
-        var formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    public String buildRedirectUrl(String orderCode, long amountVnd, Instant createdAt, Instant expiresAt) {
+        // vnp_CreateDate và vnp_ExpireDate cùng múi giờ Việt Nam, định dạng yyyyMMddHHmmss như VNPay yêu cầu. Hạn lấy
+        // đúng
+        // expiresAt của đơn (PaymentDeadline) để trang VNPay và đồng hồ trên trang Ví hết cùng lúc; thiếu mốc (đơn chưa
+        // lưu) thì tính từ giờ hiện tại theo cùng cấu hình.
+        Instant created = createdAt != null ? createdAt : clock.instant();
+        Instant expires = expiresAt != null
+                ? expiresAt
+                : created.plus(configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES), ChronoUnit.MINUTES);
         Map<String, String> params = new TreeMap<>();
         params.put("vnp_Version", "2.1.0");
         params.put("vnp_Command", "pay");
@@ -87,12 +99,15 @@ public class VnPayClient implements PaymentGatewayClient {
                 attributes instanceof ServletRequestAttributes request
                         ? request.getRequest().getRemoteAddr()
                         : "127.0.0.1");
-        params.put("vnp_CreateDate", now.format(formatter));
-        params.put(
-                "vnp_ExpireDate",
-                now.plusMinutes(configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES))
-                        .format(formatter));
+        params.put("vnp_CreateDate", formatVnpayTime(created));
+        params.put("vnp_ExpireDate", formatVnpayTime(expires));
+        // params là TreeMap nên đã sort theo tên; vnp_ExpireDate nằm trong params nên được ký cùng các tham số khác.
         return payUrl + "?" + VnPaySigner.encodeParameters(params) + "&vnp_SecureHash="
                 + VnPaySigner.sign(params, secret);
+    }
+
+    /** yyyyMMddHHmmss theo giờ Việt Nam (Asia/Ho_Chi_Minh), dùng cho vnp_CreateDate và vnp_ExpireDate. */
+    static String formatVnpayTime(Instant instant) {
+        return VNPAY_TIME_FORMAT.format(instant);
     }
 }

@@ -46,6 +46,8 @@ export interface TopUpOrderResponse {
   expiresAt?: string | null;
   /** Chỉ có khi đọc lại đơn (GET, hủy đơn); xem TopUpOrderDetailResponse.failureReason. */
   failureReason?: string | null;
+  /** Giờ server lúc trả response (ISO); FE lấy serverTime - giờ máy để bù lệch đồng hồ khi đếm ngược. */
+  serverTime?: string | null;
 }
 
 export interface TopUpConfirmResponse {

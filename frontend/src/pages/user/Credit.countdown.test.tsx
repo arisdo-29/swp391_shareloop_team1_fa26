@@ -61,7 +61,7 @@ describe('B29: đếm ngược đơn nạp đang chờ thanh toán', () => {
     });
 
     // then: chỉ đổi hiển thị, trạng thái thật vẫn do job đổi
-    expect(screen.getAllByText('Hết hạn').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Đơn đã hết hạn').length).toBeGreaterThan(0);
     expect(screen.queryByText('Đang chờ thanh toán')).toBeNull();
     expect(screen.queryByRole('timer')).toBeNull();
     expect(screen.getByText(

@@ -2,8 +2,6 @@ package com.shareloop.wallet.service;
 
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.integration.payment.VnPaySigner;
-import com.shareloop.setting.ConfigKey;
-import com.shareloop.setting.service.ConfigService;
 import com.shareloop.wallet.WalletErrorCode;
 import com.shareloop.wallet.dto.VnPayIpnResponse;
 import com.shareloop.wallet.entity.PaymentOrder;
@@ -12,9 +10,6 @@ import com.shareloop.wallet.entity.PaymentProvider;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
 import com.shareloop.wallet.repository.WalletAccountRepository;
 import java.math.BigInteger;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,26 +23,20 @@ public class VnPayCallbackService {
     private final PaymentOrderRepository orders;
     private final WalletAccountRepository wallets;
     private final CreditService creditService;
-    private final ConfigService configService;
-    private final Clock clock;
+    private final PaymentDeadline paymentDeadline;
     private final String secret;
-    private final long expiryGraceMinutes;
 
     public VnPayCallbackService(
             PaymentOrderRepository orders,
             WalletAccountRepository wallets,
             CreditService creditService,
-            ConfigService configService,
-            Clock clock,
-            @Value("${app.payment.vnpay.hash-secret:}") String secret,
-            @Value("${app.payment.vnpay.expiry-grace-minutes:2}") long expiryGraceMinutes) {
+            PaymentDeadline paymentDeadline,
+            @Value("${app.payment.vnpay.hash-secret:}") String secret) {
         this.orders = orders;
         this.wallets = wallets;
         this.creditService = creditService;
-        this.configService = configService;
-        this.clock = clock;
+        this.paymentDeadline = paymentDeadline;
         this.secret = secret;
-        this.expiryGraceMinutes = expiryGraceMinutes;
     }
 
     public boolean verify(Map<String, String> params) {
@@ -163,9 +152,7 @@ public class VnPayCallbackService {
     // (VI-06, TD-05).
     // Grace bù độ lệch đồng hồ giữa server và VNPAY.
     private boolean isPastDeadline(PaymentOrder order) {
-        long expireMinutes = configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES);
-        Instant deadline = order.getCreatedAt().plus(expireMinutes + expiryGraceMinutes, ChronoUnit.MINUTES);
-        return clock.instant().isAfter(deadline);
+        return paymentDeadline.isClosed(order.getCreatedAt());
     }
 
     // VNPAY báo thành công nhưng đơn đã quá hạn: không cộng Credit, ghi WARN để đối soát tay.
