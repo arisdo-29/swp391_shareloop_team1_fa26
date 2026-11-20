@@ -82,8 +82,8 @@ export function AI() {
     if (!user || !quota || inFlight.current) return;
     if (quota.freeUsesRemaining === 0 && !confirmCharge) {
       setQueryError('');
-      setSubmittedQuery(normalizedQuery);
       if (!wallet || wallet.available < quota.feeCredits) {
+        setSubmittedQuery(normalizedQuery);
         setNeedsTopUp(true);
         setSearchError('Bạn đã hết lượt miễn phí và chưa đủ Credit cho lượt tìm tiếp theo.');
         setStatus('error');
@@ -226,7 +226,11 @@ export function AI() {
             <button
               key={example}
               type="button"
-              onClick={() => setQuery(example)}
+              onClick={() => {
+                setQuery(example);
+                setQueryError('');
+                if (quota?.freeUsesRemaining === 0) void search(example);
+              }}
               className="min-h-9 rounded-full border border-border bg-white px-3 text-xs font-semibold text-text-secondary transition hover:border-primary/50 hover:text-primary"
             >
               {example}

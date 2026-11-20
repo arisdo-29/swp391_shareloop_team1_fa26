@@ -144,12 +144,16 @@ Xem thông tin uy tín cá nhân của chính người dùng đang đăng nhập
     }
   },
   "nextRank": "DIAMOND",
-  "pointsToNextRank": 80
+  "pointsToNextRank": 80,
+  "currentRankMinPoints": 200,
+  "nextRankMinPoints": 400
 }
 ```
 
-`nextRank` là hạng ngay trên hạng hiện tại, `pointsToNextRank` là số điểm còn thiếu tính theo ngưỡng cấu hình
-(`reputation_silver_min`, `reputation_gold_min`, `reputation_diamond_min`); cả hai là `null` khi đã ở Kim cương.
+`currentRankMinPoints` và `nextRankMinPoints` là điểm tối thiểu của hạng hiện tại và hạng kế tiếp.
+Hạng Đồng bắt đầu từ 0, các mốc còn lại lấy từ cấu hình `reputation_silver_min`, `reputation_gold_min` và
+`reputation_diamond_min`. `pointsToNextRank` là số điểm còn thiếu so với mốc kế tiếp.
+Khi đã ở Kim cương, `nextRank`, `nextRankMinPoints` và `pointsToNextRank` đều là `null`.
 
 Mỗi lần hoàn tất giao dịch, mỗi bên nhận một thông báo `POINTS_AWARDED` (link `/profile?tab=reputation`): tiêu đề
 "Bạn được cộng N điểm uy tín" hoặc "Giao dịch hoàn tất, chưa được cộng điểm", nội dung là `reason` ở trên kèm tổng

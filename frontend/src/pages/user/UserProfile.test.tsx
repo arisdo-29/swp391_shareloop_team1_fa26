@@ -174,7 +174,7 @@ describe('Trang Hồ sơ công khai', () => {
     expect(screen.getByText('NA')).toBeTruthy();
     expect(screen.getByText('Hạng Vàng')).toBeTruthy();
     expect(screen.getByText('Khu vực: Bình Thạnh')).toBeTruthy();
-    expect(screen.getByText('4 / 5 sao')).toBeTruthy();
+    expect(screen.getAllByRole('img', { name: '4 trên 5 sao' })).toHaveLength(2);
     expect(screen.getByText('12')).toBeTruthy();
     expect(screen.getByText('96%')).toBeTruthy();
     expect(screen.queryByText(/Credit/)).toBeNull();

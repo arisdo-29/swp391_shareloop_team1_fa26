@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Button,
   EmptyState,
@@ -13,6 +13,7 @@ import {
 import { CONDITIONS } from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import type { ItemType } from '../../types/domain';
+import { aiApi } from '../../services/aiApi';
 import { catalogApi, type CategoryResponse } from '../../services/catalogApi';
 import {
   itemApi,
@@ -39,6 +40,7 @@ import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import './browse.css';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
+import { loginPath } from '../../utils/authRedirect';
 
 // Giá trị hình thức ở thanh địa chỉ (gift, trade) khác tên của API
 const OFFER_TYPE_BY_TYPE: Record<ItemType, OfferType> = { gift: 'GIVE', trade: 'SWAP' };
@@ -118,6 +120,39 @@ async function fillBrowseResultCache(
 interface SavedRotation {
   filterKey: string;
   seed: number;
+}
+
+function BrowseAiPrompt({ signedIn }: { signedIn: boolean }) {
+  const [remaining, setRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    let active = true;
+    void aiApi.quota().then(
+      (quota) => { if (active) setRemaining(quota.freeUsesRemaining); },
+      () => { if (active) setRemaining(null); },
+    );
+    return () => { active = false; };
+  }, [signedIn]);
+
+  return (
+    <aside aria-label="Trợ lý AI" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-low p-4">
+      <div className="min-w-0 space-y-1">
+        <p className="text-sm font-semibold text-text-primary">Không biết tìm bằng từ khóa nào?</p>
+        <p className="text-sm text-text-secondary">Mô tả món đồ bạn cần, Trợ lý AI sẽ tìm giúp bạn.</p>
+        {remaining !== null ? (
+          <p className="text-sm font-medium text-primary">Còn {remaining} lượt miễn phí</p>
+        ) : null}
+        {!signedIn ? <p className="text-sm text-text-secondary">Đăng nhập để xem số lượt miễn phí.</p> : null}
+      </div>
+      <Link
+        to={signedIn ? '/ai' : loginPath('/ai')}
+        className="inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
+      >
+        Thử Trợ lý AI
+      </Link>
+    </aside>
+  );
 }
 
 export function Browse() {
@@ -463,6 +498,9 @@ export function Browse() {
         </aside>
 
         <section className="browse-results" aria-label="Danh sách món đồ">
+          {!boostedOnly ? (
+            <BrowseAiPrompt key={currentUser?.id ?? 'guest'} signedIn={Boolean(currentUser)} />
+          ) : null}
           <div className="browse-results-toolbar">
             <div className="browse-results-summary">
               <strong>{totalElements} món</strong>

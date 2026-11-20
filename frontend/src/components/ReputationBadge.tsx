@@ -1,4 +1,5 @@
-import { formatAsDescribedRate, formatTrustStars, getRankLabel } from '../utils/reputation';
+import { formatAsDescribedRate, getRankLabel } from '../utils/reputation';
+import { StarRating } from './StarRating';
 
 export interface ReputationBadgeProps {
   trustStars?: number | null;
@@ -27,10 +28,10 @@ export function ReputationBadge({
   compact = false,
 }: ReputationBadgeProps) {
   const rankLabel = getRankLabel(rank);
-  const starsText = formatTrustStars(trustStars);
+  const hasStars = trustStars != null && Number.isFinite(trustStars);
   const rateText = formatAsDescribedRate(asDescribedRate);
 
-  if (!rankLabel && starsText === '—' && rateText === '—') {
+  if (!rankLabel && !hasStars && rateText === '—') {
     return null;
   }
 
@@ -46,12 +47,7 @@ export function ReputationBadge({
             {rankLabel}
           </span>
         ) : null}
-        {starsText !== '—' ? (
-          <span className="inline-flex items-center gap-0.5 font-medium text-warning" title="Sao uy tín">
-            <span aria-hidden="true">★</span>
-            <span>{starsText}/5</span>
-          </span>
-        ) : null}
+        <StarRating value={trustStars} />
         {rateText !== '—' ? (
           <span className="text-2xs text-text-muted" title="Tỉ lệ đúng mô tả">
             ({rateText} đúng mô tả)
@@ -72,12 +68,7 @@ export function ReputationBadge({
           Hạng {rankLabel}
         </span>
       ) : null}
-      {starsText !== '—' ? (
-        <span className="inline-flex items-center gap-1 font-semibold text-warning" title="Sao uy tín">
-          <span aria-hidden="true" className="text-sm leading-none">★</span>
-          <span>{starsText}/5 sao</span>
-        </span>
-      ) : null}
+      <StarRating value={trustStars} className="text-sm" />
       {rateText !== '—' ? (
         <span
           className="inline-flex items-center rounded-sm bg-success-soft px-2 py-0.5 font-medium text-success ring-1 ring-inset ring-success/20"

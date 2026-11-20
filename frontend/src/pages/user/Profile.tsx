@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser } from '../../app/store';
 import {
@@ -13,6 +13,7 @@ import {
 } from '../../components/ui';
 import { fileToDataUrl } from '../../utils/files';
 import { OtpInput } from '../../components/OtpInput';
+import { StarRating } from '../../components/StarRating';
 import { userApi } from '../../services/userApi';
 import { catalogApi } from '../../services/catalogApi';
 import { mediaApi } from '../../services/mediaApi';
@@ -35,6 +36,42 @@ type ProfileTab = 'profile' | 'reputation';
 // Chỉ nhận tab hợp lệ từ URL, giá trị lạ thì về tab Hồ sơ.
 function tabFromSearch(value: string | null): ProfileTab {
   return value === 'reputation' ? 'reputation' : 'profile';
+}
+
+function RankProgress({ reputation }: { reputation: MyReputation }) {
+  const { rank, nextRank, totalPoints, currentRankMinPoints, nextRankMinPoints } = reputation;
+  const highestRank = rank === 'DIAMOND';
+  let progress = 100;
+
+  if (!highestRank) {
+    if (currentRankMinPoints == null || nextRankMinPoints == null || nextRankMinPoints <= currentRankMinPoints) {
+      return null;
+    }
+    const fraction = (totalPoints - currentRankMinPoints) / (nextRankMinPoints - currentRankMinPoints);
+    progress = Math.min(100, Math.max(0, fraction * 100));
+  }
+
+  return (
+    <div className="mt-3 space-y-1.5">
+      <div
+        role="progressbar"
+        aria-label="Tiến trình lên hạng"
+        aria-valuenow={Number(progress.toFixed(1))}
+        aria-valuetext={highestRank ? 'Đã đạt hạng cao nhất' : undefined}
+        className="h-2 overflow-hidden rounded-full bg-primary-fixed"
+      >
+        <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
+      </div>
+      {currentRankMinPoints != null ? (
+        <div className="flex flex-wrap justify-between gap-x-3 text-xs text-text-muted">
+          <span>{getRankLabel(rank)} · {currentRankMinPoints} điểm</span>
+          {nextRank && nextRankMinPoints != null ? (
+            <span>{getRankLabel(nextRank)} · {nextRankMinPoints} điểm</span>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function reputationErrorMessage(error: unknown) {
@@ -145,14 +182,28 @@ function phoneChangeErrorMessage(error: ApiError) {
 
 export function Profile() {
   const user = useAppSelector(selectCurrentUser)!;
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  if (user.role !== 'admin' && searchParams.get('tab') === 'credit') {
+    return <Navigate to="/credit" replace />;
+  }
+
+  return (
+    <ProfileContent
+      user={user}
+      tab={user.role === 'admin' ? 'profile' : tabFromSearch(searchParams.get('tab'))}
+      changeTab={(nextTab) => setSearchParams(nextTab === 'profile' ? {} : { tab: nextTab }, { replace: true })}
+    />
+  );
+}
+
+function ProfileContent({ user, tab, changeTab }: {
+  user: NonNullable<ReturnType<typeof selectCurrentUser>>;
+  tab: ProfileTab;
+  changeTab: (tab: ProfileTab) => void;
+}) {
   const isAdmin = user.role === 'admin';
   const dispatch = useAppDispatch();
-  const [searchParams, setSearchParams] = useSearchParams();
-  // Tab lấy từ URL để thông báo có thể trỏ thẳng tới /profile?tab=reputation.
-  const tab: ProfileTab = isAdmin ? 'profile' : tabFromSearch(searchParams.get('tab'));
-  const changeTab = (nextTab: ProfileTab) => {
-    setSearchParams(nextTab === 'profile' ? {} : { tab: nextTab }, { replace: true });
-  };
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
@@ -476,19 +527,10 @@ export function Profile() {
             {(
               [
                 ['profile', 'Hồ sơ'],
-                ['credit', 'Ví Credit'],
                 ['reputation', 'Uy tín & Hạng'],
               ] as const
             ).map(([id, label]) =>
-              id === 'credit' && !isAdmin ? (
-                <Link
-                  key={id}
-                  to="/credit"
-                  className="flex w-full items-center min-h-11 rounded-md px-3 py-2.5 text-left text-sm font-semibold transition text-text-secondary hover:bg-surface-low"
-                >
-                  {label}
-                </Link>
-              ) : id === 'credit' ? null : isAdmin && id === 'reputation' ? null : (
+              isAdmin && id === 'reputation' ? null : (
                 <button
                   key={id}
                   onClick={() => changeTab(id)}
@@ -712,10 +754,11 @@ export function Profile() {
                             ? 'Bạn đang ở hạng cao nhất.'
                             : 'Điểm tăng khi bạn hoàn tất giao dịch và quyết định hạng.'}
                       </p>
+                      <RankProgress reputation={reputation} />
                     </div>
                     <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
                       <p className="text-xs font-semibold text-text-secondary">Sao uy tín</p>
-                      <p className="mt-2 text-xl font-bold">{reputation.trustStars} / 5</p>
+                      <div className="mt-2 text-base"><StarRating value={reputation.trustStars} /></div>
                       <p className="mt-1 text-xs leading-5 text-text-muted">Giảm khi bị báo cáo đúng.</p>
                     </div>
                     <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">

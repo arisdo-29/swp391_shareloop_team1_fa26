@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -74,6 +74,41 @@ describe('AI search quota', () => {
     expect(aiApi.search).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Tiếp tục' }));
     await waitFor(() => expect(aiApi.search).toHaveBeenCalledWith('Tìm sách cũ', true));
+  });
+
+  it('hỏi ngay khi chọn gợi ý có phí và chỉ tìm sau khi xác nhận', async () => {
+    const user = userEvent.setup();
+    vi.mocked(aiApi.quota).mockReset().mockResolvedValue({ freeUsesRemaining: 0, feeCredits: 2, hasToppedUp: true });
+    render(<MemoryRouter><AI /></MemoryRouter>);
+
+    await screen.findByText(/Lượt tiếp theo/);
+    const suggestion = screen.getByText('Thử:').parentElement!;
+    const example = within(suggestion).getAllByRole('button')[0];
+    await user.click(example);
+
+    const dialog = screen.getByRole('dialog', { name: 'Xác nhận lượt tìm có phí' });
+    expect(aiApi.search).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Huỷ' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(aiApi.search).not.toHaveBeenCalled();
+
+    await user.click(example);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Tiếp tục' }));
+    await waitFor(() => expect(aiApi.search).toHaveBeenCalledExactlyOnceWith(example.textContent, true));
+  });
+
+  it('chỉ điền gợi ý vào ô tìm khi còn lượt miễn phí để người dùng chỉnh sửa', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><AI /></MemoryRouter>);
+
+    await screen.findByText('Còn 5 lượt miễn phí');
+    const example = within(screen.getByText('Thử:').parentElement!).getAllByRole('button')[0];
+    await user.click(example);
+
+    const input = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Mô tả món đồ cần tìm' });
+    expect(input.value).toBe(example.textContent);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(aiApi.search).not.toHaveBeenCalled();
   });
 
   it('không gọi API khi hết lượt và thiếu Credit', async () => {

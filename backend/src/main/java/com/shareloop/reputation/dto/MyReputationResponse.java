@@ -27,11 +27,17 @@ public record MyReputationResponse(
         Rank nextRank,
 
         @Schema(description = "Số điểm còn thiếu để lên hạng kế tiếp, null nếu đã ở hạng cao nhất", example = "80")
-        Integer pointsToNextRank) {
+        Integer pointsToNextRank,
+
+        @Schema(description = "Điểm tối thiểu của hạng hiện tại", example = "200")
+        int currentRankMinPoints,
+
+        @Schema(description = "Điểm tối thiểu của hạng kế tiếp, null nếu đã ở hạng cao nhất", example = "400")
+        Integer nextRankMinPoints) {
 
     /** Dùng khi không cần thông tin hạng kế tiếp (giữ tương thích các chỗ tạo cũ). */
     public MyReputationResponse(
             int totalPoints, Rank rank, int trustStars, Double accuracyRate, Page<PointHistoryDto> history) {
-        this(totalPoints, rank, trustStars, accuracyRate, history, null, null);
+        this(totalPoints, rank, trustStars, accuracyRate, history, null, null, 0, null);
     }
 }

@@ -61,12 +61,14 @@ class MeReputationControllerTest {
         PageImpl<PointHistoryDto> page = new PageImpl<>(List.of(historyDto), PageRequest.of(0, 20), 1);
 
         when(reputationService.getMyReputation(eq(USER_ID), anyInt(), anyInt()))
-                .thenReturn(new MyReputationResponse(320, Rank.GOLD, 4, 0.92, page));
+                .thenReturn(new MyReputationResponse(320, Rank.GOLD, 4, 0.92, page, Rank.DIAMOND, 280, 300, 600));
 
         mockMvc.perform(get(URL).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalPoints").value(320))
                 .andExpect(jsonPath("$.rank").value("GOLD"))
+                .andExpect(jsonPath("$.currentRankMinPoints").value(300))
+                .andExpect(jsonPath("$.nextRankMinPoints").value(600))
                 .andExpect(jsonPath("$.trustStars").value(4))
                 .andExpect(jsonPath("$.accuracyRate").value(0.92))
                 .andExpect(jsonPath("$.history.content[0].delta").value(10))

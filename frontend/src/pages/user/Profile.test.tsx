@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '../../types/domain';
 import { reputationApi, type MyReputation } from '../../services/reputationApi';
@@ -58,7 +58,10 @@ function buildReputation(overrides: Partial<MyReputation> = {}): MyReputation {
 function renderProfile(url = '/profile') {
   return render(
     <MemoryRouter initialEntries={[url]}>
-      <Profile />
+      <Routes>
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/credit" element={<h1>Ví Credit</h1>} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -100,14 +103,69 @@ describe('Profile', () => {
     expect(reputationApi.getMyReputation).toHaveBeenCalledTimes(1);
   });
 
+  it('tính tiến trình giữa hai mốc điểm do API trả về', async () => {
+    vi.mocked(reputationApi.getMyReputation).mockResolvedValue(buildReputation({
+      totalPoints: 125,
+      rank: 'SILVER',
+      nextRank: 'GOLD',
+      pointsToNextRank: 75,
+      currentRankMinPoints: 50,
+      nextRankMinPoints: 200,
+    }));
+    renderProfile('/profile?tab=reputation');
+
+    const bar = await screen.findByRole('progressbar', { name: 'Tiến trình lên hạng' });
+    expect(bar.getAttribute('aria-valuenow')).toBe('50');
+    expect(screen.getByText('Bạc · 50 điểm')).toBeTruthy();
+    expect(screen.getByText('Vàng · 200 điểm')).toBeTruthy();
+  });
+
+  it('hiển thị thanh đầy khi đã đạt hạng Kim cương', async () => {
+    vi.mocked(reputationApi.getMyReputation).mockResolvedValue(buildReputation({
+      totalPoints: 650,
+      rank: 'DIAMOND',
+      nextRank: null,
+      currentRankMinPoints: 600,
+      nextRankMinPoints: null,
+    }));
+    renderProfile('/profile?tab=reputation');
+
+    const bar = await screen.findByRole('progressbar', { name: 'Tiến trình lên hạng' });
+    expect(bar.getAttribute('aria-valuenow')).toBe('100');
+    expect(screen.getByText('Bạn đang ở hạng cao nhất.')).toBeTruthy();
+  });
+
+  it('giữ thông tin điểm còn thiếu khi API cũ chưa trả các mốc điểm', async () => {
+    vi.mocked(reputationApi.getMyReputation).mockResolvedValue(buildReputation({
+      nextRank: 'DIAMOND',
+      pointsToNextRank: 30,
+    }));
+    renderProfile('/profile?tab=reputation');
+
+    expect(await screen.findByText('Còn 30 điểm nữa để lên hạng Kim cương.')).toBeTruthy();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+  });
+
   it('về tab Hồ sơ khi tham số tab không hợp lệ', async () => {
     // given
     // when
-    renderProfile('/profile?tab=credit');
+    renderProfile('/profile?tab=unknown');
 
     // then
     expect(await screen.findByText('Thông tin cá nhân')).toBeTruthy();
     expect(screen.queryByText('Lịch sử uy tín')).toBeNull();
+  });
+
+  it('bỏ liên kết Ví Credit khỏi hồ sơ và giữ chuyển hướng cho URL cũ', async () => {
+    const profile = renderProfile();
+    expect(await screen.findByText('Thông tin cá nhân')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Ví Credit' })).toBeNull();
+    profile.unmount();
+    vi.mocked(userApi.getMe).mockClear();
+
+    renderProfile('/profile?tab=credit');
+    expect(await screen.findByRole('heading', { name: 'Ví Credit' })).toBeTruthy();
+    expect(userApi.getMe).not.toHaveBeenCalled();
   });
 
   it('đổi sang tab Uy tín khi bấm nút và dùng lại kết quả đã tải', async () => {

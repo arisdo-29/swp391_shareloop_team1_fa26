@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { StarRating } from '../../components/StarRating';
 import { Alert, EmptyState, PageHeader, SkeletonRows } from '../../components/ui';
 import {
   adminAnomalyApi,
@@ -181,7 +182,7 @@ export function AdminAnomalies() {
                                 </span>
                               </td>
                               <td className="whitespace-nowrap text-xs">{formatDateTime(acc.registeredAt)}</td>
-                              <td className="whitespace-nowrap text-xs font-medium">{acc.trustStars} ⭐</td>
+                              <td className="whitespace-nowrap text-xs font-medium"><StarRating value={acc.trustStars} /></td>
                               <td>{accountStatusBadge(acc)}</td>
                             </tr>
                           ))}
