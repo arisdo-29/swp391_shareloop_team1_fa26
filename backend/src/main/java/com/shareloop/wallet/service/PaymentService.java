@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -41,6 +43,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class PaymentService {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
+
+    /** Lý do ghi vào đơn khi người dùng tự hủy trên trang Ví. */
+    static final String USER_CANCELLED_REASON = "Bạn đã hủy đơn nạp.";
+
+    /** vnp_ResponseCode 24: khách hủy giao dịch trên trang VNPay. */
+    static final String VNPAY_CUSTOMER_CANCELLED = "24";
 
     private final PaymentOrderRepository paymentOrderRepository;
     private final CreditService creditService;
@@ -120,6 +130,26 @@ public class PaymentService {
                 .filter(found -> found.getUserId() == userId)
                 .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND));
         return detail(order, Map.of());
+    }
+
+    /**
+     * Người dùng tự hủy đơn nạp đang chờ thanh toán (POST /api/v1/wallet/topup-orders/{orderCode}/cancel). Đơn chuyển
+     * FAILED ngay, lý do "Bạn đã hủy đơn nạp." Không đụng ví: đơn PENDING chưa giữ hay cộng Credit nào.
+     *
+     * <p>Idempotent: đổi bằng một câu UPDATE có điều kiện status = PENDING. Gọi lại khi đơn đã FAILED, hoặc đơn đã
+     * SUCCESS/EXPIRED, thì không đổi gì và trả trạng thái hiện tại của đơn.
+     *
+     * @param userId người gọi, lấy từ token
+     * @param orderCode mã đơn
+     * @return chi tiết đơn sau khi hủy (hoặc trạng thái hiện tại nếu đơn không còn PENDING)
+     * @throws BusinessException WALLET_PAYMENT_ORDER_NOT_FOUND khi không có đơn hoặc đơn của người khác
+     */
+    public TopUpOrderDetailResponse cancelOwnOrder(long userId, String orderCode) {
+        int cancelled = paymentOrderRepository.cancelPending(orderCode, userId, USER_CANCELLED_REASON);
+        if (cancelled == 0) {
+            log.info("Top-up order {} not cancelled: not PENDING or not owned by user {}", orderCode, userId);
+        }
+        return getOwnOrder(userId, orderCode);
     }
 
     /**
@@ -209,7 +239,30 @@ public class PaymentService {
                 order.getReviewNote(),
                 owner == null ? null : owner.fullName(),
                 owner == null ? null : owner.email(),
-                reviewer == null ? null : reviewer.fullName());
+                reviewer == null ? null : reviewer.fullName(),
+                failureReason(order));
+    }
+
+    /**
+     * Lý do đơn FAILED cho người dùng đọc. Ghi chú xử lý (tự hủy, cần hoàn tiền) ưu tiên trước; không có thì suy từ
+     * vnp_ResponseCode trong callback_data. Trạng thái khác FAILED trả null.
+     */
+    static String failureReason(PaymentOrder order) {
+        if (order.getStatus() != PaymentOrderStatus.FAILED) {
+            return null;
+        }
+        if (order.getReviewNote() != null && !order.getReviewNote().isBlank()) {
+            return order.getReviewNote();
+        }
+        Map<String, String> callback = order.getCallbackData();
+        String responseCode = callback == null ? null : callback.get("vnp_ResponseCode");
+        if (responseCode == null) {
+            return "Thanh toán không thành công.";
+        }
+        if (VNPAY_CUSTOMER_CANCELLED.equals(responseCode)) {
+            return "Bạn đã hủy giao dịch tại VNPay.";
+        }
+        return "VNPay báo thanh toán không thành công (mã " + responseCode + ").";
     }
 
     private void requireValidTopUpAmount(long amountVnd, int vndPerCredit, int minCredits) {

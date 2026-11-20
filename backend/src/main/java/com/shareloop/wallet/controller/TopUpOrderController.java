@@ -49,4 +49,13 @@ public class TopUpOrderController {
             @Parameter(hidden = true) @CurrentUserId Long currentUserId, @PathVariable String orderCode) {
         return paymentService.getOwnOrder(currentUserId, orderCode);
     }
+
+    @Operation(
+            summary = "Hủy đơn nạp Credit đang chờ thanh toán",
+            description = "Đơn PENDING chuyển FAILED ngay. Gọi lại không đổi gì; luôn trả trạng thái hiện tại của đơn.")
+    @PostMapping("/{orderCode}/cancel")
+    public TopUpOrderDetailResponse cancelOrder(
+            @Parameter(hidden = true) @CurrentUserId Long currentUserId, @PathVariable String orderCode) {
+        return paymentService.cancelOwnOrder(currentUserId, orderCode);
+    }
 }

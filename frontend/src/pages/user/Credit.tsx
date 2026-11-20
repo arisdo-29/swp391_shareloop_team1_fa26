@@ -126,6 +126,8 @@ export function Credit() {
   const [topUpProcessing, setTopUpProcessing] = useState(false);
   const [topUpError, setTopUpError] = useState('');
   const [returnState, setReturnState] = useState<ReturnState>('idle');
+  const [cancellingOrder, setCancellingOrder] = useState(false);
+  const cancelInFlight = useRef(false);
   const [orderCheckKey, setOrderCheckKey] = useState(0);
   const createTopUpInFlight = useRef(false);
 
@@ -304,6 +306,40 @@ export function Credit() {
     return () => window.clearTimeout(timer);
   }, [apiTopUpOrder?.status, location.search, returnState]);
 
+  // "Xác nhận hủy": Backend hủy ngay và trả trạng thái mới của đơn, nên cập nhật giao diện theo response luôn,
+  // không cần "Kiểm tra lại". Không tải lại ví: đơn chưa thanh toán không đổi số dư.
+  const cancelTopUpOrder = async (orderCode: string) => {
+    if (cancelInFlight.current) return;
+    cancelInFlight.current = true;
+    setCancellingOrder(true);
+    try {
+      const order = await paymentApi.cancelOrder(orderCode);
+      setApiTopUpOrder({ ...order, redirectUrl: '' });
+      if (order.status === 'FAILED') {
+        clearPendingTopUp();
+        setReturnState('cancelled');
+        toast.success('Đã hủy đơn nạp Credit.');
+      } else {
+        // Đơn đã kịp SUCCESS hoặc EXPIRED trước khi hủy: hiện đúng trạng thái Backend trả.
+        const result = resolveTopUpReturnResult(order.status, null);
+        setReturnState(result);
+        if (result === 'success') {
+          clearPendingTopUp();
+          refreshWallet();
+          setHistoryReloadKey((key) => key + 1);
+        } else if (result === 'expired') {
+          clearPendingTopUp();
+        }
+      }
+    } catch (caught) {
+      const apiError = caught as Partial<ApiError>;
+      toast.error(apiError.message || 'Không hủy được đơn nạp. Vui lòng thử lại.');
+    } finally {
+      cancelInFlight.current = false;
+      setCancellingOrder(false);
+    }
+  };
+
   const selectedItemTitle = selectedEntry ? itemTitleOf(selectedEntry, itemTitles) : undefined;
 
   const continuePayment = async () => {
@@ -443,6 +479,8 @@ export function Credit() {
             <ApiTopUpOrder
               order={apiTopUpOrder}
               returnState={returnState}
+              cancelling={cancellingOrder}
+              onCancel={() => void cancelTopUpOrder(apiTopUpOrder.orderCode)}
               onNewTopup={() => {
                 setApiTopUpOrder(null);
                 setReturnState('idle');
@@ -640,21 +678,36 @@ export function ApiTopUpOrder({
   order,
   returnState,
   onNewTopup,
+  onCancel,
+  cancelling = false,
 }: {
   order: TopUpOrderResponse;
   returnState?: ReturnState;
   onNewTopup: () => void;
+  /** Hủy đơn đang chờ thanh toán; không truyền thì không hiện nút hủy. */
+  onCancel?: () => void;
+  cancelling?: boolean;
 }) {
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const safeRedirectUrl = paymentRedirectUrl(order.redirectUrl);
   const paid = order.status === 'SUCCESS';
-  const cancelled = order.status === 'FAILED' && returnState === 'cancelled';
+  // FAILED gồm cả tự hủy, hủy tại VNPay và VNPay báo lỗi: với người dùng đều là đơn đã hủy, lý do do Backend trả.
+  const cancelled = order.status === 'FAILED';
+  const expired = order.status === 'EXPIRED';
   const pendingAfterFailedReturn =
     order.status === 'PENDING' && returnState === 'pending-after-failed-return';
-  const remainingMs = usePaymentCountdown(order.status === 'PENDING' ? order.expiresAt : null);
+  // Chỉ đếm ngược khi người dùng còn đang ở bước thanh toán: đơn PENDING và lần thanh toán vừa rồi chưa thất bại.
+  // Trạng thái khác truyền null để hook dọn interval.
+  const remainingMs = usePaymentCountdown(
+    order.status === 'PENDING' && !pendingAfterFailedReturn ? order.expiresAt : null,
+  );
   // B29: hết giờ chỉ đổi cách hiển thị; PaymentExpiryJob mới đổi trạng thái thật, Credit không được cộng.
   const timedOut = remainingMs !== null && remainingMs <= 0;
+  const waitingForPayment = order.status === 'PENDING' && !timedOut;
   const statusLabel = cancelled
-    ? 'Đã hủy thanh toán'
+    ? returnState === 'cancelled'
+      ? 'Đã hủy thanh toán'
+      : 'Đã hủy'
     : pendingAfterFailedReturn
       ? 'Đang đồng bộ trạng thái'
       : timedOut
@@ -663,21 +716,21 @@ export function ApiTopUpOrder({
   const heading = paid
     ? 'Nạp Credit thành công'
     : cancelled
-      ? 'Đã hủy thanh toán'
+      ? 'Đơn nạp đã hủy'
       : pendingAfterFailedReturn
         ? 'Đơn nạp đang chờ xác nhận'
-        : order.status === 'FAILED'
-          ? 'Thanh toán không thành công'
-          : order.status === 'EXPIRED'
-            ? 'Đơn nạp Credit đã hết hạn'
-            : 'Đơn đang chờ thanh toán';
+        : expired
+          ? 'Đơn nạp Credit đã hết hạn'
+          : 'Đơn đang chờ thanh toán';
   const description = paid
     ? `+${order.credits} Credit đã được cộng vào ví.`
     : cancelled
-      ? ''
+      ? `${order.failureReason ? `${order.failureReason} ` : ''}Credit không được cộng và số dư ví không thay đổi.`
       : pendingAfterFailedReturn
         ? 'Lần thanh toán vừa thất bại, nhưng trạng thái đơn vẫn đang chờ hệ thống xác nhận hủy.'
-        : 'Credit chưa được cộng vào ví. Trạng thái sẽ thay đổi sau khi khoản thanh toán được xác nhận.';
+        : expired
+          ? 'Đơn đã quá hạn thanh toán. Credit không được cộng cho đơn này.'
+          : 'Credit chưa được cộng vào ví. Trạng thái sẽ thay đổi sau khi khoản thanh toán được xác nhận.';
   return (
     <div className="rounded-xl bg-white px-5 py-8 ring-1 ring-border/80 sm:px-8">
       <div className="mx-auto max-w-2xl text-center">
@@ -715,14 +768,34 @@ export function ApiTopUpOrder({
             {backendMockProviderMessage}
           </p>
         ) : null}
+        {confirmingCancel && order.status === 'PENDING' ? (
+          <div className="mt-6 rounded-lg bg-warning-soft p-4 text-left text-sm text-text-primary">
+            <p className="font-semibold">Hủy đơn nạp này?</p>
+            <p className="mt-1 text-text-secondary">
+              Đơn sẽ không thanh toán tiếp được. Credit chưa được cộng nên số dư ví không thay đổi.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button variant="danger" disabled={cancelling} onClick={onCancel}>
+                {cancelling ? 'Đang hủy...' : 'Xác nhận hủy'}
+              </Button>
+              <Button variant="ghost" disabled={cancelling} onClick={() => setConfirmingCancel(false)}>
+                Không hủy
+              </Button>
+            </div>
+          </div>
+        ) : null}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button variant="outline" onClick={onNewTopup}>
-            Tạo đơn nạp khác
+            {order.status === 'PENDING' && !timedOut ? 'Tạo đơn nạp khác' : 'Tạo đơn nạp mới'}
           </Button>
+          {onCancel && order.status === 'PENDING' && !confirmingCancel ? (
+            <Button variant="ghost" disabled={cancelling} onClick={() => setConfirmingCancel(true)}>
+              Hủy đơn nạp
+            </Button>
+          ) : null}
           {order.provider === 'VNPAY' &&
-          order.status === 'PENDING' &&
+          waitingForPayment &&
           !pendingAfterFailedReturn &&
-          !timedOut &&
           safeRedirectUrl ? (
             <a
               href={safeRedirectUrl}
