@@ -22,6 +22,7 @@ import com.shareloop.wallet.entity.PaymentProvider;
 import com.shareloop.wallet.mapper.WalletMapper;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
 import com.shareloop.wallet.repository.PaymentOrderSnapshot;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +31,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 
 /** Unit test PaymentService: Mockito, không khởi động Spring, không đụng DB. Khoá và cộng tiền thật ở các test IT. */
 @ExtendWith(MockitoExtension.class)
@@ -90,8 +93,9 @@ class PaymentServiceTest {
 
     @Test
     void createTopUpOrder_whenAmountValid_savesPendingOrderWithCreditsAndReturnsRedirectUrl() {
-        // given
+        // given: không còn đơn đang chờ
         givenDefaultTopUpConfig();
+        givenNoActivePending();
 
         // when
         TopUpOrderResponse response = paymentService.createTopUpOrder(USER_ID, 20_000);
@@ -107,6 +111,50 @@ class PaymentServiceTest {
         assertThat(response.credits()).isEqualTo(20);
         assertThat(response.orderCode()).hasSize(32);
         assertThat(response.redirectUrl()).endsWith("orderCode=" + response.orderCode());
+        // URL được lưu vào đơn để "Tiếp tục thanh toán" dùng lại, khoá ví trước khi kiểm đơn đang chờ
+        assertThat(savedOrder.getValue().getPaymentUrl()).isEqualTo(response.redirectUrl());
+        verify(creditService).lockWalletRow(USER_ID);
+    }
+
+    @Test
+    void createTopUpOrder_whenPendingExists_throwsConflictWithPendingOrderAndCreatesNothing() {
+        // given: còn một đơn 50.000đ đang chờ thanh toán
+        givenDefaultTopUpConfig();
+        PaymentOrder pending = new PaymentOrder(USER_ID, "old123", 50_000, 50, 1_000, PaymentProvider.VNPAY);
+        when(paymentOrderRepository.findActivePendingOrders(anyLong(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(pending)));
+
+        // when
+        Throwable thrown = catchThrowable(() -> paymentService.createTopUpOrder(USER_ID, 20_000));
+
+        // then: 409 kèm thông tin đơn cũ, không hủy đơn cũ, không tạo đơn mới
+        assertBusinessError(thrown, WalletErrorCode.WALLET_TOPUP_PENDING_EXISTS);
+        assertThat(((BusinessException) thrown).getDetails())
+                .containsEntry("orderCode", "old123")
+                .containsEntry("amountVnd", 50_000L)
+                .containsEntry("credits", 50);
+        verify(paymentOrderRepository, never()).cancelAllPendingOfUser(anyLong(), any());
+        verify(paymentOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void createTopUpOrder_whenReplacePending_cancelsOldThenCreatesNew() {
+        // given
+        givenDefaultTopUpConfig();
+        PaymentOrder pending = new PaymentOrder(USER_ID, "old123", 50_000, 50, 1_000, PaymentProvider.VNPAY);
+        when(paymentOrderRepository.findActivePendingOrders(anyLong(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(pending)));
+        when(paymentOrderRepository.cancelAllPendingOfUser(anyLong(), any())).thenReturn(1);
+
+        // when
+        TopUpOrderResponse response = paymentService.createTopUpOrder(USER_ID, 20_000, true);
+
+        // then: hủy đơn cũ có điều kiện rồi mới lưu đơn mới, cùng transaction
+        var inOrder = org.mockito.Mockito.inOrder(paymentOrderRepository);
+        inOrder.verify(paymentOrderRepository)
+                .cancelAllPendingOfUser(USER_ID, "Bạn đã hủy đơn này để tạo đơn nạp mới.");
+        inOrder.verify(paymentOrderRepository).save(any());
+        assertThat(response.status()).isEqualTo(PaymentOrderStatus.PENDING);
     }
 
     // ---------- confirmMockPayment ----------
@@ -166,6 +214,11 @@ class PaymentServiceTest {
                 catchThrowable(() -> paymentService.confirmMockPayment(USER_ID, ORDER_CODE)),
                 WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_PAYABLE);
         verify(creditService, never()).topUp(anyLong(), anyLong());
+    }
+
+    private void givenNoActivePending() {
+        when(paymentOrderRepository.findActivePendingOrders(anyLong(), any(), any()))
+                .thenReturn(Page.empty());
     }
 
     private void givenDefaultTopUpConfig() {

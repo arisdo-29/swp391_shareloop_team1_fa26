@@ -158,7 +158,8 @@ class VnPayCallbackIT extends IntegrationTest {
     @CsvSource({"00,02", "24,00", "24,02"})
     void bothResponseAndTransactionStatusMustBeSuccessful(String response, String transactionStatus) throws Exception {
         ipn(signed("2000000", response, transactionStatus), "00");
-        assertStatus("FAILED");
+        // Mã 24 là khách hủy tại VNPay (CANCELLED); mã khác là thất bại (FAILED).
+        assertStatus("24".equals(response) ? "CANCELLED" : "FAILED");
         assertNoCredits();
     }
 
@@ -226,7 +227,7 @@ class VnPayCallbackIT extends IntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"FAILED", "EXPIRED"})
+    @ValueSource(strings = {"FAILED", "EXPIRED", "CANCELLED"})
     void terminalUnpaidOrder_cannotBeCredited(String terminalStatus) throws Exception {
         jdbc.update("UPDATE payment_orders SET status = ? WHERE order_code = ?", terminalStatus, orderCode);
         ipn(signed("2000000", "00", "00"), "02");
@@ -269,8 +270,15 @@ class VnPayCallbackIT extends IntegrationTest {
     }
 
     @Test
-    void unsuccessfulPayment_marksFailed() throws Exception {
+    void customerCancelledIpn_marksCancelled() throws Exception {
         ipn(signed("2000000", "24", "02"), "00");
+        assertStatus("CANCELLED");
+        assertNoCredits();
+    }
+
+    @Test
+    void unsuccessfulPayment_marksFailed() throws Exception {
+        ipn(signed("2000000", "51", "02"), "00");
         assertStatus("FAILED");
         assertThat(jdbc.queryForObject("SELECT credit_balance FROM users WHERE id = ?", Long.class, userId))
                 .isZero();
@@ -301,8 +309,8 @@ class VnPayCallbackIT extends IntegrationTest {
                 .andExpect(status().isFound())
                 .andExpect(redirectedUrl("http://localhost:5173/credit?orderCode=" + orderCode + "&status=FAILED"));
 
-        // then: đơn FAILED ngay, lưu mã lỗi, không cộng Credit; API xem đơn trả lý do cho người dùng
-        assertStatus("FAILED");
+        // then: đơn CANCELLED ngay (khách hủy), lưu mã lỗi, không cộng Credit; API xem đơn trả lý do cho người dùng
+        assertStatus("CANCELLED");
         assertThat(jdbc.queryForObject(
                         "SELECT callback_data ->> 'vnp_ResponseCode' FROM payment_orders WHERE order_code = ?",
                         String.class,
@@ -310,8 +318,9 @@ class VnPayCallbackIT extends IntegrationTest {
                 .isEqualTo("24");
         assertNoCredits();
         var detail = payment.getOwnOrder(userId, orderCode);
-        assertThat(detail.status()).isEqualTo(PaymentOrderStatus.FAILED);
+        assertThat(detail.status()).isEqualTo(PaymentOrderStatus.CANCELLED);
         assertThat(detail.failureReason()).isEqualTo("Bạn đã hủy giao dịch tại VNPay.");
+        assertThat(detail.paymentUrl()).isNull();
         assertThat(detail.expiresAt()).isNotNull();
     }
 
@@ -338,10 +347,10 @@ class VnPayCallbackIT extends IntegrationTest {
         // when: hủy lần hai
         var second = payment.cancelOwnOrder(userId, orderCode);
 
-        // then: cả hai lần đều trả FAILED kèm lý do; lần hai không ghi gì thêm, không đụng ví
-        assertThat(first.status()).isEqualTo(PaymentOrderStatus.FAILED);
+        // then: cả hai lần đều trả CANCELLED kèm lý do; lần hai không ghi gì thêm, không đụng ví
+        assertThat(first.status()).isEqualTo(PaymentOrderStatus.CANCELLED);
         assertThat(first.failureReason()).isEqualTo("Bạn đã hủy đơn nạp.");
-        assertThat(second.status()).isEqualTo(PaymentOrderStatus.FAILED);
+        assertThat(second.status()).isEqualTo(PaymentOrderStatus.CANCELLED);
         assertThat(second.failureReason()).isEqualTo("Bạn đã hủy đơn nạp.");
         assertThat(jdbc.queryForObject(
                         "SELECT updated_at FROM payment_orders WHERE order_code = ?", Object.class, orderCode))
@@ -391,8 +400,8 @@ class VnPayCallbackIT extends IntegrationTest {
         // when: VNPay vẫn gửi IPN báo đã thu tiền
         ipn(signed("2000000", "00", "00"), "02");
 
-        // then: không cộng Credit (cùng cách xử lý đơn trả sau hạn), đơn vẫn FAILED và được đánh dấu cần hoàn tiền
-        assertStatus("FAILED");
+        // then: không cộng Credit (cùng cách xử lý đơn trả sau hạn), đơn vẫn CANCELLED và được đánh dấu cần hoàn tiền
+        assertStatus("CANCELLED");
         assertNoCredits();
         assertThat(jdbc.queryForObject(
                         "SELECT review_note FROM payment_orders WHERE order_code = ?", String.class, orderCode))

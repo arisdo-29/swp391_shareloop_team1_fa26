@@ -73,12 +73,12 @@ public class VnPayCallbackService {
     }
 
     /**
-     * Người dùng quay về từ VNPay với kết quả thất bại (vd vnp_ResponseCode 24 = khách hủy): chuyển đơn FAILED ngay, không
+     * Người dùng quay về từ VNPay với kết quả thất bại (vd vnp_ResponseCode 24 = khách hủy): chuyển đơn CANCELLED (mã 24) hoặc FAILED ngay, không
      * chờ IPN hay job hết hạn. Tham số Return được VNPay ký giống IPN nên tin được sau khi kiểm chữ ký; chỉ đổi đơn
      * VNPAY còn PENDING và đúng số tiền, ghi lại callback để biết mã lỗi. Kết quả thành công ở Return không cộng
      * Credit: chỉ IPN mới cộng (giữ nguyên luồng cũ). Không ném lỗi: Return luôn chuyển hướng về trang Ví.
      *
-     * @return true nếu vừa chuyển đơn sang FAILED
+     * @return true nếu vừa chuyển đơn sang CANCELLED / FAILED
      */
     @Transactional
     public boolean failFromReturn(Map<String, String> params) {
@@ -100,19 +100,30 @@ public class VnPayCallbackService {
             return false;
         }
         order.recordGatewayResult(params.get("vnp_TransactionNo"), true, params);
-        order.markFailed();
+        markUnpaid(order, params);
         log.info(
-                "VNPAY return failed, order set FAILED: orderCode={}, vnp_ResponseCode={}",
+                "VNPAY return failed, order set {}: orderCode={}, vnp_ResponseCode={}",
+                order.getStatus(),
                 order.getOrderCode(),
                 params.get("vnp_ResponseCode"));
         return true;
     }
 
+    // Khách hủy tại VNPay (mã 24) là CANCELLED; mã lỗi khác là FAILED. Chỉ đổi đơn còn PENDING.
+    private static void markUnpaid(PaymentOrder order, Map<String, String> params) {
+        if ("24".equals(params.get("vnp_ResponseCode"))) {
+            order.markCancelled();
+        } else {
+            order.markFailed();
+        }
+    }
+
     // IPN báo đã thu tiền cho đơn đã hủy hoặc hết hạn: theo cách project xử lý đơn trả sau hạn (rejectExpiredOrder),
     // không tự cộng Credit mà ghi WARN và đánh dấu đơn cần đối soát, hoàn tiền tay. Không đè callback_data cũ.
     private void flagIfPaidAfterClosed(PaymentOrder order, Map<String, String> params) {
-        boolean closedUnpaid =
-                order.getStatus() == PaymentOrderStatus.FAILED || order.getStatus() == PaymentOrderStatus.EXPIRED;
+        boolean closedUnpaid = order.getStatus() == PaymentOrderStatus.FAILED
+                || order.getStatus() == PaymentOrderStatus.CANCELLED
+                || order.getStatus() == PaymentOrderStatus.EXPIRED;
         if (!closedUnpaid || !isSuccessful(params) || !isAmountMatching(order, params.get("vnp_Amount"))) {
             return;
         }
@@ -138,7 +149,7 @@ public class VnPayCallbackService {
 
     private VnPayIpnResponse settleOrder(PaymentOrder order, Map<String, String> params) {
         if (!isSuccessful(params)) {
-            order.markFailed();
+            markUnpaid(order, params);
             return new VnPayIpnResponse("00", "Confirm Success");
         }
         if (isPastDeadline(order)) {

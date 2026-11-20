@@ -99,6 +99,7 @@ export function resolveTopUpReturnResult(
 ): TopUpReturnResult {
   if (orderStatus === 'SUCCESS') return 'success';
   if (orderStatus === 'EXPIRED') return 'expired';
+  if (orderStatus === 'CANCELLED') return 'cancelled';
   if (orderStatus === 'FAILED') return returnStatus === 'FAILED' ? 'cancelled' : 'failed';
   if (returnStatus === 'FAILED') return 'pending-after-failed-return';
   return 'pending';

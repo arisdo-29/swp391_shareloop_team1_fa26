@@ -51,6 +51,22 @@ public class PaymentDeadline {
         return expiresAt(createdAt).plus(graceMinutes, ChronoUnit.MINUTES);
     }
 
+    /** Đơn tạo SAU mốc này còn trong hạn thanh toán (now - payment_order_expire_minutes). */
+    public Instant activeCreatedAfter() {
+        int expireMinutes = configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES);
+        return now().minus(expireMinutes, ChronoUnit.MINUTES);
+    }
+
+    /** Đơn PENDING tạo TRƯỚC mốc này đã qua hạn cộng dung sai, được chuyển EXPIRED. */
+    public Instant closedCreatedBefore() {
+        return activeCreatedAfter().minus(graceMinutes, ChronoUnit.MINUTES);
+    }
+
+    /** Đơn tạo lúc createdAt đã qua hạn thanh toán (chưa tính dung sai) chưa. */
+    public boolean isPastExpiresAt(Instant createdAt) {
+        return !now().isBefore(expiresAt(createdAt));
+    }
+
     /** Đơn tạo lúc createdAt đã qua mốc đóng hẳn chưa. */
     public boolean isClosed(Instant createdAt) {
         return now().isAfter(closesAt(createdAt));

@@ -14,6 +14,8 @@ import java.time.Instant;
  *     khác
  * @param serverTime giờ server lúc trả response; FE lấy serverTime - giờ máy để bù lệch đồng hồ khi đếm ngược tới
  *     expiresAt
+ * @param paymentUrl URL thanh toán đã dựng lúc tạo đơn (cùng vnp_TxnRef, vnp_ExpireDate); chỉ có trong API của chủ
+ *     đơn và chỉ khi đơn còn PENDING trong hạn, còn lại null
  */
 public record TopUpOrderDetailResponse(
         String orderCode,
@@ -33,4 +35,5 @@ public record TopUpOrderDetailResponse(
         String userEmail,
         String reviewedByName,
         String failureReason,
-        Instant serverTime) {}
+        Instant serverTime,
+        String paymentUrl) {}

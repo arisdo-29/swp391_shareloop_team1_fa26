@@ -59,11 +59,51 @@ public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long
     // clearAutomatically: bỏ entity cũ khỏi persistence context để lần đọc sau trong cùng transaction thấy trạng thái
     // mới.
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("update PaymentOrder o set o.status = com.shareloop.wallet.entity.PaymentOrderStatus.FAILED,"
+    @Query("update PaymentOrder o set o.status = com.shareloop.wallet.entity.PaymentOrderStatus.CANCELLED,"
             + " o.reviewNote = :reason where o.orderCode = :orderCode and o.userId = :userId"
             + " and o.status = com.shareloop.wallet.entity.PaymentOrderStatus.PENDING")
     int cancelPending(
             @Param("orderCode") String orderCode, @Param("userId") long userId, @Param("reason") String reason);
+
+    /**
+     * Hủy mọi đơn PENDING của một người (dùng khi "Hủy đơn cũ & tạo đơn mới"). Câu UPDATE có điều kiện status = PENDING
+     * nên đơn vừa được IPN cộng tiền không bị đổi. Người gọi đã khoá dòng users nên chạy lần lượt với IPN.
+     *
+     * @return số đơn vừa hủy
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update PaymentOrder o set o.status = com.shareloop.wallet.entity.PaymentOrderStatus.CANCELLED,"
+            + " o.reviewNote = :reason where o.userId = :userId"
+            + " and o.status = com.shareloop.wallet.entity.PaymentOrderStatus.PENDING")
+    int cancelAllPendingOfUser(@Param("userId") long userId, @Param("reason") String reason);
+
+    /**
+     * Chuyển EXPIRED các đơn PENDING của một người tạo trước {@code cutoff} (đã qua hạn cộng dung sai với VNPay). Gọi
+     * trước khi liệt kê hay tạo đơn để đơn quá hạn không hiện như đang chờ, không chờ PaymentExpiryJob.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update PaymentOrder o set o.status = com.shareloop.wallet.entity.PaymentOrderStatus.EXPIRED"
+            + " where o.userId = :userId and o.status = com.shareloop.wallet.entity.PaymentOrderStatus.PENDING"
+            + " and o.createdAt < :cutoff")
+    int expireStalePendingOfUser(@Param("userId") long userId, @Param("cutoff") Instant cutoff);
+
+    /** Đơn nạp của một người, theo thứ tự của pageable; status null là mọi trạng thái (lịch sử nạp). */
+    @Query("select o from PaymentOrder o where o.userId = :userId and (:status is null or o.status = :status)")
+    org.springframework.data.domain.Page<PaymentOrder> findOwnOrders(
+            @Param("userId") long userId,
+            @Param("status") PaymentOrderStatus status,
+            org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Đơn PENDING của một người còn trong hạn thanh toán (tạo sau {@code createdAfter} = now - payment_order_expire_minutes).
+     * Đơn PENDING đã quá hạn nhưng còn trong dung sai chờ IPN không tính là "đang chờ thanh toán".
+     */
+    @Query("select o from PaymentOrder o where o.userId = :userId"
+            + " and o.status = com.shareloop.wallet.entity.PaymentOrderStatus.PENDING and o.createdAt > :createdAfter")
+    org.springframework.data.domain.Page<PaymentOrder> findActivePendingOrders(
+            @Param("userId") long userId,
+            @Param("createdAfter") Instant createdAfter,
+            org.springframework.data.domain.Pageable pageable);
 
     /**
      * Đọc đơn và khoá dòng payment_orders đến hết transaction (SELECT ... FOR UPDATE). Luồng nạp và callback

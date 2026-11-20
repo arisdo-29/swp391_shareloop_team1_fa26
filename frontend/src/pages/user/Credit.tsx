@@ -4,6 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks';
 import { selectCurrentUser } from '../../app/store';
 import { Dialog } from '../../components/Dialog';
+import { Pagination } from '../../components/Pagination';
 import { Alert, Button, Field, PageHeader, StatusBadge } from '../../components/ui';
 import {
   CreditHistorySection,
@@ -29,6 +30,8 @@ import { useWallet } from '../../app/useWallet';
 import { walletApi, type HeldFeeItem, type WalletHistoryCounts } from '../../services/walletApi';
 import {
   paymentApi,
+  TOPUP_PENDING_EXISTS,
+  type TopUpOrderDetailResponse,
   type PaymentOrderStatus,
   type PaymentProvider,
   type TopUpOrderResponse,
@@ -75,6 +78,7 @@ const paymentStatusLabels: Record<PaymentOrderStatus, string> = {
   SUCCESS: 'Đã cộng Credit',
   FAILED: 'Thanh toán thất bại',
   EXPIRED: 'Đơn đã hết hạn',
+  CANCELLED: 'Đã hủy',
 };
 
 function paymentProviderLabel(provider: PaymentProvider) {
@@ -138,6 +142,15 @@ export function Credit() {
   const [clockOffsetMs, setClockOffsetMs] = useState(0);
   // Trình duyệt chặn mở tab VNPay: hiện nút để người dùng tự bấm mở.
   const [paymentTabBlocked, setPaymentTabBlocked] = useState(false);
+  // Hộp thoại khi còn đơn đang chờ mà người dùng muốn tạo đơn mới: không âm thầm bỏ đơn cũ.
+  const [pendingPrompt, setPendingPrompt] = useState<{
+    order: TopUpOrderResponse;
+    amountVnd: number | null;
+  } | null>(null);
+  // Tăng để mục "Lịch sử nạp" tải lại sau mỗi lần tạo, hủy hoặc đơn đổi trạng thái.
+  const [topUpHistoryKey, setTopUpHistoryKey] = useState(0);
+  // Mã đơn đang theo dõi (đơn PENDING trên thẻ): vòng hỏi trạng thái đọc lại đúng đơn này.
+  const currentOrderCodeRef = useRef<string | null>(null);
   const cancelInFlight = useRef(false);
   const [orderCheckKey, setOrderCheckKey] = useState(0);
   const createTopUpInFlight = useRef(false);
@@ -252,15 +265,34 @@ export function Credit() {
     const params = new URLSearchParams(location.search);
     const pendingSession = loadPendingTopUp();
     const returnCode = returnOrderCode(params);
-    const code = returnCode ?? pendingSession?.orderCode ?? null;
+    const code = returnCode ?? currentOrderCodeRef.current ?? pendingSession?.orderCode ?? null;
     const gatewayReturnStatus = vnpayReturnStatus(params);
     if (!code) {
       setTopUpError('');
       if (gatewayReturnStatus === 'INVALID_SIGNATURE') {
         setReturnState('invalid');
         clearPendingTopUp();
+        return;
       }
-      return;
+      // Không có đơn trong URL hay phiên: hỏi server đơn đang chờ thanh toán của mình, để đơn tạo trước đó (tab khác,
+      // lần vào trước) không bị "mất" khỏi trang.
+      let restoreActive = true;
+      paymentApi
+        .listOrders({ status: 'PENDING', page: 0, size: 1 })
+        .then((page) => {
+          const pending = page.items[0];
+          if (!restoreActive || !pending) return;
+          setClockOffsetMs(clockOffsetFrom(pending.serverTime));
+          setApiTopUpOrder({ ...pending, redirectUrl: pending.paymentUrl ?? '' });
+          setReturnState('idle');
+          setStep('pending');
+        })
+        .catch(() => {
+          // Không tải được thì vẫn cho tạo đơn; Backend vẫn chặn đơn thứ hai bằng 409.
+        });
+      return () => {
+        restoreActive = false;
+      };
     }
     let active = true;
     setReturnState((current) => (current === 'idle' ? 'checking' : current));
@@ -273,7 +305,7 @@ export function Credit() {
             ? (pendingSession.redirectUrl ?? '')
             : '';
         setClockOffsetMs(clockOffsetFrom(order.serverTime));
-        setApiTopUpOrder({ ...order, redirectUrl: savedRedirectUrl });
+        setApiTopUpOrder({ ...order, redirectUrl: order.paymentUrl ?? savedRedirectUrl });
         setStep('pending');
         const result = resolveTopUpReturnResult(order.status, gatewayReturnStatus);
         setReturnState(result);
@@ -283,7 +315,7 @@ export function Credit() {
           setHistoryReloadKey((key) => key + 1);
         } else if (result === 'cancelled') {
           clearPendingTopUp();
-          toast.warning(PAYMENT_CANCELLED_MESSAGE);
+          if (returnCode) toast.warning(PAYMENT_CANCELLED_MESSAGE);
         } else if (result === 'failed' || result === 'expired') {
           clearPendingTopUp();
         }
@@ -324,20 +356,90 @@ export function Credit() {
     };
   }, [waitingForPayment]);
 
+  const currentOrderCode = apiTopUpOrder?.orderCode ?? null;
+  const currentOrderStatus = apiTopUpOrder?.status ?? null;
+  useEffect(() => {
+    currentOrderCodeRef.current = currentOrderStatus === 'PENDING' ? currentOrderCode : null;
+    setTopUpHistoryKey((key) => key + 1);
+  }, [currentOrderCode, currentOrderStatus]);
+
+  // Đồng hồ về 0: đơn hết hạn thanh toán, rời khỏi mục "đang chờ" và sang lịch sử; hỏi lại server để lấy trạng thái
+  // cuối (server chuyển EXPIRED sau dung sai chờ IPN). FE không tự cộng hay trừ gì.
+  const handleDeadlineReached = () => {
+    clearPendingTopUp();
+    currentOrderCodeRef.current = null;
+    setApiTopUpOrder(null);
+    setPaymentTabBlocked(false);
+    setReturnState('idle');
+    setStep('select');
+    setTopUpHistoryKey((key) => key + 1);
+    toast.warning('Đơn nạp đã hết hạn thanh toán. Bạn có thể tạo đơn mới.');
+  };
+
+  // "Tạo đơn nạp mới" trên thẻ: còn đơn đang chờ thì hỏi trước, không âm thầm bỏ đơn cũ.
+  const requestNewTopUp = () => {
+    if (apiTopUpOrder && isStillPayable(apiTopUpOrder, clockOffsetMs)) {
+      setPendingPrompt({ order: apiTopUpOrder, amountVnd: null });
+      return;
+    }
+    setApiTopUpOrder(null);
+    setPaymentTabBlocked(false);
+    setReturnState('idle');
+    clearPendingTopUp();
+    setTopUpError('');
+    setStep('select');
+  };
+
+  const continueOldOrder = () => {
+    if (!pendingPrompt) return;
+    const url = paymentRedirectUrl(pendingPrompt.order.redirectUrl);
+    setApiTopUpOrder(pendingPrompt.order);
+    setStep('pending');
+    setPendingPrompt(null);
+    if (url) {
+      const tab = window.open(url, '_blank', 'noopener,noreferrer');
+      setPaymentTabBlocked(!tab);
+    }
+  };
+
+  const replaceOldOrder = async () => {
+    if (!pendingPrompt) return;
+    const { order, amountVnd } = pendingPrompt;
+    setPendingPrompt(null);
+    if (amountVnd !== null) {
+      // Có số tiền: Backend hủy đơn cũ và tạo đơn mới trong cùng một transaction.
+      await startTopUp(amountVnd, true);
+      return;
+    }
+    // Bấm từ thẻ (chưa nhập số tiền): hủy đơn cũ rồi đưa người dùng về form để nhập số tiền mới.
+    const cancelled = await cancelTopUpOrder(order.orderCode, { silent: true });
+    if (cancelled) {
+      setApiTopUpOrder(null);
+      setReturnState('idle');
+      setStep('select');
+      toast.success('Đã hủy đơn cũ. Hãy nhập số tiền cho đơn nạp mới.');
+    }
+  };
+
   // "Xác nhận hủy": Backend hủy ngay và trả trạng thái mới của đơn, nên cập nhật giao diện theo response luôn,
   // không cần "Kiểm tra lại". Không tải lại ví: đơn chưa thanh toán không đổi số dư.
-  const cancelTopUpOrder = async (orderCode: string) => {
-    if (cancelInFlight.current) return;
+  const cancelTopUpOrder = async (
+    orderCode: string,
+    { silent = false }: { silent?: boolean } = {},
+  ): Promise<boolean> => {
+    if (cancelInFlight.current) return false;
     cancelInFlight.current = true;
     setCancellingOrder(true);
     try {
       const order = await paymentApi.cancelOrder(orderCode);
       setClockOffsetMs(clockOffsetFrom(order.serverTime));
       setApiTopUpOrder({ ...order, redirectUrl: '' });
-      if (order.status === 'FAILED') {
+      setTopUpHistoryKey((key) => key + 1);
+      if (order.status === 'CANCELLED' || order.status === 'FAILED') {
         clearPendingTopUp();
         setReturnState('cancelled');
-        toast.success('Đã hủy đơn nạp Credit.');
+        if (!silent) toast.success('Đã hủy đơn nạp Credit.');
+        return true;
       } else {
         // Đơn đã kịp SUCCESS hoặc EXPIRED trước khi hủy: hiện đúng trạng thái Backend trả.
         const result = resolveTopUpReturnResult(order.status, null);
@@ -350,24 +452,53 @@ export function Credit() {
           clearPendingTopUp();
         }
       }
+      return false;
     } catch (caught) {
       const apiError = caught as Partial<ApiError>;
       toast.error(apiError.message || 'Không hủy được đơn nạp. Vui lòng thử lại.');
+      return false;
     } finally {
       cancelInFlight.current = false;
       setCancellingOrder(false);
     }
   };
 
+  const showPendingConflict = async (amountVnd: number) => {
+    try {
+      const page = await paymentApi.listOrders({ status: 'PENDING', page: 0, size: 1 });
+      const pending = page.items[0];
+      if (!pending) {
+        setTopUpError('Đơn đang chờ vừa kết thúc. Vui lòng bấm tạo đơn lại.');
+        return;
+      }
+      const order: TopUpOrderResponse = { ...pending, redirectUrl: pending.paymentUrl ?? '' };
+      setClockOffsetMs(clockOffsetFrom(pending.serverTime));
+      setApiTopUpOrder(order);
+      setStep('pending');
+      setPendingPrompt({ order, amountVnd });
+    } catch {
+      setTopUpError('Bạn còn một đơn nạp đang chờ thanh toán. Vui lòng tải lại trang để xem đơn đó.');
+    }
+  };
+
   const selectedItemTitle = selectedEntry ? itemTitleOf(selectedEntry, itemTitles) : undefined;
 
   const continuePayment = async () => {
-    if (createTopUpInFlight.current) return;
     const amountVnd = Number(apiAmountVnd);
     if (!Number.isSafeInteger(amountVnd) || amountVnd <= 0) {
       setTopUpError('Vui lòng nhập số tiền nạp hợp lệ.');
       return;
     }
+    // Còn đơn đang chờ thanh toán: hỏi tiếp tục đơn cũ hay hủy đơn cũ & tạo đơn mới.
+    if (apiTopUpOrder && isStillPayable(apiTopUpOrder, clockOffsetMs)) {
+      setPendingPrompt({ order: apiTopUpOrder, amountVnd });
+      return;
+    }
+    await startTopUp(amountVnd, false);
+  };
+
+  const startTopUp = async (amountVnd: number, replacePending: boolean) => {
+    if (createTopUpInFlight.current) return;
     createTopUpInFlight.current = true;
     setTopUpSubmitting(true);
     setTopUpProcessing(false);
@@ -377,7 +508,10 @@ export function Credit() {
     // điền vào. Tab ShareLoop ở lại để hiện đồng hồ và hỏi trạng thái đơn.
     const paymentTab = openBlankPaymentTab();
     try {
-      const order = await paymentApi.createTopUpOrder({ amountVnd });
+      const order = await paymentApi.createTopUpOrder(
+        replacePending ? { amountVnd, replacePending: true } : { amountVnd },
+      );
+      setTopUpHistoryKey((key) => key + 1);
       savePendingTopUp(order);
       setClockOffsetMs(clockOffsetFrom(order.serverTime));
       setApiTopUpOrder(order);
@@ -403,7 +537,12 @@ export function Credit() {
       }
     } catch (caught) {
       paymentTab?.close();
-      setTopUpError(topUpCreateErrorMessage(caught));
+      if ((caught as Partial<ApiError>).code === TOPUP_PENDING_EXISTS) {
+        // Backend báo còn đơn đang chờ (vd tạo ở tab khác): lấy đơn đó về rồi hỏi người dùng.
+        await showPendingConflict(amountVnd);
+      } else {
+        setTopUpError(topUpCreateErrorMessage(caught));
+      }
     } finally {
       createTopUpInFlight.current = false;
       setTopUpSubmitting(false);
@@ -504,15 +643,6 @@ export function Credit() {
               <Alert tone="error">{topUpError}</Alert>
             </div>
           ) : null}
-          {step === 'select' ? (
-            <ApiTopupSelection
-              amountVnd={apiAmountVnd}
-              onAmountChange={setApiAmountVnd}
-              onContinue={() => void continuePayment()}
-              submitting={topUpSubmitting}
-              processing={topUpProcessing}
-            />
-          ) : null}
           {step === 'pending' && apiTopUpOrder ? (
             <ApiTopUpOrder
               order={apiTopUpOrder}
@@ -520,20 +650,37 @@ export function Credit() {
               cancelling={cancellingOrder}
               clockOffsetMs={clockOffsetMs}
               paymentTabBlocked={paymentTabBlocked}
-              onDeadlineReached={() => setOrderCheckKey((key) => key + 1)}
+              onDeadlineReached={handleDeadlineReached}
               onCancel={() => void cancelTopUpOrder(apiTopUpOrder.orderCode)}
-              onNewTopup={() => {
-                setApiTopUpOrder(null);
-                setPaymentTabBlocked(false);
-                setReturnState('idle');
-                clearPendingTopUp();
-                setTopUpError('');
-                setStep('select');
-              }}
+              onNewTopup={requestNewTopUp}
             />
+          ) : null}
+          {/* Đơn đang chờ hiện ở thẻ phía trên, form vẫn dùng được; tạo đơn khi còn đơn chờ sẽ hỏi trước. */}
+          {step === 'select' || apiTopUpOrder?.status === 'PENDING' ? (
+            <div className={step === 'pending' ? 'mt-5' : ''}>
+              <ApiTopupSelection
+                amountVnd={apiAmountVnd}
+                onAmountChange={setApiAmountVnd}
+                onContinue={() => void continuePayment()}
+                submitting={topUpSubmitting}
+                processing={topUpProcessing}
+              />
+            </div>
           ) : null}
         </section>
       </div>
+
+      {pendingPrompt ? (
+        <PendingTopUpDialog
+          order={pendingPrompt.order}
+          busy={topUpSubmitting || cancellingOrder}
+          onContinue={continueOldOrder}
+          onReplace={() => void replaceOldOrder()}
+          onClose={() => setPendingPrompt(null)}
+        />
+      ) : null}
+
+      <TopUpHistorySection reloadKey={topUpHistoryKey} />
 
       <HeldFeesSection
         heldFees={heldFees}
@@ -742,8 +889,9 @@ export function ApiTopUpOrder({
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const safeRedirectUrl = paymentRedirectUrl(order.redirectUrl);
   const paid = order.status === 'SUCCESS';
-  // FAILED gồm cả tự hủy, hủy tại VNPay và VNPay báo lỗi: với người dùng đều là đơn đã hủy, lý do do Backend trả.
-  const cancelled = order.status === 'FAILED';
+  // CANCELLED: tự hủy, hủy để tạo đơn mới, hủy tại VNPay. FAILED: cổng báo thanh toán lỗi. Lý do do Backend trả.
+  const cancelled = order.status === 'CANCELLED';
+  const failed = order.status === 'FAILED';
   const expired = order.status === 'EXPIRED';
   const pendingAfterFailedReturn =
     order.status === 'PENDING' && returnState === 'pending-after-failed-return';
@@ -766,7 +914,9 @@ export function ApiTopUpOrder({
     ? returnState === 'cancelled'
       ? 'Đã hủy thanh toán'
       : 'Đã hủy'
-    : pendingAfterFailedReturn
+    : failed
+      ? paymentStatusLabels.FAILED
+      : pendingAfterFailedReturn
       ? 'Đang đồng bộ trạng thái'
       : timedOut
         ? paymentStatusLabels.EXPIRED
@@ -775,14 +925,16 @@ export function ApiTopUpOrder({
     ? 'Nạp Credit thành công'
     : cancelled
       ? 'Đơn nạp đã hủy'
-      : pendingAfterFailedReturn
+      : failed
+        ? 'Thanh toán không thành công'
+        : pendingAfterFailedReturn
         ? 'Đơn nạp đang chờ xác nhận'
         : expired
           ? 'Đơn nạp Credit đã hết hạn'
           : 'Đơn đang chờ thanh toán';
   const description = paid
     ? `+${order.credits} Credit đã được cộng vào ví.`
-    : cancelled
+    : cancelled || failed
       ? `${order.failureReason ? `${order.failureReason} ` : ''}Credit không được cộng và số dư ví không thay đổi.`
       : pendingAfterFailedReturn
         ? 'Lần thanh toán vừa thất bại, nhưng trạng thái đơn vẫn đang chờ hệ thống xác nhận hủy.'
@@ -844,7 +996,7 @@ export function ApiTopUpOrder({
         ) : null}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button variant="outline" onClick={onNewTopup}>
-            {order.status === 'PENDING' && !timedOut ? 'Tạo đơn nạp khác' : 'Tạo đơn nạp mới'}
+            Tạo đơn nạp mới
           </Button>
           {onCancel && order.status === 'PENDING' && !confirmingCancel ? (
             <Button variant="ghost" disabled={cancelling} onClick={() => setConfirmingCancel(true)}>
@@ -902,6 +1054,162 @@ function OrderCodeDetailRow({ orderCode }: { orderCode: string }) {
         </button>
       </dd>
     </div>
+  );
+}
+
+/** Đơn còn PENDING và chưa qua hạn thanh toán (theo giờ server). */
+function isStillPayable(order: TopUpOrderResponse, clockOffsetMs: number): boolean {
+  if (order.status !== 'PENDING') return false;
+  const deadline = order.expiresAt ? Date.parse(order.expiresAt) : Number.NaN;
+  return !Number.isFinite(deadline) || deadline - clockOffsetMs > Date.now();
+}
+
+/** Còn đơn đang chờ mà người dùng muốn tạo đơn mới: chọn tiếp tục đơn cũ hoặc hủy đơn cũ & tạo đơn mới. */
+function PendingTopUpDialog({
+  order,
+  busy,
+  onContinue,
+  onReplace,
+  onClose,
+}: {
+  order: TopUpOrderResponse;
+  busy: boolean;
+  onContinue: () => void;
+  onReplace: () => void;
+  onClose: () => void;
+}) {
+  const canContinue = Boolean(paymentRedirectUrl(order.redirectUrl));
+  return (
+    <Dialog title="Bạn còn đơn nạp đang chờ" busy={busy} onClose={onClose}>
+      <p className="text-sm leading-6 text-text-secondary">
+        Bạn còn 1 đơn <strong className="text-text-primary">{formatVnd(order.amountVnd)}</strong> (
+        {order.credits} Credit) đang chờ thanh toán. Mỗi lần chỉ giữ một đơn đang chờ.
+      </p>
+      <div className="mt-5 flex flex-wrap justify-end gap-2">
+        {canContinue ? (
+          <Button variant="outline" disabled={busy} onClick={onContinue}>
+            Tiếp tục thanh toán đơn cũ
+          </Button>
+        ) : null}
+        <Button variant="danger" disabled={busy} onClick={onReplace}>
+          Hủy đơn cũ & tạo đơn mới
+        </Button>
+      </div>
+    </Dialog>
+  );
+}
+
+const TOPUP_HISTORY_PAGE_SIZE = 5;
+
+/** Nhãn và màu badge của một đơn trong lịch sử nạp. Đơn PENDING đã qua hạn (đang chờ server chốt) hiện là Hết hạn. */
+function topUpHistoryBadge(order: TopUpOrderDetailResponse): { label: string; className: string } {
+  if (order.status === 'SUCCESS') return { label: 'Thành công', className: 'bg-success-soft text-success' };
+  if (order.status === 'PENDING') {
+    const now = order.serverTime ? Date.parse(order.serverTime) : Date.now();
+    const expired = order.expiresAt ? Date.parse(order.expiresAt) <= now : false;
+    return expired
+      ? { label: 'Hết hạn', className: 'bg-surface-low text-text-muted' }
+      : { label: 'Đang chờ', className: 'bg-warning-soft text-warning' };
+  }
+  if (order.status === 'CANCELLED') return { label: 'Đã hủy', className: 'bg-surface-container text-text-secondary' };
+  if (order.status === 'FAILED') return { label: 'Thất bại', className: 'bg-error-soft text-error' };
+  return { label: 'Hết hạn', className: 'bg-surface-low text-text-muted' };
+}
+
+/** Lịch sử nạp: mọi đơn nạp của mình, mới nhất trước, có phân trang. Dữ liệu luôn đọc từ server. */
+export function TopUpHistorySection({ reloadKey }: { reloadKey: number }) {
+  const [page, setPage] = useState(0);
+  const [orders, setOrders] = useState<TopUpOrderDetailResponse[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError('');
+    paymentApi
+      .listOrders({ page, size: TOPUP_HISTORY_PAGE_SIZE })
+      .then((result) => {
+        if (!active) return;
+        setOrders(result.items);
+        setTotal(result.totalElements);
+      })
+      .catch(() => {
+        if (active) setError('Không tải được lịch sử nạp.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [page, reloadKey, retryKey]);
+
+  return (
+    <section aria-label="Lịch sử nạp" className="mt-5 rounded-xl bg-white p-5 ring-1 ring-border/80 sm:p-6">
+      <h2 className="section-title">Lịch sử nạp</h2>
+      <p className="mt-1 text-xs text-text-muted">Mọi đơn nạp Credit của bạn, mới nhất trước.</p>
+      {loading && !orders.length ? (
+        <div className="mt-3" role="status">
+          <Alert>Đang tải lịch sử nạp...</Alert>
+        </div>
+      ) : null}
+      {!loading && error ? (
+        <div className="mt-3 space-y-3">
+          <Alert tone="error">{error}</Alert>
+          <Button variant="outline" onClick={() => setRetryKey((key) => key + 1)}>
+            Thử lại
+          </Button>
+        </div>
+      ) : null}
+      {!loading && !error && !orders.length ? (
+        <p className="mt-3 text-sm text-text-muted">Bạn chưa có đơn nạp nào.</p>
+      ) : null}
+      {orders.length ? (
+        <ul className="mt-3 divide-y divide-border overflow-hidden rounded-md ring-1 ring-border/80">
+          {orders.map((order) => {
+            const badge = topUpHistoryBadge(order);
+            return (
+              <li
+                key={order.orderCode}
+                className="flex flex-col gap-2 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="font-semibold tabular-nums text-text-primary">
+                    {formatVnd(order.amountVnd)} · {order.credits} Credit
+                  </p>
+                  <p className="mt-0.5 text-xs text-text-muted">
+                    {new Date(order.createdAt).toLocaleString('vi-VN')} · #
+                    {order.orderCode.slice(0, 4).toUpperCase()}...{order.orderCode.slice(-4).toUpperCase()}
+                  </p>
+                  {order.failureReason ? (
+                    <p className="mt-0.5 text-xs text-text-muted">{order.failureReason}</p>
+                  ) : null}
+                </div>
+                <span
+                  className={`inline-flex w-fit shrink-0 rounded-full px-3 py-1 text-xs font-bold ${badge.className}`}
+                >
+                  {badge.label}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {total > TOPUP_HISTORY_PAGE_SIZE ? (
+        <div className="mt-3">
+          <Pagination
+            page={page}
+            size={TOPUP_HISTORY_PAGE_SIZE}
+            totalElements={total}
+            disabled={loading}
+            onPageChange={setPage}
+          />
+        </div>
+      ) : null}
+    </section>
   );
 }
 
