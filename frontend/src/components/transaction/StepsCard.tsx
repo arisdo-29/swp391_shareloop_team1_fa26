@@ -139,7 +139,7 @@ export function StepsCard({
               {canDispute && (
                 <>
                   <p>Gửi khiếu nại nếu có vấn đề với món đồ hoặc việc giao nhận.</p>
-                  <Button variant="outline" onClick={onOpenDispute}>
+                  <Button variant="warning" onClick={onOpenDispute}>
                     Khiếu nại giao dịch
                   </Button>
                 </>
