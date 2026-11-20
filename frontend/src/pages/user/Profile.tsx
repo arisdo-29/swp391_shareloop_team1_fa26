@@ -759,7 +759,7 @@ function ProfileContent({ user, tab, changeTab }: {
                     <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
                       <p className="text-xs font-semibold text-text-secondary">Sao uy tín</p>
                       <div className="mt-2 text-base"><StarRating value={reputation.trustStars} /></div>
-                      <p className="mt-1 text-xs leading-5 text-text-muted">Giảm khi bị báo cáo đúng.</p>
+                      <p className="mt-1 text-xs leading-5 text-text-muted">Giảm khi vi phạm hoặc báo cáo sai.</p>
                     </div>
                   </section>
                   <section className="overflow-hidden rounded-lg bg-white ring-1 ring-border/80">
