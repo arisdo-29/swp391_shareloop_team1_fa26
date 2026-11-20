@@ -614,6 +614,8 @@ class ReputationServiceTest {
             // GOLD 320 điểm, ngưỡng DIAMOND 600 → còn thiếu 280 điểm
             assertThat(res.nextRank()).isEqualTo(Rank.DIAMOND);
             assertThat(res.pointsToNextRank()).isEqualTo(280);
+            assertThat(res.currentRankMinPoints()).isEqualTo(300);
+            assertThat(res.nextRankMinPoints()).isEqualTo(600);
         }
 
         @Test
@@ -631,8 +633,26 @@ class ReputationServiceTest {
             assertThat(res.totalPoints()).isEqualTo(0);
             assertThat(res.rank()).isEqualTo(Rank.BRONZE);
             assertThat(res.trustStars()).isEqualTo(5);
+            assertThat(res.currentRankMinPoints()).isZero();
             assertNull(res.accuracyRate());
             assertThat(res.history().getContent()).isEmpty();
+        }
+
+        @Test
+        void getMyReputation_highestRankHasNoNextThreshold() {
+            Long userId = 3L;
+            UserReputation user = new UserReputation(userId, (short) 5, 650, Rank.DIAMOND);
+            when(userReputationRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(activityLogQueryService.search(eq(userId), eq("POINTS"), any(), any(), eq(0), eq(20)))
+                    .thenReturn(Page.empty());
+
+            MyReputationResponse res = service.getMyReputation(userId, 0, 20);
+
+            assertThat(res.rank()).isEqualTo(Rank.DIAMOND);
+            assertThat(res.currentRankMinPoints()).isEqualTo(600);
+            assertNull(res.nextRank());
+            assertNull(res.nextRankMinPoints());
+            assertNull(res.pointsToNextRank());
         }
 
         @Test

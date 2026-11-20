@@ -100,6 +100,49 @@ describe('Profile', () => {
     expect(reputationApi.getMyReputation).toHaveBeenCalledTimes(1);
   });
 
+  it('tính tiến trình giữa hai mốc điểm do API trả về', async () => {
+    vi.mocked(reputationApi.getMyReputation).mockResolvedValue(buildReputation({
+      totalPoints: 125,
+      rank: 'SILVER',
+      nextRank: 'GOLD',
+      pointsToNextRank: 75,
+      currentRankMinPoints: 50,
+      nextRankMinPoints: 200,
+    }));
+    renderProfile('/profile?tab=reputation');
+
+    const bar = await screen.findByRole('progressbar', { name: 'Tiến trình lên hạng' });
+    expect(bar.getAttribute('aria-valuenow')).toBe('50');
+    expect(screen.getByText('Bạc · 50 điểm')).toBeTruthy();
+    expect(screen.getByText('Vàng · 200 điểm')).toBeTruthy();
+  });
+
+  it('hiển thị thanh đầy khi đã đạt hạng Kim cương', async () => {
+    vi.mocked(reputationApi.getMyReputation).mockResolvedValue(buildReputation({
+      totalPoints: 650,
+      rank: 'DIAMOND',
+      nextRank: null,
+      currentRankMinPoints: 600,
+      nextRankMinPoints: null,
+    }));
+    renderProfile('/profile?tab=reputation');
+
+    const bar = await screen.findByRole('progressbar', { name: 'Tiến trình lên hạng' });
+    expect(bar.getAttribute('aria-valuenow')).toBe('100');
+    expect(screen.getByText('Bạn đang ở hạng cao nhất.')).toBeTruthy();
+  });
+
+  it('giữ thông tin điểm còn thiếu khi API cũ chưa trả các mốc điểm', async () => {
+    vi.mocked(reputationApi.getMyReputation).mockResolvedValue(buildReputation({
+      nextRank: 'DIAMOND',
+      pointsToNextRank: 30,
+    }));
+    renderProfile('/profile?tab=reputation');
+
+    expect(await screen.findByText('Còn 30 điểm nữa để lên hạng Kim cương.')).toBeTruthy();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+  });
+
   it('về tab Hồ sơ khi tham số tab không hợp lệ', async () => {
     // given
     // when
