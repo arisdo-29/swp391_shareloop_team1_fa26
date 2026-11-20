@@ -876,7 +876,8 @@ public class ReportService {
             }
         }
 
-        // Khiếu nại mở từ handover-issue đưa giao dịch vào DISPUTED; kết luận xong phải đưa nó ra. Giao dịch không ở
+        // Khiếu nại mở từ refuse-handover hoặc handover-failed đưa giao dịch vào DISPUTED; kết luận xong phải đưa nó
+        // ra. Giao dịch không ở
         // DISPUTED (khiếu nại mở sau COMPLETED, báo cáo bài/người) thì RequestService bỏ qua.
         if (requestService != null && report.getTargetType() == TargetType.REQUEST && report.getRequestId() != null) {
             requestService.resolveDisputedRequest(

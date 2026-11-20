@@ -195,6 +195,45 @@ class NotAsDescribedReportIT extends IntegrationTest {
         assertThat(statusOf(requestId)).isEqualTo("DISPUTED");
     }
 
+    @Test
+    void conclude_whenSwapDonorRefusesAndAdminUpholds_cancelsReopensMainItemAndHidesOfferedItem() throws Exception {
+        // given: giao dịch Trao đổi, chủ bài từ chối món đem đổi nên khiếu nại nhắm vào người xin
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long adminId = insertUser("Admin");
+        long mainItemId = insertItem(donorId, "SWAP");
+        long offeredItemId = insertItem(receiverId, "GIVE");
+        long requestId = createLogisticsConfirmedRequest(mainItemId, offeredItemId, donorId, receiverId);
+        mockMvc.perform(post("/api/v1/requests/{id}/refuse-handover", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new RefuseHandoverRequest(REASON, null))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DISPUTED"));
+        List<Map<String, Object>> reports = reportsOf(requestId);
+        assertThat(reports).hasSize(1);
+        assertThat(reports.get(0).get("target_user_id")).isEqualTo(receiverId);
+        long reportId = jdbc.queryForObject("SELECT id FROM reports WHERE request_id = ?", Long.class, requestId);
+        // Cho hạn giải trình trôi qua để Admin được kết luận (D-15)
+        jdbc.update(
+                "UPDATE reports SET response_due_at = ? WHERE id = ?",
+                Timestamp.from(Instant.now().minus(1, ChronoUnit.HOURS)),
+                reportId);
+
+        // when
+        mockMvc.perform(post("/api/v1/admin/reports/{reportId}/conclude", reportId)
+                        .header("Authorization", "Bearer " + jwtService.issue(adminId, true))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"UPHOLD\"}"))
+                .andExpect(status().isOk());
+
+        // then: giao dịch huỷ, bài chính mở lại, món đổi của người xin (bên vi phạm) bị ẩn
+        assertThat(statusOf(requestId)).isEqualTo("CANCELLED");
+        assertThat(itemStatusOf(mainItemId)).isEqualTo("APPROVED");
+        assertThat(itemActiveOf(mainItemId)).isTrue();
+        assertThat(itemActiveOf(offeredItemId)).isFalse();
+    }
+
     // ---------- Helper ----------
 
     private org.springframework.test.web.servlet.ResultActions refuseAsReceiver(long requestId, long receiverId)
@@ -208,11 +247,18 @@ class NotAsDescribedReportIT extends IntegrationTest {
 
     /** Đi qua API: gửi yêu cầu, chọn người nhận, chốt lịch, xác nhận hậu cần để tới LOGISTICS_CONFIRMED. */
     private long createLogisticsConfirmedRequest(long donorId, long receiverId) throws Exception {
-        long itemId = insertItem(donorId);
-        MvcResult created = mockMvc.perform(
-                        post("/api/v1/items/{itemId}/requests", itemId).header("Authorization", token(receiverId)))
-                .andExpect(status().isCreated())
-                .andReturn();
+        return createLogisticsConfirmedRequest(insertItem(donorId, "GIVE"), null, donorId, receiverId);
+    }
+
+    /** Như trên nhưng chọn sẵn bài và món đem đổi (offeredItemId null nếu không kèm món). */
+    private long createLogisticsConfirmedRequest(long itemId, Long offeredItemId, long donorId, long receiverId)
+            throws Exception {
+        var createCall = post("/api/v1/items/{itemId}/requests", itemId).header("Authorization", token(receiverId));
+        if (offeredItemId != null) {
+            createCall.contentType(MediaType.APPLICATION_JSON).content("{\"offeredItemId\":" + offeredItemId + "}");
+        }
+        MvcResult created =
+                mockMvc.perform(createCall).andExpect(status().isCreated()).andReturn();
         long requestId = objectMapper
                 .readTree(created.getResponse().getContentAsString())
                 .get("id")
@@ -247,6 +293,14 @@ class NotAsDescribedReportIT extends IntegrationTest {
         return jdbc.queryForObject("SELECT status FROM requests WHERE id = ?", String.class, requestId);
     }
 
+    private String itemStatusOf(long itemId) {
+        return jdbc.queryForObject("SELECT status FROM items WHERE id = ?", String.class, itemId);
+    }
+
+    private boolean itemActiveOf(long itemId) {
+        return jdbc.queryForObject("SELECT is_active FROM items WHERE id = ?", Boolean.class, itemId);
+    }
+
     private String token(long userId) {
         return "Bearer " + jwtService.issue(userId, false);
     }
@@ -264,18 +318,22 @@ class NotAsDescribedReportIT extends IntegrationTest {
         return userId;
     }
 
-    private long insertItem(long donorId) {
+    private long insertItem(long donorId, String offerType) {
         long categoryId = jdbc.queryForObject("SELECT id FROM item_categories ORDER BY id LIMIT 1", Long.class);
         long areaId = jdbc.queryForObject("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1", Long.class);
+        // Bài Trao đổi bắt buộc có món mong muốn
+        String desiredItem = "SWAP".equals(offerType) ? "Muốn đổi lấy đồ dùng học tập" : null;
         Long itemId = jdbc.queryForObject(
-                "INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, condition, status,"
-                        + " fee_state, pending_fee, pending_fee_type)"
-                        + " VALUES (?, ?, ?, 'GIVE', 'Máy cũ', 'Mô tả', 'GOOD', 'APPROVED', 'CHARGED', 0, NULL)"
+                "INSERT INTO items (donor_id, category_id, area_id, offer_type, title, description, desired_item,"
+                        + " condition, status, fee_state, pending_fee, pending_fee_type)"
+                        + " VALUES (?, ?, ?, ?, 'Máy cũ', 'Mô tả', ?, 'GOOD', 'APPROVED', 'CHARGED', 0, NULL)"
                         + " RETURNING id",
                 Long.class,
                 donorId,
                 categoryId,
-                areaId);
+                areaId,
+                offerType,
+                desiredItem);
         itemIds.add(itemId);
         return itemId;
     }
