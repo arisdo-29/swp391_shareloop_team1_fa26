@@ -1,4 +1,5 @@
-import { http } from './http';
+import { http, tokenStorage, type ApiError } from './http';
+import { userApi } from './userApi';
 import type { WalletResponse } from './walletApi';
 
 // Contract: docs/api/payment.md
@@ -50,10 +51,20 @@ export interface TopUpConfirmResponse {
 
 export const paymentApi = {
   async getOrder(orderCode: string): Promise<TopUpOrderDetailResponse> {
-    const { data } = await http.get<TopUpOrderDetailResponse>(
-      `${paymentApiEndpoints.createTopUpOrder}/${encodeURIComponent(orderCode)}`,
-    );
-    return data;
+    try {
+      const { data } = await http.get<TopUpOrderDetailResponse>(
+        `${paymentApiEndpoints.createTopUpOrder}/${encodeURIComponent(orderCode)}`,
+      );
+      return data;
+    } catch (caught) {
+      const error = caught as ApiError;
+      if (error.status === 401 && tokenStorage.get()) {
+        // Không tin 401 của riêng API đơn thanh toán để kết thúc phiên. /me là nguồn xác
+        // thực phiên; interceptor sẽ logout nếu chính /me cũng xác nhận JWT không hợp lệ.
+        await userApi.getMe().catch(() => undefined);
+      }
+      throw caught;
+    }
   },
   async createTopUpOrder(input: CreateTopUpOrderRequest): Promise<TopUpOrderResponse> {
     const { data } = await http.post<TopUpOrderResponse>(
