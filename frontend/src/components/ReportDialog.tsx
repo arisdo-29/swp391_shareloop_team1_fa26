@@ -111,7 +111,7 @@ export function ReportDialog({ target, contextLabel, onClose, onSuccess }: Repor
         <div className="mt-3 rounded-md bg-error-soft p-3 text-xs text-error">{error}</div>
       ) : null}
       <div className="mt-6 flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose} disabled={submitting}>
+        <Button variant="outline" onClick={onClose} disabled={submitting}>
           Hủy
         </Button>
         <Button

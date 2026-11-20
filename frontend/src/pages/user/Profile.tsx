@@ -593,7 +593,7 @@ export function Profile() {
                     </div>
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="outline"
                       onClick={closePhoneChange}
                       disabled={phoneChangeSending || phoneChangeConfirming}
                     >

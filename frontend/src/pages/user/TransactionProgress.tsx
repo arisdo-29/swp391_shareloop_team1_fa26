@@ -117,7 +117,7 @@ function TransactionProgressView({
 
   return (
     <div className="page-shell py-6 sm:py-8">
-      <Button variant="ghost" onClick={() => navigate(requestConversationPath(request.id))}>
+      <Button variant="outline" onClick={() => navigate(requestConversationPath(request.id))}>
         Quay lại tin nhắn
       </Button>
       <div className="mb-6 mt-2 flex flex-wrap items-start justify-between gap-3">
@@ -180,7 +180,7 @@ function TransactionProgressView({
           <HandoverMediaCard request={request} />
           {canCancelTransaction(request.status) ? (
             <section className="space-y-2">
-              <Button variant="ghost" onClick={() => setOpenDialog('cancel')}>
+              <Button variant="danger" onClick={() => setOpenDialog('cancel')}>
                 Huỷ giao dịch
               </Button>
               <p className="text-xs leading-5 text-text-secondary">

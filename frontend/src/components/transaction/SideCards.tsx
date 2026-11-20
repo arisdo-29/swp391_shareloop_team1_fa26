@@ -50,7 +50,7 @@ export function ItemSideCard({
           ) : null}
           {request.offeredItemId ? (
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               className="mt-1"
               onClick={() => navigate(`/items/${request.offeredItemId}`)}
@@ -107,7 +107,7 @@ export function PartnerCard({
           </Button>
         ) : null}
         {canReport ? (
-          <Button variant="ghost" onClick={onReport}>
+          <Button variant="warning" onClick={onReport}>
             Báo cáo
           </Button>
         ) : null}

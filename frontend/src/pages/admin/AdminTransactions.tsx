@@ -315,7 +315,7 @@ function CancelDialog({
         </div>
       ) : null}
       <div className="mt-6 flex justify-end gap-2">
-        <Button variant="ghost" disabled={busy} onClick={onClose}>
+        <Button variant="outline" disabled={busy} onClick={onClose}>
           Đóng
         </Button>
         <Button variant="danger" disabled={busy || trimmed.length < REASON_MIN} onClick={() => void submit()}>

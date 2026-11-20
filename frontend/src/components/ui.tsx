@@ -108,7 +108,7 @@ export function Icon({
 }
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'warning';
   size?: 'sm' | 'md' | 'lg';
 };
 export function Button({
@@ -128,6 +128,8 @@ export function Button({
     ghost:
       'border-transparent bg-transparent text-text-secondary hover:bg-surface-low hover:text-text-primary',
     danger: 'border-error/20 bg-error-soft text-error hover:border-error/40 hover:bg-error/15',
+    warning:
+      'border-warning/30 bg-warning-soft text-warning hover:border-warning/50 hover:bg-warning/20',
   };
   // Cỡ sm vẫn cao 44px để đủ vùng bấm trên màn cảm ứng, chỉ khác ở chữ và đệm ngang.
   const sizes = {

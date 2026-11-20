@@ -76,7 +76,7 @@ export function ChangeOfferedItem({ requestId, currentUserId, currentItemId, onU
             <Button size="sm" disabled={loading || selectedId === null} onClick={() => void save()}>
               Xác nhận đổi món
             </Button>
-            <Button size="sm" variant="ghost" disabled={loading} onClick={() => setOpen(false)}>
+            <Button size="sm" variant="outline" disabled={loading} onClick={() => setOpen(false)}>
               Đóng
             </Button>
           </div>

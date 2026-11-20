@@ -82,7 +82,7 @@ export function ModerationChecklistContent({
 
       {error ? <div className="mt-4"><Alert tone="error">{error}</Alert></div> : null}
       <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">
-        <Button variant="ghost" onClick={onCancel} disabled={disabled}>{cancelLabel}</Button>
+        <Button variant="outline" onClick={onCancel} disabled={disabled}>{cancelLabel}</Button>
         <Button onClick={onConfirm} disabled={!isComplete || disabled}>
           {disabled ? 'Đang xử lý...' : 'Xác nhận duyệt bài'}
         </Button>
@@ -196,7 +196,7 @@ export function RejectReasonsContent({
 
       {error ? <div className="mt-4"><Alert tone="error">{error}</Alert></div> : null}
       <div className="sticky bottom-0 mt-5 flex flex-wrap justify-end gap-2 border-t border-border/70 bg-white pt-4">
-        <Button variant="ghost" onClick={onCancel} disabled={disabled}>Hủy</Button>
+        <Button variant="outline" onClick={onCancel} disabled={disabled}>Hủy</Button>
         <Button
           variant="danger"
           onClick={() => {

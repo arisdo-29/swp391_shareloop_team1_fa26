@@ -107,7 +107,7 @@ function AgainstMeCard({ report }: { report: MyReportSummary }) {
           {/* Chỉ khiếu nại giao dịch mới có cuộc trò chuyện chung với đối phương để thương lượng. */}
           {report.requestId ? (
             <Link to={`/requests/${report.requestId}`}>
-              <Button size="sm" variant="ghost" className="w-full sm:w-auto">
+              <Button size="sm" variant="outline" className="w-full sm:w-auto">
                 Nhắn tin
               </Button>
             </Link>

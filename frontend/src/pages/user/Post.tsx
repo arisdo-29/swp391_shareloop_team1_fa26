@@ -771,7 +771,7 @@ export function Post() {
             />
           </div>
           <div className="mt-6 flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={submitting || mediaUploading}>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={submitting || mediaUploading}>
               Hủy
             </Button>
             <Button

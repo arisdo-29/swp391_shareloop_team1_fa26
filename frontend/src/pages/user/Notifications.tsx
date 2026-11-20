@@ -387,7 +387,7 @@ function BulkActionBar({
         <Icon name="trash" className="size-4" />
         Xóa đã chọn
       </Button>
-      <Button variant="ghost" size="sm" disabled={busy || !hasRead} onClick={onClearRead}>
+      <Button variant="danger" size="sm" disabled={busy || !hasRead} onClick={onClearRead}>
         Dọn sạch thông báo đã đọc
       </Button>
     </div>

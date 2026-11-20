@@ -893,7 +893,7 @@ export function Activities() {
                         </Button>
                         <Button
                           size="sm"
-                          variant="ghost"
+                          variant="danger"
                           disabled={!canRemove || removingItemId === item.id}
                           onClick={() => setRemoveConfirmId(item.id)}
                         >
@@ -993,7 +993,7 @@ export function Activities() {
               />
             ) : editQuoteLoading ? null : (
               <div className="mt-6 flex justify-end">
-                <Button variant="ghost" onClick={() => setEditingId('')}>
+                <Button variant="outline" onClick={() => setEditingId('')}>
                   Hủy
                 </Button>
               </div>
@@ -1083,7 +1083,7 @@ export function Activities() {
           ) : null}
           <div className="mt-6 flex justify-end gap-2">
             <Button
-              variant="ghost"
+              variant="outline"
               disabled={Boolean(renewingItemId || boostingItemId)}
               onClick={() => setListingFeeAction(null)}
             >
@@ -1121,7 +1121,7 @@ export function Activities() {
           ) : null}
           <div className="mt-6 flex justify-end gap-2">
             <Button
-              variant="ghost"
+              variant="outline"
               disabled={Boolean(removingItemId)}
               onClick={() => setRemoveConfirmId('')}
             >
@@ -1171,7 +1171,7 @@ export function Activities() {
           ) : null}
           <div className="mt-6 flex justify-end gap-2">
             <Button
-              variant="ghost"
+              variant="outline"
               disabled={selectingRequestId === acceptRequest.id}
               onClick={() => {
                 setAcceptError('');
@@ -1599,7 +1599,7 @@ function EditItemForm({
       />
       {uploadError ? <Alert tone="error">{uploadError}</Alert> : null}
       <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="ghost" disabled={formDisabled} onClick={onCancel}>
+        <Button type="button" variant="outline" disabled={formDisabled} onClick={onCancel}>
           Hủy
         </Button>
         <Button type="submit" disabled={formDisabled || attributesLoading}>

@@ -158,7 +158,7 @@ export function VerifyEmail() {
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             className="w-full"
             disabled={processing || !email.trim() || resendSeconds > 0}
             onClick={() => void resend()}
