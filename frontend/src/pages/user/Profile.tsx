@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { actions, selectCurrentUser } from '../../app/store';
 import {
@@ -145,14 +145,28 @@ function phoneChangeErrorMessage(error: ApiError) {
 
 export function Profile() {
   const user = useAppSelector(selectCurrentUser)!;
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  if (user.role !== 'admin' && searchParams.get('tab') === 'credit') {
+    return <Navigate to="/credit" replace />;
+  }
+
+  return (
+    <ProfileContent
+      user={user}
+      tab={user.role === 'admin' ? 'profile' : tabFromSearch(searchParams.get('tab'))}
+      changeTab={(nextTab) => setSearchParams(nextTab === 'profile' ? {} : { tab: nextTab }, { replace: true })}
+    />
+  );
+}
+
+function ProfileContent({ user, tab, changeTab }: {
+  user: NonNullable<ReturnType<typeof selectCurrentUser>>;
+  tab: ProfileTab;
+  changeTab: (tab: ProfileTab) => void;
+}) {
   const isAdmin = user.role === 'admin';
   const dispatch = useAppDispatch();
-  const [searchParams, setSearchParams] = useSearchParams();
-  // Tab lấy từ URL để thông báo có thể trỏ thẳng tới /profile?tab=reputation.
-  const tab: ProfileTab = isAdmin ? 'profile' : tabFromSearch(searchParams.get('tab'));
-  const changeTab = (nextTab: ProfileTab) => {
-    setSearchParams(nextTab === 'profile' ? {} : { tab: nextTab }, { replace: true });
-  };
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
@@ -476,19 +490,10 @@ export function Profile() {
             {(
               [
                 ['profile', 'Hồ sơ'],
-                ['credit', 'Ví Credit'],
                 ['reputation', 'Uy tín & Hạng'],
               ] as const
             ).map(([id, label]) =>
-              id === 'credit' && !isAdmin ? (
-                <Link
-                  key={id}
-                  to="/credit"
-                  className="flex w-full items-center min-h-11 rounded-md px-3 py-2.5 text-left text-sm font-semibold transition text-text-secondary hover:bg-surface-low"
-                >
-                  {label}
-                </Link>
-              ) : id === 'credit' ? null : isAdmin && id === 'reputation' ? null : (
+              isAdmin && id === 'reputation' ? null : (
                 <button
                   key={id}
                   onClick={() => changeTab(id)}
