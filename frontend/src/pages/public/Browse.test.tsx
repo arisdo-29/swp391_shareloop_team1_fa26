@@ -5,6 +5,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { aiApi } from '../../services/aiApi';
 import { catalogApi, type CategoryResponse } from '../../services/catalogApi';
 import { itemApi, type ItemResponse } from '../../services/itemApi';
 import { categoryBrowsePath } from '../../utils/browseFilters';
@@ -22,6 +23,8 @@ vi.mock('../../app/hooks', () => ({
 vi.mock('../../app/store', () => ({
   selectCurrentUser: vi.fn(),
 }));
+
+vi.mock('../../services/aiApi', () => ({ aiApi: { quota: vi.fn() } }));
 
 vi.mock('./HomeMotion', () => ({
   HomeMotion: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -139,6 +142,7 @@ function renderBrowseInStrictMode() {
 
 beforeEach(() => {
   authState.currentUser = null;
+  vi.mocked(aiApi.quota).mockResolvedValue({ freeUsesRemaining: 3, feeCredits: 2, hasToppedUp: true });
   vi.mocked(catalogApi.categories).mockResolvedValue(categories);
   vi.mocked(catalogApi.categoriesWithCounts).mockResolvedValue(categories);
   vi.mocked(catalogApi.areas).mockResolvedValue([]);
@@ -148,6 +152,34 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+describe('giới thiệu Trợ lý AI trên trang Tìm đồ', () => {
+  it('dẫn khách tới đăng nhập với đích quay về /ai và không gọi API hạn mức', async () => {
+    renderBrowse();
+
+    expect(await screen.findByText(book.title)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Thử Trợ lý AI' }).getAttribute('href')).toBe('/login?next=%2Fai');
+    expect(aiApi.quota).not.toHaveBeenCalled();
+  });
+
+  it('hiện lượt còn lại từ API và dẫn thành viên tới /ai', async () => {
+    authState.currentUser = { id: 12 };
+    renderBrowse();
+
+    expect(await screen.findByText('Còn 3 lượt miễn phí')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Thử Trợ lý AI' }).getAttribute('href')).toBe('/ai');
+  });
+
+  it('vẫn hiện danh sách và liên kết nếu không tải được hạn mức', async () => {
+    authState.currentUser = { id: 12 };
+    vi.mocked(aiApi.quota).mockRejectedValueOnce(new Error('Không tải được hạn mức'));
+    renderBrowse();
+
+    expect(await screen.findByText(book.title)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Thử Trợ lý AI' })).toBeTruthy();
+    expect(screen.queryByText(/Còn .* lượt miễn phí/)).toBeNull();
+  });
 });
 
 describe('lọc danh mục trên trang Tìm đồ', () => {
