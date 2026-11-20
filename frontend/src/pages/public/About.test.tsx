@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAppSelector } from '../../app/hooks';
@@ -125,6 +125,24 @@ describe('trang Giới thiệu', () => {
     renderAbout();
 
     expect(screen.getAllByText(/trong 24 giờ sau khi/).length).toBeGreaterThan(0);
+  });
+
+  it('mở FAQ hỗ trợ và hiển thị đúng liên kết email', () => {
+    renderAbout();
+
+    const question = screen.getByText(
+      'Tôi cần hỗ trợ hoặc gặp sự cố khi sử dụng ShareLoop thì liên hệ ở đâu?',
+    );
+    const details = question.closest('details');
+    const summary = question.closest('summary');
+    expect(details?.open).toBe(false);
+
+    fireEvent.click(summary!);
+
+    expect(details?.open).toBe(true);
+    expect(screen.getByRole('link', { name: 'support@shareloop.vn' }).getAttribute('href')).toBe(
+      'mailto:support@shareloop.vn',
+    );
   });
 
   it('không còn các nội dung luật đã bỏ', () => {
