@@ -165,4 +165,16 @@ describe('AdminAccounts', () => {
       ),
     );
   });
+
+  it('L01: cột thao tác không cho phép rớt dòng khi nút là Mở khóa', async () => {
+    renderPage();
+    await screen.findByText('Bình Trần');
+
+    const row = rowOf('Bình Trần');
+    const actionCell = within(row).getByRole('button', { name: 'Mở khóa' }).closest('td')!;
+    expect(actionCell.className).toContain('whitespace-nowrap');
+    const flexWrap = actionCell.querySelector('div')!;
+    expect(flexWrap.className).toContain('flex-nowrap');
+    expect(within(actionCell).getByText('Xem Credit')).toBeTruthy();
+  });
 });
