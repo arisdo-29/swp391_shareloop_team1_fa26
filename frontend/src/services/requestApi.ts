@@ -53,6 +53,9 @@ export interface RequestResponse {
   // Khiếu nại nhìn từ phía người xem (tối đa hai). Chỉ có ở chi tiết, danh sách cuộc trò chuyện và kết quả của
   // Từ chối giao nhận / Giao nhận không thành công; nơi khác null.
   disputes?: RequestDispute[] | null;
+  // Báo cáo vi phạm khi một bên từ chối nhận (giao dịch đã huỷ). Không phải khiếu nại nên tách khỏi disputes;
+  // không có hạn giải trình. Null khi giao dịch không bị từ chối nhận.
+  refusalReport?: RequestDispute | null;
   // Ảnh đại diện hai bên, dạng /api/v1/media/{id}; null khi chưa có ảnh.
   donorAvatarUrl?: string | null;
   receiverAvatarUrl?: string | null;

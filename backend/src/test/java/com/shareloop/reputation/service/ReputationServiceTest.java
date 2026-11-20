@@ -347,7 +347,7 @@ class ReputationServiceTest {
                     .notify(
                             eq(donorId),
                             eq("POINTS_AWARDED"),
-                            eq("Bạn được cộng 10 điểm uy tín"),
+                            eq("Bạn được cộng 10 điểm tích luỹ"),
                             org.mockito.ArgumentMatchers.contains("lên hạng Bạc"),
                             eq("/profile?tab=reputation"));
             verify(notificationService)
@@ -361,7 +361,7 @@ class ReputationServiceTest {
                     .notify(
                             eq(receiverId),
                             eq("POINTS_AWARDED"),
-                            eq("Bạn được cộng 2 điểm uy tín"),
+                            eq("Bạn được cộng 2 điểm tích luỹ"),
                             org.mockito.ArgumentMatchers.contains("Tổng điểm hiện tại: 2"),
                             eq("/profile?tab=reputation"));
         }

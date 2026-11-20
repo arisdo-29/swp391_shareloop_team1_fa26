@@ -808,7 +808,7 @@ Hai sơ đồ dưới được vẽ mới theo các đường dẫn trong fronte
 | 21     | Quản trị           | **Duyệt bài**                                             | Hàng chờ bài và màn chi tiết duyệt theo checklist.                                         |
 | 22     | Quản trị           | **Danh mục; Khu vực**                                     | Quản lý danh mục, thuộc tính động, cây khu vực.                                            |
 | 23     | Quản trị           | **Checklist duyệt bài; Từ khóa cấm**                      | Quản lý câu hỏi checklist, lý do từ chối mẫu, từ khoá cấm (thử nhanh).                     |
-| 24     | Quản trị           | **Tài khoản; Uy tín và hạng**                             | Khoá / mở khoá tài khoản; cấu hình điểm và ngưỡng hạng.                                    |
+| 24     | Quản trị           | **Tài khoản; Hạng và Uy tín**                             | Khoá / mở khoá tài khoản; cấu hình điểm và ngưỡng hạng.                                    |
 | 25     | Quản trị           | **Giao dịch; Khiếu nại và báo cáo**                       | Tra cứu, huỷ giao dịch kẹt; yêu cầu giải trình và kết luận hồ sơ.                          |
 | 26     | Quản trị           | **Báo cáo tài chính; Đơn nạp Credit; Tra cứu người dùng** | Ba sổ tài chính, xuất CSV; danh sách đơn nạp; ví và lịch sử Credit từng người.             |
 | 27     | Quản trị           | **Cấu hình phí; Nhật ký hoạt động; Cảnh báo bất thường**  | Sửa cấu hình nghiệp vụ; tra cứu nhật ký; xem cặp giao dịch lặp.                            |
@@ -1798,7 +1798,7 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 | [CD-03](#BR_CD_03) | Cho → Trao đổi trong chat: giao dịch bài Cho chưa chốt lịch, người nhận muốn đưa một bài của mình vào đổi → chủ bài được hỏi có chuyển sang Trao đổi (5 Credit) không; đồng ý và trả phí thì món đó thành món đổi và chuyển Đang giao dịch. |
 | [CD-04](#BR_CD_04) | Trao đổi → Cho: chủ bài chọn một người không kèm món đổi → hộp xác nhận "Chuyển bài sang Cho, không hoàn phí đã trả". Đồng ý thì bài thành Cho và mở chat.                                                                                  |
 | [CD-06](#BR_CD_06) | Phí chuyển ghi sổ cái loại Phí đăng (POST_FEE), trừ ngay; bài không phải duyệt lại vì nội dung không đổi. Không kiểm hạn mức bài Trao đổi khi chuyển.                                                                                       |
-| [CD-07](#BR_CD_07) | Điểm uy tín tính theo hình thức cuối cùng khi hoàn tất (Cho: +10 / +2; Trao đổi: +6 / +6).                                                                                                                                                  |
+| [CD-07](#BR_CD_07) | Điểm tích luỹ tính theo hình thức cuối cùng khi hoàn tất (Cho: +10 / +2; Trao đổi: +6 / +6).                                                                                                                                                  |
 
 <span id="FIG_sw21" class="anchor"></span>***Hình 16. Luồng xử lý F20 Chuyển Cho ↔ Trao đổi – file ShareLoop_Flows_Swimlane_v12_VI.drawio***
 
@@ -1942,7 +1942,7 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 
 - Hoàn tất giao nhận: ảnh / video minh chứng (tuỳ chọn).
 
-- Từ chối giao nhận: lý do 5–1000 ký tự (bắt buộc), ảnh minh chứng (tuỳ chọn).
+- Từ chối giao nhận (hộp thoại Báo cáo vi phạm): lý do cố định Không đúng mô tả, mô tả 5–1000 ký tự (bắt buộc), ảnh minh chứng (tuỳ chọn).
 
 **Kiểm tra:**
 
@@ -1958,7 +1958,9 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 
 - Giao hàng: người gửi bấm hoàn tất nghĩa là đã gửi hàng, người nhận bấm khi đã nhận hàng.
 
-- Từ chối giao nhận → Đang tranh chấp ngay, mở khiếu nại Không đúng mô tả, chủ của món bị từ chối có 48 giờ giải trình ([GN-07](#BR_GN_07)).
+- Từ chối giao nhận → giao dịch Đã huỷ ngay, món bị từ chối tạm ẩn, món của người từ chối mở lại, mở báo cáo vi phạm Không đúng mô tả nhắm vào chủ món bị từ chối. Không phải khiếu nại, không qua Đang tranh chấp ([GN-07](#BR_GN_07)).
+
+> **Phân biệt khiếu nại và báo cáo (21/11/2026):** Khiếu nại gắn với một giao dịch đã xảy ra hoặc có thể đã xảy ra: khiếu nại sau Hoàn tất (trong 24 giờ, bên kia giải trình 48 giờ, BC-07, BC-08) và Sự cố giao nhận khi bên kia đã bấm hoàn tất (giao dịch Đang tranh chấp chờ Admin xác minh, BC-09). Báo cáo vi phạm nhắm vào một bài hoặc một người. Từ chối giao nhận là báo cáo vi phạm: việc trao đồ không xảy ra nên giao dịch Đã huỷ ngay, Admin chỉ kết luận ai có lỗi, không quyết định giao dịch thành công hay không.
 
 - Một bên đã bấm hoàn tất, bên kia im lặng 3 ngày (giao hàng 7 ngày), không có khiếu nại → tự Hoàn tất ([GN-09](#BR_GN_09)).
 
@@ -1975,7 +1977,7 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 | **Mã**             | **Nội dung luật** |
 |--------------------|-------------------|
 | [GN-06](#BR_GN_06) | Sau khi Đã chốt lịch, mỗi bên chọn một trong ba kết quả: Hoàn tất giao nhận, Giao nhận không thành công, Từ chối giao nhận. Mỗi bên bấm hoàn tất một lần. Giao hàng: người gửi bấm khi đã gửi, người nhận bấm khi đã nhận. |
-| [GN-07](#BR_GN_07) | Từ chối giao nhận (bên nhận món đồ: Cho tặng chỉ người nhận, Trao đổi cả hai bên), bắt buộc lý do → Đang tranh chấp ngay, mở khiếu nại Không đúng mô tả, chủ của món bị từ chối có 48 giờ giải trình. Bài chưa Đã trao, chưa cộng điểm (D-04). |
+| [GN-07](#BR_GN_07) | Từ chối giao nhận (bên nhận món đồ: Cho tặng chỉ người nhận, Trao đổi cả hai bên), bắt buộc mô tả → giao dịch Đã huỷ ngay, món bị từ chối tạm ẩn, món của người từ chối mở lại, mở báo cáo vi phạm Không đúng mô tả nhắm vào chủ món bị từ chối. Giải trình không bắt buộc, không có hạn. Không bao giờ Hoàn tất, không Đã trao, không cộng điểm (D-04). |
 | [GN-08](#BR_GN_08) | Hoàn tất đầu tiên → Chờ xác nhận giao nhận, báo bên kia. Đủ hai bên bấm hoàn tất → Hoàn tất, bài (và món đổi) → Đã trao, cộng điểm, báo hai bên hạn khiếu nại kèm giờ cụ thể. |
 | [GN-09](#BR_GN_09) | Một bên đã bấm hoàn tất, bên kia im lặng quá hạn và giao dịch không có khiếu nại → tự Hoàn tất. Gặp trực tiếp 3 ngày, giao hàng 7 ngày. |
 | [GN-10](#BR_GN_10) | Ảnh / video minh chứng đính kèm được từ Đã chốt lịch trở đi (cả khi Hoàn tất, Đang tranh chấp); hai bên xem được; Admin xem khi xử lý khiếu nại. |
@@ -2032,7 +2034,7 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 | [HG-01](#BR_HG_01) | Một bên huỷ được giao dịch khi đang Đã được chọn hoặc Đang hẹn lịch; bắt buộc lý do 5–500 ký tự (ghi kèm "\[Chủ bài\]" / "\[Người nhận\]"). Bài và món đổi về Đang hiển thị, bên kia nhận thông báo. Không hoàn, không thu phí. Từ Đã chốt lịch dùng "Giao nhận không thành công" (HG-03). |
 | [HG-02](#BR_HG_02) | Giao dịch Đang tranh chấp: người dùng không tự huỷ, phải chờ Admin. |
 | [HG-03](#BR_HG_03) | "Giao nhận không thành công": khi Đã chốt lịch hoặc Chờ xác nhận giao nhận và mình chưa bấm hoàn tất; lý do 5–500 ký tự, ảnh tuỳ chọn. Bên kia chưa bấm hoàn tất → Đã huỷ như HG-01, không phạt. Bên kia đã bấm hoàn tất → Đang tranh chấp + khiếu nại Không đến / không giao (NO_SHOW), hạn giải trình 48 giờ. |
-| [BC-09](#BR_BC_09) | Khiếu nại tự mở từ: giao nhận không thành công khi bên kia đã bấm hoàn tất (HG-03), từ chối giao nhận (GN-07). |
+| [BC-09](#BR_BC_09) | Khiếu nại tự mở từ giao nhận không thành công khi bên kia đã bấm hoàn tất (HG-03), gọi là Sự cố giao nhận, chờ Admin xác minh. Từ chối giao nhận (GN-07) mở báo cáo vi phạm, không phải khiếu nại. |
 
 <span id="FIG_sw13" class="anchor"></span>***Hình 20. Luồng xử lý F12 Huỷ giao dịch – file ShareLoop_Flows_Swimlane_v12_VI.drawio***
 
@@ -2092,7 +2094,7 @@ Mọi chế tài chỉ ở cấp tài khoản (trừ sao, ẩn bài, cấm); h�
 | [BC-02](#BR_BC_02) | Bài có 3 báo cáo đang chờ (Chờ xử lý / Chờ giải trình) → tạm ẩn bài, trạng thái bài giữ nguyên; báo chủ bài và Admin.                                                  |
 | [BC-07](#BR_BC_07) | Khiếu nại giao dịch Hoàn tất: là một bên của giao dịch, trong 24 giờ sau hoàn tất, chưa khiếu nại giao dịch này (D-05).                                                |
 | [BC-08](#BR_BC_08) | Bên bị khiếu nại giải trình 1 lần kèm bằng chứng, trong 48 giờ; thông báo ghi rõ giờ hết hạn. Nội dung giải trình tối đa 2000 ký tự, giống giải trình báo cáo (BC-03). |
-| [BC-09](#BR_BC_09) | Khiếu nại tự mở từ: giao nhận không thành công khi bên kia đã bấm hoàn tất (HG-03), từ chối giao nhận (GN-07). |
+| [BC-09](#BR_BC_09) | Khiếu nại tự mở từ giao nhận không thành công khi bên kia đã bấm hoàn tất (HG-03), gọi là Sự cố giao nhận, chờ Admin xác minh. Từ chối giao nhận (GN-07) mở báo cáo vi phạm, không phải khiếu nại. |
 
 <span id="FIG_sw17" class="anchor"></span>***Hình 21. Luồng xử lý F16 Báo cáo, khiếu nại – file ShareLoop_Flows_Swimlane_v12_VI.drawio***
 
@@ -2390,7 +2392,7 @@ Các chức năng Admin. Admin là tài khoản tạo sẵn, không đăng bài 
 
 **Use case:** [UC-46](#UC_46) **· Tác nhân:** Admin
 
-**Kích hoạt:** Admin mở "Cấu hình phí" hoặc "Uy tín và hạng".
+**Kích hoạt:** Admin mở "Cấu hình phí" hoặc "Hạng và Uy tín".
 
 **Mô tả:** Sửa các con số nghiệp vụ lưu trong bảng cấu hình (phí, hạn mức, mốc thời gian, điểm, ngưỡng hạng).
 
@@ -2428,7 +2430,7 @@ Các chức năng Admin. Admin là tài khoản tạo sẵn, không đăng bài 
 
 > **\[Ảnh chụp màn hình cần chèn\]** *Trang Cấu hình phí (/admin/settings/fees).*
 >
-> **\[Ảnh chụp màn hình cần chèn\]** *Trang Uy tín và hạng (/admin/reputation).*
+> **\[Ảnh chụp màn hình cần chèn\]** *Trang Hạng và Uy tín (/admin/reputation).*
 
 ### 3.8.6 Xử lý báo cáo và khiếu nại
 
@@ -2454,7 +2456,7 @@ Các chức năng Admin. Admin là tài khoản tạo sẵn, không đăng bài 
 
 - Bác bỏ: hồ sơ Bác bỏ; mở lại bài đang tạm ẩn khi đủ điều kiện ([BC-04](#BR_BC_04)); giao dịch tranh chấp → Hoàn tất ([BC-11](#BR_BC_11)).
 
-- Chấp thuận: trừ 1 sao người vi phạm; báo cáo bài thì ẩn bài vĩnh viễn và đóng các báo cáo khác của bài ([BC-05](#BR_BC_05)); lý do nghiêm trọng thì ẩn mọi bài của người vi phạm ([BC-06](#BR_BC_06)); giao dịch tranh chấp → Đã huỷ ([BC-12](#BR_BC_12)).
+- Chấp thuận: trừ 1 sao người vi phạm; báo cáo bài thì ẩn bài (chỉ hiện lại khi chủ bài sửa và Admin duyệt lại) và đóng các báo cáo khác của bài ([BC-05](#BR_BC_05)); lý do nghiêm trọng thì ẩn mọi bài của người vi phạm ([BC-06](#BR_BC_06)); giao dịch tranh chấp → Đã huỷ ([BC-12](#BR_BC_12)).
 
 - Sao về 0: tài khoản bị cấm ([UT-04](#BR_UT_04), [KC-05](#BR_KC_05)).
 
@@ -2472,7 +2474,7 @@ Các chức năng Admin. Admin là tài khoản tạo sẵn, không đăng bài 
 |--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [BC-03](#BR_BC_03) | Admin bấm "Yêu cầu giải trình" trên báo cáo bài hoặc người: bên bị báo cáo có 48 giờ, giải trình kèm ảnh. Một bài nhiều báo cáo thì mọi báo cáo chờ của bài dùng chung một hạn và chủ bài giải trình một lần cho cả bài. Nội dung giải trình tối đa 2000 ký tự. |
 | [BC-04](#BR_BC_04) | Báo cáo bài bị bác bỏ: mở lại bài nếu không còn báo cáo chờ, bài chưa từng có báo cáo bị chấp thuận, chủ bài không bị khoá / cấm và còn sao.                                                                                                                    |
-| [BC-05](#BR_BC_05) | Báo cáo bài được chấp thuận: ẩn bài vĩnh viễn (không tự hiện lại), trừ 1 sao chủ bài; các báo cáo khác đang chờ của bài đóng theo, chỉ trừ 1 sao.                                                                                                               |
+| [BC-05](#BR_BC_05) | Báo cáo bài được chấp thuận: ẩn bài (không tự hiện lại), trừ 1 sao chủ bài; các báo cáo khác đang chờ của bài đóng theo, chỉ trừ 1 sao. Bài chỉ hiện lại khi chủ bài sửa bài và Admin duyệt lại (22/11/2026); chủ bài chưa sửa thì bài vẫn ẩn.                                                                                                               |
 | [BC-06](#BR_BC_06) | Lý do nghiêm trọng (Hàng cấm, Hàng giả) được chấp thuận → ẩn mọi bài đang hiển thị của người vi phạm để Admin rà soát. Admin sửa được danh sách lý do nghiêm trọng.                                                                                             |
 | [BC-10](#BR_BC_10) | Admin chỉ kết luận khi đã có giải trình hoặc đã quá hạn giải trình (D-15); màn Admin khoá nút Kết luận và hiện hạn.                                                                                                                                             |
 | [BC-11](#BR_BC_11) | Kết luận Bác bỏ: báo cáo Bác bỏ; giao dịch Đang tranh chấp → Hoàn tất (bài Đã trao, cộng điểm).                                                                                                                                                                 |
@@ -2667,7 +2669,7 @@ Ba sơ đồ trạng thái lấy từ file swimlane v12 (trang S1, S2, S3).
 
 <span id="FIG_sw22" class="anchor"></span>***Hình 24. S1 Trạng thái giao dịch (requests.status) – file ShareLoop_Flows_Swimlane_v12_VI.drawio***
 
-> **Ghi chú rà soát:** S1 vẽ cạnh LOGISTICS_CONFIRMED → DISPUTED; RequestStatus.canTransition không có cạnh này. Code đi qua AWAITING_HANDOVER rồi sang DISPUTED trong cùng một lần xử lý khi một bên bấm "Từ chối giao nhận". Từ 21/11/2026, LOGISTICS_CONFIRMED → CANCELLED và AWAITING_HANDOVER → CANCELLED do người dùng chỉ còn đi qua nút "Giao nhận không thành công" khi bên kia chưa bấm hoàn tất. File drawio chưa vẽ lại, cần cập nhật tay.
+> **Ghi chú rà soát:** S1 vẽ cạnh LOGISTICS_CONFIRMED → DISPUTED; RequestStatus.canTransition không có cạnh này. Từ 21/11/2026 "Từ chối giao nhận" đi thẳng sang CANCELLED (không qua DISPUTED); DISPUTED chỉ còn đến từ AWAITING_HANDOVER khi một bên báo giao nhận không thành công lúc bên kia đã bấm hoàn tất (Sự cố giao nhận, chờ Admin xác minh). Từ 21/11/2026, LOGISTICS_CONFIRMED → CANCELLED và AWAITING_HANDOVER → CANCELLED do người dùng chỉ còn đi qua nút "Giao nhận không thành công" khi bên kia chưa bấm hoàn tất. File drawio chưa vẽ lại, cần cập nhật tay.
 
 <span id="FIG_sw23" class="anchor"></span>***Hình 25. S2 Trạng thái bài đăng (items.status) – file ShareLoop_Flows_Swimlane_v12_VI.drawio***
 
@@ -3609,7 +3611,7 @@ Người nhận gửi yêu cầu xin (bài Cho) hoặc đề nghị đổi (bài
 | <span id="BR_CD_04" class="anchor"></span>**CD-04** | Trao đổi → Cho: chủ bài chọn một người không kèm món đổi → hộp xác nhận "Chuyển bài sang Cho, không hoàn phí đã trả". Đồng ý thì bài thành Cho và mở chat.                                                                                  | —            | [Chọn người giao dịch và chuyển hình thức Cho ↔ Trao đổi](#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi) |
 | <span id="BR_CD_05" class="anchor"></span>**CD-05** | Trong giao dịch bài Cho, người nhận không gửi ảnh trong chat; chủ bài gửi ảnh từ khi Đã chốt lịch.                                                                                                                                          | —            | [Nhắn tin trong giao dịch](#nhắn-tin-trong-giao-dịch)                                                             |
 | <span id="BR_CD_06" class="anchor"></span>**CD-06** | Phí chuyển ghi sổ cái loại Phí đăng (POST_FEE), trừ ngay; bài không phải duyệt lại vì nội dung không đổi. Không kiểm hạn mức bài Trao đổi khi chuyển.                                                                                       | —            | [Chọn người giao dịch và chuyển hình thức Cho ↔ Trao đổi](#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi) |
-| <span id="BR_CD_07" class="anchor"></span>**CD-07** | Điểm uy tín tính theo hình thức cuối cùng khi hoàn tất (Cho: +10 / +2; Trao đổi: +6 / +6).                                                                                                                                                  | —            | [Chọn người giao dịch và chuyển hình thức Cho ↔ Trao đổi](#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi) |
+| <span id="BR_CD_07" class="anchor"></span>**CD-07** | Điểm tích luỹ tính theo hình thức cuối cùng khi hoàn tất (Cho: +10 / +2; Trao đổi: +6 / +6).                                                                                                                                                  | —            | [Chọn người giao dịch và chuyển hình thức Cho ↔ Trao đổi](#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi) |
 | **CD-08**                                           | Người nhận đổi được món đem đổi khi yêu cầu còn chờ hoặc đã được chọn nhưng chưa chốt lịch; lịch đã đề xuất phải hai bên xác nhận lại; chủ bài được báo và có thể huỷ giao dịch nếu không đồng ý. Sau khi chốt lịch không đổi được (cập nhật 16/11/2026).                                                                                                                                             | —            | —                                                                                                                 |
 
 ### 5.1.L Chat trong giao dịch
@@ -3639,7 +3641,7 @@ Từ lúc chọn người tới lúc hoàn tất. Sơ đồ dưới tóm tắt t
 | <span id="BR_GN_04" class="anchor"></span>**GN-04** | Khi Đã chốt lịch: họ tên, email, SĐT của hai bên hiện trong trang giao dịch (không gửi qua email); đã hiện thì không ẩn lại (D-11).                                                                                                                       | —                          | [Chốt lịch giao nhận và xem thông tin liên lạc](#chốt-lịch-giao-nhận-và-xem-thông-tin-liên-lạc) |
 | <span id="BR_GN_05" class="anchor"></span>**GN-05** | Quá 10 ngày từ lúc chọn người mà chưa chốt lịch → tự huỷ, bài về Đang hiển thị.                                                                                                                                                                           | chat_open_days = 10        | [Chốt lịch giao nhận và xem thông tin liên lạc](#chốt-lịch-giao-nhận-và-xem-thông-tin-liên-lạc) |
 | <span id="BR_GN_06" class="anchor"></span>**GN-06** | Sau khi Đã chốt lịch, mỗi bên chọn một trong ba kết quả: Hoàn tất giao nhận, Giao nhận không thành công, Từ chối giao nhận. Mỗi bên bấm hoàn tất một lần. Giao hàng: người gửi bấm khi đã gửi, người nhận bấm khi đã nhận. | —                          | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                          |
-| <span id="BR_GN_07" class="anchor"></span>**GN-07** | Từ chối giao nhận (bên nhận món đồ: Cho tặng chỉ người nhận, Trao đổi cả hai bên), bắt buộc lý do 5–1000 ký tự → Đang tranh chấp ngay, mở khiếu nại Không đúng mô tả trong cùng một lần xử lý, chủ của món bị từ chối có 48 giờ giải trình. Bài chưa Đã trao, chưa cộng điểm (D-04). Admin chấp nhận: món của bên vi phạm bị ẩn, món còn lại mở lại. | response_window_hours = 48 | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                          |
+| <span id="BR_GN_07" class="anchor"></span>**GN-07** | Từ chối giao nhận (bên nhận món đồ: Cho tặng chỉ người nhận, Trao đổi cả hai bên), bắt buộc mô tả 5–1000 ký tự → trong cùng một lần xử lý: giao dịch Đã huỷ, món bị từ chối tạm ẩn, món của người từ chối mở lại, mở báo cáo vi phạm Không đúng mô tả (báo cáo bài, gắn giao dịch) nhắm vào chủ món bị từ chối. Bên bị báo cáo được giải trình nhưng không bắt buộc, không có hạn, không chặn Admin kết luận. Admin chỉ kết luận ai có lỗi, giao dịch luôn Đã huỷ: chấp nhận thì trừ 1 sao chủ món, món giữ ẩn; bác bỏ thì món mở lại và trừ 1 sao người báo cáo. Không Đã trao, không cộng điểm (D-04). | — | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                          |
 | <span id="BR_GN_08" class="anchor"></span>**GN-08** | Hoàn tất đầu tiên → Chờ xác nhận giao nhận, báo bên kia. Đủ hai bên bấm hoàn tất → Hoàn tất; bài (và món đổi) → Đã trao; cộng điểm; báo hai bên hạn khiếu nại kèm giờ cụ thể. | —                          | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                          |
 | <span id="BR_GN_09" class="anchor"></span>**GN-09** | Một bên đã bấm hoàn tất, bên kia im lặng quá hạn và giao dịch không có khiếu nại → tự Hoàn tất. Gặp trực tiếp 3 ngày, giao hàng 7 ngày. | auto_confirm_days = 3, auto_confirm_days_shipping = 7 | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                          |
 | <span id="BR_GN_10" class="anchor"></span>**GN-10** | Ảnh / video minh chứng đính kèm được từ Đã chốt lịch trở đi (cả khi Hoàn tất, Đang tranh chấp); hai bên xem được; Admin xem khi xử lý khiếu nại.                                                                                                          | —                          | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                          |
@@ -3703,7 +3705,7 @@ Báo cáo là về một bài hoặc một người; khiếu nại là về mộ
 </tr>
 <tr class="odd">
 <td><span id="BR_BC_05" class="anchor"></span><strong>BC-05</strong></td>
-<td>Báo cáo bài được chấp thuận: ẩn bài vĩnh viễn (không tự hiện lại), trừ 1 sao chủ bài; các báo cáo khác đang chờ của bài đóng theo, chỉ trừ 1 sao.</td>
+<td>Báo cáo bài được chấp thuận: ẩn bài (không tự hiện lại), trừ 1 sao chủ bài; các báo cáo khác đang chờ của bài đóng theo, chỉ trừ 1 sao. Bài chỉ hiện lại khi chủ bài sửa bài và Admin duyệt lại (22/11/2026); chủ bài chưa sửa thì bài vẫn ẩn.</td>
 <td>—</td>
 <td><a href="#xử-lý-báo-cáo-và-khiếu-nại">Xử lý báo cáo và khiếu nại</a></td>
 </tr>
@@ -3729,7 +3731,7 @@ Báo cáo là về một bài hoặc một người; khiếu nại là về mộ
 </tr>
 <tr class="odd">
 <td><span id="BR_BC_09" class="anchor"></span><strong>BC-09</strong></td>
-<td>Khiếu nại tự mở từ: giao nhận không thành công khi bên kia đã bấm hoàn tất (HG-03), từ chối giao nhận (GN-07).</td>
+<td>Khiếu nại tự mở từ giao nhận không thành công khi bên kia đã bấm hoàn tất (HG-03), gọi là Sự cố giao nhận, chờ Admin xác minh. Từ chối giao nhận (GN-07) mở báo cáo vi phạm, không phải khiếu nại.</td>
 <td>—</td>
 <td><p><a href="#huỷ-giao-dịch-và-báo-chưa-nhận-chưa-giao">Huỷ giao dịch và báo chưa nhận / chưa giao</a></p>
 <p><a href="#báo-cáo-bài-người-dùng-và-khiếu-nại-giao-dịch">Báo cáo bài, người dùng và khiếu nại giao dịch</a></p></td>
@@ -3884,7 +3886,7 @@ Giá trị mặc định lấy từ enum ConfigKey (backend/src/main/java/com/sh
 | stuck_request_hours              | 48                          | Ngưỡng giao dịch bị kẹt. Giao dịch quá giờ hẹn hơn số giờ này mà chưa bên nào xác nhận bàn giao thì Admin thấy ở bộ lọc Bị kẹt.                                                                                                                                            |
 | complaint_window_hours           | 24                          | Hạn khiếu nại. Số giờ được khiếu nại sau khi giao dịch hoàn tất.                                                                                                                                                                                                           |
 | response_window_hours            | 48                          | Hạn giải trình. Số giờ bên bị khiếu nại được giải trình, tính từ lúc nhận thông báo.                                                                                                                                                                                       |
-| daily_points_cap                 | 30                          | Trần điểm mỗi ngày. Số điểm uy tín tối đa một người được cộng trong một ngày.                                                                                                                                                                                              |
+| daily_points_cap                 | 30                          | Trần điểm mỗi ngày. Số điểm tích luỹ tối đa một người được cộng trong một ngày.                                                                                                                                                                                              |
 | payment_order_expire_minutes     | 30                          | Hạn đơn nạp. Số phút một đơn nạp được chờ thanh toán. Quá hạn thì đơn chuyển sang hết hạn.                                                                                                                                                                                 |
 | reputation_silver_min            | 50                          | Điểm tối thiểu hạng Bạc. Tổng điểm cần có để lên hạng Bạc. Phải nhỏ hơn điểm tối thiểu hạng Vàng.                                                                                                                                                                          |
 | reputation_gold_min              | 150                         | Điểm tối thiểu hạng Vàng. Tổng điểm cần có để lên hạng Vàng. Phải lớn hơn hạng Bạc và nhỏ hơn hạng Kim cương.                                                                                                                                                              |
@@ -4112,10 +4114,10 @@ Thông báo lỗi lấy từ các lớp \*ErrorCode trong backend (mỗi module 
 | D-01   | Bài Cho miễn phí, tối đa 5 bài; bài Trao đổi 5 Credit trong hạn mức theo hạng, vượt hạn mức đăng thêm được với 10 Credit, không giới hạn trên.                                                   | [PH-02](#BR_PH_02), [BD-05](#BR_BD_05), [BD-06](#BR_BD_06) |
 | D-02   | Giữ chuyển đổi hình thức, chỉ lúc chọn người hoặc trong chat bài Cho; Cho → Trao đổi trả 5 Credit, Trao đổi → Cho không hoàn phí; không kiểm hạn mức; không đồng ý thì không chọn được người đó. | Mục K                                                      |
 | D-03   | Bỏ AI trong duyệt bài.                                                                                                                                                                           | [KD-01](#BR_KD_01)                                         |
-| D-04   | Bên nhận món đồ bấm Từ chối giao nhận → Đang tranh chấp, chưa Đã trao, chưa cộng điểm.                                                                                                                 | [GN-07](#BR_GN_07)                                         |
+| D-04   | Bên nhận món đồ bấm Từ chối giao nhận → Đã huỷ kèm báo cáo vi phạm, không Đã trao, không cộng điểm.                                                                                                                 | [GN-07](#BR_GN_07)                                         |
 | D-05   | Khiếu nại trong 24 giờ sau hoàn tất; giải trình trong 48 giờ.                                                                                                                                    | [BC-07](#BR_BC_07), [BC-08](#BR_BC_08)                     |
 | D-06   | Không gia hạn bài Hết hạn; đăng bài mới.                                                                                                                                                         | [HT-03](#BR_HT_03)                                         |
-| D-07   | Bài 3 báo cáo tạm ẩn → Admin yêu cầu giải trình 48 giờ → kết luận; bác bỏ mở lại bài, chấp thuận ẩn hẳn và trừ 1 sao.                                                                            | [BC-02](#BR_BC_02) … [BC-05](#BR_BC_05)                    |
+| D-07   | Bài 3 báo cáo tạm ẩn → Admin yêu cầu giải trình 48 giờ → kết luận; bác bỏ mở lại bài, chấp thuận ẩn bài và trừ 1 sao (bài chỉ hiện lại khi chủ bài sửa và Admin duyệt lại).                                                                            | [BC-02](#BR_BC_02) … [BC-05](#BR_BC_05)                    |
 | D-08   | Bỏ chức năng hàng chính hãng.                                                                                                                                                                    | [KD-10](#BR_KD_10)                                         |
 | D-09   | Hai mức: Khoá do Admin (có lý do hiển thị), Cấm tự động khi sao về 0; mỗi lần trừ sao báo số sao còn lại; không có sao ân hạn; giao dịch Đang tranh chấp của người bị cấm giữ lại cho Admin.     | Mục B, [UT-03](#BR_UT_03), [UT-04](#BR_UT_04)              |
 | D-10   | VNPay sandbox chạy trọn vòng; bỏ nạp thủ công.                                                                                                                                                   | [VI-04](#BR_VI_04), [VI-05](#BR_VI_05)                     |
@@ -4272,7 +4274,7 @@ Chụp trên bản staging (frontend Vercel, backend Cloud Run) bằng các tài
 | 46     | [Quản lý từ khoá cấm, checklist, lý do từ chối mẫu](#quản-lý-từ-khoá-cấm-checklist-lý-do-từ-chối-mẫu)             | Trang Từ khóa cấm (/admin/keywords) với ô thử nhanh.                                                         |
 | 47     | [Quản lý từ khoá cấm, checklist, lý do từ chối mẫu](#quản-lý-từ-khoá-cấm-checklist-lý-do-từ-chối-mẫu)             | Trang Checklist duyệt bài (/admin/checklist).                                                                |
 | 48     | [Cấu hình phí, hạn mức, uy tín và hạng](#cấu-hình-phí-hạn-mức-uy-tín-và-hạng)                                     | Trang Cấu hình phí (/admin/settings/fees).                                                                   |
-| 49     | [Cấu hình phí, hạn mức, uy tín và hạng](#cấu-hình-phí-hạn-mức-uy-tín-và-hạng)                                     | Trang Uy tín và hạng (/admin/reputation).                                                                    |
+| 49     | [Cấu hình phí, hạn mức, uy tín và hạng](#cấu-hình-phí-hạn-mức-uy-tín-và-hạng)                                     | Trang Hạng và Uy tín (/admin/reputation).                                                                    |
 | 50     | [Xử lý báo cáo và khiếu nại](#xử-lý-báo-cáo-và-khiếu-nại)                                                         | Trang Khiếu nại và báo cáo (/admin/complaints): chi tiết hồ sơ, nút Kết luận bị khoá khi còn hạn giải trình. |
 | 51     | [Quản lý tài khoản: khoá và mở khoá](#quản-lý-tài-khoản-khoá-và-mở-khoá)                                          | Trang Tài khoản (/admin/users) với hộp thoại Khoá tài khoản.                                                 |
 | 52     | [Quản lý giao dịch](#quản-lý-giao-dịch)                                                                           | Trang Giao dịch (/admin/transactions) với bộ lọc Bị kẹt.                                                     |

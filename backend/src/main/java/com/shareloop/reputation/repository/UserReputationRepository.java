@@ -90,7 +90,7 @@ public interface UserReputationRepository extends JpaRepository<UserReputation, 
     List<Object[]> findRepeatedPairs(@Param("since") Instant since, @Param("threshold") long threshold);
 
     /**
-     * Kiểm tra xem giao dịch đã được ghi nhận cộng điểm uy tín hay chưa qua bảng activity_logs (Idempotency).
+     * Kiểm tra xem giao dịch đã được ghi nhận cộng điểm tích luỹ hay chưa qua bảng activity_logs (Idempotency).
      */
     @Query(value = """
             SELECT COUNT(1) > 0

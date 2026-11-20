@@ -6,7 +6,7 @@ import com.shareloop.report.entity.TargetType;
 import java.time.Instant;
 
 /**
- * Một hồ sơ báo cáo hoặc khiếu nại trong tab Khiếu nại & Báo cáo của Member. Không có id người gửi và mô tả để bên bị
+ * Một hồ sơ báo cáo hoặc khiếu nại trong tab Khiếu nại và Báo cáo của Member. Không có id người gửi và mô tả để bên bị
  * phản ánh không biết ai đã báo cáo mình.
  *
  * @param targetName tiêu đề bài đăng (report bài hoặc giao dịch) hoặc họ tên người bị báo cáo; null khi đã bị xoá

@@ -11,7 +11,8 @@ import { canConfirmHandover, formatDeadline } from '../../utils/request';
 import {
   handoverFailedConsequence,
   handoverFailedReasons,
-  refuseHandoverConsequence,
+  REFUSE_HANDOVER_CONSEQUENCE,
+  REFUSE_HANDOVER_REASON_LABEL,
 } from '../../utils/handoverOutcome';
 
 // Các hộp thoại của trang Tiến trình giao dịch, chuyển từ bảng tiến trình cũ ở trang Tin nhắn.
@@ -259,16 +260,18 @@ export function RefuseHandoverDialog({
   return (
     <DialogFrame labelledBy="refuse-handover-title" busy={submitting} onClose={onClose}>
       <h2 id="refuse-handover-title" className="text-xl font-bold">
-        Từ chối giao nhận
+        Báo cáo vi phạm
       </h2>
       <p className="mt-1 text-sm text-text-muted">{itemTitle}</p>
-      <p className="mt-3 text-sm leading-6 text-text-secondary">
-        {refuseHandoverConsequence(partnerName)}
-      </p>
+      <p className="mt-3 text-sm leading-6 text-text-secondary">{REFUSE_HANDOVER_CONSEQUENCE}</p>
+      <dl className="mt-4 text-sm">
+        <dt className="font-semibold">Lý do</dt>
+        <dd className="mt-1 text-text-secondary">{REFUSE_HANDOVER_REASON_LABEL}</dd>
+      </dl>
       <TextArea
         className="mt-4"
-        label="Lý do từ chối (bắt buộc)"
-        hint="Nêu rõ món đồ khác mô tả ở điểm nào. Nhập ít nhất 5 ký tự."
+        label="Mô tả (bắt buộc)"
+        hint={`Nêu rõ món đồ của ${partnerName} khác mô tả ở điểm nào. Nhập ít nhất 5 ký tự.`}
         value={reason}
         maxLength={REFUSE_REASON_LIMIT}
         disabled={submitting}
@@ -290,7 +293,7 @@ export function RefuseHandoverDialog({
           Đóng
         </Button>
         <Button variant="warning" disabled={submitting || !canSubmit} onClick={() => void submit()}>
-          {submitting ? 'Đang gửi...' : 'Từ chối giao nhận'}
+          {submitting ? 'Đang gửi...' : 'Gửi báo cáo'}
         </Button>
       </div>
     </DialogFrame>

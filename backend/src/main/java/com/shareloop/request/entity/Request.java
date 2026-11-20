@@ -25,6 +25,8 @@ public class Request extends BaseEntity {
     public static final String CANCEL_BY_RECEIVER = "[Người nhận] ";
     public static final String CANCEL_BY_SYSTEM = "[Hệ thống] ";
     public static final String CANCEL_BY_ADMIN = "[Admin] ";
+    // Câu mở đầu lý do huỷ khi một bên từ chối nhận, đặt sau tiền tố người huỷ (GN-07)
+    public static final String REFUSAL_REASON = "Từ chối nhận vì món không đúng mô tả. ";
 
     @Column(name = "item_id", nullable = false)
     private Long itemId;
@@ -290,22 +292,20 @@ public class Request extends BaseEntity {
     }
 
     /**
-     * Một bên từ chối nhận món đồ: chuyển thẳng sang DISPUTED (GN-07).
+     * Một bên từ chối nhận món đồ: việc trao đồ không xảy ra nên giao dịch huỷ ngay (GN-07), không qua DISPUTED.
      *
-     * <p>Chỉ hợp lệ khi giao dịch ở LOGISTICS_CONFIRMED hoặc AWAITING_HANDOVER và bên từ chối chưa bấm hoàn tất. Từ
-     * LOGISTICS_CONFIRMED phải đi qua AWAITING_HANDOVER vì sơ đồ trạng thái không có cạnh đi thẳng sang DISPUTED.
+     * <p>Chỉ hợp lệ khi giao dịch ở LOGISTICS_CONFIRMED hoặc AWAITING_HANDOVER và bên từ chối chưa bấm hoàn tất.
      *
      * @param isDonor true nếu người từ chối là chủ bài, false nếu là người nhận
+     * @param reason lý do bên từ chối đã nhập
      * @throws BusinessException REQUEST_INVALID_STATE_TRANSITION khi sai trạng thái hoặc bên từ chối đã bấm hoàn tất
      */
-    public void refuseHandover(boolean isDonor) {
+    public void refuseHandover(boolean isDonor, String reason) {
         if (!isHandoverOpen() || hasConfirmedHandover(isDonor)) {
             throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
         }
-        if (this.status == RequestStatus.LOGISTICS_CONFIRMED) {
-            transitionTo(RequestStatus.AWAITING_HANDOVER);
-        }
-        transitionTo(RequestStatus.DISPUTED);
+        String prefix = isDonor ? CANCEL_BY_DONOR : CANCEL_BY_RECEIVER;
+        cancel(prefix + REFUSAL_REASON + reason);
     }
 
     /** Giao dịch còn đang chờ giao nhận (đã chốt lịch, chưa hoàn tất): nơi ba nút kết quả được phép dùng. */

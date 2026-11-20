@@ -289,7 +289,7 @@ const activityLogTypeLabels: Record<string, string> = {
   ADMIN_ACTION: 'Thao tác quản trị',
   REVIEW: 'Kiểm duyệt bài',
   AI_CALL: 'Gọi trợ lý AI',
-  POINTS: 'Thay đổi điểm uy tín',
+  POINTS: 'Thay đổi điểm tích luỹ',
   STARS: 'Thay đổi sao uy tín',
   SECURITY: 'Sự kiện bảo mật',
 };

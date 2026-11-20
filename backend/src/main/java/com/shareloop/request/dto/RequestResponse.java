@@ -58,7 +58,10 @@ public record RequestResponse(
         Integer conversionFee,
         // Khiếu nại của giao dịch nhìn từ phía người xem (tối đa hai, mỗi bên một lần). Chỉ có ở GET /requests/{id},
         // danh sách cuộc trò chuyện và kết quả của hai nút mở tranh chấp; nơi khác để null.
-        List<RequestDisputeSummary> disputes) {
+        List<RequestDisputeSummary> disputes,
+        // Báo cáo vi phạm khi một bên từ chối nhận (GN-07), nhìn từ phía người xem. Không phải khiếu nại nên tách khỏi
+        // disputes. Có ở cùng các nơi như disputes; null khi giao dịch không bị từ chối nhận.
+        RequestDisputeSummary refusalReport) {
 
     // Dạng 30 tham số (chưa có ảnh đại diện, disputeExpired, handoverMedia) để code và test đang gọi vẫn compile.
     public RequestResponse(
@@ -129,6 +132,7 @@ public record RequestResponse(
                 null,
                 null,
                 null,
+                null,
                 null);
     }
 
@@ -179,11 +183,20 @@ public record RequestResponse(
                 media,
                 itemOfferType,
                 newConversionFee,
-                disputes);
+                disputes,
+                refusalReport);
     }
 
     /** Gắn danh sách khiếu nại theo vai của người xem (D-04); các trường khác giữ nguyên. */
     public RequestResponse withDisputes(List<RequestDisputeSummary> newDisputes) {
+        return withReports(newDisputes, refusalReport);
+    }
+
+    /**
+     * Gắn khiếu nại theo vai (D-04) và báo cáo từ chối nhận (GN-07) của người xem; các trường khác giữ nguyên.
+     */
+    public RequestResponse withReports(
+            List<RequestDisputeSummary> newDisputes, RequestDisputeSummary newRefusalReport) {
         return new RequestResponse(
                 id,
                 itemId,
@@ -221,7 +234,8 @@ public record RequestResponse(
                 handoverMedia,
                 itemOfferType,
                 conversionFee,
-                newDisputes);
+                newDisputes,
+                newRefusalReport);
     }
 
     // Dạng 28 tham số (chưa có disputeResponseDueAt) để code và test đang gọi vẫn compile.

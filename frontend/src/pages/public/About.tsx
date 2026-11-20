@@ -84,7 +84,7 @@ const giverSteps = [
   ],
   [
     'Giao và xác nhận đã giao',
-    `Giao xong, hai bên cùng bấm "Hoàn tất giao nhận" thì giao dịch hoàn tất, cả hai được cộng điểm uy tín. Một bên đã bấm mà bên kia im lặng ${RULES.autoConfirmDays} ngày (gửi qua đơn vị vận chuyển là ${RULES.autoConfirmDaysShipping} ngày) và không có khiếu nại thì giao dịch tự hoàn tất.`,
+    `Giao xong, hai bên cùng bấm "Hoàn tất giao nhận" thì giao dịch hoàn tất, cả hai được cộng điểm tích luỹ. Một bên đã bấm mà bên kia im lặng ${RULES.autoConfirmDays} ngày (gửi qua đơn vị vận chuyển là ${RULES.autoConfirmDaysShipping} ngày) và không có khiếu nại thì giao dịch tự hoàn tất.`,
   ],
 ] as const;
 
@@ -148,7 +148,7 @@ const faqs = [
     'Vật cần sang tên pháp lý (xe có biển số, giấy tờ, sim chính chủ, tài khoản), vật quy đổi ngay ra tiền (vàng, ngoại tệ, thẻ cào, voucher, tiền mã hoá), hàng giả và hàng nhái.',
   ],
   [
-    'Điểm uy tín và sao uy tín khác nhau thế nào?',
+    'Điểm tích luỹ và sao uy tín khác nhau thế nào?',
     `Điểm tăng khi hoàn tất giao dịch và quyết định hạng: Đồng dưới 50, Bạc từ 50, Vàng từ 150, Kim cương từ 400. Sao bắt đầu ở 5, chỉ bị trừ 1 khi Admin chấp thuận một báo cáo hoặc khiếu nại, và hồi 1 sao sau mỗi ${RULES.cleanStreakForStar} giao dịch hoàn tất liên tiếp không bị trừ.`,
   ],
   [
@@ -289,7 +289,7 @@ export function About() {
             </table>
           </div>
           <p className="about-table-note">
-            Chủ bài không đồng ý chuyển hình thức thì không chọn được người đó. Điểm uy tín tính
+            Chủ bài không đồng ý chuyển hình thức thì không chọn được người đó. Điểm tích luỹ tính
             theo hình thức cuối cùng của bài khi giao dịch hoàn tất.
           </p>
         </section>

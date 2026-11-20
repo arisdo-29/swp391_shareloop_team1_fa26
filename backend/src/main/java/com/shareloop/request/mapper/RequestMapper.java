@@ -111,7 +111,9 @@ public final class RequestMapper {
                 itemInfo.itemOfferType(),
                 // Phí đọc ConfigService nên mapper (static) không tính được; RequestService.addExtraInfo điền.
                 null,
-                // Khiếu nại theo vai cần biết người xem nên RequestService gắn sau bằng withDisputes.
+                // Khiếu nại theo vai và báo cáo từ chối nhận cần biết người xem nên RequestService gắn sau bằng
+                // withReports.
+                null,
                 null);
     }
 }

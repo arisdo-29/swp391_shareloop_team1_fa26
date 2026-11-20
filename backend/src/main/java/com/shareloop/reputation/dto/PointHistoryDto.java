@@ -3,7 +3,7 @@ package com.shareloop.reputation.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 
-@Schema(description = "Một lần thay đổi điểm uy tín")
+@Schema(description = "Một lần thay đổi điểm tích luỹ")
 public record PointHistoryDto(
         @Schema(description = "Điểm thay đổi", example = "10")
         int delta,

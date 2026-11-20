@@ -3,7 +3,7 @@ import { Alert, Button } from '../ui';
 import { requestApi, type RequestResponse } from '../../services/requestApi';
 import type { ApiError } from '../../services/http';
 import { canConfirmHandover, canRefuseHandover } from '../../utils/request';
-import { handoverFailedConsequence, refuseHandoverConsequence } from '../../utils/handoverOutcome';
+import { handoverFailedConsequence, REFUSE_HANDOVER_CONSEQUENCE } from '../../utils/handoverOutcome';
 
 interface HandoverCardProps {
   request: RequestResponse;
@@ -103,7 +103,7 @@ export function HandoverCard({
                   Từ chối giao nhận
                 </Button>
                 <p className="text-xs leading-5 text-text-secondary">
-                  {refuseHandoverConsequence(partnerName)}
+                  {REFUSE_HANDOVER_CONSEQUENCE}
                 </p>
               </li>
             ) : null}

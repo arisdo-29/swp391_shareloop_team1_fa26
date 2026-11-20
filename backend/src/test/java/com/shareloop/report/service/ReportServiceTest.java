@@ -255,9 +255,9 @@ class ReportServiceTest {
     @Test
     @DisplayName("L6: bài có báo cáo được chấp thuận thì tiếp tục ẩn khi mở khoá")
     void keepsItemHidden_whenItemHasUpheldReport_returnsTrue() {
-        when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(
-                        TargetType.ITEM, 10L, List.of(ReportStatus.RESOLVED)))
-                .thenReturn(1L);
+        doReturn(null).when(reportService).findItemApprovedAt(10L);
+        when(reportRepository.existsByTargetTypeAndItemIdAndStatus(TargetType.ITEM, 10L, ReportStatus.RESOLVED))
+                .thenReturn(true);
 
         assertThat(reportService.keepsItemHidden(10L)).isTrue();
     }
@@ -265,11 +265,7 @@ class ReportServiceTest {
     @Test
     @DisplayName("L6: bài còn đủ ngưỡng báo cáo chờ (3) thì tiếp tục ẩn, dưới ngưỡng thì được hiện lại")
     void keepsItemHidden_dependsOnPendingReportThreshold() {
-        for (long itemId : new long[] {10L, 11L}) {
-            when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(
-                            TargetType.ITEM, itemId, List.of(ReportStatus.RESOLVED)))
-                    .thenReturn(0L);
-        }
+        doReturn(null).when(reportService).findItemApprovedAt(anyLong());
         when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, 10L, PENDING))
                 .thenReturn(3L);
         when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, 11L, PENDING))
@@ -277,6 +273,78 @@ class ReportServiceTest {
 
         assertThat(reportService.keepsItemHidden(10L)).isTrue();
         assertThat(reportService.keepsItemHidden(11L)).isFalse();
+    }
+
+    @Test
+    @DisplayName("Báo cáo được chấp thuận từ trước lần duyệt lại gần nhất không còn giữ bài ẩn")
+    void keepsItemHidden_whenUpheldReportOlderThanLastApproval_returnsFalse() {
+        Instant approvedAt = Instant.parse("2026-11-20T10:00:00Z");
+        doReturn(approvedAt).when(reportService).findItemApprovedAt(10L);
+        when(reportRepository.existsByTargetTypeAndItemIdAndStatusAndResolvedAtAfter(
+                        TargetType.ITEM, 10L, ReportStatus.RESOLVED, approvedAt))
+                .thenReturn(false);
+
+        assertThat(reportService.keepsItemHidden(10L)).isFalse();
+    }
+
+    private void givenHiddenApprovedItem(long itemId, long donorId) {
+        when(itemQueryService.getSummary(itemId))
+                .thenReturn(new ItemSummary(itemId, donorId, OfferType.GIVE, ItemStatus.APPROVED, false));
+    }
+
+    private void givenUpheldReportSinceLastApproval(long itemId, boolean upheld) {
+        Instant approvedAt = Instant.parse("2026-11-20T10:00:00Z");
+        doReturn(approvedAt).when(reportService).findItemApprovedAt(itemId);
+        when(reportRepository.existsByTargetTypeAndItemIdAndStatusAndResolvedAtAfter(
+                        TargetType.ITEM, itemId, ReportStatus.RESOLVED, approvedAt))
+                .thenReturn(upheld);
+    }
+
+    @Test
+    @DisplayName("Bài ẩn vì báo cáo được chấp nhận, chủ bài sửa và được duyệt lại: bài hiện lại và báo chủ bài")
+    void relistItemAfterReapproval_whenHiddenByUpheldReport_unhidesItem() {
+        givenHiddenApprovedItem(200L, 20L);
+        givenUpheldReportSinceLastApproval(200L, true);
+        when(reputationService.canPost(20L)).thenReturn(true);
+
+        reportService.relistItemAfterReapproval(200L);
+
+        verify(itemService).unhide(200L);
+        verify(notificationService).notify(eq(20L), eq("ITEM_REOPENED"), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Bài ẩn vì lý do khác (không có báo cáo chấp nhận sau lần duyệt trước) thì không hiện lại")
+    void relistItemAfterReapproval_whenNoUpheldReport_keepsItemHidden() {
+        givenHiddenApprovedItem(200L, 20L);
+        givenUpheldReportSinceLastApproval(200L, false);
+
+        reportService.relistItemAfterReapproval(200L);
+
+        verify(itemService, never()).unhide(anyLong());
+    }
+
+    @Test
+    @DisplayName("Bài đang hiện hoặc chưa APPROVED thì không làm gì")
+    void relistItemAfterReapproval_whenAlreadyVisible_doesNothing() {
+        when(itemQueryService.getSummary(200L))
+                .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.APPROVED, true));
+
+        reportService.relistItemAfterReapproval(200L);
+
+        verify(itemService, never()).unhide(anyLong());
+    }
+
+    @Test
+    @DisplayName("Chủ bài đang bị khoá thì không hiện lại bài")
+    void relistItemAfterReapproval_whenDonorLocked_keepsItemHidden() {
+        givenHiddenApprovedItem(200L, 20L);
+        givenUpheldReportSinceLastApproval(200L, true);
+        when(userService.isLocked(20L)).thenReturn(true);
+
+        reportService.relistItemAfterReapproval(200L);
+
+        verify(itemService, never()).unhide(anyLong());
     }
 
     @Test
@@ -439,94 +507,105 @@ class ReportServiceTest {
     }
 
     @Test
-    void openNotAsDescribedReport_whenAwaitingHandover_createsDisputeForDonor() {
-        // given: bên nhận trả lời trước nên giao dịch mới ở AWAITING_HANDOVER, chưa COMPLETED
-        ReportService.RequestSnapshot snapshot =
-                new ReportService.RequestSnapshot(100L, 200L, 10L, "AWAITING_HANDOVER", null);
-        doReturn(snapshot).when(reportService).findRequest(100L);
-        when(itemQueryService.getSummary(200L))
-                .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.APPROVED));
-        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> {
-            Report saved = inv.getArgument(0);
-            ReflectionTestUtils.setField(saved, "id", 5L);
-            return saved;
-        });
+    void openRefusalReport_createsItemReportAgainstOwnerWithoutDeadline() {
+        // given
+        when(evidenceService.attach(List.of(8L), 10L)).thenReturn("[8]");
 
         // when
-        reportService.openNotAsDescribedReport(10L, 100L, "Máy không bật được", null);
+        reportService.openRefusalReport(10L, 100L, 200L, 20L, "Máy không bật được", List.of(8L));
 
-        // then
+        // then: báo cáo bài, không phải khiếu nại, không có hạn giải trình và không báo lại hai bên
         ArgumentCaptor<Report> captor = ArgumentCaptor.forClass(Report.class);
         verify(reportRepository).save(captor.capture());
         Report report = captor.getValue();
-        assertThat(report.getReporterId()).isEqualTo(10L);
-        assertThat(report.getTargetType()).isEqualTo(TargetType.REQUEST);
-        assertThat(report.getReason()).isEqualTo(ReportReason.NOT_AS_DESCRIBED);
-        assertThat(report.getDescription()).isEqualTo("Máy không bật được");
+        assertThat(report.getTargetType()).isEqualTo(TargetType.ITEM);
+        assertThat(report.getItemId()).isEqualTo(200L);
         assertThat(report.getTargetUserId()).isEqualTo(20L);
         assertThat(report.getRequestId()).isEqualTo(100L);
-        assertThat(report.getStatus()).isEqualTo(ReportStatus.AWAITING_RESPONSE);
-        verify(notificationService).notify(eq(20L), eq("DISPUTE_OPENED"), any(), any(), eq("/me/disputes/5"));
-        verify(eventPublisher).publishEvent(new com.shareloop.report.event.DisputeOpenedEvent(100L, 48));
-    }
-
-    @Test
-    void openNotAsDescribedReport_whenCalledTwice_createsOnlyOneReport() {
-        // given: lần gọi thứ hai thấy report của bên nhận đã có
-        when(reportRepository.existsByReporterIdAndTargetTypeAndRequestId(10L, TargetType.REQUEST, 100L))
-                .thenReturn(true);
-
-        // when
-        reportService.openNotAsDescribedReport(10L, 100L, "Máy không bật được", null);
-
-        // then
-        verify(reportRepository, never()).save(any(Report.class));
+        assertThat(report.getReporterId()).isEqualTo(10L);
+        assertThat(report.getReason()).isEqualTo(ReportReason.NOT_AS_DESCRIBED);
+        assertThat(report.getDescription()).isEqualTo("Máy không bật được");
+        assertThat(report.getEvidence()).isEqualTo("[8]");
+        assertThat(report.getStatus()).isEqualTo(ReportStatus.OPEN);
+        assertThat(report.getResponseDueAt()).isNull();
         verify(notificationService, never()).notify(anyLong(), any(), any(), any(), any());
     }
 
     @Test
-    void openNotAsDescribedReport_whenSwapDonorRefuses_createsDisputeAgainstReceiver() {
-        // given: chủ bài ở Trao đổi từ chối món đổi nên người nhận là bên bị khiếu nại
-        ReportService.RequestSnapshot snapshot =
-                new ReportService.RequestSnapshot(100L, 200L, 10L, "AWAITING_HANDOVER", null);
-        doReturn(snapshot).when(reportService).findRequest(100L);
-        when(itemQueryService.getSummary(200L))
-                .thenReturn(new ItemSummary(200L, 20L, OfferType.SWAP, ItemStatus.APPROVED));
-        when(evidenceService.attach(List.of(8L), 20L)).thenReturn("[8]");
-        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> {
-            Report saved = inv.getArgument(0);
-            ReflectionTestUtils.setField(saved, "id", 6L);
-            return saved;
-        });
+    void openRefusalReport_whenCalledTwice_createsOnlyOneReport() {
+        // given: lần gọi thứ hai thấy báo cáo của người từ chối đã có
+        when(reportRepository.existsByReporterIdAndTargetTypeAndRequestId(10L, TargetType.ITEM, 100L))
+                .thenReturn(true);
 
         // when
-        reportService.openNotAsDescribedReport(20L, 100L, "Món đổi bị nứt màn hình", List.of(8L));
+        reportService.openRefusalReport(10L, 100L, 200L, 20L, "Máy không bật được", null);
 
         // then
-        ArgumentCaptor<Report> captor = ArgumentCaptor.forClass(Report.class);
-        verify(reportRepository).save(captor.capture());
-        assertThat(captor.getValue().getReporterId()).isEqualTo(20L);
-        assertThat(captor.getValue().getTargetUserId()).isEqualTo(10L);
-        assertThat(captor.getValue().getReason()).isEqualTo(ReportReason.NOT_AS_DESCRIBED);
-        verify(notificationService).notify(eq(10L), eq("DISPUTE_OPENED"), any(), any(), eq("/me/disputes/6"));
+        verify(reportRepository, never()).save(any(Report.class));
     }
 
     @Test
-    void openNotAsDescribedReport_whenNotAParty_throwsNotAParty() {
-        // given
-        ReportService.RequestSnapshot snapshot =
-                new ReportService.RequestSnapshot(100L, 200L, 10L, "AWAITING_HANDOVER", null);
-        doReturn(snapshot).when(reportService).findRequest(100L);
+    void conclude_whenRefusalReportUpheld_deductsStarFromOwnerAndKeepsItemHidden() {
+        // given: người nhận 10 từ chối bài 200 của chủ bài 20
+        Report report = Report.createRefusalReport(10L, 100L, 200L, 20L, "Máy không bật được", null);
+        ReflectionTestUtils.setField(report, "id", 30L);
+        when(reportRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
         when(itemQueryService.getSummary(200L))
                 .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.APPROVED));
 
         // when
-        assertThatThrownBy(() -> reportService.openNotAsDescribedReport(99L, 100L, "Lý do", null))
-                // then
-                .isInstanceOfSatisfying(
-                        BusinessException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(ReportErrorCode.DISPUTE_NOT_A_PARTY));
-        verify(reportRepository, never()).save(any(Report.class));
+        reportService.conclude(1L, 30L, new ConcludeReportRequest(ReportDecision.UPHOLD, "Món sai mô tả"));
+
+        // then: bên bị báo cáo bị trừ sao, bài giữ ẩn, giao dịch không bị đụng tới
+        verify(reputationService).deductStar(20L, 1, "Món sai mô tả");
+        verify(reputationService, never()).deductStar(eq(10L), any(Integer.class), any());
+        verify(itemService).hide(200L);
+        verify(itemService, never()).unhide(anyLong());
+        verify(requestService, never()).resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean());
+        verify(requestService, never())
+                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+    }
+
+    @Test
+    void conclude_whenRefusalReportDismissed_reopensItemAndDeductsStarFromReporter() {
+        // given
+        Report report = Report.createRefusalReport(10L, 100L, 200L, 20L, "Máy không bật được", null);
+        ReflectionTestUtils.setField(report, "id", 31L);
+        when(reportRepository.findByIdForUpdate(31L)).thenReturn(Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(itemQueryService.getSummary(200L))
+                .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.APPROVED, false));
+        when(reputationService.canPost(20L)).thenReturn(true);
+
+        // when
+        reportService.conclude(1L, 31L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
+
+        // then: bài mở lại, người báo cáo chịu phạt như một vi phạm, bên bị báo cáo không bị trừ
+        verify(itemService).unhide(200L);
+        verify(reputationService).deductStar(eq(10L), eq(1), anyString());
+        verify(reputationService, never()).deductStar(eq(20L), any(Integer.class), any());
+        verify(requestService, never())
+                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+    }
+
+    @Test
+    void findRefusalReportsForRequests_letsReportedUserRespondWithoutDeadline() {
+        // given
+        Report report = Report.createRefusalReport(10L, 100L, 200L, 20L, "Máy không bật được", null);
+        ReflectionTestUtils.setField(report, "id", 32L);
+        when(reportRepository.findByTargetTypeAndRequestIdInOrderByCreatedAtAsc(TargetType.ITEM, List.of(100L)))
+                .thenReturn(List.of(report));
+
+        // when
+        var forReported = reportService.findRefusalReportsForRequests(List.of(100L), 20L);
+        var forReporter = reportService.findRefusalReportsForRequests(List.of(100L), 10L);
+
+        // then
+        assertThat(forReported.get(100L).canRespond()).isTrue();
+        assertThat(forReported.get(100L).openedByMe()).isFalse();
+        assertThat(forReporter.get(100L).canRespond()).isFalse();
+        assertThat(forReporter.get(100L).openedByMe()).isTrue();
     }
 
     @Test
@@ -865,7 +944,7 @@ class ReportServiceTest {
         reportService.conclude(1L, 14L, new ConcludeReportRequest(ReportDecision.UPHOLD, null));
 
         // then
-        verify(requestService).resolveDisputedRequest(77L, true, 200L, false);
+        verify(requestService).resolveDisputedRequest(77L, true, 200L);
     }
 
     @Test
@@ -882,7 +961,7 @@ class ReportServiceTest {
         reportService.conclude(1L, 15L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
 
         // then
-        verify(requestService).resolveDisputedRequest(77L, false, 200L, false);
+        verify(requestService).resolveDisputedRequest(77L, false, 200L);
     }
 
     @Test
@@ -900,11 +979,7 @@ class ReportServiceTest {
 
         // then
         verify(requestService, never())
-                .resolveDisputedRequest(
-                        anyLong(),
-                        org.mockito.ArgumentMatchers.anyBoolean(),
-                        any(),
-                        org.mockito.ArgumentMatchers.anyBoolean());
+                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any());
     }
 
     @Test

@@ -93,21 +93,27 @@ export function DisputeResponseDialog({
   disputeId,
   reasonLabel,
   deadlineText,
+  isReport = false,
   onClose,
   onSubmitted,
 }: {
   disputeId: number;
   reasonLabel: string;
   deadlineText?: string;
+  // true khi giải trình báo cáo từ chối nhận (không phải khiếu nại); vẫn gửi qua cùng API giải trình.
+  isReport?: boolean;
   onClose: () => void;
   onSubmitted: () => void;
 }) {
+  const subject = isReport ? 'báo cáo' : 'khiếu nại';
   return (
     <DialogFrame labelledBy="dispute-response-title" onClose={onClose}>
       <h2 id="dispute-response-title" className="text-xl font-bold">
-        Giải trình khiếu nại
+        Giải trình {subject}
       </h2>
-      <p className="mt-1 text-sm text-text-muted">Lý do khiếu nại: {reasonLabel}</p>
+      <p className="mt-1 text-sm text-text-muted">
+        Lý do {subject}: {reasonLabel}
+      </p>
       {deadlineText ? (
         <p className="mt-3 text-sm leading-6 text-text-secondary">{deadlineText}</p>
       ) : null}

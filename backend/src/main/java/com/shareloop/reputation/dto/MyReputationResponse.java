@@ -6,7 +6,7 @@ import org.springframework.data.domain.Page;
 
 @Schema(description = "Thông tin uy tín của chính người dùng đang đăng nhập")
 public record MyReputationResponse(
-        @Schema(description = "Tổng điểm uy tín hiện tại", example = "320")
+        @Schema(description = "Tổng điểm tích luỹ hiện tại", example = "320")
         int totalPoints,
 
         @Schema(description = "Hạng tín nhiệm hiện tại", example = "GOLD")
@@ -15,7 +15,7 @@ public record MyReputationResponse(
         @Schema(description = "Số sao uy tín còn lại (0-5)", example = "4")
         int trustStars,
 
-        @Schema(description = "Lịch sử biến động điểm uy tín, sắp xếp mới nhất lên trước")
+        @Schema(description = "Lịch sử biến động điểm tích luỹ, sắp xếp mới nhất lên trước")
         Page<PointHistoryDto> history,
 
         @Schema(description = "Hạng kế tiếp, null nếu đã ở hạng cao nhất", example = "DIAMOND")

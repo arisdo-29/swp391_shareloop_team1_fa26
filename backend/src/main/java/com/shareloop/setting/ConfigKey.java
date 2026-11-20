@@ -315,7 +315,7 @@ public enum ConfigKey {
             "30",
             ConfigGroup.REPUTATION,
             "Trần điểm mỗi ngày",
-            "Số điểm uy tín tối đa một người được cộng trong một ngày."),
+            "Số điểm tích luỹ tối đa một người được cộng trong một ngày."),
     PAYMENT_ORDER_EXPIRE_MINUTES(
             "payment_order_expire_minutes",
             "30",

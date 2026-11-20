@@ -310,6 +310,7 @@ public class RequestService {
         List<Long> requestIds = requests.stream().map(Request::getId).toList();
         Map<Long, Instant> lastMessageMap = findLastMessageAtMap(requestIds);
         Map<Long, List<RequestDisputeSummary>> disputesMap = findDisputesMap(requestIds, currentUserId);
+        Map<Long, RequestDisputeSummary> refusalMap = findRefusalMap(requestIds, currentUserId);
         List<Long> disputedRequestIds = requests.stream()
                 .filter(r -> r.getStatus() == RequestStatus.DISPUTED)
                 .map(Request::getId)
@@ -338,7 +339,8 @@ public class RequestService {
                             complaintDeadline,
                             lastMessageAt,
                             disputeResponseDueAt);
-                    return addExtraInfo(response, null).withDisputes(disputesOf(disputesMap, request));
+                    return addExtraInfo(response, null)
+                            .withReports(disputesOf(disputesMap, request), refusalOf(refusalMap, request));
                 })
                 .toList();
     }
@@ -356,6 +358,7 @@ public class RequestService {
                 .toList();
         Map<Long, Instant> lastMessageMap = findLastMessageAtMap(requestIds);
         Map<Long, List<RequestDisputeSummary>> disputesMap = findDisputesMap(requestIds, currentUserId);
+        Map<Long, RequestDisputeSummary> refusalMap = findRefusalMap(requestIds, currentUserId);
         List<Long> disputedRequestIds = requests.stream()
                 .filter(r -> r.getStatus() == RequestStatus.DISPUTED)
                 .map(Request::getId)
@@ -380,7 +383,8 @@ public class RequestService {
                             complaintDeadline,
                             lastMessageAt,
                             disputeResponseDueAt);
-                    return addExtraInfo(response, null).withDisputes(disputesOf(disputesMap, request));
+                    return addExtraInfo(response, null)
+                            .withReports(disputesOf(disputesMap, request), refusalOf(refusalMap, request));
                 })
                 .toList();
     }
@@ -738,13 +742,14 @@ public class RequestService {
         // rollback.
         eventPublisher.publishEvent(
                 new HandoverIssueReportedEvent(requestId, currentUserId, reason, requestDto.evidenceMediaIds()));
-        return toResponse(saved).withDisputes(findDisputes(requestId, currentUserId));
+        return withReports(toResponse(saved), requestId, currentUserId);
     }
 
     /**
-     * Bên nhận món đồ từ chối giao nhận (GN-07, BC-09): giao dịch sang DISPUTED ngay và mở khiếu nại "Không đúng mô
-     * tả". Cho tặng chỉ người nhận được từ chối; Trao đổi cả hai bên đều nhận một món nên cả hai được từ chối. Bên bị
-     * khiếu nại là chủ của món bị từ chối.
+     * Bên nhận món đồ từ chối nhận vì món không đúng mô tả (GN-07, BC-09). Việc trao đồ không xảy ra nên giao dịch huỷ
+     * ngay: món bị từ chối tạm ẩn, món của người từ chối mở lại, và module report mở báo cáo vi phạm nhắm vào chủ món
+     * bị từ chối để Admin xem xét. Cho tặng chỉ người nhận được từ chối; Trao đổi cả hai bên đều nhận một món nên cả
+     * hai được từ chối.
      *
      * @throws BusinessException REQUEST_NOT_FOUND, REQUEST_FORBIDDEN khi không phải một trong hai bên,
      *     REQUEST_REFUSE_NOT_ALLOWED khi chủ bài ở giao dịch Cho tặng, REQUEST_INVALID_STATE_TRANSITION khi sai trạng
@@ -760,13 +765,50 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_REFUSE_NOT_ALLOWED);
         }
 
-        request.refuseHandover(isDonor);
+        String reason = requestDto.reason().trim();
+        request.refuseHandover(isDonor, reason);
         Request saved = requestRepository.save(request);
-        // Listener của module report chạy ngay trong transaction này để report và DISPUTED cùng thành công hoặc cùng
+        publishNegotiationEnded(saved);
+
+        // Người nhận từ chối thì món bị từ chối là bài chính; chủ bài từ chối (chỉ ở Trao đổi) thì là món đổi
+        long refusedItemId = isDonor ? saved.getOfferedItemId() : saved.getItemId();
+        long reportedUserId = isDonor ? saved.getReceiverId() : item.donorId();
+        releaseReservedItems(saved);
+        itemService.hide(refusedItemId);
+
+        // Listener của module report chạy ngay trong transaction này để báo cáo và việc huỷ cùng thành công hoặc cùng
         // rollback.
         eventPublisher.publishEvent(new NotAsDescribedReportedEvent(
-                requestId, currentUserId, requestDto.reason().trim(), requestDto.evidenceMediaIds()));
-        return toResponse(saved).withDisputes(findDisputes(requestId, currentUserId));
+                requestId, currentUserId, refusedItemId, reportedUserId, reason, requestDto.evidenceMediaIds()));
+        notifyRefusal(saved, currentUserId, reportedUserId);
+        if (activityLogService != null) {
+            activityLogService.log(
+                    ActivityType.REQUEST_CANCEL.name(),
+                    currentUserId,
+                    "REQUEST",
+                    saved.getId(),
+                    (String) null,
+                    saved.getCancelReason());
+        }
+        return withReports(toResponse(saved), requestId, currentUserId);
+    }
+
+    // Báo cả hai bên khi giao dịch huỷ vì từ chối nhận; bên bị báo cáo biết món đang tạm ẩn và có thể giải trình.
+    private void notifyRefusal(Request request, long refuserId, long reportedUserId) {
+        String link = "/requests/" + request.getId();
+        notificationService.notify(
+                refuserId,
+                "TRANSACTION_CANCELLED",
+                "Đã từ chối nhận",
+                "Bạn đã từ chối nhận và gửi báo cáo. Giao dịch đã huỷ, bài của bạn được mở lại. Admin đang xem xét.",
+                link);
+        notificationService.notify(
+                reportedUserId,
+                "TRANSACTION_CANCELLED",
+                "Đối phương từ chối nhận món đồ",
+                "Đối phương đã từ chối nhận vì món không đúng mô tả. Giao dịch đã huỷ, món của bạn đang tạm ẩn chờ"
+                        + " Admin xem xét. Bạn có thể gửi giải trình ở trang Tiến trình giao dịch.",
+                link);
     }
 
     private Request loadRequest(long requestId) {
@@ -827,13 +869,13 @@ public class RequestService {
     }
 
     /**
-     * Đưa giao dịch DISPUTED ra khỏi trạng thái tranh chấp khi Admin kết luận khiếu nại. Giao dịch không ở DISPUTED
-     * (ví dụ khiếu nại mở sau khi đã COMPLETED) thì bỏ qua, không làm gì.
+     * Đưa giao dịch DISPUTED ra khỏi trạng thái tranh chấp khi Admin kết luận khiếu nại sự cố giao nhận (GN-07: một
+     * bên báo giao nhận không thành công khi bên kia đã bấm hoàn tất). Giao dịch không ở DISPUTED (ví dụ khiếu nại mở
+     * sau khi đã COMPLETED) thì bỏ qua, không làm gì. Từ chối nhận không đi qua đây vì giao dịch đã huỷ ngay.
      *
-     * <p>Chấp nhận khiếu nại: CANCELLED, nhả cả hai món về APPROVED. Nếu bên vi phạm là chủ bài (ví dụ món không đúng
-     * mô tả) thì bài chính bị ẩn luôn (is_active = false, giống BC-05), để món mô tả sai không hiện lại cho người khác
-     * xin; món đổi của người nhận vẫn mở lại. Bác bỏ: COMPLETED như một lần hoàn tất bình thường (hai món sang TRADED,
-     * cộng điểm uy tín). Cả hai bên đều được thông báo kết quả.
+     * <p>Chấp nhận: CANCELLED, nhả cả hai món về APPROVED; nếu bên vi phạm là chủ bài thì bài chính bị ẩn luôn
+     * (is_active = false, giống BC-05). Bác bỏ: COMPLETED như một lần hoàn tất bình thường (hai món sang TRADED, cộng
+     * điểm tích luỹ). Cả hai bên đều được thông báo kết quả.
      *
      * @param requestId giao dịch của khiếu nại
      * @param upheld true nếu Admin chấp nhận khiếu nại, false nếu bác bỏ
@@ -851,18 +893,6 @@ public class RequestService {
      */
     @Transactional
     public boolean resolveDisputedRequest(long requestId, boolean upheld, Long violatorUserId) {
-        return resolveDisputedRequest(requestId, upheld, violatorUserId, false);
-    }
-
-    /**
-     * Như {@link #resolveDisputedRequest(long, boolean, Long)}, kèm cờ khiếu nại có phải "Không đúng mô tả" (mở từ
-     * nút Từ chối giao nhận) hay không. Chỉ khiếu nại "Không đúng mô tả" mới ẩn món đổi khi người xin là bên vi phạm;
-     * khiếu nại NO_SHOW giữ luật cũ (chỉ ẩn bài chính khi chủ bài vi phạm).
-     *
-     * @param notAsDescribed true nếu khiếu nại có lý do NOT_AS_DESCRIBED
-     */
-    @Transactional
-    public boolean resolveDisputedRequest(long requestId, boolean upheld, Long violatorUserId, boolean notAsDescribed) {
         Request request = requestRepository.findById(requestId).orElse(null);
         if (request == null || request.getStatus() != RequestStatus.DISPUTED) {
             return false;
@@ -870,7 +900,7 @@ public class RequestService {
 
         String message;
         if (upheld) {
-            message = cancelUpheldDispute(request, violatorUserId, notAsDescribed);
+            message = cancelUpheldDispute(request, violatorUserId);
         } else {
             request.completeAfterDispute(Instant.now());
             requestRepository.save(request);
@@ -881,7 +911,8 @@ public class RequestService {
             if (reputationService != null) {
                 reputationService.onCompleted(request.getId());
             }
-            message = "Admin đã bác bỏ khiếu nại: giao dịch được công nhận hoàn tất.";
+            message =
+                    "Admin đã xác minh sự cố giao nhận: việc giao nhận đã diễn ra, giao dịch được công nhận hoàn tất.";
         }
 
         notifyBothParties(request, upheld ? "TRANSACTION_CANCELLED" : "TRANSACTION_COMPLETED", message);
@@ -889,45 +920,32 @@ public class RequestService {
     }
 
     /**
-     * Huỷ giao dịch khi Admin chấp nhận khiếu nại và xử lý món của bên vi phạm. Chủ bài vi phạm: ẩn bài chính, món đổi
-     * mở lại. Người xin vi phạm ở khiếu nại "Không đúng mô tả" của Trao đổi: ẩn món đổi, bài chính mở lại. Các trường
-     * hợp còn lại: mở lại cả hai món.
+     * Huỷ giao dịch khi Admin chấp nhận khiếu nại sự cố giao nhận. Chủ bài vi phạm: ẩn bài chính, món đổi mở lại. Các
+     * trường hợp còn lại: mở lại cả hai món.
      *
      * @return câu thông báo kết quả gửi cho hai bên
      */
-    private String cancelUpheldDispute(Request request, Long violatorUserId, boolean notAsDescribed) {
-        request.cancel(Request.CANCEL_BY_SYSTEM + "Admin chấp nhận khiếu nại, giao dịch bị huỷ");
+    private String cancelUpheldDispute(Request request, Long violatorUserId) {
+        request.cancel(Request.CANCEL_BY_SYSTEM + "Admin xác minh sự cố giao nhận, giao dịch bị huỷ");
         requestRepository.save(request);
 
         Long donorId =
                 findItemSnapshot(request.getItemId()).map(ItemSnapshot::donorId).orElse(null);
         boolean donorViolated = violatorUserId != null && violatorUserId.equals(donorId);
-        boolean hasOfferedItem = request.getOfferedItemId() != null;
-        boolean receiverViolatedSwap = notAsDescribed
-                && hasOfferedItem
-                && violatorUserId != null
-                && violatorUserId.equals(request.getReceiverId());
 
         itemService.releaseIfReserved(request.getItemId());
         if (donorViolated) {
             itemService.hide(request.getItemId());
         }
-        if (hasOfferedItem) {
+        if (request.getOfferedItemId() != null) {
             itemService.releaseIfReserved(request.getOfferedItemId());
-        }
-        if (receiverViolatedSwap) {
-            itemService.hide(request.getOfferedItemId());
         }
 
         if (donorViolated) {
-            return "Admin đã chấp nhận khiếu nại: giao dịch bị huỷ. Bài đăng của chủ bài bị ẩn vì chủ bài là bên"
+            return "Admin đã xác minh sự cố giao nhận: giao dịch bị huỷ. Bài đăng của chủ bài bị ẩn vì chủ bài là bên"
                     + " vi phạm, món đem đổi (nếu có) được mở lại.";
         }
-        if (receiverViolatedSwap) {
-            return "Admin đã chấp nhận khiếu nại: giao dịch bị huỷ. Món đem đổi bị ẩn vì người đem đổi là bên vi phạm,"
-                    + " bài đăng được mở lại.";
-        }
-        return "Admin đã chấp nhận khiếu nại: giao dịch bị huỷ và bài đăng được mở lại.";
+        return "Admin đã xác minh sự cố giao nhận: giao dịch bị huỷ và bài đăng được mở lại.";
     }
 
     private void notifyBothParties(Request request, String type, String message) {
@@ -1094,12 +1112,12 @@ public class RequestService {
                     complaintDeadline,
                     lastMessageAt,
                     disputeResponseDueAt);
-            return addExtraInfo(response, handoverMedia).withDisputes(findDisputes(request.getId(), currentUserId));
+            return withReports(addExtraInfo(response, handoverMedia), request.getId(), currentUserId);
         }
 
         RequestResponse response = RequestMapper.toResponse(
                 request, receiverName, null, null, itemInfo, complaintDeadline, lastMessageAt, disputeResponseDueAt);
-        return addExtraInfo(response, handoverMedia).withDisputes(findDisputes(request.getId(), currentUserId));
+        return withReports(addExtraInfo(response, handoverMedia), request.getId(), currentUserId);
     }
 
     /**
@@ -1561,6 +1579,26 @@ public class RequestService {
             return Map.of();
         }
         return reportService.findDisputesForRequests(requestIds, viewerId);
+    }
+
+    // Gắn khiếu nại theo vai (D-04) và báo cáo từ chối nhận (GN-07) của người xem vào một giao dịch.
+    private RequestResponse withReports(RequestResponse response, Long requestId, long viewerId) {
+        RequestDisputeSummary refusalReport = requestId == null
+                ? null
+                : findRefusalMap(List.of(requestId), viewerId).get(requestId);
+        return response.withReports(findDisputes(requestId, viewerId), refusalReport);
+    }
+
+    private Map<Long, RequestDisputeSummary> findRefusalMap(List<Long> requestIds, long viewerId) {
+        if (reportService == null || requestIds == null || requestIds.isEmpty()) {
+            return Map.of();
+        }
+        return reportService.findRefusalReportsForRequests(requestIds, viewerId);
+    }
+
+    private static RequestDisputeSummary refusalOf(Map<Long, RequestDisputeSummary> refusalMap, Request request) {
+        // Map.of() ném lỗi khi tra khoá null, nên Request chưa có id thì trả null luôn
+        return request.getId() == null ? null : refusalMap.get(request.getId());
     }
 
     private static List<RequestDisputeSummary> disputesOf(

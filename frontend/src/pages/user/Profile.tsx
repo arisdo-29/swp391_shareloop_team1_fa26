@@ -331,7 +331,7 @@ function ProfileContent({ user, tab, changeTab }: {
     };
   }, [isAdmin, reputationPage, reputationReloadKey]);
 
-  // Lắng nghe tín hiệu realtime để tải lại khối Uy tín & Hạng ngay khi có thông báo (R13).
+  // Lắng nghe tín hiệu realtime để tải lại khối Hạng và Uy tín ngay khi có thông báo (R13).
   useRealtimeRefresh(['NOTIFICATION'], () => {
     if (!isAdmin) {
       setReputationReloadKey((key) => key + 1);
@@ -527,7 +527,7 @@ function ProfileContent({ user, tab, changeTab }: {
             {(
               [
                 ['profile', 'Hồ sơ'],
-                ['reputation', 'Uy tín & Hạng'],
+                ['reputation', 'Hạng và Uy tín'],
               ] as const
             ).map(([id, label]) =>
               isAdmin && id === 'reputation' ? null : (
@@ -745,7 +745,7 @@ function ProfileContent({ user, tab, changeTab }: {
                       <p className="text-xs font-semibold text-text-secondary">Hạng thành viên</p>
                       <p className="mt-2 flex items-baseline gap-2.5">
                         <strong className="text-2xl">{getRankLabel(reputation.rank)}</strong>
-                        <span className="text-sm text-text-muted">{reputation.totalPoints} điểm uy tín</span>
+                        <span className="text-sm text-text-muted">{reputation.totalPoints} điểm tích luỹ</span>
                       </p>
                       <p className="mt-2 text-sm leading-6 text-text-secondary">
                         {reputation.nextRank && typeof reputation.pointsToNextRank === 'number'
@@ -759,12 +759,12 @@ function ProfileContent({ user, tab, changeTab }: {
                     <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
                       <p className="text-xs font-semibold text-text-secondary">Sao uy tín</p>
                       <div className="mt-2 text-base"><StarRating value={reputation.trustStars} /></div>
-                      <p className="mt-1 text-xs leading-5 text-text-muted">Giảm khi bị báo cáo đúng.</p>
+                      <p className="mt-1 text-xs leading-5 text-text-muted">Giảm khi vi phạm hoặc báo cáo sai.</p>
                     </div>
                   </section>
                   <section className="overflow-hidden rounded-lg bg-white ring-1 ring-border/80">
                     <div className="border-b border-border px-5 py-4">
-                      <h2 className="section-title">Lịch sử uy tín</h2>
+                      <h2 className="section-title">Lịch sử điểm tích luỹ</h2>
                       <p className="mt-1 text-xs text-text-muted">{reputation.history.totalElements} lần thay đổi điểm</p>
                     </div>
                     <PointSummary summary={pointSummary} />
@@ -783,7 +783,7 @@ function ProfileContent({ user, tab, changeTab }: {
                       </div>
                     )) : (
                       <div className="p-5">
-                        <p className="text-sm text-text-muted">Chưa có thay đổi điểm uy tín.</p>
+                        <p className="text-sm text-text-muted">Chưa có thay đổi điểm tích luỹ.</p>
                       </div>
                     )}
                     {reputation.history.totalPages > 1 ? (

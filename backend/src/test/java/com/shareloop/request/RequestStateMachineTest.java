@@ -259,16 +259,18 @@ class RequestStateMachineTest {
         }
 
         @Test
-        @DisplayName("Người nhận từ chối giao nhận khi chưa bên nào bấm hoàn tất -> DISPUTED")
-        void refuseHandover_whenLogisticsConfirmed_movesToDisputed() {
+        @DisplayName("Người nhận từ chối nhận khi chưa bên nào bấm hoàn tất -> CANCELLED kèm lý do từ chối nhận")
+        void refuseHandover_whenLogisticsConfirmed_cancelsWithRefusalReason() {
             // given
             Request request = createRequest(RequestStatus.LOGISTICS_CONFIRMED);
 
             // when
-            request.refuseHandover(false);
+            request.refuseHandover(false, "Máy không bật được");
 
             // then
-            assertThat(request.getStatus()).isEqualTo(RequestStatus.DISPUTED);
+            assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+            assertThat(request.getCancelReason())
+                    .isEqualTo(Request.CANCEL_BY_RECEIVER + Request.REFUSAL_REASON + "Máy không bật được");
             assertThat(request.getReceiverHandoverAt()).isNull();
             assertThat(request.getCompletedAt()).isNull();
         }
@@ -281,7 +283,7 @@ class RequestStateMachineTest {
             request.confirmHandover(false, Instant.now());
 
             // when / then
-            assertThatThrownBy(() -> request.refuseHandover(false))
+            assertThatThrownBy(() -> request.refuseHandover(false, "Máy không bật được"))
                     .isInstanceOfSatisfying(
                             BusinessException.class,
                             ex -> assertThat(ex.getErrorCode())
@@ -358,19 +360,18 @@ class RequestStateMachineTest {
         }
 
         @Test
-        @DisplayName(
-                "Mũi tên 11b: AWAITING_HANDOVER -> DISPUTED (Chủ bài đã bấm hoàn tất, người nhận từ chối giao nhận)")
-        void awaitingHandoverToDisputed_receiverRefusesAfterDonorConfirmed() {
+        @DisplayName("AWAITING_HANDOVER -> CANCELLED (Chủ bài đã bấm hoàn tất, người nhận từ chối nhận)")
+        void awaitingHandoverToCancelled_receiverRefusesAfterDonorConfirmed() {
             // given
             Request request = createRequest(RequestStatus.LOGISTICS_CONFIRMED);
             request.confirmHandover(true, Instant.now());
             assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
 
             // when
-            request.refuseHandover(false);
+            request.refuseHandover(false, "Máy không bật được");
 
             // then
-            assertThat(request.getStatus()).isEqualTo(RequestStatus.DISPUTED);
+            assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
             assertThat(request.getCompletedAt()).isNull();
         }
 

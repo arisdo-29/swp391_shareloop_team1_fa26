@@ -4,12 +4,14 @@ import type { DisputeResponse } from '../../services/reportApi';
 import { formatDateTime, formatDeadline } from '../../utils/request';
 import { completedStepCount, transactionSteps } from '../../utils/transactionSteps';
 import {
+  disputeConcludedText,
+  disputeHeadline,
   disputeStatusLabel,
   formatRemaining,
   isDisputeConcluded,
   isResponseOverdue,
-  transactionDisputeReasonLabel,
 } from '../../utils/disputeView';
+import { RefusalNotice } from './RefusalNotice';
 
 type StepState = 'done' | 'current' | 'todo';
 
@@ -49,11 +51,10 @@ function StatusResult({ request }: { request: RequestResponse }) {
 
 /** Khiếu nại do chính mình mở: chỉ thông tin, không có nút. */
 function OpenedByMeNotice({ dispute, partnerName }: { dispute: RequestDispute; partnerName: string }) {
-  const reason = transactionDisputeReasonLabel(dispute.reason);
   return (
     <div className="space-y-2">
       <Alert tone="info">
-        Bạn đã gửi khiếu nại: {reason}.{' '}
+        {disputeHeadline(dispute, partnerName)}{' '}
         {dispute.responseDueAt
           ? `${partnerName} có đến ${formatDeadline(dispute.responseDueAt)} để giải trình, sau đó Admin kết luận.`
           : 'Admin sẽ xem xét và kết luận.'}
@@ -75,9 +76,8 @@ function AgainstMeNotice({
   partnerName: string;
   onRespond: (dispute: RequestDispute) => void;
 }) {
-  const reason = transactionDisputeReasonLabel(dispute.reason);
   if (isDisputeConcluded(dispute)) {
-    return <Alert tone="info">Admin đã kết luận khiếu nại {reason.toLowerCase()} của {partnerName}.</Alert>;
+    return <Alert tone="info">{disputeConcludedText(dispute, partnerName)}</Alert>;
   }
   if (dispute.respondedAt) {
     return (
@@ -96,9 +96,7 @@ function AgainstMeNotice({
   return (
     <div className="space-y-3">
       <Alert tone="warning">
-        <span className="font-semibold">
-          {partnerName} đã khiếu nại giao dịch này: {reason}.
-        </span>{' '}
+        <span className="font-semibold">{disputeHeadline(dispute, partnerName)}</span>{' '}
         {dispute.responseDueAt
           ? `Bạn cần giải trình trước ${formatDeadline(dispute.responseDueAt)} (${formatRemaining(dispute.responseDueAt)}).`
           : 'Bạn cần giải trình để Admin có đủ thông tin.'}
@@ -155,8 +153,12 @@ export function StepsCard({
   const disputes = request.disputes ?? [];
   const alreadyComplained = disputes.some((dispute) => dispute.openedByMe) || Boolean(disputeReceipt);
   const canDispute = request.status === 'COMPLETED' && !request.disputeExpired && !alreadyComplained;
+  const refusalReport = request.refusalReport ?? null;
   const showHelp =
-    request.status === 'COMPLETED' || request.status === 'DISPUTED' || disputes.length > 0;
+    request.status === 'COMPLETED' ||
+    request.status === 'DISPUTED' ||
+    disputes.length > 0 ||
+    refusalReport !== null;
 
   return (
     <section className="card space-y-5 p-5 sm:p-6" aria-labelledby="steps-title">
@@ -221,11 +223,13 @@ export function StepsCard({
                 Admin kết luận và gửi kết quả qua Thông báo.
               </p>
             </div>
+          ) : refusalReport ? (
+            <RefusalNotice report={refusalReport} partnerName={partnerName} onRespond={onRespondDispute} />
           ) : disputes.length ? (
             <DisputeList disputes={disputes} partnerName={partnerName} onRespond={onRespondDispute} />
           ) : request.status === 'DISPUTED' ? (
             <div className="space-y-2 text-sm leading-6 text-text-secondary">
-              <p className="font-semibold text-warning">Giao dịch đang có khiếu nại</p>
+              <p className="font-semibold text-warning">Sự cố giao nhận, chờ Admin xác minh</p>
               {request.disputeResponseDueAt && (
                 <p>Hạn giải trình ghi nhận: {formatDeadline(request.disputeResponseDueAt)}.</p>
               )}

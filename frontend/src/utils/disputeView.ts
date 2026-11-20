@@ -20,6 +20,33 @@ export function formatRemaining(dueAt: string, now = Date.now()) {
   return `còn ${minutes} phút`;
 }
 
+/**
+ * Khiếu nại NO_SHOW mở từ "Giao nhận không thành công" khi bên kia đã bấm hoàn tất (GN-07). Trên giao diện gọi là
+ * sự cố giao nhận chờ Admin xác minh, không gọi là khiếu nại.
+ */
+export function isHandoverIssue(dispute: RequestDispute) {
+  return dispute.reason === 'NO_SHOW';
+}
+
+/** Câu mở đầu của một khiếu nại theo vai người xem. */
+export function disputeHeadline(dispute: RequestDispute, partnerName: string) {
+  if (isHandoverIssue(dispute)) {
+    return dispute.openedByMe
+      ? 'Bạn đã báo sự cố giao nhận, chờ Admin xác minh.'
+      : `${partnerName} đã báo sự cố giao nhận, chờ Admin xác minh.`;
+  }
+  const reason = transactionDisputeReasonLabel(dispute.reason);
+  return dispute.openedByMe
+    ? `Bạn đã khiếu nại giao dịch này: ${reason}.`
+    : `${partnerName} đã khiếu nại giao dịch này: ${reason}.`;
+}
+
+/** Câu báo Admin đã kết luận, dùng cho bên bị khiếu nại. */
+export function disputeConcludedText(dispute: RequestDispute, partnerName: string) {
+  if (isHandoverIssue(dispute)) return 'Admin đã xác minh sự cố giao nhận.';
+  return `Admin đã kết luận khiếu nại ${transactionDisputeReasonLabel(dispute.reason).toLowerCase()} của ${partnerName}.`;
+}
+
 export function isDisputeConcluded(dispute: RequestDispute) {
   return dispute.status === 'RESOLVED' || dispute.status === 'DISMISSED';
 }

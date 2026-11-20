@@ -147,7 +147,7 @@ export const router = createBrowserRouter([
               { path: 'finance/users', element: <AdminFinanceUsers /> },
               { path: 'finance/users/:userId', element: <AdminFinanceUserDetail /> },
               { path: 'settings/fees', element: <AdminSettings /> },
-              // Hạng và điểm uy tín nay cấu hình chung ở trang Uy tín & Hạng.
+              // Hạng và điểm tích luỹ nay cấu hình chung ở trang Hạng và Uy tín.
               { path: 'settings/ranks', element: <Navigate to="/admin/reputation" replace /> },
               { path: 'audit-logs', element: <AdminAuditLogs /> },
               { path: 'notifications', element: <Notifications inAdmin /> },

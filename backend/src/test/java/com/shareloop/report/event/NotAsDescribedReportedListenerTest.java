@@ -23,12 +23,12 @@ class NotAsDescribedReportedListenerTest {
     void onNotAsDescribed_opensReportForReporterWithReasonAndEvidence() {
         // given
         NotAsDescribedReportedEvent event =
-                new NotAsDescribedReportedEvent(100L, 10L, "Máy không bật được", List.of(5L));
+                new NotAsDescribedReportedEvent(100L, 10L, 200L, 20L, "Máy không bật được", List.of(5L));
 
         // when
         listener.onNotAsDescribed(event);
 
         // then
-        verify(reportService).openNotAsDescribedReport(10L, 100L, "Máy không bật được", List.of(5L));
+        verify(reportService).openRefusalReport(10L, 100L, 200L, 20L, "Máy không bật được", List.of(5L));
     }
 }

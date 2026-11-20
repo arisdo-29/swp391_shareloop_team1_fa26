@@ -51,7 +51,7 @@ function ResponsePage({ reportId, kind }: { reportId: number; kind: Kind }) {
           className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary hover:underline"
         >
           <Icon name="caretLeft" className="size-4" />
-          Về Khiếu nại & Báo cáo
+          Về Khiếu nại và Báo cáo
         </Link>
         <section className="card mt-3 overflow-hidden" aria-labelledby="response-title">
           <header className="border-b border-border bg-surface-container/50 p-5 sm:p-7">
@@ -132,6 +132,14 @@ function DeadlineNotice({
       <Alert tone="success">
         Bạn đã gửi giải trình lúc {formatDateTime(detail.respondedAt)}. Hồ sơ đang chờ quản trị viên
         kết luận.
+      </Alert>
+    );
+  }
+  if (!detail.responseDueAt) {
+    // Báo cáo từ chối nhận: không có hạn, giải trình không bắt buộc (GN-07)
+    return (
+      <Alert tone="info">
+        Giải trình không bắt buộc. Bạn có thể gửi giải trình cho đến khi quản trị viên kết luận.
       </Alert>
     );
   }

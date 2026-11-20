@@ -299,7 +299,7 @@ public class RequestJobService {
             itemService.markTraded(request.getOfferedItemId());
         }
 
-        // Tích luỹ điểm uy tín nếu có module Reputation (BC-12, UT-02, UT-05)
+        // Cộng điểm tích luỹ nếu có module Reputation (BC-12, UT-02, UT-05)
         if (reputationService != null) {
             reputationService.onCompleted(request.getId());
         }

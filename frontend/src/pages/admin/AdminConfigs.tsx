@@ -51,9 +51,9 @@ export function AdminConfigs() {
         description="Xem và cập nhật các thiết lập vận hành. Mỗi thay đổi cần nhập lý do và được lưu vào nhật ký."
       />
       <p className="mb-5 rounded-md bg-primary-faint p-4 text-sm leading-6 text-text-secondary">
-        Hạng thành viên và quy tắc điểm uy tín được cấu hình ở trang{' '}
+        Hạng thành viên và quy tắc điểm tích luỹ được cấu hình ở trang{' '}
         <Link className="font-semibold text-link underline" to="/admin/reputation">
-          Uy tín & Hạng
+          Hạng và Uy tín
         </Link>
         .
       </p>

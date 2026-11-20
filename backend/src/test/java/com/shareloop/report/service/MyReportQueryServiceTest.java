@@ -119,8 +119,7 @@ class MyReportQueryServiceTest {
         // given
         Report report = report(4L, TargetType.ITEM, 5L, ME, null);
         report.awaitResponse(NOW.plusSeconds(3600));
-        when(reportRepository.findByTargetUserIdAndResponseDueAtIsNotNullOrderByCreatedAtDescIdDesc(ME))
-                .thenReturn(List.of(report));
+        when(reportRepository.findVisibleToRespondent(ME)).thenReturn(List.of(report));
 
         // when
         List<MyReportSummary> result = service.listAgainstMe(ME);
@@ -135,8 +134,7 @@ class MyReportQueryServiceTest {
         // given
         Report report = report(5L, TargetType.ITEM, 5L, ME, null);
         report.awaitResponse(NOW.minusSeconds(60));
-        when(reportRepository.findByTargetUserIdAndResponseDueAtIsNotNullOrderByCreatedAtDescIdDesc(ME))
-                .thenReturn(List.of(report));
+        when(reportRepository.findVisibleToRespondent(ME)).thenReturn(List.of(report));
 
         // when
         List<MyReportSummary> result = service.listAgainstMe(ME);
