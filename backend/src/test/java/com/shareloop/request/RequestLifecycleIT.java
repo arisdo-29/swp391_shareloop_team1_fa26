@@ -124,19 +124,44 @@ class RequestLifecycleIT extends IntegrationTest {
 
         // 6. Donor đề xuất lịch hẹn giao trực tiếp -> chuyển AWAITING_LOGISTICS
         Instant futureTime = Instant.now().plus(2, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
-        ScheduleRequest scheduleReq = new ScheduleRequest("IN_PERSON", "Cổng trường FPT", futureTime, false);
+        ScheduleRequest scheduleReq = new ScheduleRequest("IN_PERSON", "Cổng trường FPT", futureTime, true);
+        mockMvc.perform(post("/api/v1/requests/{id}/schedule", req1Id)
+                        .header("Authorization", donorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new ScheduleRequest("IN_PERSON", scheduleReq.meetingPlace(), futureTime, null))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_WAIVER_REQUIRED"));
         mockMvc.perform(post("/api/v1/requests/{id}/schedule", req1Id)
                         .header("Authorization", donorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(scheduleReq)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("AWAITING_LOGISTICS"))
+                .andExpect(jsonPath("$.donorWaiverAt").isNotEmpty())
                 .andExpect(jsonPath("$.meetingPlace").value("Cổng trường FPT"));
 
-        // 7. Receiver 1 xác nhận lịch hẹn -> LOGISTICS_CONFIRMED, contactRevealedAt != null
-        ConfirmLogisticsRequest confirmLogistics = new ConfirmLogisticsRequest(false);
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", req1Id)
                         .header("Authorization", r1Token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(false))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_WAIVER_REQUIRED"));
+
+        // 7. Bản ghi cũ có đồng ý lịch nhưng thiếu cam kết của chủ bài.
+        jdbc.update("UPDATE requests SET donor_waiver_at = NULL WHERE id = ?", req1Id);
+        ConfirmLogisticsRequest confirmLogistics = new ConfirmLogisticsRequest(true);
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", req1Id)
+                        .header("Authorization", r1Token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(confirmLogistics)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("AWAITING_LOGISTICS"))
+                .andExpect(jsonPath("$.donorScheduleOkAt").isNotEmpty())
+                .andExpect(jsonPath("$.receiverWaiverAt").isNotEmpty())
+                .andExpect(jsonPath("$.contactRevealedAt").isEmpty());
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", req1Id)
+                        .header("Authorization", donorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(confirmLogistics)))
                 .andExpect(status().isOk())
@@ -214,6 +239,15 @@ class RequestLifecycleIT extends IntegrationTest {
         // Chốt lịch hẹn với phương thức SHIPPING và cam kết miễn trừ trách nhiệm
         Instant futureTime = Instant.now().plus(3, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
         ScheduleRequest scheduleReq = new ScheduleRequest("SHIPPING", "Gửi qua Viettel Post", futureTime, true);
+        mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
+                        .header("Authorization", donorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new ScheduleRequest("SHIPPING", scheduleReq.meetingPlace(), futureTime, false))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_WAIVER_REQUIRED"));
+        assertThat(queryRequestStatus(requestId)).isEqualTo("RESERVED");
+
         mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
                         .header("Authorization", donorToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -449,14 +483,17 @@ class RequestLifecycleIT extends IntegrationTest {
                 .andExpect(status().isOk());
 
         Instant futureTime = Instant.now().plus(1, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
-        ScheduleRequest scheduleReq = new ScheduleRequest("IN_PERSON", "FPT Park", futureTime, false);
+        ScheduleRequest scheduleReq = new ScheduleRequest("IN_PERSON", "FPT Park", futureTime, true);
         mockMvc.perform(post("/api/v1/requests/{id}/schedule", reqId)
                         .header("Authorization", donorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(scheduleReq)))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", reqId).header("Authorization", receiverToken))
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", reqId)
+                        .header("Authorization", receiverToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(true))))
                 .andExpect(status().isOk());
 
         // 8. Bên nhận xác nhận handover nhưng không trả lời asDescribed -> 400 REQUEST_AS_DESCRIBED_REQUIRED

@@ -19,7 +19,7 @@ public enum RequestErrorCode implements ErrorCode {
     REQUEST_SCHEDULE_LOCKED(HttpStatus.CONFLICT, "Lịch hẹn đã được xác nhận và bị khoá, không thể chỉnh sửa."),
     REQUEST_SCHEDULE_PAST_TIME(HttpStatus.BAD_REQUEST, "Thời gian hẹn giao nhận phải ở tương lai."),
     REQUEST_WAIVER_REQUIRED(
-            HttpStatus.BAD_REQUEST, "Hình thức giao hàng (Shipping) bắt buộc phải xác nhận cam kết chịu trách nhiệm."),
+            HttpStatus.BAD_REQUEST, "Vui lòng đồng ý cam kết trách nhiệm giao nhận."),
     REQUEST_SCHEDULE_NOT_SET(HttpStatus.BAD_REQUEST, "Chưa có thông tin lịch hẹn để xác nhận."),
     REQUEST_CONTACT_NOT_REVEALED(
             HttpStatus.CONFLICT, "Thông tin liên lạc chỉ được hiển thị sau khi hai bên đã chốt lịch hẹn."),

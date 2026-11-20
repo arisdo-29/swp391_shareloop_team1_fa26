@@ -92,6 +92,10 @@ export function canConfirmMeetingSchedule({
   );
 }
 
+export function hasConfirmedMeetingSchedule(scheduleOkAt?: string, waiverAt?: string): boolean {
+  return Boolean(scheduleOkAt && waiverAt);
+}
+
 export function scheduleApiErrorMessage(error: unknown, fallback: string): string {
   const apiError = error as Partial<ApiError>;
   if (apiError.code === 'REQUEST_SCHEDULE_PAST_TIME') {

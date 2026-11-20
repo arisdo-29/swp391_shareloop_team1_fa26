@@ -381,12 +381,12 @@ class OfferChangeIT extends IntegrationTest {
                         .header("Authorization", token(donorId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new ScheduleRequest("IN_PERSON", "Cổng trường", meetingTime, false))))
+                                new ScheduleRequest("IN_PERSON", "Cổng trường", meetingTime, true))))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", token(receiverId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(false))))
+                        .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(true))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"));
     }

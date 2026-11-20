@@ -2,13 +2,20 @@ package com.shareloop.request.repository;
 
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface RequestRepository extends JpaRepository<Request, Long> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM Request r WHERE r.id = :id")
+    Optional<Request> findByIdForScheduleUpdate(@Param("id") long id);
 
     /**
      * Đếm số lượng yêu cầu đang ở trạng thái PENDING của một người (YC-03: tối đa 5).

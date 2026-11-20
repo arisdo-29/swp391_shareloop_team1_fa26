@@ -1,5 +1,6 @@
 package com.shareloop.request.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -20,4 +21,5 @@ public record ScheduleRequest(
         @NotNull(message = "Thời gian hẹn không được để trống")
         Instant meetingTime,
 
+        @Schema(description = "Phải là true khi lưu lịch giao nhận", requiredMode = Schema.RequiredMode.REQUIRED)
         Boolean agreeToWaiver) {}
