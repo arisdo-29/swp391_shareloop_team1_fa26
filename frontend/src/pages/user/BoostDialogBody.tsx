@@ -2,11 +2,8 @@ import { Link } from 'react-router-dom';
 import { Alert, Button, Icon } from '../../components/ui';
 import type { BoostQuote } from '../../services/itemApi';
 import {
-  BOOST_BENEFITS,
-  BOOST_REFUND_POLICY,
   boostRejection,
   formatDate,
-  formatDateTime,
   formatTime,
 } from '../../utils/boostMessages';
 
@@ -30,8 +27,9 @@ interface BoostDialogBodyProps {
 }
 
 /**
- * Nội dung hộp đẩy bài ở "Bài của tôi". Được đẩy: hộp xác nhận với các mốc và quyền lợi lấy từ quote (không hiện số dư
- * ví). Không được đẩy (quote.allowed = false hoặc POST lỗi): popup lý do và khi nào làm lại được, kèm nút hành động.
+ * Nội dung hộp đẩy bài ở "Bài của tôi". Được đẩy: hộp xác nhận với ba chỉ số từ quote và tóm tắt quyền lợi (không
+ * hiện số dư ví). Không được đẩy (quote.allowed = false hoặc POST lỗi): popup lý do và khi nào làm lại được, kèm nút
+ * hành động.
  */
 export function BoostDialogBody({
   titleId,
@@ -95,10 +93,19 @@ export function BoostDialogBody({
         ) : quote ? (
           <>
             <BoostMetrics quote={quote} boostDays={boostDays} />
-            {/* Từ màn md hai khối nằm cạnh nhau để hộp thoại thấp lại, không phải cuộn. */}
-            <div className="grid gap-3 md:grid-cols-2">
-              <BoostTimeline quote={quote} />
-              <BoostBenefits />
+            <div className="rounded-lg border border-border bg-surface-low px-4 py-3 text-sm leading-6 text-text-secondary">
+              <p>
+                Bài được ưu tiên tại trang chủ và đầu trang Tìm đồ, đồng thời xoay vòng công bằng với
+                các bài đẩy khác. Credit được trừ ngay khi xác nhận.
+              </p>
+              <Link
+                to="/about#day-bai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1.5 inline-flex font-semibold text-link transition hover:text-secondary"
+              >
+                Xem chi tiết quy định đẩy bài
+              </Link>
             </div>
           </>
         ) : (
@@ -174,54 +181,6 @@ function BoostMetrics({ quote, boostDays }: { quote: BoostQuote; boostDays: numb
         </p>
         <p className="mt-0.5 text-2xs font-medium text-text-muted">Lúc {formatTime(quote.newBoostedUntil)}</p>
       </div>
-    </div>
-  );
-}
-
-/** Hai trường hợp sau khi hết gói: mua thêm (tới chainEndsAt) và không mua thêm (nghỉ tới cooldownUntil, nếu có). */
-function BoostTimeline({ quote }: { quote: BoostQuote }) {
-  return (
-    <div className="space-y-2.5 rounded-lg border border-border bg-surface p-4 shadow-sm">
-      <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted">Quy tắc gia hạn và lộ trình</h3>
-      <div className="space-y-2">
-        <div className="rounded-md border border-border bg-surface-low p-3 text-xs leading-relaxed text-text-secondary">
-          <span className="mb-0.5 block font-semibold text-text-primary">Nếu mua thêm gói:</span>
-          Đợt đẩy kéo dài tối đa tới{' '}
-          <strong className="font-semibold text-primary">{formatDateTime(quote.chainEndsAt)}</strong>.
-        </div>
-        {/* cooldownUntil (backend tính): mốc được đẩy lại nếu mua gói này rồi không mua thêm. */}
-        {quote.cooldownUntil ? (
-          <div className="rounded-md border border-border bg-surface-low p-3 text-xs leading-relaxed text-text-secondary">
-            <span className="mb-0.5 block font-semibold text-text-primary">Nếu không mua thêm:</span>
-            Sau khi hết thời gian đẩy, bài đăng sẽ không được đẩy tiếp cho tới{' '}
-            <strong className="font-semibold text-text-primary">{formatDateTime(quote.cooldownUntil)}</strong>. Số
-            suất đẩy có giới hạn, nên mỗi bài phải chờ một khoảng thời gian giữa hai đợt đẩy để nhường lượt cho bài
-            đăng khác.
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function BoostBenefits() {
-  return (
-    <div className="space-y-2 rounded-lg border border-border bg-surface-low p-4">
-      <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted">Quyền lợi hiển thị và lưu ý</h3>
-      {BOOST_BENEFITS.map((benefit) => (
-        <p key={benefit.label} className="flex items-start gap-2.5 text-xs leading-relaxed text-text-secondary sm:text-[13px]">
-          <Icon name="check" className="mt-0.5 size-4 shrink-0 text-success" />
-          <span>
-            <strong className="font-semibold text-text-primary">{benefit.label}:</strong> {benefit.text}
-          </span>
-        </p>
-      ))}
-      <p className="flex items-start gap-2.5 rounded-md border border-warning/20 bg-warning-soft p-2.5 text-xs leading-relaxed text-warning">
-        <Icon name="warning" className="mt-0.5 size-4 shrink-0" />
-        <span>
-          <strong className="font-semibold">Chính sách hoàn phí:</strong> {BOOST_REFUND_POLICY}
-        </span>
-      </p>
     </div>
   );
 }

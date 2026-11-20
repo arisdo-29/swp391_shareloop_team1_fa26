@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAppSelector } from '../../app/hooks';
 import { itemApi, type ListingFeeConfigResponse } from '../../services/itemApi';
+import { BOOST_BENEFITS, BOOST_REFUND_POLICY } from '../../utils/boostMessages';
 import { About } from './About';
 
 vi.mock('../../app/hooks', () => ({
@@ -74,8 +75,26 @@ describe('trang Giới thiệu', () => {
     renderAbout();
 
     // then
-    expect(await screen.findByText(/Một đợt đẩy liên tục tối đa 14 ngày/)).toBeTruthy();
+    expect((await screen.findAllByText(/Một đợt đẩy liên tục tối đa 14 ngày/)).length).toBeGreaterThan(0);
     expect(screen.getByText(/nhóm bài đổi luân phiên mỗi 3 phút/)).toBeTruthy();
+  });
+
+  it('hiển thị đầy đủ quy định đẩy bài tại đúng anchor', async () => {
+    vi.mocked(useAppSelector).mockReturnValue({ id: 'api_7' });
+    vi.mocked(itemApi.getListingFees).mockResolvedValue(feesWithoutOverQuota);
+
+    renderAbout();
+
+    const section = document.getElementById('day-bai');
+    expect(section).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Quy tắc gia hạn và lộ trình' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Quyền lợi hiển thị và lưu ý' })).toBeTruthy();
+    expect(await screen.findByText(/Mỗi gói kéo dài thêm 3 ngày/)).toBeTruthy();
+    expect(screen.getByText(/bài phải nghỉ 3 ngày mới được đẩy lại/)).toBeTruthy();
+    for (const benefit of BOOST_BENEFITS) {
+      expect(screen.getByText(new RegExp(benefit.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))).toBeTruthy();
+    }
+    expect(screen.getByText(new RegExp(BOOST_REFUND_POLICY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))).toBeTruthy();
   });
 
   it('hiện số phí vượt hạn mức khi backend trả về', async () => {

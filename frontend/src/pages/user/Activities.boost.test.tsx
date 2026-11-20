@@ -261,8 +261,10 @@ describe('mở hộp Đẩy bài từ thông báo (B24)', () => {
     // then
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Xác nhận đẩy bài')).toBeTruthy();
-    expect(itemApi.getBoostQuote).toHaveBeenCalledWith(31);
-    expect(itemApi.getBoostQuote).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(itemApi.getBoostQuote).toHaveBeenCalledWith(31);
+      expect(itemApi.getBoostQuote).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('bài trong thông báo không còn trong danh sách thì báo, không mở hộp', async () => {

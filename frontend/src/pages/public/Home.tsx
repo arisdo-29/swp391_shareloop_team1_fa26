@@ -9,6 +9,7 @@ import {
   ItemImage,
   ProductCard,
   SearchField,
+  Select,
 } from '../../components/ui';
 import type { Item, ItemType } from '../../types/domain';
 import { catalogApi } from '../../services/catalogApi';
@@ -453,9 +454,8 @@ export function Home() {
               placeholder="Bạn đang tìm món gì?"
               aria-label="Từ khóa tìm kiếm"
             />
-            <select
+            <Select
               aria-label="Chọn quận"
-              className="input appearance-none"
               value={district}
               onChange={(event) => setDistrict(event.target.value)}
             >
@@ -463,7 +463,7 @@ export function Home() {
               {districtOptions.map((area) => (
                 <option key={area.id} value={area.id}>{area.label}</option>
               ))}
-            </select>
+            </Select>
             <Button
               type="submit"
               className="home-hero-submit"

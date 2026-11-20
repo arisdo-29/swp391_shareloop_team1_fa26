@@ -51,10 +51,10 @@ export function ToastHost() {
         <div
           key={entry.id}
           role={entry.tone === 'error' ? 'alert' : 'status'}
-          className={`pointer-events-auto flex items-start gap-3 rounded-lg border p-3 shadow-md ${toneClass[entry.tone]}`}
+          className={`pointer-events-auto flex items-center gap-3 rounded-lg border p-3 shadow-md ${toneClass[entry.tone]}`}
         >
           <span
-            className={`mt-0.5 grid size-7 shrink-0 place-items-center rounded-full ${iconClass[entry.tone]}`}
+            className={`grid size-7 shrink-0 place-items-center rounded-full ${iconClass[entry.tone]}`}
           >
             <Icon
               name={entry.tone === 'success' ? 'check' : 'warning'}

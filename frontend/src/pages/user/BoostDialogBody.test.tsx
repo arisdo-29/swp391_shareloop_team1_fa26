@@ -52,8 +52,8 @@ afterEach(() => {
 });
 
 describe('hộp xác nhận đẩy bài', () => {
-  it('đợt mới hiển thị phí, các mốc từ quote, số suất và đoạn quyền lợi; không có số dư ví', () => {
-    // given: mốc nghỉ khác mốc kéo dài tối đa để kiểm từng mốc hiện đúng chỗ
+  it('đợt mới hiển thị ba ô chính, số suất và link quy định; không còn hai khối dài', () => {
+    // given
     const quote = { ...allowedQuote, cooldownUntil: '2026-11-13T08:00:00Z' };
 
     // when
@@ -62,28 +62,26 @@ describe('hộp xác nhận đẩy bài', () => {
     // then
     expect(screen.getByRole('heading', { name: 'Xác nhận đẩy bài' })).toBeTruthy();
     expect(screen.getByText('Áo khoác gió')).toBeTruthy();
+    expect(screen.getByText('Thời lượng')).toBeTruthy();
     expect(screen.getByText('3 ngày')).toBeTruthy();
     // ô Chi phí đẩy và nhãn trên nút xác nhận
+    expect(screen.getByText('Chi phí đẩy')).toBeTruthy();
     expect(screen.getAllByText('5 Credit')).toHaveLength(2);
+    expect(screen.getByText('Hiệu lực đến')).toBeTruthy();
     expect(screen.getByText(formatDate(quote.newBoostedUntil))).toBeTruthy();
     expect(screen.getByText(`Lúc ${formatTime(quote.newBoostedUntil)}`)).toBeTruthy();
-    expect(screen.getByText(formatDateTime(quote.chainEndsAt))).toBeTruthy();
-    expect(screen.getByText(formatDateTime(quote.cooldownUntil))).toBeTruthy();
     expect(screen.getByText('Còn 12 suất đẩy trống')).toBeTruthy();
-    expect(screen.getByText(/Người mua sau không được xếp trên bạn/)).toBeTruthy();
-    expect(screen.getByText(/không hoàn phí/)).toBeTruthy();
+    const rulesLink = screen.getByRole('link', { name: 'Xem chi tiết quy định đẩy bài' });
+    expect(rulesLink.getAttribute('href')).toBe('/about#day-bai');
+    expect(rulesLink.getAttribute('target')).toBe('_blank');
+    expect(rulesLink.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(screen.queryByText('Quy tắc gia hạn và lộ trình')).toBeNull();
+    expect(screen.queryByText('Quyền lợi hiển thị và lưu ý')).toBeNull();
+    expect(screen.queryByText(formatDateTime(quote.chainEndsAt))).toBeNull();
+    expect(screen.queryByText(formatDateTime(quote.cooldownUntil))).toBeNull();
     expect(screen.queryByText(/Số dư/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận đẩy 5 Credit' }));
     expect(onConfirm).toHaveBeenCalledTimes(1);
-  });
-
-  it('không có cooldownUntil thì chỉ hiện trường hợp mua thêm gói', () => {
-    // when
-    renderBody({ ...allowedQuote, cooldownUntil: null });
-
-    // then
-    expect(screen.getByText('Nếu mua thêm gói:')).toBeTruthy();
-    expect(screen.queryByText('Nếu không mua thêm:')).toBeNull();
   });
 
   it('nút Hủy và nút đóng X đều gọi onCancel', () => {

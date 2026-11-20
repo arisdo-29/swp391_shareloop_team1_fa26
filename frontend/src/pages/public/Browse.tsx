@@ -78,7 +78,8 @@ async function fillBrowseResultCache(
   targetCount: number,
 ) {
   while (
-    (cache.totalElements === null || cache.items.length < Math.min(targetCount, cache.totalElements)) &&
+    (cache.totalElements === null ||
+      cache.items.length < Math.min(targetCount, cache.totalElements)) &&
     (cache.apiTotalPages === null || cache.nextApiPage < cache.apiTotalPages)
   ) {
     const apiPage = cache.nextApiPage;
@@ -257,7 +258,11 @@ export function Browse() {
     };
     // Mọi thứ quyết định tập kết quả, trừ số trang. Đổi bất kỳ phần nào thì là bộ lọc mới.
     const filterKey = JSON.stringify({ ...requestParams, boostedOnly, viewerKey });
-    if (activeFilterKeyRef.current !== null && activeFilterKeyRef.current !== filterKey && page !== 0) {
+    if (
+      activeFilterKeyRef.current !== null &&
+      activeFilterKeyRef.current !== filterKey &&
+      page !== 0
+    ) {
       activeFilterKeyRef.current = filterKey;
       resultCacheRef.current = null;
       setPage(0);
@@ -524,18 +529,17 @@ export function Browse() {
                 </button>
               ) : null}
             </div>
-            <label className="browse-sort-control">
-              Sắp xếp
-              <select
+            <div className="browse-sort-control">
+              <Select
+                label="Sắp xếp"
                 aria-label="Sắp xếp"
-                className="input"
                 value={sortMode}
                 onChange={(event) => changeSortMode(event.target.value)}
               >
                 <option value="newest">Mới nhất</option>
                 <option value="featured">Tin nổi bật</option>
-              </select>
-            </label>
+              </Select>
+            </div>
           </div>
 
           {itemsLoading ? (

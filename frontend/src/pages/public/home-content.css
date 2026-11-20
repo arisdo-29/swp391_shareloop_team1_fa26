@@ -2139,7 +2139,7 @@
 }
 .home-content .home-gift-band {
   margin-top: clamp(56px, 6vw, 84px);
-  padding-bottom: clamp(44px, 5vw, 72px);
+  padding-bottom: clamp(16px, 2vw, 24px);
   background: var(--color-primary-faint);
 }
 .home-content .home-gift-grid {

@@ -10,6 +10,7 @@ import {
   EmptyState,
   ItemImage,
   Icon,
+  Select,
   StatusBadge,
   TypeBadge,
 } from '../../components/ui';
@@ -885,9 +886,9 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   </div>
                 ) : null}
                 {sharePickerOpen && !shareUnavailableReason ? (
-                  <select
+                  <Select
                     aria-label="Chia sẻ bài của bạn"
-                    className="input min-h-10 py-2 text-xs"
+                    className="min-h-10 py-2 text-xs"
                     value={shareItemId}
                     disabled={sending || !chatEnabled || !!chatImage}
                     onChange={(event) => setShareItemId(event.target.value)}
@@ -898,7 +899,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                         Kèm bài: {item.title}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 ) : null}
                 <form
                   className="flex items-center gap-2"
