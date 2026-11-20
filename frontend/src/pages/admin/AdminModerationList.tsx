@@ -96,7 +96,11 @@ export function AdminModerationList() {
         </div>
         <Select
           aria-label="Lọc theo loại bài"
+ fix/frontend-ui-l07-l08
           inputClassName="h-9 px-2.5 text-xs text-text-primary"
+
+          className="h-9 px-2.5 text-xs text-text-primary"
+ develop
           value={filterType}
           onChange={(event) => setFilterType(event.target.value as 'all' | 'new' | 'edited')}
         >

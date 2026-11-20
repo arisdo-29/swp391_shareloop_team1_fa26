@@ -17,6 +17,7 @@ import com.shareloop.user.dto.AdminAccountRole;
 import com.shareloop.user.dto.AdminAccountState;
 import com.shareloop.user.dto.AdminUserSummary;
 import com.shareloop.user.dto.ContactInfo;
+import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.service.UserService;
 import com.shareloop.wallet.FinanceErrorCode;
 import com.shareloop.wallet.WalletErrorCode;
@@ -24,13 +25,19 @@ import com.shareloop.wallet.dto.AdminFinanceUserSummary;
 import com.shareloop.wallet.dto.CreditTypeTotal;
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
 import com.shareloop.wallet.dto.TopUpReconciliation;
+import com.shareloop.wallet.dto.TopUpReportItem;
 import com.shareloop.wallet.dto.WalletResponse;
 import com.shareloop.wallet.dto.WalletTransactionResponse;
 import com.shareloop.wallet.entity.CreditTxType;
+import com.shareloop.wallet.entity.PaymentOrder;
+import com.shareloop.wallet.entity.PaymentOrderStatus;
+import com.shareloop.wallet.entity.PaymentProvider;
+import com.shareloop.wallet.repository.PaymentOrderRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,11 +47,12 @@ class AdminFinanceServiceTest {
 
     private final CreditService creditService = mock(CreditService.class);
     private final UserService userService = mock(UserService.class);
+    private final PaymentOrderRepository paymentOrderRepository = mock(PaymentOrderRepository.class);
     private AdminFinanceService adminFinanceService;
 
     @BeforeEach
     void setUp() {
-        adminFinanceService = new AdminFinanceService(creditService, userService);
+        adminFinanceService = new AdminFinanceService(creditService, userService, paymentOrderRepository);
     }
 
     @Test
@@ -218,5 +226,64 @@ class AdminFinanceServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
                         .isEqualTo(FinanceErrorCode.INVALID_DATE_RANGE));
+    }
+
+    @Test
+    @DisplayName("getTopUpReportDetails: trả danh sách chi tiết đơn nạp ghép họ tên và email từ UserService (L02)")
+    void getTopUpReportDetails_whenOrdersExist_mergesUserInfoAndReturnsDetails() {
+        LocalDate from = LocalDate.of(2026, 10, 1);
+        LocalDate to = LocalDate.of(2026, 10, 17);
+
+        PaymentOrder order1 = new PaymentOrder(7L, "ORD-001", 50000L, 50, 1000, PaymentProvider.VNPAY);
+        order1.markSuccess(Instant.parse("2026-10-10T10:00:00Z"));
+        PaymentOrder order2 = new PaymentOrder(8L, "ORD-002", 20000L, 20, 1000, PaymentProvider.MOCK);
+        order2.markSuccess(Instant.parse("2026-10-11T11:00:00Z"));
+
+        when(paymentOrderRepository.findSuccessfulOrders(eq(PaymentOrderStatus.SUCCESS), any(), any()))
+                .thenReturn(List.of(order1, order2));
+        when(userService.findBriefs(Set.of(7L, 8L)))
+                .thenReturn(Map.of(
+                        7L, new UserBrief(7L, "Lan An", "an@test.local"),
+                        8L, new UserBrief(8L, "Bình", "binh@test.local")));
+
+        List<TopUpReportItem> details = adminFinanceService.getTopUpReportDetails(from, to);
+
+        assertThat(details).hasSize(2);
+        assertThat(details.get(0).orderCode()).isEqualTo("ORD-001");
+        assertThat(details.get(0).fullName()).isEqualTo("Lan An");
+        assertThat(details.get(0).email()).isEqualTo("an@test.local");
+        assertThat(details.get(0).amountVnd()).isEqualTo(50000L);
+        assertThat(details.get(0).credits()).isEqualTo(50);
+        assertThat(details.get(0).provider()).isEqualTo(PaymentProvider.VNPAY);
+
+        assertThat(details.get(1).orderCode()).isEqualTo("ORD-002");
+        assertThat(details.get(1).fullName()).isEqualTo("Bình");
+        assertThat(details.get(1).email()).isEqualTo("binh@test.local");
+    }
+
+    @Test
+    @DisplayName("getTopUpReportDetails: không có đơn nạp nào thì trả về danh sách rỗng (L02)")
+    void getTopUpReportDetails_whenEmpty_returnsEmptyList() {
+        when(paymentOrderRepository.findSuccessfulOrders(eq(PaymentOrderStatus.SUCCESS), any(), any()))
+                .thenReturn(List.of());
+
+        List<TopUpReportItem> details = adminFinanceService.getTopUpReportDetails(null, null);
+
+        assertThat(details).isEmpty();
+        verify(userService, never()).findBriefs(any());
+    }
+
+    @Test
+    @DisplayName("getTopUpReportDetails: from sau to ném INVALID_DATE_RANGE (L02)")
+    void getTopUpReportDetails_fromAfterTo_throwsInvalidDateRange() {
+        LocalDate from = LocalDate.of(2026, 10, 20);
+        LocalDate to = LocalDate.of(2026, 10, 10);
+
+        assertThatThrownBy(() -> adminFinanceService.getTopUpReportDetails(from, to))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
+                        .isEqualTo(FinanceErrorCode.INVALID_DATE_RANGE));
+
+        verify(paymentOrderRepository, never()).findSuccessfulOrders(any(), any(), any());
     }
 }

@@ -3,7 +3,11 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+ fix/frontend-ui-l07-l08
 import { Select, TextArea } from './ui';
+
+import { Select } from './ui';
+ develop
 
 afterEach(cleanup);
 
@@ -50,6 +54,7 @@ describe('Select', () => {
     expect((select as HTMLSelectElement).value).toBe('used');
     expect(screen.queryByRole('listbox')).toBeNull();
   });
+fix/frontend-ui-l07-l08
 
   it('tách class bố cục của wrapper khỏi class của ô nhập', () => {
     render(
@@ -70,4 +75,6 @@ describe('Select', () => {
     expect(textarea.classList.contains('min-h-32')).toBe(true);
     expect(textarea.classList.contains('mt-4')).toBe(false);
   });
+
+ develop
 });

@@ -2,10 +2,14 @@ package com.shareloop.wallet.mapper;
 
 import com.shareloop.wallet.dto.CreditTypeTotal;
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
+import com.shareloop.wallet.dto.MemberTopUpSummary;
 import com.shareloop.wallet.dto.TopUpReconciliation;
+import com.shareloop.wallet.dto.TopUpReportItem;
 import com.shareloop.wallet.entity.CreditTxType;
+import com.shareloop.wallet.entity.PaymentProvider;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
@@ -28,9 +32,16 @@ public class FinanceReportCsvWriter {
     private static final String UNBOUNDED = "không giới hạn";
     private static final String MATCHED = "Khớp";
     private static final String MISMATCHED = "Lệch";
+    private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final DateTimeFormatter DISPLAY_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter DISPLAY_DATE_TIME = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     public byte[] write(FinanceSummaryResponse report, LocalDate from, LocalDate to) {
+        return write(report, List.of(), from, to);
+    }
+
+    public byte[] write(
+            FinanceSummaryResponse report, List<TopUpReportItem> topUpDetails, LocalDate from, LocalDate to) {
         StringBuilder csv = new StringBuilder(BOM);
 
         line(csv, "Báo cáo tài chính ShareLoop");
@@ -57,6 +68,40 @@ public class FinanceReportCsvWriter {
                 reconciliation.topUpCredits(),
                 reconciliation.difference(),
                 reconciliation.matched() ? MATCHED : MISMATCHED);
+        csv.append(CRLF);
+
+        line(csv, "Chi tiết nạp tiền");
+        line(csv, "Thời gian", "Mã đơn", "Họ tên", "Email", "Số tiền (VND)", "Credit nhận", "Cổng thanh toán");
+        if (topUpDetails != null) {
+            for (TopUpReportItem item : topUpDetails) {
+                String formattedTime = item.paidAt() != null
+                        ? DISPLAY_DATE_TIME.format(item.paidAt().atZone(VIETNAM_ZONE))
+                        : "";
+                line(
+                        csv,
+                        formattedTime,
+                        item.orderCode(),
+                        item.fullName(),
+                        item.email(),
+                        item.amountVnd(),
+                        item.credits(),
+                        providerLabel(item.provider()));
+            }
+        }
+        csv.append(CRLF);
+
+        line(csv, "Theo thành viên");
+        line(csv, "Họ tên", "Email", "Tổng tiền (VND)", "Tổng Credit nhận", "Số đơn nạp");
+        List<MemberTopUpSummary> memberSummaries = MemberTopUpSummary.fromDetails(topUpDetails);
+        for (MemberTopUpSummary member : memberSummaries) {
+            line(
+                    csv,
+                    member.fullName(),
+                    member.email(),
+                    member.totalAmountVnd(),
+                    member.totalCredits(),
+                    member.orderCount());
+        }
 
         return csv.toString().getBytes(StandardCharsets.UTF_8);
     }
@@ -90,13 +135,35 @@ public class FinanceReportCsvWriter {
         };
     }
 
+    public static String providerLabel(PaymentProvider provider) {
+        if (provider == null) {
+            return "";
+        }
+        return switch (provider) {
+            case VNPAY -> "VNPAY";
+            case MOCK -> "MOCK";
+            case MANUAL -> "Thủ công (MANUAL)";
+        };
+    }
+
     // Ngày hiển thị dd/MM/yyyy theo thói quen người Việt; không truyền mốc nào thì ghi "không giới hạn".
     private static String formatDate(LocalDate date) {
         return date != null ? date.format(DISPLAY_DATE) : UNBOUNDED;
     }
 
     private static void line(StringBuilder csv, Object... cells) {
-        csv.append(Arrays.stream(cells).map(String::valueOf).collect(Collectors.joining(",")))
+        csv.append(Arrays.stream(cells).map(FinanceReportCsvWriter::escapeCsv).collect(Collectors.joining(",")))
                 .append(CRLF);
+    }
+
+    private static String escapeCsv(Object value) {
+        if (value == null) {
+            return "";
+        }
+        String text = String.valueOf(value);
+        if (text.contains(",") || text.contains("\"") || text.contains("\r") || text.contains("\n")) {
+            return "\"" + text.replace("\"", "\"\"") + "\"";
+        }
+        return text;
     }
 }

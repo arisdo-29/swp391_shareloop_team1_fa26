@@ -249,7 +249,10 @@ export function Select(
     error,
     hint,
     className = '',
+fix/frontend-ui-l07-l08
     inputClassName = '',
+
+develop
     children,
     value,
     defaultValue,
@@ -381,13 +384,21 @@ export function Select(
   }, [activeIndex, open]);
 
   return (
+ fix/frontend-ui-l07-l08
     <label className={`block ${className}`} htmlFor={rest.id ?? selectId}>
+
+    <label className="block" htmlFor={rest.id ?? selectId}>
+ develop
       {label ? <span className="label">{label}</span> : null}
       <span className="relative block">
         <select
           ref={selectRef}
           id={rest.id ?? selectId}
+ fix/frontend-ui-l07-l08
           className={`input cursor-pointer appearance-none rounded-xl border-border bg-white pr-10 transition hover:border-[#A9C8BB] focus:border-primary disabled:cursor-not-allowed ${error ? errorInputClass : ''} ${inputClassName}`}
+
+          className={`input cursor-pointer appearance-none rounded-xl border-border bg-white pr-10 transition hover:border-[#A9C8BB] focus:border-primary disabled:cursor-not-allowed ${error ? errorInputClass : ''} ${className}`}
+develop
           aria-invalid={error ? true : undefined}
           aria-describedby={hasMessage ? messageId : undefined}
           aria-expanded={open}

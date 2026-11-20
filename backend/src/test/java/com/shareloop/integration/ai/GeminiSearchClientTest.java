@@ -19,7 +19,7 @@ class GeminiSearchClientTest {
         JsonNode body = mapper.readTree(
                 client.buildRequestBody("Tìm món làm mình nổi bật", "[{\"id\":7,\"title\":\"Vòng tay\"}]"));
 
-        assertThat(body.path("model").asText()).isEqualTo("gemini-4-hydrogen");
+        assertThat(body.path("model").asText()).isEqualTo("gemini-3.5-flash-lite");
         assertThat(body.path("generation_config").path("thinking_level").asText())
                 .isEqualTo("low");
         assertThat(body.path("store").asBoolean()).isFalse();
@@ -40,7 +40,7 @@ class GeminiSearchClientTest {
     @Test
     void parsesOnlyCompletedJsonModelOutput() throws Exception {
         AiResponse response = client.parseResponse(200, """
-                {"status":"completed","model":"gemini-4-hydrogen","steps":[
+                {"status":"completed","model":"gemini-3.5-flash-lite","steps":[
                   {"type":"model_output","content":[{"type":"text",
                     "text":"{\\"inScope\\":true,\\"itemIds\\":[7],\\"message\\":\\"Có món hợp\\"}"}]}
                 ]}
@@ -48,7 +48,7 @@ class GeminiSearchClientTest {
 
         assertThat(mapper.readTree(response.content()).path("itemIds").path(0).longValue())
                 .isEqualTo(7);
-        assertThat(response.model()).isEqualTo("gemini-4-hydrogen");
+        assertThat(response.model()).isEqualTo("gemini-3.5-flash-lite");
         assertThatThrownBy(() -> client.parseResponse(429, "{}")).hasMessage("Gemini API returned HTTP 429");
     }
 }
