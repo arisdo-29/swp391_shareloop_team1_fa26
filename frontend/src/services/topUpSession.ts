@@ -3,6 +3,8 @@ import type { PaymentOrderStatus, TopUpOrderResponse } from './paymentApi';
 const STORAGE_KEY = 'shareloop:pendingTopUp';
 export interface PendingTopUpSession {
   orderCode: string;
+  redirectUrl?: string;
+  expiresAt?: string;
 }
 
 export type VnPayReturnStatus = 'SUCCESS' | 'FAILED' | 'INVALID_SIGNATURE';
@@ -16,7 +18,17 @@ export type TopUpReturnResult =
 
 export function savePendingTopUp(order: TopUpOrderResponse) {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ orderCode: order.orderCode }));
+    const redirectUrl = order.redirectUrl ? paymentRedirectUrl(order.redirectUrl) : null;
+    const expiresAt =
+      order.expiresAt && Number.isFinite(Date.parse(order.expiresAt)) ? order.expiresAt : undefined;
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        orderCode: order.orderCode,
+        ...(redirectUrl ? { redirectUrl } : {}),
+        ...(expiresAt ? { expiresAt } : {}),
+      }),
+    );
   } catch {
     /* Storage may be blocked by the browser. */
   }
@@ -27,11 +39,24 @@ export function loadPendingTopUp(): PendingTopUpSession | null {
     const value = JSON.parse(
       sessionStorage.getItem(STORAGE_KEY) ?? 'null',
     ) as PendingTopUpSession | null;
-    return value &&
-      typeof value.orderCode === 'string' &&
-      /^[a-zA-Z0-9-]{1,40}$/.test(value.orderCode)
-      ? { orderCode: value.orderCode }
-      : null;
+    if (
+      !value ||
+      typeof value.orderCode !== 'string' ||
+      !/^[a-zA-Z0-9-]{1,40}$/.test(value.orderCode)
+    ) {
+      return null;
+    }
+    const redirectUrl =
+      typeof value.redirectUrl === 'string' ? paymentRedirectUrl(value.redirectUrl) : null;
+    const expiresAt =
+      typeof value.expiresAt === 'string' && Number.isFinite(Date.parse(value.expiresAt))
+        ? value.expiresAt
+        : undefined;
+    return {
+      orderCode: value.orderCode,
+      ...(redirectUrl ? { redirectUrl } : {}),
+      ...(expiresAt ? { expiresAt } : {}),
+    };
   } catch {
     return null;
   }

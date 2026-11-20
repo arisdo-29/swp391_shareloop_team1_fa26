@@ -159,6 +159,21 @@ const faqs = [
     'Tài khoản bị khoá thì sao?',
     'Admin có thể khoá tài khoản kèm lý do. Khi đăng nhập, bạn sẽ thấy lý do đó.',
   ],
+  [
+    'Tôi cần hỗ trợ hoặc gặp sự cố khi sử dụng ShareLoop thì liên hệ ở đâu?',
+    <>
+      Nếu bạn có thắc mắc, cần hỗ trợ về tài khoản, đăng bài, cho tặng, trao đổi, Credit,
+      giao dịch hoặc gặp lỗi trong quá trình sử dụng ShareLoop, vui lòng liên hệ qua email{' '}
+      <a
+        href="mailto:support@shareloop.vn"
+        className="font-semibold text-primary underline underline-offset-2"
+      >
+        support@shareloop.vn
+      </a>
+      . Khi gửi email, bạn nên mô tả rõ vấn đề và đính kèm hình ảnh minh họa (nếu có) để đội
+      ngũ hỗ trợ kiểm tra và phản hồi.
+    </>,
+  ],
 ] as const;
 
 /** Trang giới thiệu ShareLoop và hướng dẫn sử dụng. Ai cũng xem được, kể cả khách chưa đăng nhập. */

@@ -37,17 +37,25 @@ describe('VNPay return', () => {
 });
 
 describe('pending top-up session', () => {
-  it('chỉ lưu mã đơn, không lưu trạng thái hay số Credit ở trình duyệt', () => {
+  it('chỉ lưu dữ liệu điều hướng do Backend cấp, không lưu trạng thái, số tiền hay Credit', () => {
     savePendingTopUp({
       orderCode: 'SL-123',
       amountVnd: 20_000,
       credits: 20,
       status: 'PENDING',
       provider: 'VNPAY',
-      redirectUrl: 'https://sandbox.vnpayment.vn',
+      redirectUrl: 'https://sandbox.vnpayment.vn/pay?vnp_TxnRef=SL-123',
+      expiresAt: '2026-11-17T08:30:00Z',
     });
 
-    expect(loadPendingTopUp()).toEqual({ orderCode: 'SL-123' });
+    expect(loadPendingTopUp()).toEqual({
+      orderCode: 'SL-123',
+      redirectUrl: 'https://sandbox.vnpayment.vn/pay?vnp_TxnRef=SL-123',
+      expiresAt: '2026-11-17T08:30:00Z',
+    });
+    expect(sessionStorage.getItem('shareloop:pendingTopUp')).not.toContain('amountVnd');
+    expect(sessionStorage.getItem('shareloop:pendingTopUp')).not.toContain('credits');
+    expect(sessionStorage.getItem('shareloop:pendingTopUp')).not.toContain('status');
     clearPendingTopUp();
     expect(loadPendingTopUp()).toBeNull();
   });

@@ -8,7 +8,7 @@
   --browse-muted: #6b7280;
   min-height: calc(100vh - 68px);
   max-width: var(--layout-wide-max);
-  padding-inline: var(--layout-gutter);
+  padding: clamp(14px, 1.5vw, 20px) var(--layout-gutter) clamp(24px, 3vw, 40px);
   background: var(--browse-background);
   box-shadow: 0 0 0 100vmax var(--browse-background);
   clip-path: inset(0 -100vmax);
@@ -16,7 +16,7 @@
 }
 
 .browse-heading > div {
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 .browse-heading h1 {
@@ -25,7 +25,7 @@
 }
 
 .browse-mobile-filter {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .browse-mobile-filter > button {
@@ -169,12 +169,12 @@
 }
 
 .browse-results > * + * {
-  margin-top: 16px;
+  margin-top: 10px;
 }
 
 .browse-results-toolbar {
   display: flex;
-  min-height: 46px;
+  min-height: 42px;
   align-items: center;
   justify-content: space-between;
   gap: 14px;

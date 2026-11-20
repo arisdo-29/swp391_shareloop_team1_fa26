@@ -39,6 +39,12 @@ function isLoginRequest(url: string | undefined) {
   return url.split('?')[0].replace(/\/+$/, '').endsWith('/api/v1/auth/login');
 }
 
+function isTopUpOrderStatusRequest(url: string | undefined, method: string | undefined) {
+  if (method?.toLowerCase() !== 'get' || !url) return false;
+  const path = url.split('?')[0].replace(/\/+$/, '');
+  return /\/api\/v1\/wallet\/topup-orders\/[^/]+$/.test(path);
+}
+
 function blockedAccountMessage(body: Partial<ApiError>) {
   const reason = typeof body.details?.reason === 'string' ? body.details.reason.trim() : '';
   const message = body.message?.trim();
@@ -117,7 +123,12 @@ http.interceptors.response.use(
     const body = error.response?.data;
     const code = body?.code ?? (status === 0 ? 'NETWORK_ERROR' : 'UNKNOWN_ERROR');
     const blockedAccount = BLOCKED_ACCOUNT_CODES.has(code) && (status === 401 || status === 403);
-    const expiredSession = status === 401 && code !== 'AUTH_INVALID_CREDENTIALS';
+    // Riêng API đọc đơn sau redirect VNPay có thể lỗi độc lập. paymentApi sẽ xác minh lại
+    // phiên qua /me; chỉ 401 từ /me mới được phép xóa phiên đang còn trong trình duyệt.
+    const expiredSession =
+      status === 401 &&
+      code !== 'AUTH_INVALID_CREDENTIALS' &&
+      !isTopUpOrderStatusRequest(error.config?.url, error.config?.method);
     if (!isLoginRequest(error.config?.url) && (blockedAccount || expiredSession)) {
       const hadApiToken = Boolean(tokenStorage.get());
       tokenStorage.clear();

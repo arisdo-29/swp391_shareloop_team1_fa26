@@ -38,6 +38,7 @@ import { backendMockProviderMessage, startPayment } from '../../services/payment
 import { toast } from '../../components/toast';
 import {
   clearPendingTopUp,
+  loadPendingTopUp,
   paymentRedirectUrl,
   resolveTopUpReturnResult,
   returnOrderCode,
@@ -57,10 +58,10 @@ type ReturnState =
   | 'checking'
   | 'success';
 
-const PAYMENT_CANCELLED_MESSAGE =
-  'Bạn đã hủy thanh toán. Tài khoản chưa bị trừ tiền.';
+const PAYMENT_CANCELLED_MESSAGE = 'Bạn đã hủy yêu cầu thanh toán.';
 const PAYMENT_PENDING_AFTER_FAILED_RETURN_MESSAGE =
   'Thanh toán vừa thất bại tại VNPay, nhưng đơn vẫn đang chờ hệ thống xác nhận hủy. Credit chưa được cộng vào ví.';
+const ORDER_STATUS_POLL_INTERVAL_MS = 2_500;
 
 const paymentStatusLabels: Record<PaymentOrderStatus, string> = {
   PENDING: 'Đang chờ thanh toán',
@@ -236,7 +237,9 @@ export function Credit() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const code = returnOrderCode(params);
+    const pendingSession = loadPendingTopUp();
+    const returnCode = returnOrderCode(params);
+    const code = returnCode ?? pendingSession?.orderCode ?? null;
     const gatewayReturnStatus = vnpayReturnStatus(params);
     if (!code) {
       setTopUpError('');
@@ -247,12 +250,16 @@ export function Credit() {
       return;
     }
     let active = true;
-    setReturnState('checking');
+    setReturnState((current) => (current === 'idle' ? 'checking' : current));
     paymentApi
       .getOrder(code)
       .then((order) => {
         if (!active) return;
-        setApiTopUpOrder({ ...order, redirectUrl: '' });
+        const savedRedirectUrl =
+          order.status === 'PENDING' && pendingSession?.orderCode === code
+            ? (pendingSession.redirectUrl ?? '')
+            : '';
+        setApiTopUpOrder({ ...order, redirectUrl: savedRedirectUrl });
         setStep('pending');
         const result = resolveTopUpReturnResult(order.status, gatewayReturnStatus);
         setReturnState(result);
@@ -282,6 +289,20 @@ export function Credit() {
       active = false;
     };
   }, [location.search, refreshWallet, orderCheckKey]);
+
+  // Return của VNPay có thể về trước IPN. Khi Backend còn PENDING, tiếp tục hỏi trạng thái
+  // đến khi Backend xác nhận kết quả; chỉ lúc SUCCESS mới tải lại số dư ví.
+  useEffect(() => {
+    const code = returnOrderCode(new URLSearchParams(location.search));
+    const waitingForBackend =
+      returnState === 'pending' || returnState === 'pending-after-failed-return';
+    if (!code || apiTopUpOrder?.status !== 'PENDING' || !waitingForBackend) return;
+
+    const timer = window.setTimeout(() => {
+      setOrderCheckKey((key) => key + 1);
+    }, ORDER_STATUS_POLL_INTERVAL_MS);
+    return () => window.clearTimeout(timer);
+  }, [apiTopUpOrder?.status, location.search, returnState]);
 
   const selectedItemTitle = selectedEntry ? itemTitleOf(selectedEntry, itemTitles) : undefined;
 
@@ -366,11 +387,6 @@ export function Credit() {
       {returnState === 'failed' ? (
         <div className="mb-6">
           <Alert tone="error">Thanh toán không thành công. Credit chưa được cộng vào ví.</Alert>
-        </div>
-      ) : null}
-      {returnState === 'cancelled' ? (
-        <div className="mb-6">
-          <Alert tone="warning">{PAYMENT_CANCELLED_MESSAGE}</Alert>
         </div>
       ) : null}
       {returnState === 'expired' ? (
@@ -638,25 +654,27 @@ export function ApiTopUpOrder({
   // B29: hết giờ chỉ đổi cách hiển thị; PaymentExpiryJob mới đổi trạng thái thật, Credit không được cộng.
   const timedOut = remainingMs !== null && remainingMs <= 0;
   const statusLabel = cancelled
-    ? 'Thanh toán đã hủy'
-    : timedOut
-      ? 'Hết hạn'
-      : paymentStatusLabels[order.status];
+    ? 'Đã hủy thanh toán'
+    : pendingAfterFailedReturn
+      ? 'Đang đồng bộ trạng thái'
+      : timedOut
+        ? 'Hết hạn'
+        : paymentStatusLabels[order.status];
   const heading = paid
     ? 'Nạp Credit thành công'
     : cancelled
-      ? 'Thanh toán đã hủy'
+      ? 'Đã hủy thanh toán'
       : pendingAfterFailedReturn
         ? 'Đơn nạp đang chờ xác nhận'
         : order.status === 'FAILED'
           ? 'Thanh toán không thành công'
           : order.status === 'EXPIRED'
             ? 'Đơn nạp Credit đã hết hạn'
-            : 'Đơn nạp Credit đã được tạo';
+            : 'Đơn đang chờ thanh toán';
   const description = paid
     ? `+${order.credits} Credit đã được cộng vào ví.`
     : cancelled
-      ? 'Đơn đã được xác nhận hủy. Credit chưa được cộng vào ví.'
+      ? ''
       : pendingAfterFailedReturn
         ? 'Lần thanh toán vừa thất bại, nhưng trạng thái đơn vẫn đang chờ hệ thống xác nhận hủy.'
         : 'Credit chưa được cộng vào ví. Trạng thái sẽ thay đổi sau khi khoản thanh toán được xác nhận.';
@@ -664,31 +682,29 @@ export function ApiTopUpOrder({
     <div className="rounded-xl bg-white px-5 py-8 ring-1 ring-border/80 sm:px-8">
       <div className="mx-auto max-w-2xl text-center">
         <span
-          className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${paid ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}
+          className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${paid ? 'bg-success-soft text-success' : cancelled ? 'bg-error-soft text-error' : 'bg-warning-soft text-warning'}`}
         >
           {statusLabel}
         </span>
-        {remainingMs !== null ? (
+        {remainingMs !== null && !timedOut ? (
           <p
             className="mt-3 text-sm font-semibold text-text-secondary"
             role="timer"
             aria-live="off"
           >
-            {timedOut ? (
-              'Đơn đã quá hạn thanh toán. Credit sẽ không được cộng cho đơn này.'
-            ) : (
-              <>
-                Còn <span className="tabular-nums text-text-primary">{formatRemaining(remainingMs)}</span>{' '}
-                để thanh toán
-                {order.expiresAt ? ` (hạn ${new Date(order.expiresAt).toLocaleTimeString('vi-VN')})` : ''}
-              </>
-            )}
+            Còn <span className="tabular-nums text-text-primary">{formatRemaining(remainingMs)}</span>{' '}
+            để thanh toán
+            {order.expiresAt ? ` (hạn ${new Date(order.expiresAt).toLocaleTimeString('vi-VN')})` : ''}
+          </p>
+        ) : timedOut ? (
+          <p className="mt-3 text-sm font-semibold text-text-secondary">
+            Đơn đã quá hạn thanh toán. Credit sẽ không được cộng cho đơn này.
           </p>
         ) : null}
         <h2 className="mt-4 text-2xl font-bold">{heading}</h2>
-        <p className="mt-2 text-sm leading-6 text-text-muted">{description}</p>
+        {description ? <p className="mt-2 text-sm leading-6 text-text-muted">{description}</p> : null}
         <dl className="mt-6 divide-y divide-border rounded-lg bg-surface-low px-4 text-left">
-          <DetailRow label="Mã đơn" value={order.orderCode} />
+          <OrderCodeDetailRow orderCode={order.orderCode} />
           <DetailRow label="Số tiền" value={formatVnd(order.amountVnd)} />
           <DetailRow label="Credit dự kiến" value={`${order.credits} Credit`} />
           <DetailRow label="Cổng thanh toán" value={paymentProviderLabel(order.provider)} />
@@ -705,6 +721,7 @@ export function ApiTopUpOrder({
           </Button>
           {order.provider === 'VNPAY' &&
           order.status === 'PENDING' &&
+          !pendingAfterFailedReturn &&
           !timedOut &&
           safeRedirectUrl ? (
             <a
@@ -720,6 +737,40 @@ export function ApiTopUpOrder({
   );
 }
 
+function OrderCodeDetailRow({ orderCode }: { orderCode: string }) {
+  const [copied, setCopied] = useState(false);
+  const compactCode =
+    orderCode.length > 10
+      ? `#${orderCode.slice(0, 4).toUpperCase()}...${orderCode.slice(-4).toUpperCase()}`
+      : `#${orderCode.toUpperCase()}`;
+
+  const copyOrderCode = async () => {
+    try {
+      await navigator.clipboard.writeText(orderCode);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 py-3">
+      <dt className="text-sm text-text-muted">Mã đơn</dt>
+      <dd className="flex min-w-0 items-center gap-2 text-right text-sm font-medium text-text-primary">
+        <code className="font-mono text-xs">{compactCode}</code>
+        <button
+          type="button"
+          className="inline-flex min-h-8 items-center rounded-md border border-border bg-white px-2.5 text-xs font-semibold text-primary transition hover:bg-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          aria-label="Sao chép mã đơn đầy đủ"
+          onClick={() => void copyOrderCode()}
+        >
+          {copied ? 'Đã sao chép' : 'Sao chép'}
+        </button>
+      </dd>
+    </div>
+  );
+}
+
 /**
  * Số mili giây còn lại tới hạn thanh toán do Backend trả, cập nhật mỗi giây; null khi không có hạn để đếm. Chỉ để hiển
  * thị: không đổi trạng thái đơn.
@@ -729,7 +780,7 @@ function usePaymentCountdown(expiresAt: string | null | undefined): number | nul
   const hasDeadline = Number.isFinite(deadline);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!hasDeadline) return;
+    if (!hasDeadline || deadline <= Date.now()) return;
     const timer = window.setInterval(() => {
       const current = Date.now();
       setNow(current);
