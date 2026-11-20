@@ -179,7 +179,7 @@ export function AdminAccounts() {
                   <th>Vai trò</th>
                   <th>Trạng thái</th>
                   <th>Ngày tạo</th>
-                  <th>Thao tác</th>
+                  <th className="whitespace-nowrap">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -205,10 +205,12 @@ export function AdminAccounts() {
                       <td className="whitespace-nowrap text-xs">
                         {new Date(account.createdAt).toLocaleDateString('vi-VN')}
                       </td>
-                      <td>
-                        <div className="flex flex-wrap items-center gap-2">
+                      <td className="whitespace-nowrap">
+                        <div className="flex flex-nowrap items-center gap-2">
                           {action ? (
                             <Button
+                              size="sm"
+                              className="!min-h-9 !py-1 min-w-[76px] justify-center"
                               variant={action === 'lock' ? 'danger' : 'outline'}
                               onClick={() => {
                                 setNotice('');
@@ -220,7 +222,7 @@ export function AdminAccounts() {
                           ) : null}
                           {account.role === 'USER' ? (
                             <Link
-                              className="text-xs font-semibold text-link hover:underline"
+                              className="whitespace-nowrap text-xs font-semibold text-link hover:underline"
                               to={`/admin/finance/users/${account.id}`}
                             >
                               Xem Credit
