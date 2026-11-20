@@ -143,23 +143,16 @@ it('giữ phiên và báo Toast khi người dùng quay lại sau khi hủy VNPa
   expect(tokenStorage.get()).toBe('valid-token');
   expect(tokenStorage.getUserId()).toBe(7);
   expect(refreshWallet).not.toHaveBeenCalled();
- fix/credit-vnpay-session
   expect(screen.getByRole('heading', { name: 'Đã hủy thanh toán' })).toBeTruthy();
   expect(screen.getAllByText('Đã hủy thanh toán').length).toBeGreaterThan(1);
   expect(screen.queryByRole('timer')).toBeNull();
   expect(screen.queryByRole('link', { name: 'Tiếp tục thanh toán' })).toBeNull();
-
-  expect(screen.getByRole('heading', { name: 'Thanh toán đã hủy' })).toBeTruthy();
-  expect(screen.getAllByText('Thanh toán đã hủy').length).toBeGreaterThan(1);
-  expect(screen.queryByRole('timer')).toBeNull();
- develop
   expect(screen.getByText('20 Credit')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Tạo đơn nạp khác' })).toBeTruthy();
   expect(screen.queryByText('Đơn nạp Credit đã được tạo')).toBeNull();
   unsubscribe();
 });
 
-fix/credit-vnpay-session
 it('hiển thị thất bại riêng và không phát thông báo hủy khi Backend chỉ trả FAILED', async () => {
   vi.mocked(paymentApi.getOrder).mockResolvedValue({
     orderCode: 'SL-FAILED',
@@ -194,8 +187,6 @@ it('hiển thị thất bại riêng và không phát thông báo hủy khi Back
   unsubscribe();
 });
 
-
- develop
 it('không tự đánh dấu đã hủy khi callback thất bại nhưng Backend vẫn trả PENDING', async () => {
   sessionStorage.setItem('shareloop:pendingTopUp', JSON.stringify({ orderCode: 'SL-123' }));
   vi.mocked(paymentApi.getOrder).mockResolvedValue({
@@ -224,7 +215,6 @@ it('không tự đánh dấu đã hủy khi callback thất bại nhưng Backend
     'Thanh toán vừa thất bại tại VNPay, nhưng đơn vẫn đang chờ hệ thống xác nhận hủy. Credit chưa được cộng vào ví.',
   )).toBeTruthy();
   expect(screen.getByRole('heading', { name: 'Đơn nạp đang chờ xác nhận' })).toBeTruthy();
- fix/credit-vnpay-session
   expect(screen.getAllByText('Đang đồng bộ trạng thái').length).toBeGreaterThan(0);
   expect(screen.getByRole('timer')).toBeTruthy();
   expect(screen.queryByRole('link', { name: 'Tiếp tục thanh toán' })).toBeNull();
@@ -263,11 +253,3 @@ it('tự kiểm tra lại đơn PENDING và tải lại ví khi Backend xác nh�
   await waitFor(() => expect(refreshWallet).toHaveBeenCalledTimes(1));
   expect(screen.getByText('Nạp thành công +50 Credit')).toBeTruthy();
 });
-=======
-  expect(screen.getAllByText('Đang chờ thanh toán').length).toBeGreaterThan(0);
-  expect(screen.getByRole('timer')).toBeTruthy();
-  expect(screen.queryByText('Thanh toán đã hủy')).toBeNull();
-  expect(sessionStorage.getItem('shareloop:pendingTopUp')).not.toBeNull();
-  expect(refreshWallet).not.toHaveBeenCalled();
-});
- develop
