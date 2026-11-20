@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '../../types/domain';
 import { reputationApi, type MyReputation } from '../../services/reputationApi';
@@ -58,7 +58,10 @@ function buildReputation(overrides: Partial<MyReputation> = {}): MyReputation {
 function renderProfile(url = '/profile') {
   return render(
     <MemoryRouter initialEntries={[url]}>
-      <Profile />
+      <Routes>
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/credit" element={<h1>Ví Credit</h1>} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -146,11 +149,23 @@ describe('Profile', () => {
   it('về tab Hồ sơ khi tham số tab không hợp lệ', async () => {
     // given
     // when
-    renderProfile('/profile?tab=credit');
+    renderProfile('/profile?tab=unknown');
 
     // then
     expect(await screen.findByText('Thông tin cá nhân')).toBeTruthy();
     expect(screen.queryByText('Lịch sử uy tín')).toBeNull();
+  });
+
+  it('bỏ liên kết Ví Credit khỏi hồ sơ và giữ chuyển hướng cho URL cũ', async () => {
+    const profile = renderProfile();
+    expect(await screen.findByText('Thông tin cá nhân')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Ví Credit' })).toBeNull();
+    profile.unmount();
+    vi.mocked(userApi.getMe).mockClear();
+
+    renderProfile('/profile?tab=credit');
+    expect(await screen.findByRole('heading', { name: 'Ví Credit' })).toBeTruthy();
+    expect(userApi.getMe).not.toHaveBeenCalled();
   });
 
   it('đổi sang tab Uy tín khi bấm nút và dùng lại kết quả đã tải', async () => {
