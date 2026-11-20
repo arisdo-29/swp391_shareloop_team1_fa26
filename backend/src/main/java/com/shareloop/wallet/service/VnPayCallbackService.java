@@ -72,14 +72,71 @@ public class VnPayCallbackService {
                 .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
         var order = orders.lockById(snapshot.get().getId())
                 .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND));
-        order.recordGatewayResult(params.get("vnp_TransactionNo"), true, params);
         if (order.getStatus() != PaymentOrderStatus.PENDING) {
+            flagIfPaidAfterClosed(order, params);
             return new VnPayIpnResponse("02", "Order already confirmed");
         }
+        order.recordGatewayResult(params.get("vnp_TransactionNo"), true, params);
         if (!isAmountMatching(order, params.get("vnp_Amount"))) {
             return new VnPayIpnResponse("04", "Invalid amount");
         }
         return settleOrder(order, params);
+    }
+
+    /**
+     * Người dùng quay về từ VNPay với kết quả thất bại (vd vnp_ResponseCode 24 = khách hủy): chuyển đơn FAILED ngay, không
+     * chờ IPN hay job hết hạn. Tham số Return được VNPay ký giống IPN nên tin được sau khi kiểm chữ ký; chỉ đổi đơn
+     * VNPAY còn PENDING và đúng số tiền, ghi lại callback để biết mã lỗi. Kết quả thành công ở Return không cộng
+     * Credit: chỉ IPN mới cộng (giữ nguyên luồng cũ). Không ném lỗi: Return luôn chuyển hướng về trang Ví.
+     *
+     * @return true nếu vừa chuyển đơn sang FAILED
+     */
+    @Transactional
+    public boolean failFromReturn(Map<String, String> params) {
+        if (!verify(params) || isSuccessful(params)) {
+            return false;
+        }
+        var snapshot = orders.findSnapshotByOrderCode(params.get("vnp_TxnRef"));
+        if (snapshot.isEmpty()
+                || snapshot.get().getProvider() != PaymentProvider.VNPAY
+                || snapshot.get().getStatus() != PaymentOrderStatus.PENDING) {
+            return false;
+        }
+        // Cùng thứ tự khoá với IPN (users → payment_orders) để Return và IPN đến cùng lúc không chờ vòng.
+        wallets.lockById(snapshot.get().getUserId())
+                .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
+        var order = orders.lockById(snapshot.get().getId())
+                .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND));
+        if (order.getStatus() != PaymentOrderStatus.PENDING || !isAmountMatching(order, params.get("vnp_Amount"))) {
+            return false;
+        }
+        order.recordGatewayResult(params.get("vnp_TransactionNo"), true, params);
+        order.markFailed();
+        log.info(
+                "VNPAY return failed, order set FAILED: orderCode={}, vnp_ResponseCode={}",
+                order.getOrderCode(),
+                params.get("vnp_ResponseCode"));
+        return true;
+    }
+
+    // IPN báo đã thu tiền cho đơn đã hủy hoặc hết hạn: theo cách project xử lý đơn trả sau hạn (rejectExpiredOrder),
+    // không tự cộng Credit mà ghi WARN và đánh dấu đơn cần đối soát, hoàn tiền tay. Không đè callback_data cũ.
+    private void flagIfPaidAfterClosed(PaymentOrder order, Map<String, String> params) {
+        boolean closedUnpaid =
+                order.getStatus() == PaymentOrderStatus.FAILED || order.getStatus() == PaymentOrderStatus.EXPIRED;
+        if (!closedUnpaid || !isSuccessful(params) || !isAmountMatching(order, params.get("vnp_Amount"))) {
+            return;
+        }
+        String transactionNo = params.get("vnp_TransactionNo");
+        order.flagPaidAfterClosed("VNPay báo đã thu tiền sau khi đơn đã đóng; đơn chờ đối soát để hoàn tiền"
+                + " (mã giao dịch VNPay: " + transactionNo + ").");
+        log.warn(
+                "VNPAY IPN paid after order closed, credits NOT granted, needs refund: orderCode={}, status={},"
+                        + " amountVnd={}, vnp_TransactionNo={}",
+                order.getOrderCode(),
+                order.getStatus(),
+                order.getAmountVnd(),
+                transactionNo);
     }
 
     private boolean isAmountMatching(PaymentOrder order, String amount) {

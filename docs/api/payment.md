@@ -89,9 +89,25 @@ khi FE vẫn gọi; nay khôi phục, chỉ đọc.
   "reviewNote": null,
   "userName": null,
   "userEmail": null,
-  "reviewedByName": null
+  "reviewedByName": null,
+  "failureReason": null
 }
 ```
+
+## POST /api/v1/wallet/topup-orders/{orderCode}/cancel
+
+Người dùng tự hủy đơn nạp đang chờ thanh toán ("Xác nhận hủy" ở trang Ví).
+
+- Xác thực: **bắt buộc** Bearer Token; chỉ hủy được đơn của chính mình.
+- Đơn PENDING chuyển `FAILED` ngay bằng một câu `UPDATE ... WHERE status = 'PENDING'`, `review_note` = "Bạn đã hủy đơn nạp.".
+  Không đụng ví (đơn chưa thanh toán không giữ hay cộng Credit).
+- Idempotent: gọi lại khi đơn đã FAILED, hoặc đơn đã SUCCESS / EXPIRED, không đổi gì và vẫn trả `200`.
+- Thành công: `200`, một `TopUpOrderDetailResponse` (trạng thái hiện tại của đơn, kèm `expiresAt`, `failureReason`).
+- Lỗi: `404 WALLET_PAYMENT_ORDER_NOT_FOUND` khi không có đơn hoặc đơn của người khác; `401 UNAUTHORIZED`.
+
+`failureReason` (mọi API trả `TopUpOrderDetailResponse`): chỉ có khi đơn `FAILED`. Lấy `review_note` nếu có (tự hủy, cần hoàn
+tiền); không thì theo `vnp_ResponseCode` đã lưu: `24` → "Bạn đã hủy giao dịch tại VNPay.", mã khác → "VNPay báo thanh toán
+không thành công (mã X).", không có mã → "Thanh toán không thành công.".
 
 ## POST /api/v1/wallet/topup-orders/{orderCode}/mock-confirm
 
@@ -179,7 +195,9 @@ Ví dụ khi đã xử lý kết quả: `{"RspCode":"00","Message":"Confirm Succ
 
 ### GET /api/v1/payments/vnpay/return
 
-Không cần Bearer Token. Chỉ kiểm chữ ký và redirect 302; không ghi đơn, không cộng Credit.
+Không cần Bearer Token. Kiểm chữ ký rồi redirect 302; không bao giờ cộng Credit (chỉ IPN cộng tiền).
+Chữ ký hợp lệ mà `vnp_ResponseCode` khác `00` (vd `24` = khách hủy): đơn VNPAY còn PENDING, đúng số tiền chuyển **FAILED ngay**
+và lưu tham số vào `callback_data` (giữ mã lỗi), không chờ IPN hay job hết hạn. Lỗi ở bước này chỉ ghi log, không chặn redirect.
 Query gửi FE: `orderCode` và `status=SUCCESS|FAILED|INVALID_SIGNATURE`. Chữ ký sai trả `orderCode` rỗng.
 `SUCCESS` ở đây chỉ phản ánh dữ liệu return của cổng; IPN có thể đến sau. FE cần tải lại ví và không được suy ra đã cộng tiền từ query này.
 FE đọc API trạng thái đơn bằng mã tham chiếu; không suy ra đã cộng tiền từ query return hoặc số dư tăng.
@@ -196,6 +214,10 @@ IPN muộn: đơn còn PENDING nhưng đã quá `payment_order_expire_minutes` c
 (mặc định 2 phút, bù lệch đồng hồ với VNPAY) thì IPN hợp lệ, thành công **không** cộng Credit: đơn chuyển EXPIRED, trả `RspCode=02`
 (`Order expired`) và ghi log WARN gồm `orderCode`, số tiền, `vnp_TransactionNo` để đối soát tay. URL thanh toán luôn gửi
 `vnp_ExpireDate` = thời điểm tạo + `payment_order_expire_minutes`.
+
+IPN thành công tới khi đơn đã đóng mà chưa cộng (FAILED do hủy, hoặc EXPIRED): theo cùng cách với IPN muộn ở trên,
+**không** cộng Credit, giữ trạng thái, trả `RspCode=02`; ghi log WARN và ghi `review_note` "VNPay báo đã thu tiền sau khi đơn
+đã đóng; đơn chờ đối soát để hoàn tiền (mã giao dịch VNPay: …)" để Admin hoàn tiền tay. `callback_data` cũ không bị ghi đè.
 
 | Biến | Ý nghĩa / mặc định |
 | --- | --- |

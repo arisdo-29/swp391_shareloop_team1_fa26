@@ -7,6 +7,8 @@ export const paymentApiEndpoints = {
   createTopUpOrder: '/api/v1/wallet/topup-orders',
   mockConfirm: (orderCode: string) =>
     `/api/v1/wallet/topup-orders/${encodeURIComponent(orderCode)}/mock-confirm`,
+  cancel: (orderCode: string) =>
+    `/api/v1/wallet/topup-orders/${encodeURIComponent(orderCode)}/cancel`,
 } as const;
 
 export type PaymentOrderStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'EXPIRED';
@@ -25,6 +27,8 @@ export interface TopUpOrderDetailResponse extends Omit<TopUpOrderResponse, 'redi
   userName?: string | null;
   userEmail?: string | null;
   reviewedByName?: string | null;
+  /** Lý do đơn FAILED (tự hủy, hủy tại VNPay, mã lỗi VNPay); null với trạng thái khác. */
+  failureReason?: string | null;
 }
 
 export interface CreateTopUpOrderRequest {
@@ -40,6 +44,8 @@ export interface TopUpOrderResponse {
   redirectUrl: string;
   /** Hạn thanh toán do Backend tính (created_at + payment_order_expire_minutes); FE chỉ đếm ngược, không tự tính. */
   expiresAt?: string | null;
+  /** Chỉ có khi đọc lại đơn (GET, hủy đơn); xem TopUpOrderDetailResponse.failureReason. */
+  failureReason?: string | null;
 }
 
 export interface TopUpConfirmResponse {
@@ -71,6 +77,11 @@ export const paymentApi = {
       paymentApiEndpoints.createTopUpOrder,
       input,
     );
+    return data;
+  },
+  /** Hủy đơn đang chờ thanh toán; gọi lại không đổi gì. Luôn trả trạng thái hiện tại của đơn. */
+  async cancelOrder(orderCode: string): Promise<TopUpOrderDetailResponse> {
+    const { data } = await http.post<TopUpOrderDetailResponse>(paymentApiEndpoints.cancel(orderCode));
     return data;
   },
   // Chỉ hoạt động khi Backend bật app.payment.mock.enabled; nếu tắt, endpoint trả 404.

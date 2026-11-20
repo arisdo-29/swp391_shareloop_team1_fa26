@@ -38,6 +38,22 @@ public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long
     Optional<Long> findUserIdById(@Param("id") Long id);
 
     /**
+     * Người dùng tự hủy đơn nạp: chỉ đổi khi đơn còn PENDING và đúng chủ đơn, trong một câu UPDATE có điều kiện nên gọi
+     * lại nhiều lần cũng chỉ đổi một lần (idempotent). IPN đang giữ khoá dòng thì câu này chờ; IPN cộng tiền xong (đơn
+     * SUCCESS) thì câu này không đổi gì. Ghi lý do vào review_note (cột ghi chú xử lý đơn, không còn dùng cho duyệt tay).
+     *
+     * @return 1 nếu vừa hủy, 0 nếu đơn không còn PENDING, không có hoặc của người khác
+     */
+    // clearAutomatically: bỏ entity cũ khỏi persistence context để lần đọc sau trong cùng transaction thấy trạng thái
+    // mới.
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update PaymentOrder o set o.status = com.shareloop.wallet.entity.PaymentOrderStatus.FAILED,"
+            + " o.reviewNote = :reason where o.orderCode = :orderCode and o.userId = :userId"
+            + " and o.status = com.shareloop.wallet.entity.PaymentOrderStatus.PENDING")
+    int cancelPending(
+            @Param("orderCode") String orderCode, @Param("userId") long userId, @Param("reason") String reason);
+
+    /**
      * Đọc đơn và khoá dòng payment_orders đến hết transaction (SELECT ... FOR UPDATE). Luồng nạp và callback
      * luôn gọi SAU khi đã khoá dòng users, để mọi luồng khoá theo cùng thứ tự users → payment_orders.
      */

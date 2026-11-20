@@ -135,6 +135,7 @@ class TopUpOrderControllerTest {
                         null,
                         null,
                         null,
+                        null,
                         null));
 
         // when + then
@@ -161,5 +162,41 @@ class TopUpOrderControllerTest {
     @Test
     void getOrder_withoutToken_returns401() throws Exception {
         mockMvc.perform(get(URL + "/abc123")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void cancelOrder_returnsOrderStatusAfterCancelWithReason() throws Exception {
+        // given: service hủy đơn của chính user 10 và trả trạng thái mới
+        String token = jwtService.issue(10L, false);
+        when(paymentService.cancelOwnOrder(10L, "abc123"))
+                .thenReturn(new TopUpOrderDetailResponse(
+                        "abc123",
+                        10L,
+                        20_000,
+                        20,
+                        1_000,
+                        PaymentOrderStatus.FAILED,
+                        PaymentProvider.VNPAY,
+                        Instant.parse("2026-11-17T08:00:00Z"),
+                        EXPIRES_AT,
+                        null,
+                        null,
+                        null,
+                        "Bạn đã hủy đơn nạp.",
+                        null,
+                        null,
+                        null,
+                        "Bạn đã hủy đơn nạp."));
+
+        // when + then
+        mockMvc.perform(post(URL + "/abc123/cancel").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.failureReason").value("Bạn đã hủy đơn nạp."));
+    }
+
+    @Test
+    void cancelOrder_withoutToken_returns401() throws Exception {
+        mockMvc.perform(post(URL + "/abc123/cancel")).andExpect(status().isUnauthorized());
     }
 }

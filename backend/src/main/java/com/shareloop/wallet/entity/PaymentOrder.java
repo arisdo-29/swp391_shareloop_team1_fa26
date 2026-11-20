@@ -132,6 +132,14 @@ public class PaymentOrder {
         }
     }
 
+    /**
+     * Cổng báo đã thu tiền cho đơn đã kết thúc mà không cộng Credit (FAILED, EXPIRED): giữ nguyên trạng thái, ghi chú để
+     * đối soát và hoàn tiền tay. Không đè callback_data để còn giữ mã lỗi lúc đơn bị hủy.
+     */
+    public void flagPaidAfterClosed(String note) {
+        reviewNote = note;
+    }
+
     public Map<String, String> getCallbackData() {
         return callbackData;
     }
