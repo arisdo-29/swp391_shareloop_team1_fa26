@@ -17,7 +17,7 @@ class GeminiDescriptionClientTest {
     @Test
     void sendsOnlyTitleWithoutPhotosOrConversationHistory() {
         JsonNode request = mapper.readTree(client.buildRequestBody("Đồng hồ Casio"));
-        assertThat(request.path("model").asText()).isEqualTo("gemini-4-hydrogen");
+        assertThat(request.path("model").asText()).isEqualTo("gemini-3.5-flash-lite");
         assertThat(request.path("generation_config").path("thinking_level").asText())
                 .isEqualTo("low");
         assertThat(request.path("store").asBoolean()).isFalse();
