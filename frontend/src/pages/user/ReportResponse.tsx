@@ -135,6 +135,14 @@ function DeadlineNotice({
       </Alert>
     );
   }
+  if (!detail.responseDueAt) {
+    // Báo cáo từ chối nhận: không có hạn, giải trình không bắt buộc (GN-07)
+    return (
+      <Alert tone="info">
+        Giải trình không bắt buộc. Bạn có thể gửi giải trình cho đến khi quản trị viên kết luận.
+      </Alert>
+    );
+  }
   if (!detail.responseWindowOpen) {
     return (
       <Alert tone="warning">

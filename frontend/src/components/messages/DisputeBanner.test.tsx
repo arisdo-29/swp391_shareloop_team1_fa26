@@ -96,4 +96,27 @@ describe('DisputeBanner', () => {
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByText(/khiếu nại/)).toBeNull();
   });
+
+  it('giao dịch huỷ vì từ chối nhận: bên bị báo cáo thấy báo cáo vi phạm và nút Gửi giải trình', () => {
+    // when
+    render(
+      <MemoryRouter>
+        <DisputeBanner
+          request={{
+            ...request(null),
+            status: 'CANCELLED',
+            refusalReport: dispute({ id: 9, status: 'OPEN', responseDueAt: null }),
+          }}
+          partnerName="An Chủ Bài"
+          progressPath="/messages/101/progress"
+          onResponded={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    // then
+    expect(screen.getByText('An Chủ Bài đã từ chối nhận vì món không đúng mô tả.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Gửi giải trình' })).toBeTruthy();
+    expect(screen.queryByText(/khiếu nại/)).toBeNull();
+  });
 });

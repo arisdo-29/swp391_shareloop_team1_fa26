@@ -20,16 +20,17 @@ Mọi đổi trạng thái đi qua `RequestStatus.canTransition`; cạnh không 
 | `RESERVED` | `CANCELLED` | Huỷ giao dịch, job quá 10 ngày chưa chốt lịch, khoá tài khoản |
 | `AWAITING_LOGISTICS` | `LOGISTICS_CONFIRMED` | Hai bên chốt lịch |
 | `AWAITING_LOGISTICS` | `CANCELLED` | Như `RESERVED` |
-| `LOGISTICS_CONFIRMED` | `AWAITING_HANDOVER` | Một bên bấm "Hoàn tất giao nhận", hoặc bước trung gian khi từ chối giao nhận |
-| `LOGISTICS_CONFIRMED` | `CANCELLED` | "Giao nhận không thành công" khi bên kia chưa bấm hoàn tất, Admin huỷ, khoá tài khoản |
+| `LOGISTICS_CONFIRMED` | `AWAITING_HANDOVER` | Một bên bấm "Hoàn tất giao nhận" |
+| `LOGISTICS_CONFIRMED` | `CANCELLED` | "Giao nhận không thành công" khi bên kia chưa bấm hoàn tất, `POST /requests/{id}/refuse-handover` (từ chối nhận), Admin huỷ, khoá tài khoản |
 | `AWAITING_HANDOVER` | `COMPLETED` | Bên còn lại bấm hoàn tất, hoặc job tự hoàn tất sau `auto_confirm_days` (gặp trực tiếp) hoặc `auto_confirm_days_shipping` (giao hàng) |
-| `AWAITING_HANDOVER` | `DISPUTED` | `POST /requests/{id}/refuse-handover`, hoặc `POST /requests/{id}/handover-failed` khi bên kia đã bấm hoàn tất |
-| `AWAITING_HANDOVER` | `CANCELLED` | "Giao nhận không thành công" khi bên kia chưa bấm hoàn tất, Admin huỷ, khoá tài khoản |
-| `DISPUTED` | `COMPLETED` | Admin bác bỏ khiếu nại (`DISMISS`) |
-| `DISPUTED` | `CANCELLED` | Admin chấp nhận khiếu nại (`UPHOLD`), hoặc Admin huỷ giao dịch kẹt. Người bị khiếu nại là chủ bài thì bài chính bị ẩn (`is_active = false`), món đổi mở lại (16/11/2026). Khiếu nại "Không đúng mô tả" mà người bị khiếu nại là người xin ở Trao đổi thì món đổi bị ẩn, bài chính mở lại (21/11/2026) |
+| `AWAITING_HANDOVER` | `DISPUTED` | `POST /requests/{id}/handover-failed` khi bên kia đã bấm hoàn tất (sự cố giao nhận, chờ Admin xác minh) |
+| `AWAITING_HANDOVER` | `CANCELLED` | "Giao nhận không thành công" khi bên kia chưa bấm hoàn tất, `POST /requests/{id}/refuse-handover` (từ chối nhận), Admin huỷ, khoá tài khoản |
+| `DISPUTED` | `COMPLETED` | Admin bác bỏ khiếu nại sự cố giao nhận (`DISMISS`) |
+| `DISPUTED` | `CANCELLED` | Admin chấp nhận khiếu nại sự cố giao nhận (`UPHOLD`), hoặc Admin huỷ giao dịch kẹt. Người bị khiếu nại là chủ bài thì bài chính bị ẩn (`is_active = false`), món đổi mở lại (16/11/2026) |
 
-`COMPLETED`, `REJECTED`, `CANCELLED` là trạng thái cuối. Không có cạnh `LOGISTICS_CONFIRMED -> DISPUTED`: từ chối giao nhận ở
-`LOGISTICS_CONFIRMED` đi qua `AWAITING_HANDOVER` rồi sang `DISPUTED` trong cùng một lần gọi.
+`COMPLETED`, `REJECTED`, `CANCELLED` là trạng thái cuối. Từ chối nhận không bao giờ đi qua `DISPUTED`: việc trao đồ không
+xảy ra nên giao dịch huỷ ngay, Admin chỉ kết luận ai có lỗi qua báo cáo vi phạm (21/11/2026). `DISPUTED` chỉ còn dùng cho
+sự cố giao nhận (`handover-failed` khi bên kia đã bấm hoàn tất), vì chưa biết việc trao đồ có xảy ra hay không.
 
 ### Chuyển đổi hình thức Cho ↔ Trao đổi (CD-01 … CD-07, D-02)
 
@@ -453,20 +454,27 @@ Nút "Giao nhận không thành công" (GN-06, GN-07). Thay cho `POST /handover-
 
 ## 15. POST /api/v1/requests/{id}/refuse-handover
 
-Nút "Từ chối giao nhận" của bên nhận món đồ (GN-07, BC-09).
+Nút "Từ chối giao nhận" của bên nhận món đồ (GN-07, BC-09). Từ 21/11/2026 đây là **huỷ giao dịch kèm báo cáo vi phạm**,
+không phải khiếu nại: việc trao đồ không xảy ra nên giao dịch luôn kết thúc ở `CANCELLED`, không bao giờ `COMPLETED`,
+không đánh dấu bài đã trao, không cộng điểm tích luỹ hoàn tất cho ai.
 
 - **Xác thực:** Bắt buộc JWT. Cho tặng: chỉ người nhận `receiverId`. Trao đổi (giao dịch có `offeredItemId`): cả hai bên,
   vì mỗi bên đều nhận một món.
 - **Path variable:** `id` (id của request).
-- **Body:** `RefuseHandoverRequest` (`reason` bắt buộc 5 đến 1000 ký tự, `evidenceMediaIds` tuỳ chọn).
+- **Body:** `RefuseHandoverRequest` (`reason` là mô tả bắt buộc 5 đến 1000 ký tự, `evidenceMediaIds` tuỳ chọn). Lý do báo
+  cáo luôn là `NOT_AS_DESCRIBED`.
 - **Điều kiện:** Request đang `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER` và người gọi **chưa** bấm hoàn tất.
-- **Hành vi nghiệp vụ:**
-  - Request sang `DISPUTED` ngay (từ `LOGISTICS_CONFIRMED` đi qua `AWAITING_HANDOVER`).
-  - Phát `NotAsDescribedReportedEvent(requestId, reporterId, reason, evidenceMediaIds)`. Module report mở report
-    `NOT_AS_DESCRIBED` trong cùng transaction, bên bị khiếu nại là chủ của món bị từ chối (bên còn lại), có 48 giờ giải trình.
-  - Admin chấp nhận khiếu nại: chủ bài vi phạm thì bài chính bị ẩn, món đổi mở lại. Người xin vi phạm (chủ bài từ chối
-    món đổi ở Trao đổi) thì món đổi bị ẩn, bài chính mở lại.
-- **Thành công:** `200 OK`, trả về `RequestResponse` với `status = DISPUTED`.
+- **Hành vi nghiệp vụ** (cùng một transaction):
+  - Request sang `CANCELLED` ngay, `cancelReason` = tiền tố người huỷ + `Từ chối nhận vì món không đúng mô tả. ` + mô tả.
+  - Món bị từ chối tạm ẩn ngay (`is_active = false`, cơ chế ẩn bài hiện có): người nhận từ chối thì ẩn bài chính, chủ bài
+    từ chối ở Trao đổi thì ẩn món đổi. Món còn lại (của người từ chối) mở lại về `APPROVED` như khi huỷ giao dịch.
+  - Phát `NotAsDescribedReportedEvent(requestId, reporterId, refusedItemId, reportedUserId, reason, evidenceMediaIds)`.
+    Module report mở **báo cáo bài** (`targetType = ITEM`, `itemId` = món bị từ chối, `targetUserId` = chủ món đó,
+    `requestId` = giao dịch, `reason = NOT_AS_DESCRIBED`, `status = OPEN`, không có hạn giải trình). Xem `report.md`.
+  - Cả hai bên nhận `TRANSACTION_CANCELLED`: người từ chối biết báo cáo đã gửi, bên bị báo cáo biết món đang tạm ẩn và có
+    thể gửi giải trình (không bắt buộc).
+  - Admin kết luận báo cáo ở trang Khiếu nại, giao dịch vẫn `CANCELLED` trong mọi trường hợp (xem `report.md` mục 5).
+- **Thành công:** `200 OK`, trả về `RequestResponse` với `status = CANCELLED` và `refusalReport` của người gọi.
 - **Lỗi:**
   - `400 VALIDATION_FAILED`: `reason` trống hoặc ngoài 5 đến 1000 ký tự.
   - `403 REQUEST_FORBIDDEN`: Không phải chủ bài hoặc người nhận.
@@ -538,7 +546,8 @@ Backend tính sẵn theo người đang gọi API, frontend không tự so giờ
 | `receiverRank` | string? | Hạng uy tín của người gửi yêu cầu (`BRONZE`, `SILVER`, `GOLD`, `DIAMOND`). Alias: `rank` (YC-06) |
 | `lastMessageAt` | string? | Thời điểm tin nhắn mới nhất trong hội thoại của giao dịch ISO-8601 UTC (U03). `null` khi chưa có tin nhắn nào |
 | `disputeResponseDueAt` | string? | Hạn giải trình của khiếu nại đang mở thuộc giao dịch ISO-8601 UTC (U5-BE, D-04, GN-07). Chỉ có giá trị khi `status = DISPUTED`, các trạng thái khác luôn là `null`. FE dùng để hiển thị thời hạn giải trình |
-| `disputes` | RequestDisputeSummary[]? | Khiếu nại của giao dịch nhìn từ phía người xem, cũ trước, tối đa hai phần tử (mỗi bên một lần). Có ở `GET /requests/{id}`, `GET /items/{itemId}/requests`, `GET /me/requests` và kết quả của `refuse-handover`, `handover-failed` (khi mở tranh chấp). Nơi khác là `null`. Xem bảng `RequestDisputeSummary` (21/11/2026) |
+| `disputes` | RequestDisputeSummary[]? | Khiếu nại của giao dịch nhìn từ phía người xem (khiếu nại sau hoàn tất và sự cố giao nhận), cũ trước, tối đa hai phần tử (mỗi bên một lần). Không chứa báo cáo từ chối nhận. Có ở `GET /requests/{id}`, `GET /items/{itemId}/requests`, `GET /me/requests` và kết quả của `refuse-handover`, `handover-failed`. Nơi khác là `null`. Xem bảng `RequestDisputeSummary` (21/11/2026) |
+| `refusalReport` | RequestDisputeSummary? | Báo cáo vi phạm khi một bên từ chối nhận (GN-07), nhìn từ phía người xem. Cùng dạng `RequestDisputeSummary`, `responseDueAt` luôn `null`, `canRespond = true` khi người xem là bên bị báo cáo, chưa giải trình và báo cáo chưa kết luận. Có ở cùng các nơi như `disputes`; `null` khi giao dịch không bị từ chối nhận |
 | `donorAvatarUrl` | string? | Ảnh đại diện chủ bài, dạng `/api/v1/media/{id}`; `null` khi chưa có ảnh. Có ở mọi API trả `RequestResponse` |
 | `receiverAvatarUrl` | string? | Ảnh đại diện người nhận, cùng quy ước với `donorAvatarUrl` |
 | `disputeExpired` | boolean | `true` khi giao dịch đã hoàn tất và thời điểm hiện tại đã qua `complaintDeadline` (hết hạn khiếu nại); `false` trong mọi trường hợp khác, kể cả khi chưa hoàn tất. Backend tính từ `complaint_window_hours`, FE không tự so giờ |

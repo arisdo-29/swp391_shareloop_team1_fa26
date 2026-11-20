@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Button } from '../ui';
 import { DisputeResponseDialog } from '../DisputeResponseDialog';
+import { RefusalNotice } from '../transaction/RefusalNotice';
 import type { RequestDispute, RequestResponse } from '../../services/requestApi';
 import { formatDeadline } from '../../utils/request';
 import {
+  disputeHeadline,
   formatRemaining,
   isDisputeConcluded,
+  isHandoverIssue,
   transactionDisputeReasonLabel,
 } from '../../utils/disputeView';
 
@@ -19,22 +22,39 @@ interface DisputeBannerProps {
 }
 
 /**
- * Banner khiếu nại trên ô soạn tin (D-04). Bên bị khiếu nại còn hạn thấy banner vàng có nút "Giải trình ngay", bên
- * khiếu nại thấy banner thông tin không có nút. Khiếu nại đã kết luận thì không hiện.
+ * Banner trên ô soạn tin (D-04). Khiếu nại và sự cố giao nhận: bên bị khiếu nại còn hạn thấy banner vàng có nút
+ * "Giải trình ngay", bên mở thấy banner thông tin. Giao dịch huỷ vì từ chối nhận (GN-07) hiện báo cáo vi phạm, bên bị
+ * báo cáo có nút "Gửi giải trình" không bắt buộc. Khiếu nại hay báo cáo đã kết luận thì không hiện.
  */
 export function DisputeBanner({ request, partnerName, progressPath, onResponded }: DisputeBannerProps) {
   const [responding, setResponding] = useState<RequestDispute | null>(null);
   const openDisputes = (request.disputes ?? []).filter((dispute) => !isDisputeConcluded(dispute));
-  if (!openDisputes.length) return null;
+  const refusalReport =
+    request.refusalReport && !isDisputeConcluded(request.refusalReport) ? request.refusalReport : null;
+  if (!openDisputes.length && !refusalReport) return null;
+
+  const progressLink = (
+    <Link to={progressPath} className="font-semibold text-primary hover:underline">
+      Xem tiến trình
+    </Link>
+  );
 
   return (
     <div className="space-y-2">
+      {refusalReport ? (
+        <RefusalNotice
+          report={refusalReport}
+          partnerName={partnerName}
+          onRespond={setResponding}
+          extra={progressLink}
+        />
+      ) : null}
       {openDisputes.map((dispute) => (
         <BannerRow
           key={dispute.id}
           dispute={dispute}
           partnerName={partnerName}
-          progressPath={progressPath}
+          progressLink={progressLink}
           onRespond={() => setResponding(dispute)}
         />
       ))}
@@ -42,6 +62,7 @@ export function DisputeBanner({ request, partnerName, progressPath, onResponded 
         <DisputeResponseDialog
           disputeId={responding.id}
           reasonLabel={transactionDisputeReasonLabel(responding.reason)}
+          isReport={responding.id === refusalReport?.id}
           deadlineText={
             responding.responseDueAt
               ? `Hạn giải trình: ${formatDeadline(responding.responseDueAt)}. Mỗi khiếu nại chỉ giải trình được một lần.`
@@ -61,33 +82,28 @@ export function DisputeBanner({ request, partnerName, progressPath, onResponded 
 function BannerRow({
   dispute,
   partnerName,
-  progressPath,
+  progressLink,
   onRespond,
 }: {
   dispute: RequestDispute;
   partnerName: string;
-  progressPath: string;
+  progressLink: ReactNode;
   onRespond: () => void;
 }) {
-  const reason = transactionDisputeReasonLabel(dispute.reason);
-  const progressLink = (
-    <Link to={progressPath} className="font-semibold text-primary hover:underline">
-      Xem tiến trình
-    </Link>
-  );
-
   if (dispute.openedByMe) {
+    const next = isHandoverIssue(dispute)
+      ? `Admin sẽ xác minh sau khi ${partnerName} giải trình hoặc hết hạn.`
+      : `Admin sẽ kết luận sau khi ${partnerName} giải trình hoặc hết hạn.`;
     return (
       <Alert tone="info">
-        Bạn đã khiếu nại giao dịch này: {reason}. Admin sẽ kết luận sau khi {partnerName} giải trình hoặc hết
-        hạn. {progressLink}
+        {disputeHeadline(dispute, partnerName)} {next} {progressLink}
       </Alert>
     );
   }
   if (dispute.respondedAt) {
     return (
       <Alert tone="success">
-        Bạn đã giải trình khiếu nại của {partnerName}. Admin sẽ xem xét và kết luận. {progressLink}
+        Bạn đã gửi giải trình cho {partnerName}. Admin sẽ xem xét. {progressLink}
       </Alert>
     );
   }
@@ -100,9 +116,7 @@ function BannerRow({
   }
   return (
     <Alert tone="warning">
-      <span className="font-semibold">
-        {partnerName} đã khiếu nại giao dịch này: {reason}.
-      </span>{' '}
+      <span className="font-semibold">{disputeHeadline(dispute, partnerName)}</span>{' '}
       {dispute.responseDueAt
         ? `Bạn cần giải trình trước ${formatDeadline(dispute.responseDueAt)} (${formatRemaining(dispute.responseDueAt)}).`
         : 'Bạn cần giải trình để Admin có đủ thông tin.'}

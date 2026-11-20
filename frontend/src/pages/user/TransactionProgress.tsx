@@ -244,7 +244,7 @@ function TransactionProgressView({
               updated,
               updated.status === 'CANCELLED'
                 ? 'Đã hủy giao dịch. Bài đăng được mở lại cho người khác.'
-                : 'Đã gửi khiếu nại sự cố giao nhận. Admin sẽ xem xét.',
+                : 'Đã báo sự cố giao nhận. Admin sẽ xác minh.',
             )
           }
         />
@@ -259,7 +259,7 @@ function TransactionProgressView({
           onClose={() => setOpenDialog(null)}
           onStale={reload}
           onDone={(updated) =>
-            finishAction(updated, 'Đã gửi khiếu nại món đồ không đúng mô tả. Admin sẽ xem xét.')
+            finishAction(updated, 'Bạn đã từ chối nhận và gửi báo cáo. Admin đang xem xét.')
           }
         />
       ) : null}
@@ -267,6 +267,7 @@ function TransactionProgressView({
         <DisputeResponseDialog
           disputeId={respondingDispute.id}
           reasonLabel={transactionDisputeReasonLabel(respondingDispute.reason)}
+          isReport={respondingDispute.id === request.refusalReport?.id}
           deadlineText={
             respondingDispute.responseDueAt
               ? `Hạn giải trình: ${formatDeadline(respondingDispute.responseDueAt)}. Mỗi khiếu nại chỉ giải trình được một lần.`
@@ -275,7 +276,7 @@ function TransactionProgressView({
           onClose={() => setRespondingDispute(null)}
           onSubmitted={() => {
             setRespondingDispute(null);
-            setNotice('Đã gửi giải trình. Admin sẽ xem xét và kết luận.');
+            setNotice('Đã gửi giải trình. Admin sẽ xem xét.');
             reload();
           }}
         />

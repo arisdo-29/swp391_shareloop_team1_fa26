@@ -7,7 +7,7 @@ export const requestStatusLabel: Record<ItemRequestStatus, string> = {
   LOGISTICS_CONFIRMED: 'Đã chốt lịch',
   AWAITING_HANDOVER: 'Chờ giao nhận',
   COMPLETED: 'Hoàn tất',
-  DISPUTED: 'Đang khiếu nại',
+  DISPUTED: 'Sự cố giao nhận',
   REJECTED: 'Không được chọn',
   CANCELLED: 'Đã hủy',
 };

@@ -58,13 +58,12 @@ public class MyReportQueryService {
     }
 
     /**
-     * Các hồ sơ nhắm vào tôi mà Admin đã yêu cầu giải trình hoặc là khiếu nại giao dịch (đã có hạn giải trình), mới
-     * nhất lên trước (D-07, BC-03).
+     * Các hồ sơ nhắm vào tôi mà Admin đã yêu cầu giải trình, là khiếu nại giao dịch (đã có hạn giải trình) hoặc là báo
+     * cáo từ chối nhận (giải trình không bắt buộc, GN-07), mới nhất lên trước (D-07, BC-03).
      */
     @Transactional(readOnly = true)
     public List<MyReportSummary> listAgainstMe(Long userId) {
-        return toSummaries(
-                reportRepository.findByTargetUserIdAndResponseDueAtIsNotNullOrderByCreatedAtDescIdDesc(userId));
+        return toSummaries(reportRepository.findVisibleToRespondent(userId));
     }
 
     /**
@@ -171,8 +170,8 @@ public class MyReportQueryService {
                 report.getCreatedAt(),
                 report.getResponseDueAt(),
                 report.getRespondedAt(),
-                // Cùng luật với ReportService.respond: chỉ còn mở khi chưa giải trình và chưa quá hạn
-                report.isResponseWindowOpen(now) && report.getRespondedAt() == null,
+                // Báo cáo từ chối nhận không có hạn nhưng vẫn giải trình được tới khi Admin kết luận (GN-07)
+                report.canStillRespond(now),
                 report.getResolution(),
                 report.getResolvedAt());
     }

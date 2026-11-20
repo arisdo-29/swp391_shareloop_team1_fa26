@@ -32,6 +32,8 @@ function reasonLabel(report: MyReportSummary) {
 function againstMeStatus(report: MyReportSummary): [string, Tone] {
   if (report.status === 'RESOLVED') return ['Đã kết luận: có vi phạm', 'error'];
   if (report.status === 'DISMISSED') return ['Đã kết luận: không vi phạm', 'success'];
+  // Báo cáo từ chối nhận không có hạn: giải trình không bắt buộc (GN-07)
+  if (!report.responseDueAt && report.responseWindowOpen) return ['Có thể gửi giải trình', 'info'];
   if (report.responseWindowOpen) return ['Cần giải trình', 'warning'];
   if (report.respondedAt) return ['Đã giải trình, chờ kết luận', 'info'];
   return ['Quá hạn giải trình, chờ kết luận', 'neutral'];

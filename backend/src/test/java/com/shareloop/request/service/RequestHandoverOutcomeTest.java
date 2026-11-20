@@ -229,8 +229,8 @@ class RequestHandoverOutcomeTest {
     // ---------- refuse-handover ----------
 
     @Test
-    @DisplayName("Người nhận ở Cho tặng từ chối giao nhận: sang DISPUTED và mở khiếu nại không đúng mô tả")
-    void refuseHandover_whenGiveReceiverRefuses_movesToDisputedAndPublishesEvent() {
+    @DisplayName("Người nhận ở Cho tặng từ chối nhận: huỷ ngay, ẩn bài chính, báo cáo nhắm vào chủ bài")
+    void refuseHandover_whenGiveReceiverRefuses_cancelsHidesMainItemAndReportsDonor() {
         // given
         Request request = giveRequest(RequestStatus.LOGISTICS_CONFIRMED, null, null);
         saveReturnsArgument();
@@ -240,11 +240,19 @@ class RequestHandoverOutcomeTest {
                 REQUEST_ID, RECEIVER_ID, new RefuseHandoverRequest("  Máy không bật được  ", List.of(5L)));
 
         // then
-        assertThat(response.status()).isEqualTo("DISPUTED");
-        assertThat(request.getStatus()).isEqualTo(RequestStatus.DISPUTED);
+        assertThat(response.status()).isEqualTo("CANCELLED");
+        assertThat(request.getCancelReason())
+                .isEqualTo(Request.CANCEL_BY_RECEIVER + Request.REFUSAL_REASON + "Máy không bật được");
+        verify(itemService).release(ITEM_ID);
+        verify(itemService).hide(ITEM_ID);
+        verify(itemService, never()).markTraded(org.mockito.ArgumentMatchers.anyLong());
         verify(eventPublisher)
-                .publishEvent(
-                        new NotAsDescribedReportedEvent(REQUEST_ID, RECEIVER_ID, "Máy không bật được", List.of(5L)));
+                .publishEvent(new NotAsDescribedReportedEvent(
+                        REQUEST_ID, RECEIVER_ID, ITEM_ID, DONOR_ID, "Máy không bật được", List.of(5L)));
+        verify(notificationService)
+                .notify(eq(RECEIVER_ID), eq("TRANSACTION_CANCELLED"), anyString(), anyString(), anyString());
+        verify(notificationService)
+                .notify(eq(DONOR_ID), eq("TRANSACTION_CANCELLED"), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -263,8 +271,8 @@ class RequestHandoverOutcomeTest {
     }
 
     @Test
-    @DisplayName("Chủ bài ở Trao đổi được từ chối món đổi người nhận mang đến")
-    void refuseHandover_whenSwapDonorRefuses_movesToDisputed() {
+    @DisplayName("Chủ bài ở Trao đổi từ chối món đổi: huỷ ngay, bài chính mở lại, ẩn món đổi, báo cáo người xin")
+    void refuseHandover_whenSwapDonorRefuses_reopensMainItemAndHidesOfferedItem() {
         // given
         Request request = swapRequest(RequestStatus.AWAITING_HANDOVER);
         saveReturnsArgument();
@@ -273,9 +281,35 @@ class RequestHandoverOutcomeTest {
         requestService.refuseHandover(REQUEST_ID, DONOR_ID, new RefuseHandoverRequest("Món đổi bị nứt màn hình", null));
 
         // then
-        assertThat(request.getStatus()).isEqualTo(RequestStatus.DISPUTED);
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        verify(itemService).release(ITEM_ID);
+        verify(itemService).releaseIfReserved(OFFERED_ITEM_ID);
+        verify(itemService).hide(OFFERED_ITEM_ID);
+        verify(itemService, never()).hide(ITEM_ID);
         verify(eventPublisher)
-                .publishEvent(new NotAsDescribedReportedEvent(REQUEST_ID, DONOR_ID, "Món đổi bị nứt màn hình", null));
+                .publishEvent(new NotAsDescribedReportedEvent(
+                        REQUEST_ID, DONOR_ID, OFFERED_ITEM_ID, RECEIVER_ID, "Món đổi bị nứt màn hình", null));
+    }
+
+    @Test
+    @DisplayName("Người nhận ở Trao đổi từ chối bài chính: huỷ ngay, ẩn bài chính, món đổi mở lại")
+    void refuseHandover_whenSwapReceiverRefuses_hidesMainItemAndReopensOfferedItem() {
+        // given
+        Request request = swapRequest(RequestStatus.LOGISTICS_CONFIRMED);
+        saveReturnsArgument();
+
+        // when
+        requestService.refuseHandover(REQUEST_ID, RECEIVER_ID, new RefuseHandoverRequest("Máy không bật được", null));
+
+        // then
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        verify(itemService).release(ITEM_ID);
+        verify(itemService).hide(ITEM_ID);
+        verify(itemService).releaseIfReserved(OFFERED_ITEM_ID);
+        verify(itemService, never()).hide(OFFERED_ITEM_ID);
+        verify(eventPublisher)
+                .publishEvent(new NotAsDescribedReportedEvent(
+                        REQUEST_ID, RECEIVER_ID, ITEM_ID, DONOR_ID, "Máy không bật được", null));
     }
 
     @Test
