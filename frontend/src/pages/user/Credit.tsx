@@ -58,10 +58,17 @@ type ReturnState =
   | 'checking'
   | 'success';
 
+ fix/credit-vnpay-session
 const PAYMENT_CANCELLED_MESSAGE = 'Bạn đã hủy yêu cầu thanh toán.';
 const PAYMENT_PENDING_AFTER_FAILED_RETURN_MESSAGE =
   'Thanh toán vừa thất bại tại VNPay, nhưng đơn vẫn đang chờ hệ thống xác nhận hủy. Credit chưa được cộng vào ví.';
 const ORDER_STATUS_POLL_INTERVAL_MS = 2_500;
+
+const PAYMENT_CANCELLED_MESSAGE =
+  'Bạn đã hủy thanh toán. Tài khoản chưa bị trừ tiền.';
+const PAYMENT_PENDING_AFTER_FAILED_RETURN_MESSAGE =
+  'Thanh toán vừa thất bại tại VNPay, nhưng đơn vẫn đang chờ hệ thống xác nhận hủy. Credit chưa được cộng vào ví.';
+develop
 
 const paymentStatusLabels: Record<PaymentOrderStatus, string> = {
   PENDING: 'Đang chờ thanh toán',
@@ -382,6 +389,14 @@ export function Credit() {
           >
             Kiểm tra lại
           </Button>
+ fix/credit-vnpay-session
+
+        </div>
+      ) : null}
+      {returnState === 'failed' ? (
+        <div className="mb-6">
+          <Alert tone="error">Thanh toán không thành công. Credit chưa được cộng vào ví.</Alert>
+ develop
         </div>
       ) : null}
       {returnState === 'failed' ? (
@@ -654,6 +669,7 @@ export function ApiTopUpOrder({
   // B29: hết giờ chỉ đổi cách hiển thị; PaymentExpiryJob mới đổi trạng thái thật, Credit không được cộng.
   const timedOut = remainingMs !== null && remainingMs <= 0;
   const statusLabel = cancelled
+ fix/credit-vnpay-session
     ? 'Đã hủy thanh toán'
     : pendingAfterFailedReturn
       ? 'Đang đồng bộ trạng thái'
@@ -664,17 +680,35 @@ export function ApiTopUpOrder({
     ? 'Nạp Credit thành công'
     : cancelled
       ? 'Đã hủy thanh toán'
+
+    ? 'Thanh toán đã hủy'
+    : timedOut
+      ? 'Hết hạn'
+      : paymentStatusLabels[order.status];
+  const heading = paid
+    ? 'Nạp Credit thành công'
+    : cancelled
+      ? 'Thanh toán đã hủy'
+ develop
       : pendingAfterFailedReturn
         ? 'Đơn nạp đang chờ xác nhận'
         : order.status === 'FAILED'
           ? 'Thanh toán không thành công'
           : order.status === 'EXPIRED'
             ? 'Đơn nạp Credit đã hết hạn'
+ fix/credit-vnpay-session
             : 'Đơn đang chờ thanh toán';
   const description = paid
     ? `+${order.credits} Credit đã được cộng vào ví.`
     : cancelled
       ? ''
+
+            : 'Đơn nạp Credit đã được tạo';
+  const description = paid
+    ? `+${order.credits} Credit đã được cộng vào ví.`
+    : cancelled
+      ? 'Đơn đã được xác nhận hủy. Credit chưa được cộng vào ví.'
+ develop
       : pendingAfterFailedReturn
         ? 'Lần thanh toán vừa thất bại, nhưng trạng thái đơn vẫn đang chờ hệ thống xác nhận hủy.'
         : 'Credit chưa được cộng vào ví. Trạng thái sẽ thay đổi sau khi khoản thanh toán được xác nhận.';
@@ -702,7 +736,11 @@ export function ApiTopUpOrder({
           </p>
         ) : null}
         <h2 className="mt-4 text-2xl font-bold">{heading}</h2>
+ fix/credit-vnpay-session
         {description ? <p className="mt-2 text-sm leading-6 text-text-muted">{description}</p> : null}
+
+        <p className="mt-2 text-sm leading-6 text-text-muted">{description}</p>
+develop
         <dl className="mt-6 divide-y divide-border rounded-lg bg-surface-low px-4 text-left">
           <OrderCodeDetailRow orderCode={order.orderCode} />
           <DetailRow label="Số tiền" value={formatVnd(order.amountVnd)} />
