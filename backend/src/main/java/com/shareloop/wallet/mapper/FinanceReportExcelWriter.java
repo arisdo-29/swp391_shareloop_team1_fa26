@@ -3,6 +3,8 @@ package com.shareloop.wallet.mapper;
 import com.shareloop.wallet.dto.CreditTypeTotal;
 import com.shareloop.wallet.dto.DailyCashTotal;
 import com.shareloop.wallet.dto.FinanceSummaryResponse;
+import com.shareloop.wallet.dto.MemberTopUpSummary;
+import com.shareloop.wallet.dto.TopUpReportItem;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -29,6 +31,7 @@ public class FinanceReportExcelWriter {
     private static final DateTimeFormatter DISPLAY_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter FILE_DATE = DateTimeFormatter.ofPattern("dd-MM-yyyy");
     private static final DateTimeFormatter EXPORTED_AT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    private static final DateTimeFormatter DISPLAY_DATE_TIME = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     private final Clock clock;
 
     public FinanceReportExcelWriter(Clock clock) {
@@ -36,6 +39,11 @@ public class FinanceReportExcelWriter {
     }
 
     public byte[] write(FinanceSummaryResponse report, LocalDate from, LocalDate to) {
+        return write(report, List.of(), from, to);
+    }
+
+    public byte[] write(
+            FinanceSummaryResponse report, List<TopUpReportItem> topUpDetails, LocalDate from, LocalDate to) {
         try (var workbook = new XSSFWorkbook();
                 var output = new ByteArrayOutputStream()) {
             CellStyle title = workbook.createCellStyle();
@@ -111,6 +119,69 @@ public class FinanceReportExcelWriter {
             }
             row(daily, index, totals, "Tổng", report.cashAmountVnd(), report.cashOrderCount());
             finish(daily, 3, 1);
+
+            Sheet topUpSheet = workbook.createSheet("Chi tiết nạp tiền");
+            row(
+                    topUpSheet,
+                    0,
+                    header,
+                    "Thời gian",
+                    "Mã đơn",
+                    "Họ tên",
+                    "Email",
+                    "Số tiền (VND)",
+                    "Credit nhận",
+                    "Cổng thanh toán");
+            int topUpIndex = 1;
+            long totalTopUpAmount = 0;
+            long totalTopUpCredits = 0;
+            if (topUpDetails != null) {
+                for (TopUpReportItem item : topUpDetails) {
+                    String formattedTime = item.paidAt() != null
+                            ? DISPLAY_DATE_TIME.format(item.paidAt().atZone(VIETNAM_ZONE))
+                            : "";
+                    row(
+                            topUpSheet,
+                            topUpIndex++,
+                            number,
+                            formattedTime,
+                            item.orderCode(),
+                            item.fullName(),
+                            item.email(),
+                            item.amountVnd(),
+                            item.credits(),
+                            FinanceReportCsvWriter.providerLabel(item.provider()));
+                    totalTopUpAmount += item.amountVnd();
+                    totalTopUpCredits += item.credits();
+                }
+            }
+            row(topUpSheet, topUpIndex, totals, "Tổng", "", "", "", totalTopUpAmount, totalTopUpCredits, "");
+            finish(topUpSheet, 7, 1);
+
+            Sheet memberSheet = workbook.createSheet("Theo thành viên");
+            row(memberSheet, 0, header, "Họ tên", "Email", "Số tiền nạp (VND)", "Tổng Credit nhận", "Số đơn nạp");
+            List<MemberTopUpSummary> memberSummaries = MemberTopUpSummary.fromDetails(topUpDetails);
+            int memberIndex = 1;
+            long memberTotalAmount = 0;
+            long memberTotalCredits = 0;
+            long memberTotalOrders = 0;
+            for (MemberTopUpSummary member : memberSummaries) {
+                row(
+                        memberSheet,
+                        memberIndex++,
+                        number,
+                        member.fullName(),
+                        member.email(),
+                        member.totalAmountVnd(),
+                        member.totalCredits(),
+                        member.orderCount());
+                memberTotalAmount += member.totalAmountVnd();
+                memberTotalCredits += member.totalCredits();
+                memberTotalOrders += member.orderCount();
+            }
+            row(memberSheet, memberIndex, totals, "Tổng", "", memberTotalAmount, memberTotalCredits, memberTotalOrders);
+            finish(memberSheet, 5, 1);
+
             workbook.write(output);
             return output.toByteArray();
         } catch (IOException e) {

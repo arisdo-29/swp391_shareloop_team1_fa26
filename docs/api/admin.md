@@ -269,6 +269,14 @@ Tổng,22,6
 Đối chiếu nạp Credit
 Credit quy đổi từ tiền mặt,Credit nạp ghi sổ,Chênh lệch,Kết quả
 100,100,0,Khớp
+
+Chi tiết nạp tiền
+Thời gian,Mã đơn,Họ tên,Email,Số tiền (VND),Credit nhận,Cổng thanh toán
+15/10/2026 15:30,ORD-001,Nguyễn Văn A,a@test.com,20000,20,VNPAY
+
+Theo thành viên
+Họ tên,Email,Tổng tiền (VND),Tổng Credit nhận,Số đơn nạp
+Nguyễn Văn A,a@test.com,20000,20,1
 ```
 
 - **Mã lỗi:** trả JSON theo định dạng lỗi chung (không phải CSV), không có `Content-Disposition`.
@@ -290,7 +298,7 @@ Xuất báo cáo Excel cho Admin, dùng cùng bộ lọc `from` và `to` theo ng
 
 - **Thành công:** `200 OK` với `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
 - **Tên file:** `bao-cao-tai-chinh_<from>_<to>.xlsx`, ngày theo `dd-MM-yyyy`; thiếu mốc thì dùng `bat-dau` hoặc `hien-tai`.
-- **Nội dung:** sheet **Tổng hợp** gồm tiền thu, Credit cộng, Credit trừ và đối chiếu; sheet **Tiền thu theo ngày** gồm `cashByDay`. Số tiền và Credit là ô số.
+- **Nội dung:** sheet **Tổng hợp** gồm tiền thu, Credit cộng, Credit trừ và đối chiếu; sheet **Tiền thu theo ngày** gồm `cashByDay`; sheet **Chi tiết nạp tiền** gồm danh sách từng đơn nạp thành công (thời gian, mã đơn, họ tên, email, số tiền, credit nhận, cổng thanh toán); sheet **Theo thành viên** tổng hợp theo từng thành viên (họ tên, email, tổng tiền nạp, tổng credit nhận, số đơn). Số tiền và Credit là ô số.
 - **Lỗi:** `400 INVALID_DATE_RANGE` khi Từ ngày sau Đến ngày, `400 VALIDATION_FAILED` cho định dạng ngày sai, `401` khi chưa đăng nhập, `403` khi thiếu quyền Admin.
 
 ---

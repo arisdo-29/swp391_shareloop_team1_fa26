@@ -75,6 +75,14 @@ public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long
             @Param("status") PaymentOrderStatus status, @Param("from") Instant from, @Param("to") Instant to);
 
     /**
+     * Danh sách các đơn nạp thành công trong khoảng [from, to), sắp xếp theo thời điểm thanh toán cũ nhất trước (L02).
+     */
+    @Query("select o from PaymentOrder o where o.status = :status and o.paidAt >= :from and o.paidAt < :to"
+            + " order by o.paidAt asc, o.id asc")
+    List<PaymentOrder> findSuccessfulOrders(
+            @Param("status") PaymentOrderStatus status, @Param("from") Instant from, @Param("to") Instant to);
+
+    /**
      * Đổi hàng loạt các đơn đang {@code fromStatus} tạo trước {@code cutoff} sang {@code toStatus}, trả số dòng đã đổi.
      * Chỉ PaymentExpiryService gọi (PENDING → EXPIRED). Cột updated_at do trigger của DB tự cập nhật.
      *
