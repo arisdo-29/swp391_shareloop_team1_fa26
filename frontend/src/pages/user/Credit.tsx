@@ -52,12 +52,15 @@ type ReturnState =
   | 'cancelled'
   | 'failed'
   | 'expired'
+  | 'pending-after-failed-return'
   | 'invalid'
   | 'checking'
   | 'success';
 
 const PAYMENT_CANCELLED_MESSAGE =
   'Bạn đã hủy thanh toán. Tài khoản chưa bị trừ tiền.';
+const PAYMENT_PENDING_AFTER_FAILED_RETURN_MESSAGE =
+  'Thanh toán vừa thất bại tại VNPay, nhưng đơn vẫn đang chờ hệ thống xác nhận hủy. Credit chưa được cộng vào ví.';
 
 const paymentStatusLabels: Record<PaymentOrderStatus, string> = {
   PENDING: 'Đang chờ thanh toán',
@@ -347,6 +350,19 @@ export function Credit() {
           </Button>
         </div>
       ) : null}
+      {returnState === 'pending-after-failed-return' ? (
+        <div className="mb-6 space-y-3">
+          <Alert tone="warning">{PAYMENT_PENDING_AFTER_FAILED_RETURN_MESSAGE}</Alert>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setOrderCheckKey((key) => key + 1);
+            }}
+          >
+            Kiểm tra lại
+          </Button>
+        </div>
+      ) : null}
       {returnState === 'failed' ? (
         <div className="mb-6">
           <Alert tone="error">Thanh toán không thành công. Credit chưa được cộng vào ví.</Alert>
@@ -410,6 +426,7 @@ export function Credit() {
           {step === 'pending' && apiTopUpOrder ? (
             <ApiTopUpOrder
               order={apiTopUpOrder}
+              returnState={returnState}
               onNewTopup={() => {
                 setApiTopUpOrder(null);
                 setReturnState('idle');
@@ -605,17 +622,44 @@ function ApiTopupSelection({
 
 export function ApiTopUpOrder({
   order,
+  returnState,
   onNewTopup,
 }: {
   order: TopUpOrderResponse;
+  returnState?: ReturnState;
   onNewTopup: () => void;
 }) {
   const safeRedirectUrl = paymentRedirectUrl(order.redirectUrl);
   const paid = order.status === 'SUCCESS';
+  const cancelled = order.status === 'FAILED' && returnState === 'cancelled';
+  const pendingAfterFailedReturn =
+    order.status === 'PENDING' && returnState === 'pending-after-failed-return';
   const remainingMs = usePaymentCountdown(order.status === 'PENDING' ? order.expiresAt : null);
   // B29: hết giờ chỉ đổi cách hiển thị; PaymentExpiryJob mới đổi trạng thái thật, Credit không được cộng.
   const timedOut = remainingMs !== null && remainingMs <= 0;
-  const statusLabel = timedOut ? 'Hết hạn' : paymentStatusLabels[order.status];
+  const statusLabel = cancelled
+    ? 'Thanh toán đã hủy'
+    : timedOut
+      ? 'Hết hạn'
+      : paymentStatusLabels[order.status];
+  const heading = paid
+    ? 'Nạp Credit thành công'
+    : cancelled
+      ? 'Thanh toán đã hủy'
+      : pendingAfterFailedReturn
+        ? 'Đơn nạp đang chờ xác nhận'
+        : order.status === 'FAILED'
+          ? 'Thanh toán không thành công'
+          : order.status === 'EXPIRED'
+            ? 'Đơn nạp Credit đã hết hạn'
+            : 'Đơn nạp Credit đã được tạo';
+  const description = paid
+    ? `+${order.credits} Credit đã được cộng vào ví.`
+    : cancelled
+      ? 'Đơn đã được xác nhận hủy. Credit chưa được cộng vào ví.'
+      : pendingAfterFailedReturn
+        ? 'Lần thanh toán vừa thất bại, nhưng trạng thái đơn vẫn đang chờ hệ thống xác nhận hủy.'
+        : 'Credit chưa được cộng vào ví. Trạng thái sẽ thay đổi sau khi khoản thanh toán được xác nhận.';
   return (
     <div className="rounded-xl bg-white px-5 py-8 ring-1 ring-border/80 sm:px-8">
       <div className="mx-auto max-w-2xl text-center">
@@ -641,14 +685,8 @@ export function ApiTopUpOrder({
             )}
           </p>
         ) : null}
-        <h2 className="mt-4 text-2xl font-bold">
-          {paid ? 'Nạp Credit thành công' : 'Đơn nạp Credit đã được tạo'}
-        </h2>
-        <p className="mt-2 text-sm leading-6 text-text-muted">
-          {paid
-            ? `+${order.credits} Credit đã được cộng vào ví.`
-            : 'Credit chưa được cộng vào ví. Trạng thái sẽ thay đổi sau khi khoản thanh toán được xác nhận.'}
-        </p>
+        <h2 className="mt-4 text-2xl font-bold">{heading}</h2>
+        <p className="mt-2 text-sm leading-6 text-text-muted">{description}</p>
         <dl className="mt-6 divide-y divide-border rounded-lg bg-surface-low px-4 text-left">
           <DetailRow label="Mã đơn" value={order.orderCode} />
           <DetailRow label="Số tiền" value={formatVnd(order.amountVnd)} />

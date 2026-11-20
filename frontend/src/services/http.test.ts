@@ -233,7 +233,7 @@ describe('HTTP mutation Toast interceptor', () => {
     await http.post('/api/v1/items', {});
 
     expect(received).toContainEqual(
-      expect.objectContaining({ tone: 'success', message: 'Đăng bài thành công.' }),
+      expect.objectContaining({ tone: 'success', message: 'Đã gửi yêu cầu đăng bài thành công.' }),
     );
     unsubscribe();
   });

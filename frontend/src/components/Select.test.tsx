@@ -70,4 +70,27 @@ describe('Select', () => {
     expect(textarea.classList.contains('min-h-32')).toBe(true);
     expect(textarea.classList.contains('mt-4')).toBe(false);
   });
+
+  it('hiển thị đầy đủ tên danh mục dài và cho phép tự xuống dòng', async () => {
+    const user = userEvent.setup();
+    const longCategoryName = 'Thiết bị điện tử và phụ kiện công nghệ dành cho học tập';
+    render(
+      <Select label="Danh mục" defaultValue="all">
+        <option value="all">Tất cả danh mục</option>
+        <option value="technology">{longCategoryName}</option>
+      </Select>,
+    );
+
+    await user.click(screen.getByRole('combobox', { name: 'Danh mục' }));
+    const option = within(screen.getByRole('listbox', { name: 'Danh mục' })).getByRole('option', {
+      name: longCategoryName,
+    });
+    const label = within(option).getByText(longCategoryName);
+
+    expect(label.classList.contains('whitespace-normal')).toBe(true);
+    expect(label.classList.contains('break-words')).toBe(true);
+    expect(label.classList.contains('truncate')).toBe(false);
+    expect(label.classList.contains('text-ellipsis')).toBe(false);
+    expect(Array.from(label.classList).some((className) => className.startsWith('line-clamp'))).toBe(false);
+  });
 });

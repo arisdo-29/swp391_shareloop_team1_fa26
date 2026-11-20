@@ -28,11 +28,7 @@ import {
 type FormErrors = Partial<Record<'type' | 'title' | 'category' | 'condition' | 'district' | 'description' | 'tradeFor' | 'brand' | 'defectNote' | 'images' | 'defectImages' | 'operatingStatus', string>>;
 type MediaUploadState = 'idle' | 'uploading' | 'error';
 
-const SWAP_POST_SUCCESS =
-  'Đăng bài trao đổi thành công. Bài đăng đã được gửi để xét duyệt.';
-const GIVE_POST_SUCCESS =
-  'Đăng bài cho tặng thành công. Bài đăng đã được gửi để xét duyệt.';
-const PENDING_REVIEW_NOTICE = 'Bài đăng đang chờ quản trị viên duyệt.';
+const POST_REQUEST_SUCCESS = 'Đã gửi yêu cầu đăng bài thành công.';
 const WALLET_INSUFFICIENT_BALANCE = 'WALLET_INSUFFICIENT_BALANCE';
 const INSUFFICIENT_CREDIT_MESSAGE = 'Số dư Credit khả dụng không đủ để đăng bài.';
 const MODERATION_BLOCKED_TITLE = 'Bài đăng chưa đáp ứng quy định';
@@ -331,7 +327,7 @@ export function Post() {
         }
       }
       setMediaUploadState('idle');
-      const item = await itemApi.create(
+      await itemApi.create(
         {
           categoryId,
           areaId,
@@ -350,9 +346,7 @@ export function Post() {
         },
       );
       refreshWallet();
-      const baseNotice = type === 'gift' ? GIVE_POST_SUCCESS : SWAP_POST_SUCCESS;
-      const reviewNotice = item.status === 'PENDING_REVIEW' ? ` ${PENDING_REVIEW_NOTICE}` : '';
-      navigate('/activities', { state: { notice: `${baseNotice}${reviewNotice}` } });
+      navigate('/activities', { state: { notice: POST_REQUEST_SUCCESS } });
     } catch (caught) {
       const apiError = caught as ApiError;
       const fieldNames: Record<string, keyof FormErrors> = {
@@ -778,7 +772,7 @@ export function Post() {
               onClick={confirmSubmit}
               disabled={submitting || mediaUploading || (type === 'trade' && postFee === null)}
             >
-              {submitting ? 'Đang đăng...' : 'Xác nhận đăng bài'}
+              {submitting ? 'Đang gửi yêu cầu đăng bài...' : 'Xác nhận đăng bài'}
             </Button>
           </div>
         </DialogFrame>

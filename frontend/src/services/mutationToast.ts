@@ -55,7 +55,7 @@ export function mutationToastDefinition(
       failure: 'Không đặt lại được mật khẩu.',
     },
     '/api/v1/items': {
-      success: verb === 'post' ? 'Đăng bài thành công.' : 'Cập nhật bài đăng thành công.',
+      success: verb === 'post' ? 'Đã gửi yêu cầu đăng bài thành công.' : 'Cập nhật bài đăng thành công.',
       failure: verb === 'post' ? 'Không đăng được bài.' : 'Không cập nhật được bài đăng.',
     },
     '/api/v1/media': {
@@ -90,7 +90,8 @@ export function mutationToastDefinition(
   if (matches(path, /\/api\/v1\/items\/\d+\/boost$/)) return null;
   if (matches(path, /\/api\/v1\/items\/\d+$/)) {
     if (verb === 'delete') {
-      return { success: 'Đã gỡ bài đăng.', failure: 'Không gỡ được bài đăng.', tone: 'warning' };
+      // Trang Hoạt động tự báo thành công/lỗi theo trạng thái: thu hồi PENDING_REVIEW hoặc gỡ bài đã duyệt.
+      return null;
     }
     return { success: 'Cập nhật bài đăng thành công.', failure: 'Không cập nhật được bài đăng.' };
   }

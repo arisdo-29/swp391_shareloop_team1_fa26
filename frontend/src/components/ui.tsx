@@ -457,7 +457,11 @@ export function Select(
                             : 'cursor-pointer text-text-primary hover:bg-[#D7E9E1]'
                     }`}
                   >
-                    <span className={`min-w-0 flex-1 truncate ${selected ? 'font-semibold' : ''}`}>{option.label}</span>
+                    <span
+                      className={`min-w-0 flex-1 whitespace-normal break-words leading-5 ${selected ? 'font-semibold' : ''}`}
+                    >
+                      {option.label}
+                    </span>
                     {selected ? <Check aria-hidden="true" className="size-4 shrink-0 text-primary" weight="bold" /> : null}
                   </li>
                 );
