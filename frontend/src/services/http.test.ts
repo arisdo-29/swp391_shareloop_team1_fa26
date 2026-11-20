@@ -138,6 +138,22 @@ describe('HTTP session interceptor', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  it('không kết thúc phiên chỉ vì API kiểm tra đơn thanh toán trả 401', async () => {
+    setSession();
+    const handler = vi.fn<(termination: SessionTermination) => void>();
+    setUnauthorizedHandler(handler);
+    rejectRequest(401, { code: 'UNAUTHORIZED', message: 'Không đọc được đơn thanh toán.' });
+
+    await expect(http.get('/api/v1/wallet/topup-orders/SL-123')).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+      status: 401,
+    });
+
+    expect(tokenStorage.get()).toBe('active-token');
+    expect(tokenStorage.getUserId()).toBe(7);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it('chỉ kết thúc phiên với 401 từ API bảo vệ khi JWT không còn hợp lệ', async () => {
     setSession();
     const handler = vi.fn<(termination: SessionTermination) => void>();

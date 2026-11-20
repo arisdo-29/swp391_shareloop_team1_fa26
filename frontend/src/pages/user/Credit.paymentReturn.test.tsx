@@ -112,13 +112,11 @@ it('giữ phiên và báo Toast khi người dùng quay lại sau khi hủy VNPa
     </MemoryRouter>,
   );
 
-  expect(await screen.findByText('Bạn đã hủy thanh toán. Tài khoản chưa bị trừ tiền.'))
-    .toBeTruthy();
+  await screen.findByRole('heading', { name: 'Thanh toán đã hủy' });
   await waitFor(() => {
-    expect(received).toContainEqual(expect.objectContaining({
-      tone: 'warning',
-      message: 'Bạn đã hủy thanh toán. Tài khoản chưa bị trừ tiền.',
-    }));
+    expect(received.filter((message) => message.message === 'Bạn đã hủy thanh toán.')).toEqual([
+      expect.objectContaining({ tone: 'warning' }),
+    ]);
   });
   expect(tokenStorage.get()).toBe('valid-token');
   expect(tokenStorage.getUserId()).toBe(7);
@@ -129,6 +127,38 @@ it('giữ phiên và báo Toast khi người dùng quay lại sau khi hủy VNPa
   expect(screen.getByText('20 Credit')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Tạo đơn nạp khác' })).toBeTruthy();
   expect(screen.queryByText('Đơn nạp Credit đã được tạo')).toBeNull();
+  unsubscribe();
+});
+
+it('hiển thị thất bại riêng và không phát thông báo hủy khi Backend chỉ trả FAILED', async () => {
+  vi.mocked(paymentApi.getOrder).mockResolvedValue({
+    orderCode: 'SL-FAILED',
+    userId: 7,
+    amountVnd: 50_000,
+    credits: 50,
+    vndPerCredit: 1_000,
+    status: 'FAILED',
+    provider: 'VNPAY',
+    createdAt: '2026-11-03T00:00:00Z',
+    expiresAt: '2026-11-03T00:15:00Z',
+    submittedAt: null,
+    reviewedBy: null,
+    reviewedAt: null,
+    reviewNote: null,
+  });
+  const received: ToastMessage[] = [];
+  const unsubscribe = subscribeToasts((message) => received.push(message));
+
+  render(
+    <MemoryRouter initialEntries={['/credit?orderCode=SL-FAILED']}>
+      <Credit />
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByText('Thanh toán không thành công. Credit chưa được cộng vào ví.'))
+    .toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Thanh toán không thành công' })).toBeTruthy();
+  expect(received.some((message) => message.message === 'Bạn đã hủy thanh toán.')).toBe(false);
   unsubscribe();
 });
 
@@ -165,4 +195,35 @@ it('không tự đánh dấu đã hủy khi callback thất bại nhưng Backend
   expect(screen.queryByText('Thanh toán đã hủy')).toBeNull();
   expect(sessionStorage.getItem('shareloop:pendingTopUp')).not.toBeNull();
   expect(refreshWallet).not.toHaveBeenCalled();
+});
+
+it('tự kiểm tra lại đơn PENDING và tải lại ví khi Backend xác nhận SUCCESS', async () => {
+  const pendingOrder = {
+    orderCode: 'SL-123',
+    userId: 7,
+    amountVnd: 50_000,
+    credits: 50,
+    vndPerCredit: 1_000,
+    status: 'PENDING' as const,
+    provider: 'VNPAY' as const,
+    createdAt: '2026-11-03T00:00:00Z',
+    expiresAt: '2099-11-03T00:15:00Z',
+    submittedAt: null,
+    reviewedBy: null,
+    reviewedAt: null,
+    reviewNote: null,
+  };
+  vi.mocked(paymentApi.getOrder)
+    .mockResolvedValueOnce(pendingOrder)
+    .mockResolvedValueOnce({ ...pendingOrder, status: 'SUCCESS' });
+
+  render(
+    <MemoryRouter initialEntries={['/credit?orderCode=SL-123&status=SUCCESS']}>
+      <Credit />
+    </MemoryRouter>,
+  );
+
+  await waitFor(() => expect(paymentApi.getOrder).toHaveBeenCalledTimes(2), { timeout: 4_000 });
+  await waitFor(() => expect(refreshWallet).toHaveBeenCalledTimes(1));
+  expect(screen.getByText('Nạp thành công +50 Credit')).toBeTruthy();
 });

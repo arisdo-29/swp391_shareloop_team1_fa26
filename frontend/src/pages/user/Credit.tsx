@@ -57,10 +57,10 @@ type ReturnState =
   | 'checking'
   | 'success';
 
-const PAYMENT_CANCELLED_MESSAGE =
-  'Bạn đã hủy thanh toán. Tài khoản chưa bị trừ tiền.';
+const PAYMENT_CANCELLED_MESSAGE = 'Bạn đã hủy thanh toán.';
 const PAYMENT_PENDING_AFTER_FAILED_RETURN_MESSAGE =
   'Thanh toán vừa thất bại tại VNPay, nhưng đơn vẫn đang chờ hệ thống xác nhận hủy. Credit chưa được cộng vào ví.';
+const ORDER_STATUS_POLL_INTERVAL_MS = 2_500;
 
 const paymentStatusLabels: Record<PaymentOrderStatus, string> = {
   PENDING: 'Đang chờ thanh toán',
@@ -247,7 +247,7 @@ export function Credit() {
       return;
     }
     let active = true;
-    setReturnState('checking');
+    setReturnState((current) => (current === 'idle' ? 'checking' : current));
     paymentApi
       .getOrder(code)
       .then((order) => {
@@ -282,6 +282,20 @@ export function Credit() {
       active = false;
     };
   }, [location.search, refreshWallet, orderCheckKey]);
+
+  // Return của VNPay có thể về trước IPN. Khi Backend còn PENDING, tiếp tục hỏi trạng thái
+  // đến khi Backend xác nhận kết quả; chỉ lúc SUCCESS mới tải lại số dư ví.
+  useEffect(() => {
+    const code = returnOrderCode(new URLSearchParams(location.search));
+    const waitingForBackend =
+      returnState === 'pending' || returnState === 'pending-after-failed-return';
+    if (!code || apiTopUpOrder?.status !== 'PENDING' || !waitingForBackend) return;
+
+    const timer = window.setTimeout(() => {
+      setOrderCheckKey((key) => key + 1);
+    }, ORDER_STATUS_POLL_INTERVAL_MS);
+    return () => window.clearTimeout(timer);
+  }, [apiTopUpOrder?.status, location.search, returnState]);
 
   const selectedItemTitle = selectedEntry ? itemTitleOf(selectedEntry, itemTitles) : undefined;
 
@@ -366,11 +380,6 @@ export function Credit() {
       {returnState === 'failed' ? (
         <div className="mb-6">
           <Alert tone="error">Thanh toán không thành công. Credit chưa được cộng vào ví.</Alert>
-        </div>
-      ) : null}
-      {returnState === 'cancelled' ? (
-        <div className="mb-6">
-          <Alert tone="warning">{PAYMENT_CANCELLED_MESSAGE}</Alert>
         </div>
       ) : null}
       {returnState === 'expired' ? (
@@ -656,7 +665,7 @@ export function ApiTopUpOrder({
   const description = paid
     ? `+${order.credits} Credit đã được cộng vào ví.`
     : cancelled
-      ? 'Đơn đã được xác nhận hủy. Credit chưa được cộng vào ví.'
+      ? ''
       : pendingAfterFailedReturn
         ? 'Lần thanh toán vừa thất bại, nhưng trạng thái đơn vẫn đang chờ hệ thống xác nhận hủy.'
         : 'Credit chưa được cộng vào ví. Trạng thái sẽ thay đổi sau khi khoản thanh toán được xác nhận.';
@@ -686,7 +695,7 @@ export function ApiTopUpOrder({
           </p>
         ) : null}
         <h2 className="mt-4 text-2xl font-bold">{heading}</h2>
-        <p className="mt-2 text-sm leading-6 text-text-muted">{description}</p>
+        {description ? <p className="mt-2 text-sm leading-6 text-text-muted">{description}</p> : null}
         <dl className="mt-6 divide-y divide-border rounded-lg bg-surface-low px-4 text-left">
           <DetailRow label="Mã đơn" value={order.orderCode} />
           <DetailRow label="Số tiền" value={formatVnd(order.amountVnd)} />
