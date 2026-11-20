@@ -1501,7 +1501,8 @@ class RequestServiceTest {
                 "IN_PERSON",
                 "FPT",
                 Instant.now().plus(1, java.time.temporal.ChronoUnit.DAYS),
-                true, true,
+                true,
+                true,
                 Instant.now());
         request.confirmLogistics(false, true, Instant.now());
         request.confirmHandover(true, null, Instant.now());
