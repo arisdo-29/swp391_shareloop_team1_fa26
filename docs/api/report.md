@@ -385,7 +385,7 @@ Admin đưa ra kết luận xử lý đối với báo cáo hoặc khiếu nại
     - Trừ 1 sao uy tín của người vi phạm qua `ReputationService.deductStar(violatorId, 1, note)` (UT-02).
     - Nếu lý do vi phạm thuộc nhóm nghiêm trọng cấu hình qua `report_serious_reasons` (`ConfigKey.REPORT_SERIOUS_REASONS`, Admin sửa ở trang Cấu hình; mặc định `PROHIBITED_ITEM`, `COUNTERFEIT`; khoá chữ hoa trùng đã xoá mềm ở L13):
       - Hệ thống tự động ẩn toàn bộ các bài đăng đang hoạt động khác của người vi phạm để rà soát (`itemService.hideAllOfUser(violatorId)`, BC-06).
-    - Nếu đối tượng báo cáo là bài đăng cụ thể (`ITEM`), tự động ẩn bài đăng đó (`itemService.hide(itemId)`).
+    - Nếu đối tượng báo cáo là bài đăng cụ thể (`ITEM`), tự động ẩn bài đăng đó (`itemService.hide(itemId)`). Bài chỉ hiện lại khi chủ bài sửa (`PUT /items/{id}`) và Admin duyệt lại, xem `item.md` mục `PUT /api/v1/items/{id}` (22/11/2026).
     - **Báo cáo bài (D-07, BC-05):** các báo cáo khác của cùng bài đang `OPEN`/`AWAITING_RESPONSE` đóng theo: `RESOLVED`, `starsDeducted = 0`, `resolution = "Đóng theo kết luận báo cáo #<id>"`. Chủ bài chỉ bị trừ 1 sao cho lần chấp thuận này.
     - Ghi nhận nhật ký hành động Admin (`activity_logs` loại `REPORT_UPHELD`; có `closedReportIds` khi đóng theo báo cáo khác).
   - Cập nhật thông tin Admin kết luận (`resolved_by`), ghi chú kết luận (`resolution`) và thời điểm kết luận (`resolved_at`).

@@ -2456,7 +2456,7 @@ Các chức năng Admin. Admin là tài khoản tạo sẵn, không đăng bài 
 
 - Bác bỏ: hồ sơ Bác bỏ; mở lại bài đang tạm ẩn khi đủ điều kiện ([BC-04](#BR_BC_04)); giao dịch tranh chấp → Hoàn tất ([BC-11](#BR_BC_11)).
 
-- Chấp thuận: trừ 1 sao người vi phạm; báo cáo bài thì ẩn bài vĩnh viễn và đóng các báo cáo khác của bài ([BC-05](#BR_BC_05)); lý do nghiêm trọng thì ẩn mọi bài của người vi phạm ([BC-06](#BR_BC_06)); giao dịch tranh chấp → Đã huỷ ([BC-12](#BR_BC_12)).
+- Chấp thuận: trừ 1 sao người vi phạm; báo cáo bài thì ẩn bài (chỉ hiện lại khi chủ bài sửa và Admin duyệt lại) và đóng các báo cáo khác của bài ([BC-05](#BR_BC_05)); lý do nghiêm trọng thì ẩn mọi bài của người vi phạm ([BC-06](#BR_BC_06)); giao dịch tranh chấp → Đã huỷ ([BC-12](#BR_BC_12)).
 
 - Sao về 0: tài khoản bị cấm ([UT-04](#BR_UT_04), [KC-05](#BR_KC_05)).
 
@@ -2474,7 +2474,7 @@ Các chức năng Admin. Admin là tài khoản tạo sẵn, không đăng bài 
 |--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [BC-03](#BR_BC_03) | Admin bấm "Yêu cầu giải trình" trên báo cáo bài hoặc người: bên bị báo cáo có 48 giờ, giải trình kèm ảnh. Một bài nhiều báo cáo thì mọi báo cáo chờ của bài dùng chung một hạn và chủ bài giải trình một lần cho cả bài. Nội dung giải trình tối đa 2000 ký tự. |
 | [BC-04](#BR_BC_04) | Báo cáo bài bị bác bỏ: mở lại bài nếu không còn báo cáo chờ, bài chưa từng có báo cáo bị chấp thuận, chủ bài không bị khoá / cấm và còn sao.                                                                                                                    |
-| [BC-05](#BR_BC_05) | Báo cáo bài được chấp thuận: ẩn bài vĩnh viễn (không tự hiện lại), trừ 1 sao chủ bài; các báo cáo khác đang chờ của bài đóng theo, chỉ trừ 1 sao.                                                                                                               |
+| [BC-05](#BR_BC_05) | Báo cáo bài được chấp thuận: ẩn bài (không tự hiện lại), trừ 1 sao chủ bài; các báo cáo khác đang chờ của bài đóng theo, chỉ trừ 1 sao. Bài chỉ hiện lại khi chủ bài sửa bài và Admin duyệt lại (22/11/2026); chủ bài chưa sửa thì bài vẫn ẩn.                                                                                                               |
 | [BC-06](#BR_BC_06) | Lý do nghiêm trọng (Hàng cấm, Hàng giả) được chấp thuận → ẩn mọi bài đang hiển thị của người vi phạm để Admin rà soát. Admin sửa được danh sách lý do nghiêm trọng.                                                                                             |
 | [BC-10](#BR_BC_10) | Admin chỉ kết luận khi đã có giải trình hoặc đã quá hạn giải trình (D-15); màn Admin khoá nút Kết luận và hiện hạn.                                                                                                                                             |
 | [BC-11](#BR_BC_11) | Kết luận Bác bỏ: báo cáo Bác bỏ; giao dịch Đang tranh chấp → Hoàn tất (bài Đã trao, cộng điểm).                                                                                                                                                                 |
@@ -3705,7 +3705,7 @@ Báo cáo là về một bài hoặc một người; khiếu nại là về mộ
 </tr>
 <tr class="odd">
 <td><span id="BR_BC_05" class="anchor"></span><strong>BC-05</strong></td>
-<td>Báo cáo bài được chấp thuận: ẩn bài vĩnh viễn (không tự hiện lại), trừ 1 sao chủ bài; các báo cáo khác đang chờ của bài đóng theo, chỉ trừ 1 sao.</td>
+<td>Báo cáo bài được chấp thuận: ẩn bài (không tự hiện lại), trừ 1 sao chủ bài; các báo cáo khác đang chờ của bài đóng theo, chỉ trừ 1 sao. Bài chỉ hiện lại khi chủ bài sửa bài và Admin duyệt lại (22/11/2026); chủ bài chưa sửa thì bài vẫn ẩn.</td>
 <td>—</td>
 <td><a href="#xử-lý-báo-cáo-và-khiếu-nại">Xử lý báo cáo và khiếu nại</a></td>
 </tr>
@@ -4117,7 +4117,7 @@ Thông báo lỗi lấy từ các lớp \*ErrorCode trong backend (mỗi module 
 | D-04   | Bên nhận món đồ bấm Từ chối giao nhận → Đã huỷ kèm báo cáo vi phạm, không Đã trao, không cộng điểm.                                                                                                                 | [GN-07](#BR_GN_07)                                         |
 | D-05   | Khiếu nại trong 24 giờ sau hoàn tất; giải trình trong 48 giờ.                                                                                                                                    | [BC-07](#BR_BC_07), [BC-08](#BR_BC_08)                     |
 | D-06   | Không gia hạn bài Hết hạn; đăng bài mới.                                                                                                                                                         | [HT-03](#BR_HT_03)                                         |
-| D-07   | Bài 3 báo cáo tạm ẩn → Admin yêu cầu giải trình 48 giờ → kết luận; bác bỏ mở lại bài, chấp thuận ẩn hẳn và trừ 1 sao.                                                                            | [BC-02](#BR_BC_02) … [BC-05](#BR_BC_05)                    |
+| D-07   | Bài 3 báo cáo tạm ẩn → Admin yêu cầu giải trình 48 giờ → kết luận; bác bỏ mở lại bài, chấp thuận ẩn bài và trừ 1 sao (bài chỉ hiện lại khi chủ bài sửa và Admin duyệt lại).                                                                            | [BC-02](#BR_BC_02) … [BC-05](#BR_BC_05)                    |
 | D-08   | Bỏ chức năng hàng chính hãng.                                                                                                                                                                    | [KD-10](#BR_KD_10)                                         |
 | D-09   | Hai mức: Khoá do Admin (có lý do hiển thị), Cấm tự động khi sao về 0; mỗi lần trừ sao báo số sao còn lại; không có sao ân hạn; giao dịch Đang tranh chấp của người bị cấm giữ lại cho Admin.     | Mục B, [UT-03](#BR_UT_03), [UT-04](#BR_UT_04)              |
 | D-10   | VNPay sandbox chạy trọn vòng; bỏ nạp thủ công.                                                                                                                                                   | [VI-04](#BR_VI_04), [VI-05](#BR_VI_05)                     |

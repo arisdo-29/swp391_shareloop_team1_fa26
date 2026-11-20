@@ -72,6 +72,10 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     /** Bài đã có report được chấp thuận chưa; có thì bác bỏ report khác không mở lại bài (D-07). */
     boolean existsByTargetTypeAndItemIdAndStatus(TargetType targetType, Long itemId, ReportStatus status);
 
+    /** Bài có báo cáo được chấp thuận sau mốc cho trước không; dùng để bỏ qua báo cáo cũ hơn lần duyệt lại gần nhất. */
+    boolean existsByTargetTypeAndItemIdAndStatusAndResolvedAtAfter(
+            TargetType targetType, Long itemId, ReportStatus status, Instant resolvedAfter);
+
     /** Bài còn báo cáo từ chối nhận (gắn giao dịch) đang chờ không; có thì giữ bài ẩn tới khi Admin kết luận (GN-07). */
     boolean existsByTargetTypeAndItemIdAndReasonAndRequestIdIsNotNullAndStatusIn(
             TargetType targetType, Long itemId, ReportReason reason, Collection<ReportStatus> statuses);

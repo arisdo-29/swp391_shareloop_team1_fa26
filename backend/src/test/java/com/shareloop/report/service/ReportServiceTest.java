@@ -255,9 +255,9 @@ class ReportServiceTest {
     @Test
     @DisplayName("L6: bài có báo cáo được chấp thuận thì tiếp tục ẩn khi mở khoá")
     void keepsItemHidden_whenItemHasUpheldReport_returnsTrue() {
-        when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(
-                        TargetType.ITEM, 10L, List.of(ReportStatus.RESOLVED)))
-                .thenReturn(1L);
+        doReturn(null).when(reportService).findItemApprovedAt(10L);
+        when(reportRepository.existsByTargetTypeAndItemIdAndStatus(TargetType.ITEM, 10L, ReportStatus.RESOLVED))
+                .thenReturn(true);
 
         assertThat(reportService.keepsItemHidden(10L)).isTrue();
     }
@@ -265,11 +265,7 @@ class ReportServiceTest {
     @Test
     @DisplayName("L6: bài còn đủ ngưỡng báo cáo chờ (3) thì tiếp tục ẩn, dưới ngưỡng thì được hiện lại")
     void keepsItemHidden_dependsOnPendingReportThreshold() {
-        for (long itemId : new long[] {10L, 11L}) {
-            when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(
-                            TargetType.ITEM, itemId, List.of(ReportStatus.RESOLVED)))
-                    .thenReturn(0L);
-        }
+        doReturn(null).when(reportService).findItemApprovedAt(anyLong());
         when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, 10L, PENDING))
                 .thenReturn(3L);
         when(reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, 11L, PENDING))
@@ -277,6 +273,78 @@ class ReportServiceTest {
 
         assertThat(reportService.keepsItemHidden(10L)).isTrue();
         assertThat(reportService.keepsItemHidden(11L)).isFalse();
+    }
+
+    @Test
+    @DisplayName("Báo cáo được chấp thuận từ trước lần duyệt lại gần nhất không còn giữ bài ẩn")
+    void keepsItemHidden_whenUpheldReportOlderThanLastApproval_returnsFalse() {
+        Instant approvedAt = Instant.parse("2026-11-20T10:00:00Z");
+        doReturn(approvedAt).when(reportService).findItemApprovedAt(10L);
+        when(reportRepository.existsByTargetTypeAndItemIdAndStatusAndResolvedAtAfter(
+                        TargetType.ITEM, 10L, ReportStatus.RESOLVED, approvedAt))
+                .thenReturn(false);
+
+        assertThat(reportService.keepsItemHidden(10L)).isFalse();
+    }
+
+    private void givenHiddenApprovedItem(long itemId, long donorId) {
+        when(itemQueryService.getSummary(itemId))
+                .thenReturn(new ItemSummary(itemId, donorId, OfferType.GIVE, ItemStatus.APPROVED, false));
+    }
+
+    private void givenUpheldReportSinceLastApproval(long itemId, boolean upheld) {
+        Instant approvedAt = Instant.parse("2026-11-20T10:00:00Z");
+        doReturn(approvedAt).when(reportService).findItemApprovedAt(itemId);
+        when(reportRepository.existsByTargetTypeAndItemIdAndStatusAndResolvedAtAfter(
+                        TargetType.ITEM, itemId, ReportStatus.RESOLVED, approvedAt))
+                .thenReturn(upheld);
+    }
+
+    @Test
+    @DisplayName("Bài ẩn vì báo cáo được chấp nhận, chủ bài sửa và được duyệt lại: bài hiện lại và báo chủ bài")
+    void relistItemAfterReapproval_whenHiddenByUpheldReport_unhidesItem() {
+        givenHiddenApprovedItem(200L, 20L);
+        givenUpheldReportSinceLastApproval(200L, true);
+        when(reputationService.canPost(20L)).thenReturn(true);
+
+        reportService.relistItemAfterReapproval(200L);
+
+        verify(itemService).unhide(200L);
+        verify(notificationService).notify(eq(20L), eq("ITEM_REOPENED"), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Bài ẩn vì lý do khác (không có báo cáo chấp nhận sau lần duyệt trước) thì không hiện lại")
+    void relistItemAfterReapproval_whenNoUpheldReport_keepsItemHidden() {
+        givenHiddenApprovedItem(200L, 20L);
+        givenUpheldReportSinceLastApproval(200L, false);
+
+        reportService.relistItemAfterReapproval(200L);
+
+        verify(itemService, never()).unhide(anyLong());
+    }
+
+    @Test
+    @DisplayName("Bài đang hiện hoặc chưa APPROVED thì không làm gì")
+    void relistItemAfterReapproval_whenAlreadyVisible_doesNothing() {
+        when(itemQueryService.getSummary(200L))
+                .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.APPROVED, true));
+
+        reportService.relistItemAfterReapproval(200L);
+
+        verify(itemService, never()).unhide(anyLong());
+    }
+
+    @Test
+    @DisplayName("Chủ bài đang bị khoá thì không hiện lại bài")
+    void relistItemAfterReapproval_whenDonorLocked_keepsItemHidden() {
+        givenHiddenApprovedItem(200L, 20L);
+        givenUpheldReportSinceLastApproval(200L, true);
+        when(userService.isLocked(20L)).thenReturn(true);
+
+        reportService.relistItemAfterReapproval(200L);
+
+        verify(itemService, never()).unhide(anyLong());
     }
 
     @Test

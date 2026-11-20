@@ -31,6 +31,7 @@ import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
+import com.shareloop.item.event.ItemApprovedEvent;
 import com.shareloop.item.event.ItemRemovedEvent;
 import com.shareloop.item.repository.ItemRepository;
 import com.shareloop.listingfee.dto.DisplayWindow;
@@ -1024,6 +1025,7 @@ class ItemServiceTest {
 
         itemService.markApproved(1L);
         assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
+        verify(eventPublisher).publishEvent(new ItemApprovedEvent(1L));
 
         assertThatThrownBy(() -> itemService.markApproved(1L))
                 .isInstanceOf(BusinessException.class)

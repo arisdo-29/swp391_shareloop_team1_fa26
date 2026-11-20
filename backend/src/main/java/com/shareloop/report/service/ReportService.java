@@ -4,6 +4,7 @@ import com.shareloop.audit.ActivityType;
 import com.shareloop.audit.service.ActivityLogService;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.item.dto.ItemSummary;
+import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.notification.service.NotificationService;
@@ -243,9 +244,8 @@ public class ReportService {
      */
     @Transactional(readOnly = true)
     public boolean keepsItemHidden(long itemId) {
-        if (reportRepository.countByTargetTypeAndItemIdAndStatusIn(
-                        TargetType.ITEM, itemId, List.of(ReportStatus.RESOLVED))
-                > 0) {
+        // Báo cáo được chấp thuận từ trước lần duyệt lại gần nhất đã được xử lý xong (bài đã hiện lại), không tính nữa
+        if (hasUpheldReportSinceLastApproval(itemId)) {
             return true;
         }
         // GN-07: món bị từ chối nhận tạm ẩn tới khi Admin kết luận báo cáo, dù chưa đủ ngưỡng
@@ -256,6 +256,75 @@ public class ReportService {
         long pendingReports =
                 reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, itemId, PENDING_STATUSES);
         return pendingReports >= configService.getInt(ConfigKey.REPORT_HIDE_THRESHOLD);
+    }
+
+    /**
+     * Hiện lại bài từng bị ẩn vì báo cáo vi phạm được chấp nhận, khi chủ bài đã sửa (PUT /items/{id}) và Admin duyệt
+     * lại. Bài chỉ hiện lại khi đang ẩn, vừa APPROVED và có báo cáo được chấp nhận sau lần duyệt trước; chủ bài chưa sửa
+     * thì bài chưa qua duyệt lại nên vẫn ẩn. Bài ẩn vì lý do khác (Admin gỡ, khoá tài khoản, đủ ngưỡng báo cáo chờ) và
+     * chủ bài đang bị khoá hoặc hết sao thì không đụng tới.
+     */
+    @Transactional
+    public void relistItemAfterReapproval(long itemId) {
+        if (itemService == null || itemQueryService == null) {
+            return;
+        }
+        ItemSummary summary;
+        try {
+            summary = itemQueryService.getSummary(itemId);
+        } catch (BusinessException deleted) {
+            return; // bài đã bị xoá: không có gì để hiện lại
+        }
+        if (summary == null
+                || summary.active()
+                || summary.status() != ItemStatus.APPROVED
+                || summary.donorId() == null
+                || !hasUpheldReportSinceLastApproval(itemId)) {
+            return;
+        }
+        long donorId = summary.donorId();
+        if ((userService != null && userService.isLocked(donorId))
+                || (reputationService != null && !reputationService.canPost(donorId))) {
+            return;
+        }
+
+        itemService.unhide(itemId);
+        if (notificationService != null) {
+            String title = itemTitle(itemId);
+            notificationService.notify(
+                    donorId,
+                    "ITEM_REOPENED",
+                    "Bài đăng đã hiển thị lại",
+                    (title == null || title.isBlank() ? "Bài của bạn" : "Bài «" + title + "»")
+                            + " đã hiển thị lại sau khi bạn sửa và Admin duyệt lại.",
+                    "/activities");
+        }
+    }
+
+    // Có báo cáo được chấp thuận sau lần duyệt gần nhất của bài không. Chưa có mốc duyệt (null) thì tính mọi báo cáo.
+    private boolean hasUpheldReportSinceLastApproval(long itemId) {
+        Instant approvedAt = findItemApprovedAt(itemId);
+        if (approvedAt == null) {
+            return reportRepository.existsByTargetTypeAndItemIdAndStatus(
+                    TargetType.ITEM, itemId, ReportStatus.RESOLVED);
+        }
+        return reportRepository.existsByTargetTypeAndItemIdAndStatusAndResolvedAtAfter(
+                TargetType.ITEM, itemId, ReportStatus.RESOLVED, approvedAt);
+    }
+
+    // Mốc duyệt gần nhất của bài (items.approved_at). Khi sự kiện duyệt chạy, mốc này vẫn là của lần duyệt trước.
+    Instant findItemApprovedAt(long itemId) {
+        if (jdbcClient == null) {
+            return null;
+        }
+        return jdbcClient
+                .sql("SELECT approved_at FROM items WHERE id = ?")
+                .param(itemId)
+                .query((rs, rowNum) -> rs.getTimestamp("approved_at") != null
+                        ? rs.getTimestamp("approved_at").toInstant()
+                        : null)
+                .optional()
+                .orElse(null);
     }
 
     // U04: chủ bài cũng phải biết bài đang tạm ẩn; bấm thông báo mở trang Hoạt động.
