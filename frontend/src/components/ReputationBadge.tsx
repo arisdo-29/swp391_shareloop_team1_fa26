@@ -1,10 +1,9 @@
-import { formatAsDescribedRate, getRankLabel } from '../utils/reputation';
+import { getRankLabel } from '../utils/reputation';
 import { StarRating } from './StarRating';
 
 export interface ReputationBadgeProps {
   trustStars?: number | null;
   rank?: string | null;
-  asDescribedRate?: number | null;
   className?: string;
   compact?: boolean;
 }
@@ -18,20 +17,18 @@ function rankBadgeColor(rank?: string | null) {
 }
 
 /**
- * Component hiển thị thông tin uy tín người dùng: Hạng, Sao uy tín và Tỉ lệ đúng mô tả (YC-06).
+ * Component hiển thị thông tin uy tín người dùng: Hạng và Sao uy tín (YC-06).
  */
 export function ReputationBadge({
   trustStars,
   rank,
-  asDescribedRate,
   className = '',
   compact = false,
 }: ReputationBadgeProps) {
   const rankLabel = getRankLabel(rank);
   const hasStars = trustStars != null && Number.isFinite(trustStars);
-  const rateText = formatAsDescribedRate(asDescribedRate);
 
-  if (!rankLabel && !hasStars && rateText === '—') {
+  if (!rankLabel && !hasStars) {
     return null;
   }
 
@@ -48,11 +45,6 @@ export function ReputationBadge({
           </span>
         ) : null}
         <StarRating value={trustStars} />
-        {rateText !== '—' ? (
-          <span className="text-2xs text-text-muted" title="Tỉ lệ đúng mô tả">
-            ({rateText} đúng mô tả)
-          </span>
-        ) : null}
       </span>
     );
   }
@@ -69,14 +61,6 @@ export function ReputationBadge({
         </span>
       ) : null}
       <StarRating value={trustStars} className="text-sm" />
-      {rateText !== '—' ? (
-        <span
-          className="inline-flex items-center rounded-sm bg-success-soft px-2 py-0.5 font-medium text-success ring-1 ring-inset ring-success/20"
-          title="Tỉ lệ đúng mô tả"
-        >
-          {rateText} đúng mô tả
-        </span>
-      ) : null}
     </div>
   );
 }

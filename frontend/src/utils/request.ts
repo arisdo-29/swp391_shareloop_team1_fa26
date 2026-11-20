@@ -43,14 +43,15 @@ export function canConfirmHandover(status: ItemRequestStatus) {
   return status === 'LOGISTICS_CONFIRMED' || status === 'AWAITING_HANDOVER';
 }
 
-// Hai bên được huỷ giao dịch sau khi đã chọn người (docs/api/request.md mục 13). Backend vẫn kiểm lại.
+// Hai bên được huỷ giao dịch sau khi đã chọn người và trước khi chốt lịch (docs/api/request.md mục 13).
+// Từ khi chốt lịch trở đi dùng nút "Giao nhận không thành công". Backend vẫn kiểm lại.
 export function canCancelTransaction(status: ItemRequestStatus) {
-  return (
-    status === 'RESERVED' ||
-    status === 'AWAITING_LOGISTICS' ||
-    status === 'LOGISTICS_CONFIRMED' ||
-    status === 'AWAITING_HANDOVER'
-  );
+  return status === 'RESERVED' || status === 'AWAITING_LOGISTICS';
+}
+
+// Ai được bấm "Từ chối giao nhận": bên nhận món đồ. Cho tặng chỉ người nhận, Trao đổi cả hai bên.
+export function canRefuseHandover(viewerIsDonor: boolean, offeredItemId?: number | null) {
+  return !viewerIsDonor || Boolean(offeredItemId);
 }
 
 // U08: còn khiếu nại được khi giao dịch hoàn tất và chưa qua complaintDeadline backend trả về.
@@ -95,15 +96,6 @@ export function formatDateTime(value: string) {
   const valueOf = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value ?? '';
   return `${valueOf('hour')}:${valueOf('minute')} ${valueOf('day')}/${valueOf('month')}/${valueOf('year')}`;
-}
-
-// API báo sự cố chỉ nhận khi bên kia đã xác nhận bàn giao còn mình chưa (mục 14).
-export function canReportHandoverIssue(
-  status: ItemRequestStatus,
-  otherConfirmedAt?: string,
-  currentConfirmedAt?: string,
-) {
-  return status === 'AWAITING_HANDOVER' && Boolean(otherConfirmedAt) && !currentConfirmedAt;
 }
 
 const selectedRequestStatuses: ItemRequestStatus[] = [

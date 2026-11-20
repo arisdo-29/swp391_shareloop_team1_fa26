@@ -329,7 +329,7 @@ class OfferChangeIT extends IntegrationTest {
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
                         .header("Authorization", token(receiverId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new HandoverConfirmRequest(true, null))))
+                        .content(objectMapper.writeValueAsString(new HandoverConfirmRequest(null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"));
 

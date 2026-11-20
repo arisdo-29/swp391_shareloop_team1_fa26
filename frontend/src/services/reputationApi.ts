@@ -10,7 +10,6 @@ export interface MyReputation {
   totalPoints: number;
   rank: 'BRONZE' | 'SILVER' | 'GOLD' | 'DIAMOND';
   trustStars: number;
-  accuracyRate: number | null;
   /** Hạng kế tiếp; null khi đã ở Kim cương. Có thể thiếu nếu backend chưa cập nhật. */
   nextRank?: 'BRONZE' | 'SILVER' | 'GOLD' | 'DIAMOND' | null;
   /** Điểm còn thiếu để lên hạng kế tiếp, backend tính theo ngưỡng cấu hình. */

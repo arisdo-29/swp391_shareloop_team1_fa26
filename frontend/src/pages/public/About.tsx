@@ -22,6 +22,7 @@ const RULES = {
   requestPendingDays: 3,
   chatOpenDays: 10,
   autoConfirmDays: 3,
+  autoConfirmDaysShipping: 7,
   complaintHours: 24,
   responseHours: 48,
   reportHideThreshold: 3,
@@ -40,7 +41,7 @@ const reasons = [
     'Gần nhà',
     'Tìm theo quận. Hẹn gặp ở chỗ công cộng gần bạn, hoặc gửi qua đơn vị vận chuyển nếu hai bên đồng ý.',
   ],
-  ['Biết ai đáng tin', 'Mỗi người có hạng, sao uy tín và tỉ lệ đúng mô tả từ các lần giao trước.'],
+  ['Biết ai đáng tin', 'Mỗi người có hạng và sao uy tín từ các lần giao trước.'],
   [
     'Bài được duyệt',
     'Hệ thống tự kiểm khi bạn gửi bài, rồi Admin duyệt từng bài theo checklist. Không có AI trong khâu duyệt bài và kiểm tin nhắn.',
@@ -60,11 +61,11 @@ const receiverSteps = [
   ],
   [
     'Chờ chủ bài chọn',
-    `Chủ bài xem sao, hạng, tỉ lệ đúng mô tả của bạn rồi chọn đúng 1 người. Yêu cầu chờ quá ${RULES.requestPendingDays} ngày thì tự huỷ, bạn cũng tự rút được khi còn chờ. Được chọn thì chat mở, không được chọn thì bạn nhận thông báo.`,
+    `Chủ bài xem sao và hạng của bạn rồi chọn đúng 1 người. Yêu cầu chờ quá ${RULES.requestPendingDays} ngày thì tự huỷ, bạn cũng tự rút được khi còn chờ. Được chọn thì chat mở, không được chọn thì bạn nhận thông báo.`,
   ],
   [
     'Chốt lịch và xác nhận đã nhận',
-    `Hai bên cùng đồng ý thì lịch được chốt. Quá ${RULES.chatOpenDays} ngày từ lúc được chọn mà chưa chốt thì giao dịch tự huỷ. Nhận đồ rồi bấm "Đã nhận" và cho biết món có đúng mô tả không.`,
+    `Hai bên cùng đồng ý thì lịch được chốt. Quá ${RULES.chatOpenDays} ngày từ lúc được chọn mà chưa chốt thì giao dịch tự huỷ. Gặp xong thì mỗi bên chọn một trong ba kết quả: Hoàn tất giao nhận, Giao nhận không thành công hoặc Từ chối giao nhận.`,
   ],
 ] as const;
 
@@ -79,18 +80,18 @@ const giverSteps = [
   ],
   [
     'Chọn một người',
-    'Xem sao, hạng, tỉ lệ đúng mô tả và món đem đổi của từng người, rồi chọn đúng 1 người. Những người còn lại tự nhận thông báo.',
+    'Xem sao, hạng và món đem đổi của từng người, rồi chọn đúng 1 người. Những người còn lại tự nhận thông báo.',
   ],
   [
     'Giao và xác nhận đã giao',
-    `Bạn bấm "Đã giao", người nhận bấm "Đã nhận". Hai bên xác nhận và đồ đúng mô tả thì giao dịch hoàn tất, cả hai được cộng điểm uy tín. Một bên xác nhận mà bên kia im lặng ${RULES.autoConfirmDays} ngày và không có khiếu nại thì giao dịch tự hoàn tất.`,
+    `Giao xong, hai bên cùng bấm "Hoàn tất giao nhận" thì giao dịch hoàn tất, cả hai được cộng điểm uy tín. Một bên đã bấm mà bên kia im lặng ${RULES.autoConfirmDays} ngày (gửi qua đơn vị vận chuyển là ${RULES.autoConfirmDaysShipping} ngày) và không có khiếu nại thì giao dịch tự hoàn tất.`,
   ],
 ] as const;
 
 const safetyTips = [
   'Hẹn ở chỗ đông người: cổng chợ, quán cà phê, sảnh chung cư.',
   'Nếu gửi qua đơn vị vận chuyển, hai bên tự gửi và đều phải bấm cam kết tự chịu trách nhiệm.',
-  'ShareLoop không bồi thường tiền hàng hay phí gửi. Hãy kiểm đồ kỹ trước khi bấm "Đã nhận".',
+  'ShareLoop không bồi thường tiền hàng hay phí gửi. Hãy kiểm đồ kỹ trước khi bấm "Hoàn tất giao nhận".',
   'Không chuyển tiền hay đặt cọc dưới bất kỳ hình thức nào.',
   'Trước khi chốt lịch, tin nhắn chứa số điện thoại, email, link, mạng xã hội sẽ bị chặn. Sau khi chốt, họ tên, email, số điện thoại của nhau hiện trong trang giao dịch, chỉ trong app.',
   `Bạn báo cáo được một bài hoặc một người. Bài có ${RULES.reportHideThreshold} báo cáo đang chờ thì tạm ẩn, chủ bài có ${RULES.responseHours} giờ giải trình.`,
@@ -124,15 +125,15 @@ const faqs = [
   ],
   [
     'Tôi có huỷ giao dịch được không?',
-    'Được. Trước khi hoàn tất, bên nào cũng huỷ được, kèm lý do và không mất phí. Giao dịch đang tranh chấp thì bạn phải chờ Admin.',
+    'Được. Trước khi chốt lịch, bên nào cũng huỷ được, kèm lý do và không mất phí. Sau khi chốt lịch, nếu không gặp được nhau thì bấm "Giao nhận không thành công": bên kia chưa bấm hoàn tất thì giao dịch bị huỷ, không ai bị phạt. Giao dịch đang tranh chấp thì bạn phải chờ Admin.',
   ],
   [
     'Bên kia không bấm xác nhận thì sao?',
-    `Một bên đã xác nhận, bên kia im lặng ${RULES.autoConfirmDays} ngày và không có khiếu nại thì giao dịch tự hoàn tất. Quá ${RULES.chatOpenDays} ngày từ lúc được chọn mà chưa chốt lịch thì giao dịch tự huỷ.`,
+    `Một bên đã bấm hoàn tất, bên kia im lặng ${RULES.autoConfirmDays} ngày (gửi qua đơn vị vận chuyển là ${RULES.autoConfirmDaysShipping} ngày) và không có khiếu nại thì giao dịch tự hoàn tất. Nếu bạn chưa nhận được đồ thì bấm "Giao nhận không thành công" để mở khiếu nại. Quá ${RULES.chatOpenDays} ngày từ lúc được chọn mà chưa chốt lịch thì giao dịch tự huỷ.`,
   ],
   [
     'Đồ nhận được không đúng mô tả thì sao?',
-    `Bạn báo "không đúng mô tả" khi bấm "Đã nhận": giao dịch chuyển sang tranh chấp, chủ bài có ${RULES.responseHours} giờ giải trình và Admin kết luận, trong lúc này chưa cộng điểm. ShareLoop không bồi thường tiền hàng hay phí gửi; khiếu nại đúng chỉ dẫn tới trừ sao người vi phạm.`,
+    `Bạn bấm "Từ chối giao nhận" và nêu lý do. Giao dịch chuyển sang tranh chấp, chủ món đồ có ${RULES.responseHours} giờ giải trình rồi Admin kết luận, trong lúc này chưa cộng điểm. Ở Trao đổi, cả hai bên đều được từ chối món mình nhận. ShareLoop không bồi thường tiền hàng hay phí gửi, khiếu nại đúng chỉ dẫn tới trừ sao người vi phạm.`,
   ],
   [
     'Nếu người kia không đến hẹn hoặc tôi chưa nhận được đồ thì sao?',

@@ -795,7 +795,7 @@ Hai sơ đồ dưới được vẽ mới theo các đường dẫn trong fronte
 | 8      | Tài khoản          | **Quên / đặt lại mật khẩu**                               | Nhập email, sau đó OTP và mật khẩu mới.                                                    |
 | 9      | Tài khoản          | **Hồ sơ cá nhân**                                         | Họ tên, khu vực, ảnh đại diện, uy tín; đổi số điện thoại (hộp thoại OTP).                  |
 | 10     | Tài khoản          | **Đổi mật khẩu**                                          | Mật khẩu hiện tại và mật khẩu mới.                                                         |
-| 11     | Tài khoản          | **Hồ sơ công khai**                                       | Sao, hạng, tỉ lệ đúng mô tả và bài đang hiển thị của một người.                            |
+| 11     | Tài khoản          | **Hồ sơ công khai**                                       | Sao, hạng và bài đang hiển thị của một người.                            |
 | 12     | Bài đăng           | **Đăng đồ**                                               | Form tạo / sửa bài, tải ảnh, gợi ý mô tả bằng AI, hộp thoại xác nhận phí.                  |
 | 13     | Bài đăng           | **Hoạt động của tôi**                                     | Bài của tôi (sửa, gỡ, gia hạn, đẩy, xem người xin, chọn người) và yêu cầu đã gửi (rút).    |
 | 14     | Tìm kiếm           | **Trợ lý AI**                                             | Nhập nhu cầu bằng câu tự nhiên, xem lượt miễn phí còn lại và kết quả.                      |
@@ -1129,7 +1129,7 @@ Luồng xử lý: xem [Hình 7](#FIG_sw3) (F02 Đăng nhập, quên và đổi m
 
 **Kiểm tra:**
 
-- Chỉ xem của chính mình; người khác chỉ thấy sao, hạng, tỉ lệ đúng mô tả trên hồ sơ công khai.
+- Chỉ xem của chính mình; người khác chỉ thấy sao, hạng trên hồ sơ công khai.
 
 **Nếu hợp lệ:**
 
@@ -1754,7 +1754,7 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 
 **Kích hoạt:** Chủ bài mở danh sách người xin của một bài và bấm "Chọn". Hoặc, trong chat của giao dịch bài Cho chưa chốt lịch, người nhận gửi đề nghị đưa một bài của mình vào đổi.
 
-**Mô tả:** Chủ bài xem sao, hạng, tỉ lệ đúng mô tả và món đem đổi của từng người, chọn đúng một người. Nếu hình thức bài khác loại yêu cầu, hệ thống hỏi xác nhận chuyển hình thức. Với bài Cho, người nhận còn có thể đề nghị đổi món ngay trong chat trước khi chốt lịch; chủ bài đồng ý thì bài chuyển sang Trao đổi.
+**Mô tả:** Chủ bài xem sao, hạng và món đem đổi của từng người, chọn đúng một người. Nếu hình thức bài khác loại yêu cầu, hệ thống hỏi xác nhận chuyển hình thức. Với bài Cho, người nhận còn có thể đề nghị đổi món ngay trong chat trước khi chốt lịch; chủ bài đồng ý thì bài chuyển sang Trao đổi.
 
 **Chi tiết chức năng**
 
@@ -1792,7 +1792,7 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 
 | **Mã**             | **Nội dung luật**                                                                                                                                                                                                                           |
 |--------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [YC-06](#BR_YC_06) | Chủ bài xem danh sách người xin (sao, hạng, tỉ lệ đúng mô tả, món đem đổi) và chọn đúng một người.                                                                                                                                          |
+| [YC-06](#BR_YC_06) | Chủ bài xem danh sách người xin (sao, hạng, món đem đổi) và chọn đúng một người.                                                                                                                                          |
 | [YC-07](#BR_YC_07) | Khi chọn: yêu cầu → Đã được chọn, bài và món đem đổi → Đang giao dịch; các yêu cầu khác của bài → Không được chọn; các yêu cầu khác đang dùng cùng món đem đổi ở bài khác → Đã huỷ. Mở chat, ghim thẻ bài (bài Trao đổi ghim cả hai món).   |
 | [CD-02](#BR_CD_02) | Cho → Trao đổi lúc chọn người: chủ bài chọn một người có kèm món đổi → hộp xác nhận "Chuyển bài sang Trao đổi, trừ 5 Credit". Đồng ý và đủ khả dụng → trừ 5 Credit, bài thành Trao đổi, chat mở. Không đồng ý thì không chọn được người đó. |
 | [CD-03](#BR_CD_03) | Cho → Trao đổi trong chat: giao dịch bài Cho chưa chốt lịch, người nhận muốn đưa một bài của mình vào đổi → chủ bài được hỏi có chuyển sang Trao đổi (5 Credit) không; đồng ý và trả phí thì món đó thành món đổi và chuyển Đang giao dịch. |
@@ -1806,7 +1806,7 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 
 **Giao diện**
 
-> **\[Ảnh chụp màn hình cần chèn\]** *Danh sách người xin của một bài (sao, hạng, tỉ lệ đúng mô tả, món đổi).*
+> **\[Ảnh chụp màn hình cần chèn\]** *Danh sách người xin của một bài (sao, hạng, món đổi).*
 >
 > **\[Ảnh chụp màn hình cần chèn\]** *Hộp thoại xác nhận "Chuyển bài sang Trao đổi, trừ 5 Credit".*
 
@@ -1932,56 +1932,60 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 
 **Use case:** [UC-27](#UC_27), [UC-28](#UC_28) **· Tác nhân:** Member (hai bên giao dịch)
 
-**Kích hoạt:** Chủ bài bấm "Đã giao"; người nhận bấm "Đã nhận" ở trang Tiến trình giao dịch.
+**Kích hoạt:** Một bên bấm "Hoàn tất giao nhận" ở trang Tiến trình giao dịch.
 
-**Mô tả:** Mỗi bên xác nhận một lần, có thể kèm ảnh / video minh chứng. Người nhận bắt buộc trả lời "Món đồ có đúng mô tả không?".
+**Mô tả:** Sau khi chốt lịch, mỗi bên chọn một trong ba kết quả: Hoàn tất giao nhận, Giao nhận không thành công (mục 3.6.7) hoặc Từ chối giao nhận (bên nhận món đồ). Ba nút dùng chung cho cả hai bên, cả Cho tặng và Trao đổi, cả gặp trực tiếp và giao hàng. Không còn câu hỏi "Món đồ có đúng mô tả không?" (21/11/2026).
 
 **Chi tiết chức năng**
 
 **Đầu vào:**
 
-- Câu trả lời đúng mô tả (người nhận); lý do nếu không đúng (≤ 1000 ký tự); ảnh / video minh chứng (tuỳ chọn).
+- Hoàn tất giao nhận: ảnh / video minh chứng (tuỳ chọn).
+
+- Từ chối giao nhận: lý do 5–1000 ký tự (bắt buộc), ảnh minh chứng (tuỳ chọn).
 
 **Kiểm tra:**
 
-- Giao dịch Đã chốt lịch hoặc Chờ xác nhận giao nhận; người gọi chưa xác nhận ([GN-06](#BR_GN_06)).
+- Giao dịch Đã chốt lịch hoặc Chờ xác nhận giao nhận, người gọi chưa bấm hoàn tất ([GN-06](#BR_GN_06)).
 
-- Chọn "Không đúng" thì bắt buộc lý do ([GN-07](#BR_GN_07)).
+- Từ chối giao nhận: Cho tặng chỉ người nhận, Trao đổi cả hai bên ([GN-07](#BR_GN_07)).
 
 **Nếu hợp lệ:**
 
-- Xác nhận đầu tiên → Chờ xác nhận giao nhận, báo bên kia ([GN-08](#BR_GN_08)).
+- Hoàn tất đầu tiên → Chờ xác nhận giao nhận, báo bên kia ([GN-08](#BR_GN_08)).
 
-- Đủ hai xác nhận và đúng mô tả → Hoàn tất; bài (và món đổi) → Đã trao; cộng điểm; báo hạn khiếu nại 24 giờ.
+- Đủ hai bên bấm hoàn tất → Hoàn tất, bài (và món đổi) → Đã trao, cộng điểm, báo hạn khiếu nại 24 giờ.
 
-- "Không đúng mô tả" → Đang tranh chấp ngay, mở khiếu nại NOT_AS_DESCRIBED, chủ bài có 48 giờ giải trình ([GN-07](#BR_GN_07)).
+- Giao hàng: người gửi bấm hoàn tất nghĩa là đã gửi hàng, người nhận bấm khi đã nhận hàng.
 
-- Một bên im lặng 3 ngày, không có khiếu nại → tự Hoàn tất ([GN-09](#BR_GN_09)).
+- Từ chối giao nhận → Đang tranh chấp ngay, mở khiếu nại Không đúng mô tả, chủ của món bị từ chối có 48 giờ giải trình ([GN-07](#BR_GN_07)).
+
+- Một bên đã bấm hoàn tất, bên kia im lặng 3 ngày (giao hàng 7 ngày), không có khiếu nại → tự Hoàn tất ([GN-09](#BR_GN_09)).
 
 **Nếu không hợp lệ (thông báo):**
 
-- "Người nhận bắt buộc phải trả lời câu hỏi món đồ có đúng mô tả hay không."
-
-- "Bắt buộc nhập lý do khi chọn món đồ không đúng mô tả."
+- "Chỉ bên nhận món đồ mới được từ chối giao nhận."
 
 - "Bạn đã xác nhận giao nhận cho yêu cầu này rồi."
 
+- "Chuyển trạng thái yêu cầu không hợp lệ."
+
 **Luật nghiệp vụ áp dụng (tóm tắt tại chỗ; bấm mã để xem đầy đủ ở mục 5.1)**
 
-| **Mã**             | **Nội dung luật**                                                                                                                                                                                                                                         |
-|--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [GN-06](#BR_GN_06) | Xác nhận giao nhận chỉ sau khi Đã chốt lịch, mỗi bên một lần. Chủ bài bấm "Đã giao"; người nhận bấm "Đã nhận" và bắt buộc trả lời "Món đồ có đúng mô tả không?".                                                                                          |
-| [GN-07](#BR_GN_07) | Người nhận trả lời Không đúng: bắt buộc nhập lý do → giao dịch Đang tranh chấp ngay, mở khiếu nại Không đúng mô tả (chủ bài có 48 giờ giải trình) trong cùng một lần xử lý; bài chưa Đã trao, chưa cộng điểm (D-04). Trang giao dịch hiện hạn giải trình. |
-| [GN-08](#BR_GN_08) | Xác nhận đầu tiên → Chờ xác nhận giao nhận, báo bên kia. Đủ hai xác nhận (và đúng mô tả) → Hoàn tất; bài (và món đổi) → Đã trao; cộng điểm; báo hai bên hạn khiếu nại kèm giờ cụ thể.                                                                     |
-| [GN-09](#BR_GN_09) | Một bên đã xác nhận, bên kia im lặng 3 ngày và giao dịch không có khiếu nại → tự Hoàn tất.                                                                                                                                                                |
-| [GN-10](#BR_GN_10) | Ảnh / video minh chứng đính kèm được từ Đã chốt lịch trở đi (cả khi Hoàn tất, Đang tranh chấp); hai bên xem được; Admin xem khi xử lý khiếu nại.                                                                                                          |
+| **Mã**             | **Nội dung luật** |
+|--------------------|-------------------|
+| [GN-06](#BR_GN_06) | Sau khi Đã chốt lịch, mỗi bên chọn một trong ba kết quả: Hoàn tất giao nhận, Giao nhận không thành công, Từ chối giao nhận. Mỗi bên bấm hoàn tất một lần. Giao hàng: người gửi bấm khi đã gửi, người nhận bấm khi đã nhận. |
+| [GN-07](#BR_GN_07) | Từ chối giao nhận (bên nhận món đồ: Cho tặng chỉ người nhận, Trao đổi cả hai bên), bắt buộc lý do → Đang tranh chấp ngay, mở khiếu nại Không đúng mô tả, chủ của món bị từ chối có 48 giờ giải trình. Bài chưa Đã trao, chưa cộng điểm (D-04). |
+| [GN-08](#BR_GN_08) | Hoàn tất đầu tiên → Chờ xác nhận giao nhận, báo bên kia. Đủ hai bên bấm hoàn tất → Hoàn tất, bài (và món đổi) → Đã trao, cộng điểm, báo hai bên hạn khiếu nại kèm giờ cụ thể. |
+| [GN-09](#BR_GN_09) | Một bên đã bấm hoàn tất, bên kia im lặng quá hạn và giao dịch không có khiếu nại → tự Hoàn tất. Gặp trực tiếp 3 ngày, giao hàng 7 ngày. |
+| [GN-10](#BR_GN_10) | Ảnh / video minh chứng đính kèm được từ Đã chốt lịch trở đi (cả khi Hoàn tất, Đang tranh chấp); hai bên xem được; Admin xem khi xử lý khiếu nại. |
 | [UT-06](#BR_UT_06) | Cộng điểm khi giao dịch Hoàn tất: bài Cho +10 người cho, +2 người nhận; bài Trao đổi +6 mỗi bên. Hạng tính lại ngay.                                                                                                                                      |
 
 <span id="FIG_sw16" class="anchor"></span>***Hình 19. Luồng xử lý F15 Giao nhận – file ShareLoop_Flows_Swimlane_v12_VI.drawio***
 
 **Giao diện**
 
-> **\[Ảnh chụp màn hình cần chèn\]** *Hộp thoại Xác nhận đã nhận với câu hỏi "Món đồ có đúng mô tả không?".*
+> **\[Ảnh chụp màn hình cần chèn\]** *Khối Giao nhận với ba nút Hoàn tất giao nhận, Giao nhận không thành công, Từ chối giao nhận.*
 >
 > **\[Ảnh chụp màn hình cần chèn\]** *Trang Tiến trình giao dịch ở trạng thái Hoàn tất (hạn khiếu nại).*
 
@@ -1989,9 +1993,9 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 
 **Use case:** [UC-30](#UC_30), [UC-31](#UC_31) **· Tác nhân:** Member (hai bên giao dịch)
 
-**Kích hoạt:** Một bên bấm "Huỷ giao dịch" hoặc "Tôi chưa nhận được đồ" / "Tôi chưa giao được" ở trang Tiến trình giao dịch.
+**Kích hoạt:** Một bên bấm "Huỷ giao dịch" (trước khi chốt lịch) hoặc "Giao nhận không thành công" (sau khi chốt lịch) ở trang Tiến trình giao dịch.
 
-**Mô tả:** Huỷ giao dịch đang mở kèm lý do; hoặc báo sự cố khi bên kia đã xác nhận còn mình chưa, giao dịch chuyển tranh chấp.
+**Mô tả:** Trước khi chốt lịch, một bên huỷ giao dịch kèm lý do. Từ khi chốt lịch, nút "Giao nhận không thành công" thay cho "Huỷ giao dịch": bên kia chưa bấm hoàn tất thì giao dịch bị huỷ, bên kia đã bấm hoàn tất thì giao dịch chuyển tranh chấp.
 
 **Chi tiết chức năng**
 
@@ -1999,34 +2003,36 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 
 - Huỷ: lý do 5–500 ký tự.
 
-- Báo sự cố: ghi chú 5–1000 ký tự, ảnh bằng chứng (tuỳ chọn).
+- Giao nhận không thành công: lý do chọn sẵn theo hình thức giao nhận kèm mô tả thêm (tổng 5–500 ký tự), ảnh bằng chứng (tuỳ chọn).
 
 **Kiểm tra:**
 
-- Huỷ khi Đã được chọn, Đang hẹn lịch, Đã chốt lịch hoặc Chờ xác nhận giao nhận; Đang tranh chấp thì chờ Admin ([HG-01](#BR_HG_01), [HG-02](#BR_HG_02)).
+- Huỷ chỉ khi Đã được chọn hoặc Đang hẹn lịch; Đang tranh chấp thì chờ Admin ([HG-01](#BR_HG_01), [HG-02](#BR_HG_02)).
 
-- Báo sự cố chỉ khi Chờ xác nhận giao nhận, bên kia đã xác nhận, mình chưa ([HG-03](#BR_HG_03)).
+- Giao nhận không thành công chỉ khi Đã chốt lịch hoặc Chờ xác nhận giao nhận và mình chưa bấm hoàn tất ([HG-03](#BR_HG_03)).
 
 **Nếu hợp lệ:**
 
 - Huỷ: giao dịch → Đã huỷ (lý do kèm "\[Chủ bài\]" / "\[Người nhận\]"), bài và món đổi về Đang hiển thị, bên kia được báo; không hoàn, không thu phí.
 
-- Báo sự cố: → Đang tranh chấp, mở khiếu nại NO_SHOW, bên kia có 48 giờ giải trình.
+- Giao nhận không thành công, bên kia chưa bấm hoàn tất: xử lý như Huỷ, không phạt ai.
+
+- Giao nhận không thành công, bên kia đã bấm hoàn tất: → Đang tranh chấp, mở khiếu nại NO_SHOW, bên kia có 48 giờ giải trình.
 
 **Nếu không hợp lệ (thông báo):**
 
-- "Dữ liệu không hợp lệ." (lý do / ghi chú sai độ dài)
+- "Dữ liệu không hợp lệ." (lý do sai độ dài)
 
 - "Chuyển trạng thái yêu cầu không hợp lệ."
 
 **Luật nghiệp vụ áp dụng (tóm tắt tại chỗ; bấm mã để xem đầy đủ ở mục 5.1)**
 
-| **Mã**             | **Nội dung luật**                                                                                                                                                                                                                                                     |
-|--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [HG-01](#BR_HG_01) | Một bên huỷ được giao dịch khi đang Đã được chọn, Đang hẹn lịch, Đã chốt lịch hoặc Chờ xác nhận giao nhận; bắt buộc lý do 5–500 ký tự (ghi kèm "\[Chủ bài\]" / "\[Người nhận\]"). Bài và món đổi về Đang hiển thị, bên kia nhận thông báo. Không hoàn, không thu phí. |
-| [HG-02](#BR_HG_02) | Giao dịch Đang tranh chấp: người dùng không tự huỷ, phải chờ Admin.                                                                                                                                                                                                   |
-| [HG-03](#BR_HG_03) | Báo "Tôi chưa nhận được đồ" / "Tôi chưa giao được": chỉ khi Chờ xác nhận giao nhận, bên kia đã xác nhận còn mình chưa; ghi chú 5–1000 ký tự, ảnh tuỳ chọn. Kết quả: Đang tranh chấp + khiếu nại Không đến / không giao (NO_SHOW), hạn giải trình 48 giờ.              |
-| [BC-09](#BR_BC_09) | Khiếu nại tự mở từ: báo chưa nhận / chưa giao (HG-03), báo không đúng mô tả (GN-07).                                                                                                                                                                                  |
+| **Mã**             | **Nội dung luật** |
+|--------------------|-------------------|
+| [HG-01](#BR_HG_01) | Một bên huỷ được giao dịch khi đang Đã được chọn hoặc Đang hẹn lịch; bắt buộc lý do 5–500 ký tự (ghi kèm "\[Chủ bài\]" / "\[Người nhận\]"). Bài và món đổi về Đang hiển thị, bên kia nhận thông báo. Không hoàn, không thu phí. Từ Đã chốt lịch dùng "Giao nhận không thành công" (HG-03). |
+| [HG-02](#BR_HG_02) | Giao dịch Đang tranh chấp: người dùng không tự huỷ, phải chờ Admin. |
+| [HG-03](#BR_HG_03) | "Giao nhận không thành công": khi Đã chốt lịch hoặc Chờ xác nhận giao nhận và mình chưa bấm hoàn tất; lý do 5–500 ký tự, ảnh tuỳ chọn. Bên kia chưa bấm hoàn tất → Đã huỷ như HG-01, không phạt. Bên kia đã bấm hoàn tất → Đang tranh chấp + khiếu nại Không đến / không giao (NO_SHOW), hạn giải trình 48 giờ. |
+| [BC-09](#BR_BC_09) | Khiếu nại tự mở từ: giao nhận không thành công khi bên kia đã bấm hoàn tất (HG-03), từ chối giao nhận (GN-07). |
 
 <span id="FIG_sw13" class="anchor"></span>***Hình 20. Luồng xử lý F12 Huỷ giao dịch – file ShareLoop_Flows_Swimlane_v12_VI.drawio***
 
@@ -2034,7 +2040,7 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 
 > **\[Ảnh chụp màn hình cần chèn\]** *Hộp thoại Huỷ giao dịch có ô lý do.*
 >
-> **\[Ảnh chụp màn hình cần chèn\]** *Hộp thoại "Tôi chưa nhận được đồ".*
+> **\[Ảnh chụp màn hình cần chèn\]** *Hộp thoại "Giao nhận không thành công".*
 
 ## 3.7 Báo cáo, khiếu nại và thông báo
 
@@ -2086,7 +2092,7 @@ Mọi chế tài chỉ ở cấp tài khoản (trừ sao, ẩn bài, cấm); h�
 | [BC-02](#BR_BC_02) | Bài có 3 báo cáo đang chờ (Chờ xử lý / Chờ giải trình) → tạm ẩn bài, trạng thái bài giữ nguyên; báo chủ bài và Admin.                                                  |
 | [BC-07](#BR_BC_07) | Khiếu nại giao dịch Hoàn tất: là một bên của giao dịch, trong 24 giờ sau hoàn tất, chưa khiếu nại giao dịch này (D-05).                                                |
 | [BC-08](#BR_BC_08) | Bên bị khiếu nại giải trình 1 lần kèm bằng chứng, trong 48 giờ; thông báo ghi rõ giờ hết hạn. Nội dung giải trình tối đa 2000 ký tự, giống giải trình báo cáo (BC-03). |
-| [BC-09](#BR_BC_09) | Khiếu nại tự mở từ: báo chưa nhận / chưa giao (HG-03), báo không đúng mô tả (GN-07).                                                                                   |
+| [BC-09](#BR_BC_09) | Khiếu nại tự mở từ: giao nhận không thành công khi bên kia đã bấm hoàn tất (HG-03), từ chối giao nhận (GN-07). |
 
 <span id="FIG_sw17" class="anchor"></span>***Hình 21. Luồng xử lý F16 Báo cáo, khiếu nại – file ShareLoop_Flows_Swimlane_v12_VI.drawio***
 
@@ -2100,7 +2106,7 @@ Mọi chế tài chỉ ở cấp tài khoản (trừ sao, ẩn bài, cấm); h�
 
 **Use case:** [UC-32](#UC_32) **· Tác nhân:** Member (bên bị báo cáo)
 
-**Kích hoạt:** Bên bị báo cáo bấm thông báo "Bạn có 48 giờ … để giải trình".
+**Kích hoạt:** Bên bị báo cáo bấm thông báo "Bạn có 48 giờ … để giải trình". Với khiếu nại giao dịch, bên bị khiếu nại còn bấm "Giải trình ngay" ở trang Tiến trình giao dịch hoặc trên banner trong khung chat (21/11/2026).
 
 **Mô tả:** Gửi nội dung giải trình kèm ảnh một lần, trước hạn. Một bài nhiều báo cáo chỉ cần giải trình một lần cho cả bài.
 
@@ -2661,7 +2667,7 @@ Ba sơ đồ trạng thái lấy từ file swimlane v12 (trang S1, S2, S3).
 
 <span id="FIG_sw22" class="anchor"></span>***Hình 24. S1 Trạng thái giao dịch (requests.status) – file ShareLoop_Flows_Swimlane_v12_VI.drawio***
 
-> **Ghi chú rà soát:** S1 vẽ cạnh LOGISTICS_CONFIRMED → DISPUTED; RequestStatus.canTransition không có cạnh này. Code đi qua AWAITING_HANDOVER rồi sang DISPUTED trong cùng một lần xử lý khi người nhận chọn "Không đúng mô tả".
+> **Ghi chú rà soát:** S1 vẽ cạnh LOGISTICS_CONFIRMED → DISPUTED; RequestStatus.canTransition không có cạnh này. Code đi qua AWAITING_HANDOVER rồi sang DISPUTED trong cùng một lần xử lý khi một bên bấm "Từ chối giao nhận". Từ 21/11/2026, LOGISTICS_CONFIRMED → CANCELLED và AWAITING_HANDOVER → CANCELLED do người dùng chỉ còn đi qua nút "Giao nhận không thành công" khi bên kia chưa bấm hoàn tất. File drawio chưa vẽ lại, cần cập nhật tay.
 
 <span id="FIG_sw23" class="anchor"></span>***Hình 25. S2 Trạng thái bài đăng (items.status) – file ShareLoop_Flows_Swimlane_v12_VI.drawio***
 
@@ -3578,7 +3584,7 @@ Người nhận gửi yêu cầu xin (bài Cho) hoặc đề nghị đổi (bài
 </tr>
 <tr class="even">
 <td><span id="BR_YC_06" class="anchor"></span><strong>YC-06</strong></td>
-<td>Chủ bài xem danh sách người xin (sao, hạng, tỉ lệ đúng mô tả, món đem đổi) và chọn đúng một người.</td>
+<td>Chủ bài xem danh sách người xin (sao, hạng, món đem đổi) và chọn đúng một người.</td>
 <td>—</td>
 <td><a href="#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi">Chọn người giao dịch và chuyển hình thức Cho ↔︎ Trao đổi</a></td>
 </tr>
@@ -3632,10 +3638,10 @@ Từ lúc chọn người tới lúc hoàn tất. Sơ đồ dưới tóm tắt t
 | <span id="BR_GN_03" class="anchor"></span>**GN-03** | Hai bên cùng đồng ý → Đã chốt lịch; lịch bị khoá, không sửa được nữa.                                                                                                                                                                                     | —                          | [Chốt lịch giao nhận và xem thông tin liên lạc](#chốt-lịch-giao-nhận-và-xem-thông-tin-liên-lạc) |
 | <span id="BR_GN_04" class="anchor"></span>**GN-04** | Khi Đã chốt lịch: họ tên, email, SĐT của hai bên hiện trong trang giao dịch (không gửi qua email); đã hiện thì không ẩn lại (D-11).                                                                                                                       | —                          | [Chốt lịch giao nhận và xem thông tin liên lạc](#chốt-lịch-giao-nhận-và-xem-thông-tin-liên-lạc) |
 | <span id="BR_GN_05" class="anchor"></span>**GN-05** | Quá 10 ngày từ lúc chọn người mà chưa chốt lịch → tự huỷ, bài về Đang hiển thị.                                                                                                                                                                           | chat_open_days = 10        | [Chốt lịch giao nhận và xem thông tin liên lạc](#chốt-lịch-giao-nhận-và-xem-thông-tin-liên-lạc) |
-| <span id="BR_GN_06" class="anchor"></span>**GN-06** | Xác nhận giao nhận chỉ sau khi Đã chốt lịch, mỗi bên một lần. Chủ bài bấm "Đã giao"; người nhận bấm "Đã nhận" và bắt buộc trả lời "Món đồ có đúng mô tả không?".                                                                                          | —                          | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                          |
-| <span id="BR_GN_07" class="anchor"></span>**GN-07** | Người nhận trả lời Không đúng: bắt buộc nhập lý do → giao dịch Đang tranh chấp ngay, mở khiếu nại Không đúng mô tả (chủ bài có 48 giờ giải trình) trong cùng một lần xử lý; bài chưa Đã trao, chưa cộng điểm (D-04). Trang giao dịch hiện hạn giải trình. | response_window_hours = 48 | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                          |
-| <span id="BR_GN_08" class="anchor"></span>**GN-08** | Xác nhận đầu tiên → Chờ xác nhận giao nhận, báo bên kia. Đủ hai xác nhận (và đúng mô tả) → Hoàn tất; bài (và món đổi) → Đã trao; cộng điểm; báo hai bên hạn khiếu nại kèm giờ cụ thể.                                                                     | —                          | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                          |
-| <span id="BR_GN_09" class="anchor"></span>**GN-09** | Một bên đã xác nhận, bên kia im lặng 3 ngày và giao dịch không có khiếu nại → tự Hoàn tất.                                                                                                                                                                | auto_confirm_days = 3      | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                          |
+| <span id="BR_GN_06" class="anchor"></span>**GN-06** | Sau khi Đã chốt lịch, mỗi bên chọn một trong ba kết quả: Hoàn tất giao nhận, Giao nhận không thành công, Từ chối giao nhận. Mỗi bên bấm hoàn tất một lần. Giao hàng: người gửi bấm khi đã gửi, người nhận bấm khi đã nhận. | —                          | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                          |
+| <span id="BR_GN_07" class="anchor"></span>**GN-07** | Từ chối giao nhận (bên nhận món đồ: Cho tặng chỉ người nhận, Trao đổi cả hai bên), bắt buộc lý do 5–1000 ký tự → Đang tranh chấp ngay, mở khiếu nại Không đúng mô tả trong cùng một lần xử lý, chủ của món bị từ chối có 48 giờ giải trình. Bài chưa Đã trao, chưa cộng điểm (D-04). Admin chấp nhận: món của bên vi phạm bị ẩn, món còn lại mở lại. | response_window_hours = 48 | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                          |
+| <span id="BR_GN_08" class="anchor"></span>**GN-08** | Hoàn tất đầu tiên → Chờ xác nhận giao nhận, báo bên kia. Đủ hai bên bấm hoàn tất → Hoàn tất; bài (và món đổi) → Đã trao; cộng điểm; báo hai bên hạn khiếu nại kèm giờ cụ thể. | —                          | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                          |
+| <span id="BR_GN_09" class="anchor"></span>**GN-09** | Một bên đã bấm hoàn tất, bên kia im lặng quá hạn và giao dịch không có khiếu nại → tự Hoàn tất. Gặp trực tiếp 3 ngày, giao hàng 7 ngày. | auto_confirm_days = 3, auto_confirm_days_shipping = 7 | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                          |
 | <span id="BR_GN_10" class="anchor"></span>**GN-10** | Ảnh / video minh chứng đính kèm được từ Đã chốt lịch trở đi (cả khi Hoàn tất, Đang tranh chấp); hai bên xem được; Admin xem khi xử lý khiếu nại.                                                                                                          | —                          | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                          |
 | <span id="BR_GN_11" class="anchor"></span>**GN-11** | Hệ thống không bồi thường tiền hàng, phí gửi trong mọi trường hợp; khiếu nại chỉ dẫn tới trừ sao.                                                                                                                                                         | —                          | [Chốt lịch giao nhận và xem thông tin liên lạc](#chốt-lịch-giao-nhận-và-xem-thông-tin-liên-lạc) |
 
@@ -3643,9 +3649,9 @@ Từ lúc chọn người tới lúc hoàn tất. Sơ đồ dưới tóm tắt t
 
 | **Mã**                                              | **Luật**                                                                                                                                                                                                                                                              | **Con số**               | **Dùng ở**                                                                              |
 |-----------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------|-----------------------------------------------------------------------------------------|
-| <span id="BR_HG_01" class="anchor"></span>**HG-01** | Một bên huỷ được giao dịch khi đang Đã được chọn, Đang hẹn lịch, Đã chốt lịch hoặc Chờ xác nhận giao nhận; bắt buộc lý do 5–500 ký tự (ghi kèm "\[Chủ bài\]" / "\[Người nhận\]"). Bài và món đổi về Đang hiển thị, bên kia nhận thông báo. Không hoàn, không thu phí. | 5–500 ký tự              | [Huỷ giao dịch và báo chưa nhận / chưa giao](#huỷ-giao-dịch-và-báo-chưa-nhận-chưa-giao) |
+| <span id="BR_HG_01" class="anchor"></span>**HG-01** | Một bên huỷ được giao dịch khi đang Đã được chọn hoặc Đang hẹn lịch; bắt buộc lý do 5–500 ký tự (ghi kèm "\[Chủ bài\]" / "\[Người nhận\]"). Bài và món đổi về Đang hiển thị, bên kia nhận thông báo. Không hoàn, không thu phí. Từ Đã chốt lịch dùng "Giao nhận không thành công" (HG-03). | 5–500 ký tự              | [Huỷ giao dịch và báo chưa nhận / chưa giao](#huỷ-giao-dịch-và-báo-chưa-nhận-chưa-giao) |
 | <span id="BR_HG_02" class="anchor"></span>**HG-02** | Giao dịch Đang tranh chấp: người dùng không tự huỷ, phải chờ Admin.                                                                                                                                                                                                   | —                        | [Huỷ giao dịch và báo chưa nhận / chưa giao](#huỷ-giao-dịch-và-báo-chưa-nhận-chưa-giao) |
-| <span id="BR_HG_03" class="anchor"></span>**HG-03** | Báo "Tôi chưa nhận được đồ" / "Tôi chưa giao được": chỉ khi Chờ xác nhận giao nhận, bên kia đã xác nhận còn mình chưa; ghi chú 5–1000 ký tự, ảnh tuỳ chọn. Kết quả: Đang tranh chấp + khiếu nại Không đến / không giao (NO_SHOW), hạn giải trình 48 giờ.              | 5–1000 ký tự, 48 giờ     | [Huỷ giao dịch và báo chưa nhận / chưa giao](#huỷ-giao-dịch-và-báo-chưa-nhận-chưa-giao) |
+| <span id="BR_HG_03" class="anchor"></span>**HG-03** | "Giao nhận không thành công": khi Đã chốt lịch hoặc Chờ xác nhận giao nhận và mình chưa bấm hoàn tất; lý do 5–500 ký tự, ảnh tuỳ chọn. Bên kia chưa bấm hoàn tất → Đã huỷ như HG-01, không phạt. Bên kia đã bấm hoàn tất → Đang tranh chấp + khiếu nại Không đến / không giao (NO_SHOW), hạn giải trình 48 giờ. | 5–1000 ký tự, 48 giờ     | [Huỷ giao dịch và báo chưa nhận / chưa giao](#huỷ-giao-dịch-và-báo-chưa-nhận-chưa-giao) |
 | <span id="BR_HG_04" class="anchor"></span>**HG-04** | Admin huỷ được giao dịch ở mọi trạng thái chưa kết thúc (kể cả Đang tranh chấp), bắt buộc lý do. Khiếu nại đang mở không tự đóng.                                                                                                                                     | —                        | [Quản lý giao dịch](#quản-lý-giao-dịch)                                                 |
 | <span id="BR_HG_05" class="anchor"></span>**HG-05** | Giao dịch "bị kẹt" (Admin lọc được): quá giờ hẹn 48 giờ mà chưa bên nào xác nhận giao nhận, hoặc một bên đang bị khoá.                                                                                                                                                | stuck_request_hours = 48 | [Quản lý giao dịch](#quản-lý-giao-dịch)                                                 |
 
@@ -3723,7 +3729,7 @@ Báo cáo là về một bài hoặc một người; khiếu nại là về mộ
 </tr>
 <tr class="odd">
 <td><span id="BR_BC_09" class="anchor"></span><strong>BC-09</strong></td>
-<td>Khiếu nại tự mở từ: báo chưa nhận / chưa giao (HG-03), báo không đúng mô tả (GN-07).</td>
+<td>Khiếu nại tự mở từ: giao nhận không thành công khi bên kia đã bấm hoàn tất (HG-03), từ chối giao nhận (GN-07).</td>
 <td>—</td>
 <td><p><a href="#huỷ-giao-dịch-và-báo-chưa-nhận-chưa-giao">Huỷ giao dịch và báo chưa nhận / chưa giao</a></p>
 <p><a href="#báo-cáo-bài-người-dùng-và-khiếu-nại-giao-dịch">Báo cáo bài, người dùng và khiếu nại giao dịch</a></p></td>
@@ -3873,7 +3879,8 @@ Giá trị mặc định lấy từ enum ConfigKey (backend/src/main/java/com/sh
 | max_pending_requests             | 5                           | Số yêu cầu chờ tối đa. Số yêu cầu đang chờ phản hồi mà một người được gửi cùng lúc.                                                                                                                                                                                        |
 | request_pending_days             | 3                           | Hạn yêu cầu chờ phản hồi. Số ngày một yêu cầu được chờ phản hồi. Quá hạn thì yêu cầu tự huỷ.                                                                                                                                                                               |
 | chat_open_days                   | 10                          | Thời gian mở chat. Số ngày kể từ khi chọn người nhận. Chưa chốt lịch trong thời gian này thì giao dịch bị huỷ và chat đóng.                                                                                                                                                |
-| auto_confirm_days                | 3                           | Hạn tự động hoàn tất. Một bên đã xác nhận mà bên kia im lặng quá số ngày này thì giao dịch tự hoàn tất.                                                                                                                                                                    |
+| auto_confirm_days                | 3                           | Hạn tự động hoàn tất khi gặp trực tiếp. Một bên đã xác nhận mà bên kia im lặng quá số ngày này thì giao dịch tự hoàn tất.                                                                                                                                                                    |
+| auto_confirm_days_shipping | 7 | Hạn tự động hoàn tất khi giao hàng (21/11/2026). Dài hơn gặp trực tiếp vì cần thời gian vận chuyển. |
 | stuck_request_hours              | 48                          | Ngưỡng giao dịch bị kẹt. Giao dịch quá giờ hẹn hơn số giờ này mà chưa bên nào xác nhận bàn giao thì Admin thấy ở bộ lọc Bị kẹt.                                                                                                                                            |
 | complaint_window_hours           | 24                          | Hạn khiếu nại. Số giờ được khiếu nại sau khi giao dịch hoàn tất.                                                                                                                                                                                                           |
 | response_window_hours            | 48                          | Hạn giải trình. Số giờ bên bị khiếu nại được giải trình, tính từ lúc nhận thông báo.                                                                                                                                                                                       |
@@ -4041,8 +4048,8 @@ Thông báo lỗi lấy từ các lớp \*ErrorCode trong backend (mỗi module 
 | MSG113 | REQUEST_WAIVER_REQUIRED                  | BAD REQUEST           | request      | Vui lòng đồng ý cam kết trách nhiệm giao nhận.      |
 | MSG114 | REQUEST_SCHEDULE_NOT_SET                 | BAD REQUEST           | request      | Chưa có thông tin lịch hẹn để xác nhận.                                              |
 | MSG115 | REQUEST_CONTACT_NOT_REVEALED             | CONFLICT              | request      | Thông tin liên lạc chỉ được hiển thị sau khi hai bên đã chốt lịch hẹn.               |
-| MSG116 | REQUEST_AS_DESCRIBED_REQUIRED            | BAD REQUEST           | request      | Người nhận bắt buộc phải trả lời câu hỏi món đồ có đúng mô tả hay không.             |
-| MSG117 | REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED | BAD REQUEST           | request      | Bắt buộc nhập lý do khi chọn món đồ không đúng mô tả.                                |
+| MSG116 | REQUEST_REFUSE_NOT_ALLOWED | FORBIDDEN | request | Chỉ bên nhận món đồ mới được từ chối giao nhận. |
+| MSG117 | (đã bỏ 21/11/2026) | — | request | Không còn câu hỏi đúng mô tả khi xác nhận giao nhận. |
 | MSG118 | REQUEST_HANDOVER_ALREADY_CONFIRMED       | CONFLICT              | request      | Bạn đã xác nhận giao nhận cho yêu cầu này rồi.                                       |
 | MSG119 | REQUEST_MEDIA_REQUIRED                   | BAD REQUEST           | request      | Danh sách ảnh/video minh chứng không được rỗng.                                      |
 | MSG120 | REQUEST_MEDIA_STAGE_INVALID              | BAD REQUEST           | request      | Giai đoạn đính kèm minh chứng không hợp lệ.                                          |
@@ -4105,7 +4112,7 @@ Thông báo lỗi lấy từ các lớp \*ErrorCode trong backend (mỗi module 
 | D-01   | Bài Cho miễn phí, tối đa 5 bài; bài Trao đổi 5 Credit trong hạn mức theo hạng, vượt hạn mức đăng thêm được với 10 Credit, không giới hạn trên.                                                   | [PH-02](#BR_PH_02), [BD-05](#BR_BD_05), [BD-06](#BR_BD_06) |
 | D-02   | Giữ chuyển đổi hình thức, chỉ lúc chọn người hoặc trong chat bài Cho; Cho → Trao đổi trả 5 Credit, Trao đổi → Cho không hoàn phí; không kiểm hạn mức; không đồng ý thì không chọn được người đó. | Mục K                                                      |
 | D-03   | Bỏ AI trong duyệt bài.                                                                                                                                                                           | [KD-01](#BR_KD_01)                                         |
-| D-04   | Người nhận báo Không đúng mô tả → Đang tranh chấp, chưa Đã trao, chưa cộng điểm.                                                                                                                 | [GN-07](#BR_GN_07)                                         |
+| D-04   | Bên nhận món đồ bấm Từ chối giao nhận → Đang tranh chấp, chưa Đã trao, chưa cộng điểm.                                                                                                                 | [GN-07](#BR_GN_07)                                         |
 | D-05   | Khiếu nại trong 24 giờ sau hoàn tất; giải trình trong 48 giờ.                                                                                                                                    | [BC-07](#BR_BC_07), [BC-08](#BR_BC_08)                     |
 | D-06   | Không gia hạn bài Hết hạn; đăng bài mới.                                                                                                                                                         | [HT-03](#BR_HT_03)                                         |
 | D-07   | Bài 3 báo cáo tạm ẩn → Admin yêu cầu giải trình 48 giờ → kết luận; bác bỏ mở lại bài, chấp thuận ẩn hẳn và trừ 1 sao.                                                                            | [BC-02](#BR_BC_02) … [BC-05](#BR_BC_05)                    |
@@ -4244,15 +4251,15 @@ Chụp trên bản staging (frontend Vercel, backend Cloud Run) bằng các tài
 | 25     | [AI trợ lý tìm đồ](#ai-trợ-lý-tìm-đồ)                                                                             | Trang Trợ lý AI (/ai): ô nhập, số lượt miễn phí còn lại, kết quả có thẻ bài.                                 |
 | 26     | [Gửi yêu cầu xin hoặc đề nghị đổi](#gửi-yêu-cầu-xin-hoặc-đề-nghị-đổi)                                             | Hộp thoại Gửi yêu cầu (có chọn món đem đổi).                                                                 |
 | 27     | [Rút yêu cầu](#rút-yêu-cầu)                                                                                       | Tab Yêu cầu đã gửi trên trang Hoạt động, có nút Rút yêu cầu.                                                 |
-| 28     | [Chọn người giao dịch và chuyển hình thức Cho ↔ Trao đổi](#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi) | Danh sách người xin của một bài (sao, hạng, tỉ lệ đúng mô tả, món đổi).                                      |
+| 28     | [Chọn người giao dịch và chuyển hình thức Cho ↔ Trao đổi](#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi) | Danh sách người xin của một bài (sao, hạng, món đổi).                                      |
 | 29     | [Chọn người giao dịch và chuyển hình thức Cho ↔ Trao đổi](#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi) | Hộp thoại xác nhận "Chuyển bài sang Trao đổi, trừ 5 Credit".                                                 |
 | 30     | [Nhắn tin trong giao dịch](#nhắn-tin-trong-giao-dịch)                                                             | Trang Tin nhắn (/messages): thẻ bài ghim ở đầu, một tin bị chặn kèm lý do.                                   |
 | 31     | [Chốt lịch giao nhận và xem thông tin liên lạc](#chốt-lịch-giao-nhận-và-xem-thông-tin-liên-lạc)                   | Trang Tiến trình giao dịch: thẻ lịch hẹn đang chờ bên kia xác nhận.                                          |
 | 32     | [Chốt lịch giao nhận và xem thông tin liên lạc](#chốt-lịch-giao-nhận-và-xem-thông-tin-liên-lạc)                   | Trang Tiến trình giao dịch sau khi chốt: khối thông tin liên lạc của đối tác.                                |
-| 33     | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                                            | Hộp thoại Xác nhận đã nhận với câu hỏi "Món đồ có đúng mô tả không?".                                        |
+| 33     | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                                            | Khối Giao nhận với ba nút kết quả. |
 | 34     | [Xác nhận đã giao, đã nhận](#xác-nhận-đã-giao-đã-nhận)                                                            | Trang Tiến trình giao dịch ở trạng thái Hoàn tất (hạn khiếu nại).                                            |
 | 35     | [Huỷ giao dịch và báo chưa nhận / chưa giao](#huỷ-giao-dịch-và-báo-chưa-nhận-chưa-giao)                           | Hộp thoại Huỷ giao dịch có ô lý do.                                                                          |
-| 36     | [Huỷ giao dịch và báo chưa nhận / chưa giao](#huỷ-giao-dịch-và-báo-chưa-nhận-chưa-giao)                           | Hộp thoại "Tôi chưa nhận được đồ".                                                                           |
+| 36     | [Huỷ giao dịch và báo chưa nhận / chưa giao](#huỷ-giao-dịch-và-báo-chưa-nhận-chưa-giao)                           | Hộp thoại "Giao nhận không thành công". |
 | 37     | [Báo cáo bài, người dùng và khiếu nại giao dịch](#báo-cáo-bài-người-dùng-và-khiếu-nại-giao-dịch)                  | Hộp thoại Báo cáo bài (chọn lý do, mô tả, ảnh).                                                              |
 | 38     | [Báo cáo bài, người dùng và khiếu nại giao dịch](#báo-cáo-bài-người-dùng-và-khiếu-nại-giao-dịch)                  | Hộp thoại Khiếu nại giao dịch.                                                                               |
 | 39     | [Giải trình báo cáo, khiếu nại](#giải-trình-báo-cáo-khiếu-nại)                                                    | Trang Gửi giải trình (/me/reports/:id hoặc /me/disputes/:id) có hạn giải trình.                              |

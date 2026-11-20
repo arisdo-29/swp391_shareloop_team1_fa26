@@ -1193,7 +1193,6 @@ export function Activities() {
               <ReputationBadge
                 trustStars={acceptRequest.requesterTrustStars}
                 rank={acceptRequest.requesterRank}
-                asDescribedRate={acceptRequest.requesterAsDescribedRate}
               />
             </div>
           </div>
@@ -2011,7 +2010,6 @@ function RequestPanel({
                   <ReputationBadge
                     trustStars={request.requesterTrustStars}
                     rank={request.requesterRank}
-                    asDescribedRate={request.requesterAsDescribedRate}
                     compact
                   />
                   <span className="text-xs text-text-muted">

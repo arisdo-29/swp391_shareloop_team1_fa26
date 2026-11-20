@@ -146,7 +146,6 @@ export function ChatHeader({
               <ReputationBadge
                 trustStars={request.receiverTrustStars ?? request.trustStars}
                 rank={request.receiverRank ?? request.rank}
-                asDescribedRate={request.receiverAsDescribedRate ?? request.asDescribedRate}
                 compact
               />
             </div>

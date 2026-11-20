@@ -10,7 +10,7 @@ const values = [
 const steps = [
   ['Đăng hoặc tìm món', 'Chia sẻ món bạn có, hoặc lọc theo nhu cầu và quận. Khách xem được, muốn gửi yêu cầu thì đăng nhập.'],
   ['Chọn người và chốt lịch', 'Chủ bài chọn một người, hai bên trò chuyện rồi cùng đồng ý lịch gặp trực tiếp hoặc gửi qua đơn vị vận chuyển.'],
-  ['Xác nhận hoàn tất', 'Chủ bài bấm "Đã giao", người nhận bấm "Đã nhận" và cho biết đồ có đúng mô tả không.'],
+  ['Xác nhận hoàn tất', 'Giao xong, hai bên cùng bấm "Hoàn tất giao nhận". Đồ khác mô tả thì bấm "Từ chối giao nhận" để Admin xem xét.'],
 ];
 
 export function HomeLifecycle({ items }: { items: Item[] }) {

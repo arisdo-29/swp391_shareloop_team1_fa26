@@ -149,8 +149,11 @@ describe('trang Giới thiệu', () => {
     renderAbout();
 
     const pageText = document.body.textContent ?? '';
-    for (const removed of ['7 ngày', 'Được đẩy', 'chính hãng', 'thực phẩm', 'QR']) {
+    for (const removed of ['Được đẩy', 'chính hãng', 'thực phẩm', 'QR']) {
       expect(pageText).not.toContain(removed);
     }
+    // Hạn khiếu nại 7 ngày đã bỏ (nay là 24 giờ). "7 ngày" vẫn hợp lệ cho hạn tự hoàn tất khi giao hàng.
+    expect(pageText).not.toMatch(/khiếu nại trong 7 ngày|7 ngày (để|được) khiếu nại/);
+    expect(pageText).toContain('gửi qua đơn vị vận chuyển là 7 ngày');
   });
 });

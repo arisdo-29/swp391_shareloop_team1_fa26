@@ -7,9 +7,14 @@ import { mediaApi } from '../../services/mediaApi';
 import { openDispute, type DisputeResponse, type ReportReason } from '../../services/reportApi';
 import type { ApiError } from '../../services/http';
 import { disputeErrorMessage, disputeReasonLabels } from '../../utils/disputeErrors';
-import { canConfirmHandover, canReportHandoverIssue, formatDeadline } from '../../utils/request';
+import { canConfirmHandover, formatDeadline } from '../../utils/request';
+import {
+  handoverFailedConsequence,
+  handoverFailedReasons,
+  refuseHandoverConsequence,
+} from '../../utils/handoverOutcome';
 
-// Ba hộp thoại của trang Tiến trình giao dịch, chuyển từ bảng tiến trình cũ ở trang Tin nhắn.
+// Các hộp thoại của trang Tiến trình giao dịch, chuyển từ bảng tiến trình cũ ở trang Tin nhắn.
 // Mỗi hộp thoại tự giữ ô nhập và tự gọi API; xong thì báo Request mới (hoặc lời nhắn) về trang.
 
 async function uploadEvidence(files: File[]) {
@@ -102,56 +107,51 @@ export function CancelTransactionDialog({
   );
 }
 
-export function handoverIssueLabel(viewerIsDonor: boolean) {
-  return viewerIsDonor ? 'Tôi không giao được đồ' : 'Tôi không nhận được đồ';
+const OTHER_REASON = 'other';
+const HANDOVER_FAILED_LIMIT = 500;
+const REFUSE_REASON_LIMIT = 1000;
+
+function handoverOutcomeError(error: unknown) {
+  const apiError = error as Partial<ApiError>;
+  const messages: Record<string, string> = {
+    REQUEST_FORBIDDEN: 'Bạn không phải một bên của giao dịch này.',
+    REQUEST_NOT_FOUND: 'Không tìm thấy giao dịch này.',
+    REQUEST_REFUSE_NOT_ALLOWED: 'Chỉ bên nhận món đồ mới được từ chối giao nhận.',
+    REQUEST_INVALID_STATE_TRANSITION: 'Giao dịch đã thay đổi trạng thái. Vui lòng tải lại.',
+  };
+  return (apiError.code && messages[apiError.code]) || disputeErrorMessage(error);
 }
 
-function handoverIssueDescription(
-  viewerIsDonor: boolean,
-  partnerName: string,
-  reportIssue: boolean,
-) {
-  if (!reportIssue) {
-    const partnerRole = viewerIsDonor ? 'người nhận' : 'người cho';
-    return `Nếu bạn chọn Hủy giao dịch, ${partnerRole} sẽ nhận được lý do và bài đăng sẽ được mở lại cho người khác.`;
-  }
-
-  const partnerConfirmation = viewerIsDonor ? 'đã xác nhận nhận đồ' : 'đã xác nhận giao đồ';
-  const partnerRole = viewerIsDonor ? 'Người nhận' : 'Người cho';
-  return `${partnerName} ${partnerConfirmation}. Báo cáo sẽ chuyển giao dịch sang trạng thái Đang tranh chấp. ${partnerRole} sẽ nhận được thông báo và có 48 giờ để giải trình. Bài đăng chưa được mở lại cho đến khi Admin kết luận.`;
+interface HandoverOutcomeProps extends DialogBaseProps {
+  partnerName: string;
+  viewerIsDonor: boolean;
+  onDone: (request: RequestResponse) => void;
+  onStale: () => void;
 }
 
-export function HandoverIssueDialog({
+export function HandoverFailedDialog({
   request,
   currentUserId,
   itemTitle,
   partnerName,
   viewerIsDonor,
   onClose,
-  onReported,
-  onCancelled,
+  onDone,
   onStale,
-}: DialogBaseProps & {
-  partnerName: string;
-  viewerIsDonor: boolean;
-  onReported: (request: RequestResponse) => void;
-  onCancelled: (request: RequestResponse) => void;
-  onStale: () => void;
-}) {
+}: HandoverOutcomeProps) {
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [evidence, setEvidence] = useState<File[]>([]);
   const inFlight = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const currentHandoverAt = viewerIsDonor ? request.donorHandoverAt : request.receiverHandoverAt;
-  const partnerHandoverAt = viewerIsDonor ? request.receiverHandoverAt : request.donorHandoverAt;
-  const reportIssue = canReportHandoverIssue(request.status, partnerHandoverAt, currentHandoverAt);
-  const notePrefix = reason && reason !== 'other' ? reason : '';
+  const partnerConfirmed = Boolean(viewerIsDonor ? request.receiverHandoverAt : request.donorHandoverAt);
+  const reasons = handoverFailedReasons(request.deliveryMethod === 'SHIPPING', viewerIsDonor);
+  const notePrefix = reason && reason !== OTHER_REASON ? reason : '';
   const message = [notePrefix, note.trim()].filter(Boolean).join(' — ');
-  const noteLimit = (reportIssue ? 1000 : 500) - (notePrefix ? notePrefix.length + 3 : 0);
-  const canSubmit = canConfirmHandover(request.status) && !currentHandoverAt &&
-    Boolean(reason) && message.length >= 5 && note.length <= noteLimit;
+  const noteLimit = HANDOVER_FAILED_LIMIT - (notePrefix ? notePrefix.length + 3 : 0);
+  const canSubmit = canConfirmHandover(request.status) && Boolean(reason) &&
+    message.length >= 5 && note.length <= noteLimit;
 
   const submit = async () => {
     if (inFlight.current || !canSubmit) return;
@@ -159,64 +159,49 @@ export function HandoverIssueDialog({
     setSubmitting(true);
     setError('');
     try {
-      if (!reportIssue) {
-        onCancelled(await requestApi.cancelTransaction(request.id, currentUserId, message));
-        return;
-      }
       const evidenceMediaIds = evidence.length ? await uploadEvidence(evidence) : undefined;
-      onReported(
-        await requestApi.reportHandoverIssue(request.id, currentUserId, {
-          note: message,
-          evidenceMediaIds,
-        }),
+      onDone(
+        await requestApi.handoverFailed(request.id, currentUserId, { reason: message, evidenceMediaIds }),
       );
     } catch (caught) {
-      const apiError = caught as ApiError;
-      setError(
-        !reportIssue
-          ? cancelReasonError(caught)
-          : apiError.code === 'REQUEST_INVALID_STATE_TRANSITION'
-          ? 'Chỉ báo được khi đối phương đã xác nhận bàn giao còn bạn thì chưa. Vui lòng tải lại.'
-          : disputeErrorMessage(caught),
-      );
-      if (apiError.status === 409) onStale();
+      setError(handoverOutcomeError(caught));
+      if ((caught as ApiError).status === 409) onStale();
     } finally {
       inFlight.current = false;
       setSubmitting(false);
     }
   };
 
-  const title = handoverIssueLabel(viewerIsDonor);
   return (
-    <DialogFrame labelledBy="handover-issue-title" busy={submitting} onClose={onClose}>
-      <h2 id="handover-issue-title" className="text-xl font-bold">
-        {title}
+    <DialogFrame labelledBy="handover-failed-title" busy={submitting} onClose={onClose}>
+      <h2 id="handover-failed-title" className="text-xl font-bold">
+        Giao nhận không thành công
       </h2>
       <p className="mt-1 text-sm text-text-muted">{itemTitle}</p>
       <p className="mt-3 text-sm leading-6 text-text-secondary">
-        {handoverIssueDescription(viewerIsDonor, partnerName, reportIssue)}
+        {handoverFailedConsequence(partnerConfirmed, partnerName)}
       </p>
       <Select className="mt-4" label="Lý do giao nhận không thành công" value={reason}
         disabled={submitting} onChange={(event) => setReason(event.target.value)}>
         <option value="">Chọn lý do</option>
-        <option>{viewerIsDonor ? 'Người nhận không đến điểm hẹn' : 'Người giao không đến điểm hẹn'}</option>
-        <option>Không liên hệ được với bên còn lại</option>
-        <option>Gặp sự cố khi vận chuyển</option>
-        <option value="other">Lý do khác</option>
+        {reasons.map((label) => (
+          <option key={label}>{label}</option>
+        ))}
+        <option value={OTHER_REASON}>Lý do khác</option>
       </Select>
       <TextArea
         className="mt-4"
-        label={reason === 'other' ? 'Mô tả sự cố (bắt buộc)' : 'Mô tả thêm (không bắt buộc)'}
-        hint={reason === 'other' ? 'Nhập ít nhất 5 ký tự.' : undefined}
+        label={reason === OTHER_REASON ? 'Mô tả sự cố (bắt buộc)' : 'Mô tả thêm (không bắt buộc)'}
+        hint={reason === OTHER_REASON ? 'Nhập ít nhất 5 ký tự.' : undefined}
         value={note}
         maxLength={noteLimit}
         disabled={submitting}
         onChange={(event) => setNote(event.target.value)}
       />
       <p className="mt-1 text-right text-xs text-text-muted">{note.length}/{noteLimit}</p>
-      {reportIssue ? <div className="mt-4">
+      <div className="mt-4">
         <ReportEvidenceField files={evidence} onChange={setEvidence} disabled={submitting} />
-      </div> : null}
+      </div>
       {error ? (
         <div role="alert" className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">
           {error}
@@ -227,7 +212,85 @@ export function HandoverIssueDialog({
           Đóng
         </Button>
         <Button disabled={submitting || !canSubmit} onClick={() => void submit()}>
-          {submitting ? 'Đang xử lý...' : reportIssue ? 'Gửi báo cáo' : 'Hủy giao dịch'}
+          {submitting ? 'Đang xử lý...' : partnerConfirmed ? 'Gửi khiếu nại' : 'Hủy giao dịch'}
+        </Button>
+      </div>
+    </DialogFrame>
+  );
+}
+
+export function RefuseHandoverDialog({
+  request,
+  currentUserId,
+  itemTitle,
+  partnerName,
+  onClose,
+  onDone,
+  onStale,
+}: HandoverOutcomeProps) {
+  const [reason, setReason] = useState('');
+  const [evidence, setEvidence] = useState<File[]>([]);
+  const inFlight = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const trimmed = reason.trim();
+  const canSubmit = canConfirmHandover(request.status) && trimmed.length >= 5 &&
+    trimmed.length <= REFUSE_REASON_LIMIT;
+
+  const submit = async () => {
+    if (inFlight.current || !canSubmit) return;
+    inFlight.current = true;
+    setSubmitting(true);
+    setError('');
+    try {
+      const evidenceMediaIds = evidence.length ? await uploadEvidence(evidence) : undefined;
+      onDone(
+        await requestApi.refuseHandover(request.id, currentUserId, { reason: trimmed, evidenceMediaIds }),
+      );
+    } catch (caught) {
+      setError(handoverOutcomeError(caught));
+      if ((caught as ApiError).status === 409) onStale();
+    } finally {
+      inFlight.current = false;
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <DialogFrame labelledBy="refuse-handover-title" busy={submitting} onClose={onClose}>
+      <h2 id="refuse-handover-title" className="text-xl font-bold">
+        Từ chối giao nhận
+      </h2>
+      <p className="mt-1 text-sm text-text-muted">{itemTitle}</p>
+      <p className="mt-3 text-sm leading-6 text-text-secondary">
+        {refuseHandoverConsequence(partnerName)}
+      </p>
+      <TextArea
+        className="mt-4"
+        label="Lý do từ chối (bắt buộc)"
+        hint="Nêu rõ món đồ khác mô tả ở điểm nào. Nhập ít nhất 5 ký tự."
+        value={reason}
+        maxLength={REFUSE_REASON_LIMIT}
+        disabled={submitting}
+        onChange={(event) => setReason(event.target.value)}
+      />
+      <p className="mt-1 text-right text-xs text-text-muted">
+        {reason.length}/{REFUSE_REASON_LIMIT}
+      </p>
+      <div className="mt-4">
+        <ReportEvidenceField files={evidence} onChange={setEvidence} disabled={submitting} />
+      </div>
+      {error ? (
+        <div role="alert" className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">
+          {error}
+        </div>
+      ) : null}
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="outline" disabled={submitting} onClick={onClose}>
+          Đóng
+        </Button>
+        <Button variant="warning" disabled={submitting || !canSubmit} onClick={() => void submit()}>
+          {submitting ? 'Đang gửi...' : 'Từ chối giao nhận'}
         </Button>
       </div>
     </DialogFrame>

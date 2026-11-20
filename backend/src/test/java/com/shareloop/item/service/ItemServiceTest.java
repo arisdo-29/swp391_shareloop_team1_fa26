@@ -144,7 +144,7 @@ class ItemServiceTest {
         lenient().when(userService.isAdmin(anyLong())).thenReturn(false);
         lenient()
                 .when(reputationService.getReputationSummary(10L))
-                .thenReturn(new ReputationSummary(10L, 4, Rank.SILVER, 0.9));
+                .thenReturn(new ReputationSummary(10L, 4, Rank.SILVER));
         lenient()
                 .when(userService.findBriefs(List.of(10L)))
                 .thenReturn(Map.of(10L, new UserBrief(10L, "Người thật", "user@example.test")));
@@ -661,7 +661,6 @@ class ItemServiceTest {
         assertThat(response.donorName()).isEqualTo("Người thật");
         assertThat(response.donorTrustStars()).isEqualTo(4);
         assertThat(response.donorRank()).isEqualTo("SILVER");
-        assertThat(response.donorAsDescribedRate()).isEqualTo(0.9);
     }
 
     @Test

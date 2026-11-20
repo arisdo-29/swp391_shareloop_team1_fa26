@@ -1,5 +1,6 @@
 package com.shareloop.request.dto;
 
+import com.shareloop.report.dto.RequestDisputeSummary;
 import java.time.Instant;
 import java.util.List;
 
@@ -26,13 +27,11 @@ public record RequestResponse(
         Instant contactRevealedAt,
         Instant donorHandoverAt,
         Instant receiverHandoverAt,
-        Boolean asDescribed,
         Instant completedAt,
         Instant createdAt,
         String receiverName,
         Integer receiverTrustStars,
         String receiverRank,
-        Double receiverAsDescribedRate,
         String itemTitle,
         String itemImage,
         Long donorId,
@@ -56,9 +55,12 @@ public record RequestResponse(
         String itemOfferType,
         // Số Credit chủ bài sẽ trả nếu giao dịch chuyển sang Trao đổi: POST_FEE khi bài đang GIVE, 0 khi đang SWAP
         // (CD-02). Backend tính để frontend không viết cứng phí. Null khi không biết loại bài.
-        Integer conversionFee) {
+        Integer conversionFee,
+        // Khiếu nại của giao dịch nhìn từ phía người xem (tối đa hai, mỗi bên một lần). Chỉ có ở GET /requests/{id},
+        // danh sách cuộc trò chuyện và kết quả của hai nút mở tranh chấp; nơi khác để null.
+        List<RequestDisputeSummary> disputes) {
 
-    // Dạng 32 tham số (chưa có ảnh đại diện, disputeExpired, handoverMedia) để code và test đang gọi vẫn compile.
+    // Dạng 30 tham số (chưa có ảnh đại diện, disputeExpired, handoverMedia) để code và test đang gọi vẫn compile.
     public RequestResponse(
             Long id,
             Long itemId,
@@ -76,13 +78,11 @@ public record RequestResponse(
             Instant contactRevealedAt,
             Instant donorHandoverAt,
             Instant receiverHandoverAt,
-            Boolean asDescribed,
             Instant completedAt,
             Instant createdAt,
             String receiverName,
             Integer receiverTrustStars,
             String receiverRank,
-            Double receiverAsDescribedRate,
             String itemTitle,
             String itemImage,
             Long donorId,
@@ -109,13 +109,11 @@ public record RequestResponse(
                 contactRevealedAt,
                 donorHandoverAt,
                 receiverHandoverAt,
-                asDescribed,
                 completedAt,
                 createdAt,
                 receiverName,
                 receiverTrustStars,
                 receiverRank,
-                receiverAsDescribedRate,
                 itemTitle,
                 itemImage,
                 donorId,
@@ -125,6 +123,7 @@ public record RequestResponse(
                 complaintDeadline,
                 lastMessageAt,
                 disputeResponseDueAt,
+                null,
                 null,
                 null,
                 null,
@@ -160,13 +159,11 @@ public record RequestResponse(
                 contactRevealedAt,
                 donorHandoverAt,
                 receiverHandoverAt,
-                asDescribed,
                 completedAt,
                 createdAt,
                 receiverName,
                 receiverTrustStars,
                 receiverRank,
-                receiverAsDescribedRate,
                 itemTitle,
                 itemImage,
                 donorId,
@@ -181,10 +178,53 @@ public record RequestResponse(
                 isDisputeExpired,
                 media,
                 itemOfferType,
-                newConversionFee);
+                newConversionFee,
+                disputes);
     }
 
-    // Dạng 30 tham số (chưa có disputeResponseDueAt) để code và test đang gọi vẫn compile.
+    /** Gắn danh sách khiếu nại theo vai của người xem (D-04); các trường khác giữ nguyên. */
+    public RequestResponse withDisputes(List<RequestDisputeSummary> newDisputes) {
+        return new RequestResponse(
+                id,
+                itemId,
+                receiverId,
+                offeredItemId,
+                type,
+                status,
+                deliveryMethod,
+                meetingPlace,
+                meetingTime,
+                donorScheduleOkAt,
+                receiverScheduleOkAt,
+                donorWaiverAt,
+                receiverWaiverAt,
+                contactRevealedAt,
+                donorHandoverAt,
+                receiverHandoverAt,
+                completedAt,
+                createdAt,
+                receiverName,
+                receiverTrustStars,
+                receiverRank,
+                itemTitle,
+                itemImage,
+                donorId,
+                donorName,
+                offeredItemTitle,
+                cancelReason,
+                complaintDeadline,
+                lastMessageAt,
+                disputeResponseDueAt,
+                donorAvatarUrl,
+                receiverAvatarUrl,
+                disputeExpired,
+                handoverMedia,
+                itemOfferType,
+                conversionFee,
+                newDisputes);
+    }
+
+    // Dạng 28 tham số (chưa có disputeResponseDueAt) để code và test đang gọi vẫn compile.
     public RequestResponse(
             Long id,
             Long itemId,
@@ -202,13 +242,11 @@ public record RequestResponse(
             Instant contactRevealedAt,
             Instant donorHandoverAt,
             Instant receiverHandoverAt,
-            Boolean asDescribed,
             Instant completedAt,
             Instant createdAt,
             String receiverName,
             Integer receiverTrustStars,
             String receiverRank,
-            Double receiverAsDescribedRate,
             String itemTitle,
             String itemImage,
             Long donorId,
@@ -234,13 +272,11 @@ public record RequestResponse(
                 contactRevealedAt,
                 donorHandoverAt,
                 receiverHandoverAt,
-                asDescribed,
                 completedAt,
                 createdAt,
                 receiverName,
                 receiverTrustStars,
                 receiverRank,
-                receiverAsDescribedRate,
                 itemTitle,
                 itemImage,
                 donorId,
@@ -252,7 +288,7 @@ public record RequestResponse(
                 null);
     }
 
-    // Dạng 29 tham số (chưa có complaintDeadline và lastMessageAt) để code và test đang gọi vẫn compile.
+    // Dạng 27 tham số (chưa có complaintDeadline và lastMessageAt) để code và test đang gọi vẫn compile.
     public RequestResponse(
             Long id,
             Long itemId,
@@ -270,13 +306,11 @@ public record RequestResponse(
             Instant contactRevealedAt,
             Instant donorHandoverAt,
             Instant receiverHandoverAt,
-            Boolean asDescribed,
             Instant completedAt,
             Instant createdAt,
             String receiverName,
             Integer receiverTrustStars,
             String receiverRank,
-            Double receiverAsDescribedRate,
             String itemTitle,
             String itemImage,
             Long donorId,
@@ -300,13 +334,11 @@ public record RequestResponse(
                 contactRevealedAt,
                 donorHandoverAt,
                 receiverHandoverAt,
-                asDescribed,
                 completedAt,
                 createdAt,
                 receiverName,
                 receiverTrustStars,
                 receiverRank,
-                receiverAsDescribedRate,
                 itemTitle,
                 itemImage,
                 donorId,
@@ -318,7 +350,7 @@ public record RequestResponse(
                 null);
     }
 
-    // Dạng 23 tham số (chưa có tên món, chủ bài và lý do huỷ) để code và test đang gọi vẫn compile; 6 trường mới để
+    // Dạng 21 tham số (chưa có tên món, chủ bài và lý do huỷ) để code và test đang gọi vẫn compile; 6 trường mới để
     // null.
     public RequestResponse(
             Long id,
@@ -337,13 +369,11 @@ public record RequestResponse(
             Instant contactRevealedAt,
             Instant donorHandoverAt,
             Instant receiverHandoverAt,
-            Boolean asDescribed,
             Instant completedAt,
             Instant createdAt,
             String receiverName,
             Integer receiverTrustStars,
-            String receiverRank,
-            Double receiverAsDescribedRate) {
+            String receiverRank) {
         this(
                 id,
                 itemId,
@@ -361,13 +391,11 @@ public record RequestResponse(
                 contactRevealedAt,
                 donorHandoverAt,
                 receiverHandoverAt,
-                asDescribed,
                 completedAt,
                 createdAt,
                 receiverName,
                 receiverTrustStars,
                 receiverRank,
-                receiverAsDescribedRate,
                 null,
                 null,
                 null,
@@ -385,11 +413,7 @@ public record RequestResponse(
         return receiverRank;
     }
 
-    public Double asDescribedRate() {
-        return receiverAsDescribedRate;
-    }
-
-    // Giữ dạng 20 tham số để tương thích code đang gọi toResponse(request, receiverName)
+    // Giữ dạng 19 tham số để tương thích code đang gọi toResponse(request, receiverName)
     public RequestResponse(
             Long id,
             Long itemId,
@@ -407,7 +431,6 @@ public record RequestResponse(
             Instant contactRevealedAt,
             Instant donorHandoverAt,
             Instant receiverHandoverAt,
-            Boolean asDescribed,
             Instant completedAt,
             Instant createdAt,
             String receiverName) {
@@ -428,16 +451,14 @@ public record RequestResponse(
                 contactRevealedAt,
                 donorHandoverAt,
                 receiverHandoverAt,
-                asDescribed,
                 completedAt,
                 createdAt,
                 receiverName,
                 null,
-                null,
                 null);
     }
 
-    // Giữ dạng 19 tham số cũ để code và test đang dùng vẫn compile; receiverName = null.
+    // Giữ dạng 18 tham số cũ để code và test đang dùng vẫn compile; receiverName = null.
     public RequestResponse(
             Long id,
             Long itemId,
@@ -455,7 +476,6 @@ public record RequestResponse(
             Instant contactRevealedAt,
             Instant donorHandoverAt,
             Instant receiverHandoverAt,
-            Boolean asDescribed,
             Instant completedAt,
             Instant createdAt) {
         this(
@@ -475,7 +495,6 @@ public record RequestResponse(
                 contactRevealedAt,
                 donorHandoverAt,
                 receiverHandoverAt,
-                asDescribed,
                 completedAt,
                 createdAt,
                 null);
@@ -515,7 +534,6 @@ public record RequestResponse(
                 null,
                 null,
                 null,
-                null,
                 createdAt,
                 null);
     }
@@ -541,7 +559,6 @@ public record RequestResponse(
                 deliveryMethod,
                 meetingPlace,
                 meetingTime,
-                null,
                 null,
                 null,
                 null,

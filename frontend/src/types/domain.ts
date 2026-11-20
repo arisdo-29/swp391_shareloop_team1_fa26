@@ -119,7 +119,6 @@ export interface Item {
   donorName?: string;
   donorTrustStars?: number;
   donorRank?: string;
-  donorAsDescribedRate?: number;
   donorLocked?: boolean;
   // Có khi bài đã giao dịch thành công (TRADED).
   completedAt?: string;
@@ -178,7 +177,6 @@ export interface ItemRequest {
   requesterName?: string;
   requesterTrustStars?: number;
   requesterRank?: string;
-  requesterAsDescribedRate?: number;
   status: ItemRequestStatus;
   message: string;
   createdAt: string;

@@ -1,6 +1,18 @@
 import { http } from './http';
 import type { ItemRequest, ItemRequestStatus, ItemType } from '../types/domain';
 import { apiUserId } from './mappers';
+import type { ReportReason } from './reportApi';
+
+// Backend tính openedByMe và canRespond theo người xem, frontend không tự so giờ (docs/api/request.md).
+export interface RequestDispute {
+  id: number;
+  reason: ReportReason;
+  openedByMe: boolean;
+  status: 'OPEN' | 'AWAITING_RESPONSE' | 'RESOLVED' | 'DISMISSED';
+  responseDueAt?: string | null;
+  respondedAt?: string | null;
+  canRespond: boolean;
+}
 
 // Theo docs/api/request.md
 export interface RequestResponse {
@@ -20,7 +32,6 @@ export interface RequestResponse {
   contactRevealedAt?: string;
   donorHandoverAt?: string;
   receiverHandoverAt?: string;
-  asDescribed?: boolean;
   completedAt?: string;
   // Lý do huỷ kèm tiền tố người huỷ: "[Chủ bài] ", "[Người nhận] ", "[Hệ thống] "; giữ nguyên khi hiển thị.
   cancelReason?: string | null;
@@ -28,7 +39,6 @@ export interface RequestResponse {
   receiverName?: string | null;
   receiverTrustStars?: number | null;
   receiverRank?: string | null;
-  receiverAsDescribedRate?: number | null;
   // Tên món đồ và chủ bài để không phải hiện id (docs/api/request.md).
   itemTitle?: string | null;
   itemImage?: string | null;
@@ -37,10 +47,12 @@ export interface RequestResponse {
   offeredItemTitle?: string | null;
   trustStars?: number | null;
   rank?: string | null;
-  asDescribedRate?: number | null;
   complaintDeadline?: string | null;
   lastMessageAt?: string | null;
   disputeResponseDueAt?: string | null;
+  // Khiếu nại nhìn từ phía người xem (tối đa hai). Chỉ có ở chi tiết, danh sách cuộc trò chuyện và kết quả của
+  // Từ chối giao nhận / Giao nhận không thành công; nơi khác null.
+  disputes?: RequestDispute[] | null;
   // Ảnh đại diện hai bên, dạng /api/v1/media/{id}; null khi chưa có ảnh.
   donorAvatarUrl?: string | null;
   receiverAvatarUrl?: string | null;
@@ -70,12 +82,12 @@ export interface ConfirmLogisticsRequestBody {
 }
 
 export interface HandoverConfirmRequestBody {
-  asDescribed?: boolean;
-  notAsDescribedReason?: string;
+  mediaIds?: number[];
 }
 
-export interface HandoverIssueBody {
-  note: string;
+// Dùng chung cho "Giao nhận không thành công" (5 đến 500 ký tự) và "Từ chối giao nhận" (5 đến 1000 ký tự).
+export interface HandoverOutcomeBody {
+  reason: string;
   evidenceMediaIds?: number[];
 }
 
@@ -114,7 +126,6 @@ export function toFeItemRequest(
 ): ItemRequest {
   const trustStars = request.receiverTrustStars ?? request.trustStars;
   const rank = request.receiverRank ?? request.rank;
-  const asDescribedRate = request.receiverAsDescribedRate ?? request.asDescribedRate;
   return {
     id: `api_req_${request.id}`,
     type: request.type === 'SWAP' ? 'trade' : 'gift',
@@ -128,7 +139,6 @@ export function toFeItemRequest(
     requesterName: request.receiverName ?? undefined,
     requesterTrustStars: typeof trustStars === 'number' ? trustStars : undefined,
     requesterRank: rank ?? undefined,
-    requesterAsDescribedRate: typeof asDescribedRate === 'number' ? asDescribedRate : undefined,
     status: request.status,
     message: '',
     createdAt: request.createdAt,
@@ -221,13 +231,20 @@ export const requestApi = {
     );
     return data;
   },
-  async reportHandoverIssue(id: number, currentUserId: number, body: HandoverIssueBody) {
+  // Bên kia chưa bấm hoàn tất thì backend huỷ giao dịch, đã bấm thì mở tranh chấp (docs/api/request.md).
+  async handoverFailed(id: number, currentUserId: number, body: HandoverOutcomeBody) {
     const { data } = await http.post<RequestResponse>(
-      `/api/v1/requests/${id}/handover-issue`,
+      `/api/v1/requests/${id}/handover-failed`,
       body,
-      {
-        params: { currentUserId },
-      },
+      { params: { currentUserId } },
+    );
+    return data;
+  },
+  async refuseHandover(id: number, currentUserId: number, body: HandoverOutcomeBody) {
+    const { data } = await http.post<RequestResponse>(
+      `/api/v1/requests/${id}/refuse-handover`,
+      body,
+      { params: { currentUserId } },
     );
     return data;
   },

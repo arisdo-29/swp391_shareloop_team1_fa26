@@ -365,6 +365,8 @@ chuyện của giao dịch.
 | `requestId` | number | ID yêu cầu giao dịch |
 | `senderId` | number? | ID người gửi tin; `null` với tin `SYSTEM` |
 | `kind` | string | `TEXT`, `IMAGE`, `ITEM_CARD`, `OFFER_CHANGE`, `SYSTEM` |
+
+Tin `SYSTEM` cũng được thêm khi giao dịch bị khiếu nại (nghe `DisputeOpenedEvent` của module report, xem `report.md`).
 | `content` | string? | Nội dung văn bản |
 | `mediaId` | number? | ID ảnh đính kèm (nếu `kind == IMAGE`) |
 | `refItemId` | number? | ID bài đăng đính kèm (`ITEM_CARD`) hoặc món đề nghị đổi (`OFFER_CHANGE`) |

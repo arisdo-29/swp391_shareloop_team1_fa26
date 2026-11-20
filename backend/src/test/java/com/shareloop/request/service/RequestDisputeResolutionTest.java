@@ -140,6 +140,56 @@ class RequestDisputeResolutionTest {
     }
 
     @Test
+    @DisplayName("Không đúng mô tả, chủ bài vi phạm (người nhận từ chối món chính): ẩn bài chính, món đổi mở lại")
+    void resolveDisputedRequest_whenNotAsDescribedAndDonorViolated_hidesMainItemReopensOfferedItem() {
+        // given
+        Request request = disputedSwapRequest();
+
+        // when
+        boolean resolved = requestService.resolveDisputedRequest(REQUEST_ID, true, DONOR_ID, true);
+
+        // then
+        assertThat(resolved).isTrue();
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        verify(itemService).hide(ITEM_ID);
+        verify(itemService).releaseIfReserved(OFFERED_ITEM_ID);
+        verify(itemService, never()).hide(OFFERED_ITEM_ID);
+    }
+
+    @Test
+    @DisplayName("Không đúng mô tả, người xin vi phạm (chủ bài từ chối món đổi): bài chính mở lại, ẩn món đổi")
+    void resolveDisputedRequest_whenNotAsDescribedAndReceiverViolated_hidesOfferedItemReopensMainItem() {
+        // given
+        Request request = disputedSwapRequest();
+
+        // when
+        boolean resolved = requestService.resolveDisputedRequest(REQUEST_ID, true, RECEIVER_ID, true);
+
+        // then
+        assertThat(resolved).isTrue();
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        verify(itemService).releaseIfReserved(ITEM_ID);
+        verify(itemService, never()).hide(ITEM_ID);
+        verify(itemService).releaseIfReserved(OFFERED_ITEM_ID);
+        verify(itemService).hide(OFFERED_ITEM_ID);
+    }
+
+    @Test
+    @DisplayName("Khiếu nại NO_SHOW mà người xin vi phạm: giữ luật cũ, không ẩn món nào")
+    void resolveDisputedRequest_whenNoShowAndReceiverViolated_hidesNothing() {
+        // given
+        disputedSwapRequest();
+
+        // when
+        requestService.resolveDisputedRequest(REQUEST_ID, true, RECEIVER_ID, false);
+
+        // then
+        verify(itemService).releaseIfReserved(ITEM_ID);
+        verify(itemService).releaseIfReserved(OFFERED_ITEM_ID);
+        verify(itemService, never()).hide(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
     @DisplayName("Bác bỏ khiếu nại: Request COMPLETED, hai món TRADED, cộng điểm uy tín, thông báo cả hai bên")
     void resolveDisputedRequest_whenDismissed_completesMarksTradedAndAwardsPoints() {
         // given

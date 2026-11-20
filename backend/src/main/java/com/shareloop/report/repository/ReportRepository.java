@@ -55,6 +55,9 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     List<Report> findByTargetTypeAndRequestIdInAndStatusIn(
             TargetType targetType, Collection<Long> requestIds, Collection<ReportStatus> statuses);
 
+    /** Mọi khiếu nại của các giao dịch, cũ trước; dùng để hiện khiếu nại theo vai ở trang Tiến trình và khung chat. */
+    List<Report> findByTargetTypeAndRequestIdInOrderByCreatedAtAsc(TargetType targetType, Collection<Long> requestIds);
+
     /** Đếm report của một bài theo loại đối tượng và trạng thái; dùng cho ngưỡng tự ẩn bài (BC-02). */
     long countByTargetTypeAndItemIdAndStatusIn(TargetType targetType, Long itemId, Collection<ReportStatus> statuses);
 

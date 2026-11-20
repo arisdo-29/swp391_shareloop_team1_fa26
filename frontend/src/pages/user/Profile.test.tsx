@@ -49,7 +49,6 @@ function buildReputation(overrides: Partial<MyReputation> = {}): MyReputation {
     totalPoints: 120,
     rank: 'GOLD',
     trustStars: 4,
-    accuracyRate: 0.92,
     history: { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 },
     ...overrides,
   };
@@ -181,15 +180,17 @@ describe('Profile', () => {
     expect(reputationApi.getMyReputation).toHaveBeenCalledTimes(1);
   });
 
-  it('hiện "Chưa đủ giao dịch để tính" khi tỉ lệ đúng mô tả là null', async () => {
+  it('không còn ô tỉ lệ đúng mô tả trong tóm tắt uy tín', async () => {
     // given
-    vi.mocked(reputationApi.getMyReputation).mockResolvedValue(buildReputation({ accuracyRate: null }));
+    vi.mocked(reputationApi.getMyReputation).mockResolvedValue(buildReputation());
 
     // when
     renderProfile('/profile?tab=reputation');
 
     // then
-    expect(await screen.findByText('Chưa đủ giao dịch để tính')).toBeTruthy();
+    expect(await screen.findByText('Sao uy tín')).toBeTruthy();
+    expect(screen.queryByText('Đúng mô tả')).toBeNull();
+    expect(screen.queryByText('Chưa đủ giao dịch để tính')).toBeNull();
   });
 
   it('giữ nhãn quản trị hệ thống và không gọi API uy tín với admin', async () => {

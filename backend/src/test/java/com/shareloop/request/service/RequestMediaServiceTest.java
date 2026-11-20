@@ -142,7 +142,7 @@ class RequestMediaServiceTest {
         when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
 
         List<Long> mediaIds = List.of(701L);
-        HandoverConfirmRequest dto = new HandoverConfirmRequest(true, null, mediaIds);
+        HandoverConfirmRequest dto = new HandoverConfirmRequest(mediaIds);
 
         requestService.confirmHandover(REQUEST_ID, RECEIVER_ID, dto);
 

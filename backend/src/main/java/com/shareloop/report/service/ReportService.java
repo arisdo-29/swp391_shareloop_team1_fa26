@@ -16,12 +16,14 @@ import com.shareloop.report.dto.DisputeResponseRequest;
 import com.shareloop.report.dto.ReportConclusionResponse;
 import com.shareloop.report.dto.ReportDecision;
 import com.shareloop.report.dto.ReportResponse;
+import com.shareloop.report.dto.RequestDisputeSummary;
 import com.shareloop.report.dto.RespondReportRequest;
 import com.shareloop.report.entity.Report;
 import com.shareloop.report.entity.ReportReason;
 import com.shareloop.report.entity.ReportStage;
 import com.shareloop.report.entity.ReportStatus;
 import com.shareloop.report.entity.TargetType;
+import com.shareloop.report.event.DisputeOpenedEvent;
 import com.shareloop.report.repository.ReportRepository;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.dto.RequestChatContext;
@@ -40,6 +42,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,6 +69,7 @@ public class ReportService {
     private final ReportEvidenceService evidenceService;
     private final JdbcClient jdbcClient;
     private final Clock clock;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Autowired
     public ReportService(
@@ -80,7 +84,8 @@ public class ReportService {
             @Autowired(required = false) RequestService requestService,
             @Autowired(required = false) UserService userService,
             @Autowired(required = false) JdbcClient jdbcClient,
-            @Autowired(required = false) Clock clock) {
+            @Autowired(required = false) Clock clock,
+            @Autowired(required = false) ApplicationEventPublisher eventPublisher) {
         this.reportRepository = reportRepository;
         this.itemQueryService = itemQueryService;
         this.itemService = itemService;
@@ -93,6 +98,7 @@ public class ReportService {
         this.userService = userService;
         this.jdbcClient = jdbcClient;
         this.clock = clock != null ? clock : Clock.systemUTC();
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -385,6 +391,7 @@ public class ReportService {
                 responseDueAt);
 
         Report saved = reportRepository.save(dispute);
+        publishDisputeOpened(saved, responseHours);
 
         // 8. Gửi thông báo cho bên bị khiếu nại
         if (notificationService != null) {
@@ -402,17 +409,20 @@ public class ReportService {
     }
 
     /**
-     * Tự mở report NOT_AS_DESCRIBED khi bên nhận chọn "Không đúng mô tả" lúc xác nhận giao nhận (GN-07).
-     * Khác openDisputeReport ở chỗ không đòi giao dịch đã COMPLETED, vì bên nhận có thể trả lời trước khi bên cho xác
-     * nhận. Mỗi bên nhận chỉ có một report cho mỗi giao dịch: gọi lại thì bỏ qua, không lỗi.
+     * Tự mở report NOT_AS_DESCRIBED khi một bên bấm "Từ chối giao nhận" (GN-07, BC-09).
+     * Người từ chối là người báo, bên còn lại là bên bị báo và có hạn giải trình như khiếu nại thường (BC-08).
+     * Khác openDisputeReport ở chỗ không đòi giao dịch đã COMPLETED. Mỗi người chỉ có một report cho mỗi giao dịch:
+     * gọi lại thì bỏ qua, không lỗi.
      *
+     * @param reporterId bên từ chối, phải là chủ bài hoặc người nhận của giao dịch
+     * @param evidenceMediaIds id media minh chứng, có thể null hoặc rỗng
      * @throws BusinessException REPORT_TARGET_NOT_FOUND khi không thấy giao dịch hoặc bài đăng; DISPUTE_NOT_A_PARTY khi
-     *     receiverId không phải bên nhận của giao dịch
+     *     reporterId không thuộc giao dịch
      */
     @Transactional
-    public void openNotAsDescribedReport(Long receiverId, Long requestId, String reason) {
+    public void openNotAsDescribedReport(Long reporterId, Long requestId, String reason, List<Long> evidenceMediaIds) {
         // Event có thể tới hai lần nên kiểm trùng trước, không ném lỗi
-        if (reportRepository.existsByReporterIdAndTargetTypeAndRequestId(receiverId, TargetType.REQUEST, requestId)) {
+        if (reportRepository.existsByReporterIdAndTargetTypeAndRequestId(reporterId, TargetType.REQUEST, requestId)) {
             return;
         }
 
@@ -420,35 +430,40 @@ public class ReportService {
         if (requestSnapshot == null) {
             throw new BusinessException(ReportErrorCode.REPORT_TARGET_NOT_FOUND, "Không tìm thấy yêu cầu giao dịch.");
         }
-        if (!receiverId.equals(requestSnapshot.receiverId())) {
-            throw new BusinessException(ReportErrorCode.DISPUTE_NOT_A_PARTY);
-        }
         ItemSummary itemSummary = itemQueryService.getSummary(requestSnapshot.itemId());
         if (itemSummary == null) {
             throw new BusinessException(
                     ReportErrorCode.REPORT_TARGET_NOT_FOUND, "Không tìm thấy bài đăng của giao dịch.");
         }
+        Long donorId = itemSummary.donorId();
+        Long receiverId = requestSnapshot.receiverId();
+        boolean reporterIsReceiver = reporterId.equals(receiverId);
+        if (!reporterIsReceiver && !reporterId.equals(donorId)) {
+            throw new BusinessException(ReportErrorCode.DISPUTE_NOT_A_PARTY);
+        }
 
-        // Bên cho là bên bị báo cáo và có thời hạn giải trình như khiếu nại thường (BC-08)
+        Long respondentId = reporterIsReceiver ? donorId : receiverId;
         int responseHours = windowHours(ConfigKey.RESPONSE_WINDOW_HOURS);
         Instant responseDueAt = Instant.now(clock).plus(Duration.ofHours(responseHours));
         Report report = Report.createDispute(
-                receiverId,
+                reporterId,
                 requestId,
                 requestSnapshot.itemId(),
-                itemSummary.donorId(),
+                respondentId,
                 ReportReason.NOT_AS_DESCRIBED,
                 reason,
-                null,
+                evidenceService.attach(evidenceMediaIds, reporterId),
                 responseDueAt);
         Report saved = reportRepository.save(report);
+        publishDisputeOpened(saved, responseHours);
 
         if (notificationService != null) {
             notificationService.notify(
-                    itemSummary.donorId(),
+                    respondentId,
                     "DISPUTE_OPENED",
-                    "Món đồ bị báo không đúng mô tả",
-                    "Người nhận báo món đồ không đúng mô tả. " + responseWindowSentence(responseHours, responseDueAt),
+                    "Đối phương từ chối nhận món đồ",
+                    "Đối phương từ chối nhận món đồ và báo không đúng mô tả. "
+                            + responseWindowSentence(responseHours, responseDueAt),
                     "/me/disputes/" + saved.getId());
         }
     }
@@ -498,6 +513,7 @@ public class ReportService {
                 evidenceService.attach(evidenceMediaIds, reporterId),
                 responseDueAt);
         Report saved = reportRepository.save(report);
+        publishDisputeOpened(saved, responseHours);
 
         if (notificationService != null) {
             String issue = reporterIsReceiver ? "chưa nhận được đồ" : "chưa giao được đồ";
@@ -508,6 +524,14 @@ public class ReportService {
                     "Đối phương báo " + issue + " dù bạn đã xác nhận bàn giao. "
                             + responseWindowSentence(responseHours, responseDueAt),
                     "/me/disputes/" + saved.getId());
+        }
+    }
+
+    // Báo module chat thêm dòng tin hệ thống "giao dịch đang có khiếu nại" (D-04). Không có publisher ở unit test rút
+    // gọn.
+    private void publishDisputeOpened(Report saved, int responseHours) {
+        if (eventPublisher != null && saved.getRequestId() != null) {
+            eventPublisher.publishEvent(new DisputeOpenedEvent(saved.getRequestId(), responseHours));
         }
     }
 
@@ -550,6 +574,51 @@ public class ReportService {
             }
         }
         return result;
+    }
+
+    /**
+     * Khiếu nại của một giao dịch nhìn từ phía người xem (D-04, BC-08): ai mở, trạng thái, hạn và còn giải trình được
+     * không. Mỗi bên khiếu nại tối đa một lần nên danh sách có tối đa hai phần tử, cũ trước.
+     */
+    @Transactional(readOnly = true)
+    public List<RequestDisputeSummary> findDisputesForRequest(Long requestId, Long viewerId) {
+        if (requestId == null) {
+            return List.of();
+        }
+        return findDisputesForRequests(List.of(requestId), viewerId).getOrDefault(requestId, List.of());
+    }
+
+    /** Như {@link #findDisputesForRequest} cho nhiều giao dịch một lần, tránh gọi lặp ở danh sách cuộc trò chuyện. */
+    @Transactional(readOnly = true)
+    public Map<Long, List<RequestDisputeSummary>> findDisputesForRequests(
+            java.util.Collection<Long> requestIds, Long viewerId) {
+        if (requestIds == null || requestIds.isEmpty()) {
+            return Map.of();
+        }
+        Instant now = Instant.now(clock);
+        Map<Long, List<RequestDisputeSummary>> result = new HashMap<>();
+        for (Report report :
+                reportRepository.findByTargetTypeAndRequestIdInOrderByCreatedAtAsc(TargetType.REQUEST, requestIds)) {
+            result.computeIfAbsent(report.getRequestId(), id -> new ArrayList<>())
+                    .add(toDisputeSummary(report, viewerId, now));
+        }
+        return result;
+    }
+
+    private RequestDisputeSummary toDisputeSummary(Report report, Long viewerId, Instant now) {
+        boolean openedByMe = viewerId != null && viewerId.equals(report.getReporterId());
+        boolean isRespondent = viewerId != null && viewerId.equals(report.getTargetUserId());
+        boolean concluded = report.getStatus() == ReportStatus.RESOLVED || report.getStatus() == ReportStatus.DISMISSED;
+        boolean withinWindow = report.getResponseDueAt() == null || !now.isAfter(report.getResponseDueAt());
+        boolean canRespond = isRespondent && !concluded && report.getRespondedAt() == null && withinWindow;
+        return new RequestDisputeSummary(
+                report.getId(),
+                report.getReason(),
+                openedByMe,
+                report.getStatus(),
+                report.getResponseDueAt(),
+                report.getRespondedAt(),
+                canRespond);
     }
 
     /**
@@ -807,11 +876,15 @@ public class ReportService {
             }
         }
 
-        // Khiếu nại mở từ handover-issue đưa giao dịch vào DISPUTED; kết luận xong phải đưa nó ra. Giao dịch không ở
+        // Khiếu nại mở từ refuse-handover hoặc handover-failed đưa giao dịch vào DISPUTED; kết luận xong phải đưa nó
+        // ra. Giao dịch không ở
         // DISPUTED (khiếu nại mở sau COMPLETED, báo cáo bài/người) thì RequestService bỏ qua.
         if (requestService != null && report.getTargetType() == TargetType.REQUEST && report.getRequestId() != null) {
             requestService.resolveDisputedRequest(
-                    report.getRequestId(), decision == ReportDecision.UPHOLD, report.getTargetUserId());
+                    report.getRequestId(),
+                    decision == ReportDecision.UPHOLD,
+                    report.getTargetUserId(),
+                    report.getReason() == ReportReason.NOT_AS_DESCRIBED);
         }
 
         Report saved = reportRepository.save(report);

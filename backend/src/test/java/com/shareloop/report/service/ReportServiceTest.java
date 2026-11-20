@@ -30,6 +30,7 @@ import com.shareloop.report.dto.DisputeResponseRequest;
 import com.shareloop.report.dto.ReportConclusionResponse;
 import com.shareloop.report.dto.ReportDecision;
 import com.shareloop.report.dto.ReportResponse;
+import com.shareloop.report.dto.RequestDisputeSummary;
 import com.shareloop.report.entity.Report;
 import com.shareloop.report.entity.ReportReason;
 import com.shareloop.report.entity.ReportStage;
@@ -100,6 +101,9 @@ class ReportServiceTest {
 
     Clock clock = Clock.fixed(BASE_TIME, ZoneId.of("UTC"));
 
+    @Mock
+    org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     ReportService reportService;
 
     @BeforeEach
@@ -141,7 +145,8 @@ class ReportServiceTest {
                 requestService,
                 userService,
                 jdbcClient,
-                clock));
+                clock,
+                eventPublisher));
     }
 
     @Test
@@ -448,7 +453,7 @@ class ReportServiceTest {
         });
 
         // when
-        reportService.openNotAsDescribedReport(10L, 100L, "Máy không bật được");
+        reportService.openNotAsDescribedReport(10L, 100L, "Máy không bật được", null);
 
         // then
         ArgumentCaptor<Report> captor = ArgumentCaptor.forClass(Report.class);
@@ -462,6 +467,7 @@ class ReportServiceTest {
         assertThat(report.getRequestId()).isEqualTo(100L);
         assertThat(report.getStatus()).isEqualTo(ReportStatus.AWAITING_RESPONSE);
         verify(notificationService).notify(eq(20L), eq("DISPUTE_OPENED"), any(), any(), eq("/me/disputes/5"));
+        verify(eventPublisher).publishEvent(new com.shareloop.report.event.DisputeOpenedEvent(100L, 48));
     }
 
     @Test
@@ -471,7 +477,7 @@ class ReportServiceTest {
                 .thenReturn(true);
 
         // when
-        reportService.openNotAsDescribedReport(10L, 100L, "Máy không bật được");
+        reportService.openNotAsDescribedReport(10L, 100L, "Máy không bật được", null);
 
         // then
         verify(reportRepository, never()).save(any(Report.class));
@@ -479,14 +485,43 @@ class ReportServiceTest {
     }
 
     @Test
-    void openNotAsDescribedReport_whenNotTheReceiver_throwsNotAParty() {
+    void openNotAsDescribedReport_whenSwapDonorRefuses_createsDisputeAgainstReceiver() {
+        // given: chủ bài ở Trao đổi từ chối món đổi nên người nhận là bên bị khiếu nại
+        ReportService.RequestSnapshot snapshot =
+                new ReportService.RequestSnapshot(100L, 200L, 10L, "AWAITING_HANDOVER", null);
+        doReturn(snapshot).when(reportService).findRequest(100L);
+        when(itemQueryService.getSummary(200L))
+                .thenReturn(new ItemSummary(200L, 20L, OfferType.SWAP, ItemStatus.APPROVED));
+        when(evidenceService.attach(List.of(8L), 20L)).thenReturn("[8]");
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> {
+            Report saved = inv.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 6L);
+            return saved;
+        });
+
+        // when
+        reportService.openNotAsDescribedReport(20L, 100L, "Món đổi bị nứt màn hình", List.of(8L));
+
+        // then
+        ArgumentCaptor<Report> captor = ArgumentCaptor.forClass(Report.class);
+        verify(reportRepository).save(captor.capture());
+        assertThat(captor.getValue().getReporterId()).isEqualTo(20L);
+        assertThat(captor.getValue().getTargetUserId()).isEqualTo(10L);
+        assertThat(captor.getValue().getReason()).isEqualTo(ReportReason.NOT_AS_DESCRIBED);
+        verify(notificationService).notify(eq(10L), eq("DISPUTE_OPENED"), any(), any(), eq("/me/disputes/6"));
+    }
+
+    @Test
+    void openNotAsDescribedReport_whenNotAParty_throwsNotAParty() {
         // given
         ReportService.RequestSnapshot snapshot =
                 new ReportService.RequestSnapshot(100L, 200L, 10L, "AWAITING_HANDOVER", null);
         doReturn(snapshot).when(reportService).findRequest(100L);
+        when(itemQueryService.getSummary(200L))
+                .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.APPROVED));
 
         // when
-        assertThatThrownBy(() -> reportService.openNotAsDescribedReport(99L, 100L, "Lý do"))
+        assertThatThrownBy(() -> reportService.openNotAsDescribedReport(99L, 100L, "Lý do", null))
                 // then
                 .isInstanceOfSatisfying(
                         BusinessException.class,
@@ -830,7 +865,7 @@ class ReportServiceTest {
         reportService.conclude(1L, 14L, new ConcludeReportRequest(ReportDecision.UPHOLD, null));
 
         // then
-        verify(requestService).resolveDisputedRequest(77L, true, 200L);
+        verify(requestService).resolveDisputedRequest(77L, true, 200L, false);
     }
 
     @Test
@@ -847,7 +882,7 @@ class ReportServiceTest {
         reportService.conclude(1L, 15L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
 
         // then
-        verify(requestService).resolveDisputedRequest(77L, false, 200L);
+        verify(requestService).resolveDisputedRequest(77L, false, 200L, false);
     }
 
     @Test
@@ -865,7 +900,11 @@ class ReportServiceTest {
 
         // then
         verify(requestService, never())
-                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+                .resolveDisputedRequest(
+                        anyLong(),
+                        org.mockito.ArgumentMatchers.anyBoolean(),
+                        any(),
+                        org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test
@@ -1987,5 +2026,118 @@ class ReportServiceTest {
         assertThat(response).isNotNull();
         assertThat(response.id()).isEqualTo(100L);
         assertThat(response.targetUserId()).isEqualTo(donorId);
+    }
+
+    // ---------- Khiếu nại theo vai của người xem (D-04) ----------
+
+    private Report disputeOf(long reporterId, long respondentId, Instant responseDueAt) {
+        Report dispute = Report.createDispute(
+                reporterId, 100L, 200L, respondentId, ReportReason.NO_SHOW, "Không đến điểm hẹn", null, responseDueAt);
+        ReflectionTestUtils.setField(dispute, "id", 7L);
+        when(reportRepository.findByTargetTypeAndRequestIdInOrderByCreatedAtAsc(TargetType.REQUEST, List.of(100L)))
+                .thenReturn(List.of(dispute));
+        return dispute;
+    }
+
+    @Test
+    @DisplayName("Bên khiếu nại thấy openedByMe = true và không giải trình được")
+    void findDisputesForRequest_whenViewerIsReporter_marksOpenedByMeAndCannotRespond() {
+        // given
+        disputeOf(10L, 20L, BASE_TIME.plus(Duration.ofHours(48)));
+
+        // when
+        List<RequestDisputeSummary> disputes = reportService.findDisputesForRequest(100L, 10L);
+
+        // then
+        assertThat(disputes).hasSize(1);
+        assertThat(disputes.get(0).id()).isEqualTo(7L);
+        assertThat(disputes.get(0).reason()).isEqualTo(ReportReason.NO_SHOW);
+        assertThat(disputes.get(0).openedByMe()).isTrue();
+        assertThat(disputes.get(0).canRespond()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Bên bị khiếu nại còn trong hạn và chưa giải trình thì canRespond = true")
+    void findDisputesForRequest_whenViewerIsRespondentWithinWindow_canRespond() {
+        // given
+        disputeOf(10L, 20L, BASE_TIME.plus(Duration.ofHours(48)));
+
+        // when
+        RequestDisputeSummary dispute =
+                reportService.findDisputesForRequest(100L, 20L).get(0);
+
+        // then
+        assertThat(dispute.openedByMe()).isFalse();
+        assertThat(dispute.canRespond()).isTrue();
+        assertThat(dispute.responseDueAt()).isEqualTo(BASE_TIME.plus(Duration.ofHours(48)));
+    }
+
+    @Test
+    @DisplayName("Quá hạn giải trình thì bên bị khiếu nại không còn giải trình được")
+    void findDisputesForRequest_whenWindowExpired_cannotRespond() {
+        // given
+        disputeOf(10L, 20L, BASE_TIME.minus(Duration.ofMinutes(1)));
+
+        // when
+        RequestDisputeSummary dispute =
+                reportService.findDisputesForRequest(100L, 20L).get(0);
+
+        // then
+        assertThat(dispute.canRespond()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Đã giải trình thì canRespond = false và có respondedAt")
+    void findDisputesForRequest_whenAlreadyResponded_cannotRespond() {
+        // given
+        Report dispute = disputeOf(10L, 20L, BASE_TIME.plus(Duration.ofHours(48)));
+        dispute.respond("Tôi có đến, đối phương không nghe máy", null, BASE_TIME);
+
+        // when
+        RequestDisputeSummary summary =
+                reportService.findDisputesForRequest(100L, 20L).get(0);
+
+        // then
+        assertThat(summary.canRespond()).isFalse();
+        assertThat(summary.respondedAt()).isEqualTo(BASE_TIME);
+    }
+
+    @Test
+    @DisplayName("Giao dịch chưa có khiếu nại trả danh sách rỗng")
+    void findDisputesForRequest_whenNoDispute_returnsEmpty() {
+        // given
+        when(reportRepository.findByTargetTypeAndRequestIdInOrderByCreatedAtAsc(TargetType.REQUEST, List.of(100L)))
+                .thenReturn(List.of());
+
+        // when
+        List<RequestDisputeSummary> disputes = reportService.findDisputesForRequest(100L, 10L);
+
+        // then
+        assertThat(disputes).isEmpty();
+    }
+
+    @Test
+    @DisplayName("D2: giải trình không phụ thuộc trạng thái giao dịch (DISPUTED hay COMPLETED đều được)")
+    void respondDispute_doesNotCheckRequestStatus() {
+        // given: khiếu nại mở từ nút Từ chối giao nhận khi giao dịch còn DISPUTED
+        Report dispute = Report.createDispute(
+                10L,
+                100L,
+                200L,
+                20L,
+                ReportReason.NOT_AS_DESCRIBED,
+                "Máy không bật được",
+                null,
+                BASE_TIME.plus(Duration.ofHours(48)));
+        ReflectionTestUtils.setField(dispute, "id", 8L);
+        when(reportRepository.findByIdForUpdate(8L)).thenReturn(Optional.of(dispute));
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // when
+        reportService.respondDispute(20L, 8L, new DisputeResponseRequest("Máy vẫn bật khi tôi giao", null));
+
+        // then
+        assertThat(dispute.getRespondedAt()).isEqualTo(BASE_TIME);
+        verify(reportService, never()).findRequest(anyLong());
     }
 }

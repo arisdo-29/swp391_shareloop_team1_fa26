@@ -19,17 +19,6 @@ export function getRankLabel(rank?: string | null): string {
 }
 
 /**
- * Định dạng tỉ lệ đúng mô tả (asDescribedRate / accuracyRate) dạng 0–1 thành phần trăm (YC-06).
- * Ví dụ 0.95 -> '95%'. Nếu null hoặc không hợp lệ -> '—'.
- */
-export function formatAsDescribedRate(rate?: number | null): string {
-  if (rate == null || Number.isNaN(rate)) {
-    return '—';
-  }
-  return `${Math.round(rate * 100)}%`;
-}
-
-/**
  * Định dạng số sao uy tín (trustStars) 1–5 sao (YC-06).
  */
 export function formatTrustStars(stars?: number | null): string {

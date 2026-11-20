@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * Chi tiết một bài đăng trả về cho client.
  *
- * <p>Các trường của người đăng (donorName, donorTrustStars, donorRank, donorAsDescribedRate) do module reputation và
+ * <p>Các trường của người đăng (donorName, donorTrustStars, donorRank) do module reputation và
  * user phụ trách; khi mapper của module item tạo DTO thì tạm để null, service gọi UserService và ReputationService rồi
  * gán qua {@link #withDonor}.
  */
@@ -38,7 +38,6 @@ public record ItemResponse(
         String donorName,
         Integer donorTrustStars,
         String donorRank,
-        Double donorAsDescribedRate,
         Boolean donorLocked,
         // Chỉ có giá trị khi chủ bài hoặc Admin xem; người khác nhận null. hidden = bài đang is_active = false.
         Boolean hidden,
@@ -55,7 +54,7 @@ public record ItemResponse(
         Instant boostChainEndsAt,
         Instant boostCooldownUntil) {
 
-    /** Constructor 28 tham số trước khi có ba mốc đợt đẩy; ba trường mới để null. */
+    /** Constructor 27 tham số trước khi có ba mốc đợt đẩy; ba trường mới để null. */
     public ItemResponse(
             Long id,
             Long donorId,
@@ -79,7 +78,6 @@ public record ItemResponse(
             String donorName,
             Integer donorTrustStars,
             String donorRank,
-            Double donorAsDescribedRate,
             Boolean donorLocked,
             Boolean hidden,
             String hiddenReason,
@@ -108,7 +106,6 @@ public record ItemResponse(
                 donorName,
                 donorTrustStars,
                 donorRank,
-                donorAsDescribedRate,
                 donorLocked,
                 hidden,
                 hiddenReason,
@@ -119,7 +116,7 @@ public record ItemResponse(
                 null);
     }
 
-    /** Constructor 26 tham số trước khi có completedAt, requestable; hai trường mới để null. */
+    /** Constructor 25 tham số trước khi có completedAt, requestable; hai trường mới để null. */
     public ItemResponse(
             Long id,
             Long donorId,
@@ -143,7 +140,6 @@ public record ItemResponse(
             String donorName,
             Integer donorTrustStars,
             String donorRank,
-            Double donorAsDescribedRate,
             Boolean donorLocked,
             Boolean hidden,
             String hiddenReason) {
@@ -170,7 +166,6 @@ public record ItemResponse(
                 donorName,
                 donorTrustStars,
                 donorRank,
-                donorAsDescribedRate,
                 donorLocked,
                 hidden,
                 hiddenReason,
@@ -203,7 +198,6 @@ public record ItemResponse(
                 donorName,
                 donorTrustStars,
                 donorRank,
-                donorAsDescribedRate,
                 donorLocked,
                 hidden,
                 hiddenReason,
@@ -239,7 +233,6 @@ public record ItemResponse(
                 donorName,
                 donorTrustStars,
                 donorRank,
-                donorAsDescribedRate,
                 donorLocked,
                 isHidden,
                 isHidden ? reason : null,
@@ -250,8 +243,7 @@ public record ItemResponse(
                 boostCooldownUntil);
     }
 
-    public ItemResponse withDonor(
-            String name, Integer trustStars, String rank, Double asDescribedRate, Boolean donorLocked) {
+    public ItemResponse withDonor(String name, Integer trustStars, String rank, Boolean donorLocked) {
         return new ItemResponse(
                 id,
                 donorId,
@@ -275,7 +267,6 @@ public record ItemResponse(
                 name,
                 trustStars,
                 rank,
-                asDescribedRate,
                 donorLocked,
                 hidden,
                 hiddenReason,
@@ -314,7 +305,6 @@ public record ItemResponse(
                 donorName,
                 donorTrustStars,
                 donorRank,
-                donorAsDescribedRate,
                 donorLocked,
                 hidden,
                 hiddenReason,
@@ -325,11 +315,11 @@ public record ItemResponse(
                 null);
     }
 
-    public ItemResponse withDonor(String name, Integer trustStars, String rank, Double asDescribedRate) {
-        return withDonor(name, trustStars, rank, asDescribedRate, donorLocked);
+    public ItemResponse withDonor(String name, Integer trustStars, String rank) {
+        return withDonor(name, trustStars, rank, donorLocked);
     }
 
-    /** Constructor 25 tham số kế thừa từ U04 (chưa có donorLocked). */
+    /** Constructor 24 tham số kế thừa từ U04 (chưa có donorLocked). */
     public ItemResponse(
             Long id,
             Long donorId,
@@ -353,7 +343,6 @@ public record ItemResponse(
             String donorName,
             Integer donorTrustStars,
             String donorRank,
-            Double donorAsDescribedRate,
             Boolean hidden,
             String hiddenReason) {
         this(
@@ -379,7 +368,6 @@ public record ItemResponse(
                 donorName,
                 donorTrustStars,
                 donorRank,
-                donorAsDescribedRate,
                 null,
                 hidden,
                 hiddenReason);
@@ -407,8 +395,7 @@ public record ItemResponse(
             Instant boostedUntil,
             String donorName,
             Integer donorTrustStars,
-            String donorRank,
-            Double donorAsDescribedRate) {
+            String donorRank) {
         this(
                 id,
                 donorId,
@@ -432,7 +419,6 @@ public record ItemResponse(
                 donorName,
                 donorTrustStars,
                 donorRank,
-                donorAsDescribedRate,
                 null,
                 null,
                 null);
@@ -479,7 +465,6 @@ public record ItemResponse(
                 null,
                 null,
                 null,
-                null,
                 null);
     }
 
@@ -515,7 +500,6 @@ public record ItemResponse(
                 createdAt,
                 updatedAt,
                 List.of(),
-                null,
                 null,
                 null,
                 null,

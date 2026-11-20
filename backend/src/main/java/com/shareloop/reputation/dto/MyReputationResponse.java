@@ -15,11 +15,6 @@ public record MyReputationResponse(
         @Schema(description = "Số sao uy tín còn lại (0-5)", example = "4")
         int trustStars,
 
-        @Schema(
-                description = "Tỉ lệ đúng mô tả (0.0-1.0), null nếu chưa có giao dịch nào được đánh giá",
-                example = "0.92")
-        Double accuracyRate,
-
         @Schema(description = "Lịch sử biến động điểm uy tín, sắp xếp mới nhất lên trước")
         Page<PointHistoryDto> history,
 
@@ -36,8 +31,7 @@ public record MyReputationResponse(
         Integer nextRankMinPoints) {
 
     /** Dùng khi không cần thông tin hạng kế tiếp (giữ tương thích các chỗ tạo cũ). */
-    public MyReputationResponse(
-            int totalPoints, Rank rank, int trustStars, Double accuracyRate, Page<PointHistoryDto> history) {
-        this(totalPoints, rank, trustStars, accuracyRate, history, null, null, 0, null);
+    public MyReputationResponse(int totalPoints, Rank rank, int trustStars, Page<PointHistoryDto> history) {
+        this(totalPoints, rank, trustStars, history, null, null, 0, null);
     }
 }

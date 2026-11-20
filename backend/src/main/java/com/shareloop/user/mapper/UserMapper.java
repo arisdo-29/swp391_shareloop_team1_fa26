@@ -54,7 +54,6 @@ public class UserMapper {
                 district,
                 reputation.rank(),
                 reputation.trustStars(),
-                reputation.asDescribedRate(),
                 completedTransactions,
                 user.getCreatedAt());
     }
