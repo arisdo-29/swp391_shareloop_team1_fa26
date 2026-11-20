@@ -296,6 +296,32 @@ class RequestControllerTest {
     }
 
     @Test
+    @DisplayName("Lưu lịch hẹn thiếu agreeToWaiver trả về 400 REQUEST_WAIVER_REQUIRED (GN-02)")
+    void updateSchedule_whenAgreeToWaiverMissing_returns400() throws Exception {
+        // given
+        String token = jwtService.issue(20L, false);
+        // Service là nơi kiểm cam kết, nên giả lập đúng lỗi nó ném ra khi body không có agreeToWaiver
+        when(requestService.updateSchedule(eq(100L), eq(20L), any()))
+                .thenThrow(new BusinessException(RequestErrorCode.REQUEST_WAIVER_REQUIRED));
+        String bodyWithoutWaiver = """
+                {
+                    "deliveryMethod": "IN_PERSON",
+                    "meetingPlace": "Cổng trường FPT",
+                    "meetingTime": "2026-10-25T10:00:00Z"
+                }
+                """;
+
+        // when
+        var result = mockMvc.perform(post("/api/v1/requests/100/schedule")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(bodyWithoutWaiver));
+
+        // then
+        result.andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("REQUEST_WAIVER_REQUIRED"));
+    }
+
+    @Test
     @DisplayName("Xác nhận lịch hẹn có JWT trả về 200 OK")
     void confirmLogistics_withToken_returns200() throws Exception {
         String token = jwtService.issue(10L, false);
