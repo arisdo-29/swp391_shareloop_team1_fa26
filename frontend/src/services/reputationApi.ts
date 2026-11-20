@@ -15,6 +15,8 @@ export interface MyReputation {
   nextRank?: 'BRONZE' | 'SILVER' | 'GOLD' | 'DIAMOND' | null;
   /** Điểm còn thiếu để lên hạng kế tiếp, backend tính theo ngưỡng cấu hình. */
   pointsToNextRank?: number | null;
+  currentRankMinPoints?: number;
+  nextRankMinPoints?: number | null;
   history: {
     content: PointHistory[];
     totalElements: number;

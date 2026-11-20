@@ -37,6 +37,42 @@ function tabFromSearch(value: string | null): ProfileTab {
   return value === 'reputation' ? 'reputation' : 'profile';
 }
 
+function RankProgress({ reputation }: { reputation: MyReputation }) {
+  const { rank, nextRank, totalPoints, currentRankMinPoints, nextRankMinPoints } = reputation;
+  const highestRank = rank === 'DIAMOND';
+  let progress = 100;
+
+  if (!highestRank) {
+    if (currentRankMinPoints == null || nextRankMinPoints == null || nextRankMinPoints <= currentRankMinPoints) {
+      return null;
+    }
+    const fraction = (totalPoints - currentRankMinPoints) / (nextRankMinPoints - currentRankMinPoints);
+    progress = Math.min(100, Math.max(0, fraction * 100));
+  }
+
+  return (
+    <div className="mt-3 space-y-1.5">
+      <div
+        role="progressbar"
+        aria-label="Tiến trình lên hạng"
+        aria-valuenow={Number(progress.toFixed(1))}
+        aria-valuetext={highestRank ? 'Đã đạt hạng cao nhất' : undefined}
+        className="h-2 overflow-hidden rounded-full bg-primary-fixed"
+      >
+        <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
+      </div>
+      {currentRankMinPoints != null ? (
+        <div className="flex flex-wrap justify-between gap-x-3 text-xs text-text-muted">
+          <span>{getRankLabel(rank)} · {currentRankMinPoints} điểm</span>
+          {nextRank && nextRankMinPoints != null ? (
+            <span>{getRankLabel(nextRank)} · {nextRankMinPoints} điểm</span>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function reputationErrorMessage(error: unknown) {
   const apiError = error as Partial<ApiError>;
   if (apiError.code === 'USER_NOT_FOUND' || apiError.status === 404) {
@@ -712,6 +748,7 @@ export function Profile() {
                             ? 'Bạn đang ở hạng cao nhất.'
                             : 'Điểm tăng khi bạn hoàn tất giao dịch và quyết định hạng.'}
                       </p>
+                      <RankProgress reputation={reputation} />
                     </div>
                     <div className="rounded-lg bg-white p-5 ring-1 ring-border/80">
                       <p className="text-xs font-semibold text-text-secondary">Sao uy tín</p>

@@ -283,9 +283,19 @@ public class ReputationService {
         }
 
         Rank nextRank = nextRank(rank);
-        Integer pointsToNextRank = nextRank == null ? null : Math.max(rankMinPoints(nextRank) - totalPoints, 0);
+        int currentRankMinPoints = rankMinPoints(rank);
+        Integer nextRankMinPoints = nextRank == null ? null : rankMinPoints(nextRank);
+        Integer pointsToNextRank = nextRankMinPoints == null ? null : Math.max(nextRankMinPoints - totalPoints, 0);
         return new MyReputationResponse(
-                totalPoints, rank, trustStars, accuracyRate, history, nextRank, pointsToNextRank);
+                totalPoints,
+                rank,
+                trustStars,
+                accuracyRate,
+                history,
+                nextRank,
+                pointsToNextRank,
+                currentRankMinPoints,
+                nextRankMinPoints);
     }
 
     // Hạng ngay trên hạng hiện tại; Kim cương là hạng cao nhất.
