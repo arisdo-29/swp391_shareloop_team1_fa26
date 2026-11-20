@@ -34,7 +34,7 @@ import {
   type TopUpOrderResponse,
 } from '../../services/paymentApi';
 import type { ApiError } from '../../services/http';
-import { backendMockProviderMessage, startPayment } from '../../services/paymentFlow';
+import { backendMockProviderMessage } from '../../services/paymentFlow';
 import { toast } from '../../components/toast';
 import {
   clearPendingTopUp,
@@ -61,7 +61,14 @@ type ReturnState =
 const PAYMENT_CANCELLED_MESSAGE = 'Bạn đã hủy yêu cầu thanh toán.';
 const PAYMENT_PENDING_AFTER_FAILED_RETURN_MESSAGE =
   'Thanh toán vừa thất bại tại VNPay, nhưng đơn vẫn đang chờ hệ thống xác nhận hủy. Credit chưa được cộng vào ví.';
-const ORDER_STATUS_POLL_INTERVAL_MS = 2_500;
+// Hỏi lại trạng thái đơn đang chờ mỗi 4 giây (và khi người dùng quay lại tab) để biết VNPay đã báo kết quả chưa.
+const ORDER_STATUS_POLL_INTERVAL_MS = 4_000;
+
+/** Độ lệch giữa giờ server và giờ máy (ms); dương khi server chạy trước. Không có serverTime thì coi như 0. */
+function clockOffsetFrom(serverTime: string | null | undefined): number {
+  const server = serverTime ? Date.parse(serverTime) : Number.NaN;
+  return Number.isFinite(server) ? server - Date.now() : 0;
+}
 
 const paymentStatusLabels: Record<PaymentOrderStatus, string> = {
   PENDING: 'Đang chờ thanh toán',
@@ -127,6 +134,10 @@ export function Credit() {
   const [topUpError, setTopUpError] = useState('');
   const [returnState, setReturnState] = useState<ReturnState>('idle');
   const [cancellingOrder, setCancellingOrder] = useState(false);
+  // Độ lệch đồng hồ đo ở lần đọc đơn gần nhất, để đếm ngược theo giờ server chứ không theo giờ máy người dùng.
+  const [clockOffsetMs, setClockOffsetMs] = useState(0);
+  // Trình duyệt chặn mở tab VNPay: hiện nút để người dùng tự bấm mở.
+  const [paymentTabBlocked, setPaymentTabBlocked] = useState(false);
   const cancelInFlight = useRef(false);
   const [orderCheckKey, setOrderCheckKey] = useState(0);
   const createTopUpInFlight = useRef(false);
@@ -261,6 +272,7 @@ export function Credit() {
           order.status === 'PENDING' && pendingSession?.orderCode === code
             ? (pendingSession.redirectUrl ?? '')
             : '';
+        setClockOffsetMs(clockOffsetFrom(order.serverTime));
         setApiTopUpOrder({ ...order, redirectUrl: savedRedirectUrl });
         setStep('pending');
         const result = resolveTopUpReturnResult(order.status, gatewayReturnStatus);
@@ -292,19 +304,25 @@ export function Credit() {
     };
   }, [location.search, refreshWallet, orderCheckKey]);
 
-  // Return của VNPay có thể về trước IPN. Khi Backend còn PENDING, tiếp tục hỏi trạng thái
-  // đến khi Backend xác nhận kết quả; chỉ lúc SUCCESS mới tải lại số dư ví.
+  // Đơn còn PENDING (đang thanh toán ở tab VNPay, hoặc Return về trước IPN): hỏi lại trạng thái mỗi 4 giây và ngay khi
+  // người dùng quay lại tab này. Hết PENDING thì dừng; chỉ lúc SUCCESS mới tải lại số dư ví (effect đọc đơn ở trên).
+  // Mỗi lần đổi trạng thái effect dọn timer cũ nên không có hai vòng hỏi chạy song song.
+  const waitingForPayment = step === 'pending' && apiTopUpOrder?.status === 'PENDING';
   useEffect(() => {
-    const code = returnOrderCode(new URLSearchParams(location.search));
-    const waitingForBackend =
-      returnState === 'pending' || returnState === 'pending-after-failed-return';
-    if (!code || apiTopUpOrder?.status !== 'PENDING' || !waitingForBackend) return;
-
-    const timer = window.setTimeout(() => {
-      setOrderCheckKey((key) => key + 1);
-    }, ORDER_STATUS_POLL_INTERVAL_MS);
-    return () => window.clearTimeout(timer);
-  }, [apiTopUpOrder?.status, location.search, returnState]);
+    if (!waitingForPayment) return;
+    const checkNow = () => setOrderCheckKey((key) => key + 1);
+    const timer = window.setInterval(checkNow, ORDER_STATUS_POLL_INTERVAL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') checkNow();
+    };
+    window.addEventListener('focus', checkNow);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', checkNow);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [waitingForPayment]);
 
   // "Xác nhận hủy": Backend hủy ngay và trả trạng thái mới của đơn, nên cập nhật giao diện theo response luôn,
   // không cần "Kiểm tra lại". Không tải lại ví: đơn chưa thanh toán không đổi số dư.
@@ -314,6 +332,7 @@ export function Credit() {
     setCancellingOrder(true);
     try {
       const order = await paymentApi.cancelOrder(orderCode);
+      setClockOffsetMs(clockOffsetFrom(order.serverTime));
       setApiTopUpOrder({ ...order, redirectUrl: '' });
       if (order.status === 'FAILED') {
         clearPendingTopUp();
@@ -353,18 +372,37 @@ export function Credit() {
     setTopUpSubmitting(true);
     setTopUpProcessing(false);
     setTopUpError('');
+    setPaymentTabBlocked(false);
+    // Mở tab trống NGAY trong lúc bấm (trình duyệt chỉ cho mở tab mới khi đang xử lý cú bấm), có URL VNPay rồi mới
+    // điền vào. Tab ShareLoop ở lại để hiện đồng hồ và hỏi trạng thái đơn.
+    const paymentTab = openBlankPaymentTab();
     try {
       const order = await paymentApi.createTopUpOrder({ amountVnd });
       savePendingTopUp(order);
+      setClockOffsetMs(clockOffsetFrom(order.serverTime));
       setApiTopUpOrder(order);
+      setReturnState('idle');
       setStep('pending');
       if (order.provider === 'MOCK') {
+        paymentTab?.close();
         setTopUpError(backendMockProviderMessage);
         return;
       }
-      setTopUpProcessing(true);
-      await startPayment(order);
+      const redirectUrl = paymentRedirectUrl(order.redirectUrl);
+      if (!redirectUrl) {
+        paymentTab?.close();
+        setTopUpError(
+          'Không thể mở cổng thanh toán vì địa chỉ chuyển hướng không hợp lệ. Vui lòng thử lại sau.',
+        );
+        return;
+      }
+      if (paymentTab && !paymentTab.closed) {
+        paymentTab.location.href = redirectUrl;
+      } else {
+        setPaymentTabBlocked(true);
+      }
     } catch (caught) {
+      paymentTab?.close();
       setTopUpError(topUpCreateErrorMessage(caught));
     } finally {
       createTopUpInFlight.current = false;
@@ -394,7 +432,7 @@ export function Credit() {
         </div>
       ) : null}
 
-      {returnState === 'pending' ? (
+      {returnState === 'pending' && returnOrderCode(new URLSearchParams(location.search)) ? (
         <div className="mb-6 space-y-3">
           <Alert>Đơn đang chờ xác nhận từ hệ thống. Credit chưa được cộng cho giao dịch này.</Alert>
           <Button
@@ -480,9 +518,13 @@ export function Credit() {
               order={apiTopUpOrder}
               returnState={returnState}
               cancelling={cancellingOrder}
+              clockOffsetMs={clockOffsetMs}
+              paymentTabBlocked={paymentTabBlocked}
+              onDeadlineReached={() => setOrderCheckKey((key) => key + 1)}
               onCancel={() => void cancelTopUpOrder(apiTopUpOrder.orderCode)}
               onNewTopup={() => {
                 setApiTopUpOrder(null);
+                setPaymentTabBlocked(false);
                 setReturnState('idle');
                 clearPendingTopUp();
                 setTopUpError('');
@@ -680,6 +722,9 @@ export function ApiTopUpOrder({
   onNewTopup,
   onCancel,
   cancelling = false,
+  clockOffsetMs = 0,
+  paymentTabBlocked = false,
+  onDeadlineReached,
 }: {
   order: TopUpOrderResponse;
   returnState?: ReturnState;
@@ -687,6 +732,12 @@ export function ApiTopUpOrder({
   /** Hủy đơn đang chờ thanh toán; không truyền thì không hiện nút hủy. */
   onCancel?: () => void;
   cancelling?: boolean;
+  /** Độ lệch giờ server - giờ máy (ms), lấy từ serverTime của lần đọc đơn gần nhất. */
+  clockOffsetMs?: number;
+  /** Trình duyệt chặn mở tab VNPay: nút đổi thành "Mở trang thanh toán VNPay" để người dùng tự bấm. */
+  paymentTabBlocked?: boolean;
+  /** Gọi một lần khi đồng hồ về 0, để hỏi lại server kết quả cuối của đơn. */
+  onDeadlineReached?: () => void;
 }) {
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const safeRedirectUrl = paymentRedirectUrl(order.redirectUrl);
@@ -700,9 +751,16 @@ export function ApiTopUpOrder({
   // Trạng thái khác truyền null để hook dọn interval.
   const remainingMs = usePaymentCountdown(
     order.status === 'PENDING' && !pendingAfterFailedReturn ? order.expiresAt : null,
+    clockOffsetMs,
   );
-  // B29: hết giờ chỉ đổi cách hiển thị; PaymentExpiryJob mới đổi trạng thái thật, Credit không được cộng.
+  // Hết giờ chỉ đổi cách hiển thị và hỏi lại server; server (đọc đơn hoặc PaymentExpiryJob) mới đổi trạng thái thật,
+  // FE không tự cộng hay trừ gì.
   const timedOut = remainingMs !== null && remainingMs <= 0;
+  const deadlineReachedRef = useRef(onDeadlineReached);
+  deadlineReachedRef.current = onDeadlineReached;
+  useEffect(() => {
+    if (timedOut) deadlineReachedRef.current?.();
+  }, [timedOut]);
   const waitingForPayment = order.status === 'PENDING' && !timedOut;
   const statusLabel = cancelled
     ? returnState === 'cancelled'
@@ -711,7 +769,7 @@ export function ApiTopUpOrder({
     : pendingAfterFailedReturn
       ? 'Đang đồng bộ trạng thái'
       : timedOut
-        ? 'Hết hạn'
+        ? paymentStatusLabels.EXPIRED
         : paymentStatusLabels[order.status];
   const heading = paid
     ? 'Nạp Credit thành công'
@@ -797,11 +855,14 @@ export function ApiTopUpOrder({
           waitingForPayment &&
           !pendingAfterFailedReturn &&
           safeRedirectUrl ? (
+            // Mở VNPay ở tab mới như lúc tạo đơn; tab này ở lại đếm ngược và hỏi trạng thái.
             <a
               href={safeRedirectUrl}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-bold text-white"
             >
-              Tiếp tục thanh toán
+              {paymentTabBlocked ? 'Mở trang thanh toán VNPay' : 'Tiếp tục thanh toán'}
             </a>
           ) : null}
         </div>
@@ -845,11 +906,29 @@ function OrderCodeDetailRow({ orderCode }: { orderCode: string }) {
 }
 
 /**
+ * Mở một tab trống để sau đó điền URL VNPay. Bỏ liên kết ngược (opener) để trang thanh toán không điều khiển được tab
+ * ShareLoop. Trình duyệt chặn popup thì trả null.
+ */
+function openBlankPaymentTab(): Window | null {
+  try {
+    const tab = window.open('', '_blank');
+    if (tab) tab.opener = null;
+    return tab;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Số mili giây còn lại tới hạn thanh toán do Backend trả, cập nhật mỗi giây; null khi không có hạn để đếm. Chỉ để hiển
  * thị: không đổi trạng thái đơn.
  */
-function usePaymentCountdown(expiresAt: string | null | undefined): number | null {
-  const deadline = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+function usePaymentCountdown(
+  expiresAt: string | null | undefined,
+  clockOffsetMs = 0,
+): number | null {
+  // Còn lại = expiresAt - (giờ máy + độ lệch với server), tức hạn quy về giờ máy = expiresAt - độ lệch.
+  const deadline = expiresAt ? Date.parse(expiresAt) - clockOffsetMs : Number.NaN;
   const hasDeadline = Number.isFinite(deadline);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {

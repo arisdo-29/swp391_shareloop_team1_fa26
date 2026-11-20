@@ -12,6 +12,8 @@ import java.time.Instant;
  * @param reviewedByName họ tên Admin đã duyệt hoặc từ chối; null khi đơn chưa được xử lý
  * @param failureReason lý do đơn FAILED cho người dùng đọc (tự hủy, hủy tại VNPay, mã lỗi VNPay); null với trạng thái
  *     khác
+ * @param serverTime giờ server lúc trả response; FE lấy serverTime - giờ máy để bù lệch đồng hồ khi đếm ngược tới
+ *     expiresAt
  */
 public record TopUpOrderDetailResponse(
         String orderCode,
@@ -30,4 +32,5 @@ public record TopUpOrderDetailResponse(
         String userName,
         String userEmail,
         String reviewedByName,
-        String failureReason) {}
+        String failureReason,
+        Instant serverTime) {}

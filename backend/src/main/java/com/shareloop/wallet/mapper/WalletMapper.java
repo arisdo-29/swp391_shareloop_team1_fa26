@@ -39,7 +39,8 @@ public class WalletMapper {
 
     // redirectUrl không lưu trong DB nên truyền vào từ PaymentGatewayClient; expiresAt do PaymentService tính từ cấu
     // hình.
-    public TopUpOrderResponse toTopUpOrderResponse(PaymentOrder order, String redirectUrl, Instant expiresAt) {
+    public TopUpOrderResponse toTopUpOrderResponse(
+            PaymentOrder order, String redirectUrl, Instant expiresAt, Instant serverTime) {
         return new TopUpOrderResponse(
                 order.getOrderCode(),
                 order.getAmountVnd(),
@@ -47,6 +48,7 @@ public class WalletMapper {
                 order.getStatus(),
                 order.getProvider(),
                 redirectUrl,
-                expiresAt);
+                expiresAt,
+                serverTime);
     }
 }

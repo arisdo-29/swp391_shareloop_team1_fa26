@@ -19,7 +19,6 @@ import com.shareloop.wallet.mapper.WalletMapper;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
 import com.shareloop.wallet.repository.PaymentOrderSnapshot;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +56,7 @@ public class PaymentService {
     private final ConfigService configService;
     private final PaymentGatewayClient paymentGatewayClient;
     private final WalletMapper walletMapper;
+    private final PaymentDeadline paymentDeadline;
     private final UserService userService;
 
     @Autowired
@@ -66,12 +66,14 @@ public class PaymentService {
             ConfigService configService,
             PaymentGatewayClient paymentGatewayClient,
             WalletMapper walletMapper,
+            PaymentDeadline paymentDeadline,
             UserService userService) {
         this.paymentOrderRepository = paymentOrderRepository;
         this.creditService = creditService;
         this.configService = configService;
         this.paymentGatewayClient = paymentGatewayClient;
         this.walletMapper = walletMapper;
+        this.paymentDeadline = paymentDeadline;
         this.userService = userService;
     }
 
@@ -80,8 +82,16 @@ public class PaymentService {
             CreditService creditService,
             ConfigService configService,
             PaymentGatewayClient paymentGatewayClient,
-            WalletMapper walletMapper) {
-        this(paymentOrderRepository, creditService, configService, paymentGatewayClient, walletMapper, null);
+            WalletMapper walletMapper,
+            PaymentDeadline paymentDeadline) {
+        this(
+                paymentOrderRepository,
+                creditService,
+                configService,
+                paymentGatewayClient,
+                walletMapper,
+                paymentDeadline,
+                null);
     }
 
     /**
@@ -106,16 +116,21 @@ public class PaymentService {
                 userId, newOrderCode(), amountVnd, credits, vndPerCredit, paymentGatewayClient.provider());
         paymentOrderRepository.save(order);
 
-        String redirectUrl = paymentGatewayClient.buildRedirectUrl(order.getOrderCode(), amountVnd);
-        return walletMapper.toTopUpOrderResponse(order, redirectUrl, expiresAt(order));
+        // Cùng một mốc expiresAt cho URL VNPay (vnp_ExpireDate) và cho FE đếm ngược.
+        Instant expiresAt = expiresAt(order);
+        String redirectUrl =
+                paymentGatewayClient.buildRedirectUrl(order.getOrderCode(), amountVnd, order.getCreatedAt(), expiresAt);
+        return walletMapper.toTopUpOrderResponse(order, redirectUrl, expiresAt, paymentDeadline.now());
     }
 
     /**
      * Xem một đơn nạp của chính mình (GET /api/v1/wallet/topup-orders/{orderCode}). FE gọi khi người dùng quay về từ
      * cổng thanh toán hoặc tải lại trang Ví để biết đơn đã được cộng chưa và còn hạn thanh toán tới lúc nào.
      *
-     * <p>Chỉ đọc, không đổi trạng thái: đơn quá expiresAt mà job chưa chạy vẫn trả PENDING, FE tự hiện "Hết hạn" theo
-     * expiresAt; PaymentExpiryJob mới là nơi đổi sang EXPIRED (VI-06). Không trả tên người dùng và Admin duyệt.
+     * <p>Đơn PENDING đã qua mốc đóng hẳn (expiresAt + dung sai lệch giờ với VNPay, xem PaymentDeadline) thì chuyển
+     * EXPIRED ngay khi xem, không chờ PaymentExpiryJob (5 phút một lần). Trong khoảng dung sai đơn vẫn PENDING để IPN
+     * hợp lệ tới muộn còn được cộng; FE tự hiện "Đơn đã hết hạn" theo expiresAt và hỏi lại tới khi có kết quả cuối.
+     * Không trả tên người dùng và Admin duyệt.
      *
      * @param userId người gọi, lấy từ token
      * @param orderCode mã đơn
@@ -123,13 +138,23 @@ public class PaymentService {
      * @throws BusinessException WALLET_PAYMENT_ORDER_NOT_FOUND khi không có đơn hoặc đơn của người khác (không để lộ
      *     đơn đó có tồn tại)
      */
-    @Transactional(readOnly = true)
     public TopUpOrderDetailResponse getOwnOrder(long userId, String orderCode) {
-        PaymentOrder order = paymentOrderRepository
+        PaymentOrder order = findOwnOrder(userId, orderCode);
+        if (order.getStatus() == PaymentOrderStatus.PENDING
+                && order.getCreatedAt() != null
+                && paymentDeadline.isClosed(order.getCreatedAt())
+                && paymentOrderRepository.expireIfPending(order.getId()) == 1) {
+            log.info("Top-up order {} expired on read", orderCode);
+            order = findOwnOrder(userId, orderCode);
+        }
+        return detail(order, Map.of());
+    }
+
+    private PaymentOrder findOwnOrder(long userId, String orderCode) {
+        return paymentOrderRepository
                 .findByOrderCode(orderCode)
                 .filter(found -> found.getUserId() == userId)
                 .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_PAYMENT_ORDER_NOT_FOUND));
-        return detail(order, Map.of());
     }
 
     /**
@@ -195,15 +220,14 @@ public class PaymentService {
         return PageResponse.from(orderPage.map(order -> detail(order, briefs)));
     }
 
-    // Hạn thanh toán, cùng công thức với PaymentExpiryService (B29: trả sẵn để FE đếm ngược, không tự tính). created_at
-    // do
-    // JPA Auditing gán lúc persist nên luôn có sau save; chỉ null khi repository bị mock trong unit test.
+    // Hạn thanh toán lấy từ PaymentDeadline (một chỗ tính duy nhất). created_at do JPA Auditing gán lúc persist nên
+    // luôn
+    // có sau save; chỉ null khi repository bị mock trong unit test.
     private Instant expiresAt(PaymentOrder order) {
         if (order.getCreatedAt() == null) {
             return null;
         }
-        return order.getCreatedAt()
-                .plus(configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES), ChronoUnit.MINUTES);
+        return paymentDeadline.expiresAt(order.getCreatedAt());
     }
 
     private Map<Long, UserBrief> findBriefs(List<PaymentOrder> orderList) {
@@ -240,7 +264,8 @@ public class PaymentService {
                 owner == null ? null : owner.fullName(),
                 owner == null ? null : owner.email(),
                 reviewer == null ? null : reviewer.fullName(),
-                failureReason(order));
+                failureReason(order),
+                paymentDeadline.now());
     }
 
     /**

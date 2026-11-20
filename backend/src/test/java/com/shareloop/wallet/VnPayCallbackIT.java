@@ -402,6 +402,23 @@ class VnPayCallbackIT extends IntegrationTest {
     }
 
     @Test
+    void successfulIpnAfterOrderExpiredOnRead_isFlaggedForRefundWithoutCredits() throws Exception {
+        // given: đơn quá hạn cộng dung sai, người dùng xem đơn nên đơn đã chuyển EXPIRED
+        makeOrderOlderThanDeadlineBy(graceMinutes() + 1);
+        assertThat(payment.getOwnOrder(userId, orderCode).status()).isEqualTo(PaymentOrderStatus.EXPIRED);
+
+        // when: VNPay vẫn gửi IPN báo đã thu tiền
+        ipn(signed("2000000", "00", "00"), "02");
+
+        // then: không cộng Credit, đơn vẫn EXPIRED, có ghi chú đối soát để hoàn tiền
+        assertStatus("EXPIRED");
+        assertNoCredits();
+        assertThat(jdbc.queryForObject(
+                        "SELECT review_note FROM payment_orders WHERE order_code = ?", String.class, orderCode))
+                .contains("hoàn tiền");
+    }
+
+    @Test
     void invalidReturn_redirectsWithoutLeakingOrderCodeOrChangingState() throws Exception {
         var params = new LinkedMultiValueMap<String, String>();
         var data = signed("2000000", "00", "00");

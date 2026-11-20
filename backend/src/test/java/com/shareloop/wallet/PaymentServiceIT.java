@@ -49,6 +49,9 @@ class PaymentServiceIT extends IntegrationTest {
     @Autowired
     JdbcTemplate jdbc;
 
+    // Khớp app.payment.vnpay.expiry-grace-minutes trong application.yml.
+    private static final long GRACE_MINUTES = 2;
+
     private final List<Long> createdUserIds = new ArrayList<>();
 
     @AfterEach
@@ -154,7 +157,8 @@ class PaymentServiceIT extends IntegrationTest {
         // when
         var response = paymentService.createTopUpOrder(userId, 20_000);
 
-        // then: expiresAt = created_at + payment_order_expire_minutes, cùng mốc job dùng để chuyển EXPIRED
+        // then: expiresAt = created_at + payment_order_expire_minutes, làm tròn xuống giây như vnp_ExpireDate;
+        // serverTime là giờ server lúc trả response để FE bù lệch đồng hồ
         Instant createdAt = jdbc.queryForObject(
                         "SELECT created_at FROM payment_orders WHERE order_code = ?",
                         Timestamp.class,
@@ -162,12 +166,50 @@ class PaymentServiceIT extends IntegrationTest {
                 .toInstant();
         long expireMinutes = configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES);
         assertThat(response.expiresAt())
-                .isCloseTo(createdAt.plus(expireMinutes, ChronoUnit.MINUTES), within(1, ChronoUnit.MILLIS));
+                .isEqualTo(createdAt.plus(expireMinutes, ChronoUnit.MINUTES).truncatedTo(ChronoUnit.SECONDS));
+        assertThat(response.serverTime()).isCloseTo(Instant.now(), within(10, ChronoUnit.SECONDS));
     }
 
     @Test
-    void getOwnOrder_whenOwner_returnsPendingWithExpiresAtWithoutChangingStatus() {
-        // given: đơn đã quá hạn nhưng job chưa chạy
+    void getOwnOrder_whenPastExpiresAtAndGrace_expiresOrderOnRead() {
+        // given: đơn PENDING đã qua hạn cộng dung sai 2 phút với VNPay, job chưa chạy
+        long userId = insertUser();
+        String orderCode = paymentService.createTopUpOrder(userId, 20_000).orderCode();
+        long expireMinutes = configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES);
+        Instant createdAt = Instant.now()
+                .minus(expireMinutes + GRACE_MINUTES + 1, ChronoUnit.MINUTES)
+                .truncatedTo(ChronoUnit.SECONDS);
+        jdbc.update(
+                "UPDATE payment_orders SET created_at = ? WHERE order_code = ?", Timestamp.from(createdAt), orderCode);
+
+        // when
+        var order = paymentService.getOwnOrder(userId, orderCode);
+
+        // then: chuyển EXPIRED ngay khi xem, không đụng ví
+        assertThat(order.status()).isEqualTo(PaymentOrderStatus.EXPIRED);
+        assertThat(jdbc.queryForObject(
+                        "SELECT status FROM payment_orders WHERE order_code = ?", String.class, orderCode))
+                .isEqualTo("EXPIRED");
+        assertThat(balanceOf(userId)).isZero();
+        assertThat(ledgerCountOf(userId)).isZero();
+    }
+
+    @Test
+    void getOwnOrder_whenAlreadyPaid_neverExpiresEvenIfOld() {
+        // given: đơn đã SUCCESS từ lâu
+        long userId = insertUser();
+        String orderCode = paymentService.createTopUpOrder(userId, 20_000).orderCode();
+        paymentService.confirmMockPayment(userId, orderCode);
+        jdbc.update("UPDATE payment_orders SET created_at = now() - interval '2 days' WHERE order_code = ?", orderCode);
+
+        // when + then
+        assertThat(paymentService.getOwnOrder(userId, orderCode).status()).isEqualTo(PaymentOrderStatus.SUCCESS);
+        assertThat(balanceOf(userId)).isEqualTo(20);
+    }
+
+    @Test
+    void getOwnOrder_whenPastExpiresAtButWithinGrace_staysPending() {
+        // given: đơn đã quá hạn 1 phút, còn trong dung sai 2 phút chờ IPN tới muộn
         long userId = insertUser();
         String orderCode = paymentService.createTopUpOrder(userId, 20_000).orderCode();
         long expireMinutes = configService.getInt(ConfigKey.PAYMENT_ORDER_EXPIRE_MINUTES);
@@ -179,7 +221,7 @@ class PaymentServiceIT extends IntegrationTest {
         // when
         var order = paymentService.getOwnOrder(userId, orderCode);
 
-        // then: vẫn PENDING (chỉ job đổi trạng thái), expiresAt đã qua để FE hiện "Hết hạn"
+        // then: vẫn PENDING để IPN hợp lệ tới muộn còn được cộng; expiresAt đã qua để FE hiện "Đơn đã hết hạn"
         assertThat(order.status()).isEqualTo(PaymentOrderStatus.PENDING);
         assertThat(order.expiresAt()).isEqualTo(createdAt.plus(expireMinutes, ChronoUnit.MINUTES));
         assertThat(order.userName()).isNull();
