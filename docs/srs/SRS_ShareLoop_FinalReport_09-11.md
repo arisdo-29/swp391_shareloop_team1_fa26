@@ -1876,27 +1876,27 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 
 **Kích hoạt:** Một bên bấm "Đề xuất lịch" ở trang Tiến trình giao dịch.
 
-**Mô tả:** Một bên đề xuất hình thức, thời gian, địa điểm; bên kia xác nhận. Khi đủ hai xác nhận, lịch bị khoá và họ tên, email, SĐT hai bên hiện trong trang giao dịch.
+**Mô tả:** Một bên đề xuất hình thức, thời gian và địa điểm để bên kia xác nhận. Khi cả hai bên đã xác nhận lịch và cam kết trách nhiệm, lịch bị khoá và họ tên, email, SĐT hai bên hiện trong trang giao dịch.
 
 **Chi tiết chức năng**
 
 **Đầu vào:**
 
-- Hình thức (Gặp trực tiếp / Gửi vận chuyển), thời gian hẹn, địa điểm (≤ 255 ký tự); cam kết chịu trách nhiệm khi gửi vận chuyển.
+- Hình thức (Gặp trực tiếp / Gửi vận chuyển), thời gian hẹn và địa điểm (≤ 255 ký tự). Cả hai hình thức đều yêu cầu cam kết chịu trách nhiệm.
 
 **Kiểm tra:**
 
 - Thời gian ở tương lai; lịch chưa bị khoá ([GN-01](#BR_GN_01)).
 
-- Gửi vận chuyển: cả hai bên bấm "Cam kết chịu trách nhiệm" ([GN-02](#BR_GN_02)).
+- Cả hai bên bấm "Cam kết chịu trách nhiệm" cho lịch đang lưu ([GN-02](#BR_GN_02)).
 
 - Quá 10 ngày từ lúc chọn người mà chưa chốt thì giao dịch tự huỷ ([GN-05](#BR_GN_05)).
 
 **Nếu hợp lệ:**
 
-- Đề xuất: giao dịch → Đang hẹn lịch; bên đề xuất tự đồng ý, đồng ý cũ của bên kia bị xoá.
+- Khi có đề xuất mới, giao dịch chuyển sang Đang hẹn lịch. Hệ thống ghi nhận đồng ý và cam kết của bên đề xuất, đồng thời xoá đồng ý và cam kết cũ của bên kia.
 
-- Đủ hai xác nhận: → Đã chốt lịch, khoá lịch, hiện liên lạc trong app (không gửi email), tắt lọc liên hệ, cho gửi ảnh ([GN-03](#BR_GN_03), [GN-04](#BR_GN_04)).
+- Khi đủ xác nhận và cam kết của hai bên, giao dịch chuyển sang Đã chốt lịch. Hệ thống khoá lịch, hiện liên lạc trong app (không gửi email), tắt lọc liên hệ và cho gửi ảnh ([GN-03](#BR_GN_03), [GN-04](#BR_GN_04)).
 
 **Nếu không hợp lệ (thông báo):**
 
@@ -1904,7 +1904,7 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 
 - "Lịch hẹn đã được xác nhận và bị khoá, không thể chỉnh sửa."
 
-- "Hình thức giao hàng (Shipping) bắt buộc phải xác nhận cam kết chịu trách nhiệm."
+- "Vui lòng đồng ý cam kết trách nhiệm giao nhận."
 
 - "Thông tin liên lạc chỉ được hiển thị sau khi hai bên đã chốt lịch hẹn."
 
@@ -1913,7 +1913,7 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 | **Mã**             | **Nội dung luật**                                                                                                                                                                |
 |--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [GN-01](#BR_GN_01) | Bên nào cũng đề xuất lịch được: hình thức, giờ hẹn (phải ở tương lai), địa điểm (≤ 255 ký tự). Bên đề xuất tự được tính là đồng ý; đề xuất mới xoá đồng ý cũ của bên kia (D-12). |
-| [GN-02](#BR_GN_02) | Gửi qua đơn vị vận chuyển: cả hai bên phải bấm "Cam kết chịu trách nhiệm" với nội dung hiển thị đầy đủ.                                                                          |
+| [GN-02](#BR_GN_02) | Cả hai bên phải cam kết chịu trách nhiệm cho lịch đang lưu, áp dụng cho cả gặp trực tiếp và gửi qua đơn vị vận chuyển.                                                                          |
 | [GN-03](#BR_GN_03) | Hai bên cùng đồng ý → Đã chốt lịch; lịch bị khoá, không sửa được nữa.                                                                                                            |
 | [GN-04](#BR_GN_04) | Khi Đã chốt lịch: họ tên, email, SĐT của hai bên hiện trong trang giao dịch (không gửi qua email); đã hiện thì không ẩn lại (D-11).                                              |
 | [GN-05](#BR_GN_05) | Quá 10 ngày từ lúc chọn người mà chưa chốt lịch → tự huỷ, bài về Đang hiển thị.                                                                                                  |
@@ -3628,7 +3628,7 @@ Từ lúc chọn người tới lúc hoàn tất. Sơ đồ dưới tóm tắt t
 | **Mã**                                              | **Luật**                                                                                                                                                                                                                                                  | **Con số**                 | **Dùng ở**                                                                                      |
 |-----------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------|-------------------------------------------------------------------------------------------------|
 | <span id="BR_GN_01" class="anchor"></span>**GN-01** | Bên nào cũng đề xuất lịch được: hình thức, giờ hẹn (phải ở tương lai), địa điểm (≤ 255 ký tự). Bên đề xuất tự được tính là đồng ý; đề xuất mới xoá đồng ý cũ của bên kia (D-12).                                                                          | 255 ký tự                  | [Chốt lịch giao nhận và xem thông tin liên lạc](#chốt-lịch-giao-nhận-và-xem-thông-tin-liên-lạc) |
-| <span id="BR_GN_02" class="anchor"></span>**GN-02** | Gửi qua đơn vị vận chuyển: cả hai bên phải bấm "Cam kết chịu trách nhiệm" với nội dung hiển thị đầy đủ.                                                                                                                                                   | —                          | [Chốt lịch giao nhận và xem thông tin liên lạc](#chốt-lịch-giao-nhận-và-xem-thông-tin-liên-lạc) |
+| <span id="BR_GN_02" class="anchor"></span>**GN-02** | Cả hai bên phải cam kết chịu trách nhiệm cho lịch đang lưu, áp dụng cho cả gặp trực tiếp và gửi qua đơn vị vận chuyển.                                                                                                                                                   | —                          | [Chốt lịch giao nhận và xem thông tin liên lạc](#chốt-lịch-giao-nhận-và-xem-thông-tin-liên-lạc) |
 | <span id="BR_GN_03" class="anchor"></span>**GN-03** | Hai bên cùng đồng ý → Đã chốt lịch; lịch bị khoá, không sửa được nữa.                                                                                                                                                                                     | —                          | [Chốt lịch giao nhận và xem thông tin liên lạc](#chốt-lịch-giao-nhận-và-xem-thông-tin-liên-lạc) |
 | <span id="BR_GN_04" class="anchor"></span>**GN-04** | Khi Đã chốt lịch: họ tên, email, SĐT của hai bên hiện trong trang giao dịch (không gửi qua email); đã hiện thì không ẩn lại (D-11).                                                                                                                       | —                          | [Chốt lịch giao nhận và xem thông tin liên lạc](#chốt-lịch-giao-nhận-và-xem-thông-tin-liên-lạc) |
 | <span id="BR_GN_05" class="anchor"></span>**GN-05** | Quá 10 ngày từ lúc chọn người mà chưa chốt lịch → tự huỷ, bài về Đang hiển thị.                                                                                                                                                                           | chat_open_days = 10        | [Chốt lịch giao nhận và xem thông tin liên lạc](#chốt-lịch-giao-nhận-và-xem-thông-tin-liên-lạc) |
@@ -4038,7 +4038,7 @@ Thông báo lỗi lấy từ các lớp \*ErrorCode trong backend (mỗi module 
 | MSG110 | REQUEST_OFFERED_ITEM_NOT_ALLOWED         | BAD REQUEST           | request      | Bài đăng cho tặng không nhận món đề nghị trao đổi.                                   |
 | MSG111 | REQUEST_SCHEDULE_LOCKED                  | CONFLICT              | request      | Lịch hẹn đã được xác nhận và bị khoá, không thể chỉnh sửa.                           |
 | MSG112 | REQUEST_SCHEDULE_PAST_TIME               | BAD REQUEST           | request      | Thời gian hẹn giao nhận phải ở tương lai.                                            |
-| MSG113 | REQUEST_WAIVER_REQUIRED                  | BAD REQUEST           | request      | Hình thức giao hàng (Shipping) bắt buộc phải xác nhận cam kết chịu trách nhiệm.      |
+| MSG113 | REQUEST_WAIVER_REQUIRED                  | BAD REQUEST           | request      | Vui lòng đồng ý cam kết trách nhiệm giao nhận.      |
 | MSG114 | REQUEST_SCHEDULE_NOT_SET                 | BAD REQUEST           | request      | Chưa có thông tin lịch hẹn để xác nhận.                                              |
 | MSG115 | REQUEST_CONTACT_NOT_REVEALED             | CONFLICT              | request      | Thông tin liên lạc chỉ được hiển thị sau khi hai bên đã chốt lịch hẹn.               |
 | MSG116 | REQUEST_AS_DESCRIBED_REQUIRED            | BAD REQUEST           | request      | Người nhận bắt buộc phải trả lời câu hỏi món đồ có đúng mô tả hay không.             |

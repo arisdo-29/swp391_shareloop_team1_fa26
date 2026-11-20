@@ -231,7 +231,7 @@ Xem chi tiết thông tin của một yêu cầu giao dịch (F10, UC-26).
   "deliveryMethod": "IN_PERSON", // "IN_PERSON" hoặc "SHIPPING"
   "meetingPlace": "Cổng trường ĐH FPT",
   "meetingTime": "2026-10-20T10:00:00Z",
-  "agreeToWaiver": true // Tuỳ chọn, bắt buộc khi xác nhận Shipping
+  "agreeToWaiver": true // Bắt buộc cho cả IN_PERSON và SHIPPING
 }
 ```
 
@@ -239,11 +239,12 @@ Xem chi tiết thông tin của một yêu cầu giao dịch (F10, UC-26).
   - Request nếu đang `RESERVED` sẽ tự động chuyển sang `AWAITING_LOGISTICS`.
   - Nếu Request đã ở `LOGISTICS_CONFIRMED` trở lên thì bị khoá không cho sửa lịch (GN-03).
   - Thời gian hẹn phải ở tương lai.
-  - Bên gửi đề xuất tự động được ghi nhận đồng ý lịch mới (`donorScheduleOkAt` hoặc `receiverScheduleOkAt`), bên còn lại bị reset để xác nhận lại.
+  - Bên đề xuất được ghi nhận đồng ý và cam kết cho lịch mới. Hệ thống xoá thời điểm đồng ý và cam kết của bên còn lại.
   - Gửi thông báo `SCHEDULE_UPDATED` cho bên còn lại.
 - **Thành công:** `200 OK`, trả về `RequestResponse`.
 - **Lỗi:**
   - `400 REQUEST_SCHEDULE_PAST_TIME`: Thời gian hẹn ở quá khứ.
+  - `400 REQUEST_WAIVER_REQUIRED`: Thiếu cam kết trách nhiệm giao nhận.
   - `403 REQUEST_FORBIDDEN`: Không phải thành viên tham gia giao dịch.
   - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
   - `409 REQUEST_SCHEDULE_LOCKED`: Lịch hẹn đã chốt, không thể chỉnh sửa.
@@ -260,19 +261,19 @@ Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (GN-02, GN-03,
 
 ```json
 {
-  "agreeToWaiver": true // Bắt buộc true nếu deliveryMethod là SHIPPING
+  "agreeToWaiver": true // Bắt buộc nếu bên gọi chưa cam kết cho lịch đang lưu
 }
 ```
 
 - **Hành vi nghiệp vụ:**
   - Ghi nhận bên gọi đã đồng ý lịch hẹn.
-  - Với hình thức `SHIPPING`, bắt buộc phải đồng ý cam kết trách nhiệm (GN-02, GN-11: hệ thống không can thiệp hay bồi thường hàng hoá và phí vận chuyển).
-  - Khi cả hai bên đều đã đồng ý lịch (và cam kết trách nhiệm nếu là `SHIPPING`), Request tự động chuyển sang `LOGISTICS_CONFIRMED` và ghi nhận `contactRevealedAt`.
+  - Cả `IN_PERSON` và `SHIPPING` đều yêu cầu cam kết trách nhiệm (GN-02). Bên chưa có thời điểm cam kết cho lịch đang lưu phải gửi `agreeToWaiver: true`.
+  - Khi cả hai bên đều đã đồng ý lịch và cam kết trách nhiệm, Request tự động chuyển sang `LOGISTICS_CONFIRMED` và ghi nhận `contactRevealedAt`.
   - Gửi thông báo `LOGISTICS_CONFIRMED` cho đối phương.
 - **Thành công:** `200 OK`, trả về `RequestResponse`.
 - **Lỗi:**
   - `400 REQUEST_SCHEDULE_NOT_SET`: Chưa có lịch hẹn để xác nhận.
-  - `400 REQUEST_WAIVER_REQUIRED`: Chưa đồng ý cam kết trách nhiệm khi chọn giao hàng (Shipping).
+  - `400 REQUEST_WAIVER_REQUIRED`: Thiếu cam kết trách nhiệm giao nhận.
   - `403 REQUEST_FORBIDDEN`: Không phải thành viên tham gia giao dịch.
   - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
   - `409 REQUEST_INVALID_STATE_TRANSITION`: Trạng thái yêu cầu không phải AWAITING_LOGISTICS.
@@ -522,7 +523,7 @@ Các trường đã có từ trước và dùng cho màn Tiến trình giao dị
 | `deliveryMethod` | string | Có | `IN_PERSON` hoặc `SHIPPING` |
 | `meetingPlace` | string | Có | Tối đa 255 ký tự; quá giới hạn trả "Địa điểm tối đa 255 ký tự." |
 | `meetingTime` | string | Có | Thời gian hẹn ISO-8601 UTC ở tương lai |
-| `agreeToWaiver` | boolean | Không | Bắt buộc true nếu là SHIPPING |
+| `agreeToWaiver` | boolean | Có | Phải là `true` cho cả `IN_PERSON` và `SHIPPING` |
 
 ### CancelTransactionRequest
 
@@ -541,7 +542,7 @@ Các trường đã có từ trước và dùng cho màn Tiến trình giao dị
 
 | Trường | Kiểu | Bắt buộc | Ràng buộc |
 |---|---|---|---|
-| `agreeToWaiver` | boolean | Không | Bắt buộc true nếu là SHIPPING |
+| `agreeToWaiver` | boolean | Có điều kiện | Phải là `true` nếu chưa cam kết cho lịch đang lưu |
 
 ### HandoverConfirmRequest
 
@@ -579,7 +580,7 @@ Các trường đã có từ trước và dùng cho màn Tiến trình giao dị
 | `REQUEST_LIMIT_EXCEEDED` | 400 | Vượt quá 5 yêu cầu đang chờ xử lý (YC-03) |
 | `REQUEST_SWAP_OFFERED_ITEM_REQUIRED` | 400 | Thiếu món đề nghị khi gửi yêu cầu đổi đồ (BD-02) |
 | `REQUEST_SCHEDULE_PAST_TIME` | 400 | Thời gian hẹn ở trong quá khứ |
-| `REQUEST_WAIVER_REQUIRED` | 400 | Chưa đồng ý cam kết miễn trừ trách nhiệm khi chọn Ship (GN-02) |
+| `REQUEST_WAIVER_REQUIRED` | 400 | Thiếu cam kết trách nhiệm giao nhận (GN-02) |
 | `REQUEST_SCHEDULE_NOT_SET` | 400 | Chưa có thông tin lịch hẹn để xác nhận |
 | `REQUEST_AS_DESCRIBED_REQUIRED` | 400 | Bên nhận chưa trả lời câu hỏi món đồ có đúng mô tả hay không (GN-07) |
 | `REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED` | 400 | Thiếu lý do khi bên nhận chọn không đúng mô tả (GN-07) |

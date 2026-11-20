@@ -533,7 +533,7 @@ class RequestServiceTest {
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now());
         request.proposeSchedule(
-                "IN_PERSON", "Điểm hẹn", Instant.now().plus(2, ChronoUnit.DAYS), true, false, Instant.now());
+                "IN_PERSON", "Điểm hẹn", Instant.now().plus(2, ChronoUnit.DAYS), true, true, Instant.now());
         assertThat(request.getDonorScheduleOkAt()).isNotNull();
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED")))
@@ -1050,14 +1050,14 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now()); // RESERVED
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
         Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
-        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Cổng trường FPT", meetingTime, null);
+        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Cổng trường FPT", meetingTime, true);
 
         RequestResponse response = requestService.updateSchedule(101L, 20L, dto); // donor đề xuất
 
@@ -1076,14 +1076,14 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now()); // RESERVED
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
         Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
-        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Cổng trường FPT", meetingTime, null);
+        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Cổng trường FPT", meetingTime, true);
 
         RequestResponse response = requestService.updateSchedule(101L, 10L, dto); // receiver đề xuất
 
@@ -1098,13 +1098,13 @@ class RequestServiceTest {
     void updateSchedule_whenPastTime_throwsPastTime() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
         Instant pastTime = Instant.now().minus(1, ChronoUnit.HOURS);
-        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Cổng trường", pastTime, null);
+        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Cổng trường", pastTime, true);
 
         assertThatThrownBy(() -> requestService.updateSchedule(101L, 20L, dto))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
@@ -1118,16 +1118,16 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
         request.proposeSchedule(
-                "IN_PERSON", "Cổng trường", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now()); // sang LOGISTICS_CONFIRMED
+                "IN_PERSON", "Cổng trường", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now()); // sang LOGISTICS_CONFIRMED
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
         Instant futureTime = Instant.now().plus(2, ChronoUnit.DAYS);
-        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Địa điểm mới", futureTime, null);
+        ScheduleRequest dto = new ScheduleRequest("IN_PERSON", "Địa điểm mới", futureTime, true);
 
         assertThatThrownBy(() -> requestService.updateSchedule(101L, 20L, dto))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
@@ -1142,16 +1142,16 @@ class RequestServiceTest {
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now());
         Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
-        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, true, false, Instant.now());
+        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, true, true, Instant.now());
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
         // Receiver gọi xác nhận lịch
-        RequestResponse response = requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(null));
+        RequestResponse response = requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true));
 
         assertThat(response.status()).isEqualTo("LOGISTICS_CONFIRMED");
         assertThat(response.receiverScheduleOkAt()).isNotNull();
@@ -1168,15 +1168,15 @@ class RequestServiceTest {
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now());
         Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
-        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, true, false, Instant.now());
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, true, true, Instant.now());
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
         // when
-        requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(null));
+        requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true));
 
         // then
         verify(eventPublisher).publishEvent(new RequestNegotiationEndedEvent(101L));
@@ -1210,10 +1210,10 @@ class RequestServiceTest {
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now());
         Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
-        // Receiver đề xuất lịch nhưng chưa xác nhận (cả 2 null)
-        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, false, false, Instant.now());
+        // Chỉ người nhận đã đồng ý lịch và cam kết.
+        request.proposeSchedule("IN_PERSON", "Cổng trường", meetingTime, false, true, Instant.now());
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
@@ -1234,7 +1234,7 @@ class RequestServiceTest {
         Instant meetingTime = Instant.now().plus(2, ChronoUnit.DAYS);
         request.proposeSchedule("SHIPPING", "123 Đường XYZ", meetingTime, true, true, Instant.now());
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
@@ -1255,7 +1255,7 @@ class RequestServiceTest {
         // Donor đề xuất và agreeToWaiver = true
         request.proposeSchedule("SHIPPING", "123 Đường XYZ", meetingTime, true, true, Instant.now());
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForScheduleUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
@@ -1276,8 +1276,8 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
         request.proposeSchedule(
-                "IN_PERSON", "Cổng trường", Instant.now().plus(2, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now()); // sang LOGISTICS_CONFIRMED, contactRevealedAt != null
+                "IN_PERSON", "Cổng trường", Instant.now().plus(2, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now()); // sang LOGISTICS_CONFIRMED, contactRevealedAt != null
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
@@ -1301,8 +1301,8 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
         request.proposeSchedule(
-                "IN_PERSON", "Cổng trường", Instant.now().plus(2, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now()); // sang LOGISTICS_CONFIRMED
+                "IN_PERSON", "Cổng trường", Instant.now().plus(2, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now()); // sang LOGISTICS_CONFIRMED
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
@@ -1370,8 +1370,8 @@ class RequestServiceTest {
     void confirmHandover_whenDonorFirst_transitionsToAwaitingHandover() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
         assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
@@ -1394,8 +1394,8 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
         assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
@@ -1418,8 +1418,8 @@ class RequestServiceTest {
     void confirmHandover_whenReceiverConfirmsAfterDonor_transitionsToCompleted() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
         request.confirmHandover(true, null, Instant.now());
         assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
 
@@ -1446,8 +1446,8 @@ class RequestServiceTest {
     void confirmHandover_whenCompleted_returnsComplaintDeadlineAndNotifiesItWithTime() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
         request.confirmHandover(true, null, Instant.now());
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -1502,9 +1502,9 @@ class RequestServiceTest {
                 "FPT",
                 Instant.now().plus(1, java.time.temporal.ChronoUnit.DAYS),
                 true,
-                false,
+                true,
                 Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
         request.confirmHandover(true, null, Instant.now());
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
@@ -1551,8 +1551,8 @@ class RequestServiceTest {
     private void stubLogisticsConfirmedRequest() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
@@ -1565,8 +1565,8 @@ class RequestServiceTest {
     void confirmHandover_whenSwapCompleted_marksBothItemsTraded() {
         Request request = new Request(1L, 10L, 2L, "SWAP");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
         request.confirmHandover(true, null, Instant.now());
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
@@ -1589,8 +1589,8 @@ class RequestServiceTest {
     void confirmHandover_whenReceiverSelectsNotAsDescribedWithoutReason_throwsError() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
@@ -1608,8 +1608,8 @@ class RequestServiceTest {
     void confirmHandover_whenReceiverMissingAsDescribed_throwsError() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
@@ -1642,8 +1642,8 @@ class RequestServiceTest {
     void confirmHandover_whenAlreadyConfirmed_throwsError() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, false, Instant.now());
-        request.confirmLogistics(false, false, Instant.now());
+        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
+        request.confirmLogistics(false, true, Instant.now());
         request.confirmHandover(true, null, Instant.now());
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));

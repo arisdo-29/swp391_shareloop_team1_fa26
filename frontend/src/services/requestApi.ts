@@ -62,7 +62,7 @@ export interface ScheduleRequestBody {
   deliveryMethod: 'IN_PERSON' | 'SHIPPING';
   meetingPlace: string;
   meetingTime: string;
-  agreeToWaiver?: boolean;
+  agreeToWaiver: true;
 }
 
 export interface ConfirmLogisticsRequestBody {

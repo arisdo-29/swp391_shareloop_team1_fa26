@@ -186,7 +186,7 @@ public class Request extends BaseEntity {
      * Đề xuất hoặc cập nhật lịch hẹn giao nhận (GN-01, GN-02).
      *
      * <p>Chuyển sang AWAITING_LOGISTICS nếu đang là RESERVED.
-     * Bên đề xuất tự động được ghi nhận đồng ý lịch mới, bên còn lại phải xác nhận lại.
+     * Ghi nhận đồng ý lịch và cam kết của bên đề xuất, xoá cả hai xác nhận của bên còn lại.
      */
     public void proposeSchedule(
             String deliveryMethod,
@@ -195,6 +195,9 @@ public class Request extends BaseEntity {
             boolean isDonor,
             boolean agreeToWaiver,
             Instant now) {
+        if (!agreeToWaiver) {
+            throw new BusinessException(RequestErrorCode.REQUEST_WAIVER_REQUIRED);
+        }
         if (this.status == RequestStatus.RESERVED) {
             transitionTo(RequestStatus.AWAITING_LOGISTICS);
         } else if (this.status != RequestStatus.AWAITING_LOGISTICS) {
@@ -205,26 +208,23 @@ public class Request extends BaseEntity {
         this.meetingPlace = meetingPlace;
         this.meetingTime = meetingTime;
 
-        boolean isShipping = "SHIPPING".equalsIgnoreCase(deliveryMethod);
         if (isDonor) {
             this.donorScheduleOkAt = now;
+            this.donorWaiverAt = now;
             this.receiverScheduleOkAt = null;
-            if (isShipping && agreeToWaiver) {
-                this.donorWaiverAt = now;
-            }
+            this.receiverWaiverAt = null;
         } else {
             this.receiverScheduleOkAt = now;
+            this.receiverWaiverAt = now;
             this.donorScheduleOkAt = null;
-            if (isShipping && agreeToWaiver) {
-                this.receiverWaiverAt = now;
-            }
+            this.donorWaiverAt = null;
         }
     }
 
     /**
      * Xác nhận lịch hẹn giao nhận và cam kết trách nhiệm (GN-02, GN-03).
      *
-     * <p>Khi cả hai bên đều đã đồng ý lịch (và cam kết trách nhiệm nếu là SHIPPING),
+     * <p>Khi cả hai bên đều đã đồng ý lịch và cam kết trách nhiệm,
      * Request chuyển sang LOGISTICS_CONFIRMED và ghi nhận contactRevealedAt.
      */
     public void confirmLogistics(boolean isDonor, boolean agreeToWaiver, Instant now) {
@@ -235,29 +235,22 @@ public class Request extends BaseEntity {
             throw new BusinessException(RequestErrorCode.REQUEST_SCHEDULE_NOT_SET);
         }
 
-        boolean isShipping = "SHIPPING".equalsIgnoreCase(this.deliveryMethod);
-        if (isShipping) {
-            boolean alreadyWaived = isDonor ? (this.donorWaiverAt != null) : (this.receiverWaiverAt != null);
-            if (!agreeToWaiver && !alreadyWaived) {
-                throw new BusinessException(RequestErrorCode.REQUEST_WAIVER_REQUIRED);
-            }
-            if (agreeToWaiver) {
-                if (isDonor) {
-                    this.donorWaiverAt = now;
-                } else {
-                    this.receiverWaiverAt = now;
-                }
-            }
+        Instant waiverAt = isDonor ? this.donorWaiverAt : this.receiverWaiverAt;
+        if (waiverAt == null && !agreeToWaiver) {
+            throw new BusinessException(RequestErrorCode.REQUEST_WAIVER_REQUIRED);
         }
 
+        Instant confirmedWaiverAt = waiverAt != null ? waiverAt : now;
         if (isDonor) {
             this.donorScheduleOkAt = now;
+            this.donorWaiverAt = confirmedWaiverAt;
         } else {
             this.receiverScheduleOkAt = now;
+            this.receiverWaiverAt = confirmedWaiverAt;
         }
 
-        boolean donorOk = this.donorScheduleOkAt != null && (!isShipping || this.donorWaiverAt != null);
-        boolean receiverOk = this.receiverScheduleOkAt != null && (!isShipping || this.receiverWaiverAt != null);
+        boolean donorOk = this.donorScheduleOkAt != null && this.donorWaiverAt != null;
+        boolean receiverOk = this.receiverScheduleOkAt != null && this.receiverWaiverAt != null;
 
         if (donorOk && receiverOk) {
             transitionTo(RequestStatus.LOGISTICS_CONFIRMED);

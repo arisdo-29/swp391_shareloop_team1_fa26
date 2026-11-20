@@ -236,7 +236,7 @@ class RequestJobServiceTest {
             Request request = new Request(1L, 10L, null, "GIVE");
             ReflectionTestUtils.setField(request, "id", 202L);
             request.select(cutoff.minus(2, ChronoUnit.HOURS));
-            request.proposeSchedule("DIRECT", "FPT Gate", now.plus(1, ChronoUnit.DAYS), true, false, cutoff);
+            request.proposeSchedule("DIRECT", "FPT Gate", now.plus(1, ChronoUnit.DAYS), true, true, cutoff);
 
             when(requestRepository.findSilentReservedRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(request), List.of());
@@ -289,8 +289,8 @@ class RequestJobServiceTest {
             ReflectionTestUtils.setField(request, "id", 301L);
             request.select(now.minus(5, ChronoUnit.DAYS));
             request.proposeSchedule(
-                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(4, ChronoUnit.DAYS));
-            request.confirmLogistics(false, false, now.minus(4, ChronoUnit.DAYS)); // status -> LOGISTICS_CONFIRMED
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(4, ChronoUnit.DAYS));
+            request.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS)); // status -> LOGISTICS_CONFIRMED
             request.confirmHandover(
                     true, null, cutoff.minus(2, ChronoUnit.HOURS)); // donor confirms -> AWAITING_HANDOVER
 
@@ -326,16 +326,16 @@ class RequestJobServiceTest {
             ReflectionTestUtils.setField(r1, "id", 301L);
             r1.select(now.minus(5, ChronoUnit.DAYS));
             r1.proposeSchedule(
-                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(4, ChronoUnit.DAYS));
-            r1.confirmLogistics(false, false, now.minus(4, ChronoUnit.DAYS));
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(4, ChronoUnit.DAYS));
+            r1.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS));
             r1.confirmHandover(true, null, cutoff.minus(2, ChronoUnit.HOURS));
 
             Request r2 = new Request(2L, 20L, null, "GIVE");
             ReflectionTestUtils.setField(r2, "id", 302L);
             r2.select(now.minus(5, ChronoUnit.DAYS));
             r2.proposeSchedule(
-                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(4, ChronoUnit.DAYS));
-            r2.confirmLogistics(false, false, now.minus(4, ChronoUnit.DAYS));
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(4, ChronoUnit.DAYS));
+            r2.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS));
             r2.confirmHandover(true, null, cutoff.minus(3, ChronoUnit.HOURS));
 
             when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
@@ -361,8 +361,8 @@ class RequestJobServiceTest {
             ReflectionTestUtils.setField(request, "id", 303L);
             request.select(now.minus(5, ChronoUnit.DAYS));
             request.proposeSchedule(
-                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(4, ChronoUnit.DAYS));
-            request.confirmLogistics(false, false, now.minus(4, ChronoUnit.DAYS));
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(4, ChronoUnit.DAYS));
+            request.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS));
             request.confirmHandover(true, null, cutoff.minus(1, ChronoUnit.HOURS));
 
             when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
@@ -416,8 +416,8 @@ class RequestJobServiceTest {
             ReflectionTestUtils.setField(request, "id", 302L);
             request.select(now.minus(5, ChronoUnit.DAYS));
             request.proposeSchedule(
-                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(4, ChronoUnit.DAYS));
-            request.confirmLogistics(false, false, now.minus(4, ChronoUnit.DAYS));
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(4, ChronoUnit.DAYS));
+            request.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS));
             request.confirmHandover(
                     false, true, cutoff.minus(1, ChronoUnit.HOURS)); // receiver confirms -> AWAITING_HANDOVER
 
@@ -447,8 +447,8 @@ class RequestJobServiceTest {
             ReflectionTestUtils.setField(request, "id", 303L);
             request.select(now.minus(4, ChronoUnit.DAYS));
             request.proposeSchedule(
-                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, false, now.minus(3, ChronoUnit.DAYS));
-            request.confirmLogistics(false, false, now.minus(3, ChronoUnit.DAYS));
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(3, ChronoUnit.DAYS));
+            request.confirmLogistics(false, true, now.minus(3, ChronoUnit.DAYS));
             // Confirm mới 1 ngày trước (sau cutoff)
             request.confirmHandover(true, null, cutoff.plus(1, ChronoUnit.DAYS));
 

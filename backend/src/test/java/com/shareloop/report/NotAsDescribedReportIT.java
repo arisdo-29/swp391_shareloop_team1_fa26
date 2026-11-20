@@ -182,10 +182,12 @@ class NotAsDescribedReportIT extends IntegrationTest {
                         .header("Authorization", token(donorId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new ScheduleRequest("IN_PERSON", "FPT Park", meetingTime, false))))
+                                new ScheduleRequest("IN_PERSON", "FPT Park", meetingTime, true))))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
-                        .header("Authorization", token(receiverId)))
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"agreeToWaiver\":true}"))
                 .andExpect(status().isOk());
         return requestId;
     }

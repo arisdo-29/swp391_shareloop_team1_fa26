@@ -1023,7 +1023,7 @@ public class RequestService {
     @Transactional
     public RequestResponse updateSchedule(long requestId, long currentUserId, ScheduleRequest requestDto) {
         Request request = requestRepository
-                .findById(requestId)
+                .findByIdForScheduleUpdate(requestId)
                 .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
 
         ItemSnapshot item = findItemSnapshot(request.getItemId())
@@ -1038,14 +1038,13 @@ public class RequestService {
         }
 
         boolean isDonor = item.donorId() == currentUserId;
-        boolean agreeToWaiver = Boolean.TRUE.equals(requestDto.agreeToWaiver());
 
         request.proposeSchedule(
                 requestDto.deliveryMethod(),
                 requestDto.meetingPlace(),
                 requestDto.meetingTime(),
                 isDonor,
-                agreeToWaiver,
+                Boolean.TRUE.equals(requestDto.agreeToWaiver()),
                 Instant.now());
 
         Request saved = requestRepository.save(request);
@@ -1070,7 +1069,7 @@ public class RequestService {
     @Transactional
     public RequestResponse confirmLogistics(long requestId, long currentUserId, ConfirmLogisticsRequest requestDto) {
         Request request = requestRepository
-                .findById(requestId)
+                .findByIdForScheduleUpdate(requestId)
                 .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
 
         ItemSnapshot item = findItemSnapshot(request.getItemId())
