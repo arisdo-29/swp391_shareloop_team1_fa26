@@ -132,6 +132,16 @@ describe('Chi tiết bài đã giao dịch', () => {
     expect(screen.getByRole('button', { name: 'Gửi yêu cầu, miễn phí' })).toBeTruthy();
     expect(screen.queryByText('Đã giao dịch')).toBeNull();
   });
+
+  it('nút Báo cáo bài đăng dùng Button variant warning', async () => {
+    // when
+    await renderDetail(detail());
+
+    // then
+    const reportButton = screen.getByRole('button', { name: 'Báo cáo bài đăng' });
+    expect(reportButton).toBeTruthy();
+    expect(reportButton.className).toContain('bg-warning-soft');
+  });
 });
 
 describe('Liên kết hồ sơ ở khối chủ bài', () => {

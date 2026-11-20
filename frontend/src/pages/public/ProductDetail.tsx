@@ -566,16 +566,17 @@ export function ProductDetail() {
           ) : null}
           {reportNotice ? <Alert tone="success">{reportNotice}</Alert> : null}
           {currentUserId && !own ? (
-            <button
+            <Button
               type="button"
-              className="min-h-11 text-sm font-semibold text-text-secondary hover:text-error"
+              variant="warning"
+              className="w-full"
               onClick={() => {
                 setReportNotice('');
                 setReportOpen(true);
               }}
             >
               Báo cáo bài đăng
-            </button>
+            </Button>
           ) : null}
         </aside>
       </div>
