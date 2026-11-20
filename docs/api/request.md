@@ -106,7 +106,7 @@ Chủ bài xem danh sách các yêu cầu gửi tới bài đăng của mình (F
 
 - **Xác thực:** Bắt buộc JWT (phải là chủ bài đăng).
 - **Path variable:** `itemId` (id bài đăng).
-- **Thành công:** `200 OK`, mảng `RequestResponse` (sắp xếp theo thời gian tạo mới nhất lên trước). Mỗi phần tử đính kèm thông tin uy tín của người gửi yêu cầu: `receiverTrustStars`, `receiverRank`, `receiverAsDescribedRate` (đồng thời hỗ trợ alias `trustStars`, `rank`, `asDescribedRate`).
+- **Thành công:** `200 OK`, mảng `RequestResponse` (sắp xếp theo thời gian tạo mới nhất lên trước). Mỗi phần tử đính kèm thông tin uy tín của người gửi yêu cầu: `receiverTrustStars`, `receiverRank` (đồng thời hỗ trợ alias `trustStars`, `rank`). Không còn tỉ lệ đúng mô tả (21/11/2026).
 - **Ví dụ Response:**
 
 ```json
@@ -118,10 +118,8 @@ Chủ bài xem danh sách các yêu cầu gửi tới bài đăng của mình (F
     "receiverName": "Nguyễn Văn A",
     "receiverTrustStars": 5,
     "receiverRank": "BRONZE",
-    "receiverAsDescribedRate": 1.0,
     "trustStars": 5,
     "rank": "BRONZE",
-    "asDescribedRate": 1.0,
     "offeredItemId": null,
     "type": "GIVE",
     "status": "PENDING",
@@ -512,7 +510,6 @@ Nút "Từ chối giao nhận" của bên nhận món đồ (GN-07, BC-09).
 | `contactRevealedAt` | string? | Thời điểm mở thông tin liên lạc ISO-8601 UTC |
 | `donorHandoverAt` | string? | Thời điểm người giao xác nhận đã giao ISO-8601 UTC |
 | `receiverHandoverAt` | string? | Thời điểm người nhận xác nhận đã nhận ISO-8601 UTC |
-| `asDescribed` | boolean? | Người nhận đánh giá món đồ đúng mô tả hay không |
 | `completedAt` | string? | Thời điểm hoàn tất giao dịch ISO-8601 UTC |
 | `complaintDeadline` | string? | Hạn khiếu nại = `completedAt` + `complaint_window_hours` (24 giờ, U08); `null` khi chưa hoàn tất. Thông báo `TRANSACTION_COMPLETED` gửi hai bên ghi `Bạn có 24 giờ, đến HH:mm dd/MM, để khiếu nại nếu có vấn đề.` |
 | `cancelReason` | string? | Lý do huỷ, có tiền tố người huỷ `[Chủ bài] `, `[Người nhận] ` hoặc `[Hệ thống] `. Có khi `status = CANCELLED` |
@@ -525,7 +522,6 @@ Nút "Từ chối giao nhận" của bên nhận món đồ (GN-07, BC-09).
 | `offeredItemTitle` | string? | Tiêu đề món người xin đề nghị đổi (chỉ yêu cầu `SWAP`) |
 | `receiverTrustStars` | number? | Số sao uy tín của người gửi yêu cầu (TrustStars: 1-5). Alias: `trustStars` (YC-06) |
 | `receiverRank` | string? | Hạng uy tín của người gửi yêu cầu (`BRONZE`, `SILVER`, `GOLD`, `DIAMOND`). Alias: `rank` (YC-06) |
-| `receiverAsDescribedRate` | number? | Tỉ lệ giao dịch đúng mô tả của người gửi yêu cầu, thang 0.00 - 1.00 (vd `0.92` là 92%). `null` khi có dưới 3 giao dịch hoàn tất đã được đánh giá "đúng mô tả?". Alias: `asDescribedRate` (YC-06) |
 | `lastMessageAt` | string? | Thời điểm tin nhắn mới nhất trong hội thoại của giao dịch ISO-8601 UTC (U03). `null` khi chưa có tin nhắn nào |
 | `disputeResponseDueAt` | string? | Hạn giải trình của khiếu nại đang mở thuộc giao dịch ISO-8601 UTC (U5-BE, D-04, GN-07). Chỉ có giá trị khi `status = DISPUTED`, các trạng thái khác luôn là `null`. FE dùng để hiển thị thời hạn giải trình |
 | `donorAvatarUrl` | string? | Ảnh đại diện chủ bài, dạng `/api/v1/media/{id}`; `null` khi chưa có ảnh. Có ở mọi API trả `RequestResponse` |

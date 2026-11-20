@@ -44,8 +44,6 @@ export interface PublicProfileResponse {
   district: string | null;
   rank: 'BRONZE' | 'SILVER' | 'GOLD' | 'DIAMOND';
   trustStars: number;
-  // Thang 0–1; null khi dưới 3 giao dịch đã được đánh giá.
-  asDescribedRate: number | null;
   completedTransactions: number;
   joinedAt: string;
 }

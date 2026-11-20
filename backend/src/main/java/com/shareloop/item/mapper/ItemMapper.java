@@ -56,7 +56,6 @@ public final class ItemMapper {
                 null,
                 null,
                 null,
-                null,
                 displayWindow != null ? displayWindow.boostStartedAt() : null,
                 displayWindow != null ? displayWindow.boostChainEndsAt() : null,
                 displayWindow != null ? displayWindow.boostCooldownUntil() : null);

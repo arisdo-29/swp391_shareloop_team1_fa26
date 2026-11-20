@@ -73,11 +73,11 @@ class PublicProfileIT extends IntegrationTest {
 
     @Test
     void getProfile_returnsNumbersAndHidesPrivateFields() throws Exception {
-        // given: chủ hồ sơ cho 3 món (2 đúng mô tả, 1 không) và nhận 1 món của người xem
-        givenTradedItem(ownerId, viewerId, "Món đã cho 1", true);
-        givenTradedItem(ownerId, viewerId, "Món đã cho 2", true);
-        givenTradedItem(ownerId, viewerId, "Món đã cho 3", false);
-        givenTradedItem(viewerId, ownerId, "Món đã nhận", null);
+        // given: chủ hồ sơ cho 3 món và nhận 1 món của người xem
+        givenTradedItem(ownerId, viewerId, "Món đã cho 1");
+        givenTradedItem(ownerId, viewerId, "Món đã cho 2");
+        givenTradedItem(ownerId, viewerId, "Món đã cho 3");
+        givenTradedItem(viewerId, ownerId, "Món đã nhận");
 
         // when, then
         mvc.perform(get("/api/v1/users/{id}/profile", ownerId).header("Authorization", "Bearer " + viewerToken))
@@ -88,7 +88,7 @@ class PublicProfileIT extends IntegrationTest {
                 .andExpect(jsonPath("$.district").value(areaName))
                 .andExpect(jsonPath("$.rank").value("GOLD"))
                 .andExpect(jsonPath("$.trustStars").value(4))
-                .andExpect(jsonPath("$.asDescribedRate").value(Matchers.closeTo(0.6667, 0.001)))
+                .andExpect(jsonPath("$.asDescribedRate").doesNotExist())
                 .andExpect(jsonPath("$.completedTransactions").value(4))
                 .andExpect(jsonPath("$.joinedAt").exists())
                 .andExpect(jsonPath("$.email").doesNotExist())
@@ -162,7 +162,7 @@ class PublicProfileIT extends IntegrationTest {
         hidden.approve();
         hidden.deactivate();
         items.saveAndFlush(hidden);
-        givenTradedItem(ownerId, viewerId, "Bài đã giao dịch", null);
+        givenTradedItem(ownerId, viewerId, "Bài đã giao dịch");
 
         // when, then
         mvc.perform(get("/api/v1/users/{id}/items", ownerId)
@@ -180,8 +180,8 @@ class PublicProfileIT extends IntegrationTest {
     void listItems_doneTab_returnsTradedItemsWithCompletedAt() throws Exception {
         // given
         givenApprovedItem("Bài công khai");
-        givenTradedItem(ownerId, viewerId, "Bài đã giao dịch 1", null);
-        givenTradedItem(ownerId, viewerId, "Bài đã giao dịch 2", null);
+        givenTradedItem(ownerId, viewerId, "Bài đã giao dịch 1");
+        givenTradedItem(ownerId, viewerId, "Bài đã giao dịch 2");
 
         // when, then
         mvc.perform(get("/api/v1/users/{id}/items", ownerId)
@@ -232,7 +232,7 @@ class PublicProfileIT extends IntegrationTest {
     @Test
     void getItemDetail_whenTraded_isReadOnlyForOtherUsers() throws Exception {
         // given
-        long tradedItemId = givenTradedItem(ownerId, viewerId, "Bài đã giao dịch", null);
+        long tradedItemId = givenTradedItem(ownerId, viewerId, "Bài đã giao dịch");
 
         // when, then
         mvc.perform(get("/api/v1/items/{id}", tradedItemId).header("Authorization", "Bearer " + viewerToken))
@@ -257,7 +257,7 @@ class PublicProfileIT extends IntegrationTest {
     @Test
     void createRequest_whenItemTraded_throwsItemNotAvailable() throws Exception {
         // given
-        long tradedItemId = givenTradedItem(ownerId, viewerId, "Bài đã giao dịch", null);
+        long tradedItemId = givenTradedItem(ownerId, viewerId, "Bài đã giao dịch");
         long otherUserId = insertUser("profile-other@shareloop.local", "Lê Văn Cường", "0900111003");
         String otherToken = jwtService.issue(otherUserId, false);
 
@@ -300,17 +300,16 @@ class PublicProfileIT extends IntegrationTest {
         return items.saveAndFlush(item);
     }
 
-    // Bài của donorId đã TRADED, kèm một Request COMPLETED với receiverId; asDescribed null là chưa đánh giá.
-    private long givenTradedItem(long donorId, long receiverId, String title, Boolean asDescribed) {
+    // Bài của donorId đã TRADED, kèm một Request COMPLETED với receiverId.
+    private long givenTradedItem(long donorId, long receiverId, String title) {
         Item item = newItem(donorId, title);
         item.approve();
         item.markTraded();
         items.saveAndFlush(item);
-        jdbc.sql("INSERT INTO requests (item_id, receiver_id, type, status, completed_at, as_described) "
-                        + "VALUES (:itemId, :receiverId, 'GIVE', 'COMPLETED', CURRENT_TIMESTAMP, :asDescribed)")
+        jdbc.sql("INSERT INTO requests (item_id, receiver_id, type, status, completed_at) "
+                        + "VALUES (:itemId, :receiverId, 'GIVE', 'COMPLETED', CURRENT_TIMESTAMP)")
                 .param("itemId", item.getId())
                 .param("receiverId", receiverId)
-                .param("asDescribed", asDescribed)
                 .update();
         return item.getId();
     }

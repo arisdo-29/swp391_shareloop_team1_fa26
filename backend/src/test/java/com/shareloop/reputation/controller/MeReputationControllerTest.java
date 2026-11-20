@@ -53,7 +53,7 @@ class MeReputationControllerTest {
     }
 
     @Test
-    @DisplayName("Đăng nhập thành công trả về điểm, hạng, sao, tỉ lệ và lịch sử điểm")
+    @DisplayName("Đăng nhập thành công trả về điểm, hạng, sao và lịch sử điểm, không còn tỉ lệ đúng mô tả")
     void getMyReputation_authenticated_returns200() throws Exception {
         String token = jwtService.issue(USER_ID, false);
         PointHistoryDto historyDto =
@@ -61,7 +61,7 @@ class MeReputationControllerTest {
         PageImpl<PointHistoryDto> page = new PageImpl<>(List.of(historyDto), PageRequest.of(0, 20), 1);
 
         when(reputationService.getMyReputation(eq(USER_ID), anyInt(), anyInt()))
-                .thenReturn(new MyReputationResponse(320, Rank.GOLD, 4, 0.92, page, Rank.DIAMOND, 280, 300, 600));
+                .thenReturn(new MyReputationResponse(320, Rank.GOLD, 4, page, Rank.DIAMOND, 280, 300, 600));
 
         mockMvc.perform(get(URL).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
@@ -70,26 +70,25 @@ class MeReputationControllerTest {
                 .andExpect(jsonPath("$.currentRankMinPoints").value(300))
                 .andExpect(jsonPath("$.nextRankMinPoints").value(600))
                 .andExpect(jsonPath("$.trustStars").value(4))
-                .andExpect(jsonPath("$.accuracyRate").value(0.92))
+                .andExpect(jsonPath("$.accuracyRate").doesNotExist())
                 .andExpect(jsonPath("$.history.content[0].delta").value(10))
                 .andExpect(jsonPath("$.history.content[0].reason").value("REQUEST_COMPLETED"));
     }
 
     @Test
-    @DisplayName("Người dùng chưa có giao dịch trả về accuracyRate = null và lịch sử rỗng")
-    void getMyReputation_noTransactions_returnsNullAccuracyRate() throws Exception {
+    @DisplayName("Người dùng chưa có giao dịch trả về lịch sử rỗng")
+    void getMyReputation_noTransactions_returnsEmptyHistory() throws Exception {
         String token = jwtService.issue(USER_ID, false);
         PageImpl<PointHistoryDto> emptyPage = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
 
         when(reputationService.getMyReputation(eq(USER_ID), anyInt(), anyInt()))
-                .thenReturn(new MyReputationResponse(0, Rank.BRONZE, 5, null, emptyPage));
+                .thenReturn(new MyReputationResponse(0, Rank.BRONZE, 5, emptyPage));
 
         mockMvc.perform(get(URL).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalPoints").value(0))
                 .andExpect(jsonPath("$.rank").value("BRONZE"))
                 .andExpect(jsonPath("$.trustStars").value(5))
-                .andExpect(jsonPath("$.accuracyRate").isEmpty())
                 .andExpect(jsonPath("$.history.content").isEmpty());
     }
 }

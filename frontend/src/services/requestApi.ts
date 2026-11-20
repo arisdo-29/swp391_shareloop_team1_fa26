@@ -20,7 +20,6 @@ export interface RequestResponse {
   contactRevealedAt?: string;
   donorHandoverAt?: string;
   receiverHandoverAt?: string;
-  asDescribed?: boolean;
   completedAt?: string;
   // Lý do huỷ kèm tiền tố người huỷ: "[Chủ bài] ", "[Người nhận] ", "[Hệ thống] "; giữ nguyên khi hiển thị.
   cancelReason?: string | null;
@@ -28,7 +27,6 @@ export interface RequestResponse {
   receiverName?: string | null;
   receiverTrustStars?: number | null;
   receiverRank?: string | null;
-  receiverAsDescribedRate?: number | null;
   // Tên món đồ và chủ bài để không phải hiện id (docs/api/request.md).
   itemTitle?: string | null;
   itemImage?: string | null;
@@ -37,7 +35,6 @@ export interface RequestResponse {
   offeredItemTitle?: string | null;
   trustStars?: number | null;
   rank?: string | null;
-  asDescribedRate?: number | null;
   complaintDeadline?: string | null;
   lastMessageAt?: string | null;
   disputeResponseDueAt?: string | null;
@@ -114,7 +111,6 @@ export function toFeItemRequest(
 ): ItemRequest {
   const trustStars = request.receiverTrustStars ?? request.trustStars;
   const rank = request.receiverRank ?? request.rank;
-  const asDescribedRate = request.receiverAsDescribedRate ?? request.asDescribedRate;
   return {
     id: `api_req_${request.id}`,
     type: request.type === 'SWAP' ? 'trade' : 'gift',
@@ -128,7 +124,6 @@ export function toFeItemRequest(
     requesterName: request.receiverName ?? undefined,
     requesterTrustStars: typeof trustStars === 'number' ? trustStars : undefined,
     requesterRank: rank ?? undefined,
-    requesterAsDescribedRate: typeof asDescribedRate === 'number' ? asDescribedRate : undefined,
     status: request.status,
     message: '',
     createdAt: request.createdAt,

@@ -795,7 +795,7 @@ Hai sơ đồ dưới được vẽ mới theo các đường dẫn trong fronte
 | 8      | Tài khoản          | **Quên / đặt lại mật khẩu**                               | Nhập email, sau đó OTP và mật khẩu mới.                                                    |
 | 9      | Tài khoản          | **Hồ sơ cá nhân**                                         | Họ tên, khu vực, ảnh đại diện, uy tín; đổi số điện thoại (hộp thoại OTP).                  |
 | 10     | Tài khoản          | **Đổi mật khẩu**                                          | Mật khẩu hiện tại và mật khẩu mới.                                                         |
-| 11     | Tài khoản          | **Hồ sơ công khai**                                       | Sao, hạng, tỉ lệ đúng mô tả và bài đang hiển thị của một người.                            |
+| 11     | Tài khoản          | **Hồ sơ công khai**                                       | Sao, hạng và bài đang hiển thị của một người.                            |
 | 12     | Bài đăng           | **Đăng đồ**                                               | Form tạo / sửa bài, tải ảnh, gợi ý mô tả bằng AI, hộp thoại xác nhận phí.                  |
 | 13     | Bài đăng           | **Hoạt động của tôi**                                     | Bài của tôi (sửa, gỡ, gia hạn, đẩy, xem người xin, chọn người) và yêu cầu đã gửi (rút).    |
 | 14     | Tìm kiếm           | **Trợ lý AI**                                             | Nhập nhu cầu bằng câu tự nhiên, xem lượt miễn phí còn lại và kết quả.                      |
@@ -1129,7 +1129,7 @@ Luồng xử lý: xem [Hình 7](#FIG_sw3) (F02 Đăng nhập, quên và đổi m
 
 **Kiểm tra:**
 
-- Chỉ xem của chính mình; người khác chỉ thấy sao, hạng, tỉ lệ đúng mô tả trên hồ sơ công khai.
+- Chỉ xem của chính mình; người khác chỉ thấy sao, hạng trên hồ sơ công khai.
 
 **Nếu hợp lệ:**
 
@@ -1754,7 +1754,7 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 
 **Kích hoạt:** Chủ bài mở danh sách người xin của một bài và bấm "Chọn". Hoặc, trong chat của giao dịch bài Cho chưa chốt lịch, người nhận gửi đề nghị đưa một bài của mình vào đổi.
 
-**Mô tả:** Chủ bài xem sao, hạng, tỉ lệ đúng mô tả và món đem đổi của từng người, chọn đúng một người. Nếu hình thức bài khác loại yêu cầu, hệ thống hỏi xác nhận chuyển hình thức. Với bài Cho, người nhận còn có thể đề nghị đổi món ngay trong chat trước khi chốt lịch; chủ bài đồng ý thì bài chuyển sang Trao đổi.
+**Mô tả:** Chủ bài xem sao, hạng và món đem đổi của từng người, chọn đúng một người. Nếu hình thức bài khác loại yêu cầu, hệ thống hỏi xác nhận chuyển hình thức. Với bài Cho, người nhận còn có thể đề nghị đổi món ngay trong chat trước khi chốt lịch; chủ bài đồng ý thì bài chuyển sang Trao đổi.
 
 **Chi tiết chức năng**
 
@@ -1792,7 +1792,7 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 
 | **Mã**             | **Nội dung luật**                                                                                                                                                                                                                           |
 |--------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [YC-06](#BR_YC_06) | Chủ bài xem danh sách người xin (sao, hạng, tỉ lệ đúng mô tả, món đem đổi) và chọn đúng một người.                                                                                                                                          |
+| [YC-06](#BR_YC_06) | Chủ bài xem danh sách người xin (sao, hạng, món đem đổi) và chọn đúng một người.                                                                                                                                          |
 | [YC-07](#BR_YC_07) | Khi chọn: yêu cầu → Đã được chọn, bài và món đem đổi → Đang giao dịch; các yêu cầu khác của bài → Không được chọn; các yêu cầu khác đang dùng cùng món đem đổi ở bài khác → Đã huỷ. Mở chat, ghim thẻ bài (bài Trao đổi ghim cả hai món).   |
 | [CD-02](#BR_CD_02) | Cho → Trao đổi lúc chọn người: chủ bài chọn một người có kèm món đổi → hộp xác nhận "Chuyển bài sang Trao đổi, trừ 5 Credit". Đồng ý và đủ khả dụng → trừ 5 Credit, bài thành Trao đổi, chat mở. Không đồng ý thì không chọn được người đó. |
 | [CD-03](#BR_CD_03) | Cho → Trao đổi trong chat: giao dịch bài Cho chưa chốt lịch, người nhận muốn đưa một bài của mình vào đổi → chủ bài được hỏi có chuyển sang Trao đổi (5 Credit) không; đồng ý và trả phí thì món đó thành món đổi và chuyển Đang giao dịch. |
@@ -1806,7 +1806,7 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 
 **Giao diện**
 
-> **\[Ảnh chụp màn hình cần chèn\]** *Danh sách người xin của một bài (sao, hạng, tỉ lệ đúng mô tả, món đổi).*
+> **\[Ảnh chụp màn hình cần chèn\]** *Danh sách người xin của một bài (sao, hạng, món đổi).*
 >
 > **\[Ảnh chụp màn hình cần chèn\]** *Hộp thoại xác nhận "Chuyển bài sang Trao đổi, trừ 5 Credit".*
 
@@ -3584,7 +3584,7 @@ Người nhận gửi yêu cầu xin (bài Cho) hoặc đề nghị đổi (bài
 </tr>
 <tr class="even">
 <td><span id="BR_YC_06" class="anchor"></span><strong>YC-06</strong></td>
-<td>Chủ bài xem danh sách người xin (sao, hạng, tỉ lệ đúng mô tả, món đem đổi) và chọn đúng một người.</td>
+<td>Chủ bài xem danh sách người xin (sao, hạng, món đem đổi) và chọn đúng một người.</td>
 <td>—</td>
 <td><a href="#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi">Chọn người giao dịch và chuyển hình thức Cho ↔︎ Trao đổi</a></td>
 </tr>
@@ -4048,8 +4048,8 @@ Thông báo lỗi lấy từ các lớp \*ErrorCode trong backend (mỗi module 
 | MSG113 | REQUEST_WAIVER_REQUIRED                  | BAD REQUEST           | request      | Vui lòng đồng ý cam kết trách nhiệm giao nhận.      |
 | MSG114 | REQUEST_SCHEDULE_NOT_SET                 | BAD REQUEST           | request      | Chưa có thông tin lịch hẹn để xác nhận.                                              |
 | MSG115 | REQUEST_CONTACT_NOT_REVEALED             | CONFLICT              | request      | Thông tin liên lạc chỉ được hiển thị sau khi hai bên đã chốt lịch hẹn.               |
-| MSG116 | REQUEST_AS_DESCRIBED_REQUIRED            | BAD REQUEST           | request      | Người nhận bắt buộc phải trả lời câu hỏi món đồ có đúng mô tả hay không.             |
-| MSG117 | REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED | BAD REQUEST           | request      | Bắt buộc nhập lý do khi chọn món đồ không đúng mô tả.                                |
+| MSG116 | REQUEST_REFUSE_NOT_ALLOWED | FORBIDDEN | request | Chỉ bên nhận món đồ mới được từ chối giao nhận. |
+| MSG117 | (đã bỏ 21/11/2026) | — | request | Không còn câu hỏi đúng mô tả khi xác nhận giao nhận. |
 | MSG118 | REQUEST_HANDOVER_ALREADY_CONFIRMED       | CONFLICT              | request      | Bạn đã xác nhận giao nhận cho yêu cầu này rồi.                                       |
 | MSG119 | REQUEST_MEDIA_REQUIRED                   | BAD REQUEST           | request      | Danh sách ảnh/video minh chứng không được rỗng.                                      |
 | MSG120 | REQUEST_MEDIA_STAGE_INVALID              | BAD REQUEST           | request      | Giai đoạn đính kèm minh chứng không hợp lệ.                                          |
@@ -4251,7 +4251,7 @@ Chụp trên bản staging (frontend Vercel, backend Cloud Run) bằng các tài
 | 25     | [AI trợ lý tìm đồ](#ai-trợ-lý-tìm-đồ)                                                                             | Trang Trợ lý AI (/ai): ô nhập, số lượt miễn phí còn lại, kết quả có thẻ bài.                                 |
 | 26     | [Gửi yêu cầu xin hoặc đề nghị đổi](#gửi-yêu-cầu-xin-hoặc-đề-nghị-đổi)                                             | Hộp thoại Gửi yêu cầu (có chọn món đem đổi).                                                                 |
 | 27     | [Rút yêu cầu](#rút-yêu-cầu)                                                                                       | Tab Yêu cầu đã gửi trên trang Hoạt động, có nút Rút yêu cầu.                                                 |
-| 28     | [Chọn người giao dịch và chuyển hình thức Cho ↔ Trao đổi](#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi) | Danh sách người xin của một bài (sao, hạng, tỉ lệ đúng mô tả, món đổi).                                      |
+| 28     | [Chọn người giao dịch và chuyển hình thức Cho ↔ Trao đổi](#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi) | Danh sách người xin của một bài (sao, hạng, món đổi).                                      |
 | 29     | [Chọn người giao dịch và chuyển hình thức Cho ↔ Trao đổi](#chọn-người-giao-dịch-và-chuyển-hình-thức-cho-trao-đổi) | Hộp thoại xác nhận "Chuyển bài sang Trao đổi, trừ 5 Credit".                                                 |
 | 30     | [Nhắn tin trong giao dịch](#nhắn-tin-trong-giao-dịch)                                                             | Trang Tin nhắn (/messages): thẻ bài ghim ở đầu, một tin bị chặn kèm lý do.                                   |
 | 31     | [Chốt lịch giao nhận và xem thông tin liên lạc](#chốt-lịch-giao-nhận-và-xem-thông-tin-liên-lạc)                   | Trang Tiến trình giao dịch: thẻ lịch hẹn đang chờ bên kia xác nhận.                                          |

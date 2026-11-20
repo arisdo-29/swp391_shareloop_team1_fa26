@@ -16,23 +16,13 @@ public final class RequestMapper {
     }
 
     public static RequestResponse toResponse(Request request, String receiverName) {
-        return toResponse(request, receiverName, null, null, null);
+        return toResponse(request, receiverName, null, null);
     }
 
-    // Map họ tên và thông tin uy tín (TrustStars, hạng, tỉ lệ đúng mô tả) (YC-06, Issue #110), chưa có tên món đồ.
+    // Map họ tên và thông tin uy tín (TrustStars, hạng) (YC-06, Issue #110), chưa có tên món đồ.
     public static RequestResponse toResponse(
-            Request request,
-            String receiverName,
-            Integer receiverTrustStars,
-            String receiverRank,
-            Double receiverAsDescribedRate) {
-        return toResponse(
-                request,
-                receiverName,
-                receiverTrustStars,
-                receiverRank,
-                receiverAsDescribedRate,
-                RequestItemInfo.EMPTY);
+            Request request, String receiverName, Integer receiverTrustStars, String receiverRank) {
+        return toResponse(request, receiverName, receiverTrustStars, receiverRank, RequestItemInfo.EMPTY);
     }
 
     // Map đầy đủ, kèm tên món đồ và tên chủ bài để giao diện không phải hiện id (U2).
@@ -41,14 +31,12 @@ public final class RequestMapper {
             String receiverName,
             Integer receiverTrustStars,
             String receiverRank,
-            Double receiverAsDescribedRate,
             RequestItemInfo itemInfo) {
         if (request == null) {
             return null;
         }
         // Hạn khiếu nại cần đọc ConfigService nên do RequestService tính và truyền vào overload đầy đủ (U08).
-        return toResponse(
-                request, receiverName, receiverTrustStars, receiverRank, receiverAsDescribedRate, itemInfo, null, null);
+        return toResponse(request, receiverName, receiverTrustStars, receiverRank, itemInfo, null, null);
     }
 
     // Map đầy đủ kèm thời hạn khiếu nại (U08) và thời gian tin nhắn mới nhất (U03).
@@ -57,7 +45,6 @@ public final class RequestMapper {
             String receiverName,
             Integer receiverTrustStars,
             String receiverRank,
-            Double receiverAsDescribedRate,
             RequestItemInfo itemInfo,
             java.time.Instant complaintDeadline,
             java.time.Instant lastMessageAt) {
@@ -66,7 +53,6 @@ public final class RequestMapper {
                 receiverName,
                 receiverTrustStars,
                 receiverRank,
-                receiverAsDescribedRate,
                 itemInfo,
                 complaintDeadline,
                 lastMessageAt,
@@ -79,7 +65,6 @@ public final class RequestMapper {
             String receiverName,
             Integer receiverTrustStars,
             String receiverRank,
-            Double receiverAsDescribedRate,
             RequestItemInfo itemInfo,
             java.time.Instant complaintDeadline,
             java.time.Instant lastMessageAt,
@@ -104,13 +89,11 @@ public final class RequestMapper {
                 request.getContactRevealedAt(),
                 request.getDonorHandoverAt(),
                 request.getReceiverHandoverAt(),
-                request.getAsDescribed(),
                 request.getCompletedAt(),
                 request.getCreatedAt(),
                 receiverName,
                 receiverTrustStars,
                 receiverRank,
-                receiverAsDescribedRate,
                 itemInfo.itemTitle(),
                 itemInfo.itemImage(),
                 itemInfo.donorId(),

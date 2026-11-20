@@ -147,8 +147,8 @@ và thẻ người đăng ở chi tiết bài).
 Quy tắc:
 
 - **Không** trả email, số điện thoại, số dư Credit, điểm thưởng (`totalPoints`), địa chỉ chi tiết, `areaId`.
-- `rank`, `trustStars`, `asDescribedRate` lấy từ `ReputationService.getReputationSummary` (cùng số với thẻ người đăng
-  ở chi tiết bài, xem `reputation.md` mục 1.3). `asDescribedRate` thang 0–1, `null` khi dưới 3 giao dịch đã được đánh giá.
+- `rank`, `trustStars` lấy từ `ReputationService.getReputationSummary` (cùng số với thẻ người đăng
+  ở chi tiết bài, xem `reputation.md` mục 1.3). Không còn `asDescribedRate` (21/11/2026).
 - `completedTransactions`: số Request `COMPLETED` mà người này tham gia, tính cả vai cho và vai nhận
   (`RequestQueryService.countCompletedByUser`).
 - `district`: tên khu vực mặc định; `null` khi chưa chọn, frontend ẩn dòng này.
@@ -165,7 +165,6 @@ Quy tắc:
   "district": "Quận 3",
   "rank": "GOLD",
   "trustStars": 4,
-  "asDescribedRate": 0.92,
   "completedTransactions": 18,
   "joinedAt": "2026-03-01T08:00:00Z"
 }

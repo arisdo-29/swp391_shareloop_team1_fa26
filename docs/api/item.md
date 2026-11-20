@@ -358,7 +358,6 @@ Quy tắc:
 | `donorName` | string? | Tên người đăng; chỉ có ở API chi tiết |
 | `donorTrustStars` | number? | Sao uy tín người đăng; chỉ có ở API chi tiết |
 | `donorRank` | string? | Hạng người đăng; chỉ có ở API chi tiết |
-| `donorAsDescribedRate` | number? | Tỉ lệ đúng mô tả thang 0–1; chỉ có ở API chi tiết |
 | `hidden` | boolean? | Bài đang tạm ẩn (`is_active = false`), ví dụ tự ẩn do đủ báo cáo đang chờ (U04). Chỉ có khi **chủ bài** xem (chi tiết, sửa, bài của tôi) hoặc Admin xem; người khác nhận `null` |
 | `hiddenReason` | string? | Lý do ẩn. Hiện luôn `null` vì chưa lưu lý do ẩn (C06); FE hiện câu mặc định |
 | `completedAt` | string? | Thời điểm giao dịch hoàn tất ISO-8601 UTC. Chỉ có khi bài `TRADED`, ở API chi tiết và `GET /users/{id}/items?tab=DONE`; nơi khác `null` |

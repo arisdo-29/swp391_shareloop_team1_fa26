@@ -41,7 +41,7 @@ const reasons = [
     'Gần nhà',
     'Tìm theo quận. Hẹn gặp ở chỗ công cộng gần bạn, hoặc gửi qua đơn vị vận chuyển nếu hai bên đồng ý.',
   ],
-  ['Biết ai đáng tin', 'Mỗi người có hạng, sao uy tín và tỉ lệ đúng mô tả từ các lần giao trước.'],
+  ['Biết ai đáng tin', 'Mỗi người có hạng và sao uy tín từ các lần giao trước.'],
   [
     'Bài được duyệt',
     'Hệ thống tự kiểm khi bạn gửi bài, rồi Admin duyệt từng bài theo checklist. Không có AI trong khâu duyệt bài và kiểm tin nhắn.',
@@ -61,7 +61,7 @@ const receiverSteps = [
   ],
   [
     'Chờ chủ bài chọn',
-    `Chủ bài xem sao, hạng, tỉ lệ đúng mô tả của bạn rồi chọn đúng 1 người. Yêu cầu chờ quá ${RULES.requestPendingDays} ngày thì tự huỷ, bạn cũng tự rút được khi còn chờ. Được chọn thì chat mở, không được chọn thì bạn nhận thông báo.`,
+    `Chủ bài xem sao và hạng của bạn rồi chọn đúng 1 người. Yêu cầu chờ quá ${RULES.requestPendingDays} ngày thì tự huỷ, bạn cũng tự rút được khi còn chờ. Được chọn thì chat mở, không được chọn thì bạn nhận thông báo.`,
   ],
   [
     'Chốt lịch và xác nhận đã nhận',
@@ -80,7 +80,7 @@ const giverSteps = [
   ],
   [
     'Chọn một người',
-    'Xem sao, hạng, tỉ lệ đúng mô tả và món đem đổi của từng người, rồi chọn đúng 1 người. Những người còn lại tự nhận thông báo.',
+    'Xem sao, hạng và món đem đổi của từng người, rồi chọn đúng 1 người. Những người còn lại tự nhận thông báo.',
   ],
   [
     'Giao và xác nhận đã giao',

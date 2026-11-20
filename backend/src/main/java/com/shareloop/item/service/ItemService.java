@@ -340,7 +340,6 @@ public class ItemService {
                         donor == null ? null : donor.fullName(),
                         reputation.trustStars(),
                         reputation.rank().name(),
-                        reputation.asDescribedRate(),
                         donorLocked)
                 .withTradeInfo(findCompletedAt(item), requestable);
         // U04: chỉ chủ bài biết bài đang tạm ẩn; người khác nhận hidden = null và không thấy các mốc đợt đẩy.

@@ -305,7 +305,6 @@ class RequestJobServiceTest {
             assertThat(completedCount).isEqualTo(1);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED);
             assertThat(request.isAutoConfirmed()).isTrue();
-            assertThat(request.getAsDescribed()).isTrue();
             assertThat(request.getCompletedAt()).isEqualTo(now);
 
             verify(requestRepository).save(request);

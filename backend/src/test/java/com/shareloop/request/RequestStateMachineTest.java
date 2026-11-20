@@ -337,7 +337,6 @@ class RequestStateMachineTest {
             assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED);
             assertThat(request.isAutoConfirmed()).isTrue();
             assertThat(request.getCompletedAt()).isEqualTo(now);
-            assertThat(request.getAsDescribed()).isTrue();
         }
 
         @Test
@@ -709,7 +708,6 @@ class RequestStateMachineTest {
             assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED);
             assertThat(request.isAutoConfirmed()).isTrue();
             assertThat(request.getCompletedAt()).isEqualTo(autoConfirmTime);
-            assertThat(request.getAsDescribed()).isTrue();
         }
 
         @Test

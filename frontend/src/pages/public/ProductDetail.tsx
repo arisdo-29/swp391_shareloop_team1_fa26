@@ -410,7 +410,7 @@ export function ProductDetail() {
             />
             <div className="min-w-0 flex-1 space-y-1">
               <h2 id="item-owner" className="text-base font-bold">{item.donorName || 'Người đăng'}</h2>
-              <ReputationBadge trustStars={item.donorTrustStars} rank={item.donorRank} asDescribedRate={item.donorAsDescribedRate} />
+              <ReputationBadge trustStars={item.donorTrustStars} rank={item.donorRank} />
             </div>
             {ownerProfileId ? (
               <Button variant="outline" onClick={() => navigate(userProfilePath(ownerProfileId))}>

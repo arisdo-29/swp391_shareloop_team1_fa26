@@ -321,7 +321,6 @@ public class RequestService {
                     ReputationSummary rep = findReceiverReputation(request.getReceiverId());
                     Integer trustStars = rep != null ? rep.trustStars() : 5;
                     String rank = rep != null && rep.rank() != null ? rep.rank().name() : Rank.BRONZE.name();
-                    Double asDescribedRate = rep != null ? rep.asDescribedRate() : null;
                     Instant complaintDeadline = ComplaintWindow.deadline(request.getCompletedAt(), complaintHours);
                     Instant lastMessageAt = request.getId() != null ? lastMessageMap.get(request.getId()) : null;
                     Instant disputeResponseDueAt =
@@ -333,7 +332,6 @@ public class RequestService {
                             receiverName,
                             trustStars,
                             rank,
-                            asDescribedRate,
                             findItemInfo(request, itemCards),
                             complaintDeadline,
                             lastMessageAt,
@@ -373,7 +371,6 @@ public class RequestService {
                     RequestResponse response = RequestMapper.toResponse(
                             request,
                             findUserName(request.getReceiverId()),
-                            null,
                             null,
                             null,
                             findItemInfo(request, itemCards),
@@ -1085,13 +1082,11 @@ public class RequestService {
             ReputationSummary rep = findReceiverReputation(request.getReceiverId());
             Integer trustStars = rep != null ? rep.trustStars() : 5;
             String rank = rep != null && rep.rank() != null ? rep.rank().name() : Rank.BRONZE.name();
-            Double asDescribedRate = rep != null ? rep.asDescribedRate() : null;
             RequestResponse response = RequestMapper.toResponse(
                     request,
                     receiverName,
                     trustStars,
                     rank,
-                    asDescribedRate,
                     itemInfo,
                     complaintDeadline,
                     lastMessageAt,
@@ -1100,15 +1095,7 @@ public class RequestService {
         }
 
         RequestResponse response = RequestMapper.toResponse(
-                request,
-                receiverName,
-                null,
-                null,
-                null,
-                itemInfo,
-                complaintDeadline,
-                lastMessageAt,
-                disputeResponseDueAt);
+                request, receiverName, null, null, itemInfo, complaintDeadline, lastMessageAt, disputeResponseDueAt);
         return addExtraInfo(response, handoverMedia);
     }
 
@@ -1501,7 +1488,6 @@ public class RequestService {
         RequestResponse response = RequestMapper.toResponse(
                 request,
                 findUserName(request.getReceiverId()),
-                null,
                 null,
                 null,
                 findItemInfo(request, new HashMap<>()),

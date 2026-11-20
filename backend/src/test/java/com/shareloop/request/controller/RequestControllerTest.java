@@ -469,17 +469,12 @@ class RequestControllerTest {
                 Instant.now(),
                 Instant.now(),
                 Instant.now(),
-                true,
                 Instant.now(),
                 Instant.now());
 
         when(requestService.confirmHandover(eq(100L), eq(10L), any())).thenReturn(response);
 
-        String jsonBody = """
-                {
-                    "asDescribed": true
-                }
-                """;
+        String jsonBody = "{}";
 
         mockMvc.perform(post("/api/v1/requests/100/confirm-handover")
                         .header("Authorization", "Bearer " + token)
@@ -487,7 +482,7 @@ class RequestControllerTest {
                         .content(jsonBody))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
-                .andExpect(jsonPath("$.asDescribed").value(true))
+                .andExpect(jsonPath("$.asDescribed").doesNotExist())
                 .andExpect(jsonPath("$.completedAt").isNotEmpty());
     }
 
@@ -572,11 +567,7 @@ class RequestControllerTest {
         mockMvc.perform(post("/api/v1/requests/100/confirm-handover")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                        {
-                          "asDescribed": true
-                        }
-                        """))
+                        .content("{}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"));
     }

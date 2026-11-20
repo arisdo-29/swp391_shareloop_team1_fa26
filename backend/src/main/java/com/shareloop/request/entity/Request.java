@@ -72,9 +72,6 @@ public class Request extends BaseEntity {
     @Column(name = "receiver_handover_at")
     private Instant receiverHandoverAt;
 
-    @Column(name = "as_described")
-    private Boolean asDescribed;
-
     @Column(name = "auto_confirmed", nullable = false)
     private boolean autoConfirmed = false;
 
@@ -361,9 +358,6 @@ public class Request extends BaseEntity {
         transitionTo(RequestStatus.COMPLETED);
         this.autoConfirmed = true;
         this.completedAt = now;
-        if (this.asDescribed == null) {
-            this.asDescribed = true;
-        }
     }
 
     public Long getItemId() {
@@ -424,10 +418,6 @@ public class Request extends BaseEntity {
 
     public Instant getReceiverHandoverAt() {
         return receiverHandoverAt;
-    }
-
-    public Boolean getAsDescribed() {
-        return asDescribed;
     }
 
     public boolean isAutoConfirmed() {

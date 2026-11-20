@@ -68,9 +68,6 @@ export function SelectRequestDialog({
                 conversation.request.receiverTrustStars ?? conversation.request.trustStars
               }
               rank={conversation.request.receiverRank ?? conversation.request.rank}
-              asDescribedRate={
-                conversation.request.receiverAsDescribedRate ?? conversation.request.asDescribedRate
-              }
             />
           </div>
           <p className="mt-1 text-xs text-text-muted">
