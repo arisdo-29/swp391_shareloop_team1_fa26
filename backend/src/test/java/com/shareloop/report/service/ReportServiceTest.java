@@ -448,7 +448,7 @@ class ReportServiceTest {
         });
 
         // when
-        reportService.openNotAsDescribedReport(10L, 100L, "Máy không bật được");
+        reportService.openNotAsDescribedReport(10L, 100L, "Máy không bật được", null);
 
         // then
         ArgumentCaptor<Report> captor = ArgumentCaptor.forClass(Report.class);
@@ -471,7 +471,7 @@ class ReportServiceTest {
                 .thenReturn(true);
 
         // when
-        reportService.openNotAsDescribedReport(10L, 100L, "Máy không bật được");
+        reportService.openNotAsDescribedReport(10L, 100L, "Máy không bật được", null);
 
         // then
         verify(reportRepository, never()).save(any(Report.class));
@@ -479,14 +479,43 @@ class ReportServiceTest {
     }
 
     @Test
-    void openNotAsDescribedReport_whenNotTheReceiver_throwsNotAParty() {
+    void openNotAsDescribedReport_whenSwapDonorRefuses_createsDisputeAgainstReceiver() {
+        // given: chủ bài ở Trao đổi từ chối món đổi nên người nhận là bên bị khiếu nại
+        ReportService.RequestSnapshot snapshot =
+                new ReportService.RequestSnapshot(100L, 200L, 10L, "AWAITING_HANDOVER", null);
+        doReturn(snapshot).when(reportService).findRequest(100L);
+        when(itemQueryService.getSummary(200L))
+                .thenReturn(new ItemSummary(200L, 20L, OfferType.SWAP, ItemStatus.APPROVED));
+        when(evidenceService.attach(List.of(8L), 20L)).thenReturn("[8]");
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> {
+            Report saved = inv.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 6L);
+            return saved;
+        });
+
+        // when
+        reportService.openNotAsDescribedReport(20L, 100L, "Món đổi bị nứt màn hình", List.of(8L));
+
+        // then
+        ArgumentCaptor<Report> captor = ArgumentCaptor.forClass(Report.class);
+        verify(reportRepository).save(captor.capture());
+        assertThat(captor.getValue().getReporterId()).isEqualTo(20L);
+        assertThat(captor.getValue().getTargetUserId()).isEqualTo(10L);
+        assertThat(captor.getValue().getReason()).isEqualTo(ReportReason.NOT_AS_DESCRIBED);
+        verify(notificationService).notify(eq(10L), eq("DISPUTE_OPENED"), any(), any(), eq("/me/disputes/6"));
+    }
+
+    @Test
+    void openNotAsDescribedReport_whenNotAParty_throwsNotAParty() {
         // given
         ReportService.RequestSnapshot snapshot =
                 new ReportService.RequestSnapshot(100L, 200L, 10L, "AWAITING_HANDOVER", null);
         doReturn(snapshot).when(reportService).findRequest(100L);
+        when(itemQueryService.getSummary(200L))
+                .thenReturn(new ItemSummary(200L, 20L, OfferType.GIVE, ItemStatus.APPROVED));
 
         // when
-        assertThatThrownBy(() -> reportService.openNotAsDescribedReport(99L, 100L, "Lý do"))
+        assertThatThrownBy(() -> reportService.openNotAsDescribedReport(99L, 100L, "Lý do", null))
                 // then
                 .isInstanceOfSatisfying(
                         BusinessException.class,
@@ -830,7 +859,7 @@ class ReportServiceTest {
         reportService.conclude(1L, 14L, new ConcludeReportRequest(ReportDecision.UPHOLD, null));
 
         // then
-        verify(requestService).resolveDisputedRequest(77L, true, 200L);
+        verify(requestService).resolveDisputedRequest(77L, true, 200L, false);
     }
 
     @Test
@@ -847,7 +876,7 @@ class ReportServiceTest {
         reportService.conclude(1L, 15L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
 
         // then
-        verify(requestService).resolveDisputedRequest(77L, false, 200L);
+        verify(requestService).resolveDisputedRequest(77L, false, 200L, false);
     }
 
     @Test
@@ -865,7 +894,11 @@ class ReportServiceTest {
 
         // then
         verify(requestService, never())
-                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+                .resolveDisputedRequest(
+                        anyLong(),
+                        org.mockito.ArgumentMatchers.anyBoolean(),
+                        any(),
+                        org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test

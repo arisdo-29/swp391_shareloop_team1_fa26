@@ -6,7 +6,8 @@ import com.shareloop.request.dto.ChangeOfferedItemRequest;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.HandoverConfirmRequest;
-import com.shareloop.request.dto.HandoverIssueRequest;
+import com.shareloop.request.dto.HandoverFailedRequest;
+import com.shareloop.request.dto.RefuseHandoverRequest;
 import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.dto.ScheduleRequest;
@@ -147,9 +148,9 @@ public class RequestController {
     }
 
     /**
-     * Xác nhận đã giao / đã nhận đồ và trả lời đúng mô tả (GN-06, GN-08, GN-07, UC-27).
+     * Hoàn tất giao nhận từ phía người đang đăng nhập (GN-06, GN-08, UC-27).
      */
-    @Operation(summary = "Xác nhận đã giao hoặc đã nhận đồ và trả lời đúng mô tả")
+    @Operation(summary = "Hoàn tất giao nhận")
     @PostMapping("/api/v1/requests/{id}/confirm-handover")
     public RequestResponse confirmHandover(
             @PathVariable long id,
@@ -159,15 +160,27 @@ public class RequestController {
     }
 
     /**
-     * Báo "chưa nhận được" / "chưa giao được" khi bên kia đã xác nhận bàn giao còn mình thì chưa.
+     * Giao nhận không thành công: huỷ giao dịch nếu bên kia chưa bấm hoàn tất, mở tranh chấp nếu đã bấm (GN-06, GN-07).
      */
-    @Operation(summary = "Báo chưa nhận được hoặc chưa giao được đồ, mở khiếu nại")
-    @PostMapping("/api/v1/requests/{id}/handover-issue")
-    public RequestResponse reportHandoverIssue(
+    @Operation(summary = "Báo giao nhận không thành công")
+    @PostMapping("/api/v1/requests/{id}/handover-failed")
+    public RequestResponse handoverFailed(
             @PathVariable long id,
             @CurrentUserId Long currentUserId,
-            @Valid @RequestBody HandoverIssueRequest request) {
-        return requestService.reportHandoverIssue(id, currentUserId, request);
+            @Valid @RequestBody HandoverFailedRequest request) {
+        return requestService.handoverFailed(id, currentUserId, request);
+    }
+
+    /**
+     * Từ chối nhận món đồ, mở khiếu nại "Không đúng mô tả" (GN-07, BC-09).
+     */
+    @Operation(summary = "Từ chối giao nhận")
+    @PostMapping("/api/v1/requests/{id}/refuse-handover")
+    public RequestResponse refuseHandover(
+            @PathVariable long id,
+            @CurrentUserId Long currentUserId,
+            @Valid @RequestBody RefuseHandoverRequest request) {
+        return requestService.refuseHandover(id, currentUserId, request);
     }
 
     /**

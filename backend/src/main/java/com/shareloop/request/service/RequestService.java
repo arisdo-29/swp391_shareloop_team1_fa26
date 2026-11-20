@@ -20,7 +20,8 @@ import com.shareloop.request.dto.CancelTransactionRequest;
 import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.HandoverConfirmRequest;
-import com.shareloop.request.dto.HandoverIssueRequest;
+import com.shareloop.request.dto.HandoverFailedRequest;
+import com.shareloop.request.dto.RefuseHandoverRequest;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestItemInfo;
@@ -70,7 +71,12 @@ public class RequestService {
             RequestStatus.AWAITING_HANDOVER,
             RequestStatus.DISPUTED);
 
-    // Các trạng thái mà một trong hai bên được tự huỷ giao dịch đã chọn người
+    // Hai bên chỉ được tự huỷ bằng cancel-transaction khi chưa chốt lịch; từ LOGISTICS_CONFIRMED trở đi dùng
+    // "giao nhận không thành công" (handover-failed) để không có hai nút trùng ý.
+    private static final Set<RequestStatus> PARTY_CANCEL_STATUSES =
+            Set.of(RequestStatus.RESERVED, RequestStatus.AWAITING_LOGISTICS);
+
+    // Các trạng thái mà Admin được huỷ giao dịch đã chọn người
     private static final Set<RequestStatus> CANCELLABLE_TRANSACTION_STATUSES = Set.of(
             RequestStatus.RESERVED,
             RequestStatus.AWAITING_LOGISTICS,
@@ -675,9 +681,9 @@ public class RequestService {
     }
 
     /**
-     * Chủ bài hoặc người nhận huỷ giao dịch sau khi đã chọn người, khi còn ở RESERVED, AWAITING_LOGISTICS,
-     * LOGISTICS_CONFIRMED hoặc AWAITING_HANDOVER. Bài chính và món mang đổi được nhả về APPROVED để mở lại cho người
-     * khác; phí đăng không bị tính lại vì bài không qua duyệt lần nữa.
+     * Chủ bài hoặc người nhận huỷ giao dịch sau khi đã chọn người, khi còn ở RESERVED hoặc AWAITING_LOGISTICS. Bài
+     * chính và món mang đổi được nhả về APPROVED để mở lại cho người khác; phí đăng không bị tính lại vì bài không qua
+     * duyệt lần nữa. Từ LOGISTICS_CONFIRMED trở đi hai bên dùng {@link #handoverFailed} thay cho hàm này.
      *
      * @param requestId id của giao dịch
      * @param currentUserId id người huỷ (phải là chủ bài hoặc người nhận)
@@ -688,23 +694,111 @@ public class RequestService {
      */
     @Transactional
     public RequestResponse cancelTransaction(long requestId, long currentUserId, CancelTransactionRequest requestDto) {
-        Request request = requestRepository
+        Request request = loadRequest(requestId);
+        ItemSnapshot item = loadItemSnapshot(request);
+        boolean isDonor = requireParty(request, item, currentUserId);
+        // DISPUTED vẫn có cạnh sang CANCELLED nhưng chỉ Admin phân xử mới được đi, nên chặn riêng ở đây
+        if (!PARTY_CANCEL_STATUSES.contains(request.getStatus())) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+
+        Request saved = cancelByParty(
+                request, item, currentUserId, isDonor, requestDto.reason().trim());
+        return toResponse(saved);
+    }
+
+    /**
+     * Một bên báo giao nhận không thành công khi giao dịch đã chốt lịch (GN-06, GN-07).
+     *
+     * <p>Bên kia chưa bấm hoàn tất: giao dịch bị huỷ, bài và món đổi mở lại, không phạt, báo bên kia. Bên kia đã bấm
+     * hoàn tất: giao dịch sang DISPUTED và mở khiếu nại NO_SHOW qua event cho module report; giao dịch DISPUTED không
+     * bị job tự hoàn tất vì job chỉ xử lý AWAITING_HANDOVER.
+     *
+     * @throws BusinessException REQUEST_NOT_FOUND, REQUEST_FORBIDDEN khi không phải một trong hai bên,
+     *     REQUEST_INVALID_STATE_TRANSITION khi sai trạng thái hoặc người báo đã bấm hoàn tất
+     */
+    @Transactional
+    public RequestResponse handoverFailed(long requestId, long currentUserId, HandoverFailedRequest requestDto) {
+        Request request = loadRequest(requestId);
+        ItemSnapshot item = loadItemSnapshot(request);
+        boolean isDonor = requireParty(request, item, currentUserId);
+        if (!request.isHandoverOpen() || request.hasConfirmedHandover(isDonor)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+
+        String reason = requestDto.reason().trim();
+        if (!request.hasOtherPartyConfirmedHandover(isDonor)) {
+            attachHandoverEvidence(request, currentUserId, requestDto.evidenceMediaIds());
+            return toResponse(cancelByParty(request, item, currentUserId, isDonor, reason));
+        }
+
+        request.openHandoverIssue(isDonor);
+        Request saved = requestRepository.save(request);
+        // Listener của module report chạy ngay trong transaction này để report và DISPUTED cùng thành công hoặc cùng
+        // rollback.
+        eventPublisher.publishEvent(
+                new HandoverIssueReportedEvent(requestId, currentUserId, reason, requestDto.evidenceMediaIds()));
+        return toResponse(saved);
+    }
+
+    /**
+     * Bên nhận món đồ từ chối giao nhận (GN-07, BC-09): giao dịch sang DISPUTED ngay và mở khiếu nại "Không đúng mô
+     * tả". Cho tặng chỉ người nhận được từ chối; Trao đổi cả hai bên đều nhận một món nên cả hai được từ chối. Bên bị
+     * khiếu nại là chủ của món bị từ chối.
+     *
+     * @throws BusinessException REQUEST_NOT_FOUND, REQUEST_FORBIDDEN khi không phải một trong hai bên,
+     *     REQUEST_REFUSE_NOT_ALLOWED khi chủ bài ở giao dịch Cho tặng, REQUEST_INVALID_STATE_TRANSITION khi sai trạng
+     *     thái hoặc người từ chối đã bấm hoàn tất
+     */
+    @Transactional
+    public RequestResponse refuseHandover(long requestId, long currentUserId, RefuseHandoverRequest requestDto) {
+        Request request = loadRequest(requestId);
+        ItemSnapshot item = loadItemSnapshot(request);
+        boolean isDonor = requireParty(request, item, currentUserId);
+        boolean isSwap = request.getOfferedItemId() != null;
+        if (isDonor && !isSwap) {
+            throw new BusinessException(RequestErrorCode.REQUEST_REFUSE_NOT_ALLOWED);
+        }
+
+        request.refuseHandover(isDonor);
+        Request saved = requestRepository.save(request);
+        // Listener của module report chạy ngay trong transaction này để report và DISPUTED cùng thành công hoặc cùng
+        // rollback.
+        eventPublisher.publishEvent(new NotAsDescribedReportedEvent(
+                requestId, currentUserId, requestDto.reason().trim(), requestDto.evidenceMediaIds()));
+        return toResponse(saved);
+    }
+
+    private Request loadRequest(long requestId) {
+        return requestRepository
                 .findById(requestId)
                 .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
-        ItemSnapshot item = findItemSnapshot(request.getItemId())
-                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+    }
 
+    private ItemSnapshot loadItemSnapshot(Request request) {
+        return findItemSnapshot(request.getItemId())
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
+    }
+
+    /** Kiểm người thao tác là một trong hai bên; trả về true nếu là chủ bài, false nếu là người nhận. */
+    private boolean requireParty(Request request, ItemSnapshot item, long currentUserId) {
         boolean isDonor = item.donorId() == currentUserId;
         boolean isReceiver = request.getReceiverId() == currentUserId;
         if (!isDonor && !isReceiver) {
             throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
         }
-        // DISPUTED vẫn có cạnh sang CANCELLED nhưng chỉ Admin phân xử mới được đi, nên chặn riêng ở đây
-        if (!CANCELLABLE_TRANSACTION_STATUSES.contains(request.getStatus())) {
-            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
-        }
+        return isDonor;
+    }
 
-        String reason = requestDto.reason().trim();
+    private void attachHandoverEvidence(Request request, long currentUserId, List<Long> mediaIds) {
+        if (mediaIds != null && !mediaIds.isEmpty()) {
+            attachMediaInternal(request.getId(), currentUserId, mediaIds, "HANDOVER");
+        }
+    }
+
+    /** Huỷ giao dịch do một bên, nhả bài về APPROVED, báo bên kia và ghi nhật ký. Dùng chung cho hai đường huỷ. */
+    private Request cancelByParty(
+            Request request, ItemSnapshot item, long currentUserId, boolean isDonor, String reason) {
         String prefix = isDonor ? Request.CANCEL_BY_DONOR : Request.CANCEL_BY_RECEIVER;
         request.cancel(prefix + reason);
         Request saved = requestRepository.save(request);
@@ -729,42 +823,7 @@ public class RequestService {
                     (String) null,
                     prefix + reason);
         }
-
-        return toResponse(saved);
-    }
-
-    /**
-     * Một bên báo "chưa nhận được" / "chưa giao được" khi bên kia đã xác nhận bàn giao còn mình thì chưa.
-     *
-     * <p>Request chuyển AWAITING_HANDOVER sang DISPUTED và mở khiếu nại NO_SHOW qua event cho module report. Giao dịch
-     * DISPUTED không bị job tự xác nhận hoàn tất vì job chỉ xử lý AWAITING_HANDOVER.
-     *
-     * @throws BusinessException REQUEST_NOT_FOUND, REQUEST_FORBIDDEN khi không phải một trong hai bên,
-     *     REQUEST_INVALID_STATE_TRANSITION khi sai trạng thái hoặc sai điều kiện xác nhận bàn giao
-     */
-    @Transactional
-    public RequestResponse reportHandoverIssue(long requestId, long currentUserId, HandoverIssueRequest requestDto) {
-        Request request = requestRepository
-                .findById(requestId)
-                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
-        ItemSnapshot item = findItemSnapshot(request.getItemId())
-                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
-
-        boolean isDonor = item.donorId() == currentUserId;
-        boolean isReceiver = request.getReceiverId() == currentUserId;
-        if (!isDonor && !isReceiver) {
-            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
-        }
-
-        request.openHandoverIssue(isDonor);
-        Request saved = requestRepository.save(request);
-
-        // Listener của module report chạy ngay trong transaction này để report và DISPUTED cùng thành công hoặc cùng
-        // rollback.
-        eventPublisher.publishEvent(new HandoverIssueReportedEvent(
-                requestId, currentUserId, requestDto.note().trim(), requestDto.evidenceMediaIds()));
-
-        return toResponse(saved);
+        return saved;
     }
 
     /**
@@ -792,6 +851,18 @@ public class RequestService {
      */
     @Transactional
     public boolean resolveDisputedRequest(long requestId, boolean upheld, Long violatorUserId) {
+        return resolveDisputedRequest(requestId, upheld, violatorUserId, false);
+    }
+
+    /**
+     * Như {@link #resolveDisputedRequest(long, boolean, Long)}, kèm cờ khiếu nại có phải "Không đúng mô tả" (mở từ
+     * nút Từ chối giao nhận) hay không. Chỉ khiếu nại "Không đúng mô tả" mới ẩn món đổi khi người xin là bên vi phạm;
+     * khiếu nại NO_SHOW giữ luật cũ (chỉ ẩn bài chính khi chủ bài vi phạm).
+     *
+     * @param notAsDescribed true nếu khiếu nại có lý do NOT_AS_DESCRIBED
+     */
+    @Transactional
+    public boolean resolveDisputedRequest(long requestId, boolean upheld, Long violatorUserId, boolean notAsDescribed) {
         Request request = requestRepository.findById(requestId).orElse(null);
         if (request == null || request.getStatus() != RequestStatus.DISPUTED) {
             return false;
@@ -799,23 +870,7 @@ public class RequestService {
 
         String message;
         if (upheld) {
-            request.cancel(Request.CANCEL_BY_SYSTEM + "Admin chấp nhận khiếu nại, giao dịch bị huỷ");
-            requestRepository.save(request);
-            Long donorId = findItemSnapshot(request.getItemId())
-                    .map(ItemSnapshot::donorId)
-                    .orElse(null);
-            boolean donorViolated = violatorUserId != null && violatorUserId.equals(donorId);
-            itemService.releaseIfReserved(request.getItemId());
-            if (donorViolated) {
-                itemService.hide(request.getItemId());
-            }
-            if (request.getOfferedItemId() != null) {
-                itemService.releaseIfReserved(request.getOfferedItemId());
-            }
-            message = donorViolated
-                    ? "Admin đã chấp nhận khiếu nại: giao dịch bị huỷ. Bài đăng của chủ bài bị ẩn vì chủ bài là bên"
-                            + " vi phạm; món đem đổi (nếu có) được mở lại."
-                    : "Admin đã chấp nhận khiếu nại: giao dịch bị huỷ và bài đăng được mở lại.";
+            message = cancelUpheldDispute(request, violatorUserId, notAsDescribed);
         } else {
             request.completeAfterDispute(Instant.now());
             requestRepository.save(request);
@@ -831,6 +886,48 @@ public class RequestService {
 
         notifyBothParties(request, upheld ? "TRANSACTION_CANCELLED" : "TRANSACTION_COMPLETED", message);
         return true;
+    }
+
+    /**
+     * Huỷ giao dịch khi Admin chấp nhận khiếu nại và xử lý món của bên vi phạm. Chủ bài vi phạm: ẩn bài chính, món đổi
+     * mở lại. Người xin vi phạm ở khiếu nại "Không đúng mô tả" của Trao đổi: ẩn món đổi, bài chính mở lại. Các trường
+     * hợp còn lại: mở lại cả hai món.
+     *
+     * @return câu thông báo kết quả gửi cho hai bên
+     */
+    private String cancelUpheldDispute(Request request, Long violatorUserId, boolean notAsDescribed) {
+        request.cancel(Request.CANCEL_BY_SYSTEM + "Admin chấp nhận khiếu nại, giao dịch bị huỷ");
+        requestRepository.save(request);
+
+        Long donorId =
+                findItemSnapshot(request.getItemId()).map(ItemSnapshot::donorId).orElse(null);
+        boolean donorViolated = violatorUserId != null && violatorUserId.equals(donorId);
+        boolean hasOfferedItem = request.getOfferedItemId() != null;
+        boolean receiverViolatedSwap = notAsDescribed
+                && hasOfferedItem
+                && violatorUserId != null
+                && violatorUserId.equals(request.getReceiverId());
+
+        itemService.releaseIfReserved(request.getItemId());
+        if (donorViolated) {
+            itemService.hide(request.getItemId());
+        }
+        if (hasOfferedItem) {
+            itemService.releaseIfReserved(request.getOfferedItemId());
+        }
+        if (receiverViolatedSwap) {
+            itemService.hide(request.getOfferedItemId());
+        }
+
+        if (donorViolated) {
+            return "Admin đã chấp nhận khiếu nại: giao dịch bị huỷ. Bài đăng của chủ bài bị ẩn vì chủ bài là bên"
+                    + " vi phạm, món đem đổi (nếu có) được mở lại.";
+        }
+        if (receiverViolatedSwap) {
+            return "Admin đã chấp nhận khiếu nại: giao dịch bị huỷ. Món đem đổi bị ẩn vì người đem đổi là bên vi phạm,"
+                    + " bài đăng được mở lại.";
+        }
+        return "Admin đã chấp nhận khiếu nại: giao dịch bị huỷ và bài đăng được mở lại.";
     }
 
     private void notifyBothParties(Request request, String type, String message) {
@@ -1134,7 +1231,7 @@ public class RequestService {
     }
 
     /**
-     * Xác nhận đã giao hoặc đã nhận đồ và trả lời đúng mô tả (GN-06, GN-08, GN-07, UC-27).
+     * Một bên bấm "Hoàn tất giao nhận" (GN-06, GN-08, UC-27).
      *
      * <p>Chỉ chủ bài đăng (donor) hoặc người nhận (receiver) mới có quyền xác nhận.
      * Khi một bên bấm, Request chuyển sang AWAITING_HANDOVER và tiếp tục chờ bên còn lại (GN-08).
@@ -1148,54 +1245,22 @@ public class RequestService {
      *
      * @param requestId id của yêu cầu giao dịch
      * @param currentUserId id của người đang thao tác
-     * @param requestDto thông tin xác nhận (bắt buộc asDescribed và lý do nếu không đúng mô tả đối với bên nhận)
+     * @param requestDto ảnh hoặc video minh chứng (tuỳ chọn, có thể null)
      * @return RequestResponse sau khi xác nhận
      */
     @Transactional
     public RequestResponse confirmHandover(long requestId, long currentUserId, HandoverConfirmRequest requestDto) {
-        Request request = requestRepository
-                .findById(requestId)
-                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
-
-        ItemSnapshot item = findItemSnapshot(request.getItemId())
-                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
-
-        boolean isDonor = item.donorId() == currentUserId;
-        boolean isReceiver = request.getReceiverId() == currentUserId;
-
-        if (!isDonor && !isReceiver) {
-            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
-        }
-
-        Boolean asDescribed = null;
-        if (isReceiver) {
-            if (requestDto == null || requestDto.asDescribed() == null) {
-                throw new BusinessException(RequestErrorCode.REQUEST_AS_DESCRIBED_REQUIRED);
-            }
-            if (Boolean.FALSE.equals(requestDto.asDescribed())
-                    && (requestDto.notAsDescribedReason() == null
-                            || requestDto.notAsDescribedReason().isBlank())) {
-                throw new BusinessException(RequestErrorCode.REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED);
-            }
-            asDescribed = requestDto.asDescribed();
-        }
+        Request request = loadRequest(requestId);
+        ItemSnapshot item = loadItemSnapshot(request);
+        boolean isDonor = requireParty(request, item, currentUserId);
 
         // Đính kèm ảnh hoặc video minh chứng khi giao nhận nếu có (GN-10)
-        if (requestDto != null
-                && requestDto.mediaIds() != null
-                && !requestDto.mediaIds().isEmpty()) {
-            attachMediaInternal(request.getId(), currentUserId, requestDto.mediaIds(), "HANDOVER");
+        if (requestDto != null) {
+            attachHandoverEvidence(request, currentUserId, requestDto.mediaIds());
         }
 
-        request.confirmHandover(isDonor, asDescribed, Instant.now());
+        request.confirmHandover(isDonor, Instant.now());
         Request saved = requestRepository.save(request);
-
-        // Chọn "Không đúng mô tả" thì báo cho module report mở report (GN-07). Event chỉ được xử lý sau khi
-        // giao dịch này commit, nên lỗi mở report không làm mất câu trả lời của người nhận.
-        if (Boolean.FALSE.equals(asDescribed) && eventPublisher != null) {
-            eventPublisher.publishEvent(new NotAsDescribedReportedEvent(
-                    requestId, currentUserId, requestDto.notAsDescribedReason().trim()));
-        }
 
         long otherUserId = isDonor ? request.getReceiverId() : item.donorId();
 

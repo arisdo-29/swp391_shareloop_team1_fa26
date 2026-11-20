@@ -70,12 +70,12 @@ export interface ConfirmLogisticsRequestBody {
 }
 
 export interface HandoverConfirmRequestBody {
-  asDescribed?: boolean;
-  notAsDescribedReason?: string;
+  mediaIds?: number[];
 }
 
-export interface HandoverIssueBody {
-  note: string;
+// Dùng chung cho "Giao nhận không thành công" (5 đến 500 ký tự) và "Từ chối giao nhận" (5 đến 1000 ký tự).
+export interface HandoverOutcomeBody {
+  reason: string;
   evidenceMediaIds?: number[];
 }
 
@@ -221,13 +221,20 @@ export const requestApi = {
     );
     return data;
   },
-  async reportHandoverIssue(id: number, currentUserId: number, body: HandoverIssueBody) {
+  // Bên kia chưa bấm hoàn tất thì backend huỷ giao dịch, đã bấm thì mở tranh chấp (docs/api/request.md).
+  async handoverFailed(id: number, currentUserId: number, body: HandoverOutcomeBody) {
     const { data } = await http.post<RequestResponse>(
-      `/api/v1/requests/${id}/handover-issue`,
+      `/api/v1/requests/${id}/handover-failed`,
       body,
-      {
-        params: { currentUserId },
-      },
+      { params: { currentUserId } },
+    );
+    return data;
+  },
+  async refuseHandover(id: number, currentUserId: number, body: HandoverOutcomeBody) {
+    const { data } = await http.post<RequestResponse>(
+      `/api/v1/requests/${id}/refuse-handover`,
+      body,
+      { params: { currentUserId } },
     );
     return data;
   },

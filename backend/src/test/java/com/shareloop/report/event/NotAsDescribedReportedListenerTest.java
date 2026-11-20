@@ -4,6 +4,7 @@ import static org.mockito.Mockito.verify;
 
 import com.shareloop.report.service.ReportService;
 import com.shareloop.request.event.NotAsDescribedReportedEvent;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -19,14 +20,15 @@ class NotAsDescribedReportedListenerTest {
     NotAsDescribedReportedListener listener;
 
     @Test
-    void onNotAsDescribed_opensReportForReceiverWithTheirReason() {
+    void onNotAsDescribed_opensReportForReporterWithReasonAndEvidence() {
         // given
-        NotAsDescribedReportedEvent event = new NotAsDescribedReportedEvent(100L, 10L, "Máy không bật được");
+        NotAsDescribedReportedEvent event =
+                new NotAsDescribedReportedEvent(100L, 10L, "Máy không bật được", List.of(5L));
 
         // when
         listener.onNotAsDescribed(event);
 
         // then
-        verify(reportService).openNotAsDescribedReport(10L, 100L, "Máy không bật được");
+        verify(reportService).openNotAsDescribedReport(10L, 100L, "Máy không bật được", List.of(5L));
     }
 }

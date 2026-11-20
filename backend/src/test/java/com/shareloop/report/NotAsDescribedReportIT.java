@@ -6,7 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.shareloop.auth.service.JwtService;
-import com.shareloop.request.dto.HandoverConfirmRequest;
+import com.shareloop.request.dto.RefuseHandoverRequest;
 import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.service.RequestJobService;
 import com.shareloop.support.IntegrationTest;
@@ -28,9 +28,8 @@ import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Chạy thật luồng xác nhận giao nhận trên PostgreSQL: bên nhận chọn "Không đúng mô tả" thì module report tự mở report
- * sau khi giao dịch commit (GN-07), và job tự hoàn tất bỏ qua giao dịch đó (GN-09).
- * Không dùng @Transactional ở lớp test vì listener AFTER_COMMIT chỉ chạy khi giao dịch thật sự commit.
+ * Chạy thật luồng "Từ chối giao nhận" trên PostgreSQL: bên nhận món đồ từ chối thì giao dịch sang DISPUTED và module
+ * report mở report NOT_AS_DESCRIBED trong cùng transaction (GN-07), job tự hoàn tất bỏ qua giao dịch đó (GN-09).
  */
 @AutoConfigureMockMvc
 class NotAsDescribedReportIT extends IntegrationTest {
@@ -76,15 +75,14 @@ class NotAsDescribedReportIT extends IntegrationTest {
     }
 
     @Test
-    void confirmHandover_whenReceiverFirstSaysNotAsDescribed_opensExactlyOneReport() throws Exception {
+    void refuseHandover_whenReceiverRefusesFirst_opensExactlyOneReportAgainstDonor() throws Exception {
         // given
         long donorId = insertUser("Donor");
         long receiverId = insertUser("Receiver");
         long requestId = createLogisticsConfirmedRequest(donorId, receiverId);
 
         // when
-        confirmAsReceiver(requestId, receiverId, false, REASON)
-                .andExpect(jsonPath("$.status").value("DISPUTED"));
+        refuseAsReceiver(requestId, receiverId).andExpect(jsonPath("$.status").value("DISPUTED"));
 
         // then
         List<Map<String, Object>> reports = reportsOf(requestId);
@@ -99,8 +97,7 @@ class NotAsDescribedReportIT extends IntegrationTest {
     }
 
     @Test
-    void confirmHandover_whenDonorConfirmedFirstThenReceiverSaysNotAsDescribed_transitionsToDisputedAndOpensReport()
-            throws Exception {
+    void refuseHandover_whenDonorConfirmedFirst_transitionsToDisputedAndOpensReport() throws Exception {
         // given
         long donorId = insertUser("Donor");
         long receiverId = insertUser("Receiver");
@@ -110,22 +107,23 @@ class NotAsDescribedReportIT extends IntegrationTest {
                 .andExpect(status().isOk());
 
         // when
-        confirmAsReceiver(requestId, receiverId, false, REASON)
-                .andExpect(jsonPath("$.status").value("DISPUTED"));
+        refuseAsReceiver(requestId, receiverId).andExpect(jsonPath("$.status").value("DISPUTED"));
 
         // then
         assertThat(reportsOf(requestId)).hasSize(1);
     }
 
     @Test
-    void confirmHandover_whenReceiverSaysAsDescribed_opensNoReport() throws Exception {
+    void confirmHandover_whenReceiverConfirms_opensNoReport() throws Exception {
         // given
         long donorId = insertUser("Donor");
         long receiverId = insertUser("Receiver");
         long requestId = createLogisticsConfirmedRequest(donorId, receiverId);
 
         // when
-        confirmAsReceiver(requestId, receiverId, true, null)
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
+                        .header("Authorization", token(receiverId)))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("AWAITING_HANDOVER"));
 
         // then
@@ -133,14 +131,37 @@ class NotAsDescribedReportIT extends IntegrationTest {
     }
 
     @Test
-    void autoConfirmHandoverRequests_whenReceiverReportedNotAsDescribed_doesNotComplete() throws Exception {
-        // given: bên nhận báo không đúng mô tả cách đây 5 ngày, bên cho vẫn im lặng
+    void refuseHandover_whenGiveDonorRefuses_returns403AndOpensNoReport() throws Exception {
+        // given
         long donorId = insertUser("Donor");
         long receiverId = insertUser("Receiver");
         long requestId = createLogisticsConfirmedRequest(donorId, receiverId);
-        confirmAsReceiver(requestId, receiverId, false, REASON);
+
+        // when
+        mockMvc.perform(post("/api/v1/requests/{id}/refuse-handover", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new RefuseHandoverRequest(REASON, null))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("REQUEST_REFUSE_NOT_ALLOWED"));
+
+        // then
+        assertThat(reportsOf(requestId)).isEmpty();
+        assertThat(statusOf(requestId)).isEqualTo("LOGISTICS_CONFIRMED");
+    }
+
+    @Test
+    void autoConfirmHandoverRequests_whenDisputedByRefusal_doesNotComplete() throws Exception {
+        // given: chủ bài đã bấm hoàn tất 5 ngày trước, người nhận từ chối giao nhận
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long requestId = createLogisticsConfirmedRequest(donorId, receiverId);
+        mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
+                        .header("Authorization", token(donorId)))
+                .andExpect(status().isOk());
+        refuseAsReceiver(requestId, receiverId);
         jdbc.update(
-                "UPDATE requests SET receiver_handover_at = ? WHERE id = ?",
+                "UPDATE requests SET donor_handover_at = ? WHERE id = ?",
                 Timestamp.from(Instant.now().minus(5, ChronoUnit.DAYS)),
                 requestId);
 
@@ -153,12 +174,12 @@ class NotAsDescribedReportIT extends IntegrationTest {
 
     // ---------- Helper ----------
 
-    private org.springframework.test.web.servlet.ResultActions confirmAsReceiver(
-            long requestId, long receiverId, boolean asDescribed, String reason) throws Exception {
-        return mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
+    private org.springframework.test.web.servlet.ResultActions refuseAsReceiver(long requestId, long receiverId)
+            throws Exception {
+        return mockMvc.perform(post("/api/v1/requests/{id}/refuse-handover", requestId)
                         .header("Authorization", token(receiverId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new HandoverConfirmRequest(asDescribed, reason))))
+                        .content(objectMapper.writeValueAsString(new RefuseHandoverRequest(REASON, null))))
                 .andExpect(status().isOk());
     }
 

@@ -283,7 +283,14 @@ public enum ConfigKey {
             "3",
             ConfigGroup.TRANSACTION,
             "Hạn tự động hoàn tất",
-            "Một bên đã xác nhận mà bên kia im lặng quá số ngày này thì giao dịch tự hoàn tất."),
+            "Gặp trực tiếp: một bên đã xác nhận mà bên kia im lặng quá số ngày này thì giao dịch tự hoàn tất."),
+    AUTO_CONFIRM_DAYS_SHIPPING(
+            "auto_confirm_days_shipping",
+            "7",
+            ConfigGroup.TRANSACTION,
+            "Hạn tự động hoàn tất khi giao hàng",
+            "Giao hàng: một bên đã xác nhận mà bên kia im lặng quá số ngày này thì giao dịch tự hoàn tất. Dài hơn gặp"
+                    + " trực tiếp vì cần thời gian vận chuyển."),
     STUCK_REQUEST_HOURS(
             "stuck_request_hours",
             "48",

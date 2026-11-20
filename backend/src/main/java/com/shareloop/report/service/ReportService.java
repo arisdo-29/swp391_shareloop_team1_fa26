@@ -402,17 +402,20 @@ public class ReportService {
     }
 
     /**
-     * Tự mở report NOT_AS_DESCRIBED khi bên nhận chọn "Không đúng mô tả" lúc xác nhận giao nhận (GN-07).
-     * Khác openDisputeReport ở chỗ không đòi giao dịch đã COMPLETED, vì bên nhận có thể trả lời trước khi bên cho xác
-     * nhận. Mỗi bên nhận chỉ có một report cho mỗi giao dịch: gọi lại thì bỏ qua, không lỗi.
+     * Tự mở report NOT_AS_DESCRIBED khi một bên bấm "Từ chối giao nhận" (GN-07, BC-09).
+     * Người từ chối là người báo, bên còn lại là bên bị báo và có hạn giải trình như khiếu nại thường (BC-08).
+     * Khác openDisputeReport ở chỗ không đòi giao dịch đã COMPLETED. Mỗi người chỉ có một report cho mỗi giao dịch:
+     * gọi lại thì bỏ qua, không lỗi.
      *
+     * @param reporterId bên từ chối, phải là chủ bài hoặc người nhận của giao dịch
+     * @param evidenceMediaIds id media minh chứng, có thể null hoặc rỗng
      * @throws BusinessException REPORT_TARGET_NOT_FOUND khi không thấy giao dịch hoặc bài đăng; DISPUTE_NOT_A_PARTY khi
-     *     receiverId không phải bên nhận của giao dịch
+     *     reporterId không thuộc giao dịch
      */
     @Transactional
-    public void openNotAsDescribedReport(Long receiverId, Long requestId, String reason) {
+    public void openNotAsDescribedReport(Long reporterId, Long requestId, String reason, List<Long> evidenceMediaIds) {
         // Event có thể tới hai lần nên kiểm trùng trước, không ném lỗi
-        if (reportRepository.existsByReporterIdAndTargetTypeAndRequestId(receiverId, TargetType.REQUEST, requestId)) {
+        if (reportRepository.existsByReporterIdAndTargetTypeAndRequestId(reporterId, TargetType.REQUEST, requestId)) {
             return;
         }
 
@@ -420,35 +423,39 @@ public class ReportService {
         if (requestSnapshot == null) {
             throw new BusinessException(ReportErrorCode.REPORT_TARGET_NOT_FOUND, "Không tìm thấy yêu cầu giao dịch.");
         }
-        if (!receiverId.equals(requestSnapshot.receiverId())) {
-            throw new BusinessException(ReportErrorCode.DISPUTE_NOT_A_PARTY);
-        }
         ItemSummary itemSummary = itemQueryService.getSummary(requestSnapshot.itemId());
         if (itemSummary == null) {
             throw new BusinessException(
                     ReportErrorCode.REPORT_TARGET_NOT_FOUND, "Không tìm thấy bài đăng của giao dịch.");
         }
+        Long donorId = itemSummary.donorId();
+        Long receiverId = requestSnapshot.receiverId();
+        boolean reporterIsReceiver = reporterId.equals(receiverId);
+        if (!reporterIsReceiver && !reporterId.equals(donorId)) {
+            throw new BusinessException(ReportErrorCode.DISPUTE_NOT_A_PARTY);
+        }
 
-        // Bên cho là bên bị báo cáo và có thời hạn giải trình như khiếu nại thường (BC-08)
+        Long respondentId = reporterIsReceiver ? donorId : receiverId;
         int responseHours = windowHours(ConfigKey.RESPONSE_WINDOW_HOURS);
         Instant responseDueAt = Instant.now(clock).plus(Duration.ofHours(responseHours));
         Report report = Report.createDispute(
-                receiverId,
+                reporterId,
                 requestId,
                 requestSnapshot.itemId(),
-                itemSummary.donorId(),
+                respondentId,
                 ReportReason.NOT_AS_DESCRIBED,
                 reason,
-                null,
+                evidenceService.attach(evidenceMediaIds, reporterId),
                 responseDueAt);
         Report saved = reportRepository.save(report);
 
         if (notificationService != null) {
             notificationService.notify(
-                    itemSummary.donorId(),
+                    respondentId,
                     "DISPUTE_OPENED",
-                    "Món đồ bị báo không đúng mô tả",
-                    "Người nhận báo món đồ không đúng mô tả. " + responseWindowSentence(responseHours, responseDueAt),
+                    "Đối phương từ chối nhận món đồ",
+                    "Đối phương từ chối nhận món đồ và báo không đúng mô tả. "
+                            + responseWindowSentence(responseHours, responseDueAt),
                     "/me/disputes/" + saved.getId());
         }
     }
@@ -811,7 +818,10 @@ public class ReportService {
         // DISPUTED (khiếu nại mở sau COMPLETED, báo cáo bài/người) thì RequestService bỏ qua.
         if (requestService != null && report.getTargetType() == TargetType.REQUEST && report.getRequestId() != null) {
             requestService.resolveDisputedRequest(
-                    report.getRequestId(), decision == ReportDecision.UPHOLD, report.getTargetUserId());
+                    report.getRequestId(),
+                    decision == ReportDecision.UPHOLD,
+                    report.getTargetUserId(),
+                    report.getReason() == ReportReason.NOT_AS_DESCRIBED);
         }
 
         Report saved = reportRepository.save(report);

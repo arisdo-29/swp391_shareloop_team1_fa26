@@ -22,10 +22,7 @@ public enum RequestErrorCode implements ErrorCode {
     REQUEST_SCHEDULE_NOT_SET(HttpStatus.BAD_REQUEST, "Chưa có thông tin lịch hẹn để xác nhận."),
     REQUEST_CONTACT_NOT_REVEALED(
             HttpStatus.CONFLICT, "Thông tin liên lạc chỉ được hiển thị sau khi hai bên đã chốt lịch hẹn."),
-    REQUEST_AS_DESCRIBED_REQUIRED(
-            HttpStatus.BAD_REQUEST, "Người nhận bắt buộc phải trả lời câu hỏi món đồ có đúng mô tả hay không."),
-    REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED(
-            HttpStatus.BAD_REQUEST, "Bắt buộc nhập lý do khi chọn món đồ không đúng mô tả."),
+    REQUEST_REFUSE_NOT_ALLOWED(HttpStatus.FORBIDDEN, "Chỉ bên nhận món đồ mới được từ chối giao nhận."),
     REQUEST_HANDOVER_ALREADY_CONFIRMED(HttpStatus.CONFLICT, "Bạn đã xác nhận giao nhận cho yêu cầu này rồi."),
     REQUEST_MEDIA_REQUIRED(HttpStatus.BAD_REQUEST, "Danh sách ảnh/video minh chứng không được rỗng."),
     REQUEST_MEDIA_STAGE_INVALID(HttpStatus.BAD_REQUEST, "Giai đoạn đính kèm minh chứng không hợp lệ."),

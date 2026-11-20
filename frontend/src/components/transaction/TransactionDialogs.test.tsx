@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RequestResponse } from '../../services/requestApi';
 import { openDispute } from '../../services/reportApi';
 import { DisputeDialog } from './TransactionDialogs';
+import { handoverFailedReasons } from '../../utils/handoverOutcome';
 
 vi.mock('../../services/reportApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../services/reportApi')>();
@@ -98,3 +99,23 @@ describe('DisputeDialog', () => {
   });
 });
 
+
+describe('handoverFailedReasons', () => {
+  it('gặp trực tiếp: không đến điểm hẹn theo vai và không liên hệ được', () => {
+    expect(handoverFailedReasons(false, false)).toEqual([
+      'Người giao không đến điểm hẹn',
+      'Không liên hệ được với bên còn lại',
+    ]);
+    expect(handoverFailedReasons(false, true)[0]).toBe('Người nhận không đến điểm hẹn');
+  });
+
+  it('giao hàng: người nhận thấy lý do người gửi không gửi, người gửi thấy lý do người nhận không nhận', () => {
+    expect(handoverFailedReasons(true, false)).toEqual([
+      'Hàng bị thất lạc hoặc hư hỏng khi vận chuyển',
+      'Người gửi không gửi hàng như đã hẹn',
+      'Không liên hệ được với bên còn lại',
+    ]);
+    expect(handoverFailedReasons(true, true)).toContain('Người nhận không nhận hàng');
+    expect(handoverFailedReasons(true, true)).not.toContain('Người gửi không gửi hàng như đã hẹn');
+  });
+});

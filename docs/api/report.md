@@ -126,35 +126,39 @@ Endpoint `POST /disputes/{disputeId}/response` hiện có vẫn nhận `{note, e
 trả `200` và giữ các mã lỗi `DISPUTE_*` riêng. Cả hai endpoint đều gắn bằng chứng riêng tư
 qua cùng gateway và chuyển `AWAITING_RESPONSE` về `OPEN` sau khi giải trình, đúng mục 3.9 (Sơ đồ trạng thái) của SRS Final Report 09/11.
 
-### Report tự mở khi báo "chưa nhận được" / "chưa giao được" đồ
+### Report tự mở khi giao nhận không thành công
 
-Không có endpoint mới. Khi một bên gọi `POST /api/v1/requests/{id}/handover-issue`, module request chuyển Request sang
-`DISPUTED` rồi phát event `HandoverIssueReportedEvent`. Listener trong module report (`@EventListener`, chạy **cùng
-transaction** với bước chuyển `DISPUTED`, lỗi thì cả hai rollback) gọi
-`ReportService.openHandoverIssueReport(reporterId, requestId, note, evidenceMediaIds)`:
+Không có endpoint mới. Khi một bên gọi `POST /api/v1/requests/{id}/handover-failed` lúc bên kia **đã** bấm hoàn tất,
+module request chuyển Request sang `DISPUTED` rồi phát event `HandoverIssueReportedEvent`. Listener trong module report
+(`@EventListener`, chạy **cùng transaction** với bước chuyển `DISPUTED`, lỗi thì cả hai rollback) gọi
+`ReportService.openHandoverIssueReport(reporterId, requestId, note, evidenceMediaIds)`. Khi bên kia chưa bấm hoàn tất thì
+giao dịch bị huỷ, không mở report nào. Endpoint cũ `POST /requests/{id}/handover-issue` đã bị xoá (21/11/2026).
 
 - Tạo đúng 1 report: `targetType = REQUEST`, `reason = NO_SHOW`, `stage = AFTER`, `status = AWAITING_RESPONSE`,
-  `description` là ghi chú của người báo, `evidence` lấy từ `evidenceMediaIds` qua `ReportEvidenceService.attach`,
+  `description` là lý do người báo nhập, `evidence` lấy từ `evidenceMediaIds` qua `ReportEvidenceService.attach`,
   `targetUserId` là bên còn lại, `responseDueAt` theo `response_window_hours` (48 giờ). Không thêm bảng hay cột.
 - Chống trùng: người báo đã có report `REQUEST` cho giao dịch này thì bỏ qua, không lỗi.
 - Gửi thông báo `DISPUTE_OPENED` cho bên còn lại, dẫn tới `/me/disputes/{reportId}` để giải trình.
 - Chủ bài, người nhận và Admin xử lý như khiếu nại thường (`POST /disputes/{disputeId}/response`, `.../conclude`).
 
-### Report tự mở khi bên nhận chọn "Không đúng mô tả" (GN-07, BC-09)
+### Report tự mở khi một bên bấm "Từ chối giao nhận" (GN-07, BC-09)
 
-Không có endpoint mới. Khi bên nhận gọi `POST /api/v1/requests/{id}/confirm-handover` với `asDescribed = false`,
-module request phát event `NotAsDescribedReportedEvent`. Listener trong module report
-(`@TransactionalEventListener(AFTER_COMMIT)`, chạy trong transaction mới) gọi
-`ReportService.openNotAsDescribedReport(receiverId, requestId, reason)`:
+Không có endpoint mới. Khi bên nhận món đồ gọi `POST /api/v1/requests/{id}/refuse-handover`, module request chuyển
+Request sang `DISPUTED` rồi phát event `NotAsDescribedReportedEvent(requestId, reporterId, reason, evidenceMediaIds)`.
+Listener trong module report (`@EventListener`, chạy **cùng transaction**) gọi
+`ReportService.openNotAsDescribedReport(reporterId, requestId, reason, evidenceMediaIds)`:
 
+- Người báo là bên từ chối. Cho tặng chỉ người nhận được từ chối. Trao đổi cả hai bên đều được từ chối món mình nhận.
 - Tạo đúng 1 report: `targetType = REQUEST`, `reason = NOT_AS_DESCRIBED`, `stage = AFTER`, `status = AWAITING_RESPONSE`,
-  `description` là lý do bên nhận nhập, `targetUserId` là chủ bài, `responseDueAt` theo `response_window_hours` (48 giờ).
-  Không thêm bảng hay cột.
+  `description` là lý do bên từ chối nhập, `evidence` lấy từ `evidenceMediaIds`, `targetUserId` là bên còn lại (chủ của
+  món bị từ chối), `responseDueAt` theo `response_window_hours` (48 giờ). Không thêm bảng hay cột.
 - Khác `POST /requests/{requestId}/disputes`: không đòi giao dịch đã `COMPLETED` và không xét cửa sổ khiếu nại
-  24 giờ (`complaint_window_hours`, BC-07), vì bên nhận có thể trả lời khi giao dịch còn `AWAITING_HANDOVER`.
-- Chống trùng: bên nhận đã có report `REQUEST` cho giao dịch này thì bỏ qua, không lỗi.
-- Gửi thông báo `DISPUTE_OPENED` cho chủ bài, dẫn tới `/me/disputes/{reportId}` để giải trình.
-- Chủ bài và Admin xử lý như khiếu nại thường (`POST /disputes/{disputeId}/response`, `.../conclude`).
+  24 giờ (`complaint_window_hours`, BC-07).
+- Chống trùng: người báo đã có report `REQUEST` cho giao dịch này thì bỏ qua, không lỗi.
+- `reporterId` không phải chủ bài hay người nhận thì `403 DISPUTE_NOT_A_PARTY`.
+- Gửi thông báo `DISPUTE_OPENED` cho bên bị báo, dẫn tới `/me/disputes/{reportId}` để giải trình.
+- Admin kết luận như khiếu nại thường (mục 4). `UPHOLD`: chủ bài vi phạm thì bài chính bị ẩn, món đổi mở lại. Người xin
+  vi phạm (Trao đổi, chủ bài từ chối món đổi) thì món đổi bị ẩn, bài chính mở lại.
 - `ReportService.hasReportForRequest(requestId)` cho job tự hoàn tất ở module request bỏ qua giao dịch đã có report (GN-09).
 
 Lỗi ghi bổ sung: `400 VALIDATION_FAILED`; `403 REPORT_NOT_PARTICIPANT` (giải trình qua `/reports`)
@@ -347,7 +351,7 @@ Admin đưa ra kết luận xử lý đối với báo cáo hoặc khiếu nại
   - Báo cáo phải tồn tại trong hệ thống (`404 REPORT_NOT_FOUND`).
   - Báo cáo chưa được kết luận trước đó; nếu đã ở trạng thái `RESOLVED` hoặc `DISMISSED` thì từ chối xử lý (`409 REPORT_ALREADY_CONCLUDED`).
   - **Chỉ kết luận khi đã giải trình hoặc hết hạn (D-15, BC-10):** hồ sơ đang `AWAITING_RESPONSE` và `now <= responseDueAt` thì từ chối (`409 REPORT_RESPONSE_WINDOW_OPEN`, `details.responseDueAt` là hạn giải trình dạng ISO-8601). Bên bị báo cáo giải trình xong thì hồ sơ về `OPEN` và kết luận được ngay; quá hạn mà chưa giải trình thì cũng kết luận được.
-  - **Giao dịch đang `DISPUTED`** (khiếu nại `REQUEST` mở từ `POST /requests/{id}/handover-issue`): kết luận xong thì giao dịch được đưa ra khỏi `DISPUTED`. `UPHOLD` -> giao dịch `CANCELLED` (`cancelReason` có tiền tố `[Hệ thống]`), nhả cả hai món về `APPROVED`. `DISMISS` -> giao dịch `COMPLETED` như hoàn tất bình thường (hai món `TRADED`, cộng điểm uy tín). Cả hai bên nhận thông báo kết quả. Khiếu nại mở sau khi giao dịch đã `COMPLETED` (`POST /requests/{requestId}/disputes`) không đổi trạng thái giao dịch, chỉ áp dụng trừ sao như trước.
+  - **Giao dịch đang `DISPUTED`** (khiếu nại `REQUEST` mở từ `POST /requests/{id}/handover-failed` hoặc `POST /requests/{id}/refuse-handover`): kết luận xong thì giao dịch được đưa ra khỏi `DISPUTED`. `UPHOLD` -> giao dịch `CANCELLED` (`cancelReason` có tiền tố `[Hệ thống]`), nhả cả hai món về `APPROVED`. `DISMISS` -> giao dịch `COMPLETED` như hoàn tất bình thường (hai món `TRADED`, cộng điểm uy tín). Cả hai bên nhận thông báo kết quả. Khiếu nại mở sau khi giao dịch đã `COMPLETED` (`POST /requests/{requestId}/disputes`) không đổi trạng thái giao dịch, chỉ áp dụng trừ sao như trước.
   - **Khi kết luận DISMISS (Bác bỏ / Không có cơ sở):**
     - Trạng thái báo cáo chuyển thành `DISMISSED`.
     - Không trừ sao uy tín, không ẩn bài đăng.

@@ -111,31 +111,92 @@ class RequestControllerTest {
     }
 
     @Test
-    @DisplayName("Báo sự cố giao nhận với ghi chú hợp lệ trả về 200 OK")
-    void reportHandoverIssue_withValidNote_returns200() throws Exception {
+    @DisplayName("Báo giao nhận không thành công với lý do hợp lệ trả về 200 OK")
+    void handoverFailed_withValidReason_returns200() throws Exception {
+        // given
         String token = jwtService.issue(10L, false);
-        when(requestService.reportHandoverIssue(eq(100L), eq(10L), any()))
+        when(requestService.handoverFailed(eq(100L), eq(10L), any()))
                 .thenReturn(
                         new RequestResponse(100L, 1L, 10L, null, "GIVE", "DISPUTED", null, null, null, Instant.now()));
 
-        mockMvc.perform(post("/api/v1/requests/100/handover-issue")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"note\":\"Chưa nhận được đồ\",\"evidenceMediaIds\":[7]}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("DISPUTED"));
+        // when
+        var result = mockMvc.perform(post("/api/v1/requests/100/handover-failed")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"Chưa nhận được đồ\",\"evidenceMediaIds\":[7]}"));
+
+        // then
+        result.andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DISPUTED"));
     }
 
     @Test
-    @DisplayName("Báo sự cố giao nhận thiếu ghi chú trả về 400")
-    void reportHandoverIssue_withoutNote_returns400() throws Exception {
+    @DisplayName("Báo giao nhận không thành công thiếu lý do trả về 400")
+    void handoverFailed_withoutReason_returns400() throws Exception {
+        // given
         String token = jwtService.issue(10L, false);
 
-        mockMvc.perform(post("/api/v1/requests/100/handover-issue")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"evidenceMediaIds\":[7]}"))
-                .andExpect(status().isBadRequest());
+        // when
+        var result = mockMvc.perform(post("/api/v1/requests/100/handover-failed")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"evidenceMediaIds\":[7]}"));
+
+        // then
+        result.andExpect(status().isBadRequest());
+        verifyNoInteractions(requestService);
+    }
+
+    @Test
+    @DisplayName("Từ chối giao nhận với lý do hợp lệ trả về 200 OK")
+    void refuseHandover_withValidReason_returns200() throws Exception {
+        // given
+        String token = jwtService.issue(10L, false);
+        when(requestService.refuseHandover(eq(100L), eq(10L), any()))
+                .thenReturn(
+                        new RequestResponse(100L, 1L, 10L, null, "GIVE", "DISPUTED", null, null, null, Instant.now()));
+
+        // when
+        var result = mockMvc.perform(post("/api/v1/requests/100/refuse-handover")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"Máy không bật được\"}"));
+
+        // then
+        result.andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DISPUTED"));
+    }
+
+    @Test
+    @DisplayName("Từ chối giao nhận với lý do quá ngắn trả về 400")
+    void refuseHandover_withTooShortReason_returns400() throws Exception {
+        // given
+        String token = jwtService.issue(10L, false);
+
+        // when
+        var result = mockMvc.perform(post("/api/v1/requests/100/refuse-handover")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"Hỏng\"}"));
+
+        // then
+        result.andExpect(status().isBadRequest());
+        verifyNoInteractions(requestService);
+    }
+
+    @Test
+    @DisplayName("Endpoint cũ handover-issue đã bị xoá")
+    void handoverIssue_endpointRemoved_isNotOk() throws Exception {
+        // given
+        String token = jwtService.issue(10L, false);
+
+        // when
+        var result = mockMvc.perform(post("/api/v1/requests/100/handover-issue")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"note\":\"Chưa nhận được đồ\"}"));
+
+        // then
+        result.andExpect(status().is4xxClientError());
+        verifyNoInteractions(requestService);
     }
 
     @Test
@@ -498,28 +559,6 @@ class RequestControllerTest {
         mockMvc.perform(get("/api/v1/requests/100/media"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
-    }
-
-    @Test
-    @DisplayName("Xác nhận bàn giao với lý do không đúng mô tả vượt 1000 ký tự trả về 400 (BC-01)")
-    void confirmHandover_whenReasonTooLong_returns400() throws Exception {
-        String token = jwtService.issue(10L, false);
-        String longReason = "a".repeat(1001);
-        String body = """
-                {
-                  "asDescribed": false,
-                  "notAsDescribedReason": "%s"
-                }
-                """.formatted(longReason);
-
-        mockMvc.perform(post("/api/v1/requests/100/confirm-handover")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.field").value("notAsDescribedReason"));
-        verifyNoInteractions(requestService);
     }
 
     @Test
