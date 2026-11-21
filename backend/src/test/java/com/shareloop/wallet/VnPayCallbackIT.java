@@ -285,14 +285,53 @@ class VnPayCallbackIT extends IntegrationTest {
     }
 
     @Test
-    void return_redirectsWithoutCrediting() throws Exception {
+    void return_whenSuccessfulBeforeIpn_creditsOnceAsIpnFallback() throws Exception {
+        // given: VNPay báo thành công về Return URL, IPN chưa tới
         var params = new LinkedMultiValueMap<String, String>();
         signed("2000000", "00", "00").forEach(params::add);
+
+        // when
         mvc.perform(get("/api/v1/payments/vnpay/return").params(params))
                 .andExpect(status().isFound())
                 .andExpect(redirectedUrl("http://localhost:5173/credit?orderCode=" + orderCode + "&status=SUCCESS"));
-        assertStatus("PENDING");
-        assertPristineOrder();
+
+        // then: đơn chốt qua cùng luồng IPN, cộng đúng một lần
+        assertStatus("SUCCESS");
+        assertThat(credit.getWallet(userId).creditBalance()).isEqualTo(20);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM credit_ledger WHERE user_id = ?", Long.class, userId))
+                .isEqualTo(1L);
+    }
+
+    @Test
+    void ipn_whenArrivingAfterSuccessfulReturn_returns02AndKeepsBalance() throws Exception {
+        // given: Return thành công đã chốt đơn
+        var params = new LinkedMultiValueMap<String, String>();
+        signed("2000000", "00", "00").forEach(params::add);
+        mvc.perform(get("/api/v1/payments/vnpay/return").params(params)).andExpect(status().isFound());
+
+        // when: IPN tới muộn
+        ipn(signed("2000000", "00", "00"), "02");
+
+        // then: số dư và ledger không đổi
+        assertStatus("SUCCESS");
+        assertThat(credit.getWallet(userId).creditBalance()).isEqualTo(20);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM credit_ledger WHERE user_id = ?", Long.class, userId))
+                .isEqualTo(1L);
+    }
+
+    @Test
+    void return_whenSuccessfulButOrderAlreadyExpired_doesNotCredit() throws Exception {
+        // given: đơn quá hạn cả dung sai và đã chuyển EXPIRED khi người dùng xem đơn
+        makeOrderOlderThanDeadlineBy(graceMinutes() + 1);
+        assertThat(payment.getOwnOrder(userId, orderCode).status()).isEqualTo(PaymentOrderStatus.EXPIRED);
+        var params = new LinkedMultiValueMap<String, String>();
+        signed("2000000", "00", "00").forEach(params::add);
+
+        // when
+        mvc.perform(get("/api/v1/payments/vnpay/return").params(params)).andExpect(status().isFound());
+
+        // then
+        assertStatus("EXPIRED");
         assertNoCredits();
     }
 
