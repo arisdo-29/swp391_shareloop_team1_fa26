@@ -30,7 +30,10 @@ import {
   canSelectPendingRequest,
   markRequestChatSeen,
 } from '../../utils/request';
-import { chatImageForbiddenMessage } from '../../utils/apiErrorMessages';
+import {
+  chatImageForbiddenMessage,
+  selectRequestBlockedMessage,
+} from '../../utils/apiErrorMessages';
 import { mediaApi } from '../../services/mediaApi';
 import {
   CHAT_POLL_INTERVAL_MS,
@@ -133,6 +136,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const [selectError, setSelectError] = useState('');
   // 402 khi chủ bài thiếu Credit để chuyển bài sang Trao đổi; hộp chọn người vẫn mở.
   const [selectNeedsTopUp, setSelectNeedsTopUp] = useState(false);
+  // Món đổi hoặc bài không còn dùng được: khoá nút xác nhận vì chọn lại cũng không thành công.
+  const [selectBlocked, setSelectBlocked] = useState(false);
   const [mobileChat, setMobileChat] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportNotice, setReportNotice] = useState('');
@@ -594,6 +599,12 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
         setSelectNeedsTopUp(true);
         return;
       }
+      const blockedMessage = selectRequestBlockedMessage(apiError.code);
+      if (blockedMessage) {
+        setSelectError(blockedMessage);
+        setSelectBlocked(true);
+        return;
+      }
       const errorMessages: Record<string, string> = {
         REQUEST_FORBIDDEN: 'Bạn không có quyền chọn người cho bài đăng này.',
         REQUEST_NOT_FOUND: 'Không tìm thấy yêu cầu này.',
@@ -735,6 +746,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
           onSelectCandidate={(id) => {
             setSelectError('');
             setSelectNeedsTopUp(false);
+            setSelectBlocked(false);
             setSelectCandidateId(id);
             setSelectedRequestId(id);
             navigate(`${requestConversationPath(id)}?selectRequest=${id}`, { replace: true });
@@ -1022,11 +1034,13 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
           submitting={selectSubmitting}
           error={selectError}
           needsTopUp={selectNeedsTopUp}
+          blocked={selectBlocked}
           onCancel={() => {
             if (selectSubmitting) return;
             setSelectCandidateId(null);
             setSelectError('');
             setSelectNeedsTopUp(false);
+            setSelectBlocked(false);
             navigate(requestConversationPath(selectCandidate.request.id), { replace: true });
           }}
           onViewItem={(itemId) => {

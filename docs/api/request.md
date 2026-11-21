@@ -183,6 +183,12 @@ Chủ bài đăng chọn đúng một người nhận cho bài đăng (F10 bư�
   - Request được chọn chuyển sang trạng thái `RESERVED` (`reservedAt` được ghi nhận).
   - Tất cả các Request khác gửi tới cùng bài đăng đang ở trạng thái `PENDING` sẽ tự động chuyển sang `REJECTED`.
   - Các yêu cầu PENDING khác ở các bài khác đang dùng cùng món đề nghị `offeredItemId` tự động bị `CANCELLED` (YC-04, YC-07).
+  - **Kiểm trước khi chọn (22/11/2026):** bài chính đang `PENDING_REVIEW` (vừa sửa, chờ duyệt lại) thì trả
+    `409 REQUEST_ITEM_UNDER_REVIEW`. Yêu cầu có món đề nghị thì món đó phải vẫn là của người gửi, `APPROVED` và đang
+    hiển thị; nếu không trả `409 REQUEST_OFFERED_ITEM_UNAVAILABLE`. Hai bước kiểm này chạy **trước** bước đổi hình thức
+    và trừ phí, nên lỗi không trừ Credit của chủ bài.
+  - **CD-04:** chọn yêu cầu không kèm món ở bài Trao đổi thì bài chuyển sang Cho tặng, phí đăng đã trả không được hoàn.
+    Giao diện hiện rõ câu "Bài sẽ chuyển sang Cho tặng, phí đăng đã trả không được hoàn." trong hộp xác nhận.
   - Điểm uy tín khi hoàn tất (`COMPLETED`): tự động tính theo `requests.type` sau chuyển đổi (CD-07).
   - Khi giao dịch bị huỷ (người dùng, job hết hạn), các món đã giữ chỗ được nhả về `APPROVED`.
   - Người nhận được chọn nhận thông báo `REQUEST_ACCEPTED`.
@@ -194,7 +200,25 @@ Chủ bài đăng chọn đúng một người nhận cho bài đăng (F10 bư�
   - `404 REQUEST_NOT_FOUND`: Không tìm thấy yêu cầu.
   - `404 REQUEST_ITEM_NOT_FOUND`: Không tìm thấy bài đăng liên quan.
   - `409 REQUEST_INVALID_STATE_TRANSITION`: Yêu cầu không còn ở trạng thái `PENDING` để chọn.
+  - `409 REQUEST_ITEM_UNDER_REVIEW`: Bài đang chờ duyệt lại sau khi sửa, chủ bài chọn người sau khi bài được duyệt.
+  - `409 REQUEST_OFFERED_ITEM_UNAVAILABLE`: Món người này đề nghị đổi không còn khả dụng (bị giữ chỗ ở giao dịch khác,
+    bị xoá, bị ẩn, đang chờ duyệt lại hoặc hết hạn).
+  - `409 ITEM_HIDDEN`: Bài đang tạm ẩn nên chưa giữ chỗ được (do `ItemService.reserve`).
   - `409 ITEM_INVALID_STATUS_TRANSITION`: Món đồ (bài chính hoặc món đề nghị) không còn ở trạng thái `APPROVED` để giữ chỗ.
+
+### Yêu cầu tự huỷ khi món đem đổi không còn dùng được (22/11/2026)
+
+Module item phát `ItemUnavailableEvent(itemId, reason)` khi một bài rời trạng thái "APPROVED và đang hiển thị":
+giữ chỗ (`RESERVED`), xoá (`REMOVED`), ẩn kể cả khi khoá tài khoản hoặc 0 sao (`HIDDEN`), chủ bài sửa bài đang APPROVED
+(`EDITED`), hết hạn (`EXPIRED`). Nhả giữ chỗ (`release`) và duyệt lại (`markApproved`) không phát event này.
+`ItemUnavailableRequestListener` (`@EventListener`, cùng transaction) xử lý:
+
+- Mọi lý do: huỷ các Request `PENDING` có `offered_item_id = itemId`, `cancelReason` là
+  `"[Hệ thống] Món bạn đề nghị đổi không còn khả dụng"`. Người gửi và chủ bài đích nhận `REQUEST_CANCELLED`. Request đã
+  được chọn (`RESERVED`) không bị lấy ra. Lúc chọn người, `selectReceiver` tự huỷ các yêu cầu dùng chung món đổi trước
+  khi giữ chỗ món đó, nên listener không huỷ lại và không ai nhận hai thông báo cho cùng một yêu cầu.
+- `EDITED`: người có Request `PENDING` tới bài nhận `REQUEST_ITEM_EDITED` "Chủ bài vừa sửa bài, bài đang chờ duyệt lại."
+  Yêu cầu không bị huỷ. Sửa lại bài đang `REJECTED` hoặc `PENDING_REVIEW` không gửi thông báo này.
 
 ---
 
@@ -639,6 +663,8 @@ Các trường đã có từ trước và dùng cho màn Tiến trình giao dị
 | `REQUEST_CONTACT_NOT_REVEALED` | 409 | Chưa chốt lịch hẹn để xem thông tin liên lạc (GN-04) |
 | `REQUEST_HANDOVER_ALREADY_CONFIRMED` | 409 | Bạn đã xác nhận giao nhận cho yêu cầu này rồi |
 | `REQUEST_INVALID_STATE_TRANSITION` | 409 | Chuyển đổi trạng thái không hợp lệ theo sơ đồ |
+| `REQUEST_OFFERED_ITEM_UNAVAILABLE` | 409 | Chọn người khi món đề nghị đổi không còn là của người gửi, không `APPROVED` hoặc đang ẩn |
+| `REQUEST_ITEM_UNDER_REVIEW` | 409 | Chọn người khi bài đang chờ duyệt lại sau khi sửa |
 | `REQUEST_OFFER_CHANGE_NOT_ALLOWED` | 409 | Đề nghị hoặc đồng ý đổi món trong chat khi giao dịch không còn là `GIVE` hoặc không ở `RESERVED` / `AWAITING_LOGISTICS` (xem `docs/api/chat.md`) |
 | `REQUEST_FORBIDDEN` | 403 | Không có quyền thao tác trên yêu cầu này (hoặc người ngoài xem minh chứng) |
 | `REQUEST_REFUSE_NOT_ALLOWED` | 403 | Chủ bài ở giao dịch Cho tặng bấm "Từ chối giao nhận" (GN-07) |

@@ -467,6 +467,16 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
         }
 
+        // Bài vừa sửa đang chờ duyệt lại: chưa chọn được người, báo rõ thay vì lỗi giữ chỗ chung chung.
+        if ("PENDING_REVIEW".equals(item.status())) {
+            throw new BusinessException(RequestErrorCode.REQUEST_ITEM_UNDER_REVIEW);
+        }
+
+        // Kiểm món đem đổi trước khi đổi hình thức và trừ phí, để món hỏng thì không trừ Credit của chủ bài.
+        if (selectedRequest.getOfferedItemId() != null) {
+            requireOfferedItemAvailable(selectedRequest.getOfferedItemId(), selectedRequest.getReceiverId());
+        }
+
         // Chuyển đổi loại Cho ↔ Trao đổi khi chọn người nhận (CD-02, CD-04, CD-06)
         boolean isGiveToSwap = "GIVE".equals(item.offerType()) && selectedRequest.getOfferedItemId() != null;
         boolean isSwapToGive = "SWAP".equals(item.offerType()) && selectedRequest.getOfferedItemId() == null;
@@ -643,6 +653,19 @@ public class RequestService {
                 || !"APPROVED".equals(offeredItem.status())
                 || !offeredItem.isActive()) {
             throw new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
+        }
+    }
+
+    // Lúc chọn người, món đem đổi phải vẫn là của người gửi, APPROVED và đang hiển thị. Khác requireValidOfferedItem ở
+    // mã lỗi: chủ bài cần biết lỗi nằm ở món của người kia chứ không phải bài của mình.
+    private void requireOfferedItemAvailable(long offeredItemId, long receiverId) {
+        ItemSnapshot offeredItem = findItemSnapshot(offeredItemId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_OFFERED_ITEM_UNAVAILABLE));
+        boolean available = offeredItem.donorId() == receiverId
+                && "APPROVED".equals(offeredItem.status())
+                && offeredItem.isActive();
+        if (!available) {
+            throw new BusinessException(RequestErrorCode.REQUEST_OFFERED_ITEM_UNAVAILABLE);
         }
     }
 
@@ -1005,6 +1028,58 @@ public class RequestService {
                     "/requests/" + request.getId());
         }
         return pendingRequests.size();
+    }
+
+    /**
+     * Huỷ các yêu cầu PENDING đang dùng bài làm món đem đổi, khi bài đó không còn dùng được (bị giữ chỗ ở giao dịch
+     * khác, bị xoá, ẩn, sửa hoặc hết hạn; YC-04, YC-07). Người gửi và chủ bài đích đều được báo. Yêu cầu vừa được chọn
+     * đã là RESERVED nên không bị lấy ra.
+     *
+     * @return số yêu cầu đã huỷ
+     */
+    @Transactional
+    public int cancelPendingRequestsOfferingItem(long offeredItemId) {
+        List<Request> pendingRequests =
+                requestRepository.findByOfferedItemIdAndStatus(offeredItemId, RequestStatus.PENDING);
+        for (Request request : pendingRequests) {
+            request.cancel(Request.CANCEL_BY_SYSTEM + "Món bạn đề nghị đổi không còn khả dụng");
+            requestRepository.save(request);
+            notifyOfferedItemUnavailable(request);
+        }
+        return pendingRequests.size();
+    }
+
+    private void notifyOfferedItemUnavailable(Request request) {
+        String link = "/requests/" + request.getId();
+        notificationService.notify(
+                request.getReceiverId(),
+                "REQUEST_CANCELLED",
+                "Yêu cầu trao đổi bị huỷ",
+                "Món bạn đề nghị đổi không còn khả dụng nên yêu cầu đã tự huỷ.",
+                link);
+        findItemSnapshot(request.getItemId())
+                .ifPresent(item -> notificationService.notify(
+                        item.donorId(),
+                        "REQUEST_CANCELLED",
+                        "Một yêu cầu đã tự huỷ",
+                        "Món người gửi đề nghị đổi không còn khả dụng nên yêu cầu tới bài của bạn đã tự huỷ.",
+                        link));
+    }
+
+    /**
+     * Bài đang hiển thị vừa bị chủ bài sửa và chờ duyệt lại: báo người có yêu cầu PENDING tới bài. Không huỷ yêu cầu;
+     * chủ bài chọn người được sau khi bài được duyệt lại.
+     */
+    @Transactional
+    public void notifyPendingRequestersItemEdited(long itemId) {
+        for (Request request : requestRepository.findByItemIdAndStatus(itemId, RequestStatus.PENDING)) {
+            notificationService.notify(
+                    request.getReceiverId(),
+                    "REQUEST_ITEM_EDITED",
+                    "Bài bạn xin vừa được sửa",
+                    "Chủ bài vừa sửa bài, bài đang chờ duyệt lại.",
+                    "/requests/" + request.getId());
+        }
     }
 
     private void cancelBecauseUserLocked(Request request, long lockedUserId) {

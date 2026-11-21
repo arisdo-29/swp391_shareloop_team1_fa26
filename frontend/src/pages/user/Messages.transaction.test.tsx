@@ -184,6 +184,32 @@ describe('Modal chọn người cho yêu cầu SWAP', () => {
     );
     expect(requestApi.select).not.toHaveBeenCalled();
   });
+
+  it('bài đang chờ duyệt lại thì hiện đúng câu lỗi và khoá nút xác nhận', async () => {
+    // given: backend từ chối vì bài vừa sửa đang chờ duyệt lại
+    const userEvents = userEvent.setup();
+    await renderMessages(DONOR_ID, request({ status: 'PENDING', contactRevealedAt: undefined }));
+    vi.mocked(requestApi.select).mockRejectedValue({
+      status: 409,
+      code: 'REQUEST_ITEM_UNDER_REVIEW',
+      message: 'Lỗi',
+    });
+
+    // when
+    await userEvents.click(screen.getByRole('button', { name: 'Chọn người này' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Xác nhận chọn người giao dịch' });
+    await userEvents.click(within(dialog).getByRole('button', { name: 'Xác nhận chọn' }));
+
+    // then
+    expect(
+      await within(dialog).findByText(
+        'Bài đang chờ duyệt lại sau khi sửa, bạn chọn người sau khi bài được duyệt.',
+      ),
+    ).toBeTruthy();
+    expect(
+      (within(dialog).getByRole('button', { name: 'Xác nhận chọn' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
 });
 
 describe('Gửi ảnh trong giao dịch Cho tặng', () => {

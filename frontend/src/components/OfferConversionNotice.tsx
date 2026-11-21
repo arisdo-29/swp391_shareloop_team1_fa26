@@ -9,7 +9,7 @@ export function OfferConversionWarning({ conversion }: { conversion: OfferConver
   const message =
     conversion.to === 'SWAP'
       ? `Bài đang là Cho tặng. Chọn người này thì bài chuyển sang Trao đổi và bạn trả ${conversionFeeText(conversion.fee)} phí đăng Trao đổi. Các yêu cầu khác sẽ bị từ chối.`
-      : 'Bài đang là Trao đổi. Chọn người này thì bài chuyển sang Cho tặng. Phí đăng đã trả không được hoàn.';
+      : 'Người này không kèm món đổi. Bài sẽ chuyển sang Cho tặng, phí đăng đã trả không được hoàn.';
   return (
     <p role="note" className="mt-3 rounded-md bg-warning-soft p-3 text-xs leading-5 text-warning">
       {message}

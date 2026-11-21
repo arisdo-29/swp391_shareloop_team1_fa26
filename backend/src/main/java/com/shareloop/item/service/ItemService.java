@@ -23,6 +23,7 @@ import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.entity.OperatingStatus;
 import com.shareloop.item.event.ItemApprovedEvent;
 import com.shareloop.item.event.ItemRemovedEvent;
+import com.shareloop.item.event.ItemUnavailableEvent;
 import com.shareloop.item.mapper.ItemMapper;
 import com.shareloop.item.repository.ItemRepository;
 import com.shareloop.listingfee.dto.DisplayWindow;
@@ -285,6 +286,8 @@ public class ItemService {
         }
 
         Long previousCategoryId = item.getCategoryId();
+        // Chỉ bài đang hiển thị bị sửa mới "rời" APPROVED; sửa lại bài REJECTED / PENDING_REVIEW không phát event.
+        boolean wasApproved = item.getStatus() == ItemStatus.APPROVED;
         item.submitEdit(
                 request.categoryId(),
                 request.areaId(),
@@ -307,6 +310,9 @@ public class ItemService {
             saveReviewFlag(itemId, moderation);
         }
         publishItemUpdate(itemId, userId);
+        if (wasApproved) {
+            publishUnavailable(itemId, ItemUnavailableEvent.Reason.EDITED);
+        }
         return withHiddenState(toResponse(item, findDisplayWindow(itemId)), item);
     }
 
@@ -697,11 +703,26 @@ public class ItemService {
     }
 
     /**
-     * Giữ chỗ bài đăng khi chủ bài chọn người nhận (YC-07, Issue #38).
+     * Giữ chỗ bài đăng khi chủ bài chọn người nhận (YC-07, Issue #38). Bài bị ẩn thì ném ITEM_HIDDEN; bài không ở
+     * APPROVED thì ném ITEM_INVALID_STATUS_TRANSITION. Giữ chỗ xong phát ItemUnavailableEvent để module request huỷ
+     * các yêu cầu khác đang dùng bài này làm món đem đổi.
      */
     @Transactional
     public void reserve(Long itemId) {
+        Item item = requireItem(itemId);
+        // Bài bị ẩn vẫn có thể còn APPROVED; báo rõ lý do thay vì lỗi chuyển trạng thái chung chung.
+        if (!item.isActive()) {
+            throw new BusinessException(ItemErrorCode.ITEM_HIDDEN);
+        }
         transition(itemId, ItemStatus.APPROVED, ItemStatus.RESERVED);
+        publishUnavailable(itemId, ItemUnavailableEvent.Reason.RESERVED);
+    }
+
+    // eventPublisher null chỉ gặp ở unit test dựng service rút gọn.
+    private void publishUnavailable(long itemId, ItemUnavailableEvent.Reason reason) {
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new ItemUnavailableEvent(itemId, reason));
+        }
     }
 
     /**
@@ -753,6 +774,7 @@ public class ItemService {
         Item item = requireItem(itemId);
         item.deactivate();
         publishItemUpdate(itemId, item.getDonorId());
+        publishUnavailable(itemId, ItemUnavailableEvent.Reason.HIDDEN);
     }
 
     @Transactional
@@ -789,6 +811,7 @@ public class ItemService {
         }
         item.markDeleted();
         eventPublisher.publishEvent(new ItemRemovedEvent(itemId, item.getDonorId()));
+        publishUnavailable(itemId, ItemUnavailableEvent.Reason.REMOVED);
         publishItemUpdate(itemId, item.getDonorId());
     }
 
@@ -804,7 +827,10 @@ public class ItemService {
         for (Item item : items) {
             item.deactivate();
             hiddenIds.add(item.getId());
-            if (item.getId() != null) publishItemUpdate(item.getId(), userId);
+            if (item.getId() != null) {
+                publishItemUpdate(item.getId(), userId);
+                publishUnavailable(item.getId(), ItemUnavailableEvent.Reason.HIDDEN);
+            }
         }
         return hiddenIds;
     }
@@ -820,15 +846,19 @@ public class ItemService {
 
     @Transactional
     public void hideAllOfUser(long userId) {
-        itemRepository.findByDonorIdAndIsActiveTrue(userId).forEach(item -> {
+        for (Item item : itemRepository.findByDonorIdAndIsActiveTrue(userId)) {
             item.deactivate();
-            if (item.getId() != null) publishItemUpdate(item.getId(), userId);
-        });
+            if (item.getId() != null) {
+                publishItemUpdate(item.getId(), userId);
+                publishUnavailable(item.getId(), ItemUnavailableEvent.Reason.HIDDEN);
+            }
+        }
     }
 
     @Transactional
     public void markExpired(long itemId) {
         transition(itemId, ItemStatus.APPROVED, ItemStatus.EXPIRED);
+        publishUnavailable(itemId, ItemUnavailableEvent.Reason.EXPIRED);
     }
 
     @Transactional

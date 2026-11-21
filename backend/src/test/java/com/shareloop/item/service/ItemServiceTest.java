@@ -33,6 +33,7 @@ import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.event.ItemApprovedEvent;
 import com.shareloop.item.event.ItemRemovedEvent;
+import com.shareloop.item.event.ItemUnavailableEvent;
 import com.shareloop.item.repository.ItemRepository;
 import com.shareloop.listingfee.dto.DisplayWindow;
 import com.shareloop.listingfee.service.ListingFeeQueryService;
@@ -1007,6 +1008,101 @@ class ItemServiceTest {
         assertThatThrownBy(() -> itemService.reserve(2L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
+    }
+
+    @Test
+    void reserve_whenItemHidden_throwsItemHiddenAndKeepsStatus() {
+        // given: bài APPROVED nhưng đang bị ẩn
+        Item item = approvedItem(1L);
+        item.deactivate();
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        // when, then
+        assertThatThrownBy(() -> itemService.reserve(1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_HIDDEN);
+        assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
+        verify(eventPublisher, never()).publishEvent(any(ItemUnavailableEvent.class));
+    }
+
+    @Test
+    void reserve_whenSuccess_publishesItemUnavailableEvent() {
+        // given
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(approvedItem(1L)));
+
+        // when
+        itemService.reserve(1L);
+
+        // then
+        verify(eventPublisher).publishEvent(new ItemUnavailableEvent(1L, ItemUnavailableEvent.Reason.RESERVED));
+    }
+
+    @Test
+    void hide_publishesItemUnavailableEvent() {
+        // given
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(approvedItem(1L)));
+
+        // when
+        itemService.hide(1L);
+
+        // then
+        verify(eventPublisher).publishEvent(new ItemUnavailableEvent(1L, ItemUnavailableEvent.Reason.HIDDEN));
+    }
+
+    @Test
+    void markExpired_publishesItemUnavailableEvent() {
+        // given
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(approvedItem(1L)));
+
+        // when
+        itemService.markExpired(1L);
+
+        // then
+        verify(eventPublisher).publishEvent(new ItemUnavailableEvent(1L, ItemUnavailableEvent.Reason.EXPIRED));
+    }
+
+    @Test
+    void remove_publishesItemUnavailableEventBesideItemRemovedEvent() {
+        // given
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(approvedItem(1L)));
+
+        // when
+        itemService.remove(1L);
+
+        // then
+        verify(eventPublisher).publishEvent(new ItemUnavailableEvent(1L, ItemUnavailableEvent.Reason.REMOVED));
+        verify(eventPublisher).publishEvent(any(ItemRemovedEvent.class));
+    }
+
+    @Test
+    void hideApprovedItemsOfUser_publishesItemUnavailableEventForEachItem() {
+        // given
+        when(itemRepository.findByDonorIdAndStatusAndIsActiveTrue(10L, ItemStatus.APPROVED))
+                .thenReturn(List.of(approvedItem(1L), approvedItem(2L)));
+
+        // when
+        itemService.hideApprovedItemsOfUser(10L);
+
+        // then
+        verify(eventPublisher).publishEvent(new ItemUnavailableEvent(1L, ItemUnavailableEvent.Reason.HIDDEN));
+        verify(eventPublisher).publishEvent(new ItemUnavailableEvent(2L, ItemUnavailableEvent.Reason.HIDDEN));
+    }
+
+    @Test
+    void releaseAndMarkApproved_doNotPublishItemUnavailableEvent() {
+        // given: bài đang giữ chỗ và bài chờ duyệt
+        Item reserved = approvedItem(1L);
+        reserved.reserve();
+        Item pending = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(reserved));
+        when(itemRepository.findById(2L)).thenReturn(Optional.of(pending));
+
+        // when
+        itemService.release(1L);
+        itemService.markApproved(2L);
+
+        // then
+        verify(eventPublisher, never()).publishEvent(any(ItemUnavailableEvent.class));
     }
 
     @Test

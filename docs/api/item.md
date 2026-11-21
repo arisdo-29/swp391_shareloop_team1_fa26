@@ -2,8 +2,13 @@
 
 ## Service cửa ngõ nội bộ
 
-- `ItemService.reserve(Long itemId)` chuyển `APPROVED → RESERVED`; `release(long itemId)` chuyển `RESERVED → APPROVED`. Trạng thái khác trả `ITEM_INVALID_STATUS_TRANSITION`.
+- `ItemService.reserve(Long itemId)` chuyển `APPROVED → RESERVED`; `release(long itemId)` chuyển `RESERVED → APPROVED`. Trạng thái khác trả `ITEM_INVALID_STATUS_TRANSITION`. Bài bị ẩn (`is_active = false`) thì `reserve` trả `409 ITEM_HIDDEN` "Bài đang tạm ẩn nên chưa giữ chỗ được." (22/11/2026).
 - `markTraded` và `markExpired` chuyển trạng thái qua `canTransition()`; `hide/unhide/hideAllOfUser` chỉ đổi `is_active`.
+- `ItemUnavailableEvent(itemId, reason)` (22/11/2026): phát khi bài rời trạng thái "APPROVED và đang hiển thị" ở
+  `reserve` (`RESERVED`), xoá (`REMOVED`, phát cùng `ItemRemovedEvent` cũ), `hide` / `hideApprovedItemsOfUser` /
+  `hideAllOfUser` (`HIDDEN`), `updateItem` khi bài đang `APPROVED` (`EDITED`), `markExpired` (`EXPIRED`). `release` và
+  `markApproved` không phát. Module request nghe để huỷ yêu cầu PENDING đang dùng bài làm món đem đổi và báo người
+  đang xin bài khi bài bị sửa (xem `request.md`, mục "Yêu cầu tự huỷ khi món đem đổi không còn dùng được").
 - `remove(itemId, userId)` phục vụ DELETE của chủ bài; `remove(itemId)` là cửa ngõ nội bộ. Các hàm vòng đời khác chưa có endpoint HTTP riêng.
 
 Quy ước chung: tiền tố `/api/v1`, thời gian ISO-8601 UTC, thành công trả thẳng DTO (không bọc),
@@ -383,7 +388,7 @@ Với danh sách, hai trường này được đọc bằng một query cho cả
 
 | code | HTTP | Khi nào |
 |---|---|---|
-| `ITEM_NOT_FOUND` | 404 | Không tìm thấy bài đăng hoặc bài không ở `APPROVED`/`TRADED` mà người xem không phải chủ |
+| `ITEM_NOT_FOUND` | 404 | Không tìm thấy bài đăng hoặc người xem không có quyền xem (xem quy tắc hiển thị ở mục 2) |
 | `USER_NOT_FOUND` | 404 | `GET /users/{id}/items`: người dùng không tồn tại, chưa xác thực, bị khoá, bị cấm hoặc là Admin (mã của module user) |
 | `ITEM_SWAP_DESIRED_ITEM_REQUIRED` | 400 | Bài đăng SWAP nhưng thiếu món mong muốn |
 | `ITEM_DEFECT_NOTE_REQUIRED` | 400 | Bài đăng có tình trạng DEFECTIVE nhưng thiếu mô tả lỗi |
@@ -397,6 +402,7 @@ Với danh sách, hai trường này được đọc bằng một query cho cả
 | `ITEM_NOT_OWNER` | 403 | Sửa bài không phải của mình |
 | `ITEM_EDIT_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được sửa |
 | `ITEM_REMOVE_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được gỡ |
+| `ITEM_HIDDEN` | 409 | Giữ chỗ (`reserve`) bài đang tạm ẩn, gặp khi chọn người, đổi món đề nghị hoặc đồng ý đổi món trong chat |
 | `ITEM_REPUTATION_BLOCKED` | 403 | Người đăng hoặc sửa bài có 0 sao uy tín (BD-07) |
 | `ITEM_MODERATION_BLOCKED` | 422 | Nội dung tạo hoặc sửa bị kiểm duyệt tầng 1 chặn |
 | `VALIDATION_FAILED` | 400 | Sai định dạng hoặc thiếu trường bắt buộc |
