@@ -7,28 +7,49 @@ import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.ConfigKey.ValueType;
 import com.shareloop.setting.SettingErrorCode;
 import com.shareloop.setting.dto.ChecklistItem;
+import com.shareloop.setting.dto.ConfigPreviewResponse;
 import com.shareloop.setting.dto.ConfigResponse;
 import com.shareloop.setting.dto.LexiconEntry;
+import com.shareloop.setting.entity.WebsiteAttribute;
+import com.shareloop.setting.mapper.ConfigPreviewMapper;
 import com.shareloop.setting.repository.WebsiteAttributeRepository;
+import com.shareloop.setting.rules.ConfigChange;
+import com.shareloop.setting.rules.ConfigRuleEngine;
+import com.shareloop.setting.rules.ConfigSnapshot;
+import com.shareloop.setting.rules.RuleMessage;
+import com.shareloop.setting.rules.RuleResult;
 import java.math.BigDecimal;
 import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional(readOnly = true)
 public class ConfigService {
 
+    private static final String CONFIG_GROUP = "CONFIG";
+
     private final WebsiteAttributeRepository repository;
     private final ActivityLogService activityLogService;
+    private final ConfigRuleEngine ruleEngine;
+    private final ConfigPreviewMapper previewMapper;
 
-    public ConfigService(WebsiteAttributeRepository repository, ActivityLogService activityLogService) {
+    public ConfigService(
+            WebsiteAttributeRepository repository,
+            ActivityLogService activityLogService,
+            ConfigRuleEngine ruleEngine,
+            ConfigPreviewMapper previewMapper) {
         this.repository = repository;
         this.activityLogService = activityLogService;
+        this.ruleEngine = ruleEngine;
+        this.previewMapper = previewMapper;
     }
 
     public List<ConfigResponse> listConfigs() {
@@ -46,7 +67,7 @@ public class ConfigService {
     }
 
     // Tên, mô tả và nhóm lấy từ chính ConfigKey nên không cần thêm cột trong DB.
-    private ConfigResponse toResponse(ConfigKey key, String value) {
+    public ConfigResponse toResponse(ConfigKey key, String value) {
         return new ConfigResponse(
                 key.key(),
                 value,
@@ -178,57 +199,162 @@ public class ConfigService {
                 .toList();
     }
 
+    /**
+     * Cập nhật một khoá qua bộ luật liên khoá. Không kéo theo khoá nào và không có cảnh báo thì lưu luôn và ghi log
+     * (luật thứ tự điểm hạng UT-06 và các luật khác chạy trong engine). Nếu kéo theo khoá khác hoặc có cảnh báo thì không
+     * lưu gì mà trả 409 kèm bản xem trước để giao diện chuyển sang cập nhật theo lô.
+     *
+     * @throws BusinessException lỗi kiểu, khoảng giá trị, khoá cố định, lỗi luật (400) hoặc SETTING_CONFIG_SYNC_REQUIRED
+     *     (409)
+     */
+    // @Transactional: khoá dòng, kiểm tra và lưu nằm chung một transaction, lỗi giữa chừng thì không lưu gì.
     @Transactional
     public ConfigResponse update(ConfigKey key, String value, String reason, Long adminId) {
-        if (key != null && !key.adminEditable()) {
-            throw new BusinessException(SettingErrorCode.SETTING_CONFIG_NOT_EDITABLE);
+        Objects.requireNonNull(key, "key must not be null");
+        String requestedValue = value == null ? "" : value;
+        Map<ConfigKey, String> requested = Map.of(key, requestedValue);
+        validateRequested(requested);
+        lockConfigRows();
+        RuleResult result = evaluate(requested);
+        requireNoErrors(result);
+        if (hasSideEffects(result)) {
+            throw new BusinessException(
+                    SettingErrorCode.SETTING_CONFIG_SYNC_REQUIRED,
+                    null,
+                    null,
+                    Map.of("preview", previewMapper.toResponse(result)));
         }
-        validateValue(key, value);
-        value = value.trim();
-        validateRankThresholds(key, value);
-        var attribute = repository
-                .findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", key.key())
-                .orElseThrow(() -> new BusinessException(
-                        SettingErrorCode.SETTING_CONFIG_NOT_FOUND, "Missing config: " + key.key()));
-        String previousValue = attribute.getAttrValue();
-        attribute.updateValue(value);
-        repository.save(attribute);
-        activityLogService.log(
-                ActivityType.CONFIG_UPDATE.name(),
-                adminId,
-                "CONFIG",
-                null,
-                Map.of("key", key.key(), "oldValue", previousValue, "newValue", value),
-                reason);
-        return toResponse(key, value);
+        saveChanges(result.changes(), reason, adminId);
+        return toResponse(key, requestedValue.trim());
+    }
+
+    // Có khoá đồng bộ kèm theo (causedByKey khác null) hoặc có cảnh báo thì Admin cần xem trước chứ không lưu thẳng.
+    private boolean hasSideEffects(RuleResult result) {
+        boolean hasSyncedChange = result.changes().stream().anyMatch(change -> change.causedByKey() != null);
+        return hasSyncedChange || result.hasWarnings();
     }
 
     /**
-     * Điểm tối thiểu của ba hạng phải tăng dần: Bạc nhỏ hơn Vàng, Vàng nhỏ hơn Kim cương (UT-06). Nếu không, một người
-     * có thể được xếp hạng cao hơn trong khi điểm lại thấp hơn. Khoá khác thì bỏ qua.
-     *
-     * @throws BusinessException SETTING_RANK_THRESHOLD_ORDER khi giá trị mới làm thứ tự bị đảo hoặc bằng nhau
+     * Khoá toàn bộ dòng cấu hình (SELECT ... FOR UPDATE) cho tới hết transaction, để hai lần cập nhật không chạy song
+     * song trên cùng một ảnh chụp giá trị cũ. Chỉ gọi được khi đã có transaction ghi.
      */
-    private void validateRankThresholds(ConfigKey changedKey, String newValue) {
-        boolean isRankThreshold = changedKey == ConfigKey.REPUTATION_SILVER_MIN
-                || changedKey == ConfigKey.REPUTATION_GOLD_MIN
-                || changedKey == ConfigKey.REPUTATION_DIAMOND_MIN;
-        if (!isRankThreshold) {
-            return;
-        }
+    // Propagation.MANDATORY: gọi ngoài transaction thì báo lỗi ngay, tránh khoá xong lại nhả liền mà không ai hay.
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockConfigRows() {
+        repository.findByAttrGroupAndIsActiveTrueOrderByAttrKeyAsc(CONFIG_GROUP);
+    }
 
-        int silverMin = thresholdAfterChange(ConfigKey.REPUTATION_SILVER_MIN, changedKey, newValue);
-        int goldMin = thresholdAfterChange(ConfigKey.REPUTATION_GOLD_MIN, changedKey, newValue);
-        int diamondMin = thresholdAfterChange(ConfigKey.REPUTATION_DIAMOND_MIN, changedKey, newValue);
-        if (silverMin >= goldMin || goldMin >= diamondMin) {
-            throw new BusinessException(SettingErrorCode.SETTING_RANK_THRESHOLD_ORDER);
+    /** Ảnh chụp giá trị hiện hành của mọi khoá. Khoá chưa có dòng trong DB thì lấy giá trị mặc định. */
+    public ConfigSnapshot loadSnapshot() {
+        Map<ConfigKey, String> values = new EnumMap<>(ConfigKey.class);
+        for (WebsiteAttribute attribute :
+                repository.findByAttrGroupAndIsActiveTrueOrderBySortOrderAscIdAsc(CONFIG_GROUP)) {
+            ConfigKey key = findKey(attribute.getAttrKey());
+            if (key != null) {
+                values.putIfAbsent(key, attribute.getAttrValue());
+            }
+        }
+        return ConfigSnapshot.of(values);
+    }
+
+    /**
+     * Kiểm kiểu và khoảng giá trị cho từng khoá Admin gửi, rồi chạy bộ luật trên ảnh chụp hiện tại. Không ghi gì.
+     *
+     * @throws BusinessException khoá cố định (SETTING_CONFIG_NOT_EDITABLE) hoặc giá trị sai kiểu hay ngoài khoảng
+     */
+    public RuleResult evaluate(Map<ConfigKey, String> requested) {
+        validateRequested(requested);
+        return ruleEngine.run(loadSnapshot(), requested);
+    }
+
+    /**
+     * Kiểm đầu vào của từng khoá Admin gửi (khoá cố định, kiểu, khoảng giá trị). Gọi trước khi khoá dòng để đầu vào sai
+     * bị từ chối ngay mà không giữ khoá làm người khác phải chờ.
+     */
+    public void validateRequested(Map<ConfigKey, String> requested) {
+        for (Map.Entry<ConfigKey, String> entry : requested.entrySet()) {
+            if (!entry.getKey().adminEditable()) {
+                throw new BusinessException(SettingErrorCode.SETTING_CONFIG_NOT_EDITABLE);
+            }
+            validateValue(entry.getKey(), entry.getValue());
         }
     }
 
-    // Khoá đang được sửa lấy giá trị mới, hai khoá còn lại lấy giá trị đang lưu.
-    private int thresholdAfterChange(ConfigKey thresholdKey, ConfigKey changedKey, String newValue) {
-        String value = thresholdKey == changedKey ? newValue : get(thresholdKey);
-        return Integer.parseInt(value.trim());
+    /** Xem trước kết quả của một thay đổi, không ghi DB. */
+    public ConfigPreviewResponse preview(Map<ConfigKey, String> requested) {
+        return previewMapper.toResponse(evaluate(requested));
+    }
+
+    /**
+     * Nếu có lỗi thì ném lỗi đầu tiên (mã và câu chữ của lỗi đó), kèm danh sách mọi lỗi trong details để giao diện
+     * hiện đủ.
+     */
+    public void requireNoErrors(RuleResult result) {
+        if (!result.hasErrors()) {
+            return;
+        }
+        RuleMessage first = result.errors().get(0);
+        throw new BusinessException(
+                first.errorCode(), first.message(), null, Map.of("errors", previewMapper.toMessages(result.errors())));
+    }
+
+    /**
+     * Lưu từng khoá đã đổi và ghi một dòng nhật ký cho mỗi khoá, dùng chung một lý do. Khoá đồng bộ ghi thêm
+     * syncedFrom và note. Một khoá lỗi thì ném ngay và transaction rollback toàn bộ.
+     *
+     * @throws BusinessException SETTING_CONFIG_NOT_FOUND khi một khoá chưa có dòng trong DB
+     */
+    @Transactional
+    public void saveChanges(List<ConfigChange> changes, String reason, Long adminId) {
+        for (ConfigChange change : changes) {
+            saveChange(change, reason, adminId);
+        }
+    }
+
+    private void saveChange(ConfigChange change, String reason, Long adminId) {
+        var attribute = repository
+                .findFirstByAttrGroupAndAttrKeyAndIsActiveTrue(
+                        CONFIG_GROUP, change.key().key())
+                .orElseThrow(() -> new BusinessException(
+                        SettingErrorCode.SETTING_CONFIG_NOT_FOUND,
+                        "Missing config: " + change.key().key()));
+        attribute.updateValue(change.newValue());
+        repository.save(attribute);
+        activityLogService.log(ActivityType.CONFIG_UPDATE.name(), adminId, CONFIG_GROUP, null, logData(change), reason);
+    }
+
+    private Map<String, Object> logData(ConfigChange change) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("key", change.key().key());
+        data.put("oldValue", change.oldValue());
+        data.put("newValue", change.newValue());
+        if (change.causedByKey() != null) {
+            data.put("syncedFrom", change.causedByKey().key());
+            data.put("note", change.note());
+        }
+        return data;
+    }
+
+    /**
+     * Tìm khoá theo tên khoá kỹ thuật.
+     *
+     * @throws BusinessException SETTING_CONFIG_NOT_FOUND khi không có khoá nào tên như vậy
+     */
+    public ConfigKey resolveKey(String key) {
+        ConfigKey configKey = findKey(key);
+        if (configKey == null) {
+            throw new BusinessException(SettingErrorCode.SETTING_CONFIG_NOT_FOUND, "Unknown config: " + key);
+        }
+        return configKey;
+    }
+
+    private static ConfigKey findKey(String key) {
+        for (ConfigKey configKey : ConfigKey.values()) {
+            if (configKey.key().equals(key)) {
+                return configKey;
+            }
+        }
+        return null;
     }
 
     public void validateValue(ConfigKey key, String value) {
