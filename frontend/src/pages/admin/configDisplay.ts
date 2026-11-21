@@ -11,6 +11,13 @@ const reportReasonLabels: Record<string, string> = {
   OTHER: 'Khác',
 };
 
+/** Câu báo sau khi lưu: nêu số cấu hình đã cập nhật khi có cấu hình đồng bộ đi kèm. */
+export function configUpdateNotice(label: string, updatedCount: number) {
+  return updatedCount > 1
+    ? `Đã cập nhật ${updatedCount} cấu hình, gồm "${label}" và các cấu hình liên quan.`
+    : `Đã cập nhật "${label}".`;
+}
+
 /**
  * Giá trị -1 của hạn mức bài đăng nghĩa là không giới hạn, nên hiện chữ thay vì số âm. Danh sách lý do vi phạm nghiêm
  * trọng (L13) hiện bằng nhãn tiếng Việt thay cho mã kỹ thuật.

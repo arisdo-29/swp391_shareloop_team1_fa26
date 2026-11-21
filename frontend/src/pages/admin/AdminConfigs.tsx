@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Button, EmptyState, PageHeader, SkeletonRows } from '../../components/ui';
-import type { AdminConfigResponse } from '../../services/adminConfigApi';
+import type { AdminConfigResponse, BatchUpdateAdminConfigRequest } from '../../services/adminConfigApi';
 import { ConfigEditDialog } from './ConfigEditDialog';
-import { formatConfigValue } from './configDisplay';
+import { configUpdateNotice, formatConfigValue } from './configDisplay';
 import { useAdminConfigs } from './useAdminConfigs';
 
 interface ConfigSection {
@@ -29,19 +29,19 @@ function groupConfigs(configs: AdminConfigResponse[]): ConfigSection[] {
 
 /** Cấu hình hệ thống: bảng theo nhóm, mỗi dòng có tên và mô tả tiếng Việt, sửa kèm lý do. */
 export function AdminConfigs() {
-  const { configs, loading, error, reload, saving, saveError, clearSaveError, update, updateByBody } = useAdminConfigs();
+  const { configs, loading, error, reload, saving, saveError, clearSaveError, preview, cancelPreview, updateBatch } =
+    useAdminConfigs();
   const [editing, setEditing] = useState<AdminConfigResponse | null>(null);
   const [notice, setNotice] = useState('');
   const sections = groupConfigs(configs);
 
-  const save = async (value: string, reason: string) => {
-    if (!editing) return;
-    const updated = editing.key === 'chat_ai_threshold'
-      ? await updateByBody(editing.key, value, reason)
-      : await update(editing.key, value, reason);
-    if (!updated) return;
-    setEditing(null);
-    setNotice(`Đã cập nhật "${updated.label}".`);
+  const save = async (request: BatchUpdateAdminConfigRequest) => {
+    const result = await updateBatch(request);
+    if (result.ok && editing) {
+      setNotice(configUpdateNotice(editing.label, result.configs.length));
+      setEditing(null);
+    }
+    return result;
   };
 
   return (
@@ -129,7 +129,9 @@ export function AdminConfigs() {
           saving={saving}
           error={saveError}
           onClose={() => setEditing(null)}
-          onSave={(value, reason) => void save(value, reason)}
+          onPreview={preview}
+          onCancelPreview={cancelPreview}
+          onSave={save}
         />
       ) : null}
     </>

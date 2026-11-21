@@ -7,7 +7,7 @@ import { adminConfigApi, type AdminConfigResponse } from '../../services/adminCo
 import { AdminReputation } from './AdminReputation';
 
 vi.mock('../../services/adminConfigApi', () => ({
-  adminConfigApi: { list: vi.fn(), update: vi.fn() },
+  adminConfigApi: { list: vi.fn(), preview: vi.fn(), updateBatch: vi.fn() },
 }));
 
 function config(
@@ -130,21 +130,130 @@ describe('AdminReputation cấu hình hạng', () => {
       within(dialog).getByRole('textbox', { name: 'Lý do thay đổi' }),
       'Điều chỉnh thử',
     );
-    expect(within(dialog).getByText(/phải tăng dần/)).toBeTruthy();
+    // Thứ tự điểm các hạng không còn kiểm ở trình duyệt, Backend kiểm khi lưu.
+    expect(within(dialog).queryByText(/phải tăng dần/)).toBeNull();
     expect(within(dialog).getByText(/Số bài Trao đổi phí thường phải/)).toBeTruthy();
     expect(within(dialog).getByText(/Số ngày hiển thị bài phải/)).toBeTruthy();
     expect(
       within(dialog).getByRole('button', { name: 'Lưu thay đổi' }).hasAttribute('disabled'),
     ).toBe(true);
-    expect(adminConfigApi.update).not.toHaveBeenCalled();
+    expect(adminConfigApi.updateBatch).not.toHaveBeenCalled();
   });
 
-  it('lưu các giá trị đã đổi qua API hiện có và cập nhật bảng', async () => {
+  it('hiện lỗi thứ tự điểm các hạng do Backend trả về và giữ hộp thoại', async () => {
     const user = userEvent.setup();
-    vi.mocked(adminConfigApi.update).mockImplementation(async (key, input) => {
-      const current = configs.find((entry) => entry.key === key)!;
-      return { ...current, value: input.value };
+    const orderMessage =
+      'Điểm tối thiểu các hạng phải tăng dần: Bạc nhỏ hơn Vàng, Vàng nhỏ hơn Kim cương.';
+    vi.mocked(adminConfigApi.updateBatch).mockRejectedValue({
+      status: 400,
+      message: orderMessage,
+      details: {
+        errors: [
+          {
+            message: orderMessage,
+            keys: ['reputation_silver_min', 'reputation_gold_min', 'reputation_diamond_min'],
+            errorCode: 'SETTING_RANK_THRESHOLD_ORDER',
+          },
+        ],
+      },
     });
+    render(<AdminReputation />);
+
+    await user.click(await screen.findByRole('button', { name: 'Sửa nội dung hạng Bạc' }));
+    const dialog = screen.getByRole('dialog', { name: 'Sửa nội dung hạng Bạc' });
+    const minPoints = within(dialog).getByRole('spinbutton', { name: 'Điểm tối thiểu' });
+    await user.clear(minPoints);
+    await user.type(minPoints, '250');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Lý do thay đổi' }), 'Thử');
+    await user.click(within(dialog).getByRole('button', { name: 'Lưu thay đổi' }));
+
+    expect((await within(dialog).findByRole('alert')).textContent).toContain('phải tăng dần');
+    expect(
+      within(dialog).getByRole('button', { name: 'Lưu thay đổi' }).hasAttribute('disabled'),
+    ).toBe(true);
+    expect(screen.getByRole('dialog', { name: 'Sửa nội dung hạng Bạc' })).toBeTruthy();
+  });
+
+  it('báo cấu hình Backend đồng bộ kèm khi đổi số ngày hiển thị bài mặc định', async () => {
+    const user = userEvent.setup();
+    vi.mocked(adminConfigApi.updateBatch).mockResolvedValue({
+      configs: [
+        { ...configs.find((entry) => entry.key === 'post_display_days')!, value: '40' },
+        { ...configs.find((entry) => entry.key === 'post_display_days_gold')!, value: '55' },
+      ],
+    });
+    render(<AdminReputation />);
+
+    await user.click(await screen.findByRole('button', { name: 'Sửa nội dung hạng Bạc' }));
+    const dialog = screen.getByRole('dialog', { name: 'Sửa nội dung hạng Bạc' });
+    const displayDays = within(dialog).getByRole('spinbutton', { name: /^Số ngày hiển thị bài/ });
+    await user.clear(displayDays);
+    await user.type(displayDays, '40');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Lý do thay đổi' }), 'Tăng ngày');
+    await user.click(within(dialog).getByRole('button', { name: 'Lưu thay đổi' }));
+
+    expect(
+      await screen.findByText('Đã cập nhật hạng "Bạc", đồng bộ kèm: Số ngày hiển thị bài hạng Vàng.'),
+    ).toBeTruthy();
+  });
+
+  it('bắt tích xác nhận khi Backend trả cảnh báo chưa xác nhận rồi gửi lại với acknowledgedWarnings = true', async () => {
+    const user = userEvent.setup();
+    vi.mocked(adminConfigApi.updateBatch)
+      .mockRejectedValueOnce({
+        status: 409,
+        code: 'SETTING_CONFIG_WARNING_NOT_ACKNOWLEDGED',
+        message: 'Thay đổi có cảnh báo.',
+        details: {
+          preview: {
+            changes: [],
+            errors: [],
+            warnings: [
+              {
+                message: 'Số ngày hiển thị bài hạng Vàng (20) ngắn hơn Số ngày hiển thị bài (30).',
+                keys: ['post_display_days_gold', 'post_display_days'],
+                errorCode: null,
+              },
+            ],
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        configs: [{ ...configs.find((entry) => entry.key === 'post_display_days_gold')!, value: '20' }],
+      });
+    render(<AdminReputation />);
+
+    await user.click(await screen.findByRole('button', { name: 'Sửa nội dung hạng Vàng' }));
+    const dialog = screen.getByRole('dialog', { name: 'Sửa nội dung hạng Vàng' });
+    const displayDays = within(dialog).getByRole('spinbutton', { name: /^Số ngày hiển thị bài/ });
+    await user.clear(displayDays);
+    await user.type(displayDays, '20');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Lý do thay đổi' }), 'Thử');
+    await user.click(within(dialog).getByRole('button', { name: 'Lưu thay đổi' }));
+
+    expect(await within(dialog).findByText(/ngắn hơn Số ngày hiển thị bài/)).toBeTruthy();
+    expect(
+      within(dialog).getByRole('button', { name: 'Lưu thay đổi' }).hasAttribute('disabled'),
+    ).toBe(true);
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Tôi đã hiểu cảnh báo' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Lưu thay đổi' }));
+
+    await waitFor(() => expect(adminConfigApi.updateBatch).toHaveBeenCalledTimes(2));
+    expect(adminConfigApi.updateBatch).toHaveBeenLastCalledWith({
+      changes: [{ key: 'post_display_days_gold', value: '20' }],
+      reason: 'Thử',
+      acknowledgedWarnings: true,
+    });
+  });
+
+  it('lưu cả ba giá trị đã đổi trong một lô và cập nhật bảng', async () => {
+    const user = userEvent.setup();
+    vi.mocked(adminConfigApi.updateBatch).mockImplementation(async (input) => ({
+      configs: input.changes.map((change) => ({
+        ...configs.find((entry) => entry.key === change.key)!,
+        value: change.value,
+      })),
+    }));
     render(<AdminReputation />);
 
     await user.click(await screen.findByRole('button', { name: 'Sửa nội dung hạng Vàng' }));
@@ -165,18 +274,15 @@ describe('AdminReputation cấu hình hạng', () => {
     );
     await user.click(within(dialog).getByRole('button', { name: 'Lưu thay đổi' }));
 
-    await waitFor(() => expect(adminConfigApi.update).toHaveBeenCalledTimes(3));
-    expect(adminConfigApi.update).toHaveBeenNthCalledWith(1, 'reputation_gold_min', {
-      value: '300',
+    await waitFor(() => expect(adminConfigApi.updateBatch).toHaveBeenCalledTimes(1));
+    expect(adminConfigApi.updateBatch).toHaveBeenCalledWith({
+      changes: [
+        { key: 'reputation_gold_min', value: '300' },
+        { key: 'max_active_items_gold', value: '20' },
+        { key: 'post_display_days_gold', value: '60' },
+      ],
       reason: 'Cập nhật quyền lợi hạng Vàng',
-    });
-    expect(adminConfigApi.update).toHaveBeenNthCalledWith(2, 'max_active_items_gold', {
-      value: '20',
-      reason: 'Cập nhật quyền lợi hạng Vàng',
-    });
-    expect(adminConfigApi.update).toHaveBeenNthCalledWith(3, 'post_display_days_gold', {
-      value: '60',
-      reason: 'Cập nhật quyền lợi hạng Vàng',
+      acknowledgedWarnings: false,
     });
     expect(await screen.findByText('Đã cập nhật hạng "Vàng".')).toBeTruthy();
     const goldRow = screen.getByText('Vàng').closest('tr')!;
