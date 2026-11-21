@@ -53,6 +53,11 @@ Trả lời và giải thích bằng tiếng Việt. Tên class, biến, commit 
   không sửa migration cũ.
 - Service có business rule phải có test; test DB dùng Testcontainers, không dùng H2.
 
+## Chữ hiển thị (người dùng và Admin)
+- Viết tiếng Việt, không chen tiếng Anh.
+- Không dùng dấu ;, không hiện enum thô, không hiện ID kỹ thuật.
+- Không dùng ký tự & trong chữ hiển thị, viết "và".
+
 ## Không được làm
 - Không đổi pom.xml, SecurityConfig, common/, config/ trừ khi task yêu cầu rõ.
 - Không đọc, tạo hay commit .env, API key, mật khẩu.

@@ -14,7 +14,8 @@ import java.time.Instant;
  * @param provider cổng thanh toán
  * @param redirectUrl địa chỉ FE chuyển người dùng tới để thanh toán
  * @param expiresAt hạn thanh toán = created_at + payment_order_expire_minutes (B29: FE đếm ngược theo mốc này, không tự
- *     tính); quá mốc này job chuyển đơn sang EXPIRED
+ *     tính); quá mốc này job chuyển đơn sang EXPIRED. Cùng mốc với vnp_ExpireDate gửi VNPay
+ * @param serverTime giờ server lúc trả response; FE dùng để bù lệch đồng hồ máy người dùng khi đếm ngược
  */
 public record TopUpOrderResponse(
         String orderCode,
@@ -23,4 +24,5 @@ public record TopUpOrderResponse(
         PaymentOrderStatus status,
         PaymentProvider provider,
         String redirectUrl,
-        Instant expiresAt) {}
+        Instant expiresAt,
+        Instant serverTime) {}

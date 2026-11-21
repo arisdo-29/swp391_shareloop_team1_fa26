@@ -73,6 +73,9 @@ class AdminTopUpControllerTest {
                 null,
                 "Nguyen Van A",
                 "a@fpt.edu.vn",
+                null,
+                null,
+                Instant.now(),
                 null);
         when(paymentService.listOrders(any(), any(), anyBoolean(), anyInt(), anyInt()))
                 .thenReturn(new PageResponse<>(List.of(order), 0, 20, 1L));

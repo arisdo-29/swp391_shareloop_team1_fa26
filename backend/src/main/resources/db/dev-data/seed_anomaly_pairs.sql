@@ -26,7 +26,7 @@ VALUES
   ((SELECT id FROM users WHERE email = 'an@shareloop.local'),
    (SELECT id FROM item_categories ORDER BY id LIMIT 1),
    (SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1),
-   'GIVE', 'Giáo trình Cấu trúc dữ liệu & Giải thuật (Demo lặp 3)', 'Giáo trình đại học còn đầy đủ trang.', 'GOOD', 'TRADED', now() - INTERVAL '11 days', now() + INTERVAL '19 days'),
+   'GIVE', 'Giáo trình Cấu trúc dữ liệu và Giải thuật (Demo lặp 3)', 'Giáo trình đại học còn đầy đủ trang.', 'GOOD', 'TRADED', now() - INTERVAL '11 days', now() + INTERVAL '19 days'),
 
   ((SELECT id FROM users WHERE email = 'an@shareloop.local'),
    (SELECT id FROM item_categories ORDER BY id LIMIT 1),
@@ -62,7 +62,7 @@ VALUES
    (SELECT id FROM users WHERE email = 'an@shareloop.local'),
    'GIVE', 'COMPLETED', now() - INTERVAL '12 days'),
 
-  ((SELECT id FROM items WHERE title = 'Giáo trình Cấu trúc dữ liệu & Giải thuật (Demo lặp 3)'),
+  ((SELECT id FROM items WHERE title = 'Giáo trình Cấu trúc dữ liệu và Giải thuật (Demo lặp 3)'),
    (SELECT id FROM users WHERE email = 'binh@shareloop.local'),
    'GIVE', 'COMPLETED', now() - INTERVAL '10 days'),
 

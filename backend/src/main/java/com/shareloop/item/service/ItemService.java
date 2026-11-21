@@ -21,6 +21,7 @@ import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.entity.OperatingStatus;
+import com.shareloop.item.event.ItemApprovedEvent;
 import com.shareloop.item.event.ItemRemovedEvent;
 import com.shareloop.item.mapper.ItemMapper;
 import com.shareloop.item.repository.ItemRepository;
@@ -340,7 +341,6 @@ public class ItemService {
                         donor == null ? null : donor.fullName(),
                         reputation.trustStars(),
                         reputation.rank().name(),
-                        reputation.asDescribedRate(),
                         donorLocked)
                 .withTradeInfo(findCompletedAt(item), requestable);
         // U04: chỉ chủ bài biết bài đang tạm ẩn; người khác nhận hidden = null và không thấy các mốc đợt đẩy.
@@ -819,6 +819,10 @@ public class ItemService {
     @Transactional
     public void markApproved(long itemId) {
         transition(itemId, ItemStatus.PENDING_REVIEW, ItemStatus.APPROVED);
+        // Module report nghe để hiện lại bài từng bị ẩn vì báo cáo vi phạm (chủ bài đã sửa và được duyệt lại)
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new ItemApprovedEvent(itemId));
+        }
     }
 
     @Transactional

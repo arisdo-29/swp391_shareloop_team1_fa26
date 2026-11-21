@@ -1,29 +1,14 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ReportEvidenceField } from '../../components/ReportEvidenceField';
-import { Alert, Button, Icon, SkeletonRows, TextArea } from '../../components/ui';
-import { mediaApi } from '../../services/mediaApi';
-import {
-  reportApi,
-  respondDispute,
-  type ReportEvidence,
-  type RespondentReportDetail,
-} from '../../services/reportApi';
-import { disputeErrorMessage, disputeReasonLabels } from '../../utils/disputeErrors';
+import { DisputeResponseForm } from '../../components/DisputeResponseDialog';
+import { Alert, Button, Icon, SkeletonRows } from '../../components/ui';
+import { reportApi, type ReportEvidence, type RespondentReportDetail } from '../../services/reportApi';
+import { disputeReasonLabels } from '../../utils/disputeErrors';
+import { formatRemaining } from '../../utils/disputeView';
 
 type Kind = 'report' | 'dispute';
 
 const formatDateTime = (value: string) => new Date(value).toLocaleString('vi-VN');
-
-/** Thời gian còn lại tới hạn, dạng "còn 1 ngày 3 giờ" hoặc "còn 45 phút". Chỉ để hiển thị, server mới quyết định hạn. */
-function remainingText(dueAt: string) {
-  const minutes = Math.max(0, Math.floor((new Date(dueAt).getTime() - Date.now()) / 60_000));
-  const days = Math.floor(minutes / 1440);
-  const hours = Math.floor((minutes % 1440) / 60);
-  if (days) return `còn ${days} ngày ${hours} giờ`;
-  if (hours) return `còn ${hours} giờ ${minutes % 60} phút`;
-  return `còn ${minutes} phút`;
-}
 
 function reasonLabel(detail: RespondentReportDetail) {
   // Khiếu nại giao dịch dùng mã NO_SHOW cho mọi sự cố giao nhận, giống trang Khiếu nại của Admin.
@@ -66,7 +51,7 @@ function ResponsePage({ reportId, kind }: { reportId: number; kind: Kind }) {
           className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary hover:underline"
         >
           <Icon name="caretLeft" className="size-4" />
-          Về Khiếu nại & Báo cáo
+          Về Khiếu nại và Báo cáo
         </Link>
         <section className="card mt-3 overflow-hidden" aria-labelledby="response-title">
           <header className="border-b border-border bg-surface-container/50 p-5 sm:p-7">
@@ -100,7 +85,7 @@ function ResponsePage({ reportId, kind }: { reportId: number; kind: Kind }) {
                 <DeadlineNotice detail={detail} submitted={submitted} />
                 <ComplaintDetails detail={detail} />
                 {detail.responseWindowOpen && !submitted ? (
-                  <ResponseForm
+                  <DisputeResponseForm
                     reportId={reportId}
                     kind={kind}
                     onSubmitted={() => setSubmitted(true)}
@@ -150,6 +135,14 @@ function DeadlineNotice({
       </Alert>
     );
   }
+  if (!detail.responseDueAt) {
+    // Báo cáo từ chối nhận: không có hạn, giải trình không bắt buộc (GN-07)
+    return (
+      <Alert tone="info">
+        Giải trình không bắt buộc. Bạn có thể gửi giải trình cho đến khi quản trị viên kết luận.
+      </Alert>
+    );
+  }
   if (!detail.responseWindowOpen) {
     return (
       <Alert tone="warning">
@@ -161,7 +154,7 @@ function DeadlineNotice({
   return (
     <Alert tone="warning">
       <span className="font-semibold">Hạn giải trình: {formatDateTime(detail.responseDueAt)}</span>{' '}
-      ({remainingText(detail.responseDueAt)}). Quá hạn thì hồ sơ không nhận giải trình nữa.
+      ({formatRemaining(detail.responseDueAt)}). Quá hạn thì hồ sơ không nhận giải trình nữa.
     </Alert>
   );
 }
@@ -300,83 +293,3 @@ function EvidenceImage({ reportId, evidence }: { reportId: number; evidence: Rep
   );
 }
 
-function ResponseForm({
-  reportId,
-  kind,
-  onSubmitted,
-}: {
-  reportId: number;
-  kind: Kind;
-  onSubmitted: () => void;
-}) {
-  const isDispute = kind === 'dispute';
-  const maxLength = 2000;
-  const [response, setResponse] = useState('');
-  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const inFlight = useRef(false);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const content = response.trim();
-    if (!content || content.length > maxLength || inFlight.current) return;
-    inFlight.current = true;
-    setSubmitting(true);
-    setError('');
-    try {
-      const uploads = await Promise.all(evidenceFiles.map((file) => mediaApi.upload(file)));
-      const evidenceMediaIds = uploads.length ? uploads.map((entry) => entry.mediaId) : undefined;
-      if (isDispute) {
-        await respondDispute(reportId, { note: content, evidenceMediaIds });
-      } else {
-        await reportApi.respond(reportId, { response: content, evidenceMediaIds });
-      }
-      onSubmitted();
-    } catch (caught) {
-      setError(disputeErrorMessage(caught));
-    } finally {
-      inFlight.current = false;
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="space-y-5 border-t border-border pt-5">
-      <div>
-        <TextArea
-          label="Nội dung giải trình (bắt buộc)"
-          hint="Nêu thời điểm, việc đã xảy ra và ảnh nào giúp làm rõ."
-          placeholder="Ví dụ: Tôi đã giao món đồ vào..."
-          value={response}
-          maxLength={maxLength}
-          disabled={submitting}
-          required
-          onChange={(event) => setResponse(event.target.value)}
-        />
-        <p className="mt-1 text-right text-xs text-text-secondary">
-          {response.length}/{maxLength}
-        </p>
-      </div>
-      <ReportEvidenceField
-        files={evidenceFiles}
-        onChange={setEvidenceFiles}
-        disabled={submitting}
-      />
-      {error && (
-        <div role="alert">
-          <Alert tone="error">{error}</Alert>
-        </div>
-      )}
-      <div className="flex justify-end border-t border-border pt-4">
-        <Button
-          type="submit"
-          className="w-full sm:w-auto"
-          disabled={submitting || !response.trim()}
-        >
-          {submitting ? 'Đang gửi…' : 'Gửi giải trình'}
-        </Button>
-      </div>
-    </form>
-  );
-}

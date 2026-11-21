@@ -140,7 +140,7 @@ class RequestDisputeResolutionTest {
     }
 
     @Test
-    @DisplayName("Bác bỏ khiếu nại: Request COMPLETED, hai món TRADED, cộng điểm uy tín, thông báo cả hai bên")
+    @DisplayName("Bác bỏ khiếu nại: Request COMPLETED, hai món TRADED, cộng điểm tích luỹ, thông báo cả hai bên")
     void resolveDisputedRequest_whenDismissed_completesMarksTradedAndAwardsPoints() {
         // given
         Request request = disputedSwapRequest();

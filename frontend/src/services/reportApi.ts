@@ -109,7 +109,7 @@ export interface DisputeResponse {
   responseDueAt: string;
 }
 
-/** Hồ sơ trong tab Khiếu nại & Báo cáo của Member (docs/api/report.md mục 6, 7). Không có người gửi và mô tả. */
+/** Hồ sơ trong tab Khiếu nại và Báo cáo của Member (docs/api/report.md mục 6, 7). Không có người gửi và mô tả. */
 export interface MyReportSummary {
   id: number;
   targetType: ReportTargetType;

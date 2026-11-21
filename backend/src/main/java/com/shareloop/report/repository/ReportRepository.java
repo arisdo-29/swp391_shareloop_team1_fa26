@@ -1,6 +1,7 @@
 package com.shareloop.report.repository;
 
 import com.shareloop.report.entity.Report;
+import com.shareloop.report.entity.ReportReason;
 import com.shareloop.report.entity.ReportStatus;
 import com.shareloop.report.entity.TargetType;
 import jakarta.persistence.LockModeType;
@@ -55,6 +56,9 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     List<Report> findByTargetTypeAndRequestIdInAndStatusIn(
             TargetType targetType, Collection<Long> requestIds, Collection<ReportStatus> statuses);
 
+    /** Mọi khiếu nại của các giao dịch, cũ trước; dùng để hiện khiếu nại theo vai ở trang Tiến trình và khung chat. */
+    List<Report> findByTargetTypeAndRequestIdInOrderByCreatedAtAsc(TargetType targetType, Collection<Long> requestIds);
+
     /** Đếm report của một bài theo loại đối tượng và trạng thái; dùng cho ngưỡng tự ẩn bài (BC-02). */
     long countByTargetTypeAndItemIdAndStatusIn(TargetType targetType, Long itemId, Collection<ReportStatus> statuses);
 
@@ -68,7 +72,15 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     /** Bài đã có report được chấp thuận chưa; có thì bác bỏ report khác không mở lại bài (D-07). */
     boolean existsByTargetTypeAndItemIdAndStatus(TargetType targetType, Long itemId, ReportStatus status);
 
-    /** Các report một người đã gửi, mới nhất lên trước; dùng cho tab Khiếu nại & Báo cáo của Member. */
+    /** Bài có báo cáo được chấp thuận sau mốc cho trước không; dùng để bỏ qua báo cáo cũ hơn lần duyệt lại gần nhất. */
+    boolean existsByTargetTypeAndItemIdAndStatusAndResolvedAtAfter(
+            TargetType targetType, Long itemId, ReportStatus status, Instant resolvedAfter);
+
+    /** Bài còn báo cáo từ chối nhận (gắn giao dịch) đang chờ không; có thì giữ bài ẩn tới khi Admin kết luận (GN-07). */
+    boolean existsByTargetTypeAndItemIdAndReasonAndRequestIdIsNotNullAndStatusIn(
+            TargetType targetType, Long itemId, ReportReason reason, Collection<ReportStatus> statuses);
+
+    /** Các report một người đã gửi, mới nhất lên trước; dùng cho tab Khiếu nại và Báo cáo của Member. */
     List<Report> findByReporterIdOrderByCreatedAtDescIdDesc(Long reporterId);
 
     /**
@@ -76,5 +88,13 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
      * phản ánh (chủ bài với report bài đăng, đối tác với khiếu nại giao dịch). Report chưa có hạn là Admin chưa yêu
      * cầu giải trình nên chưa cho bên bị phản ánh thấy.
      */
-    List<Report> findByTargetUserIdAndResponseDueAtIsNotNullOrderByCreatedAtDescIdDesc(Long targetUserId);
+    /**
+     * Hồ sơ bên bị phản ánh được thấy: đã có hạn giải trình, hoặc là báo cáo từ chối nhận (báo cáo bài gắn giao dịch, lý
+     * do Không đúng mô tả, GN-07). Mới nhất lên trước.
+     */
+    @Query("select r from Report r where r.targetUserId = :userId and (r.responseDueAt is not null"
+            + " or (r.targetType = com.shareloop.report.entity.TargetType.ITEM and r.requestId is not null"
+            + " and r.reason = com.shareloop.report.entity.ReportReason.NOT_AS_DESCRIBED))"
+            + " order by r.createdAt desc, r.id desc")
+    List<Report> findVisibleToRespondent(@Param("userId") Long userId);
 }

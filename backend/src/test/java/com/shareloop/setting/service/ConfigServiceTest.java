@@ -25,7 +25,11 @@ class ConfigServiceTest {
 
     private final WebsiteAttributeRepository repository = mock(WebsiteAttributeRepository.class);
     private final ActivityLogService activityLogService = mock(ActivityLogService.class);
-    private final ConfigService service = new ConfigService(repository, activityLogService);
+    private final ConfigService service = new ConfigService(
+            repository,
+            activityLogService,
+            new com.shareloop.setting.rules.ConfigRuleEngine(),
+            new com.shareloop.setting.mapper.ConfigPreviewMapper());
 
     @Test
     void getIntReturnsStoredInteger() {
@@ -138,6 +142,7 @@ class ConfigServiceTest {
 
     @Test
     void updatedValueIsReturnedOnTheNextRead() {
+        // boost_fee thay vì post_fee: post_fee kéo theo edit_fee, renew_fee nên PUT đơn sẽ trả 409
         AtomicReference<String> storedValue = new AtomicReference<>("5");
         var attribute = mock(WebsiteAttribute.class);
         when(attribute.getAttrValue()).thenAnswer(invocation -> storedValue.get());
@@ -147,13 +152,13 @@ class ConfigServiceTest {
                 })
                 .when(attribute)
                 .updateValue(anyString());
-        when(repository.findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", "post_fee"))
+        when(repository.findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", "boost_fee"))
                 .thenReturn(Optional.of(attribute));
-        when(repository.findConfigValueByAttrKey("post_fee")).thenAnswer(invocation -> Optional.of(storedValue.get()));
+        when(repository.findConfigValueByAttrKey("boost_fee")).thenAnswer(invocation -> Optional.of(storedValue.get()));
 
-        service.update(ConfigKey.POST_FEE, "10", null, 1L);
+        service.update(ConfigKey.BOOST_FEE, "10", null, 1L);
 
-        assertThat(service.getInt(ConfigKey.POST_FEE)).isEqualTo(10);
+        assertThat(service.getInt(ConfigKey.BOOST_FEE)).isEqualTo(10);
     }
 
     @Test
@@ -346,10 +351,10 @@ class ConfigServiceTest {
     void updateConfigLogsActivityWithAdminIdAndReason() {
         var attribute = mock(WebsiteAttribute.class);
         when(attribute.getAttrValue()).thenReturn("5");
-        when(repository.findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", "post_fee"))
+        when(repository.findFirstByAttrGroupAndAttrKeyAndIsActiveTrue("CONFIG", "boost_fee"))
                 .thenReturn(Optional.of(attribute));
 
-        service.update(ConfigKey.POST_FEE, "10", "Tăng phí", 9L);
+        service.update(ConfigKey.BOOST_FEE, "10", "Tăng phí", 9L);
 
         org.mockito.Mockito.verify(activityLogService)
                 .log(
@@ -357,7 +362,7 @@ class ConfigServiceTest {
                         org.mockito.ArgumentMatchers.eq(9L),
                         org.mockito.ArgumentMatchers.eq("CONFIG"),
                         org.mockito.ArgumentMatchers.isNull(),
-                        org.mockito.ArgumentMatchers.eq(Map.of("key", "post_fee", "oldValue", "5", "newValue", "10")),
+                        org.mockito.ArgumentMatchers.eq(Map.of("key", "boost_fee", "oldValue", "5", "newValue", "10")),
                         org.mockito.ArgumentMatchers.eq("Tăng phí"));
     }
 }

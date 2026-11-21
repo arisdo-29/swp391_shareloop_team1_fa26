@@ -45,9 +45,6 @@ public class ReputationService {
 
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
-    /** SRS 6.12: tỉ lệ đúng mô tả chỉ hiện khi người đăng có từ 3 giao dịch đã được đánh giá trở lên. */
-    static final int MIN_RATED_FOR_AS_DESCRIBED_RATE = 3;
-
     private final ConfigService configService;
     private final UserReputationRepository userReputationRepository;
     private final ActivityLogService activityLogService;
@@ -222,25 +219,25 @@ public class ReputationService {
     @Transactional(readOnly = true)
     public ReputationSummary getReputationSummary(Long userId) {
         if (userId == null) {
-            return new ReputationSummary(null, 5, Rank.BRONZE, null);
+            return new ReputationSummary(null, 5, Rank.BRONZE);
         }
         if (userReputationRepository == null) {
-            return new ReputationSummary(userId, 5, Rank.BRONZE, null);
+            return new ReputationSummary(userId, 5, Rank.BRONZE);
         }
 
         UserReputation reputation = userReputationRepository.findById(userId).orElse(null);
         if (reputation == null) {
-            return new ReputationSummary(userId, 5, Rank.BRONZE, null);
+            return new ReputationSummary(userId, 5, Rank.BRONZE);
         }
 
         int trustStars = reputation.getTrustStars();
         Rank rank = getRank(reputation.getTotalPoints());
 
-        return new ReputationSummary(userId, trustStars, rank, asDescribedRate(userId));
+        return new ReputationSummary(userId, trustStars, rank);
     }
 
     /**
-     * Xem thông tin điểm, hạng, TrustStars, tỉ lệ đúng mô tả và lịch sử biến động điểm của chính người dùng (UC-05, Issue #128).
+     * Xem thông tin điểm, hạng, TrustStars và lịch sử biến động điểm của chính người dùng (UC-05, Issue #128).
      *
      * @param userId ID người dùng đang đăng nhập
      * @param page số trang (bắt đầu từ 0)
@@ -262,8 +259,6 @@ public class ReputationService {
         int totalPoints = reputation != null ? reputation.getTotalPoints() : 0;
         int trustStars = reputation != null ? reputation.getTrustStars() : 5;
         Rank rank = getRank(totalPoints);
-
-        Double accuracyRate = asDescribedRate(userId);
 
         int pageNumber = Math.max(page, 0);
         int pageSize = Math.min(Math.max(size, 1), 50);
@@ -290,7 +285,6 @@ public class ReputationService {
                 totalPoints,
                 rank,
                 trustStars,
-                accuracyRate,
                 history,
                 nextRank,
                 pointsToNextRank,
@@ -488,7 +482,7 @@ public class ReputationService {
             return;
         }
         String title =
-                granted > 0 ? "Bạn được cộng " + granted + " điểm uy tín" : "Giao dịch hoàn tất, chưa được cộng điểm";
+                granted > 0 ? "Bạn được cộng " + granted + " điểm tích luỹ" : "Giao dịch hoàn tất, chưa được cộng điểm";
         StringBuilder body = new StringBuilder(pointsReason(context, roleLabel, basePoints, granted));
         body.append(". Tổng điểm hiện tại: ").append(newTotal).append(".");
         if (rankBefore != null && newRank.ordinal() > rankBefore.ordinal()) {
@@ -723,20 +717,6 @@ public class ReputationService {
             return timestamp.toInstant();
         }
         return null;
-    }
-
-    /**
-     * Tỉ lệ đúng mô tả theo thang 0–1 (0.92 nghĩa là 92%), dùng chung cho hồ sơ, danh sách yêu cầu và /me/reputation để
-     * mọi nơi cùng một thang. Dưới {@value #MIN_RATED_FOR_AS_DESCRIBED_RATE} giao dịch đã được đánh giá thì trả null vì
-     * quá ít dữ liệu (SRS 6.12).
-     */
-    private Double asDescribedRate(Long userId) {
-        if (userReputationRepository == null
-                || userReputationRepository.countRatedCompletedAsDonor(userId) < MIN_RATED_FOR_AS_DESCRIBED_RATE) {
-            return null;
-        }
-        Double percent = userReputationRepository.calculateAsDescribedRate(userId);
-        return percent != null ? percent / 100.0 : null;
     }
 
     // configService null chỉ gặp ở unit test dựng service rút gọn; khi đó dùng giá trị mặc định của ConfigKey.

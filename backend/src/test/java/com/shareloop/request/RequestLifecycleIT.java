@@ -193,15 +193,14 @@ class RequestLifecycleIT extends IntegrationTest {
                 .andExpect(jsonPath("$.status").value("AWAITING_HANDOVER"))
                 .andExpect(jsonPath("$.donorHandoverAt").isNotEmpty());
 
-        // 11. Receiver 1 bấm xác nhận đã nhận đồ (asDescribed = true) -> chuyển COMPLETED
-        HandoverConfirmRequest receiverHandover = new HandoverConfirmRequest(true, null);
+        // 11. Receiver 1 bấm hoàn tất giao nhận -> chuyển COMPLETED
+        HandoverConfirmRequest receiverHandover = new HandoverConfirmRequest(null);
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", req1Id)
                         .header("Authorization", r1Token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(receiverHandover)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
-                .andExpect(jsonPath("$.asDescribed").value(true))
                 .andExpect(jsonPath("$.completedAt").isNotEmpty());
 
         // 12. Kiểm tra trạng thái cuối và Credit
@@ -270,7 +269,7 @@ class RequestLifecycleIT extends IntegrationTest {
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
                         .header("Authorization", receiverToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new HandoverConfirmRequest(true, null))))
+                        .content(objectMapper.writeValueAsString(new HandoverConfirmRequest(null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"));
 
@@ -440,7 +439,8 @@ class RequestLifecycleIT extends IntegrationTest {
     }
 
     @Test
-    @DisplayName("Các nhánh ràng buộc và lỗi: tự xin bài mình, gửi trùng, bài chưa duyệt, thiếu đánh giá mô tả")
+    @DisplayName(
+            "Các nhánh ràng buộc và lỗi: tự xin bài mình, gửi trùng, bài chưa duyệt, huỷ sau chốt lịch, từ chối sai vai")
     void validationAndConstraintBranches() throws Exception {
         long donorId = insertUser("Donor Valid", 20, 0);
         long receiverId = insertUser("Receiver Valid", 10, 0);
@@ -496,19 +496,21 @@ class RequestLifecycleIT extends IntegrationTest {
                         .content(objectMapper.writeValueAsString(new ConfirmLogisticsRequest(true))))
                 .andExpect(status().isOk());
 
-        // 8. Bên nhận xác nhận handover nhưng không trả lời asDescribed -> 400 REQUEST_AS_DESCRIBED_REQUIRED
-        mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", reqId).header("Authorization", receiverToken))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("REQUEST_AS_DESCRIBED_REQUIRED"));
-
-        // 9. Bên nhận chọn asDescribed = false nhưng không kèm lý do -> 400 REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED
-        HandoverConfirmRequest invalidReason = new HandoverConfirmRequest(false, "   ");
-        mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", reqId)
+        // 8. Đã chốt lịch thì không còn huỷ bằng cancel-transaction -> 409 REQUEST_INVALID_STATE_TRANSITION
+        mockMvc.perform(post("/api/v1/requests/{id}/cancel-transaction", reqId)
                         .header("Authorization", receiverToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidReason)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED"));
+                        .content("{\"reason\":\"Tôi không đi được nữa\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REQUEST_INVALID_STATE_TRANSITION"));
+
+        // 9. Chủ bài ở Cho tặng không được từ chối giao nhận -> 403 REQUEST_REFUSE_NOT_ALLOWED
+        mockMvc.perform(post("/api/v1/requests/{id}/refuse-handover", reqId)
+                        .header("Authorization", donorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Không muốn cho nữa\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("REQUEST_REFUSE_NOT_ALLOWED"));
     }
 
     // ---------- Helper methods ----------

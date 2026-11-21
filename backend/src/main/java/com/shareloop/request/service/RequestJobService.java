@@ -156,29 +156,41 @@ public class RequestJobService {
     }
 
     /**
-     * Tự động xác nhận hoàn tất giao dịch (COMPLETED) khi một bên đã xác nhận mà bên kia im lặng quá 3 ngày (GN-09).
+     * Tự động xác nhận hoàn tất giao dịch (COMPLETED) khi một bên đã xác nhận mà bên kia im lặng quá hạn (GN-09).
+     * Gặp trực tiếp dùng auto_confirm_days (3 ngày), Giao hàng dùng auto_confirm_days_shipping (7 ngày) vì người gửi
+     * bấm hoàn tất ngay lúc gửi hàng, còn hàng cần thời gian vận chuyển.
      *
      * @param now thời điểm hiện tại
      * @return số lượng yêu cầu đã tự động hoàn tất
      */
     public int autoConfirmHandoverRequests(Instant now) {
-        int autoConfirmDays = configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS);
-        Instant cutoff = now.minus(autoConfirmDays, ChronoUnit.DAYS);
+        int inPersonDays = configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS);
+        int shippingDays = configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING);
+        Instant inPersonCutoff = now.minus(inPersonDays, ChronoUnit.DAYS);
+        Instant shippingCutoff = now.minus(shippingDays, ChronoUnit.DAYS);
 
         int count = 0;
         long lastSeenId = 0;
         Pageable pageable = PageRequest.of(0, BATCH_SIZE);
-        List<Request> batch = requestRepository.findOverdueHandoverRequests(cutoff, lastSeenId, pageable);
+        List<Request> batch =
+                requestRepository.findOverdueHandoverRequests(inPersonCutoff, shippingCutoff, lastSeenId, pageable);
         while (!batch.isEmpty()) {
             for (Request request : batch) {
-                if (processInOwnTransaction(() -> autoConfirmInTransaction(request.getId(), cutoff, now))) {
+                boolean shipping = isShipping(request);
+                Instant cutoff = shipping ? shippingCutoff : inPersonCutoff;
+                int days = shipping ? shippingDays : inPersonDays;
+                if (processInOwnTransaction(() -> autoConfirmInTransaction(request.getId(), cutoff, days, now))) {
                     count++;
                 }
             }
             lastSeenId = batch.get(batch.size() - 1).getId();
-            batch = requestRepository.findOverdueHandoverRequests(cutoff, lastSeenId, pageable);
+            batch = requestRepository.findOverdueHandoverRequests(inPersonCutoff, shippingCutoff, lastSeenId, pageable);
         }
         return count;
+    }
+
+    private static boolean isShipping(Request request) {
+        return "SHIPPING".equals(request.getDeliveryMethod());
     }
 
     private boolean expirePendingInTransaction(long requestId, Instant cutoff) {
@@ -252,7 +264,7 @@ public class RequestJobService {
         return true;
     }
 
-    private boolean autoConfirmInTransaction(long requestId, Instant cutoff, Instant now) {
+    private boolean autoConfirmInTransaction(long requestId, Instant cutoff, int autoConfirmDays, Instant now) {
         Request request = requestRepository.findById(requestId).orElse(null);
         if (request == null) {
             return false;
@@ -273,7 +285,7 @@ public class RequestJobService {
             return false;
         }
 
-        // Chỉ tự hoàn tất khi giao dịch không có report (GN-09), ví dụ bên nhận đã báo không đúng mô tả
+        // Chỉ tự hoàn tất khi giao dịch không có report (GN-09)
         if (reportService != null && reportService.hasReportForRequest(request.getId())) {
             return false;
         }
@@ -287,7 +299,7 @@ public class RequestJobService {
             itemService.markTraded(request.getOfferedItemId());
         }
 
-        // Tích luỹ điểm uy tín nếu có module Reputation (BC-12, UT-02, UT-05)
+        // Cộng điểm tích luỹ nếu có module Reputation (BC-12, UT-02, UT-05)
         if (reputationService != null) {
             reputationService.onCompleted(request.getId());
         }
@@ -295,7 +307,8 @@ public class RequestJobService {
         // Ghi rõ hạn khiếu nại tính từ lúc hệ thống hoàn tất (U08)
         int complaintHours = configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS);
         Instant completedAt = request.getCompletedAt() != null ? request.getCompletedAt() : now;
-        String body = "Giao dịch đã được hệ thống tự động hoàn tất do đối phương không phản hồi sau 3 ngày. "
+        String body = "Giao dịch đã được hệ thống tự động hoàn tất do đối phương không phản hồi sau " + autoConfirmDays
+                + " ngày. "
                 + ComplaintWindow.sentence(complaintHours, ComplaintWindow.deadline(completedAt, complaintHours));
         Long donorId = findDonorId(request.getItemId());
         if (donorId != null) {

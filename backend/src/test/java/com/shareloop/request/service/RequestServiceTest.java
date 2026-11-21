@@ -1380,7 +1380,7 @@ class RequestServiceTest {
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        RequestResponse response = requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null, null));
+        RequestResponse response = requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null));
 
         assertThat(response.status()).isEqualTo("AWAITING_HANDOVER");
         assertThat(request.getDonorHandoverAt()).isNotNull();
@@ -1404,7 +1404,7 @@ class RequestServiceTest {
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(true, null));
+        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(null));
 
         assertThat(response.status()).isEqualTo("AWAITING_HANDOVER");
         assertThat(request.getReceiverHandoverAt()).isNotNull();
@@ -1413,14 +1413,13 @@ class RequestServiceTest {
     }
 
     @Test
-    @DisplayName(
-            "confirmHandover: Receiver xác nhận sau Donor với đúng mô tả -> COMPLETED, gọi ItemService và ReputationService")
+    @DisplayName("confirmHandover: Receiver xác nhận sau Donor -> COMPLETED, gọi ItemService và ReputationService")
     void confirmHandover_whenReceiverConfirmsAfterDonor_transitionsToCompleted() {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now());
         request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
         request.confirmLogistics(false, true, Instant.now());
-        request.confirmHandover(true, null, Instant.now());
+        request.confirmHandover(true, Instant.now());
         assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
@@ -1429,11 +1428,10 @@ class RequestServiceTest {
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(true, null));
+        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(null));
 
         assertThat(response.status()).isEqualTo("COMPLETED");
         assertThat(request.getReceiverHandoverAt()).isNotNull();
-        assertThat(request.getAsDescribed()).isTrue();
         assertThat(request.getCompletedAt()).isNotNull();
         verify(itemService).markTraded(1L);
         verify(reputationService).onCompleted(101L);
@@ -1448,7 +1446,7 @@ class RequestServiceTest {
         request.select(Instant.now());
         request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
         request.confirmLogistics(false, true, Instant.now());
-        request.confirmHandover(true, null, Instant.now());
+        request.confirmHandover(true, Instant.now());
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).thenReturn(24);
@@ -1456,7 +1454,7 @@ class RequestServiceTest {
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(true, null));
+        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(null));
 
         assertThat(response.complaintDeadline())
                 .isEqualTo(request.getCompletedAt().plus(24, ChronoUnit.HOURS));
@@ -1474,62 +1472,12 @@ class RequestServiceTest {
     }
 
     @Test
-    @DisplayName(
-            "confirmHandover: Người nhận chọn không đúng mô tả -> chuyển DISPUTED, không markTraded, phát report event")
-    void confirmHandover_whenReceiverSaysNotAsDescribed_publishesReportEvent() {
+    void confirmHandover_whenReceiverConfirms_publishesNoReportEvent() {
         // given
         stubLogisticsConfirmedRequest();
 
         // when
-        RequestResponse response =
-                requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(false, "  Máy không bật được  "));
-
-        // then
-        assertThat(response.status()).isEqualTo("DISPUTED");
-        verify(itemService, never()).markTraded(anyLong());
-        verify(eventPublisher).publishEvent(new NotAsDescribedReportedEvent(101L, 10L, "Máy không bật được"));
-    }
-
-    @Test
-    @DisplayName(
-            "confirmHandover: Người nhận xác nhận sau donor nhưng chọn không đúng mô tả -> chuyển DISPUTED, không COMPLETED")
-    void confirmHandover_whenReceiverConfirmsAfterDonorNotAsDescribed_transitionsToDisputed() {
-        // given: donor đã xác nhận trước -> status là AWAITING_HANDOVER
-        Request request = new Request(1L, 10L, null, "GIVE");
-        request.select(Instant.now());
-        request.proposeSchedule(
-                "IN_PERSON",
-                "FPT",
-                Instant.now().plus(1, java.time.temporal.ChronoUnit.DAYS),
-                true,
-                true,
-                Instant.now());
-        request.confirmLogistics(false, true, Instant.now());
-        request.confirmHandover(true, null, Instant.now());
-
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
-        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
-                .when(requestService)
-                .findItemSnapshot(1L);
-
-        // when
-        RequestResponse response =
-                requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(false, "Món đồ bị vỡ màn hình"));
-
-        // then
-        assertThat(response.status()).isEqualTo("DISPUTED");
-        verify(itemService, never()).markTraded(anyLong());
-        verify(eventPublisher).publishEvent(new NotAsDescribedReportedEvent(101L, 10L, "Món đồ bị vỡ màn hình"));
-    }
-
-    @Test
-    void confirmHandover_whenReceiverSaysAsDescribed_publishesNoReportEvent() {
-        // given
-        stubLogisticsConfirmedRequest();
-
-        // when
-        requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(true, null));
+        requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(null));
 
         // then
         verify(eventPublisher, never()).publishEvent(any(NotAsDescribedReportedEvent.class));
@@ -1541,7 +1489,7 @@ class RequestServiceTest {
         stubLogisticsConfirmedRequest();
 
         // when
-        requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null, null));
+        requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null));
 
         // then
         verify(eventPublisher, never()).publishEvent(any(NotAsDescribedReportedEvent.class));
@@ -1567,7 +1515,7 @@ class RequestServiceTest {
         request.select(Instant.now());
         request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
         request.confirmLogistics(false, true, Instant.now());
-        request.confirmHandover(true, null, Instant.now());
+        request.confirmHandover(true, Instant.now());
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -1575,51 +1523,12 @@ class RequestServiceTest {
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(true, null));
+        RequestResponse response = requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(null));
 
         assertThat(response.status()).isEqualTo("COMPLETED");
         verify(itemService).markTraded(1L);
         verify(itemService).markTraded(2L);
         verify(reputationService).onCompleted(101L);
-    }
-
-    @Test
-    @DisplayName(
-            "confirmHandover: Receiver chọn không đúng mô tả mà không có lý do -> ném lỗi REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED")
-    void confirmHandover_whenReceiverSelectsNotAsDescribedWithoutReason_throwsError() {
-        Request request = new Request(1L, 10L, null, "GIVE");
-        request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
-        request.confirmLogistics(false, true, Instant.now());
-
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
-        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
-                .when(requestService)
-                .findItemSnapshot(1L);
-
-        assertThatThrownBy(() -> requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(false, "   ")))
-                .isInstanceOfSatisfying(BusinessException.class, ex -> {
-                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_NOT_AS_DESCRIBED_REASON_REQUIRED);
-                });
-    }
-
-    @Test
-    @DisplayName("confirmHandover: Receiver không trả lời câu hỏi đúng mô tả -> ném lỗi REQUEST_AS_DESCRIBED_REQUIRED")
-    void confirmHandover_whenReceiverMissingAsDescribed_throwsError() {
-        Request request = new Request(1L, 10L, null, "GIVE");
-        request.select(Instant.now());
-        request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
-        request.confirmLogistics(false, true, Instant.now());
-
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
-        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
-                .when(requestService)
-                .findItemSnapshot(1L);
-
-        assertThatThrownBy(() -> requestService.confirmHandover(101L, 10L, new HandoverConfirmRequest(null, null)))
-                .isInstanceOfSatisfying(BusinessException.class, ex -> {
-                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_AS_DESCRIBED_REQUIRED);
-                });
     }
 
     @Test
@@ -1631,7 +1540,7 @@ class RequestServiceTest {
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        assertThatThrownBy(() -> requestService.confirmHandover(101L, 999L, new HandoverConfirmRequest(true, null)))
+        assertThatThrownBy(() -> requestService.confirmHandover(101L, 999L, new HandoverConfirmRequest(null)))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_FORBIDDEN);
                 });
@@ -1644,14 +1553,14 @@ class RequestServiceTest {
         request.select(Instant.now());
         request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
         request.confirmLogistics(false, true, Instant.now());
-        request.confirmHandover(true, null, Instant.now());
+        request.confirmHandover(true, Instant.now());
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        assertThatThrownBy(() -> requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null, null)))
+        assertThatThrownBy(() -> requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null)))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_HANDOVER_ALREADY_CONFIRMED);
                 });
@@ -1669,7 +1578,7 @@ class RequestServiceTest {
                 .when(requestService)
                 .findItemSnapshot(1L);
 
-        assertThatThrownBy(() -> requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null, null)))
+        assertThatThrownBy(() -> requestService.confirmHandover(101L, 20L, new HandoverConfirmRequest(null)))
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
                 });
@@ -1707,7 +1616,7 @@ class RequestServiceTest {
         when(requestRepository.findByItemIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(request));
         when(userService.findContact(10L))
                 .thenReturn(new ContactInfo(10L, "Nguyễn Văn B", "receiver@example.com", "0901234567"));
-        when(reputationService.getReputationSummary(10L)).thenReturn(new ReputationSummary(10L, 5, Rank.SILVER, 95.5));
+        when(reputationService.getReputationSummary(10L)).thenReturn(new ReputationSummary(10L, 5, Rank.SILVER));
 
         // when
         List<RequestResponse> responses = requestService.listByItem(1L, 20L); // donor gọi
@@ -1720,8 +1629,6 @@ class RequestServiceTest {
         assertThat(resp.trustStars()).isEqualTo(5);
         assertThat(resp.receiverRank()).isEqualTo("SILVER");
         assertThat(resp.rank()).isEqualTo("SILVER");
-        assertThat(resp.receiverAsDescribedRate()).isEqualTo(95.5);
-        assertThat(resp.asDescribedRate()).isEqualTo(95.5);
     }
 
     @Test
@@ -1747,7 +1654,6 @@ class RequestServiceTest {
         assertThat(resp.receiverName()).isEqualTo("Nguyễn Văn B");
         assertThat(resp.receiverTrustStars()).isEqualTo(5);
         assertThat(resp.receiverRank()).isEqualTo("BRONZE");
-        assertThat(resp.receiverAsDescribedRate()).isNull();
     }
 
     @Test
@@ -1761,7 +1667,7 @@ class RequestServiceTest {
                 .findItemSnapshot(1L);
         when(userService.findContact(10L))
                 .thenReturn(new ContactInfo(10L, "Nguyễn Văn B", "receiver@example.com", "0901234567"));
-        when(reputationService.getReputationSummary(10L)).thenReturn(new ReputationSummary(10L, 4, Rank.GOLD, 100.0));
+        when(reputationService.getReputationSummary(10L)).thenReturn(new ReputationSummary(10L, 4, Rank.GOLD));
 
         // when
         RequestResponse resp = requestService.getDetail(101L, 20L); // donor xem
@@ -1770,7 +1676,6 @@ class RequestServiceTest {
         assertThat(resp.receiverName()).isEqualTo("Nguyễn Văn B");
         assertThat(resp.receiverTrustStars()).isEqualTo(4);
         assertThat(resp.receiverRank()).isEqualTo("GOLD");
-        assertThat(resp.receiverAsDescribedRate()).isEqualTo(100.0);
     }
 
     @Test

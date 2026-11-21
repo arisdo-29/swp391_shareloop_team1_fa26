@@ -247,8 +247,11 @@ public class ActivityLogQueryService {
             return ActivityType.REVIEW_APPROVE.label();
         }
         if (ActivityType.CONFIG_UPDATE.code().equals(log.getType()) && log.getData() != null) {
-            return configLabel(dataValue(log, "key")) + ": " + dataValue(log, "oldValue") + " → "
+            String change = configLabel(dataValue(log, "key")) + ": " + dataValue(log, "oldValue") + " → "
                     + dataValue(log, "newValue");
+            // Khoá đồng bộ có note giải thích vì sao đổi; log cũ không có note thì hiện như trước.
+            String note = dataValue(log, "note");
+            return note == null ? change : change + " (" + note + ")";
         }
         if ((ActivityType.AI_USAGE.code().equals(log.getType()) || "AiUsage".equals(log.getType()))
                 && log.getData() != null) {

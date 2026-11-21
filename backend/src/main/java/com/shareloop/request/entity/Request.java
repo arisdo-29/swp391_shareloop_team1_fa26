@@ -25,6 +25,8 @@ public class Request extends BaseEntity {
     public static final String CANCEL_BY_RECEIVER = "[Người nhận] ";
     public static final String CANCEL_BY_SYSTEM = "[Hệ thống] ";
     public static final String CANCEL_BY_ADMIN = "[Admin] ";
+    // Câu mở đầu lý do huỷ khi một bên từ chối nhận, đặt sau tiền tố người huỷ (GN-07)
+    public static final String REFUSAL_REASON = "Từ chối nhận vì món không đúng mô tả. ";
 
     @Column(name = "item_id", nullable = false)
     private Long itemId;
@@ -71,9 +73,6 @@ public class Request extends BaseEntity {
 
     @Column(name = "receiver_handover_at")
     private Instant receiverHandoverAt;
-
-    @Column(name = "as_described")
-    private Boolean asDescribed;
 
     @Column(name = "auto_confirmed", nullable = false)
     private boolean autoConfirmed = false;
@@ -259,51 +258,69 @@ public class Request extends BaseEntity {
     }
 
     /**
-     * Xác nhận giao nhận từ một bên (GN-06, GN-08, GN-07, UC-27).
+     * Xác nhận giao nhận từ một bên (GN-06, GN-08, UC-27).
      *
      * <p>Chỉ được gọi khi Request đang ở LOGISTICS_CONFIRMED hoặc AWAITING_HANDOVER.
      * Khi 1 bên bấm, Request chuyển sang AWAITING_HANDOVER và tiếp tục chờ bên kia (GN-08).
      * Khi cả 2 bên đều đã xác nhận, Request chuyển sang COMPLETED và ghi nhận completedAt.
+     * Hàm này không bao giờ chuyển sang DISPUTED: từ chối hoặc báo thất bại đi qua hàm riêng.
      *
      * @param isDonor true nếu người xác nhận là chủ bài đăng (người giao), false nếu là người nhận
-     * @param asDescribed người nhận đánh giá món đồ có đúng mô tả hay không (bắt buộc khi là bên nhận)
      * @param now thời điểm xác nhận
      */
-    public void confirmHandover(boolean isDonor, Boolean asDescribed, Instant now) {
-        if (this.status != RequestStatus.LOGISTICS_CONFIRMED && this.status != RequestStatus.AWAITING_HANDOVER) {
+    public void confirmHandover(boolean isDonor, Instant now) {
+        if (!isHandoverOpen()) {
             throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+        if (hasConfirmedHandover(isDonor)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_HANDOVER_ALREADY_CONFIRMED);
         }
 
         if (isDonor) {
-            if (this.donorHandoverAt != null) {
-                throw new BusinessException(RequestErrorCode.REQUEST_HANDOVER_ALREADY_CONFIRMED);
-            }
             this.donorHandoverAt = now;
         } else {
-            if (this.receiverHandoverAt != null) {
-                throw new BusinessException(RequestErrorCode.REQUEST_HANDOVER_ALREADY_CONFIRMED);
-            }
-            if (asDescribed == null) {
-                throw new BusinessException(RequestErrorCode.REQUEST_AS_DESCRIBED_REQUIRED);
-            }
             this.receiverHandoverAt = now;
-            this.asDescribed = asDescribed;
         }
 
-        if (Boolean.FALSE.equals(this.asDescribed)) {
-            if (this.status == RequestStatus.LOGISTICS_CONFIRMED) {
-                transitionTo(RequestStatus.AWAITING_HANDOVER);
-            }
-            transitionTo(RequestStatus.DISPUTED);
-        } else if (this.donorHandoverAt != null && this.receiverHandoverAt != null) {
-            if (this.status == RequestStatus.LOGISTICS_CONFIRMED) {
-                transitionTo(RequestStatus.AWAITING_HANDOVER);
-            }
-            transitionTo(RequestStatus.COMPLETED);
-            this.completedAt = now;
-        } else if (this.status == RequestStatus.LOGISTICS_CONFIRMED) {
+        if (this.status == RequestStatus.LOGISTICS_CONFIRMED) {
             transitionTo(RequestStatus.AWAITING_HANDOVER);
         }
+        if (this.donorHandoverAt != null && this.receiverHandoverAt != null) {
+            transitionTo(RequestStatus.COMPLETED);
+            this.completedAt = now;
+        }
+    }
+
+    /**
+     * Một bên từ chối nhận món đồ: việc trao đồ không xảy ra nên giao dịch huỷ ngay (GN-07), không qua DISPUTED.
+     *
+     * <p>Chỉ hợp lệ khi giao dịch ở LOGISTICS_CONFIRMED hoặc AWAITING_HANDOVER và bên từ chối chưa bấm hoàn tất.
+     *
+     * @param isDonor true nếu người từ chối là chủ bài, false nếu là người nhận
+     * @param reason lý do bên từ chối đã nhập
+     * @throws BusinessException REQUEST_INVALID_STATE_TRANSITION khi sai trạng thái hoặc bên từ chối đã bấm hoàn tất
+     */
+    public void refuseHandover(boolean isDonor, String reason) {
+        if (!isHandoverOpen() || hasConfirmedHandover(isDonor)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+        String prefix = isDonor ? CANCEL_BY_DONOR : CANCEL_BY_RECEIVER;
+        cancel(prefix + REFUSAL_REASON + reason);
+    }
+
+    /** Giao dịch còn đang chờ giao nhận (đã chốt lịch, chưa hoàn tất): nơi ba nút kết quả được phép dùng. */
+    public boolean isHandoverOpen() {
+        return this.status == RequestStatus.LOGISTICS_CONFIRMED || this.status == RequestStatus.AWAITING_HANDOVER;
+    }
+
+    /** Bên này đã bấm hoàn tất giao nhận chưa. */
+    public boolean hasConfirmedHandover(boolean isDonor) {
+        return isDonor ? this.donorHandoverAt != null : this.receiverHandoverAt != null;
+    }
+
+    /** Bên kia đã bấm hoàn tất giao nhận chưa (quyết định "giao nhận không thành công" huỷ hay mở tranh chấp). */
+    public boolean hasOtherPartyConfirmedHandover(boolean isDonor) {
+        return hasConfirmedHandover(!isDonor);
     }
 
     /**
@@ -341,9 +358,6 @@ public class Request extends BaseEntity {
         transitionTo(RequestStatus.COMPLETED);
         this.autoConfirmed = true;
         this.completedAt = now;
-        if (this.asDescribed == null) {
-            this.asDescribed = true;
-        }
     }
 
     public Long getItemId() {
@@ -404,10 +418,6 @@ public class Request extends BaseEntity {
 
     public Instant getReceiverHandoverAt() {
         return receiverHandoverAt;
-    }
-
-    public Boolean getAsDescribed() {
-        return asDescribed;
     }
 
     public boolean isAutoConfirmed() {

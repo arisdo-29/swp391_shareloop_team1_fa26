@@ -24,7 +24,8 @@ vi.mock('../../services/requestApi', async (importOriginal) => ({
     get: vi.fn(),
     media: vi.fn(),
     cancelTransaction: vi.fn(),
-    reportHandoverIssue: vi.fn(),
+    handoverFailed: vi.fn(),
+    refuseHandover: vi.fn(),
     getContact: vi.fn(),
     select: vi.fn(),
   },
@@ -321,5 +322,57 @@ describe('Khung chat gọn', () => {
     expect(within(chat).getAllByRole('button', { name: 'Xem chi tiết' })).toHaveLength(2);
     expect(within(chat).getByRole('button', { name: 'Xem tiến trình' })).toBeTruthy();
     expect(within(chat).getByRole('button', { name: 'Xem hồ sơ' })).toBeTruthy();
+  });
+});
+
+describe('Banner khiếu nại trong khung chat', () => {
+  it('bên bị khiếu nại thấy banner có nút Giải trình ngay trên ô soạn tin', async () => {
+    // when
+    await renderMessages(
+      DONOR_ID,
+      request({
+        status: 'DISPUTED',
+        disputes: [
+          {
+            id: 7,
+            reason: 'NOT_AS_DESCRIBED',
+            openedByMe: false,
+            status: 'AWAITING_RESPONSE',
+            responseDueAt: '2099-01-01T03:00:00Z',
+            respondedAt: null,
+            canRespond: true,
+          },
+        ],
+      }),
+    );
+
+    // then
+    expect(await screen.findByRole('button', { name: 'Giải trình ngay' })).toBeTruthy();
+    expect(screen.getByText(/đã khiếu nại giao dịch này: Không đúng mô tả/)).toBeTruthy();
+  });
+
+  it('bên khiếu nại chỉ thấy banner thông tin', async () => {
+    // when
+    await renderMessages(
+      RECEIVER_ID,
+      request({
+        status: 'DISPUTED',
+        disputes: [
+          {
+            id: 7,
+            reason: 'NOT_AS_DESCRIBED',
+            openedByMe: true,
+            status: 'AWAITING_RESPONSE',
+            responseDueAt: '2099-01-01T03:00:00Z',
+            respondedAt: null,
+            canRespond: false,
+          },
+        ],
+      }),
+    );
+
+    // then
+    expect(await screen.findByText(/Bạn đã khiếu nại giao dịch này: Không đúng mô tả/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Giải trình ngay' })).toBeNull();
   });
 });

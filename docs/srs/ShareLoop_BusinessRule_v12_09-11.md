@@ -159,7 +159,7 @@ Cột "Nhanh nhất sau" tính theo trần 30 điểm / ngày (UT-07).
 **Nếu bị hỏi**
 
 - *"Sao bị báo cáo mà chưa trừ sao?"* Nếu trừ ngay, ai cũng có thể báo cáo bừa để hạ uy tín người khác. Chỉ trừ khi Admin đã nghe hai phía và kết luận.
-- *"Sao không cho hai bên chấm sao cho nhau như Shopee?"* Chấm sao hai chiều dễ bị trả đũa và cày chéo. ShareLoop thay bằng câu hỏi bắt buộc "Món đồ có đúng mô tả không?" khi nhận đồ và hiển thị tỉ lệ đúng mô tả cho chủ bài khi chọn người.
+- *"Sao không cho hai bên chấm sao cho nhau như Shopee?"* Chấm sao hai chiều dễ bị trả đũa và cày chéo. ShareLoop chỉ dùng sao, điểm và hạng. Món đồ khác mô tả thì người nhận bấm "Từ chối giao nhận": giao dịch huỷ ngay, món bị tạm ẩn và Admin xem xét báo cáo. Báo cáo đúng thì trừ sao chủ món, báo cáo sai thì trừ sao người báo cáo (21/11/2026: bỏ câu hỏi "Món đồ có đúng mô tả không?" và tỉ lệ % đúng mô tả, từ chối nhận là báo cáo vi phạm, không phải khiếu nại).
 - *"Điểm có đổi ra Credit không?"* Không. Nếu đổi được, điểm trở thành tiền và động cơ cày điểm tăng vọt; điểm chỉ mở quyền lợi hiển thị.
 
 ## D. Ví Credit và nạp tiền

@@ -648,11 +648,6 @@ export function Activities() {
       <PageHeader
         title="Hoạt động"
         description="Quản lý bài đăng và chọn người nhận ở đây. Sau khi chọn, hẹn lịch và bàn giao diễn ra trong Tin nhắn."
-        action={
-          <Link to="/post">
-            <Button className="bronze-action">Đăng tin</Button>
-          </Link>
-        }
       />
       <div className="space-y-3 empty:hidden [&:not(:empty)]:mb-6">
         {pageNotice ? <Alert tone="success">{pageNotice}</Alert> : null}
@@ -720,7 +715,7 @@ export function Activities() {
             [
               ['items', `Bài của tôi (${filteredItems.length})`],
               ['sent', `Yêu cầu tôi đã gửi (${filteredSentRequests.length})`],
-              ['complaints', 'Khiếu nại & Báo cáo'],
+              ['complaints', 'Khiếu nại và Báo cáo'],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -735,7 +730,7 @@ export function Activities() {
             </button>
           ))}
         </div>
-        {/* Tab Khiếu nại & Báo cáo có hai danh sách riêng, không dùng chung bộ lọc trạng thái bài/yêu cầu. */}
+        {/* Tab Khiếu nại và Báo cáo có hai danh sách riêng, không dùng chung bộ lọc trạng thái bài/yêu cầu. */}
         {tab === 'complaints' ? null : (
         <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
           <span className="shrink-0 text-xs text-text-muted">{activeResultCount} kết quả</span>
@@ -1193,7 +1188,6 @@ export function Activities() {
               <ReputationBadge
                 trustStars={acceptRequest.requesterTrustStars}
                 rank={acceptRequest.requesterRank}
-                asDescribedRate={acceptRequest.requesterAsDescribedRate}
               />
             </div>
           </div>
@@ -1581,26 +1575,7 @@ function EditItemForm({
         onChange={(event) => setDescription(event.target.value)}
       />
       <DescribeItemSuggestion title={title} disabled={formDisabled} onUse={setDescription} />
-      {attributesLoading ? (
-        <p className="text-xs text-text-muted">Đang tải thuộc tính danh mục...</p>
-      ) : null}
       {attributesError ? <p className="text-xs text-error">{attributesError}</p> : null}
-      {!attributesLoading && !attributesError && sortedCategoryAttributes.length ? (
-        <div className="flex flex-wrap gap-2">
-          {sortedCategoryAttributes.map((attribute) => (
-            <span
-              key={attribute.id}
-              className="rounded-full bg-surface-low px-3 py-1 text-xs ring-1 ring-border"
-            >
-              {attribute.name}
-              {attribute.required ? ' · bắt buộc' : ''}
-              {attribute.options.length
-                ? ` · ${attribute.options.join(', ')}`
-                : ` · ${attribute.dataType}`}
-            </span>
-          ))}
-        </div>
-      ) : null}
 
       <ImageEditor
         label="Ảnh"
@@ -2011,7 +1986,6 @@ function RequestPanel({
                   <ReputationBadge
                     trustStars={request.requesterTrustStars}
                     rank={request.requesterRank}
-                    asDescribedRate={request.requesterAsDescribedRate}
                     compact
                   />
                   <span className="text-xs text-text-muted">

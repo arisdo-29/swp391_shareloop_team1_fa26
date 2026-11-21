@@ -124,7 +124,7 @@ class RequestCancelTransactionTest {
     @DisplayName("Người nhận huỷ giao dịch: lý do có tiền tố người nhận, thông báo chủ bài")
     void cancelTransaction_whenReceiverCancels_prefixesReasonAndNotifiesDonor() {
         // given
-        Request request = requestInStatus(RequestStatus.LOGISTICS_CONFIRMED, null);
+        Request request = requestInStatus(RequestStatus.AWAITING_LOGISTICS, null);
         when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
 
         // when
@@ -137,10 +137,10 @@ class RequestCancelTransactionTest {
     }
 
     @Test
-    @DisplayName("Huỷ giao dịch SWAP đang AWAITING_HANDOVER: nhả cả bài chính và món mang đổi")
-    void cancelTransaction_whenSwapAwaitingHandover_releasesBothItems() {
+    @DisplayName("Huỷ giao dịch SWAP đang AWAITING_LOGISTICS: nhả cả bài chính và món mang đổi")
+    void cancelTransaction_whenSwapAwaitingLogistics_releasesBothItems() {
         // given
-        Request request = requestInStatus(RequestStatus.AWAITING_HANDOVER, OFFERED_ITEM_ID);
+        Request request = requestInStatus(RequestStatus.AWAITING_LOGISTICS, OFFERED_ITEM_ID);
         when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
 
         // when

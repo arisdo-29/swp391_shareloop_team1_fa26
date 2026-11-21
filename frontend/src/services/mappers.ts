@@ -140,7 +140,6 @@ export function toFeItem(
     donorName: item.donorName ?? undefined,
     donorTrustStars: item.donorTrustStars ?? undefined,
     donorRank: item.donorRank ?? undefined,
-    donorAsDescribedRate: item.donorAsDescribedRate ?? undefined,
     donorLocked: item.donorLocked ?? undefined,
     hidden: item.hidden ?? undefined,
     hiddenReason: item.hiddenReason ?? undefined,

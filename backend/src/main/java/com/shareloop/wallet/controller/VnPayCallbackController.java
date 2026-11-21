@@ -52,6 +52,15 @@ public class VnPayCallbackController {
     @GetMapping("/return")
     public ResponseEntity<Void> paymentReturn(@RequestParam Map<String, String> params) {
         boolean verified = service.verify(params);
+        if (verified && !service.isSuccessful(params)) {
+            // Hủy hoặc thất bại tại VNPay: chuyển đơn FAILED ngay để trang Ví không còn hiện đơn đang chờ.
+            // Lỗi ở bước này không chặn việc chuyển hướng về trang Ví (IPN hoặc job vẫn chốt đơn sau).
+            try {
+                service.failFromReturn(params);
+            } catch (RuntimeException ex) {
+                log.error("VNPAY return could not mark order FAILED", ex);
+            }
+        }
         String status = !verified ? "INVALID_SIGNATURE" : service.isSuccessful(params) ? "SUCCESS" : "FAILED";
         URI location = UriComponentsBuilder.fromUriString(feResultUrl)
                 .replaceQueryParam("orderCode", "{orderCode}")

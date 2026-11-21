@@ -36,7 +36,7 @@ Trả danh sách cấu hình nghiệp vụ cho Admin. Endpoint đọc giá trị
 | `MODERATION` | Kiểm duyệt và báo cáo | `chat_violation_alert`, `report_hide_threshold`, `report_max_items_per_owner`, `report_window_days`, `review_newcomer_max_approved` (số bài đã từng được duyệt tối đa để người đăng được xem là người mới, mặc định 3), `report_serious_reasons` (kiểu danh sách mã lý do cách nhau dấu phẩy, mỗi mã phải là một `ReportReason`, sai thì `SETTING_CONFIG_INVALID_TYPE`) (`review_sla_hours` đã bỏ, KD-06) |
 | `ACCOUNT` | Tài khoản và OTP | `otp_ttl_minutes`, `otp_max_failed`, `otp_resend_cooldown_seconds`, `pending_account_ttl_hours`, `phone_change_interval_days` |
 | `TRANSACTION` | Yêu cầu và giao dịch | `max_pending_requests`, `request_pending_days`, `chat_open_days`, `auto_confirm_days`, `stuck_request_hours` |
-| `REPUTATION` | Uy tín và hạng | `post_display_days_gold`, `max_active_items_*` (ngưỡng phí thường Trao đổi: Đồng 5, Bạc 8, Vàng 15, Kim cương -1), `max_active_give_items` (Cho tặng, mặc định 5), `daily_points_cap`, `reputation_*`, `ip_alert_window_days`, `ip_alert_min_accounts` |
+| `REPUTATION` | Hạng và Uy tín | `post_display_days_gold`, `max_active_items_*` (ngưỡng phí thường Trao đổi: Đồng 5, Bạc 8, Vàng 15, Kim cương -1), `max_active_give_items` (Cho tặng, mặc định 5), `daily_points_cap`, `reputation_*`, `ip_alert_window_days`, `ip_alert_min_accounts` |
 
 Trang Cấu hình hệ thống bỏ nhóm `REPUTATION`; nhóm này hiện ở trang Uy tín và Hạng.
 
@@ -55,6 +55,144 @@ Cập nhật giá trị cấu hình đã được seed. Yêu cầu role `ADMIN` 
 
 Thành công trả về `ConfigResponse` và ghi một dòng `activity_logs` loại `CONFIG_UPDATED`, gồm admin, key, giá trị cũ/mới và lý do. Key không tồn tại trong `ConfigKey` hoặc chưa được seed sẽ bị từ chối.
 
+**Đi qua bộ luật liên khoá.** Cả `PUT /{key}` và `PUT /` đều chạy bộ luật (xem mục bộ luật bên dưới). Có lỗi luật thì `400` như thường. Nếu thay đổi **kéo theo cấu hình khác** (đồng bộ) hoặc **có cảnh báo** thì **không lưu gì** và trả `409 SETTING_CONFIG_SYNC_REQUIRED`, kèm bản xem trước trong `details.preview` (cùng dạng với response của `POST /preview`). Giao diện dùng bản xem trước này rồi gọi `PUT /batch`. Không kéo theo gì và không có cảnh báo thì lưu như cũ.
+
+```json
+{
+  "code": "SETTING_CONFIG_SYNC_REQUIRED",
+  "message": "Thay đổi này kéo theo cấu hình liên quan hoặc có cảnh báo, hãy xem trước rồi lưu theo lô.",
+  "details": {
+    "preview": {
+      "changes": [
+        { "key": "boost_days", "label": "Số ngày mỗi gói đẩy bài", "oldValue": "3", "newValue": "4", "causedByKey": null, "causedByLabel": null, "note": null },
+        { "key": "boost_max_days", "label": "Số ngày đẩy tối đa", "oldValue": "6", "newValue": "8", "causedByKey": "boost_days", "causedByLabel": "Số ngày mỗi gói đẩy bài", "note": "Đồng bộ theo Số ngày mỗi gói đẩy bài" }
+      ],
+      "errors": [],
+      "warnings": []
+    }
+  }
+}
+```
+
+## POST /api/v1/admin/configs/preview
+
+Xem trước một thay đổi, **không ghi gì vào cơ sở dữ liệu** và không khoá dòng. Chạy bộ luật trên giá trị đang lưu rồi trả các cấu hình sẽ đổi kèm, lỗi và cảnh báo. Chỉ Admin được gọi.
+
+```json
+{ "key": "boost_days", "value": "4" }
+```
+
+Thành công `200` (kể cả khi `errors` không rỗng: lỗi luật là một phần của kết quả xem trước):
+
+```json
+{
+  "changes": [
+    { "key": "boost_days", "label": "Số ngày mỗi gói đẩy bài", "oldValue": "3", "newValue": "4", "causedByKey": null, "causedByLabel": null, "note": null },
+    { "key": "boost_max_days", "label": "Số ngày đẩy tối đa", "oldValue": "6", "newValue": "8", "causedByKey": "boost_days", "causedByLabel": "Số ngày mỗi gói đẩy bài", "note": "Đồng bộ theo Số ngày mỗi gói đẩy bài" }
+  ],
+  "errors": [],
+  "warnings": []
+}
+```
+
+- `changes`: khoá Admin gửi đứng trước, khoá đồng bộ đứng sau. Khoá đồng bộ có `causedByKey`, `causedByLabel` và `note`.
+- `errors[]` và `warnings[]`: mỗi mục có `message` (tiếng Việt, dùng tên hiển thị của khoá), `keys` (các khoá liên quan để tô đúng ô) và `errorCode` (`null` với cảnh báo).
+- Ví dụ lỗi khi `boost_days` = 20 (kéo `boost_max_days` thành 40, vượt 30 ngày hiển thị bài):
+
+```json
+{
+  "changes": [ "... boost_days 3 → 20, boost_max_days 6 → 40 ..." ],
+  "errors": [
+    {
+      "message": "Số ngày đẩy tối đa (40) không được lớn hơn Số ngày hiển thị bài (30), vì đợt đẩy không thể dài hơn thời gian bài được hiển thị.",
+      "keys": ["boost_max_days", "post_display_days"],
+      "errorCode": "SETTING_CONFIG_RULE_VIOLATION"
+    }
+  ],
+  "warnings": []
+}
+```
+
+Lỗi: `400 VALIDATION_FAILED` (thiếu key hoặc value), `400 SETTING_CONFIG_INVALID_TYPE`, `400 SETTING_CONFIG_OUT_OF_RANGE`, `400 SETTING_CONFIG_NOT_EDITABLE`, `401`, `403`, `404 SETTING_CONFIG_NOT_FOUND`.
+
+## PUT /api/v1/admin/configs/batch
+
+Lưu nhiều cấu hình trong **một transaction**: hoặc lưu hết hoặc không lưu gì. Chỉ Admin được gọi.
+
+```json
+{
+  "changes": [{ "key": "boost_days", "value": "4" }],
+  "reason": "Đổi gói đẩy bài sang 4 ngày",
+  "acknowledgedWarnings": false
+}
+```
+
+- `changes` không được rỗng, mỗi `key` chỉ xuất hiện một lần (gửi trùng thì `400 SETTING_CONFIG_RULE_VIOLATION`). Chỉ cần gửi khoá chính, cấu hình đồng bộ do server tự tính lại và lưu kèm. Khoá có trong `changes` thì server **không ghi đè**, ví dụ gửi cả `boost_days` = 4 và `boost_max_days` = 12 thì giữ 12 rồi để luật lỗi tự kiểm tra.
+- `reason` bắt buộc, dùng chung cho mọi dòng nhật ký.
+- `acknowledgedWarnings`: `true` khi Admin đã tick "Tôi đã hiểu cảnh báo". Thiếu thì coi là `false`.
+- Server khoá các dòng cấu hình (`SELECT ... FOR UPDATE`, theo thứ tự `attr_key`) rồi chạy lại bộ luật trên toàn bộ `changes`, nên hai lô gửi cùng lúc sẽ chạy lần lượt, không chạy song song.
+- Thay đổi chỉ áp dụng cho lượt mua hoặc duyệt mới, không sửa ngược đợt đẩy hay bài đang chạy.
+
+Thành công `200`: danh sách mọi cấu hình đã đổi, kể cả cấu hình đồng bộ.
+
+```json
+{
+  "configs": [
+    { "key": "boost_days", "value": "4", "defaultValue": "3", "label": "Số ngày mỗi gói đẩy bài", "description": "…", "group": "POSTING", "groupLabel": "Đăng bài và hiển thị" },
+    { "key": "boost_max_days", "value": "8", "defaultValue": "6", "label": "Số ngày đẩy tối đa", "description": "…", "group": "POSTING", "groupLabel": "Đăng bài và hiển thị" }
+  ]
+}
+```
+
+Mỗi khoá đã đổi ghi một dòng `activity_logs` loại `CONFIG_UPDATE`, cùng `reason`, `data` gồm `key`, `oldValue`, `newValue`. Khoá đồng bộ ghi thêm `data.syncedFrom` (key nguồn) và `data.note` (`"Đồng bộ theo <tên nguồn>"`). Trang nhật ký hiện `note` trong ngoặc sau thay đổi, log cũ không có `note` thì hiện như trước.
+
+Lỗi:
+
+- `400 VALIDATION_FAILED`: `changes` rỗng hoặc thiếu `reason`.
+- `400 SETTING_CONFIG_INVALID_TYPE`, `400 SETTING_CONFIG_OUT_OF_RANGE`, `400 SETTING_CONFIG_NOT_EDITABLE`: giá trị của khoá Admin gửi không hợp lệ.
+- `400 SETTING_CONFIG_RULE_VIOLATION`, `400 SETTING_RANK_THRESHOLD_ORDER`, `400 SETTING_CONFIG_SYNC_CONFLICT`: lỗi bộ luật. `message` là lỗi đầu tiên, `details.errors[]` là mọi lỗi (cùng dạng `errors` của preview). Giá trị đồng bộ ra ngoài khoảng cho phép của khoá đích trả `400 SETTING_CONFIG_OUT_OF_RANGE` kèm `details.errors[]`.
+- `404 SETTING_CONFIG_NOT_FOUND`: key không tồn tại hoặc chưa được seed.
+- `409 SETTING_CONFIG_WARNING_NOT_ACKNOWLEDGED`: có cảnh báo mà `acknowledgedWarnings` là `false`. Không lưu gì, `details.preview` chứa kết quả xem trước để hiện cảnh báo.
+- `401`, `403` như các endpoint khác.
+
+## Bộ luật liên khoá của cấu hình
+
+Chạy ở `POST /preview`, `PUT /batch`, `PUT /{key}` và `PUT /`. Giá trị mặc định luôn đọc từ cấu hình đang lưu, không viết cứng. Luật lỗi và cảnh báo chỉ báo khi một khoá của luật vừa bị đổi.
+
+**Đồng bộ** (tính từ giá trị đang lưu, không ghi đè khoá Admin đã gửi, tối đa 5 vòng):
+
+| Khi đổi | Tự đổi theo |
+|---|---|
+| `boost_days` | `boost_max_days` = số gói cũ × số ngày mới (số gói = làm tròn `boost_max_days` cũ chia `boost_days` cũ, tối thiểu 1). Ví dụ 3 → 4 thì 6 → 8 |
+| `post_fee` | `edit_fee` và `renew_fee` nếu đang bằng `post_fee` cũ. `post_fee_over_quota` giữ tỉ lệ, làm tròn lên. Ví dụ 5 → 7 thì 10 → 14 |
+| `post_display_days` | `post_display_days_gold` giữ khoảng chênh với mức thường, không nhỏ hơn mức thường mới |
+
+Giá trị đồng bộ ra ngoài khoảng cho phép của khoá đích, hoặc khoá đích là khoá cố định, thì không tự sửa mà trả lỗi nêu rõ khoá và giá trị đề xuất.
+
+**Lỗi** (chặn lưu):
+
+- `item_photos_min` không lớn hơn `item_photos_max`.
+- `boost_days` ≤ `boost_max_days` ≤ `post_display_days`.
+- `boost_max_days` phải là bội số của `boost_days`, kèm gợi ý số gần nhất ("Gợi ý: 6 hoặc 9").
+- `boost_max_per_page` ≤ `boost_max_active` và `boost_max_per_user` ≤ `boost_max_active`.
+- `max_active_items_bronze` ≤ `silver` ≤ `gold` ≤ `diamond`. `-1` là không giới hạn, chỉ hợp lệ khi mọi hạng cao hơn cũng là `-1`.
+- `reputation_silver_min` < `reputation_gold_min` < `reputation_diamond_min` (`SETTING_RANK_THRESHOLD_ORDER`, giữ nguyên câu chữ cũ).
+
+**Cảnh báo** (phải xác nhận):
+
+- `boost_ending_notice_hours` ≥ `boost_days` × 24 giờ.
+- `post_display_days_gold` < `post_display_days`.
+- Một khoá phí (tên kết thúc bằng `_fee`) vừa được đặt bằng 0.
+
+### Mã lỗi mới
+
+| Mã | HTTP | Ý nghĩa |
+|---|---|---|
+| `SETTING_CONFIG_RULE_VIOLATION` | 400 | Giá trị mâu thuẫn với cấu hình liên quan, hoặc gửi trùng khoá trong lô |
+| `SETTING_CONFIG_SYNC_CONFLICT` | 400 | Hai luật đồng bộ đòi hai giá trị khác nhau cho một khoá, hoặc đồng bộ quá 5 vòng |
+| `SETTING_CONFIG_SYNC_REQUIRED` | 409 | `PUT` đơn kéo theo cấu hình khác hoặc có cảnh báo, kèm `details.preview` |
+| `SETTING_CONFIG_WARNING_NOT_ACKNOWLEDGED` | 409 | `PUT /batch` có cảnh báo mà chưa xác nhận |
+
 ## PUT /api/v1/admin/configs
 
 Cập nhật cấu hình bằng key trong request body. Chỉ Admin được gọi. Giá trị được kiểm tra theo kiểu và khoảng đã khai báo cho key; ví dụ `post_fee` là số nguyên không âm. Thay đổi được đọc từ database ngay ở lần gọi kế tiếp, không dùng cache.
@@ -72,11 +210,12 @@ Có thể gửi thêm `reason` để ghi lý do vào `activity_logs`. Thành cô
 - `400 SETTING_CONFIG_INVALID_TYPE`: value sai kiểu theo key.
 - `400 SETTING_CONFIG_OUT_OF_RANGE`: value ngoài khoảng cho phép.
 - `400 SETTING_RANK_THRESHOLD_ORDER`: sửa `reputation_silver_min`, `reputation_gold_min` hoặc `reputation_diamond_min` làm điểm tối thiểu các hạng không còn tăng dần. Phải thoả Bạc < Vàng < Kim cương (UT-06), so với giá trị đang lưu của hai khoá còn lại. Muốn nâng cả ba mốc thì sửa từ mốc cao nhất xuống mốc thấp nhất.
+- `409 SETTING_CONFIG_SYNC_REQUIRED`: thay đổi kéo theo cấu hình khác hoặc có cảnh báo, chưa lưu gì (xem `PUT /{key}`).
 - `401 UNAUTHORIZED`: chưa đăng nhập.
 - `403 FORBIDDEN`: tài khoản không phải Admin.
 - `404 SETTING_CONFIG_NOT_FOUND`: key không tồn tại hoặc cấu hình chưa được seed.
 
-Quy tắc `SETTING_RANK_THRESHOLD_ORDER` áp dụng cho cả `PUT /api/v1/admin/configs/{key}`.
+Quy tắc `SETTING_RANK_THRESHOLD_ORDER` và các luật liên khoá khác áp dụng cho cả `PUT /api/v1/admin/configs/{key}`.
 
 ## Admin lexicon
 

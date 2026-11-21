@@ -136,7 +136,7 @@ function BrowseAiPrompt({ signedIn }: { signedIn: boolean }) {
   }, [signedIn]);
 
   return (
-    <aside aria-label="Trợ lý AI" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-low p-4">
+    <aside aria-label="Trợ lý AI" className="space-y-3 rounded-lg border border-border bg-surface-low p-4">
       <div className="min-w-0 space-y-1">
         <p className="text-sm font-semibold text-text-primary">Không biết tìm bằng từ khóa nào?</p>
         <p className="text-sm text-text-secondary">Mô tả món đồ bạn cần, Trợ lý AI sẽ tìm giúp bạn.</p>
@@ -147,7 +147,7 @@ function BrowseAiPrompt({ signedIn }: { signedIn: boolean }) {
       </div>
       <Link
         to={signedIn ? '/ai' : loginPath('/ai')}
-        className="inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
+        className="flex min-h-11 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
       >
         Thử Trợ lý AI
       </Link>
@@ -483,24 +483,26 @@ export function Browse() {
       </div>
 
       <div className="browse-layout">
-        <aside
+        {/* Khối bên trái gồm thẻ bộ lọc và khung Trợ lý AI, cùng ẩn hiện và cùng dính khi cuộn */}
+        <div
           id="browse-filters"
-          aria-label="Bộ lọc"
-          className={`${mobileFilters ? 'block' : 'hidden'} browse-filter-card lg:sticky lg:top-24 lg:block`}
+          className={`${mobileFilters ? 'block' : 'hidden'} space-y-4 lg:sticky lg:top-24 lg:block`}
         >
-          <div className="browse-filter-heading">
-            <h2>Bộ lọc</h2>
-            <button type="button" onClick={reset} className="browse-reset-button">
-              Đặt lại
-            </button>
-          </div>
-          {filters}
-        </aside>
-
-        <section className="browse-results" aria-label="Danh sách món đồ">
+          <aside aria-label="Bộ lọc" className="browse-filter-card">
+            <div className="browse-filter-heading">
+              <h2>Bộ lọc</h2>
+              <button type="button" onClick={reset} className="browse-reset-button">
+                Đặt lại
+              </button>
+            </div>
+            {filters}
+          </aside>
           {!boostedOnly ? (
             <BrowseAiPrompt key={currentUser?.id ?? 'guest'} signedIn={Boolean(currentUser)} />
           ) : null}
+        </div>
+
+        <section className="browse-results" aria-label="Danh sách món đồ">
           <div className="browse-results-toolbar">
             <div className="browse-results-summary">
               <strong>{totalElements} món</strong>

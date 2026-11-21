@@ -158,21 +158,30 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
 
     /**
      * Tìm các yêu cầu AWAITING_HANDOVER có đúng một bên xác nhận quá hạn im lặng (GN-09).
+     * Hạn tính theo hình thức giao nhận: Giao hàng dùng shippingCutoff, Gặp trực tiếp dùng inPersonCutoff.
      * Phân trang kiểu keyset theo id > afterId, tối đa limit bản ghi (Mục Q).
      */
     @Query("""
         SELECT r FROM Request r
         WHERE r.status = com.shareloop.request.entity.RequestStatus.AWAITING_HANDOVER
         AND (
-            (r.donorHandoverAt IS NOT NULL AND r.receiverHandoverAt IS NULL AND r.donorHandoverAt < :cutoff)
+            (r.donorHandoverAt IS NOT NULL AND r.receiverHandoverAt IS NULL)
             OR
-            (r.receiverHandoverAt IS NOT NULL AND r.donorHandoverAt IS NULL AND r.receiverHandoverAt < :cutoff)
+            (r.receiverHandoverAt IS NOT NULL AND r.donorHandoverAt IS NULL)
+        )
+        AND (
+            (r.deliveryMethod = 'SHIPPING'
+                AND COALESCE(r.donorHandoverAt, r.receiverHandoverAt) < :shippingCutoff)
+            OR
+            ((r.deliveryMethod IS NULL OR r.deliveryMethod <> 'SHIPPING')
+                AND COALESCE(r.donorHandoverAt, r.receiverHandoverAt) < :inPersonCutoff)
         )
         AND r.id > :afterId
         ORDER BY r.id ASC
     """)
     List<Request> findOverdueHandoverRequests(
-            @Param("cutoff") java.time.Instant cutoff,
+            @Param("inPersonCutoff") java.time.Instant inPersonCutoff,
+            @Param("shippingCutoff") java.time.Instant shippingCutoff,
             @Param("afterId") long afterId,
             org.springframework.data.domain.Pageable pageable);
 

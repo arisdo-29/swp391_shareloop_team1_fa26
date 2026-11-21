@@ -42,6 +42,7 @@ import {
 import { ConversationList } from '../../components/messages/ConversationList';
 import { ChatHeader } from '../../components/messages/ChatHeader';
 import { ChatMessage } from '../../components/messages/ChatMessage';
+import { DisputeBanner } from '../../components/messages/DisputeBanner';
 import { SelectRequestDialog } from '../../components/messages/SelectRequestDialog';
 import {
   AcceptOfferChangeDialog,
@@ -873,6 +874,18 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                     </button>
                   </p>
                 ) : null}
+                <DisputeBanner
+                  request={selected.request}
+                  partnerName={selectedParticipantName}
+                  progressPath={transactionProgressPath(selected.request.id)}
+                  onResponded={() => {
+                    // Tải lại giao dịch để banner đổi sang "đã giải trình"
+                    requestApi
+                      .get(selected.request.id, currentUserId)
+                      .then(updateSelectedRequest)
+                      .catch(() => undefined);
+                  }}
+                />
                 {canProposeOfferChange ? (
                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-surface-low px-3 py-2 text-xs leading-5 text-text-secondary">
                     <p className="min-w-0 flex-1">

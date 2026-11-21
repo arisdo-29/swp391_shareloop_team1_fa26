@@ -283,7 +283,14 @@ public enum ConfigKey {
             "3",
             ConfigGroup.TRANSACTION,
             "Hạn tự động hoàn tất",
-            "Một bên đã xác nhận mà bên kia im lặng quá số ngày này thì giao dịch tự hoàn tất."),
+            "Gặp trực tiếp: một bên đã xác nhận mà bên kia im lặng quá số ngày này thì giao dịch tự hoàn tất."),
+    AUTO_CONFIRM_DAYS_SHIPPING(
+            "auto_confirm_days_shipping",
+            "7",
+            ConfigGroup.TRANSACTION,
+            "Hạn tự động hoàn tất khi giao hàng",
+            "Giao hàng: một bên đã xác nhận mà bên kia im lặng quá số ngày này thì giao dịch tự hoàn tất. Dài hơn gặp"
+                    + " trực tiếp vì cần thời gian vận chuyển."),
     STUCK_REQUEST_HOURS(
             "stuck_request_hours",
             "48",
@@ -308,7 +315,7 @@ public enum ConfigKey {
             "30",
             ConfigGroup.REPUTATION,
             "Trần điểm mỗi ngày",
-            "Số điểm uy tín tối đa một người được cộng trong một ngày."),
+            "Số điểm tích luỹ tối đa một người được cộng trong một ngày."),
     PAYMENT_ORDER_EXPIRE_MINUTES(
             "payment_order_expire_minutes",
             "30",

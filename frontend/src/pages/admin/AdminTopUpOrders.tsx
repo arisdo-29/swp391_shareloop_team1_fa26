@@ -14,6 +14,7 @@ const statusLabels: Record<PaymentOrderStatus, string> = {
   SUCCESS: 'Thành công',
   FAILED: 'Thất bại',
   EXPIRED: 'Hết hạn',
+  CANCELLED: 'Đã hủy',
 };
 
 function statusClass(status: PaymentOrderStatus) {

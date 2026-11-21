@@ -49,7 +49,6 @@ function buildReputation(overrides: Partial<MyReputation> = {}): MyReputation {
     totalPoints: 120,
     rank: 'GOLD',
     trustStars: 4,
-    accuracyRate: 0.92,
     history: { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 },
     ...overrides,
   };
@@ -99,7 +98,7 @@ describe('Profile', () => {
     renderProfile('/profile?tab=reputation');
 
     // then
-    expect(await screen.findByText('Lịch sử uy tín')).toBeTruthy();
+    expect(await screen.findByText('Lịch sử điểm tích luỹ')).toBeTruthy();
     expect(reputationApi.getMyReputation).toHaveBeenCalledTimes(1);
   });
 
@@ -153,7 +152,7 @@ describe('Profile', () => {
 
     // then
     expect(await screen.findByText('Thông tin cá nhân')).toBeTruthy();
-    expect(screen.queryByText('Lịch sử uy tín')).toBeNull();
+    expect(screen.queryByText('Lịch sử điểm tích luỹ')).toBeNull();
   });
 
   it('bỏ liên kết Ví Credit khỏi hồ sơ và giữ chuyển hướng cho URL cũ', async () => {
@@ -177,19 +176,21 @@ describe('Profile', () => {
     await userEvent.click(screen.getByRole('button', { name: /Uy tín/ }));
 
     // then
-    expect(await screen.findByText('Lịch sử uy tín')).toBeTruthy();
+    expect(await screen.findByText('Lịch sử điểm tích luỹ')).toBeTruthy();
     expect(reputationApi.getMyReputation).toHaveBeenCalledTimes(1);
   });
 
-  it('hiện "Chưa đủ giao dịch để tính" khi tỉ lệ đúng mô tả là null', async () => {
+  it('không còn ô tỉ lệ đúng mô tả trong tóm tắt uy tín', async () => {
     // given
-    vi.mocked(reputationApi.getMyReputation).mockResolvedValue(buildReputation({ accuracyRate: null }));
+    vi.mocked(reputationApi.getMyReputation).mockResolvedValue(buildReputation());
 
     // when
     renderProfile('/profile?tab=reputation');
 
     // then
-    expect(await screen.findByText('Chưa đủ giao dịch để tính')).toBeTruthy();
+    expect(await screen.findByText('Sao uy tín')).toBeTruthy();
+    expect(screen.queryByText('Đúng mô tả')).toBeNull();
+    expect(screen.queryByText('Chưa đủ giao dịch để tính')).toBeNull();
   });
 
   it('giữ nhãn quản trị hệ thống và không gọi API uy tín với admin', async () => {

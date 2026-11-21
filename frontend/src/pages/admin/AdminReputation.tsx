@@ -9,11 +9,20 @@ import {
   SkeletonRows,
   TextArea,
 } from '../../components/ui';
-import type { AdminConfigResponse } from '../../services/adminConfigApi';
+import type {
+  AdminConfigResponse,
+  BatchUpdateAdminConfigRequest,
+  ConfigRuleMessage,
+} from '../../services/adminConfigApi';
 import { ConfigEditDialog } from './ConfigEditDialog';
-import { formatConfigValue } from './configDisplay';
-import { DIAMOND_MIN_KEY, GOLD_MIN_KEY, SILVER_MIN_KEY, rankOrderError } from './rankThresholds';
-import { useAdminConfigs } from './useAdminConfigs';
+import { ConfigRuleAlerts } from './ConfigRuleAlerts';
+import { configUpdateNotice, formatConfigValue } from './configDisplay';
+import { useAdminConfigs, type BatchSaveResult } from './useAdminConfigs';
+
+// Thứ tự điểm Bạc < Vàng < Kim cương do Backend kiểm tra, trang chỉ hiện lỗi Backend trả về.
+const SILVER_MIN_KEY = 'reputation_silver_min';
+const GOLD_MIN_KEY = 'reputation_gold_min';
+const DIAMOND_MIN_KEY = 'reputation_diamond_min';
 
 const POST_DISPLAY_DAYS_KEY = 'post_display_days';
 const POST_DISPLAY_DAYS_GOLD_KEY = 'post_display_days_gold';
@@ -113,7 +122,11 @@ function RankEditDialog({
   saving: boolean;
   error: string;
   onClose: () => void;
-  onSave: (values: RankEditValues, reason: string) => void;
+  onSave: (
+    values: RankEditValues,
+    reason: string,
+    acknowledgedWarnings: boolean,
+  ) => Promise<BatchSaveResult | null>;
 }) {
   const byKey = (key: string) => configs.find((entry) => entry.key === key);
   const initialValues: RankEditValues = {
@@ -123,10 +136,11 @@ function RankEditDialog({
   };
   const [values, setValues] = useState(initialValues);
   const [reason, setReason] = useState('');
-  const minPointsError = rank.minPointsKey
-    ? integerError(values.minPoints, 0, 'Điểm tối thiểu') ||
-      rankOrderError(configs, rank.minPointsKey, values.minPoints)
-    : '';
+  const [acknowledged, setAcknowledged] = useState(false);
+  // Lỗi và cảnh báo Backend trả về sau khi bấm lưu (ví dụ điểm các hạng không còn tăng dần).
+  const [ruleErrors, setRuleErrors] = useState<ConfigRuleMessage[]>([]);
+  const [ruleWarnings, setRuleWarnings] = useState<ConfigRuleMessage[]>([]);
+  const minPointsError = rank.minPointsKey ? integerError(values.minPoints, 0, 'Điểm tối thiểu') : '';
   const regularFeeLimitError = integerError(
     values.regularFeeLimit,
     -1,
@@ -142,10 +156,23 @@ function RankEditDialog({
     reason.trim().length > 0 &&
     !minPointsError &&
     !regularFeeLimitError &&
-    !displayDaysError;
+    !displayDaysError &&
+    ruleErrors.length === 0 &&
+    (ruleWarnings.length === 0 || acknowledged);
 
   const setValue = (key: keyof RankEditValues, value: string) => {
     setValues((current) => ({ ...current, [key]: value }));
+    // Giá trị đã đổi thì lỗi và cảnh báo cũ không còn đúng.
+    setRuleErrors([]);
+    setRuleWarnings([]);
+    setAcknowledged(false);
+  };
+
+  const save = async () => {
+    const result = await onSave(values, reason.trim(), acknowledged);
+    if (!result || result.ok) return;
+    setRuleErrors(result.errors);
+    setRuleWarnings(result.preview?.warnings ?? []);
   };
 
   return (
@@ -194,6 +221,13 @@ function RankEditDialog({
           onChange={(event) => setReason(event.target.value)}
         />
       </div>
+      <ConfigRuleAlerts
+        errors={ruleErrors}
+        warnings={ruleWarnings}
+        acknowledged={acknowledged}
+        disabled={saving}
+        onAcknowledgedChange={setAcknowledged}
+      />
       {error ? (
         <div className="mt-4" role="alert">
           <Alert tone="error">{error}</Alert>
@@ -203,12 +237,26 @@ function RankEditDialog({
         <Button variant="outline" disabled={saving} onClick={onClose}>
           Hủy
         </Button>
-        <Button disabled={saving || !canSave} onClick={() => onSave(values, reason.trim())}>
+        <Button disabled={saving || !canSave} onClick={() => void save()}>
           {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
         </Button>
       </div>
     </Dialog>
   );
+}
+
+// Cấu hình Backend tự đồng bộ kèm (ví dụ đổi số ngày hiển thị bài mặc định kéo theo số ngày của hạng Vàng) được nêu ra
+// để Admin biết, vì hộp thoại hạng không có phần xem trước.
+function rankUpdateNotice(
+  rankName: string,
+  requested: { key: string }[],
+  updated: AdminConfigResponse[],
+) {
+  const extras = updated.filter((entry) => !requested.some((change) => change.key === entry.key));
+  const base = `Đã cập nhật hạng "${rankName}"`;
+  return extras.length > 0
+    ? `${base}, đồng bộ kèm: ${extras.map((entry) => entry.label).join(', ')}.`
+    : `${base}.`;
 }
 
 /** Uy tín và Hạng: cấu hình hạng thành viên và quy tắc cộng điểm (dùng API cấu hình có sẵn). */
@@ -220,13 +268,13 @@ export function AdminReputation() {
     reload,
     saving,
     saveError,
-    setSaveError,
     clearSaveError,
-    update,
+    preview,
+    cancelPreview,
+    updateBatch,
   } = useAdminConfigs();
   const [editing, setEditing] = useState<AdminConfigResponse | null>(null);
   const [editingRank, setEditingRank] = useState<RankRow | null>(null);
-  const [rankSaving, setRankSaving] = useState(false);
   const [notice, setNotice] = useState('');
   const byKey = (key: string) => configs.find((entry) => entry.key === key);
   const rules = configs.filter(
@@ -239,30 +287,17 @@ export function AdminReputation() {
     setEditing(config);
   };
 
-  const save = async (value: string, reason: string) => {
-    if (!editing) return;
-    // Báo lỗi thứ tự điểm các hạng ngay trên trang, Backend vẫn kiểm tra lại khi lưu.
-    const orderError = rankOrderError(configs, editing.key, value);
-    if (orderError) {
-      setSaveError(orderError);
-      return;
+  const save = async (request: BatchUpdateAdminConfigRequest) => {
+    const result = await updateBatch(request);
+    if (result.ok && editing) {
+      setNotice(configUpdateNotice(editing.label, result.configs.length));
+      setEditing(null);
     }
-    const updated = await update(editing.key, value, reason);
-    if (!updated) return;
-    setEditing(null);
-    setNotice(`Đã cập nhật "${updated.label}".`);
+    return result;
   };
 
-  const saveRank = async (values: RankEditValues, reason: string) => {
-    if (!editingRank || rankSaving) return;
-    if (editingRank.minPointsKey) {
-      const orderError = rankOrderError(configs, editingRank.minPointsKey, values.minPoints);
-      if (orderError) {
-        setSaveError(orderError);
-        return;
-      }
-    }
-
+  const saveRank = async (values: RankEditValues, reason: string, acknowledgedWarnings: boolean) => {
+    if (!editingRank || saving) return null;
     const changes = [
       ...(editingRank.minPointsKey
         ? [{ key: editingRank.minPointsKey, value: values.minPoints.trim() }]
@@ -271,25 +306,21 @@ export function AdminReputation() {
       { key: editingRank.displayDaysKey, value: values.displayDays.trim() },
     ].filter(({ key, value }) => byKey(key)?.value !== value);
 
-    setRankSaving(true);
     setNotice('');
-    try {
-      for (const change of changes) {
-        const updated = await update(change.key, change.value, reason);
-        if (!updated) return;
-      }
+    // Một lô duy nhất: hoặc lưu cả ba giá trị hoặc không lưu gì, Backend kiểm tra thứ tự điểm các hạng.
+    const result = await updateBatch({ changes, reason, acknowledgedWarnings });
+    if (result.ok) {
       setEditingRank(null);
-      setNotice(`Đã cập nhật hạng "${editingRank.name}".`);
-    } finally {
-      setRankSaving(false);
+      setNotice(rankUpdateNotice(editingRank.name, changes, result.configs));
     }
+    return result;
   };
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Uy tín & Hạng"
-        description="Cấu hình hạng thành viên, quy tắc cộng điểm uy tín và hỗ trợ khôi phục uy tín cho tài khoản đủ điều kiện."
+        title="Hạng và Uy tín"
+        description="Cấu hình hạng thành viên, quy tắc cộng điểm tích luỹ và hỗ trợ khôi phục uy tín cho tài khoản đủ điều kiện."
       />
 
       {notice ? (
@@ -348,7 +379,7 @@ export function AdminReputation() {
                           <Button
                             variant="outline"
                             className="!px-2"
-                            disabled={saving || rankSaving}
+                            disabled={saving}
                             aria-label={`Sửa nội dung hạng ${rank.name}`}
                             onClick={() => {
                               clearSaveError();
@@ -370,7 +401,7 @@ export function AdminReputation() {
           <section>
             <h2 className="mb-1 section-title">Quy tắc cộng điểm</h2>
             <p className="mb-3 text-sm text-text-muted">
-              Điểm uy tín quyết định hạng của người dùng.
+              Điểm tích luỹ quyết định hạng của người dùng.
             </p>
             {rules.length ? (
               <div className="table-wrap">
@@ -413,7 +444,9 @@ export function AdminReputation() {
           saving={saving}
           error={saveError}
           onClose={() => setEditing(null)}
-          onSave={(value, reason) => void save(value, reason)}
+          onPreview={preview}
+          onCancelPreview={cancelPreview}
+          onSave={save}
         />
       ) : null}
 
@@ -421,10 +454,10 @@ export function AdminReputation() {
         <RankEditDialog
           rank={editingRank}
           configs={configs}
-          saving={rankSaving}
+          saving={saving}
           error={saveError}
           onClose={() => setEditingRank(null)}
-          onSave={(values, reason) => void saveRank(values, reason)}
+          onSave={saveRank}
         />
       ) : null}
     </div>

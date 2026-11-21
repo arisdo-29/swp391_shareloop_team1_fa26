@@ -31,6 +31,7 @@ import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
+import com.shareloop.item.event.ItemApprovedEvent;
 import com.shareloop.item.event.ItemRemovedEvent;
 import com.shareloop.item.repository.ItemRepository;
 import com.shareloop.listingfee.dto.DisplayWindow;
@@ -144,7 +145,7 @@ class ItemServiceTest {
         lenient().when(userService.isAdmin(anyLong())).thenReturn(false);
         lenient()
                 .when(reputationService.getReputationSummary(10L))
-                .thenReturn(new ReputationSummary(10L, 4, Rank.SILVER, 0.9));
+                .thenReturn(new ReputationSummary(10L, 4, Rank.SILVER));
         lenient()
                 .when(userService.findBriefs(List.of(10L)))
                 .thenReturn(Map.of(10L, new UserBrief(10L, "Người thật", "user@example.test")));
@@ -661,7 +662,6 @@ class ItemServiceTest {
         assertThat(response.donorName()).isEqualTo("Người thật");
         assertThat(response.donorTrustStars()).isEqualTo(4);
         assertThat(response.donorRank()).isEqualTo("SILVER");
-        assertThat(response.donorAsDescribedRate()).isEqualTo(0.9);
     }
 
     @Test
@@ -1025,6 +1025,7 @@ class ItemServiceTest {
 
         itemService.markApproved(1L);
         assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
+        verify(eventPublisher).publishEvent(new ItemApprovedEvent(1L));
 
         assertThatThrownBy(() -> itemService.markApproved(1L))
                 .isInstanceOf(BusinessException.class)

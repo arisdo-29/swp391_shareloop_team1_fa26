@@ -88,6 +88,9 @@ public class PaymentOrder {
     @Column(name = "review_note", length = 500)
     private String reviewNote;
 
+    @Column(name = "payment_url", columnDefinition = "TEXT")
+    private String paymentUrl;
+
     public Instant getSubmittedAt() {
         return submittedAt;
     }
@@ -126,10 +129,34 @@ public class PaymentOrder {
         this.callbackData = Map.copyOf(callbackData);
     }
 
+    /** Khách hủy tại cổng thanh toán (VNPay mã 24): PENDING → CANCELLED. Trạng thái khác giữ nguyên. */
+    public void markCancelled() {
+        if (status == PaymentOrderStatus.PENDING) {
+            status = PaymentOrderStatus.CANCELLED;
+        }
+    }
+
+    /** Lưu URL thanh toán vừa dựng để "Tiếp tục thanh toán" mở lại đúng URL đó (cùng vnp_TxnRef, vnp_ExpireDate). */
+    public void attachPaymentUrl(String url) {
+        this.paymentUrl = url;
+    }
+
+    public String getPaymentUrl() {
+        return paymentUrl;
+    }
+
     public void markFailed() {
         if (status == PaymentOrderStatus.PENDING) {
             status = PaymentOrderStatus.FAILED;
         }
+    }
+
+    /**
+     * Cổng báo đã thu tiền cho đơn đã kết thúc mà không cộng Credit (FAILED, EXPIRED): giữ nguyên trạng thái, ghi chú để
+     * đối soát và hoàn tiền tay. Không đè callback_data để còn giữ mã lỗi lúc đơn bị hủy.
+     */
+    public void flagPaidAfterClosed(String note) {
+        reviewNote = note;
     }
 
     public Map<String, String> getCallbackData() {
