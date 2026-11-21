@@ -103,6 +103,9 @@ class RequestServiceTest {
     @Mock
     CreditService creditService;
 
+    @Mock
+    ItemReopenedNotifier itemReopenedNotifier;
+
     @Spy
     @InjectMocks
     RequestService requestService;
@@ -1200,6 +1203,48 @@ class RequestServiceTest {
 
         // then
         verify(eventPublisher).publishEvent(new RequestNegotiationEndedEvent(101L));
+    }
+
+    @Test
+    @DisplayName("cancelTransaction: bài mở lại thì báo những người từng bị từ chối, trừ người nhận vừa huỷ")
+    void cancelTransaction_whenItemReopened_notifiesRejectedRequesters() {
+        // given
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "RESERVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        requestService.cancelTransaction(101L, 20L, new CancelTransactionRequest("Bận đột xuất"));
+
+        // then
+        verify(itemService).release(1L);
+        verify(itemReopenedNotifier).notifyRejectedRequesters(1L, 10L);
+    }
+
+    @Test
+    @DisplayName("cancelByAdmin: Admin huỷ giao dịch thì cũng báo những người từng bị từ chối")
+    void cancelByAdmin_whenItemReopened_notifiesRejectedRequesters() {
+        // given
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient()
+                .doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "RESERVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        requestService.cancelByAdmin(101L, 1L, new CancelTransactionRequest("Giao dịch bị kẹt"));
+
+        // then
+        verify(itemReopenedNotifier).notifyRejectedRequesters(1L, 10L);
     }
 
     @Test

@@ -107,6 +107,7 @@ public class RequestService {
     private final ActivityLogService activityLogService;
     private final ReportService reportService;
     private final CreditService creditService;
+    private final ItemReopenedNotifier itemReopenedNotifier;
 
     @Autowired
     public RequestService(
@@ -123,7 +124,8 @@ public class RequestService {
             @Autowired(required = false) ApplicationEventPublisher eventPublisher,
             @Autowired(required = false) ActivityLogService activityLogService,
             @Autowired(required = false) @Lazy ReportService reportService,
-            @Autowired(required = false) CreditService creditService) {
+            @Autowired(required = false) CreditService creditService,
+            @Autowired(required = false) ItemReopenedNotifier itemReopenedNotifier) {
         this.requestRepository = requestRepository;
         this.notificationService = notificationService;
         this.configService = configService;
@@ -138,6 +140,7 @@ public class RequestService {
         this.activityLogService = activityLogService;
         this.reportService = reportService;
         this.creditService = creditService;
+        this.itemReopenedNotifier = itemReopenedNotifier;
     }
 
     public RequestService(
@@ -167,6 +170,7 @@ public class RequestService {
                 eventPublisher,
                 activityLogService,
                 null,
+                null,
                 null);
     }
 
@@ -193,6 +197,7 @@ public class RequestService {
                 null,
                 null,
                 null,
+                null,
                 null);
     }
 
@@ -212,6 +217,7 @@ public class RequestService {
                 userService,
                 null,
                 jdbcClient,
+                null,
                 null,
                 null,
                 null,
@@ -847,6 +853,7 @@ public class RequestService {
         publishNegotiationEnded(saved);
 
         releaseReservedItems(saved);
+        notifyItemReopened(saved);
 
         long otherUserId = isDonor ? saved.getReceiverId() : item.donorId();
         notificationService.notify(
@@ -1052,6 +1059,7 @@ public class RequestService {
         Request saved = requestRepository.save(request);
         releaseReservedItems(saved);
         publishNegotiationEnded(saved);
+        notifyItemReopened(saved);
 
         notifyBothParties(saved, "TRANSACTION_CANCELLED", "Admin đã huỷ giao dịch. Lý do: " + reason);
         if (activityLogService != null) {
@@ -1064,6 +1072,14 @@ public class RequestService {
                     Request.CANCEL_BY_ADMIN + reason);
         }
         return toResponse(saved);
+    }
+
+    // Bài chính vừa về APPROVED: báo những người từng bị từ chối ở bài này (mỗi người một lần) để họ xin lại.
+    // itemReopenedNotifier null chỉ gặp ở unit test dựng service rút gọn.
+    private void notifyItemReopened(Request request) {
+        if (itemReopenedNotifier != null) {
+            itemReopenedNotifier.notifyRejectedRequesters(request.getItemId(), request.getReceiverId());
+        }
     }
 
     // Nhả bài chính về APPROVED. Món mang đổi dùng releaseIfReserved vì giao dịch SWAP cũ có thể chưa giữ chỗ nó.

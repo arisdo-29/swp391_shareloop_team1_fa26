@@ -171,6 +171,8 @@ export function ProductDetail() {
   const isDonorLocked = Boolean(item.donorLocked);
   // Bài đã giao dịch thành công: chỉ xem. Dựa vào cờ requestable backend trả, không tự suy từ trạng thái.
   const isTradedReadOnly = item.status === 'TRADED' && item.requestable === false;
+  // Bài đã chọn người khác: người từng gửi yêu cầu vẫn xem lại được bài nhưng không gửi yêu cầu mới.
+  const isReservedReadOnly = item.status === 'RESERVED' && item.requestable === false && !own;
   const ownerProfileId = toBackendUserId(item.ownerId);
   const activeListing =
     (item.status === 'approved' || item.status === 'APPROVED') &&
@@ -357,6 +359,8 @@ export function ProductDetail() {
               <ConditionBadge condition={item.condition} />
               {isTradedReadOnly ? (
                 <StatusBadge status="TRADED" label="Đã giao dịch" />
+              ) : isReservedReadOnly && !existingRequest ? (
+                <StatusBadge status="RESERVED" label="Đã có người nhận" />
               ) : !activeListing ? (
                 <StatusBadge status={item.status} />
               ) : null}
@@ -472,6 +476,17 @@ export function ProductDetail() {
                   Hủy yêu cầu
                 </Button>
               ) : null}
+            </>
+          ) : isReservedReadOnly ? (
+            <>
+              <h2 className="text-lg font-bold">Đã có người nhận</h2>
+              <p className="text-sm leading-6 text-text-secondary">
+                Chủ bài đã chọn người nhận cho món này nên bài không nhận yêu cầu mới. Bạn chỉ xem được
+                chi tiết bài đăng.
+              </p>
+              <Link to="/browse">
+                <Button variant="outline" className="w-full">Tìm món khác</Button>
+              </Link>
             </>
           ) : !activeListing ? (
             <>

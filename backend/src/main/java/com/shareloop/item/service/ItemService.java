@@ -317,7 +317,9 @@ public class ItemService {
      *   nút gửi yêu cầu. Không trả thông tin người nhận hay yêu cầu liên quan.
      * - Chủ bài đăng: xem được mọi trạng thái.
      * - Người tham gia giao dịch (G06): bài đang giao dịch (RESERVED) thì các bên tham gia (người nhận/người đổi) vẫn xem được.
-     * - Còn lại (chờ duyệt, bị từ chối, hết hạn, bị ẩn, chủ bài bị khoá): trả về ITEM_NOT_FOUND (404).
+     * - Người từng gửi yêu cầu tới bài (yêu cầu ở bất kỳ trạng thái nào, kể cả không được chọn): xem lại được bài
+     *   APPROVED, RESERVED hoặc TRADED ở chế độ chỉ xem, requestable = false khi bài không còn mở.
+     * - Còn lại (chờ duyệt, bị từ chối, hết hạn, bị ẩn, đã xoá, chủ bài bị khoá): trả về ITEM_NOT_FOUND (404).
      */
     @Transactional(readOnly = true)
     public ItemResponse getItem(Long id, Long currentUserId) {
@@ -329,7 +331,10 @@ public class ItemService {
                 && requestQueryService.isParticipantInActiveTransaction(item.getId(), currentUserId);
         boolean donorLocked = userService.isLocked(item.getDonorId());
         boolean publiclyVisible = item.isActive() && !donorLocked && isPublicDetailStatus(item.getStatus());
-        if (!publiclyVisible && !isOwner && !isParticipant) {
+        if (!publiclyVisible
+                && !isOwner
+                && !isParticipant
+                && !canViewAsFormerRequester(item, currentUserId, donorLocked)) {
             throw new BusinessException(ItemErrorCode.ITEM_NOT_FOUND);
         }
 
@@ -350,6 +355,16 @@ public class ItemService {
     // Trạng thái người ngoài được xem chi tiết: đang hiển thị, hoặc đã giao dịch xong (xem từ hồ sơ công khai).
     private static boolean isPublicDetailStatus(ItemStatus status) {
         return status == ItemStatus.APPROVED || status == ItemStatus.TRADED;
+    }
+
+    // Người không được chọn vẫn bấm "Xem chi tiết" từ khung chat cũ; bài đã có người nhận (RESERVED) thì cho xem lại
+    // thay vì 404. Bài bị ẩn hoặc chủ bài bị khoá vẫn giấu như với mọi người khác.
+    private boolean canViewAsFormerRequester(Item item, Long currentUserId, boolean donorLocked) {
+        if (currentUserId == null || requestQueryService == null || !item.isActive() || donorLocked) {
+            return false;
+        }
+        boolean viewableStatus = isPublicDetailStatus(item.getStatus()) || item.getStatus() == ItemStatus.RESERVED;
+        return viewableStatus && requestQueryService.hasRequestedItem(item.getId(), currentUserId);
     }
 
     // Chỉ bài TRADED mới có thời điểm hoàn tất; bài khác không cần hỏi module request.

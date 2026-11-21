@@ -55,6 +55,8 @@ export function notificationCategory(type: string): NotificationCategory {
       'LOGISTICS_CONFIRMED',
       'SCHEDULE_UPDATED',
       'OFFERED_ITEM_CHANGED',
+      // Món từng yêu cầu mở lại do giao dịch đã chọn bị huỷ (docs/api/request.md).
+      'REQUESTED_ITEM_REOPENED',
       'HANDOVER_CONFIRMED',
     ].includes(type)
   ) {

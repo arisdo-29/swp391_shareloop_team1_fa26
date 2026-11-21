@@ -28,6 +28,11 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
     boolean existsByItemIdAndReceiverIdAndStatusIn(Long itemId, Long receiverId, Collection<RequestStatus> statuses);
 
     /**
+     * Người dùng đã từng gửi yêu cầu tới bài này chưa, ở bất kỳ trạng thái nào (quyền xem lại bài ở chế độ chỉ xem).
+     */
+    boolean existsByItemIdAndReceiverId(Long itemId, Long receiverId);
+
+    /**
      * Danh sách yêu cầu gửi tới một bài đăng, sắp theo thời gian tạo mới nhất lên trước.
      */
     List<Request> findByItemIdOrderByCreatedAtDesc(Long itemId);

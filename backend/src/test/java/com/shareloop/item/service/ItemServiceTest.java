@@ -775,6 +775,58 @@ class ItemServiceTest {
     }
 
     @Test
+    void getItem_whenRejectedRequesterViewsReservedItem_returnsReadOnlyItem() {
+        // given: bài đã chọn người khác, người 30 từng gửi yêu cầu và bị từ chối
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        item.reserve();
+        ReflectionTestUtils.setField(item, "id", 1L);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(requestQueryService.isParticipantInActiveTransaction(1L, 30L)).thenReturn(false);
+        when(requestQueryService.hasRequestedItem(1L, 30L)).thenReturn(true);
+
+        // when
+        ItemResponse response = itemService.getItem(1L, 30L);
+
+        // then
+        assertThat(response.status()).isEqualTo(ItemStatus.RESERVED);
+        assertThat(response.requestable()).isFalse();
+    }
+
+    @Test
+    void getItem_whenStrangerViewsReservedItem_throwsNotFound() {
+        // given: người 99 chưa từng gửi yêu cầu
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        item.reserve();
+        ReflectionTestUtils.setField(item, "id", 1L);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(requestQueryService.hasRequestedItem(1L, 99L)).thenReturn(false);
+
+        // when, then
+        assertThatThrownBy(() -> itemService.getItem(1L, 99L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
+    }
+
+    @Test
+    void getItem_whenRejectedRequesterViewsHiddenItem_throwsNotFound() {
+        // given: bài bị ẩn thì người từng gửi yêu cầu cũng không xem được
+        Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
+        item.approve();
+        item.reserve();
+        item.deactivate();
+        ReflectionTestUtils.setField(item, "id", 1L);
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+
+        // when, then
+        assertThatThrownBy(() -> itemService.getItem(1L, 30L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
+        verify(requestQueryService, never()).hasRequestedItem(anyLong(), anyLong());
+    }
+
+    @Test
     @DisplayName("U04: danh sách bài của tôi đánh dấu bài đang tạm ẩn")
     void listMyItems_marksHiddenItems() {
         Item visible = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách 1", "Mô tả", null, ItemCondition.NEW, null, null);

@@ -420,6 +420,10 @@ Chủ bài hoặc người nhận huỷ giao dịch sau khi chủ bài đã ch�
     vì bài không qua duyệt lần nữa.
   - Bên còn lại nhận thông báo `TRANSACTION_CANCELLED` kèm lý do.
   - Ghi activity log `REQUEST_CANCEL` (`targetType = REQUEST`, `reason` là `cancelReason`).
+  - Bài chính mở lại nên những người có Request `REJECTED` ở bài đó nhận thông báo `REQUESTED_ITEM_REOPENED`
+    "Món bạn từng yêu cầu đã mở lại" (mỗi người một lần, trừ người nhận của giao dịch vừa huỷ). Khác `ITEM_REOPENED`
+    của module report (báo chủ bài khi bài được hiện lại sau báo cáo). Cùng hành vi ở nhánh huỷ của
+    `handover-failed` (mục 14), Admin huỷ giao dịch và job tự huỷ giao dịch quá hạn chốt lịch (22/11/2026).
 - **Thành công:** `200 OK`, trả về `RequestResponse` với `status = CANCELLED`.
 - **Lỗi:**
   - `400 VALIDATION_FAILED`: `reason` trống hoặc ngoài 5 đến 500 ký tự.
@@ -648,6 +652,7 @@ Không phải endpoint HTTP. Module khác đọc dữ kiện về Request qua `c
 | Hàm | Người gọi | Ý nghĩa |
 |-----|-----------|---------|
 | `boolean hasReservedOrHigherRequest(long itemId)` | item | Bài đã có Request từ `RESERVED` trở lên |
+| `boolean hasRequestedItem(long itemId, long userId)` | item (xem chi tiết bài) | Người dùng từng gửi Request tới bài, ở bất kỳ trạng thái nào |
 | `boolean hasActiveDelivery(long userId)` | user | Người dùng đang có giao dịch `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER` (TK-11) |
 | `long countCompletedByUser(long userId)` | user (hồ sơ công khai) | Số Request `COMPLETED` người dùng tham gia, tính cả vai người nhận và chủ bài |
 | `Map<Long, Instant> findCompletedAtByItemIds(Collection<Long> itemIds)` | item (bài `TRADED`) | `completed_at` theo id bài; bài là bài chính (`item_id`) hoặc món đề nghị (`offered_item_id`) đều tính. Bài chưa có Request `COMPLETED` không có trong map |

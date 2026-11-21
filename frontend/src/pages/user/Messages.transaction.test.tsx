@@ -264,6 +264,45 @@ describe('Chia sẻ bài trong tin nhắn', () => {
   });
 });
 
+describe('Yêu cầu theo từng trạng thái chưa mở chat', () => {
+  it('yêu cầu không được chọn: báo đúng câu, không có ô soạn tin, vẫn xem được chi tiết bài', async () => {
+    // when
+    await renderMessages(RECEIVER_ID, request({ status: 'REJECTED', contactRevealedAt: undefined }));
+
+    // then
+    expect(
+      screen.getByText(
+        'Chủ bài đã chọn người khác cho món này. Bạn vẫn xem lại được yêu cầu của mình.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText('Yêu cầu không được chọn nên cuộc trò chuyện không mở.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('Cuộc trò chuyện mở khi chủ bài chọn yêu cầu này.')).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Tin nhắn' })).toBeNull();
+    expect(screen.getByText('Bạn đã xin nhận')).toBeTruthy();
+  });
+
+  it('yêu cầu đang chờ giữ câu cũ và ô soạn tin bị khoá', async () => {
+    // when
+    await renderMessages(RECEIVER_ID, request({ status: 'PENDING', contactRevealedAt: undefined }));
+
+    // then
+    expect(screen.getByText('Cuộc trò chuyện mở khi chủ bài chọn yêu cầu này.')).toBeTruthy();
+    expect((screen.getByRole('textbox', { name: 'Tin nhắn' }) as HTMLInputElement).disabled).toBe(true);
+    expect(screen.queryByText(/Chủ bài đã chọn người khác/)).toBeNull();
+  });
+
+  it('giao dịch đã huỷ giữ câu Giao dịch đã bị huỷ', async () => {
+    // when
+    await renderMessages(RECEIVER_ID, request({ status: 'CANCELLED' }));
+
+    // then
+    expect(screen.getByText('Giao dịch đã bị huỷ.')).toBeTruthy();
+    expect(screen.queryByText(/Chủ bài đã chọn người khác/)).toBeNull();
+  });
+});
+
 describe('Khung chat gọn', () => {
   it('SWAP chỉ hiện đúng hai món ở đầu khung chat và không lặp món đề xuất bên dưới', async () => {
     // given: API thẻ ghim trả cả bài đăng gốc và món đề xuất

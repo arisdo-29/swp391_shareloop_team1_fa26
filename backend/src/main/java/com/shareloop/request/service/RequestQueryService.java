@@ -38,6 +38,15 @@ public class RequestQueryService {
     }
 
     /**
+     * Người dùng từng gửi yêu cầu tới bài này chưa, bất kể yêu cầu đang ở trạng thái nào. Người không được chọn vẫn xem
+     * lại được bài mình đã xin ở chế độ chỉ xem. Người gọi: item.
+     */
+    @Transactional(readOnly = true)
+    public boolean hasRequestedItem(long itemId, long userId) {
+        return repository.existsByItemIdAndReceiverId(itemId, userId);
+    }
+
+    /**
      * Số giao dịch COMPLETED mà người dùng tham gia, tính cả vai cho và vai nhận. Dùng cho ô "Giao dịch hoàn tất"
      * trên hồ sơ công khai. Người gọi: user.
      */

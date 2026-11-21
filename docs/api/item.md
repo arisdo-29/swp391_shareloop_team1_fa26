@@ -114,6 +114,10 @@ Xem chi tiết một bài đăng theo ID.
     nhận hay yêu cầu liên quan. Gọi thẳng `POST /api/v1/items/{id}/requests` vẫn bị chặn `409 REQUEST_ITEM_NOT_AVAILABLE`.
   - Với cả hai trường hợp trên, bài phải đang hiển thị (`is_active = true`) và chủ bài không bị khoá.
   - Bài ở trạng thái `RESERVED` (đang trong giao dịch): Ngoài chủ bài đăng, các bên tham gia giao dịch đang hoạt động (người nhận được chọn hoặc người trao đổi món `offered_item_id`) cũng được xem ở chế độ chỉ xem (`requestable = false`).
+  - Người **từng gửi yêu cầu** tới bài (Request ở bất kỳ trạng thái nào, kể cả `REJECTED` khi chủ bài chọn người khác,
+    kiểm qua `RequestQueryService.hasRequestedItem`) xem được bài `APPROVED`, `RESERVED` hoặc `TRADED` ở chế độ chỉ xem
+    (`requestable = false` khi bài không còn `APPROVED`), để nút "Xem chi tiết" trong khung chat cũ không trả 404
+    (22/11/2026). Bài bị ẩn (`is_active = false`), đã xoá mềm hoặc chủ bài bị khoá vẫn trả `404` như với mọi người.
   - Bài ở các trạng thái khác (`PENDING_REVIEW`, `REJECTED`, `EXPIRED`): Chỉ chính **chủ bài đăng** (`donorId`) mới xem được.
   - Trường hợp bài không tồn tại, đã xoá mềm, hoặc người xem không có quyền: Trả về `404 ITEM_NOT_FOUND`.
 - `requestable`: `true` khi bài `APPROVED`, đang hiển thị, chủ bài không bị khoá. Frontend ẩn nút "Gửi yêu cầu" khi

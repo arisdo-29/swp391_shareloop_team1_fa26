@@ -247,6 +247,8 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
   const selectCandidate = conversations.find(({ request }) => request.id === selectCandidateId);
   const selectedParticipantName = selected ? requestParticipantName(selected, currentUserId) : '';
   const isCancelled = selected?.request.status === 'CANCELLED';
+  // Yêu cầu không được chọn: chat không bao giờ mở, người gửi chỉ xem lại yêu cầu của mình.
+  const isRejected = selected?.request.status === 'REJECTED';
   const chatViewable = selected ? canViewChat(selected.request.status) : false;
   const chatEnabled = selected ? canChat(selected.request.status) : false;
   const requestMediaEnabled = selected
@@ -826,14 +828,26 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   <p className="mx-auto max-w-sm py-10 text-center text-sm leading-6 text-text-muted">
                     {isCancelled
                       ? 'Giao dịch đã bị huỷ.'
-                      : chatEnabled
-                        ? 'Chưa có tin nhắn. Hãy gửi lời chào để bắt đầu.'
-                        : 'Cuộc trò chuyện mở khi chủ bài chọn yêu cầu này.'}
+                      : isRejected
+                        ? 'Yêu cầu không được chọn nên cuộc trò chuyện không mở.'
+                        : chatEnabled
+                          ? 'Chưa có tin nhắn. Hãy gửi lời chào để bắt đầu.'
+                          : 'Cuộc trò chuyện mở khi chủ bài chọn yêu cầu này.'}
                   </p>
                 )}
                 <div ref={messagesEndRef} aria-hidden="true" />
               </div>
 
+              {isRejected ? (
+                <div className="shrink-0 border-t border-border px-4 py-3">
+                  <div
+                    role="status"
+                    className="rounded-md border border-border bg-surface-low px-3 py-2 text-center text-xs text-text-secondary"
+                  >
+                    Chủ bài đã chọn người khác cho món này. Bạn vẫn xem lại được yêu cầu của mình.
+                  </div>
+                </div>
+              ) : (
               <div className="shrink-0 space-y-2 border-t border-border px-4 py-3">
                 {isCancelled ? (
                   <div
@@ -989,6 +1003,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                   </p>
                 ) : null}
               </div>
+              )}
             </section>
           </>
         ) : (
