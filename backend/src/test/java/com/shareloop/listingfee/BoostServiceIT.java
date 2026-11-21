@@ -59,7 +59,6 @@ class BoostServiceIT extends IntegrationTest {
     private final List<Long> createdCategoryIds = new ArrayList<>();
 
     // Chỉ có giá trị khi test đã đổi boost_max_active; cleanUp trả lại giá trị cũ.
-    private Long configAdminId;
     private String originalMaxActive;
 
     // Thứ tự xoá: trả cấu hình trước (ghi activity_logs của Admin test), rồi credit_ledger và items tham chiếu users,
@@ -67,10 +66,8 @@ class BoostServiceIT extends IntegrationTest {
     @AfterEach
     void cleanUp() {
         if (originalMaxActive != null) {
-            configService.update(ConfigKey.BOOST_MAX_ACTIVE, originalMaxActive, "Trả lại sau test", configAdminId);
-            jdbc.update("DELETE FROM activity_logs WHERE actor_id = ?", configAdminId);
+            writeBoostMaxActive(originalMaxActive);
             originalMaxActive = null;
-            configAdminId = null;
         }
         for (Long userId : createdUserIds) {
             jdbc.update("DELETE FROM credit_ledger WHERE user_id = ?", userId);
@@ -699,13 +696,21 @@ class BoostServiceIT extends IntegrationTest {
         return itemFeeRepository.countActiveBoosts(Instant.now());
     }
 
-    // Đổi qua ConfigService như Admin làm (ghi activity_logs nên cần một user thật); cleanUp trả lại giá trị cũ.
+    // Ghi thẳng vào DB, không qua ConfigService.update: bộ luật cấu hình không cho boost_max_active nhỏ hơn
+    // boost_max_per_user, mà test cần đặt số suất sát với số bài đang đẩy. cleanUp trả lại giá trị cũ.
     private void setBoostMaxActive(long maxActive) {
         if (originalMaxActive == null) {
-            configAdminId = insertUser(0);
             originalMaxActive = configService.get(ConfigKey.BOOST_MAX_ACTIVE);
         }
-        configService.update(ConfigKey.BOOST_MAX_ACTIVE, String.valueOf(maxActive), "BoostServiceIT", configAdminId);
+        writeBoostMaxActive(String.valueOf(maxActive));
+    }
+
+    private void writeBoostMaxActive(String value) {
+        jdbc.update(
+                "UPDATE website_attributes SET attr_value = ? WHERE attr_group = 'CONFIG' AND attr_key = ? "
+                        + "AND is_deleted = FALSE",
+                value,
+                ConfigKey.BOOST_MAX_ACTIVE.key());
     }
 
     /**

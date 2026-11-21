@@ -10,6 +10,14 @@ public enum SettingErrorCode implements ErrorCode {
     SETTING_CONFIG_NOT_EDITABLE(HttpStatus.BAD_REQUEST, "Cấu hình này cố định, Admin không sửa được."),
     SETTING_RANK_THRESHOLD_ORDER(
             HttpStatus.BAD_REQUEST, "Điểm tối thiểu các hạng phải tăng dần: Bạc nhỏ hơn Vàng, Vàng nhỏ hơn Kim cương."),
+    SETTING_CONFIG_RULE_VIOLATION(HttpStatus.BAD_REQUEST, "Giá trị cấu hình mâu thuẫn với một cấu hình liên quan."),
+    SETTING_CONFIG_SYNC_CONFLICT(
+            HttpStatus.BAD_REQUEST, "Không thể đồng bộ các cấu hình liên quan vì chúng đòi các giá trị khác nhau."),
+    SETTING_CONFIG_SYNC_REQUIRED(
+            HttpStatus.CONFLICT,
+            "Thay đổi này kéo theo cấu hình liên quan hoặc có cảnh báo, hãy xem trước rồi lưu theo lô."),
+    SETTING_CONFIG_WARNING_NOT_ACKNOWLEDGED(
+            HttpStatus.CONFLICT, "Thay đổi có cảnh báo, cần xác nhận đã hiểu cảnh báo trước khi lưu."),
     SETTING_LEXICON_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy từ khóa kiểm duyệt."),
     SETTING_LEXICON_INVALID_VALUE(HttpStatus.BAD_REQUEST, "Thông tin từ khóa kiểm duyệt không hợp lệ."),
     SETTING_LEXICON_DUPLICATE(HttpStatus.CONFLICT, "Từ khóa đã tồn tại trong nhóm và phạm vi này."),
