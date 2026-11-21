@@ -196,7 +196,7 @@ describe('thu hồi yêu cầu đăng bài đang chờ duyệt', () => {
     expect(within(dialog).getByRole('heading', { name: 'Thu hồi yêu cầu đăng bài?' })).toBeTruthy();
     expect(
       within(dialog).getByText(
-        'Yêu cầu sẽ được thu hồi và bài bị gỡ khỏi hệ thống. Phí đang giữ sẽ được nhả; các yêu cầu đang chờ (nếu có) sẽ bị hủy.',
+        'Yêu cầu sẽ được thu hồi và bài bị gỡ khỏi hệ thống. Phí đang giữ sẽ được nhả. Các yêu cầu đang chờ (nếu có) sẽ bị hủy.',
       ),
     ).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận thu hồi' }));
