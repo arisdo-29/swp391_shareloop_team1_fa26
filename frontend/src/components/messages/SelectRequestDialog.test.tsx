@@ -74,7 +74,7 @@ describe('SelectRequestDialog khi chọn người làm đổi hình thức bài'
     // then
     expect(
       within(dialog).getByText(
-        'Bài đang là Trao đổi. Chọn người này thì bài chuyển sang Cho tặng; phí đăng đã trả không được hoàn.',
+        'Bài đang là Trao đổi. Chọn người này thì bài chuyển sang Cho tặng. Phí đăng đã trả không được hoàn.',
       ),
     ).toBeTruthy();
   });

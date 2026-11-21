@@ -104,7 +104,7 @@ const faqs = [
   ],
   [
     'Tôi chưa đăng nhập thì làm được gì?',
-    'Bạn xem trang chủ, tìm, lọc bài và xem chi tiết bài. Mọi thao tác khác cần đăng nhập; đăng ký bằng email và xác thực qua mã gửi về email.',
+    'Bạn xem trang chủ, tìm, lọc bài và xem chi tiết bài. Mọi thao tác khác cần đăng nhập. Đăng ký bằng email và xác thực qua mã gửi về email.',
   ],
   [
     'Credit dùng để làm gì?',

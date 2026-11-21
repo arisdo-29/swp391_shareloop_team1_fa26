@@ -814,7 +814,7 @@ public class RequestService {
             }
             message = donorViolated
                     ? "Admin đã chấp nhận khiếu nại: giao dịch bị huỷ. Bài đăng của chủ bài bị ẩn vì chủ bài là bên"
-                            + " vi phạm; món đem đổi (nếu có) được mở lại."
+                            + " vi phạm. Món đem đổi (nếu có) được mở lại."
                     : "Admin đã chấp nhận khiếu nại: giao dịch bị huỷ và bài đăng được mở lại.";
         } else {
             request.completeAfterDispute(Instant.now());

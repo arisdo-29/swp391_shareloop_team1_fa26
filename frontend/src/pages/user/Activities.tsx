@@ -1138,7 +1138,7 @@ export function Activities() {
           </h2>
           <p className="mt-2 text-sm leading-6 text-text-muted">
             {withdrawingReviewRequest
-              ? 'Yêu cầu sẽ được thu hồi và bài bị gỡ khỏi hệ thống. Phí đang giữ sẽ được nhả; các yêu cầu đang chờ (nếu có) sẽ bị hủy.'
+              ? 'Yêu cầu sẽ được thu hồi và bài bị gỡ khỏi hệ thống. Phí đang giữ sẽ được nhả. Các yêu cầu đang chờ (nếu có) sẽ bị hủy.'
               : 'Bài đăng sẽ không còn hiển thị với người dùng khác.'}
           </p>
           {/* Chủ bài tự gỡ thì backend không gửi thông báo dừng đẩy, nên đây là nơi duy nhất người dùng được biết. */}

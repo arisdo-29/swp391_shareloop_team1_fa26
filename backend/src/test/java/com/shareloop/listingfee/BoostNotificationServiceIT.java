@@ -102,7 +102,7 @@ class BoostNotificationServiceIT extends IntegrationTest {
         // then
         assertThat(bodiesOf(ownerId, BoostNotificationService.BOOST_ENDING_SOON))
                 .containsExactly("Bài «" + ITEM_TITLE + "» hết đẩy lúc " + format(boostedUntil)
-                        + ". Bài sắp hết hạn hiển thị nên chưa mua thêm gói đẩy được; hãy gia hạn bài trước rồi"
+                        + ". Bài sắp hết hạn hiển thị nên chưa mua thêm gói đẩy được. Hãy gia hạn bài trước rồi"
                         + " đẩy tiếp.");
     }
 
@@ -167,7 +167,7 @@ class BoostNotificationServiceIT extends IntegrationTest {
         assertThat(bodiesOf(ownerId, BoostNotificationService.BOOST_ENDING_SOON))
                 .containsExactly("Bài «" + ITEM_TITLE + "» hết đẩy lúc " + format(boostedUntil)
                         + ". Đợt đẩy đã đủ tối đa " + boostMaxDays()
-                        + " ngày nên không mua thêm gói được; bài được đẩy lại từ " + format(boostAgainAt) + ".");
+                        + " ngày nên không mua thêm gói được. Bài được đẩy lại từ " + format(boostAgainAt) + ".");
     }
 
     @Test
@@ -239,7 +239,7 @@ class BoostNotificationServiceIT extends IntegrationTest {
         assertThat(boostedUntilOf(itemId)).isCloseTo(now, within(1, ChronoUnit.MILLIS));
         assertThat(bodiesOf(ownerId, BoostNotificationService.BOOST_STOPPED))
                 .containsExactly(
-                        "Bài «" + ITEM_TITLE + "» bị ẩn nên đã dừng đẩy; thời gian đẩy còn lại không được hoàn phí.");
+                        "Bài «" + ITEM_TITLE + "» bị ẩn nên đã dừng đẩy. Thời gian đẩy còn lại không được hoàn phí.");
     }
 
     // ---------- chạy lại không gửi trùng ----------
