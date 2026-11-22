@@ -152,6 +152,33 @@ describe('AdminTransactionDetail', () => {
     ).toBeTruthy();
   });
 
+  it('hiện ảnh giao nhận kèm giai đoạn và người đăng bằng tiếng Việt', async () => {
+    vi.mocked(adminRequestApi.detail).mockResolvedValue(
+      detail({
+        photos: [
+          { mediaId: 3, url: '/api/v1/media/3', stage: 'HANDOVER', uploaderName: 'An Chủ Bài', createdAt: '2026-10-25T09:30:00Z' },
+          { mediaId: 4, url: '/api/v1/media/4', stage: 'HANDOVER', uploaderName: null, createdAt: '2026-10-25T09:40:00Z' },
+        ],
+      }),
+    );
+    renderPage();
+
+    await screen.findByText('Hai bên');
+    expect(screen.getAllByAltText('Ảnh giao nhận')).toHaveLength(2);
+    expect(screen.getByText('Lúc giao nhận, An Chủ Bài')).toBeTruthy();
+    expect(screen.getByText('Lúc giao nhận')).toBeTruthy();
+    expect(screen.queryByText('Chưa có ảnh giao nhận.')).toBeNull();
+  });
+
+  it('giao dịch chưa có ảnh thì báo chưa có ảnh giao nhận', async () => {
+    vi.mocked(adminRequestApi.detail).mockResolvedValue(detail({ photos: [] }));
+    renderPage();
+
+    await screen.findByText('Hai bên');
+    expect(screen.getByText('Chưa có ảnh giao nhận.')).toBeTruthy();
+    expect(screen.queryByAltText('Ảnh giao nhận')).toBeNull();
+  });
+
   it('báo lỗi khi không tải được và cho thử lại', async () => {
     const user = userEvent.setup();
     vi.mocked(adminRequestApi.detail)

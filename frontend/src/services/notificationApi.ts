@@ -41,7 +41,7 @@ const HIDDEN_KEY_PREFIX = 'shareloop:hiddenNotifications:';
 export function notificationCategory(type: string): NotificationCategory {
   if (type.startsWith('POST_') || type.startsWith('ITEM_')) return 'moderation';
   if (type.startsWith('DISPUTE_') || type.startsWith('REPORT_')) return 'complaint';
-  if (type.startsWith('TRUST_') || type.startsWith('BOOST_') || type.startsWith('POINTS_') || type.includes('CREDIT'))
+  if (type.startsWith('TRUST_') || type.startsWith('BOOST_') || type.startsWith('POINTS_') || type.startsWith('TOPUP_') || type.includes('CREDIT'))
     return 'credit';
   if (
     type.startsWith('REQUEST_') ||

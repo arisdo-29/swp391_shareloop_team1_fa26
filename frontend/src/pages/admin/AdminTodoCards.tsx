@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { adminModerationApi } from '../../services/adminModerationApi';
 import { reportApi } from '../../services/reportApi';
 import { adminAnomalyApi } from '../../services/adminAnomalyApi';
+import { adminItemApi } from '../../services/adminItemApi';
 
 // Hàng đợi duyệt bài không trả tổng số nên đọc một trang lớn; vượt ngưỡng thì hiện "100+".
 const REVIEW_QUEUE_PEEK = 100;
@@ -13,6 +14,7 @@ interface TodoCounts {
   reviews: Count;
   reports: Count;
   anomalies: Count;
+  visibleItems: Count;
 }
 
 /**
@@ -20,7 +22,7 @@ interface TodoCounts {
  * ô nào lỗi thì chỉ ô đó hiện "--", các ô khác vẫn dùng được.
  */
 export function AdminTodoCards() {
-  const [counts, setCounts] = useState<TodoCounts>({ reviews: null, reports: null, anomalies: null });
+  const [counts, setCounts] = useState<TodoCounts>({ reviews: null, reports: null, anomalies: null, visibleItems: null });
 
   useEffect(() => {
     let active = true;
@@ -42,15 +44,24 @@ export function AdminTodoCards() {
       ]).then(([open, awaiting]) => open.totalElements + awaiting.totalElements),
     );
     load('anomalies', adminAnomalyApi.report().then((report) => report.repeatedPairs.length));
+    // Bài đang hiện cho mọi người: đã duyệt và chưa bị ẩn. Chỉ lấy tổng số nên xin một dòng.
+    load('visibleItems', adminItemApi.list({ status: 'APPROVED', active: true, page: 0, size: 1 }).then((page) => page.totalElements));
     return () => {
       active = false;
     };
   }, []);
 
-  const cards: Array<{ to: string; label: string; count: Count; note: string; capped?: boolean }> = [
+  const cards: Array<{ to: string; label: string; count: Count; note: string; capped?: boolean; informational?: boolean }> = [
     { to: '/admin/moderation', label: 'Bài chờ duyệt', count: counts.reviews, note: 'Duyệt sớm để bài hiện cho mọi người.', capped: true },
     { to: '/admin/complaints', label: 'Khiếu nại và báo cáo đang mở', count: counts.reports, note: 'Gồm cả việc đang chờ giải trình.' },
     { to: '/admin/alerts', label: 'Cảnh báo giao dịch lặp', count: counts.anomalies, note: 'Cặp người dùng giao dịch lặp nhiều lần.' },
+    {
+      to: '/admin/items',
+      label: 'Bài đang hiển thị',
+      count: counts.visibleItems,
+      note: 'Xem, ẩn hoặc hiện lại bài ở trang Quản lý bài đăng.',
+      informational: true,
+    },
   ];
 
   return (
@@ -58,7 +69,7 @@ export function AdminTodoCards() {
       <h2 id="admin-todo" className="section-title">Việc cần làm</h2>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => {
-          const urgent = typeof card.count === 'number' && card.count > 0;
+          const urgent = !card.informational && typeof card.count === 'number' && card.count > 0;
           const value =
             card.count === null
               ? '...'

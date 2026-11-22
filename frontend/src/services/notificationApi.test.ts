@@ -37,3 +37,13 @@ describe('notificationCategory', () => {
     expect(category).toBe('transaction');
   });
 });
+
+describe('notificationCategory với thông báo nạp tiền', () => {
+  it('xếp TOPUP_RECONCILED vào nhóm Credit', () => {
+    // when
+    const category = notificationCategory('TOPUP_RECONCILED');
+
+    // then
+    expect(category).toBe('credit');
+  });
+});

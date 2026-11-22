@@ -84,7 +84,9 @@ export function AdminModerationList() {
 
   return (
     <>
-      <PageHeader title="Duyệt bài" description="Danh sách bài đăng đang chờ kiểm duyệt." />
+      <PageHeader title="Duyệt bài" description="Danh sách bài đăng đang chờ kiểm duyệt."
+        action={<Link to="/admin/items" className="text-sm font-semibold text-primary hover:underline">Quản lý bài đăng</Link>}
+      />
       <div className="mb-5 flex flex-col gap-3 rounded-lg bg-white p-3 ring-1 ring-border/80 sm:flex-row sm:items-center">
         <div className="flex-1">
           <SearchField
