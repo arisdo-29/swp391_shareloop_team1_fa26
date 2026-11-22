@@ -93,7 +93,7 @@ class AuthServiceTest {
     @Test
     void login_whenEmailNotFound_throwsInvalidCredentials() {
         // given
-        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
+        when(userRepository.findFirstByEmailCanonicalOrderByIdAsc(EMAIL)).thenReturn(Optional.empty());
 
         // when, then
         assertErrorCode(new LoginRequest(EMAIL, PASSWORD), AuthErrorCode.AUTH_INVALID_CREDENTIALS);
@@ -320,7 +320,7 @@ class AuthServiceTest {
     void forgotPassword_whenEmailNotFound_returnsOtpSentResponseWithoutIssuingOtp() {
         // given
         givenOtpConfig();
-        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
+        when(userRepository.findFirstByEmailCanonicalOrderByIdAsc(EMAIL)).thenReturn(Optional.empty());
 
         // when
         OtpSentResponse response = service.forgotPassword(new ForgotPasswordRequest(EMAIL));
@@ -390,7 +390,7 @@ class AuthServiceTest {
     @Test
     void resetPassword_whenEmailNotFound_throwsOtpExpired() {
         // given
-        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
+        when(userRepository.findFirstByEmailCanonicalOrderByIdAsc(EMAIL)).thenReturn(Optional.empty());
 
         // when, then
         assertResetPasswordErrorCode(
@@ -557,7 +557,7 @@ class AuthServiceTest {
         if (!active) {
             user.deactivate();
         }
-        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+        when(userRepository.findFirstByEmailCanonicalOrderByIdAsc(EMAIL)).thenReturn(Optional.of(user));
         return user;
     }
 

@@ -41,8 +41,8 @@ quên mật khẩu, đặt lại mật khẩu. Hồ sơ (`GET`/`PUT /api/v1/me`)
 
 Quy tắc:
 
-- **Đăng ký lại khi email đang `PENDING_VERIFICATION`**: không báo trùng email. Server cập nhật mật khẩu, họ tên,
-  số điện thoại theo request mới, sinh OTP mới (đặt lại `otp_failed_count = 0`, hạn mới) rồi gửi email; vẫn trả `201`.
+- **Đăng ký lại khi email đang `PENDING_VERIFICATION`**: không báo trùng email. Server **không** ghi đè mật khẩu, họ tên, số điện thoại
+  đã đăng ký trước đó, chỉ sinh OTP mới (đặt lại `otp_failed_count = 0`, hạn mới) rồi gửi email; vẫn trả `201`.
   Lần đăng ký lại cũng phải chờ `otp_resend_cooldown_seconds` kể từ lần gửi trước, nếu chưa đủ thì trả
   `429 AUTH_OTP_RESEND_TOO_SOON`.
 - Email đã thuộc tài khoản `ACTIVE` hoặc `BANNED` (chưa xoá mềm) → `409 AUTH_EMAIL_ALREADY_REGISTERED`.
@@ -410,3 +410,8 @@ Bản hiện tại của FE là contract cũ. Cần đổi:
     `authApi.resetPassword({ email, otp, newPassword })` (204). **Không có** `verifyResetOtp` và không có `resetToken`:
     màn nhập OTP chỉ giữ mã ở phía FE, bước cuối gửi cả ba trường. Trang `ForgotPassword.tsx` hiện vẫn dùng dữ liệu
     giả trong store, chưa nối API.
+
+## Cột dữ liệu thêm ở đợt rà soát 22/11
+
+- `users.login_failed_count` (SMALLINT, mặc định 0) và `users.login_locked_until` (TIMESTAMPTZ): khoá đăng nhập tạm sau nhiều lần sai mật khẩu.
+- `users.email_canonical` (VARCHAR 255, trigger tự điền): email chuẩn hoá để kiểm trùng và tìm tài khoản. Chữ thường, bỏ khoảng trắng. Gmail: bỏ phần từ dấu `+`, bỏ dấu chấm, `googlemail.com` thành `gmail.com`. Mọi luồng đăng ký, đăng nhập, quên mật khẩu, đặt lại mật khẩu, gửi lại OTP và xác thực OTP tìm theo cột này. Email gốc vẫn dùng để gửi thư và hiển thị.

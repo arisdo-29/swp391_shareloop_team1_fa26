@@ -21,6 +21,10 @@ public class User extends BaseEntity {
     @Column(name = "email", nullable = false, length = 255)
     private String email;
 
+    // Chỉ đọc: database tự điền bằng trigger (A3). Dùng để tìm và kiểm trùng email, email gốc giữ để gửi thư.
+    @Column(name = "email_canonical", insertable = false, updatable = false)
+    private String emailCanonical;
+
     @Column(name = "password_hash", nullable = false, length = 100)
     private String passwordHash;
 

@@ -17,6 +17,7 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.UserErrorCode;
+import com.shareloop.user.entity.EmailCanonical;
 import com.shareloop.user.entity.OtpPurpose;
 import com.shareloop.user.entity.User;
 import com.shareloop.user.entity.UserStatus;
@@ -110,7 +111,7 @@ public class AuthService {
     public OtpSentResponse register(RegisterRequest request, String registrationIp) {
         String email = normalizeEmail(request.email());
         checkEmailNotDisposable(email);
-        Optional<User> existingUser = userRepository.findByEmail(email);
+        Optional<User> existingUser = findUserByEmail(email);
         if (existingUser.isPresent()) {
             return resendOtpForPendingRegistration(existingUser.get(), email);
         }
@@ -232,9 +233,7 @@ public class AuthService {
 
     // Chỉ tài khoản đăng nhập được mới cho đặt lại mật khẩu; PENDING dùng /resend-otp, BANNED hoặc bị khoá thì không.
     private Optional<User> findUserAllowedToResetPassword(String email) {
-        return userRepository
-                .findByEmail(email)
-                .filter(user -> user.getStatus() == UserStatus.ACTIVE && user.isActive());
+        return findUserByEmail(email).filter(user -> user.getStatus() == UserStatus.ACTIVE && user.isActive());
     }
 
     // Còn trong cooldown: không gửi mã mới nhưng vẫn trả 200 như email không tồn tại, vì 429 sẽ lộ email có tài khoản.
@@ -251,7 +250,7 @@ public class AuthService {
     }
 
     private Optional<User> findPendingUser(String email) {
-        return userRepository.findByEmail(email).filter(user -> user.getStatus() == UserStatus.PENDING_VERIFICATION);
+        return findUserByEmail(email).filter(user -> user.getStatus() == UserStatus.PENDING_VERIFICATION);
     }
 
     // field = "email" để FE hiện lỗi ngay dưới ô email.
@@ -265,6 +264,11 @@ public class AuthService {
         if (userRepository.existsByPhoneAndStatus(phone, UserStatus.ACTIVE)) {
             throw new BusinessException(AuthErrorCode.AUTH_PHONE_ALREADY_USED);
         }
+    }
+
+    // Mọi luồng tìm tài khoản theo email đều đi qua đây để dùng email chuẩn hoá (A3).
+    private Optional<User> findUserByEmail(String email) {
+        return userRepository.findFirstByEmailCanonicalOrderByIdAsc(EmailCanonical.of(email));
     }
 
     private String normalizeEmail(String email) {
@@ -287,8 +291,7 @@ public class AuthService {
 
     private User findUserWithMatchingPassword(LoginRequest request) {
         String normalizedEmail = normalizeEmail(request.email());
-        User user = userRepository
-                .findByEmail(normalizedEmail)
+        User user = findUserByEmail(normalizedEmail)
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.AUTH_INVALID_CREDENTIALS));
         Instant now = clock.instant();
         throwIfLoginLocked(user, now);
