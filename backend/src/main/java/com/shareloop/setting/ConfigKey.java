@@ -38,6 +38,18 @@ public enum ConfigKey {
             ConfigGroup.POSTING,
             "Số ngày hiển thị bài",
             "Số ngày bài được hiển thị sau khi duyệt hoặc gia hạn."),
+    RESERVED_DISPLAY_REFUND_MAX_DAYS(
+            "reserved_display_refund_max_days",
+            "7",
+            ConfigGroup.POSTING,
+            "Số ngày trả lại tối đa khi huỷ giao dịch",
+            "Khi giao dịch bị huỷ và bài được mở lại, hạn hiển thị được cộng thêm số ngày bài đã nằm trong giao dịch, tối đa bằng số ngày này."),
+    RESERVED_RELEASE_GRACE_HOURS(
+            "reserved_release_grace_hours",
+            "24",
+            ConfigGroup.POSTING,
+            "Số giờ chờ gia hạn sau khi mở lại bài",
+            "Bài được mở lại sau giao dịch huỷ mà vẫn quá hạn hiển thị thì được giữ thêm số giờ này để chủ bài kịp gia hạn."),
     POST_DISPLAY_DAYS_GOLD(
             "post_display_days_gold",
             "45",

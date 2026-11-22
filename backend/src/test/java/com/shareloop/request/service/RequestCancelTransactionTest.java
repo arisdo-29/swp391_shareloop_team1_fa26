@@ -107,7 +107,7 @@ class RequestCancelTransactionTest {
         // then
         assertThat(response.status()).isEqualTo("CANCELLED");
         assertThat(request.getCancelReason()).isEqualTo("[Chủ bài] Tôi bận việc đột xuất");
-        verify(itemService).release(ITEM_ID);
+        verify(itemService).releaseAfterCancel(eq(ITEM_ID), any());
         verify(notificationService)
                 .notify(eq(RECEIVER_ID), eq("TRANSACTION_CANCELLED"), anyString(), contains("Tôi bận"), anyString());
         verify(activityLogService)
@@ -148,8 +148,8 @@ class RequestCancelTransactionTest {
 
         // then
         assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
-        verify(itemService).release(ITEM_ID);
-        verify(itemService).releaseIfReserved(OFFERED_ITEM_ID);
+        verify(itemService).releaseAfterCancel(eq(ITEM_ID), any());
+        verify(itemService).releaseIfReservedAfterCancel(eq(OFFERED_ITEM_ID), any());
     }
 
     @Test
@@ -164,7 +164,7 @@ class RequestCancelTransactionTest {
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_FORBIDDEN));
-        verify(itemService, never()).release(ITEM_ID);
+        verify(itemService, never()).releaseAfterCancel(eq(ITEM_ID), any());
     }
 
     @Test
@@ -190,6 +190,6 @@ class RequestCancelTransactionTest {
                             ex -> assertThat(ex.getErrorCode())
                                     .isEqualTo(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION));
         }
-        verify(itemService, never()).release(ITEM_ID);
+        verify(itemService, never()).releaseAfterCancel(eq(ITEM_ID), any());
     }
 }

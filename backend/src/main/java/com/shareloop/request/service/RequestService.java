@@ -985,12 +985,12 @@ public class RequestService {
                 findItemSnapshot(request.getItemId()).map(ItemSnapshot::donorId).orElse(null);
         boolean donorViolated = violatorUserId != null && violatorUserId.equals(donorId);
 
-        itemService.releaseIfReserved(request.getItemId());
+        itemService.releaseIfReservedAfterCancel(request.getItemId(), request.getReservedAt());
         if (donorViolated) {
             itemService.hide(request.getItemId());
         }
         if (request.getOfferedItemId() != null) {
-            itemService.releaseIfReserved(request.getOfferedItemId());
+            itemService.releaseIfReservedAfterCancel(request.getOfferedItemId(), request.getReservedAt());
         }
 
         if (donorViolated) {
@@ -1134,9 +1134,9 @@ public class RequestService {
 
         // Yêu cầu PENDING chưa giữ chỗ món nào và chưa mở chat nên không có gì để nhả hay huỷ đề nghị
         if (!wasPending) {
-            itemService.releaseIfReserved(request.getItemId());
+            itemService.releaseIfReservedAfterCancel(request.getItemId(), request.getReservedAt());
             if (request.getOfferedItemId() != null) {
-                itemService.releaseIfReserved(request.getOfferedItemId());
+                itemService.releaseIfReservedAfterCancel(request.getOfferedItemId(), request.getReservedAt());
             }
             publishNegotiationEnded(request);
         }
@@ -1204,9 +1204,9 @@ public class RequestService {
 
     // Nhả bài chính về APPROVED. Món mang đổi dùng releaseIfReserved vì giao dịch SWAP cũ có thể chưa giữ chỗ nó.
     private void releaseReservedItems(Request request) {
-        itemService.release(request.getItemId());
+        itemService.releaseAfterCancel(request.getItemId(), request.getReservedAt());
         if (request.getOfferedItemId() != null) {
-            itemService.releaseIfReserved(request.getOfferedItemId());
+            itemService.releaseIfReservedAfterCancel(request.getOfferedItemId(), request.getReservedAt());
         }
     }
 

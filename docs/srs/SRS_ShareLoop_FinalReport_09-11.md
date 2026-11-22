@@ -2278,7 +2278,7 @@ Các chức năng Admin. Admin là tài khoản tạo sẵn, không đăng bài 
 | [KD-06](#BR_KD_06) | Hàng chờ duyệt xếp: người đăng ít sao trước → tài khoản mới hơn trước → bài chờ lâu hơn trước. Không có thông báo nhắc Admin khi bài chờ quá 24 giờ (đã bỏ).                                       |
 | [KD-11](#BR_KD_11) | Hai Admin cùng xử lý một bài thì chỉ một người thành công; phí không bị trừ hai lần.                                                                                                               |
 | [PH-03](#BR_PH_03) | Phí đăng của mỗi bài chỉ bị trừ một lần: Theo PH-02; Lần duyệt đầu tiên; hoàn: Không hoàn khi bài đã duyệt rồi bị gỡ, hết hạn, vi phạm hay giao dịch không thành                                   |
-| [BD-12](#BR_BD_12) | Thời gian hiển thị tính từ lần duyệt đầu: 30 ngày; hạng Vàng trở lên 45 ngày.                                                                                                                      |
+| [BD-12](#BR_BD_12) | Thời gian hiển thị tính từ lần duyệt đầu: 30 ngày; hạng Vàng trở lên 45 ngày. Giao dịch huỷ trước lúc hoàn tất mà bài được mở lại thì hạn hiển thị và hạn đẩy được cộng thêm số giờ bài đã nằm trong giao dịch, tối đa reserved_display_refund_max_days ngày. Vẫn quá hạn sau khi cộng thì giữ thêm reserved_release_grace_hours giờ để kịp gia hạn. |
 
 > **Ghi chú rà soát:** Sơ đồ F06 ghi "10 câu checklist khởi tạo"; dữ liệu hiện tại còn 9 câu đang bật (câu về an toàn thực phẩm đã gỡ theo [KD-07](#BR_KD_07)).
 
@@ -3367,7 +3367,7 @@ Mỗi bài phải qua Admin duyệt trước khi ai đó nhìn thấy; từ lúc
 </tr>
 <tr class="even">
 <td><span id="BR_BD_12" class="anchor"></span><strong>BD-12</strong></td>
-<td>Thời gian hiển thị tính từ lần duyệt đầu: 30 ngày; hạng Vàng trở lên 45 ngày.</td>
+<td>Thời gian hiển thị tính từ lần duyệt đầu: 30 ngày; hạng Vàng trở lên 45 ngày. Giao dịch huỷ trước lúc hoàn tất mà bài được mở lại thì hạn hiển thị và hạn đẩy được cộng thêm số giờ bài đã nằm trong giao dịch, tối đa reserved_display_refund_max_days ngày. Vẫn quá hạn sau khi cộng thì giữ thêm reserved_release_grace_hours giờ để kịp gia hạn.</td>
 <td>post_display_days = 30, post_display_days_gold = 45</td>
 <td><a href="#duyệt-bài-theo-checklist">Duyệt bài theo checklist</a></td>
 </tr>

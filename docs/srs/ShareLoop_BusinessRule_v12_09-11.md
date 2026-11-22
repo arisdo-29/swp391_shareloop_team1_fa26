@@ -268,7 +268,7 @@ Thông tin trên bài: hình thức Cho tặng (GIVE) / Trao đổi (SWAP); tìn
 | BD-09 | Mọi bản sửa quay lại Chờ duyệt, bài ẩn khỏi tìm kiếm tới khi duyệt xong; các yêu cầu đang chờ của bài giữ nguyên, người gửi được báo "Chủ bài vừa sửa bài, bài đang chờ duyệt lại." và chủ bài chọn người được sau khi bài được duyệt lại. Bài đang được đem đi đổi ở yêu cầu khác thì yêu cầu đó tự huỷ (cập nhật 22/11/2026). Bản sửa của bài đã từng duyệt: thời gian chờ duyệt được cộng bù vào hạn hiển thị và hạn đẩy đang chạy khi bản sửa được duyệt, bản sửa bị từ chối thì không cộng bù. | — |
 | BD-10 | Chỉ sửa / gỡ được khi là chủ bài, còn sao, bài không ở Đang giao dịch / Đã trao / Hết hạn và chưa có yêu cầu nào được chọn. Không đổi hình thức Cho ↔ Trao đổi khi sửa (đổi theo mục K hoặc đăng bài mới). | — |
 | BD-11 | Gỡ bài = xoá mềm, nhả phí đang giữ; các yêu cầu Chờ chủ bài chọn bị huỷ ngay với lý do "\[Hệ thống\] Bài đã bị gỡ" và người gửi được báo (D-13). | — |
-| BD-12 | Thời gian hiển thị tính từ lần duyệt đầu: 30 ngày; hạng Vàng trở lên 45 ngày. | post\_display\_days = 30, post\_display\_days\_gold = 45 |
+| BD-12 | Thời gian hiển thị tính từ lần duyệt đầu: 30 ngày; hạng Vàng trở lên 45 ngày. Giao dịch huỷ trước lúc hoàn tất mà bài được mở lại thì hạn hiển thị và hạn đẩy được cộng thêm số giờ bài đã nằm trong giao dịch, tối đa reserved\_display\_refund\_max\_days ngày. Vẫn quá hạn sau khi cộng thì giữ thêm reserved\_release\_grace\_hours giờ để kịp gia hạn. | post\_display\_days = 30, post\_display\_days\_gold = 45, reserved\_display\_refund\_max\_days = 7, reserved\_release\_grace\_hours = 24 |
 
 | Tình huống khi sửa (BD-08) | Phí |
 | --- | --- |

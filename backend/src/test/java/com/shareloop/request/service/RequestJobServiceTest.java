@@ -194,7 +194,7 @@ class RequestJobServiceTest {
             assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
             assertThat(request.getCancelReason()).contains("10 ngày");
             verify(requestRepository).save(request);
-            verify(itemService).release(1L);
+            verify(itemService).releaseAfterCancel(eq(1L), any());
             // Thông báo cho cả donor (20L) và receiver (10L)
             verify(notificationService).notify(eq(20L), eq("REQUEST_CANCELLED"), anyString(), anyString(), anyString());
             verify(notificationService).notify(eq(10L), eq("REQUEST_CANCELLED"), anyString(), anyString(), anyString());
@@ -247,7 +247,7 @@ class RequestJobServiceTest {
 
             assertThat(cancelledCount).isEqualTo(1);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
-            verify(itemService).release(1L);
+            verify(itemService).releaseAfterCancel(eq(1L), any());
         }
 
         @Test
@@ -269,8 +269,8 @@ class RequestJobServiceTest {
 
             // then
             assertThat(cancelledCount).isEqualTo(1);
-            verify(itemService).release(1L);
-            verify(itemService).releaseIfReserved(50L);
+            verify(itemService).releaseAfterCancel(eq(1L), any());
+            verify(itemService).releaseIfReservedAfterCancel(eq(50L), any());
         }
     }
 

@@ -244,9 +244,9 @@ public class RequestJobService {
         }
 
         // Nhả giữ chỗ bài đăng về APPROVED (GN-05, TD-02)
-        itemService.release(request.getItemId());
+        itemService.releaseAfterCancel(request.getItemId(), request.getReservedAt());
         if (request.getOfferedItemId() != null) {
-            itemService.releaseIfReserved(request.getOfferedItemId());
+            itemService.releaseIfReservedAfterCancel(request.getOfferedItemId(), request.getReservedAt());
         }
         // Bài mở lại: báo những người từng bị từ chối ở bài này (cùng hàm với các đường huỷ ở RequestService).
         if (itemReopenedNotifier != null) {

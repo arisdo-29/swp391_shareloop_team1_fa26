@@ -26,7 +26,9 @@ import com.shareloop.item.event.ItemRemovedEvent;
 import com.shareloop.item.event.ItemUnavailableEvent;
 import com.shareloop.item.mapper.ItemMapper;
 import com.shareloop.item.repository.ItemRepository;
+import com.shareloop.listingfee.dto.DisplayRefund;
 import com.shareloop.listingfee.dto.DisplayWindow;
+import com.shareloop.listingfee.service.DisplayTimeService;
 import com.shareloop.listingfee.service.ListingFeeQueryService;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.media.MediaErrorCode;
@@ -43,6 +45,8 @@ import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.UserErrorCode;
 import com.shareloop.user.service.UserService;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -67,6 +71,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Service
 public class ItemService {
+    private static final DateTimeFormatter REFUND_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy").withZone(ZoneId.of("Asia/Ho_Chi_Minh"));
     private static final Pattern MEDIA_URL = Pattern.compile("/api/v1/media/([1-9][0-9]*)");
     private final ItemRepository itemRepository;
     private final JdbcClient jdbcClient;
@@ -89,6 +95,13 @@ public class ItemService {
     @Autowired
     void setNotificationService(NotificationService notificationService) {
         this.notificationService = notificationService;
+    }
+
+    private DisplayTimeService displayTimeService;
+
+    @Autowired
+    void setDisplayTimeService(DisplayTimeService displayTimeService) {
+        this.displayTimeService = displayTimeService;
     }
 
     public ItemService(
@@ -742,6 +755,50 @@ public class ItemService {
     @Transactional
     public void release(long itemId) {
         transition(itemId, ItemStatus.RESERVED, ItemStatus.APPROVED);
+    }
+
+    /**
+     * Nhả bài sau khi giao dịch huỷ trước lúc hoàn tất và trả lại thời gian bài đã nằm trong giao dịch vào hạn hiển thị
+     * (B2). Mọi đường huỷ gọi hàm này nên cách tính nằm ở một chỗ, trong listingfee.
+     *
+     * @param reservedAt lúc chủ bài chọn người nhận (requests.reserved_at)
+     */
+    @Transactional
+    public void releaseAfterCancel(long itemId, Instant reservedAt) {
+        release(itemId);
+        refundReservedTime(itemId, reservedAt);
+    }
+
+    /** Như {@link #releaseAfterCancel} nhưng bỏ qua món không ở RESERVED (món mang đổi của giao dịch SWAP cũ). */
+    @Transactional
+    public void releaseIfReservedAfterCancel(long itemId, Instant reservedAt) {
+        if (requireItem(itemId).getStatus() == ItemStatus.RESERVED) {
+            releaseAfterCancel(itemId, reservedAt);
+        }
+    }
+
+    // Trả lại thời gian rồi báo chủ bài hạn mới. displayTimeService null chỉ gặp ở unit test dựng service rút gọn.
+    private void refundReservedTime(long itemId, Instant reservedAt) {
+        if (displayTimeService == null || reservedAt == null) {
+            return;
+        }
+        Optional<DisplayRefund> refund = displayTimeService.refundReservedTime(itemId, reservedAt);
+        if (refund.isEmpty() || notificationService == null) {
+            return;
+        }
+        Item item = requireItem(itemId);
+        String expireText = REFUND_TIME_FORMAT.format(refund.get().newExpireAt());
+        String body = refund.get().graceApplied()
+                ? "Bài «" + item.getTitle() + "» đã được mở lại. Hạn hiển thị mới là " + expireText
+                        + ", bạn nhớ gia hạn nếu muốn giữ bài."
+                : "Bài «" + item.getTitle() + "» đã được mở lại và được cộng bù thời gian đã nằm trong giao dịch. "
+                        + "Hạn hiển thị mới là " + expireText + ".";
+        notificationService.notify(
+                item.getDonorId(),
+                "ITEM_DISPLAY_EXTENDED",
+                "Hạn hiển thị của bài đã được cập nhật",
+                body,
+                "/items/" + itemId);
     }
 
     /**

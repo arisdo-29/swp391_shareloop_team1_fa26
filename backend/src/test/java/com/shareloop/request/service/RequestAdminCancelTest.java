@@ -103,8 +103,8 @@ class RequestAdminCancelTest {
         // then
         assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
         assertThat(request.getCancelReason()).isEqualTo("[Admin] Một bên bị khoá tài khoản");
-        verify(itemService).release(1L);
-        verify(itemService).releaseIfReserved(50L);
+        verify(itemService).releaseAfterCancel(eq(1L), any());
+        verify(itemService).releaseIfReservedAfterCancel(eq(50L), any());
         verify(notificationService)
                 .notify(eq(RECEIVER_ID), eq("TRANSACTION_CANCELLED"), anyString(), anyString(), anyString());
         verify(notificationService)
@@ -137,6 +137,6 @@ class RequestAdminCancelTest {
                             ex -> assertThat(ex.getErrorCode())
                                     .isEqualTo(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION));
         }
-        verify(itemService, never()).release(1L);
+        verify(itemService, never()).releaseAfterCancel(eq(1L), any());
     }
 }

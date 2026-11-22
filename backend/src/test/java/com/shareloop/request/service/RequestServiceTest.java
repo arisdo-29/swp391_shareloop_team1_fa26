@@ -1377,7 +1377,7 @@ class RequestServiceTest {
         requestService.cancelTransaction(101L, 20L, new CancelTransactionRequest("Bận đột xuất"));
 
         // then
-        verify(itemService).release(1L);
+        verify(itemService).releaseAfterCancel(eq(1L), any());
         verify(itemReopenedNotifier).notifyRejectedRequesters(1L, 10L);
     }
 
