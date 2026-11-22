@@ -580,3 +580,9 @@ Không có `reporterId` và `description` để bên bị phản ánh không bi�
 - `AWAITING_RESPONSE`: Chờ bên bị khiếu nại gửi giải trình (cửa sổ 3 ngày).
 - `RESOLVED`: Đã giải quyết xong (chấp thuận khiếu nại).
 - `DISMISSED`: Bác bỏ báo cáo / khiếu nại.
+
+## Bài bị báo cáo đang có giao dịch mở (F1)
+
+- Chấp thuận báo cáo bài có lý do thuộc `report_serious_reasons` (mặc định hàng cấm, hàng giả) mà bài đang có giao dịch mở (từ `RESERVED` tới `DISPUTED`, bài là bài chính hoặc món mang đổi): giao dịch bị huỷ qua đường huỷ của Admin với lý do "Món đồ vi phạm quy định nên giao dịch bị huỷ", không cộng điểm cho ai, hai bên nhận thông báo `TRANSACTION_CANCELLED`, món đổi của bên kia được nhả như huỷ thường.
+- Lý do khác, hoặc bài tự ẩn do đủ `report_hide_threshold` báo cáo: giao dịch tiếp tục, hai bên nhận thông báo `TRANSACTION_ITEM_UNDER_REVIEW` ("Bài đang bị xem xét vi phạm", với tự ẩn chỉ gửi một lần lúc chạm ngưỡng). `GET /requests/{id}` trả `flags` chứa `ITEM_UNDER_REVIEW` khi bài của giao dịch đang bị ẩn để trang Tiến trình giao dịch hiện cảnh báo.
+- `GET /admin/reports/{id}` thêm `openTransactionPartnerName` (tên bên còn lại của giao dịch đang mở, null nếu không có) và `seriousReason` để hộp kết luận báo trước hệ quả.

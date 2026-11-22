@@ -140,6 +140,13 @@ function TransactionProgressView({
           <Alert tone="success">{notice}</Alert>
         </div>
       ) : null}
+      {request.flags?.includes('ITEM_UNDER_REVIEW') ? (
+        <div className="mb-4">
+          <Alert tone="warning">
+            Bài đang bị xem xét vi phạm. Giao dịch vẫn tiếp tục, bạn nên cẩn thận khi bàn giao.
+          </Alert>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-5">

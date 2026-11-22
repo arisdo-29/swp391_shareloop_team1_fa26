@@ -12,6 +12,8 @@ import com.shareloop.report.entity.ReportStatus;
 import com.shareloop.report.entity.TargetType;
 import com.shareloop.report.repository.ReportRepository;
 import com.shareloop.request.service.RequestService;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.service.UserService;
 import java.time.Clock;
@@ -34,6 +36,7 @@ public class AdminReportQueryService {
     private final RequestService requests;
     private final ReportEvidenceService evidence;
     private final Clock clock;
+    private final ConfigService configService;
 
     public AdminReportQueryService(
             ReportRepository reports,
@@ -41,13 +44,15 @@ public class AdminReportQueryService {
             ItemQueryService items,
             RequestService requests,
             ReportEvidenceService evidence,
-            Clock clock) {
+            Clock clock,
+            ConfigService configService) {
         this.reports = reports;
         this.users = users;
         this.items = items;
         this.requests = requests;
         this.evidence = evidence;
         this.clock = clock;
+        this.configService = configService;
     }
 
     /**
@@ -121,7 +126,34 @@ public class AdminReportQueryService {
                 itemTitle,
                 nameOf(briefs, report.getResolvedBy()),
                 // Cùng luật với ReportService.conclude, tính theo giờ server để FE không phải tự so giờ máy
-                report.isResponseWindowOpen(Instant.now(clock)));
+                report.isResponseWindowOpen(Instant.now(clock)),
+                openTransactionPartnerName(report, itemId, briefs),
+                isSeriousReason(report));
+    }
+
+    // Báo cáo bài mà bài đang có giao dịch mở: tên bên còn lại để hộp kết luận báo trước (F1).
+    private String openTransactionPartnerName(Report report, Long itemId, Map<Long, UserBrief> briefs) {
+        if (report.getTargetType() != TargetType.ITEM || itemId == null) {
+            return null;
+        }
+        Long partnerId = requests.findOpenTransactionOfItem(itemId)
+                .map(open -> open.partnerUserId())
+                .orElse(null);
+        if (partnerId == null) {
+            return null;
+        }
+        UserBrief partner = briefs.containsKey(partnerId)
+                ? briefs.get(partnerId)
+                : users.findBriefs(List.of(partnerId)).get(partnerId);
+        return partner == null ? null : partner.fullName();
+    }
+
+    // Cùng danh sách lý do nghiêm trọng mà ReportService.conclude dùng (khoá report_serious_reasons).
+    private boolean isSeriousReason(Report report) {
+        return report.getReason() != null
+                && configService
+                        .getCodes(ConfigKey.REPORT_SERIOUS_REASONS)
+                        .contains(report.getReason().name());
     }
 
     // Id bài đăng liên quan của từng hồ sơ. Hồ sơ REQUEST lấy bài qua giao dịch, giao dịch đã xoá thì bỏ qua.

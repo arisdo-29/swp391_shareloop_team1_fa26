@@ -174,6 +174,30 @@ describe('AdminComplaints', () => {
     expect(reportApi.conclude).not.toHaveBeenCalled();
   });
 
+  it('F1: bài đang có giao dịch thì hộp kết luận báo trước giao dịch sẽ bị huỷ hay vẫn tiếp tục', async () => {
+    const serious = await openPendingDetail(
+      detail(
+        { status: 'OPEN' },
+        { ...pending, openTransactionPartnerName: 'Lê Văn Cường', seriousReason: true },
+      ),
+    );
+    await serious.user.click(serious.concludeButton);
+    expect(
+      within(serious.dialog).getByText(/Bài đang có giao dịch với Lê Văn Cường\./),
+    ).toBeTruthy();
+    expect(within(serious.dialog).getByText(/Chấp thuận thì giao dịch sẽ bị huỷ/)).toBeTruthy();
+    cleanup();
+
+    const other = await openPendingDetail(
+      detail(
+        { status: 'OPEN' },
+        { ...pending, openTransactionPartnerName: 'Lê Văn Cường', seriousReason: false },
+      ),
+    );
+    await other.user.click(other.concludeButton);
+    expect(within(other.dialog).getByText(/Chấp thuận thì giao dịch vẫn tiếp tục/)).toBeTruthy();
+  });
+
   it('D-15: đã hết hạn giải trình thì Admin kết luận được', async () => {
     const { dialog, concludeButton } = await openPendingDetail(
       detail(

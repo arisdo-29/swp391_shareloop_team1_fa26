@@ -24,6 +24,7 @@ import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.HandoverConfirmRequest;
 import com.shareloop.request.dto.HandoverFailedRequest;
+import com.shareloop.request.dto.OpenItemTransaction;
 import com.shareloop.request.dto.RefuseHandoverRequest;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.dto.RequestContactResponse;
@@ -69,6 +70,14 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class RequestService {
+
+    // Giao dịch đang mở của một bài: từ lúc được chọn tới trước khi kết thúc, kể cả đang tranh chấp (F1).
+    private static final Set<RequestStatus> OPEN_TRANSACTION_STATUSES = Set.of(
+            RequestStatus.RESERVED,
+            RequestStatus.AWAITING_LOGISTICS,
+            RequestStatus.LOGISTICS_CONFIRMED,
+            RequestStatus.AWAITING_HANDOVER,
+            RequestStatus.DISPUTED);
 
     // Giao dịch đang chạy của người nhận, tính vào giới hạn max_active_transactions (C4).
     private static final Set<RequestStatus> RUNNING_STATUSES = Set.of(
@@ -761,6 +770,56 @@ public class RequestService {
         }
     }
 
+    /**
+     * Giao dịch đang mở của một bài, dù bài là bài chính hay món mang đổi (F1). Module report dùng khi bài bị báo cáo vi phạm.
+     */
+    @Transactional(readOnly = true)
+    public Optional<OpenItemTransaction> findOpenTransactionOfItem(long itemId) {
+        List<Request> asMainItem =
+                requestRepository.findByItemIdInAndStatusIn(List.of(itemId), OPEN_TRANSACTION_STATUSES);
+        if (!asMainItem.isEmpty()) {
+            Request request = asMainItem.get(0);
+            return Optional.of(new OpenItemTransaction(request.getId(), request.getReceiverId()));
+        }
+        List<Request> asOfferedItem =
+                requestRepository.findByOfferedItemIdAndStatusIn(itemId, OPEN_TRANSACTION_STATUSES);
+        if (asOfferedItem.isEmpty()) {
+            return Optional.empty();
+        }
+        Request request = asOfferedItem.get(0);
+        Long mainDonorId =
+                findItemSnapshot(request.getItemId()).map(ItemSnapshot::donorId).orElse(null);
+        return Optional.of(new OpenItemTransaction(request.getId(), mainDonorId));
+    }
+
+    /**
+     * Báo hai bên bài trong giao dịch đang bị xem xét vi phạm nhưng giao dịch vẫn tiếp tục (F1). Dùng khi bài tự ẩn do đủ
+     * báo cáo hoặc báo cáo được chấp thuận với lý do không thuộc nhóm nghiêm trọng.
+     */
+    @Transactional
+    public void notifyItemUnderReview(long requestId) {
+        Request request = requestRepository.findById(requestId).orElse(null);
+        if (request == null || !OPEN_TRANSACTION_STATUSES.contains(request.getStatus())) {
+            return;
+        }
+        String link = "/requests/" + request.getId();
+        String message =
+                "Món đồ trong giao dịch của bạn đang bị xem xét vi phạm. Giao dịch vẫn tiếp tục, bạn nên cẩn thận khi bàn giao.";
+        notificationService.notify(
+                request.getReceiverId(), "TRANSACTION_ITEM_UNDER_REVIEW", "Bài đang bị xem xét vi phạm", message, link);
+        findItemSnapshot(request.getItemId())
+                .ifPresent(item -> notificationService.notify(
+                        item.donorId(), "TRANSACTION_ITEM_UNDER_REVIEW", "Bài đang bị xem xét vi phạm", message, link));
+    }
+
+    // Bài trong giao dịch đang mở bị ẩn (báo cáo vi phạm): trang Tiến trình hiện cảnh báo (F1).
+    private List<String> detailFlagsOf(Request request, long itemId) {
+        boolean open = OPEN_TRANSACTION_STATUSES.contains(request.getStatus());
+        boolean itemHidden =
+                findItemSnapshot(itemId).map(item -> !item.isActive()).orElse(false);
+        return open && itemHidden ? List.of("ITEM_UNDER_REVIEW") : List.of();
+    }
+
     private long countRunningTransactions(long receiverId) {
         return requestRepository.countByReceiverIdAndStatusIn(receiverId, RUNNING_STATUSES);
     }
@@ -1406,12 +1465,14 @@ public class RequestService {
                     complaintDeadline,
                     lastMessageAt,
                     disputeResponseDueAt);
-            return withReports(addExtraInfo(response, handoverMedia), request.getId(), currentUserId);
+            return withReports(addExtraInfo(response, handoverMedia), request.getId(), currentUserId)
+                    .withFlags(detailFlagsOf(request, request.getItemId()));
         }
 
         RequestResponse response = RequestMapper.toResponse(
                 request, receiverName, null, null, itemInfo, complaintDeadline, lastMessageAt, disputeResponseDueAt);
-        return withReports(addExtraInfo(response, handoverMedia), request.getId(), currentUserId);
+        return withReports(addExtraInfo(response, handoverMedia), request.getId(), currentUserId)
+                .withFlags(detailFlagsOf(request, request.getItemId()));
     }
 
     /**

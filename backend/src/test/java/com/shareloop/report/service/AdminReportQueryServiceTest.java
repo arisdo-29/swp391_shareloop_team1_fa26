@@ -15,6 +15,7 @@ import com.shareloop.report.repository.ReportRepository;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.service.RequestService;
+import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.service.UserService;
 import java.time.Clock;
@@ -33,9 +34,10 @@ class AdminReportQueryServiceTest {
     final ItemQueryService items = mock(ItemQueryService.class);
     final RequestService requests = mock(RequestService.class);
     final ReportEvidenceService evidence = mock(ReportEvidenceService.class);
+    final ConfigService configService = mock(ConfigService.class);
     static final Instant NOW = Instant.parse("2026-10-30T03:00:00Z");
-    final AdminReportQueryService service =
-            new AdminReportQueryService(reports, users, items, requests, evidence, Clock.fixed(NOW, ZoneOffset.UTC));
+    final AdminReportQueryService service = new AdminReportQueryService(
+            reports, users, items, requests, evidence, Clock.fixed(NOW, ZoneOffset.UTC), configService);
 
     Report report(TargetType type, Long itemId, Long targetId, Long requestId) {
         var report =

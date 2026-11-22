@@ -667,6 +667,14 @@ export function AdminComplaints() {
                   )}
                   {decisionStep === 'choose' && (
                     <>
+                      {detail.openTransactionPartnerName ? (
+                        <Alert tone="warning">
+                          {`Bài đang có giao dịch với ${detail.openTransactionPartnerName}. `}
+                          {detail.seriousReason
+                            ? 'Chấp thuận thì giao dịch sẽ bị huỷ.'
+                            : 'Chấp thuận thì giao dịch vẫn tiếp tục.'}
+                        </Alert>
+                      ) : null}
                       <fieldset className="grid gap-2 sm:grid-cols-2">
                         <legend className="label">Chọn kết luận</legend>
                         {(Object.keys(decisionLabels) as ReportDecision[]).map((value) => (

@@ -29,6 +29,7 @@ import com.shareloop.report.entity.TargetType;
 import com.shareloop.report.event.DisputeOpenedEvent;
 import com.shareloop.report.repository.ReportRepository;
 import com.shareloop.reputation.service.ReputationService;
+import com.shareloop.request.dto.CancelTransactionRequest;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.service.RequestService;
 import com.shareloop.setting.ConfigKey;
@@ -227,6 +228,13 @@ public class ReportService {
         }
 
         itemService.hide(itemId);
+        // F1: bài tự ẩn mà đang có giao dịch thì giữ giao dịch, báo hai bên là bài đang bị xem xét (chỉ lần chạm
+        // ngưỡng)
+        if (pendingReports == threshold && requestService != null) {
+            requestService
+                    .findOpenTransactionOfItem(itemId)
+                    .ifPresent(open -> requestService.notifyItemUnderReview(open.requestId()));
+        }
         if (pendingReports == threshold && notificationService != null) {
             String title = itemTitle(itemId);
             notificationService.notifyAdmins(
@@ -930,8 +938,14 @@ public class ReportService {
                         violatorId, 1, note != null ? note : "Bị kết luận vi phạm theo báo cáo" + about);
             }
 
-            // BC-06: Nếu lý do thuộc nhóm nghiêm trọng, rà soát ẩn toàn bộ bài đăng khác của người vi phạm
             boolean serious = isSeriousReason(report.getReason());
+            // F1: bài có giao dịch đang mở thì xử lý giao dịch trước khi ẩn bài, để việc nhả bài chạy khi bài còn
+            // nguyên trạng
+            if (report.getTargetType() == TargetType.ITEM && report.getItemId() != null) {
+                handleOpenTransactionOfViolatingItem(report.getItemId(), adminId, serious);
+            }
+
+            // BC-06: Nếu lý do thuộc nhóm nghiêm trọng, rà soát ẩn toàn bộ bài đăng khác của người vi phạm
             if (serious && violatorId != null && itemService != null) {
                 itemService.hideAllOfUser(violatorId);
             }
@@ -1000,6 +1014,26 @@ public class ReportService {
                 saved.getResolution(),
                 saved.getStarsDeducted(),
                 saved.getResolvedAt());
+    }
+
+    /**
+     * Bài bị kết luận vi phạm mà đang có giao dịch (F1). Lý do nghiêm trọng thì Admin huỷ giao dịch (không cộng điểm, báo
+     * hai bên, bài đổi của bên kia được nhả như huỷ thường). Lý do khác thì giữ giao dịch và báo hai bên bài đang bị xem xét.
+     */
+    private void handleOpenTransactionOfViolatingItem(long itemId, long adminId, boolean serious) {
+        if (requestService == null) {
+            return;
+        }
+        requestService.findOpenTransactionOfItem(itemId).ifPresent(open -> {
+            if (serious) {
+                requestService.cancelByAdmin(
+                        open.requestId(),
+                        adminId,
+                        new CancelTransactionRequest("Món đồ vi phạm quy định nên giao dịch bị huỷ"));
+            } else {
+                requestService.notifyItemUnderReview(open.requestId());
+            }
+        });
     }
 
     /**

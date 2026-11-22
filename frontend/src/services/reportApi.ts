@@ -81,6 +81,10 @@ export interface AdminReportDetail {
   resolvedByName?: string | null;
   /** Backend tính: còn chờ giải trình và chưa tới hạn thì Admin chưa được kết luận (D-15, BC-10). */
   responseWindowOpen?: boolean;
+  /** Tên bên còn lại của giao dịch đang mở của bài bị báo cáo, null khi bài không có giao dịch đang mở. */
+  openTransactionPartnerName?: string | null;
+  /** Lý do thuộc nhóm nghiêm trọng: chấp thuận sẽ huỷ giao dịch đang mở của bài. */
+  seriousReason?: boolean;
 }
 export interface ReportEvidence {
   id: number;

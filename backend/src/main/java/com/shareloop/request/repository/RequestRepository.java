@@ -54,6 +54,8 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
      */
     List<Request> findByOfferedItemIdAndStatus(Long offeredItemId, RequestStatus status);
 
+    List<Request> findByOfferedItemIdAndStatusIn(Long offeredItemId, Collection<RequestStatus> statuses);
+
     /**
      * Yêu cầu của một người nhận đang ở một trong các trạng thái cho trước (dọn dẹp khi khoá tài khoản).
      */
