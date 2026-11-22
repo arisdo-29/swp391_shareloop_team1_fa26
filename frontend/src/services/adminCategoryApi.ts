@@ -59,6 +59,11 @@ export const adminCategoryApi = {
     invalidateCatalogCache('categories');
     return data;
   },
+  // Số bài đang hiển thị công khai sẽ bị ẩn khỏi Tìm đồ nếu tắt danh mục (gồm danh mục con).
+  async visibleItemCount(id: number) {
+    const { data } = await http.get<{ visibleItemCount: number }>(`/api/v1/admin/categories/${id}/visible-item-count`);
+    return data.visibleItemCount;
+  },
   // categoryIds phải gồm mọi danh mục (kể cả đang ẩn) theo thứ tự mới. Trả danh sách đã sắp xếp.
   async reorder(categoryIds: number[]) {
     const { data } = await http.put<AdminCategoryResponse[]>('/api/v1/admin/categories/reorder', { categoryIds });

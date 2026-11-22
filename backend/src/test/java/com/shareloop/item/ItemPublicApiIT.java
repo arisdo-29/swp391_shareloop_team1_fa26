@@ -78,6 +78,58 @@ class ItemPublicApiIT extends IntegrationTest {
     }
 
     @Test
+    void browseHidesItemsOfDisabledCategoryOrAreaAndShowsThemAgainWhenEnabled() throws Exception {
+        // given: một bài đã duyệt thuộc danh mục và khu vực đang bật
+        long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long areaId = jdbc.sql("SELECT id FROM areas WHERE level = 2 ORDER BY id LIMIT 1")
+                .query(Long.class)
+                .single();
+        long userId = jdbc.sql(
+                        "INSERT INTO users (email, password_hash, full_name, phone, status) "
+                                + "VALUES ('catalog-off-test@shareloop.local', 'unused', 'Test', '0900000777', 'ACTIVE') RETURNING id")
+                .query(Long.class)
+                .single();
+        Item approved = item(userId, categoryId, areaId, "catalog-off-unique");
+        approved.approve();
+        items.saveAndFlush(approved);
+        long itemId = approved.getId();
+
+        // when: tắt danh mục
+        jdbc.sql("UPDATE item_categories SET is_active = false WHERE id = :id")
+                .param("id", categoryId)
+                .update();
+
+        // then: không còn trong kết quả tìm, chi tiết vẫn xem được nhưng không nhận yêu cầu mới
+        assertThat(browseTotal("catalog-off-unique")).isZero();
+        mvc.perform(get("/api/v1/items/" + itemId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requestable").value(false));
+
+        // when: bật lại danh mục rồi tắt khu vực
+        jdbc.sql("UPDATE item_categories SET is_active = true WHERE id = :id")
+                .param("id", categoryId)
+                .update();
+        assertThat(browseTotal("catalog-off-unique")).isEqualTo(1);
+        jdbc.sql("UPDATE areas SET is_active = false WHERE id = :id")
+                .param("id", areaId)
+                .update();
+
+        // then
+        assertThat(browseTotal("catalog-off-unique")).isZero();
+    }
+
+    private long browseTotal(String keyword) throws Exception {
+        String body = mvc.perform(get("/api/v1/items").param("q", keyword).param("size", "5"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return ((Number) JsonPath.read(body, "$.totalElements")).longValue();
+    }
+
+    @Test
     void categoryCountMatchesBrowseAcrossBoostPagesAndExcludesExpiredItems() throws Exception {
         long categoryId = jdbc.sql("SELECT id FROM item_categories WHERE is_active = true ORDER BY id LIMIT 1")
                 .query(Long.class)

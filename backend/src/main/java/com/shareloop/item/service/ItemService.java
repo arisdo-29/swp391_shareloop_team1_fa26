@@ -359,7 +359,11 @@ public class ItemService {
 
         var donor = userService.findBriefs(List.of(item.getDonorId())).get(item.getDonorId());
         var reputation = reputationService.getReputationSummary(item.getDonorId());
-        boolean requestable = item.getStatus() == ItemStatus.APPROVED && item.isActive() && !donorLocked;
+        // Danh mục hoặc khu vực của bài bị tắt thì xem được bài nhưng không nhận yêu cầu mới (B3).
+        boolean requestable = item.getStatus() == ItemStatus.APPROVED
+                && item.isActive()
+                && !donorLocked
+                && itemRepository.isInEnabledCatalog(item.getId());
         ItemResponse response = toResponse(item, findDisplayWindow(item.getId()))
                 .withDonor(
                         donor == null ? null : donor.fullName(),
@@ -479,6 +483,18 @@ public class ItemService {
     }
 
     /** Số bài công khai theo danh mục, dùng cùng điều kiện hiển thị với danh sách Tìm đồ. */
+    /** Số bài đang hiển thị công khai trong danh mục (gồm danh mục con), cho hộp xác nhận tắt danh mục của Admin. */
+    @Transactional(readOnly = true)
+    public long countVisibleInCategory(long categoryId) {
+        return itemRepository.countVisibleInCategory(categoryId, Instant.now());
+    }
+
+    /** Số bài đang hiển thị công khai trong khu vực (gồm khu vực con), cho hộp xác nhận tắt khu vực của Admin. */
+    @Transactional(readOnly = true)
+    public long countVisibleInArea(long areaId) {
+        return itemRepository.countVisibleInArea(areaId, Instant.now());
+    }
+
     @Transactional(readOnly = true)
     public Map<Long, Long> countPublicItemsByCategory() {
         Map<Long, Long> counts = new HashMap<>();

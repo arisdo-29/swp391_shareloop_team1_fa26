@@ -106,6 +106,8 @@ const isOperatingStatus = (value: string): value is OperatingStatus =>
 type EditFormErrors = Partial<
   Record<
     | 'title'
+    | 'category'
+    | 'area'
     | 'description'
     | 'desiredItem'
     | 'brand'
@@ -1353,6 +1355,12 @@ function EditItemForm({
 
   const validate = () => {
     const nextErrors: EditFormErrors = {};
+    if (!categories.some((category) => category.id === categoryId)) {
+      nextErrors.category = 'Danh mục này đã ngưng, vui lòng chọn mục khác.';
+    }
+    if (!areas.some((area) => area.id === areaId)) {
+      nextErrors.area = 'Khu vực này đã ngưng, vui lòng chọn mục khác.';
+    }
     if (!title.trim()) nextErrors.title = 'Vui lòng nhập tiêu đề.';
     else if (title.trim().length > 150) nextErrors.title = 'Tiêu đề tối đa 150 ký tự.';
     if (!description.trim()) nextErrors.description = 'Vui lòng nhập mô tả.';
@@ -1500,12 +1508,13 @@ function EditItemForm({
       />
       <Select
         label="Danh mục"
+        error={errors.category}
         value={categoryId}
         disabled={formDisabled}
         onChange={(event) => setCategoryId(Number(event.target.value))}
       >
         {!categories.some((category) => category.id === categoryId) ? (
-          <option value={categoryId}>Danh mục hiện tại</option>
+          <option value={categoryId}>Đã ngưng, vui lòng chọn mục khác</option>
         ) : null}
         {[...categories]
           .sort(
@@ -1603,12 +1612,13 @@ function EditItemForm({
       />
       <Select
         label="Khu vực"
+        error={errors.area}
         value={areaId}
         disabled={formDisabled}
         onChange={(event) => setAreaId(Number(event.target.value))}
       >
         {!areas.some((area) => area.id === areaId) ? (
-          <option value={areaId}>Khu vực hiện tại</option>
+          <option value={areaId}>Đã ngưng, vui lòng chọn mục khác</option>
         ) : null}
         {areas.map((area) => (
           <option key={area.id} value={area.id}>

@@ -83,7 +83,9 @@ beforeEach(() => {
   vi.mocked(catalogApi.categories).mockResolvedValue([
     { id: 7, name: 'Quần áo', parentId: null, restricted: false, boostable: true, sortOrder: 1, activeItemCount: 1 },
   ]);
-  vi.mocked(catalogApi.areas).mockResolvedValue([]);
+  vi.mocked(catalogApi.areas).mockResolvedValue([
+    { id: 1, name: 'Quận 1', parentId: null, level: 2, children: [] },
+  ]);
 });
 
 afterEach(() => {

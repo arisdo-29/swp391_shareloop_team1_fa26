@@ -48,11 +48,19 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             Pageable pageable);
 
     /**
+     * Bài chỉ hiện công khai khi danh mục và khu vực của bài còn bật (B3). Viết bằng EXISTS ngay trong câu truy vấn để
+     * module item không phải gọi repository của catalog. Danh mục hoặc khu vực bị tắt rồi bật lại thì bài hiện lại.
+     */
+    String ENABLED_CATALOG = "AND EXISTS (SELECT 1 FROM item_categories c WHERE c.id = i.category_id "
+            + "AND c.is_active AND NOT c.is_deleted) "
+            + "AND EXISTS (SELECT 1 FROM areas ar WHERE ar.id = i.area_id AND ar.is_active AND NOT ar.is_deleted) ";
+
+    /**
      * Điều kiện chung của trang Tìm đồ: bài APPROVED, không ẩn, chưa xoá, còn hạn hiển thị, và khớp các bộ lọc tuỳ chọn
      * (danh mục, khu vực, tình trạng, hình thức, từ khoá không dấu theo tên bài). Bộ lọc null thì bỏ qua. Viết một lần
      * để các query đếm, lấy bài đẩy và lấy bài thường luôn lọc giống hệt nhau.
      */
-    String PUBLIC_BROWSE_FILTER = " i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+    String PUBLIC_BROWSE_FILTER = " i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted " + ENABLED_CATALOG + ""
             + "AND (i.expire_at IS NULL OR i.expire_at > :now) "
             + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
             + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
@@ -77,7 +85,7 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     @Query(
             value = "SELECT i.category_id, count(*) FROM items i "
-                    + "WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + "WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted " + ENABLED_CATALOG + ""
                     + "AND (i.expire_at IS NULL OR i.expire_at > :now) GROUP BY i.category_id",
             nativeQuery = true)
     List<Object[]> countPublicItemsByCategory(Instant now);
@@ -129,9 +137,11 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
     @Query(
             value = "SELECT i.* FROM items i WHERE i.donor_id = :donorId AND i.status = 'APPROVED' "
                     + "AND i.is_active AND NOT i.is_deleted AND (i.expire_at IS NULL OR i.expire_at > :now) "
+                    + ENABLED_CATALOG + ""
                     + "ORDER BY i.created_at DESC, i.id DESC",
             countQuery = "SELECT count(*) FROM items i WHERE i.donor_id = :donorId AND i.status = 'APPROVED' "
-                    + "AND i.is_active AND NOT i.is_deleted AND (i.expire_at IS NULL OR i.expire_at > :now)",
+                    + "AND i.is_active AND NOT i.is_deleted AND (i.expire_at IS NULL OR i.expire_at > :now) "
+                    + ENABLED_CATALOG + "",
             nativeQuery = true)
     Page<Item> findPublicActiveByDonor(@Param("donorId") Long donorId, @Param("now") Instant now, Pageable pageable);
 
@@ -173,6 +183,7 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     @Query(
             value = "SELECT i.* FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + ENABLED_CATALOG + ""
                     + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
                     + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
                     + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
@@ -182,6 +193,7 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
                     + "|| '%' ESCAPE '!' ORDER BY i.created_at DESC, i.id DESC",
             countQuery =
                     "SELECT count(*) FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                            + ENABLED_CATALOG + ""
                             + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
                             + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
                             + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
@@ -200,6 +212,7 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     @Query(
             value = "SELECT i.* FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + ENABLED_CATALOG + ""
                     + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
                     + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
                     + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
@@ -209,6 +222,7 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
                     + "|| '%' ESCAPE '!' ORDER BY i.created_at DESC, i.id DESC",
             countQuery =
                     "SELECT count(*) FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                            + ENABLED_CATALOG + ""
                             + "AND (CAST(:categoryId AS bigint) IS NULL OR i.category_id = :categoryId) "
                             + "AND (CAST(:areaId AS bigint) IS NULL OR i.area_id = :areaId) "
                             + "AND (CAST(:condition AS varchar) IS NULL OR i.condition = :condition) "
@@ -224,4 +238,26 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             @Param("offerType") String offerType,
             @Param("q") String q,
             Pageable pageable);
+
+    /** Bài còn bật danh mục và khu vực không (B3). Bài không tồn tại cũng trả false. */
+    @Query(
+            value = "SELECT EXISTS (SELECT 1 FROM items i WHERE i.id = :itemId " + ENABLED_CATALOG + ")",
+            nativeQuery = true)
+    boolean isInEnabledCatalog(Long itemId);
+
+    /** Số bài đang hiển thị công khai thuộc danh mục (kể cả danh mục con), dùng cho hộp xác nhận tắt danh mục. */
+    @Query(
+            value = "SELECT count(*) FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + "AND (i.expire_at IS NULL OR i.expire_at > :now) AND i.category_id IN "
+                    + "(SELECT c.id FROM item_categories c WHERE c.id = :categoryId OR c.parent_id = :categoryId)",
+            nativeQuery = true)
+    long countVisibleInCategory(Long categoryId, Instant now);
+
+    /** Số bài đang hiển thị công khai thuộc khu vực (kể cả khu vực con), dùng cho hộp xác nhận tắt khu vực. */
+    @Query(
+            value = "SELECT count(*) FROM items i WHERE i.status = 'APPROVED' AND i.is_active AND NOT i.is_deleted "
+                    + "AND (i.expire_at IS NULL OR i.expire_at > :now) AND i.area_id IN "
+                    + "(SELECT a.id FROM areas a WHERE a.id = :areaId OR a.parent_id = :areaId)",
+            nativeQuery = true)
+    long countVisibleInArea(Long areaId, Instant now);
 }

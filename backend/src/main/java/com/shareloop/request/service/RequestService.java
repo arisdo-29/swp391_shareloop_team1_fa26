@@ -270,6 +270,11 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);
         }
 
+        // Danh mục hoặc khu vực của bài bị Admin tắt: bài đã ẩn khỏi Tìm đồ nên không nhận yêu cầu mới (B3).
+        if (itemQueryService != null && itemQueryService.hasDisabledCatalog(itemId)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_ITEM_CATEGORY_DISABLED);
+        }
+
         // Không gửi yêu cầu tới bài của người dùng đang bị khoá tài khoản
         if (userService != null && userService.isLocked(targetItem.donorId())) {
             throw new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_AVAILABLE);

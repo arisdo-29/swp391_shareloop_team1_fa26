@@ -97,6 +97,7 @@ nếu chọn yêu cầu này (giao dịch chuyển sang Trao đổi).
   - `403 REQUEST_REPUTATION_BLOCKED`: Tài khoản có 0 sao uy tín, bị vô hiệu hoá quyền gửi yêu cầu giao dịch (YC-02).
   - `404 REQUEST_ITEM_NOT_FOUND`: Không tìm thấy bài đăng hoặc món đề nghị không tồn tại.
   - `409 REQUEST_ITEM_NOT_AVAILABLE`: Bài đăng hoặc món đề nghị không ở trạng thái sẵn sàng (không phải APPROVED, bị ẩn, hoặc không thuộc sở hữu người gửi).
+  - `409 REQUEST_ITEM_CATEGORY_DISABLED`: Danh mục hoặc khu vực của bài đã bị Admin tắt ("Danh mục của bài đang tạm ngưng").
   - `409 REQUEST_ALREADY_EXISTS`: Đã có yêu cầu đang hoạt động cho bài này (YC-03).
 
 ---
@@ -660,6 +661,7 @@ Các trường đã có từ trước và dùng cho màn Tiến trình giao dị
 | `REQUEST_MEDIA_REQUIRED` | 400 | Danh sách ảnh/video minh chứng không được rỗng (GN-10) |
 | `REQUEST_MEDIA_STAGE_INVALID` | 400 | Giai đoạn đính kèm minh chứng không hợp lệ |
 | `REQUEST_ITEM_NOT_AVAILABLE` | 409 | Bài đăng không ở trạng thái sẵn sàng (chưa duyệt, đã trao đổi...) |
+| `REQUEST_ITEM_CATEGORY_DISABLED` | 409 | Danh mục hoặc khu vực của bài đã bị tắt, bài không nhận yêu cầu mới |
 | `REQUEST_ALREADY_EXISTS` | 409 | Đã có một yêu cầu đang hoạt động cho bài này (YC-03) |
 | `REQUEST_SCHEDULE_LOCKED` | 409 | Lịch hẹn đã chốt và bị khoá (GN-03) |
 | `REQUEST_CONTACT_NOT_REVEALED` | 409 | Chưa chốt lịch hẹn để xem thông tin liên lạc (GN-04) |
