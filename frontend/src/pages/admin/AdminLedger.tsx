@@ -11,19 +11,10 @@ import {
 import type { AdminUserSummary } from '../../services/adminUserApi';
 import { useDebouncedValue } from '../../utils/useDebouncedValue';
 import { adminErrorMessage } from './adminErrors';
+import { ledgerTypeLabels } from './adminItemDisplay';
 import { AdminUserPicker } from './AdminUserPicker';
 
 const PAGE_SIZE = 20;
-
-const typeLabels: Record<LedgerTxType, string> = {
-  TOP_UP: 'Nạp Credit',
-  POST_FEE: 'Phí đăng bài',
-  EDIT_FEE: 'Phí sửa bài',
-  RENEW_FEE: 'Phí gia hạn',
-  BOOST_FEE: 'Phí đẩy bài',
-  AI_SEARCH_FEE: 'Phí trợ lý AI',
-  ADMIN_ADJUST: 'Admin điều chỉnh',
-};
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString('vi-VN');
@@ -149,7 +140,7 @@ export function AdminLedger() {
           onChange={(event) => setType(event.target.value as LedgerTxType | '')}
         >
           <option value="">Tất cả</option>
-          {Object.entries(typeLabels).map(([value, label]) => (
+          {Object.entries(ledgerTypeLabels).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
@@ -224,7 +215,7 @@ export function AdminLedger() {
                       <p className="font-semibold text-text-primary">{row.userName || 'Người dùng đã xóa'}</p>
                       {row.userEmail ? <p className="text-xs text-text-muted">{row.userEmail}</p> : null}
                     </td>
-                    <td>{typeLabels[row.type]}</td>
+                    <td>{ledgerTypeLabels[row.type]}</td>
                     <td
                       className={`text-right font-semibold tabular-nums ${row.amount >= 0 ? 'text-success' : 'text-error'}`}
                     >

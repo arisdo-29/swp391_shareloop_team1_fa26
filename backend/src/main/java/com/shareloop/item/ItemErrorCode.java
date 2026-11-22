@@ -30,7 +30,14 @@ public enum ItemErrorCode implements ErrorCode {
     ITEM_ADMIN_BLOCKED(HttpStatus.FORBIDDEN, "Quản trị viên không được đăng bài giao dịch."),
     ITEM_MODERATION_BLOCKED(HttpStatus.UNPROCESSABLE_CONTENT, "Nội dung bài đăng không qua kiểm duyệt tầng 1."),
     ITEM_INVALID_STATUS_TRANSITION(HttpStatus.CONFLICT, "Không thể chuyển trạng thái bài đăng."),
-    ITEM_HIDDEN(HttpStatus.CONFLICT, "Bài đang tạm ẩn nên chưa giữ chỗ được.");
+    ITEM_HIDDEN(HttpStatus.CONFLICT, "Bài đang tạm ẩn nên chưa giữ chỗ được."),
+    ITEM_HIDE_NOT_ALLOWED(
+            HttpStatus.CONFLICT, "Bài đang có giao dịch chạy, hãy huỷ giao dịch ở trang Giao dịch trước khi ẩn bài."),
+    ITEM_ALREADY_HIDDEN(HttpStatus.CONFLICT, "Bài này đã được ẩn rồi."),
+    ITEM_NOT_HIDDEN(HttpStatus.CONFLICT, "Bài này đang hiển thị, không cần hiện lại."),
+    ITEM_UNHIDE_NOT_ALLOWED(
+            HttpStatus.CONFLICT,
+            "Tài khoản chủ bài đang bị khoá nên chưa hiện lại được bài, hãy mở khoá tài khoản trước.");
 
     private final HttpStatus status;
     private final String defaultMessage;

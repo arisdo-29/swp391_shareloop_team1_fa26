@@ -25,6 +25,7 @@ import com.shareloop.wallet.mapper.WalletMapper;
 import com.shareloop.wallet.repository.CashTotalsView;
 import com.shareloop.wallet.repository.CreditLedgerRepository;
 import com.shareloop.wallet.repository.CreditTypeTotalView;
+import com.shareloop.wallet.repository.ItemFeeTotalView;
 import com.shareloop.wallet.repository.PaidOrderView;
 import com.shareloop.wallet.repository.PaymentOrderRepository;
 import com.shareloop.wallet.repository.UserTopUpTotalView;
@@ -368,6 +369,30 @@ public class CreditService {
                 CreditLedgerEntry.topUp(userId, order.getCredits(), wallet.getCreditBalance(), order.getId()));
         publishWalletUpdate(userId);
         return walletMapper.toResponse(wallet);
+    }
+
+    /**
+     * Tổng phí đăng bài đã trừ của từng bài, tính theo số Credit dương. Bài chưa trừ phí đăng thì không có trong map.
+     * Dùng cho danh sách bài của Admin; chỉ đọc sổ cái.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Long> getPostFeePaidByItem(Collection<Long> itemIds) {
+        Map<Long, Long> paid = new java.util.HashMap<>();
+        if (itemIds == null || itemIds.isEmpty()) {
+            return paid;
+        }
+        for (ItemFeeTotalView view : creditLedgerRepository.sumByItemAndType(itemIds, CreditTxType.POST_FEE)) {
+            paid.put(view.getItemId(), Math.abs(view.getTotal()));
+        }
+        return paid;
+    }
+
+    /** Mọi dòng sổ cái gắn với một bài, cũ nhất trước, cho trang chi tiết bài của Admin. */
+    @Transactional(readOnly = true)
+    public List<WalletTransactionResponse> getLedgerOfItem(long itemId) {
+        return creditLedgerRepository.findByItemIdOrderByIdAsc(itemId).stream()
+                .map(walletMapper::toTransactionResponse)
+                .toList();
     }
 
     /**

@@ -53,6 +53,10 @@ public class Item extends BaseEntity {
     @Column(name = "status", nullable = false, length = 16)
     private ItemStatus status = ItemStatus.PENDING_REVIEW;
 
+    // Bài do Admin ẩn: chỉ nút "Hiện lại" của Admin mới hiện lại được, các đường tự động bỏ qua bài có cờ này.
+    @Column(name = "hidden_by_admin", nullable = false)
+    private boolean hiddenByAdmin = false;
+
     protected Item() {}
 
     public Item(
@@ -121,6 +125,22 @@ public class Item extends BaseEntity {
 
     public ItemStatus getStatus() {
         return status;
+    }
+
+    public boolean isHiddenByAdmin() {
+        return hiddenByAdmin;
+    }
+
+    /** Admin ẩn bài: tắt hiển thị và gắn cờ để các đường tự động không hiện lại. */
+    public void hideByAdmin() {
+        deactivate();
+        hiddenByAdmin = true;
+    }
+
+    /** Admin hiện lại bài: bật hiển thị và xoá cờ. */
+    public void unhideByAdmin() {
+        activate();
+        hiddenByAdmin = false;
     }
 
     public void approve() {

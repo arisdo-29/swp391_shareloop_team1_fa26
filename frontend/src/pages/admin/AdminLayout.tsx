@@ -10,6 +10,7 @@ const sections = [
     label: 'Nội dung',
     items: [
       ['Duyệt bài', '/admin/moderation', 'moderation'],
+      ['Quản lý bài đăng', '/admin/items', 'manageItems'],
       // L16: đã gỡ "Xác minh hàng chính hãng" (/admin/authenticity) ở cả FE lẫn BE.
       // Tạm ẩn "Bài quá hạn" (/admin/expired-posts): backend chưa có API danh sách cho Admin.
       ['Danh mục', '/admin/categories', 'category'],

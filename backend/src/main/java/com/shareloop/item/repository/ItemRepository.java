@@ -18,6 +18,36 @@ import org.springframework.stereotype.Repository;
 public interface ItemRepository extends JpaRepository<Item, Long> {
 
     /**
+     * Danh sách bài cho Admin ở mọi trạng thái (kể cả đang ẩn). Bài đã xoá mềm bị @SQLRestriction loại. Các cờ
+     * allCategories, allOwners, filterActive và filterBoosted = false thì bỏ qua tham số tương ứng; ids truyền vào
+     * luôn có ít nhất một phần tử để IN không rỗng.
+     */
+    @Query("select i from Item i where (:status is null or i.status = :status)"
+            + " and (:filterActive = false or i.isActive = :active)"
+            + " and (:offerType is null or i.offerType = :offerType)"
+            + " and (:allCategories = true or i.categoryId = :categoryId)"
+            + " and (:allOwners = true or i.donorId = :ownerId)"
+            + " and (:keywordPattern is null or lower(i.title) like :keywordPattern or i.donorId in :keywordOwnerIds)"
+            + " and i.createdAt >= :from and i.createdAt < :to"
+            + " and (:filterBoosted = false or i.id in :boostedIds)")
+    Page<Item> searchForAdmin(
+            @Param("status") ItemStatus status,
+            @Param("filterActive") boolean filterActive,
+            @Param("active") boolean active,
+            @Param("offerType") OfferType offerType,
+            @Param("allCategories") boolean allCategories,
+            @Param("categoryId") long categoryId,
+            @Param("allOwners") boolean allOwners,
+            @Param("ownerId") long ownerId,
+            @Param("keywordPattern") String keywordPattern,
+            @Param("keywordOwnerIds") Collection<Long> keywordOwnerIds,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("filterBoosted") boolean filterBoosted,
+            @Param("boostedIds") Collection<Long> boostedIds,
+            Pageable pageable);
+
+    /**
      * Điều kiện chung của trang Tìm đồ: bài APPROVED, không ẩn, chưa xoá, còn hạn hiển thị, và khớp các bộ lọc tuỳ chọn
      * (danh mục, khu vực, tình trạng, hình thức, từ khoá không dấu theo tên bài). Bộ lọc null thì bỏ qua. Viết một lần
      * để các query đếm, lấy bài đẩy và lấy bài thường luôn lọc giống hệt nhau.

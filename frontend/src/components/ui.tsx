@@ -26,6 +26,7 @@ import { WarningCircle } from '@phosphor-icons/react/dist/csr/WarningCircle';
 import { SquaresFour } from '@phosphor-icons/react/dist/csr/SquaresFour';
 import { CheckSquare } from '@phosphor-icons/react/dist/csr/CheckSquare';
 import { ListBullets } from '@phosphor-icons/react/dist/csr/ListBullets';
+import { Notebook } from '@phosphor-icons/react/dist/csr/Notebook';
 import { ListChecks } from '@phosphor-icons/react/dist/csr/ListChecks';
 import { Prohibit } from '@phosphor-icons/react/dist/csr/Prohibit';
 import { Users } from '@phosphor-icons/react/dist/csr/Users';
@@ -87,6 +88,7 @@ const iconMap = {
   report: ChartLineUp,
   topup: Receipt,
   ledger: ListBullets,
+  manageItems: Notebook,
   fees: SlidersHorizontal,
   auditLog: Scroll,
   alert: Warning,

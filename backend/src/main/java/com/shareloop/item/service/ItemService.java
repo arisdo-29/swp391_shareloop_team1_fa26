@@ -777,10 +777,37 @@ public class ItemService {
         publishUnavailable(itemId, ItemUnavailableEvent.Reason.HIDDEN);
     }
 
+    /**
+     * Hiện lại bài đã ẩn bởi các đường tự động (báo cáo bị bác bỏ, bài được duyệt lại). Bài do Admin ẩn thì bỏ qua: chỉ
+     * {@link #unhideByAdmin} mới hiện lại được.
+     */
     @Transactional
     public void unhide(long itemId) {
         Item item = requireItem(itemId);
+        if (item.isHiddenByAdmin()) {
+            return;
+        }
         item.activate();
+        publishItemUpdate(itemId, item.getDonorId());
+    }
+
+    /**
+     * Admin ẩn bài: tắt hiển thị, gắn cờ hidden_by_admin và phát ItemUnavailableEvent để huỷ các yêu cầu đang dùng bài
+     * này làm món đổi. Người gọi (AdminItemService) đã kiểm bài không có giao dịch đang chạy.
+     */
+    @Transactional
+    public void hideByAdmin(long itemId) {
+        Item item = requireItem(itemId);
+        item.hideByAdmin();
+        publishItemUpdate(itemId, item.getDonorId());
+        publishUnavailable(itemId, ItemUnavailableEvent.Reason.HIDDEN);
+    }
+
+    /** Admin hiện lại bài: bật hiển thị và xoá cờ hidden_by_admin. */
+    @Transactional
+    public void unhideByAdmin(long itemId) {
+        Item item = requireItem(itemId);
+        item.unhideByAdmin();
         publishItemUpdate(itemId, item.getDonorId());
     }
 
@@ -839,6 +866,10 @@ public class ItemService {
     @Transactional
     public void unhideItems(List<Long> itemIds) {
         for (Item item : itemRepository.findAllById(itemIds)) {
+            // Bài do Admin ẩn sau khi bị ẩn vì khoá tài khoản thì giữ nguyên, chỉ Admin hiện lại được.
+            if (item.isHiddenByAdmin()) {
+                continue;
+            }
             item.activate();
             if (item.getId() != null) publishItemUpdate(item.getId(), item.getDonorId());
         }

@@ -13,6 +13,15 @@ import org.springframework.data.repository.query.Param;
 /** Sổ cái chỉ thêm dòng mới (save) và đọc lịch sử; không có hàm sửa, xoá. */
 public interface CreditLedgerRepository extends JpaRepository<CreditLedgerEntry, Long> {
 
+    /** Mọi dòng sổ cái gắn với một bài (phí đăng, sửa, gia hạn, đẩy), cũ nhất trước, cho chi tiết bài của Admin. */
+    List<CreditLedgerEntry> findByItemIdOrderByIdAsc(Long itemId);
+
+    /** Tổng Credit đã trừ của từng bài theo một loại phí (số âm). Bài chưa trừ lần nào thì không có trong kết quả. */
+    @Query("select l.itemId as itemId, sum(l.amount) as total from CreditLedgerEntry l"
+            + " where l.itemId in :itemIds and l.type = :type group by l.itemId")
+    List<ItemFeeTotalView> sumByItemAndType(
+            @Param("itemIds") java.util.Collection<Long> itemIds, @Param("type") CreditTxType type);
+
     // Điều kiện lọc chung của trang Lịch sử giao dịch Credit. allUsers = true bỏ qua userId. keywordPattern null là
     // không tìm; ngược lại khớp người (userIds, luôn có ít nhất một phần tử), ghi chú hoặc mã đơn nạp.
     String ADMIN_FILTER = " where (:type is null or l.type = :type)"

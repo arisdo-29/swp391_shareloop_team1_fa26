@@ -14,6 +14,7 @@ import com.shareloop.report.dto.CreateDisputeRequest;
 import com.shareloop.report.dto.CreateReportRequest;
 import com.shareloop.report.dto.DisputeResponse;
 import com.shareloop.report.dto.DisputeResponseRequest;
+import com.shareloop.report.dto.ItemReportBrief;
 import com.shareloop.report.dto.ReportConclusionResponse;
 import com.shareloop.report.dto.ReportDecision;
 import com.shareloop.report.dto.ReportResponse;
@@ -571,6 +572,17 @@ public class ReportService {
         if (eventPublisher != null && saved.getRequestId() != null) {
             eventPublisher.publishEvent(new DisputeOpenedEvent(saved.getRequestId(), responseHours));
         }
+    }
+
+    /** Các báo cáo nhắm vào một bài (kể cả đã đóng), mới nhất trước, cho trang chi tiết bài của Admin. */
+    @Transactional(readOnly = true)
+    public List<ItemReportBrief> findReportsOfItem(long itemId) {
+        List<ItemReportBrief> briefs = new ArrayList<>();
+        for (Report report : reportRepository.findByItemIdOrderByCreatedAtDescIdDesc(itemId)) {
+            briefs.add(
+                    new ItemReportBrief(report.getId(), report.getReason(), report.getStatus(), report.getCreatedAt()));
+        }
+        return briefs;
     }
 
     /** Giao dịch đã có report nào chưa (GN-09: job tự hoàn tất chỉ xử lý giao dịch không có report). */

@@ -41,6 +41,8 @@ const AdminLedger = lazy(() => import('../pages/admin/AdminLedger').then((module
 const AdminReputation = lazy(() => import('../pages/admin/AdminReputation').then((module) => ({ default: module.AdminReputation })));
 const AdminAccounts = lazy(() => import('../pages/admin/AdminAccounts').then((module) => ({ default: module.AdminAccounts })));
 const AdminModerationList = lazy(() => import('../pages/admin/AdminModerationList').then((module) => ({ default: module.AdminModerationList })));
+const AdminItems = lazy(() => import('../pages/admin/AdminItems').then((module) => ({ default: module.AdminItems })));
+const AdminItemDetail = lazy(() => import('../pages/admin/AdminItemDetail').then((module) => ({ default: module.AdminItemDetail })));
 const AdminModerationDetail = lazy(() => import('../pages/admin/AdminModerationDetail').then((module) => ({ default: module.AdminModerationDetail })));
 const AdminFinanceUsers = lazy(() => import('../pages/admin/AdminFinanceUsers').then((module) => ({ default: module.AdminFinanceUsers })));
 const AdminFinanceUserDetail = lazy(() => import('../pages/admin/AdminFinanceUsers').then((module) => ({ default: module.AdminFinanceUserDetail })));
@@ -125,6 +127,8 @@ export const router = createBrowserRouter([
               { index: true, element: <AdminDashboard /> },
               { path: 'moderation', element: <AdminModerationList /> },
               { path: 'moderation/:itemId', element: <AdminModerationDetail /> },
+              { path: 'items', element: <AdminItems /> },
+              { path: 'items/:itemId', element: <AdminItemDetail /> },
               // L16: đã gỡ trang và API Nhãn chính hãng; giữ đường dẫn cũ để link đã lưu quay về trang tổng quan.
               { path: 'authenticity', element: <Navigate to="/admin" replace /> },
               { path: 'checklist', element: <AdminContentPage kind="checklist" /> },

@@ -706,3 +706,54 @@ Admin huỷ giao dịch đã được chọn người (thường là giao dịch
 - **Hành vi:** giống `POST /requests/{id}/cancel-transaction` ở `request.md` (nhả bài chính và món mang đổi về `APPROVED`), khác ở chỗ `cancelReason` có tiền tố `[Admin] `, thông báo `TRANSACTION_CANCELLED` gửi cho **cả hai bên**, và activity log `REQUEST_CANCEL` có `actorId` là Admin. Khiếu nại đang mở của giao dịch `DISPUTED` không tự đóng, Admin kết luận riêng ở trang khiếu nại.
 - **Thành công:** `200 OK`, trả `RequestResponse` với `status = CANCELLED`.
 - **Lỗi:** `400 VALIDATION_FAILED`, `404 REQUEST_NOT_FOUND`, `409 REQUEST_INVALID_STATE_TRANSITION`.
+
+## Quản lý bài đăng (Admin)
+
+Tất cả chỉ ADMIN (401 chưa đăng nhập, 403 user thường). Service nằm ở module admin (`AdminItemService`), gọi module khác qua service: `ItemQueryService`, `ListingFeeQueryService`, `CreditService`, `RequestQueryService`, `RequestService`, `ReportService`, `UserService`, `CategoryService`.
+
+### GET /api/v1/admin/items
+
+Mọi bài ở mọi trạng thái, kể cả đang ẩn. Bài đã xoá mềm không có trong danh sách. Mới nhất trước (`createdAt` giảm dần rồi `id` giảm dần).
+
+| Tham số | Mặc định | Ý nghĩa |
+| --- | --- | --- |
+| status | (bỏ trống) | `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `RESERVED`, `TRADED`, `EXPIRED` |
+| active | (bỏ trống) | true chỉ bài đang hiện, false chỉ bài đang ẩn |
+| offerType | (bỏ trống) | `GIVE` hoặc `SWAP` |
+| categoryId, ownerId | (bỏ trống) | Danh mục, chủ bài |
+| q | (bỏ trống) | Khớp một phần tiêu đề, họ tên hoặc email chủ bài (không phân biệt hoa thường) |
+| from, to | (bỏ trống) | Ngày tạo bài `yyyy-MM-dd` theo giờ Việt Nam, `to` tính trọn ngày |
+| boosted | false | true chỉ bài đang được đẩy |
+| page, size | 0, 20 | size 1..100 |
+
+Trả `PageResponse<AdminItemRow>`: `id`, `title`, `imageUrl`, `ownerId`, `ownerName`, `ownerEmail`, `categoryName`, `offerType`, `status`, `active`,
+`hiddenSource` (`ADMIN`, `OWNER_LOCKED` khi chủ bài đang bị khoá, `OTHER` khi do báo cáo hoặc hệ thống; null khi bài đang hiện), `postFeePaid` (tổng phí đăng đã thu, Credit dương),
+`pendingRequestCount`, `createdAt`, `approvedAt`, `expireAt`, `boostedUntil`, `boosting`.
+
+### GET /api/v1/admin/items/{id}
+
+Trả `AdminItemFullDetail`: `item` (như `AdminItemDetail` của trang duyệt bài: nội dung, ảnh, thuộc tính), `summary` (một `AdminItemRow`), `feeLines` (dòng sổ cái gắn với bài, cũ nhất trước),
+`requests` (mọi yêu cầu tới bài: `id`, `receiverName`, `type`, `status`, `offeredItemTitle`, `running`, `createdAt`), `hasRunningTransaction`, `runningRequestId`,
+`reports` (`id`, `reason`, `status`, `createdAt`), `hiddenReason` (lý do Admin đã ẩn, null khi không do Admin ẩn), `visibilityHistory` (nhật ký ẩn và hiện lại, mới nhất trước). `404 ITEM_NOT_FOUND` khi không có bài hoặc đã xoá.
+
+### POST /api/v1/admin/items/{id}/hide
+
+Body `{ "reason": "5 đến 500 ký tự" }`. Admin ẩn bài vi phạm:
+
+- Không hoàn phí đăng. Bài RESERVED trở lên hoặc đang có giao dịch đã chọn người chưa kết thúc không ẩn được: `409 ITEM_HIDE_NOT_ALLOWED`, Admin huỷ giao dịch ở trang Giao dịch trước. Bài đã ẩn: `409 ITEM_ALREADY_HIDDEN`.
+- `is_active = false` và `hidden_by_admin = true`, không đổi `status`.
+- Huỷ các yêu cầu PENDING tới bài (`RequestService.cancelPendingRequestsToItem`, người xin nhận `REQUEST_CANCELLED`) và các yêu cầu PENDING dùng bài làm món đổi (qua `ItemUnavailableEvent` lý do `HIDDEN`).
+- Lượt đẩy đang chạy dừng theo: bài ẩn không còn trong danh sách đẩy và `BoostNotificationService` cắt `boosted_until` về lúc dừng.
+- Chủ bài nhận thông báo `ITEM_HIDDEN_BY_ADMIN` kèm lý do. Ghi nhật ký `ADMIN_ITEM_HIDDEN` (`targetType = ITEM`, `data` có `ownerId` và `cancelledRequests`, lý do ở `reason`).
+
+Trả `AdminItemFullDetail` mới.
+
+### POST /api/v1/admin/items/{id}/unhide
+
+Body `{ "reason": "..." }`. Hiện lại bài đang ẩn (do Admin, báo cáo hoặc khoá tài khoản đã mở): bài hiện như cũ nếu còn trong hạn hiển thị, xoá cờ `hidden_by_admin`. `409 ITEM_NOT_HIDDEN` khi bài đang hiện,
+`409 ITEM_UNHIDE_NOT_ALLOWED` khi chủ bài đang bị khoá. Chủ bài nhận thông báo `ITEM_UNHIDDEN_BY_ADMIN`. Ghi nhật ký `ADMIN_ITEM_UNHIDDEN`. Trả `AdminItemFullDetail` mới.
+
+### Bài do Admin ẩn không bị đường khác hiện lại
+
+Chỉ nút "Hiện lại" ở trên mới hiện lại được bài có cờ `hidden_by_admin`. Ba đường tự động đều bỏ qua bài này: báo cáo bị bác bỏ (`ReportService` gọi `ItemService.unhide`),
+bài được duyệt lại sau khi sửa (`relistItemAfterReapproval` gọi `ItemService.unhide`) và mở khoá tài khoản (`AdminUserService.unlock` gọi `ItemService.unhideItems`).

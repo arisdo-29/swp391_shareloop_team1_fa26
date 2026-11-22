@@ -1,10 +1,14 @@
 package com.shareloop.request.service;
 
+import com.shareloop.request.dto.ItemRequestBrief;
 import com.shareloop.request.entity.Request;
+import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.repository.RequestRepository;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -72,5 +76,34 @@ public class RequestQueryService {
             }
         }
         return completedAtByItemId;
+    }
+
+    /** Số yêu cầu đang chờ chọn (PENDING) của từng bài. Bài không có yêu cầu nào thì không có trong map. */
+    @Transactional(readOnly = true)
+    public Map<Long, Long> countPendingByItemIds(Collection<Long> itemIds) {
+        Map<Long, Long> counts = new HashMap<>();
+        if (itemIds == null || itemIds.isEmpty()) {
+            return counts;
+        }
+        for (Request request : repository.findByItemIdInAndStatusIn(itemIds, List.of(RequestStatus.PENDING))) {
+            counts.merge(request.getItemId(), 1L, Long::sum);
+        }
+        return counts;
+    }
+
+    /** Mọi yêu cầu tới một bài, mới nhất trước, cho trang chi tiết bài của Admin. */
+    @Transactional(readOnly = true)
+    public List<ItemRequestBrief> findBriefsByItem(long itemId) {
+        List<ItemRequestBrief> briefs = new ArrayList<>();
+        for (Request request : repository.findByItemIdOrderByCreatedAtDesc(itemId)) {
+            briefs.add(new ItemRequestBrief(
+                    request.getId(),
+                    request.getReceiverId(),
+                    request.getType(),
+                    request.getStatus().name(),
+                    request.getOfferedItemId(),
+                    request.getCreatedAt()));
+        }
+        return briefs;
     }
 }
