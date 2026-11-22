@@ -928,7 +928,7 @@ public class ItemService {
         Item item = requireItem(itemId);
         item.hideByAdmin();
         publishItemUpdate(itemId, item.getDonorId());
-        publishUnavailable(itemId, ItemUnavailableEvent.Reason.HIDDEN);
+        publishUnavailable(itemId, ItemUnavailableEvent.Reason.HIDDEN_BY_ADMIN);
     }
 
     /** Admin hiện lại bài: bật hiển thị và xoá cờ hidden_by_admin. */
@@ -984,7 +984,7 @@ public class ItemService {
             hiddenIds.add(item.getId());
             if (item.getId() != null) {
                 publishItemUpdate(item.getId(), userId);
-                publishUnavailable(item.getId(), ItemUnavailableEvent.Reason.HIDDEN);
+                publishUnavailable(item.getId(), ItemUnavailableEvent.Reason.HIDDEN_BY_ACCOUNT);
             }
         }
         return hiddenIds;
@@ -1009,7 +1009,7 @@ public class ItemService {
             item.deactivate();
             if (item.getId() != null) {
                 publishItemUpdate(item.getId(), userId);
-                publishUnavailable(item.getId(), ItemUnavailableEvent.Reason.HIDDEN);
+                publishUnavailable(item.getId(), ItemUnavailableEvent.Reason.HIDDEN_BY_ACCOUNT);
             }
         }
     }
@@ -1032,6 +1032,8 @@ public class ItemService {
     @Transactional
     public void markRejected(long itemId) {
         transition(itemId, ItemStatus.PENDING_REVIEW, ItemStatus.REJECTED);
+        // Bản sửa bị từ chối: các yêu cầu đang chờ tới bài bị huỷ (C1). Bài mới bị từ chối chưa có yêu cầu nào.
+        publishUnavailable(itemId, ItemUnavailableEvent.Reason.EDIT_REJECTED);
     }
 
     private void transition(long itemId, ItemStatus expected, ItemStatus target) {

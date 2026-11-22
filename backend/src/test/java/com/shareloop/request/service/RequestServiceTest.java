@@ -657,7 +657,7 @@ class RequestServiceTest {
     }
 
     @Test
-    void selectReceiver_whenOfferedItemReservedElsewhere_throwsOfferedItemUnavailableWithoutCharging() {
+    void selectReceiver_whenOfferedItemReservedElsewhere_throwsOfferedItemInOtherTransactionWithoutCharging() {
         // given: bài Cho, món đổi 50 đã bị giữ chỗ ở giao dịch khác
         Request selectedRequest = new Request(1L, 10L, 50L, "GIVE");
         org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
@@ -674,7 +674,7 @@ class RequestServiceTest {
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         ex -> assertThat(ex.getErrorCode())
-                                .isEqualTo(RequestErrorCode.REQUEST_OFFERED_ITEM_UNAVAILABLE));
+                                .isEqualTo(RequestErrorCode.REQUEST_OFFERED_ITEM_IN_OTHER_TRANSACTION));
         verify(creditService, never()).spend(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any(), any());
         verify(itemService, never()).convertOfferType(anyLong(), any());
         verify(itemService, never()).reserve(anyLong());

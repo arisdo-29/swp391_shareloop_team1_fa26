@@ -67,6 +67,8 @@ export interface RequestResponse {
   itemOfferType?: 'GIVE' | 'SWAP' | null;
   // Số Credit chủ bài trả nếu giao dịch chuyển sang Trao đổi; backend đọc từ cấu hình, không tự tính.
   conversionFee?: number | null;
+  // Cờ cảnh báo backend tính cho chủ bài: OFFERED_ITEM_BUSY, RECEIVER_TOO_BUSY, ITEM_UNDER_REVIEW.
+  flags?: string[] | null;
 }
 
 export interface CreateRequestBody {
@@ -147,6 +149,7 @@ export function toFeItemRequest(
     createdAt: request.createdAt,
     itemOfferType: toFeOfferType(request.itemOfferType),
     conversionFee: typeof request.conversionFee === 'number' ? request.conversionFee : undefined,
+    flags: request.flags ?? undefined,
   };
 }
 

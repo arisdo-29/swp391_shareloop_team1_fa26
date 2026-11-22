@@ -7,6 +7,7 @@ import com.shareloop.item.ItemErrorCode;
 import com.shareloop.item.dto.ItemCardDto;
 import com.shareloop.item.dto.ItemSummary;
 import com.shareloop.item.entity.OfferType;
+import com.shareloop.item.event.ItemUnavailableEvent;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
 import com.shareloop.media.service.MediaService;
@@ -45,6 +46,7 @@ import com.shareloop.user.service.UserService;
 import com.shareloop.wallet.entity.CreditTxType;
 import com.shareloop.wallet.service.CreditService;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -351,7 +353,8 @@ public class RequestService {
                             lastMessageAt,
                             disputeResponseDueAt);
                     return addExtraInfo(response, null)
-                            .withReports(disputesOf(disputesMap, request), refusalOf(refusalMap, request));
+                            .withReports(disputesOf(disputesMap, request), refusalOf(refusalMap, request))
+                            .withFlags(flagsOf(request));
                 })
                 .toList();
     }
@@ -395,7 +398,8 @@ public class RequestService {
                             lastMessageAt,
                             disputeResponseDueAt);
                     return addExtraInfo(response, null)
-                            .withReports(disputesOf(disputesMap, request), refusalOf(refusalMap, request));
+                            .withReports(disputesOf(disputesMap, request), refusalOf(refusalMap, request))
+                            .withFlags(flagsOf(request));
                 })
                 .toList();
     }
@@ -663,9 +667,31 @@ public class RequestService {
 
     // Lúc chọn người, món đem đổi phải vẫn là của người gửi, APPROVED và đang hiển thị. Khác requireValidOfferedItem ở
     // mã lỗi: chủ bài cần biết lỗi nằm ở món của người kia chứ không phải bài của mình.
+    // Cờ cảnh báo trên thẻ yêu cầu của chủ bài, để biết trước khi bấm chọn (C1). Chỉ yêu cầu đang chờ mới có cờ.
+    private List<String> flagsOf(Request request) {
+        List<String> flags = new ArrayList<>();
+        if (request.getStatus() != RequestStatus.PENDING) {
+            return flags;
+        }
+        if (request.getOfferedItemId() != null) {
+            boolean offeredItemBusy = findItemSnapshot(request.getOfferedItemId())
+                    .map(offered -> "RESERVED".equals(offered.status()))
+                    .orElse(false);
+            if (offeredItemBusy) {
+                flags.add("OFFERED_ITEM_BUSY");
+            }
+        }
+        return flags;
+    }
+
     private void requireOfferedItemAvailable(long offeredItemId, long receiverId) {
         ItemSnapshot offeredItem = findItemSnapshot(offeredItemId)
                 .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_OFFERED_ITEM_UNAVAILABLE));
+        // Món đang nằm trong giao dịch khác thì báo đúng nguyên nhân để chủ bài biết phải chờ hoặc chọn người khác
+        // (C1).
+        if (offeredItem.donorId() == receiverId && "RESERVED".equals(offeredItem.status())) {
+            throw new BusinessException(RequestErrorCode.REQUEST_OFFERED_ITEM_IN_OTHER_TRANSACTION);
+        }
         boolean available = offeredItem.donorId() == receiverId
                 && "APPROVED".equals(offeredItem.status())
                 && offeredItem.isActive();
@@ -1111,22 +1137,64 @@ public class RequestService {
 
     /**
      * Admin ẩn bài đang có yêu cầu chờ chọn: huỷ mọi yêu cầu PENDING tới bài và báo từng người xin. Người xin không
-     * thấy lý do ẩn chi tiết, chỉ biết bài đã bị ẩn. Giao dịch đã chọn (RESERVED trở lên) không bị lấy ra vì AdminItemService
-     * đã chặn ẩn bài đang có giao dịch chạy.
+     * thấy lý do ẩn chi tiết, chỉ biết bài đã bị ẩn. Giao dịch đã chọn (RESERVED trở lên) không bị lấy ra vì
+     * AdminItemService đã chặn ẩn bài đang có giao dịch chạy.
      *
      * @return số yêu cầu đã huỷ
      */
     @Transactional
     public int cancelPendingRequestsToItem(long itemId, String reason) {
+        return cancelPendingRequestsToItem(itemId, reason, "Bài bạn xin đã bị quản trị viên ẩn nên yêu cầu đã tự huỷ.");
+    }
+
+    /**
+     * Bài không còn chọn được (hết hạn, bị ẩn, bản sửa bị từ chối): huỷ các yêu cầu PENDING tới bài, ghi đúng nguyên nhân
+     * và báo từng người xin (C1). Lý do khác (giữ chỗ, xoá, sửa) không đi qua đây nên trả 0.
+     *
+     * @return số yêu cầu đã huỷ
+     */
+    @Transactional
+    public int cancelPendingRequestsToItem(long itemId, ItemUnavailableEvent.Reason reason) {
+        switch (reason) {
+            case EXPIRED:
+                return cancelPendingRequestsToItem(
+                        itemId,
+                        "Bài đã hết thời gian hiển thị",
+                        "Bài bạn xin đã hết thời gian hiển thị nên yêu cầu đã tự huỷ.");
+            case HIDDEN:
+                return cancelPendingRequestsToItem(
+                        itemId, "Bài đang tạm ẩn", "Bài bạn xin đang tạm ẩn nên yêu cầu đã tự huỷ.");
+            case HIDDEN_BY_ADMIN:
+                return cancelPendingRequestsToItem(
+                        itemId,
+                        "Bài đã bị quản trị viên ẩn",
+                        "Bài bạn xin đã bị quản trị viên ẩn nên yêu cầu đã tự huỷ.");
+            case HIDDEN_BY_ACCOUNT:
+                return cancelPendingRequestsToItem(
+                        itemId,
+                        "Chủ bài đang bị khoá tài khoản",
+                        "Chủ bài đang bị khoá tài khoản nên yêu cầu bạn gửi đã tự huỷ.");
+            case EDIT_REJECTED:
+                return cancelPendingRequestsToItem(
+                        itemId,
+                        "Bài đang được chủ bài chỉnh sửa và chưa được duyệt",
+                        "Bài bạn xin đang được chủ bài chỉnh sửa và chưa được duyệt nên yêu cầu đã tự huỷ.");
+            default:
+                return 0;
+        }
+    }
+
+    // Dùng chung cho mọi nguyên nhân: huỷ yêu cầu PENDING tới bài, lưu lý do hệ thống và thông báo người xin.
+    private int cancelPendingRequestsToItem(long itemId, String systemReason, String requesterMessage) {
         List<Request> pendingRequests = requestRepository.findByItemIdAndStatus(itemId, RequestStatus.PENDING);
         for (Request request : pendingRequests) {
-            request.cancel(Request.CANCEL_BY_SYSTEM + reason);
+            request.cancel(Request.CANCEL_BY_SYSTEM + systemReason);
             requestRepository.save(request);
             notificationService.notify(
                     request.getReceiverId(),
                     "REQUEST_CANCELLED",
                     "Yêu cầu của bạn bị huỷ",
-                    "Bài bạn xin đã bị quản trị viên ẩn nên yêu cầu đã tự huỷ.",
+                    requesterMessage,
                     "/requests/" + request.getId());
         }
         return pendingRequests.size();

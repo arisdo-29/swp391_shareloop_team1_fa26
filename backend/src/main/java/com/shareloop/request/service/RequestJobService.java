@@ -210,12 +210,14 @@ public class RequestJobService {
 
         request.cancel(Request.CANCEL_BY_SYSTEM + "Hết hạn do chủ bài chưa chọn");
         requestRepository.save(request);
+        int pendingDays = configService.getInt(ConfigKey.REQUEST_PENDING_DAYS);
 
         notificationService.notify(
                 request.getReceiverId(),
                 "REQUEST_EXPIRED",
                 "Yêu cầu hết hạn",
-                "Yêu cầu giao dịch của bạn đã tự động hết hạn do chủ bài không phản hồi trong 3 ngày.",
+                "Yêu cầu giao dịch của bạn đã tự động hết hạn do chủ bài không phản hồi trong " + pendingDays
+                        + " ngày.",
                 "/items/" + request.getItemId());
 
         return true;

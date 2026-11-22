@@ -112,4 +112,23 @@ describe('danh sách yêu cầu ở Bài của tôi', () => {
     expect(screen.getByRole('link', { name: 'Xem hồ sơ của Tester 2' }).getAttribute('href')).toBe('/users/42');
     expect(screen.getByRole('link', { name: 'Tester 2' }).getAttribute('href')).toBe('/users/42');
   });
+
+  it('yêu cầu có cờ cảnh báo hiện nhãn tiếng Việt để chủ bài biết trước khi chọn', async () => {
+    // given
+    vi.mocked(requestApi.forItem).mockResolvedValue([
+      { ...pendingRequest, flags: ['OFFERED_ITEM_BUSY', 'RECEIVER_TOO_BUSY'] },
+    ]);
+    render(
+      <MemoryRouter>
+        <Activities />
+      </MemoryRouter>,
+    );
+
+    // when
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem 1 yêu cầu' }));
+
+    // then
+    expect(screen.getByText('Món người này mang đổi đang nằm trong một giao dịch khác')).toBeTruthy();
+    expect(screen.getByText('Người này đang có quá nhiều giao dịch chưa xong')).toBeTruthy();
+  });
 });

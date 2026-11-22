@@ -1085,8 +1085,10 @@ class ItemServiceTest {
         itemService.hideApprovedItemsOfUser(10L);
 
         // then
-        verify(eventPublisher).publishEvent(new ItemUnavailableEvent(1L, ItemUnavailableEvent.Reason.HIDDEN));
-        verify(eventPublisher).publishEvent(new ItemUnavailableEvent(2L, ItemUnavailableEvent.Reason.HIDDEN));
+        verify(eventPublisher)
+                .publishEvent(new ItemUnavailableEvent(1L, ItemUnavailableEvent.Reason.HIDDEN_BY_ACCOUNT));
+        verify(eventPublisher)
+                .publishEvent(new ItemUnavailableEvent(2L, ItemUnavailableEvent.Reason.HIDDEN_BY_ACCOUNT));
     }
 
     @Test

@@ -28,7 +28,13 @@ import { userProfilePath } from '../../utils/chatMessages';
 import { ActivitiesComplaints } from './ActivitiesComplaints';
 import { BoostDialogBody, type BoostFailure } from './BoostDialogBody';
 import { DescribeItemSuggestion } from '../../components/ai/DescribeItemSuggestion';
-import { CONDITIONS, ELECTRONIC_DEFECT_HINT, ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
+import {
+  CONDITIONS,
+  ELECTRONIC_DEFECT_HINT,
+  ITEM_IMAGES_MAX,
+  ITEM_IMAGES_MIN,
+  REQUEST_FLAG_LABELS,
+} from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import { fileToDataUrl } from '../../utils/files';
 import {
@@ -2065,6 +2071,15 @@ function RequestPanel({
                     </Link>
                   </p>
                 ) : null}
+                {request.status === 'PENDING'
+                  ? (request.flags ?? []).map((flag) =>
+                      REQUEST_FLAG_LABELS[flag] ? (
+                        <p key={flag} className="text-xs font-semibold text-warning">
+                          {REQUEST_FLAG_LABELS[flag]}
+                        </p>
+                      ) : null,
+                    )
+                  : null}
                 {request.status !== 'PENDING' ? (
                   <span
                     className={`inline-flex rounded-sm px-2 py-0.5 text-2xs font-bold ${requestChipClass(request.status)}`}

@@ -687,3 +687,10 @@ Không phải endpoint HTTP. Module khác đọc dữ kiện về Request qua `c
 | `boolean hasActiveDelivery(long userId)` | user | Người dùng đang có giao dịch `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER` (TK-11) |
 | `long countCompletedByUser(long userId)` | user (hồ sơ công khai) | Số Request `COMPLETED` người dùng tham gia, tính cả vai người nhận và chủ bài |
 | `Map<Long, Instant> findCompletedAtByItemIds(Collection<Long> itemIds)` | item (bài `TRADED`) | `completed_at` theo id bài; bài là bài chính (`item_id`) hoặc món đề nghị (`offered_item_id`) đều tính. Bài chưa có Request `COMPLETED` không có trong map |
+
+## Huỷ yêu cầu tới bài không còn chọn được (C1)
+
+Khi bài hết hạn, bị ẩn (Admin ẩn, đủ ngưỡng báo cáo, kết luận báo cáo, khoá tài khoản chủ bài) hoặc bản sửa bị từ chối, mọi yêu cầu `PENDING` tới bài tự huỷ ngay. `cancel_reason` ghi đúng nguyên nhân ("Bài đã hết thời gian hiển thị", "Bài đang tạm ẩn", "Bài đã bị quản trị viên ẩn", "Chủ bài đang bị khoá tài khoản", "Bài đang được chủ bài chỉnh sửa và chưa được duyệt") và người xin nhận một thông báo `REQUEST_CANCELLED`.
+
+- `RequestResponse.flags` (danh sách chuỗi, chỉ điền ở danh sách yêu cầu của một bài cho chủ bài, chỉ với yêu cầu `PENDING`): `OFFERED_ITEM_BUSY` khi món người xin mang đổi đang nằm trong giao dịch khác.
+- `409 REQUEST_OFFERED_ITEM_IN_OTHER_TRANSACTION` ở `POST /requests/{id}/select` khi món mang đổi đang nằm trong một giao dịch khác.
