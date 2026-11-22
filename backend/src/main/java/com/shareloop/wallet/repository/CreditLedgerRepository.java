@@ -39,6 +39,9 @@ public interface CreditLedgerRepository extends JpaRepository<CreditLedgerEntry,
             @Param("from") Instant from,
             @Param("to") Instant to);
 
+    /** Các dòng sổ cái gắn với một đơn nạp (thường là một dòng TOP_UP), dùng cho chi tiết đơn của Admin. */
+    List<CreditLedgerEntry> findByPaymentOrderIdOrderByIdAsc(Long paymentOrderId);
+
     /** Đã có dòng với đúng note này chưa; dùng để chặn hoàn phí AI hai lần cho cùng một dòng gốc. */
     boolean existsByUserIdAndTypeAndNote(Long userId, CreditTxType type, String note);
 

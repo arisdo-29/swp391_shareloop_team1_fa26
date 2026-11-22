@@ -61,6 +61,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("admin") Boolean admin,
             Pageable pageable);
 
+    /** Id các tài khoản có họ tên hoặc email khớp mẫu LIKE (đã là chữ thường, bọc dấu %), dùng để tìm cho Admin. */
+    @Query(
+            "select u.id from User u where lower(u.fullName) like :keywordPattern or lower(u.email) like :keywordPattern")
+    java.util.List<Long> findIdsByNameOrEmail(@Param("keywordPattern") String keywordPattern);
+
     /**
      * Danh sách ID của các quản trị viên đang hoạt động (dùng cho gửi thông báo cảnh báo hệ thống).
      */

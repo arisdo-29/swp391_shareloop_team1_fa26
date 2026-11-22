@@ -132,6 +132,10 @@ Không trả `#<id>` trong `targetTitle`, `actorName`. Log `REPORT_DISMISSED`, `
 | `AREA_TOGGLE` | Bật/tắt khu vực | `AREA` | `name`, `active` |
 | `GRACE_STAR` | Cấp sao ân hạn | `USER` | `before`, `after` (lý do Admin nhập ở `reason`). Chỉ còn ở nhật ký cũ: sao ân hạn đã bỏ (UT-09) |
 | `STAR_RESTORED` | Tự hồi sao | `USER` (`actorId = null`) | `before`, `after`, `cleanStreak` |
+| `ADMIN_TOPUP_RECONCILED` | Đối soát đơn nạp tiền | `PAYMENT_ORDER` | `orderCode`, `action` (GRANT_CREDIT hoặc REFUNDED_OUTSIDE), lý do ở `reason` |
+| `ADMIN_ITEM_HIDDEN` | Admin ẩn bài đăng | `ITEM` | `ownerId`, lý do ở `reason` |
+| `ADMIN_ITEM_UNHIDDEN` | Admin hiện lại bài đăng | `ITEM` | `ownerId`, lý do ở `reason` |
+| `ADMIN_VIEWED_CHAT` | Admin xem tin nhắn giao dịch | `REQUEST` | `messageCount` |
 
 > Bản ghi cũ có `type = 'AiUsage'` được migration `V202610191500__audit_rename_ai_usage` đổi thành `AI_USAGE`.
 
@@ -300,6 +304,12 @@ Xuất báo cáo Excel cho Admin, dùng cùng bộ lọc `from` và `to` theo ng
 - **Tên file:** `bao-cao-tai-chinh_<from>_<to>.xlsx`, ngày theo `dd-MM-yyyy`; thiếu mốc thì dùng `bat-dau` hoặc `hien-tai`.
 - **Nội dung:** sheet **Tổng hợp** gồm tiền thu, Credit cộng, Credit trừ và đối chiếu; sheet **Tiền thu theo ngày** gồm `cashByDay`; sheet **Chi tiết nạp tiền** gồm danh sách từng đơn nạp thành công (thời gian, mã đơn, họ tên, email, số tiền, credit nhận, cổng thanh toán); sheet **Theo thành viên** tổng hợp theo từng thành viên (họ tên, email, tổng tiền nạp, tổng credit nhận, số đơn). Số tiền và Credit là ô số.
 - **Lỗi:** `400 INVALID_DATE_RANGE` khi Từ ngày sau Đến ngày, `400 VALIDATION_FAILED` cho định dạng ngày sai, `401` khi chưa đăng nhập, `403` khi thiếu quyền Admin.
+
+---
+
+## 2.3. Giao dịch nạp tiền (đối soát từng đơn)
+
+Danh sách, chi tiết, tổng hợp, xuất CSV và xử lý đối soát đơn nạp: xem `docs/api/payment.md`, mục "API Admin: Giao dịch nạp tiền".
 
 ---
 

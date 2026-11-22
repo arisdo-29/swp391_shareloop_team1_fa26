@@ -31,8 +31,8 @@ const sections = [
   {
     label: 'Tài chính và Credit',
     items: [
+      ['Giao dịch nạp tiền', '/admin/finance/topup-orders', 'topup'],
       ['Báo cáo tài chính', '/admin/finance', 'report'],
-      ['Đơn nạp Credit', '/admin/finance/topup-orders', 'topup'],
     ],
   },
   {

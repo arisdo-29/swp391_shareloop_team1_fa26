@@ -6,22 +6,60 @@ lỗi theo định dạng thống nhất (xem `docs/api/wallet.md`).
 Người sở hữu: BE1. Chọn cổng qua `app.payment.provider=mock|vnpay`. Mặc định `mock` ở dev/test, **`vnpay` ở profile prod** (deploy).
 `MockPaymentClient` giả lập thanh toán; `VnPayClient` tạo URL chuyển sang VNPAY.
 
-### GET /api/v1/admin/finance/topup-orders
+## API Admin: Giao dịch nạp tiền (22/11/2026)
 
-Chỉ ADMIN (401 chưa đăng nhập, 403 user thường). Liệt kê đơn nạp của mọi provider (VNPAY, MOCK, và các đơn cũ nếu có), query:
+Tất cả đường dẫn dưới đây chỉ ADMIN (401 chưa đăng nhập, 403 user thường). Trang `/admin/finance/topup-orders` là trang đối soát
+từng đơn, tách khỏi "Báo cáo tài chính" (số tổng hợp). Mọi thời gian ở tham số `from`, `to` tính theo ngày giờ Việt Nam
+(`yyyy-MM-dd`, `to` tính trọn ngày) và lọc theo `createdAt`.
+
+### Đơn cần đối soát
+
+Đơn VNPAY có `status` là `FAILED`, `CANCELLED` hoặc `EXPIRED` nhưng VNPay đã báo thu tiền (callback thành công đúng chữ ký và đúng
+số tiền): `paid_at` có giá trị và `reviewed_at` còn trống. `paid_at` của đơn đã đóng là lúc VNPay báo đã thu, KHÔNG có nghĩa đã nạp
+thành công. Mọi chỗ tính tiền thật (báo cáo tài chính, sổ cái) đều lọc thêm `status = SUCCESS`.
+Hai nhánh ghi `paid_at` và `provider_txn_id` khi callback tới: `VnPayCallbackService.flagIfPaidAfterClosed` (đơn đã đóng) và
+`rejectExpiredOrder` (đơn PENDING quá hạn). Migration `V202611221000__wallet_payment_order_backfill_paid_at` chỉ gán `paid_at` cho đơn cũ có
+`callback_data` đã lưu với `vnp_ResponseCode` và `vnp_TransactionStatus` cùng bằng `00` và `signature_verified = true`.
+
+### GET /api/v1/admin/finance/topup-orders
 
 | Tham số | Mặc định | Ý nghĩa |
 | --- | --- | --- |
-| provider | (bỏ trống) | VNPAY/MOCK/MANUAL; bỏ trống là mọi provider |
-| status | (bỏ trống) | PENDING/SUCCESS/FAILED/EXPIRED; bỏ trống là mọi trạng thái |
-| submittedOnly | false | true chỉ lấy đơn người dùng đã bấm xác nhận thanh toán; false lấy cả đơn chưa gửi |
-| page | 0 | Số trang >= 0 |
-| size | 20 | 1..100 |
+| provider | (bỏ trống) | VNPAY/MOCK/MANUAL; bỏ trống là mọi cổng |
+| status | (bỏ trống) | PENDING/SUCCESS/FAILED/EXPIRED/CANCELLED; bỏ trống là mọi trạng thái |
+| q | (bỏ trống) | Khớp một phần mã đơn, họ tên hoặc email người nạp (không phân biệt hoa thường) |
+| from, to | (bỏ trống) | Khoảng ngày tạo đơn |
+| needsReconcile | false | true chỉ lấy đơn cần đối soát |
+| page, size | 0, 20 | size 1..100 |
 
-Mặc định (không truyền gì) hiện tất cả đơn nạp ở mọi provider và mọi trạng thái. Trả 200 `PageResponse<TopUpOrderDetailResponse>`:
-`items`, `page`, `size`, `totalElements`; sắp theo thời điểm tạo `createdAt` giảm dần (đơn mới nhất lên đầu) rồi `id` giảm dần.
+Trả `PageResponse<AdminTopUpOrderResponse>`, mới nhất trước: `orderCode`, `userId`, `userName`, `userEmail`, `amountVnd`, `credits`,
+`provider`, `status`, `providerTxnId`, `createdAt`, `paidAt`, `needsReconcile`, `reviewedAt`, `reviewedByName`, `reviewNote`.
+Không có `paymentUrl`. Tham số `submittedOnly` cũ đã bỏ vì không còn nơi nào gọi.
 
-API của Admin trả thêm tên để giao diện không hiện id: `userName` và `userEmail` (chủ đơn), `reviewedByName` (Admin đã duyệt hoặc từ chối đối với đơn lịch sử, `null` khi đơn chưa được xử lý).
+### GET /api/v1/admin/finance/topup-orders/{orderCode}
+
+Trả `AdminTopUpOrderDetail`: `order` (như trên), `callbackData` (chỉ các khoá `vnp_ResponseCode`, `vnp_TransactionStatus`,
+`vnp_TransactionNo`, `vnp_BankCode`, `vnp_PayDate`, `vnp_Amount`; không bao giờ có `vnp_SecureHash`), `ledgerLines` (các dòng sổ cái TOP_UP đã cộng
+cho đơn: `id`, `amount`, `balanceAfter`, `createdAt`). Lỗi `404 WALLET_PAYMENT_ORDER_NOT_FOUND`.
+
+### GET /api/v1/admin/finance/topup-orders/summary?from&to
+
+Trả `{ byStatus: [{ status, orderCount, amountVnd }], needsReconcileCount }`, luôn đủ năm trạng thái (đơn không có thì 0).
+
+### GET /api/v1/admin/finance/topup-orders/export.csv
+
+Cùng bộ lọc với danh sách (`provider`, `status`, `q`, `from`, `to`, `needsReconcile`), tối đa 10000 dòng mới nhất. UTF-8 có BOM.
+
+### POST /api/v1/admin/finance/topup-orders/{orderCode}/reconcile
+
+Body `{ "action": "GRANT_CREDIT" | "REFUNDED_OUTSIDE", "note": "5 đến 500 ký tự" }`. Mỗi đơn xử lý một lần.
+
+- `GRANT_CREDIT`: khoá dòng `users` rồi `payment_orders` như IPN, đơn sang `SUCCESS` (giữ `paid_at`), cộng Credit qua `CreditService`
+  (ledger `TOP_UP` gắn `payment_order_id`), ghi `reviewedBy`, `reviewedAt`, `reviewNote`. Người nạp nhận thông báo `TOPUP_RECONCILED`.
+- `REFUNDED_OUTSIDE`: giữ nguyên trạng thái, không cộng Credit, chỉ ghi `reviewedBy`, `reviewedAt`, `reviewNote`.
+
+Cả hai ghi nhật ký `ADMIN_TOPUP_RECONCILED` (`targetType = PAYMENT_ORDER`, `data` có `orderCode` và `action`, lý do ở `reason`). Trả `AdminTopUpOrderDetail`.
+Lỗi: `404 WALLET_PAYMENT_ORDER_NOT_FOUND`, `409 WALLET_TOPUP_NOT_RECONCILABLE` (đơn không cần đối soát hoặc đã xử lý), `400` khi `note` ngắn hơn 5 ký tự.
 
 ## Luồng MOCK (F04, UC-10)
 
@@ -186,6 +224,7 @@ Xác nhận thanh toán giả lập và cộng Credit (VI-04, VI-07) trong một
 | `WALLET_PAYMENT_ORDER_NOT_FOUND`   | 404  | Không có đơn hoặc đơn của người khác                      |
 | `WALLET_PAYMENT_ORDER_NOT_PAYABLE` | 409  | Đơn `FAILED`, `EXPIRED`, `CANCELLED` hoặc dùng mock-confirm cho đơn khác `MOCK` |
 | `WALLET_TOPUP_PENDING_EXISTS`      | 409  | Tạo đơn khi còn đơn đang chờ thanh toán mà không gửi `replacePending: true`; `details` là đơn đang chờ |
+| `WALLET_TOPUP_NOT_RECONCILABLE`    | 409  | Admin đối soát đơn không cần đối soát hoặc đã xử lý rồi |
 
 ### Trạng thái đơn
 

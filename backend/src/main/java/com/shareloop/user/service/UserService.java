@@ -358,6 +358,18 @@ public class UserService {
     }
 
     /**
+     * Id các tài khoản có họ tên hoặc email chứa từ khoá (không phân biệt hoa thường), để module khác lọc dữ liệu
+     * theo người cho Admin. Từ khoá trống trả danh sách rỗng.
+     */
+    @Transactional(readOnly = true)
+    public List<Long> findIdsByKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return List.of();
+        }
+        return userRepository.findIdsByNameOrEmail(toKeywordPattern(keyword));
+    }
+
+    /**
      * Danh sách tài khoản cho trang quản lý của Admin (KC-01), tài khoản mới nhất trước. Mọi bộ lọc đều tuỳ chọn:
      * keyword khớp một phần họ tên, email hoặc số điện thoại (không phân biệt hoa thường); state lọc theo trạng thái
      * hiển thị (LOCKED nghĩa là is_active = false); role lọc Admin hoặc người dùng thường.
