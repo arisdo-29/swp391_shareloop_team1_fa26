@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Alert, Button, Icon, ItemImage } from '../ui';
+import { Alert, Button, Icon } from '../ui';
+import { PrivateImage } from '../PrivateImage';
 import { Dialog } from '../Dialog';
 import {
   requestApi,
@@ -89,8 +90,8 @@ export function HandoverMediaCard({ request }: { request: RequestResponse }) {
 
       {preview ? (
         <Dialog title={`Xem ảnh ${stageLabels[preview.stage].toLowerCase()}`} wide onClose={() => setPreview(null)}>
-          <ItemImage
-            src={preview.url}
+          <PrivateImage
+            path={preview.url}
             alt={`Ảnh ${stageLabels[preview.stage].toLowerCase()} kích thước lớn`}
             className="max-h-[70dvh] w-full rounded-md bg-surface-low object-contain"
           />
@@ -150,7 +151,7 @@ function MediaSection({
                 onClick={() => onPreview(entry)}
                 className="block size-[100px] overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
-                <ItemImage src={entry.url} alt={`Ảnh ${label}`} className="size-[100px] rounded-md object-cover" />
+                <PrivateImage path={entry.url} alt={`Ảnh ${label}`} className="size-[100px] rounded-md object-cover" />
               </button>
               <p className="mt-1 line-clamp-2 text-2xs leading-4 text-text-secondary">
                 {stageLabels[entry.stage]} {formatDateTime(entry.createdAt)}

@@ -10,6 +10,7 @@ import com.shareloop.item.entity.OfferType;
 import com.shareloop.item.event.ItemUnavailableEvent;
 import com.shareloop.item.service.ItemQueryService;
 import com.shareloop.item.service.ItemService;
+import com.shareloop.media.MediaErrorCode;
 import com.shareloop.media.service.MediaService;
 import com.shareloop.notification.service.NotificationService;
 import com.shareloop.report.dto.RequestDisputeSummary;
@@ -1690,6 +1691,46 @@ public class RequestService {
         return findHandoverMedia(requestId);
     }
 
+    // Đường dẫn đọc ảnh riêng tư của một giao dịch (D2): kiểm quyền ở readMedia, không dùng đường công khai.
+    static String mediaPath(long requestId, long mediaId) {
+        return "/api/v1/requests/" + requestId + "/media/" + mediaId;
+    }
+
+    /**
+     * Đọc nội dung ảnh chat hoặc ảnh giao nhận của một giao dịch (D2). Chỉ hai bên và Admin xem được, và ảnh phải thuộc
+     * đúng giao dịch này. Người không có quyền hoặc ảnh không thuộc giao dịch đều nhận MEDIA_NOT_FOUND (404) chứ không phải
+     * 403, để không lộ ảnh có tồn tại.
+     */
+    @Transactional(readOnly = true)
+    public MediaService.MediaContent readMedia(long requestId, long mediaId, long currentUserId) {
+        Request request = requestRepository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(MediaErrorCode.MEDIA_NOT_FOUND));
+        ItemSnapshot item = findItemSnapshot(request.getItemId())
+                .orElseThrow(() -> new BusinessException(MediaErrorCode.MEDIA_NOT_FOUND));
+        boolean isParty = request.getReceiverId() == currentUserId || item.donorId() == currentUserId;
+        boolean isAdmin = userService != null && userService.isAdmin(currentUserId);
+        if ((!isParty && !isAdmin) || !isMediaOfRequest(requestId, mediaId)) {
+            throw new BusinessException(MediaErrorCode.MEDIA_NOT_FOUND);
+        }
+        return mediaService.readPrivateAttached(mediaId);
+    }
+
+    // Ảnh thuộc giao dịch khi là ảnh giao nhận hoặc ảnh trong tin nhắn đã qua kiểm duyệt của giao dịch đó.
+    private boolean isMediaOfRequest(long requestId, long mediaId) {
+        if (jdbcClient == null) {
+            return false;
+        }
+        return Boolean.TRUE.equals(jdbcClient
+                .sql(
+                        "SELECT EXISTS (SELECT 1 FROM request_media_mappings WHERE request_id = :requestId AND media_id = :mediaId)"
+                                + " OR EXISTS (SELECT 1 FROM messages WHERE request_id = :requestId AND media_id = :mediaId AND moderation = 'PASS')")
+                .param("requestId", requestId)
+                .param("mediaId", mediaId)
+                .query(Boolean.class)
+                .single());
+    }
+
     // Đọc minh chứng của một yêu cầu, cũ trước. Không kiểm quyền: nơi gọi đã kiểm người xem là một trong hai bên.
     private List<RequestMediaResponse> findHandoverMedia(Long requestId) {
         if (requestId == null) {
@@ -1699,7 +1740,7 @@ public class RequestService {
             return requestMediaRepository.findByRequestIdOrderByCreatedAtAsc(requestId).stream()
                     .map(m -> new RequestMediaResponse(
                             m.getMediaId(),
-                            "/api/v1/media/" + m.getMediaId(),
+                            mediaPath(requestId, m.getMediaId()),
                             m.getStage(),
                             m.getUploadedBy(),
                             m.getCreatedAt()))
@@ -1713,7 +1754,7 @@ public class RequestService {
                     .param("requestId", requestId)
                     .query((rs, rowNum) -> new RequestMediaResponse(
                             rs.getLong("media_id"),
-                            "/api/v1/media/" + rs.getLong("media_id"),
+                            mediaPath(requestId, rs.getLong("media_id")),
                             rs.getString("stage"),
                             rs.getLong("uploaded_by"),
                             rs.getTimestamp("created_at").toInstant()))
@@ -1729,7 +1770,8 @@ public class RequestService {
         }
 
         if (mediaService != null) {
-            mediaService.attach(mediaIds, currentUserId);
+            // Ảnh giao nhận riêng tư: chỉ hai bên và Admin xem được (D2)
+            mediaService.attachPrivate(mediaIds, currentUserId);
         }
 
         String effectiveStage = (stage != null && !stage.isBlank()) ? stage.toUpperCase() : "HANDOVER";

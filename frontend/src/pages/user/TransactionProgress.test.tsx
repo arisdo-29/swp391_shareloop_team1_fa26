@@ -13,6 +13,11 @@ import type { ItemRequestStatus, User } from '../../types/domain';
 import { respondDispute } from '../../services/reportApi';
 import { TransactionProgress } from './TransactionProgress';
 
+// Ảnh riêng tư tải bằng token: ở test này chỉ cần hook trả blob URL có sẵn.
+vi.mock('../../utils/usePrivateMediaUrl', () => ({
+  usePrivateMediaUrl: () => ({ url: 'blob:test-image', loading: false, failed: false }),
+}));
+
 vi.mock('../../services/requestApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../services/requestApi')>()),
   requestApi: {

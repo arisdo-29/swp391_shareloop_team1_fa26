@@ -824,6 +824,7 @@ function ApiMessages({ currentUserId }: { currentUserId: number }) {
                       entry={entry}
                       mine={entry.senderId === currentUserId}
                       progressPath={transactionProgressPath(selected.request.id)}
+                      requestId={selected.request.id}
                       onOpenItem={(itemId) => navigate(`/items/${itemId}`)}
                       offerActions={
                         offerChangeOpen && selectedAsDonor && entry.id === pendingOfferChange?.id

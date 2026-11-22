@@ -243,7 +243,7 @@ class ChatServiceTest {
             assertThat(response.mediaId()).isEqualTo(mediaId);
             assertThat(response.content()).isEqualTo("Ảnh gói đồ");
 
-            verify(mediaService).attach(List.of(mediaId), RECEIVER_ID);
+            verify(mediaService).attachPrivate(List.of(mediaId), RECEIVER_ID);
             verify(messageRepository).save(any(Message.class));
         }
 
@@ -266,7 +266,7 @@ class ChatServiceTest {
             assertThat(response.mediaId()).isEqualTo(mediaId);
             assertThat(response.content()).isNull();
 
-            verify(mediaService).attach(List.of(mediaId), RECEIVER_ID);
+            verify(mediaService).attachPrivate(List.of(mediaId), RECEIVER_ID);
         }
 
         @Test
@@ -284,7 +284,7 @@ class ChatServiceTest {
                             .isEqualTo(ChatErrorCode.CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN));
 
             org.mockito.Mockito.verify(mediaService, org.mockito.Mockito.never())
-                    .attach(any(), org.mockito.ArgumentMatchers.anyLong());
+                    .attachPrivate(any(), org.mockito.ArgumentMatchers.anyLong());
         }
 
         private RequestChatContext contextOfType(String type) {
@@ -305,7 +305,7 @@ class ChatServiceTest {
                     .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                             .isEqualTo(ChatErrorCode.CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN));
             org.mockito.Mockito.verify(mediaService, org.mockito.Mockito.never())
-                    .attach(any(), org.mockito.ArgumentMatchers.anyLong());
+                    .attachPrivate(any(), org.mockito.ArgumentMatchers.anyLong());
         }
 
         @Test
@@ -321,7 +321,7 @@ class ChatServiceTest {
 
             // then
             assertThat(response.kind()).isEqualTo(MessageKind.IMAGE.name());
-            verify(mediaService).attach(List.of(51L), DONOR_ID);
+            verify(mediaService).attachPrivate(List.of(51L), DONOR_ID);
         }
 
         @Test
@@ -372,7 +372,7 @@ class ChatServiceTest {
                             .isEqualTo(ChatErrorCode.CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN));
 
             org.mockito.Mockito.verify(mediaService, org.mockito.Mockito.never())
-                    .attach(any(), org.mockito.ArgumentMatchers.anyLong());
+                    .attachPrivate(any(), org.mockito.ArgumentMatchers.anyLong());
         }
 
         @Test
@@ -391,7 +391,7 @@ class ChatServiceTest {
 
             assertThat(response).isNotNull();
             assertThat(response.kind()).isEqualTo(MessageKind.IMAGE.name());
-            verify(mediaService).attach(List.of(mediaId), DONOR_ID);
+            verify(mediaService).attachPrivate(List.of(mediaId), DONOR_ID);
         }
 
         @Test

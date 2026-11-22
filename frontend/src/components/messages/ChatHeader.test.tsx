@@ -355,6 +355,7 @@ describe('ChatMessage', () => {
           entry={systemMessage}
           mine={false}
           progressPath="/messages/101/progress"
+          requestId={101}
           onOpenItem={vi.fn()}
         />
       </MemoryRouter>,

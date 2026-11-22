@@ -196,6 +196,20 @@ public class RequestController {
     }
 
     /**
+     * Đọc nội dung một ảnh chat hoặc ảnh giao nhận của giao dịch (D2). Chỉ hai bên và Admin; người khác nhận 404.
+     */
+    @Operation(summary = "Xem ảnh chat hoặc ảnh giao nhận của giao dịch (chỉ hai bên và Admin)")
+    @GetMapping("/api/v1/requests/{id}/media/{mediaId}")
+    public org.springframework.http.ResponseEntity<byte[]> readMedia(
+            @PathVariable long id, @PathVariable long mediaId, @CurrentUserId Long currentUserId) {
+        var content = requestService.readMedia(id, mediaId, currentUserId);
+        return org.springframework.http.ResponseEntity.ok()
+                .cacheControl(org.springframework.http.CacheControl.noStore())
+                .contentType(org.springframework.http.MediaType.parseMediaType(content.mimeType()))
+                .body(content.bytes());
+    }
+
+    /**
      * Lấy danh sách ảnh hoặc video minh chứng của yêu cầu giao dịch (GN-10).
      * Chỉ hai bên tham gia giao dịch mới có quyền xem.
      */

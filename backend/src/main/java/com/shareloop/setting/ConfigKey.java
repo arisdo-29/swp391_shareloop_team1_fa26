@@ -50,6 +50,18 @@ public enum ConfigKey {
             ConfigGroup.POSTING,
             "Số giờ chờ gia hạn sau khi mở lại bài",
             "Bài được mở lại sau giao dịch huỷ mà vẫn quá hạn hiển thị thì được giữ thêm số giờ này để chủ bài kịp gia hạn."),
+    MEDIA_ORPHAN_CLEANUP_HOURS(
+            "media_orphan_cleanup_hours",
+            "24",
+            ConfigGroup.POSTING,
+            "Số giờ giữ ảnh chưa dùng",
+            "Ảnh đã tải lên nhưng chưa gắn vào bài đăng hay tin nhắn sau số giờ này sẽ bị xoá."),
+    MEDIA_UPLOAD_PER_HOUR(
+            "media_upload_per_hour",
+            "40",
+            ConfigGroup.POSTING,
+            "Số ảnh tải lên tối đa mỗi giờ",
+            "Số ảnh tối đa một người được tải lên trong một giờ. Vượt số này thì phải chờ."),
     POST_DISPLAY_DAYS_GOLD(
             "post_display_days_gold",
             "45",

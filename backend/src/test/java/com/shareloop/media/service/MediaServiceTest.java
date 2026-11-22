@@ -3,6 +3,7 @@ package com.shareloop.media.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -47,6 +48,7 @@ class MediaServiceTest {
     void uploadUsesFileSignatureAndReturnsId() throws IOException {
         byte[] png = {(byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1};
         when(config.getInt(ConfigKey.IMAGE_MAX_MB)).thenReturn(5);
+        lenient().when(config.getInt(ConfigKey.MEDIA_UPLOAD_PER_HOUR)).thenReturn(40);
         when(storage.save(png, "png")).thenReturn("image.png");
         when(repository.saveAndFlush(any(MediaFile.class))).thenAnswer(invocation -> {
             MediaFile media = invocation.getArgument(0);
@@ -77,6 +79,7 @@ class MediaServiceTest {
     @Test
     void invalidImageNeverReachesStorage() throws IOException {
         when(config.getInt(ConfigKey.IMAGE_MAX_MB)).thenReturn(5);
+        lenient().when(config.getInt(ConfigKey.MEDIA_UPLOAD_PER_HOUR)).thenReturn(40);
         var file = new MockMultipartFile("file", "x.png", "image/png", new byte[] {1, 2, 3});
         assertThatThrownBy(() -> service.upload(file, 4L))
                 .isInstanceOf(BusinessException.class)
@@ -88,6 +91,7 @@ class MediaServiceTest {
     void upload_whenImageLargerThanImageMaxMb_throwsFileTooLarge() throws IOException {
         // given: giới hạn 1 MB, ảnh lớn hơn đúng 1 byte
         when(config.getInt(ConfigKey.IMAGE_MAX_MB)).thenReturn(1);
+        lenient().when(config.getInt(ConfigKey.MEDIA_UPLOAD_PER_HOUR)).thenReturn(40);
         var file = new MockMultipartFile("file", "big.png", "image/png", pngWithSize(ONE_MB + 1));
 
         // when
@@ -104,6 +108,7 @@ class MediaServiceTest {
         // given: ảnh đúng bằng giới hạn 1 MB vẫn hợp lệ
         byte[] png = pngWithSize(ONE_MB);
         when(config.getInt(ConfigKey.IMAGE_MAX_MB)).thenReturn(1);
+        lenient().when(config.getInt(ConfigKey.MEDIA_UPLOAD_PER_HOUR)).thenReturn(40);
         when(storage.save(png, "png")).thenReturn("image.png");
         when(repository.saveAndFlush(any(MediaFile.class))).thenAnswer(invocation -> {
             MediaFile media = invocation.getArgument(0);

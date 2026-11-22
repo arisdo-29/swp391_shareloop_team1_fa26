@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button, ItemImage, StatusBadge, TypeBadge } from '../ui';
 import type { MessageResponse } from '../../services/chatApi';
-import { resolveMediaUrl } from '../../services/mediaUrl';
+import { PrivateImage } from '../PrivateImage';
 import { messageOfferStatusLabel } from '../../utils/chatMessages';
 
 /**
@@ -12,12 +12,15 @@ export function ChatMessage({
   entry,
   mine,
   progressPath,
+  requestId,
   onOpenItem,
   offerActions,
 }: {
   entry: MessageResponse;
   mine: boolean;
   progressPath: string;
+  // Id số của giao dịch: ảnh chat riêng tư chỉ đọc được qua /requests/{id}/media/{mediaId} (D2).
+  requestId: number | string;
   onOpenItem: (itemId: number) => void;
   // Chỉ trang Tin nhắn truyền vào, cho chủ bài ở đề nghị đổi món đang chờ khi giao dịch còn thương lượng.
   offerActions?: { submitting: boolean; onAccept: () => void; onDecline: () => void };
@@ -71,18 +74,13 @@ export function ChatMessage({
           </button>
         ) : null}
         {entry.mediaId ? (
-          <a
-            href={resolveMediaUrl(`/api/v1/media/${entry.mediaId}`)}
-            target="_blank"
-            rel="noreferrer"
-            className="mb-2 block"
-          >
-            <img
-              src={resolveMediaUrl(`/api/v1/media/${entry.mediaId}`)}
+          <div className="mb-2">
+            <PrivateImage
+              path={`/api/v1/requests/${requestId}/media/${entry.mediaId}`}
               alt="Ảnh trong cuộc trò chuyện"
               className="max-h-72 max-w-full rounded-md object-contain"
             />
-          </a>
+          </div>
         ) : null}
         {entry.content ? <p className="whitespace-pre-wrap break-words">{entry.content}</p> : null}
         {offerLabel ? (

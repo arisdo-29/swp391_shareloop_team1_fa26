@@ -7,6 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminRequestApi, type AdminRequestDetail } from '../../services/adminRequestApi';
 import { AdminTransactionDetail } from './AdminTransactionDetail';
 
+// Ảnh riêng tư tải bằng token: ở test này chỉ cần hook trả blob URL có sẵn.
+vi.mock('../../utils/usePrivateMediaUrl', () => ({
+  usePrivateMediaUrl: () => ({ url: 'blob:test-image', loading: false, failed: false }),
+}));
+
 vi.mock('../../services/adminRequestApi', () => ({
   adminRequestApi: { detail: vi.fn(), messages: vi.fn(), cancel: vi.fn(), list: vi.fn() },
 }));
