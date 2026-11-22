@@ -60,6 +60,13 @@ public class User extends BaseEntity {
     @Column(name = "otp_failed_count", nullable = false)
     private short otpFailedCount;
 
+    // Khoá đăng nhập tạm (A2): đếm số lần sai mật khẩu liên tiếp, đủ ngưỡng thì đặt hạn khoá.
+    @Column(name = "login_failed_count", nullable = false)
+    private short loginFailedCount;
+
+    @Column(name = "login_locked_until")
+    private Instant loginLockedUntil;
+
     @Column(name = "registration_ip", length = 45)
     private String registrationIp;
 
@@ -164,6 +171,33 @@ public class User extends BaseEntity {
 
     public void recordRegistrationIp(String registrationIp) {
         this.registrationIp = registrationIp;
+    }
+
+    /** Đang trong thời gian khoá đăng nhập tạm vì sai mật khẩu nhiều lần (A2). */
+    public boolean isLoginLocked(Instant now) {
+        return loginLockedUntil != null && loginLockedUntil.isAfter(now);
+    }
+
+    public Instant getLoginLockedUntil() {
+        return loginLockedUntil;
+    }
+
+    public short getLoginFailedCount() {
+        return loginFailedCount;
+    }
+
+    /** Ghi một lần sai mật khẩu; đủ {@code maxAttempts} thì khoá tới {@code now + lockMinutes} phút. */
+    public void recordLoginFailure(int maxAttempts, int lockMinutes, Instant now) {
+        loginFailedCount++;
+        if (loginFailedCount >= maxAttempts) {
+            loginLockedUntil = now.plusSeconds(lockMinutes * 60L);
+        }
+    }
+
+    /** Đăng nhập đúng hoặc đặt lại mật khẩu xong: xoá bộ đếm và hạn khoá. */
+    public void resetLoginFailures() {
+        loginFailedCount = 0;
+        loginLockedUntil = null;
     }
 
     /** Cập nhật phần hồ sơ người dùng được tự sửa (TK-12). Email và số điện thoại cố ý không có ở đây. */

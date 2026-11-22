@@ -17,6 +17,10 @@ public enum AuthErrorCode implements ErrorCode {
     AUTH_EMAIL_NOT_VERIFIED(HttpStatus.FORBIDDEN, "Email chưa được xác thực."),
     AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "Email hoặc mật khẩu không đúng."),
     AUTH_ACCOUNT_LOCKED(HttpStatus.FORBIDDEN, "Tài khoản đã bị khoá."),
+    // Khoá tạm vì sai mật khẩu nhiều lần (A2); câu hiển thị dựng từ số phút còn lại nên defaultMessage chỉ là dự phòng.
+    AUTH_LOGIN_TEMPORARILY_LOCKED(
+            HttpStatus.TOO_MANY_REQUESTS,
+            "Bạn đã nhập sai nhiều lần. Vui lòng thử lại sau ít phút hoặc đặt lại mật khẩu."),
     // Cấm khi hết sao uy tín (D-09): status = BANNED, khác khoá tạm thời (is_active = false).
     AUTH_ACCOUNT_BANNED(HttpStatus.FORBIDDEN, "Tài khoản đã bị cấm."),
     // 400 chứ không phải 401: FE gặp 401 sẽ hiểu là hết phiên và đăng xuất người dùng.

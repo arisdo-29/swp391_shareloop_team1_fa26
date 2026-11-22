@@ -248,6 +248,18 @@ public enum ConfigKey {
             ConfigGroup.ACCOUNT,
             "Khoảng cách gửi lại OTP",
             "Số giây tối thiểu giữa hai lần gửi lại mã OTP."),
+    LOGIN_MAX_FAILED_ATTEMPTS(
+            "login_max_failed_attempts",
+            "5",
+            ConfigGroup.ACCOUNT,
+            "Số lần sai mật khẩu liên tiếp tối đa",
+            "Sai mật khẩu đủ số lần này liên tiếp thì email đó bị khoá đăng nhập tạm thời."),
+    LOGIN_LOCK_MINUTES(
+            "login_lock_minutes",
+            "15",
+            ConfigGroup.ACCOUNT,
+            "Thời gian khoá đăng nhập",
+            "Số phút email bị khoá đăng nhập sau khi sai mật khẩu quá số lần cho phép."),
     PENDING_ACCOUNT_TTL_HOURS(
             "pending_account_ttl_hours",
             "24",

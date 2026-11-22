@@ -26,6 +26,7 @@ import com.shareloop.user.entity.UserStatus;
 import com.shareloop.user.mapper.UserMapper;
 import com.shareloop.user.repository.UserRepository;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -463,6 +464,84 @@ class AuthServiceTest {
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(expected));
+    }
+
+    @Test
+    void login_whenWrongPasswordReachesMaxAttempts_locksLoginForConfiguredMinutes() {
+        // given: đã sai 4 lần, lần này là lần thứ 5
+        User user = givenUser(UserStatus.ACTIVE, true);
+        ReflectionTestUtils.setField(user, "loginFailedCount", (short) 4);
+        givenLoginLockConfig();
+        when(passwordEncoder.matches(PASSWORD, HASH)).thenReturn(false);
+
+        // when
+        assertErrorCode(new LoginRequest(EMAIL, PASSWORD), AuthErrorCode.AUTH_INVALID_CREDENTIALS);
+
+        // then
+        Instant now = Instant.now();
+        assertThat(user.isLoginLocked(now)).isTrue();
+        assertThat(user.getLoginLockedUntil()).isBefore(now.plusSeconds(15 * 60 + 5));
+    }
+
+    @Test
+    void login_whenLocked_throwsLockedWithoutCheckingPassword() {
+        // given
+        User user = givenUser(UserStatus.ACTIVE, true);
+        ReflectionTestUtils.setField(user, "loginLockedUntil", Instant.now().plusSeconds(10 * 60));
+
+        // when, then
+        assertErrorCode(new LoginRequest(EMAIL, PASSWORD), AuthErrorCode.AUTH_LOGIN_TEMPORARILY_LOCKED);
+        verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
+    void login_whenLockedMessage_containsRemainingMinutes() {
+        // given
+        User user = givenUser(UserStatus.ACTIVE, true);
+        ReflectionTestUtils.setField(user, "loginLockedUntil", Instant.now().plusSeconds(10 * 60 - 5));
+
+        // when, then
+        assertThatThrownBy(() -> service.login(new LoginRequest(EMAIL, PASSWORD)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getMessage()).contains("sau 10 phút"));
+    }
+
+    @Test
+    void login_whenLockExpired_allowsLoginAndResetsCounter() {
+        // given: hạn khoá đã qua 1 phút
+        User user = givenUser(UserStatus.ACTIVE, true);
+        ReflectionTestUtils.setField(user, "loginFailedCount", (short) 5);
+        ReflectionTestUtils.setField(user, "loginLockedUntil", Instant.now().minusSeconds(60));
+        when(passwordEncoder.matches(PASSWORD, HASH)).thenReturn(true);
+        when(jwtService.issue(7L, false)).thenReturn("token");
+
+        // when
+        service.login(new LoginRequest(EMAIL, PASSWORD));
+
+        // then
+        assertThat(user.getLoginFailedCount()).isZero();
+        assertThat(user.getLoginLockedUntil()).isNull();
+    }
+
+    @Test
+    void login_whenPasswordCorrect_resetsFailedCounter() {
+        // given
+        User user = givenUser(UserStatus.ACTIVE, true);
+        ReflectionTestUtils.setField(user, "loginFailedCount", (short) 3);
+        when(passwordEncoder.matches(PASSWORD, HASH)).thenReturn(true);
+        when(jwtService.issue(7L, false)).thenReturn("token");
+
+        // when
+        service.login(new LoginRequest(EMAIL, PASSWORD));
+
+        // then
+        assertThat(user.getLoginFailedCount()).isZero();
+    }
+
+    private void givenLoginLockConfig() {
+        when(configService.getInt(ConfigKey.LOGIN_MAX_FAILED_ATTEMPTS)).thenReturn(5);
+        when(configService.getInt(ConfigKey.LOGIN_LOCK_MINUTES)).thenReturn(15);
     }
 
     private User givenUserById() {

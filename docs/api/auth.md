@@ -126,7 +126,7 @@ Quy tắc:
 - Request: `LoginRequest`.
 - Thành công: `200`, `AuthResponse`.
 - Lỗi: `400 VALIDATION_FAILED`, `401 AUTH_INVALID_CREDENTIALS`, `403 AUTH_EMAIL_NOT_VERIFIED`,
-  `403 AUTH_ACCOUNT_LOCKED`, `403 AUTH_ACCOUNT_BANNED`.
+  `429 AUTH_LOGIN_TEMPORARILY_LOCKED`, `403 AUTH_ACCOUNT_LOCKED`, `403 AUTH_ACCOUNT_BANNED`.
 
 Quy tắc:
 
@@ -356,6 +356,7 @@ Trả về từ `/verify-otp` và `/login`.
 | `AUTH_EMAIL_NOT_VERIFIED`       | 403  | Đăng nhập khi tài khoản còn `PENDING_VERIFICATION`                                  |
 | `AUTH_INVALID_CREDENTIALS`      | 401  | Sai email hoặc sai mật khẩu (không phân biệt)                                       |
 | `AUTH_ACCOUNT_LOCKED`           | 403  | Tài khoản bị khoá (`is_active = false`); kèm `details.reason` nếu Admin nhập lý do khi khoá |
+| `AUTH_LOGIN_TEMPORARILY_LOCKED`  | 429  | Sai mật khẩu quá `login_max_failed_attempts` lần liên tiếp, khoá `login_lock_minutes` phút; kèm `details.retryAfterMinutes`. Đăng nhập đúng hoặc đặt lại mật khẩu thì mở khoá |
 | `AUTH_ACCOUNT_BANNED`           | 403  | Tài khoản bị cấm (`status = BANNED`, hết sao uy tín), message "Tài khoản đã bị cấm." |
 | `AUTH_CURRENT_PASSWORD_INCORRECT` | 400 | Đổi mật khẩu: mật khẩu hiện tại không đúng, `field` = `currentPassword`            |
 | `AUTH_NEW_PASSWORD_SAME_AS_CURRENT` | 400 | Đổi / đặt lại mật khẩu: mật khẩu mới trùng mật khẩu hiện tại, `field` = `newPassword` |

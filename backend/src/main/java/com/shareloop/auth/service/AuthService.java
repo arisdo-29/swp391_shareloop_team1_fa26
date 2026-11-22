@@ -23,6 +23,8 @@ import com.shareloop.user.entity.UserStatus;
 import com.shareloop.user.mapper.UserMapper;
 import com.shareloop.user.repository.UserRepository;
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -81,10 +83,14 @@ public class AuthService {
      * Đăng nhập bằng email và mật khẩu (TK-03, TK-04, UC-02).
      *
      * <p>Quy tắc: sai email và sai mật khẩu cùng trả một lỗi để không dò được email; chỉ khi mật khẩu đúng mới
-     * kiểm trạng thái tài khoản.
+     * kiểm trạng thái tài khoản. Sai mật khẩu đủ login_max_failed_attempts lần liên tiếp thì khoá đăng nhập email đó
+     * login_lock_minutes phút; đang khoá thì không kiểm mật khẩu. Đăng nhập đúng thì đặt lại bộ đếm.
      *
-     * @throws BusinessException AUTH_INVALID_CREDENTIALS, AUTH_EMAIL_NOT_VERIFIED, AUTH_ACCOUNT_LOCKED, AUTH_ACCOUNT_BANNED
+     * @throws BusinessException AUTH_INVALID_CREDENTIALS, AUTH_LOGIN_TEMPORARILY_LOCKED, AUTH_EMAIL_NOT_VERIFIED,
+     *     AUTH_ACCOUNT_LOCKED, AUTH_ACCOUNT_BANNED
      */
+    // noRollbackFor: sai mật khẩu ném BusinessException nhưng bộ đếm sai vẫn phải được lưu, giống verifyOtp.
+    @Transactional(noRollbackFor = BusinessException.class)
     public AuthResponse login(LoginRequest request) {
         User user = findUserWithMatchingPassword(request);
         checkAccountCanLogin(user);
@@ -220,6 +226,8 @@ public class AuthService {
             throw new BusinessException(AuthErrorCode.AUTH_NEW_PASSWORD_SAME_AS_CURRENT, null, "newPassword", null);
         }
         user.changePasswordHash(passwordEncoder.encode(request.newPassword()));
+        // Đặt lại mật khẩu xong thì mở khoá đăng nhập tạm để người dùng vào được ngay.
+        user.resetLoginFailures();
     }
 
     // Chỉ tài khoản đăng nhập được mới cho đặt lại mật khẩu; PENDING dùng /resend-otp, BANNED hoặc bị khoá thì không.
@@ -282,10 +290,34 @@ public class AuthService {
         User user = userRepository
                 .findByEmail(normalizedEmail)
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.AUTH_INVALID_CREDENTIALS));
+        Instant now = clock.instant();
+        throwIfLoginLocked(user, now);
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            user.recordLoginFailure(
+                    configService.getInt(ConfigKey.LOGIN_MAX_FAILED_ATTEMPTS),
+                    configService.getInt(ConfigKey.LOGIN_LOCK_MINUTES),
+                    now);
             throw new BusinessException(AuthErrorCode.AUTH_INVALID_CREDENTIALS);
         }
+        user.resetLoginFailures();
         return user;
+    }
+
+    // Đang khoá thì báo số phút còn lại (làm tròn lên). Hết hạn khoá thì xoá bộ đếm cũ để người dùng có đủ lượt thử
+    // mới.
+    private void throwIfLoginLocked(User user, Instant now) {
+        if (user.isLoginLocked(now)) {
+            long secondsLeft = Duration.between(now, user.getLoginLockedUntil()).toSeconds();
+            long minutesLeft = (secondsLeft + SECONDS_PER_MINUTE - 1) / SECONDS_PER_MINUTE;
+            throw new BusinessException(
+                    AuthErrorCode.AUTH_LOGIN_TEMPORARILY_LOCKED,
+                    "Bạn đã nhập sai nhiều lần. Vui lòng thử lại sau " + minutesLeft + " phút hoặc đặt lại mật khẩu.",
+                    null,
+                    Map.of("retryAfterMinutes", minutesLeft));
+        }
+        if (user.getLoginLockedUntil() != null) {
+            user.resetLoginFailures();
+        }
     }
 
     private void checkAccountCanLogin(User user) {
