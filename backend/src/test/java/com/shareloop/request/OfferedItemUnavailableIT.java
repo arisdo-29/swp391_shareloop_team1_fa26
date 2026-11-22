@@ -46,10 +46,11 @@ class OfferedItemUnavailableIT extends IntegrationTest {
         requestService.selectReceiver(requestR1, donorA);
         entityManager.flush();
 
-        // then: R2 tự huỷ, B nhận đúng một thông báo huỷ và không ai nhận hai thông báo huỷ cho R2
+        // then: R2 tự huỷ, B và chủ bài C mỗi người nhận đúng một thông báo huỷ, không ai nhận hai thông báo cho R2
         assertThat(requestStatus(requestR1)).isEqualTo("RESERVED");
         assertThat(requestStatus(requestR2)).isEqualTo("CANCELLED");
         assertThat(cancelNoticeCount(receiverB, requestR2)).isEqualTo(1);
+        assertThat(cancelNoticeCount(donorC, requestR2)).isEqualTo(1);
         assertThat(maxCancelNoticesPerUser(requestR2)).isEqualTo(1);
     }
 

@@ -710,7 +710,29 @@ public class RequestService {
                     "Yêu cầu trao đổi bị huỷ",
                     "Món đồ bạn đề nghị đã được chọn trong một giao dịch khác.",
                     "/requests/" + otherSwap.getId());
+            notifyTargetDonorOfferedItemTaken(otherSwap);
         }
+    }
+
+    // Chủ bài đích cũng cần biết yêu cầu tới bài mình đã biến mất, giống đường huỷ qua ItemUnavailableEvent.
+    // Không tra được tên người gửi hoặc tiêu đề bài thì dùng chữ chung để thông báo vẫn đọc được.
+    private void notifyTargetDonorOfferedItemTaken(Request otherSwap) {
+        Optional<ItemSnapshot> targetItem = findItemSnapshot(otherSwap.getItemId());
+        if (targetItem.isEmpty()) {
+            return;
+        }
+        String senderName = findUserName(otherSwap.getReceiverId());
+        String itemTitle = findItemTitle(otherSwap.getItemId());
+        String senderText = senderName != null ? senderName : "một người dùng";
+        String itemText = itemTitle != null ? "bài «" + itemTitle + "»" : "bài của bạn";
+        String message = "Yêu cầu của " + senderText + " cho " + itemText
+                + " đã tự huỷ vì món đề nghị đổi đã được chọn ở một giao dịch khác.";
+        notificationService.notify(
+                targetItem.get().donorId(),
+                "REQUEST_CANCELLED",
+                "Một yêu cầu đã tự huỷ",
+                message,
+                "/requests/" + otherSwap.getId());
     }
 
     /**

@@ -216,7 +216,9 @@ giữ chỗ (`RESERVED`), xoá (`REMOVED`), ẩn kể cả khi khoá tài khoả
 - Mọi lý do: huỷ các Request `PENDING` có `offered_item_id = itemId`, `cancelReason` là
   `"[Hệ thống] Món bạn đề nghị đổi không còn khả dụng"`. Người gửi và chủ bài đích nhận `REQUEST_CANCELLED`. Request đã
   được chọn (`RESERVED`) không bị lấy ra. Lúc chọn người, `selectReceiver` tự huỷ các yêu cầu dùng chung món đổi trước
-  khi giữ chỗ món đó, nên listener không huỷ lại và không ai nhận hai thông báo cho cùng một yêu cầu.
+  khi giữ chỗ món đó, nên listener không huỷ lại và không ai nhận hai thông báo cho cùng một yêu cầu. Ở đường này
+  người gửi và chủ bài đích cũng đều nhận `REQUEST_CANCELLED`, chủ bài đích đọc được câu "Yêu cầu của {tên người gửi}
+  cho bài «{tiêu đề}» đã tự huỷ vì món đề nghị đổi đã được chọn ở một giao dịch khác."
 - `EDITED`: người có Request `PENDING` tới bài nhận `REQUEST_ITEM_EDITED` "Chủ bài vừa sửa bài, bài đang chờ duyệt lại."
   Yêu cầu không bị huỷ. Sửa lại bài đang `REJECTED` hoặc `PENDING_REVIEW` không gửi thông báo này.
 

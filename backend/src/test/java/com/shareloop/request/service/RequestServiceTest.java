@@ -575,6 +575,7 @@ class RequestServiceTest {
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
+        doReturn(Optional.empty()).when(requestService).findItemSnapshot(2L);
         givenOfferedItemAvailable(50L, 10L);
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
@@ -590,6 +591,41 @@ class RequestServiceTest {
         assertThat(otherSwapRequest.getCancelReason()).isNotNull();
         org.mockito.Mockito.verify(notificationService)
                 .notify(eq(10L), eq("REQUEST_CANCELLED"), any(), any(), eq("/requests/103"));
+    }
+
+    @Test
+    void selectReceiver_whenOtherRequestSharesOfferedItem_notifiesTargetDonorWithSenderNameAndTitle() {
+        // given: yêu cầu 103 của người gửi 11 tới bài 2 (chủ 30) dùng chung món đổi 50 với yêu cầu được chọn
+        Request selectedRequest = new Request(1L, 11L, 50L, "SWAP");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+        Request otherSwapRequest = new Request(2L, 11L, 50L, "SWAP");
+        org.springframework.test.util.ReflectionTestUtils.setField(otherSwapRequest, "id", 103L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(30L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(2L);
+        givenOfferedItemAvailable(50L, 11L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+        when(requestRepository.findByOfferedItemIdAndStatus(50L, RequestStatus.PENDING))
+                .thenReturn(List.of(selectedRequest, otherSwapRequest));
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+        when(userService.findContact(11L)).thenReturn(new ContactInfo(11L, "Lan Anh", "c@example.com", "0903"));
+        when(itemQueryService.findTitles(List.of(2L))).thenReturn(Map.of(2L, "Xe đạp"));
+
+        // when
+        requestService.selectReceiver(101L, 20L);
+
+        // then
+        verify(notificationService)
+                .notify(
+                        30L,
+                        "REQUEST_CANCELLED",
+                        "Một yêu cầu đã tự huỷ",
+                        "Yêu cầu của Lan Anh cho bài «Xe đạp» đã tự huỷ vì món đề nghị đổi đã được chọn ở một"
+                                + " giao dịch khác.",
+                        "/requests/103");
     }
 
     @Test
