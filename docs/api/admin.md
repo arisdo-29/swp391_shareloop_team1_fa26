@@ -313,6 +313,31 @@ Danh sách, chi tiết, tổng hợp, xuất CSV và xử lý đối soát đơn
 
 ---
 
+## 2.4. GET /api/v1/admin/finance/ledger
+
+Chỉ ADMIN (401 chưa đăng nhập, 403 user thường). Sổ cái `credit_ledger` của toàn hệ thống, mới nhất trước (`createdAt` giảm dần rồi `id` giảm dần).
+Chỉ đọc, giữ ranh giới module: tên người qua `UserService`, tiêu đề bài qua `ItemQueryService`, mã đơn nạp qua `PaymentOrderRepository` (cùng module wallet).
+
+| Tham số | Mặc định | Ý nghĩa |
+| --- | --- | --- |
+| type | (bỏ trống) | `TOP_UP`, `POST_FEE`, `EDIT_FEE`, `RENEW_FEE`, `BOOST_FEE`, `AI_SEARCH_FEE`, `ADMIN_ADJUST`; bỏ trống là mọi loại |
+| userId | (bỏ trống) | Chỉ dòng của người dùng này |
+| q | (bỏ trống) | Khớp một phần họ tên hoặc email người dùng, ghi chú, hoặc mã đơn nạp (không phân biệt hoa thường) |
+| from, to | (bỏ trống) | Khoảng ngày `yyyy-MM-dd` theo giờ Việt Nam, `to` tính trọn ngày. `from` sau `to` trả `422 WALLET_INVALID_DATE_RANGE` |
+| page, size | 0, 20 | size 1..100 |
+
+Trả `AdminLedgerPage`: `items`, `page`, `size`, `totalElements`, `totalIn` (tổng Credit cộng vào, dòng dương) và `totalOut` (tổng trừ ra, giữ dấu âm).
+Hai tổng tính trên cả khoảng lọc, không chỉ trang hiện tại. Mỗi dòng `AdminLedgerRow`: `id`, `createdAt`, `userId`, `userName`, `userEmail`, `type`,
+`amount` (có dấu), `balanceAfter`, `itemId`, `itemTitle` (null khi không gắn bài hoặc bài đã mất), `orderCode` (mã đơn nạp với `TOP_UP`),
+`note`, `createdByName` (chỉ có ở dòng `ADMIN_ADJUST`, vì `created_by` do JPA Auditing gán cho mọi dòng và với các khoản phí chính là người dùng).
+
+## 2.5. GET /api/v1/admin/finance/ledger.csv
+
+Cùng bộ lọc (`type`, `userId`, `q`, `from`, `to`), tối đa 10000 dòng mới nhất, UTF-8 có BOM. Cột: Thời gian, Người dùng, Email, Loại (nhãn tiếng Việt),
+Số Credit, Số dư sau, Bài liên quan, Mã đơn nạp, Ghi chú, Người thực hiện.
+
+---
+
 ## 3. GET /api/v1/admin/finance/users/{userId}/history
 
 Tra cứu lịch sử tài chính và biến động số dư Credit của một người dùng (AD-03, Issue #115). Chỉ dành cho Admin. Phân trang và sắp xếp mới nhất lên trước (`createdAt DESC, id DESC`).

@@ -86,6 +86,7 @@ const iconMap = {
   lookup: MagnifyingGlass,
   report: ChartLineUp,
   topup: Receipt,
+  ledger: ListBullets,
   fees: SlidersHorizontal,
   auditLog: Scroll,
   alert: Warning,

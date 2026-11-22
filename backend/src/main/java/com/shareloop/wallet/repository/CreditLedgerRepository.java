@@ -13,6 +13,48 @@ import org.springframework.data.repository.query.Param;
 /** Sổ cái chỉ thêm dòng mới (save) và đọc lịch sử; không có hàm sửa, xoá. */
 public interface CreditLedgerRepository extends JpaRepository<CreditLedgerEntry, Long> {
 
+    // Điều kiện lọc chung của trang Lịch sử giao dịch Credit. allUsers = true bỏ qua userId. keywordPattern null là
+    // không tìm; ngược lại khớp người (userIds, luôn có ít nhất một phần tử), ghi chú hoặc mã đơn nạp.
+    String ADMIN_FILTER = " where (:type is null or l.type = :type)"
+            + " and (:allUsers = true or l.userId = :userId)"
+            + " and (:keywordPattern is null or l.userId in :userIds or lower(l.note) like :keywordPattern"
+            + "   or l.paymentOrderId in (select o.id from PaymentOrder o where lower(o.orderCode) like :keywordPattern))"
+            + " and l.createdAt >= :from and l.createdAt < :to";
+
+    /** Sổ cái toàn hệ thống cho Admin, thứ tự theo pageable (mới nhất trước). */
+    @Query("select l from CreditLedgerEntry l" + ADMIN_FILTER)
+    Page<CreditLedgerEntry> findForAdmin(
+            @Param("type") CreditTxType type,
+            @Param("allUsers") boolean allUsers,
+            @Param("userId") long userId,
+            @Param("keywordPattern") String keywordPattern,
+            @Param("userIds") java.util.Collection<Long> userIds,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            Pageable pageable);
+
+    /** Tổng Credit cộng vào (dòng dương) trong cùng bộ lọc với {@link #findForAdmin}. */
+    @Query("select coalesce(sum(l.amount), 0) from CreditLedgerEntry l" + ADMIN_FILTER + " and l.amount > 0")
+    long sumInForAdmin(
+            @Param("type") CreditTxType type,
+            @Param("allUsers") boolean allUsers,
+            @Param("userId") long userId,
+            @Param("keywordPattern") String keywordPattern,
+            @Param("userIds") java.util.Collection<Long> userIds,
+            @Param("from") Instant from,
+            @Param("to") Instant to);
+
+    /** Tổng Credit trừ ra (dòng âm, giữ dấu âm) trong cùng bộ lọc với {@link #findForAdmin}. */
+    @Query("select coalesce(sum(l.amount), 0) from CreditLedgerEntry l" + ADMIN_FILTER + " and l.amount < 0")
+    long sumOutForAdmin(
+            @Param("type") CreditTxType type,
+            @Param("allUsers") boolean allUsers,
+            @Param("userId") long userId,
+            @Param("keywordPattern") String keywordPattern,
+            @Param("userIds") java.util.Collection<Long> userIds,
+            @Param("from") Instant from,
+            @Param("to") Instant to);
+
     /**
      * Lịch sử ví của một người trong khoảng [from, to). Thứ tự sắp xếp truyền qua Pageable. Index
      * ix_ledger_user (user_id, created_at DESC) phục vụ đúng truy vấn này.

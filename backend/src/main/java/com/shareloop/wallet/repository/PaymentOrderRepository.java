@@ -45,6 +45,10 @@ public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long
             + " from PaymentOrder o where o.createdAt >= :from and o.createdAt < :to group by o.status")
     List<StatusTotalView> summarizeByStatus(@Param("from") Instant from, @Param("to") Instant to);
 
+    /** Mã đơn của nhiều đơn theo id, dùng để gắn mã vào dòng sổ cái. */
+    @Query("select o.id as id, o.orderCode as orderCode from PaymentOrder o where o.id in :ids")
+    List<OrderCodeView> findCodesByIds(@Param("ids") Collection<Long> ids);
+
     /** Số đơn cần đối soát trong khoảng ngày tạo [from, to). */
     @Query("select count(o) from PaymentOrder o where o.createdAt >= :from and o.createdAt < :to"
             + " and o.provider = com.shareloop.wallet.entity.PaymentProvider.VNPAY"

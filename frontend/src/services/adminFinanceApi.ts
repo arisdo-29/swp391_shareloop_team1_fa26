@@ -114,6 +114,49 @@ export interface AdminTopUpFilters {
   needsReconcile?: boolean;
 }
 
+/** Một dòng sổ cái Credit của toàn hệ thống (docs/api/admin.md mục 2.4). */
+export type LedgerTxType =
+  | 'TOP_UP'
+  | 'POST_FEE'
+  | 'EDIT_FEE'
+  | 'RENEW_FEE'
+  | 'BOOST_FEE'
+  | 'AI_SEARCH_FEE'
+  | 'ADMIN_ADJUST';
+
+export interface AdminLedgerRow {
+  id: number;
+  createdAt: string;
+  userId: number;
+  userName: string | null;
+  userEmail: string | null;
+  type: LedgerTxType;
+  amount: number;
+  balanceAfter: number;
+  itemId: number | null;
+  itemTitle: string | null;
+  orderCode: string | null;
+  note: string | null;
+  createdByName: string | null;
+}
+
+export interface AdminLedgerPage {
+  items: AdminLedgerRow[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalIn: number;
+  totalOut: number;
+}
+
+export interface AdminLedgerFilters {
+  type?: LedgerTxType;
+  userId?: number;
+  q?: string;
+  from?: string;
+  to?: string;
+}
+
 export const adminFinanceApi = {
   // Bỏ trống bộ lọc nào là không lọc theo tiêu chí đó (docs/api/payment.md).
   async topUpOrders(params: AdminTopUpFilters & { page: number; size: number }) {
@@ -142,6 +185,23 @@ export const adminFinanceApi = {
       body,
     );
     return data;
+  },
+  async ledger(params: AdminLedgerFilters & { page: number; size: number }) {
+    const { data } = await http.get<AdminLedgerPage>('/api/v1/admin/finance/ledger', { params });
+    return data;
+  },
+  async ledgerCsv(params: AdminLedgerFilters): Promise<FinanceCsvDownload> {
+    const response = await http.get<Blob>('/api/v1/admin/finance/ledger.csv', {
+      params,
+      responseType: 'blob',
+    });
+    return {
+      blob: response.data,
+      fileName: financeFileName(
+        response.headers['content-disposition'],
+        'lich-su-giao-dich-credit.csv',
+      ),
+    };
   },
   async topUpOrdersCsv(params: AdminTopUpFilters): Promise<FinanceCsvDownload> {
     const response = await http.get<Blob>('/api/v1/admin/finance/topup-orders/export.csv', {

@@ -37,6 +37,7 @@ const AdminAnomalies = lazy(() => import('../pages/admin/AdminAnomalies').then((
 const AdminComplaints = lazy(() => import('../pages/admin/AdminComplaints').then((module) => ({ default: module.AdminComplaints })));
 const AdminTransactions = lazy(() => import('../pages/admin/AdminTransactions').then((module) => ({ default: module.AdminTransactions })));
 const AdminTopUpOrders = lazy(() => import('../pages/admin/AdminTopUpOrders').then((module) => ({ default: module.AdminTopUpOrders })));
+const AdminLedger = lazy(() => import('../pages/admin/AdminLedger').then((module) => ({ default: module.AdminLedger })));
 const AdminReputation = lazy(() => import('../pages/admin/AdminReputation').then((module) => ({ default: module.AdminReputation })));
 const AdminAccounts = lazy(() => import('../pages/admin/AdminAccounts').then((module) => ({ default: module.AdminAccounts })));
 const AdminModerationList = lazy(() => import('../pages/admin/AdminModerationList').then((module) => ({ default: module.AdminModerationList })));
@@ -144,6 +145,7 @@ export const router = createBrowserRouter([
               { path: 'alerts', element: <AdminAnomalies /> },
               { path: 'finance', element: <AdminFinance /> },
               { path: 'finance/topup-orders', element: <AdminTopUpOrders /> },
+              { path: 'finance/ledger', element: <AdminLedger /> },
               { path: 'finance/users', element: <AdminFinanceUsers /> },
               { path: 'finance/users/:userId', element: <AdminFinanceUserDetail /> },
               { path: 'settings/fees', element: <AdminSettings /> },
