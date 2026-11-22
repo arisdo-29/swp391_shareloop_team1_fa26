@@ -51,8 +51,9 @@ public class RequestJobService {
     private final TransactionTemplate transactionTemplate;
     private final ReportService reportService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ItemReopenedNotifier itemReopenedNotifier;
 
-    // Dạng 9 tham số (chưa có ApplicationEventPublisher) để test đang gọi vẫn compile.
+    // Dạng 9 tham số (chưa có ApplicationEventPublisher, ItemReopenedNotifier) để test đang gọi vẫn compile.
     public RequestJobService(
             RequestRepository requestRepository,
             ItemService itemService,
@@ -73,6 +74,7 @@ public class RequestJobService {
                 jdbcClient,
                 transactionTemplate,
                 reportService,
+                null,
                 null);
     }
 
@@ -87,7 +89,8 @@ public class RequestJobService {
             @Autowired(required = false) JdbcClient jdbcClient,
             TransactionTemplate transactionTemplate,
             @Autowired(required = false) ReportService reportService,
-            @Autowired(required = false) ApplicationEventPublisher eventPublisher) {
+            @Autowired(required = false) ApplicationEventPublisher eventPublisher,
+            @Autowired(required = false) ItemReopenedNotifier itemReopenedNotifier) {
         this.requestRepository = requestRepository;
         this.itemService = itemService;
         this.notificationService = notificationService;
@@ -98,6 +101,7 @@ public class RequestJobService {
         this.transactionTemplate = transactionTemplate;
         this.reportService = reportService;
         this.eventPublisher = eventPublisher;
+        this.itemReopenedNotifier = itemReopenedNotifier;
     }
 
     /**
@@ -243,6 +247,10 @@ public class RequestJobService {
         itemService.release(request.getItemId());
         if (request.getOfferedItemId() != null) {
             itemService.releaseIfReserved(request.getOfferedItemId());
+        }
+        // Bài mở lại: báo những người từng bị từ chối ở bài này (cùng hàm với các đường huỷ ở RequestService).
+        if (itemReopenedNotifier != null) {
+            itemReopenedNotifier.notifyRejectedRequesters(request.getItemId(), request.getReceiverId());
         }
 
         Long donorId = findDonorId(request.getItemId());

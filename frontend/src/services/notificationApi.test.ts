@@ -13,6 +13,22 @@ describe('notificationCategory', () => {
     },
   );
 
+  it('xếp thông báo món từng yêu cầu đã mở lại vào nhóm Giao dịch', () => {
+    // when
+    const category = notificationCategory('REQUESTED_ITEM_REOPENED');
+
+    // then
+    expect(category).toBe('transaction');
+  });
+
+  it('giữ thông báo bài được hiện lại sau báo cáo ở nhóm Kiểm duyệt', () => {
+    // when
+    const category = notificationCategory('ITEM_REOPENED');
+
+    // then
+    expect(category).toBe('moderation');
+  });
+
   it('vẫn xếp thông báo yêu cầu cũ vào nhóm Giao dịch', () => {
     // when
     const category = notificationCategory('REQUEST_CANCELLED');

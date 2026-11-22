@@ -107,6 +107,7 @@ public class RequestService {
     private final ActivityLogService activityLogService;
     private final ReportService reportService;
     private final CreditService creditService;
+    private final ItemReopenedNotifier itemReopenedNotifier;
 
     @Autowired
     public RequestService(
@@ -123,7 +124,8 @@ public class RequestService {
             @Autowired(required = false) ApplicationEventPublisher eventPublisher,
             @Autowired(required = false) ActivityLogService activityLogService,
             @Autowired(required = false) @Lazy ReportService reportService,
-            @Autowired(required = false) CreditService creditService) {
+            @Autowired(required = false) CreditService creditService,
+            @Autowired(required = false) ItemReopenedNotifier itemReopenedNotifier) {
         this.requestRepository = requestRepository;
         this.notificationService = notificationService;
         this.configService = configService;
@@ -138,6 +140,7 @@ public class RequestService {
         this.activityLogService = activityLogService;
         this.reportService = reportService;
         this.creditService = creditService;
+        this.itemReopenedNotifier = itemReopenedNotifier;
     }
 
     public RequestService(
@@ -167,6 +170,7 @@ public class RequestService {
                 eventPublisher,
                 activityLogService,
                 null,
+                null,
                 null);
     }
 
@@ -193,6 +197,7 @@ public class RequestService {
                 null,
                 null,
                 null,
+                null,
                 null);
     }
 
@@ -212,6 +217,7 @@ public class RequestService {
                 userService,
                 null,
                 jdbcClient,
+                null,
                 null,
                 null,
                 null,
@@ -461,6 +467,16 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
         }
 
+        // Bài vừa sửa đang chờ duyệt lại: chưa chọn được người, báo rõ thay vì lỗi giữ chỗ chung chung.
+        if ("PENDING_REVIEW".equals(item.status())) {
+            throw new BusinessException(RequestErrorCode.REQUEST_ITEM_UNDER_REVIEW);
+        }
+
+        // Kiểm món đem đổi trước khi đổi hình thức và trừ phí, để món hỏng thì không trừ Credit của chủ bài.
+        if (selectedRequest.getOfferedItemId() != null) {
+            requireOfferedItemAvailable(selectedRequest.getOfferedItemId(), selectedRequest.getReceiverId());
+        }
+
         // Chuyển đổi loại Cho ↔ Trao đổi khi chọn người nhận (CD-02, CD-04, CD-06)
         boolean isGiveToSwap = "GIVE".equals(item.offerType()) && selectedRequest.getOfferedItemId() != null;
         boolean isSwapToGive = "SWAP".equals(item.offerType()) && selectedRequest.getOfferedItemId() == null;
@@ -640,6 +656,19 @@ public class RequestService {
         }
     }
 
+    // Lúc chọn người, món đem đổi phải vẫn là của người gửi, APPROVED và đang hiển thị. Khác requireValidOfferedItem ở
+    // mã lỗi: chủ bài cần biết lỗi nằm ở món của người kia chứ không phải bài của mình.
+    private void requireOfferedItemAvailable(long offeredItemId, long receiverId) {
+        ItemSnapshot offeredItem = findItemSnapshot(offeredItemId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_OFFERED_ITEM_UNAVAILABLE));
+        boolean available = offeredItem.donorId() == receiverId
+                && "APPROVED".equals(offeredItem.status())
+                && offeredItem.isActive();
+        if (!available) {
+            throw new BusinessException(RequestErrorCode.REQUEST_OFFERED_ITEM_UNAVAILABLE);
+        }
+    }
+
     // Cho → Trao đổi (CD-02, CD-06): chủ bài trả POST_FEE như khi đăng bài Trao đổi, rồi đổi loại bài và loại giao
     // dịch.
     // Trừ tiền trước để thiếu Credit thì ném WALLET_INSUFFICIENT_BALANCE khi chưa đổi gì.
@@ -681,7 +710,29 @@ public class RequestService {
                     "Yêu cầu trao đổi bị huỷ",
                     "Món đồ bạn đề nghị đã được chọn trong một giao dịch khác.",
                     "/requests/" + otherSwap.getId());
+            notifyTargetDonorOfferedItemTaken(otherSwap);
         }
+    }
+
+    // Chủ bài đích cũng cần biết yêu cầu tới bài mình đã biến mất, giống đường huỷ qua ItemUnavailableEvent.
+    // Không tra được tên người gửi hoặc tiêu đề bài thì dùng chữ chung để thông báo vẫn đọc được.
+    private void notifyTargetDonorOfferedItemTaken(Request otherSwap) {
+        Optional<ItemSnapshot> targetItem = findItemSnapshot(otherSwap.getItemId());
+        if (targetItem.isEmpty()) {
+            return;
+        }
+        String senderName = findUserName(otherSwap.getReceiverId());
+        String itemTitle = findItemTitle(otherSwap.getItemId());
+        String senderText = senderName != null ? senderName : "một người dùng";
+        String itemText = itemTitle != null ? "bài «" + itemTitle + "»" : "bài của bạn";
+        String message = "Yêu cầu của " + senderText + " cho " + itemText
+                + " đã tự huỷ vì món đề nghị đổi đã được chọn ở một giao dịch khác.";
+        notificationService.notify(
+                targetItem.get().donorId(),
+                "REQUEST_CANCELLED",
+                "Một yêu cầu đã tự huỷ",
+                message,
+                "/requests/" + otherSwap.getId());
     }
 
     /**
@@ -847,6 +898,7 @@ public class RequestService {
         publishNegotiationEnded(saved);
 
         releaseReservedItems(saved);
+        notifyItemReopened(saved);
 
         long otherUserId = isDonor ? saved.getReceiverId() : item.donorId();
         notificationService.notify(
@@ -1000,6 +1052,58 @@ public class RequestService {
         return pendingRequests.size();
     }
 
+    /**
+     * Huỷ các yêu cầu PENDING đang dùng bài làm món đem đổi, khi bài đó không còn dùng được (bị giữ chỗ ở giao dịch
+     * khác, bị xoá, ẩn, sửa hoặc hết hạn; YC-04, YC-07). Người gửi và chủ bài đích đều được báo. Yêu cầu vừa được chọn
+     * đã là RESERVED nên không bị lấy ra.
+     *
+     * @return số yêu cầu đã huỷ
+     */
+    @Transactional
+    public int cancelPendingRequestsOfferingItem(long offeredItemId) {
+        List<Request> pendingRequests =
+                requestRepository.findByOfferedItemIdAndStatus(offeredItemId, RequestStatus.PENDING);
+        for (Request request : pendingRequests) {
+            request.cancel(Request.CANCEL_BY_SYSTEM + "Món bạn đề nghị đổi không còn khả dụng");
+            requestRepository.save(request);
+            notifyOfferedItemUnavailable(request);
+        }
+        return pendingRequests.size();
+    }
+
+    private void notifyOfferedItemUnavailable(Request request) {
+        String link = "/requests/" + request.getId();
+        notificationService.notify(
+                request.getReceiverId(),
+                "REQUEST_CANCELLED",
+                "Yêu cầu trao đổi bị huỷ",
+                "Món bạn đề nghị đổi không còn khả dụng nên yêu cầu đã tự huỷ.",
+                link);
+        findItemSnapshot(request.getItemId())
+                .ifPresent(item -> notificationService.notify(
+                        item.donorId(),
+                        "REQUEST_CANCELLED",
+                        "Một yêu cầu đã tự huỷ",
+                        "Món người gửi đề nghị đổi không còn khả dụng nên yêu cầu tới bài của bạn đã tự huỷ.",
+                        link));
+    }
+
+    /**
+     * Bài đang hiển thị vừa bị chủ bài sửa và chờ duyệt lại: báo người có yêu cầu PENDING tới bài. Không huỷ yêu cầu;
+     * chủ bài chọn người được sau khi bài được duyệt lại.
+     */
+    @Transactional
+    public void notifyPendingRequestersItemEdited(long itemId) {
+        for (Request request : requestRepository.findByItemIdAndStatus(itemId, RequestStatus.PENDING)) {
+            notificationService.notify(
+                    request.getReceiverId(),
+                    "REQUEST_ITEM_EDITED",
+                    "Bài bạn xin vừa được sửa",
+                    "Chủ bài vừa sửa bài, bài đang chờ duyệt lại.",
+                    "/requests/" + request.getId());
+        }
+    }
+
     private void cancelBecauseUserLocked(Request request, long lockedUserId) {
         boolean wasPending = request.getStatus() == RequestStatus.PENDING;
         request.cancel(Request.CANCEL_BY_SYSTEM + LOCKED_ACCOUNT_REASON);
@@ -1052,6 +1156,7 @@ public class RequestService {
         Request saved = requestRepository.save(request);
         releaseReservedItems(saved);
         publishNegotiationEnded(saved);
+        notifyItemReopened(saved);
 
         notifyBothParties(saved, "TRANSACTION_CANCELLED", "Admin đã huỷ giao dịch. Lý do: " + reason);
         if (activityLogService != null) {
@@ -1064,6 +1169,14 @@ public class RequestService {
                     Request.CANCEL_BY_ADMIN + reason);
         }
         return toResponse(saved);
+    }
+
+    // Bài chính vừa về APPROVED: báo những người từng bị từ chối ở bài này (mỗi người một lần) để họ xin lại.
+    // itemReopenedNotifier null chỉ gặp ở unit test dựng service rút gọn.
+    private void notifyItemReopened(Request request) {
+        if (itemReopenedNotifier != null) {
+            itemReopenedNotifier.notifyRejectedRequesters(request.getItemId(), request.getReceiverId());
+        }
     }
 
     // Nhả bài chính về APPROVED. Món mang đổi dùng releaseIfReserved vì giao dịch SWAP cũ có thể chưa giữ chỗ nó.

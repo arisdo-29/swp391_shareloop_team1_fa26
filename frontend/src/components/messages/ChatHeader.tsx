@@ -9,6 +9,7 @@ import { productDetailFromRequestPath } from '../../utils/productDetailNavigatio
 import type { PinnedItemResponse } from '../../services/chatApi';
 import type { ItemResponse } from '../../services/itemApi';
 import { CompactProgress } from './CompactProgress';
+import { RequestSummary } from './RequestSummary';
 import {
   avatarInitials,
   conversationImage,
@@ -120,6 +121,9 @@ export function ChatHeader({
   const viewerIsDonor = isDonorView(conversation, currentUserId);
   const title = conversationTitle(conversation);
   const isSwap = request.type === 'SWAP';
+  // Chat chưa mở (đang chờ hoặc không được chọn): người gửi cần nhớ lại mình đã xin hay đề nghị đổi món gì.
+  const showsRequestSummary =
+    !viewerIsDonor && (request.status === 'PENDING' || request.status === 'REJECTED');
   const pinnedImageFor = (itemId?: number) =>
     itemId === undefined
       ? undefined
@@ -176,6 +180,8 @@ export function ChatHeader({
           ) : null}
         </div>
       </header>
+
+      {showsRequestSummary ? <RequestSummary conversation={conversation} /> : null}
 
       <div
         hidden={detailsHidden}

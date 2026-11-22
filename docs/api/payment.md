@@ -203,8 +203,8 @@ Xác nhận thanh toán giả lập và cộng Credit (VI-04, VI-07) trong một
 
 1. FE gọi tạo đơn như trên; nhận `provider=VNPAY` và chuyển trình duyệt tới `redirectUrl`.
 2. URL có số tiền nhân 100, thời gian `Asia/Ho_Chi_Minh`, hạn từ `PAYMENT_ORDER_EXPIRE_MINUTES`, chữ ký HMAC-SHA512 trên tham số đã sắp xếp và URL-encode.
-3. VNPAY gọi IPN để backend ghi kết quả và cộng Credit. Chỉ IPN được cộng tiền.
-4. Trình duyệt quay về return, backend kiểm chữ ký rồi chuyển hướng 302 tới `app.payment.vnpay.fe-result-url`, mặc định `http://localhost:5173/credit` (route `/credit` đã có trong FE).
+3. VNPAY gọi IPN để backend ghi kết quả và cộng Credit. Đây là đường cộng tiền chính.
+4. Trình duyệt quay về return, backend kiểm chữ ký. Thanh toán thành công thì chốt đơn bằng đúng hàm xử lý IPN (dự phòng khi IPN không tới), rồi chuyển hướng 302 tới `app.payment.vnpay.fe-result-url`, mặc định `http://localhost:5173/credit` (route `/credit` đã có trong FE).
 
 ### GET /api/v1/payments/vnpay/ipn
 
@@ -232,11 +232,17 @@ Ví dụ khi đã xử lý kết quả: `{"RspCode":"00","Message":"Confirm Succ
 
 ### GET /api/v1/payments/vnpay/return
 
-Không cần Bearer Token. Kiểm chữ ký rồi redirect 302; không bao giờ cộng Credit (chỉ IPN cộng tiền).
+Không cần Bearer Token. Kiểm chữ ký rồi redirect 302.
+Chữ ký hợp lệ và thanh toán thành công (`vnp_ResponseCode` và `vnp_TransactionStatus` đều `00`): backend gọi đúng hàm
+`processIpn` của IPN làm dự phòng, phòng khi IPN không tới (sai IPN URL trên merchant, server khởi động chậm). Hàm này khoá
+`users` rồi `payment_orders`, kiểm số tiền, kiểm hạn đơn; đơn không còn PENDING thì không làm gì (`02`). Vì vậy Return và
+IPN tới theo thứ tự nào cũng chỉ cộng Credit **một lần** (idempotent); IPN tới sau Return nhận `RspCode=02`. Đơn đã quá hạn
+thì không cộng như IPN muộn. Đơn được chốt từ Return ghi log INFO `VNPAY order settled from return (IPN fallback)`. Lỗi ở
+bước này chỉ ghi log, không chặn redirect.
 Chữ ký hợp lệ mà `vnp_ResponseCode` khác `00` (vd `24` = khách hủy): đơn VNPAY còn PENDING, đúng số tiền chuyển ngay sang **CANCELLED** (mã `24`) hoặc **FAILED** (mã khác)
 và lưu tham số vào `callback_data` (giữ mã lỗi), không chờ IPN hay job hết hạn. Lỗi ở bước này chỉ ghi log, không chặn redirect.
 Query gửi FE: `orderCode` và `status=SUCCESS|FAILED|INVALID_SIGNATURE`. Chữ ký sai trả `orderCode` rỗng.
-`SUCCESS` ở đây chỉ phản ánh dữ liệu return của cổng; IPN có thể đến sau. FE cần tải lại ví và không được suy ra đã cộng tiền từ query này.
+`SUCCESS` ở đây chỉ phản ánh dữ liệu return của cổng; bước chốt đơn dự phòng có thể không cộng (đơn quá hạn, sai số tiền, lỗi). FE cần tải lại ví và không được suy ra đã cộng tiền từ query này.
 FE đọc API trạng thái đơn bằng mã tham chiếu; không suy ra đã cộng tiền từ query return hoặc số dư tăng.
 
 ### Biến môi trường (dev và prod)
@@ -273,16 +279,21 @@ IPN thành công tới khi đơn đã đóng mà chưa cộng (FAILED do hủy, 
 | `VNPAY_FE_RESULT_URL` | URL FE kết quả, bắt buộc khi chọn VNPAY ở prod (không có mặc định); đặt `https://<frontend-domain>/credit`. Dev mặc định `http://localhost:5173/credit` |
 | `PAYMENT_MOCK_ENABLED` | Bật endpoint mock-confirm (tự cộng Credit không cần tiền); chỉ bật ở dev, staging |
 
-Phải khai báo IPN URL `https://<render-domain>/api/v1/payments/vnpay/ipn` trong trang quản trị merchant sandbox của VNPAY.
-Backend phải truy cập công khai bằng HTTPS để VNPAY gọi IPN.
+Phải khai báo IPN URL trỏ tới backend Cloud Run trong trang quản trị merchant sandbox của VNPAY:
+`https://shareloop-api-648813583458.asia-southeast1.run.app/api/v1/payments/vnpay/ipn` (domain backend hiện tại, cùng
+giá trị `VITE_API_BASE_URL` trong `frontend/.env.example`). Backend phải truy cập công khai bằng HTTPS để VNPAY gọi IPN.
+`VNPAY_RETURN_URL` trên Cloud Run là `https://<backend-domain>/api/v1/payments/vnpay/return`, `VNPAY_FE_RESULT_URL` là
+`https://<frontend-domain>/credit`.
 
 Local: khai báo các biến trong môi trường của IDE/terminal chạy backend (Spring không tự đọc file `.env`).
 Riêng mock-confirm: profile dev mặc định bật; muốn tắt ở dev dùng `APP_PAYMENT_MOCK_ENABLED=false`.
 `PAYMENT_MOCK_ENABLED` là mapping của profile prod; không thay đổi mặc định các profile trong task này.
 Chạy profile `dev`; sau khi có merchant dùng `PAYMENT_PROVIDER=vnpay`,
 `VNPAY_RETURN_URL=https://<public-backend>/api/v1/payments/vnpay/return` và
-`VNPAY_FE_RESULT_URL=http://localhost:5173/credit`. Backend local cần tunnel HTTPS công khai để nhận IPN;
-đăng ký `https://<public-backend>/api/v1/payments/vnpay/ipn` tại merchant. Không trỏ return URL thẳng tới FE.
+`VNPAY_FE_RESULT_URL=http://localhost:5173/credit`. Backend local cần tunnel HTTPS công khai để nhận IPN và
+Return; muốn IPN gọi về máy mình thì tạm đổi IPN URL tại merchant thành `https://<public-backend>/api/v1/payments/vnpay/ipn`
+(nhớ đổi lại về domain Cloud Run sau khi thử). Không đổi IPN URL thì Return vẫn chốt đơn dự phòng như trên.
+Không trỏ return URL thẳng tới FE.
 
 Chưa có merchant: automated tests dùng `TESTONLY`/`test-secret` trong test context, không cần gọi cổng thật.
 Không dùng các giá trị giả này để thanh toán. Giữ provider đang deploy.

@@ -6,6 +6,7 @@ import type { ApiConversation } from '../messages/conversation';
 import { requestApi, type RequestResponse } from '../../services/requestApi';
 import type { ApiError } from '../../services/http';
 import { canSelectPendingRequest } from '../../utils/request';
+import { selectRequestBlockedMessage } from '../../utils/apiErrorMessages';
 import { productDetailFromRequestPath } from '../../utils/productDetailNavigation';
 
 interface PendingCardProps {
@@ -83,6 +84,8 @@ function DonorPendingActions({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  // Món đổi hoặc bài không còn dùng được: khoá nút xác nhận vì chọn lại cũng không thành công.
+  const [blocked, setBlocked] = useState(false);
 
   // Các yêu cầu khác cùng bài quyết định còn được chọn hay không (đã có người được chọn thì thôi).
   useEffect(() => {
@@ -132,6 +135,12 @@ function DonorPendingActions({
       setDialogOpen(false);
     } catch (caught) {
       const apiError = caught as ApiError;
+      const blockedMessage = selectRequestBlockedMessage(apiError.code);
+      if (blockedMessage) {
+        setError(blockedMessage);
+        setBlocked(true);
+        return;
+      }
       setError(
         selectErrorMessages[apiError.code] ||
           'Không thể chọn người này. Vui lòng tải lại trang và thử lại.',
@@ -151,6 +160,7 @@ function DonorPendingActions({
           disabled={submitting}
           onClick={() => {
             setError('');
+            setBlocked(false);
             setDialogOpen(true);
           }}
         >
@@ -165,6 +175,7 @@ function DonorPendingActions({
           participantName={partnerName}
           submitting={submitting}
           error={error}
+          blocked={blocked}
           onCancel={() => {
             if (!submitting) setDialogOpen(false);
           }}

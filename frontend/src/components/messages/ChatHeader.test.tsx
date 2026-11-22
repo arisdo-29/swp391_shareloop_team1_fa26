@@ -100,6 +100,36 @@ describe('ChatHeader', () => {
     expect(screen.getByText('Người cho tặng')).toBeTruthy();
   });
 
+  it('người gửi yêu cầu không được chọn thấy tóm tắt đã xin nhận món nào và lúc gửi', () => {
+    // when
+    renderHeader(RECEIVER_ID, conversation({ status: 'REJECTED' }));
+
+    // then
+    expect(screen.getByText('Bạn đã xin nhận')).toBeTruthy();
+    expect(screen.getAllByText('Xe đạp cũ').length).toBeGreaterThan(0);
+    expect(screen.getByText(/^Gửi lúc /)).toBeTruthy();
+  });
+
+  it('tóm tắt đề nghị đổi dùng tên món backend gửi kèm khi không tải được bài', () => {
+    // when
+    renderHeader(
+      RECEIVER_ID,
+      conversation({ status: 'REJECTED', offeredItemId: 77, offeredItemTitle: 'Mũ bảo hiểm' }),
+    );
+
+    // then
+    expect(screen.getByText(/Bạn đã đề nghị đổi/)).toBeTruthy();
+    expect(screen.getAllByText('Mũ bảo hiểm').length).toBeGreaterThan(0);
+  });
+
+  it('giao dịch đã mở chat thì không hiện tóm tắt yêu cầu', () => {
+    // when
+    renderHeader(RECEIVER_ID, conversation({ status: 'AWAITING_HANDOVER' }));
+
+    // then
+    expect(screen.queryByText('Bạn đã xin nhận')).toBeNull();
+  });
+
   it('chủ bài thấy tên và vai Người nhận', () => {
     // when
     renderHeader(DONOR_ID, conversation());

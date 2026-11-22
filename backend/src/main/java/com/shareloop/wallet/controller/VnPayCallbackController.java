@@ -48,10 +48,13 @@ public class VnPayCallbackController {
     @Operation(
             summary = "Chuyển người dùng về trang kết quả thanh toán",
             description =
-                    "Không cần Bearer Token. Kiểm chữ ký rồi chuyển hướng 302 về giao diện với mã đơn và trạng thái. Endpoint này không cộng Credit; kết quả cộng Credit được xử lý qua IPN.")
+                    "Không cần Bearer Token. Kiểm chữ ký rồi chuyển hướng 302 về giao diện với mã đơn và trạng thái. Thanh toán thành công và đúng chữ ký thì chốt đơn qua cùng luồng với IPN (dự phòng khi IPN không tới), không bao giờ cộng hai lần.")
     @GetMapping("/return")
     public ResponseEntity<Void> paymentReturn(@RequestParam Map<String, String> params) {
         boolean verified = service.verify(params);
+        if (verified && service.isSuccessful(params)) {
+            settleFromReturn(params);
+        }
         if (verified && !service.isSuccessful(params)) {
             // Hủy hoặc thất bại tại VNPay: chuyển đơn FAILED ngay để trang Ví không còn hiện đơn đang chờ.
             // Lỗi ở bước này không chặn việc chuyển hướng về trang Ví (IPN hoặc job vẫn chốt đơn sau).
@@ -69,5 +72,21 @@ public class VnPayCallbackController {
                 .buildAndExpand(verified ? params.getOrDefault("vnp_TxnRef", "") : "")
                 .toUri();
         return ResponseEntity.status(302).location(location).build();
+    }
+
+    // Dự phòng khi IPN không tới (sai IPN URL trên merchant, server ngủ đông): Return thành công và đúng chữ ký thì
+    // chạy đúng hàm processIpn. Gọi sang bean service nên đi qua proxy Spring và @Transactional có hiệu lực; hàm đã
+    // khoá users rồi payment_orders, kiểm số tiền, kiểm hạn, và đơn không còn PENDING thì trả 02 nên không cộng hai
+    // lần.
+    // Lỗi chỉ ghi log, người dùng vẫn được chuyển về trang Ví.
+    private void settleFromReturn(Map<String, String> params) {
+        try {
+            VnPayIpnResponse result = service.processIpn(params);
+            if ("00".equals(result.rspCode())) {
+                log.info("VNPAY order settled from return (IPN fallback): orderCode={}", params.get("vnp_TxnRef"));
+            }
+        } catch (RuntimeException ex) {
+            log.error("VNPAY return could not settle order", ex);
+        }
     }
 }

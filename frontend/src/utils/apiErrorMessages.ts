@@ -43,6 +43,22 @@ export function moderationBlockedMessage(error: Pick<ApiError, 'details'>): stri
   return DEFAULT_MODERATION_MESSAGE;
 }
 
+/**
+ * Lỗi khi chọn người mà món đem đổi hoặc bài không còn dùng được (docs/api/request.md mục 5). Gặp các lỗi này thì
+ * hộp chọn người khoá nút xác nhận vì bấm lại cũng không thành công.
+ */
+export const SELECT_REQUEST_BLOCKED_MESSAGES: Record<string, string> = {
+  REQUEST_OFFERED_ITEM_UNAVAILABLE: 'Món người này đề nghị đổi không còn khả dụng.',
+  REQUEST_ITEM_UNDER_REVIEW:
+    'Bài đang chờ duyệt lại sau khi sửa, bạn chọn người sau khi bài được duyệt.',
+  ITEM_HIDDEN: 'Bài đang tạm ẩn nên chưa giữ chỗ được.',
+};
+
+/** Câu cho lỗi làm hộp chọn người bị khoá. Trả null với lỗi khác. */
+export function selectRequestBlockedMessage(code: string | undefined): string | null {
+  return code ? (SELECT_REQUEST_BLOCKED_MESSAGES[code] ?? null) : null;
+}
+
 export const CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN = 'CHAT_IMAGE_GIVE_RECEIVER_FORBIDDEN';
 export const ITEM_GIVE_LIMIT_REACHED = 'ITEM_GIVE_LIMIT_REACHED';
 

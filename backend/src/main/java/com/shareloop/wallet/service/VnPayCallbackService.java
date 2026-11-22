@@ -75,8 +75,9 @@ public class VnPayCallbackService {
     /**
      * Người dùng quay về từ VNPay với kết quả thất bại (vd vnp_ResponseCode 24 = khách hủy): chuyển đơn CANCELLED (mã 24) hoặc FAILED ngay, không
      * chờ IPN hay job hết hạn. Tham số Return được VNPay ký giống IPN nên tin được sau khi kiểm chữ ký; chỉ đổi đơn
-     * VNPAY còn PENDING và đúng số tiền, ghi lại callback để biết mã lỗi. Kết quả thành công ở Return không cộng
-     * Credit: chỉ IPN mới cộng (giữ nguyên luồng cũ). Không ném lỗi: Return luôn chuyển hướng về trang Ví.
+     * VNPAY còn PENDING và đúng số tiền, ghi lại callback để biết mã lỗi. Kết quả thành công ở Return không đi qua
+     * hàm này: controller gọi thẳng {@link #processIpn} làm dự phòng cho IPN. Không ném lỗi: Return luôn chuyển hướng
+     * về trang Ví.
      *
      * @return true nếu vừa chuyển đơn sang CANCELLED / FAILED
      */

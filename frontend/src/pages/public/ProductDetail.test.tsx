@@ -124,6 +124,16 @@ describe('Chi tiết bài đã giao dịch', () => {
     expect(screen.queryByRole('button', { name: /Gửi đề nghị/ })).toBeNull();
   });
 
+  it('bài RESERVED ở chế độ chỉ xem có nhãn Đã có người nhận và không có nút gửi yêu cầu', async () => {
+    // when: người từng gửi yêu cầu không được chọn mở lại bài
+    await renderDetail(detail({ status: 'RESERVED', requestable: false }));
+
+    // then
+    expect(screen.getAllByText('Đã có người nhận').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /Gửi yêu cầu/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Gửi đề nghị/ })).toBeNull();
+  });
+
   it('bài đang mở nhận yêu cầu vẫn có nút gửi yêu cầu như cũ', async () => {
     // when
     await renderDetail(detail());

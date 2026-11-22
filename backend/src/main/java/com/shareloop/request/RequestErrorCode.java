@@ -16,6 +16,9 @@ public enum RequestErrorCode implements ErrorCode {
             HttpStatus.UNPROCESSABLE_ENTITY, "Yêu cầu trao đổi bắt buộc phải chọn món đề nghị."),
     REQUEST_OFFERED_ITEM_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "Bài đăng cho tặng không nhận món đề nghị trao đổi."),
     REQUEST_OFFERED_ITEM_CHANGE_LOCKED(HttpStatus.CONFLICT, "Chỉ có thể đổi món đề nghị trước khi chốt lịch hẹn."),
+    REQUEST_OFFERED_ITEM_UNAVAILABLE(HttpStatus.CONFLICT, "Món người này đề nghị đổi không còn khả dụng."),
+    REQUEST_ITEM_UNDER_REVIEW(
+            HttpStatus.CONFLICT, "Bài đang chờ duyệt lại sau khi sửa, bạn chọn người sau khi bài được duyệt."),
     REQUEST_SCHEDULE_LOCKED(HttpStatus.CONFLICT, "Lịch hẹn đã được xác nhận và bị khoá, không thể chỉnh sửa."),
     REQUEST_SCHEDULE_PAST_TIME(HttpStatus.BAD_REQUEST, "Thời gian hẹn giao nhận phải ở tương lai."),
     REQUEST_WAIVER_REQUIRED(HttpStatus.BAD_REQUEST, "Vui lòng đồng ý cam kết trách nhiệm giao nhận."),

@@ -103,6 +103,9 @@ class RequestServiceTest {
     @Mock
     CreditService creditService;
 
+    @Mock
+    ItemReopenedNotifier itemReopenedNotifier;
+
     @Spy
     @InjectMocks
     RequestService requestService;
@@ -572,6 +575,8 @@ class RequestServiceTest {
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
+        doReturn(Optional.empty()).when(requestService).findItemSnapshot(2L);
+        givenOfferedItemAvailable(50L, 10L);
 
         when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
         when(requestRepository.findByItemIdAndStatus(1L, RequestStatus.PENDING)).thenReturn(List.of(selectedRequest));
@@ -589,6 +594,41 @@ class RequestServiceTest {
     }
 
     @Test
+    void selectReceiver_whenOtherRequestSharesOfferedItem_notifiesTargetDonorWithSenderNameAndTitle() {
+        // given: yêu cầu 103 của người gửi 11 tới bài 2 (chủ 30) dùng chung món đổi 50 với yêu cầu được chọn
+        Request selectedRequest = new Request(1L, 11L, 50L, "SWAP");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+        Request otherSwapRequest = new Request(2L, 11L, 50L, "SWAP");
+        org.springframework.test.util.ReflectionTestUtils.setField(otherSwapRequest, "id", 103L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(30L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(2L);
+        givenOfferedItemAvailable(50L, 11L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+        when(requestRepository.findByOfferedItemIdAndStatus(50L, RequestStatus.PENDING))
+                .thenReturn(List.of(selectedRequest, otherSwapRequest));
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+        when(userService.findContact(11L)).thenReturn(new ContactInfo(11L, "Lan Anh", "c@example.com", "0903"));
+        when(itemQueryService.findTitles(List.of(2L))).thenReturn(Map.of(2L, "Xe đạp"));
+
+        // when
+        requestService.selectReceiver(101L, 20L);
+
+        // then
+        verify(notificationService)
+                .notify(
+                        30L,
+                        "REQUEST_CANCELLED",
+                        "Một yêu cầu đã tự huỷ",
+                        "Yêu cầu của Lan Anh cho bài «Xe đạp» đã tự huỷ vì món đề nghị đổi đã được chọn ở một"
+                                + " giao dịch khác.",
+                        "/requests/103");
+    }
+
+    @Test
     @DisplayName("Chọn yêu cầu SWAP thì giữ chỗ cả bài chính lẫn món mang đổi")
     void selectReceiver_whenSwapRequest_reservesBothItems() {
         // given
@@ -597,6 +637,7 @@ class RequestServiceTest {
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
+        givenOfferedItemAvailable(50L, 10L);
         when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
         when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -606,6 +647,121 @@ class RequestServiceTest {
         // then
         org.mockito.Mockito.verify(itemService).reserve(1L);
         org.mockito.Mockito.verify(itemService).reserve(50L);
+    }
+
+    // Món đem đổi offeredItemId của người gửi receiverId vẫn APPROVED và đang hiển thị.
+    private void givenOfferedItemAvailable(long offeredItemId, long receiverId) {
+        doReturn(Optional.of(new RequestService.ItemSnapshot(receiverId, "SWAP", "APPROVED", true)))
+                .when(requestService)
+                .findItemSnapshot(offeredItemId);
+    }
+
+    @Test
+    void selectReceiver_whenOfferedItemReservedElsewhere_throwsOfferedItemUnavailableWithoutCharging() {
+        // given: bài Cho, món đổi 50 đã bị giữ chỗ ở giao dịch khác
+        Request selectedRequest = new Request(1L, 10L, 50L, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "RESERVED", true)))
+                .when(requestService)
+                .findItemSnapshot(50L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+
+        // when, then
+        assertThatThrownBy(() -> requestService.selectReceiver(101L, 20L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode())
+                                .isEqualTo(RequestErrorCode.REQUEST_OFFERED_ITEM_UNAVAILABLE));
+        verify(creditService, never()).spend(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any(), any());
+        verify(itemService, never()).convertOfferType(anyLong(), any());
+        verify(itemService, never()).reserve(anyLong());
+        assertThat(selectedRequest.getStatus()).isEqualTo(RequestStatus.PENDING);
+    }
+
+    @Test
+    void selectReceiver_whenOfferedItemHiddenOrDeleted_throwsOfferedItemUnavailable() {
+        // given: món đổi 50 bị ẩn, món đổi 60 đã xoá
+        Request hiddenOffer = new Request(1L, 10L, 50L, "SWAP");
+        Request deletedOffer = new Request(1L, 11L, 60L, "SWAP");
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(10L, "SWAP", "APPROVED", false)))
+                .when(requestService)
+                .findItemSnapshot(50L);
+        doReturn(Optional.empty()).when(requestService).findItemSnapshot(60L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(hiddenOffer));
+        when(requestRepository.findById(102L)).thenReturn(Optional.of(deletedOffer));
+
+        // when, then
+        assertThatThrownBy(() -> requestService.selectReceiver(101L, 20L))
+                .hasFieldOrPropertyWithValue("errorCode", RequestErrorCode.REQUEST_OFFERED_ITEM_UNAVAILABLE);
+        assertThatThrownBy(() -> requestService.selectReceiver(102L, 20L))
+                .hasFieldOrPropertyWithValue("errorCode", RequestErrorCode.REQUEST_OFFERED_ITEM_UNAVAILABLE);
+        verify(itemService, never()).reserve(anyLong());
+    }
+
+    @Test
+    void selectReceiver_whenItemUnderReviewAfterEdit_throwsItemUnderReview() {
+        // given: bài vừa sửa nên đang PENDING_REVIEW
+        Request selectedRequest = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "PENDING_REVIEW")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+
+        // when, then
+        assertThatThrownBy(() -> requestService.selectReceiver(101L, 20L))
+                .hasFieldOrPropertyWithValue("errorCode", RequestErrorCode.REQUEST_ITEM_UNDER_REVIEW);
+        verify(itemService, never()).reserve(anyLong());
+        assertThat(selectedRequest.getStatus()).isEqualTo(RequestStatus.PENDING);
+    }
+
+    @Test
+    void cancelPendingRequestsOfferingItem_cancelsPendingRequestsAndNotifiesSenderAndTargetDonor() {
+        // given: yêu cầu 103 tới bài 2 (chủ 30) đang đem món 50 đi đổi
+        Request pendingSwap = new Request(2L, 10L, 50L, "SWAP");
+        org.springframework.test.util.ReflectionTestUtils.setField(pendingSwap, "id", 103L);
+        when(requestRepository.findByOfferedItemIdAndStatus(50L, RequestStatus.PENDING))
+                .thenReturn(List.of(pendingSwap));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(30L, "SWAP", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(2L);
+
+        // when
+        int cancelled = requestService.cancelPendingRequestsOfferingItem(50L);
+
+        // then
+        assertThat(cancelled).isEqualTo(1);
+        assertThat(pendingSwap.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        assertThat(pendingSwap.getCancelReason()).contains("Món bạn đề nghị đổi không còn khả dụng");
+        verify(notificationService).notify(eq(10L), eq("REQUEST_CANCELLED"), any(), any(), eq("/requests/103"));
+        verify(notificationService).notify(eq(30L), eq("REQUEST_CANCELLED"), any(), any(), eq("/requests/103"));
+    }
+
+    @Test
+    void notifyPendingRequestersItemEdited_notifiesEachPendingRequesterWithoutCancelling() {
+        // given
+        Request pending = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(pending, "id", 101L);
+        when(requestRepository.findByItemIdAndStatus(1L, RequestStatus.PENDING)).thenReturn(List.of(pending));
+
+        // when
+        requestService.notifyPendingRequestersItemEdited(1L);
+
+        // then
+        assertThat(pending.getStatus()).isEqualTo(RequestStatus.PENDING);
+        verify(notificationService)
+                .notify(
+                        eq(10L),
+                        eq("REQUEST_ITEM_EDITED"),
+                        any(),
+                        eq("Chủ bài vừa sửa bài, bài đang chờ duyệt lại."),
+                        eq("/requests/101"));
     }
 
     @Test
@@ -638,6 +794,7 @@ class RequestServiceTest {
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
+        givenOfferedItemAvailable(50L, 10L);
         when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
         when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -663,6 +820,7 @@ class RequestServiceTest {
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
+        givenOfferedItemAvailable(50L, 10L);
         when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
 
         org.mockito.Mockito.doThrow(new BusinessException(WalletErrorCode.WALLET_INSUFFICIENT_BALANCE))
@@ -1200,6 +1358,48 @@ class RequestServiceTest {
 
         // then
         verify(eventPublisher).publishEvent(new RequestNegotiationEndedEvent(101L));
+    }
+
+    @Test
+    @DisplayName("cancelTransaction: bài mở lại thì báo những người từng bị từ chối, trừ người nhận vừa huỷ")
+    void cancelTransaction_whenItemReopened_notifiesRejectedRequesters() {
+        // given
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "RESERVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        requestService.cancelTransaction(101L, 20L, new CancelTransactionRequest("Bận đột xuất"));
+
+        // then
+        verify(itemService).release(1L);
+        verify(itemReopenedNotifier).notifyRejectedRequesters(1L, 10L);
+    }
+
+    @Test
+    @DisplayName("cancelByAdmin: Admin huỷ giao dịch thì cũng báo những người từng bị từ chối")
+    void cancelByAdmin_whenItemReopened_notifiesRejectedRequesters() {
+        // given
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 101L);
+        request.select(Instant.now());
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient()
+                .doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "RESERVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        requestService.cancelByAdmin(101L, 1L, new CancelTransactionRequest("Giao dịch bị kẹt"));
+
+        // then
+        verify(itemReopenedNotifier).notifyRejectedRequesters(1L, 10L);
     }
 
     @Test

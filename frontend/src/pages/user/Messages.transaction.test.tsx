@@ -184,6 +184,32 @@ describe('Modal chọn người cho yêu cầu SWAP', () => {
     );
     expect(requestApi.select).not.toHaveBeenCalled();
   });
+
+  it('bài đang chờ duyệt lại thì hiện đúng câu lỗi và khoá nút xác nhận', async () => {
+    // given: backend từ chối vì bài vừa sửa đang chờ duyệt lại
+    const userEvents = userEvent.setup();
+    await renderMessages(DONOR_ID, request({ status: 'PENDING', contactRevealedAt: undefined }));
+    vi.mocked(requestApi.select).mockRejectedValue({
+      status: 409,
+      code: 'REQUEST_ITEM_UNDER_REVIEW',
+      message: 'Lỗi',
+    });
+
+    // when
+    await userEvents.click(screen.getByRole('button', { name: 'Chọn người này' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Xác nhận chọn người giao dịch' });
+    await userEvents.click(within(dialog).getByRole('button', { name: 'Xác nhận chọn' }));
+
+    // then
+    expect(
+      await within(dialog).findByText(
+        'Bài đang chờ duyệt lại sau khi sửa, bạn chọn người sau khi bài được duyệt.',
+      ),
+    ).toBeTruthy();
+    expect(
+      (within(dialog).getByRole('button', { name: 'Xác nhận chọn' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
 });
 
 describe('Gửi ảnh trong giao dịch Cho tặng', () => {
@@ -261,6 +287,45 @@ describe('Chia sẻ bài trong tin nhắn', () => {
     await renderMessages(DONOR_ID, request({ status: 'CANCELLED' }));
     expect((screen.getByRole('textbox', { name: 'Tin nhắn' }) as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Chia sẻ bài' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe('Yêu cầu theo từng trạng thái chưa mở chat', () => {
+  it('yêu cầu không được chọn: báo đúng câu, không có ô soạn tin, vẫn xem được chi tiết bài', async () => {
+    // when
+    await renderMessages(RECEIVER_ID, request({ status: 'REJECTED', contactRevealedAt: undefined }));
+
+    // then
+    expect(
+      screen.getByText(
+        'Chủ bài đã chọn người khác cho món này. Bạn vẫn xem lại được yêu cầu của mình.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText('Yêu cầu không được chọn nên cuộc trò chuyện không mở.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('Cuộc trò chuyện mở khi chủ bài chọn yêu cầu này.')).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Tin nhắn' })).toBeNull();
+    expect(screen.getByText('Bạn đã xin nhận')).toBeTruthy();
+  });
+
+  it('yêu cầu đang chờ giữ câu cũ và ô soạn tin bị khoá', async () => {
+    // when
+    await renderMessages(RECEIVER_ID, request({ status: 'PENDING', contactRevealedAt: undefined }));
+
+    // then
+    expect(screen.getByText('Cuộc trò chuyện mở khi chủ bài chọn yêu cầu này.')).toBeTruthy();
+    expect((screen.getByRole('textbox', { name: 'Tin nhắn' }) as HTMLInputElement).disabled).toBe(true);
+    expect(screen.queryByText(/Chủ bài đã chọn người khác/)).toBeNull();
+  });
+
+  it('giao dịch đã huỷ giữ câu Giao dịch đã bị huỷ', async () => {
+    // when
+    await renderMessages(RECEIVER_ID, request({ status: 'CANCELLED' }));
+
+    // then
+    expect(screen.getByText('Giao dịch đã bị huỷ.')).toBeTruthy();
+    expect(screen.queryByText(/Chủ bài đã chọn người khác/)).toBeNull();
   });
 });
 
