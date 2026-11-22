@@ -92,8 +92,8 @@ public class AuthService {
     }
 
     /**
-     * Đăng ký tài khoản và gửi OTP về email (TK-02, TK-06). Email còn PENDING_VERIFICATION thì cập nhật thông tin
-     * rồi cấp OTP mới (vẫn theo cooldown).
+     * Đăng ký tài khoản và gửi OTP về email (TK-02, TK-04, TK-06). Email còn PENDING_VERIFICATION thì chỉ cấp OTP
+     * mới (vẫn theo cooldown), không ghi đè mật khẩu, họ tên hay số điện thoại đã đăng ký trước đó.
      *
      * <p>Email dùng một lần bị chặn (TK-02). IP được lưu khi tạo tài khoản để cảnh báo cho Admin.
      *
@@ -104,26 +104,29 @@ public class AuthService {
     public OtpSentResponse register(RegisterRequest request, String registrationIp) {
         String email = normalizeEmail(request.email());
         checkEmailNotDisposable(email);
-        String phone = normalizePhone(request.phone());
-        String fullName = request.fullName().trim();
-        String passwordHash = passwordEncoder.encode(request.password());
-
         Optional<User> existingUser = userRepository.findByEmail(email);
-        if (existingUser.isPresent() && existingUser.get().getStatus() != UserStatus.PENDING_VERIFICATION) {
+        if (existingUser.isPresent()) {
+            return resendOtpForPendingRegistration(existingUser.get(), email);
+        }
+
+        String phone = normalizePhone(request.phone());
+        checkPhoneNotUsedByActiveAccount(phone);
+        String passwordHash = passwordEncoder.encode(request.password());
+        User user =
+                new User(email, passwordHash, request.fullName().trim(), phone, false, UserStatus.PENDING_VERIFICATION);
+        user.recordRegistrationIp(registrationIp);
+        userRepository.save(user);
+        otpService.issue(user, OtpPurpose.REGISTER);
+        return buildOtpSentResponse(email);
+    }
+
+    // Email đã có: tài khoản đã kích hoạt thì báo trùng. Tài khoản còn chờ xác thực chỉ gửi mã mới, không đổi mật khẩu
+    // để người lạ đăng ký lại bằng email của người khác không chiếm được tài khoản (TK-04).
+    private OtpSentResponse resendOtpForPendingRegistration(User existingUser, String email) {
+        if (existingUser.getStatus() != UserStatus.PENDING_VERIFICATION) {
             throw new BusinessException(AuthErrorCode.AUTH_EMAIL_ALREADY_REGISTERED);
         }
-        checkPhoneNotUsedByActiveAccount(phone);
-
-        User user;
-        if (existingUser.isPresent()) {
-            user = existingUser.get();
-            user.updatePendingRegistration(passwordHash, fullName, phone);
-        } else {
-            user = new User(email, passwordHash, fullName, phone, false, UserStatus.PENDING_VERIFICATION);
-            user.recordRegistrationIp(registrationIp);
-            userRepository.save(user);
-        }
-        otpService.issue(user, OtpPurpose.REGISTER);
+        otpService.issue(existingUser, OtpPurpose.REGISTER);
         return buildOtpSentResponse(email);
     }
 

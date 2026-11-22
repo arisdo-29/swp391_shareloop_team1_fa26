@@ -34,7 +34,7 @@ Ai cũng xem được bài; muốn đăng, xin hay đổi đồ thì phải có 
 | TK-01 | Khách (chưa đăng nhập) xem trang chủ, tìm và lọc bài, xem chi tiết bài, danh mục, khu vực. Mọi thao tác khác phải đăng nhập. Hồ sơ công khai của người dùng chỉ xem được khi đã đăng nhập. | — |
 | TK-02 | Đăng ký cần email, mật khẩu, họ tên, số điện thoại. Email thuộc danh sách tên miền dùng một lần thì bị từ chối. | — |
 | TK-03 | SĐT bắt buộc, là số di động Việt Nam đầu 03 / 05 / 07 / 08 / 09 (nhận +84). Không xác thực SĐT bằng SMS. | 10 chữ số |
-| TK-04 | Email và SĐT không trùng tài khoản đang hoạt động khác. Đăng ký lại một email đang chờ xác thực thì ghi đè thông tin cũ và gửi mã mới. | — |
+| TK-04 | Email và SĐT không trùng tài khoản đang hoạt động khác. Đăng ký lại một email đang chờ xác thực thì chỉ gửi lại mã mới, giữ nguyên mật khẩu và thông tin đã đăng ký. Người gõ nhầm mật khẩu dùng Quên mật khẩu sau khi kích hoạt. | — |
 | TK-05 | Một địa chỉ IP tạo tối đa 3 tài khoản mới trong 24 giờ gần nhất; vượt thì báo lỗi 429. | accounts\_per\_ip\_24h = 3 |
 | TK-06 | Tài khoản chỉ dùng được sau khi nhập đúng OTP gửi qua email: 6 số, sống 5 phút, sai 5 lần thì mã bị huỷ, gửi lại sau ít nhất 60 giây. Mã lưu dạng băm BCrypt. | otp\_ttl\_minutes = 5, otp\_max\_failed = 5, otp\_resend\_cooldown\_seconds = 60 |
 | TK-07 | Tài khoản chưa xác thực quá 24 giờ bị xoá mềm; email đó đăng ký lại được. | pending\_account\_ttl\_hours = 24 |

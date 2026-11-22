@@ -152,13 +152,6 @@ public class User extends BaseEntity {
         this.otpFailedCount = 0;
     }
 
-    /** Đăng ký lại khi tài khoản còn PENDING_VERIFICATION: ghi đè thông tin theo request mới. */
-    public void updatePendingRegistration(String passwordHash, String fullName, String phone) {
-        this.passwordHash = passwordHash;
-        this.fullName = fullName;
-        this.phone = phone;
-    }
-
     /** Xác thực email xong. Không đặt tên activate() vì BaseEntity.activate() là bật is_active. */
     public void markVerified() {
         this.status = UserStatus.ACTIVE;

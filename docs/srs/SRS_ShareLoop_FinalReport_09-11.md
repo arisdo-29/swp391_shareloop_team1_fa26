@@ -906,7 +906,7 @@ Nhóm chức năng giúp Khách tạo tài khoản và giúp Member, Admin đăn
 
 - Số điện thoại di động Việt Nam 10 số, đầu 03 / 05 / 07 / 08 / 09, nhận dạng +84 ([TK-03](#BR_TK_03)).
 
-- Email và số điện thoại chưa thuộc tài khoản đang hoạt động khác; email đang chờ xác thực thì ghi đè và gửi mã mới ([TK-04](#BR_TK_04)).
+- Email và số điện thoại chưa thuộc tài khoản đang hoạt động khác; email đang chờ xác thực thì chỉ gửi lại mã mới, giữ nguyên mật khẩu đã đăng ký ([TK-04](#BR_TK_04)).
 
 - Một địa chỉ IP tạo tối đa 3 tài khoản mới trong 24 giờ ([TK-05](#BR_TK_05)).
 
@@ -938,7 +938,7 @@ Nhóm chức năng giúp Khách tạo tài khoản và giúp Member, Admin đăn
 |--------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [TK-02](#BR_TK_02) | Đăng ký cần email, mật khẩu, họ tên, số điện thoại. Email thuộc danh sách tên miền dùng một lần thì bị từ chối.                                               |
 | [TK-03](#BR_TK_03) | SĐT bắt buộc, là số di động Việt Nam đầu 03 / 05 / 07 / 08 / 09 (nhận +84). Không xác thực SĐT bằng SMS.                                                      |
-| [TK-04](#BR_TK_04) | Email và SĐT không trùng tài khoản đang hoạt động khác. Đăng ký lại một email đang chờ xác thực thì ghi đè thông tin cũ và gửi mã mới.                        |
+| [TK-04](#BR_TK_04) | Email và SĐT không trùng tài khoản đang hoạt động khác. Đăng ký lại một email đang chờ xác thực thì chỉ gửi lại mã mới, giữ nguyên mật khẩu và thông tin đã đăng ký. Người gõ nhầm mật khẩu dùng Quên mật khẩu sau khi kích hoạt.                        |
 | [TK-05](#BR_TK_05) | Một địa chỉ IP tạo tối đa 3 tài khoản mới trong 24 giờ gần nhất; vượt thì báo lỗi 429.                                                                        |
 | [TK-06](#BR_TK_06) | Tài khoản chỉ dùng được sau khi nhập đúng OTP gửi qua email: 6 số, sống 5 phút, sai 5 lần thì mã bị huỷ, gửi lại sau ít nhất 60 giây. Mã lưu dạng băm BCrypt. |
 | [TK-07](#BR_TK_07) | Tài khoản chưa xác thực quá 24 giờ bị xoá mềm; email đó đăng ký lại được.                                                                                     |
@@ -2871,7 +2871,7 @@ Ai cũng xem được bài; muốn đăng, xin hay đổi đồ thì phải có 
 </tr>
 <tr class="even">
 <td><span id="BR_TK_04" class="anchor"></span><strong>TK-04</strong></td>
-<td>Email và SĐT không trùng tài khoản đang hoạt động khác. Đăng ký lại một email đang chờ xác thực thì ghi đè thông tin cũ và gửi mã mới.</td>
+<td>Email và SĐT không trùng tài khoản đang hoạt động khác. Đăng ký lại một email đang chờ xác thực thì chỉ gửi lại mã mới, giữ nguyên mật khẩu và thông tin đã đăng ký. Người gõ nhầm mật khẩu dùng Quên mật khẩu sau khi kích hoạt.</td>
 <td>—</td>
 <td><a href="#đăng-ký-tài-khoản-và-xác-thực-email">Đăng ký tài khoản và xác thực email</a></td>
 </tr>
