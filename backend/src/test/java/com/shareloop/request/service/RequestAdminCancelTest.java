@@ -89,6 +89,22 @@ class RequestAdminCancelTest {
     }
 
     @Test
+    @DisplayName("Lý do Admin dài 500 ký tự vẫn được lưu đủ, không bị cắt (E2)")
+    void cancelByAdmin_whenReasonIs500Chars_storesWholeReason() {
+        // given
+        Request request = request(RequestStatus.DISPUTED, null);
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+        when(itemQueryService.getSummary(1L)).thenReturn(new ItemSummary(1L, DONOR_ID, null, null));
+        String reason = "a".repeat(500);
+
+        // when
+        requestService.cancelByAdmin(REQUEST_ID, ADMIN_ID, new CancelTransactionRequest(reason));
+
+        // then
+        assertThat(request.getCancelReason()).isEqualTo("[Admin] " + reason);
+    }
+
+    @Test
     @DisplayName("Admin huỷ giao dịch DISPUTED: CANCELLED, nhả hai món, thông báo cả hai bên, ghi log do Admin")
     void cancelByAdmin_whenDisputedSwap_cancelsReleasesNotifiesBothAndLogs() {
         // given

@@ -713,3 +713,7 @@ Khoá cấu hình `max_active_transactions` (mặc định 5) đếm giao dịch
 
 - Người nhận tự huỷ yêu cầu đang chờ (`POST /requests/{id}/cancel`) thì phải chờ `request_resend_cooldown_hours` giờ (mặc định 24) mới gửi lại cho đúng bài đó. Gửi sớm hơn trả `409 REQUEST_RESEND_COOLDOWN` ("Bạn vừa huỷ yêu cầu cho bài này. Có thể gửi lại sau HH:mm dd/MM"), kèm `details.canResendAt`. Chỉ lần tự huỷ của người nhận mới tính, huỷ do hệ thống (bài hết hạn, bị ẩn, khoá tài khoản) thì không.
 - Yêu cầu tự huỷ trong vòng `request_quiet_cancel_minutes` phút (mặc định 5) sau khi gửi thì không gửi `REQUEST_CANCELLED` cho chủ bài, và thông báo `NEW_REQUEST` của yêu cầu đó được đánh dấu đã đọc (không xoá). Lần huỷ này vẫn tính thời gian chờ gửi lại.
+
+## Độ dài lý do huỷ (E2)
+
+Cột `requests.cancel_reason` dài 600 ký tự (đủ cho lý do 500 ký tự của huỷ giao dịch, huỷ của Admin và sự cố giao nhận cộng tiền tố người huỷ). Lý do "Từ chối giao nhận" vẫn cho nhập tới 1000 ký tự: toàn văn lưu ở báo cáo (cột `reports.description`), còn `cancel_reason` chỉ lưu bản rút gọn ở ranh giới từ kèm "…". Việc rút gọn nằm ở `Request.cancel`, nên mọi đường ghi lý do huỷ đều được bảo vệ.

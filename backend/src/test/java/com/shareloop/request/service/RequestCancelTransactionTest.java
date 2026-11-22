@@ -94,6 +94,21 @@ class RequestCancelTransactionTest {
     }
 
     @Test
+    @DisplayName("Lý do huỷ dài 500 ký tự vẫn được lưu đủ, không bị cắt (E2)")
+    void cancelTransaction_whenReasonIs500Chars_storesWholeReason() {
+        // given
+        Request request = requestInStatus(RequestStatus.AWAITING_LOGISTICS, null);
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+        String reason = "b".repeat(500);
+
+        // when
+        requestService.cancelTransaction(REQUEST_ID, DONOR_ID, new CancelTransactionRequest(reason));
+
+        // then
+        assertThat(request.getCancelReason()).isEqualTo("[Chủ bài] " + reason);
+    }
+
+    @Test
     @DisplayName("Chủ bài huỷ giao dịch: Request CANCELLED, lý do có tiền tố, thông báo người nhận, ghi activity log")
     void cancelTransaction_whenDonorCancels_cancelsNotifiesAndLogs() {
         // given

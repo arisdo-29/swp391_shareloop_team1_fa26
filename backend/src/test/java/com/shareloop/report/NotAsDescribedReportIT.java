@@ -286,7 +286,41 @@ class NotAsDescribedReportIT extends IntegrationTest {
         assertThat(trustStarsOf(donorId)).isEqualTo(5);
     }
 
+    @Test
+    void refuseHandover_whenReasonIs1000Chars_cancelReasonFitsColumnAndReportKeepsFullText() throws Exception {
+        // given: lý do dài 1000 ký tự gồm nhiều từ, cho cả người nhận (GIVE) và chủ bài (SWAP)
+        String longReason = "lỗi ".repeat(250).trim();
+        assertThat(longReason).hasSize(999);
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long giveRequestId = createLogisticsConfirmedRequest(insertItem(donorId, "GIVE"), null, donorId, receiverId);
+        long mainItemId = insertItem(donorId, "SWAP");
+        long offeredItemId = insertItem(receiverId, "GIVE");
+        long swapRequestId = createLogisticsConfirmedRequest(mainItemId, offeredItemId, donorId, receiverId);
+
+        // when
+        refuseWith(giveRequestId, receiverId, longReason);
+        refuseWith(swapRequestId, donorId, longReason);
+
+        // then: cancel_reason không vượt 600 ký tự, kết thúc bằng "…"; báo cáo nhận đủ lý do
+        for (long requestId : List.of(giveRequestId, swapRequestId)) {
+            String cancelReason =
+                    jdbc.queryForObject("SELECT cancel_reason FROM requests WHERE id = ?", String.class, requestId);
+            assertThat(cancelReason.length()).isLessThanOrEqualTo(600);
+            assertThat(cancelReason).endsWith("…");
+            assertThat(reportsOf(requestId).get(0).get("description")).isEqualTo(longReason);
+        }
+    }
+
     // ---------- Helper ----------
+
+    private void refuseWith(long requestId, long userId, String reason) throws Exception {
+        mockMvc.perform(post("/api/v1/requests/{id}/refuse-handover", requestId)
+                        .header("Authorization", token(userId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new RefuseHandoverRequest(reason, null))))
+                .andExpect(status().isOk());
+    }
 
     private ResultActions refuse(long requestId, long userId) throws Exception {
         return mockMvc.perform(post("/api/v1/requests/{id}/refuse-handover", requestId)
