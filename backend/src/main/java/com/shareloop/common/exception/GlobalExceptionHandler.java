@@ -8,6 +8,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -77,6 +78,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
         return build(CommonErrorCode.FORBIDDEN, null, null, null);
+    }
+
+    // Hai thao tác cùng lúc vi phạm ràng buộc duy nhất (ví dụ cùng chọn một món đổi): trả 409 để người dùng tải lại,
+    // log lỗi gốc ở mức WARN để dev tra nguyên nhân.
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex) {
+        log.warn("Data integrity violation, traceId={}", MDC.get(TraceIdFilter.MDC_KEY), ex);
+        return build(
+                CommonErrorCode.CONFLICT,
+                "Thao tác vừa được thực hiện ở nơi khác. Vui lòng tải lại trang.",
+                null,
+                null);
     }
 
     @ExceptionHandler(Exception.class)

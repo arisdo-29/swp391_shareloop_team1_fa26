@@ -4,12 +4,15 @@ import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.ItemCondition;
 import com.shareloop.item.entity.ItemStatus;
 import com.shareloop.item.entity.OfferType;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -238,6 +241,14 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             @Param("offerType") String offerType,
             @Param("q") String q,
             Pageable pageable);
+
+    /**
+     * Lấy bài và khoá dòng tới hết transaction (C3), giống WalletAccountRepository.lockById. Dùng khi giữ chỗ và nhả bài
+     * để hai thao tác cùng lúc trên một bài chạy lần lượt, không cùng đọc APPROVED rồi cùng giữ chỗ.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select i from Item i where i.id = :id")
+    Optional<Item> findByIdForUpdate(@Param("id") Long id);
 
     /** Bài còn bật danh mục và khu vực không (B3). Bài không tồn tại cũng trả false. */
     @Query(

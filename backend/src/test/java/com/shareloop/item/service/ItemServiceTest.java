@@ -984,7 +984,8 @@ class ItemServiceTest {
         item.approve();
         ReflectionTestUtils.setField(item, "id", 1L);
 
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(item));
 
         itemService.reserve(1L);
 
@@ -999,13 +1000,15 @@ class ItemServiceTest {
     @Test
     void reserveRejectsUnapprovedAndMissingItems() {
         Item pending = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(pending));
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(pending));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(pending));
         assertThatThrownBy(() -> itemService.reserve(1L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
         assertThat(pending.getStatus()).isEqualTo(ItemStatus.PENDING_REVIEW);
 
-        when(itemRepository.findById(2L)).thenReturn(Optional.empty());
+        lenient().when(itemRepository.findById(2L)).thenReturn(Optional.empty());
+        lenient().when(itemRepository.findByIdForUpdate(2L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> itemService.reserve(2L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
@@ -1016,7 +1019,8 @@ class ItemServiceTest {
         // given: bài APPROVED nhưng đang bị ẩn
         Item item = approvedItem(1L);
         item.deactivate();
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(item));
 
         // when, then
         assertThatThrownBy(() -> itemService.reserve(1L))
@@ -1029,7 +1033,8 @@ class ItemServiceTest {
     @Test
     void reserve_whenSuccess_publishesItemUnavailableEvent() {
         // given
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(approvedItem(1L)));
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(approvedItem(1L)));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(approvedItem(1L)));
 
         // when
         itemService.reserve(1L);
@@ -1097,8 +1102,10 @@ class ItemServiceTest {
         Item reserved = approvedItem(1L);
         reserved.reserve();
         Item pending = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(reserved));
-        when(itemRepository.findById(2L)).thenReturn(Optional.of(pending));
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(reserved));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(reserved));
+        lenient().when(itemRepository.findById(2L)).thenReturn(Optional.of(pending));
+        lenient().when(itemRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(pending));
 
         // when
         itemService.release(1L);
@@ -1113,7 +1120,8 @@ class ItemServiceTest {
         Item item = new Item(10L, 1L, 1L, OfferType.GIVE, "Sách", "Mô tả", null, ItemCondition.NEW, null, null);
         item.approve();
         item.reserve();
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(item));
 
         itemService.release(1L);
         assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
@@ -1122,7 +1130,8 @@ class ItemServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_INVALID_STATUS_TRANSITION);
         assertThat(item.getStatus()).isEqualTo(ItemStatus.APPROVED);
 
-        when(itemRepository.findById(2L)).thenReturn(Optional.empty());
+        lenient().when(itemRepository.findById(2L)).thenReturn(Optional.empty());
+        lenient().when(itemRepository.findByIdForUpdate(2L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> itemService.release(2L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ItemErrorCode.ITEM_NOT_FOUND);
@@ -1134,7 +1143,8 @@ class ItemServiceTest {
         Item item = new Item(10L, 1L, 1L, OfferType.SWAP, "Sách", "Mô tả", "Vở", ItemCondition.NEW, null, null);
         item.approve();
         item.reserve();
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(item));
 
         // when
         itemService.releaseIfReserved(1L);
@@ -1148,7 +1158,8 @@ class ItemServiceTest {
         // given
         Item item = new Item(10L, 1L, 1L, OfferType.SWAP, "Sách", "Mô tả", "Vở", ItemCondition.NEW, null, null);
         item.approve();
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        lenient().when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(item));
 
         // when
         itemService.releaseIfReserved(1L);

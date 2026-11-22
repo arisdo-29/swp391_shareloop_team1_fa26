@@ -779,7 +779,8 @@ class RequestServiceTest {
         // when
         requestService.selectReceiver(101L, 20L);
 
-        // then
+        org.mockito.Mockito.verify(itemService).lockForSelection(1L, null);
+        org.mockito.Mockito.verify(itemService).reserve(1L);
         org.mockito.Mockito.verify(itemService).reserve(1L);
         org.mockito.Mockito.verifyNoMoreInteractions(itemService);
     }

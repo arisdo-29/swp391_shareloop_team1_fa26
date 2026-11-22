@@ -694,3 +694,9 @@ Khi bài hết hạn, bị ẩn (Admin ẩn, đủ ngưỡng báo cáo, kết lu
 
 - `RequestResponse.flags` (danh sách chuỗi, chỉ điền ở danh sách yêu cầu của một bài cho chủ bài, chỉ với yêu cầu `PENDING`): `OFFERED_ITEM_BUSY` khi món người xin mang đổi đang nằm trong giao dịch khác.
 - `409 REQUEST_OFFERED_ITEM_IN_OTHER_TRANSACTION` ở `POST /requests/{id}/select` khi món mang đổi đang nằm trong một giao dịch khác.
+
+## Bấm cùng lúc (C3)
+
+- Khi chọn người nhận, server khoá dòng bài được xin rồi tới món mang đổi (bài chính trước, món đổi sau) trước khi kiểm tra và ghi. Hai chủ bài chọn cùng lúc hai yêu cầu dùng chung một món đổi thì chỉ một bên thành công, bên còn lại nhận `409 REQUEST_OFFERED_ITEM_IN_OTHER_TRANSACTION`.
+- Database có unique index có điều kiện `ux_requests_active_offered_item` trên `requests(offered_item_id)` cho các giao dịch từ `RESERVED` tới `DISPUTED`.
+- Mọi vi phạm ràng buộc duy nhất lọt tới tầng API trả `409 CONFLICT` với câu "Thao tác vừa được thực hiện ở nơi khác. Vui lòng tải lại trang." và log lỗi gốc ở mức WARN.

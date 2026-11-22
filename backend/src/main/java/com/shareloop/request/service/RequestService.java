@@ -453,6 +453,10 @@ public class RequestService {
                 .findById(requestId)
                 .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
 
+        // Khoá bài và món đổi trước mọi kiểm tra và ghi (C3): thao tác cùng lúc chạy lần lượt, luồng sau thấy dữ liệu
+        // mới.
+        itemService.lockForSelection(selectedRequest.getItemId(), selectedRequest.getOfferedItemId());
+
         ItemSnapshot item = findItemSnapshot(selectedRequest.getItemId())
                 .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_ITEM_NOT_FOUND));
 

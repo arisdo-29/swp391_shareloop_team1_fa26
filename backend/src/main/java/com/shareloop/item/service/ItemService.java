@@ -793,7 +793,9 @@ public class ItemService {
      */
     @Transactional
     public void reserve(Long itemId) {
-        Item item = requireItem(itemId);
+        // Khoá dòng bài trước khi kiểm trạng thái (C3). Thứ tự khoá: bài chính trước, món đổi sau, cùng thứ tự với
+        // các đường nhả, nên hai giao dịch dùng chung hai món không khoá chéo nhau (không deadlock).
+        Item item = requireItemForUpdate(itemId);
         // Bài bị ẩn vẫn có thể còn APPROVED; báo rõ lý do thay vì lỗi chuyển trạng thái chung chung.
         if (!item.isActive()) {
             throw new BusinessException(ItemErrorCode.ITEM_HIDDEN);
@@ -822,9 +824,23 @@ public class ItemService {
         publishItemUpdate(itemId, item.getDonorId());
     }
 
+    /**
+     * Khoá dòng bài được xin rồi tới món đem đổi, trước khi chọn người nhận (C3). Hai chủ bài chọn cùng lúc hai yêu cầu
+     * dùng chung một món đổi sẽ chạy lần lượt: luồng sau chờ ở đây rồi thấy món đã bị giữ chỗ và nhận lỗi rõ ràng, không
+     * còn tranh nhau ghi bảng yêu cầu rồi deadlock. Thứ tự khoá cố định là bài chính trước, món đổi sau.
+     */
+    @Transactional
+    public void lockForSelection(long itemId, Long offeredItemId) {
+        requireItemForUpdate(itemId);
+        if (offeredItemId != null) {
+            requireItemForUpdate(offeredItemId);
+        }
+    }
+
     /** Nhả giữ chỗ sau khi Request bị huỷ. */
     @Transactional
     public void release(long itemId) {
+        requireItemForUpdate(itemId); // khoá dòng trước khi kiểm trạng thái (C3)
         transition(itemId, ItemStatus.RESERVED, ItemStatus.APPROVED);
     }
 
@@ -878,7 +894,7 @@ public class ItemService {
      */
     @Transactional
     public void releaseIfReserved(long itemId) {
-        if (requireItem(itemId).getStatus() == ItemStatus.RESERVED) {
+        if (requireItemForUpdate(itemId).getStatus() == ItemStatus.RESERVED) {
             release(itemId);
         }
     }
@@ -1050,6 +1066,12 @@ public class ItemService {
         notificationService.publishRealtimeUpdate(donorId, "ITEM", itemId);
         notificationService.publishCatalogUpdate(itemId);
         notificationService.publishAdminUpdate("MODERATION", itemId);
+    }
+
+    private Item requireItemForUpdate(long itemId) {
+        return itemRepository
+                .findByIdForUpdate(itemId)
+                .orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
     }
 
     private Item requireItem(long itemId) {
