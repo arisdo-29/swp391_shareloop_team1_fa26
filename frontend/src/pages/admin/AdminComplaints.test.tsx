@@ -198,6 +198,19 @@ describe('AdminComplaints', () => {
     expect(within(other.dialog).getByText(/Chấp thuận thì giao dịch vẫn tiếp tục/)).toBeTruthy();
   });
 
+  it('F2: báo cáo của tài khoản mới hiện nhãn Tài khoản mới ở danh sách', async () => {
+    vi.mocked(reportApi.list).mockResolvedValue({
+      items: [report({ status: 'OPEN', newReporterAccount: true })],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    render(<AdminComplaints />);
+
+    expect(await screen.findByText('Tài khoản mới')).toBeTruthy();
+  });
+
   it('D-15: đã hết hạn giải trình thì Admin kết luận được', async () => {
     const { dialog, concludeButton } = await openPendingDetail(
       detail(

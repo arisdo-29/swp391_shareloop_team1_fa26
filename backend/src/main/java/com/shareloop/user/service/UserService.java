@@ -357,6 +357,19 @@ public class UserService {
         return briefs;
     }
 
+    /** Thời điểm tạo tài khoản của nhiều người dùng trong một lần truy vấn; id không có (đã xoá mềm) thì không có trong map. */
+    @Transactional(readOnly = true)
+    public Map<Long, java.time.Instant> findCreatedAt(Collection<Long> ids) {
+        Map<Long, java.time.Instant> createdAt = new HashMap<>();
+        if (ids == null || ids.isEmpty()) {
+            return createdAt;
+        }
+        for (User user : userRepository.findAllById(ids)) {
+            createdAt.put(user.getId(), user.getCreatedAt());
+        }
+        return createdAt;
+    }
+
     /**
      * Id các tài khoản có họ tên hoặc email chứa từ khoá (không phân biệt hoa thường), để module khác lọc dữ liệu
      * theo người cho Admin. Từ khoá trống trả danh sách rỗng.

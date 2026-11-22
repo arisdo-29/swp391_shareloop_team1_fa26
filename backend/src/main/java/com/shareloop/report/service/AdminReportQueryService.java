@@ -37,6 +37,13 @@ public class AdminReportQueryService {
     private final ReportEvidenceService evidence;
     private final Clock clock;
     private final ConfigService configService;
+    private ReporterTrustService reporterTrustService;
+
+    // Setter: không có thì không hiện nhãn tài khoản mới (unit test dựng service rút gọn).
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setReporterTrustService(ReporterTrustService reporterTrustService) {
+        this.reporterTrustService = reporterTrustService;
+    }
 
     public AdminReportQueryService(
             ReportRepository reports,
@@ -67,13 +74,19 @@ public class AdminReportQueryService {
         Map<Long, Long> itemIdByReportId = findRelatedItemIds(content);
         Map<Long, String> itemTitles = items.findTitles(new HashSet<>(itemIdByReportId.values()));
         Map<Long, UserBrief> briefs = users.findBriefs(collectUserIds(content));
+        Set<Long> trustedReporters =
+                findTrustedReporters(content.stream().map(Report::getReporterId).toList());
 
         List<ReportResponse> rows = new ArrayList<>();
         for (Report report : content) {
             Long itemId = itemIdByReportId.get(report.getId());
             String itemTitle = itemId == null ? null : itemTitles.get(itemId);
             String reporterName = nameOf(briefs, report.getReporterId());
-            rows.add(summary(report, reporterName, targetNameOf(report, briefs, itemTitle)));
+            rows.add(summary(
+                    report,
+                    reporterName,
+                    targetNameOf(report, briefs, itemTitle),
+                    isNewReporter(trustedReporters, report)));
         }
         return new AdminReportPage(rows, page, size, result.getTotalElements(), result.getTotalPages());
     }
@@ -110,7 +123,11 @@ public class AdminReportQueryService {
                 itemId == null ? null : items.findTitles(List.of(itemId)).get(itemId);
         String reporterName = reporter == null ? null : reporter.fullName();
         return new AdminReportDetail(
-                summary(report, reporterName, targetNameOf(report, briefs, itemTitle)),
+                summary(
+                        report,
+                        reporterName,
+                        targetNameOf(report, briefs, itemTitle),
+                        isNewReporter(findTrustedReporters(List.of(report.getReporterId())), report)),
                 new Participant(report.getReporterId(), reporterName),
                 targetId == null ? null : new Participant(targetId, reported == null ? null : reported.fullName()),
                 itemId,
@@ -207,7 +224,18 @@ public class AdminReportQueryService {
         return brief == null ? null : brief.fullName();
     }
 
-    private ReportResponse summary(Report report, String reporterName, String targetName) {
+    // Người báo đủ tin cậy theo ReporterTrustService; không có service thì coi tất cả đủ tin cậy.
+    private Set<Long> findTrustedReporters(List<Long> reporterIds) {
+        return reporterTrustService == null
+                ? new HashSet<>(reporterIds)
+                : reporterTrustService.findTrusted(reporterIds);
+    }
+
+    private static boolean isNewReporter(Set<Long> trustedReporters, Report report) {
+        return !trustedReporters.contains(report.getReporterId());
+    }
+
+    private ReportResponse summary(Report report, String reporterName, String targetName, boolean newReporterAccount) {
         return new ReportResponse(
                 report.getId(),
                 report.getReporterId(),
@@ -221,6 +249,7 @@ public class AdminReportQueryService {
                 report.getStatus(),
                 report.getCreatedAt(),
                 reporterName,
-                targetName);
+                targetName,
+                newReporterAccount);
     }
 }

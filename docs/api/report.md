@@ -586,3 +586,7 @@ Không có `reporterId` và `description` để bên bị phản ánh không bi�
 - Chấp thuận báo cáo bài có lý do thuộc `report_serious_reasons` (mặc định hàng cấm, hàng giả) mà bài đang có giao dịch mở (từ `RESERVED` tới `DISPUTED`, bài là bài chính hoặc món mang đổi): giao dịch bị huỷ qua đường huỷ của Admin với lý do "Món đồ vi phạm quy định nên giao dịch bị huỷ", không cộng điểm cho ai, hai bên nhận thông báo `TRANSACTION_CANCELLED`, món đổi của bên kia được nhả như huỷ thường.
 - Lý do khác, hoặc bài tự ẩn do đủ `report_hide_threshold` báo cáo: giao dịch tiếp tục, hai bên nhận thông báo `TRANSACTION_ITEM_UNDER_REVIEW` ("Bài đang bị xem xét vi phạm", với tự ẩn chỉ gửi một lần lúc chạm ngưỡng). `GET /requests/{id}` trả `flags` chứa `ITEM_UNDER_REVIEW` khi bài của giao dịch đang bị ẩn để trang Tiến trình giao dịch hiện cảnh báo.
 - `GET /admin/reports/{id}` thêm `openTransactionPartnerName` (tên bên còn lại của giao dịch đang mở, null nếu không có) và `seriousReason` để hộp kết luận báo trước hệ quả.
+
+## Báo cáo của tài khoản mới không tính vào ngưỡng tự ẩn (F2)
+
+Chỉ báo cáo của người đủ tin cậy mới được tính vào `report_hide_threshold`. Đủ tin cậy khi tuổi tài khoản từ `report_trusted_min_account_days` ngày (mặc định 7) hoặc đã có ít nhất `report_trusted_min_completed` giao dịch hoàn tất (mặc định 1). Báo cáo của tài khoản mới vẫn được lưu và vào hàng chờ Admin như thường. `ReportResponse.newReporterAccount` (chỉ có trong API của Admin) là `true` khi người gửi chưa đủ tin cậy, màn Admin hiện nhãn "Tài khoản mới".

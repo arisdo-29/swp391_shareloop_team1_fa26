@@ -235,6 +235,18 @@ public enum ConfigKey {
             "Ngưỡng tự ẩn bài bị báo cáo",
             "Số báo cáo đang mở khiến một bài tự động bị ẩn."),
     // L13: trước đây chỉ đọc bằng getRaw và có cả khoá chữ hoa trùng; nay khai báo ở đây để Admin sửa được.
+    REPORT_TRUSTED_MIN_ACCOUNT_DAYS(
+            "report_trusted_min_account_days",
+            "7",
+            ConfigGroup.MODERATION,
+            "Tuổi tài khoản để báo cáo tính vào ngưỡng tự ẩn",
+            "Báo cáo chỉ tính vào ngưỡng tự ẩn bài khi người báo có tài khoản từ số ngày này, hoặc đã có đủ số giao dịch hoàn tất. Báo cáo của tài khoản mới vẫn vào hàng chờ Admin."),
+    REPORT_TRUSTED_MIN_COMPLETED(
+            "report_trusted_min_completed",
+            "1",
+            ConfigGroup.MODERATION,
+            "Số giao dịch hoàn tất để báo cáo tính vào ngưỡng tự ẩn",
+            "Người báo đã có ít nhất số giao dịch hoàn tất này thì báo cáo tính vào ngưỡng tự ẩn bài dù tài khoản còn mới."),
     REPORT_SERIOUS_REASONS(
             "report_serious_reasons",
             "PROHIBITED_ITEM,COUNTERFEIT",

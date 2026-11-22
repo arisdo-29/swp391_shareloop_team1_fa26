@@ -51,7 +51,45 @@ public record ReportResponse(
                 description =
                         "Tên đối tượng bị báo cáo: tiêu đề bài đăng, họ tên người dùng hoặc tiêu đề bài của giao dịch. Chỉ có trong API của Admin",
                 example = "Áo khoác gió nam")
-        String targetName) {
+        String targetName,
+
+        @Schema(
+                description =
+                        "true khi người gửi chưa đủ tin cậy (tài khoản mới, chưa có giao dịch hoàn tất) nên báo cáo không tính vào ngưỡng tự ẩn bài. Chỉ có trong API của Admin",
+                example = "false")
+        Boolean newReporterAccount) {
+
+    // Dạng 13 tham số (chưa có newReporterAccount) cho code đang gọi; trường mới để null.
+    public ReportResponse(
+            Long id,
+            Long reporterId,
+            TargetType targetType,
+            Long itemId,
+            Long targetUserId,
+            Long requestId,
+            ReportReason reason,
+            String description,
+            ReportStage stage,
+            ReportStatus status,
+            Instant createdAt,
+            String reporterName,
+            String targetName) {
+        this(
+                id,
+                reporterId,
+                targetType,
+                itemId,
+                targetUserId,
+                requestId,
+                reason,
+                description,
+                stage,
+                status,
+                createdAt,
+                reporterName,
+                targetName,
+                null);
+    }
 
     // Dạng 11 tham số (chưa có tên) cho code đang gọi; reporterName và targetName để null.
     public ReportResponse(

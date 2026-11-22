@@ -434,6 +434,11 @@ export function AdminComplaints() {
                   </p>
                   <p className="break-words text-xs leading-5 text-text-secondary">
                     {report.reporterName || 'Người dùng đã xóa'} · {date(report.createdAt)}
+                    {report.newReporterAccount ? (
+                      <span className="ml-2 rounded-sm bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">
+                        Tài khoản mới
+                      </span>
+                    ) : null}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
@@ -549,6 +554,11 @@ export function AdminComplaints() {
                   <dt className="label">Người gửi</dt>
                   <dd className="break-words font-semibold">
                     {detail.reporter.fullName ?? 'Người dùng'}
+                    {detail.report.newReporterAccount ? (
+                      <span className="ml-2 rounded-sm bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">
+                        Tài khoản mới
+                      </span>
+                    ) : null}
                   </dd>
                 </div>
                 <div className="min-w-0">

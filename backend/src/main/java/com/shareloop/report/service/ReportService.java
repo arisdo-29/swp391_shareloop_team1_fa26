@@ -45,6 +45,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -74,6 +76,14 @@ public class ReportService {
     private final JdbcClient jdbcClient;
     private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
+    private ReporterTrustService reporterTrustService;
+
+    // Setter thay vì thêm tham số constructor: constructor này nhiều chỗ dựng (unit test). Không có thì tính mọi báo
+    // cáo (F2).
+    @Autowired(required = false)
+    void setReporterTrustService(ReporterTrustService reporterTrustService) {
+        this.reporterTrustService = reporterTrustService;
+    }
 
     @Autowired
     public ReportService(
@@ -221,8 +231,8 @@ public class ReportService {
      */
     private void hideItemWhenReportThresholdReached(long itemId) {
         int threshold = configService.getInt(ConfigKey.REPORT_HIDE_THRESHOLD);
-        long pendingReports =
-                reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, itemId, PENDING_STATUSES);
+        // F2: chỉ báo cáo của người đủ tin cậy mới tính vào ngưỡng tự ẩn
+        long pendingReports = countTrustedPendingReports(itemId);
         if (pendingReports < threshold || itemService == null) {
             return;
         }
@@ -247,6 +257,22 @@ public class ReportService {
         }
     }
 
+    // Số báo cáo đang chờ của bài mà người báo đủ tin cậy (F2). reporterTrustService null chỉ gặp ở unit test dựng
+    // service
+    // rút gọn: khi đó tính mọi báo cáo như trước.
+    private long countTrustedPendingReports(long itemId) {
+        if (reporterTrustService == null) {
+            return reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, itemId, PENDING_STATUSES);
+        }
+        List<Report> pending = reportRepository.findByTargetTypeAndItemIdAndStatusInAndIdNot(
+                TargetType.ITEM, itemId, PENDING_STATUSES, 0L);
+        Set<Long> trusted = reporterTrustService.findTrusted(
+                pending.stream().map(Report::getReporterId).collect(Collectors.toSet()));
+        return pending.stream()
+                .filter(report -> trusted.contains(report.getReporterId()))
+                .count();
+    }
+
     /** Bài đã bị kết luận vi phạm kể từ lần duyệt gần nhất (B4): chủ bài phải sửa bài để gửi duyệt lại. */
     @Transactional(readOnly = true)
     public boolean hasConcludedViolation(long itemId) {
@@ -269,9 +295,7 @@ public class ReportService {
                 TargetType.ITEM, itemId, ReportReason.NOT_AS_DESCRIBED, PENDING_STATUSES)) {
             return true;
         }
-        long pendingReports =
-                reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, itemId, PENDING_STATUSES);
-        return pendingReports >= configService.getInt(ConfigKey.REPORT_HIDE_THRESHOLD);
+        return countTrustedPendingReports(itemId) >= configService.getInt(ConfigKey.REPORT_HIDE_THRESHOLD);
     }
 
     /**

@@ -39,6 +39,8 @@ export interface ReportResponse {
   // Chỉ có trong API của Admin (docs/api/report.md): họ tên người gửi và tên đối tượng bị báo cáo.
   reporterName?: string | null;
   targetName?: string | null;
+  // Người gửi chưa đủ tin cậy (tài khoản mới): báo cáo vào hàng chờ nhưng không tính vào ngưỡng tự ẩn bài.
+  newReporterAccount?: boolean | null;
 }
 
 export type ReportStatus = ReportResponse['status'];

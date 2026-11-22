@@ -820,6 +820,21 @@ public class RequestService {
         return open && itemHidden ? List.of("ITEM_UNDER_REVIEW") : List.of();
     }
 
+    /** Số giao dịch hoàn tất của một người, ở vai chủ bài hoặc người nhận (F2: độ tin cậy của người báo cáo). */
+    @Transactional(readOnly = true)
+    public long countCompletedTransactions(long userId) {
+        if (jdbcClient == null) {
+            return 0;
+        }
+        return jdbcClient
+                .sql(
+                        "SELECT count(*) FROM requests r JOIN items i ON i.id = r.item_id"
+                                + " WHERE r.status = 'COMPLETED' AND r.is_deleted = false AND (r.receiver_id = :userId OR i.donor_id = :userId)")
+                .param("userId", userId)
+                .query(Long.class)
+                .single();
+    }
+
     private long countRunningTransactions(long receiverId) {
         return requestRepository.countByReceiverIdAndStatusIn(receiverId, RUNNING_STATUSES);
     }
