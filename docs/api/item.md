@@ -146,6 +146,10 @@ Xem chi tiết một bài đăng theo ID.
 
 ---
 
+### Cộng bù thời gian chờ duyệt bản sửa (B1)
+
+Bài đã từng duyệt gửi bản sửa: server ghi mốc `items.edit_submitted_at`. Khi Admin duyệt bản sửa, số giờ từ mốc tới lúc duyệt được cộng vào `expireAt` và vào `boostedUntil` nếu đợt đẩy còn chạy lúc gửi, rồi xoá mốc và ghi nhật ký `ITEM_DISPLAY_COMPENSATED`. Bản sửa bị từ chối thì xoá mốc, không cộng bù. FE hỏi xác nhận trước khi gửi bản sửa của bài đã duyệt.
+
 ## DELETE /api/v1/items/{id}
 
 - **Xác thực:** Bearer Token, chỉ chủ bài.

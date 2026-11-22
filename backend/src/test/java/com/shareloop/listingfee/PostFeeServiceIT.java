@@ -3,11 +3,14 @@ package com.shareloop.listingfee;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.within;
 
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.common.exception.ErrorCode;
 import com.shareloop.item.ItemErrorCode;
+import com.shareloop.item.entity.Item;
 import com.shareloop.item.entity.OfferType;
+import com.shareloop.item.repository.ItemRepository;
 import com.shareloop.listingfee.dto.EditQuote;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.support.IntegrationTest;
@@ -31,6 +34,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Test PostFeeService cùng CreditService thật trên PostgreSQL (Testcontainers). Không @Transactional ở lớp test: mỗi
@@ -49,6 +53,12 @@ class PostFeeServiceIT extends IntegrationTest {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Autowired
+    ItemRepository itemRepository;
+
+    @Autowired
+    TransactionTemplate transactionTemplate;
 
     private final List<Long> createdUserIds = new ArrayList<>();
     // Giá trị cấu hình gốc của các khoá bị test đổi, để trả lại sau mỗi test.
@@ -571,8 +581,9 @@ class PostFeeServiceIT extends IntegrationTest {
         postFeeService.chargeHeldFee(itemId);
 
         // then: chỉ lần duyệt đầu (loại POST) mới đặt expire_at
-        assertThat(feeColumnsOf(itemId).get("fee_state")).isEqualTo("CHARGED");
-        assertThat(expireAtOf(itemId)).isEqualTo(oldExpireAt);
+        // then: chỉ lần duyệt đầu (loại POST) mới đặt expire_at; bản sửa chỉ được cộng bù thời gian chờ
+        assertThat(expireAtOf(itemId))
+                .isCloseTo(oldExpireAt, within(5, ChronoUnit.SECONDS)); // chỉ cộng vài mili giây chờ duyệt (B1)
     }
 
     @Test
@@ -657,6 +668,100 @@ class PostFeeServiceIT extends IntegrationTest {
 
     // ---------- hàm hỗ trợ ----------
 
+    // ---------- B1: cộng bù thời gian chờ duyệt bản sửa ----------
+
+    @Test
+    void chargeHeldFee_whenEditWaitedTwoDays_extendsExpireAtAndBoostByTwoDays() {
+        // given: bài đã duyệt, hết hạn sau 10 ngày, đang đẩy tới 5 ngày nữa; bản sửa gửi cách đây 2 ngày
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, false);
+        jdbc.update(
+                "UPDATE items SET expire_at = now() + interval '10 days', boosted_until = now() + interval '5 days'"
+                        + " WHERE id = ?",
+                itemId);
+        postFeeService.holdEditFee(itemId, ownerId);
+        jdbc.update("UPDATE items SET edit_submitted_at = now() - interval '2 days' WHERE id = ?", itemId);
+        Instant oldExpireAt = expireAtOf(itemId);
+        Instant oldBoostedUntil = timestampOf("boosted_until", itemId);
+
+        // when
+        postFeeService.chargeHeldFee(itemId);
+
+        // then: hạn hiển thị và hạn đẩy cùng lùi thêm 2 ngày, mốc được xoá
+        assertThat(expireAtOf(itemId)).isCloseTo(oldExpireAt.plus(2, ChronoUnit.DAYS), within(5, ChronoUnit.SECONDS));
+        assertThat(timestampOf("boosted_until", itemId))
+                .isCloseTo(oldBoostedUntil.plus(2, ChronoUnit.DAYS), within(5, ChronoUnit.SECONDS));
+        assertThat(timestampOf("edit_submitted_at", itemId)).isNull();
+    }
+
+    @Test
+    void chargeHeldFee_whenFirstApproval_doesNotAddAnyTime() {
+        // given: bài mới chờ duyệt lần đầu, chưa từng duyệt nên không có mốc sửa
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertItem(ownerId);
+        postFeeService.holdPostFee(itemId, ownerId);
+        jdbc.update("UPDATE items SET created_at = now() - interval '3 days' WHERE id = ?", itemId);
+        Instant before = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+
+        // when
+        postFeeService.chargeHeldFee(itemId);
+
+        // then: hạn đúng bằng lúc duyệt cộng số ngày hiển thị, không cộng thêm thời gian chờ
+        int displayDays = 30;
+        assertThat(expireAtOf(itemId))
+                .isBetween(
+                        before.plus(displayDays, ChronoUnit.DAYS), Instant.now().plus(displayDays, ChronoUnit.DAYS));
+    }
+
+    @Test
+    void releaseHeldFee_whenEditRejected_clearsMarkWithoutCompensation() {
+        // given
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, false);
+        jdbc.update("UPDATE items SET expire_at = now() + interval '10 days' WHERE id = ?", itemId);
+        postFeeService.holdEditFee(itemId, ownerId);
+        Instant oldExpireAt = expireAtOf(itemId);
+
+        // when
+        postFeeService.releaseHeldFee(itemId, "REJECTED");
+
+        // then
+        assertThat(timestampOf("edit_submitted_at", itemId)).isNull();
+        assertThat(expireAtOf(itemId)).isEqualTo(oldExpireAt);
+    }
+
+    @Test
+    void holdEditFee_whenEditSubmitted_savingItemEntityKeepsMark() {
+        // given: gửi bản sửa nên có mốc
+        long ownerId = insertUser(START_BALANCE, 0);
+        long itemId = insertApprovedItem(ownerId, false);
+        postFeeService.holdEditFee(itemId, ownerId);
+        Instant mark = timestampOf("edit_submitted_at", itemId);
+        assertThat(mark).isNotNull();
+
+        // when: module item lưu lại entity Item (đổi tiêu đề)
+        transactionTemplate.executeWithoutResult(status -> {
+            Item item = itemRepository.findById(itemId).orElseThrow();
+            item.submitEdit(
+                    item.getCategoryId(),
+                    item.getAreaId(),
+                    item.getOfferType(),
+                    "Tiêu đề mới",
+                    item.getDescription(),
+                    item.getDesiredItem(),
+                    item.getCondition(),
+                    item.getDefectNote(),
+                    item.getBrand());
+        });
+
+        // then: Item không map cột này nên không ghi đè mất mốc
+        assertThat(timestampOf("edit_submitted_at", itemId)).isEqualTo(mark);
+    }
+
+    private Instant timestampOf(String column, long itemId) {
+        Timestamp value = jdbc.queryForObject("SELECT " + column + " FROM items WHERE id = ?", Timestamp.class, itemId);
+        return value == null ? null : value.toInstant();
+    }
     /** Kết quả cuộc đua: luồng nào thắng và lỗi của luồng thua (null nếu cả hai cùng thành công). */
     private record RaceResult(boolean chargeWon, Throwable loserError) {}
 

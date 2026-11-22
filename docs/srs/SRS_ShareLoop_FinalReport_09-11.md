@@ -1426,7 +1426,7 @@ Bài Cho miễn phí (tối đa 5 bài), bài Trao đổi giữ 5 Credit khi g�
 | **Mã**             | **Nội dung luật**                                                                                                                                                                                          |
 |--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [BD-08](#BR_BD_08) | Phí sửa theo bảng dưới; hệ thống báo trước số phí trước khi gửi.                                                                                                                                           |
-| [BD-09](#BR_BD_09) | Mọi bản sửa quay lại Chờ duyệt, bài ẩn khỏi tìm kiếm tới khi duyệt xong; các yêu cầu đang chờ của bài giữ nguyên.                                                                                          |
+| [BD-09](#BR_BD_09) | Mọi bản sửa quay lại Chờ duyệt, bài ẩn khỏi tìm kiếm tới khi duyệt xong; các yêu cầu đang chờ của bài giữ nguyên. Bản sửa của bài đã từng duyệt: thời gian chờ duyệt được cộng bù vào hạn hiển thị và hạn đẩy đang chạy khi bản sửa được duyệt, bản sửa bị từ chối thì không cộng bù. |
 | [BD-10](#BR_BD_10) | Chỉ sửa / gỡ được khi là chủ bài, còn sao, bài không ở Đang giao dịch / Đã trao / Hết hạn và chưa có yêu cầu nào được chọn. Không đổi hình thức Cho ↔ Trao đổi khi sửa (đổi theo mục K hoặc đăng bài mới). |
 | [BD-11](#BR_BD_11) | Gỡ bài = xoá mềm, nhả phí đang giữ; các yêu cầu Chờ chủ bài chọn bị huỷ ngay với lý do "\[Hệ thống\] Bài đã bị gỡ" và người gửi được báo (D-13).                                                           |
 | [PH-03](#BR_PH_03) | Phí đăng của mỗi bài chỉ bị trừ một lần: Theo PH-02; Lần duyệt đầu tiên; hoàn: Không hoàn khi bài đã duyệt rồi bị gỡ, hết hạn, vi phạm hay giao dịch không thành                                           |
@@ -3349,7 +3349,7 @@ Mỗi bài phải qua Admin duyệt trước khi ai đó nhìn thấy; từ lúc
 </tr>
 <tr class="odd">
 <td><span id="BR_BD_09" class="anchor"></span><strong>BD-09</strong></td>
-<td>Mọi bản sửa quay lại Chờ duyệt, bài ẩn khỏi tìm kiếm tới khi duyệt xong; các yêu cầu đang chờ của bài giữ nguyên.</td>
+<td>Mọi bản sửa quay lại Chờ duyệt, bài ẩn khỏi tìm kiếm tới khi duyệt xong; các yêu cầu đang chờ của bài giữ nguyên. Bản sửa của bài đã từng duyệt: thời gian chờ duyệt được cộng bù vào hạn hiển thị và hạn đẩy đang chạy khi bản sửa được duyệt, bản sửa bị từ chối thì không cộng bù.</td>
 <td>—</td>
 <td><a href="#sửa-bài-và-gỡ-bài">Sửa bài và gỡ bài</a></td>
 </tr>

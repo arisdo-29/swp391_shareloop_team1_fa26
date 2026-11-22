@@ -39,12 +39,21 @@ class PostFeeServiceTest {
     @Mock
     ItemService itemService;
 
+    @Mock
+    DisplayTimeService displayTimeService;
+
     private PostFeeService postFeeService;
 
     @BeforeEach
     void setUp() {
         postFeeService = new PostFeeService(
-                itemFeeRepository, creditService, configService, reputationService, itemService, Clock.systemUTC());
+                itemFeeRepository,
+                creditService,
+                configService,
+                reputationService,
+                itemService,
+                Clock.systemUTC(),
+                displayTimeService);
     }
 
     @Test

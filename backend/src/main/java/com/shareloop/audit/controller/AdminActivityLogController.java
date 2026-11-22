@@ -91,7 +91,8 @@ public class AdminActivityLogController {
                                                 "ADMIN_TOPUP_RECONCILED",
                                                 "ADMIN_ITEM_HIDDEN",
                                                 "ADMIN_ITEM_UNHIDDEN",
-                                                "ADMIN_VIEWED_CHAT"
+                                                "ADMIN_VIEWED_CHAT",
+                                                "ITEM_DISPLAY_COMPENSATED"
                                             }))
                     @RequestParam(required = false)
                     String type,

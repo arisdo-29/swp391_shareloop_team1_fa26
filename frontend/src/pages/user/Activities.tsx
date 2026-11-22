@@ -23,7 +23,7 @@ import { offerConversion, requestOfferLabel, selectionQuestion } from '../../uti
 import { DialogFrame } from '../../components/Dialog';
 import { ChangeOfferedItem } from '../../components/transaction/ChangeOfferedItem';
 import { toast } from '../../components/toast';
-import { boostStatusLines, formatDateTime } from '../../utils/boostMessages';
+import { boostStatusLines, formatDateTime, formatRemaining } from '../../utils/boostMessages';
 import { userProfilePath } from '../../utils/chatMessages';
 import { ActivitiesComplaints } from './ActivitiesComplaints';
 import { BoostDialogBody, type BoostFailure } from './BoostDialogBody';
@@ -160,6 +160,8 @@ export function Activities() {
   const [editQuoteError, setEditQuoteError] = useState('');
   const [editQuoteNeedsTopUp, setEditQuoteNeedsTopUp] = useState(false);
   const [apiEditingItem, setApiEditingItem] = useState<ItemResponse | null>(null);
+  // Bản sửa đang chờ chủ bài xác nhận (bài đã từng duyệt sẽ tạm ẩn khi chờ duyệt lại).
+  const [confirmEditInput, setConfirmEditInput] = useState<UpdateItemRequest | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [myItems, setMyItems] = useState<Item[]>([]);
   const [apiRequestsByItem, setApiRequestsByItem] = useState<Record<string, ItemRequest[]>>({});
@@ -269,6 +271,15 @@ export function Activities() {
     } finally {
       setEditQuoteLoading(false);
     }
+  };
+
+  // Bài đã từng duyệt: hỏi lại trước khi gửi bản sửa vì bài sẽ ẩn trong lúc chờ duyệt.
+  const requestSaveApiItem = async (input: UpdateItemRequest) => {
+    if (apiEditingItem?.expireAt) {
+      setConfirmEditInput(input);
+      return;
+    }
+    await saveApiItem(input);
   };
 
   const saveApiItem = async (input: UpdateItemRequest) => {
@@ -1010,7 +1021,7 @@ export function Activities() {
                 areas={editAreas}
                 disabled={editSaving || editQuoteLoading}
                 onCancel={() => setEditingId('')}
-                onSave={saveApiItem}
+                onSave={requestSaveApiItem}
               />
             ) : editQuoteLoading ? null : (
               <div className="mt-6 flex justify-end">
@@ -1021,6 +1032,44 @@ export function Activities() {
             )}
           </div>
         </div>
+      ) : null}
+
+      {confirmEditInput && apiEditingItem ? (
+        <DialogFrame
+          labelledBy="confirm-edit-title"
+          onClose={() => setConfirmEditInput(null)}
+        >
+          <h2 id="confirm-edit-title" className="text-xl font-bold">
+            Gửi bản sửa để duyệt lại
+          </h2>
+          <p className="mt-2 text-sm">
+            Bài sẽ tạm ẩn khi chờ duyệt. Thời gian chờ duyệt sẽ được cộng bù vào hạn hiển thị khi bản sửa
+            được duyệt. Nếu bản sửa bị từ chối, bài bị gỡ cho tới khi bạn sửa lại.
+          </p>
+          <ul className="mt-3 list-disc pl-5 text-sm text-text-secondary">
+            {apiEditingItem.expireAt ? (
+              <li>Hạn hiển thị còn {formatRemaining(apiEditingItem.expireAt, Date.now())}.</li>
+            ) : null}
+            {apiEditingItem.boostedUntil &&
+            new Date(apiEditingItem.boostedUntil).getTime() > Date.now() ? (
+              <li>Lượt đẩy đang chạy còn {formatRemaining(apiEditingItem.boostedUntil, Date.now())}.</li>
+            ) : null}
+          </ul>
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setConfirmEditInput(null)}>
+              Xem lại
+            </Button>
+            <Button
+              onClick={() => {
+                const input = confirmEditInput;
+                setConfirmEditInput(null);
+                void saveApiItem(input);
+              }}
+            >
+              Gửi duyệt lại
+            </Button>
+          </div>
+        </DialogFrame>
       ) : null}
 
       {listingFeeAction?.type === 'boost' ? (
