@@ -1703,7 +1703,7 @@ Gửi yêu cầu, chat, chốt lịch và giao nhận đều miễn phí. Một 
 |--------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [YC-01](#BR_YC_01) | Không gửi yêu cầu cho bài của chính mình.                                                                                                                                                                   |
 | [YC-02](#BR_YC_02) | Chỉ gửi tới bài Đang hiển thị, không bị ẩn, chủ bài không bị khoá / cấm. Người gửi phải còn sao, không bị khoá / cấm, không phải Admin.                                                                     |
-| [YC-03](#BR_YC_03) | Mỗi người chỉ có một yêu cầu đang mở với cùng một bài; tối đa 5 yêu cầu Chờ chủ bài chọn cùng lúc (gửi song song tới nhiều bài khác nhau).                                                                  |
+| [YC-03](#BR_YC_03) | Mỗi người chỉ có một yêu cầu đang mở với cùng một bài; tối đa 5 yêu cầu Chờ chủ bài chọn cùng lúc (gửi song song tới nhiều bài khác nhau). Người nhận có từ max_active_transactions (mặc định 5) giao dịch chưa xong (từ lúc được chọn tới lúc bàn giao) thì chưa gửi thêm yêu cầu và chủ bài chưa chọn người đó được. |
 | [YC-04](#BR_YC_04) | Món đem đổi phải là bài của chính người gửi, Đang hiển thị, không bị ẩn; chọn từ danh sách bài, không nhập tự do. Bài Trao đổi bắt buộc kèm món đổi; bài Cho được kèm món đổi nhưng không bắt buộc (CD-01). |
 | [CD-01](#BR_CD_01) | Ở bài Cho, người xin được kèm một bài Đang hiển thị của mình làm món đổi (không bắt buộc). Ở bài Trao đổi, người xin được gửi yêu cầu không kèm món đổi.                                                    |
 
@@ -3658,7 +3658,7 @@ Người nhận gửi yêu cầu xin (bài Cho) hoặc đề nghị đổi (bài
 </tr>
 <tr class="odd">
 <td><span id="BR_YC_03" class="anchor"></span><strong>YC-03</strong></td>
-<td>Mỗi người chỉ có một yêu cầu đang mở với cùng một bài; tối đa 5 yêu cầu Chờ chủ bài chọn cùng lúc (gửi song song tới nhiều bài khác nhau).</td>
+<td>Mỗi người chỉ có một yêu cầu đang mở với cùng một bài; tối đa 5 yêu cầu Chờ chủ bài chọn cùng lúc (gửi song song tới nhiều bài khác nhau). Người nhận có từ max_active_transactions (mặc định 5) giao dịch chưa xong (từ lúc được chọn tới lúc bàn giao) thì chưa gửi thêm yêu cầu và chủ bài chưa chọn người đó được.</td>
 <td>max_pending_requests = 5</td>
 <td><a href="#gửi-yêu-cầu-xin-hoặc-đề-nghị-đổi">Gửi yêu cầu xin hoặc đề nghị đổi</a></td>
 </tr>

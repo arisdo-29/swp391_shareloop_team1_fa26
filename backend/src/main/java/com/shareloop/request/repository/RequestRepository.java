@@ -22,6 +22,9 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
      */
     long countByReceiverIdAndStatus(Long receiverId, RequestStatus status);
 
+    /** Đếm giao dịch đang chạy của người nhận (C4): các trạng thái từ RESERVED tới AWAITING_HANDOVER. */
+    long countByReceiverIdAndStatusIn(Long receiverId, Collection<RequestStatus> statuses);
+
     /**
      * Kiểm tra người dùng đã có yêu cầu đang hoạt động cho bài này chưa (YC-03, ux_requests_active).
      */

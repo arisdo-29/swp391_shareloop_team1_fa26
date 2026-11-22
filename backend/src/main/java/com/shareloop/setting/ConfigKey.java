@@ -290,6 +290,12 @@ public enum ConfigKey {
             ConfigGroup.TRANSACTION,
             "Số yêu cầu chờ tối đa",
             "Số yêu cầu đang chờ phản hồi mà một người được gửi cùng lúc."),
+    MAX_ACTIVE_TRANSACTIONS(
+            "max_active_transactions",
+            "5",
+            ConfigGroup.TRANSACTION,
+            "Số giao dịch đang chạy tối đa của người nhận",
+            "Số giao dịch chưa xong (từ lúc được chọn tới lúc bàn giao) mà một người nhận được có cùng lúc. Đủ số này thì chưa gửi thêm yêu cầu và chủ bài chưa chọn thêm người đó được."),
     REQUEST_PENDING_DAYS(
             "request_pending_days",
             "3",

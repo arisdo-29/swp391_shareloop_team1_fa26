@@ -700,3 +700,11 @@ Khi bài hết hạn, bị ẩn (Admin ẩn, đủ ngưỡng báo cáo, kết lu
 - Khi chọn người nhận, server khoá dòng bài được xin rồi tới món mang đổi (bài chính trước, món đổi sau) trước khi kiểm tra và ghi. Hai chủ bài chọn cùng lúc hai yêu cầu dùng chung một món đổi thì chỉ một bên thành công, bên còn lại nhận `409 REQUEST_OFFERED_ITEM_IN_OTHER_TRANSACTION`.
 - Database có unique index có điều kiện `ux_requests_active_offered_item` trên `requests(offered_item_id)` cho các giao dịch từ `RESERVED` tới `DISPUTED`.
 - Mọi vi phạm ràng buộc duy nhất lọt tới tầng API trả `409 CONFLICT` với câu "Thao tác vừa được thực hiện ở nơi khác. Vui lòng tải lại trang." và log lỗi gốc ở mức WARN.
+
+## Giới hạn giao dịch đang chạy của người nhận (C4)
+
+Khoá cấu hình `max_active_transactions` (mặc định 5) đếm giao dịch của người đó ở vai người nhận với trạng thái `RESERVED`, `AWAITING_LOGISTICS`, `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER`.
+
+- `POST /items/{id}/requests`: đủ ngưỡng thì `409 REQUEST_TOO_MANY_ACTIVE_TRANSACTIONS` ("Bạn đang có N giao dịch chưa xong. Hoàn tất bớt rồi gửi thêm yêu cầu").
+- `POST /requests/{id}/select`: người nhận đủ ngưỡng thì `409 REQUEST_RECEIVER_TOO_BUSY` ("Người này đang có quá nhiều giao dịch chưa xong").
+- `RequestResponse.flags` của yêu cầu `PENDING` có thêm `RECEIVER_TOO_BUSY` để chủ bài biết trước khi bấm chọn.

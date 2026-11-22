@@ -66,6 +66,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RequestService {
 
+    // Giao dịch đang chạy của người nhận, tính vào giới hạn max_active_transactions (C4).
+    private static final Set<RequestStatus> RUNNING_STATUSES = Set.of(
+            RequestStatus.RESERVED,
+            RequestStatus.AWAITING_LOGISTICS,
+            RequestStatus.LOGISTICS_CONFIRMED,
+            RequestStatus.AWAITING_HANDOVER);
+
     private static final Set<RequestStatus> ACTIVE_STATUSES = Set.of(
             RequestStatus.PENDING,
             RequestStatus.RESERVED,
@@ -251,6 +258,16 @@ public class RequestService {
         long pendingCount = requestRepository.countByReceiverIdAndStatus(receiverId, RequestStatus.PENDING);
         if (pendingCount >= maxPending) {
             throw new BusinessException(RequestErrorCode.REQUEST_LIMIT_EXCEEDED);
+        }
+
+        // 1b. Người nhận đang có quá nhiều giao dịch chưa xong thì chưa gửi thêm (C4)
+        long runningCount = countRunningTransactions(receiverId);
+        if (runningCount >= configService.getInt(ConfigKey.MAX_ACTIVE_TRANSACTIONS)) {
+            throw new BusinessException(
+                    RequestErrorCode.REQUEST_TOO_MANY_ACTIVE_TRANSACTIONS,
+                    "Bạn đang có " + runningCount + " giao dịch chưa xong. Hoàn tất bớt rồi gửi thêm yêu cầu.",
+                    null,
+                    Map.of("activeTransactions", runningCount));
         }
 
         // 2. Kiểm tra không gửi trùng yêu cầu đang hoạt động cho cùng bài (YC-03)
@@ -480,6 +497,11 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
         }
 
+        // Người nhận đang có quá nhiều giao dịch chưa xong: báo chủ bài để chọn người khác (C4).
+        if (isReceiverTooBusy(selectedRequest.getReceiverId())) {
+            throw new BusinessException(RequestErrorCode.REQUEST_RECEIVER_TOO_BUSY);
+        }
+
         // Bài vừa sửa đang chờ duyệt lại: chưa chọn được người, báo rõ thay vì lỗi giữ chỗ chung chung.
         if ("PENDING_REVIEW".equals(item.status())) {
             throw new BusinessException(RequestErrorCode.REQUEST_ITEM_UNDER_REVIEW);
@@ -685,7 +707,18 @@ public class RequestService {
                 flags.add("OFFERED_ITEM_BUSY");
             }
         }
+        if (isReceiverTooBusy(request.getReceiverId())) {
+            flags.add("RECEIVER_TOO_BUSY");
+        }
         return flags;
+    }
+
+    private long countRunningTransactions(long receiverId) {
+        return requestRepository.countByReceiverIdAndStatusIn(receiverId, RUNNING_STATUSES);
+    }
+
+    private boolean isReceiverTooBusy(long receiverId) {
+        return countRunningTransactions(receiverId) >= configService.getInt(ConfigKey.MAX_ACTIVE_TRANSACTIONS);
     }
 
     private void requireOfferedItemAvailable(long offeredItemId, long receiverId) {

@@ -113,6 +113,7 @@ class RequestServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(configService.getInt(ConfigKey.MAX_PENDING_REQUESTS)).thenReturn(5);
+        lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_TRANSACTIONS)).thenReturn(5);
         lenient().when(configService.getInt(ConfigKey.POST_FEE)).thenReturn(5);
         lenient().when(reputationService.canRequest(anyLong())).thenReturn(true);
         lenient().when(userService.isLocked(anyLong())).thenReturn(false);
@@ -165,6 +166,45 @@ class RequestServiceTest {
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_ALREADY_EXISTS);
                 });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi người nhận đã có đủ giao dịch đang chạy (C4)")
+    void createRequest_whenReceiverHasTooManyRunningTransactions_throwsTooManyActiveTransactions() {
+        // given
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.countByReceiverIdAndStatusIn(eq(10L), anySet())).thenReturn(5L);
+
+        // when, then
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_TOO_MANY_ACTIVE_TRANSACTIONS);
+                    assertThat(ex.getMessage()).contains("5 giao dịch chưa xong");
+                });
+        org.mockito.Mockito.verify(requestRepository, org.mockito.Mockito.never())
+                .save(any(Request.class));
+    }
+
+    @Test
+    @DisplayName("Chủ bài không chọn được người nhận đang có quá nhiều giao dịch chưa xong (C4)")
+    void selectReceiver_whenReceiverHasTooManyRunningTransactions_throwsReceiverTooBusy() {
+        // given
+        Request selectedRequest = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+        when(requestRepository.countByReceiverIdAndStatusIn(eq(10L), anySet())).thenReturn(5L);
+
+        // when, then
+        assertThatThrownBy(() -> requestService.selectReceiver(101L, 20L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_RECEIVER_TOO_BUSY));
+        assertThat(selectedRequest.getStatus()).isEqualTo(RequestStatus.PENDING);
+        org.mockito.Mockito.verify(itemService, org.mockito.Mockito.never()).reserve(anyLong());
     }
 
     @Test
