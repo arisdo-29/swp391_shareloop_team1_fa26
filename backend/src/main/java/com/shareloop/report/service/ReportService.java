@@ -19,6 +19,7 @@ import com.shareloop.report.dto.ReportConclusionResponse;
 import com.shareloop.report.dto.ReportDecision;
 import com.shareloop.report.dto.ReportResponse;
 import com.shareloop.report.dto.RequestDisputeSummary;
+import com.shareloop.report.dto.RequestReportBrief;
 import com.shareloop.report.dto.RespondReportRequest;
 import com.shareloop.report.entity.Report;
 import com.shareloop.report.entity.ReportReason;
@@ -581,6 +582,23 @@ public class ReportService {
         for (Report report : reportRepository.findByItemIdOrderByCreatedAtDescIdDesc(itemId)) {
             briefs.add(
                     new ItemReportBrief(report.getId(), report.getReason(), report.getStatus(), report.getCreatedAt()));
+        }
+        return briefs;
+    }
+
+    /** Các báo cáo và khiếu nại gắn với một giao dịch, mới nhất trước, cho trang chi tiết giao dịch của Admin. */
+    @Transactional(readOnly = true)
+    public List<RequestReportBrief> findReportsOfRequest(long requestId) {
+        List<RequestReportBrief> briefs = new ArrayList<>();
+        for (Report report : reportRepository.findByRequestIdOrderByCreatedAtDescIdDesc(requestId)) {
+            briefs.add(new RequestReportBrief(
+                    report.getId(),
+                    report.getReporterId(),
+                    report.getTargetType(),
+                    report.getReason(),
+                    report.getStage(),
+                    report.getStatus(),
+                    report.getCreatedAt()));
         }
         return briefs;
     }

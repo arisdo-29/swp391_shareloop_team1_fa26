@@ -22,6 +22,8 @@ export function preloadRoute(pathname: string): Promise<unknown> {
   if (pathname === '/admin') page = import('../pages/admin/AdminFinancePages');
   else if (pathname === '/admin/moderation') page = import('../pages/admin/AdminModerationList');
   else if (pathname.startsWith('/admin/moderation/')) page = import('../pages/admin/AdminModerationDetail');
+  else if (pathname === '/admin/transactions') page = import('../pages/admin/AdminTransactions');
+  else if (pathname.startsWith('/admin/transactions/')) page = import('../pages/admin/AdminTransactionDetail');
   else if (pathname === '/admin/items') page = import('../pages/admin/AdminItems');
   else if (pathname.startsWith('/admin/items/')) page = import('../pages/admin/AdminItemDetail');
   else if (pathname === '/admin/users') page = import('../pages/admin/AdminAccounts');

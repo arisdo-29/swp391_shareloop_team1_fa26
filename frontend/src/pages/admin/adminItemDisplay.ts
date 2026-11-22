@@ -48,3 +48,8 @@ export const ledgerTypeLabels: Record<LedgerTxType, string> = {
 export function formatDateTime(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString('vi-VN') : '—';
 }
+
+export const deliveryMethodLabels: Record<'IN_PERSON' | 'SHIPPING', string> = {
+  IN_PERSON: 'Gặp trực tiếp',
+  SHIPPING: 'Gửi hàng',
+};

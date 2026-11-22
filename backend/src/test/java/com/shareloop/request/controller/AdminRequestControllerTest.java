@@ -60,8 +60,9 @@ class AdminRequestControllerTest {
                 "Bình",
                 Instant.now(),
                 Instant.now(),
-                "Quá giờ hẹn");
-        when(adminRequestService.list(RequestStatus.LOGISTICS_CONFIRMED, true, "xe", 0, 20))
+                "Quá giờ hẹn",
+                "PICKUP");
+        when(adminRequestService.list(RequestStatus.LOGISTICS_CONFIRMED, true, "xe", null, null, null, null, 0, 20))
                 .thenReturn(new AdminRequestPageResponse(List.of(row), 0, 20, 1, 1));
 
         mockMvc.perform(get("/api/v1/admin/requests")

@@ -672,6 +672,9 @@ Danh sách giao dịch, mới nhất trước. Mọi tham số đều tuỳ ch�
 | `status` | string | - | Lọc theo trạng thái (`PENDING`, `RESERVED`, `AWAITING_LOGISTICS`, `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER`, `COMPLETED`, `DISPUTED`, `REJECTED`, `CANCELLED`) |
 | `stuck` | boolean | - | `true`: chỉ giao dịch bị kẹt; `false`: chỉ giao dịch không kẹt |
 | `q` | string | - | Khớp một phần (không phân biệt hoa thường) tên bài, tên chủ bài, tên người nhận; hoặc đúng mã giao dịch |
+| `type` | string | - | `GIVE` (Cho tặng) hoặc `SWAP` (Trao đổi) |
+| `deliveryMethod` | string | - | `IN_PERSON` (gặp trực tiếp) hoặc `SHIPPING` (gửi hàng) |
+| `from`, `to` | date | - | Khoảng ngày tạo giao dịch `yyyy-MM-dd` theo giờ Việt Nam, `to` tính trọn ngày |
 | `page` | number | `0` | Số trang, bắt đầu từ 0 |
 | `size` | number | `20` | 1 đến 100 |
 
@@ -687,15 +690,47 @@ Danh sách giao dịch, mới nhất trước. Mọi tham số đều tuỳ ch�
       "id": 5, "itemId": 1, "itemTitle": "Xe đạp cũ", "type": "GIVE", "status": "LOGISTICS_CONFIRMED",
       "donorId": 20, "donorName": "An", "receiverId": 10, "receiverName": "Bình",
       "meetingTime": "2026-10-25T09:00:00Z", "createdAt": "2026-10-20T08:00:00Z",
-      "flagReason": "Quá giờ hẹn hơn 48 giờ mà chưa bên nào xác nhận bàn giao"
+      "flagReason": "Quá giờ hẹn hơn 48 giờ mà chưa bên nào xác nhận bàn giao",
+      "deliveryMethod": "IN_PERSON"
     }
   ],
   "page": 0, "size": 20, "totalElements": 1, "totalPages": 1
 }
 ```
 
-- `flagReason` là `null` khi giao dịch không bị kẹt. `itemTitle`, `donorName`, `receiverName` có thể `null` khi bài hoặc tài khoản đã xoá.
-- Lọc và phân trang làm trong bộ nhớ sau khi đọc các giao dịch khớp `status`, vì tên bài và tên người thuộc module khác.
+- `flagReason` là `null` khi giao dịch không bị kẹt. `deliveryMethod` là `null` khi chưa chọn hình thức giao nhận. `itemTitle`, `donorName`, `receiverName` có thể `null` khi bài hoặc tài khoản đã xoá.
+- Lọc và phân trang làm trong bộ nhớ sau khi đọc các giao dịch khớp `status`, vì tên bài và tên người thuộc module khác. Các bộ lọc `type`, `deliveryMethod`, `from`, `to` cũng lọc trong bộ nhớ, đợt sau sẽ chuyển sang SQL.
+
+### GET /api/v1/admin/requests/{id}
+
+Chi tiết một giao dịch ở mọi trạng thái, chỉ để xem. Thao tác duy nhất vẫn là huỷ giao dịch (`POST /{id}/cancel`). Service nằm ở module admin (`AdminRequestDetailService`)
+để module request không phụ thuộc vào chat, report và reputation. Lỗi: `404 REQUEST_NOT_FOUND`.
+
+Trả `AdminRequestDetail`:
+
+| Trường | Ý nghĩa |
+|---|---|
+| `id`, `type`, `status`, `createdAt` | Như danh sách |
+| `donor`, `receiver` | `AdminRequestParty`: `userId`, `name`, `email`, `trustStars`, `rank`, `locked` (tài khoản đang bị khoá) |
+| `item`, `offeredItem` | `AdminRequestItemInfo`: `itemId`, `title`, `imageUrl`, `status`, `offerType`. `offeredItem` null với giao dịch Cho tặng. Bài đã xoá thì chỉ còn `itemId` |
+| `deliveryMethod`, `meetingPlace`, `meetingTime` | Giao nhận; null khi chưa có |
+| `timeline` | Các mốc theo thứ tự thời gian, mỗi mốc `label` (tiếng Việt), `at`, `note`. Gồm: gửi yêu cầu, được chọn, từng bên cam kết giao nhận, từng bên đồng ý lịch hẹn, mở liên hệ, từng bên xác nhận giao nhận, hoàn tất hoặc tự hoàn tất, huỷ hoặc không được chọn |
+| `photos` | Ảnh giao nhận: `mediaId`, `url`, `stage` (`HANDOVER` hoặc `DISPUTE`), `uploaderName`, `createdAt` |
+| `reports` | Báo cáo và khiếu nại gắn với giao dịch: `id`, `reporterName`, `targetType`, `reason`, `stage`, `status`, `createdAt` |
+| `points` | Điểm tích luỹ đã cộng: `userName`, `role`, `points` (đọc từ nhật ký `POINTS` qua `ReputationService.findPointsAwardedForRequest`) |
+| `messagesViewable` | true khi giao dịch có báo cáo hoặc khiếu nại |
+| `cancellable` | true khi giao dịch đang `RESERVED`, `AWAITING_LOGISTICS`, `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER` hoặc `DISPUTED` |
+
+Người huỷ trên dòng thời gian suy từ tiền tố của `cancelReason`: `[Chủ bài]` thành "Do chủ bài huỷ", `[Người nhận]` thành "Do người nhận huỷ", `[Admin]` thành "Do Admin huỷ", `[Hệ thống]` thành "Do hệ thống huỷ", không có tiền tố thì "Giao dịch bị huỷ".
+Giao dịch không lưu riêng thời điểm huỷ nên mốc huỷ dùng lần cập nhật cuối của giao dịch.
+
+### GET /api/v1/admin/requests/{id}/messages
+
+Tin nhắn đã qua kiểm duyệt của giao dịch, cũ trước. Chỉ trả khi giao dịch có báo cáo hoặc khiếu nại (`ReportService.hasReportForRequest`), ngược lại `409 REQUEST_MESSAGES_NOT_VIEWABLE`
+"Chỉ xem được tin nhắn khi giao dịch có báo cáo hoặc khiếu nại." Tin nhắn là dữ liệu riêng tư nên **mỗi lần gọi** ghi nhật ký `ADMIN_VIEWED_CHAT` (`targetType = REQUEST`, `data.messageCount`),
+kể cả khi Admin mở lại nhiều lần. Lấy qua `ChatService.findMessagesForAdmin`.
+
+Trả `{ "items": [AdminChatMessage] }`: `id`, `senderName`, `senderRole` (Chủ bài, Người nhận, Hệ thống), `kind`, `content`, `mediaUrl`, `itemTitle`, `createdAt`. Tin bị chặn kiểm duyệt không có trong danh sách.
 
 ### POST /api/v1/admin/requests/{id}/cancel
 

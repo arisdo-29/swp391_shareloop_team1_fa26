@@ -2,6 +2,7 @@
 
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminRequestApi, type AdminRequestRow } from '../../services/adminRequestApi';
 import { AdminTransactions } from './AdminTransactions';
@@ -24,12 +25,21 @@ function row(overrides: Partial<AdminRequestRow>): AdminRequestRow {
     meetingTime: '2026-10-25T09:00:00Z',
     createdAt: '2026-10-20T08:00:00Z',
     flagReason: 'Quá giờ hẹn hơn 48 giờ mà chưa bên nào xác nhận bàn giao',
+    deliveryMethod: 'IN_PERSON',
     ...overrides,
   };
 }
 
 function page(items: AdminRequestRow[]) {
   return { items, page: 0, size: 20, totalElements: items.length, totalPages: 1 };
+}
+
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <AdminTransactions />
+    </MemoryRouter>,
+  );
 }
 
 beforeEach(() => {
@@ -46,7 +56,7 @@ afterEach(() => {
 
 describe('AdminTransactions', () => {
   it('hiện danh sách kèm lý do kẹt và chỉ có nút huỷ ở giao dịch huỷ được', async () => {
-    render(<AdminTransactions />);
+    renderPage();
 
     expect(await screen.findByText('Xe đạp cũ')).toBeTruthy();
     expect(screen.getByText(/Bị kẹt: Quá giờ hẹn hơn 48 giờ/)).toBeTruthy();
@@ -54,7 +64,7 @@ describe('AdminTransactions', () => {
   });
 
   it('bấm Bị kẹt thì gọi API với stuck=true', async () => {
-    render(<AdminTransactions />);
+    renderPage();
     await screen.findByText('Xe đạp cũ');
 
     await userEvent.click(screen.getByRole('button', { name: 'Quá giờ xác nhận bàn giao' }));
@@ -65,7 +75,7 @@ describe('AdminTransactions', () => {
   });
 
   it('lọc theo trạng thái gửi status lên API', async () => {
-    render(<AdminTransactions />);
+    renderPage();
     await screen.findByText('Xe đạp cũ');
 
     await userEvent.selectOptions(screen.getByLabelText('Trạng thái'), 'DISPUTED');
@@ -75,8 +85,47 @@ describe('AdminTransactions', () => {
     );
   });
 
+  it('hiện hình thức giao nhận, không hiện mã kỹ thuật, và tên bài dẫn tới trang chi tiết', async () => {
+    renderPage();
+
+    const link = await screen.findByRole('link', { name: 'Xe đạp cũ' });
+    expect(link.getAttribute('href')).toBe('/admin/transactions/5');
+    expect(screen.getAllByText('Gặp trực tiếp').length).toBeGreaterThan(0);
+    expect(document.body.textContent ?? '').not.toContain('mã 5');
+    expect(document.body.textContent ?? '').not.toContain('IN_PERSON');
+  });
+
+  it('lọc theo loại, hình thức giao nhận và khoảng ngày gửi đúng tham số', async () => {
+    renderPage();
+    await screen.findByText('Xe đạp cũ');
+
+    await userEvent.selectOptions(screen.getByLabelText('Loại giao dịch'), 'SWAP');
+    await userEvent.selectOptions(screen.getByLabelText('Hình thức giao nhận'), 'SHIPPING');
+    await userEvent.type(screen.getByLabelText('Từ ngày'), '2026-10-01');
+
+    await waitFor(() =>
+      expect(adminRequestApi.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ type: 'SWAP', deliveryMethod: 'SHIPPING', from: '2026-10-01', page: 0 }),
+      ),
+    );
+  });
+
+  it('khoảng ngày ngược thì báo lỗi và không gọi lại API', async () => {
+    renderPage();
+    await screen.findByText('Xe đạp cũ');
+    vi.mocked(adminRequestApi.list).mockClear();
+
+    await userEvent.type(screen.getByLabelText('Từ ngày'), '2026-10-20');
+    await userEvent.type(screen.getByLabelText('Đến ngày'), '2026-10-10');
+
+    expect(await screen.findByText('"Từ ngày" không được sau "Đến ngày".')).toBeTruthy();
+    expect(adminRequestApi.list).not.toHaveBeenCalledWith(
+      expect.objectContaining({ from: '2026-10-20', to: '2026-10-10' }),
+    );
+  });
+
   it('huỷ giao dịch cần lý do tối thiểu 5 ký tự rồi gọi API và tải lại danh sách', async () => {
-    render(<AdminTransactions />);
+    renderPage();
     await screen.findByText('Xe đạp cũ');
 
     await userEvent.click(screen.getByRole('button', { name: 'Huỷ giao dịch' }));
@@ -94,7 +143,7 @@ describe('AdminTransactions', () => {
 
   it('hiện lỗi tiếng Việt khi backend trả 409', async () => {
     vi.mocked(adminRequestApi.cancel).mockRejectedValue({ status: 409, code: 'REQUEST_INVALID_STATE_TRANSITION' });
-    render(<AdminTransactions />);
+    renderPage();
     await screen.findByText('Xe đạp cũ');
 
     await userEvent.click(screen.getByRole('button', { name: 'Huỷ giao dịch' }));

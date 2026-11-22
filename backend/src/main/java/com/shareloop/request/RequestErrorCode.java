@@ -6,6 +6,8 @@ import org.springframework.http.HttpStatus;
 /** Mã lỗi của module request; tiền tố REQUEST_ và là một phần của contract (docs/api/request.md). */
 public enum RequestErrorCode implements ErrorCode {
     REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy yêu cầu giao dịch."),
+    REQUEST_MESSAGES_NOT_VIEWABLE(
+            HttpStatus.CONFLICT, "Chỉ xem được tin nhắn khi giao dịch có báo cáo hoặc khiếu nại."),
     REQUEST_INVALID_STATE_TRANSITION(HttpStatus.CONFLICT, "Chuyển trạng thái yêu cầu không hợp lệ."),
     REQUEST_ALREADY_EXISTS(HttpStatus.CONFLICT, "Bạn đã có một yêu cầu đang hoạt động cho bài đăng này."),
     REQUEST_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "Bạn đã đạt giới hạn tối đa 5 yêu cầu đang chờ xử lý."),

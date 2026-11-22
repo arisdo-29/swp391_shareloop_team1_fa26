@@ -1527,6 +1527,12 @@ public class RequestService {
         return findHandoverMedia(requestId);
     }
 
+    /** Minh chứng giao nhận của một giao dịch, cũ trước, cho trang chi tiết của Admin (Admin không phải một bên của giao dịch). */
+    @Transactional(readOnly = true)
+    public List<RequestMediaResponse> getMediaListForAdmin(long requestId) {
+        return findHandoverMedia(requestId);
+    }
+
     // Đọc minh chứng của một yêu cầu, cũ trước. Không kiểm quyền: nơi gọi đã kiểm người xem là một trong hai bên.
     private List<RequestMediaResponse> findHandoverMedia(Long requestId) {
         if (requestId == null) {

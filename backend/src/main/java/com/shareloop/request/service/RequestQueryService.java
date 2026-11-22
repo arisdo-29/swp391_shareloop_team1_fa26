@@ -1,5 +1,8 @@
 package com.shareloop.request.service;
 
+import com.shareloop.common.exception.BusinessException;
+import com.shareloop.request.RequestErrorCode;
+import com.shareloop.request.dto.AdminRequestCore;
 import com.shareloop.request.dto.ItemRequestBrief;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
@@ -105,5 +108,40 @@ public class RequestQueryService {
                     request.getCreatedAt()));
         }
         return briefs;
+    }
+
+    /**
+     * Toàn bộ mốc và thông tin giao nhận của một giao dịch cho trang chi tiết của Admin.
+     *
+     * @throws BusinessException REQUEST_NOT_FOUND khi không có giao dịch
+     */
+    @Transactional(readOnly = true)
+    public AdminRequestCore getAdminCore(long requestId) {
+        Request request = repository
+                .findById(requestId)
+                .orElseThrow(() -> new BusinessException(RequestErrorCode.REQUEST_NOT_FOUND));
+        return new AdminRequestCore(
+                request.getId(),
+                request.getItemId(),
+                request.getReceiverId(),
+                request.getOfferedItemId(),
+                request.getType(),
+                request.getStatus().name(),
+                request.getDeliveryMethod(),
+                request.getMeetingPlace(),
+                request.getMeetingTime(),
+                request.getDonorWaiverAt(),
+                request.getReceiverWaiverAt(),
+                request.getDonorScheduleOkAt(),
+                request.getReceiverScheduleOkAt(),
+                request.getContactRevealedAt(),
+                request.getDonorHandoverAt(),
+                request.getReceiverHandoverAt(),
+                request.isAutoConfirmed(),
+                request.getReservedAt(),
+                request.getCompletedAt(),
+                request.getCancelReason(),
+                request.getCreatedAt(),
+                request.getUpdatedAt());
     }
 }

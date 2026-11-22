@@ -243,6 +243,20 @@ public class ChatService {
     }
 
     /**
+     * Toàn bộ tin nhắn đã qua kiểm duyệt của một giao dịch, cũ trước, cho Admin đọc khi giao dịch có báo cáo hoặc
+     * khiếu nại. Không kiểm người xem vì Admin không phải một bên; AdminRequestDetailService đã kiểm điều kiện và ghi
+     * nhật ký mỗi lần xem.
+     */
+    @Transactional(readOnly = true)
+    public List<MessageResponse> findMessagesForAdmin(long requestId) {
+        return messageRepository.findByRequestIdOrderByIdAsc(requestId).stream()
+                .filter(m -> m.getModeration() == MessageModeration.PASS)
+                .map(m -> MessageMapper.toResponse(
+                        m, m.getRefItemId() == null ? null : findItemCardSafely(m.getRefItemId())))
+                .toList();
+    }
+
+    /**
      * Lấy danh sách thẻ sản phẩm ghim ở đầu cuộc trò chuyện (CH-06).
      * Nếu là bài Trao đổi thì ghim cả hai món (bài chính và món đề nghị).
      *

@@ -1,11 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { Pagination } from '../../components/Pagination';
-import { Alert, Button, PageHeader, Select, SkeletonRows, TextArea } from '../../components/ui';
-import { adminRequestApi, type AdminRequestPage, type AdminRequestRow } from '../../services/adminRequestApi';
+import { Link } from 'react-router-dom';
+import { Alert, Button, Field, PageHeader, Select, SkeletonRows, TextArea } from '../../components/ui';
+import {
+  adminRequestApi,
+  type AdminRequestListParams,
+  type AdminRequestPage,
+  type AdminRequestRow,
+  type DeliveryMethod,
+} from '../../services/adminRequestApi';
 import type { ApiError } from '../../services/http';
 import type { ItemRequestStatus } from '../../types/domain';
 import { requestStatusLabel } from '../../utils/request';
+import { deliveryMethodLabels } from './adminItemDisplay';
 
 const PAGE_SIZE = 20;
 const REASON_MIN = 5;
@@ -45,6 +53,10 @@ export function AdminTransactions() {
   const [result, setResult] = useState<AdminRequestPage | null>(null);
   const [status, setStatus] = useState<ItemRequestStatus | ''>('');
   const [stuckOnly, setStuckOnly] = useState(false);
+  const [type, setType] = useState<'GIVE' | 'SWAP' | ''>('');
+  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod | ''>('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [queryInput, setQueryInput] = useState('');
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
@@ -54,18 +66,27 @@ export function AdminTransactions() {
   const [notice, setNotice] = useState('');
   const [cancelling, setCancelling] = useState<AdminRequestRow | null>(null);
 
+  const dateRangeError =
+    fromDate && toDate && fromDate > toDate ? '"Từ ngày" không được sau "Đến ngày".' : '';
+
   useEffect(() => {
+    if (dateRangeError) return;
     let active = true;
     setLoading(true);
     setError('');
+    const params: AdminRequestListParams = {
+      status: status || undefined,
+      stuck: stuckOnly ? true : undefined,
+      q: query || undefined,
+      type: type || undefined,
+      deliveryMethod: deliveryMethod || undefined,
+      from: fromDate || undefined,
+      to: toDate || undefined,
+      page,
+      size: PAGE_SIZE,
+    };
     adminRequestApi
-      .list({
-        status: status || undefined,
-        stuck: stuckOnly ? true : undefined,
-        q: query || undefined,
-        page,
-        size: PAGE_SIZE,
-      })
+      .list(params)
       .then((response) => {
         if (!active) return;
         if (response.items.length === 0 && page > 0) {
@@ -85,7 +106,7 @@ export function AdminTransactions() {
     return () => {
       active = false;
     };
-  }, [page, query, reloadKey, status, stuckOnly]);
+  }, [page, query, reloadKey, status, stuckOnly, type, deliveryMethod, fromDate, toDate, dateRangeError]);
 
   const closeDialog = useCallback(() => setCancelling(null), []);
 
@@ -132,8 +153,55 @@ export function AdminTransactions() {
             ))}
           </Select>
         </div>
+        <div className="min-w-40">
+          <Select
+            label="Loại giao dịch"
+            value={type}
+            onChange={(event) => {
+              setType(event.target.value as 'GIVE' | 'SWAP' | '');
+              setPage(0);
+            }}
+          >
+            <option value="">Tất cả</option>
+            <option value="GIVE">Cho tặng</option>
+            <option value="SWAP">Trao đổi</option>
+          </Select>
+        </div>
+        <div className="min-w-40">
+          <Select
+            label="Hình thức giao nhận"
+            value={deliveryMethod}
+            onChange={(event) => {
+              setDeliveryMethod(event.target.value as DeliveryMethod | '');
+              setPage(0);
+            }}
+          >
+            <option value="">Tất cả</option>
+            <option value="IN_PERSON">Gặp trực tiếp</option>
+            <option value="SHIPPING">Gửi hàng</option>
+          </Select>
+        </div>
+        <Field
+          label="Từ ngày"
+          type="date"
+          value={fromDate}
+          error={dateRangeError || undefined}
+          onChange={(event) => {
+            setFromDate(event.target.value);
+            setPage(0);
+          }}
+        />
+        <Field
+          label="Đến ngày"
+          type="date"
+          value={toDate}
+          onChange={(event) => {
+            setToDate(event.target.value);
+            setPage(0);
+          }}
+        />
         <label className="grid gap-1.5 text-sm font-medium">
-          Tìm theo tên bài, tên người hoặc mã
+          Tìm theo tên bài hoặc tên người
           <input
             className="rounded-md border border-border bg-white px-3 py-2"
             value={queryInput}
@@ -181,6 +249,7 @@ export function AdminTransactions() {
                   <th>Chủ bài</th>
                   <th>Người nhận</th>
                   <th>Trạng thái</th>
+                  <th>Giao nhận</th>
                   <th>Giờ hẹn</th>
                   <th>Thao tác</th>
                 </tr>
@@ -198,7 +267,7 @@ export function AdminTransactions() {
                 ))}
                 {result.items.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center text-text-muted">
+                    <td colSpan={7} className="text-center text-text-muted">
                       Không có giao dịch phù hợp bộ lọc hiện tại.
                     </td>
                   </tr>
@@ -225,12 +294,14 @@ function TransactionRow({ row, onCancel }: { row: AdminRequestRow; onCancel: () 
   return (
     <tr>
       <td>
-        <p className="cell-truncate font-semibold text-text-primary" title={row.itemTitle || undefined}>
+        <Link
+          to={`/admin/transactions/${row.id}`}
+          className="cell-truncate block font-semibold text-primary hover:underline"
+          title={row.itemTitle || undefined}
+        >
           {row.itemTitle || 'Bài đã xoá'}
-        </p>
-        <p className="text-xs text-text-muted">
-          {row.type === 'SWAP' ? 'Trao đổi' : 'Cho tặng'} · mã {row.id}
-        </p>
+        </Link>
+        <p className="text-xs text-text-muted">{row.type === 'SWAP' ? 'Trao đổi' : 'Cho tặng'}</p>
       </td>
       <td>{row.donorName || '—'}</td>
       <td>{row.receiverName || '—'}</td>
@@ -242,6 +313,7 @@ function TransactionRow({ row, onCancel }: { row: AdminRequestRow; onCancel: () 
         </span>
         {row.flagReason ? <p className="mt-1 max-w-56 text-xs font-semibold text-error">Bị kẹt: {row.flagReason}</p> : null}
       </td>
+      <td className="text-xs">{row.deliveryMethod ? deliveryMethodLabels[row.deliveryMethod] : '—'}</td>
       <td className="text-xs">{formatDateTime(row.meetingTime)}</td>
       <td>
         {cancellableStatuses.includes(row.status) ? (
@@ -256,12 +328,12 @@ function TransactionRow({ row, onCancel }: { row: AdminRequestRow; onCancel: () 
   );
 }
 
-function CancelDialog({
+export function CancelDialog({
   row,
   onClose,
   onDone,
 }: {
-  row: AdminRequestRow;
+  row: Pick<AdminRequestRow, 'id' | 'itemTitle' | 'donorName' | 'receiverName'>;
   onClose: () => void;
   onDone: () => void;
 }) {
