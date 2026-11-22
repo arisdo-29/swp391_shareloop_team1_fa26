@@ -667,6 +667,7 @@ Các trường đã có từ trước và dùng cho màn Tiến trình giao dị
 | `REQUEST_INVALID_STATE_TRANSITION` | 409 | Chuyển đổi trạng thái không hợp lệ theo sơ đồ |
 | `REQUEST_OFFERED_ITEM_UNAVAILABLE` | 409 | Chọn người khi món đề nghị đổi không còn là của người gửi, không `APPROVED` hoặc đang ẩn |
 | `REQUEST_ITEM_UNDER_REVIEW` | 409 | Chọn người khi bài đang chờ duyệt lại sau khi sửa |
+| `REQUEST_MESSAGES_NOT_VIEWABLE` | 409 | Admin xem tin nhắn của giao dịch chưa có báo cáo hay khiếu nại (`GET /admin/requests/{id}/messages`, xem `admin.md`) |
 | `REQUEST_OFFER_CHANGE_NOT_ALLOWED` | 409 | Đề nghị hoặc đồng ý đổi món trong chat khi giao dịch không còn là `GIVE` hoặc không ở `RESERVED` / `AWAITING_LOGISTICS` (xem `docs/api/chat.md`) |
 | `REQUEST_FORBIDDEN` | 403 | Không có quyền thao tác trên yêu cầu này (hoặc người ngoài xem minh chứng) |
 | `REQUEST_REFUSE_NOT_ALLOWED` | 403 | Chủ bài ở giao dịch Cho tặng bấm "Từ chối giao nhận" (GN-07) |

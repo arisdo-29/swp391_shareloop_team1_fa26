@@ -149,6 +149,10 @@ Môn SWP391 · Nhóm 1 · Học kỳ Fall 2026
 >
 > [3.8.10 Báo cáo tài chính, đơn nạp và tra cứu ví](#báo-cáo-tài-chính-đơn-nạp-và-tra-cứu-ví)
 >
+> [3.8.11 Quản lý bài đăng của Admin](#quản-lý-bài-đăng-của-admin)
+>
+> [3.8.12 Đối soát đơn nạp của Admin](#đối-soát-đơn-nạp-của-admin)
+>
 > [3.9 Sơ đồ trạng thái](#sơ-đồ-trạng-thái)
 >
 > [3.10 Tác vụ nền](#tác-vụ-nền)
@@ -1204,7 +1208,7 @@ Credit chỉ dùng để trả phí dịch vụ cho nền tảng (1 Credit = 1.0
 | [VI-05](#BR_VI_05) | (Đã bỏ) Không có nạp thủ công. Trên máy dev dùng cổng giả lập (MOCK).                                                                                                                                                                                                          |
 | [VI-06](#BR_VI_06) | Đơn Chờ thanh toán quá 30 phút thì Hết hạn. Cùng mốc này được gửi sang VNPay làm hạn của trang thanh toán.                                                                                                                                                                     |
 | [VI-07](#BR_VI_07) | Mỗi lần cộng / trừ Credit nằm trong một giao dịch cơ sở dữ liệu có khoá dòng ví và ghi một dòng sổ cái; mỗi đơn nạp chỉ sinh một dòng Nạp.                                                                                                                                     |
-| [VI-08](#BR_VI_08) | Không có chức năng Admin cộng / trừ Credit tay.                                                                                                                                                                                                                                |
+| [VI-08](#BR_VI_08) | Không có chức năng Admin cộng / trừ Credit tay, trừ một ngoại lệ: đối soát đơn nạp VNPay đã có callback thành công đúng chữ ký và đúng số tiền nhưng đơn đã đóng. Khi đó Admin xác nhận cộng Credit đúng số tiền của đơn, bắt buộc ghi lý do, ghi nhật ký, mỗi đơn chỉ một lần.                                                                                                                                                                                                                                |
 
 <span id="FIG_sw5" class="anchor"></span>***Hình 10. Luồng xử lý F04 Nạp Credit – file ShareLoop_Flows_Swimlane_v12_VI.drawio***
 
@@ -2641,7 +2645,7 @@ Mô tả: Xem các cặp người giao dịch lặp lại nhiều lần và các
 
 **Nếu hợp lệ:**
 
-- Tiền mặt thực thu phải bằng Credit nạp × 1.000 đ ([VI-09](#BR_VI_09)); không có chức năng cộng / trừ Credit tay ([VI-08](#BR_VI_08), [AD-03](#BR_AD_03)).
+- Tiền mặt thực thu phải bằng Credit nạp × 1.000 đ ([VI-09](#BR_VI_09)); không có chức năng cộng / trừ Credit tay ([VI-08](#BR_VI_08), [AD-03](#BR_AD_03)), trừ ngoại lệ đối soát đơn nạp đã thu tiền nhưng đơn đã đóng.
 
 **Nếu không hợp lệ (thông báo):**
 
@@ -2651,9 +2655,9 @@ Mô tả: Xem các cặp người giao dịch lặp lại nhiều lần và các
 
 | **Mã**             | **Nội dung luật**                                                                                                                                            |
 |--------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [VI-08](#BR_VI_08) | Không có chức năng Admin cộng / trừ Credit tay.                                                                                                              |
+| [VI-08](#BR_VI_08) | Không có chức năng Admin cộng / trừ Credit tay, trừ một ngoại lệ: đối soát đơn nạp VNPay đã có callback thành công đúng chữ ký và đúng số tiền nhưng đơn đã đóng. Khi đó Admin xác nhận cộng Credit đúng số tiền của đơn, bắt buộc ghi lý do, ghi nhật ký, mỗi đơn chỉ một lần.                                                                                                              |
 | [VI-09](#BR_VI_09) | Báo cáo tài chính tách ba sổ: tiền mặt thực thu (đơn thành công), Credit cộng vào, Credit trừ ra theo loại phí; tiền mặt thu phải bằng Credit nạp × 1.000 đ. |
-| [AD-03](#BR_AD_03) | Admin xem báo cáo tài chính, xuất CSV, tra cứu ví và lịch sử Credit của từng tài khoản (chỉ xem, không sửa).                                                 |
+| [AD-03](#BR_AD_03) | Admin xem báo cáo tài chính, xuất CSV, tra cứu ví và lịch sử Credit của từng tài khoản (chỉ xem, không sửa), trừ ngoại lệ đối soát đơn nạp VNPay đã thu tiền nhưng đơn đã đóng ([VI-08](#BR_VI_08)): Admin xác nhận cộng Credit đúng số tiền của đơn, bắt buộc lý do, ghi nhật ký, mỗi đơn một lần.                                                 |
 
 **Giao diện**
 
@@ -2662,6 +2666,93 @@ Mô tả: Xem các cặp người giao dịch lặp lại nhiều lần và các
 > **\[Ảnh chụp màn hình cần chèn\]** *Trang Đơn nạp Credit (/admin/finance/topup-orders).*
 >
 > **\[Ảnh chụp màn hình cần chèn\]** *Trang Chi tiết ví người dùng (/admin/finance/users/:userId).*
+
+### 3.8.11 Quản lý bài đăng của Admin
+
+**Use case:** Admin quản lý bài đăng **· Tác nhân:** Admin
+
+**Kích hoạt:** Admin mở "Quản lý bài đăng" (/admin/items) hoặc bấm một dòng trong danh sách để xem chi tiết.
+
+**Mô tả:** Xem mọi bài đăng ở mọi trạng thái (kể cả đang ẩn, đã giữ chỗ, đã giao dịch, hết hạn), xem phí Credit, yêu cầu, báo cáo và lịch sử ẩn hiện của từng bài, ẩn bài vi phạm và hiện lại bài đã ẩn.
+
+**Chi tiết chức năng**
+
+**Đầu vào:**
+
+- Bộ lọc: từ khoá (tiêu đề, tên hoặc email chủ bài), trạng thái, hiển thị (đang hiện hoặc đang ẩn), hình thức, danh mục, khoảng ngày tạo, chỉ bài đang đẩy; lý do ẩn hoặc hiện lại (5 đến 500 ký tự).
+
+**Kiểm tra:**
+
+- Ẩn bài: bài chưa ẩn và không có giao dịch đang chạy (bài đã giữ chỗ trở lên hoặc có giao dịch đã chọn người chưa kết thúc).
+- Hiện lại bài: bài đang ẩn và tài khoản chủ bài không bị khoá.
+- Bắt buộc lý do cho cả hai thao tác.
+
+**Nếu hợp lệ:**
+
+- Ẩn bài: bài ngừng hiển thị (không đổi trạng thái), gắn cờ "Admin đã ẩn", các yêu cầu đang chờ tới bài và các yêu cầu dùng bài làm món đổi tự huỷ, lượt đẩy đang chạy dừng theo, chủ bài nhận thông báo kèm lý do, ghi nhật ký. Phí đăng không được hoàn.
+- Hiện lại bài: bài hiện như cũ nếu còn trong hạn hiển thị, xoá cờ "Admin đã ẩn", báo chủ bài, ghi nhật ký.
+
+**Nếu không hợp lệ (thông báo):**
+
+- "Bài đang có giao dịch chạy, hãy huỷ giao dịch ở trang Giao dịch trước khi ẩn bài."
+- "Bài này đã được ẩn rồi." và "Bài này đang hiển thị, không cần hiện lại."
+- "Tài khoản chủ bài đang bị khoá nên chưa hiện lại được bài, hãy mở khoá tài khoản trước."
+
+**Luật nghiệp vụ áp dụng (tóm tắt tại chỗ; bấm mã để xem đầy đủ ở mục 5.1)**
+
+| **Mã**             | **Nội dung luật**                                                                                                                                                                                                                                                                  |
+|--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [AD-06](#BR_AD_06) | Admin ẩn được bài vi phạm (bắt buộc lý do, không hoàn phí đăng, không ẩn được bài đang có giao dịch chạy) và hiện lại bài đã ẩn. Bài do Admin ẩn chỉ nút "Hiện lại" của Admin mới hiện lại được: báo cáo bị bác bỏ, bài được duyệt lại sau khi sửa và mở khoá tài khoản đều bỏ qua bài này. |
+| [AD-05](#BR_AD_05) | Mọi thao tác Admin đều ghi nhật ký có người làm; thao tác nặng bắt buộc lý do.                                                                                                                                                                                                       |
+
+**Giao diện**
+
+> **\[Ảnh chụp màn hình cần chèn\]** *Trang Quản lý bài đăng (/admin/items) với bộ lọc và nút Ẩn, Hiện lại.*
+>
+> **\[Ảnh chụp màn hình cần chèn\]** *Trang chi tiết bài của Admin (/admin/items/:itemId).*
+
+### 3.8.12 Đối soát đơn nạp của Admin
+
+**Use case:** Admin đối soát đơn nạp VNPay **· Tác nhân:** Admin
+
+**Kích hoạt:** Admin mở "Giao dịch nạp tiền" (/admin/finance/topup-orders), lọc "Cần đối soát" và bấm một đơn.
+
+**Mô tả:** Xem mọi đơn nạp kèm tổng theo trạng thái, xuất CSV và xử lý đơn mà VNPay đã thu tiền nhưng đơn đã đóng (Thất bại, Đã huỷ hoặc Hết hạn) nên chưa được cộng Credit.
+
+**Chi tiết chức năng**
+
+**Đầu vào:**
+
+- Bộ lọc: từ khoá (mã đơn, tên hoặc email người nạp), trạng thái, khoảng ngày, chỉ đơn cần đối soát.
+- Quyết định đối soát: cộng Credit cho người nạp, hoặc ghi nhận đã hoàn tiền ngoài hệ thống; kèm lý do bắt buộc.
+
+**Kiểm tra:**
+
+- Đơn thuộc cổng VNPay, đã đóng, có bằng chứng VNPay đã thu tiền (callback thành công đúng chữ ký và đúng số tiền) và chưa từng được đối soát.
+- Lý do không để trống.
+
+**Nếu hợp lệ:**
+
+- Cộng Credit: ví người nạp tăng đúng số Credit của đơn, sổ cái thêm một dòng Nạp, đơn chuyển Thành công, người nạp nhận thông báo, ghi nhật ký có người làm và lý do. Mỗi đơn chỉ đối soát một lần ([VI-07](#BR_VI_07), [VI-08](#BR_VI_08)).
+- Hoàn tiền ngoài hệ thống: ví không đổi, đơn được đánh dấu đã đối soát kèm lý do, ghi nhật ký.
+
+**Nếu không hợp lệ (thông báo):**
+
+- "Đơn nạp này không cần đối soát hoặc đã được xử lý."
+
+**Luật nghiệp vụ áp dụng (tóm tắt tại chỗ; bấm mã để xem đầy đủ ở mục 5.1)**
+
+| **Mã**             | **Nội dung luật**                                                                                                                                                                                                                                                                                 |
+|--------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [VI-04](#BR_VI_04) | Chỉ cộng Credit khi VNPay gọi IPN có chữ ký đúng, số tiền khớp và đơn còn Chờ thanh toán. Đơn đã đóng mà VNPay báo đã thu tiền thì không tự cộng, chỉ ghi bằng chứng để Admin đối soát.                                                                                                              |
+| [VI-08](#BR_VI_08) | Không có chức năng Admin cộng / trừ Credit tay, trừ ngoại lệ đối soát đơn nạp đã thu tiền nhưng đơn đã đóng: Admin xác nhận cộng đúng số tiền của đơn, bắt buộc lý do, ghi nhật ký, mỗi đơn một lần.                                                                                                |
+| [AD-05](#BR_AD_05) | Mọi thao tác Admin đều ghi nhật ký có người làm; thao tác nặng bắt buộc lý do.                                                                                                                                                                                                                    |
+
+**Giao diện**
+
+> **\[Ảnh chụp màn hình cần chèn\]** *Trang Giao dịch nạp tiền (/admin/finance/topup-orders) với thẻ tổng, bộ lọc và hộp thoại đối soát.*
+>
+> **\[Ảnh chụp màn hình cần chèn\]** *Trang Lịch sử giao dịch Credit (/admin/finance/ledger).*
 
 ## 3.9 Sơ đồ trạng thái
 
@@ -3061,7 +3152,7 @@ Credit là tiền trả phí dịch vụ cho nền tảng, nạp duy nhất qua 
 </tr>
 <tr class="even">
 <td><span id="BR_VI_08" class="anchor"></span><strong>VI-08</strong></td>
-<td>Không có chức năng Admin cộng / trừ Credit tay.</td>
+<td>Không có chức năng Admin cộng / trừ Credit tay, trừ một ngoại lệ: đối soát đơn nạp VNPay đã có callback thành công đúng chữ ký và đúng số tiền nhưng đơn đã đóng. Khi đó Admin xác nhận cộng Credit đúng số tiền của đơn, bắt buộc ghi lý do, ghi nhật ký, mỗi đơn chỉ một lần.</td>
 <td>—</td>
 <td><p><a href="#nạp-credit-qua-vnpay">Nạp Credit qua VNPay</a></p>
 <p><a href="#báo-cáo-tài-chính-đơn-nạp-và-tra-cứu-ví">Báo cáo tài chính, đơn nạp và tra cứu ví</a></p></td>
@@ -3795,7 +3886,7 @@ Báo cáo là về một bài hoặc một người; khiếu nại là về mộ
 </tr>
 <tr class="odd">
 <td><span id="BR_AD_03" class="anchor"></span><strong>AD-03</strong></td>
-<td>Admin xem báo cáo tài chính, xuất CSV, tra cứu ví và lịch sử Credit của từng tài khoản (chỉ xem, không sửa).</td>
+<td>Admin xem báo cáo tài chính, xuất CSV, tra cứu ví và lịch sử Credit của từng tài khoản (chỉ xem, không sửa), trừ ngoại lệ đối soát đơn nạp VNPay đã thu tiền nhưng đơn đã đóng ([VI-08](#BR_VI_08)): Admin xác nhận cộng Credit đúng số tiền của đơn, bắt buộc lý do, ghi nhật ký, mỗi đơn một lần.</td>
 <td><a href="#báo-cáo-tài-chính-đơn-nạp-và-tra-cứu-ví">Báo cáo tài chính, đơn nạp và tra cứu ví</a></td>
 </tr>
 <tr class="even">
@@ -3809,6 +3900,11 @@ Báo cáo là về một bài hoặc một người; khiếu nại là về mộ
 <td>Mọi thao tác Admin (duyệt, từ chối, kết luận, yêu cầu giải trình, khoá, mở khoá, huỷ giao dịch, đổi cấu hình, sửa danh mục, từ khoá, checklist, khu vực) đều ghi nhật ký có người làm; thao tác nặng bắt buộc lý do.</td>
 <td><p><a href="#tổng-quan-quản-trị">Tổng quan quản trị</a></p>
 <p><a href="#giám-sát-bất-thường-và-nhật-ký-hoạt-động">Giám sát bất thường và nhật ký hoạt động</a></p></td>
+</tr>
+<tr class="even">
+<td><span id="BR_AD_06" class="anchor"></span><strong>AD-06</strong></td>
+<td>Admin ẩn được bài vi phạm (bắt buộc lý do, không hoàn phí đăng, không ẩn được bài đang có giao dịch chạy) và hiện lại bài đã ẩn. Bài do Admin ẩn chỉ nút "Hiện lại" của Admin mới hiện lại được: báo cáo bị bác bỏ, bài được duyệt lại sau khi sửa và mở khoá tài khoản đều bỏ qua bài này.</td>
+<td><p><a href="#quản-lý-bài-đăng-của-admin">Quản lý bài đăng của Admin</a></p></td>
 </tr>
 </tbody>
 </table>

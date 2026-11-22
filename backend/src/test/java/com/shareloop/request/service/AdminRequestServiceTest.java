@@ -161,6 +161,58 @@ class AdminRequestServiceTest {
     }
 
     @Test
+    @DisplayName("Lọc theo loại giao dịch và hình thức giao nhận, kèm cột hình thức giao nhận")
+    void list_whenTypeAndDeliveryMethod_filtersByBothAndReturnsDeliveryMethod() {
+        // given: giao dịch 10 Cho tặng nhận tại chỗ, giao dịch 11 Trao đổi giao tận nơi, giao dịch 12 Cho tặng giao tận
+        // nơi
+        Request giveInPerson = request(10L, RequestStatus.RESERVED, null);
+        ReflectionTestUtils.setField(giveInPerson, "deliveryMethod", "IN_PERSON");
+        Request swapShipping = request(11L, RequestStatus.RESERVED, null);
+        ReflectionTestUtils.setField(swapShipping, "type", "SWAP");
+        ReflectionTestUtils.setField(swapShipping, "deliveryMethod", "SHIPPING");
+        Request giveShipping = request(12L, RequestStatus.RESERVED, null);
+        ReflectionTestUtils.setField(giveShipping, "deliveryMethod", "SHIPPING");
+        when(requestRepository.findAllByOrderByCreatedAtDesc())
+                .thenReturn(List.of(giveInPerson, swapShipping, giveShipping));
+
+        // when
+        AdminRequestPageResponse swaps = adminRequestService.list(null, null, null, "SWAP", null, null, null, 0, 20);
+        AdminRequestPageResponse shipping =
+                adminRequestService.list(null, null, null, null, "SHIPPING", null, null, 0, 20);
+        AdminRequestPageResponse giveShippingOnly =
+                adminRequestService.list(null, null, null, "GIVE", "SHIPPING", null, null, 0, 20);
+
+        // then
+        assertThat(swaps.items()).extracting("id").containsExactly(11L);
+        assertThat(shipping.items()).extracting("id").containsExactly(11L, 12L);
+        assertThat(giveShippingOnly.items()).extracting("id").containsExactly(12L);
+        assertThat(giveShippingOnly.items().get(0).deliveryMethod()).isEqualTo("SHIPPING");
+    }
+
+    @Test
+    @DisplayName("Lọc theo khoảng ngày tạo theo giờ Việt Nam, ngày kết thúc tính trọn ngày")
+    void list_whenDateRange_filtersByCreatedAtInVietnamTime() {
+        // given: NOW là thời điểm cố định; giao dịch 13 tạo 10 ngày trước, giao dịch 14 tạo 2 ngày trước
+        Request tenDaysAgo = request(13L, RequestStatus.RESERVED, null);
+        Request twoDaysAgo = request(14L, RequestStatus.RESERVED, null);
+        ReflectionTestUtils.setField(twoDaysAgo, "createdAt", NOW.minus(2, ChronoUnit.DAYS));
+        when(requestRepository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(twoDaysAgo, tenDaysAgo));
+        java.time.LocalDate twoDaysAgoDate = NOW.minus(2, ChronoUnit.DAYS)
+                .atZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh"))
+                .toLocalDate();
+
+        // when
+        AdminRequestPageResponse onlyRecent =
+                adminRequestService.list(null, null, null, null, null, twoDaysAgoDate, twoDaysAgoDate, 0, 20);
+        AdminRequestPageResponse before =
+                adminRequestService.list(null, null, null, null, null, null, twoDaysAgoDate.minusDays(1), 0, 20);
+
+        // then
+        assertThat(onlyRecent.items()).extracting("id").containsExactly(14L);
+        assertThat(before.items()).extracting("id").containsExactly(13L);
+    }
+
+    @Test
     @DisplayName("Phân trang: trả đúng trang, tổng số dòng và tổng số trang")
     void list_paginatesResults() {
         // given

@@ -1104,6 +1104,29 @@ public class RequestService {
         }
     }
 
+    /**
+     * Admin ẩn bài đang có yêu cầu chờ chọn: huỷ mọi yêu cầu PENDING tới bài và báo từng người xin. Người xin không
+     * thấy lý do ẩn chi tiết, chỉ biết bài đã bị ẩn. Giao dịch đã chọn (RESERVED trở lên) không bị lấy ra vì AdminItemService
+     * đã chặn ẩn bài đang có giao dịch chạy.
+     *
+     * @return số yêu cầu đã huỷ
+     */
+    @Transactional
+    public int cancelPendingRequestsToItem(long itemId, String reason) {
+        List<Request> pendingRequests = requestRepository.findByItemIdAndStatus(itemId, RequestStatus.PENDING);
+        for (Request request : pendingRequests) {
+            request.cancel(Request.CANCEL_BY_SYSTEM + reason);
+            requestRepository.save(request);
+            notificationService.notify(
+                    request.getReceiverId(),
+                    "REQUEST_CANCELLED",
+                    "Yêu cầu của bạn bị huỷ",
+                    "Bài bạn xin đã bị quản trị viên ẩn nên yêu cầu đã tự huỷ.",
+                    "/requests/" + request.getId());
+        }
+        return pendingRequests.size();
+    }
+
     private void cancelBecauseUserLocked(Request request, long lockedUserId) {
         boolean wasPending = request.getStatus() == RequestStatus.PENDING;
         request.cancel(Request.CANCEL_BY_SYSTEM + LOCKED_ACCOUNT_REASON);
@@ -1501,6 +1524,12 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
         }
 
+        return findHandoverMedia(requestId);
+    }
+
+    /** Minh chứng giao nhận của một giao dịch, cũ trước, cho trang chi tiết của Admin (Admin không phải một bên của giao dịch). */
+    @Transactional(readOnly = true)
+    public List<RequestMediaResponse> getMediaListForAdmin(long requestId) {
         return findHandoverMedia(requestId);
     }
 

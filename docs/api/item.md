@@ -3,6 +3,7 @@
 ## Service cửa ngõ nội bộ
 
 - `ItemService.reserve(Long itemId)` chuyển `APPROVED → RESERVED`; `release(long itemId)` chuyển `RESERVED → APPROVED`. Trạng thái khác trả `ITEM_INVALID_STATUS_TRANSITION`. Bài bị ẩn (`is_active = false`) thì `reserve` trả `409 ITEM_HIDDEN` "Bài đang tạm ẩn nên chưa giữ chỗ được." (22/11/2026).
+- Bài do Admin ẩn (cột `items.hidden_by_admin = true`, migration `V202611221010`) chỉ `ItemService.unhideByAdmin` mới hiện lại được. `ItemService.unhide` (báo cáo bị bác bỏ, bài được duyệt lại sau khi sửa) và `unhideItems` (mở khoá tài khoản) bỏ qua bài có cờ này. Xem `admin.md`, mục "Quản lý bài đăng (Admin)".
 - `markTraded` và `markExpired` chuyển trạng thái qua `canTransition()`; `hide/unhide/hideAllOfUser` chỉ đổi `is_active`.
 - `ItemUnavailableEvent(itemId, reason)` (22/11/2026): phát khi bài rời trạng thái "APPROVED và đang hiển thị" ở
   `reserve` (`RESERVED`), xoá (`REMOVED`, phát cùng `ItemRemovedEvent` cũ), `hide` / `hideApprovedItemsOfUser` /
@@ -403,6 +404,10 @@ Với danh sách, hai trường này được đọc bằng một query cho cả
 | `ITEM_EDIT_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được sửa |
 | `ITEM_REMOVE_NOT_ALLOWED` | 409 | Bài hoặc Request đã ở giai đoạn không được gỡ |
 | `ITEM_HIDDEN` | 409 | Giữ chỗ (`reserve`) bài đang tạm ẩn, gặp khi chọn người, đổi món đề nghị hoặc đồng ý đổi món trong chat |
+| `ITEM_HIDE_NOT_ALLOWED` | 409 | Admin ẩn bài đang có giao dịch chạy (bài đã giữ chỗ trở lên hoặc có giao dịch đã chọn người chưa kết thúc) |
+| `ITEM_ALREADY_HIDDEN` | 409 | Admin ẩn bài đã ẩn |
+| `ITEM_NOT_HIDDEN` | 409 | Admin hiện lại bài đang hiển thị |
+| `ITEM_UNHIDE_NOT_ALLOWED` | 409 | Admin hiện lại bài của chủ bài đang bị khoá |
 | `ITEM_REPUTATION_BLOCKED` | 403 | Người đăng hoặc sửa bài có 0 sao uy tín (BD-07) |
 | `ITEM_MODERATION_BLOCKED` | 422 | Nội dung tạo hoặc sửa bị kiểm duyệt tầng 1 chặn |
 | `VALIDATION_FAILED` | 400 | Sai định dạng hoặc thiếu trường bắt buộc |

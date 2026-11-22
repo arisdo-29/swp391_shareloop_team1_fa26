@@ -20,10 +20,7 @@ import com.shareloop.wallet.repository.PaymentOrderRepository;
 import com.shareloop.wallet.repository.PaymentOrderSnapshot;
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -284,21 +281,6 @@ public class PaymentService {
         return new TopUpConfirmResponse(orderCode, PaymentOrderStatus.SUCCESS, snapshot.getCredits(), wallet);
     }
 
-    /**
-     * Danh sách đơn nạp cho Admin, đơn mới tạo nằm trên cùng. provider null nghĩa là mọi cổng thanh toán (VNPAY, MOCK,
-     * MANUAL), nên Admin xem được cả đơn VNPay; status null nghĩa là mọi trạng thái.
-     * Kèm tên chủ đơn và tên Admin duyệt (nếu có).
-     */
-    @Transactional(readOnly = true)
-    public PageResponse<TopUpOrderDetailResponse> listOrders(
-            PaymentProvider provider, PaymentOrderStatus status, boolean submittedOnly, int page, int size) {
-        Sort newestFirst = Sort.by(Sort.Direction.DESC, "createdAt", "id");
-        Page<PaymentOrder> orderPage = paymentOrderRepository.findOrders(
-                provider, status, submittedOnly, PageRequest.of(page, size, newestFirst));
-        Map<Long, UserBrief> briefs = findBriefs(orderPage.getContent());
-        return PageResponse.from(orderPage.map(order -> detail(order, briefs, false)));
-    }
-
     // Hạn thanh toán lấy từ PaymentDeadline (một chỗ tính duy nhất). created_at do JPA Auditing gán lúc persist nên
     // luôn
     // có sau save; chỉ null khi repository bị mock trong unit test.
@@ -307,20 +289,6 @@ public class PaymentService {
             return null;
         }
         return paymentDeadline.expiresAt(order.getCreatedAt());
-    }
-
-    private Map<Long, UserBrief> findBriefs(List<PaymentOrder> orderList) {
-        if (userService == null) {
-            return Map.of();
-        }
-        Set<Long> userIds = new HashSet<>();
-        for (PaymentOrder order : orderList) {
-            userIds.add(order.getUserId());
-            if (order.getReviewedBy() != null) {
-                userIds.add(order.getReviewedBy());
-            }
-        }
-        return userService.findBriefs(userIds);
     }
 
     // includePaymentUrl: chỉ API của chủ đơn trả URL thanh toán, và chỉ khi đơn còn PENDING trong hạn.

@@ -19,4 +19,8 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long>,
 
     // Dòng nhật ký mới nhất của một loại hành động trên một đối tượng, dùng để đọc lại dữ liệu lúc khoá tài khoản
     java.util.Optional<ActivityLog> findFirstByTypeAndTargetIdOrderByIdDesc(String type, Long targetId);
+
+    // Lịch sử các hành động thuộc một nhóm loại trên một đối tượng, mới nhất trước
+    List<ActivityLog> findByTargetTypeAndTargetIdAndTypeInOrderByIdDesc(
+            String targetType, Long targetId, java.util.Collection<String> types);
 }

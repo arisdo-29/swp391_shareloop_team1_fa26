@@ -34,6 +34,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminRequestService {
 
     // Các trạng thái giao dịch đang mở, đã được chọn người và chưa kết thúc
+    private static final java.time.ZoneId VIETNAM_ZONE = java.time.ZoneId.of("Asia/Ho_Chi_Minh");
+
     private static final Set<RequestStatus> OPEN_STATUSES = Set.of(
             RequestStatus.RESERVED,
             RequestStatus.AWAITING_LOGISTICS,
@@ -70,6 +72,28 @@ public class AdminRequestService {
      */
     @Transactional(readOnly = true)
     public AdminRequestPageResponse list(RequestStatus status, Boolean stuck, String q, int page, int size) {
+        return list(status, stuck, q, null, null, null, null, page, size);
+    }
+
+    /**
+     * Như hàm trên, thêm lọc theo loại giao dịch (GIVE hoặc SWAP), hình thức giao nhận và khoảng ngày tạo. from và to
+     * tính theo giờ Việt Nam, to tính trọn ngày. Lọc trong bộ nhớ như các bộ lọc khác, đợt sau sẽ chuyển sang SQL.
+     */
+    @Transactional(readOnly = true)
+    public AdminRequestPageResponse list(
+            RequestStatus status,
+            Boolean stuck,
+            String q,
+            String type,
+            String deliveryMethod,
+            java.time.LocalDate from,
+            java.time.LocalDate to,
+            int page,
+            int size) {
+        Instant fromInstant =
+                from == null ? null : from.atStartOfDay(VIETNAM_ZONE).toInstant();
+        Instant toInstant =
+                to == null ? null : to.plusDays(1).atStartOfDay(VIETNAM_ZONE).toInstant();
         List<Request> requests = status == null
                 ? requestRepository.findAllByOrderByCreatedAtDesc()
                 : requestRepository.findByStatusOrderByCreatedAtDesc(status);
@@ -77,7 +101,11 @@ public class AdminRequestService {
         List<AdminRequestRow> filtered = new ArrayList<>();
         for (AdminRequestRow row : toRows(requests)) {
             boolean stuckMatches = stuck == null || stuck == (row.flagReason() != null);
-            if (stuckMatches && matchesQuery(row, q)) {
+            boolean typeMatches = type == null || type.equals(row.type());
+            boolean deliveryMatches = deliveryMethod == null || deliveryMethod.equals(row.deliveryMethod());
+            boolean dateMatches = (fromInstant == null || !row.createdAt().isBefore(fromInstant))
+                    && (toInstant == null || row.createdAt().isBefore(toInstant));
+            if (stuckMatches && matchesQuery(row, q) && typeMatches && deliveryMatches && dateMatches) {
                 filtered.add(row);
             }
         }
@@ -125,7 +153,8 @@ public class AdminRequestService {
                     nameOf(briefs, request.getReceiverId()),
                     request.getMeetingTime(),
                     request.getCreatedAt(),
-                    flagReasonOf(request, donorId, lockedIds, overdueAfter, now)));
+                    flagReasonOf(request, donorId, lockedIds, overdueAfter, now),
+                    request.getDeliveryMethod()));
         }
         return rows;
     }

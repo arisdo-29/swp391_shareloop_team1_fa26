@@ -155,8 +155,48 @@ public class PaymentOrder {
      * Cổng báo đã thu tiền cho đơn đã kết thúc mà không cộng Credit (FAILED, EXPIRED): giữ nguyên trạng thái, ghi chú để
      * đối soát và hoàn tiền tay. Không đè callback_data để còn giữ mã lỗi lúc đơn bị hủy.
      */
-    public void flagPaidAfterClosed(String note) {
+    /**
+     * VNPay báo đã thu tiền nhưng đơn đã đóng (FAILED, CANCELLED, EXPIRED): không cộng Credit, chỉ ghi lại bằng chứng
+     * tiền đã về để Admin đối soát. paid_at ở đây là lúc VNPay báo đã thu, không có nghĩa đơn đã nạp thành công; mọi
+     * chỗ tính tiền thật đều lọc thêm status = SUCCESS.
+     */
+    public void flagPaidAfterClosed(String note, Instant paidAt, String transactionNo) {
         reviewNote = note;
+        markPaidEvidence(paidAt, transactionNo);
+    }
+
+    /** Đơn PENDING quá hạn nhưng VNPay đã thu tiền: chuyển EXPIRED và ghi bằng chứng tiền đã về để đối soát. */
+    public void expireWithPaidEvidence(Instant paidAt, String transactionNo) {
+        markExpired();
+        markPaidEvidence(paidAt, transactionNo);
+    }
+
+    // Không đè paid_at đã có, vì lần báo đầu tiên mới là lúc tiền về.
+    private void markPaidEvidence(Instant paidAt, String transactionNo) {
+        if (this.paidAt == null) {
+            this.paidAt = paidAt.truncatedTo(ChronoUnit.MICROS);
+        }
+        if (transactionNo != null && !transactionNo.isBlank()) {
+            this.providerTxnId = transactionNo;
+        }
+    }
+
+    /**
+     * Đơn VNPAY đã đóng mà VNPay đã thu tiền (có paid_at) và Admin chưa xử lý. Đơn SUCCESS hoặc PENDING không bao giờ
+     * cần đối soát.
+     */
+    public boolean needsReconcile() {
+        boolean closedUnpaid = status == PaymentOrderStatus.FAILED
+                || status == PaymentOrderStatus.CANCELLED
+                || status == PaymentOrderStatus.EXPIRED;
+        return provider == PaymentProvider.VNPAY && closedUnpaid && paidAt != null && reviewedAt == null;
+    }
+
+    /** Admin xác nhận đã thu tiền và cộng Credit: đơn sang SUCCESS, giữ nguyên paid_at (lúc tiền thật về). */
+    public void markReconciledGranted(long adminId, Instant now, String note) {
+        this.status = PaymentOrderStatus.SUCCESS;
+        this.signatureVerified = true;
+        review(adminId, now, note);
     }
 
     public Map<String, String> getCallbackData() {

@@ -20,6 +20,12 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ReportRepository extends JpaRepository<Report, Long> {
 
+    /** Mọi báo cáo nhắm vào một bài (kể cả đã đóng), mới nhất trước, cho trang chi tiết bài của Admin. */
+    java.util.List<Report> findByItemIdOrderByCreatedAtDescIdDesc(Long itemId);
+
+    /** Mọi báo cáo và khiếu nại gắn với một giao dịch, mới nhất trước, cho trang chi tiết giao dịch của Admin. */
+    java.util.List<Report> findByRequestIdOrderByCreatedAtDescIdDesc(Long requestId);
+
     @Query("SELECT r FROM Report r WHERE (:status IS NULL OR r.status = :status) "
             + "AND (:targetType IS NULL OR r.targetType = :targetType)")
     Page<Report> findForAdmin(

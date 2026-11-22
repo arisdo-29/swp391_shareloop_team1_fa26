@@ -175,7 +175,7 @@ Credit là tiền trả phí dịch vụ cho nền tảng, nạp duy nhất qua 
 | VI-05 | (Đã bỏ) Không có nạp thủ công. Trên máy dev dùng cổng giả lập (MOCK). | — |
 | VI-06 | Đơn Chờ thanh toán quá 30 phút thì Hết hạn. Cùng mốc này được gửi sang VNPay làm hạn của trang thanh toán. | payment\_order\_expire\_minutes = 30 |
 | VI-07 | Mỗi lần cộng / trừ Credit nằm trong một giao dịch cơ sở dữ liệu có khoá dòng ví và ghi một dòng sổ cái; mỗi đơn nạp chỉ sinh một dòng Nạp. | — |
-| VI-08 | Không có chức năng Admin cộng / trừ Credit tay. | — |
+| VI-08 | Không có chức năng Admin cộng / trừ Credit tay, trừ một ngoại lệ: đối soát đơn nạp VNPay đã có callback thành công đúng chữ ký và đúng số tiền nhưng đơn đã đóng. Khi đó Admin xác nhận cộng Credit đúng số tiền của đơn, bắt buộc ghi lý do, ghi nhật ký, mỗi đơn chỉ một lần. | — |
 | VI-09 | Báo cáo tài chính tách ba sổ: tiền mặt thực thu (đơn thành công), Credit cộng vào, Credit trừ ra theo loại phí; tiền mặt thu phải bằng Credit nạp × 1.000 đ. | — |
 
 Đơn nạp có bốn trạng thái: Chờ thanh toán (PENDING), Thành công (SUCCESS), Thất bại (FAILED, VNPay báo lỗi), Hết hạn (EXPIRED). Sổ cái có các loại dòng: Nạp (TOP\_UP), Phí đăng (POST\_FEE), Phí sửa (EDIT\_FEE), Phí gia hạn (RENEW\_FEE), Phí đẩy bài (BOOST\_FEE), Phí AI (AI\_SEARCH\_FEE, dòng dương là hoàn phí); loại Điều chỉnh (ADMIN\_ADJUST) có trong danh sách nhưng không dùng.

@@ -12,6 +12,7 @@ import com.shareloop.reputation.dto.PointHistoryDto;
 import com.shareloop.reputation.dto.RepeatedPair;
 import com.shareloop.reputation.dto.ReputationSummary;
 import com.shareloop.reputation.dto.RequestParticipantProjection;
+import com.shareloop.reputation.dto.RequestPointsAward;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.entity.UserReputation;
 import com.shareloop.reputation.repository.UserReputationRepository;
@@ -26,6 +27,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -206,6 +208,29 @@ public class ReputationService {
                 .findById(userId)
                 .map(user -> getRank(user.getTotalPoints()))
                 .orElse(Rank.BRONZE);
+    }
+
+    /**
+     * Điểm tích luỹ đã cộng nhờ một giao dịch hoàn tất, mỗi người một dòng (đọc từ nhật ký POINTS của giao dịch). Giao
+     * dịch chưa hoàn tất hoặc chưa cộng điểm thì trả danh sách rỗng. Dùng cho trang chi tiết giao dịch của Admin.
+     */
+    public List<RequestPointsAward> findPointsAwardedForRequest(long requestId) {
+        if (activityLogQueryService == null) {
+            return List.of();
+        }
+        List<RequestPointsAward> awards = new ArrayList<>();
+        for (ActivityLogDto log :
+                activityLogQueryService.findHistory("REQUEST", requestId, List.of(ActivityType.POINTS.code()))) {
+            int points =
+                    log.data() != null && log.data().get("points") instanceof Number number ? number.intValue() : 0;
+            String role = log.data() != null && log.data().get("role") != null
+                    ? String.valueOf(log.data().get("role"))
+                    : null;
+            if (log.actorId() != null) {
+                awards.add(new RequestPointsAward(log.actorId(), role, points));
+            }
+        }
+        return awards;
     }
 
     /**

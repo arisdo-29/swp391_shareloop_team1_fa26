@@ -132,6 +132,10 @@ Không trả `#<id>` trong `targetTitle`, `actorName`. Log `REPORT_DISMISSED`, `
 | `AREA_TOGGLE` | Bật/tắt khu vực | `AREA` | `name`, `active` |
 | `GRACE_STAR` | Cấp sao ân hạn | `USER` | `before`, `after` (lý do Admin nhập ở `reason`). Chỉ còn ở nhật ký cũ: sao ân hạn đã bỏ (UT-09) |
 | `STAR_RESTORED` | Tự hồi sao | `USER` (`actorId = null`) | `before`, `after`, `cleanStreak` |
+| `ADMIN_TOPUP_RECONCILED` | Đối soát đơn nạp tiền | `PAYMENT_ORDER` | `orderCode`, `action` (GRANT_CREDIT hoặc REFUNDED_OUTSIDE), lý do ở `reason` |
+| `ADMIN_ITEM_HIDDEN` | Admin ẩn bài đăng | `ITEM` | `ownerId`, lý do ở `reason` |
+| `ADMIN_ITEM_UNHIDDEN` | Admin hiện lại bài đăng | `ITEM` | `ownerId`, lý do ở `reason` |
+| `ADMIN_VIEWED_CHAT` | Admin xem tin nhắn giao dịch | `REQUEST` | `messageCount` |
 
 > Bản ghi cũ có `type = 'AiUsage'` được migration `V202610191500__audit_rename_ai_usage` đổi thành `AI_USAGE`.
 
@@ -300,6 +304,37 @@ Xuất báo cáo Excel cho Admin, dùng cùng bộ lọc `from` và `to` theo ng
 - **Tên file:** `bao-cao-tai-chinh_<from>_<to>.xlsx`, ngày theo `dd-MM-yyyy`; thiếu mốc thì dùng `bat-dau` hoặc `hien-tai`.
 - **Nội dung:** sheet **Tổng hợp** gồm tiền thu, Credit cộng, Credit trừ và đối chiếu; sheet **Tiền thu theo ngày** gồm `cashByDay`; sheet **Chi tiết nạp tiền** gồm danh sách từng đơn nạp thành công (thời gian, mã đơn, họ tên, email, số tiền, credit nhận, cổng thanh toán); sheet **Theo thành viên** tổng hợp theo từng thành viên (họ tên, email, tổng tiền nạp, tổng credit nhận, số đơn). Số tiền và Credit là ô số.
 - **Lỗi:** `400 INVALID_DATE_RANGE` khi Từ ngày sau Đến ngày, `400 VALIDATION_FAILED` cho định dạng ngày sai, `401` khi chưa đăng nhập, `403` khi thiếu quyền Admin.
+
+---
+
+## 2.3. Giao dịch nạp tiền (đối soát từng đơn)
+
+Danh sách, chi tiết, tổng hợp, xuất CSV và xử lý đối soát đơn nạp: xem `docs/api/payment.md`, mục "API Admin: Giao dịch nạp tiền".
+
+---
+
+## 2.4. GET /api/v1/admin/finance/ledger
+
+Chỉ ADMIN (401 chưa đăng nhập, 403 user thường). Sổ cái `credit_ledger` của toàn hệ thống, mới nhất trước (`createdAt` giảm dần rồi `id` giảm dần).
+Chỉ đọc, giữ ranh giới module: tên người qua `UserService`, tiêu đề bài qua `ItemQueryService`, mã đơn nạp qua `PaymentOrderRepository` (cùng module wallet).
+
+| Tham số | Mặc định | Ý nghĩa |
+| --- | --- | --- |
+| type | (bỏ trống) | `TOP_UP`, `POST_FEE`, `EDIT_FEE`, `RENEW_FEE`, `BOOST_FEE`, `AI_SEARCH_FEE`, `ADMIN_ADJUST`; bỏ trống là mọi loại |
+| userId | (bỏ trống) | Chỉ dòng của người dùng này |
+| q | (bỏ trống) | Khớp một phần họ tên hoặc email người dùng, ghi chú, hoặc mã đơn nạp (không phân biệt hoa thường) |
+| from, to | (bỏ trống) | Khoảng ngày `yyyy-MM-dd` theo giờ Việt Nam, `to` tính trọn ngày. `from` sau `to` trả `422 WALLET_INVALID_DATE_RANGE` |
+| page, size | 0, 20 | size 1..100 |
+
+Trả `AdminLedgerPage`: `items`, `page`, `size`, `totalElements`, `totalIn` (tổng Credit cộng vào, dòng dương) và `totalOut` (tổng trừ ra, giữ dấu âm).
+Hai tổng tính trên cả khoảng lọc, không chỉ trang hiện tại. Mỗi dòng `AdminLedgerRow`: `id`, `createdAt`, `userId`, `userName`, `userEmail`, `type`,
+`amount` (có dấu), `balanceAfter`, `itemId`, `itemTitle` (null khi không gắn bài hoặc bài đã mất), `orderCode` (mã đơn nạp với `TOP_UP`),
+`note`, `createdByName` (chỉ có ở dòng `ADMIN_ADJUST`, vì `created_by` do JPA Auditing gán cho mọi dòng và với các khoản phí chính là người dùng).
+
+## 2.5. GET /api/v1/admin/finance/ledger.csv
+
+Cùng bộ lọc (`type`, `userId`, `q`, `from`, `to`), tối đa 10000 dòng mới nhất, UTF-8 có BOM. Cột: Thời gian, Người dùng, Email, Loại (nhãn tiếng Việt),
+Số Credit, Số dư sau, Bài liên quan, Mã đơn nạp, Ghi chú, Người thực hiện.
 
 ---
 
@@ -637,6 +672,9 @@ Danh sách giao dịch, mới nhất trước. Mọi tham số đều tuỳ ch�
 | `status` | string | - | Lọc theo trạng thái (`PENDING`, `RESERVED`, `AWAITING_LOGISTICS`, `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER`, `COMPLETED`, `DISPUTED`, `REJECTED`, `CANCELLED`) |
 | `stuck` | boolean | - | `true`: chỉ giao dịch bị kẹt; `false`: chỉ giao dịch không kẹt |
 | `q` | string | - | Khớp một phần (không phân biệt hoa thường) tên bài, tên chủ bài, tên người nhận; hoặc đúng mã giao dịch |
+| `type` | string | - | `GIVE` (Cho tặng) hoặc `SWAP` (Trao đổi) |
+| `deliveryMethod` | string | - | `IN_PERSON` (gặp trực tiếp) hoặc `SHIPPING` (gửi hàng) |
+| `from`, `to` | date | - | Khoảng ngày tạo giao dịch `yyyy-MM-dd` theo giờ Việt Nam, `to` tính trọn ngày |
 | `page` | number | `0` | Số trang, bắt đầu từ 0 |
 | `size` | number | `20` | 1 đến 100 |
 
@@ -652,15 +690,47 @@ Danh sách giao dịch, mới nhất trước. Mọi tham số đều tuỳ ch�
       "id": 5, "itemId": 1, "itemTitle": "Xe đạp cũ", "type": "GIVE", "status": "LOGISTICS_CONFIRMED",
       "donorId": 20, "donorName": "An", "receiverId": 10, "receiverName": "Bình",
       "meetingTime": "2026-10-25T09:00:00Z", "createdAt": "2026-10-20T08:00:00Z",
-      "flagReason": "Quá giờ hẹn hơn 48 giờ mà chưa bên nào xác nhận bàn giao"
+      "flagReason": "Quá giờ hẹn hơn 48 giờ mà chưa bên nào xác nhận bàn giao",
+      "deliveryMethod": "IN_PERSON"
     }
   ],
   "page": 0, "size": 20, "totalElements": 1, "totalPages": 1
 }
 ```
 
-- `flagReason` là `null` khi giao dịch không bị kẹt. `itemTitle`, `donorName`, `receiverName` có thể `null` khi bài hoặc tài khoản đã xoá.
-- Lọc và phân trang làm trong bộ nhớ sau khi đọc các giao dịch khớp `status`, vì tên bài và tên người thuộc module khác.
+- `flagReason` là `null` khi giao dịch không bị kẹt. `deliveryMethod` là `null` khi chưa chọn hình thức giao nhận. `itemTitle`, `donorName`, `receiverName` có thể `null` khi bài hoặc tài khoản đã xoá.
+- Lọc và phân trang làm trong bộ nhớ sau khi đọc các giao dịch khớp `status`, vì tên bài và tên người thuộc module khác. Các bộ lọc `type`, `deliveryMethod`, `from`, `to` cũng lọc trong bộ nhớ, đợt sau sẽ chuyển sang SQL.
+
+### GET /api/v1/admin/requests/{id}
+
+Chi tiết một giao dịch ở mọi trạng thái, chỉ để xem. Thao tác duy nhất vẫn là huỷ giao dịch (`POST /{id}/cancel`). Service nằm ở module admin (`AdminRequestDetailService`)
+để module request không phụ thuộc vào chat, report và reputation. Lỗi: `404 REQUEST_NOT_FOUND`.
+
+Trả `AdminRequestDetail`:
+
+| Trường | Ý nghĩa |
+|---|---|
+| `id`, `type`, `status`, `createdAt` | Như danh sách |
+| `donor`, `receiver` | `AdminRequestParty`: `userId`, `name`, `email`, `trustStars`, `rank`, `locked` (tài khoản đang bị khoá) |
+| `item`, `offeredItem` | `AdminRequestItemInfo`: `itemId`, `title`, `imageUrl`, `status`, `offerType`. `offeredItem` null với giao dịch Cho tặng. Bài đã xoá thì chỉ còn `itemId` |
+| `deliveryMethod`, `meetingPlace`, `meetingTime` | Giao nhận; null khi chưa có |
+| `timeline` | Các mốc theo thứ tự thời gian, mỗi mốc `label` (tiếng Việt), `at`, `note`. Gồm: gửi yêu cầu, được chọn, từng bên cam kết giao nhận, từng bên đồng ý lịch hẹn, mở liên hệ, từng bên xác nhận giao nhận, hoàn tất hoặc tự hoàn tất, huỷ hoặc không được chọn |
+| `photos` | Ảnh giao nhận: `mediaId`, `url`, `stage` (`HANDOVER` hoặc `DISPUTE`), `uploaderName`, `createdAt` |
+| `reports` | Báo cáo và khiếu nại gắn với giao dịch: `id`, `reporterName`, `targetType`, `reason`, `stage`, `status`, `createdAt` |
+| `points` | Điểm tích luỹ đã cộng: `userName`, `role`, `points` (đọc từ nhật ký `POINTS` qua `ReputationService.findPointsAwardedForRequest`) |
+| `messagesViewable` | true khi giao dịch có báo cáo hoặc khiếu nại |
+| `cancellable` | true khi giao dịch đang `RESERVED`, `AWAITING_LOGISTICS`, `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER` hoặc `DISPUTED` |
+
+Người huỷ trên dòng thời gian suy từ tiền tố của `cancelReason`: `[Chủ bài]` thành "Do chủ bài huỷ", `[Người nhận]` thành "Do người nhận huỷ", `[Admin]` thành "Do Admin huỷ", `[Hệ thống]` thành "Do hệ thống huỷ", không có tiền tố thì "Giao dịch bị huỷ".
+Giao dịch không lưu riêng thời điểm huỷ nên mốc huỷ dùng lần cập nhật cuối của giao dịch.
+
+### GET /api/v1/admin/requests/{id}/messages
+
+Tin nhắn đã qua kiểm duyệt của giao dịch, cũ trước. Chỉ trả khi giao dịch có báo cáo hoặc khiếu nại (`ReportService.hasReportForRequest`), ngược lại `409 REQUEST_MESSAGES_NOT_VIEWABLE`
+"Chỉ xem được tin nhắn khi giao dịch có báo cáo hoặc khiếu nại." Tin nhắn là dữ liệu riêng tư nên **mỗi lần gọi** ghi nhật ký `ADMIN_VIEWED_CHAT` (`targetType = REQUEST`, `data.messageCount`),
+kể cả khi Admin mở lại nhiều lần. Lấy qua `ChatService.findMessagesForAdmin`.
+
+Trả `{ "items": [AdminChatMessage] }`: `id`, `senderName`, `senderRole` (Chủ bài, Người nhận, Hệ thống), `kind`, `content`, `mediaUrl`, `itemTitle`, `createdAt`. Tin bị chặn kiểm duyệt không có trong danh sách.
 
 ### POST /api/v1/admin/requests/{id}/cancel
 
@@ -671,3 +741,54 @@ Admin huỷ giao dịch đã được chọn người (thường là giao dịch
 - **Hành vi:** giống `POST /requests/{id}/cancel-transaction` ở `request.md` (nhả bài chính và món mang đổi về `APPROVED`), khác ở chỗ `cancelReason` có tiền tố `[Admin] `, thông báo `TRANSACTION_CANCELLED` gửi cho **cả hai bên**, và activity log `REQUEST_CANCEL` có `actorId` là Admin. Khiếu nại đang mở của giao dịch `DISPUTED` không tự đóng, Admin kết luận riêng ở trang khiếu nại.
 - **Thành công:** `200 OK`, trả `RequestResponse` với `status = CANCELLED`.
 - **Lỗi:** `400 VALIDATION_FAILED`, `404 REQUEST_NOT_FOUND`, `409 REQUEST_INVALID_STATE_TRANSITION`.
+
+## Quản lý bài đăng (Admin)
+
+Tất cả chỉ ADMIN (401 chưa đăng nhập, 403 user thường). Service nằm ở module admin (`AdminItemService`), gọi module khác qua service: `ItemQueryService`, `ListingFeeQueryService`, `CreditService`, `RequestQueryService`, `RequestService`, `ReportService`, `UserService`, `CategoryService`.
+
+### GET /api/v1/admin/items
+
+Mọi bài ở mọi trạng thái, kể cả đang ẩn. Bài đã xoá mềm không có trong danh sách. Mới nhất trước (`createdAt` giảm dần rồi `id` giảm dần).
+
+| Tham số | Mặc định | Ý nghĩa |
+| --- | --- | --- |
+| status | (bỏ trống) | `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `RESERVED`, `TRADED`, `EXPIRED` |
+| active | (bỏ trống) | true chỉ bài đang hiện, false chỉ bài đang ẩn |
+| offerType | (bỏ trống) | `GIVE` hoặc `SWAP` |
+| categoryId, ownerId | (bỏ trống) | Danh mục, chủ bài |
+| q | (bỏ trống) | Khớp một phần tiêu đề, họ tên hoặc email chủ bài (không phân biệt hoa thường) |
+| from, to | (bỏ trống) | Ngày tạo bài `yyyy-MM-dd` theo giờ Việt Nam, `to` tính trọn ngày |
+| boosted | false | true chỉ bài đang được đẩy |
+| page, size | 0, 20 | size 1..100 |
+
+Trả `PageResponse<AdminItemRow>`: `id`, `title`, `imageUrl`, `ownerId`, `ownerName`, `ownerEmail`, `categoryName`, `offerType`, `status`, `active`,
+`hiddenSource` (`ADMIN`, `OWNER_LOCKED` khi chủ bài đang bị khoá, `OTHER` khi do báo cáo hoặc hệ thống; null khi bài đang hiện), `postFeePaid` (tổng phí đăng đã thu, Credit dương),
+`pendingRequestCount`, `createdAt`, `approvedAt`, `expireAt`, `boostedUntil`, `boosting`.
+
+### GET /api/v1/admin/items/{id}
+
+Trả `AdminItemFullDetail`: `item` (như `AdminItemDetail` của trang duyệt bài: nội dung, ảnh, thuộc tính), `summary` (một `AdminItemRow`), `feeLines` (dòng sổ cái gắn với bài, cũ nhất trước),
+`requests` (mọi yêu cầu tới bài: `id`, `receiverName`, `type`, `status`, `offeredItemTitle`, `running`, `createdAt`), `hasRunningTransaction`, `runningRequestId`,
+`reports` (`id`, `reason`, `status`, `createdAt`), `hiddenReason` (lý do Admin đã ẩn, null khi không do Admin ẩn), `visibilityHistory` (nhật ký ẩn và hiện lại, mới nhất trước). `404 ITEM_NOT_FOUND` khi không có bài hoặc đã xoá.
+
+### POST /api/v1/admin/items/{id}/hide
+
+Body `{ "reason": "5 đến 500 ký tự" }`. Admin ẩn bài vi phạm:
+
+- Không hoàn phí đăng. Bài RESERVED trở lên hoặc đang có giao dịch đã chọn người chưa kết thúc không ẩn được: `409 ITEM_HIDE_NOT_ALLOWED`, Admin huỷ giao dịch ở trang Giao dịch trước. Bài đã ẩn: `409 ITEM_ALREADY_HIDDEN`.
+- `is_active = false` và `hidden_by_admin = true`, không đổi `status`.
+- Huỷ các yêu cầu PENDING tới bài (`RequestService.cancelPendingRequestsToItem`, người xin nhận `REQUEST_CANCELLED`) và các yêu cầu PENDING dùng bài làm món đổi (qua `ItemUnavailableEvent` lý do `HIDDEN`).
+- Lượt đẩy đang chạy dừng theo: bài ẩn không còn trong danh sách đẩy và `BoostNotificationService` cắt `boosted_until` về lúc dừng.
+- Chủ bài nhận thông báo `ITEM_HIDDEN_BY_ADMIN` kèm lý do. Ghi nhật ký `ADMIN_ITEM_HIDDEN` (`targetType = ITEM`, `data` có `ownerId` và `cancelledRequests`, lý do ở `reason`).
+
+Trả `AdminItemFullDetail` mới.
+
+### POST /api/v1/admin/items/{id}/unhide
+
+Body `{ "reason": "..." }`. Hiện lại bài đang ẩn (do Admin, báo cáo hoặc khoá tài khoản đã mở): bài hiện như cũ nếu còn trong hạn hiển thị, xoá cờ `hidden_by_admin`. `409 ITEM_NOT_HIDDEN` khi bài đang hiện,
+`409 ITEM_UNHIDE_NOT_ALLOWED` khi chủ bài đang bị khoá. Chủ bài nhận thông báo `ITEM_UNHIDDEN_BY_ADMIN`. Ghi nhật ký `ADMIN_ITEM_UNHIDDEN`. Trả `AdminItemFullDetail` mới.
+
+### Bài do Admin ẩn không bị đường khác hiện lại
+
+Chỉ nút "Hiện lại" ở trên mới hiện lại được bài có cờ `hidden_by_admin`. Ba đường tự động đều bỏ qua bài này: báo cáo bị bác bỏ (`ReportService` gọi `ItemService.unhide`),
+bài được duyệt lại sau khi sửa (`relistItemAfterReapproval` gọi `ItemService.unhide`) và mở khoá tài khoản (`AdminUserService.unlock` gọi `ItemService.unhideItems`).

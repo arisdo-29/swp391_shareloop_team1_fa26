@@ -6,6 +6,7 @@ import java.time.Instant;
  * Một dòng trong danh sách giao dịch của Admin.
  *
  * @param flagReason lý do gắn cờ "Bị kẹt" bằng tiếng Việt; null khi giao dịch không bị kẹt
+ * @param deliveryMethod hình thức giao nhận; null khi chưa chọn
  */
 public record AdminRequestRow(
         Long id,
@@ -19,4 +20,5 @@ public record AdminRequestRow(
         String receiverName,
         Instant meetingTime,
         Instant createdAt,
-        String flagReason) {}
+        String flagReason,
+        String deliveryMethod) {}

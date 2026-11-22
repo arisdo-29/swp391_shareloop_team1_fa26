@@ -129,8 +129,11 @@ public class VnPayCallbackService {
             return;
         }
         String transactionNo = params.get("vnp_TransactionNo");
-        order.flagPaidAfterClosed("VNPay báo đã thu tiền sau khi đơn đã đóng; đơn chờ đối soát để hoàn tiền"
-                + " (mã giao dịch VNPay: " + transactionNo + ").");
+        order.flagPaidAfterClosed(
+                "VNPay báo đã thu tiền sau khi đơn đã đóng. Đơn chờ Admin đối soát" + " (mã giao dịch VNPay: "
+                        + transactionNo + ").",
+                paymentDeadline.now(),
+                transactionNo);
         log.warn(
                 "VNPAY IPN paid after order closed, credits NOT granted, needs refund: orderCode={}, status={},"
                         + " amountVnd={}, vnp_TransactionNo={}",
@@ -170,7 +173,8 @@ public class VnPayCallbackService {
     // VNPAY báo thành công nhưng đơn đã quá hạn: không cộng Credit, ghi WARN để đối soát tay.
     // Trả 02 (đã xử lý xong) để VNPAY không gọi lại IPN.
     private VnPayIpnResponse rejectExpiredOrder(PaymentOrder order, Map<String, String> params) {
-        order.markExpired();
+        // Ghi paid_at và mã giao dịch VNPay để Admin thấy đơn này cần đối soát (tiền đã thu mà chưa cộng Credit).
+        order.expireWithPaidEvidence(paymentDeadline.now(), params.get("vnp_TransactionNo"));
         log.warn(
                 "VNPAY IPN paid after deadline, order set EXPIRED, credits NOT granted: orderCode={}, amountVnd={}, vnp_TransactionNo={}",
                 order.getOrderCode(),

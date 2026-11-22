@@ -444,9 +444,11 @@ class VnPayCallbackIT extends IntegrationTest {
         assertNoCredits();
         assertThat(jdbc.queryForObject(
                         "SELECT review_note FROM payment_orders WHERE order_code = ?", String.class, orderCode))
-                .contains("hoàn tiền")
+                .startsWith("VNPay báo đã thu tiền sau khi đơn đã đóng. Đơn chờ Admin đối soát")
+                .doesNotContain(";")
                 .contains("123456");
-        assertThat(payment.getOwnOrder(userId, orderCode).failureReason()).contains("hoàn tiền");
+        assertThat(payment.getOwnOrder(userId, orderCode).failureReason()).contains("đối soát");
+        assertPaidEvidenceRecorded();
     }
 
     @Test
@@ -458,12 +460,13 @@ class VnPayCallbackIT extends IntegrationTest {
         // when: VNPay vẫn gửi IPN báo đã thu tiền
         ipn(signed("2000000", "00", "00"), "02");
 
-        // then: không cộng Credit, đơn vẫn EXPIRED, có ghi chú đối soát để hoàn tiền
+        // then: không cộng Credit, đơn vẫn EXPIRED, có ghi chú chờ Admin đối soát
         assertStatus("EXPIRED");
         assertNoCredits();
         assertThat(jdbc.queryForObject(
                         "SELECT review_note FROM payment_orders WHERE order_code = ?", String.class, orderCode))
-                .contains("hoàn tiền");
+                .contains("đối soát");
+        assertPaidEvidenceRecorded();
     }
 
     @Test
@@ -488,6 +491,7 @@ class VnPayCallbackIT extends IntegrationTest {
         ipn(signed("2000000", "00", "00"), "02");
         assertStatus("EXPIRED");
         assertNoCredits();
+        assertPaidEvidenceRecorded();
     }
 
     @Test
@@ -566,6 +570,17 @@ class VnPayCallbackIT extends IntegrationTest {
         mvc.perform(get("/api/v1/payments/vnpay/ipn").params(query))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.RspCode").value(code));
+    }
+
+    // VNPay đã thu tiền nhưng đơn đã đóng: ghi paid_at và mã giao dịch để Admin đối soát, chưa xử lý nên chưa có
+    // reviewed_at.
+    private void assertPaidEvidenceRecorded() {
+        assertThat(jdbc.queryForObject(
+                        "SELECT paid_at IS NOT NULL AND provider_txn_id = '123456' AND reviewed_at IS NULL"
+                                + " FROM payment_orders WHERE order_code = ?",
+                        Boolean.class,
+                        orderCode))
+                .isTrue();
     }
 
     private void assertStatus(String status) {
