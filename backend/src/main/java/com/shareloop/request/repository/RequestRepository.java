@@ -22,6 +22,10 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
      */
     long countByReceiverIdAndStatus(Long receiverId, RequestStatus status);
 
+    /** Lần tự huỷ gần nhất của người nhận cho một bài, để tính thời gian chờ gửi lại (C5). */
+    Optional<Request> findFirstByItemIdAndReceiverIdAndStatusAndCancelReasonOrderByUpdatedAtDesc(
+            Long itemId, Long receiverId, RequestStatus status, String cancelReason);
+
     /** Đếm giao dịch đang chạy của người nhận (C4): các trạng thái từ RESERVED tới AWAITING_HANDOVER. */
     long countByReceiverIdAndStatusIn(Long receiverId, Collection<RequestStatus> statuses);
 

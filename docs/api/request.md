@@ -708,3 +708,8 @@ Khoá cấu hình `max_active_transactions` (mặc định 5) đếm giao dịch
 - `POST /items/{id}/requests`: đủ ngưỡng thì `409 REQUEST_TOO_MANY_ACTIVE_TRANSACTIONS` ("Bạn đang có N giao dịch chưa xong. Hoàn tất bớt rồi gửi thêm yêu cầu").
 - `POST /requests/{id}/select`: người nhận đủ ngưỡng thì `409 REQUEST_RECEIVER_TOO_BUSY` ("Người này đang có quá nhiều giao dịch chưa xong").
 - `RequestResponse.flags` của yêu cầu `PENDING` có thêm `RECEIVER_TOO_BUSY` để chủ bài biết trước khi bấm chọn.
+
+## Chống gửi rồi huỷ liên tục (C5)
+
+- Người nhận tự huỷ yêu cầu đang chờ (`POST /requests/{id}/cancel`) thì phải chờ `request_resend_cooldown_hours` giờ (mặc định 24) mới gửi lại cho đúng bài đó. Gửi sớm hơn trả `409 REQUEST_RESEND_COOLDOWN` ("Bạn vừa huỷ yêu cầu cho bài này. Có thể gửi lại sau HH:mm dd/MM"), kèm `details.canResendAt`. Chỉ lần tự huỷ của người nhận mới tính, huỷ do hệ thống (bài hết hạn, bị ẩn, khoá tài khoản) thì không.
+- Yêu cầu tự huỷ trong vòng `request_quiet_cancel_minutes` phút (mặc định 5) sau khi gửi thì không gửi `REQUEST_CANCELLED` cho chủ bài, và thông báo `NEW_REQUEST` của yêu cầu đó được đánh dấu đã đọc (không xoá). Lần huỷ này vẫn tính thời gian chờ gửi lại.

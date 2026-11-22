@@ -46,6 +46,9 @@ import com.shareloop.user.service.UserService;
 import com.shareloop.wallet.entity.CreditTxType;
 import com.shareloop.wallet.service.CreditService;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -72,6 +75,12 @@ public class RequestService {
             RequestStatus.AWAITING_LOGISTICS,
             RequestStatus.LOGISTICS_CONFIRMED,
             RequestStatus.AWAITING_HANDOVER);
+
+    // Lý do ghi khi người nhận tự huỷ yêu cầu đang chờ; dùng để nhận ra lần tự huỷ khi tính thời gian chờ gửi lại (C5).
+    private static final String SELF_CANCEL_REASON = Request.CANCEL_BY_RECEIVER + "Người gửi tự huỷ yêu cầu";
+
+    private static final DateTimeFormatter RESEND_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("HH:mm dd/MM").withZone(ZoneId.of("Asia/Ho_Chi_Minh"));
 
     private static final Set<RequestStatus> ACTIVE_STATUSES = Set.of(
             RequestStatus.PENDING,
@@ -260,6 +269,9 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_LIMIT_EXCEEDED);
         }
 
+        // 1a. Vừa tự huỷ yêu cầu cho đúng bài này thì phải chờ đủ giờ mới gửi lại (C5)
+        requireResendCooldownPassed(itemId, receiverId);
+
         // 1b. Người nhận đang có quá nhiều giao dịch chưa xong thì chưa gửi thêm (C4)
         long runningCount = countRunningTransactions(receiverId);
         if (runningCount >= configService.getInt(ConfigKey.MAX_ACTIVE_TRANSACTIONS)) {
@@ -438,12 +450,17 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
         }
 
-        request.cancel(Request.CANCEL_BY_RECEIVER + "Người gửi tự huỷ yêu cầu");
+        // Huỷ ngay sau khi gửi (còn trong request_quiet_cancel_minutes): chủ bài không cần biết (C5)
+        boolean quietCancel = isQuietCancel(request);
+        request.cancel(SELF_CANCEL_REASON);
         Request saved = requestRepository.save(request);
 
-        // Thông báo cho chủ bài đăng biết yêu cầu đã bị huỷ
         ItemSnapshot item = findItemSnapshot(saved.getItemId()).orElse(null);
-        if (item != null) {
+        if (quietCancel && item != null) {
+            // Không xoá thông báo "Có yêu cầu mới", chỉ đánh dấu đã đọc để chủ bài không thấy số chưa đọc vô nghĩa.
+            notificationService.markAsReadByTypeAndLink(item.donorId(), "NEW_REQUEST", "/requests/" + saved.getId());
+        } else if (item != null) {
+            // Thông báo cho chủ bài đăng biết yêu cầu đã bị huỷ
             notificationService.notify(
                     item.donorId(),
                     "REQUEST_CANCELLED",
@@ -711,6 +728,36 @@ public class RequestService {
             flags.add("RECEIVER_TOO_BUSY");
         }
         return flags;
+    }
+
+    // Tự huỷ trong vòng request_quiet_cancel_minutes sau khi gửi thì coi như gửi nhầm (C5).
+    private boolean isQuietCancel(Request request) {
+        if (request.getCreatedAt() == null) {
+            return false;
+        }
+        long quietMinutes = configService.getInt(ConfigKey.REQUEST_QUIET_CANCEL_MINUTES);
+        return Instant.now().isBefore(request.getCreatedAt().plus(quietMinutes, ChronoUnit.MINUTES));
+    }
+
+    // Chỉ lần tự huỷ của người nhận mới bắt chờ. Huỷ do hệ thống (bài hết hạn, bị ẩn, khoá tài khoản) có lý do khác nên
+    // không khớp và không tính thời gian chờ (C5).
+    private void requireResendCooldownPassed(long itemId, long receiverId) {
+        Optional<Request> lastSelfCancel =
+                requestRepository.findFirstByItemIdAndReceiverIdAndStatusAndCancelReasonOrderByUpdatedAtDesc(
+                        itemId, receiverId, RequestStatus.CANCELLED, SELF_CANCEL_REASON);
+        if (lastSelfCancel.isEmpty() || lastSelfCancel.get().getUpdatedAt() == null) {
+            return;
+        }
+        long cooldownHours = configService.getInt(ConfigKey.REQUEST_RESEND_COOLDOWN_HOURS);
+        Instant canResendAt = lastSelfCancel.get().getUpdatedAt().plus(cooldownHours, ChronoUnit.HOURS);
+        if (Instant.now().isBefore(canResendAt)) {
+            throw new BusinessException(
+                    RequestErrorCode.REQUEST_RESEND_COOLDOWN,
+                    "Bạn vừa huỷ yêu cầu cho bài này. Có thể gửi lại sau " + RESEND_TIME_FORMAT.format(canResendAt)
+                            + ".",
+                    null,
+                    Map.of("canResendAt", canResendAt.toString()));
+        }
     }
 
     private long countRunningTransactions(long receiverId) {

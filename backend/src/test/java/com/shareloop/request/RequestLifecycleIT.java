@@ -300,7 +300,13 @@ class RequestLifecycleIT extends IntegrationTest {
         assertThat(queryUserCreditBalance(donorId)).isEqualTo(20);
         assertThat(queryUserCreditBalance(receiverId)).isEqualTo(10);
 
-        // Có thể gửi lại yêu cầu mới sau khi yêu cầu cũ đã bị huỷ
+        // Vừa tự huỷ thì chưa gửi lại được (C5), qua thời gian chờ thì gửi lại được
+        mockMvc.perform(post("/api/v1/items/{id}/requests", itemId).header("Authorization", receiverToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REQUEST_RESEND_COOLDOWN"));
+        jdbc.update("ALTER TABLE requests DISABLE TRIGGER trg_requests_updated_at");
+        jdbc.update("UPDATE requests SET updated_at = now() - interval '25 hours' WHERE id = ?", requestId);
+        jdbc.update("ALTER TABLE requests ENABLE TRIGGER trg_requests_updated_at");
         long newRequestId = createRequestViaApi(itemId, receiverToken, null);
         assertThat(queryRequestStatus(newRequestId)).isEqualTo("PENDING");
     }

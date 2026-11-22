@@ -17,6 +17,7 @@ public enum RequestErrorCode implements ErrorCode {
     REQUEST_TOO_MANY_ACTIVE_TRANSACTIONS(
             HttpStatus.CONFLICT, "Bạn đang có nhiều giao dịch chưa xong. Hoàn tất bớt rồi gửi thêm yêu cầu."),
     REQUEST_RECEIVER_TOO_BUSY(HttpStatus.CONFLICT, "Người này đang có quá nhiều giao dịch chưa xong."),
+    REQUEST_RESEND_COOLDOWN(HttpStatus.CONFLICT, "Bạn vừa huỷ yêu cầu cho bài này. Chưa thể gửi lại ngay."),
     REQUEST_ITEM_CATEGORY_DISABLED(HttpStatus.CONFLICT, "Danh mục của bài đang tạm ngưng."),
     REQUEST_ITEM_NOT_AVAILABLE(HttpStatus.CONFLICT, "Bài đăng không ở trạng thái sẵn sàng để gửi yêu cầu."),
     REQUEST_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy bài đăng."),

@@ -296,6 +296,18 @@ public enum ConfigKey {
             ConfigGroup.TRANSACTION,
             "Số giao dịch đang chạy tối đa của người nhận",
             "Số giao dịch chưa xong (từ lúc được chọn tới lúc bàn giao) mà một người nhận được có cùng lúc. Đủ số này thì chưa gửi thêm yêu cầu và chủ bài chưa chọn thêm người đó được."),
+    REQUEST_RESEND_COOLDOWN_HOURS(
+            "request_resend_cooldown_hours",
+            "24",
+            ConfigGroup.TRANSACTION,
+            "Số giờ chờ gửi lại yêu cầu sau khi tự huỷ",
+            "Người nhận tự huỷ yêu cầu cho một bài thì phải chờ đủ số giờ này mới được gửi lại cho đúng bài đó."),
+    REQUEST_QUIET_CANCEL_MINUTES(
+            "request_quiet_cancel_minutes",
+            "5",
+            ConfigGroup.TRANSACTION,
+            "Số phút huỷ yêu cầu mà không báo chủ bài",
+            "Yêu cầu tự huỷ trong vòng số phút này sau khi gửi thì không gửi thông báo huỷ cho chủ bài và thông báo yêu cầu mới được đánh dấu đã đọc."),
     REQUEST_PENDING_DAYS(
             "request_pending_days",
             "3",
