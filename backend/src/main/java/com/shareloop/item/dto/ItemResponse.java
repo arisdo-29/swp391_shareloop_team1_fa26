@@ -52,7 +52,75 @@ public record ItemResponse(
         // mốc đẩy muộn nhất của đợt, mốc được đẩy lại. null khi bài chưa từng được đẩy.
         Instant boostStartedAt,
         Instant boostChainEndsAt,
-        Instant boostCooldownUntil) {
+        Instant boostCooldownUntil,
+        // Lý do Admin từ chối lần gần nhất; chỉ chủ bài hoặc Admin xem và chỉ khi bài đang Bị từ chối (B4).
+        String rejectionReason) {
+
+    /** Constructor 30 tham số trước khi có rejectionReason; trường mới để null. */
+    public ItemResponse(
+            Long id,
+            Long donorId,
+            Long categoryId,
+            Long areaId,
+            OfferType offerType,
+            String title,
+            String description,
+            String desiredItem,
+            ItemCondition condition,
+            String defectNote,
+            String brand,
+            List<String> images,
+            ItemStatus status,
+            Instant createdAt,
+            Instant updatedAt,
+            List<String> defectImages,
+            OperatingStatus operatingStatus,
+            Instant expireAt,
+            Instant boostedUntil,
+            String donorName,
+            Integer donorTrustStars,
+            String donorRank,
+            Boolean donorLocked,
+            Boolean hidden,
+            String hiddenReason,
+            Instant completedAt,
+            Boolean requestable,
+            Instant boostStartedAt,
+            Instant boostChainEndsAt,
+            Instant boostCooldownUntil) {
+        this(
+                id,
+                donorId,
+                categoryId,
+                areaId,
+                offerType,
+                title,
+                description,
+                desiredItem,
+                condition,
+                defectNote,
+                brand,
+                images,
+                status,
+                createdAt,
+                updatedAt,
+                defectImages,
+                operatingStatus,
+                expireAt,
+                boostedUntil,
+                donorName,
+                donorTrustStars,
+                donorRank,
+                donorLocked,
+                hidden,
+                hiddenReason,
+                completedAt,
+                requestable,
+                boostStartedAt,
+                boostChainEndsAt,
+                boostCooldownUntil,
+                null);
+    }
 
     /** Constructor 27 tham số trước khi có ba mốc đợt đẩy; ba trường mới để null. */
     public ItemResponse(
@@ -206,6 +274,42 @@ public record ItemResponse(
                 boostStartedAt,
                 boostChainEndsAt,
                 boostCooldownUntil);
+    }
+
+    /** Gắn lý do bị từ chối cho chủ bài hoặc Admin (B4). Gọi sau cùng vì các hàm with khác tạo bản sao 30 trường. */
+    public ItemResponse withRejectionReason(String reason) {
+        return new ItemResponse(
+                id,
+                donorId,
+                categoryId,
+                areaId,
+                offerType,
+                title,
+                description,
+                desiredItem,
+                condition,
+                defectNote,
+                brand,
+                images,
+                status,
+                createdAt,
+                updatedAt,
+                defectImages,
+                operatingStatus,
+                expireAt,
+                boostedUntil,
+                donorName,
+                donorTrustStars,
+                donorRank,
+                donorLocked,
+                hidden,
+                hiddenReason,
+                completedAt,
+                requestable,
+                boostStartedAt,
+                boostChainEndsAt,
+                boostCooldownUntil,
+                reason);
     }
 
     /** Gắn trạng thái tạm ẩn cho chủ bài hoặc Admin (U04). */

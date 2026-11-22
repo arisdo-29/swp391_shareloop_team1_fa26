@@ -728,7 +728,8 @@ class ItemServiceTest {
 
         assertThat(response.status()).isEqualTo(ItemStatus.APPROVED);
         assertThat(response.hidden()).isTrue();
-        assertThat(response.hiddenReason()).isNull();
+        // Không phải Admin ẩn, chưa kết luận vi phạm: câu mặc định là đang chờ Admin xem xét báo cáo (B4)
+        assertThat(response.hiddenReason()).isEqualTo("Bài đang tạm ẩn để Admin xem xét báo cáo.");
     }
 
     @Test

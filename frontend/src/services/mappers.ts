@@ -143,6 +143,7 @@ export function toFeItem(
     donorLocked: item.donorLocked ?? undefined,
     hidden: item.hidden ?? undefined,
     hiddenReason: item.hiddenReason ?? undefined,
+    rejectionReason: item.rejectionReason ?? undefined,
     completedAt: item.completedAt ?? undefined,
     requestable: item.requestable ?? undefined,
   };

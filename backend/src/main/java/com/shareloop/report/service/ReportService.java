@@ -239,6 +239,12 @@ public class ReportService {
         }
     }
 
+    /** Bài đã bị kết luận vi phạm kể từ lần duyệt gần nhất (B4): chủ bài phải sửa bài để gửi duyệt lại. */
+    @Transactional(readOnly = true)
+    public boolean hasConcludedViolation(long itemId) {
+        return hasUpheldReportSinceLastApproval(itemId);
+    }
+
     /**
      * Bài có phải tiếp tục ẩn vì báo cáo không (L6): đã có báo cáo được chấp thuận (RESOLVED, ẩn vĩnh viễn) hoặc số báo
      * cáo đang chờ vẫn đạt ngưỡng report_hide_threshold (BC-02). Mở khoá tài khoản hỏi hàm này để không hiện lại bài

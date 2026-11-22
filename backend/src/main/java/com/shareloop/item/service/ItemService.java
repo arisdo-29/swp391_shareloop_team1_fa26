@@ -1,5 +1,7 @@
 package com.shareloop.item.service;
 
+import com.shareloop.audit.ActivityType;
+import com.shareloop.audit.service.ActivityLogQueryService;
 import com.shareloop.catalog.service.AreaService;
 import com.shareloop.catalog.service.CategoryAttributeService;
 import com.shareloop.catalog.service.CategoryService;
@@ -37,9 +39,11 @@ import com.shareloop.moderation.ModerationResult;
 import com.shareloop.moderation.ModerationStatus;
 import com.shareloop.moderation.service.ContentModerationService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.report.service.ReportService;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
+import com.shareloop.review.service.ReviewQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.UserErrorCode;
@@ -98,6 +102,20 @@ public class ItemService {
     }
 
     private DisplayTimeService displayTimeService;
+    private ReviewQueryService reviewQueryService;
+    private ReportService reportService;
+    private ActivityLogQueryService activityLogQueryService;
+
+    // Setter thay vì constructor: ReportService phụ thuộc ngược lại ItemService nên cần @Lazy để tránh vòng.
+    @Autowired
+    void setHiddenStateSources(
+            ReviewQueryService reviewQueryService,
+            @Lazy ReportService reportService,
+            ActivityLogQueryService activityLogQueryService) {
+        this.reviewQueryService = reviewQueryService;
+        this.reportService = reportService;
+        this.activityLogQueryService = activityLogQueryService;
+    }
 
     @Autowired
     void setDisplayTimeService(DisplayTimeService displayTimeService) {
@@ -467,9 +485,46 @@ public class ItemService {
         return responses;
     }
 
-    // Bài đang is_active = false (tự ẩn do báo cáo, Admin ẩn, hết sao) là "đang tạm ẩn". Lý do lấy từ C06 khi có.
-    private static ItemResponse withHiddenState(ItemResponse response, Item item) {
-        return response.withVisibility(!item.isActive(), null);
+    // Chủ bài và Admin xem thêm trạng thái ẩn, lý do ẩn và lý do bị từ chối (B4).
+    private ItemResponse withHiddenState(ItemResponse response, Item item) {
+        ItemResponse result = response.withVisibility(!item.isActive(), describeHiddenReason(item));
+        if (item.getStatus() == ItemStatus.REJECTED && reviewQueryService != null) {
+            result = result.withRejectionReason(
+                    reviewQueryService.findRejectReason(item.getId()).orElse(null));
+        }
+        return result;
+    }
+
+    // Bài đang tạm ẩn thì nói rõ vì sao và việc cần làm. Thứ tự ưu tiên khi trùng: tài khoản bị khoá, Admin ẩn,
+    // vi phạm đã kết luận, rồi đang chờ xem xét báo cáo. Bài không ẩn thì không có lý do.
+    private String describeHiddenReason(Item item) {
+        if (item.isActive()) {
+            return null;
+        }
+        if (userService.isLocked(item.getDonorId())) {
+            return "Bài đang tạm ẩn vì tài khoản của bạn đang bị khoá. Bài sẽ hiện lại khi tài khoản được mở khoá.";
+        }
+        if (item.isHiddenByAdmin()) {
+            return describeAdminHidden(item);
+        }
+        if (reportService != null && reportService.hasConcludedViolation(item.getId())) {
+            return "Bài vi phạm quy định. Sửa bài để gửi duyệt lại.";
+        }
+        return "Bài đang tạm ẩn để Admin xem xét báo cáo.";
+    }
+
+    private String describeAdminHidden(Item item) {
+        String adminReason = activityLogQueryService == null
+                ? null
+                : activityLogQueryService
+                        .findLatestReason(ActivityType.ADMIN_ITEM_HIDDEN.name(), item.getId())
+                        .map(String::trim)
+                        .filter(reason -> !reason.isEmpty())
+                        .orElse(null);
+        if (adminReason == null) {
+            return "Admin đã ẩn bài này. Vui lòng liên hệ Admin nếu cần hỗ trợ.";
+        }
+        return "Admin đã ẩn bài này. Lý do: " + adminReason + ". Vui lòng liên hệ Admin nếu cần hỗ trợ.";
     }
 
     /**

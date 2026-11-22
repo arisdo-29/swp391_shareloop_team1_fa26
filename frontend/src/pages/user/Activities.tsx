@@ -850,7 +850,7 @@ export function Activities() {
                       {item.hidden ? (
                         <p className="text-sm leading-6 text-warning">
                           {item.hiddenReason?.trim() ||
-                            'Bài đang tạm ẩn khỏi Tìm đồ. Admin sẽ xem xét và báo kết quả.'}
+                            'Bài đang tạm ẩn khỏi Tìm đồ.'}
                         </p>
                       ) : null}
                       <p className="text-sm leading-6">
