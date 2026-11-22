@@ -284,6 +284,32 @@ class AdminTopUpIT extends IntegrationTest {
         assertThat(paidAtOf(customerCancelled)).isNull();
     }
 
+    @Test
+    void rewordMigration_replacesOldSemicolonNoteAndKeepsOtherNotes() throws Exception {
+        // given: một đơn mang câu cũ có dấu chấm phẩy, một đơn mang ghi chú khác
+        String oldNote = order("EXPIRED", null);
+        String otherNote = order("EXPIRED", null);
+        jdbc.update(
+                "UPDATE payment_orders SET review_note = 'VNPay báo đã thu tiền sau khi đơn đã đóng; đơn chờ đối soát để hoàn tiền (mã giao dịch VNPay: 123).' WHERE order_code = ?",
+                oldNote);
+        jdbc.update("UPDATE payment_orders SET review_note = 'Đã hoàn qua ngân hàng' WHERE order_code = ?", otherNote);
+
+        // when: chạy lại đúng câu lệnh của migration
+        jdbc.execute(java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/resources/db/migration/V202611221020__wallet_payment_order_reword_review_note.sql")));
+
+        // then
+        assertThat(noteOf(oldNote))
+                .isEqualTo(
+                        "VNPay báo đã thu tiền sau khi đơn đã đóng. Đơn chờ Admin đối soát (mã giao dịch VNPay: 123).");
+        assertThat(noteOf(otherNote)).isEqualTo("Đã hoàn qua ngân hàng");
+    }
+
+    private String noteOf(String orderCode) {
+        return jdbc.queryForObject(
+                "SELECT review_note FROM payment_orders WHERE order_code = ?", String.class, orderCode);
+    }
+
     private Object paidAtOf(String orderCode) {
         return jdbc.queryForObject("SELECT paid_at FROM payment_orders WHERE order_code = ?", Object.class, orderCode);
     }

@@ -444,9 +444,10 @@ class VnPayCallbackIT extends IntegrationTest {
         assertNoCredits();
         assertThat(jdbc.queryForObject(
                         "SELECT review_note FROM payment_orders WHERE order_code = ?", String.class, orderCode))
-                .contains("hoàn tiền")
+                .startsWith("VNPay báo đã thu tiền sau khi đơn đã đóng. Đơn chờ Admin đối soát")
+                .doesNotContain(";")
                 .contains("123456");
-        assertThat(payment.getOwnOrder(userId, orderCode).failureReason()).contains("hoàn tiền");
+        assertThat(payment.getOwnOrder(userId, orderCode).failureReason()).contains("đối soát");
         assertPaidEvidenceRecorded();
     }
 
@@ -459,12 +460,12 @@ class VnPayCallbackIT extends IntegrationTest {
         // when: VNPay vẫn gửi IPN báo đã thu tiền
         ipn(signed("2000000", "00", "00"), "02");
 
-        // then: không cộng Credit, đơn vẫn EXPIRED, có ghi chú đối soát để hoàn tiền
+        // then: không cộng Credit, đơn vẫn EXPIRED, có ghi chú chờ Admin đối soát
         assertStatus("EXPIRED");
         assertNoCredits();
         assertThat(jdbc.queryForObject(
                         "SELECT review_note FROM payment_orders WHERE order_code = ?", String.class, orderCode))
-                .contains("hoàn tiền");
+                .contains("đối soát");
         assertPaidEvidenceRecorded();
     }
 

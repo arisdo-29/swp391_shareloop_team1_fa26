@@ -306,7 +306,7 @@ Hết hạn phía server: `PaymentExpiryJob` (5 phút một lần) chuyển PEND
 
 IPN thành công tới khi đơn đã đóng mà chưa cộng (FAILED do hủy, hoặc EXPIRED): theo cùng cách với IPN muộn ở trên,
 **không** cộng Credit, giữ trạng thái, trả `RspCode=02`; ghi log WARN và ghi `review_note` "VNPay báo đã thu tiền sau khi đơn
-đã đóng; đơn chờ đối soát để hoàn tiền (mã giao dịch VNPay: …)" để Admin hoàn tiền tay. `callback_data` cũ không bị ghi đè.
+đã đóng. Đơn chờ Admin đối soát (mã giao dịch VNPay: …)" để Admin đối soát. `callback_data` cũ không bị ghi đè.
 
 | Biến | Ý nghĩa / mặc định |
 | --- | --- |

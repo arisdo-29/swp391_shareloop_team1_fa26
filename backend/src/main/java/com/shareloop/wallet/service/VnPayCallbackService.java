@@ -130,7 +130,7 @@ public class VnPayCallbackService {
         }
         String transactionNo = params.get("vnp_TransactionNo");
         order.flagPaidAfterClosed(
-                "VNPay báo đã thu tiền sau khi đơn đã đóng; đơn chờ đối soát để hoàn tiền" + " (mã giao dịch VNPay: "
+                "VNPay báo đã thu tiền sau khi đơn đã đóng. Đơn chờ Admin đối soát" + " (mã giao dịch VNPay: "
                         + transactionNo + ").",
                 paymentDeadline.now(),
                 transactionNo);
