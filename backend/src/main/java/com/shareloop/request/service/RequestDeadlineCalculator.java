@@ -19,7 +19,18 @@ final class RequestDeadlineCalculator {
     }
 
     RequestDeadlines of(Request request) {
-        return new RequestDeadlines(null, null, cancelRequestExpiresAt(request), null, null);
+        return new RequestDeadlines(null, null, cancelRequestExpiresAt(request), rescheduleExpiresAt(request), null);
+    }
+
+    // Hạn bên kia phản hồi đề nghị dời lịch: sớm hơn giữa giờ hẹn cũ và lúc đề xuất cộng số giờ phản hồi (GN-11).
+    private java.time.Instant rescheduleExpiresAt(Request request) {
+        if (!request.hasPendingReschedule()) {
+            return null;
+        }
+        int hours = configService.getInt(ConfigKey.CANCEL_REQUEST_RESPONSE_HOURS);
+        java.time.Instant byResponse = request.getRescheduleProposedAt().plus(hours, ChronoUnit.HOURS);
+        java.time.Instant meeting = request.getMeetingTime();
+        return meeting != null && meeting.isBefore(byResponse) ? meeting : byResponse;
     }
 
     // Hạn bên kia phản hồi đề nghị huỷ; null khi không có đề nghị nào đang chờ.

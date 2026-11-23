@@ -69,6 +69,72 @@ public class RequestDeadlineJobService {
         return count;
     }
 
+    /**
+     * Giữ lịch cũ cho các đề nghị dời lịch đã hết hạn (GN-11).
+     *
+     * @return số đề nghị đã hết hạn
+     */
+    public int expireReschedules(Instant now) {
+        int responseHours = configService.getInt(ConfigKey.CANCEL_REQUEST_RESPONSE_HOURS);
+        Instant cutoff = now.minus(responseHours, ChronoUnit.HOURS);
+
+        int count = 0;
+        long lastSeenId = 0;
+        Pageable pageable = PageRequest.of(0, BATCH_SIZE);
+        List<Request> batch = requestRepository.findExpiredReschedules(now, cutoff, lastSeenId, pageable);
+        while (!batch.isEmpty()) {
+            for (Request request : batch) {
+                if (processInOwnTransaction(
+                        request.getId(), () -> requestService.expireReschedule(request.getId(), now))) {
+                    count++;
+                }
+            }
+            lastSeenId = batch.get(batch.size() - 1).getId();
+            batch = requestRepository.findExpiredReschedules(now, cutoff, lastSeenId, pageable);
+        }
+        return count;
+    }
+
+    /**
+     * Tự huỷ giao dịch Gặp trực tiếp đã chốt lịch mà quá giờ hẹn confirmed_stale_cancel_days ngày không ai bấm gì
+     * (GN-12).
+     *
+     * @return số giao dịch đã huỷ
+     */
+    public int cancelStaleConfirmed(Instant now) {
+        int staleDays = configService.getInt(ConfigKey.CONFIRMED_STALE_CANCEL_DAYS);
+        return forEachConfirmedPastMeeting(
+                now.minus(staleDays, ChronoUnit.DAYS),
+                requestId -> requestService.cancelStaleConfirmed(requestId, now));
+    }
+
+    /**
+     * Nhắc một lần khi đã qua giờ hẹn 24 giờ mà chưa bên nào bấm gì (GN-12).
+     *
+     * @return số giao dịch đã gửi nhắc
+     */
+    public int remindStaleConfirmed(Instant now) {
+        return forEachConfirmedPastMeeting(
+                now.minus(1, ChronoUnit.DAYS), requestId -> requestService.remindStaleConfirmed(requestId, now));
+    }
+
+    private int forEachConfirmedPastMeeting(Instant cutoff, java.util.function.LongPredicate action) {
+        int count = 0;
+        long lastSeenId = 0;
+        Pageable pageable = PageRequest.of(0, BATCH_SIZE);
+        List<Request> batch = requestRepository.findConfirmedPastMeeting(cutoff, lastSeenId, pageable);
+        while (!batch.isEmpty()) {
+            for (Request request : batch) {
+                if (processInOwnTransaction(request.getId(), () -> action.test(request.getId()))) {
+                    count++;
+                }
+            }
+            lastSeenId = batch.get(batch.size() - 1).getId();
+            batch = requestRepository.findConfirmedPastMeeting(cutoff, lastSeenId, pageable);
+        }
+        return count;
+    }
+
     private boolean processInOwnTransaction(long requestId, java.util.function.BooleanSupplier action) {
         try {
             Boolean result = transactionTemplate.execute(status -> action.getAsBoolean());

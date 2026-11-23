@@ -7,9 +7,12 @@ import {
 } from '../../services/requestApi';
 import type { ApiError } from '../../services/http';
 import { canSchedule, formatDateTime } from '../../utils/request';
+import { usePublicConfig } from '../../utils/usePublicConfig';
+import { ReschedulePanel } from './ReschedulePanel';
 import {
   canConfirmMeetingSchedule,
   hasConfirmedMeetingSchedule,
+  maximumMeetingTimeValue,
   minimumMeetingTimeValue,
   parseLocalMeetingTime,
   scheduleApiErrorMessage,
@@ -53,7 +56,8 @@ export function ScheduleCard(props: ScheduleCardProps) {
   );
 }
 
-function ScheduleSummary({ request, currentUserId }: ScheduleCardProps) {
+function ScheduleSummary(props: ScheduleCardProps) {
+  const { request, currentUserId } = props;
   const [contact, setContact] = useState<RequestContactResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -98,6 +102,7 @@ function ScheduleSummary({ request, currentUserId }: ScheduleCardProps) {
         )
       ) : null}
       {error ? <Alert tone="error">{error}</Alert> : null}
+      <ReschedulePanel {...props} />
     </>
   );
 }
@@ -121,6 +126,7 @@ function ScheduleForm({
   const [now, setNow] = useState(() => new Date());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const maxDays = usePublicConfig().meeting_max_days_ahead;
 
   // Cập nhật mốc "bây giờ" mỗi 30 giây để kiểm giờ hẹn không lùi về quá khứ.
   useEffect(() => {
@@ -137,7 +143,7 @@ function ScheduleForm({
     viewerIsDonor ? request.receiverWaiverAt : request.donorWaiverAt,
   );
   const placeError = validateMeetingPlace(meetingPlace);
-  const timeError = validateLocalMeetingTime(meetingTime, now);
+  const timeError = validateLocalMeetingTime(meetingTime, now, maxDays);
   const hasUnsavedSchedule =
     meetingPlace.trim() !== (request.meetingPlace ?? '').trim() ||
     meetingTime !== (request.meetingTime ? toLocalMeetingTimeValue(request.meetingTime) : '') ||
@@ -161,7 +167,7 @@ function ScheduleForm({
     const checkNow = new Date();
     const parsedMeetingTime = parseLocalMeetingTime(meetingTime);
     const validationError =
-      validateMeetingPlace(meetingPlace) || validateLocalMeetingTime(meetingTime, checkNow);
+      validateMeetingPlace(meetingPlace) || validateLocalMeetingTime(meetingTime, checkNow, maxDays);
     if (validationError || !parsedMeetingTime) {
       setNow(checkNow);
       setError(validationError || 'Thời gian giao nhận không hợp lệ.');
@@ -259,6 +265,8 @@ function ScheduleForm({
           type="datetime-local"
           value={meetingTime}
           min={minimumMeetingTimeValue(now)}
+          max={maximumMeetingTimeValue(now, maxDays)}
+          hint={`Chỉ hẹn trong vòng ${maxDays} ngày tới.`}
           error={meetingTime ? (timeError ?? undefined) : undefined}
           disabled={submitting}
           onChange={(event) => {

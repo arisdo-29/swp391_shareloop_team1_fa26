@@ -41,6 +41,42 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
             org.springframework.data.domain.Pageable pageable);
 
     /**
+     * Đề nghị dời lịch đã hết hạn (GN-11): quá số giờ phản hồi hoặc đã tới giờ hẹn cũ, tuỳ cái nào tới trước.
+     */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.rescheduleProposedAt IS NOT NULL
+        AND r.status IN (com.shareloop.request.entity.RequestStatus.LOGISTICS_CONFIRMED,
+                         com.shareloop.request.entity.RequestStatus.AWAITING_HANDOVER)
+        AND (r.rescheduleProposedAt < :cutoff OR r.meetingTime <= :now)
+        AND r.id > :afterId
+        ORDER BY r.id ASC
+    """)
+    List<Request> findExpiredReschedules(
+            @Param("now") Instant now,
+            @Param("cutoff") Instant cutoff,
+            @Param("afterId") long afterId,
+            org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Giao dịch Gặp trực tiếp đã chốt lịch, qua giờ hẹn trước cutoff mà chưa bên nào bấm gì và không có đề nghị huỷ
+     * đang chờ (GN-12). Dùng cho cả việc nhắc và việc tự huỷ.
+     */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.status = com.shareloop.request.entity.RequestStatus.LOGISTICS_CONFIRMED
+        AND (r.deliveryMethod IS NULL OR r.deliveryMethod <> 'SHIPPING')
+        AND r.cancelRequestedAt IS NULL
+        AND r.meetingTime < :cutoff
+        AND r.id > :afterId
+        ORDER BY r.id ASC
+    """)
+    List<Request> findConfirmedPastMeeting(
+            @Param("cutoff") Instant cutoff,
+            @Param("afterId") long afterId,
+            org.springframework.data.domain.Pageable pageable);
+
+    /**
      * Người đề nghị huỷ từ threshold giao dịch trở lên (đã huỷ vì chính đề nghị đó, đã thấy liên hệ) kể từ since.
      */
     @Query("""

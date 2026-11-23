@@ -33,6 +33,7 @@ import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestItemInfo;
 import com.shareloop.request.dto.RequestMediaResponse;
 import com.shareloop.request.dto.RequestResponse;
+import com.shareloop.request.dto.RescheduleRequest;
 import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.entity.CancelRequestCode;
 import com.shareloop.request.entity.Request;
@@ -1265,12 +1266,13 @@ public class RequestService {
 
     // Phần chung của huỷ theo đề nghị: lưu, nhả bài chính và món đổi (releaseReservedItems trả lại thời gian hiển thị),
     // báo bài mở lại, ghi nhật ký.
-    private Request finishCancelByAgreement(Request request, long actorUserId) {
+    private Request finishCancelByAgreement(Request request, Long actorUserId) {
         Request saved = requestRepository.save(request);
         publishNegotiationEnded(saved);
         releaseReservedItems(saved);
         notifyItemReopened(saved);
-        if (activityLogService != null) {
+        // Hệ thống tự huỷ (actorUserId null) thì không có người để ghi nhật ký
+        if (activityLogService != null && actorUserId != null) {
             activityLogService.log(
                     ActivityType.REQUEST_CANCEL.name(),
                     actorUserId,
@@ -1371,6 +1373,193 @@ public class RequestService {
             eventPublisher.publishEvent(
                     new SilentCancelRequestReportedEvent(saved.getId(), requesterId, silentUserId, issue, note));
         }
+        return true;
+    }
+
+    // ===== Giới hạn giờ hẹn, dời lịch và giao dịch kẹt (GN-11, GN-12) =====
+
+    // GN-11: giờ hẹn xa nhất meeting_max_days_ahead ngày tính từ lúc đề xuất. Với Giao hàng là ngày gửi hàng dự kiến.
+    private void requireMeetingTimeNotTooFar(Instant meetingTime, Instant now) {
+        int maxDays = configService.getInt(ConfigKey.MEETING_MAX_DAYS_AHEAD);
+        if (meetingTime.isAfter(now.plus(maxDays, ChronoUnit.DAYS))) {
+            throw new BusinessException(
+                    RequestErrorCode.REQUEST_SCHEDULE_TOO_FAR, "Chỉ hẹn trong vòng " + maxDays + " ngày tới");
+        }
+    }
+
+    /**
+     * Một bên đề nghị dời lịch sau khi chốt (GN-11). Lịch cũ giữ nguyên, bên kia được báo và có thời gian phản hồi tới
+     * sớm hơn giữa giờ hẹn cũ và cancel_request_response_hours giờ.
+     *
+     * @throws BusinessException REQUEST_SCHEDULE_PAST_TIME, REQUEST_SCHEDULE_TOO_FAR, REQUEST_RESCHEDULE_NOT_ALLOWED,
+     *     REQUEST_RESCHEDULE_LIMIT_REACHED, REQUEST_RESCHEDULE_PENDING, REQUEST_CANCEL_REQUEST_PENDING
+     */
+    @Transactional
+    public RequestResponse proposeReschedule(long requestId, long currentUserId, RescheduleRequest requestDto) {
+        Request request = loadRequestForUpdate(requestId);
+        ItemSnapshot item = loadItemSnapshot(request);
+        boolean isDonor = requireParty(request, item, currentUserId);
+        Instant now = Instant.now();
+        if (requestDto.meetingTime().isBefore(now)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_SCHEDULE_PAST_TIME);
+        }
+        requireMeetingTimeNotTooFar(requestDto.meetingTime(), now);
+
+        String newPlace =
+                requestDto.meetingPlace() == null || requestDto.meetingPlace().isBlank()
+                        ? null
+                        : requestDto.meetingPlace().trim();
+        int maxCount = configService.getInt(ConfigKey.RESCHEDULE_MAX_COUNT);
+        request.proposeReschedule(currentUserId, requestDto.meetingTime(), newPlace, now, maxCount);
+        Request saved = requestRepository.save(request);
+
+        Instant dueAt = deadlineCalculator.of(saved).rescheduleExpiresAt();
+        long otherUserId = isDonor ? saved.getReceiverId() : item.donorId();
+        notificationService.notify(
+                otherUserId,
+                "RESCHEDULE_PROPOSED",
+                "Đề nghị dời lịch",
+                nameOrDefault(currentUserId) + " đề nghị dời lịch sang " + VietnamTime.format(requestDto.meetingTime())
+                        + (newPlace == null ? "" : " tại " + newPlace) + ". Bạn có đồng ý không? Hạn phản hồi "
+                        + VietnamTime.format(dueAt) + ".",
+                "/requests/" + saved.getId());
+        return toResponse(saved);
+    }
+
+    /** Bên kia đồng ý dời lịch (GN-11): đổi lịch, liên hệ vẫn mở, tăng bộ đếm số lần dời. */
+    @Transactional
+    public RequestResponse acceptReschedule(long requestId, long currentUserId) {
+        Request request = loadRequestForUpdate(requestId);
+        ItemSnapshot item = loadItemSnapshot(request);
+        requireParty(request, item, currentUserId);
+        long proposerId = request.getRescheduleProposedBy() == null ? 0 : request.getRescheduleProposedBy();
+        request.acceptReschedule(currentUserId);
+        Request saved = requestRepository.save(request);
+
+        notificationService.notify(
+                proposerId,
+                "RESCHEDULE_ACCEPTED",
+                "Đã đồng ý dời lịch",
+                nameOrDefault(currentUserId) + " đã đồng ý dời lịch. Giờ hẹn mới là "
+                        + VietnamTime.format(saved.getMeetingTime())
+                        + (saved.getMeetingPlace() == null ? "" : " tại " + saved.getMeetingPlace()) + ".",
+                "/requests/" + saved.getId());
+        return toResponse(saved);
+    }
+
+    /** Bên kia từ chối dời lịch (GN-11): giữ lịch cũ, báo người đề nghị. */
+    @Transactional
+    public RequestResponse rejectReschedule(long requestId, long currentUserId) {
+        Request request = loadRequestForUpdate(requestId);
+        ItemSnapshot item = loadItemSnapshot(request);
+        requireParty(request, item, currentUserId);
+        long proposerId = request.getRescheduleProposedBy() == null ? 0 : request.getRescheduleProposedBy();
+        request.rejectReschedule(currentUserId);
+        Request saved = requestRepository.save(request);
+
+        notificationService.notify(
+                proposerId,
+                "RESCHEDULE_REJECTED",
+                "Không đồng ý dời lịch",
+                nameOrDefault(currentUserId) + " không đồng ý dời lịch. Lịch cũ được giữ là "
+                        + VietnamTime.format(saved.getMeetingTime()) + ".",
+                "/requests/" + saved.getId());
+        return toResponse(saved);
+    }
+
+    /**
+     * Việc nền: đề nghị dời lịch hết hạn thì giữ lịch cũ và báo người đề nghị (GN-11).
+     *
+     * @return true nếu đã xử lý, false nếu đề nghị đã được trả lời hoặc chưa tới hạn
+     */
+    @Transactional
+    public boolean expireReschedule(long requestId, Instant now) {
+        Request request = requestRepository.findByIdForUpdate(requestId).orElse(null);
+        if (request == null || !request.hasPendingReschedule()) {
+            return false;
+        }
+        Instant dueAt = deadlineCalculator.of(request).rescheduleExpiresAt();
+        if (dueAt.isAfter(now)) {
+            return false;
+        }
+        long proposerId = request.getRescheduleProposedBy();
+        request.expireReschedule();
+        requestRepository.save(request);
+        notificationService.notify(
+                proposerId,
+                "RESCHEDULE_EXPIRED",
+                "Đề nghị dời lịch đã hết hạn",
+                "Bên kia chưa trả lời kịp nên đề nghị dời lịch hết hạn. Lịch cũ được giữ là "
+                        + VietnamTime.format(request.getMeetingTime()) + ".",
+                "/requests/" + request.getId());
+        return true;
+    }
+
+    /**
+     * Việc nền: giao dịch Gặp trực tiếp đã chốt lịch mà qua giờ hẹn confirmed_stale_cancel_days ngày vẫn chưa bên nào
+     * bấm gì thì tự huỷ, không phạt ai, nhả bài, báo hai bên (GN-12).
+     *
+     * @return true nếu đã huỷ
+     */
+    @Transactional
+    public boolean cancelStaleConfirmed(long requestId, Instant now) {
+        Request request = requestRepository.findByIdForUpdate(requestId).orElse(null);
+        int staleDays = configService.getInt(ConfigKey.CONFIRMED_STALE_CANCEL_DAYS);
+        if (request == null
+                || request.getStatus() != RequestStatus.LOGISTICS_CONFIRMED
+                || request.getMeetingTime() == null
+                || request.hasPendingCancelRequest()
+                || request.getMeetingTime().plus(staleDays, ChronoUnit.DAYS).isAfter(now)) {
+            return false;
+        }
+
+        request.cancelAsStale("Quá " + staleDays + " ngày kể từ giờ hẹn mà chưa bên nào xác nhận.");
+        Request saved = finishCancelByAgreement(request, null);
+
+        String message = "Giao dịch đã tự huỷ vì quá " + staleDays
+                + " ngày kể từ giờ hẹn mà chưa bên nào xác nhận. Bài đăng được mở lại và không bên nào bị trừ sao.";
+        String link = "/requests/" + saved.getId();
+        notificationService.notify(
+                saved.getReceiverId(), "TRANSACTION_CANCELLED", "Giao dịch đã tự huỷ", message, link);
+        notificationService.notify(
+                loadItemSnapshot(saved).donorId(), "TRANSACTION_CANCELLED", "Giao dịch đã tự huỷ", message, link);
+        return true;
+    }
+
+    /**
+     * Việc nền: nhắc cả hai bên một lần khi đã qua giờ hẹn 24 giờ mà chưa bên nào bấm gì (GN-12). Không gửi lặp: kiểm
+     * thông báo cùng loại đã gửi kể từ giờ hẹn.
+     *
+     * @return true nếu đã gửi nhắc cho ít nhất một bên
+     */
+    @Transactional
+    public boolean remindStaleConfirmed(long requestId, Instant now) {
+        Request request = requestRepository.findById(requestId).orElse(null);
+        if (request == null
+                || request.getStatus() != RequestStatus.LOGISTICS_CONFIRMED
+                || request.getMeetingTime() == null
+                || request.hasPendingCancelRequest()
+                || request.getMeetingTime().plus(1, ChronoUnit.DAYS).isAfter(now)) {
+            return false;
+        }
+
+        int staleDays = configService.getInt(ConfigKey.CONFIRMED_STALE_CANCEL_DAYS);
+        Instant cancelAt = request.getMeetingTime().plus(staleDays, ChronoUnit.DAYS);
+        String message = "Đã qua giờ hẹn mà chưa bên nào xác nhận. Hãy bấm Đã giao nhận xong hoặc Giao nhận không thành"
+                + " công. Giao dịch sẽ tự huỷ lúc " + VietnamTime.format(cancelAt) + " nếu vẫn chưa ai xác nhận.";
+        String link = "/requests/" + request.getId();
+        boolean sent = remindOnce(request.getReceiverId(), "HANDOVER_STALE_REMINDER", link, request, message);
+        long donorId = loadItemSnapshot(request).donorId();
+        sent |= remindOnce(donorId, "HANDOVER_STALE_REMINDER", link, request, message);
+        return sent;
+    }
+
+    // Gửi nhắc nếu chưa có thông báo cùng loại kể từ giờ hẹn (không gửi lặp mỗi lần job chạy).
+    private boolean remindOnce(long userId, String type, String link, Request request, String message) {
+        if (notificationService.hasNotificationSince(userId, type, link, request.getMeetingTime())) {
+            return false;
+        }
+        notificationService.notify(userId, type, "Nhắc xác nhận giao nhận", message, link);
         return true;
     }
 
@@ -1849,6 +2038,7 @@ public class RequestService {
         if (requestDto.meetingTime().isBefore(Instant.now())) {
             throw new BusinessException(RequestErrorCode.REQUEST_SCHEDULE_PAST_TIME);
         }
+        requireMeetingTimeNotTooFar(requestDto.meetingTime(), Instant.now());
 
         boolean isDonor = item.donorId() == currentUserId;
 

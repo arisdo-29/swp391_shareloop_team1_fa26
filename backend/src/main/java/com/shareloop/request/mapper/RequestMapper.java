@@ -3,6 +3,7 @@ package com.shareloop.request.mapper;
 import com.shareloop.request.dto.CancelRequestInfo;
 import com.shareloop.request.dto.RequestItemInfo;
 import com.shareloop.request.dto.RequestResponse;
+import com.shareloop.request.dto.RescheduleInfo;
 import com.shareloop.request.entity.CancelRequestCode;
 import com.shareloop.request.entity.Request;
 
@@ -120,9 +121,22 @@ public final class RequestMapper {
                 // Cờ do RequestService gắn sau; đề nghị huỷ đang chờ lấy thẳng từ giao dịch (GN-06).
                 null,
                 toCancelRequestInfo(request),
-                null,
+                toRescheduleInfo(request),
                 null,
                 null);
+    }
+
+    // Đề nghị dời lịch đang chờ và số lần đã dời (GN-11).
+    private static RescheduleInfo toRescheduleInfo(Request request) {
+        if (!request.hasPendingReschedule()) {
+            return new RescheduleInfo(null, null, null, null, request.getRescheduleCount());
+        }
+        return new RescheduleInfo(
+                request.getRescheduleProposedBy(),
+                request.getRescheduleProposedAt(),
+                request.getRescheduleMeetingTime(),
+                request.getRescheduleMeetingPlace(),
+                request.getRescheduleCount());
     }
 
     // Đề nghị huỷ đang chờ bên kia phản hồi; mọi trường null khi không có.

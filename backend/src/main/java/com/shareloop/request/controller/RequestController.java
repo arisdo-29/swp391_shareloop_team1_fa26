@@ -12,6 +12,7 @@ import com.shareloop.request.dto.RefuseHandoverRequest;
 import com.shareloop.request.dto.RejectCancelRequest;
 import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestResponse;
+import com.shareloop.request.dto.RescheduleRequest;
 import com.shareloop.request.dto.ScheduleRequest;
 import com.shareloop.request.service.RequestService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -218,6 +219,28 @@ public class RequestController {
     @DeleteMapping("/api/v1/requests/{id}/cancel-request")
     public RequestResponse withdrawCancelRequest(@PathVariable long id, @CurrentUserId Long currentUserId) {
         return requestService.withdrawCancelRequest(id, currentUserId);
+    }
+
+    /** Đề nghị dời lịch sau khi chốt, trước giờ hẹn (GN-11). Lịch cũ giữ nguyên cho tới khi bên kia đồng ý. */
+    @Operation(summary = "Đề nghị dời lịch")
+    @PostMapping("/api/v1/requests/{id}/reschedule")
+    public RequestResponse proposeReschedule(
+            @PathVariable long id, @CurrentUserId Long currentUserId, @Valid @RequestBody RescheduleRequest request) {
+        return requestService.proposeReschedule(id, currentUserId, request);
+    }
+
+    /** Bên kia đồng ý dời lịch: đổi lịch, liên hệ vẫn mở (GN-11). */
+    @Operation(summary = "Đồng ý dời lịch")
+    @PostMapping("/api/v1/requests/{id}/reschedule/accept")
+    public RequestResponse acceptReschedule(@PathVariable long id, @CurrentUserId Long currentUserId) {
+        return requestService.acceptReschedule(id, currentUserId);
+    }
+
+    /** Bên kia từ chối dời lịch: giữ lịch cũ (GN-11). */
+    @Operation(summary = "Từ chối dời lịch")
+    @PostMapping("/api/v1/requests/{id}/reschedule/reject")
+    public RequestResponse rejectReschedule(@PathVariable long id, @CurrentUserId Long currentUserId) {
+        return requestService.rejectReschedule(id, currentUserId);
     }
 
     /**

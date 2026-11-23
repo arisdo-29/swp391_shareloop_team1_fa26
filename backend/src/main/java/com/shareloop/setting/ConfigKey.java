@@ -375,6 +375,24 @@ public enum ConfigKey {
             ConfigGroup.TRANSACTION,
             "Số ngày theo dõi huỷ sau khi thấy liên hệ",
             "Số ngày gần nhất dùng để đếm các lần đề nghị huỷ sau khi đã thấy thông tin liên hệ."),
+    MEETING_MAX_DAYS_AHEAD(
+            "meeting_max_days_ahead",
+            "7",
+            ConfigGroup.TRANSACTION,
+            "Giờ hẹn xa nhất",
+            "Số ngày xa nhất, tính từ lúc đề xuất, mà hai bên được hẹn giờ giao nhận hoặc ngày gửi hàng."),
+    RESCHEDULE_MAX_COUNT(
+            "reschedule_max_count",
+            "2",
+            ConfigGroup.TRANSACTION,
+            "Số lần dời lịch tối đa",
+            "Số lần tối đa một giao dịch được dời lịch sau khi đã chốt. Chỉ tính các lần bên kia đồng ý."),
+    CONFIRMED_STALE_CANCEL_DAYS(
+            "confirmed_stale_cancel_days",
+            "3",
+            ConfigGroup.TRANSACTION,
+            "Số ngày tự huỷ giao dịch đã chốt lịch mà không ai làm gì",
+            "Giao dịch đã chốt lịch, qua giờ hẹn hoặc hạn gửi hàng quá số ngày này mà chưa bên nào bấm gì thì tự huỷ, không phạt ai."),
     STUCK_REQUEST_HOURS(
             "stuck_request_hours",
             "48",

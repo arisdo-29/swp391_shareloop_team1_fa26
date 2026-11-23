@@ -107,6 +107,23 @@ public class Request extends BaseEntity {
     @Column(name = "cancel_request_reason", length = 500)
     private String cancelRequestReason;
 
+    // Đề nghị dời lịch đang chờ bên kia phản hồi (GN-11). Null khi không có đề nghị nào.
+    @Column(name = "reschedule_proposed_by")
+    private Long rescheduleProposedBy;
+
+    @Column(name = "reschedule_proposed_at")
+    private Instant rescheduleProposedAt;
+
+    @Column(name = "reschedule_meeting_time")
+    private Instant rescheduleMeetingTime;
+
+    @Column(name = "reschedule_meeting_place", length = 255)
+    private String rescheduleMeetingPlace;
+
+    // Số lần dời lịch đã được đồng ý
+    @Column(name = "reschedule_count", nullable = false)
+    private int rescheduleCount = 0;
+
     protected Request() {}
 
     public Request(Long itemId, Long receiverId, Long offeredItemId, String type) {
@@ -321,6 +338,8 @@ public class Request extends BaseEntity {
         } else {
             this.receiverHandoverAt = now;
         }
+        // GN-11: đã có bên bấm hoàn tất thì không dời lịch nữa, đề nghị dời còn chờ không còn ý nghĩa
+        clearReschedule();
 
         if (this.status == RequestStatus.LOGISTICS_CONFIRMED) {
             transitionTo(RequestStatus.AWAITING_HANDOVER);
@@ -380,6 +399,81 @@ public class Request extends BaseEntity {
         transitionTo(RequestStatus.DISPUTED);
     }
 
+    // ===== Dời lịch sau khi chốt (GN-11) =====
+
+    /** GN-11: có đề nghị dời lịch đang chờ bên kia phản hồi (chỉ tính khi giao dịch còn đang chờ giao nhận). */
+    public boolean hasPendingReschedule() {
+        return this.rescheduleProposedAt != null && isHandoverOpen();
+    }
+
+    /**
+     * GN-11: một bên đề xuất giờ mới (và địa điểm mới nếu Gặp trực tiếp muốn đổi). Lịch cũ giữ nguyên cho tới khi bên
+     * kia đồng ý.
+     *
+     * @param maxCount số lần dời tối đa mỗi giao dịch, đọc từ cấu hình
+     * @throws BusinessException REQUEST_RESCHEDULE_NOT_ALLOWED khi sai trạng thái, đã qua giờ hẹn hoặc đã có bên bấm
+     *     hoàn tất, REQUEST_RESCHEDULE_LIMIT_REACHED khi hết số lần dời, REQUEST_RESCHEDULE_PENDING hoặc
+     *     REQUEST_CANCEL_REQUEST_PENDING khi đang có đề nghị khác chờ
+     */
+    public void proposeReschedule(Long proposerId, Instant newTime, String newPlace, Instant now, int maxCount) {
+        boolean someoneCompleted = this.donorHandoverAt != null || this.receiverHandoverAt != null;
+        if (!isHandoverOpen() || someoneCompleted || !isBeforeMeetingTime(now)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_RESCHEDULE_NOT_ALLOWED);
+        }
+        if (hasPendingCancelRequest()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_CANCEL_REQUEST_PENDING);
+        }
+        if (hasPendingReschedule()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_RESCHEDULE_PENDING);
+        }
+        if (this.rescheduleCount >= maxCount) {
+            throw new BusinessException(RequestErrorCode.REQUEST_RESCHEDULE_LIMIT_REACHED);
+        }
+        this.rescheduleProposedBy = proposerId;
+        this.rescheduleProposedAt = now;
+        this.rescheduleMeetingTime = newTime;
+        this.rescheduleMeetingPlace = newPlace;
+    }
+
+    /** GN-11: bên kia đồng ý thì đổi lịch, liên hệ vẫn mở, hai bên không phải cam kết lại. Tăng bộ đếm. */
+    public void acceptReschedule(Long accepterId) {
+        requirePendingReschedule(accepterId);
+        this.meetingTime = this.rescheduleMeetingTime;
+        if (this.rescheduleMeetingPlace != null) {
+            this.meetingPlace = this.rescheduleMeetingPlace;
+        }
+        this.rescheduleCount++;
+        clearReschedule();
+    }
+
+    /** GN-11: bên kia từ chối thì giữ lịch cũ, không tăng bộ đếm. */
+    public void rejectReschedule(Long rejecterId) {
+        requirePendingReschedule(rejecterId);
+        clearReschedule();
+    }
+
+    /** GN-11: đề nghị dời hết hạn thì giữ lịch cũ. Hạn là sớm hơn giữa giờ hẹn cũ và lúc đề xuất cộng số giờ phản hồi. */
+    public void expireReschedule() {
+        clearReschedule();
+    }
+
+    private void requirePendingReschedule(Long callerId) {
+        if (!hasPendingReschedule()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_RESCHEDULE_NOT_FOUND);
+        }
+        // Người đề xuất không tự đồng ý hay từ chối đề nghị của mình
+        if (callerId.equals(this.rescheduleProposedBy)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_FORBIDDEN);
+        }
+    }
+
+    private void clearReschedule() {
+        this.rescheduleProposedBy = null;
+        this.rescheduleProposedAt = null;
+        this.rescheduleMeetingTime = null;
+        this.rescheduleMeetingPlace = null;
+    }
+
     // ===== Đề nghị huỷ có xác nhận của bên kia (GN-06) =====
 
     /** GN-06: có đề nghị huỷ đang chờ bên kia phản hồi (chỉ tính khi giao dịch còn đang chờ giao nhận). */
@@ -404,6 +498,10 @@ public class Request extends BaseEntity {
         }
         if (hasPendingCancelRequest()) {
             throw new BusinessException(RequestErrorCode.REQUEST_CANCEL_REQUEST_PENDING);
+        }
+        // Không cho có đồng thời đề nghị huỷ và đề nghị dời lịch
+        if (hasPendingReschedule()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_RESCHEDULE_PENDING);
         }
         this.cancelRequestedBy = requesterId;
         this.cancelRequestedAt = now;
@@ -433,6 +531,14 @@ public class Request extends BaseEntity {
         // Người đề nghị là bên còn lại nên tiền tố ghi theo người đề nghị
         String prefix = accepterIsDonor ? CANCEL_BY_RECEIVER : CANCEL_BY_DONOR;
         cancelKeepingCancelRequest(prefix + "Bên kia đồng ý huỷ. " + cancelRequestSummary());
+    }
+
+    /** GN-12: giao dịch đã chốt lịch mà không ai làm gì quá hạn thì hệ thống huỷ, không phạt ai. */
+    public void cancelAsStale(String reason) {
+        if (this.status != RequestStatus.LOGISTICS_CONFIRMED || hasPendingCancelRequest()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
+        }
+        cancel(CANCEL_BY_SYSTEM + reason);
     }
 
     /** GN-06: bên kia im lặng quá hạn phản hồi thì huỷ như "Đồng ý". Hệ thống là bên huỷ. */
@@ -575,6 +681,26 @@ public class Request extends BaseEntity {
 
     public String getCancelReason() {
         return cancelReason;
+    }
+
+    public Long getRescheduleProposedBy() {
+        return rescheduleProposedBy;
+    }
+
+    public Instant getRescheduleProposedAt() {
+        return rescheduleProposedAt;
+    }
+
+    public Instant getRescheduleMeetingTime() {
+        return rescheduleMeetingTime;
+    }
+
+    public String getRescheduleMeetingPlace() {
+        return rescheduleMeetingPlace;
+    }
+
+    public int getRescheduleCount() {
+        return rescheduleCount;
     }
 
     public Long getCancelRequestedBy() {

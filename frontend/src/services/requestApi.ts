@@ -83,8 +83,15 @@ export interface RequestResponse {
   cancelRequestCode?: CancelRequestCode | null;
   cancelRequestLabel?: string | null;
   cancelRequestReason?: string | null;
+  // Đề nghị dời lịch đang chờ bên kia phản hồi (GN-11) và số lần đã dời.
+  rescheduleProposedBy?: number | null;
+  rescheduleProposedAt?: string | null;
+  rescheduleMeetingTime?: string | null;
+  rescheduleMeetingPlace?: string | null;
+  rescheduleCount?: number | null;
   // Mốc hạn do backend tính, FE chỉ hiện.
   cancelRequestExpiresAt?: string | null;
+  rescheduleExpiresAt?: string | null;
 }
 
 export interface CreateRequestBody {
@@ -112,6 +119,12 @@ export interface HandoverOutcomeBody {
   code?: CancelRequestCode;
   reason?: string;
   evidenceMediaIds?: number[];
+}
+
+export interface RescheduleRequestBody {
+  meetingTime: string;
+  // Chỉ Gặp trực tiếp, bỏ trống nếu không đổi địa điểm.
+  meetingPlace?: string;
 }
 
 export interface CancelRequestBody {
@@ -317,6 +330,29 @@ export const requestApi = {
     const { data } = await http.delete<RequestResponse>(`/api/v1/requests/${id}/cancel-request`, {
       params: { currentUserId },
     });
+    return data;
+  },
+  // Dời lịch sau khi chốt (docs/api/request.md). Lịch cũ giữ nguyên cho tới khi bên kia đồng ý.
+  async proposeReschedule(id: number, currentUserId: number, body: RescheduleRequestBody) {
+    const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/reschedule`, body, {
+      params: { currentUserId },
+    });
+    return data;
+  },
+  async acceptReschedule(id: number, currentUserId: number) {
+    const { data } = await http.post<RequestResponse>(
+      `/api/v1/requests/${id}/reschedule/accept`,
+      {},
+      { params: { currentUserId } },
+    );
+    return data;
+  },
+  async rejectReschedule(id: number, currentUserId: number) {
+    const { data } = await http.post<RequestResponse>(
+      `/api/v1/requests/${id}/reschedule/reject`,
+      {},
+      { params: { currentUserId } },
+    );
     return data;
   },
   async getContact(id: number, currentUserId: number) {

@@ -45,13 +45,19 @@ public class RequestJob {
         int silentReservedExpired = requestJobService.expireSilentReservedRequests(now);
         int autoConfirmed = requestJobService.autoConfirmHandoverRequests(now);
         int cancelRequestsExpired = requestDeadlineJobService.expireCancelRequests(now);
+        int reschedulesExpired = requestDeadlineJobService.expireReschedules(now);
+        int staleCancelled = requestDeadlineJobService.cancelStaleConfirmed(now);
+        int staleReminded = requestDeadlineJobService.remindStaleConfirmed(now);
 
         log.info(
                 "RequestJob finished: {} pending expired, {} silent reserved expired, {} auto confirmed,"
-                        + " {} cancel requests expired",
+                        + " {} cancel requests expired, {} reschedules expired, {} stale cancelled, {} stale reminded",
                 pendingExpired,
                 silentReservedExpired,
                 autoConfirmed,
-                cancelRequestsExpired);
+                cancelRequestsExpired,
+                reschedulesExpired,
+                staleCancelled,
+                staleReminded);
     }
 }
