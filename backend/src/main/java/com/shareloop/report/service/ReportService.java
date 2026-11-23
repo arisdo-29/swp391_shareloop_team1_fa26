@@ -962,6 +962,10 @@ public class ReportService {
                         violatorId, 1, note != null ? note : "Bị kết luận vi phạm theo báo cáo" + about);
             }
 
+            // F3: khiếu nại giao dịch đã hoàn tất được chấp thuận thì thu hồi điểm người vi phạm đã nhận từ giao dịch
+            // đó
+            revokePointsIfCompletedRequest(report, violatorId);
+
             boolean serious = isSeriousReason(report.getReason());
             // F1: bài có giao dịch đang mở thì xử lý giao dịch trước khi ẩn bài, để việc nhả bài chạy khi bài còn
             // nguyên trạng
@@ -1038,6 +1042,24 @@ public class ReportService {
                 saved.getResolution(),
                 saved.getStarsDeducted(),
                 saved.getResolvedAt());
+    }
+
+    // Chỉ giao dịch COMPLETED mới đã cộng điểm. Giao dịch đang DISPUTED thì bị huỷ khi kết luận nên chưa có điểm nào.
+    private void revokePointsIfCompletedRequest(Report report, Long violatorId) {
+        if (report.getTargetType() != TargetType.REQUEST
+                || report.getRequestId() == null
+                || violatorId == null
+                || reputationService == null) {
+            return;
+        }
+        RequestSnapshot request = findRequest(report.getRequestId());
+        if (request == null || !"COMPLETED".equals(request.status())) {
+            return;
+        }
+        reputationService.revokePointsForRequest(
+                violatorId,
+                report.getRequestId(),
+                "Khiếu nại giao dịch được chấp thuận, thu hồi điểm đã cộng từ giao dịch");
     }
 
     /**

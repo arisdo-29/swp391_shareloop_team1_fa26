@@ -234,6 +234,60 @@ public class ReputationService {
     }
 
     /**
+     * Thu hồi điểm đã cộng cho một người nhờ một giao dịch hoàn tất, khi khiếu nại giao dịch đó được chấp thuận (F3). Trừ đúng
+     * số điểm nhật ký POINTS ghi cho người đó, không để điểm âm, tính lại hạng, ghi nhật ký POINTS_REVOKED và báo người đó. Người
+     * bị hại giữ điểm vì chỉ gọi cho người vi phạm. Gọi lại lần hai không trừ thêm.
+     *
+     * @return số điểm đã thu hồi, 0 khi không có gì để thu hồi
+     */
+    @Transactional
+    public int revokePointsForRequest(long userId, long requestId, String reason) {
+        if (userReputationRepository == null) {
+            return 0;
+        }
+        int awarded = findPointsAwardedForRequest(requestId).stream()
+                .filter(award -> award.userId() == userId)
+                .mapToInt(RequestPointsAward::points)
+                .sum();
+        if (awarded <= 0 || userReputationRepository.isPointsRevokedForRequest(requestId, userId)) {
+            return 0;
+        }
+        UserReputation user = userReputationRepository.findByIdForUpdate(userId).orElse(null);
+        if (user == null) {
+            return 0;
+        }
+        int revoked = Math.min(awarded, user.getTotalPoints());
+        user.revokePoints(revoked, getRank(user.getTotalPoints() - revoked));
+        userReputationRepository.save(user);
+
+        if (activityLogService != null) {
+            activityLogService.log(
+                    ActivityType.POINTS_REVOKED.name(),
+                    userId,
+                    "REQUEST",
+                    requestId,
+                    Map.of(
+                            "points",
+                            revoked,
+                            "totalPoints",
+                            user.getTotalPoints(),
+                            "rank",
+                            user.getRankLevel().name()),
+                    reason != null ? reason : "Thu hồi " + revoked + " điểm của giao dịch bị kết luận vi phạm");
+        }
+        if (notificationService != null) {
+            notificationService.notify(
+                    userId,
+                    "POINTS_REVOKED",
+                    "Bạn bị thu hồi điểm",
+                    "Giao dịch bị kết luận vi phạm nên " + revoked
+                            + " điểm đã cộng cho bạn từ giao dịch này bị thu hồi.",
+                    "/profile?tab=reputation");
+        }
+        return revoked;
+    }
+
+    /**
      * Lấy thông tin uy tín tổng quan của người dùng (YC-06, Issue #110).
      * Bao gồm TrustStars (mặc định 5), hạng (mặc định BRONZE) và tỉ lệ đúng mô tả thang 0–1 (null khi dưới 3 giao
      * dịch đã được đánh giá).

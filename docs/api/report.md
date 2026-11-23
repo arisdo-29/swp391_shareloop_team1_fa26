@@ -590,3 +590,7 @@ Không có `reporterId` và `description` để bên bị phản ánh không bi�
 ## Báo cáo của tài khoản mới không tính vào ngưỡng tự ẩn (F2)
 
 Chỉ báo cáo của người đủ tin cậy mới được tính vào `report_hide_threshold`. Đủ tin cậy khi tuổi tài khoản từ `report_trusted_min_account_days` ngày (mặc định 7) hoặc đã có ít nhất `report_trusted_min_completed` giao dịch hoàn tất (mặc định 1). Báo cáo của tài khoản mới vẫn được lưu và vào hàng chờ Admin như thường. `ReportResponse.newReporterAccount` (chỉ có trong API của Admin) là `true` khi người gửi chưa đủ tin cậy, màn Admin hiện nhãn "Tài khoản mới".
+
+## Khiếu nại thắng sau khi giao dịch hoàn tất thì thu hồi điểm (F3)
+
+Chấp thuận khiếu nại của giao dịch đã `COMPLETED`: trừ lại đúng số điểm nhật ký `POINTS` đã ghi cho người vi phạm (bên bị khiếu nại, hoặc người Admin chọn khi có) từ giao dịch đó, không để điểm âm, tính lại hạng, ghi nhật ký `POINTS_REVOKED` ("Thu hồi điểm") và báo người đó (`POINTS_REVOKED`). Người khiếu nại giữ điểm. Kết luận gọi lại không trừ hai lần.

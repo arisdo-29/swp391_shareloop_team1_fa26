@@ -87,6 +87,12 @@ public class UserReputation extends SliceAudit {
         this.rankLevel = newRank;
     }
 
+    /** Thu hồi điểm tích luỹ (F3), không để âm; hạng đã được người gọi tính lại theo tổng mới. */
+    public void revokePoints(int points, Rank newRank) {
+        this.totalPoints = Math.max(0, this.totalPoints - points);
+        this.rankLevel = newRank;
+    }
+
     public int deductStars(int amount) {
         int before = this.trustStars;
         this.trustStars = (short) Math.max(0, this.trustStars - amount);

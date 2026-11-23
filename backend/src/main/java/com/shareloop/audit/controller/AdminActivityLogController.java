@@ -92,7 +92,8 @@ public class AdminActivityLogController {
                                                 "ADMIN_ITEM_HIDDEN",
                                                 "ADMIN_ITEM_UNHIDDEN",
                                                 "ADMIN_VIEWED_CHAT",
-                                                "ITEM_DISPLAY_COMPENSATED"
+                                                "ITEM_DISPLAY_COMPENSATED",
+                                                "POINTS_REVOKED"
                                             }))
                     @RequestParam(required = false)
                     String type,
