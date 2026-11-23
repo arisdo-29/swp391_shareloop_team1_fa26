@@ -1,5 +1,6 @@
 package com.shareloop.admin.service;
 
+import com.shareloop.admin.dto.AdminCancelRequest;
 import com.shareloop.admin.dto.AdminChatMessage;
 import com.shareloop.admin.dto.AdminRequestDetail;
 import com.shareloop.admin.dto.AdminRequestItemInfo;
@@ -8,6 +9,8 @@ import com.shareloop.admin.dto.AdminRequestParty;
 import com.shareloop.admin.dto.AdminRequestPhoto;
 import com.shareloop.admin.dto.AdminRequestPoints;
 import com.shareloop.admin.dto.AdminRequestReportRow;
+import com.shareloop.admin.dto.AdminReschedule;
+import com.shareloop.admin.dto.AdminShippingLeg;
 import com.shareloop.admin.dto.AdminTimelineEvent;
 import com.shareloop.audit.ActivityType;
 import com.shareloop.audit.service.ActivityLogService;
@@ -121,7 +124,15 @@ public class AdminRequestDetailService {
                 toPoints(awards, briefs),
                 !reports.isEmpty(),
                 CANCELLABLE_STATUSES.contains(core.status()),
-                core.createdAt());
+                core.createdAt(),
+                toCancelRequest(core),
+                toReschedule(core),
+                toShippingLegs(
+                        core,
+                        toItemInfo(core.itemId()),
+                        core.offeredItemId() == null ? null : toItemInfo(core.offeredItemId())),
+                core.deadlines(),
+                core.autoConfirmed());
     }
 
     /**
@@ -201,6 +212,91 @@ public class AdminRequestDetailService {
         }
     }
 
+    private static String roleOf(Long userId, AdminRequestCore core) {
+        return userId != null && userId == core.receiverId() ? "Người nhận" : "Chủ bài";
+    }
+
+    // Đề nghị huỷ: đang chờ khi giao dịch còn mở, đã đồng ý khi giao dịch huỷ, bị từ chối khi sang sự cố giao nhận.
+    static AdminCancelRequest toCancelRequest(AdminRequestCore core) {
+        if (core.cancelRequest().cancelRequestedBy() == null) {
+            return null;
+        }
+        String status = core.status();
+        String state = "CANCELLED".equals(status)
+                ? "ACCEPTED"
+                : "DISPUTED".equals(status) || "COMPLETED".equals(status) ? "REJECTED" : "PENDING";
+        return new AdminCancelRequest(
+                state,
+                roleOf(core.cancelRequest().cancelRequestedBy(), core),
+                core.cancelRequest().cancelRequestedAt(),
+                core.cancelRequest().cancelRequestLabel(),
+                core.cancelRequest().cancelRequestReason(),
+                "PENDING".equals(state) ? core.deadlines().cancelRequestExpiresAt() : null);
+    }
+
+    static AdminReschedule toReschedule(AdminRequestCore core) {
+        var reschedule = core.reschedule();
+        int count = reschedule.rescheduleCount() == null ? 0 : reschedule.rescheduleCount();
+        boolean pending = reschedule.rescheduleProposedBy() != null
+                && ("LOGISTICS_CONFIRMED".equals(core.status()) || "AWAITING_HANDOVER".equals(core.status()));
+        if (count == 0 && !pending) {
+            return null;
+        }
+        return new AdminReschedule(
+                count,
+                pending,
+                pending ? roleOf(reschedule.rescheduleProposedBy(), core) : null,
+                pending ? reschedule.rescheduleProposedAt() : null,
+                pending ? reschedule.rescheduleMeetingTime() : null,
+                pending ? reschedule.rescheduleMeetingPlace() : null,
+                pending ? core.deadlines().rescheduleExpiresAt() : null);
+    }
+
+    // Giao hàng: mỗi chiều có địa chỉ, ngày gửi, mã vận đơn, ngày nhận. Admin thấy đủ địa chỉ (GN-12).
+    static List<AdminShippingLeg> toShippingLegs(
+            AdminRequestCore core, AdminRequestItemInfo mainItem, AdminRequestItemInfo offeredItem) {
+        if (!"SHIPPING".equals(core.deliveryMethod())) {
+            return List.of();
+        }
+        var shipping = core.shipping();
+        List<AdminShippingLeg> legs = new ArrayList<>();
+        legs.add(shippingLeg(
+                1,
+                mainItem == null ? null : mainItem.title(),
+                "Chủ bài",
+                "Người nhận",
+                shipping.receiverAddress(),
+                shipping.donorShippedAt(),
+                shipping.donorTrackingCode(),
+                core.receiverHandoverAt()));
+        if (core.offeredItemId() != null) {
+            legs.add(shippingLeg(
+                    2,
+                    offeredItem == null ? null : offeredItem.title(),
+                    "Người nhận",
+                    "Chủ bài",
+                    shipping.donorAddress(),
+                    shipping.receiverShippedAt(),
+                    shipping.receiverTrackingCode(),
+                    core.donorHandoverAt()));
+        }
+        return legs;
+    }
+
+    private static AdminShippingLeg shippingLeg(
+            int leg,
+            String title,
+            String senderRole,
+            String receiverRole,
+            String address,
+            Instant shippedAt,
+            String trackingCode,
+            Instant receivedAt) {
+        String step = receivedAt != null ? "Đã nhận" : shippedAt != null ? "Đã gửi" : "Chờ gửi";
+        return new AdminShippingLeg(
+                leg, title, senderRole, receiverRole, address, shippedAt, trackingCode, receivedAt, step);
+    }
+
     /**
      * Dòng thời gian dựng từ các cột mốc của giao dịch, sắp theo thời gian. Người huỷ lấy từ tiền tố của lý do huỷ. Mốc
      * huỷ dùng lần cập nhật cuối vì giao dịch không lưu riêng thời điểm huỷ.
@@ -214,8 +310,45 @@ public class AdminRequestDetailService {
         add(events, "Chủ bài đồng ý lịch hẹn", core.donorScheduleOkAt(), null);
         add(events, "Người nhận đồng ý lịch hẹn", core.receiverScheduleOkAt(), null);
         add(events, "Mở thông tin liên hệ cho hai bên", core.contactRevealedAt(), null);
-        add(events, "Chủ bài xác nhận đã giao nhận", core.donorHandoverAt(), null);
-        add(events, "Người nhận xác nhận đã giao nhận", core.receiverHandoverAt(), null);
+        boolean shipping = "SHIPPING".equals(core.deliveryMethod());
+        if (shipping) {
+            add(
+                    events,
+                    "Chủ bài gửi hàng (chiều 1)",
+                    core.shipping().donorShippedAt(),
+                    core.shipping().donorTrackingCode());
+            add(
+                    events,
+                    "Người nhận gửi hàng (chiều 2)",
+                    core.shipping().receiverShippedAt(),
+                    core.shipping().receiverTrackingCode());
+            add(events, "Chủ bài nhận được hàng (chiều 2)", core.donorHandoverAt(), null);
+            add(events, "Người nhận nhận được hàng (chiều 1)", core.receiverHandoverAt(), null);
+        } else {
+            add(events, "Chủ bài xác nhận đã giao nhận", core.donorHandoverAt(), null);
+            add(events, "Người nhận xác nhận đã giao nhận", core.receiverHandoverAt(), null);
+        }
+        if (core.cancelRequest().cancelRequestedBy() != null) {
+            String requester = roleOf(core.cancelRequest().cancelRequestedBy(), core);
+            String reason = core.cancelRequest().cancelRequestLabel() == null
+                    ? null
+                    : core.cancelRequest().cancelRequestLabel()
+                            + (core.cancelRequest().cancelRequestReason() == null
+                                    ? ""
+                                    : ". " + core.cancelRequest().cancelRequestReason());
+            add(
+                    events,
+                    requester + " đề nghị huỷ giao dịch",
+                    core.cancelRequest().cancelRequestedAt(),
+                    reason);
+        }
+        if (core.reschedule().rescheduleProposedBy() != null) {
+            add(
+                    events,
+                    roleOf(core.reschedule().rescheduleProposedBy(), core) + " đề nghị dời lịch",
+                    core.reschedule().rescheduleProposedAt(),
+                    null);
+        }
         if ("COMPLETED".equals(core.status())) {
             add(
                     events,

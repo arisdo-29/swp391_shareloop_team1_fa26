@@ -1,5 +1,6 @@
 package com.shareloop.admin.dto;
 
+import com.shareloop.request.dto.RequestDeadlines;
 import java.time.Instant;
 import java.util.List;
 
@@ -33,4 +34,10 @@ public record AdminRequestDetail(
         List<AdminRequestPoints> points,
         boolean messagesViewable,
         boolean cancellable,
-        Instant createdAt) {}
+        Instant createdAt,
+        // Đề nghị huỷ (kể cả đã xử lý), dời lịch, giao hàng hai chiều, mốc hạn và cờ tự hoàn tất (GN-06 tới GN-13)
+        AdminCancelRequest cancelRequest,
+        AdminReschedule reschedule,
+        List<AdminShippingLeg> shippingLegs,
+        RequestDeadlines deadlines,
+        boolean autoConfirmed) {}

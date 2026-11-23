@@ -3,11 +3,16 @@ package com.shareloop.request.service;
 import com.shareloop.common.exception.BusinessException;
 import com.shareloop.request.RequestErrorCode;
 import com.shareloop.request.dto.AdminRequestCore;
+import com.shareloop.request.dto.CancelRequestInfo;
 import com.shareloop.request.dto.ItemRequestBrief;
 import com.shareloop.request.dto.RepeatedCancelerRow;
+import com.shareloop.request.dto.RescheduleInfo;
+import com.shareloop.request.dto.ShippingInfo;
+import com.shareloop.request.entity.CancelRequestCode;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestStatus;
 import com.shareloop.request.repository.RequestRepository;
+import com.shareloop.setting.service.ConfigService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -21,9 +26,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RequestQueryService {
     private final RequestRepository repository;
+    private final RequestDeadlineCalculator deadlineCalculator;
 
-    public RequestQueryService(RequestRepository repository) {
+    public RequestQueryService(RequestRepository repository, ConfigService configService) {
         this.repository = repository;
+        this.deadlineCalculator = new RequestDeadlineCalculator(configService);
     }
 
     /**
@@ -152,6 +159,45 @@ public class RequestQueryService {
                 request.getCompletedAt(),
                 request.getCancelReason(),
                 request.getCreatedAt(),
-                request.getUpdatedAt());
+                request.getUpdatedAt(),
+                adminCancelRequestInfo(request),
+                new RescheduleInfo(
+                        request.getRescheduleProposedBy(),
+                        request.getRescheduleProposedAt(),
+                        request.getRescheduleMeetingTime(),
+                        request.getRescheduleMeetingPlace(),
+                        request.getRescheduleCount()),
+                adminShippingInfo(request),
+                deadlineCalculator.of(request));
+    }
+
+    // Admin thấy đề nghị huỷ cả khi đã xử lý (giao dịch huỷ hoặc sang DISPUTED), không chỉ khi đang chờ.
+    private static CancelRequestInfo adminCancelRequestInfo(Request request) {
+        if (request.getCancelRequestedBy() == null) {
+            return CancelRequestInfo.EMPTY;
+        }
+        CancelRequestCode code = request.getCancelRequestCode();
+        return new CancelRequestInfo(
+                request.getCancelRequestedBy(),
+                request.getCancelRequestedAt(),
+                code == null ? null : code.name(),
+                code == null ? null : code.label(),
+                request.getCancelRequestReason());
+    }
+
+    // Admin thấy đủ địa chỉ ở mọi trạng thái.
+    private static ShippingInfo adminShippingInfo(Request request) {
+        if (!request.isShipping()) {
+            return ShippingInfo.EMPTY;
+        }
+        return new ShippingInfo(
+                request.getReceiverAddress(),
+                request.getDonorAddress(),
+                request.getDonorShippedAt(),
+                request.getDonorTrackingCode(),
+                request.getReceiverShippedAt(),
+                request.getReceiverTrackingCode(),
+                request.getReceiverAddress() != null,
+                request.getDonorAddress() != null);
     }
 }

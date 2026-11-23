@@ -155,3 +155,41 @@ describe('AdminTransactions', () => {
     expect(within(dialog).getByRole('alert').textContent).toContain('không còn ở trạng thái huỷ được');
   });
 });
+
+describe('AdminTransactions nhãn và bộ lọc của luật mới', () => {
+  it('hiện nhãn đề nghị huỷ đang chờ, chờ gửi hàng và một bên đã nhận', async () => {
+    vi.mocked(adminRequestApi.list).mockResolvedValue(
+      page([
+        row({ id: 7, flagReason: null, labels: ['Đang chờ phản hồi đề nghị huỷ'] }),
+        row({
+          id: 8,
+          flagReason: null,
+          deliveryMethod: 'SHIPPING',
+          labels: ['Chờ gửi hàng', 'Quá hạn gửi hàng', 'Một bên đã nhận'],
+        }),
+      ]),
+    );
+    renderPage();
+
+    expect(await screen.findByText('Đang chờ phản hồi đề nghị huỷ', { selector: 'p' })).toBeTruthy();
+    expect(screen.getByText('Chờ gửi hàng')).toBeTruthy();
+    expect(screen.getByText('Một bên đã nhận')).toBeTruthy();
+  });
+
+  it('bấm hai nút lọc mới thì gọi API với pendingCancel và sendOverdue', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Sách cũ');
+
+    await user.click(screen.getByRole('button', { name: 'Đang chờ phản hồi đề nghị huỷ' }));
+    await waitFor(() =>
+      expect(adminRequestApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ pendingCancel: true })),
+    );
+    await user.click(screen.getByRole('button', { name: 'Giao hàng quá hạn gửi' }));
+    await waitFor(() =>
+      expect(adminRequestApi.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ pendingCancel: true, sendOverdue: true }),
+      ),
+    );
+  });
+});

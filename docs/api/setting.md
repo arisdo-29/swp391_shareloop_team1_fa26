@@ -361,3 +361,20 @@ Thành công trả về danh sách toàn bộ mục sau khi đã cập nhật l�
 Công khai, không cần đăng nhập. Trả map khoá cấu hình sang số nguyên cho một danh sách khoá chọn lọc (`PublicConfigController.PUBLIC_KEYS`): hạn mức yêu cầu và giao dịch, số ngày chờ, cửa sổ khiếu nại và giải trình, ngưỡng báo cáo, điểm và sao, lượt AI miễn phí, các giới hạn đẩy bài, số ngày hiển thị bài. Không trả khoá nội bộ (phí, từ khoá cấm, lý do nghiêm trọng...). Đây là đường duy nhất được thêm vào danh sách công khai của `SecurityConfig`, các đường `/api/v1/configs/**` khác vẫn cần đăng nhập. Frontend dùng cho trang Giới thiệu và các câu có số ngày, số giờ, có giá trị dự phòng khi gọi lỗi.
 
 Câu lỗi nghiệp vụ có số (yêu cầu chờ tối đa, hạn khiếu nại, hạn giải trình, đổi số điện thoại, huỷ tự động) được dựng từ cấu hình lúc ném lỗi. Câu mặc định của `ErrorCode` không còn ghi số cứng.
+
+## Khoá cấu hình mới của đợt 3 (23/11/2026)
+
+Admin xem và sửa ở trang Cấu hình (nhóm Giao dịch), mô tả tiếng Việt lấy từ `ConfigKey`. Các khoá người dùng cần thấy số cũng nằm trong `GET /api/v1/configs/public`.
+
+| Khoá | Mặc định | Công khai | Ý nghĩa |
+|---|---|---|---|
+| `cancel_request_response_hours` | 24 | có | Số giờ bên kia được phản hồi đề nghị huỷ hoặc đề nghị dời lịch |
+| `cancel_after_contact_alert_count` | 3 | không | Số lần đề nghị huỷ sau khi thấy liên hệ thì hiện ở màn Giám sát bất thường |
+| `cancel_after_contact_window_days` | 30 | không | Số ngày theo dõi cho cảnh báo trên |
+| `meeting_max_days_ahead` | 7 | có | Giờ hẹn hoặc ngày gửi hàng dự kiến xa nhất, tính từ lúc đề xuất |
+| `reschedule_max_count` | 2 | có | Số lần dời lịch tối đa mỗi giao dịch, chỉ tính lần được đồng ý |
+| `confirmed_stale_cancel_days` | 3 | có | Giao dịch đã chốt lịch qua giờ hẹn (hoặc hạn gửi) quá số ngày này mà không ai làm gì thì tự huỷ |
+| `shipping_send_deadline_days` | 3 | có | Hạn gửi của mỗi chiều = ngày gửi dự kiến cộng số ngày này |
+| `deadline_reminder_hours_before_response` | 6 | có | Nhắc bên được hỏi khi còn số giờ này trước hạn phản hồi |
+
+`auto_confirm_days_shipping` (7) nay tính theo từng chiều kể từ lúc gửi. Cột mới ở bảng `requests` (ERD vẫn 17 bảng): `cancel_requested_by`, `cancel_requested_at`, `cancel_request_code`, `cancel_request_reason`, `reschedule_proposed_by`, `reschedule_proposed_at`, `reschedule_meeting_time`, `reschedule_meeting_place`, `reschedule_count`, `receiver_address`, `donor_address`, `donor_shipped_at`, `donor_tracking_code`, `receiver_shipped_at`, `receiver_tracking_code`.

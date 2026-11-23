@@ -116,3 +116,11 @@ Lấy số lượng thông báo chưa đọc của tôi (dùng cho icon quả ch
 |---|---|---|
 | `NOTIFICATION_NOT_FOUND` | 404 | Không tìm thấy thông báo hoặc không thuộc về người dùng hiện tại |
 | `NOTIFICATION_SEND_FAILED` | 500 | Gửi thông báo hoặc email thất bại |
+
+## Loại thông báo mới của đợt 3 (23/11/2026)
+
+Tất cả thuộc nhóm Giao dịch ở bộ lọc của frontend (`notificationCategory`), link dẫn tới `/requests/{id}`.
+
+`CANCEL_REQUESTED`, `CANCEL_REQUEST_WITHDRAWN`, `CANCEL_REQUEST_REJECTED`, `CANCEL_REQUEST_REMINDER`, `RESCHEDULE_PROPOSED`, `RESCHEDULE_ACCEPTED`, `RESCHEDULE_REJECTED`, `RESCHEDULE_EXPIRED`, `RESCHEDULE_REMINDER`, `SHIPMENT_SENT`, `SHIP_DATE_REMINDER`, `SHIP_OVERDUE_REMINDER`, `SHIP_OVERDUE_NOTICE`, `HANDOVER_STALE_REMINDER`, `HANDOVER_AUTO_CONFIRM_REMINDER`, `SCHEDULE_AUTO_CANCEL_REMINDER`, `MEETING_REMINDER`.
+
+Các loại `*_REMINDER` không gửi lặp: trước khi gửi, job kiểm thông báo cùng loại, cùng người, cùng link đã gửi kể từ mốc sự kiện (`NotificationService.hasNotificationSince`), không cần cột đánh dấu.

@@ -10,6 +10,7 @@ import {
   type AdminRequestParty,
 } from '../../services/adminRequestApi';
 import { formatTrustStars, getRankLabel } from '../../utils/reputation';
+import { formatDeadline } from '../../utils/request';
 import { requestStatusLabel } from '../../utils/request';
 import { adminErrorMessage } from './adminErrors';
 import {
@@ -42,6 +43,16 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
       <dd className="text-right font-medium text-text-primary">{children}</dd>
     </div>
   );
+}
+
+const cancelStateLabels: Record<string, string> = {
+  PENDING: 'Đang chờ phản hồi',
+  ACCEPTED: 'Đã xử lý, giao dịch huỷ vì bên kia đồng ý hoặc im lặng',
+  REJECTED: 'Đã xử lý, bên kia không đồng ý nên giao dịch sang sự cố giao nhận',
+};
+
+function when(value: string | null | undefined) {
+  return value ? formatDeadline(value) : '—';
 }
 
 function Party({ title, party }: { title: string; party: AdminRequestParty | null }) {
@@ -193,13 +204,39 @@ export function AdminTransactionDetail() {
             </div>
           </Card>
 
+          {detail.shippingLegs && detail.shippingLegs.length > 0 ? (
+            <Card title="Giao hàng hai chiều">
+              <div className="space-y-3">
+                {detail.shippingLegs.map((leg) => (
+                  <div key={leg.leg} className="rounded-md bg-surface-low p-3 text-sm" data-testid={`admin-leg-${leg.leg}`}>
+                    <p className="font-semibold text-text-primary">
+                      Chiều {leg.leg}: {leg.itemTitle || 'Món đã xoá'} ({leg.step})
+                    </p>
+                    <dl className="mt-1 divide-y divide-border/60">
+                      <Row label="Người gửi">{leg.senderRole}</Row>
+                      <Row label="Người nhận">{leg.receiverRole}</Row>
+                      <Row label="Địa chỉ giao tới">{leg.address || 'Chưa nhập'}</Row>
+                      <Row label="Ngày gửi">{formatDateTime(leg.shippedAt)}</Row>
+                      <Row label="Mã vận đơn">{leg.trackingCode || '—'}</Row>
+                      <Row label="Ngày nhận">{formatDateTime(leg.receivedAt)}</Row>
+                    </dl>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          ) : null}
+
           <Card title="Giao nhận">
             <dl className="divide-y divide-border/60">
               <Row label="Hình thức">
                 {detail.deliveryMethod ? deliveryMethodLabels[detail.deliveryMethod] : 'Chưa chọn'}
               </Row>
               <Row label="Địa điểm hoặc địa chỉ">{detail.meetingPlace || '—'}</Row>
-              <Row label="Giờ hẹn">{formatDateTime(detail.meetingTime)}</Row>
+              <Row label={detail.deliveryMethod === 'SHIPPING' ? 'Ngày gửi hàng dự kiến' : 'Giờ hẹn'}>
+                {formatDateTime(detail.meetingTime)}
+              </Row>
+              {detail.reschedule ? <Row label="Số lần đã dời lịch">{detail.reschedule.count}</Row> : null}
+              {detail.autoConfirmed ? <Row label="Hoàn tất">Hệ thống tự ghi nhận do bên nhận im lặng</Row> : null}
             </dl>
             {detail.photos.length > 0 ? (
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -224,6 +261,53 @@ export function AdminTransactionDetail() {
         </div>
 
         <div className="space-y-5">
+          {detail.cancelRequest ? (
+            <Card title="Đề nghị huỷ">
+              <dl className="divide-y divide-border/60">
+                <Row label="Trạng thái">{cancelStateLabels[detail.cancelRequest.state] ?? detail.cancelRequest.state}</Row>
+                <Row label="Người đề nghị">{detail.cancelRequest.requestedByRole}</Row>
+                <Row label="Lúc đề nghị">{formatDateTime(detail.cancelRequest.requestedAt)}</Row>
+                <Row label="Lý do">
+                  {[detail.cancelRequest.label, detail.cancelRequest.reason].filter(Boolean).join('. ') || '—'}
+                </Row>
+                {detail.cancelRequest.expiresAt ? (
+                  <Row label="Hạn phản hồi">{when(detail.cancelRequest.expiresAt)}</Row>
+                ) : null}
+              </dl>
+            </Card>
+          ) : null}
+
+          {detail.reschedule && (detail.reschedule.pending || detail.reschedule.count > 0) ? (
+            <Card title="Dời lịch">
+              <dl className="divide-y divide-border/60">
+                <Row label="Số lần đã dời được đồng ý">{detail.reschedule.count}</Row>
+                {detail.reschedule.pending ? (
+                  <>
+                    <Row label="Đề nghị đang chờ">{detail.reschedule.proposedByRole} đề nghị</Row>
+                    <Row label="Giờ mới đề nghị">{formatDateTime(detail.reschedule.proposedMeetingTime)}</Row>
+                    <Row label="Hạn phản hồi">{when(detail.reschedule.expiresAt)}</Row>
+                  </>
+                ) : null}
+              </dl>
+            </Card>
+          ) : null}
+
+          {detail.deadlines && Object.values(detail.deadlines).some(Boolean) ? (
+            <Card title="Mốc hạn">
+              <dl className="divide-y divide-border/60">
+                {detail.deadlines.autoCancelAt ? <Row label="Tự huỷ nếu không ai làm gì">{when(detail.deadlines.autoCancelAt)}</Row> : null}
+                {detail.deadlines.autoConfirmAt ? <Row label="Tự hoàn tất">{when(detail.deadlines.autoConfirmAt)}</Row> : null}
+                {detail.deadlines.sendDeadlineAt ? <Row label="Hạn gửi hàng">{when(detail.deadlines.sendDeadlineAt)}</Row> : null}
+                {detail.deadlines.cancelRequestExpiresAt ? (
+                  <Row label="Hạn phản hồi đề nghị huỷ">{when(detail.deadlines.cancelRequestExpiresAt)}</Row>
+                ) : null}
+                {detail.deadlines.rescheduleExpiresAt ? (
+                  <Row label="Hạn phản hồi đề nghị dời lịch">{when(detail.deadlines.rescheduleExpiresAt)}</Row>
+                ) : null}
+              </dl>
+            </Card>
+          ) : null}
+
           <Card title="Dòng thời gian">
             <ol className="space-y-3 border-l border-border pl-4 text-sm">
               {detail.timeline.map((event, index) => (
