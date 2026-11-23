@@ -197,3 +197,116 @@ describe('AdminTransactionDetail', () => {
     expect(await screen.findByText('Hai bên')).toBeTruthy();
   });
 });
+
+describe('AdminTransactionDetail luật huỷ có xác nhận, dời lịch và giao hàng hai chiều', () => {
+  it('hiện đề nghị huỷ đang chờ cùng hạn phản hồi và số lần dời lịch', async () => {
+    vi.mocked(adminRequestApi.detail).mockResolvedValue(
+      detail({
+        status: 'LOGISTICS_CONFIRMED',
+        cancelRequest: {
+          state: 'PENDING',
+          requestedByRole: 'Chủ bài',
+          requestedAt: '2026-11-30T08:00:00Z',
+          label: 'Tôi bận đột xuất',
+          reason: 'Đi công tác',
+          expiresAt: '2026-12-01T08:00:00Z',
+        },
+        reschedule: {
+          count: 1,
+          pending: true,
+          proposedByRole: 'Người nhận',
+          proposedAt: '2026-11-30T09:00:00Z',
+          proposedMeetingTime: '2026-12-03T09:00:00Z',
+          proposedMeetingPlace: null,
+          expiresAt: '2026-12-01T09:00:00Z',
+        },
+      }),
+    );
+    renderPage();
+
+    await screen.findByText('Đề nghị huỷ');
+    expect(screen.getByText('Đang chờ phản hồi')).toBeTruthy();
+    expect(screen.getByText('Tôi bận đột xuất. Đi công tác')).toBeTruthy();
+    expect(screen.getByText('Dời lịch', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getAllByText('Số lần đã dời được đồng ý').length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toContain('PENDING');
+  });
+
+  it('đề nghị huỷ đã xử lý hiện kết quả bằng chữ, không hiện mã', async () => {
+    vi.mocked(adminRequestApi.detail).mockResolvedValue(
+      detail({
+        status: 'DISPUTED',
+        cancelRequest: {
+          state: 'REJECTED',
+          requestedByRole: 'Người nhận',
+          requestedAt: '2026-11-30T08:00:00Z',
+          label: 'Bên kia chưa gửi hàng',
+          reason: null,
+          expiresAt: null,
+        },
+      }),
+    );
+    renderPage();
+
+    await screen.findByText('Đề nghị huỷ');
+    expect(screen.getByText(/bên kia không đồng ý nên giao dịch sang sự cố giao nhận/)).toBeTruthy();
+    expect(document.body.textContent).not.toContain('REJECTED');
+  });
+
+  it('Giao hàng hai chiều hiện từng chiều với địa chỉ, ngày gửi, mã vận đơn và ngày nhận', async () => {
+    vi.mocked(adminRequestApi.detail).mockResolvedValue(
+      detail({
+        status: 'AWAITING_HANDOVER',
+        deliveryMethod: 'SHIPPING',
+        meetingPlace: null,
+        autoConfirmed: false,
+        shippingLegs: [
+          {
+            leg: 1,
+            itemTitle: 'Xe đạp cũ',
+            senderRole: 'Chủ bài',
+            receiverRole: 'Người nhận',
+            address: '12 Lê Lợi',
+            shippedAt: '2026-11-25T08:00:00Z',
+            trackingCode: 'GHN111',
+            receivedAt: '2026-11-26T08:00:00Z',
+            step: 'Đã nhận',
+          },
+          {
+            leg: 2,
+            itemTitle: 'Ghế xoay',
+            senderRole: 'Người nhận',
+            receiverRole: 'Chủ bài',
+            address: '34 Trần Phú',
+            shippedAt: null,
+            trackingCode: null,
+            receivedAt: null,
+            step: 'Chờ gửi',
+          },
+        ],
+        deadlines: {
+          autoCancelAt: null,
+          autoConfirmAt: null,
+          cancelRequestExpiresAt: null,
+          rescheduleExpiresAt: null,
+          sendDeadlineAt: '2026-12-01T08:00:00Z',
+          leg1AutoReceiveAt: null,
+          leg2AutoReceiveAt: null,
+        },
+      }),
+    );
+    renderPage();
+
+    await screen.findByText('Giao hàng hai chiều');
+    const first = within(screen.getByTestId('admin-leg-1'));
+    expect(first.getByText('12 Lê Lợi')).toBeTruthy();
+    expect(first.getByText('GHN111')).toBeTruthy();
+    expect(first.getByText(/Chiều 1: Xe đạp cũ \(Đã nhận\)/)).toBeTruthy();
+    const second = within(screen.getByTestId('admin-leg-2'));
+    expect(second.getByText('34 Trần Phú')).toBeTruthy();
+    expect(second.getByText(/Chờ gửi/)).toBeTruthy();
+    expect(screen.getByText('Ngày gửi hàng dự kiến')).toBeTruthy();
+    expect(screen.getByText('Hạn gửi hàng')).toBeTruthy();
+    expect(document.body.textContent).not.toContain('SHIPPING');
+  });
+});

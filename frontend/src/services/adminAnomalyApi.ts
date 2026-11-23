@@ -15,6 +15,12 @@ export interface RepeatedPair {
   lastCompletedAt: string;
 }
 
+export interface RepeatedCanceler {
+  user: AnomalyUser;
+  cancelCount: number;
+  lastCancelRequestedAt: string;
+}
+
 export interface SharedIpAccount {
   id: number;
   fullName: string;
@@ -39,6 +45,9 @@ export interface AnomalyReportResponse {
   ipWindowDays?: number;
   ipMinAccounts?: number;
   sharedIpGroups?: SharedIpGroup[];
+  cancelWindowDays?: number;
+  cancelThreshold?: number;
+  repeatedCancelers?: RepeatedCanceler[];
 }
 
 export const adminAnomalyApi = {

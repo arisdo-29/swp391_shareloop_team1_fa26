@@ -285,6 +285,11 @@ public class Report extends BaseEntity {
         }
     }
 
+    /** Khiếu nại được chấp thuận nhưng Admin quyết không trừ sao ai (đề nghị huỷ không tố ai). */
+    public void markNoStarsDeducted() {
+        this.starsDeducted = 0;
+    }
+
     /**
      * Đóng một báo cáo đang chờ của cùng bài khi Admin đã chấp thuận báo cáo khác về bài đó (D-07, BC-05): tính là có
      * cơ sở nhưng không trừ sao, vì mỗi bài chỉ bị trừ 1 sao cho lần chấp thuận.

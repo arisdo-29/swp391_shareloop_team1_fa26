@@ -34,4 +34,64 @@ public record AdminRequestCore(
         Instant completedAt,
         String cancelReason,
         Instant createdAt,
-        Instant updatedAt) {}
+        Instant updatedAt,
+        // Đề nghị huỷ (kể cả đã xử lý), dời lịch, giao hàng hai chiều và mốc hạn cho trang chi tiết của Admin (GN-06
+        // tới GN-13)
+        CancelRequestInfo cancelRequest,
+        RescheduleInfo reschedule,
+        ShippingInfo shipping,
+        RequestDeadlines deadlines) {
+
+    // Dạng 22 tham số (chưa có đề nghị huỷ, dời lịch, giao hàng, mốc hạn) để code và test đang gọi vẫn compile.
+    public AdminRequestCore(
+            long id,
+            long itemId,
+            long receiverId,
+            Long offeredItemId,
+            String type,
+            String status,
+            String deliveryMethod,
+            String meetingPlace,
+            Instant meetingTime,
+            Instant donorWaiverAt,
+            Instant receiverWaiverAt,
+            Instant donorScheduleOkAt,
+            Instant receiverScheduleOkAt,
+            Instant contactRevealedAt,
+            Instant donorHandoverAt,
+            Instant receiverHandoverAt,
+            boolean autoConfirmed,
+            Instant reservedAt,
+            Instant completedAt,
+            String cancelReason,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(
+                id,
+                itemId,
+                receiverId,
+                offeredItemId,
+                type,
+                status,
+                deliveryMethod,
+                meetingPlace,
+                meetingTime,
+                donorWaiverAt,
+                receiverWaiverAt,
+                donorScheduleOkAt,
+                receiverScheduleOkAt,
+                contactRevealedAt,
+                donorHandoverAt,
+                receiverHandoverAt,
+                autoConfirmed,
+                reservedAt,
+                completedAt,
+                cancelReason,
+                createdAt,
+                updatedAt,
+                CancelRequestInfo.EMPTY,
+                RescheduleInfo.EMPTY,
+                ShippingInfo.EMPTY,
+                RequestDeadlines.EMPTY);
+    }
+}

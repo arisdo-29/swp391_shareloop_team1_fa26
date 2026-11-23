@@ -355,8 +355,56 @@ public enum ConfigKey {
             "7",
             ConfigGroup.TRANSACTION,
             "Hạn tự động hoàn tất khi giao hàng",
-            "Giao hàng: một bên đã xác nhận mà bên kia im lặng quá số ngày này thì giao dịch tự hoàn tất. Dài hơn gặp"
-                    + " trực tiếp vì cần thời gian vận chuyển."),
+            "Giao hàng, tính cho từng chiều: bên gửi đã bấm Đã gửi hàng mà bên nhận im lặng quá số ngày này kể từ lúc gửi"
+                    + " thì chiều đó tự ghi nhận Đã nhận. Đủ mọi chiều thì giao dịch hoàn tất."),
+    CANCEL_REQUEST_RESPONSE_HOURS(
+            "cancel_request_response_hours",
+            "24",
+            ConfigGroup.TRANSACTION,
+            "Hạn phản hồi đề nghị huỷ",
+            "Số giờ bên kia được phản hồi một đề nghị huỷ giao dịch đã chốt lịch. Im lặng quá hạn thì giao dịch tự huỷ, không phạt ai."),
+    CANCEL_AFTER_CONTACT_ALERT_COUNT(
+            "cancel_after_contact_alert_count",
+            "3",
+            ConfigGroup.TRANSACTION,
+            "Ngưỡng cảnh báo huỷ nhiều lần sau khi thấy liên hệ",
+            "Một người đề nghị huỷ giao dịch đã huỷ từ số lần này trở lên trong khoảng theo dõi thì hiện ở trang Giám sát bất thường. Không tự phạt."),
+    CANCEL_AFTER_CONTACT_WINDOW_DAYS(
+            "cancel_after_contact_window_days",
+            "30",
+            ConfigGroup.TRANSACTION,
+            "Số ngày theo dõi huỷ sau khi thấy liên hệ",
+            "Số ngày gần nhất dùng để đếm các lần đề nghị huỷ sau khi đã thấy thông tin liên hệ."),
+    MEETING_MAX_DAYS_AHEAD(
+            "meeting_max_days_ahead",
+            "7",
+            ConfigGroup.TRANSACTION,
+            "Giờ hẹn xa nhất",
+            "Số ngày xa nhất, tính từ lúc đề xuất, mà hai bên được hẹn giờ giao nhận hoặc ngày gửi hàng."),
+    RESCHEDULE_MAX_COUNT(
+            "reschedule_max_count",
+            "2",
+            ConfigGroup.TRANSACTION,
+            "Số lần dời lịch tối đa",
+            "Số lần tối đa một giao dịch được dời lịch sau khi đã chốt. Chỉ tính các lần bên kia đồng ý."),
+    CONFIRMED_STALE_CANCEL_DAYS(
+            "confirmed_stale_cancel_days",
+            "3",
+            ConfigGroup.TRANSACTION,
+            "Số ngày tự huỷ giao dịch đã chốt lịch mà không ai làm gì",
+            "Giao dịch đã chốt lịch, qua giờ hẹn hoặc hạn gửi hàng quá số ngày này mà chưa bên nào bấm gì thì tự huỷ, không phạt ai."),
+    SHIPPING_SEND_DEADLINE_DAYS(
+            "shipping_send_deadline_days",
+            "3",
+            ConfigGroup.TRANSACTION,
+            "Hạn gửi hàng",
+            "Hạn gửi của mỗi chiều giao hàng là ngày gửi hàng dự kiến cộng thêm số ngày này. Quá hạn mà chưa gửi thì bên nhận được báo chưa nhận hàng."),
+    DEADLINE_REMINDER_HOURS_BEFORE_RESPONSE(
+            "deadline_reminder_hours_before_response",
+            "6",
+            ConfigGroup.TRANSACTION,
+            "Nhắc trước hạn phản hồi",
+            "Số giờ trước hạn phản hồi đề nghị huỷ hoặc đề nghị dời lịch thì hệ thống nhắc bên được hỏi một lần."),
     STUCK_REQUEST_HOURS(
             "stuck_request_hours",
             "48",

@@ -562,9 +562,8 @@ class ReportServiceTest {
         verify(reputationService, never()).deductStar(eq(10L), any(Integer.class), any());
         verify(itemService).hide(200L);
         verify(itemService, never()).unhide(anyLong());
-        verify(requestService, never()).resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean());
         verify(requestService, never())
-                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any(), any());
     }
 
     @Test
@@ -586,7 +585,7 @@ class ReportServiceTest {
         verify(reputationService).deductStar(eq(10L), eq(1), anyString());
         verify(reputationService, never()).deductStar(eq(20L), any(Integer.class), any());
         verify(requestService, never())
-                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any(), any());
     }
 
     @Test
@@ -943,11 +942,14 @@ class ReportServiceTest {
                 .findRequest(77L);
         when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        // when
-        reportService.conclude(1L, 14L, new ConcludeReportRequest(ReportDecision.UPHOLD, null));
+        // when: Admin chọn cách xử lý cho từng món (GN-14)
+        java.util.List<com.shareloop.request.dto.ItemDisputeOutcome> outcomes =
+                java.util.List.of(new com.shareloop.request.dto.ItemDisputeOutcome(
+                        105L, com.shareloop.request.dto.ItemDisputeOutcome.Choice.HIDE));
+        reportService.conclude(1L, 14L, new ConcludeReportRequest(ReportDecision.UPHOLD, null, false, outcomes));
 
-        // then
-        verify(requestService).resolveDisputedRequest(77L, true, 200L);
+        // then: chuyển nguyên danh sách lựa chọn và Admin kết luận cho RequestService
+        verify(requestService).resolveDisputedRequest(77L, true, 1L, outcomes);
     }
 
     @Test
@@ -964,7 +966,7 @@ class ReportServiceTest {
         reportService.conclude(1L, 15L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
 
         // then
-        verify(requestService).resolveDisputedRequest(77L, false, 200L);
+        verify(requestService).resolveDisputedRequest(77L, false, 1L, null);
     }
 
     @Test
@@ -982,7 +984,7 @@ class ReportServiceTest {
 
         // then
         verify(requestService, never())
-                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any(), any());
     }
 
     @Test
@@ -1174,6 +1176,108 @@ class ReportServiceTest {
 
         assertThat(response.status()).isEqualTo(ReportStatus.RESOLVED);
         verify(reputationService).deductStar(eq(violatorId), eq(1), eq("Bùng hẹn không lý do"));
+    }
+
+    private Report cancelRejectedReport(Long reportId, Long requestId, Long reporterId, Long respondentId) {
+        Report report = new Report(
+                reporterId,
+                TargetType.REQUEST,
+                null,
+                respondentId,
+                requestId,
+                ReportReason.OTHER,
+                "Bên kia không đồng ý huỷ",
+                ReportStage.BEFORE);
+        ReflectionTestUtils.setField(report, "id", reportId);
+        when(reportRepository.findByIdForUpdate(reportId)).thenReturn(Optional.of(report));
+        when(requestService.isCancelDisputeWithoutAccusation(requestId)).thenReturn(true);
+        org.mockito.Mockito.lenient()
+                .when(reportRepository.save(any(Report.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient()
+                .doReturn(new ReportService.RequestSnapshot(requestId, 1L, respondentId, "DISPUTED", null))
+                .when(reportService)
+                .findRequest(requestId);
+        return report;
+    }
+
+    @Test
+    @DisplayName("Chấp thuận khiếu nại đề nghị huỷ không tố ai, Admin không chọn ai: không trừ sao bên không đồng ý")
+    void conclude_uphold_cancelDisputeWithoutAccusationAndNoPenalty_deductsNoStar() {
+        // given: người cho 601 đề nghị huỷ vì bận, người nhận 100 không đồng ý nên 100 là bên bị khiếu nại
+        Report report = cancelRejectedReport(21L, 502L, 601L, 100L);
+
+        // when
+        reportService.conclude(1L, 21L, new ConcludeReportRequest(ReportDecision.UPHOLD, "Huỷ không phạt"));
+
+        // then
+        verify(reputationService, never()).deductStar(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any());
+        assertThat(report.getStarsDeducted()).isZero();
+        verify(requestService).resolveDisputedRequest(502L, true, 1L, null);
+    }
+
+    @Test
+    @DisplayName("Chấp thuận khiếu nại đề nghị huỷ không tố ai, Admin chọn bên bị trừ: chỉ bên đó mất 1 sao")
+    void conclude_uphold_cancelDisputeWithoutAccusationAndChosenParty_deductsOnlyThatParty() {
+        // given
+        Report report = cancelRejectedReport(22L, 503L, 601L, 100L);
+        when(requestService.getChatContext(503L))
+                .thenReturn(new RequestChatContext(503L, RequestStatus.DISPUTED, 100L, 601L, 1L, null));
+
+        // when
+        reportService.conclude(
+                1L, 22L, new ConcludeReportRequest(ReportDecision.UPHOLD, "Trừ người đề nghị", false, null, 601L));
+
+        // then
+        verify(reputationService).deductStar(eq(601L), eq(1), eq("Trừ người đề nghị"));
+        verify(reputationService, never()).deductStar(eq(100L), org.mockito.ArgumentMatchers.anyInt(), any());
+        assertThat(report.getStarsDeducted()).isEqualTo((short) 1);
+    }
+
+    @Test
+    @DisplayName("Admin chọn bên bị trừ không thuộc giao dịch: ném REPORT_PENALIZED_USER_INVALID, không trừ sao")
+    void conclude_uphold_cancelDisputeWithoutAccusationAndStranger_throwsPenalizedUserInvalid() {
+        // given
+        cancelRejectedReport(23L, 504L, 601L, 100L);
+        when(requestService.getChatContext(504L))
+                .thenReturn(new RequestChatContext(504L, RequestStatus.DISPUTED, 100L, 601L, 1L, null));
+        ConcludeReportRequest request = new ConcludeReportRequest(ReportDecision.UPHOLD, "Ghi chú", false, null, 999L);
+
+        // when and then
+        assertThatThrownBy(() -> reportService.conclude(1L, 23L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ReportErrorCode.REPORT_PENALIZED_USER_INVALID);
+        verify(reputationService, never()).deductStar(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any());
+    }
+
+    @Test
+    @DisplayName("Chấp thuận khiếu nại có tố bên kia: vẫn trừ 1 sao bên bị tố, bỏ qua penalizedUserId")
+    void conclude_uphold_accusationDispute_stillDeductsAccusedParty() {
+        // given: requestService.isCancelDisputeWithoutAccusation mặc định false
+        Report report = new Report(
+                100L,
+                TargetType.REQUEST,
+                null,
+                601L,
+                505L,
+                ReportReason.NO_SHOW,
+                "Không đến điểm hẹn",
+                ReportStage.BEFORE);
+        ReflectionTestUtils.setField(report, "id", 24L);
+        when(reportRepository.findByIdForUpdate(24L)).thenReturn(Optional.of(report));
+        doReturn(new ReportService.RequestSnapshot(505L, 1L, 100L, "DISPUTED", null))
+                .when(reportService)
+                .findRequest(505L);
+        when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // when
+        reportService.conclude(
+                1L, 24L, new ConcludeReportRequest(ReportDecision.UPHOLD, "Có cơ sở", false, null, 100L));
+
+        // then
+        verify(reputationService).deductStar(eq(601L), eq(1), eq("Có cơ sở"));
+        verify(reputationService, never()).deductStar(eq(100L), org.mockito.ArgumentMatchers.anyInt(), any());
     }
 
     @Test

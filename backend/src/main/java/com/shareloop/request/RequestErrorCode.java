@@ -41,6 +41,27 @@ public enum RequestErrorCode implements ErrorCode {
     REQUEST_FORBIDDEN(HttpStatus.FORBIDDEN, "Bạn không có quyền thao tác trên yêu cầu này."),
     REQUEST_REPUTATION_BLOCKED(HttpStatus.FORBIDDEN, "Tài khoản có 0 sao uy tín, không thể gửi yêu cầu giao dịch."),
     REQUEST_ADMIN_BLOCKED(HttpStatus.FORBIDDEN, "Quản trị viên không được gửi yêu cầu giao dịch."),
+    REQUEST_BEFORE_MEETING_TIME(
+            HttpStatus.CONFLICT, "Chưa tới giờ hẹn. Bạn có thể đề nghị dời lịch hoặc đề nghị huỷ giao dịch."),
+    REQUEST_CANCEL_REQUEST_PENDING(HttpStatus.CONFLICT, "Đã có một đề nghị huỷ đang chờ phản hồi."),
+    REQUEST_CANCEL_REQUEST_NOT_FOUND(HttpStatus.CONFLICT, "Không có đề nghị huỷ nào đang chờ phản hồi."),
+    REQUEST_CANCEL_REASON_INVALID(HttpStatus.BAD_REQUEST, "Lý do huỷ không hợp lệ ở thời điểm này."),
+    REQUEST_SCHEDULE_TOO_FAR(HttpStatus.BAD_REQUEST, "Giờ hẹn quá xa. Chỉ hẹn trong vòng vài ngày tới."),
+    REQUEST_RESCHEDULE_LIMIT_REACHED(HttpStatus.CONFLICT, "Giao dịch đã dời lịch đủ số lần cho phép."),
+    REQUEST_RESCHEDULE_NOT_ALLOWED(
+            HttpStatus.CONFLICT, "Chỉ dời lịch được trước giờ hẹn và khi chưa bên nào bấm hoàn tất hoặc gửi hàng."),
+    REQUEST_RESCHEDULE_PENDING(HttpStatus.CONFLICT, "Đã có một đề nghị dời lịch đang chờ phản hồi."),
+    REQUEST_RESCHEDULE_NOT_FOUND(HttpStatus.CONFLICT, "Không có đề nghị dời lịch nào đang chờ phản hồi."),
+    REQUEST_SHIPPING_ADDRESS_REQUIRED(
+            HttpStatus.BAD_REQUEST, "Cần đủ địa chỉ nhận hàng của các bên trước khi chốt lịch giao hàng."),
+    REQUEST_LEG_NOT_SHIPPED(HttpStatus.CONFLICT, "Bên kia chưa gửi hàng nên chưa thể xác nhận đã nhận."),
+    REQUEST_LEG_ALREADY_SHIPPED(HttpStatus.CONFLICT, "Bạn đã gửi hàng cho giao dịch này rồi."),
+    REQUEST_LEG_NOT_APPLICABLE(HttpStatus.CONFLICT, "Giao dịch này không có chiều giao hàng đó dành cho bạn."),
+    REQUEST_TRACKING_CODE_INVALID(HttpStatus.BAD_REQUEST, "Mã vận đơn phải từ 3 đến 50 ký tự."),
+    REQUEST_SEND_DEADLINE_NOT_PASSED(HttpStatus.CONFLICT, "Bên kia chưa quá hạn gửi hàng nên chưa thể báo chưa nhận."),
+    REQUEST_NOT_SHIPPING(HttpStatus.CONFLICT, "Chỉ giao dịch Giao hàng mới có thao tác này."),
+    REQUEST_ITEM_OUTCOMES_REQUIRED(
+            HttpStatus.BAD_REQUEST, "Cần chọn cách xử lý cho từng món của giao dịch trước khi chấp thuận khiếu nại."),
     REQUEST_OFFER_CHANGE_NOT_ALLOWED(
             HttpStatus.CONFLICT,
             "Chỉ giao dịch Cho đang chờ chốt lịch mới được chuyển sang Trao đổi bằng món đề nghị.");

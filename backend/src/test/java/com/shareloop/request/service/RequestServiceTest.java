@@ -114,6 +114,7 @@ class RequestServiceTest {
     void setUp() {
         lenient().when(configService.getInt(ConfigKey.MAX_PENDING_REQUESTS)).thenReturn(5);
         lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_TRANSACTIONS)).thenReturn(5);
+        lenient().when(configService.getInt(ConfigKey.MEETING_MAX_DAYS_AHEAD)).thenReturn(7);
         lenient().when(configService.getInt(ConfigKey.POST_FEE)).thenReturn(5);
         lenient().when(reputationService.canRequest(anyLong())).thenReturn(true);
         lenient().when(userService.isLocked(anyLong())).thenReturn(false);
@@ -1611,7 +1612,9 @@ class RequestServiceTest {
                 .findItemSnapshot(1L);
 
         // Receiver gọi confirm kèm agreeToWaiver = true
-        RequestResponse response = requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true));
+        // Luật mới (GN-12): người nhận phải có địa chỉ nhận hàng mới chốt được lịch giao hàng
+        RequestResponse response =
+                requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true, "12 Lê Lợi"));
 
         assertThat(response.status()).isEqualTo("LOGISTICS_CONFIRMED");
         assertThat(response.donorWaiverAt()).isNotNull();
@@ -1723,7 +1726,7 @@ class RequestServiceTest {
         request.confirmLogistics(false, true, Instant.now());
         assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
@@ -1747,7 +1750,7 @@ class RequestServiceTest {
         request.confirmLogistics(false, true, Instant.now());
         assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
@@ -1771,7 +1774,7 @@ class RequestServiceTest {
         request.confirmHandover(true, Instant.now());
         assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
@@ -1796,7 +1799,7 @@ class RequestServiceTest {
         request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
         request.confirmLogistics(false, true, Instant.now());
         request.confirmHandover(true, Instant.now());
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).thenReturn(24);
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
@@ -1850,7 +1853,7 @@ class RequestServiceTest {
         request.select(Instant.now());
         request.proposeSchedule("IN_PERSON", "FPT", Instant.now().plus(1, ChronoUnit.DAYS), true, true, Instant.now());
         request.confirmLogistics(false, true, Instant.now());
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
@@ -1866,7 +1869,7 @@ class RequestServiceTest {
         request.confirmLogistics(false, true, Instant.now());
         request.confirmHandover(true, Instant.now());
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "SWAP", "APPROVED")))
                 .when(requestService)
@@ -1884,7 +1887,7 @@ class RequestServiceTest {
     @DisplayName("confirmHandover: Người ngoài gọi handover -> ném lỗi REQUEST_FORBIDDEN")
     void confirmHandover_whenOutsider_throwsForbidden() {
         Request request = new Request(1L, 10L, null, "GIVE");
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
@@ -1904,7 +1907,7 @@ class RequestServiceTest {
         request.confirmLogistics(false, true, Instant.now());
         request.confirmHandover(true, Instant.now());
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);
@@ -1922,7 +1925,7 @@ class RequestServiceTest {
         Request request = new Request(1L, 10L, null, "GIVE");
         request.select(Instant.now()); // RESERVED
 
-        when(requestRepository.findById(101L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(request));
         doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
                 .when(requestService)
                 .findItemSnapshot(1L);

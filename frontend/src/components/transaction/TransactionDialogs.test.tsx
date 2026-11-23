@@ -3,10 +3,15 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { RequestResponse } from '../../services/requestApi';
+import { requestApi, type RequestResponse } from '../../services/requestApi';
 import { openDispute } from '../../services/reportApi';
-import { DisputeDialog } from './TransactionDialogs';
-import { handoverFailedReasons } from '../../utils/handoverOutcome';
+import {
+  CancelRequestDialog,
+  DisputeDialog,
+  HandoverFailedDialog,
+  RejectCancelRequestDialog,
+} from './TransactionDialogs';
+import { afterMeetingReasons, BEFORE_MEETING_REASONS, isBeforeMeetingTime } from '../../utils/handoverOutcome';
 
 vi.mock('../../services/reportApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../services/reportApi')>();
@@ -100,22 +105,231 @@ describe('DisputeDialog', () => {
 });
 
 
-describe('handoverFailedReasons', () => {
-  it('gặp trực tiếp: không đến điểm hẹn theo vai và không liên hệ được', () => {
-    expect(handoverFailedReasons(false, false)).toEqual([
-      'Người giao không đến điểm hẹn',
-      'Không liên hệ được với bên còn lại',
+describe('lý do huỷ và giờ hẹn', () => {
+  it('trước giờ hẹn có ba lý do và từ giờ hẹn có lý do theo hình thức giao nhận', () => {
+    expect(BEFORE_MEETING_REASONS.map((option) => option.label)).toEqual([
+      'Tôi bận đột xuất',
+      'Tôi không còn nhu cầu',
+      'Lý do khác',
     ]);
-    expect(handoverFailedReasons(false, true)[0]).toBe('Người nhận không đến điểm hẹn');
+    expect(afterMeetingReasons(false).map((option) => option.code)).toEqual([
+      'COUNTERPART_NO_SHOW',
+      'CANNOT_CONTACT',
+      'OTHER',
+    ]);
+    expect(afterMeetingReasons(true)[0].label).toBe('Bên kia chưa gửi hàng');
   });
 
-  it('giao hàng: người nhận thấy lý do người gửi không gửi, người gửi thấy lý do người nhận không nhận', () => {
-    expect(handoverFailedReasons(true, false)).toEqual([
-      'Hàng bị thất lạc hoặc hư hỏng khi vận chuyển',
-      'Người gửi không gửi hàng như đã hẹn',
-      'Không liên hệ được với bên còn lại',
-    ]);
-    expect(handoverFailedReasons(true, true)).toContain('Người nhận không nhận hàng');
-    expect(handoverFailedReasons(true, true)).not.toContain('Người gửi không gửi hàng như đã hẹn');
+  it('isBeforeMeetingTime so giờ hẹn với bây giờ', () => {
+    const now = new Date('2026-12-01T10:00:00Z');
+    expect(isBeforeMeetingTime('2026-12-01T12:00:00Z', now)).toBe(true);
+    expect(isBeforeMeetingTime('2026-12-01T09:00:00Z', now)).toBe(false);
+    expect(isBeforeMeetingTime(undefined, now)).toBe(false);
+  });
+});
+
+const confirmedRequest: RequestResponse = {
+  id: 101,
+  itemId: 45,
+  receiverId: 12,
+  donorId: 9,
+  type: 'GIVE',
+  status: 'LOGISTICS_CONFIRMED',
+  deliveryMethod: 'IN_PERSON',
+  contactRevealedAt: '2026-11-30T08:00:00Z',
+  createdAt: '2026-11-20T08:00:00Z',
+};
+
+describe('CancelRequestDialog', () => {
+  it('lý do khác bắt buộc nhập chữ rồi gửi đề nghị huỷ với mã lý do', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(requestApi, 'requestCancel').mockResolvedValue({ ...confirmedRequest });
+    const onDone = vi.fn();
+    render(
+      <CancelRequestDialog
+        request={confirmedRequest}
+        currentUserId={9}
+        itemTitle="Máy pha cà phê"
+        partnerName="Bình"
+        viewerIsDonor
+        onClose={vi.fn()}
+        onDone={onDone}
+        onStale={vi.fn()}
+      />,
+    );
+    const submit = screen.getByRole('button', { name: 'Gửi đề nghị huỷ' }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+
+    await user.selectOptions(screen.getByLabelText('Lý do đề nghị huỷ'), 'OTHER');
+    expect(submit.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText(/Mô tả lý do/), { target: { value: 'Tôi phải đi công tác' } });
+    await user.click(submit);
+
+    await waitFor(() =>
+      expect(requestApi.requestCancel).toHaveBeenCalledWith(101, 9, {
+        code: 'OTHER',
+        reason: 'Tôi phải đi công tác',
+      }),
+    );
+    expect(onDone).toHaveBeenCalledOnce();
+  });
+
+  it('lý do có sẵn gửi được ngay mà không cần nhập chữ', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(requestApi, 'requestCancel').mockResolvedValue({ ...confirmedRequest });
+    render(
+      <CancelRequestDialog
+        request={confirmedRequest}
+        currentUserId={9}
+        itemTitle="Máy pha cà phê"
+        partnerName="Bình"
+        viewerIsDonor
+        onClose={vi.fn()}
+        onDone={vi.fn()}
+        onStale={vi.fn()}
+      />,
+    );
+    await user.selectOptions(screen.getByLabelText('Lý do đề nghị huỷ'), 'BUSY');
+    await user.click(screen.getByRole('button', { name: 'Gửi đề nghị huỷ' }));
+
+    await waitFor(() =>
+      expect(requestApi.requestCancel).toHaveBeenCalledWith(101, 9, { code: 'BUSY', reason: undefined }),
+    );
+  });
+});
+
+describe('Lý do khác ngắn hơn 5 ký tự', () => {
+  it('đề nghị huỷ: báo lỗi tiếng Việt, khoá nút và không gọi API', async () => {
+    const user = userEvent.setup();
+    const spy = vi.spyOn(requestApi, 'requestCancel').mockResolvedValue({ ...confirmedRequest });
+    render(
+      <CancelRequestDialog
+        request={confirmedRequest}
+        currentUserId={9}
+        itemTitle="Máy pha cà phê"
+        partnerName="Bình"
+        viewerIsDonor
+        onClose={vi.fn()}
+        onDone={vi.fn()}
+        onStale={vi.fn()}
+      />,
+    );
+    await user.selectOptions(screen.getByLabelText('Lý do đề nghị huỷ'), 'OTHER');
+    fireEvent.change(screen.getByLabelText(/Mô tả lý do/), { target: { value: 'abc' } });
+
+    expect(screen.getByText('Mô tả cần ít nhất 5 ký tự.')).toBeTruthy();
+    const submit = screen.getByRole('button', { name: 'Gửi đề nghị huỷ' }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    await user.click(submit);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('giao nhận không thành công: báo lỗi tiếng Việt, khoá nút và không gọi API', async () => {
+    const user = userEvent.setup();
+    const pastRequest = { ...confirmedRequest, meetingTime: '2026-11-30T10:00:00Z' };
+    const spy = vi.spyOn(requestApi, 'handoverFailed').mockResolvedValue({ ...pastRequest });
+    render(
+      <HandoverFailedDialog
+        request={pastRequest}
+        currentUserId={12}
+        itemTitle="Máy pha cà phê"
+        partnerName="An"
+        viewerIsDonor={false}
+        onClose={vi.fn()}
+        onDone={vi.fn()}
+        onStale={vi.fn()}
+      />,
+    );
+    await user.selectOptions(screen.getByLabelText('Lý do giao nhận không thành công'), 'OTHER');
+    fireEvent.change(screen.getByLabelText(/Mô tả sự cố/), { target: { value: 'ab' } });
+
+    expect(screen.getByText('Mô tả cần ít nhất 5 ký tự.')).toBeTruthy();
+    const submit = screen.getByRole('button', { name: /Gửi đề nghị huỷ|Gửi khiếu nại/ }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    await user.click(submit);
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('HandoverFailedDialog', () => {
+  const pastRequest = { ...confirmedRequest, meetingTime: '2026-11-30T10:00:00Z' };
+
+  it('gửi mã lý do không đến điểm hẹn và nút ghi rõ là đề nghị huỷ khi bên kia chưa bấm hoàn tất', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(requestApi, 'handoverFailed').mockResolvedValue({ ...pastRequest });
+    render(
+      <HandoverFailedDialog
+        request={pastRequest}
+        currentUserId={12}
+        itemTitle="Máy pha cà phê"
+        partnerName="An"
+        viewerIsDonor={false}
+        onClose={vi.fn()}
+        onDone={vi.fn()}
+        onStale={vi.fn()}
+      />,
+    );
+    await user.selectOptions(
+      screen.getByLabelText('Lý do giao nhận không thành công'),
+      'COUNTERPART_NO_SHOW',
+    );
+    await user.click(screen.getByRole('button', { name: 'Gửi đề nghị huỷ' }));
+
+    await waitFor(() =>
+      expect(requestApi.handoverFailed).toHaveBeenCalledWith(101, 12, {
+        code: 'COUNTERPART_NO_SHOW',
+        reason: undefined,
+        evidenceMediaIds: undefined,
+      }),
+    );
+  });
+
+  it('khi bên kia đã bấm hoàn tất thì nút là gửi khiếu nại', () => {
+    render(
+      <HandoverFailedDialog
+        request={{ ...pastRequest, status: 'AWAITING_HANDOVER', donorHandoverAt: '2026-11-30T11:00:00Z' }}
+        currentUserId={12}
+        itemTitle="Máy pha cà phê"
+        partnerName="An"
+        viewerIsDonor={false}
+        onClose={vi.fn()}
+        onDone={vi.fn()}
+        onStale={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Gửi khiếu nại' })).toBeTruthy();
+  });
+});
+
+describe('RejectCancelRequestDialog', () => {
+  it('bắt buộc giải trình từ 5 ký tự rồi gửi không đồng ý', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(requestApi, 'rejectCancelRequest').mockResolvedValue({ ...confirmedRequest, status: 'DISPUTED' });
+    const onDone = vi.fn();
+    render(
+      <RejectCancelRequestDialog
+        request={confirmedRequest}
+        currentUserId={12}
+        itemTitle="Máy pha cà phê"
+        partnerName="An"
+        viewerIsDonor={false}
+        onClose={vi.fn()}
+        onDone={onDone}
+        onStale={vi.fn()}
+      />,
+    );
+    const submit = screen.getByRole('button', { name: 'Gửi giải trình' }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText(/Giải trình/), { target: { value: 'Tôi vẫn muốn nhận' } });
+    await user.click(submit);
+
+    await waitFor(() =>
+      expect(requestApi.rejectCancelRequest).toHaveBeenCalledWith(101, 12, {
+        explanation: 'Tôi vẫn muốn nhận',
+        evidenceMediaIds: undefined,
+      }),
+    );
+    expect(onDone).toHaveBeenCalledOnce();
   });
 });

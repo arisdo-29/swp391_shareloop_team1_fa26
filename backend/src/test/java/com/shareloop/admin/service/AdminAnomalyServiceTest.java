@@ -12,6 +12,7 @@ import com.shareloop.admin.dto.AnomalyUser;
 import com.shareloop.admin.dto.RepeatedPairAnomaly;
 import com.shareloop.reputation.dto.RepeatedPair;
 import com.shareloop.reputation.service.ReputationService;
+import com.shareloop.request.service.RequestQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.dto.SharedIpAccount;
@@ -45,6 +46,9 @@ class AdminAnomalyServiceTest {
     UserService userService;
 
     @Mock
+    RequestQueryService requestQueryService;
+
+    @Mock
     ConfigService configService;
 
     AdminAnomalyService service;
@@ -52,11 +56,13 @@ class AdminAnomalyServiceTest {
     @BeforeEach
     void setUp() {
         service = new AdminAnomalyService(
-                reputationService, userService, configService, Clock.fixed(NOW, ZoneOffset.UTC));
+                reputationService, requestQueryService, userService, configService, Clock.fixed(NOW, ZoneOffset.UTC));
         when(configService.getInt(ConfigKey.REPUTATION_PAIR_WINDOW_DAYS)).thenReturn(90);
         when(configService.getInt(ConfigKey.REPUTATION_PAIR_ALERT_THRESHOLD)).thenReturn(5);
         when(configService.getInt(ConfigKey.IP_ALERT_WINDOW_DAYS)).thenReturn(30);
         when(configService.getInt(ConfigKey.IP_ALERT_MIN_ACCOUNTS)).thenReturn(3);
+        when(configService.getInt(ConfigKey.CANCEL_AFTER_CONTACT_WINDOW_DAYS)).thenReturn(30);
+        when(configService.getInt(ConfigKey.CANCEL_AFTER_CONTACT_ALERT_COUNT)).thenReturn(3);
     }
 
     @Test

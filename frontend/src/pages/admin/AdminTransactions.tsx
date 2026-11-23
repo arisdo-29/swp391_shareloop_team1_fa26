@@ -65,6 +65,9 @@ export function AdminTransactions() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [cancelling, setCancelling] = useState<AdminRequestRow | null>(null);
+  // Hai bộ lọc của luật mới: có đề nghị huỷ đang chờ, Giao hàng quá hạn gửi
+  const [pendingCancelOnly, setPendingCancelOnly] = useState(false);
+  const [sendOverdueOnly, setSendOverdueOnly] = useState(false);
 
   const dateRangeError =
     fromDate && toDate && fromDate > toDate ? '"Từ ngày" không được sau "Đến ngày".' : '';
@@ -77,6 +80,8 @@ export function AdminTransactions() {
     const params: AdminRequestListParams = {
       status: status || undefined,
       stuck: stuckOnly ? true : undefined,
+      pendingCancel: pendingCancelOnly ? true : undefined,
+      sendOverdue: sendOverdueOnly ? true : undefined,
       q: query || undefined,
       type: type || undefined,
       deliveryMethod: deliveryMethod || undefined,
@@ -106,7 +111,20 @@ export function AdminTransactions() {
     return () => {
       active = false;
     };
-  }, [page, query, reloadKey, status, stuckOnly, type, deliveryMethod, fromDate, toDate, dateRangeError]);
+  }, [
+    page,
+    query,
+    reloadKey,
+    status,
+    stuckOnly,
+    pendingCancelOnly,
+    sendOverdueOnly,
+    type,
+    deliveryMethod,
+    fromDate,
+    toDate,
+    dateRangeError,
+  ]);
 
   const closeDialog = useCallback(() => setCancelling(null), []);
 
@@ -221,6 +239,28 @@ export function AdminTransactions() {
         >
           Quá giờ xác nhận bàn giao
         </Button>
+        <Button
+          type="button"
+          variant={pendingCancelOnly ? 'primary' : 'outline'}
+          aria-pressed={pendingCancelOnly}
+          onClick={() => {
+            setPendingCancelOnly((current) => !current);
+            setPage(0);
+          }}
+        >
+          Đang chờ phản hồi đề nghị huỷ
+        </Button>
+        <Button
+          type="button"
+          variant={sendOverdueOnly ? 'primary' : 'outline'}
+          aria-pressed={sendOverdueOnly}
+          onClick={() => {
+            setSendOverdueOnly((current) => !current);
+            setPage(0);
+          }}
+        >
+          Giao hàng quá hạn gửi
+        </Button>
       </form>
 
       {error ? (
@@ -312,6 +352,11 @@ function TransactionRow({ row, onCancel }: { row: AdminRequestRow; onCancel: () 
           {requestStatusLabel[row.status]}
         </span>
         {row.flagReason ? <p className="mt-1 max-w-56 text-xs font-semibold text-error">Bị kẹt: {row.flagReason}</p> : null}
+        {(row.labels ?? []).map((label) => (
+          <p key={label} className="mt-1 max-w-56 text-xs font-semibold text-warning">
+            {label}
+          </p>
+        ))}
       </td>
       <td className="text-xs">{row.deliveryMethod ? deliveryMethodLabels[row.deliveryMethod] : '—'}</td>
       <td className="text-xs">{formatDateTime(row.meetingTime)}</td>

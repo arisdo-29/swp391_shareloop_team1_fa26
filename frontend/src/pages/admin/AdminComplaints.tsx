@@ -22,6 +22,13 @@ import {
 } from '../../services/reportApi';
 import type { ApiError } from '../../services/http';
 import { formatDeadline } from '../../utils/request';
+import { adminRequestApi, type AdminRequestDetail } from '../../services/adminRequestApi';
+import { DisputeItemOutcomes } from '../../components/admin/DisputeItemOutcomes';
+import {
+  defaultItemChoices,
+  disputeItemRows,
+  type ItemChoice,
+} from '../../utils/disputeItemOutcomes';
 import { disputeReasonLabels } from '../../utils/disputeErrors';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
@@ -205,6 +212,11 @@ export function AdminComplaints() {
   const [decision, setDecision] = useState<ReportDecision | ''>('');
   const [note, setNote] = useState('');
   const [deliberateFalse, setDeliberateFalse] = useState(false);
+  // Khiếu nại sự cố giao nhận đang DISPUTED: chọn cách xử lý từng món khi chấp thuận (GN-14)
+  const [requestDetail, setRequestDetail] = useState<AdminRequestDetail | null>(null);
+  const [itemChoices, setItemChoices] = useState<Record<number, ItemChoice>>({});
+  // Khiếu nại do bên kia không đồng ý đề nghị huỷ không tố ai: bên bị trừ sao ('' là không trừ ai)
+  const [penalizedUserId, setPenalizedUserId] = useState('');
   const [decisionStep, setDecisionStep] = useState<'review' | 'choose' | 'confirm'>('review');
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
@@ -247,6 +259,9 @@ export function AdminComplaints() {
     setNote('');
     setDeliberateFalse(false);
     setDecision('');
+    setRequestDetail(null);
+    setItemChoices({});
+    setPenalizedUserId('');
     reportApi
       .detail(selectedId, controller.signal)
       .then((result) => {
@@ -260,6 +275,27 @@ export function AdminComplaints() {
       });
     return () => controller.abort();
   }, [selectedId, reload]);
+
+  // Tải các món của giao dịch khi hồ sơ là khiếu nại giao dịch đang DISPUTED, để Admin chọn cách xử lý từng món
+  useEffect(() => {
+    const requestId = detail?.report.targetType === 'REQUEST' ? detail.report.requestId : null;
+    if (!detail || requestId === null || concluded(detail.report.status)) return;
+    let active = true;
+    adminRequestApi
+      .detail(requestId)
+      .then((result) => {
+        if (!active || result.status !== 'DISPUTED') return;
+        setRequestDetail(result);
+        // Lý do chung (OTHER) là đề nghị huỷ không tố ai: không bên nào bị coi là vi phạm nên mặc định Mở lại
+        const violatorId =
+          detail.report.reason === 'OTHER' ? null : (detail.reportedUser?.id ?? null);
+        setItemChoices(defaultItemChoices(disputeItemRows(result), violatorId));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [detail]);
 
   useEffect(() => {
     if (selectedId === null) opener.current?.focus();
@@ -285,6 +321,17 @@ export function AdminComplaints() {
         decision,
         note: note.trim(),
         deliberateFalseReport: decision === 'DISMISS' && deliberateFalse ? true : undefined,
+        itemOutcomes:
+          decision === 'UPHOLD' && requestDetail
+            ? disputeItemRows(requestDetail).map((row) => ({
+                itemId: row.itemId,
+                choice: itemChoices[row.itemId] ?? 'REOPEN',
+              }))
+            : undefined,
+        penalizedUserId:
+          decision === 'UPHOLD' && requestDetail && isCancelWithoutAccusation && penalizedUserId
+            ? Number(penalizedUserId)
+            : undefined,
       });
       setNoticeTone('success');
       setNotice('Đã kết luận khiếu nại.');
@@ -353,6 +400,8 @@ export function AdminComplaints() {
 
   const closeDetail = () => setSelectedId(null);
   const title = detail?.report.targetName;
+  const isCancelWithoutAccusation =
+    detail?.report.targetType === 'REQUEST' && detail.report.reason === 'OTHER';
   const detailIsConcluded = detail && concluded(detail.report.status);
 
   return (
@@ -714,6 +763,33 @@ export function AdminComplaints() {
                           </label>
                         ))}
                       </fieldset>
+                      {decision === 'UPHOLD' && requestDetail ? (
+                        <DisputeItemOutcomes
+                          rows={disputeItemRows(requestDetail)}
+                          choices={itemChoices}
+                          onChange={(itemId, choice) =>
+                            setItemChoices((current) => ({ ...current, [itemId]: choice }))
+                          }
+                        />
+                      ) : null}
+                      {decision === 'UPHOLD' && requestDetail && isCancelWithoutAccusation ? (
+                        <Select
+                          label="Bên bị trừ 1 sao"
+                          hint="Đề nghị huỷ này không tố ai. Mặc định huỷ giao dịch mà không phạt bên nào."
+                          value={penalizedUserId}
+                          onChange={(event) => setPenalizedUserId(event.target.value)}
+                        >
+                          <option value="">Không trừ sao ai</option>
+                          {requestDetail.donor ? (
+                            <option value={requestDetail.donor.userId ?? undefined}>
+                              {requestDetail.donor.name ?? 'Chủ bài'} (chủ bài)
+                            </option>
+                          ) : null}
+                          <option value={requestDetail.receiver.userId ?? undefined}>
+                            {requestDetail.receiver.name ?? 'Người nhận'} (người nhận)
+                          </option>
+                        </Select>
+                      ) : null}
                       {decision === 'DISMISS' && !isRefusalReport(detail.report) ? (
                         <label className="flex items-center gap-2 text-sm">
                           <input

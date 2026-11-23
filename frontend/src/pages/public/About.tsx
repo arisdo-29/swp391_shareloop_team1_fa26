@@ -26,6 +26,12 @@ function toRules(config: PublicConfig) {
     chatOpenDays: config.chat_open_days,
     autoConfirmDays: config.auto_confirm_days,
     autoConfirmDaysShipping: config.auto_confirm_days_shipping,
+    meetingMaxDaysAhead: config.meeting_max_days_ahead,
+    rescheduleMaxCount: config.reschedule_max_count,
+    cancelResponseHours: config.cancel_request_response_hours,
+    confirmedStaleCancelDays: config.confirmed_stale_cancel_days,
+    shippingSendDeadlineDays: config.shipping_send_deadline_days,
+    reminderHours: config.deadline_reminder_hours_before_response,
     complaintHours: config.complaint_window_hours,
     responseHours: config.response_window_hours,
     reportHideThreshold: config.report_hide_threshold,
@@ -71,7 +77,7 @@ const receiverSteps = (RULES: Rules) => [
   ],
   [
     'Chốt lịch và xác nhận đã nhận',
-    `Hai bên cùng đồng ý thì lịch được chốt. Quá ${RULES.chatOpenDays} ngày từ lúc được chọn mà chưa chốt thì giao dịch tự huỷ. Gặp xong thì mỗi bên chọn một trong ba kết quả: Hoàn tất giao nhận, Giao nhận không thành công hoặc Từ chối giao nhận.`,
+    `Hai bên cùng đồng ý thì lịch được chốt. Quá ${RULES.chatOpenDays} ngày từ lúc được chọn mà chưa chốt thì giao dịch tự huỷ. Giờ hẹn (hoặc ngày gửi hàng dự kiến) chỉ được chọn trong vòng ${RULES.meetingMaxDaysAhead} ngày tới. Từ giờ hẹn trở đi, mỗi bên chọn một trong ba kết quả: Đã giao nhận xong, Giao nhận không thành công hoặc Từ chối giao nhận.`,
   ],
 ] as const;
 
@@ -90,14 +96,14 @@ const giverSteps = (RULES: Rules) => [
   ],
   [
     'Giao và xác nhận đã giao',
-    `Giao xong, hai bên cùng bấm "Hoàn tất giao nhận" thì giao dịch hoàn tất, cả hai được cộng điểm tích luỹ. Một bên đã bấm mà bên kia im lặng ${RULES.autoConfirmDays} ngày (gửi qua đơn vị vận chuyển là ${RULES.autoConfirmDaysShipping} ngày) và không có khiếu nại thì giao dịch tự hoàn tất.`,
+    `Giao xong, hai bên cùng bấm "Đã giao nhận xong" thì giao dịch hoàn tất, cả hai được cộng điểm tích luỹ. Một bên đã bấm mà bên kia im lặng ${RULES.autoConfirmDays} ngày và không có khiếu nại thì giao dịch tự hoàn tất. Giao hàng thì tính theo từng chiều: chiều đã gửi mà bên nhận im lặng ${RULES.autoConfirmDaysShipping} ngày kể từ lúc gửi thì tự ghi nhận đã nhận.`,
   ],
 ] as const;
 
 const safetyTips = (RULES: Rules) => [
   'Hẹn ở chỗ đông người: cổng chợ, quán cà phê, sảnh chung cư.',
   'Nếu gửi qua đơn vị vận chuyển, hai bên tự gửi và đều phải bấm cam kết tự chịu trách nhiệm.',
-  'ShareLoop không bồi thường tiền hàng hay phí gửi. Hãy kiểm đồ kỹ trước khi bấm "Hoàn tất giao nhận".',
+  'ShareLoop không bồi thường tiền hàng hay phí gửi. Hãy kiểm đồ kỹ trước khi bấm "Đã giao nhận xong" hoặc "Tôi đã nhận được hàng".',
   'Không chuyển tiền hay đặt cọc dưới bất kỳ hình thức nào.',
   'Trước khi chốt lịch, tin nhắn chứa số điện thoại, email, link, mạng xã hội sẽ bị chặn. Sau khi chốt, họ tên, email, số điện thoại của nhau hiện trong trang giao dịch, chỉ trong app.',
   `Bạn báo cáo được một bài hoặc một người. Bài có ${RULES.reportHideThreshold} báo cáo đang chờ thì tạm ẩn, chủ bài có ${RULES.responseHours} giờ giải trình.`,
@@ -131,11 +137,19 @@ const faqs = (RULES: Rules) => [
   ],
   [
     'Tôi có huỷ giao dịch được không?',
-    'Được. Trước khi chốt lịch, bên nào cũng huỷ được, kèm lý do và không mất phí. Sau khi chốt lịch, nếu không gặp được nhau thì bấm "Giao nhận không thành công": bên kia chưa bấm hoàn tất thì giao dịch bị huỷ, không ai bị phạt. Giao dịch đang tranh chấp thì bạn phải chờ Admin.',
+    `Được. Trước khi chốt lịch, bên nào cũng huỷ được, kèm lý do và không mất phí. Sau khi chốt lịch thì giao dịch chưa huỷ ngay mà cần bên kia xác nhận: bạn bấm "Đề nghị huỷ giao dịch" (trước giờ hẹn) hoặc "Giao nhận không thành công" (từ giờ hẹn). Bên kia có ${RULES.cancelResponseHours} giờ để trả lời. Đồng ý hoặc im lặng thì giao dịch huỷ và không ai bị phạt, không đồng ý thì giao dịch chuyển sang sự cố giao nhận để Admin xác minh. Bạn rút lại được đề nghị trước khi bên kia trả lời.`,
   ],
   [
     'Bên kia không bấm xác nhận thì sao?',
-    `Một bên đã bấm hoàn tất, bên kia im lặng ${RULES.autoConfirmDays} ngày (gửi qua đơn vị vận chuyển là ${RULES.autoConfirmDaysShipping} ngày) và không có khiếu nại thì giao dịch tự hoàn tất. Nếu bạn chưa nhận được đồ thì bấm "Giao nhận không thành công" để mở khiếu nại. Quá ${RULES.chatOpenDays} ngày từ lúc được chọn mà chưa chốt lịch thì giao dịch tự huỷ.`,
+    `Một bên đã bấm hoàn tất, bên kia im lặng ${RULES.autoConfirmDays} ngày (Giao hàng tính theo từng chiều, ${RULES.autoConfirmDaysShipping} ngày kể từ lúc gửi) và không có khiếu nại thì giao dịch tự hoàn tất, hệ thống nhắc bạn trước 24 giờ. Nếu bạn chưa nhận được đồ thì bấm "Giao nhận không thành công" để mở khiếu nại. Quá ${RULES.chatOpenDays} ngày từ lúc được chọn mà chưa chốt lịch thì giao dịch tự huỷ. Đã chốt lịch mà qua giờ hẹn ${RULES.confirmedStaleCancelDays} ngày vẫn chưa ai xác nhận thì cũng tự huỷ, không ai bị phạt.`,
+  ],
+  [
+    'Tôi có dời lịch được không?',
+    `Được, trước giờ hẹn và khi chưa bên nào bấm hoàn tất hoặc gửi hàng. Bạn bấm "Đề nghị dời lịch", bên kia đồng ý thì đổi lịch, thông tin liên hệ vẫn mở và hai bên không phải cam kết lại. Bên kia từ chối hoặc im lặng quá hạn thì giữ lịch cũ. Mỗi giao dịch dời tối đa ${RULES.rescheduleMaxCount} lần, chỉ tính các lần được đồng ý. Hệ thống nhắc bên được hỏi khi còn ${RULES.reminderHours} giờ.`,
+  ],
+  [
+    'Giao hàng qua đơn vị vận chuyển hoạt động thế nào?',
+    `Mỗi bên tự nhập địa chỉ nhận hàng của mình, địa chỉ chỉ hiện cho bên kia sau khi chốt lịch. Cho tặng có một chiều, Trao đổi có hai chiều. Mỗi chiều đi qua ba bước Chờ gửi, Đã gửi, Đã nhận: bên gửi bấm "Tôi đã gửi hàng" kèm mã vận đơn, bên nhận bấm "Tôi đã nhận được hàng" sau khi hàng tới. Hạn gửi là ngày gửi dự kiến cộng ${RULES.shippingSendDeadlineDays} ngày. Quá hạn mà chưa gửi thì bên nhận báo được, khi đó bên gửi đồng ý huỷ, phản đối bằng cách bấm đã gửi hoặc im lặng. ShareLoop không tra mã vận đơn và không bồi thường tiền hàng hay phí gửi.`,
   ],
   [
     'Đồ nhận được không đúng mô tả thì sao?',

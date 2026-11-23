@@ -101,11 +101,13 @@ describe('ScheduleCard waiver', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lưu lịch hẹn' }));
 
     await waitFor(() =>
+      // Luật mới (GN-12): Giao hàng không dùng địa điểm, chủ bài ở Cho tặng cũng không cần địa chỉ
       expect(update).toHaveBeenCalledWith(101, 9, {
         deliveryMethod: 'SHIPPING',
-        meetingPlace: 'Cổng trường',
+        meetingPlace: undefined,
         meetingTime: expect.any(String),
         agreeToWaiver: true,
+        shippingAddress: undefined,
       }),
     );
   });
@@ -128,5 +130,77 @@ describe('ScheduleCard waiver', () => {
     rerender(scheduleCard({ ...savedRequest, meetingPlace: 'Sân trường' }, isDonor));
     expect(waiverCheckbox().checked).toBe(false);
     expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Địa điểm gặp' }).value).toBe('Sân trường');
+  });
+});
+
+describe('ScheduleCard giao hàng', () => {
+  const shippingRequest: RequestResponse = {
+    id: 101,
+    itemId: 45,
+    receiverId: 12,
+    donorId: 9,
+    type: 'GIVE',
+    status: 'AWAITING_LOGISTICS',
+    deliveryMethod: 'SHIPPING',
+    meetingTime: new Date(Date.now() + 86_400_000).toISOString(),
+    createdAt: '2026-11-17T08:00:00Z',
+    donorScheduleOkAt: '2026-11-17T09:00:00Z',
+    donorWaiverAt: '2026-11-17T09:00:00Z',
+  };
+
+  function card(request: RequestResponse, viewerIsDonor: boolean) {
+    return (
+      <ScheduleCard
+        request={request}
+        currentUserId={viewerIsDonor ? 9 : 12}
+        viewerIsDonor={viewerIsDonor}
+        partnerName="Bình"
+        onUpdated={() => undefined}
+      />
+    );
+  }
+
+  it('người nhận thấy nhãn Ngày gửi hàng dự kiến, ô địa chỉ của mình và không có ô địa điểm', () => {
+    render(card(shippingRequest, false));
+    expect(screen.getByLabelText(/Ngày gửi hàng dự kiến/)).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Địa chỉ nhận hàng của bạn' })).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: 'Địa điểm gặp' })).toBeNull();
+  });
+
+  it('chủ bài ở Cho tặng không có ô địa chỉ, ở Trao đổi thì có', () => {
+    render(card(shippingRequest, true));
+    expect(screen.queryByRole('textbox', { name: 'Địa chỉ nhận hàng của bạn' })).toBeNull();
+    cleanup();
+    render(card({ ...shippingRequest, type: 'SWAP', offeredItemId: 77 }, true));
+    expect(screen.getByRole('textbox', { name: 'Địa chỉ nhận hàng của bạn' })).toBeTruthy();
+  });
+
+  it('hiện trạng thái địa chỉ của bên kia mà không hiện nội dung', () => {
+    render(card({ ...shippingRequest, receiverAddressProvided: true }, true));
+    expect(screen.getByText(/Địa chỉ của Bình: Đã nhập/)).toBeTruthy();
+    cleanup();
+    render(card({ ...shippingRequest, receiverAddressProvided: false }, true));
+    expect(screen.getByText(/Địa chỉ của Bình: Chưa nhập/)).toBeTruthy();
+  });
+
+  it('khoá nút lưu khi thiếu địa chỉ và gửi địa chỉ khi lưu', async () => {
+    const update = vi.spyOn(requestApi, 'updateSchedule').mockResolvedValue(shippingRequest);
+    render(card({ ...shippingRequest, donorScheduleOkAt: undefined, donorWaiverAt: undefined }, false));
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Lưu lịch hẹn' }).disabled).toBe(true);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Địa chỉ nhận hàng của bạn' }), {
+      target: { value: '12 Lê Lợi' },
+    });
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu lịch hẹn' }));
+
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        101,
+        12,
+        expect.objectContaining({ deliveryMethod: 'SHIPPING', shippingAddress: '12 Lê Lợi' }),
+      ),
+    );
   });
 });

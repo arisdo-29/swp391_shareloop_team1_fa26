@@ -604,3 +604,31 @@ Admin kết luận báo cáo bài hoặc người dùng thì người báo nhậ
 - `POST /admin/reports/{id}/conclude` nhận thêm `deliberateFalseReport` (boolean, mặc định `false`). Bác bỏ mà tích cờ này thì trừ 1 sao người báo (`TRUST_STARS_DEDUCTED`) và ghi nhật ký `STARS`. Báo cáo "Từ chối giao nhận" bỏ qua cờ vì người báo đã bị trừ sao tự động.
 - `POST /reports` kiểm lý do theo loại đối tượng, sai trả `400 REPORT_REASON_NOT_ALLOWED` ("Lý do không phù hợp với loại báo cáo"). Bài (`ITEM`): `NOT_AS_DESCRIBED`, `COUNTERFEIT`, `PROHIBITED_ITEM`, `OTHER`. Người dùng (`USER`): `NO_SHOW`, `WRONG_CONTACT_INFO`, `HARASSMENT`, `OTHER`. Giao dịch (`REQUEST`): `NOT_AS_DESCRIBED`, `COUNTERFEIT`, `NO_SHOW`, `WRONG_CONTACT_INFO`, `HARASSMENT`, `OTHER`. Bảng này nằm ở `ReportReason.allowedFor` và khớp `reportReasonsByTarget` ở frontend.
 - `WRONG_CONTACT_INFO` với người dùng chỉ báo được khi hai người từng có giao dịch đã chốt lịch (`contact_revealed_at` khác null), nếu không trả `400 REPORT_CONTACT_REASON_NOT_ALLOWED`.
+
+## Kết luận khiếu nại theo từng món của giao dịch (GN-14)
+
+Khi Admin chấp thuận (`UPHOLD`) khiếu nại sự cố giao nhận mà giao dịch đang `DISPUTED`, giao dịch bị huỷ và `POST /admin/reports/{id}/conclude` nhận thêm `itemOutcomes`: danh sách `{itemId, choice}`, bắt buộc có đủ mọi món của giao dịch (món chính và món đổi nếu có), mỗi món đúng một lựa chọn.
+
+| `choice` | Nhãn | Kết quả |
+|---|---|---|
+| `REOPEN` | Mở lại | Bài về `APPROVED` và hiển thị lại. Dùng `ItemService.releaseIfReservedAfterCancel`, thời gian giữ chỗ được trả lại theo `reserved_display_refund_max_days`. |
+| `HIDE` | Ẩn | Bài về `APPROVED` rồi bị Admin ẩn (`items.hidden_by_admin = true`). Các đường tự động (báo cáo bị bác bỏ, duyệt lại, mở khoá tài khoản) không hiện lại được, chỉ nút hiện lại của Admin xoá cờ. |
+| `TRANSFERRED` | Đã đổi chủ | Như `HIDE`, nhật ký `ADMIN_ITEM_HIDDEN` ghi lý do "Món đã được trao trong một giao dịch bị huỷ", nên `hiddenReason` của bài hiện lý do này. Hai bên được báo "Món <tên> đã nằm ở chỗ <tên người giữ>. Hai bên liên hệ để hoàn trả nếu cần." Hệ thống không tự hoàn trả, không giữ đồ hay tiền. |
+
+- Luật giống nhau cho chủ bài và người nhận. Giá trị mặc định ở giao diện: món của bên vi phạm là `HIDE`, món của bên không vi phạm là `REOPEN`. Bản cũ chỉ ẩn khi chủ bài vi phạm đã bị bỏ.
+- Thiếu món, thừa món lạ, trùng món hoặc thiếu `choice` trả `400 REQUEST_ITEM_OUTCOMES_REQUIRED` ("Cần chọn cách xử lý cho từng món của giao dịch trước khi chấp thuận khiếu nại.") và không đổi gì.
+- Bác bỏ (`DISMISS`) không cần `itemOutcomes`: giao dịch `COMPLETED`, các món sang `TRADED` như cũ. Giao dịch không còn `DISPUTED` (khiếu nại mở sau khi hoàn tất) thì bỏ qua `itemOutcomes`.
+- Mỗi món ghi một dòng nhật ký: `ADMIN_ITEM_HIDDEN` cho `HIDE` và `TRANSFERRED`, `REQUEST_CANCEL` cho `REOPEN`.
+
+### Khiếu nại từ đề nghị huỷ bị bên kia không đồng ý (GN-06)
+
+Bên không đồng ý một đề nghị huỷ **không bao giờ bị trừ sao chỉ vì từ chối**. Lý do khiếu nại phụ thuộc mã lý do của người đề nghị:
+
+| Mã lý do đề nghị | Lý do khiếu nại | Admin chấp thuận (`UPHOLD`) | Admin bác (`DISMISS`) |
+|---|---|---|---|
+| `COUNTERPART_NO_SHOW`, `COUNTERPART_NOT_SHIPPED`, `CANNOT_CONTACT` | `NO_SHOW` | Huỷ giao dịch, trừ 1 sao bên bị tố (bên không đồng ý) | Giao dịch `COMPLETED` như khiếu nại sự cố giao nhận |
+| `BUSY`, `NO_LONGER_NEEDED`, `OTHER` | `OTHER` | Huỷ giao dịch, **không trừ sao ai**, hoặc trừ 1 sao đúng bên Admin chọn qua `penalizedUserId` | Giao dịch **tiếp tục** (`DISPUTED` về `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER`), xoá đề nghị huỷ, báo `TRANSACTION_RESUMED` |
+
+- `POST /admin/reports/{id}/conclude` có thêm `penalizedUserId` (số, tuỳ chọn). Chỉ có tác dụng khi chấp thuận khiếu nại không tố ai. Phải là chủ bài hoặc người nhận của giao dịch, nếu không trả `400 REPORT_PENALIZED_USER_INVALID` và không đổi gì. Bỏ trống thì không trừ sao ai (`starsDeducted = 0`). Với khiếu nại có tố bên kia thì bỏ qua trường này.
+- Mặc định ở giao diện cho khiếu nại không tố ai: ô "Bên bị trừ 1 sao" là "Không trừ sao ai", cả hai món là `REOPEN`.
+- Giao hàng: món đang ở chỗ nào lấy theo từng chiều (chiều đã nhận thì món ở chỗ người nhận chiều đó và mặc định `TRANSFERRED`), Admin vẫn đổi được.

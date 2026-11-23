@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Avatar, Button, ItemImage, StatusBadge, TypeBadge } from '../ui';
 import { ReputationBadge } from '../ReputationBadge';
-import { requestStatusLabel } from '../../utils/request';
+import { formatDeadline, requestStatusLabel } from '../../utils/request';
 import { transactionProgressPath, userProfilePath } from '../../utils/chatMessages';
 import { conditionLabel } from '../../utils/formatting';
 import { productDetailFromRequestPath } from '../../utils/productDetailNavigation';
 import type { PinnedItemResponse } from '../../services/chatApi';
 import type { ItemResponse } from '../../services/itemApi';
 import { CompactProgress } from './CompactProgress';
+import { nearestDeadlineLine } from '../../utils/deadlines';
 import { RequestSummary } from './RequestSummary';
 import {
   avatarInitials,
@@ -238,7 +239,7 @@ export function ChatHeader({
 
       {/* Tiến trình tách riêng khỏi khung món đồ: ẩn món đồ vẫn thấy tiến trình. */}
       <div className="mx-4 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md p-2 ring-1 ring-border/80">
-        <CompactProgress status={request.status} />
+        <CompactProgress status={request.status} request={request} />
         <Button
           size="sm"
           className="!min-h-7 !px-2.5 !py-0.5"
@@ -246,6 +247,17 @@ export function ChatHeader({
         >
           Xem tiến trình
         </Button>
+        {nearestDeadlineLine(request, viewerIsDonor, participantName) ? (
+          <p className="w-full text-xs text-text-secondary" data-testid="chat-nearest-deadline">
+            {nearestDeadlineLine(request, viewerIsDonor, participantName)?.text}.
+          </p>
+        ) : null}
+        {request.cancelRequestedAt ? (
+          <p className="w-full text-xs font-semibold text-warning">
+            Đang có đề nghị huỷ chờ phản hồi
+            {request.cancelRequestExpiresAt ? `, hạn ${formatDeadline(request.cancelRequestExpiresAt)}` : ''}.
+          </p>
+        ) : null}
       </div>
     </div>
   );

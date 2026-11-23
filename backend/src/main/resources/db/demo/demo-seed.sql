@@ -91,3 +91,72 @@ WHERE q.item_id = i.id
   AND i.title = 'Demo - Bộ ly thủy tinh (đã chốt lịch)'
   AND q.status = 'LOGISTICS_CONFIRMED'
   AND q.contact_revealed_at IS NULL;
+
+-- Ba giao dịch demo cho luật huỷ có xác nhận, dời lịch và giao hàng hai chiều (đợt 3).
+-- Bài đang nằm trong giao dịch: RESERVED.
+INSERT INTO items
+  (donor_id, category_id, area_id, offer_type, title, description, desired_item,
+   condition, status, approved_at, expire_at)
+SELECT u.id, c.id, a.id, v.offer_type, v.title, v.description, v.desired_item,
+       v.condition, 'RESERVED', now(), now() + INTERVAL '30 days'
+FROM (VALUES
+  ('an.demo@shareloop.local', 'Đồ gia dụng, nhà bếp', 'Quận 1', 'GIVE',
+   'Demo - Máy xay sinh tố (đang có đề nghị huỷ)', 'Máy xay còn tốt, chủ bài vừa đề nghị huỷ vì bận đột xuất.',
+   NULL, 'GOOD'),
+  ('binh.demo@shareloop.local', 'Đồ gia dụng, nhà bếp', 'Quận 3', 'GIVE',
+   'Demo - Đèn bàn (đã dời lịch một lần)', 'Đèn bàn còn sáng tốt, hai bên đã đồng ý dời lịch một lần.',
+   NULL, 'GOOD'),
+  ('an.demo@shareloop.local', 'Thể thao, dã ngoại', 'Quận 5', 'SWAP',
+   'Demo - Máy ảnh cũ (trao đổi qua giao hàng)', 'Máy ảnh còn chụp tốt, đổi lấy mũ bảo hiểm.',
+   'Mũ bảo hiểm', 'GOOD'),
+  ('chi.demo@shareloop.local', 'Thể thao, dã ngoại', 'Quận 5', 'SWAP',
+   'Demo - Mũ bảo hiểm (đổi qua giao hàng)', 'Mũ bảo hiểm còn mới, đổi lấy máy ảnh.',
+   'Máy ảnh', 'LIKE_NEW')
+) AS v(email, category, area, offer_type, title, description, desired_item, condition)
+JOIN users u ON u.email = v.email AND NOT u.is_deleted
+JOIN item_categories c ON c.name = v.category
+JOIN areas a ON a.name = v.area
+WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.donor_id = u.id AND i.title = v.title);
+
+-- Gặp trực tiếp, chủ bài An đề nghị huỷ vì bận đột xuất, Chi chưa phản hồi (hạn phản hồi do cấu hình).
+INSERT INTO requests
+  (item_id, receiver_id, type, status, delivery_method, meeting_place, meeting_time,
+   donor_schedule_ok_at, receiver_schedule_ok_at, donor_waiver_at, receiver_waiver_at,
+   reserved_at, contact_revealed_at, cancel_requested_by, cancel_requested_at, cancel_request_code)
+SELECT i.id, r.id, 'GIVE', 'LOGISTICS_CONFIRMED', 'IN_PERSON', 'Cổng chính Đại học FPT',
+       now() + INTERVAL '1 day', now(), now(), now(), now(), now(), now(), d.id, now() - INTERVAL '1 hour', 'BUSY'
+FROM items i
+JOIN users d ON d.id = i.donor_id AND d.email = 'an.demo@shareloop.local'
+JOIN users r ON r.email = 'chi.demo@shareloop.local'
+WHERE i.title = 'Demo - Máy xay sinh tố (đang có đề nghị huỷ)'
+  AND NOT EXISTS (SELECT 1 FROM requests q WHERE q.item_id = i.id AND q.receiver_id = r.id);
+
+-- Gặp trực tiếp đã dời lịch một lần (reschedule_count = 1).
+INSERT INTO requests
+  (item_id, receiver_id, type, status, delivery_method, meeting_place, meeting_time,
+   donor_schedule_ok_at, receiver_schedule_ok_at, donor_waiver_at, receiver_waiver_at,
+   reserved_at, contact_revealed_at, reschedule_count)
+SELECT i.id, r.id, 'GIVE', 'LOGISTICS_CONFIRMED', 'IN_PERSON', 'Thư viện trường',
+       now() + INTERVAL '3 days', now(), now(), now(), now(), now(), now(), 1
+FROM items i
+JOIN users d ON d.id = i.donor_id AND d.email = 'binh.demo@shareloop.local'
+JOIN users r ON r.email = 'an.demo@shareloop.local'
+WHERE i.title = 'Demo - Đèn bàn (đã dời lịch một lần)'
+  AND NOT EXISTS (SELECT 1 FROM requests q WHERE q.item_id = i.id AND q.receiver_id = r.id);
+
+-- Trao đổi qua Giao hàng: An đã gửi chiều 1, Chi đã nhận chiều 1, chiều 2 (Chi gửi mũ cho An) chưa gửi.
+INSERT INTO requests
+  (item_id, receiver_id, offered_item_id, type, status, delivery_method, meeting_time,
+   donor_schedule_ok_at, receiver_schedule_ok_at, donor_waiver_at, receiver_waiver_at,
+   reserved_at, contact_revealed_at, receiver_address, donor_address,
+   donor_shipped_at, donor_tracking_code, receiver_handover_at)
+SELECT i.id, r.id, o.id, 'SWAP', 'AWAITING_HANDOVER', 'SHIPPING', now() - INTERVAL '3 days',
+       now() - INTERVAL '6 days', now() - INTERVAL '6 days', now() - INTERVAL '6 days', now() - INTERVAL '6 days',
+       now() - INTERVAL '6 days', now() - INTERVAL '6 days', '12 Lê Lợi, Quận 1', '34 Trần Phú, Quận 5',
+       now() - INTERVAL '2 days', 'DEMO-GHN-001', now() - INTERVAL '1 day'
+FROM items i
+JOIN users d ON d.id = i.donor_id AND d.email = 'an.demo@shareloop.local'
+JOIN users r ON r.email = 'chi.demo@shareloop.local'
+JOIN items o ON o.donor_id = r.id AND o.title = 'Demo - Mũ bảo hiểm (đổi qua giao hàng)'
+WHERE i.title = 'Demo - Máy ảnh cũ (trao đổi qua giao hàng)'
+  AND NOT EXISTS (SELECT 1 FROM requests q WHERE q.item_id = i.id AND q.receiver_id = r.id);

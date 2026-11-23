@@ -193,4 +193,54 @@ class AdminRequestServiceTest {
         // then
         verify(requestService).cancelByAdmin(6L, 1L, dto);
     }
+
+    @Test
+    @DisplayName("Danh sách gắn nhãn đề nghị huỷ đang chờ và lọc được theo pendingCancel")
+    void list_whenPendingCancelFilter_labelsAndFilters() {
+        // given
+        Request pendingCancel = request(11L, RequestStatus.LOGISTICS_CONFIRMED, NOW.plus(1, ChronoUnit.DAYS));
+        ReflectionTestUtils.setField(pendingCancel, "cancelRequestedAt", NOW.minus(1, ChronoUnit.HOURS));
+        ReflectionTestUtils.setField(pendingCancel, "cancelRequestedBy", DONOR_ID);
+        Request plain = request(12L, RequestStatus.LOGISTICS_CONFIRMED, NOW.plus(1, ChronoUnit.DAYS));
+        when(requestRepository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(pendingCancel, plain));
+
+        // when
+        AdminRequestPageResponse withoutPending =
+                adminRequestService.list(null, null, null, null, null, null, null, false, null, 0, 20);
+        AdminRequestPageResponse onlyPending =
+                adminRequestService.list(null, null, null, null, null, null, null, true, null, 0, 20);
+
+        // then
+        assertThat(withoutPending.items()).extracting("id").containsExactly(12L);
+        assertThat(onlyPending.items()).extracting("id").containsExactly(11L);
+        assertThat(onlyPending.items().get(0).labels()).contains("Đang chờ phản hồi đề nghị huỷ");
+    }
+
+    @Test
+    @DisplayName("Giao hàng: nhãn Chờ gửi hàng, Một bên đã nhận và bộ lọc quá hạn gửi")
+    void list_whenShipping_labelsWaitingToShipOneSideReceivedAndSendOverdue() {
+        // given: Trao đổi, ngày gửi dự kiến cách đây 5 ngày nên quá hạn gửi 3 ngày, chiều 1 đã nhận, chiều 2 chưa gửi
+        when(configService.getInt(ConfigKey.SHIPPING_SEND_DEADLINE_DAYS)).thenReturn(3);
+        Request overdue = request(13L, RequestStatus.AWAITING_HANDOVER, NOW.minus(5, ChronoUnit.DAYS));
+        ReflectionTestUtils.setField(overdue, "deliveryMethod", "SHIPPING");
+        ReflectionTestUtils.setField(overdue, "offeredItemId", 2L);
+        ReflectionTestUtils.setField(overdue, "donorShippedAt", NOW.minus(4, ChronoUnit.DAYS));
+        ReflectionTestUtils.setField(overdue, "receiverHandoverAt", NOW.minus(3, ChronoUnit.DAYS));
+        Request onTime = request(14L, RequestStatus.LOGISTICS_CONFIRMED, NOW.plus(1, ChronoUnit.DAYS));
+        ReflectionTestUtils.setField(onTime, "deliveryMethod", "SHIPPING");
+        when(requestRepository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(overdue, onTime));
+
+        // when
+        AdminRequestPageResponse overdueOnly =
+                adminRequestService.list(null, null, null, null, null, null, null, null, true, 0, 20);
+        AdminRequestPageResponse notOverdue =
+                adminRequestService.list(null, null, null, null, null, null, null, null, false, 0, 20);
+
+        // then
+        assertThat(overdueOnly.items()).extracting("id").containsExactly(13L);
+        assertThat(overdueOnly.items().get(0).labels())
+                .containsExactly("Chờ gửi hàng", "Quá hạn gửi hàng", "Một bên đã nhận");
+        assertThat(notOverdue.items()).extracting("id").containsExactly(14L);
+        assertThat(notOverdue.items().get(0).labels()).containsExactly("Chờ gửi hàng");
+    }
 }

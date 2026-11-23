@@ -82,9 +82,9 @@ class DemoDataSeederIT extends IntegrationTest {
         // then: số lượng và số dư giữ nguyên
         assertThat(count("SELECT count(*) FROM users WHERE email LIKE ?")).isEqualTo(4);
         assertThat(count("SELECT count(*) FROM items i JOIN users u ON u.id = i.donor_id WHERE u.email LIKE ?"))
-                .isEqualTo(4);
+                .isEqualTo(8);
         assertThat(count("SELECT count(*) FROM requests r JOIN users u ON u.id = r.receiver_id WHERE u.email LIKE ?"))
-                .isEqualTo(1);
+                .isEqualTo(4);
         assertThat(count("SELECT count(*) FROM credit_ledger l JOIN users u ON u.id = l.user_id WHERE u.email LIKE ?"))
                 .isEqualTo(3);
         assertThat(count("SELECT count(*) FROM payment_orders o JOIN users u ON u.id = o.user_id WHERE u.email LIKE ?"))
@@ -131,7 +131,32 @@ class DemoDataSeederIT extends IntegrationTest {
         // then
         assertThat(approvedGive).isGreaterThanOrEqualTo(1);
         assertThat(approvedSwap).isGreaterThanOrEqualTo(1);
-        assertThat(confirmedRequests).isEqualTo(1);
+        // Bộ ly (đã chốt lịch), máy xay (có đề nghị huỷ) và đèn bàn (đã dời lịch)
+        assertThat(confirmedRequests).isEqualTo(3);
+    }
+
+    @Test
+    void run_createsRequestWithPendingCancelRequestOneReschedulingAndTwoWayShipping() {
+        // given: dữ liệu đã seed ở @BeforeEach
+
+        // when
+        Integer pendingCancel =
+                count("SELECT count(*) FROM requests r JOIN users u ON u.id = r.receiver_id WHERE u.email LIKE ?"
+                        + " AND r.status = 'LOGISTICS_CONFIRMED' AND r.cancel_requested_by IS NOT NULL"
+                        + " AND r.cancel_request_code = 'BUSY'");
+        Integer rescheduled =
+                count("SELECT count(*) FROM requests r JOIN users u ON u.id = r.receiver_id WHERE u.email LIKE ?"
+                        + " AND r.reschedule_count = 1");
+        Integer oneSideReceived =
+                count("SELECT count(*) FROM requests r JOIN users u ON u.id = r.receiver_id WHERE u.email LIKE ?"
+                        + " AND r.delivery_method = 'SHIPPING' AND r.type = 'SWAP' AND r.status = 'AWAITING_HANDOVER'"
+                        + " AND r.donor_shipped_at IS NOT NULL AND r.receiver_handover_at IS NOT NULL"
+                        + " AND r.receiver_shipped_at IS NULL AND r.donor_handover_at IS NULL");
+
+        // then
+        assertThat(pendingCancel).isEqualTo(1);
+        assertThat(rescheduled).isEqualTo(1);
+        assertThat(oneSideReceived).isEqualTo(1);
     }
 
     @Test

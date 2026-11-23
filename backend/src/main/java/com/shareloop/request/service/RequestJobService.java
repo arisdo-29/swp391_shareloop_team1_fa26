@@ -168,33 +168,25 @@ public class RequestJobService {
      * @return số lượng yêu cầu đã tự động hoàn tất
      */
     public int autoConfirmHandoverRequests(Instant now) {
+        // Chỉ Gặp trực tiếp: Giao hàng tự hoàn tất theo từng chiều ở RequestDeadlineJobService (GN-12)
         int inPersonDays = configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS);
-        int shippingDays = configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING);
         Instant inPersonCutoff = now.minus(inPersonDays, ChronoUnit.DAYS);
-        Instant shippingCutoff = now.minus(shippingDays, ChronoUnit.DAYS);
 
         int count = 0;
         long lastSeenId = 0;
         Pageable pageable = PageRequest.of(0, BATCH_SIZE);
-        List<Request> batch =
-                requestRepository.findOverdueHandoverRequests(inPersonCutoff, shippingCutoff, lastSeenId, pageable);
+        List<Request> batch = requestRepository.findOverdueHandoverRequests(inPersonCutoff, lastSeenId, pageable);
         while (!batch.isEmpty()) {
             for (Request request : batch) {
-                boolean shipping = isShipping(request);
-                Instant cutoff = shipping ? shippingCutoff : inPersonCutoff;
-                int days = shipping ? shippingDays : inPersonDays;
-                if (processInOwnTransaction(() -> autoConfirmInTransaction(request.getId(), cutoff, days, now))) {
+                if (processInOwnTransaction(
+                        () -> autoConfirmInTransaction(request.getId(), inPersonCutoff, inPersonDays, now))) {
                     count++;
                 }
             }
             lastSeenId = batch.get(batch.size() - 1).getId();
-            batch = requestRepository.findOverdueHandoverRequests(inPersonCutoff, shippingCutoff, lastSeenId, pageable);
+            batch = requestRepository.findOverdueHandoverRequests(inPersonCutoff, lastSeenId, pageable);
         }
         return count;
-    }
-
-    private static boolean isShipping(Request request) {
-        return "SHIPPING".equals(request.getDeliveryMethod());
     }
 
     private boolean expirePendingInTransaction(long requestId, Instant cutoff) {
@@ -281,7 +273,8 @@ public class RequestJobService {
             return false;
         }
 
-        if (request.getStatus() != RequestStatus.AWAITING_HANDOVER) {
+        // Giao hàng tự hoàn tất theo từng chiều ở RequestDeadlineJobService (GN-12), việc này chỉ cho Gặp trực tiếp
+        if (request.getStatus() != RequestStatus.AWAITING_HANDOVER || request.isShipping()) {
             return false;
         }
 
@@ -315,27 +308,35 @@ public class RequestJobService {
             reputationService.onCompleted(request.getId());
         }
 
-        // Ghi rõ hạn khiếu nại tính từ lúc hệ thống hoàn tất (U08)
+        // Hai câu khác nhau (GN-13): bên đã bấm biết vì sao hoàn tất, bên im lặng biết mình còn quyền khiếu nại tới lúc
+        // nào
         int complaintHours = configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS);
         Instant completedAt = request.getCompletedAt() != null ? request.getCompletedAt() : now;
-        String body = "Giao dịch đã được hệ thống tự động hoàn tất do đối phương không phản hồi sau " + autoConfirmDays
-                + " ngày. "
-                + ComplaintWindow.sentence(complaintHours, ComplaintWindow.deadline(completedAt, complaintHours));
+        Instant complaintDeadline = ComplaintWindow.deadline(completedAt, complaintHours);
         Long donorId = findDonorId(request.getItemId());
-        if (donorId != null) {
+        boolean receiverSilent = request.getDonorHandoverAt() != null;
+        Long silentUserId = receiverSilent ? Long.valueOf(request.getReceiverId()) : donorId;
+        Long confirmedUserId = receiverSilent ? donorId : Long.valueOf(request.getReceiverId());
+        String link = "/requests/" + request.getId();
+        if (silentUserId != null) {
             notificationService.notify(
-                    donorId,
+                    silentUserId,
                     "TRANSACTION_COMPLETED",
                     "Giao dịch đã tự động hoàn tất",
-                    body,
-                    "/requests/" + request.getId());
+                    "Giao dịch đã tự hoàn tất vì bạn không phản hồi trong " + autoConfirmDays
+                            + " ngày. Bạn có thể khiếu nại tới " + VietnamTime.format(complaintDeadline) + ".",
+                    link);
         }
-        notificationService.notify(
-                request.getReceiverId(),
-                "TRANSACTION_COMPLETED",
-                "Giao dịch đã tự động hoàn tất",
-                body,
-                "/requests/" + request.getId());
+        if (confirmedUserId != null) {
+            notificationService.notify(
+                    confirmedUserId,
+                    "TRANSACTION_COMPLETED",
+                    "Giao dịch đã hoàn tất",
+                    "Giao dịch đã hoàn tất vì " + findUserName(silentUserId) + " không phản hồi trong "
+                            + autoConfirmDays + " ngày. "
+                            + ComplaintWindow.sentence(complaintHours, complaintDeadline),
+                    link);
+        }
 
         return true;
     }
@@ -351,6 +352,19 @@ public class RequestJobService {
                     exception);
             return false;
         }
+    }
+
+    // Tên người dùng cho câu thông báo; không tra được thì nói "Đối phương".
+    private String findUserName(Long userId) {
+        if (jdbcClient == null || userId == null) {
+            return "Đối phương";
+        }
+        return jdbcClient
+                .sql("SELECT full_name FROM users WHERE id = :id")
+                .param("id", userId)
+                .query(String.class)
+                .optional()
+                .orElse("Đối phương");
     }
 
     private Long findDonorId(long itemId) {

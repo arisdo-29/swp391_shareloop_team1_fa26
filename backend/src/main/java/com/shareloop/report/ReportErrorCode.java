@@ -27,6 +27,8 @@ public enum ReportErrorCode implements ErrorCode {
     DISPUTE_ALREADY_RESPONDED(HttpStatus.CONFLICT, "Bạn đã gửi bản giải trình cho khiếu nại này rồi."),
     DISPUTE_RESPONSE_WINDOW_EXPIRED(HttpStatus.UNPROCESSABLE_ENTITY, "Đã quá thời hạn để gửi giải trình."),
     DISPUTE_INVALID_EVIDENCE(HttpStatus.BAD_REQUEST, "Bằng chứng không hợp lệ hoặc không thuộc quyền sở hữu của bạn."),
+    REPORT_PENALIZED_USER_INVALID(
+            HttpStatus.BAD_REQUEST, "Người bị trừ sao phải là chủ bài hoặc người nhận của giao dịch này."),
     REPORT_ALREADY_CONCLUDED(HttpStatus.CONFLICT, "Báo cáo này đã được kết luận trước đó."),
     // D-15, BC-10: chỉ kết luận khi bên bị báo cáo đã giải trình hoặc đã hết hạn giải trình.
     REPORT_RESPONSE_WINDOW_OPEN(

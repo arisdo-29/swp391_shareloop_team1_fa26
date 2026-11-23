@@ -21,6 +21,8 @@ export interface AdminRequestRow {
   flagReason: string | null;
   // Hình thức giao nhận; null khi chưa chọn.
   deliveryMethod: DeliveryMethod | null;
+  // Nhãn tiếng Việt do backend tính: Đang chờ phản hồi đề nghị huỷ, Chờ gửi hàng, Một bên đã nhận, Quá hạn gửi hàng.
+  labels?: string[];
 }
 
 export interface AdminRequestPage {
@@ -39,6 +41,10 @@ export interface AdminRequestListParams {
   deliveryMethod?: DeliveryMethod;
   from?: string;
   to?: string;
+  // Chỉ giao dịch có đề nghị huỷ đang chờ phản hồi.
+  pendingCancel?: boolean;
+  // Chỉ giao dịch Giao hàng đã quá hạn gửi mà còn chiều chưa gửi.
+  sendOverdue?: boolean;
   page: number;
   size: number;
 }
@@ -91,6 +97,48 @@ export interface AdminRequestPoints {
   points: number;
 }
 
+export interface AdminCancelRequest {
+  // PENDING đang chờ, ACCEPTED giao dịch đã huỷ vì bên kia đồng ý hoặc im lặng, REJECTED bên kia không đồng ý
+  state: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  requestedByRole: string;
+  requestedAt: string | null;
+  label: string | null;
+  reason: string | null;
+  expiresAt: string | null;
+}
+
+export interface AdminReschedule {
+  count: number;
+  pending: boolean;
+  proposedByRole: string | null;
+  proposedAt: string | null;
+  proposedMeetingTime: string | null;
+  proposedMeetingPlace: string | null;
+  expiresAt: string | null;
+}
+
+export interface AdminShippingLeg {
+  leg: number;
+  itemTitle: string | null;
+  senderRole: string;
+  receiverRole: string;
+  address: string | null;
+  shippedAt: string | null;
+  trackingCode: string | null;
+  receivedAt: string | null;
+  step: string;
+}
+
+export interface AdminDeadlines {
+  autoCancelAt: string | null;
+  autoConfirmAt: string | null;
+  cancelRequestExpiresAt: string | null;
+  rescheduleExpiresAt: string | null;
+  sendDeadlineAt: string | null;
+  leg1AutoReceiveAt: string | null;
+  leg2AutoReceiveAt: string | null;
+}
+
 export interface AdminRequestDetail {
   id: number;
   type: 'GIVE' | 'SWAP';
@@ -109,6 +157,12 @@ export interface AdminRequestDetail {
   messagesViewable: boolean;
   cancellable: boolean;
   createdAt: string;
+  // Luật huỷ có xác nhận, dời lịch, giao hàng hai chiều và mốc hạn (docs/api/request.md). Cũ hơn có thể thiếu.
+  cancelRequest?: AdminCancelRequest | null;
+  reschedule?: AdminReschedule | null;
+  shippingLegs?: AdminShippingLeg[];
+  deadlines?: AdminDeadlines | null;
+  autoConfirmed?: boolean;
 }
 
 export interface AdminChatMessage {

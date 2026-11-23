@@ -283,7 +283,6 @@ class RequestJobServiceTest {
                 "Donor đã xác nhận, receiver im lặng quá 3 ngày -> tự động COMPLETED, markTraded, reputation và notification")
         void autoConfirmHandoverRequests_whenDonorConfirmedAndReceiverSilent_autoCompletes() {
             when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
-            when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING)).thenReturn(7);
             Instant cutoff = now.minus(3, ChronoUnit.DAYS);
 
             Request request = new Request(1L, 10L, null, "GIVE");
@@ -294,8 +293,7 @@ class RequestJobServiceTest {
             request.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS)); // status -> LOGISTICS_CONFIRMED
             request.confirmHandover(true, cutoff.minus(2, ChronoUnit.HOURS)); // donor confirms -> AWAITING_HANDOVER
 
-            when(requestRepository.findOverdueHandoverRequests(
-                            eq(cutoff), any(Instant.class), anyLong(), any(Pageable.class)))
+            when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(301L)).thenReturn(Optional.of(request));
             when(itemQueryService.getSummary(1L)).thenReturn(new ItemSummary(1L, 20L, null, null));
@@ -317,10 +315,46 @@ class RequestJobServiceTest {
         }
 
         @Test
+        @DisplayName("Hoàn tất tự động gửi hai câu khác nhau cho bên đã bấm và bên im lặng (GN-13)")
+        void autoConfirmHandoverRequests_whenAutoCompleted_sendsDifferentSentencesToConfirmedAndSilentParty() {
+            when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
+            when(configService.getInt(ConfigKey.COMPLAINT_WINDOW_HOURS)).thenReturn(24);
+            Instant cutoff = now.minus(3, ChronoUnit.DAYS);
+
+            Request request = new Request(1L, 10L, null, "GIVE");
+            ReflectionTestUtils.setField(request, "id", 305L);
+            request.select(now.minus(5, ChronoUnit.DAYS));
+            request.proposeSchedule(
+                    "DIRECT", "Gate", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(4, ChronoUnit.DAYS));
+            request.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS));
+            request.confirmHandover(true, cutoff.minus(2, ChronoUnit.HOURS)); // chủ bài đã bấm, người nhận im lặng
+
+            when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
+                    .thenReturn(List.of(request), List.of());
+            when(requestRepository.findById(305L)).thenReturn(Optional.of(request));
+            when(itemQueryService.getSummary(1L)).thenReturn(new ItemSummary(1L, 20L, null, null));
+
+            requestJobService.autoConfirmHandoverRequests(now);
+
+            org.mockito.ArgumentCaptor<String> silent = org.mockito.ArgumentCaptor.forClass(String.class);
+            org.mockito.ArgumentCaptor<String> confirmed = org.mockito.ArgumentCaptor.forClass(String.class);
+            verify(notificationService)
+                    .notify(eq(10L), eq("TRANSACTION_COMPLETED"), anyString(), silent.capture(), anyString());
+            verify(notificationService)
+                    .notify(eq(20L), eq("TRANSACTION_COMPLETED"), anyString(), confirmed.capture(), anyString());
+            assertThat(silent.getValue())
+                    .startsWith(
+                            "Giao dịch đã tự hoàn tất vì bạn không phản hồi trong 3 ngày. Bạn có thể khiếu nại tới");
+            assertThat(confirmed.getValue())
+                    .startsWith("Giao dịch đã hoàn tất vì")
+                    .contains("không phản hồi trong 3 ngày");
+            assertThat(confirmed.getValue()).doesNotContain("vì bạn không phản hồi");
+        }
+
+        @Test
         @DisplayName("Quét theo từng lô 100 bản ghi cho đến khi hết (Mục Q)")
         void autoConfirmHandoverRequests_whenMultipleBatches_processesAllUntilEmpty() {
             when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
-            when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING)).thenReturn(7);
             Instant cutoff = now.minus(3, ChronoUnit.DAYS);
 
             Request r1 = new Request(1L, 10L, null, "GIVE");
@@ -339,8 +373,7 @@ class RequestJobServiceTest {
             r2.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS));
             r2.confirmHandover(true, cutoff.minus(3, ChronoUnit.HOURS));
 
-            when(requestRepository.findOverdueHandoverRequests(
-                            eq(cutoff), any(Instant.class), anyLong(), any(Pageable.class)))
+            when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(r1), List.of(r2), List.of());
             when(requestRepository.findById(301L)).thenReturn(Optional.of(r1));
             when(requestRepository.findById(302L)).thenReturn(Optional.of(r2));
@@ -357,7 +390,6 @@ class RequestJobServiceTest {
         void autoConfirmHandoverRequests_whenRequestHasReport_doesNotComplete() {
             // given: bên cho đã xác nhận giao đồ nhưng có report khiếu nại chưa xử lý, bên nhận im lặng quá 3 ngày
             when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
-            when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING)).thenReturn(7);
             Instant cutoff = now.minus(3, ChronoUnit.DAYS);
 
             Request request = new Request(1L, 10L, null, "GIVE");
@@ -368,8 +400,7 @@ class RequestJobServiceTest {
             request.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS));
             request.confirmHandover(true, cutoff.minus(1, ChronoUnit.HOURS));
 
-            when(requestRepository.findOverdueHandoverRequests(
-                            eq(cutoff), any(Instant.class), anyLong(), any(Pageable.class)))
+            when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(303L)).thenReturn(Optional.of(request));
             when(reportService.hasReportForRequest(303L)).thenReturn(true);
@@ -390,14 +421,12 @@ class RequestJobServiceTest {
         void autoConfirmHandoverRequests_whenRequestDisputed_doesNotComplete() {
             // given
             when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
-            when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING)).thenReturn(7);
             Instant cutoff = now.minus(3, ChronoUnit.DAYS);
             Request request = new Request(1L, 10L, null, "GIVE");
             ReflectionTestUtils.setField(request, "id", 304L);
             ReflectionTestUtils.setField(request, "status", RequestStatus.DISPUTED);
             ReflectionTestUtils.setField(request, "donorHandoverAt", cutoff.minus(1, ChronoUnit.HOURS));
-            when(requestRepository.findOverdueHandoverRequests(
-                            eq(cutoff), any(Instant.class), anyLong(), any(Pageable.class)))
+            when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(304L)).thenReturn(Optional.of(request));
 
@@ -416,7 +445,6 @@ class RequestJobServiceTest {
                 "Receiver đã xác nhận, donor im lặng quá 3 ngày trong giao dịch SWAP -> tự động COMPLETED cả 2 bài")
         void autoConfirmHandoverRequests_whenReceiverConfirmedInSwap_autoCompletesBothItems() {
             when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
-            when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING)).thenReturn(7);
             Instant cutoff = now.minus(3, ChronoUnit.DAYS);
 
             Request request = new Request(1L, 10L, 2L, "SWAP");
@@ -427,8 +455,7 @@ class RequestJobServiceTest {
             request.confirmLogistics(false, true, now.minus(4, ChronoUnit.DAYS));
             request.confirmHandover(false, cutoff.minus(1, ChronoUnit.HOURS)); // receiver confirms -> AWAITING_HANDOVER
 
-            when(requestRepository.findOverdueHandoverRequests(
-                            eq(cutoff), any(Instant.class), anyLong(), any(Pageable.class)))
+            when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(302L)).thenReturn(Optional.of(request));
             when(itemQueryService.getSummary(1L)).thenReturn(new ItemSummary(1L, 20L, null, null));
@@ -448,7 +475,6 @@ class RequestJobServiceTest {
         @DisplayName("Chưa đủ 3 ngày kể từ lúc một bên xác nhận -> không auto confirm")
         void autoConfirmHandoverRequests_whenNotOverdue_doesNotComplete() {
             when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
-            when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING)).thenReturn(7);
             Instant cutoff = now.minus(3, ChronoUnit.DAYS);
 
             Request request = new Request(1L, 10L, null, "GIVE");
@@ -460,8 +486,7 @@ class RequestJobServiceTest {
             // Confirm mới 1 ngày trước (sau cutoff)
             request.confirmHandover(true, cutoff.plus(1, ChronoUnit.DAYS));
 
-            when(requestRepository.findOverdueHandoverRequests(
-                            eq(cutoff), any(Instant.class), anyLong(), any(Pageable.class)))
+            when(requestRepository.findOverdueHandoverRequests(eq(cutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(303L)).thenReturn(Optional.of(request));
 
@@ -473,25 +498,32 @@ class RequestJobServiceTest {
         }
 
         @Test
-        @DisplayName("Giao hàng: người gửi xác nhận 4 ngày trước, chưa đủ 7 ngày -> không auto confirm")
-        void autoConfirmHandoverRequests_whenShippingBeforeSevenDays_doesNotComplete() {
-            // given
+        @DisplayName(
+                "Giao hàng: việc tự hoàn tất của Gặp trực tiếp không đụng tới giao dịch Giao hàng (luật mới tính theo từng chiều)")
+        void autoConfirmHandoverRequests_whenShippingRequestReturned_doesNotComplete() {
+            // given: luật mới thay luật cũ ở GN-12, Giao hàng tự hoàn tất theo từng chiều ở RequestDeadlineJobService
             when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS)).thenReturn(3);
-            when(configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING)).thenReturn(7);
             Instant inPersonCutoff = now.minus(3, ChronoUnit.DAYS);
-            Instant shippingCutoff = now.minus(7, ChronoUnit.DAYS);
 
             Request request = new Request(1L, 10L, null, "GIVE");
             ReflectionTestUtils.setField(request, "id", 304L);
             request.select(now.minus(6, ChronoUnit.DAYS));
             request.proposeSchedule(
-                    "SHIPPING", "Kho GHN", now.plus(1, ChronoUnit.DAYS), true, true, now.minus(5, ChronoUnit.DAYS));
-            request.confirmLogistics(false, true, now.minus(5, ChronoUnit.DAYS));
-            // Người gửi bấm hoàn tất (đã gửi hàng) 4 ngày trước: quá hạn gặp trực tiếp nhưng chưa quá hạn giao hàng
-            request.confirmHandover(true, now.minus(4, ChronoUnit.DAYS));
+                    "SHIPPING",
+                    null,
+                    now.plus(1, ChronoUnit.DAYS),
+                    false,
+                    true,
+                    now.minus(5, ChronoUnit.DAYS),
+                    "12 Lê Lợi");
+            request.confirmLogistics(true, true, now.minus(5, ChronoUnit.DAYS));
+            // Người nhận bấm đã nhận được hàng 4 ngày trước: dù có lọt vào danh sách cũ, việc cũ cũng không hoàn tất
+            request.markShipped(true, "GHN123", now.minus(5, ChronoUnit.DAYS));
+            request.markReceived(false, now.minus(4, ChronoUnit.DAYS));
+            ReflectionTestUtils.setField(request, "status", RequestStatus.AWAITING_HANDOVER);
+            ReflectionTestUtils.setField(request, "completedAt", null);
 
-            when(requestRepository.findOverdueHandoverRequests(
-                            eq(inPersonCutoff), eq(shippingCutoff), anyLong(), any(Pageable.class)))
+            when(requestRepository.findOverdueHandoverRequests(eq(inPersonCutoff), anyLong(), any(Pageable.class)))
                     .thenReturn(List.of(request), List.of());
             when(requestRepository.findById(304L)).thenReturn(Optional.of(request));
 

@@ -154,6 +154,7 @@ describe('trang Giới thiệu', () => {
     }
     // Hạn khiếu nại 7 ngày đã bỏ (nay là 24 giờ). "7 ngày" vẫn hợp lệ cho hạn tự hoàn tất khi giao hàng.
     expect(pageText).not.toMatch(/khiếu nại trong 7 ngày|7 ngày (để|được) khiếu nại/);
-    expect(pageText).toContain('gửi qua đơn vị vận chuyển là 7 ngày');
+    // Luật mới (GN-12): Giao hàng tự ghi nhận theo từng chiều, 7 ngày tính từ lúc gửi
+    expect(pageText).toContain('7 ngày kể từ lúc gửi');
   });
 });

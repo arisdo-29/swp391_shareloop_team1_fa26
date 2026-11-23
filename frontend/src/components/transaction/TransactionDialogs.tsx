@@ -3,15 +3,18 @@ import { useRef, useState } from 'react';
 import { Alert, Button, Select, TextArea } from '../ui';
 import { ReportEvidenceField } from '../ReportEvidenceField';
 import { DialogFrame } from '../Dialog';
-import { requestApi, type RequestResponse } from '../../services/requestApi';
+import { requestApi, type CancelRequestCode, type RequestResponse } from '../../services/requestApi';
 import { mediaApi } from '../../services/mediaApi';
 import { openDispute, type DisputeResponse, type ReportReason } from '../../services/reportApi';
 import type { ApiError } from '../../services/http';
 import { disputeErrorMessage, disputeReasonLabels } from '../../utils/disputeErrors';
 import { canConfirmHandover, formatDeadline } from '../../utils/request';
+import { shippingFailedConsequence } from '../../utils/shipping';
 import {
+  afterMeetingReasons,
+  BEFORE_MEETING_REASONS,
+  cancelRequestConsequence,
   handoverFailedConsequence,
-  handoverFailedReasons,
   REFUSE_HANDOVER_CONSEQUENCE,
   REFUSE_HANDOVER_REASON_LABEL,
 } from '../../utils/handoverOutcome';
@@ -109,7 +112,6 @@ export function CancelTransactionDialog({
   );
 }
 
-const OTHER_REASON = 'other';
 const HANDOVER_FAILED_LIMIT = 500;
 const REFUSE_REASON_LIMIT = 1000;
 
@@ -120,6 +122,10 @@ function handoverOutcomeError(error: unknown) {
     REQUEST_NOT_FOUND: 'Không tìm thấy giao dịch này.',
     REQUEST_REFUSE_NOT_ALLOWED: 'Chỉ bên nhận món đồ mới được từ chối giao nhận.',
     REQUEST_INVALID_STATE_TRANSITION: 'Giao dịch đã thay đổi trạng thái. Vui lòng tải lại.',
+    REQUEST_BEFORE_MEETING_TIME: 'Chưa tới giờ hẹn. Bạn có thể đề nghị huỷ giao dịch.',
+    REQUEST_CANCEL_REQUEST_PENDING: 'Đã có một đề nghị huỷ đang chờ phản hồi.',
+    REQUEST_CANCEL_REQUEST_NOT_FOUND: 'Đề nghị huỷ không còn chờ phản hồi. Vui lòng tải lại.',
+    REQUEST_CANCEL_REASON_INVALID: 'Lý do không hợp lệ. Lý do khác cần nhập ít nhất 5 ký tự.',
   };
   return (apiError.code && messages[apiError.code]) || disputeErrorMessage(error);
 }
@@ -141,7 +147,7 @@ export function HandoverFailedDialog({
   onDone,
   onStale,
 }: HandoverOutcomeProps) {
-  const [reason, setReason] = useState('');
+  const [code, setCode] = useState<CancelRequestCode | ''>('');
   const [note, setNote] = useState('');
   const [evidence, setEvidence] = useState<File[]>([]);
   const inFlight = useRef(false);
@@ -149,22 +155,25 @@ export function HandoverFailedDialog({
   const [error, setError] = useState('');
   const config = usePublicConfig();
   const partnerConfirmed = Boolean(viewerIsDonor ? request.receiverHandoverAt : request.donorHandoverAt);
-  const reasons = handoverFailedReasons(request.deliveryMethod === 'SHIPPING', viewerIsDonor);
-  const notePrefix = reason && reason !== OTHER_REASON ? reason : '';
-  const message = [notePrefix, note.trim()].filter(Boolean).join(' — ');
-  const noteLimit = HANDOVER_FAILED_LIMIT - (notePrefix ? notePrefix.length + 3 : 0);
-  const canSubmit = canConfirmHandover(request.status) && Boolean(reason) &&
-    message.length >= 5 && note.length <= noteLimit;
+  const reasons = afterMeetingReasons(request.deliveryMethod === 'SHIPPING');
+  const noteRequired = code === 'OTHER';
+  const noteReady = !noteRequired || note.trim().length >= 5;
+  const canSubmit = canConfirmHandover(request.status) && Boolean(code) && noteReady &&
+    note.length <= HANDOVER_FAILED_LIMIT;
 
   const submit = async () => {
-    if (inFlight.current || !canSubmit) return;
+    if (inFlight.current || !canSubmit || !code) return;
     inFlight.current = true;
     setSubmitting(true);
     setError('');
     try {
       const evidenceMediaIds = evidence.length ? await uploadEvidence(evidence) : undefined;
       onDone(
-        await requestApi.handoverFailed(request.id, currentUserId, { reason: message, evidenceMediaIds }),
+        await requestApi.handoverFailed(request.id, currentUserId, {
+          code,
+          reason: note.trim() || undefined,
+          evidenceMediaIds,
+        }),
       );
     } catch (caught) {
       setError(handoverOutcomeError(caught));
@@ -182,26 +191,41 @@ export function HandoverFailedDialog({
       </h2>
       <p className="mt-1 text-sm text-text-muted">{itemTitle}</p>
       <p className="mt-3 text-sm leading-6 text-text-secondary">
-        {handoverFailedConsequence(partnerConfirmed, partnerName, config.response_window_hours)}
+        {request.deliveryMethod === 'SHIPPING'
+          ? shippingFailedConsequence(
+              request,
+              viewerIsDonor,
+              partnerName,
+              config.response_window_hours,
+              config.cancel_request_response_hours,
+            )
+          : handoverFailedConsequence(
+              partnerConfirmed,
+              partnerName,
+              config.response_window_hours,
+              config.cancel_request_response_hours,
+            )}
       </p>
-      <Select className="mt-4" label="Lý do giao nhận không thành công" value={reason}
-        disabled={submitting} onChange={(event) => setReason(event.target.value)}>
+      <Select className="mt-4" label="Lý do giao nhận không thành công" value={code}
+        disabled={submitting} onChange={(event) => setCode(event.target.value as CancelRequestCode | '')}>
         <option value="">Chọn lý do</option>
-        {reasons.map((label) => (
-          <option key={label}>{label}</option>
+        {reasons.map((option) => (
+          <option key={option.code} value={option.code}>
+            {option.label}
+          </option>
         ))}
-        <option value={OTHER_REASON}>Lý do khác</option>
       </Select>
       <TextArea
         className="mt-4"
-        label={reason === OTHER_REASON ? 'Mô tả sự cố (bắt buộc)' : 'Mô tả thêm (không bắt buộc)'}
-        hint={reason === OTHER_REASON ? 'Nhập ít nhất 5 ký tự.' : undefined}
+        label={noteRequired ? 'Mô tả sự cố (bắt buộc)' : 'Mô tả thêm (không bắt buộc)'}
+        hint={noteRequired ? 'Nhập ít nhất 5 ký tự.' : undefined}
+        error={noteRequired && note.trim().length > 0 && note.trim().length < 5 ? 'Mô tả cần ít nhất 5 ký tự.' : undefined}
         value={note}
-        maxLength={noteLimit}
+        maxLength={HANDOVER_FAILED_LIMIT}
         disabled={submitting}
         onChange={(event) => setNote(event.target.value)}
       />
-      <p className="mt-1 text-right text-xs text-text-muted">{note.length}/{noteLimit}</p>
+      <p className="mt-1 text-right text-xs text-text-muted">{note.length}/{HANDOVER_FAILED_LIMIT}</p>
       <div className="mt-4">
         <ReportEvidenceField files={evidence} onChange={setEvidence} disabled={submitting} />
       </div>
@@ -215,7 +239,169 @@ export function HandoverFailedDialog({
           Đóng
         </Button>
         <Button disabled={submitting || !canSubmit} onClick={() => void submit()}>
-          {submitting ? 'Đang xử lý...' : partnerConfirmed ? 'Gửi khiếu nại' : 'Hủy giao dịch'}
+          {submitting ? 'Đang xử lý...' : partnerConfirmed ? 'Gửi khiếu nại' : 'Gửi đề nghị huỷ'}
+        </Button>
+      </div>
+    </DialogFrame>
+  );
+}
+
+/** Hộp "Đề nghị huỷ giao dịch" dùng trước giờ hẹn (GN-06). Giao dịch chưa huỷ cho tới khi bên kia phản hồi. */
+export function CancelRequestDialog({
+  request,
+  currentUserId,
+  itemTitle,
+  partnerName,
+  onClose,
+  onDone,
+  onStale,
+}: HandoverOutcomeProps) {
+  const [code, setCode] = useState<CancelRequestCode | ''>('');
+  const [note, setNote] = useState('');
+  const inFlight = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const config = usePublicConfig();
+  const noteRequired = code === 'OTHER';
+  const canSubmit = canConfirmHandover(request.status) && Boolean(code) &&
+    (!noteRequired || note.trim().length >= 5);
+
+  const submit = async () => {
+    if (inFlight.current || !canSubmit || !code) return;
+    inFlight.current = true;
+    setSubmitting(true);
+    setError('');
+    try {
+      onDone(
+        await requestApi.requestCancel(request.id, currentUserId, { code, reason: note.trim() || undefined }),
+      );
+    } catch (caught) {
+      setError(handoverOutcomeError(caught));
+      if ((caught as ApiError).status === 409) onStale();
+    } finally {
+      inFlight.current = false;
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <DialogFrame labelledBy="cancel-request-title" busy={submitting} onClose={onClose}>
+      <h2 id="cancel-request-title" className="text-xl font-bold">
+        Đề nghị huỷ giao dịch
+      </h2>
+      <p className="mt-1 text-sm text-text-muted">{itemTitle}</p>
+      <p className="mt-3 text-sm leading-6 text-text-secondary">
+        {cancelRequestConsequence(partnerName, config.cancel_request_response_hours)}
+      </p>
+      <Select className="mt-4" label="Lý do đề nghị huỷ" value={code}
+        disabled={submitting} onChange={(event) => setCode(event.target.value as CancelRequestCode | '')}>
+        <option value="">Chọn lý do</option>
+        {BEFORE_MEETING_REASONS.map((option) => (
+          <option key={option.code} value={option.code}>
+            {option.label}
+          </option>
+        ))}
+      </Select>
+      <TextArea
+        className="mt-4"
+        label={noteRequired ? 'Mô tả lý do (bắt buộc)' : 'Mô tả thêm (không bắt buộc)'}
+        hint={noteRequired ? 'Nhập ít nhất 5 ký tự.' : undefined}
+        error={noteRequired && note.trim().length > 0 && note.trim().length < 5 ? 'Mô tả cần ít nhất 5 ký tự.' : undefined}
+        value={note}
+        maxLength={HANDOVER_FAILED_LIMIT}
+        disabled={submitting}
+        onChange={(event) => setNote(event.target.value)}
+      />
+      {error ? (
+        <div role="alert" className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">
+          {error}
+        </div>
+      ) : null}
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="outline" disabled={submitting} onClick={onClose}>
+          Đóng
+        </Button>
+        <Button variant="danger" disabled={submitting || !canSubmit} onClick={() => void submit()}>
+          {submitting ? 'Đang gửi...' : 'Gửi đề nghị huỷ'}
+        </Button>
+      </div>
+    </DialogFrame>
+  );
+}
+
+/** Hộp "Không đồng ý" với đề nghị huỷ của bên kia: giải trình bắt buộc, ảnh không bắt buộc (GN-06). */
+export function RejectCancelRequestDialog({
+  request,
+  currentUserId,
+  itemTitle,
+  partnerName,
+  onClose,
+  onDone,
+  onStale,
+}: HandoverOutcomeProps) {
+  const [explanation, setExplanation] = useState('');
+  const [evidence, setEvidence] = useState<File[]>([]);
+  const inFlight = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const trimmed = explanation.trim();
+  const canSubmit = trimmed.length >= 5 && trimmed.length <= HANDOVER_FAILED_LIMIT;
+
+  const submit = async () => {
+    if (inFlight.current || !canSubmit) return;
+    inFlight.current = true;
+    setSubmitting(true);
+    setError('');
+    try {
+      const evidenceMediaIds = evidence.length ? await uploadEvidence(evidence) : undefined;
+      onDone(
+        await requestApi.rejectCancelRequest(request.id, currentUserId, {
+          explanation: trimmed,
+          evidenceMediaIds,
+        }),
+      );
+    } catch (caught) {
+      setError(handoverOutcomeError(caught));
+      if ((caught as ApiError).status === 409) onStale();
+    } finally {
+      inFlight.current = false;
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <DialogFrame labelledBy="reject-cancel-title" busy={submitting} onClose={onClose}>
+      <h2 id="reject-cancel-title" className="text-xl font-bold">
+        Không đồng ý huỷ giao dịch
+      </h2>
+      <p className="mt-1 text-sm text-text-muted">{itemTitle}</p>
+      <p className="mt-3 text-sm leading-6 text-text-secondary">
+        Giao dịch chuyển sang sự cố giao nhận và chờ Admin xác minh. Lời giải trình của bạn được gửi kèm lý do của{' '}
+        {partnerName}.
+      </p>
+      <TextArea
+        className="mt-4"
+        label="Giải trình (bắt buộc)"
+        hint="Nhập ít nhất 5 ký tự."
+        value={explanation}
+        maxLength={HANDOVER_FAILED_LIMIT}
+        disabled={submitting}
+        onChange={(event) => setExplanation(event.target.value)}
+      />
+      <div className="mt-4">
+        <ReportEvidenceField files={evidence} onChange={setEvidence} disabled={submitting} />
+      </div>
+      {error ? (
+        <div role="alert" className="mt-4 rounded-md bg-error-soft p-3 text-xs text-error">
+          {error}
+        </div>
+      ) : null}
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="outline" disabled={submitting} onClick={onClose}>
+          Đóng
+        </Button>
+        <Button variant="warning" disabled={submitting || !canSubmit} onClick={() => void submit()}>
+          {submitting ? 'Đang gửi...' : 'Gửi giải trình'}
         </Button>
       </div>
     </DialogFrame>

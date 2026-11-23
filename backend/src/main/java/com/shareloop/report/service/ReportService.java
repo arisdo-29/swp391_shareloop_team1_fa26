@@ -571,6 +571,57 @@ public class ReportService {
      */
     @Transactional
     public void openHandoverIssueReport(Long reporterId, Long requestId, String note, List<Long> evidenceMediaIds) {
+        openNoShowDispute(reporterId, requestId, note, evidenceMediaIds, null, ReportReason.NO_SHOW);
+    }
+
+    /**
+     * Mở khiếu nại khi bên kia không đồng ý đề nghị huỷ (GN-06). Người đề nghị là người khiếu nại, người không đồng ý
+     * là bên bị khiếu nại và đã giải trình trong nội dung nên không cần báo thêm.
+     *
+     * <p>Lý do khiếu nại phụ thuộc lý do đề nghị huỷ. Tố bên kia (không đến, chưa gửi hàng) thì lý do là NO_SHOW và Admin
+     * chấp thuận sẽ trừ sao bên bị tố. Các lý do bận, hết nhu cầu, khác không tố ai nên dùng lý do chung OTHER: bên không
+     * đồng ý không bị trừ sao tự động, Admin chọn huỷ không phạt hoặc chọn rõ bên bị trừ.
+     *
+     * @param accusation true khi lý do đề nghị huỷ là tố bên kia
+     */
+    @Transactional
+    public void openCancelRejectedDispute(Long reporterId, Long requestId, String note, boolean accusation) {
+        openNoShowDispute(
+                reporterId,
+                requestId,
+                note,
+                null,
+                CancelNotice.NONE,
+                accusation ? ReportReason.NO_SHOW : ReportReason.OTHER);
+    }
+
+    /**
+     * Mở báo cáo không đến hẹn sau khi giao dịch đã huỷ vì bên kia im lặng trước đề nghị huỷ (GN-06). Admin xem và tự
+     * quyết, hệ thống không tự trừ sao.
+     *
+     * @param issuePhrase mô tả vấn đề cho người bị báo, ví dụ "không đến điểm hẹn"
+     */
+    @Transactional
+    public void openSilentCancelReport(Long reporterId, Long requestId, String issuePhrase, String note) {
+        openNoShowDispute(reporterId, requestId, note, null, CancelNotice.silent(issuePhrase), ReportReason.NO_SHOW);
+    }
+
+    // Cách báo cho bên bị khiếu nại: null là câu của sự cố giao nhận (bên kia đã bấm hoàn tất), NONE là không báo.
+    private record CancelNotice(String issuePhrase) {
+        static final CancelNotice NONE = new CancelNotice(null);
+
+        static CancelNotice silent(String issuePhrase) {
+            return new CancelNotice(issuePhrase);
+        }
+    }
+
+    private void openNoShowDispute(
+            Long reporterId,
+            Long requestId,
+            String note,
+            List<Long> evidenceMediaIds,
+            CancelNotice notice,
+            ReportReason reason) {
         if (reportRepository.existsByReporterIdAndTargetTypeAndRequestId(reporterId, TargetType.REQUEST, requestId)) {
             return;
         }
@@ -599,23 +650,44 @@ public class ReportService {
                 requestId,
                 requestSnapshot.itemId(),
                 respondentId,
-                ReportReason.NO_SHOW,
+                reason,
                 note,
                 evidenceService.attach(evidenceMediaIds, reporterId),
                 responseDueAt);
         Report saved = reportRepository.save(report);
         publishDisputeOpened(saved, responseHours);
 
-        if (notificationService != null) {
-            String issue = reporterIsReceiver ? "chưa nhận được đồ" : "chưa giao được đồ";
+        if (notificationService != null && notice != CancelNotice.NONE) {
+            notifyRespondentOfNoShow(saved, respondentId, reporterIsReceiver, notice, responseHours, responseDueAt);
+        }
+    }
+
+    private void notifyRespondentOfNoShow(
+            Report saved,
+            Long respondentId,
+            boolean reporterIsReceiver,
+            CancelNotice notice,
+            int responseHours,
+            Instant responseDueAt) {
+        String windowSentence = responseWindowSentence(responseHours, responseDueAt);
+        String link = "/me/disputes/" + saved.getId();
+        if (notice != null) {
             notificationService.notify(
                     respondentId,
                     "DISPUTE_OPENED",
-                    "Đối phương báo " + issue,
-                    "Đối phương báo " + issue + " dù bạn đã xác nhận bàn giao. "
-                            + responseWindowSentence(responseHours, responseDueAt),
-                    "/me/disputes/" + saved.getId());
+                    "Đối phương báo bạn " + notice.issuePhrase(),
+                    "Giao dịch đã huỷ vì bạn không phản hồi đề nghị huỷ. Đối phương báo bạn " + notice.issuePhrase()
+                            + ". " + windowSentence,
+                    link);
+            return;
         }
+        String issue = reporterIsReceiver ? "chưa nhận được đồ" : "chưa giao được đồ";
+        notificationService.notify(
+                respondentId,
+                "DISPUTE_OPENED",
+                "Đối phương báo " + issue,
+                "Đối phương báo " + issue + " dù bạn đã xác nhận bàn giao. " + windowSentence,
+                link);
     }
 
     // Báo module chat thêm dòng tin hệ thống "giao dịch đang có khiếu nại" (D-04). Không có publisher ở unit test rút
@@ -989,7 +1061,16 @@ public class ReportService {
                         note != null ? note : "Từ chối nhận không có cơ sở, báo cáo bị bác bỏ" + about);
             }
         } else if (decision == ReportDecision.UPHOLD) {
-            Long violatorId = resolveViolator(report);
+            // GN-06: đề nghị huỷ không tố ai mà bên kia không đồng ý thì bên không đồng ý không bị trừ sao chỉ vì từ
+            // chối.
+            // Admin huỷ không phạt, hoặc chọn rõ bên bị trừ.
+            boolean cancelWithoutAccusation = isCancelDisputeWithoutAccusation(report);
+            Long violatorId = cancelWithoutAccusation
+                    ? requirePenalizedParty(report.getRequestId(), request.penalizedUserId())
+                    : resolveViolator(report);
+            if (cancelWithoutAccusation && violatorId == null) {
+                report.markNoStarsDeducted();
+            }
 
             // UT-02: Trừ 1 sao uy tín
             if (violatorId != null && reputationService != null) {
@@ -1036,7 +1117,7 @@ public class ReportService {
                 if (violatorId != null) {
                     logPayload.put("violatorId", violatorId);
                 }
-                logPayload.put("starsDeducted", 1);
+                logPayload.put("starsDeducted", violatorId == null ? 0 : 1);
                 logPayload.put("seriousViolation", serious);
                 if (!closedReportIds.isEmpty()) {
                     logPayload.put("closedReportIds", closedReportIds);
@@ -1051,7 +1132,12 @@ public class ReportService {
                         "REPORT",
                         reportId,
                         logPayload,
-                        note != null ? note : "Chấp thuận báo cáo" + about + ", xử phạt trừ 1 sao uy tín");
+                        note != null
+                                ? note
+                                : "Chấp thuận báo cáo" + about
+                                        + (violatorId == null
+                                                ? ", huỷ giao dịch và không trừ sao ai"
+                                                : ", xử phạt trừ 1 sao uy tín"));
             }
         }
 
@@ -1060,7 +1146,7 @@ public class ReportService {
         // cáo từ chối nhận là báo cáo bài, giao dịch đã huỷ từ trước nên không đi qua đây.
         if (requestService != null && report.getTargetType() == TargetType.REQUEST && report.getRequestId() != null) {
             requestService.resolveDisputedRequest(
-                    report.getRequestId(), decision == ReportDecision.UPHOLD, report.getTargetUserId());
+                    report.getRequestId(), decision == ReportDecision.UPHOLD, adminId, request.itemOutcomes());
         }
 
         notifyConcluded(report, decision, note, about);
@@ -1079,6 +1165,27 @@ public class ReportService {
                 saved.getResolution(),
                 saved.getStarsDeducted(),
                 saved.getResolvedAt());
+    }
+
+    // Khiếu nại mở vì bên kia không đồng ý một đề nghị huỷ không tố ai (bận, hết nhu cầu, khác).
+    private boolean isCancelDisputeWithoutAccusation(Report report) {
+        return requestService != null
+                && report.getTargetType() == TargetType.REQUEST
+                && report.getRequestId() != null
+                && requestService.isCancelDisputeWithoutAccusation(report.getRequestId());
+    }
+
+    // Bên Admin chọn trừ sao phải là chủ bài hoặc người nhận của giao dịch; không chọn thì trả null (không trừ ai).
+    private Long requirePenalizedParty(Long requestId, Long penalizedUserId) {
+        if (penalizedUserId == null) {
+            return null;
+        }
+        RequestChatContext context = requestService.getChatContext(requestId);
+        boolean isParty = penalizedUserId.equals(context.donorId()) || penalizedUserId.equals(context.receiverId());
+        if (!isParty) {
+            throw new BusinessException(ReportErrorCode.REPORT_PENALIZED_USER_INVALID);
+        }
+        return penalizedUserId;
     }
 
     /**

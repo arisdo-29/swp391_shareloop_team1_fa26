@@ -1,5 +1,6 @@
 package com.shareloop.request.job;
 
+import com.shareloop.request.service.RequestDeadlineJobService;
 import com.shareloop.request.service.RequestJobService;
 import java.time.Clock;
 import java.time.Instant;
@@ -24,10 +25,13 @@ public class RequestJob {
     private static final Logger log = LoggerFactory.getLogger(RequestJob.class);
 
     private final RequestJobService requestJobService;
+    private final RequestDeadlineJobService requestDeadlineJobService;
     private final Clock clock;
 
-    public RequestJob(RequestJobService requestJobService, Clock clock) {
+    public RequestJob(
+            RequestJobService requestJobService, RequestDeadlineJobService requestDeadlineJobService, Clock clock) {
         this.requestJobService = requestJobService;
+        this.requestDeadlineJobService = requestDeadlineJobService;
         this.clock = clock;
     }
 
@@ -40,11 +44,29 @@ public class RequestJob {
         int pendingExpired = requestJobService.expirePendingRequests(now);
         int silentReservedExpired = requestJobService.expireSilentReservedRequests(now);
         int autoConfirmed = requestJobService.autoConfirmHandoverRequests(now);
+        int cancelRequestsExpired = requestDeadlineJobService.expireCancelRequests(now);
+        int reschedulesExpired = requestDeadlineJobService.expireReschedules(now);
+        int staleCancelled = requestDeadlineJobService.cancelStaleConfirmed(now);
+        int staleReminded = requestDeadlineJobService.remindStaleConfirmed(now);
+        int shippingLegsAutoReceived = requestDeadlineJobService.autoReceiveShippingLegs(now);
+        int shippingReminded = requestDeadlineJobService.remindShipping(now);
+        int shippingStuck = requestDeadlineJobService.openShippingOneLegStuck(now);
+        int reminded = requestDeadlineJobService.remindDeadlines(now);
 
         log.info(
-                "RequestJob finished: {} pending expired, {} silent reserved expired, {} auto confirmed",
+                "RequestJob finished: {} pending expired, {} silent reserved expired, {} auto confirmed,"
+                        + " {} cancel requests expired, {} reschedules expired, {} stale cancelled, {} stale reminded,"
+                        + " {} shipping legs auto received, {} shipping reminded, {} shipping stuck, {} deadline reminders",
                 pendingExpired,
                 silentReservedExpired,
-                autoConfirmed);
+                autoConfirmed,
+                cancelRequestsExpired,
+                reschedulesExpired,
+                staleCancelled,
+                staleReminded,
+                shippingLegsAutoReceived,
+                shippingReminded,
+                shippingStuck,
+                reminded);
     }
 }

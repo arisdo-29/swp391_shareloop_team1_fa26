@@ -58,6 +58,25 @@ export function notificationCategory(type: string): NotificationCategory {
       // Món từng yêu cầu mở lại do giao dịch đã chọn bị huỷ (docs/api/request.md).
       'REQUESTED_ITEM_REOPENED',
       'HANDOVER_CONFIRMED',
+      // Luật huỷ có xác nhận, dời lịch, giao hàng hai chiều và nhắc hạn (docs/api/notification.md)
+      'CANCEL_REQUESTED',
+      'CANCEL_REQUEST_WITHDRAWN',
+      'CANCEL_REQUEST_REJECTED',
+      'TRANSACTION_RESUMED',
+      'CANCEL_REQUEST_REMINDER',
+      'RESCHEDULE_PROPOSED',
+      'RESCHEDULE_ACCEPTED',
+      'RESCHEDULE_REJECTED',
+      'RESCHEDULE_EXPIRED',
+      'RESCHEDULE_REMINDER',
+      'SHIPMENT_SENT',
+      'SHIP_DATE_REMINDER',
+      'SHIP_OVERDUE_REMINDER',
+      'SHIP_OVERDUE_NOTICE',
+      'HANDOVER_STALE_REMINDER',
+      'HANDOVER_AUTO_CONFIRM_REMINDER',
+      'SCHEDULE_AUTO_CANCEL_REMINDER',
+      'MEETING_REMINDER',
     ].includes(type)
   ) {
     return 'transaction';

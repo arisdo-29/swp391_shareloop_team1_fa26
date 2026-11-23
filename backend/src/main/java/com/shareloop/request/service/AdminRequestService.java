@@ -43,6 +43,9 @@ public class AdminRequestService {
             RequestStatus.AWAITING_HANDOVER,
             RequestStatus.DISPUTED);
 
+    static final String LABEL_PENDING_CANCEL = "Đang chờ phản hồi đề nghị huỷ";
+    static final String LABEL_SEND_OVERDUE = "Quá hạn gửi hàng";
+
     private final RequestRepository requestRepository;
     private final RequestService requestService;
     private final ItemQueryService itemQueryService;
@@ -90,13 +93,35 @@ public class AdminRequestService {
             java.time.LocalDate to,
             int page,
             int size) {
+        return list(status, stuck, q, type, deliveryMethod, from, to, null, null, page, size);
+    }
+
+    /**
+     * Như hàm trên, thêm hai bộ lọc của luật mới: pendingCancel (có đề nghị huỷ đang chờ phản hồi) và sendOverdue (giao
+     * dịch Giao hàng đã quá hạn gửi mà còn chiều chưa gửi). Hai bộ lọc này cần mốc hạn tính từ cấu hình nên lọc trong
+     * bộ nhớ như bộ lọc bị kẹt.
+     */
+    @Transactional(readOnly = true)
+    public AdminRequestPageResponse list(
+            RequestStatus status,
+            Boolean stuck,
+            String q,
+            String type,
+            String deliveryMethod,
+            java.time.LocalDate from,
+            java.time.LocalDate to,
+            Boolean pendingCancel,
+            Boolean sendOverdue,
+            int page,
+            int size) {
         Instant fromInstant =
                 from == null ? null : from.atStartOfDay(VIETNAM_ZONE).toInstant();
         Instant toInstant =
                 to == null ? null : to.plusDays(1).atStartOfDay(VIETNAM_ZONE).toInstant();
         // Không có bộ lọc cần dữ liệu module khác (tên, khoá tài khoản): lọc và chia trang ngay trong SQL, chỉ dựng
         // dòng cho trang (G2)
-        boolean needsMemoryFilter = stuck != null || (q != null && !q.isBlank());
+        boolean needsMemoryFilter =
+                stuck != null || pendingCancel != null || sendOverdue != null || (q != null && !q.isBlank());
         if (!needsMemoryFilter) {
             var result = requestRepository.findForAdmin(
                     status == null ? java.util.EnumSet.allOf(RequestStatus.class) : java.util.EnumSet.of(status),
@@ -120,11 +145,21 @@ public class AdminRequestService {
         List<AdminRequestRow> filtered = new ArrayList<>();
         for (AdminRequestRow row : toRows(requests)) {
             boolean stuckMatches = stuck == null || stuck == (row.flagReason() != null);
+            boolean pendingCancelMatches =
+                    pendingCancel == null || pendingCancel == row.labels().contains(LABEL_PENDING_CANCEL);
+            boolean sendOverdueMatches =
+                    sendOverdue == null || sendOverdue == row.labels().contains(LABEL_SEND_OVERDUE);
             boolean typeMatches = type == null || type.equals(row.type());
             boolean deliveryMatches = deliveryMethod == null || deliveryMethod.equals(row.deliveryMethod());
             boolean dateMatches = (fromInstant == null || !row.createdAt().isBefore(fromInstant))
                     && (toInstant == null || row.createdAt().isBefore(toInstant));
-            if (stuckMatches && matchesQuery(row, q) && typeMatches && deliveryMatches && dateMatches) {
+            if (stuckMatches
+                    && pendingCancelMatches
+                    && sendOverdueMatches
+                    && matchesQuery(row, q)
+                    && typeMatches
+                    && deliveryMatches
+                    && dateMatches) {
                 filtered.add(row);
             }
         }
@@ -173,9 +208,44 @@ public class AdminRequestService {
                     request.getMeetingTime(),
                     request.getCreatedAt(),
                     flagReasonOf(request, donorId, lockedIds, overdueAfter, now),
-                    request.getDeliveryMethod()));
+                    request.getDeliveryMethod(),
+                    labelsOf(request, now)));
         }
         return rows;
+    }
+
+    // Nhãn cho danh sách Admin (GN-06, GN-12). Chỉ giao dịch đang chờ giao nhận mới có nhãn giao hàng.
+    private List<String> labelsOf(Request request, Instant now) {
+        List<String> labels = new ArrayList<>();
+        if (request.hasPendingCancelRequest()) {
+            labels.add(LABEL_PENDING_CANCEL);
+        }
+        boolean shippingInProgress = request.isShipping()
+                && (request.getStatus() == RequestStatus.LOGISTICS_CONFIRMED
+                        || request.getStatus() == RequestStatus.AWAITING_HANDOVER);
+        if (!shippingInProgress) {
+            return labels;
+        }
+        boolean anyUnsent = false;
+        boolean anyReceived = false;
+        boolean allReceived = true;
+        for (int leg = 1; leg <= request.requiredLegs(); leg++) {
+            anyUnsent |= !request.isLegShipped(leg);
+            anyReceived |= request.isLegReceived(leg);
+            allReceived &= request.isLegReceived(leg);
+        }
+        if (anyUnsent) {
+            labels.add("Chờ gửi hàng");
+            int sendDays = configService.getInt(ConfigKey.SHIPPING_SEND_DEADLINE_DAYS);
+            if (request.getMeetingTime() != null
+                    && request.getMeetingTime().plus(Duration.ofDays(sendDays)).isBefore(now)) {
+                labels.add(LABEL_SEND_OVERDUE);
+            }
+        }
+        if (anyReceived && !allReceived) {
+            labels.add("Một bên đã nhận");
+        }
+        return labels;
     }
 
     private ItemSummary findSummary(Long itemId) {
