@@ -198,6 +198,59 @@ describe('CancelRequestDialog', () => {
   });
 });
 
+describe('Lý do khác ngắn hơn 5 ký tự', () => {
+  it('đề nghị huỷ: báo lỗi tiếng Việt, khoá nút và không gọi API', async () => {
+    const user = userEvent.setup();
+    const spy = vi.spyOn(requestApi, 'requestCancel').mockResolvedValue({ ...confirmedRequest });
+    render(
+      <CancelRequestDialog
+        request={confirmedRequest}
+        currentUserId={9}
+        itemTitle="Máy pha cà phê"
+        partnerName="Bình"
+        viewerIsDonor
+        onClose={vi.fn()}
+        onDone={vi.fn()}
+        onStale={vi.fn()}
+      />,
+    );
+    await user.selectOptions(screen.getByLabelText('Lý do đề nghị huỷ'), 'OTHER');
+    fireEvent.change(screen.getByLabelText(/Mô tả lý do/), { target: { value: 'abc' } });
+
+    expect(screen.getByText('Mô tả cần ít nhất 5 ký tự.')).toBeTruthy();
+    const submit = screen.getByRole('button', { name: 'Gửi đề nghị huỷ' }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    await user.click(submit);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('giao nhận không thành công: báo lỗi tiếng Việt, khoá nút và không gọi API', async () => {
+    const user = userEvent.setup();
+    const pastRequest = { ...confirmedRequest, meetingTime: '2026-11-30T10:00:00Z' };
+    const spy = vi.spyOn(requestApi, 'handoverFailed').mockResolvedValue({ ...pastRequest });
+    render(
+      <HandoverFailedDialog
+        request={pastRequest}
+        currentUserId={12}
+        itemTitle="Máy pha cà phê"
+        partnerName="An"
+        viewerIsDonor={false}
+        onClose={vi.fn()}
+        onDone={vi.fn()}
+        onStale={vi.fn()}
+      />,
+    );
+    await user.selectOptions(screen.getByLabelText('Lý do giao nhận không thành công'), 'OTHER');
+    fireEvent.change(screen.getByLabelText(/Mô tả sự cố/), { target: { value: 'ab' } });
+
+    expect(screen.getByText('Mô tả cần ít nhất 5 ký tự.')).toBeTruthy();
+    const submit = screen.getByRole('button', { name: /Gửi đề nghị huỷ|Gửi khiếu nại/ }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    await user.click(submit);
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
 describe('HandoverFailedDialog', () => {
   const pastRequest = { ...confirmedRequest, meetingTime: '2026-11-30T10:00:00Z' };
 

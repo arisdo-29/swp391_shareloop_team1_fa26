@@ -1672,8 +1672,15 @@ public class RequestService {
 
     // GN-12: mốc tự huỷ giao dịch kẹt. Gặp trực tiếp tính từ giờ hẹn, Giao hàng tính từ hạn gửi.
     private Instant staleThreshold(Request request, int staleDays) {
+        return staleBase(request).plus(staleDays, ChronoUnit.DAYS);
+    }
+
+    // Mốc bắt đầu đếm ngày kẹt: giờ hẹn (Giao hàng: hạn gửi). Giao dịch vừa quay lại sau khi Admin bác đề nghị huỷ thì
+    // đếm từ lúc quay lại, để không bị huỷ ngay lần chạy kế.
+    private Instant staleBase(Request request) {
         Instant base = request.isShipping() ? deadlineCalculator.sendDeadlineAt(request) : request.getMeetingTime();
-        return base.plus(staleDays, ChronoUnit.DAYS);
+        Instant resumedAt = request.getResumedAt();
+        return resumedAt != null && resumedAt.isAfter(base) ? resumedAt : base;
     }
 
     // ===== Nhắc hạn (GN-13) =====
@@ -2050,12 +2057,12 @@ public class RequestService {
                 || request.getStatus() != RequestStatus.LOGISTICS_CONFIRMED
                 || request.getMeetingTime() == null
                 || request.hasPendingCancelRequest()
-                || request.getMeetingTime().plus(1, ChronoUnit.DAYS).isAfter(now)) {
+                || sinceMeetingOrResume(request).plus(1, ChronoUnit.DAYS).isAfter(now)) {
             return false;
         }
 
         int staleDays = configService.getInt(ConfigKey.CONFIRMED_STALE_CANCEL_DAYS);
-        Instant cancelAt = request.getMeetingTime().plus(staleDays, ChronoUnit.DAYS);
+        Instant cancelAt = staleThreshold(request, staleDays);
         String message = "Đã qua giờ hẹn mà chưa bên nào xác nhận. Hãy bấm Đã giao nhận xong hoặc Giao nhận không thành"
                 + " công. Giao dịch sẽ tự huỷ lúc " + VietnamTime.format(cancelAt) + " nếu vẫn chưa ai xác nhận.";
         String link = "/requests/" + request.getId();
@@ -2067,7 +2074,13 @@ public class RequestService {
 
     // Gửi nhắc nếu chưa có thông báo cùng loại kể từ giờ hẹn (không gửi lặp mỗi lần job chạy).
     private boolean remindOnce(long userId, String type, String link, Request request, String message) {
-        return remindOnce(userId, type, link, request.getMeetingTime(), message);
+        return remindOnce(userId, type, link, sinceMeetingOrResume(request), message);
+    }
+
+    // Nhắc giao dịch kẹt đếm từ giờ hẹn, hoặc từ lúc quay lại sau khi Admin bác đề nghị huỷ nếu muộn hơn.
+    private Instant sinceMeetingOrResume(Request request) {
+        Instant resumedAt = request.getResumedAt();
+        return resumedAt != null && resumedAt.isAfter(request.getMeetingTime()) ? resumedAt : request.getMeetingTime();
     }
 
     private boolean remindOnce(long userId, String type, String link, Instant since, String message) {
@@ -2181,7 +2194,7 @@ public class RequestService {
             message = cancelUpheldDispute(request, adminId, itemOutcomes);
         } else if (isCancelDisputeWithoutAccusation(request)) {
             // Đề nghị huỷ không tố ai mà Admin bác: giao dịch tiếp tục, không coi là đã giao nhận xong (GN-06)
-            request.resumeAfterRejectedCancel();
+            request.resumeAfterRejectedCancel(Instant.now());
             requestRepository.save(request);
             notifyBothParties(
                     request,

@@ -300,6 +300,54 @@ class RequestRescheduleTest {
     }
 
     @Test
+    void cancelStaleConfirmed_whenJustResumedAfterRejectedCancel_doesNotCancelUntilStaleDaysFromResume() {
+        // given: giờ hẹn đã qua 10 ngày nhưng giao dịch vừa quay lại sau khi Admin bác đề nghị huỷ
+        Request request = confirmedRequest(daysAgo(10));
+        ReflectionTestUtils.setField(request, "resumedAt", Instant.now().minus(1, ChronoUnit.HOURS));
+
+        // when
+        boolean cancelled = requestService.cancelStaleConfirmed(REQUEST_ID, Instant.now());
+
+        // then: mốc tính lại từ lúc quay lại nên chưa huỷ
+        assertThat(cancelled).isFalse();
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
+        verify(itemService, never()).releaseAfterCancel(anyLong(), any());
+    }
+
+    @Test
+    void cancelStaleConfirmed_whenThreeDaysPastResume_cancelsAsUsual() {
+        // given
+        Request request = confirmedRequest(daysAgo(10));
+        ReflectionTestUtils.setField(request, "resumedAt", daysAgo(4));
+
+        // when
+        boolean cancelled = requestService.cancelStaleConfirmed(REQUEST_ID, Instant.now());
+
+        // then
+        assertThat(cancelled).isTrue();
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+    }
+
+    @Test
+    void resumeAfterRejectedCancel_whenResumed_recordsResumeTimeAndClearsCancelRequest() {
+        // given
+        Request request = confirmedRequest(daysAgo(1));
+        ReflectionTestUtils.setField(request, "status", RequestStatus.DISPUTED);
+        ReflectionTestUtils.setField(request, "cancelRequestedBy", DONOR_ID);
+        ReflectionTestUtils.setField(request, "cancelRequestedAt", Instant.now());
+        ReflectionTestUtils.setField(request, "cancelRequestCode", com.shareloop.request.entity.CancelRequestCode.BUSY);
+        Instant now = Instant.now();
+
+        // when
+        request.resumeAfterRejectedCancel(now);
+
+        // then
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
+        assertThat(request.getResumedAt()).isEqualTo(now);
+        assertThat(request.getCancelRequestedBy()).isNull();
+    }
+
+    @Test
     void cancelStaleConfirmed_whenOnlyTwoDaysPastMeeting_doesNothing() {
         // given
         Request request = confirmedRequest(daysAgo(2));

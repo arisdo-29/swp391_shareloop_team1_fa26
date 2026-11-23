@@ -355,8 +355,8 @@ public enum ConfigKey {
             "7",
             ConfigGroup.TRANSACTION,
             "Hạn tự động hoàn tất khi giao hàng",
-            "Giao hàng: một bên đã xác nhận mà bên kia im lặng quá số ngày này thì giao dịch tự hoàn tất. Dài hơn gặp"
-                    + " trực tiếp vì cần thời gian vận chuyển."),
+            "Giao hàng, tính cho từng chiều: bên gửi đã bấm Đã gửi hàng mà bên nhận im lặng quá số ngày này kể từ lúc gửi"
+                    + " thì chiều đó tự ghi nhận Đã nhận. Đủ mọi chiều thì giao dịch hoàn tất."),
     CANCEL_REQUEST_RESPONSE_HOURS(
             "cancel_request_response_hours",
             "24",

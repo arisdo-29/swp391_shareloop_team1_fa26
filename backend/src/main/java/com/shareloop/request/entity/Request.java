@@ -120,6 +120,11 @@ public class Request extends BaseEntity {
     @Column(name = "reschedule_meeting_place", length = 255)
     private String rescheduleMeetingPlace;
 
+    // Lúc giao dịch quay lại sau khi Admin bác khiếu nại đề nghị huỷ không tố ai. Job tự huỷ giao dịch kẹt tính lại mốc
+    // từ lúc này để không huỷ ngay lần chạy kế.
+    @Column(name = "resumed_at")
+    private Instant resumedAt;
+
     // Số lần dời lịch đã được đồng ý
     @Column(name = "reschedule_count", nullable = false)
     private int rescheduleCount = 0;
@@ -842,13 +847,14 @@ public class Request extends BaseEntity {
      * có đề nghị. Đã có bên bấm hoàn tất (bên kia trả lời bằng cách bấm hoàn tất) thì về AWAITING_HANDOVER, còn lại về
      * LOGISTICS_CONFIRMED. Dấu vết đề nghị được xoá.
      */
-    public void resumeAfterRejectedCancel() {
+    public void resumeAfterRejectedCancel(Instant now) {
         if (this.status != RequestStatus.DISPUTED || this.cancelRequestedBy == null || isCancelRequestAccusation()) {
             throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
         }
         boolean someoneConfirmed = this.donorHandoverAt != null || this.receiverHandoverAt != null;
         transitionTo(someoneConfirmed ? RequestStatus.AWAITING_HANDOVER : RequestStatus.LOGISTICS_CONFIRMED);
         clearCancelRequest();
+        this.resumedAt = now;
     }
 
     /** Câu mô tả lý do đề nghị để ghép vào lý do huỷ và thông báo, ví dụ "bạn không đến điểm hẹn". */
@@ -1013,6 +1019,10 @@ public class Request extends BaseEntity {
 
     public String getRescheduleMeetingPlace() {
         return rescheduleMeetingPlace;
+    }
+
+    public Instant getResumedAt() {
+        return resumedAt;
     }
 
     public int getRescheduleCount() {

@@ -219,6 +219,7 @@ export function HandoverFailedDialog({
         className="mt-4"
         label={noteRequired ? 'Mô tả sự cố (bắt buộc)' : 'Mô tả thêm (không bắt buộc)'}
         hint={noteRequired ? 'Nhập ít nhất 5 ký tự.' : undefined}
+        error={noteRequired && note.trim().length > 0 && note.trim().length < 5 ? 'Mô tả cần ít nhất 5 ký tự.' : undefined}
         value={note}
         maxLength={HANDOVER_FAILED_LIMIT}
         disabled={submitting}
@@ -305,6 +306,7 @@ export function CancelRequestDialog({
         className="mt-4"
         label={noteRequired ? 'Mô tả lý do (bắt buộc)' : 'Mô tả thêm (không bắt buộc)'}
         hint={noteRequired ? 'Nhập ít nhất 5 ký tự.' : undefined}
+        error={noteRequired && note.trim().length > 0 && note.trim().length < 5 ? 'Mô tả cần ít nhất 5 ký tự.' : undefined}
         value={note}
         maxLength={HANDOVER_FAILED_LIMIT}
         disabled={submitting}

@@ -190,6 +190,62 @@ class RequestDisputeResolutionTest {
                 .notify(eq(DONOR_ID), eq("TRANSACTION_CANCELLED"), anyString(), anyString(), anyString());
     }
 
+    private String transferredBodyForShipping(boolean leg1Received, boolean leg2Received) {
+        Request request = disputedSwapRequest();
+        ReflectionTestUtils.setField(request, "deliveryMethod", "SHIPPING");
+        if (leg1Received) {
+            ReflectionTestUtils.setField(request, "receiverHandoverAt", java.time.Instant.now());
+        }
+        if (leg2Received) {
+            ReflectionTestUtils.setField(request, "donorHandoverAt", java.time.Instant.now());
+        }
+        when(userService.findContact(RECEIVER_ID))
+                .thenReturn(new ContactInfo(RECEIVER_ID, "Bình", "binh@test.local", "0900000001"));
+        org.mockito.Mockito.lenient()
+                .when(userService.findContact(DONOR_ID))
+                .thenReturn(new ContactInfo(DONOR_ID, "An", "an@test.local", "0900000002"));
+
+        requestService.resolveDisputedRequest(
+                REQUEST_ID, true, ADMIN_ID, outcomes(Choice.TRANSFERRED, Choice.TRANSFERRED));
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(notificationService)
+                .notify(eq(RECEIVER_ID), eq("TRANSACTION_CANCELLED"), anyString(), body.capture(), anyString());
+        return body.getValue();
+    }
+
+    @Test
+    @DisplayName("Giao hàng, chưa chiều nào nhận: món chính còn ở chỗ chủ bài, món đổi còn ở chỗ người nhận")
+    void resolveDisputedRequest_whenShippingAndNoLegReceived_namesTheSenderAsHolderOfEachItem() {
+        // when
+        String body = transferredBodyForShipping(false, false);
+
+        // then: câu của món chính nói chủ bài, câu của món đổi nói người nhận
+        assertThat(body).contains("đã nằm ở chỗ An.").contains("đã nằm ở chỗ Bình.");
+        assertThat(body.indexOf("ở chỗ An.")).isLessThan(body.indexOf("ở chỗ Bình."));
+    }
+
+    @Test
+    @DisplayName("Giao hàng, cả hai chiều đã nhận: món chính ở chỗ người nhận, món đổi ở chỗ chủ bài")
+    void resolveDisputedRequest_whenShippingAndBothLegsReceived_namesTheReceiverOfEachLeg() {
+        // when
+        String body = transferredBodyForShipping(true, true);
+
+        // then
+        assertThat(body.indexOf("ở chỗ Bình.")).isLessThan(body.indexOf("ở chỗ An."));
+    }
+
+    @Test
+    @DisplayName("Giao hàng, chỉ chiều 1 đã nhận: cả hai món cùng nằm ở chỗ người nhận")
+    void resolveDisputedRequest_whenShippingAndOnlyFirstLegReceived_bothItemsAtReceiver() {
+        // when
+        String body = transferredBodyForShipping(true, false);
+
+        // then
+        assertThat(body).doesNotContain("ở chỗ An.");
+        assertThat(body.split("ở chỗ Bình\\.", -1)).hasSize(3);
+    }
+
     @Test
     @DisplayName("Chấp nhận mà thiếu lựa chọn cho một món thì báo lỗi và không đổi gì")
     void resolveDisputedRequest_whenOutcomeMissingForAnItem_throwsOutcomesRequired() {
