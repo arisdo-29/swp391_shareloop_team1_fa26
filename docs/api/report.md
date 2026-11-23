@@ -580,3 +580,27 @@ Không có `reporterId` và `description` để bên bị phản ánh không bi�
 - `AWAITING_RESPONSE`: Chờ bên bị khiếu nại gửi giải trình (cửa sổ 3 ngày).
 - `RESOLVED`: Đã giải quyết xong (chấp thuận khiếu nại).
 - `DISMISSED`: Bác bỏ báo cáo / khiếu nại.
+
+## Bài bị báo cáo đang có giao dịch mở (F1)
+
+- Chấp thuận báo cáo bài có lý do thuộc `report_serious_reasons` (mặc định hàng cấm, hàng giả) mà bài đang có giao dịch mở (từ `RESERVED` tới `DISPUTED`, bài là bài chính hoặc món mang đổi): giao dịch bị huỷ qua đường huỷ của Admin với lý do "Món đồ vi phạm quy định nên giao dịch bị huỷ", không cộng điểm cho ai, hai bên nhận thông báo `TRANSACTION_CANCELLED`, món đổi của bên kia được nhả như huỷ thường.
+- Lý do khác, hoặc bài tự ẩn do đủ `report_hide_threshold` báo cáo: giao dịch tiếp tục, hai bên nhận thông báo `TRANSACTION_ITEM_UNDER_REVIEW` ("Bài đang bị xem xét vi phạm", với tự ẩn chỉ gửi một lần lúc chạm ngưỡng). `GET /requests/{id}` trả `flags` chứa `ITEM_UNDER_REVIEW` khi bài của giao dịch đang bị ẩn để trang Tiến trình giao dịch hiện cảnh báo.
+- `GET /admin/reports/{id}` thêm `openTransactionPartnerName` (tên bên còn lại của giao dịch đang mở, null nếu không có) và `seriousReason` để hộp kết luận báo trước hệ quả.
+
+## Báo cáo của tài khoản mới không tính vào ngưỡng tự ẩn (F2)
+
+Chỉ báo cáo của người đủ tin cậy mới được tính vào `report_hide_threshold`. Đủ tin cậy khi tuổi tài khoản từ `report_trusted_min_account_days` ngày (mặc định 7) hoặc đã có ít nhất `report_trusted_min_completed` giao dịch hoàn tất (mặc định 1). Báo cáo của tài khoản mới vẫn được lưu và vào hàng chờ Admin như thường. `ReportResponse.newReporterAccount` (chỉ có trong API của Admin) là `true` khi người gửi chưa đủ tin cậy, màn Admin hiện nhãn "Tài khoản mới".
+
+## Khiếu nại thắng sau khi giao dịch hoàn tất thì thu hồi điểm (F3)
+
+Chấp thuận khiếu nại của giao dịch đã `COMPLETED`: trừ lại đúng số điểm nhật ký `POINTS` đã ghi cho người vi phạm (bên bị khiếu nại, hoặc người Admin chọn khi có) từ giao dịch đó, không để điểm âm, tính lại hạng, ghi nhật ký `POINTS_REVOKED` ("Thu hồi điểm") và báo người đó (`POINTS_REVOKED`). Người khiếu nại giữ điểm. Kết luận gọi lại không trừ hai lần.
+
+## Thông báo kết quả báo cáo (F6)
+
+Admin kết luận báo cáo bài hoặc người dùng thì người báo nhận thông báo `REPORT_CONCLUDED` ("Báo cáo của bạn đã có kết quả", kèm kết quả và ghi chú của Admin, không lộ thông tin cá nhân người bị báo). Kết luận bác bỏ thì người bị báo cũng nhận `REPORT_CONCLUDED` ("Báo cáo về bài hoặc tài khoản của bạn đã được xem xét và không có vi phạm."). Link dẫn tới `/activities?tab=complaints`. Khiếu nại giao dịch giữ cách báo riêng của giao dịch nên không gửi thêm.
+
+## Phạt báo sai và kiểm lý do theo loại (F7)
+
+- `POST /admin/reports/{id}/conclude` nhận thêm `deliberateFalseReport` (boolean, mặc định `false`). Bác bỏ mà tích cờ này thì trừ 1 sao người báo (`TRUST_STARS_DEDUCTED`) và ghi nhật ký `STARS`. Báo cáo "Từ chối giao nhận" bỏ qua cờ vì người báo đã bị trừ sao tự động.
+- `POST /reports` kiểm lý do theo loại đối tượng, sai trả `400 REPORT_REASON_NOT_ALLOWED` ("Lý do không phù hợp với loại báo cáo"). Bài (`ITEM`): `NOT_AS_DESCRIBED`, `COUNTERFEIT`, `PROHIBITED_ITEM`, `OTHER`. Người dùng (`USER`): `NO_SHOW`, `WRONG_CONTACT_INFO`, `HARASSMENT`, `OTHER`. Giao dịch (`REQUEST`): `NOT_AS_DESCRIBED`, `COUNTERFEIT`, `NO_SHOW`, `WRONG_CONTACT_INFO`, `HARASSMENT`, `OTHER`. Bảng này nằm ở `ReportReason.allowedFor` và khớp `reportReasonsByTarget` ở frontend.
+- `WRONG_CONTACT_INFO` với người dùng chỉ báo được khi hai người từng có giao dịch đã chốt lịch (`contact_revealed_at` khác null), nếu không trả `400 REPORT_CONTACT_REASON_NOT_ALLOWED`.

@@ -1,6 +1,7 @@
 package com.shareloop.request.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -97,8 +98,8 @@ class RequestLockCleanupTest {
         assertThat(cancelled).isEqualTo(1);
         assertThat(reserved.getStatus()).isEqualTo(RequestStatus.CANCELLED);
         assertThat(reserved.getCancelReason()).isEqualTo("[Hệ thống] Tài khoản bị khoá");
-        verify(itemService).releaseIfReserved(100L);
-        verify(itemService).releaseIfReserved(200L);
+        verify(itemService).releaseIfReservedAfterCancel(eq(100L), any());
+        verify(itemService).releaseIfReservedAfterCancel(eq(200L), any());
         verify(notificationService)
                 .notify(eq(OTHER_USER_ID), eq("TRANSACTION_CANCELLED"), anyString(), anyString(), anyString());
     }
@@ -121,7 +122,7 @@ class RequestLockCleanupTest {
         // then
         assertThat(cancelled).isEqualTo(1);
         assertThat(awaitingHandover.getStatus()).isEqualTo(RequestStatus.CANCELLED);
-        verify(itemService).releaseIfReserved(100L);
+        verify(itemService).releaseIfReservedAfterCancel(eq(100L), any());
         verify(notificationService)
                 .notify(eq(OTHER_USER_ID), eq("TRANSACTION_CANCELLED"), anyString(), anyString(), anyString());
     }
@@ -142,7 +143,7 @@ class RequestLockCleanupTest {
         // then
         assertThat(cancelled).isEqualTo(1);
         assertThat(pending.getStatus()).isEqualTo(RequestStatus.CANCELLED);
-        verify(itemService, never()).releaseIfReserved(anyLong());
+        verify(itemService, never()).releaseIfReservedAfterCancel(anyLong(), any());
     }
 
     @Test

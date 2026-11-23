@@ -185,6 +185,19 @@ public class NotificationService {
         return NotificationMapper.toResponse(saved);
     }
 
+    /**
+     * Đánh dấu đã đọc các thông báo chưa đọc cùng loại và cùng link của một người. Dùng khi sự việc được báo đã không còn ý
+     * nghĩa (ví dụ yêu cầu vừa gửi đã bị huỷ ngay), không xoá thông báo.
+     */
+    @Transactional
+    public void markAsReadByTypeAndLink(long userId, String type, String link) {
+        var unread = notificationRepository.findByUserIdAndTypeAndLinkAndIsReadFalse(userId, type, link);
+        if (!unread.isEmpty()) {
+            unread.forEach(Notification::markAsRead);
+            publishRealtimeUpdate(userId, "NOTIFICATION", null);
+        }
+    }
+
     @Transactional
     public List<NotificationResponse> markManyAsRead(List<Long> ids, long userId) {
         var uniqueIds = ids.stream().distinct().toList();

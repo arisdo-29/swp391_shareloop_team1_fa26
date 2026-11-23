@@ -68,7 +68,7 @@ public class AdminRequestService {
     /**
      * Danh sách giao dịch, mới nhất trước. Mọi bộ lọc đều tuỳ chọn: status, stuck (true chỉ lấy giao dịch bị kẹt,
      * false chỉ lấy giao dịch không kẹt), q (khớp một phần mã giao dịch, tên bài hoặc tên hai bên). Lọc và phân trang
-     * làm trong bộ nhớ vì tên bài và tên người nằm ở module khác.
+     * làm trong bộ nhớ chỉ khi có q hoặc stuck, vì tên bài, tên người và khoá tài khoản nằm ở module khác; các bộ lọc còn lại chạy trong SQL.
      */
     @Transactional(readOnly = true)
     public AdminRequestPageResponse list(RequestStatus status, Boolean stuck, String q, int page, int size) {
@@ -94,6 +94,25 @@ public class AdminRequestService {
                 from == null ? null : from.atStartOfDay(VIETNAM_ZONE).toInstant();
         Instant toInstant =
                 to == null ? null : to.plusDays(1).atStartOfDay(VIETNAM_ZONE).toInstant();
+        // Không có bộ lọc cần dữ liệu module khác (tên, khoá tài khoản): lọc và chia trang ngay trong SQL, chỉ dựng
+        // dòng cho trang (G2)
+        boolean needsMemoryFilter = stuck != null || (q != null && !q.isBlank());
+        if (!needsMemoryFilter) {
+            var result = requestRepository.findForAdmin(
+                    status == null ? java.util.EnumSet.allOf(RequestStatus.class) : java.util.EnumSet.of(status),
+                    type == null ? "" : type,
+                    deliveryMethod == null ? "" : deliveryMethod,
+                    fromInstant == null ? Instant.EPOCH : fromInstant,
+                    toInstant == null ? Instant.parse("9999-01-01T00:00:00Z") : toInstant,
+                    org.springframework.data.domain.PageRequest.of(
+                            page,
+                            size,
+                            org.springframework.data.domain.Sort.by(
+                                    org.springframework.data.domain.Sort.Order.desc("createdAt"),
+                                    org.springframework.data.domain.Sort.Order.desc("id"))));
+            return new AdminRequestPageResponse(
+                    toRows(result.getContent()), page, size, result.getTotalElements(), result.getTotalPages());
+        }
         List<Request> requests = status == null
                 ? requestRepository.findAllByOrderByCreatedAtDesc()
                 : requestRepository.findByStatusOrderByCreatedAtDesc(status);

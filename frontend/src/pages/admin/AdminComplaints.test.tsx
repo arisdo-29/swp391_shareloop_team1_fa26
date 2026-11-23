@@ -174,6 +174,62 @@ describe('AdminComplaints', () => {
     expect(reportApi.conclude).not.toHaveBeenCalled();
   });
 
+  it('F1: bài đang có giao dịch thì hộp kết luận báo trước giao dịch sẽ bị huỷ hay vẫn tiếp tục', async () => {
+    const serious = await openPendingDetail(
+      detail(
+        { status: 'OPEN' },
+        { ...pending, openTransactionPartnerName: 'Lê Văn Cường', seriousReason: true },
+      ),
+    );
+    await serious.user.click(serious.concludeButton);
+    expect(
+      within(serious.dialog).getByText(/Bài đang có giao dịch với Lê Văn Cường\./),
+    ).toBeTruthy();
+    expect(within(serious.dialog).getByText(/Chấp thuận thì giao dịch sẽ bị huỷ/)).toBeTruthy();
+    cleanup();
+
+    const other = await openPendingDetail(
+      detail(
+        { status: 'OPEN' },
+        { ...pending, openTransactionPartnerName: 'Lê Văn Cường', seriousReason: false },
+      ),
+    );
+    await other.user.click(other.concludeButton);
+    expect(within(other.dialog).getByText(/Chấp thuận thì giao dịch vẫn tiếp tục/)).toBeTruthy();
+  });
+
+  it('F2: báo cáo của tài khoản mới hiện nhãn Tài khoản mới ở danh sách', async () => {
+    vi.mocked(reportApi.list).mockResolvedValue({
+      items: [report({ status: 'OPEN', newReporterAccount: true })],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    render(<AdminComplaints />);
+
+    expect(await screen.findByText('Tài khoản mới')).toBeTruthy();
+  });
+
+  it('F7: bác bỏ có ô Báo cáo sai có chủ ý, tích thì gửi cờ phạt, mặc định không gửi', async () => {
+    const { user, dialog, concludeButton } = await openPendingDetail(
+      detail({ status: 'OPEN' }, { ...pending }),
+    );
+    vi.mocked(reportApi.conclude).mockResolvedValue({} as never);
+    await user.click(concludeButton);
+    await user.click(within(dialog).getByRole('radio', { name: 'Bác bỏ · Không có cơ sở' }));
+    const checkbox = within(dialog).getByRole('checkbox', { name: /Báo cáo sai có chủ ý/ }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    await user.click(checkbox);
+    await user.click(within(dialog).getByRole('button', { name: 'Kiểm tra kết luận' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Xác nhận gửi' }));
+
+    expect(reportApi.conclude).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({ decision: 'DISMISS', deliberateFalseReport: true }),
+    );
+  });
+
   it('D-15: đã hết hạn giải trình thì Admin kết luận được', async () => {
     const { dialog, concludeButton } = await openPendingDetail(
       detail(

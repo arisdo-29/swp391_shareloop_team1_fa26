@@ -98,8 +98,8 @@ class RequestDisputeResolutionTest {
         assertThat(resolved).isTrue();
         assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
         assertThat(request.getCancelReason()).startsWith("[Hệ thống] ");
-        verify(itemService).releaseIfReserved(ITEM_ID);
-        verify(itemService).releaseIfReserved(OFFERED_ITEM_ID);
+        verify(itemService).releaseIfReservedAfterCancel(eq(ITEM_ID), any());
+        verify(itemService).releaseIfReservedAfterCancel(eq(OFFERED_ITEM_ID), any());
         verify(itemService, never()).markTraded(org.mockito.ArgumentMatchers.anyLong());
         verify(notificationService)
                 .notify(eq(RECEIVER_ID), eq("TRANSACTION_CANCELLED"), anyString(), anyString(), anyString());
@@ -119,9 +119,9 @@ class RequestDisputeResolutionTest {
         // then
         assertThat(resolved).isTrue();
         assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
-        verify(itemService).releaseIfReserved(ITEM_ID);
+        verify(itemService).releaseIfReservedAfterCancel(eq(ITEM_ID), any());
         verify(itemService).hide(ITEM_ID);
-        verify(itemService).releaseIfReserved(OFFERED_ITEM_ID);
+        verify(itemService).releaseIfReservedAfterCancel(eq(OFFERED_ITEM_ID), any());
         verify(itemService, never()).hide(OFFERED_ITEM_ID);
     }
 
@@ -135,7 +135,7 @@ class RequestDisputeResolutionTest {
         requestService.resolveDisputedRequest(REQUEST_ID, true, RECEIVER_ID);
 
         // then
-        verify(itemService).releaseIfReserved(ITEM_ID);
+        verify(itemService).releaseIfReservedAfterCancel(eq(ITEM_ID), any());
         verify(itemService, never()).hide(org.mockito.ArgumentMatchers.anyLong());
     }
 
@@ -176,7 +176,7 @@ class RequestDisputeResolutionTest {
         // then
         assertThat(resolved).isFalse();
         assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED);
-        verify(itemService, never()).releaseIfReserved(org.mockito.ArgumentMatchers.anyLong());
+        verify(itemService, never()).releaseIfReservedAfterCancel(org.mockito.ArgumentMatchers.anyLong(), any());
         verify(notificationService, never()).notify(any(Long.class), any(), any(), any(), any());
     }
 }

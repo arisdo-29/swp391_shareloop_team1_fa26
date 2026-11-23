@@ -134,3 +134,10 @@ Tất cả endpoint cần JWT có quyền Admin; người dùng thường nhận
 ```json
 { "code": "CATALOG_CATEGORY_NOT_FOUND", "message": "Không tìm thấy danh mục.", "traceId": "a1b2c3d4" }
 ```
+
+## Tắt danh mục hoặc khu vực ẩn bài khỏi Tìm đồ (B3)
+
+Bài chỉ hiện công khai (Tìm đồ, danh sách người dùng, tìm kiếm AI) khi danh mục và khu vực của bài còn bật. Bật lại thì bài hiện lại. Chi tiết bài vẫn xem được nhưng `requestable = false` và gửi yêu cầu trả `409 REQUEST_ITEM_CATEGORY_DISABLED`.
+
+- `GET /api/v1/admin/categories/{id}/visible-item-count`: Admin. Trả `{ "visibleItemCount": N }`, số bài đang hiển thị công khai thuộc danh mục và danh mục con. Dùng cho hộp xác nhận trước khi tắt.
+- `GET /api/v1/admin/areas/{id}/visible-item-count`: tương tự cho khu vực và khu vực con.

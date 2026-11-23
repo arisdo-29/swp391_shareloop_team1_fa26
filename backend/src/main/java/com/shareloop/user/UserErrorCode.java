@@ -12,7 +12,7 @@ public enum UserErrorCode implements ErrorCode {
     USER_CANNOT_LOCK_SELF(HttpStatus.BAD_REQUEST, "Không thể tự khoá tài khoản của chính mình."),
     USER_PHONE_ALREADY_USED(HttpStatus.CONFLICT, "Số điện thoại đã được sử dụng bởi tài khoản khác."),
     USER_PHONE_SAME_AS_CURRENT(HttpStatus.BAD_REQUEST, "Số điện thoại mới trùng với số điện thoại hiện tại."),
-    USER_PHONE_CHANGE_COOLDOWN(HttpStatus.BAD_REQUEST, "Chỉ được đổi số điện thoại tối đa 1 lần trong 30 ngày."),
+    USER_PHONE_CHANGE_COOLDOWN(HttpStatus.BAD_REQUEST, "Chỉ được đổi số điện thoại một lần trong thời gian quy định."),
     USER_PHONE_CHANGE_ACTIVE_DELIVERY(
             HttpStatus.CONFLICT, "Không thể đổi số điện thoại khi đang có giao dịch chưa hoàn tất.");
 

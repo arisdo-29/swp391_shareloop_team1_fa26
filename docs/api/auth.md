@@ -41,8 +41,8 @@ quên mật khẩu, đặt lại mật khẩu. Hồ sơ (`GET`/`PUT /api/v1/me`)
 
 Quy tắc:
 
-- **Đăng ký lại khi email đang `PENDING_VERIFICATION`**: không báo trùng email. Server cập nhật mật khẩu, họ tên,
-  số điện thoại theo request mới, sinh OTP mới (đặt lại `otp_failed_count = 0`, hạn mới) rồi gửi email; vẫn trả `201`.
+- **Đăng ký lại khi email đang `PENDING_VERIFICATION`**: không báo trùng email. Server **không** ghi đè mật khẩu, họ tên, số điện thoại
+  đã đăng ký trước đó, chỉ sinh OTP mới (đặt lại `otp_failed_count = 0`, hạn mới) rồi gửi email; vẫn trả `201`.
   Lần đăng ký lại cũng phải chờ `otp_resend_cooldown_seconds` kể từ lần gửi trước, nếu chưa đủ thì trả
   `429 AUTH_OTP_RESEND_TOO_SOON`.
 - Email đã thuộc tài khoản `ACTIVE` hoặc `BANNED` (chưa xoá mềm) → `409 AUTH_EMAIL_ALREADY_REGISTERED`.
@@ -126,7 +126,7 @@ Quy tắc:
 - Request: `LoginRequest`.
 - Thành công: `200`, `AuthResponse`.
 - Lỗi: `400 VALIDATION_FAILED`, `401 AUTH_INVALID_CREDENTIALS`, `403 AUTH_EMAIL_NOT_VERIFIED`,
-  `403 AUTH_ACCOUNT_LOCKED`, `403 AUTH_ACCOUNT_BANNED`.
+  `429 AUTH_LOGIN_TEMPORARILY_LOCKED`, `403 AUTH_ACCOUNT_LOCKED`, `403 AUTH_ACCOUNT_BANNED`.
 
 Quy tắc:
 
@@ -356,6 +356,7 @@ Trả về từ `/verify-otp` và `/login`.
 | `AUTH_EMAIL_NOT_VERIFIED`       | 403  | Đăng nhập khi tài khoản còn `PENDING_VERIFICATION`                                  |
 | `AUTH_INVALID_CREDENTIALS`      | 401  | Sai email hoặc sai mật khẩu (không phân biệt)                                       |
 | `AUTH_ACCOUNT_LOCKED`           | 403  | Tài khoản bị khoá (`is_active = false`); kèm `details.reason` nếu Admin nhập lý do khi khoá |
+| `AUTH_LOGIN_TEMPORARILY_LOCKED`  | 429  | Sai mật khẩu quá `login_max_failed_attempts` lần liên tiếp, khoá `login_lock_minutes` phút; kèm `details.retryAfterMinutes`. Đăng nhập đúng hoặc đặt lại mật khẩu thì mở khoá |
 | `AUTH_ACCOUNT_BANNED`           | 403  | Tài khoản bị cấm (`status = BANNED`, hết sao uy tín), message "Tài khoản đã bị cấm." |
 | `AUTH_CURRENT_PASSWORD_INCORRECT` | 400 | Đổi mật khẩu: mật khẩu hiện tại không đúng, `field` = `currentPassword`            |
 | `AUTH_NEW_PASSWORD_SAME_AS_CURRENT` | 400 | Đổi / đặt lại mật khẩu: mật khẩu mới trùng mật khẩu hiện tại, `field` = `newPassword` |
@@ -409,3 +410,8 @@ Bản hiện tại của FE là contract cũ. Cần đổi:
     `authApi.resetPassword({ email, otp, newPassword })` (204). **Không có** `verifyResetOtp` và không có `resetToken`:
     màn nhập OTP chỉ giữ mã ở phía FE, bước cuối gửi cả ba trường. Trang `ForgotPassword.tsx` hiện vẫn dùng dữ liệu
     giả trong store, chưa nối API.
+
+## Cột dữ liệu thêm ở đợt rà soát 22/11
+
+- `users.login_failed_count` (SMALLINT, mặc định 0) và `users.login_locked_until` (TIMESTAMPTZ): khoá đăng nhập tạm sau nhiều lần sai mật khẩu.
+- `users.email_canonical` (VARCHAR 255, trigger tự điền): email chuẩn hoá để kiểm trùng và tìm tài khoản. Chữ thường, bỏ khoảng trắng. Gmail: bỏ phần từ dấu `+`, bỏ dấu chấm, `googlemail.com` thành `gmail.com`. Mọi luồng đăng ký, đăng nhập, quên mật khẩu, đặt lại mật khẩu, gửi lại OTP và xác thực OTP tìm theo cột này. Email gốc vẫn dùng để gửi thư và hiển thị.

@@ -1,5 +1,7 @@
 package com.shareloop.item.service;
 
+import com.shareloop.audit.ActivityType;
+import com.shareloop.audit.service.ActivityLogQueryService;
 import com.shareloop.catalog.service.AreaService;
 import com.shareloop.catalog.service.CategoryAttributeService;
 import com.shareloop.catalog.service.CategoryService;
@@ -26,7 +28,9 @@ import com.shareloop.item.event.ItemRemovedEvent;
 import com.shareloop.item.event.ItemUnavailableEvent;
 import com.shareloop.item.mapper.ItemMapper;
 import com.shareloop.item.repository.ItemRepository;
+import com.shareloop.listingfee.dto.DisplayRefund;
 import com.shareloop.listingfee.dto.DisplayWindow;
+import com.shareloop.listingfee.service.DisplayTimeService;
 import com.shareloop.listingfee.service.ListingFeeQueryService;
 import com.shareloop.listingfee.service.PostFeeService;
 import com.shareloop.media.MediaErrorCode;
@@ -35,14 +39,18 @@ import com.shareloop.moderation.ModerationResult;
 import com.shareloop.moderation.ModerationStatus;
 import com.shareloop.moderation.service.ContentModerationService;
 import com.shareloop.notification.service.NotificationService;
+import com.shareloop.report.service.ReportService;
 import com.shareloop.reputation.entity.Rank;
 import com.shareloop.reputation.service.ReputationService;
 import com.shareloop.request.service.RequestQueryService;
+import com.shareloop.review.service.ReviewQueryService;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.UserErrorCode;
 import com.shareloop.user.service.UserService;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -67,6 +75,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Service
 public class ItemService {
+    private static final DateTimeFormatter REFUND_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy").withZone(ZoneId.of("Asia/Ho_Chi_Minh"));
     private static final Pattern MEDIA_URL = Pattern.compile("/api/v1/media/([1-9][0-9]*)");
     private final ItemRepository itemRepository;
     private final JdbcClient jdbcClient;
@@ -89,6 +99,27 @@ public class ItemService {
     @Autowired
     void setNotificationService(NotificationService notificationService) {
         this.notificationService = notificationService;
+    }
+
+    private DisplayTimeService displayTimeService;
+    private ReviewQueryService reviewQueryService;
+    private ReportService reportService;
+    private ActivityLogQueryService activityLogQueryService;
+
+    // Setter thay vì constructor: ReportService phụ thuộc ngược lại ItemService nên cần @Lazy để tránh vòng.
+    @Autowired
+    void setHiddenStateSources(
+            ReviewQueryService reviewQueryService,
+            @Lazy ReportService reportService,
+            ActivityLogQueryService activityLogQueryService) {
+        this.reviewQueryService = reviewQueryService;
+        this.reportService = reportService;
+        this.activityLogQueryService = activityLogQueryService;
+    }
+
+    @Autowired
+    void setDisplayTimeService(DisplayTimeService displayTimeService) {
+        this.displayTimeService = displayTimeService;
     }
 
     public ItemService(
@@ -346,7 +377,11 @@ public class ItemService {
 
         var donor = userService.findBriefs(List.of(item.getDonorId())).get(item.getDonorId());
         var reputation = reputationService.getReputationSummary(item.getDonorId());
-        boolean requestable = item.getStatus() == ItemStatus.APPROVED && item.isActive() && !donorLocked;
+        // Danh mục hoặc khu vực của bài bị tắt thì xem được bài nhưng không nhận yêu cầu mới (B3).
+        boolean requestable = item.getStatus() == ItemStatus.APPROVED
+                && item.isActive()
+                && !donorLocked
+                && itemRepository.isInEnabledCatalog(item.getId());
         ItemResponse response = toResponse(item, findDisplayWindow(item.getId()))
                 .withDonor(
                         donor == null ? null : donor.fullName(),
@@ -450,9 +485,46 @@ public class ItemService {
         return responses;
     }
 
-    // Bài đang is_active = false (tự ẩn do báo cáo, Admin ẩn, hết sao) là "đang tạm ẩn". Lý do lấy từ C06 khi có.
-    private static ItemResponse withHiddenState(ItemResponse response, Item item) {
-        return response.withVisibility(!item.isActive(), null);
+    // Chủ bài và Admin xem thêm trạng thái ẩn, lý do ẩn và lý do bị từ chối (B4).
+    private ItemResponse withHiddenState(ItemResponse response, Item item) {
+        ItemResponse result = response.withVisibility(!item.isActive(), describeHiddenReason(item));
+        if (item.getStatus() == ItemStatus.REJECTED && reviewQueryService != null) {
+            result = result.withRejectionReason(
+                    reviewQueryService.findRejectReason(item.getId()).orElse(null));
+        }
+        return result;
+    }
+
+    // Bài đang tạm ẩn thì nói rõ vì sao và việc cần làm. Thứ tự ưu tiên khi trùng: tài khoản bị khoá, Admin ẩn,
+    // vi phạm đã kết luận, rồi đang chờ xem xét báo cáo. Bài không ẩn thì không có lý do.
+    private String describeHiddenReason(Item item) {
+        if (item.isActive()) {
+            return null;
+        }
+        if (userService.isLocked(item.getDonorId())) {
+            return "Bài đang tạm ẩn vì tài khoản của bạn đang bị khoá. Bài sẽ hiện lại khi tài khoản được mở khoá.";
+        }
+        if (item.isHiddenByAdmin()) {
+            return describeAdminHidden(item);
+        }
+        if (reportService != null && reportService.hasConcludedViolation(item.getId())) {
+            return "Bài vi phạm quy định. Sửa bài để gửi duyệt lại.";
+        }
+        return "Bài đang tạm ẩn để Admin xem xét báo cáo.";
+    }
+
+    private String describeAdminHidden(Item item) {
+        String adminReason = activityLogQueryService == null
+                ? null
+                : activityLogQueryService
+                        .findLatestReason(ActivityType.ADMIN_ITEM_HIDDEN.name(), item.getId())
+                        .map(String::trim)
+                        .filter(reason -> !reason.isEmpty())
+                        .orElse(null);
+        if (adminReason == null) {
+            return "Admin đã ẩn bài này. Vui lòng liên hệ Admin nếu cần hỗ trợ.";
+        }
+        return "Admin đã ẩn bài này. Lý do: " + adminReason + ". Vui lòng liên hệ Admin nếu cần hỗ trợ.";
     }
 
     /**
@@ -466,6 +538,18 @@ public class ItemService {
     }
 
     /** Số bài công khai theo danh mục, dùng cùng điều kiện hiển thị với danh sách Tìm đồ. */
+    /** Số bài đang hiển thị công khai trong danh mục (gồm danh mục con), cho hộp xác nhận tắt danh mục của Admin. */
+    @Transactional(readOnly = true)
+    public long countVisibleInCategory(long categoryId) {
+        return itemRepository.countVisibleInCategory(categoryId, Instant.now());
+    }
+
+    /** Số bài đang hiển thị công khai trong khu vực (gồm khu vực con), cho hộp xác nhận tắt khu vực của Admin. */
+    @Transactional(readOnly = true)
+    public long countVisibleInArea(long areaId) {
+        return itemRepository.countVisibleInArea(areaId, Instant.now());
+    }
+
     @Transactional(readOnly = true)
     public Map<Long, Long> countPublicItemsByCategory() {
         Map<Long, Long> counts = new HashMap<>();
@@ -709,7 +793,9 @@ public class ItemService {
      */
     @Transactional
     public void reserve(Long itemId) {
-        Item item = requireItem(itemId);
+        // Khoá dòng bài trước khi kiểm trạng thái (C3). Thứ tự khoá: bài chính trước, món đổi sau, cùng thứ tự với
+        // các đường nhả, nên hai giao dịch dùng chung hai món không khoá chéo nhau (không deadlock).
+        Item item = requireItemForUpdate(itemId);
         // Bài bị ẩn vẫn có thể còn APPROVED; báo rõ lý do thay vì lỗi chuyển trạng thái chung chung.
         if (!item.isActive()) {
             throw new BusinessException(ItemErrorCode.ITEM_HIDDEN);
@@ -738,10 +824,68 @@ public class ItemService {
         publishItemUpdate(itemId, item.getDonorId());
     }
 
+    /**
+     * Khoá dòng bài được xin rồi tới món đem đổi, trước khi chọn người nhận (C3). Hai chủ bài chọn cùng lúc hai yêu cầu
+     * dùng chung một món đổi sẽ chạy lần lượt: luồng sau chờ ở đây rồi thấy món đã bị giữ chỗ và nhận lỗi rõ ràng, không
+     * còn tranh nhau ghi bảng yêu cầu rồi deadlock. Thứ tự khoá cố định là bài chính trước, món đổi sau.
+     */
+    @Transactional
+    public void lockForSelection(long itemId, Long offeredItemId) {
+        requireItemForUpdate(itemId);
+        if (offeredItemId != null) {
+            requireItemForUpdate(offeredItemId);
+        }
+    }
+
     /** Nhả giữ chỗ sau khi Request bị huỷ. */
     @Transactional
     public void release(long itemId) {
+        requireItemForUpdate(itemId); // khoá dòng trước khi kiểm trạng thái (C3)
         transition(itemId, ItemStatus.RESERVED, ItemStatus.APPROVED);
+    }
+
+    /**
+     * Nhả bài sau khi giao dịch huỷ trước lúc hoàn tất và trả lại thời gian bài đã nằm trong giao dịch vào hạn hiển thị
+     * (B2). Mọi đường huỷ gọi hàm này nên cách tính nằm ở một chỗ, trong listingfee.
+     *
+     * @param reservedAt lúc chủ bài chọn người nhận (requests.reserved_at)
+     */
+    @Transactional
+    public void releaseAfterCancel(long itemId, Instant reservedAt) {
+        release(itemId);
+        refundReservedTime(itemId, reservedAt);
+    }
+
+    /** Như {@link #releaseAfterCancel} nhưng bỏ qua món không ở RESERVED (món mang đổi của giao dịch SWAP cũ). */
+    @Transactional
+    public void releaseIfReservedAfterCancel(long itemId, Instant reservedAt) {
+        if (requireItem(itemId).getStatus() == ItemStatus.RESERVED) {
+            releaseAfterCancel(itemId, reservedAt);
+        }
+    }
+
+    // Trả lại thời gian rồi báo chủ bài hạn mới. displayTimeService null chỉ gặp ở unit test dựng service rút gọn.
+    private void refundReservedTime(long itemId, Instant reservedAt) {
+        if (displayTimeService == null || reservedAt == null) {
+            return;
+        }
+        Optional<DisplayRefund> refund = displayTimeService.refundReservedTime(itemId, reservedAt);
+        if (refund.isEmpty() || notificationService == null) {
+            return;
+        }
+        Item item = requireItem(itemId);
+        String expireText = REFUND_TIME_FORMAT.format(refund.get().newExpireAt());
+        String body = refund.get().graceApplied()
+                ? "Bài «" + item.getTitle() + "» đã được mở lại. Hạn hiển thị mới là " + expireText
+                        + ", bạn nhớ gia hạn nếu muốn giữ bài."
+                : "Bài «" + item.getTitle() + "» đã được mở lại và được cộng bù thời gian đã nằm trong giao dịch. "
+                        + "Hạn hiển thị mới là " + expireText + ".";
+        notificationService.notify(
+                item.getDonorId(),
+                "ITEM_DISPLAY_EXTENDED",
+                "Hạn hiển thị của bài đã được cập nhật",
+                body,
+                "/items/" + itemId);
     }
 
     /**
@@ -750,7 +894,7 @@ public class ItemService {
      */
     @Transactional
     public void releaseIfReserved(long itemId) {
-        if (requireItem(itemId).getStatus() == ItemStatus.RESERVED) {
+        if (requireItemForUpdate(itemId).getStatus() == ItemStatus.RESERVED) {
             release(itemId);
         }
     }
@@ -800,7 +944,7 @@ public class ItemService {
         Item item = requireItem(itemId);
         item.hideByAdmin();
         publishItemUpdate(itemId, item.getDonorId());
-        publishUnavailable(itemId, ItemUnavailableEvent.Reason.HIDDEN);
+        publishUnavailable(itemId, ItemUnavailableEvent.Reason.HIDDEN_BY_ADMIN);
     }
 
     /** Admin hiện lại bài: bật hiển thị và xoá cờ hidden_by_admin. */
@@ -856,7 +1000,7 @@ public class ItemService {
             hiddenIds.add(item.getId());
             if (item.getId() != null) {
                 publishItemUpdate(item.getId(), userId);
-                publishUnavailable(item.getId(), ItemUnavailableEvent.Reason.HIDDEN);
+                publishUnavailable(item.getId(), ItemUnavailableEvent.Reason.HIDDEN_BY_ACCOUNT);
             }
         }
         return hiddenIds;
@@ -881,7 +1025,7 @@ public class ItemService {
             item.deactivate();
             if (item.getId() != null) {
                 publishItemUpdate(item.getId(), userId);
-                publishUnavailable(item.getId(), ItemUnavailableEvent.Reason.HIDDEN);
+                publishUnavailable(item.getId(), ItemUnavailableEvent.Reason.HIDDEN_BY_ACCOUNT);
             }
         }
     }
@@ -904,6 +1048,8 @@ public class ItemService {
     @Transactional
     public void markRejected(long itemId) {
         transition(itemId, ItemStatus.PENDING_REVIEW, ItemStatus.REJECTED);
+        // Bản sửa bị từ chối: các yêu cầu đang chờ tới bài bị huỷ (C1). Bài mới bị từ chối chưa có yêu cầu nào.
+        publishUnavailable(itemId, ItemUnavailableEvent.Reason.EDIT_REJECTED);
     }
 
     private void transition(long itemId, ItemStatus expected, ItemStatus target) {
@@ -920,6 +1066,12 @@ public class ItemService {
         notificationService.publishRealtimeUpdate(donorId, "ITEM", itemId);
         notificationService.publishCatalogUpdate(itemId);
         notificationService.publishAdminUpdate("MODERATION", itemId);
+    }
+
+    private Item requireItemForUpdate(long itemId) {
+        return itemRepository
+                .findByIdForUpdate(itemId)
+                .orElseThrow(() -> new BusinessException(ItemErrorCode.ITEM_NOT_FOUND));
     }
 
     private Item requireItem(long itemId) {

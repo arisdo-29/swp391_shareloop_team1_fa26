@@ -342,3 +342,7 @@ Checklist Render/merchant, SQL đối chiếu và giới hạn kiểm chứng: [
 Tham khảo [tài liệu thanh toán VNPAY 2.1.0](https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html).
 
 Job chuyển đơn PENDING quá `payment_order_expire_minutes` sang EXPIRED.
+
+## Câu hiển thị cho đơn chờ đối soát (G1 bổ sung)
+
+Đơn đã đóng (hết hạn, huỷ, thất bại) mà VNPay báo đã thu tiền (`paid_at` có giá trị) và Admin chưa đối soát (`reviewed_at` trống) thì `failureReason` trả câu cố định "VNPay đã báo thu tiền sau khi đơn hết hạn. Admin sẽ kiểm tra và cộng Credit hoặc hoàn tiền cho bạn." thay vì ghi chú nội bộ `review_note` (Admin vẫn thấy `review_note` đầy đủ).

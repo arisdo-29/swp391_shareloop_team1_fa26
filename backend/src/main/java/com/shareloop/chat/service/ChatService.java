@@ -154,8 +154,10 @@ public class ChatService {
             if (context.status() == RequestStatus.RESERVED || context.status() == RequestStatus.AWAITING_LOGISTICS) {
                 throw new BusinessException(ChatErrorCode.CHAT_IMAGE_BEFORE_LOGISTICS_FORBIDDEN);
             }
-            // Gắn ảnh qua MediaService để đảm bảo quyền sở hữu và chuyển sang ATTACHED
-            mediaService.attach(List.of(request.mediaId()), currentUserId);
+            // Gắn ảnh qua MediaService để đảm bảo quyền sở hữu, chuyển sang ATTACHED và riêng tư: ảnh chat chỉ hai bên
+            // và
+            // Admin xem được qua /requests/{id}/media/{mediaId} (D2)
+            mediaService.attachPrivate(List.of(request.mediaId()), currentUserId);
         }
 
         // Kiểm tra bài đăng khi chia sẻ thẻ bài (CH-06)
@@ -492,6 +494,14 @@ public class ChatService {
                 recordViolation(context, senderId, content, e.getMessage());
             }
             throw e;
+        }
+        // Tin hợp lệ nhưng nhắc tới mạng xã hội (mức REVIEW): vẫn gửi, chỉ gắn cờ cho Admin (D3).
+        chatContactFilter.findReviewMatch(content).ifPresent(keyword -> flagForReview(context, senderId, keyword));
+    }
+
+    private void flagForReview(RequestChatContext context, Long senderId, String keyword) {
+        if (chatViolationRecorder != null) {
+            chatViolationRecorder.flagForAdminReview(context.requestId(), senderId, keyword);
         }
     }
 

@@ -5,11 +5,14 @@ import { Alert, Button, IconButton, Select, TextArea } from './ui';
 import { ReportEvidenceField } from './ReportEvidenceField';
 import { DialogFrame } from './Dialog';
 import { mediaApi } from '../services/mediaApi';
-import { disputeReasonLabels } from '../utils/disputeErrors';
+import { disputeReasonLabels, reportReasonsByTarget } from '../utils/disputeErrors';
 
 const REPORT_DESCRIPTION_MAX_LENGTH = 2000;
 
 function reportErrorMessage(error: ApiError) {
+  if (error.code === 'REPORT_REASON_NOT_ALLOWED') return 'Lý do không phù hợp với loại báo cáo.';
+  if (error.code === 'REPORT_CONTACT_REASON_NOT_ALLOWED')
+    return 'Chỉ báo sai thông tin liên lạc khi hai bên đã từng chốt lịch giao dịch.';
   if (error.status === 400) return 'Thông tin báo cáo chưa hợp lệ. Vui lòng kiểm tra lại.';
   if (error.status === 404) return 'Không tìm thấy đối tượng cần báo cáo.';
   if (error.status === 409)
@@ -81,9 +84,9 @@ export function ReportDialog({ target, contextLabel, onClose, onSuccess }: Repor
         disabled={submitting}
       >
         <option value="">Chọn lý do báo cáo</option>
-        {Object.entries(disputeReasonLabels).map(([value, label]) => (
+        {reportReasonsByTarget[target.targetType].map((value) => (
           <option key={value} value={value}>
-            {label}
+            {disputeReasonLabels[value]}
           </option>
         ))}
       </Select>

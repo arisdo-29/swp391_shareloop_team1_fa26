@@ -146,6 +146,10 @@ Xem chi tiết một bài đăng theo ID.
 
 ---
 
+### Cộng bù thời gian chờ duyệt bản sửa (B1)
+
+Bài đã từng duyệt gửi bản sửa: server ghi mốc `items.edit_submitted_at`. Khi Admin duyệt bản sửa, số giờ từ mốc tới lúc duyệt được cộng vào `expireAt` và vào `boostedUntil` nếu đợt đẩy còn chạy lúc gửi, rồi xoá mốc và ghi nhật ký `ITEM_DISPLAY_COMPENSATED`. Bản sửa bị từ chối thì xoá mốc, không cộng bù. FE hỏi xác nhận trước khi gửi bản sửa của bài đã duyệt.
+
 ## DELETE /api/v1/items/{id}
 
 - **Xác thực:** Bearer Token, chỉ chủ bài.
@@ -412,3 +416,12 @@ Với danh sách, hai trường này được đọc bằng một query cho cả
 | `ITEM_MODERATION_BLOCKED` | 422 | Nội dung tạo hoặc sửa bị kiểm duyệt tầng 1 chặn |
 | `VALIDATION_FAILED` | 400 | Sai định dạng hoặc thiếu trường bắt buộc |
 | `UNAUTHORIZED` | 401 | Thiếu token hoặc token không hợp lệ |
+
+## Lý do ẩn và lý do từ chối cho chủ bài (B4)
+
+`ItemResponse` thêm `rejectionReason`: lý do Admin từ chối lần gần nhất, chỉ chủ bài hoặc Admin nhận và chỉ khi bài đang `REJECTED`. `hiddenReason` được điền khi bài đang tạm ẩn (`hidden = true`), mỗi trường hợp một câu kèm việc cần làm. Thứ tự ưu tiên khi trùng:
+
+1. Tài khoản của chủ bài đang bị khoá.
+2. Admin ẩn bài (kèm lý do Admin đã ghi ở nhật ký `ADMIN_ITEM_HIDDEN`).
+3. Báo cáo vi phạm đã được kết luận: "Bài vi phạm quy định. Sửa bài để gửi duyệt lại."
+4. Còn lại là đang chờ Admin xem xét báo cáo.

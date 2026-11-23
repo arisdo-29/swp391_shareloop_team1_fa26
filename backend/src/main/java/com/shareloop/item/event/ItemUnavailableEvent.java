@@ -16,7 +16,13 @@ public record ItemUnavailableEvent(long itemId, Reason reason) {
     public enum Reason {
         RESERVED,
         REMOVED,
+        // Ẩn do báo cáo (tự ẩn khi đủ ngưỡng hoặc kết luận vi phạm).
         HIDDEN,
+        HIDDEN_BY_ADMIN,
+        // Ẩn vì chủ bài bị khoá tài khoản hoặc hết sao.
+        HIDDEN_BY_ACCOUNT,
+        // Bản sửa của bài đã duyệt bị Admin từ chối: bài bị gỡ cho tới khi chủ bài sửa lại.
+        EDIT_REJECTED,
         EDITED,
         EXPIRED
     }

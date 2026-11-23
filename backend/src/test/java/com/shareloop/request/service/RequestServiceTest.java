@@ -113,6 +113,7 @@ class RequestServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(configService.getInt(ConfigKey.MAX_PENDING_REQUESTS)).thenReturn(5);
+        lenient().when(configService.getInt(ConfigKey.MAX_ACTIVE_TRANSACTIONS)).thenReturn(5);
         lenient().when(configService.getInt(ConfigKey.POST_FEE)).thenReturn(5);
         lenient().when(reputationService.canRequest(anyLong())).thenReturn(true);
         lenient().when(userService.isLocked(anyLong())).thenReturn(false);
@@ -165,6 +166,45 @@ class RequestServiceTest {
                 .isInstanceOfSatisfying(BusinessException.class, ex -> {
                     assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_ALREADY_EXISTS);
                 });
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi người nhận đã có đủ giao dịch đang chạy (C4)")
+    void createRequest_whenReceiverHasTooManyRunningTransactions_throwsTooManyActiveTransactions() {
+        // given
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.countByReceiverIdAndStatusIn(eq(10L), anySet())).thenReturn(5L);
+
+        // when, then
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_TOO_MANY_ACTIVE_TRANSACTIONS);
+                    assertThat(ex.getMessage()).contains("5 giao dịch chưa xong");
+                });
+        org.mockito.Mockito.verify(requestRepository, org.mockito.Mockito.never())
+                .save(any(Request.class));
+    }
+
+    @Test
+    @DisplayName("Chủ bài không chọn được người nhận đang có quá nhiều giao dịch chưa xong (C4)")
+    void selectReceiver_whenReceiverHasTooManyRunningTransactions_throwsReceiverTooBusy() {
+        // given
+        Request selectedRequest = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+        when(requestRepository.findById(101L)).thenReturn(Optional.of(selectedRequest));
+        when(requestRepository.countByReceiverIdAndStatusIn(eq(10L), anySet())).thenReturn(5L);
+
+        // when, then
+        assertThatThrownBy(() -> requestService.selectReceiver(101L, 20L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_RECEIVER_TOO_BUSY));
+        assertThat(selectedRequest.getStatus()).isEqualTo(RequestStatus.PENDING);
+        org.mockito.Mockito.verify(itemService, org.mockito.Mockito.never()).reserve(anyLong());
     }
 
     @Test
@@ -434,6 +474,114 @@ class RequestServiceTest {
     }
 
     @Test
+    @DisplayName(
+            "Huỷ trong vài phút đầu sau khi gửi thì không báo chủ bài và đánh dấu đã đọc thông báo yêu cầu mới (C5)")
+    void cancelRequest_whenCancelledWithinQuietMinutes_doesNotNotifyDonorAndMarksNewRequestRead() {
+        // given: yêu cầu vừa gửi 1 phút trước, ngưỡng yên lặng 5 phút
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "id", 55L);
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                request, "createdAt", java.time.Instant.now().minusSeconds(60));
+        when(configService.getInt(ConfigKey.REQUEST_QUIET_CANCEL_MINUTES)).thenReturn(5);
+        when(requestRepository.findById(55L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        requestService.cancelRequest(55L, 10L);
+
+        // then
+        verify(notificationService, never()).notify(eq(20L), eq("REQUEST_CANCELLED"), any(), any(), any());
+        verify(notificationService).markAsReadByTypeAndLink(20L, "NEW_REQUEST", "/requests/55");
+    }
+
+    @Test
+    @DisplayName("Huỷ sau thời gian yên lặng thì vẫn báo chủ bài (C5)")
+    void cancelRequest_whenCancelledAfterQuietMinutes_notifiesDonor() {
+        // given: yêu cầu gửi cách đây 10 phút
+        Request request = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                request, "createdAt", java.time.Instant.now().minusSeconds(600));
+        when(configService.getInt(ConfigKey.REQUEST_QUIET_CANCEL_MINUTES)).thenReturn(5);
+        when(requestRepository.findById(55L)).thenReturn(Optional.of(request));
+        when(requestRepository.save(any(Request.class))).thenAnswer(i -> i.getArgument(0));
+        doReturn(Optional.of(new RequestService.ItemSnapshot(20L, "GIVE", "APPROVED")))
+                .when(requestService)
+                .findItemSnapshot(1L);
+
+        // when
+        requestService.cancelRequest(55L, 10L);
+
+        // then
+        verify(notificationService).notify(eq(20L), eq("REQUEST_CANCELLED"), any(), any(), eq("/items/1"));
+    }
+
+    @Test
+    @DisplayName("Vừa tự huỷ yêu cầu cho bài này thì chưa gửi lại được, báo giờ được gửi lại (C5)")
+    void createRequest_whenSelfCancelledRecently_throwsResendCooldownWithTime() {
+        // given: tự huỷ cách đây 2 giờ, thời gian chờ 24 giờ
+        Request cancelled = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                cancelled, "updatedAt", java.time.Instant.now().minusSeconds(2 * 3600));
+        when(configService.getInt(ConfigKey.REQUEST_RESEND_COOLDOWN_HOURS)).thenReturn(24);
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.findFirstByItemIdAndReceiverIdAndStatusAndCancelReasonOrderByUpdatedAtDesc(
+                        eq(1L), eq(10L), eq(RequestStatus.CANCELLED), any()))
+                .thenReturn(Optional.of(cancelled));
+
+        // when, then
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getErrorCode()).isEqualTo(RequestErrorCode.REQUEST_RESEND_COOLDOWN);
+                    assertThat(ex.getMessage()).startsWith("Bạn vừa huỷ yêu cầu cho bài này. Có thể gửi lại sau ");
+                });
+    }
+
+    @Test
+    @DisplayName("Tự huỷ đã quá thời gian chờ thì gửi lại được (C5)")
+    void createRequest_whenCooldownPassed_doesNotThrowCooldown() {
+        // given: tự huỷ cách đây 30 giờ
+        Request cancelled = new Request(1L, 10L, null, "GIVE");
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                cancelled, "updatedAt", java.time.Instant.now().minusSeconds(30 * 3600));
+        when(configService.getInt(ConfigKey.REQUEST_RESEND_COOLDOWN_HOURS)).thenReturn(24);
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.findFirstByItemIdAndReceiverIdAndStatusAndCancelReasonOrderByUpdatedAtDesc(
+                        eq(1L), eq(10L), eq(RequestStatus.CANCELLED), any()))
+                .thenReturn(Optional.of(cancelled));
+
+        doReturn(Optional.empty()).when(requestService).findItemSnapshot(1L);
+        // vượt qua kiểm tra chờ, lỗi kế tiếp là do không có bài, không phải thời gian chờ
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isNotEqualTo(RequestErrorCode.REQUEST_RESEND_COOLDOWN));
+    }
+
+    @Test
+    @DisplayName("Chưa từng tự huỷ (hoặc chỉ bị huỷ do hệ thống) thì không có thời gian chờ (C5)")
+    void createRequest_whenNoSelfCancelBefore_doesNotThrowCooldown() {
+        // given: truy vấn chỉ khớp lần tự huỷ của người nhận nên huỷ do hệ thống không xuất hiện
+        when(requestRepository.countByReceiverIdAndStatus(10L, RequestStatus.PENDING))
+                .thenReturn(0L);
+        when(requestRepository.findFirstByItemIdAndReceiverIdAndStatusAndCancelReasonOrderByUpdatedAtDesc(
+                        eq(1L), eq(10L), eq(RequestStatus.CANCELLED), any()))
+                .thenReturn(Optional.empty());
+
+        doReturn(Optional.empty()).when(requestService).findItemSnapshot(1L);
+
+        // when, then
+        assertThatThrownBy(() -> requestService.createRequest(1L, 10L, new CreateRequest(null)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isNotEqualTo(RequestErrorCode.REQUEST_RESEND_COOLDOWN));
+    }
+
+    @Test
     @DisplayName("Ném lỗi FORBIDDEN khi người khác cố tình huỷ yêu cầu không phải của mình")
     void cancelRequest_whenNotReceiver_throwsForbidden() {
         Request request = new Request(1L, 10L, null, "GIVE");
@@ -657,7 +805,7 @@ class RequestServiceTest {
     }
 
     @Test
-    void selectReceiver_whenOfferedItemReservedElsewhere_throwsOfferedItemUnavailableWithoutCharging() {
+    void selectReceiver_whenOfferedItemReservedElsewhere_throwsOfferedItemInOtherTransactionWithoutCharging() {
         // given: bài Cho, món đổi 50 đã bị giữ chỗ ở giao dịch khác
         Request selectedRequest = new Request(1L, 10L, 50L, "GIVE");
         org.springframework.test.util.ReflectionTestUtils.setField(selectedRequest, "id", 101L);
@@ -674,7 +822,7 @@ class RequestServiceTest {
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         ex -> assertThat(ex.getErrorCode())
-                                .isEqualTo(RequestErrorCode.REQUEST_OFFERED_ITEM_UNAVAILABLE));
+                                .isEqualTo(RequestErrorCode.REQUEST_OFFERED_ITEM_IN_OTHER_TRANSACTION));
         verify(creditService, never()).spend(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any(), any());
         verify(itemService, never()).convertOfferType(anyLong(), any());
         verify(itemService, never()).reserve(anyLong());
@@ -779,7 +927,8 @@ class RequestServiceTest {
         // when
         requestService.selectReceiver(101L, 20L);
 
-        // then
+        org.mockito.Mockito.verify(itemService).lockForSelection(1L, null);
+        org.mockito.Mockito.verify(itemService).reserve(1L);
         org.mockito.Mockito.verify(itemService).reserve(1L);
         org.mockito.Mockito.verifyNoMoreInteractions(itemService);
     }
@@ -1377,7 +1526,7 @@ class RequestServiceTest {
         requestService.cancelTransaction(101L, 20L, new CancelTransactionRequest("Bận đột xuất"));
 
         // then
-        verify(itemService).release(1L);
+        verify(itemService).releaseAfterCancel(eq(1L), any());
         verify(itemReopenedNotifier).notifyRejectedRequesters(1L, 10L);
     }
 

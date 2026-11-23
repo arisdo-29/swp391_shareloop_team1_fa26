@@ -145,7 +145,7 @@ public class AdminRequestDetailService {
 
         List<AdminChatMessage> rows = new ArrayList<>();
         for (MessageResponse message : messages) {
-            rows.add(toChatMessage(message, donorId, core.receiverId(), briefs));
+            rows.add(toChatMessage(requestId, message, donorId, core.receiverId(), briefs));
         }
         activityLogService.log(
                 ActivityType.ADMIN_VIEWED_CHAT.code(),
@@ -299,7 +299,7 @@ public class AdminRequestDetailService {
     }
 
     private static AdminChatMessage toChatMessage(
-            MessageResponse message, Long donorId, long receiverId, Map<Long, UserBrief> briefs) {
+            long requestId, MessageResponse message, Long donorId, long receiverId, Map<Long, UserBrief> briefs) {
         Long senderId = message.senderId();
         String role = "Hệ thống";
         if (senderId != null) {
@@ -312,7 +312,8 @@ public class AdminRequestDetailService {
                 role,
                 message.kind(),
                 message.content(),
-                message.mediaId() == null ? null : "/api/v1/media/" + message.mediaId(),
+                // Ảnh chat riêng tư: đọc qua endpoint của giao dịch, Admin được phép (D2)
+                message.mediaId() == null ? null : "/api/v1/requests/" + requestId + "/media/" + message.mediaId(),
                 message.itemCard() == null ? null : message.itemCard().title(),
                 message.createdAt());
     }

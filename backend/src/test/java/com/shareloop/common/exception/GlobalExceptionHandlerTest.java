@@ -52,6 +52,16 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void dataIntegrityViolationReturns409WithReloadMessage() throws Exception {
+        // given, when, then
+        mockMvc.perform(get("/fake/integrity"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"))
+                .andExpect(
+                        jsonPath("$.message").value("Thao tác vừa được thực hiện ở nơi khác. Vui lòng tải lại trang."));
+    }
+
+    @Test
     void malformedJsonReturns400() throws Exception {
         mockMvc.perform(post("/fake/validate")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -124,6 +134,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/fake/items/{id}")
         String item(@PathVariable Long id) {
             return "ok";
+        }
+
+        @GetMapping("/fake/integrity")
+        String integrity() {
+            throw new org.springframework.dao.DataIntegrityViolationException("duplicate key value");
         }
 
         @GetMapping("/fake/not-found")

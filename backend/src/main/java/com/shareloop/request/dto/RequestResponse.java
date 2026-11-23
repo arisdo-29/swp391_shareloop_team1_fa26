@@ -61,7 +61,92 @@ public record RequestResponse(
         List<RequestDisputeSummary> disputes,
         // Báo cáo vi phạm khi một bên từ chối nhận (GN-07), nhìn từ phía người xem. Không phải khiếu nại nên tách khỏi
         // disputes. Có ở cùng các nơi như disputes; null khi giao dịch không bị từ chối nhận.
-        RequestDisputeSummary refusalReport) {
+        RequestDisputeSummary refusalReport,
+        // Cờ cảnh báo cho FE hiện nhãn trên thẻ yêu cầu và trang tiến trình: OFFERED_ITEM_BUSY, RECEIVER_TOO_BUSY,
+        // ITEM_UNDER_REVIEW. null khi không có cờ nào.
+        List<String> flags) {
+
+    // Dạng 38 tham số (chưa có flags) để code và test đang gọi vẫn compile.
+    public RequestResponse(
+            Long id,
+            Long itemId,
+            Long receiverId,
+            Long offeredItemId,
+            String type,
+            String status,
+            String deliveryMethod,
+            String meetingPlace,
+            Instant meetingTime,
+            Instant donorScheduleOkAt,
+            Instant receiverScheduleOkAt,
+            Instant donorWaiverAt,
+            Instant receiverWaiverAt,
+            Instant contactRevealedAt,
+            Instant donorHandoverAt,
+            Instant receiverHandoverAt,
+            Instant completedAt,
+            Instant createdAt,
+            String receiverName,
+            Integer receiverTrustStars,
+            String receiverRank,
+            String itemTitle,
+            String itemImage,
+            Long donorId,
+            String donorName,
+            String offeredItemTitle,
+            String cancelReason,
+            Instant complaintDeadline,
+            Instant lastMessageAt,
+            Instant disputeResponseDueAt,
+            String donorAvatarUrl,
+            String receiverAvatarUrl,
+            Boolean disputeExpired,
+            List<RequestMediaResponse> handoverMedia,
+            String itemOfferType,
+            Integer conversionFee,
+            List<RequestDisputeSummary> disputes,
+            RequestDisputeSummary refusalReport) {
+        this(
+                id,
+                itemId,
+                receiverId,
+                offeredItemId,
+                type,
+                status,
+                deliveryMethod,
+                meetingPlace,
+                meetingTime,
+                donorScheduleOkAt,
+                receiverScheduleOkAt,
+                donorWaiverAt,
+                receiverWaiverAt,
+                contactRevealedAt,
+                donorHandoverAt,
+                receiverHandoverAt,
+                completedAt,
+                createdAt,
+                receiverName,
+                receiverTrustStars,
+                receiverRank,
+                itemTitle,
+                itemImage,
+                donorId,
+                donorName,
+                offeredItemTitle,
+                cancelReason,
+                complaintDeadline,
+                lastMessageAt,
+                disputeResponseDueAt,
+                donorAvatarUrl,
+                receiverAvatarUrl,
+                disputeExpired,
+                handoverMedia,
+                itemOfferType,
+                conversionFee,
+                disputes,
+                refusalReport,
+                null);
+    }
 
     // Dạng 30 tham số (chưa có ảnh đại diện, disputeExpired, handoverMedia) để code và test đang gọi vẫn compile.
     public RequestResponse(
@@ -184,7 +269,8 @@ public record RequestResponse(
                 itemOfferType,
                 newConversionFee,
                 disputes,
-                refusalReport);
+                refusalReport,
+                flags);
     }
 
     /** Gắn danh sách khiếu nại theo vai của người xem (D-04); các trường khác giữ nguyên. */
@@ -235,7 +321,52 @@ public record RequestResponse(
                 itemOfferType,
                 conversionFee,
                 newDisputes,
-                newRefusalReport);
+                newRefusalReport,
+                flags);
+    }
+
+    /** Gắn cờ cảnh báo; các trường khác giữ nguyên. */
+    public RequestResponse withFlags(List<String> newFlags) {
+        return new RequestResponse(
+                id,
+                itemId,
+                receiverId,
+                offeredItemId,
+                type,
+                status,
+                deliveryMethod,
+                meetingPlace,
+                meetingTime,
+                donorScheduleOkAt,
+                receiverScheduleOkAt,
+                donorWaiverAt,
+                receiverWaiverAt,
+                contactRevealedAt,
+                donorHandoverAt,
+                receiverHandoverAt,
+                completedAt,
+                createdAt,
+                receiverName,
+                receiverTrustStars,
+                receiverRank,
+                itemTitle,
+                itemImage,
+                donorId,
+                donorName,
+                offeredItemTitle,
+                cancelReason,
+                complaintDeadline,
+                lastMessageAt,
+                disputeResponseDueAt,
+                donorAvatarUrl,
+                receiverAvatarUrl,
+                disputeExpired,
+                handoverMedia,
+                itemOfferType,
+                conversionFee,
+                disputes,
+                refusalReport,
+                newFlags);
     }
 
     // Dạng 28 tham số (chưa có disputeResponseDueAt) để code và test đang gọi vẫn compile.

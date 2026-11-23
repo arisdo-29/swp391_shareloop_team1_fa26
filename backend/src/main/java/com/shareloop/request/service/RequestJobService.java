@@ -133,7 +133,7 @@ public class RequestJobService {
     }
 
     /**
-     * Tự động huỷ các yêu cầu RESERVED hoặc AWAITING_LOGISTICS quá 10 ngày chưa chốt lịch (GN-05, TD-02, CH-01).
+     * Tự động huỷ các yêu cầu RESERVED hoặc AWAITING_LOGISTICS quá chat_open_days ngày chưa chốt lịch (GN-05, TD-02, CH-01).
      * Đóng khung chat (do Request sang CANCELLED) và nhả bài đăng về APPROVED qua ItemService.release.
      *
      * @param now thời điểm hiện tại
@@ -210,12 +210,14 @@ public class RequestJobService {
 
         request.cancel(Request.CANCEL_BY_SYSTEM + "Hết hạn do chủ bài chưa chọn");
         requestRepository.save(request);
+        int pendingDays = configService.getInt(ConfigKey.REQUEST_PENDING_DAYS);
 
         notificationService.notify(
                 request.getReceiverId(),
                 "REQUEST_EXPIRED",
                 "Yêu cầu hết hạn",
-                "Yêu cầu giao dịch của bạn đã tự động hết hạn do chủ bài không phản hồi trong 3 ngày.",
+                "Yêu cầu giao dịch của bạn đã tự động hết hạn do chủ bài không phản hồi trong " + pendingDays
+                        + " ngày.",
                 "/items/" + request.getItemId());
 
         return true;
@@ -235,7 +237,8 @@ public class RequestJobService {
             return false;
         }
 
-        request.cancel(Request.CANCEL_BY_SYSTEM + "Huỷ tự động do quá hạn 10 ngày không chốt lịch");
+        int chatDays = configService.getInt(ConfigKey.CHAT_OPEN_DAYS);
+        request.cancel(Request.CANCEL_BY_SYSTEM + "Huỷ tự động do quá hạn " + chatDays + " ngày không chốt lịch");
         requestRepository.save(request);
 
         // Module chat tự huỷ đề nghị đổi món còn PENDING, chạy trong cùng transaction của lần huỷ này.
@@ -244,9 +247,9 @@ public class RequestJobService {
         }
 
         // Nhả giữ chỗ bài đăng về APPROVED (GN-05, TD-02)
-        itemService.release(request.getItemId());
+        itemService.releaseAfterCancel(request.getItemId(), request.getReservedAt());
         if (request.getOfferedItemId() != null) {
-            itemService.releaseIfReserved(request.getOfferedItemId());
+            itemService.releaseIfReservedAfterCancel(request.getOfferedItemId(), request.getReservedAt());
         }
         // Bài mở lại: báo những người từng bị từ chối ở bài này (cùng hàm với các đường huỷ ở RequestService).
         if (itemReopenedNotifier != null) {
@@ -259,14 +262,14 @@ public class RequestJobService {
                     donorId,
                     "REQUEST_CANCELLED",
                     "Giao dịch bị huỷ tự động",
-                    "Giao dịch đã tự động huỷ do quá 10 ngày không chốt lịch hẹn. Bài đăng đã mở lại.",
+                    "Giao dịch đã tự động huỷ do quá " + chatDays + " ngày không chốt lịch hẹn. Bài đăng đã mở lại.",
                     "/items/" + request.getItemId());
         }
         notificationService.notify(
                 request.getReceiverId(),
                 "REQUEST_CANCELLED",
                 "Giao dịch bị huỷ tự động",
-                "Giao dịch đã tự động huỷ do quá 10 ngày không chốt lịch hẹn.",
+                "Giao dịch đã tự động huỷ do quá " + chatDays + " ngày không chốt lịch hẹn.",
                 "/items/" + request.getItemId());
 
         return true;

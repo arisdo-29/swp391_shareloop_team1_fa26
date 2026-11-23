@@ -34,3 +34,12 @@ Service nội bộ cho module item. Kiểm tất cả id không trùng, tồn t�
 đang `UPLOADED`, sau đó chuyển tất cả sang `ATTACHED` trong transaction người gọi.
 Thiếu tệp: `MEDIA_NOT_FOUND`; không phải chủ: `MEDIA_NOT_OWNER`; đã gắn:
 `MEDIA_NOT_UPLOADED`. Module item chịu trách nhiệm lưu `item_media_mappings` cùng transaction.
+
+## Ảnh riêng tư và dọn ảnh (D2, rà soát 22/11)
+
+- `GET /api/v1/media/{id}` (công khai) chỉ trả ảnh `PUBLIC` đã gắn vào bài đăng hoặc là ảnh đại diện. Ảnh mới tải lên chưa gắn, và ảnh `PRIVATE` (chat, giao nhận, minh chứng báo cáo), trả `404 MEDIA_NOT_FOUND`.
+- `GET /api/v1/media/{id}/preview` (cần đăng nhập): người tải lên xem lại ảnh của mình khi chưa gắn. Người khác `404`.
+- `GET /api/v1/requests/{requestId}/media/{mediaId}` (cần đăng nhập): ảnh chat và ảnh giao nhận, chỉ hai bên của giao dịch và Admin xem được và ảnh phải thuộc đúng giao dịch. Không phải người được xem hoặc ảnh không thuộc giao dịch thì `404`, không trả `403`, để không lộ ảnh có tồn tại. `RequestMediaResponse.url` và `AdminChatMessage.mediaUrl` đã đổi sang đường dẫn này.
+- Ảnh chat và ảnh giao nhận được gắn ở dạng riêng tư (`MediaService.attachPrivate`). Migration `V202611221600` chuyển ảnh cũ sang riêng tư và `V202611221610` đánh dấu `ATTACHED` cho ảnh cũ còn đang được dùng.
+- Mỗi người tải lên tối đa `media_upload_per_hour` ảnh mỗi giờ (mặc định 40), quá thì `429 MEDIA_UPLOAD_TOO_FAST` ("Bạn tải ảnh quá nhanh. Vui lòng thử lại sau ít phút").
+- Job `MediaOrphanCleanupJob` (mỗi giờ, cũng chạy qua `/internal/jobs/run`) xoá đối tượng trên kho lưu trữ rồi đánh dấu xoá các ảnh chưa gắn quá `media_orphan_cleanup_hours` giờ (mặc định 24).

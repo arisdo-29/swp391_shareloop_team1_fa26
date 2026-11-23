@@ -38,7 +38,8 @@ public class SecurityConfig {
         "/api/v1/areas/**",
         "/api/v1/items",
         "/api/v1/items/*",
-        "/api/v1/media/*"
+        "/api/v1/media/*",
+        "/api/v1/configs/public"
     };
 
     private static final String[] PERMIT_ALL = {

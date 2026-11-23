@@ -17,7 +17,7 @@ const { refreshWallet } = vi.hoisted(() => ({ refreshWallet: vi.fn() }));
 
 vi.mock('../../services/requestApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../services/requestApi')>()),
-  requestApi: { mine: vi.fn(), forItem: vi.fn(), get: vi.fn(), select: vi.fn() },
+  requestApi: { mine: vi.fn(), forItem: vi.fn(), received: vi.fn(), get: vi.fn(), select: vi.fn() },
 }));
 vi.mock('../../services/itemApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../services/itemApi')>()),
@@ -130,6 +130,7 @@ async function renderMessages(viewerId: number, current: RequestResponse, messag
   vi.mocked(requestApi.mine).mockResolvedValue(viewerId === RECEIVER_ID ? [current] : []);
   vi.mocked(itemApi.mine).mockResolvedValue(viewerId === DONOR_ID ? [item()] : [receiverChair]);
   vi.mocked(requestApi.forItem).mockResolvedValue(viewerId === DONOR_ID ? [current] : []);
+  vi.mocked(requestApi.received).mockResolvedValue(viewerId === DONOR_ID ? [current] : []);
   vi.mocked(requestApi.get).mockResolvedValue(current);
   vi.mocked(itemApi.detail).mockResolvedValue(item());
   vi.mocked(chatApi.list).mockResolvedValue(messages);

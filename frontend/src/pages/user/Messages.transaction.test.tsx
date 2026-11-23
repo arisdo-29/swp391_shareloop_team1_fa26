@@ -21,6 +21,7 @@ vi.mock('../../services/requestApi', async (importOriginal) => ({
   requestApi: {
     mine: vi.fn(),
     forItem: vi.fn(),
+    received: vi.fn(),
     get: vi.fn(),
     media: vi.fn(),
     cancelTransaction: vi.fn(),
@@ -119,6 +120,7 @@ async function renderMessages(
   vi.mocked(requestApi.mine).mockResolvedValue(viewerId === RECEIVER_ID ? [current] : []);
   vi.mocked(itemApi.mine).mockResolvedValue(ownedItems);
   vi.mocked(requestApi.forItem).mockResolvedValue([current]);
+  vi.mocked(requestApi.received).mockResolvedValue([current]);
   vi.mocked(requestApi.get).mockResolvedValue(current);
   vi.mocked(requestApi.media).mockResolvedValue(media);
   vi.mocked(itemApi.detail).mockResolvedValue(item());
@@ -361,6 +363,7 @@ describe('Khung chat gọn', () => {
     vi.mocked(requestApi.mine).mockResolvedValue([current]);
     vi.mocked(itemApi.mine).mockResolvedValue([]);
     vi.mocked(requestApi.forItem).mockResolvedValue([current]);
+    vi.mocked(requestApi.received).mockResolvedValue([current]);
     vi.mocked(requestApi.get).mockResolvedValue(current);
     vi.mocked(requestApi.media).mockResolvedValue([]);
     vi.mocked(itemApi.detail).mockImplementation((itemId) =>

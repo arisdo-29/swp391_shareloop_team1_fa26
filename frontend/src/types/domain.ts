@@ -184,6 +184,8 @@ export interface ItemRequest {
   itemOfferType?: ItemType;
   // Credit chủ bài trả nếu chuyển bài sang Trao đổi; backend trả, frontend chỉ hiển thị.
   conversionFee?: number;
+  // Cờ cảnh báo từ backend để hiện nhãn trên thẻ yêu cầu.
+  flags?: string[];
 }
 
 export interface CreditHistory {

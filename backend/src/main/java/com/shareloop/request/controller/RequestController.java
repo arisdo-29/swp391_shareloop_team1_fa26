@@ -69,6 +69,18 @@ public class RequestController {
     }
 
     /**
+     * Mọi yêu cầu tới các bài của người gọi trong một lần (G2), có lọc theo trạng thái.
+     */
+    @Operation(summary = "Xem mọi yêu cầu gửi tới các bài của mình trong một lần, lọc theo trạng thái")
+    @GetMapping("/api/v1/me/received-requests")
+    public List<RequestResponse> listReceivedRequests(
+            @CurrentUserId Long currentUserId,
+            @org.springframework.web.bind.annotation.RequestParam(required = false)
+                    java.util.Set<com.shareloop.request.entity.RequestStatus> status) {
+        return requestService.listReceivedRequests(currentUserId, status);
+    }
+
+    /**
      * Người gửi tự huỷ yêu cầu khi còn ở trạng thái PENDING.
      */
     @Operation(summary = "Người gửi tự huỷ yêu cầu khi còn ở trạng thái PENDING")
@@ -193,6 +205,20 @@ public class RequestController {
             @CurrentUserId Long currentUserId,
             @Valid @RequestBody com.shareloop.request.dto.AttachMediaRequest request) {
         return requestService.attachMedia(id, currentUserId, request.mediaIds(), request.stage());
+    }
+
+    /**
+     * Đọc nội dung một ảnh chat hoặc ảnh giao nhận của giao dịch (D2). Chỉ hai bên và Admin; người khác nhận 404.
+     */
+    @Operation(summary = "Xem ảnh chat hoặc ảnh giao nhận của giao dịch (chỉ hai bên và Admin)")
+    @GetMapping("/api/v1/requests/{id}/media/{mediaId}")
+    public org.springframework.http.ResponseEntity<byte[]> readMedia(
+            @PathVariable long id, @PathVariable long mediaId, @CurrentUserId Long currentUserId) {
+        var content = requestService.readMedia(id, mediaId, currentUserId);
+        return org.springframework.http.ResponseEntity.ok()
+                .cacheControl(org.springframework.http.CacheControl.noStore())
+                .contentType(org.springframework.http.MediaType.parseMediaType(content.mimeType()))
+                .body(content.bytes());
     }
 
     /**

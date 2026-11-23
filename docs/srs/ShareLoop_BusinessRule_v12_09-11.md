@@ -34,7 +34,7 @@ Ai cũng xem được bài; muốn đăng, xin hay đổi đồ thì phải có 
 | TK-01 | Khách (chưa đăng nhập) xem trang chủ, tìm và lọc bài, xem chi tiết bài, danh mục, khu vực. Mọi thao tác khác phải đăng nhập. Hồ sơ công khai của người dùng chỉ xem được khi đã đăng nhập. | — |
 | TK-02 | Đăng ký cần email, mật khẩu, họ tên, số điện thoại. Email thuộc danh sách tên miền dùng một lần thì bị từ chối. | — |
 | TK-03 | SĐT bắt buộc, là số di động Việt Nam đầu 03 / 05 / 07 / 08 / 09 (nhận +84). Không xác thực SĐT bằng SMS. | 10 chữ số |
-| TK-04 | Email và SĐT không trùng tài khoản đang hoạt động khác. Đăng ký lại một email đang chờ xác thực thì ghi đè thông tin cũ và gửi mã mới. | — |
+| TK-04 | Email và SĐT không trùng tài khoản đang hoạt động khác. Đăng ký lại một email đang chờ xác thực thì chỉ gửi lại mã mới, giữ nguyên mật khẩu và thông tin đã đăng ký. Người gõ nhầm mật khẩu dùng Quên mật khẩu sau khi kích hoạt. | — |
 | TK-05 | Một địa chỉ IP tạo tối đa 3 tài khoản mới trong 24 giờ gần nhất; vượt thì báo lỗi 429. | accounts\_per\_ip\_24h = 3 |
 | TK-06 | Tài khoản chỉ dùng được sau khi nhập đúng OTP gửi qua email: 6 số, sống 5 phút, sai 5 lần thì mã bị huỷ, gửi lại sau ít nhất 60 giây. Mã lưu dạng băm BCrypt. | otp\_ttl\_minutes = 5, otp\_max\_failed = 5, otp\_resend\_cooldown\_seconds = 60 |
 | TK-07 | Tài khoản chưa xác thực quá 24 giờ bị xoá mềm; email đó đăng ký lại được. | pending\_account\_ttl\_hours = 24 |
@@ -133,7 +133,7 @@ Cột "Nhanh nhất sau" tính theo trần 30 điểm / ngày (UT-07).
 | UT-02 | Chỉ trừ sao khi Admin chấp thuận một báo cáo / khiếu nại; mỗi lần 1 sao, không âm. Mới bị báo cáo thì chưa trừ. | 1 sao / lần |
 | UT-03 | Mỗi lần bị trừ sao, người dùng nhận thông báo "Bạn bị trừ 1 sao. Bạn còn N sao trước khi tài khoản bị cấm." | — |
 | UT-04 | Sao về 0 → tài khoản Bị cấm (KC-05). | 0 |
-| UT-05 | Hồi 1 sao sau mỗi 10 giao dịch hoàn tất liên tiếp không bị trừ sao, tối đa 5 sao. Bị trừ sao thì chuỗi đếm về 0. | reputation\_clean\_streak\_for\_star = 10 |
+| UT-05 | Hồi 1 sao sau mỗi 10 giao dịch hoàn tất liên tiếp không bị trừ sao, tối đa 5 sao. Bị trừ sao thì chuỗi đếm về 0. Giao dịch cặp lặp (từ lần thứ 3 giữa cùng một cặp trong cửa sổ reputation\_pair\_window\_days) không tính vào chuỗi sạch và không thêm đối tác. Hồi sao cần chuỗi đủ 10 giao dịch và ít nhất star\_restore\_min\_distinct\_partners đối tác khác nhau. | reputation\_clean\_streak\_for\_star = 10 |
 | UT-06 | Cộng điểm khi giao dịch Hoàn tất: bài Cho +10 người cho, +2 người nhận; bài Trao đổi +6 mỗi bên. Hạng tính lại ngay. | 10 / 2 / 6 |
 | UT-07 | Mỗi tài khoản được cộng tối đa 30 điểm / ngày theo giờ Việt Nam; chạm trần thì chỉ cộng phần còn lại. | daily\_points\_cap = 30 |
 | UT-08 | Chống cày điểm: từ giao dịch hoàn tất thứ 3 giữa cùng một cặp người trong 90 ngày thì không cộng điểm (vẫn ghi lịch sử); cặp có hơn 5 giao dịch hiện ở màn Giám sát bất thường. | 90 ngày / thứ 3 / hơn 5 |
@@ -265,10 +265,10 @@ Thông tin trên bài: hình thức Cho tặng (GIVE) / Trao đổi (SWAP); tìn
 | BD-06 | Bài Trao đổi được phí thường theo hạng (Đồng 5, Bạc 8, Vàng 15, Kim cương không giới hạn); vượt thì vẫn đăng được với phí 10 Credit (PH-02). | max\_active\_items\_bronze / silver / gold / diamond = 5 / 8 / 15 / −1 |
 | BD-07 | Tài khoản 0 sao, bị khoá, bị cấm hoặc là Admin thì không đăng bài được. | — |
 | BD-08 | Phí sửa theo bảng dưới; hệ thống báo trước số phí trước khi gửi. | edit\_fee = 5 |
-| BD-09 | Mọi bản sửa quay lại Chờ duyệt, bài ẩn khỏi tìm kiếm tới khi duyệt xong; các yêu cầu đang chờ của bài giữ nguyên, người gửi được báo "Chủ bài vừa sửa bài, bài đang chờ duyệt lại." và chủ bài chọn người được sau khi bài được duyệt lại. Bài đang được đem đi đổi ở yêu cầu khác thì yêu cầu đó tự huỷ (cập nhật 22/11/2026). | — |
+| BD-09 | Mọi bản sửa quay lại Chờ duyệt, bài ẩn khỏi tìm kiếm tới khi duyệt xong; các yêu cầu đang chờ của bài giữ nguyên, người gửi được báo "Chủ bài vừa sửa bài, bài đang chờ duyệt lại." và chủ bài chọn người được sau khi bài được duyệt lại. Bài đang được đem đi đổi ở yêu cầu khác thì yêu cầu đó tự huỷ (cập nhật 22/11/2026). Bản sửa của bài đã từng duyệt: thời gian chờ duyệt được cộng bù vào hạn hiển thị và hạn đẩy đang chạy khi bản sửa được duyệt, bản sửa bị từ chối thì không cộng bù. | — |
 | BD-10 | Chỉ sửa / gỡ được khi là chủ bài, còn sao, bài không ở Đang giao dịch / Đã trao / Hết hạn và chưa có yêu cầu nào được chọn. Không đổi hình thức Cho ↔ Trao đổi khi sửa (đổi theo mục K hoặc đăng bài mới). | — |
 | BD-11 | Gỡ bài = xoá mềm, nhả phí đang giữ; các yêu cầu Chờ chủ bài chọn bị huỷ ngay với lý do "\[Hệ thống\] Bài đã bị gỡ" và người gửi được báo (D-13). | — |
-| BD-12 | Thời gian hiển thị tính từ lần duyệt đầu: 30 ngày; hạng Vàng trở lên 45 ngày. | post\_display\_days = 30, post\_display\_days\_gold = 45 |
+| BD-12 | Thời gian hiển thị tính từ lần duyệt đầu: 30 ngày; hạng Vàng trở lên 45 ngày. Giao dịch huỷ trước lúc hoàn tất mà bài được mở lại thì hạn hiển thị và hạn đẩy được cộng thêm số giờ bài đã nằm trong giao dịch, tối đa reserved\_display\_refund\_max\_days ngày. Vẫn quá hạn sau khi cộng thì giữ thêm reserved\_release\_grace\_hours giờ để kịp gia hạn. | post\_display\_days = 30, post\_display\_days\_gold = 45, reserved\_display\_refund\_max\_days = 7, reserved\_release\_grace\_hours = 24 |
 
 | Tình huống khi sửa (BD-08) | Phí |
 | --- | --- |

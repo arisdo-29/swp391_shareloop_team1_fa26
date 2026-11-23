@@ -86,8 +86,11 @@ public class Request extends BaseEntity {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    // Độ dài cột cancel_reason (migration V202610272320). Lý do dài hơn được rút gọn khi ghi, xem fitCancelReason.
+    public static final int CANCEL_REASON_MAX_LENGTH = 600;
+
     // 500 ký tự người dùng nhập + tiền tố người huỷ
-    @Column(name = "cancel_reason", length = 600)
+    @Column(name = "cancel_reason", length = CANCEL_REASON_MAX_LENGTH)
     private String cancelReason;
 
     protected Request() {}
@@ -118,7 +121,23 @@ public class Request extends BaseEntity {
      */
     public void cancel(String reason) {
         transitionTo(RequestStatus.CANCELLED);
-        this.cancelReason = reason;
+        this.cancelReason = fitCancelReason(reason);
+    }
+
+    /**
+     * Rút gọn lý do để vừa cột cancel_reason (E2): cắt ở ranh giới từ và thêm "…". Mọi đường ghi cancel_reason đều đi
+     * qua {@link #cancel}, nên đây là chỗ duy nhất. Lý do "Từ chối giao nhận" tới 1000 ký tự vẫn được lưu đủ ở báo cáo.
+     */
+    static String fitCancelReason(String reason) {
+        if (reason == null || reason.length() <= CANCEL_REASON_MAX_LENGTH) {
+            return reason;
+        }
+        String shortened = reason.substring(0, CANCEL_REASON_MAX_LENGTH - 1);
+        int lastSpace = shortened.lastIndexOf(' ');
+        if (lastSpace > 0) {
+            shortened = shortened.substring(0, lastSpace);
+        }
+        return shortened.stripTrailing() + "…";
     }
 
     /**

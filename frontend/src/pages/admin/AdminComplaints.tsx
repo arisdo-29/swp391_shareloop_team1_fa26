@@ -54,6 +54,10 @@ function reportReasonLabel(report: ReportResponse) {
 
 const date = (value: string | null) =>
   value ? new Date(value).toLocaleString('vi-VN') : 'Chưa có';
+// Báo cáo Từ chối giao nhận (báo cáo bài kèm giao dịch): người báo đã bị trừ sao tự động nên không có ô phạt thêm (F7).
+const isRefusalReport = (report: ReportResponse) =>
+  report.targetType === 'ITEM' && report.reason === 'NOT_AS_DESCRIBED' && report.requestId != null;
+
 const concluded = (status: ReportStatus) => status === 'RESOLVED' || status === 'DISMISSED';
 const statusTones: Record<ReportStatus, string> = {
   OPEN: 'bg-warning-soft text-warning',
@@ -200,6 +204,7 @@ export function AdminComplaints() {
   const [detailError, setDetailError] = useState('');
   const [decision, setDecision] = useState<ReportDecision | ''>('');
   const [note, setNote] = useState('');
+  const [deliberateFalse, setDeliberateFalse] = useState(false);
   const [decisionStep, setDecisionStep] = useState<'review' | 'choose' | 'confirm'>('review');
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
@@ -240,6 +245,7 @@ export function AdminComplaints() {
     setDetailError('');
     setDecisionStep('review');
     setNote('');
+    setDeliberateFalse(false);
     setDecision('');
     reportApi
       .detail(selectedId, controller.signal)
@@ -275,7 +281,11 @@ export function AdminComplaints() {
     setSubmitting(true);
     setDetailError('');
     try {
-      await reportApi.conclude(detail.report.id, { decision, note: note.trim() });
+      await reportApi.conclude(detail.report.id, {
+        decision,
+        note: note.trim(),
+        deliberateFalseReport: decision === 'DISMISS' && deliberateFalse ? true : undefined,
+      });
       setNoticeTone('success');
       setNotice('Đã kết luận khiếu nại.');
       setDetail(null);
@@ -434,6 +444,11 @@ export function AdminComplaints() {
                   </p>
                   <p className="break-words text-xs leading-5 text-text-secondary">
                     {report.reporterName || 'Người dùng đã xóa'} · {date(report.createdAt)}
+                    {report.newReporterAccount ? (
+                      <span className="ml-2 rounded-sm bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">
+                        Tài khoản mới
+                      </span>
+                    ) : null}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
@@ -549,6 +564,11 @@ export function AdminComplaints() {
                   <dt className="label">Người gửi</dt>
                   <dd className="break-words font-semibold">
                     {detail.reporter.fullName ?? 'Người dùng'}
+                    {detail.report.newReporterAccount ? (
+                      <span className="ml-2 rounded-sm bg-warning-soft px-2 py-0.5 text-2xs font-bold text-warning">
+                        Tài khoản mới
+                      </span>
+                    ) : null}
                   </dd>
                 </div>
                 <div className="min-w-0">
@@ -667,6 +687,14 @@ export function AdminComplaints() {
                   )}
                   {decisionStep === 'choose' && (
                     <>
+                      {detail.openTransactionPartnerName ? (
+                        <Alert tone="warning">
+                          {`Bài đang có giao dịch với ${detail.openTransactionPartnerName}. `}
+                          {detail.seriousReason
+                            ? 'Chấp thuận thì giao dịch sẽ bị huỷ.'
+                            : 'Chấp thuận thì giao dịch vẫn tiếp tục.'}
+                        </Alert>
+                      ) : null}
                       <fieldset className="grid gap-2 sm:grid-cols-2">
                         <legend className="label">Chọn kết luận</legend>
                         {(Object.keys(decisionLabels) as ReportDecision[]).map((value) => (
@@ -686,6 +714,17 @@ export function AdminComplaints() {
                           </label>
                         ))}
                       </fieldset>
+                      {decision === 'DISMISS' && !isRefusalReport(detail.report) ? (
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={deliberateFalse}
+                            onChange={(event) => setDeliberateFalse(event.target.checked)}
+                            className="accent-primary"
+                          />
+                          Báo cáo sai có chủ ý (trừ 1 sao người báo)
+                        </label>
+                      ) : null}
                       <TextArea
                         label="Ghi chú kết luận (không bắt buộc)"
                         hint="Tối đa 500 ký tự."

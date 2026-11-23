@@ -66,3 +66,10 @@ export const ADMIN_ROUTES = [
 /** Số ảnh thật bắt buộc cho mỗi bài đăng (giống kiểm tra của backend khi tạo và sửa bài). */
 export const ITEM_IMAGES_MIN = 3;
 export const ITEM_IMAGES_MAX = 8;
+
+// Nhãn tiếng Việt cho cờ cảnh báo trên thẻ yêu cầu (backend trả mã, frontend chỉ hiển thị).
+export const REQUEST_FLAG_LABELS: Record<string, string> = {
+  OFFERED_ITEM_BUSY: 'Món người này mang đổi đang nằm trong một giao dịch khác',
+  RECEIVER_TOO_BUSY: 'Người này đang có quá nhiều giao dịch chưa xong',
+  ITEM_UNDER_REVIEW: 'Bài đang bị xem xét vi phạm',
+};

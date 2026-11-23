@@ -38,6 +38,30 @@ public enum ConfigKey {
             ConfigGroup.POSTING,
             "Số ngày hiển thị bài",
             "Số ngày bài được hiển thị sau khi duyệt hoặc gia hạn."),
+    RESERVED_DISPLAY_REFUND_MAX_DAYS(
+            "reserved_display_refund_max_days",
+            "7",
+            ConfigGroup.POSTING,
+            "Số ngày trả lại tối đa khi huỷ giao dịch",
+            "Khi giao dịch bị huỷ và bài được mở lại, hạn hiển thị được cộng thêm số ngày bài đã nằm trong giao dịch, tối đa bằng số ngày này."),
+    RESERVED_RELEASE_GRACE_HOURS(
+            "reserved_release_grace_hours",
+            "24",
+            ConfigGroup.POSTING,
+            "Số giờ chờ gia hạn sau khi mở lại bài",
+            "Bài được mở lại sau giao dịch huỷ mà vẫn quá hạn hiển thị thì được giữ thêm số giờ này để chủ bài kịp gia hạn."),
+    MEDIA_ORPHAN_CLEANUP_HOURS(
+            "media_orphan_cleanup_hours",
+            "24",
+            ConfigGroup.POSTING,
+            "Số giờ giữ ảnh chưa dùng",
+            "Ảnh đã tải lên nhưng chưa gắn vào bài đăng hay tin nhắn sau số giờ này sẽ bị xoá."),
+    MEDIA_UPLOAD_PER_HOUR(
+            "media_upload_per_hour",
+            "40",
+            ConfigGroup.POSTING,
+            "Số ảnh tải lên tối đa mỗi giờ",
+            "Số ảnh tối đa một người được tải lên trong một giờ. Vượt số này thì phải chờ."),
     POST_DISPLAY_DAYS_GOLD(
             "post_display_days_gold",
             "45",
@@ -211,6 +235,18 @@ public enum ConfigKey {
             "Ngưỡng tự ẩn bài bị báo cáo",
             "Số báo cáo đang mở khiến một bài tự động bị ẩn."),
     // L13: trước đây chỉ đọc bằng getRaw và có cả khoá chữ hoa trùng; nay khai báo ở đây để Admin sửa được.
+    REPORT_TRUSTED_MIN_ACCOUNT_DAYS(
+            "report_trusted_min_account_days",
+            "7",
+            ConfigGroup.MODERATION,
+            "Tuổi tài khoản để báo cáo tính vào ngưỡng tự ẩn",
+            "Báo cáo chỉ tính vào ngưỡng tự ẩn bài khi người báo có tài khoản từ số ngày này, hoặc đã có đủ số giao dịch hoàn tất. Báo cáo của tài khoản mới vẫn vào hàng chờ Admin."),
+    REPORT_TRUSTED_MIN_COMPLETED(
+            "report_trusted_min_completed",
+            "1",
+            ConfigGroup.MODERATION,
+            "Số giao dịch hoàn tất để báo cáo tính vào ngưỡng tự ẩn",
+            "Người báo đã có ít nhất số giao dịch hoàn tất này thì báo cáo tính vào ngưỡng tự ẩn bài dù tài khoản còn mới."),
     REPORT_SERIOUS_REASONS(
             "report_serious_reasons",
             "PROHIBITED_ITEM,COUNTERFEIT",
@@ -248,6 +284,18 @@ public enum ConfigKey {
             ConfigGroup.ACCOUNT,
             "Khoảng cách gửi lại OTP",
             "Số giây tối thiểu giữa hai lần gửi lại mã OTP."),
+    LOGIN_MAX_FAILED_ATTEMPTS(
+            "login_max_failed_attempts",
+            "5",
+            ConfigGroup.ACCOUNT,
+            "Số lần sai mật khẩu liên tiếp tối đa",
+            "Sai mật khẩu đủ số lần này liên tiếp thì email đó bị khoá đăng nhập tạm thời."),
+    LOGIN_LOCK_MINUTES(
+            "login_lock_minutes",
+            "15",
+            ConfigGroup.ACCOUNT,
+            "Thời gian khoá đăng nhập",
+            "Số phút email bị khoá đăng nhập sau khi sai mật khẩu quá số lần cho phép."),
     PENDING_ACCOUNT_TTL_HOURS(
             "pending_account_ttl_hours",
             "24",
@@ -266,6 +314,24 @@ public enum ConfigKey {
             ConfigGroup.TRANSACTION,
             "Số yêu cầu chờ tối đa",
             "Số yêu cầu đang chờ phản hồi mà một người được gửi cùng lúc."),
+    MAX_ACTIVE_TRANSACTIONS(
+            "max_active_transactions",
+            "5",
+            ConfigGroup.TRANSACTION,
+            "Số giao dịch đang chạy tối đa của người nhận",
+            "Số giao dịch chưa xong (từ lúc được chọn tới lúc bàn giao) mà một người nhận được có cùng lúc. Đủ số này thì chưa gửi thêm yêu cầu và chủ bài chưa chọn thêm người đó được."),
+    REQUEST_RESEND_COOLDOWN_HOURS(
+            "request_resend_cooldown_hours",
+            "24",
+            ConfigGroup.TRANSACTION,
+            "Số giờ chờ gửi lại yêu cầu sau khi tự huỷ",
+            "Người nhận tự huỷ yêu cầu cho một bài thì phải chờ đủ số giờ này mới được gửi lại cho đúng bài đó."),
+    REQUEST_QUIET_CANCEL_MINUTES(
+            "request_quiet_cancel_minutes",
+            "5",
+            ConfigGroup.TRANSACTION,
+            "Số phút huỷ yêu cầu mà không báo chủ bài",
+            "Yêu cầu tự huỷ trong vòng số phút này sau khi gửi thì không gửi thông báo huỷ cho chủ bài và thông báo yêu cầu mới được đánh dấu đã đọc."),
     REQUEST_PENDING_DAYS(
             "request_pending_days",
             "3",
@@ -358,6 +424,12 @@ public enum ConfigKey {
             ConfigGroup.REPUTATION,
             "Điểm mỗi bên khi trao đổi",
             "Số điểm mỗi bên nhận được khi một giao dịch Trao đổi hoàn tất."),
+    STAR_RESTORE_MIN_DISTINCT_PARTNERS(
+            "star_restore_min_distinct_partners",
+            "5",
+            ConfigGroup.REPUTATION,
+            "Số đối tác khác nhau để hồi sao",
+            "Chuỗi giao dịch sạch phải có ít nhất số người khác nhau này mới được hồi sao. Giao dịch lặp với cùng một người không tính vào chuỗi."),
     REPUTATION_CLEAN_STREAK_FOR_STAR(
             "reputation_clean_streak_for_star",
             "10",

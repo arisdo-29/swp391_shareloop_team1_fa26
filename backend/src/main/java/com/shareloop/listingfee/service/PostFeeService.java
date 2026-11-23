@@ -57,6 +57,7 @@ public class PostFeeService {
     private final ReputationService reputationService;
     private final ItemService itemService;
     private final Clock clock;
+    private final DisplayTimeService displayTimeService;
 
     public PostFeeService(
             ItemFeeRepository itemFeeRepository,
@@ -64,13 +65,15 @@ public class PostFeeService {
             ConfigService configService,
             ReputationService reputationService,
             @Lazy ItemService itemService,
-            Clock clock) {
+            Clock clock,
+            DisplayTimeService displayTimeService) {
         this.itemFeeRepository = itemFeeRepository;
         this.creditService = creditService;
         this.configService = configService;
         this.reputationService = reputationService;
         this.itemService = itemService;
         this.clock = clock;
+        this.displayTimeService = displayTimeService;
     }
 
     /**
@@ -188,6 +191,10 @@ public class PostFeeService {
             itemFee.markReleased();
         }
         itemFee.markHeld(quote.amount(), feeType);
+        // Bài đã từng duyệt: ghi mốc gửi bản sửa để cộng bù thời gian chờ duyệt khi được duyệt (B1).
+        if (snapshot.getEverApproved()) {
+            itemFee.markEditSubmitted(clock.instant());
+        }
     }
 
     /**
@@ -226,6 +233,7 @@ public class PostFeeService {
             int displayDays = displayDaysAfterApproval(snapshot.getDonorId());
             itemFee.startDisplayPeriod(clock.instant().plus(displayDays, ChronoUnit.DAYS));
         }
+        displayTimeService.compensateEditReview(itemFee);
     }
 
     /**
@@ -258,6 +266,8 @@ public class PostFeeService {
         ItemFee itemFee = lockItemFee(itemId);
         requireSameHeldFee(itemFee, snapshot);
         itemFee.markReleased();
+        // Bản sửa bị từ chối hoặc bài bị xoá: không cộng bù, bỏ mốc (B1).
+        itemFee.clearEditSubmitted();
     }
 
     @Transactional(readOnly = true)

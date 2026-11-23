@@ -14,6 +14,7 @@ import com.shareloop.config.SecurityConfig;
 import com.shareloop.config.WebConfig;
 import com.shareloop.listingfee.job.BoostNotificationJob;
 import com.shareloop.listingfee.job.ItemExpiryJob;
+import com.shareloop.media.job.MediaOrphanCleanupJob;
 import com.shareloop.request.job.RequestJob;
 import com.shareloop.user.job.PendingAccountCleanupJob;
 import com.shareloop.wallet.job.PaymentExpiryJob;
@@ -54,13 +55,21 @@ class InternalJobControllerTest {
     @MockitoBean
     private BoostNotificationJob boostNotificationJob;
 
+    @MockitoBean
+    private MediaOrphanCleanupJob mediaOrphanCleanupJob;
+
     @Test
     @DisplayName("Thiếu header X-Job-Token trả 403 và không job nào chạy")
     void runJobs_withoutToken_returns403() throws Exception {
         mockMvc.perform(post(URL)).andExpect(status().isForbidden());
 
         verifyNoInteractions(
-                itemExpiryJob, requestJob, pendingAccountCleanupJob, paymentExpiryJob, boostNotificationJob);
+                itemExpiryJob,
+                requestJob,
+                pendingAccountCleanupJob,
+                paymentExpiryJob,
+                boostNotificationJob,
+                mediaOrphanCleanupJob);
     }
 
     @Test
@@ -69,11 +78,16 @@ class InternalJobControllerTest {
         mockMvc.perform(post(URL).header("X-Job-Token", "wrong-token")).andExpect(status().isForbidden());
 
         verifyNoInteractions(
-                itemExpiryJob, requestJob, pendingAccountCleanupJob, paymentExpiryJob, boostNotificationJob);
+                itemExpiryJob,
+                requestJob,
+                pendingAccountCleanupJob,
+                paymentExpiryJob,
+                boostNotificationJob,
+                mediaOrphanCleanupJob);
     }
 
     @Test
-    @DisplayName("Đúng token trả 200, đủ 5 job được gọi và trả về ok")
+    @DisplayName("Đúng token trả 200, đủ 6 job được gọi và trả về ok")
     void runJobs_withValidToken_runsAllJobsSuccessfully() throws Exception {
         mockMvc.perform(post(URL).header("X-Job-Token", VALID_TOKEN))
                 .andExpect(status().isOk())
@@ -82,6 +96,7 @@ class InternalJobControllerTest {
                 .andExpect(jsonPath("$.pendingAccountCleanupJob").value("ok"))
                 .andExpect(jsonPath("$.paymentExpiryJob").value("ok"))
                 .andExpect(jsonPath("$.boostNotificationJob").value("ok"))
+                .andExpect(jsonPath("$.mediaOrphanCleanupJob").value("ok"))
                 .andExpect(jsonPath("$.reviewSlaJob").doesNotExist());
 
         verify(itemExpiryJob).run();
@@ -89,6 +104,7 @@ class InternalJobControllerTest {
         verify(pendingAccountCleanupJob).run();
         verify(paymentExpiryJob).run();
         verify(boostNotificationJob).run();
+        verify(mediaOrphanCleanupJob).run();
     }
 
     @Test
@@ -103,6 +119,7 @@ class InternalJobControllerTest {
                 .andExpect(jsonPath("$.pendingAccountCleanupJob").value("ok"))
                 .andExpect(jsonPath("$.paymentExpiryJob").value("ok"))
                 .andExpect(jsonPath("$.boostNotificationJob").value("ok"))
+                .andExpect(jsonPath("$.mediaOrphanCleanupJob").value("ok"))
                 .andExpect(jsonPath("$.reviewSlaJob").doesNotExist());
 
         verify(itemExpiryJob).run();
@@ -110,5 +127,6 @@ class InternalJobControllerTest {
         verify(pendingAccountCleanupJob).run();
         verify(paymentExpiryJob).run();
         verify(boostNotificationJob).run();
+        verify(mediaOrphanCleanupJob).run();
     }
 }

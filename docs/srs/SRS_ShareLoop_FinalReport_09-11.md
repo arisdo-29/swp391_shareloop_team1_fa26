@@ -906,7 +906,7 @@ Nhóm chức năng giúp Khách tạo tài khoản và giúp Member, Admin đăn
 
 - Số điện thoại di động Việt Nam 10 số, đầu 03 / 05 / 07 / 08 / 09, nhận dạng +84 ([TK-03](#BR_TK_03)).
 
-- Email và số điện thoại chưa thuộc tài khoản đang hoạt động khác; email đang chờ xác thực thì ghi đè và gửi mã mới ([TK-04](#BR_TK_04)).
+- Email và số điện thoại chưa thuộc tài khoản đang hoạt động khác; email đang chờ xác thực thì chỉ gửi lại mã mới, giữ nguyên mật khẩu đã đăng ký ([TK-04](#BR_TK_04)).
 
 - Một địa chỉ IP tạo tối đa 3 tài khoản mới trong 24 giờ ([TK-05](#BR_TK_05)).
 
@@ -938,7 +938,7 @@ Nhóm chức năng giúp Khách tạo tài khoản và giúp Member, Admin đăn
 |--------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [TK-02](#BR_TK_02) | Đăng ký cần email, mật khẩu, họ tên, số điện thoại. Email thuộc danh sách tên miền dùng một lần thì bị từ chối.                                               |
 | [TK-03](#BR_TK_03) | SĐT bắt buộc, là số di động Việt Nam đầu 03 / 05 / 07 / 08 / 09 (nhận +84). Không xác thực SĐT bằng SMS.                                                      |
-| [TK-04](#BR_TK_04) | Email và SĐT không trùng tài khoản đang hoạt động khác. Đăng ký lại một email đang chờ xác thực thì ghi đè thông tin cũ và gửi mã mới.                        |
+| [TK-04](#BR_TK_04) | Email và SĐT không trùng tài khoản đang hoạt động khác. Đăng ký lại một email đang chờ xác thực thì chỉ gửi lại mã mới, giữ nguyên mật khẩu và thông tin đã đăng ký. Người gõ nhầm mật khẩu dùng Quên mật khẩu sau khi kích hoạt.                        |
 | [TK-05](#BR_TK_05) | Một địa chỉ IP tạo tối đa 3 tài khoản mới trong 24 giờ gần nhất; vượt thì báo lỗi 429.                                                                        |
 | [TK-06](#BR_TK_06) | Tài khoản chỉ dùng được sau khi nhập đúng OTP gửi qua email: 6 số, sống 5 phút, sai 5 lần thì mã bị huỷ, gửi lại sau ít nhất 60 giây. Mã lưu dạng băm BCrypt. |
 | [TK-07](#BR_TK_07) | Tài khoản chưa xác thực quá 24 giờ bị xoá mềm; email đó đăng ký lại được.                                                                                     |
@@ -1426,7 +1426,7 @@ Bài Cho miễn phí (tối đa 5 bài), bài Trao đổi giữ 5 Credit khi g�
 | **Mã**             | **Nội dung luật**                                                                                                                                                                                          |
 |--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [BD-08](#BR_BD_08) | Phí sửa theo bảng dưới; hệ thống báo trước số phí trước khi gửi.                                                                                                                                           |
-| [BD-09](#BR_BD_09) | Mọi bản sửa quay lại Chờ duyệt, bài ẩn khỏi tìm kiếm tới khi duyệt xong; các yêu cầu đang chờ của bài giữ nguyên.                                                                                          |
+| [BD-09](#BR_BD_09) | Mọi bản sửa quay lại Chờ duyệt, bài ẩn khỏi tìm kiếm tới khi duyệt xong; các yêu cầu đang chờ của bài giữ nguyên. Bản sửa của bài đã từng duyệt: thời gian chờ duyệt được cộng bù vào hạn hiển thị và hạn đẩy đang chạy khi bản sửa được duyệt, bản sửa bị từ chối thì không cộng bù. |
 | [BD-10](#BR_BD_10) | Chỉ sửa / gỡ được khi là chủ bài, còn sao, bài không ở Đang giao dịch / Đã trao / Hết hạn và chưa có yêu cầu nào được chọn. Không đổi hình thức Cho ↔ Trao đổi khi sửa (đổi theo mục K hoặc đăng bài mới). |
 | [BD-11](#BR_BD_11) | Gỡ bài = xoá mềm, nhả phí đang giữ; các yêu cầu Chờ chủ bài chọn bị huỷ ngay với lý do "\[Hệ thống\] Bài đã bị gỡ" và người gửi được báo (D-13).                                                           |
 | [PH-03](#BR_PH_03) | Phí đăng của mỗi bài chỉ bị trừ một lần: Theo PH-02; Lần duyệt đầu tiên; hoàn: Không hoàn khi bài đã duyệt rồi bị gỡ, hết hạn, vi phạm hay giao dịch không thành                                           |
@@ -1703,7 +1703,7 @@ Gửi yêu cầu, chat, chốt lịch và giao nhận đều miễn phí. Một 
 |--------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [YC-01](#BR_YC_01) | Không gửi yêu cầu cho bài của chính mình.                                                                                                                                                                   |
 | [YC-02](#BR_YC_02) | Chỉ gửi tới bài Đang hiển thị, không bị ẩn, chủ bài không bị khoá / cấm. Người gửi phải còn sao, không bị khoá / cấm, không phải Admin.                                                                     |
-| [YC-03](#BR_YC_03) | Mỗi người chỉ có một yêu cầu đang mở với cùng một bài; tối đa 5 yêu cầu Chờ chủ bài chọn cùng lúc (gửi song song tới nhiều bài khác nhau).                                                                  |
+| [YC-03](#BR_YC_03) | Mỗi người chỉ có một yêu cầu đang mở với cùng một bài; tối đa 5 yêu cầu Chờ chủ bài chọn cùng lúc (gửi song song tới nhiều bài khác nhau). Người nhận có từ max_active_transactions (mặc định 5) giao dịch chưa xong (từ lúc được chọn tới lúc bàn giao) thì chưa gửi thêm yêu cầu và chủ bài chưa chọn người đó được. |
 | [YC-04](#BR_YC_04) | Món đem đổi phải là bài của chính người gửi, Đang hiển thị, không bị ẩn; chọn từ danh sách bài, không nhập tự do. Bài Trao đổi bắt buộc kèm món đổi; bài Cho được kèm món đổi nhưng không bắt buộc (CD-01). |
 | [CD-01](#BR_CD_01) | Ở bài Cho, người xin được kèm một bài Đang hiển thị của mình làm món đổi (không bắt buộc). Ở bài Trao đổi, người xin được gửi yêu cầu không kèm món đổi.                                                    |
 
@@ -1859,7 +1859,7 @@ Luồng xử lý: xem [Hình 15](#FIG_sw11) (F10 Gửi yêu cầu, chọn ngư�
 | **Mã**             | **Nội dung luật**                                                                                                                                                                  |
 |--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [CH-01](#BR_CH_01) | Gửi tin được khi giao dịch từ Đã được chọn tới Đang tranh chấp; sau khi kết thúc (hoàn tất / huỷ) chỉ xem lại.                                                                     |
-| [CH-02](#BR_CH_02) | Trước khi Đã chốt lịch: chặn tin chứa SĐT, email, URL, tên mạng xã hội và lời mời liên hệ ngoài (zalo, facebook, ib, inbox…), kể cả viết cách quãng, viết số bằng chữ, chèn ký tự. |
+| [CH-02](#BR_CH_02) | Trước khi Đã chốt lịch: chặn tin chứa SĐT, email, URL, tên mạng xã hội và lời mời liên hệ ngoài (zalo, facebook, ib, inbox…), kể cả viết cách quãng, viết số bằng chữ, chèn ký tự. Đường dẫn và tên mạng xã hội (facebook.com, zalo.me, m.me, t.me, instagram.com, tiktok.com, zalo, facebook, insta) chỉ bị gắn cờ mức Xem xét: tin vẫn gửi được và Admin nhận thông báo. Giới hạn: bộ lọc bằng biểu thức chính quy và từ khoá đều có thể bị lách (viết cách chữ, đổi ký tự), nên không coi là chặn tuyệt đối. |
 | [CH-03](#BR_CH_03) | Từ khoá cấm mức Chặn bị chặn ở mọi thời điểm.                                                                                                                                      |
 | [CH-04](#BR_CH_04) | Chỉ kiểm tin bằng tầng 1 (quy tắc và từ khoá); không gọi AI kiểm tin (D-17).                                                                                                       |
 | [CH-05](#BR_CH_05) | Tin bị chặn: người gửi thấy lý do; tính một lần vi phạm. Đủ 3 lần vi phạm trong một giao dịch thì cảnh báo Admin.                                                                  |
@@ -2278,7 +2278,7 @@ Các chức năng Admin. Admin là tài khoản tạo sẵn, không đăng bài 
 | [KD-06](#BR_KD_06) | Hàng chờ duyệt xếp: người đăng ít sao trước → tài khoản mới hơn trước → bài chờ lâu hơn trước. Không có thông báo nhắc Admin khi bài chờ quá 24 giờ (đã bỏ).                                       |
 | [KD-11](#BR_KD_11) | Hai Admin cùng xử lý một bài thì chỉ một người thành công; phí không bị trừ hai lần.                                                                                                               |
 | [PH-03](#BR_PH_03) | Phí đăng của mỗi bài chỉ bị trừ một lần: Theo PH-02; Lần duyệt đầu tiên; hoàn: Không hoàn khi bài đã duyệt rồi bị gỡ, hết hạn, vi phạm hay giao dịch không thành                                   |
-| [BD-12](#BR_BD_12) | Thời gian hiển thị tính từ lần duyệt đầu: 30 ngày; hạng Vàng trở lên 45 ngày.                                                                                                                      |
+| [BD-12](#BR_BD_12) | Thời gian hiển thị tính từ lần duyệt đầu: 30 ngày; hạng Vàng trở lên 45 ngày. Giao dịch huỷ trước lúc hoàn tất mà bài được mở lại thì hạn hiển thị và hạn đẩy được cộng thêm số giờ bài đã nằm trong giao dịch, tối đa reserved_display_refund_max_days ngày. Vẫn quá hạn sau khi cộng thì giữ thêm reserved_release_grace_hours giờ để kịp gia hạn. |
 
 > **Ghi chú rà soát:** Sơ đồ F06 ghi "10 câu checklist khởi tạo"; dữ liệu hiện tại còn 9 câu đang bật (câu về an toàn thực phẩm đã gỡ theo [KD-07](#BR_KD_07)).
 
@@ -2871,7 +2871,7 @@ Ai cũng xem được bài; muốn đăng, xin hay đổi đồ thì phải có 
 </tr>
 <tr class="even">
 <td><span id="BR_TK_04" class="anchor"></span><strong>TK-04</strong></td>
-<td>Email và SĐT không trùng tài khoản đang hoạt động khác. Đăng ký lại một email đang chờ xác thực thì ghi đè thông tin cũ và gửi mã mới.</td>
+<td>Email và SĐT không trùng tài khoản đang hoạt động khác. Đăng ký lại một email đang chờ xác thực thì chỉ gửi lại mã mới, giữ nguyên mật khẩu và thông tin đã đăng ký. Người gõ nhầm mật khẩu dùng Quên mật khẩu sau khi kích hoạt.</td>
 <td>—</td>
 <td><a href="#đăng-ký-tài-khoản-và-xác-thực-email">Đăng ký tài khoản và xác thực email</a></td>
 </tr>
@@ -3048,7 +3048,7 @@ Sao đo mức đáng tin và chỉ giảm khi Admin kết luận vi phạm; đi�
 </tr>
 <tr class="odd">
 <td><span id="BR_UT_05" class="anchor"></span><strong>UT-05</strong></td>
-<td>Hồi 1 sao sau mỗi 10 giao dịch hoàn tất liên tiếp không bị trừ sao, tối đa 5 sao. Bị trừ sao thì chuỗi đếm về 0.</td>
+<td>Hồi 1 sao sau mỗi 10 giao dịch hoàn tất liên tiếp không bị trừ sao, tối đa 5 sao. Bị trừ sao thì chuỗi đếm về 0. Giao dịch cặp lặp (từ lần thứ 3 giữa cùng một cặp trong cửa sổ reputation_pair_window_days) không tính vào chuỗi sạch và không thêm đối tác. Hồi sao cần chuỗi đủ 10 giao dịch và ít nhất star_restore_min_distinct_partners đối tác khác nhau.</td>
 <td>reputation_clean_streak_for_star = 10</td>
 <td><a href="#xem-sao-uy-tín-điểm-và-hạng">Xem sao uy tín, điểm và hạng</a></td>
 </tr>
@@ -3349,7 +3349,7 @@ Mỗi bài phải qua Admin duyệt trước khi ai đó nhìn thấy; từ lúc
 </tr>
 <tr class="odd">
 <td><span id="BR_BD_09" class="anchor"></span><strong>BD-09</strong></td>
-<td>Mọi bản sửa quay lại Chờ duyệt, bài ẩn khỏi tìm kiếm tới khi duyệt xong; các yêu cầu đang chờ của bài giữ nguyên.</td>
+<td>Mọi bản sửa quay lại Chờ duyệt, bài ẩn khỏi tìm kiếm tới khi duyệt xong; các yêu cầu đang chờ của bài giữ nguyên. Bản sửa của bài đã từng duyệt: thời gian chờ duyệt được cộng bù vào hạn hiển thị và hạn đẩy đang chạy khi bản sửa được duyệt, bản sửa bị từ chối thì không cộng bù.</td>
 <td>—</td>
 <td><a href="#sửa-bài-và-gỡ-bài">Sửa bài và gỡ bài</a></td>
 </tr>
@@ -3367,7 +3367,7 @@ Mỗi bài phải qua Admin duyệt trước khi ai đó nhìn thấy; từ lúc
 </tr>
 <tr class="even">
 <td><span id="BR_BD_12" class="anchor"></span><strong>BD-12</strong></td>
-<td>Thời gian hiển thị tính từ lần duyệt đầu: 30 ngày; hạng Vàng trở lên 45 ngày.</td>
+<td>Thời gian hiển thị tính từ lần duyệt đầu: 30 ngày; hạng Vàng trở lên 45 ngày. Giao dịch huỷ trước lúc hoàn tất mà bài được mở lại thì hạn hiển thị và hạn đẩy được cộng thêm số giờ bài đã nằm trong giao dịch, tối đa reserved_display_refund_max_days ngày. Vẫn quá hạn sau khi cộng thì giữ thêm reserved_release_grace_hours giờ để kịp gia hạn.</td>
 <td>post_display_days = 30, post_display_days_gold = 45</td>
 <td><a href="#duyệt-bài-theo-checklist">Duyệt bài theo checklist</a></td>
 </tr>
@@ -3658,7 +3658,7 @@ Người nhận gửi yêu cầu xin (bài Cho) hoặc đề nghị đổi (bài
 </tr>
 <tr class="odd">
 <td><span id="BR_YC_03" class="anchor"></span><strong>YC-03</strong></td>
-<td>Mỗi người chỉ có một yêu cầu đang mở với cùng một bài; tối đa 5 yêu cầu Chờ chủ bài chọn cùng lúc (gửi song song tới nhiều bài khác nhau).</td>
+<td>Mỗi người chỉ có một yêu cầu đang mở với cùng một bài; tối đa 5 yêu cầu Chờ chủ bài chọn cùng lúc (gửi song song tới nhiều bài khác nhau). Người nhận có từ max_active_transactions (mặc định 5) giao dịch chưa xong (từ lúc được chọn tới lúc bàn giao) thì chưa gửi thêm yêu cầu và chủ bài chưa chọn người đó được.</td>
 <td>max_pending_requests = 5</td>
 <td><a href="#gửi-yêu-cầu-xin-hoặc-đề-nghị-đổi">Gửi yêu cầu xin hoặc đề nghị đổi</a></td>
 </tr>
@@ -3714,7 +3714,7 @@ Chat giúp hai bên thống nhất mà không lộ liên lạc trước khi ch�
 | **Mã**                                              | **Luật**                                                                                                                                                                           | **Con số**               | **Dùng ở**                                            |
 |-----------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------|-------------------------------------------------------|
 | <span id="BR_CH_01" class="anchor"></span>**CH-01** | Gửi tin được khi giao dịch từ Đã được chọn tới Đang tranh chấp; sau khi kết thúc (hoàn tất / huỷ) chỉ xem lại.                                                                     | —                        | [Nhắn tin trong giao dịch](#nhắn-tin-trong-giao-dịch) |
-| <span id="BR_CH_02" class="anchor"></span>**CH-02** | Trước khi Đã chốt lịch: chặn tin chứa SĐT, email, URL, tên mạng xã hội và lời mời liên hệ ngoài (zalo, facebook, ib, inbox…), kể cả viết cách quãng, viết số bằng chữ, chèn ký tự. | —                        | [Nhắn tin trong giao dịch](#nhắn-tin-trong-giao-dịch) |
+| <span id="BR_CH_02" class="anchor"></span>**CH-02** | Trước khi Đã chốt lịch: chặn tin chứa SĐT, email, URL, tên mạng xã hội và lời mời liên hệ ngoài (zalo, facebook, ib, inbox…), kể cả viết cách quãng, viết số bằng chữ, chèn ký tự. Đường dẫn và tên mạng xã hội (facebook.com, zalo.me, m.me, t.me, instagram.com, tiktok.com, zalo, facebook, insta) chỉ bị gắn cờ mức Xem xét: tin vẫn gửi được và Admin nhận thông báo. Giới hạn: bộ lọc bằng biểu thức chính quy và từ khoá đều có thể bị lách (viết cách chữ, đổi ký tự), nên không coi là chặn tuyệt đối. | —                        | [Nhắn tin trong giao dịch](#nhắn-tin-trong-giao-dịch) |
 | <span id="BR_CH_03" class="anchor"></span>**CH-03** | Từ khoá cấm mức Chặn bị chặn ở mọi thời điểm.                                                                                                                                      | —                        | [Nhắn tin trong giao dịch](#nhắn-tin-trong-giao-dịch) |
 | <span id="BR_CH_04" class="anchor"></span>**CH-04** | Chỉ kiểm tin bằng tầng 1 (quy tắc và từ khoá); không gọi AI kiểm tin (D-17).                                                                                                       | —                        | [Nhắn tin trong giao dịch](#nhắn-tin-trong-giao-dịch) |
 | <span id="BR_CH_05" class="anchor"></span>**CH-05** | Tin bị chặn: người gửi thấy lý do; tính một lần vi phạm. Đủ 3 lần vi phạm trong một giao dịch thì cảnh báo Admin.                                                                  | chat_violation_alert = 3 | [Nhắn tin trong giao dịch](#nhắn-tin-trong-giao-dịch) |
@@ -3994,6 +3994,18 @@ Giá trị mặc định lấy từ enum ConfigKey (backend/src/main/java/com/sh
 | reputation_swap_each             | 6                           | Điểm mỗi bên khi trao đổi. Số điểm mỗi bên nhận được khi một giao dịch Trao đổi hoàn tất.                                                                                                                                                                                  |
 | reputation_clean_streak_for_star | 10                          | Số giao dịch sạch để hồi sao. Số giao dịch hoàn tất liên tiếp không vi phạm để được hồi 1 sao, khi người dùng đang dưới 5 sao.                                                                                                                                             |
 | reputation_pair_no_points_from   | 3                           | Giao dịch lặp cặp hết điểm từ lần thứ. Từ giao dịch thứ mấy giữa cùng hai người, trong thời gian tính lặp cặp, thì cả hai không được cộng điểm.                                                                                                                            |
+| star_restore_min_distinct_partners | 5 | Số đối tác khác nhau để hồi sao. Giao dịch lặp cặp không tính vào chuỗi sạch. |
+| login_max_failed_attempts | 5 | Số lần sai mật khẩu liên tiếp tối đa trước khi khoá đăng nhập email đó. |
+| login_lock_minutes | 15 | Số phút khoá đăng nhập sau khi sai quá số lần cho phép. |
+| reserved_display_refund_max_days | 7 | Số ngày trả lại tối đa vào hạn hiển thị khi giao dịch huỷ và bài được mở lại. |
+| reserved_release_grace_hours | 24 | Số giờ giữ thêm khi bài được mở lại mà vẫn quá hạn hiển thị. |
+| max_active_transactions | 5 | Số giao dịch chưa xong tối đa của một người nhận. |
+| request_resend_cooldown_hours | 24 | Số giờ chờ gửi lại yêu cầu cho cùng một bài sau khi tự huỷ. |
+| request_quiet_cancel_minutes | 5 | Huỷ yêu cầu trong số phút này sau khi gửi thì không báo chủ bài. |
+| report_trusted_min_account_days | 7 | Tuổi tài khoản để báo cáo tính vào ngưỡng tự ẩn bài. |
+| report_trusted_min_completed | 1 | Số giao dịch hoàn tất để báo cáo tính vào ngưỡng tự ẩn bài. |
+| media_orphan_cleanup_hours | 24 | Số giờ giữ ảnh đã tải lên nhưng chưa gắn. |
+| media_upload_per_hour | 40 | Số ảnh tải lên tối đa mỗi người mỗi giờ. |
 | reputation_pair_window_days      | 90                          | Số ngày tính lặp cặp. Số ngày gần nhất dùng để đếm các giao dịch giữa cùng hai người.                                                                                                                                                                                      |
 | reputation_pair_alert_threshold  | 5                           | Ngưỡng cảnh báo lặp cặp. Số giao dịch giữa cùng hai người vượt mức này thì cảnh báo Admin.                                                                                                                                                                                 |
 | ip_alert_window_days             | 30                          | Số ngày tính cảnh báo cùng IP. Số ngày gần nhất dùng để đếm tài khoản đăng ký từ cùng một địa chỉ IP.                                                                                                                                                                      |
@@ -4398,3 +4410,14 @@ Những chỗ code nhánh develop khác với BR v12 (02/11/2026) và kết qu�
 | 8      | Hồ sơ công khai (TK-01)                  | Khách xem trang chủ, tìm, chi tiết bài, danh mục, khu vực. | Hồ sơ công khai cần đăng nhập; file mô tả UC-07 ghi Khách xem được.                                                    | Chốt 09/11 (D-23): giữ cần đăng nhập; đã sửa UC-07 và TK-01.                   |
 | 9      | Độ dài giải trình                        | Không nêu.                                                 | /reports/{id}/response ≤ 2000 ký tự; /disputes/{id}/response ≤ 1000 ký tự.                                             | Chốt 09/11 (D-24): 2000 ký tự cho cả hai; đã ghi vào BC-03, BC-08.             |
 | 10     | Cảnh báo nhiều tài khoản cùng IP (AD-04) | Không nêu.                                                 | Chưa có; màn Giám sát bất thường chỉ có cặp giao dịch lặp.                                                             | Chốt 09/11 (D-26): làm thêm; đã ghi vào AD-04, mục 3.8.9 và bảng cấu hình.     |
+
+
+## Cột dữ liệu thêm ở đợt rà soát 22/11/2026 (không thêm bảng, vẫn 17 bảng)
+
+| Bảng | Cột | Ý nghĩa |
+| --- | --- | --- |
+| users | login_failed_count, login_locked_until | Khoá đăng nhập tạm sau nhiều lần sai mật khẩu (A2) |
+| users | email_canonical | Email chuẩn hoá để kiểm trùng, trigger tự điền, có unique index nếu dữ liệu không trùng (A3) |
+| users | clean_streak_partners | Mảng id đối tác khác nhau của chuỗi giao dịch sạch (F4) |
+| items | edit_submitted_at | Mốc gửi bản sửa của bài đã duyệt, dùng để cộng bù thời gian chờ duyệt (B1) |
+| requests | ux_requests_active_offered_item (index) | Một món chỉ được đem đổi ở một giao dịch đang chạy (C3) |

@@ -98,4 +98,12 @@ public interface UserReputationRepository extends JpaRepository<UserReputation, 
             WHERE target_type = 'REQUEST' AND target_id = :requestId AND type = 'POINTS'
             """, nativeQuery = true)
     boolean isReputationAppliedForRequest(@Param("requestId") Long requestId);
+
+    /** Điểm của giao dịch đã được thu hồi cho người này chưa (F3), để gọi lại hai lần không trừ hai lần. */
+    @Query(value = """
+            SELECT COUNT(1) > 0
+            FROM activity_logs
+            WHERE target_type = 'REQUEST' AND target_id = :requestId AND actor_id = :userId AND type = 'POINTS_REVOKED'
+            """, nativeQuery = true)
+    boolean isPointsRevokedForRequest(@Param("requestId") Long requestId, @Param("userId") Long userId);
 }

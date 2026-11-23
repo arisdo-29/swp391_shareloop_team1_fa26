@@ -366,6 +366,12 @@ export function ProductDetail() {
               ) : null}
             </div>
             <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{item.title}</h1>
+            {own && item.hidden && item.hiddenReason ? (
+              <Alert tone="warning">{item.hiddenReason}</Alert>
+            ) : null}
+            {own && item.status === 'REJECTED' && item.rejectionReason ? (
+              <Alert tone="warning">Bài bị từ chối. Lý do: {item.rejectionReason}. Sửa bài để gửi duyệt lại.</Alert>
+            ) : null}
             <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-text-muted">
               <span>{item.district}</span>
               <span>{item.category}</span>

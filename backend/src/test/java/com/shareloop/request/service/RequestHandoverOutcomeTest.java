@@ -136,7 +136,7 @@ class RequestHandoverOutcomeTest {
         // then
         assertThat(response.status()).isEqualTo("CANCELLED");
         assertThat(request.getCancelReason()).isEqualTo(Request.CANCEL_BY_RECEIVER + "Không đến điểm hẹn");
-        verify(itemService).release(ITEM_ID);
+        verify(itemService).releaseAfterCancel(eq(ITEM_ID), any());
         verify(notificationService)
                 .notify(eq(DONOR_ID), eq("TRANSACTION_CANCELLED"), anyString(), anyString(), anyString());
         verify(eventPublisher, never()).publishEvent(any(HandoverIssueReportedEvent.class));
@@ -161,7 +161,7 @@ class RequestHandoverOutcomeTest {
         assertThat(captor.getValue())
                 .isEqualTo(
                         new HandoverIssueReportedEvent(REQUEST_ID, RECEIVER_ID, "Chưa thấy ai giao đồ", List.of(7L)));
-        verify(itemService, never()).release(ITEM_ID);
+        verify(itemService, never()).releaseAfterCancel(eq(ITEM_ID), any());
     }
 
     @Test
@@ -243,7 +243,7 @@ class RequestHandoverOutcomeTest {
         assertThat(response.status()).isEqualTo("CANCELLED");
         assertThat(request.getCancelReason())
                 .isEqualTo(Request.CANCEL_BY_RECEIVER + Request.REFUSAL_REASON + "Máy không bật được");
-        verify(itemService).release(ITEM_ID);
+        verify(itemService).releaseAfterCancel(eq(ITEM_ID), any());
         verify(itemService).hide(ITEM_ID);
         verify(itemService, never()).markTraded(org.mockito.ArgumentMatchers.anyLong());
         verify(eventPublisher)
@@ -282,8 +282,8 @@ class RequestHandoverOutcomeTest {
 
         // then
         assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
-        verify(itemService).release(ITEM_ID);
-        verify(itemService).releaseIfReserved(OFFERED_ITEM_ID);
+        verify(itemService).releaseAfterCancel(eq(ITEM_ID), any());
+        verify(itemService).releaseIfReservedAfterCancel(eq(OFFERED_ITEM_ID), any());
         verify(itemService).hide(OFFERED_ITEM_ID);
         verify(itemService, never()).hide(ITEM_ID);
         verify(eventPublisher)
@@ -303,9 +303,9 @@ class RequestHandoverOutcomeTest {
 
         // then
         assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
-        verify(itemService).release(ITEM_ID);
+        verify(itemService).releaseAfterCancel(eq(ITEM_ID), any());
         verify(itemService).hide(ITEM_ID);
-        verify(itemService).releaseIfReserved(OFFERED_ITEM_ID);
+        verify(itemService).releaseIfReservedAfterCancel(eq(OFFERED_ITEM_ID), any());
         verify(itemService, never()).hide(OFFERED_ITEM_ID);
         verify(eventPublisher)
                 .publishEvent(new NotAsDescribedReportedEvent(

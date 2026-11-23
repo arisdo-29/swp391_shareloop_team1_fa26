@@ -97,6 +97,7 @@ nếu chọn yêu cầu này (giao dịch chuyển sang Trao đổi).
   - `403 REQUEST_REPUTATION_BLOCKED`: Tài khoản có 0 sao uy tín, bị vô hiệu hoá quyền gửi yêu cầu giao dịch (YC-02).
   - `404 REQUEST_ITEM_NOT_FOUND`: Không tìm thấy bài đăng hoặc món đề nghị không tồn tại.
   - `409 REQUEST_ITEM_NOT_AVAILABLE`: Bài đăng hoặc món đề nghị không ở trạng thái sẵn sàng (không phải APPROVED, bị ẩn, hoặc không thuộc sở hữu người gửi).
+  - `409 REQUEST_ITEM_CATEGORY_DISABLED`: Danh mục hoặc khu vực của bài đã bị Admin tắt ("Danh mục của bài đang tạm ngưng").
   - `409 REQUEST_ALREADY_EXISTS`: Đã có yêu cầu đang hoạt động cho bài này (YC-03).
 
 ---
@@ -660,6 +661,7 @@ Các trường đã có từ trước và dùng cho màn Tiến trình giao dị
 | `REQUEST_MEDIA_REQUIRED` | 400 | Danh sách ảnh/video minh chứng không được rỗng (GN-10) |
 | `REQUEST_MEDIA_STAGE_INVALID` | 400 | Giai đoạn đính kèm minh chứng không hợp lệ |
 | `REQUEST_ITEM_NOT_AVAILABLE` | 409 | Bài đăng không ở trạng thái sẵn sàng (chưa duyệt, đã trao đổi...) |
+| `REQUEST_ITEM_CATEGORY_DISABLED` | 409 | Danh mục hoặc khu vực của bài đã bị tắt, bài không nhận yêu cầu mới |
 | `REQUEST_ALREADY_EXISTS` | 409 | Đã có một yêu cầu đang hoạt động cho bài này (YC-03) |
 | `REQUEST_SCHEDULE_LOCKED` | 409 | Lịch hẹn đã chốt và bị khoá (GN-03) |
 | `REQUEST_CONTACT_NOT_REVEALED` | 409 | Chưa chốt lịch hẹn để xem thông tin liên lạc (GN-04) |
@@ -685,3 +687,38 @@ Không phải endpoint HTTP. Module khác đọc dữ kiện về Request qua `c
 | `boolean hasActiveDelivery(long userId)` | user | Người dùng đang có giao dịch `LOGISTICS_CONFIRMED` hoặc `AWAITING_HANDOVER` (TK-11) |
 | `long countCompletedByUser(long userId)` | user (hồ sơ công khai) | Số Request `COMPLETED` người dùng tham gia, tính cả vai người nhận và chủ bài |
 | `Map<Long, Instant> findCompletedAtByItemIds(Collection<Long> itemIds)` | item (bài `TRADED`) | `completed_at` theo id bài; bài là bài chính (`item_id`) hoặc món đề nghị (`offered_item_id`) đều tính. Bài chưa có Request `COMPLETED` không có trong map |
+
+## Huỷ yêu cầu tới bài không còn chọn được (C1)
+
+Khi bài hết hạn, bị ẩn (Admin ẩn, đủ ngưỡng báo cáo, kết luận báo cáo, khoá tài khoản chủ bài) hoặc bản sửa bị từ chối, mọi yêu cầu `PENDING` tới bài tự huỷ ngay. `cancel_reason` ghi đúng nguyên nhân ("Bài đã hết thời gian hiển thị", "Bài đang tạm ẩn", "Bài đã bị quản trị viên ẩn", "Chủ bài đang bị khoá tài khoản", "Bài đang được chủ bài chỉnh sửa và chưa được duyệt") và người xin nhận một thông báo `REQUEST_CANCELLED`.
+
+- `RequestResponse.flags` (danh sách chuỗi, chỉ điền ở danh sách yêu cầu của một bài cho chủ bài, chỉ với yêu cầu `PENDING`): `OFFERED_ITEM_BUSY` khi món người xin mang đổi đang nằm trong giao dịch khác.
+- `409 REQUEST_OFFERED_ITEM_IN_OTHER_TRANSACTION` ở `POST /requests/{id}/select` khi món mang đổi đang nằm trong một giao dịch khác.
+
+## Bấm cùng lúc (C3)
+
+- Khi chọn người nhận, server khoá dòng bài được xin rồi tới món mang đổi (bài chính trước, món đổi sau) trước khi kiểm tra và ghi. Hai chủ bài chọn cùng lúc hai yêu cầu dùng chung một món đổi thì chỉ một bên thành công, bên còn lại nhận `409 REQUEST_OFFERED_ITEM_IN_OTHER_TRANSACTION`.
+- Database có unique index có điều kiện `ux_requests_active_offered_item` trên `requests(offered_item_id)` cho các giao dịch từ `RESERVED` tới `DISPUTED`.
+- Mọi vi phạm ràng buộc duy nhất lọt tới tầng API trả `409 CONFLICT` với câu "Thao tác vừa được thực hiện ở nơi khác. Vui lòng tải lại trang." và log lỗi gốc ở mức WARN.
+
+## Giới hạn giao dịch đang chạy của người nhận (C4)
+
+Khoá cấu hình `max_active_transactions` (mặc định 5) đếm giao dịch của người đó ở vai người nhận với trạng thái `RESERVED`, `AWAITING_LOGISTICS`, `LOGISTICS_CONFIRMED`, `AWAITING_HANDOVER`.
+
+- `POST /items/{id}/requests`: đủ ngưỡng thì `409 REQUEST_TOO_MANY_ACTIVE_TRANSACTIONS` ("Bạn đang có N giao dịch chưa xong. Hoàn tất bớt rồi gửi thêm yêu cầu").
+- `POST /requests/{id}/select`: người nhận đủ ngưỡng thì `409 REQUEST_RECEIVER_TOO_BUSY` ("Người này đang có quá nhiều giao dịch chưa xong").
+- `RequestResponse.flags` của yêu cầu `PENDING` có thêm `RECEIVER_TOO_BUSY` để chủ bài biết trước khi bấm chọn.
+
+## Chống gửi rồi huỷ liên tục (C5)
+
+- Người nhận tự huỷ yêu cầu đang chờ (`POST /requests/{id}/cancel`) thì phải chờ `request_resend_cooldown_hours` giờ (mặc định 24) mới gửi lại cho đúng bài đó. Gửi sớm hơn trả `409 REQUEST_RESEND_COOLDOWN` ("Bạn vừa huỷ yêu cầu cho bài này. Có thể gửi lại sau HH:mm dd/MM"), kèm `details.canResendAt`. Chỉ lần tự huỷ của người nhận mới tính, huỷ do hệ thống (bài hết hạn, bị ẩn, khoá tài khoản) thì không.
+- Yêu cầu tự huỷ trong vòng `request_quiet_cancel_minutes` phút (mặc định 5) sau khi gửi thì không gửi `REQUEST_CANCELLED` cho chủ bài, và thông báo `NEW_REQUEST` của yêu cầu đó được đánh dấu đã đọc (không xoá). Lần huỷ này vẫn tính thời gian chờ gửi lại.
+
+## Độ dài lý do huỷ (E2)
+
+Cột `requests.cancel_reason` dài 600 ký tự (đủ cho lý do 500 ký tự của huỷ giao dịch, huỷ của Admin và sự cố giao nhận cộng tiền tố người huỷ). Lý do "Từ chối giao nhận" vẫn cho nhập tới 1000 ký tự: toàn văn lưu ở báo cáo (cột `reports.description`), còn `cancel_reason` chỉ lưu bản rút gọn ở ranh giới từ kèm "…". Việc rút gọn nằm ở `Request.cancel`, nên mọi đường ghi lý do huỷ đều được bảo vệ.
+
+## Giảm số lượt gọi API (G2)
+
+- `GET /api/v1/me/received-requests?status=A,B` (cần đăng nhập): mọi yêu cầu gửi tới các bài của người gọi trong một lần, mới nhất trước, cùng dạng `RequestResponse` như `GET /items/{id}/requests` (tên và uy tín người xin tra một lần cho mỗi người). `status` tuỳ chọn, nhiều giá trị cách nhau bằng dấu phẩy hoặc lặp tham số, bỏ trống là mọi trạng thái. Trang Tin nhắn dùng endpoint này thay cho gọi từng bài.
+- `GET /admin/requests`: các bộ lọc `status`, `type`, `deliveryMethod`, `from`, `to` và việc sắp xếp, chia trang chạy trong SQL, chỉ dựng dòng cho trang hiện tại. Riêng `q` (khớp tên bài, tên người) và `stuck` (khoá tài khoản, giờ hẹn) vẫn lọc trong bộ nhớ vì dữ liệu nằm ở module khác. Contract và kết quả không đổi.

@@ -29,6 +29,7 @@ import com.shareloop.report.entity.TargetType;
 import com.shareloop.report.event.DisputeOpenedEvent;
 import com.shareloop.report.repository.ReportRepository;
 import com.shareloop.reputation.service.ReputationService;
+import com.shareloop.request.dto.CancelTransactionRequest;
 import com.shareloop.request.dto.RequestChatContext;
 import com.shareloop.request.service.RequestService;
 import com.shareloop.setting.ConfigKey;
@@ -44,6 +45,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -73,6 +76,14 @@ public class ReportService {
     private final JdbcClient jdbcClient;
     private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
+    private ReporterTrustService reporterTrustService;
+
+    // Setter thay vì thêm tham số constructor: constructor này nhiều chỗ dựng (unit test). Không có thì tính mọi báo
+    // cáo (F2).
+    @Autowired(required = false)
+    void setReporterTrustService(ReporterTrustService reporterTrustService) {
+        this.reporterTrustService = reporterTrustService;
+    }
 
     @Autowired
     public ReportService(
@@ -122,6 +133,10 @@ public class ReportService {
         if (targetType == null) {
             throw new BusinessException(ReportErrorCode.REPORT_TARGET_REQUIRED);
         }
+        // F7: lý do phải phù hợp với loại đối tượng báo cáo
+        if (request.reason() != null && !ReportReason.allowedFor(targetType).contains(request.reason())) {
+            throw new BusinessException(ReportErrorCode.REPORT_REASON_NOT_ALLOWED);
+        }
 
         Long resolvedItemId = request.resolvedItemId();
         Long resolvedTargetUserId = request.resolvedTargetUserId();
@@ -169,6 +184,11 @@ public class ReportService {
                 }
                 if (reporterId.equals(resolvedTargetUserId)) {
                     throw new BusinessException(ReportErrorCode.REPORT_CANNOT_REPORT_SELF);
+                }
+                // F7: sai thông tin liên lạc chỉ báo được khi hai người từng chốt lịch với nhau
+                if (request.reason() == ReportReason.WRONG_CONTACT_INFO
+                        && !haveConfirmedScheduleTogether(reporterId, resolvedTargetUserId)) {
+                    throw new BusinessException(ReportErrorCode.REPORT_CONTACT_REASON_NOT_ALLOWED);
                 }
                 int userWindowDays = configService != null ? configService.getInt(ConfigKey.REPORT_WINDOW_DAYS) : 30;
                 if (userWindowDays <= 0) {
@@ -220,13 +240,20 @@ public class ReportService {
      */
     private void hideItemWhenReportThresholdReached(long itemId) {
         int threshold = configService.getInt(ConfigKey.REPORT_HIDE_THRESHOLD);
-        long pendingReports =
-                reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, itemId, PENDING_STATUSES);
+        // F2: chỉ báo cáo của người đủ tin cậy mới tính vào ngưỡng tự ẩn
+        long pendingReports = countTrustedPendingReports(itemId);
         if (pendingReports < threshold || itemService == null) {
             return;
         }
 
         itemService.hide(itemId);
+        // F1: bài tự ẩn mà đang có giao dịch thì giữ giao dịch, báo hai bên là bài đang bị xem xét (chỉ lần chạm
+        // ngưỡng)
+        if (pendingReports == threshold && requestService != null) {
+            requestService
+                    .findOpenTransactionOfItem(itemId)
+                    .ifPresent(open -> requestService.notifyItemUnderReview(open.requestId()));
+        }
         if (pendingReports == threshold && notificationService != null) {
             String title = itemTitle(itemId);
             notificationService.notifyAdmins(
@@ -237,6 +264,28 @@ public class ReportService {
                     "/admin/complaints");
             notifyDonorItemHidden(itemId, title);
         }
+    }
+
+    // Số báo cáo đang chờ của bài mà người báo đủ tin cậy (F2). reporterTrustService null chỉ gặp ở unit test dựng
+    // service
+    // rút gọn: khi đó tính mọi báo cáo như trước.
+    private long countTrustedPendingReports(long itemId) {
+        if (reporterTrustService == null) {
+            return reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, itemId, PENDING_STATUSES);
+        }
+        List<Report> pending = reportRepository.findByTargetTypeAndItemIdAndStatusInAndIdNot(
+                TargetType.ITEM, itemId, PENDING_STATUSES, 0L);
+        Set<Long> trusted = reporterTrustService.findTrusted(
+                pending.stream().map(Report::getReporterId).collect(Collectors.toSet()));
+        return pending.stream()
+                .filter(report -> trusted.contains(report.getReporterId()))
+                .count();
+    }
+
+    /** Bài đã bị kết luận vi phạm kể từ lần duyệt gần nhất (B4): chủ bài phải sửa bài để gửi duyệt lại. */
+    @Transactional(readOnly = true)
+    public boolean hasConcludedViolation(long itemId) {
+        return hasUpheldReportSinceLastApproval(itemId);
     }
 
     /**
@@ -255,9 +304,7 @@ public class ReportService {
                 TargetType.ITEM, itemId, ReportReason.NOT_AS_DESCRIBED, PENDING_STATUSES)) {
             return true;
         }
-        long pendingReports =
-                reportRepository.countByTargetTypeAndItemIdAndStatusIn(TargetType.ITEM, itemId, PENDING_STATUSES);
-        return pendingReports >= configService.getInt(ConfigKey.REPORT_HIDE_THRESHOLD);
+        return countTrustedPendingReports(itemId) >= configService.getInt(ConfigKey.REPORT_HIDE_THRESHOLD);
     }
 
     /**
@@ -434,7 +481,11 @@ public class ReportService {
         Instant completedAt = reqSnapshot.completedAt() != null ? reqSnapshot.completedAt() : Instant.now(clock);
         Instant deadline = completedAt.plus(Duration.ofHours(windowHours));
         if (Instant.now(clock).isAfter(deadline)) {
-            throw new BusinessException(ReportErrorCode.DISPUTE_WINDOW_EXPIRED);
+            throw new BusinessException(
+                    ReportErrorCode.DISPUTE_WINDOW_EXPIRED,
+                    "Đã quá thời hạn " + windowHours + " giờ để khiếu nại giao dịch.",
+                    null,
+                    null);
         }
 
         // 5. Mỗi người chỉ khiếu nại giao dịch này một lần
@@ -746,7 +797,11 @@ public class ReportService {
 
         // Quá hạn giải trình 48 giờ
         if (dispute.getResponseDueAt() != null && Instant.now(clock).isAfter(dispute.getResponseDueAt())) {
-            throw new BusinessException(ReportErrorCode.DISPUTE_RESPONSE_WINDOW_EXPIRED);
+            throw new BusinessException(
+                    ReportErrorCode.DISPUTE_RESPONSE_WINDOW_EXPIRED,
+                    "Đã quá thời hạn " + windowHours(ConfigKey.RESPONSE_WINDOW_HOURS) + " giờ để gửi giải trình.",
+                    null,
+                    null);
         }
 
         // Đính kèm bằng chứng nếu có
@@ -908,6 +963,24 @@ public class ReportService {
             if (report.getTargetType() == TargetType.ITEM && report.getItemId() != null) {
                 reopenItemIfNoPendingReports(report.getItemId(), reportId, title);
             }
+            // F7: Admin tích "Báo cáo sai có chủ ý" (không áp cho Từ chối giao nhận vì đã tự trừ sao ở dưới)
+            if (!report.isRefusalReport()
+                    && Boolean.TRUE.equals(request.deliberateFalseReport())
+                    && reputationService != null) {
+                reputationService.deductStar(
+                        report.getReporterId(),
+                        1,
+                        note != null ? note : "Báo cáo sai có chủ ý" + about + ", bị trừ 1 sao uy tín");
+                if (activityLogService != null) {
+                    activityLogService.log(
+                            ActivityType.STARS.name(),
+                            adminId,
+                            "REPORT",
+                            reportId,
+                            Map.of("reason", "DELIBERATE_FALSE_REPORT", "reporterId", report.getReporterId()),
+                            "Báo cáo sai có chủ ý, trừ 1 sao người báo");
+                }
+            }
             // GN-07: từ chối nhận không có cơ sở thì người báo cáo chịu cùng mức phạt như một vi phạm
             if (report.isRefusalReport() && reputationService != null) {
                 reputationService.deductStar(
@@ -924,8 +997,18 @@ public class ReportService {
                         violatorId, 1, note != null ? note : "Bị kết luận vi phạm theo báo cáo" + about);
             }
 
-            // BC-06: Nếu lý do thuộc nhóm nghiêm trọng, rà soát ẩn toàn bộ bài đăng khác của người vi phạm
+            // F3: khiếu nại giao dịch đã hoàn tất được chấp thuận thì thu hồi điểm người vi phạm đã nhận từ giao dịch
+            // đó
+            revokePointsIfCompletedRequest(report, violatorId);
+
             boolean serious = isSeriousReason(report.getReason());
+            // F1: bài có giao dịch đang mở thì xử lý giao dịch trước khi ẩn bài, để việc nhả bài chạy khi bài còn
+            // nguyên trạng
+            if (report.getTargetType() == TargetType.ITEM && report.getItemId() != null) {
+                handleOpenTransactionOfViolatingItem(report.getItemId(), adminId, serious);
+            }
+
+            // BC-06: Nếu lý do thuộc nhóm nghiêm trọng, rà soát ẩn toàn bộ bài đăng khác của người vi phạm
             if (serious && violatorId != null && itemService != null) {
                 itemService.hideAllOfUser(violatorId);
             }
@@ -980,6 +1063,8 @@ public class ReportService {
                     report.getRequestId(), decision == ReportDecision.UPHOLD, report.getTargetUserId());
         }
 
+        notifyConcluded(report, decision, note, about);
+
         Report saved = reportRepository.save(report);
 
         return new ReportConclusionResponse(
@@ -994,6 +1079,92 @@ public class ReportService {
                 saved.getResolution(),
                 saved.getStarsDeducted(),
                 saved.getResolvedAt());
+    }
+
+    /**
+     * Báo kết quả cho người báo cáo (kèm ghi chú của Admin) và, khi bác bỏ, báo người bị báo cáo là không có vi phạm (F6). Không lộ
+     * thông tin cá nhân của người bị báo. Khiếu nại giao dịch giữ cách báo riêng của giao dịch nên không gửi trùng ở đây.
+     */
+    private void notifyConcluded(Report report, ReportDecision decision, String note, String about) {
+        if (notificationService == null || report.getTargetType() == TargetType.REQUEST) {
+            return;
+        }
+        String link = "/activities?tab=complaints";
+        String noteText = note == null || note.isBlank() ? "" : " Ghi chú của Admin: " + note;
+        String result = decision == ReportDecision.UPHOLD
+                ? "đã được chấp thuận. Cảm ơn bạn đã giúp cộng đồng an toàn hơn."
+                : "đã được xem xét và chưa thấy vi phạm.";
+        notificationService.notify(
+                report.getReporterId(),
+                "REPORT_CONCLUDED",
+                "Báo cáo của bạn đã có kết quả",
+                "Báo cáo của bạn" + about + " " + result + noteText,
+                link);
+        if (decision == ReportDecision.DISMISS) {
+            Long reportedUserId = resolveViolator(report);
+            if (reportedUserId != null && !reportedUserId.equals(report.getReporterId())) {
+                notificationService.notify(
+                        reportedUserId,
+                        "REPORT_CONCLUDED",
+                        "Báo cáo đã được xem xét",
+                        "Báo cáo về bài hoặc tài khoản của bạn đã được xem xét và không có vi phạm.",
+                        link);
+            }
+        }
+    }
+
+    // Hai người từng có giao dịch đã chốt lịch (thông tin liên hệ đã được mở) ở bất kỳ vai nào (F7).
+    private boolean haveConfirmedScheduleTogether(long userA, long userB) {
+        if (jdbcClient == null) {
+            return false;
+        }
+        return Boolean.TRUE.equals(jdbcClient
+                .sql(
+                        "SELECT EXISTS (SELECT 1 FROM requests r JOIN items i ON i.id = r.item_id"
+                                + " WHERE r.contact_revealed_at IS NOT NULL AND r.is_deleted = false"
+                                + " AND ((r.receiver_id = :a AND i.donor_id = :b) OR (r.receiver_id = :b AND i.donor_id = :a)))")
+                .param("a", userA)
+                .param("b", userB)
+                .query(Boolean.class)
+                .single());
+    }
+
+    // Chỉ giao dịch COMPLETED mới đã cộng điểm. Giao dịch đang DISPUTED thì bị huỷ khi kết luận nên chưa có điểm nào.
+    private void revokePointsIfCompletedRequest(Report report, Long violatorId) {
+        if (report.getTargetType() != TargetType.REQUEST
+                || report.getRequestId() == null
+                || violatorId == null
+                || reputationService == null) {
+            return;
+        }
+        RequestSnapshot request = findRequest(report.getRequestId());
+        if (request == null || !"COMPLETED".equals(request.status())) {
+            return;
+        }
+        reputationService.revokePointsForRequest(
+                violatorId,
+                report.getRequestId(),
+                "Khiếu nại giao dịch được chấp thuận, thu hồi điểm đã cộng từ giao dịch");
+    }
+
+    /**
+     * Bài bị kết luận vi phạm mà đang có giao dịch (F1). Lý do nghiêm trọng thì Admin huỷ giao dịch (không cộng điểm, báo
+     * hai bên, bài đổi của bên kia được nhả như huỷ thường). Lý do khác thì giữ giao dịch và báo hai bên bài đang bị xem xét.
+     */
+    private void handleOpenTransactionOfViolatingItem(long itemId, long adminId, boolean serious) {
+        if (requestService == null) {
+            return;
+        }
+        requestService.findOpenTransactionOfItem(itemId).ifPresent(open -> {
+            if (serious) {
+                requestService.cancelByAdmin(
+                        open.requestId(),
+                        adminId,
+                        new CancelTransactionRequest("Món đồ vi phạm quy định nên giao dịch bị huỷ"));
+            } else {
+                requestService.notifyItemUnderReview(open.requestId());
+            }
+        });
     }
 
     /**

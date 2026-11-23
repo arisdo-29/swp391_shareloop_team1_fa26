@@ -161,6 +161,7 @@ export function Register() {
             autoComplete="new-password"
             error={errors.password}
           />
+          <p className="text-xs leading-5 text-text-secondary">Nếu email này đã đăng ký trước đó, mật khẩu cũ vẫn được giữ. Quên mật khẩu thì dùng Quên mật khẩu sau khi kích hoạt.</p>
           <Button size="lg" className="auth-entry-submit w-full" disabled={processing}>
             {processing ? 'Đang gửi mã...' : 'Đăng ký'}
           </Button>

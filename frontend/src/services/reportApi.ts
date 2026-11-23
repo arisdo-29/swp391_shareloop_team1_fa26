@@ -39,6 +39,8 @@ export interface ReportResponse {
   // Chỉ có trong API của Admin (docs/api/report.md): họ tên người gửi và tên đối tượng bị báo cáo.
   reporterName?: string | null;
   targetName?: string | null;
+  // Người gửi chưa đủ tin cậy (tài khoản mới): báo cáo vào hàng chờ nhưng không tính vào ngưỡng tự ẩn bài.
+  newReporterAccount?: boolean | null;
 }
 
 export type ReportStatus = ReportResponse['status'];
@@ -81,6 +83,10 @@ export interface AdminReportDetail {
   resolvedByName?: string | null;
   /** Backend tính: còn chờ giải trình và chưa tới hạn thì Admin chưa được kết luận (D-15, BC-10). */
   responseWindowOpen?: boolean;
+  /** Tên bên còn lại của giao dịch đang mở của bài bị báo cáo, null khi bài không có giao dịch đang mở. */
+  openTransactionPartnerName?: string | null;
+  /** Lý do thuộc nhóm nghiêm trọng: chấp thuận sẽ huỷ giao dịch đang mở của bài. */
+  seriousReason?: boolean;
 }
 export interface ReportEvidence {
   id: number;
@@ -189,7 +195,7 @@ export const reportApi = {
     });
     return data;
   },
-  async conclude(reportId: number, input: { decision: ReportDecision; note?: string }) {
+  async conclude(reportId: number, input: { decision: ReportDecision; note?: string; deliberateFalseReport?: boolean }) {
     const { data } = await http.post<ReportConclusionResponse>(`/api/v1/admin/reports/${reportId}/conclude`, input);
     return data;
   },

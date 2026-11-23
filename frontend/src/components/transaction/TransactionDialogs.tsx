@@ -1,3 +1,4 @@
+import { usePublicConfig } from '../../utils/usePublicConfig';
 import { useRef, useState } from 'react';
 import { Alert, Button, Select, TextArea } from '../ui';
 import { ReportEvidenceField } from '../ReportEvidenceField';
@@ -146,6 +147,7 @@ export function HandoverFailedDialog({
   const inFlight = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const config = usePublicConfig();
   const partnerConfirmed = Boolean(viewerIsDonor ? request.receiverHandoverAt : request.donorHandoverAt);
   const reasons = handoverFailedReasons(request.deliveryMethod === 'SHIPPING', viewerIsDonor);
   const notePrefix = reason && reason !== OTHER_REASON ? reason : '';
@@ -180,7 +182,7 @@ export function HandoverFailedDialog({
       </h2>
       <p className="mt-1 text-sm text-text-muted">{itemTitle}</p>
       <p className="mt-3 text-sm leading-6 text-text-secondary">
-        {handoverFailedConsequence(partnerConfirmed, partnerName)}
+        {handoverFailedConsequence(partnerConfirmed, partnerName, config.response_window_hours)}
       </p>
       <Select className="mt-4" label="Lý do giao nhận không thành công" value={reason}
         disabled={submitting} onChange={(event) => setReason(event.target.value)}>

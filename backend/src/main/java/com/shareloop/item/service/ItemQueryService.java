@@ -56,6 +56,11 @@ public class ItemQueryService {
         return item.isActive() && item.getStatus() == ItemStatus.APPROVED;
     }
 
+    /** Danh mục hoặc khu vực của bài đang bị tắt (B3): bài không nhận yêu cầu mới. */
+    public boolean hasDisabledCatalog(long itemId) {
+        return !repository.isInEnabledCatalog(itemId);
+    }
+
     public long countApprovedByDonor(long donorId) {
         return repository.countByDonorIdAndStatusAndIsActiveTrue(donorId, ItemStatus.APPROVED);
     }

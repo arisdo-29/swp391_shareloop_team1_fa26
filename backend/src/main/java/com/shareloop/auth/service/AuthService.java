@@ -17,12 +17,15 @@ import com.shareloop.common.exception.BusinessException;
 import com.shareloop.setting.ConfigKey;
 import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.UserErrorCode;
+import com.shareloop.user.entity.EmailCanonical;
 import com.shareloop.user.entity.OtpPurpose;
 import com.shareloop.user.entity.User;
 import com.shareloop.user.entity.UserStatus;
 import com.shareloop.user.mapper.UserMapper;
 import com.shareloop.user.repository.UserRepository;
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -81,10 +84,14 @@ public class AuthService {
      * Đăng nhập bằng email và mật khẩu (TK-03, TK-04, UC-02).
      *
      * <p>Quy tắc: sai email và sai mật khẩu cùng trả một lỗi để không dò được email; chỉ khi mật khẩu đúng mới
-     * kiểm trạng thái tài khoản.
+     * kiểm trạng thái tài khoản. Sai mật khẩu đủ login_max_failed_attempts lần liên tiếp thì khoá đăng nhập email đó
+     * login_lock_minutes phút; đang khoá thì không kiểm mật khẩu. Đăng nhập đúng thì đặt lại bộ đếm.
      *
-     * @throws BusinessException AUTH_INVALID_CREDENTIALS, AUTH_EMAIL_NOT_VERIFIED, AUTH_ACCOUNT_LOCKED, AUTH_ACCOUNT_BANNED
+     * @throws BusinessException AUTH_INVALID_CREDENTIALS, AUTH_LOGIN_TEMPORARILY_LOCKED, AUTH_EMAIL_NOT_VERIFIED,
+     *     AUTH_ACCOUNT_LOCKED, AUTH_ACCOUNT_BANNED
      */
+    // noRollbackFor: sai mật khẩu ném BusinessException nhưng bộ đếm sai vẫn phải được lưu, giống verifyOtp.
+    @Transactional(noRollbackFor = BusinessException.class)
     public AuthResponse login(LoginRequest request) {
         User user = findUserWithMatchingPassword(request);
         checkAccountCanLogin(user);
@@ -92,8 +99,8 @@ public class AuthService {
     }
 
     /**
-     * Đăng ký tài khoản và gửi OTP về email (TK-02, TK-06). Email còn PENDING_VERIFICATION thì cập nhật thông tin
-     * rồi cấp OTP mới (vẫn theo cooldown).
+     * Đăng ký tài khoản và gửi OTP về email (TK-02, TK-04, TK-06). Email còn PENDING_VERIFICATION thì chỉ cấp OTP
+     * mới (vẫn theo cooldown), không ghi đè mật khẩu, họ tên hay số điện thoại đã đăng ký trước đó.
      *
      * <p>Email dùng một lần bị chặn (TK-02). IP được lưu khi tạo tài khoản để cảnh báo cho Admin.
      *
@@ -104,26 +111,29 @@ public class AuthService {
     public OtpSentResponse register(RegisterRequest request, String registrationIp) {
         String email = normalizeEmail(request.email());
         checkEmailNotDisposable(email);
-        String phone = normalizePhone(request.phone());
-        String fullName = request.fullName().trim();
-        String passwordHash = passwordEncoder.encode(request.password());
+        Optional<User> existingUser = findUserByEmail(email);
+        if (existingUser.isPresent()) {
+            return resendOtpForPendingRegistration(existingUser.get(), email);
+        }
 
-        Optional<User> existingUser = userRepository.findByEmail(email);
-        if (existingUser.isPresent() && existingUser.get().getStatus() != UserStatus.PENDING_VERIFICATION) {
+        String phone = normalizePhone(request.phone());
+        checkPhoneNotUsedByActiveAccount(phone);
+        String passwordHash = passwordEncoder.encode(request.password());
+        User user =
+                new User(email, passwordHash, request.fullName().trim(), phone, false, UserStatus.PENDING_VERIFICATION);
+        user.recordRegistrationIp(registrationIp);
+        userRepository.save(user);
+        otpService.issue(user, OtpPurpose.REGISTER);
+        return buildOtpSentResponse(email);
+    }
+
+    // Email đã có: tài khoản đã kích hoạt thì báo trùng. Tài khoản còn chờ xác thực chỉ gửi mã mới, không đổi mật khẩu
+    // để người lạ đăng ký lại bằng email của người khác không chiếm được tài khoản (TK-04).
+    private OtpSentResponse resendOtpForPendingRegistration(User existingUser, String email) {
+        if (existingUser.getStatus() != UserStatus.PENDING_VERIFICATION) {
             throw new BusinessException(AuthErrorCode.AUTH_EMAIL_ALREADY_REGISTERED);
         }
-        checkPhoneNotUsedByActiveAccount(phone);
-
-        User user;
-        if (existingUser.isPresent()) {
-            user = existingUser.get();
-            user.updatePendingRegistration(passwordHash, fullName, phone);
-        } else {
-            user = new User(email, passwordHash, fullName, phone, false, UserStatus.PENDING_VERIFICATION);
-            user.recordRegistrationIp(registrationIp);
-            userRepository.save(user);
-        }
-        otpService.issue(user, OtpPurpose.REGISTER);
+        otpService.issue(existingUser, OtpPurpose.REGISTER);
         return buildOtpSentResponse(email);
     }
 
@@ -217,13 +227,13 @@ public class AuthService {
             throw new BusinessException(AuthErrorCode.AUTH_NEW_PASSWORD_SAME_AS_CURRENT, null, "newPassword", null);
         }
         user.changePasswordHash(passwordEncoder.encode(request.newPassword()));
+        // Đặt lại mật khẩu xong thì mở khoá đăng nhập tạm để người dùng vào được ngay.
+        user.resetLoginFailures();
     }
 
     // Chỉ tài khoản đăng nhập được mới cho đặt lại mật khẩu; PENDING dùng /resend-otp, BANNED hoặc bị khoá thì không.
     private Optional<User> findUserAllowedToResetPassword(String email) {
-        return userRepository
-                .findByEmail(email)
-                .filter(user -> user.getStatus() == UserStatus.ACTIVE && user.isActive());
+        return findUserByEmail(email).filter(user -> user.getStatus() == UserStatus.ACTIVE && user.isActive());
     }
 
     // Còn trong cooldown: không gửi mã mới nhưng vẫn trả 200 như email không tồn tại, vì 429 sẽ lộ email có tài khoản.
@@ -240,7 +250,7 @@ public class AuthService {
     }
 
     private Optional<User> findPendingUser(String email) {
-        return userRepository.findByEmail(email).filter(user -> user.getStatus() == UserStatus.PENDING_VERIFICATION);
+        return findUserByEmail(email).filter(user -> user.getStatus() == UserStatus.PENDING_VERIFICATION);
     }
 
     // field = "email" để FE hiện lỗi ngay dưới ô email.
@@ -254,6 +264,11 @@ public class AuthService {
         if (userRepository.existsByPhoneAndStatus(phone, UserStatus.ACTIVE)) {
             throw new BusinessException(AuthErrorCode.AUTH_PHONE_ALREADY_USED);
         }
+    }
+
+    // Mọi luồng tìm tài khoản theo email đều đi qua đây để dùng email chuẩn hoá (A3).
+    private Optional<User> findUserByEmail(String email) {
+        return userRepository.findFirstByEmailCanonicalOrderByIdAsc(EmailCanonical.of(email));
     }
 
     private String normalizeEmail(String email) {
@@ -276,13 +291,36 @@ public class AuthService {
 
     private User findUserWithMatchingPassword(LoginRequest request) {
         String normalizedEmail = normalizeEmail(request.email());
-        User user = userRepository
-                .findByEmail(normalizedEmail)
+        User user = findUserByEmail(normalizedEmail)
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.AUTH_INVALID_CREDENTIALS));
+        Instant now = clock.instant();
+        throwIfLoginLocked(user, now);
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            user.recordLoginFailure(
+                    configService.getInt(ConfigKey.LOGIN_MAX_FAILED_ATTEMPTS),
+                    configService.getInt(ConfigKey.LOGIN_LOCK_MINUTES),
+                    now);
             throw new BusinessException(AuthErrorCode.AUTH_INVALID_CREDENTIALS);
         }
+        user.resetLoginFailures();
         return user;
+    }
+
+    // Đang khoá thì báo số phút còn lại (làm tròn lên). Hết hạn khoá thì xoá bộ đếm cũ để người dùng có đủ lượt thử
+    // mới.
+    private void throwIfLoginLocked(User user, Instant now) {
+        if (user.isLoginLocked(now)) {
+            long secondsLeft = Duration.between(now, user.getLoginLockedUntil()).toSeconds();
+            long minutesLeft = (secondsLeft + SECONDS_PER_MINUTE - 1) / SECONDS_PER_MINUTE;
+            throw new BusinessException(
+                    AuthErrorCode.AUTH_LOGIN_TEMPORARILY_LOCKED,
+                    "Bạn đã nhập sai nhiều lần. Vui lòng thử lại sau " + minutesLeft + " phút hoặc đặt lại mật khẩu.",
+                    null,
+                    Map.of("retryAfterMinutes", minutesLeft));
+        }
+        if (user.getLoginLockedUntil() != null) {
+            user.resetLoginFailures();
+        }
     }
 
     private void checkAccountCanLogin(User user) {

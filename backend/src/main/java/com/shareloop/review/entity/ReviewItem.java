@@ -56,6 +56,10 @@ public class ReviewItem extends SliceAudit {
         return id;
     }
 
+    public String getRejectReason() {
+        return rejectReason;
+    }
+
     public Instant getApprovedAt() {
         return approvedAt;
     }

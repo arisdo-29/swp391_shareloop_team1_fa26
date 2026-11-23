@@ -23,12 +23,18 @@ import { offerConversion, requestOfferLabel, selectionQuestion } from '../../uti
 import { DialogFrame } from '../../components/Dialog';
 import { ChangeOfferedItem } from '../../components/transaction/ChangeOfferedItem';
 import { toast } from '../../components/toast';
-import { boostStatusLines, formatDateTime } from '../../utils/boostMessages';
+import { boostStatusLines, formatDateTime, formatRemaining } from '../../utils/boostMessages';
 import { userProfilePath } from '../../utils/chatMessages';
 import { ActivitiesComplaints } from './ActivitiesComplaints';
 import { BoostDialogBody, type BoostFailure } from './BoostDialogBody';
 import { DescribeItemSuggestion } from '../../components/ai/DescribeItemSuggestion';
-import { CONDITIONS, ELECTRONIC_DEFECT_HINT, ITEM_IMAGES_MAX, ITEM_IMAGES_MIN } from '../../constants/domain';
+import {
+  CONDITIONS,
+  ELECTRONIC_DEFECT_HINT,
+  ITEM_IMAGES_MAX,
+  ITEM_IMAGES_MIN,
+  REQUEST_FLAG_LABELS,
+} from '../../constants/domain';
 import { conditionLabel } from '../../utils/formatting';
 import { fileToDataUrl } from '../../utils/files';
 import {
@@ -106,6 +112,8 @@ const isOperatingStatus = (value: string): value is OperatingStatus =>
 type EditFormErrors = Partial<
   Record<
     | 'title'
+    | 'category'
+    | 'area'
     | 'description'
     | 'desiredItem'
     | 'brand'
@@ -160,6 +168,8 @@ export function Activities() {
   const [editQuoteError, setEditQuoteError] = useState('');
   const [editQuoteNeedsTopUp, setEditQuoteNeedsTopUp] = useState(false);
   const [apiEditingItem, setApiEditingItem] = useState<ItemResponse | null>(null);
+  // Bản sửa đang chờ chủ bài xác nhận (bài đã từng duyệt sẽ tạm ẩn khi chờ duyệt lại).
+  const [confirmEditInput, setConfirmEditInput] = useState<UpdateItemRequest | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [myItems, setMyItems] = useState<Item[]>([]);
   const [apiRequestsByItem, setApiRequestsByItem] = useState<Record<string, ItemRequest[]>>({});
@@ -269,6 +279,15 @@ export function Activities() {
     } finally {
       setEditQuoteLoading(false);
     }
+  };
+
+  // Bài đã từng duyệt: hỏi lại trước khi gửi bản sửa vì bài sẽ ẩn trong lúc chờ duyệt.
+  const requestSaveApiItem = async (input: UpdateItemRequest) => {
+    if (apiEditingItem?.expireAt) {
+      setConfirmEditInput(input);
+      return;
+    }
+    await saveApiItem(input);
   };
 
   const saveApiItem = async (input: UpdateItemRequest) => {
@@ -837,7 +856,7 @@ export function Activities() {
                       {item.hidden ? (
                         <p className="text-sm leading-6 text-warning">
                           {item.hiddenReason?.trim() ||
-                            'Bài đang tạm ẩn khỏi Tìm đồ. Admin sẽ xem xét và báo kết quả.'}
+                            'Bài đang tạm ẩn khỏi Tìm đồ.'}
                         </p>
                       ) : null}
                       <p className="text-sm leading-6">
@@ -1010,7 +1029,7 @@ export function Activities() {
                 areas={editAreas}
                 disabled={editSaving || editQuoteLoading}
                 onCancel={() => setEditingId('')}
-                onSave={saveApiItem}
+                onSave={requestSaveApiItem}
               />
             ) : editQuoteLoading ? null : (
               <div className="mt-6 flex justify-end">
@@ -1021,6 +1040,44 @@ export function Activities() {
             )}
           </div>
         </div>
+      ) : null}
+
+      {confirmEditInput && apiEditingItem ? (
+        <DialogFrame
+          labelledBy="confirm-edit-title"
+          onClose={() => setConfirmEditInput(null)}
+        >
+          <h2 id="confirm-edit-title" className="text-xl font-bold">
+            Gửi bản sửa để duyệt lại
+          </h2>
+          <p className="mt-2 text-sm">
+            Bài sẽ tạm ẩn khi chờ duyệt. Thời gian chờ duyệt sẽ được cộng bù vào hạn hiển thị khi bản sửa
+            được duyệt. Nếu bản sửa bị từ chối, bài bị gỡ cho tới khi bạn sửa lại.
+          </p>
+          <ul className="mt-3 list-disc pl-5 text-sm text-text-secondary">
+            {apiEditingItem.expireAt ? (
+              <li>Hạn hiển thị còn {formatRemaining(apiEditingItem.expireAt, Date.now())}.</li>
+            ) : null}
+            {apiEditingItem.boostedUntil &&
+            new Date(apiEditingItem.boostedUntil).getTime() > Date.now() ? (
+              <li>Lượt đẩy đang chạy còn {formatRemaining(apiEditingItem.boostedUntil, Date.now())}.</li>
+            ) : null}
+          </ul>
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setConfirmEditInput(null)}>
+              Xem lại
+            </Button>
+            <Button
+              onClick={() => {
+                const input = confirmEditInput;
+                setConfirmEditInput(null);
+                void saveApiItem(input);
+              }}
+            >
+              Gửi duyệt lại
+            </Button>
+          </div>
+        </DialogFrame>
       ) : null}
 
       {listingFeeAction?.type === 'boost' ? (
@@ -1304,6 +1361,12 @@ function EditItemForm({
 
   const validate = () => {
     const nextErrors: EditFormErrors = {};
+    if (!categories.some((category) => category.id === categoryId)) {
+      nextErrors.category = 'Danh mục này đã ngưng, vui lòng chọn mục khác.';
+    }
+    if (!areas.some((area) => area.id === areaId)) {
+      nextErrors.area = 'Khu vực này đã ngưng, vui lòng chọn mục khác.';
+    }
     if (!title.trim()) nextErrors.title = 'Vui lòng nhập tiêu đề.';
     else if (title.trim().length > 150) nextErrors.title = 'Tiêu đề tối đa 150 ký tự.';
     if (!description.trim()) nextErrors.description = 'Vui lòng nhập mô tả.';
@@ -1451,12 +1514,13 @@ function EditItemForm({
       />
       <Select
         label="Danh mục"
+        error={errors.category}
         value={categoryId}
         disabled={formDisabled}
         onChange={(event) => setCategoryId(Number(event.target.value))}
       >
         {!categories.some((category) => category.id === categoryId) ? (
-          <option value={categoryId}>Danh mục hiện tại</option>
+          <option value={categoryId}>Đã ngưng, vui lòng chọn mục khác</option>
         ) : null}
         {[...categories]
           .sort(
@@ -1554,12 +1618,13 @@ function EditItemForm({
       />
       <Select
         label="Khu vực"
+        error={errors.area}
         value={areaId}
         disabled={formDisabled}
         onChange={(event) => setAreaId(Number(event.target.value))}
       >
         {!areas.some((area) => area.id === areaId) ? (
-          <option value={areaId}>Khu vực hiện tại</option>
+          <option value={areaId}>Đã ngưng, vui lòng chọn mục khác</option>
         ) : null}
         {areas.map((area) => (
           <option key={area.id} value={area.id}>
@@ -2006,6 +2071,15 @@ function RequestPanel({
                     </Link>
                   </p>
                 ) : null}
+                {request.status === 'PENDING'
+                  ? (request.flags ?? []).map((flag) =>
+                      REQUEST_FLAG_LABELS[flag] ? (
+                        <p key={flag} className="text-xs font-semibold text-warning">
+                          {REQUEST_FLAG_LABELS[flag]}
+                        </p>
+                      ) : null,
+                    )
+                  : null}
                 {request.status !== 'PENDING' ? (
                   <span
                     className={`inline-flex rounded-sm px-2 py-0.5 text-2xs font-bold ${requestChipClass(request.status)}`}

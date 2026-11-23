@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Alert, Button, ItemImage, PageHeader, SkeletonRows } from '../../components/ui';
+import { PrivateImage } from '../../components/PrivateImage';
 import {
   adminRequestApi,
   type AdminChatMessage,
@@ -204,8 +205,8 @@ export function AdminTransactionDetail() {
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {detail.photos.map((photo) => (
                   <figure key={photo.mediaId} className="text-xs text-text-muted">
-                    <ItemImage
-                      src={photo.url}
+                    <PrivateImage
+                      path={photo.url}
                       alt="Ảnh giao nhận"
                       className="h-28 w-full rounded-md object-cover"
                     />
@@ -302,7 +303,7 @@ export function AdminTransactionDetail() {
                       {message.senderName ? ` (${message.senderName})` : ''}, {formatDateTime(message.createdAt)}
                     </p>
                     {message.mediaUrl ? (
-                      <ItemImage src={message.mediaUrl} alt="Ảnh trong tin nhắn" className="mt-1 h-32 rounded-md object-cover" />
+                      <PrivateImage path={message.mediaUrl} alt="Ảnh trong tin nhắn" className="mt-1 h-32 rounded-md object-cover" />
                     ) : null}
                     {message.itemTitle ? <p className="text-text-secondary">Món được nhắc: {message.itemTitle}</p> : null}
                     {message.content ? <p className="whitespace-pre-line text-text-primary">{message.content}</p> : null}

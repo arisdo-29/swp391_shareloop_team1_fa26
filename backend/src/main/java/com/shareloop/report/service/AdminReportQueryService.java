@@ -12,6 +12,8 @@ import com.shareloop.report.entity.ReportStatus;
 import com.shareloop.report.entity.TargetType;
 import com.shareloop.report.repository.ReportRepository;
 import com.shareloop.request.service.RequestService;
+import com.shareloop.setting.ConfigKey;
+import com.shareloop.setting.service.ConfigService;
 import com.shareloop.user.dto.UserBrief;
 import com.shareloop.user.service.UserService;
 import java.time.Clock;
@@ -34,6 +36,14 @@ public class AdminReportQueryService {
     private final RequestService requests;
     private final ReportEvidenceService evidence;
     private final Clock clock;
+    private final ConfigService configService;
+    private ReporterTrustService reporterTrustService;
+
+    // Setter: không có thì không hiện nhãn tài khoản mới (unit test dựng service rút gọn).
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setReporterTrustService(ReporterTrustService reporterTrustService) {
+        this.reporterTrustService = reporterTrustService;
+    }
 
     public AdminReportQueryService(
             ReportRepository reports,
@@ -41,13 +51,15 @@ public class AdminReportQueryService {
             ItemQueryService items,
             RequestService requests,
             ReportEvidenceService evidence,
-            Clock clock) {
+            Clock clock,
+            ConfigService configService) {
         this.reports = reports;
         this.users = users;
         this.items = items;
         this.requests = requests;
         this.evidence = evidence;
         this.clock = clock;
+        this.configService = configService;
     }
 
     /**
@@ -62,13 +74,19 @@ public class AdminReportQueryService {
         Map<Long, Long> itemIdByReportId = findRelatedItemIds(content);
         Map<Long, String> itemTitles = items.findTitles(new HashSet<>(itemIdByReportId.values()));
         Map<Long, UserBrief> briefs = users.findBriefs(collectUserIds(content));
+        Set<Long> trustedReporters =
+                findTrustedReporters(content.stream().map(Report::getReporterId).toList());
 
         List<ReportResponse> rows = new ArrayList<>();
         for (Report report : content) {
             Long itemId = itemIdByReportId.get(report.getId());
             String itemTitle = itemId == null ? null : itemTitles.get(itemId);
             String reporterName = nameOf(briefs, report.getReporterId());
-            rows.add(summary(report, reporterName, targetNameOf(report, briefs, itemTitle)));
+            rows.add(summary(
+                    report,
+                    reporterName,
+                    targetNameOf(report, briefs, itemTitle),
+                    isNewReporter(trustedReporters, report)));
         }
         return new AdminReportPage(rows, page, size, result.getTotalElements(), result.getTotalPages());
     }
@@ -105,7 +123,11 @@ public class AdminReportQueryService {
                 itemId == null ? null : items.findTitles(List.of(itemId)).get(itemId);
         String reporterName = reporter == null ? null : reporter.fullName();
         return new AdminReportDetail(
-                summary(report, reporterName, targetNameOf(report, briefs, itemTitle)),
+                summary(
+                        report,
+                        reporterName,
+                        targetNameOf(report, briefs, itemTitle),
+                        isNewReporter(findTrustedReporters(List.of(report.getReporterId())), report)),
                 new Participant(report.getReporterId(), reporterName),
                 targetId == null ? null : new Participant(targetId, reported == null ? null : reported.fullName()),
                 itemId,
@@ -121,7 +143,34 @@ public class AdminReportQueryService {
                 itemTitle,
                 nameOf(briefs, report.getResolvedBy()),
                 // Cùng luật với ReportService.conclude, tính theo giờ server để FE không phải tự so giờ máy
-                report.isResponseWindowOpen(Instant.now(clock)));
+                report.isResponseWindowOpen(Instant.now(clock)),
+                openTransactionPartnerName(report, itemId, briefs),
+                isSeriousReason(report));
+    }
+
+    // Báo cáo bài mà bài đang có giao dịch mở: tên bên còn lại để hộp kết luận báo trước (F1).
+    private String openTransactionPartnerName(Report report, Long itemId, Map<Long, UserBrief> briefs) {
+        if (report.getTargetType() != TargetType.ITEM || itemId == null) {
+            return null;
+        }
+        Long partnerId = requests.findOpenTransactionOfItem(itemId)
+                .map(open -> open.partnerUserId())
+                .orElse(null);
+        if (partnerId == null) {
+            return null;
+        }
+        UserBrief partner = briefs.containsKey(partnerId)
+                ? briefs.get(partnerId)
+                : users.findBriefs(List.of(partnerId)).get(partnerId);
+        return partner == null ? null : partner.fullName();
+    }
+
+    // Cùng danh sách lý do nghiêm trọng mà ReportService.conclude dùng (khoá report_serious_reasons).
+    private boolean isSeriousReason(Report report) {
+        return report.getReason() != null
+                && configService
+                        .getCodes(ConfigKey.REPORT_SERIOUS_REASONS)
+                        .contains(report.getReason().name());
     }
 
     // Id bài đăng liên quan của từng hồ sơ. Hồ sơ REQUEST lấy bài qua giao dịch, giao dịch đã xoá thì bỏ qua.
@@ -175,7 +224,18 @@ public class AdminReportQueryService {
         return brief == null ? null : brief.fullName();
     }
 
-    private ReportResponse summary(Report report, String reporterName, String targetName) {
+    // Người báo đủ tin cậy theo ReporterTrustService; không có service thì coi tất cả đủ tin cậy.
+    private Set<Long> findTrustedReporters(List<Long> reporterIds) {
+        return reporterTrustService == null
+                ? new HashSet<>(reporterIds)
+                : reporterTrustService.findTrusted(reporterIds);
+    }
+
+    private static boolean isNewReporter(Set<Long> trustedReporters, Report report) {
+        return !trustedReporters.contains(report.getReporterId());
+    }
+
+    private ReportResponse summary(Report report, String reporterName, String targetName, boolean newReporterAccount) {
         return new ReportResponse(
                 report.getId(),
                 report.getReporterId(),
@@ -189,6 +249,7 @@ public class AdminReportQueryService {
                 report.getStatus(),
                 report.getCreatedAt(),
                 reporterName,
-                targetName);
+                targetName,
+                newReporterAccount);
     }
 }

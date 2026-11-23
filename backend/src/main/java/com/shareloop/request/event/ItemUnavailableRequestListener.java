@@ -22,6 +22,8 @@ public class ItemUnavailableRequestListener {
     @EventListener
     public void onItemUnavailable(ItemUnavailableEvent event) {
         requestService.cancelPendingRequestsOfferingItem(event.itemId());
+        // Bài hết hạn, bị ẩn hoặc bản sửa bị từ chối: người đang xin bài không còn chọn được nên huỷ ngay (C1).
+        requestService.cancelPendingRequestsToItem(event.itemId(), event.reason());
         if (event.reason() == ItemUnavailableEvent.Reason.EDITED) {
             requestService.notifyPendingRequestersItemEdited(event.itemId());
         }

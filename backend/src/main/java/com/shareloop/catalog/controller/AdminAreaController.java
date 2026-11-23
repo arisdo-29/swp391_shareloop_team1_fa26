@@ -3,6 +3,7 @@ package com.shareloop.catalog.controller;
 import com.shareloop.catalog.dto.AdminAreaActiveRequest;
 import com.shareloop.catalog.dto.AdminAreaRequest;
 import com.shareloop.catalog.dto.AdminAreaResponse;
+import com.shareloop.catalog.dto.VisibleItemCountResponse;
 import com.shareloop.catalog.service.AdminAreaService;
 import com.shareloop.common.security.CurrentUserId;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,6 +38,15 @@ public class AdminAreaController {
     @GetMapping
     public List<AdminAreaResponse> list() {
         return service.listAll();
+    }
+
+    @Operation(
+            summary = "Đếm bài sẽ bị ẩn khi tắt khu vực",
+            description =
+                    "Chỉ Admin. Số bài đang hiển thị công khai thuộc khu vực và khu vực con, dùng cho hộp xác nhận trước khi tắt.")
+    @GetMapping("/{id}/visible-item-count")
+    public VisibleItemCountResponse countVisibleItems(@PathVariable long id) {
+        return service.countVisibleItems(id);
     }
 
     @Operation(
