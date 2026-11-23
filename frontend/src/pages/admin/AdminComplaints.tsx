@@ -22,6 +22,9 @@ import {
 } from '../../services/reportApi';
 import type { ApiError } from '../../services/http';
 import { formatDeadline } from '../../utils/request';
+import { adminRequestApi, type AdminRequestDetail } from '../../services/adminRequestApi';
+import { DisputeItemOutcomes } from '../../components/admin/DisputeItemOutcomes';
+import { defaultItemChoices, disputeItemRows, type ItemChoice } from '../../utils/disputeItemOutcomes';
 import { disputeReasonLabels } from '../../utils/disputeErrors';
 import { useRealtimeRefresh } from '../../utils/useRealtimeRefresh';
 
@@ -205,6 +208,9 @@ export function AdminComplaints() {
   const [decision, setDecision] = useState<ReportDecision | ''>('');
   const [note, setNote] = useState('');
   const [deliberateFalse, setDeliberateFalse] = useState(false);
+  // Khiếu nại sự cố giao nhận đang DISPUTED: chọn cách xử lý từng món khi chấp thuận (GN-14)
+  const [requestDetail, setRequestDetail] = useState<AdminRequestDetail | null>(null);
+  const [itemChoices, setItemChoices] = useState<Record<number, ItemChoice>>({});
   const [decisionStep, setDecisionStep] = useState<'review' | 'choose' | 'confirm'>('review');
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
@@ -247,6 +253,8 @@ export function AdminComplaints() {
     setNote('');
     setDeliberateFalse(false);
     setDecision('');
+    setRequestDetail(null);
+    setItemChoices({});
     reportApi
       .detail(selectedId, controller.signal)
       .then((result) => {
@@ -260,6 +268,24 @@ export function AdminComplaints() {
       });
     return () => controller.abort();
   }, [selectedId, reload]);
+
+  // Tải các món của giao dịch khi hồ sơ là khiếu nại giao dịch đang DISPUTED, để Admin chọn cách xử lý từng món
+  useEffect(() => {
+    const requestId = detail?.report.targetType === 'REQUEST' ? detail.report.requestId : null;
+    if (!detail || requestId === null || concluded(detail.report.status)) return;
+    let active = true;
+    adminRequestApi
+      .detail(requestId)
+      .then((result) => {
+        if (!active || result.status !== 'DISPUTED') return;
+        setRequestDetail(result);
+        setItemChoices(defaultItemChoices(disputeItemRows(result), detail.reportedUser?.id ?? null));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [detail]);
 
   useEffect(() => {
     if (selectedId === null) opener.current?.focus();
@@ -285,6 +311,13 @@ export function AdminComplaints() {
         decision,
         note: note.trim(),
         deliberateFalseReport: decision === 'DISMISS' && deliberateFalse ? true : undefined,
+        itemOutcomes:
+          decision === 'UPHOLD' && requestDetail
+            ? disputeItemRows(requestDetail).map((row) => ({
+                itemId: row.itemId,
+                choice: itemChoices[row.itemId] ?? 'REOPEN',
+              }))
+            : undefined,
       });
       setNoticeTone('success');
       setNotice('Đã kết luận khiếu nại.');
@@ -714,6 +747,13 @@ export function AdminComplaints() {
                           </label>
                         ))}
                       </fieldset>
+                      {decision === 'UPHOLD' && requestDetail ? (
+                        <DisputeItemOutcomes
+                          rows={disputeItemRows(requestDetail)}
+                          choices={itemChoices}
+                          onChange={(itemId, choice) => setItemChoices((current) => ({ ...current, [itemId]: choice }))}
+                        />
+                      ) : null}
                       {decision === 'DISMISS' && !isRefusalReport(detail.report) ? (
                         <label className="flex items-center gap-2 text-sm">
                           <input

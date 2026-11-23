@@ -25,6 +25,7 @@ import com.shareloop.request.dto.ConfirmLogisticsRequest;
 import com.shareloop.request.dto.CreateRequest;
 import com.shareloop.request.dto.HandoverConfirmRequest;
 import com.shareloop.request.dto.HandoverFailedRequest;
+import com.shareloop.request.dto.ItemDisputeOutcome;
 import com.shareloop.request.dto.OpenItemTransaction;
 import com.shareloop.request.dto.RefuseHandoverRequest;
 import com.shareloop.request.dto.RejectCancelRequest;
@@ -2151,30 +2152,24 @@ public class RequestService {
     }
 
     /**
-     * Đưa giao dịch DISPUTED ra khỏi trạng thái tranh chấp khi Admin kết luận khiếu nại sự cố giao nhận (GN-07: một
-     * bên báo giao nhận không thành công khi bên kia đã bấm hoàn tất). Giao dịch không ở DISPUTED (ví dụ khiếu nại mở
-     * sau khi đã COMPLETED) thì bỏ qua, không làm gì. Từ chối nhận không đi qua đây vì giao dịch đã huỷ ngay.
+     * Đưa giao dịch DISPUTED ra khỏi trạng thái tranh chấp khi Admin kết luận khiếu nại sự cố giao nhận (GN-07). Giao
+     * dịch không ở DISPUTED (ví dụ khiếu nại mở sau khi đã COMPLETED) thì bỏ qua, không làm gì. Từ chối nhận không đi qua
+     * đây vì giao dịch đã huỷ ngay.
      *
-     * <p>Chấp nhận: CANCELLED, nhả cả hai món về APPROVED; nếu bên vi phạm là chủ bài thì bài chính bị ẩn luôn
-     * (is_active = false, giống BC-05). Bác bỏ: COMPLETED như một lần hoàn tất bình thường (hai món sang TRADED, cộng
-     * điểm tích luỹ). Cả hai bên đều được thông báo kết quả.
+     * <p>Chấp nhận: CANCELLED, bắt buộc có cách xử lý cho từng món (Mở lại, Ẩn, Đã đổi chủ) áp cùng một luật cho chủ bài
+     * và người nhận (GN-14). Bác bỏ: COMPLETED như một lần hoàn tất bình thường (các món sang TRADED, cộng điểm tích
+     * luỹ), không cần chọn. Cả hai bên đều được thông báo kết quả.
      *
      * @param requestId giao dịch của khiếu nại
      * @param upheld true nếu Admin chấp nhận khiếu nại, false nếu bác bỏ
+     * @param adminId Admin kết luận, để ghi nhật ký từng món
+     * @param itemOutcomes cách xử lý từng món khi chấp nhận, phải đủ mọi món của giao dịch
      * @return true nếu giao dịch đã được xử lý
+     * @throws BusinessException REQUEST_ITEM_OUTCOMES_REQUIRED khi chấp nhận mà thiếu, thừa hoặc trùng lựa chọn của món
      */
     @Transactional
-    public boolean resolveDisputedRequest(long requestId, boolean upheld) {
-        return resolveDisputedRequest(requestId, upheld, null);
-    }
-
-    /**
-     * Như {@link #resolveDisputedRequest(long, boolean)}, kèm người bị kết luận vi phạm (người bị khiếu nại).
-     *
-     * @param violatorUserId người bị khiếu nại; null nếu không rõ (khi đó bài chính được mở lại như cũ)
-     */
-    @Transactional
-    public boolean resolveDisputedRequest(long requestId, boolean upheld, Long violatorUserId) {
+    public boolean resolveDisputedRequest(
+            long requestId, boolean upheld, Long adminId, List<ItemDisputeOutcome> itemOutcomes) {
         Request request = requestRepository.findById(requestId).orElse(null);
         if (request == null || request.getStatus() != RequestStatus.DISPUTED) {
             return false;
@@ -2182,7 +2177,7 @@ public class RequestService {
 
         String message;
         if (upheld) {
-            message = cancelUpheldDispute(request, violatorUserId);
+            message = cancelUpheldDispute(request, adminId, itemOutcomes);
         } else {
             request.completeAfterDispute(Instant.now());
             requestRepository.save(request);
@@ -2202,32 +2197,98 @@ public class RequestService {
     }
 
     /**
-     * Huỷ giao dịch khi Admin chấp nhận khiếu nại sự cố giao nhận. Chủ bài vi phạm: ẩn bài chính, món đổi mở lại. Các
-     * trường hợp còn lại: mở lại cả hai món.
+     * Huỷ giao dịch khi Admin chấp nhận khiếu nại sự cố giao nhận và xử lý từng món theo lựa chọn của Admin (GN-14).
+     * Mở lại: bài về APPROVED. Ẩn: bài về APPROVED rồi bị Admin ẩn. Đã đổi chủ: như Ẩn nhưng ghi lý do món đã được trao
+     * trong một giao dịch bị huỷ. Không tự hoàn trả, không giữ đồ hay tiền.
      *
      * @return câu thông báo kết quả gửi cho hai bên
      */
-    private String cancelUpheldDispute(Request request, Long violatorUserId) {
+    private String cancelUpheldDispute(Request request, Long adminId, List<ItemDisputeOutcome> itemOutcomes) {
+        Map<Long, ItemDisputeOutcome.Choice> choices = requireOutcomeForEveryItem(request, itemOutcomes);
         request.cancel(Request.CANCEL_BY_SYSTEM + "Admin xác minh sự cố giao nhận, giao dịch bị huỷ");
         requestRepository.save(request);
 
-        Long donorId =
-                findItemSnapshot(request.getItemId()).map(ItemSnapshot::donorId).orElse(null);
-        boolean donorViolated = violatorUserId != null && violatorUserId.equals(donorId);
-
-        itemService.releaseIfReservedAfterCancel(request.getItemId(), request.getReservedAt());
-        if (donorViolated) {
-            itemService.hide(request.getItemId());
-        }
+        StringBuilder message = new StringBuilder("Admin đã xác minh sự cố giao nhận: giao dịch bị huỷ.");
+        ItemSnapshot snapshot = loadItemSnapshot(request);
+        // Món chính nằm ở chỗ người nhận khi đã đổi chủ, món đổi nằm ở chỗ chủ bài
+        message.append(applyItemOutcome(
+                request, request.getItemId(), choices.get(request.getItemId()), adminId, request.getReceiverId()));
         if (request.getOfferedItemId() != null) {
-            itemService.releaseIfReservedAfterCancel(request.getOfferedItemId(), request.getReservedAt());
+            message.append(applyItemOutcome(
+                    request,
+                    request.getOfferedItemId(),
+                    choices.get(request.getOfferedItemId()),
+                    adminId,
+                    snapshot.donorId()));
         }
+        return message.toString();
+    }
 
-        if (donorViolated) {
-            return "Admin đã xác minh sự cố giao nhận: giao dịch bị huỷ. Bài đăng của chủ bài bị ẩn vì chủ bài là bên"
-                    + " vi phạm, món đem đổi (nếu có) được mở lại.";
+    // Bắt buộc đủ mọi món của giao dịch, mỗi món đúng một lựa chọn, không món lạ (GN-14).
+    private Map<Long, ItemDisputeOutcome.Choice> requireOutcomeForEveryItem(
+            Request request, List<ItemDisputeOutcome> itemOutcomes) {
+        Set<Long> expected = new java.util.LinkedHashSet<>();
+        expected.add(request.getItemId());
+        if (request.getOfferedItemId() != null) {
+            expected.add(request.getOfferedItemId());
         }
-        return "Admin đã xác minh sự cố giao nhận: giao dịch bị huỷ và bài đăng được mở lại.";
+        Map<Long, ItemDisputeOutcome.Choice> choices = new HashMap<>();
+        if (itemOutcomes != null) {
+            for (ItemDisputeOutcome outcome : itemOutcomes) {
+                boolean unknownItem =
+                        outcome == null || outcome.itemId() == null || !expected.contains(outcome.itemId());
+                if (unknownItem
+                        || outcome.choice() == null
+                        || choices.put(outcome.itemId(), outcome.choice()) != null) {
+                    throw new BusinessException(RequestErrorCode.REQUEST_ITEM_OUTCOMES_REQUIRED);
+                }
+            }
+        }
+        if (!choices.keySet().containsAll(expected)) {
+            throw new BusinessException(RequestErrorCode.REQUEST_ITEM_OUTCOMES_REQUIRED);
+        }
+        return choices;
+    }
+
+    // Xử lý một món, ghi nhật ký và trả câu nói về món đó cho hai bên (GN-14).
+    private String applyItemOutcome(
+            Request request, long itemId, ItemDisputeOutcome.Choice choice, Long adminId, long holderUserId) {
+        String title = findItemTitle(itemId);
+        String name = title == null || title.isBlank() ? "đã chọn" : title;
+        // Bài về APPROVED trước, rồi mới ẩn nếu Admin chọn Ẩn hoặc Đã đổi chủ
+        itemService.releaseIfReservedAfterCancel(itemId, request.getReservedAt());
+        String logNote;
+        String sentence;
+        switch (choice) {
+            case HIDE -> {
+                itemService.hideByAdmin(itemId);
+                logNote = "Bài bị ẩn theo kết luận khiếu nại giao dịch";
+                sentence = " Món " + name + " bị ẩn.";
+            }
+            case TRANSFERRED -> {
+                itemService.hideByAdmin(itemId);
+                logNote = "Món đã được trao trong một giao dịch bị huỷ";
+                sentence = " Món " + name + " đã nằm ở chỗ " + nameOrDefault(holderUserId)
+                        + ". Hai bên liên hệ để hoàn trả nếu cần.";
+            }
+            default -> {
+                logNote = "Món được mở lại theo kết luận khiếu nại giao dịch";
+                sentence = " Món " + name + " được mở lại.";
+            }
+        }
+        if (activityLogService != null && adminId != null) {
+            ActivityType type = choice == ItemDisputeOutcome.Choice.REOPEN
+                    ? ActivityType.REQUEST_CANCEL
+                    : ActivityType.ADMIN_ITEM_HIDDEN;
+            activityLogService.log(
+                    type.name(),
+                    adminId,
+                    choice == ItemDisputeOutcome.Choice.REOPEN ? "REQUEST" : "ITEM",
+                    choice == ItemDisputeOutcome.Choice.REOPEN ? request.getId() : itemId,
+                    Map.<String, Object>of("requestId", request.getId(), "itemId", itemId, "choice", choice.name()),
+                    logNote);
+        }
+        return sentence;
     }
 
     private void notifyBothParties(Request request, String type, String message) {

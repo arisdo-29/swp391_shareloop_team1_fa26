@@ -139,6 +139,59 @@ class RequestCancelRequestIT extends IntegrationTest {
     }
 
     @Test
+    void concludeUphold_whenDisputedRequest_appliesItemOutcomesAndRequiresEveryItem() throws Exception {
+        // given: giao dịch DISPUTED sau khi bên kia không đồng ý đề nghị huỷ
+        long donorId = insertUser("Donor");
+        long receiverId = insertUser("Receiver");
+        long adminId = insertUser("Admin");
+        long itemId = insertItem(donorId);
+        long requestId = createLogisticsConfirmedRequest(itemId, donorId, receiverId, 24);
+        mockMvc.perform(post("/api/v1/requests/{id}/cancel-request", requestId)
+                        .header("Authorization", token(donorId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"NO_LONGER_NEEDED\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/requests/{id}/cancel-request/reject", requestId)
+                        .header("Authorization", token(receiverId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"explanation\":\"Tôi vẫn muốn nhận món đồ này\"}"))
+                .andExpect(status().isOk());
+        long reportId = jdbc.queryForObject("SELECT id FROM reports WHERE request_id = ?", Long.class, requestId);
+        jdbc.update("UPDATE reports SET response_due_at = now() - interval '1 hour' WHERE id = ?", reportId);
+        String adminAuth = "Bearer " + jwtService.issue(adminId, true);
+
+        // thiếu lựa chọn cho món thì báo lỗi và giao dịch vẫn DISPUTED
+        mockMvc.perform(post("/api/v1/admin/reports/{id}/conclude", reportId)
+                        .header("Authorization", adminAuth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"UPHOLD\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_ITEM_OUTCOMES_REQUIRED"));
+        assertThat(statusOf(requestId)).isEqualTo("DISPUTED");
+
+        // when: Admin chọn Đã đổi chủ cho món chính
+        mockMvc.perform(post("/api/v1/admin/reports/{id}/conclude", reportId)
+                        .header("Authorization", adminAuth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"UPHOLD\",\"itemOutcomes\":[{\"itemId\":" + itemId
+                                + ",\"choice\":\"TRANSFERRED\"}]}"))
+                .andExpect(status().isOk());
+
+        // then: giao dịch huỷ, bài bị ẩn bằng cờ của Admin và lý do lấy từ nhật ký
+        assertThat(statusOf(requestId)).isEqualTo("CANCELLED");
+        assertThat(jdbc.queryForObject("SELECT hidden_by_admin FROM items WHERE id = ?", Boolean.class, itemId))
+                .isTrue();
+        assertThat(jdbc.queryForObject("SELECT is_active FROM items WHERE id = ?", Boolean.class, itemId))
+                .isFalse();
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM activity_logs WHERE type = 'ADMIN_ITEM_HIDDEN' AND target_id = ?"
+                                + " AND reason = 'Món đã được trao trong một giao dịch bị huỷ'",
+                        Integer.class,
+                        itemId))
+                .isEqualTo(1);
+    }
+
+    @Test
     void withdrawCancelRequest_whenRequesterWithdraws_keepsTransactionRunning() throws Exception {
         // given
         long donorId = insertUser("Donor");

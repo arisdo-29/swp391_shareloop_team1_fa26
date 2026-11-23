@@ -562,9 +562,8 @@ class ReportServiceTest {
         verify(reputationService, never()).deductStar(eq(10L), any(Integer.class), any());
         verify(itemService).hide(200L);
         verify(itemService, never()).unhide(anyLong());
-        verify(requestService, never()).resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean());
         verify(requestService, never())
-                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any(), any());
     }
 
     @Test
@@ -586,7 +585,7 @@ class ReportServiceTest {
         verify(reputationService).deductStar(eq(10L), eq(1), anyString());
         verify(reputationService, never()).deductStar(eq(20L), any(Integer.class), any());
         verify(requestService, never())
-                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any(), any());
     }
 
     @Test
@@ -943,11 +942,14 @@ class ReportServiceTest {
                 .findRequest(77L);
         when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        // when
-        reportService.conclude(1L, 14L, new ConcludeReportRequest(ReportDecision.UPHOLD, null));
+        // when: Admin chọn cách xử lý cho từng món (GN-14)
+        java.util.List<com.shareloop.request.dto.ItemDisputeOutcome> outcomes =
+                java.util.List.of(new com.shareloop.request.dto.ItemDisputeOutcome(
+                        105L, com.shareloop.request.dto.ItemDisputeOutcome.Choice.HIDE));
+        reportService.conclude(1L, 14L, new ConcludeReportRequest(ReportDecision.UPHOLD, null, false, outcomes));
 
-        // then
-        verify(requestService).resolveDisputedRequest(77L, true, 200L);
+        // then: chuyển nguyên danh sách lựa chọn và Admin kết luận cho RequestService
+        verify(requestService).resolveDisputedRequest(77L, true, 1L, outcomes);
     }
 
     @Test
@@ -964,7 +966,7 @@ class ReportServiceTest {
         reportService.conclude(1L, 15L, new ConcludeReportRequest(ReportDecision.DISMISS, null));
 
         // then
-        verify(requestService).resolveDisputedRequest(77L, false, 200L);
+        verify(requestService).resolveDisputedRequest(77L, false, 1L, null);
     }
 
     @Test
@@ -982,7 +984,7 @@ class ReportServiceTest {
 
         // then
         verify(requestService, never())
-                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+                .resolveDisputedRequest(anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any(), any());
     }
 
     @Test

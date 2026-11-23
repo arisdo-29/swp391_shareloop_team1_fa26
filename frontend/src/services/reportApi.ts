@@ -195,7 +195,16 @@ export const reportApi = {
     });
     return data;
   },
-  async conclude(reportId: number, input: { decision: ReportDecision; note?: string; deliberateFalseReport?: boolean }) {
+  // Chấp thuận khiếu nại sự cố giao nhận đang DISPUTED thì bắt buộc có itemOutcomes đủ mọi món (docs/api/report.md).
+  async conclude(
+    reportId: number,
+    input: {
+      decision: ReportDecision;
+      note?: string;
+      deliberateFalseReport?: boolean;
+      itemOutcomes?: { itemId: number; choice: 'REOPEN' | 'HIDE' | 'TRANSFERRED' }[];
+    },
+  ) {
     const { data } = await http.post<ReportConclusionResponse>(`/api/v1/admin/reports/${reportId}/conclude`, input);
     return data;
   },

@@ -604,3 +604,18 @@ Admin kết luận báo cáo bài hoặc người dùng thì người báo nhậ
 - `POST /admin/reports/{id}/conclude` nhận thêm `deliberateFalseReport` (boolean, mặc định `false`). Bác bỏ mà tích cờ này thì trừ 1 sao người báo (`TRUST_STARS_DEDUCTED`) và ghi nhật ký `STARS`. Báo cáo "Từ chối giao nhận" bỏ qua cờ vì người báo đã bị trừ sao tự động.
 - `POST /reports` kiểm lý do theo loại đối tượng, sai trả `400 REPORT_REASON_NOT_ALLOWED` ("Lý do không phù hợp với loại báo cáo"). Bài (`ITEM`): `NOT_AS_DESCRIBED`, `COUNTERFEIT`, `PROHIBITED_ITEM`, `OTHER`. Người dùng (`USER`): `NO_SHOW`, `WRONG_CONTACT_INFO`, `HARASSMENT`, `OTHER`. Giao dịch (`REQUEST`): `NOT_AS_DESCRIBED`, `COUNTERFEIT`, `NO_SHOW`, `WRONG_CONTACT_INFO`, `HARASSMENT`, `OTHER`. Bảng này nằm ở `ReportReason.allowedFor` và khớp `reportReasonsByTarget` ở frontend.
 - `WRONG_CONTACT_INFO` với người dùng chỉ báo được khi hai người từng có giao dịch đã chốt lịch (`contact_revealed_at` khác null), nếu không trả `400 REPORT_CONTACT_REASON_NOT_ALLOWED`.
+
+## Kết luận khiếu nại theo từng món của giao dịch (GN-14)
+
+Khi Admin chấp thuận (`UPHOLD`) khiếu nại sự cố giao nhận mà giao dịch đang `DISPUTED`, giao dịch bị huỷ và `POST /admin/reports/{id}/conclude` nhận thêm `itemOutcomes`: danh sách `{itemId, choice}`, bắt buộc có đủ mọi món của giao dịch (món chính và món đổi nếu có), mỗi món đúng một lựa chọn.
+
+| `choice` | Nhãn | Kết quả |
+|---|---|---|
+| `REOPEN` | Mở lại | Bài về `APPROVED` và hiển thị lại. Dùng `ItemService.releaseIfReservedAfterCancel`, thời gian giữ chỗ được trả lại theo `reserved_display_refund_max_days`. |
+| `HIDE` | Ẩn | Bài về `APPROVED` rồi bị Admin ẩn (`items.hidden_by_admin = true`). Các đường tự động (báo cáo bị bác bỏ, duyệt lại, mở khoá tài khoản) không hiện lại được, chỉ nút hiện lại của Admin xoá cờ. |
+| `TRANSFERRED` | Đã đổi chủ | Như `HIDE`, nhật ký `ADMIN_ITEM_HIDDEN` ghi lý do "Món đã được trao trong một giao dịch bị huỷ", nên `hiddenReason` của bài hiện lý do này. Hai bên được báo "Món <tên> đã nằm ở chỗ <tên người giữ>. Hai bên liên hệ để hoàn trả nếu cần." Hệ thống không tự hoàn trả, không giữ đồ hay tiền. |
+
+- Luật giống nhau cho chủ bài và người nhận. Giá trị mặc định ở giao diện: món của bên vi phạm là `HIDE`, món của bên không vi phạm là `REOPEN`. Bản cũ chỉ ẩn khi chủ bài vi phạm đã bị bỏ.
+- Thiếu món, thừa món lạ, trùng món hoặc thiếu `choice` trả `400 REQUEST_ITEM_OUTCOMES_REQUIRED` ("Cần chọn cách xử lý cho từng món của giao dịch trước khi chấp thuận khiếu nại.") và không đổi gì.
+- Bác bỏ (`DISMISS`) không cần `itemOutcomes`: giao dịch `COMPLETED`, các món sang `TRADED` như cũ. Giao dịch không còn `DISPUTED` (khiếu nại mở sau khi hoàn tất) thì bỏ qua `itemOutcomes`.
+- Mỗi món ghi một dòng nhật ký: `ADMIN_ITEM_HIDDEN` cho `HIDE` và `TRANSFERRED`, `REQUEST_CANCEL` cho `REOPEN`.

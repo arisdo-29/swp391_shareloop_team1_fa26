@@ -1115,7 +1115,7 @@ public class ReportService {
         // cáo từ chối nhận là báo cáo bài, giao dịch đã huỷ từ trước nên không đi qua đây.
         if (requestService != null && report.getTargetType() == TargetType.REQUEST && report.getRequestId() != null) {
             requestService.resolveDisputedRequest(
-                    report.getRequestId(), decision == ReportDecision.UPHOLD, report.getTargetUserId());
+                    report.getRequestId(), decision == ReportDecision.UPHOLD, adminId, request.itemOutcomes());
         }
 
         notifyConcluded(report, decision, note, about);
