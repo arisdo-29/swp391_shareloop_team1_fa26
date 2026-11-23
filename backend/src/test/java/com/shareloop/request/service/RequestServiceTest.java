@@ -1612,7 +1612,9 @@ class RequestServiceTest {
                 .findItemSnapshot(1L);
 
         // Receiver gọi confirm kèm agreeToWaiver = true
-        RequestResponse response = requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true));
+        // Luật mới (GN-12): người nhận phải có địa chỉ nhận hàng mới chốt được lịch giao hàng
+        RequestResponse response =
+                requestService.confirmLogistics(101L, 10L, new ConfirmLogisticsRequest(true, "12 Lê Lợi"));
 
         assertThat(response.status()).isEqualTo("LOGISTICS_CONFIRMED");
         assertThat(response.donorWaiverAt()).isNotNull();

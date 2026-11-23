@@ -48,16 +48,23 @@ public class RequestJob {
         int reschedulesExpired = requestDeadlineJobService.expireReschedules(now);
         int staleCancelled = requestDeadlineJobService.cancelStaleConfirmed(now);
         int staleReminded = requestDeadlineJobService.remindStaleConfirmed(now);
+        int shippingLegsAutoReceived = requestDeadlineJobService.autoReceiveShippingLegs(now);
+        int shippingReminded = requestDeadlineJobService.remindShipping(now);
+        int shippingStuck = requestDeadlineJobService.openShippingOneLegStuck(now);
 
         log.info(
                 "RequestJob finished: {} pending expired, {} silent reserved expired, {} auto confirmed,"
-                        + " {} cancel requests expired, {} reschedules expired, {} stale cancelled, {} stale reminded",
+                        + " {} cancel requests expired, {} reschedules expired, {} stale cancelled, {} stale reminded,"
+                        + " {} shipping legs auto received, {} shipping reminded, {} shipping stuck",
                 pendingExpired,
                 silentReservedExpired,
                 autoConfirmed,
                 cancelRequestsExpired,
                 reschedulesExpired,
                 staleCancelled,
-                staleReminded);
+                staleReminded,
+                shippingLegsAutoReceived,
+                shippingReminded,
+                shippingStuck);
     }
 }

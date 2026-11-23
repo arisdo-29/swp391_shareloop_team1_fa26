@@ -4,6 +4,7 @@ import com.shareloop.request.dto.CancelRequestInfo;
 import com.shareloop.request.dto.RequestItemInfo;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.dto.RescheduleInfo;
+import com.shareloop.request.dto.ShippingInfo;
 import com.shareloop.request.entity.CancelRequestCode;
 import com.shareloop.request.entity.Request;
 
@@ -122,8 +123,29 @@ public final class RequestMapper {
                 null,
                 toCancelRequestInfo(request),
                 toRescheduleInfo(request),
-                null,
+                toShippingInfo(request),
                 null);
+    }
+
+    // Tiến độ giao hàng hai chiều (GN-12). Địa chỉ đầy đủ ở đây, RequestService ẩn địa chỉ của bên kia khi chưa chốt
+    // lịch.
+    private static ShippingInfo toShippingInfo(Request request) {
+        if (!request.isShipping()) {
+            return ShippingInfo.EMPTY;
+        }
+        return new ShippingInfo(
+                request.getReceiverAddress(),
+                request.getDonorAddress(),
+                request.getDonorShippedAt(),
+                request.getDonorTrackingCode(),
+                request.getReceiverShippedAt(),
+                request.getReceiverTrackingCode(),
+                isFilled(request.getReceiverAddress()),
+                isFilled(request.getDonorAddress()));
+    }
+
+    private static boolean isFilled(String text) {
+        return text != null && !text.isBlank();
     }
 
     // Đề nghị dời lịch đang chờ và số lần đã dời (GN-11).

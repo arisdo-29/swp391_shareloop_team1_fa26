@@ -168,33 +168,25 @@ public class RequestJobService {
      * @return số lượng yêu cầu đã tự động hoàn tất
      */
     public int autoConfirmHandoverRequests(Instant now) {
+        // Chỉ Gặp trực tiếp: Giao hàng tự hoàn tất theo từng chiều ở RequestDeadlineJobService (GN-12)
         int inPersonDays = configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS);
-        int shippingDays = configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING);
         Instant inPersonCutoff = now.minus(inPersonDays, ChronoUnit.DAYS);
-        Instant shippingCutoff = now.minus(shippingDays, ChronoUnit.DAYS);
 
         int count = 0;
         long lastSeenId = 0;
         Pageable pageable = PageRequest.of(0, BATCH_SIZE);
-        List<Request> batch =
-                requestRepository.findOverdueHandoverRequests(inPersonCutoff, shippingCutoff, lastSeenId, pageable);
+        List<Request> batch = requestRepository.findOverdueHandoverRequests(inPersonCutoff, lastSeenId, pageable);
         while (!batch.isEmpty()) {
             for (Request request : batch) {
-                boolean shipping = isShipping(request);
-                Instant cutoff = shipping ? shippingCutoff : inPersonCutoff;
-                int days = shipping ? shippingDays : inPersonDays;
-                if (processInOwnTransaction(() -> autoConfirmInTransaction(request.getId(), cutoff, days, now))) {
+                if (processInOwnTransaction(
+                        () -> autoConfirmInTransaction(request.getId(), inPersonCutoff, inPersonDays, now))) {
                     count++;
                 }
             }
             lastSeenId = batch.get(batch.size() - 1).getId();
-            batch = requestRepository.findOverdueHandoverRequests(inPersonCutoff, shippingCutoff, lastSeenId, pageable);
+            batch = requestRepository.findOverdueHandoverRequests(inPersonCutoff, lastSeenId, pageable);
         }
         return count;
-    }
-
-    private static boolean isShipping(Request request) {
-        return "SHIPPING".equals(request.getDeliveryMethod());
     }
 
     private boolean expirePendingInTransaction(long requestId, Instant cutoff) {
@@ -281,7 +273,8 @@ public class RequestJobService {
             return false;
         }
 
-        if (request.getStatus() != RequestStatus.AWAITING_HANDOVER) {
+        // Giao hàng tự hoàn tất theo từng chiều ở RequestDeadlineJobService (GN-12), việc này chỉ cho Gặp trực tiếp
+        if (request.getStatus() != RequestStatus.AWAITING_HANDOVER || request.isShipping()) {
             return false;
         }
 

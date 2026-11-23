@@ -235,14 +235,14 @@ class RequestLifecycleIT extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("RESERVED"));
 
-        // Chốt lịch hẹn với phương thức SHIPPING và cam kết miễn trừ trách nhiệm
+        // Chốt lịch giao hàng (GN-12): meetingTime là ngày gửi hàng dự kiến, Trao đổi cần địa chỉ của cả hai bên
         Instant futureTime = Instant.now().plus(3, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
-        ScheduleRequest scheduleReq = new ScheduleRequest("SHIPPING", "Gửi qua Viettel Post", futureTime, true);
+        ScheduleRequest scheduleReq = new ScheduleRequest("SHIPPING", null, futureTime, true, "34 Trần Phú");
         mockMvc.perform(post("/api/v1/requests/{id}/schedule", requestId)
                         .header("Authorization", donorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new ScheduleRequest("SHIPPING", scheduleReq.meetingPlace(), futureTime, false))))
+                                new ScheduleRequest("SHIPPING", null, futureTime, false, "34 Trần Phú"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("REQUEST_WAIVER_REQUIRED"));
         assertThat(queryRequestStatus(requestId)).isEqualTo("RESERVED");
@@ -253,7 +253,7 @@ class RequestLifecycleIT extends IntegrationTest {
                         .content(objectMapper.writeValueAsString(scheduleReq)))
                 .andExpect(status().isOk());
 
-        ConfirmLogisticsRequest confirmLogistics = new ConfirmLogisticsRequest(true);
+        ConfirmLogisticsRequest confirmLogistics = new ConfirmLogisticsRequest(true, "12 Lê Lợi");
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-logistics", requestId)
                         .header("Authorization", receiverToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -261,7 +261,18 @@ class RequestLifecycleIT extends IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("LOGISTICS_CONFIRMED"));
 
-        // Cả hai bên xác nhận giao nhận
+        // Mỗi bên gửi chiều của mình rồi bên nhận bấm đã nhận được hàng
+        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId)
+                        .header("Authorization", donorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trackingCode\":\"GHN1111\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/requests/{id}/shipment", requestId)
+                        .header("Authorization", receiverToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trackingCode\":\"VTP2222\"}"))
+                .andExpect(status().isOk());
+
         mockMvc.perform(post("/api/v1/requests/{id}/confirm-handover", requestId)
                         .header("Authorization", donorToken))
                 .andExpect(status().isOk());

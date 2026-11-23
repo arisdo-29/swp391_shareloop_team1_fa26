@@ -19,7 +19,18 @@ final class RequestDeadlineCalculator {
     }
 
     RequestDeadlines of(Request request) {
-        return new RequestDeadlines(null, null, cancelRequestExpiresAt(request), rescheduleExpiresAt(request), null);
+        return new RequestDeadlines(
+                null, null, cancelRequestExpiresAt(request), rescheduleExpiresAt(request), sendDeadlineAt(request));
+    }
+
+    // Hạn gửi của mỗi chiều giao hàng: ngày gửi dự kiến cộng shipping_send_deadline_days ngày (GN-12). Chỉ có ở Giao
+    // hàng.
+    java.time.Instant sendDeadlineAt(Request request) {
+        if (!request.isShipping() || request.getMeetingTime() == null) {
+            return null;
+        }
+        int days = configService.getInt(ConfigKey.SHIPPING_SEND_DEADLINE_DAYS);
+        return request.getMeetingTime().plus(days, ChronoUnit.DAYS);
     }
 
     // Hạn bên kia phản hồi đề nghị dời lịch: sớm hơn giữa giờ hẹn cũ và lúc đề xuất cộng số giờ phản hồi (GN-11).
@@ -30,7 +41,8 @@ final class RequestDeadlineCalculator {
         int hours = configService.getInt(ConfigKey.CANCEL_REQUEST_RESPONSE_HOURS);
         java.time.Instant byResponse = request.getRescheduleProposedAt().plus(hours, ChronoUnit.HOURS);
         java.time.Instant meeting = request.getMeetingTime();
-        return meeting != null && meeting.isBefore(byResponse) ? meeting : byResponse;
+        boolean meetingIsDeadline = !request.isShipping() && meeting != null && meeting.isBefore(byResponse);
+        return meetingIsDeadline ? meeting : byResponse;
     }
 
     // Hạn bên kia phản hồi đề nghị huỷ; null khi không có đề nghị nào đang chờ.

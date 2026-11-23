@@ -87,6 +87,11 @@ public record RequestResponse(
         return withExtras(cancelRequest, reschedule, shipping, newDeadlines);
     }
 
+    /** Thay nhóm trường giao hàng (ví dụ để ẩn địa chỉ của bên kia); các trường khác giữ nguyên. */
+    public RequestResponse withShipping(ShippingInfo newShipping) {
+        return withExtras(cancelRequest, reschedule, newShipping, deadlines);
+    }
+
     /** Thay bốn nhóm trường mới cùng lúc; các trường khác giữ nguyên. */
     public RequestResponse withExtras(
             CancelRequestInfo newCancelRequest,

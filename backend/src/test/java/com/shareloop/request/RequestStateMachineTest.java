@@ -540,8 +540,10 @@ class RequestStateMachineTest {
             Request request = createRequest(RequestStatus.AWAITING_LOGISTICS);
             Instant now = Instant.now();
             Instant meetingTime = now.plus(2, ChronoUnit.DAYS);
-            request.proposeSchedule(deliveryMethod, "Địa điểm cũ", meetingTime, true, true, now);
-            request.proposeSchedule(deliveryMethod, "Địa điểm mới", meetingTime, false, true, now.plusSeconds(1));
+            // Giao hàng: người nhận phải nhập địa chỉ nhận hàng của mình (GN-12)
+            request.proposeSchedule(deliveryMethod, "Địa điểm cũ", meetingTime, true, true, now, null);
+            request.proposeSchedule(
+                    deliveryMethod, "Địa điểm mới", meetingTime, false, true, now.plusSeconds(1), "12 Lê Lợi");
 
             assertThat(request.getDonorScheduleOkAt()).isNull();
             assertThat(request.getDonorWaiverAt()).isNull();
@@ -667,26 +669,26 @@ class RequestStateMachineTest {
             // Chủ bài chọn người nhận
             request.select(Instant.now());
 
-            // Chủ bài đề xuất ship và đồng ý cam kết miễn trừ trách nhiệm
+            // Chủ bài đề xuất ngày gửi hàng dự kiến (Cho tặng nên chủ bài không cần địa chỉ) và đồng ý cam kết
             Instant meetingTime = Instant.now().plus(4, ChronoUnit.DAYS);
             Instant t1 = Instant.now();
             request.proposeSchedule("SHIPPING", null, meetingTime, true, true, t1);
             assertThat(request.getDonorWaiverAt()).isEqualTo(t1);
 
-            // Người nhận xác nhận lịch và cũng đồng ý cam kết trách nhiệm
+            // Người nhận nhập địa chỉ nhận hàng, xác nhận lịch và cũng đồng ý cam kết trách nhiệm
             Instant t2 = t1.plus(2, ChronoUnit.HOURS);
-            request.confirmLogistics(false, true, t2);
+            request.confirmLogistics(false, true, t2, "12 Lê Lợi");
             assertThat(request.getStatus()).isEqualTo(RequestStatus.LOGISTICS_CONFIRMED);
             assertThat(request.getReceiverWaiverAt()).isEqualTo(t2);
 
-            // Người nhận nhận được kiện hàng trước bấm xác nhận
+            // Luật mới (GN-12): chiều 1 do chủ bài gửi, người nhận chỉ báo nhận được sau khi chiều đó Đã gửi
             Instant t3 = meetingTime.plus(1, ChronoUnit.DAYS);
-            request.confirmHandover(false, t3);
+            request.markShipped(true, "GHN12345", t3);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.AWAITING_HANDOVER);
 
-            // Chủ bài xác nhận đã gửi thành công
+            // Cho tặng chỉ có một chiều nên người nhận nhận xong là hoàn tất
             Instant t4 = t3.plus(1, ChronoUnit.HOURS);
-            request.confirmHandover(true, t4);
+            request.markReceived(false, t4);
             assertThat(request.getStatus()).isEqualTo(RequestStatus.COMPLETED);
         }
 

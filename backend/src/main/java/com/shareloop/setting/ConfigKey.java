@@ -393,6 +393,12 @@ public enum ConfigKey {
             ConfigGroup.TRANSACTION,
             "Số ngày tự huỷ giao dịch đã chốt lịch mà không ai làm gì",
             "Giao dịch đã chốt lịch, qua giờ hẹn hoặc hạn gửi hàng quá số ngày này mà chưa bên nào bấm gì thì tự huỷ, không phạt ai."),
+    SHIPPING_SEND_DEADLINE_DAYS(
+            "shipping_send_deadline_days",
+            "3",
+            ConfigGroup.TRANSACTION,
+            "Hạn gửi hàng",
+            "Hạn gửi của mỗi chiều giao hàng là ngày gửi hàng dự kiến cộng thêm số ngày này. Quá hạn mà chưa gửi thì bên nhận được báo chưa nhận hàng."),
     STUCK_REQUEST_HOURS(
             "stuck_request_hours",
             "48",

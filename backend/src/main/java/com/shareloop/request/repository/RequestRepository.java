@@ -48,7 +48,8 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
         WHERE r.rescheduleProposedAt IS NOT NULL
         AND r.status IN (com.shareloop.request.entity.RequestStatus.LOGISTICS_CONFIRMED,
                          com.shareloop.request.entity.RequestStatus.AWAITING_HANDOVER)
-        AND (r.rescheduleProposedAt < :cutoff OR r.meetingTime <= :now)
+        AND (r.rescheduleProposedAt < :cutoff
+             OR (r.meetingTime <= :now AND (r.deliveryMethod IS NULL OR r.deliveryMethod <> 'SHIPPING')))
         AND r.id > :afterId
         ORDER BY r.id ASC
     """)
@@ -72,6 +73,80 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
         ORDER BY r.id ASC
     """)
     List<Request> findConfirmedPastMeeting(
+            @Param("cutoff") Instant cutoff,
+            @Param("afterId") long afterId,
+            org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Giao dịch Giao hàng có chiều đã gửi trước cutoff mà bên nhận chưa xác nhận (GN-09, GN-12). Việc nền tự ghi nhận Đã
+     * nhận cho từng chiều như vậy.
+     */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.status = com.shareloop.request.entity.RequestStatus.AWAITING_HANDOVER
+        AND r.deliveryMethod = 'SHIPPING'
+        AND ((r.donorShippedAt < :cutoff AND r.receiverHandoverAt IS NULL)
+             OR (r.receiverShippedAt < :cutoff AND r.donorHandoverAt IS NULL))
+        AND r.id > :afterId
+        ORDER BY r.id ASC
+    """)
+    List<Request> findShippingLegsOverdue(
+            @Param("cutoff") Instant cutoff,
+            @Param("afterId") long afterId,
+            org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Giao dịch Giao hàng còn chiều chưa gửi mà ngày gửi dự kiến trước cutoff (GN-12). Dùng cho việc nhắc hạn gửi.
+     */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.status IN (com.shareloop.request.entity.RequestStatus.LOGISTICS_CONFIRMED,
+                           com.shareloop.request.entity.RequestStatus.AWAITING_HANDOVER)
+        AND r.deliveryMethod = 'SHIPPING'
+        AND r.meetingTime < :cutoff
+        AND (r.donorShippedAt IS NULL OR (r.offeredItemId IS NOT NULL AND r.receiverShippedAt IS NULL))
+        AND r.id > :afterId
+        ORDER BY r.id ASC
+    """)
+    List<Request> findShippingWithUnsentLeg(
+            @Param("cutoff") Instant cutoff,
+            @Param("afterId") long afterId,
+            org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Giao dịch Giao hàng đã chốt lịch, chưa chiều nào gửi, ngày gửi dự kiến trước cutoff và không có đề nghị huỷ đang
+     * chờ (GN-12). Dùng cho việc nhắc hạn gửi và việc tự huỷ.
+     */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.status = com.shareloop.request.entity.RequestStatus.LOGISTICS_CONFIRMED
+        AND r.deliveryMethod = 'SHIPPING'
+        AND r.cancelRequestedAt IS NULL
+        AND r.meetingTime < :cutoff
+        AND r.id > :afterId
+        ORDER BY r.id ASC
+    """)
+    List<Request> findShippingNothingSent(
+            @Param("cutoff") Instant cutoff,
+            @Param("afterId") long afterId,
+            org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Giao dịch Giao hàng đã có chiều Đã nhận mà chiều còn lại chưa gửi, ngày gửi dự kiến trước cutoff (GN-12): kẹt một
+     * chiều, việc nền sẽ chuyển sang DISPUTED để Admin xử lý.
+     */
+    @Query("""
+        SELECT r FROM Request r
+        WHERE r.status = com.shareloop.request.entity.RequestStatus.AWAITING_HANDOVER
+        AND r.deliveryMethod = 'SHIPPING'
+        AND r.offeredItemId IS NOT NULL
+        AND ((r.receiverHandoverAt IS NOT NULL AND r.receiverShippedAt IS NULL)
+             OR (r.donorHandoverAt IS NOT NULL AND r.donorShippedAt IS NULL))
+        AND r.meetingTime < :cutoff
+        AND r.id > :afterId
+        ORDER BY r.id ASC
+    """)
+    List<Request> findShippingOneLegStuck(
             @Param("cutoff") Instant cutoff,
             @Param("afterId") long afterId,
             org.springframework.data.domain.Pageable pageable);
@@ -275,19 +350,13 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
             OR
             (r.receiverHandoverAt IS NOT NULL AND r.donorHandoverAt IS NULL)
         )
-        AND (
-            (r.deliveryMethod = 'SHIPPING'
-                AND COALESCE(r.donorHandoverAt, r.receiverHandoverAt) < :shippingCutoff)
-            OR
-            ((r.deliveryMethod IS NULL OR r.deliveryMethod <> 'SHIPPING')
-                AND COALESCE(r.donorHandoverAt, r.receiverHandoverAt) < :inPersonCutoff)
-        )
+        AND (r.deliveryMethod IS NULL OR r.deliveryMethod <> 'SHIPPING')
+        AND COALESCE(r.donorHandoverAt, r.receiverHandoverAt) < :inPersonCutoff
         AND r.id > :afterId
         ORDER BY r.id ASC
     """)
     List<Request> findOverdueHandoverRequests(
             @Param("inPersonCutoff") java.time.Instant inPersonCutoff,
-            @Param("shippingCutoff") java.time.Instant shippingCutoff,
             @Param("afterId") long afterId,
             org.springframework.data.domain.Pageable pageable);
 

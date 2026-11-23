@@ -36,6 +36,7 @@ public class PublicConfigController {
             ConfigKey.MEETING_MAX_DAYS_AHEAD,
             ConfigKey.RESCHEDULE_MAX_COUNT,
             ConfigKey.CONFIRMED_STALE_CANCEL_DAYS,
+            ConfigKey.SHIPPING_SEND_DEADLINE_DAYS,
             ConfigKey.REPORT_HIDE_THRESHOLD,
             ConfigKey.REPUTATION_CLEAN_STREAK_FOR_STAR,
             ConfigKey.STAR_RESTORE_MIN_DISTINCT_PARTNERS,

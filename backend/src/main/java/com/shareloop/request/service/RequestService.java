@@ -35,6 +35,8 @@ import com.shareloop.request.dto.RequestMediaResponse;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.dto.RescheduleRequest;
 import com.shareloop.request.dto.ScheduleRequest;
+import com.shareloop.request.dto.ShipmentRequest;
+import com.shareloop.request.dto.ShippingInfo;
 import com.shareloop.request.entity.CancelRequestCode;
 import com.shareloop.request.entity.Request;
 import com.shareloop.request.entity.RequestMediaMapping;
@@ -353,7 +355,7 @@ public class RequestService {
                 "Một thành viên đã gửi yêu cầu tới bài đăng của bạn.",
                 "/requests/" + saved.getId());
 
-        return toResponse(saved);
+        return toResponse(saved, receiverId);
     }
 
     /**
@@ -434,7 +436,7 @@ public class RequestService {
                             complaintDeadline,
                             lastMessageAt,
                             disputeResponseDueAt);
-                    return addExtraInfo(request, response, null)
+                    return addExtraInfo(request, response, null, currentUserId)
                             .withReports(disputesOf(disputesMap, request), refusalOf(refusalMap, request))
                             .withFlags(flagsOf(request));
                 })
@@ -479,7 +481,7 @@ public class RequestService {
                             complaintDeadline,
                             lastMessageAt,
                             disputeResponseDueAt);
-                    return addExtraInfo(request, response, null)
+                    return addExtraInfo(request, response, null, currentUserId)
                             .withReports(disputesOf(disputesMap, request), refusalOf(refusalMap, request))
                             .withFlags(flagsOf(request));
                 })
@@ -522,7 +524,7 @@ public class RequestService {
                     "/items/" + saved.getItemId());
         }
 
-        return toResponse(saved);
+        return toResponse(saved, currentUserId);
     }
 
     /**
@@ -632,7 +634,7 @@ public class RequestService {
                 "Chủ bài đã chọn bạn để trao tặng/trao đổi món đồ.",
                 "/requests/" + selectedRequest.getId());
 
-        return toResponse(saved);
+        return toResponse(saved, currentUserId);
     }
 
     /** Người gửi yêu cầu thay món đem đổi trước khi hai bên chốt lịch. */
@@ -651,7 +653,7 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_OFFERED_ITEM_CHANGE_LOCKED);
         }
         if (request.getOfferedItemId() == offeredItemId) {
-            return toResponse(request);
+            return toResponse(request, currentUserId);
         }
         requireValidOfferedItem(offeredItemId, currentUserId, request.getItemId());
         if (request.getStatus() != RequestStatus.PENDING) {
@@ -672,7 +674,7 @@ public class RequestService {
                         + " bạn có thể huỷ giao dịch trước khi chốt lịch mà không bị trừ sao.";
         notificationService.notify(
                 item.donorId(), "OFFERED_ITEM_CHANGED", "Món đề nghị đã thay đổi", body, "/requests/" + saved.getId());
-        return toResponse(saved);
+        return toResponse(saved, currentUserId);
     }
 
     /**
@@ -715,7 +717,7 @@ public class RequestService {
                 "Giao dịch của bạn đã chuyển sang Trao đổi với món bạn đề nghị.",
                 "/requests/" + saved.getId());
 
-        return toResponse(saved);
+        return toResponse(saved, donorId);
     }
 
     /**
@@ -992,7 +994,7 @@ public class RequestService {
 
         Request saved = cancelByParty(
                 request, item, currentUserId, isDonor, requestDto.reason().trim());
-        return toResponse(saved);
+        return toResponse(saved, currentUserId);
     }
 
     /**
@@ -1016,12 +1018,18 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
         }
 
+        if (request.isShipping()) {
+            return handoverFailedForShipping(request, item, currentUserId, isDonor, requestDto);
+        }
+
         CancelRequestCode code = requestDto.code() != null ? requestDto.code() : CancelRequestCode.OTHER;
         String typedReason =
                 requestDto.reason() == null ? "" : requestDto.reason().trim();
         if (!request.hasOtherPartyConfirmedHandover(isDonor)) {
-            return toResponse(startCancelRequestAfterMeeting(
-                    request, item, currentUserId, isDonor, code, typedReason, requestDto.evidenceMediaIds()));
+            return toResponse(
+                    startCancelRequestAfterMeeting(
+                            request, item, currentUserId, isDonor, code, typedReason, requestDto.evidenceMediaIds()),
+                    currentUserId);
         }
 
         // Bên kia đã bấm hoàn tất: giữ nhánh cũ, khiếu nại ngay. Không mã lý do thì nội dung là đúng chữ người nhập.
@@ -1033,7 +1041,124 @@ public class RequestService {
         // rollback.
         eventPublisher.publishEvent(
                 new HandoverIssueReportedEvent(requestId, currentUserId, reason, requestDto.evidenceMediaIds()));
-        return withReports(toResponse(saved), requestId, currentUserId);
+        return withReports(toResponse(saved, currentUserId), requestId, currentUserId);
+    }
+
+    /**
+     * Giao nhận không thành công khi Giao hàng (GN-12), tính theo chiều mà người báo là bên nhận. Chiều đã gửi, hoặc
+     * chiều kia đã nhận: khiếu nại ngay. Chiều chưa gửi và chưa quá hạn gửi: chưa cho báo. Chiều chưa gửi và đã quá hạn:
+     * tạo đề nghị huỷ "bên kia chưa gửi hàng" để bên gửi đồng ý, phản đối bằng cách bấm đã gửi, hoặc im lặng.
+     */
+    private RequestResponse handoverFailedForShipping(
+            Request request, ItemSnapshot item, long userId, boolean isDonor, HandoverFailedRequest requestDto) {
+        int incomingLeg = request.incomingLegOf(isDonor);
+        if (incomingLeg == 0) {
+            throw new BusinessException(RequestErrorCode.REQUEST_LEG_NOT_APPLICABLE);
+        }
+        String typedReason =
+                requestDto.reason() == null ? "" : requestDto.reason().trim();
+        int otherLeg = incomingLeg == 1 ? 2 : 1;
+        boolean otherLegReceived = request.requiredLegs() == 2 && request.isLegReceived(otherLeg);
+
+        if (request.isLegShipped(incomingLeg) || otherLegReceived) {
+            String note = describeLeg(request, incomingLeg)
+                    + (typedReason.isEmpty() ? "" : ". " + typedReason)
+                    + (request.isLegShipped(incomingLeg) ? "" : ". Chiều còn lại đã được nhận.");
+            request.openShippingIssue();
+            Request saved = requestRepository.save(request);
+            // Listener của module report chạy ngay trong transaction này để khiếu nại và DISPUTED cùng thành công
+            eventPublisher.publishEvent(
+                    new HandoverIssueReportedEvent(saved.getId(), userId, note, requestDto.evidenceMediaIds()));
+            return withReports(toResponse(saved, userId), saved.getId(), userId);
+        }
+
+        Instant now = Instant.now();
+        Instant sendDeadline = deadlineCalculator.sendDeadlineAt(request);
+        if (sendDeadline != null && now.isBefore(sendDeadline)) {
+            throw new BusinessException(
+                    RequestErrorCode.REQUEST_SEND_DEADLINE_NOT_PASSED,
+                    "Bên kia chưa gửi hàng, hạn gửi đến " + VietnamTime.formatDate(sendDeadline));
+        }
+        Request saved = createCancelRequest(
+                request,
+                item,
+                userId,
+                isDonor,
+                CancelRequestCode.COUNTERPART_NOT_SHIPPED,
+                typedReason.isEmpty() ? null : typedReason,
+                now);
+        attachHandoverEvidence(saved, userId, requestDto.evidenceMediaIds());
+        return toResponse(saved, userId);
+    }
+
+    // Mô tả một chiều cho nội dung khiếu nại: món nào, mã vận đơn của bên gửi (GN-12).
+    private String describeLeg(Request request, int leg) {
+        Long itemId = leg == 1 ? request.getItemId() : request.getOfferedItemId();
+        String title = itemId == null ? null : findItemTitle(itemId);
+        String tracking = leg == 1 ? request.getDonorTrackingCode() : request.getReceiverTrackingCode();
+        return "Chiều giao hàng món " + (title == null ? (leg == 1 ? "chính" : "đổi") : title)
+                + (tracking == null ? ", bên gửi chưa có mã vận đơn" : ", mã vận đơn " + tracking);
+    }
+
+    // Câu báo hai bên khi giao dịch Giao hàng huỷ mà đã có chiều được gửi: món nằm ở chỗ người nhận (GN-12).
+    private String shippedItemsNotice(Request request) {
+        if (!request.isShipping()) {
+            return "";
+        }
+        StringBuilder notice = new StringBuilder();
+        for (int leg = 1; leg <= request.requiredLegs(); leg++) {
+            if (request.isLegShipped(leg)) {
+                Long itemId = leg == 1 ? request.getItemId() : request.getOfferedItemId();
+                String title = itemId == null ? null : findItemTitle(itemId);
+                notice.append(" Món ")
+                        .append(title == null ? "đã gửi" : title)
+                        .append(" đã được gửi, hai bên liên hệ để hoàn trả.");
+            }
+        }
+        return notice.toString();
+    }
+
+    /**
+     * Người gửi báo đã gửi hàng cho chiều của mình, kèm mã vận đơn 3 đến 50 ký tự và ảnh biên nhận không bắt buộc
+     * (GN-12). Lần gửi đầu chuyển giao dịch sang AWAITING_HANDOVER. Nếu bên nhận đang có đề nghị huỷ "chưa gửi hàng" cho
+     * đúng chiều này thì đề nghị tự rút. Không tích hợp đơn vị vận chuyển, không tra mã vận đơn.
+     *
+     * @throws BusinessException REQUEST_NOT_SHIPPING, REQUEST_LEG_NOT_APPLICABLE, REQUEST_LEG_ALREADY_SHIPPED,
+     *     REQUEST_TRACKING_CODE_INVALID, REQUEST_CANCEL_REQUEST_PENDING khi đang có đề nghị huỷ khác chờ
+     */
+    @Transactional
+    public RequestResponse markShipped(long requestId, long currentUserId, ShipmentRequest requestDto) {
+        Request request = loadRequestForUpdate(requestId);
+        ItemSnapshot item = loadItemSnapshot(request);
+        boolean isDonor = requireParty(request, item, currentUserId);
+        if (!request.isShipping()) {
+            throw new BusinessException(RequestErrorCode.REQUEST_NOT_SHIPPING);
+        }
+        boolean hadPendingCancel = request.hasPendingCancelRequest();
+        Long cancelRequester = request.getCancelRequestedBy();
+
+        request.markShipped(isDonor, requestDto.trackingCode(), Instant.now());
+        attachHandoverEvidence(request, currentUserId, requestDto.mediaIds());
+        Request saved = requestRepository.save(request);
+
+        String link = "/requests/" + saved.getId();
+        long receiverOfLeg = isDonor ? saved.getReceiverId() : item.donorId();
+        String trackingCode = isDonor ? saved.getDonorTrackingCode() : saved.getReceiverTrackingCode();
+        notificationService.notify(
+                receiverOfLeg,
+                "SHIPMENT_SENT",
+                "Hàng đã được gửi",
+                "Hàng đã được gửi, mã vận đơn " + trackingCode + ". Khi nhận được hàng, hãy bấm Tôi đã nhận được hàng.",
+                link);
+        if (hadPendingCancel && !saved.hasPendingCancelRequest() && cancelRequester != null) {
+            notificationService.notify(
+                    cancelRequester,
+                    "CANCEL_REQUEST_WITHDRAWN",
+                    "Đề nghị huỷ đã được rút",
+                    nameOrDefault(currentUserId) + " đã gửi hàng nên đề nghị huỷ của bạn tự rút. Giao dịch tiếp tục.",
+                    link);
+        }
+        return toResponse(saved, currentUserId);
     }
 
     /**
@@ -1055,8 +1180,13 @@ public class RequestService {
         if (isDonor && !isSwap) {
             throw new BusinessException(RequestErrorCode.REQUEST_REFUSE_NOT_ALLOWED);
         }
-        // GN-07: chưa tới giờ hẹn thì chưa ai nhận món nào để mà từ chối
-        if (request.isBeforeMeetingTime(Instant.now())) {
+        if (request.isShipping()) {
+            // GN-12: từ chối được sau khi chiều mình nhận đã Đã gửi
+            if (!request.isLegShipped(request.incomingLegOf(isDonor))) {
+                throw new BusinessException(RequestErrorCode.REQUEST_LEG_NOT_SHIPPED);
+            }
+        } else if (request.isBeforeMeetingTime(Instant.now())) {
+            // GN-07: chưa tới giờ hẹn thì chưa ai nhận món nào để mà từ chối
             throw new BusinessException(RequestErrorCode.REQUEST_BEFORE_MEETING_TIME);
         }
 
@@ -1085,7 +1215,7 @@ public class RequestService {
                     (String) null,
                     saved.getCancelReason());
         }
-        return withReports(toResponse(saved), requestId, currentUserId);
+        return withReports(toResponse(saved, currentUserId), requestId, currentUserId);
     }
 
     // Báo cả hai bên khi giao dịch huỷ vì từ chối nhận; bên bị báo cáo biết món đang tạm ẩn và có thể giải trình.
@@ -1122,15 +1252,17 @@ public class RequestService {
         ItemSnapshot item = loadItemSnapshot(request);
         boolean isDonor = requireParty(request, item, currentUserId);
         Instant now = Instant.now();
-        // Từ giờ hẹn trở đi hai bên dùng "Giao nhận không thành công"
-        if (!request.isBeforeMeetingTime(now)) {
+        // Từ giờ hẹn trở đi (Giao hàng: từ khi có chiều Đã gửi) hai bên dùng "Giao nhận không thành công"
+        if (!request.isBeforeHandoverStart(now)) {
             throw new BusinessException(RequestErrorCode.REQUEST_INVALID_STATE_TRANSITION);
         }
         if (!requestDto.code().isAllowedBeforeMeeting()) {
             throw new BusinessException(RequestErrorCode.REQUEST_CANCEL_REASON_INVALID);
         }
         String reason = cleanCancelReason(requestDto.code(), requestDto.reason());
-        return toResponse(createCancelRequest(request, item, currentUserId, isDonor, requestDto.code(), reason, now));
+        return toResponse(
+                createCancelRequest(request, item, currentUserId, isDonor, requestDto.code(), reason, now),
+                currentUserId);
     }
 
     // "Giao nhận không thành công" khi bên kia chưa bấm hoàn tất: chưa huỷ, chỉ tạo đề nghị (GN-06).
@@ -1230,7 +1362,7 @@ public class RequestService {
                 "Đề nghị huỷ đã được rút lại",
                 nameOrDefault(currentUserId) + " đã rút lại đề nghị huỷ. Giao dịch tiếp tục như thường.",
                 "/requests/" + saved.getId());
-        return toResponse(saved);
+        return toResponse(saved, currentUserId);
     }
 
     /**
@@ -1253,15 +1385,17 @@ public class RequestService {
                 "TRANSACTION_CANCELLED",
                 "Giao dịch đã được huỷ",
                 nameOrDefault(currentUserId)
-                        + " đã đồng ý huỷ giao dịch. Bài đăng được mở lại và không bên nào bị trừ sao.",
+                        + " đã đồng ý huỷ giao dịch. Bài đăng được mở lại và không bên nào bị trừ sao."
+                        + shippedItemsNotice(saved),
                 link);
         notificationService.notify(
                 currentUserId,
                 "TRANSACTION_CANCELLED",
                 "Giao dịch đã được huỷ",
-                "Bạn đã đồng ý huỷ giao dịch. Bài đăng được mở lại và không bên nào bị trừ sao.",
+                "Bạn đã đồng ý huỷ giao dịch. Bài đăng được mở lại và không bên nào bị trừ sao."
+                        + shippedItemsNotice(saved),
                 link);
-        return toResponse(saved);
+        return toResponse(saved, currentUserId);
     }
 
     // Phần chung của huỷ theo đề nghị: lưu, nhả bài chính và món đổi (releaseReservedItems trả lại thời gian hiển thị),
@@ -1298,7 +1432,7 @@ public class RequestService {
         requireParty(request, item, currentUserId);
         Request saved = disputeCancelRequest(
                 request, currentUserId, requestDto.explanation().trim(), requestDto.evidenceMediaIds());
-        return withReports(toResponse(saved), requestId, currentUserId);
+        return withReports(toResponse(saved, currentUserId), requestId, currentUserId);
     }
 
     // Chuyển DISPUTED và báo module report mở khiếu nại. Dùng cho "Không đồng ý" và cho việc bên kia bấm hoàn tất khi
@@ -1358,18 +1492,20 @@ public class RequestService {
                 "TRANSACTION_CANCELLED",
                 "Giao dịch đã được huỷ",
                 "Giao dịch đã huỷ vì bên kia không phản hồi đề nghị huỷ trong " + responseHours
-                        + " giờ. Bài đăng được mở lại và không bên nào bị trừ sao.",
+                        + " giờ. Bài đăng được mở lại và không bên nào bị trừ sao."
+                        + shippedItemsNotice(saved),
                 link);
         notificationService.notify(
                 silentUserId,
                 "TRANSACTION_CANCELLED",
                 "Giao dịch đã được huỷ",
                 "Giao dịch đã huỷ vì bạn không phản hồi đề nghị huỷ trong " + responseHours
-                        + " giờ. Bài đăng được mở lại và không bên nào bị trừ sao.",
+                        + " giờ. Bài đăng được mở lại và không bên nào bị trừ sao."
+                        + shippedItemsNotice(saved),
                 link);
 
         if (code == CancelRequestCode.COUNTERPART_NO_SHOW || code == CancelRequestCode.COUNTERPART_NOT_SHIPPED) {
-            String issue = code == CancelRequestCode.COUNTERPART_NO_SHOW ? "không đến điểm hẹn" : "chưa gửi hàng";
+            String issue = code == CancelRequestCode.COUNTERPART_NO_SHOW ? "không đến điểm hẹn" : "không gửi hàng";
             eventPublisher.publishEvent(
                     new SilentCancelRequestReportedEvent(saved.getId(), requesterId, silentUserId, issue, note));
         }
@@ -1423,7 +1559,7 @@ public class RequestService {
                         + (newPlace == null ? "" : " tại " + newPlace) + ". Bạn có đồng ý không? Hạn phản hồi "
                         + VietnamTime.format(dueAt) + ".",
                 "/requests/" + saved.getId());
-        return toResponse(saved);
+        return toResponse(saved, currentUserId);
     }
 
     /** Bên kia đồng ý dời lịch (GN-11): đổi lịch, liên hệ vẫn mở, tăng bộ đếm số lần dời. */
@@ -1444,7 +1580,7 @@ public class RequestService {
                         + VietnamTime.format(saved.getMeetingTime())
                         + (saved.getMeetingPlace() == null ? "" : " tại " + saved.getMeetingPlace()) + ".",
                 "/requests/" + saved.getId());
-        return toResponse(saved);
+        return toResponse(saved, currentUserId);
     }
 
     /** Bên kia từ chối dời lịch (GN-11): giữ lịch cũ, báo người đề nghị. */
@@ -1464,7 +1600,7 @@ public class RequestService {
                 nameOrDefault(currentUserId) + " không đồng ý dời lịch. Lịch cũ được giữ là "
                         + VietnamTime.format(saved.getMeetingTime()) + ".",
                 "/requests/" + saved.getId());
-        return toResponse(saved);
+        return toResponse(saved, currentUserId);
     }
 
     /**
@@ -1509,20 +1645,233 @@ public class RequestService {
                 || request.getStatus() != RequestStatus.LOGISTICS_CONFIRMED
                 || request.getMeetingTime() == null
                 || request.hasPendingCancelRequest()
-                || request.getMeetingTime().plus(staleDays, ChronoUnit.DAYS).isAfter(now)) {
+                || staleThreshold(request, staleDays).isAfter(now)) {
             return false;
         }
 
-        request.cancelAsStale("Quá " + staleDays + " ngày kể từ giờ hẹn mà chưa bên nào xác nhận.");
+        String since =
+                request.isShipping() ? "hạn gửi hàng mà chưa chiều nào được gửi" : "giờ hẹn mà chưa bên nào xác nhận";
+        request.cancelAsStale("Quá " + staleDays + " ngày kể từ " + since + ".");
         Request saved = finishCancelByAgreement(request, null);
 
-        String message = "Giao dịch đã tự huỷ vì quá " + staleDays
-                + " ngày kể từ giờ hẹn mà chưa bên nào xác nhận. Bài đăng được mở lại và không bên nào bị trừ sao.";
+        String message = "Giao dịch đã tự huỷ vì quá " + staleDays + " ngày kể từ " + since
+                + ". Bài đăng được mở lại và không bên nào bị trừ sao.";
         String link = "/requests/" + saved.getId();
         notificationService.notify(
                 saved.getReceiverId(), "TRANSACTION_CANCELLED", "Giao dịch đã tự huỷ", message, link);
         notificationService.notify(
                 loadItemSnapshot(saved).donorId(), "TRANSACTION_CANCELLED", "Giao dịch đã tự huỷ", message, link);
+        return true;
+    }
+
+    // GN-12: mốc tự huỷ giao dịch kẹt. Gặp trực tiếp tính từ giờ hẹn, Giao hàng tính từ hạn gửi.
+    private Instant staleThreshold(Request request, int staleDays) {
+        Instant base = request.isShipping() ? deadlineCalculator.sendDeadlineAt(request) : request.getMeetingTime();
+        return base.plus(staleDays, ChronoUnit.DAYS);
+    }
+
+    /**
+     * Việc nền: tự ghi nhận Đã nhận cho từng chiều Giao hàng đã gửi mà bên nhận im lặng quá auto_confirm_days_shipping
+     * ngày kể từ lúc gửi (GN-09, GN-12). Chiều chưa gửi không bao giờ tự hoàn tất. Mọi chiều Đã nhận thì giao dịch hoàn
+     * tất với cờ autoConfirmed. Giao dịch đã có báo cáo thì không tự hoàn tất.
+     *
+     * @return true nếu có ít nhất một chiều được tự ghi nhận
+     */
+    @Transactional
+    public boolean autoReceiveShippingLegs(long requestId, Instant now) {
+        Request request = requestRepository.findByIdForUpdate(requestId).orElse(null);
+        if (request == null || !request.isShipping() || request.getStatus() != RequestStatus.AWAITING_HANDOVER) {
+            return false;
+        }
+        if (reportService != null && reportService.hasReportForRequest(requestId)) {
+            return false;
+        }
+        int days = configService.getInt(ConfigKey.AUTO_CONFIRM_DAYS_SHIPPING);
+        Instant cutoff = now.minus(days, ChronoUnit.DAYS);
+        ItemSnapshot item = loadItemSnapshot(request);
+        List<Integer> receivedLegs = new ArrayList<>();
+        for (int leg = 1; leg <= request.requiredLegs(); leg++) {
+            Instant shippedAt = leg == 1 ? request.getDonorShippedAt() : request.getReceiverShippedAt();
+            if (shippedAt != null && !request.isLegReceived(leg) && shippedAt.isBefore(cutoff)) {
+                request.autoReceive(leg, now);
+                receivedLegs.add(leg);
+            }
+        }
+        if (receivedLegs.isEmpty()) {
+            return false;
+        }
+
+        Request saved = requestRepository.save(request);
+        if (saved.getStatus() == RequestStatus.COMPLETED) {
+            completeShippingAutomatically(saved, item, receivedLegs, days);
+        } else {
+            notifyLegAutoReceived(saved, item, receivedLegs, days);
+        }
+        return true;
+    }
+
+    // Bên nhận của chiều: chiều 1 là người nhận, chiều 2 là chủ bài.
+    private long receiverOfLeg(Request request, ItemSnapshot item, int leg) {
+        return leg == 1 ? request.getReceiverId() : item.donorId();
+    }
+
+    private void notifyLegAutoReceived(Request request, ItemSnapshot item, List<Integer> legs, int days) {
+        String link = "/requests/" + request.getId();
+        for (int leg : legs) {
+            long silent = receiverOfLeg(request, item, leg);
+            long sender = leg == 1 ? item.donorId() : request.getReceiverId();
+            Long itemId = leg == 1 ? request.getItemId() : request.getOfferedItemId();
+            String title = itemId == null ? "đã gửi" : findItemTitle(itemId);
+            notificationService.notify(
+                    silent,
+                    "HANDOVER_CONFIRMED",
+                    "Hệ thống đã ghi nhận bạn nhận hàng",
+                    "Món " + title + " được ghi nhận là đã nhận vì bạn không phản hồi trong " + days + " ngày.",
+                    link);
+            notificationService.notify(
+                    sender,
+                    "HANDOVER_CONFIRMED",
+                    "Món đã được ghi nhận là đã nhận",
+                    "Món " + title + " được ghi nhận là đã nhận vì " + nameOrDefault(silent) + " không phản hồi trong "
+                            + days + " ngày.",
+                    link);
+        }
+    }
+
+    // Hoàn tất tự động: bên im lặng và bên đã bấm nhận hai câu khác nhau (GN-09).
+    private void completeShippingAutomatically(Request saved, ItemSnapshot item, List<Integer> legs, int days) {
+        itemService.markTraded(saved.getItemId());
+        if (saved.getOfferedItemId() != null) {
+            itemService.markTraded(saved.getOfferedItemId());
+        }
+        if (reputationService != null) {
+            reputationService.onCompleted(saved.getId());
+        }
+        int complaintHours = complaintWindowHours();
+        Instant complaintDeadline = ComplaintWindow.deadline(saved.getCompletedAt(), complaintHours);
+        String link = "/requests/" + saved.getId();
+        java.util.Set<Long> silentUsers = new java.util.LinkedHashSet<>();
+        for (int leg : legs) {
+            silentUsers.add(receiverOfLeg(saved, item, leg));
+        }
+        for (long userId : java.util.List.of(item.donorId(), saved.getReceiverId())) {
+            if (silentUsers.contains(userId)) {
+                notificationService.notify(
+                        userId,
+                        "TRANSACTION_COMPLETED",
+                        "Giao dịch đã tự hoàn tất",
+                        "Giao dịch đã tự hoàn tất vì bạn không phản hồi trong " + days + " ngày. Bạn có thể khiếu nại"
+                                + " tới " + VietnamTime.format(complaintDeadline) + ".",
+                        link);
+            } else {
+                long silent = silentUsers.iterator().next();
+                notificationService.notify(
+                        userId,
+                        "TRANSACTION_COMPLETED",
+                        "Giao dịch đã hoàn tất",
+                        "Giao dịch đã hoàn tất vì " + nameOrDefault(silent) + " không phản hồi trong " + days
+                                + " ngày. " + ComplaintWindow.sentence(complaintHours, complaintDeadline),
+                        link);
+            }
+        }
+    }
+
+    /**
+     * Việc nền: nhắc hạn gửi hàng cho từng chiều chưa gửi (GN-12). Mỗi chiều nhắc một lần khi tới ngày gửi dự kiến (báo
+     * bên gửi) và một lần khi quá hạn gửi (báo bên gửi và báo bên nhận về quyền báo chưa nhận được hàng). Không gửi lặp.
+     *
+     * @return true nếu đã gửi ít nhất một thông báo
+     */
+    @Transactional
+    public boolean remindShipping(long requestId, Instant now) {
+        Request request = requestRepository.findById(requestId).orElse(null);
+        if (request == null
+                || !request.isShipping()
+                || !request.isHandoverOpen()
+                || request.getMeetingTime() == null
+                || request.getMeetingTime().isAfter(now)) {
+            return false;
+        }
+        ItemSnapshot item = loadItemSnapshot(request);
+        Instant sendDeadline = deadlineCalculator.sendDeadlineAt(request);
+        String link = "/requests/" + request.getId();
+        boolean sent = false;
+        for (int leg = 1; leg <= request.requiredLegs(); leg++) {
+            if (request.isLegShipped(leg)) {
+                continue;
+            }
+            long sender = leg == 1 ? item.donorId() : request.getReceiverId();
+            long receiver = receiverOfLeg(request, item, leg);
+            Instant since = request.getMeetingTime();
+            sent |= remindOnce(
+                    sender,
+                    "SHIP_DATE_REMINDER",
+                    link,
+                    since,
+                    "Đã tới ngày gửi hàng dự kiến. Hãy gửi hàng và nhập mã vận đơn trước "
+                            + VietnamTime.formatDate(sendDeadline) + ".");
+            if (!sendDeadline.isAfter(now)) {
+                sent |= remindOnce(
+                        sender,
+                        "SHIP_OVERDUE_REMINDER",
+                        link,
+                        since,
+                        "Đã quá hạn gửi hàng. Bên nhận có thể báo chưa nhận được hàng và đề nghị huỷ giao dịch.");
+                sent |= remindOnce(
+                        receiver,
+                        "SHIP_OVERDUE_NOTICE",
+                        link,
+                        since,
+                        "Bên kia đã quá hạn gửi hàng. Bạn có thể bấm Giao nhận không thành công để đề nghị huỷ giao dịch.");
+            }
+        }
+        return sent;
+    }
+
+    /**
+     * Việc nền: giao dịch Giao hàng có một chiều đã được nhận mà chiều còn lại chưa gửi, quá hạn gửi cộng
+     * confirmed_stale_cancel_days ngày thì chuyển sang DISPUTED và mở báo cáo không giao hàng nhắm vào bên chưa gửi để
+     * Admin xử lý. Không tự huỷ, không tự trừ sao.
+     *
+     * @return true nếu đã chuyển sang DISPUTED
+     */
+    @Transactional
+    public boolean openShippingOneLegStuck(long requestId, Instant now) {
+        Request request = requestRepository.findByIdForUpdate(requestId).orElse(null);
+        int staleDays = configService.getInt(ConfigKey.CONFIRMED_STALE_CANCEL_DAYS);
+        if (request == null
+                || !request.isShipping()
+                || request.getStatus() != RequestStatus.AWAITING_HANDOVER
+                || request.getMeetingTime() == null
+                || staleThreshold(request, staleDays).isAfter(now)
+                || (reportService != null && reportService.hasReportForRequest(requestId))) {
+            return false;
+        }
+        boolean receiverGotLeg1WithoutSendingLeg2 =
+                request.isLegReceived(1) && !request.isLegShipped(2) && request.requiredLegs() == 2;
+        boolean donorGotLeg2WithoutSendingLeg1 =
+                request.isLegReceived(2) && !request.isLegShipped(1) && request.requiredLegs() == 2;
+        if (!receiverGotLeg1WithoutSendingLeg2 && !donorGotLeg2WithoutSendingLeg1) {
+            return false;
+        }
+
+        ItemSnapshot item = loadItemSnapshot(request);
+        // Bên đang chờ hàng là người báo, bên chưa gửi là người bị báo
+        long reporterId = receiverGotLeg1WithoutSendingLeg2 ? item.donorId() : request.getReceiverId();
+        int unsentLeg = receiverGotLeg1WithoutSendingLeg2 ? 2 : 1;
+        request.openShippingIssue();
+        Request saved = requestRepository.save(request);
+        eventPublisher.publishEvent(new HandoverIssueReportedEvent(
+                saved.getId(),
+                reporterId,
+                describeLeg(saved, unsentLeg) + ". Chiều còn lại đã được nhận nhưng chiều này chưa được gửi quá hạn.",
+                null));
+        notificationService.notify(
+                reporterId,
+                "DISPUTE_OPENED",
+                "Giao dịch chuyển sang sự cố giao nhận",
+                "Bên kia chưa gửi hàng quá hạn nên giao dịch chuyển sang sự cố giao nhận. Admin sẽ xem xét.",
+                "/requests/" + saved.getId());
         return true;
     }
 
@@ -1556,10 +1905,14 @@ public class RequestService {
 
     // Gửi nhắc nếu chưa có thông báo cùng loại kể từ giờ hẹn (không gửi lặp mỗi lần job chạy).
     private boolean remindOnce(long userId, String type, String link, Request request, String message) {
-        if (notificationService.hasNotificationSince(userId, type, link, request.getMeetingTime())) {
+        return remindOnce(userId, type, link, request.getMeetingTime(), message);
+    }
+
+    private boolean remindOnce(long userId, String type, String link, Instant since, String message) {
+        if (notificationService.hasNotificationSince(userId, type, link, since)) {
             return false;
         }
-        notificationService.notify(userId, type, "Nhắc xác nhận giao nhận", message, link);
+        notificationService.notify(userId, type, "Nhắc giao nhận", message, link);
         return true;
     }
 
@@ -1950,7 +2303,7 @@ public class RequestService {
                     (String) null,
                     Request.CANCEL_BY_ADMIN + reason);
         }
-        return toResponse(saved);
+        return toResponse(saved, adminId);
     }
 
     // Bài chính vừa về APPROVED: báo những người từng bị từ chối ở bài này (mỗi người một lần) để họ xin lại.
@@ -2007,13 +2360,17 @@ public class RequestService {
                     complaintDeadline,
                     lastMessageAt,
                     disputeResponseDueAt);
-            return withReports(addExtraInfo(request, response, handoverMedia), request.getId(), currentUserId)
+            return withReports(
+                            addExtraInfo(request, response, handoverMedia, currentUserId),
+                            request.getId(),
+                            currentUserId)
                     .withFlags(detailFlagsOf(request, request.getItemId()));
         }
 
         RequestResponse response = RequestMapper.toResponse(
                 request, receiverName, null, null, itemInfo, complaintDeadline, lastMessageAt, disputeResponseDueAt);
-        return withReports(addExtraInfo(request, response, handoverMedia), request.getId(), currentUserId)
+        return withReports(
+                        addExtraInfo(request, response, handoverMedia, currentUserId), request.getId(), currentUserId)
                 .withFlags(detailFlagsOf(request, request.getItemId()));
     }
 
@@ -2048,7 +2405,8 @@ public class RequestService {
                 requestDto.meetingTime(),
                 isDonor,
                 Boolean.TRUE.equals(requestDto.agreeToWaiver()),
-                Instant.now());
+                Instant.now(),
+                requestDto.shippingAddress());
 
         Request saved = requestRepository.save(request);
 
@@ -2061,7 +2419,7 @@ public class RequestService {
                 "Đối phương đã cập nhật lịch hẹn giao nhận.",
                 "/requests/" + saved.getId());
 
-        return toResponse(saved);
+        return toResponse(saved, currentUserId);
     }
 
     /**
@@ -2085,7 +2443,8 @@ public class RequestService {
         boolean isDonor = item.donorId() == currentUserId;
         boolean agreeToWaiver = requestDto != null && Boolean.TRUE.equals(requestDto.agreeToWaiver());
 
-        request.confirmLogistics(isDonor, agreeToWaiver, Instant.now());
+        String shippingAddress = requestDto == null ? null : requestDto.shippingAddress();
+        request.confirmLogistics(isDonor, agreeToWaiver, Instant.now(), shippingAddress);
         Request saved = requestRepository.save(request);
 
         // Nếu cả hai đã xác nhận và sang LOGISTICS_CONFIRMED, thông báo cho bên còn lại
@@ -2100,7 +2459,7 @@ public class RequestService {
                     "/requests/" + saved.getId());
         }
 
-        return toResponse(saved);
+        return toResponse(saved, currentUserId);
     }
 
     /**
@@ -2172,12 +2531,17 @@ public class RequestService {
             throw new BusinessException(RequestErrorCode.REQUEST_CANCEL_REQUEST_PENDING);
         }
 
-        request.confirmHandover(isDonor, Instant.now());
+        if (request.isShipping()) {
+            // GN-12: giao hàng thì nút này là "Tôi đã nhận được hàng" cho chiều mình nhận
+            request.markReceived(isDonor, Instant.now());
+        } else {
+            request.confirmHandover(isDonor, Instant.now());
+        }
         if (answersCancelRequest) {
             // GN-06: bên kia bấm "Đã giao nhận xong" khi có đề nghị huỷ đang chờ thì coi như không đồng ý
             Request disputed = disputeCancelRequest(
                     request, currentUserId, "Tôi đã bấm đã giao nhận xong nên không đồng ý huỷ giao dịch.", null);
-            return withReports(toResponse(disputed), requestId, currentUserId);
+            return withReports(toResponse(disputed, currentUserId), requestId, currentUserId);
         }
         Request saved = requestRepository.save(request);
 
@@ -2220,11 +2584,13 @@ public class RequestService {
                     otherUserId,
                     "HANDOVER_CONFIRMED",
                     "Đối phương đã xác nhận giao nhận",
-                    "Đối phương đã xác nhận giao nhận món đồ. Vui lòng kiểm tra và xác nhận.",
+                    saved.isShipping()
+                            ? nameOrDefault(currentUserId) + " đã nhận được hàng của bạn."
+                            : "Đối phương đã xác nhận giao nhận món đồ. Vui lòng kiểm tra và xác nhận.",
                     "/requests/" + targetRequestId);
         }
 
-        return toResponse(saved);
+        return toResponse(saved, currentUserId);
     }
 
     /**
@@ -2458,7 +2824,7 @@ public class RequestService {
 
     // Phản hồi của các thao tác (tạo, huỷ, chọn, chốt lịch...) cũng kèm tên người xin và tên món đồ, để giao diện
     // không bị mất tên khi thay yêu cầu cũ bằng phản hồi mới.
-    private RequestResponse toResponse(Request request) {
+    private RequestResponse toResponse(Request request, Long viewerId) {
         Instant complaintDeadline = request != null && request.getCompletedAt() != null
                 ? ComplaintWindow.deadline(request.getCompletedAt(), complaintWindowHours())
                 : null;
@@ -2473,13 +2839,13 @@ public class RequestService {
                 complaintDeadline,
                 lastMessageAt,
                 disputeResponseDueAt);
-        return addExtraInfo(request, response, null);
+        return addExtraInfo(request, response, null, viewerId);
     }
 
     // Gắn ảnh đại diện hai bên, cờ hết hạn khiếu nại và phí chuyển sang Trao đổi; handoverMedia chỉ truyền ở chi tiết,
     // danh sách để null.
     private RequestResponse addExtraInfo(
-            Request request, RequestResponse response, List<RequestMediaResponse> handoverMedia) {
+            Request request, RequestResponse response, List<RequestMediaResponse> handoverMedia, Long viewerId) {
         if (response == null) {
             return null;
         }
@@ -2488,7 +2854,30 @@ public class RequestService {
         boolean disputeExpired = isComplaintWindowClosed(response.complaintDeadline());
         Integer conversionFee = conversionFeeOf(response.itemOfferType());
         return response.withExtraInfo(donorAvatarUrl, receiverAvatarUrl, disputeExpired, handoverMedia, conversionFee)
-                .withDeadlines(deadlineCalculator.of(request));
+                .withDeadlines(deadlineCalculator.of(request))
+                .withShipping(shippingInfoFor(request, response, viewerId));
+    }
+
+    // GN-12: địa chỉ của chính mình luôn thấy, địa chỉ của bên kia chỉ thấy sau khi chốt lịch (giống thông tin liên
+    // hệ).
+    // Không biết người xem thì ẩn cả hai.
+    private ShippingInfo shippingInfoFor(Request request, RequestResponse response, Long viewerId) {
+        ShippingInfo full = response.shipping();
+        boolean revealed = request.getContactRevealedAt() != null;
+        // Chỉ hai bên (và Admin) nhận được phản hồi này nên không phải người nhận thì coi là chủ bài
+        boolean viewerIsReceiver = viewerId != null && viewerId.equals(response.receiverId());
+        boolean viewerIsDonor = viewerId != null && !viewerIsReceiver;
+        String receiverAddress = viewerIsReceiver || (viewerIsDonor && revealed) ? full.receiverAddress() : null;
+        String donorAddress = viewerIsDonor || (viewerIsReceiver && revealed) ? full.donorAddress() : null;
+        return new ShippingInfo(
+                receiverAddress,
+                donorAddress,
+                full.donorShippedAt(),
+                full.donorTrackingCode(),
+                full.receiverShippedAt(),
+                full.receiverTrackingCode(),
+                full.receiverAddressProvided(),
+                full.donorAddressProvided());
     }
 
     // Phí chủ bài trả nếu giao dịch chuyển sang Trao đổi (CD-02): bài đang GIVE thì trả POST_FEE như khi đăng bài

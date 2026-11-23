@@ -13,7 +13,10 @@ public record ShippingInfo(
         Instant donorShippedAt,
         String donorTrackingCode,
         Instant receiverShippedAt,
-        String receiverTrackingCode) {
+        String receiverTrackingCode,
+        // Đã nhập địa chỉ hay chưa, luôn trả đúng kể cả khi nội dung địa chỉ của bên kia bị ẩn trước khi chốt lịch.
+        Boolean receiverAddressProvided,
+        Boolean donorAddressProvided) {
 
-    public static final ShippingInfo EMPTY = new ShippingInfo(null, null, null, null, null, null);
+    public static final ShippingInfo EMPTY = new ShippingInfo(null, null, null, null, null, null, null, null);
 }

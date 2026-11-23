@@ -14,6 +14,7 @@ import com.shareloop.request.dto.RequestContactResponse;
 import com.shareloop.request.dto.RequestResponse;
 import com.shareloop.request.dto.RescheduleRequest;
 import com.shareloop.request.dto.ScheduleRequest;
+import com.shareloop.request.dto.ShipmentRequest;
 import com.shareloop.request.service.RequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -219,6 +220,14 @@ public class RequestController {
     @DeleteMapping("/api/v1/requests/{id}/cancel-request")
     public RequestResponse withdrawCancelRequest(@PathVariable long id, @CurrentUserId Long currentUserId) {
         return requestService.withdrawCancelRequest(id, currentUserId);
+    }
+
+    /** Người gửi báo đã gửi hàng cho chiều của mình, kèm mã vận đơn (GN-12). */
+    @Operation(summary = "Báo đã gửi hàng")
+    @PostMapping("/api/v1/requests/{id}/shipment")
+    public RequestResponse markShipped(
+            @PathVariable long id, @CurrentUserId Long currentUserId, @Valid @RequestBody ShipmentRequest request) {
+        return requestService.markShipped(id, currentUserId, request);
     }
 
     /** Đề nghị dời lịch sau khi chốt, trước giờ hẹn (GN-11). Lịch cũ giữ nguyên cho tới khi bên kia đồng ý. */
