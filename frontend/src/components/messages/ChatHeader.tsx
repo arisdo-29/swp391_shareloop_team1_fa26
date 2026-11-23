@@ -238,7 +238,7 @@ export function ChatHeader({
 
       {/* Tiến trình tách riêng khỏi khung món đồ: ẩn món đồ vẫn thấy tiến trình. */}
       <div className="mx-4 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md p-2 ring-1 ring-border/80">
-        <CompactProgress status={request.status} />
+        <CompactProgress status={request.status} request={request} />
         <Button
           size="sm"
           className="!min-h-7 !px-2.5 !py-0.5"

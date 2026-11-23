@@ -8,6 +8,7 @@ import { StepsCard } from '../../components/transaction/StepsCard';
 import { ScheduleCard } from '../../components/transaction/ScheduleCard';
 import { ChangeOfferedItem } from '../../components/transaction/ChangeOfferedItem';
 import { HandoverCard } from '../../components/transaction/HandoverCard';
+import { ShipmentCard } from '../../components/transaction/ShipmentCard';
 import { HandoverMediaCard } from '../../components/transaction/HandoverMediaCard';
 import { ItemSideCard, PartnerCard } from '../../components/transaction/SideCards';
 import { PendingCard } from '../../components/transaction/PendingCard';
@@ -195,17 +196,31 @@ function TransactionProgressView({
             partnerName={partnerName}
             onUpdated={applyUpdate}
           />
-          <HandoverCard
-            request={request}
-            currentUserId={currentUserId}
-            viewerIsDonor={viewerIsDonor}
-            partnerName={partnerName}
-            onUpdated={applyUpdate}
-            onOpenFailed={() => setOpenDialog('failed')}
-            onOpenRefuse={() => setOpenDialog('refuse')}
-            onOpenCancelRequest={() => setOpenDialog('cancelRequest')}
-            onOpenRejectCancel={() => setOpenDialog('rejectCancel')}
-          />
+          {request.deliveryMethod === 'SHIPPING' ? (
+            <ShipmentCard
+              request={request}
+              currentUserId={currentUserId}
+              viewerIsDonor={viewerIsDonor}
+              partnerName={partnerName}
+              onUpdated={applyUpdate}
+              onOpenFailed={() => setOpenDialog('failed')}
+              onOpenRefuse={() => setOpenDialog('refuse')}
+              onOpenCancelRequest={() => setOpenDialog('cancelRequest')}
+              onOpenRejectCancel={() => setOpenDialog('rejectCancel')}
+            />
+          ) : (
+            <HandoverCard
+              request={request}
+              currentUserId={currentUserId}
+              viewerIsDonor={viewerIsDonor}
+              partnerName={partnerName}
+              onUpdated={applyUpdate}
+              onOpenFailed={() => setOpenDialog('failed')}
+              onOpenRefuse={() => setOpenDialog('refuse')}
+              onOpenCancelRequest={() => setOpenDialog('cancelRequest')}
+              onOpenRejectCancel={() => setOpenDialog('rejectCancel')}
+            />
+          )}
           <HandoverMediaCard request={request} />
           {canCancelTransaction(request.status) ? (
             <section className="space-y-2">

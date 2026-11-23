@@ -89,7 +89,18 @@ export interface RequestResponse {
   rescheduleMeetingTime?: string | null;
   rescheduleMeetingPlace?: string | null;
   rescheduleCount?: number | null;
+  // Giao hàng hai chiều. Chiều 1 là món chính chủ bài gửi, chiều 2 là món đổi người nhận gửi. Địa chỉ của bên kia chỉ có
+  // sau khi chốt lịch, flag Provided cho biết đã nhập hay chưa.
+  receiverAddress?: string | null;
+  donorAddress?: string | null;
+  receiverAddressProvided?: boolean | null;
+  donorAddressProvided?: boolean | null;
+  donorShippedAt?: string | null;
+  donorTrackingCode?: string | null;
+  receiverShippedAt?: string | null;
+  receiverTrackingCode?: string | null;
   // Mốc hạn do backend tính, FE chỉ hiện.
+  sendDeadlineAt?: string | null;
   cancelRequestExpiresAt?: string | null;
   rescheduleExpiresAt?: string | null;
 }
@@ -100,13 +111,23 @@ export interface CreateRequestBody {
 
 export interface ScheduleRequestBody {
   deliveryMethod: 'IN_PERSON' | 'SHIPPING';
-  meetingPlace: string;
+  // Giao hàng không dùng địa điểm, meetingTime là ngày gửi hàng dự kiến.
+  meetingPlace?: string;
   meetingTime: string;
   agreeToWaiver: true;
+  // Địa chỉ nhận hàng của chính người gọi khi Giao hàng (tối đa 255 ký tự).
+  shippingAddress?: string;
 }
 
 export interface ConfirmLogisticsRequestBody {
   agreeToWaiver?: boolean;
+  shippingAddress?: string;
+}
+
+export interface ShipmentRequestBody {
+  // Mã vận đơn 3 đến 50 ký tự, không tra tự động.
+  trackingCode: string;
+  mediaIds?: number[];
 }
 
 export interface HandoverConfirmRequestBody {
@@ -353,6 +374,13 @@ export const requestApi = {
       {},
       { params: { currentUserId } },
     );
+    return data;
+  },
+  // Báo đã gửi hàng cho chiều của mình (Giao hàng). Lần gửi đầu chuyển sang bước giao nhận.
+  async markShipped(id: number, currentUserId: number, body: ShipmentRequestBody) {
+    const { data } = await http.post<RequestResponse>(`/api/v1/requests/${id}/shipment`, body, {
+      params: { currentUserId },
+    });
     return data;
   },
   async getContact(id: number, currentUserId: number) {

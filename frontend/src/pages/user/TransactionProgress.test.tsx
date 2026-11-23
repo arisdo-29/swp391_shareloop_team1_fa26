@@ -712,17 +712,17 @@ describe('Ba nút kết quả giao nhận', () => {
     expect(screen.queryByText(/đúng mô tả không/)).toBeNull();
   });
 
-  it('Giao hàng: chữ giải thích khác cho người gửi và người nhận', async () => {
-    // when
+  it('Giao hàng: người gửi thấy nút Tôi đã gửi hàng, người nhận thấy dòng chờ bên kia gửi', async () => {
+    // when: luật mới (GN-12) Giao hàng có thẻ riêng theo từng chiều
     await renderProgress(DONOR_ID, request({ deliveryMethod: 'SHIPPING' }));
 
     // then
-    expect(
-      screen.getByText('Bạn đã gửi hàng. Giao dịch hoàn tất khi người nhận xác nhận đã nhận.'),
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tôi đã gửi hàng' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Đã giao nhận xong' })).toBeNull();
     cleanup();
     await renderProgress(RECEIVER_ID, request({ deliveryMethod: 'SHIPPING' }));
-    expect(screen.getByText('Bạn đã nhận được hàng.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Tôi đã gửi hàng' })).toBeNull();
+    expect(screen.getByText('Món bạn nhận')).toBeTruthy();
   });
 
   it('không thành công khi bên kia chưa bấm: hộp thoại báo đề nghị huỷ chờ bên kia và gọi handover-failed', async () => {
@@ -785,9 +785,17 @@ describe('Ba nút kết quả giao nhận', () => {
   });
 
   it('Giao hàng: lý do chưa gửi hàng thay cho không đến điểm hẹn', async () => {
-    // given
+    // given: chiều 1 đã gửi nên người nhận báo được
     const userEvents = userEvent.setup();
-    await renderProgress(DONOR_ID, request({ deliveryMethod: 'SHIPPING' }));
+    await renderProgress(
+      RECEIVER_ID,
+      request({
+        deliveryMethod: 'SHIPPING',
+        status: 'AWAITING_HANDOVER',
+        donorShippedAt: '2026-10-25T08:00:00Z',
+        donorTrackingCode: 'GHN123',
+      }),
+    );
 
     // when
     await userEvents.click(screen.getByRole('button', { name: 'Giao nhận không thành công' }));

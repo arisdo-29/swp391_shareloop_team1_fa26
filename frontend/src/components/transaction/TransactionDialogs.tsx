@@ -9,6 +9,7 @@ import { openDispute, type DisputeResponse, type ReportReason } from '../../serv
 import type { ApiError } from '../../services/http';
 import { disputeErrorMessage, disputeReasonLabels } from '../../utils/disputeErrors';
 import { canConfirmHandover, formatDeadline } from '../../utils/request';
+import { shippingFailedConsequence } from '../../utils/shipping';
 import {
   afterMeetingReasons,
   BEFORE_MEETING_REASONS,
@@ -190,12 +191,20 @@ export function HandoverFailedDialog({
       </h2>
       <p className="mt-1 text-sm text-text-muted">{itemTitle}</p>
       <p className="mt-3 text-sm leading-6 text-text-secondary">
-        {handoverFailedConsequence(
-          partnerConfirmed,
-          partnerName,
-          config.response_window_hours,
-          config.cancel_request_response_hours,
-        )}
+        {request.deliveryMethod === 'SHIPPING'
+          ? shippingFailedConsequence(
+              request,
+              viewerIsDonor,
+              partnerName,
+              config.response_window_hours,
+              config.cancel_request_response_hours,
+            )
+          : handoverFailedConsequence(
+              partnerConfirmed,
+              partnerName,
+              config.response_window_hours,
+              config.cancel_request_response_hours,
+            )}
       </p>
       <Select className="mt-4" label="Lý do giao nhận không thành công" value={code}
         disabled={submitting} onChange={(event) => setCode(event.target.value as CancelRequestCode | '')}>

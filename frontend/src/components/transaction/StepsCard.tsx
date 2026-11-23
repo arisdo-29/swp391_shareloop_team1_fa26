@@ -12,6 +12,7 @@ import {
   isResponseOverdue,
 } from '../../utils/disputeView';
 import { RefusalNotice } from './RefusalNotice';
+import { isShippingRequest, shippingProgressSummary } from '../../utils/shipping';
 
 type StepState = 'done' | 'current' | 'todo';
 
@@ -19,6 +20,8 @@ type StepState = 'done' | 'current' | 'todo';
 function stepCaption(index: number, state: StepState, request: RequestResponse) {
   if (index === 1 && request.meetingTime) return `Hẹn ${formatDateTime(request.meetingTime)}`;
   if (index === 3 && request.completedAt) return formatDateTime(request.completedAt);
+  // Giao hàng: bước Giao nhận hiện tiến độ từng chiều thay cho chữ chung (GN-12)
+  if (index === 2 && isShippingRequest(request) && state !== 'todo') return shippingProgressSummary(request);
   if (state === 'done') return 'Đã xong';
   if (state === 'current') return 'Đang thực hiện';
   return 'Chưa tới';
