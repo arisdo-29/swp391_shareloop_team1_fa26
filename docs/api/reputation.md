@@ -168,3 +168,7 @@ Lý do gọi giao dịch bằng tên món, không dùng `#id`.
 | `401` | Unauthorized | Chưa đăng nhập hoặc token không hợp lệ |
 | `404` | Not Found | `USER_NOT_FOUND`: Tài khoản không tồn tại |
 
+
+## Hồi sao chỉ tính giao dịch với nhiều người khác nhau (F4)
+
+Giao dịch cặp lặp (từ lần thứ 3 giữa cùng một cặp trong cửa sổ `reputation_pair_window_days`) không tăng chuỗi giao dịch sạch và không thêm đối tác. Hồi 1 sao khi chuỗi đạt `reputation_clean_streak_for_star` và có ít nhất `star_restore_min_distinct_partners` (mặc định 5) người khác nhau. Các đối tác lưu ở cột `users.clean_streak_partners` (mảng id), được xoá mỗi khi chuỗi về 0 (lúc hồi sao hoặc lúc bị trừ sao).

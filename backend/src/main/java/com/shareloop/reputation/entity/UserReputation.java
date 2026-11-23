@@ -8,7 +8,11 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLRestriction;
+import org.hibernate.type.SqlTypes;
 
 /**
  * Entity lát cắt của bảng users: chỉ map nhóm cột uy tín của module reputation.
@@ -43,6 +47,11 @@ public class UserReputation extends SliceAudit {
     @Column(name = "clean_streak", nullable = false)
     private int cleanStreak;
 
+    // Các đối tác khác nhau của chuỗi sạch hiện tại (F4); rỗng khi chuỗi về 0.
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "clean_streak_partners", nullable = false, columnDefinition = "bigint[]")
+    private List<Long> cleanStreakPartners = new ArrayList<>();
+
     // Cột grace_star_used vẫn còn trong bảng (17 bảng đã chốt) nhưng không map: nhóm đã bỏ sao ân hạn (UT-09).
 
     protected UserReputation() {}
@@ -76,10 +85,6 @@ public class UserReputation extends SliceAudit {
 
     public LocalDate getPointsDate() {
         return pointsDate;
-    }
-
-    public int getCleanStreak() {
-        return cleanStreak;
     }
 
     public void addPoints(int points, Rank newRank) {
@@ -139,18 +144,32 @@ public class UserReputation extends SliceAudit {
      * @param streakForStar số giao dịch sạch liên tiếp để hồi 1 sao
      * @return true nếu vừa hồi sao
      */
-    public boolean recordCleanTransaction(int streakForStar) {
+    public boolean recordCleanTransaction(int streakForStar, int minDistinctPartners, long partnerId) {
         cleanStreak++;
-        if (cleanStreak >= streakForStar && trustStars < MAX_TRUST_STARS) {
+        if (!cleanStreakPartners.contains(partnerId)) {
+            cleanStreakPartners.add(partnerId);
+        }
+        // Hồi sao khi chuỗi đủ dài và đủ số người khác nhau: 10 giao dịch với cùng một người không hồi được sao (F4)
+        boolean enoughPartners = cleanStreakPartners.size() >= minDistinctPartners;
+        if (cleanStreak >= streakForStar && enoughPartners && trustStars < MAX_TRUST_STARS) {
             trustStars++;
-            cleanStreak = 0;
+            resetCleanStreak();
             return true;
         }
         return false;
     }
 
+    public int getCleanStreak() {
+        return cleanStreak;
+    }
+
+    public List<Long> getCleanStreakPartners() {
+        return cleanStreakPartners;
+    }
+
     /** Vi phạm làm mất chuỗi giao dịch sạch (UT-05). */
     public void resetCleanStreak() {
         this.cleanStreak = 0;
+        this.cleanStreakPartners = new ArrayList<>();
     }
 }

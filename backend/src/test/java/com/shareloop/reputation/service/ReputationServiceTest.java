@@ -671,9 +671,9 @@ class ReputationServiceTest {
 
             assertThat(donor.getTotalPoints()).isEqualTo(20);
             assertThat(receiver.getTotalPoints()).isEqualTo(10);
-            // Không cộng điểm nhưng vẫn là giao dịch sạch
-            assertThat(donor.getCleanStreak()).isEqualTo(1);
-            assertThat(receiver.getCleanStreak()).isEqualTo(1);
+            // Không cộng điểm và cũng không tính vào chuỗi sạch (F4)
+            assertThat(donor.getCleanStreak()).isZero();
+            assertThat(receiver.getCleanStreak()).isZero();
 
             @SuppressWarnings("unchecked")
             ArgumentCaptor<Map<String, Object>> data = ArgumentCaptor.forClass(Map.class);

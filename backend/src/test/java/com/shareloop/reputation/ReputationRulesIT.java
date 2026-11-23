@@ -100,7 +100,7 @@ class ReputationRulesIT extends IntegrationTest {
                         a))
                 .isEqualTo("0/3");
         assertThat(jdbc.queryForObject("SELECT clean_streak FROM users WHERE id = ?", Integer.class, a))
-                .isEqualTo(2);
+                .isEqualTo(1); // giao dịch lặp cặp thứ 3 không tính vào chuỗi (F4)
     }
 
     @Test

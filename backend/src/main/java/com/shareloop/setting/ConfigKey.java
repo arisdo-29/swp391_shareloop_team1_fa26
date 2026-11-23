@@ -424,6 +424,12 @@ public enum ConfigKey {
             ConfigGroup.REPUTATION,
             "Điểm mỗi bên khi trao đổi",
             "Số điểm mỗi bên nhận được khi một giao dịch Trao đổi hoàn tất."),
+    STAR_RESTORE_MIN_DISTINCT_PARTNERS(
+            "star_restore_min_distinct_partners",
+            "5",
+            ConfigGroup.REPUTATION,
+            "Số đối tác khác nhau để hồi sao",
+            "Chuỗi giao dịch sạch phải có ít nhất số người khác nhau này mới được hồi sao. Giao dịch lặp với cùng một người không tính vào chuỗi."),
     REPUTATION_CLEAN_STREAK_FOR_STAR(
             "reputation_clean_streak_for_star",
             "10",

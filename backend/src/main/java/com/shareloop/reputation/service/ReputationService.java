@@ -479,19 +479,25 @@ public class ReputationService {
                 pairTransactionNo >= configInt(ConfigKey.REPUTATION_PAIR_NO_POINTS_FROM),
                 LocalDate.ofInstant(now, VIETNAM_ZONE),
                 configInt(ConfigKey.DAILY_POINTS_CAP),
-                configInt(ConfigKey.REPUTATION_CLEAN_STREAK_FOR_STAR));
+                configInt(ConfigKey.REPUTATION_CLEAN_STREAK_FOR_STAR),
+                configInt(ConfigKey.STAR_RESTORE_MIN_DISTINCT_PARTNERS));
 
         // 6. Cộng điểm trong trần ngày, tính lại hạng ngay lập tức và ghi chuỗi giao dịch sạch
         if (donor != null) {
-            applyCompletion(donor, donorPts, "DONOR", "vai trò cho/tặng", context);
+            applyCompletion(donor, donorPts, "DONOR", "vai trò cho/tặng", context, receiverId);
         }
         if (receiver != null) {
-            applyCompletion(receiver, receiverPts, "RECEIVER", "vai trò nhận/đổi", context);
+            applyCompletion(receiver, receiverPts, "RECEIVER", "vai trò nhận/đổi", context, donorId);
         }
     }
 
     private void applyCompletion(
-            UserReputation user, int basePoints, String role, String roleLabel, CompletionContext context) {
+            UserReputation user,
+            int basePoints,
+            String role,
+            String roleLabel,
+            CompletionContext context,
+            long partnerId) {
         int granted =
                 user.claimDailyPoints(context.repeatedPair() ? 0 : basePoints, context.dailyCap(), context.today());
         int newTotal = user.getTotalPoints() + granted;
@@ -500,7 +506,10 @@ public class ReputationService {
         user.addPoints(granted, newRank);
 
         int starsBefore = user.getTrustStars();
-        boolean starRestored = user.recordCleanTransaction(context.streakForStar());
+        // F4: giao dịch cặp lặp (từ lần thứ 3 giữa cùng cặp) không tính vào chuỗi sạch, không thêm đối tác, không tăng
+        // chuỗi
+        boolean starRestored = !context.repeatedPair()
+                && user.recordCleanTransaction(context.streakForStar(), context.minDistinctPartners(), partnerId);
         userReputationRepository.save(user);
         notifyPointsResult(user, basePoints, granted, newTotal, rankBefore, newRank, starRestored, context, roleLabel);
 
@@ -813,7 +822,8 @@ public class ReputationService {
             boolean repeatedPair,
             LocalDate today,
             int dailyCap,
-            int streakForStar) {}
+            int streakForStar,
+            int minDistinctPartners) {}
 
     /**
      * Lớp hỗ trợ gói ItemService thành ObjectProvider khi dùng trong unit test.
